@@ -79,7 +79,7 @@ export default async function PassportPage() {
       .single(),
   ]);
 
-  const comps = (userComps ?? []) as NurseComp[];
+  const comps = (userComps ?? []) as unknown as NurseComp[];
 
   // ── Overall level
   const competentCount  = comps.filter(c => c.status === "competent").length;
