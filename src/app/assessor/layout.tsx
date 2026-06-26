@@ -21,7 +21,7 @@ export default async function AssessorLayout({ children }: { children: React.Rea
     .eq("id", user.id)
     .single();
 
-  if (profile?.role !== "assessor") {
+  if (!profile || !["assessor", "hospital_admin", "super_admin"].includes(profile.role)) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">

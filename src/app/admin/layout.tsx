@@ -21,7 +21,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
     .eq("id", user.id)
     .single();
 
-  if (profile?.role !== "hospital_admin") {
+  if (!profile || !["hospital_admin", "super_admin"].includes(profile.role)) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
