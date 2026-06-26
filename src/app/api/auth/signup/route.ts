@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
+import { createClient as createAdminClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
 
 export async function POST(request: Request) {
@@ -16,9 +17,13 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: error.message || error.code || JSON.stringify(error) }, { status: 400 });
   }
 
-  // Explicitly upsert profile — trigger may not always fire with metadata
+  // Use service role key to bypass RLS and write the profile with correct role
   if (data.user) {
-    await supabase.from("profiles").upsert({
+    const admin = createAdminClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_ROLE_KEY!
+    );
+    await admin.from("profiles").upsert({
       id: data.user.id,
       full_name: full_name || "New User",
       email,
