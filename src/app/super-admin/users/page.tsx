@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 
 const ROLE_BADGE: Record<string, string> = {
@@ -22,12 +23,14 @@ export default async function AllUsersPage() {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
-  const { data: profiles } = await supabase
+  const admin = createAdminClient();
+
+  const { data: profiles } = await admin
     .from("profiles")
     .select("id, full_name, email, role, specialization, hospital_id, created_at")
     .order("created_at", { ascending: false });
 
-  const { data: hospitals } = await supabase
+  const { data: hospitals } = await admin
     .from("hospitals")
     .select("id, name");
 
@@ -45,7 +48,6 @@ export default async function AllUsersPage() {
         <p className="text-gray-400 text-sm mt-0.5">{profiles?.length ?? 0} users registered on the platform</p>
       </div>
 
-      {/* Role summary */}
       <div className="flex flex-wrap gap-2 mb-6">
         {Object.entries(ROLE_LABELS).map(([role, label]) => (
           <div key={role} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold ${ROLE_BADGE[role]}`}>
@@ -58,7 +60,7 @@ export default async function AllUsersPage() {
       {!profiles?.length ? (
         <div className="bg-white rounded-xl border border-gray-100 p-12 text-center">
           <p className="text-3xl mb-3">👥</p>
-          <p className="text-gray-500 text-sm">No users found. Check RLS policies for super_admin access.</p>
+          <p className="text-gray-500 text-sm">No users found.</p>
         </div>
       ) : (
         <div className="bg-white rounded-xl border border-gray-100 overflow-hidden">
@@ -77,7 +79,7 @@ export default async function AllUsersPage() {
                 <tr key={p.id} className="hover:bg-gray-50/40">
                   <td className="px-5 py-3.5">
                     <div className="flex items-center gap-3">
-                      <div className={`w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-bold shrink-0 ${ROLE_BADGE[p.role]?.replace("text-", "bg-").replace("-100", "-500") ?? "bg-gray-400"}`}>
+                      <div className="w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center text-gray-600 text-xs font-bold shrink-0">
                         {p.full_name?.[0] ?? "?"}
                       </div>
                       <div>

@@ -1,17 +1,48 @@
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
+
+const LIBRARY_LABELS: Record<string, string> = {
+  core:     "Core Nursing",
+  specialty: "Specialty",
+  role:     "Role-Based",
+};
+
+const LIBRARY_COLORS: Record<string, string> = {
+  core:      "border-teal-100 bg-teal-50/40",
+  specialty: "border-indigo-100 bg-indigo-50/40",
+  role:      "border-violet-100 bg-violet-50/40",
+};
+
+const LIBRARY_BADGE: Record<string, string> = {
+  core:      "text-teal-600",
+  specialty: "text-indigo-600",
+  role:      "text-violet-600",
+};
 
 export default async function CompetencyLibraryPage() {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
-  const { data: competencies } = await supabase
-    .from("competencies")
-    .select("id, name, category, description, expiry_months, created_at")
-    .order("category, name");
+  const admin = createAdminClient();
 
-  const categories = [...new Set((competencies ?? []).map(c => c.category))].sort();
+  const { data: frameworks } = await admin
+    .from("frameworks")
+    .select("id, name, library, sort_order, framework_domains(id, name, framework_competencies(id))")
+    .eq("is_active", true)
+    .order("library")
+    .order("sort_order");
+
+  const grouped: Record<string, typeof frameworks> = {};
+  for (const f of frameworks ?? []) {
+    if (!grouped[f.library]) grouped[f.library] = [];
+    grouped[f.library]!.push(f);
+  }
+
+  const totalDomains = (frameworks ?? []).reduce((s, f) => s + (f.framework_domains?.length ?? 0), 0);
+  const totalComps = (frameworks ?? []).reduce((s, f) =>
+    s + (f.framework_domains ?? []).reduce((d, dom) => d + (dom.framework_competencies?.length ?? 0), 0), 0);
 
   return (
     <div className="max-w-5xl">
@@ -19,50 +50,49 @@ export default async function CompetencyLibraryPage() {
         <div>
           <h1 className="text-xl font-bold text-gray-900">Global Competency Library</h1>
           <p className="text-gray-400 text-sm mt-0.5">
-            {competencies?.length ?? 0} competencies across {categories.length} categories
+            {(frameworks ?? []).length} frameworks · {totalDomains} domains · {totalComps} competencies
           </p>
         </div>
         <div className="bg-rose-50 border border-rose-200 rounded-lg px-3 py-2 text-xs text-rose-700">
-          Edit via Supabase dashboard
+          Read-only view
         </div>
       </div>
 
-      {categories.map(cat => {
-        const items = (competencies ?? []).filter(c => c.category === cat);
-        return (
-          <div key={cat} className="mb-6">
-            <h2 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3">{cat}</h2>
-            <div className="bg-white rounded-xl border border-gray-100 overflow-hidden">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-gray-100 bg-gray-50/50">
-                    <th className="text-left px-5 py-2.5 text-[10px] font-semibold text-gray-400 uppercase tracking-wide">Name</th>
-                    <th className="text-left px-4 py-2.5 text-[10px] font-semibold text-gray-400 uppercase tracking-wide">Description</th>
-                    <th className="text-center px-4 py-2.5 text-[10px] font-semibold text-gray-400 uppercase tracking-wide">Renewal</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-50">
-                  {items.map(c => (
-                    <tr key={c.id} className="hover:bg-gray-50/40">
-                      <td className="px-5 py-3 font-medium text-gray-900">{c.name}</td>
-                      <td className="px-4 py-3 text-xs text-gray-500 max-w-xs">
-                        {c.description ?? "—"}
-                      </td>
-                      <td className="px-4 py-3 text-center text-xs text-gray-600">{c.expiry_months}mo</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+      {Object.entries(grouped).map(([library, fws]) => (
+        <div key={library} className="mb-8">
+          <h2 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3">
+            {LIBRARY_LABELS[library] ?? library} ({fws?.length ?? 0})
+          </h2>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            {(fws ?? []).map(f => {
+              const domainCount = f.framework_domains?.length ?? 0;
+              const compCount = (f.framework_domains ?? []).reduce((s, d) => s + (d.framework_competencies?.length ?? 0), 0);
+              return (
+                <div key={f.id} className={`rounded-xl border p-4 ${LIBRARY_COLORS[library] ?? "border-gray-100"}`}>
+                  <div className="flex items-start justify-between gap-2">
+                    <div>
+                      <span className={`text-[9px] font-bold uppercase tracking-wider ${LIBRARY_BADGE[library] ?? "text-gray-400"}`}>
+                        {LIBRARY_LABELS[library] ?? library}
+                      </span>
+                      <p className="font-semibold text-gray-900 text-sm mt-0.5">{f.name}</p>
+                    </div>
+                  </div>
+                  <div className="flex gap-3 mt-2 text-xs text-gray-500">
+                    <span>{domainCount} domains</span>
+                    <span>·</span>
+                    <span>{compCount} competencies</span>
+                  </div>
+                </div>
+              );
+            })}
           </div>
-        );
-      })}
+        </div>
+      ))}
 
-      {!competencies?.length && (
+      {!frameworks?.length && (
         <div className="bg-white rounded-xl border border-gray-100 p-12 text-center">
           <p className="text-3xl mb-3">🪪</p>
-          <p className="text-gray-500 text-sm">No competencies defined yet.</p>
-          <p className="text-gray-400 text-xs mt-1">Add competencies in the Supabase dashboard or via the migrations.</p>
+          <p className="text-gray-500 text-sm">No frameworks found. Run migration 004-seed-frameworks.sql.</p>
         </div>
       )}
     </div>

@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 
 export default async function AllHospitalsPage() {
@@ -6,12 +7,14 @@ export default async function AllHospitalsPage() {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
-  const { data: hospitals } = await supabase
+  const admin = createAdminClient();
+
+  const { data: hospitals } = await admin
     .from("hospitals")
     .select("id, name, city, country, tier, created_at")
     .order("created_at", { ascending: false });
 
-  const { data: profiles } = await supabase
+  const { data: profiles } = await admin
     .from("profiles")
     .select("hospital_id, role");
 
@@ -44,7 +47,7 @@ export default async function AllHospitalsPage() {
       {rows.length === 0 ? (
         <div className="bg-white rounded-xl border border-gray-100 p-12 text-center">
           <p className="text-3xl mb-3">🏥</p>
-          <p className="text-gray-500 text-sm">No hospitals found. Check RLS policies — super_admin needs read access to hospitals table.</p>
+          <p className="text-gray-500 text-sm">No hospitals registered yet.</p>
         </div>
       ) : (
         <div className="bg-white rounded-xl border border-gray-100 overflow-hidden">
@@ -64,8 +67,13 @@ export default async function AllHospitalsPage() {
               {rows.map(h => (
                 <tr key={h.id} className="hover:bg-gray-50/40">
                   <td className="px-5 py-3.5">
-                    <p className="font-medium text-gray-900">{h.name}</p>
-                    <p className="text-[10px] text-gray-400 font-mono mt-0.5">{h.id.slice(0, 8)}…</p>
+                    <div className="flex items-center gap-2.5">
+                      <div className="w-8 h-8 rounded-lg bg-rose-50 flex items-center justify-center text-rose-600 text-sm shrink-0">🏥</div>
+                      <div>
+                        <p className="font-medium text-gray-900">{h.name}</p>
+                        <p className="text-[10px] text-gray-400 font-mono mt-0.5">{h.id.slice(0, 8)}…</p>
+                      </div>
+                    </div>
                   </td>
                   <td className="px-4 py-3.5 text-xs text-gray-500">
                     {h.city ? `${h.city}, ` : ""}{h.country}

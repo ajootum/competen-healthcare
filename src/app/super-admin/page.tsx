@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 
@@ -7,6 +8,8 @@ export default async function SuperAdminDashboard() {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
+  const admin = createAdminClient();
+
   const [
     { count: totalHospitals },
     { count: totalNurses },
@@ -14,18 +17,22 @@ export default async function SuperAdminDashboard() {
     { count: totalEducators },
     { count: totalHospitalAdmins },
     { count: totalCourses },
-    { count: totalCompetencies },
+    { data: frameworks },
     { data: hospitals },
   ] = await Promise.all([
-    supabase.from("hospitals").select("*", { count: "exact", head: true }),
-    supabase.from("profiles").select("*", { count: "exact", head: true }).eq("role", "nurse"),
-    supabase.from("profiles").select("*", { count: "exact", head: true }).eq("role", "assessor"),
-    supabase.from("profiles").select("*", { count: "exact", head: true }).eq("role", "educator"),
-    supabase.from("profiles").select("*", { count: "exact", head: true }).eq("role", "hospital_admin"),
-    supabase.from("courses").select("*", { count: "exact", head: true }),
-    supabase.from("competencies").select("*", { count: "exact", head: true }),
-    supabase.from("hospitals").select("id, name, city, country, tier, created_at").order("created_at", { ascending: false }).limit(5),
+    admin.from("hospitals").select("*", { count: "exact", head: true }),
+    admin.from("profiles").select("*", { count: "exact", head: true }).eq("role", "nurse"),
+    admin.from("profiles").select("*", { count: "exact", head: true }).eq("role", "assessor"),
+    admin.from("profiles").select("*", { count: "exact", head: true }).eq("role", "educator"),
+    admin.from("profiles").select("*", { count: "exact", head: true }).eq("role", "hospital_admin"),
+    admin.from("courses").select("*", { count: "exact", head: true }),
+    admin.from("frameworks").select("id, library"),
+    admin.from("hospitals").select("id, name, city, country, tier, created_at").order("created_at", { ascending: false }).limit(5),
   ]);
+
+  const coreCount = (frameworks ?? []).filter(f => f.library === "core").length;
+  const specialtyCount = (frameworks ?? []).filter(f => f.library === "specialty").length;
+  const roleCount = (frameworks ?? []).filter(f => f.library === "role").length;
 
   const tierBadge: Record<string, string> = {
     free:         "bg-gray-100 text-gray-600",
@@ -41,9 +48,7 @@ export default async function SuperAdminDashboard() {
       </div>
 
       {/* User stats */}
-      <div className="mb-2">
-        <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-3">Platform Users</p>
-      </div>
+      <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-3">Platform Users</p>
       <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 mb-8">
         {[
           { label: "Nurses",         value: totalNurses ?? 0,        icon: "👩‍⚕️", color: "text-teal-600"   },
@@ -62,14 +67,28 @@ export default async function SuperAdminDashboard() {
         ))}
       </div>
 
-      {/* Content stats */}
-      <div className="mb-2">
-        <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-3">Content</p>
+      {/* Framework stats */}
+      <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-3">Competency Frameworks</p>
+      <div className="grid grid-cols-3 gap-3 mb-8">
+        {[
+          { label: "Core Nursing",  value: coreCount,     color: "text-teal-600" },
+          { label: "Specialty",     value: specialtyCount, color: "text-indigo-600" },
+          { label: "Role-Based",    value: roleCount,     color: "text-violet-600" },
+        ].map(s => (
+          <div key={s.label} className="bg-white rounded-xl p-4 border border-gray-100">
+            <p className="text-[10px] text-gray-400 font-semibold uppercase tracking-wide mb-1">{s.label}</p>
+            <p className={`text-2xl font-bold ${s.color}`}>{s.value}</p>
+            <p className="text-[10px] text-gray-400">frameworks</p>
+          </div>
+        ))}
       </div>
+
+      {/* Content stats */}
+      <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-3">Content</p>
       <div className="grid grid-cols-2 gap-3 mb-8">
         {[
-          { label: "Courses in Library",     value: totalCourses ?? 0,      icon: "📚", color: "text-purple-600" },
-          { label: "Global Competencies",    value: totalCompetencies ?? 0, icon: "🪪", color: "text-teal-600" },
+          { label: "Courses in Library", value: totalCourses ?? 0, icon: "📚", color: "text-purple-600" },
+          { label: "Total Frameworks",   value: (frameworks ?? []).length, icon: "🪪", color: "text-teal-600" },
         ].map(s => (
           <div key={s.label} className="bg-white rounded-xl p-4 border border-gray-100">
             <div className="flex items-center justify-between mb-1">
@@ -89,7 +108,8 @@ export default async function SuperAdminDashboard() {
         </div>
         {!hospitals?.length ? (
           <div className="bg-white rounded-xl border border-gray-100 p-8 text-center text-gray-400 text-sm">
-            No hospitals registered yet. Note: super admin needs RLS access to view all hospitals.
+            <p className="text-2xl mb-2">🏥</p>
+            <p>No hospitals registered yet.</p>
           </div>
         ) : (
           <div className="bg-white rounded-xl border border-gray-100 overflow-hidden">
