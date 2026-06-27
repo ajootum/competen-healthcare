@@ -3,11 +3,13 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 
 const NAV = [
-  { label: "Dashboard",       href: "/educator",          icon: "🏠" },
-  { label: "My Courses",      href: "/educator/courses",  icon: "📚" },
-  { label: "Question Bank",   href: "/educator/questions",icon: "❓" },
-  { label: "Student Progress",href: "/educator/students", icon: "📈" },
-  { label: "Content Library", href: "/educator/library",  icon: "🗂️" },
+  { label: "Dashboard",       href: "/educator",            icon: "🏠" },
+  { label: "Validation",      href: "/educator",            icon: "✅" },
+  { label: "My Courses",      href: "/educator/courses",    icon: "📚" },
+  { label: "Question Bank",   href: "/educator/questions",  icon: "❓" },
+  { label: "Student Progress",href: "/educator/students",   icon: "📈" },
+  { label: "Content Library", href: "/educator/library",    icon: "🗂️" },
+  { label: "Assessor View",   href: "/assessor",            icon: "🔍" },
 ];
 
 export default async function EducatorLayout({ children }: { children: React.ReactNode }) {

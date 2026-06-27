@@ -3,12 +3,27 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 
 const NAV = [
-  { label: "Platform Overview",  href: "/super-admin",                   icon: "🌍" },
-  { label: "Organisations",      href: "/super-admin/organisations",      icon: "🏛️" },
-  { label: "All Facilities",     href: "/super-admin/hospitals",         icon: "🏥" },
-  { label: "All Users",          href: "/super-admin/users",             icon: "👥" },
-  { label: "Competency Library", href: "/super-admin/competencies",      icon: "🪪" },
-  { label: "Platform Settings",  href: "/super-admin/settings",          icon: "⚙️" },
+  { group: "PLATFORM", items: [
+    { label: "Overview",          href: "/super-admin",                    icon: "🌍" },
+    { label: "Organisations",     href: "/super-admin/organisations",      icon: "🏛️" },
+    { label: "All Facilities",    href: "/super-admin/hospitals",          icon: "🏥" },
+    { label: "All Users",         href: "/super-admin/users",              icon: "👥" },
+  ]},
+  { group: "CONTENT", items: [
+    { label: "Content Builder",   href: "/super-admin/content",            icon: "📐" },
+    { label: "Scoring Rules",     href: "/super-admin/scoring",            icon: "📊" },
+    { label: "Assessment Methods",href: "/super-admin/assessment-methods", icon: "🩺" },
+    { label: "Reassessment",      href: "/super-admin/schedules",          icon: "🔄" },
+  ]},
+  { group: "GOVERNANCE", items: [
+    { label: "Policies",          href: "/super-admin/policy-manager",     icon: "📄" },
+    { label: "Workflows",         href: "/super-admin/workflows",          icon: "⚡" },
+    { label: "Report Templates",  href: "/super-admin/reports",            icon: "📈" },
+  ]},
+  { group: "SETTINGS", items: [
+    { label: "Competency Library",href: "/super-admin/competencies",       icon: "🪪" },
+    { label: "Platform Settings", href: "/super-admin/settings",           icon: "⚙️" },
+  ]},
 ];
 
 export default async function SuperAdminLayout({ children }: { children: React.ReactNode }) {
@@ -48,13 +63,18 @@ export default async function SuperAdminLayout({ children }: { children: React.R
             <span className="text-[10px] font-bold text-rose-400/70 uppercase tracking-widest">Super Admin</span>
           </div>
 
-          <nav className="flex flex-col gap-0.5 flex-1">
-            {NAV.map(({ label, href, icon }) => (
-              <Link key={label} href={href}
-                className="flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm text-slate-400 hover:bg-rose-900/30 hover:text-white transition-colors">
-                <span className="w-5 text-center text-sm">{icon}</span>
-                <span>{label}</span>
-              </Link>
+          <nav className="flex flex-col gap-0.5 flex-1 overflow-y-auto">
+            {NAV.map(({ group, items }) => (
+              <div key={group} className="mb-1">
+                <p className="text-[9px] font-bold text-slate-600 uppercase tracking-widest px-3 py-1.5 mt-1">{group}</p>
+                {items.map(({ label, href, icon }) => (
+                  <Link key={label} href={href}
+                    className="flex items-center gap-2.5 px-3 py-1.5 rounded-lg text-xs text-slate-400 hover:bg-rose-900/30 hover:text-white transition-colors">
+                    <span className="w-4 text-center text-xs">{icon}</span>
+                    <span>{label}</span>
+                  </Link>
+                ))}
+              </div>
             ))}
           </nav>
 

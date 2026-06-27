@@ -1,118 +1,144 @@
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import Link from "next/link";
+
+const SCORE_COLORS = ["#ef4444","#f97316","#eab308","#14b8a6","#0d9488","#3b82f6","#8b5cf6"];
+const SCORE_LABELS = ["Training Required","Novice","Advanced Beginner","Competent","Competent+","Proficient","Expert"];
 
 export default async function EducatorDashboard() {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
-  const { data: profile } = await supabase
+  const { data: profile } = await supabase.from("profiles").select("role, hospital_id, full_name").eq("id", user.id).single();
+  if (!profile || !["educator","hospital_admin","super_admin"].includes(profile.role)) redirect("/dashboard");
+
+  const admin = createAdminClient();
+
+  const { data: hospitalNurses } = await admin
     .from("profiles")
-    .select("full_name, hospital_id")
-    .eq("id", user.id)
-    .single();
+    .select("id")
+    .eq("hospital_id", profile.hospital_id ?? "")
+    .eq("role", "nurse");
 
-  const [{ data: courses }, { data: questions }, { data: enrollments }] = await Promise.all([
-    supabase.from("courses").select("id, title, level, is_published, created_at").order("created_at", { ascending: false }).limit(5),
-    supabase.from("questions").select("id, topic").limit(1),
-    supabase.from("course_enrollments").select("id, completed_at").limit(1),
-  ]);
+  const nurseIds = (hospitalNurses ?? []).map(n => n.id);
 
-  const [{ count: totalCourses }, { count: totalQuestions }, { count: totalEnrollments }, { count: completions }] = await Promise.all([
-    supabase.from("courses").select("*", { count: "exact", head: true }),
-    supabase.from("questions").select("*", { count: "exact", head: true }),
-    supabase.from("course_enrollments").select("*", { count: "exact", head: true }),
-    supabase.from("course_enrollments").select("*", { count: "exact", head: true }).not("completed_at", "is", null),
-  ]);
+  const { data: pending } = nurseIds.length ? await admin
+    .from("competency_scores")
+    .select(`
+      id, competency_id, cycle_id, nurse_id, score, label, is_passing, assessed_at,
+      profiles!nurse_id(full_name),
+      framework_competencies!competency_id(
+        name,
+        framework_domains(name, frameworks(name))
+      )
+    `)
+    .eq("educator_validated", false)
+    .in("nurse_id", nurseIds)
+    .order("assessed_at") : { data: [] };
 
-  const levelColors: Record<string, string> = {
-    beginner:     "bg-green-100 text-green-700",
-    intermediate: "bg-amber-100 text-amber-700",
-    advanced:     "bg-red-100 text-red-700",
-  };
+  const monthAgo = new Date(); monthAgo.setDate(monthAgo.getDate() - 30);
+  const { data: recentValidated } = nurseIds.length ? await admin
+    .from("competency_scores")
+    .select(`
+      id, competency_id, nurse_id, score, is_passing, assessed_at,
+      profiles!nurse_id(full_name),
+      framework_competencies!competency_id(name, framework_domains(name))
+    `)
+    .eq("educator_validated", true)
+    .in("nurse_id", nurseIds)
+    .gte("assessed_at", monthAgo.toISOString())
+    .order("assessed_at", { ascending: false })
+    .limit(20) : { data: [] };
 
   return (
-    <>
+    <div className="max-w-5xl">
       <div className="mb-6">
-        <h1 className="text-xl font-bold text-gray-900">Educator Dashboard</h1>
-        <p className="text-gray-400 text-sm mt-0.5">Welcome back, {profile?.full_name?.split(" ")[0]}. Manage your content.</p>
+        <h1 className="text-xl font-bold text-gray-900">Educator Validation</h1>
+        <p className="text-gray-400 text-sm mt-0.5">
+          {(pending ?? []).length} score{(pending ?? []).length !== 1 ? "s" : ""} awaiting your review
+        </p>
       </div>
 
-      {/* Stats */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-8">
-        {[
-          { label: "Total Courses",    value: totalCourses ?? 0,    icon: "📚", color: "text-purple-600" },
-          { label: "Question Bank",    value: totalQuestions ?? 0,  icon: "❓", color: "text-indigo-600" },
-          { label: "Enrollments",      value: totalEnrollments ?? 0,icon: "👩‍⚕️", color: "text-teal-600" },
-          { label: "Completions",      value: completions ?? 0,     icon: "✅", color: "text-green-600" },
-        ].map(s => (
-          <div key={s.label} className="bg-white rounded-xl p-4 border border-gray-100">
-            <div className="flex items-center justify-between mb-1">
-              <p className="text-[10px] text-gray-400 font-semibold uppercase tracking-wide">{s.label}</p>
-              <span className="text-base">{s.icon}</span>
-            </div>
-            <p className={`text-2xl font-bold ${s.color}`}>{s.value}</p>
-          </div>
-        ))}
-      </div>
-
-      {/* Quick actions */}
-      <div className="grid grid-cols-2 gap-3 mb-8">
-        <Link href="/educator/courses"
-          className="bg-purple-600 hover:bg-purple-700 text-white rounded-xl p-4 transition-colors">
-          <p className="text-lg mb-1">📚</p>
-          <p className="font-semibold text-sm">Manage Courses</p>
-          <p className="text-xs text-purple-200 mt-0.5">View, edit, and publish content</p>
-        </Link>
-        <Link href="/educator/questions"
-          className="bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl p-4 transition-colors">
-          <p className="text-lg mb-1">❓</p>
-          <p className="font-semibold text-sm">Question Bank</p>
-          <p className="text-xs text-indigo-200 mt-0.5">Create and manage quiz questions</p>
-        </Link>
-        <Link href="/educator/students"
-          className="bg-teal-600 hover:bg-teal-700 text-white rounded-xl p-4 transition-colors">
-          <p className="text-lg mb-1">📈</p>
-          <p className="font-semibold text-sm">Student Progress</p>
-          <p className="text-xs text-teal-200 mt-0.5">See who's enrolled and how they're doing</p>
-        </Link>
-        <Link href="/educator/library"
-          className="bg-slate-600 hover:bg-slate-700 text-white rounded-xl p-4 transition-colors">
-          <p className="text-lg mb-1">🗂️</p>
-          <p className="font-semibold text-sm">Content Library</p>
-          <p className="text-xs text-slate-300 mt-0.5">Upload and organise learning materials</p>
-        </Link>
-      </div>
-
-      {/* Recent courses */}
-      <div>
-        <div className="flex items-center justify-between mb-3">
-          <h2 className="text-sm font-bold text-gray-700">Recent Courses</h2>
-          <Link href="/educator/courses" className="text-xs text-purple-600 hover:underline">View all →</Link>
-        </div>
-        {!courses?.length ? (
-          <div className="bg-white rounded-xl border border-gray-100 p-8 text-center text-gray-400 text-sm">
-            No courses yet. Add content in the Supabase dashboard or via the course API.
-          </div>
-        ) : (
-          <div className="bg-white rounded-xl border border-gray-100 overflow-hidden">
-            {courses.map((c, i) => (
-              <div key={c.id} className={`flex items-center gap-3 px-5 py-3.5 ${i > 0 ? "border-t border-gray-50" : ""}`}>
-                <div className="w-8 h-8 rounded-lg bg-purple-100 flex items-center justify-center text-purple-600 text-sm shrink-0">📚</div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-gray-900 truncate">{c.title}</p>
-                  <div className="flex items-center gap-2 mt-0.5">
-                    <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded capitalize ${levelColors[c.level] ?? "bg-gray-100 text-gray-600"}`}>{c.level}</span>
-                    {!c.is_published && <span className="text-[10px] text-amber-600 font-medium">Draft</span>}
+      <div className="mb-8">
+        <h2 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3">
+          Awaiting Validation ({(pending ?? []).length})
+        </h2>
+        {(pending ?? []).length > 0 ? (
+          <div className="flex flex-col gap-2">
+            {(pending ?? []).map(cs => {
+              const nurse = cs.profiles as unknown as { full_name: string } | null;
+              const comp = cs.framework_competencies as unknown as {
+                name: string;
+                framework_domains: { name: string; frameworks: { name: string } | null } | null
+              } | null;
+              return (
+                <div key={cs.id} className="bg-white rounded-xl border border-gray-100 px-5 py-4 flex items-center justify-between">
+                  <div className="flex items-center gap-4">
+                    <div className="w-10 h-10 rounded-full flex items-center justify-center text-white font-bold text-sm"
+                      style={{ backgroundColor: SCORE_COLORS[cs.score] ?? "#9ca3af" }}>
+                      {cs.score}
+                    </div>
+                    <div>
+                      <p className="font-semibold text-sm text-gray-900">{comp?.name}</p>
+                      <p className="text-[10px] text-gray-400">
+                        {comp?.framework_domains?.frameworks?.name} · {comp?.framework_domains?.name}
+                      </p>
+                      <p className="text-[10px] text-teal-600 mt-0.5">
+                        {nurse?.full_name} · {SCORE_LABELS[cs.score] ?? "—"} · {new Date(cs.assessed_at).toLocaleDateString()}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className={`text-[10px] font-semibold px-2 py-0.5 rounded ${cs.is_passing ? "bg-green-50 text-green-600" : "bg-red-50 text-red-600"}`}>
+                      {cs.is_passing ? "Pass" : "Fail"}
+                    </span>
+                    <Link href={`/educator/validate/${cs.competency_id}?cycle=${cs.cycle_id}&nurse=${cs.nurse_id}`}
+                      className="px-4 py-2 bg-teal-600 text-white text-xs font-semibold rounded-lg hover:bg-teal-700">
+                      Review →
+                    </Link>
                   </div>
                 </div>
-                <span className="text-xs text-gray-400">{new Date(c.created_at).toLocaleDateString()}</span>
-              </div>
-            ))}
+              );
+            })}
+          </div>
+        ) : (
+          <div className="bg-white rounded-xl border border-gray-100 p-8 text-center">
+            <p className="text-2xl mb-2">✅</p>
+            <p className="text-gray-600 font-medium">All up to date</p>
+            <p className="text-gray-400 text-sm mt-1">No assessments awaiting validation.</p>
           </div>
         )}
       </div>
-    </>
+
+      {(recentValidated ?? []).length > 0 && (
+        <div>
+          <h2 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3">Recently Validated</h2>
+          <div className="flex flex-col gap-2">
+            {(recentValidated ?? []).map(cs => {
+              const nurse = cs.profiles as unknown as { full_name: string } | null;
+              const comp = cs.framework_competencies as unknown as { name: string; framework_domains: { name: string } | null } | null;
+              return (
+                <div key={cs.id} className="bg-white rounded-xl border border-gray-100 px-5 py-3 flex items-center gap-4">
+                  <div className="w-7 h-7 rounded-full flex items-center justify-center text-white text-xs font-bold"
+                    style={{ backgroundColor: SCORE_COLORS[cs.score] ?? "#9ca3af" }}>{cs.score}</div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm text-gray-800">{comp?.name}</p>
+                    <p className="text-[10px] text-gray-400">{nurse?.full_name} · {comp?.framework_domains?.name}</p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className={`text-[10px] font-semibold px-2 py-0.5 rounded ${cs.is_passing ? "bg-green-50 text-green-600" : "bg-red-50 text-red-500"}`}>
+                      {cs.is_passing ? "Pass" : "Fail"}
+                    </span>
+                    <span className="text-[10px] bg-blue-50 text-blue-600 px-2 py-0.5 rounded font-semibold">✓ Validated</span>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+    </div>
   );
 }

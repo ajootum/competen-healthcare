@@ -33,7 +33,7 @@ export default async function DepartmentsPage() {
     if (!acc[s.department_id]) acc[s.department_id] = [];
     acc[s.department_id].push(s);
     return acc;
-  }, {} as Record<string, typeof staff>);
+  }, {} as Record<string, NonNullable<typeof staff>>);
 
   return (
     <div className="max-w-5xl">

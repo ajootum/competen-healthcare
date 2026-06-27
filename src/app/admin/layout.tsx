@@ -6,6 +6,8 @@ const NAV = [
   { label: "Overview",      href: "/admin/dashboard",   icon: "🏛️" },
   { label: "Nurse Roster",  href: "/admin/nurses",      icon: "👩‍⚕️" },
   { label: "Departments",   href: "/admin/departments", icon: "🏢" },
+  { label: "Cycles",        href: "/admin/cycles",      icon: "🔄" },
+  { label: "Workforce",     href: "/admin/workforce",   icon: "📊" },
   { label: "Competencies",  href: "/admin/competencies",icon: "🪪" },
   { label: "Invite Nurses", href: "/admin/invite",      icon: "➕" },
   { label: "Settings",      href: "/admin/settings",    icon: "⚙️" },
