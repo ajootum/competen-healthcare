@@ -3,11 +3,12 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 
 const NAV = [
-  { label: "Overview",       href: "/admin/dashboard",    icon: "🏛️" },
-  { label: "Nurse Roster",   href: "/admin/nurses",       icon: "👩‍⚕️" },
-  { label: "Competencies",   href: "/admin/competencies", icon: "🪪" },
-  { label: "Invite Nurses",  href: "/admin/invite",       icon: "➕" },
-  { label: "Settings",       href: "/admin/settings",     icon: "⚙️" },
+  { label: "Overview",      href: "/admin/dashboard",   icon: "🏛️" },
+  { label: "Nurse Roster",  href: "/admin/nurses",      icon: "👩‍⚕️" },
+  { label: "Departments",   href: "/admin/departments", icon: "🏢" },
+  { label: "Competencies",  href: "/admin/competencies",icon: "🪪" },
+  { label: "Invite Nurses", href: "/admin/invite",      icon: "➕" },
+  { label: "Settings",      href: "/admin/settings",    icon: "⚙️" },
 ];
 
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {

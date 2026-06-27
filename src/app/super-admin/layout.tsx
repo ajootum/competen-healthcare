@@ -3,11 +3,12 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 
 const NAV = [
-  { label: "Platform Overview",  href: "/super-admin",              icon: "🌍" },
-  { label: "All Hospitals",      href: "/super-admin/hospitals",    icon: "🏥" },
-  { label: "All Users",          href: "/super-admin/users",        icon: "👥" },
-  { label: "Competency Library", href: "/super-admin/competencies", icon: "🪪" },
-  { label: "Platform Settings",  href: "/super-admin/settings",     icon: "⚙️" },
+  { label: "Platform Overview",  href: "/super-admin",                   icon: "🌍" },
+  { label: "Organisations",      href: "/super-admin/organisations",      icon: "🏛️" },
+  { label: "All Facilities",     href: "/super-admin/hospitals",         icon: "🏥" },
+  { label: "All Users",          href: "/super-admin/users",             icon: "👥" },
+  { label: "Competency Library", href: "/super-admin/competencies",      icon: "🪪" },
+  { label: "Platform Settings",  href: "/super-admin/settings",          icon: "⚙️" },
 ];
 
 export default async function SuperAdminLayout({ children }: { children: React.ReactNode }) {
