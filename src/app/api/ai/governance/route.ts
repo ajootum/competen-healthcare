@@ -1,3 +1,6 @@
+// Pro plan: allow up to 60s for AI generation (Hobby capped at 10s)
+export const maxDuration = 60;
+
 import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
 import { generate } from "@/lib/ai/client";
