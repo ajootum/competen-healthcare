@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/server";
+import { generateDecisionsForCycle } from "@/lib/engines/decisions";
 
 export async function POST(
   _req: NextRequest,
@@ -12,7 +13,7 @@ export async function POST(
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const { data: profile } = await supabase.from("profiles").select("role, hospital_id").eq("id", user.id).single();
+  const { data: profile } = await createAdminClient().from("profiles").select("role, hospital_id, full_name").eq("id", user.id).single();
   if (!["hospital_admin","super_admin","educator"].includes(profile?.role ?? "")) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
@@ -51,5 +52,24 @@ export async function POST(
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
-  return NextResponse.json({ ok: true, clinical_readiness_score: clinicalReadinessScore });
+  // ── Competency Decision Engine ──────────────────────────────
+  // Turn validated scores into formal governed competency decisions.
+  let decisionsCreated = 0;
+  try {
+    const result = await generateDecisionsForCycle(admin, cycleId, user.id, profile?.full_name ?? null);
+    decisionsCreated = result.created;
+    await admin.from("audit_log").insert({
+      actor_id: user.id,
+      actor_name: profile?.full_name ?? null,
+      action: "finalize_decisions",
+      entity_type: "cycle",
+      entity_id: cycleId,
+      entity_name: null,
+      new_value: { decisions_created: decisionsCreated, clinical_readiness_score: clinicalReadinessScore },
+    });
+  } catch {
+    // Decision generation is best-effort; cycle completion already succeeded.
+  }
+
+  return NextResponse.json({ ok: true, clinical_readiness_score: clinicalReadinessScore, decisions_created: decisionsCreated });
 }

@@ -7,7 +7,7 @@ export async function POST(req: Request) {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const { data: profile } = await supabase.from("profiles").select("role").eq("id", user.id).single();
+  const { data: profile } = await createAdminClient().from("profiles").select("role").eq("id", user.id).single();
   if (!["assessor","educator","hospital_admin","super_admin"].includes(profile?.role ?? "")) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
@@ -72,7 +72,7 @@ async function recomputeAll(
   // 1. Get all complete assessments for this competency in this cycle
   const { data: assessments } = await admin
     .from("assessments")
-    .select("score")
+    .select("score, assessor_id")
     .eq("cycle_id", cycleId)
     .eq("competency_id", competencyId)
     .eq("status", "complete")
@@ -80,9 +80,30 @@ async function recomputeAll(
 
   if (!assessments?.length) return;
 
+  // 2. Check consensus rule — only finalise once min_assessors have submitted
+  const { data: cycle } = await admin
+    .from("competency_cycles")
+    .select("min_assessors, consensus_rule")
+    .eq("id", cycleId)
+    .returns<{ min_assessors?: number | null; consensus_rule?: string | null }[]>()
+    .single();
+
+  const minAssessors = cycle?.min_assessors ?? 1;
+  const consensusRule = cycle?.consensus_rule ?? "any";
+  const uniqueAssessors = new Set(assessments.map(a => a.assessor_id)).size;
+
+  if (uniqueAssessors < minAssessors) return; // quorum not reached
+
   const scores = assessments.map(a => a.score as number);
-  const avg = scores.reduce((s, v) => s + v, 0) / scores.length;
-  const finalScore = Math.round(avg);
+
+  let finalScore: number;
+  if (consensusRule === "unanimous") {
+    // All scores must agree — use lowest (most conservative)
+    finalScore = Math.min(...scores);
+  } else {
+    // majority or any — use mean
+    finalScore = Math.round(scores.reduce((s, v) => s + v, 0) / scores.length);
+  }
 
   // 2. Look up Benner level
   const { data: level } = await admin

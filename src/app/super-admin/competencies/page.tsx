@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
+import Link from "next/link";
 
 const LIBRARY_LABELS: Record<string, string> = {
   core:     "Core Nursing",
@@ -53,9 +54,10 @@ export default async function CompetencyLibraryPage() {
             {(frameworks ?? []).length} frameworks · {totalDomains} domains · {totalComps} competencies
           </p>
         </div>
-        <div className="bg-rose-50 border border-rose-200 rounded-lg px-3 py-2 text-xs text-rose-700">
-          Read-only view
-        </div>
+        <Link href="/super-admin/content"
+          className="bg-teal-600 hover:bg-teal-700 text-white text-sm font-semibold px-4 py-2 rounded-lg transition-colors shrink-0">
+          + Add / edit competencies
+        </Link>
       </div>
 
       {Object.entries(grouped).map(([library, fws]) => (
@@ -68,7 +70,8 @@ export default async function CompetencyLibraryPage() {
               const domainCount = f.framework_domains?.length ?? 0;
               const compCount = (f.framework_domains ?? []).reduce((s, d) => s + (d.framework_competencies?.length ?? 0), 0);
               return (
-                <div key={f.id} className={`rounded-xl border p-4 ${LIBRARY_COLORS[library] ?? "border-gray-100"}`}>
+                <Link key={f.id} href={`/super-admin/content/${f.id}`}
+                  className={`rounded-xl border p-4 hover:shadow-sm transition-shadow group ${LIBRARY_COLORS[library] ?? "border-gray-100"}`}>
                   <div className="flex items-start justify-between gap-2">
                     <div>
                       <span className={`text-[9px] font-bold uppercase tracking-wider ${LIBRARY_BADGE[library] ?? "text-gray-400"}`}>
@@ -76,13 +79,14 @@ export default async function CompetencyLibraryPage() {
                       </span>
                       <p className="font-semibold text-gray-900 text-sm mt-0.5">{f.name}</p>
                     </div>
+                    <span className="text-xs text-teal-600 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">Edit →</span>
                   </div>
                   <div className="flex gap-3 mt-2 text-xs text-gray-500">
                     <span>{domainCount} domains</span>
                     <span>·</span>
                     <span>{compCount} competencies</span>
                   </div>
-                </div>
+                </Link>
               );
             })}
           </div>

@@ -1,72 +1,224 @@
-import { createClient } from "@/lib/supabase/server";
-import { createAdminClient } from "@/lib/supabase/server";
+import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import Link from "next/link";
+import type { OrgRole } from "@/lib/roles";
 
 const SCORE_COLORS = ["#ef4444","#f97316","#eab308","#14b8a6","#0d9488","#3b82f6","#8b5cf6"];
 const SCORE_LABELS = ["Training Required","Novice","Advanced Beginner","Competent","Competent+","Proficient","Expert"];
+
+const METHOD_ICONS: Record<string, string> = {
+  knowledge: "📝", direct_observation: "👁️", simulation: "🎮",
+  osce: "🏥", concurrent_audit: "📋", retrospective_audit: "🗂️", logbook: "📓",
+};
 
 export default async function AssessorDashboard() {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
-  const { data: profile } = await supabase.from("profiles").select("role, hospital_id, full_name").eq("id", user.id).single();
+  const admin = createAdminClient();
+  const { data: profile } = await admin.from("profiles").select("role, hospital_id, full_name").eq("id", user.id).single();
   if (!profile || !["assessor","educator","hospital_admin"].includes(profile.role)) redirect("/dashboard");
 
-  const admin = createAdminClient();
+  const { data: orgProfile, error: orgErr } = await admin
+    .from("profiles")
+    .select("org_role")
+    .eq("id", user.id)
+    .returns<{ org_role: string | null }[]>()
+    .maybeSingle();
+  const orgRole = (!orgErr && orgProfile ? orgProfile.org_role as OrgRole : null) ?? null;
 
-  // All active cycles in this hospital
-  const { data: cycles } = await admin
-    .from("competency_cycles")
-    .select(`
-      id, cycle_type, status, start_date, end_date,
-      profiles!nurse_id(id, full_name),
-      cycle_frameworks(
-        id, status,
-        frameworks(id, name, library)
-      )
-    `)
-    .eq("hospital_id", profile.hospital_id ?? "")
-    .eq("status", "active")
-    .order("start_date");
+  const [{ data: cycles }, { data: myAssessments }, { data: recentDone }] = await Promise.all([
+    admin.from("competency_cycles")
+      .select(`id, cycle_type, status, start_date, end_date,
+        profiles!nurse_id(id, full_name),
+        cycle_frameworks(id, status, frameworks(id, name, library))`)
+      .eq("hospital_id", profile.hospital_id ?? "")
+      .eq("status", "active")
+      .order("start_date"),
 
-  // Assessments assigned to this assessor (pending/in_progress)
-  const { data: myAssessments } = await admin
-    .from("assessments")
-    .select(`
-      id, method, status, score, assessed_at,
-      competency_cycles!cycle_id(id, cycle_type, profiles!nurse_id(full_name)),
-      framework_competencies!competency_id(id, name,
-        framework_domains!domain_id(name, frameworks!framework_id(name))
-      )
-    `)
-    .eq("assessor_id", user.id)
-    .in("status", ["pending","in_progress"])
-    .order("created_at");
+    admin.from("assessments")
+      .select(`id, method, status, score, assessed_at,
+        competency_cycles!cycle_id(id, cycle_type, profiles!nurse_id(full_name)),
+        framework_competencies!competency_id(id, name,
+          framework_domains!domain_id(name, frameworks!framework_id(name)))`)
+      .eq("assessor_id", user.id)
+      .in("status", ["pending","in_progress"])
+      .order("created_at"),
 
-  // Recent assessments completed by this assessor
-  const { data: recentDone } = await admin
-    .from("assessments")
-    .select("id, method, score, assessed_at, framework_competencies!competency_id(name)")
-    .eq("assessor_id", user.id)
-    .eq("status", "complete")
-    .order("assessed_at", { ascending: false })
-    .limit(5);
+    admin.from("assessments")
+      .select("id, method, score, assessed_at, framework_competencies!competency_id(name)")
+      .eq("assessor_id", user.id)
+      .eq("status", "complete")
+      .order("assessed_at", { ascending: false })
+      .limit(5),
+  ]);
 
-  const METHOD_ICONS: Record<string, string> = {
-    knowledge: "📝", direct_observation: "👁️", simulation: "🎮",
-    osce: "🏥", concurrent_audit: "📋", retrospective_audit: "🗂️", logbook: "📓",
+  // For charge_nurse: fetch nurses in same hospital with their competency cycle status
+  let hospitalNurses: { id: string; full_name: string; activeCycles: number }[] = [];
+  if (orgRole === "charge_nurse" || orgRole === "shift_supervisor") {
+    const { data: nurses } = await admin.from("profiles")
+      .select("id, full_name")
+      .eq("hospital_id", profile.hospital_id ?? "")
+      .eq("role", "nurse")
+      .limit(20);
+
+    if (nurses?.length) {
+      const nurseIds = nurses.map(n => n.id);
+      const { data: nursesCycles } = await admin.from("competency_cycles")
+        .select("nurse_id")
+        .in("nurse_id", nurseIds)
+        .eq("status", "active");
+
+      hospitalNurses = nurses.map(n => ({
+        id: n.id,
+        full_name: n.full_name,
+        activeCycles: nursesCycles?.filter(c => c.nurse_id === n.id).length ?? 0,
+      }));
+    }
+  }
+
+  const orgRoleLabel: Record<string, string> = {
+    charge_nurse: "Charge Nurse / In-Charge",
+    shift_supervisor: "Shift Supervisor",
+    leader: "Team Leader",
   };
 
   return (
     <div className="max-w-5xl">
-      <div className="mb-6">
-        <h1 className="text-xl font-bold text-gray-900">Assessor Dashboard</h1>
-        <p className="text-gray-400 text-sm mt-0.5">Welcome, {profile.full_name} — {(cycles ?? []).length} active cycles in your hospital</p>
+      <div className="mb-6 flex items-start justify-between">
+        <div>
+          <h1 className="text-xl font-bold text-gray-900">
+            {orgRole && orgRoleLabel[orgRole] ? `${orgRoleLabel[orgRole]} Dashboard` : "Assessor Dashboard"}
+          </h1>
+          <p className="text-gray-400 text-sm mt-0.5">
+            Welcome, {profile.full_name} — {(cycles ?? []).length} active cycles in your hospital
+          </p>
+        </div>
       </div>
 
-      {/* Pending assessments for this assessor */}
+      {/* ── Charge Nurse: Unit Overview ── */}
+      {orgRole === "charge_nurse" && (
+        <div className="mb-8">
+          <h2 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3">Unit Overview</h2>
+          <div className="grid grid-cols-3 gap-3 mb-4">
+            {[
+              { label: "Nurses in Unit",   value: hospitalNurses.length,                                         icon: "👩‍⚕️", color: "text-teal-600" },
+              { label: "Active Cycles",    value: (cycles ?? []).length,                                          icon: "🔄",   color: "text-blue-600" },
+              { label: "Pending Audits",   value: (myAssessments ?? []).length,                                   icon: "📋",   color: "text-amber-500" },
+            ].map(s => (
+              <div key={s.label} className="bg-white rounded-xl border border-gray-100 p-4">
+                <div className="flex items-center justify-between mb-1">
+                  <p className="text-[10px] text-gray-400 font-semibold uppercase tracking-wide">{s.label}</p>
+                  <span>{s.icon}</span>
+                </div>
+                <p className={`text-2xl font-bold ${s.color}`}>{s.value}</p>
+              </div>
+            ))}
+          </div>
+
+          <div className="bg-white rounded-xl border border-gray-100 p-5">
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="font-semibold text-sm text-gray-900">Staff in Unit</h3>
+              <Link href="/assessor/assign"
+                className="text-xs px-3 py-1.5 bg-indigo-600 text-white rounded-lg font-semibold hover:bg-indigo-700">
+                + Assign Assessor
+              </Link>
+            </div>
+            {hospitalNurses.length === 0 ? (
+              <p className="text-sm text-gray-400 text-center py-6">No nurses linked to your hospital yet.</p>
+            ) : (
+              <div className="divide-y divide-gray-50">
+                {hospitalNurses.map(n => (
+                  <div key={n.id} className="flex items-center justify-between py-3">
+                    <div className="flex items-center gap-3">
+                      <div className="w-8 h-8 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-700 text-xs font-bold">
+                        {n.full_name[0]}
+                      </div>
+                      <p className="text-sm text-gray-800 font-medium">{n.full_name}</p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      {n.activeCycles > 0 ? (
+                        <span className="text-[10px] px-2 py-0.5 bg-teal-50 text-teal-600 rounded font-semibold">{n.activeCycles} active cycle{n.activeCycles > 1 ? "s" : ""}</span>
+                      ) : (
+                        <span className="text-[10px] px-2 py-0.5 bg-gray-100 text-gray-400 rounded">No active cycle</span>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ── Shift Supervisor: Readiness Panel ── */}
+      {orgRole === "shift_supervisor" && (
+        <div className="mb-8">
+          <h2 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3">Shift Readiness</h2>
+          <div className="grid grid-cols-2 gap-3 mb-4">
+            <div className="bg-white rounded-xl border border-gray-100 p-5">
+              <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-3">Staff on Unit</p>
+              {hospitalNurses.length === 0 ? (
+                <p className="text-sm text-gray-400">No nurses linked yet.</p>
+              ) : (
+                <div className="flex flex-col gap-2">
+                  {hospitalNurses.slice(0, 8).map(n => (
+                    <div key={n.id} className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <div className="w-6 h-6 rounded-full bg-teal-100 flex items-center justify-center text-teal-700 text-[10px] font-bold">
+                          {n.full_name[0]}
+                        </div>
+                        <span className="text-xs text-gray-700">{n.full_name}</span>
+                      </div>
+                      <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded ${n.activeCycles > 0 ? "bg-amber-50 text-amber-600" : "bg-green-50 text-green-600"}`}>
+                        {n.activeCycles > 0 ? "In Assessment" : "Clear"}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+            <div className="bg-white rounded-xl border border-gray-100 p-5">
+              <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-3">Competency Alerts</p>
+              {(myAssessments ?? []).length === 0 ? (
+                <div className="text-center py-4">
+                  <p className="text-2xl mb-1">✅</p>
+                  <p className="text-xs text-gray-400">No pending alerts</p>
+                </div>
+              ) : (
+                <div className="flex flex-col gap-2">
+                  {(myAssessments ?? []).slice(0, 5).map(a => {
+                    const comp = a.framework_competencies as unknown as { name: string } | null;
+                    return (
+                      <div key={a.id} className="flex items-center gap-2">
+                        <span className="text-red-500 text-xs">⚠️</span>
+                        <p className="text-xs text-gray-700 truncate">{comp?.name}</p>
+                      </div>
+                    );
+                  })}
+                  {(myAssessments ?? []).length > 5 && (
+                    <p className="text-[10px] text-gray-400">+{(myAssessments ?? []).length - 5} more</p>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Leader: Team intro ── */}
+      {orgRole === "leader" && (
+        <div className="mb-8 bg-indigo-50 border border-indigo-100 rounded-xl p-5 flex items-start gap-3">
+          <span className="text-2xl">⭐</span>
+          <div>
+            <p className="font-semibold text-indigo-900 text-sm">Team Leader View</p>
+            <p className="text-indigo-600 text-xs mt-0.5">You can assess team members, review competency progress, and coordinate with charge nurses. Use Audit Tools below to begin.</p>
+          </div>
+        </div>
+      )}
+
+      {/* ── Pending Assessments (all sub-roles) ── */}
       {(myAssessments ?? []).length > 0 && (
         <div className="mb-8">
           <h2 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3">Your Pending Assessments</h2>
@@ -99,7 +251,7 @@ export default async function AssessorDashboard() {
         </div>
       )}
 
-      {/* All active cycles */}
+      {/* ── Active Cycles (all sub-roles) ── */}
       <div className="mb-8">
         <h2 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3">Active Cycles ({(cycles ?? []).length})</h2>
         <div className="flex flex-col gap-3">
@@ -146,7 +298,7 @@ export default async function AssessorDashboard() {
         </div>
       </div>
 
-      {/* Recent completed */}
+      {/* ── Recently Completed ── */}
       {(recentDone ?? []).length > 0 && (
         <div>
           <h2 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3">Recently Completed</h2>

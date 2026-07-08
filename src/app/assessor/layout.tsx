@@ -1,27 +1,57 @@
-import { createClient } from "@/lib/supabase/server";
+import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
+import { cookies } from "next/headers";
 import Link from "next/link";
+import RoleSwitcher from "@/components/RoleSwitcher";
+import { highestRole, ORG_ROLE_CONFIG, type AppRole, type OrgRole } from "@/lib/roles";
 
-const NAV = [
+const BASE_NAV = [
   { label: "Dashboard",     href: "/assessor",         icon: "🏠" },
   { label: "Audit Tools",   href: "/assessor/assess",  icon: "📋" },
-  { label: "My Nurses",     href: "/assessor/nurses",  icon: "👩‍⚕️" },
+  { label: "My Workers",    href: "/assessor/nurses",  icon: "👩‍⚕️" },
   { label: "OSCE Sessions", href: "/assessor/osce",    icon: "🩺" },
   { label: "History",       href: "/assessor/history", icon: "📁" },
 ];
+
+const ORG_ROLE_NAV: Partial<Record<OrgRole, { label: string; href: string; icon: string }[]>> = {
+  charge_nurse: [
+    { label: "Unit Overview",    href: "/assessor/unit",   icon: "🏥" },
+    { label: "Assign Assessors", href: "/assessor/assign", icon: "📌" },
+  ],
+  shift_supervisor: [
+    { label: "Shift Readiness",   href: "/assessor/shift",  icon: "⏰" },
+    { label: "Competency Alerts", href: "/assessor/alerts", icon: "🚨" },
+  ],
+  leader: [
+    { label: "Team Overview",  href: "/assessor/team",  icon: "⭐" },
+  ],
+};
 
 export default async function AssessorLayout({ children }: { children: React.ReactNode }) {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
-  const { data: profile } = await supabase
+  const adminClient = createAdminClient();
+  const { data: profile } = await adminClient
     .from("profiles")
-    .select("full_name, role")
+    .select("full_name, role, roles")
     .eq("id", user.id)
     .single();
 
-  if (!profile || !["assessor", "hospital_admin", "super_admin"].includes(profile.role)) {
+  const userRoles: AppRole[] = (profile?.roles?.length ? profile.roles : [profile?.role]).filter(Boolean) as AppRole[];
+  const cookieStore = await cookies();
+  const activeRole = (cookieStore.get("active_role")?.value ?? highestRole(userRoles)) as AppRole;
+
+  const { data: orgProfile, error: orgError } = await adminClient
+    .from("profiles")
+    .select("org_role")
+    .eq("id", user.id)
+    .returns<{ org_role: string | null }[]>()
+    .maybeSingle();
+  const orgRole = (!orgError && orgProfile ? orgProfile.org_role as OrgRole : null) ?? null;
+
+  if (!userRoles.includes("assessor")) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
@@ -34,6 +64,10 @@ export default async function AssessorLayout({ children }: { children: React.Rea
     );
   }
 
+  const orgRoleCfg = orgRole ? ORG_ROLE_CONFIG[orgRole] : null;
+  const extraNav = orgRole ? (ORG_ROLE_NAV[orgRole] ?? []) : [];
+  const portalLabel = orgRoleCfg?.label ?? "Assessor";
+
   return (
     <div className="min-h-screen bg-gray-50 font-[family-name:var(--font-geist-sans)]">
       <div className="flex">
@@ -44,17 +78,30 @@ export default async function AssessorLayout({ children }: { children: React.Rea
           </Link>
 
           <div className="px-3 mb-4">
-            <span className="text-[10px] font-bold text-indigo-400/70 uppercase tracking-widest">Assessor Portal</span>
+            <span className="text-[10px] font-bold text-indigo-400/70 uppercase tracking-widest">{portalLabel} Portal</span>
           </div>
 
           <nav className="flex flex-col gap-0.5 flex-1">
-            {NAV.map(({ label, href, icon }) => (
+            {BASE_NAV.map(({ label, href, icon }) => (
               <Link key={label} href={href}
                 className="flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm text-slate-400 hover:bg-indigo-900/40 hover:text-white transition-colors">
                 <span className="w-5 text-center text-sm">{icon}</span>
                 <span>{label}</span>
               </Link>
             ))}
+            {extraNav.length > 0 && (
+              <>
+                <div className="my-1 border-t border-slate-800/40" />
+                <p className="text-[9px] font-bold text-slate-600 uppercase tracking-widest px-3 py-1">{portalLabel}</p>
+                {extraNav.map(({ label, href, icon }) => (
+                  <Link key={label} href={href}
+                    className="flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm text-indigo-300/70 hover:bg-indigo-900/40 hover:text-white transition-colors">
+                    <span className="w-5 text-center text-sm">{icon}</span>
+                    <span>{label}</span>
+                  </Link>
+                ))}
+              </>
+            )}
             <div className="my-2 border-t border-slate-800/60" />
             <Link href="/dashboard"
               className="flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm text-slate-500 hover:bg-indigo-900/30 hover:text-white transition-colors">
@@ -70,9 +117,14 @@ export default async function AssessorLayout({ children }: { children: React.Rea
               </div>
               <div className="flex-1 min-w-0">
                 <p className="text-white text-xs font-medium truncate">{profile?.full_name}</p>
-                <p className="text-indigo-300/60 text-[10px]">Assessor</p>
+                <p className="text-indigo-300/60 text-[10px]">{portalLabel}</p>
               </div>
             </div>
+            {userRoles.length > 1 && (
+              <div className="mb-2">
+                <RoleSwitcher roles={userRoles} activeRole={activeRole} />
+              </div>
+            )}
             <form action="/api/auth/logout" method="POST">
               <button type="submit"
                 className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm text-slate-500 hover:bg-slate-800/30 hover:text-white transition-colors">

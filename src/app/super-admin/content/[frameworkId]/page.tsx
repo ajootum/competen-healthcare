@@ -3,6 +3,8 @@ import { createAdminClient } from "@/lib/supabase/server";
 import { redirect, notFound } from "next/navigation";
 import Link from "next/link";
 import DomainCompetencyBuilder from "./DomainCompetencyBuilder";
+import VersionHistory from "./VersionHistory";
+import ImpactAnalysis from "./ImpactAnalysis";
 
 export default async function FrameworkDetailPage({ params }: { params: Promise<{ frameworkId: string }> }) {
   const { frameworkId } = await params;
@@ -14,30 +16,36 @@ export default async function FrameworkDetailPage({ params }: { params: Promise<
 
   const { data: framework } = await admin
     .from("frameworks")
-    .select("id, name, library, description, is_active")
+    .select("id, name, library, description, is_active, pub_status, version_num")
     .eq("id", frameworkId)
+    .returns<{ id: string; name: string; library: string; description: string | null; is_active: boolean; pub_status?: string | null; version_num?: number | null }[]>()
     .single();
 
   if (!framework) notFound();
 
-  const { data: domains } = await admin
-    .from("framework_domains")
-    .select(`
-      id, name, description, sort_order, is_active,
-      framework_competencies(
-        id, name, description, sort_order, is_active,
-        performance_criteria(id, criterion, sort_order, is_active),
-        competency_skills(
-          id, name, sort_order, is_active,
-          skill_checklists(id, name, is_active, checklist_items(id, item, is_critical, sort_order))
-        ),
-        assessment_method_configs(id, method, is_required, min_assessors, weight, is_active)
-      )
-    `)
-    .eq("framework_id", frameworkId)
-    .order("sort_order");
+  const [{ data: domains }, { data: versions }] = await Promise.all([
+    admin
+      .from("framework_domains")
+      .select(`
+        id, name, sort_order,
+        framework_competencies(
+          id, name, description, sort_order,
+          competency_skills(id, name, sort_order, is_active)
+        )
+      `)
+      .eq("framework_id", frameworkId)
+      .order("sort_order"),
+
+    admin
+      .from("framework_versions")
+      .select("id, version_num, published_by_name, published_at, notes, snapshot")
+      .eq("framework_id", frameworkId)
+      .order("version_num", { ascending: false })
+      .limit(20),
+  ]);
 
   const LIBRARY_LABEL: Record<string, string> = { core: "Core Nursing", specialty: "Specialty", role: "Role-Based" };
+  const versionNum = framework.version_num ?? 0;
 
   return (
     <div className="max-w-5xl">
@@ -55,14 +63,30 @@ export default async function FrameworkDetailPage({ params }: { params: Promise<
             <span className="text-[10px] bg-teal-100 text-teal-700 font-bold px-2 py-0.5 rounded capitalize">
               {LIBRARY_LABEL[framework.library] ?? framework.library}
             </span>
+            {versionNum > 0 && (
+              <span className="text-[10px] bg-gray-100 text-gray-600 font-semibold px-2 py-0.5 rounded">
+                v{versionNum}
+              </span>
+            )}
           </div>
           <p className="text-gray-400 text-sm mt-0.5">
             {(domains ?? []).length} domains · {(domains ?? []).reduce((s, d) => s + (d.framework_competencies?.length ?? 0), 0)} competencies
           </p>
         </div>
+        <div className="flex items-center gap-2 shrink-0">
+          <ImpactAnalysis frameworkId={frameworkId} />
+          <Link href={`/super-admin/content/${frameworkId}/cpus`}
+            className="px-4 py-2 text-xs font-semibold bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors">
+            🧩 Practice &amp; CPU Structure →
+          </Link>
+        </div>
       </div>
 
       <DomainCompetencyBuilder frameworkId={frameworkId} domains={domains ?? []} />
+
+      {(versions ?? []).length > 0 && (
+        <VersionHistory versions={versions as Parameters<typeof VersionHistory>[0]["versions"]} />
+      )}
     </div>
   );
 }

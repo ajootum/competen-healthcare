@@ -41,10 +41,11 @@ export default async function CompetenciesPage() {
       .order("full_name"),
     supabase
       .from("frameworks")
-      .select("id, name, library, sort_order")
+      .select("id, name, library, sort_order, pub_status")
       .eq("is_active", true)
       .order("library")
-      .order("sort_order"),
+      .order("sort_order")
+      .returns<{ id: string; name: string; library: string; sort_order: number; pub_status?: string | null }[]>(),
     supabase
       .from("competency_cycles")
       .select("id, nurse_id, cycle_type, status, start_date, end_date, cycle_framework_assignments(framework_id)")
@@ -207,23 +208,39 @@ export default async function CompetenciesPage() {
       <div>
         <h2 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3">Available Frameworks</h2>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-          {(frameworks ?? []).map(f => (
-            <div key={f.id} className={`rounded-xl border p-4 ${
-              f.library === "core" ? "border-teal-100 bg-teal-50/30"
-              : f.library === "specialty" ? "border-indigo-100 bg-indigo-50/30"
-              : "border-violet-100 bg-violet-50/30"
-            }`}>
-              <div className="flex items-start justify-between gap-2">
-                <div>
-                  <span className={`text-[9px] font-bold uppercase tracking-wider ${
-                    f.library === "core" ? "text-teal-500" : f.library === "specialty" ? "text-indigo-400" : "text-violet-400"
-                  }`}>{f.library}</span>
-                  <p className="font-semibold text-gray-900 text-sm mt-0.5">{f.name}</p>
+          {(frameworks ?? []).map(f => {
+            const status = f.pub_status ?? "published";
+            const statusCfg: Record<string, { label: string; cls: string }> = {
+              draft:      { label: "Draft",      cls: "text-gray-500 bg-gray-100" },
+              in_review:  { label: "In Review",  cls: "text-amber-700 bg-amber-50" },
+              approved:   { label: "Approved",   cls: "text-blue-700 bg-blue-50" },
+              published:  { label: "Published",  cls: "text-green-700 bg-green-50" },
+              archived:   { label: "Archived",   cls: "text-red-500 bg-red-50" },
+            };
+            const sc = statusCfg[status] ?? statusCfg.published;
+            return (
+              <div key={f.id} className={`rounded-xl border p-4 ${
+                f.library === "core" ? "border-teal-100 bg-teal-50/30"
+                : f.library === "specialty" ? "border-indigo-100 bg-indigo-50/30"
+                : "border-violet-100 bg-violet-50/30"
+              }`}>
+                <div className="flex items-start justify-between gap-2">
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className={`text-[9px] font-bold uppercase tracking-wider ${
+                        f.library === "core" ? "text-teal-500" : f.library === "specialty" ? "text-indigo-400" : "text-violet-400"
+                      }`}>{f.library}</span>
+                      {status !== "published" && (
+                        <span className={`text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded ${sc.cls}`}>{sc.label}</span>
+                      )}
+                    </div>
+                    <p className="font-semibold text-gray-900 text-sm mt-0.5">{f.name}</p>
+                  </div>
+                  <span className="text-xs text-gray-400 shrink-0">{frameworkCompCount[f.id] ?? 0} items</span>
                 </div>
-                <span className="text-xs text-gray-400 shrink-0">{frameworkCompCount[f.id] ?? 0} items</span>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       </div>
 

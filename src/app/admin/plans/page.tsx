@@ -1,0 +1,42 @@
+import { createClient, createAdminClient } from "@/lib/supabase/server";
+import { redirect } from "next/navigation";
+import PlansManager from "./PlansManager";
+
+export default async function PlansPage() {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) redirect("/login");
+
+  const admin = createAdminClient();
+  const { data: profile } = await admin.from("profiles").select("role, hospital_id").eq("id", user.id).single();
+  if (!profile || !["hospital_admin", "super_admin", "educator", "assessor"].includes(profile.role)) redirect("/dashboard");
+
+  const hospitalId = profile.hospital_id ?? "";
+
+  const [{ data: plans }, { data: workers }, { data: assessors }, { data: cpus }] = await Promise.all([
+    admin.from("assessment_plans")
+      .select("id, name, programme_type, scheduling_rule, status, is_template, due_date, nurse_id, profiles!nurse_id(full_name), plan_items(id), plan_assessors(id, profiles!assessor_id(full_name))")
+      .eq("hospital_id", hospitalId)
+      .order("created_at", { ascending: false }),
+    admin.from("profiles").select("id, full_name").eq("hospital_id", hospitalId).eq("role", "nurse").order("full_name"),
+    admin.from("profiles").select("id, full_name").eq("hospital_id", hospitalId).in("role", ["assessor", "educator"]).order("full_name"),
+    admin.from("clinical_practice_units").select("id, name").order("name").limit(300),
+  ]);
+
+  return (
+    <div className="max-w-4xl">
+      <div className="mb-6">
+        <h1 className="text-xl font-bold text-gray-900">Assessment Plans</h1>
+        <p className="text-gray-400 text-sm mt-0.5">
+          Operationalise blueprints into scheduled, individualised assessment plans (Book II Ch.11).
+        </p>
+      </div>
+      <PlansManager
+        plans={(plans ?? []) as never}
+        workers={(workers ?? []).map(w => ({ id: w.id, full_name: w.full_name }))}
+        assessors={(assessors ?? []).map(a => ({ id: a.id, full_name: a.full_name }))}
+        cpus={(cpus ?? []).map(c => ({ id: c.id, name: c.name }))}
+      />
+    </div>
+  );
+}

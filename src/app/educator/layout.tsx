@@ -1,6 +1,9 @@
-import { createClient } from "@/lib/supabase/server";
+import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
+import { cookies } from "next/headers";
 import Link from "next/link";
+import RoleSwitcher from "@/components/RoleSwitcher";
+import { highestRole, type AppRole } from "@/lib/roles";
 
 const NAV = [
   { label: "Dashboard",       href: "/educator",            icon: "🏠" },
@@ -9,6 +12,7 @@ const NAV = [
   { label: "Question Bank",   href: "/educator/questions",  icon: "❓" },
   { label: "Student Progress",href: "/educator/students",   icon: "📈" },
   { label: "Content Library", href: "/educator/library",    icon: "🗂️" },
+  { label: "Bulk Import",      href: "/educator/import",     icon: "📥" },
   { label: "Assessor View",   href: "/assessor",            icon: "🔍" },
 ];
 
@@ -17,13 +21,17 @@ export default async function EducatorLayout({ children }: { children: React.Rea
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
-  const { data: profile } = await supabase
+  const { data: profile } = await createAdminClient()
     .from("profiles")
-    .select("full_name, role")
+    .select("full_name, role, roles")
     .eq("id", user.id)
     .single();
 
-  if (profile?.role !== "educator") {
+  const userRoles: AppRole[] = (profile?.roles?.length ? profile.roles : [profile?.role]).filter(Boolean) as AppRole[];
+  const cookieStore = await cookies();
+  const activeRole = (cookieStore.get("active_role")?.value ?? highestRole(userRoles)) as AppRole;
+
+  if (!userRoles.includes("educator")) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
@@ -75,6 +83,11 @@ export default async function EducatorLayout({ children }: { children: React.Rea
                 <p className="text-purple-300/60 text-[10px]">Educator</p>
               </div>
             </div>
+            {userRoles.length > 1 && (
+              <div className="mb-2">
+                <RoleSwitcher roles={userRoles} activeRole={activeRole} />
+              </div>
+            )}
             <form action="/api/auth/logout" method="POST">
               <button type="submit"
                 className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm text-purple-200/40 hover:bg-purple-900/30 hover:text-white transition-colors">

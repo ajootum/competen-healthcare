@@ -1,27 +1,37 @@
-import { createClient } from "@/lib/supabase/server";
+import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
+import { cookies } from "next/headers";
 import Link from "next/link";
+import RoleSwitcher from "@/components/RoleSwitcher";
+import { highestRole, type AppRole } from "@/lib/roles";
 
 const NAV = [
   { group: "PLATFORM", items: [
     { label: "Overview",          href: "/super-admin",                    icon: "🌍" },
+    { label: "Command Centre",    href: "/super-admin/command-centre",     icon: "🛰️" },
     { label: "Organisations",     href: "/super-admin/organisations",      icon: "🏛️" },
     { label: "All Facilities",    href: "/super-admin/hospitals",          icon: "🏥" },
     { label: "All Users",         href: "/super-admin/users",              icon: "👥" },
+    { label: "Bulk Import",       href: "/super-admin/import",             icon: "📥" },
   ]},
   { group: "CONTENT", items: [
     { label: "Content Builder",   href: "/super-admin/content",            icon: "📐" },
+    { label: "Knowledge Graph",   href: "/super-admin/knowledge-graph",    icon: "🕸️" },
+    { label: "AI Assistant",      href: "/super-admin/assistant",          icon: "🤖" },
     { label: "Scoring Rules",     href: "/super-admin/scoring",            icon: "📊" },
     { label: "Assessment Methods",href: "/super-admin/assessment-methods", icon: "🩺" },
     { label: "Reassessment",      href: "/super-admin/schedules",          icon: "🔄" },
   ]},
   { group: "GOVERNANCE", items: [
+    { label: "Committees",        href: "/super-admin/governance/committees", icon: "⚖️" },
     { label: "Policies",          href: "/super-admin/policy-manager",     icon: "📄" },
     { label: "Workflows",         href: "/super-admin/workflows",          icon: "⚡" },
     { label: "Report Templates",  href: "/super-admin/reports",            icon: "📈" },
+    { label: "Audit Log",         href: "/super-admin/audit",              icon: "🗒️" },
   ]},
   { group: "SETTINGS", items: [
     { label: "Competency Library",href: "/super-admin/competencies",       icon: "🪪" },
+    { label: "Metadata & Tags",   href: "/super-admin/metadata",           icon: "🏷️" },
     { label: "Platform Settings", href: "/super-admin/settings",           icon: "⚙️" },
   ]},
 ];
@@ -31,13 +41,18 @@ export default async function SuperAdminLayout({ children }: { children: React.R
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
-  const { data: profile } = await supabase
+  const admin = createAdminClient();
+  const { data: profile } = await admin
     .from("profiles")
-    .select("full_name, role")
+    .select("full_name, role, roles")
     .eq("id", user.id)
     .single();
 
-  if (profile?.role !== "super_admin") {
+  const userRoles: AppRole[] = (profile?.roles?.length ? profile.roles : [profile?.role]).filter(Boolean) as AppRole[];
+  const cookieStore = await cookies();
+  const activeRole = (cookieStore.get("active_role")?.value ?? highestRole(userRoles)) as AppRole;
+
+  if (!userRoles.includes("super_admin")) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
@@ -88,6 +103,11 @@ export default async function SuperAdminLayout({ children }: { children: React.R
                 <p className="text-rose-300/60 text-[10px]">Super Admin</p>
               </div>
             </div>
+            {userRoles.length > 1 && (
+              <div className="mb-2">
+                <RoleSwitcher roles={userRoles} activeRole={activeRole} />
+              </div>
+            )}
             <form action="/api/auth/logout" method="POST">
               <button type="submit"
                 className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm text-slate-500 hover:bg-slate-800/30 hover:text-white transition-colors">

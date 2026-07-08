@@ -2,16 +2,25 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import Link from "next/link";
+import { OUTCOME_CONFIG, MATURITY_LABELS, AUTH_TYPE_LABELS, AUTH_STATUS_CONFIG, CREDENTIAL_TYPE_LABELS, CREDENTIAL_STATUS_CONFIG, RECOGNITION_TYPE_LABELS, type DecisionOutcome, type Maturity, type AuthorizationType, type AuthStatus } from "@/lib/ckcm";
 
 const SCORE_COLORS = ["#ef4444","#f97316","#eab308","#14b8a6","#0d9488","#3b82f6","#8b5cf6"];
 const SCORE_LABELS = ["Training Required","Novice","Advanced Beginner","Competent","Competent+","Proficient","Expert"];
+
+function reassessmentState(expiry: string | null): { label: string; cls: string } | null {
+  if (!expiry) return null;
+  const days = Math.ceil((new Date(expiry).getTime() - Date.now()) / 86400000);
+  if (days < 0)  return { label: "Expired",              cls: "bg-red-50 text-red-600" };
+  if (days <= 60) return { label: `Due in ${days}d`,     cls: "bg-amber-50 text-amber-700" };
+  return { label: `Valid to ${new Date(expiry).toLocaleDateString()}`, cls: "bg-gray-50 text-gray-500" };
+}
 
 export default async function PassportPage() {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
-  const { data: profile } = await supabase.from("profiles").select("full_name, role, hospital_id").eq("id", user.id).single();
+  const { data: profile } = await createAdminClient().from("profiles").select("full_name, role, hospital_id").eq("id", user.id).single();
   if (!profile) redirect("/login");
 
   const admin = createAdminClient();
@@ -81,6 +90,67 @@ export default async function PassportPage() {
   const validated = best.filter(b => b.educator_validated).length;
   const avgScore = totalScored ? Math.round(best.reduce((s, b) => s + b.score, 0) / totalScored * 10) / 10 : null;
 
+  // ── Formal competency decisions (latest per competency) ──────
+  const { data: allDecisions } = await admin
+    .from("competency_decisions")
+    .select(`
+      competency_id, outcome, maturity, effective_date, expiry_date, critical_failure, created_at,
+      framework_competencies(id, name, framework_domains(name, frameworks(name)))
+    `)
+    .eq("nurse_id", user.id)
+    .order("created_at", { ascending: false });
+
+  type DecisionEntry = {
+    competency_id: string; outcome: DecisionOutcome; maturity: Maturity | null;
+    effective_date: string; expiry_date: string | null; critical_failure: boolean;
+    name: string; domain_name: string; framework_name: string;
+  };
+  const dseen = new Set<string>();
+  const decisions: DecisionEntry[] = [];
+  for (const d of allDecisions ?? []) {
+    if (dseen.has(d.competency_id)) continue;
+    dseen.add(d.competency_id);
+    const comp = d.framework_competencies as unknown as {
+      name: string; framework_domains: { name: string; frameworks: { name: string } | null } | null
+    } | null;
+    if (!comp) continue;
+    decisions.push({
+      competency_id: d.competency_id,
+      outcome: d.outcome as DecisionOutcome,
+      maturity: (d.maturity as Maturity) ?? null,
+      effective_date: d.effective_date,
+      expiry_date: d.expiry_date,
+      critical_failure: d.critical_failure ?? false,
+      name: comp.name,
+      domain_name: comp.framework_domains?.name ?? "—",
+      framework_name: comp.framework_domains?.frameworks?.name ?? "—",
+    });
+  }
+  const competentCount = decisions.filter(d => OUTCOME_CONFIG[d.outcome]?.passing).length;
+  const dueSoon = decisions.filter(d => d.expiry_date && (new Date(d.expiry_date).getTime() - Date.now()) / 86400000 <= 60).length;
+
+  // ── Active clinical authorizations (Book II Ch.24) ──────────
+  const { data: authorizations } = await admin
+    .from("clinical_authorizations")
+    .select("id, authorization_number, authorization_type, authorization_level, status, scope, conditions, expiry_date")
+    .eq("nurse_id", user.id)
+    .in("status", ["active", "suspended"])
+    .order("created_at", { ascending: false });
+
+  // ── Professional credentials (Book II Ch.25) ────────────────
+  const { data: credentials } = await admin
+    .from("professional_credentials")
+    .select("id, credential_type, title, issuing_body, status, verified, expiry_date")
+    .eq("nurse_id", user.id)
+    .order("created_at", { ascending: false });
+
+  // ── Professional recognitions (Book II Ch.26) ───────────────
+  const { data: recognitions } = await admin
+    .from("professional_recognitions")
+    .select("id, recognition_type, title, description, awarded_by_name, awarded_at")
+    .eq("nurse_id", user.id)
+    .order("awarded_at", { ascending: false });
+
   return (
     <div className="max-w-4xl">
       <div className="flex items-center gap-2 text-xs text-gray-400 mb-4">
@@ -94,6 +164,10 @@ export default async function PassportPage() {
           <h1 className="text-xl font-bold text-gray-900">Competency Passport</h1>
           <p className="text-gray-400 text-sm mt-0.5">{profile.full_name} · {cycles?.length ?? 0} cycle{(cycles?.length ?? 0) !== 1 ? "s" : ""}</p>
         </div>
+        <Link href="/dashboard/passport/print"
+          className="inline-flex items-center gap-1.5 text-sm font-medium text-teal-700 bg-teal-50 hover:bg-teal-100 px-3 py-1.5 rounded-lg transition-colors">
+          🖨️ Print / Export
+        </Link>
       </div>
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
@@ -109,6 +183,111 @@ export default async function PassportPage() {
           </div>
         ))}
       </div>
+
+      {/* ── Formal Competency Decisions (governed view) ── */}
+      {decisions.length > 0 && (
+        <div className="mb-6">
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="text-xs font-bold text-gray-400 uppercase tracking-widest">
+              Competency Decisions ({competentCount} competent{dueSoon > 0 ? ` · ${dueSoon} due for reassessment` : ""})
+            </h2>
+          </div>
+          <div className="bg-white rounded-xl border border-gray-100 overflow-hidden divide-y divide-gray-50">
+            {decisions.map(d => {
+              const oc = OUTCOME_CONFIG[d.outcome];
+              const re = reassessmentState(d.expiry_date);
+              return (
+                <div key={d.competency_id} className="flex items-center gap-3 px-5 py-3">
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm text-gray-800">{d.name}</p>
+                    <p className="text-[10px] text-gray-400">{d.framework_name} · {d.domain_name}</p>
+                  </div>
+                  {d.maturity && <span className="text-[10px] text-gray-500 hidden sm:inline">{MATURITY_LABELS[d.maturity]}</span>}
+                  {d.critical_failure && <span className="text-[10px] bg-red-50 text-red-600 px-1.5 py-0.5 rounded font-semibold">⚠ Critical</span>}
+                  {re && <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${re.cls}`}>{re.label}</span>}
+                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded ${oc?.cls ?? "bg-gray-100 text-gray-600"}`}>{oc?.label ?? d.outcome}</span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* ── Clinical Authorizations ── */}
+      {(authorizations ?? []).length > 0 && (
+        <div className="mb-6">
+          <h2 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3">Clinical Authorizations</h2>
+          <div className="bg-white rounded-xl border border-gray-100 overflow-hidden divide-y divide-gray-50">
+            {(authorizations ?? []).map(a => {
+              const st = AUTH_STATUS_CONFIG[a.status as AuthStatus];
+              return (
+                <div key={a.id} className="flex items-center gap-3 px-5 py-3">
+                  <span className="text-lg">🔑</span>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm text-gray-800">
+                      {AUTH_TYPE_LABELS[a.authorization_type as AuthorizationType] ?? a.authorization_type}
+                      <span className="text-gray-400"> · {a.authorization_level}</span>
+                    </p>
+                    <p className="text-[10px] text-gray-400">
+                      {a.scope ?? "—"}{a.conditions ? ` · ${a.conditions}` : ""}
+                      {a.expiry_date ? ` · to ${new Date(a.expiry_date).toLocaleDateString()}` : ""}
+                    </p>
+                  </div>
+                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded ${st?.cls ?? "bg-gray-100 text-gray-600"}`}>{st?.label ?? a.status}</span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* ── Professional Recognitions ── */}
+      {(recognitions ?? []).length > 0 && (
+        <div className="mb-6">
+          <h2 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3">Recognitions</h2>
+          <div className="flex flex-wrap gap-2">
+            {(recognitions ?? []).map(r => {
+              const t = RECOGNITION_TYPE_LABELS[r.recognition_type] ?? RECOGNITION_TYPE_LABELS.custom;
+              return (
+                <div key={r.id} className="bg-white rounded-xl border border-amber-100 px-4 py-3 flex items-center gap-2.5"
+                  title={r.description ?? undefined}>
+                  <span className="text-xl">{t.icon}</span>
+                  <div>
+                    <p className="text-sm font-medium text-gray-800">{r.title}</p>
+                    <p className="text-[10px] text-gray-400">{t.label} · {new Date(r.awarded_at).toLocaleDateString()}</p>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* ── Professional Credentials ── */}
+      {(credentials ?? []).length > 0 && (
+        <div className="mb-6">
+          <h2 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3">Professional Credentials</h2>
+          <div className="bg-white rounded-xl border border-gray-100 overflow-hidden divide-y divide-gray-50">
+            {(credentials ?? []).map(c => {
+              const st = CREDENTIAL_STATUS_CONFIG[c.status] ?? CREDENTIAL_STATUS_CONFIG.pending_verification;
+              return (
+                <div key={c.id} className="flex items-center gap-3 px-5 py-3">
+                  <span className="text-lg">🎖️</span>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm text-gray-800">{c.title}{c.verified && <span className="ml-1.5 text-[10px] text-blue-600">✓ verified</span>}</p>
+                    <p className="text-[10px] text-gray-400">
+                      {CREDENTIAL_TYPE_LABELS[c.credential_type] ?? c.credential_type}
+                      {c.issuing_body ? ` · ${c.issuing_body}` : ""}
+                      {c.expiry_date ? ` · expires ${new Date(c.expiry_date).toLocaleDateString()}` : ""}
+                    </p>
+                  </div>
+                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded ${st.cls}`}>{st.label}</span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {byFramework.size > 0 ? (
         <div className="flex flex-col gap-6">

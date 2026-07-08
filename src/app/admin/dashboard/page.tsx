@@ -1,6 +1,7 @@
-import { createClient } from "@/lib/supabase/server";
+import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import Link from "next/link";
+import type { OrgRole } from "@/lib/roles";
 
 type CompetencyRow = {
   user_id: string;
@@ -15,18 +16,53 @@ export default async function AdminDashboardPage() {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
-  const { data: profile } = await supabase
+  const admin = createAdminClient();
+
+  const { data: profile } = await admin
     .from("profiles")
     .select("full_name, role, hospital_id")
     .eq("id", user.id)
     .single();
 
-  if (!profile?.hospital_id) redirect("/dashboard");
+  const { data: orgProfile, error: orgErr } = await admin
+    .from("profiles")
+    .select("org_role, organisation_id")
+    .eq("id", user.id)
+    .returns<{ org_role: string | null; organisation_id: string | null }[]>()
+    .maybeSingle();
+  const orgRole = (!orgErr && orgProfile ? orgProfile.org_role as OrgRole : null) ?? null;
 
-  const { data: nurses } = await supabase
+  // Chief officers and org admins see all facilities in their organisation
+  const orgWideRoles: OrgRole[] = ["chief_officer", "org_admin"];
+  const isOrgWide = orgRole && orgWideRoles.includes(orgRole) && orgProfile?.organisation_id;
+
+  let nurseHospitalIds: string[] = profile?.hospital_id ? [profile.hospital_id] : [];
+
+  if (isOrgWide) {
+    const { data: orgHospitals } = await admin
+      .from("hospitals")
+      .select("id")
+      .eq("organisation_id", orgProfile!.organisation_id!);
+    nurseHospitalIds = (orgHospitals ?? []).map(h => h.id);
+  }
+
+  if (!nurseHospitalIds.length) {
+    return (
+      <div className="flex flex-col items-center justify-center py-24 text-center">
+        <p className="text-5xl mb-4">🏥</p>
+        <h1 className="text-lg font-bold text-gray-900 mb-2">No facility assigned</h1>
+        <p className="text-sm text-gray-400 max-w-sm">
+          Your account hasn&apos;t been linked to a hospital or organisation yet.
+          A Super Admin needs to assign you to a facility before data appears here.
+        </p>
+      </div>
+    );
+  }
+
+  const { data: nurses } = await admin
     .from("profiles")
     .select("id, full_name, specialization, created_at")
-    .eq("hospital_id", profile.hospital_id ?? "")
+    .in("hospital_id", nurseHospitalIds)
     .eq("role", "nurse")
     .order("full_name", { ascending: true });
 
@@ -34,15 +70,15 @@ export default async function AdminDashboardPage() {
 
   const [{ data: allEnrollments }, { data: rawComps }, { data: allCPD }] = await Promise.all([
     nurseIds.length > 0
-      ? supabase.from("course_enrollments").select("user_id, progress, completed_at").in("user_id", nurseIds)
+      ? admin.from("course_enrollments").select("user_id, progress, completed_at").in("user_id", nurseIds)
       : Promise.resolve({ data: [] as { user_id: string; progress: number; completed_at: string | null }[] }),
     nurseIds.length > 0
-      ? supabase.from("nurse_competencies")
+      ? admin.from("nurse_competencies")
           .select("user_id, competency_id, status, expiry_date, competencies(name, category)")
           .in("user_id", nurseIds)
       : Promise.resolve({ data: [] as CompetencyRow[] }),
     nurseIds.length > 0
-      ? supabase.from("cpd_logs").select("user_id, hours").in("user_id", nurseIds)
+      ? admin.from("cpd_logs").select("user_id, hours").in("user_id", nurseIds)
       : Promise.resolve({ data: [] as { user_id: string; hours: number }[] }),
   ]);
 
@@ -106,8 +142,17 @@ export default async function AdminDashboardPage() {
           {/* Header */}
           <div className="mb-6 flex items-start justify-between">
             <div>
-              <h1 className="text-xl font-bold text-gray-900">Hospital Dashboard</h1>
-              <p className="text-gray-400 text-sm mt-0.5">Ward-level compliance and workforce intelligence for nursing directors.</p>
+              <h1 className="text-xl font-bold text-gray-900">
+                {orgRole === "chief_officer" ? "Chief Officer Dashboard"
+                  : orgRole === "org_admin" ? "Administrator Dashboard"
+                  : orgRole === "manager" ? "Manager Dashboard"
+                  : "Organisation Dashboard"}
+              </h1>
+              <p className="text-gray-400 text-sm mt-0.5">
+                {isOrgWide
+                  ? `Organisation-wide view across ${nurseHospitalIds.length} facilit${nurseHospitalIds.length !== 1 ? "ies" : "y"}.`
+                  : "Facility-level compliance and workforce intelligence."}
+              </p>
             </div>
             <a href="mailto:gabriel@semacast.com?subject=Export CPD Report"
               className="flex items-center gap-2 text-xs bg-teal-600 text-white px-4 py-2 rounded-lg hover:bg-teal-700 transition-colors font-medium">
@@ -357,20 +402,22 @@ export default async function AdminDashboardPage() {
           )}
 
           {/* Quick actions */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            {[
-              { label: "Invite Nurse",      icon: "➕", color: "bg-teal-50 text-teal-700",    href: "/admin/invite" },
-              { label: "Export CPD Report", icon: "📊", color: "bg-blue-50 text-blue-700",     href: "#" },
-              { label: "Competency Matrix", icon: "🪪", color: "bg-purple-50 text-purple-700", href: "/admin/competencies" },
-              { label: "Hospital Settings", icon: "⚙️", color: "bg-gray-50 text-gray-700",    href: "/admin/settings" },
-            ].map(({ label, icon, color, href }) => (
-              <Link key={label} href={href}
-                className={`flex items-center gap-3 p-4 rounded-xl text-sm font-medium hover:opacity-80 transition-opacity ${color}`}>
-                <span className="text-xl">{icon}</span>
-                {label}
-              </Link>
-            ))}
-          </div>
+          {orgRole !== "chief_officer" && (
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              {[
+                ...(["org_admin","manager"].includes(orgRole ?? "") || !orgRole ? [{ label: "Invite Worker", icon: "➕", color: "bg-teal-50 text-teal-700", href: "/admin/invite" }] : []),
+                { label: "Export CPD Report", icon: "📊", color: "bg-blue-50 text-blue-700", href: "#" },
+                { label: "Competency Matrix", icon: "🪪", color: "bg-purple-50 text-purple-700", href: "/admin/competencies" },
+                ...(["org_admin"].includes(orgRole ?? "") || !orgRole ? [{ label: "Settings", icon: "⚙️", color: "bg-gray-50 text-gray-700", href: "/admin/settings" }] : []),
+              ].map(({ label, icon, color, href }) => (
+                <Link key={label} href={href}
+                  className={`flex items-center gap-3 p-4 rounded-xl text-sm font-medium hover:opacity-80 transition-opacity ${color}`}>
+                  <span className="text-xl">{icon}</span>
+                  {label}
+                </Link>
+              ))}
+            </div>
+          )}
     </>
   );
 }

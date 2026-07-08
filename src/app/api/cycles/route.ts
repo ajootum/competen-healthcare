@@ -7,12 +7,12 @@ export async function POST(req: Request) {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const { data: profile } = await supabase.from("profiles").select("role, hospital_id").eq("id", user.id).single();
+  const { data: profile } = await createAdminClient().from("profiles").select("role, hospital_id").eq("id", user.id).single();
   if (!["hospital_admin","super_admin","educator"].includes(profile?.role ?? "")) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  const { nurse_id, cycle_type, start_date, end_date, notes, framework_ids } = await req.json();
+  const { nurse_id, cycle_type, start_date, end_date, notes, framework_ids, min_assessors, consensus_rule } = await req.json();
   if (!nurse_id || !cycle_type) return NextResponse.json({ error: "nurse_id and cycle_type required" }, { status: 400 });
 
   const admin = createAdminClient();
@@ -27,6 +27,8 @@ export async function POST(req: Request) {
     end_date: end_date ?? null,
     notes: notes ?? null,
     created_by: user.id,
+    min_assessors: min_assessors ?? 1,
+    consensus_rule: consensus_rule ?? "any",
   }).select().single();
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });

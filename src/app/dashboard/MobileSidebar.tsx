@@ -4,17 +4,16 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 const navItems = [
-  { label: "Dashboard",           href: "/dashboard",            icon: "⊞" },
-  { label: "CPD Academy",         href: "/dashboard/courses",    icon: "📚" },
-  { label: "Question Bank",       href: "/dashboard/questions",  icon: "❓" },
-  { label: "Competency Passport", href: "/dashboard/passport",   icon: "🪪" },
-  { label: "CPD Log",             href: "/dashboard/cpd",        icon: "⏱️" },
-  { label: "Knowledge Hub",       href: "/dashboard/knowledge",  icon: "🔬" },
-  { label: "AI Copilot",          href: "/dashboard/copilot",    icon: "🤖" },
-  { label: "Simulation Lab",      href: "/dashboard/simulation", icon: "🏥" },
-  { label: "OSCE Platform",       href: "/dashboard/osce",       icon: "📋" },
-  { label: "Audit Tools",         href: "/dashboard/audit",      icon: "📊" },
-  { label: "Billing & Plan",      href: "/dashboard/billing",    icon: "💳" },
+  { label: "Dashboard",           href: "/dashboard",              icon: "🏠" },
+  { label: "Competency Passport", href: "/dashboard/passport",     icon: "🧠" },
+  { label: "Learning Pathway",    href: "/dashboard/learning",     icon: "📚" },
+  { label: "My CPUs",             href: "/dashboard/cpu",          icon: "🏥" },
+  { label: "Assessments",         href: "/dashboard/assessments",  icon: "📝" },
+  { label: "Skills Logbook",      href: "/dashboard/logbook",      icon: "📖" },
+  { label: "Feedback",            href: "/dashboard/feedback",     icon: "💬" },
+  { label: "Certificates",        href: "/dashboard/certificates", icon: "🏆" },
+  { label: "Clinical Library",    href: "/dashboard/library",      icon: "🔎" },
+  { label: "Career Growth",       href: "/dashboard/career",       icon: "📈" },
 ];
 
 type Props = {

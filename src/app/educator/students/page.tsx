@@ -1,5 +1,8 @@
-import { createClient } from "@/lib/supabase/server";
+import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
+
+type NurseRow = { id: string; full_name: string; specialization: string | null };
+type StudentRow = NurseRow & { enrolled: number; completed: number; avgProg: number; hours: number };
 
 export default async function StudentsPage() {
   const supabase = await createClient();
@@ -15,10 +18,10 @@ export default async function StudentsPage() {
   const hospitalId = profile?.hospital_id;
 
   const { data: nurses } = hospitalId
-    ? await supabase.from("profiles").select("id, full_name, specialization").eq("hospital_id", hospitalId).eq("role", "nurse")
+    ? await createAdminClient().from("profiles").select("id, full_name, specialization").eq("hospital_id", hospitalId).eq("role", "nurse")
     : { data: [] };
 
-  const nurseIds = (nurses ?? []).map(n => n.id);
+  const nurseIds = (nurses ?? []).map((n: NurseRow) => n.id);
 
   const [{ data: enrollments }, { data: cpd }] = await Promise.all([
     nurseIds.length
@@ -31,7 +34,7 @@ export default async function StudentsPage() {
       : Promise.resolve({ data: [] as { user_id: string; hours: number }[] }),
   ]);
 
-  const rows = (nurses ?? []).map(n => {
+  const rows = (nurses ?? []).map((n: NurseRow) => {
     const enrolled  = (enrollments ?? []).filter(e => e.user_id === n.id).length;
     const completed = (enrollments ?? []).filter(e => e.user_id === n.id && e.completed_at).length;
     const avgProg   = enrolled > 0
@@ -39,7 +42,7 @@ export default async function StudentsPage() {
       : 0;
     const hours = (cpd ?? []).filter(l => l.user_id === n.id).reduce((s, l) => s + Number(l.hours), 0);
     return { ...n, enrolled, completed, avgProg, hours };
-  }).sort((a, b) => b.completed - a.completed);
+  }).sort((a: StudentRow, b: StudentRow) => b.completed - a.completed);
 
   return (
     <div className="max-w-5xl">
@@ -72,7 +75,7 @@ export default async function StudentsPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-50">
-              {rows.map(n => (
+              {rows.map((n: StudentRow) => (
                 <tr key={n.id} className="hover:bg-gray-50/40">
                   <td className="px-5 py-3.5">
                     <div className="flex items-center gap-3">

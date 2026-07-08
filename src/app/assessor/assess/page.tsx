@@ -1,4 +1,4 @@
-import { createClient } from "@/lib/supabase/server";
+import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import AssessClient from "./AssessClient";
@@ -95,8 +95,7 @@ export default async function AssessorAssessPage({ searchParams }: { searchParam
   }
 
   // Nurse selected — load cycle and framework data
-  const [{ data: nurse }, { data: cycle }] = await Promise.all([
-    supabase.from("profiles").select("full_name, specialization").eq("id", nurseId).single(),
+  const [{ data: nurse }, { data: cycle }] = await Promise.all([ createAdminClient().from("profiles").select("full_name, specialization").eq("id", nurseId).single(),
     cycleId
       ? supabase.from("competency_cycles").select("id, cycle_type, start_date, end_date").eq("id", cycleId).single()
       : supabase.from("competency_cycles").select("id, cycle_type, start_date, end_date").eq("nurse_id", nurseId).eq("status", "active").single(),

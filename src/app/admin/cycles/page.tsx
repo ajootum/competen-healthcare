@@ -24,7 +24,7 @@ export default async function CyclesPage() {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
-  const { data: profile } = await supabase.from("profiles").select("role, hospital_id").eq("id", user.id).single();
+  const { data: profile } = await createAdminClient().from("profiles").select("role, hospital_id").eq("id", user.id).single();
   if (!profile || !["hospital_admin","super_admin","educator"].includes(profile.role)) redirect("/dashboard");
 
   const admin = createAdminClient();

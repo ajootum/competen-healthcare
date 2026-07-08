@@ -3,6 +3,7 @@ import { createAdminClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import FrameworkActions from "./FrameworkActions";
+import FrameworkLifecycle from "./FrameworkLifecycle";
 
 const LIBRARY_STYLES: Record<string, { bg: string; badge: string; icon: string }> = {
   core:      { bg: "border-teal-100 bg-teal-50/30",    badge: "bg-teal-100 text-teal-700",    icon: "🏥" },
@@ -20,14 +21,19 @@ export default async function ContentBuilderPage() {
   const { data: frameworks } = await admin
     .from("frameworks")
     .select(`
-      id, name, library, sort_order, is_active,
+      id, name, library, sort_order, is_active, pub_status, version_num,
       framework_domains(
         id, name,
         framework_competencies(id)
       )
     `)
     .order("library")
-    .order("sort_order");
+    .order("sort_order")
+    .returns<{
+      id: string; name: string; library: string; sort_order: number;
+      is_active: boolean; pub_status?: string | null; version_num?: number | null;
+      framework_domains?: { id: string; name: string; framework_competencies?: { id: string }[] }[];
+    }[]>();
 
   const grouped: Record<string, typeof frameworks> = { core: [], specialty: [], role: [] };
   for (const f of frameworks ?? []) {
@@ -72,14 +78,17 @@ export default async function ContentBuilderPage() {
                           <div className="flex items-center gap-2">
                             <p className="font-semibold text-gray-900 text-sm">{f.name}</p>
                             {!f.is_active && <span className="text-[10px] bg-gray-100 text-gray-500 px-2 py-0.5 rounded">Inactive</span>}
+                            {(f.version_num ?? 0) > 0 && (
+                              <span className="text-[10px] bg-gray-100 text-gray-500 font-semibold px-1.5 py-0.5 rounded">v{f.version_num}</span>
+                            )}
                           </div>
                           <p className="text-[10px] text-gray-400 mt-0.5">{domCount} domains · {compCount} competencies</p>
                         </div>
                       </div>
-                      <div className="flex items-center gap-2">
-                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded capitalize ${style.badge}`}>{lib}</span>
+                      <div className="flex items-center gap-2 flex-wrap justify-end">
+                        <FrameworkLifecycle frameworkId={f.id} initialStatus={f.pub_status} />
                         <Link href={`/super-admin/content/${f.id}`}
-                          className="px-3 py-1.5 text-xs font-semibold bg-white border border-gray-200 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors">
+                          className="px-3 py-1.5 text-xs font-semibold bg-white border border-gray-200 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors shrink-0">
                           Configure →
                         </Link>
                       </div>

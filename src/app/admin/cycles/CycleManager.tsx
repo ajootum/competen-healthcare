@@ -18,6 +18,8 @@ export default function CycleManager({ nurses, frameworks }: { nurses: Nurse[]; 
     cycle_type: "orientation",
     end_date: "",
     notes: "",
+    min_assessors: 1,
+    consensus_rule: "any",
   });
   const [selectedFrameworks, setSelectedFrameworks] = useState<string[]>([]);
 
@@ -47,7 +49,7 @@ export default function CycleManager({ nurses, frameworks }: { nurses: Nurse[]; 
     setSaving(false);
     if (res.ok) {
       setOpen(false);
-      setForm({ nurse_id: "", cycle_type: "orientation", end_date: "", notes: "" });
+      setForm({ nurse_id: "", cycle_type: "orientation", end_date: "", notes: "", min_assessors: 1, consensus_rule: "any" });
       setSelectedFrameworks([]);
       router.refresh();
     } else {
@@ -114,6 +116,26 @@ export default function CycleManager({ nurses, frameworks }: { nurses: Nurse[]; 
                       </div>
                     </div>
                   ))}
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs font-semibold text-gray-500 mb-1 block">Min Assessors</label>
+                  <input
+                    type="number" min={1} max={10}
+                    value={form.min_assessors}
+                    onChange={e => setForm(p => ({ ...p, min_assessors: parseInt(e.target.value) || 1 }))}
+                    className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500" />
+                </div>
+                <div>
+                  <label className="text-xs font-semibold text-gray-500 mb-1 block">Consensus Rule</label>
+                  <select value={form.consensus_rule} onChange={e => setForm(p => ({ ...p, consensus_rule: e.target.value }))}
+                    className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500">
+                    <option value="any">Any (first assessor)</option>
+                    <option value="majority">Majority (mean score)</option>
+                    <option value="unanimous">Unanimous (lowest score)</option>
+                  </select>
                 </div>
               </div>
 

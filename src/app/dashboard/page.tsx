@@ -1,7 +1,9 @@
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
+import { cookies } from "next/headers";
 import Link from "next/link";
+import { ROLE_CONFIG, highestRole, type AppRole } from "@/lib/roles";
 
 const SCORE_COLORS = ["#ef4444","#f97316","#eab308","#14b8a6","#0d9488","#3b82f6","#8b5cf6"];
 
@@ -18,15 +20,15 @@ export default async function DashboardPage() {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
-  const { data: profile } = await supabase.from("profiles").select("*").eq("id", user.id).single();
+  const admin = createAdminClient();
+  const { data: profile } = await admin.from("profiles").select("*").eq("id", user.id).single();
   if (!profile) redirect("/login");
 
-  if (profile.role === "super_admin") redirect("/super-admin");
-  if (profile.role === "hospital_admin") redirect("/admin/dashboard");
-  if (profile.role === "assessor") redirect("/assessor");
-  if (profile.role === "educator") redirect("/educator");
+  const userRoles: AppRole[] = (profile.roles?.length ? profile.roles : [profile.role]).filter(Boolean) as AppRole[];
+  const cookieStore = await cookies();
+  const activeRole = (cookieStore.get("active_role")?.value ?? highestRole(userRoles)) as AppRole;
 
-  const admin = createAdminClient();
+  if (activeRole !== "nurse") redirect(ROLE_CONFIG[activeRole].portal);
   const firstName = profile.full_name?.split(" ")[0] ?? "Nurse";
 
   const { data: cycles } = await admin
@@ -42,7 +44,32 @@ export default async function DashboardPage() {
     .order("start_date", { ascending: false })
     .limit(5);
 
-  const activeCycle = (cycles ?? []).find(c => c.status === "active") ?? null;
+  const activeCycle = (cycles ?? []).find(c => c.status === "active") ?? (cycles ?? [])[0] ?? null;
+
+  // The five questions the dashboard must answer (Frontend User Structures spec)
+  const [{ data: decisions }, { data: pathwayItems }, { data: pendingAssessments }] = await Promise.all([
+    admin.from("competency_decisions")
+      .select("competency_id, outcome, expiry_date, created_at")
+      .eq("nurse_id", user.id).order("created_at", { ascending: false }),
+    admin.from("pathway_items")
+      .select("id, learning_pathways!inner(nurse_id, status)")
+      .eq("learning_pathways.nurse_id", user.id).eq("learning_pathways.status", "active"),
+    (cycles ?? []).length
+      ? admin.from("assessments").select("id, status").in("cycle_id", (cycles ?? []).map(c => c.id)).in("status", ["pending", "in_progress"])
+      : Promise.resolve({ data: [] }),
+  ]);
+  const dseen = new Set<string>();
+  let competentNow = 0, gaps = 0, dueSoon = 0;
+  for (const d of decisions ?? []) {
+    if (dseen.has(d.competency_id)) continue;
+    dseen.add(d.competency_id);
+    const expired = d.expiry_date && new Date(d.expiry_date).getTime() < Date.now();
+    const passing = ["competent", "provisionally_competent", "competent_with_conditions"].includes(d.outcome);
+    if (passing && !expired) {
+      competentNow++;
+      if (d.expiry_date && (new Date(d.expiry_date).getTime() - Date.now()) / 86400000 <= 60) dueSoon++;
+    } else gaps++;
+  }
 
   const [domainResult, compResult] = await Promise.all([
     activeCycle ? admin
@@ -68,23 +95,33 @@ export default async function DashboardPage() {
 
   return (
     <>
-      <div className="mb-8">
-        <h1 className="text-xl font-bold text-gray-900">Good morning, {firstName}</h1>
-        <p className="text-gray-500 text-sm mt-0.5">Your clinical competency overview</p>
+      <div className="flex items-start justify-between mb-6">
+        <div>
+          <h1 className="text-xl font-bold text-gray-900">Good morning, {firstName}</h1>
+          <p className="text-gray-500 text-sm mt-0.5">Your professional growth dashboard</p>
+        </div>
+        {(pathwayItems ?? []).length > 0 && (
+          <Link href="/dashboard/learning"
+            className="bg-teal-600 hover:bg-teal-700 text-white text-sm font-semibold px-4 py-2 rounded-lg transition-colors shrink-0">
+            ▶ Continue where you left off
+          </Link>
+        )}
       </div>
 
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+      {/* The five questions, answered at a glance */}
+      <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 mb-8">
         {[
-          { label: "Active Cycle",        value: activeCycle ? activeCycle.cycle_type : "None", sub: activeCycle ? "in progress" : "no active cycle", color: "text-teal-600" },
-          { label: "Competencies Scored", value: totalCompetencies,  sub: "this cycle",         color: "text-blue-600" },
-          { label: "Passing",             value: passingCount,        sub: `of ${totalCompetencies} scored`, color: "text-green-600" },
-          { label: "Avg Score",           value: avgScore ?? "—",     sub: "Benner 0–6",         color: "text-violet-600" },
-        ].map(({ label, value, sub, color }) => (
-          <div key={label} className="bg-white rounded-xl p-5 border border-gray-100">
-            <p className="text-xs text-gray-400 font-medium uppercase tracking-wide mb-1">{label}</p>
-            <p className={`text-2xl font-bold capitalize ${color}`}>{value}</p>
-            <p className="text-xs text-gray-400 mt-0.5">{sub}</p>
-          </div>
+          { label: "Competent in", value: competentNow, sub: "competencies current", color: "text-green-600", href: "/dashboard/passport" },
+          { label: "Still to learn", value: gaps, sub: gaps ? "open gaps" : "no open gaps", color: gaps ? "text-amber-600" : "text-gray-400", href: "/dashboard/learning" },
+          { label: "Pending assessments", value: (pendingAssessments ?? []).length, sub: "awaiting assessor", color: "text-blue-600", href: "/dashboard/assessments" },
+          { label: "Due for renewal", value: dueSoon, sub: "within 60 days", color: dueSoon ? "text-red-500" : "text-gray-400", href: "/dashboard/certificates" },
+          { label: "This cycle avg", value: avgScore ?? "—", sub: "Benner 0–6", color: "text-violet-600", href: "/dashboard/logbook" },
+        ].map(({ label, value, sub, color, href }) => (
+          <Link key={label} href={href} className="bg-white rounded-xl p-4 border border-gray-100 hover:border-teal-200 transition-colors">
+            <p className="text-xs text-gray-400 font-medium mb-1">{label}</p>
+            <p className={`text-2xl font-bold ${color}`}>{value}</p>
+            <p className="text-[10px] text-gray-400 mt-0.5">{sub}</p>
+          </Link>
         ))}
       </div>
 
@@ -204,10 +241,10 @@ export default async function DashboardPage() {
 
       <div className="mt-6 grid grid-cols-2 sm:grid-cols-4 gap-4">
         {[
-          { label: "My Passport",   href: "/dashboard/passport", icon: "🪪", color: "bg-teal-50 text-teal-700" },
-          { label: "CPD Log",       href: "/dashboard/cpd",       icon: "⏱️", color: "bg-blue-50 text-blue-700" },
-          { label: "AI Copilot",    href: "/dashboard/copilot",   icon: "🤖", color: "bg-purple-50 text-purple-700" },
-          { label: "Knowledge Hub", href: "/dashboard/knowledge", icon: "🔬", color: "bg-amber-50 text-amber-700" },
+          { label: "My CPUs",          href: "/dashboard/cpu",          icon: "🏥", color: "bg-teal-50 text-teal-700" },
+          { label: "Skills Logbook",   href: "/dashboard/logbook",      icon: "📖", color: "bg-blue-50 text-blue-700" },
+          { label: "Career Growth",    href: "/dashboard/career",       icon: "📈", color: "bg-purple-50 text-purple-700" },
+          { label: "Clinical Library", href: "/dashboard/library",      icon: "🔎", color: "bg-amber-50 text-amber-700" },
         ].map(({ label, href, icon, color }) => (
           <Link key={label} href={href}
             className={`flex items-center gap-3 rounded-xl px-4 py-4 text-sm font-medium hover:opacity-80 transition-opacity ${color}`}>
