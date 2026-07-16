@@ -5,6 +5,7 @@ import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
 import { generate } from "@/lib/ai/client";
 import { aiStatus } from "@/lib/ai/config";
+import { checkAiQuota } from "@/lib/ai/quota";
 
 // GET — report AI readiness (so the UI can show config state without a call)
 export async function GET() {
@@ -22,6 +23,11 @@ export async function POST(req: Request) {
   const { data: profile } = await admin.from("profiles").select("role, full_name").eq("id", user.id).single();
   if (!["super_admin", "hospital_admin", "educator"].includes(profile?.role ?? "")) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
+  const quota = await checkAiQuota(admin, user.id);
+  if (!quota.ok) {
+    return NextResponse.json({ error: "AI rate limit reached (" + quota.limit + " requests/hour). Try again later." }, { status: 429 });
   }
 
   if (!aiStatus().configured) {

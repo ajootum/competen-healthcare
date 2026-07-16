@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { cookies } from "next/headers";
 import Link from "next/link";
 import RoleSwitcher from "@/components/RoleSwitcher";
+import NavLink from "@/components/NavLink";
 import { highestRole, type AppRole } from "@/lib/roles";
 
 const NAV = [
@@ -15,6 +16,7 @@ const NAV = [
     { label: "Bulk Import",       href: "/super-admin/import",             icon: "📥" },
   ]},
   { group: "CONTENT", items: [
+    { label: "Studio",            href: "/super-admin/studio",             icon: "🎛️" },
     { label: "Content Builder",   href: "/super-admin/content",            icon: "📐" },
     { label: "Knowledge Graph",   href: "/super-admin/knowledge-graph",    icon: "🕸️" },
     { label: "AI Assistant",      href: "/super-admin/assistant",          icon: "🤖" },
@@ -68,7 +70,7 @@ export default async function SuperAdminLayout({ children }: { children: React.R
   return (
     <div className="min-h-screen bg-gray-50 font-[family-name:var(--font-geist-sans)]">
       <div className="flex">
-        <aside className="hidden md:flex w-56 min-h-screen bg-[#0f1923] flex-col py-6 px-4 fixed top-0 left-0 z-20">
+        <aside className="hidden md:flex w-56 h-screen bg-[#0f1923] flex-col py-6 px-4 fixed top-0 left-0 z-20">
           <Link href="/" className="flex items-center gap-2 mb-6 px-2">
             <div className="w-7 h-7 rounded bg-rose-500 flex items-center justify-center text-white font-bold text-sm">C</div>
             <span className="text-white font-semibold text-sm">Competen</span>
@@ -83,11 +85,9 @@ export default async function SuperAdminLayout({ children }: { children: React.R
               <div key={group} className="mb-1">
                 <p className="text-[9px] font-bold text-slate-600 uppercase tracking-widest px-3 py-1.5 mt-1">{group}</p>
                 {items.map(({ label, href, icon }) => (
-                  <Link key={label} href={href}
-                    className="flex items-center gap-2.5 px-3 py-1.5 rounded-lg text-xs text-slate-400 hover:bg-rose-900/30 hover:text-white transition-colors">
-                    <span className="w-4 text-center text-xs">{icon}</span>
-                    <span>{label}</span>
-                  </Link>
+                  <NavLink key={label} href={href} icon={icon} label={label} exact={href === "/super-admin"}
+                    className="flex items-center gap-2.5 px-3 py-1.5 rounded-lg text-xs text-slate-400 hover:bg-rose-900/30 hover:text-white transition-colors"
+                    activeClassName="flex items-center gap-2.5 px-3 py-1.5 rounded-lg text-xs bg-rose-900/50 text-white font-medium" />
                 ))}
               </div>
             ))}

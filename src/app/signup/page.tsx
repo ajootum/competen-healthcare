@@ -6,6 +6,7 @@ export default function SignupPage() {
   const [form, setForm] = useState({ full_name: "", email: "", password: "", role: "nurse" });
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [confirmSent, setConfirmSent] = useState(false);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -22,22 +23,40 @@ export default function SignupPage() {
       const data = await res.json();
 
       if (!res.ok) {
-        setError(data.error || data.message || JSON.stringify(data) || "Sign up failed — please try again");
+        setError(data.error || data.message || "Sign up failed — please try again");
+        setLoading(false);
+      } else if (data.needsConfirmation) {
+        setConfirmSent(true);
         setLoading(false);
       } else {
         const portals: Record<string, string> = {
-          nurse:          "/dashboard",
-          hospital_admin: "/admin/dashboard",
-          assessor:       "/assessor",
-          educator:       "/educator",
-          super_admin:    "/super-admin",
+          nurse:    "/dashboard",
+          assessor: "/assessor",
+          educator: "/educator",
         };
-        window.location.href = portals[form.role] ?? "/dashboard";
+        window.location.href = portals[data.role] ?? "/dashboard";
       }
     } catch (err) {
       setError("Network error: " + String(err));
       setLoading(false);
     }
+  }
+
+  if (confirmSent) {
+    return (
+      <div className="min-h-screen bg-[#0a2e38] flex flex-col items-center justify-center px-4">
+        <div className="w-full max-w-md bg-white rounded-2xl p-8 text-center">
+          <p className="text-4xl mb-3">📬</p>
+          <h1 className="text-lg font-bold text-gray-900">Check your email</h1>
+          <p className="text-sm text-gray-500 mt-2">
+            We sent a confirmation link to <b>{form.email}</b>. Click it to activate your account, then sign in.
+          </p>
+          <Link href="/login" className="mt-5 inline-block text-sm font-semibold text-teal-600 hover:underline">
+            Go to sign in →
+          </Link>
+        </div>
+      </div>
+    );
   }
 
   return (
@@ -90,8 +109,10 @@ export default function SignupPage() {
               <option value="nurse">Nurse / Clinical Staff</option>
               <option value="assessor">Assessor / Clinical Supervisor</option>
               <option value="educator">Nurse Educator</option>
-              <option value="hospital_admin">Hospital Administrator</option>
             </select>
+            <p className="text-[10px] text-gray-400 mt-1">
+              Administrator accounts are created by your organisation&apos;s admin or Competen.
+            </p>
           </div>
 
           {error && (

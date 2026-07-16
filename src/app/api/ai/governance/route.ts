@@ -5,6 +5,7 @@ import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
 import { generate } from "@/lib/ai/client";
 import { aiStatus } from "@/lib/ai/config";
+import { checkAiQuota } from "@/lib/ai/quota";
 import { frameworkImpact } from "@/lib/engines/impact";
 
 // POST — AI Governance Assistant: plain-language impact summary of a proposed
@@ -19,6 +20,11 @@ export async function POST(req: Request) {
   if (!["super_admin", "hospital_admin"].includes(profile?.role ?? "")) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
+  const quota = await checkAiQuota(admin, user.id);
+  if (!quota.ok) {
+    return NextResponse.json({ error: "AI rate limit reached (" + quota.limit + " requests/hour). Try again later." }, { status: 429 });
+  }
+
   if (!aiStatus().configured) return NextResponse.json({ error: "AI is not configured." }, { status: 503 });
 
   const { frameworkId } = await req.json();

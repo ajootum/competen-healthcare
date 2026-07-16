@@ -257,3 +257,43 @@ export const QO_LINK_TYPE_LABELS: Record<string, string> = {
   supports: "Supports",
   measures: "Measures",
 };
+
+// ============================================================
+// COMPETEN Studio — modular content authoring
+// ============================================================
+
+export const SKILL_TYPE_LABELS: Record<string, { label: string; icon: string }> = {
+  psychomotor:     { label: "Psychomotor",     icon: "✋" },
+  cognitive:       { label: "Cognitive",       icon: "🧠" },
+  communication:   { label: "Communication",   icon: "💬" },
+  decision_making: { label: "Decision-making", icon: "⚖️" },
+  leadership:      { label: "Leadership",      icon: "⭐" },
+  documentation:   { label: "Documentation",   icon: "📝" },
+  safety_critical: { label: "Safety-critical", icon: "🛡️" },
+};
+
+export const SCORING_METHOD_LABELS: Record<string, string> = {
+  done_not_done: "Done / Not done",
+  competent_nyc: "Competent / Not yet competent",
+  scale_0_2:     "0–2 scale",
+  scale_0_4:     "0–4 scale",
+  entrustment:   "Entrustment scale",
+  narrative:     "Narrative only",
+};
+
+// Assessor operating layer ("The Assessor Role" spec)
+export const ENTRUSTMENT_LABELS: Record<string, string> = {
+  not_permitted:        "Not permitted to perform",
+  direct_supervision:   "May perform under direct supervision",
+  indirect_supervision: "May perform under indirect supervision",
+  independent:          "May perform independently",
+  may_supervise:        "May supervise or teach others",
+};
+
+export const TASK_TYPE_UI: Record<string, { label: string; icon: string; cls: string }> = {
+  full_cpu:    { label: "Full CPU assessment", icon: "🏥", cls: "bg-blue-50 text-blue-700" },
+  focused:     { label: "Focused assessment",  icon: "🎯", cls: "bg-violet-50 text-violet-700" },
+  renewal:     { label: "Renewal",             icon: "🔄", cls: "bg-amber-50 text-amber-700" },
+  remediation: { label: "Remediation",         icon: "🌱", cls: "bg-red-50 text-red-600" },
+  entrustment: { label: "Entrustment decision",icon: "🔑", cls: "bg-teal-50 text-teal-700" },
+};

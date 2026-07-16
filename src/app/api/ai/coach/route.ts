@@ -5,6 +5,7 @@ import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
 import { generate } from "@/lib/ai/client";
 import { aiStatus } from "@/lib/ai/config";
+import { checkAiQuota } from "@/lib/ai/quota";
 import { OUTCOME_CONFIG, type DecisionOutcome } from "@/lib/ckcm";
 
 // POST — AI Competency Coach: turns a worker's gap decisions into an explained,
@@ -20,6 +21,10 @@ export async function POST(req: Request) {
   }
 
   const admin = createAdminClient();
+  const quota = await checkAiQuota(admin, user.id);
+  if (!quota.ok) {
+    return NextResponse.json({ error: "AI rate limit reached (" + quota.limit + " requests/hour). Try again later." }, { status: 429 });
+  }
   const { data: me } = await admin.from("profiles").select("role, full_name").eq("id", user.id).single();
   const { nurse_id } = await req.json().catch(() => ({}));
 

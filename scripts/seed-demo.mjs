@@ -5,6 +5,11 @@
 import { createClient } from "@supabase/supabase-js";
 import { readFileSync } from "node:fs";
 
+if (!process.argv.includes("--confirm")) {
+  console.error("This script WRITES to the database in .env.local. Re-run with --confirm to proceed.");
+  process.exit(1);
+}
+
 const env = {};
 for (const line of readFileSync(new URL("../.env.local", import.meta.url), "utf8").split(/\r?\n/)) {
   const m = line.match(/^([A-Z0-9_]+)\s*=\s*(.*)$/);
@@ -113,6 +118,93 @@ const { error: edgeErr } = await db.from("knowledge_edges").upsert(edges, {
 if (edgeErr) console.warn("knowledge_edges:", edgeErr.message);
 
 console.log(`Seeded: framework=${fw}\n  domain=${dom}\n  practice=${pra}\n  cpu=${cpu}\n  competencies=${comps.length}, skills=8, resource linked, ${edges.length} graph edges`);
+
+// ── Role Requirement Matrix (migration 021) — skipped if not applied ──
+try {
+  const { data: existing021 } = await db.from("role_requirements").select("id").eq("cpu_id", cpu).limit(1);
+  if (existing021 === null) throw new Error("role_requirements not found — run migration 021");
+  if (!existing021.length) {
+    const { error } = await db.from("role_requirements").insert({
+      profession: "nursing", role_label: "Registered Nurse",
+      hospital_id: null, department_id: null, cpu_id: cpu, requirement_type: "mandatory",
+    });
+    if (error) throw new Error(error.message);
+    console.log("Role requirement seeded: Registered Nurse → Safe Oxygen Administration (mandatory).");
+  }
+} catch (e) {
+  console.log(`Role requirement skipped: ${e.message}`);
+}
+
+// ── Scoped authority demo (migration 023) — skipped if not applied ──
+try {
+  const daysFromNow = (n) => { const d = new Date(); d.setDate(d.getDate() + n); return d.toISOString().slice(0, 10); };
+  const { error: probe023 } = await db.from("assessor_authorizations").select("id").limit(1);
+  if (probe023) throw new Error("assessor_authorizations not found — run migration 023");
+  const { data: elisha } = await db.from("profiles").select("id, full_name, hospital_id").ilike("full_name", "%Elisha%").single();
+  if (elisha) {
+    const { data: existingAuth } = await db.from("assessor_authorizations")
+      .select("id").eq("user_id", elisha.id).eq("cpu_id", cpu).maybeSingle();
+    if (!existingAuth) {
+      await db.from("assessor_authorizations").insert({
+        user_id: elisha.id, hospital_id: elisha.hospital_id, cpu_id: cpu,
+        independence: "independent", valid_until: daysFromNow(365),
+        authorized_by_name: "Seed",
+      });
+    }
+    const { data: existingResp } = await db.from("content_responsibilities")
+      .select("id").eq("user_id", elisha.id).eq("content_id", cpu).eq("responsibility_type", "product_owner").maybeSingle();
+    if (!existingResp) {
+      await db.from("content_responsibilities").insert({
+        user_id: elisha.id, content_type: "cpu", content_id: cpu,
+        content_name: "Safe Oxygen Administration", responsibility_type: "product_owner",
+        review_due: daysFromNow(365),
+      });
+    }
+    console.log("Scoped authority seeded: Elisha = assessor for demo CPU + its Product Owner.");
+  }
+} catch (e) {
+  console.log(`Scoped authority skipped: ${e.message}`);
+}
+
+// ── Knowledge test demo (migration 022) — skipped if not applied ──
+try {
+  const { error: probeErr } = await db.from("question_banks").select("id").limit(1);
+  if (probeErr) throw new Error("question_banks not found — run migration 022");
+  const { data: existingBank } = await db.from("question_banks").select("id").eq("name", "Oxygen Therapy Knowledge Test").maybeSingle();
+  if (!existingBank) {
+    const { data: bank, error: bErr } = await db.from("question_banks").insert({
+      name: "Oxygen Therapy Knowledge Test",
+      description: "Blueprint knowledge component for Safe Oxygen Administration.",
+      cpu_id: cpu, pass_mark: 75, validity_months: 24,
+    }).select("id").single();
+    if (bErr) throw new Error(bErr.message);
+    const QS = [
+      { content: "What is the target SpO2 range for most acutely ill adult patients receiving oxygen therapy?",
+        options: ["85–90%", "94–98%", "100% at all times", "70–80%"], correct: 1,
+        explanation: "94–98% is the standard target for most acutely ill patients; 88–92% applies to those at risk of hypercapnic respiratory failure." },
+      { content: "Before commencing oxygen therapy, the FIRST action is to:",
+        options: ["Set the flow rate to maximum", "Verify patient identity using two identifiers", "Document the therapy", "Call the physician"], correct: 1,
+        explanation: "Patient identification with two identifiers is the critical first step — its omission is a critical failure." },
+      { content: "A non-rebreather mask at 15 L/min delivers approximately what FiO2?",
+        options: ["24–28%", "40–60%", "60–90%", "21%"], correct: 2,
+        explanation: "A non-rebreather with reservoir at 10–15 L/min delivers roughly 60–90% FiO2." },
+      { content: "A patient on oxygen shows falling SpO2 below the prescribed target despite therapy. The correct response is to:",
+        options: ["Wait and re-check in an hour", "Reduce the flow to conserve oxygen", "Escalate immediately per the deterioration protocol", "Remove the device to re-test on room air"], correct: 2,
+        explanation: "Failure to escalate SpO2 below target is a defined critical failure — escalate immediately." },
+    ];
+    for (const q of QS) {
+      const { error } = await db.from("questions").insert({
+        bank_id: bank.id, content: q.content, options: q.options,
+        correct_answer: q.options[q.correct], explanation: q.explanation,
+        category: "knowledge_assessment", is_published: true,
+      });
+      if (error) throw new Error(error.message);
+    }
+    console.log("Knowledge test seeded: Oxygen Therapy Knowledge Test (4 questions, pass 75%).");
+  }
+} catch (e) {
+  console.log(`Knowledge test skipped: ${e.message}`);
+}
 
 // ── EQOS demo (migration 019) — skipped gracefully if not applied ──
 try {

@@ -52,6 +52,17 @@ export default async function MyAssessmentsPage() {
   const assessorName = (a: { profiles: unknown }) =>
     (a.profiles as { full_name: string } | null)?.full_name ?? "—";
 
+  // Governed knowledge tests (migration 022) — hidden until installed
+  const [{ data: banks }, { data: kAttempts }] = await Promise.all([
+    admin.from("question_banks").select("id, name, pass_mark, clinical_practice_units(name)").eq("is_active", true).order("name"),
+    admin.from("knowledge_attempts").select("bank_id, score, passed, completed_at")
+      .eq("nurse_id", user.id).order("completed_at", { ascending: false }),
+  ]);
+  const latestAttempt = new Map<string, { score: number; passed: boolean }>();
+  for (const a of kAttempts ?? []) {
+    if (!latestAttempt.has(a.bank_id)) latestAttempt.set(a.bank_id, { score: Number(a.score), passed: a.passed });
+  }
+
   return (
     <div className="max-w-4xl">
       <div className="mb-6">
@@ -85,6 +96,35 @@ export default async function MyAssessmentsPage() {
                 </span>
               </div>
             ))}
+          </div>
+        </div>
+      )}
+
+      {(banks ?? []).length > 0 && (
+        <div className="mb-6">
+          <h2 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3">Knowledge Tests 📝</h2>
+          <div className="bg-white rounded-xl border border-gray-100 divide-y divide-gray-50">
+            {(banks ?? []).map(b => {
+              const at = latestAttempt.get(b.id);
+              const cpu = (b.clinical_practice_units as unknown as { name: string } | null)?.name;
+              return (
+                <div key={b.id} className="flex items-center gap-3 px-5 py-3">
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm text-gray-800">{b.name}</p>
+                    <p className="text-[10px] text-gray-400">{cpu ? `${cpu} · ` : ""}pass mark {b.pass_mark}%</p>
+                  </div>
+                  {at && (
+                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded ${at.passed ? "bg-green-50 text-green-600" : "bg-red-50 text-red-500"}`}>
+                      {at.passed ? `Passed ${at.score}%` : `Last ${at.score}%`}
+                    </span>
+                  )}
+                  <Link href={`/dashboard/tests/${b.id}`}
+                    className="text-xs font-semibold text-teal-700 bg-teal-50 hover:bg-teal-100 px-3 py-1.5 rounded-lg transition-colors shrink-0">
+                    {at?.passed ? "Retake" : at ? "Try again" : "Take test"}
+                  </Link>
+                </div>
+              );
+            })}
           </div>
         </div>
       )}

@@ -2,6 +2,8 @@ import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import type { OrgRole } from "@/lib/roles";
+import { generateAssessorQueue } from "@/lib/engines/tasks";
+import SmartQueue from "./SmartQueue";
 
 const SCORE_COLORS = ["#ef4444","#f97316","#eab308","#14b8a6","#0d9488","#3b82f6","#8b5cf6"];
 const SCORE_LABELS = ["Training Required","Novice","Advanced Beginner","Competent","Competent+","Proficient","Expert"];
@@ -84,6 +86,13 @@ export default async function AssessorDashboard() {
     leader: "Team Leader",
   };
 
+  // Generated assessment workload — never the raw content library.
+  // Fails soft (empty queue) until migration 021's requirement matrix exists.
+  let queue: Awaited<ReturnType<typeof generateAssessorQueue>> = { tasks: [], workload: { tasks: 0, estMinutes: 0, learners: 0, urgent: 0 } };
+  try {
+    queue = await generateAssessorQueue(admin, profile.hospital_id ?? "", user.id);
+  } catch { /* requirement matrix not installed yet */ }
+
   return (
     <div className="max-w-5xl">
       <div className="mb-6 flex items-start justify-between">
@@ -96,6 +105,9 @@ export default async function AssessorDashboard() {
           </p>
         </div>
       </div>
+
+      {/* ── Smart Assessment Queue (generated workload) ── */}
+      <SmartQueue tasks={queue.tasks} workload={queue.workload} />
 
       {/* ── Charge Nurse: Unit Overview ── */}
       {orgRole === "charge_nurse" && (

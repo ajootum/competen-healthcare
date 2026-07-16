@@ -4,6 +4,7 @@ import { cookies } from "next/headers";
 import Link from "next/link";
 import MobileSidebar from "./MobileSidebar";
 import RoleSwitcher from "@/components/RoleSwitcher";
+import NavLink from "@/components/NavLink";
 import { highestRole, type AppRole } from "@/lib/roles";
 
 // Core navigation follows the Frontend User Structures spec: a short menu that
@@ -58,26 +59,22 @@ export default async function DashboardLayout({ children }: { children: React.Re
       />
 
       <div className="flex">
-        <aside className="hidden md:flex w-56 min-h-screen bg-[#0a2e38] flex-col py-6 px-4 fixed top-0 left-0 z-20">
+        <aside className="hidden md:flex w-56 h-screen bg-[#0a2e38] flex-col py-6 px-4 fixed top-0 left-0 z-20">
           <Link href="/" className="flex items-center gap-2 mb-6 px-2">
             <div className="w-7 h-7 rounded bg-teal-500 flex items-center justify-center text-white font-bold text-sm">C</div>
             <span className="text-white font-semibold text-sm">Competen</span>
           </Link>
           <nav className="flex flex-col gap-0.5 flex-1 overflow-y-auto">
             {navItems.map(({ label, href, icon }) => (
-              <Link key={label} href={href}
-                className="flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm text-teal-100/70 hover:bg-teal-800/50 hover:text-white transition-colors">
-                <span className="text-sm leading-none w-5 text-center">{icon}</span>
-                <span>{label}</span>
-              </Link>
+              <NavLink key={label} href={href} icon={icon} label={label} exact={href === "/dashboard"}
+                className="flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm text-teal-100/70 hover:bg-teal-800/50 hover:text-white transition-colors"
+                activeClassName="flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm bg-teal-700/60 text-white font-medium" />
             ))}
             <p className="px-3 pt-3 pb-1 text-[9px] font-bold uppercase tracking-widest text-teal-400/40">Tools</p>
             {toolItems.map(({ label, href, icon }) => (
-              <Link key={label} href={href}
-                className="flex items-center gap-2.5 px-3 py-1.5 rounded-lg text-[13px] text-teal-100/40 hover:bg-teal-800/50 hover:text-white transition-colors">
-                <span className="text-sm leading-none w-5 text-center">{icon}</span>
-                <span>{label}</span>
-              </Link>
+              <NavLink key={label} href={href} icon={icon} label={label}
+                className="flex items-center gap-2.5 px-3 py-1.5 rounded-lg text-[13px] text-teal-100/40 hover:bg-teal-800/50 hover:text-white transition-colors"
+                activeClassName="flex items-center gap-2.5 px-3 py-1.5 rounded-lg text-[13px] bg-teal-700/60 text-white font-medium" />
             ))}
           </nav>
           <div className="pt-4 border-t border-teal-800/60">

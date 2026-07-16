@@ -27,6 +27,14 @@ export async function PATCH(req: Request) {
   if (!approval) return NextResponse.json({ error: "Not found" }, { status: 404 });
   if (approval.status !== "pending") return NextResponse.json({ error: "Already reviewed" }, { status: 400 });
 
+  // Separation of duties (User Account Architecture §27): the person who
+  // submitted content for review may not approve it themselves.
+  if (approval.submitted_by === user.id) {
+    return NextResponse.json({
+      error: "Separation of duties: you submitted this content — a different reviewer must approve or reject it.",
+    }, { status: 403 });
+  }
+
   const newApprovalStatus = decision === "approve" ? "approved" : "rejected";
   const newFrameworkStatus = decision === "approve" ? "approved" : "draft";
 

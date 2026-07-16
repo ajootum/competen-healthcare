@@ -2,22 +2,33 @@ import { createClient } from "@/lib/supabase/server";
 import { createClient as createAdminClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
 
+// Public self-registration. Privileged roles (hospital_admin, super_admin)
+// are assigned by administrators in All Users — never via public signup.
+const PUBLIC_ROLES = ["nurse", "assessor", "educator"];
+
 export async function POST(request: Request) {
   const { email, password, full_name, role } = await request.json();
-  const supabase = await createClient();
 
+  if (!email || !password) {
+    return NextResponse.json({ error: "Email and password are required" }, { status: 400 });
+  }
+  if (String(password).length < 8) {
+    return NextResponse.json({ error: "Password must be at least 8 characters" }, { status: 400 });
+  }
+  const safeRole = PUBLIC_ROLES.includes(role) ? role : "nurse";
+
+  const supabase = await createClient();
   const { data, error } = await supabase.auth.signUp({
     email,
     password,
-    options: { data: { full_name, role } },
+    options: { data: { full_name, role: safeRole } },
   });
 
   if (error) {
-    console.error("Supabase signup error:", JSON.stringify(error));
-    return NextResponse.json({ error: error.message || error.code || JSON.stringify(error) }, { status: 400 });
+    return NextResponse.json({ error: error.message || "Sign up failed" }, { status: 400 });
   }
 
-  // Use service role key to bypass RLS and write the profile with correct role
+  // Service role bypasses RLS to write the profile with the validated role
   if (data.user) {
     const admin = createAdminClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -27,9 +38,10 @@ export async function POST(request: Request) {
       id: data.user.id,
       full_name: full_name || "New User",
       email,
-      role: role || "nurse",
+      role: safeRole,
     }, { onConflict: "id" });
   }
 
-  return NextResponse.json({ success: true });
+  // No session ⇒ Supabase email confirmation is enabled — user must verify first
+  return NextResponse.json({ success: true, role: safeRole, needsConfirmation: !data.session });
 }

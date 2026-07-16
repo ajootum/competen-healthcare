@@ -2,6 +2,7 @@ import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { cookies } from "next/headers";
 import Link from "next/link";
+import NavLink from "@/components/NavLink";
 import RoleSwitcher from "@/components/RoleSwitcher";
 import { highestRole, ORG_ROLE_CONFIG, type AppRole, type OrgRole } from "@/lib/roles";
 
@@ -71,7 +72,7 @@ export default async function AssessorLayout({ children }: { children: React.Rea
   return (
     <div className="min-h-screen bg-gray-50 font-[family-name:var(--font-geist-sans)]">
       <div className="flex">
-        <aside className="hidden md:flex w-56 min-h-screen bg-[#0f172a] flex-col py-6 px-4 fixed top-0 left-0 z-20">
+        <aside className="hidden md:flex w-56 h-screen bg-[#0f172a] flex-col py-6 px-4 fixed top-0 left-0 z-20">
           <Link href="/" className="flex items-center gap-2 mb-6 px-2">
             <div className="w-7 h-7 rounded bg-indigo-500 flex items-center justify-center text-white font-bold text-sm">C</div>
             <span className="text-white font-semibold text-sm">Competen</span>
@@ -81,13 +82,11 @@ export default async function AssessorLayout({ children }: { children: React.Rea
             <span className="text-[10px] font-bold text-indigo-400/70 uppercase tracking-widest">{portalLabel} Portal</span>
           </div>
 
-          <nav className="flex flex-col gap-0.5 flex-1">
+          <nav className="flex flex-col gap-0.5 flex-1 overflow-y-auto">
             {BASE_NAV.map(({ label, href, icon }) => (
-              <Link key={label} href={href}
-                className="flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm text-slate-400 hover:bg-indigo-900/40 hover:text-white transition-colors">
-                <span className="w-5 text-center text-sm">{icon}</span>
-                <span>{label}</span>
-              </Link>
+              <NavLink key={label} href={href} icon={icon} label={label} exact={href === "/assessor"}
+                className="flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm text-slate-400 hover:bg-indigo-900/40 hover:text-white transition-colors"
+                activeClassName="flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm bg-indigo-900/60 text-white font-medium" />
             ))}
             {extraNav.length > 0 && (
               <>

@@ -2,6 +2,11 @@
 // Skills Logbook has data. Idempotent (upsert on cycle+skill+assessor).
 import { createClient } from "@supabase/supabase-js";
 import { readFileSync } from "node:fs";
+
+if (!process.argv.includes("--confirm")) {
+  console.error("This script WRITES to the database in .env.local. Re-run with --confirm to proceed.");
+  process.exit(1);
+}
 const env = {};
 for (const line of readFileSync(new URL("../.env.local", import.meta.url), "utf8").split(/\r?\n/)) {
   const m = line.match(/^([A-Z0-9_]+)\s*=\s*(.*)$/);

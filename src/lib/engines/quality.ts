@@ -34,8 +34,11 @@ export async function qualityReport(admin: Admin, hospitalId: string): Promise<Q
     admin.from("frameworks").select("id, pub_status, review_date").eq("is_active", true)
       .returns<{ id: string; pub_status: string | null; review_date: string | null }[]>(),
     admin.from("profiles").select("id").eq("hospital_id", hospitalId).eq("role", "nurse"),
-    admin.from("competency_decisions").select("nurse_id, competency_id, outcome, expiry_date, created_at")
-      .order("created_at", { ascending: false }),
+    admin.from("competency_decisions")
+      .select("nurse_id, competency_id, outcome, expiry_date, created_at, profiles!nurse_id!inner(hospital_id)")
+      .eq("profiles.hospital_id", hospitalId)
+      .order("created_at", { ascending: false })
+      .limit(5000),
     admin.from("professional_credentials").select("verified, status, expiry_date").eq("hospital_id", hospitalId),
     admin.from("governance_committees").select("id, is_active, committee_members(id)"),
     admin.from("audit_log").select("id", { count: "exact", head: true })

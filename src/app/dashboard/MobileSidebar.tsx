@@ -72,7 +72,7 @@ export default function MobileSidebar({ fullName, role, isAdmin }: Props) {
           <button onClick={() => setOpen(false)} className="text-teal-300/60 hover:text-white transition-colors text-lg leading-none">✕</button>
         </div>
 
-        <nav className="flex flex-col gap-0.5 flex-1">
+        <nav className="flex flex-col gap-0.5 flex-1 overflow-y-auto">
           {navItems.map(({ label, href, icon }) => {
             const active = pathname === href || (href !== "/dashboard" && pathname.startsWith(href));
             return (
