@@ -74,9 +74,9 @@ export default async function MyCpusPage() {
   return (
     <div className="max-w-4xl">
       <div className="mb-6">
-        <h1 className="text-xl font-bold text-gray-900">My Clinical Practice Units</h1>
+        <h1 className="text-xl font-bold text-gray-900">My CPUs</h1>
         <p className="text-gray-400 text-sm mt-0.5">
-          Where learning, workplace practice and assessment converge — your progress through each unit of clinical work.
+          Your Clinical Practice Units — where learning, workplace practice and assessment converge.
         </p>
       </div>
 
@@ -98,9 +98,10 @@ export default async function MyCpusPage() {
                 <div className="px-5 py-4 bg-gray-50/50 border-b border-gray-100">
                   <div className="flex items-center gap-3">
                     <div className="flex-1 min-w-0">
-                      <p className="font-bold text-gray-900">{cpu.name}
+                      <Link href={`/dashboard/cpu/${cpu.id}`} className="font-bold text-gray-900 hover:text-teal-700">
+                        {cpu.name}
                         <span className="ml-2 text-[10px] font-mono font-normal text-gray-300">{cpu.code}</span>
-                      </p>
+                      </Link>
                       <p className="text-[11px] text-gray-400 mt-0.5">
                         {practice ? `${practice} · ` : ""}{COMPLEXITY_LABELS[cpu.complexity] ?? `Level ${cpu.complexity}`}
                         {cpu.reassessment_months ? ` · reassess every ${cpu.reassessment_months} months` : ""}
@@ -111,6 +112,10 @@ export default async function MyCpusPage() {
                       <p className="text-lg font-bold text-gray-900">{progress}%</p>
                       <p className="text-[10px] text-gray-400">{passing}/{cpuComps.length} competent</p>
                     </div>
+                    <Link href={`/dashboard/cpu/${cpu.id}`}
+                      className="text-xs font-semibold bg-teal-600 hover:bg-teal-700 text-white px-3 py-1.5 rounded-lg shrink-0">
+                      Open workspace →
+                    </Link>
                   </div>
                   <div className="w-full h-1.5 bg-gray-100 rounded-full overflow-hidden mt-3">
                     <div className={`h-full rounded-full ${progress >= 100 ? "bg-green-500" : progress > 0 ? "bg-teal-500" : "bg-gray-200"}`}

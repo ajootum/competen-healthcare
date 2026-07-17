@@ -125,7 +125,7 @@ function ChecklistModal({ station, onClose }: { station: Station; onClose: () =>
   const toggle = (id: string) => {
     setChecked(prev => {
       const next = new Set(prev);
-      next.has(id) ? next.delete(id) : next.add(id);
+      if (next.has(id)) next.delete(id); else next.add(id);
       return next;
     });
   };
@@ -208,19 +208,63 @@ function ChecklistModal({ station, onClose }: { station: Station; onClose: () =>
 
 type Tab = "practice" | "results" | "book";
 
+// AI Examiner: the Clinical Coach runs the station and scores against its checklist
+function examinerPrompt(s: Station): string {
+  const items = s.checklist.map((c, i) => `${i + 1}. ${c.text}`).join("\n");
+  return `Act as my OSCE examiner for this station, one step at a time.
+
+Station: ${s.title} (${s.category}, ${s.difficulty}, ${s.duration}).
+Official checklist you will score me against:
+${items}
+
+Set the scene briefly, then ask me to talk through and demonstrate the skill step by step — asking one question at a time and probing where I'm vague. Do NOT reveal the checklist during the exam. At the end, score me item-by-item against the checklist (met / partially met / not met), give a percentage with the 70% pass mark, and coach me on what to improve.`;
+}
+
 export default function OSCEPage() {
   const [tab, setTab] = useState<Tab>("practice");
   const [activeStation, setActiveStation] = useState<Station | null>(null);
+  const [q, setQ] = useState("");
+  const [cat, setCat] = useState("All");
 
   const available = stations.filter(s => s.status === "available");
+  const categories = ["All", ...new Set(stations.map(s => s.category))];
+  const shown = stations.filter(s =>
+    (cat === "All" || s.category === cat) &&
+    (!q.trim() || s.title.toLowerCase().includes(q.trim().toLowerCase())));
+
+  const MODES = [
+    { icon: "📋", label: "Practice", sub: "Self-scored checklists", onClick: () => setTab("practice") },
+    { icon: "🤖", label: "AI Examiner", sub: "Scored practice with the Coach", onClick: null, hint: "Use the AI Examiner button on any station" },
+    { icon: "🏥", label: "Formal Assessment", sub: "Assessor-led, feeds your record", href: "/dashboard/assessments" },
+    { icon: "🎥", label: "Remote OSCE", sub: "Live examiner · Q4 2026", onClick: () => setTab("book") },
+  ];
 
   return (
     <div>
       {activeStation && <ChecklistModal station={activeStation} onClose={() => setActiveStation(null)} />}
 
-      <div className="mb-6">
-        <h1 className="text-xl font-bold text-gray-900">Digital OSCE Platform</h1>
-        <p className="text-gray-400 text-sm mt-0.5">Objective Structured Clinical Examinations — standardised assessment of clinical skills.</p>
+      <div className="mb-5">
+        <h1 className="text-xl font-bold text-gray-900">OSCE Platform</h1>
+        <p className="text-gray-400 text-sm mt-0.5">Your clinical skills assessment centre — practise, be examined, and validate skills at standardised stations.</p>
+      </div>
+
+      {/* Assessment modes (real modes only) */}
+      <div className="grid grid-cols-2 xl:grid-cols-4 gap-3 mb-6">
+        {MODES.map(m => {
+          const inner = (
+            <>
+              <span className="text-xl">{m.icon}</span>
+              <div className="min-w-0">
+                <p className="text-xs font-bold text-gray-800">{m.label}</p>
+                <p className="text-[10px] text-gray-400 leading-tight">{m.sub}</p>
+              </div>
+            </>
+          );
+          const cls = "bg-white rounded-xl border border-gray-100 p-3.5 flex items-center gap-3 text-left hover:border-teal-200 transition-colors";
+          if (m.href) return <a key={m.label} href={m.href} className={cls}>{inner}</a>;
+          if (m.onClick) return <button key={m.label} onClick={m.onClick} className={cls}>{inner}</button>;
+          return <div key={m.label} className={cls.replace(" hover:border-teal-200", "")} title={m.hint}>{inner}</div>;
+        })}
       </div>
 
       {/* Hero */}
@@ -261,13 +305,22 @@ export default function OSCEPage() {
       {/* ── PRACTICE TAB ── */}
       {tab === "practice" && (
         <>
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="font-semibold text-gray-900 text-sm">OSCE Stations</h2>
-            <span className="text-xs text-gray-400">{available.length} available · {stations.length - available.length} coming soon</span>
+          <div className="flex flex-wrap items-center gap-2 mb-4">
+            <h2 className="font-semibold text-gray-900 text-sm mr-auto">OSCE Stations</h2>
+            {categories.map(c => (
+              <button key={c} onClick={() => setCat(c)}
+                className={`text-[11px] font-semibold px-2.5 py-1 rounded-lg border transition-colors ${
+                  cat === c ? "bg-teal-600 border-teal-600 text-white" : "border-gray-200 bg-white text-gray-500 hover:bg-gray-50"}`}>
+                {c}
+              </button>
+            ))}
+            <input value={q} onChange={e => setQ(e.target.value)} placeholder="Search stations…"
+              className="border border-gray-200 rounded-lg px-2.5 py-1.5 text-xs w-36 bg-white focus:outline-none focus:ring-2 focus:ring-teal-500/30" />
+            <span className="text-xs text-gray-400 w-full sm:w-auto">{available.length} available · {stations.length - available.length} coming soon</span>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
-            {stations.map(s => (
+            {shown.map(s => (
               <div key={s.id} className={`bg-white rounded-xl border p-5 flex flex-col gap-3 ${s.status === "coming_soon" ? "border-gray-100 opacity-60" : "border-gray-100"}`}>
                 <div className="flex items-start justify-between">
                   <div className="w-10 h-10 rounded-lg bg-teal-50 flex items-center justify-center text-xl">📋</div>
@@ -283,12 +336,21 @@ export default function OSCEPage() {
                   <h3 className="font-semibold text-gray-900 text-sm">Station {s.id}: {s.title}</h3>
                   <p className="text-xs text-gray-400 mt-0.5">{s.category} · ⏱ {s.duration} · {s.checklist.length || "—"} checklist items</p>
                 </div>
-                <button
-                  disabled={s.status === "coming_soon"}
-                  onClick={() => setActiveStation(s)}
-                  className="mt-auto w-full text-sm font-medium py-2 rounded-lg border border-teal-200 text-teal-600 hover:bg-teal-50 transition-colors disabled:opacity-40 disabled:cursor-not-allowed">
-                  {s.status === "coming_soon" ? "Coming Soon" : "Start Practice →"}
-                </button>
+                <div className="mt-auto flex gap-2">
+                  <button
+                    disabled={s.status === "coming_soon"}
+                    onClick={() => setActiveStation(s)}
+                    className="flex-1 text-sm font-medium py-2 rounded-lg border border-teal-200 text-teal-600 hover:bg-teal-50 transition-colors disabled:opacity-40 disabled:cursor-not-allowed">
+                    {s.status === "coming_soon" ? "Coming Soon" : "Start Practice →"}
+                  </button>
+                  {s.status !== "coming_soon" && (
+                    <a href={`/dashboard/copilot?scenario=${encodeURIComponent(examinerPrompt(s))}`}
+                      title="Be examined and scored by the AI Clinical Coach"
+                      className="text-sm font-medium py-2 px-3 rounded-lg bg-teal-600 text-white hover:bg-teal-700 transition-colors">
+                      🤖 AI Examiner
+                    </a>
+                  )}
+                </div>
               </div>
             ))}
           </div>

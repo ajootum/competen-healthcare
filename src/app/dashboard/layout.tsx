@@ -7,31 +7,41 @@ import RoleSwitcher from "@/components/RoleSwitcher";
 import NavLink from "@/components/NavLink";
 import { highestRole, type AppRole } from "@/lib/roles";
 
-// Core navigation follows the Frontend User Structures spec: a short menu that
-// answers "what am I competent in, what's next, what's pending, how do I grow".
-const navItems = [
-  { label: "Dashboard",           href: "/dashboard",              icon: "🏠" },
-  { label: "Competency Passport", href: "/dashboard/passport",     icon: "🧠" },
-  { label: "Learning Pathway",    href: "/dashboard/learning",     icon: "📚" },
-  { label: "My CPUs",             href: "/dashboard/cpu",          icon: "🏥" },
-  { label: "Assessments",         href: "/dashboard/assessments",  icon: "📝" },
-  { label: "Skills Logbook",      href: "/dashboard/logbook",      icon: "📖" },
-  { label: "Feedback",            href: "/dashboard/feedback",     icon: "💬" },
-  { label: "Certificates",        href: "/dashboard/certificates", icon: "🏆" },
-  { label: "Clinical Library",    href: "/dashboard/library",      icon: "🔎" },
-  { label: "Career Growth",       href: "/dashboard/career",       icon: "📈" },
-];
-
-const toolItems = [
-  { label: "CPD Academy",    href: "/dashboard/courses",    icon: "🎓" },
-  { label: "Question Bank",  href: "/dashboard/questions",  icon: "❓" },
-  { label: "CPD Log",        href: "/dashboard/cpd",        icon: "⏱️" },
-  { label: "Knowledge Hub",  href: "/dashboard/knowledge",  icon: "🔬" },
-  { label: "AI Copilot",     href: "/dashboard/copilot",    icon: "🤖" },
-  { label: "Simulation Lab", href: "/dashboard/simulation", icon: "🧪" },
-  { label: "OSCE Platform",  href: "/dashboard/osce",       icon: "📋" },
-  { label: "Audit Tools",    href: "/dashboard/audit",      icon: "📊" },
-  { label: "Billing & Plan", href: "/dashboard/billing",    icon: "💳" },
+// Grouped per the Account & Subscription spec §2 / Nurse Workspace mockup.
+// "My CPUs" is kept (not in the mockup) so the page isn't orphaned; "Portfolio"
+// is omitted — no portfolio feature exists yet.
+const NAV_GROUPS: { group: string | null; items: { label: string; href: string; icon: string }[] }[] = [
+  { group: null, items: [
+    { label: "Dashboard",               href: "/dashboard",              icon: "🏠" },
+    { label: "Career Growth",           href: "/dashboard/career",       icon: "📈" },
+  ]},
+  { group: "Learning", items: [
+    { label: "Learning Pathway",        href: "/dashboard/learning",     icon: "📚" },
+    { label: "CPD Academy",             href: "/dashboard/courses",      icon: "🎓" },
+    { label: "Question Bank",           href: "/dashboard/questions",    icon: "❓" },
+    { label: "Simulation Lab",          href: "/dashboard/simulation",   icon: "🧪" },
+    { label: "OSCE Platform",           href: "/dashboard/osce",         icon: "📋" },
+  ]},
+  { group: "Clinical Practice", items: [
+    { label: "Clinical Skills Logbook", href: "/dashboard/logbook",      icon: "📖" },
+    { label: "Competency Passport",     href: "/dashboard/passport",     icon: "🛂" },
+    { label: "My CPUs",                 href: "/dashboard/cpu",          icon: "🏥" },
+    { label: "Clinical Library",        href: "/dashboard/library",      icon: "🔎" },
+    { label: "Knowledge Hub",           href: "/dashboard/knowledge",    icon: "🔬" },
+    { label: "AI Copilot",              href: "/dashboard/copilot",      icon: "✨" },
+  ]},
+  { group: "Performance", items: [
+    { label: "Assessments",             href: "/dashboard/assessments",  icon: "📝" },
+    { label: "My Feedback",             href: "/dashboard/feedback",     icon: "💬" },
+    { label: "Audit Centre",            href: "/dashboard/audit",        icon: "🛡️" },
+  ]},
+  { group: "Professional", items: [
+    { label: "CPD Log",                 href: "/dashboard/cpd",          icon: "⏱️" },
+    { label: "Certificates",            href: "/dashboard/certificates", icon: "🏆" },
+  ]},
+  { group: "Administration", items: [
+    { label: "Settings",                href: "/dashboard/billing",      icon: "⚙️" },
+  ]},
 ];
 
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
@@ -61,21 +71,29 @@ export default async function DashboardLayout({ children }: { children: React.Re
       <div className="flex">
         <aside className="hidden md:flex w-56 h-screen bg-[#0a2e38] flex-col py-6 px-4 fixed top-0 left-0 z-20">
           <Link href="/" className="flex items-center gap-2 mb-6 px-2">
-            <div className="w-7 h-7 rounded bg-teal-500 flex items-center justify-center text-white font-bold text-sm">C</div>
-            <span className="text-white font-semibold text-sm">Competen</span>
+            <div className="w-7 h-7 rounded bg-teal-500 flex items-center justify-center text-white font-bold text-sm shrink-0">C</div>
+            <span className="min-w-0">
+              <span className="block text-white font-semibold text-sm leading-tight">Competen</span>
+              <span className="block text-teal-400/60 text-[10px] leading-tight">Nurse Workspace</span>
+            </span>
           </Link>
           <nav className="flex flex-col gap-0.5 flex-1 overflow-y-auto">
-            {navItems.map(({ label, href, icon }) => (
-              <NavLink key={label} href={href} icon={icon} label={label} exact={href === "/dashboard"}
-                className="flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm text-teal-100/70 hover:bg-teal-800/50 hover:text-white transition-colors"
-                activeClassName="flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm bg-teal-700/60 text-white font-medium" />
+            {NAV_GROUPS.map(({ group, items }) => (
+              <div key={group ?? "root"} className="flex flex-col gap-0.5">
+                {group && <p className="px-3 pt-3 pb-1 text-[9px] font-bold uppercase tracking-widest text-teal-400/40">{group}</p>}
+                {items.map(({ label, href, icon }) => (
+                  <NavLink key={label} href={href} icon={icon} label={label} exact={href === "/dashboard"}
+                    className="flex items-center gap-2.5 px-3 py-1.5 rounded-lg text-[13px] text-teal-100/70 hover:bg-teal-800/50 hover:text-white transition-colors"
+                    activeClassName="flex items-center gap-2.5 px-3 py-1.5 rounded-lg text-[13px] bg-teal-700/60 text-white font-medium" />
+                ))}
+              </div>
             ))}
-            <p className="px-3 pt-3 pb-1 text-[9px] font-bold uppercase tracking-widest text-teal-400/40">Tools</p>
-            {toolItems.map(({ label, href, icon }) => (
-              <NavLink key={label} href={href} icon={icon} label={label}
-                className="flex items-center gap-2.5 px-3 py-1.5 rounded-lg text-[13px] text-teal-100/40 hover:bg-teal-800/50 hover:text-white transition-colors"
-                activeClassName="flex items-center gap-2.5 px-3 py-1.5 rounded-lg text-[13px] bg-teal-700/60 text-white font-medium" />
-            ))}
+            {/* Help & Support opens email — no in-app help centre exists yet. */}
+            <a href="mailto:gabriel@semacast.com?subject=Competen support request"
+              className="flex items-center gap-2.5 px-3 py-1.5 rounded-lg text-[13px] text-teal-100/70 hover:bg-teal-800/50 hover:text-white transition-colors">
+              <span className="w-5 text-center text-sm leading-none">🎧</span>
+              <span>Help &amp; Support</span>
+            </a>
           </nav>
           <div className="pt-4 border-t border-teal-800/60">
             <div className="flex items-center gap-2 px-3 py-2">

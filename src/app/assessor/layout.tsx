@@ -10,6 +10,7 @@ const BASE_NAV = [
   { label: "Dashboard",     href: "/assessor",         icon: "🏠" },
   { label: "Audit Tools",   href: "/assessor/assess",  icon: "📋" },
   { label: "My Workers",    href: "/assessor/nurses",  icon: "👩‍⚕️" },
+  { label: "Logbook Review", href: "/assessor/logbook", icon: "🖊️" },
   { label: "OSCE Sessions", href: "/assessor/osce",    icon: "🩺" },
   { label: "History",       href: "/assessor/history", icon: "📁" },
 ];

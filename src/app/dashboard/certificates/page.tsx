@@ -1,12 +1,36 @@
 import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import Link from "next/link";
-import {
-  OUTCOME_CONFIG, CREDENTIAL_TYPE_LABELS, CREDENTIAL_STATUS_CONFIG,
-  RECOGNITION_TYPE_LABELS, type DecisionOutcome,
-} from "@/lib/ckcm";
+import { CREDENTIAL_TYPE_LABELS, RECOGNITION_TYPE_LABELS, OUTCOME_CONFIG, type DecisionOutcome } from "@/lib/ckcm";
+import CredentialsWorkspace, { type CredRow } from "./CredentialsWorkspace";
 
-// Certificates & Credentials — everything the nurse has earned, plus what's expiring.
+// Certificates & Credentials workspace (Volume 3 spec). Professional
+// credentials come from the org's governed record; competency certificates
+// are the validated passing decisions (spec rule: only validated decisions
+// create certificates), stamped with the issuing employer; badges are
+// professional recognitions. No QR/wallet/upload — no backing yet, so no
+// dead buttons; portfolio export is the printable passport.
+
+const dayMs = 86400000;
+// Server component renders once per request, so "now" is stable for a render.
+const nowMs = () => Date.now();
+const fmt = (iso: string | null) => iso ? new Date(iso).toLocaleDateString(undefined, { day: "2-digit", month: "short", year: "numeric" }) : "—";
+
+const CRED_ICON: Record<string, string> = {
+  professional_license: "🪪", academic_qualification: "🎓", board_certification: "🏛️",
+  specialty_certification: "🧠", internal_certification: "🏥", external_certification: "📜",
+  cpd_certificate: "⏱️", instructor_certification: "🧭", mandatory_training: "✅",
+};
+
+function statusOf(expiry: string | null, base: "active" | "pending" | "suspended" = "active"):
+  { status: CredRow["status"]; label: string } {
+  if (base !== "active") return { status: base, label: base === "pending" ? "Pending verification" : "Suspended" };
+  if (!expiry) return { status: "active", label: "Active" };
+  const days = Math.ceil((new Date(expiry).getTime() - nowMs()) / dayMs);
+  if (days < 0) return { status: "expired", label: "Expired" };
+  if (days <= 90) return { status: "expiring", label: `Expires in ${days}d` };
+  return { status: "active", label: "Active" };
+}
 
 export default async function CertificatesPage() {
   const supabase = await createClient();
@@ -16,139 +40,183 @@ export default async function CertificatesPage() {
   const admin = createAdminClient();
   const [{ data: credentials }, { data: recognitions }, { data: decisions }] = await Promise.all([
     admin.from("professional_credentials")
-      .select("id, credential_type, title, issuing_body, status, verified, issue_date, expiry_date")
+      .select("id, credential_number, credential_type, title, issuing_body, status, verified, issue_date, expiry_date, document_url")
       .eq("nurse_id", user.id).order("created_at", { ascending: false }),
     admin.from("professional_recognitions")
-      .select("id, recognition_type, title, awarded_by_name, awarded_at")
+      .select("id, recognition_type, title, description, awarded_by_name, awarded_at")
       .eq("nurse_id", user.id).order("awarded_at", { ascending: false }),
     admin.from("competency_decisions")
-      .select("competency_id, outcome, effective_date, expiry_date, created_at, framework_competencies(name)")
+      .select("id, competency_id, outcome, validation_outcome, effective_date, expiry_date, created_at, framework_competencies(name), hospitals(name)")
       .eq("nurse_id", user.id).order("created_at", { ascending: false }),
   ]);
 
-  // Latest passing decision per competency = a live "competency certificate"
+  // Competency certificates: latest validated passing decision per competency
   const seen = new Set<string>();
-  const compCerts: { name: string; effective: string; expiry: string | null; days: number | null }[] = [];
+  const certRows: CredRow[] = [];
   for (const d of decisions ?? []) {
     if (seen.has(d.competency_id)) continue;
     seen.add(d.competency_id);
+    if (d.validation_outcome !== "validated") continue;
     if (!OUTCOME_CONFIG[d.outcome as DecisionOutcome]?.passing) continue;
-    const days = d.expiry_date ? Math.ceil((new Date(d.expiry_date).getTime() - Date.now()) / 86400000) : null;
-    compCerts.push({
-      name: (d.framework_competencies as unknown as { name: string } | null)?.name ?? "—",
-      effective: d.effective_date, expiry: d.expiry_date, days,
+    const st = statusOf(d.expiry_date);
+    certRows.push({
+      id: `cert-${d.id}`, kind: "certificate", icon: "📜",
+      title: (d.framework_competencies as unknown as { name: string } | null)?.name ?? "Competency",
+      subtitle: (d.hospitals as unknown as { name: string } | null)?.name ?? "Issued on validation",
+      refNumber: `CERT-${d.id.slice(0, 8).toUpperCase()}`, docUrl: null,
+      issued: d.effective_date, expires: d.expiry_date,
+      status: st.status, statusLabel: st.label,
     });
   }
 
-  const expiring = [
-    ...compCerts.filter(c => c.days != null && c.days <= 90).map(c => ({ what: c.name, days: c.days! })),
-    ...(credentials ?? []).filter(c => c.expiry_date).map(c => ({
-      what: c.title, days: Math.ceil((new Date(c.expiry_date!).getTime() - Date.now()) / 86400000),
-    })).filter(c => c.days <= 90),
-  ].sort((a, b) => a.days - b.days);
+  const credRows: CredRow[] = (credentials ?? []).map(c => {
+    const base = c.status === "pending_verification" ? "pending" : c.status === "suspended" || c.status === "revoked" ? "suspended" : "active";
+    const st = statusOf(c.expiry_date, base as "active" | "pending" | "suspended");
+    return {
+      id: `cred-${c.id}`, kind: "credential" as const,
+      icon: CRED_ICON[c.credential_type] ?? "🪪",
+      title: c.title,
+      subtitle: `${CREDENTIAL_TYPE_LABELS[c.credential_type] ?? c.credential_type}${c.issuing_body ? ` · ${c.issuing_body}` : ""}${c.verified ? " · ✓ verified" : ""}`,
+      refNumber: c.credential_number, docUrl: c.document_url,
+      issued: c.issue_date, expires: c.expiry_date,
+      status: st.status, statusLabel: st.label,
+    };
+  });
+
+  const badgeRows: CredRow[] = (recognitions ?? []).map(r => ({
+    id: `badge-${r.id}`, kind: "badge" as const,
+    icon: RECOGNITION_TYPE_LABELS[r.recognition_type]?.icon ?? "🎖️",
+    title: r.title,
+    subtitle: `${RECOGNITION_TYPE_LABELS[r.recognition_type]?.label ?? "Recognition"}${r.awarded_by_name ? ` · ${r.awarded_by_name}` : ""}${r.description ? ` — ${r.description}` : ""}`,
+    refNumber: null, docUrl: null,
+    issued: r.awarded_at, expires: null,
+    status: "active" as const, statusLabel: "Awarded",
+  }));
+
+  const rows = [...credRows, ...certRows, ...badgeRows];
+
+  // ── KPIs + portfolio breakdown ──
+  const expiringSoon = rows.filter(r => r.status === "expiring").length;
+  const expired = rows.filter(r => r.status === "expired").length;
+  const activeCount = rows.filter(r => r.status === "active").length;
+  const upcoming = rows
+    .filter(r => r.expires && new Date(r.expires).getTime() > nowMs())
+    .sort((a, b) => a.expires!.localeCompare(b.expires!))
+    .slice(0, 4)
+    .map(r => ({ ...r, days: Math.ceil((new Date(r.expires!).getTime() - nowMs()) / dayMs) }));
+
+  const donut = [
+    { label: "Active", n: activeCount, color: "#16a34a" },
+    { label: "Expiring soon", n: expiringSoon, color: "#f59e0b" },
+    { label: "Expired", n: expired, color: "#ef4444" },
+    { label: "Pending/other", n: rows.length - activeCount - expiringSoon - expired, color: "#9ca3af" },
+  ];
+  const total = rows.length;
+  const circ = 2 * Math.PI * 40;
+  let arcOffset = 0;
+  const arcs = donut.filter(d => d.n > 0).map(d => {
+    const len = total ? (d.n / total) * circ : 0;
+    const a = { ...d, dash: `${len} ${circ - len}`, offset: -arcOffset };
+    arcOffset += len;
+    return a;
+  });
+
+  const card = "bg-white rounded-xl border border-gray-100";
+
+  const KPI = [
+    { icon: "🪪", value: credRows.length, label: "Professional Credentials", tint: "bg-green-50" },
+    { icon: "📜", value: certRows.length, label: "Competency Certificates", tint: "bg-violet-50" },
+    { icon: "🏅", value: badgeRows.length, label: "Badges & Recognitions", tint: "bg-amber-50" },
+    { icon: "⏳", value: expiringSoon, label: "Expiring Soon (90 days)", tint: "bg-blue-50" },
+  ];
 
   return (
-    <div className="max-w-4xl">
-      <div className="flex items-start justify-between mb-6">
+    <div className="max-w-6xl">
+      <div className="flex flex-wrap items-center justify-between gap-3 mb-5">
         <div>
           <h1 className="text-xl font-bold text-gray-900">Certificates &amp; Credentials</h1>
-          <p className="text-gray-400 text-sm mt-0.5">Your earned qualifications, live competency certificates and badges.</p>
+          <p className="text-gray-400 text-sm mt-0.5">Your earned qualifications, certifications and recognitions.</p>
         </div>
         <Link href="/dashboard/passport/print"
-          className="inline-flex items-center gap-1.5 text-sm font-medium text-teal-700 bg-teal-50 hover:bg-teal-100 px-3 py-1.5 rounded-lg transition-colors shrink-0">
+          className="text-sm font-semibold bg-teal-600 hover:bg-teal-700 text-white px-4 py-2 rounded-lg">
           🖨️ Export portfolio
         </Link>
       </div>
 
-      {expiring.length > 0 && (
-        <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 mb-6">
-          <p className="text-xs font-bold text-amber-700 uppercase tracking-widest mb-2">⏰ Renewal alerts</p>
-          {expiring.map((e, i) => (
-            <p key={i} className="text-sm text-amber-900">
-              {e.what} — {e.days < 0 ? <b>expired {-e.days} days ago</b> : <>expires in <b>{e.days} days</b></>}
-            </p>
-          ))}
-        </div>
-      )}
-
-      <h2 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3">Professional Credentials 🎖️</h2>
-      {(credentials ?? []).length === 0 ? (
-        <div className="bg-white rounded-xl border border-gray-100 p-8 text-center text-sm text-gray-400 mb-6">
-          No credentials recorded yet — your organisation adds licenses and certifications here.
-        </div>
-      ) : (
-        <div className="bg-white rounded-xl border border-gray-100 divide-y divide-gray-50 mb-6">
-          {(credentials ?? []).map(c => {
-            const st = CREDENTIAL_STATUS_CONFIG[c.status] ?? CREDENTIAL_STATUS_CONFIG.pending_verification;
-            return (
-              <div key={c.id} className="flex items-center gap-3 px-5 py-3.5">
-                <span className="text-xl">🎖️</span>
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-gray-800">{c.title}
-                    {c.verified && <span className="ml-1.5 text-[10px] text-blue-600 font-semibold">✓ verified</span>}
-                  </p>
-                  <p className="text-[10px] text-gray-400">
-                    {CREDENTIAL_TYPE_LABELS[c.credential_type] ?? c.credential_type}
-                    {c.issuing_body ? ` · ${c.issuing_body}` : ""}
-                    {c.expiry_date ? ` · expires ${new Date(c.expiry_date).toLocaleDateString()}` : ""}
-                  </p>
-                </div>
-                <span className={`text-[10px] font-bold px-2 py-0.5 rounded ${st.cls}`}>{st.label}</span>
-              </div>
-            );
-          })}
-        </div>
-      )}
-
-      <h2 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3">Competency Certificates 🪪</h2>
-      {compCerts.length === 0 ? (
-        <div className="bg-white rounded-xl border border-gray-100 p-8 text-center text-sm text-gray-400 mb-6">
-          Each competent decision becomes a live certificate here.
-        </div>
-      ) : (
-        <div className="bg-white rounded-xl border border-gray-100 divide-y divide-gray-50 mb-6">
-          {compCerts.map((c, i) => (
-            <div key={i} className="flex items-center gap-3 px-5 py-3">
-              <span className="text-xl">🪪</span>
-              <div className="flex-1 min-w-0">
-                <p className="text-sm text-gray-800">{c.name}</p>
-                <p className="text-[10px] text-gray-400">
-                  Awarded {new Date(c.effective).toLocaleDateString()}
-                  {c.expiry ? ` · valid to ${new Date(c.expiry).toLocaleDateString()}` : ""}
-                </p>
-              </div>
-              {c.days != null && (
-                <span className={`text-[10px] font-bold px-2 py-0.5 rounded ${
-                  c.days < 0 ? "bg-red-50 text-red-600" : c.days <= 60 ? "bg-amber-50 text-amber-700" : "bg-green-50 text-green-600"}`}>
-                  {c.days < 0 ? "Expired" : "Current"}
-                </span>
-              )}
+      {/* KPI cards */}
+      <div className="grid grid-cols-2 xl:grid-cols-4 gap-3 mb-5">
+        {KPI.map(k => (
+          <div key={k.label} className={`${card} p-4 flex items-center gap-3`}>
+            <span className={`w-10 h-10 rounded-full ${k.tint} flex items-center justify-center text-lg shrink-0`}>{k.icon}</span>
+            <div>
+              <p className="text-2xl font-bold text-gray-900">{k.value}</p>
+              <p className="text-[10px] text-gray-500 font-medium leading-tight">{k.label}</p>
             </div>
-          ))}
-        </div>
-      )}
+          </div>
+        ))}
+      </div>
 
-      <h2 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3">Badges 🏆</h2>
-      {(recognitions ?? []).length === 0 ? (
-        <div className="bg-white rounded-xl border border-gray-100 p-8 text-center text-sm text-gray-400">
-          Awards and recognitions from your organisation appear here.
+      <div className="grid grid-cols-1 xl:grid-cols-[1fr_290px] gap-5">
+        <div className="min-w-0">
+          <CredentialsWorkspace rows={rows} />
         </div>
-      ) : (
-        <div className="flex flex-wrap gap-2">
-          {(recognitions ?? []).map(r => {
-            const t = RECOGNITION_TYPE_LABELS[r.recognition_type] ?? RECOGNITION_TYPE_LABELS.custom;
-            return (
-              <div key={r.id} className="bg-white rounded-xl border border-amber-100 px-4 py-3 flex items-center gap-2.5">
-                <span className="text-xl">{t.icon}</span>
-                <div>
-                  <p className="text-sm font-medium text-gray-800">{r.title}</p>
-                  <p className="text-[10px] text-gray-400">{t.label} · {new Date(r.awarded_at).toLocaleDateString()}</p>
+
+        {/* Right rail */}
+        <div className="flex flex-col gap-5">
+          <div className={`${card} p-5`}>
+            <h2 className="font-semibold text-gray-900 text-sm mb-3">Your Credential Portfolio</h2>
+            {total ? (
+              <div className="flex items-center gap-4">
+                <svg width="96" height="96" viewBox="0 0 96 96">
+                  {arcs.map(a => (
+                    <circle key={a.label} cx="48" cy="48" r="40" fill="none" stroke={a.color} strokeWidth="10"
+                      strokeDasharray={a.dash} strokeDashoffset={a.offset} transform="rotate(-90 48 48)" />
+                  ))}
+                  <text x="48" y="45" textAnchor="middle" fontSize="18" fontWeight="800" fill="#111827">{total}</text>
+                  <text x="48" y="60" textAnchor="middle" fontSize="8" fill="#9ca3af">Total</text>
+                </svg>
+                <div className="flex-1 flex flex-col gap-1">
+                  {donut.map(d => (
+                    <div key={d.label} className="flex items-center gap-1.5 text-[11px]">
+                      <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: d.color }} />
+                      <span className="text-gray-600 flex-1">{d.label}</span>
+                      <b className="text-gray-800">{d.n}</b>
+                    </div>
+                  ))}
                 </div>
               </div>
-            );
-          })}
+            ) : <p className="text-xs text-gray-400 text-center py-3">Your portfolio builds as records are added. 🗂️</p>}
+          </div>
+
+          <div className={`${card} p-5`}>
+            <h2 className="font-semibold text-gray-900 text-sm mb-3">Upcoming Expirations</h2>
+            {upcoming.length ? upcoming.map(u => (
+              <div key={u.id} className="flex items-center gap-2.5 py-1.5 border-b border-gray-50 last:border-0">
+                <span className="text-base shrink-0">{u.icon}</span>
+                <div className="min-w-0 flex-1">
+                  <p className="text-[11px] text-gray-800 truncate">{u.title}</p>
+                  <p className="text-[9px] text-gray-400" suppressHydrationWarning>Expires {fmt(u.expires)}</p>
+                </div>
+                <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded shrink-0 ${u.days <= 90 ? "bg-amber-50 text-amber-700" : "bg-gray-50 text-gray-500"}`}>
+                  {u.days} days
+                </span>
+              </div>
+            )) : <p className="text-xs text-gray-400 text-center py-3">Nothing expiring on record. ✅</p>}
+          </div>
+
+          <div className={`${card} p-5`}>
+            <h2 className="font-semibold text-gray-900 text-sm mb-2.5">Quick Actions</h2>
+            <div className="flex flex-col gap-1.5">
+              <Link href="/dashboard/passport/print" className="text-[11px] font-semibold text-teal-700 hover:underline">🖨️ Print / download portfolio</Link>
+              <Link href="/dashboard/passport" className="text-[11px] font-semibold text-teal-700 hover:underline">🧠 View Competency Passport</Link>
+              <Link href="/dashboard/cpd" className="text-[11px] font-semibold text-teal-700 hover:underline">⏱️ Log CPD activity</Link>
+            </div>
+            <p className="text-[9px] text-gray-300 mt-3">
+              Credentials are recorded and verified by your organisation; competency certificates are issued automatically when an educator validates a passing decision.
+            </p>
+          </div>
         </div>
-      )}
+      </div>
     </div>
   );
 }

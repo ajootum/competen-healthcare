@@ -30,6 +30,8 @@ Maps every specification artefact to its implementation. Status: ✅ implemented
 | Knowledge graph + semantic edges | ✅ | `knowledge_edges` (012), `engines/graph.ts`; pgvector ready (017) |
 | **Clinical Knowledge Objects (CKO)** — governed anatomy/physiology/reasoning content, reusable + AI-citable | ✅ | Migration 025 (`knowledge_objects`, `knowledge_links`, `knowledge_requirements`, FTS extended) · `api/knowledge-objects` · `studio/knowledge`; auto-extracted by the CPU importer |
 | Versioning, change requests, impact analysis | ✅ | Migration 012; `engines/impact.ts`; framework lifecycle |
+| **Lifetime Competency Passport spine** — employment passports (10 statuses), employer-stamped decisions, career timeline, lifetime/specialty framing on passport page | ✅ | Migration 027 (`employment_records`, employer columns on `competency_decisions`, backfill); `engines/decisions.ts` stamps employer; `dashboard/passport` v2 |
+| Lifetime Passport: transfer workflow (Accept/Reassess/Bridge), QR-verified PDF, employment admin UI, concurrent multi-employer | ⬜ | Registered gaps (spec §6, §9, §10) — need receiving-org workflow + public verification endpoint |
 | Governance committees (5 levels) | ✅ | `governance_committees` (012); Committees page |
 
 ## 3. Studio (authoring environment)

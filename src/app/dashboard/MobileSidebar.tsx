@@ -3,17 +3,27 @@ import { useState, useEffect } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
+// Mirrors the desktop sidebar (Nurse Workspace mockup grouping, flattened).
 const navItems = [
-  { label: "Dashboard",           href: "/dashboard",              icon: "🏠" },
-  { label: "Competency Passport", href: "/dashboard/passport",     icon: "🧠" },
-  { label: "Learning Pathway",    href: "/dashboard/learning",     icon: "📚" },
-  { label: "My CPUs",             href: "/dashboard/cpu",          icon: "🏥" },
-  { label: "Assessments",         href: "/dashboard/assessments",  icon: "📝" },
-  { label: "Skills Logbook",      href: "/dashboard/logbook",      icon: "📖" },
-  { label: "Feedback",            href: "/dashboard/feedback",     icon: "💬" },
-  { label: "Certificates",        href: "/dashboard/certificates", icon: "🏆" },
-  { label: "Clinical Library",    href: "/dashboard/library",      icon: "🔎" },
-  { label: "Career Growth",       href: "/dashboard/career",       icon: "📈" },
+  { label: "Dashboard",               href: "/dashboard",              icon: "🏠" },
+  { label: "Career Growth",           href: "/dashboard/career",       icon: "📈" },
+  { label: "Learning Pathway",        href: "/dashboard/learning",     icon: "📚" },
+  { label: "CPD Academy",             href: "/dashboard/courses",      icon: "🎓" },
+  { label: "Question Bank",           href: "/dashboard/questions",    icon: "❓" },
+  { label: "Simulation Lab",          href: "/dashboard/simulation",   icon: "🧪" },
+  { label: "OSCE Platform",           href: "/dashboard/osce",         icon: "📋" },
+  { label: "Clinical Skills Logbook", href: "/dashboard/logbook",      icon: "📖" },
+  { label: "Competency Passport",     href: "/dashboard/passport",     icon: "🛂" },
+  { label: "My CPUs",                 href: "/dashboard/cpu",          icon: "🏥" },
+  { label: "Clinical Library",        href: "/dashboard/library",      icon: "🔎" },
+  { label: "Knowledge Hub",           href: "/dashboard/knowledge",    icon: "🔬" },
+  { label: "AI Copilot",              href: "/dashboard/copilot",      icon: "✨" },
+  { label: "Assessments",             href: "/dashboard/assessments",  icon: "📝" },
+  { label: "My Feedback",             href: "/dashboard/feedback",     icon: "💬" },
+  { label: "Audit Centre",            href: "/dashboard/audit",        icon: "🛡️" },
+  { label: "CPD Log",                 href: "/dashboard/cpd",          icon: "⏱️" },
+  { label: "Certificates",            href: "/dashboard/certificates", icon: "🏆" },
+  { label: "Settings",                href: "/dashboard/billing",      icon: "⚙️" },
 ];
 
 type Props = {
@@ -26,9 +36,12 @@ export default function MobileSidebar({ fullName, role, isAdmin }: Props) {
   const [open, setOpen] = useState(false);
   const pathname = usePathname();
 
-  useEffect(() => {
+  // Close the drawer on navigation (state adjustment during render, per React docs)
+  const [prevPath, setPrevPath] = useState(pathname);
+  if (prevPath !== pathname) {
+    setPrevPath(pathname);
     setOpen(false);
-  }, [pathname]);
+  }
 
   useEffect(() => {
     document.body.style.overflow = open ? "hidden" : "";

@@ -1,197 +1,152 @@
-"use client";
-import { useState } from "react";
+import { createClient, createAdminClient } from "@/lib/supabase/server";
+import { redirect } from "next/navigation";
+import SimulationLab, { type Scenario, type GovernedCase } from "./SimulationLab";
 
-const scenarios = [
+// Simulation Lab (Simulation Lab Redesign spec). Text-based AI simulations
+// that genuinely run: each scenario launches an interactive session with the
+// AI Clinical Coach (present → decide → consequence → debrief), alongside the
+// governed case studies. No fake progress rings, XP, streaks or leaderboards —
+// completion tracking, branching engines and vitals monitors are registered
+// gaps, not simulated UI.
+
+type Brief = {
+  id: number; title: string; category: string; difficulty: string; duration: string;
+  patient: string; complaint: string;
+  vitals: Record<string, string>;
+  skills: string[];
+};
+
+const BRIEFS: Brief[] = [
   {
     id: 1, title: "Cardiac Arrest — Adult Male, 58yrs", category: "Emergency", difficulty: "Hard", duration: "20 min",
-    patient: "Male, 58 years · Kenyatta National Hospital, Medical Ward",
+    patient: "Male, 58 years · Medical Ward",
     complaint: "Found unresponsive by ward nurse. No pulse. Last seen 10 minutes ago.",
-    vitals: { hr: "0 bpm", bp: "Unrecordable", spo2: "Unmeasurable", rr: "Apnoeic", temp: "36.8°C" },
-    skills: ["BLS / CPR initiation", "AED use", "Airway management", "Team leadership & communication", "ROSC recognition"],
+    vitals: { HR: "0 bpm", BP: "Unrecordable", SpO2: "Unmeasurable", RR: "Apnoeic", Temp: "36.8°C" },
+    skills: ["BLS / CPR initiation", "AED use", "Airway management", "Team leadership", "ROSC recognition"],
   },
   {
     id: 2, title: "Respiratory Distress — Post-op Patient", category: "Critical Care", difficulty: "Medium", duration: "15 min",
     patient: "Female, 44 years · Post-op ward, Day 1 after laparotomy",
-    complaint: "Patient is increasingly short of breath and anxious. Dressing intact. IV line in situ.",
-    vitals: { hr: "118 bpm", bp: "92/60 mmHg", spo2: "88%", rr: "28 breaths/min", temp: "38.2°C" },
-    skills: ["Respiratory assessment", "Oxygen therapy", "Fluid management", "Sepsis recognition", "Escalation protocol"],
+    complaint: "Increasingly short of breath and anxious. Dressing intact. IV line in situ.",
+    vitals: { HR: "118 bpm", BP: "92/60 mmHg", SpO2: "88%", RR: "28/min", Temp: "38.2°C" },
+    skills: ["Respiratory assessment", "Oxygen therapy", "Fluid management", "Sepsis recognition", "Escalation"],
   },
   {
     id: 3, title: "Neonatal Resuscitation at Delivery", category: "Pediatrics", difficulty: "Hard", duration: "20 min",
     patient: "Neonate, 0 minutes old · Labour ward, term delivery",
     complaint: "Baby delivered floppy, not breathing, and blue. Mother had prolonged labour.",
-    vitals: { hr: "40 bpm", bp: "N/A", spo2: "Unable", rr: "Absent", temp: "36.0°C" },
-    skills: ["NRP algorithm", "Bag-mask ventilation", "Chest compressions (neonate)", "Warming & stimulation", "Family communication"],
+    vitals: { HR: "40 bpm", BP: "N/A", SpO2: "Unable", RR: "Absent", Temp: "36.0°C" },
+    skills: ["NRP algorithm", "Bag-mask ventilation", "Neonatal compressions", "Warming & stimulation", "Family communication"],
   },
   {
     id: 4, title: "Anaphylaxis — Penicillin Reaction", category: "Emergency", difficulty: "Medium", duration: "15 min",
     patient: "Female, 31 years · Outpatient clinic, 10 min after IV penicillin",
-    complaint: "Patient reports throat tightening, widespread urticaria, dizziness. Administered 1.2g benzylpenicillin 10 min ago.",
-    vitals: { hr: "132 bpm", bp: "78/40 mmHg", spo2: "91%", rr: "24 breaths/min", temp: "36.6°C" },
-    skills: ["Anaphylaxis recognition", "Adrenaline administration", "Airway positioning", "IV fluid resuscitation", "Incident documentation"],
+    complaint: "Throat tightening, widespread urticaria, dizziness after 1.2g benzylpenicillin.",
+    vitals: { HR: "132 bpm", BP: "78/40 mmHg", SpO2: "91%", RR: "24/min", Temp: "36.6°C" },
+    skills: ["Anaphylaxis recognition", "Adrenaline administration", "Airway positioning", "IV fluids", "Documentation"],
   },
   {
     id: 5, title: "Safe Medication Administration — Ward Round", category: "Pharmacology", difficulty: "Easy", duration: "10 min",
     patient: "Male, 67 years · Medical ward, on 6 regular medications",
-    complaint: "Routine morning medication round. Patient has new confusion noted overnight.",
-    vitals: { hr: "88 bpm", bp: "148/92 mmHg", spo2: "96%", rr: "18 breaths/min", temp: "37.1°C" },
-    skills: ["Medication 10 Rights", "Drug interaction check", "Capacity assessment", "Medication reconciliation", "Handover communication"],
+    complaint: "Routine morning medication round. New confusion noted overnight.",
+    vitals: { HR: "88 bpm", BP: "148/92 mmHg", SpO2: "96%", RR: "18/min", Temp: "37.1°C" },
+    skills: ["Medication 10 Rights", "Interaction check", "Capacity assessment", "Reconciliation", "Handover"],
   },
   {
     id: 6, title: "Sepsis Recognition & Bundle Initiation", category: "Critical Care", difficulty: "Hard", duration: "25 min",
     patient: "Female, 52 years · Medical ward, admitted 6 hours ago with UTI",
-    complaint: "Nurse called urgently — patient is confused, shivering, looks unwell. NEWS score has risen to 7.",
-    vitals: { hr: "124 bpm", bp: "86/52 mmHg", spo2: "93%", rr: "26 breaths/min", temp: "38.9°C" },
-    skills: ["qSOFA / NEWS scoring", "Sepsis 6 bundle", "Blood culture technique", "IV access & fluids", "Senior escalation"],
+    complaint: "Urgent call — patient confused, shivering, looks unwell. NEWS score risen to 7.",
+    vitals: { HR: "124 bpm", BP: "86/52 mmHg", SpO2: "93%", RR: "26/min", Temp: "38.9°C" },
+    skills: ["qSOFA / NEWS scoring", "Sepsis 6 bundle", "Blood cultures", "IV access & fluids", "Senior escalation"],
   },
 ];
 
-const diffColors: Record<string, string> = {
-  Easy:   "bg-green-100 text-green-700",
-  Medium: "bg-amber-100 text-amber-700",
-  Hard:   "bg-red-100 text-red-600",
-};
+function promptFor(b: Brief): string {
+  const vitals = Object.entries(b.vitals).map(([k, v]) => `${k} ${v}`).join(", ");
+  return `Run an interactive clinical simulation with me, one step at a time.
 
-type Scenario = typeof scenarios[0];
+Scenario: ${b.title} (${b.category}, ${b.difficulty}).
+Patient: ${b.patient}.
+Presentation: ${b.complaint}
+Initial vitals: ${vitals}.
+Skills being practised: ${b.skills.join(", ")}.
 
-function PreviewModal({ scenario, onClose }: { scenario: Scenario; onClose: () => void }) {
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={onClose}>
-      <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" />
-      <div className="relative bg-white rounded-2xl shadow-2xl max-w-lg w-full max-h-[85vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
-        {/* Header */}
-        <div className="bg-gradient-to-r from-[#0a2e38] to-teal-800 rounded-t-2xl p-5 text-white">
-          <div className="flex items-start justify-between gap-3">
-            <div>
-              <div className="flex items-center gap-2 mb-2">
-                <span className={`text-[10px] font-bold px-2 py-0.5 rounded ${diffColors[scenario.difficulty]}`}>{scenario.difficulty}</span>
-                <span className="text-xs text-teal-300">{scenario.category} · ⏱ {scenario.duration}</span>
-              </div>
-              <h2 className="font-bold text-base leading-tight">{scenario.title}</h2>
-              <p className="text-teal-300 text-xs mt-1">{scenario.patient}</p>
-            </div>
-            <button onClick={onClose} className="text-white/60 hover:text-white text-xl shrink-0 leading-none">✕</button>
-          </div>
-        </div>
-
-        <div className="p-5 flex flex-col gap-5">
-          {/* Presenting complaint */}
-          <div>
-            <p className="text-[10px] font-bold text-gray-400 tracking-widest uppercase mb-1.5">Presenting Complaint</p>
-            <p className="text-sm text-gray-700 bg-amber-50 border border-amber-100 rounded-lg px-3 py-2.5 leading-relaxed">{scenario.complaint}</p>
-          </div>
-
-          {/* Vitals */}
-          <div>
-            <p className="text-[10px] font-bold text-gray-400 tracking-widest uppercase mb-2">Initial Vitals</p>
-            <div className="grid grid-cols-5 gap-2">
-              {[
-                { label: "HR", value: scenario.vitals.hr },
-                { label: "BP", value: scenario.vitals.bp },
-                { label: "SpO₂", value: scenario.vitals.spo2 },
-                { label: "RR", value: scenario.vitals.rr },
-                { label: "Temp", value: scenario.vitals.temp },
-              ].map(({ label, value }) => (
-                <div key={label} className="bg-gray-50 rounded-lg p-2 text-center border border-gray-100">
-                  <p className="text-[9px] text-gray-400 font-semibold uppercase tracking-wider">{label}</p>
-                  <p className="text-xs font-bold text-gray-800 mt-0.5 leading-tight">{value}</p>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* Skills */}
-          <div>
-            <p className="text-[10px] font-bold text-gray-400 tracking-widest uppercase mb-2">Skills Assessed</p>
-            <div className="flex flex-col gap-1.5">
-              {scenario.skills.map((skill, i) => (
-                <div key={skill} className="flex items-center gap-2.5 text-sm text-gray-700">
-                  <div className="w-5 h-5 rounded-full bg-teal-600 text-white text-[10px] font-bold flex items-center justify-center shrink-0">{i + 1}</div>
-                  {skill}
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* CTA */}
-          <div className="bg-teal-50 border border-teal-100 rounded-xl p-4 text-center">
-            <p className="text-xs font-semibold text-teal-700 mb-1">Full simulation launching Q3 2026</p>
-            <p className="text-xs text-teal-600/70">Branching decisions · AI patient responses · Debrief & scoring</p>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
+Present the situation, then ask me what I do FIRST and wait for my answer. React realistically to each of my decisions (including deterioration if I choose poorly), keep each step short, and after the scenario ends give me a structured debrief with evidence-based rationale against each of the target skills.`;
 }
 
-export default function SimulationPage() {
-  const [preview, setPreview] = useState<Scenario | null>(null);
+export default async function SimulationLabPage() {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) redirect("/login");
+
+  const admin = createAdminClient();
+  const { data: rawCases } = await admin.from("clinical_cases")
+    .select("id, title, difficulty, clinical_practice_units(name)")
+    .neq("status", "retired").order("created_at", { ascending: false }).limit(8);
+
+  const scenarios: Scenario[] = BRIEFS.map(b => ({
+    id: String(b.id), title: b.title, category: b.category, difficulty: b.difficulty,
+    duration: b.duration, description: b.complaint, skills: b.skills, prompt: promptFor(b),
+  }));
+  const cases: GovernedCase[] = ((rawCases ?? []) as unknown as {
+    id: string; title: string; difficulty: string | null; clinical_practice_units: { name: string } | null;
+  }[]).map(c => ({ id: c.id, title: c.title, difficulty: c.difficulty, cpuName: c.clinical_practice_units?.name ?? null }));
+
+  const STEPS = [
+    { n: "1", icon: "📋", title: "Choose Scenario", sub: "Pick a scenario matching your specialty or learning goal" },
+    { n: "2", icon: "🔍", title: "Assess & Analyze", sub: "Review the patient, vitals and history the Coach presents" },
+    { n: "3", icon: "✅", title: "Make Decisions", sub: "Choose interventions and see realistic consequences" },
+    { n: "4", icon: "💬", title: "Debrief & Learn", sub: "Get evidence-based rationale against each target skill" },
+  ];
 
   return (
-    <div>
-      {preview && <PreviewModal scenario={preview} onClose={() => setPreview(null)} />}
-
-      <div className="mb-6">
-        <h1 className="text-xl font-bold text-gray-900">Virtual Simulation Lab</h1>
-        <p className="text-gray-400 text-sm mt-0.5">High-fidelity clinical scenarios to practise decision-making in a safe environment.</p>
+    <div className="max-w-6xl">
+      <div className="flex items-start gap-3 mb-5">
+        <span className="w-11 h-11 rounded-xl bg-teal-50 flex items-center justify-center text-xl shrink-0">🩺</span>
+        <div>
+          <h1 className="text-xl font-bold text-gray-900">Simulation Lab</h1>
+          <p className="text-gray-400 text-sm mt-0.5">Practice clinical decision-making in realistic, risk-free environments.</p>
+        </div>
       </div>
 
-      {/* Coming soon banner */}
-      <div className="bg-gradient-to-r from-[#0a2e38] to-teal-800 rounded-2xl p-6 mb-6 text-white">
-        <div className="flex items-start justify-between">
-          <div>
-            <span className="text-xs bg-amber-400 text-amber-900 font-semibold px-2 py-0.5 rounded mb-3 inline-block">BETA — Q3 2026</span>
-            <h2 className="text-lg font-bold mb-1">Interactive 3D Simulation</h2>
-            <p className="text-teal-200/80 text-sm max-w-md">
-              Immersive clinical scenarios built for East African hospital contexts — no expensive mannequins required. Run on any device.
+      {/* Hero */}
+      <div className="bg-[#0a2e38] rounded-2xl p-6 mb-5 text-white">
+        <div className="flex flex-wrap items-center gap-6">
+          <div className="flex-1 min-w-[260px]">
+            <span className="text-[9px] font-bold bg-amber-400 text-amber-950 px-2 py-0.5 rounded">AI-POWERED</span>
+            <h2 className="text-lg font-bold mt-2">Interactive Clinical Simulations</h2>
+            <p className="text-[12px] text-teal-100/70 mt-1 leading-relaxed max-w-lg">
+              Text-based scenarios run live by the AI Clinical Coach — it presents the patient, reacts
+              realistically to every decision you make, and debriefs you with evidence-based rationale.
             </p>
-          </div>
-          <div className="text-5xl opacity-40">🏥</div>
-        </div>
-        <div className="grid grid-cols-3 gap-4 mt-5">
-          {["Branching Scenarios", "AI Patient Responses", "Debrief & Scoring"].map(f => (
-            <div key={f} className="bg-white/10 rounded-xl p-3 text-center text-sm text-teal-100">{f}</div>
-          ))}
-        </div>
-      </div>
-
-      {/* Scenario library */}
-      <div className="flex items-center justify-between mb-4">
-        <h2 className="font-semibold text-gray-900 text-sm">Scenario Library</h2>
-        <span className="text-xs text-gray-400">{scenarios.length} scenarios available</span>
-      </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {scenarios.map(s => (
-          <div key={s.id} className="bg-white rounded-xl border border-gray-100 p-5 flex flex-col gap-3">
-            <div className="flex items-start justify-between">
-              <div className="w-10 h-10 rounded-lg bg-teal-50 flex items-center justify-center text-xl">🏥</div>
-              <span className={`text-[10px] font-semibold px-2 py-0.5 rounded ${diffColors[s.difficulty] ?? "bg-gray-100 text-gray-500"}`}>{s.difficulty}</span>
+            <div className="flex flex-wrap gap-x-4 gap-y-1 mt-3 text-[10px] text-teal-200/70">
+              <span>🧾 Evidence-based scenarios</span>
+              <span>💬 Realistic consequences</span>
+              <span>⚡ Instant debrief</span>
+              <span>🏥 {cases.length} governed case stud{cases.length === 1 ? "y" : "ies"}</span>
             </div>
-            <div>
-              <h3 className="font-semibold text-gray-900 text-sm">{s.title}</h3>
-              <p className="text-xs text-gray-400 mt-0.5">{s.category} · ⏱ {s.duration}</p>
-            </div>
-            <button onClick={() => setPreview(s)} className="mt-auto w-full text-sm font-medium py-2 rounded-lg border border-teal-200 text-teal-600 hover:bg-teal-50 transition-colors">
-              Preview Scenario
-            </button>
           </div>
-        ))}
+          <div className="bg-white/10 rounded-xl p-4 text-center shrink-0">
+            <p className="text-3xl font-extrabold text-teal-300">{scenarios.length + cases.length}</p>
+            <p className="text-[10px] text-teal-100/70">scenarios available</p>
+          </div>
+        </div>
       </div>
 
+      <SimulationLab scenarios={scenarios} cases={cases} />
+
+      {/* How it works */}
       <div className="mt-6 bg-white rounded-xl border border-gray-100 p-5">
-        <h2 className="font-semibold text-gray-900 text-sm mb-3">How Simulation Works</h2>
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          {[
-            { step: "1", title: "Choose Scenario", desc: "Select a clinical case matching your specialisation" },
-            { step: "2", title: "Assess Patient", desc: "Review vitals, history, and presenting complaint" },
-            { step: "3", title: "Make Decisions", desc: "Choose interventions — each choice has consequences" },
-            { step: "4", title: "Debrief & Learn", desc: "Review your performance against clinical guidelines" },
-          ].map(({ step, title, desc }) => (
-            <div key={step} className="text-center">
-              <div className="w-8 h-8 rounded-full bg-teal-600 text-white text-sm font-bold flex items-center justify-center mx-auto mb-2">{step}</div>
-              <p className="text-sm font-semibold text-gray-800">{title}</p>
-              <p className="text-xs text-gray-400 mt-0.5">{desc}</p>
+        <h2 className="font-semibold text-gray-900 text-sm mb-4">How Simulation Works</h2>
+        <div className="grid sm:grid-cols-2 xl:grid-cols-4 gap-4">
+          {STEPS.map((s, i) => (
+            <div key={s.n} className="flex items-start gap-3">
+              <span className="w-6 h-6 rounded-full bg-teal-600 text-white text-[11px] font-bold flex items-center justify-center shrink-0">{s.n}</span>
+              <div>
+                <p className="text-xs font-semibold text-gray-800">{s.icon} {s.title}</p>
+                <p className="text-[10px] text-gray-400 leading-snug mt-0.5">{s.sub}</p>
+              </div>
+              {i < STEPS.length - 1 && <span className="hidden xl:block text-gray-200 ml-auto">→</span>}
             </div>
           ))}
         </div>

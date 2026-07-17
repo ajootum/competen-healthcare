@@ -25,6 +25,11 @@ export async function generateDecisionsForCycle(
   if (!cycle) return { created: 0 };
   const nurseId = cycle.nurse_id as string;
 
+  // Employer stamp (Lifetime Passport spec §6): decisions carry the employer
+  // at decision time so the competency's provenance survives job changes.
+  const { data: placement } = await admin
+    .from("profiles").select("hospital_id, organisation_id").eq("id", nurseId).single();
+
   // Validated/aggregated scores for this cycle
   const { data: scores } = await admin
     .from("competency_scores")
@@ -91,12 +96,20 @@ export async function generateDecisionsForCycle(
       validated_by: validated ? decidedBy : null,
       validated_at: validated ? today.toISOString() : null,
       validation_outcome: validated ? "validated" : null,
+      hospital_id: placement?.hospital_id ?? null,
+      organisation_id: placement?.organisation_id ?? null,
     };
   });
 
   // Replace any existing decisions for this cycle so re-running reflects latest scores
   await admin.from("competency_decisions").delete().eq("cycle_id", cycleId);
-  const { error } = await admin.from("competency_decisions").insert(rows);
+  let { error } = await admin.from("competency_decisions").insert(rows);
+  if (error && /hospital_id|organisation_id/.test(error.message)) {
+    // Migration 027 not applied yet — insert without the employer stamp
+    ({ error } = await admin.from("competency_decisions")
+      .insert(rows.map(r => Object.fromEntries(
+        Object.entries(r).filter(([k]) => k !== "hospital_id" && k !== "organisation_id")))));
+  }
   if (error) throw new Error(error.message);
 
   // Refresh the nurse's learning pathway from the new decision gaps (best-effort)

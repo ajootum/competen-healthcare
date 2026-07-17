@@ -1,15 +1,11 @@
 import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
-import Link from "next/link";
+import LogbookWorkspace, { type SkillOption, type EntryRow, type ScoredRow } from "./LogbookWorkspace";
 
-// Clinical Skills Logbook — every skill-level score the nurse has received,
-// grouped by competency, with Benner levels and assessor verification.
-
-const SCORE_COLORS = ["#ef4444", "#f97316", "#eab308", "#14b8a6", "#0d9488", "#3b82f6", "#8b5cf6"];
-const LEVEL_HINT = [
-  "Requires training", "Constant supervision", "Some supervision",
-  "Independent", "Independent+", "Adapts to complex cases", "Can lead others",
-];
+// Clinical Skills Logbook (Skills Logbook Redesign spec) — the worker's
+// procedural record: self-logged entries awaiting supervisor verification
+// (migration 028) alongside assessor-scored skills from competency cycles.
+// Miller's Pyramid and domain analytics are computed from real entries only.
 
 export default async function SkillsLogbookPage() {
   const supabase = await createClient();
@@ -17,106 +13,115 @@ export default async function SkillsLogbookPage() {
   if (!user) redirect("/login");
 
   const admin = createAdminClient();
-  const { data: cycles } = await admin.from("competency_cycles").select("id").eq("nurse_id", user.id);
+  const [{ data: cycles }, { data: rawEntries }, { data: skillLib }] = await Promise.all([
+    admin.from("competency_cycles").select("id").eq("nurse_id", user.id),
+    admin.from("skill_log_entries")
+      .select("id, skill_name, performed_at, location, supervision_level, notes, status, verified_by_name, verifier_comment, framework_competencies!competency_id(name, framework_domains(name))")
+      .eq("nurse_id", user.id).order("performed_at", { ascending: false }),
+    admin.from("competency_skills")
+      .select("id, name, is_active, framework_competencies!competency_id(id, name, cpu_id)")
+      .eq("is_active", true).order("name").limit(400),
+  ]);
   const cycleIds = (cycles ?? []).map(c => c.id);
 
   const { data: skillScores } = cycleIds.length
     ? await admin.from("skill_scores")
-        .select("skill_id, competency_id, score, notes, assessed_at, competency_skills(name), framework_competencies!competency_id(name), profiles!assessor_id(full_name)")
-        .in("cycle_id", cycleIds)
-        .order("assessed_at", { ascending: false })
+        .select("skill_id, score, assessed_at, competency_skills(name), framework_competencies!competency_id(name), profiles!assessor_id(full_name)")
+        .in("cycle_id", cycleIds).order("assessed_at", { ascending: false })
     : { data: [] };
 
-  // Latest score per skill
+  // Entries (self-logged; degrades to empty if migration 028 not applied)
+  const entries: EntryRow[] = ((rawEntries ?? []) as unknown as {
+    id: string; skill_name: string; performed_at: string; location: string | null;
+    supervision_level: string; notes: string | null; status: string;
+    verified_by_name: string | null; verifier_comment: string | null;
+    framework_competencies: { name: string; framework_domains: { name: string } | null } | null;
+  }[]).map(e => ({
+    id: e.id, skillName: e.skill_name,
+    competencyName: e.framework_competencies?.name ?? null,
+    domainName: e.framework_competencies?.framework_domains?.name ?? null,
+    performedAt: e.performed_at, location: e.location,
+    supervision: e.supervision_level, notes: e.notes,
+    status: e.status, verifierName: e.verified_by_name, verifierComment: e.verifier_comment,
+  }));
+
+  // Skill library for the modal
+  const skills: SkillOption[] = ((skillLib ?? []) as unknown as {
+    id: string; name: string; framework_competencies: { id: string; name: string; cpu_id: string | null } | null;
+  }[]).map(s => ({
+    id: s.id, name: s.name,
+    competencyId: s.framework_competencies?.id ?? null,
+    competencyName: s.framework_competencies?.name ?? null,
+    cpuId: s.framework_competencies?.cpu_id ?? null,
+  }));
+
+  // Latest assessor score per skill (existing governed record)
   const seen = new Set<string>();
-  type Row = { skill: string; competency: string; score: number; assessor: string; date: string | null; notes: string | null };
-  const rows: Row[] = [];
+  const scored: ScoredRow[] = [];
   for (const s of skillScores ?? []) {
     if (seen.has(s.skill_id)) continue;
     seen.add(s.skill_id);
-    rows.push({
+    scored.push({
       skill: (s.competency_skills as unknown as { name: string } | null)?.name ?? "—",
       competency: (s.framework_competencies as unknown as { name: string } | null)?.name ?? "—",
       score: s.score,
       assessor: (s.profiles as unknown as { full_name: string } | null)?.full_name ?? "—",
       date: s.assessed_at,
-      notes: s.notes,
     });
   }
 
-  const byCompetency = new Map<string, Row[]>();
-  for (const r of rows) {
-    if (!byCompetency.has(r.competency)) byCompetency.set(r.competency, []);
-    byCompetency.get(r.competency)!.push(r);
+  // ── Analytics: Miller distribution + top domains (entries + scorings) ──
+  const miller = { p1: 0, p2: 0, p3: 0 };
+  for (const e of entries) {
+    if (e.supervision === "observed") miller.p1++;
+    else if (e.supervision === "independent") miller.p3++;
+    else miller.p2++;
   }
-  const independent = rows.filter(r => r.score >= 3).length;
-  const supervised = rows.filter(r => r.score > 0 && r.score < 3).length;
+  const domainCount = new Map<string, number>();
+  for (const e of entries) {
+    if (e.domainName) domainCount.set(e.domainName, (domainCount.get(e.domainName) ?? 0) + 1);
+  }
+  const topDomains = [...domainCount.entries()].sort((a, b) => b[1] - a[1]).slice(0, 5);
+  const maxDomain = topDomains[0]?.[1] ?? 1;
 
   return (
-    <div className="max-w-4xl">
-      <div className="mb-6">
-        <h1 className="text-xl font-bold text-gray-900">Clinical Skills Logbook</h1>
-        <p className="text-gray-400 text-sm mt-0.5">
-          Your verified record of clinical skills — from supervised practice to independent performance.
-        </p>
-      </div>
+    <div className="max-w-5xl">
+      <LogbookWorkspace skills={skills} entries={entries} scored={scored} />
 
-      <div className="grid grid-cols-3 gap-3 mb-6">
-        {[
-          { label: "Skills logged", value: rows.length, color: "text-blue-600" },
-          { label: "Independent (≥3)", value: independent, color: "text-green-600" },
-          { label: "Under supervision", value: supervised, color: "text-amber-600" },
-        ].map(({ label, value, color }) => (
-          <div key={label} className="bg-white rounded-xl p-4 border border-gray-100">
-            <p className="text-xs text-gray-400 font-medium mb-1">{label}</p>
-            <p className={`text-2xl font-bold ${color}`}>{value}</p>
+      {/* Analytics band */}
+      <div className="grid md:grid-cols-2 gap-5 mt-5">
+        <div className="bg-white rounded-xl border border-gray-100 p-5">
+          <h2 className="font-semibold text-gray-900 text-sm mb-1">Skills by Competency Level</h2>
+          <p className="text-[10px] text-gray-400 mb-3">Miller&apos;s Pyramid, from your logged supervision levels.</p>
+          <div className="grid grid-cols-3 gap-3 text-center">
+            {[
+              { label: "Knows (P1)", sub: "Observed practice", value: miller.p1, cls: "text-gray-500" },
+              { label: "Knows How (P2)", sub: "Supervised practice", value: miller.p2, cls: "text-teal-600" },
+              { label: "Shows How (P3)", sub: "Independent performance", value: miller.p3, cls: "text-green-600" },
+            ].map(m => (
+              <div key={m.label} className="bg-gray-50/70 rounded-lg py-3">
+                <p className="text-lg">🔺</p>
+                <p className={`text-xl font-bold ${m.cls}`}>{m.value}</p>
+                <p className="text-[10px] font-semibold text-gray-600">{m.label}</p>
+                <p className="text-[9px] text-gray-400">{m.sub}</p>
+              </div>
+            ))}
           </div>
-        ))}
-      </div>
-
-      {rows.length === 0 ? (
-        <div className="bg-white rounded-xl border border-gray-100 p-12 text-center">
-          <p className="text-4xl mb-3">📖</p>
-          <p className="font-semibold text-gray-700">No skills logged yet</p>
-          <p className="text-gray-400 text-sm mt-2">
-            Your logbook fills as assessors score individual skills during your competency cycles.
-          </p>
         </div>
-      ) : (
-        <div className="flex flex-col gap-5">
-          {[...byCompetency.entries()].map(([competency, skills]) => (
-            <div key={competency} className="bg-white rounded-xl border border-gray-100 overflow-hidden">
-              <div className="px-5 py-3 bg-gray-50/50 border-b border-gray-100">
-                <p className="text-sm font-bold text-gray-800">{competency}</p>
+        <div className="bg-white rounded-xl border border-gray-100 p-5">
+          <h2 className="font-semibold text-gray-900 text-sm mb-1">Top Skill Domains</h2>
+          <p className="text-[10px] text-gray-400 mb-3">Where your logged practice concentrates.</p>
+          {topDomains.length ? topDomains.map(([name, n]) => (
+            <div key={name} className="flex items-center gap-2.5 py-1">
+              <span className="text-[11px] text-gray-700 w-36 truncate">{name}</span>
+              <div className="flex-1 h-2 bg-gray-100 rounded-full overflow-hidden">
+                <div className="h-full bg-teal-500 rounded-full" style={{ width: `${Math.round((n / maxDomain) * 100)}%` }} />
               </div>
-              <div className="divide-y divide-gray-50">
-                {skills.map((s, i) => (
-                  <div key={i} className="flex items-center gap-3 px-5 py-3">
-                    <div className="w-7 h-7 rounded-full flex items-center justify-center text-white text-xs font-bold shrink-0"
-                      style={{ backgroundColor: SCORE_COLORS[s.score] ?? "#9ca3af" }}>{s.score}</div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm text-gray-800">{s.skill}</p>
-                      <p className="text-[10px] text-gray-400">
-                        {LEVEL_HINT[s.score]} · verified by {s.assessor}
-                        {s.date ? ` · ${new Date(s.date).toLocaleDateString()}` : ""}
-                      </p>
-                      {s.notes && <p className="text-[11px] text-gray-500 italic mt-0.5">&ldquo;{s.notes}&rdquo;</p>}
-                    </div>
-                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded shrink-0 ${
-                      s.score >= 3 ? "bg-green-50 text-green-600" : "bg-amber-50 text-amber-700"}`}>
-                      {s.score >= 3 ? "Independent" : "Supervised"}
-                    </span>
-                  </div>
-                ))}
-              </div>
+              <span className="text-[10px] font-bold text-gray-500 w-5 text-right">{n}</span>
             </div>
-          ))}
+          )) : <p className="text-xs text-gray-400 text-center py-4">Log skills to see your domain distribution. 📊</p>}
         </div>
-      )}
-
-      <p className="text-[11px] text-gray-400 mt-6">
-        Skill evidence supports your competency decisions on the <Link href="/dashboard/passport" className="text-teal-600 hover:underline">Passport</Link>.
-      </p>
+      </div>
     </div>
   );
 }
