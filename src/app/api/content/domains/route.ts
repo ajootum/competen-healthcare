@@ -36,9 +36,12 @@ export async function PATCH(req: Request) {
   if (!admin) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   const id = new URL(req.url).searchParams.get("id");
   if (!id) return NextResponse.json({ error: "id required" }, { status: 400 });
-  const { name } = await req.json();
-  if (!name) return NextResponse.json({ error: "name required" }, { status: 400 });
-  const { data, error } = await admin.from("framework_domains").update({ name }).eq("id", id).select().single();
+  const body = await req.json();
+  // Partial update — supports renaming and reordering.
+  const allowed = ["name", "sort_order"];
+  const update = Object.fromEntries(Object.entries(body).filter(([k]) => allowed.includes(k)));
+  if (Object.keys(update).length === 0) return NextResponse.json({ error: "no valid fields" }, { status: 400 });
+  const { data, error } = await admin.from("framework_domains").update(update).eq("id", id).select().single();
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   return NextResponse.json(data);
 }

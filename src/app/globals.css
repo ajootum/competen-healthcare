@@ -24,3 +24,9 @@ body {
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
 }
+
+/* Workspace pages (e.g. the Competency Studio) opt out of the shell's
+   max-w-6xl reading cap by rendering data-wide on their root element. */
+main:has([data-wide]) {
+  max-width: none;
+}

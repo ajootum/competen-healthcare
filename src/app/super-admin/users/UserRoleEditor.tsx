@@ -209,7 +209,7 @@ export default function UserRoleEditor({
                         </button>
                       )}
                     </div>
-                    <p className="text-[11px] text-gray-400 mb-3">Select one or more roles — the user can switch between the portals they're assigned to.</p>
+                    <p className="text-[11px] text-gray-400 mb-3">Select one or more roles — the user can switch between the portals they&apos;re assigned to.</p>
                     <div className="flex flex-col gap-4">
                       {ORG_ROLE_GROUPS.map(group => {
                         const gc = ROLE_CONFIG[group.portalRole];

@@ -17,7 +17,7 @@ const NAV = [
   ]},
   { group: "CONTENT", items: [
     { label: "Studio",            href: "/super-admin/studio",             icon: "🎛️" },
-    { label: "Framework Builder", href: "/super-admin/content",            icon: "📐" },
+    { label: "Competency Studio", href: "/super-admin/content",            icon: "📐" },
     { label: "Knowledge Graph",   href: "/super-admin/knowledge-graph",    icon: "🕸️" },
     { label: "AI Assistant",      href: "/super-admin/assistant",          icon: "🤖" },
     { label: "Scoring Rules",     href: "/super-admin/scoring",            icon: "📊" },
@@ -118,6 +118,8 @@ export default async function SuperAdminLayout({ children }: { children: React.R
           </div>
         </aside>
 
+        {/* Pages stay readable at max-w-6xl; a workspace page opts out of the
+            cap by rendering data-wide on its root (rule in globals.css). */}
         <main className="flex-1 md:ml-56 px-4 md:px-6 py-8 max-w-6xl">
           {children}
         </main>

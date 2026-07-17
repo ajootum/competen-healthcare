@@ -40,7 +40,7 @@ export async function PATCH(req: Request) {
   const body = await req.json();
   // Partial update — supports renaming (name/description) and CKCM structural
   // assignment (practice_id / cpu_id / code / risk_category).
-  const allowed = ["name", "description", "practice_id", "cpu_id", "code", "risk_category"];
+  const allowed = ["name", "description", "practice_id", "cpu_id", "code", "risk_category", "sort_order"];
   const update = Object.fromEntries(
     Object.entries(body).filter(([k]) => allowed.includes(k))
   );
