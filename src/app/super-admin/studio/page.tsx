@@ -50,10 +50,13 @@ export default async function StudioPage() {
     { icon: "🏥", label: "Practices & CPU Library", desc: "Cross-framework view of every practice and CPU — counts, status, one-click clone", href: "/super-admin/studio/cpus", stat: `${cpus ?? 0} CPUs` },
     { icon: "🩺", label: "Assessment Builder", desc: "Blueprints, methods, weights, consensus rules and evidence matrices", href: "/super-admin/assessment-methods", stat: null },
     { icon: "❓", label: "Question Builder", desc: "Governed MCQ banks — pass marks, validity, CPU-linked knowledge tests", href: "/super-admin/studio/questions", stat: `${banks ?? 0} banks` },
+    { icon: "🫀", label: "Knowledge Objects", desc: "Governed clinical knowledge — anatomy, physiology, reasoning; citable by the AI", href: "/super-admin/studio/knowledge", stat: null },
+    { icon: "🧑‍⚕️", label: "Case Studies", desc: "Worked clinical scenarios — findings, questions and expert reasoning", href: "/super-admin/studio/cases", stat: null },
     { icon: "📚", label: "Learning Builder", desc: "Learning resources and pathways (managed in the Admin portal)", href: "/admin/resources", stat: null },
     { icon: "📎", label: "Evidence Builder", desc: "Evidence requirements per CPU — types, quantities, validity", href: "/super-admin/content", stat: null },
     { icon: "🗂️", label: "Version Control", desc: "Semantic versions, change requests, impact analysis — never edit live content", href: "/super-admin/content", stat: null },
     { icon: "🧾", label: "Ownership & Responsibilities", desc: "Accountable owners for every content object — product owners, reviewers, publishers", href: "/super-admin/studio/responsibilities", stat: null },
+    { icon: "📄", label: "Import CPU Document", desc: "Turn an authored CPU document into competencies, skills, rules and questions", href: "/super-admin/studio/import", stat: null },
     { icon: "⚖️", label: "Approval Queue", desc: "Governance review before publication — separation of duties enforced", href: "/admin/approvals", stat: (inReview ?? 0) > 0 ? `${inReview} in review` : "queue empty" },
     { icon: "📖", label: "Published Library", desc: "Everything currently live across the platform", href: "/super-admin/competencies", stat: null },
   ];

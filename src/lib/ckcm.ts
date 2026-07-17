@@ -297,3 +297,17 @@ export const TASK_TYPE_UI: Record<string, { label: string; icon: string; cls: st
   remediation: { label: "Remediation",         icon: "🌱", cls: "bg-red-50 text-red-600" },
   entrustment: { label: "Entrustment decision",icon: "🔑", cls: "bg-teal-50 text-teal-700" },
 };
+
+// Clinical Knowledge Objects (migration 025)
+export const KNOWLEDGE_TYPE_UI: Record<string, { label: string; icon: string }> = {
+  anatomy:            { label: "Anatomy",            icon: "🫀" },
+  physiology:         { label: "Physiology",         icon: "⚡" },
+  pathophysiology:    { label: "Pathophysiology",    icon: "🔬" },
+  pharmacology:       { label: "Pharmacology",       icon: "💊" },
+  classification:     { label: "Classification",     icon: "🗂️" },
+  assessment_tool:    { label: "Assessment Tool",    icon: "📏" },
+  clinical_reasoning: { label: "Clinical Reasoning", icon: "🧠" },
+  procedure:          { label: "Procedure",          icon: "🩺" },
+  evidence:           { label: "Evidence",           icon: "📑" },
+  other:              { label: "Other",              icon: "📄" },
+};

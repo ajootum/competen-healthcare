@@ -28,6 +28,7 @@ Maps every specification artefact to its implementation. Status: ✅ implemented
 | Credentials, recognitions, curricula | ✅ | Migrations 016, 018 |
 | Learning pathways from decision gaps | ✅ | `src/lib/engines/pathways.ts` (014) |
 | Knowledge graph + semantic edges | ✅ | `knowledge_edges` (012), `engines/graph.ts`; pgvector ready (017) |
+| **Clinical Knowledge Objects (CKO)** — governed anatomy/physiology/reasoning content, reusable + AI-citable | ✅ | Migration 025 (`knowledge_objects`, `knowledge_links`, `knowledge_requirements`, FTS extended) · `api/knowledge-objects` · `studio/knowledge`; auto-extracted by the CPU importer |
 | Versioning, change requests, impact analysis | ✅ | Migration 012; `engines/impact.ts`; framework lifecycle |
 | Governance committees (5 levels) | ✅ | `governance_committees` (012); Committees page |
 
@@ -42,6 +43,9 @@ Maps every specification artefact to its implementation. Status: ✅ implemented
 | Policy Builder | ✅ | Policy manager |
 | Version Manager / Approval Queue / Published Library | ✅ | Lifecycle, approvals, competency library |
 | Question Builder (MCQ banks) | 🟨 | Practice quiz existed; governed banks added in v1.1 (migration 022) |
+| **CPU document importer** (authored .docx → CPU, competencies, skills, critical rules, question bank) | ✅ | `src/lib/import/cpu-parser.ts` (19 unit tests) + `docx-text.ts` (mammoth, reads Word list structure) · `api/import/cpu` · `studio/import`. Handles multi-CPU bundles + 3 outcome formats; preview-and-review before commit |
+| **CPU authoring template & rules** | ✅ | `docs/CPU-AUTHORING-TEMPLATE.md` + generated Word template (`scripts/make-cpu-template.mjs`); round-trip verified against the importer |
+| **Clinical Practice Catalogue taxonomy** | 🟨 | 15 domains already matched the Catalogue's chapters; 15 practices seeded (`scripts/seed-catalogue-practices.mjs`). CPU shells not seeded — the importer creates CPUs from the authored documents instead |
 | Simulation Builder | ⬜ | Registered gap (v1.5) |
 | Studio Home Dashboard ("what needs my attention"), global search, Quick Create (UX spec §6-8) | ✅ | Studio hub v1.1 |
 | Practice/CPU library screens + CPU clone service ("Clinical Practice and CPUs" spec) | ✅ | `studio/cpus`; clone copies blueprint, evidence matrix, critical failures |
@@ -73,6 +77,7 @@ Maps every specification artefact to its implementation. Status: ✅ implemented
 | Improvement Objects (9 methodologies, lifecycle) | ✅ | 019 |
 | Accreditation readiness (8 checks) | ✅ | `engines/quality.ts`; Admin → Accreditation |
 | Incident management, CAPA | ⬜ | Registered gap (v1.5) |
+| **Clinical case studies** — worked scenarios (scenario/findings/questions/discussion/learning points), reveal-answer study view, AI-citable | ✅ | Migration 026 (`clinical_cases`, FTS extended) · `api/clinical-cases` · `studio/cases`; auto-extracted by the CPU importer |
 | Accreditation/Quality Digital Twin | ⬜ | v2+ vision item |
 
 ## 6. Frontends (Frontend User Structures, FCLUXS)

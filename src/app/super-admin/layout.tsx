@@ -17,7 +17,7 @@ const NAV = [
   ]},
   { group: "CONTENT", items: [
     { label: "Studio",            href: "/super-admin/studio",             icon: "🎛️" },
-    { label: "Content Builder",   href: "/super-admin/content",            icon: "📐" },
+    { label: "Framework Builder", href: "/super-admin/content",            icon: "📐" },
     { label: "Knowledge Graph",   href: "/super-admin/knowledge-graph",    icon: "🕸️" },
     { label: "AI Assistant",      href: "/super-admin/assistant",          icon: "🤖" },
     { label: "Scoring Rules",     href: "/super-admin/scoring",            icon: "📊" },

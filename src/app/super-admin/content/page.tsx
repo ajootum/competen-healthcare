@@ -48,7 +48,7 @@ export default async function ContentBuilderPage() {
     <div className="max-w-5xl">
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-xl font-bold text-gray-900">Content Builder</h1>
+          <h1 className="text-xl font-bold text-gray-900">Framework Builder</h1>
           <p className="text-gray-400 text-sm mt-0.5">
             {(frameworks ?? []).length} frameworks · {totalDomains} domains · {totalComps} competencies — all editable without code
           </p>
