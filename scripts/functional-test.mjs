@@ -732,6 +732,14 @@ record("xworkspace", "§16 role switches recorded in audit log", (switchAudit ??
   const html = await res.text();
   record("xworkspace", "§16 nurse home reachable with non-nurse active_role (no bounce)", res.status === 200 && html.includes("👋"), `status ${res.status}`);
 }
+{
+  // Regression: logout must redirect with 303 (See Other). The default 307
+  // preserves POST, making the browser re-POST /login → 405 in production.
+  // Runs LAST for the dual user — signOut revokes their sessions globally.
+  const res = await fetch(BASE + "/api/auth/logout", { method: "POST", headers: { Cookie: dualLogin.cookies }, redirect: "manual" });
+  const loc = res.headers.get("location") ?? "";
+  record("xworkspace", "logout 303-redirects to login (no 405 re-POST)", res.status === 303 && loc.includes("/login"), `status ${res.status} → ${loc}`);
+}
 
 // Assessment Studio: full authoring chain (skill → attach → checklist →
 // critical item → question bank → question) as an ASSESSOR via /api/studio.
