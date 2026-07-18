@@ -641,6 +641,22 @@ const EDUCATOR_PAGES = [
   ["/educator/interventions", "Interventions"],
   ["/educator/meetings", "Meetings &amp; Follow-ups"],
   ["/educator/referrals", "Referrals"],
+  ["/educator/studio", "Education Studio"],
+  ["/educator/studio/curriculum", "Curriculum &amp; Framework Design"],
+  ["/educator/studio/assessment", "Assessment Design Studio"],
+  ["/educator/studio/content", "Learning Content Studio"],
+  ["/educator/studio/mapping", "Blueprint &amp; Mapping Centre"],
+  ["/educator/studio/cko", "CKO &amp; CPU Studio"],
+  ["/educator/studio/ai", "AI Studio"],
+  ["/educator/studio/publishing", "Publishing &amp; Governance"],
+  ["/educator/studio/frameworks", "Framework Builder"],
+  ["/educator/studio/cpus", "CPU Builder"],
+  ["/educator/studio/knowledge", "Clinical Library"],
+  ["/educator/studio/checklists", "Clinical Skills Checklist Builder"],
+  ["/educator/studio/rubrics", "Assessment Templates"],
+  ["/educator/studio/gaps", "Gap Analysis"],
+  ["/educator/studio/versions", "Version Control"],
+  ["/educator/studio/analytics", "Object Analytics"],
   ["/educator/reviews", "My Reviews"],
   ["/educator/evidence", "Evidence Review"],
   ["/educator/moderation", "Moderation Queue"],
@@ -713,6 +729,77 @@ record("educator:support", "referral created + referee notified", r.status === 2
 }
 r = await send("PATCH", "/api/support/referrals", eduLogin2.cookies, { id: refId, status: "resolved", resolution_note: "TEST — met with learner, plan agreed" });
 record("educator:support", "referral resolves", r.status === 200, `status ${r.status}`);
+
+// Education Studio: educator can author a checklist via /api/studio, and the AI generator answers
+r = await send("POST", "/api/studio", eduLogin2.cookies, { kind: "skill", name: "TEST — studio skill" });
+body = await r.json().catch(() => ({}));
+const studioEduSkill = body.id;
+r = await send("POST", "/api/studio", eduLogin2.cookies, { kind: "attach_skill", skill_id: studioEduSkill, competency_id: anyComp.id });
+body = await r.json().catch(() => ({}));
+const studioEduCompSkill = body.id;
+r = await send("POST", "/api/studio", eduLogin2.cookies, { kind: "checklist", skill_id: studioEduCompSkill, name: "TEST — studio checklist" });
+record("educator:studio", "educator authors a checklist via studio", r.status === 201, `status ${r.status}`);
+r = await send("POST", "/api/ai/osce", eduLogin2.cookies, { station_name: "TEST — studio station", competency_id: anyComp.id });
+body = await r.json().catch(() => ({}));
+record("educator:studio", "AI assessment generator answers", (r.status === 200 && (body.answer ?? "").length > 100) || r.status === 503, `status ${r.status}${r.status === 503 ? " (AI off)" : ""}`);
+r = await send("POST", "/api/studio", nurse.cookies, { kind: "skill", name: "TEST — rogue" });
+record("educator:studio", "nurse blocked from studio authoring", r.status === 403, `status ${r.status}`);
+
+// ── Educator framework authoring: create hospital framework → domains → competencies → reorder → publish ──
+// Educators author their OWN hospital's frameworks (scope=local, audit-logged); the shared master library stays read-only.
+const authoring = (payload) => send("POST", "/api/studio/authoring", eduLogin2.cookies, payload);
+let authFwId, authDom1, authDom2, authComp;
+r = await authoring({ action: "create_framework", name: "TEST — Educator Framework", library: "specialty" });
+body = await r.json().catch(() => ({})); authFwId = body.id;
+const { data: authFwRow } = authFwId ? await admin.from("frameworks").select("scope, hospital_id, owner_type").eq("id", authFwId).single() : { data: null };
+record("educator:authoring", "educator creates a hospital framework", r.status === 201 && !!authFwId && authFwRow?.scope === "local" && authFwRow?.hospital_id === HOSPITAL, `status ${r.status}, scope ${authFwRow?.scope}`);
+
+r = await authoring({ action: "create_domain", framework_id: authFwId, name: "TEST — Domain A" });
+body = await r.json().catch(() => ({})); authDom1 = body.id;
+record("educator:authoring", "educator creates a domain", r.status === 201 && !!authDom1, `status ${r.status}`);
+r = await authoring({ action: "create_domain", framework_id: authFwId, name: "TEST — Domain B" });
+body = await r.json().catch(() => ({})); authDom2 = body.id;
+
+r = await authoring({ action: "create_competency", domain_id: authDom1, name: "TEST — Competency 1" });
+body = await r.json().catch(() => ({})); authComp = body.id;
+record("educator:authoring", "educator creates a competency", r.status === 201 && !!authComp, `status ${r.status}`);
+
+r = await authoring({ action: "reorder_domains", framework_id: authFwId, order: [authDom2, authDom1] });
+const { data: reordered } = await admin.from("framework_domains").select("id, sort_order").eq("framework_id", authFwId).order("sort_order");
+record("educator:authoring", "educator reorders domains (sort persisted)", r.status === 200 && reordered?.[0]?.id === authDom2, `status ${r.status}`);
+
+r = await authoring({ action: "update_competency", competency_id: authComp, name: "TEST — Competency 1 renamed" });
+const { data: renamedComp } = authComp ? await admin.from("framework_competencies").select("name").eq("id", authComp).single() : { data: null };
+record("educator:authoring", "educator autosave-renames a competency", r.status === 200 && renamedComp?.name === "TEST — Competency 1 renamed", `status ${r.status}`);
+
+r = await authoring({ action: "lifecycle", framework_id: authFwId, step: "publish" });
+const { data: publishedFw } = authFwId ? await admin.from("frameworks").select("pub_status, version_num").eq("id", authFwId).single() : { data: null };
+const { data: authVersion } = authFwId ? await admin.from("framework_versions").select("id").eq("framework_id", authFwId) : { data: [] };
+record("educator:authoring", "educator publishes framework (version snapshotted)", r.status === 200 && publishedFw?.pub_status === "published" && (authVersion ?? []).length >= 1, `status ${r.status}, ${publishedFw?.pub_status}`);
+
+r = await send("POST", "/api/studio/authoring", nurse.cookies, { action: "create_framework", name: "TEST — rogue framework" });
+record("educator:authoring", "nurse blocked from framework authoring", r.status === 403, `status ${r.status}`);
+
+const { data: masterFw } = await admin.from("frameworks").select("id").eq("scope", "master").limit(1).single();
+r = masterFw ? await authoring({ action: "create_domain", framework_id: masterFw.id, name: "TEST — should fail" }) : { status: 0 };
+record("educator:authoring", "educator blocked from editing master library", r.status === 403, `status ${r.status}`);
+
+// Cleanup authoring artefacts (children first, then audit rows for the throwaway educator)
+if (authFwId) {
+  await admin.from("framework_competencies").delete().in("domain_id", [authDom1, authDom2].filter(Boolean));
+  await admin.from("framework_domains").delete().eq("framework_id", authFwId);
+  await admin.from("framework_versions").delete().eq("framework_id", authFwId);
+  await admin.from("content_approvals").delete().eq("framework_id", authFwId);
+  await admin.from("frameworks").delete().eq("id", authFwId);
+}
+await admin.from("audit_log").delete().eq("actor_id", uatEducator.id);
+
+if (studioEduCompSkill) {
+  const { data: sc } = await admin.from("skill_checklists").select("id").eq("skill_id", studioEduCompSkill);
+  for (const x of sc ?? []) await admin.from("skill_checklists").delete().eq("id", x.id);
+  await admin.from("competency_skills").delete().eq("id", studioEduCompSkill);
+}
+if (studioEduSkill) await admin.from("skill_library").delete().eq("id", studioEduSkill);
 
 await admin.from("support_sessions").delete().eq("nurse_id", created.nurse.id);
 await admin.from("interventions").delete().eq("nurse_id", created.nurse.id);

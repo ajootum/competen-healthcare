@@ -55,11 +55,14 @@ const NAV_GROUPS: { group: string | null; items: NavItem[] }[] = [
     { label: "Support Analytics",   href: "/educator/support-analytics", icon: "📊" },
   ]},
   { group: "Education Studio", items: [
-    { label: "Curriculum Builder",  icon: "🏗️", soon: true },
-    { label: "Learning Outcomes",   icon: "🎓", soon: true },
-    { label: "Course Builder",      icon: "🧱", soon: true },
-    { label: "Learning Paths",      icon: "🛤️", soon: true },
-    { label: "Blueprint Mapping",   icon: "🗺️", soon: true },
+    { label: "Studio Overview",     href: "/educator/studio",             icon: "✨" },
+    { label: "Curriculum & Framework", href: "/educator/studio/curriculum", icon: "🏛️" },
+    { label: "Assessment Design",   href: "/educator/studio/assessment",  icon: "📝" },
+    { label: "Learning Content",    href: "/educator/studio/content",     icon: "🎬" },
+    { label: "Blueprint & Mapping", href: "/educator/studio/mapping",     icon: "🧭" },
+    { label: "CKO & CPU Studio",    href: "/educator/studio/cko",         icon: "💠" },
+    { label: "AI Studio",           href: "/educator/studio/ai",          icon: "🤖" },
+    { label: "Publishing & Governance", href: "/educator/studio/publishing", icon: "🏛️" },
   ]},
   { group: "Analytics & Quality", items: [
     { label: "Analytics & Reports", icon: "📊", soon: true },
@@ -177,7 +180,7 @@ export default async function EducatorLayout({ children }: { children: React.Rea
                     <span className="text-[8px] font-bold uppercase tracking-wider bg-purple-950 text-purple-400/40 rounded px-1 py-0.5">soon</span>
                   </span>
                 ) : (
-                  <NavLink key={label} href={href} icon={icon} label={label} exact={href === "/educator"}
+                  <NavLink key={label} href={href} icon={icon} label={label} exact={href === "/educator" || href === "/educator/studio"}
                     badge={badge ? badgeValue[badge] : undefined}
                     className="flex items-center gap-2.5 px-3 py-1.5 rounded-lg text-[13px] text-purple-200/60 hover:bg-purple-900/40 hover:text-white transition-colors"
                     activeClassName="flex items-center gap-2.5 px-3 py-1.5 rounded-lg text-[13px] bg-purple-900/60 text-white font-medium" />
