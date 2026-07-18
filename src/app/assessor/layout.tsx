@@ -6,52 +6,50 @@ import NavLink from "@/components/NavLink";
 import RoleSwitcher from "@/components/RoleSwitcher";
 import { highestRole, ORG_ROLE_CONFIG, type AppRole, type OrgRole } from "@/lib/roles";
 
-// Assessor Workspace sidebar — structure per the v2 dashboard mockup. Items
-// whose module doesn't exist yet (Competency Reviews, Mini-CEX/DOPS/CBD,
-// Digital Portfolio, Checklists & Blueprints) render as muted "soon" rows —
-// visible structure, no dead links. Some entries open in the clinician shell.
-type NavItem = { label: string; href?: string; icon: string; badge?: "queue" | "logbook" | "unread"; soon?: boolean };
+// Assessor Workspace sidebar — Assessment Operations Centre structure
+// (Enterprise Assessor Workspace V2 mockup). Items whose module doesn't exist
+// yet render as muted "soon" rows — visible structure, no dead links. Some
+// entries open in the clinician shell; Hospital Dashboard is role-gated.
+type NavItem = { label: string; href?: string; icon: string; badge?: "queue" | "logbook" | "unread"; soon?: boolean; adminOnly?: boolean };
 const NAV_GROUPS: { group: string | null; items: NavItem[] }[] = [
   { group: null, items: [
     { label: "Dashboard",              href: "/assessor",                   icon: "🏠" },
-    { label: "Notifications",          href: "/dashboard/notifications",    icon: "🔔", badge: "unread" },
+    { label: "Notifications",          href: "/assessor/notifications",     icon: "🔔", badge: "unread" },
   ]},
-  { group: "Assessments", items: [
-    { label: "My Assessments",         href: "/assessor/nurses",            icon: "🗒️" },
-    { label: "Assessment Queue",       href: "/assessor/queue",             icon: "📥", badge: "queue" },
+  { group: "Assessment Operations", items: [
+    { label: "Assessment Inbox",       href: "/assessor/queue",             icon: "📥", badge: "queue" },
+    { label: "Today's Schedule",       href: "/assessor/calendar",          icon: "🗓️" },
     { label: "Assessment Calendar",    href: "/assessor/calendar",          icon: "📅" },
-    { label: "Competency Reviews",     icon: "🔍", soon: true },
-    { label: "OSCE Management",        href: "/assessor/osce",              icon: "🩺" },
+    { label: "Learners",               href: "/assessor/nurses",            icon: "👩‍⚕️" },
   ]},
-  { group: "Audit & Quality", items: [
-    { label: "Clinical Audits",        href: "/dashboard/audit",            icon: "🩹" },
-    { label: "Documentation Audits",   href: "/dashboard/audit/chart",      icon: "🗂️" },
-    { label: "Competency Audits",      href: "/dashboard/audit/concurrent", icon: "📋" },
-    { label: "Audit Reports",          href: "/assessor/history",           icon: "📁" },
-  ]},
-  { group: "Workplace", items: [
-    { label: "Workplace Observations", href: "/assessor/assess",            icon: "👁️" },
-    { label: "Mini-CEX",               icon: "🧾", soon: true },
-    { label: "DOPS",                   icon: "🫱", soon: true },
-    { label: "CBD",                    icon: "💬", soon: true },
-  ]},
-  { group: "Evidence", items: [
+  { group: "Competency & Evidence", items: [
+    { label: "Competency Frameworks",  href: "/dashboard/library",          icon: "📚" },
     { label: "Evidence Validation",    href: "/assessor/logbook",           icon: "🖊️", badge: "logbook" },
-    { label: "Digital Portfolio",      icon: "🗃️", soon: true },
+    { label: "Competency Passports",   icon: "🛂", soon: true },
   ]},
-  { group: "Assessor Tools", items: [
-    { label: "Assessment Tools",       href: "/assessor/assess",            icon: "🧰" },
-    { label: "Checklists & Blueprints", icon: "✅", soon: true },
+  { group: "Assessment Activities", items: [
+    { label: "Conduct Assessment",     href: "/assessor/assess",            icon: "📝" },
+    { label: "OSCE Management",        href: "/assessor/osce",              icon: "🩺" },
     { label: "Simulation Scenarios",   href: "/dashboard/simulation",       icon: "🧪" },
-    { label: "Question Bank",          href: "/dashboard/questions",        icon: "❓" },
-    { label: "AI Copilot",             href: "/dashboard/copilot",          icon: "✨" },
+  ]},
+  { group: "Quality & Audit", items: [
+    { label: "Concurrent Audits",      href: "/dashboard/audit/concurrent", icon: "📋" },
+    { label: "Retrospective Audits",   href: "/dashboard/audit/chart",      icon: "🗂️" },
+    { label: "Clinical Audits",        href: "/dashboard/audit",            icon: "🩹" },
+    { label: "Quality Indicators",     icon: "📐", soon: true },
+  ]},
+  { group: "Analytics & Reports", items: [
+    { label: "Hospital Dashboard",     href: "/admin/dashboard",            icon: "🏥", adminOnly: true },
+    { label: "Assessor Analytics",     href: "/assessor/analytics",         icon: "📊" },
+    { label: "Risk & Remediation",     href: "/assessor/remediation",       icon: "🎯" },
+    { label: "Reports Centre",         href: "/assessor/history",           icon: "📁" },
+  ]},
+  { group: "AI & Intelligence", items: [
+    { label: "AI Assessment Copilot",  href: "/dashboard/copilot",          icon: "✨" },
     { label: "Knowledge Hub",          href: "/dashboard/knowledge",        icon: "🔬" },
   ]},
-  { group: "Analytics", items: [
-    { label: "Analytics & Reports",    href: "/assessor/analytics",         icon: "📊" },
-    { label: "Risk & Quality Insights", href: "/assessor/remediation",      icon: "🎯" },
-  ]},
-  { group: "Admin", items: [
+  { group: "Administration", items: [
+    { label: "Templates & Tools",      icon: "🧰", soon: true },
     { label: "Settings",               href: "/dashboard/billing",          icon: "⚙️" },
   ]},
 ];
@@ -118,7 +116,7 @@ export default async function AssessorLayout({ children }: { children: React.Rea
             <span className="block text-indigo-300/60 text-[10px] leading-tight">{portalLabel} Workspace</span>
           </span>
           <span className="flex-1" />
-          <Link href="/dashboard/notifications" aria-label="Notifications" className="relative w-9 h-9 rounded-lg flex items-center justify-center text-base">
+          <Link href="/assessor/notifications" aria-label="Notifications" className="relative w-9 h-9 rounded-lg flex items-center justify-center text-base">
             🔔
             {badgeValue.unread > 0 && (
               <span className="absolute top-0.5 right-0.5 bg-red-500 text-white text-[9px] font-bold rounded-full min-w-[15px] h-[15px] px-0.5 flex items-center justify-center">
@@ -128,7 +126,9 @@ export default async function AssessorLayout({ children }: { children: React.Rea
           </Link>
         </div>
         <nav className="flex gap-1 overflow-x-auto px-3 pb-2">
-          {NAV_GROUPS.flatMap(g => g.items).filter(i => i.href && !i.soon).map(({ label, href, badge }) => (
+          {NAV_GROUPS.flatMap(g => g.items)
+            .filter(i => i.href && !i.soon && (!i.adminOnly || userRoles.includes("hospital_admin")))
+            .map(({ label, href, badge }) => (
             <Link key={label} href={href!}
               className="shrink-0 text-[11px] text-indigo-100/80 bg-indigo-900/40 hover:bg-indigo-800/60 rounded-full px-3 py-1 transition-colors">
               {label}{badge && badgeValue[badge] > 0 ? ` (${badgeValue[badge]})` : ""}
@@ -154,7 +154,7 @@ export default async function AssessorLayout({ children }: { children: React.Rea
             {NAV_GROUPS.map(({ group, items }) => (
               <div key={group ?? "root"} className="flex flex-col gap-0.5">
                 {group && <p className="px-3 pt-3 pb-1 text-[9px] font-bold uppercase tracking-widest text-indigo-400/50">{group}</p>}
-                {items.map(({ label, href, icon, badge, soon }) => soon || !href ? (
+                {items.filter(i => !i.adminOnly || userRoles.includes("hospital_admin")).map(({ label, href, icon, badge, soon }) => soon || !href ? (
                   <span key={label} title="Not available yet — this module has no backing store"
                     className="flex items-center gap-2.5 px-3 py-1.5 rounded-lg text-[13px] text-slate-600 cursor-default select-none">
                     <span className="w-5 text-center text-sm leading-none opacity-50">{icon}</span>

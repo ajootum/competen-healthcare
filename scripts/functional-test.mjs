@@ -297,7 +297,8 @@ try {
 
 // 3f. Assessor workspace: pages render, scheduling works, exports work
 const ASSESSOR_PAGES = [
-  ["/assessor", "Welcome back"],
+  ["/assessor", "Assessment Operations Centre"],
+  ["/assessor/notifications", "Notifications"],
   ["/assessor/queue", "Assessment Queue"],
   ["/assessor/calendar", "Assessment Calendar"],
   ["/assessor/analytics", "My Analytics"],
