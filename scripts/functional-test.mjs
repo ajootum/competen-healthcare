@@ -617,6 +617,107 @@ r = await get("/api/reports/history", assessor.cookies);
   const csv = await r.text();
   record("uat:e2e", "history CSV reconciles with submitted assessments", csv.includes("Test Nurse"), "");
 }
+// Educator Validation Centre: the 7 new modules render + core flows
+const EDUCATOR_PAGES = [
+  ["/educator/teach", "Teach &amp; Assess"],
+  ["/educator/assessments", "Assessments"],
+  ["/educator/questions", "Question Bank"],
+  ["/educator/library", "Learning Resources"],
+  ["/educator/courses", "CPD &amp; Courses"],
+  ["/educator/simulation", "Simulation Scenarios"],
+  ["/educator/support", "Learner Success Dashboard"],
+  ["/educator/students", "Learner Directory"],
+  ["/educator/profiles", "Learner Profiles"],
+  ["/educator/progress", "Progress Monitoring"],
+  ["/educator/at-risk", "At-Risk Learners"],
+  ["/educator/plans", "Learning Plans"],
+  ["/educator/feedback", "Feedback &amp; Comments"],
+  ["/educator/gaps", "Competency Gaps"],
+  ["/educator/evidence-support", "Evidence Support"],
+  ["/educator/ai-insights", "AI Learning Insights"],
+  ["/educator/communication", "Communication Centre"],
+  ["/educator/support-analytics", "Support Analytics"],
+  ["/educator/coaching", "Coaching Sessions"],
+  ["/educator/interventions", "Interventions"],
+  ["/educator/meetings", "Meetings &amp; Follow-ups"],
+  ["/educator/referrals", "Referrals"],
+  ["/educator/reviews", "My Reviews"],
+  ["/educator/evidence", "Evidence Review"],
+  ["/educator/moderation", "Moderation Queue"],
+  ["/educator/escalations", "Escalations"],
+  ["/educator/approvals", "Passport Approvals"],
+  ["/educator/quality-flags", "Quality Flags"],
+  ["/educator/validation-analytics", "Validation Analytics"],
+];
+for (const [path, marker] of EDUCATOR_PAGES) {
+  const res = await get(path, eduLogin2.cookies);
+  const html = await res.text();
+  record("educator:centre", path, res.status === 200 && html.includes(marker), `status ${res.status}`);
+}
+// Approvals flow: educator validates the conducted score, cycle appears fully approvable
+const { data: pendingScore } = await admin.from("competency_scores").select("id").eq("cycle_id", created.cycle).eq("competency_id", anyComp.id).single();
+r = await send("POST", "/api/educator/validate", eduLogin2.cookies, { competency_score_id: pendingScore.id, action: "validate", notes: "TEST — validated in approvals flow" });
+const { data: validatedScore } = await admin.from("competency_scores").select("educator_validated").eq("id", pendingScore.id).single();
+record("educator:centre", "educator validates a competency score", r.status === 200 && validatedScore?.educator_validated === true, `status ${r.status}, validated ${validatedScore?.educator_validated}`);
+r = await get("/api/reports/validations", eduLogin2.cookies);
+record("educator:centre", "validations CSV export", r.status === 200 && (r.headers.get("content-type") ?? "").includes("text/csv"), `status ${r.status}`);
+r = await get("/api/reports/validations", nurse.cookies);
+record("educator:centre", "nurse blocked from validations export", r.status === 403, `status ${r.status}`);
+
+// ── Learner Support stores: coaching sessions, interventions, referrals ──────
+// Coaching: schedule → learner notified → complete with notes
+r = await send("POST", "/api/support/sessions", eduLogin2.cookies, {
+  nurse_id: created.nurse.id, session_type: "coaching",
+  scheduled_for: new Date(Date.now() + 2 * 86400000).toISOString(),
+  focus: "TEST — IV therapy skills", goals: "TEST — practise cannulation on 3 supervised attempts",
+});
+body = await r.json().catch(() => ({}));
+const coachId = body.id;
+const { data: coachNotif } = await admin.from("notifications").select("type").eq("user_id", created.nurse.id).eq("type", "coaching_scheduled");
+record("educator:support", "coaching session scheduled + learner notified", r.status === 201 && !!coachId && (coachNotif ?? []).length === 1, `status ${r.status}, ${coachNotif?.length ?? 0} notifications`);
+r = await send("POST", "/api/support/sessions", nurse.cookies, { nurse_id: created.assessor.id, scheduled_for: new Date().toISOString() });
+record("educator:support", "nurse cannot schedule sessions", r.status === 403, `status ${r.status}`);
+r = await send("PATCH", "/api/support/sessions", eduLogin2.cookies, { id: coachId, status: "completed", notes: "TEST — good progress, review in a week" });
+const { data: coachDone } = await admin.from("support_sessions").select("status, notes").eq("id", coachId).single();
+record("educator:support", "coaching session completed with notes", r.status === 200 && coachDone?.status === "completed" && !!coachDone?.notes, `status ${r.status}, ${coachDone?.status}`);
+
+// Interventions: create → learner notified → advance → complete requires outcome
+r = await send("POST", "/api/support/interventions", eduLogin2.cookies, {
+  nurse_id: created.nurse.id, reason: "TEST — repeated medication-safety failures", competency_name: "TEST — Medication Safety",
+  objectives: "TEST — pass reassessment", review_date: new Date(Date.now() + 7 * 86400000).toISOString().slice(0, 10),
+});
+body = await r.json().catch(() => ({}));
+const ivId = body.id;
+const { data: ivNotif } = await admin.from("notifications").select("type").eq("user_id", created.nurse.id).eq("type", "intervention_created");
+record("educator:support", "intervention created + learner notified", r.status === 201 && !!ivId && (ivNotif ?? []).length === 1, `status ${r.status}, ${ivNotif?.length ?? 0} notifications`);
+r = await send("PATCH", "/api/support/interventions", eduLogin2.cookies, { id: ivId, status: "completed", outcome: "" });
+record("educator:support", "completing intervention requires an outcome", r.status === 400, `status ${r.status}`);
+r = await send("PATCH", "/api/support/interventions", eduLogin2.cookies, { id: ivId, status: "in_progress" });
+r = await send("PATCH", "/api/support/interventions", eduLogin2.cookies, { id: ivId, status: "completed", outcome: "successful", outcome_note: "TEST — passed reassessment" });
+const { data: ivDone } = await admin.from("interventions").select("status, outcome").eq("id", ivId).single();
+record("educator:support", "intervention completes with outcome", r.status === 200 && ivDone?.status === "completed" && ivDone?.outcome === "successful", `status ${r.status}, outcome ${ivDone?.outcome}`);
+
+// Referrals: create to internal referee (the assessor) → referee notified → resolve → referrer notified. Learner must NOT see it.
+r = await send("POST", "/api/support/referrals", eduLogin2.cookies, {
+  nurse_id: created.nurse.id, referred_to_id: created.assessor.id, reason: "TEST — attendance and engagement concern", urgency: "high",
+});
+body = await r.json().catch(() => ({}));
+const refId = body.id;
+const { data: refNotif } = await admin.from("notifications").select("type").eq("user_id", created.assessor.id).eq("type", "referral_created");
+record("educator:support", "referral created + referee notified", r.status === 201 && !!refId && (refNotif ?? []).length === 1, `status ${r.status}, ${refNotif?.length ?? 0} notifications`);
+{
+  const nurseAuthed = anon();
+  await nurseAuthed.auth.signInWithPassword({ email: created.nurse.email, password: created.nurse.password });
+  const { data: seen } = await nurseAuthed.from("referrals").select("id").eq("id", refId);
+  record("educator:support", "learner cannot read referrals (RLS)", (seen ?? []).length === 0, `${seen?.length ?? 0} rows`);
+}
+r = await send("PATCH", "/api/support/referrals", eduLogin2.cookies, { id: refId, status: "resolved", resolution_note: "TEST — met with learner, plan agreed" });
+record("educator:support", "referral resolves", r.status === 200, `status ${r.status}`);
+
+await admin.from("support_sessions").delete().eq("nurse_id", created.nurse.id);
+await admin.from("interventions").delete().eq("nurse_id", created.nurse.id);
+await admin.from("referrals").delete().eq("nurse_id", created.nurse.id);
+
 await admin.from("profiles").delete().eq("id", uatEducator.id);
 await admin.auth.admin.deleteUser(uatEducator.id);
 

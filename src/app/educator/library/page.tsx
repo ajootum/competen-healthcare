@@ -1,37 +1,38 @@
-export default function ContentLibraryPage() {
+import { requireEducatorAccess } from "@/lib/educator-access";
+import ResourceLibrary from "@/app/admin/resources/ResourceLibrary";
+import { EduHeader } from "../ui";
+
+// Learning Resources — the governed resource library with full management
+// (add, activate, link to competencies) via the existing educator-permitted
+// API. Resource ↔ competency links are what power auto-generated learning
+// pathways and the coach engine. Replaces the old "coming soon" stub.
+
+export const dynamic = "force-dynamic";
+
+export default async function EducatorLibraryPage() {
+  const { admin } = await requireEducatorAccess();
+
+  const [{ data: resources }, { data: links }, { data: comps }] = await Promise.all([
+    admin.from("learning_resources").select("id, title, resource_type, url, is_active").order("created_at", { ascending: false }),
+    admin.from("resource_competencies").select("resource_id, competency_id, framework_competencies(name)"),
+    admin.from("framework_competencies").select("id, name, framework_domains(name, frameworks(name))").order("name").limit(500),
+  ]);
+
   return (
-    <div className="max-w-3xl">
-      <div className="mb-6">
-        <h1 className="text-xl font-bold text-gray-900">Content Library</h1>
-        <p className="text-gray-400 text-sm mt-0.5">Manage learning materials, videos, and references.</p>
-      </div>
-
-      <div className="bg-purple-50 border border-purple-200 rounded-xl p-8 text-center mb-6">
-        <p className="text-4xl mb-3">🗂️</p>
-        <h2 className="font-semibold text-purple-900 mb-2">Content Library — Coming Soon</h2>
-        <p className="text-sm text-purple-700 max-w-sm mx-auto">
-          Upload PDFs, videos, and reference materials. Organise by topic or link directly to courses.
-        </p>
-      </div>
-
-      <div className="bg-white border border-gray-200 rounded-xl p-5">
-        <h3 className="font-semibold text-gray-900 mb-4 text-sm">Planned Features</h3>
-        <ul className="flex flex-col gap-2 text-sm text-gray-600">
-          {[
-            "Upload PDFs, videos, and EPUB resources",
-            "Organise by category, level, and topic",
-            "Link materials directly to course modules",
-            "Track which nurses have accessed each resource",
-            "External link management for YouTube / WHO / NCLEX resources",
-            "AI-powered content summarisation",
-          ].map(f => (
-            <li key={f} className="flex items-start gap-2">
-              <span className="text-purple-300 mt-0.5">○</span>
-              <span>{f}</span>
-            </li>
-          ))}
-        </ul>
-      </div>
+    <div className="max-w-4xl">
+      <EduHeader icon="🗂️" title="Learning Resources" sub="Governed resources mapped to competencies — the source for learning pathways, coach plans and remediation." />
+      <ResourceLibrary
+        resources={(resources ?? []) as never}
+        links={(links ?? []) as never}
+        competencies={(comps ?? []).map(c => {
+          const d = c.framework_domains as unknown as { name: string; frameworks: { name: string } | null } | null;
+          return { id: c.id, name: c.name, framework: d?.frameworks?.name ?? "", domain: d?.name ?? "" };
+        })}
+      />
+      <p className="text-[10px] text-gray-400 mt-4">
+        Resources are links to governed material (documents, videos, references). Direct file hosting, access tracking and AI summarisation
+        aren&apos;t built — pathways reference these links as-is.
+      </p>
     </div>
   );
 }

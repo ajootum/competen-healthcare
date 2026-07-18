@@ -21,7 +21,7 @@ type Priority = "high" | "important" | "info" | "success";
 
 const PRIORITY_OF = (type: string): Priority => {
   if (["logbook_rejected", "logbook_escalated"].includes(type)) return "high";
-  if (["logbook_changes_requested", "logbook_pending", "credential_submitted", "assessment_scheduled", "assessment_cancelled", "message", "audit_finding", "capa_assigned", "appeal_submitted", "appeal_resolved"].includes(type)) return "important";
+  if (["logbook_changes_requested", "logbook_pending", "credential_submitted", "assessment_scheduled", "assessment_cancelled", "message", "audit_finding", "capa_assigned", "appeal_submitted", "appeal_resolved", "coaching_scheduled", "coaching_cancelled", "intervention_created", "referral_created", "referral_resolved"].includes(type)) return "important";
   if (["logbook_verified", "decisions_issued", "credential_added", "assessment_submitted", "osce_completed"].includes(type)) return "success";
   return "info";
 };
@@ -42,6 +42,8 @@ const TYPE_ICON: Record<string, string> = {
   evidence_requested: "📎", assessment_submitted: "📝", message: "💬", osce_completed: "🩺",
   audit_finding: "📋", capa_assigned: "🛠️",
   report_ready: "📊", appeal_submitted: "⚖️", appeal_resolved: "⚖️",
+  coaching_scheduled: "🗓️", coaching_cancelled: "🚫", intervention_created: "🎯",
+  referral_created: "📤", referral_resolved: "📤",
 };
 
 const ACTION_LABEL: Record<string, string> = {
@@ -55,6 +57,8 @@ const ACTION_LABEL: Record<string, string> = {
   evidence_requested: "Open Logbook", assessment_submitted: "View Feedback", osce_completed: "View Feedback",
   audit_finding: "View Feedback", capa_assigned: "Open CAPA Tracker",
   report_ready: "Open Report", appeal_submitted: "Review Appeal", appeal_resolved: "View Feedback",
+  coaching_scheduled: "View Schedule", coaching_cancelled: "View Schedule", intervention_created: "View Learning",
+  referral_created: "Open Referrals", referral_resolved: "Open Referrals",
 };
 
 const TABS: Record<Variant, { label: string; types: string[] | null; actionSet?: boolean }[]> = {
