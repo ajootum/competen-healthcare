@@ -19,7 +19,7 @@ const WORKSPACE_LABEL: Record<AppRole, string> = {
 };
 
 export default function WorkspaceSwitcher({ roles, activeRole, variant = "sidebar" }: {
-  roles: AppRole[]; activeRole: AppRole; variant?: "sidebar" | "mobile";
+  roles: AppRole[]; activeRole: AppRole; variant?: "sidebar" | "mobile" | "footer";
 }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
@@ -46,7 +46,9 @@ export default function WorkspaceSwitcher({ roles, activeRole, variant = "sideba
     <>
       <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
       <div className={`absolute z-50 bg-white rounded-xl shadow-xl border border-gray-100 overflow-hidden ${
-        variant === "sidebar" ? "top-full left-0 right-0 mt-1" : "top-full right-0 mt-1 w-56"}`}>
+        variant === "sidebar" ? "top-full left-0 right-0 mt-1"
+          : variant === "footer" ? "bottom-full left-0 right-0 mb-1"
+          : "top-full right-0 mt-1 w-56"}`}>
         <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest px-3 pt-3 pb-1">Switch Workspace</p>
         {roles.map(role => {
           const cfg = ROLE_CONFIG[role];
@@ -68,6 +70,30 @@ export default function WorkspaceSwitcher({ roles, activeRole, variant = "sideba
       </div>
     </>
   );
+
+  if (variant === "footer") {
+    // Always-visible control in the sidebar footer. Multi-role: opens the
+    // permitted-workspace list (upward). Single-role: states the access level
+    // plainly so the control's presence is never a mystery.
+    if (!multi) {
+      return (
+        <p className="px-3 py-1.5 text-[10px] text-slate-500">
+          Workspace access: <span className="text-slate-400 font-semibold">{WORKSPACE_LABEL[activeRole]}</span> only
+        </p>
+      );
+    }
+    return (
+      <div className="relative">
+        <button onClick={() => setOpen(o => !o)}
+          className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-medium bg-white/10 hover:bg-white/20 transition-colors text-white">
+          <span>{ROLE_CONFIG[activeRole].icon}</span>
+          <span className="flex-1 text-left truncate">Switch Workspace</span>
+          <span className="text-white/50 text-[10px]">▲</span>
+        </button>
+        {dropdown}
+      </div>
+    );
+  }
 
   if (variant === "mobile") {
     return (

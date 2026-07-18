@@ -71,7 +71,7 @@ const NAV_GROUPS: { group: string | null; items: NavItem[] }[] = [
     { label: "AI Assistant History",   href: "/assessor/ai/history",        icon: "🕘" },
   ]},
   { group: "Administration", items: [
-    { label: "Templates & Tools",      icon: "🧰", soon: true },
+    { label: "Assessment Studio",      href: "/assessor/studio",            icon: "🎛️" },
     { label: "Settings",               href: "/dashboard/billing",          icon: "⚙️" },
   ]},
 ];
@@ -159,7 +159,7 @@ export default async function AssessorLayout({ children }: { children: React.Rea
 
       <div className="flex">
         <aside className="hidden md:flex w-60 h-screen bg-[#0f172a] flex-col py-6 px-4 fixed top-0 left-0 z-20">
-          <Link href="/" className="flex items-center gap-2 mb-4 px-2">
+          <Link href="/assessor" className="flex items-center gap-2 mb-4 px-2">
             <div className="w-7 h-7 rounded bg-indigo-500 flex items-center justify-center text-white font-bold text-sm shrink-0">C</div>
             <span className="min-w-0">
               <span className="block text-white font-bold text-sm leading-tight tracking-wide">COMPETEN</span>
@@ -203,6 +203,9 @@ export default async function AssessorLayout({ children }: { children: React.Rea
                 <p className="text-white text-xs font-medium truncate">{profile?.full_name}</p>
                 <p className="text-indigo-300/60 text-[10px]">{portalLabel}</p>
               </div>
+            </div>
+            <div className="mb-2">
+              <WorkspaceSwitcher roles={userRoles} activeRole="assessor" variant="footer" />
             </div>
             <form action="/api/auth/logout" method="POST">
               <button type="submit"

@@ -71,7 +71,7 @@ export default async function SuperAdminLayout({ children }: { children: React.R
     <div className="min-h-screen bg-gray-50 font-[family-name:var(--font-geist-sans)]">
       <div className="flex">
         <aside className="hidden md:flex w-56 h-screen bg-[#0f1923] flex-col py-6 px-4 fixed top-0 left-0 z-20">
-          <Link href="/" className="flex items-center gap-2 mb-6 px-2">
+          <Link href="/super-admin" className="flex items-center gap-2 mb-6 px-2">
             <div className="w-7 h-7 rounded bg-rose-500 flex items-center justify-center text-white font-bold text-sm">C</div>
             <span className="text-white font-semibold text-sm">Competen</span>
           </Link>

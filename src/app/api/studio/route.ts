@@ -2,23 +2,37 @@ import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
 
 // COMPETEN Studio write API — reusable skill library, skill↔competency
-// attachment, and checklist authoring ("latest competen" spec).
+// attachment, checklist and question-bank authoring ("latest competen" spec +
+// Assessment Studio spec). Authoring kinds are open to assessment-staff roles
+// (the Assessment Studio in the assessor workspace); CPU cloning and
+// responsibility assignment stay with admin governance roles.
 
-async function requireKnowledgeAdmin() {
+const AUTHOR_ROLES = ["super_admin", "hospital_admin", "educator", "assessor"];
+const GOVERNANCE_KINDS = new Set(["clone_cpu", "responsibility"]);
+
+async function requireStudioAuthor() {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { error: "Unauthorized", status: 401 as const };
   const admin = createAdminClient();
-  const { data: profile } = await admin.from("profiles").select("role, full_name").eq("id", user.id).single();
-  if (profile?.role !== "super_admin") return { error: "Forbidden", status: 403 as const };
-  return { user, admin, profile };
+  const { data: profile } = await admin.from("profiles").select("role, roles, full_name").eq("id", user.id).single();
+  const roles: string[] = profile?.roles?.length ? profile.roles : [profile?.role].filter(Boolean) as string[];
+  if (!roles.some(r => AUTHOR_ROLES.includes(r))) return { error: "Forbidden", status: 403 as const };
+  return { user, admin, profile, roles };
+}
+
+function canGovern(roles: string[]) {
+  return roles.some(r => ["super_admin", "hospital_admin"].includes(r));
 }
 
 export async function POST(req: Request) {
-  const auth = await requireKnowledgeAdmin();
+  const auth = await requireStudioAuthor();
   if ("error" in auth) return NextResponse.json({ error: auth.error }, { status: auth.status });
   const body = await req.json();
   const kind = body.kind as string;
+  if (GOVERNANCE_KINDS.has(kind) && !canGovern(auth.roles)) {
+    return NextResponse.json({ error: "CPU governance actions need an admin role" }, { status: 403 });
+  }
 
   // ── Create / update a library skill ──
   if (kind === "skill") {
@@ -215,12 +229,15 @@ export async function POST(req: Request) {
 }
 
 export async function DELETE(req: Request) {
-  const auth = await requireKnowledgeAdmin();
+  const auth = await requireStudioAuthor();
   if ("error" in auth) return NextResponse.json({ error: auth.error }, { status: auth.status });
   const url = new URL(req.url);
   const kind = url.searchParams.get("kind");
   const id = url.searchParams.get("id");
   if (!id) return NextResponse.json({ error: "id required" }, { status: 400 });
+  if (kind === "responsibility" && !canGovern(auth.roles)) {
+    return NextResponse.json({ error: "CPU governance actions need an admin role" }, { status: 403 });
+  }
 
   if (kind === "skill") {
     // Retire (soft) — instances on competencies keep working

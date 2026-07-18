@@ -111,7 +111,7 @@ export default function MobileSidebar({ fullName, role, isAdmin, unread = 0, ava
         open ? "translate-x-0" : "-translate-x-full"
       }`}>
         <div className="flex items-center justify-between mb-6">
-          <Link href="/" className="flex items-center gap-2">
+          <Link href="/dashboard" className="flex items-center gap-2">
             <div className="w-7 h-7 rounded bg-teal-500 flex items-center justify-center text-white font-bold text-sm">C</div>
             <span className="text-white font-semibold text-sm">Competen</span>
           </Link>

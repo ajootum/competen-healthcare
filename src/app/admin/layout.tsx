@@ -107,7 +107,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
 
       <div className="flex">
         <aside className="hidden md:flex w-56 h-screen bg-[#0a2e38] flex-col py-6 px-4 fixed top-0 left-0 z-20">
-          <Link href="/" className="flex items-center gap-2 mb-6 px-2">
+          <Link href="/admin/dashboard" className="flex items-center gap-2 mb-6 px-2">
             <div className="w-7 h-7 rounded bg-teal-500 flex items-center justify-center text-white font-bold text-sm">C</div>
             <span className="text-white font-semibold text-sm">Competen</span>
           </Link>

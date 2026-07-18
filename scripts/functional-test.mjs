@@ -31,7 +31,7 @@ function record(section, name, pass, note = "") {
   console.log(`${pass ? "  PASS" : "* FAIL"}  [${section}] ${name}${note ? " — " + note : ""}`);
 }
 
-async function makeUser(email, fullName, role) {
+async function makeUser(email, fullName, role, hospitalId = HOSPITAL) {
   const { data: page } = await admin.auth.admin.listUsers({ page: 1, perPage: 1000 });
   const old = (page?.users ?? []).find(u => u.email === email);
   if (old) { await admin.from("profiles").delete().eq("id", old.id); await admin.auth.admin.deleteUser(old.id); }
@@ -42,7 +42,7 @@ async function makeUser(email, fullName, role) {
   if (error) throw new Error("createUser " + email + ": " + error.message);
   const { error: perr } = await admin.from("profiles").upsert({
     id: u.user.id, email, full_name: fullName, role, roles: [role],
-    hospital_id: HOSPITAL, organisation_id: ORG,
+    hospital_id: hospitalId, organisation_id: ORG,
   });
   if (perr) throw new Error("profile " + email + ": " + perr.message);
   return { id: u.user.id, email, password };
@@ -380,6 +380,11 @@ const ASSESSOR_PAGES = [
   ["/assessor/ai/automation", "AI Automation Centre"],
   ["/assessor/ai/simulation", "Simulation Intelligence"],
   ["/assessor/ai/history", "AI Assistant History"],
+  ["/assessor/studio", "Assessment Studio"],
+  ["/assessor/studio/checklists", "Checklist Builder"],
+  ["/assessor/studio/assessments", "Question Builder"],
+  ["/assessor/studio/rubrics", "Rubrics &amp; Scoring"],
+  ["/assessor/studio/versions", "Version Control"],
   ["/assessor/analytics", "My Analytics"],
   ["/assessor/remediation", "Remediation"],
   ["/assessor/history", "Assessment History"],
@@ -571,6 +576,194 @@ record("assessor:quality", "CAPA cannot move backwards", r.status === 400, `stat
 r = await get("/api/reports/quality", assessor.cookies);
 record("assessor:quality", "quality audits CSV export", r.status === 200 && (r.headers.get("content-type") ?? "").includes("text/csv"), `status ${r.status}`);
 
+// ── UAT §1/§5: end-to-end lifecycle to passport + business rules ─────────────
+// Critical-failure rule: score 0 on a second competency via the cockpit.
+const { data: comp2 } = await admin.from("framework_competencies").select("id").neq("id", anyComp.id).limit(1).maybeSingle();
+if (comp2) {
+  r = await send("POST", "/api/assess/submit", assessor.cookies, {
+    cycle_id: created.cycle, nurse_id: created.nurse.id, method: "direct_observation", attest: true,
+    scores: [{ competency_id: comp2.id, score: 0, notes: "TEST — critical failure observed" }],
+  });
+  record("uat:e2e", "critical-failure score recorded via cockpit", r.status === 200, `status ${r.status}`);
+}
+// Educator runs the formal decision process → decisions, passport, notification.
+const uatEducator = await makeUser("testeducator2@competen.test", "Test Educator II", "educator");
+const eduLogin2 = await login(uatEducator.email, uatEducator.password);
+r = await send("POST", `/api/cycles/${created.cycle}/decisions`, eduLogin2.cookies, {});
+body = await r.json().catch(() => ({}));
+record("uat:e2e", "educator decision run issues decisions", r.status === 200 && (body.created ?? 0) >= 1, `status ${r.status}, created ${body.created}`);
+const { data: cycleDecisions } = await admin.from("competency_decisions")
+  .select("competency_id, outcome, critical_failure, expiry_date").eq("cycle_id", created.cycle);
+const passDec = (cycleDecisions ?? []).find(d => d.competency_id === anyComp.id);
+record("uat:e2e", "passing score → provisional outcome with expiry",
+  passDec?.outcome === "provisionally_competent" && !!passDec?.expiry_date,
+  `outcome ${passDec?.outcome}, expiry ${passDec?.expiry_date ?? "—"}`);
+if (comp2) {
+  const critDec = (cycleDecisions ?? []).find(d => d.competency_id === comp2.id);
+  record("uat:e2e", "score 0 → critical failure, not competent, no expiry",
+    critDec?.outcome === "not_yet_competent" && critDec?.critical_failure === true && !critDec?.expiry_date,
+    `outcome ${critDec?.outcome}, critical ${critDec?.critical_failure}`);
+}
+const { data: decNotif } = await admin.from("notifications").select("type").eq("user_id", created.nurse.id).eq("type", "decisions_issued");
+record("uat:e2e", "learner notified of issued decisions", (decNotif ?? []).length >= 1, `${decNotif?.length ?? 0} notifications`);
+r = await get("/api/reports/passports", assessor.cookies);
+{
+  const csv = await r.text();
+  const line = csv.split("\n").find(l => l.includes("Test Nurse"));
+  record("uat:e2e", "passport CSV reconciles (Test Nurse has decided competencies)", !!line && !/,0\s*$/.test(line ?? ""), line ? line.trim().slice(0, 90) : "row missing");
+}
+r = await get("/api/reports/history", assessor.cookies);
+{
+  const csv = await r.text();
+  record("uat:e2e", "history CSV reconciles with submitted assessments", csv.includes("Test Nurse"), "");
+}
+await admin.from("profiles").delete().eq("id", uatEducator.id);
+await admin.auth.admin.deleteUser(uatEducator.id);
+
+// ── UAT §4: tenant isolation (assessor in a different hospital) ──────────────
+const { data: isoHosp } = await admin.from("hospitals")
+  .insert({ name: "TEST — Isolation Hospital", organisation_id: ORG, country: "Uganda" }).select("id").single();
+if (isoHosp) {
+  created.outsider = await makeUser("testoutsider@competen.test", "Test Outsider", "assessor", isoHosp.id);
+  const outsiderLogin = await login(created.outsider.email, created.outsider.password);
+  r = await send("POST", "/api/passports/request-evidence", outsiderLogin.cookies, { nurse_id: created.nurse.id });
+  record("uat:isolation", "cross-tenant evidence request blocked", r.status === 403, `status ${r.status}`);
+  r = await send("POST", "/api/messages", outsiderLogin.cookies, { recipient_id: created.nurse.id, text: "TEST — cross-tenant message" });
+  record("uat:isolation", "cross-tenant message blocked", r.status === 403, `status ${r.status}`);
+  r = await send("PATCH", "/api/quality/capa", outsiderLogin.cookies, { id: capaId, status: "completed" });
+  record("uat:isolation", "cross-tenant CAPA update blocked", r.status === 403, `status ${r.status}`);
+} else {
+  record("uat:isolation", "isolation hospital created", false, "hospitals insert failed");
+}
+
+// ── UAT §7: secure uploads ───────────────────────────────────────────────────
+{
+  const fd = new FormData();
+  fd.append("file", new File([new Uint8Array([0x4d, 0x5a, 1, 2, 3, 4])], "malware.exe", { type: "application/x-msdownload" }));
+  const res = await fetch(BASE + "/api/evidence", { method: "POST", headers: { Cookie: nurse.cookies }, body: fd });
+  record("uat:security", "executable upload rejected by mime allow-list", res.status === 400, `status ${res.status}`);
+}
+
+// ── UAT §8: performance & reliability (dev server, warm) ─────────────────────
+{
+  const t0 = Date.now();
+  const res = await get("/assessor", assessor.cookies);
+  const ms = Date.now() - t0;
+  record("uat:performance", "dashboard responds under 4s (warm dev)", res.status === 200 && ms < 4000, `${ms}ms`);
+  const five = await Promise.all(Array.from({ length: 5 }, () => get("/assessor/reports", assessor.cookies)));
+  record("uat:performance", "5 concurrent analytics loads all succeed", five.every(x => x.status === 200), five.map(x => x.status).join(","));
+}
+
+// ── Cross-workspace integration (Nurse ↔ Assessor spec) ─────────────────────
+// §1 Assignment visible on both sides
+r = await send("POST", "/api/schedule", assessor.cookies, {
+  nurse_id: created.nurse.id, method: "direct_observation",
+  scheduled_for: new Date(Date.now() + 3 * 86400000).toISOString(),
+  location: "Test Ward B", note: "TEST — cross-workspace assignment",
+});
+body = await r.json().catch(() => ({}));
+const xSchedId = body.id;
+record("xworkspace", "§1 assessor assigns a session", r.status === 201 && !!xSchedId, `status ${r.status}`);
+{
+  const res = await get("/dashboard/notifications", nurse.cookies);
+  const html = await res.text();
+  record("xworkspace", "§1 nurse sees the assignment notification", res.status === 200 && html.includes("Assessment scheduled"), `status ${res.status}`);
+  const res2 = await get("/assessor/schedule", assessor.cookies);
+  const html2 = await res2.text();
+  record("xworkspace", "§1 session visible in assessor schedule", res2.status === 200 && html2.includes("Test Nurse"), `status ${res2.status}`);
+}
+{
+  const nurseAuthed = anon();
+  await nurseAuthed.auth.signInWithPassword({ email: created.nurse.email, password: created.nurse.password });
+  const { data: mySessions } = await nurseAuthed.from("scheduled_assessments").select("id").eq("nurse_id", created.nurse.id);
+  record("xworkspace", "§1 nurse reads own session via RLS", (mySessions ?? []).length >= 1, `${mySessions?.length ?? 0} rows`);
+  // No signOut(): default scope revokes ALL of the user's sessions globally,
+  // which would kill the nurse's app cookie session mid-battery.
+}
+// §3 Evidence linkage visible to the assessor immediately
+r = await send("POST", "/api/logbook", nurse.cookies, { skill_name: "TEST — cross-workspace evidence", supervision_level: "supervised", location: "Test Ward" });
+record("xworkspace", "§3 nurse logs an evidence entry", [200, 201].includes(r.status), `status ${r.status}`);
+{
+  const res = await get("/assessor/logbook", assessor.cookies);
+  const html = await res.text();
+  record("xworkspace", "§3 entry appears in assessor Evidence Centre", res.status === 200 && html.includes("cross-workspace evidence"), `status ${res.status}`);
+}
+// §6/§9 Decision → nurse passport parity
+const { data: xCompName } = await admin.from("framework_competencies").select("name").eq("id", anyComp.id).single();
+{
+  const res = await get("/dashboard/passport", nurse.cookies);
+  const html = await res.text();
+  record("xworkspace", "§6/§9 nurse passport shows the decided competency", res.status === 200 && html.includes((xCompName?.name ?? "").slice(0, 24)), `status ${res.status}`);
+}
+// §8 Feedback parity: assessor's cockpit note visible in nurse feedback
+{
+  const res = await get("/dashboard/feedback", nurse.cookies);
+  const html = await res.text();
+  record("xworkspace", "§8 assessor note visible in nurse feedback", res.status === 200 && html.includes("observed full procedure"), `status ${res.status}`);
+}
+// §11 Learning pathway regenerated from decision gaps
+const { data: pathItems } = await admin.from("pathway_items")
+  .select("id, learning_pathways!inner(nurse_id)").eq("learning_pathways.nurse_id", created.nurse.id);
+record("xworkspace", "§11 failed decision generated pathway items", (pathItems ?? []).length >= 1, `${pathItems?.length ?? 0} items`);
+// §12 Cancellation syncs both calendars and notifies
+r = await send("PATCH", "/api/schedule", assessor.cookies, { id: xSchedId, status: "cancelled" });
+const { data: xCancelNotif } = await admin.from("notifications").select("id").eq("user_id", created.nurse.id).eq("type", "assessment_cancelled");
+record("xworkspace", "§12 cancellation syncs and notifies the nurse", r.status === 200 && (xCancelNotif ?? []).length >= 1, `status ${r.status}, ${xCancelNotif?.length ?? 0} notifications`);
+// §16 Dual-role switching without logout, with audit trail
+created.dual = await makeUser("testdual@competen.test", "Test Dual Role", "nurse");
+await admin.from("profiles").update({ roles: ["nurse", "assessor"] }).eq("id", created.dual.id);
+const dualLogin = await login(created.dual.email, created.dual.password);
+r = await send("POST", "/api/auth/switch-role", dualLogin.cookies, { role: "assessor" });
+body = await r.json().catch(() => ({}));
+record("xworkspace", "§16 dual-role user switches to assessor", r.status === 200 && body.redirect === "/assessor", `status ${r.status} → ${body.redirect}`);
+{
+  const res = await get("/assessor", dualLogin.cookies);
+  record("xworkspace", "§16 assessor workspace accessible after switch", res.status === 200, `status ${res.status}`);
+}
+r = await send("POST", "/api/auth/switch-role", dualLogin.cookies, { role: "nurse" });
+record("xworkspace", "§16 switch back to nurse allowed", r.status === 200, `status ${r.status}`);
+const { data: switchAudit } = await admin.from("audit_log").select("id").eq("actor_id", created.dual.id).eq("action", "switch_role");
+record("xworkspace", "§16 role switches recorded in audit log", (switchAudit ?? []).length >= 2, `${switchAudit?.length ?? 0} audit rows`);
+
+// Assessment Studio: full authoring chain (skill → attach → checklist →
+// critical item → question bank → question) as an ASSESSOR via /api/studio.
+r = await send("POST", "/api/studio", assessor.cookies, { kind: "skill", name: "TEST — Aseptic non-touch technique" });
+body = await r.json().catch(() => ({}));
+const studioSkillId = body.id;
+record("assessor:studio", "assessor creates a library skill", r.status === 201 && !!studioSkillId, `status ${r.status}`);
+r = await send("POST", "/api/studio", assessor.cookies, { kind: "attach_skill", skill_id: studioSkillId, competency_id: anyComp.id });
+body = await r.json().catch(() => ({}));
+const studioCompSkillId = body.id;
+record("assessor:studio", "skill attached to a competency", r.status === 201 && !!studioCompSkillId, `status ${r.status}`);
+r = await send("POST", "/api/studio", assessor.cookies, { kind: "checklist", skill_id: studioCompSkillId, name: "TEST — ANTT checklist" });
+body = await r.json().catch(() => ({}));
+const studioChecklistId = body.id;
+record("assessor:studio", "checklist created on the skill", r.status === 201 && !!studioChecklistId, `status ${r.status}`);
+r = await send("POST", "/api/studio", assessor.cookies, { kind: "checklist_item", checklist_id: studioChecklistId, item: "TEST — performs hand hygiene before contact", is_critical: true });
+record("assessor:studio", "critical checklist item added", r.status === 201, `status ${r.status}`);
+r = await send("POST", "/api/studio", assessor.cookies, { kind: "question_bank", name: "TEST — Medication safety bank", pass_mark: 80 });
+body = await r.json().catch(() => ({}));
+const studioBankId = body.id;
+record("assessor:studio", "question bank created", r.status === 201 && !!studioBankId, `status ${r.status}`);
+r = await send("POST", "/api/studio", assessor.cookies, { kind: "bank_question", bank_id: studioBankId, content: "TEST — Which right is checked first?", options: ["Right patient", "Right route"], correct_index: 0 });
+record("assessor:studio", "question added to bank", r.status === 201, `status ${r.status}`);
+r = await send("POST", "/api/studio", nurse.cookies, { kind: "skill", name: "TEST — rogue skill" });
+record("assessor:studio", "nurse role cannot author", r.status === 403, `status ${r.status}`);
+r = await send("POST", "/api/studio", assessor.cookies, { kind: "clone_cpu", cpu_id: anyComp.id });
+record("assessor:studio", "assessor blocked from CPU governance", r.status === 403, `status ${r.status}`);
+// Studio cleanup (reverse order; checklist_items cascade via checklist delete is not defined — remove explicitly)
+if (studioChecklistId) {
+  const { data: sItems } = await admin.from("checklist_items").select("id").eq("checklist_id", studioChecklistId);
+  for (const it of sItems ?? []) await admin.from("checklist_items").delete().eq("id", it.id);
+  await admin.from("skill_checklists").delete().eq("id", studioChecklistId);
+}
+if (studioCompSkillId) await admin.from("competency_skills").delete().eq("id", studioCompSkillId);
+if (studioSkillId) await admin.from("skill_library").delete().eq("id", studioSkillId);
+if (studioBankId) {
+  await admin.from("questions").delete().eq("bank_id", studioBankId);
+  await admin.from("question_banks").delete().eq("id", studioBankId);
+}
+
 // AI & Intelligence: grounded insight narrative + report writer
 r = await send("POST", "/api/ai/insights", assessor.cookies, { scope: "overview" });
 body = await r.json().catch(() => ({}));
@@ -682,6 +875,7 @@ record("permissions", "invalid workspace role rejected", r.status === 400, `stat
   const res = await get("/assessor", assessor.cookies);
   const html = await res.text();
   record("permissions", "no cross-shell Nurse Dashboard link in sidebar", res.status === 200 && !html.includes("Nurse Dashboard"), `status ${res.status}`);
+  record("permissions", "footer workspace control visible (single-role: access statement)", html.includes("Workspace access"), "");
 }
 
 // RLS: anonymous client sees nothing
@@ -768,7 +962,7 @@ if (!KEEP) {
     .filter(Boolean);
   if (sigPaths.length) await admin.storage.from("evidence").remove(sigPaths);
   await admin.from("osce_exams").delete().ilike("title", "TEST — %");
-  for (const uid of [created.nurse.id, created.assessor.id]) {
+  for (const uid of [created.nurse.id, created.assessor.id, ...(created.outsider ? [created.outsider.id] : []), ...(created.dual ? [created.dual.id] : [])]) {
     const { data: evRows } = await admin.from("evidence").select("file_path").eq("owner_id", uid);
     if (evRows?.length) await admin.storage.from("evidence").remove(evRows.map(e => e.file_path));
     const { data: avatarFiles } = await admin.storage.from("avatars").list(uid);
@@ -792,6 +986,7 @@ if (!KEEP) {
   // Notifications the test actions generated FOR real users (e.g. hospital
   // verifiers) — the "TEST — " marker is unique to this battery.
   await admin.from("notifications").delete().ilike("body", "%TEST — %");
+  await admin.from("hospitals").delete().ilike("name", "TEST — %");
   console.log("Removed test accounts and their data.");
 } else {
   console.log(`\n--keep: test accounts left in place (${created.nurse.email} / ${created.assessor.email})`);

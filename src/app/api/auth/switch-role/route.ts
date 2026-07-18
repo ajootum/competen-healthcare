@@ -23,11 +23,20 @@ export async function POST(req: Request) {
   }
 
   const cookieStore = await cookies();
+  const previous = cookieStore.get("active_role")?.value ?? null;
   cookieStore.set("active_role", role, {
     httpOnly: true,
     sameSite: "lax",
     path: "/",
     maxAge: 60 * 60 * 24 * 7, // 7 days
+  });
+
+  // Cross-workspace spec §16: every role switch lands in the audit trail.
+  const { data: me } = await createAdminClient().from("profiles").select("full_name").eq("id", user.id).single();
+  await createAdminClient().from("audit_log").insert({
+    actor_id: user.id, actor_name: me?.full_name ?? null,
+    action: "switch_role", entity_type: "profile", entity_id: user.id,
+    new_value: { from: previous, to: role },
   });
 
   return NextResponse.json({ redirect: ROLE_CONFIG[role].portal });
