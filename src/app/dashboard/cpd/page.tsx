@@ -25,11 +25,19 @@ export default async function CPDPage() {
   if (!user) redirect("/login");
 
   const admin = createAdminClient();
-  const [{ data: logs }, { data: cpdCerts }, { data: enrollments }] = await Promise.all([
+  const [{ data: logs }, { data: cpdCerts }, { data: enrollments }, { data: me }] = await Promise.all([
     admin.from("cpd_logs").select("*").eq("user_id", user.id).order("activity_date", { ascending: false }),
     admin.from("professional_credentials").select("id").eq("nurse_id", user.id).eq("credential_type", "cpd_certificate"),
     admin.from("course_enrollments").select("completed_at").eq("user_id", user.id).not("completed_at", "is", null),
+    admin.from("profiles").select("hospital_id").eq("id", user.id).single(),
   ]);
+
+  // Org-configured annual target (hospitals.cpd_target_hours; null until set)
+  let targetHours: number | null = null;
+  if (me?.hospital_id) {
+    const { data: hosp } = await admin.from("hospitals").select("cpd_target_hours").eq("id", me.hospital_id).single();
+    targetHours = hosp?.cpd_target_hours != null ? Number(hosp.cpd_target_hours) : null;
+  }
 
   const all = logs ?? [];
   const year = new Date().getFullYear();
@@ -129,7 +137,7 @@ export default async function CPDPage() {
       </div>
 
       {/* Log form + activity list (existing working client) */}
-      <CPDClient initialLogs={all} totalHours={lifetime} />
+      <CPDClient initialLogs={all} totalHours={lifetime} targetHours={targetHours} />
 
       <div className="mt-5 grid md:grid-cols-2 gap-4">
         <div className="bg-teal-50 border border-teal-100 rounded-xl px-5 py-4 flex items-center gap-3">

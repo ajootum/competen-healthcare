@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { CREDENTIAL_TYPE_LABELS, RECOGNITION_TYPE_LABELS, OUTCOME_CONFIG, type DecisionOutcome } from "@/lib/ckcm";
 import CredentialsWorkspace, { type CredRow } from "./CredentialsWorkspace";
+import CredentialManager from "./CredentialManager";
 
 // Certificates & Credentials workspace (Volume 3 spec). Professional
 // credentials come from the org's governed record; competency certificates
@@ -68,6 +69,27 @@ export default async function CertificatesPage() {
       status: st.status, statusLabel: st.label,
     });
   }
+
+  // Self-managed licences/registrations with attached documents (§A + §E)
+  const credIds = (credentials ?? []).map(c => c.id);
+  const { data: credEvidence } = credIds.length
+    ? await admin.from("evidence")
+        .select("id, credential_id, file_name, mime_type, size_bytes, note, created_at")
+        .in("credential_id", credIds).order("created_at")
+    : { data: [] };
+  const evidenceByCred = new Map<string, { id: string; file_name: string; mime_type: string; size_bytes: number; note: string | null; created_at: string }[]>();
+  for (const ev of (credEvidence ?? []) as unknown as { id: string; credential_id: string; file_name: string; mime_type: string; size_bytes: number; note: string | null; created_at: string }[]) {
+    const list = evidenceByCred.get(ev.credential_id) ?? [];
+    list.push(ev);
+    evidenceByCred.set(ev.credential_id, list);
+  }
+  const ownCredentials = (credentials ?? []).map(c => ({
+    id: c.id, title: c.title, credential_type: c.credential_type,
+    issuing_body: c.issuing_body, credential_number: c.credential_number,
+    issue_date: c.issue_date, expiry_date: c.expiry_date,
+    status: c.status, verified: !!c.verified,
+    evidence: evidenceByCred.get(c.id) ?? [],
+  }));
 
   const credRows: CredRow[] = (credentials ?? []).map(c => {
     const base = c.status === "pending_verification" ? "pending" : c.status === "suspended" || c.status === "revoked" ? "suspended" : "active";
@@ -158,6 +180,7 @@ export default async function CertificatesPage() {
 
       <div className="grid grid-cols-1 xl:grid-cols-[1fr_290px] gap-5">
         <div className="min-w-0">
+          <CredentialManager credentials={ownCredentials} />
           <CredentialsWorkspace rows={rows} />
         </div>
 

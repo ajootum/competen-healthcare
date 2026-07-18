@@ -167,6 +167,8 @@ r = await send("POST", "/api/cpd", nurse.cookies, { activity_type: "course", tit
 record("workflow:cpd", "non-numeric hours rejected", r.status === 400, `status ${r.status}`);
 r = await send("POST", "/api/cpd", nurse.cookies, { activity_type: "course", title: "TEST — negative hours", hours: -5 });
 record("workflow:cpd", "negative hours rejected", r.status === 400, `status ${r.status}`);
+r = await send("POST", "/api/cpd", nurse.cookies, { activity_type: "course", title: "TEST — Functional test CPD", hours: 2.5 });
+record("workflow:cpd", "duplicate activity same date rejected (§G)", r.status === 409, `status ${r.status}`);
 
 // 3c. Quiz attempt — correctness must be computed server-side
 const { data: q } = await admin.from("questions").select("id, correct_answer").is("bank_id", null).limit(1).single();
@@ -181,6 +183,94 @@ if (q) {
   record("workflow:quiz", "client cannot fake correctness (server-side scoring)",
     r.status === 200 && qa2?.is_correct === false, `stored is_correct=${qa2?.is_correct}`);
 } else record("workflow:quiz", "practice attempt recorded", false, "no practice questions found");
+
+// 3c-ii. Evidence engine (§E): upload → list → signed view → access control
+const PNG = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==", "base64");
+async function uploadEvidence(cookies, fields) {
+  const form = new FormData();
+  form.append("file", new Blob([PNG], { type: "image/png" }), "test-evidence.png");
+  for (const [k, v] of Object.entries(fields)) form.append(k, v);
+  return fetch(BASE + "/api/evidence", { method: "POST", headers: { Cookie: cookies }, body: form });
+}
+if (created.logEntry) {
+  r = await uploadEvidence(nurse.cookies, { skill_log_entry_id: created.logEntry });
+  body = await r.json().catch(() => ({}));
+  const evidenceId = body.evidence?.id;
+  record("workflow:evidence", "nurse uploads evidence to own entry", r.status === 201 && !!evidenceId, `status ${r.status}`);
+
+  r = await get(`/api/evidence?entry=${created.logEntry}`, nurse.cookies);
+  body = await r.json().catch(() => ({}));
+  record("workflow:evidence", "evidence listed on the entry", (body.evidence ?? []).length === 1, `${body.evidence?.length ?? 0} files`);
+
+  r = await get(`/api/evidence?id=${evidenceId}`, assessor.cookies);
+  body = await r.json().catch(() => ({}));
+  record("workflow:evidence", "verifier gets signed download URL", r.status === 200 && String(body.url ?? "").includes("token="), `status ${r.status}`);
+
+  r = await get(`/api/evidence?id=${evidenceId}`, "");
+  record("workflow:evidence", "unauthenticated evidence access rejected", r.status === 401, `status ${r.status}`);
+
+  r = await uploadEvidence(assessor.cookies, { skill_log_entry_id: created.logEntry });
+  record("workflow:evidence", "cannot attach to someone else's entry", r.status === 403, `status ${r.status}`);
+}
+
+// 3c-iii. Credentials (§A): self-entry lands pending; adding for others is staff-only
+r = await send("POST", "/api/credentials", nurse.cookies, {
+  title: "TEST — RN Licence", credential_type: "professional_license",
+  issuing_body: "Test Council", credential_number: "TC-0001", expiry_date: "2027-01-01",
+});
+body = await r.json().catch(() => ({}));
+record("workflow:credentials", "nurse self-submits a licence", r.status === 201 && !!body.id, `status ${r.status}`);
+const { data: credRow } = body.id
+  ? await admin.from("professional_credentials").select("status, credential_number").eq("id", body.id).single()
+  : { data: null };
+record("workflow:credentials", "licence stored pending verification with number",
+  credRow?.status === "pending_verification" && credRow?.credential_number === "TC-0001", JSON.stringify(credRow));
+r = await send("POST", "/api/credentials", nurse.cookies, { nurse_id: created.assessor.id, title: "TEST — should fail" });
+record("workflow:credentials", "nurse cannot add credentials for others", r.status === 403, `status ${r.status}`);
+
+// 3c-iii-b. Account management: profile edit, avatar, password change
+r = await send("PATCH", "/api/account/profile", nurse.cookies, { full_name: "Test Nurse Renamed", phone: "+256700000000", role: "super_admin" });
+const { data: prof } = await admin.from("profiles").select("full_name, phone, role").eq("id", created.nurse.id).single();
+record("workflow:account", "profile self-edit (name, phone)", r.status === 200 && prof?.full_name === "Test Nurse Renamed" && prof?.phone === "+256700000000", JSON.stringify(prof));
+record("workflow:account", "role cannot be self-escalated", prof?.role === "nurse", `role=${prof?.role}`);
+
+{
+  const fd = new FormData();
+  fd.append("file", new Blob([PNG], { type: "image/png" }), "avatar.png");
+  r = await fetch(BASE + "/api/account/avatar", { method: "POST", headers: { Cookie: nurse.cookies }, body: fd });
+  body = await r.json().catch(() => ({}));
+  const avatarOk = r.status === 200 && typeof body.avatar_url === "string";
+  let publicOk = false;
+  if (avatarOk) publicOk = (await fetch(body.avatar_url)).ok;
+  record("workflow:account", "avatar upload sets public image URL", avatarOk && publicOk, `status ${r.status}, url fetch ${publicOk}`);
+}
+
+r = await send("POST", "/api/account/password", nurse.cookies, { current_password: "wrong-password", new_password: "NewPass-12345" });
+record("workflow:account", "password change rejects wrong current password", r.status === 403, `status ${r.status}`);
+r = await send("POST", "/api/account/password", nurse.cookies, { current_password: created.nurse.password, new_password: "NewPass-12345" });
+record("workflow:account", "password change succeeds with correct current", r.status === 200, `status ${r.status}`);
+{
+  const oldLogin = await login(created.nurse.email, created.nurse.password);
+  const newLogin = await login(created.nurse.email, "NewPass-12345");
+  record("workflow:account", "old password no longer works, new one does",
+    oldLogin.status === 400 && newLogin.status === 200, `old ${oldLogin.status}, new ${newLogin.status}`);
+  if (newLogin.status === 200) { nurse.cookies = newLogin.cookies; created.nurse.password = "NewPass-12345"; }
+}
+
+// 3c-iv. Notifications (§8): events landed, unread count works, mark-all-read works
+const { data: nurseNotifs } = await admin.from("notifications").select("type").eq("user_id", created.nurse.id);
+record("workflow:notifications", "nurse notified of verification verdict",
+  (nurseNotifs ?? []).some(n => n.type === "logbook_verified"), (nurseNotifs ?? []).map(n => n.type).join(",") || "none");
+const { data: assessorNotifs } = await admin.from("notifications").select("type").eq("user_id", created.assessor.id);
+record("workflow:notifications", "verifier notified of pending entry + credential",
+  (assessorNotifs ?? []).some(n => n.type === "logbook_pending") && (assessorNotifs ?? []).some(n => n.type === "credential_submitted"),
+  (assessorNotifs ?? []).map(n => n.type).join(",") || "none");
+r = await get("/api/notifications", nurse.cookies);
+body = await r.json().catch(() => ({}));
+record("workflow:notifications", "notification list API with unread count", r.status === 200 && body.unread > 0, `unread ${body.unread}`);
+r = await send("PATCH", "/api/notifications", nurse.cookies, { all: true });
+const after = await (await get("/api/notifications", nurse.cookies)).json().catch(() => ({}));
+record("workflow:notifications", "mark all read", r.status === 200 && after.unread === 0, `unread now ${after.unread}`);
 
 // 3d. Library governed search
 r = await get("/api/library?q=hygiene", nurse.cookies);
@@ -204,6 +294,43 @@ try {
   }
   record("workflow:ai", "copilot streams a response", res.status === 200 && first.includes("data:"), `status ${res.status}`);
 } catch (e) { record("workflow:ai", "copilot streams a response", false, String(e).slice(0, 80)); }
+
+// 3f. Assessor workspace: pages render, scheduling works, exports work
+const ASSESSOR_PAGES = [
+  ["/assessor", "Welcome back"],
+  ["/assessor/queue", "Assessment Queue"],
+  ["/assessor/calendar", "Assessment Calendar"],
+  ["/assessor/analytics", "My Analytics"],
+  ["/assessor/remediation", "Remediation"],
+  ["/assessor/history", "Assessment History"],
+];
+for (const [path, marker] of ASSESSOR_PAGES) {
+  const res = await get(path, assessor.cookies);
+  const html = await res.text();
+  record("assessor:pages", path, res.status === 200 && html.includes(marker), `status ${res.status}`);
+}
+
+// Scheduling: assessor schedules for the nurse → nurse notified; nurse can't schedule
+const tomorrow = new Date(Date.now() + 86400000).toISOString();
+r = await send("POST", "/api/schedule", assessor.cookies, { nurse_id: created.nurse.id, method: "direct_observation", scheduled_for: tomorrow, location: "Test Ward" });
+body = await r.json().catch(() => ({}));
+const schedId = body.id;
+record("assessor:schedule", "assessor schedules an assessment", r.status === 201 && !!schedId, `status ${r.status}`);
+const { data: schedNotif } = await admin.from("notifications").select("type").eq("user_id", created.nurse.id).eq("type", "assessment_scheduled");
+record("assessor:schedule", "nurse notified of scheduled session", (schedNotif ?? []).length === 1, `${schedNotif?.length ?? 0} notifications`);
+r = await send("POST", "/api/schedule", nurse.cookies, { nurse_id: created.assessor.id, scheduled_for: tomorrow });
+record("assessor:schedule", "nurse role cannot schedule", r.status === 403, `status ${r.status}`);
+r = await send("PATCH", "/api/schedule", assessor.cookies, { id: schedId, status: "cancelled" });
+const { data: schedRow } = schedId ? await admin.from("scheduled_assessments").select("status").eq("id", schedId).single() : { data: null };
+record("assessor:schedule", "assessor cancels the session", r.status === 200 && schedRow?.status === "cancelled", `status=${schedRow?.status}`);
+
+// CSV exports: assessor gets CSV, nurse is blocked
+r = await get("/api/reports/history", assessor.cookies);
+record("assessor:reports", "history CSV export", r.status === 200 && (r.headers.get("content-type") ?? "").includes("text/csv"), `status ${r.status}`);
+r = await get("/api/reports/analytics", assessor.cookies);
+record("assessor:reports", "analytics CSV export", r.status === 200 && (r.headers.get("content-type") ?? "").includes("text/csv"), `status ${r.status}`);
+r = await get("/api/reports/history", nurse.cookies);
+record("assessor:reports", "nurse blocked from assessor exports", r.status === 403, `status ${r.status}`);
 
 // PHASE 4 — Permissions & tenant isolation
 r = await get("/api/super-admin/users/list", nurse.cookies);
@@ -289,6 +416,13 @@ for (const [t, p] of [["framework_domains", "framework_id"], ["clinical_practice
 if (!KEEP) {
   console.log("\nCleaning up test data…");
   for (const uid of [created.nurse.id, created.assessor.id]) {
+    const { data: evRows } = await admin.from("evidence").select("file_path").eq("owner_id", uid);
+    if (evRows?.length) await admin.storage.from("evidence").remove(evRows.map(e => e.file_path));
+    const { data: avatarFiles } = await admin.storage.from("avatars").list(uid);
+    if (avatarFiles?.length) await admin.storage.from("avatars").remove(avatarFiles.map(f => `${uid}/${f.name}`));
+    await admin.from("evidence").delete().eq("owner_id", uid);
+    await admin.from("notifications").delete().eq("user_id", uid);
+    await admin.from("professional_credentials").delete().eq("nurse_id", uid);
     await admin.from("skill_log_entries").delete().eq("nurse_id", uid);
     await admin.from("cpd_logs").delete().eq("user_id", uid);
     await admin.from("quiz_attempts").delete().eq("user_id", uid);
@@ -296,6 +430,9 @@ if (!KEEP) {
     await admin.from("profiles").delete().eq("id", uid);
     await admin.auth.admin.deleteUser(uid);
   }
+  // Notifications the test actions generated FOR real users (e.g. hospital
+  // verifiers) — the "TEST — " marker is unique to this battery.
+  await admin.from("notifications").delete().ilike("body", "%TEST — %");
   console.log("Removed test accounts and their data.");
 } else {
   console.log(`\n--keep: test accounts left in place (${created.nurse.email} / ${created.assessor.email})`);

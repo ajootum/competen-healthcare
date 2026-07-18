@@ -20,6 +20,20 @@ export default async function LogbookVerificationPage() {
     .eq("status", "pending").neq("nurse_id", user.id)
     .order("created_at", { ascending: true }).limit(100);
 
+  // Evidence attached to the pending entries (empty until migration 029)
+  const pendingIds = (raw ?? []).map(e => e.id);
+  const { data: evidenceRows } = pendingIds.length
+    ? await admin.from("evidence")
+        .select("id, skill_log_entry_id, file_name, mime_type, size_bytes, note, created_at")
+        .in("skill_log_entry_id", pendingIds).order("created_at")
+    : { data: [] };
+  const evidenceByEntry = new Map<string, { id: string; file_name: string; mime_type: string; size_bytes: number; note: string | null; created_at: string }[]>();
+  for (const ev of (evidenceRows ?? []) as unknown as { id: string; skill_log_entry_id: string; file_name: string; mime_type: string; size_bytes: number; note: string | null; created_at: string }[]) {
+    const list = evidenceByEntry.get(ev.skill_log_entry_id) ?? [];
+    list.push(ev);
+    evidenceByEntry.set(ev.skill_log_entry_id, list);
+  }
+
   const entries: PendingEntry[] = ((raw ?? []) as unknown as {
     id: string; skill_name: string; performed_at: string; location: string | null;
     supervision_level: string; notes: string | null; created_at: string;
@@ -29,6 +43,7 @@ export default async function LogbookVerificationPage() {
     competencyName: e.framework_competencies?.name ?? null,
     performedAt: e.performed_at, location: e.location,
     supervision: e.supervision_level, notes: e.notes, loggedAt: e.created_at,
+    evidence: evidenceByEntry.get(e.id) ?? [],
   }));
 
   return (

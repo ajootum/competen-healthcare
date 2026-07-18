@@ -2,6 +2,7 @@ import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { OUTCOME_CONFIG, type DecisionOutcome } from "@/lib/ckcm";
+import AccountSettings from "./AccountSettings";
 
 // Account & Subscription (Nurse Workspace Account & Subscription spec v1.0).
 // Enterprise-first: members of an organisation see their Organisation Licence
@@ -47,7 +48,7 @@ export default async function AccountSubscriptionPage() {
 
   const admin = createAdminClient();
   const { data: me } = await admin.from("profiles")
-    .select("id, full_name, role, created_at, hospital_id, organisation_id")
+    .select("id, full_name, email, role, created_at, hospital_id, organisation_id, phone, country, specialization, avatar_url")
     .eq("id", user.id).single();
 
   const monthStart = new Date();
@@ -197,6 +198,17 @@ export default async function AccountSubscriptionPage() {
               </div>
             </div>
           )}
+
+          {/* Account management: profile, photo, password */}
+          <AccountSettings profile={{
+            full_name: me?.full_name ?? "",
+            email: me?.email ?? user.email ?? "",
+            phone: me?.phone ?? "",
+            country: me?.country ?? "",
+            specialization: me?.specialization ?? "",
+            avatar_url: me?.avatar_url ?? null,
+            role: me?.role ?? "nurse",
+          }} />
 
           {/* Plan includes + usage */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 items-start">

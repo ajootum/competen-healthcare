@@ -2,10 +2,12 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import EvidencePanel, { type EvidenceItem } from "@/components/EvidencePanel";
 
 export type PendingEntry = {
   id: string; skillName: string; nurseName: string; competencyName: string | null;
   performedAt: string; location: string | null; supervision: string; notes: string | null; loggedAt: string;
+  evidence: EvidenceItem[];
 };
 
 const SUP_LABEL: Record<string, string> = {
@@ -62,6 +64,7 @@ export default function VerifyQueue({ entries }: { entries: PendingEntry[] }) {
                 {e.location ? ` · ${e.location}` : ""}
               </p>
               {e.notes && <p className="text-[11px] text-gray-500 italic mt-1">&ldquo;{e.notes}&rdquo;</p>}
+              <EvidencePanel entryId={e.id} initial={e.evidence} />
             </div>
           </div>
           {commentFor === e.id && (

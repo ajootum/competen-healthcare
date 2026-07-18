@@ -1,6 +1,7 @@
 import { createAdminClient } from "@/lib/supabase/server";
 import { generatePathwayForNurse } from "@/lib/engines/pathways";
 import { maturityFromScore, outcomeFor } from "@/lib/engines/outcomes";
+import { notify } from "@/lib/notify";
 
 export { maturityFromScore, outcomeFor };
 
@@ -114,6 +115,14 @@ export async function generateDecisionsForCycle(
 
   // Refresh the nurse's learning pathway from the new decision gaps (best-effort)
   try { await generatePathwayForNurse(admin, nurseId); } catch { /* non-fatal */ }
+
+  const passingCount = rows.filter(r => r.expiry_date).length;
+  await notify([nurseId], {
+    type: "decisions_issued",
+    title: "New competency decisions issued",
+    body: `${rows.length} decision${rows.length === 1 ? "" : "s"} recorded${passingCount ? ` (${passingCount} passing)` : ""} by ${decidedByName ?? "your organisation"}`,
+    href: "/dashboard/passport",
+  });
 
   return { created: rows.length };
 }

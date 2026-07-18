@@ -6,28 +6,55 @@ import NavLink from "@/components/NavLink";
 import RoleSwitcher from "@/components/RoleSwitcher";
 import { highestRole, ORG_ROLE_CONFIG, type AppRole, type OrgRole } from "@/lib/roles";
 
-const BASE_NAV = [
-  { label: "Dashboard",     href: "/assessor",         icon: "🏠" },
-  { label: "Audit Tools",   href: "/assessor/assess",  icon: "📋" },
-  { label: "My Workers",    href: "/assessor/nurses",  icon: "👩‍⚕️" },
-  { label: "Logbook Review", href: "/assessor/logbook", icon: "🖊️" },
-  { label: "OSCE Sessions", href: "/assessor/osce",    icon: "🩺" },
-  { label: "History",       href: "/assessor/history", icon: "📁" },
+// Assessor Workspace sidebar — structure per the v2 dashboard mockup. Items
+// whose module doesn't exist yet (Competency Reviews, Mini-CEX/DOPS/CBD,
+// Digital Portfolio, Checklists & Blueprints) render as muted "soon" rows —
+// visible structure, no dead links. Some entries open in the clinician shell.
+type NavItem = { label: string; href?: string; icon: string; badge?: "queue" | "logbook" | "unread"; soon?: boolean };
+const NAV_GROUPS: { group: string | null; items: NavItem[] }[] = [
+  { group: null, items: [
+    { label: "Dashboard",              href: "/assessor",                   icon: "🏠" },
+    { label: "Notifications",          href: "/dashboard/notifications",    icon: "🔔", badge: "unread" },
+  ]},
+  { group: "Assessments", items: [
+    { label: "My Assessments",         href: "/assessor/nurses",            icon: "🗒️" },
+    { label: "Assessment Queue",       href: "/assessor/queue",             icon: "📥", badge: "queue" },
+    { label: "Assessment Calendar",    href: "/assessor/calendar",          icon: "📅" },
+    { label: "Competency Reviews",     icon: "🔍", soon: true },
+    { label: "OSCE Management",        href: "/assessor/osce",              icon: "🩺" },
+  ]},
+  { group: "Audit & Quality", items: [
+    { label: "Clinical Audits",        href: "/dashboard/audit",            icon: "🩹" },
+    { label: "Documentation Audits",   href: "/dashboard/audit/chart",      icon: "🗂️" },
+    { label: "Competency Audits",      href: "/dashboard/audit/concurrent", icon: "📋" },
+    { label: "Audit Reports",          href: "/assessor/history",           icon: "📁" },
+  ]},
+  { group: "Workplace", items: [
+    { label: "Workplace Observations", href: "/assessor/assess",            icon: "👁️" },
+    { label: "Mini-CEX",               icon: "🧾", soon: true },
+    { label: "DOPS",                   icon: "🫱", soon: true },
+    { label: "CBD",                    icon: "💬", soon: true },
+  ]},
+  { group: "Evidence", items: [
+    { label: "Evidence Validation",    href: "/assessor/logbook",           icon: "🖊️", badge: "logbook" },
+    { label: "Digital Portfolio",      icon: "🗃️", soon: true },
+  ]},
+  { group: "Assessor Tools", items: [
+    { label: "Assessment Tools",       href: "/assessor/assess",            icon: "🧰" },
+    { label: "Checklists & Blueprints", icon: "✅", soon: true },
+    { label: "Simulation Scenarios",   href: "/dashboard/simulation",       icon: "🧪" },
+    { label: "Question Bank",          href: "/dashboard/questions",        icon: "❓" },
+    { label: "AI Copilot",             href: "/dashboard/copilot",          icon: "✨" },
+    { label: "Knowledge Hub",          href: "/dashboard/knowledge",        icon: "🔬" },
+  ]},
+  { group: "Analytics", items: [
+    { label: "Analytics & Reports",    href: "/assessor/analytics",         icon: "📊" },
+    { label: "Risk & Quality Insights", href: "/assessor/remediation",      icon: "🎯" },
+  ]},
+  { group: "Admin", items: [
+    { label: "Settings",               href: "/dashboard/billing",          icon: "⚙️" },
+  ]},
 ];
-
-const ORG_ROLE_NAV: Partial<Record<OrgRole, { label: string; href: string; icon: string }[]>> = {
-  charge_nurse: [
-    { label: "Unit Overview",    href: "/assessor/unit",   icon: "🏥" },
-    { label: "Assign Assessors", href: "/assessor/assign", icon: "📌" },
-  ],
-  shift_supervisor: [
-    { label: "Shift Readiness",   href: "/assessor/shift",  icon: "⏰" },
-    { label: "Competency Alerts", href: "/assessor/alerts", icon: "🚨" },
-  ],
-  leader: [
-    { label: "Team Overview",  href: "/assessor/team",  icon: "⭐" },
-  ],
-};
 
 export default async function AssessorLayout({ children }: { children: React.ReactNode }) {
   const supabase = await createClient();
@@ -37,7 +64,7 @@ export default async function AssessorLayout({ children }: { children: React.Rea
   const adminClient = createAdminClient();
   const { data: profile } = await adminClient
     .from("profiles")
-    .select("full_name, role, roles")
+    .select("full_name, role, roles, avatar_url")
     .eq("id", user.id)
     .single();
 
@@ -66,45 +93,85 @@ export default async function AssessorLayout({ children }: { children: React.Rea
     );
   }
 
+  // Live counters for the sidebar badges (all real, fail-soft to 0).
+  const [{ count: queueCount }, { count: logbookCount }, { count: unreadCount }] = await Promise.all([
+    adminClient.from("assessments").select("id", { count: "exact", head: true })
+      .eq("assessor_id", user.id).in("status", ["pending", "in_progress"]),
+    adminClient.from("skill_log_entries").select("id", { count: "exact", head: true })
+      .eq("status", "pending").neq("nurse_id", user.id),
+    adminClient.from("notifications").select("id", { count: "exact", head: true })
+      .eq("user_id", user.id).eq("read", false),
+  ]);
+  const badgeValue = { queue: queueCount ?? 0, logbook: logbookCount ?? 0, unread: unreadCount ?? 0 };
+
   const orgRoleCfg = orgRole ? ORG_ROLE_CONFIG[orgRole] : null;
-  const extraNav = orgRole ? (ORG_ROLE_NAV[orgRole] ?? []) : [];
   const portalLabel = orgRoleCfg?.label ?? "Assessor";
 
   return (
     <div className="min-h-screen bg-gray-50 font-[family-name:var(--font-geist-sans)]">
-      <div className="flex">
-        <aside className="hidden md:flex w-56 h-screen bg-[#0f172a] flex-col py-6 px-4 fixed top-0 left-0 z-20">
-          <Link href="/" className="flex items-center gap-2 mb-6 px-2">
-            <div className="w-7 h-7 rounded bg-indigo-500 flex items-center justify-center text-white font-bold text-sm">C</div>
-            <span className="text-white font-semibold text-sm">Competen</span>
+      {/* Mobile top bar with horizontally scrollable nav — the desktop rail is hidden below md. */}
+      <header className="md:hidden fixed top-0 left-0 right-0 z-40 bg-[#0f172a] shadow-lg">
+        <div className="h-12 flex items-center gap-2 px-3">
+          <span className="w-7 h-7 rounded bg-indigo-500 flex items-center justify-center text-white font-bold text-sm shrink-0">C</span>
+          <span className="min-w-0">
+            <span className="block text-white font-semibold text-sm leading-tight">Competen</span>
+            <span className="block text-indigo-300/60 text-[10px] leading-tight">{portalLabel} Workspace</span>
+          </span>
+          <span className="flex-1" />
+          <Link href="/dashboard/notifications" aria-label="Notifications" className="relative w-9 h-9 rounded-lg flex items-center justify-center text-base">
+            🔔
+            {badgeValue.unread > 0 && (
+              <span className="absolute top-0.5 right-0.5 bg-red-500 text-white text-[9px] font-bold rounded-full min-w-[15px] h-[15px] px-0.5 flex items-center justify-center">
+                {badgeValue.unread > 99 ? "99+" : badgeValue.unread}
+              </span>
+            )}
           </Link>
+        </div>
+        <nav className="flex gap-1 overflow-x-auto px-3 pb-2">
+          {NAV_GROUPS.flatMap(g => g.items).filter(i => i.href && !i.soon).map(({ label, href, badge }) => (
+            <Link key={label} href={href!}
+              className="shrink-0 text-[11px] text-indigo-100/80 bg-indigo-900/40 hover:bg-indigo-800/60 rounded-full px-3 py-1 transition-colors">
+              {label}{badge && badgeValue[badge] > 0 ? ` (${badgeValue[badge]})` : ""}
+            </Link>
+          ))}
+        </nav>
+      </header>
 
-          <div className="px-3 mb-4">
-            <span className="text-[10px] font-bold text-indigo-400/70 uppercase tracking-widest">{portalLabel} Portal</span>
+      <div className="flex">
+        <aside className="hidden md:flex w-60 h-screen bg-[#0f172a] flex-col py-6 px-4 fixed top-0 left-0 z-20">
+          <Link href="/" className="flex items-center gap-2 mb-4 px-2">
+            <div className="w-7 h-7 rounded bg-indigo-500 flex items-center justify-center text-white font-bold text-sm shrink-0">C</div>
+            <span className="min-w-0">
+              <span className="block text-white font-bold text-sm leading-tight tracking-wide">COMPETEN</span>
+              <span className="block text-indigo-300/60 text-[9px] leading-tight">Competency Management Platform</span>
+            </span>
+          </Link>
+          <div className="mx-2 mb-4 bg-indigo-600 rounded-lg px-3 py-2">
+            <p className="text-white text-[11px] font-semibold">🛡️ {portalLabel} Workspace</p>
           </div>
 
           <nav className="flex flex-col gap-0.5 flex-1 overflow-y-auto">
-            {BASE_NAV.map(({ label, href, icon }) => (
-              <NavLink key={label} href={href} icon={icon} label={label} exact={href === "/assessor"}
-                className="flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm text-slate-400 hover:bg-indigo-900/40 hover:text-white transition-colors"
-                activeClassName="flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm bg-indigo-900/60 text-white font-medium" />
-            ))}
-            {extraNav.length > 0 && (
-              <>
-                <div className="my-1 border-t border-slate-800/40" />
-                <p className="text-[9px] font-bold text-slate-600 uppercase tracking-widest px-3 py-1">{portalLabel}</p>
-                {extraNav.map(({ label, href, icon }) => (
-                  <Link key={label} href={href}
-                    className="flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm text-indigo-300/70 hover:bg-indigo-900/40 hover:text-white transition-colors">
-                    <span className="w-5 text-center text-sm">{icon}</span>
-                    <span>{label}</span>
-                  </Link>
+            {NAV_GROUPS.map(({ group, items }) => (
+              <div key={group ?? "root"} className="flex flex-col gap-0.5">
+                {group && <p className="px-3 pt-3 pb-1 text-[9px] font-bold uppercase tracking-widest text-indigo-400/50">{group}</p>}
+                {items.map(({ label, href, icon, badge, soon }) => soon || !href ? (
+                  <span key={label} title="Not available yet — this module has no backing store"
+                    className="flex items-center gap-2.5 px-3 py-1.5 rounded-lg text-[13px] text-slate-600 cursor-default select-none">
+                    <span className="w-5 text-center text-sm leading-none opacity-50">{icon}</span>
+                    <span className="flex-1">{label}</span>
+                    <span className="text-[8px] font-bold uppercase tracking-wider bg-slate-800 text-slate-500 rounded px-1 py-0.5">soon</span>
+                  </span>
+                ) : (
+                  <NavLink key={label} href={href} icon={icon} label={label} exact={href === "/assessor"}
+                    badge={badge ? badgeValue[badge] : undefined}
+                    className="flex items-center gap-2.5 px-3 py-1.5 rounded-lg text-[13px] text-slate-400 hover:bg-indigo-900/40 hover:text-white transition-colors"
+                    activeClassName="flex items-center gap-2.5 px-3 py-1.5 rounded-lg text-[13px] bg-indigo-900/60 text-white font-medium" />
                 ))}
-              </>
-            )}
+              </div>
+            ))}
             <div className="my-2 border-t border-slate-800/60" />
             <Link href="/dashboard"
-              className="flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm text-slate-500 hover:bg-indigo-900/30 hover:text-white transition-colors">
+              className="flex items-center gap-2.5 px-3 py-1.5 rounded-lg text-[13px] text-slate-500 hover:bg-indigo-900/30 hover:text-white transition-colors">
               <span className="w-5 text-center text-sm">⊞</span>
               <span>Nurse Dashboard</span>
             </Link>
@@ -112,9 +179,14 @@ export default async function AssessorLayout({ children }: { children: React.Rea
 
           <div className="pt-4 border-t border-slate-800/60">
             <div className="flex items-center gap-2 px-3 py-2">
-              <div className="w-7 h-7 rounded-full bg-indigo-500 flex items-center justify-center text-white text-xs font-bold">
-                {profile?.full_name?.[0] ?? "A"}
-              </div>
+              {profile?.avatar_url ? (
+                // eslint-disable-next-line @next/next/no-img-element -- avatar from Supabase storage
+                <img src={profile.avatar_url} alt="" className="w-7 h-7 rounded-full object-cover border border-indigo-800" />
+              ) : (
+                <div className="w-7 h-7 rounded-full bg-indigo-500 flex items-center justify-center text-white text-xs font-bold">
+                  {profile?.full_name?.[0] ?? "A"}
+                </div>
+              )}
               <div className="flex-1 min-w-0">
                 <p className="text-white text-xs font-medium truncate">{profile?.full_name}</p>
                 <p className="text-indigo-300/60 text-[10px]">{portalLabel}</p>
@@ -135,7 +207,7 @@ export default async function AssessorLayout({ children }: { children: React.Rea
           </div>
         </aside>
 
-        <main className="flex-1 md:ml-56 px-4 md:px-6 py-8 max-w-6xl">
+        <main className="flex-1 md:ml-60 px-4 md:px-6 pt-24 md:pt-8 pb-8">
           {children}
         </main>
       </div>

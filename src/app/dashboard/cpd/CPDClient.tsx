@@ -20,8 +20,11 @@ const activityIcons: Record<string, string> = {
   osce:         "📋",
 };
 
-export default function CPDClient({ initialLogs, totalHours }: { initialLogs: Log[]; totalHours: number }) {
+export default function CPDClient({ initialLogs, totalHours, targetHours }: {
+  initialLogs: Log[]; totalHours: number; targetHours: number | null;
+}) {
   const [logs, setLogs] = useState(initialLogs);
+  const [submitError, setSubmitError] = useState<string | null>(null);
   const [total, setTotal] = useState(totalHours);
   const [showForm, setShowForm] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -36,11 +39,16 @@ export default function CPDClient({ initialLogs, totalHours }: { initialLogs: Lo
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setLoading(true);
+    setSubmitError(null);
     const res = await fetch("/api/cpd", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(form),
     });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      setSubmitError(err.error ?? "Could not log the activity. Please try again.");
+    }
     if (res.ok) {
       const newLog: Log = {
         id: crypto.randomUUID(),
@@ -59,8 +67,8 @@ export default function CPDClient({ initialLogs, totalHours }: { initialLogs: Lo
     setLoading(false);
   }
 
-  const yearlyTarget = 30;
-  const pct = Math.min(100, Math.round((total / yearlyTarget) * 100));
+  // Annual target is org-configured (hospitals.cpd_target_hours) — never invented.
+  const pct = targetHours ? Math.min(100, Math.round((total / targetHours) * 100)) : null;
 
   return (
     <div>
@@ -69,20 +77,26 @@ export default function CPDClient({ initialLogs, totalHours }: { initialLogs: Lo
         <div className="flex items-center justify-between mb-3">
           <div>
             <p className="font-semibold text-gray-900">Annual CPD Progress</p>
-            <p className="text-xs text-gray-400 mt-0.5">Target: {yearlyTarget} hours/year</p>
+            <p className="text-xs text-gray-400 mt-0.5">
+              {targetHours ? `Target: ${targetHours} hours/year` : "No annual target set by your organisation yet"}
+            </p>
           </div>
           <div className="text-right">
             <p className="text-2xl font-bold text-teal-600">{total.toFixed(1)}</p>
             <p className="text-xs text-gray-400">hours logged</p>
           </div>
         </div>
-        <div className="h-3 bg-gray-100 rounded-full overflow-hidden">
-          <div className="h-full bg-teal-500 rounded-full transition-all duration-500" style={{ width: `${pct}%` }} />
-        </div>
-        <div className="flex justify-between mt-1.5">
-          <span className="text-xs text-gray-400">{pct}% complete</span>
-          <span className="text-xs text-gray-400">{Math.max(0, yearlyTarget - total).toFixed(1)}h remaining</span>
-        </div>
+        {pct !== null && targetHours && (
+          <>
+            <div className="h-3 bg-gray-100 rounded-full overflow-hidden">
+              <div className="h-full bg-teal-500 rounded-full transition-all duration-500" style={{ width: `${pct}%` }} />
+            </div>
+            <div className="flex justify-between mt-1.5">
+              <span className="text-xs text-gray-400">{pct}% complete</span>
+              <span className="text-xs text-gray-400">{Math.max(0, targetHours - total).toFixed(1)}h remaining</span>
+            </div>
+          </>
+        )}
       </div>
 
       {/* Log button */}
@@ -133,6 +147,9 @@ export default function CPDClient({ initialLogs, totalHours }: { initialLogs: Lo
                 className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-teal-500" />
             </div>
           </div>
+          {submitError && (
+            <p className="text-xs text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2 mb-3">{submitError}</p>
+          )}
           <div className="flex gap-3">
             <button type="submit" disabled={loading}
               className="bg-teal-600 text-white px-5 py-2 rounded-lg text-sm font-medium hover:bg-teal-700 disabled:opacity-60 transition-colors">

@@ -13,6 +13,7 @@ import { highestRole, type AppRole } from "@/lib/roles";
 const NAV_GROUPS: { group: string | null; items: { label: string; href: string; icon: string }[] }[] = [
   { group: null, items: [
     { label: "Dashboard",               href: "/dashboard",              icon: "🏠" },
+    { label: "Notifications",           href: "/dashboard/notifications", icon: "🔔" },
     { label: "Career Growth",           href: "/dashboard/career",       icon: "📈" },
   ]},
   { group: "Learning", items: [
@@ -51,7 +52,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
 
   const { data: profile } = await createAdminClient()
     .from("profiles")
-    .select("full_name, role, roles")
+    .select("full_name, role, roles, avatar_url")
     .eq("id", user.id)
     .single();
 
@@ -60,12 +61,19 @@ export default async function DashboardLayout({ children }: { children: React.Re
   const cookieStore = await cookies();
   const activeRole = (cookieStore.get("active_role")?.value ?? highestRole(userRoles)) as AppRole;
 
+  // Unread notification count for the sidebar bell (0 until migration 029 runs).
+  const { count: unreadCount } = await createAdminClient()
+    .from("notifications").select("id", { count: "exact", head: true })
+    .eq("user_id", user.id).eq("read", false);
+
   return (
     <div className="min-h-screen bg-gray-50 font-[family-name:var(--font-geist-sans)]">
       <MobileSidebar
         fullName={profile?.full_name ?? "Nurse"}
         role={profile?.role ?? "nurse"}
         isAdmin={profile?.role === "hospital_admin"}
+        unread={unreadCount ?? 0}
+        avatarUrl={profile?.avatar_url ?? null}
       />
 
       <div className="flex">
@@ -83,6 +91,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
                 {group && <p className="px-3 pt-3 pb-1 text-[9px] font-bold uppercase tracking-widest text-teal-400/40">{group}</p>}
                 {items.map(({ label, href, icon }) => (
                   <NavLink key={label} href={href} icon={icon} label={label} exact={href === "/dashboard"}
+                    badge={href === "/dashboard/notifications" ? unreadCount ?? 0 : undefined}
                     className="flex items-center gap-2.5 px-3 py-1.5 rounded-lg text-[13px] text-teal-100/70 hover:bg-teal-800/50 hover:text-white transition-colors"
                     activeClassName="flex items-center gap-2.5 px-3 py-1.5 rounded-lg text-[13px] bg-teal-700/60 text-white font-medium" />
                 ))}
@@ -97,9 +106,14 @@ export default async function DashboardLayout({ children }: { children: React.Re
           </nav>
           <div className="pt-4 border-t border-teal-800/60">
             <div className="flex items-center gap-2 px-3 py-2">
-              <div className="w-7 h-7 rounded-full bg-teal-500 flex items-center justify-center text-white text-xs font-bold">
-                {firstName[0]}
-              </div>
+              {profile?.avatar_url ? (
+                // eslint-disable-next-line @next/next/no-img-element -- avatar from Supabase storage
+                <img src={profile.avatar_url} alt="" className="w-7 h-7 rounded-full object-cover border border-teal-700" />
+              ) : (
+                <div className="w-7 h-7 rounded-full bg-teal-500 flex items-center justify-center text-white text-xs font-bold">
+                  {firstName[0]}
+                </div>
+              )}
               <div className="flex-1 min-w-0">
                 <p className="text-white text-xs font-medium truncate">{profile?.full_name}</p>
                 <p className="text-teal-400/60 text-[10px]">Nurse</p>

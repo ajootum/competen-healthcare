@@ -1,5 +1,6 @@
 import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
+import { notify, hospitalVerifierIds } from "@/lib/notify";
 
 // Skills Logbook API (Skills Logbook Redesign spec).
 // POST — a worker logs a skill they performed (status: pending).
@@ -33,10 +34,17 @@ export async function POST(req: Request) {
   }).select("id").single();
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
-  const { data: me } = await admin.from("profiles").select("full_name").eq("id", user.id).single();
+  const { data: me } = await admin.from("profiles").select("full_name, hospital_id").eq("id", user.id).single();
   await admin.from("audit_log").insert({
     actor_id: user.id, actor_name: me?.full_name ?? null,
     action: "log_skill", entity_type: "skill_log_entry", entity_id: data.id, entity_name: skill_name.trim(),
+  });
+
+  await notify(await hospitalVerifierIds(me?.hospital_id ?? null, user.id), {
+    type: "logbook_pending",
+    title: "Skill log entry awaiting verification",
+    body: `${me?.full_name ?? "A colleague"} logged "${skill_name.trim()}"`,
+    href: "/assessor/logbook",
   });
 
   return NextResponse.json({ ok: true, id: data.id }, { status: 201 });
@@ -78,6 +86,14 @@ export async function PATCH(req: Request) {
     actor_id: user.id, actor_name: me?.full_name ?? null,
     action: status === "verified" ? "verify_skill_entry" : status === "rejected" ? "reject_skill_entry" : "request_skill_entry_changes",
     entity_type: "skill_log_entry", entity_id: id, entity_name: entry.skill_name,
+  });
+
+  const verdict = status === "verified" ? "verified" : status === "rejected" ? "rejected" : "returned with change requests";
+  await notify([entry.nurse_id], {
+    type: `logbook_${status}`,
+    title: `Skill log ${verdict}`,
+    body: `"${entry.skill_name}" was ${verdict} by ${me?.full_name ?? "a verifier"}${comment?.trim() ? ` — “${comment.trim()}”` : ""}`,
+    href: "/dashboard/logbook",
   });
 
   return NextResponse.json({ ok: true });

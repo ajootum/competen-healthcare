@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import EvidencePanel, { type EvidenceItem } from "@/components/EvidencePanel";
 
 // Clinical Skills Logbook workspace (Skills Logbook Redesign spec).
 // Workers log skills in under a minute; supervisors verify; verified entries
@@ -13,6 +14,7 @@ export type EntryRow = {
   id: string; skillName: string; competencyName: string | null; domainName: string | null;
   performedAt: string; location: string | null; supervision: string; notes: string | null;
   status: string; verifierName: string | null; verifierComment: string | null;
+  evidence: EvidenceItem[];
 };
 export type ScoredRow = { skill: string; competency: string; score: number; assessor: string; date: string | null };
 
@@ -173,6 +175,7 @@ export default function LogbookWorkspace({ skills, entries, scored }: {
                     {e.verifierComment && (
                       <p className="text-[11px] text-gray-500 italic mt-1">&ldquo;{e.verifierComment}&rdquo;{e.verifierName ? ` — ${e.verifierName}` : ""}</p>
                     )}
+                    <EvidencePanel entryId={e.id} initial={e.evidence} canAttach />
                   </div>
                   <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded shrink-0 ${sup.cls}`} title={sup.miller}>{sup.label}</span>
                   <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded shrink-0 ${st.cls}`}>{st.label}</span>

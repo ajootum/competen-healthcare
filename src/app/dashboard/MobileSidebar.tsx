@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation";
 // Mirrors the desktop sidebar (Nurse Workspace mockup grouping, flattened).
 const navItems = [
   { label: "Dashboard",               href: "/dashboard",              icon: "🏠" },
+  { label: "Notifications",           href: "/dashboard/notifications", icon: "🔔" },
   { label: "Career Growth",           href: "/dashboard/career",       icon: "📈" },
   { label: "Learning Pathway",        href: "/dashboard/learning",     icon: "📚" },
   { label: "CPD Academy",             href: "/dashboard/courses",      icon: "🎓" },
@@ -30,9 +31,11 @@ type Props = {
   fullName: string;
   role: string;
   isAdmin: boolean;
+  unread?: number;
+  avatarUrl?: string | null;
 };
 
-export default function MobileSidebar({ fullName, role, isAdmin }: Props) {
+export default function MobileSidebar({ fullName, role, isAdmin, unread = 0, avatarUrl }: Props) {
   const [open, setOpen] = useState(false);
   const pathname = usePathname();
 
@@ -52,18 +55,48 @@ export default function MobileSidebar({ fullName, role, isAdmin }: Props) {
 
   return (
     <>
-      {/* Hamburger button — only visible on mobile */}
-      <button
-        onClick={() => setOpen(true)}
-        className="md:hidden fixed top-4 left-4 z-30 w-9 h-9 rounded-lg bg-[#0a2e38] flex items-center justify-center text-white shadow-lg"
-        aria-label="Open menu"
-      >
-        <svg width="16" height="12" viewBox="0 0 16 12" fill="none">
-          <rect width="16" height="2" rx="1" fill="white"/>
-          <rect y="5" width="16" height="2" rx="1" fill="white"/>
-          <rect y="10" width="16" height="2" rx="1" fill="white"/>
-        </svg>
-      </button>
+      {/* Fixed top app bar — mobile only. A full-width bar (not a floating
+          button) so the menu is always discoverable. */}
+      <header className="md:hidden fixed top-0 left-0 right-0 z-40 h-14 bg-[#0a2e38] flex items-center gap-3 px-3 shadow-lg">
+        <button
+          onClick={() => setOpen(true)}
+          className="w-10 h-10 rounded-lg flex items-center justify-center text-white hover:bg-teal-800/50 transition-colors shrink-0"
+          aria-label="Open menu"
+        >
+          <svg width="18" height="14" viewBox="0 0 16 12" fill="none">
+            <rect width="16" height="2" rx="1" fill="white"/>
+            <rect y="5" width="16" height="2" rx="1" fill="white"/>
+            <rect y="10" width="16" height="2" rx="1" fill="white"/>
+          </svg>
+        </button>
+        <Link href="/dashboard" className="flex items-center gap-2 min-w-0">
+          <span className="w-7 h-7 rounded bg-teal-500 flex items-center justify-center text-white font-bold text-sm shrink-0">C</span>
+          <span className="min-w-0">
+            <span className="block text-white font-semibold text-sm leading-tight truncate">Competen</span>
+            <span className="block text-teal-400/60 text-[10px] leading-tight">Nurse Workspace</span>
+          </span>
+        </Link>
+        <span className="flex-1" />
+        <Link href="/dashboard/notifications" aria-label="Notifications"
+          className="relative w-10 h-10 rounded-lg flex items-center justify-center text-lg hover:bg-teal-800/50 transition-colors shrink-0">
+          🔔
+          {unread > 0 && (
+            <span className="absolute top-1 right-1 bg-red-500 text-white text-[9px] font-bold rounded-full min-w-[15px] h-[15px] px-0.5 flex items-center justify-center">
+              {unread > 99 ? "99+" : unread}
+            </span>
+          )}
+        </Link>
+        <Link href="/dashboard/billing" aria-label="Account settings" className="shrink-0">
+          {avatarUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element -- avatar from Supabase storage
+            <img src={avatarUrl} alt="" className="w-8 h-8 rounded-full object-cover border border-teal-700" />
+          ) : (
+            <span className="w-8 h-8 rounded-full bg-teal-500 flex items-center justify-center text-white text-xs font-bold">
+              {firstName[0]}
+            </span>
+          )}
+        </Link>
+      </header>
 
       {/* Overlay */}
       {open && (
@@ -94,7 +127,12 @@ export default function MobileSidebar({ fullName, role, isAdmin }: Props) {
                   active ? "bg-teal-700/60 text-white" : "text-teal-100/70 hover:bg-teal-800/50 hover:text-white"
                 }`}>
                 <span className="text-sm leading-none w-5 text-center">{icon}</span>
-                <span>{label}</span>
+                <span className="flex-1">{label}</span>
+                {href === "/dashboard/notifications" && unread > 0 && (
+                  <span className="bg-red-500 text-white text-[9px] font-bold rounded-full min-w-[16px] h-4 px-1 flex items-center justify-center">
+                    {unread > 99 ? "99+" : unread}
+                  </span>
+                )}
               </Link>
             );
           })}
@@ -109,9 +147,14 @@ export default function MobileSidebar({ fullName, role, isAdmin }: Props) {
             </Link>
           )}
           <div className="flex items-center gap-2 px-3 py-2">
-            <div className="w-7 h-7 rounded-full bg-teal-500 flex items-center justify-center text-white text-xs font-bold">
-              {firstName[0]}
-            </div>
+            {avatarUrl ? (
+              // eslint-disable-next-line @next/next/no-img-element -- avatar from Supabase storage
+              <img src={avatarUrl} alt="" className="w-7 h-7 rounded-full object-cover border border-teal-700" />
+            ) : (
+              <div className="w-7 h-7 rounded-full bg-teal-500 flex items-center justify-center text-white text-xs font-bold">
+                {firstName[0]}
+              </div>
+            )}
             <div className="flex-1 min-w-0">
               <p className="text-white text-xs font-medium truncate">{fullName}</p>
               <p className="text-teal-400/60 text-[10px] capitalize">{role.replace(/_/g, " ")}</p>
