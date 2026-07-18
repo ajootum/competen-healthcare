@@ -724,6 +724,14 @@ r = await send("POST", "/api/auth/switch-role", dualLogin.cookies, { role: "nurs
 record("xworkspace", "§16 switch back to nurse allowed", r.status === 200, `status ${r.status}`);
 const { data: switchAudit } = await admin.from("audit_log").select("id").eq("actor_id", created.dual.id).eq("action", "switch_role");
 record("xworkspace", "§16 role switches recorded in audit log", (switchAudit ?? []).length >= 2, `${switchAudit?.length ?? 0} audit rows`);
+{
+  // Regression: /dashboard must render the clinician home even when
+  // active_role points elsewhere — it must never bounce back to a portal
+  // (the "jumping between workspaces" loop for multi-role users).
+  const res = await get("/dashboard", `${dualLogin.cookies}; active_role=assessor`);
+  const html = await res.text();
+  record("xworkspace", "§16 nurse home reachable with non-nurse active_role (no bounce)", res.status === 200 && html.includes("👋"), `status ${res.status}`);
+}
 
 // Assessment Studio: full authoring chain (skill → attach → checklist →
 // critical item → question bank → question) as an ASSESSOR via /api/studio.

@@ -50,10 +50,15 @@ export default async function DashboardPage() {
   const { data: profile } = await admin.from("profiles").select("*").eq("id", user.id).single();
   if (!profile) redirect("/login");
 
+  // NOTE: this page is the clinician home, full stop. It used to double as a
+  // post-login role router (redirecting when active_role !== "nurse"), which
+  // made the nurse shell unreachable for multi-role users — every /dashboard
+  // link bounced them back to their portal ("jumping between workspaces").
+  // Post-login routing lives in the login/signup pages; workspace switching
+  // navigates to portals directly.
   const userRoles: AppRole[] = (profile.roles?.length ? profile.roles : [profile.role]).filter(Boolean) as AppRole[];
   const cookieStore = await cookies();
   const activeRole = (cookieStore.get("active_role")?.value ?? highestRole(userRoles)) as AppRole;
-  if (activeRole !== "nurse") redirect(ROLE_CONFIG[activeRole].portal);
 
   const firstName = profile.full_name?.split(" ")[0] ?? "Nurse";
   const hour = new Date().getHours();
