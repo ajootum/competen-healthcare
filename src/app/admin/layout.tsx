@@ -82,6 +82,29 @@ export default async function AdminLayout({ children }: { children: React.ReactN
 
   return (
     <div className="min-h-screen bg-gray-50 font-[family-name:var(--font-geist-sans)]">
+      {/* Mobile top bar with horizontally scrollable nav — the desktop rail is hidden below md. */}
+      <header className="md:hidden fixed top-0 left-0 right-0 z-40 bg-[#0a2e38] shadow-lg">
+        <div className="h-12 flex items-center gap-2 px-3">
+          <span className="w-7 h-7 rounded bg-teal-500 flex items-center justify-center text-white font-bold text-sm shrink-0">C</span>
+          <span className="min-w-0">
+            <span className="block text-white font-semibold text-sm leading-tight">Competen</span>
+            <span className="block text-teal-300/60 text-[10px] leading-tight">{portalLabel} Portal</span>
+          </span>
+          <span className="flex-1" />
+          <Link href="/dashboard" className="text-[11px] text-teal-100/70 border border-teal-800 rounded-lg px-2.5 py-1">
+            ⊞ My Dashboard
+          </Link>
+        </div>
+        <nav className="flex gap-1 overflow-x-auto px-3 pb-2">
+          {filteredNav.map(({ label, href }) => (
+            <Link key={label} href={href}
+              className="shrink-0 text-[11px] text-teal-100/80 bg-teal-800/50 hover:bg-teal-700/60 rounded-full px-3 py-1 transition-colors">
+              {label}
+            </Link>
+          ))}
+        </nav>
+      </header>
+
       <div className="flex">
         <aside className="hidden md:flex w-56 h-screen bg-[#0a2e38] flex-col py-6 px-4 fixed top-0 left-0 z-20">
           <Link href="/" className="flex items-center gap-2 mb-6 px-2">
@@ -132,7 +155,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
           </div>
         </aside>
 
-        <main className="flex-1 md:ml-56 px-4 md:px-6 py-8 max-w-6xl">
+        <main className="flex-1 md:ml-56 px-4 md:px-6 pt-24 md:pt-8 pb-8 max-w-6xl">
           {children}
         </main>
       </div>

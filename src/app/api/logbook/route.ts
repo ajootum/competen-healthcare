@@ -8,7 +8,7 @@ import { notify, hospitalVerifierIds } from "@/lib/notify";
 // Both actions are audit-logged.
 
 const SUPERVISION = new Set(["observed", "assisted", "supervised", "independent"]);
-const VERDICTS = new Set(["verified", "rejected", "changes_requested"]);
+const VERDICTS = new Set(["verified", "rejected", "changes_requested", "escalated"]);
 
 export async function POST(req: Request) {
   const supabase = await createClient();
@@ -56,21 +56,58 @@ export async function PATCH(req: Request) {
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const admin = createAdminClient();
-  const { data: me } = await admin.from("profiles").select("role, roles, full_name").eq("id", user.id).single();
+  const { data: me } = await admin.from("profiles")
+    .select("role, roles, full_name, hospital_id, is_senior_assessor").eq("id", user.id).single();
   const roles: string[] = me?.roles?.length ? me.roles : [me?.role].filter(Boolean) as string[];
   if (!roles.some(r => ["assessor", "educator", "hospital_admin", "super_admin"].includes(r))) {
     return NextResponse.json({ error: "Only assessors, educators or admins can verify entries" }, { status: 403 });
   }
+  const isSenior = !!me?.is_senior_assessor || roles.some(r => ["hospital_admin", "super_admin"].includes(r));
 
   const { id, status, comment } = await req.json();
   if (!id || !VERDICTS.has(status)) {
     return NextResponse.json({ error: "id and a valid status are required" }, { status: 400 });
   }
 
-  const { data: entry } = await admin.from("skill_log_entries").select("id, nurse_id, skill_name").eq("id", id).single();
+  const { data: entry } = await admin.from("skill_log_entries").select("id, nurse_id, skill_name, status").eq("id", id).single();
   if (!entry) return NextResponse.json({ error: "Entry not found" }, { status: 404 });
   if (entry.nurse_id === user.id) {
     return NextResponse.json({ error: "You cannot verify your own logbook entry" }, { status: 400 });
+  }
+
+  // Escalation to a senior assessor (spec: Escalate to Senior Assessor)
+  if (status === "escalated") {
+    if (!["pending", "changes_requested"].includes(entry.status)) {
+      return NextResponse.json({ error: "Only open entries can be escalated" }, { status: 400 });
+    }
+    const { error: escErr } = await admin.from("skill_log_entries").update({
+      status: "escalated",
+      escalated_by: user.id,
+      escalated_by_name: me?.full_name ?? null,
+      escalated_at: new Date().toISOString(),
+      escalation_reason: comment?.trim() || null,
+    }).eq("id", id);
+    if (escErr) return NextResponse.json({ error: escErr.message }, { status: 500 });
+
+    await admin.from("audit_log").insert({
+      actor_id: user.id, actor_name: me?.full_name ?? null,
+      action: "escalate_skill_entry", entity_type: "skill_log_entry", entity_id: id, entity_name: entry.skill_name,
+    });
+    // Notify the hospital's senior assessors
+    const { data: seniors } = await admin.from("profiles").select("id")
+      .eq("hospital_id", me?.hospital_id ?? "").eq("is_senior_assessor", true).neq("id", user.id).limit(20);
+    await notify((seniors ?? []).map(s => s.id), {
+      type: "logbook_escalated",
+      title: "Evidence escalated for senior review",
+      body: `${me?.full_name ?? "An assessor"} escalated "${entry.skill_name}"${comment?.trim() ? ` — “${comment.trim()}”` : ""}`,
+      href: "/assessor/logbook",
+    });
+    return NextResponse.json({ ok: true });
+  }
+
+  // Escalated entries can only be decided by senior assessors or admins
+  if (entry.status === "escalated" && !isSenior) {
+    return NextResponse.json({ error: "This entry is escalated — only a senior assessor can decide it" }, { status: 403 });
   }
 
   const { error } = await admin.from("skill_log_entries").update({

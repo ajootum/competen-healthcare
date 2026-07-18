@@ -7,7 +7,12 @@ import { NextResponse } from "next/server";
 // (owner, or a verifier role in the same hospital). All actions audit-logged.
 
 const MAX_BYTES = 10 * 1024 * 1024;
+const MAX_MEDIA_BYTES = 50 * 1024 * 1024; // video/audio evidence (voice notes, recordings)
 const ALLOWED_MIME = new Set(["application/pdf", "image/png", "image/jpeg", "image/webp"]);
+const MEDIA_MIME = new Set([
+  "video/mp4", "video/webm",
+  "audio/mpeg", "audio/mp4", "audio/webm", "audio/wav", "audio/ogg",
+]);
 const VERIFIER_ROLES = ["assessor", "educator", "hospital_admin", "super_admin"];
 
 async function requireUser() {
@@ -42,11 +47,12 @@ export async function POST(req: Request) {
   if (!form || !(file instanceof File)) {
     return NextResponse.json({ error: "A file is required (multipart form field 'file')" }, { status: 400 });
   }
-  if (file.size === 0 || file.size > MAX_BYTES) {
-    return NextResponse.json({ error: "File must be between 1 byte and 10 MB" }, { status: 400 });
+  const isMedia = MEDIA_MIME.has(file.type);
+  if (!ALLOWED_MIME.has(file.type) && !isMedia) {
+    return NextResponse.json({ error: "Accepted: PDF, PNG, JPEG, WebP, MP4/WebM video, or MP3/M4A/WAV/OGG/WebM audio" }, { status: 400 });
   }
-  if (!ALLOWED_MIME.has(file.type)) {
-    return NextResponse.json({ error: "Only PDF, PNG, JPEG or WebP files are accepted" }, { status: 400 });
+  if (file.size === 0 || file.size > (isMedia ? MAX_MEDIA_BYTES : MAX_BYTES)) {
+    return NextResponse.json({ error: isMedia ? "Media files must be between 1 byte and 50 MB" : "File must be between 1 byte and 10 MB" }, { status: 400 });
   }
 
   const entryId = (form.get("skill_log_entry_id") as string) || null;

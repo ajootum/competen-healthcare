@@ -30,3 +30,11 @@ body {
 main:has([data-wide]) {
   max-width: none;
 }
+
+/* Print-optimised report export (Analytics & Reports "⬇ PDF"): strip the app
+   chrome so the browser's Save-as-PDF produces a clean document. */
+@media print {
+  aside, header, nav, .no-print { display: none !important; }
+  main { margin: 0 !important; padding: 0 !important; max-width: none !important; }
+  body { background: white !important; }
+}

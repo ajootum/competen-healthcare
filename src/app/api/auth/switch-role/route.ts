@@ -13,11 +13,11 @@ export async function POST(req: Request) {
 
   const { data: profile } = await createAdminClient()
     .from("profiles")
-    .select("roles")
+    .select("role, roles")
     .eq("id", user.id)
     .single();
 
-  const userRoles: string[] = profile?.roles ?? [];
+  const userRoles: string[] = (profile?.roles?.length ? profile.roles : [profile?.role]).filter(Boolean) as string[];
   if (!userRoles.includes(role)) {
     return NextResponse.json({ error: "You do not have this role" }, { status: 403 });
   }

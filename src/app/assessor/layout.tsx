@@ -1,10 +1,9 @@
 import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
-import { cookies } from "next/headers";
 import Link from "next/link";
 import NavLink from "@/components/NavLink";
-import RoleSwitcher from "@/components/RoleSwitcher";
-import { highestRole, ORG_ROLE_CONFIG, type AppRole, type OrgRole } from "@/lib/roles";
+import WorkspaceSwitcher from "@/components/WorkspaceSwitcher";
+import { ORG_ROLE_CONFIG, type AppRole, type OrgRole } from "@/lib/roles";
 
 // Assessor Workspace sidebar — Assessment Operations Centre structure
 // (Enterprise Assessor Workspace V2 mockup). Items whose module doesn't exist
@@ -16,37 +15,60 @@ const NAV_GROUPS: { group: string | null; items: NavItem[] }[] = [
     { label: "Dashboard",              href: "/assessor",                   icon: "🏠" },
     { label: "Notifications",          href: "/assessor/notifications",     icon: "🔔", badge: "unread" },
   ]},
-  { group: "Assessment Operations", items: [
+  { group: "Assessment Management", items: [
     { label: "Assessment Inbox",       href: "/assessor/queue",             icon: "📥", badge: "queue" },
-    { label: "Today's Schedule",       href: "/assessor/calendar",          icon: "🗓️" },
-    { label: "Assessment Calendar",    href: "/assessor/calendar",          icon: "📅" },
     { label: "Learners",               href: "/assessor/nurses",            icon: "👩‍⚕️" },
+    { label: "Assessment Schedule",    href: "/assessor/schedule",          icon: "🗓️" },
+    { label: "Assessment Calendar",    href: "/assessor/calendar",          icon: "📅" },
   ]},
   { group: "Competency & Evidence", items: [
-    { label: "Competency Frameworks",  href: "/dashboard/library",          icon: "📚" },
+    { label: "Assessment Frameworks",  href: "/assessor/frameworks",        icon: "🗂️" },
     { label: "Evidence Validation",    href: "/assessor/logbook",           icon: "🖊️", badge: "logbook" },
-    { label: "Competency Passports",   icon: "🛂", soon: true },
+    { label: "Competency Passport Centre", href: "/assessor/passports",     icon: "🛂" },
   ]},
   { group: "Assessment Activities", items: [
     { label: "Conduct Assessment",     href: "/assessor/assess",            icon: "📝" },
-    { label: "OSCE Management",        href: "/assessor/osce",              icon: "🩺" },
-    { label: "Simulation Scenarios",   href: "/dashboard/simulation",       icon: "🧪" },
+    { label: "OSCE Centre",            href: "/assessor/osce",              icon: "🩺" },
+    { label: "Simulation Centre",      href: "/assessor/simulation",        icon: "🧪" },
   ]},
-  { group: "Quality & Audit", items: [
-    { label: "Concurrent Audits",      href: "/dashboard/audit/concurrent", icon: "📋" },
-    { label: "Retrospective Audits",   href: "/dashboard/audit/chart",      icon: "🗂️" },
-    { label: "Clinical Audits",        href: "/dashboard/audit",            icon: "🩹" },
-    { label: "Quality Indicators",     icon: "📐", soon: true },
+  { group: "Quality & Governance", items: [
+    { label: "Live Quality Monitor",   href: "/assessor/quality",               icon: "📈" },
+    { label: "Concurrent Reviews",     href: "/assessor/quality/concurrent",    icon: "📋" },
+    { label: "Retrospective Reviews",  href: "/assessor/quality/retrospective", icon: "🗂️" },
+    { label: "Clinical Audits",        href: "/assessor/quality/clinical",      icon: "🩹" },
+    { label: "Improvement Actions",    href: "/assessor/quality/capa",          icon: "🛠️" },
+    { label: "Quality Indicators",     href: "/assessor/quality/indicators",    icon: "📐" },
+    { label: "Compliance Dashboard",   href: "/admin/dashboard",                icon: "🛡️", adminOnly: true },
+    { label: "Audit Library",          href: "/assessor/quality/library",       icon: "📚" },
   ]},
   { group: "Analytics & Reports", items: [
-    { label: "Hospital Dashboard",     href: "/admin/dashboard",            icon: "🏥", adminOnly: true },
-    { label: "Assessor Analytics",     href: "/assessor/analytics",         icon: "📊" },
-    { label: "Risk & Remediation",     href: "/assessor/remediation",       icon: "🎯" },
-    { label: "Reports Centre",         href: "/assessor/history",           icon: "📁" },
+    { label: "Assessment Dashboard",   href: "/assessor/reports",               icon: "📊" },
+    { label: "Learner Performance",    href: "/assessor/reports/learners",      icon: "👩‍⚕️" },
+    { label: "Competency Analytics",   href: "/assessor/reports/competencies",  icon: "🧩" },
+    { label: "Assessment Quality",     href: "/assessor/reports/quality",       icon: "🎖️" },
+    { label: "Evidence Analytics",     href: "/assessor/reports/evidence",      icon: "🖇️" },
+    { label: "Productivity & Workload", href: "/assessor/reports/productivity", icon: "⚡" },
+    { label: "Risk & Remediation",     href: "/assessor/remediation",           icon: "🎯" },
+    { label: "Department Reports",     href: "/assessor/reports/departments",   icon: "🏥" },
+    { label: "Benchmarking",           href: "/assessor/reports/benchmarking",  icon: "⚖️" },
+    { label: "Workforce Intelligence", href: "/assessor/reports/workforce",     icon: "🔮" },
+    { label: "Report Builder",         href: "/assessor/reports/builder",       icon: "🧱" },
+    { label: "Report Library",         href: "/assessor/history",               icon: "📁" },
+    { label: "Scheduled Reports",      href: "/assessor/reports/scheduled",     icon: "⏰" },
   ]},
   { group: "AI & Intelligence", items: [
-    { label: "AI Assessment Copilot",  href: "/dashboard/copilot",          icon: "✨" },
-    { label: "Knowledge Hub",          href: "/dashboard/knowledge",        icon: "🔬" },
+    { label: "AI Assessment Copilot",  href: "/assessor/ai/copilot",        icon: "✨" },
+    { label: "Assessment Insights",    href: "/assessor/ai/insights",       icon: "💡" },
+    { label: "Competency Intelligence", href: "/assessor/ai/competency",    icon: "🧠" },
+    { label: "Risk Engine",            href: "/assessor/ai/risk",           icon: "📡" },
+    { label: "Learner Intelligence",   href: "/assessor/ai/learner",        icon: "🧬" },
+    { label: "Workforce Intelligence", href: "/assessor/reports/workforce", icon: "🔮" },
+    { label: "Knowledge Hub",          href: "/assessor/ai/knowledge",      icon: "🔬" },
+    { label: "AI Report Writer",       href: "/assessor/ai/report-writer",  icon: "📄" },
+    { label: "Learning Recommendations", href: "/assessor/ai/learning",     icon: "🎓" },
+    { label: "AI Automation Centre",   href: "/assessor/ai/automation",     icon: "⚙️" },
+    { label: "Simulation Intelligence", href: "/assessor/ai/simulation",    icon: "🧪" },
+    { label: "AI Assistant History",   href: "/assessor/ai/history",        icon: "🕘" },
   ]},
   { group: "Administration", items: [
     { label: "Templates & Tools",      icon: "🧰", soon: true },
@@ -67,8 +89,6 @@ export default async function AssessorLayout({ children }: { children: React.Rea
     .single();
 
   const userRoles: AppRole[] = (profile?.roles?.length ? profile.roles : [profile?.role]).filter(Boolean) as AppRole[];
-  const cookieStore = await cookies();
-  const activeRole = (cookieStore.get("active_role")?.value ?? highestRole(userRoles)) as AppRole;
 
   const { data: orgProfile, error: orgError } = await adminClient
     .from("profiles")
@@ -113,7 +133,7 @@ export default async function AssessorLayout({ children }: { children: React.Rea
           <span className="w-7 h-7 rounded bg-indigo-500 flex items-center justify-center text-white font-bold text-sm shrink-0">C</span>
           <span className="min-w-0">
             <span className="block text-white font-semibold text-sm leading-tight">Competen</span>
-            <span className="block text-indigo-300/60 text-[10px] leading-tight">{portalLabel} Workspace</span>
+            <WorkspaceSwitcher roles={userRoles} activeRole="assessor" variant="mobile" />
           </span>
           <span className="flex-1" />
           <Link href="/assessor/notifications" aria-label="Notifications" className="relative w-9 h-9 rounded-lg flex items-center justify-center text-base">
@@ -146,9 +166,7 @@ export default async function AssessorLayout({ children }: { children: React.Rea
               <span className="block text-indigo-300/60 text-[9px] leading-tight">Competency Management Platform</span>
             </span>
           </Link>
-          <div className="mx-2 mb-4 bg-indigo-600 rounded-lg px-3 py-2">
-            <p className="text-white text-[11px] font-semibold">🛡️ {portalLabel} Workspace</p>
-          </div>
+          <WorkspaceSwitcher roles={userRoles} activeRole="assessor" />
 
           <nav className="flex flex-col gap-0.5 flex-1 overflow-y-auto">
             {NAV_GROUPS.map(({ group, items }) => (
@@ -169,12 +187,6 @@ export default async function AssessorLayout({ children }: { children: React.Rea
                 ))}
               </div>
             ))}
-            <div className="my-2 border-t border-slate-800/60" />
-            <Link href="/dashboard"
-              className="flex items-center gap-2.5 px-3 py-1.5 rounded-lg text-[13px] text-slate-500 hover:bg-indigo-900/30 hover:text-white transition-colors">
-              <span className="w-5 text-center text-sm">⊞</span>
-              <span>Nurse Dashboard</span>
-            </Link>
           </nav>
 
           <div className="pt-4 border-t border-slate-800/60">
@@ -192,11 +204,6 @@ export default async function AssessorLayout({ children }: { children: React.Rea
                 <p className="text-indigo-300/60 text-[10px]">{portalLabel}</p>
               </div>
             </div>
-            {userRoles.length > 1 && (
-              <div className="mb-2">
-                <RoleSwitcher roles={userRoles} activeRole={activeRole} />
-              </div>
-            )}
             <form action="/api/auth/logout" method="POST">
               <button type="submit"
                 className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm text-slate-500 hover:bg-slate-800/30 hover:text-white transition-colors">

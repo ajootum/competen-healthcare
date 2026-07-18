@@ -12,6 +12,7 @@ const NAV = [
   { label: "My Courses",      href: "/educator/courses",    icon: "📚" },
   { label: "Question Bank",   href: "/educator/questions",  icon: "❓" },
   { label: "Student Progress",href: "/educator/students",   icon: "📈" },
+  { label: "Senior Assessors",href: "/educator/seniors",    icon: "⭐" },
   { label: "Content Library", href: "/educator/library",    icon: "🗂️" },
   { label: "Bulk Import",      href: "/educator/import",     icon: "📥" },
   { label: "Assessor View",   href: "/assessor",            icon: "🔍" },

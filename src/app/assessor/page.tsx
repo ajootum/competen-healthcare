@@ -14,9 +14,10 @@ import SmartQueue from "./SmartQueue";
 
 const NOTIF_ICON: Record<string, string> = {
   logbook_pending: "📖", logbook_verified: "✅", logbook_rejected: "❌",
-  logbook_changes_requested: "✏️", decisions_issued: "🧠",
+  logbook_changes_requested: "✏️", logbook_escalated: "⬆️", decisions_issued: "🧠",
   credential_added: "🏅", credential_submitted: "🏅",
   assessment_scheduled: "📅", assessment_cancelled: "🚫",
+  senior_assessor_granted: "⭐", senior_assessor_revoked: "⭐",
 };
 
 const nowMs = () => Date.now();

@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { METHOD_LABELS as METHOD_LABELS_T, OUTCOME_CONFIG, type DecisionOutcome } from "@/lib/ckcm";
 import FeedbackFeed, { type FeedbackItem } from "./FeedbackFeed";
+import AppealPanel, { type AppealableAssessment, type MyAppeal } from "./AppealPanel";
 
 const METHOD_LABELS = METHOD_LABELS_T as Record<string, string>;
 
@@ -53,6 +54,28 @@ export default async function MyFeedbackPage() {
       ? admin.from("skill_scores").select("score, assessed_at").in("cycle_id", cycleIds)
       : Promise.resolve({ data: [] }),
   ]);
+
+  // ── Appeals: recent scored assessments the learner can appeal + own appeals ──
+  const [{ data: appealables }, { data: myAppeals }] = await Promise.all([
+    cycleIds.length
+      ? admin.from("assessments")
+          .select("id, method, score, assessed_at, framework_competencies!competency_id(name)")
+          .in("cycle_id", cycleIds).eq("status", "complete").not("score", "is", null)
+          .order("assessed_at", { ascending: false }).limit(10)
+      : Promise.resolve({ data: [] }),
+    admin.from("appeals")
+      .select("id, competency_name, status, created_at, resolution_note")
+      .eq("nurse_id", user.id).order("created_at", { ascending: false }).limit(8),
+  ]);
+  const appealOptions: AppealableAssessment[] = ((appealables ?? []) as unknown as {
+    id: string; method: string; score: number; assessed_at: string | null; framework_competencies: { name: string } | null;
+  }[]).map(a => ({
+    id: a.id,
+    label: `${a.framework_competencies?.name ?? "Assessment"} · ${a.score}/6 · ${METHOD_LABELS[a.method] ?? a.method}${a.assessed_at ? ` · ${a.assessed_at.slice(0, 10)}` : ""}`,
+  }));
+  const appealRows: MyAppeal[] = (myAppeals ?? []).map(a => ({
+    id: a.id, competency: a.competency_name, status: a.status, at: a.created_at, note: a.resolution_note,
+  }));
 
   // ── Feed items: assessment comments + skill-scoring comments ──
   const items: FeedbackItem[] = [
@@ -155,6 +178,8 @@ export default async function MyFeedbackPage() {
         {/* Feed */}
         <div className="min-w-0 flex flex-col gap-5">
           <FeedbackFeed items={items} />
+
+          <AppealPanel assessments={appealOptions} appeals={appealRows} />
 
           {(pathwayItems ?? []).length > 0 && (
             <div className="bg-teal-50 border border-teal-100 rounded-xl p-5">

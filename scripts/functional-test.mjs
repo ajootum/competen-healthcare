@@ -158,6 +158,48 @@ body = await r.json().catch(() => ({}));
 r = await send("PATCH", "/api/logbook", assessor.cookies, { id: body.id, status: "verified" });
 record("workflow:logbook", "assessor cannot verify own entry (conflict of interest)", r.status === 400, `status ${r.status}`);
 
+// 3a-iii. Escalation to senior assessor (migration 031)
+{
+  const educator = await makeUser("testeducator@competen.test", "Test Educator", "educator");
+  const eduLogin = await login(educator.email, educator.password);
+  record("workflow:escalation", "educator login", eduLogin.status === 200, `status ${eduLogin.status}`);
+
+  // Nurse logs an entry; the (non-senior) assessor escalates it
+  r = await send("POST", "/api/logbook", nurse.cookies, { skill_name: "TEST — escalation demo", supervision_level: "assisted" });
+  const escEntry = (await r.json().catch(() => ({}))).id;
+  r = await send("PATCH", "/api/logbook", assessor.cookies, { id: escEntry, status: "escalated", comment: "Needs senior review" });
+  const { data: escRow } = await admin.from("skill_log_entries").select("status, escalated_by").eq("id", escEntry).single();
+  record("workflow:escalation", "assessor escalates an entry", r.status === 200 && escRow?.status === "escalated" && escRow?.escalated_by === created.assessor.id, `status=${escRow?.status}`);
+
+  // Non-senior assessor cannot decide an escalated entry
+  r = await send("PATCH", "/api/logbook", assessor.cookies, { id: escEntry, status: "verified" });
+  record("workflow:escalation", "non-senior blocked from deciding escalated entry", r.status === 403, `status ${r.status}`);
+
+  // Nurse cannot manage senior assessors; educator can
+  r = await send("PATCH", "/api/senior-assessors", nurse.cookies, { user_id: created.assessor.id, senior: true });
+  record("workflow:escalation", "nurse blocked from senior assignment", r.status === 403, `status ${r.status}`);
+  r = await send("PATCH", "/api/senior-assessors", eduLogin.cookies, { user_id: created.assessor.id, senior: true });
+  const { data: seniorRow } = await admin.from("profiles").select("is_senior_assessor").eq("id", created.assessor.id).single();
+  record("workflow:escalation", "educator grants senior status", r.status === 200 && seniorRow?.is_senior_assessor === true, `senior=${seniorRow?.is_senior_assessor}`);
+  const { data: grantNotif } = await admin.from("notifications").select("type").eq("user_id", created.assessor.id).eq("type", "senior_assessor_granted");
+  record("workflow:escalation", "assessor notified of senior grant", (grantNotif ?? []).length === 1, `${grantNotif?.length ?? 0} notifications`);
+
+  // Now-senior assessor decides the escalated entry
+  r = await send("PATCH", "/api/logbook", assessor.cookies, { id: escEntry, status: "verified", comment: "Senior review complete" });
+  const { data: escDone } = await admin.from("skill_log_entries").select("status").eq("id", escEntry).single();
+  record("workflow:escalation", "senior assessor decides escalated entry", r.status === 200 && escDone?.status === "verified", `status=${escDone?.status}`);
+
+  // Escalation notifications route to seniors: educator escalates a fresh entry
+  r = await send("POST", "/api/logbook", nurse.cookies, { skill_name: "TEST — escalation notify demo", supervision_level: "observed" });
+  const escEntry2 = (await r.json().catch(() => ({}))).id;
+  await send("PATCH", "/api/logbook", eduLogin.cookies, { id: escEntry2, status: "escalated", comment: "TEST — routing check" });
+  const { data: escNotif } = await admin.from("notifications").select("type").eq("user_id", created.assessor.id).eq("type", "logbook_escalated");
+  record("workflow:escalation", "seniors notified of new escalation", (escNotif ?? []).length === 1, `${escNotif?.length ?? 0} notifications`);
+
+  await admin.from("profiles").delete().eq("id", educator.id);
+  await admin.auth.admin.deleteUser(educator.id);
+}
+
 // 3b. CPD: log an activity, confirm it lands and is user-scoped; invalid input rejected
 r = await send("POST", "/api/cpd", nurse.cookies, { activity_type: "course", title: "TEST — Functional test CPD", hours: 2.5 });
 record("workflow:cpd", "nurse logs CPD activity", r.status === 200, `status ${r.status}`);
@@ -299,8 +341,45 @@ try {
 const ASSESSOR_PAGES = [
   ["/assessor", "Assessment Operations Centre"],
   ["/assessor/notifications", "Notifications"],
-  ["/assessor/queue", "Assessment Queue"],
+  ["/assessor/queue", "Assessment Inbox"],
   ["/assessor/calendar", "Assessment Calendar"],
+  ["/assessor/schedule", "Assessment Schedule"],
+  ["/assessor/nurses", "Learners"],
+  ["/assessor/frameworks", "Assessment Frameworks"],
+  ["/assessor/logbook", "Evidence Validation Centre"],
+  ["/assessor/passports", "Competency Passport Centre"],
+  ["/assessor/assess", "Conduct Assessment"],
+  ["/assessor/osce", "OSCE Management Centre"],
+  ["/assessor/simulation", "Simulation &amp; OSCE Centre"],
+  ["/assessor/quality", "Quality &amp; Governance"],
+  ["/assessor/quality/concurrent", "Concurrent Reviews"],
+  ["/assessor/quality/retrospective", "Retrospective Reviews"],
+  ["/assessor/quality/clinical", "Clinical Audits"],
+  ["/assessor/quality/capa", "Improvement Actions"],
+  ["/assessor/quality/indicators", "Quality Indicators"],
+  ["/assessor/quality/library", "Audit Library"],
+  ["/assessor/reports", "Assessment Dashboard"],
+  ["/assessor/reports/learners", "Learner Performance"],
+  ["/assessor/reports/competencies", "Competency Analytics"],
+  ["/assessor/reports/quality", "Assessment Quality"],
+  ["/assessor/reports/evidence", "Evidence Analytics"],
+  ["/assessor/reports/productivity", "Productivity &amp; Workload"],
+  ["/assessor/reports/departments", "Department Reports"],
+  ["/assessor/reports/benchmarking", "Benchmarking"],
+  ["/assessor/reports/workforce", "Workforce Intelligence"],
+  ["/assessor/reports/builder", "Report Builder"],
+  ["/assessor/reports/scheduled", "Scheduled Reports"],
+  ["/assessor/ai/copilot", "AI Assessment Copilot"],
+  ["/assessor/ai/insights", "Assessment Insights"],
+  ["/assessor/ai/competency", "Competency Intelligence"],
+  ["/assessor/ai/risk", "Risk Engine"],
+  ["/assessor/ai/learner", "Learner Intelligence"],
+  ["/assessor/ai/knowledge", "Knowledge Hub"],
+  ["/assessor/ai/report-writer", "AI Report Writer"],
+  ["/assessor/ai/learning", "AI Learning Recommendations"],
+  ["/assessor/ai/automation", "AI Automation Centre"],
+  ["/assessor/ai/simulation", "Simulation Intelligence"],
+  ["/assessor/ai/history", "AI Assistant History"],
   ["/assessor/analytics", "My Analytics"],
   ["/assessor/remediation", "Remediation"],
   ["/assessor/history", "Assessment History"],
@@ -325,13 +404,263 @@ r = await send("PATCH", "/api/schedule", assessor.cookies, { id: schedId, status
 const { data: schedRow } = schedId ? await admin.from("scheduled_assessments").select("status").eq("id", schedId).single() : { data: null };
 record("assessor:schedule", "assessor cancels the session", r.status === 200 && schedRow?.status === "cancelled", `status=${schedRow?.status}`);
 
+// Conduct Assessment cockpit: full session submit → assessment recorded,
+// consensus recomputed, learner notified; attestation + role gates enforced.
+const { data: anyComp } = await admin.from("framework_competencies").select("id").limit(1).single();
+const { data: testCycle } = await admin.from("competency_cycles").insert({
+  nurse_id: created.nurse.id, hospital_id: HOSPITAL, cycle_type: "annual", status: "active",
+}).select("id").single();
+created.cycle = testCycle?.id ?? null;
+r = await get(`/assessor/assess?nurse=${created.nurse.id}&cycle=${testCycle.id}`, assessor.cookies);
+{
+  const html = await r.text();
+  record("assessor:conduct", "cockpit renders for a live session",
+    r.status === 200 && html.includes("Assessment Workflow") && html.includes("Automatic Actions on Submit"), `status ${r.status}`);
+}
+// 1x1 transparent PNG as a stand-in signature drawing
+const SIG_PNG = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==";
+r = await send("POST", "/api/assess/submit", assessor.cookies, {
+  cycle_id: testCycle.id, nurse_id: created.nurse.id, method: "direct_observation", attest: true,
+  strengths: "TEST — calm, systematic practice",
+  recommendation: "competent", duration_seconds: 300,
+  signatures: { assessor: SIG_PNG, learner: SIG_PNG },
+  scores: [{ competency_id: anyComp.id, score: 4, notes: "TEST — observed full procedure" }],
+});
+body = await r.json().catch(() => ({}));
+const { data: sessRows } = await admin.from("assessments").select("score, status").eq("cycle_id", testCycle.id).eq("assessor_id", created.assessor.id);
+record("assessor:conduct", "session submit records the assessment",
+  r.status === 200 && body.ok === true && (sessRows ?? []).length === 1 && sessRows?.[0]?.score === 4 && sessRows?.[0]?.status === "complete",
+  `status ${r.status}, rows ${sessRows?.length ?? 0}`);
+const { data: consScore } = await admin.from("competency_scores").select("score").eq("cycle_id", testCycle.id).eq("competency_id", anyComp.id).maybeSingle();
+record("assessor:conduct", "consensus score recomputed", consScore?.score === 4, `score ${consScore?.score}`);
+const { data: sessRec } = await admin.from("assessment_sessions").select("recommendation, duration_seconds, assessor_signature_path, learner_signature_path").eq("cycle_id", testCycle.id).maybeSingle();
+record("assessor:conduct", "session record saved with recommendation",
+  sessRec?.recommendation === "competent" && sessRec?.duration_seconds === 300, `rec ${sessRec?.recommendation}, dur ${sessRec?.duration_seconds}`);
+record("assessor:conduct", "e-signatures stored",
+  !!sessRec?.assessor_signature_path && !!sessRec?.learner_signature_path, `assessor ${sessRec?.assessor_signature_path ? "✓" : "✗"}, learner ${sessRec?.learner_signature_path ? "✓" : "✗"}`);
+r = await send("POST", "/api/assess/submit", assessor.cookies, {
+  cycle_id: testCycle.id, nurse_id: created.nurse.id, method: "direct_observation", attest: true,
+  recommendation: "definitely_amazing", scores: [{ competency_id: anyComp.id, score: 3 }],
+});
+record("assessor:conduct", "invalid recommendation rejected", r.status === 400, `status ${r.status}`);
+
+// Messaging (one-way, notification-backed) + AI in-session assistant
+r = await send("POST", "/api/messages", assessor.cookies, { recipient_id: created.nurse.id, text: "TEST — well done today, review the airway checklist before Thursday." });
+const { data: msgNotif } = await admin.from("notifications").select("type").eq("user_id", created.nurse.id).eq("type", "message");
+record("assessor:conduct", "message delivered to learner", r.status === 200 && (msgNotif ?? []).length === 1, `status ${r.status}, ${msgNotif?.length ?? 0} notifications`);
+r = await send("POST", "/api/messages", assessor.cookies, { text: "TEST — no recipient" });
+record("assessor:conduct", "message without recipient rejected", r.status === 400, `status ${r.status}`);
+r = await send("POST", "/api/ai/assess", assessor.cookies, { nurse_id: created.nurse.id, method: "direct_observation" });
+body = await r.json().catch(() => ({}));
+record("assessor:conduct", "AI in-session assistant answers", (r.status === 200 && (body.answer ?? "").length > 50) || r.status === 503, `status ${r.status}${r.status === 503 ? " (AI not configured)" : `, ${(body.answer ?? "").length} chars`}`);
+
+// Media evidence: video upload accepted (widened mime set)
+{
+  const fd = new FormData();
+  fd.append("file", new File([new Uint8Array([0x1a, 0x45, 0xdf, 0xa3, 1, 2, 3, 4])], "test-clip.webm", { type: "video/webm" }));
+  fd.append("note", "TEST — video evidence");
+  const res = await fetch(BASE + "/api/evidence", { method: "POST", headers: { Cookie: nurse.cookies }, body: fd });
+  record("assessor:conduct", "video evidence accepted", res.status === 201, `status ${res.status}`);
+}
+const { data: subNotif } = await admin.from("notifications").select("type").eq("user_id", created.nurse.id).eq("type", "assessment_submitted");
+record("assessor:conduct", "learner notified of the session", (subNotif ?? []).length === 1, `${subNotif?.length ?? 0} notifications`);
+r = await send("POST", "/api/assess/submit", assessor.cookies, {
+  cycle_id: testCycle.id, nurse_id: created.nurse.id, method: "direct_observation", attest: false,
+  scores: [{ competency_id: anyComp.id, score: 3 }],
+});
+record("assessor:conduct", "submit without attestation rejected", r.status === 400, `status ${r.status}`);
+r = await send("POST", "/api/assess/submit", nurse.cookies, {
+  cycle_id: testCycle.id, nurse_id: created.assessor.id, method: "direct_observation", attest: true,
+  scores: [{ competency_id: anyComp.id, score: 3 }],
+});
+record("assessor:conduct", "nurse role cannot submit assessments", r.status === 403, `status ${r.status}`);
+
+// OSCE Centre: exam lifecycle → results feed the assessment engine
+r = await send("POST", "/api/osce/exams", assessor.cookies, {
+  title: "TEST — Airway OSCE", programme: "Test Programme", exam_date: new Date().toISOString().slice(0, 10),
+  stations: [{ name: "Airway assessment station", competency_id: anyComp.id, duration_minutes: 10 }],
+  candidate_ids: [created.nurse.id],
+});
+body = await r.json().catch(() => ({}));
+const osceId = body.id;
+const osceStationId = body.stations?.[0]?.id;
+record("assessor:osce", "assessor creates an OSCE with station + candidate", r.status === 201 && !!osceId && !!osceStationId, `status ${r.status}`);
+r = await send("POST", "/api/osce/exams", nurse.cookies, { title: "TEST — rogue OSCE" });
+record("assessor:osce", "nurse role cannot create OSCEs", r.status === 403, `status ${r.status}`);
+r = await send("PATCH", "/api/osce/exams", assessor.cookies, { id: osceId, status: "published" });
+r = await send("PATCH", "/api/osce/exams", assessor.cookies, { id: osceId, status: "running" });
+record("assessor:osce", "publish → start lifecycle", r.status === 200, `status ${r.status}`);
+r = await send("POST", "/api/osce/results", assessor.cookies, { station_id: osceStationId, nurse_id: created.nurse.id, score: 5, notes: "TEST — clear airway assessment" });
+record("assessor:osce", "examiner records a station score", r.status === 200, `status ${r.status}`);
+const preOsce = await admin.from("assessments").select("id").eq("cycle_id", created.cycle).eq("method", "osce");
+r = await send("PATCH", "/api/osce/exams", assessor.cookies, { id: osceId, status: "completed" });
+body = await r.json().catch(() => ({}));
+const postOsce = await admin.from("assessments").select("id, score").eq("cycle_id", created.cycle).eq("method", "osce");
+record("assessor:osce", "completion feeds the assessment engine",
+  r.status === 200 && (postOsce.data ?? []).length === (preOsce.data ?? []).length + 1,
+  `engine rows ${(preOsce.data ?? []).length} → ${(postOsce.data ?? []).length}`);
+const { data: osceNotif } = await admin.from("notifications").select("type").eq("user_id", created.nurse.id).eq("type", "osce_completed");
+record("assessor:osce", "candidate notified of OSCE results", (osceNotif ?? []).length === 1, `${osceNotif?.length ?? 0} notifications`);
+r = await get(`/api/reports/osce?exam=${osceId}`, assessor.cookies);
+record("assessor:osce", "OSCE results CSV export", r.status === 200 && (r.headers.get("content-type") ?? "").includes("text/csv"), `status ${r.status}`);
+r = await send("POST", "/api/ai/osce", assessor.cookies, { station_name: "IV cannulation station", competency_id: anyComp.id });
+body = await r.json().catch(() => ({}));
+record("assessor:osce", "AI station designer drafts material", (r.status === 200 && (body.answer ?? "").length > 100) || r.status === 503, `status ${r.status}${r.status === 503 ? " (AI not configured)" : `, ${(body.answer ?? "").length} chars`}`);
+
+// Simulation Centre: schedule a simulation session + AI scenario designer
+r = await send("POST", "/api/schedule", assessor.cookies, { nurse_id: created.nurse.id, method: "simulation", scheduled_for: new Date(Date.now() + 172800000).toISOString(), location: "Sim Lab", note: "TEST — Sepsis Recognition & Bundle Initiation" });
+body = await r.json().catch(() => ({}));
+const simSchedId = body.id;
+record("assessor:simulation", "simulation session scheduled", r.status === 201 && !!simSchedId, `status ${r.status}`);
+{
+  const res = await get("/assessor/simulation", assessor.cookies);
+  const html = await res.text();
+  record("assessor:simulation", "scheduled session appears in the centre", res.status === 200 && html.includes("Sepsis Recognition &amp; Bundle Initiation"), `status ${res.status}`);
+}
+r = await send("PATCH", "/api/schedule", assessor.cookies, { id: simSchedId, status: "cancelled" });
+record("assessor:simulation", "session cancelled", r.status === 200, `status ${r.status}`);
+r = await send("POST", "/api/ai/simulation", assessor.cookies, { scenario_name: "Post-partum haemorrhage", competency_id: anyComp.id });
+body = await r.json().catch(() => ({}));
+record("assessor:simulation", "AI scenario designer drafts material", (r.status === 200 && (body.answer ?? "").length > 100) || r.status === 503, `status ${r.status}${r.status === 503 ? " (AI not configured)" : `, ${(body.answer ?? "").length} chars`}`);
+
+// Quality & Governance: audit from a governed checklist → auto-CAPA on failed
+// critical criteria; manual CAPA lifecycle; CSV export.
+let { data: auditItems } = await admin.from("checklist_items")
+  .select("id, is_critical, skill_checklists(competency_skills(competency_id))").eq("is_critical", true).limit(1);
+let auditItem = auditItems?.[0];
+let auditCompId = auditItem?.skill_checklists?.competency_skills?.competency_id;
+let seededChecklist = null;
+if (!auditItem || !auditCompId) {
+  // No governed checklist exists in the DB — seed a temporary one (removed below).
+  const { data: sk } = await admin.from("competency_skills").insert({ competency_id: anyComp.id, name: "TEST — audit skill", sort_order: 999 }).select("id").single();
+  const { data: cl } = await admin.from("skill_checklists").insert({ skill_id: sk.id, name: "TEST — audit checklist" }).select("id").single();
+  const { data: it } = await admin.from("checklist_items").insert({ checklist_id: cl.id, item: "TEST — verifies patient identity with two identifiers", is_critical: true, sort_order: 1 }).select("id, is_critical").single();
+  seededChecklist = { skillId: sk.id, clId: cl.id, itemId: it.id };
+  auditItem = it;
+  auditCompId = anyComp.id;
+}
+r = await send("POST", "/api/quality/audits", assessor.cookies, {
+  audit_type: "clinical", competency_id: auditCompId, area: "TEST — ICU",
+  responses: [{ checklist_item_id: auditItem.id, result: "not_met", note: "TEST — not performed" }],
+});
+body = await r.json().catch(() => ({}));
+const expCapa = auditItem.is_critical ? 1 : 0;
+record("assessor:quality", "clinical audit recorded from governed checklist",
+  r.status === 201 && body.compliance === 0 && body.capa_created === expCapa,
+  `status ${r.status}, compliance ${body.compliance}, auto-CAPA ${body.capa_created} (expected ${expCapa})${seededChecklist ? " — seeded temp checklist" : ""}`);
+if (seededChecklist) {
+  await admin.from("checklist_items").delete().eq("id", seededChecklist.itemId);
+  await admin.from("skill_checklists").delete().eq("id", seededChecklist.clId);
+  await admin.from("competency_skills").delete().eq("id", seededChecklist.skillId);
+}
+r = await send("POST", "/api/quality/audits", nurse.cookies, {
+  audit_type: "clinical", competency_id: anyComp.id, responses: [{ checklist_item_id: anyComp.id, result: "met" }],
+});
+record("assessor:quality", "nurse role cannot conduct audits", r.status === 403, `status ${r.status}`);
+r = await send("POST", "/api/quality/capa", assessor.cookies, {
+  title: "TEST — Update hand hygiene signage", priority: "high",
+  due_date: new Date(Date.now() + 86400000).toISOString().slice(0, 10),
+});
+body = await r.json().catch(() => ({}));
+const capaId = body.id;
+record("assessor:quality", "manual CAPA action created", r.status === 201 && !!capaId, `status ${r.status}`);
+r = await send("PATCH", "/api/quality/capa", assessor.cookies, { id: capaId, status: "in_progress" });
+record("assessor:quality", "CAPA status advances", r.status === 200, `status ${r.status}`);
+r = await send("PATCH", "/api/quality/capa", assessor.cookies, { id: capaId, status: "open" });
+record("assessor:quality", "CAPA cannot move backwards", r.status === 400, `status ${r.status}`);
+r = await get("/api/reports/quality", assessor.cookies);
+record("assessor:quality", "quality audits CSV export", r.status === 200 && (r.headers.get("content-type") ?? "").includes("text/csv"), `status ${r.status}`);
+
+// AI & Intelligence: grounded insight narrative + report writer
+r = await send("POST", "/api/ai/insights", assessor.cookies, { scope: "overview" });
+body = await r.json().catch(() => ({}));
+record("assessor:ai", "insight narrative generated", (r.status === 200 && (body.answer ?? "").length > 100) || r.status === 503, `status ${r.status}${r.status === 503 ? " (AI not configured)" : `, ${(body.answer ?? "").length} chars`}`);
+r = await send("POST", "/api/ai/insights", nurse.cookies, { scope: "overview" });
+record("assessor:ai", "nurse blocked from insights", r.status === 403, `status ${r.status}`);
+r = await send("POST", "/api/ai/report", assessor.cookies, { report_type: "executive" });
+body = await r.json().catch(() => ({}));
+record("assessor:ai", "AI report writer generates a report", (r.status === 200 && (body.answer ?? "").length > 200) || r.status === 503, `status ${r.status}${r.status === 503 ? " (AI not configured)" : `, ${(body.answer ?? "").length} chars`}`);
+r = await send("POST", "/api/ai/report", assessor.cookies, { report_type: "not_a_type" });
+record("assessor:ai", "invalid report type rejected", r.status === 400, `status ${r.status}`);
+
+// Report Builder: custom reports, saved definitions, schedules + cron, appeals
+r = await get("/api/reports/custom?dataset=assessments&format=csv", assessor.cookies);
+record("assessor:builder", "custom report CSV export", r.status === 200 && (r.headers.get("content-type") ?? "").includes("text/csv"), `status ${r.status}`);
+r = await get("/api/reports/custom?dataset=learners", assessor.cookies);
+body = await r.json().catch(() => ({}));
+record("assessor:builder", "custom report JSON preview", r.status === 200 && Array.isArray(body.rows), `status ${r.status}, ${body.rows?.length ?? "no"} rows`);
+r = await get("/api/reports/custom?dataset=assessments", nurse.cookies);
+record("assessor:builder", "nurse blocked from custom reports", r.status === 403, `status ${r.status}`);
+r = await send("POST", "/api/reports/definitions", assessor.cookies, {
+  name: "TEST — Monthly assessments", dataset: "assessments", config: { columns: ["date", "learner", "score"] },
+});
+body = await r.json().catch(() => ({}));
+const reportDefId = body.id;
+record("assessor:builder", "report definition saved", r.status === 201 && !!reportDefId, `status ${r.status}`);
+r = await send("POST", "/api/reports/schedules", assessor.cookies, {
+  name: "TEST — Daily assessment report", definition_id: reportDefId, frequency: "daily",
+  recipient_ids: [created.assessor.id],
+});
+body = await r.json().catch(() => ({}));
+const schedRepId = body.id;
+record("assessor:builder", "report schedule created", r.status === 201 && !!schedRepId && !!body.next_run_at, `status ${r.status}`);
+await admin.from("report_schedules").update({ next_run_at: new Date(Date.now() - 3600e3).toISOString() }).eq("id", schedRepId);
+r = await fetch(BASE + "/api/cron/reports", { headers: { Authorization: `Bearer ${env.CRON_SECRET}` } });
+body = await r.json().catch(() => ({}));
+const { data: repNotif } = await admin.from("notifications").select("type").eq("user_id", created.assessor.id).eq("type", "report_ready");
+record("assessor:builder", "cron executes due schedule + notifies recipient",
+  r.status === 200 && (body.processed ?? 0) >= 1 && (repNotif ?? []).length >= 1,
+  `status ${r.status}, processed ${body.processed}, notifications ${repNotif?.length ?? 0}`);
+r = await fetch(BASE + "/api/cron/reports");
+record("assessor:builder", "cron rejects missing secret", r.status === 401 || r.status === 503, `status ${r.status}`);
+
+// Appeals: nurse appeals an outcome → staff resolve → nurse notified
+const { data: appealTarget } = await admin.from("assessments").select("id").eq("cycle_id", created.cycle).limit(1).single();
+r = await send("POST", "/api/appeals", nurse.cookies, { assessment_id: appealTarget.id, reason: "TEST — I completed all critical steps; the observing charge nurse can confirm." });
+body = await r.json().catch(() => ({}));
+const appealId = body.id;
+record("assessor:appeals", "learner raises an appeal", r.status === 201 && !!appealId, `status ${r.status}`);
+r = await send("POST", "/api/appeals", nurse.cookies, { assessment_id: appealTarget.id, reason: "TEST — duplicate" });
+record("assessor:appeals", "duplicate appeal rejected", r.status === 409, `status ${r.status}`);
+r = await send("PATCH", "/api/appeals", assessor.cookies, { id: appealId, status: "overturned", resolution_note: "TEST — reassessment arranged with a second assessor" });
+const { data: appealNotif } = await admin.from("notifications").select("type").eq("user_id", created.nurse.id).eq("type", "appeal_resolved");
+record("assessor:appeals", "staff resolve appeal + learner notified", r.status === 200 && (appealNotif ?? []).length === 1, `status ${r.status}, ${appealNotif?.length ?? 0} notifications`);
+
 // CSV exports: assessor gets CSV, nurse is blocked
 r = await get("/api/reports/history", assessor.cookies);
 record("assessor:reports", "history CSV export", r.status === 200 && (r.headers.get("content-type") ?? "").includes("text/csv"), `status ${r.status}`);
 r = await get("/api/reports/analytics", assessor.cookies);
 record("assessor:reports", "analytics CSV export", r.status === 200 && (r.headers.get("content-type") ?? "").includes("text/csv"), `status ${r.status}`);
+r = await get("/api/reports/evidence", assessor.cookies);
+record("assessor:reports", "evidence queue CSV export", r.status === 200 && (r.headers.get("content-type") ?? "").includes("text/csv"), `status ${r.status}`);
+r = await get("/api/reports/passports", assessor.cookies);
+record("assessor:reports", "passport centre CSV export", r.status === 200 && (r.headers.get("content-type") ?? "").includes("text/csv"), `status ${r.status}`);
+
+// Passport Centre: request-evidence action notifies the clinician
+r = await send("POST", "/api/passports/request-evidence", assessor.cookies, { nurse_id: created.nurse.id, note: "TEST — please evidence recent IV practice" });
+const { data: evReqNotif } = await admin.from("notifications").select("type").eq("user_id", created.nurse.id).eq("type", "evidence_requested");
+record("assessor:passports", "request-evidence notifies the clinician", r.status === 200 && (evReqNotif ?? []).length === 1, `status ${r.status}, notifications ${evReqNotif?.length ?? 0}`);
+r = await send("POST", "/api/passports/request-evidence", nurse.cookies, { nurse_id: created.assessor.id });
+record("assessor:passports", "nurse blocked from requesting evidence", r.status === 403, `status ${r.status}`);
 r = await get("/api/reports/history", nurse.cookies);
 record("assessor:reports", "nurse blocked from assessor exports", r.status === 403, `status ${r.status}`);
+
+// 3g. Admin portal: dashboard reads real decisions, CSV export gated
+{
+  const hospAdmin = await makeUser("testhospadmin@competen.test", "Test Hosp Admin", "hospital_admin");
+  const adminLogin = await login(hospAdmin.email, hospAdmin.password);
+  record("admin", "hospital admin login", adminLogin.status === 200, `status ${adminLogin.status}`);
+  const res = await get("/admin/dashboard", adminLogin.cookies);
+  const html = await res.text();
+  record("admin", "/admin/dashboard renders with CPD compliance", res.status === 200 && html.includes("CPD Compliance"), `status ${res.status}`);
+  record("admin", "no invented 30h target when unset", !html.includes("Target: 30h/year"), html.includes("Target: 30h/year") ? "hardcoded target present" : "ok");
+  r = await get("/api/reports/admin-cpd", adminLogin.cookies);
+  record("admin", "admin CPD CSV export", r.status === 200 && (r.headers.get("content-type") ?? "").includes("text/csv"), `status ${r.status}`);
+  r = await get("/api/reports/admin-cpd", nurse.cookies);
+  record("admin", "nurse blocked from admin export", r.status === 403, `status ${r.status}`);
+  await admin.from("profiles").delete().eq("id", hospAdmin.id);
+  await admin.auth.admin.deleteUser(hospAdmin.id);
+}
 
 // PHASE 4 — Permissions & tenant isolation
 r = await get("/api/super-admin/users/list", nurse.cookies);
@@ -340,6 +669,20 @@ r = await send("POST", "/api/content/frameworks", nurse.cookies, { name: "TEST s
 record("permissions", "nurse blocked from content authoring", [401, 403].includes(r.status), `status ${r.status}`);
 r = await send("POST", "/api/logbook", "", { skill_name: "x", supervision_level: "observed" });
 record("permissions", "unauthenticated API rejected", r.status === 401, `status ${r.status}`);
+
+// Workspace switcher: server-side permission enforcement
+r = await send("POST", "/api/auth/switch-role", assessor.cookies, { role: "nurse" });
+record("permissions", "switch to unheld workspace rejected", r.status === 403, `status ${r.status}`);
+r = await send("POST", "/api/auth/switch-role", assessor.cookies, { role: "assessor" });
+body = await r.json().catch(() => ({}));
+record("permissions", "switch to held workspace allowed", r.status === 200 && body.redirect === "/assessor", `status ${r.status} → ${body.redirect}`);
+r = await send("POST", "/api/auth/switch-role", assessor.cookies, { role: "bogus" });
+record("permissions", "invalid workspace role rejected", r.status === 400, `status ${r.status}`);
+{
+  const res = await get("/assessor", assessor.cookies);
+  const html = await res.text();
+  record("permissions", "no cross-shell Nurse Dashboard link in sidebar", res.status === 200 && !html.includes("Nurse Dashboard"), `status ${res.status}`);
+}
 
 // RLS: anonymous client sees nothing
 const a = anon();
@@ -359,7 +702,7 @@ if (grace) {
   record("rls", "nurse cannot read another nurse's logbook", (crossLog ?? []).length === 0, `${crossLog?.length ?? 0} rows`);
 }
 const { data: own } = await nurseClient.from("skill_log_entries").select("id").eq("nurse_id", created.nurse.id);
-record("rls", "nurse can read their own logbook", (own ?? []).length === 1, `${own?.length ?? 0} rows`);
+record("rls", "nurse can read their own logbook", (own ?? []).length >= 1, `${own?.length ?? 0} rows`);
 
 // PHASE 5 — Entity register (doc §3) and data integrity
 const ENTITIES = [
@@ -416,6 +759,15 @@ for (const [t, p] of [["framework_domains", "framework_id"], ["clinical_practice
 // PHASE 6 — Cleanup
 if (!KEEP) {
   console.log("\nCleaning up test data…");
+  // Session e-signature files live in the evidence bucket outside per-user folders
+  const { data: sigSessions } = await admin.from("assessment_sessions")
+    .select("assessor_signature_path, learner_signature_path, witness_signature_path")
+    .eq("nurse_id", created.nurse.id);
+  const sigPaths = (sigSessions ?? [])
+    .flatMap(s => [s.assessor_signature_path, s.learner_signature_path, s.witness_signature_path])
+    .filter(Boolean);
+  if (sigPaths.length) await admin.storage.from("evidence").remove(sigPaths);
+  await admin.from("osce_exams").delete().ilike("title", "TEST — %");
   for (const uid of [created.nurse.id, created.assessor.id]) {
     const { data: evRows } = await admin.from("evidence").select("file_path").eq("owner_id", uid);
     if (evRows?.length) await admin.storage.from("evidence").remove(evRows.map(e => e.file_path));
@@ -426,6 +778,12 @@ if (!KEEP) {
     await admin.from("professional_credentials").delete().eq("nurse_id", uid);
     await admin.from("skill_log_entries").delete().eq("nurse_id", uid);
     await admin.from("cpd_logs").delete().eq("user_id", uid);
+    await admin.from("competency_cycles").delete().eq("nurse_id", uid);
+    await admin.from("capa_actions").delete().eq("created_by", uid);
+    await admin.from("audits").delete().eq("conducted_by", uid);
+    await admin.from("appeals").delete().eq("nurse_id", uid);
+    await admin.from("report_schedules").delete().eq("created_by", uid);
+    await admin.from("report_definitions").delete().eq("created_by", uid);
     await admin.from("quiz_attempts").delete().eq("user_id", uid);
     await admin.from("audit_log").delete().eq("actor_id", uid);
     await admin.from("profiles").delete().eq("id", uid);

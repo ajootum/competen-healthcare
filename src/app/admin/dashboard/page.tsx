@@ -2,13 +2,18 @@ import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import type { OrgRole } from "@/lib/roles";
+import { OUTCOME_CONFIG, type DecisionOutcome } from "@/lib/ckcm";
+import { computeRiskFlags } from "@/lib/engines/risk";
 
-type CompetencyRow = {
+// Competency figures come from competency_decisions (latest per
+// nurse+competency) — this page previously read the legacy nurse_competencies
+// table, which is empty, so the overview always claimed "no data".
+type CompRow = {
   user_id: string;
-  competency_id: string;
-  status: string;
+  status: "competent" | "awaiting_validation" | "expired" | "not_yet";
   expiry_date: string | null;
-  competencies: { name: string; category: string } | null;
+  name: string;
+  category: string;
 };
 
 export default async function AdminDashboardPage() {
@@ -68,21 +73,45 @@ export default async function AdminDashboardPage() {
 
   const nurseIds = nurses?.map(n => n.id) ?? [];
 
-  const [{ data: allEnrollments }, { data: rawComps }, { data: allCPD }] = await Promise.all([
+  const [{ data: allEnrollments }, { data: rawDecisions }, { data: allCPD }, { data: hospitalRows }] = await Promise.all([
     nurseIds.length > 0
       ? admin.from("course_enrollments").select("user_id, progress, completed_at").in("user_id", nurseIds)
       : Promise.resolve({ data: [] as { user_id: string; progress: number; completed_at: string | null }[] }),
     nurseIds.length > 0
-      ? admin.from("nurse_competencies")
-          .select("user_id, competency_id, status, expiry_date, competencies(name, category)")
-          .in("user_id", nurseIds)
-      : Promise.resolve({ data: [] as CompetencyRow[] }),
+      ? admin.from("competency_decisions")
+          .select("nurse_id, competency_id, outcome, validation_outcome, expiry_date, created_at, framework_competencies(name, framework_domains(name))")
+          .in("nurse_id", nurseIds).order("created_at", { ascending: false })
+      : Promise.resolve({ data: [] }),
     nurseIds.length > 0
       ? admin.from("cpd_logs").select("user_id, hours").in("user_id", nurseIds)
       : Promise.resolve({ data: [] as { user_id: string; hours: number }[] }),
+    admin.from("hospitals").select("id, cpd_target_hours").in("id", nurseHospitalIds),
   ]);
 
-  const allComps = (rawComps ?? []) as CompetencyRow[];
+  // Latest decision per nurse+competency → status buckets
+  const today = new Date();
+  const todayKey = today.toISOString().slice(0, 10);
+  const seenDecision = new Set<string>();
+  const allComps: CompRow[] = [];
+  for (const d of (rawDecisions ?? []) as unknown as {
+    nurse_id: string; competency_id: string; outcome: string; validation_outcome: string | null;
+    expiry_date: string | null; created_at: string;
+    framework_competencies: { name: string; framework_domains: { name: string } | null } | null;
+  }[]) {
+    const key = `${d.nurse_id}:${d.competency_id}`;
+    if (seenDecision.has(key)) continue;
+    seenDecision.add(key);
+    const passing = OUTCOME_CONFIG[d.outcome as DecisionOutcome]?.passing ?? false;
+    const status: CompRow["status"] = !passing ? "not_yet"
+      : d.expiry_date && d.expiry_date < todayKey ? "expired"
+      : d.validation_outcome === "validated" ? "competent"
+      : "awaiting_validation";
+    allComps.push({
+      user_id: d.nurse_id, status, expiry_date: d.expiry_date,
+      name: d.framework_competencies?.name ?? "Competency",
+      category: d.framework_competencies?.framework_domains?.name ?? "General",
+    });
+  }
 
   // ── Top-level stats
   const totalNurses        = nurses?.length ?? 0;
@@ -92,27 +121,40 @@ export default async function AdminDashboardPage() {
   const expiredCount       = allComps.filter(c => c.status === "expired").length;
 
   // ── Expiring in next 60 days
-  const today      = new Date();
   const in60Days   = new Date(today.getTime() + 60 * 24 * 60 * 60 * 1000);
   const expiring   = allComps.filter(c => {
-    if (!c.expiry_date) return false;
+    if (!c.expiry_date || c.status !== "competent") return false;
     const exp = new Date(c.expiry_date);
     return exp >= today && exp <= in60Days;
   });
 
-  // ── Skill gaps: competencies with most expired/pending records
-  const gapMap: Record<string, { name: string; category: string; expired: number; pending: number }> = {};
+  // ── Skill gaps: competencies with most expired / not-yet-competent records
+  const gapMap: Record<string, { name: string; category: string; expired: number; notYet: number }> = {};
   for (const c of allComps) {
-    if (!c.competencies?.name) continue;
-    const key = c.competency_id;
-    if (!gapMap[key]) gapMap[key] = { name: c.competencies.name, category: c.competencies.category, expired: 0, pending: 0 };
-    if (c.status === "expired") gapMap[key].expired++;
-    if (c.status === "pending") gapMap[key].pending++;
+    if (!gapMap[c.name]) gapMap[c.name] = { name: c.name, category: c.category, expired: 0, notYet: 0 };
+    if (c.status === "expired") gapMap[c.name].expired++;
+    if (c.status === "not_yet") gapMap[c.name].notYet++;
   }
   const topGaps = Object.values(gapMap)
-    .filter(g => g.expired + g.pending > 0)
-    .sort((a, b) => (b.expired + b.pending) - (a.expired + a.pending))
+    .filter(g => g.expired + g.notYet > 0)
+    .sort((a, b) => (b.expired + b.notYet) - (a.expired + a.notYet))
     .slice(0, 6);
+
+  // ── At risk: nurses flagged by the risk engine (critical failures,
+  // non-passing, expired) — not an arbitrary CPD-hours cutoff.
+  let atRiskNurses = 0;
+  try {
+    const flagged = new Set<string>();
+    for (const hid of nurseHospitalIds) {
+      for (const r of await computeRiskFlags(admin, hid)) flagged.add(r.nurseId);
+    }
+    atRiskNurses = flagged.size;
+  } catch { /* fail-soft */ }
+
+  // ── CPD annual target: org-configured (hospitals.cpd_target_hours); null when
+  // unset or when facilities disagree — never invented.
+  const targetVals = [...new Set((hospitalRows ?? []).map(h => h.cpd_target_hours).filter((v): v is number => v != null).map(Number))];
+  const cpdTarget = targetVals.length === 1 ? targetVals[0] : null;
 
   // ── Ward breakdown: group nurses by specialization
   const wardMap: Record<string, { nurses: typeof nurses; compCount: number; competentCount: number; cpdHours: number }> = {};
@@ -127,15 +169,12 @@ export default async function AdminDashboardPage() {
   }
   const wards = Object.entries(wardMap).sort((a, b) => b[1].nurses!.length - a[1].nurses!.length);
 
-  // ── CPD compliance (30h annual target)
-  const CPD_TARGET = 30;
   const nursesCPD = (nurses ?? []).map(nurse => {
     const hours = allCPD?.filter(l => l.user_id === nurse.id).reduce((s, l) => s + Number(l.hours), 0) ?? 0;
     return { ...nurse, hours };
   }).sort((a, b) => a.hours - b.hours);
 
-  const atRisk = nursesCPD.filter(n => n.hours < 10).length;
-  const onTrack = nursesCPD.filter(n => n.hours >= CPD_TARGET).length;
+  const onTrack = cpdTarget !== null ? nursesCPD.filter(n => n.hours >= cpdTarget).length : null;
 
   return (
     <>
@@ -154,9 +193,9 @@ export default async function AdminDashboardPage() {
                   : "Facility-level compliance and workforce intelligence."}
               </p>
             </div>
-            <a href="mailto:gabriel@semacast.com?subject=Export CPD Report"
+            <a href="/api/reports/admin-cpd"
               className="flex items-center gap-2 text-xs bg-teal-600 text-white px-4 py-2 rounded-lg hover:bg-teal-700 transition-colors font-medium">
-              ↓ Export Report
+              ↓ Export CSV
             </a>
           </div>
 
@@ -166,8 +205,8 @@ export default async function AdminDashboardPage() {
               { label: "Total Nurses",      value: totalNurses,                color: "text-teal-600",  icon: "👩‍⚕️", sub: `${wards.length} wards` },
               { label: "Courses Completed", value: completedCourses,           color: "text-blue-600",  icon: "📚", sub: `${allEnrollments?.length ?? 0} enrolled` },
               { label: "Competencies",      value: competentCount,             color: "text-green-600", icon: "✅", sub: `${expiredCount} expired` },
-              { label: "Total CPD Hours",   value: totalCPDHours.toFixed(0),   color: "text-amber-500", icon: "⏱️", sub: `${onTrack} at target` },
-              { label: "At Risk",           value: atRisk,                     color: "text-red-500",   icon: "⚠️", sub: "<10 CPD hours" },
+              { label: "Total CPD Hours",   value: totalCPDHours.toFixed(0),   color: "text-amber-500", icon: "⏱️", sub: cpdTarget !== null ? `${onTrack} at target` : "no target set" },
+              { label: "At Risk",           value: atRiskNurses,               color: "text-red-500",   icon: "⚠️", sub: "flagged from live decisions" },
             ].map(({ label, value, color, icon, sub }) => (
               <div key={label} className="bg-white rounded-xl p-4 border border-gray-100">
                 <div className="flex items-center justify-between mb-1">
@@ -229,17 +268,18 @@ export default async function AdminDashboardPage() {
               <h2 className="font-semibold text-gray-900 text-sm mb-4">Competency Status Overview</h2>
               {allComps.length > 0 ? (
                 <div className="flex flex-col gap-3">
-                  {(["competent", "in_progress", "expired", "pending"] as const).map(status => {
+                  {(["competent", "awaiting_validation", "expired", "not_yet"] as const).map(status => {
                     const count = allComps.filter(c => c.status === status).length;
                     const pct = Math.round((count / allComps.length) * 100);
                     const colors: Record<string, string> = {
-                      competent:   "bg-green-500",
-                      in_progress: "bg-blue-500",
-                      expired:     "bg-red-500",
-                      pending:     "bg-gray-300",
+                      competent:           "bg-green-500",
+                      awaiting_validation: "bg-blue-500",
+                      expired:             "bg-red-500",
+                      not_yet:             "bg-amber-400",
                     };
                     const labels: Record<string, string> = {
-                      competent: "Competent", in_progress: "In Progress", expired: "Expired", pending: "Pending",
+                      competent: "Competent", awaiting_validation: "Awaiting Validation",
+                      expired: "Expired", not_yet: "Not Yet Competent",
                     };
                     return (
                       <div key={status}>
@@ -277,7 +317,7 @@ export default async function AdminDashboardPage() {
                     </div>
                     <div className="text-right shrink-0">
                       {gap.expired > 0 && <p className="text-[10px] font-bold text-red-500">{gap.expired} expired</p>}
-                      {gap.pending > 0 && <p className="text-[10px] text-gray-400">{gap.pending} pending</p>}
+                      {gap.notYet > 0 && <p className="text-[10px] text-amber-600">{gap.notYet} not yet competent</p>}
                     </div>
                   </div>
                 ))}
@@ -289,7 +329,9 @@ export default async function AdminDashboardPage() {
           <div className="bg-white rounded-xl border border-gray-100 p-5 mb-6">
             <div className="flex items-center justify-between mb-4">
               <h2 className="font-semibold text-gray-900 text-sm">CPD Compliance — All Nurses</h2>
-              <span className="text-xs text-gray-400">Target: {CPD_TARGET}h/year</span>
+              <span className="text-xs text-gray-400">
+                {cpdTarget !== null ? `Target: ${cpdTarget}h/year` : "No annual target set by the organisation"}
+              </span>
             </div>
             {nursesCPD.length === 0 ? (
               <div className="text-center py-8 text-gray-400">
@@ -311,12 +353,14 @@ export default async function AdminDashboardPage() {
                   </thead>
                   <tbody className="divide-y divide-gray-50">
                     {nursesCPD.map(nurse => {
-                      const pct = Math.min(Math.round((nurse.hours / CPD_TARGET) * 100), 100);
+                      const pct = cpdTarget !== null ? Math.min(Math.round((nurse.hours / cpdTarget) * 100), 100) : null;
                       const nurseComps    = allComps.filter(c => c.user_id === nurse.id);
                       const nurseCompetent = nurseComps.filter(c => c.status === "competent").length;
                       const nurseExpiring  = expiring.filter(c => c.user_id === nurse.id).length;
-                      const statusLabel = nurse.hours >= CPD_TARGET ? { label: "On Target", cls: "bg-green-100 text-green-700" }
-                        : nurse.hours >= 15              ? { label: "In Progress", cls: "bg-blue-100 text-blue-700" }
+                      const statusLabel = cpdTarget === null
+                        ? (nurse.hours > 0 ? { label: `${nurse.hours.toFixed(0)}h logged`, cls: "bg-gray-100 text-gray-600" } : { label: "Nothing logged", cls: "bg-gray-100 text-gray-400" })
+                        : nurse.hours >= cpdTarget       ? { label: "On Target", cls: "bg-green-100 text-green-700" }
+                        : nurse.hours >= cpdTarget / 2   ? { label: "In Progress", cls: "bg-blue-100 text-blue-700" }
                         : nurse.hours > 0                ? { label: "Behind", cls: "bg-amber-100 text-amber-700" }
                         : { label: "Not Started", cls: "bg-red-100 text-red-600" };
                       return (
@@ -335,13 +379,21 @@ export default async function AdminDashboardPage() {
                             </div>
                           </td>
                           <td className="py-3 text-xs text-gray-500">{nurse.specialization ?? "General"}</td>
-                          <td className="py-3 text-sm font-medium text-gray-700">{nurse.hours.toFixed(0)}h <span className="text-xs text-gray-400">/ {CPD_TARGET}h</span></td>
+                          <td className="py-3 text-sm font-medium text-gray-700">
+                            {nurse.hours.toFixed(0)}h {cpdTarget !== null && <span className="text-xs text-gray-400">/ {cpdTarget}h</span>}
+                          </td>
                           <td className="py-3 w-36">
-                            <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
-                              <div className={`h-full rounded-full ${pct === 100 ? "bg-green-500" : pct >= 50 ? "bg-blue-400" : pct > 0 ? "bg-amber-400" : "bg-gray-200"}`}
-                                style={{ width: `${pct}%` }} />
-                            </div>
-                            <p className="text-[10px] text-gray-400 mt-0.5">{pct}%</p>
+                            {pct !== null ? (
+                              <>
+                                <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                                  <div className={`h-full rounded-full ${pct === 100 ? "bg-green-500" : pct >= 50 ? "bg-blue-400" : pct > 0 ? "bg-amber-400" : "bg-gray-200"}`}
+                                    style={{ width: `${pct}%` }} />
+                                </div>
+                                <p className="text-[10px] text-gray-400 mt-0.5">{pct}%</p>
+                              </>
+                            ) : (
+                              <p className="text-[10px] text-gray-300">no target</p>
+                            )}
                           </td>
                           <td className="py-3">
                             <div className="flex items-center gap-2">
@@ -384,8 +436,8 @@ export default async function AdminDashboardPage() {
                       return (
                         <tr key={i}>
                           <td className="py-2.5 text-gray-800 font-medium">{nurse?.full_name ?? "—"}</td>
-                          <td className="py-2.5 text-gray-700">{c.competencies?.name ?? "—"}</td>
-                          <td className="py-2.5 text-gray-500 text-xs">{c.competencies?.category ?? "—"}</td>
+                          <td className="py-2.5 text-gray-700">{c.name}</td>
+                          <td className="py-2.5 text-gray-500 text-xs">{c.category}</td>
                           <td className="py-2.5 text-gray-500 text-xs">{c.expiry_date}</td>
                           <td className="py-2.5">
                             <span className={`text-xs font-semibold ${daysLeft <= 14 ? "text-red-600" : "text-amber-600"}`}>
@@ -406,10 +458,16 @@ export default async function AdminDashboardPage() {
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
               {[
                 ...(["org_admin","manager"].includes(orgRole ?? "") || !orgRole ? [{ label: "Invite Worker", icon: "➕", color: "bg-teal-50 text-teal-700", href: "/admin/invite" }] : []),
-                { label: "Export CPD Report", icon: "📊", color: "bg-blue-50 text-blue-700", href: "#" },
+                { label: "Export CPD Report", icon: "📊", color: "bg-blue-50 text-blue-700", href: "/api/reports/admin-cpd" },
                 { label: "Competency Matrix", icon: "🪪", color: "bg-purple-50 text-purple-700", href: "/admin/competencies" },
                 ...(["org_admin"].includes(orgRole ?? "") || !orgRole ? [{ label: "Settings", icon: "⚙️", color: "bg-gray-50 text-gray-700", href: "/admin/settings" }] : []),
-              ].map(({ label, icon, color, href }) => (
+              ].map(({ label, icon, color, href }) => href.startsWith("/api/") ? (
+                <a key={label} href={href}
+                  className={`flex items-center gap-3 p-4 rounded-xl text-sm font-medium hover:opacity-80 transition-opacity ${color}`}>
+                  <span className="text-xl">{icon}</span>
+                  {label}
+                </a>
+              ) : (
                 <Link key={label} href={href}
                   className={`flex items-center gap-3 p-4 rounded-xl text-sm font-medium hover:opacity-80 transition-opacity ${color}`}>
                   <span className="text-xl">{icon}</span>
