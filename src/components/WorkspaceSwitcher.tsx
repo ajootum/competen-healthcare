@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
 import { ROLE_CONFIG, type AppRole } from "@/lib/roles";
 
 // Permission-controlled workspace switcher. Renders the workspace pill; when
@@ -21,7 +20,6 @@ const WORKSPACE_LABEL: Record<AppRole, string> = {
 export default function WorkspaceSwitcher({ roles, activeRole, variant = "sidebar" }: {
   roles: AppRole[]; activeRole: AppRole; variant?: "sidebar" | "mobile" | "footer";
 }) {
-  const router = useRouter();
   const [open, setOpen] = useState(false);
   const [switching, setSwitching] = useState<AppRole | null>(null);
   const multi = roles.length > 1;
@@ -35,8 +33,13 @@ export default function WorkspaceSwitcher({ roles, activeRole, variant = "sideba
     });
     if (res.ok) {
       const { redirect } = await res.json();
-      router.push(redirect);
-      router.refresh();
+      // HARD navigation, deliberately not router.push: in production the
+      // client router serves prefetched RSC payloads computed with the OLD
+      // active_role cookie — whose baked-in portal redirect bounces the user
+      // straight back (the "jumping between workspaces" bug). A full page
+      // load hits the server with the fresh cookie and clears the cache.
+      window.location.assign(redirect);
+      return;
     }
     setSwitching(null);
     setOpen(false);

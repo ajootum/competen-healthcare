@@ -1,10 +1,8 @@
 "use client";
 import { useState } from "react";
-import { useRouter } from "next/navigation";
 import { ROLE_CONFIG, type AppRole } from "@/lib/roles";
 
 export default function RoleSwitcher({ roles, activeRole }: { roles: AppRole[]; activeRole: AppRole }) {
-  const router = useRouter();
   const [open, setOpen] = useState(false);
   const [switching, setSwitching] = useState<AppRole | null>(null);
 
@@ -20,7 +18,10 @@ export default function RoleSwitcher({ roles, activeRole }: { roles: AppRole[]; 
     });
     if (res.ok) {
       const { redirect } = await res.json();
-      router.push(redirect);
+      // Hard navigation — router.push replays prefetched payloads computed
+      // with the old active_role cookie and bounces back (prod-only loop).
+      window.location.assign(redirect);
+      return;
     }
     setSwitching(null);
     setOpen(false);
