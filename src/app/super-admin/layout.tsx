@@ -4,6 +4,7 @@ import { cookies } from "next/headers";
 import Link from "next/link";
 import RoleSwitcher from "@/components/RoleSwitcher";
 import NavLink from "@/components/NavLink";
+import NavGroup from "@/components/NavGroup";
 import SidebarToggle from "@/components/SidebarToggle";
 import { highestRole, type AppRole } from "@/lib/roles";
 
@@ -84,14 +85,13 @@ export default async function SuperAdminLayout({ children }: { children: React.R
 
           <nav className="flex flex-col gap-0.5 flex-1 overflow-y-auto">
             {NAV.map(({ group, items }) => (
-              <div key={group} className="mb-1">
-                <p className="text-[9px] font-bold text-slate-600 uppercase tracking-widest px-3 py-1.5 mt-1" data-sb-label>{group}</p>
+              <NavGroup key={group} title={group} hrefs={items.map(i => i.href)} headerClass="text-[9px] font-bold text-slate-600 uppercase tracking-widest">
                 {items.map(({ label, href, icon }) => (
                   <NavLink key={label} href={href} icon={icon} label={label} exact={href === "/super-admin"}
                     className="flex items-center gap-2.5 px-3 py-1.5 rounded-lg text-xs text-slate-400 hover:bg-rose-900/30 hover:text-white transition-colors"
                     activeClassName="flex items-center gap-2.5 px-3 py-1.5 rounded-lg text-xs bg-rose-900/50 text-white font-medium" />
                 ))}
-              </div>
+              </NavGroup>
             ))}
           </nav>
 

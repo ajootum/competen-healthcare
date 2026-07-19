@@ -5,6 +5,7 @@ import Link from "next/link";
 import MobileSidebar from "./MobileSidebar";
 import RoleSwitcher from "@/components/RoleSwitcher";
 import NavLink from "@/components/NavLink";
+import NavGroup from "@/components/NavGroup";
 import SidebarToggle from "@/components/SidebarToggle";
 import { highestRole, type AppRole } from "@/lib/roles";
 
@@ -88,17 +89,19 @@ export default async function DashboardLayout({ children }: { children: React.Re
             </span>
           </Link>
           <nav className="flex flex-col gap-0.5 flex-1 overflow-y-auto">
-            {NAV_GROUPS.map(({ group, items }) => (
-              <div key={group ?? "root"} className="flex flex-col gap-0.5">
-                {group && <p className="px-3 pt-3 pb-1 text-[9px] font-bold uppercase tracking-widest text-teal-400/40" data-sb-label>{group}</p>}
-                {items.map(({ label, href, icon }) => (
-                  <NavLink key={label} href={href} icon={icon} label={label} exact={href === "/dashboard"}
-                    badge={href === "/dashboard/notifications" ? unreadCount ?? 0 : undefined}
-                    className="flex items-center gap-2.5 px-3 py-1.5 rounded-lg text-[13px] text-teal-100/70 hover:bg-teal-800/50 hover:text-white transition-colors"
-                    activeClassName="flex items-center gap-2.5 px-3 py-1.5 rounded-lg text-[13px] bg-teal-700/60 text-white font-medium" />
-                ))}
-              </div>
-            ))}
+            {NAV_GROUPS.map(({ group, items }) => {
+              const nodes = items.map(({ label, href, icon }) => (
+                <NavLink key={label} href={href} icon={icon} label={label} exact={href === "/dashboard"}
+                  badge={href === "/dashboard/notifications" ? unreadCount ?? 0 : undefined}
+                  className="flex items-center gap-2.5 px-3 py-1.5 rounded-lg text-[13px] text-teal-100/70 hover:bg-teal-800/50 hover:text-white transition-colors"
+                  activeClassName="flex items-center gap-2.5 px-3 py-1.5 rounded-lg text-[13px] bg-teal-700/60 text-white font-medium" />
+              ));
+              return group ? (
+                <NavGroup key={group} title={group} hrefs={items.map(i => i.href)} headerClass="text-[9px] font-bold uppercase tracking-widest text-teal-400/40">{nodes}</NavGroup>
+              ) : (
+                <div key="root" className="flex flex-col gap-0.5">{nodes}</div>
+              );
+            })}
             {/* Help & Support opens email — no in-app help centre exists yet. */}
             <a href="mailto:gabriel@semacast.com?subject=Competen support request" data-sb-item title="Help & Support"
               className="flex items-center gap-2.5 px-3 py-1.5 rounded-lg text-[13px] text-teal-100/70 hover:bg-teal-800/50 hover:text-white transition-colors">

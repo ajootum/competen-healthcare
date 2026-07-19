@@ -2,6 +2,7 @@ import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import NavLink from "@/components/NavLink";
+import NavGroup from "@/components/NavGroup";
 import SidebarToggle from "@/components/SidebarToggle";
 import WorkspaceSwitcher from "@/components/WorkspaceSwitcher";
 import { type AppRole } from "@/lib/roles";
@@ -177,24 +178,26 @@ export default async function EducatorLayout({ children }: { children: React.Rea
           <div data-sb-label><WorkspaceSwitcher roles={userRoles} activeRole="educator" /></div>
 
           <nav className="flex flex-col gap-0.5 flex-1 overflow-y-auto">
-            {NAV_GROUPS.map(({ group, items }) => (
-              <div key={group ?? "root"} className="flex flex-col gap-0.5">
-                {group && <p className="px-3 pt-3 pb-1 text-[9px] font-bold uppercase tracking-widest text-purple-400/50" data-sb-label>{group}</p>}
-                {items.map(({ label, href, icon, badge, soon }) => soon || !href ? (
-                  <span key={label} title={label} data-sb-item
-                    className="flex items-center gap-2.5 px-3 py-1.5 rounded-lg text-[13px] text-purple-200/25 cursor-default select-none">
-                    <span className="w-5 text-center text-sm leading-none opacity-50">{icon}</span>
-                    <span className="flex-1" data-sb-label>{label}</span>
-                    <span className="text-[8px] font-bold uppercase tracking-wider bg-purple-950 text-purple-400/40 rounded px-1 py-0.5" data-sb-label>soon</span>
-                  </span>
-                ) : (
-                  <NavLink key={label} href={href} icon={icon} label={label} exact={href === "/educator" || href === "/educator/studio" || href === "/educator/analytics" || href === "/educator/ai"}
-                    badge={badge ? badgeValue[badge] : undefined}
-                    className="flex items-center gap-2.5 px-3 py-1.5 rounded-lg text-[13px] text-purple-200/60 hover:bg-purple-900/40 hover:text-white transition-colors"
-                    activeClassName="flex items-center gap-2.5 px-3 py-1.5 rounded-lg text-[13px] bg-purple-900/60 text-white font-medium" />
-                ))}
-              </div>
-            ))}
+            {NAV_GROUPS.map(({ group, items }) => {
+              const nodes = items.map(({ label, href, icon, badge, soon }) => soon || !href ? (
+                <span key={label} title={label} data-sb-item
+                  className="flex items-center gap-2.5 px-3 py-1.5 rounded-lg text-[13px] text-purple-200/25 cursor-default select-none">
+                  <span className="w-5 text-center text-sm leading-none opacity-50">{icon}</span>
+                  <span className="flex-1" data-sb-label>{label}</span>
+                  <span className="text-[8px] font-bold uppercase tracking-wider bg-purple-950 text-purple-400/40 rounded px-1 py-0.5" data-sb-label>soon</span>
+                </span>
+              ) : (
+                <NavLink key={label} href={href} icon={icon} label={label} exact={href === "/educator" || href === "/educator/studio" || href === "/educator/analytics" || href === "/educator/ai"}
+                  badge={badge ? badgeValue[badge] : undefined}
+                  className="flex items-center gap-2.5 px-3 py-1.5 rounded-lg text-[13px] text-purple-200/60 hover:bg-purple-900/40 hover:text-white transition-colors"
+                  activeClassName="flex items-center gap-2.5 px-3 py-1.5 rounded-lg text-[13px] bg-purple-900/60 text-white font-medium" />
+              ));
+              return group ? (
+                <NavGroup key={group} title={group} hrefs={items.filter(i => i.href).map(i => i.href!)} headerClass="text-[9px] font-bold uppercase tracking-widest text-purple-400/50">{nodes}</NavGroup>
+              ) : (
+                <div key="root" className="flex flex-col gap-0.5">{nodes}</div>
+              );
+            })}
           </nav>
 
           <div className="pt-4 border-t border-purple-900/60">

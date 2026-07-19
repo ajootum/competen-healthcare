@@ -54,4 +54,17 @@ main[data-content] { transition: margin-left .2s ease; }
   html.sb-collapsed aside[data-sidebar] [data-sb-item] { justify-content: center; padding-left: 0; padding-right: 0; }
   /* Scoped to the desktop rail so mobile navs that reuse NavLink keep labels. */
   html.sb-collapsed aside[data-sidebar] [data-sb-label] { display: none !important; }
+  /* Icon rail: drop the accordion header and force every section's items to
+     show as icons, so a collapsed accordion never hides the rail. Modern
+     browsers hide closed-<details> content via the ::details-content pseudo
+     (content-visibility), so override that too — not just the child display. */
+  html.sb-collapsed aside[data-sidebar] details[data-nav-group] > summary { display: none !important; }
+  html.sb-collapsed aside[data-sidebar] details[data-nav-group] > div { display: flex !important; }
+  html.sb-collapsed aside[data-sidebar] details[data-nav-group]::details-content { content-visibility: visible !important; }
 }
+
+/* ── Collapsible nav sections (accordion) ───────────────────────────────────
+   Click a section header to expand/collapse it (NavGroup). Strip the native
+   <details> disclosure triangle; the rotating chevron in the header stands in. */
+aside[data-sidebar] details[data-nav-group] > summary { list-style: none; }
+aside[data-sidebar] details[data-nav-group] > summary::-webkit-details-marker { display: none; }
