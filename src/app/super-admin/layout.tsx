@@ -4,6 +4,7 @@ import { cookies } from "next/headers";
 import Link from "next/link";
 import RoleSwitcher from "@/components/RoleSwitcher";
 import NavLink from "@/components/NavLink";
+import SidebarToggle from "@/components/SidebarToggle";
 import { highestRole, type AppRole } from "@/lib/roles";
 
 const NAV = [
@@ -70,20 +71,21 @@ export default async function SuperAdminLayout({ children }: { children: React.R
   return (
     <div className="min-h-screen bg-gray-50 font-[family-name:var(--font-geist-sans)]">
       <div className="flex">
-        <aside className="hidden md:flex w-56 h-screen bg-[#0f1923] flex-col py-6 px-4 fixed top-0 left-0 z-20">
-          <Link href="/super-admin" className="flex items-center gap-2 mb-6 px-2">
+        <aside data-sidebar className="hidden md:flex w-56 h-screen bg-[#0f1923] flex-col py-6 px-4 fixed top-0 left-0 z-20">
+          <SidebarToggle />
+          <Link href="/super-admin" className="flex items-center gap-2 mb-6 px-2" data-sb-item>
             <div className="w-7 h-7 rounded bg-rose-500 flex items-center justify-center text-white font-bold text-sm">C</div>
-            <span className="text-white font-semibold text-sm">Competen</span>
+            <span className="text-white font-semibold text-sm" data-sb-label>Competen</span>
           </Link>
 
-          <div className="px-3 mb-4">
+          <div className="px-3 mb-4" data-sb-label>
             <span className="text-[10px] font-bold text-rose-400/70 uppercase tracking-widest">Super Admin</span>
           </div>
 
           <nav className="flex flex-col gap-0.5 flex-1 overflow-y-auto">
             {NAV.map(({ group, items }) => (
               <div key={group} className="mb-1">
-                <p className="text-[9px] font-bold text-slate-600 uppercase tracking-widest px-3 py-1.5 mt-1">{group}</p>
+                <p className="text-[9px] font-bold text-slate-600 uppercase tracking-widest px-3 py-1.5 mt-1" data-sb-label>{group}</p>
                 {items.map(({ label, href, icon }) => (
                   <NavLink key={label} href={href} icon={icon} label={label} exact={href === "/super-admin"}
                     className="flex items-center gap-2.5 px-3 py-1.5 rounded-lg text-xs text-slate-400 hover:bg-rose-900/30 hover:text-white transition-colors"
@@ -98,21 +100,21 @@ export default async function SuperAdminLayout({ children }: { children: React.R
               <div className="w-7 h-7 rounded-full bg-rose-500 flex items-center justify-center text-white text-xs font-bold">
                 {profile?.full_name?.[0] ?? "S"}
               </div>
-              <div className="flex-1 min-w-0">
+              <div className="flex-1 min-w-0" data-sb-label>
                 <p className="text-white text-xs font-medium truncate">{profile?.full_name}</p>
                 <p className="text-rose-300/60 text-[10px]">Super Admin</p>
               </div>
             </div>
             {userRoles.length > 1 && (
-              <div className="mb-2">
+              <div className="mb-2" data-sb-label>
                 <RoleSwitcher roles={userRoles} activeRole={activeRole} />
               </div>
             )}
             <form action="/api/auth/logout" method="POST">
-              <button type="submit"
+              <button type="submit" data-sb-item
                 className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm text-slate-500 hover:bg-slate-800/30 hover:text-white transition-colors">
                 <span className="w-5 text-center">↩</span>
-                <span>Sign out</span>
+                <span data-sb-label>Sign out</span>
               </button>
             </form>
           </div>
@@ -120,7 +122,7 @@ export default async function SuperAdminLayout({ children }: { children: React.R
 
         {/* Pages stay readable at max-w-6xl; a workspace page opts out of the
             cap by rendering data-wide on its root (rule in globals.css). */}
-        <main className="flex-1 md:ml-56 px-4 md:px-6 py-8 max-w-6xl">
+        <main data-content className="flex-1 md:ml-56 px-4 md:px-6 py-8 max-w-6xl">
           {children}
         </main>
       </div>

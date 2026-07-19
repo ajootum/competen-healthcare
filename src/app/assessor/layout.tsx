@@ -2,6 +2,7 @@ import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import NavLink from "@/components/NavLink";
+import SidebarToggle from "@/components/SidebarToggle";
 import WorkspaceSwitcher from "@/components/WorkspaceSwitcher";
 import { ORG_ROLE_CONFIG, type AppRole, type OrgRole } from "@/lib/roles";
 
@@ -158,26 +159,27 @@ export default async function AssessorLayout({ children }: { children: React.Rea
       </header>
 
       <div className="flex">
-        <aside className="hidden md:flex w-60 h-screen bg-[#0f172a] flex-col py-6 px-4 fixed top-0 left-0 z-20">
-          <Link href="/assessor" className="flex items-center gap-2 mb-4 px-2">
+        <aside data-sidebar className="hidden md:flex w-60 h-screen bg-[#0f172a] flex-col py-6 px-4 fixed top-0 left-0 z-20">
+          <SidebarToggle />
+          <Link href="/assessor" className="flex items-center gap-2 mb-4 px-2" data-sb-item>
             <div className="w-7 h-7 rounded bg-indigo-500 flex items-center justify-center text-white font-bold text-sm shrink-0">C</div>
-            <span className="min-w-0">
+            <span className="min-w-0" data-sb-label>
               <span className="block text-white font-bold text-sm leading-tight tracking-wide">COMPETEN</span>
               <span className="block text-indigo-300/60 text-[9px] leading-tight">Competency Management Platform</span>
             </span>
           </Link>
-          <WorkspaceSwitcher roles={userRoles} activeRole="assessor" />
+          <div data-sb-label><WorkspaceSwitcher roles={userRoles} activeRole="assessor" /></div>
 
           <nav className="flex flex-col gap-0.5 flex-1 overflow-y-auto">
             {NAV_GROUPS.map(({ group, items }) => (
               <div key={group ?? "root"} className="flex flex-col gap-0.5">
-                {group && <p className="px-3 pt-3 pb-1 text-[9px] font-bold uppercase tracking-widest text-indigo-400/50">{group}</p>}
+                {group && <p className="px-3 pt-3 pb-1 text-[9px] font-bold uppercase tracking-widest text-indigo-400/50" data-sb-label>{group}</p>}
                 {items.filter(i => !i.adminOnly || userRoles.includes("hospital_admin")).map(({ label, href, icon, badge, soon }) => soon || !href ? (
-                  <span key={label} title="Not available yet — this module has no backing store"
+                  <span key={label} title={label} data-sb-item
                     className="flex items-center gap-2.5 px-3 py-1.5 rounded-lg text-[13px] text-slate-600 cursor-default select-none">
                     <span className="w-5 text-center text-sm leading-none opacity-50">{icon}</span>
-                    <span className="flex-1">{label}</span>
-                    <span className="text-[8px] font-bold uppercase tracking-wider bg-slate-800 text-slate-500 rounded px-1 py-0.5">soon</span>
+                    <span className="flex-1" data-sb-label>{label}</span>
+                    <span className="text-[8px] font-bold uppercase tracking-wider bg-slate-800 text-slate-500 rounded px-1 py-0.5" data-sb-label>soon</span>
                   </span>
                 ) : (
                   <NavLink key={label} href={href} icon={icon} label={label} exact={href === "/assessor"}
@@ -199,25 +201,25 @@ export default async function AssessorLayout({ children }: { children: React.Rea
                   {profile?.full_name?.[0] ?? "A"}
                 </div>
               )}
-              <div className="flex-1 min-w-0">
+              <div className="flex-1 min-w-0" data-sb-label>
                 <p className="text-white text-xs font-medium truncate">{profile?.full_name}</p>
                 <p className="text-indigo-300/60 text-[10px]">{portalLabel}</p>
               </div>
             </div>
-            <div className="mb-2">
+            <div className="mb-2" data-sb-label>
               <WorkspaceSwitcher roles={userRoles} activeRole="assessor" variant="footer" />
             </div>
             <form action="/api/auth/logout" method="POST">
-              <button type="submit"
+              <button type="submit" data-sb-item
                 className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm text-slate-500 hover:bg-slate-800/30 hover:text-white transition-colors">
                 <span className="w-5 text-center">↩</span>
-                <span>Sign out</span>
+                <span data-sb-label>Sign out</span>
               </button>
             </form>
           </div>
         </aside>
 
-        <main className="flex-1 md:ml-60 px-4 md:px-6 pt-24 md:pt-8 pb-8">
+        <main data-content className="flex-1 md:ml-60 px-4 md:px-6 pt-24 md:pt-8 pb-8">
           {children}
         </main>
       </div>

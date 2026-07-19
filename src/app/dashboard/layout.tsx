@@ -5,6 +5,7 @@ import Link from "next/link";
 import MobileSidebar from "./MobileSidebar";
 import RoleSwitcher from "@/components/RoleSwitcher";
 import NavLink from "@/components/NavLink";
+import SidebarToggle from "@/components/SidebarToggle";
 import { highestRole, type AppRole } from "@/lib/roles";
 
 // Grouped per the Account & Subscription spec §2 / Nurse Workspace mockup.
@@ -77,10 +78,11 @@ export default async function DashboardLayout({ children }: { children: React.Re
       />
 
       <div className="flex">
-        <aside className="hidden md:flex w-56 h-screen bg-[#0a2e38] flex-col py-6 px-4 fixed top-0 left-0 z-20">
-          <Link href="/dashboard" className="flex items-center gap-2 mb-6 px-2">
+        <aside data-sidebar className="hidden md:flex w-56 h-screen bg-[#0a2e38] flex-col py-6 px-4 fixed top-0 left-0 z-20">
+          <SidebarToggle />
+          <Link href="/dashboard" className="flex items-center gap-2 mb-6 px-2" data-sb-item>
             <div className="w-7 h-7 rounded bg-teal-500 flex items-center justify-center text-white font-bold text-sm shrink-0">C</div>
-            <span className="min-w-0">
+            <span className="min-w-0" data-sb-label>
               <span className="block text-white font-semibold text-sm leading-tight">Competen</span>
               <span className="block text-teal-400/60 text-[10px] leading-tight">Nurse Workspace</span>
             </span>
@@ -88,7 +90,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
           <nav className="flex flex-col gap-0.5 flex-1 overflow-y-auto">
             {NAV_GROUPS.map(({ group, items }) => (
               <div key={group ?? "root"} className="flex flex-col gap-0.5">
-                {group && <p className="px-3 pt-3 pb-1 text-[9px] font-bold uppercase tracking-widest text-teal-400/40">{group}</p>}
+                {group && <p className="px-3 pt-3 pb-1 text-[9px] font-bold uppercase tracking-widest text-teal-400/40" data-sb-label>{group}</p>}
                 {items.map(({ label, href, icon }) => (
                   <NavLink key={label} href={href} icon={icon} label={label} exact={href === "/dashboard"}
                     badge={href === "/dashboard/notifications" ? unreadCount ?? 0 : undefined}
@@ -98,10 +100,10 @@ export default async function DashboardLayout({ children }: { children: React.Re
               </div>
             ))}
             {/* Help & Support opens email — no in-app help centre exists yet. */}
-            <a href="mailto:gabriel@semacast.com?subject=Competen support request"
+            <a href="mailto:gabriel@semacast.com?subject=Competen support request" data-sb-item title="Help & Support"
               className="flex items-center gap-2.5 px-3 py-1.5 rounded-lg text-[13px] text-teal-100/70 hover:bg-teal-800/50 hover:text-white transition-colors">
               <span className="w-5 text-center text-sm leading-none">🎧</span>
-              <span>Help &amp; Support</span>
+              <span data-sb-label>Help &amp; Support</span>
             </a>
           </nav>
           <div className="pt-4 border-t border-teal-800/60">
@@ -114,27 +116,27 @@ export default async function DashboardLayout({ children }: { children: React.Re
                   {firstName[0]}
                 </div>
               )}
-              <div className="flex-1 min-w-0">
+              <div className="flex-1 min-w-0" data-sb-label>
                 <p className="text-white text-xs font-medium truncate">{profile?.full_name}</p>
                 <p className="text-teal-400/60 text-[10px]">Nurse</p>
               </div>
             </div>
             {userRoles.some(r => ["educator", "assessor"].includes(r)) && (
-              <div className="mb-2">
+              <div className="mb-2" data-sb-label>
                 <RoleSwitcher roles={userRoles} activeRole={activeRole} />
               </div>
             )}
             <form action="/api/auth/logout" method="POST">
-              <button type="submit"
+              <button type="submit" data-sb-item
                 className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm text-teal-100/50 hover:bg-teal-800/30 hover:text-white transition-colors">
                 <span className="w-5 text-center">↩</span>
-                <span>Sign out</span>
+                <span data-sb-label>Sign out</span>
               </button>
             </form>
           </div>
         </aside>
 
-        <main className="flex-1 md:ml-56 px-4 md:px-6 pt-16 md:pt-8 pb-8 min-h-screen">
+        <main data-content className="flex-1 md:ml-56 px-4 md:px-6 pt-16 md:pt-8 pb-8 min-h-screen">
           {children}
         </main>
       </div>

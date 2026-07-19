@@ -825,11 +825,11 @@ for (const [path, marker] of IMPROVEMENT_PAGES) {
   record("educator:analytics", path, res.status === 200 && html.includes(marker), `status ${res.status}${res.status === 200 && !html.includes(marker) ? ", marker missing" : ""}`);
 }
 
-// AI & Intelligence Hub
-{
-  const res = await get("/educator/ai", eduLogin2.cookies);
+// AI & Intelligence Hub + Copilot workspace
+for (const [path, marker] of [["/educator/ai", "Institution Intelligence Map"], ["/educator/ai/copilot", "Recommended Next Actions"]]) {
+  const res = await get(path, eduLogin2.cookies);
   const html = await res.text();
-  record("educator:analytics", "/educator/ai", res.status === 200 && html.includes("Institution Intelligence Map"), `status ${res.status}${res.status === 200 && !html.includes("Institution Intelligence Map") ? ", marker missing" : ""}`);
+  record("educator:analytics", path, res.status === 200 && html.includes(marker), `status ${res.status}${res.status === 200 && !html.includes(marker) ? ", marker missing" : ""}`);
 }
 // Approvals flow: educator validates the conducted score, cycle appears fully approvable
 const { data: pendingScore } = await admin.from("competency_scores").select("id").eq("cycle_id", created.cycle).eq("competency_id", anyComp.id).single();

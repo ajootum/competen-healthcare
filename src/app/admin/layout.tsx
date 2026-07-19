@@ -4,6 +4,7 @@ import { cookies } from "next/headers";
 import Link from "next/link";
 import RoleSwitcher from "@/components/RoleSwitcher";
 import NavLink from "@/components/NavLink";
+import SidebarToggle from "@/components/SidebarToggle";
 import { highestRole, ORG_ROLE_CONFIG, type AppRole, type OrgRole } from "@/lib/roles";
 
 const ALL_NAV = [
@@ -106,13 +107,14 @@ export default async function AdminLayout({ children }: { children: React.ReactN
       </header>
 
       <div className="flex">
-        <aside className="hidden md:flex w-56 h-screen bg-[#0a2e38] flex-col py-6 px-4 fixed top-0 left-0 z-20">
-          <Link href="/admin/dashboard" className="flex items-center gap-2 mb-6 px-2">
+        <aside data-sidebar className="hidden md:flex w-56 h-screen bg-[#0a2e38] flex-col py-6 px-4 fixed top-0 left-0 z-20">
+          <SidebarToggle />
+          <Link href="/admin/dashboard" className="flex items-center gap-2 mb-6 px-2" data-sb-item>
             <div className="w-7 h-7 rounded bg-teal-500 flex items-center justify-center text-white font-bold text-sm">C</div>
-            <span className="text-white font-semibold text-sm">Competen</span>
+            <span className="text-white font-semibold text-sm" data-sb-label>Competen</span>
           </Link>
 
-          <div className="px-3 mb-4">
+          <div className="px-3 mb-4" data-sb-label>
             <span className="text-[10px] font-bold text-teal-400/70 uppercase tracking-widest">{portalLabel}</span>
           </div>
 
@@ -123,10 +125,10 @@ export default async function AdminLayout({ children }: { children: React.ReactN
                 activeClassName="flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm bg-teal-700/60 text-white font-medium" />
             ))}
             <div className="my-2 border-t border-teal-800/30" />
-            <Link href="/dashboard"
+            <Link href="/dashboard" data-sb-item title="My Dashboard"
               className="flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm text-teal-100/40 hover:bg-teal-800/50 hover:text-white transition-colors">
               <span className="w-5 text-center text-sm">⊞</span>
-              <span>My Dashboard</span>
+              <span data-sb-label>My Dashboard</span>
             </Link>
           </nav>
 
@@ -135,27 +137,27 @@ export default async function AdminLayout({ children }: { children: React.ReactN
               <div className="w-7 h-7 rounded-full bg-amber-400 flex items-center justify-center text-amber-900 text-xs font-bold">
                 {profile?.full_name?.[0] ?? "A"}
               </div>
-              <div className="flex-1 min-w-0">
+              <div className="flex-1 min-w-0" data-sb-label>
                 <p className="text-white text-xs font-medium truncate">{profile?.full_name}</p>
                 <p className="text-amber-300/60 text-[10px]">{portalLabel}</p>
               </div>
             </div>
             {userRoles.length > 1 && (
-              <div className="mb-2">
+              <div className="mb-2" data-sb-label>
                 <RoleSwitcher roles={userRoles} activeRole={activeRole} />
               </div>
             )}
             <form action="/api/auth/logout" method="POST">
-              <button type="submit"
+              <button type="submit" data-sb-item
                 className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm text-teal-100/50 hover:bg-teal-800/30 hover:text-white transition-colors">
                 <span className="w-5 text-center">↩</span>
-                <span>Sign out</span>
+                <span data-sb-label>Sign out</span>
               </button>
             </form>
           </div>
         </aside>
 
-        <main className="flex-1 md:ml-56 px-4 md:px-6 pt-24 md:pt-8 pb-8 max-w-6xl">
+        <main data-content className="flex-1 md:ml-56 px-4 md:px-6 pt-24 md:pt-8 pb-8 max-w-6xl">
           {children}
         </main>
       </div>

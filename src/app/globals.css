@@ -38,3 +38,20 @@ main:has([data-wide]) {
   main { margin: 0 !important; padding: 0 !important; max-width: none !important; }
   body { background: white !important; }
 }
+
+/* ── Collapsible sidebar (desktop) ──────────────────────────────────────────
+   Works across every workspace layout (nurse, assessor, educator, admin,
+   super-admin). SidebarToggle flips <html class="sb-collapsed"> and persists it
+   to localStorage; the root layout re-applies it pre-paint to avoid a flash.
+   The sidebar (aside[data-sidebar]) shrinks to an icon rail and the content
+   (main[data-content]) reclaims the freed space; anything marked
+   [data-sb-label] (nav labels, group headings, logo text, footer) is hidden. */
+aside[data-sidebar] { transition: width .2s ease; }
+main[data-content] { transition: margin-left .2s ease; }
+@media (min-width: 768px) {
+  html.sb-collapsed aside[data-sidebar] { width: 4.25rem !important; overflow-x: hidden; }
+  html.sb-collapsed main[data-content] { margin-left: 4.25rem !important; }
+  html.sb-collapsed aside[data-sidebar] [data-sb-item] { justify-content: center; padding-left: 0; padding-right: 0; }
+  /* Scoped to the desktop rail so mobile navs that reuse NavLink keep labels. */
+  html.sb-collapsed aside[data-sidebar] [data-sb-label] { display: none !important; }
+}
