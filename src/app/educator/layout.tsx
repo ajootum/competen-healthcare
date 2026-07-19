@@ -102,7 +102,7 @@ const NAV_GROUPS: { group: string | null; items: NavItem[] }[] = [
     { label: "Scenario Library",    href: "/educator/tools/professional/scenarios",      icon: "🧪" },
     { label: "Resource Library",    href: "/educator/tools/professional/resources",      icon: "📚" },
     { label: "Document Generator",  href: "/educator/tools/professional/documents",      icon: "📄" },
-    { subheader: "Publishing Tools" },
+    { subheader: "Publishing Tools", href: "/educator/tools/publishing" },
     { label: "Publishing Queue",    href: "/educator/studio/publishing",  icon: "📤" },
     { label: "Version Management",  href: "/educator/studio/versions",    icon: "🕐" },
     { label: "Approval Requests",   href: "/educator/approvals",          icon: "✅" },
