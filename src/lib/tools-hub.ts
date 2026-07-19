@@ -117,8 +117,11 @@ export async function loadToolsHub(admin: Admin, hospitalId: string): Promise<To
 
   const activity: Activity[] = au.map(a => ({ actor: a.actor_name ?? "Someone", action: a.action ?? "updated an item", entity: a.entity_name, when: a.created_at }));
 
-  // Quick-access tools = the modules that deep-link to a live page.
-  const quickTools = TOOL_SECTIONS.flatMap(s => s.modules).filter(m => m.href && !m.soon);
+  // Quick-access tools = the ten featured modules from the mockup, in order.
+  // Live ones deep-link to their page; not-yet-built ones stay flagged soon.
+  const QUICK = ["AI Prompt Library", "Template Library", "Question Bank Manager", "Scenario Library", "Resource Library", "Document Generator", "Content Import & Export", "Publishing Queue", "My Workspace", "CPD Portfolio"];
+  const allModules = TOOL_SECTIONS.flatMap(s => s.modules);
+  const quickTools = QUICK.map(l => allModules.find(m => m.label === l)).filter((m): m is ToolModule => !!m);
 
   // Top templates: no usage/favourite store yet — surface recent content honestly.
   const templatesList: Template[] = [

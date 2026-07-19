@@ -62,8 +62,14 @@ export default async function ToolsHubPage() {
           {/* Quick access tools */}
           <div className="rounded-2xl bg-white border border-gray-200 shadow-sm p-5">
             <p className="text-[11px] font-bold uppercase tracking-widest text-gray-500 mb-3">Quick Access Tools</p>
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
-              {d.quickTools.map(t => (
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+              {d.quickTools.map(t => t.soon ? (
+                <div key={t.label} title="Coming soon — needs a backing store" className="rounded-xl border border-dashed border-gray-200 p-3.5 bg-gray-50/60 cursor-default">
+                  <span className="text-xl opacity-50">{t.icon}</span>
+                  <p className="text-[13px] font-bold text-gray-400 mt-1.5 leading-tight flex items-center gap-1.5">{t.label}<span className="text-[8px] font-bold uppercase text-gray-400 bg-gray-100 rounded px-1 py-0.5">soon</span></p>
+                  <p className="text-[11px] text-gray-400 leading-tight">{t.desc}</p>
+                </div>
+              ) : (
                 <Link key={t.label} href={t.href!} className="rounded-xl border border-gray-200 p-3.5 hover:border-violet-300 hover:bg-violet-50/40 transition-colors">
                   <span className="text-xl">{t.icon}</span>
                   <p className="text-[13px] font-bold text-gray-800 mt-1.5 leading-tight">{t.label}</p>

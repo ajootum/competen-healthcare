@@ -13,7 +13,10 @@ import { type AppRole } from "@/lib/roles";
 // the spec render as muted "soon" rows until their stores exist — visible
 // structure, no dead links. Existing URLs preserved (/educator/courses,
 // /questions, /students, /seniors, /library, /import).
-type NavItem = { label: string; href?: string; icon: string; badge?: "queue" | "unread"; soon?: boolean };
+// A nav item is either a link/row (label + icon, optionally href/soon) or a
+// sub-section divider inside a group (subheader only) — used to split the
+// Productivity & Administration Centre dropdown into its five labelled sections.
+type NavItem = { label?: string; href?: string; icon?: string; badge?: "queue" | "unread"; soon?: boolean; subheader?: string };
 const NAV_GROUPS: { group: string | null; items: NavItem[] }[] = [
   { group: null, items: [
     { label: "Dashboard",           href: "/educator",               icon: "🏠" },
@@ -83,8 +86,14 @@ const NAV_GROUPS: { group: string | null; items: NavItem[] }[] = [
     { label: "Predictive Alerts",   href: "/educator/ai/predictive", icon: "🔮" },
     { label: "Executive Intelligence", href: "/educator/ai/executive", icon: "👑" },
   ]},
+  // The Productivity & Administration Centre — a single collapsible dropdown
+  // whose contents are split into the five sections from the spec/mockup
+  // (Professional Tools, Publishing Tools, Workspace Settings, Professional
+  // Development, Administration). Modules deep-link to their live page where one
+  // exists; the rest render muted "soon" (visible structure, no dead links).
   { group: "Productivity & Administration Centre", items: [
     { label: "Overview",            href: "/educator/tools",              icon: "🧰" },
+    { subheader: "Professional Tools" },
     { label: "AI Prompt Library",   icon: "🧠", soon: true },
     { label: "Template Library",    href: "/educator/studio",             icon: "🗂️" },
     { label: "Content Import & Export", href: "/educator/import",         icon: "🔁" },
@@ -93,18 +102,22 @@ const NAV_GROUPS: { group: string | null; items: NavItem[] }[] = [
     { label: "Scenario Library",    href: "/educator/simulation",         icon: "🧪" },
     { label: "Resource Library",    href: "/educator/library",            icon: "📚" },
     { label: "Document Generator",  icon: "📄", soon: true },
+    { subheader: "Publishing Tools" },
     { label: "Publishing Queue",    href: "/educator/studio/publishing",  icon: "📤" },
     { label: "Version Management",  href: "/educator/studio/versions",    icon: "🕐" },
     { label: "Approval Requests",   href: "/educator/approvals",          icon: "✅" },
     { label: "Digital Signatures",  icon: "✍️", soon: true },
+    { subheader: "Workspace Settings" },
     { label: "My Workspace",        icon: "🎛️", soon: true },
+    { label: "Notifications",       href: "/educator/notifications",      icon: "🔔" },
     { label: "Dashboard Preferences", icon: "⚙️", soon: true },
     { label: "Calendar Integration", icon: "🗓️", soon: true },
     { label: "Connected Apps",      icon: "🔌", soon: true },
+    { subheader: "Professional Development" },
     { label: "CPD Portfolio",       href: "/educator/courses",            icon: "🏅" },
     { label: "Teaching Portfolio",  icon: "📁", soon: true },
     { label: "Professional Goals",  icon: "🎯", soon: true },
-    { label: "Certifications",      icon: "📜", soon: true },
+    { subheader: "Administration" },
     { label: "Profile & Permissions", icon: "🛂", soon: true },
     { label: "Institution Settings", icon: "🏛️", soon: true },
     { label: "Audit Logs",          icon: "🗒️", soon: true },
@@ -176,10 +189,11 @@ export default async function EducatorLayout({ children }: { children: React.Rea
           </Link>
         </div>
         <nav className="flex gap-1 overflow-x-auto px-3 pb-2">
-          {NAV_GROUPS.flatMap(g => g.items)
-            .filter(i => i.href && !i.soon)
+          {/* One pill per destination — dedupe by href so a page reached from two
+              groups (e.g. Notifications) isn't listed twice. */}
+          {[...new Map(NAV_GROUPS.flatMap(g => g.items).filter(i => i.href && !i.soon).map(i => [i.href, i] as const)).values()]
             .map(({ label, href, badge }) => (
-            <Link key={label} href={href!}
+            <Link key={href} href={href!}
               className="shrink-0 text-[11px] text-purple-100/80 bg-purple-900/40 hover:bg-purple-800/60 rounded-full px-3 py-1 transition-colors">
               {label}{badge && badgeValue[badge] > 0 ? ` (${badgeValue[badge]})` : ""}
             </Link>
@@ -201,19 +215,32 @@ export default async function EducatorLayout({ children }: { children: React.Rea
 
           <nav className="flex flex-col gap-0.5 flex-1 overflow-y-auto">
             {NAV_GROUPS.map(({ group, items }) => {
-              const nodes = items.map(({ label, href, icon, badge, soon }) => soon || !href ? (
-                <span key={label} title={label} data-sb-item
-                  className="flex items-center gap-2.5 px-3 py-1.5 rounded-lg text-[13px] text-purple-200/25 cursor-default select-none">
-                  <span className="w-5 text-center text-sm leading-none opacity-50">{icon}</span>
-                  <span className="flex-1" data-sb-label>{label}</span>
-                  <span className="text-[8px] font-bold uppercase tracking-wider bg-purple-950 text-purple-400/40 rounded px-1 py-0.5" data-sb-label>soon</span>
-                </span>
-              ) : (
-                <NavLink key={label} href={href} icon={icon} label={label} exact={href === "/educator" || href === "/educator/studio" || href === "/educator/analytics" || href === "/educator/ai"}
-                  badge={badge ? badgeValue[badge] : undefined}
-                  className="flex items-center gap-2.5 px-3 py-1.5 rounded-lg text-[13px] text-purple-200/60 hover:bg-purple-900/40 hover:text-white transition-colors"
-                  activeClassName="flex items-center gap-2.5 px-3 py-1.5 rounded-lg text-[13px] bg-purple-900/60 text-white font-medium" />
-              ));
+              const renderItem = (item: NavItem) => {
+                // Sub-section divider inside a group (e.g. the P&A Centre's five sections).
+                if (item.subheader) return (
+                  <div key={"sub-" + item.subheader} data-sb-label
+                    className="px-3 pt-2.5 pb-0.5 text-[8px] font-bold uppercase tracking-widest text-purple-400/40 select-none">
+                    {item.subheader}
+                  </div>
+                );
+                const { label, href, icon, badge, soon } = item;
+                // Not-yet-built module — muted, non-clickable "soon" row.
+                if (soon || !href) return (
+                  <span key={label} title={label} data-sb-item
+                    className="flex items-center gap-2.5 px-3 py-1.5 rounded-lg text-[13px] text-purple-200/25 cursor-default select-none">
+                    <span className="w-5 text-center text-sm leading-none opacity-50">{icon}</span>
+                    <span className="flex-1" data-sb-label>{label}</span>
+                    <span className="text-[8px] font-bold uppercase tracking-wider bg-purple-950 text-purple-400/40 rounded px-1 py-0.5" data-sb-label>soon</span>
+                  </span>
+                );
+                return (
+                  <NavLink key={label} href={href} icon={icon!} label={label!} exact={href === "/educator" || href === "/educator/studio" || href === "/educator/analytics" || href === "/educator/ai"}
+                    badge={badge ? badgeValue[badge] : undefined}
+                    className="flex items-center gap-2.5 px-3 py-1.5 rounded-lg text-[13px] text-purple-200/60 hover:bg-purple-900/40 hover:text-white transition-colors"
+                    activeClassName="flex items-center gap-2.5 px-3 py-1.5 rounded-lg text-[13px] bg-purple-900/60 text-white font-medium" />
+                );
+              };
+              const nodes = items.map(renderItem);
               return group ? (
                 <NavGroup key={group} title={group} hrefs={items.filter(i => i.href).map(i => i.href!)} headerClass="text-[9px] font-bold uppercase tracking-widest text-purple-400/50">{nodes}</NavGroup>
               ) : (
