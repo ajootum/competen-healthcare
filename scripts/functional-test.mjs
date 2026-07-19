@@ -36,16 +36,25 @@ async function makeUser(email, fullName, role, hospitalId = HOSPITAL) {
   const old = (page?.users ?? []).find(u => u.email === email);
   if (old) { await admin.from("profiles").delete().eq("id", old.id); await admin.auth.admin.deleteUser(old.id); }
   const password = "Test-" + randomBytes(9).toString("base64url");
-  const { data: u, error } = await admin.auth.admin.createUser({
-    email, password, email_confirm: true, user_metadata: { full_name: fullName },
-  });
+  // A prior crashed run can leave an un-deletable auth account (GoTrue 500 when
+  // it still owns orphaned storage objects). Fall back to a fresh unique email
+  // on collision so one poisoned leftover can't crash the whole suite.
+  let attempt = email, u = null, error = null;
+  for (let i = 0; i < 3; i++) {
+    ({ data: u, error } = await admin.auth.admin.createUser({
+      email: attempt, password, email_confirm: true, user_metadata: { full_name: fullName },
+    }));
+    if (!error) break;
+    if (!/already.*registered/i.test(error.message ?? "")) break;
+    attempt = email.replace("@", `-${randomBytes(3).toString("hex")}@`);
+  }
   if (error) throw new Error("createUser " + email + ": " + error.message);
   const { error: perr } = await admin.from("profiles").upsert({
-    id: u.user.id, email, full_name: fullName, role, roles: [role],
+    id: u.user.id, email: attempt, full_name: fullName, role, roles: [role],
     hospital_id: hospitalId, organisation_id: ORG,
   });
   if (perr) throw new Error("profile " + email + ": " + perr.message);
-  return { id: u.user.id, email, password };
+  return { id: u.user.id, email: attempt, password };
 }
 
 async function login(email, password) {
@@ -669,6 +678,158 @@ for (const [path, marker] of EDUCATOR_PAGES) {
   const res = await get(path, eduLogin2.cookies);
   const html = await res.text();
   record("educator:centre", path, res.status === 200 && html.includes(marker), `status ${res.status}`);
+}
+
+// ── Analytics & Quality workspace: overview dashboard + 8 section pages ──────
+const ANALYTICS_PAGES = [
+  ["/educator/analytics", "Learning Progress Trend"],
+  ["/educator/analytics/learning", "Learning Analytics"],
+  ["/educator/analytics/competency", "Competency Analytics"],
+  ["/educator/analytics/curriculum", "Curriculum Analytics"],
+  ["/educator/analytics/assessment", "Assessment Analytics"],
+  ["/educator/analytics/outcomes", "Learner Outcomes"],
+  ["/educator/analytics/quality", "Program Quality"],
+  ["/educator/analytics/accreditation", "Accreditation &amp; Standards"],
+  ["/educator/analytics/improvement", "Improvement Centre"],
+];
+for (const [path, marker] of ANALYTICS_PAGES) {
+  const res = await get(path, eduLogin2.cookies);
+  const html = await res.text();
+  record("educator:analytics", path, res.status === 200 && html.includes(marker), `status ${res.status}${res.status === 200 && !html.includes(marker) ? ", marker missing" : ""}`);
+}
+
+// Learning Analytics workspace: landing + 6 modules (Learner/Cohort/Course/Faculty/Trend/Custom)
+const LEARNING_PAGES = [
+  ["/educator/analytics/learning", "Open module"],
+  ["/educator/analytics/learning/learners", "Individual Learner Overview"],
+  ["/educator/analytics/learning/cohorts", "Cohort Analytics"],
+  ["/educator/analytics/learning/courses", "Course Completion Funnel"],
+  ["/educator/analytics/learning/faculty", "Faculty Ranking"],
+  ["/educator/analytics/learning/trends", "Performance Trend"],
+  ["/educator/analytics/learning/custom", "AI Analytics Assistant"],
+];
+for (const [path, marker] of LEARNING_PAGES) {
+  const res = await get(path, eduLogin2.cookies);
+  const html = await res.text();
+  record("educator:analytics", path, res.status === 200 && html.includes(marker), `status ${res.status}${res.status === 200 && !html.includes(marker) ? ", marker missing" : ""}`);
+}
+
+// Competency Analytics workspace: landing + 7 modules
+const COMPETENCY_PAGES = [
+  ["/educator/analytics/competency", "Competency Analytics"],
+  ["/educator/analytics/competency/coverage", "Coverage Matrix"],
+  ["/educator/analytics/competency/achievement", "Achievement by Learner"],
+  ["/educator/analytics/competency/heatmaps", "Learners × Domains"],
+  ["/educator/analytics/competency/gaps", "Gap Register"],
+  ["/educator/analytics/competency/domains", "Domain Scorecards"],
+  ["/educator/analytics/competency/skills", "Skill Mastery Overview"],
+  ["/educator/analytics/competency/trends", "Competency Trend"],
+];
+for (const [path, marker] of COMPETENCY_PAGES) {
+  const res = await get(path, eduLogin2.cookies);
+  const html = await res.text();
+  record("educator:analytics", path, res.status === 200 && html.includes(marker), `status ${res.status}${res.status === 200 && !html.includes(marker) ? ", marker missing" : ""}`);
+}
+
+// Curriculum Analytics workspace: landing + 6 modules
+const CURRICULUM_PAGES = [
+  ["/educator/analytics/curriculum", "Curriculum Analytics"],
+  ["/educator/analytics/curriculum/effectiveness", "Curriculum Performance Overview"],
+  ["/educator/analytics/curriculum/blueprint", "Blueprint Coverage Matrix"],
+  ["/educator/analytics/curriculum/outcomes", "Learning Outcomes Performance"],
+  ["/educator/analytics/curriculum/cpus", "CPU Performance Overview"],
+  ["/educator/analytics/curriculum/content", "Content by Type"],
+  ["/educator/analytics/curriculum/gaps", "Curriculum Gaps Register"],
+];
+for (const [path, marker] of CURRICULUM_PAGES) {
+  const res = await get(path, eduLogin2.cookies);
+  const html = await res.text();
+  record("educator:analytics", path, res.status === 200 && html.includes(marker), `status ${res.status}${res.status === 200 && !html.includes(marker) ? ", marker missing" : ""}`);
+}
+
+// Assessment Analytics workspace: landing + 5 modules
+const ASSESSMENT_PAGES = [
+  ["/educator/analytics/assessment", "Assessment Analytics"],
+  ["/educator/analytics/assessment/performance", "Performance by Assessment Type"],
+  ["/educator/analytics/assessment/questions", "Question Bank"],
+  ["/educator/analytics/assessment/reliability", "Reliability Indicators"],
+  ["/educator/analytics/assessment/blueprint", "Blueprint Coverage Matrix"],
+  ["/educator/analytics/assessment/difficulty", "Difficulty by Category"],
+];
+for (const [path, marker] of ASSESSMENT_PAGES) {
+  const res = await get(path, eduLogin2.cookies);
+  const html = await res.text();
+  record("educator:analytics", path, res.status === 200 && html.includes(marker), `status ${res.status}${res.status === 200 && !html.includes(marker) ? ", marker missing" : ""}`);
+}
+
+// Learner Outcomes workspace: landing + 5 modules
+const OUTCOMES_PAGES = [
+  ["/educator/analytics/outcomes", "Learner Outcomes"],
+  ["/educator/analytics/outcomes/success", "Success Distribution"],
+  ["/educator/analytics/outcomes/competency", "Achievement by Domain"],
+  ["/educator/analytics/outcomes/clinical", "Clinical Readiness by Domain"],
+  ["/educator/analytics/outcomes/certification", "Certification Checklist"],
+  ["/educator/analytics/outcomes/cpd", "Recommended CPD"],
+];
+for (const [path, marker] of OUTCOMES_PAGES) {
+  const res = await get(path, eduLogin2.cookies);
+  const html = await res.text();
+  record("educator:analytics", path, res.status === 200 && html.includes(marker), `status ${res.status}${res.status === 200 && !html.includes(marker) ? ", marker missing" : ""}`);
+}
+
+// Program Quality workspace: landing + 8 modules
+const QUALITY_PAGES = [
+  ["/educator/analytics/quality", "Program Quality"],
+  ["/educator/analytics/quality/program", "Quality Score by Domain"],
+  ["/educator/analytics/quality/faculty", "Faculty Assessment Activity"],
+  ["/educator/analytics/quality/curriculum", "Curriculum Quality Scorecard"],
+  ["/educator/analytics/quality/assessment", "Top Assessment Types"],
+  ["/educator/analytics/quality/compliance", "Compliance Matrix"],
+  ["/educator/analytics/quality/benchmarking", "Benchmarking"],
+  ["/educator/analytics/quality/reviews", "Improvement Actions"],
+  ["/educator/analytics/quality/reports", "Report Templates"],
+];
+for (const [path, marker] of QUALITY_PAGES) {
+  const res = await get(path, eduLogin2.cookies);
+  const html = await res.text();
+  record("educator:analytics", path, res.status === 200 && html.includes(marker), `status ${res.status}${res.status === 200 && !html.includes(marker) ? ", marker missing" : ""}`);
+}
+
+// Accreditation & Standards workspace: landing + 7 modules
+const ACCREDITATION_PAGES = [
+  ["/educator/analytics/accreditation", "Accreditation &amp; Standards"],
+  ["/educator/analytics/accreditation/standards", "Compliance by Area"],
+  ["/educator/analytics/accreditation/reports", "What this module needs"],
+  ["/educator/analytics/accreditation/evidence", "Evidence by Type"],
+  ["/educator/analytics/accreditation/mapping", "What this module needs"],
+  ["/educator/analytics/accreditation/audit", "Readiness by Domain"],
+  ["/educator/analytics/accreditation/documents", "What this module needs"],
+  ["/educator/analytics/accreditation/improvement", "Actions by Source"],
+];
+for (const [path, marker] of ACCREDITATION_PAGES) {
+  const res = await get(path, eduLogin2.cookies);
+  const html = await res.text();
+  record("educator:analytics", path, res.status === 200 && html.includes(marker), `status ${res.status}${res.status === 200 && !html.includes(marker) ? ", marker missing" : ""}`);
+}
+
+// Improvement & Action Center workspace: landing + 3 modules
+const IMPROVEMENT_PAGES = [
+  ["/educator/analytics/improvement", "CAPA by Status"],
+  ["/educator/analytics/improvement/plans", "What this module needs"],
+  ["/educator/analytics/improvement/capa", "Recent CAPAs"],
+  ["/educator/analytics/improvement/risks", "Risks by Category"],
+];
+for (const [path, marker] of IMPROVEMENT_PAGES) {
+  const res = await get(path, eduLogin2.cookies);
+  const html = await res.text();
+  record("educator:analytics", path, res.status === 200 && html.includes(marker), `status ${res.status}${res.status === 200 && !html.includes(marker) ? ", marker missing" : ""}`);
+}
+
+// AI & Intelligence Hub
+{
+  const res = await get("/educator/ai", eduLogin2.cookies);
+  const html = await res.text();
+  record("educator:analytics", "/educator/ai", res.status === 200 && html.includes("Institution Intelligence Map"), `status ${res.status}${res.status === 200 && !html.includes("Institution Intelligence Map") ? ", marker missing" : ""}`);
 }
 // Approvals flow: educator validates the conducted score, cycle appears fully approvable
 const { data: pendingScore } = await admin.from("competency_scores").select("id").eq("cycle_id", created.cycle).eq("competency_id", anyComp.id).single();

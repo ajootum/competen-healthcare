@@ -65,15 +65,21 @@ const NAV_GROUPS: { group: string | null; items: NavItem[] }[] = [
     { label: "Publishing & Governance", href: "/educator/studio/publishing", icon: "🏛️" },
   ]},
   { group: "Analytics & Quality", items: [
-    { label: "Analytics & Reports", icon: "📊", soon: true },
-    { label: "Quality & Audit",     icon: "🛡️", soon: true },
+    { label: "Analytics Overview",  href: "/educator/analytics",              icon: "📊" },
+    { label: "Learning Analytics",  href: "/educator/analytics/learning",     icon: "📈" },
+    { label: "Competency Analytics", href: "/educator/analytics/competency",  icon: "🎯" },
+    { label: "Curriculum Analytics", href: "/educator/analytics/curriculum",  icon: "📚" },
+    { label: "Assessment Analytics", href: "/educator/analytics/assessment",  icon: "📝" },
+    { label: "Learner Outcomes",    href: "/educator/analytics/outcomes",     icon: "🎓" },
+    { label: "Program Quality",     href: "/educator/analytics/quality",      icon: "🛡️" },
+    { label: "Accreditation & Standards", href: "/educator/analytics/accreditation", icon: "📜" },
+    { label: "Improvement Centre",  href: "/educator/analytics/improvement",  icon: "🎯" },
   ]},
   { group: "AI & Intelligence", items: [
-    { label: "AI Teaching Assistant", href: "/dashboard/copilot",    icon: "✨" },
-    { label: "Question Generator",  icon: "🧪", soon: true },
-    { label: "Lesson Planner",      icon: "📋", soon: true },
-    { label: "Scenario Builder",    icon: "🎭", soon: true },
-    { label: "AI Analytics",        icon: "🧠", soon: true },
+    { label: "Intelligence Hub",    href: "/educator/ai",            icon: "🧠" },
+    { label: "AI Copilot",          href: "/dashboard/copilot",      icon: "✨" },
+    { label: "Predictive Alerts",   href: "/educator/at-risk",       icon: "🔮" },
+    { label: "Executive Intelligence", href: "/educator/analytics/quality", icon: "👑" },
   ]},
   { group: "Tools & Settings", items: [
     { label: "Bulk Import",         href: "/educator/import",        icon: "📥" },
@@ -180,7 +186,7 @@ export default async function EducatorLayout({ children }: { children: React.Rea
                     <span className="text-[8px] font-bold uppercase tracking-wider bg-purple-950 text-purple-400/40 rounded px-1 py-0.5">soon</span>
                   </span>
                 ) : (
-                  <NavLink key={label} href={href} icon={icon} label={label} exact={href === "/educator" || href === "/educator/studio"}
+                  <NavLink key={label} href={href} icon={icon} label={label} exact={href === "/educator" || href === "/educator/studio" || href === "/educator/analytics"}
                     badge={badge ? badgeValue[badge] : undefined}
                     className="flex items-center gap-2.5 px-3 py-1.5 rounded-lg text-[13px] text-purple-200/60 hover:bg-purple-900/40 hover:text-white transition-colors"
                     activeClassName="flex items-center gap-2.5 px-3 py-1.5 rounded-lg text-[13px] bg-purple-900/60 text-white font-medium" />
