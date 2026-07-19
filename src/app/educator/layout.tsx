@@ -93,15 +93,15 @@ const NAV_GROUPS: { group: string | null; items: NavItem[] }[] = [
   // exists; the rest render muted "soon" (visible structure, no dead links).
   { group: "Productivity & Administration Centre", items: [
     { label: "Overview",            href: "/educator/tools",              icon: "🧰" },
-    { subheader: "Professional Tools" },
-    { label: "AI Prompt Library",   icon: "🧠", soon: true },
-    { label: "Template Library",    href: "/educator/studio",             icon: "🗂️" },
-    { label: "Content Import & Export", href: "/educator/import",         icon: "🔁" },
-    { label: "Question Bank Manager", href: "/educator/questions",        icon: "❓" },
-    { label: "Lesson & Session Templates", icon: "🗒️", soon: true },
-    { label: "Scenario Library",    href: "/educator/simulation",         icon: "🧪" },
-    { label: "Resource Library",    href: "/educator/library",            icon: "📚" },
-    { label: "Document Generator",  icon: "📄", soon: true },
+    { subheader: "Professional Tools", href: "/educator/tools/professional" },
+    { label: "AI Prompt Library",   href: "/educator/tools/professional/prompts",        icon: "🧠" },
+    { label: "Template Library",    href: "/educator/tools/professional/templates",      icon: "🗂️" },
+    { label: "Content Import & Export", href: "/educator/tools/professional/import-export", icon: "🔁" },
+    { label: "Question Bank Manager", href: "/educator/tools/professional/questions",    icon: "❓" },
+    { label: "Lesson & Session Templates", href: "/educator/tools/professional/lessons", icon: "🗒️" },
+    { label: "Scenario Library",    href: "/educator/tools/professional/scenarios",      icon: "🧪" },
+    { label: "Resource Library",    href: "/educator/tools/professional/resources",      icon: "📚" },
+    { label: "Document Generator",  href: "/educator/tools/professional/documents",      icon: "📄" },
     { subheader: "Publishing Tools" },
     { label: "Publishing Queue",    href: "/educator/studio/publishing",  icon: "📤" },
     { label: "Version Management",  href: "/educator/studio/versions",    icon: "🕐" },
@@ -192,10 +192,10 @@ export default async function EducatorLayout({ children }: { children: React.Rea
           {/* One pill per destination — dedupe by href so a page reached from two
               groups (e.g. Notifications) isn't listed twice. */}
           {[...new Map(NAV_GROUPS.flatMap(g => g.items).filter(i => i.href && !i.soon).map(i => [i.href, i] as const)).values()]
-            .map(({ label, href, badge }) => (
-            <Link key={href} href={href!}
+            .map(i => (
+            <Link key={i.href} href={i.href!}
               className="shrink-0 text-[11px] text-purple-100/80 bg-purple-900/40 hover:bg-purple-800/60 rounded-full px-3 py-1 transition-colors">
-              {label}{badge && badgeValue[badge] > 0 ? ` (${badgeValue[badge]})` : ""}
+              {i.label ?? i.subheader}{i.badge && badgeValue[i.badge] > 0 ? ` (${badgeValue[i.badge]})` : ""}
             </Link>
           ))}
         </nav>
@@ -217,12 +217,15 @@ export default async function EducatorLayout({ children }: { children: React.Rea
             {NAV_GROUPS.map(({ group, items }) => {
               const renderItem = (item: NavItem) => {
                 // Sub-section divider inside a group (e.g. the P&A Centre's five sections).
-                if (item.subheader) return (
-                  <div key={"sub-" + item.subheader} data-sb-label
-                    className="px-3 pt-2.5 pb-0.5 text-[8px] font-bold uppercase tracking-widest text-purple-400/40 select-none">
-                    {item.subheader}
-                  </div>
-                );
+                // When it has an href it becomes a clickable link to that section's landing page.
+                if (item.subheader) {
+                  const shCls = "px-3 pt-2.5 pb-0.5 text-[8px] font-bold uppercase tracking-widest select-none";
+                  return item.href ? (
+                    <Link key={"sub-" + item.subheader} href={item.href} data-sb-label className={`${shCls} block text-purple-400/50 hover:text-purple-100 transition-colors`}>{item.subheader}</Link>
+                  ) : (
+                    <div key={"sub-" + item.subheader} data-sb-label className={`${shCls} text-purple-400/40`}>{item.subheader}</div>
+                  );
+                }
                 const { label, href, icon, badge, soon } = item;
                 // Not-yet-built module — muted, non-clickable "soon" row.
                 if (soon || !href) return (
