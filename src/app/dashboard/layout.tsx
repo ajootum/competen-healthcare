@@ -15,6 +15,7 @@ import { highestRole, type AppRole } from "@/lib/roles";
 const NAV_GROUPS: { group: string | null; items: { label: string; href: string; icon: string }[] }[] = [
   { group: null, items: [
     { label: "Dashboard",               href: "/dashboard",              icon: "🏠" },
+    { label: "My Shift",                href: "/dashboard/shift",        icon: "🩺" },
     { label: "Notifications",           href: "/dashboard/notifications", icon: "🔔" },
     { label: "Career Growth",           href: "/dashboard/career",       icon: "📈" },
   ]},

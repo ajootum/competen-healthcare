@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getCaller, isResponse, isStaff, isSuper, forbidden, badRequest } from "@/lib/api-auth";
+import { getCaller, isResponse, isStaff, isSuper, forbidden, badRequest, assertProfileScope } from "@/lib/api-auth";
 import { notify } from "@/lib/notify";
 
 // Operational Escalations (COE Escalation domain — 5 levels).
@@ -24,13 +24,24 @@ export async function GET() {
 export async function POST(req: Request) {
   const c = await getCaller();
   if (isResponse(c)) return c;
-  if (!isStaff(c)) return forbidden();
+  // Any authenticated clinician may RAISE an escalation (frontline safety);
+  // managing the queue (GET/PATCH) stays coordinator-only.
   const b = await req.json().catch(() => ({}));
   if (!b.summary?.trim()) return badRequest("summary required");
   const level = Number(b.level);
   if (!Number.isInteger(level) || level < 1 || level > 5) return badRequest("level must be 1–5");
   const admin = c.admin as any;
   const hospitalId = isSuper(c) ? (b.hospital_id ?? c.hospitalId) : c.hospitalId;
+  if (b.patient_id) {
+    const { data: p } = await admin.from("op_patients").select("hospital_id").eq("id", b.patient_id).maybeSingle();
+    if (!p) return NextResponse.json({ error: "Patient not found" }, { status: 404 });
+    if (!isSuper(c) && p.hospital_id !== c.hospitalId) return forbidden("Patient out of scope");
+  }
+  // A named responder must be in the caller's hospital (we notify them below).
+  if (b.assigned_responder) {
+    const scope = await assertProfileScope(c, b.assigned_responder);
+    if (scope) return scope;
+  }
 
   const deadline = new Date();
   deadline.setMinutes(deadline.getMinutes() + (level >= 4 ? 15 : level === 3 ? 60 : 240));

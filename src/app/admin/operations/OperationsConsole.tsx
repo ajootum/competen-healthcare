@@ -13,7 +13,8 @@ const ISO = ["none", "contact", "droplet", "airborne", "protective"];
 const RISK = ["low", "medium", "high"];
 const STAFF_ROLES = ["charge", "nurse", "support", "float", "educator", "assessor", "doctor", "therapist"];
 const SAFETY_CATS = ["fall_risk", "medication", "pressure_injury", "infection", "patient_id", "deterioration", "device", "environmental"];
-const TABS = ["Command", "Shifts", "Ward", "Assignments", "Safety"] as const;
+const TABS = ["Command", "Shifts", "Ward", "Assignments", "Care", "Safety"] as const;
+const OBS_TYPES = ["vital_signs", "neuro", "respiratory", "cardiovascular", "fluid_balance", "pain", "sedation", "pews", "gcs", "specialty"];
 
 async function call(method: string, path: string, body?: any) {
   const r = await fetch(path, { method, headers: body ? { "Content-Type": "application/json" } : {}, body: body ? JSON.stringify(body) : undefined });
@@ -340,6 +341,95 @@ function AssignmentsTab({ data, support, ui }: TabProps) {
   );
 }
 
+// ── Care (tasks + observations oversight) ─────────────────────────────────────
+function CareTab({ data, support, ui }: TabProps) {
+  const [tPatient, setTPatient] = useState(""); const [tStaff, setTStaff] = useState(""); const [tDesc, setTDesc] = useState(""); const [tPriority, setTPriority] = useState("normal");
+  const [oPatient, setOPatient] = useState(""); const [oType, setOType] = useState("vital_signs"); const [oDue, setODue] = useState("");
+  const ewsColor = (n: number | null) => n == null ? "text-gray-400" : n >= 7 ? "text-red-600" : n >= 5 ? "text-orange-600" : "text-gray-600";
+
+  async function assignTask() {
+    if (!tStaff || !tDesc.trim()) { ui.toast("err", "Pick a staff member and describe the task"); return; }
+    ui.setBusy(true);
+    const r = await call("POST", "/api/operations/tasks", { assigned_to: tStaff, patient_id: tPatient || undefined, description: tDesc, priority: tPriority });
+    ui.setBusy(false);
+    if (r.ok) { setTDesc(""); ui.toast("ok", "Task assigned"); ui.refresh(); } else ui.toast("err", r.data?.error || "Failed");
+  }
+  async function verifyTask(id: string) {
+    ui.setBusy(true); const r = await call("PATCH", `/api/operations/tasks?id=${id}`, { status: "verified" }); ui.setBusy(false);
+    if (r.ok) { ui.toast("ok", "Task verified"); ui.refresh(); } else ui.toast("err", r.data?.error || "Failed");
+  }
+  async function scheduleObs() {
+    if (!oPatient) { ui.toast("err", "Pick a patient"); return; }
+    ui.setBusy(true);
+    const r = await call("POST", "/api/operations/observations", { mode: "schedule", patient_id: oPatient, observation_type: oType, due_at: oDue || undefined });
+    ui.setBusy(false);
+    if (r.ok) { ui.toast("ok", "Observation scheduled"); ui.refresh(); } else ui.toast("err", r.data?.error || "Failed");
+  }
+
+  return (
+    <div className="grid md:grid-cols-2 gap-5">
+      <div className="space-y-5">
+        <div className={card}>
+          <h3 className="font-semibold text-gray-900 mb-3">Assign a task</h3>
+          <div className="space-y-2">
+            <div className="grid grid-cols-2 gap-2">
+              <label className={label}><span className={lbl}>Staff</span><select className={input} value={tStaff} onChange={e => setTStaff(e.target.value)}><option value="">Select…</option>{support.staff.map((s: any) => <option key={s.id} value={s.id}>{s.full_name}</option>)}</select></label>
+              <label className={label}><span className={lbl}>Patient (optional)</span><select className={input} value={tPatient} onChange={e => setTPatient(e.target.value)}><option value="">—</option>{data.patients.map((p: any) => <option key={p.id} value={p.id}>{p.label}</option>)}</select></label>
+            </div>
+            <div className="flex gap-2">
+              <input className={input} placeholder="Task description" value={tDesc} onChange={e => setTDesc(e.target.value)} />
+              <select className={input} style={{ width: 110 }} value={tPriority} onChange={e => setTPriority(e.target.value)}>{["low", "normal", "high", "urgent"].map(p => <option key={p}>{p}</option>)}</select>
+            </div>
+            <button className={btn} disabled={ui.busy} onClick={assignTask}>Assign task</button>
+          </div>
+        </div>
+        <div className={card}>
+          <h3 className="font-semibold text-gray-900 mb-3">Schedule an observation</h3>
+          {support.careReady === false && <p className="text-xs text-amber-600 mb-2">Observations need migration <code className="font-mono">039-clinical-observations.sql</code> — apply it to enable this.</p>}
+          <div className="grid grid-cols-3 gap-2">
+            <select className={input} value={oPatient} onChange={e => setOPatient(e.target.value)}><option value="">Patient…</option>{data.patients.map((p: any) => <option key={p.id} value={p.id}>{p.label}</option>)}</select>
+            <select className={input} value={oType} onChange={e => setOType(e.target.value)}>{OBS_TYPES.map(t => <option key={t} value={t}>{pretty(t)}</option>)}</select>
+            <input type="datetime-local" className={input} value={oDue} onChange={e => setODue(e.target.value)} />
+          </div>
+          <button className={`${btn} mt-3`} disabled={ui.busy} onClick={scheduleObs}>Schedule</button>
+        </div>
+      </div>
+
+      <div className="space-y-5">
+        <div className={card}>
+          <h3 className="font-semibold text-gray-900 mb-3">Open tasks ({data.tasks.length})</h3>
+          <div className="divide-y">
+            {data.tasks.length === 0 && <p className="text-sm text-gray-400">No open tasks.</p>}
+            {data.tasks.map((t: any) => (
+              <div key={t.id} className="py-2 flex items-center gap-2 text-sm">
+                <span className={`text-[10px] px-1.5 py-0.5 rounded ${t.priority === "urgent" ? "bg-red-100 text-red-700" : t.priority === "high" ? "bg-orange-100 text-orange-700" : "bg-gray-100 text-gray-500"}`}>{t.priority}</span>
+                <span className="text-gray-800 truncate">{t.description}</span>
+                <span className="text-xs text-gray-400">{t.profiles?.full_name ?? "—"} · {t.status}</span>
+                {t.status === "completed" && <button className={`${btnGhost} ml-auto`} disabled={ui.busy} onClick={() => verifyTask(t.id)}>Verify</button>}
+              </div>
+            ))}
+          </div>
+        </div>
+        <div className={card}>
+          <h3 className="font-semibold text-gray-900 mb-3">Recent observations ({data.observations.length})</h3>
+          <div className="divide-y">
+            {data.observations.length === 0 && <p className="text-sm text-gray-400">No observations yet.</p>}
+            {data.observations.slice(0, 12).map((o: any) => (
+              <div key={o.id} className="py-2 flex items-center gap-2 text-sm">
+                <span className="text-gray-700">{o.op_patients?.label ?? "—"}</span>
+                <span className="text-xs text-gray-400">{pretty(o.observation_type)}</span>
+                {o.ews_score != null && <span className={`font-medium ${ewsColor(o.ews_score)}`}>EWS {o.ews_score}</span>}
+                {o.escalation_triggered && <span className="text-[10px] px-1.5 py-0.5 rounded bg-red-100 text-red-700">escalated</span>}
+                <span className="ml-auto text-[10px] px-2 py-0.5 rounded-full bg-gray-100 text-gray-500">{o.status}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── Safety (escalations + safety alerts) ──────────────────────────────────────
 function SafetyTab({ data, support, ui }: TabProps) {
   const [eLevel, setELevel] = useState("2"); const [eSummary, setESummary] = useState(""); const [ePatient, setEPatient] = useState(""); const [eResponder, setEResponder] = useState("");
@@ -463,6 +553,7 @@ export default function OperationsConsole({ ready, data, support }: { ready: boo
       {tab === "Shifts" && <ShiftsTab {...props} />}
       {tab === "Ward" && <WardTab {...props} />}
       {tab === "Assignments" && <AssignmentsTab {...props} />}
+      {tab === "Care" && <CareTab {...props} />}
       {tab === "Safety" && <SafetyTab {...props} />}
     </div>
   );

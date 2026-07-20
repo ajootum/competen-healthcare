@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getCaller, isResponse, isStaff, isSuper, forbidden, badRequest } from "@/lib/api-auth";
+import { getCaller, isResponse, isStaff, isSuper, forbidden, badRequest, assertProfileScope } from "@/lib/api-auth";
 
 // Safety Alerts (COE Patient Safety domain).
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -24,11 +24,21 @@ export async function GET() {
 export async function POST(req: Request) {
   const c = await getCaller();
   if (isResponse(c)) return c;
-  if (!isStaff(c)) return forbidden();
+  // Any authenticated clinician may RAISE a safety alert; resolving stays coordinator-only.
   const b = await req.json().catch(() => ({}));
   if (!CATS.includes(b.category)) return badRequest("valid category required");
   const admin = c.admin as any;
   const hospitalId = isSuper(c) ? (b.hospital_id ?? c.hospitalId) : c.hospitalId;
+  if (b.patient_id) {
+    const { data: p } = await admin.from("op_patients").select("hospital_id").eq("id", b.patient_id).maybeSingle();
+    if (!p) return NextResponse.json({ error: "Patient not found" }, { status: 404 });
+    if (!isSuper(c) && p.hospital_id !== c.hospitalId) return forbidden("Patient out of scope");
+  }
+  // A named owner must be in the caller's hospital; otherwise default to the caller.
+  if (b.owner_id && b.owner_id !== c.userId) {
+    const scope = await assertProfileScope(c, b.owner_id);
+    if (scope) return scope;
+  }
   const { data, error } = await admin.from("op_safety_alerts").insert({
     hospital_id: hospitalId, unit_id: b.unit_id ?? null, patient_id: b.patient_id ?? null,
     category: b.category, severity: SEV.includes(b.severity) ? b.severity : "medium",
