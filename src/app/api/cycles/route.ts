@@ -1,23 +1,20 @@
-import { createClient } from "@/lib/supabase/server";
-import { createAdminClient } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
+import { getCaller, isResponse, forbidden, isStaff, isEducator, isSuper, assertProfileScope } from "@/lib/api-auth";
 
 export async function POST(req: Request) {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-
-  const { data: profile } = await createAdminClient().from("profiles").select("role, hospital_id").eq("id", user.id).single();
-  if (!["hospital_admin","super_admin","educator"].includes(profile?.role ?? "")) {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-  }
+  const c = await getCaller();
+  if (isResponse(c)) return c;
+  if (!isEducator(c)) return forbidden();
 
   const { nurse_id, cycle_type, start_date, end_date, notes, framework_ids, min_assessors, consensus_rule } = await req.json();
   if (!nurse_id || !cycle_type) return NextResponse.json({ error: "nurse_id and cycle_type required" }, { status: 400 });
 
-  const admin = createAdminClient();
+  const admin = c.admin;
   const { data: nurse } = await admin.from("profiles").select("hospital_id").eq("id", nurse_id).single();
   if (!nurse?.hospital_id) return NextResponse.json({ error: "Nurse has no hospital assigned" }, { status: 400 });
+  // The learner must be in the caller's hospital.
+  const scopeErr = await assertProfileScope(c, nurse_id);
+  if (scopeErr) return scopeErr;
 
   const { data: cycle, error } = await admin.from("competency_cycles").insert({
     nurse_id,
@@ -26,7 +23,7 @@ export async function POST(req: Request) {
     start_date: start_date ?? new Date().toISOString().split("T")[0],
     end_date: end_date ?? null,
     notes: notes ?? null,
-    created_by: user.id,
+    created_by: c.userId,
     min_assessors: min_assessors ?? 1,
     consensus_rule: consensus_rule ?? "any",
   }).select().single();
@@ -43,16 +40,15 @@ export async function POST(req: Request) {
 }
 
 export async function GET(req: Request) {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const c = await getCaller();
+  if (isResponse(c)) return c;
+  if (!isStaff(c)) return forbidden(); // competency cycles are staff-only
 
   const { searchParams } = new URL(req.url);
   const nurseId = searchParams.get("nurse_id");
-  const hospitalId = searchParams.get("hospital_id");
   const status = searchParams.get("status");
 
-  const admin = createAdminClient();
+  const admin = c.admin;
   let q = admin.from("competency_cycles").select(`
     id, cycle_type, status, start_date, end_date, created_at, notes,
     profiles!nurse_id(id, full_name, role),
@@ -60,8 +56,10 @@ export async function GET(req: Request) {
   `).order("created_at", { ascending: false });
 
   if (nurseId) q = q.eq("nurse_id", nurseId);
-  if (hospitalId) q = q.eq("hospital_id", hospitalId);
   if (status) q = q.eq("status", status);
+  // Tenant scope: the caller's hospital only (super = all). Any client-supplied
+  // hospital_id is ignored in favour of the caller's own scope.
+  if (!isSuper(c)) q = q.eq("hospital_id", c.hospitalId ?? "__none__");
 
   const { data, error } = await q;
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
