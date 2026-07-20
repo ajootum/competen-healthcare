@@ -23,6 +23,7 @@ const ALL_NAV = [
   { label: "Quality & Accreditation", href: "/quality-accreditation", icon: "🎯", orgRoles: ["chief_officer","org_admin","quality_manager","governance_committee",null] },
   { label: "Human Resources", href: "/human-resources", icon: "👥", orgRoles: ["chief_officer","org_admin","hr_manager",null] },
   { label: "Hospital Executive", href: "/hospital-executive", icon: "🛰️", orgRoles: ["chief_officer","org_admin",null] },
+  { label: "Organisation Admin", href: "/organisation-admin", icon: "🗂️", orgRoles: ["chief_officer","org_admin","it_admin",null] },
   // Cycles: those who run and monitor assessments
   { label: "Cycles",         href: "/admin/cycles",       icon: "🔄", orgRoles: ["org_admin","manager","competency_coordinator","quality_manager",null] },
   { label: "Assessment Plans", href: "/admin/plans",      icon: "🗓️", orgRoles: ["org_admin","manager","competency_coordinator","educator",null] },
