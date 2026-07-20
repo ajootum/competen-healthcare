@@ -19,9 +19,9 @@ type NavItem = { label: string; href?: string; icon: string; exact?: boolean; so
 const NAV_GROUPS: { group: string; items: NavItem[] }[] = [
   { group: "Shift Command", items: [
     { label: "Dashboard",          href: "/supervisor",                            icon: "🖥️", exact: true },
-    { label: "Current Shift",      href: "/supervisor/operations?section=shifts",  icon: "🩺" },
-    { label: "Today's Priorities", href: "/supervisor#priorities",                 icon: "⚠️" },
-    { label: "Shift Timeline",     href: "/supervisor#timeline",                   icon: "🕑" },
+    { label: "Current Shift",      href: "/supervisor/current-shift",              icon: "🩺" },
+    { label: "Today's Priorities", href: "/supervisor/priorities",                icon: "⚠️" },
+    { label: "Shift Timeline",     href: "/supervisor/timeline",                  icon: "🕑" },
   ]},
   { group: "Patient Operations", items: [
     { label: "Patient List",       href: "/supervisor/operations?section=ward",    icon: "👤" },
