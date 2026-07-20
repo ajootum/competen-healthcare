@@ -26,12 +26,12 @@ const NAV_GROUPS: { group: string; items: NavItem[] }[] = [
   { group: "Patient Operations", items: [
     { label: "Patient Ops Dashboard",     href: "/supervisor/patient-ops",         icon: "📊" },
     { label: "Patient Census",            href: "/supervisor/patient-list",        icon: "👤" },
-    { label: "Patient Shift Management",  icon: "🔁", soon: true },
+    { label: "Patient Shift Management",  href: "/supervisor/patient-shift",       icon: "🔁" },
     { label: "Patient Flow",              href: "/supervisor/patient-flow",        icon: "🔀" },
     { label: "Clinical Safety",           href: "/supervisor/clinical-safety",     icon: "🛡️" },
     { label: "Bed & Capacity",            href: "/supervisor/bed-management",       icon: "🛏️" },
     { label: "Ward Map",                  href: "/supervisor/ward-map",            icon: "🗺️" },
-    { label: "Patient Operations Center", icon: "🗂️", soon: true },
+    { label: "Patient Operations Center", href: "/supervisor/patient-ops-center",  icon: "🗂️" },
   ]},
   { group: "Workforce Operations", items: [
     { label: "Assignments",        href: "/supervisor/operations?section=assignments", icon: "🧩" },
