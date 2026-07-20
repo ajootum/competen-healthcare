@@ -38,21 +38,31 @@ export async function loadQualityDashboard(admin: any, hid: string | null, isSup
   } catch { /* ignore */ }
 
   // ── CAPA (corrective/preventive actions)
-  const capa = { open: 0, overdue: 0, critical: 0 };
+  // critical and overdue are computed from the SAME open set, so an action that
+  // is both would be double-counted if the two were summed. highOrOverdue is the
+  // deduplicated union (distinct actions needing urgent attention) for callers
+  // that aggregate a single "high-severity" figure.
+  const capa = { open: 0, overdue: 0, critical: 0, highOrOverdue: 0 };
   try {
     const { data } = await scope(admin.from("capa_actions").select("status, priority, due_date").limit(3000));
     const openRows = (data ?? []).filter((c: any) => !["completed", "verified", "closed"].includes(c.status));
+    const isCrit = (c: any) => c.priority === "high" || c.priority === "critical";
+    const isOverdue = (c: any) => c.due_date && c.due_date < today;
     capa.open = openRows.length;
-    capa.overdue = openRows.filter((c: any) => c.due_date && c.due_date < today).length;
-    capa.critical = openRows.filter((c: any) => c.priority === "high" || c.priority === "critical").length;
+    capa.overdue = openRows.filter(isOverdue).length;
+    capa.critical = openRows.filter(isCrit).length;
+    capa.highOrOverdue = openRows.filter((c: any) => isCrit(c) || isOverdue(c)).length;
   } catch { /* ignore */ }
 
-  // ── Improvement projects (QI / PDSA)
-  const improvements = { total: 0, active: 0 };
+  // ── Improvement projects (QI / PDSA). total = active + completed exactly, so
+  // executive KPIs built from these reconcile.
+  const improvements = { total: 0, active: 0, completed: 0 };
   try {
     const { data } = await scope(admin.from("improvement_objects").select("status").limit(2000));
-    improvements.total = (data ?? []).length;
-    improvements.active = (data ?? []).filter((i: any) => !["completed", "closed"].includes(i.status)).length;
+    const rows = data ?? [];
+    improvements.total = rows.length;
+    improvements.completed = rows.filter((i: any) => ["completed", "closed"].includes(i.status)).length;
+    improvements.active = improvements.total - improvements.completed;
   } catch { /* ignore */ }
 
   // ── Standards + indicators via the hospital's quality_objects
