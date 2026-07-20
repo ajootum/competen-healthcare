@@ -101,6 +101,20 @@ export const ORG_ROLE_CONFIG: Record<OrgRole, {
   healthcare_worker:      { label: "Healthcare Worker",                icon: "🩺", description: "Tracked, assessed and upskilled on the platform",             portalRole: "nurse",          tier: 13 },
 };
 
+export const ORG_ROLES = Object.keys(ORG_ROLE_CONFIG) as OrgRole[];
+
+// A user's effective org roles for access gating: the full org_roles[] array
+// (preferred) or the org_role scalar (fallback). Returns [null] when the user has
+// no org role — so catch-all nav items (which list null) still show for them, and
+// gating on `orgRolesOf(p).some(r => item.orgRoles.includes(r))` matches EVERY
+// role the user holds, not just their primary/highest one.
+export function orgRolesOf(p: { org_role?: string | null; org_roles?: string[] | null } | null | undefined): (OrgRole | null)[] {
+  if (!p) return [null];
+  const raw = ((p.org_roles?.length ? p.org_roles : [p.org_role]) as (string | null | undefined)[]).filter(Boolean) as string[];
+  const valid = raw.filter(r => (ORG_ROLES as string[]).includes(r)) as OrgRole[];
+  return valid.length ? valid : [null];
+}
+
 export function portalRoleFromOrgRole(orgRole: OrgRole): AppRole {
   return ORG_ROLE_CONFIG[orgRole].portalRole;
 }

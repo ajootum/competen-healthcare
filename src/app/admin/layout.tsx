@@ -5,7 +5,7 @@ import Link from "next/link";
 import RoleSwitcher from "@/components/RoleSwitcher";
 import NavLink from "@/components/NavLink";
 import SidebarToggle from "@/components/SidebarToggle";
-import { highestRole, ORG_ROLE_CONFIG, type AppRole, type OrgRole } from "@/lib/roles";
+import { highestRole, orgRolesOf, ORG_ROLE_CONFIG, type AppRole, type OrgRole } from "@/lib/roles";
 
 const ALL_NAV = [
   // Overview: all management and functional roles
@@ -68,11 +68,15 @@ export default async function AdminLayout({ children }: { children: React.ReactN
 
   const { data: orgProfile, error: orgErr } = await adminClient
     .from("profiles")
-    .select("org_role")
+    .select("org_role, org_roles")
     .eq("id", user.id)
-    .returns<{ org_role: string | null }[]>()
+    .returns<{ org_role: string | null; org_roles: string[] | null }[]>()
     .maybeSingle();
   const orgRole = (!orgErr && orgProfile ? orgProfile.org_role as OrgRole : null) ?? null;
+  // Effective org roles = the FULL org_roles[] array (fall back to the scalar), so a
+  // user with several activated roles sees every nav item ANY of them unlocks — not
+  // just the ones their single highest-seniority role grants.
+  const orgRoles = orgRolesOf(!orgErr ? orgProfile : null) as (OrgRole | null)[];
 
   if (!userRoles.includes("hospital_admin")) {
     return (
@@ -89,7 +93,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
 
   const orgRoleCfg = orgRole ? ORG_ROLE_CONFIG[orgRole] : null;
   const portalLabel = orgRoleCfg?.label ?? "Admin";
-  const filteredNav = ALL_NAV.filter(item => item.orgRoles.includes(orgRole));
+  const filteredNav = ALL_NAV.filter(item => item.orgRoles.some(r => (orgRoles as (string | null)[]).includes(r)));
 
   return (
     <div className="min-h-screen bg-gray-50 font-[family-name:var(--font-geist-sans)]">
