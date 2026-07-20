@@ -197,7 +197,7 @@ function ShiftsTab({ data, support, ui }: TabProps) {
 // ── Ward (beds & patients) ────────────────────────────────────────────────────
 function WardTab({ data, support, ui }: TabProps) {
   const [bLabel, setBLabel] = useState(""); const [bDept, setBDept] = useState(""); const [bType, setBType] = useState("standard");
-  const [pLabel, setPLabel] = useState(""); const [pDept, setPDept] = useState(""); const [pBed, setPBed] = useState(""); const [pAcuity, setPAcuity] = useState("stable"); const [pDepy, setPDepy] = useState("level_1"); const [pIso, setPIso] = useState("none"); const [pRisk, setPRisk] = useState("low");
+  const [pLabel, setPLabel] = useState(""); const [pDept, setPDept] = useState(""); const [pBed, setPBed] = useState(""); const [pAcuity, setPAcuity] = useState("stable"); const [pDepy, setPDepy] = useState("level_1"); const [pIso, setPIso] = useState("none"); const [pRisk, setPRisk] = useState("low"); const [pAge, setPAge] = useState(""); const [pDx, setPDx] = useState("");
   const availableBeds = data.beds.filter((b: any) => b.status === "available");
 
   async function addBed() {
@@ -212,9 +212,9 @@ function WardTab({ data, support, ui }: TabProps) {
   async function registerPatient() {
     if (!pLabel.trim()) { ui.toast("err", "Operational label required"); return; }
     ui.setBusy(true);
-    const r = await call("POST", "/api/operations/patients", { label: pLabel, department_id: pDept || undefined, bed_id: pBed || undefined, acuity_level: pAcuity, dependency_level: pDepy, isolation_status: pIso, risk_level: pRisk });
+    const r = await call("POST", "/api/operations/patients", { label: pLabel, department_id: pDept || undefined, bed_id: pBed || undefined, acuity_level: pAcuity, dependency_level: pDepy, isolation_status: pIso, risk_level: pRisk, age_years: pAge || undefined, diagnosis: pDx || undefined });
     ui.setBusy(false);
-    if (r.ok) { setPLabel(""); setPBed(""); ui.toast("ok", "Patient registered"); ui.refresh(); } else ui.toast("err", r.data?.error || "Failed");
+    if (r.ok) { setPLabel(""); setPBed(""); setPAge(""); setPDx(""); ui.toast("ok", "Patient registered"); ui.refresh(); } else ui.toast("err", r.data?.error || "Failed");
   }
   async function discharge(id: string) {
     ui.setBusy(true); const r = await call("PATCH", `/api/operations/patients?id=${id}`, { operational_status: "discharged" }); ui.setBusy(false);
@@ -255,6 +255,8 @@ function WardTab({ data, support, ui }: TabProps) {
             <select className={input} value={pDepy} onChange={e => setPDepy(e.target.value)}>{DEP.map(a => <option key={a} value={a}>dep: {pretty(a)}</option>)}</select>
             <select className={input} value={pIso} onChange={e => setPIso(e.target.value)}>{ISO.map(a => <option key={a} value={a}>iso: {a}</option>)}</select>
             <select className={input} value={pRisk} onChange={e => setPRisk(e.target.value)}>{RISK.map(a => <option key={a} value={a}>risk: {a}</option>)}</select>
+            <input className={input} type="number" min={0} max={130} placeholder="Age (yrs, optional)" value={pAge} onChange={e => setPAge(e.target.value)} />
+            <input className={input} placeholder="Working diagnosis (optional)" value={pDx} onChange={e => setPDx(e.target.value)} />
           </div>
           <button className={`${btn} mt-3`} disabled={ui.busy} onClick={registerPatient}>Register</button>
         </div>

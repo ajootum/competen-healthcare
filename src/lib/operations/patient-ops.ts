@@ -72,7 +72,7 @@ export async function loadPatientOps(admin: any, hid: string | null, isSuper: bo
     return {
       id: p.id, bed: p.op_beds?.label ?? null, bedId: p.bed_id ?? null, label: p.label,
       acuity: p.acuity_level, risk: p.risk_level, isolation: p.isolation_status, opStatus: p.operational_status,
-      department: p.departments?.name ?? null,
+      department: p.departments?.name ?? null, age: p.age_years ?? null, diagnosis: p.diagnosis ?? null,
       pews: ews, pewsTrend: pewsTrend(p.id), lastObs: lastObs(p.id), nextReview: nextReview(p.id), overdueObs: overdueObs(p.id),
       nurse: nurseByPatient.get(p.id)?.name ?? null, nurseId: nurseByPatient.get(p.id)?.id ?? null,
       alerts: alertsByPatient.get(p.id) ?? [], escalations: escByPatient.get(p.id) ?? [], flags,

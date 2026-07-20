@@ -36,7 +36,7 @@ export async function POST(req: Request) {
     if (!d) return NextResponse.json({ error: "Department not found" }, { status: 404 });
     if (!isSuper(c) && d.hospital_id !== c.hospitalId) return forbidden("Department out of scope");
   }
-  const { data, error } = await admin.from("op_patients").insert({
+  const insertObj: any = {
     hospital_id: hospitalId, department_id: b.department_id ?? null, unit_id: b.unit_id ?? null, bed_id: b.bed_id ?? null,
     label: b.label.trim(), patient_ref: b.patient_ref?.trim() || null,
     acuity_level: ACUITY.includes(b.acuity_level) ? b.acuity_level : "stable",
@@ -44,7 +44,13 @@ export async function POST(req: Request) {
     isolation_status: ISO.includes(b.isolation_status) ? b.isolation_status : "none",
     risk_level: RISK.includes(b.risk_level) ? b.risk_level : "low",
     operational_status: "admitted", created_by: c.userId,
-  }).select().single();
+  };
+  // Operational-lite age + working diagnosis (migration 047). Only sent when
+  // provided, so pre-migration inserts (empty values) still succeed.
+  const age = parseInt(b.age_years, 10);
+  if (Number.isFinite(age) && age >= 0 && age <= 130) insertObj.age_years = age;
+  if (b.diagnosis?.trim()) insertObj.diagnosis = b.diagnosis.trim().slice(0, 200);
+  const { data, error } = await admin.from("op_patients").insert(insertObj).select().single();
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   // Occupy the bed if one was given.
   if (b.bed_id) await admin.from("op_beds").update({ status: "occupied" }).eq("id", b.bed_id).eq("hospital_id", hospitalId);
@@ -68,6 +74,8 @@ export async function PATCH(req: Request) {
   if (RISK.includes(b.risk_level)) update.risk_level = b.risk_level;
   if (ISO.includes(b.isolation_status)) update.isolation_status = b.isolation_status;
   if (OPSTATUS.includes(b.operational_status)) update.operational_status = b.operational_status;
+  if (b.age_years !== undefined) { const age = parseInt(b.age_years, 10); update.age_years = (Number.isFinite(age) && age >= 0 && age <= 130) ? age : null; }
+  if (b.diagnosis !== undefined) update.diagnosis = b.diagnosis?.trim() ? b.diagnosis.trim().slice(0, 200) : null;
   if (!Object.keys(update).length) return badRequest("no valid fields");
   const { data, error } = await admin.from("op_patients").update(update).eq("id", id).select().single();
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });

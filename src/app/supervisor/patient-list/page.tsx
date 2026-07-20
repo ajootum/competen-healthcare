@@ -129,6 +129,8 @@ export default async function PatientList() {
               <tr className="text-[10px] uppercase tracking-wide text-gray-400 border-b border-gray-100">
                 <th className="text-left font-medium px-4 py-2.5">Bed</th>
                 <th className="text-left font-medium px-4 py-2.5">Patient</th>
+                <th className="text-left font-medium px-4 py-2.5">Age</th>
+                <th className="text-left font-medium px-4 py-2.5">Diagnosis</th>
                 <th className="text-left font-medium px-4 py-2.5">Status</th>
                 <th className="text-left font-medium px-4 py-2.5">PEWS</th>
                 <th className="text-left font-medium px-4 py-2.5">Assigned nurse</th>
@@ -140,12 +142,14 @@ export default async function PatientList() {
             </thead>
             <tbody className="divide-y divide-gray-50">
               {active.length === 0 && (
-                <tr><td colSpan={9} className="px-4 py-8 text-center text-sm text-gray-400">No active patients on the register.</td></tr>
+                <tr><td colSpan={11} className="px-4 py-8 text-center text-sm text-gray-400">No active patients on the register.</td></tr>
               )}
               {active.map(p => (
                 <tr key={p.id} className="hover:bg-gray-50/60">
                   <td className="px-4 py-2.5 whitespace-nowrap text-gray-500 tabular-nums">{p.bed ?? "—"}</td>
                   <td className="px-4 py-2.5 whitespace-nowrap font-medium text-gray-900">{p.label}</td>
+                  <td className="px-4 py-2.5 whitespace-nowrap text-gray-500 tabular-nums">{p.age != null ? `${p.age}y` : "—"}</td>
+                  <td className="px-4 py-2.5 text-gray-600 max-w-[12rem] truncate" title={p.diagnosis ?? ""}>{p.diagnosis ?? "—"}</td>
                   <td className="px-4 py-2.5 whitespace-nowrap">
                     <span className={`text-[10px] px-2 py-0.5 rounded-full ${STATE_TONE[p.state] ?? "bg-gray-100 text-gray-600"}`}>{p.state}</span>
                   </td>
@@ -183,7 +187,7 @@ export default async function PatientList() {
           </table>
         </div>
         <div className="px-4 py-2.5 border-t border-gray-100">
-          <p className="text-[11px] text-gray-400">Age &amp; diagnosis are held in the clinical record (Patient Care Engine), not the operational register.</p>
+          <p className="text-[11px] text-gray-400">Age &amp; working diagnosis are operational-lite fields set at patient registration — shown as &ldquo;—&rdquo; until entered; the full clinical record lives in the Patient Care Engine.</p>
         </div>
       </div>
 
