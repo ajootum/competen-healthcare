@@ -36,7 +36,9 @@ export default async function PatientShiftManagement() {
   const configReady = !(suRes as any).error;
   const suByPatient = new Map<string, any>((configReady ? (suRes.data ?? []) : []).map((r: any) => [r.patient_id, r]));
 
-  const rows = po.active.map((p: any) => {
+  // Shift worklist is admitted patients only — exclude not-yet-arrived "Expected"
+  // admissions so they don't pad the count or raise false nurse/review exceptions.
+  const rows = po.active.filter((p: any) => p.state !== "Expected").map((p: any) => {
     const su = suByPatient.get(p.id);
     return {
       id: p.id, label: p.label, bed: p.bed, nurse: p.nurse, nurseId: p.nurseId, stage: p.stage,

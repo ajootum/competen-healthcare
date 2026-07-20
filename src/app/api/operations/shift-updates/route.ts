@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getCaller, isResponse, isStaff, isSuper, forbidden, badRequest } from "@/lib/api-auth";
+import { getCaller, isResponse, isSupervisor, isSuper, forbidden, badRequest } from "@/lib/api-auth";
 
 // Patient shift updates (SSW-PO-001 §3) — per-patient operational record for the
 // CURRENT shift: review, update status, handover + snapshot. Reads/writes for
@@ -19,7 +19,7 @@ async function activeShiftId(admin: any, isSuperCaller: boolean, hid: string | n
 
 export async function GET() {
   const c = await getCaller(); if (isResponse(c)) return c;
-  if (!isStaff(c)) return forbidden();
+  if (!isSupervisor(c)) return forbidden();
   const admin = c.admin as any;
   const shiftId = await activeShiftId(admin, isSuper(c), c.hospitalId);
   let q = admin.from("op_patient_shift_updates").select("patient_id, reviewed, update_status, handover_status, snapshot").order("updated_at", { ascending: false }).limit(500);
@@ -32,7 +32,7 @@ export async function GET() {
 
 export async function POST(req: Request) {
   const c = await getCaller(); if (isResponse(c)) return c;
-  if (!isStaff(c)) return forbidden();
+  if (!isSupervisor(c)) return forbidden();
   const b = await req.json().catch(() => ({}));
   if (!b.patient_id) return badRequest("patient_id required");
   const admin = c.admin as any;

@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getCaller, isResponse, isStaff, isSuper, forbidden, badRequest } from "@/lib/api-auth";
+import { getCaller, isResponse, isSupervisor, isSuper, forbidden, badRequest } from "@/lib/api-auth";
 
 // Operational flow blockers (SSW-005 Patient Flow) — supervisor-logged blockers on
 // patient movement. Reads + writes for any operational staff; tenant-scoped in code
@@ -10,7 +10,7 @@ const CATS = ["no_bed", "bed_cleaning", "discharge_meds", "family_education", "t
 
 export async function GET() {
   const c = await getCaller(); if (isResponse(c)) return c;
-  if (!isStaff(c)) return forbidden();
+  if (!isSupervisor(c)) return forbidden();
   const admin = c.admin as any;
   let q = admin.from("op_flow_blockers").select("*, op_patients!patient_id(label), op_beds!bed_id(label)").eq("status", "open").order("created_at", { ascending: false }).limit(100);
   if (!isSuper(c)) q = q.eq("hospital_id", c.hospitalId ?? NONE);
@@ -21,7 +21,7 @@ export async function GET() {
 
 export async function POST(req: Request) {
   const c = await getCaller(); if (isResponse(c)) return c;
-  if (!isStaff(c)) return forbidden();
+  if (!isSupervisor(c)) return forbidden();
   const b = await req.json().catch(() => ({}));
   if (!CATS.includes(b.category)) return badRequest("valid category required");
   const admin = c.admin as any;
@@ -42,7 +42,7 @@ export async function POST(req: Request) {
 
 export async function PATCH(req: Request) {
   const c = await getCaller(); if (isResponse(c)) return c;
-  if (!isStaff(c)) return forbidden();
+  if (!isSupervisor(c)) return forbidden();
   const id = new URL(req.url).searchParams.get("id");
   if (!id) return badRequest("id required");
   const admin = c.admin as any;

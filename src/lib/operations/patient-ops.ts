@@ -43,8 +43,16 @@ export async function loadPatientOps(admin: any, hid: string | null, isSuper: bo
   const nextReview = (pid: string) => (obsByPatient.get(pid) ?? []).filter(o => o.status === "due" && o.due_at).sort((a, b) => a.due_at.localeCompare(b.due_at))[0]?.due_at ?? null;
   const overdueObs = (pid: string) => (obsByPatient.get(pid) ?? []).some(o => o.status === "overdue");
 
-  const nurseByPatient = new Map<string, { id: string; name: string }>();
-  assignments.forEach((a: any) => { if (a.patient_id && !nurseByPatient.has(a.patient_id)) nurseByPatient.set(a.patient_id, { id: a.staff_id, name: a.profiles?.full_name ?? "" }); });
+  // Nurse of record: a patient may hold both a 'primary' and a 'supporting' active
+  // assignment, and the source query has no ORDER BY — so prefer the primary
+  // deterministically rather than whichever row Postgres returns first.
+  const nurseByPatient = new Map<string, { id: string; name: string; primary: boolean }>();
+  assignments.forEach((a: any) => {
+    if (!a.patient_id) return;
+    const isPrimary = a.assignment_type === "primary";
+    const existing = nurseByPatient.get(a.patient_id);
+    if (!existing || (isPrimary && !existing.primary)) nurseByPatient.set(a.patient_id, { id: a.staff_id, name: a.profiles?.full_name ?? "", primary: isPrimary });
+  });
   const bedType = new Map<string, string>(beds.map((b: any) => [b.id, b.bed_type]));
   const alertsByPatient = new Map<string, any[]>();
   alerts.forEach((a: any) => { if (!a.patient_id) return; if (!alertsByPatient.has(a.patient_id)) alertsByPatient.set(a.patient_id, []); alertsByPatient.get(a.patient_id)!.push(a); });
@@ -128,6 +136,19 @@ export async function loadPatientOps(admin: any, hid: string | null, isSuper: bo
   const turnaround = (btRes as any).error ? [] : ((btRes.data ?? []) as any[]);
   const turnaroundReady = !(btRes as any).error;
 
+  // ── Flow metrics (real — from movement events + completed turnarounds) ────
+  let avgLosDays: number | null = null, avgTurnaroundH: number | null = null;
+  const activeIds = active.map((p: any) => p.id);
+  if (activeIds.length) {
+    const admRes = await admin.from("op_movement_events").select("patient_id, created_at").eq("event_type", "admission").in("patient_id", activeIds).limit(500);
+    const adm = (admRes as any).error ? [] : ((admRes.data ?? []) as any[]);
+    if (adm.length) { const nowT = Date.now(); const los = adm.map((a: any) => (nowT - new Date(a.created_at).getTime()) / 86400e3); avgLosDays = +(los.reduce((s: number, x: number) => s + x, 0) / los.length).toFixed(1); }
+  }
+  const btDoneRes = await fbScope(admin.from("op_bed_turnaround").select("created_at, completed_at")).eq("stage", "ready").not("completed_at", "is", null).limit(50);
+  const btDone = (btDoneRes as any).error ? [] : ((btDoneRes.data ?? []) as any[]);
+  if (btDone.length) { const durs = btDone.map((t: any) => (new Date(t.completed_at).getTime() - new Date(t.created_at).getTime()) / 3.6e6); avgTurnaroundH = +(durs.reduce((s: number, x: number) => s + x, 0) / durs.length).toFixed(1); }
+  const flowMetrics = { avgLosDays, avgTurnaroundH, delayedDischarges: summary.dischargesExpected, awaitingBed: flow.awaitingBed.length };
+
   // ── Safety (Clinical Safety) ─────────────────────────────────────────────
   const openEsc = escalations.filter((e: any) => ["open", "acknowledged"].includes(e.status));
   const deteriorating = active.filter(p => p.pews != null && p.pews >= 5);
@@ -200,7 +221,7 @@ export async function loadPatientOps(admin: any, hid: string | null, isSuper: bo
   const nurses = [...new Map(assignments.map((a: any) => [a.staff_id, a.profiles?.full_name])).entries()].map(([id, name]) => ({ id, name }));
 
   return {
-    ready: true as const, patients: enriched, active, summary, flow, blockers, flowBlockers, flowBlockersReady, turnaround, turnaroundReady,
+    ready: true as const, patients: enriched, active, summary, flow, blockers, flowBlockers, flowBlockersReady, turnaround, turnaroundReady, flowMetrics,
     safetyBanner, alertQueue, deteriorating, compliance, openEsc,
     bedBoard, capacity, cleaningBeds, zones, nurses, copilot,
   };

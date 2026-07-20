@@ -63,12 +63,16 @@ export default async function PatientOperationsDashboard() {
     { label: "Delayed discharges", n: summary.dischargesExpected, tone: "text-amber-600", href: "/supervisor/patient-flow" },
   ];
 
+  // Aggregate categories already summarise awaiting-bed and cleaning, so drop the
+  // per-item blocker rows for those two to avoid double-displaying the same items;
+  // keep any other detected blocker (e.g. "No bed available").
+  const extraBlockers = blockers.filter((b: any) => b.label !== "Awaiting bed allocation" && b.label !== "Bed awaiting cleaning");
   const bottlenecks = [
     { label: "Awaiting bed", n: flow.awaitingBed.length },
     { label: "Transfer pending", n: flow.transferTheatre.length },
     { label: "Discharge ready", n: flow.dischargeReady.length },
     { label: "Bed cleaning delay", n: capacity.cleaning },
-    ...blockers.slice(0, 4).map((b: any) => ({ label: b.label, n: 1, detail: b.detail })),
+    ...extraBlockers.slice(0, 4).map((b: any) => ({ label: b.label, n: 1, detail: b.detail })),
   ].filter(b => b.n > 0);
 
   const safety = [

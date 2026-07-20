@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getCaller, isResponse, isStaff, isSuper, forbidden, badRequest } from "@/lib/api-auth";
+import { getCaller, isResponse, isSupervisor, isSuper, forbidden, badRequest } from "@/lib/api-auth";
 
 // Operational Patients (COE Patient Operations). Operational objects only —
 // location/acuity/isolation/status — NEVER clinical documentation (not an EMR).
@@ -15,7 +15,7 @@ const STAGES = ["expected_admission", "awaiting_bed", "admitted", "in_care", "as
 export async function GET() {
   const c = await getCaller();
   if (isResponse(c)) return c;
-  if (!isStaff(c)) return forbidden();
+  if (!isSupervisor(c)) return forbidden();
   const admin = c.admin as any;
   let q = admin.from("op_patients").select("*, op_beds!bed_id(label), departments!department_id(name)").neq("operational_status", "discharged").order("created_at", { ascending: false }).limit(500);
   if (!isSuper(c)) q = q.eq("hospital_id", c.hospitalId ?? "00000000-0000-0000-0000-000000000000");
@@ -27,7 +27,7 @@ export async function GET() {
 export async function POST(req: Request) {
   const c = await getCaller();
   if (isResponse(c)) return c;
-  if (!isStaff(c)) return forbidden();
+  if (!isSupervisor(c)) return forbidden();
   const b = await req.json().catch(() => ({}));
   if (!b.label?.trim()) return badRequest("label required (operational identifier — not full PHI)");
   const admin = c.admin as any;
@@ -36,6 +36,19 @@ export async function POST(req: Request) {
     const { data: d } = await admin.from("departments").select("hospital_id").eq("id", b.department_id).maybeSingle();
     if (!d) return NextResponse.json({ error: "Department not found" }, { status: 404 });
     if (!isSuper(c) && d.hospital_id !== c.hospitalId) return forbidden("Department out of scope");
+  }
+  // Verify a client-supplied bed belongs to the caller's hospital — else a foreign
+  // bed_id leaks its label back on read and lets discharge flip its status (below).
+  if (b.bed_id) {
+    const { data: bd } = await admin.from("op_beds").select("hospital_id").eq("id", b.bed_id).maybeSingle();
+    if (!bd) return NextResponse.json({ error: "Bed not found" }, { status: 404 });
+    if (!isSuper(c) && bd.hospital_id !== c.hospitalId) return forbidden("Bed out of scope");
+  }
+  // Verify a client-supplied unit belongs to the caller's hospital (unit → department).
+  if (b.unit_id) {
+    const { data: u } = await admin.from("units").select("departments!department_id(hospital_id)").eq("id", b.unit_id).maybeSingle();
+    if (!u) return NextResponse.json({ error: "Unit not found" }, { status: 404 });
+    if (!isSuper(c) && (u as any).departments?.hospital_id !== c.hospitalId) return forbidden("Unit out of scope");
   }
   const insertObj: any = {
     hospital_id: hospitalId, department_id: b.department_id ?? null, unit_id: b.unit_id ?? null, bed_id: b.bed_id ?? null,
@@ -65,7 +78,7 @@ export async function POST(req: Request) {
 export async function PATCH(req: Request) {
   const c = await getCaller();
   if (isResponse(c)) return c;
-  if (!isStaff(c)) return forbidden();
+  if (!isSupervisor(c)) return forbidden();
   const id = new URL(req.url).searchParams.get("id");
   if (!id) return badRequest("id required");
   const admin = c.admin as any;
@@ -85,11 +98,17 @@ export async function PATCH(req: Request) {
   if (!Object.keys(update).length) return badRequest("no valid fields");
   const { data, error } = await admin.from("op_patients").update(update).eq("id", id).select().single();
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  // Free the bed on discharge.
-  if (update.operational_status === "discharged" && row.bed_id) await admin.from("op_beds").update({ status: "cleaning" }).eq("id", row.bed_id);
-  // Movement timeline (fail-soft pre-migration 050).
+  // Free the bed on discharge — scoped to the patient's hospital so a stored
+  // foreign bed_id can never flip another tenant's bed.
+  if (update.operational_status === "discharged" && row.bed_id) await admin.from("op_beds").update({ status: "cleaning" }).eq("id", row.bed_id).eq("hospital_id", row.hospital_id);
+  // Movement timeline (fail-soft pre-migration 050). A move to transfer_pending
+  // logs a distinct 'transfer' event so the dashboard's "Transfers today" counts.
   const events: any[] = [];
-  if (update.operational_status) events.push({ event_type: update.operational_status === "discharged" ? "discharge" : "status_change", detail: `Status: ${update.operational_status.replace(/_/g, " ")}` });
+  if (update.operational_status) {
+    const st = update.operational_status;
+    const et = st === "discharged" ? "discharge" : st === "transfer_pending" ? "transfer" : "status_change";
+    events.push({ event_type: et, detail: `Status: ${st.replace(/_/g, " ")}` });
+  }
   if (update.current_stage) events.push({ event_type: "stage_change", detail: `Stage: ${update.current_stage.replace(/_/g, " ")}` });
   if (events.length) await admin.from("op_movement_events").insert(events.map(e => ({ hospital_id: row.hospital_id, patient_id: id, created_by: c.userId, ...e })));
   return NextResponse.json(data);

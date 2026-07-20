@@ -26,12 +26,17 @@ export const badRequest = (msg = "Bad request") => NextResponse.json({ error: ms
 export const STAFF_ROLES = ["assessor", "educator", "senior_educator", "clinical_educator", "curriculum_lead", "assessment_lead", "simulation_lead", "quality_reviewer", "education_administrator", "program_director", "hospital_admin", "super_admin"];
 export const EDUCATOR_ROLES = ["educator", "senior_educator", "clinical_educator", "curriculum_lead", "assessment_lead", "simulation_lead", "education_administrator", "program_director", "hospital_admin", "super_admin"];
 export const ADMIN_ROLES = ["hospital_admin", "super_admin"];
+// Shift-supervisor + admin: the roles that run live Patient Operations (patient
+// register/discharge, shift updates, flow blockers, bed turnaround). Matches the
+// supervisor pages' gate — deliberately excludes education-only STAFF_ROLES.
+export const SUPERVISOR_ROLES = ["assessor", "hospital_admin", "super_admin"];
 
 export const hasRole = (c: Caller, ...roles: string[]) => c.roles.some(r => roles.includes(r));
 export const isSuper = (c: Caller) => hasRole(c, "super_admin");
 export const isStaff = (c: Caller) => hasRole(c, ...STAFF_ROLES);
 export const isEducator = (c: Caller) => hasRole(c, ...EDUCATOR_ROLES);
 export const isAdmin = (c: Caller) => hasRole(c, ...ADMIN_ROLES);
+export const isSupervisor = (c: Caller) => hasRole(c, ...SUPERVISOR_ROLES);
 
 // Authenticate and load the caller's role + tenant. Returns a NextResponse on
 // failure (caller does `if (isResponse(c)) return c`).

@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { loadPatientOps, fmtTime, titleCase, ewsColor, STATE_TONE, BED_TONE } from "@/lib/operations/patient-ops";
 import BedTurnaroundPanel from "./BedTurnaroundPanel";
+import BedControls from "./BedControls";
 
 export const dynamic = "force-dynamic";
 
@@ -50,17 +51,6 @@ export default async function BedManagement() {
     { label: "Isolation", n: capacity.isolation, tone: "text-rose-600" },
     { label: "Expected vacancies", n: capacity.expectedVacancies, sub: "discharges due", tone: "text-teal-600" },
     { label: "Expected demand", n: capacity.expectedDemand, sub: "admissions expected", tone: "text-amber-600" },
-  ];
-
-  // F) Action bar — every control links to a real operational surface (no dead buttons).
-  const WARD = "/supervisor/operations?section=ward";
-  const actions: { label: string; href: string; primary?: boolean }[] = [
-    { label: "Allocate Bed", href: WARD, primary: true },
-    { label: "Move Patient", href: WARD },
-    { label: "Request Cleaning", href: WARD },
-    { label: "Reserve Bed", href: WARD },
-    { label: "Block Bed", href: WARD },
-    { label: "Bed Turnaround", href: WARD },
   ];
 
   const BedTile = ({ b }: { b: any }) => (
@@ -114,17 +104,8 @@ export default async function BedManagement() {
         </div>
       </div>
 
-      {/* F) Actions bar */}
-      <div className="flex flex-wrap gap-2">
-        {actions.map(a => (
-          <Link key={a.label} href={a.href}
-            className={a.primary
-              ? "text-sm font-medium bg-teal-600 hover:bg-teal-700 text-white rounded-lg px-3.5 py-2 transition-colors"
-              : "text-sm font-medium bg-white border border-gray-200 text-teal-700 hover:border-teal-300 hover:bg-teal-50/40 rounded-lg px-3.5 py-2 transition-colors"}>
-            {a.label}
-          </Link>
-        ))}
-      </div>
+      {/* F) Bed status controls (reserve / block / release / cleaning) */}
+      <BedControls beds={bedBoard} />
 
       {/* C) Bed status board */}
       <div className={card}>
