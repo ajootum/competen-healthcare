@@ -48,14 +48,14 @@ export function landlordCan(caller: LandlordCaller, ...required: PlatformRole[])
 // Record a landlord-plane action to the Global Audit Centre (best-effort).
 export async function landlordAudit(admin: any, caller: { userId: string; fullName: string | null }, entry: {
   action: string; entity_type?: string; entity_id?: string | null; entity_name?: string | null;
-  tenant_id?: string | null; new_value?: any; reason?: string | null;
+  tenant_id?: string | null; old_value?: any; new_value?: any; reason?: string | null;
 }) {
   try {
     await admin.from("plat_audit_events").insert({
       actor_id: caller.userId, actor_name: caller.fullName, actor_plane: "landlord",
       action: entry.action, entity_type: entry.entity_type ?? null, entity_id: entry.entity_id ?? null,
       entity_name: entry.entity_name ?? null, tenant_id: entry.tenant_id ?? null,
-      new_value: entry.new_value ?? null, reason: entry.reason ?? null,
+      old_value: entry.old_value ?? null, new_value: entry.new_value ?? null, reason: entry.reason ?? null,
     });
   } catch { /* pre-migration / non-fatal */ }
 }

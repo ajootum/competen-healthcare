@@ -14,6 +14,8 @@ const NAV = [
   { label: "Subscriptions",    href: "/platform/control-plane/subscriptions", icon: "🎫" },
   { label: "Feature Flags",    href: "/platform/control-plane/feature-flags", icon: "🚩" },
   { label: "Audit Centre",     href: "/platform/control-plane/audit",        icon: "📜" },
+  { label: "Event Centre",     href: "/platform/control-plane/events",       icon: "📡" },
+  { label: "Platform Staff",   href: "/platform/staff",                      icon: "🧑‍💼" },
   { label: "Products",         href: "/platform/control-plane/products",     icon: "🧩" },
   { label: "Regions",          href: "/platform/control-plane/regions",      icon: "🌍" },
   { label: "Billing",          href: "/platform/control-plane/billing",      icon: "💷" },

@@ -2,10 +2,12 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { getLandlordCaller } from "@/lib/platform/landlord";
 import { loadTenantRegistry } from "@/lib/platform/tenant-registry";
+import TenantActions from "./TenantActions";
 
 export const dynamic = "force-dynamic";
 
 // Global Tenant Registry (LCP-001 §1).
+/* eslint-disable @typescript-eslint/no-explicit-any */
 const card = "bg-white rounded-xl border border-gray-200 p-5";
 const statusCls: Record<string, string> = {
   active: "bg-green-100 text-green-700", trial: "bg-blue-100 text-blue-700", prospect: "bg-indigo-100 text-indigo-700",
@@ -16,6 +18,8 @@ export default async function TenantRegistryPage() {
   const caller = await getLandlordCaller();
   if (!caller) redirect("/dashboard");
   const reg = await loadTenantRegistry(caller.admin);
+  let plans: { code: string; name: string }[] = [];
+  try { const { data } = await (caller.admin as any).from("plat_plans").select("code, name").eq("is_active", true).order("sort"); plans = data ?? []; } catch { /* pre-migration */ }
 
   return (
     <div className="space-y-5">
@@ -41,26 +45,24 @@ export default async function TenantRegistryPage() {
           <div className={card}>
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
-                <thead><tr className="text-left text-xs text-gray-500 border-b"><th className="py-2 pr-3">Tenant</th><th className="pr-3">Type</th><th className="pr-3">Status</th><th className="pr-3">Plan</th><th className="pr-3">Country</th><th className="pr-3 text-right">Orgs</th><th className="pr-3 text-right">Facilities</th><th className="pr-3 text-right">Users</th></tr></thead>
+                <thead><tr className="text-left text-xs text-gray-500 border-b"><th className="py-2 pr-3">Tenant</th><th className="pr-3">Type</th><th className="pr-3">Status</th><th className="pr-3">Plan</th><th className="pr-3 text-right">Users</th><th className="pr-3 text-right">Actions</th></tr></thead>
                 <tbody>
-                  {reg.tenants.length === 0 && <tr><td colSpan={8} className="py-3 text-gray-400">No tenants yet. Provision one to get started.</td></tr>}
+                  {reg.tenants.length === 0 && <tr><td colSpan={6} className="py-3 text-gray-400">No tenants yet. Provision one to get started.</td></tr>}
                   {reg.tenants.map(t => (
                     <tr key={t.id} className="border-b last:border-0">
                       <td className="py-2.5 pr-3"><div className="font-medium text-gray-800">{t.name}</div>{t.slug && <div className="text-[11px] text-gray-400 font-mono">{t.slug}</div>}</td>
                       <td className="pr-3 text-gray-500">{t.tenant_type.replace(/_/g, " ")}</td>
                       <td className="pr-3"><span className={`text-[10px] px-2 py-0.5 rounded-full ${statusCls[t.status] ?? "bg-gray-100 text-gray-500"}`}>{t.status}</span></td>
                       <td className="pr-3 text-gray-500">{t.plan ?? "—"}</td>
-                      <td className="pr-3 text-gray-500">{t.primary_country ?? "—"}</td>
-                      <td className="pr-3 text-right tabular-nums text-gray-600">{t.organisations}</td>
-                      <td className="pr-3 text-right tabular-nums text-gray-600">{t.facilities}</td>
                       <td className="pr-3 text-right tabular-nums text-gray-600">{t.users}</td>
+                      <td className="pr-3"><TenantActions tenantId={t.id} status={t.status} plan={t.plan} plans={plans} /></td>
                     </tr>
                   ))}
                 </tbody>
               </table>
             </div>
           </div>
-          <p className="text-[11px] text-gray-400">Existing organisations were lifted to one tenant each by migration 041. Lifecycle transitions (suspend / archive) and multi-org consolidation land in Phase 2.</p>
+          <p className="text-[11px] text-gray-400">Change a tenant&apos;s plan or lifecycle (activate / suspend / archive) inline — each writes an audit event and a platform event. Multi-org consolidation lands later.</p>
         </>
       )}
     </div>

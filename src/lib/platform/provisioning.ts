@@ -6,6 +6,7 @@
 // the caller (an API route) must already have enforced landlord access.
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { landlordAudit } from "./landlord";
+import { emitPlatformEvent } from "./events";
 
 export type ProvisionInput = {
   name: string;
@@ -102,11 +103,12 @@ export async function provisionTenant(
       }
     } catch { /* plan/subscription optional */ }
 
-    // 7. Audit
+    // 7. Audit + event
     await landlordAudit(admin, caller, {
       action: "provision_tenant", entity_type: "tenant", entity_id: tenant.id, entity_name: name,
       tenant_id: tenant.id, new_value: { template: input.templateCode, plan: planCode, departments: deptCount },
     });
+    await emitPlatformEvent(admin, { event_type: "tenant.created", tenant_id: tenant.id, severity: "info", payload: { name, template: input.templateCode, plan: planCode } });
 
     return { ok: true, tenantId: tenant.id, organisationId: org.id, hospitalId: hosp.id, departments: deptCount, steps };
   } catch (e: any) {

@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { getLandlordCaller } from "@/lib/platform/landlord";
 import { loadFeatureFlags } from "@/lib/platform/feature-flags";
+import FlagAssign from "./FlagAssign";
 
 export const dynamic = "force-dynamic";
 
@@ -45,12 +46,13 @@ export default async function FeatureFlagsPage() {
                     </div>
                   )}
                 </div>
+                <FlagAssign flagKey={f.key} />
               </div>
             ))}
           </div>
         </div>
       )}
-      <p className="text-[11px] text-gray-400">Evaluated in code via <code className="font-mono">flagEnabled(admin, key, &#123;tenantId, planCode, country&#125;)</code>. Scoped assignment editing (per-tenant toggles) is a fast follow.</p>
+      <p className="text-[11px] text-gray-400">Evaluated in code via <code className="font-mono">flagEnabled(admin, key, &#123;tenantId, planCode, country&#125;)</code>. Use <b>+ assign</b> to scope a flag to a tenant, plan, country or cohort — most-specific wins.</p>
     </div>
   );
 }
