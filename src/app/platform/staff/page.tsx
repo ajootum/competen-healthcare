@@ -10,11 +10,11 @@ const STAFF = [
   { icon: "🤝", label: "Customer Success", href: "/platform/staff/customer-success", sub: "Tenant health, onboarding, renewals", live: true },
   { icon: "🎧", label: "Support", href: "/platform/staff/support", sub: "Ticket queue", live: true },
   { icon: "💷", label: "Finance", href: "/platform/staff/finance", sub: "MRR, plan mix, billing", live: true },
-  { icon: "🧭", label: "Product", href: "/platform/staff/product", sub: "Product & module governance", live: false },
-  { icon: "💻", label: "Engineering", href: "/platform/staff/engineering", sub: "Deployments, versions, incidents", live: false },
-  { icon: "✨", label: "AI Operations", href: "/platform/staff/ai-ops", sub: "Providers, budgets, governance", live: false },
-  { icon: "🔬", label: "Quality", href: "/platform/staff/quality", sub: "Compliance & standards", live: false },
-  { icon: "🛡️", label: "Security", href: "/platform/staff/security", sub: "Auth monitoring, threats", live: false },
+  { icon: "🧭", label: "Product", href: "/platform/staff/product", sub: "Product & module governance", live: true },
+  { icon: "💻", label: "Engineering", href: "/platform/staff/engineering", sub: "Release log & platform scale", live: true },
+  { icon: "✨", label: "AI Operations", href: "/platform/staff/ai-ops", sub: "Provider status & AI usage", live: true },
+  { icon: "🔬", label: "Quality", href: "/platform/staff/quality", sub: "Platform quality & standards", live: true },
+  { icon: "🛡️", label: "Security", href: "/platform/staff/security", sub: "SOC over audit & events", live: true },
 ];
 
 export default async function StaffHub() {
