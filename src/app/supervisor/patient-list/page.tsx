@@ -147,7 +147,7 @@ export default async function PatientList() {
               {active.map(p => (
                 <tr key={p.id} className="hover:bg-gray-50/60">
                   <td className="px-4 py-2.5 whitespace-nowrap text-gray-500 tabular-nums">{p.bed ?? "—"}</td>
-                  <td className="px-4 py-2.5 whitespace-nowrap font-medium text-gray-900">{p.label}</td>
+                  <td className="px-4 py-2.5 whitespace-nowrap font-medium"><Link href={`/supervisor/patient-card/${p.id}`} className="text-teal-700 hover:underline">{p.label}</Link></td>
                   <td className="px-4 py-2.5 whitespace-nowrap text-gray-500 tabular-nums">{p.age != null ? `${p.age}y` : "—"}</td>
                   <td className="px-4 py-2.5 text-gray-600 max-w-[12rem] truncate" title={p.diagnosis ?? ""}>{p.diagnosis ?? "—"}</td>
                   <td className="px-4 py-2.5 whitespace-nowrap">
@@ -174,6 +174,8 @@ export default async function PatientList() {
                   </td>
                   <td className="px-4 py-2.5 whitespace-nowrap text-right">
                     <div className="inline-flex items-center gap-2">
+                      <Link href={`/supervisor/patient-card/${p.id}`} className="text-[11px] font-medium text-teal-700 hover:underline">Open</Link>
+                      <span className="text-gray-200">·</span>
                       <Link href={HREF.assign} className="text-[11px] font-medium text-teal-700 hover:underline">Assign</Link>
                       <span className="text-gray-200">·</span>
                       <Link href={HREF.review} className="text-[11px] font-medium text-teal-700 hover:underline">Review</Link>

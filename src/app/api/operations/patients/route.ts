@@ -10,6 +10,7 @@ const DEP = ["level_0", "level_1", "level_2", "level_3"];
 const ISO = ["none", "contact", "droplet", "airborne", "protective"];
 const RISK = ["low", "medium", "high"];
 const OPSTATUS = ["expected", "admitted", "transfer_pending", "discharge_pending", "discharged"];
+const STAGES = ["expected_admission", "awaiting_bed", "admitted", "in_care", "assessment", "treatment", "theatre", "recovery", "transfer_pending", "discharge_ready", "discharged"];
 
 export async function GET() {
   const c = await getCaller();
@@ -50,11 +51,14 @@ export async function POST(req: Request) {
   const age = parseInt(b.age_years, 10);
   if (Number.isFinite(age) && age >= 0 && age <= 130) insertObj.age_years = age;
   if (b.diagnosis?.trim()) insertObj.diagnosis = b.diagnosis.trim().slice(0, 200);
+  if (b.consultant?.trim()) insertObj.consultant = b.consultant.trim().slice(0, 120);
+  if (STAGES.includes(b.current_stage)) insertObj.current_stage = b.current_stage;
   const { data, error } = await admin.from("op_patients").insert(insertObj).select().single();
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   // Occupy the bed if one was given.
   if (b.bed_id) await admin.from("op_beds").update({ status: "occupied" }).eq("id", b.bed_id).eq("hospital_id", hospitalId);
   await admin.from("audit_log").insert({ actor_id: c.userId, action: "register_op_patient", entity_type: "op_patient", entity_id: data.id, hospital_id: hospitalId });
+  await admin.from("op_movement_events").insert({ hospital_id: hospitalId, patient_id: data.id, event_type: "admission", detail: b.bed_id ? "Admitted to bed" : "Admission registered", created_by: c.userId }); // fail-soft pre-migration 050
   return NextResponse.json(data, { status: 201 });
 }
 
@@ -76,10 +80,17 @@ export async function PATCH(req: Request) {
   if (OPSTATUS.includes(b.operational_status)) update.operational_status = b.operational_status;
   if (b.age_years !== undefined) { const age = parseInt(b.age_years, 10); update.age_years = (Number.isFinite(age) && age >= 0 && age <= 130) ? age : null; }
   if (b.diagnosis !== undefined) update.diagnosis = b.diagnosis?.trim() ? b.diagnosis.trim().slice(0, 200) : null;
+  if (b.consultant !== undefined) update.consultant = b.consultant?.trim() ? b.consultant.trim().slice(0, 120) : null;
+  if (STAGES.includes(b.current_stage)) update.current_stage = b.current_stage;
   if (!Object.keys(update).length) return badRequest("no valid fields");
   const { data, error } = await admin.from("op_patients").update(update).eq("id", id).select().single();
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   // Free the bed on discharge.
   if (update.operational_status === "discharged" && row.bed_id) await admin.from("op_beds").update({ status: "cleaning" }).eq("id", row.bed_id);
+  // Movement timeline (fail-soft pre-migration 050).
+  const events: any[] = [];
+  if (update.operational_status) events.push({ event_type: update.operational_status === "discharged" ? "discharge" : "status_change", detail: `Status: ${update.operational_status.replace(/_/g, " ")}` });
+  if (update.current_stage) events.push({ event_type: "stage_change", detail: `Stage: ${update.current_stage.replace(/_/g, " ")}` });
+  if (events.length) await admin.from("op_movement_events").insert(events.map(e => ({ hospital_id: row.hospital_id, patient_id: id, created_by: c.userId, ...e })));
   return NextResponse.json(data);
 }
