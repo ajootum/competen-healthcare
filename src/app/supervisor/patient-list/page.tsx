@@ -1,7 +1,7 @@
 import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import Link from "next/link";
-import { loadPatientOps, fmtTime, ewsColor, STATE_TONE } from "@/lib/operations/patient-ops";
+import { loadPatientOps, fmtTime, titleCase, ewsColor, STATE_TONE } from "@/lib/operations/patient-ops";
 
 export const dynamic = "force-dynamic";
 
@@ -98,8 +98,8 @@ export default async function PatientList() {
     <div className="space-y-5">
       {/* A) Header */}
       <div>
-        <h1 className="text-2xl font-bold text-gray-900">Patient List</h1>
-        <p className="text-sm text-gray-500 mt-1">Real-time operational register of all patients</p>
+        <h1 className="text-2xl font-bold text-gray-900">Patient Census</h1>
+        <p className="text-sm text-gray-500 mt-1">Live operational worklist for the unit · opens the Patient Card</p>
       </div>
 
       {/* B) Summary banner */}
@@ -134,6 +134,8 @@ export default async function PatientList() {
                 <th className="text-left font-medium px-4 py-2.5">Status</th>
                 <th className="text-left font-medium px-4 py-2.5">PEWS</th>
                 <th className="text-left font-medium px-4 py-2.5">Assigned nurse</th>
+                <th className="text-left font-medium px-4 py-2.5">Consultant</th>
+                <th className="text-left font-medium px-4 py-2.5">Stage</th>
                 <th className="text-left font-medium px-4 py-2.5">Last obs</th>
                 <th className="text-left font-medium px-4 py-2.5">Next review</th>
                 <th className="text-left font-medium px-4 py-2.5">Safety flags</th>
@@ -142,7 +144,7 @@ export default async function PatientList() {
             </thead>
             <tbody className="divide-y divide-gray-50">
               {active.length === 0 && (
-                <tr><td colSpan={11} className="px-4 py-8 text-center text-sm text-gray-400">No active patients on the register.</td></tr>
+                <tr><td colSpan={13} className="px-4 py-8 text-center text-sm text-gray-400">No active patients on the register.</td></tr>
               )}
               {active.map(p => (
                 <tr key={p.id} className="hover:bg-gray-50/60">
@@ -162,6 +164,8 @@ export default async function PatientList() {
                   <td className="px-4 py-2.5 whitespace-nowrap">
                     {p.nurse ? <span className="text-gray-700">{firstName(p.nurse)}</span> : <span className="text-red-600 font-medium">Unassigned</span>}
                   </td>
+                  <td className="px-4 py-2.5 whitespace-nowrap text-gray-500">{p.consultant ?? "—"}</td>
+                  <td className="px-4 py-2.5 whitespace-nowrap">{p.stage ? <span className="text-[10px] px-2 py-0.5 rounded-full bg-teal-50 text-teal-700">{titleCase(p.stage)}</span> : <span className="text-gray-300">—</span>}</td>
                   <td className="px-4 py-2.5 whitespace-nowrap text-gray-500 tabular-nums">{fmtTime(p.lastObs)}</td>
                   <td className={`px-4 py-2.5 whitespace-nowrap tabular-nums ${p.overdueObs ? "text-red-600 font-medium" : "text-gray-500"}`}>{fmtTime(p.nextReview)}</td>
                   <td className="px-4 py-2.5">
