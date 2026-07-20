@@ -22,13 +22,32 @@ export async function GET(req: Request) {
     return NextResponse.json({ learners: [], competencies: [], courses: [], questions: [] });
   }
   const like = `%${q.replace(/[%_]/g, "\\$&")}%`;
+  const isSuper = roles.includes("super_admin");
+
+  // Competencies are tenant-authored (framework_competencies → domain → framework
+  // → hospital_id), so scope suggestions to the caller's hospital frameworks plus
+  // the shared master library (hospital_id null). Without this a hospital's
+  // framework/competency names leak cross-tenant in search (§19). super_admin is
+  // unscoped. (Courses and questions have no hospital column — global catalogue.)
+  let scopedDomainIds: string[] | null = null;
+  if (!isSuper) {
+    const { data: fws } = await admin.from("frameworks").select("id")
+      .or(`hospital_id.eq.${profile?.hospital_id ?? "00000000-0000-0000-0000-000000000000"},hospital_id.is.null`);
+    const fwIds = (fws ?? []).map(f => f.id);
+    const { data: doms } = fwIds.length
+      ? await admin.from("framework_domains").select("id").in("framework_id", fwIds)
+      : { data: [] };
+    scopedDomainIds = (doms ?? []).map(d => d.id);
+  }
+
+  const compQuery = admin.from("framework_competencies").select("id, name").ilike("name", like).limit(5);
+  if (scopedDomainIds !== null) compQuery.in("domain_id", scopedDomainIds.length ? scopedDomainIds : ["00000000-0000-0000-0000-000000000000"]);
 
   const [learners, competencies, courses, questions] = await Promise.all([
     admin.from("profiles").select("id, full_name")
       .eq("hospital_id", profile?.hospital_id ?? "").eq("role", "nurse")
       .ilike("full_name", like).limit(5),
-    admin.from("framework_competencies").select("id, name")
-      .ilike("name", like).limit(5),
+    compQuery,
     admin.from("courses").select("id, title")
       .ilike("title", like).limit(5),
     admin.from("questions").select("id, topic, question_text")
