@@ -20,6 +20,7 @@ const ALL_NAV = [
   { label: "Shift Supervisor", href: "/supervisor",       icon: "🖥️", orgRoles: ["chief_officer","org_admin","manager",null] },
   { label: "Unit Manager",   href: "/unit-manager",       icon: "📊", orgRoles: ["chief_officer","org_admin","manager",null] },
   { label: "Competency Office", href: "/competency-office", icon: "🏛️", orgRoles: ["chief_officer","org_admin","governance_committee","competency_coordinator",null] },
+  { label: "Quality & Accreditation", href: "/quality-accreditation", icon: "🎯", orgRoles: ["chief_officer","org_admin","quality_manager","governance_committee",null] },
   // Cycles: those who run and monitor assessments
   { label: "Cycles",         href: "/admin/cycles",       icon: "🔄", orgRoles: ["org_admin","manager","competency_coordinator","quality_manager",null] },
   { label: "Assessment Plans", href: "/admin/plans",      icon: "🗓️", orgRoles: ["org_admin","manager","competency_coordinator","educator",null] },
