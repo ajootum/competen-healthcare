@@ -1,12 +1,12 @@
-import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
+import { getCaller, isResponse, forbidden, isAdmin } from "@/lib/api-auth";
 
 export async function GET() {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const c = await getCaller();
+  if (isResponse(c)) return c;
+  if (!isAdmin(c)) return forbidden(); // hospital id→name map is admin-only (labels)
 
-  const { data: hospitals } = await createAdminClient()
+  const { data: hospitals } = await c.admin
     .from("hospitals")
     .select("id, name");
 

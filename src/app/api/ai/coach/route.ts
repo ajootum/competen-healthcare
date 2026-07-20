@@ -1,8 +1,8 @@
 // Pro plan: allow up to 60s for AI generation (Hobby capped at 10s)
 export const maxDuration = 60;
 
-import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
+import { getCaller, isResponse, forbidden, isStaff, assertProfileScope } from "@/lib/api-auth";
 import { generate } from "@/lib/ai/client";
 import { aiStatus } from "@/lib/ai/config";
 import { checkAiQuota } from "@/lib/ai/quota";
@@ -12,27 +12,30 @@ import { OUTCOME_CONFIG, type DecisionOutcome } from "@/lib/ckcm";
 // prioritised learning plan grounded in their pathway + governed resources.
 // Body: { nurse_id? }  — staff may coach any worker; a worker may coach self.
 export async function POST(req: Request) {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const c = await getCaller();
+  if (isResponse(c)) return c;
 
   if (!aiStatus().configured) {
     return NextResponse.json({ error: "AI is not configured." }, { status: 503 });
   }
 
-  const admin = createAdminClient();
-  const quota = await checkAiQuota(admin, user.id);
+  const admin = c.admin;
+  const quota = await checkAiQuota(admin, c.userId);
   if (!quota.ok) {
     return NextResponse.json({ error: "AI rate limit reached (" + quota.limit + " requests/hour). Try again later." }, { status: 429 });
   }
-  const { data: me } = await admin.from("profiles").select("role, full_name").eq("id", user.id).single();
+  const { data: me } = await admin.from("profiles").select("full_name").eq("id", c.userId).single();
   const { nurse_id } = await req.json().catch(() => ({}));
 
-  // Authorisation: staff coach anyone; a worker coaches only themselves.
-  const isStaff = ["super_admin", "hospital_admin", "educator", "assessor"].includes(me?.role ?? "");
-  const targetId = (isStaff && nurse_id) ? nurse_id : user.id;
-  if (!isStaff && nurse_id && nurse_id !== user.id) {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  // Authorisation: staff coach anyone in their hospital; a worker coaches self.
+  const staff = isStaff(c);
+  const targetId = (staff && nurse_id) ? nurse_id : c.userId;
+  if (!staff && nurse_id && nurse_id !== c.userId) return forbidden();
+  // Tenant scope: coaching another worker's record is limited to the caller's
+  // hospital (staff cannot pull a nurse from another tenant).
+  if (targetId !== c.userId) {
+    const scopeErr = await assertProfileScope(c, targetId);
+    if (scopeErr) return scopeErr;
   }
 
   const { data: target } = await admin.from("profiles").select("full_name").eq("id", targetId).single();
@@ -98,7 +101,7 @@ export async function POST(req: Request) {
   }
 
   await admin.from("audit_log").insert({
-    actor_id: user.id, actor_name: me?.full_name ?? null,
+    actor_id: c.userId, actor_name: me?.full_name ?? null,
     action: "ai_coach", entity_type: "worker", entity_id: targetId,
     new_value: { gaps: gaps.length, model: result.model, tokens: result.usage },
   });

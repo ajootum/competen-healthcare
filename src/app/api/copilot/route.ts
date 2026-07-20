@@ -1,4 +1,5 @@
 import Anthropic from "@anthropic-ai/sdk";
+import { getCaller, isResponse } from "@/lib/api-auth";
 
 const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
@@ -17,6 +18,11 @@ Always end responses that involve patient care decisions with: "Follow your hosp
 Keep responses concise — 3–5 sentences for simple questions, structured bullet points for complex ones.`;
 
 export async function POST(request: Request) {
+  // Authenticated users only — this endpoint proxies a paid LLM (clinical copilot
+  // for nurses & staff), never anonymous.
+  const c = await getCaller();
+  if (isResponse(c)) return c;
+
   const { messages } = await request.json();
 
   if (!process.env.ANTHROPIC_API_KEY) {

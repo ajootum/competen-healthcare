@@ -1,21 +1,15 @@
-import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
+import { getCaller, isResponse, forbidden, isEducator, assertFrameworkScope } from "@/lib/api-auth";
 
 export async function PATCH(req: Request) {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const c = await getCaller();
+  if (isResponse(c)) return c;
+  if (!isEducator(c)) return forbidden(); // reviewer role (educator/lead/admin)
 
-  const admin = createAdminClient();
-  const { data: profile } = await admin
-    .from("profiles")
-    .select("role, full_name, hospital_id, organisation_id")
-    .eq("id", user.id)
-    .single();
-
-  if (!profile || !["hospital_admin", "super_admin"].includes(profile.role)) {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-  }
+  const admin = c.admin;
+  // getCaller supplies role/tenant; fetch the display name for audit records.
+  const { data: me } = await admin.from("profiles").select("full_name").eq("id", c.userId).single();
+  const fullName = (me?.full_name as string) ?? null;
 
   const { approvalId, decision, comment }: { approvalId: string; decision: "approve" | "reject"; comment?: string } = await req.json();
 
@@ -27,9 +21,14 @@ export async function PATCH(req: Request) {
   if (!approval) return NextResponse.json({ error: "Not found" }, { status: 404 });
   if (approval.status !== "pending") return NextResponse.json({ error: "Already reviewed" }, { status: 400 });
 
+  // Tenant scope: the framework under review must belong to the caller's
+  // hospital (super_admin unrestricted). Blocks cross-tenant approvals.
+  const scopeErr = await assertFrameworkScope(c, approval.framework_id as string, { write: true });
+  if (scopeErr) return scopeErr;
+
   // Separation of duties (User Account Architecture §27): the person who
   // submitted content for review may not approve it themselves.
-  if (approval.submitted_by === user.id) {
+  if (approval.submitted_by === c.userId) {
     return NextResponse.json({
       error: "Separation of duties: you submitted this content — a different reviewer must approve or reject it.",
     }, { status: 403 });
@@ -40,8 +39,8 @@ export async function PATCH(req: Request) {
 
   await admin.from("content_approvals").update({
     status: newApprovalStatus,
-    reviewed_by: user.id,
-    reviewed_by_name: profile.full_name,
+    reviewed_by: c.userId,
+    reviewed_by_name: fullName,
     reviewed_at: new Date().toISOString(),
     comment: comment ?? null,
   }).eq("id", approvalId);
@@ -49,8 +48,8 @@ export async function PATCH(req: Request) {
   await admin.from("frameworks").update({ pub_status: newFrameworkStatus }).eq("id", approval.framework_id);
 
   await admin.from("audit_log").insert({
-    actor_id: user.id,
-    actor_name: profile.full_name,
+    actor_id: c.userId,
+    actor_name: fullName,
     action: decision === "approve" ? "approve_content" : "reject_content",
     entity_type: "framework",
     entity_id: approval.framework_id,
@@ -58,8 +57,8 @@ export async function PATCH(req: Request) {
     old_value: { pub_status: "in_review" },
     new_value: { pub_status: newFrameworkStatus },
     notes: comment ?? null,
-    hospital_id: profile.hospital_id ?? null,
-    organisation_id: profile.organisation_id ?? null,
+    hospital_id: c.hospitalId ?? null,
+    organisation_id: c.organisationId ?? null,
   });
 
   return NextResponse.json({ ok: true });

@@ -1,19 +1,18 @@
-import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
 import { frameworkImpact } from "@/lib/engines/impact";
+import { getCaller, isResponse, forbidden, isEducator, assertFrameworkScope } from "@/lib/api-auth";
 
 export async function GET(_req: Request, { params }: { params: Promise<{ frameworkId: string }> }) {
   const { frameworkId } = await params;
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const c = await getCaller();
+  if (isResponse(c)) return c;
+  if (!isEducator(c)) return forbidden();
 
-  const admin = createAdminClient();
-  const { data: profile } = await admin.from("profiles").select("role").eq("id", user.id).single();
-  if (!["super_admin", "hospital_admin"].includes(profile?.role ?? "")) {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-  }
+  // Tenant scope: the framework must be in the caller's hospital (or the shared
+  // master library, which is readable). super_admin is unrestricted.
+  const scopeErr = await assertFrameworkScope(c, frameworkId);
+  if (scopeErr) return scopeErr;
 
-  const report = await frameworkImpact(admin, frameworkId);
+  const report = await frameworkImpact(c.admin, frameworkId);
   return NextResponse.json(report);
 }

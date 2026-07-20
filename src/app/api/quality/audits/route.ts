@@ -1,5 +1,5 @@
-import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
+import { getCaller, isResponse, hasRole, assertProfileScope, assertCompetencyScope } from "@/lib/api-auth";
 import { notify } from "@/lib/notify";
 
 // Quality Engine — conduct an audit in one submission. The checklist comes
@@ -13,16 +13,15 @@ import { notify } from "@/lib/notify";
 const TYPES = new Set(["concurrent", "retrospective", "clinical"]);
 
 export async function POST(req: Request) {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-
-  const admin = createAdminClient();
-  const { data: me } = await admin.from("profiles").select("full_name, role, roles, hospital_id").eq("id", user.id).single();
-  const roles: string[] = me?.roles?.length ? me.roles : [me?.role].filter(Boolean) as string[];
-  if (!roles.some(r => ["assessor", "educator", "hospital_admin", "super_admin"].includes(r))) {
+  const c = await getCaller();
+  if (isResponse(c)) return c;
+  // Assessor roles conduct audits (assessor is not an "educator" role).
+  if (!hasRole(c, "assessor", "educator", "hospital_admin", "super_admin")) {
     return NextResponse.json({ error: "Only assessor roles can conduct audits" }, { status: 403 });
   }
+
+  const admin = c.admin;
+  const { data: me } = await admin.from("profiles").select("full_name").eq("id", c.userId).single();
 
   const body = await req.json().catch(() => ({}));
   const { audit_type, competency_id, nurse_id, area, record_ref, note } = body;
@@ -33,6 +32,15 @@ export async function POST(req: Request) {
   if (!competency_id) return NextResponse.json({ error: "competency_id is required (audit criteria come from the competency's checklist)" }, { status: 400 });
   const valid = responses.filter(r => typeof r.checklist_item_id === "string" && ["met", "not_met", "na"].includes(r.result ?? ""));
   if (!valid.length) return NextResponse.json({ error: "At least one checklist response is required" }, { status: 400 });
+
+  // Tenant scope: the audited competency must be in the caller's hospital (or a
+  // shared master-library competency), and any named nurse must be in-hospital.
+  const compScopeErr = await assertCompetencyScope(c, competency_id);
+  if (compScopeErr) return compScopeErr;
+  if (nurse_id) {
+    const nurseScopeErr = await assertProfileScope(c, nurse_id);
+    if (nurseScopeErr) return nurseScopeErr;
+  }
 
   const { data: comp } = await admin.from("framework_competencies").select("id, name").eq("id", competency_id).single();
   if (!comp) return NextResponse.json({ error: "Competency not found" }, { status: 404 });
@@ -50,7 +58,7 @@ export async function POST(req: Request) {
 
   const title = `${comp.name} — ${audit_type} audit`;
   const { data: audit, error } = await admin.from("audits").insert({
-    hospital_id: me?.hospital_id ?? null,
+    hospital_id: c.hospitalId,
     audit_type, title,
     competency_id, nurse_id: nurse_id || null,
     area: (area ?? "").trim() || null,
@@ -59,7 +67,7 @@ export async function POST(req: Request) {
     compliance_pct: compliance,
     items_met: met, items_not_met: notMet, items_na: na,
     note: (note ?? "").trim() || null,
-    conducted_by: user.id, conducted_by_name: me?.full_name ?? null,
+    conducted_by: c.userId, conducted_by_name: me?.full_name ?? null,
   }).select("id").single();
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
@@ -81,20 +89,20 @@ export async function POST(req: Request) {
   if (criticalFails.length) {
     const due = new Date(); due.setDate(due.getDate() + 7);
     const { error: cerr } = await admin.from("capa_actions").insert(criticalFails.map(r => ({
-      hospital_id: me?.hospital_id ?? null,
+      hospital_id: c.hospitalId,
       audit_id: audit.id,
       title: `Critical criterion failed: ${itemById.get(r.checklist_item_id as string)?.item ?? "checklist item"}`,
       description: `Auto-created by the Quality Engine from "${title}"${area ? ` (${area})` : ""}. Verify corrective action with evidence before closure.`,
       priority: "high",
       due_date: due.toISOString().slice(0, 10),
-      owner_id: user.id, owner_name: me?.full_name ?? null,
-      created_by: user.id,
+      owner_id: c.userId, owner_name: me?.full_name ?? null,
+      created_by: c.userId,
     })));
     if (!cerr) capaCreated = criticalFails.length;
   }
 
   await admin.from("audit_log").insert({
-    actor_id: user.id, actor_name: me?.full_name ?? null,
+    actor_id: c.userId, actor_name: me?.full_name ?? null,
     action: "conduct_audit", entity_type: "audit", entity_id: audit.id, entity_name: title,
     new_value: { audit_type, compliance, met, not_met: notMet, na, capa_created: capaCreated },
   });

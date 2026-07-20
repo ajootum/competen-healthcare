@@ -1,8 +1,8 @@
 // Pro plan: allow up to 60s for AI generation (Hobby capped at 10s)
 export const maxDuration = 60;
 
-import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
+import { getCaller, isResponse, isEducator, forbidden, badRequest, assertCycleScope } from "@/lib/api-auth";
 import { generate } from "@/lib/ai/client";
 import { aiStatus } from "@/lib/ai/config";
 import { checkAiQuota } from "@/lib/ai/quota";
@@ -14,24 +14,30 @@ import { checkAiQuota } from "@/lib/ai/quota";
 // educator makes the decision. Body: { competency_score_id }
 
 export async function POST(req: Request) {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const c = await getCaller();
+  if (isResponse(c)) return c;
+  if (!isEducator(c)) return forbidden();
 
-  const admin = createAdminClient();
-  const { data: me } = await admin.from("profiles").select("role, roles, full_name").eq("id", user.id).single();
-  const roles: string[] = me?.roles?.length ? me.roles : [me?.role].filter(Boolean) as string[];
-  if (!roles.some(r => ["educator", "hospital_admin", "super_admin"].includes(r))) {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-  }
   if (!aiStatus().configured) return NextResponse.json({ error: "AI is not configured." }, { status: 503 });
-  const quota = await checkAiQuota(admin, user.id);
+  const quota = await checkAiQuota(c.admin, c.userId);
   if (!quota.ok) return NextResponse.json({ error: `AI rate limit reached (${quota.limit} requests/hour). Try again later.` }, { status: 429 });
 
   const { competency_score_id } = await req.json().catch(() => ({}));
-  if (!competency_score_id) return NextResponse.json({ error: "competency_score_id required" }, { status: 400 });
+  if (!competency_score_id) return badRequest("competency_score_id required");
 
-  const { data: cs } = await admin
+  // Scope check: resolve the score's cycle and confirm it belongs to the
+  // caller's hospital BEFORE reading learner PII / assessor notes and sending
+  // them to the AI (the admin client bypasses RLS).
+  const { data: scope } = await c.admin
+    .from("competency_scores")
+    .select("cycle_id")
+    .eq("id", competency_score_id)
+    .maybeSingle();
+  if (!scope) return NextResponse.json({ error: "Score not found" }, { status: 404 });
+  const scopeErr = await assertCycleScope(c, scope.cycle_id as string);
+  if (scopeErr) return scopeErr;
+
+  const { data: cs } = await c.admin
     .from("competency_scores")
     .select(`
       id, competency_id, cycle_id, nurse_id, score, label, is_passing, assessed_at,
@@ -43,10 +49,10 @@ export async function POST(req: Request) {
   if (!cs) return NextResponse.json({ error: "Score not found" }, { status: 404 });
 
   const [{ data: assessments }, { data: history }] = await Promise.all([
-    admin.from("assessments")
+    c.admin.from("assessments")
       .select("method, score, notes, assessed_at, profiles!assessor_id(full_name)")
       .eq("competency_id", cs.competency_id).eq("cycle_id", cs.cycle_id).order("assessed_at"),
-    admin.from("competency_scores")
+    c.admin.from("competency_scores")
       .select("score, is_passing, assessed_at, educator_validated")
       .eq("nurse_id", cs.nurse_id).eq("competency_id", cs.competency_id)
       .order("assessed_at"),
@@ -89,8 +95,9 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: result.error === "refusal" ? "The assistant declined this request." : `Assistant error: ${result.detail ?? "failed"}` }, { status: 500 });
   }
 
-  await admin.from("audit_log").insert({
-    actor_id: user.id, actor_name: me?.full_name ?? null,
+  const { data: me } = await c.admin.from("profiles").select("full_name").eq("id", c.userId).single();
+  await c.admin.from("audit_log").insert({
+    actor_id: c.userId, actor_name: me?.full_name ?? null,
     action: "ai_validation_review", entity_type: "competency_score", entity_id: cs.id,
     new_value: { model: result.model, tokens: result.usage },
   });

@@ -1,25 +1,23 @@
-import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
 import { isPassing, getBennerLabel } from "@/lib/benner";
+import { getCaller, isResponse, forbidden, isStaff, assertCycleScope } from "@/lib/api-auth";
 
 // POST — submit skill scores for a cycle
 // Body: { cycle_id, scores: [{ skill_id, competency_id, domain_id, framework_id, score }] }
 export async function POST(req: Request) {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-
-  const { data: profile } = await createAdminClient().from("profiles").select("role").eq("id", user.id).single();
-  if (!["super_admin", "hospital_admin", "assessor", "educator"].includes(profile?.role ?? "")) {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-  }
+  const c = await getCaller();
+  if (isResponse(c)) return c;
+  if (!isStaff(c)) return forbidden();
 
   const { cycle_id, scores } = await req.json();
   if (!cycle_id || !Array.isArray(scores) || !scores.length) {
     return NextResponse.json({ error: "cycle_id and scores[] required" }, { status: 400 });
   }
+  // The cycle (and thus the learner) must be in the caller's hospital.
+  const scopeErr = await assertCycleScope(c, cycle_id);
+  if (scopeErr) return scopeErr;
 
-  const admin = createAdminClient();
+  const admin = c.admin;
 
   // Upsert all skill scores
   const rows = scores.map((s: { skill_id: string; competency_id: string; domain_id: string; framework_id: string; score: number; notes?: string }) => ({
@@ -28,7 +26,7 @@ export async function POST(req: Request) {
     competency_id: s.competency_id,
     domain_id:     s.domain_id,
     framework_id:  s.framework_id,
-    assessor_id:   user.id,
+    assessor_id:   c.userId,
     score:         s.score,
     notes:         s.notes ?? null,
     assessed_at:   new Date().toISOString(),
@@ -96,16 +94,19 @@ export async function POST(req: Request) {
 // GET — fetch skill scores for a cycle
 // ?cycle_id=xxx&competency_id=xxx (optional)
 export async function GET(req: Request) {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const c = await getCaller();
+  if (isResponse(c)) return c;
+  if (!isStaff(c)) return forbidden(); // skill scores are staff-only
 
   const params = new URL(req.url).searchParams;
   const cycle_id = params.get("cycle_id");
   const competency_id = params.get("competency_id");
   if (!cycle_id) return NextResponse.json({ error: "cycle_id required" }, { status: 400 });
+  // The cycle must be in the caller's hospital.
+  const scopeErr = await assertCycleScope(c, cycle_id);
+  if (scopeErr) return scopeErr;
 
-  const admin = createAdminClient();
+  const admin = c.admin;
   let query = admin
     .from("skill_scores")
     .select("id, skill_id, competency_id, domain_id, score, notes, assessed_at, assessor_id, competency_skills(name)")

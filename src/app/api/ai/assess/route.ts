@@ -1,8 +1,8 @@
 // Pro plan: allow up to 60s for AI generation (Hobby capped at 10s)
 export const maxDuration = 60;
 
-import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
+import { getCaller, isResponse, forbidden, isStaff, assertProfileScope } from "@/lib/api-auth";
 import { generate } from "@/lib/ai/client";
 import { aiStatus } from "@/lib/ai/config";
 import { checkAiQuota } from "@/lib/ai/quota";
@@ -15,27 +15,26 @@ import { METHOD_LABELS, OUTCOME_CONFIG, type AssessmentMethod, type DecisionOutc
 // makes or predicts the competency decision.
 // Body: { nurse_id, competency_id?, method? }
 export async function POST(req: Request) {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const c = await getCaller();
+  if (isResponse(c)) return c;
+  if (!isStaff(c)) return forbidden(); // assessment assistant is staff-only
 
-  const admin = createAdminClient();
-  const { data: me } = await admin.from("profiles").select("role, roles, full_name").eq("id", user.id).single();
-  const roles: string[] = me?.roles?.length ? me.roles : [me?.role].filter(Boolean) as string[];
-  if (!roles.some(r => ["assessor", "educator", "hospital_admin", "super_admin"].includes(r))) {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-  }
+  const admin = c.admin;
+  const { data: me } = await admin.from("profiles").select("full_name").eq("id", c.userId).single();
 
   if (!aiStatus().configured) {
     return NextResponse.json({ error: "AI is not configured." }, { status: 503 });
   }
-  const quota = await checkAiQuota(admin, user.id);
+  const quota = await checkAiQuota(admin, c.userId);
   if (!quota.ok) {
     return NextResponse.json({ error: "AI rate limit reached (" + quota.limit + " requests/hour). Try again later." }, { status: 429 });
   }
 
   const { nurse_id, competency_id, method } = await req.json().catch(() => ({}));
   if (!nurse_id) return NextResponse.json({ error: "nurse_id is required" }, { status: 400 });
+  // Tenant scope: the learner must be in the caller's hospital (super = any).
+  const scopeErr = await assertProfileScope(c, nurse_id);
+  if (scopeErr) return scopeErr;
 
   const [{ data: nurse }, { data: decisions }, { data: comp }] = await Promise.all([
     admin.from("profiles").select("full_name, specialization").eq("id", nurse_id).single(),
@@ -108,7 +107,7 @@ export async function POST(req: Request) {
   }
 
   await admin.from("audit_log").insert({
-    actor_id: user.id, actor_name: me?.full_name ?? null,
+    actor_id: c.userId, actor_name: me?.full_name ?? null,
     action: "ai_assess_assist", entity_type: "worker", entity_id: nurse_id,
     new_value: { competency_id: competency_id ?? null, model: result.model, tokens: result.usage },
   });

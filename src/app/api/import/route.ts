@@ -1,5 +1,5 @@
-import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
+import { getCaller, isResponse, forbidden, isAdmin, isSuper } from "@/lib/api-auth";
 import { ORG_ROLE_CONFIG, type OrgRole } from "@/lib/roles";
 
 export type ImportRow = {
@@ -19,71 +19,45 @@ export type ImportResult = {
   message: string;
 };
 
-async function getCallerScope() {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return null;
-
-  const admin = createAdminClient();
-  const { data: profile } = await admin
-    .from("profiles")
-    .select("role, hospital_id")
-    .eq("id", user.id)
-    .single();
-
-  const { data: ext } = await admin
-    .from("profiles")
-    .select("org_role, organisation_id")
-    .eq("id", user.id)
-    .returns<{ org_role: string | null; organisation_id: string | null }[]>()
-    .maybeSingle();
-
-  if (!profile) return null;
-
-  const role = profile.role as string;
-  const orgRole = ext?.org_role ?? null;
-
-  // super_admin: no restriction
-  if (role === "super_admin") return { user, role, scope: "all" as const, orgId: null, hospitalId: null };
-
-  // hospital_admin with org_admin org_role: their org's hospitals
-  if (role === "hospital_admin" && orgRole === "org_admin") {
-    return { user, role, scope: "org" as const, orgId: ext?.organisation_id ?? null, hospitalId: null };
-  }
-
-  // educator: only their own hospital
-  if (role === "educator") {
-    return { user, role, scope: "hospital" as const, orgId: null, hospitalId: profile.hospital_id ?? null };
-  }
-
-  return null; // access denied
-}
-
 export async function POST(req: Request) {
-  const caller = await getCallerScope();
-  if (!caller) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  const c = await getCaller();
+  if (isResponse(c)) return c;
+  // Bulk import assigns users to hospitals and can set portal roles — this is a
+  // governance action, admin only (super_admin or hospital_admin).
+  if (!isAdmin(c)) return forbidden();
 
   const { rows }: { rows: ImportRow[] } = await req.json();
   if (!Array.isArray(rows) || rows.length === 0) {
     return NextResponse.json({ error: "No rows provided" }, { status: 400 });
   }
 
-  const admin = createAdminClient();
+  const admin = c.admin;
 
-  // Build allowed hospital set for this caller
-  let allowedHospitals: Map<string, string> = new Map(); // name.toLowerCase() → id
+  // Build the set of hospitals this caller may import into. super = all;
+  // an org-wide admin (org_role org_admin) = every hospital in their org;
+  // a plain hospital_admin = only their own hospital. The admin client bypasses
+  // RLS, so this set is the ONLY tenant boundary on the import.
+  const allowedHospitals = new Map<string, string>(); // name.toLowerCase() → id
+  const allowedHospitalIds = new Set<string>();
+  const register = (id: string, name: string) => { allowedHospitals.set(name.toLowerCase().trim(), id); allowedHospitalIds.add(id); };
 
-  if (caller.scope === "all") {
+  if (isSuper(c)) {
     const { data: hospitals } = await admin.from("hospitals").select("id, name");
-    (hospitals ?? []).forEach(h => allowedHospitals.set(h.name.toLowerCase().trim(), h.id));
-  } else if (caller.scope === "org" && caller.orgId) {
-    const { data: hospitals } = await admin
-      .from("hospitals").select("id, name").eq("organisation_id", caller.orgId);
-    (hospitals ?? []).forEach(h => allowedHospitals.set(h.name.toLowerCase().trim(), h.id));
-  } else if (caller.scope === "hospital" && caller.hospitalId) {
-    const { data: hospital } = await admin
-      .from("hospitals").select("id, name").eq("id", caller.hospitalId).maybeSingle();
-    if (hospital) allowedHospitals.set(hospital.name.toLowerCase().trim(), hospital.id);
+    (hospitals ?? []).forEach(h => register(h.id, h.name));
+  } else {
+    const { data: ext } = await admin
+      .from("profiles").select("org_role, organisation_id").eq("id", c.userId)
+      .returns<{ org_role: string | null; organisation_id: string | null }[]>()
+      .maybeSingle();
+    const orgRole = ext?.org_role ?? null;
+    const orgId = ext?.organisation_id ?? c.organisationId ?? null;
+    if (orgRole === "org_admin" && orgId) {
+      const { data: hospitals } = await admin.from("hospitals").select("id, name").eq("organisation_id", orgId);
+      (hospitals ?? []).forEach(h => register(h.id, h.name));
+    } else if (c.hospitalId) {
+      const { data: hospital } = await admin.from("hospitals").select("id, name").eq("id", c.hospitalId).maybeSingle();
+      if (hospital) register(hospital.id, hospital.name);
+    }
   }
 
   const results: ImportResult[] = [];
@@ -97,7 +71,7 @@ export async function POST(req: Request) {
 
     if (!email) continue;
 
-    // Resolve hospital
+    // Resolve hospital — must be one this caller is allowed to import into.
     const hospitalKey = row.hospital?.trim().toLowerCase();
     const hospitalId = hospitalKey ? allowedHospitals.get(hospitalKey) : undefined;
 
@@ -106,12 +80,20 @@ export async function POST(req: Request) {
       continue;
     }
 
-    // Look up user by email
+    // Look up user by email (global lookup — the email is a unique key).
     const { data: profile } = await admin
-      .from("profiles").select("id").eq("email", email).maybeSingle();
+      .from("profiles").select("id, hospital_id").eq("email", email).maybeSingle();
 
     if (!profile) {
       results.push({ seq, email, name: fullName, status: "not_found", message: "No account found with this email" });
+      continue;
+    }
+
+    // Tenant guard: never mutate a user who already belongs to a hospital
+    // outside this caller's scope (prevents poaching another tenant's account).
+    const currentHospital = (profile as { hospital_id: string | null }).hospital_id;
+    if (currentHospital && !allowedHospitalIds.has(currentHospital)) {
+      results.push({ seq, email, name: fullName, status: "error", message: "Account belongs to another organisation — not accessible" });
       continue;
     }
 
@@ -120,10 +102,19 @@ export async function POST(req: Request) {
 
     if (row.org_role?.trim()) {
       const orgRoleVal = row.org_role.trim().toLowerCase() as OrgRole;
-      if (ORG_ROLE_CONFIG[orgRoleVal]) {
-        update.org_role = orgRoleVal;
-        update.role = ORG_ROLE_CONFIG[orgRoleVal].portalRole;
-        update.roles = [update.role];
+      const cfg = ORG_ROLE_CONFIG[orgRoleVal];
+      if (cfg) {
+        const portalRole = cfg.portalRole;
+        // Privilege-escalation guard: only super_admin may confer an elevated
+        // portal role (hospital_admin/super_admin) via import. A hospital_admin
+        // importing an admin-tier org_role gets the hospital/name assignment but
+        // NOT the elevated role.
+        const elevated = portalRole === "hospital_admin" || portalRole === "super_admin";
+        if (!(elevated && !isSuper(c))) {
+          update.org_role = orgRoleVal;
+          update.role = portalRole;
+          update.roles = [portalRole];
+        }
       }
     }
 

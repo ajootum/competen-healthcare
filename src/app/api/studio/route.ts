@@ -1,5 +1,5 @@
-import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
+import { getCaller, isResponse, forbidden, assertCompetencyScope, type Caller } from "@/lib/api-auth";
 
 // COMPETEN Studio write API — reusable skill library, skill↔competency
 // attachment, checklist and question-bank authoring ("latest competen" spec +
@@ -10,15 +10,14 @@ import { NextResponse } from "next/server";
 const AUTHOR_ROLES = ["super_admin", "hospital_admin", "educator", "assessor"];
 const GOVERNANCE_KINDS = new Set(["clone_cpu", "responsibility"]);
 
-async function requireStudioAuthor() {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return { error: "Unauthorized", status: 401 as const };
-  const admin = createAdminClient();
-  const { data: profile } = await admin.from("profiles").select("role, roles, full_name").eq("id", user.id).single();
-  const roles: string[] = profile?.roles?.length ? profile.roles : [profile?.role].filter(Boolean) as string[];
-  if (!roles.some(r => AUTHOR_ROLES.includes(r))) return { error: "Forbidden", status: 403 as const };
-  return { user, admin, profile, roles };
+type StudioCaller = Caller & { fullName: string | null };
+
+async function requireStudioAuthor(): Promise<NextResponse | StudioCaller> {
+  const c = await getCaller();
+  if (isResponse(c)) return c;
+  if (!c.roles.some(r => AUTHOR_ROLES.includes(r))) return forbidden();
+  const { data: prof } = await c.admin.from("profiles").select("full_name").eq("id", c.userId).maybeSingle();
+  return Object.assign(c, { fullName: (prof?.full_name as string) ?? null });
 }
 
 function canGovern(roles: string[]) {
@@ -27,7 +26,7 @@ function canGovern(roles: string[]) {
 
 export async function POST(req: Request) {
   const auth = await requireStudioAuthor();
-  if ("error" in auth) return NextResponse.json({ error: auth.error }, { status: auth.status });
+  if (isResponse(auth)) return auth;
   const body = await req.json();
   const kind = body.kind as string;
   if (GOVERNANCE_KINDS.has(kind) && !canGovern(auth.roles)) {
@@ -52,7 +51,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ id });
     }
     const { data, error } = await auth.admin.from("skill_library")
-      .insert({ ...row, created_by: auth.user.id }).select("id").single();
+      .insert({ ...row, created_by: auth.userId }).select("id").single();
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
     return NextResponse.json(data, { status: 201 });
   }
@@ -61,6 +60,10 @@ export async function POST(req: Request) {
   if (kind === "attach_skill") {
     const { skill_id, competency_id } = body;
     if (!skill_id || !competency_id) return NextResponse.json({ error: "skill_id and competency_id required" }, { status: 400 });
+    // Tenant scope: the target competency must be in the caller's hospital (or a
+    // shared master competency); block attaching onto another hospital's content.
+    const scopeErr = await assertCompetencyScope(auth, competency_id);
+    if (scopeErr) return scopeErr;
     const { data: skill } = await auth.admin.from("skill_library").select("name, description").eq("id", skill_id).single();
     if (!skill) return NextResponse.json({ error: "skill not found" }, { status: 404 });
     const { data: dup } = await auth.admin.from("competency_skills")
@@ -81,6 +84,11 @@ export async function POST(req: Request) {
   if (kind === "detach_skill") {
     const { competency_skill_id } = body;
     if (!competency_skill_id) return NextResponse.json({ error: "competency_skill_id required" }, { status: 400 });
+    // Tenant scope: resolve the owning competency and verify it is in scope.
+    const { data: cs } = await auth.admin.from("competency_skills").select("competency_id").eq("id", competency_skill_id).maybeSingle();
+    if (!cs) return NextResponse.json({ error: "not found" }, { status: 404 });
+    const scopeErr = await assertCompetencyScope(auth, cs.competency_id as string);
+    if (scopeErr) return scopeErr;
     const { error } = await auth.admin.from("competency_skills").delete().eq("id", competency_skill_id);
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
     return NextResponse.json({ ok: true });
@@ -126,7 +134,7 @@ export async function POST(req: Request) {
       cpu_id: cpu_id || null,
       pass_mark: pass_mark ?? 80, validity_months: validity_months ?? 24,
       time_limit_minutes: time_limit_minutes || null,
-      created_by: auth.user.id,
+      created_by: auth.userId,
     }).select("id").single();
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
     return NextResponse.json(data, { status: 201 });
@@ -198,7 +206,7 @@ export async function POST(req: Request) {
       }
     }
     await auth.admin.from("audit_log").insert({
-      actor_id: auth.user.id, actor_name: auth.profile?.full_name ?? null,
+      actor_id: auth.userId, actor_name: auth.fullName ?? null,
       action: "clone_cpu", entity_type: "clinical_practice_unit", entity_id: clone.id,
       new_value: { cloned_from: cpu_id, name: `${src.name} (copy)` },
     });
@@ -216,7 +224,7 @@ export async function POST(req: Request) {
       content_name: content_name ?? null,
       responsibility_type,
       review_due: review_due || null,
-      assigned_by: auth.user.id,
+      assigned_by: auth.userId,
     }).select("id").single();
     if (error) {
       const msg = error.message.includes("duplicate") ? "That person already holds this responsibility for this object" : error.message;
@@ -230,7 +238,7 @@ export async function POST(req: Request) {
 
 export async function DELETE(req: Request) {
   const auth = await requireStudioAuthor();
-  if ("error" in auth) return NextResponse.json({ error: auth.error }, { status: auth.status });
+  if (isResponse(auth)) return auth;
   const url = new URL(req.url);
   const kind = url.searchParams.get("kind");
   const id = url.searchParams.get("id");

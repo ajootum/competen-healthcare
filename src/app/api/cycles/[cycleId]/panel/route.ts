@@ -1,14 +1,16 @@
-import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
+import { getCaller, isResponse, forbidden, isStaff, isEducator, isAdmin, assertCycleScope } from "@/lib/api-auth";
 
 export async function GET(_req: Request, { params }: { params: Promise<{ cycleId: string }> }) {
   const { cycleId } = await params;
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const c = await getCaller();
+  if (isResponse(c)) return c;
+  if (!isStaff(c)) return forbidden(); // exposes assessor names/emails — staff-only
+  // The cycle must be in the caller's hospital.
+  const scopeErr = await assertCycleScope(c, cycleId);
+  if (scopeErr) return scopeErr;
 
-  const admin = createAdminClient();
-  const { data } = await admin
+  const { data } = await c.admin
     .from("cycle_assessors")
     .select("id, assessor_id, assigned_at, profiles!assessor_id(full_name, email)")
     .eq("cycle_id", cycleId);
@@ -18,23 +20,20 @@ export async function GET(_req: Request, { params }: { params: Promise<{ cycleId
 
 export async function POST(req: Request, { params }: { params: Promise<{ cycleId: string }> }) {
   const { cycleId } = await params;
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-
-  const admin = createAdminClient();
-  const { data: profile } = await admin.from("profiles").select("role").eq("id", user.id).single();
-  if (!["hospital_admin", "super_admin", "educator"].includes(profile?.role ?? "")) {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-  }
+  const c = await getCaller();
+  if (isResponse(c)) return c;
+  if (!isEducator(c)) return forbidden();
+  // The cycle must be in the caller's hospital.
+  const scopeErr = await assertCycleScope(c, cycleId);
+  if (scopeErr) return scopeErr;
 
   const { assessor_id } = await req.json();
   if (!assessor_id) return NextResponse.json({ error: "assessor_id required" }, { status: 400 });
 
-  const { data, error } = await admin.from("cycle_assessors").insert({
+  const { data, error } = await c.admin.from("cycle_assessors").insert({
     cycle_id: cycleId,
     assessor_id,
-    assigned_by: user.id,
+    assigned_by: c.userId,
   }).select().single();
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
@@ -43,18 +42,15 @@ export async function POST(req: Request, { params }: { params: Promise<{ cycleId
 
 export async function DELETE(req: Request, { params }: { params: Promise<{ cycleId: string }> }) {
   const { cycleId } = await params;
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-
-  const admin = createAdminClient();
-  const { data: profile } = await admin.from("profiles").select("role").eq("id", user.id).single();
-  if (!["hospital_admin", "super_admin"].includes(profile?.role ?? "")) {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-  }
+  const c = await getCaller();
+  if (isResponse(c)) return c;
+  if (!isAdmin(c)) return forbidden();
+  // The cycle must be in the caller's hospital.
+  const scopeErr = await assertCycleScope(c, cycleId);
+  if (scopeErr) return scopeErr;
 
   const { assessor_id } = await req.json();
-  await admin.from("cycle_assessors").delete()
+  await c.admin.from("cycle_assessors").delete()
     .eq("cycle_id", cycleId)
     .eq("assessor_id", assessor_id);
 

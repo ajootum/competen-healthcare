@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
-import { createAdminClient } from "@/lib/supabase/server";
 import { generateDecisionsForCycle } from "@/lib/engines/decisions";
+import { getCaller, isResponse, forbidden, isEducator, assertCycleScope } from "@/lib/api-auth";
 
 export async function POST(
   _req: NextRequest,
@@ -9,16 +8,16 @@ export async function POST(
 ) {
   const { cycleId } = await params;
 
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const c = await getCaller();
+  if (isResponse(c)) return c;
+  if (!isEducator(c)) return forbidden();
+  // The cycle must be in the caller's hospital.
+  const scopeErr = await assertCycleScope(c, cycleId);
+  if (scopeErr) return scopeErr;
 
-  const { data: profile } = await createAdminClient().from("profiles").select("role, hospital_id, full_name").eq("id", user.id).single();
-  if (!["hospital_admin","super_admin","educator"].includes(profile?.role ?? "")) {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-  }
-
-  const admin = createAdminClient();
+  const admin = c.admin;
+  const { data: me } = await admin.from("profiles").select("full_name").eq("id", c.userId).single();
+  const actorName = me?.full_name ?? null;
 
   // Get the cycle's framework scores to compute clinical readiness score
   const { data: fwScores } = await admin
@@ -56,11 +55,11 @@ export async function POST(
   // Turn validated scores into formal governed competency decisions.
   let decisionsCreated = 0;
   try {
-    const result = await generateDecisionsForCycle(admin, cycleId, user.id, profile?.full_name ?? null);
+    const result = await generateDecisionsForCycle(admin, cycleId, c.userId, actorName);
     decisionsCreated = result.created;
     await admin.from("audit_log").insert({
-      actor_id: user.id,
-      actor_name: profile?.full_name ?? null,
+      actor_id: c.userId,
+      actor_name: actorName,
       action: "finalize_decisions",
       entity_type: "cycle",
       entity_id: cycleId,

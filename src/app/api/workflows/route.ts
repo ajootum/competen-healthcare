@@ -1,35 +1,40 @@
-import { createClient } from "@/lib/supabase/server";
-import { createAdminClient } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
+import { getCaller, isResponse, forbidden, isAdmin, isEducator, isSuper } from "@/lib/api-auth";
 
 export async function POST(req: Request) {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-
-  const { data: profile } = await createAdminClient().from("profiles").select("role, hospital_id").eq("id", user.id).single();
-  if (!["super_admin", "hospital_admin"].includes(profile?.role ?? "")) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  const c = await getCaller();
+  if (isResponse(c)) return c;
+  if (!isAdmin(c)) return forbidden(); // workflow automation is governance — admin only
 
   const { name, description, trigger_type, steps, hospital_id } = await req.json();
   if (!name || !trigger_type) return NextResponse.json({ error: "name and trigger_type required" }, { status: 400 });
 
-  const admin = createAdminClient();
+  // Force the tenant: super may target any hospital (or null = global);
+  // everyone else is pinned to their own hospital (client hospital_id ignored).
+  const targetHospitalId = isSuper(c) ? (hospital_id ?? null) : c.hospitalId;
+
+  const admin = c.admin;
   const { data, error } = await admin.from("workflow_templates").insert({
     name, description, trigger_type,
     steps: steps ?? [],
-    hospital_id: hospital_id ?? (profile?.role === "hospital_admin" ? profile.hospital_id : null),
+    hospital_id: targetHospitalId,
   }).select().single();
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   return NextResponse.json(data, { status: 201 });
 }
 
 export async function GET() {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const c = await getCaller();
+  if (isResponse(c)) return c;
+  if (!isEducator(c)) return forbidden();
 
-  const admin = createAdminClient();
-  const { data, error } = await admin.from("workflow_templates").select("id, name, trigger_type, steps, is_active").order("trigger_type");
+  const admin = c.admin;
+  let q = admin.from("workflow_templates").select("id, name, trigger_type, steps, is_active").order("trigger_type");
+  // Tenant scope: super sees all; everyone else sees only their own hospital's
+  // templates plus global (hospital_id null) platform defaults.
+  if (!isSuper(c)) q = q.or(`hospital_id.eq.${c.hospitalId ?? "__none__"},hospital_id.is.null`);
+
+  const { data, error } = await q;
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   return NextResponse.json(data);
 }

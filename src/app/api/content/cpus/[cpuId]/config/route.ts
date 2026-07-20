@@ -1,23 +1,14 @@
-import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
-
-async function requireSuperAdmin() {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return { error: "Unauthorized", status: 401 as const };
-  const { data: profile } = await createAdminClient().from("profiles").select("role").eq("id", user.id).single();
-  if (profile?.role !== "super_admin") return { error: "Forbidden", status: 403 as const };
-  return { user };
-}
+import { getCaller, isResponse, forbidden, isStaff, isSuper } from "@/lib/api-auth";
 
 // GET — full config for a CPU: blueprint + methods + evidence matrix + critical failures
 export async function GET(_req: Request, { params }: { params: Promise<{ cpuId: string }> }) {
   const { cpuId } = await params;
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const c = await getCaller();
+  if (isResponse(c)) return c;
+  if (!isStaff(c)) return forbidden();
 
-  const admin = createAdminClient();
+  const admin = c.admin;
   const [{ data: blueprint }, { data: methods }, { data: matrix }, { data: critical }] = await Promise.all([
     admin.from("assessment_blueprints").select("*").eq("cpu_id", cpuId).maybeSingle(),
     admin.from("blueprint_methods").select("*").order("method"),
@@ -35,10 +26,11 @@ export async function GET(_req: Request, { params }: { params: Promise<{ cpuId: 
 // PATCH — update blueprint header, or upsert a method / evidence-matrix row / critical failure
 export async function PATCH(req: Request, { params }: { params: Promise<{ cpuId: string }> }) {
   const { cpuId } = await params;
-  const auth = await requireSuperAdmin();
-  if (auth.error) return NextResponse.json({ error: auth.error }, { status: auth.status });
+  const c = await getCaller();
+  if (isResponse(c)) return c;
+  if (!isSuper(c)) return forbidden(); // blueprint authoring is super_admin only
 
-  const admin = createAdminClient();
+  const admin = c.admin;
   const body = await req.json();
 
   // Ensure a blueprint exists
@@ -90,13 +82,14 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ cpuId:
 // DELETE — remove a method / evidence row / critical failure
 export async function DELETE(req: Request, { params }: { params: Promise<{ cpuId: string }> }) {
   const { cpuId } = await params;
-  const auth = await requireSuperAdmin();
-  if (auth.error) return NextResponse.json({ error: auth.error }, { status: auth.status });
+  const c = await getCaller();
+  if (isResponse(c)) return c;
+  if (!isSuper(c)) return forbidden(); // blueprint authoring is super_admin only
 
   const { searchParams } = new URL(req.url);
   const kind = searchParams.get("kind");
   const value = searchParams.get("value");
-  const admin = createAdminClient();
+  const admin = c.admin;
 
   if (kind === "method" && value) {
     const { data: blueprint } = await admin.from("assessment_blueprints").select("id").eq("cpu_id", cpuId).maybeSingle();

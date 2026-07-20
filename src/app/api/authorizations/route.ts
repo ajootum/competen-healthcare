@@ -1,29 +1,25 @@
-import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
-
-async function requireStaff() {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return { error: "Unauthorized", status: 401 as const };
-  const admin = createAdminClient();
-  const { data: profile } = await admin.from("profiles").select("role, hospital_id, full_name").eq("id", user.id).single();
-  if (!["super_admin", "hospital_admin", "educator"].includes(profile?.role ?? "")) return { error: "Forbidden", status: 403 as const };
-  return { user, admin, profile };
-}
+import { getCaller, isResponse, forbidden, isEducator, assertProfileScope, assertRowScope } from "@/lib/api-auth";
 
 // POST — grant a clinical authorization to a nurse
 export async function POST(req: Request) {
-  const auth = await requireStaff();
-  if ("error" in auth) return NextResponse.json({ error: auth.error }, { status: auth.status });
+  const c = await getCaller();
+  if (isResponse(c)) return c;
+  if (!isEducator(c)) return forbidden();
 
   const { nurse_id, authorization_type, authorization_level, scope, conditions, expiry_date, based_on_decision, activities } = await req.json();
   if (!nurse_id) return NextResponse.json({ error: "nurse_id required" }, { status: 400 });
+  // The nurse being authorized must be in the caller's hospital.
+  const scopeErr = await assertProfileScope(c, nurse_id);
+  if (scopeErr) return scopeErr;
 
-  const { data: nurse } = await auth.admin.from("profiles").select("hospital_id").eq("id", nurse_id).single();
+  const admin = c.admin;
+  const { data: nurse } = await admin.from("profiles").select("hospital_id").eq("id", nurse_id).single();
+  const { data: me } = await admin.from("profiles").select("full_name").eq("id", c.userId).single();
 
-  const { data: cao, error } = await auth.admin.from("clinical_authorizations").insert({
+  const { data: cao, error } = await admin.from("clinical_authorizations").insert({
     nurse_id,
-    hospital_id: nurse?.hospital_id ?? auth.profile?.hospital_id ?? null,
+    hospital_id: nurse?.hospital_id ?? c.hospitalId ?? null,
     authorization_type: authorization_type ?? "clinical_privilege",
     authorization_level: authorization_level ?? "independent",
     status: "active",
@@ -31,21 +27,21 @@ export async function POST(req: Request) {
     conditions: conditions ?? null,
     expiry_date: expiry_date ?? null,
     based_on_decision: based_on_decision ?? null,
-    granted_by: auth.user.id,
-    granted_by_name: auth.profile?.full_name ?? null,
+    granted_by: c.userId,
+    granted_by_name: me?.full_name ?? null,
   }).select("id").single();
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
   if (Array.isArray(activities) && activities.length) {
-    await auth.admin.from("authorization_activities").insert(
+    await admin.from("authorization_activities").insert(
       activities.map((a: { cpu_id?: string; competency_id?: string; label: string }) => ({
         authorization_id: cao.id, cpu_id: a.cpu_id ?? null, competency_id: a.competency_id ?? null, label: a.label,
       }))
     );
   }
 
-  await auth.admin.from("audit_log").insert({
-    actor_id: auth.user.id, actor_name: auth.profile?.full_name ?? null,
+  await admin.from("audit_log").insert({
+    actor_id: c.userId, actor_name: me?.full_name ?? null,
     action: "grant_authorization", entity_type: "authorization", entity_id: cao.id,
     new_value: { nurse_id, authorization_type, authorization_level },
   });
@@ -55,16 +51,23 @@ export async function POST(req: Request) {
 
 // PATCH — change status (suspend / revoke / reactivate)
 export async function PATCH(req: Request) {
-  const auth = await requireStaff();
-  if ("error" in auth) return NextResponse.json({ error: auth.error }, { status: auth.status });
+  const c = await getCaller();
+  if (isResponse(c)) return c;
+  if (!isEducator(c)) return forbidden();
 
   const { id, status } = await req.json();
   if (!id || !["pending", "active", "suspended", "revoked", "expired"].includes(status)) {
     return NextResponse.json({ error: "id and valid status required" }, { status: 400 });
   }
-  await auth.admin.from("clinical_authorizations").update({ status }).eq("id", id);
-  await auth.admin.from("audit_log").insert({
-    actor_id: auth.user.id, actor_name: auth.profile?.full_name ?? null,
+  // The authorization must belong to the caller's hospital.
+  const scopeErr = await assertRowScope(c, "clinical_authorizations", id);
+  if (scopeErr) return scopeErr;
+
+  const admin = c.admin;
+  const { data: me } = await admin.from("profiles").select("full_name").eq("id", c.userId).single();
+  await admin.from("clinical_authorizations").update({ status }).eq("id", id);
+  await admin.from("audit_log").insert({
+    actor_id: c.userId, actor_name: me?.full_name ?? null,
     action: "update_authorization", entity_type: "authorization", entity_id: id,
     new_value: { status },
   });
@@ -72,10 +75,13 @@ export async function PATCH(req: Request) {
 }
 
 export async function DELETE(req: Request) {
-  const auth = await requireStaff();
-  if ("error" in auth) return NextResponse.json({ error: auth.error }, { status: auth.status });
+  const c = await getCaller();
+  if (isResponse(c)) return c;
+  if (!isEducator(c)) return forbidden();
   const id = new URL(req.url).searchParams.get("id");
   if (!id) return NextResponse.json({ error: "id required" }, { status: 400 });
-  await auth.admin.from("clinical_authorizations").delete().eq("id", id);
+  const scopeErr = await assertRowScope(c, "clinical_authorizations", id);
+  if (scopeErr) return scopeErr;
+  await c.admin.from("clinical_authorizations").delete().eq("id", id);
   return NextResponse.json({ ok: true });
 }

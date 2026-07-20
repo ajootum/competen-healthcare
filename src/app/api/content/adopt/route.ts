@@ -1,22 +1,23 @@
-import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
+import { getCaller, isResponse, forbidden, isEducator, assertFrameworkScope } from "@/lib/api-auth";
 
 export async function POST(req: Request) {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-
-  const admin = createAdminClient();
-  const { data: profile } = await admin.from("profiles").select("role, hospital_id").eq("id", user.id).single();
-  if (!profile || !["hospital_admin", "super_admin"].includes(profile.role)) {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-  }
+  const c = await getCaller();
+  if (isResponse(c)) return c;
+  if (!isEducator(c)) return forbidden();
 
   const { framework_id } = await req.json();
   if (!framework_id) return NextResponse.json({ error: "framework_id required" }, { status: 400 });
 
-  const hospitalId = profile.hospital_id;
+  const hospitalId = c.hospitalId;
   if (!hospitalId) return NextResponse.json({ error: "No hospital assigned" }, { status: 400 });
+
+  const admin = c.admin;
+
+  // The source must be a master/global framework (hospital_id null) or one that
+  // already belongs to the caller's hospital — never another tenant's framework.
+  const scopeErr = await assertFrameworkScope(c, framework_id);
+  if (scopeErr) return scopeErr;
 
   const { data: master } = await admin
     .from("frameworks")
@@ -48,7 +49,7 @@ export async function POST(req: Request) {
     .eq("framework_id", framework_id)
     .order("sort_order");
 
-  // Create adopted framework copy
+  // Create adopted framework copy — the copy is always owned by the caller's hospital.
   const { data: adopted, error: fwErr } = await admin
     .from("frameworks")
     .insert({
@@ -60,6 +61,7 @@ export async function POST(req: Request) {
       scope: "hospital",
       owner_type: "hospital",
       owner_id: hospitalId,
+      hospital_id: hospitalId,
       parent_framework_id: framework_id,
     })
     .select("id")
