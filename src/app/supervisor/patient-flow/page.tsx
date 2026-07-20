@@ -2,6 +2,7 @@ import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { loadPatientOps, STATE_TONE } from "@/lib/operations/patient-ops";
+import FlowBlockersPanel from "./FlowBlockersPanel";
 
 export const dynamic = "force-dynamic";
 
@@ -37,6 +38,7 @@ export default async function PatientFlow() {
   );
 
   const { flow, blockers } = po;
+  const flowPatients = po.active.map((p: any) => ({ id: p.id, label: p.label }));
 
   // B) Flow summary KPIs (each is a live count off the shared flow pipeline).
   const kpis = [
@@ -105,26 +107,8 @@ export default async function PatientFlow() {
         </div>
       </div>
 
-      {/* D) Flow blockers */}
-      <div className={card}>
-        <h3 className="font-semibold text-gray-900 mb-3">Flow blockers</h3>
-        {blockers.length === 0 ? (
-          <p className="text-sm text-gray-400">No flow blockers detected.</p>
-        ) : (
-          <div className="grid sm:grid-cols-2 gap-2">
-            {blockers.map((b: any, i: number) => (
-              <div key={i} className="flex items-start gap-2 rounded-lg border border-amber-100 bg-amber-50/50 px-3 py-2">
-                <span className="text-amber-500 mt-0.5">▲</span>
-                <div className="min-w-0">
-                  <p className="text-sm font-medium text-gray-800">{b.label}</p>
-                  <p className="text-[11px] text-gray-500 truncate">{b.detail}</p>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-        <p className="text-[11px] text-gray-400 mt-3">Only blockers detectable from live operational data are shown. Richer blocker tracking — transport, medication-ready, family education — arrives with the flow-tracking module.</p>
-      </div>
+      {/* D) Flow blockers — logged (resolvable) + auto-detected */}
+      <FlowBlockersPanel blockers={po.flowBlockers} auto={blockers} patients={flowPatients} configReady={po.flowBlockersReady} />
 
       {/* E) Operational queues + actions */}
       <div className={card}>

@@ -114,9 +114,15 @@ export async function loadPatientOps(admin: any, hid: string | null, isSuper: bo
   const cleaningBeds = beds.filter((b: any) => b.status === "cleaning");
   const freeBeds = beds.filter((b: any) => b.status === "available").length;
   const blockers: { label: string; detail: string }[] = [];
-  if (freeBeds === 0 && flow.expected.length) blockers.push({ label: "No bed available", detail: `${flow.expected.length} expected, 0 free beds` });
+  if (freeBeds === 0 && flow.awaitingBed.length) blockers.push({ label: "No bed available", detail: `${flow.awaitingBed.length} awaiting, 0 free beds` });
   cleaningBeds.forEach((b: any) => blockers.push({ label: "Bed awaiting cleaning", detail: b.label }));
   flow.awaitingBed.forEach(p => blockers.push({ label: "Awaiting bed allocation", detail: p.label }));
+
+  // Logged flow blockers (migration 048) — real + resolvable. Fail-soft pre-migration.
+  const fbScope = (q: any) => (isSuper ? q : q.eq("hospital_id", hid ?? "00000000-0000-0000-0000-000000000000"));
+  const fbRes = await fbScope(admin.from("op_flow_blockers").select("id, category, detail, patient_id, op_patients!patient_id(label)")).eq("status", "open").order("created_at", { ascending: false }).limit(100);
+  const flowBlockers = (fbRes as any).error ? [] : ((fbRes.data ?? []) as any[]);
+  const flowBlockersReady = !(fbRes as any).error;
 
   // ── Safety (Clinical Safety) ─────────────────────────────────────────────
   const openEsc = escalations.filter((e: any) => ["open", "acknowledged"].includes(e.status));
@@ -190,7 +196,7 @@ export async function loadPatientOps(admin: any, hid: string | null, isSuper: bo
   const nurses = [...new Map(assignments.map((a: any) => [a.staff_id, a.profiles?.full_name])).entries()].map(([id, name]) => ({ id, name }));
 
   return {
-    ready: true as const, patients: enriched, active, summary, flow, blockers,
+    ready: true as const, patients: enriched, active, summary, flow, blockers, flowBlockers, flowBlockersReady,
     safetyBanner, alertQueue, deteriorating, compliance, openEsc,
     bedBoard, capacity, cleaningBeds, zones, nurses, copilot,
   };
