@@ -4,6 +4,7 @@ export type AppRole = "super_admin" | "hospital_admin" | "educator" | "assessor"
 export type OrgRole =
   | "chief_officer"
   | "org_admin"
+  | "director_of_nursing"
   | "governance_committee"
   | "manager"
   | "competency_coordinator"
@@ -86,6 +87,7 @@ export const ORG_ROLE_CONFIG: Record<OrgRole, {
   // Organisation leadership
   chief_officer:          { label: "Chief Officer",                    icon: "👑", description: "Strategic org-wide oversight and executive reporting",        portalRole: "hospital_admin", tier: 1  },
   org_admin:              { label: "Administrator",                    icon: "🗂️", description: "Manages users, facilities and org settings",                  portalRole: "hospital_admin", tier: 2  },
+  director_of_nursing:    { label: "Director of Nursing",              icon: "🩺", description: "Owns ward configuration — bed capacity, staffing standards and round schedules", portalRole: "hospital_admin", tier: 3  },
   governance_committee:   { label: "Competency Governance Committee",  icon: "⚖️", description: "Reviews and approves clinical competency content before publication", portalRole: "hospital_admin", tier: 3  },
   manager:                { label: "Manager",                          icon: "👔", description: "Manages a facility or department",                            portalRole: "hospital_admin", tier: 4  },
   competency_coordinator: { label: "Competency Coordinator",           icon: "📅", description: "Runs competency programme, schedules assessments, reports",   portalRole: "hospital_admin", tier: 5  },

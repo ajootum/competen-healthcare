@@ -59,7 +59,7 @@ const NAV_GROUPS: { group: string; items: NavItem[] }[] = [
     { label: "Predictions",        icon: "🔮", soon: true },
   ]},
   { group: "Tools & Settings", items: [
-    { label: "Settings",           href: "/supervisor/settings",                   icon: "⚙️" },
+    { label: "Ward Configuration", href: "/supervisor/settings",                   icon: "🛠️" },
     { label: "Support",            href: "mailto:gabriel@semacast.com?subject=Shift Command Centre support", icon: "🎧" },
   ]},
 ];

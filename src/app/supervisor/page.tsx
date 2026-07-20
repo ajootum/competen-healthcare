@@ -71,6 +71,24 @@ export default async function ShiftCommandCentre() {
   const tasksTotal = tasksTotalRes.count ?? 0;
   const tasksDone = tasksDoneRes.count ?? 0;
 
+  // ── Ward configuration (mandatory staffing standards + round schedule) ───
+  // Feeds the Workforce ratio-compliance figure and the Timeline's planned
+  // rounds. Defensive: these tables exist only after migration 046 is applied.
+  const [stdRes, roundRes] = await Promise.all([
+    scope(admin.from("op_staffing_standards").select("shift_type, department_id, role, min_count, target_ratio")),
+    scope(admin.from("op_round_schedule").select("shift_type, department_id, at_time, label")),
+  ]);
+  const applies = (row: any) =>
+    (row.shift_type === "any" || !activeShift || row.shift_type === activeShift.shift_type) &&
+    (row.department_id == null || !activeShift?.department_id || row.department_id === activeShift.department_id);
+  const standards = ((stdRes as any).error ? [] : ((stdRes.data ?? []) as any[])).filter(applies);
+  const rounds = ((roundRes as any).error ? [] : ((roundRes.data ?? []) as any[])).filter(applies);
+  const ratioRows = standards.map((s: any) => ({ role: s.role, required: s.min_count, present: (roleMix as any)[s.role] ?? 0 }));
+  const ratioMet = ratioRows.filter((r: any) => r.present >= r.required).length;
+  const ratioCompliance = ratioRows.length ? Math.round((ratioMet / ratioRows.length) * 100) : null;
+  const workRoles = [...new Set([...Object.keys(roleMix), ...ratioRows.map((r: any) => r.role)])];
+  const requiredFor = (role: string) => ratioRows.find((r: any) => r.role === role)?.required;
+
   // ── Patients ─────────────────────────────────────────────────────────────
   const census = patients.length;
   const byStatus = (s: string) => patients.filter((p: any) => p.operational_status === s).length;
@@ -123,14 +141,16 @@ export default async function ShiftCommandCentre() {
   openEsc.filter((e: any) => e.level < 4).slice(0, 2).forEach((e: any) => priorities.push({ tone: "amber", title: `Review escalation — ${e.op_patients?.label ?? "patient"} · L${e.level}`, sub: e.summary, href: "/supervisor/operations?section=safety" }));
   tasks.filter((t: any) => t.priority === "urgent").slice(0, 2).forEach((t: any) => priorities.push({ tone: "amber", title: t.description, sub: `Urgent · ${t.op_patients?.label ?? "unassigned"}`, href: "/supervisor/operations?section=care" }));
 
-  // ── Shift Timeline (real events on a time axis) ──────────────────────────
-  const tl: { at: string | null; label: string; done: boolean }[] = [];
-  if (activeShift?.starts_at) tl.push({ at: activeShift.starts_at, label: "Shift started", done: activeShift.status !== "planned" });
-  if (latestHandover?.accepted_at) tl.push({ at: latestHandover.accepted_at, label: "Handover accepted", done: true });
-  escalations.slice(0, 3).forEach((e: any) => e.created_at && tl.push({ at: e.created_at, label: `Escalation raised — ${e.op_patients?.label ?? "patient"}`, done: true }));
-  observations.filter((o: any) => o.status === "recorded" && o.recorded_at).slice(0, 2).forEach((o: any) => tl.push({ at: o.recorded_at, label: `Observation — ${o.op_patients?.label ?? "patient"}`, done: true }));
-  if (activeShift?.ends_at) tl.push({ at: activeShift.ends_at, label: "Shift close", done: activeShift.status === "completed" });
-  tl.sort((a, b) => new Date(a.at ?? 0).getTime() - new Date(b.at ?? 0).getTime());
+  // ── Shift Timeline (real events + planned rounds from ward config) ───────
+  type TlItem = { hm: string; label: string; kind: "event" | "round"; done: boolean };
+  const tl: TlItem[] = [];
+  if (activeShift?.starts_at) tl.push({ hm: fmtTime(activeShift.starts_at), label: "Shift started", kind: "event", done: activeShift.status !== "planned" });
+  if (latestHandover?.accepted_at) tl.push({ hm: fmtTime(latestHandover.accepted_at), label: "Handover accepted", kind: "event", done: true });
+  escalations.slice(0, 3).forEach((e: any) => e.created_at && tl.push({ hm: fmtTime(e.created_at), label: `Escalation — ${e.op_patients?.label ?? "patient"}`, kind: "event", done: true }));
+  observations.filter((o: any) => o.status === "recorded" && o.recorded_at).slice(0, 2).forEach((o: any) => tl.push({ hm: fmtTime(o.recorded_at), label: `Observation — ${o.op_patients?.label ?? "patient"}`, kind: "event", done: true }));
+  rounds.forEach((r: any) => tl.push({ hm: r.at_time, label: r.label, kind: "round", done: false }));
+  if (activeShift?.ends_at) tl.push({ hm: fmtTime(activeShift.ends_at), label: "Shift close", kind: "event", done: activeShift.status === "completed" });
+  tl.sort((a, b) => a.hm.localeCompare(b.hm));
 
   // ── Workforce Assignment (staff → their patients/beds) ───────────────────
   const byStaff = new Map<string, { name: string; patients: any[] }>();
@@ -233,12 +253,12 @@ export default async function ShiftCommandCentre() {
         <div id="timeline" className={card}>
           <h3 className={head}>🕑 Shift Timeline</h3>
           <div className="mt-3 space-y-2">
-            {tl.length === 0 && <p className="text-sm text-gray-400">No shift events recorded yet.</p>}
-            {tl.slice(0, 8).map((e, i) => (
+            {tl.length === 0 && <p className="text-sm text-gray-400">No shift events or planned rounds yet.</p>}
+            {tl.slice(0, 10).map((e, i) => (
               <div key={i} className="flex items-center gap-2.5 text-sm">
-                <span className="text-xs text-gray-400 tabular-nums w-11 shrink-0">{fmtTime(e.at)}</span>
-                <span className={`w-2 h-2 rounded-full shrink-0 ${e.done ? "bg-teal-500" : "border border-gray-300"}`} />
-                <span className={`truncate ${e.done ? "text-gray-700" : "text-gray-400"}`}>{e.label}</span>
+                <span className="text-xs text-gray-400 tabular-nums w-11 shrink-0">{e.hm}</span>
+                <span className={`w-2 h-2 rounded-full shrink-0 ${e.kind === "round" ? "border border-teal-400" : e.done ? "bg-teal-500" : "border border-gray-300"}`} />
+                <span className={`truncate ${e.kind === "round" ? "text-gray-600" : e.done ? "text-gray-700" : "text-gray-400"}`}>{e.label}{e.kind === "round" && <span className="ml-1.5 text-[9px] uppercase tracking-wide text-teal-500/70">round</span>}</span>
               </div>
             ))}
           </div>
@@ -247,15 +267,19 @@ export default async function ShiftCommandCentre() {
         <div id="workforce" className={card}>
           <h3 className={head}>👥 Workforce Operations</h3>
           <div className="mt-3 space-y-1.5">
-            {Object.keys(roleMix).length === 0 && <p className="text-sm text-gray-400">No staff on the active shift.</p>}
-            {Object.entries(roleMix).map(([r, n]) => (
-              <div key={r} className="flex items-center justify-between text-sm">
-                <span className="text-gray-600">{titleCase(r)}</span>
-                <span className="font-semibold text-gray-900 tabular-nums">{n as number}</span>
-              </div>
-            ))}
+            {workRoles.length === 0 && <p className="text-sm text-gray-400">No staff on the active shift.</p>}
+            {workRoles.map((r) => {
+              const pc = (roleMix as any)[r] ?? 0; const req = requiredFor(r); const short = req != null && pc < req;
+              return (
+                <div key={r} className="flex items-center justify-between text-sm">
+                  <span className="text-gray-600">{titleCase(r)}</span>
+                  <span className={`font-semibold tabular-nums ${short ? "text-red-600" : "text-gray-900"}`}>{pc}{req != null && <span className="text-gray-400 font-normal"> / {req}</span>}</span>
+                </div>
+              );
+            })}
           </div>
-          <div className="mt-3 pt-3 border-t border-gray-100 grid grid-cols-2 gap-2 text-center">
+          <div className={`mt-3 pt-3 border-t border-gray-100 grid ${ratioCompliance != null ? "grid-cols-3" : "grid-cols-2"} gap-2 text-center`}>
+            {ratioCompliance != null && <div><p className={`text-lg font-bold ${ratioCompliance < 100 ? "text-amber-600" : "text-green-600"}`}>{ratioCompliance}%</p><p className="text-[10px] text-gray-500">Mandatory ratios</p></div>}
             <div><p className={`text-lg font-bold ${compCoverage != null && compCoverage < 90 ? "text-amber-600" : "text-green-600"}`}>{compCoverage != null ? `${compCoverage}%` : "—"}</p><p className="text-[10px] text-gray-500">Competency-validated</p></div>
             <div><p className="text-lg font-bold text-gray-900">{present.length}<span className="text-gray-300">/</span>{rostered.length}</p><p className="text-[10px] text-gray-500">Present / rostered</p></div>
           </div>
