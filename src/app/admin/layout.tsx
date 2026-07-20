@@ -16,6 +16,7 @@ const ALL_NAV = [
   // Departments: structural roles + IT admin
   { label: "Departments",    href: "/admin/departments",  icon: "🏢", orgRoles: ["org_admin","manager","it_admin",null] },
   { label: "Positions",      href: "/admin/positions",    icon: "🧩", orgRoles: ["chief_officer","org_admin","hr_manager","manager",null] },
+  { label: "Operations",     href: "/admin/operations",   icon: "🩺", orgRoles: ["chief_officer","org_admin","manager","competency_coordinator","quality_manager",null] },
   // Cycles: those who run and monitor assessments
   { label: "Cycles",         href: "/admin/cycles",       icon: "🔄", orgRoles: ["org_admin","manager","competency_coordinator","quality_manager",null] },
   { label: "Assessment Plans", href: "/admin/plans",      icon: "🗓️", orgRoles: ["org_admin","manager","competency_coordinator","educator",null] },
