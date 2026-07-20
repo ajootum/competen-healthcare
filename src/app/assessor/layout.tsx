@@ -5,7 +5,7 @@ import NavLink from "@/components/NavLink";
 import NavGroup from "@/components/NavGroup";
 import SidebarToggle from "@/components/SidebarToggle";
 import WorkspaceSwitcher from "@/components/WorkspaceSwitcher";
-import { ORG_ROLE_CONFIG, type AppRole, type OrgRole } from "@/lib/roles";
+import { ORG_ROLE_CONFIG, orgRolesOf, workspacesFor, type AppRole, type OrgRole } from "@/lib/roles";
 
 // Assessor Workspace sidebar — Assessment Operations Centre structure
 // (Enterprise Assessor Workspace V2 mockup). Items whose module doesn't exist
@@ -96,11 +96,13 @@ export default async function AssessorLayout({ children }: { children: React.Rea
 
   const { data: orgProfile, error: orgError } = await adminClient
     .from("profiles")
-    .select("org_role")
+    .select("org_role, org_roles")
     .eq("id", user.id)
-    .returns<{ org_role: string | null }[]>()
+    .returns<{ org_role: string | null; org_roles: string[] | null }[]>()
     .maybeSingle();
   const orgRole = (!orgError && orgProfile ? orgProfile.org_role as OrgRole : null) ?? null;
+  // Dedicated org-role workspaces this user can switch into.
+  const workspaces = workspacesFor(orgRolesOf(!orgError ? orgProfile : null), userRoles);
 
   if (!userRoles.includes("assessor")) {
     return (
@@ -137,7 +139,7 @@ export default async function AssessorLayout({ children }: { children: React.Rea
           <span className="w-7 h-7 rounded bg-indigo-500 flex items-center justify-center text-white font-bold text-sm shrink-0">C</span>
           <span className="min-w-0">
             <span className="block text-white font-semibold text-sm leading-tight">Competen</span>
-            <WorkspaceSwitcher roles={userRoles} activeRole="assessor" variant="mobile" />
+            <WorkspaceSwitcher roles={userRoles} activeRole="assessor" workspaces={workspaces} variant="mobile" />
           </span>
           <span className="flex-1" />
           <Link href="/assessor/notifications" aria-label="Notifications" className="relative w-9 h-9 rounded-lg flex items-center justify-center text-base">
@@ -171,7 +173,7 @@ export default async function AssessorLayout({ children }: { children: React.Rea
               <span className="block text-indigo-300/60 text-[9px] leading-tight">Competency Management Platform</span>
             </span>
           </Link>
-          <div data-sb-label><WorkspaceSwitcher roles={userRoles} activeRole="assessor" /></div>
+          <div data-sb-label><WorkspaceSwitcher roles={userRoles} activeRole="assessor" workspaces={workspaces} /></div>
 
           <nav className="flex flex-col gap-0.5 flex-1 overflow-y-auto">
             {NAV_GROUPS.map(({ group, items }) => {
@@ -213,7 +215,7 @@ export default async function AssessorLayout({ children }: { children: React.Rea
               </div>
             </div>
             <div className="mb-2" data-sb-label>
-              <WorkspaceSwitcher roles={userRoles} activeRole="assessor" variant="footer" />
+              <WorkspaceSwitcher roles={userRoles} activeRole="assessor" workspaces={workspaces} variant="footer" />
             </div>
             <form action="/api/auth/logout" method="POST">
               <button type="submit" data-sb-item

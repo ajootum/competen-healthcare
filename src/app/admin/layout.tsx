@@ -5,7 +5,7 @@ import Link from "next/link";
 import RoleSwitcher from "@/components/RoleSwitcher";
 import NavLink from "@/components/NavLink";
 import SidebarToggle from "@/components/SidebarToggle";
-import { highestRole, orgRolesOf, ORG_ROLE_CONFIG, type AppRole, type OrgRole } from "@/lib/roles";
+import { highestRole, orgRolesOf, workspacesFor, ORG_ROLE_CONFIG, type AppRole, type OrgRole } from "@/lib/roles";
 
 const ALL_NAV = [
   // Overview: all management and functional roles
@@ -94,6 +94,8 @@ export default async function AdminLayout({ children }: { children: React.ReactN
   const orgRoleCfg = orgRole ? ORG_ROLE_CONFIG[orgRole] : null;
   const portalLabel = orgRoleCfg?.label ?? "Admin";
   const filteredNav = ALL_NAV.filter(item => item.orgRoles.some(r => (orgRoles as (string | null)[]).includes(r)));
+  // Dedicated org-role workspaces this user can switch into (surfaced in the portal switcher).
+  const workspaces = workspacesFor(orgRoles, userRoles);
 
   return (
     <div className="min-h-screen bg-gray-50 font-[family-name:var(--font-geist-sans)]">
@@ -156,9 +158,9 @@ export default async function AdminLayout({ children }: { children: React.ReactN
                 <p className="text-amber-300/60 text-[10px]">{portalLabel}</p>
               </div>
             </div>
-            {userRoles.length > 1 && (
+            {(userRoles.length > 1 || workspaces.length > 0) && (
               <div className="mb-2" data-sb-label>
-                <RoleSwitcher roles={userRoles} activeRole={activeRole} />
+                <RoleSwitcher roles={userRoles} activeRole={activeRole} workspaces={workspaces} />
               </div>
             )}
             <form action="/api/auth/logout" method="POST">

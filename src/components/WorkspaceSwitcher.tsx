@@ -1,13 +1,15 @@
 "use client";
 
 import { useState } from "react";
-import { ROLE_CONFIG, type AppRole } from "@/lib/roles";
+import { ROLE_CONFIG, type AppRole, type WorkspaceLink } from "@/lib/roles";
 
-// Permission-controlled workspace switcher. Renders the workspace pill; when
-// the user holds more than one role it becomes a dropdown listing ONLY the
-// workspaces their roles permit. The switch itself is enforced server-side
-// (/api/auth/switch-role rejects roles the user doesn't hold and sets the
-// httpOnly active_role cookie) — this UI never grants anything.
+// Permission-controlled workspace switcher. Renders the workspace pill; when the
+// user holds more than one portal — or has dedicated org-role workspaces to jump
+// into — it becomes a dropdown listing ONLY the destinations their roles permit.
+// Portal switches are enforced server-side (/api/auth/switch-role rejects roles
+// the user doesn't hold and sets the httpOnly active_role cookie); workspace
+// links are plain navigations whose own layout gate enforces access. This UI
+// never grants anything.
 
 const WORKSPACE_LABEL: Record<AppRole, string> = {
   super_admin: "Platform Admin Workspace",
@@ -17,12 +19,14 @@ const WORKSPACE_LABEL: Record<AppRole, string> = {
   nurse: "Clinician Workspace",
 };
 
-export default function WorkspaceSwitcher({ roles, activeRole, variant = "sidebar" }: {
-  roles: AppRole[]; activeRole: AppRole; variant?: "sidebar" | "mobile" | "footer";
+export default function WorkspaceSwitcher({ roles, activeRole, workspaces = [], variant = "sidebar" }: {
+  roles: AppRole[]; activeRole: AppRole; workspaces?: WorkspaceLink[]; variant?: "sidebar" | "mobile" | "footer";
 }) {
   const [open, setOpen] = useState(false);
   const [switching, setSwitching] = useState<AppRole | null>(null);
   const multi = roles.length > 1;
+  // Something to choose between: more than one portal, or at least one workspace.
+  const canSwitch = multi || workspaces.length > 0;
 
   async function switchTo(role: AppRole) {
     if (role === activeRole) { setOpen(false); return; }
@@ -45,10 +49,10 @@ export default function WorkspaceSwitcher({ roles, activeRole, variant = "sideba
     setOpen(false);
   }
 
-  const dropdown = open && multi && (
+  const dropdown = open && canSwitch && (
     <>
       <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
-      <div className={`absolute z-50 bg-white rounded-xl shadow-xl border border-gray-100 overflow-hidden ${
+      <div className={`absolute z-50 bg-white rounded-xl shadow-xl border border-gray-100 overflow-hidden max-h-[70vh] overflow-y-auto ${
         variant === "sidebar" ? "top-full left-0 right-0 mt-1"
           : variant === "footer" ? "bottom-full left-0 right-0 mb-1"
           : "top-full right-0 mt-1 w-56"}`}>
@@ -67,18 +71,30 @@ export default function WorkspaceSwitcher({ roles, activeRole, variant = "sideba
             </button>
           );
         })}
+        {workspaces.length > 0 && (
+          <>
+            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest px-3 pt-2.5 pb-1 border-t border-gray-100">Workspaces</p>
+            {workspaces.map(ws => (
+              <a key={ws.href} href={ws.href}
+                className="w-full flex items-center gap-2.5 px-3 py-2.5 text-xs text-gray-700 hover:bg-gray-50 transition-colors">
+                <span>{ws.icon}</span>
+                <span className="flex-1 text-left">{ws.label}</span>
+              </a>
+            ))}
+          </>
+        )}
         <p className="text-[9px] text-gray-400 px-3 py-2 border-t border-gray-50">
-          Only workspaces your roles permit are listed; access is enforced server-side.
+          Only destinations your roles permit are listed; access is enforced server-side.
         </p>
       </div>
     </>
   );
 
   if (variant === "footer") {
-    // Always-visible control in the sidebar footer. Multi-role: opens the
-    // permitted-workspace list (upward). Single-role: states the access level
-    // plainly so the control's presence is never a mystery.
-    if (!multi) {
+    // Always-visible control in the sidebar footer. When there's somewhere to go
+    // it opens the permitted-destination list (upward). Otherwise it states the
+    // access level plainly so the control's presence is never a mystery.
+    if (!canSwitch) {
       return (
         <p className="px-3 py-1.5 text-[10px] text-slate-500">
           Workspace access: <span className="text-slate-400 font-semibold">{WORKSPACE_LABEL[activeRole]}</span> only
@@ -101,9 +117,9 @@ export default function WorkspaceSwitcher({ roles, activeRole, variant = "sideba
   if (variant === "mobile") {
     return (
       <span className="relative block">
-        <button onClick={() => multi && setOpen(o => !o)}
-          className={`block text-indigo-300/60 text-[10px] leading-tight text-left ${multi ? "hover:text-indigo-200" : "cursor-default"}`}>
-          {WORKSPACE_LABEL[activeRole]}{multi && " ▾"}
+        <button onClick={() => canSwitch && setOpen(o => !o)}
+          className={`block text-indigo-300/60 text-[10px] leading-tight text-left ${canSwitch ? "hover:text-indigo-200" : "cursor-default"}`}>
+          {WORKSPACE_LABEL[activeRole]}{canSwitch && " ▾"}
         </button>
         {dropdown}
       </span>
@@ -112,13 +128,13 @@ export default function WorkspaceSwitcher({ roles, activeRole, variant = "sideba
 
   return (
     <div className="relative mx-2 mb-4">
-      <button onClick={() => multi && setOpen(o => !o)}
-        className={`w-full bg-indigo-600 rounded-lg px-3 py-2 text-left ${multi ? "hover:bg-indigo-500 transition-colors" : "cursor-default"}`}>
+      <button onClick={() => canSwitch && setOpen(o => !o)}
+        className={`w-full bg-indigo-600 rounded-lg px-3 py-2 text-left ${canSwitch ? "hover:bg-indigo-500 transition-colors" : "cursor-default"}`}>
         <p className="text-white text-[11px] font-semibold flex items-center gap-1.5">
           <span>🛡️ {WORKSPACE_LABEL[activeRole]}</span>
-          {multi && <span className="ml-auto text-indigo-200 text-[9px]">▾</span>}
+          {canSwitch && <span className="ml-auto text-indigo-200 text-[9px]">▾</span>}
         </p>
-        {multi && <p className="text-indigo-200/70 text-[9px] mt-0.5">{roles.length} workspaces available</p>}
+        {canSwitch && <p className="text-indigo-200/70 text-[9px] mt-0.5">{roles.length + workspaces.length} workspaces available</p>}
       </button>
       {dropdown}
     </div>

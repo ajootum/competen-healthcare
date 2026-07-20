@@ -8,6 +8,7 @@ import NavLink from "@/components/NavLink";
 import NavGroup from "@/components/NavGroup";
 import SidebarToggle from "@/components/SidebarToggle";
 import { highestRole, type AppRole } from "@/lib/roles";
+import { workspaceLinksForUser } from "@/lib/workspace-links";
 
 // Grouped per the Account & Subscription spec §2 / Nurse Workspace mockup.
 // "My CPUs" is kept (not in the mockup) so the page isn't orphaned; "Portfolio"
@@ -63,6 +64,8 @@ export default async function DashboardLayout({ children }: { children: React.Re
   const userRoles: AppRole[] = (profile?.roles?.length ? profile.roles : [profile?.role]).filter(Boolean) as AppRole[];
   const cookieStore = await cookies();
   const activeRole = (cookieStore.get("active_role")?.value ?? highestRole(userRoles)) as AppRole;
+  // Dedicated org-role workspaces this user can switch into.
+  const workspaces = await workspaceLinksForUser(createAdminClient(), user.id, userRoles);
 
   // Unread notification count for the sidebar bell (0 until migration 029 runs).
   const { count: unreadCount } = await createAdminClient()
@@ -125,9 +128,9 @@ export default async function DashboardLayout({ children }: { children: React.Re
                 <p className="text-teal-400/60 text-[10px]">Nurse</p>
               </div>
             </div>
-            {userRoles.some(r => ["educator", "assessor"].includes(r)) && (
+            {(userRoles.length > 1 || workspaces.length > 0) && (
               <div className="mb-2" data-sb-label>
-                <RoleSwitcher roles={userRoles} activeRole={activeRole} />
+                <RoleSwitcher roles={userRoles} activeRole={activeRole} workspaces={workspaces} />
               </div>
             )}
             <form action="/api/auth/logout" method="POST">

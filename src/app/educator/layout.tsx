@@ -6,6 +6,7 @@ import NavGroup from "@/components/NavGroup";
 import SidebarToggle from "@/components/SidebarToggle";
 import WorkspaceSwitcher from "@/components/WorkspaceSwitcher";
 import { type AppRole } from "@/lib/roles";
+import { workspaceLinksForUser } from "@/lib/workspace-links";
 
 // Educator Workspace sidebar — enterprise education operations centre
 // (Final Dashboard & Sidebar Enhancement Specification). Grouped navigation
@@ -151,6 +152,8 @@ export default async function EducatorLayout({ children }: { children: React.Rea
     .single();
 
   const userRoles: AppRole[] = (profile?.roles?.length ? profile.roles : [profile?.role]).filter(Boolean) as AppRole[];
+  // Dedicated org-role workspaces this user can switch into.
+  const workspaces = await workspaceLinksForUser(adminClient, user.id, userRoles);
 
   if (!userRoles.includes("educator")) {
     return (
@@ -189,7 +192,7 @@ export default async function EducatorLayout({ children }: { children: React.Rea
           <span className="w-7 h-7 rounded bg-purple-500 flex items-center justify-center text-white font-bold text-sm shrink-0">C</span>
           <span className="min-w-0">
             <span className="block text-white font-semibold text-sm leading-tight">Competen</span>
-            <WorkspaceSwitcher roles={userRoles} activeRole="educator" variant="mobile" />
+            <WorkspaceSwitcher roles={userRoles} activeRole="educator" workspaces={workspaces} variant="mobile" />
           </span>
           <span className="flex-1" />
           <Link href="/educator/notifications" aria-label="Notifications" className="relative w-9 h-9 rounded-lg flex items-center justify-center text-base">
@@ -224,7 +227,7 @@ export default async function EducatorLayout({ children }: { children: React.Rea
               <span className="block text-purple-300/60 text-[9px] leading-tight">Educator Workspace</span>
             </span>
           </Link>
-          <div data-sb-label><WorkspaceSwitcher roles={userRoles} activeRole="educator" /></div>
+          <div data-sb-label><WorkspaceSwitcher roles={userRoles} activeRole="educator" workspaces={workspaces} /></div>
 
           <nav className="flex flex-col gap-0.5 flex-1 overflow-y-auto">
             {NAV_GROUPS.map(({ group, items }) => {
@@ -281,7 +284,7 @@ export default async function EducatorLayout({ children }: { children: React.Rea
               </div>
             </div>
             <div className="mb-2" data-sb-label>
-              <WorkspaceSwitcher roles={userRoles} activeRole="educator" variant="footer" />
+              <WorkspaceSwitcher roles={userRoles} activeRole="educator" workspaces={workspaces} variant="footer" />
             </div>
             <form action="/api/auth/logout" method="POST">
               <button type="submit" data-sb-item

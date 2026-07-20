@@ -6,6 +6,7 @@ import RoleSwitcher from "@/components/RoleSwitcher";
 import NavLink from "@/components/NavLink";
 import SidebarToggle from "@/components/SidebarToggle";
 import { highestRole, type AppRole } from "@/lib/roles";
+import { workspaceLinksForUser } from "@/lib/workspace-links";
 
 // Shift Supervisor Workspace (SSW-001) — the real-time operational command
 // centre for a clinical shift. Role-scoped to operational coordinators
@@ -37,6 +38,8 @@ export default async function SupervisorLayout({ children }: { children: React.R
   const userRoles: AppRole[] = (profile?.roles?.length ? profile.roles : [profile?.role]).filter(Boolean) as AppRole[];
   const cookieStore = await cookies();
   const activeRole = (cookieStore.get("active_role")?.value ?? highestRole(userRoles)) as AppRole;
+  // Dedicated org-role workspaces this user can switch into.
+  const workspaces = await workspaceLinksForUser(admin, user.id, userRoles);
 
   if (!userRoles.some(r => ALLOWED.includes(r))) {
     return (
@@ -102,7 +105,7 @@ export default async function SupervisorLayout({ children }: { children: React.R
                 <p className="text-amber-300/60 text-[10px]">Shift Supervisor</p>
               </div>
             </div>
-            {userRoles.length > 1 && <div className="mb-2" data-sb-label><RoleSwitcher roles={userRoles} activeRole={activeRole} /></div>}
+            {(userRoles.length > 1 || workspaces.length > 0) && <div className="mb-2" data-sb-label><RoleSwitcher roles={userRoles} activeRole={activeRole} workspaces={workspaces} /></div>}
             <form action="/api/auth/logout" method="POST">
               <button type="submit" data-sb-item className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm text-teal-100/50 hover:bg-teal-800/30 hover:text-white transition-colors">
                 <span className="w-5 text-center">↩</span><span data-sb-label>Sign out</span>
