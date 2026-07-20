@@ -16,21 +16,57 @@ export type OrgRole =
   | "leader"
   | "healthcare_worker";
 
-// Competen internal staff roles — differentiate who a super_admin user actually is
+// Competen LANDLORD axis — the platform-operator identities (PLA-001). Distinct
+// from the tenant-plane AppRole/OrgRole: a PlatformRole means the user operates
+// the platform ACROSS tenants. `platform_super_admin` and `developer` are kept as
+// back-compat aliases of the canonical `platform_operations` / `engineer`.
 export type PlatformRole =
-  | "platform_owner"
-  | "platform_super_admin"
-  | "content_manager"
-  | "customer_success"
-  | "developer";
+  | "platform_owner"        // POW-001
+  | "platform_operations"   // PSA-001 (canonical)
+  | "platform_super_admin"  // PSA-001 (alias, existing data)
+  | "customer_success"      // PCS-001
+  | "support"               // SUP-001
+  | "product_manager"       // PRD-001
+  | "engineer"              // ENG-001 (canonical)
+  | "developer"             // ENG-001 (alias, existing data)
+  | "ai_operator"           // AIS-001
+  | "finance"               // FIN-001
+  | "content_manager"       // CNT-001
+  | "quality_officer"       // QLT-001
+  | "security_operator";    // SEC-001
 
-export const PLATFORM_ROLE_CONFIG: Record<PlatformRole, { label: string; icon: string; description: string }> = {
-  platform_owner:       { label: "Platform Owner",       icon: "👑", description: "CEO + CPO — full platform authority, billing, legal" },
-  platform_super_admin: { label: "Platform Super Admin", icon: "🛡️", description: "Technical admin — security, backups, infrastructure" },
-  content_manager:      { label: "Content Manager",      icon: "📚", description: "Manages master competency library and frameworks" },
-  customer_success:     { label: "Customer Success",     icon: "🤝", description: "Onboarding, training and tenant support" },
-  developer:            { label: "Developer",            icon: "💻", description: "Code, APIs, database — no clinical data restriction" },
+export const PLATFORM_ROLE_CONFIG: Record<PlatformRole, { label: string; icon: string; description: string; tier: number; workspace: string }> = {
+  platform_owner:       { label: "Platform Owner",         icon: "👑", description: "Strategic ownership — commercial, global policy, delegation", tier: 1, workspace: "POW-001" },
+  platform_operations:  { label: "Platform Operations",    icon: "🛠️", description: "Tenant administration, incidents, controlled emergency actions", tier: 2, workspace: "PSA-001" },
+  platform_super_admin: { label: "Platform Operations",    icon: "🛠️", description: "Tenant administration, incidents, controlled emergency actions", tier: 2, workspace: "PSA-001" },
+  customer_success:     { label: "Customer Success",       icon: "🤝", description: "Onboarding, adoption, health scores, renewals", tier: 3, workspace: "PCS-001" },
+  support:              { label: "Support",                icon: "🎧", description: "Tickets, user recovery, tenant support", tier: 3, workspace: "SUP-001" },
+  product_manager:      { label: "Product Management",     icon: "🧭", description: "Product/module governance across tenants", tier: 3, workspace: "PRD-001" },
+  engineer:             { label: "Engineering",            icon: "💻", description: "Code, APIs, database, deployments", tier: 3, workspace: "ENG-001" },
+  developer:            { label: "Engineering",            icon: "💻", description: "Code, APIs, database, deployments", tier: 3, workspace: "ENG-001" },
+  ai_operator:          { label: "AI Operations",          icon: "✨", description: "Providers, prompts, token budgets, AI governance", tier: 3, workspace: "AIS-001" },
+  finance:              { label: "Finance",                icon: "💷", description: "Billing, subscriptions, revenue", tier: 3, workspace: "FIN-001" },
+  content_manager:      { label: "Content Operations",     icon: "📚", description: "Master competency library, standards, marketplace", tier: 3, workspace: "CNT-001" },
+  quality_officer:      { label: "Quality & Compliance",   icon: "🔬", description: "Platform quality, compliance, standards governance", tier: 3, workspace: "QLT-001" },
+  security_operator:    { label: "Security Operations",    icon: "🛡️", description: "Auth monitoring, security events, threat response", tier: 3, workspace: "SEC-001" },
 };
+
+// The set of valid landlord role codes, for membership tests.
+export const PLATFORM_ROLES = Object.keys(PLATFORM_ROLE_CONFIG) as PlatformRole[];
+
+// Resolve a profile's landlord roles (platform_roles[] preferred, platform_role scalar fallback).
+export function platformRolesOf(p: { platform_role?: string | null; platform_roles?: string[] | null } | null | undefined): PlatformRole[] {
+  if (!p) return [];
+  const raw = ((p.platform_roles?.length ? p.platform_roles : [p.platform_role]) as (string | null | undefined)[]).filter(Boolean) as string[];
+  return raw.filter(r => (PLATFORM_ROLES as string[]).includes(r)) as PlatformRole[];
+}
+
+// True when the profile holds at least one landlord role (any, or one of `roles`).
+export function hasPlatformRole(p: { platform_role?: string | null; platform_roles?: string[] | null } | null | undefined, ...roles: PlatformRole[]): boolean {
+  const held = platformRolesOf(p);
+  if (!held.length) return false;
+  return roles.length === 0 ? true : held.some(r => roles.includes(r));
+}
 
 export const ROLE_CONFIG: Record<AppRole, { label: string; icon: string; portal: string; color: string }> = {
   super_admin:    { label: "Super Admin",       icon: "🛡️", portal: "/super-admin",     color: "bg-violet-600" },
