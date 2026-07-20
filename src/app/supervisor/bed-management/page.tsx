@@ -2,6 +2,7 @@ import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { loadPatientOps, fmtTime, titleCase, ewsColor, STATE_TONE, BED_TONE } from "@/lib/operations/patient-ops";
+import BedTurnaroundPanel from "./BedTurnaroundPanel";
 
 export const dynamic = "force-dynamic";
 
@@ -149,34 +150,8 @@ export default async function BedManagement() {
       </div>
 
       <div className="grid lg:grid-cols-2 gap-4">
-        {/* D) Bed turnaround */}
-        <div className={card}>
-          <div className="flex items-center justify-between mb-3">
-            <h2 className="font-semibold text-gray-900">Bed turnaround</h2>
-            <span className="text-xs text-gray-400 tabular-nums">{cleaningBeds.length} in turnaround</span>
-          </div>
-          {cleaningBeds.length === 0 ? (
-            <p className="text-sm text-gray-400">No beds currently in turnaround.</p>
-          ) : (
-            <ul className="space-y-2">
-              {cleaningBeds.map((b: any) => (
-                <li key={b.id} className="flex items-center justify-between gap-2 rounded-lg border border-orange-200 bg-orange-50/40 px-3 py-2">
-                  <span className="flex items-center gap-2 min-w-0">
-                    <span className="w-2 h-2 rounded-full bg-orange-500 shrink-0" />
-                    <span className="text-sm font-medium text-gray-800 truncate">{b.label}</span>
-                    <span className="text-[11px] text-gray-400 truncate">{b.departments?.name ?? b.bed_type ? titleCase(b.departments?.name ?? b.bed_type ?? "") : ""}</span>
-                  </span>
-                  <span className="text-[11px] font-medium text-orange-700 shrink-0">In turnaround (cleaning)</span>
-                </li>
-              ))}
-            </ul>
-          )}
-          <div className="mt-3 rounded-lg bg-gray-50 border border-gray-100 px-3 py-2.5">
-            <p className="text-[11px] text-gray-500 leading-relaxed">
-              The step-by-step turnaround timeline — discharge → vacated → cleaning → inspection → available, with per-step timestamps — activates with the bed-turnaround tracking module. Beds above are shown live from their current cleaning status.
-            </p>
-          </div>
-        </div>
+        {/* D) Bed turnaround — real stage tracker */}
+        <BedTurnaroundPanel turnaround={po.turnaround} cleaningBeds={cleaningBeds} configReady={po.turnaroundReady} />
 
         {/* E) Demand & capacity */}
         <div className={card}>

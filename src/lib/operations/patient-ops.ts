@@ -123,6 +123,10 @@ export async function loadPatientOps(admin: any, hid: string | null, isSuper: bo
   const fbRes = await fbScope(admin.from("op_flow_blockers").select("id, category, detail, patient_id, op_patients!patient_id(label)")).eq("status", "open").order("created_at", { ascending: false }).limit(100);
   const flowBlockers = (fbRes as any).error ? [] : ((fbRes.data ?? []) as any[]);
   const flowBlockersReady = !(fbRes as any).error;
+  // Active bed turnarounds (migration 049). Fail-soft pre-migration.
+  const btRes = await fbScope(admin.from("op_bed_turnaround").select("id, bed_id, patient_label, stage, op_beds!bed_id(label)")).neq("stage", "ready").order("created_at", { ascending: true }).limit(100);
+  const turnaround = (btRes as any).error ? [] : ((btRes.data ?? []) as any[]);
+  const turnaroundReady = !(btRes as any).error;
 
   // ── Safety (Clinical Safety) ─────────────────────────────────────────────
   const openEsc = escalations.filter((e: any) => ["open", "acknowledged"].includes(e.status));
@@ -196,7 +200,7 @@ export async function loadPatientOps(admin: any, hid: string | null, isSuper: bo
   const nurses = [...new Map(assignments.map((a: any) => [a.staff_id, a.profiles?.full_name])).entries()].map(([id, name]) => ({ id, name }));
 
   return {
-    ready: true as const, patients: enriched, active, summary, flow, blockers, flowBlockers, flowBlockersReady,
+    ready: true as const, patients: enriched, active, summary, flow, blockers, flowBlockers, flowBlockersReady, turnaround, turnaroundReady,
     safetyBanner, alertQueue, deteriorating, compliance, openEsc,
     bedBoard, capacity, cleaningBeds, zones, nurses, copilot,
   };
