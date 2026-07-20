@@ -43,7 +43,7 @@ export default async function QualitySectionPage({ params }: { params: Promise<{
   const roles: string[] = (profile?.roles?.length ? profile.roles : [profile?.role]).filter(Boolean) as string[];
   if (!roles.some(r => ["hospital_admin", "super_admin", "assessor"].includes(r))) redirect("/dashboard");
 
-  const s = SECTIONS[section];
+  const s = Object.hasOwn(SECTIONS, section) ? SECTIONS[section] : undefined;
   if (!s) redirect("/quality-accreditation");
 
   return (

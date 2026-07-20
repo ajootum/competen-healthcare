@@ -53,7 +53,7 @@ export default async function HrSectionPage({ params }: { params: Promise<{ sect
   const roles: string[] = (profile?.roles?.length ? profile.roles : [profile?.role]).filter(Boolean) as string[];
   if (!roles.some(r => ["hospital_admin", "super_admin"].includes(r))) redirect("/dashboard");
 
-  const s = SECTIONS[section];
+  const s = Object.hasOwn(SECTIONS, section) ? SECTIONS[section] : undefined;
   if (!s) redirect("/human-resources");
 
   return (

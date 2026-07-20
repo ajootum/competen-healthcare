@@ -11,7 +11,8 @@ import { highestRole, type AppRole } from "@/lib/roles";
 const NAV = [
   { group: "PLATFORM", items: [
     { label: "Overview",          href: "/super-admin",                    icon: "🌍" },
-    { label: "Command Centre",    href: "/super-admin/command-centre",     icon: "🛰️" },
+    { label: "Platform Workspace", href: "/platform-admin",                icon: "🛰️" },
+    { label: "Command Centre",    href: "/super-admin/command-centre",     icon: "🎛️" },
     { label: "Organisations",     href: "/super-admin/organisations",      icon: "🏛️" },
     { label: "All Facilities",    href: "/super-admin/hospitals",          icon: "🏥" },
     { label: "All Users",         href: "/super-admin/users",              icon: "👥" },
