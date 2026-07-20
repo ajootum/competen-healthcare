@@ -24,10 +24,11 @@ const NAV_GROUPS: { group: string; items: NavItem[] }[] = [
     { label: "Shift Timeline",     href: "/supervisor/timeline",                  icon: "🕑" },
   ]},
   { group: "Patient Operations", items: [
-    { label: "Patient List",       href: "/supervisor/operations?section=ward",    icon: "👤" },
-    { label: "Clinical Safety",    href: "/supervisor/operations?section=safety",  icon: "🛡️" },
-    { label: "Bed Management",     href: "/supervisor/operations?section=ward",    icon: "🛏️" },
-    { label: "Ward Map",           href: "/supervisor#ward-map",                   icon: "🗺️" },
+    { label: "Patient List",       href: "/supervisor/patient-list",               icon: "👤" },
+    { label: "Patient Flow",       href: "/supervisor/patient-flow",               icon: "🔀" },
+    { label: "Clinical Safety",    href: "/supervisor/clinical-safety",            icon: "🛡️" },
+    { label: "Bed Management",     href: "/supervisor/bed-management",              icon: "🛏️" },
+    { label: "Ward Map",           href: "/supervisor/ward-map",                   icon: "🗺️" },
   ]},
   { group: "Workforce Operations", items: [
     { label: "Assignments",        href: "/supervisor/operations?section=assignments", icon: "🧩" },
