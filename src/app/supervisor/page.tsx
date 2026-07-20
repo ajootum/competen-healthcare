@@ -5,203 +5,417 @@ import { loadOpsConsoleData } from "@/lib/operations/ops-console-data";
 
 export const dynamic = "force-dynamic";
 
-// Shift Supervisor Dashboard (SSW-001 Phase 2) — the live operational picture
-// for the shift, assembled from the Clinical Operations Engine (op_*) data.
+// Shift Command Centre (SSW-001) — action-first operational command surface for
+// the shift supervisor, assembled entirely from live Clinical Operations Engine
+// (op_*) data. Widgets show only what the schema backs; capabilities that need
+// engines we don't yet feed (medication variance, mandatory-ratio targets) are
+// left out rather than fabricated.
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
+const NONE = "00000000-0000-0000-0000-000000000000";
 const pretty = (s: string) => (s ?? "").replace(/_/g, " ");
-const ACUITY = ["critical", "high", "moderate", "stable"];
-const ACUITY_COLOR: Record<string, string> = { stable: "text-green-600", moderate: "text-yellow-600", high: "text-orange-600", critical: "text-red-600" };
+const titleCase = (s: string) => pretty(s).split(" ").filter(Boolean).map(w => w[0].toUpperCase() + w.slice(1)).join(" ");
+const fmtTime = (iso: string | null) => iso ? new Date(iso).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: false }) : "--:--";
 const card = "bg-white rounded-xl border border-gray-200 p-5";
+const head = "font-semibold text-gray-900 flex items-center gap-2";
 
-function Stat({ n, label, tone, href }: { n: any; label: string; tone?: string; href?: string }) {
-  const inner = (
-    <div className={`${card} ${href ? "hover:border-teal-300 transition-colors" : ""}`}>
-      <div className={`text-3xl font-bold tabular-nums ${tone ?? "text-gray-900"}`}>{n}</div>
-      <div className="text-xs text-gray-500 mt-1">{label}</div>
-    </div>
-  );
-  return href ? <Link href={href}>{inner}</Link> : inner;
-}
-
-export default async function SupervisorDashboard() {
+export default async function ShiftCommandCentre() {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect("/login");
   const admin = createAdminClient() as any;
-  const { data: profile } = await admin.from("profiles").select("full_name, role, roles, hospital_id").eq("id", user.id).single();
+  const { data: profile } = await admin.from("profiles").select("full_name, role, roles, hospital_id, avatar_url").eq("id", user.id).single();
   const roles: string[] = (profile?.roles?.length ? profile.roles : [profile?.role]).filter(Boolean);
   if (!roles.some(r => ["assessor", "hospital_admin", "super_admin"].includes(r))) redirect("/dashboard");
+  const isSuper = roles.includes("super_admin");
+  const hid = profile?.hospital_id ?? null;
 
-  const { ready, data } = await loadOpsConsoleData(admin, profile?.hospital_id ?? null, roles.includes("super_admin"));
+  const { ready, data } = await loadOpsConsoleData(admin, hid, isSuper);
 
   if (!ready) {
     return (
       <div className="space-y-4">
-        <h1 className="text-2xl font-bold text-gray-900">Shift Dashboard</h1>
+        <h1 className="text-2xl font-bold text-gray-900">Shift Command Centre</h1>
         <div className="bg-amber-50 border border-amber-200 rounded-xl p-6">
           <p className="font-semibold text-amber-900">⚙️ Coming online</p>
-          <p className="text-sm text-amber-800 mt-2">The Clinical Operations Engine tables aren&apos;t provisioned yet (migrations 038 &amp; 039). Once applied, this dashboard fills with your live shift data.</p>
+          <p className="text-sm text-amber-800 mt-2">The Clinical Operations Engine tables aren&apos;t provisioned yet (migrations 038 &amp; 039). Once applied, this command centre fills with your live shift data.</p>
         </div>
       </div>
     );
   }
 
-  const { shifts, shiftStaff, beds, patients, escalations, tasks, observations } = data;
-  const { data: notifs } = await admin.from("notifications").select("type, title, created_at").eq("user_id", user.id).order("created_at", { ascending: false }).limit(6);
+  const { shifts, shiftStaff, beds, patients, assignments, escalations, alerts, tasks, observations } = data;
+  const scope = (q: any) => (isSuper ? q : q.eq("hospital_id", hid ?? NONE));
 
-  // ── Widget aggregates
+  // ── Shift & staff ────────────────────────────────────────────────────────
+  const activeShift = shifts.find((s: any) => s.status === "active") ?? shifts.find((s: any) => s.status === "planned") ?? null;
+  const shiftId = activeShift?.id ?? null;
+  const rostered = activeShift ? shiftStaff.filter((s: any) => s.shift_id === activeShift.id) : [];
+  const present = rostered.filter((s: any) => ["on_duty", "confirmed", "assigned"].includes(s.status));
+  const absent = rostered.filter((s: any) => s.status === "absent");
+  const roleMix = present.reduce((m: Record<string, number>, s: any) => ({ ...m, [s.role]: (m[s.role] ?? 0) + 1 }), {});
+  const supervisorName = activeShift?.profiles?.full_name ?? profile?.full_name ?? "—";
+  const unitName = activeShift?.departments?.name ?? "Unit";
+
+  // Extra queries — task completion is scoped to the ACTIVE SHIFT with cancelled
+  // tasks excluded from the denominator; the message count is an exact unread count.
+  const tScope = (q: any) => (shiftId ? q.eq("shift_id", shiftId) : scope(q));
+  const [handoverRes, unreadRes, tasksTotalRes, tasksDoneRes] = await Promise.all([
+    scope(admin.from("op_handovers").select("status, accepted_at, created_at")).order("created_at", { ascending: false }).limit(5),
+    admin.from("notifications").select("id", { count: "exact", head: true }).eq("user_id", user.id).eq("read", false),
+    tScope(admin.from("op_tasks").select("id", { count: "exact", head: true })).neq("status", "cancelled"),
+    tScope(admin.from("op_tasks").select("id", { count: "exact", head: true })).in("status", ["completed", "verified"]),
+  ]);
+  const handovers = handoverRes.data ?? [];
+  const unreadNotif = unreadRes.count ?? 0;
+  const tasksTotal = tasksTotalRes.count ?? 0;
+  const tasksDone = tasksDoneRes.count ?? 0;
+
+  // ── Patients ─────────────────────────────────────────────────────────────
   const census = patients.length;
-  const acuityCount = (a: string) => patients.filter((p: any) => p.acuity_level === a).length;
-  const highRisk = patients.filter((p: any) => p.acuity_level === "high" || p.acuity_level === "critical");
-  const activeShiftIds = new Set(shifts.filter((s: any) => s.status === "active").map((s: any) => s.id));
-  // Only genuinely-present staff count toward staffing (exclude off_duty/absent).
-  const onDuty = shiftStaff.filter((s: any) => activeShiftIds.has(s.shift_id) && ["on_duty", "confirmed", "assigned"].includes(s.status));
-  const roleMix = onDuty.reduce((m: Record<string, number>, s: any) => ({ ...m, [s.role]: (m[s.role] ?? 0) + 1 }), {});
-  const ratio = census && onDuty.length ? (census / onDuty.length).toFixed(1) : "—";
-  const openTasks = tasks;
-  const taskByPriority = (p: string) => openTasks.filter((t: any) => t.priority === p).length;
-  const adt = (s: string) => patients.filter((p: any) => p.operational_status === s).length;
-  const pews = escalations.filter((e: any) => e.escalation_type === "clinical_deterioration");
-  const recentObs = observations.filter((o: any) => o.status === "recorded").slice(0, 6);
-  const totalBeds = beds.length, occupied = beds.filter((b: any) => b.status === "occupied").length, available = beds.filter((b: any) => b.status === "available").length;
+  const byStatus = (s: string) => patients.filter((p: any) => p.operational_status === s).length;
+  const byAcuity = (a: string) => patients.filter((p: any) => p.acuity_level === a).length;
+  const isolation = patients.filter((p: any) => p.isolation_status && p.isolation_status !== "none").length;
+  const critical = byAcuity("critical");
+
+  // ── Safety ───────────────────────────────────────────────────────────────
+  const alertCat = (c: string) => alerts.filter((a: any) => a.category === c).length;
+  const openEsc = escalations.filter((e: any) => ["open", "acknowledged"].includes(e.status));
+  const rapid = escalations.filter((e: any) => e.level >= 4);
+  // Distinct deteriorating patients — the LATEST observation per patient with a
+  // PEWS/EWS >= 5 (not every historical high row), matching the nurse workspace.
+  const latestObs = new Map<string, any>();
+  observations.forEach((o: any) => {
+    const t = new Date(o.recorded_at ?? o.created_at ?? 0).getTime();
+    const cur = latestObs.get(o.patient_id);
+    if (!cur || t > cur._t) latestObs.set(o.patient_id, { ...o, _t: t });
+  });
+  const deteriorating = [...latestObs.values()].filter((o: any) => o.ews_score != null && o.ews_score >= 5);
+
+  // ── Observations & performance (compliance scoped to the active shift) ────
+  const overdueCount = observations.filter((o: any) => o.status === "overdue").length;
+  const shiftObs = shiftId ? observations.filter((o: any) => o.shift_id === shiftId) : observations;
+  const soRecorded = shiftObs.filter((o: any) => o.status === "recorded").length;
+  const soPending = shiftObs.filter((o: any) => ["due", "overdue"].includes(o.status)).length;
+  const obsCompliance = (soRecorded + soPending) ? Math.round((soRecorded / (soRecorded + soPending)) * 100) : null;
+  const taskCompletion = tasksTotal ? Math.round((tasksDone / tasksTotal) * 100) : null;
+  const compValidated = assignments.filter((a: any) => a.competency_validated).length;
+  const compCoverage = assignments.length ? Math.round((compValidated / assignments.length) * 100) : null;
+
+  // ── Beds / capacity ──────────────────────────────────────────────────────
+  const bedBy = (s: string) => beds.filter((b: any) => b.status === s).length;
+  const totalBeds = beds.length;
+  const occupied = bedBy("occupied"), available = bedBy("available"), reserved = bedBy("reserved"), cleaning = bedBy("cleaning"), maintenance = bedBy("out_of_service");
   const occPct = totalBeds ? Math.round((occupied / totalBeds) * 100) : 0;
-  const l45 = escalations.filter((e: any) => e.level >= 4).length;
+  const patientByBed = new Map<string, any>();
+  patients.forEach((p: any) => { if (p.bed_id) patientByBed.set(p.bed_id, p); });
+
+  // ── Handover ─────────────────────────────────────────────────────────────
+  const latestHandover = handovers[0] ?? null;
+  const handoverDone = latestHandover?.status === "accepted";
+
+  // ── Today's Priorities (action-first, ranked, only when backed) ──────────
+  const priorities: { tone: string; title: string; sub?: string; href: string }[] = [];
+  rapid.slice(0, 3).forEach((e: any) => priorities.push({ tone: "red", title: `Respond — ${e.op_patients?.label ?? "patient"} · L${e.level}`, sub: e.summary, href: "/supervisor/operations?section=safety" }));
+  if (overdueCount > 0) priorities.push({ tone: "amber", title: `PEWS review overdue — ${overdueCount} observation${overdueCount > 1 ? "s" : ""}`, sub: "Overdue clinical observations", href: "/supervisor/operations?section=safety" });
+  if (absent.length > 0) priorities.push({ tone: "amber", title: `Allocate cover — ${absent.length} staff absent`, sub: "Rostered but not on duty", href: "/supervisor/operations?section=assignments" });
+  if (!handoverDone) priorities.push({ tone: "amber", title: "Complete handover", sub: latestHandover ? `Status: ${pretty(latestHandover.status)}` : "No accepted handover recorded", href: "/supervisor/handover" });
+  openEsc.filter((e: any) => e.level < 4).slice(0, 2).forEach((e: any) => priorities.push({ tone: "amber", title: `Review escalation — ${e.op_patients?.label ?? "patient"} · L${e.level}`, sub: e.summary, href: "/supervisor/operations?section=safety" }));
+  tasks.filter((t: any) => t.priority === "urgent").slice(0, 2).forEach((t: any) => priorities.push({ tone: "amber", title: t.description, sub: `Urgent · ${t.op_patients?.label ?? "unassigned"}`, href: "/supervisor/operations?section=care" }));
+
+  // ── Shift Timeline (real events on a time axis) ──────────────────────────
+  const tl: { at: string | null; label: string; done: boolean }[] = [];
+  if (activeShift?.starts_at) tl.push({ at: activeShift.starts_at, label: "Shift started", done: activeShift.status !== "planned" });
+  if (latestHandover?.accepted_at) tl.push({ at: latestHandover.accepted_at, label: "Handover accepted", done: true });
+  escalations.slice(0, 3).forEach((e: any) => e.created_at && tl.push({ at: e.created_at, label: `Escalation raised — ${e.op_patients?.label ?? "patient"}`, done: true }));
+  observations.filter((o: any) => o.status === "recorded" && o.recorded_at).slice(0, 2).forEach((o: any) => tl.push({ at: o.recorded_at, label: `Observation — ${o.op_patients?.label ?? "patient"}`, done: true }));
+  if (activeShift?.ends_at) tl.push({ at: activeShift.ends_at, label: "Shift close", done: activeShift.status === "completed" });
+  tl.sort((a, b) => new Date(a.at ?? 0).getTime() - new Date(b.at ?? 0).getTime());
+
+  // ── Workforce Assignment (staff → their patients/beds) ───────────────────
+  const byStaff = new Map<string, { name: string; patients: any[] }>();
+  assignments.forEach((a: any) => {
+    const key = a.staff_id;
+    if (!byStaff.has(key)) byStaff.set(key, { name: a.profiles?.full_name ?? "Staff", patients: [] });
+    byStaff.get(key)!.patients.push(a);
+  });
+  const assignmentRows = [...byStaff.values()].slice(0, 8);
+
+  // ── Action Centre (real, actionable) ─────────────────────────────────────
+  const actionItems = [
+    { label: "Late observations", n: overdueCount, href: "/supervisor/operations?section=safety", tone: overdueCount ? "text-orange-600" : "text-gray-400" },
+    { label: "Open escalations", n: openEsc.length, href: "/supervisor/operations?section=safety", tone: openEsc.length ? "text-red-600" : "text-gray-400" },
+    { label: "Active incidents", n: alerts.length, href: "/supervisor/operations?section=safety", tone: alerts.length ? "text-orange-600" : "text-gray-400" },
+    { label: "Urgent tasks", n: tasks.filter((t: any) => t.priority === "urgent").length, href: "/supervisor/operations?section=care", tone: "text-gray-700" },
+    { label: "Unread notifications", n: unreadNotif, href: "/supervisor/communication", tone: unreadNotif ? "text-teal-600" : "text-gray-400" },
+  ];
+
+  // ── Operational Copilot (rule-based suggestions from live data) ──────────
+  const copilot: { text: string; action: string; href: string }[] = [];
+  observations.filter((o: any) => o.status === "overdue").slice(0, 2).forEach((o: any) => copilot.push({ text: `Observation overdue — ${o.op_patients?.label ?? "patient"}`, action: "Review", href: "/supervisor/operations?section=safety" }));
+  deteriorating.slice(0, 2).forEach((o: any) => copilot.push({ text: `Deterioration — ${o.op_patients?.label ?? "patient"} (PEWS ${o.ews_score})`, action: "Escalate", href: "/supervisor/operations?section=safety" }));
+  if (absent.length) copilot.push({ text: `Reassign ${absent.length} absent staff member${absent.length > 1 ? "s" : ""}`, action: "Assign", href: "/supervisor/operations?section=assignments" });
+  if (byStatus("discharge_pending")) copilot.push({ text: `${byStatus("discharge_pending")} discharge${byStatus("discharge_pending") > 1 ? "s" : ""} pending — free capacity`, action: "Review", href: "/supervisor/operations?section=ward" });
+  if (occPct >= 85) copilot.push({ text: `Capacity ${occPct}% — plan for admissions`, action: "Plan", href: "/supervisor/operations?section=ward" });
+
+  const donut = totalBeds ? (() => {
+    const segs = [["#14b8a6", occupied], ["#86efac", available], ["#c4b5fd", reserved], ["#fdba74", cleaning], ["#cbd5e1", maintenance]] as [string, number][];
+    let acc = 0; const stops: string[] = [];
+    segs.forEach(([c, n]) => { const a = (acc / totalBeds) * 360, b = ((acc + n) / totalBeds) * 360; if (n) stops.push(`${c} ${a}deg ${b}deg`); acc += n; });
+    return `conic-gradient(${stops.join(", ")})`;
+  })() : "conic-gradient(#e5e7eb 0deg 360deg)";
+
+  const wardStatus = (bed: any) => {
+    if (["cleaning", "out_of_service"].includes(bed.status)) return { label: "Not in use", dot: "bg-gray-300", ring: "border-gray-200 bg-gray-50" };
+    if (bed.status === "available") return { label: "Available", dot: "bg-blue-400", ring: "border-blue-200 bg-blue-50/40" };
+    const p = patientByBed.get(bed.id);
+    if (!p) return { label: "Occupied", dot: "bg-gray-400", ring: "border-gray-200" };
+    if (p.acuity_level === "critical" || p.acuity_level === "high") return { label: "High risk", dot: "bg-red-500", ring: "border-red-200 bg-red-50/40" };
+    if (p.acuity_level === "moderate") return { label: "Review", dot: "bg-amber-500", ring: "border-amber-200 bg-amber-50/40" };
+    return { label: "Stable", dot: "bg-green-500", ring: "border-green-200 bg-green-50/30" };
+  };
+
+  const bannerCells: { label: string; value: string; sub?: string; tone?: string }[] = [
+    { label: "Shift Status", value: activeShift ? titleCase(activeShift.shift_type) + " Shift" : "No active shift", sub: activeShift?.starts_at ? `${fmtTime(activeShift.starts_at)} – ${fmtTime(activeShift.ends_at)}` : "", tone: activeShift?.status === "active" ? "text-green-600" : "text-gray-500" },
+    { label: "Unit / Ward", value: unitName },
+    { label: "Supervisor", value: supervisorName, sub: "Shift Supervisor" },
+    { label: "Staff", value: `${present.length} / ${rostered.length}`, sub: "Present" },
+    { label: "Patients", value: String(census), sub: "In care" },
+    { label: "Open Alerts", value: String(alerts.length), sub: "Require attention", tone: alerts.length ? "text-red-600" : undefined },
+    { label: "Escalations", value: String(openEsc.length), sub: "Active", tone: openEsc.length ? "text-amber-600" : undefined },
+    { label: "Handover", value: handoverDone ? "Completed" : (latestHandover ? titleCase(latestHandover.status) : "Pending"), sub: latestHandover?.accepted_at ? fmtTime(latestHandover.accepted_at) : "", tone: handoverDone ? "text-green-600" : "text-gray-500" },
+  ];
 
   return (
     <div className="space-y-5">
-      <div>
-        <h1 className="text-2xl font-bold text-gray-900">Shift Dashboard</h1>
-        <p className="text-sm text-gray-500 mt-1">Live operational command centre for your shift · {profile?.full_name}</p>
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">Shift Command Centre</h1>
+          <p className="text-sm text-gray-500 mt-1">Real-time operational control for your shift</p>
+        </div>
+        <div className="text-right text-xs text-gray-400 shrink-0">
+          <p>{new Date().toLocaleDateString([], { day: "numeric", month: "short", year: "numeric" })}</p>
+          <p>All times real-time · Auto-refresh on reload</p>
+        </div>
       </div>
 
-      {/* Top stat row */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        <Stat n={census} label="Patients on the ward" href="/supervisor/operations?section=ward" />
-        <Stat n={highRisk.length} label="High-risk patients" tone={highRisk.length ? "text-orange-600" : undefined} href="/supervisor/operations?section=ward" />
-        <Stat n={pews.length} label="PEWS / deterioration alerts" tone={pews.length ? "text-red-600" : undefined} href="/supervisor/operations?section=safety" />
-        <Stat n={onDuty.length} label="Staff on duty" href="/supervisor/operations?section=shifts" />
-        <Stat n={openTasks.length} label="Pending tasks" tone={taskByPriority("urgent") ? "text-red-600" : undefined} href="/supervisor/operations?section=care" />
-        <Stat n={escalations.length} label="Open escalations" tone={l45 ? "text-red-600" : undefined} href="/supervisor/operations?section=safety" />
-        <Stat n={`${occPct}%`} label={`Bed occupancy (${occupied}/${totalBeds})`} tone={occPct >= 90 ? "text-red-600" : occPct >= 75 ? "text-orange-600" : "text-green-600"} href="/supervisor/operations?section=ward" />
-        <Stat n={available} label="Beds available" tone="text-green-600" href="/supervisor/operations?section=ward" />
+      {/* Shift Status Banner */}
+      <div className="bg-white rounded-xl border border-gray-200 px-2 py-3">
+        <div className="grid grid-cols-2 sm:grid-cols-4 xl:grid-cols-8 divide-y sm:divide-y-0 sm:divide-x divide-gray-100">
+          {bannerCells.map((c, i) => (
+            <div key={i} className="px-3 py-2">
+              <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider">{c.label}</p>
+              <p className={`text-sm font-bold leading-tight mt-0.5 ${c.tone ?? "text-gray-900"}`}>{c.value}</p>
+              {c.sub && <p className="text-[11px] text-gray-400 leading-tight">{c.sub}</p>}
+            </div>
+          ))}
+        </div>
       </div>
 
-      <div className="grid md:grid-cols-2 gap-5">
-        {/* PEWS / deterioration */}
-        <div className={card}>
-          <h3 className="font-semibold text-gray-900 mb-3">PEWS &amp; deterioration alerts</h3>
-          {pews.length === 0 && <p className="text-sm text-gray-400">No active deterioration escalations.</p>}
-          <div className="space-y-1.5">
-            {pews.slice(0, 6).map((e: any) => (
-              <div key={e.id} className="flex items-center gap-2 text-sm">
-                <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${e.level >= 4 ? "bg-red-100 text-red-700" : "bg-orange-100 text-orange-700"}`}>L{e.level}</span>
-                <span className="text-gray-800 truncate">{e.summary}</span>
+      {/* Row: Priorities · Timeline · Workforce · Patient Ops */}
+      <div className="grid lg:grid-cols-2 xl:grid-cols-4 gap-5">
+        <div id="priorities" className={card}>
+          <h3 className={head}>⚠️ Today&apos;s Priorities</h3>
+          <div className="mt-3 space-y-1.5">
+            {priorities.length === 0 && <p className="text-sm text-gray-400">No priority actions — the shift is stable.</p>}
+            {priorities.slice(0, 7).map((p, i) => (
+              <Link key={i} href={p.href} className="flex items-start gap-2 rounded-lg border border-gray-100 hover:border-teal-300 hover:bg-teal-50/30 px-2.5 py-2 transition-colors">
+                <span className={`mt-0.5 w-2 h-2 rounded-full shrink-0 ${p.tone === "red" ? "bg-red-500" : "bg-amber-500"}`} />
+                <span className="min-w-0">
+                  <span className="block text-sm text-gray-800 leading-tight">{p.title}</span>
+                  {p.sub && <span className="block text-[11px] text-gray-400 truncate">{p.sub}</span>}
+                </span>
+              </Link>
+            ))}
+          </div>
+        </div>
+
+        <div id="timeline" className={card}>
+          <h3 className={head}>🕑 Shift Timeline</h3>
+          <div className="mt-3 space-y-2">
+            {tl.length === 0 && <p className="text-sm text-gray-400">No shift events recorded yet.</p>}
+            {tl.slice(0, 8).map((e, i) => (
+              <div key={i} className="flex items-center gap-2.5 text-sm">
+                <span className="text-xs text-gray-400 tabular-nums w-11 shrink-0">{fmtTime(e.at)}</span>
+                <span className={`w-2 h-2 rounded-full shrink-0 ${e.done ? "bg-teal-500" : "border border-gray-300"}`} />
+                <span className={`truncate ${e.done ? "text-gray-700" : "text-gray-400"}`}>{e.label}</span>
               </div>
             ))}
           </div>
         </div>
 
-        {/* High-risk patients */}
-        <div className={card}>
-          <h3 className="font-semibold text-gray-900 mb-3">High-risk patients ({highRisk.length})</h3>
-          {highRisk.length === 0 && <p className="text-sm text-gray-400">No high or critical acuity patients.</p>}
-          <div className="space-y-1.5">
-            {highRisk.slice(0, 6).map((p: any) => (
-              <div key={p.id} className="flex items-center gap-2 text-sm">
-                <span className={`font-medium ${ACUITY_COLOR[p.acuity_level]}`}>●</span>
-                <span className="text-gray-800">{p.label}</span>
-                <span className="text-xs text-gray-400">{p.op_beds?.label ?? "no bed"}{p.isolation_status !== "none" ? ` · ${p.isolation_status}` : ""}</span>
-                <span className={`ml-auto text-xs ${ACUITY_COLOR[p.acuity_level]}`}>{p.acuity_level}</span>
+        <div id="workforce" className={card}>
+          <h3 className={head}>👥 Workforce Operations</h3>
+          <div className="mt-3 space-y-1.5">
+            {Object.keys(roleMix).length === 0 && <p className="text-sm text-gray-400">No staff on the active shift.</p>}
+            {Object.entries(roleMix).map(([r, n]) => (
+              <div key={r} className="flex items-center justify-between text-sm">
+                <span className="text-gray-600">{titleCase(r)}</span>
+                <span className="font-semibold text-gray-900 tabular-nums">{n as number}</span>
               </div>
             ))}
           </div>
+          <div className="mt-3 pt-3 border-t border-gray-100 grid grid-cols-2 gap-2 text-center">
+            <div><p className={`text-lg font-bold ${compCoverage != null && compCoverage < 90 ? "text-amber-600" : "text-green-600"}`}>{compCoverage != null ? `${compCoverage}%` : "—"}</p><p className="text-[10px] text-gray-500">Competency-validated</p></div>
+            <div><p className="text-lg font-bold text-gray-900">{present.length}<span className="text-gray-300">/</span>{rostered.length}</p><p className="text-[10px] text-gray-500">Present / rostered</p></div>
+          </div>
+          <Link href="/supervisor/operations?section=assignments" className="mt-3 block text-center text-xs text-teal-700 hover:underline">View assignments &amp; skill mix →</Link>
         </div>
 
-        {/* Staffing & skill mix */}
         <div className={card}>
-          <h3 className="font-semibold text-gray-900 mb-3">Staffing &amp; skill mix</h3>
-          {onDuty.length === 0 && <p className="text-sm text-gray-400">No staff deployed on an active shift yet.</p>}
-          {onDuty.length > 0 && (
+          <h3 className={head}>🧭 Patient Operations</h3>
+          <div className="mt-3 space-y-1.5 text-sm">
+            {[
+              ["Expected admissions", byStatus("expected"), "text-gray-700"],
+              ["Transfers pending", byStatus("transfer_pending"), "text-gray-700"],
+              ["Discharges pending", byStatus("discharge_pending"), "text-gray-700"],
+              ["Critical patients", critical, critical ? "text-red-600" : "text-gray-400"],
+              ["Isolation patients", isolation, isolation ? "text-purple-600" : "text-gray-400"],
+              ["Falls risk", alertCat("fall_risk"), alertCat("fall_risk") ? "text-orange-600" : "text-gray-400"],
+              ["Pressure injury risk", alertCat("pressure_injury"), alertCat("pressure_injury") ? "text-orange-600" : "text-gray-400"],
+            ].map(([l, n, tone]) => (
+              <div key={l as string} className="flex items-center justify-between">
+                <span className="text-gray-600">{l as string}</span>
+                <span className={`font-semibold tabular-nums ${tone as string}`}>{n as number}</span>
+              </div>
+            ))}
+          </div>
+          <Link href="/supervisor/operations?section=ward" className="mt-3 block text-center text-xs text-teal-700 hover:underline">View patient list →</Link>
+        </div>
+      </div>
+
+      {/* Row: Clinical Safety · Ward Map · Capacity */}
+      <div className="grid lg:grid-cols-4 gap-5">
+        <div className={card}>
+          <h3 className={head}>🛡️ Clinical Safety</h3>
+          <div className="mt-3 grid grid-cols-2 gap-x-4 gap-y-1.5 text-sm">
+            {[
+              ["PEWS alerts", deteriorating.length, "text-red-600"],
+              ["Deterioration", alertCat("deterioration"), "text-red-600"],
+              ["Falls risk", alertCat("fall_risk"), "text-orange-600"],
+              ["Pressure injury", alertCat("pressure_injury"), "text-orange-600"],
+              ["Medication risks", alertCat("medication"), "text-orange-600"],
+              ["Infection", alertCat("infection"), "text-orange-600"],
+              ["Isolation", isolation, "text-purple-600"],
+              ["Rapid responses", rapid.length, "text-red-600"],
+            ].map(([l, n, tone]) => (
+              <div key={l as string} className="flex items-center justify-between">
+                <span className="text-gray-600">{l as string}</span>
+                <span className={`font-semibold tabular-nums ${(n as number) ? (tone as string) : "text-gray-300"}`}>{n as number}</span>
+              </div>
+            ))}
+          </div>
+          <Link href="/supervisor/operations?section=safety" className="mt-3 block text-center text-xs text-teal-700 hover:underline">View all safety alerts →</Link>
+        </div>
+
+        <div id="ward-map" className={`${card} lg:col-span-2`}>
+          <h3 className={head}>🗺️ Ward Map <span className="text-gray-400 font-normal text-sm">· {unitName}</span></h3>
+          {beds.length === 0 ? (
+            <p className="text-sm text-gray-400 mt-3">No beds configured for this unit.</p>
+          ) : (
             <>
-              <p className="text-sm text-gray-600 mb-2">{onDuty.length} on duty · <span className="font-medium">{ratio}</span> patients / staff</p>
-              <div className="flex flex-wrap gap-1.5">
-                {Object.entries(roleMix).map(([r, n]) => (
-                  <span key={r} className="text-xs bg-teal-50 text-teal-700 border border-teal-100 rounded-full px-2.5 py-1">{pretty(r)}: <b>{n as number}</b></span>
-                ))}
+              <div className="mt-3 grid grid-cols-3 sm:grid-cols-5 lg:grid-cols-6 gap-2">
+                {beds.slice(0, 24).map((b: any) => {
+                  const st = wardStatus(b); const p = patientByBed.get(b.id);
+                  return (
+                    <Link key={b.id} href="/supervisor/operations?section=ward" className={`rounded-lg border ${st.ring} px-2 py-2 text-center hover:shadow-sm transition-shadow`}>
+                      <p className="text-[11px] font-semibold text-gray-700 truncate">{b.label}</p>
+                      <span className={`inline-block w-2 h-2 rounded-full my-1 ${st.dot}`} />
+                      <p className="text-[10px] text-gray-500 leading-tight">{st.label}</p>
+                      {p?.op_beds && p.acuity_level && <p className="text-[9px] text-gray-400 truncate">{p.label}</p>}
+                    </Link>
+                  );
+                })}
+              </div>
+              <div className="mt-3 flex flex-wrap gap-3 text-[10px] text-gray-500">
+                <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-green-500" /> Stable</span>
+                <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-amber-500" /> Review</span>
+                <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-red-500" /> High risk</span>
+                <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-blue-400" /> Available</span>
+                <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-gray-300" /> Not in use</span>
               </div>
             </>
           )}
         </div>
 
-        {/* Patient flow (ADT) */}
         <div className={card}>
-          <h3 className="font-semibold text-gray-900 mb-3">Patient flow</h3>
-          <div className="grid grid-cols-2 gap-2 text-sm">
-            <div className="flex justify-between"><span className="text-gray-500">Expected admissions</span><b className="tabular-nums">{adt("expected")}</b></div>
-            <div className="flex justify-between"><span className="text-gray-500">Admitted</span><b className="tabular-nums">{adt("admitted")}</b></div>
-            <div className="flex justify-between"><span className="text-gray-500">Transfer pending</span><b className="tabular-nums">{adt("transfer_pending")}</b></div>
-            <div className="flex justify-between"><span className="text-gray-500">Discharge pending</span><b className="tabular-nums">{adt("discharge_pending")}</b></div>
-          </div>
-          <div className="mt-3 pt-3 border-t flex gap-4 text-xs text-gray-500">
-            {ACUITY.map(a => <span key={a}>{pretty(a)}: <b className={ACUITY_COLOR[a]}>{acuityCount(a)}</b></span>)}
-          </div>
-        </div>
-
-        {/* Pending tasks */}
-        <div className={card}>
-          <h3 className="font-semibold text-gray-900 mb-3">Pending tasks ({openTasks.length})</h3>
-          <div className="flex gap-3 text-xs mb-3">
-            {["urgent", "high", "normal", "low"].map(p => <span key={p} className="text-gray-500">{p}: <b className={p === "urgent" ? "text-red-600" : p === "high" ? "text-orange-600" : "text-gray-800"}>{taskByPriority(p)}</b></span>)}
-          </div>
-          <div className="space-y-1.5">
-            {openTasks.slice(0, 5).map((t: any) => (
-              <div key={t.id} className="flex items-center gap-2 text-sm">
-                <span className={`text-[10px] px-1.5 py-0.5 rounded ${t.priority === "urgent" ? "bg-red-100 text-red-700" : t.priority === "high" ? "bg-orange-100 text-orange-700" : "bg-gray-100 text-gray-500"}`}>{t.priority}</span>
-                <span className="text-gray-800 truncate">{t.description}</span>
-                <span className="ml-auto text-xs text-gray-400">{t.profiles?.full_name ?? ""}</span>
+          <h3 className={head}>📊 Capacity</h3>
+          <div className="mt-3 flex items-center gap-4">
+            <div className="relative w-24 h-24 shrink-0 rounded-full" style={{ background: donut }}>
+              <div className="absolute inset-[10px] bg-white rounded-full flex flex-col items-center justify-center">
+                <span className="text-lg font-bold text-gray-900 leading-none">{totalBeds}</span>
+                <span className="text-[9px] text-gray-400">beds</span>
               </div>
-            ))}
-            {openTasks.length === 0 && <p className="text-sm text-gray-400">No open tasks.</p>}
+            </div>
+            <div className="text-[11px] space-y-1">
+              {[["Occupied", occupied, "#14b8a6"], ["Available", available, "#86efac"], ["Reserved", reserved, "#c4b5fd"], ["Cleaning", cleaning, "#fdba74"], ["Maintenance", maintenance, "#cbd5e1"]].map(([l, n, c]) => (
+                <div key={l as string} className="flex items-center gap-1.5">
+                  <span className="w-2 h-2 rounded-full" style={{ background: c as string }} />
+                  <span className="text-gray-600">{l as string}</span>
+                  <span className="ml-auto font-semibold text-gray-800 tabular-nums">{n as number}</span>
+                </div>
+              ))}
+            </div>
           </div>
-        </div>
-
-        {/* Recent observations */}
-        <div className={card}>
-          <h3 className="font-semibold text-gray-900 mb-3">Recent observations</h3>
-          {recentObs.length === 0 && <p className="text-sm text-gray-400">No observations recorded yet.</p>}
-          <div className="space-y-1.5">
-            {recentObs.map((o: any) => (
-              <div key={o.id} className="flex items-center gap-2 text-sm">
-                <span className="text-gray-700">{o.op_patients?.label ?? "—"}</span>
-                <span className="text-xs text-gray-400">{pretty(o.observation_type)}</span>
-                {o.ews_score != null && <span className={`font-medium ${o.ews_score >= 5 ? "text-orange-600" : "text-gray-600"}`}>EWS {o.ews_score}</span>}
-                {o.escalation_triggered && <span className="text-[10px] px-1.5 py-0.5 rounded bg-red-100 text-red-700">escalated</span>}
-              </div>
-            ))}
-          </div>
+          <p className="text-xs text-gray-400 mt-3 text-center">{occPct}% occupancy</p>
         </div>
       </div>
 
-      <div className="grid md:grid-cols-2 gap-5">
-        {/* Notifications */}
+      {/* Row: Action Centre · Workforce Assignment · Shift Performance · Copilot */}
+      <div className="grid lg:grid-cols-2 xl:grid-cols-4 gap-5">
         <div className={card}>
-          <h3 className="font-semibold text-gray-900 mb-3">Notifications</h3>
-          {(notifs ?? []).length === 0 && <p className="text-sm text-gray-400">Nothing new.</p>}
-          <div className="space-y-1.5">
-            {(notifs ?? []).map((n: any, i: number) => (
-              <div key={i} className="flex items-center gap-2 text-sm">
-                <span className="text-gray-800 truncate">{n.title}</span>
-                <span className="ml-auto text-xs text-gray-400">{new Date(n.created_at).toLocaleDateString()}</span>
-              </div>
+          <h3 className={head}>📥 Action Centre</h3>
+          <div className="mt-3 space-y-1">
+            {actionItems.map(a => (
+              <Link key={a.label} href={a.href} className="flex items-center justify-between rounded-lg hover:bg-gray-50 px-2 py-1.5 text-sm">
+                <span className="text-gray-600">{a.label}</span>
+                <span className={`font-bold tabular-nums ${a.tone}`}>{a.n}</span>
+              </Link>
             ))}
           </div>
         </div>
 
-        {/* AI recommendations — later phase */}
-        <div className={`${card} border-dashed`}>
-          <h3 className="font-semibold text-gray-900 mb-1">AI recommendations</h3>
-          <p className="text-sm text-gray-400">Operational AI (safe-staffing, workload &amp; capacity recommendations) arrives in a later SSW phase. The data feeding it — staffing, acuity, escalations — is already live above.</p>
+        <div className={card}>
+          <h3 className={head}>🧩 Workforce Assignment</h3>
+          <div className="mt-3 space-y-1.5">
+            {assignmentRows.length === 0 && <p className="text-sm text-gray-400">No active assignments.</p>}
+            {assignmentRows.map((s, i) => (
+              <div key={i} className="flex items-center gap-2 text-sm">
+                <span className="font-medium text-gray-800 truncate">{s.name}</span>
+                <span className="ml-auto text-xs text-gray-400 shrink-0">{s.patients.length} patient{s.patients.length !== 1 ? "s" : ""}</span>
+              </div>
+            ))}
+          </div>
+          <Link href="/supervisor/operations?section=assignments" className="mt-3 block text-center text-xs text-teal-700 hover:underline">Manage assignments →</Link>
+        </div>
+
+        <div id="performance" className={card}>
+          <h3 className={head}>📈 Shift Performance</h3>
+          <div className="mt-3 space-y-3">
+            {[["Observation compliance", obsCompliance], ["Task completion", taskCompletion], ["Competency-validated care", compCoverage]].map(([l, v]) => (
+              <div key={l as string}>
+                <div className="flex justify-between text-xs mb-1"><span className="text-gray-600">{l as string}</span><span className="font-semibold text-gray-800">{v == null ? "—" : `${v}%`}</span></div>
+                <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                  <div className={`h-full rounded-full ${v == null ? "bg-gray-200" : (v as number) >= 90 ? "bg-green-500" : (v as number) >= 75 ? "bg-amber-500" : "bg-red-500"}`} style={{ width: `${v ?? 0}%` }} />
+                </div>
+              </div>
+            ))}
+          </div>
+          <p className="text-[10px] text-gray-400 mt-3">Derived live from observations, tasks and competency-validated assignments. Medication &amp; documentation metrics arrive as those engines report.</p>
+        </div>
+
+        <div id="copilot" className={card}>
+          <h3 className={head}>✨ Operational Copilot</h3>
+          <div className="mt-3 space-y-1.5">
+            {copilot.length === 0 && <p className="text-sm text-gray-400">No suggested actions — nothing needs attention.</p>}
+            {copilot.slice(0, 7).map((c, i) => (
+              <div key={i} className="flex items-center gap-2 text-sm">
+                <span className="text-gray-700 truncate flex-1">{c.text}</span>
+                <Link href={c.href} className="text-[11px] font-medium text-teal-700 border border-teal-200 rounded-full px-2 py-0.5 hover:bg-teal-50 shrink-0">{c.action}</Link>
+              </div>
+            ))}
+          </div>
+          <p className="text-[10px] text-gray-400 mt-3">Rule-based suggestions from live shift data.</p>
         </div>
       </div>
     </div>
