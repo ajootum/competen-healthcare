@@ -15,6 +15,7 @@ type NavItem = { label: string; href?: string; icon: string; badge?: "queue" | "
 const NAV_GROUPS: { group: string | null; items: NavItem[] }[] = [
   { group: null, items: [
     { label: "Dashboard",              href: "/assessor",                   icon: "🏠" },
+    { label: "Shift Supervisor",       href: "/supervisor",                 icon: "🖥️" },
     { label: "Notifications",          href: "/assessor/notifications",     icon: "🔔", badge: "unread" },
   ]},
   { group: "Assessment Management", items: [

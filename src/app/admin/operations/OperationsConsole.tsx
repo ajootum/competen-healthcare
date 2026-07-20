@@ -516,9 +516,9 @@ function SafetyTab({ data, support, ui }: TabProps) {
   );
 }
 
-export default function OperationsConsole({ ready, data, support }: { ready: boolean; data: any; support: any }) {
+export default function OperationsConsole({ ready, data, support, initialTab }: { ready: boolean; data: any; support: any; initialTab?: string }) {
   const router = useRouter();
-  const [tab, setTab] = useState<(typeof TABS)[number]>("Command");
+  const [tab, setTab] = useState<(typeof TABS)[number]>((TABS as readonly string[]).includes(initialTab ?? "") ? (initialTab as (typeof TABS)[number]) : "Command");
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<{ kind: "ok" | "err"; text: string } | null>(null);
   const ui: UI = { busy, setBusy, toast: (kind, text) => { setMsg({ kind, text }); setTimeout(() => setMsg(null), 6000); }, refresh: () => router.refresh() };
