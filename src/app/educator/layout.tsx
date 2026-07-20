@@ -20,6 +20,7 @@ type NavItem = { label?: string; href?: string; icon?: string; badge?: "queue" |
 const NAV_GROUPS: { group: string | null; items: NavItem[] }[] = [
   { group: null, items: [
     { label: "Dashboard",           href: "/educator",               icon: "🏠" },
+    { label: "Competency Office",   href: "/competency-office",      icon: "🏛️" },
     { label: "Notifications",       href: "/educator/notifications", icon: "🔔", badge: "unread" },
   ]},
   { group: "Validation Centre", items: [
