@@ -26,7 +26,7 @@ export default async function ControlPlaneOverview() {
     <div className="space-y-5">
       <div>
         <h1 className="text-2xl font-bold text-gray-900">Landlord Control Plane</h1>
-        <p className="text-sm text-gray-500 mt-1">The platform-operator surface above every tenant · {caller.fullName ?? "Operator"}{caller.bridgedFromSuperAdmin ? " (super-admin, bridged)" : ""}</p>
+        <p className="text-sm text-gray-500 mt-1">The platform-operator surface above every tenant · {caller.fullName ?? "Operator"}{caller.isSuperAdmin ? " · Platform Super Admin" : ""}</p>
       </div>
 
       {!reg.ready && (

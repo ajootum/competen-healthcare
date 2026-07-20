@@ -1,11 +1,12 @@
 import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { platformRolesOf, hasPlatformRole, type PlatformRole } from "@/lib/roles";
 
-// Landlord-plane access resolution. The landlord axis (PlatformRole) is separate
-// from the tenant AppRole/OrgRole: it means the user operates the platform ACROSS
-// tenants. During the transition (before platform roles are provisioned) a tenant
-// super_admin is BRIDGED to landlord access so the platform is never locked out;
-// once any landlord role is assigned to a user, the platform axis governs them.
+// Landlord-plane access resolution. The landlord axis is: the AppRole
+// `super_admin` (a permanent, full-authority platform super admin) PLUS the finer
+// PlatformRole tier that specializes internal staff (owner, operations, customer
+// success, finance, …). A super_admin has full landlord authority with no
+// PlatformRole assigned; to scope someone narrowly, give them a PlatformRole and
+// NOT super_admin. The tenant plane (AppRole hospital_admin/OrgRole) is separate.
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 export type LandlordCaller = {
@@ -14,8 +15,8 @@ export type LandlordCaller = {
   fullName: string | null;
   appRoles: string[];
   platformRoles: PlatformRole[];
-  isOwner: boolean;
-  bridgedFromSuperAdmin: boolean;
+  isSuperAdmin: boolean; // AppRole super_admin — a full-authority landlord super admin
+  isOwner: boolean;      // full landlord authority (super_admin or platform_owner)
 };
 
 export async function getLandlordCaller(): Promise<LandlordCaller | null> {
@@ -26,22 +27,20 @@ export async function getLandlordCaller(): Promise<LandlordCaller | null> {
   const { data: me } = await admin.from("profiles").select("full_name, role, roles, platform_role, platform_roles").eq("id", user.id).single() as any;
   const appRoles = ((me?.roles?.length ? me.roles : [me?.role]) as (string | null)[]).filter(Boolean) as string[];
   const platformRoles = platformRolesOf(me);
-  const isSuper = appRoles.includes("super_admin");
-  const hasLandlord = platformRoles.length > 0;
-  if (!hasLandlord && !isSuper) return null;
-  const bridged = !hasLandlord && isSuper;
+  const isSuperAdmin = appRoles.includes("super_admin");
+  // Landlord access = a platform super admin, or anyone holding a PlatformRole.
+  if (!isSuperAdmin && platformRoles.length === 0) return null;
   return {
     admin, userId: user.id, fullName: (me?.full_name as string) ?? null,
-    appRoles, platformRoles,
-    isOwner: hasPlatformRole(me, "platform_owner") || bridged,
-    bridgedFromSuperAdmin: bridged,
+    appRoles, platformRoles, isSuperAdmin,
+    isOwner: isSuperAdmin || hasPlatformRole(me, "platform_owner"),
   };
 }
 
 // True if the caller may enter a surface requiring one of `required` landlord
-// roles. Owner passes everything; a bridged super_admin passes (transitional).
+// roles. A super admin / owner has full authority and passes everything.
 export function landlordCan(caller: LandlordCaller, ...required: PlatformRole[]): boolean {
-  if (caller.isOwner || caller.bridgedFromSuperAdmin) return true;
+  if (caller.isOwner) return true;
   if (required.length === 0) return caller.platformRoles.length > 0;
   return caller.platformRoles.some(r => required.includes(r));
 }

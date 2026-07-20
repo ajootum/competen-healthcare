@@ -81,7 +81,7 @@ export default async function ControlPlaneLayout({ children }: { children: React
               <div className="w-7 h-7 rounded-full bg-violet-500 flex items-center justify-center text-white text-xs font-bold">{caller.fullName?.[0] ?? "L"}</div>
               <div className="flex-1 min-w-0" data-sb-label>
                 <p className="text-white text-xs font-medium truncate">{caller.fullName ?? "Operator"}</p>
-                <p className="text-violet-300/60 text-[10px]">{caller.bridgedFromSuperAdmin ? "Super Admin (bridged)" : "Landlord"}</p>
+                <p className="text-violet-300/60 text-[10px]">{caller.isSuperAdmin ? "Platform Super Admin" : "Landlord"}</p>
               </div>
             </div>
             <form action="/api/auth/logout" method="POST">
