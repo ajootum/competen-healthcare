@@ -18,6 +18,7 @@ const NAV = [
     { label: "Command Centre",    href: "/super-admin/command-centre",     icon: "📡" },
   ]},
   { group: "ENTERPRISE ADMINISTRATION", items: [
+    { label: "Overview",          href: "/super-admin/enterprise",         icon: "🏢" },
     { label: "Organisations",     href: "/super-admin/organisations",      icon: "🏛️" },
     { label: "Facilities",        href: "/super-admin/hospitals",          icon: "🏥" },
     { label: "People & Roles",    href: "/super-admin/users",              icon: "👥" },
