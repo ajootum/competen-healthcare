@@ -59,8 +59,8 @@ export default async function EnterpriseAdministration() {
   ];
 
   const quickActions = [
-    { label: "Create Organisation", desc: "Register a new organisation", icon: "🏛️", href: "/super-admin/organisations" },
-    { label: "Create Network", desc: "Group organisations", icon: "🌐", href: "/super-admin/enterprise" },
+    { label: "Create Organisation", desc: "Register a new organisation", icon: "🏛️", href: "/super-admin/enterprise/organisations" },
+    { label: "Create Network", desc: "Group organisations", icon: "🌐", href: "/super-admin/enterprise/networks" },
     { label: "Add Facility", desc: "Add a new facility", icon: "🏥", href: "/super-admin/hospitals" },
     { label: "Build Structure", desc: "Departments & units", icon: "🗂️", href: "/super-admin/enterprise" },
     { label: "Import People", desc: "Bulk-import users", icon: "📥", href: "/super-admin/import" },
@@ -68,8 +68,8 @@ export default async function EnterpriseAdministration() {
   ];
 
   const modules = [
-    { n: 1, label: "Organisations", desc: "Registry, tenant profile & onboarding", icon: "🏛️", href: "/super-admin/organisations", live: true },
-    { n: 2, label: "Networks & Enterprise Groups", desc: "Multi-organisation & multinational structures", icon: "🌐", href: "/super-admin/enterprise", live: false },
+    { n: 1, label: "Organisations", desc: "Registry, tenant profile & onboarding", icon: "🏛️", href: "/super-admin/enterprise/organisations", live: true },
+    { n: 2, label: "Networks & Enterprise Groups", desc: "Multi-organisation & multinational structures", icon: "🌐", href: "/super-admin/enterprise/networks", live: true },
     { n: 3, label: "Facilities", desc: "Hospitals, campuses, clinics & sites", icon: "🏥", href: "/super-admin/hospitals", live: true },
     { n: 4, label: "Departments, Units & Services", desc: "Internal structure builder", icon: "🗂️", href: "/super-admin/enterprise", live: false },
     { n: 5, label: "People, Positions & Roles", desc: "Staff, positions & workspace access", icon: "👥", href: "/super-admin/users", live: true },
@@ -108,13 +108,13 @@ export default async function EnterpriseAdministration() {
 
       {/* Explorer · Pipeline · Issues */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        <Panel title="Enterprise Structure Explorer" href="/super-admin/organisations" linkLabel="Full map" info="Network → Organisation → Facility → Department → Unit">
+        <Panel title="Enterprise Structure Explorer" href="/super-admin/enterprise/organisations" linkLabel="Full map" info="Network → Organisation → Facility → Department → Unit">
           <div className="max-h-96 overflow-y-auto -mx-1 px-1">
             <StructureExplorer networks={explorer} standalone={standaloneOrgs} />
           </div>
         </Panel>
 
-        <Panel title="Onboarding Pipeline" href="/super-admin/organisations" linkLabel="View all">
+        <Panel title="Onboarding Pipeline" href="/super-admin/enterprise/organisations" linkLabel="View all">
           <div className="space-y-1">
             {pipeline.map(p => (
               <div key={p.stage} className="flex items-center justify-between px-2 py-2 rounded-lg hover:bg-gray-50">
@@ -169,7 +169,7 @@ export default async function EnterpriseAdministration() {
           </div>
         </Panel>
 
-        <Panel title="Top Organisations by Activity" href="/super-admin/organisations" linkLabel="View all">
+        <Panel title="Top Organisations by Activity" href="/super-admin/enterprise/organisations" linkLabel="View all">
           {topOrgs.length === 0 ? <p className="text-sm text-gray-400 py-6 text-center">No organisations yet.</p> : (
             <div className="space-y-2.5">
               {topOrgs.map(o => (
