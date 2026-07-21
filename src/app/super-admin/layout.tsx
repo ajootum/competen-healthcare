@@ -28,6 +28,7 @@ const NAV = [
     { label: "Bulk Import",       href: "/super-admin/import",                  icon: "📥" },
   ]},
   { group: "PLATFORM OPERATIONS", items: [
+    { label: "Overview",          href: "/super-admin/platform-ops",       icon: "🎛️" },
     { label: "Control Plane",     href: "/platform/control-plane",         icon: "🧭" },
     { label: "Platform Workspace",href: "/platform-admin",                 icon: "🛰️" },
   ]},
