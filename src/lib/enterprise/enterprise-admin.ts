@@ -116,8 +116,8 @@ export async function loadEnterpriseAdmin(admin: any) {
   const invalidEmails = profiles.filter(p => p.email && !EMAIL_RE.test(p.email)).length;
   const setupIssues = [
     { key: "org_admin", label: "Organisations with no administrator", n: orgsNoAdmin, href: "/super-admin/enterprise/organisations", tone: "rose" },
-    { key: "fac_dept", label: "Facilities with no departments", n: facsNoDept, href: "/super-admin/hospitals", tone: "orange" },
-    { key: "unit_mgr", label: "Units with no manager assigned", n: unitsNoManager, href: "/super-admin/enterprise", tone: "amber" },
+    { key: "fac_dept", label: "Facilities with no departments", n: facsNoDept, href: "/super-admin/enterprise/facilities", tone: "orange" },
+    { key: "unit_mgr", label: "Units with no manager assigned", n: unitsNoManager, href: "/super-admin/enterprise/structure", tone: "amber" },
     { key: "bad_email", label: "Imported users with invalid emails", n: invalidEmails, href: "/super-admin/users", tone: "red" },
     { key: "pos_fw", label: "Positions without competency framework", n: null, href: "/super-admin/enterprise", tone: "violet" },
     { key: "role_ws", label: "Roles without workspace assignment", n: null, href: "/super-admin/enterprise", tone: "indigo" },
