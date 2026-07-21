@@ -9,35 +9,44 @@ import NavGroup from "@/components/NavGroup";
 import SidebarToggle from "@/components/SidebarToggle";
 import { highestRole, type AppRole } from "@/lib/roles";
 
+// Sidebar IA aligned to the Mission Control model (MC-001). Every item routes to
+// a real, existing super-admin surface — sections named per the spec's platform
+// domains without introducing dead links.
 const NAV = [
-  { group: "PLATFORM", items: [
-    { label: "Overview",          href: "/super-admin",                    icon: "🌍" },
-    { label: "Control Plane",     href: "/platform/control-plane",         icon: "🧭" },
-    { label: "Platform Workspace", href: "/platform-admin",                icon: "🛰️" },
-    { label: "Command Centre",    href: "/super-admin/command-centre",     icon: "🎛️" },
+  { group: "MISSION CONTROL", items: [
+    { label: "Overview",          href: "/super-admin",                    icon: "🎛️" },
+    { label: "Command Centre",    href: "/super-admin/command-centre",     icon: "📡" },
+  ]},
+  { group: "ENTERPRISE ADMINISTRATION", items: [
     { label: "Organisations",     href: "/super-admin/organisations",      icon: "🏛️" },
-    { label: "All Facilities",    href: "/super-admin/hospitals",          icon: "🏥" },
-    { label: "All Users",         href: "/super-admin/users",              icon: "👥" },
+    { label: "Facilities",        href: "/super-admin/hospitals",          icon: "🏥" },
+    { label: "People & Roles",    href: "/super-admin/users",              icon: "👥" },
     { label: "Bulk Import",       href: "/super-admin/import",             icon: "📥" },
   ]},
-  { group: "CONTENT", items: [
-    { label: "Studio",            href: "/super-admin/studio",             icon: "🎛️" },
-    { label: "Competency Studio", href: "/super-admin/content",            icon: "📐" },
-    { label: "Knowledge Graph",   href: "/super-admin/knowledge-graph",    icon: "🕸️" },
-    { label: "AI Assistant",      href: "/super-admin/assistant",          icon: "🤖" },
-    { label: "Scoring Rules",     href: "/super-admin/scoring",            icon: "📊" },
+  { group: "PLATFORM OPERATIONS", items: [
+    { label: "Control Plane",     href: "/platform/control-plane",         icon: "🧭" },
+    { label: "Platform Workspace",href: "/platform-admin",                 icon: "🛰️" },
+  ]},
+  { group: "CLINICAL KNOWLEDGE", items: [
+    { label: "Studio",            href: "/super-admin/studio",             icon: "🧰" },
+    { label: "Frameworks",        href: "/super-admin/content",            icon: "📐" },
+    { label: "Competency Library",href: "/super-admin/competencies",       icon: "🪪" },
     { label: "Assessment Methods",href: "/super-admin/assessment-methods", icon: "🩺" },
+    { label: "Scoring Rules",     href: "/super-admin/scoring",            icon: "📊" },
     { label: "Reassessment",      href: "/super-admin/schedules",          icon: "🔄" },
   ]},
-  { group: "GOVERNANCE", items: [
+  { group: "AI & INTELLIGENCE", items: [
+    { label: "AI Assistant",      href: "/super-admin/assistant",          icon: "🤖" },
+    { label: "Knowledge Graph",   href: "/super-admin/knowledge-graph",    icon: "🕸️" },
+  ]},
+  { group: "GOVERNANCE & COMPLIANCE", items: [
     { label: "Committees",        href: "/super-admin/governance/committees", icon: "⚖️" },
     { label: "Policies",          href: "/super-admin/policy-manager",     icon: "📄" },
     { label: "Workflows",         href: "/super-admin/workflows",          icon: "⚡" },
     { label: "Report Templates",  href: "/super-admin/reports",            icon: "📈" },
     { label: "Audit Log",         href: "/super-admin/audit",              icon: "🗒️" },
   ]},
-  { group: "SETTINGS", items: [
-    { label: "Competency Library",href: "/super-admin/competencies",       icon: "🪪" },
+  { group: "SYSTEM & SETTINGS", items: [
     { label: "Metadata & Tags",   href: "/super-admin/metadata",           icon: "🏷️" },
     { label: "Platform Settings", href: "/super-admin/settings",           icon: "⚙️" },
   ]},
@@ -81,11 +90,14 @@ export default async function SuperAdminLayout({ children }: { children: React.R
           <SidebarToggle />
           <Link href="/super-admin" className="flex items-center gap-2 mb-6 px-2" data-sb-item>
             <div className="w-7 h-7 rounded bg-rose-500 flex items-center justify-center text-white font-bold text-sm">C</div>
-            <span className="text-white font-semibold text-sm" data-sb-label>Competen</span>
+            <div className="flex flex-col leading-none" data-sb-label>
+              <span className="text-white font-semibold text-sm">Competen</span>
+              <span className="text-rose-300/70 text-[10px] font-medium">Mission Control</span>
+            </div>
           </Link>
 
           <div className="px-3 mb-4" data-sb-label>
-            <span className="text-[10px] font-bold text-rose-400/70 uppercase tracking-widest">Super Admin</span>
+            <span className="text-[10px] font-bold text-rose-400/70 uppercase tracking-widest">Super Admin Workspace</span>
           </div>
 
           <nav className="flex flex-col gap-0.5 flex-1 overflow-y-auto">
