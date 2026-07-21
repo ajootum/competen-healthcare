@@ -23,7 +23,8 @@ const NAV = [
     { label: "Networks",          href: "/super-admin/enterprise/networks",      icon: "🌐" },
     { label: "Facilities",        href: "/super-admin/enterprise/facilities",    icon: "🏥" },
     { label: "Structure Builder", href: "/super-admin/enterprise/structure",     icon: "🗂️" },
-    { label: "People & Roles",    href: "/super-admin/users",                   icon: "👥" },
+    { label: "People & Roles",    href: "/super-admin/enterprise/people",        icon: "👥" },
+    { label: "Enterprise Templates", href: "/super-admin/enterprise/templates",  icon: "📦" },
     { label: "Bulk Import",       href: "/super-admin/import",                  icon: "📥" },
   ]},
   { group: "PLATFORM OPERATIONS", items: [

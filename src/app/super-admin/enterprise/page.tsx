@@ -63,8 +63,8 @@ export default async function EnterpriseAdministration() {
     { label: "Create Network", desc: "Group organisations", icon: "🌐", href: "/super-admin/enterprise/networks" },
     { label: "Add Facility", desc: "Add a new facility", icon: "🏥", href: "/super-admin/enterprise/facilities" },
     { label: "Build Structure", desc: "Departments & units", icon: "🗂️", href: "/super-admin/enterprise/structure" },
-    { label: "Import People", desc: "Bulk-import users", icon: "📥", href: "/super-admin/import" },
-    { label: "Deploy Template", desc: "Use a prebuilt structure", icon: "📦", href: "/super-admin/enterprise" },
+    { label: "Import People", desc: "Bulk-import users", icon: "📥", href: "/super-admin/enterprise/people" },
+    { label: "Deploy Template", desc: "Use a prebuilt structure", icon: "📦", href: "/super-admin/enterprise/templates" },
   ];
 
   const modules = [
@@ -72,8 +72,8 @@ export default async function EnterpriseAdministration() {
     { n: 2, label: "Networks & Enterprise Groups", desc: "Multi-organisation & multinational structures", icon: "🌐", href: "/super-admin/enterprise/networks", live: true },
     { n: 3, label: "Facilities", desc: "Hospitals, campuses, clinics & sites", icon: "🏥", href: "/super-admin/enterprise/facilities", live: true },
     { n: 4, label: "Departments, Units & Services", desc: "Internal structure builder", icon: "🗂️", href: "/super-admin/enterprise/structure", live: true },
-    { n: 5, label: "People, Positions & Roles", desc: "Staff, positions & workspace access", icon: "👥", href: "/super-admin/users", live: true },
-    { n: 6, label: "Enterprise Templates", desc: "Reusable structures & configurations", icon: "📦", href: "/super-admin/enterprise", live: false },
+    { n: 5, label: "People, Positions & Roles", desc: "Staff, positions & workspace access", icon: "👥", href: "/super-admin/enterprise/people", live: true },
+    { n: 6, label: "Enterprise Templates", desc: "Reusable structures & configurations", icon: "📦", href: "/super-admin/enterprise/templates", live: true },
   ];
 
   return (
