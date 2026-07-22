@@ -5,6 +5,8 @@ import { loadShiftOpsEngine } from "@/lib/operations/shift-ops-engine";
 import ShiftLifecycle from "./ShiftLifecycle";
 import ReadinessChecklist from "./ReadinessChecklist";
 import SupervisorPanel from "./SupervisorPanel";
+import SafetyHuddlePanel from "./SafetyHuddlePanel";
+import ShiftDecisionsPanel from "./ShiftDecisionsPanel";
 
 export const dynamic = "force-dynamic";
 
@@ -74,6 +76,14 @@ export default async function ShiftOperationsEngine() {
         <ReadinessChecklist shiftId={d.shiftId} provisioned={d.readiness?.provisioned !== false}
           items={d.readiness?.items ?? []} mandatoryComplete={d.readiness?.mandatoryComplete ?? 0}
           mandatoryTotal={d.readiness?.mandatoryTotal ?? 0} editable={lc.shiftStatus === "planned"} />
+      </div>
+
+      {/* Operational records — safety huddle + material decisions */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <SafetyHuddlePanel shiftId={d.shiftId} provisioned={d.huddle?.provisioned !== false}
+          huddle={d.huddle?.huddle ?? null} editable={lc.shiftStatus !== "completed"} />
+        <ShiftDecisionsPanel shiftId={d.shiftId} provisioned={d.decisions?.provisioned !== false}
+          decisions={d.decisions?.decisions ?? []} editable={lc.shiftStatus !== "completed"} />
       </div>
 
       {/* At-a-glance operational band (SSW-002) */}
