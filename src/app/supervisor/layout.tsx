@@ -83,13 +83,15 @@ const NAV_GROUPS: { group: string; items: NavItem[] }[] = [
     { label: "Operational Reporting",     href: "/supervisor/operational-intelligence", icon: "📄" },
     { label: "Executive Insights",        href: "/supervisor/operational-intelligence", icon: "📊" },
   ]},
-  { group: "AI & Intelligence", items: [
-    { label: "Shift AI Copilot",          href: "/supervisor/ai",                  icon: "✨" },
-    { label: "Staffing Intelligence",     href: "/supervisor/ai",                  icon: "🧠" },
-    { label: "Patient Flow Intelligence", icon: "🔮", soon: true },
-    { label: "Safety Intelligence",       href: "/supervisor/ai",                  icon: "🛰️" },
-    { label: "Predictive Intelligence",   icon: "📡", soon: true },
-    { label: "Executive Insights",        icon: "📊", soon: true },
+  { group: "AI Operational Copilot", items: [
+    { label: "AI Command Centre",         href: "/supervisor/ai",                  icon: "✨" },
+    { label: "Workforce Intelligence",    href: "/supervisor/ai",                  icon: "👥" },
+    { label: "Patient Intelligence",      href: "/supervisor/ai",                  icon: "🧭" },
+    { label: "Safety Intelligence",       href: "/supervisor/ai",                  icon: "🛡️" },
+    { label: "Operational Intelligence",  href: "/supervisor/ai",                  icon: "📊" },
+    { label: "Predictive Intelligence",   href: "/supervisor/ai",                  icon: "🔮" },
+    { label: "AI Assistant",              href: "/supervisor/ai",                  icon: "💬" },
+    { label: "Explainable AI",            href: "/supervisor/ai",                  icon: "🧠" },
   ]},
   { group: "Tools & Settings", items: [
     { label: "Workspace Settings", href: "/supervisor/settings",                   icon: "⚙️" },

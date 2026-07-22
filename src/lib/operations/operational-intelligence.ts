@@ -136,6 +136,7 @@ export async function loadOperationalIntelligence(admin: any, hid: string | null
     ready: true as const, shift,
     kpis: { healthScore, pressure, pressureLabel, capacity, occupied: o.occupied, totalBeds: o.totalBeds, taskCompletion, completedTasks: completed, totalTasks, commsResponse: commsResponse.ackRate, safetyStatus: openEsc === 0 && safety.incidents === 0 ? "Good" : "Attention", criticalAlerts: o.critical },
     shiftPerf, patient, workforce, safety, forecast, predictions, scorecard, aiInsights, dataSnapshot,
+    raw: { openTasks, overdueTasks, openEsc, highRisk, pewsEsc, capaOpen: safety.capaOpen, patientSafety, govPct },
     generatedAt: new Date().toISOString(),
   };
 }
