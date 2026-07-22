@@ -56,10 +56,14 @@ const NAV_GROUPS: { group: string; items: NavItem[] }[] = [
     { label: "Workflow & Automation", href: "/supervisor/task-center#workflow", icon: "🔀" },
     { label: "Task Analytics",        href: "/supervisor/task-center",            icon: "📊" },
   ]},
-  { group: "Communication", items: [
-    { label: "Team Communications", href: "/supervisor/communication",            icon: "💬", badge: "unread" },
-    { label: "Broadcast Centre",    icon: "📣", soon: true },
-    { label: "Messages",            href: "/supervisor/communication",            icon: "✉️", badge: "unread" },
+  { group: "Communication Centre", items: [
+    { label: "Operations Hub",            href: "/supervisor/communication",             icon: "📡" },
+    { label: "Team Communications",       href: "/supervisor/communication#console",     icon: "💬", badge: "unread" },
+    { label: "Broadcast Centre",          href: "/supervisor/communication",             icon: "📣" },
+    { label: "Escalation Communications", href: "/supervisor/communication",             icon: "⬆️", badge: "escalations" },
+    { label: "Shift Handover",            href: "/supervisor/handover",                  icon: "🔄", badge: "handover" },
+    { label: "Announcements & Alerts",    href: "/supervisor/communication",             icon: "🔔" },
+    { label: "Communication Analytics",   href: "/supervisor/communication",             icon: "📊" },
   ]},
   { group: "Quality, Safety & Escalation", items: [
     { label: "Safety Dashboard",       href: "/supervisor/clinical-safety",           icon: "🛡️", badge: "safety" },
