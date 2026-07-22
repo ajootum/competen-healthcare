@@ -2,7 +2,9 @@ import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { loadMonitoring } from "@/lib/platform/monitoring";
+import { loadJobs } from "@/lib/platform/jobs";
 import MonitoringHeader from "./MonitoringHeader";
+import JobsPanel from "./JobsPanel";
 
 export const dynamic = "force-dynamic";
 
@@ -44,7 +46,7 @@ export default async function MonitoringOperations() {
   const roles: string[] = (profile?.roles?.length ? profile.roles : [profile?.role]).filter(Boolean);
   if (!roles.includes("super_admin")) redirect("/dashboard");
 
-  const m = await loadMonitoring(admin);
+  const [m, jobs] = await Promise.all([loadMonitoring(admin), loadJobs(admin)]);
   const { kpis, services, servicesSummary, alerts, alertsSummary, events, eventsReady } = m;
 
   const healthTone = kpis.health === "Healthy" ? "text-green-600" : kpis.health === "Attention" ? "text-amber-600" : "text-rose-600";
@@ -142,22 +144,8 @@ export default async function MonitoringOperations() {
         </Panel>
       </div>
 
-      {/* Operational jobs — honest not-connected */}
-      <Panel title="Operational Jobs & Backups">
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-          {[
-            { icon: "💾", label: "Database Backups", state: "Managed by Supabase — run history not surfaced here." },
-            { icon: "⏰", label: "Scheduled Reports", state: "Reports cron endpoint configured; run history not recorded." },
-            { icon: "🧹", label: "Maintenance Jobs", state: "No maintenance job runner connected." },
-          ].map(j => (
-            <div key={j.label} className="rounded-lg border border-gray-100 p-4">
-              <div className="flex items-center gap-2 mb-1"><span className="text-lg">{j.icon}</span><span className="text-sm font-semibold text-gray-800">{j.label}</span></div>
-              <p className="text-[11px] text-gray-500">{j.state}</p>
-              <span className="inline-block mt-2 text-[9px] font-medium px-1.5 py-0.5 rounded bg-gray-100 text-gray-500">Not connected</span>
-            </div>
-          ))}
-        </div>
-      </Panel>
+      {/* POS-001F Operational jobs — live registry + on-demand runs */}
+      <JobsPanel initial={jobs} />
 
       <p className="text-[11px] text-gray-400 pb-4">Monitoring reflects live platform state — subsystem reachability and latency are probed on each load, alerts stream from tenant clinical-safety and escalation sources, and the event feed reads the platform + tenant audit logs. Infrastructure telemetry (CPU, memory, uptime history) and backup/job run history show honest “not connected” states until the monitoring agent and job runner are wired in.</p>
     </div>

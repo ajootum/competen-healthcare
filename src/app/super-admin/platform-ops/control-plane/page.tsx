@@ -4,6 +4,7 @@ import Link from "next/link";
 import { loadControlPlane } from "@/lib/platform/control-plane";
 import { loadRuntimeStatus } from "@/lib/platform/runtime";
 import InfraStatusBar from "./InfraStatusBar";
+import RecordDeployment from "./RecordDeployment";
 
 export const dynamic = "force-dynamic";
 
@@ -122,6 +123,9 @@ export default async function ControlPlaneConsole() {
               ))}
             </div>
           )}
+          <div className="mt-3 pt-2 border-t border-gray-50 flex justify-end">
+            <RecordDeployment version={env.appVersion} />
+          </div>
         </Panel>
 
         {/* Feature flags & services */}

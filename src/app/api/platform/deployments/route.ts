@@ -17,6 +17,8 @@ export async function POST(req: Request) {
 
   const { data, error } = await caller.admin.from("plat_deployments").insert({
     version: String(b.version).trim(), channel, status: "released", notes: b.notes ? String(b.notes) : null,
+    git_commit: b.git_commit ? String(b.git_commit).slice(0, 60) : null,
+    build_number: b.build_number ? String(b.build_number).slice(0, 40) : null,
     released_at: new Date().toISOString(), created_by: caller.userId,
   }).select("id").single();
   if (error) return NextResponse.json({ error: error.message }, { status: 400 });

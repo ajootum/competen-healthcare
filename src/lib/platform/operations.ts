@@ -16,18 +16,22 @@ const num = (r: any) => (r?.error ? null : r?.count ?? 0);
 
 export async function loadPlatformOperations(admin: any) {
   const dayStart = new Date(); dayStart.setHours(0, 0, 0, 0);
-  const [mon, tenRes, userRes, depRes, apprRes] = await Promise.all([
+  const dayAgo = new Date(Date.now() - 864e5).toISOString();
+  const [mon, tenRes, userRes, depRes, apprRes, jobRes, jobFailRes] = await Promise.all([
     loadMonitoring(admin),
     admin.from("tenants").select("*", { count: "exact", head: true }),
     admin.from("profiles").select("*", { count: "exact", head: true }),
     admin.from("plat_deployments").select("*", { count: "exact", head: true }).gte("created_at", dayStart.toISOString()),
     admin.from("change_requests").select("*", { count: "exact", head: true }).eq("status", "open"),
+    admin.from("plat_job_runs").select("*", { count: "exact", head: true }).gte("started_at", dayAgo),
+    admin.from("plat_job_runs").select("*", { count: "exact", head: true }).gte("started_at", dayAgo).eq("status", "failed"),
   ]);
 
   const health = mon.kpis.health;
   const crit = mon.kpis.criticalAlerts ?? 0;
   const open = mon.kpis.openAlerts;
   const tenants = num(tenRes), users = num(userRes), depToday = num(depRes), approvals = num(apprRes);
+  const jobRuns = num(jobRes), jobFails = num(jobFailRes);
   const healthStatus: OpsStatus = health === "Healthy" ? "ok" : health === "Attention" ? "warn" : "down";
 
   const widgets: OpsWidget[] = [
@@ -38,7 +42,7 @@ export async function loadPlatformOperations(admin: any) {
     { key: "ai", label: "AI Operations", value: "—", status: "na", detail: "request telemetry not metered", service: "Platform Monitoring Service" },
     { key: "approvals", label: "Pending Approvals", value: approvals == null ? "—" : String(approvals), status: approvals == null ? "na" : approvals > 0 ? "warn" : "ok", detail: approvals == null ? "aggregation pending" : "open change requests", service: "Workflow & Approval Service" },
     { key: "deployments", label: "Deployments Today", value: depToday == null ? "—" : String(depToday), status: depToday == null ? "na" : "ok", detail: "recorded since midnight", service: "Deployment Management Service" },
-    { key: "jobs", label: "Background Jobs", value: "—", status: "na", detail: "no job runner connected", service: "Background Job Scheduler" },
+    { key: "jobs", label: "Background Jobs", value: jobRuns == null ? "—" : String(jobRuns), status: jobRuns == null ? "na" : jobFails ? "warn" : "ok", detail: jobRuns == null ? "run history unavailable" : `runs 24h${jobFails ? ` · ${jobFails} failed` : ""}`, service: "Background Job Scheduler" },
   ];
 
   return {
