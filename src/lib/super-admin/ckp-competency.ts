@@ -51,6 +51,13 @@ export async function loadCompetencyCentre(admin: any) {
   const byLibrary = { core: frameworks.filter(f => f.library === "core").length, specialty: frameworks.filter(f => f.library === "specialty").length, role: frameworks.filter(f => f.library === "role").length };
   const totalComp = comps.length;
 
+  // Picker lists for the in-place Architecture Builder (framework → domain → competency).
+  const frName = new Map<string, string>(frameworks.map(f => [f.id, f.name]));
+  const builderFrameworks = frameworks.map(f => ({ id: f.id, label: f.library ? `${f.name} (${f.library})` : f.name }));
+  const builderDomains = domains
+    .map(d => ({ id: d.id, label: frName.get(d.framework_id) ? `${frName.get(d.framework_id)} › ${d.name}` : d.name }))
+    .sort((a, b) => a.label.localeCompare(b.label));
+
   return {
     kpis: {
       competencies: totalComp,
@@ -65,6 +72,8 @@ export async function loadCompetencyCentre(admin: any) {
     domainHierarchy,
     byLibrary,
     mapping: { mappings: totalMapped, crosswalks: num(edgeCount) ?? 0, unmapped: totalComp - totalMapped, activeCycles: num(cycleRes) ?? 0 },
+    builderFrameworks,
+    builderDomains,
     generatedAt: new Date().toISOString(),
   };
 }

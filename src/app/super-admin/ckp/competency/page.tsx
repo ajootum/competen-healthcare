@@ -2,6 +2,7 @@ import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { loadCompetencyCentre } from "@/lib/super-admin/ckp-competency";
+import ArchitectureBuilder from "./ArchitectureBuilder";
 
 export const dynamic = "force-dynamic";
 
@@ -68,6 +69,9 @@ export default async function CompetencyFrameworkCentre() {
           </div>
         ))}
       </div>
+
+      {/* Real in-place architecture builder — framework → domain → competency */}
+      <ArchitectureBuilder frameworks={cc.builderFrameworks} domains={cc.builderDomains} />
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         {/* Framework overview */}
@@ -148,7 +152,7 @@ export default async function CompetencyFrameworkCentre() {
         </div>
       </div>
 
-      <p className="text-[11px] text-gray-400 pb-4">The Competency & Framework Centre is the architecture layer — every competency belongs to a domain within a framework. Counts, coverage and the domain hierarchy are live; version history and crosswalks open the audit log and knowledge graph until the dedicated builders ship in later phases.</p>
+      <p className="text-[11px] text-gray-400 pb-4">The Competency & Framework Centre is the architecture layer — every competency belongs to a domain within a framework. The Architecture Builder creates real frameworks, domains and competencies in-place via the content APIs (each level feeds the next level's picker); counts, coverage and the domain hierarchy are live. Version history and crosswalks open the audit log and knowledge graph.</p>
     </div>
   );
 }
