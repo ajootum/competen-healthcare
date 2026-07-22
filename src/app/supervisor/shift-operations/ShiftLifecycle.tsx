@@ -12,7 +12,7 @@ import { useRouter } from "next/navigation";
 
 type Blocker = { code: string; message: string; hard: boolean };
 type Gate = { action: { status: string; label: string } | null; allowed: boolean; blockers: Blocker[] };
-type Command = { owner: string | null; hasOwner: boolean; activeShifts: number; commandOwners: number; uncommanded: number };
+type Command = { owner: string | null; hasOwner: boolean; confirmed?: boolean; activeShifts: number; commandOwners: number; uncommanded: number };
 
 export default function ShiftLifecycle({ states, index, subState, shiftStatus, gate, command, shiftId }: {
   states: string[]; index: number; subState: string | null; shiftStatus: string | null;
@@ -67,7 +67,11 @@ export default function ShiftLifecycle({ states, index, subState, shiftStatus, g
         {shiftStatus === "active" && !command.hasOwner ? (
           <span className="font-semibold text-rose-700 bg-rose-50 border border-rose-200 rounded-full px-2 py-0.5">● No command owner — assign a supervisor</span>
         ) : (
-          <span className="text-gray-600 bg-gray-50 border border-gray-200 rounded-full px-2 py-0.5">👤 Command: <span className="font-semibold text-gray-800">{command.owner ?? "—"}</span></span>
+          <span className="text-gray-600 bg-gray-50 border border-gray-200 rounded-full px-2 py-0.5">👤 Command: <span className="font-semibold text-gray-800">{command.owner ?? "—"}</span>
+            {command.owner && (command.confirmed
+              ? <span className="ml-1 text-green-600 font-semibold">✓ confirmed</span>
+              : <span className="ml-1 text-amber-600">pending confirmation</span>)}
+          </span>
         )}
         <span className="text-gray-400">·</span>
         <span className="text-gray-500">{command.activeShifts} active shift{command.activeShifts === 1 ? "" : "s"} · {command.commandOwners} owner{command.commandOwners === 1 ? "" : "s"}{command.uncommanded > 0 ? ` · ${command.uncommanded} uncommanded` : ""}</span>

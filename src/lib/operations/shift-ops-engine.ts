@@ -9,6 +9,7 @@
 
 import { loadShiftCommand } from "@/lib/operations/shift-command";
 import { loadReadiness } from "@/lib/operations/readiness";
+import { loadSupervisorAssignments } from "@/lib/operations/supervisor-assignments";
 
 const NONE = "00000000-0000-0000-0000-000000000000";
 const DAY = 86400000;
@@ -45,6 +46,8 @@ export async function loadShiftOpsEngine(admin: any, hid: string | null, isSuper
   // migration 064 is applied; falls back to inferred preconditions until then.
   const readiness: any = await loadReadiness(admin, sc.shiftId);
   const rdyProvisioned = readiness.provisioned === true && !readiness.error && Array.isArray(readiness.items);
+  // Supervisor assignments & confirmation (SSW-002 §6.3 / §8) — command ownership.
+  const supervisors: any = await loadSupervisorAssignments(admin, sc.shiftId, hid, isSuper);
 
   // ── Transition gate (SSW-002 §10 / §26) — the engine computes the blocking
   // reasons the UI must surface; activation/closure buttons derive from these.
@@ -89,6 +92,7 @@ export async function loadShiftOpsEngine(admin: any, hid: string | null, isSuper
   const command = {
     owner: sc.shift?.supervisor ?? null,
     hasOwner: !!sc.shift?.supervisor,
+    confirmed: supervisors.commandConfirmed === true,
     activeShifts: activeRows.length,
     commandOwners: new Set(activeRows.map((r: any) => r.supervisor_id).filter(Boolean)).size,
     uncommanded: activeRows.filter((r: any) => !r.supervisor_id).length,
@@ -155,7 +159,7 @@ export async function loadShiftOpsEngine(admin: any, hid: string | null, isSuper
     ready: true as const,
     shift: sc.shift, shiftId: sc.shiftId,
     lifecycle: { states: LIFECYCLE, current: currentState, index: stateIndex, subState: activeSubState, shiftStatus },
-    gate, command, readiness,
+    gate, command, readiness, supervisors,
     engines, liveCount,
     eventFlow,
     roadmap, principles,

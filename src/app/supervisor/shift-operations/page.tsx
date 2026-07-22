@@ -4,6 +4,7 @@ import Link from "next/link";
 import { loadShiftOpsEngine } from "@/lib/operations/shift-ops-engine";
 import ShiftLifecycle from "./ShiftLifecycle";
 import ReadinessChecklist from "./ReadinessChecklist";
+import SupervisorPanel from "./SupervisorPanel";
 
 export const dynamic = "force-dynamic";
 
@@ -65,10 +66,15 @@ export default async function ShiftOperationsEngine() {
       {/* Lifecycle state machine + readiness-gated advance action */}
       <ShiftLifecycle states={lc.states} index={lc.index} subState={lc.subState} shiftStatus={lc.shiftStatus} gate={d.gate} command={d.command} shiftId={d.shiftId} />
 
-      {/* Pre-shift readiness checklist (gates activation) */}
-      <ReadinessChecklist shiftId={d.shiftId} provisioned={d.readiness?.provisioned !== false}
-        items={d.readiness?.items ?? []} mandatoryComplete={d.readiness?.mandatoryComplete ?? 0}
-        mandatoryTotal={d.readiness?.mandatoryTotal ?? 0} editable={lc.shiftStatus === "planned"} />
+      {/* Command assignment + pre-shift readiness (both gate activation) */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <SupervisorPanel shiftId={d.shiftId} provisioned={d.supervisors?.provisioned !== false}
+          assignments={d.supervisors?.assignments ?? []} staff={d.supervisors?.staff ?? []}
+          editable={lc.shiftStatus !== "completed"} />
+        <ReadinessChecklist shiftId={d.shiftId} provisioned={d.readiness?.provisioned !== false}
+          items={d.readiness?.items ?? []} mandatoryComplete={d.readiness?.mandatoryComplete ?? 0}
+          mandatoryTotal={d.readiness?.mandatoryTotal ?? 0} editable={lc.shiftStatus === "planned"} />
+      </div>
 
       {/* At-a-glance operational band (SSW-002) */}
       <div className="grid grid-cols-4 sm:grid-cols-8 gap-3">
