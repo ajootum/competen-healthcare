@@ -48,11 +48,7 @@ const GENERAL_NAV = [
     { label: "Open AI & Intelligence →", href: "/super-admin/ai", icon: "🧠" },
   ]},
   { group: "GOVERNANCE & COMPLIANCE", items: [
-    { label: "Committees", href: "/super-admin/governance/committees", icon: "⚖️" },
-    { label: "Policies", href: "/super-admin/policy-manager", icon: "📄" },
-    { label: "Workflows", href: "/super-admin/workflows", icon: "⚡" },
-    { label: "Report Templates", href: "/super-admin/reports", icon: "📈" },
-    { label: "Audit Log", href: "/super-admin/audit", icon: "🗒️" },
+    { label: "Open Governance →", href: "/super-admin/governance", icon: "🛡️" },
   ]},
   { group: "SYSTEM & SETTINGS", items: [
     { label: "Metadata & Tags", href: "/super-admin/metadata", icon: "🏷️" },
@@ -99,16 +95,35 @@ const AI_NAV = [
   ]},
 ];
 
-const OVERVIEW_HREFS = new Set(["/super-admin", "/super-admin/ckp", "/super-admin/ai"]);
+const GOV_NAV = [
+  { group: "GOVERNANCE & COMPLIANCE", items: [
+    { label: "1. Governance Dashboard", href: "/super-admin/governance", icon: "🛡️" },
+    { label: "2. Policy & Standards Center", href: "/super-admin/policy-manager", icon: "📄" },
+    { label: "3. Compliance Management", href: "/admin/quality", icon: "✅" },
+    { label: "4. Risk & Internal Controls", href: "/super-admin/platform-ops/monitoring", icon: "⚠️" },
+    { label: "5. Audit & Assurance", href: "/super-admin/audit", icon: "📋" },
+    { label: "6. Regulatory & Accreditation", href: "/admin/accreditation", icon: "🏛️" },
+  ]},
+  { group: "QUICK ACCESS", items: [
+    { label: "Committees", href: "/super-admin/governance/committees", icon: "⚖️" },
+    { label: "Approvals", href: "/super-admin/platform-ops/approvals", icon: "🔀" },
+    { label: "Workflows", href: "/super-admin/workflows", icon: "⚡" },
+    { label: "Report Templates", href: "/super-admin/reports", icon: "📈" },
+    { label: "Audit Log", href: "/super-admin/audit", icon: "🗒️" },
+  ]},
+];
+
+const OVERVIEW_HREFS = new Set(["/super-admin", "/super-admin/ckp", "/super-admin/ai", "/super-admin/governance"]);
 
 export default function WorkspaceSidebar({ profileName, roles, activeRole, workspaces }: { profileName: string | null; roles: AppRole[]; activeRole: AppRole; workspaces: any[] }) {
   const pathname = usePathname();
   const inCkp = pathname.startsWith("/super-admin/ckp");
   const inAi = pathname === "/super-admin/ai" || pathname.startsWith("/super-admin/ai/");
-  const inWorkspace = inCkp || inAi;
-  const nav = inCkp ? CKP_NAV : inAi ? AI_NAV : GENERAL_NAV;
-  const home = inCkp ? "/super-admin/ckp" : inAi ? "/super-admin/ai" : "/super-admin";
-  const subtitle = inCkp ? "Clinical Knowledge Platform" : inAi ? "AI & Intelligence" : "Mission Control";
+  const inGov = pathname === "/super-admin/governance" || pathname.startsWith("/super-admin/governance/");
+  const inWorkspace = inCkp || inAi || inGov;
+  const nav = inCkp ? CKP_NAV : inAi ? AI_NAV : inGov ? GOV_NAV : GENERAL_NAV;
+  const home = inCkp ? "/super-admin/ckp" : inAi ? "/super-admin/ai" : inGov ? "/super-admin/governance" : "/super-admin";
+  const subtitle = inCkp ? "Clinical Knowledge Platform" : inAi ? "AI & Intelligence" : inGov ? "Governance & Compliance" : "Mission Control";
 
   return (
     <>

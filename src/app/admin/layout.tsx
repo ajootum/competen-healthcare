@@ -78,7 +78,10 @@ export default async function AdminLayout({ children }: { children: React.ReactN
   // just the ones their single highest-seniority role grants.
   const orgRoles = orgRolesOf(!orgErr ? orgProfile : null) as (OrgRole | null)[];
 
-  if (!userRoles.includes("hospital_admin")) {
+  // super_admin passes too — every /admin page already gates on
+  // hospital_admin|super_admin, so the layout blocking pure super admins was a
+  // dead-end contradiction (hit via the Governance & Compliance shell links).
+  if (!userRoles.includes("hospital_admin") && !userRoles.includes("super_admin")) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
