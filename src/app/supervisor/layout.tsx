@@ -16,56 +16,81 @@ import { workspaceLinksForUser } from "@/lib/workspace-links";
 // capabilities without a built surface yet are shown muted ("soon") rather than
 // as dead links.
 type NavItem = { label: string; href?: string; icon: string; exact?: boolean; soon?: boolean };
+
+// Standalone landing (SSW-001-R2 Ch.4) — the executive overview.
+const DASHBOARD: NavItem = { label: "Dashboard", href: "/supervisor", icon: "🏠", exact: true };
+
+// SSW-001 Revision 2.0 navigation hierarchy (Ch.3–13). Nine operational domains
+// in clinical-workflow order — shift control → patients → workforce → tasks →
+// communication → safety → analytics → decision support → configuration. Items
+// map to live surfaces; capabilities without a built surface yet are shown muted
+// ("soon") rather than as dead links.
 const NAV_GROUPS: { group: string; items: NavItem[] }[] = [
   { group: "Shift Command", items: [
-    { label: "Dashboard",          href: "/supervisor",                            icon: "🖥️", exact: true },
-    { label: "Operations Engine",  href: "/supervisor/shift-operations",           icon: "⚙️" },
-    { label: "Current Shift",      href: "/supervisor/current-shift",              icon: "🩺" },
-    { label: "Today's Priorities", href: "/supervisor/priorities",                icon: "⚠️" },
-    { label: "Shift Timeline",     href: "/supervisor/timeline",                  icon: "🕑" },
+    { label: "Shift Dashboard",   href: "/supervisor/shift-operations",            icon: "🖥️" },
+    { label: "Handover Centre",   href: "/supervisor/handover",                    icon: "🔄" },
+    { label: "Escalation Centre", href: "/supervisor/operations?section=safety",   icon: "⬆️" },
+    { label: "Shift Analytics",   href: "/supervisor/analytics",                   icon: "📈" },
   ]},
   { group: "Patient Operations", items: [
-    { label: "Patient Ops Dashboard",     href: "/supervisor/patient-ops",         icon: "📊" },
-    { label: "Patient Census",            href: "/supervisor/patient-list",        icon: "👤" },
-    { label: "Patient Shift Management",  href: "/supervisor/patient-shift",       icon: "🔁" },
-    { label: "Patient Flow",              href: "/supervisor/patient-flow",        icon: "🔀" },
-    { label: "Clinical Safety",           href: "/supervisor/clinical-safety",     icon: "🛡️" },
-    { label: "Bed & Capacity",            href: "/supervisor/bed-management",       icon: "🛏️" },
-    { label: "Ward Map",                  href: "/supervisor/ward-map",            icon: "🗺️" },
-    { label: "Patient Operations Center", href: "/supervisor/patient-ops-center",  icon: "🗂️" },
+    { label: "Patient Operations Dashboard", href: "/supervisor/patient-ops",         icon: "📊" },
+    { label: "Patient Census",               href: "/supervisor/patient-list",        icon: "👤" },
+    { label: "Patient Flow",                 href: "/supervisor/patient-flow",        icon: "🔀" },
+    { label: "Bed & Capacity",               href: "/supervisor/bed-management",       icon: "🛏️" },
+    { label: "Ward Map",                     href: "/supervisor/ward-map",            icon: "🗺️" },
+    { label: "Patient Operations Centre",    href: "/supervisor/patient-ops-center",  icon: "🗂️" },
+    { label: "Clinical Safety",              href: "/supervisor/clinical-safety",     icon: "🛡️" },
+    { label: "Patient Cards",                href: "/supervisor/patient-list",        icon: "🪪" },
   ]},
   { group: "Workforce Operations", items: [
-    { label: "Workforce Ops",      href: "/supervisor/workforce-operations",       icon: "👥" },
-    { label: "Assignments",        href: "/supervisor/operations?section=assignments", icon: "🧩" },
-    { label: "Roster & Attendance", href: "/supervisor/operations?section=shifts", icon: "📋" },
-    { label: "Competencies",       href: "/supervisor/workforce-operations",       icon: "🎖️" },
-    { label: "Breaks",             icon: "☕", soon: true },
+    { label: "Staffing Allocation",  href: "/supervisor/workforce-operations",        icon: "👥" },
+    { label: "Team Assignments",     href: "/supervisor/operations?section=assignments", icon: "🧩" },
+    { label: "Competency Readiness", href: "/supervisor/workforce-operations",        icon: "🎖️" },
+    { label: "Break Management",     icon: "☕", soon: true },
+    { label: "Supervisor Notes",     icon: "🗒️", soon: true },
   ]},
   { group: "Task Centre", items: [
-    { label: "Task Center",        href: "/supervisor/task-center",                icon: "🗂️" },
-    { label: "Tasks",              href: "/supervisor/operations?section=care",    icon: "✅" },
-    { label: "Escalations",        href: "/supervisor/operations?section=safety",  icon: "⬆️" },
-    { label: "Incidents",          href: "/supervisor/operations?section=safety",  icon: "🚩" },
-    { label: "Handover",           href: "/supervisor/handover",                   icon: "🔄" },
+    { label: "Task Assignment",   href: "/supervisor/task-center",                icon: "✅" },
+    { label: "Outstanding Tasks", href: "/supervisor/operations?section=care",    icon: "📋" },
+    { label: "Critical Tasks",    href: "/supervisor/task-center",                icon: "🔴" },
+    { label: "Completed Tasks",   href: "/supervisor/task-center",                icon: "✔️" },
+    { label: "Task Rules",        icon: "⚙️", soon: true },
   ]},
   { group: "Communication", items: [
-    { label: "Messages",           href: "/supervisor/communication",              icon: "💬" },
-    { label: "Announcements",      icon: "📣", soon: true },
-    { label: "Calls",              icon: "📞", soon: true },
+    { label: "Team Communications", href: "/supervisor/communication",            icon: "💬" },
+    { label: "Broadcast Centre",    icon: "📣", soon: true },
+    { label: "Messages",            href: "/supervisor/communication",            icon: "✉️" },
+  ]},
+  { group: "Quality, Safety & Escalation", items: [
+    { label: "Safety Dashboard",       href: "/supervisor/clinical-safety",           icon: "🛡️" },
+    { label: "Incident Reporting",     href: "/supervisor/operations?section=safety", icon: "🚩" },
+    { label: "Observation Compliance", href: "/supervisor/operations?section=safety", icon: "📋" },
+    { label: "Escalation Tracking",    href: "/supervisor/operations?section=safety", icon: "⬆️" },
+    { label: "Quality Audits",         icon: "🔍", soon: true },
+    { label: "Improvement Actions",    icon: "⚡", soon: true },
   ]},
   { group: "Analytics", items: [
-    { label: "Live Metrics",       href: "/supervisor#performance",                icon: "📊" },
-    { label: "Shift Performance",  href: "/supervisor#performance",                icon: "📈" },
-    { label: "Quality Indicators", href: "/supervisor/analytics",                  icon: "🎯" },
+    { label: "Shift Performance",       href: "/supervisor/analytics",             icon: "📈" },
+    { label: "Patient Flow Analytics",  href: "/supervisor/analytics",             icon: "🔀" },
+    { label: "Workforce Analytics",     href: "/supervisor/analytics",             icon: "👥" },
+    { label: "Safety Analytics",        href: "/supervisor/analytics",             icon: "🛡️" },
+    { label: "Operational Reports",     icon: "📄", soon: true },
   ]},
   { group: "AI & Intelligence", items: [
-    { label: "Operational Copilot", href: "/supervisor#copilot",                   icon: "✨" },
-    { label: "Recommendations",    href: "/supervisor/ai",                         icon: "💡" },
-    { label: "Predictions",        icon: "🔮", soon: true },
+    { label: "Shift AI Copilot",          href: "/supervisor/ai",                  icon: "✨" },
+    { label: "Staffing Intelligence",     href: "/supervisor/ai",                  icon: "🧠" },
+    { label: "Patient Flow Intelligence", icon: "🔮", soon: true },
+    { label: "Safety Intelligence",       href: "/supervisor/ai",                  icon: "🛰️" },
+    { label: "Predictive Intelligence",   icon: "📡", soon: true },
+    { label: "Executive Insights",        icon: "📊", soon: true },
   ]},
   { group: "Tools & Settings", items: [
-    { label: "Ward Configuration", href: "/supervisor/settings",                   icon: "🛠️" },
-    { label: "Support",            href: "mailto:gabriel@semacast.com?subject=Shift Command Centre support", icon: "🎧" },
+    { label: "Workspace Settings", href: "/supervisor/settings",                   icon: "⚙️" },
+    { label: "Shift Templates",    icon: "📄", soon: true },
+    { label: "Professional Tools", icon: "🛠️", soon: true },
+    { label: "Reports & Export",   icon: "📤", soon: true },
+    { label: "Notifications",      icon: "🔔", soon: true },
+    { label: "Administration",     icon: "🏛️", soon: true },
   ]},
 ];
 
@@ -100,7 +125,7 @@ export default async function SupervisorLayout({ children }: { children: React.R
   }
 
   // Flat list of real (non-soon) destinations for the mobile pill bar, deduped by href.
-  const mobileItems = [...new Map(NAV_GROUPS.flatMap(g => g.items).filter(i => i.href && !i.soon && !i.href.startsWith("mailto")).map(i => [i.href, i] as const)).values()];
+  const mobileItems = [...new Map([DASHBOARD, ...NAV_GROUPS.flatMap(g => g.items)].filter(i => i.href && !i.soon && !i.href.startsWith("mailto")).map(i => [i.href, i] as const)).values()];
 
   return (
     <div className="min-h-screen bg-gray-50 font-[family-name:var(--font-geist-sans)]">
@@ -133,6 +158,9 @@ export default async function SupervisorLayout({ children }: { children: React.R
           </Link>
 
           <nav className="flex flex-col gap-0.5 flex-1 overflow-y-auto">
+            <NavLink href={DASHBOARD.href!} icon={DASHBOARD.icon} label={DASHBOARD.label} exact={DASHBOARD.exact}
+              className={linkCls} activeClassName={activeCls} />
+            <div className="my-1.5 border-t border-teal-800/30" />
             {NAV_GROUPS.map(({ group, items }) => {
               const nodes = items.map(({ label, href, icon, exact, soon }) => soon || !href ? (
                 <span key={label} title={label} data-sb-item
