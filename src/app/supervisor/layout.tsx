@@ -50,11 +50,11 @@ const NAV_GROUPS: { group: string; items: NavItem[] }[] = [
     { label: "Supervisor Notes",     href: "/supervisor/workforce-operations#break",   icon: "🗒️" },
   ]},
   { group: "Task Centre", items: [
-    { label: "Task Assignment",   href: "/supervisor/task-center",                icon: "✅" },
-    { label: "Outstanding Tasks", href: "/supervisor/operations?section=care",    icon: "📋", badge: "openTasks" },
-    { label: "Critical Tasks",    href: "/supervisor/task-center",                icon: "🔴", badge: "criticalTasks" },
-    { label: "Completed Tasks",   href: "/supervisor/task-center",                icon: "✔️" },
-    { label: "Task Rules",        icon: "⚙️", soon: true },
+    { label: "Task Assignment",       href: "/supervisor/task-center",            icon: "✅" },
+    { label: "Task Board",            href: "/supervisor/task-center",            icon: "📋", badge: "openTasks" },
+    { label: "Critical Tasks",        href: "/supervisor/task-center",            icon: "🔴", badge: "criticalTasks" },
+    { label: "Workflow & Automation", icon: "🔀", soon: true },
+    { label: "Task Analytics",        href: "/supervisor/task-center",            icon: "📊" },
   ]},
   { group: "Communication", items: [
     { label: "Team Communications", href: "/supervisor/communication",            icon: "💬", badge: "unread" },

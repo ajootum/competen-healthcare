@@ -126,13 +126,37 @@ export async function loadTaskCenter(admin: any, hid: string | null, isSuper: bo
   factors.push(overdue.length === 0 ? 100 : Math.max(0, 100 - overdue.length * 8));
   const shiftScore = mean(factors);
 
+  // ── SSW-TSK-001 redesign — KPI band, Kanban board, AI suggestions, timeline ──
+  const hourIso = new Date(now + 3600 * 1000).toISOString();
+  const dueSoon = open.filter(t => t.due_at && t.due_at >= nowIso && t.due_at <= hourIso);
+  const inProgressN = tasks.filter(t => t.status === "in_progress").length;
+  const pctOf = (n: number) => (tasks.length ? Math.round((n / tasks.length) * 100) : 0);
+  const cardOf = (t: any) => ({ id: t.id, desc: t.description, bed: t.op_patients?.label ?? null, priority: t.priority, prioLabel: PRIO_LABEL[t.priority] ?? "Medium", due: t.due_at, assignee: t.profiles?.full_name ?? null, status: t.status, overdue: !!(t.due_at && t.due_at < nowIso && !DONE.has(t.status)) });
+  // Kanban maps the real op_tasks lifecycle: New (created/assigned) → Accepted →
+  // In Progress → Awaiting Review (completed, pre-verify) → Completed (verified).
+  const kanban = [
+    { key: "new", label: "New", next: "accepted", cards: tasks.filter(t => NOT_STARTED.has(t.status)).slice(0, 25).map(cardOf) },
+    { key: "accepted", label: "Accepted", next: "in_progress", cards: tasks.filter(t => t.status === "accepted").slice(0, 25).map(cardOf) },
+    { key: "in_progress", label: "In Progress", next: "completed", cards: tasks.filter(t => t.status === "in_progress").slice(0, 25).map(cardOf) },
+    { key: "awaiting", label: "Awaiting Review", next: "verified", cards: tasks.filter(t => t.status === "completed").slice(0, 25).map(cardOf) },
+    { key: "completed", label: "Completed", next: null as string | null, cards: tasks.filter(t => t.status === "verified").slice(0, 25).map(cardOf) },
+  ];
+  // AI suggestions — rule-based over live task signals (assign / escalate / review).
+  const aiSuggestions: { text: string; sub: string; id: string; action: string }[] = [];
+  unassigned.filter(t => ["urgent", "high"].includes(t.priority)).slice(0, 2).forEach(t => aiSuggestions.push({ text: t.description, sub: `${PRIO_LABEL[t.priority]} · ${t.op_patients?.label ?? "unassigned"} — assign to staff`, id: t.id, action: "Assign" }));
+  overdue.filter(t => t.priority === "urgent").slice(0, 2).forEach(t => aiSuggestions.push({ text: `Escalate: ${t.description}`, sub: `Overdue ${Math.round((now - new Date(t.due_at).getTime()) / 60000)}m${t.op_patients?.label ? ` · ${t.op_patients.label}` : ""}`, id: t.id, action: "Escalate" }));
+  dueSoon.filter(t => t.priority === "high").slice(0, 1).forEach(t => aiSuggestions.push({ text: `Due soon: ${t.description}`, sub: t.op_patients?.label ?? "priority review", id: t.id, action: "Review" }));
+  const timeline = tasks.map(t => ({ at: t.completed_at ?? t.created_at, label: (t.description ?? "Task").slice(0, 44), status: t.status, done: DONE.has(t.status) })).filter(x => x.at).sort((a, b) => new Date(b.at).getTime() - new Date(a.at).getTime()).slice(0, 8);
+
   return {
     ready,
     kpis: {
       total: tasks.length, completed: done.length, completedPct: tasks.length ? Math.round((done.length / tasks.length) * 100) : null,
-      overdue: overdue.length, critical: critical.length, highPriority: highPrio.length,
+      overdue: overdue.length, overduePct: pctOf(overdue.length), critical: critical.length, highPriority: highPrio.length,
       awaitingAccept: awaitingAccept.length, escalated: overdue.length, avgCompletionMin,
+      dueSoon: dueSoon.length, dueSoonPct: pctOf(dueSoon.length), inProgress: inProgressN, inProgressPct: pctOf(inProgressN),
     },
+    kanban, aiSuggestions, timeline,
     byPriority, byUnit,
     assignment: { states: assignmentStates, unassigned: unassigned.slice(0, 6).map(t => ({ id: t.id, desc: t.description, bed: t.op_patients?.label ?? null, priority: t.priority, unit: t.unit_id ? (unitName.get(t.unit_id) ?? "Unit") : null })), teamWorkload, maxLoad, recommendations },
     execution: { statusOverview, statusTotal: tasks.length, sla: { compliance: slaCompliance, onTrack: slaOnTrack, atRisk: slaAtRisk, breached: slaBreached, total: withSla.length }, recentUpdates },
