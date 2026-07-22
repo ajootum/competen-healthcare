@@ -39,13 +39,14 @@ const NAV = [
     { label: "Control Plane",     href: "/super-admin/platform-ops/control-plane", icon: "🧭" },
     { label: "Platform Workspace",href: "/platform-admin",                      icon: "🛰️" },
   ]},
-  { group: "CLINICAL KNOWLEDGE", items: [
-    { label: "Studio",            href: "/super-admin/studio",             icon: "🧰" },
-    { label: "Frameworks",        href: "/super-admin/content",            icon: "📐" },
-    { label: "Competency Library",href: "/super-admin/competencies",       icon: "🪪" },
-    { label: "Assessment Methods",href: "/super-admin/assessment-methods", icon: "🩺" },
-    { label: "Scoring Rules",     href: "/super-admin/scoring",            icon: "📊" },
-    { label: "Reassessment",      href: "/super-admin/schedules",          icon: "🔄" },
+  { group: "CLINICAL KNOWLEDGE PLATFORM", items: [
+    { label: "CKP Overview",      href: "/super-admin/ckp",                icon: "📚" },
+    { label: "Knowledge Studio",  href: "/super-admin/studio",             icon: "🏭" },
+    { label: "Competency & Frameworks", href: "/super-admin/content",      icon: "📐" },
+    { label: "Knowledge Repository",    href: "/super-admin/studio/knowledge", icon: "🗄️" },
+    { label: "Assessment & Validation", href: "/super-admin/assessment-methods", icon: "🎯" },
+    { label: "Publishing & Governance", href: "/super-admin/governance/committees", icon: "🚦" },
+    { label: "Knowledge Intelligence",  href: "/super-admin/knowledge-graph", icon: "📡" },
   ]},
   { group: "AI & INTELLIGENCE", items: [
     { label: "AI Assistant",      href: "/super-admin/assistant",          icon: "🤖" },
