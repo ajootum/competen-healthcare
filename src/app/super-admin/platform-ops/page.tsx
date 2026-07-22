@@ -82,8 +82,8 @@ export default async function PlatformOperations() {
   ];
 
   const quickActions = [
-    { label: "Create Tenant", desc: "Provision a new tenant", icon: "🏢", href: "/platform/control-plane" },
-    { label: "Provision Modules", desc: "Enable modules for tenant", icon: "🧩", href: "/platform/control-plane" },
+    { label: "Create Tenant", desc: "Provision a new tenant", icon: "🏢", href: "/super-admin/platform-ops/tenants" },
+    { label: "Provision Modules", desc: "Enable modules for tenant", icon: "🧩", href: "/super-admin/platform-ops/tenants" },
     { label: "Deploy Workspace", desc: "Deploy or update workspace", icon: "🖥️", href: "/platform-admin" },
     { label: "Feature Management", desc: "Enable or disable features", icon: "🎚️", href: "/platform/control-plane" },
     { label: "View Platform Map", desc: "Architecture map", icon: "🗺️", href: "/super-admin/platform-ops" },
@@ -93,12 +93,12 @@ export default async function PlatformOperations() {
   ];
 
   const modules = [
-    { n: 1, label: "Platform Control Plane", desc: "Environment, infrastructure, deployment & map", icon: "🧭", live: false },
-    { n: 2, label: "Tenant Operations", desc: "Tenants, provisioning, health & bulk ops", icon: "🏢", live: false },
-    { n: 3, label: "Workspace Management", desc: "Layouts, menus, widgets, themes, permissions", icon: "🖥️", live: false },
-    { n: 4, label: "Platform Services", desc: "Core/AI/Assessment/Learning/Integration engines", icon: "⚙️", live: false },
-    { n: 5, label: "Licensing & Subscription", desc: "Plans, licences, quotas, billing, renewals", icon: "🧾", live: false },
-    { n: 6, label: "Monitoring & Operations", desc: "Health, alerts, logs, events, backups", icon: "📡", live: false },
+    { n: 1, label: "Platform Control Plane", desc: "Environment, infrastructure, deployment & map", icon: "🧭", href: "/super-admin/platform-ops", live: false },
+    { n: 2, label: "Tenant Operations", desc: "Tenants, provisioning, health & bulk ops", icon: "🏢", href: "/super-admin/platform-ops/tenants", live: true },
+    { n: 3, label: "Workspace Management", desc: "Layouts, menus, widgets, themes, permissions", icon: "🖥️", href: "/super-admin/platform-ops", live: false },
+    { n: 4, label: "Platform Services", desc: "Core/AI/Assessment/Learning/Integration engines", icon: "⚙️", href: "/super-admin/platform-ops", live: false },
+    { n: 5, label: "Licensing & Subscription", desc: "Plans, licences, quotas, billing, renewals", icon: "🧾", href: "/super-admin/platform-ops/licensing", live: true },
+    { n: 6, label: "Monitoring & Operations", desc: "Health, alerts, logs, events, backups", icon: "📡", href: "/super-admin/platform-ops", live: false },
   ];
 
   return (
@@ -138,7 +138,7 @@ export default async function PlatformOperations() {
           <p className="text-[10px] text-gray-400 mt-2 pt-2 border-t border-gray-50">Live per-service health (CPU, latency, errors) activates with the monitoring agent.</p>
         </Panel>
 
-        <Panel title="Tenant Summary" href="/super-admin/enterprise/organisations" linkLabel="View all tenants">
+        <Panel title="Tenant Summary" href="/super-admin/platform-ops/tenants" linkLabel="View all tenants">
           {tenantSummary.total === 0 ? <p className="text-sm text-gray-400 py-6 text-center">No tenants registered.</p> : (
             <Donut segments={(tenantSummary.byPlan.length ? tenantSummary.byPlan : tenantSummary.byStatus).slice(0, 6)} total={tenantSummary.total} label="Total" />
           )}
@@ -205,15 +205,18 @@ export default async function PlatformOperations() {
       {/* Module directory */}
       <Panel title="Platform Operations — 6 modules">
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
-          {modules.map(m => (
-            <div key={m.n} className="flex items-start gap-3 rounded-lg border border-gray-100 p-4">
-              <span className="w-9 h-9 rounded-lg bg-gray-50 border border-gray-200 flex items-center justify-center text-base shrink-0">{m.icon}</span>
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2"><span className="text-[10px] font-bold text-gray-400">{m.n}</span><span className="text-sm font-semibold text-gray-900">{m.label}</span><span className="text-[9px] px-1.5 py-0.5 rounded bg-amber-50 text-amber-600 font-medium">Next phase</span></div>
-                <p className="text-[11px] text-gray-500 mt-0.5">{m.desc}</p>
-              </div>
-            </div>
-          ))}
+          {modules.map(m => {
+            const Wrap: any = m.live ? Link : "div";
+            return (
+              <Wrap key={m.n} {...(m.live ? { href: m.href } : {})} className={`flex items-start gap-3 rounded-lg border border-gray-100 p-4 ${m.live ? "hover:border-teal-300 hover:bg-teal-50/30 transition-colors" : ""}`}>
+                <span className="w-9 h-9 rounded-lg bg-gray-50 border border-gray-200 flex items-center justify-center text-base shrink-0">{m.icon}</span>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2"><span className="text-[10px] font-bold text-gray-400">{m.n}</span><span className="text-sm font-semibold text-gray-900">{m.label}</span>{!m.live && <span className="text-[9px] px-1.5 py-0.5 rounded bg-amber-50 text-amber-600 font-medium">Next phase</span>}</div>
+                  <p className="text-[11px] text-gray-500 mt-0.5">{m.desc}</p>
+                </div>
+              </Wrap>
+            );
+          })}
         </div>
       </Panel>
 

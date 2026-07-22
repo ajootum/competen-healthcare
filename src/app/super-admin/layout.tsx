@@ -28,9 +28,11 @@ const NAV = [
     { label: "Bulk Import",       href: "/super-admin/import",                  icon: "📥" },
   ]},
   { group: "PLATFORM OPERATIONS", items: [
-    { label: "Overview",          href: "/super-admin/platform-ops",       icon: "🎛️" },
-    { label: "Control Plane",     href: "/platform/control-plane",         icon: "🧭" },
-    { label: "Platform Workspace",href: "/platform-admin",                 icon: "🛰️" },
+    { label: "Overview",          href: "/super-admin/platform-ops",            icon: "🎛️" },
+    { label: "Tenant Operations", href: "/super-admin/platform-ops/tenants",    icon: "🏢" },
+    { label: "Licensing",         href: "/super-admin/platform-ops/licensing",  icon: "🧾" },
+    { label: "Control Plane",     href: "/platform/control-plane",              icon: "🧭" },
+    { label: "Platform Workspace",href: "/platform-admin",                      icon: "🛰️" },
   ]},
   { group: "CLINICAL KNOWLEDGE", items: [
     { label: "Studio",            href: "/super-admin/studio",             icon: "🧰" },
