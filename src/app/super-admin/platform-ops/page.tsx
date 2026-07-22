@@ -2,7 +2,9 @@ import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { loadPlatformOps } from "@/lib/super-admin/platform-ops";
+import { loadPlatformOperations } from "@/lib/platform/operations";
 import PlatformOpsHeader from "./_po/PlatformOpsHeader";
+import MissionControlBoard from "./MissionControlBoard";
 
 export const dynamic = "force-dynamic";
 
@@ -65,7 +67,7 @@ export default async function PlatformOperations() {
   const roles: string[] = (profile?.roles?.length ? profile.roles : [profile?.role]).filter(Boolean);
   if (!roles.includes("super_admin")) redirect("/dashboard");
 
-  const po = await loadPlatformOps(admin);
+  const [po, ops] = await Promise.all([loadPlatformOps(admin), loadPlatformOperations(admin)]);
   const { kpis, services, servicesSummary, tenantSummary, workspaceSummary, licensing, activity, activityReady, version } = po;
 
   const healthTone = kpis.health === "Healthy" ? "text-green-600" : kpis.health === "Attention" ? "text-amber-600" : "text-red-600";
@@ -104,6 +106,9 @@ export default async function PlatformOperations() {
   return (
     <div data-wide className="space-y-4">
       <PlatformOpsHeader generatedAt={po.generatedAt} />
+
+      {/* POS-001 Mission Control — live widgets from /api/platform/operations */}
+      <MissionControlBoard initial={ops} />
 
       {/* KPI ribbon */}
       <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-7 gap-3">
