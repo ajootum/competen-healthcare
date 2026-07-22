@@ -19,6 +19,7 @@ type NavItem = { label: string; href?: string; icon: string; exact?: boolean; so
 const NAV_GROUPS: { group: string; items: NavItem[] }[] = [
   { group: "Shift Command", items: [
     { label: "Dashboard",          href: "/supervisor",                            icon: "🖥️", exact: true },
+    { label: "Operations Engine",  href: "/supervisor/shift-operations",           icon: "⚙️" },
     { label: "Current Shift",      href: "/supervisor/current-shift",              icon: "🩺" },
     { label: "Today's Priorities", href: "/supervisor/priorities",                icon: "⚠️" },
     { label: "Shift Timeline",     href: "/supervisor/timeline",                  icon: "🕑" },
