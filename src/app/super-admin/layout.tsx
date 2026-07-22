@@ -46,7 +46,7 @@ const NAV = [
     { label: "Knowledge Repository",    href: "/super-admin/ckp/repository", icon: "🗄️" },
     { label: "Assessment & Validation", href: "/super-admin/ckp/assessment", icon: "🎯" },
     { label: "Publishing & Governance", href: "/super-admin/ckp/publishing", icon: "🚦" },
-    { label: "Knowledge Intelligence",  href: "/super-admin/knowledge-graph", icon: "📡" },
+    { label: "Knowledge Intelligence",  href: "/super-admin/ckp/intelligence", icon: "📡" },
   ]},
   { group: "AI & INTELLIGENCE", items: [
     { label: "AI Assistant",      href: "/super-admin/assistant",          icon: "🤖" },
