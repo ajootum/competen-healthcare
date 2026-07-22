@@ -93,13 +93,15 @@ const NAV_GROUPS: { group: string; items: NavItem[] }[] = [
     { label: "AI Assistant",              href: "/supervisor/ai",                  icon: "💬" },
     { label: "Explainable AI",            href: "/supervisor/ai",                  icon: "🧠" },
   ]},
-  { group: "Tools & Settings", items: [
-    { label: "Workspace Settings", href: "/supervisor/settings",                   icon: "⚙️" },
-    { label: "Shift Templates",    icon: "📄", soon: true },
-    { label: "Professional Tools", icon: "🛠️", soon: true },
-    { label: "Reports & Export",   icon: "📤", soon: true },
-    { label: "Notifications",      icon: "🔔", soon: true },
-    { label: "Administration",     icon: "🏛️", soon: true },
+  { group: "Workspace Configuration Centre", items: [
+    { label: "Workspace Settings",          href: "/supervisor/config-centre",       icon: "⚙️" },
+    { label: "Shift Templates & Playbooks", href: "/supervisor/config-centre",       icon: "📋" },
+    { label: "Professional Toolkit",        href: "/supervisor/config-centre",       icon: "🧰" },
+    { label: "Reports & Data Export",       href: "/supervisor/config-centre",       icon: "📄" },
+    { label: "Notifications & Automation",  href: "/supervisor/config-centre",       icon: "🔔" },
+    { label: "Personal Productivity",       href: "/supervisor/config-centre",       icon: "🙋" },
+    { label: "Administration",              href: "/supervisor/config-centre",       icon: "🛡️" },
+    { label: "Integration & Systems",       href: "/supervisor/config-centre",       icon: "🔗" },
   ]},
 ];
 
