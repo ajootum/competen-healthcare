@@ -84,7 +84,7 @@ export default async function PlatformOperations() {
   const quickActions = [
     { label: "Create Tenant", desc: "Provision a new tenant", icon: "🏢", href: "/super-admin/platform-ops/tenants" },
     { label: "Provision Modules", desc: "Enable modules for tenant", icon: "🧩", href: "/super-admin/platform-ops/tenants" },
-    { label: "Deploy Workspace", desc: "Deploy or update workspace", icon: "🖥️", href: "/platform-admin" },
+    { label: "Deploy Workspace", desc: "Deploy or update workspace", icon: "🖥️", href: "/super-admin/platform-ops/workspaces" },
     { label: "Feature Management", desc: "Enable or disable features", icon: "🎚️", href: "/platform/control-plane" },
     { label: "View Platform Map", desc: "Architecture map", icon: "🗺️", href: "/super-admin/platform-ops" },
     { label: "Run Health Check", desc: "Test platform services", icon: "🩺", href: "/super-admin/platform-ops/monitoring" },
@@ -95,7 +95,7 @@ export default async function PlatformOperations() {
   const modules = [
     { n: 1, label: "Platform Control Plane", desc: "Environment, infrastructure, deployment & map", icon: "🧭", href: "/super-admin/platform-ops", live: false },
     { n: 2, label: "Tenant Operations", desc: "Tenants, provisioning, health & bulk ops", icon: "🏢", href: "/super-admin/platform-ops/tenants", live: true },
-    { n: 3, label: "Workspace Management", desc: "Layouts, menus, widgets, themes, permissions", icon: "🖥️", href: "/super-admin/platform-ops", live: false },
+    { n: 3, label: "Workspace Management", desc: "Layouts, menus, widgets, themes, permissions", icon: "🖥️", href: "/super-admin/platform-ops/workspaces", live: true },
     { n: 4, label: "Platform Services", desc: "Core/AI/Assessment/Learning/Integration engines", icon: "⚙️", href: "/super-admin/platform-ops", live: false },
     { n: 5, label: "Licensing & Subscription", desc: "Plans, licences, quotas, billing, renewals", icon: "🧾", href: "/super-admin/platform-ops/licensing", live: true },
     { n: 6, label: "Monitoring & Operations", desc: "Health, alerts, logs, events, backups", icon: "📡", href: "/super-admin/platform-ops/monitoring", live: true },
@@ -144,7 +144,7 @@ export default async function PlatformOperations() {
           )}
         </Panel>
 
-        <Panel title="Workspace Summary" href="/super-admin/users" linkLabel="View all workspaces">
+        <Panel title="Workspace Summary" href="/super-admin/platform-ops/workspaces" linkLabel="View all workspaces">
           {workspaceSummary.length === 0 ? <p className="text-sm text-gray-400 py-6 text-center">No workspace users yet.</p> : (
             <div className="space-y-2">
               {workspaceSummary.slice(0, 7).map(w => (
