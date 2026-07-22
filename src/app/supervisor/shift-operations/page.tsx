@@ -61,13 +61,13 @@ export default async function ShiftOperationsEngine() {
         </div>
       </div>
 
-      {/* Lifecycle state machine + real advance action */}
-      <ShiftLifecycle states={lc.states} current={lc.current} index={lc.index} nextAction={lc.nextAction} shiftId={d.shiftId} />
+      {/* Lifecycle state machine + readiness-gated advance action */}
+      <ShiftLifecycle states={lc.states} index={lc.index} subState={lc.subState} shiftStatus={lc.shiftStatus} gate={d.gate} command={d.command} shiftId={d.shiftId} />
 
-      {/* Operational snapshot */}
-      <div className="grid grid-cols-3 sm:grid-cols-6 gap-3">
-        {[["On duty", `${ct.present}/${ct.rostered}`], ["Occupied", `${ct.occupied}/${ct.totalBeds}`], ["Open tasks", ct.openTasks], ["Escalations", ct.escalations], ["Audit 24h", ct.auditEvents24h ?? "—"], ["State", lc.current]].map(([l, v]: any) => (
-        <div key={l} className={`${card} p-3 text-center`}><p className="text-lg font-bold text-gray-900 tabular-nums truncate">{v}</p><p className="text-[9px] text-gray-500 uppercase tracking-wide">{l}</p></div>
+      {/* At-a-glance operational band (SSW-002) */}
+      <div className="grid grid-cols-4 sm:grid-cols-8 gap-3">
+        {[["Active Shifts", ct.activeShifts], ["Command Owners", ct.commandOwners], ["Critical", ct.critical, ct.critical > 0 ? "text-rose-600" : ""], ["Overdue Tasks", ct.overdueTasks, ct.overdueTasks > 0 ? "text-rose-600" : ""], ["Occupancy", ct.occPct == null ? "—" : `${ct.occPct}%`], ["On Duty", `${ct.present}/${ct.rostered}`], ["Escalations", ct.escalations, ct.escalations > 0 ? "text-amber-600" : ""], ["State", lc.current]].map(([l, v, tone]: any) => (
+        <div key={l} className={`${card} p-3 text-center`}><p className={`text-lg font-bold tabular-nums truncate ${tone ?? "text-gray-900"}`}>{v}</p><p className="text-[9px] text-gray-500 uppercase tracking-wide truncate">{l}</p></div>
         ))}
       </div>
 

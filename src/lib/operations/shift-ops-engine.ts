@@ -12,17 +12,21 @@ import { loadShiftCommand } from "@/lib/operations/shift-command";
 const NONE = "00000000-0000-0000-0000-000000000000";
 const DAY = 86400000;
 
-// Lifecycle states (SSW-002 Ch.3) vs the real op_shifts status enum.
-export const LIFECYCLE = ["Planning", "Pre-Shift Review", "Active Shift", "Escalation Mode", "Handover", "Shift Closed"];
+// Canonical Shift Instance state model (SSW-002 §7). op_shifts.status carries only
+// four real values (planned|active|completed|cancelled), so the current state is
+// derived from that plus operational overlays; the fuller model is shown as the
+// reference line and we only LAND on states we can actually determine.
+export const LIFECYCLE = ["Scheduled", "Pre-Shift Review", "Ready for Activation", "Active", "Closure", "Closed"];
 
 export async function loadShiftOpsEngine(admin: any, hid: string | null, isSuper: boolean) {
   const scope = (q: any) => (isSuper ? q : q.eq("hospital_id", hid ?? NONE));
   const since24 = new Date(Date.now() - DAY).toISOString();
 
-  const [sc, auditRes, auditCount] = await Promise.all([
+  const [sc, auditRes, auditCount, activeShiftsRes] = await Promise.all([
     loadShiftCommand(admin, hid, isSuper),
     scope(admin.from("audit_log").select("action, actor_name, entity_type, entity_name, created_at")).order("created_at", { ascending: false }).limit(12),
     scope(admin.from("audit_log").select("*", { count: "exact", head: true })).gte("created_at", since24),
+    scope(admin.from("op_shifts").select("supervisor_id")).eq("status", "active"),
   ]);
 
   if (!sc.ready) return { ready: false as const };
@@ -33,21 +37,52 @@ export async function loadShiftOpsEngine(admin: any, hid: string | null, isSuper
   // overdue OBSERVATIONS — a different signal — so we derive tasks here instead.
   const overdueTasks = (sc.tasks as any[]).filter((t: any) => t.due_at && new Date(t.due_at).getTime() < now).length;
 
-  // ── Shift lifecycle state (derived) ─────────────────────────────────────────
-  const shiftStatus = sc.shift?.status ?? null;
-  let currentState = "Planning";
-  if (shiftStatus === "completed") currentState = "Shift Closed";
-  else if (shiftStatus === "active") {
-    if (sc.handover && sc.handover.status !== "accepted") currentState = "Handover";
-    else if (criticalPrio > 0 || o.escalations > 0) currentState = "Escalation Mode";
-    else currentState = "Active Shift";
-  } else if (shiftStatus === "planned") currentState = "Pre-Shift Review";
-  const stateIndex = LIFECYCLE.indexOf(currentState);
-  // Next legal op_shifts action for the advance control.
-  const nextAction = shiftStatus === "planned" ? { status: "active", label: "Activate shift" }
-    : shiftStatus === "active" ? { status: "completed", label: "Close shift" } : null;
-
   const num = (r: any) => (r?.error ? null : r?.count ?? 0);
+  const shiftStatus = sc.shift?.status ?? null;
+
+  // ── Transition gate (SSW-002 §10 / §26) — the engine computes the blocking
+  // reasons the UI must surface; activation/closure buttons derive from these.
+  // Only conditions we can determine from real data are enforced; readiness
+  // items with no backing (equipment checks, safety huddle) are NOT faked as met.
+  const blockers: { code: string; message: string; hard: boolean }[] = [];
+  let gateAction: { status: string; label: string } | null = null;
+  if (shiftStatus === "planned") {
+    gateAction = { status: "active", label: "Activate shift" };
+    if (!sc.shift?.supervisor) blockers.push({ code: "SUPERVISOR_NOT_ASSIGNED", message: "No supervisor holds command of this shift.", hard: true });
+    if ((o.rostered ?? 0) === 0) blockers.push({ code: "STAFFING_REVIEW_INCOMPLETE", message: "No staff rostered / attendance not confirmed.", hard: true });
+    if ((o.totalBeds ?? 0) === 0) blockers.push({ code: "CENSUS_UNAVAILABLE", message: "No patient census or bed context for the unit.", hard: true });
+    if (sc.handover && sc.handover.status !== "accepted") blockers.push({ code: "HANDOVER_NOT_ACCEPTED", message: "Incoming handover not yet accepted (override needs authorisation).", hard: false });
+  } else if (shiftStatus === "active") {
+    gateAction = { status: "completed", label: "Begin closure" };
+    if (criticalPrio > 0) blockers.push({ code: "CRITICAL_ITEMS_UNRESOLVED", message: `${criticalPrio} critical safety item(s) unresolved — resolve or formally transfer.`, hard: true });
+    if (overdueTasks > 0) blockers.push({ code: "OVERDUE_TASKS_OPEN", message: `${overdueTasks} overdue task(s) outstanding.`, hard: false });
+    if (sc.handover && sc.handover.status !== "accepted") blockers.push({ code: "HANDOVER_INCOMPLETE", message: "Outgoing handover not accepted by incoming supervisor.", hard: false });
+  }
+  const gateAllowed = !blockers.some(b => b.hard);
+  const gate = { action: gateAction, allowed: gateAllowed, blockers };
+
+  // ── Current state + ACTIVE sub-state (SSW-002 §7) ───────────────────────────
+  let currentState = "Scheduled";
+  let activeSubState: string | null = null;
+  if (shiftStatus === "completed") currentState = "Closed";
+  else if (shiftStatus === "active") {
+    currentState = "Active";
+    if (criticalPrio > 0) activeSubState = "Emergency Operations";
+    else if (o.escalations > 0) activeSubState = "Degraded Operations";
+  } else if (shiftStatus === "planned") {
+    currentState = gateAllowed ? "Ready for Activation" : "Pre-Shift Review";
+  }
+  const stateIndex = LIFECYCLE.indexOf(currentState);
+
+  // ── Command ownership (SSW-002 §5.2 / §8) — one accountable owner per shift ──
+  const activeRows = activeShiftsRes.error ? [] : (activeShiftsRes.data ?? []);
+  const command = {
+    owner: sc.shift?.supervisor ?? null,
+    hasOwner: !!sc.shift?.supervisor,
+    activeShifts: activeRows.length,
+    commandOwners: new Set(activeRows.map((r: any) => r.supervisor_id).filter(Boolean)).size,
+    uncommanded: activeRows.filter((r: any) => !r.supervisor_id).length,
+  };
 
   // ── 10 engines mapped to live backing ───────────────────────────────────────
   const engines = [
@@ -109,12 +144,17 @@ export async function loadShiftOpsEngine(admin: any, hid: string | null, isSuper
   return {
     ready: true as const,
     shift: sc.shift, shiftId: sc.shiftId,
-    lifecycle: { states: LIFECYCLE, current: currentState, index: stateIndex, nextAction, shiftStatus },
+    lifecycle: { states: LIFECYCLE, current: currentState, index: stateIndex, subState: activeSubState, shiftStatus },
+    gate, command,
     engines, liveCount,
     eventFlow,
     roadmap, principles,
     copilot: sc.copilot,
-    counts: { present: o.present, rostered: o.rostered, occupied: o.occupied, totalBeds: o.totalBeds, openTasks: sc.tasks.length, escalations: o.escalations, auditEvents24h: num(auditCount) },
+    counts: {
+      present: o.present, rostered: o.rostered, occupied: o.occupied, totalBeds: o.totalBeds, occPct: o.occPct,
+      openTasks: sc.tasks.length, overdueTasks, escalations: o.escalations, critical: criticalPrio,
+      activeShifts: command.activeShifts, commandOwners: command.commandOwners, auditEvents24h: num(auditCount),
+    },
     generatedAt: new Date().toISOString(),
   };
 }
