@@ -86,14 +86,14 @@ export default async function PlatformOperations() {
     { label: "Provision Modules", desc: "Enable modules for tenant", icon: "🧩", href: "/super-admin/platform-ops/tenants" },
     { label: "Deploy Workspace", desc: "Deploy or update workspace", icon: "🖥️", href: "/super-admin/platform-ops/workspaces" },
     { label: "Feature Management", desc: "Enable or disable features", icon: "🎚️", href: "/platform/control-plane" },
-    { label: "View Platform Map", desc: "Architecture map", icon: "🗺️", href: "/super-admin/platform-ops" },
+    { label: "View Platform Map", desc: "Architecture map", icon: "🗺️", href: "/super-admin/platform-ops/control-plane" },
     { label: "Run Health Check", desc: "Test platform services", icon: "🩺", href: "/super-admin/platform-ops/monitoring" },
     { label: "View Logs", desc: "Access system logs", icon: "📜", href: "/super-admin/platform-ops/monitoring" },
     { label: "Backup Now", desc: "Trigger platform backup", icon: "💾", href: "/super-admin/platform-ops" },
   ];
 
   const modules = [
-    { n: 1, label: "Platform Control Plane", desc: "Environment, infrastructure, deployment & map", icon: "🧭", href: "/super-admin/platform-ops", live: false },
+    { n: 1, label: "Platform Control Plane", desc: "Environment, infrastructure, deployment & map", icon: "🧭", href: "/super-admin/platform-ops/control-plane", live: true },
     { n: 2, label: "Tenant Operations", desc: "Tenants, provisioning, health & bulk ops", icon: "🏢", href: "/super-admin/platform-ops/tenants", live: true },
     { n: 3, label: "Workspace Management", desc: "Layouts, menus, widgets, themes, permissions", icon: "🖥️", href: "/super-admin/platform-ops/workspaces", live: true },
     { n: 4, label: "Platform Services", desc: "Core/AI/Assessment/Learning/Integration engines", icon: "⚙️", href: "/super-admin/platform-ops", live: false },

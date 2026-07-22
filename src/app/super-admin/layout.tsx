@@ -33,7 +33,7 @@ const NAV = [
     { label: "Workspaces",        href: "/super-admin/platform-ops/workspaces", icon: "🖥️" },
     { label: "Licensing",         href: "/super-admin/platform-ops/licensing",  icon: "🧾" },
     { label: "Monitoring",        href: "/super-admin/platform-ops/monitoring", icon: "📡" },
-    { label: "Control Plane",     href: "/platform/control-plane",              icon: "🧭" },
+    { label: "Control Plane",     href: "/super-admin/platform-ops/control-plane", icon: "🧭" },
     { label: "Platform Workspace",href: "/platform-admin",                      icon: "🛰️" },
   ]},
   { group: "CLINICAL KNOWLEDGE", items: [
