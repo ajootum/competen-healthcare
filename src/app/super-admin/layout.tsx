@@ -44,7 +44,7 @@ const NAV = [
     { label: "Knowledge Studio",  href: "/super-admin/ckp/studio",         icon: "🏭" },
     { label: "Competency & Frameworks", href: "/super-admin/ckp/competency", icon: "📐" },
     { label: "Knowledge Repository",    href: "/super-admin/ckp/repository", icon: "🗄️" },
-    { label: "Assessment & Validation", href: "/super-admin/assessment-methods", icon: "🎯" },
+    { label: "Assessment & Validation", href: "/super-admin/ckp/assessment", icon: "🎯" },
     { label: "Publishing & Governance", href: "/super-admin/governance/committees", icon: "🚦" },
     { label: "Knowledge Intelligence",  href: "/super-admin/knowledge-graph", icon: "📡" },
   ]},
