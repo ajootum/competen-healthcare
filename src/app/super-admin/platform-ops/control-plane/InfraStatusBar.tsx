@@ -14,6 +14,7 @@ const VAL: Record<string, string> = { ok: "text-gray-900", warn: "text-amber-600
 export default function InfraStatusBar({ initial }: { initial: any }) {
   const [data, setData] = useState<any>(initial);
   const [busy, setBusy] = useState(false);
+  const [live, setLive] = useState(false);
   const [stamp, setStamp] = useState<string>(initial?.generatedAt ?? "");
 
   const refresh = useCallback(async () => {
@@ -25,10 +26,14 @@ export default function InfraStatusBar({ initial }: { initial: any }) {
     setBusy(false);
   }, []);
 
+  // POS-001J — live via SSE; the server pushes updates, EventSource auto-reconnects on drop.
   useEffect(() => {
-    const id = setInterval(refresh, 30000); // live refresh every 30s
-    return () => clearInterval(id);
-  }, [refresh]);
+    const es = new EventSource("/api/runtime/stream");
+    es.onopen = () => setLive(true);
+    es.onmessage = (e) => { try { const j = JSON.parse(e.data); setData(j); setStamp(j.generatedAt); } catch { /* ignore malformed frame */ } };
+    es.onerror = () => setLive(false);
+    return () => es.close();
+  }, []);
 
   const widgets = data?.widgets ?? [];
   const time = stamp ? new Date(stamp).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" }) : "";
@@ -38,8 +43,9 @@ export default function InfraStatusBar({ initial }: { initial: any }) {
       <div className="flex items-center justify-between mb-3">
         <h2 className="font-semibold text-gray-900 text-[15px]">Infrastructure Status Bar <span className="ml-2 text-[10px] font-medium text-gray-400">{data?.summary?.live}/{data?.summary?.total} live · POS-002</span></h2>
         <div className="flex items-center gap-2 text-xs text-gray-400">
-          <span className="inline-flex items-center gap-1"><span className={`w-1.5 h-1.5 rounded-full ${busy ? "bg-teal-400 animate-pulse" : "bg-gray-300"}`} />{time && `updated ${time}`}</span>
-          <button onClick={refresh} className="rounded-lg border border-gray-200 px-2 py-0.5 font-medium text-gray-600 hover:bg-gray-50">↻</button>
+          <span className="inline-flex items-center gap-1"><span className={`w-1.5 h-1.5 rounded-full ${live ? "bg-green-500 animate-pulse" : "bg-amber-400"}`} />{live ? "live" : "reconnecting"}</span>
+          {time && <span className="tabular-nums">· {time}</span>}
+          <button onClick={refresh} disabled={busy} className="rounded-lg border border-gray-200 px-2 py-0.5 font-medium text-gray-600 hover:bg-gray-50 disabled:opacity-40">↻</button>
         </div>
       </div>
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2">
@@ -54,7 +60,7 @@ export default function InfraStatusBar({ initial }: { initial: any }) {
           </div>
         ))}
       </div>
-      <p className="text-[10px] text-gray-400 mt-3">Fed live from the runtime services via <code className="font-mono">/api/runtime/*</code>; refreshes every 30s. Tiles marked grey are infrastructure this deployment does not self-manage.</p>
+      <p className="text-[10px] text-gray-400 mt-3">Streamed live over SSE from <code className="font-mono">/api/runtime/stream</code> — the server pushes updates, no client polling. Tiles marked grey are infrastructure this deployment does not self-manage.</p>
     </div>
   );
 }

@@ -14,6 +14,7 @@ const ICON: Record<string, string> = { health: "💚", alerts: "🚨", tenants: 
 export default function MissionControlBoard({ initial }: { initial: any }) {
   const [data, setData] = useState<any>(initial);
   const [busy, setBusy] = useState(false);
+  const [live, setLive] = useState(false);
 
   const refresh = useCallback(async () => {
     setBusy(true);
@@ -24,7 +25,14 @@ export default function MissionControlBoard({ initial }: { initial: any }) {
     setBusy(false);
   }, []);
 
-  useEffect(() => { const id = setInterval(refresh, 30000); return () => clearInterval(id); }, [refresh]);
+  // POS-001J — live via SSE; the server pushes updates, EventSource auto-reconnects on drop.
+  useEffect(() => {
+    const es = new EventSource("/api/platform/operations/stream");
+    es.onopen = () => setLive(true);
+    es.onmessage = (e) => { try { setData(JSON.parse(e.data)); } catch { /* ignore malformed frame */ } };
+    es.onerror = () => setLive(false);
+    return () => es.close();
+  }, []);
 
   const widgets = data?.widgets ?? [];
   const time = data?.generatedAt ? new Date(data.generatedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" }) : "";
@@ -34,8 +42,9 @@ export default function MissionControlBoard({ initial }: { initial: any }) {
       <div className="flex items-center justify-between mb-3">
         <h2 className="font-semibold text-gray-900 text-[15px]">Mission Control <span className="ml-2 text-[10px] font-medium text-gray-400">{data?.summary?.live}/{data?.summary?.total} live · POS-001</span></h2>
         <div className="flex items-center gap-2 text-xs text-gray-400">
-          <span className="inline-flex items-center gap-1"><span className={`w-1.5 h-1.5 rounded-full ${busy ? "bg-teal-400 animate-pulse" : "bg-gray-300"}`} />{time && `updated ${time}`}</span>
-          <button onClick={refresh} className="rounded-lg border border-gray-200 px-2 py-0.5 font-medium text-gray-600 hover:bg-gray-50">↻</button>
+          <span className="inline-flex items-center gap-1"><span className={`w-1.5 h-1.5 rounded-full ${live ? "bg-green-500 animate-pulse" : "bg-amber-400"}`} />{live ? "live" : "reconnecting"}</span>
+          {time && <span className="tabular-nums">· {time}</span>}
+          <button onClick={refresh} disabled={busy} className="rounded-lg border border-gray-200 px-2 py-0.5 font-medium text-gray-600 hover:bg-gray-50 disabled:opacity-40">↻</button>
         </div>
       </div>
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
@@ -50,7 +59,7 @@ export default function MissionControlBoard({ initial }: { initial: any }) {
           </div>
         ))}
       </div>
-      <p className="text-[10px] text-gray-400 mt-3">Fed live from the operations services via <code className="font-mono">/api/platform/operations</code>; refreshes every 30s. Grey tiles are outputs this deployment does not yet meter.</p>
+      <p className="text-[10px] text-gray-400 mt-3">Streamed live over SSE from <code className="font-mono">/api/platform/operations/stream</code> — the server pushes updates, no client polling. Grey tiles are outputs this deployment does not yet meter.</p>
     </div>
   );
 }
