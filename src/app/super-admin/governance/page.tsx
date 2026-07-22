@@ -2,6 +2,7 @@ import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { loadGovernance } from "@/lib/super-admin/governance";
+import GovernanceQueue from "./GovernanceQueue";
 
 export const dynamic = "force-dynamic";
 
@@ -36,10 +37,10 @@ export default async function GovernanceDashboard() {
   const ribbon = [
     { label: "Governance Score", value: k.governanceScore == null ? "—" : `${k.governanceScore}/100`, icon: "🛡️", tone: scoreTone(k.governanceScore) },
     { label: "Compliance Rate", value: k.complianceRate == null ? "—" : `${k.complianceRate}%`, icon: "✅", tone: scoreTone(k.complianceRate == null ? null : Math.round(k.complianceRate)) },
-    { label: "Open Risk Indicators", value: dash(k.openRisks), icon: "⚠️", tone: (k.openRisks ?? 0) > 0 ? "text-amber-600" : "text-gray-900" },
+    { label: "Open Risks", value: dash(k.openRisks), icon: "⚠️", tone: (k.openRisks ?? 0) > 0 ? "text-amber-600" : "text-gray-900" },
     { label: "Audit Completion", value: pct(k.auditCompletion), icon: "📋", tone: "text-gray-900" },
     { label: "Policies Due / Overdue", value: dash(k.policiesDue), icon: "📄", tone: (k.policiesDue ?? 0) > 0 ? "text-amber-600" : "text-gray-900" },
-    { label: "Regulatory Alerts", value: dash(k.regulatoryAlerts), icon: "🔔", tone: "text-gray-400" },
+    { label: "Regulatory Alerts", value: dash(k.regulatoryAlerts), icon: "🔔", tone: (k.regulatoryAlerts ?? 0) > 0 ? "text-rose-600" : k.regulatoryAlerts == null ? "text-gray-400" : "text-gray-900" },
   ];
 
   const actions = [
@@ -107,14 +108,19 @@ export default async function GovernanceDashboard() {
           <p className="text-[10px] text-gray-400 mt-2">Facility average of audit compliance_pct.</p>
         </div>
 
-        {/* Risk indicators */}
+        {/* Executive alerts (spec §D) — every line derives from a live register */}
         <div className={`${card} p-5`}>
-          <h2 className="font-semibold text-gray-900 text-[15px] mb-3">Risk Indicators <span className="text-[10px] text-gray-400">derived · no risk register yet</span></h2>
-          <div className="grid grid-cols-2 gap-2 mb-3">
-            {[["High-priority CAPA", g.riskIndicators.openHighCapa, "text-rose-600"], ["Overdue CAPA", g.riskIndicators.overdueCapa, "text-amber-600"], ["Safety alerts", g.riskIndicators.safetyAlerts, "text-rose-600"], ["Open escalations", g.riskIndicators.escalations, "text-orange-600"]].map(([l, n, tone]: any) => (
-              <div key={l} className="rounded-lg border border-gray-100 p-2.5 text-center"><p className={`text-xl font-bold tabular-nums ${(n ?? 0) > 0 ? tone : "text-gray-900"}`}>{dash(n)}</p><p className="text-[9px] text-gray-500 leading-tight">{l}</p></div>
-            ))}
-          </div>
+          <h2 className="font-semibold text-gray-900 text-[15px] mb-3">Executive Alerts <span className="text-[10px] text-gray-400">live from the GRC registers</span></h2>
+          {g.executiveAlerts.length === 0 ? <p className="text-sm text-gray-400 py-4 text-center">✅ No urgent governance issues.</p> : (
+            <div className="space-y-1.5 mb-3">
+              {g.executiveAlerts.map((a: any) => (
+                <Link key={a.label} href={a.href} className="flex items-center justify-between rounded-lg border border-gray-100 px-2.5 py-1.5 hover:border-teal-300 hover:bg-teal-50/40 transition-colors">
+                  <span className="text-xs text-gray-700">{a.label}</span>
+                  <span className="text-sm font-bold text-rose-600 tabular-nums shrink-0 ml-2">{a.n}</span>
+                </Link>
+              ))}
+            </div>
+          )}
           {g.highRiskOrgs.length > 0 && (
             <div className="space-y-1 pt-2 border-t border-gray-50">
               <p className="text-[10px] font-semibold text-gray-400 uppercase">High-risk organisations</p>
@@ -123,7 +129,7 @@ export default async function GovernanceDashboard() {
               ))}
             </div>
           )}
-          <p className="text-[10px] text-gray-400 mt-2">A full 5×5 risk register with controls lands in module 4.</p>
+          <p className="text-[10px] text-gray-400 mt-2">{g.registers.risksReady ? `${dash(g.riskIndicators.registeredOpen)} open registered risk${g.riskIndicators.registeredOpen === 1 ? "" : "s"} (${dash(g.riskIndicators.registeredHighCritical)} high/critical) · plus ${dash(g.riskIndicators.safetyAlerts)} safety alert${g.riskIndicators.safetyAlerts === 1 ? "" : "s"} and ${dash(g.riskIndicators.escalations)} escalation${g.riskIndicators.escalations === 1 ? "" : "s"} from operations.` : "Risk register not enabled — run migration 060."}</p>
         </div>
       </div>
 
@@ -134,16 +140,8 @@ export default async function GovernanceDashboard() {
             <h2 className="font-semibold text-gray-900 text-[15px]">Approval Queue <span className="text-[10px] text-gray-400">{dash(g.pendingApprovals)} pending</span></h2>
             <Link href="/super-admin/platform-ops/approvals" className="text-xs text-teal-700 hover:underline">Decide →</Link>
           </div>
-          {g.queue.length === 0 ? <p className="text-sm text-gray-400 py-6 text-center">Queue is clear.</p> : (
-            <div className="divide-y divide-gray-50">
-              {g.queue.map((q: any, i: number) => (
-                <div key={i} className="py-2">
-                  <p className="text-sm text-gray-800 leading-tight truncate">{q.title}</p>
-                  <p className="text-[10px] text-gray-400 capitalize">{q.sub}{q.by ? ` · ${q.by}` : ""} · {relTime(q.at)}</p>
-                </div>
-              ))}
-            </div>
-          )}
+          {/* Decide in place — approve/reject without leaving the dashboard */}
+          <GovernanceQueue queue={g.queue} />
         </div>
 
         {/* Recent audit findings */}
@@ -250,7 +248,7 @@ export default async function GovernanceDashboard() {
         </div>
       </div>
 
-      <p className="text-[11px] text-gray-400 pb-4">The Governance Dashboard is module 1 of the Governance &amp; Compliance platform. Every figure is live: the scorecard from audits/CAPA/policies/findings, organisation compliance from per-facility audit averages, risk indicators derived from high-priority CAPA, safety alerts and escalations (a dedicated 5×5 risk register lands in module 4), the approval queue from the platform engine, and accreditation frameworks from EQOS. Regulatory alerts show “—” until a regulatory feed is connected. Modules 2–6 (Policy &amp; Standards, Compliance, Risk &amp; Controls, Audit &amp; Assurance, Regulatory &amp; Accreditation) build out phase by phase.</p>
+      <p className="text-[11px] text-gray-400 pb-4">The Governance Dashboard is the command centre over the full GRC platform. Every figure is live: the scorecard now spans seven measured dimensions (audits, CAPA, policies, findings, control effectiveness from the controls library, accreditation readiness from standard self-assessments), Open Risks reads the 5×5 register, Regulatory Alerts derives from regulatory/licence obligations that are non-compliant, at risk or expiring within 30 days (the register — not an external feed), executive alerts aggregate every register’s urgent items, and the approval queue is decidable in place with per-step audit. Modules 2–6 hold the full workspaces behind each number.</p>
     </div>
   );
 }

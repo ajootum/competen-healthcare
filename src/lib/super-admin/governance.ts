@@ -21,7 +21,7 @@ export async function loadGovernance(admin: any) {
   const today = new Date();
   const soon = new Date(Date.now() + 30 * DAY).toISOString().slice(0, 10);
 
-  const [auditRows, findingRows, recentFindings, capaRows, policyRows, hospitals, committees, members, crOpen, crOpenCount, apprPending, apprRecent, fwRows, stdRows, safety, esc, activity] = await Promise.all([
+  const [auditRows, findingRows, recentFindings, capaRows, policyRows, hospitals, committees, members, crOpen, crOpenCount, apprPending, apprRecent, fwRows, stdRows, safety, esc, activity, riskRows, controlRows, oblRows, assessRows] = await Promise.all([
     admin.from("audits").select("hospital_id, status, compliance_pct, audit_type, title, conducted_at").order("conducted_at", { ascending: false }).limit(5000),
     admin.from("audit_findings").select("result, is_critical").limit(20000),
     admin.from("audit_findings").select("item_text, result, is_critical, created_at").eq("result", "not_met").order("created_at", { ascending: false }).limit(6),
@@ -30,15 +30,20 @@ export async function loadGovernance(admin: any) {
     admin.from("hospitals").select("id, name").limit(2000),
     head("governance_committees"),
     head("committee_members"),
-    admin.from("change_requests").select("entity_type, entity_name, requested_by_name, created_at").eq("status", "open").order("created_at", { ascending: false }).limit(50),
+    admin.from("change_requests").select("id, entity_type, entity_name, requested_by_name, created_at").eq("status", "open").order("created_at", { ascending: false }).limit(50),
     admin.from("change_requests").select("*", { count: "exact", head: true }).eq("status", "open"),
     admin.from("plat_approval_requests").select("*", { count: "exact", head: true }).eq("status", "pending"),
-    admin.from("plat_approval_requests").select("workflow_key, entity_name, requested_by_name, created_at").eq("status", "pending").order("created_at", { ascending: false }).limit(50),
+    admin.from("plat_approval_requests").select("id, workflow_key, entity_name, requested_by_name, current_step, total_steps, created_at").eq("status", "pending").order("created_at", { ascending: false }).limit(50),
     admin.from("quality_frameworks").select("id, code, name, framework_type, is_active").limit(200),
     admin.from("quality_standards").select("framework_id").limit(20000),
     admin.from("op_safety_alerts").select("*", { count: "exact", head: true }).eq("active", true),
     admin.from("op_escalations").select("*", { count: "exact", head: true }).in("status", ["open", "acknowledged"]),
     admin.from("audit_log").select("actor_name, action, entity_type, entity_name, created_at").in("entity_type", ["policy", "framework", "approval", "change_request", "capa", "audit", "quality_object", "improvement"]).order("created_at", { ascending: false }).limit(8),
+    // GRC registers (migrations 059–061) — wired in the deepening pass.
+    admin.from("gov_risks").select("likelihood, impact, residual_likelihood, residual_impact, status, review_date").limit(2000),
+    admin.from("gov_controls").select("effectiveness").limit(2000),
+    admin.from("gov_obligations").select("domain, status, expiry_date").limit(2000),
+    admin.from("gov_standard_assessments").select("framework_id, reference_code, status, assessed_at").order("assessed_at", { ascending: false }).limit(5000),
   ]);
 
   const audits = (auditRows.error ? [] : auditRows.data ?? []) as any[];
@@ -64,12 +69,43 @@ export async function loadGovernance(admin: any) {
   const applicableFindings = findings.filter(f => f.result !== "na");
   const findingsMet = applicableFindings.length ? Math.round((applicableFindings.filter(f => f.result === "met").length / applicableFindings.length) * 100) : null;
 
+  // ── GRC registers (migrations 059–061; deepening pass) ─────────────────────
+  const todayStr = today.toISOString().slice(0, 10);
+  const regRisks = (riskRows.error ? [] : riskRows.data ?? []) as any[];
+  const risksReady = !riskRows.error;
+  const openRegRisks = regRisks.filter(r => r.status !== "closed");
+  const scoreOfRisk = (r: any) => (r.residual_likelihood ?? r.likelihood ?? 3) * (r.residual_impact ?? r.impact ?? 3);
+  const regHighCritical = openRegRisks.filter(r => scoreOfRisk(r) >= 10).length;
+  const overdueRiskReviews = openRegRisks.filter(r => r.review_date && r.review_date < todayStr).length;
+
+  const controls = (controlRows.error ? [] : controlRows.data ?? []) as any[];
+  const controlsTested = controls.filter(ct => ct.effectiveness !== "not_tested");
+  const controlsIneffective = controls.filter(ct => ct.effectiveness === "ineffective").length;
+  const controlEffectiveness = controlsTested.length ? Math.round((controlsTested.filter(ct => ct.effectiveness === "effective").length / controlsTested.length) * 100) : null;
+
+  const obls = (oblRows.error ? [] : oblRows.data ?? []) as any[];
+  const oblNonCompliant = obls.filter(o => o.status === "non_compliant").length;
+  // "Regulatory alerts" is now a REAL number derived from the obligations
+  // register (not an external feed): regulatory/licence obligations that are
+  // non-compliant, at risk, or expiring within 30 days.
+  const regulatoryAlerts = oblRows.error ? null : obls.filter(o => ["regulatory", "licence"].includes(o.domain) && (["non_compliant", "at_risk"].includes(o.status) || (o.expiry_date && o.expiry_date <= soon))).length;
+
+  const assess = (assessRows.error ? [] : assessRows.data ?? []) as any[];
+  const latestStd = new Map<string, any>();
+  for (const a of assess) { const key = `${a.framework_id}::${String(a.reference_code).toUpperCase()}`; if (!latestStd.has(key)) latestStd.set(key, a); }
+  const latestStdList = [...latestStd.values()].filter(a => a.status !== "not_assessed");
+  const STD_W: Record<string, number> = { met: 1, partially_met: 0.5, not_met: 0 };
+  const accreditationReadiness = latestStdList.length ? Math.round((latestStdList.reduce((s, a) => s + (STD_W[a.status] ?? 0), 0) / latestStdList.length) * 100) : null;
+  const accreditationGaps = latestStdList.filter(a => a.status === "not_met").length;
+
   const dims = [
     { label: "Compliance Rate", value: complianceRate == null ? null : Math.round(complianceRate) },
     { label: "Audit Completion", value: auditCompletion },
     { label: "Policy Currency", value: policyCurrency },
     { label: "CAPA Closure", value: capaClosure },
     { label: "Findings Met", value: findingsMet },
+    { label: "Control Effectiveness", value: controlEffectiveness },
+    { label: "Accreditation Readiness", value: accreditationReadiness },
   ];
   const measured = dims.map(d => d.value).filter((v): v is number => v != null);
   const governanceScore = mean(measured);
@@ -105,11 +141,25 @@ export async function loadGovernance(admin: any) {
     .map(id => ({ id, name: hospName.get(id) ?? "—", highCapa: capaByHosp.get(id) ?? 0, avg: avgByHosp.get(id) ?? null }))
     .sort((a, b) => (b.highCapa - a.highCapa) || ((a.avg ?? 101) - (b.avg ?? 101))).slice(0, 5);
 
-  // ── Approval queue (engine + content change requests) ───────────────────────
+  // ── Approval queue (engine + content change requests) — carries id/source so
+  // the dashboard can decide in place via PATCH /api/platform/approvals.
   const queue = [
-    ...(apprRecent.error ? [] : apprRecent.data ?? []).map((r: any) => ({ kind: "approval", title: r.entity_name ?? r.workflow_key, sub: (r.workflow_key ?? "").replace(/_/g, " "), by: r.requested_by_name, at: r.created_at })),
-    ...(crOpen.error ? [] : crOpen.data ?? []).map((r: any) => ({ kind: "change", title: r.entity_name ?? "Change request", sub: (r.entity_type ?? "").replace(/_/g, " "), by: r.requested_by_name, at: r.created_at })),
+    ...(apprRecent.error ? [] : apprRecent.data ?? []).map((r: any) => ({ id: r.id, source: "approval", title: r.entity_name ?? r.workflow_key, sub: (r.workflow_key ?? "").replace(/_/g, " "), step: r.total_steps > 1 ? `step ${r.current_step + 1}/${r.total_steps}` : null, by: r.requested_by_name, at: r.created_at })),
+    ...(crOpen.error ? [] : crOpen.data ?? []).map((r: any) => ({ id: r.id, source: "change_request", title: r.entity_name ?? "Change request", sub: (r.entity_type ?? "").replace(/_/g, " "), step: null, by: r.requested_by_name, at: r.created_at })),
   ].sort((a, b) => new Date(b.at).getTime() - new Date(a.at).getTime()).slice(0, 5);
+
+  // ── Executive alerts (spec §D) — each derived from a live register/signal ───
+  const executiveAlerts = [
+    { label: "High/critical open risks", n: risksReady ? regHighCritical : null, href: "/super-admin/governance/risk" },
+    { label: "Risk reviews overdue", n: risksReady ? overdueRiskReviews : null, href: "/super-admin/governance/risk" },
+    { label: "Ineffective controls", n: controlRows.error ? null : controlsIneffective, href: "/super-admin/governance/risk" },
+    { label: "Non-compliant obligations", n: oblRows.error ? null : oblNonCompliant, href: "/super-admin/governance/compliance" },
+    { label: "Regulatory deadlines (30d)", n: regulatoryAlerts, href: "/super-admin/governance/compliance" },
+    { label: "Accreditation gaps (not met)", n: assessRows.error ? null : accreditationGaps, href: "/super-admin/governance/accreditation" },
+    { label: "Overdue corrective actions", n: capaRows.error ? null : overdueCapa, href: "/super-admin/governance/audit" },
+    { label: "Active safety alerts", n: num(safety), href: "/super-admin/platform-ops/monitoring" },
+    { label: "Policies past review", n: policyRows.error ? null : datedPolicies.filter(p => p.review_date < todayStr).length, href: "/super-admin/governance/policies" },
+  ].filter(a => (a.n ?? 0) > 0);
 
   // ── Accreditation frameworks (EQOS: JCI / SafeCare / MOH / internal) ────────
   const stdByFw = bucket(stdRows.error ? [] : stdRows.data ?? [], "framework_id");
@@ -117,19 +167,25 @@ export async function loadGovernance(admin: any) {
 
   const capaProgress = bucket(capas, "status");
 
-  // The risk KPI is measurable when ANY of its component sources resolved —
-  // not only when audits/CAPAs exist (safety alerts alone must still surface).
+  // The risk KPI prefers the REAL register (060); pre-migration it falls back
+  // to the derived indicator sum when any component source resolved.
   const riskMeasurable = !capaRows.error || num(safety) != null || num(esc) != null;
 
   return {
     kpis: {
       governanceScore, complianceRate,
-      openRisks: riskMeasurable ? openRisks : null,
+      openRisks: risksReady ? openRegRisks.length : riskMeasurable ? openRisks : null,
       auditCompletion, policiesDue,
-      regulatoryAlerts: null as number | null, // no regulatory feed connected — honest
+      regulatoryAlerts, // real: derived from the obligations register (059)
     },
     dims,
-    riskIndicators: { openHighCapa, overdueCapa, safetyAlerts: num(safety), escalations: num(esc) },
+    riskIndicators: {
+      openHighCapa, overdueCapa, safetyAlerts: num(safety), escalations: num(esc),
+      registeredOpen: risksReady ? openRegRisks.length : null,
+      registeredHighCritical: risksReady ? regHighCritical : null,
+    },
+    executiveAlerts,
+    registers: { risksReady, controlsReady: !controlRows.error, obligationsReady: !oblRows.error, assessmentsReady: !assessRows.error },
     orgCompliance,
     perOrg: perOrg.sort((a, b) => a.avg - b.avg).slice(0, 6),
     highRiskOrgs,
