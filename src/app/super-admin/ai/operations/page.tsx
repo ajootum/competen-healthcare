@@ -2,6 +2,7 @@ import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { loadAiOperations } from "@/lib/super-admin/ai-operations";
+import JobRunner from "../_components/JobRunner";
 
 export const dynamic = "force-dynamic";
 
@@ -187,6 +188,9 @@ export default async function AiOperationsCentre() {
           <p className="text-[10px] text-gray-400 mt-3">Prompt Library &amp; AI Policies as dedicated registries land with AI Studio. Prompt operations = distinct attributed operations in 24h.</p>
         </div>
       </div>
+
+      {/* Real on-demand automation runner */}
+      <JobRunner jobs={d.jobs.list} title="Run Automation Now" />
 
       {/* Recent AI requests / audit */}
       <div className={`${card} p-5`}>

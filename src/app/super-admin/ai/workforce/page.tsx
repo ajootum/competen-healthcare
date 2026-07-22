@@ -2,6 +2,7 @@ import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { loadWorkforceIntelligence } from "@/lib/super-admin/ai-workforce";
+import AskPanel from "../_components/AskPanel";
 
 export const dynamic = "force-dynamic";
 
@@ -61,6 +62,18 @@ export default async function WorkforceIntelligence() {
           </div>
         ))}
       </div>
+
+      {/* Live grounded workforce Q&A */}
+      <AskPanel
+        title="Ask Workforce Intelligence"
+        placeholder="Ask about competencies, coverage and capability…"
+        prompts={[
+          "Which competencies have no validated coverage?",
+          "What competencies does an ICU nurse need?",
+          "Which domains have the biggest skill gaps?",
+          "Recommend training for deteriorating patient management",
+        ]}
+      />
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         {/* Skill-gap analysis */}

@@ -2,6 +2,7 @@ import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { loadClinicalIntelligence } from "@/lib/super-admin/ai-clinical";
+import AskPanel from "../_components/AskPanel";
 
 export const dynamic = "force-dynamic";
 
@@ -62,6 +63,18 @@ export default async function ClinicalIntelligence() {
           </div>
         ))}
       </div>
+
+      {/* Live grounded clinical Q&A — real CKCM-grounded assistant in-place */}
+      <AskPanel
+        title="Ask Clinical Intelligence"
+        placeholder="Ask a grounded clinical knowledge question…"
+        prompts={[
+          "Which competencies cover patient deterioration?",
+          "What CPUs address airway management?",
+          "Summarise our infection control policies",
+          "Which frameworks include paediatric competencies?",
+        ]}
+      />
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         {/* Clinical Copilot */}

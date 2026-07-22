@@ -2,6 +2,8 @@ import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { loadAiStudio } from "@/lib/super-admin/ai-studio";
+import JobRunner from "../_components/JobRunner";
+import AskPanel from "../_components/AskPanel";
 
 export const dynamic = "force-dynamic";
 
@@ -147,6 +149,20 @@ export default async function AiStudioAutomation() {
             ))}
           </div>
         </div>
+      </div>
+
+      {/* Real interactive canvases: run automations + test the grounded assistant */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <JobRunner jobs={d.automations} title="Workflow Automation — Run Now" />
+        <AskPanel
+          title="Testing Playground"
+          placeholder="Test the grounded assistant with any prompt…"
+          prompts={[
+            "Which competencies cover medication safety?",
+            "Test: summarise the core framework library",
+            "What happens if I ask about unapproved content?",
+          ]}
+        />
       </div>
 
       {/* Publishing lifecycle */}

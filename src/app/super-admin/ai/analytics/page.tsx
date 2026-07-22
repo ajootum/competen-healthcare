@@ -2,6 +2,7 @@ import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { loadAiAnalytics } from "@/lib/super-admin/ai-analytics";
+import AskPanel from "../_components/AskPanel";
 
 export const dynamic = "force-dynamic";
 
@@ -69,6 +70,18 @@ export default async function IntelligenceAnalytics() {
           </div>
         ))}
       </div>
+
+      {/* Live telemetry generator — every ask records a real plat_ai_requests row
+          that immediately feeds the analytics below (reload to see it land). */}
+      <AskPanel
+        title="Generate Live Telemetry"
+        placeholder="Ask anything — the request itself becomes an analytics data point…"
+        prompts={[
+          "Which frameworks are in the core library?",
+          "Summarise the knowledge base composition",
+          "What competencies exist for infection control?",
+        ]}
+      />
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         {/* Usage trend */}

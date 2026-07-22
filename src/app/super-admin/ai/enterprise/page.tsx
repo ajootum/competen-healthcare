@@ -2,6 +2,7 @@ import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { loadEnterpriseIntelligence } from "@/lib/super-admin/ai-enterprise";
+import AskPanel from "../_components/AskPanel";
 
 export const dynamic = "force-dynamic";
 
@@ -62,6 +63,18 @@ export default async function EnterpriseIntelligence() {
         </div>
         <p className="text-[10px] text-gray-400 mt-3 pt-2 border-t border-gray-50">Dimensions are filled only from defensible direct metrics (competency scores, audit compliance, CAPA closure, incident resolution, subscription activation). Patient Safety % and any dimension without a clean signal show an honest “—” rather than a fabricated score.</p>
       </div>
+
+      {/* Live grounded executive Q&A */}
+      <AskPanel
+        title="Ask Enterprise Intelligence"
+        placeholder="Ask an executive question over the governed knowledge base…"
+        prompts={[
+          "Summarise our competency frameworks by library",
+          "What policies support accreditation readiness?",
+          "Which clinical areas have the most CPUs?",
+          "What governance structures are in place?",
+        ]}
+      />
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         {/* Executive briefing */}
