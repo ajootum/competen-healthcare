@@ -53,7 +53,7 @@ const NAV_GROUPS: { group: string; items: NavItem[] }[] = [
     { label: "Task Assignment",       href: "/supervisor/task-center",            icon: "✅" },
     { label: "Task Board",            href: "/supervisor/task-center",            icon: "📋", badge: "openTasks" },
     { label: "Critical Tasks",        href: "/supervisor/task-center",            icon: "🔴", badge: "criticalTasks" },
-    { label: "Workflow & Automation", icon: "🔀", soon: true },
+    { label: "Workflow & Automation", href: "/supervisor/task-center#workflow", icon: "🔀" },
     { label: "Task Analytics",        href: "/supervisor/task-center",            icon: "📊" },
   ]},
   { group: "Communication", items: [

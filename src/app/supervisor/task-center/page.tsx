@@ -2,8 +2,10 @@ import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { loadTaskCenter } from "@/lib/operations/task-center";
+import { loadTaskTemplates } from "@/lib/operations/task-templates";
 import TaskConsole from "./TaskConsole";
 import TaskBoard from "./TaskBoard";
+import WorkflowPanel from "./WorkflowPanel";
 
 export const dynamic = "force-dynamic";
 
@@ -33,7 +35,7 @@ export default async function TaskCentre() {
   const isSuper = roles.includes("super_admin");
   const hid = profile?.hospital_id ?? null;
 
-  const d = await loadTaskCenter(admin, hid, isSuper);
+  const [d, tpl] = await Promise.all([loadTaskCenter(admin, hid, isSuper), loadTaskTemplates(admin, hid, isSuper)]);
   const k = d.kpis, sla = d.execution.sla, wi = d.intelligence;
 
   const kpis = [
@@ -102,6 +104,9 @@ export default async function TaskCentre() {
 
       {/* Task Board (Kanban) */}
       <TaskBoard columns={d.kanban} editable={true} />
+
+      {/* Workflow & Automation */}
+      <WorkflowPanel provisioned={tpl?.provisioned !== false} templates={(tpl as any)?.templates ?? []} editable={true} />
 
       {/* Task Summary · Overdue · My Workload · Performance */}
       <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-4 gap-4">
