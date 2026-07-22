@@ -2,6 +2,8 @@ import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { loadControlPlane } from "@/lib/platform/control-plane";
+import { loadRuntimeStatus } from "@/lib/platform/runtime";
+import InfraStatusBar from "./InfraStatusBar";
 
 export const dynamic = "force-dynamic";
 
@@ -51,7 +53,7 @@ export default async function ControlPlaneConsole() {
   const roles: string[] = (profile?.roles?.length ? profile.roles : [profile?.role]).filter(Boolean);
   if (!roles.includes("super_admin")) redirect("/dashboard");
 
-  const cp = await loadControlPlane(admin);
+  const [cp, runtime] = await Promise.all([loadControlPlane(admin), loadRuntimeStatus(admin)]);
   const { environment: env, release, map, regions, products, productsSummary, featureFlags, identity, events, eventsReady } = cp;
 
   const healthTone = cp.health === "Operational" ? "text-green-600" : "text-rose-600";
@@ -89,6 +91,9 @@ export default async function ControlPlaneConsole() {
           </div>
         ))}
       </div>
+
+      {/* POS-002 Infrastructure Status Bar — live from /api/runtime/* */}
+      <InfraStatusBar initial={runtime} />
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         {/* Environment & runtime */}
