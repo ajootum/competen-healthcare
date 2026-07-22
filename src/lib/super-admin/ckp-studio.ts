@@ -12,7 +12,7 @@ export async function loadKnowledgeStudio(admin: any) {
   const head = (t: string) => admin.from(t).select("*", { count: "exact", head: true });
   const active = (t: string) => admin.from(t).select("*", { count: "exact", head: true }).eq("is_active", true);
 
-  const [cpuRows, koRows, caseRows, compCount, qbActive, lrActive, polActive, crOpen, caPending, recentCpu, recentKo, recentCase, recentComp] = await Promise.all([
+  const [cpuRows, koRows, caseRows, compCount, qbActive, lrActive, polActive, crOpen, caPending, recentCpu, recentKo, recentCase, recentComp, domainRows, frameworkRows] = await Promise.all([
     admin.from("clinical_practice_units").select("pub_status").limit(5000),
     admin.from("knowledge_objects").select("status").limit(8000),
     admin.from("clinical_cases").select("status").limit(5000),
@@ -24,6 +24,8 @@ export async function loadKnowledgeStudio(admin: any) {
     admin.from("knowledge_objects").select("title, status, created_at").order("created_at", { ascending: false }).limit(6),
     admin.from("clinical_cases").select("title, status, created_at").order("created_at", { ascending: false }).limit(6),
     admin.from("framework_competencies").select("name, created_at").order("created_at", { ascending: false }).limit(6),
+    admin.from("framework_domains").select("id, name, framework_id").order("name").limit(500),
+    admin.from("frameworks").select("id, name").limit(500),
   ]);
 
   const cpu = cpuRows.error ? {} : bucket(cpuRows.data ?? [], "pub_status");
@@ -54,9 +56,17 @@ export async function loadKnowledgeStudio(admin: any) {
     (cs.draft ?? 0) > 0 && `Enrich ${cs.draft} draft clinical case${cs.draft === 1 ? "" : "s"} with an OSCE station`,
   ].filter(Boolean) as string[];
 
+  // Domain picker for the in-Studio Competency builder (labelled with framework).
+  const fwName: Record<string, string> = {};
+  for (const f of frameworkRows.error ? [] : (frameworkRows.data ?? [])) fwName[f.id] = f.name;
+  const domains = (domainRows.error ? [] : (domainRows.data ?? [])).map((d: any) => ({
+    id: d.id,
+    label: fwName[d.framework_id] ? `${fwName[d.framework_id]} › ${d.name}` : d.name,
+  }));
+
   return {
     kpis: { total, drafts, awaitingReview, published, archived, suggestions: suggestions.length },
-    recent, suggestions,
+    recent, suggestions, domains,
     generatedAt: new Date().toISOString(),
   };
 }

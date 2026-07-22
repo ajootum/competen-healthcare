@@ -2,6 +2,7 @@ import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { loadKnowledgeStudio } from "@/lib/super-admin/ckp-studio";
+import StudioBuilder from "./StudioBuilder";
 
 export const dynamic = "force-dynamic";
 
@@ -74,10 +75,14 @@ export default async function KnowledgeStudio() {
         ))}
       </div>
 
+      {/* Real in-Studio builder canvas — creates live draft assets via the content APIs */}
+      <StudioBuilder domains={s.domains} />
+
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        {/* Asset builders */}
+        {/* Full authoring surfaces */}
         <div className={`${card} p-5 lg:col-span-2`}>
-          <h2 className="font-semibold text-gray-900 text-[15px] mb-3">Asset Builders</h2>
+          <h2 className="font-semibold text-gray-900 text-[15px] mb-1">Full Authoring Surfaces</h2>
+          <p className="text-xs text-gray-500 mb-3">The canvas above creates drafts fast; open a full surface for rich, multi-step authoring.</p>
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
             {BUILDERS.map(b => {
               const Wrap: any = b.soon ? "div" : Link;
@@ -124,7 +129,7 @@ export default async function KnowledgeStudio() {
         )}
       </div>
 
-      <p className="text-[11px] text-gray-400 pb-4">Knowledge Studio is the single authoring environment for every asset type. Builders open the live authoring surfaces; authoring-status counts and recent work are live from the knowledge schema. A unified in-Studio builder canvas and AI draft-generation land in later Knowledge Studio phases.</p>
+      <p className="text-[11px] text-gray-400 pb-4">Knowledge Studio is the single authoring environment for every asset type. The builder canvas creates real draft CKOs, competencies, frameworks and policies in-place via the content APIs; full surfaces open the rich multi-step authoring tools. Authoring-status counts and recent work are live from the knowledge schema.</p>
     </div>
   );
 }
