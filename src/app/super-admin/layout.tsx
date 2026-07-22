@@ -42,7 +42,7 @@ const NAV = [
   { group: "CLINICAL KNOWLEDGE PLATFORM", items: [
     { label: "CKP Overview",      href: "/super-admin/ckp",                icon: "📚" },
     { label: "Knowledge Studio",  href: "/super-admin/ckp/studio",         icon: "🏭" },
-    { label: "Competency & Frameworks", href: "/super-admin/content",      icon: "📐" },
+    { label: "Competency & Frameworks", href: "/super-admin/ckp/competency", icon: "📐" },
     { label: "Knowledge Repository",    href: "/super-admin/studio/knowledge", icon: "🗄️" },
     { label: "Assessment & Validation", href: "/super-admin/assessment-methods", icon: "🎯" },
     { label: "Publishing & Governance", href: "/super-admin/governance/committees", icon: "🚦" },
