@@ -11,7 +11,7 @@ const bucket = (rows: any[], key: string) => { const m: Record<string, number> =
 export async function loadAssessmentCentre(admin: any) {
   const head = (t: string) => admin.from(t).select("*", { count: "exact", head: true });
 
-  const [asmtCount, methodCount, methodActive, chkCount, itemCount, bpCount, scaleCount, levelCount, qbCount, osceCount, reassessCount, reassessActive, caseCount, cpuCount, bpMethodRows, bpCpuRows, decisionRows] = await Promise.all([
+  const [asmtCount, methodCount, methodActive, chkCount, itemCount, bpCount, scaleCount, levelCount, qbCount, osceCount, reassessCount, reassessActive, caseCount, cpuCount, bpMethodRows, bpCpuRows, decisionRows, cpuRows, skillRows, fwRows] = await Promise.all([
     head("assessments"), head("assessment_method_configs"),
     admin.from("assessment_method_configs").select("*", { count: "exact", head: true }).eq("is_active", true),
     head("skill_checklists"), head("checklist_items"), head("assessment_blueprints"),
@@ -21,6 +21,10 @@ export async function loadAssessmentCentre(admin: any) {
     admin.from("blueprint_methods").select("method").limit(20000),
     admin.from("assessment_blueprints").select("cpu_id").limit(20000),
     admin.from("competency_decisions").select("validation_outcome").limit(20000),
+    // Picker lists for the in-place Assessment Builder.
+    admin.from("clinical_practice_units").select("id, name").order("name").limit(1000),
+    admin.from("competency_skills").select("id, name, framework_competencies!competency_id(name)").eq("is_active", true).order("name").limit(2000),
+    admin.from("frameworks").select("id, name").order("name").limit(1000),
   ]);
 
   const bpMethods = bucket(bpMethodRows.error ? [] : bpMethodRows.data ?? [], "method");
@@ -54,6 +58,12 @@ export async function loadAssessmentCentre(admin: any) {
     methodMix: Object.entries(bpMethods).map(([method, n]) => ({ method: method.replace(/_/g, " "), n })).sort((a, b) => (b.n as number) - (a.n as number)).slice(0, 8),
     coverage: { blueprintCoverage, blueprintsDefined: blueprintCpus.size, cpuTotal, checklistItems: num(itemCount) ?? 0, scoringLevels: num(levelCount) ?? 0 },
     validation, validationReady,
+    // Picker lists for the Assessment Builder (label skills with their competency).
+    pickers: {
+      cpus: (cpuRows.error ? [] : cpuRows.data ?? []).map((c: any) => ({ id: c.id, label: c.name })),
+      skills: (skillRows.error ? [] : skillRows.data ?? []).map((s: any) => ({ id: s.id, label: s.framework_competencies?.name ? `${s.name} (${s.framework_competencies.name})` : s.name })),
+      frameworks: (fwRows.error ? [] : fwRows.data ?? []).map((f: any) => ({ id: f.id, label: f.name })),
+    },
     generatedAt: new Date().toISOString(),
   };
 }

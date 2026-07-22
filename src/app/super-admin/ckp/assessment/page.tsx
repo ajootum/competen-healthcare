@@ -2,6 +2,7 @@ import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { loadAssessmentCentre } from "@/lib/super-admin/ckp-assessment";
+import AssessmentBuilder from "./AssessmentBuilder";
 
 export const dynamic = "force-dynamic";
 
@@ -97,6 +98,9 @@ export default async function AssessmentValidationCentre() {
           </div>
         ))}
       </div>
+
+      {/* Real in-place assessment builder — question banks, checklists, methods, OSCE */}
+      <AssessmentBuilder cpus={a.pickers.cpus} skills={a.pickers.skills} frameworks={a.pickers.frameworks} />
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         {/* Assessment overview donut */}
