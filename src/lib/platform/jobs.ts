@@ -7,6 +7,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 import { emitPlatformEvent } from "./events";
+import { loadKnowledgeIntelligence } from "@/lib/super-admin/ckp-intelligence";
 
 export type JobDef = { key: string; name: string; description: string; category: string; schedule: string; runnable: boolean };
 
@@ -16,6 +17,7 @@ export type JobDef = { key: string; name: string; description: string; category:
 export const JOB_REGISTRY: JobDef[] = [
   { key: "platform_metrics_snapshot", name: "Platform Metrics Snapshot", description: "Snapshot tenant, user and open-alert counts to the platform event log.", category: "analytics", schedule: "0 * * * *", runnable: true },
   { key: "subscription_renewal_scan", name: "Subscription Renewal Scan", description: "Flag active subscriptions renewing within the next 30 days.", category: "licensing", schedule: "0 7 * * *", runnable: true },
+  { key: "knowledge_intelligence_scan", name: "Knowledge Intelligence Scan", description: "Recompute knowledge health, coverage, gaps and duplicates; snapshot to the platform event log.", category: "knowledge", schedule: "0 5 * * *", runnable: true },
   { key: "scheduled_reports", name: "Scheduled Reports", description: "Deliver due report schedules to recipients.", category: "reports", schedule: "0 6 * * *", runnable: false },
 ];
 
@@ -39,6 +41,19 @@ const HANDLERS: Record<string, (admin: any) => Promise<string>> = {
     const n = (data ?? []).length;
     if (n) await emitPlatformEvent(admin, { event_type: "licensing.renewals_due", severity: n > 5 ? "warning" : "info", payload: { count: n } });
     return `${n} subscription(s) renewing within 30 days`;
+  },
+  knowledge_intelligence_scan: async (admin) => {
+    // Recompute the CKP intelligence composite and snapshot it to the event log,
+    // so knowledge health is trended over time and visible in Monitoring.
+    const q = await loadKnowledgeIntelligence(admin);
+    const k = q.kpis;
+    const written = await emitPlatformEvent(admin, {
+      event_type: "knowledge.intelligence_scan",
+      severity: k.health != null && k.health < 50 ? "warning" : "info",
+      payload: { health: k.health, coverage: k.coverage, duplicates: k.duplicates, gaps: k.gaps, missing_competencies: k.missingCompetencies, recommendations: k.recommendations },
+    });
+    const pct = (n: number | null) => (n == null ? "n/a" : `${n}%`);
+    return `health=${pct(k.health)} · coverage=${pct(k.coverage)} · ${k.duplicates} duplicate(s) · ${k.gaps} gap(s) · ${k.missingCompetencies} unmapped · snapshot ${written ? "recorded" : "skipped"}`;
   },
 };
 
@@ -64,10 +79,19 @@ export async function runJob(admin: any, key: string, trigger: "manual" | "cron"
   }
 }
 
-// Run every runnable job (used by the cron). Best-effort; collects per-job results.
+// A job is due when its cron hour matches now (UTC). "0 * * * *" → every hour;
+// "0 5 * * *" → 05:00 only. The cron entry fires hourly, so honouring the hour
+// field makes each registry schedule real instead of cosmetic.
+const isDueNow = (schedule: string) => {
+  const hour = (schedule ?? "").split(/\s+/)[1];
+  return hour === "*" || Number(hour) === new Date().getUTCHours();
+};
+
+// Run every runnable job whose schedule is due (used by the hourly cron).
+// Best-effort; collects per-job results.
 export async function runDueJobs(admin: any) {
   const results: any[] = [];
-  for (const j of JOB_REGISTRY.filter(j => j.runnable)) results.push({ key: j.key, ...(await runJob(admin, j.key, "cron")) });
+  for (const j of JOB_REGISTRY.filter(j => j.runnable && isDueNow(j.schedule))) results.push({ key: j.key, ...(await runJob(admin, j.key, "cron")) });
   return results;
 }
 

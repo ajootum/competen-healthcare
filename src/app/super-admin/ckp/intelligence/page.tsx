@@ -2,6 +2,9 @@ import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { loadKnowledgeIntelligence } from "@/lib/super-admin/ckp-intelligence";
+import { JOB_REGISTRY } from "@/lib/platform/jobs";
+import JobRunner from "../../ai/_components/JobRunner";
+import AskPanel from "../../ai/_components/AskPanel";
 
 export const dynamic = "force-dynamic";
 
@@ -70,6 +73,20 @@ export default async function KnowledgeIntelligence() {
         ))}
       </div>
 
+      {/* Real interactive canvases: on-demand intelligence scan + grounded knowledge Q&A */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <JobRunner jobs={JOB_REGISTRY.filter(j => j.category === "knowledge")} title="Run Intelligence Scan" />
+        <AskPanel
+          title="Ask the Knowledge Base"
+          placeholder="Ask about coverage, gaps or any knowledge topic…"
+          prompts={[
+            "Which competencies are not mapped to a CPU?",
+            "Which frameworks have the lowest coverage?",
+            "Summarise the knowledge base by type",
+          ]}
+        />
+      </div>
+
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         {/* Knowledge health dimensions */}
         <div className={`${card} p-5`}>
@@ -91,11 +108,12 @@ export default async function KnowledgeIntelligence() {
           {q.insights.length === 0 ? <p className="text-sm text-gray-400 py-6 text-center">✅ No gaps detected — the knowledge base looks healthy.</p> : (
             <div className="space-y-2">
               {q.insights.map((r: any, i: number) => (
-                <div key={i} className="flex items-center gap-2.5 rounded-lg border border-gray-100 p-2.5">
+                <Link key={i} href={r.href ?? "/super-admin/ckp"} className="flex items-center gap-2.5 rounded-lg border border-gray-100 p-2.5 hover:border-teal-300 hover:bg-teal-50/40 transition-colors">
                   <span className="text-base shrink-0">✨</span>
                   <span className="text-sm text-gray-700 flex-1 min-w-0">{r.text}</span>
                   <span className={`text-[9px] font-medium px-1.5 py-0.5 rounded shrink-0 ${IMPACT_TONE[r.impact]}`}>{r.impact} impact</span>
-                </div>
+                  <span className="text-xs text-teal-600 shrink-0">→</span>
+                </Link>
               ))}
             </div>
           )}
@@ -163,7 +181,7 @@ export default async function KnowledgeIntelligence() {
         </div>
       </div>
 
-      <p className="text-[11px] text-gray-400 pb-4">Knowledge Intelligence is the analytics and AI layer — coverage, gap analysis, duplicate detection, knowledge health and recommendations are computed live from the knowledge base. Semantic duplicate detection, usage/search analytics and predictive intelligence activate with the embedding index and access telemetry. This completes the Clinical Knowledge Platform’s six modules.</p>
+      <p className="text-[11px] text-gray-400 pb-4">Knowledge Intelligence is the analytics and AI layer — coverage, gap analysis, duplicate detection, knowledge health and recommendations are computed live from the knowledge base. The Intelligence Scan recomputes the composite on demand (and nightly at 05:00 UTC) and snapshots it to the platform event log for trending; each insight deep-links to the surface where it gets fixed, and the assistant answers grounded in the governed CKCM knowledge base with citations. Semantic duplicate detection and usage/search analytics activate with the embedding index and access telemetry.</p>
     </div>
   );
 }

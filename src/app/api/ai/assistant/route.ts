@@ -20,8 +20,10 @@ export async function POST(req: Request) {
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const admin = createAdminClient();
-  const { data: profile } = await admin.from("profiles").select("role, full_name").eq("id", user.id).single();
-  if (!["super_admin", "hospital_admin", "educator"].includes(profile?.role ?? "")) {
+  // Roles-array aware (matches getCaller/page gates): multi-role callers pass.
+  const { data: profile } = await admin.from("profiles").select("role, roles, full_name").eq("id", user.id).single();
+  const callerRoles: string[] = (profile?.roles?.length ? profile.roles : [profile?.role]).filter(Boolean);
+  if (!callerRoles.some(r => ["super_admin", "hospital_admin", "educator"].includes(r))) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 

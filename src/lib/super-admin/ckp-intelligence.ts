@@ -90,16 +90,17 @@ export async function loadKnowledgeIntelligence(admin: any) {
   const computable = dimensions.map(d => d.value).filter((v): v is number => v != null);
   const health = computable.length ? Math.round(computable.reduce((a, b) => a + b, 0) / computable.length) : null;
 
-  // Derived AI insights.
+  // Derived AI insights — each deep-links to the surface where it gets fixed.
   const insights = [
-    missingCompetencies > 0 && { text: `Map ${missingCompetencies} unmapped competenc${missingCompetencies === 1 ? "y" : "ies"} to a CPU`, impact: "High" },
-    duplicateItems > 0 && { text: `Review ${duplicateItems} possible duplicate title${duplicateItems === 1 ? "" : "s"}`, impact: "High" },
-    lowCoverageFrameworks.length > 0 && { text: `Low coverage in ${lowCoverageFrameworks[0].name} (${lowCoverageFrameworks[0].cov}%)`, impact: "Medium" },
-    emptyDomains > 0 && { text: `${emptyDomains} domain${emptyDomains === 1 ? "" : "s"} have no competencies`, impact: "Medium" },
-    cpusNoBlueprint > 0 && { text: `${cpusNoBlueprint} CPU${cpusNoBlueprint === 1 ? "" : "s"} lack an assessment blueprint`, impact: "Medium" },
-    outdatedPolicies > 0 && { text: `${outdatedPolicies} polic${outdatedPolicies === 1 ? "y is" : "ies are"} past review date`, impact: "High" },
-    (koStatus.draft ?? 0) > 0 && { text: `Publish ${koStatus.draft} draft knowledge object${koStatus.draft === 1 ? "" : "s"}`, impact: "Low" },
-  ].filter(Boolean).slice(0, 6) as { text: string; impact: string }[];
+    missingCompetencies > 0 && { text: `Map ${missingCompetencies} unmapped competenc${missingCompetencies === 1 ? "y" : "ies"} to a CPU`, impact: "High", href: "/super-admin/ckp/competency" },
+    koDup.items > 0 && { text: `Review ${koDup.items} possible duplicate knowledge object title${koDup.items === 1 ? "" : "s"}`, impact: "High", href: "/super-admin/studio/knowledge" },
+    compDup.items > 0 && { text: `Review ${compDup.items} possible duplicate competency name${compDup.items === 1 ? "" : "s"}`, impact: "High", href: "/super-admin/ckp/competency" },
+    lowCoverageFrameworks.length > 0 && { text: `Low coverage in ${lowCoverageFrameworks[0].name} (${lowCoverageFrameworks[0].cov}%)`, impact: "Medium", href: "/super-admin/ckp/competency" },
+    emptyDomains > 0 && { text: `${emptyDomains} domain${emptyDomains === 1 ? "" : "s"} have no competencies`, impact: "Medium", href: "/super-admin/ckp/competency" },
+    cpusNoBlueprint > 0 && { text: `${cpusNoBlueprint} CPU${cpusNoBlueprint === 1 ? "" : "s"} lack an assessment blueprint`, impact: "Medium", href: "/super-admin/ckp/assessment" },
+    outdatedPolicies > 0 && { text: `${outdatedPolicies} polic${outdatedPolicies === 1 ? "y is" : "ies are"} past review date`, impact: "High", href: "/super-admin/policy-manager" },
+    (koStatus.draft ?? 0) > 0 && { text: `Publish ${koStatus.draft} draft knowledge object${koStatus.draft === 1 ? "" : "s"}`, impact: "Low", href: "/super-admin/ckp/publishing" },
+  ].filter(Boolean).slice(0, 6) as { text: string; impact: string; href: string }[];
 
   return {
     kpis: { health, coverage, duplicates: duplicateItems, recommendations: insights.length, missingCompetencies, gaps: emptyDomains + cpusNoBlueprint + lowCoverageFrameworks.length },

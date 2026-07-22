@@ -5,15 +5,19 @@
 
 export type Severity = "info" | "warning" | "critical";
 
+// Returns true when the event row was actually written (supabase reports DB
+// errors in the result, not by throwing — callers that promise a snapshot can
+// check this instead of assuming success).
 export async function emitPlatformEvent(admin: any, e: {
   event_type: string; tenant_id?: string | null; severity?: Severity; payload?: any;
-}) {
+}): Promise<boolean> {
   try {
-    await admin.from("plat_platform_events").insert({
+    const r = await admin.from("plat_platform_events").insert({
       event_type: e.event_type, tenant_id: e.tenant_id ?? null,
       severity: e.severity ?? "info", payload: e.payload ?? null,
     });
-  } catch { /* pre-migration / non-fatal */ }
+    return !r?.error;
+  } catch { return false; /* pre-migration / non-fatal */ }
 }
 
 export async function loadEventCentre(admin: any) {
