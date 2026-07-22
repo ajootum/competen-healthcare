@@ -121,7 +121,7 @@ const SYS_NAV = [
     { label: "1. System Health Dashboard", href: "/super-admin/system", icon: "💚" },
     { label: "2. Identity & Access Management", href: "/super-admin/system/identity", icon: "👤" },
     { label: "3. Security Operations Center", href: "/super-admin/system/security", icon: "🛡️" },
-    { label: "4. Infrastructure & Services", href: "/super-admin/platform-ops/control-plane", icon: "🖥️" },
+    { label: "4. Infrastructure & Services", href: "/super-admin/system/infrastructure", icon: "🖥️" },
     { label: "5. Data Protection & Recovery", href: "/super-admin/platform-ops/monitoring", icon: "💾" },
     { label: "6. Security Intelligence & Audit", href: "/super-admin/audit", icon: "🔍" },
   ]},
