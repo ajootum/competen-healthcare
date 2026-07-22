@@ -50,6 +50,9 @@ const GENERAL_NAV = [
   { group: "GOVERNANCE & COMPLIANCE", items: [
     { label: "Open Governance →", href: "/super-admin/governance", icon: "🛡️" },
   ]},
+  { group: "SYSTEM & SECURITY", items: [
+    { label: "Open System & Security →", href: "/super-admin/system", icon: "🔐" },
+  ]},
   { group: "SYSTEM & SETTINGS", items: [
     { label: "Metadata & Tags", href: "/super-admin/metadata", icon: "🏷️" },
     { label: "Platform Settings", href: "/super-admin/settings", icon: "⚙️" },
@@ -113,17 +116,36 @@ const GOV_NAV = [
   ]},
 ];
 
-const OVERVIEW_HREFS = new Set(["/super-admin", "/super-admin/ckp", "/super-admin/ai", "/super-admin/governance"]);
+const SYS_NAV = [
+  { group: "SYSTEM & SECURITY PLATFORM", items: [
+    { label: "1. System Health Dashboard", href: "/super-admin/system", icon: "💚" },
+    { label: "2. Identity & Access Management", href: "/super-admin/users", icon: "👤" },
+    { label: "3. Security Operations Center", href: "/super-admin/audit", icon: "🛡️" },
+    { label: "4. Infrastructure & Services", href: "/super-admin/platform-ops/control-plane", icon: "🖥️" },
+    { label: "5. Data Protection & Recovery", href: "/super-admin/platform-ops/monitoring", icon: "💾" },
+    { label: "6. Security Intelligence & Audit", href: "/super-admin/audit", icon: "🔍" },
+  ]},
+  { group: "QUICK ACCESS", items: [
+    { label: "Users", href: "/super-admin/users", icon: "👥" },
+    { label: "Monitoring", href: "/super-admin/platform-ops/monitoring", icon: "📡" },
+    { label: "Control Plane", href: "/super-admin/platform-ops/control-plane", icon: "🧭" },
+    { label: "Audit Log", href: "/super-admin/audit", icon: "🗒️" },
+    { label: "Platform Settings", href: "/super-admin/settings", icon: "⚙️" },
+  ]},
+];
+
+const OVERVIEW_HREFS = new Set(["/super-admin", "/super-admin/ckp", "/super-admin/ai", "/super-admin/governance", "/super-admin/system"]);
 
 export default function WorkspaceSidebar({ profileName, roles, activeRole, workspaces }: { profileName: string | null; roles: AppRole[]; activeRole: AppRole; workspaces: any[] }) {
   const pathname = usePathname();
   const inCkp = pathname.startsWith("/super-admin/ckp");
   const inAi = pathname === "/super-admin/ai" || pathname.startsWith("/super-admin/ai/");
   const inGov = pathname === "/super-admin/governance" || pathname.startsWith("/super-admin/governance/");
-  const inWorkspace = inCkp || inAi || inGov;
-  const nav = inCkp ? CKP_NAV : inAi ? AI_NAV : inGov ? GOV_NAV : GENERAL_NAV;
-  const home = inCkp ? "/super-admin/ckp" : inAi ? "/super-admin/ai" : inGov ? "/super-admin/governance" : "/super-admin";
-  const subtitle = inCkp ? "Clinical Knowledge Platform" : inAi ? "AI & Intelligence" : inGov ? "Governance & Compliance" : "Mission Control";
+  const inSys = pathname === "/super-admin/system" || pathname.startsWith("/super-admin/system/");
+  const inWorkspace = inCkp || inAi || inGov || inSys;
+  const nav = inCkp ? CKP_NAV : inAi ? AI_NAV : inGov ? GOV_NAV : inSys ? SYS_NAV : GENERAL_NAV;
+  const home = inCkp ? "/super-admin/ckp" : inAi ? "/super-admin/ai" : inGov ? "/super-admin/governance" : inSys ? "/super-admin/system" : "/super-admin";
+  const subtitle = inCkp ? "Clinical Knowledge Platform" : inAi ? "AI & Intelligence" : inGov ? "Governance & Compliance" : inSys ? "System & Security" : "Mission Control";
 
   return (
     <>
