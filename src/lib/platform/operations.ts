@@ -17,12 +17,13 @@ const num = (r: any) => (r?.error ? null : r?.count ?? 0);
 export async function loadPlatformOperations(admin: any) {
   const dayStart = new Date(); dayStart.setHours(0, 0, 0, 0);
   const dayAgo = new Date(Date.now() - 864e5).toISOString();
-  const [mon, tenRes, userRes, depRes, apprRes, jobRes, jobFailRes, aiRes, aiErrRes] = await Promise.all([
+  const [mon, tenRes, userRes, depRes, apprRes, apprEngRes, jobRes, jobFailRes, aiRes, aiErrRes] = await Promise.all([
     loadMonitoring(admin),
     admin.from("tenants").select("*", { count: "exact", head: true }),
     admin.from("profiles").select("*", { count: "exact", head: true }),
     admin.from("plat_deployments").select("*", { count: "exact", head: true }).gte("created_at", dayStart.toISOString()),
     admin.from("change_requests").select("*", { count: "exact", head: true }).eq("status", "open"),
+    admin.from("plat_approval_requests").select("*", { count: "exact", head: true }).eq("status", "pending"),
     admin.from("plat_job_runs").select("*", { count: "exact", head: true }).gte("started_at", dayAgo),
     admin.from("plat_job_runs").select("*", { count: "exact", head: true }).gte("started_at", dayAgo).eq("status", "failed"),
     admin.from("plat_ai_requests").select("*", { count: "exact", head: true }).gte("created_at", dayAgo),
@@ -32,7 +33,9 @@ export async function loadPlatformOperations(admin: any) {
   const health = mon.kpis.health;
   const crit = mon.kpis.criticalAlerts ?? 0;
   const open = mon.kpis.openAlerts;
-  const tenants = num(tenRes), users = num(userRes), depToday = num(depRes), approvals = num(apprRes);
+  const tenants = num(tenRes), users = num(userRes), depToday = num(depRes);
+  const crOpen = num(apprRes); // change_requests (source of truth for availability)
+  const approvals = crOpen == null ? null : crOpen + (num(apprEngRes) ?? 0);
   const jobRuns = num(jobRes), jobFails = num(jobFailRes);
   const aiReqs = num(aiRes), aiErrs = num(aiErrRes);
   const healthStatus: OpsStatus = health === "Healthy" ? "ok" : health === "Attention" ? "warn" : "down";
@@ -43,7 +46,7 @@ export async function loadPlatformOperations(admin: any) {
     { key: "tenants", label: "Enterprise Tenants", value: tenants == null ? "—" : String(tenants), status: tenants == null ? "na" : "ok", detail: "registered tenants", service: "Platform Analytics Service" },
     { key: "users", label: "Active Users", value: users == null ? "—" : String(users), status: users == null ? "na" : "ok", detail: "platform accounts", service: "Platform Analytics Service" },
     { key: "ai", label: "AI Operations", value: aiReqs == null ? "—" : String(aiReqs), status: aiReqs == null ? "na" : aiErrs ? "warn" : "ok", detail: aiReqs == null ? "gateway telemetry unavailable" : `requests 24h${aiErrs ? ` · ${aiErrs} failed` : ""}`, service: "AI Runtime Gateway" },
-    { key: "approvals", label: "Pending Approvals", value: approvals == null ? "—" : String(approvals), status: approvals == null ? "na" : approvals > 0 ? "warn" : "ok", detail: approvals == null ? "aggregation pending" : "open change requests", service: "Workflow & Approval Service" },
+    { key: "approvals", label: "Pending Approvals", value: approvals == null ? "—" : String(approvals), status: approvals == null ? "na" : approvals > 0 ? "warn" : "ok", detail: approvals == null ? "aggregation pending" : "approvals + change requests", service: "Workflow & Approval Service" },
     { key: "deployments", label: "Deployments Today", value: depToday == null ? "—" : String(depToday), status: depToday == null ? "na" : "ok", detail: "recorded since midnight", service: "Deployment Management Service" },
     { key: "jobs", label: "Background Jobs", value: jobRuns == null ? "—" : String(jobRuns), status: jobRuns == null ? "na" : jobFails ? "warn" : "ok", detail: jobRuns == null ? "run history unavailable" : `runs 24h${jobFails ? ` · ${jobFails} failed` : ""}`, service: "Background Job Scheduler" },
   ];
