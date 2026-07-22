@@ -12,6 +12,7 @@
 
 import { loadShiftCommand } from "@/lib/operations/shift-command";
 import { loadUnitCapability } from "@/lib/operations/unit-manager-data";
+import { loadStaffBreaks, loadSupervisorNotes } from "@/lib/operations/workforce-breaks-notes";
 
 const NONE = "00000000-0000-0000-0000-000000000000";
 const mean = (xs: number[]) => (xs.length ? Math.round(xs.reduce((a, b) => a + b, 0) / xs.length) : null);
@@ -144,6 +145,43 @@ export async function loadWorkforceOps(admin: any, hid: string | null, isSuper: 
   };
   const nurses = staffBoard.filter(s => ["nurse", "charge"].includes(s.role)).length;
   const totalPatients = staffBoard.reduce((n, s) => n + s.patients, 0);
+
+  // ── SSW-WFO-001 redesign — breaks, notes, teams, float pool, KPIs ───────────
+  const [breaks, notes] = await Promise.all([
+    loadStaffBreaks(admin, hid, isSuper, sc.shiftId),
+    loadSupervisorNotes(admin, hid, isSuper, sc.shiftId),
+  ]);
+  // Team Assignments — each present nurse's patients (from the patient board).
+  const teams = staffBoard.filter(s => ["nurse", "charge"].includes(s.role) && PRESENT.has(s.status)).map(s => {
+    const pts = patientBoard.filter((p: any) => p.nurse === s.name);
+    return {
+      id: s.id, name: s.name, role: s.role, count: pts.length,
+      high: pts.filter((p: any) => ["high", "critical"].includes(p.acuity)).length,
+      workloadPct: Math.round((pts.length / maxLoad) * 100),
+      patients: pts.slice(0, 6).map((p: any) => ({ label: p.label, acuity: p.acuity, bed: p.bed })),
+    };
+  }).sort((a, b) => b.count - a.count);
+  const assignedPatients = patientBoard.filter((p: any) => p.nurse).length;
+  const unassignedPatients = patientBoard.filter((p: any) => !p.nurse).length;
+  const highShare = patientBoard.length ? patientBoard.filter((p: any) => ["high", "critical"].includes(p.acuity)).length / patientBoard.length : 0;
+  const wardOverview = { patients: patientBoard.length, teams: teams.length, unassigned: unassignedPatients, assigned: assignedPatients, avgAcuity: highShare >= 0.3 ? "High" : highShare >= 0.1 ? "Medium" : "Low" };
+  // Staff Allocation — float pool + open (unfilled) positions.
+  const floatPool = staffBoard.filter(s => s.role === "float").map(s => ({ name: s.name, role: s.role, status: PRESENT.has(s.status) ? "Available" : tcRole(s.status) }));
+  const openShifts = staffingOverview.filter(r => r.variance != null && (r.variance as number) < 0).map(r => ({ role: r.label, positions: -(r.variance as number), urgency: r.coverage != null && r.coverage < 75 ? "Urgent" : "Moderate" }));
+  const openShiftCount = openShifts.reduce((n, o) => n + o.positions, 0);
+  const staffPicker = staffBoard.map(s => ({ id: s.id, name: s.name, role: s.role }));
+  // 7-tile redesign KPI strip.
+  const assignedStaff = staffBoard.filter(s => PRESENT.has(s.status) && s.patients > 0).length;
+  const wfoKpis = {
+    planned, present, assigned: assignedStaff,
+    presentPct: planned ? Math.round((present / planned) * 100) : null,
+    assignedPct: present ? Math.round((assignedStaff / present) * 100) : null,
+    openShifts: openShiftCount,
+    variancePct: totalRequired ? Math.round(((present - totalRequired) / totalRequired) * 100) : null,
+    overdueBreaks: (breaks.provisioned && !("error" in breaks)) ? (breaks as any).overdue : null,
+    criticalGaps: competencyGaps.length,
+  };
+
   const factors: number[] = [];
   if (sc.ratioCompliance != null) factors.push(sc.ratioCompliance);
   if (comp.total) factors.push(comp.coverage);
@@ -158,6 +196,8 @@ export async function loadWorkforceOps(admin: any, hid: string | null, isSuper: 
     assignmentBoard, workloadCoverage, quickSummary, staffingAlerts,
     handoverStatus: { pct: sc.overview.handoverPct, status: sc.overview.handoverStatus },
     absence: { total: absent },
+    // SSW-WFO-001 redesign
+    shiftId: sc.shiftId, wfoKpis, teams, wardOverview, floatPool, openShifts, openShiftCount, staffPicker, breaks, notes,
     compliance, support,
     intelligence: { avgPtsPerNurse: nurses ? +(totalPatients / nurses).toFixed(1) : null, nurses, totalPatients, shiftScore: mean(factors), openEscalations: openEsc.length },
     copilot: sc.copilot,
