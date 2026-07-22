@@ -17,16 +17,21 @@ const label = "text-xs font-semibold text-gray-600 mb-1 block";
 
 const STATUSES: Record<string, string> = { met: "Met", partially_met: "Partially met", not_met: "Not met", not_assessed: "Not assessed" };
 const PRIORITIES = ["low", "medium", "high"];
+const SURVEY_TYPES: Record<string, string> = { external: "External survey", mock: "Mock survey", self_assessment: "Self-assessment", inspection: "Inspection", surveillance: "Surveillance visit" };
+const SURVEY_STATUSES: Record<string, string> = { preparing: "Preparing", in_progress: "In progress", completed: "Completed", cancelled: "Cancelled" };
+const OUTCOMES: Record<string, string> = { passed: "Passed", passed_with_conditions: "Passed with conditions", failed: "Failed" };
 
 type Picker = { id: string; label: string };
 
 const TABS = [
   { key: "assess", label: "Assess Standard", icon: "🧭" },
+  { key: "survey", label: "Schedule Survey", icon: "📅" },
+  { key: "advance", label: "Update Survey", icon: "🗒️" },
   { key: "action", label: "Add Action", icon: "🛠️" },
 ] as const;
 type TabKey = (typeof TABS)[number]["key"];
 
-export default function AccreditationCenter({ frameworks, refsByFramework }: { frameworks: Picker[]; refsByFramework: Record<string, string[]> }) {
+export default function AccreditationCenter({ frameworks, refsByFramework, surveys }: { frameworks: Picker[]; refsByFramework: Record<string, string[]>; surveys: Picker[] }) {
   const router = useRouter();
   const [tab, setTab] = useState<TabKey>("assess");
   const [busy, setBusy] = useState(false);
@@ -49,6 +54,17 @@ export default function AccreditationCenter({ frameworks, refsByFramework }: { f
       url = "/api/governance/accreditation";
       body = { framework_id: form.framework_id, reference_code: form.reference_code, title: form.title || undefined, status: form.status, gap_note: form.gap_note || undefined, evidence_note: form.evidence_note || undefined };
       okText = `Standard assessed: ${String(form.reference_code ?? "").toUpperCase()} → ${STATUSES[form.status] ?? form.status}`;
+    } else if (tab === "survey") {
+      if (!String(form.title ?? "").trim()) missing = "title";
+      url = "/api/governance/surveys";
+      body = { title: form.title, framework_id: form.framework_id || undefined, survey_type: form.survey_type || "external", surveyor: form.surveyor || undefined, scheduled_date: form.scheduled_date || undefined, end_date: form.end_date || undefined, prep_note: form.prep_note || undefined };
+      okText = "Survey scheduled";
+    } else if (tab === "advance") {
+      if (!form.survey_id) missing = "survey";
+      else if (!form.status && !form.outcome) missing = "a status or outcome";
+      url = `/api/governance/surveys?id=${encodeURIComponent(form.survey_id)}`;
+      body = { status: form.status || undefined, outcome: form.outcome || undefined, result_note: form.result_note || undefined, prep_note: form.prep_note || undefined };
+      okText = form.outcome ? `Survey completed: ${OUTCOMES[form.outcome] ?? form.outcome}` : `Survey → ${SURVEY_STATUSES[form.status] ?? form.status}`;
     } else {
       if (!String(form.title ?? "").trim()) missing = "title";
       url = "/api/quality/capa";
@@ -59,7 +75,7 @@ export default function AccreditationCenter({ frameworks, refsByFramework }: { f
 
     setBusy(true);
     try {
-      const r = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+      const r = await fetch(url, { method: tab === "advance" ? "PATCH" : "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
       if (r.ok) { toast("ok", okText); setForm({}); router.refresh(); }
       else toast("err", (await r.json().catch(() => ({}))).error ?? "Action failed");
     } catch { toast("err", "Network error — nothing was changed"); }
@@ -94,6 +110,28 @@ export default function AccreditationCenter({ frameworks, refsByFramework }: { f
             )}
             <div className="sm:col-span-2"><label className={label}>Evidence note</label><textarea value={form.evidence_note ?? ""} onChange={set("evidence_note")} rows={2} className={input} placeholder="Where the supporting evidence lives (documents, records, systems)" /></div>
             <p className="sm:col-span-2 text-[11px] text-gray-400">Assessments are insert-only history — re-assessing the same standard supersedes the previous status and builds a readiness trail.</p>
+          </div>
+        )}
+
+        {tab === "survey" && (
+          <div className="grid sm:grid-cols-2 gap-3">
+            <div><label className={label}>Survey title *</label><input value={form.title ?? ""} onChange={set("title")} className={input} placeholder="e.g. JCI Mock Survey — Q4" /></div>
+            <div><label className={label}>Framework</label><select value={form.framework_id ?? ""} onChange={set("framework_id")} className={input}><option value="">— None —</option>{frameworks.map(f => <option key={f.id} value={f.id}>{f.label}</option>)}</select></div>
+            <div><label className={label}>Type</label><select value={form.survey_type ?? "external"} onChange={set("survey_type")} className={input}>{Object.entries(SURVEY_TYPES).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select></div>
+            <div><label className={label}>Assessing body / surveyor</label><input value={form.surveyor ?? ""} onChange={set("surveyor")} className={input} placeholder="e.g. Joint Commission International" /></div>
+            <div><label className={label}>Scheduled date</label><input type="date" value={form.scheduled_date ?? ""} onChange={set("scheduled_date")} className={input} /></div>
+            <div><label className={label}>End date</label><input type="date" value={form.end_date ?? ""} onChange={set("end_date")} className={input} /></div>
+            <div className="sm:col-span-2"><label className={label}>Preparation note</label><textarea value={form.prep_note ?? ""} onChange={set("prep_note")} rows={2} className={input} placeholder="Document requests, interview schedule, department readiness…" /></div>
+          </div>
+        )}
+
+        {tab === "advance" && (
+          <div className="grid sm:grid-cols-2 gap-3">
+            <div><label className={label}>Survey *</label><select value={form.survey_id ?? ""} onChange={set("survey_id")} className={input}><option value="">— Select survey —</option>{surveys.map(s => <option key={s.id} value={s.id}>{s.label}</option>)}</select></div>
+            <div><label className={label}>Advance to</label><select value={form.status ?? ""} onChange={set("status")} className={input}><option value="">— Unchanged —</option>{Object.entries(SURVEY_STATUSES).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select></div>
+            <div><label className={label}>Outcome <span className="font-normal text-gray-400">(completes the survey)</span></label><select value={form.outcome ?? ""} onChange={set("outcome")} className={input}><option value="">— Not yet —</option>{Object.entries(OUTCOMES).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select></div>
+            <div className="sm:col-span-2"><label className={label}>Result / findings note</label><textarea value={form.result_note ?? ""} onChange={set("result_note")} rows={2} className={input} placeholder="Preliminary findings, final results…" /></div>
+            {surveys.length === 0 && <p className="sm:col-span-2 text-[11px] text-amber-600">No active surveys — schedule one first.</p>}
           </div>
         )}
 

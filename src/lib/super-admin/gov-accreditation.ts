@@ -16,7 +16,7 @@ export async function loadAccreditationCenter(admin: any) {
   const todayStr = new Date().toISOString().slice(0, 10);
   const soonStr = new Date(Date.now() + 60 * DAY).toISOString().slice(0, 10);
 
-  const [fwRows, stdRows, assessRows, oblRows, indRows, measRows, openCapa] = await Promise.all([
+  const [fwRows, stdRows, assessRows, oblRows, indRows, measRows, openCapa, surveyRows] = await Promise.all([
     admin.from("quality_frameworks").select("id, code, name, framework_type, is_active").limit(200),
     admin.from("quality_standards").select("framework_id, reference_code, title").limit(20000),
     admin.from("gov_standard_assessments").select("framework_id, reference_code, title, status, gap_note, evidence_note, owner_name, assessed_at").order("assessed_at", { ascending: false }).limit(5000),
@@ -24,6 +24,7 @@ export async function loadAccreditationCenter(admin: any) {
     admin.from("quality_indicators").select("id, name, target_value, direction, is_active").eq("is_active", true).not("target_value", "is", null).limit(1000),
     admin.from("indicator_measurements").select("indicator_id, value, period").order("period", { ascending: false }).limit(5000),
     admin.from("capa_actions").select("*", { count: "exact", head: true }).not("status", "in", "(completed,verified,closed)"),
+    admin.from("gov_surveys").select("id, title, framework_id, survey_type, surveyor, scheduled_date, status, outcome, created_at").order("scheduled_date", { ascending: true, nullsFirst: false }).limit(500),
   ]);
 
   const frameworks = (fwRows.error ? [] : fwRows.data ?? []) as any[];
@@ -104,8 +105,26 @@ export async function loadAccreditationCenter(admin: any) {
     if (ok) attained++;
   }
 
+  // ── Surveys & inspections (migration 062; fail-soft) ────────────────────────
+  const surveysReady = !surveyRows.error;
+  const surveys = (surveysReady ? surveyRows.data ?? [] : []) as any[];
+  const activeSurveys = surveys.filter(s => !["completed", "cancelled"].includes(s.status));
+  const upcomingSurveys = activeSurveys.slice(0, 5).map(s => ({
+    id: s.id, title: s.title, type: s.survey_type, surveyor: s.surveyor,
+    fw: fwCode.get(s.framework_id) ?? null, date: s.scheduled_date, status: s.status,
+    dueSoon: !!(s.scheduled_date && s.scheduled_date >= todayStr && s.scheduled_date <= soonStr),
+  }));
+  const completedSurveys = surveys.filter(s => s.status === "completed");
+  const surveyOutcomes = {
+    passed: completedSurveys.filter(s => s.outcome === "passed").length,
+    conditions: completedSurveys.filter(s => s.outcome === "passed_with_conditions").length,
+    failed: completedSurveys.filter(s => s.outcome === "failed").length,
+  };
+
   return {
     ready,
+    surveysReady,
+    surveys: { upcoming: upcomingSurveys, active: activeSurveys.length, completed: completedSurveys.length, outcomes: surveyOutcomes },
     kpis: {
       overall: ready ? overall : null,
       met: ready ? met : null,
@@ -122,6 +141,7 @@ export async function loadAccreditationCenter(admin: any) {
     pickers: {
       frameworks: frameworks.map(f => ({ id: f.id, label: `${f.code} — ${f.name}` })),
       refsByFramework: Object.fromEntries([...knownByFw.entries()].map(([id, refs]) => [id, [...refs].sort().slice(0, 200)])),
+      surveys: activeSurveys.slice(0, 200).map(s => ({ id: s.id, label: `${s.title} (${String(s.status).replace(/_/g, " ")})` })),
     },
     generatedAt: new Date().toISOString(),
   };

@@ -72,7 +72,7 @@ export default async function RegulatoryAccreditationCenter() {
       </div>
 
       {/* Real in-place readiness work */}
-      <AccreditationCenter frameworks={d.pickers.frameworks} refsByFramework={d.pickers.refsByFramework} />
+      <AccreditationCenter frameworks={d.pickers.frameworks} refsByFramework={d.pickers.refsByFramework} surveys={d.pickers.surveys} />
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         {/* Framework readiness */}
@@ -160,19 +160,34 @@ export default async function RegulatoryAccreditationCenter() {
 
         {/* Surveys & actions */}
         <div className={`${card} p-5`}>
-          <h2 className="font-semibold text-gray-900 text-[15px] mb-3">Surveys &amp; Action Plans</h2>
-          <Link href="/super-admin/governance/audit" className="flex items-center justify-between rounded-lg border border-gray-100 px-3 py-2.5 hover:border-teal-300 transition-colors mb-2">
-            <div><p className="text-sm font-medium text-gray-800">Open accreditation actions</p><p className="text-[10px] text-gray-400">tracked in the CAPA workflow (module 5)</p></div>
-            <span className="text-lg font-bold text-gray-900 tabular-nums">{dash(d.openActions)}</span>
-          </Link>
-          <div className="rounded-lg border border-gray-100 px-3 py-2.5">
-            <p className="text-sm font-medium text-gray-400">Survey &amp; inspection management</p>
-            <p className="text-[10px] text-gray-400 mt-0.5">Scheduling, assessor details, visit preparation and on-site findings have no store yet — an honest gap; lands with the survey-cycle phase.</p>
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="font-semibold text-gray-900 text-[15px]">Upcoming Surveys</h2>
+            <span className="text-[10px] text-gray-400">{d.surveys.completed} completed · {d.surveys.outcomes.passed}✓ {d.surveys.outcomes.conditions}◐ {d.surveys.outcomes.failed}✗</span>
           </div>
+          {!d.surveysReady ? (
+            <p className="text-xs text-amber-700 bg-amber-50 rounded-lg px-3 py-2 mb-2">Run <code className="font-mono text-[11px]">062-governance-surveys.sql</code> to enable survey management.</p>
+          ) : d.surveys.upcoming.length === 0 ? <p className="text-sm text-gray-400 py-4 text-center">No surveys scheduled — plan one above.</p> : (
+            <div className="space-y-2 mb-2">
+              {d.surveys.upcoming.map((s: any) => (
+                <div key={s.id} className="flex items-center gap-2.5 rounded-lg border border-gray-100 p-2.5">
+                  <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded shrink-0 tabular-nums ${s.dueSoon ? "bg-amber-50 text-amber-700" : "bg-gray-50 text-gray-500"}`}>{s.date ?? "TBD"}</span>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-xs text-gray-800 leading-tight truncate">{s.title}</p>
+                    <p className="text-[9px] text-gray-400 capitalize">{String(s.type).replace(/_/g, " ")}{s.fw ? ` · ${s.fw}` : ""}{s.surveyor ? ` · ${s.surveyor}` : ""}</p>
+                  </div>
+                  <span className="text-[9px] font-semibold px-1.5 py-0.5 rounded bg-sky-50 text-sky-700 shrink-0 capitalize">{String(s.status).replace(/_/g, " ")}</span>
+                </div>
+              ))}
+            </div>
+          )}
+          <Link href="/super-admin/governance/audit" className="flex items-center justify-between rounded-lg border border-gray-100 px-3 py-2 hover:border-teal-300 transition-colors">
+            <div><p className="text-xs font-medium text-gray-800">Open accreditation actions</p><p className="text-[9px] text-gray-400">tracked in the CAPA workflow (module 5)</p></div>
+            <span className="text-base font-bold text-gray-900 tabular-nums">{dash(d.openActions)}</span>
+          </Link>
         </div>
       </div>
 
-      <p className="text-[11px] text-gray-400 pb-4">The Regulatory &amp; Accreditation Center completes the Governance &amp; Compliance platform. Readiness is computed from real per-standard self-assessments (insert-only history against the EQOS JCI/SafeCare/MOH/internal catalogue — gap notes required when standards aren’t fully met), the regulatory calendar reads the obligations register, indicator attainment compares live measurements to targets, and action plans flow through the CAPA workflow. Survey management and a structured evidence room are the module’s honest remaining gaps.</p>
+      <p className="text-[11px] text-gray-400 pb-4">The Regulatory &amp; Accreditation Center completes the Governance &amp; Compliance platform. Readiness is computed from real per-standard self-assessments (insert-only history against the EQOS JCI/SafeCare/MOH/internal catalogue — gap notes required when standards aren’t fully met), the regulatory calendar reads the obligations register, indicator attainment compares live measurements to targets, and action plans flow through the CAPA workflow. Survey &amp; inspection management is live (schedule → prepare → conduct → outcome, migration 062); a structured evidence room remains the module’s honest gap.</p>
     </div>
   );
 }
