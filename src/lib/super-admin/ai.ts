@@ -18,7 +18,7 @@ const num = (r: any) => (r?.error ? null : r?.count ?? 0);
 // The copilots ARE the real server-side AI operations the app runs. Each maps to
 // the operation strings recorded in plat_ai_requests, so "usage today" is live.
 // Accuracy is not metered yet → honest null.
-const COPILOTS = [
+export const COPILOTS = [
   { key: "clinical", name: "Clinical Copilot", desc: "Decision support, risk & competency guidance", icon: "🩺", ops: ["assistant", "assess", "osce", "simulation", "coach", "clinical"] },
   { key: "educator", name: "Educator Copilot", desc: "Curriculum, authoring & learner support", icon: "🎓", ops: ["author", "curriculum", "lms", "learning", "content"] },
   { key: "workforce", name: "Workforce Copilot", desc: "Skill gaps, rostering & staffing intelligence", icon: "👥", ops: ["workforce", "roster", "schedule", "staffing"] },
