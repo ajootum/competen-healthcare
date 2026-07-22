@@ -15,7 +15,7 @@ import { workspaceLinksForUser } from "@/lib/workspace-links";
 // shift supervisor = assessor tier, and admins). Items link to live surfaces;
 // capabilities without a built surface yet are shown muted ("soon") rather than
 // as dead links.
-type NavItem = { label: string; href?: string; icon: string; exact?: boolean; soon?: boolean };
+type NavItem = { label: string; href?: string; icon: string; exact?: boolean; soon?: boolean; badge?: string };
 
 // Standalone landing (SSW-001-R2 Ch.4) — the executive overview.
 const DASHBOARD: NavItem = { label: "Dashboard", href: "/supervisor", icon: "🏠", exact: true };
@@ -28,8 +28,8 @@ const DASHBOARD: NavItem = { label: "Dashboard", href: "/supervisor", icon: "�
 const NAV_GROUPS: { group: string; items: NavItem[] }[] = [
   { group: "Shift Command", items: [
     { label: "Shift Dashboard",   href: "/supervisor/shift-operations",            icon: "🖥️" },
-    { label: "Handover Centre",   href: "/supervisor/handover",                    icon: "🔄" },
-    { label: "Escalation Centre", href: "/supervisor/operations?section=safety",   icon: "⬆️" },
+    { label: "Handover Centre",   href: "/supervisor/handover",                    icon: "🔄", badge: "handover" },
+    { label: "Escalation Centre", href: "/supervisor/operations?section=safety",   icon: "⬆️", badge: "escalations" },
     { label: "Shift Analytics",   href: "/supervisor/analytics",                   icon: "📈" },
   ]},
   { group: "Patient Operations", items: [
@@ -51,21 +51,21 @@ const NAV_GROUPS: { group: string; items: NavItem[] }[] = [
   ]},
   { group: "Task Centre", items: [
     { label: "Task Assignment",   href: "/supervisor/task-center",                icon: "✅" },
-    { label: "Outstanding Tasks", href: "/supervisor/operations?section=care",    icon: "📋" },
-    { label: "Critical Tasks",    href: "/supervisor/task-center",                icon: "🔴" },
+    { label: "Outstanding Tasks", href: "/supervisor/operations?section=care",    icon: "📋", badge: "openTasks" },
+    { label: "Critical Tasks",    href: "/supervisor/task-center",                icon: "🔴", badge: "criticalTasks" },
     { label: "Completed Tasks",   href: "/supervisor/task-center",                icon: "✔️" },
     { label: "Task Rules",        icon: "⚙️", soon: true },
   ]},
   { group: "Communication", items: [
-    { label: "Team Communications", href: "/supervisor/communication",            icon: "💬" },
+    { label: "Team Communications", href: "/supervisor/communication",            icon: "💬", badge: "unread" },
     { label: "Broadcast Centre",    icon: "📣", soon: true },
-    { label: "Messages",            href: "/supervisor/communication",            icon: "✉️" },
+    { label: "Messages",            href: "/supervisor/communication",            icon: "✉️", badge: "unread" },
   ]},
   { group: "Quality, Safety & Escalation", items: [
-    { label: "Safety Dashboard",       href: "/supervisor/clinical-safety",           icon: "🛡️" },
+    { label: "Safety Dashboard",       href: "/supervisor/clinical-safety",           icon: "🛡️", badge: "safety" },
     { label: "Incident Reporting",     href: "/supervisor/operations?section=safety", icon: "🚩" },
-    { label: "Observation Compliance", href: "/supervisor/operations?section=safety", icon: "📋" },
-    { label: "Escalation Tracking",    href: "/supervisor/operations?section=safety", icon: "⬆️" },
+    { label: "Observation Compliance", href: "/supervisor/operations?section=safety", icon: "📋", badge: "overdueObs" },
+    { label: "Escalation Tracking",    href: "/supervisor/operations?section=safety", icon: "⬆️", badge: "escalations" },
     { label: "Quality Audits",         icon: "🔍", soon: true },
     { label: "Improvement Actions",    icon: "⚡", soon: true },
   ]},
@@ -104,7 +104,7 @@ export default async function SupervisorLayout({ children }: { children: React.R
   if (!user) redirect("/login");
 
   const admin = createAdminClient();
-  const { data: profile } = await admin.from("profiles").select("full_name, role, roles").eq("id", user.id).single();
+  const { data: profile } = await admin.from("profiles").select("full_name, role, roles, hospital_id").eq("id", user.id).single();
   const userRoles: AppRole[] = (profile?.roles?.length ? profile.roles : [profile?.role]).filter(Boolean) as AppRole[];
   const cookieStore = await cookies();
   const activeRole = (cookieStore.get("active_role")?.value ?? highestRole(userRoles)) as AppRole;
@@ -123,6 +123,32 @@ export default async function SupervisorLayout({ children }: { children: React.R
       </div>
     );
   }
+
+  // ── Live nav badges / unread counts (SSW-001-R2 Ch.14) ──────────────────────
+  // Hospital-scoped counts feeding the sidebar attention chips. Fail-soft: any
+  // query error (e.g. pre-migration) resolves to 0, so the nav never breaks.
+  const bSuper = userRoles.includes("super_admin");
+  const bHid = (profile as any)?.hospital_id ?? null;
+  const bNONE = "00000000-0000-0000-0000-000000000000";
+  const bScope = (q: any) => (bSuper ? q : q.eq("hospital_id", bHid ?? bNONE));
+  const bNum = (r: any) => (r?.error ? 0 : r?.count ?? 0);
+  const OPEN_TASK = "(completed,verified,cancelled)";
+  const [unreadRes, escRes, taskRes, critRes, safetyRes, obsRes, handRes] = await Promise.all([
+    admin.from("notifications").select("id", { count: "exact", head: true }).eq("user_id", user.id).eq("read", false),
+    bScope(admin.from("op_escalations").select("id", { count: "exact", head: true })).in("status", ["open", "acknowledged"]),
+    bScope(admin.from("op_tasks").select("id", { count: "exact", head: true })).not("status", "in", OPEN_TASK),
+    bScope(admin.from("op_tasks").select("id", { count: "exact", head: true })).eq("priority", "urgent").not("status", "in", OPEN_TASK),
+    bScope(admin.from("op_safety_alerts").select("id", { count: "exact", head: true })).eq("active", true),
+    bScope(admin.from("op_observations").select("id", { count: "exact", head: true })).eq("status", "overdue"),
+    bScope(admin.from("op_handovers").select("status").order("created_at", { ascending: false }).limit(1)),
+  ]);
+  const badges: Record<string, number> = {
+    unread: bNum(unreadRes), escalations: bNum(escRes), openTasks: bNum(taskRes),
+    criticalTasks: bNum(critRes), safety: bNum(safetyRes), overdueObs: bNum(obsRes),
+    handover: (!handRes.error && handRes.data?.[0] && handRes.data[0].status !== "accepted") ? 1 : 0,
+  };
+  const groupBadge = (items: NavItem[]) =>
+    [...new Set(items.filter(i => i.href && !i.soon && i.badge).map(i => i.badge!))].reduce((n, k) => n + (badges[k] ?? 0), 0);
 
   // Flat list of real (non-soon) destinations for the mobile pill bar, deduped by href.
   const mobileItems = [...new Map([DASHBOARD, ...NAV_GROUPS.flatMap(g => g.items)].filter(i => i.href && !i.soon && !i.href.startsWith("mailto")).map(i => [i.href, i] as const)).values()];
@@ -162,7 +188,7 @@ export default async function SupervisorLayout({ children }: { children: React.R
               className={linkCls} activeClassName={activeCls} />
             <div className="my-1.5 border-t border-teal-800/30" />
             {NAV_GROUPS.map(({ group, items }) => {
-              const nodes = items.map(({ label, href, icon, exact, soon }) => soon || !href ? (
+              const nodes = items.map(({ label, href, icon, exact, soon, badge }) => soon || !href ? (
                 <span key={label} title={label} data-sb-item
                   className="flex items-center gap-2.5 px-3 py-1.5 rounded-lg text-[13px] text-teal-100/25 cursor-default select-none">
                   <span className="w-5 text-center text-sm leading-none opacity-60">{icon}</span>
@@ -176,10 +202,12 @@ export default async function SupervisorLayout({ children }: { children: React.R
                 </a>
               ) : (
                 <NavLink key={label} href={href} icon={icon} label={label} exact={exact}
+                  badge={badge ? badges[badge] : undefined}
                   className={linkCls} activeClassName={activeCls} />
               ));
               return (
                 <NavGroup key={group} title={group} hrefs={items.filter(i => i.href).map(i => i.href!.split(/[?#]/)[0])}
+                  badge={groupBadge(items)}
                   headerClass="text-[9px] font-bold uppercase tracking-widest text-teal-400/50">{nodes}</NavGroup>
               );
             })}
