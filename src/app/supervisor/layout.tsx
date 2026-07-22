@@ -41,10 +41,10 @@ const NAV_GROUPS: { group: string; items: NavItem[] }[] = [
     { label: "Breaks",             icon: "☕", soon: true },
   ]},
   { group: "Task Centre", items: [
+    { label: "Task Center",        href: "/supervisor/task-center",                icon: "🗂️" },
     { label: "Tasks",              href: "/supervisor/operations?section=care",    icon: "✅" },
     { label: "Escalations",        href: "/supervisor/operations?section=safety",  icon: "⬆️" },
     { label: "Incidents",          href: "/supervisor/operations?section=safety",  icon: "🚩" },
-    { label: "Approvals",          icon: "⚖️", soon: true },
     { label: "Handover",           href: "/supervisor/handover",                   icon: "🔄" },
   ]},
   { group: "Communication", items: [
