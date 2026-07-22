@@ -8,6 +8,7 @@ import SupervisorPanel from "./SupervisorPanel";
 import SafetyHuddlePanel from "./SafetyHuddlePanel";
 import ShiftDecisionsPanel from "./ShiftDecisionsPanel";
 import ClosurePanel from "./ClosurePanel";
+import ShiftMetricsPanel from "./ShiftMetricsPanel";
 
 export const dynamic = "force-dynamic";
 
@@ -86,6 +87,11 @@ export default async function ShiftOperationsEngine() {
         <ShiftDecisionsPanel shiftId={d.shiftId} provisioned={d.decisions?.provisioned !== false}
           decisions={d.decisions?.decisions ?? []} editable={lc.shiftStatus !== "completed"} />
       </div>
+
+      {/* Shift metrics (live KPIs + persist/trend) */}
+      <ShiftMetricsPanel shiftId={d.shiftId} provisioned={d.metrics?.provisioned !== false}
+        live={d.metrics?.live ?? null} persisted={d.metrics?.persisted ?? null}
+        trend={d.metrics?.trend ?? []} editable={!!d.shiftId} />
 
       {/* Closure snapshots + command transfer (closes the lifecycle loop) */}
       <ClosurePanel shiftId={d.shiftId} provisioned={d.closure?.provisioned !== false}

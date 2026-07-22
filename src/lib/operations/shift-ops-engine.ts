@@ -12,6 +12,7 @@ import { loadReadiness } from "@/lib/operations/readiness";
 import { loadSupervisorAssignments } from "@/lib/operations/supervisor-assignments";
 import { loadSafetyHuddle, loadShiftDecisions } from "@/lib/operations/shift-records";
 import { loadShiftClosure } from "@/lib/operations/shift-closure";
+import { computeShiftMetrics, loadShiftMetricsData } from "@/lib/operations/shift-metrics";
 
 const NONE = "00000000-0000-0000-0000-000000000000";
 const DAY = 86400000;
@@ -51,11 +52,14 @@ export async function loadShiftOpsEngine(admin: any, hid: string | null, isSuper
   // Supervisor assignments & confirmation (SSW-002 §6.3 / §8) — command ownership.
   const supervisors: any = await loadSupervisorAssignments(admin, sc.shiftId, hid, isSuper);
   // Operational records (SSW-002 §6.7 / §6.8) — safety huddle + decisions.
-  const [huddle, decisions, closure] = await Promise.all([
+  const [huddle, decisions, closure, liveMetrics, metricsData] = await Promise.all([
     loadSafetyHuddle(admin, sc.shiftId),
     loadShiftDecisions(admin, sc.shiftId),
     loadShiftClosure(admin, sc.shiftId),
+    computeShiftMetrics(admin, sc, hid, isSuper),
+    loadShiftMetricsData(admin, sc.shiftId, hid, isSuper),
   ]);
+  const metrics = { provisioned: metricsData.provisioned !== false, live: (liveMetrics as any).kpis ?? null, persisted: (metricsData as any).persisted ?? null, trend: (metricsData as any).trend ?? [] };
 
   // ── Transition gate (SSW-002 §10 / §26) — the engine computes the blocking
   // reasons the UI must surface; activation/closure buttons derive from these.
@@ -167,7 +171,7 @@ export async function loadShiftOpsEngine(admin: any, hid: string | null, isSuper
     ready: true as const,
     shift: sc.shift, shiftId: sc.shiftId,
     lifecycle: { states: LIFECYCLE, current: currentState, index: stateIndex, subState: activeSubState, shiftStatus },
-    gate, command, readiness, supervisors, huddle, decisions, closure,
+    gate, command, readiness, supervisors, huddle, decisions, closure, metrics,
     engines, liveCount,
     eventFlow,
     roadmap, principles,
