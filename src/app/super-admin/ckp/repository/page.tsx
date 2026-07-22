@@ -2,6 +2,7 @@ import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { loadRepository } from "@/lib/super-admin/ckp-repository";
+import RepositoryBuilder from "./RepositoryBuilder";
 
 export const dynamic = "force-dynamic";
 
@@ -67,6 +68,9 @@ export default async function ClinicalKnowledgeRepository() {
         <span className="text-sm text-gray-400 flex-1">Search knowledge — natural language, semantic and AI search over {fmt(k.knowledgeObjects + k.cpus)} objects…</span>
         <span className="text-[10px] text-gray-400 border border-gray-200 rounded px-1.5 py-0.5">AI Assistant →</span>
       </Link>
+
+      {/* Real in-place repository builder — creates warehouse assets via the content APIs */}
+      <RepositoryBuilder />
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         {/* Repository categories */}
@@ -134,7 +138,7 @@ export default async function ClinicalKnowledgeRepository() {
         </div>
       </div>
 
-      <p className="text-[11px] text-gray-400 pb-4">The repository is Competen's clinical knowledge warehouse — GitHub meets UpToDate meets Confluence. Every object is searchable, linked in the knowledge graph and versioned. Counts, graph shape and recent knowledge are live; clinical-pathway objects and access-based "most accessed" ranking arrive with their dedicated stores and usage telemetry.</p>
+      <p className="text-[11px] text-gray-400 pb-4">The repository is Competen's clinical knowledge warehouse — GitHub meets UpToDate meets Confluence. The Repository Builder adds real knowledge objects, guidelines and policies in-place via the content APIs; every object is searchable, linked in the knowledge graph and versioned. Counts, graph shape and recent knowledge are live; access-based "most accessed" ranking arrives with usage telemetry.</p>
     </div>
   );
 }
