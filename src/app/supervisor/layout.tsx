@@ -74,12 +74,14 @@ const NAV_GROUPS: { group: string; items: NavItem[] }[] = [
     { label: "Clinical Governance",      href: "/supervisor/quality-safety",            icon: "⚖️" },
     { label: "Safety Analytics",         href: "/supervisor/quality-safety",            icon: "📊" },
   ]},
-  { group: "Analytics", items: [
-    { label: "Shift Performance",       href: "/supervisor/analytics",             icon: "📈" },
-    { label: "Patient Flow Analytics",  href: "/supervisor/analytics",             icon: "🔀" },
-    { label: "Workforce Analytics",     href: "/supervisor/analytics",             icon: "👥" },
-    { label: "Safety Analytics",        href: "/supervisor/analytics",             icon: "🛡️" },
-    { label: "Operational Reports",     icon: "📄", soon: true },
+  { group: "Operational Intelligence", items: [
+    { label: "Shift Performance",         href: "/supervisor/operational-intelligence", icon: "📈" },
+    { label: "Patient Intelligence",      href: "/supervisor/operational-intelligence", icon: "🧭" },
+    { label: "Workforce Intelligence",    href: "/supervisor/operational-intelligence", icon: "👥" },
+    { label: "Safety & Quality Intelli.", href: "/supervisor/operational-intelligence", icon: "🛡️" },
+    { label: "Predictive Intelligence",   href: "/supervisor/operational-intelligence", icon: "🔮" },
+    { label: "Operational Reporting",     href: "/supervisor/operational-intelligence", icon: "📄" },
+    { label: "Executive Insights",        href: "/supervisor/operational-intelligence", icon: "📊" },
   ]},
   { group: "AI & Intelligence", items: [
     { label: "Shift AI Copilot",          href: "/supervisor/ai",                  icon: "✨" },
