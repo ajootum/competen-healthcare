@@ -8,6 +8,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 import { loadShiftCommand } from "@/lib/operations/shift-command";
+import { loadReadiness } from "@/lib/operations/readiness";
 
 const NONE = "00000000-0000-0000-0000-000000000000";
 const DAY = 86400000;
@@ -40,17 +41,26 @@ export async function loadShiftOpsEngine(admin: any, hid: string | null, isSuper
   const num = (r: any) => (r?.error ? null : r?.count ?? 0);
   const shiftStatus = sc.shift?.status ?? null;
 
+  // Formal pre-shift readiness checklist (SSW-002 §6.4) — drives the gate when
+  // migration 064 is applied; falls back to inferred preconditions until then.
+  const readiness: any = await loadReadiness(admin, sc.shiftId);
+  const rdyProvisioned = readiness.provisioned === true && !readiness.error && Array.isArray(readiness.items);
+
   // ── Transition gate (SSW-002 §10 / §26) — the engine computes the blocking
   // reasons the UI must surface; activation/closure buttons derive from these.
-  // Only conditions we can determine from real data are enforced; readiness
-  // items with no backing (equipment checks, safety huddle) are NOT faked as met.
   const blockers: { code: string; message: string; hard: boolean }[] = [];
   let gateAction: { status: string; label: string } | null = null;
   if (shiftStatus === "planned") {
     gateAction = { status: "active", label: "Activate shift" };
-    if (!sc.shift?.supervisor) blockers.push({ code: "SUPERVISOR_NOT_ASSIGNED", message: "No supervisor holds command of this shift.", hard: true });
-    if ((o.rostered ?? 0) === 0) blockers.push({ code: "STAFFING_REVIEW_INCOMPLETE", message: "No staff rostered / attendance not confirmed.", hard: true });
-    if ((o.totalBeds ?? 0) === 0) blockers.push({ code: "CENSUS_UNAVAILABLE", message: "No patient census or bed context for the unit.", hard: true });
+    if (rdyProvisioned) {
+      // Authoritative: the explicit readiness sign-off (mandatory items).
+      if (!readiness.allComplete) blockers.push({ code: "READINESS_INCOMPLETE", message: `${readiness.mandatoryTotal - readiness.mandatoryComplete} mandatory readiness item(s) outstanding.`, hard: true });
+    } else {
+      // Fallback (pre-migration): infer readiness from live data.
+      if (!sc.shift?.supervisor) blockers.push({ code: "SUPERVISOR_NOT_ASSIGNED", message: "No supervisor holds command of this shift.", hard: true });
+      if ((o.rostered ?? 0) === 0) blockers.push({ code: "STAFFING_REVIEW_INCOMPLETE", message: "No staff rostered / attendance not confirmed.", hard: true });
+      if ((o.totalBeds ?? 0) === 0) blockers.push({ code: "CENSUS_UNAVAILABLE", message: "No patient census or bed context for the unit.", hard: true });
+    }
     if (sc.handover && sc.handover.status !== "accepted") blockers.push({ code: "HANDOVER_NOT_ACCEPTED", message: "Incoming handover not yet accepted (override needs authorisation).", hard: false });
   } else if (shiftStatus === "active") {
     gateAction = { status: "completed", label: "Begin closure" };
@@ -145,7 +155,7 @@ export async function loadShiftOpsEngine(admin: any, hid: string | null, isSuper
     ready: true as const,
     shift: sc.shift, shiftId: sc.shiftId,
     lifecycle: { states: LIFECYCLE, current: currentState, index: stateIndex, subState: activeSubState, shiftStatus },
-    gate, command,
+    gate, command, readiness,
     engines, liveCount,
     eventFlow,
     roadmap, principles,
