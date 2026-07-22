@@ -1,5 +1,6 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { aiStatus } from "@/lib/ai/config";
+import { recordAiUsage } from "@/lib/ai/gateway";
 
 // ============================================================
 // Anthropic client wrapper (Book IV — Clinical Intelligence Engine)
@@ -21,6 +22,9 @@ export type GenerateArgs = {
   user: string;
   tier?: "cheap" | "reasoning" | "heavy";
   maxTokens?: number;
+  // Optional attribution for the AI Runtime Gateway usage log (PFS-000 §15).
+  // Usage (tokens/latency/cost/status) is always recorded; context adds who/what.
+  context?: { userId?: string | null; tenantId?: string | null; operation?: string };
 };
 
 export type GenerateResult =
@@ -32,12 +36,14 @@ export type GenerateResult =
  * protection) and returns the assembled final message. Keep max_tokens modest
  * for interactive latency on constrained runtimes.
  */
-export async function generate({ system, user, tier = "reasoning", maxTokens = 1500 }: GenerateArgs): Promise<GenerateResult> {
+export async function generate({ system, user, tier = "reasoning", maxTokens = 1500, context }: GenerateArgs): Promise<GenerateResult> {
   const c = client();
   const status = aiStatus();
   if (!c || !status.models) return { ok: false, error: "not_configured" };
 
   const model = status.models[tier];
+  const base = { operation: context?.operation ?? null, tier, provider: status.provider, model, actorId: context?.userId ?? null, tenantId: context?.tenantId ?? null };
+  const t0 = Date.now();
 
   try {
     const stream = c.messages.stream({
@@ -47,8 +53,11 @@ export async function generate({ system, user, tier = "reasoning", maxTokens = 1
       messages: [{ role: "user", content: user }],
     });
     const message = await stream.finalMessage();
+    const latencyMs = Date.now() - t0;
+    const usage = { inputTokens: message.usage.input_tokens, outputTokens: message.usage.output_tokens };
 
     if (message.stop_reason === "refusal") {
+      void recordAiUsage({ ...base, ...usage, latencyMs, status: "refusal" });
       return { ok: false, error: "refusal" };
     }
     const text = message.content
@@ -56,6 +65,7 @@ export async function generate({ system, user, tier = "reasoning", maxTokens = 1
       .map(b => b.text)
       .join("");
 
+    void recordAiUsage({ ...base, ...usage, latencyMs, status: "ok" });
     return {
       ok: true,
       text,
@@ -63,6 +73,7 @@ export async function generate({ system, user, tier = "reasoning", maxTokens = 1
       usage: { input: message.usage.input_tokens, output: message.usage.output_tokens },
     };
   } catch (e) {
+    void recordAiUsage({ ...base, latencyMs: Date.now() - t0, status: "error", error: e instanceof Error ? e.message : String(e) });
     return { ok: false, error: "failed", detail: e instanceof Error ? e.message : String(e) };
   }
 }
