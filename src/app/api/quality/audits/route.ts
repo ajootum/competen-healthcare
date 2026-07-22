@@ -24,6 +24,28 @@ export async function POST(req: Request) {
   const { data: me } = await admin.from("profiles").select("full_name").eq("id", c.userId).single();
 
   const body = await req.json().catch(() => ({}));
+
+  // Plan mode (GOV-001.5 audit planning): schedule an audit as status 'planned'
+  // without checklist responses — the one-shot flow below records completed
+  // audits. Planned date is kept in record_ref (the free-text reference field).
+  if (body.mode === "plan") {
+    if (!TYPES.has(body.audit_type)) return NextResponse.json({ error: "audit_type must be concurrent, retrospective or clinical" }, { status: 400 });
+    if (!String(body.title ?? "").trim()) return NextResponse.json({ error: "title is required" }, { status: 400 });
+    const { data: planned, error: perr } = await admin.from("audits").insert({
+      hospital_id: c.hospitalId,
+      audit_type: body.audit_type,
+      title: String(body.title).trim(),
+      area: (body.area ?? "").trim() || null,
+      record_ref: body.planned_for ? `planned for ${body.planned_for}` : null,
+      status: "planned",
+      note: (body.note ?? "").trim() || null,
+      conducted_by: c.userId, conducted_by_name: me?.full_name ?? null,
+    }).select("id").single();
+    if (perr) return NextResponse.json({ error: perr.message }, { status: 500 });
+    await admin.from("audit_log").insert({ actor_id: c.userId, actor_name: me?.full_name ?? null, action: "plan_audit", entity_type: "audit", entity_id: planned.id, entity_name: String(body.title).trim() });
+    return NextResponse.json({ ok: true, id: planned.id }, { status: 201 });
+  }
+
   const { audit_type, competency_id, nurse_id, area, record_ref, note } = body;
   const responses: { checklist_item_id?: string; result?: string; note?: string }[] =
     Array.isArray(body.responses) ? body.responses : [];

@@ -101,7 +101,7 @@ const GOV_NAV = [
     { label: "2. Policy & Standards Center", href: "/super-admin/governance/policies", icon: "📄" },
     { label: "3. Compliance Management", href: "/super-admin/governance/compliance", icon: "✅" },
     { label: "4. Risk & Internal Controls", href: "/super-admin/governance/risk", icon: "⚠️" },
-    { label: "5. Audit & Assurance", href: "/super-admin/audit", icon: "📋" },
+    { label: "5. Audit & Assurance", href: "/super-admin/governance/audit", icon: "📋" },
     { label: "6. Regulatory & Accreditation", href: "/admin/accreditation", icon: "🏛️" },
   ]},
   { group: "QUICK ACCESS", items: [
