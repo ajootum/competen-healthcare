@@ -34,15 +34,18 @@ export async function POST(req: Request) {
   const recurrence = RECURRENCES.includes(b.recurrence) ? b.recurrence : "none";
   const trigger = TRIGGERS.includes(b.trigger_event) ? b.trigger_event : "manual";
   const off = Number(b.due_offset_min); const dueOffset = Number.isFinite(off) && off >= 0 ? Math.round(off) : 60;
+  const pt = Number(b.pews_threshold); const pews = Number.isFinite(pt) && pt >= 0 ? Math.round(pt) : 5;
 
   const { data: me } = await c.admin.from("profiles").select("full_name").eq("id", c.userId).single();
-  const { data, error } = await c.admin.from("op_task_templates").insert({
+  const row: any = {
     hospital_id: c.hospitalId ?? (isSuper(c) ? null : NONE),
     name: String(b.name).trim(), task_type: b.task_type?.trim() || null, priority,
     description: b.description?.trim() || null, due_offset_min: dueOffset,
     recurrence, trigger_event: trigger, requires_review: !!b.requires_review,
     created_by: c.userId, created_by_name: me?.full_name ?? null,
-  }).select("id, name").single();
+  };
+  if (trigger === "pews_high") row.pews_threshold = pews;
+  const { data, error } = await c.admin.from("op_task_templates").insert(row).select("id, name").single();
   if (error) return migrationGate(error) ?? NextResponse.json({ error: error.message }, { status: 500 });
 
   await c.admin.from("audit_log").insert({ actor_id: c.userId, actor_name: me?.full_name ?? null, action: "create_task_template", entity_type: "task_template", entity_id: data.id, entity_name: data.name, hospital_id: c.hospitalId ?? null });

@@ -18,7 +18,8 @@ export default function WorkflowPanel({ provisioned, templates, editable }: { pr
   const [busy, setBusy] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [open, setOpen] = useState(false);
-  const [f, setF] = useState<Record<string, string>>({ name: "", task_type: "", priority: "normal", recurrence: "none", trigger_event: "manual", due_offset_min: "60", description: "" });
+  const [result, setResult] = useState<string | null>(null);
+  const [f, setF] = useState<Record<string, string>>({ name: "", task_type: "", priority: "normal", recurrence: "none", trigger_event: "manual", due_offset_min: "60", pews_threshold: "5", description: "" });
 
   if (!provisioned) {
     return (
@@ -37,9 +38,19 @@ export default function WorkflowPanel({ provisioned, templates, editable }: { pr
     if (!f.name.trim()) return;
     setBusy("create"); setErr(null);
     try {
-      const res = await fetch(`/api/operations/task-templates`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...f, due_offset_min: Number(f.due_offset_min) || 60 }) });
+      const res = await fetch(`/api/operations/task-templates`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...f, due_offset_min: Number(f.due_offset_min) || 60, pews_threshold: Number(f.pews_threshold) || 5 }) });
       if (!res.ok) { const j = await res.json().catch(() => ({})); setErr(j.error ?? "Create failed"); return; }
-      setF({ name: "", task_type: "", priority: "normal", recurrence: "none", trigger_event: "manual", due_offset_min: "60", description: "" }); setOpen(false); router.refresh();
+      setF({ name: "", task_type: "", priority: "normal", recurrence: "none", trigger_event: "manual", due_offset_min: "60", pews_threshold: "5", description: "" }); setOpen(false); router.refresh();
+    } catch { setErr("Network error"); } finally { setBusy(null); }
+  }
+  async function runAutomation() {
+    setBusy("auto"); setErr(null); setResult(null);
+    try {
+      const res = await fetch(`/api/operations/task-automation`, { method: "POST" });
+      const j = await res.json().catch(() => ({}));
+      if (!res.ok) { setErr(j.error ?? "Automation failed"); return; }
+      setResult(j.generated > 0 ? `Generated ${j.generated} task(s): ${(j.details ?? []).join(", ")}` : "No tasks due — recurrence intervals not elapsed and no new trigger events.");
+      router.refresh();
     } catch { setErr("Network error"); } finally { setBusy(null); }
   }
   async function generate(t: any) {
@@ -64,8 +75,14 @@ export default function WorkflowPanel({ provisioned, templates, editable }: { pr
     <div className="bg-white rounded-xl border border-gray-200 p-5" id="workflow">
       <div className="flex items-center justify-between mb-3">
         <div><h2 className="text-sm font-bold text-gray-900">Workflow &amp; Automation</h2><p className="text-[10px] text-gray-500">Reusable task templates · recurrence &amp; event triggers</p></div>
-        {editable && <button onClick={() => setOpen(o => !o)} className="text-xs font-semibold text-teal-700 hover:underline shrink-0">{open ? "Cancel" : "+ New template"}</button>}
+        {editable && (
+          <div className="flex items-center gap-2 shrink-0">
+            <button onClick={runAutomation} disabled={busy === "auto"} className="text-xs font-semibold px-2.5 py-1 rounded-lg bg-violet-600 text-white hover:bg-violet-700 disabled:opacity-50">{busy === "auto" ? "Running…" : "▶ Run automation"}</button>
+            <button onClick={() => setOpen(o => !o)} className="text-xs font-semibold text-teal-700 hover:underline">{open ? "Cancel" : "+ New template"}</button>
+          </div>
+        )}
       </div>
+      {result && <p className="text-[11px] text-violet-700 bg-violet-50 border border-violet-100 rounded-lg px-2.5 py-1.5 mb-3">{result}</p>}
 
       {open && editable && (
         <div className="mb-3 rounded-lg border border-gray-100 bg-gray-50/50 p-3 space-y-2">
@@ -78,6 +95,7 @@ export default function WorkflowPanel({ provisioned, templates, editable }: { pr
             <select value={f.recurrence} onChange={e => setF({ ...f, recurrence: e.target.value })} className={sel}>{RECURRENCES.map(r => <option key={r} value={r}>{RECURRENCE_LABEL[r]}</option>)}</select>
             <select value={f.trigger_event} onChange={e => setF({ ...f, trigger_event: e.target.value })} className={sel}>{TRIGGERS.map(t => <option key={t} value={t}>{TRIGGER_LABEL[t]}</option>)}</select>
             <input type="number" min={0} value={f.due_offset_min} onChange={e => setF({ ...f, due_offset_min: e.target.value })} className={`${sel} w-20`} title="due offset (min)" />
+            {f.trigger_event === "pews_high" && <input type="number" min={0} max={20} value={f.pews_threshold} onChange={e => setF({ ...f, pews_threshold: e.target.value })} className={`${sel} w-20`} title="PEWS/EWS threshold" placeholder="EWS ≥" />}
           </div>
           <input value={f.description} onChange={e => setF({ ...f, description: e.target.value })} placeholder="Description (optional)" className={`${sel} w-full`} />
           <button onClick={create} disabled={!f.name.trim() || busy === "create"} className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-teal-600 text-white hover:bg-teal-700 disabled:opacity-50">{busy === "create" ? "…" : "Create template"}</button>

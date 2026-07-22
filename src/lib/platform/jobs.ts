@@ -8,6 +8,7 @@
 
 import { emitPlatformEvent } from "./events";
 import { loadKnowledgeIntelligence } from "@/lib/super-admin/ckp-intelligence";
+import { runTaskAutomation } from "@/lib/operations/task-automation";
 
 export type JobDef = { key: string; name: string; description: string; category: string; schedule: string; runnable: boolean };
 
@@ -19,6 +20,7 @@ export const JOB_REGISTRY: JobDef[] = [
   { key: "subscription_renewal_scan", name: "Subscription Renewal Scan", description: "Flag active subscriptions renewing within the next 30 days.", category: "licensing", schedule: "0 7 * * *", runnable: true },
   { key: "knowledge_intelligence_scan", name: "Knowledge Intelligence Scan", description: "Recompute knowledge health, coverage, gaps and duplicates; snapshot to the platform event log.", category: "knowledge", schedule: "0 5 * * *", runnable: true },
   { key: "scheduled_reports", name: "Scheduled Reports", description: "Deliver due report schedules to recipients.", category: "reports", schedule: "0 6 * * *", runnable: false },
+  { key: "task_automation", name: "Task Automation", description: "Fire recurring & event-triggered tasks from active task templates across all tenants.", category: "operations", schedule: "0 * * * *", runnable: true },
 ];
 
 const HANDLERS: Record<string, (admin: any) => Promise<string>> = {
@@ -54,6 +56,12 @@ const HANDLERS: Record<string, (admin: any) => Promise<string>> = {
     });
     const pct = (n: number | null) => (n == null ? "n/a" : `${n}%`);
     return `health=${pct(k.health)} · coverage=${pct(k.coverage)} · ${k.duplicates} duplicate(s) · ${k.gaps} gap(s) · ${k.missingCompetencies} unmapped · snapshot ${written ? "recorded" : "skipped"}`;
+  },
+  task_automation: async (admin) => {
+    const r = await runTaskAutomation(admin, null);
+    if (!r.ok) throw new Error(r.error ?? "automation failed");
+    if (r.generated) await emitPlatformEvent(admin, { event_type: "tasks.automation_fired", severity: "info", payload: { generated: r.generated, templates: r.details.length } });
+    return `${r.generated} task(s) generated from ${r.details.length} template(s)${r.details.length ? ` · ${r.details.slice(0, 4).join(", ")}` : ""}`;
   },
 };
 

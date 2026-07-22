@@ -134,12 +134,15 @@ export async function loadTaskCenter(admin: any, hid: string | null, isSuper: bo
   const cardOf = (t: any) => ({ id: t.id, desc: t.description, bed: t.op_patients?.label ?? null, priority: t.priority, prioLabel: PRIO_LABEL[t.priority] ?? "Medium", due: t.due_at, assignee: t.profiles?.full_name ?? null, status: t.status, overdue: !!(t.due_at && t.due_at < nowIso && !DONE.has(t.status)) });
   // Kanban maps the real op_tasks lifecycle: New (created/assigned) → Accepted →
   // In Progress → Awaiting Review (completed, pre-verify) → Completed (verified).
+  // `next` = the click-advance target; `drop` = the PATCH status when a card is
+  // dropped into this column (null = not a drop target — "New" maps to created/
+  // assigned, which the tasks PATCH API doesn't accept).
   const kanban = [
-    { key: "new", label: "New", next: "accepted", cards: tasks.filter(t => NOT_STARTED.has(t.status)).slice(0, 25).map(cardOf) },
-    { key: "accepted", label: "Accepted", next: "in_progress", cards: tasks.filter(t => t.status === "accepted").slice(0, 25).map(cardOf) },
-    { key: "in_progress", label: "In Progress", next: "completed", cards: tasks.filter(t => t.status === "in_progress").slice(0, 25).map(cardOf) },
-    { key: "awaiting", label: "Awaiting Review", next: "verified", cards: tasks.filter(t => t.status === "completed").slice(0, 25).map(cardOf) },
-    { key: "completed", label: "Completed", next: null as string | null, cards: tasks.filter(t => t.status === "verified").slice(0, 25).map(cardOf) },
+    { key: "new", label: "New", next: "accepted", drop: null as string | null, cards: tasks.filter(t => NOT_STARTED.has(t.status)).slice(0, 25).map(cardOf) },
+    { key: "accepted", label: "Accepted", next: "in_progress", drop: "accepted" as string | null, cards: tasks.filter(t => t.status === "accepted").slice(0, 25).map(cardOf) },
+    { key: "in_progress", label: "In Progress", next: "completed", drop: "in_progress" as string | null, cards: tasks.filter(t => t.status === "in_progress").slice(0, 25).map(cardOf) },
+    { key: "awaiting", label: "Awaiting Review", next: "verified", drop: "completed" as string | null, cards: tasks.filter(t => t.status === "completed").slice(0, 25).map(cardOf) },
+    { key: "completed", label: "Completed", next: null as string | null, drop: "verified" as string | null, cards: tasks.filter(t => t.status === "verified").slice(0, 25).map(cardOf) },
   ];
   // AI suggestions — rule-based over live task signals (assign / escalate / review).
   const aiSuggestions: { text: string; sub: string; id: string; action: string }[] = [];

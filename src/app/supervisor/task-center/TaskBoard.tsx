@@ -19,6 +19,7 @@ export default function TaskBoard({ columns, editable }: { columns: any[]; edita
   const router = useRouter();
   const [busy, setBusy] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
+  const [over, setOver] = useState<string | null>(null);
 
   async function move(id: string, status: string) {
     setBusy(id); setErr(null);
@@ -29,16 +30,26 @@ export default function TaskBoard({ columns, editable }: { columns: any[]; edita
     } catch { setErr("Network error"); }
     finally { setBusy(null); }
   }
+  function onDrop(col: any, e: any) {
+    e.preventDefault(); setOver(null);
+    const id = e.dataTransfer.getData("text/plain");
+    const from = e.dataTransfer.getData("from");
+    if (id && col.drop && col.key !== from) move(id, col.drop);
+  }
 
   return (
     <div className="bg-white rounded-xl border border-gray-200 p-5">
       <div className="flex items-center justify-between mb-3">
         <h2 className="text-sm font-bold text-gray-900">Task Board <span className="text-gray-400 font-normal">· all active tasks</span></h2>
-        <span className="text-[10px] text-gray-400">click a card action to advance · drag-and-drop is a follow-up</span>
+        <span className="text-[10px] text-gray-400">drag a card between columns, or use its action to advance</span>
       </div>
       <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-3">
         {columns.map((col) => (
-          <div key={col.key} className="rounded-lg bg-gray-50/60 border border-gray-100 p-2">
+          <div key={col.key}
+            onDragOver={e => { if (editable && col.drop) { e.preventDefault(); setOver(col.key); } }}
+            onDragLeave={() => setOver(o => (o === col.key ? null : o))}
+            onDrop={e => onDrop(col, e)}
+            className={`rounded-lg border p-2 transition-colors ${over === col.key ? "bg-teal-50 border-teal-300" : "bg-gray-50/60 border-gray-100"}`}>
             <div className="flex items-center justify-between mb-2 px-1">
               <span className={`text-xs font-bold ${COL_TONE[col.key] ?? "text-gray-600"}`}>{col.label}</span>
               <span className="text-[10px] font-semibold text-gray-400 bg-white rounded-full px-1.5">{col.cards.length}</span>
@@ -46,7 +57,10 @@ export default function TaskBoard({ columns, editable }: { columns: any[]; edita
             <div className="space-y-1.5 max-h-[420px] overflow-y-auto">
               {col.cards.length === 0 && <p className="text-[10px] text-gray-300 text-center py-3">—</p>}
               {col.cards.map((c: any) => (
-                <div key={c.id} className={`rounded-lg border bg-white p-2 ${c.overdue ? "border-rose-200" : "border-gray-100"}`}>
+                <div key={c.id}
+                  draggable={editable}
+                  onDragStart={e => { e.dataTransfer.setData("text/plain", c.id); e.dataTransfer.setData("from", col.key); e.dataTransfer.effectAllowed = "move"; }}
+                  className={`rounded-lg border bg-white p-2 ${editable ? "cursor-grab active:cursor-grabbing" : ""} ${c.overdue ? "border-rose-200" : "border-gray-100"}`}>
                   <p className="text-[11px] font-medium text-gray-800 leading-tight line-clamp-2">{c.desc}</p>
                   <div className="flex items-center gap-1 mt-1">
                     {c.bed && <span className="text-[9px] text-gray-400">{c.bed}</span>}
