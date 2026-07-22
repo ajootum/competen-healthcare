@@ -87,8 +87,8 @@ export default async function PlatformOperations() {
     { label: "Deploy Workspace", desc: "Deploy or update workspace", icon: "🖥️", href: "/platform-admin" },
     { label: "Feature Management", desc: "Enable or disable features", icon: "🎚️", href: "/platform/control-plane" },
     { label: "View Platform Map", desc: "Architecture map", icon: "🗺️", href: "/super-admin/platform-ops" },
-    { label: "Run Health Check", desc: "Test platform services", icon: "🩺", href: "/super-admin/platform-ops" },
-    { label: "View Logs", desc: "Access system logs", icon: "📜", href: "/super-admin/audit" },
+    { label: "Run Health Check", desc: "Test platform services", icon: "🩺", href: "/super-admin/platform-ops/monitoring" },
+    { label: "View Logs", desc: "Access system logs", icon: "📜", href: "/super-admin/platform-ops/monitoring" },
     { label: "Backup Now", desc: "Trigger platform backup", icon: "💾", href: "/super-admin/platform-ops" },
   ];
 
@@ -98,7 +98,7 @@ export default async function PlatformOperations() {
     { n: 3, label: "Workspace Management", desc: "Layouts, menus, widgets, themes, permissions", icon: "🖥️", href: "/super-admin/platform-ops", live: false },
     { n: 4, label: "Platform Services", desc: "Core/AI/Assessment/Learning/Integration engines", icon: "⚙️", href: "/super-admin/platform-ops", live: false },
     { n: 5, label: "Licensing & Subscription", desc: "Plans, licences, quotas, billing, renewals", icon: "🧾", href: "/super-admin/platform-ops/licensing", live: true },
-    { n: 6, label: "Monitoring & Operations", desc: "Health, alerts, logs, events, backups", icon: "📡", href: "/super-admin/platform-ops", live: false },
+    { n: 6, label: "Monitoring & Operations", desc: "Health, alerts, logs, events, backups", icon: "📡", href: "/super-admin/platform-ops/monitoring", live: true },
   ];
 
   return (

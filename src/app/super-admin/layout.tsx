@@ -31,6 +31,7 @@ const NAV = [
     { label: "Overview",          href: "/super-admin/platform-ops",            icon: "🎛️" },
     { label: "Tenant Operations", href: "/super-admin/platform-ops/tenants",    icon: "🏢" },
     { label: "Licensing",         href: "/super-admin/platform-ops/licensing",  icon: "🧾" },
+    { label: "Monitoring",        href: "/super-admin/platform-ops/monitoring", icon: "📡" },
     { label: "Control Plane",     href: "/platform/control-plane",              icon: "🧭" },
     { label: "Platform Workspace",href: "/platform-admin",                      icon: "🛰️" },
   ]},
