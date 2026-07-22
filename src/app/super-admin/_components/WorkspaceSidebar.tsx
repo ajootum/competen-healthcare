@@ -123,7 +123,7 @@ const SYS_NAV = [
     { label: "3. Security Operations Center", href: "/super-admin/system/security", icon: "🛡️" },
     { label: "4. Infrastructure & Services", href: "/super-admin/system/infrastructure", icon: "🖥️" },
     { label: "5. Data Protection & Recovery", href: "/super-admin/system/data", icon: "💾" },
-    { label: "6. Security Intelligence & Audit", href: "/super-admin/audit", icon: "🔍" },
+    { label: "6. Security Intelligence & Audit", href: "/super-admin/system/audit", icon: "🔍" },
   ]},
   { group: "QUICK ACCESS", items: [
     { label: "Users", href: "/super-admin/users", icon: "👥" },
