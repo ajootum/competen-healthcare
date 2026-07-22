@@ -34,11 +34,11 @@ const NAV_GROUPS: { group: string; items: NavItem[] }[] = [
     { label: "Patient Operations Center", href: "/supervisor/patient-ops-center",  icon: "🗂️" },
   ]},
   { group: "Workforce Operations", items: [
+    { label: "Workforce Ops",      href: "/supervisor/workforce-operations",       icon: "👥" },
     { label: "Assignments",        href: "/supervisor/operations?section=assignments", icon: "🧩" },
     { label: "Roster & Attendance", href: "/supervisor/operations?section=shifts", icon: "📋" },
-    { label: "Skill Mix",          href: "/supervisor#workforce",                  icon: "👥" },
+    { label: "Competencies",       href: "/supervisor/workforce-operations",       icon: "🎖️" },
     { label: "Breaks",             icon: "☕", soon: true },
-    { label: "Competencies",       icon: "🎖️", soon: true },
   ]},
   { group: "Task Centre", items: [
     { label: "Tasks",              href: "/supervisor/operations?section=care",    icon: "✅" },
