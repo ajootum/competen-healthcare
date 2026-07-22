@@ -11,6 +11,7 @@ import { loadShiftCommand } from "@/lib/operations/shift-command";
 import { loadReadiness } from "@/lib/operations/readiness";
 import { loadSupervisorAssignments } from "@/lib/operations/supervisor-assignments";
 import { loadSafetyHuddle, loadShiftDecisions } from "@/lib/operations/shift-records";
+import { loadShiftClosure } from "@/lib/operations/shift-closure";
 
 const NONE = "00000000-0000-0000-0000-000000000000";
 const DAY = 86400000;
@@ -50,9 +51,10 @@ export async function loadShiftOpsEngine(admin: any, hid: string | null, isSuper
   // Supervisor assignments & confirmation (SSW-002 §6.3 / §8) — command ownership.
   const supervisors: any = await loadSupervisorAssignments(admin, sc.shiftId, hid, isSuper);
   // Operational records (SSW-002 §6.7 / §6.8) — safety huddle + decisions.
-  const [huddle, decisions] = await Promise.all([
+  const [huddle, decisions, closure] = await Promise.all([
     loadSafetyHuddle(admin, sc.shiftId),
     loadShiftDecisions(admin, sc.shiftId),
+    loadShiftClosure(admin, sc.shiftId),
   ]);
 
   // ── Transition gate (SSW-002 §10 / §26) — the engine computes the blocking
@@ -165,7 +167,7 @@ export async function loadShiftOpsEngine(admin: any, hid: string | null, isSuper
     ready: true as const,
     shift: sc.shift, shiftId: sc.shiftId,
     lifecycle: { states: LIFECYCLE, current: currentState, index: stateIndex, subState: activeSubState, shiftStatus },
-    gate, command, readiness, supervisors, huddle, decisions,
+    gate, command, readiness, supervisors, huddle, decisions, closure,
     engines, liveCount,
     eventFlow,
     roadmap, principles,

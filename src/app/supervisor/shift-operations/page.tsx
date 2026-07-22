@@ -7,6 +7,7 @@ import ReadinessChecklist from "./ReadinessChecklist";
 import SupervisorPanel from "./SupervisorPanel";
 import SafetyHuddlePanel from "./SafetyHuddlePanel";
 import ShiftDecisionsPanel from "./ShiftDecisionsPanel";
+import ClosurePanel from "./ClosurePanel";
 
 export const dynamic = "force-dynamic";
 
@@ -85,6 +86,11 @@ export default async function ShiftOperationsEngine() {
         <ShiftDecisionsPanel shiftId={d.shiftId} provisioned={d.decisions?.provisioned !== false}
           decisions={d.decisions?.decisions ?? []} editable={lc.shiftStatus !== "completed"} />
       </div>
+
+      {/* Closure snapshots + command transfer (closes the lifecycle loop) */}
+      <ClosurePanel shiftId={d.shiftId} provisioned={d.closure?.provisioned !== false}
+        snapshots={d.closure?.snapshots ?? []} transfers={d.closure?.transfers ?? []}
+        staff={d.supervisors?.staff ?? []} editable={lc.shiftStatus !== "completed"} />
 
       {/* At-a-glance operational band (SSW-002) */}
       <div className="grid grid-cols-4 sm:grid-cols-8 gap-3">
