@@ -28,13 +28,16 @@ export async function loadCkp(admin: any) {
   ]);
 
   // Status breakdowns (small selects).
-  const [cpuRows, koRows, lrRows, compMapRows, crListRes, auditRes] = await Promise.all([
+  const since30 = new Date(Date.now() - 30 * 86400000).toISOString();
+  const [cpuRows, koRows, lrRows, compMapRows, crListRes, auditRes, libRows, publishAudit] = await Promise.all([
     admin.from("clinical_practice_units").select("pub_status").limit(5000),
     admin.from("knowledge_objects").select("status").limit(8000),
     admin.from("learning_resources").select("resource_type").limit(8000),
     admin.from("framework_competencies").select("cpu_id").limit(20000),
     admin.from("change_requests").select("id, entity_type, entity_name, change_kind, status, requested_by_name, created_at").eq("status", "open").order("created_at", { ascending: false }).limit(8),
     admin.from("audit_log").select("actor_name, action, entity_type, entity_name, created_at").in("entity_type", ["framework", "competency", "cpu", "knowledge_object", "policy", "assessment", "clinical_case", "guideline", "change_request", "approval"]).order("created_at", { ascending: false }).limit(10),
+    admin.from("frameworks").select("library").limit(2000),
+    admin.from("audit_log").select("*", { count: "exact", head: true }).ilike("action", "%publish%").gte("created_at", since30),
   ]);
 
   const cpu = cpuRows.error ? {} : bucket(cpuRows.data ?? [], "pub_status");
@@ -43,6 +46,9 @@ export async function loadCkp(admin: any) {
   const compMap = compMapRows.error ? [] : (compMapRows.data ?? []);
   const mappedComp = compMap.filter((r: any) => r.cpu_id).length;
   const totalComp = compMap.length;
+  const lib = libRows.error ? {} : bucket(libRows.data ?? [], "library");
+  const publishedThisMonth = num(publishAudit);
+  const archived = (cpu.archived ?? 0) + (ko.retired ?? 0);
 
   const cpuTotal = num(cpuCountRes) ?? 0;
   const publishedCPUs = cpu.published ?? 0;
@@ -102,14 +108,32 @@ export async function loadCkp(admin: any) {
 
   const tasks = (crListRes.error ? [] : crListRes.data ?? []).map((r: any) => ({ title: r.entity_name || "Change request", detail: `${(r.entity_type ?? "").replace(/_/g, " ")} · ${r.change_kind ?? "revision"}`, by: r.requested_by_name, at: r.created_at }));
 
-  // 6-module directory — links to the closest live surface until each module ships.
+  const frameworksN = num(frRes) ?? 0;
+  const published = publishedCPUs + activeKO;
+  const inReview = (cpu.in_review ?? 0) + (num(crOpenRes) ?? 0);
+  const approvals = (num(crOpenRes) ?? 0) + (cpu.approved ?? 0);
+  const S = (n: number) => n.toLocaleString();
+
+  // 6-module directory with per-module KPIs (the 6-modules-overview layout).
   const modules = [
-    { n: 1, name: "Knowledge Studio", desc: "Author every knowledge asset — competencies, CPUs, CKOs, assessments, policies", icon: "🏭", href: "/super-admin/ckp/studio", stat: `${draftAssets} in progress`, subs: ["Competency Builder", "CPU Builder", "CKO Builder", "Learning Builder", "Assessment Builder", "AI Authoring"] },
-    { n: 2, name: "Competency & Framework Centre", desc: "Competency architecture — libraries, frameworks, domains, crosswalks", icon: "📐", href: "/super-admin/ckp/competency", stat: `${num(frRes) ?? 0} frameworks`, subs: ["Competency Library", "Framework Library", "Domains", "Role Frameworks", "Crosswalks", "Version History"] },
-    { n: 3, name: "Clinical Knowledge Repository", desc: "The knowledge warehouse — CKOs, CPUs, evidence, guidelines, graph", icon: "🗄️", href: "/super-admin/ckp/repository", stat: `${koTotal} objects`, subs: ["CKO Library", "CPU Library", "Evidence", "Clinical Guidelines", "Knowledge Graph", "Terminology"] },
-    { n: 4, name: "Assessment & Validation Centre", desc: "Assessment governance — methods, rubrics, blueprints, psychometrics", icon: "🎯", href: "/super-admin/ckp/assessment", stat: `${assessments} assessments`, subs: ["Assessment Methods", "Rubrics & Checklists", "Blueprints", "Validation", "Psychometrics", "Certification Rules"] },
-    { n: 5, name: "Knowledge Publishing & Governance", desc: "Move knowledge safely into production — review, approve, publish", icon: "🚦", href: "/super-admin/ckp/publishing", stat: `${pendingReviews} in review`, subs: ["Review Workspace", "Clinical Review", "Governance Approval", "Publishing Pipeline", "Version Control", "Audit & Archive"] },
-    { n: 6, name: "Knowledge Intelligence", desc: "Analytics and AI insight over the clinical knowledge base", icon: "📡", href: "/super-admin/ckp/intelligence", stat: coverageScore == null ? "—" : `${coverageScore}% coverage`, subs: ["Knowledge Analytics", "AI Recommendations", "Coverage Analysis", "Duplicate Detection", "Gap Analysis", "Usage Analytics"] },
+    { n: 1, name: "Knowledge Studio", desc: "Design, create and author all knowledge assets", icon: "🏭", href: "/super-admin/ckp/studio", action: "New Asset",
+      kpis: [{ label: "Draft Assets", value: S(draftAssets) }, { label: "Awaiting Review", value: S(pendingReviews) }, { label: "Published", value: S(published) }, { label: "Assessments", value: S(assessments) }],
+      subs: ["Competency Builder", "CPU Builder", "CKO Builder", "Learning Builder", "Assessment Builder", "AI Authoring"] },
+    { n: 2, name: "Competency & Framework Centre", desc: "Manage competency architecture and frameworks", icon: "📐", href: "/super-admin/ckp/competency", action: "Create Framework",
+      kpis: [{ label: "Competencies", value: S(totalComp) }, { label: "Frameworks", value: S(frameworksN) }, { label: "Domains", value: S(num(domRes) ?? 0) }, { label: "Role Frameworks", value: S(lib.role ?? 0) }],
+      subs: ["Competency Library", "Framework Library", "Domains", "Role Frameworks", "Crosswalks", "Version History"] },
+    { n: 3, name: "Clinical Knowledge Repository", desc: "Central repository for all clinical knowledge", icon: "🗄️", href: "/super-admin/ckp/repository", action: "Add Knowledge",
+      kpis: [{ label: "CPUs", value: S(cpuTotal) }, { label: "CKOs", value: S(koTotal) }, { label: "Policies", value: S(policiesN) }, { label: "Guidelines", value: S(guidelines) }],
+      subs: ["CKO Library", "CPU Library", "Evidence Library", "Clinical Guidelines", "Knowledge Graph", "Terminology"] },
+    { n: 4, name: "Assessment & Validation Centre", desc: "Design, validate and govern assessments", icon: "🎯", href: "/super-admin/ckp/assessment", action: "Create Assessment",
+      kpis: [{ label: "Assessments", value: S(assessments) }, { label: "Rubrics", value: S(num(chkRes) ?? 0) }, { label: "Blueprints", value: S(num(bpRes) ?? 0) }, { label: "Question Banks", value: S(num(qbRes) ?? 0) }],
+      subs: ["Assessment Methods", "Rubrics & Checklists", "Blueprint Builder", "Validation Centre", "Psychometrics", "Certification Rules"] },
+    { n: 5, name: "Knowledge Publishing & Governance", desc: "Govern workflow, approvals and publishing", icon: "🚦", href: "/super-admin/ckp/publishing", action: "New Submission",
+      kpis: [{ label: "In Review", value: S(inReview) }, { label: "Approvals", value: S(approvals) }, { label: "Published (30d)", value: publishedThisMonth == null ? "—" : S(publishedThisMonth) }, { label: "Archived", value: S(archived) }],
+      subs: ["Review Workspace", "Clinical Review", "Governance Approval", "Publishing Pipeline", "Version Control", "Audit & Archive"] },
+    { n: 6, name: "Knowledge Intelligence", desc: "Analytics and AI-driven insights for knowledge", icon: "📡", href: "/super-admin/ckp/intelligence", action: "View Analytics",
+      kpis: [{ label: "Knowledge Health", value: healthPct == null ? "—" : `${healthPct}%` }, { label: "Coverage", value: coverageScore == null ? "—" : `${coverageScore}%` }, { label: "Missing Comp.", value: S(missingCompetencies) }, { label: "AI Recs", value: S(recommendations.length) }],
+      subs: ["Knowledge Analytics", "AI Recommendations", "Coverage Analysis", "Duplicate Detection", "Gap Analysis", "Usage Analytics"] },
   ];
 
   return {
