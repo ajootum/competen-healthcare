@@ -7,11 +7,11 @@ import NavGroup from "@/components/NavGroup";
 import RoleSwitcher from "@/components/RoleSwitcher";
 import type { AppRole } from "@/lib/roles";
 
-// Super-admin sidebar with a dedicated Clinical Knowledge Platform shell. When
-// inside /super-admin/ckp/* it renders the CKP workspace nav (CKP NAVIGATION +
-// QUICK ACCESS) in place of the general super-admin nav, matching the CKP mockup;
-// elsewhere it renders the full Mission Control nav. Branches on the pathname so
-// the swap is instant on client navigation.
+// Super-admin sidebar with dedicated workspace shells. Inside /super-admin/ckp/*
+// it renders the Clinical Knowledge Platform nav, and inside /super-admin/ai/*
+// the AI & Intelligence Platform nav (each with NAVIGATION + QUICK ACCESS),
+// matching their mockups; elsewhere it renders the full Mission Control nav.
+// Branches on the pathname so the swap is instant on client navigation.
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 const GENERAL_NAV = [
@@ -45,8 +45,7 @@ const GENERAL_NAV = [
     { label: "Open CKP →", href: "/super-admin/ckp", icon: "📚" },
   ]},
   { group: "AI & INTELLIGENCE", items: [
-    { label: "AI Assistant", href: "/super-admin/assistant", icon: "🤖" },
-    { label: "Knowledge Graph", href: "/super-admin/knowledge-graph", icon: "🕸️" },
+    { label: "Open AI & Intelligence →", href: "/super-admin/ai", icon: "🧠" },
   ]},
   { group: "GOVERNANCE & COMPLIANCE", items: [
     { label: "Committees", href: "/super-admin/governance/committees", icon: "⚖️" },
@@ -81,24 +80,47 @@ const CKP_NAV = [
   ]},
 ];
 
-const OVERVIEW_HREFS = new Set(["/super-admin", "/super-admin/ckp"]);
+const AI_NAV = [
+  { group: "AI & INTELLIGENCE", items: [
+    { label: "AI Home", href: "/super-admin/ai", icon: "🧠" },
+    { label: "1. AI Operations Centre", href: "/super-admin/ai/operations", icon: "⚙️" },
+    { label: "2. Clinical Intelligence", href: "/super-admin/ai/clinical", icon: "🩺" },
+    { label: "3. Workforce Intelligence", href: "/super-admin/ai/workforce", icon: "👥" },
+    { label: "4. Enterprise Intelligence", href: "/super-admin/ai/enterprise", icon: "🏢" },
+    { label: "5. AI Studio & Automation", href: "/super-admin/ai/studio", icon: "🛠️" },
+    { label: "6. Intelligence Analytics", href: "/super-admin/ai/analytics", icon: "📈" },
+  ]},
+  { group: "QUICK ACCESS", items: [
+    { label: "AI Assistant Chat", href: "/super-admin/assistant", icon: "💬" },
+    { label: "AI Gateway", href: "/super-admin/platform-ops/ai-gateway", icon: "✨" },
+    { label: "Knowledge Graph", href: "/super-admin/knowledge-graph", icon: "🕸️" },
+    { label: "AI Audit Logs", href: "/super-admin/audit", icon: "🗒️" },
+    { label: "My Approvals", href: "/super-admin/platform-ops/approvals", icon: "✅" },
+  ]},
+];
+
+const OVERVIEW_HREFS = new Set(["/super-admin", "/super-admin/ckp", "/super-admin/ai"]);
 
 export default function WorkspaceSidebar({ profileName, roles, activeRole, workspaces }: { profileName: string | null; roles: AppRole[]; activeRole: AppRole; workspaces: any[] }) {
   const pathname = usePathname();
   const inCkp = pathname.startsWith("/super-admin/ckp");
-  const nav = inCkp ? CKP_NAV : GENERAL_NAV;
+  const inAi = pathname === "/super-admin/ai" || pathname.startsWith("/super-admin/ai/");
+  const inWorkspace = inCkp || inAi;
+  const nav = inCkp ? CKP_NAV : inAi ? AI_NAV : GENERAL_NAV;
+  const home = inCkp ? "/super-admin/ckp" : inAi ? "/super-admin/ai" : "/super-admin";
+  const subtitle = inCkp ? "Clinical Knowledge Platform" : inAi ? "AI & Intelligence" : "Mission Control";
 
   return (
     <>
-      <Link href={inCkp ? "/super-admin/ckp" : "/super-admin"} className="flex items-center gap-2 mb-6 px-2" data-sb-item>
+      <Link href={home} className="flex items-center gap-2 mb-6 px-2" data-sb-item>
         <div className="w-7 h-7 rounded bg-rose-500 flex items-center justify-center text-white font-bold text-sm">C</div>
         <div className="flex flex-col leading-none" data-sb-label>
           <span className="text-white font-semibold text-sm">Competen</span>
-          <span className="text-rose-300/70 text-[10px] font-medium">{inCkp ? "Clinical Knowledge Platform" : "Mission Control"}</span>
+          <span className="text-rose-300/70 text-[10px] font-medium">{subtitle}</span>
         </div>
       </Link>
 
-      {inCkp ? (
+      {inWorkspace ? (
         <Link href="/super-admin" className="flex items-center gap-2 px-3 mb-3 text-[10px] font-semibold text-slate-500 hover:text-white transition-colors" data-sb-label>
           ← Super Admin
         </Link>
@@ -125,7 +147,7 @@ export default function WorkspaceSidebar({ profileName, roles, activeRole, works
           <div className="w-7 h-7 rounded-full bg-rose-500 flex items-center justify-center text-white text-xs font-bold">{profileName?.[0] ?? "S"}</div>
           <div className="flex-1 min-w-0" data-sb-label>
             <p className="text-white text-xs font-medium truncate">{profileName}</p>
-            <p className="text-rose-300/60 text-[10px]">{inCkp ? "Platform Owner" : "Super Admin"}</p>
+            <p className="text-rose-300/60 text-[10px]">{inWorkspace ? "Platform Owner" : "Super Admin"}</p>
           </div>
         </div>
         {(roles.length > 1 || workspaces.length > 0) && (
