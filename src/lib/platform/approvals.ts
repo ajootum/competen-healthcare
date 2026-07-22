@@ -20,6 +20,7 @@ export const WORKFLOW_CATALOGUE: WorkflowDef[] = [
   { key: "ai_content_review", name: "AI Content Review", entityType: "ai_content", icon: "🧠", steps: [{ label: "Human review" }], description: "Review AI-generated content before use." },
   { key: "user_invitation", name: "User Invitation", entityType: "invitation", icon: "✉️", steps: [{ label: "Admin approval" }], description: "Approve a platform user invitation." },
   { key: "knowledge_publication", name: "Knowledge Publication", entityType: "knowledge", icon: "📚", steps: [{ label: "Editorial review" }], description: "Publish a knowledge object." },
+  { key: "policy_publication", name: "Policy Publication", entityType: "policy", icon: "📄", steps: [{ label: "Technical review" }, { label: "Governance approval" }], description: "Approve and publish an enterprise policy." },
 ];
 export const workflowDef = (key: string) => WORKFLOW_CATALOGUE.find(w => w.key === key);
 

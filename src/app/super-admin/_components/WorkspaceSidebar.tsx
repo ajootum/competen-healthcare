@@ -98,7 +98,7 @@ const AI_NAV = [
 const GOV_NAV = [
   { group: "GOVERNANCE & COMPLIANCE", items: [
     { label: "1. Governance Dashboard", href: "/super-admin/governance", icon: "🛡️" },
-    { label: "2. Policy & Standards Center", href: "/super-admin/policy-manager", icon: "📄" },
+    { label: "2. Policy & Standards Center", href: "/super-admin/governance/policies", icon: "📄" },
     { label: "3. Compliance Management", href: "/admin/quality", icon: "✅" },
     { label: "4. Risk & Internal Controls", href: "/super-admin/platform-ops/monitoring", icon: "⚠️" },
     { label: "5. Audit & Assurance", href: "/super-admin/audit", icon: "📋" },
