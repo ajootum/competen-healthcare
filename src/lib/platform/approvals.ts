@@ -34,6 +34,9 @@ export async function submitApproval(admin: any, i: { workflowKey: string; entit
   }).select().single();
   if (ins.error) return { ok: false, error: /does not exist|schema cache/i.test(ins.error.message) ? "migration_required" : ins.error.message };
   await emitPlatformEvent(admin, { event_type: "approval.submitted", severity: "info", payload: { workflow: def.key, entity: ins.data.entity_name } });
+  // Audit the submission too (decide() already audits decisions), so the full
+  // request lifecycle is traceable in audit_log.
+  await admin.from("audit_log").insert({ actor_id: i.requestedBy ?? null, actor_name: i.requestedByName ?? null, action: "approval_submitted", entity_type: "approval", entity_id: ins.data.id, entity_name: ins.data.entity_name });
   return { ok: true, request: ins.data };
 }
 

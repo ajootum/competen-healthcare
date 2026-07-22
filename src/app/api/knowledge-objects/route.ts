@@ -11,8 +11,10 @@ async function requireAuthor() {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { error: "Unauthorized", status: 401 as const };
   const admin = createAdminClient();
-  const { data: profile } = await admin.from("profiles").select("role, full_name").eq("id", user.id).single();
-  if (!["super_admin", "hospital_admin", "educator"].includes(profile?.role ?? "")) {
+  // Roles-array aware (matches getCaller): multi-role authors pass.
+  const { data: profile } = await admin.from("profiles").select("role, roles, full_name").eq("id", user.id).single();
+  const roles: string[] = (profile?.roles?.length ? profile.roles : [profile?.role]).filter(Boolean);
+  if (!roles.some(r => ["super_admin", "hospital_admin", "educator"].includes(r))) {
     return { error: "Forbidden", status: 403 as const };
   }
   return { user, admin, profile };

@@ -2,6 +2,7 @@ import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { loadPublishing } from "@/lib/super-admin/ckp-publishing";
+import GovernanceConsole from "./GovernanceConsole";
 
 export const dynamic = "force-dynamic";
 
@@ -59,6 +60,9 @@ export default async function PublishingGovernance() {
           </div>
         ))}
       </div>
+
+      {/* Real in-place governance console — lifecycle, review decisions, KO status, engine */}
+      <GovernanceConsole frameworks={p.pickers.frameworks} knowledgeObjects={p.pickers.knowledgeObjects} pendingReviews={p.pickers.pendingReviews} />
 
       {/* Publishing pipeline */}
       <div className={`${card} p-5`}>

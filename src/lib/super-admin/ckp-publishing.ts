@@ -14,15 +14,17 @@ export async function loadPublishing(admin: any) {
   const head = (t: string) => admin.from(t).select("*", { count: "exact", head: true });
   const since30 = new Date(Date.now() - 30 * DAY).toISOString();
 
-  const [cpuRows, koRows, crRows, caRows, commRows, memberCount, auditRows, publishAudit] = await Promise.all([
+  const [cpuRows, koRows, crRows, caRows, commRows, memberCount, auditRows, publishAudit, fwRows] = await Promise.all([
     admin.from("clinical_practice_units").select("pub_status").limit(5000),
-    admin.from("knowledge_objects").select("status").limit(8000),
+    // Widened selects double as Governance Console pickers (bucket math unchanged).
+    admin.from("knowledge_objects").select("id, title, status").order("title").limit(8000),
     admin.from("change_requests").select("status, change_kind, entity_type, entity_name, requested_by_name, created_at").order("created_at", { ascending: false }).limit(2000),
-    admin.from("content_approvals").select("status").limit(4000),
+    admin.from("content_approvals").select("id, framework_name, submitted_by_name, status").limit(4000),
     admin.from("governance_committees").select("name, level, is_active").order("name").limit(200),
     head("committee_members"),
     admin.from("audit_log").select("actor_name, action, entity_type, entity_name, created_at").in("entity_type", ["framework", "competency", "cpu", "knowledge_object", "policy", "assessment", "clinical_case", "change_request"]).order("created_at", { ascending: false }).limit(12),
     admin.from("audit_log").select("*", { count: "exact", head: true }).ilike("action", "%publish%").gte("created_at", since30),
+    admin.from("frameworks").select("id, name, pub_status").order("name").limit(1000),
   ]);
 
   const cpu = cpuRows.error ? {} : bucket(cpuRows.data ?? [], "pub_status");
@@ -62,6 +64,13 @@ export async function loadPublishing(admin: any) {
     reviewQueue: { open: crStatus.open ?? 0, approved: crStatus.approved ?? 0, rejected: crStatus.rejected ?? 0, implemented: crStatus.implemented ?? 0, pendingApprovals: caStatus.pending ?? 0 },
     committees, memberCount: num(memberCount) ?? 0,
     audit, auditReady: !auditRows.error,
+    // Governance Console pickers (fail-soft; labels carry current status so the
+    // admin picks sensible transitions).
+    pickers: {
+      frameworks: (fwRows.error ? [] : fwRows.data ?? []).map((f: any) => ({ id: f.id, label: `${f.name} (${f.pub_status ?? "draft"})` })),
+      knowledgeObjects: (koRows.error ? [] : koRows.data ?? []).slice(0, 500).map((k: any) => ({ id: k.id, label: `${k.title} (${k.status ?? "draft"})` })),
+      pendingReviews: (caRows.error ? [] : caRows.data ?? []).filter((c: any) => c.status === "pending").map((c: any) => ({ id: c.id, label: `${c.framework_name ?? "Framework"}${c.submitted_by_name ? ` — by ${c.submitted_by_name}` : ""}` })),
+    },
     generatedAt: new Date().toISOString(),
   };
 }

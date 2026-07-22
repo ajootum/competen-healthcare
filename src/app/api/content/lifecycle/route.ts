@@ -16,8 +16,10 @@ export async function PATCH(req: Request) {
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const admin = createAdminClient();
-  const { data: profile } = await admin.from("profiles").select("role, full_name").eq("id", user.id).single();
-  if (!profile || profile.role !== "super_admin") return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  // Roles-array aware (matches getCaller/page gates): multi-role super admins pass.
+  const { data: profile } = await admin.from("profiles").select("role, roles, full_name").eq("id", user.id).single();
+  const roles: string[] = (profile?.roles?.length ? profile.roles : [profile?.role]).filter(Boolean);
+  if (!roles.includes("super_admin")) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
   const { frameworkId, action }: { frameworkId: string; action: Action } = await req.json();
   const newStatus = ACTION_STATUS[action];
@@ -36,9 +38,12 @@ export async function PATCH(req: Request) {
   const { error: updateErr } = await admin.from("frameworks").update({ pub_status: newStatus }).eq("id", frameworkId);
   if (updateErr) return NextResponse.json({ error: updateErr.message }, { status: 500 });
 
+  // On publish, snapshot full framework content into version history. A failed
+  // snapshot no longer passes silently — the response carries a warning so the
+  // caller can tell the admin the governance artifact is missing.
+  let warning: string | undefined;
   if (action === "publish") {
-    // Snapshot full framework content into version history
-    const { data: fullFw } = await admin
+    const { data: fullFw, error: snapErr } = await admin
       .from("frameworks")
       .select(`
         name, library, description,
@@ -55,13 +60,16 @@ export async function PATCH(req: Request) {
 
     if (fullFw) {
       const nextVersion = (framework.version_num ?? 0) + 1;
-      await admin.from("framework_versions").insert({
+      const { error: insErr } = await admin.from("framework_versions").insert({
         framework_id: frameworkId,
         version_num: nextVersion,
         snapshot: fullFw,
-        published_by_name: profile.full_name,
+        published_by_name: profile?.full_name ?? null,
       });
-      await admin.from("frameworks").update({ version_num: nextVersion }).eq("id", frameworkId);
+      if (insErr) warning = "Published, but the version snapshot failed — republish to retry it.";
+      else await admin.from("frameworks").update({ version_num: nextVersion }).eq("id", frameworkId);
+    } else {
+      warning = `Published, but the version snapshot failed${snapErr ? ` (${snapErr.message})` : ""} — republish to retry it.`;
     }
   }
 
@@ -76,14 +84,14 @@ export async function PATCH(req: Request) {
       framework_id: frameworkId,
       framework_name: framework.name,
       submitted_by: user.id,
-      submitted_by_name: profile.full_name,
+      submitted_by_name: profile?.full_name ?? null,
       status: "pending",
     });
   }
 
   await admin.from("audit_log").insert({
     actor_id: user.id,
-    actor_name: profile.full_name,
+    actor_name: profile?.full_name ?? null,
     action,
     entity_type: "framework",
     entity_id: frameworkId,
@@ -92,5 +100,5 @@ export async function PATCH(req: Request) {
     new_value: { pub_status: newStatus },
   });
 
-  return NextResponse.json({ ok: true });
+  return NextResponse.json({ ok: true, warning });
 }
