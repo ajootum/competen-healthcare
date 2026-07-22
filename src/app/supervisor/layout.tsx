@@ -43,11 +43,11 @@ const NAV_GROUPS: { group: string; items: NavItem[] }[] = [
     { label: "Patient Cards",                href: "/supervisor/patient-list",        icon: "🪪" },
   ]},
   { group: "Workforce Operations", items: [
-    { label: "Staffing Allocation",  href: "/supervisor/workforce-operations",        icon: "👥" },
-    { label: "Team Assignments",     href: "/supervisor/operations?section=assignments", icon: "🧩" },
-    { label: "Competency Readiness", href: "/supervisor/workforce-operations",        icon: "🎖️" },
-    { label: "Break Management",     icon: "☕", soon: true },
-    { label: "Supervisor Notes",     icon: "🗒️", soon: true },
+    { label: "Staffing Allocation",  href: "/supervisor/workforce-operations",         icon: "👥" },
+    { label: "Team Assignments",     href: "/supervisor/workforce-operations",         icon: "🧩" },
+    { label: "Competency Readiness", href: "/supervisor/workforce-operations#competency", icon: "🎖️" },
+    { label: "Break Management",     href: "/supervisor/workforce-operations#break",   icon: "☕" },
+    { label: "Supervisor Notes",     href: "/supervisor/workforce-operations#break",   icon: "🗒️" },
   ]},
   { group: "Task Centre", items: [
     { label: "Task Assignment",   href: "/supervisor/task-center",                icon: "✅" },
