@@ -102,7 +102,7 @@ const GOV_NAV = [
     { label: "3. Compliance Management", href: "/super-admin/governance/compliance", icon: "✅" },
     { label: "4. Risk & Internal Controls", href: "/super-admin/governance/risk", icon: "⚠️" },
     { label: "5. Audit & Assurance", href: "/super-admin/governance/audit", icon: "📋" },
-    { label: "6. Regulatory & Accreditation", href: "/admin/accreditation", icon: "🏛️" },
+    { label: "6. Regulatory & Accreditation", href: "/super-admin/governance/accreditation", icon: "🏛️" },
   ]},
   { group: "QUICK ACCESS", items: [
     { label: "Committees", href: "/super-admin/governance/committees", icon: "⚖️" },
