@@ -155,7 +155,7 @@ export default async function ExecutiveActionsCentre({ searchParams }: { searchP
           breakdown={mods.escalations.breakdown} href="/unit-manager/escalations" linkLabel="View escalations" />
         <ModulePanel icon="📈" title="CAPA & Improvement" color="#14b8a6" provisioned={mods.capa.provisioned}
           stats={[["Open CAPAs", mods.capa.open], ["Overdue", mods.capa.overdue, "text-rose-600"], ["On Track", mods.capa.onTrack, "text-green-600"]]}
-          breakdown={mods.capa.breakdown} href="/supervisor/quality-safety" linkLabel="View CAPA register" />
+          breakdown={mods.capa.breakdown} href="/unit-manager/capa" linkLabel="View CAPA register" />
         <ModulePanel icon="🎓" title="Competency Validations" color="#3b82f6" provisioned={mods.competency.provisioned}
           stats={[["Pending", mods.competency.pending], ["Expired", mods.competency.expired, "text-rose-600"], ["Due ≤7d", mods.competency.dueThisWeek, "text-amber-600"]]}
           breakdown={mods.competency.breakdown} href="/unit-manager/competency-validations" linkLabel="View validations" note="Sub-categories via Competency Engine (next phase)." />
