@@ -4,18 +4,28 @@ import Link from "next/link";
 import { loadEstablishment } from "@/lib/operations/establishment";
 import { loadUnitDepartments } from "@/lib/operations/unit-command";
 import UnitFilters from "../../UnitFilters";
-import WfmTabs from "../WfmTabs";
 
 export const dynamic = "force-dynamic";
 
-// Workforce Establishment & Demand Planning Engine (UMW-WFM-000A) — determines required
-// FTE before rostering. Computes establishment from real bed capacity + occupancy +
-// ratios (op_beds / op_staffing_standards / op_patients) using transparent, configurable
-// planning assumptions (relief factor, contracted hours, leave), all surfaced in the UI.
-// A per-tenant configuration store + demand-model time-series are honest next-phase.
+// Unit Workforce Planning (UMW-WFP-001) — the Unit Manager's STRATEGIC workforce planning
+// workspace (weeks–years), NOT operational shift planning. The "Establishment & Demand"
+// module runs the Establishment engine (UMW-WFM-000A) over real bed capacity + occupancy +
+// ratios, using planning assumptions inherited read-only from WPS-001. Every metric is
+// traceable to a single authoritative source (spec §5/§10); the computed establishment
+// feeds the WSE scheduling engines. Workforce-analytics trends + reports export next-phase.
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 const card = "bg-white rounded-xl border border-gray-200";
+// UMW-WFP-001 §4 workspace modules. Establishment & Demand is this page (active).
+const WFP_TABS: [string, string][] = [
+  ["Overview", "#top"],
+  ["Establishment & Demand", "#active"],
+  ["Staffing Engine", "/unit-manager/workforce-management/staffing-engine"],
+  ["Scenario Planning", "/unit-manager/scheduling-engine/scenarios"],
+  ["Workforce Analytics", "#soon"],
+  ["Planning Assumptions", "#assumptions"],
+  ["Reports", "#soon"],
+];
 
 function Kpi({ label, value, sub, tone, icon }: { label: string; value: any; sub?: string; tone?: string; icon?: string }) {
   return <div className={`${card} p-4`}><div className="flex items-start justify-between"><p className="text-xs text-gray-500">{label}</p>{icon && <span className="text-base opacity-40">{icon}</span>}</div><p className={`text-2xl font-bold tabular-nums mt-1 ${tone ?? "text-gray-900"}`}>{value}</p>{sub && <p className="text-[11px] text-gray-400 mt-0.5">{sub}</p>}</div>;
@@ -39,10 +49,12 @@ export default async function EstablishmentEngine() {
   const header = (
     <>
       <div className="flex items-start justify-between gap-3 flex-wrap">
-        <div className="flex items-center gap-2"><span className="text-xl">📐</span><div><h1 className="text-2xl font-bold text-gray-900 tracking-tight">Establishment &amp; Demand Planning</h1><p className="text-sm text-gray-500">Calculate required FTE, relief factor and staffing demand before rostering.</p></div></div>
+        <div className="flex items-center gap-2"><span className="text-xl">📐</span><div><h1 className="text-2xl font-bold text-gray-900 tracking-tight">Unit Workforce Planning</h1><p className="text-sm text-gray-500">Strategic establishment planning (weeks–years) — does this unit have the right workforce to deliver safely?</p></div></div>
         <UnitFilters departments={departments} />
       </div>
-      <WfmTabs />
+      <div className="flex gap-1 border-b border-gray-200 overflow-x-auto">
+        {WFP_TABS.map(([label, href]) => href === "#active" ? <span key={label} className="shrink-0 text-xs px-3 py-2 border-b-2 border-emerald-600 text-emerald-700 -mb-px font-medium">{label}</span> : href.startsWith("#") ? <a key={label} href={href} className="shrink-0 text-xs px-3 py-2 border-b-2 border-transparent -mb-px font-medium text-gray-400 hover:text-gray-600">{label}</a> : href === "#soon" ? <span key={label} className="shrink-0 text-xs px-3 py-2 border-b-2 border-transparent -mb-px font-medium text-gray-300" title="Next phase">{label}</span> : <Link key={label} href={href} className="shrink-0 text-xs px-3 py-2 border-b-2 border-transparent -mb-px font-medium text-gray-400 hover:text-gray-600">{label}</Link>)}
+      </div>
     </>
   );
 
@@ -50,7 +62,7 @@ export default async function EstablishmentEngine() {
 
   const k = d.kpis; const m = d.model; const a = d.assumptions;
   return (
-    <div className="space-y-4">
+    <div id="top" className="space-y-4">
       {header}
 
       <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-3">
@@ -60,6 +72,12 @@ export default async function EstablishmentEngine() {
         <Kpi label="Coverage compliance" value={k.coverageCompliance != null ? `${k.coverageCompliance}%` : "—"} sub={k.coverageCompliance != null && k.coverageCompliance >= 100 ? "Met" : "Below establishment"} icon="🛡️" tone={k.coverageCompliance != null && k.coverageCompliance >= 100 ? "text-emerald-600" : "text-amber-600"} />
         <Kpi label="Relief factor" value={k.reliefFactor} sub="Leave / sickness cover" icon="🔁" />
         <Kpi label="Open positions" value={k.openPositions} sub="Whole posts" icon="🪑" tone={k.openPositions ? "text-rose-600" : "text-emerald-600"} />
+      </div>
+
+      {/* Source traceability (spec §5/§10 — every metric to a single authoritative source) */}
+      <div className={`${card} p-3 flex items-center gap-2 flex-wrap text-[10px] text-gray-500`}>
+        <span className="font-semibold text-gray-600">Data sources:</span>
+        {[["Beds/occupancy", "Patient Operations"], ["Ratios & demand model", "WPS-001"], ["Relief factor & leave", "WPS-001"], ["Available FTE", "Live roster (HR next-phase)"], ["Approved establishment", "Enterprise HR — next-phase"], ["Vacancies", "Derived (HR recruitment next-phase)"]].map(([m, s]) => (<span key={m} className="px-1.5 py-0.5 rounded bg-gray-50 border border-gray-100">{m} → <b className="text-gray-600">{s}</b></span>))}
       </div>
 
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
@@ -76,10 +94,10 @@ export default async function EstablishmentEngine() {
           <p className="text-[10px] text-gray-400 mt-2">Demand model is set per unit from its dominant bed type (ICU acuity / theatre / paediatric / patient-ratio), supplying the default nurse ratio where op_staffing_standards has none. FTE per continuously-staffed post = {m.ftePerPost} (annual post hours ÷ {m.annualProductive} productive hrs). Charge posts are mandatory (≥1/shift); float pool = {a.floatPoolPct}% of direct care.</p>
         </div>
 
-        {/* Planning assumptions */}
-        <div className={`${card} p-5 xl:col-span-1`}>
-          <h3 className="text-sm font-bold text-gray-900 mb-2">Planning assumptions</h3>
-          <p className="text-[10px] text-gray-400 mb-2">Configurable defaults driving every calculation (a per-tenant config store is next-phase).</p>
+        {/* Planning assumptions (inherited read-only from WPS-001) */}
+        <div className={`${card} p-5 xl:col-span-1`} id="assumptions">
+          <div className="flex items-center justify-between mb-2"><h3 className="text-sm font-bold text-gray-900">Planning assumptions</h3><Link href="/unit-manager/planning-studio" className="text-[10px] font-semibold text-blue-700 hover:underline">Edit in WPS-001 →</Link></div>
+          <p className="text-[10px] text-gray-400 mb-2">Inherited read-only from the <b>Workforce Planning Studio (WPS-001)</b>{d.configured ? ` · config v${d.configVersion}` : " · platform defaults"}. Change them there, not here — the values drive every calculation.</p>
           <div className="space-y-1 text-[11px]">
             {[["Contracted hours/week", `${a.contractedHoursWeek}h`], ["Shifts", `${a.shiftHours}h × ${a.shiftsPerDay}/day`], ["Annual leave", `${a.annualLeaveDays} days`], ["Study leave", `${a.studyLeaveDays} days`], ["Sickness allowance", `${a.sicknessDays} days`], ["Public holidays", `${a.publicHolidays} days`], ["Annual contracted hrs", `${m.annualContracted}`], ["Annual productive hrs", `${m.annualProductive}`], ["Relief factor", `${m.reliefFactor}`]].map(([l, v]) => (<div key={l} className="flex items-center justify-between"><span className="text-gray-600">{l}</span><b className="text-gray-800">{v}</b></div>))}
           </div>
@@ -123,13 +141,26 @@ export default async function EstablishmentEngine() {
         </div>
       </div>
 
+      {/* Recruitment priorities (WFP-001 §7 output) */}
+      <div className={`${card} p-5`}>
+        <div className="flex items-center justify-between mb-3"><h3 className="text-sm font-bold text-gray-900">Recruitment priorities</h3><span className="text-[10px] text-gray-400">Where establishment exceeds available FTE</span></div>
+        {(() => { const gaps = d.requiredVsAvailable.filter((r: any) => r.gap > 0).sort((x: any, y: any) => y.gap - x.gap); return gaps.length === 0 ? <p className="text-sm text-gray-400">Establishment is fully filled — no recruitment priorities. 🎉</p> : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-2">{gaps.map((r: any, i: number) => { const posts = Math.ceil(r.gap); const pr = r.gap >= 3 ? "High" : r.gap >= 1 ? "Medium" : "Low"; return (
+            <div key={r.role} className="flex items-center justify-between rounded-lg border border-gray-100 p-2.5">
+              <div><p className="text-xs font-semibold text-gray-800">{i + 1}. {r.label}</p><p className="text-[11px] text-gray-500">{r.gap} FTE short · ~{posts} post{posts === 1 ? "" : "s"}</p></div>
+              <span className={`text-[9px] px-1.5 py-0.5 rounded ${pr === "High" ? "bg-rose-50 text-rose-700" : pr === "Medium" ? "bg-amber-50 text-amber-700" : "bg-gray-100 text-gray-600"}`}>{pr}</span>
+            </div>); })}</div>
+        ); })()}
+        <p className="text-[10px] text-gray-400 mt-2">Derived from required establishment vs available FTE. Live vacancy/recruitment status integrates with HR Recruitment (next-phase). The published establishment target feeds the <Link href="/unit-manager/scheduling-engine" className="text-emerald-700 hover:underline">WSE scheduling engines</Link>.</p>
+      </div>
+
       {/* AI forecast */}
       <div className={`${card} p-4 bg-gradient-to-br from-emerald-50/40 to-white flex items-start justify-between gap-3`}>
         <div className="flex items-start gap-2.5"><span className="text-lg">✨</span><div><p className="text-sm font-bold text-gray-900">AI workforce forecast</p><p className="text-xs text-gray-600 mt-0.5">{d.aiForecast}</p></div></div>
         <span className="text-[10px] text-gray-400 whitespace-nowrap">Advisory</span>
       </div>
 
-      <p className="text-[11px] text-gray-400 pb-4">The Establishment &amp; Demand Planning Engine (UMW-WFM-000A) is the foundation calculation service beneath the Staffing Engine, Team Assignments and Roster — the single source of truth for workforce demand. It computes FTE establishment from real bed capacity + occupancy (op_beds) and patient-to-staff ratios / minimums (op_staffing_standards), applying a relief factor derived from transparent, configurable planning assumptions (contracted hours, leave, sickness) shown above. &quot;Available FTE&quot; uses rostered headcount as a proxy (no funded-establishment/contract store yet). A per-tenant configuration store, custom demand models, and time-series forecasting are honest next-phase. Every assumption is visible so the numbers are auditable, not a black box. <Link href="/unit-manager/workforce-management" className="text-emerald-700 hover:underline">← Workforce Overview</Link></p>
+      <p className="text-[11px] text-gray-400 pb-4">Unit Workforce Planning (UMW-WFP-001) is the Unit Manager&apos;s <b>strategic</b> establishment workspace (weeks–years) — it answers whether the unit has the right funded workforce to deliver safely, and is out of scope for day-to-day attendance, acuity, allocation, breaks or shift activation (those live in the Shift Supervisor Workspace). Every metric is traceable to a single authoritative source (see Data sources above); planning assumptions are inherited read-only from <Link href="/unit-manager/planning-studio" className="text-blue-700 hover:underline">WPS-001</Link>, and the published establishment target feeds the WSE scheduling engines. Approved/funded-establishment, live vacancy and turnover analytics integrate with HR/Finance (next-phase). — The underlying Establishment &amp; Demand engine (UMW-WFM-000A) is the foundation calculation service beneath the Staffing Engine, Team Assignments and Roster — the single source of truth for workforce demand. It computes FTE establishment from real bed capacity + occupancy (op_beds) and patient-to-staff ratios / minimums (op_staffing_standards), applying a relief factor derived from transparent, configurable planning assumptions (contracted hours, leave, sickness) shown above. &quot;Available FTE&quot; uses rostered headcount as a proxy (no funded-establishment/contract store yet). A per-tenant configuration store, custom demand models, and time-series forecasting are honest next-phase. Every assumption is visible so the numbers are auditable, not a black box. <Link href="/unit-manager/workforce-management" className="text-emerald-700 hover:underline">← Workforce Overview</Link></p>
     </div>
   );
 }
