@@ -4,26 +4,127 @@ import { cookies } from "next/headers";
 import Link from "next/link";
 import RoleSwitcher from "@/components/RoleSwitcher";
 import NavLink from "@/components/NavLink";
+import NavGroup from "@/components/NavGroup";
 import SidebarToggle from "@/components/SidebarToggle";
 import { highestRole, type AppRole } from "@/lib/roles";
 import { workspaceLinksForUser } from "@/lib/workspace-links";
+import { loadConfigOverrides, isEnabled } from "@/lib/config/workspace-config";
+
+// Workspace Configuration Engine (WCE-001) wiring — maps nav sections/modules to
+// their config paths so a super-admin disabling one in the Designer removes it
+// from this live sidebar. Sections not listed are always shown.
+const SECTION_CFG: Record<string, string> = {
+  "Unit Command": "unit-manager.unit-command",
+  "Workforce Management": "unit-manager.workforce",
+  "Patient Operations": "unit-manager.patient-operations",
+  "Competency Management": "unit-manager.competency",
+  "Learning & Development": "unit-manager.learning",
+  "Quality & Safety": "unit-manager.quality",
+  "Operations & Capacity": "unit-manager.operations-capacity",
+  "Performance Analytics": "unit-manager.analytics",
+  "AI & Intelligence": "unit-manager.ai",
+  "Administration & Tools": "unit-manager.admin",
+};
+const ITEM_CFG: Record<string, string> = {
+  "Unit Operations Centre": "unit-manager.unit-command.operations-centre",
+  "Shift Intelligence": "unit-manager.unit-command.shift-intelligence",
+  "Executive Actions": "unit-manager.unit-command.action-centre",
+};
 
 // Unit Manager Workspace (UMW-001) — operational & tactical management for a
 // clinical unit: workforce readiness, competency compliance, staffing, quality,
 // learning and assessments in one leadership workspace. Role-scoped to managers.
 
-const NAV = [
-  { label: "Dashboard",           href: "/unit-manager",                             icon: "📊", exact: true },
-  { label: "Unit Performance",    href: "/unit-manager/operations?section=command",  icon: "📈" },
-  { label: "Workforce Management", href: "/unit-manager/operations?section=shifts",   icon: "👥" },
-  { label: "Competency Management", href: "/unit-manager/competency",                 icon: "🪪" },
-  { label: "Learning Oversight",  href: "/unit-manager/learning",                    icon: "📚" },
-  { label: "Assessment Oversight", href: "/unit-manager/assessment",                 icon: "📝" },
-  { label: "Quality Improvement", href: "/unit-manager/quality",                     icon: "🛡️" },
-  { label: "Budget & Resources",  href: "/unit-manager/budget",                      icon: "💷" },
-  { label: "Operational Reports", href: "/unit-manager/reports",                     icon: "🧾" },
-  { label: "AI Leadership Advisor", href: "/unit-manager/ai",                        icon: "✨" },
-  { label: "Settings",            href: "/unit-manager/settings",                    icon: "⚙️" },
+// UMW-001 workspace structure: 10 domain groups, each with sub-modules. Only the
+// Unit Command modules (+ a few group landings that reuse an existing surface or
+// the [section] placeholder) are live; every other sub-module is marked "soon"
+// rather than shown as a dead link — honest about what is and isn't built.
+type NavItem = { label: string; href?: string; icon: string; exact?: boolean; soon?: boolean; badge?: number };
+const NAV_GROUPS: { title: string; items: NavItem[] }[] = [
+  { title: "Unit Command", items: [
+    { label: "Overview Dashboard",      href: "/unit-manager",                       icon: "📊", exact: true },
+    { label: "Unit Operations Centre",  href: "/unit-manager/operations-centre",     icon: "🎛️" },
+    { label: "Shift Intelligence",      href: "/unit-manager/shift-intelligence",    icon: "🧭" },
+    { label: "Executive Actions",       href: "/unit-manager/action-centre",         icon: "✅" },
+  ] },
+  { title: "Workforce Management", items: [
+    { label: "Workforce Dashboard",   href: "/unit-manager/operations?section=shifts", icon: "👥" },
+    { label: "Rostering & Allocation", icon: "🗓️", soon: true },
+    { label: "Staffing Establishment", icon: "📋", soon: true },
+    { label: "Attendance & Leave",     icon: "🏖️", soon: true },
+    { label: "Competency Readiness",   icon: "🎯", soon: true },
+    { label: "Performance Reviews",    icon: "⭐", soon: true },
+    { label: "Workforce Planning",     icon: "📐", soon: true },
+  ] },
+  { title: "Patient Operations", items: [
+    { label: "Unit Census",     icon: "🧑‍🤝‍🧑", soon: true },
+    { label: "Patient Flow",    icon: "🔄", soon: true },
+    { label: "Bed & Capacity",  icon: "🛏️", soon: true },
+    { label: "Ward Map",        icon: "🗺️", soon: true },
+    { label: "Clinical Alerts", icon: "🚨", soon: true },
+  ] },
+  { title: "Competency Management", items: [
+    { label: "Competency Dashboard", href: "/unit-manager/competency",   icon: "🪪" },
+    { label: "Compliance",           icon: "✔️", soon: true },
+    { label: "Credential Management", icon: "🎓", soon: true },
+    { label: "Assessment Status",    href: "/unit-manager/assessment",    icon: "📝" },
+    { label: "Validation Queue",     icon: "🗂️", soon: true },
+    { label: "Competency Analytics", icon: "📊", soon: true },
+    { label: "Competency Frameworks", icon: "🧩", soon: true },
+  ] },
+  { title: "Learning & Development", items: [
+    { label: "Learning Dashboard",   href: "/unit-manager/learning", icon: "📚" },
+    { label: "Mandatory Learning",   icon: "📌", soon: true },
+    { label: "Professional Development", icon: "🚀", soon: true },
+    { label: "Career Pathways",      icon: "🧗", soon: true },
+    { label: "Education Planning",   icon: "🗓️", soon: true },
+    { label: "Learning Analytics",   icon: "📊", soon: true },
+  ] },
+  { title: "Quality & Safety", items: [
+    { label: "Quality Dashboard",    href: "/unit-manager/quality", icon: "🛡️" },
+    { label: "Incidents",            icon: "🚩", soon: true },
+    { label: "Audit Centre",         icon: "🔍", soon: true },
+    { label: "Improvement Projects", icon: "📈", soon: true },
+    { label: "Accreditation Readiness", icon: "🏅", soon: true },
+    { label: "Risk Register",        icon: "⚠️", soon: true },
+    { label: "Patient Safety",       icon: "🚑", soon: true },
+  ] },
+  { title: "Operations & Capacity", items: [
+    { label: "Capacity Dashboard",   href: "/unit-manager/operations", icon: "🏥" },
+    { label: "Equipment Readiness",  icon: "🩺", soon: true },
+    { label: "Resource Management",  icon: "📦", soon: true },
+    { label: "Stock & Consumables",  icon: "🧰", soon: true },
+    { label: "Budget Monitoring",    href: "/unit-manager/budget", icon: "💷" },
+    { label: "Operational Forecasting", icon: "🔮", soon: true },
+    { label: "Service Continuity",   icon: "♻️", soon: true },
+  ] },
+  { title: "Performance Analytics", items: [
+    { label: "Unit Scorecard",       icon: "🏆", soon: true },
+    { label: "Workforce Analytics",  icon: "👥", soon: true },
+    { label: "Clinical Analytics",   icon: "🩻", soon: true },
+    { label: "Competency Analytics", icon: "🪪", soon: true },
+    { label: "Financial Analytics",  icon: "💹", soon: true },
+    { label: "Benchmarking",         icon: "📊", soon: true },
+    { label: "Executive Reports",    href: "/unit-manager/reports", icon: "🧾" },
+  ] },
+  { title: "AI & Intelligence", items: [
+    { label: "AI Unit Copilot",      href: "/unit-manager/ai", icon: "✨" },
+    { label: "Operational Intelligence", icon: "🧠", soon: true },
+    { label: "Workforce Intelligence", icon: "👥", soon: true },
+    { label: "Patient Intelligence", icon: "🩺", soon: true },
+    { label: "Quality Intelligence", icon: "🛡️", soon: true },
+    { label: "Predictive Analytics", icon: "🔮", soon: true },
+    { label: "Executive Recommendations", icon: "💡", soon: true },
+  ] },
+  { title: "Administration & Tools", items: [
+    { label: "Team Communications",  icon: "💬", soon: true },
+    { label: "Reports & Exports",    href: "/unit-manager/reports", icon: "🧾" },
+    { label: "Policies & Documents", icon: "📄", soon: true },
+    { label: "Templates & Forms",    icon: "🗒️", soon: true },
+    { label: "Unit Configuration",   icon: "🔧", soon: true },
+    { label: "Workspace Settings",   href: "/unit-manager/settings", icon: "⚙️" },
+    { label: "Activity Log",         icon: "📜", soon: true },
+  ] },
 ];
 
 const ALLOWED = ["hospital_admin", "super_admin"];
@@ -34,12 +135,38 @@ export default async function UnitManagerLayout({ children }: { children: React.
   if (!user) redirect("/login");
 
   const admin = createAdminClient();
-  const { data: profile } = await admin.from("profiles").select("full_name, role, roles").eq("id", user.id).single();
+  const { data: profile } = await admin.from("profiles").select("full_name, role, roles, hospital_id").eq("id", user.id).single();
   const userRoles: AppRole[] = (profile?.roles?.length ? profile.roles : [profile?.role]).filter(Boolean) as AppRole[];
   const cookieStore = await cookies();
   const activeRole = (cookieStore.get("active_role")?.value ?? highestRole(userRoles)) as AppRole;
   // Dedicated org-role workspaces this user can switch into.
   const workspaces = await workspaceLinksForUser(admin, user.id, userRoles);
+
+  // WCE-001 runtime enforcement — hide any section/module a super-admin disabled
+  // in the Workspace Configuration Engine Designer (published, resolved along the
+  // hierarchy for this user's hospital/role). Fail-soft: no engine tables → all shown.
+  const { rows: cfgRows } = await loadConfigOverrides(admin);
+  const hid = (profile as { hospital_id?: string | null } | null)?.hospital_id ?? null;
+  const cfgCtx = { hospitalId: hid, roles: userRoles as string[], userId: user.id };
+
+  // Live "Clinical Alerts" badge — active safety alerts + open escalations for the
+  // unit's hospital. Fail-soft: any query error → no badge. (UMW-003 mockup "(4)".)
+  const NONE = "00000000-0000-0000-0000-000000000000";
+  const isSuperUser = userRoles.includes("super_admin");
+  const alertQ = admin.from("op_safety_alerts").select("id", { count: "exact", head: true }).eq("active", true);
+  const escQ = admin.from("op_escalations").select("id", { count: "exact", head: true }).in("status", ["open", "acknowledged"]);
+  const [safetyCnt, escCnt] = await Promise.all([
+    isSuperUser ? alertQ : alertQ.eq("hospital_id", hid ?? NONE),
+    isSuperUser ? escQ : escQ.eq("hospital_id", hid ?? NONE),
+  ]);
+  const clinicalAlerts = (safetyCnt.error ? 0 : safetyCnt.count ?? 0) + (escCnt.error ? 0 : escCnt.count ?? 0);
+
+  const visibleGroups = NAV_GROUPS
+    .filter(g => { const p = SECTION_CFG[g.title]; return !p || isEnabled(cfgRows, cfgCtx, p); })
+    .map(g => ({ ...g, items: g.items
+      .filter(it => { const p = ITEM_CFG[it.label]; return !p || isEnabled(cfgRows, cfgCtx, p); })
+      .map(it => it.label === "Clinical Alerts" && clinicalAlerts ? { ...it, badge: clinicalAlerts } : it) }));
+  const mobileItems = visibleGroups.flatMap(g => g.items.filter(i => i.href));
 
   if (!userRoles.some(r => ALLOWED.includes(r))) {
     return (
@@ -67,8 +194,8 @@ export default async function UnitManagerLayout({ children }: { children: React.
           <Link href="/dashboard" className="text-[11px] text-teal-100/70 border border-teal-800 rounded-lg px-2.5 py-1">⊞ My Dashboard</Link>
         </div>
         <nav className="flex gap-1 overflow-x-auto px-3 pb-2">
-          {NAV.map(({ label, href }) => (
-            <Link key={label} href={href} className="shrink-0 text-[11px] text-teal-100/80 bg-teal-800/50 hover:bg-teal-700/60 rounded-full px-3 py-1 transition-colors">{label}</Link>
+          {mobileItems.map(({ label, href }) => (
+            <Link key={label} href={href!} className="shrink-0 text-[11px] text-teal-100/80 bg-teal-800/50 hover:bg-teal-700/60 rounded-full px-3 py-1 transition-colors">{label}</Link>
           ))}
         </nav>
       </header>
@@ -85,11 +212,31 @@ export default async function UnitManagerLayout({ children }: { children: React.
           </div>
 
           <nav className="flex flex-col gap-0.5 flex-1 overflow-y-auto">
-            {NAV.map(({ label, href, icon, exact }) => (
-              <NavLink key={label} href={href} icon={icon} label={label} exact={exact}
-                className="flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm text-teal-100/70 hover:bg-teal-800/50 hover:text-white transition-colors"
-                activeClassName="flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm bg-teal-700/60 text-white font-medium" />
-            ))}
+            {visibleGroups.map(group => {
+              const nodes = group.items.map(item => item.soon || !item.href ? (
+                <span key={group.title + item.label} data-sb-item title={`${item.label}${item.badge ? "" : " · soon"}`}
+                  className={`flex items-center gap-2.5 px-3 py-1.5 rounded-lg text-sm cursor-default select-none ${item.badge ? "text-teal-100/60" : "text-teal-100/25"}`}>
+                  <span className="w-5 text-center text-sm">{item.icon}</span>
+                  <span data-sb-label className="flex-1 truncate">{item.label}</span>
+                  {item.badge ? (
+                    <span className="text-[9px] font-bold bg-rose-500 text-white rounded-full min-w-[16px] h-4 px-1 flex items-center justify-center">{item.badge > 99 ? "99+" : item.badge}</span>
+                  ) : (
+                    <span data-sb-label className="text-[8px] font-bold uppercase tracking-wider bg-teal-950 text-teal-400/40 rounded px-1 py-0.5">soon</span>
+                  )}
+                </span>
+              ) : (
+                <NavLink key={group.title + item.label} href={item.href} icon={item.icon} label={item.label} exact={item.exact}
+                  className="flex items-center gap-2.5 px-3 py-1.5 rounded-lg text-sm text-teal-100/70 hover:bg-teal-800/50 hover:text-white transition-colors"
+                  activeClassName="flex items-center gap-2.5 px-3 py-1.5 rounded-lg text-sm bg-teal-700/60 text-white font-medium" />
+              ));
+              return (
+                <NavGroup key={group.title} title={group.title}
+                  hrefs={group.items.filter(i => i.href).map(i => i.href!.split(/[?#]/)[0])}
+                  headerClass="text-[10px] font-bold uppercase tracking-wider text-teal-400/60">
+                  {nodes}
+                </NavGroup>
+              );
+            })}
             <div className="my-2 border-t border-teal-800/30" />
             <Link href="/dashboard" data-sb-item title="My Dashboard" className="flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm text-teal-100/40 hover:bg-teal-800/50 hover:text-white transition-colors">
               <span className="w-5 text-center text-sm">⊞</span>
