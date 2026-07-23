@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getCaller, isResponse, isStaff, isSuper, forbidden, badRequest } from "@/lib/api-auth";
+import { getCaller, isResponse, isSupervisor, isSuper, forbidden, badRequest } from "@/lib/api-auth";
 import { RECURRENCES, TRIGGERS, PRIORITIES } from "@/lib/operations/task-templates";
 
 // Task templates (SSW-TSK-001 §Workflow & Automation). GET lists; POST creates a
@@ -16,7 +16,7 @@ const migrationGate = (e: any) =>
 export async function GET() {
   const c = await getCaller();
   if (isResponse(c)) return c;
-  if (!isStaff(c)) return forbidden();
+  if (!isSupervisor(c)) return forbidden();
   let q = c.admin.from("op_task_templates").select("*").eq("active", true).order("created_at", { ascending: false }).limit(200);
   if (!isSuper(c)) q = q.eq("hospital_id", c.hospitalId ?? NONE);
   const { data, error } = await q;
@@ -27,7 +27,7 @@ export async function GET() {
 export async function POST(req: Request) {
   const c = await getCaller();
   if (isResponse(c)) return c;
-  if (!isStaff(c)) return forbidden();
+  if (!isSupervisor(c)) return forbidden();
   const b = await req.json().catch(() => ({}));
   if (!String(b.name ?? "").trim()) return badRequest("name required");
   const priority = PRIORITIES.includes(b.priority) ? b.priority : "normal";
@@ -55,7 +55,7 @@ export async function POST(req: Request) {
 export async function DELETE(req: Request) {
   const c = await getCaller();
   if (isResponse(c)) return c;
-  if (!isStaff(c)) return forbidden();
+  if (!isSupervisor(c)) return forbidden();
   const id = new URL(req.url).searchParams.get("id");
   if (!id) return badRequest("id required");
   const { data: row } = await c.admin.from("op_task_templates").select("hospital_id, name").eq("id", id).maybeSingle();

@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getCaller, isResponse, isStaff, isSuper, forbidden, badRequest } from "@/lib/api-auth";
+import { getCaller, isResponse, isSupervisor, isSuper, forbidden, badRequest } from "@/lib/api-auth";
 import { NOTE_TYPES } from "@/lib/operations/workforce-breaks-notes";
 
 // Supervisor notes (SSW-WFO-001 §5) — the structured shift journal. POST records
@@ -16,7 +16,7 @@ const migrationGate = (e: any) =>
 export async function POST(req: Request) {
   const c = await getCaller();
   if (isResponse(c)) return c;
-  if (!isStaff(c)) return forbidden();
+  if (!isSupervisor(c)) return forbidden();
   const b = await req.json().catch(() => ({}));
   if (!String(b.body ?? "").trim()) return badRequest("body required");
   const type = NOTE_TYPES.includes(b.note_type) ? b.note_type : "general";
@@ -38,7 +38,7 @@ export async function POST(req: Request) {
 export async function PATCH(req: Request) {
   const c = await getCaller();
   if (isResponse(c)) return c;
-  if (!isStaff(c)) return forbidden();
+  if (!isSupervisor(c)) return forbidden();
   const id = new URL(req.url).searchParams.get("id");
   if (!id) return badRequest("id required");
   const b = await req.json().catch(() => ({}));

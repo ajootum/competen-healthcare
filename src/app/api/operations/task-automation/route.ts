@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getCaller, isResponse, isStaff, isSuper, forbidden } from "@/lib/api-auth";
+import { getCaller, isResponse, isSupervisor, isSuper, forbidden } from "@/lib/api-auth";
 import { runTaskAutomation } from "@/lib/operations/task-automation";
 
 // Manual run of the task-automation engine (SSW-TSK-001) for the caller's hospital
@@ -11,7 +11,7 @@ import { runTaskAutomation } from "@/lib/operations/task-automation";
 export async function POST() {
   const c = await getCaller();
   if (isResponse(c)) return c;
-  if (!isStaff(c)) return forbidden();
+  if (!isSupervisor(c)) return forbidden();
 
   const r = await runTaskAutomation(c.admin, isSuper(c) ? null : c.hospitalId ?? null);
   if (!r.ok) {

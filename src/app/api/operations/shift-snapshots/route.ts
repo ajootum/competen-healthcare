@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getCaller, isResponse, isStaff, isSuper, forbidden, badRequest } from "@/lib/api-auth";
+import { getCaller, isResponse, isSupervisor, isSuper, forbidden, badRequest } from "@/lib/api-auth";
 import { loadShiftCommand } from "@/lib/operations/shift-command";
 import { SNAPSHOT_KINDS } from "@/lib/operations/shift-closure";
 
@@ -14,7 +14,7 @@ const migrationGate = (e: any) =>
 export async function POST(req: Request) {
   const c = await getCaller();
   if (isResponse(c)) return c;
-  if (!isStaff(c)) return forbidden();
+  if (!isSupervisor(c)) return forbidden();
   const b = await req.json().catch(() => ({}));
   const kind = SNAPSHOT_KINDS.includes(b.kind) ? b.kind : "closure";
 

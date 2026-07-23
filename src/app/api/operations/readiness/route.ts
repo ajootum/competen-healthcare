@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getCaller, isResponse, isStaff, isSuper, forbidden, badRequest } from "@/lib/api-auth";
+import { getCaller, isResponse, isSupervisor, isSuper, forbidden, badRequest } from "@/lib/api-auth";
 import { READINESS_CODES, READINESS_STATUSES } from "@/lib/operations/readiness";
 
 // Shift readiness records (SSW-002 §6.4 / §15.4). GET lists the checklist for a
@@ -23,7 +23,7 @@ async function shiftInScope(c: any, shiftId: string) {
 export async function GET(req: Request) {
   const c = await getCaller();
   if (isResponse(c)) return c;
-  if (!isStaff(c)) return forbidden();
+  if (!isSupervisor(c)) return forbidden();
   const shiftId = new URL(req.url).searchParams.get("shift_id");
   if (!shiftId) return badRequest("shift_id required");
   const scope = await shiftInScope(c, shiftId);
@@ -37,7 +37,7 @@ export async function GET(req: Request) {
 export async function PATCH(req: Request) {
   const c = await getCaller();
   if (isResponse(c)) return c;
-  if (!isStaff(c)) return forbidden();
+  if (!isSupervisor(c)) return forbidden();
   const url = new URL(req.url);
   const shiftId = url.searchParams.get("shift_id");
   if (!shiftId) return badRequest("shift_id required");

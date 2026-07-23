@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getCaller, isResponse, isStaff, isSuper, forbidden, badRequest } from "@/lib/api-auth";
+import { getCaller, isResponse, isSupervisor, isSuper, forbidden, badRequest } from "@/lib/api-auth";
 import { HUDDLE_STATUSES } from "@/lib/operations/shift-records";
 
 // Pre-shift safety huddle (SSW-002 §6.7 / §15.5). POST upserts the shift's huddle
@@ -23,7 +23,7 @@ async function shiftInScope(c: any, shiftId: string) {
 export async function POST(req: Request) {
   const c = await getCaller();
   if (isResponse(c)) return c;
-  if (!isStaff(c)) return forbidden();
+  if (!isSupervisor(c)) return forbidden();
   const b = await req.json().catch(() => ({}));
   const shiftId = String(b.shift_id ?? "");
   if (!shiftId) return badRequest("shift_id required");

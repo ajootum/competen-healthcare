@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getCaller, isResponse, isStaff, isSuper, forbidden, badRequest, assertProfileScope } from "@/lib/api-auth";
+import { getCaller, isResponse, isSupervisor, isSuper, forbidden, badRequest, assertProfileScope } from "@/lib/api-auth";
 
 // Shift Staff (COE Workforce Deployment) — deploy a worker onto a shift.
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -7,7 +7,7 @@ import { getCaller, isResponse, isStaff, isSuper, forbidden, badRequest, assertP
 export async function POST(req: Request) {
   const c = await getCaller();
   if (isResponse(c)) return c;
-  if (!isStaff(c)) return forbidden();
+  if (!isSupervisor(c)) return forbidden();
   const b = await req.json().catch(() => ({}));
   if (!b.shift_id || !b.staff_id) return badRequest("shift_id and staff_id required");
   const admin = c.admin as any;
@@ -30,7 +30,7 @@ export async function POST(req: Request) {
 export async function PATCH(req: Request) {
   const c = await getCaller();
   if (isResponse(c)) return c;
-  if (!isStaff(c)) return forbidden();
+  if (!isSupervisor(c)) return forbidden();
   const id = new URL(req.url).searchParams.get("id");
   if (!id) return badRequest("id required");
   const admin = c.admin as any;
@@ -48,7 +48,7 @@ export async function PATCH(req: Request) {
 export async function DELETE(req: Request) {
   const c = await getCaller();
   if (isResponse(c)) return c;
-  if (!isStaff(c)) return forbidden();
+  if (!isSupervisor(c)) return forbidden();
   const id = new URL(req.url).searchParams.get("id");
   if (!id) return badRequest("id required");
   const admin = c.admin as any;

@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getCaller, isResponse, isStaff, isSuper, forbidden, badRequest } from "@/lib/api-auth";
+import { getCaller, isResponse, isSupervisor, isSuper, forbidden, badRequest } from "@/lib/api-auth";
 
 // Clinical Shifts (COE Shift domain). Operational staff open/activate/close shifts.
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -9,7 +9,7 @@ const TYPES = ["day", "evening", "night", "long_day", "on_call"];
 export async function GET(req: Request) {
   const c = await getCaller();
   if (isResponse(c)) return c;
-  if (!isStaff(c)) return forbidden();
+  if (!isSupervisor(c)) return forbidden();
   const admin = c.admin as any;
   const url = new URL(req.url);
   const date = url.searchParams.get("date");
@@ -26,7 +26,7 @@ export async function GET(req: Request) {
 export async function POST(req: Request) {
   const c = await getCaller();
   if (isResponse(c)) return c;
-  if (!isStaff(c)) return forbidden();
+  if (!isSupervisor(c)) return forbidden();
   const b = await req.json().catch(() => ({}));
   if (!TYPES.includes(b.shift_type)) return badRequest("valid shift_type required");
   const admin = c.admin as any;
@@ -52,7 +52,7 @@ export async function POST(req: Request) {
 export async function PATCH(req: Request) {
   const c = await getCaller();
   if (isResponse(c)) return c;
-  if (!isStaff(c)) return forbidden();
+  if (!isSupervisor(c)) return forbidden();
   const id = new URL(req.url).searchParams.get("id");
   if (!id) return badRequest("id required");
   const admin = c.admin as any;

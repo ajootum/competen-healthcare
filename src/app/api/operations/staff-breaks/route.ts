@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getCaller, isResponse, isStaff, isSuper, forbidden, badRequest } from "@/lib/api-auth";
+import { getCaller, isResponse, isSupervisor, isSuper, forbidden, badRequest } from "@/lib/api-auth";
 import { BREAK_TYPES } from "@/lib/operations/workforce-breaks-notes";
 
 // Break management (SSW-WFO-001 §4). POST schedules a break; PATCH advances it
@@ -15,7 +15,7 @@ const migrationGate = (e: any) =>
 export async function POST(req: Request) {
   const c = await getCaller();
   if (isResponse(c)) return c;
-  if (!isStaff(c)) return forbidden();
+  if (!isSupervisor(c)) return forbidden();
   const b = await req.json().catch(() => ({}));
   if (!b.staff_id) return badRequest("staff_id required");
   const type = BREAK_TYPES.includes(b.break_type) ? b.break_type : "rest";
@@ -41,7 +41,7 @@ export async function POST(req: Request) {
 export async function PATCH(req: Request) {
   const c = await getCaller();
   if (isResponse(c)) return c;
-  if (!isStaff(c)) return forbidden();
+  if (!isSupervisor(c)) return forbidden();
   const id = new URL(req.url).searchParams.get("id");
   if (!id) return badRequest("id required");
   const b = await req.json().catch(() => ({}));

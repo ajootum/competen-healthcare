@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getCaller, isResponse, isStaff, isSuper, forbidden, badRequest } from "@/lib/api-auth";
+import { getCaller, isResponse, isSupervisor, isSuper, forbidden, badRequest } from "@/lib/api-auth";
 import { loadShiftCommand } from "@/lib/operations/shift-command";
 import { computeShiftMetrics } from "@/lib/operations/shift-metrics";
 
@@ -12,10 +12,10 @@ import { computeShiftMetrics } from "@/lib/operations/shift-metrics";
 const migrationGate = (e: any) =>
   /does not exist|schema cache/i.test(String(e?.message ?? "")) ? NextResponse.json({ error: "Run migration 068 to enable persisted shift metrics" }, { status: 409 }) : null;
 
-export async function POST(req: Request) {
+export async function POST() {
   const c = await getCaller();
   if (isResponse(c)) return c;
-  if (!isStaff(c)) return forbidden();
+  if (!isSupervisor(c)) return forbidden();
 
   const sc: any = await loadShiftCommand(c.admin, c.hospitalId ?? null, isSuper(c));
   const m = await computeShiftMetrics(c.admin, sc, c.hospitalId ?? null, isSuper(c));

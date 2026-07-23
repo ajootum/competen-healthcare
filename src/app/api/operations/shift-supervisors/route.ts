@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getCaller, isResponse, isStaff, isSuper, forbidden, badRequest } from "@/lib/api-auth";
+import { getCaller, isResponse, isSupervisor, isSuper, forbidden, badRequest } from "@/lib/api-auth";
 import { ASSIGNMENT_TYPES, ASSIGNMENT_SOURCES } from "@/lib/operations/supervisor-assignments";
 
 // Shift supervisor assignments & confirmation (SSW-002 §6.3 / §8 / §9.2 / §15.3).
@@ -24,7 +24,7 @@ async function shiftInScope(c: any, shiftId: string) {
 export async function POST(req: Request) {
   const c = await getCaller();
   if (isResponse(c)) return c;
-  if (!isStaff(c)) return forbidden();
+  if (!isSupervisor(c)) return forbidden();
   const b = await req.json().catch(() => ({}));
   const shiftId = String(b.shift_id ?? "");
   if (!shiftId) return badRequest("shift_id required");
@@ -62,7 +62,7 @@ export async function POST(req: Request) {
 export async function PATCH(req: Request) {
   const c = await getCaller();
   if (isResponse(c)) return c;
-  if (!isStaff(c)) return forbidden();
+  if (!isSupervisor(c)) return forbidden();
   const id = new URL(req.url).searchParams.get("id");
   if (!id) return badRequest("id required");
   const b = await req.json().catch(() => ({}));

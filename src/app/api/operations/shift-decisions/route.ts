@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getCaller, isResponse, isStaff, isSuper, forbidden, badRequest } from "@/lib/api-auth";
+import { getCaller, isResponse, isSupervisor, isSuper, forbidden, badRequest } from "@/lib/api-auth";
 import { DECISION_TYPES, DECISION_STATUSES } from "@/lib/operations/shift-records";
 
 // Material operational decisions (SSW-002 §6.8 / §5.4 — accountable users record
@@ -22,7 +22,7 @@ async function shiftInScope(c: any, shiftId: string) {
 export async function POST(req: Request) {
   const c = await getCaller();
   if (isResponse(c)) return c;
-  if (!isStaff(c)) return forbidden();
+  if (!isSupervisor(c)) return forbidden();
   const b = await req.json().catch(() => ({}));
   const shiftId = String(b.shift_id ?? "");
   if (!shiftId) return badRequest("shift_id required");
@@ -49,7 +49,7 @@ export async function POST(req: Request) {
 export async function PATCH(req: Request) {
   const c = await getCaller();
   if (isResponse(c)) return c;
-  if (!isStaff(c)) return forbidden();
+  if (!isSupervisor(c)) return forbidden();
   const id = new URL(req.url).searchParams.get("id");
   if (!id) return badRequest("id required");
   const { data: row, error: rowErr } = await c.admin.from("shift_decisions").select("id, hospital_id, decision_summary").eq("id", id).maybeSingle();

@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getCaller, isResponse, isStaff, isSuper, forbidden, badRequest, assertProfileScope } from "@/lib/api-auth";
+import { getCaller, isResponse, isSupervisor, isSuper, forbidden, badRequest, assertProfileScope } from "@/lib/api-auth";
 
 // Patient Assignment (COE Assignment domain). A patient must always have an
 // active responsible clinician; assignment is competency-validated unless an
@@ -11,7 +11,7 @@ const PASSING = ["competent", "competent_with_conditions", "provisionally_compet
 export async function POST(req: Request) {
   const c = await getCaller();
   if (isResponse(c)) return c;
-  if (!isStaff(c)) return forbidden();
+  if (!isSupervisor(c)) return forbidden();
   const b = await req.json().catch(() => ({}));
   if (!b.patient_id || !b.staff_id) return badRequest("patient_id and staff_id required");
   const admin = c.admin as any;
@@ -57,7 +57,7 @@ export async function POST(req: Request) {
 export async function GET(req: Request) {
   const c = await getCaller();
   if (isResponse(c)) return c;
-  if (!isStaff(c)) return forbidden();
+  if (!isSupervisor(c)) return forbidden();
   const admin = c.admin as any;
   const patientId = new URL(req.url).searchParams.get("patient");
   let q = admin.from("op_patient_assignments")
@@ -73,7 +73,7 @@ export async function GET(req: Request) {
 export async function PATCH(req: Request) {
   const c = await getCaller();
   if (isResponse(c)) return c;
-  if (!isStaff(c)) return forbidden();
+  if (!isSupervisor(c)) return forbidden();
   const id = new URL(req.url).searchParams.get("id");
   if (!id) return badRequest("id required");
   const admin = c.admin as any;
