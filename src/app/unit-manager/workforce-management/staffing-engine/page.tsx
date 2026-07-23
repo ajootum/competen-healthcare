@@ -5,6 +5,7 @@ import { loadWorkforceOps } from "@/lib/operations/workforce-ops";
 import { loadUnitDepartments } from "@/lib/operations/unit-command";
 import UnitFilters from "../../UnitFilters";
 import StaffingEngine from "./StaffingEngine";
+import StaffEngineTabs from "./StaffEngineTabs";
 
 export const dynamic = "force-dynamic";
 
@@ -18,7 +19,6 @@ export const dynamic = "force-dynamic";
 
 const card = "bg-white rounded-xl border border-gray-200";
 const NONE = "00000000-0000-0000-0000-000000000000";
-const SUBTABS = ["Overview", "Requirements", "Real-time Coverage", "Staff Availability", "Skills & Competencies", "Scenarios", "History & Reports", "Settings"];
 // Coverage colour tiers (mockup legend)
 const cellColor = (p: number | null) => p == null ? "bg-gray-50 text-gray-400" : p >= 90 ? "bg-emerald-100 text-emerald-800" : p >= 70 ? "bg-lime-100 text-lime-800" : p >= 50 ? "bg-amber-100 text-amber-800" : "bg-rose-100 text-rose-800";
 const hhmm = (iso?: string | null) => (iso ? new Date(iso).toISOString().slice(11, 16) : null);
@@ -70,9 +70,7 @@ export default async function StaffingEnginePage({ searchParams }: { searchParam
         <div className="flex items-center gap-2"><span className="text-xl">🧑‍⚕️</span><div><h1 className="text-2xl font-bold text-gray-900 tracking-tight">Staffing Engine</h1><p className="text-sm text-gray-500">Monitor staffing requirements, availability and real-time coverage for your unit.</p></div></div>
         <UnitFilters departments={departments} />
       </div>
-      <div className="flex gap-1 border-b border-gray-200 overflow-x-auto">
-        {SUBTABS.map((t, i) => <span key={t} className={`shrink-0 text-xs px-3 py-2 border-b-2 -mb-px font-medium ${i === 0 ? "border-emerald-600 text-emerald-700" : "border-transparent text-gray-300"}`} title={i === 0 ? "" : "Next phase"}>{t}</span>)}
-      </div>
+      <StaffEngineTabs />
     </>
   );
 
