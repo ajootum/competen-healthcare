@@ -122,3 +122,39 @@ export async function loadRosterGovernance(admin: any, hid: string | null, isSup
     recentActivity,
   };
 }
+
+// ── Coverage & Safety Validation (§10) ───────────────────────────────────────
+// Per-shift safe-staffing validation outcome (safe / warning / gap / critical) + a heat map
+// (unit×shift rows, dates as columns) computed directly from the roster assignments. A shift
+// is critical when it has no staff, or a required supervisor post is unfilled.
+export async function loadRosterCoverage(admin: any, hid: string | null, isSuper: boolean) {
+  const weekStart = mondayOf();
+  const rw = await loadRosterForWeek(admin, hid, isSuper, weekStart);
+  if (!(rw as any).provisioned) return { provisioned: false as const, weekStart };
+  const roster = (rw as any).roster;
+  if (!roster) return { provisioned: true as const, hasRoster: false as const, weekStart };
+  const asg: any[] = (rw as any).assignments ?? [];
+  const days: string[] = (rw as any).days ?? [];
+
+  const map = new Map<string, any>();
+  for (const a of asg) {
+    const key = `${a.unit_name}|${a.shift_date}|${a.shift_type}`;
+    const s = map.get(key) ?? { unit: a.unit_name, date: a.shift_date, shift: a.shift_type, posts: 0, filled: 0, supPost: false, supFilled: false, compGap: 0 };
+    s.posts++;
+    if (a.status === "assigned") { s.filled++; if (!a.competency_validated) s.compGap++; }
+    if (a.is_supervisor) { s.supPost = true; if (a.status === "assigned") s.supFilled = true; }
+    map.set(key, s);
+  }
+  const shifts = [...map.values()].map(s => {
+    const gap = s.posts - s.filled;
+    const pct = s.posts ? Math.round((s.filled / s.posts) * 100) : 100;
+    const outcome = s.filled === 0 ? "critical" : (s.supPost && !s.supFilled) ? "critical" : gap > 0 ? (pct >= 80 ? "warning" : "gap") : "safe";
+    return { ...s, gap, pct, outcome };
+  });
+  const units = [...new Set(shifts.map(s => s.unit))];
+  const counts = { safe: 0, warning: 0, gap: 0, critical: 0 } as Record<string, number>;
+  shifts.forEach(s => { counts[s.outcome] = (counts[s.outcome] ?? 0) + 1; });
+  const cell = (unit: string, date: string, shift: string) => shifts.find(s => s.unit === unit && s.date === date && s.shift === shift) ?? null;
+
+  return { provisioned: true as const, hasRoster: true as const, weekStart, days, units, shifts, counts, cell, roster: { status: roster.status, version: roster.version } };
+}
