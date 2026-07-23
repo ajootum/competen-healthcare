@@ -92,6 +92,7 @@ export default async function PlatformOperations() {
     { label: "Run Health Check", desc: "Test platform services", icon: "🩺", href: "/super-admin/platform-ops/monitoring" },
     { label: "View Logs", desc: "Access system logs", icon: "📜", href: "/super-admin/platform-ops/monitoring" },
     { label: "Platform Search", desc: "Search across all entities", icon: "🔍", href: "/super-admin/platform-ops/search" },
+    { label: "Document Service", desc: "Unified document index", icon: "📎", href: "/super-admin/platform-ops/documents" },
   ];
 
   const modules = [
