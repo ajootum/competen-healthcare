@@ -170,3 +170,29 @@ export async function loadReplacement(admin: any, hid: string | null, isSuper: b
   const gaps = absent.map((r: any) => ({ ...r, hasRequest: reqByStaff.has(r.staffId) }));
   return { ready: true as const, gaps, requests, open, filledToday, pool: base.replacementPool ?? [], kpis: base.kpis };
 }
+
+// Future / declared availability (op_staff_availability, migration 083).
+export const AVAIL_LABEL: Record<string, string> = { normal: "Normal roster", additional: "Additional shift", on_call: "On call", standby: "Standby", redeployment: "Redeployment", overtime: "Overtime", remote: "Remote", partial: "Partial", temporarily_unavailable: "Temporarily unavailable", unavailable: "Unavailable", unknown: "Unknown" };
+const AVAIL_CLINICAL = new Set(["charge", "nurse", "support", "float", "doctor", "therapist"]);
+
+export async function loadFutureAvailability(admin: any, hid: string | null, isSuper: boolean) {
+  const scope = (q: any) => (isSuper ? q : q.eq("hospital_id", hid ?? NONE));
+  let declarations: any[] = [];
+  let provisioned = true;
+  try {
+    const res = await scope(admin.from("op_staff_availability").select("id, staff_name, availability_type, period_start, period_end, reason, source, confidence, expires_at, updated_at").order("updated_at", { ascending: false })).limit(100);
+    if (res.error) provisioned = !/does not exist|schema cache/i.test(res.error.message ?? "");
+    else declarations = res.data ?? [];
+  } catch { declarations = []; }
+  const nowMs = Date.now();
+  const active = declarations.filter((d: any) => !d.expires_at || new Date(d.expires_at).getTime() >= nowMs);
+  const types = [...new Set(active.map((d: any) => d.availability_type))];
+  const byType = types.map(t => ({ type: t, label: AVAIL_LABEL[t as string] ?? t, count: active.filter((d: any) => d.availability_type === t).length })).sort((a, b) => b.count - a.count);
+  const unavailable = active.filter((d: any) => ["unavailable", "temporarily_unavailable"].includes(d.availability_type)).length;
+  const expiringSoon = active.filter((d: any) => d.expires_at && new Date(d.expires_at).getTime() < nowMs + 7 * 864e5).length;
+
+  let picker: any[] = [];
+  try { const { data } = await scope(admin.from("profiles").select("id, full_name, role")).limit(500); picker = (data ?? []).filter((p: any) => AVAIL_CLINICAL.has(p.role)); } catch { picker = []; }
+
+  return { provisioned, declarations: active, byType, unavailable, expiringSoon, total: active.length, picker: picker.slice(0, 200) };
+}
