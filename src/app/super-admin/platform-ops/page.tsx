@@ -101,6 +101,7 @@ export default async function PlatformOperations() {
     { n: 4, label: "Platform Services", desc: "Core/AI/Assessment/Learning/Integration engines", icon: "⚙️", href: "/super-admin/platform-ops", live: false },
     { n: 5, label: "Licensing & Subscription", desc: "Plans, licences, quotas, billing, renewals", icon: "🧾", href: "/super-admin/platform-ops/licensing", live: true },
     { n: 6, label: "Monitoring & Operations", desc: "Health, alerts, logs, events, backups", icon: "📡", href: "/super-admin/platform-ops/monitoring", live: true },
+    { n: 7, label: "Workspace Configuration Engine", desc: "No-code config of workspaces, sections & modules — inheritance, versioning & rollback", icon: "🎛️", href: "/super-admin/platform-ops/configuration", live: true },
   ];
 
   return (
