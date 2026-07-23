@@ -13,6 +13,18 @@ import { loadOpsConsoleData } from "@/lib/operations/ops-console-data";
 const NONE = "00000000-0000-0000-0000-000000000000";
 const ROLE_LABEL: Record<string, string> = { nurse: "Registered Nurses", charge: "Charge Nurses", support: "Support Staff", float: "Float Pool", doctor: "Doctors", therapist: "Allied Health", educator: "Educators", assessor: "Assessors" };
 
+// Demand model by dominant bed type (spec §3). Sets the default nurse ratio where no
+// op_staffing_standards ratio is configured for the unit.
+function demandModel(dBeds: any[], capacity: number): { model: string; defaultRatio: number } {
+  const n = capacity || 1;
+  const share = (types: string[]) => dBeds.filter((b: any) => types.includes(b.bed_type)).length / n;
+  if (share(["critical_care"]) >= 0.5) return { model: "ICU acuity (1:2)", defaultRatio: 2 };
+  if (share(["theatre", "recovery"]) >= 0.5) return { model: "Theatre / recovery", defaultRatio: 3 };
+  if (share(["paediatric"]) >= 0.5) return { model: "Paediatric ratio (1:4)", defaultRatio: 4 };
+  if (dBeds.length === 0) return { model: "Activity based", defaultRatio: 6 };
+  return { model: "Patient ratio (1:6)", defaultRatio: 6 };
+}
+
 // Configurable planning assumptions (defaults — a per-tenant config store is next-phase).
 export const ASSUMPTIONS = {
   contractedHoursWeek: 37.5,
@@ -68,19 +80,23 @@ export async function loadEstablishment(admin: any, hid: string | null, isSuper:
     const dBeds = beds.filter((b: any) => b.departments?.name === dn);
     const capacity = dBeds.length;
     const occupied = dBeds.filter((b: any) => b.status === "occupied").length || patients.filter((p: any) => p.departments?.name === dn).length;
+    // Demand model from the unit's dominant bed type (spec §3) — sets the default nurse
+    // ratio where op_staffing_standards has none configured.
+    const bm = demandModel(dBeds, capacity);
     const roleReq = careRoles.map(role => {
       const std = stdByDeptRole.get(`${dn}|${role}`);
-      const ratioReq = std?.ratio ? Math.ceil(occupied / std.ratio) : 0;
+      const effRatio = std?.ratio ?? (role === "nurse" ? bm.defaultRatio : null);
+      const ratioReq = effRatio ? Math.ceil(occupied / effRatio) : 0;
       const perShift = Math.max(std?.min ?? 0, ratioReq, role === "charge" ? 1 : 0); // charge is mandatory (≥1)
       const fte = +(perShift * m.ftePerPost).toFixed(1);
-      return { role, label: ROLE_LABEL[role] ?? role, perShift, fte, ratio: std?.ratio ?? null };
+      return { role, label: ROLE_LABEL[role] ?? role, perShift, fte, ratio: effRatio, ratioSource: std?.ratio ? "standard" : (role === "nurse" ? "model default" : null) };
     }).filter(r => r.perShift > 0);
     const directFte = roleReq.filter(r => r.role !== "charge").reduce((n, r) => n + r.fte, 0);
     const supervisorFte = roleReq.filter(r => r.role === "charge").reduce((n, r) => n + r.fte, 0);
     const floatFte = +(directFte * (ASSUMPTIONS.floatPoolPct / 100)).toFixed(1);
     const totalFte = +(directFte + supervisorFte + floatFte).toFixed(1);
     const occupancyPct = capacity ? Math.round((occupied / capacity) * 100) : null;
-    return { unit: dn, capacity, occupied, occupancyPct, roleReq, directFte, supervisorFte, floatFte, totalFte };
+    return { unit: dn, capacity, occupied, occupancyPct, roleReq, directFte, supervisorFte, floatFte, totalFte, demandModel: bm.model, nurseRatio: bm.defaultRatio };
   }).filter(u => u.capacity > 0 || u.occupied > 0).sort((a, b) => b.totalFte - a.totalFte);
 
   // Roll-up by role across units → required vs available FTE
@@ -115,6 +131,15 @@ export async function loadEstablishment(admin: any, hid: string | null, isSuper:
     { label: "Full capacity", occDelta: null, fte: (() => { const full = units.reduce((n, u) => { const nurseStd = stdByDeptRole.get(`${u.unit}|nurse`); const perShift = nurseStd?.ratio ? Math.ceil(u.capacity / nurseStd.ratio) : (nurseStd?.min ?? 0); return n + perShift * m.ftePerPost; }, 0); return +full.toFixed(1); })() },
   ];
 
+  // Annual leave impact (spec §6) — the establishment uplift needed to cover annual leave
+  const leaveHoursPerFte = ASSUMPTIONS.annualLeaveDays * ASSUMPTIONS.workingDayHours; // 225h
+  const annualLeaveImpact = {
+    leaveDaysPerFte: ASSUMPTIONS.annualLeaveDays,
+    coverFte: +(totalRequired * (leaveHoursPerFte / m.annualProductive)).toFixed(1), // extra FTE to backfill leave
+    leaveDaysTotal: Math.round(totalRequired * ASSUMPTIONS.annualLeaveDays),
+    reliefPortionPct: Math.round((1 - 1 / m.reliefFactor) * 100), // % of establishment that is relief cover
+  };
+
   // Predicted overtime (honest derived): if available < required, gap covered by overtime hours
   const predictedOvertimeHrs = vacancyFte > 0 ? Math.round(vacancyFte * m.annualProductive) : 0;
 
@@ -124,7 +149,7 @@ export async function loadEstablishment(admin: any, hid: string | null, isSuper:
 
   return {
     ready: true as const, model: m, assumptions: ASSUMPTIONS,
-    units, requiredVsAvailable, ratioCompliance, forecast,
+    units, requiredVsAvailable, ratioCompliance, forecast, annualLeaveImpact,
     kpis: { totalRequired, totalAvailable, vacancyFte, coverageCompliance, reliefFactor: m.reliefFactor, supervisorRequired, supervisorAvailable, openPositions: Math.max(0, Math.ceil(vacancyFte)), annualProductive: m.annualProductive, predictedOvertimeHrs },
     aiForecast,
   };

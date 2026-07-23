@@ -68,12 +68,12 @@ export default async function EstablishmentEngine() {
           <h3 className="text-sm font-bold text-gray-900 mb-3">Establishment summary <span className="text-[10px] text-gray-400 font-normal">by unit</span></h3>
           {d.units.length === 0 ? <p className="text-sm text-gray-400">No units with bed capacity / staffing standards.</p> : (
             <div className="overflow-x-auto"><table className="w-full text-xs">
-              <thead><tr className="text-gray-400 text-left border-b border-gray-100"><th className="py-2 pr-3 font-medium">Unit</th><th className="py-2 pr-3 font-medium text-right">Beds</th><th className="py-2 pr-3 font-medium text-right">Occ</th><th className="py-2 pr-3 font-medium text-right">Direct FTE</th><th className="py-2 pr-3 font-medium text-right">Supervisor</th><th className="py-2 pr-3 font-medium text-right">Float</th><th className="py-2 font-medium text-right">Total FTE</th></tr></thead>
-              <tbody>{d.units.map((u: any) => (<tr key={u.unit} className="border-b border-gray-50"><td className="py-2 pr-3 text-gray-700">{u.unit}</td><td className="py-2 pr-3 text-right text-gray-600">{u.capacity}</td><td className="py-2 pr-3 text-right text-gray-600">{u.occupancyPct != null ? `${u.occupancyPct}%` : u.occupied}</td><td className="py-2 pr-3 text-right text-gray-700">{u.directFte}</td><td className="py-2 pr-3 text-right text-gray-700">{u.supervisorFte}</td><td className="py-2 pr-3 text-right text-gray-600">{u.floatFte}</td><td className="py-2 text-right font-bold text-gray-900">{u.totalFte}</td></tr>))}</tbody>
-              <tfoot><tr className="border-t border-gray-200 font-bold"><td className="py-2 pr-3 text-gray-800" colSpan={6}>Total required establishment</td><td className="py-2 text-right text-emerald-600">{k.totalRequired} FTE</td></tr></tfoot>
+              <thead><tr className="text-gray-400 text-left border-b border-gray-100"><th className="py-2 pr-3 font-medium">Unit</th><th className="py-2 pr-3 font-medium">Demand model</th><th className="py-2 pr-3 font-medium text-right">Beds</th><th className="py-2 pr-3 font-medium text-right">Occ</th><th className="py-2 pr-3 font-medium text-right">Direct FTE</th><th className="py-2 pr-3 font-medium text-right">Supervisor</th><th className="py-2 pr-3 font-medium text-right">Float</th><th className="py-2 font-medium text-right">Total FTE</th></tr></thead>
+              <tbody>{d.units.map((u: any) => (<tr key={u.unit} className="border-b border-gray-50"><td className="py-2 pr-3 text-gray-700">{u.unit}</td><td className="py-2 pr-3"><span className="text-[10px] px-1.5 py-0.5 rounded bg-gray-100 text-gray-600">{u.demandModel}</span></td><td className="py-2 pr-3 text-right text-gray-600">{u.capacity}</td><td className="py-2 pr-3 text-right text-gray-600">{u.occupancyPct != null ? `${u.occupancyPct}%` : u.occupied}</td><td className="py-2 pr-3 text-right text-gray-700">{u.directFte}</td><td className="py-2 pr-3 text-right text-gray-700">{u.supervisorFte}</td><td className="py-2 pr-3 text-right text-gray-600">{u.floatFte}</td><td className="py-2 text-right font-bold text-gray-900">{u.totalFte}</td></tr>))}</tbody>
+              <tfoot><tr className="border-t border-gray-200 font-bold"><td className="py-2 pr-3 text-gray-800" colSpan={7}>Total required establishment</td><td className="py-2 text-right text-emerald-600">{k.totalRequired} FTE</td></tr></tfoot>
             </table></div>
           )}
-          <p className="text-[10px] text-gray-400 mt-2">FTE per continuously-staffed post = {m.ftePerPost} (annual post hours ÷ {m.annualProductive} productive hrs). Charge posts are mandatory (≥1/shift); float pool = {a.floatPoolPct}% of direct care.</p>
+          <p className="text-[10px] text-gray-400 mt-2">Demand model is set per unit from its dominant bed type (ICU acuity / theatre / paediatric / patient-ratio), supplying the default nurse ratio where op_staffing_standards has none. FTE per continuously-staffed post = {m.ftePerPost} (annual post hours ÷ {m.annualProductive} productive hrs). Charge posts are mandatory (≥1/shift); float pool = {a.floatPoolPct}% of direct care.</p>
         </div>
 
         {/* Planning assumptions */}
@@ -110,6 +110,15 @@ export default async function EstablishmentEngine() {
           <div className={`${card} p-5`}>
             <h3 className="text-sm font-bold text-gray-900 mb-2">Ratio compliance</h3>
             {d.ratioCompliance.length === 0 ? <p className="text-[11px] text-gray-400">No nurse ratio standards configured.</p> : <div className="space-y-1 text-[11px]">{d.ratioCompliance.slice(0, 5).map((r: any) => (<div key={r.unit} className="flex items-center justify-between"><span className="text-gray-700 truncate">{r.unit}</span><span className="text-gray-500">{r.ratio ? `1:${r.ratio}` : "min"} · needs {r.requiredNow ?? "—"}</span></div>))}</div>}
+          </div>
+          <div className={`${card} p-5`}>
+            <h3 className="text-sm font-bold text-gray-900 mb-2">Annual leave impact</h3>
+            <div className="grid grid-cols-3 gap-2">
+              <div><p className="text-lg font-bold text-gray-900">{d.annualLeaveImpact.coverFte}</p><p className="text-[10px] text-gray-400">FTE to backfill leave</p></div>
+              <div><p className="text-lg font-bold text-gray-900">{d.annualLeaveImpact.reliefPortionPct}%</p><p className="text-[10px] text-gray-400">of establishment is relief</p></div>
+              <div><p className="text-lg font-bold text-gray-900">{d.annualLeaveImpact.leaveDaysTotal.toLocaleString()}</p><p className="text-[10px] text-gray-400">leave days / year</p></div>
+            </div>
+            <p className="text-[10px] text-gray-400 mt-2">{d.annualLeaveImpact.leaveDaysPerFte} days entitlement per FTE — already absorbed into the relief factor ({m.reliefFactor}).</p>
           </div>
         </div>
       </div>
