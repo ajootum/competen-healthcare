@@ -42,6 +42,7 @@ const ITEM_CFG: Record<string, string> = {
 type NavItem = { label: string; href?: string; icon: string; exact?: boolean; soon?: boolean; badge?: number };
 const NAV_GROUPS: { title: string; items: NavItem[] }[] = [
   { title: "Platform Engines", items: [
+    { label: "Workforce Planning Studio", href: "/unit-manager/planning-studio", icon: "🏗️" },
     { label: "Workforce Demand Engine",  href: "/unit-manager/workforce-management/establishment", icon: "📐" },
     { label: "AI Scheduling Engine",     href: "/unit-manager/scheduling-engine", icon: "🗓️" },
     { label: "Competency Engine",        href: "/unit-manager/competency", icon: "🎯" },

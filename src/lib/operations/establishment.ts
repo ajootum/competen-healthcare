@@ -9,20 +9,21 @@
 // engine uses standard NHS-style defaults that a manager can see and reason about.
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { loadOpsConsoleData } from "@/lib/operations/ops-console-data";
+import { loadPlanningConfig, computePlanningModel } from "@/lib/config/wps-config";
 
 const NONE = "00000000-0000-0000-0000-000000000000";
 const ROLE_LABEL: Record<string, string> = { nurse: "Registered Nurses", charge: "Charge Nurses", support: "Support Staff", float: "Float Pool", doctor: "Doctors", therapist: "Allied Health", educator: "Educators", assessor: "Assessors" };
 
-// Demand model by dominant bed type (spec §3). Sets the default nurse ratio where no
-// op_staffing_standards ratio is configured for the unit.
-function demandModel(dBeds: any[], capacity: number): { model: string; defaultRatio: number } {
+// Demand model by dominant bed type (spec §3). Default nurse ratios come from the tenant's
+// published WPS-001 config where no op_staffing_standards ratio is set for the unit.
+function demandModel(dBeds: any[], capacity: number, ratios: { critical_care: number; theatre: number; paediatric: number; standard: number }): { model: string; defaultRatio: number } {
   const n = capacity || 1;
   const share = (types: string[]) => dBeds.filter((b: any) => types.includes(b.bed_type)).length / n;
-  if (share(["critical_care"]) >= 0.5) return { model: "ICU acuity (1:2)", defaultRatio: 2 };
-  if (share(["theatre", "recovery"]) >= 0.5) return { model: "Theatre / recovery", defaultRatio: 3 };
-  if (share(["paediatric"]) >= 0.5) return { model: "Paediatric ratio (1:4)", defaultRatio: 4 };
-  if (dBeds.length === 0) return { model: "Activity based", defaultRatio: 6 };
-  return { model: "Patient ratio (1:6)", defaultRatio: 6 };
+  if (share(["critical_care"]) >= 0.5) return { model: `ICU acuity (1:${ratios.critical_care})`, defaultRatio: ratios.critical_care };
+  if (share(["theatre", "recovery"]) >= 0.5) return { model: "Theatre / recovery", defaultRatio: ratios.theatre };
+  if (share(["paediatric"]) >= 0.5) return { model: `Paediatric ratio (1:${ratios.paediatric})`, defaultRatio: ratios.paediatric };
+  if (dBeds.length === 0) return { model: "Activity based", defaultRatio: ratios.standard };
+  return { model: `Patient ratio (1:${ratios.standard})`, defaultRatio: ratios.standard };
 }
 
 // Configurable planning assumptions (defaults — a per-tenant config store is next-phase).
@@ -53,14 +54,15 @@ export function planningModel() {
 
 export async function loadEstablishment(admin: any, hid: string | null, isSuper: boolean) {
   const scope = (q: any) => (isSuper ? q : q.eq("hospital_id", hid ?? NONE));
-  const { ready, data } = await loadOpsConsoleData(admin, hid, isSuper);
+  const [{ ready, data }, cfg] = await Promise.all([loadOpsConsoleData(admin, hid, isSuper), loadPlanningConfig(admin, hid, isSuper)]);
   if (!ready) return { ready: false as const };
   const { beds, patients, shiftStaff } = data;
+  const settings = cfg.settings;
 
   let standards: any[] = [];
   try { const { data: st } = await scope(admin.from("op_staffing_standards").select("department_id, shift_type, role, min_count, target_ratio, departments!department_id(name)")).limit(1000); standards = st ?? []; } catch { standards = []; }
 
-  const m = planningModel();
+  const m = computePlanningModel(settings);
 
   // Group by department name (beds/patients carry departments.name)
   const deptNames = [...new Set([...beds.map((b: any) => b.departments?.name), ...patients.map((p: any) => p.departments?.name)].filter(Boolean))];
@@ -82,7 +84,7 @@ export async function loadEstablishment(admin: any, hid: string | null, isSuper:
     const occupied = dBeds.filter((b: any) => b.status === "occupied").length || patients.filter((p: any) => p.departments?.name === dn).length;
     // Demand model from the unit's dominant bed type (spec §3) — sets the default nurse
     // ratio where op_staffing_standards has none configured.
-    const bm = demandModel(dBeds, capacity);
+    const bm = demandModel(dBeds, capacity, settings.demandRatios);
     const roleReq = careRoles.map(role => {
       const std = stdByDeptRole.get(`${dn}|${role}`);
       const effRatio = std?.ratio ?? (role === "nurse" ? bm.defaultRatio : null);
@@ -93,7 +95,7 @@ export async function loadEstablishment(admin: any, hid: string | null, isSuper:
     }).filter(r => r.perShift > 0);
     const directFte = roleReq.filter(r => r.role !== "charge").reduce((n, r) => n + r.fte, 0);
     const supervisorFte = roleReq.filter(r => r.role === "charge").reduce((n, r) => n + r.fte, 0);
-    const floatFte = +(directFte * (ASSUMPTIONS.floatPoolPct / 100)).toFixed(1);
+    const floatFte = +(directFte * (settings.floatPoolPct / 100)).toFixed(1);
     const totalFte = +(directFte + supervisorFte + floatFte).toFixed(1);
     const occupancyPct = capacity ? Math.round((occupied / capacity) * 100) : null;
     return { unit: dn, capacity, occupied, occupancyPct, roleReq, directFte, supervisorFte, floatFte, totalFte, demandModel: bm.model, nurseRatio: bm.defaultRatio };
@@ -132,9 +134,9 @@ export async function loadEstablishment(admin: any, hid: string | null, isSuper:
   ];
 
   // Annual leave impact (spec §6) — the establishment uplift needed to cover annual leave
-  const leaveHoursPerFte = ASSUMPTIONS.annualLeaveDays * ASSUMPTIONS.workingDayHours; // 225h
+  const leaveHoursPerFte = settings.annualLeaveDays * m.workingDayHours;
   const annualLeaveImpact = {
-    leaveDaysPerFte: ASSUMPTIONS.annualLeaveDays,
+    leaveDaysPerFte: settings.annualLeaveDays,
     coverFte: +(totalRequired * (leaveHoursPerFte / m.annualProductive)).toFixed(1), // extra FTE to backfill leave
     leaveDaysTotal: Math.round(totalRequired * ASSUMPTIONS.annualLeaveDays),
     reliefPortionPct: Math.round((1 - 1 / m.reliefFactor) * 100), // % of establishment that is relief cover
@@ -148,7 +150,7 @@ export async function loadEstablishment(admin: any, hid: string | null, isSuper:
     : `Establishment is fully covered (${coverageCompliance ?? 100}% of required FTE available). Maintain the relief factor of ${m.reliefFactor} to absorb leave and sickness without overtime.`;
 
   return {
-    ready: true as const, model: m, assumptions: ASSUMPTIONS,
+    ready: true as const, model: m, assumptions: settings, configVersion: cfg.version, configured: cfg.configured,
     units, requiredVsAvailable, ratioCompliance, forecast, annualLeaveImpact,
     kpis: { totalRequired, totalAvailable, vacancyFte, coverageCompliance, reliefFactor: m.reliefFactor, supervisorRequired, supervisorAvailable, openPositions: Math.max(0, Math.ceil(vacancyFte)), annualProductive: m.annualProductive, predictedOvertimeHrs },
     aiForecast,
