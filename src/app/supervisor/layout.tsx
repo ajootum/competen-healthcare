@@ -29,6 +29,7 @@ const DASHBOARD: NavItem = { label: "Dashboard", href: "/supervisor", icon: "�
 const NAV_GROUPS: { group: string; items: NavItem[] }[] = [
   { group: "Shift Command", items: [
     { label: "Shift Dashboard",   href: "/supervisor/shift-operations",            icon: "🖥️" },
+    { label: "Shift Planning & Activation", href: "/supervisor/shift-activation",   icon: "🚀" },
     { label: "Handover Centre",   href: "/supervisor/handover",                    icon: "🔄", badge: "handover" },
     { label: "Escalation Centre", href: "/supervisor/operations?section=safety",   icon: "⬆️", badge: "escalations" },
     { label: "Shift Analytics",   href: "/supervisor/analytics",                   icon: "📈" },
