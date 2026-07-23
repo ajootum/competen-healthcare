@@ -94,6 +94,7 @@ export default async function PlatformOperations() {
     { label: "Platform Search", desc: "Search across all entities", icon: "🔍", href: "/super-admin/platform-ops/search" },
     { label: "Document Service", desc: "Unified document index", icon: "📎", href: "/super-admin/platform-ops/documents" },
     { label: "Localization", desc: "Locales & translations", icon: "🌐", href: "/super-admin/platform-ops/localization" },
+    { label: "Collaboration", desc: "Comments & mentions", icon: "💬", href: "/super-admin/platform-ops/collaboration" },
   ];
 
   const modules = [
