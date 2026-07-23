@@ -161,7 +161,7 @@ export default async function ExecutiveActionsCentre({ searchParams }: { searchP
           breakdown={mods.competency.breakdown} href="/unit-manager/competency-validations" linkLabel="View validations" note="Sub-categories via Competency Engine (next phase)." />
         <ModulePanel icon="🕐" title="History & Audit" color="#6b7280" provisioned={mods.history.provisioned}
           stats={[["Events", mods.history.total], ["This Week", mods.history.thisWeek], ["Period", mods.history.thisPeriod]]}
-          breakdown={mods.history.breakdown} href="#" linkLabel="View audit trail" />
+          breakdown={mods.history.breakdown} href="/unit-manager/history-audit" linkLabel="View audit trail" />
       </div>
 
       {/* AI recs + upcoming + quick actions */}
