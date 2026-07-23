@@ -14,7 +14,7 @@ const TABS: { label: string; href: string; built?: boolean }[] = [
   { label: "Fairness", href: "/unit-manager/scheduling-engine/fairness", built: true },
   { label: "Cost Optimisation", href: "/unit-manager/scheduling-engine/cost", built: true },
   { label: "Scenario Planner", href: "/unit-manager/scheduling-engine/scenarios", built: true },
-  { label: "What-if Simulator", href: "#" },
+  { label: "What-if Simulator", href: "/unit-manager/scheduling-engine/what-if", built: true },
   { label: "Recommendations", href: "#" },
   { label: "Publish & Approve", href: "#" },
   { label: "Analytics", href: "#" },
