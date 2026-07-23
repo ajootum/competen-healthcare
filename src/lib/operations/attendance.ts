@@ -20,19 +20,32 @@ export async function loadAttendance(admin: any, hid: string | null, isSuper: bo
   if (!ready) return { ready: false as const };
   const { shifts, shiftStaff, escalations } = data;
   const activeShifts = shifts.filter((s: any) => s.status === "active");
-  const activeIds = new Set(activeShifts.map((s: any) => s.id));
-  const staff = shiftStaff.filter((s: any) => activeIds.has(s.shift_id));
+  const activeIds = [...new Set(activeShifts.map((s: any) => s.id))];
+  const staff = shiftStaff.filter((s: any) => activeIds.includes(s.shift_id));
+
+  // Attendance-event timestamps (op_attendance_events, migration 083) — enriches the register
+  // with real arrival time + minutes-late per check-in. Fail-soft: store may be empty.
+  const latestCheckIn = new Map<string, any>();
+  if (activeIds.length) {
+    try {
+      const { data: ev } = await admin.from("op_attendance_events").select("shift_staff_id, event_type, event_at, minutes_late, check_in_method").in("shift_id", activeIds).order("event_at", { ascending: false });
+      for (const e of ev ?? []) if (e.event_type === "check_in" && !latestCheckIn.has(e.shift_staff_id)) latestCheckIn.set(e.shift_staff_id, e);
+    } catch { /* store not provisioned */ }
+  }
 
   // Per-staff attendance register (the shared basis for Live Overview + Today's Attendance)
   const register = staff.map((s: any) => {
     const shift = activeShifts.find((x: any) => x.id === s.shift_id);
+    const ci = latestCheckIn.get(s.id);
     return {
       id: s.id, staffId: s.staff_id, name: s.profiles?.full_name ?? "Staff", role: s.role, roleLabel: ROLE_LABEL[s.role] ?? s.role,
       status: s.status, attendance: ATT[s.status] ?? "Unknown",
       unit: shift?.departments?.name ?? "Unit", shiftType: shift?.shift_type ?? "—", shiftId: s.shift_id,
       supervisor: shift?.supervisor_id && shift.supervisor_id === s.staff_id,
+      arrivalAt: ci?.event_at ?? null, minutesLate: ci?.minutes_late ?? null, checkInMethod: ci?.check_in_method ?? null,
     };
   }).sort((a: any, b: any) => a.name.localeCompare(b.name));
+  const lateCount = register.filter((r: any) => (r.minutesLate ?? 0) > 0).length;
 
   const count = (st: string) => register.filter((r: any) => r.status === st).length;
   const expected = register.length;
@@ -92,7 +105,7 @@ export async function loadAttendance(admin: any, hid: string | null, isSuper: bo
   // Live attendance timeline (§8) — from audit_log attendance-relevant actions
   let timeline: any[] = [];
   try {
-    const q = admin.from("audit_log").select("actor_name, action, entity_name, created_at").in("action", ["deploy_staff", "open_shift", "schedule_break", "raise_escalation"]).order("created_at", { ascending: false }).limit(12);
+    const q = admin.from("audit_log").select("actor_name, action, entity_name, created_at").in("action", ["record_attendance", "deploy_staff", "open_shift", "schedule_break", "raise_escalation"]).order("created_at", { ascending: false }).limit(12);
     const { data: tl } = await (isSuper ? q : q.eq("hospital_id", hid ?? NONE));
     timeline = tl ?? [];
   } catch { timeline = []; }
@@ -102,7 +115,7 @@ export async function loadAttendance(admin: any, hid: string | null, isSuper: bo
 
   return {
     ready: true as const, activeShifts: activeShifts.length,
-    kpis: { expected, present, presentRate, confirmed, notReported, absent, completed, replacements, riskLevel, riskScore, coveragePct, coverageState, coverageBasis, requiredKnown: required != null, pendingActions, criticalAlerts },
+    kpis: { expected, present, presentRate, confirmed, notReported, absent, completed, late: lateCount, replacements, riskLevel, riskScore, coveragePct, coverageState, coverageBasis, requiredKnown: required != null, pendingActions, criticalAlerts },
     roleBreakdown, register, replacementPool: replacementPool.slice(0, 20), distribution, alerts, timeline,
   };
 }

@@ -16,7 +16,8 @@ export const dynamic = "force-dynamic";
 const card = "bg-white rounded-xl border border-gray-200";
 const NONE = "00000000-0000-0000-0000-000000000000";
 const ACT: Record<string, { label: string; tone: string }> = {
-  deploy_staff: { label: "Staff deployed / status change", tone: "bg-emerald-50 text-emerald-700" },
+  record_attendance: { label: "Attendance recorded", tone: "bg-emerald-50 text-emerald-700" },
+  deploy_staff: { label: "Staff deployed / status change", tone: "bg-teal-50 text-teal-700" },
   open_shift: { label: "Shift opened", tone: "bg-blue-50 text-blue-700" },
   schedule_break: { label: "Break scheduled", tone: "bg-sky-50 text-sky-700" },
   raise_escalation: { label: "Escalation raised", tone: "bg-amber-50 text-amber-700" },

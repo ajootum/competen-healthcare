@@ -56,16 +56,16 @@ export default async function TodaysAttendance() {
       <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-3">
         <Kpi label="Expected" value={k.expected} />
         <Kpi label="Present" value={k.present} tone="text-emerald-600" />
-        <Kpi label="Confirmed" value={k.confirmed} tone="text-sky-600" />
         <Kpi label="Not reported" value={k.notReported} tone={k.notReported ? "text-amber-600" : undefined} />
         <Kpi label="Absent" value={k.absent} tone={k.absent ? "text-rose-600" : "text-emerald-600"} />
+        <Kpi label="Late arrivals" value={k.late} tone={k.late ? "text-amber-600" : "text-emerald-600"} />
         <Kpi label="Completed" value={k.completed} />
       </div>
 
       <div className={`${card} p-5`}>
         <h3 className="text-sm font-bold text-gray-900 mb-3">Attendance register <span className="text-[10px] text-gray-400 font-normal">{d.register.length} rostered · live status</span></h3>
         <AttendanceActions rows={d.register} />
-        <p className="text-[10px] text-gray-400 mt-3">Status changes are audited via op_shift_staff (Shift Supervisor confirmation, §12). Colours are paired with text labels (§11.4). A manual correction must preserve the original record (BR-ATT-003) — the correction store is next-phase. Minutes-late, check-in method, actual arrival/departure need the attendance-event store.</p>
+        <p className="text-[10px] text-gray-400 mt-3">Each action logs a timestamped, append-only op_attendance_events row (migration 083) and updates op_shift_staff — minutes-late is computed from the shift start on check-in. Colours are paired with text labels (§11.4). A manual correction must preserve the original record (BR-ATT-003) — the correction workflow is next-phase.</p>
       </div>
 
       <p className="text-[11px] text-gray-400 pb-4">Today&apos;s Attendance (UMW-WFM-005 §11) is real over op_shift_staff — the §39 non-integrated implementation. Row actions confirm present / acknowledge / mark absent / complete through the audited shift-staff API. <Link href="/unit-manager/workforce-management/attendance" className="text-emerald-700 hover:underline">← Live Overview</Link></p>
