@@ -14,10 +14,10 @@ const TABS: { label: string; href: string; built?: boolean }[] = [
   { label: "Patient Handover Board", href: "/supervisor/handover/board", built: true },
   { label: "SBAR Builder", href: "/supervisor/handover/sbar" },
   { label: "JBI Audit", href: "/supervisor/handover/jbi" },
-  { label: "Handover Tasks", href: "/supervisor/handover/tasks" },
+  { label: "Handover Tasks", href: "/supervisor/handover/tasks", built: true },
   { label: "Acceptance", href: "/supervisor/handover/acceptance" },
-  { label: "AI Assistant", href: "/supervisor/handover/ai" },
-  { label: "Reports", href: "/supervisor/handover/reports" },
+  { label: "AI Assistant", href: "/supervisor/handover/ai", built: true },
+  { label: "Reports", href: "/supervisor/handover/reports", built: true },
 ];
 
 export default function HandoverNav() {
