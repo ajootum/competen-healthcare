@@ -13,7 +13,7 @@ const TABS: { label: string; href: string; built?: boolean }[] = [
   { label: "Competency Matching", href: "/unit-manager/scheduling-engine/competency-matching", built: true },
   { label: "Fairness", href: "/unit-manager/scheduling-engine/fairness", built: true },
   { label: "Cost Optimisation", href: "/unit-manager/scheduling-engine/cost", built: true },
-  { label: "Scenario Planner", href: "#" },
+  { label: "Scenario Planner", href: "/unit-manager/scheduling-engine/scenarios", built: true },
   { label: "What-if Simulator", href: "#" },
   { label: "Recommendations", href: "#" },
   { label: "Publish & Approve", href: "#" },
