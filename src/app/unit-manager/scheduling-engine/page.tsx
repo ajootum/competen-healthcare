@@ -6,6 +6,7 @@ import { loadRosterForWeek, mondayOf } from "@/lib/operations/roster-solver";
 import { loadUnitDepartments } from "@/lib/operations/unit-command";
 import UnitFilters from "../UnitFilters";
 import RosterControls from "./RosterControls";
+import SchedulingTabs from "./SchedulingTabs";
 
 export const dynamic = "force-dynamic";
 
@@ -17,7 +18,6 @@ export const dynamic = "force-dynamic";
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 const card = "bg-white rounded-xl border border-gray-200";
-const TABS = ["Overview", "Demand Optimiser", "Scheduling Engine", "Constraints & Rules", "Competency Matching", "Scenario Planner", "What-if Simulator", "Recommendations", "Publish & Approve", "Analytics", "Settings"];
 const STATE_BADGE: Record<string, string> = { "Fully Covered": "bg-emerald-50 text-emerald-700", "At Risk": "bg-amber-50 text-amber-700", "Uncovered": "bg-rose-50 text-rose-700", "—": "bg-gray-100 text-gray-500" };
 const SEV: Record<string, string> = { High: "bg-rose-50 text-rose-700", Medium: "bg-amber-50 text-amber-700", Low: "bg-gray-100 text-gray-600" };
 const TAG: Record<string, string> = { "High Impact": "bg-emerald-50 text-emerald-700", Cost: "bg-blue-50 text-blue-700", Supervisor: "bg-violet-50 text-violet-700", Risk: "bg-rose-50 text-rose-700", OK: "bg-gray-100 text-gray-500" };
@@ -56,9 +56,7 @@ export default async function SchedulingEngine({ searchParams }: { searchParams:
         <div className="flex items-center gap-2"><span className="text-xl">🗓️</span><div><h1 className="text-2xl font-bold text-gray-900 tracking-tight">AI Workforce Scheduling Engine</h1><p className="text-sm text-gray-500">Intelligent scheduling that matches the right people to the right shifts — demand, competency &amp; contract aware.</p></div></div>
         <div className="flex items-center gap-2"><span className="flex items-center gap-1.5 text-[11px] text-emerald-700"><span className="w-2 h-2 rounded-full bg-emerald-500" />Online</span><UnitFilters departments={departments} /><RosterControls week={weekStart} roster={roster} /></div>
       </div>
-      <div className="flex gap-1 border-b border-gray-200 overflow-x-auto">
-        {TABS.map((t, i) => <span key={t} className={`shrink-0 text-xs px-3 py-2 border-b-2 -mb-px font-medium ${i === 0 ? "border-emerald-600 text-emerald-700" : "border-transparent text-gray-300"}`} title={i === 0 ? "" : "Next phase"}>{t}</span>)}
-      </div>
+      <SchedulingTabs />
     </>
   );
 
