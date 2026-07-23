@@ -158,3 +158,35 @@ export async function loadRosterCoverage(admin: any, hid: string | null, isSuper
 
   return { provisioned: true as const, hasRoster: true as const, weekStart, days, units, shifts, counts, cell, roster: { status: roster.status, version: roster.version } };
 }
+
+// ── Store-backed views (migration 082) ───────────────────────────────────────
+// Rule → exception catalogue category + recommended resolution + persisted-severity (§14).
+const EXC_MAP: Record<string, { category: string; resolution: string }> = {
+  "Minimum staffing ratios": { category: "coverage", resolution: "Add staff / request cross-unit cover" },
+  "Mandatory Shift Supervisor coverage": { category: "supervisor", resolution: "Assign eligible supervisor or acting cover" },
+  "Mandatory competencies": { category: "competency", resolution: "Reassign to validated staff or add supervision" },
+  "Maximum weekly hours (48h / 4 shifts)": { category: "working_time", resolution: "Redistribute shifts / approve overtime" },
+  "Minimum rest between shifts": { category: "working_time", resolution: "Space assignments to restore rest" },
+  "Rotation & workload fairness": { category: "fairness", resolution: "Rebalance shift distribution" },
+};
+const SEV_LC: Record<string, string> = { Critical: "critical", High: "high", Medium: "moderate", Low: "low" };
+
+// Exceptions & Resolutions (§14) — derived (raise-able) constraint exceptions + the persisted,
+// stateful op_roster_exceptions register for the current roster.
+export async function loadRosterExceptionsView(admin: any, hid: string | null, isSuper: boolean) {
+  const con = await loadConstraintEngine(admin, hid, isSuper) as any;
+  if (!con.provisioned) return { provisioned: false as const };
+  if (!con.hasRoster) return { provisioned: true as const, hasRoster: false as const };
+  const rosterId = con.roster.id;
+  const derived = (con.rules ?? []).filter((r: any) => r.count > 0).map((r: any) => ({ rule: r.rule, count: r.count, severity: SEV_LC[r.severity] ?? "moderate", ...(EXC_MAP[r.rule] ?? { category: "conflict", resolution: "Review" }) }));
+
+  let persisted: any[] = [];
+  try {
+    const q = admin.from("op_roster_exceptions").select("id, category, severity, status, description, staff_name, unit_name, override_reason, resolved_at, created_at").eq("roster_id", rosterId).order("created_at", { ascending: false }).limit(80);
+    const { data } = await (isSuper ? q : q.eq("hospital_id", hid ?? NONE));
+    persisted = data ?? [];
+  } catch { /* store not provisioned */ }
+  const openPersisted = persisted.filter((e: any) => !["resolved", "rejected", "expired", "superseded"].includes(e.status));
+
+  return { provisioned: true as const, hasRoster: true as const, rosterId, derived, persisted, openPersisted, kpis: { critical: con.kpis?.critical ?? 0, overrideRequests: con.kpis?.overrideRequests ?? 0 }, recentOverrides: con.recentOverrides ?? [] };
+}
