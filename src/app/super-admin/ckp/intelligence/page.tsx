@@ -181,7 +181,7 @@ export default async function KnowledgeIntelligence() {
         </div>
       </div>
 
-      <p className="text-[11px] text-gray-400 pb-4">Knowledge Intelligence is the analytics and AI layer — coverage, gap analysis, duplicate detection, knowledge health and recommendations are computed live from the knowledge base. The Intelligence Scan recomputes the composite on demand (and nightly at 05:00 UTC) and snapshots it to the platform event log for trending; each insight deep-links to the surface where it gets fixed, and the assistant answers grounded in the governed CKCM knowledge base with citations. Semantic duplicate detection and usage/search analytics activate with the embedding index and access telemetry.</p>
+      <p className="text-[11px] text-gray-400 pb-4">Knowledge Intelligence is the analytics and AI layer — coverage, gap analysis, duplicate detection, knowledge health and recommendations are computed live from the knowledge base. The Intelligence Scan recomputes the composite on demand (and nightly at 05:00 UTC) and snapshots it to the platform event log for trending; each insight deep-links to the surface where it gets fixed, and the assistant answers grounded exclusively in approved CKCM content — published CPUs, active knowledge objects, cases and policies — with citations; drafts and retired items are never retrieved. Semantic duplicate detection and usage/search analytics activate with the embedding index and access telemetry.</p>
     </div>
   );
 }

@@ -192,7 +192,7 @@ export default async function ShiftOperationsEngine() {
         </div>
       </div>
 
-      <p className="text-[11px] text-gray-400 pb-4">The Shift Operations Engine (SSW-002) is the operational backbone of the Shift Supervisor Workspace — ten event-driven services over a single operational source of truth. Every figure here is live: the lifecycle state is derived from the real op_shifts status with escalation/handover overlays, engine metrics read the op_*/audit domain, and the event flow maps real audit records onto the specification's domain events. The lifecycle advance action drives an audited op_shifts transition. Engines without a hospital-scoped data source (a communications volume metric, enterprise report export) are shown as honest states rather than fabricated numbers.</p>
+      <p className="text-[11px] text-gray-400 pb-4">The Shift Operations Engine (SSW-002) is the operational backbone of the Shift Supervisor Workspace — ten event-driven services over a single operational source of truth. Every figure here is live: the lifecycle state is derived from the real op_shifts status with escalation/handover overlays, engine metrics read the op_*/audit domain, and the event flow maps real audit records onto the specification&apos;s domain events. The lifecycle advance action drives an audited op_shifts transition. Engines without a hospital-scoped data source (a communications volume metric, enterprise report export) are shown as honest states rather than fabricated numbers.</p>
     </div>
   );
 }

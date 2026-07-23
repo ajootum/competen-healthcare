@@ -7,7 +7,6 @@ import { useRouter } from "next/navigation";
 // POST /api/jobs?key=<job> (POS-001F job runner, super_admin). Shows the live
 // result (status, detail, duration) and refreshes the page so the run appears in
 // the automation registry / job queue. No AI dependency — always functional.
-/* eslint-disable @typescript-eslint/no-explicit-any */
 
 type Job = { key: string; name: string; runnable: boolean; category?: string };
 

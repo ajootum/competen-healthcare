@@ -24,7 +24,7 @@ const TABS = [
 ] as const;
 type TabKey = (typeof TABS)[number]["key"];
 
-export default function TaskConsole({ staff, openTasks, presetTask, presetStaff }: { staff: Picker[]; openTasks: Picker[]; presetTask?: { desc: string; staffId: string | null } | null; presetStaff?: string | null }) {
+export default function TaskConsole({ staff, openTasks, presetTask }: { staff: Picker[]; openTasks: Picker[]; presetTask?: { desc: string; staffId: string | null } | null; presetStaff?: string | null }) {
   const router = useRouter();
   const [tab, setTab] = useState<TabKey>("create");
   const [busy, setBusy] = useState(false);
@@ -88,7 +88,7 @@ export default function TaskConsole({ staff, openTasks, presetTask, presetStaff 
             <div><label className={label}>Task *</label><select value={form.task_id ?? ""} onChange={set("task_id")} className={input}><option value="">— Select task —</option>{openTasks.map(t => <option key={t.id} value={t.id}>{t.label}</option>)}</select></div>
             <div><label className={label}>New status *</label><select value={form.status ?? ""} onChange={set("status")} className={input}><option value="">— Select status —</option>{Object.entries(STATUSES).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select></div>
             {openTasks.length === 0 && <p className="sm:col-span-2 text-[11px] text-amber-600">No open tasks.</p>}
-            <p className="sm:col-span-2 text-[11px] text-gray-400">Only legal transitions are accepted (e.g. you can't skip straight to verified). Verifying requires a coordinator who did not perform the task.</p>
+            <p className="sm:col-span-2 text-[11px] text-gray-400">Only legal transitions are accepted (e.g. you can&apos;t skip straight to verified). Verifying requires a coordinator who did not perform the task.</p>
           </div>
         )}
 

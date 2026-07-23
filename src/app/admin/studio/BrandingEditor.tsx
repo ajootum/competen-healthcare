@@ -37,10 +37,12 @@ export default function BrandingEditor({ hospital }: { hospital: Hospital }) {
           <div
             className="w-14 h-14 rounded-xl border border-gray-200 flex items-center justify-center overflow-hidden bg-gray-50 shrink-0"
             style={{ borderColor: color }}>
-            {logoUrl
-              ? <img src={logoUrl} alt="Logo" className="w-full h-full object-contain" />
-              : <span className="text-2xl font-bold" style={{ color }}>{hospital.name[0]}</span>
-            }
+            {logoUrl ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={logoUrl} alt="Logo" className="w-full h-full object-contain" />
+            ) : (
+              <span className="text-2xl font-bold" style={{ color }}>{hospital.name[0]}</span>
+            )}
           </div>
           <div className="flex-1">
             <label className="text-xs font-semibold text-gray-500 mb-1 block">Logo URL</label>

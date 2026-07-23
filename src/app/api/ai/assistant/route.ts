@@ -72,9 +72,12 @@ export async function POST(req: Request) {
         .or(terms.map(t => `name.ilike.%${t}%`).join(",") || `name.ilike.${pattern}`)
         .limit(6),
       admin.from("clinical_practice_units").select("id, name, description, risk_category, complexity")
+        .eq("pub_status", "published")
         .or(terms.map(t => `name.ilike.%${t}%`).join(",") || `name.ilike.${pattern}`)
         .limit(8),
-      admin.from("policies").select("id, title, content").limit(4),
+      admin.from("policies").select("id, title, content").eq("is_active", true)
+        .or(terms.map(t => `title.ilike.%${t}%`).join(",") || `title.ilike.${pattern}`)
+        .limit(4),
     ]);
 
     for (const f of frameworks ?? []) {

@@ -5,8 +5,6 @@ import { useRouter } from "next/navigation";
 export default function ValidationActions({
   competencyScoreId,
   alreadyValidated,
-  nurseId,
-  cycleId,
 }: {
   competencyScoreId: string;
   alreadyValidated: boolean;

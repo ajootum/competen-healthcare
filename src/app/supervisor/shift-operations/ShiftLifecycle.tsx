@@ -8,7 +8,6 @@ import { useRouter } from "next/navigation";
 // is enabled only when no hard blocker exists, and the reasons are surfaced to the
 // user rather than silently swallowed. ACTIVE sub-states (Degraded / Emergency,
 // §7) and explicit command ownership (§5.2 / §8) are shown inline.
-/* eslint-disable @typescript-eslint/no-explicit-any */
 
 type Blocker = { code: string; message: string; hard: boolean };
 type Gate = { action: { status: string; label: string } | null; allowed: boolean; blockers: Blocker[] };

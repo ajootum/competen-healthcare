@@ -62,7 +62,6 @@ export default async function NursesPage() {
 
   const onTrack    = rows.filter(n => n.cpdHours >= CPD_TARGET).length;
   const atRisk     = rows.filter(n => n.cpdHours < 10).length;
-  const withExpired = rows.filter(n => n.expiredComps > 0).length;
   const withExpiring = rows.filter(n => n.expiringComps > 0).length;
 
   return (

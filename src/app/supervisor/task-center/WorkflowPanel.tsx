@@ -12,6 +12,7 @@ import { RECURRENCES, RECURRENCE_LABEL, TRIGGERS, TRIGGER_LABEL, PRIORITIES } fr
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 const PRIO_TONE: Record<string, string> = { urgent: "bg-rose-50 text-rose-700", high: "bg-orange-50 text-orange-700", normal: "bg-amber-50 text-amber-700", low: "bg-blue-50 text-blue-600" };
+const dueISO = (offsetMin: number) => new Date(Date.now() + offsetMin * 60000).toISOString();
 
 export default function WorkflowPanel({ provisioned, templates, editable }: { provisioned: boolean; templates: any[]; editable: boolean }) {
   const router = useRouter();
@@ -56,7 +57,7 @@ export default function WorkflowPanel({ provisioned, templates, editable }: { pr
   async function generate(t: any) {
     setBusy(t.id); setErr(null);
     try {
-      const due = new Date(Date.now() + (t.due_offset_min ?? 60) * 60000).toISOString();
+      const due = dueISO(t.due_offset_min ?? 60);
       const res = await fetch(`/api/operations/tasks`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ description: t.description || t.name, task_type: t.task_type || t.name, priority: t.priority, due_at: due }) });
       if (!res.ok) { const j = await res.json().catch(() => ({})); setErr(j.error ?? "Generate failed"); return; }
       router.refresh();

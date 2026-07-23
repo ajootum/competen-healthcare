@@ -90,7 +90,7 @@ export default async function StudioPage() {
 
   // Only show published frameworks in Rules Editor
   const ruleFrameworks = [...masterFrameworks, ...adoptedFrameworks]
-    .filter(f => true); // show all active
+    .filter(() => true); // show all active
 
   return (
     <div className="max-w-4xl">

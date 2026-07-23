@@ -40,7 +40,6 @@ export async function loadWorkforceOps(admin: any, hid: string | null, isSuper: 
 
   const staffBoard = sc.staffBoard as any[];
   const patientBoard = (sc.patientBoard ?? []) as any[];
-  const roleMix = sc.roleMix as Record<string, number>;
   const ratioRows = sc.ratioRows as any[];
 
   // Patients (with high-acuity) grouped by responsible nurse.
@@ -148,8 +147,8 @@ export async function loadWorkforceOps(admin: any, hid: string | null, isSuper: 
 
   // ── SSW-WFO-001 redesign — breaks, notes, teams, float pool, KPIs ───────────
   const [breaks, notes] = await Promise.all([
-    loadStaffBreaks(admin, hid, isSuper, sc.shiftId),
-    loadSupervisorNotes(admin, hid, isSuper, sc.shiftId),
+    loadStaffBreaks(admin, hid, isSuper),
+    loadSupervisorNotes(admin, hid, isSuper),
   ]);
   // Team Assignments — each present nurse's patients (from the patient board).
   const teams = staffBoard.filter(s => ["nurse", "charge"].includes(s.role) && PRESENT.has(s.status)).map(s => {

@@ -109,7 +109,7 @@ export default function AuthorizationsManager({
                     const on = picked.has(c.competency_id);
                     return (
                       <button key={c.competency_id}
-                        onClick={() => setPicked(prev => { const s = new Set(prev); s.has(c.competency_id) ? s.delete(c.competency_id) : s.add(c.competency_id); return s; })}
+                        onClick={() => setPicked(prev => { const s = new Set(prev); if (s.has(c.competency_id)) s.delete(c.competency_id); else s.add(c.competency_id); return s; })}
                         className={`text-[11px] px-2.5 py-1 rounded-full border ${on ? "bg-teal-600 text-white border-teal-600" : "bg-white text-gray-600 border-gray-200 hover:border-teal-300"}`}>
                         {on ? "✓ " : "+ "}{c.name}
                       </button>

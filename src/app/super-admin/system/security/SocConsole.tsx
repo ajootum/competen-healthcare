@@ -10,7 +10,6 @@ import { useRouter } from "next/navigation";
 // deliberate, human-approved action (SYS-002 principle: AI/automation may
 // recommend but must not silently execute destructive actions) — audit-logged
 // and reversible (reinstate). Password reset forces re-authentication.
-/* eslint-disable @typescript-eslint/no-explicit-any */
 
 const input = "w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500/40";
 const label = "text-xs font-semibold text-gray-600 mb-1 block";

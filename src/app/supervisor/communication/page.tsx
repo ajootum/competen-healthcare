@@ -196,7 +196,7 @@ export default async function CommunicationCentre() {
         <div className="flex flex-wrap gap-2">{[["🧭 Patient Operations", "Patient alerts & updates"], ["✅ Task Centre", "Task assignments & updates"], ["👥 Workforce Operations", "Redeployment & coverage"], ["🛡️ Quality & Safety", "Incidents & CAPA updates"], ["✨ AI Operational Copilot", "Smart communications"]].map(([t, s]: any) => (<div key={t} className="rounded-lg border border-gray-100 bg-gray-50/60 px-2.5 py-1.5"><p className="text-[11px] font-medium text-gray-700">{t}</p><p className="text-[9px] text-gray-400">{s}</p></div>))}</div>
       </div>
 
-      <p className="text-[11px] text-gray-400 pb-4">The Communication Centre (SSW-COM-001) is the shift's operational coordination hub — context-aware team messaging and ward/hospital broadcasts with acknowledgement tracking (live from op_messages / op_broadcasts), plus escalation, handover, alert and announcement communication drawn from the existing operational engines. Response-time &amp; peak-time analytics, per-message read receipts and a follow-up-items store are not yet backed and are shown as honest states rather than fabricated.</p>
+      <p className="text-[11px] text-gray-400 pb-4">The Communication Centre (SSW-COM-001) is the shift&apos;s operational coordination hub — context-aware team messaging and ward/hospital broadcasts with acknowledgement tracking (live from op_messages / op_broadcasts), plus escalation, handover, alert and announcement communication drawn from the existing operational engines. Response-time &amp; peak-time analytics, per-message read receipts and a follow-up-items store are not yet backed and are shown as honest states rather than fabricated.</p>
     </div>
   );
 }

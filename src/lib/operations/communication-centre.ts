@@ -15,7 +15,7 @@ export const BROADCAST_PRIORITIES = ["low", "medium", "high", "critical"];
 
 export async function loadCommunicationCentre(admin: any, hid: string | null, isSuper: boolean, userId: string) {
   const scope = (q: any) => (isSuper ? q : q.eq("hospital_id", hid ?? NONE));
-  const now = Date.now(), nowIso = new Date().toISOString();
+  const nowIso = new Date().toISOString();
 
   const [sc, escRes, safetyRes, notifRes, unreadRes, msgRes, bcRes, staffCountRes] = await Promise.all([
     loadShiftCommand(admin, hid, isSuper),

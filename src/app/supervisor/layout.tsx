@@ -15,6 +15,7 @@ import { workspaceLinksForUser } from "@/lib/workspace-links";
 // shift supervisor = assessor tier, and admins). Items link to live surfaces;
 // capabilities without a built surface yet are shown muted ("soon") rather than
 // as dead links.
+/* eslint-disable @typescript-eslint/no-explicit-any */
 type NavItem = { label: string; href?: string; icon: string; exact?: boolean; soon?: boolean; badge?: string };
 
 // Standalone landing (SSW-001-R2 Ch.4) — the executive overview.
@@ -96,7 +97,7 @@ const NAV_GROUPS: { group: string; items: NavItem[] }[] = [
   { group: "Workspace Configuration Centre", items: [
     { label: "Workspace Settings",          href: "/supervisor/config-centre",       icon: "⚙️" },
     { label: "Shift Templates & Playbooks", href: "/supervisor/config-centre",       icon: "📋" },
-    { label: "Professional Toolkit",        href: "/supervisor/config-centre",       icon: "🧰" },
+    { label: "Professional Toolkit",        href: "/supervisor/toolkit",             icon: "🧰" },
     { label: "Reports & Data Export",       href: "/supervisor/config-centre",       icon: "📄" },
     { label: "Notifications & Automation",  href: "/supervisor/config-centre",       icon: "🔔" },
     { label: "Personal Productivity",       href: "/supervisor/config-centre",       icon: "🙋" },

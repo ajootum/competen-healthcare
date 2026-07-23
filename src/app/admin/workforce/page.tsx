@@ -135,7 +135,6 @@ export default async function WorkforcePage() {
   const totalAssessments = deduped.length;
   const totalPassing = deduped.filter(s => s.is_passing).length;
   const activeCycleCount = (cycles ?? []).filter(c => c.status === "active").length;
-  const nursesWithCycle = new Set((cycles ?? []).map(c => c.nurse_id)).size;
 
   return (
     <div className="max-w-5xl">

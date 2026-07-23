@@ -1,6 +1,5 @@
 import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
-import Link from "next/link";
 import { loadOperationalIntelligence } from "@/lib/operations/operational-intelligence";
 
 export const dynamic = "force-dynamic";
@@ -14,7 +13,6 @@ export const dynamic = "force-dynamic";
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 const card = "bg-white rounded-xl border border-gray-200";
-const tc = (s: string) => (s ?? "").replace(/_/g, " ").replace(/\b\w/g, m => m.toUpperCase());
 const scoreTone = (n: number | null) => (n == null ? "text-gray-300" : n >= 90 ? "text-green-600" : n >= 75 ? "text-amber-600" : "text-rose-600");
 const LEVEL_TONE: Record<string, string> = { High: "bg-rose-50 text-rose-700", Medium: "bg-amber-50 text-amber-700", Low: "bg-green-50 text-green-700", Increasing: "bg-orange-50 text-orange-700", Stable: "bg-gray-100 text-gray-600" };
 const INSIGHT_TONE: Record<string, string> = { high: "border-rose-100 bg-rose-50/40", medium: "border-amber-100 bg-amber-50/40", rec: "border-violet-100 bg-violet-50/40", info: "border-blue-100 bg-blue-50/40" };
@@ -152,7 +150,7 @@ export default async function OperationalIntelligence() {
         <div className="flex flex-wrap gap-2">{[["🧭 Patient Operations", "Census & patient data"], ["👥 Workforce Operations", "Staffing & competency"], ["✅ Task Centre", "Tasks & completion"], ["💬 Communication Centre", "Messages & escalations"], ["🛡️ Quality & Escalation", "Incidents & safety"], ["✨ AI Operational Copilot", "Predictions & recommendations"]].map(([t, sub]: any) => (<div key={t} className="rounded-lg border border-gray-100 bg-gray-50/60 px-2.5 py-1.5"><p className="text-[11px] font-medium text-gray-700">{t}</p><p className="text-[9px] text-gray-400">{sub}</p></div>))}</div>
       </div>
 
-      <p className="text-[11px] text-gray-400 pb-4">The Operational Intelligence Centre (SSW-INT-001) is the workspace's analytical layer — a derived shift health &amp; operational-pressure score, capacity, task, workforce, patient and safety intelligence, heuristic predictive forecasts and an executive scorecard, all consolidated live from every operational engine. Per-period trends without stored history, true ML predictions, average LOS and report generation/export are shown as honest states rather than fabricated.</p>
+      <p className="text-[11px] text-gray-400 pb-4">The Operational Intelligence Centre (SSW-INT-001) is the workspace&apos;s analytical layer — a derived shift health &amp; operational-pressure score, capacity, task, workforce, patient and safety intelligence, heuristic predictive forecasts and an executive scorecard, all consolidated live from every operational engine. Per-period trends without stored history, true ML predictions, average LOS and report generation/export are shown as honest states rather than fabricated.</p>
     </div>
   );
 }

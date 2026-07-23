@@ -5,7 +5,6 @@ import { useState } from "react";
 // AI Assistant (SSW-AI-001 §7) — natural-language chat grounded on the live shift
 // snapshot via /api/operations/copilot. Suggested questions seed common queries;
 // if AI isn't configured the panel says so honestly (503) rather than faking a reply.
-/* eslint-disable @typescript-eslint/no-explicit-any */
 
 const SUGGESTIONS = [
   "Which patients need review first?",

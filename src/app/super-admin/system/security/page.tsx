@@ -170,7 +170,7 @@ export default async function SecurityOperationsCenter() {
         <div className={`${card} p-5`}>
           <h2 className="font-semibold text-gray-900 text-[15px] mb-3">Detection Coverage</h2>
           <div className="space-y-1.5 mb-3">
-            {[["Audit-trail analytics", true], ["Incident correlation", true], ["Account containment", true], ["Posture scoring", true]].map(([l, on]: any) => (
+            {[["Audit-trail analytics", true], ["Incident correlation", true], ["Account containment", true], ["Posture scoring", true]].map(([l]: any) => (
               <div key={l} className="flex items-center justify-between text-xs"><span className="text-gray-600">{l}</span><span className="text-[10px] font-semibold text-green-600">live</span></div>
             ))}
           </div>

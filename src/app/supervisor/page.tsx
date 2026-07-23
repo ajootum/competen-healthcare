@@ -45,7 +45,6 @@ export default async function Dashboard() {
 
   const { shifts, shiftStaff, beds, patients, assignments, escalations, alerts, tasks, observations } = data;
   const scope = (q: any) => (isSuper ? q : q.eq("hospital_id", hid ?? NONE));
-  const now = Date.now();
   const todayStart = new Date(); todayStart.setHours(0, 0, 0, 0);
   const hour = new Date().getHours();
   const greeting = hour < 12 ? "Good morning" : hour < 18 ? "Good afternoon" : "Good evening";
@@ -73,7 +72,7 @@ export default async function Dashboard() {
 
   // Beds
   const bedBy = (s: string) => beds.filter((b: any) => b.status === s).length;
-  const totalBeds = beds.length, available = bedBy("available"), occupied = bedBy("occupied");
+  const totalBeds = beds.length, available = bedBy("available");
   const availPct = totalBeds ? Math.round((available / totalBeds) * 100) : 0;
 
   // Escalations

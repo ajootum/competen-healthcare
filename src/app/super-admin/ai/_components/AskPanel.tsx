@@ -6,7 +6,6 @@ import { useState } from "react";
 // (POST /api/ai/assistant). Renders the live answer with model + source count in
 // place. Prompt chips let each AIP module suggest domain questions. Degrades
 // honestly when AI isn't configured (503) or the hourly quota is hit (429).
-/* eslint-disable @typescript-eslint/no-explicit-any */
 
 export default function AskPanel({ title, placeholder, prompts }: { title: string; placeholder: string; prompts: string[] }) {
   const [q, setQ] = useState("");

@@ -6,7 +6,6 @@ import { useState, useMemo } from "react";
 // (actor, action, entity, category, free text). Operates on the real events the
 // server already loaded — no extra query, instant filtering. A scoped
 // server-side search over the full trail is a later phase.
-/* eslint-disable @typescript-eslint/no-explicit-any */
 
 const relTime = (iso?: string | null) => { if (!iso) return ""; const s = Math.floor((Date.now() - new Date(iso).getTime()) / 1000); if (s < 60) return "just now"; if (s < 3600) return `${Math.floor(s / 60)}m ago`; if (s < 86400) return `${Math.floor(s / 3600)}h ago`; return `${Math.floor(s / 86400)}d ago`; };
 const CAT_TONE: Record<string, string> = { Authentication: "bg-blue-50 text-blue-700", Authorization: "bg-violet-50 text-violet-700", "Admin Actions": "bg-amber-50 text-amber-700", "Data Access": "bg-rose-50 text-rose-700", System: "bg-gray-100 text-gray-600" };

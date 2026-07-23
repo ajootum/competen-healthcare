@@ -15,7 +15,7 @@ export const NOTE_TYPE_LABEL: Record<string, string> = {
   risk: "Operational Risk", handover: "Handover Note", action_item: "Action Item", general: "Note",
 };
 
-export async function loadStaffBreaks(admin: any, hid: string | null, isSuper: boolean, shiftId: string | null) {
+export async function loadStaffBreaks(admin: any, hid: string | null, isSuper: boolean) {
   const scope = (q: any) => (isSuper ? q : q.eq("hospital_id", hid ?? NONE));
   const res = await scope(admin.from("op_staff_breaks").select("id, staff_name, role, break_type, status, scheduled_at, started_at, ended_at, duration_min, relief_name"))
     .order("scheduled_at", { ascending: true, nullsFirst: false }).limit(200);
@@ -45,7 +45,7 @@ export async function loadStaffBreaks(admin: any, hid: string | null, isSuper: b
   };
 }
 
-export async function loadSupervisorNotes(admin: any, hid: string | null, isSuper: boolean, shiftId: string | null) {
+export async function loadSupervisorNotes(admin: any, hid: string | null, isSuper: boolean) {
   const scope = (q: any) => (isSuper ? q : q.eq("hospital_id", hid ?? NONE));
   const res = await scope(admin.from("op_supervisor_notes").select("id, note_type, title, body, priority, status, author_name, created_at"))
     .order("created_at", { ascending: false }).limit(40);

@@ -3,6 +3,8 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 
+const isExpired = (iso?: string | null) => !!iso && new Date(iso).getTime() < Date.now();
+
 // Assessor scope matrix (User Account Architecture §17): who may ASSESS which
 // CPU. Assessors with no rows here see the whole hospital queue; once any
 // scope is granted, their queue and entrustment powers are limited to it.
@@ -87,7 +89,7 @@ export default function AssessorScopePanel({ assessors, cpus, grants }: {
       ) : (
         <div className="bg-white rounded-xl border border-gray-100 divide-y divide-gray-50">
           {grants.map(g => {
-            const expired = g.valid_until && new Date(g.valid_until).getTime() < Date.now();
+            const expired = isExpired(g.valid_until);
             return (
               <div key={g.id} className="flex items-center gap-3 px-5 py-3">
                 <span className="text-lg">🎓</span>

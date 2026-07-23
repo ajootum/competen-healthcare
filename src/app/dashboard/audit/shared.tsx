@@ -636,7 +636,7 @@ ${sectionsHtml}
 
 // ── Concurrent & Chart Audit (Sheets 2 & 3) ──────────────────────────────────
 export function MatchAudit({
-  sections, title, description, howToUse,
+  sections, title, howToUse,
   yesLabel = "Yes", noLabel = "No", partialLabel = "Partial",
   infoFields, assesseeLabel,
 }: {
@@ -653,7 +653,10 @@ export function MatchAudit({
   const [assesseeComments, setAssesseeComments] = useState("");
 
   const setScore = (num: number, v: MatchValue) =>
-    setScores(prev => prev[num] === v ? (({ [num]: _, ...rest }) => rest)(prev) : { ...prev, [num]: v });
+    setScores(prev => {
+      if (prev[num] === v) { const rest = { ...prev }; delete rest[num]; return rest; }
+      return { ...prev, [num]: v };
+    });
 
   const totalItems = allItems.length;
   const answered   = Object.keys(scores).length;
@@ -663,7 +666,7 @@ export function MatchAudit({
   const compliance = answered > 0 ? Math.round(((yesCount + partCount * 0.5) / totalItems) * 100) : null;
 
   const toggleSection = (t: string) =>
-    setCollapsed(prev => { const n = new Set(prev); n.has(t) ? n.delete(t) : n.add(t); return n; });
+    setCollapsed(prev => { const n = new Set(prev); if (n.has(t)) n.delete(t); else n.add(t); return n; });
 
   const btnStyle = (num: number, v: MatchValue) => {
     const active = scores[num] === v;

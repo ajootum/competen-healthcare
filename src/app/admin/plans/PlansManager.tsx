@@ -50,7 +50,7 @@ export default function PlansManager({ plans, workers, assessors, cpus }: { plan
   }
 
   function toggle(set: Set<string>, id: string, setter: (s: Set<string>) => void) {
-    const s = new Set(set); s.has(id) ? s.delete(id) : s.add(id); setter(s);
+    const s = new Set(set); if (s.has(id)) s.delete(id); else s.add(id); setter(s);
   }
 
   return (

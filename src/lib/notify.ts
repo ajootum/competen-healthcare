@@ -13,7 +13,7 @@ export async function notify(userIds: string[], n: { type: string; title: string
     const { data } = await admin.from("notifications").insert(
       ids.map(user_id => ({ user_id, type: n.type, title: n.title, body: n.body ?? null, href: n.href ?? null })),
     ).select("id, user_id");
-    await recordDeliveries(admin, (data ?? []).map((row: any) => ({ notification_id: row.id, user_id: row.user_id, channel: "in_app" as const, status: "sent" as const, provider: "internal" })));
+    await recordDeliveries(admin, (data ?? []).map((row: { id: string; user_id: string }) => ({ notification_id: row.id, user_id: row.user_id, channel: "in_app" as const, status: "sent" as const, provider: "internal" })));
   } catch { /* best-effort */ }
 }
 

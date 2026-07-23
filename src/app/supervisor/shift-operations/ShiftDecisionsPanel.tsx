@@ -6,7 +6,6 @@ import { DECISION_TYPES, DECISION_TYPE_LABEL } from "@/lib/operations/shift-reco
 
 // Material operational decisions (SSW-002 §6.8 / §5.4). Log a decision (type +
 // summary + reason) and review/close it. Writes through the audited API.
-/* eslint-disable @typescript-eslint/no-explicit-any */
 
 type Decision = { id: string; decision_type: string; decision_summary: string; decision_reason: string | null; decision_maker_name: string | null; decided_at: string; status: string };
 

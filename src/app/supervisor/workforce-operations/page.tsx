@@ -16,7 +16,6 @@ export const dynamic = "force-dynamic";
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 const card = "bg-white rounded-xl border border-gray-200";
-const dash = (n: number | null | undefined) => (n == null ? "—" : n.toLocaleString());
 const tc = (s: string) => (s ?? "").replace(/_/g, " ").replace(/\b\w/g, m => m.toUpperCase());
 const covTone = (n: number | null) => (n == null ? "text-gray-300" : n >= 90 ? "text-green-600" : n >= 75 ? "text-amber-600" : "text-rose-600");
 const OVR_TONE: Record<string, string> = { Good: "bg-green-50 text-green-700", "At Risk": "bg-amber-50 text-amber-700", "Below Required": "bg-rose-50 text-rose-700", "—": "bg-gray-100 text-gray-500" };
@@ -207,7 +206,7 @@ export default async function WorkforceOperations() {
         </div>
       </div>
 
-      <p className="text-[11px] text-gray-400 pb-4">Workforce Operations is the supervisor's workforce command centre (SSW-WFO-001) — staffing snapshot &amp; coverage, skill-mix compliance, competency gaps, live team assignments &amp; workload, a fully operational break board (schedule/start/end, compliance) and a persisted supervisor journal, all live from op_*/competency data. Shift clocking (late arrivals, overtime), time-block coverage history, drag-and-drop allocation and absence reasons need dedicated stores and are shown as honest states or click-based equivalents rather than fabricated.</p>
+      <p className="text-[11px] text-gray-400 pb-4">Workforce Operations is the supervisor&apos;s workforce command centre (SSW-WFO-001) — staffing snapshot &amp; coverage, skill-mix compliance, competency gaps, live team assignments &amp; workload, a fully operational break board (schedule/start/end, compliance) and a persisted supervisor journal, all live from op_*/competency data. Shift clocking (late arrivals, overtime), time-block coverage history, drag-and-drop allocation and absence reasons need dedicated stores and are shown as honest states or click-based equivalents rather than fabricated.</p>
     </div>
   );
 }

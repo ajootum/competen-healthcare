@@ -48,7 +48,7 @@ export default function AssessmentForm({
   const [scoreForm, setScoreForm] = useState<Record<string, { method: string; score: string; notes: string }>>({});
 
   function toggleDomain(id: string) {
-    setExpandedDomains(prev => { const s = new Set(prev); s.has(id) ? s.delete(id) : s.add(id); return s; });
+    setExpandedDomains(prev => { const s = new Set(prev); if (s.has(id)) s.delete(id); else s.add(id); return s; });
   }
 
   function getExisting(competencyId: string) {

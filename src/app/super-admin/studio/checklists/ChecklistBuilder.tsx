@@ -58,7 +58,6 @@ export default function ChecklistBuilder({ skills, checklists, items }: {
   }
 
   const input = "w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500/30";
-  const label = "text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1 block";
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-[280px_1fr_260px] gap-5">

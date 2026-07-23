@@ -6,7 +6,6 @@ import { useRouter } from "next/navigation";
 // Pre-shift safety huddle (SSW-002 §6.7). Record the team briefing — concerns,
 // risks and planned actions — and complete it. Completing satisfies the
 // safety_huddle_prepared readiness item. Writes through the audited API.
-/* eslint-disable @typescript-eslint/no-explicit-any */
 
 type Huddle = {
   facilitator_name: string | null; attendance_count: number; completion_status: string;

@@ -30,7 +30,8 @@ export default function CpuConfigPanel({ cpu, onClose }: { cpu: Cpu; onClose: ()
     }
     setLoading(false);
   }
-  useEffect(() => { load(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [cpu.id]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps, react-hooks/set-state-in-effect
+  useEffect(() => { load(); }, [cpu.id]);
 
   async function patch(body: object) {
     await fetch(`/api/content/cpus/${cpu.id}/config`, {

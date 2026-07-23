@@ -13,7 +13,7 @@ type Cpu = {
 };
 
 export default function CpuBuilder({
-  frameworkId, domains, practices, cpus,
+  domains, practices, cpus,
 }: {
   frameworkId: string;
   domains: Domain[];

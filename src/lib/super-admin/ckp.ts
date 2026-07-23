@@ -14,8 +14,8 @@ export async function loadCkp(admin: any) {
   const head = (t: string) => admin.from(t).select("*", { count: "exact", head: true });
 
   const [
-    frRes, frActiveRes, domRes, pracRes, compRes, cpuCountRes, koCountRes, caseRes, bpRes, chkRes,
-    qbRes, lrCountRes, polRes, polActiveRes, commRes, crRes, crOpenRes, edgeRes, taxRes, tagRes, asmtRes,
+    frRes, frActiveRes, domRes, pracRes, , cpuCountRes, koCountRes, caseRes, bpRes, chkRes,
+    qbRes, lrCountRes, polRes, polActiveRes, commRes, , crOpenRes, edgeRes, taxRes, tagRes, asmtRes,
   ] = await Promise.all([
     head("frameworks"), admin.from("frameworks").select("*", { count: "exact", head: true }).eq("is_active", true),
     head("framework_domains"), head("practices"), head("framework_competencies"),

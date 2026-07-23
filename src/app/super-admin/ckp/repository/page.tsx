@@ -138,7 +138,7 @@ export default async function ClinicalKnowledgeRepository() {
         </div>
       </div>
 
-      <p className="text-[11px] text-gray-400 pb-4">The repository is Competen's clinical knowledge warehouse — GitHub meets UpToDate meets Confluence. The Repository Builder adds real knowledge objects, guidelines and policies in-place via the content APIs; every object is searchable, linked in the knowledge graph and versioned. Counts, graph shape and recent knowledge are live; access-based "most accessed" ranking arrives with usage telemetry.</p>
+      <p className="text-[11px] text-gray-400 pb-4">The repository is Competen&apos;s clinical knowledge warehouse — GitHub meets UpToDate meets Confluence. The Repository Builder adds real knowledge objects, guidelines and policies in-place via the content APIs; every object is searchable, linked in the knowledge graph and versioned. Counts, graph shape and recent knowledge are live; access-based &quot;most accessed&quot; ranking arrives with usage telemetry.</p>
     </div>
   );
 }

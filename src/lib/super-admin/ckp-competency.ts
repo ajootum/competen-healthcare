@@ -28,7 +28,6 @@ export async function loadCompetencyCentre(admin: any) {
 
   // domain → framework, and per-domain / per-framework competency + mapping tallies.
   const domFramework = new Map<string, string>(domains.map(d => [d.id, d.framework_id]));
-  const domName = new Map<string, string>(domains.map(d => [d.id, d.name]));
   const domCount = new Map<string, number>();
   const frCount = new Map<string, number>();
   const frMapped = new Map<string, number>();

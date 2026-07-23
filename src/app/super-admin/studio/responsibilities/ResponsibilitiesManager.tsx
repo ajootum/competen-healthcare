@@ -3,6 +3,8 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 
+const isPast = (iso?: string | null) => !!iso && new Date(iso).getTime() < Date.now();
+
 type Row = {
   id: string; content_type: string; content_id: string; content_name: string;
   responsibility_type: string; review_due: string | null; start_date: string; holder: string;
@@ -94,7 +96,7 @@ export default function ResponsibilitiesManager({ rows, staff, objects }: {
       ) : (
         <div className="bg-white rounded-xl border border-gray-100 divide-y divide-gray-50">
           {rows.map(r => {
-            const overdue = r.review_due && new Date(r.review_due).getTime() < Date.now();
+            const overdue = isPast(r.review_due);
             return (
               <div key={r.id} className="flex items-center gap-3 px-5 py-3">
                 <div className="flex-1 min-w-0">

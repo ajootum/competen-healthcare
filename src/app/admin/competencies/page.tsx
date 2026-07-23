@@ -56,7 +56,6 @@ export default async function CompetenciesPage() {
 
   // Fetch assessment progress per cycle
   const cycleIds = (cycles ?? []).map(c => c.id);
-  const nurseIds = (nurses ?? []).map(n => n.id);
 
   const [{ data: assessments }, { data: frameworkDomains }] = await Promise.all([
     cycleIds.length

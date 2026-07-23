@@ -20,7 +20,6 @@ const RISK_TONE: Record<string, string> = { High: "text-rose-600", Medium: "text
 const RISK_BADGE: Record<string, string> = { High: "bg-rose-50 text-rose-700", Medium: "bg-amber-50 text-amber-700", Low: "bg-green-50 text-green-700", Increasing: "bg-orange-50 text-orange-700", Stable: "bg-gray-100 text-gray-600" };
 const PRIO_BADGE: Record<string, string> = { Immediate: "bg-rose-100 text-rose-700", High: "bg-orange-100 text-orange-700", Medium: "bg-amber-100 text-amber-700" };
 const FEED_DOT: Record<string, string> = { high: "bg-rose-500", amber: "bg-amber-500", blue: "bg-blue-500", green: "bg-green-500" };
-const barTone = (n: number | null) => (n == null ? "bg-gray-200" : n >= 90 ? "bg-green-500" : n >= 75 ? "bg-amber-500" : "bg-rose-500");
 
 export default async function AiCopilot() {
   const supabase = await createClient();
@@ -136,7 +135,7 @@ export default async function AiCopilot() {
         <div className="flex flex-wrap gap-2">{d.agents.map((a: string) => (<div key={a} className="flex items-center gap-1.5 rounded-lg border border-gray-100 bg-gray-50/60 px-2.5 py-1.5"><span className="w-1.5 h-1.5 rounded-full bg-green-500" /><span className="text-[11px] text-gray-700">{a}</span></div>))}</div>
       </div>
 
-      <p className="text-[11px] text-gray-400 pb-4">The AI Operational Copilot (SSW-AI-001) is the workspace's decision-support layer — a live command centre, workforce/patient/safety/operational/predictive intelligence, prioritised recommendations with explainable reasoning and confidence, an AI insights feed and a shift-grounded natural-language assistant. Intelligence is heuristic/rule-based over live operational data; recommendations are proposals for the supervisor to accept, and every AI answer is audited. True ML models are a later phase.</p>
+      <p className="text-[11px] text-gray-400 pb-4">The AI Operational Copilot (SSW-AI-001) is the workspace&apos;s decision-support layer — a live command centre, workforce/patient/safety/operational/predictive intelligence, prioritised recommendations with explainable reasoning and confidence, an AI insights feed and a shift-grounded natural-language assistant. Intelligence is heuristic/rule-based over live operational data; recommendations are proposals for the supervisor to accept, and every AI answer is audited. True ML models are a later phase.</p>
     </div>
   );
 }
