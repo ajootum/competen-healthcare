@@ -196,3 +196,33 @@ export async function loadFutureAvailability(admin: any, hid: string | null, isS
 
   return { provisioned, declarations: active, byType, unavailable, expiringSoon, total: active.length, picker: picker.slice(0, 200) };
 }
+
+// Attendance Exceptions (op_attendance_exceptions, migration 083) — persisted, stateful register
+// PLUS live-derived exceptions (raise-able) from current attendance state. Fail-soft.
+const EXC_RANK: Record<string, number> = { critical: 0, high: 1, moderate: 2, low: 3, informational: 4 };
+export async function loadAttendanceExceptions(admin: any, hid: string | null, isSuper: boolean) {
+  const base = await loadAttendance(admin, hid, isSuper);
+  if (!base.ready) return { ready: false as const };
+
+  // Derived (raise-able) exceptions from live attendance state
+  const derived: any[] = [];
+  for (const r of base.register) {
+    if (r.status === "absent" && ["charge", "nurse"].includes(r.role)) derived.push({ key: `noshow-${r.id}`, category: "no_show", label: "No-show in minimum-staffing role", staffId: r.staffId, shiftId: r.shiftId, shiftStaffId: r.id, staff: r.name, unit: r.unit, severity: r.role === "charge" ? "critical" : "high", detail: `${r.roleLabel} · absent` });
+    if ((r.role === "charge" || r.supervisor) && r.status === "absent") derived.push({ key: `sup-${r.id}`, category: "supervisor_absent", label: "Shift Supervisor absent", staffId: r.staffId, shiftId: r.shiftId, shiftStaffId: r.id, staff: r.name, unit: r.unit, severity: "critical", detail: "No confirmed supervisor" });
+    if ((r.minutesLate ?? 0) > 30) derived.push({ key: `late-${r.id}`, category: "late", label: "Severe late arrival", staffId: r.staffId, shiftId: r.shiftId, shiftStaffId: r.id, staff: r.name, unit: r.unit, severity: "high", detail: `${r.minutesLate}m late` });
+  }
+
+  // Persisted exceptions (open) over active shifts
+  const shiftIds = [...new Set(base.register.map((r: any) => r.shiftId))];
+  let persisted: any[] = [];
+  if (shiftIds.length) {
+    try {
+      const q = admin.from("op_attendance_exceptions").select("id, staff_name, category, severity, status, detected_at, operational_impact, resolution_action").in("shift_id", shiftIds).order("detected_at", { ascending: false }).limit(60);
+      const { data } = await (isSuper ? q : q.eq("hospital_id", hid ?? NONE));
+      persisted = data ?? [];
+    } catch { /* store not provisioned */ }
+  }
+  const openPersisted = persisted.filter((e: any) => !["corrected", "approved_exception", "rejected", "closed"].includes(e.status));
+  derived.sort((a, b) => EXC_RANK[a.severity] - EXC_RANK[b.severity]);
+  return { ready: true as const, derived, persisted, openPersisted, kpis: base.kpis };
+}
