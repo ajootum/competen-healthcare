@@ -2,7 +2,7 @@ import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { loadSchedulingEngine } from "@/lib/operations/scheduling-engine";
-import { loadRosterForWeek, mondayOf } from "@/lib/operations/roster-solver";
+import { loadRosterForWeek, mondayOf, qualityScore } from "@/lib/operations/roster-solver";
 import { loadUnitDepartments } from "@/lib/operations/unit-command";
 import UnitFilters from "../UnitFilters";
 import RosterControls from "./RosterControls";
@@ -81,6 +81,12 @@ export default async function SchedulingEngine({ searchParams }: { searchParams:
     }));
   });
   const roleLabel: Record<string, string> = { charge: "Shift Supervisor", nurse: "RN", support: "Support", doctor: "Doctor", therapist: "Allied" };
+  const rosterQuality = roster ? qualityScore(roster.coverage_score, roster.competency_score, roster.fairness_score) : null;
+  // Individual staff schedules (spec output) — per staff, all shifts this week
+  const allAssigned = (rosterData?.assignments ?? []).filter((a: any) => a.status === "assigned" && a.staff_id);
+  const byStaff = new Map<string, { name: string; shifts: { date: string; shift: string; unit: string }[] }>();
+  for (const a of allAssigned) { if (!byStaff.has(a.staff_id)) byStaff.set(a.staff_id, { name: a.staff_name ?? "—", shifts: [] }); byStaff.get(a.staff_id)!.shifts.push({ date: a.shift_date, shift: a.shift_type, unit: a.unit_name }); }
+  const individualSchedules = [...byStaff.values()].map(s => ({ ...s, count: s.shifts.length })).sort((a, b) => b.count - a.count);
   return (
     <div className="space-y-4">
       {header}
@@ -141,7 +147,7 @@ export default async function SchedulingEngine({ searchParams }: { searchParams:
                 </tr>
               ))}</tbody>
             </table>
-            <div className="flex items-center gap-3 mt-2 pt-2 border-t border-gray-100 text-[10px] text-gray-400"><span className="flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />Covered</span><span className="flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-amber-400" />Partial</span><span className="flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-rose-400" />Uncovered</span><span>* = override (no validated competency)</span><span className="ml-auto">{roster.slots_filled}/{roster.slots_total} posts · {roster.coverage_score}% cover · {roster.competency_score ?? "—"}% competency</span></div>
+            <div className="flex items-center gap-3 mt-2 pt-2 border-t border-gray-100 text-[10px] text-gray-400"><span className="flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />Covered</span><span className="flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-amber-400" />Partial</span><span className="flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-rose-400" />Uncovered</span><span>* = override (no validated competency)</span><span className="ml-auto">{roster.slots_filled}/{roster.slots_total} posts · {roster.coverage_score}% cover · {roster.competency_score ?? "—"}% competency · <b className="text-gray-700">Quality {rosterQuality}%</b></span></div>
             </div>
           )}
         </div>
@@ -152,6 +158,26 @@ export default async function SchedulingEngine({ searchParams }: { searchParams:
           {d.alerts.length === 0 ? <p className="text-sm text-gray-400">No constraint violations detected. 🎉</p> : <div className="space-y-2">{d.alerts.slice(0, 6).map((a: any, i: number) => (<div key={i} className="flex items-start gap-2"><span className="text-sm shrink-0">⚠</span><div className="flex-1 min-w-0"><div className="flex items-center justify-between gap-2"><p className="text-xs font-semibold text-gray-800 truncate">{a.title}</p><span className={`text-[9px] px-1.5 py-0.5 rounded shrink-0 ${SEV[a.sev]}`}>{a.sev}</span></div><p className="text-[11px] text-gray-500">{a.sub}</p></div></div>))}</div>}
         </div>
       </div>
+
+      {/* Individual staff schedules (spec output) */}
+      {roster && individualSchedules.length > 0 && (
+        <div className={`${card} p-5`}>
+          <h3 className="text-sm font-bold text-gray-900 mb-3">Individual staff schedules <span className="text-[10px] text-gray-400 font-normal">week {weekStart} · {individualSchedules.length} staff rostered</span></h3>
+          <div className="overflow-x-auto"><table className="w-full text-[11px]">
+            <thead><tr className="text-gray-400 text-left border-b border-gray-100"><th className="py-1.5 pr-2 font-medium">Staff</th><th className="py-1.5 pr-2 font-medium text-center">Shifts</th>{rDays.map(dt => <th key={dt} className="py-1.5 px-1 font-medium text-center">{dt.slice(8)}</th>)}</tr></thead>
+            <tbody>{individualSchedules.slice(0, 15).map((s: any, i: number) => (
+              <tr key={i} className="border-b border-gray-50">
+                <td className="py-1.5 pr-2 text-gray-700 truncate max-w-[120px]">{s.name}</td>
+                <td className={`py-1.5 pr-2 text-center font-semibold ${s.count > 4 ? "text-rose-600" : "text-gray-700"}`}>{s.count}</td>
+                {rDays.map(dt => { const sh = s.shifts.find((x: any) => x.date === dt); return <td key={dt} className="py-1.5 px-1 text-center">{sh ? <span className={`inline-block w-4 h-4 rounded text-[8px] leading-4 font-bold text-white ${sh.shift === "day" ? "bg-amber-400" : "bg-indigo-500"}`} title={`${sh.shift} · ${sh.unit}`}>{sh.shift === "day" ? "D" : "N"}</span> : <span className="text-gray-200">·</span>}</td>; })}
+              </tr>
+            ))}</tbody>
+          </table>
+          {individualSchedules.length > 15 && <p className="text-[10px] text-gray-400 mt-1">Showing 15 of {individualSchedules.length}.</p>}
+          <div className="flex items-center gap-3 mt-2 text-[10px] text-gray-400"><span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-amber-400 inline-block" />Day</span><span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-indigo-500 inline-block" />Night</span><span>Max 4 shifts/week (48h) — over-limit flagged red.</span></div>
+          </div>
+        </div>
+      )}
 
       {/* Key metrics */}
       <div className={`${card} p-5`}>
