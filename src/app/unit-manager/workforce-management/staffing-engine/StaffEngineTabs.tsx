@@ -14,7 +14,7 @@ const TABS: { label: string; href: string; own?: boolean }[] = [
   { label: "Staff Availability", href: `${BASE}/availability`, own: true },
   { label: "Skills & Competencies", href: "/unit-manager/scheduling-engine/competency-matching" },
   { label: "Scenarios", href: "/unit-manager/scheduling-engine/scenarios" },
-  { label: "History & Reports", href: "#" },
+  { label: "History & Reports", href: `${BASE}/history`, own: true },
   { label: "Settings", href: "/unit-manager/planning-studio" },
 ];
 
