@@ -43,7 +43,7 @@ type NavItem = { label: string; href?: string; icon: string; exact?: boolean; so
 const NAV_GROUPS: { title: string; items: NavItem[] }[] = [
   { title: "Platform Engines", items: [
     { label: "Workforce Planning Studio", href: "/unit-manager/planning-studio", icon: "🏗️" },
-    { label: "Workforce Demand Engine",  href: "/unit-manager/workforce-management/establishment", icon: "📐" },
+    { label: "Unit Workforce Planning",  href: "/unit-manager/workforce-management/establishment", icon: "📐" },
     { label: "AI Scheduling Engine",     href: "/unit-manager/scheduling-engine", icon: "🗓️" },
     { label: "Competency Engine",        href: "/unit-manager/competency", icon: "🎯" },
     { label: "Workforce Analytics Engine",   icon: "📊", soon: true },
@@ -57,7 +57,7 @@ const NAV_GROUPS: { title: string; items: NavItem[] }[] = [
   ] },
   { title: "Workforce Management", items: [
     { label: "Overview",             href: "/unit-manager/workforce-management", icon: "👥" },
-    { label: "Establishment & Demand", href: "/unit-manager/workforce-management/establishment", icon: "📐" },
+    { label: "Unit Workforce Planning", href: "/unit-manager/workforce-management/establishment", icon: "📐" },
     { label: "Staffing Engine",      href: "/unit-manager/workforce-management/staffing-engine", icon: "🧑‍⚕️" },
     { label: "Team Assignments",     href: "/unit-manager/workforce-management/team-assignments", icon: "🧩" },
     { label: "Roster & Scheduling",  icon: "🗓️", soon: true },

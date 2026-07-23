@@ -109,7 +109,7 @@ export default async function PlanningStudio() {
           <div className="space-y-1.5 text-xs">
             <div className="rounded-lg bg-blue-50 border border-blue-100 p-2 text-center font-semibold text-blue-800">WPS-001 Workforce Planning Studio <span className="font-normal text-blue-500">(single source of truth)</span></div>
             <p className="text-center text-gray-300">↓</p>
-            <Link href="/unit-manager/workforce-management/establishment" className="block rounded-lg bg-emerald-50 border border-emerald-100 p-2 text-center font-semibold text-emerald-800 hover:bg-emerald-100">UMW-WFM-000A Establishment &amp; Demand Planning</Link>
+            <Link href="/unit-manager/workforce-management/establishment" className="block rounded-lg bg-emerald-50 border border-emerald-100 p-2 text-center font-semibold text-emerald-800 hover:bg-emerald-100">UMW-WFP-001 Unit Workforce Planning</Link>
             <p className="text-center text-gray-300">↓</p>
             <Link href="/unit-manager/scheduling-engine/demand-optimiser" className="block rounded-lg bg-sky-50 border border-sky-100 p-2 text-center font-semibold text-sky-800 hover:bg-sky-100">WSE-001A Demand Optimiser</Link>
             <p className="text-center text-gray-300">↓</p>
