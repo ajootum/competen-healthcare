@@ -9,13 +9,13 @@ import { usePathname } from "next/navigation";
 // to true as each module ships.
 const TABS: { label: string; href: string; built?: boolean }[] = [
   { label: "Dashboard", href: "/supervisor/handover", built: true },
-  { label: "Outgoing Shift", href: "/supervisor/handover/outgoing" },
-  { label: "Incoming Shift", href: "/supervisor/handover/incoming" },
+  { label: "Outgoing Shift", href: "/supervisor/handover/outgoing", built: true },
+  { label: "Incoming Shift", href: "/supervisor/handover/incoming", built: true },
   { label: "Patient Handover Board", href: "/supervisor/handover/board", built: true },
   { label: "SBAR Builder", href: "/supervisor/handover/sbar", built: true },
   { label: "JBI Audit", href: "/supervisor/handover/jbi", built: true },
   { label: "Handover Tasks", href: "/supervisor/handover/tasks", built: true },
-  { label: "Acceptance", href: "/supervisor/handover/acceptance" },
+  { label: "Acceptance", href: "/supervisor/handover/acceptance", built: true },
   { label: "AI Assistant", href: "/supervisor/handover/ai", built: true },
   { label: "Reports", href: "/supervisor/handover/reports", built: true },
 ];
