@@ -25,12 +25,19 @@ const FILTERS = [
   { key: "confirmed", label: "Confirmed" },
 ];
 
+const CORR_STATUS: { v: string; l: string }[] = [
+  { v: "on_duty", l: "Present" }, { v: "confirmed", l: "Confirmed" }, { v: "assigned", l: "Not reported" }, { v: "absent", l: "Absent" }, { v: "off_duty", l: "Completed" },
+];
+
 export default function AttendanceActions({ rows }: { rows: any[] }) {
   const router = useRouter();
   const [busy, setBusy] = useState<string | null>(null);
   const [filter, setFilter] = useState("all");
   const [q, setQ] = useState("");
   const [err, setErr] = useState<string | null>(null);
+  const [correct, setCorrect] = useState<string | null>(null);
+  const [corrStatus, setCorrStatus] = useState("");
+  const [corrReason, setCorrReason] = useState("");
 
   async function record(row: any, action: string) {
     setBusy(row.id); setErr(null);
@@ -38,6 +45,16 @@ export default function AttendanceActions({ rows }: { rows: any[] }) {
       const res = await fetch(`/api/operations/attendance`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ shift_staff_id: row.id, action, method: "supervisor" }) });
       if (!res.ok) { const j = await res.json().catch(() => ({})); setErr(j.error || `Failed (${res.status})`); }
       else router.refresh();
+    } catch { setErr("Network error"); } finally { setBusy(null); }
+  }
+
+  async function saveCorrection(row: any) {
+    if (!corrStatus || !corrReason) { setErr("Corrected status and reason required"); return; }
+    setBusy(row.id); setErr(null);
+    try {
+      const res = await fetch(`/api/operations/attendance-corrections`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ shift_staff_id: row.id, corrected_status: corrStatus, reason: corrReason }) });
+      if (!res.ok) { const j = await res.json().catch(() => ({})); setErr(j.error || `Failed (${res.status})`); }
+      else { setCorrect(null); setCorrStatus(""); setCorrReason(""); router.refresh(); }
     } catch { setErr("Network error"); } finally { setBusy(null); }
   }
 
@@ -59,11 +76,13 @@ export default function AttendanceActions({ rows }: { rows: any[] }) {
             <td className="py-2 pr-3 text-gray-500 capitalize">{r.unit} · {r.shiftType}</td>
             <td className="py-2 pr-3"><span className="inline-flex items-center gap-1.5"><span className={`w-1.5 h-1.5 rounded-full ${s.dot}`} /><span className={`text-[9px] px-1.5 py-0.5 rounded ${s.badge}`}>{s.label}</span></span></td>
             <td className="py-2 pr-3 whitespace-nowrap">{r.arrivalAt ? <span className="text-gray-600">{new Date(r.arrivalAt).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}{(r.minutesLate ?? 0) > 0 && <span className="text-amber-600 font-semibold"> +{r.minutesLate}m</span>}</span> : <span className="text-gray-300">—</span>}</td>
-            <td className="py-2"><div className="flex gap-1 flex-wrap">
+            <td className="py-2"><div className="flex gap-1 flex-wrap items-center">
               {r.status !== "on_duty" && <button disabled={b} onClick={() => record(r, "check_in")} className="text-[10px] px-2 py-1 rounded border border-emerald-200 text-emerald-700 hover:bg-emerald-50 disabled:opacity-40">Confirm present</button>}
               {r.status === "assigned" && <button disabled={b} onClick={() => record(r, "acknowledge")} className="text-[10px] px-2 py-1 rounded border border-sky-200 text-sky-700 hover:bg-sky-50 disabled:opacity-40">Acknowledge</button>}
               {r.status !== "absent" && <button disabled={b} onClick={() => record(r, "mark_absent")} className="text-[10px] px-2 py-1 rounded border border-rose-200 text-rose-700 hover:bg-rose-50 disabled:opacity-40">Mark absent</button>}
               {r.status === "on_duty" && <button disabled={b} onClick={() => record(r, "check_out")} className="text-[10px] px-2 py-1 rounded border border-gray-200 text-gray-600 hover:bg-gray-50 disabled:opacity-40">Completed</button>}
+              <button disabled={b} onClick={() => setCorrect(correct === r.id ? null : r.id)} className="text-[10px] px-2 py-1 rounded border border-violet-200 text-violet-700 hover:bg-violet-50 disabled:opacity-40" title="Correct — preserves the original record">Correct</button>
+              {correct === r.id && <span className="inline-flex items-center gap-1"><select value={corrStatus} onChange={e => setCorrStatus(e.target.value)} className="text-[10px] border border-gray-200 rounded px-1 py-0.5"><option value="">→ status</option>{CORR_STATUS.filter(s => s.v !== r.status).map(s => <option key={s.v} value={s.v}>{s.l}</option>)}</select><input value={corrReason} onChange={e => setCorrReason(e.target.value)} placeholder="reason" className="text-[10px] border border-gray-200 rounded px-1 py-0.5 w-24" /><button disabled={b} onClick={() => saveCorrection(r)} className="text-[10px] px-1.5 py-0.5 rounded bg-violet-600 text-white disabled:opacity-40">Save</button></span>}
             </div></td>
           </tr>
         ); })}</tbody>

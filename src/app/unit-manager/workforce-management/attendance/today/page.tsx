@@ -65,8 +65,15 @@ export default async function TodaysAttendance() {
       <div className={`${card} p-5`}>
         <h3 className="text-sm font-bold text-gray-900 mb-3">Attendance register <span className="text-[10px] text-gray-400 font-normal">{d.register.length} rostered · live status</span></h3>
         <AttendanceActions rows={d.register} />
-        <p className="text-[10px] text-gray-400 mt-3">Each action logs a timestamped, append-only op_attendance_events row (migration 083) and updates op_shift_staff — minutes-late is computed from the shift start on check-in. Colours are paired with text labels (§11.4). A manual correction must preserve the original record (BR-ATT-003) — the correction workflow is next-phase.</p>
+        <p className="text-[10px] text-gray-400 mt-3">Each action logs a timestamped, append-only op_attendance_events row (migration 083) and updates op_shift_staff — minutes-late is computed from the shift start on check-in. Colours are paired with text labels (§11.4). A <span className="text-violet-600 font-medium">Correct</span> is a separate record that preserves the original (§12.1 / BR-ATT-003).</p>
       </div>
+
+      {(d.corrections ?? []).length > 0 && (
+        <div className={`${card} p-5`}>
+          <h3 className="text-sm font-bold text-gray-900 mb-3">Recent corrections <span className="text-[10px] text-gray-400 font-normal">original preserved</span></h3>
+          <div className="space-y-1.5">{d.corrections.map((cr: any) => (<div key={cr.id} className="flex items-center justify-between text-xs rounded-lg border border-violet-100 bg-violet-50/30 p-2"><div><p className="text-gray-700"><span className="capitalize">{(cr.previous_value ?? "").replace(/_/g, " ")}</span> → <span className="font-semibold capitalize">{(cr.corrected_value ?? "").replace(/_/g, " ")}</span></p><p className="text-[10px] text-gray-500">{cr.reason}</p></div><span className="text-[10px] text-gray-400">{cr.entered_by_name ?? "—"} · {new Date(cr.created_at).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}</span></div>))}</div>
+        </div>
+      )}
 
       <p className="text-[11px] text-gray-400 pb-4">Today&apos;s Attendance (UMW-WFM-005 §11) is real over op_shift_staff — the §39 non-integrated implementation. Row actions confirm present / acknowledge / mark absent / complete through the audited shift-staff API. <Link href="/unit-manager/workforce-management/attendance" className="text-emerald-700 hover:underline">← Live Overview</Link></p>
     </div>

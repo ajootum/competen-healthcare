@@ -26,10 +26,15 @@ export async function loadAttendance(admin: any, hid: string | null, isSuper: bo
   // Attendance-event timestamps (op_attendance_events, migration 083) — enriches the register
   // with real arrival time + minutes-late per check-in. Fail-soft: store may be empty.
   const latestCheckIn = new Map<string, any>();
+  let corrections: any[] = [];
   if (activeIds.length) {
     try {
       const { data: ev } = await admin.from("op_attendance_events").select("shift_staff_id, event_type, event_at, minutes_late, check_in_method").in("shift_id", activeIds).order("event_at", { ascending: false });
       for (const e of ev ?? []) if (e.event_type === "check_in" && !latestCheckIn.has(e.shift_staff_id)) latestCheckIn.set(e.shift_staff_id, e);
+    } catch { /* store not provisioned */ }
+    try {
+      const staffRowIds = staff.map((s: any) => s.id);
+      if (staffRowIds.length) { const { data: cor } = await admin.from("op_attendance_corrections").select("id, previous_value, corrected_value, reason, entered_by_name, created_at").in("shift_staff_id", staffRowIds).order("created_at", { ascending: false }).limit(10); corrections = cor ?? []; }
     } catch { /* store not provisioned */ }
   }
 
@@ -116,7 +121,7 @@ export async function loadAttendance(admin: any, hid: string | null, isSuper: bo
   return {
     ready: true as const, activeShifts: activeShifts.length,
     kpis: { expected, present, presentRate, confirmed, notReported, absent, completed, late: lateCount, replacements, riskLevel, riskScore, coveragePct, coverageState, coverageBasis, requiredKnown: required != null, pendingActions, criticalAlerts },
-    roleBreakdown, register, replacementPool: replacementPool.slice(0, 20), distribution, alerts, timeline,
+    roleBreakdown, register, replacementPool: replacementPool.slice(0, 20), distribution, alerts, timeline, corrections,
   };
 }
 
