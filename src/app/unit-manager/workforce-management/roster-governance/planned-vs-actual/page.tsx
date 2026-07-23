@@ -1,23 +1,26 @@
 import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import Link from "next/link";
+import { loadPlannedVsActualView } from "@/lib/operations/roster-governance";
 import { loadUnitDepartments } from "@/lib/operations/unit-command";
 import UnitFilters from "../../../UnitFilters";
 import RosterGovTabs from "../RosterGovTabs";
+import ActualActions from "./ActualActions";
 
 export const dynamic = "force-dynamic";
 
-// Planned vs Actual (UMW-WFM-004 §17) — compares the published roster with actual attendance.
-// Actual attendance is captured operationally in op_shift_staff / Shift Activation on the
-// day, but it is shift-scoped, not linked to the forward-planned weekly roster (there is no
-// roster_actual_assignment store, §21.12). Reconciliation is therefore an honest next-phase
-// surface: the intended comparison measures + variance categories + real cross-links to where
-// actual staffing is confirmed today. Actual attendance must never overwrite the plan (BR-015).
+// Planned vs Actual (UMW-WFM-004 §17) — compares the published roster with actual attendance,
+// real over op_roster_actuals (082). Actual attendance is a SEPARATE record and never overwrites
+// the planned roster (BR-EXA-013). Confirm per planned assignment; variances are surfaced.
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 const card = "bg-white rounded-xl border border-gray-200";
-const MEASURES = ["Rostered staff", "Staff who reported", "Absent", "Late", "Left early", "Replaced", "Additional deployed", "Moved to another unit", "Actual supervisor", "Planned vs actual hours", "Planned vs actual skill mix", "Planned vs actual cost"];
-const VARIANCE = ["Attended as planned", "Approved replacement", "Unapproved replacement", "Sickness absence", "No-show", "Late arrival", "Early departure", "Cross-unit redeployment", "Overtime extension", "Supervisor change", "Role change", "Cancelled assignment"];
+const VAR: Record<string, string> = { no_show: "bg-rose-50 text-rose-700", sickness: "bg-amber-50 text-amber-700", unapproved_replacement: "bg-rose-50 text-rose-700", late: "bg-amber-50 text-amber-700", early_departure: "bg-amber-50 text-amber-700" };
+const fmtD = (iso?: string | null) => iso ? new Date(iso).toLocaleDateString("en-GB", { day: "numeric", month: "short" }) : "—";
+
+function Kpi({ label, value, tone }: { label: string; value: any; tone?: string }) {
+  return <div className={`${card} p-4`}><p className="text-xs text-gray-500">{label}</p><p className={`text-2xl font-bold tabular-nums mt-1 ${tone ?? "text-gray-900"}`}>{value}</p></div>;
+}
 
 export default async function PlannedVsActual() {
   const supabase = await createClient();
@@ -28,34 +31,54 @@ export default async function PlannedVsActual() {
   const roles: string[] = (profile?.roles?.length ? profile.roles : [profile?.role]).filter(Boolean);
   if (!roles.some((r: string) => ["hospital_admin", "super_admin"].includes(r))) redirect("/dashboard");
   const isSuper = roles.includes("super_admin");
-  const departments = await loadUnitDepartments(admin, profile?.hospital_id ?? null, isSuper);
 
-  return (
-    <div className="space-y-4">
+  const [d, departments] = await Promise.all([
+    loadPlannedVsActualView(admin, profile?.hospital_id ?? null, isSuper) as Promise<any>,
+    loadUnitDepartments(admin, profile?.hospital_id ?? null, isSuper),
+  ]);
+
+  const header = (
+    <>
       <div className="flex items-start justify-between gap-3 flex-wrap">
         <div className="flex items-center gap-2"><span className="text-xl">📋</span><div><h1 className="text-2xl font-bold text-gray-900 tracking-tight">Roster Governance · Planned vs Actual</h1><p className="text-sm text-gray-500">Compare the published roster with actual attendance and deployment.</p></div></div>
         <UnitFilters departments={departments} />
       </div>
       <RosterGovTabs />
+    </>
+  );
 
-      <div className="bg-amber-50 border border-amber-200 rounded-xl p-5">
-        <p className="font-semibold text-amber-900">⚙️ Planned-vs-actual reconciliation — next phase</p>
-        <p className="text-sm text-amber-800 mt-1">Actual attendance is confirmed operationally on the day (<Link href="/supervisor/shift-activation" className="text-amber-800 underline font-medium">Shift Activation</Link> / <Link href="/supervisor/team-assignments" className="text-amber-800 underline font-medium">Team Assignments</Link> over op_shift_staff), but a store linking day-of attendance back to the forward-planned weekly roster (<span className="font-mono text-[11px]">roster_actual_assignment</span>, §21.12) is not yet provisioned. Reconciliation is shown honestly rather than with fabricated variance. Actual attendance must never overwrite the published roster (BR-015) — the two remain separate records.</p>
+  if (!d.provisioned) return <div className="space-y-4">{header}<div className="bg-amber-50 border border-amber-200 rounded-xl p-6"><p className="font-semibold text-amber-900">⚙️ Roster store not provisioned</p></div></div>;
+  if (!d.hasRoster) return <div className="space-y-4">{header}<div className="bg-white border border-gray-200 rounded-xl p-6"><p className="font-semibold text-gray-800">No roster for the current week</p><p className="text-sm text-gray-500 mt-1">Generate one in the <Link href="/unit-manager/scheduling-engine" className="text-emerald-700 hover:underline">Scheduling Engine</Link>.</p></div></div>;
+
+  const confirmedPct = d.plannedPosts ? Math.round((d.confirmed / d.plannedPosts) * 100) : null;
+  return (
+    <div className="space-y-4">
+      {header}
+
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        <Kpi label="Planned posts" value={d.plannedPosts} />
+        <Kpi label="Confirmed actual" value={`${d.confirmed}${confirmedPct != null ? ` · ${confirmedPct}%` : ""}`} tone="text-emerald-600" />
+        <Kpi label="Attended as planned" value={d.attended} tone="text-emerald-600" />
+        <Kpi label="Variances" value={d.variances.length} tone={d.variances.length ? "text-amber-600" : "text-emerald-600"} />
       </div>
 
-      <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
-        <div className={`${card} p-5`}>
-          <h3 className="text-sm font-bold text-gray-900 mb-3">Comparison measures <span className="text-[10px] text-gray-400 font-normal">§17.2 · per shift</span></h3>
-          <div className="grid grid-cols-2 gap-1.5 text-[11px] text-gray-600">{MEASURES.map(m => (<div key={m} className="rounded border border-gray-100 px-2 py-1">{m}</div>))}</div>
-        </div>
-        <div className={`${card} p-5`}>
-          <h3 className="text-sm font-bold text-gray-900 mb-3">Variance categories <span className="text-[10px] text-gray-400 font-normal">§17.3</span></h3>
-          <div className="flex flex-wrap gap-1.5">{VARIANCE.map(v => (<span key={v} className="text-[10px] rounded-full border border-gray-200 px-2 py-0.5 text-gray-600">{v}</span>))}</div>
-          <p className="text-[10px] text-gray-400 mt-3">Repeated planned-vs-actual variance feeds demand forecasting, absence/overtime analytics and establishment review (§17.6) once reconciliation is wired.</p>
-        </div>
+      <div className={`${card} p-5`}>
+        <h3 className="text-sm font-bold text-gray-900 mb-3">Confirm actual attendance <span className="text-[10px] text-gray-400 font-normal">per planned assignment</span></h3>
+        <ActualActions rosterId={d.rosterId} planned={d.planned} />
+        <p className="text-[10px] text-gray-400 mt-2">Actual attendance is a separate record and never overwrites the published roster (BR-EXA-013 / §17). Confirming updates operational status; reconciliation at cycle close is next-phase.</p>
       </div>
 
-      <p className="text-[11px] text-gray-400 pb-4">Planned vs Actual (UMW-WFM-004 §17). The Shift Supervisor confirms actual staff at handover (updating operational status, not the plan, §17.4). <Link href="/unit-manager/workforce-management/roster-governance" className="text-emerald-700 hover:underline">← Governance Overview</Link></p>
+      {d.variances.length > 0 && (
+        <div className={`${card} p-5`}>
+          <h3 className="text-sm font-bold text-gray-900 mb-3">Variances <span className="text-[10px] text-gray-400 font-normal">§17.3</span></h3>
+          <div className="overflow-x-auto"><table className="w-full text-xs">
+            <thead><tr className="text-gray-400 text-left border-b border-gray-100"><th className="py-2 pr-3 font-medium">Staff</th><th className="py-2 pr-3 font-medium">Unit</th><th className="py-2 pr-3 font-medium">Date</th><th className="py-2 pr-3 font-medium">Variance</th><th className="py-2 font-medium">Reason</th></tr></thead>
+            <tbody>{d.variances.map((v: any) => (<tr key={v.id} className="border-b border-gray-50"><td className="py-2 pr-3 text-gray-800 font-medium">{v.staff_name ?? "—"}</td><td className="py-2 pr-3 text-gray-500">{v.unit_name}</td><td className="py-2 pr-3 text-gray-500 whitespace-nowrap">{fmtD(v.shift_date)} · {v.shift_type}</td><td className="py-2 pr-3"><span className={`text-[9px] px-1.5 py-0.5 rounded ${VAR[v.attendance_status] ?? "bg-gray-100 text-gray-500"}`}>{(v.attendance_status ?? "").replace(/_/g, " ")}</span></td><td className="py-2 text-gray-500">{v.variance_reason ?? "—"}</td></tr>))}</tbody>
+          </table></div>
+        </div>
+      )}
+
+      <p className="text-[11px] text-gray-400 pb-4">Planned vs Actual (UMW-WFM-004 §17) is real over op_roster_actuals. Repeated variance feeds demand forecasting, absence + fairness analytics (next-phase). <Link href="/unit-manager/workforce-management/roster-governance" className="text-emerald-700 hover:underline">← Governance Overview</Link></p>
     </div>
   );
 }

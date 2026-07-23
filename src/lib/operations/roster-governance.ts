@@ -190,3 +190,41 @@ export async function loadRosterExceptionsView(admin: any, hid: string | null, i
 
   return { provisioned: true as const, hasRoster: true as const, rosterId, derived, persisted, openPersisted, kpis: { critical: con.kpis?.critical ?? 0, overrideRequests: con.kpis?.overrideRequests ?? 0 }, recentOverrides: con.recentOverrides ?? [] };
 }
+
+// Amendments, Swaps & Replacements (§16) — the op_roster_amendments register for the current
+// roster. Post-publication changes preserve the originally published roster (BR-EXA-006/010).
+export async function loadRosterAmendmentsView(admin: any, hid: string | null, isSuper: boolean) {
+  const rw = await loadRosterForWeek(admin, hid, isSuper, mondayOf());
+  if (!(rw as any).provisioned) return { provisioned: false as const };
+  const roster = (rw as any).roster;
+  if (!roster) return { provisioned: true as const, hasRoster: false as const };
+  let amendments: any[] = [];
+  try {
+    const q = admin.from("op_roster_amendments").select("id, amendment_type, reason, affected_unit, affected_shift_date, from_staff_name, to_staff_name, approval_status, emergency, requested_by_name, requested_at").eq("roster_id", roster.id).order("requested_at", { ascending: false }).limit(60);
+    const { data } = await (isSuper ? q : q.eq("hospital_id", hid ?? NONE));
+    amendments = data ?? [];
+  } catch { /* store not provisioned */ }
+  const open = amendments.filter((a: any) => !["applied", "rejected", "cancelled"].includes(a.approval_status));
+  const appliedCount = amendments.filter((a: any) => a.approval_status === "applied").length;
+  return { provisioned: true as const, hasRoster: true as const, rosterId: roster.id, rosterStatus: roster.status, amendments, open, appliedCount };
+}
+
+// Planned vs Actual (§17) — the op_roster_actuals confirmations vs planned assignments.
+export async function loadPlannedVsActualView(admin: any, hid: string | null, isSuper: boolean) {
+  const rw = await loadRosterForWeek(admin, hid, isSuper, mondayOf());
+  if (!(rw as any).provisioned) return { provisioned: false as const };
+  const roster = (rw as any).roster;
+  if (!roster) return { provisioned: true as const, hasRoster: false as const };
+  const asg: any[] = ((rw as any).assignments ?? []).filter((a: any) => a.status === "assigned");
+  let actuals: any[] = [];
+  try {
+    const q = admin.from("op_roster_actuals").select("id, unit_name, shift_date, shift_type, staff_name, attendance_status, variance_reason, actual_hours, confirmed_by_name, created_at").eq("roster_id", roster.id).order("created_at", { ascending: false }).limit(200);
+    const { data } = await (isSuper ? q : q.eq("hospital_id", hid ?? NONE));
+    actuals = data ?? [];
+  } catch { /* store not provisioned */ }
+  const attended = actuals.filter((a: any) => a.attendance_status === "attended").length;
+  const variances = actuals.filter((a: any) => !["attended"].includes(a.attendance_status));
+  const plannedPosts = asg.length;
+  const confirmed = actuals.length;
+  return { provisioned: true as const, hasRoster: true as const, rosterId: roster.id, plannedPosts, confirmed, attended, variances, actuals, planned: asg.map((a: any) => ({ id: a.id, unit: a.unit_name, date: a.shift_date, shift: a.shift_type, staff: a.staff_name, role: a.role })) };
+}
