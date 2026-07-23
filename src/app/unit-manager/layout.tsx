@@ -48,7 +48,7 @@ const NAV_GROUPS: { title: string; items: NavItem[] }[] = [
     { label: "Executive Actions",       href: "/unit-manager/action-centre",         icon: "✅" },
   ] },
   { title: "Workforce Management", items: [
-    { label: "Workforce Dashboard",   href: "/unit-manager/operations?section=shifts", icon: "👥" },
+    { label: "Workforce Management",   href: "/unit-manager/workforce-management", icon: "👥" },
     { label: "Rostering & Allocation", icon: "🗓️", soon: true },
     { label: "Staffing Establishment", icon: "📋", soon: true },
     { label: "Attendance & Leave",     icon: "🏖️", soon: true },
