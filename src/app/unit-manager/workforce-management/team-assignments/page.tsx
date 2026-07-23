@@ -4,6 +4,7 @@ import Link from "next/link";
 import { loadTeamAssignments } from "@/lib/operations/team-assignments";
 import { loadUnitDepartments } from "@/lib/operations/unit-command";
 import UnitFilters from "../../UnitFilters";
+import TeamGovTabs from "./TeamGovTabs";
 
 export const dynamic = "force-dynamic";
 
@@ -15,7 +16,6 @@ export const dynamic = "force-dynamic";
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 const card = "bg-white rounded-xl border border-gray-200";
-const SUBTABS = ["Live Overview", "Assignment Exceptions", "Workload Oversight", "Competency Matching", "Cross-Unit Deployments", "Rules & Templates", "History & Audit"];
 const SEV: Record<string, string> = { High: "bg-rose-50 text-rose-700", Medium: "bg-amber-50 text-amber-700" };
 const WL: Record<string, string> = { High: "bg-rose-500", Medium: "bg-amber-500", Good: "bg-emerald-500" };
 const WL_BADGE: Record<string, string> = { High: "bg-rose-50 text-rose-700", Medium: "bg-amber-50 text-amber-700", Good: "bg-emerald-50 text-emerald-700", "At risk": "bg-amber-50 text-amber-700" };
@@ -47,9 +47,7 @@ export default async function TeamAssignments() {
         <div className="flex items-center gap-2"><span className="text-xl">🧩</span><div><h1 className="text-2xl font-bold text-gray-900 tracking-tight">Team Assignment Governance &amp; Oversight</h1><p className="text-sm text-gray-500">Monitor assignments, ensure safe coverage, approve exceptions and manage assignment policies.</p></div></div>
         <UnitFilters departments={departments} />
       </div>
-      <div className="flex gap-1 border-b border-gray-200 overflow-x-auto">
-        {SUBTABS.map((t, i) => <span key={t} className={`shrink-0 text-xs px-3 py-2 border-b-2 -mb-px font-medium ${i === 0 ? "border-emerald-600 text-emerald-700" : "border-transparent text-gray-300"}`} title={i === 0 ? "" : "Next phase"}>{t}</span>)}
-      </div>
+      <TeamGovTabs />
     </>
   );
 
