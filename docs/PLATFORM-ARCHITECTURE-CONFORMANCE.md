@@ -70,17 +70,17 @@ provides it, honest where it doesn't self-manage the infra.
 | Authentication | ☁️/✅ | Supabase Auth; `/api/auth/*` |
 | Authorization (RBAC/ABAC) | ✅ | `AppRole`/`OrgRole`/`PlatformRole`, `api-auth.ts`, RLS |
 | Tenant | ✅ | `tenants`, `lib/platform/tenants.ts`, provisioning |
-| Configuration | 🟡 | per-tenant columns + `plat_org_templates`; no central config service |
+| Configuration | 🟡 | per-tenant columns + `plat_org_templates` + WCE-001 workspace config engine (hierarchical resolver, Designer, versioning); no universal service-config store yet |
 | Feature Flag | ✅ | `plat_feature_flags` + assignments, control-plane |
 | File Storage | ☁️ | Supabase Storage (`/api/account/avatar`) |
-| Notification | 🟡 | `/api/notifications`, `messages`; no multi-channel (SMS/Teams) |
-| Search | 🟡 | PostgreSQL full-text; no dedicated engine |
-| Messaging (async) | 🟡 | `plat_platform_events`; no broker |
-| AI Runtime Gateway | 🟡 | `@anthropic-ai/sdk`, `/api/ai/*`; single-provider, no central token governance |
+| Notification | ✅ | multi-channel dispatch + delivery tracking (`lib/notifications/dispatch.ts`, `notif_deliveries`); in-app/email/webhook real, SMS/Teams/Slack honest-skipped without provider env |
+| Search | ✅ | Platform Search Service (`lib/platform/search.ts`, `/api/platform/search`) — unified cross-entity Postgres ILIKE; dedicated engine still an honest infra gap |
+| Messaging (async) | 🟡 | `plat_platform_events`; no broker (infra-scale — not pretended-built) |
+| AI Runtime Gateway | ✅ | governance built (`lib/ai/gateway.ts`, `plat_ai_requests`) — central token/cost accounting + analytics; single-provider (Anthropic) by design |
 | Audit | ✅ | `audit_log`, `plat_audit_events` |
-| Integration Gateway (HL7/FHIR/SCIM) | ⬜ | future; `plat_idp_configs` scaffold only |
+| Integration Gateway (HL7/FHIR/SCIM) | ⬜ | future; `plat_idp_configs` scaffold only (external/infra-scale) |
 | Licensing | ✅ | `plat_plans`/`plat_subscriptions`, licensing module |
-| Localization | 🟡 | tenant language/timezone/currency; no i18n resource service |
+| Localization | ✅ | Localization Resource Service (`lib/platform/localization.ts`, `/api/platform/localization`) — locale catalogue, bundles, resolver w/ fallback + interpolation + coverage, RTL |
 | API Gateway | ☁️ | Next.js route layer + Vercel edge |
 
 ## PCS-000 — Platform Core Services (18 services)
@@ -92,18 +92,18 @@ provides it, honest where it doesn't self-manage the infra.
 | Workspace | ✅ | code catalogue + `plat_workspaces` (Workspace Management) |
 | Role | ✅ | `lib/roles.ts` |
 | Task | 🟡 | `/api/operations/tasks` (clinical ops scope) |
-| Workflow | 🟡 | `change_requests`, competency cycles; not a generic engine |
-| Document | 🟡 | evidence/certificates; no unified document service |
-| Scheduling | 🟡 | `/api/schedule(s)` |
-| Calendar | 🟡 | assessor calendar |
+| Workflow | ✅ | generic workflow/approval engine (`lib/platform/approvals.ts`, `plat_approval_requests`/`_decisions`) — code-defined defs + ordered steps; unifies with `change_requests` |
+| Document | ✅ | Unified Document Service (`lib/platform/documents.ts`, `/api/platform/documents`) — normalised index across `evidence`/`assessment_evidence`; write-path/versioning next-phase |
+| Scheduling | 🟡 | `/api/schedule(s)` (clinical-ops scope, intentional) |
+| Calendar | 🟡 | assessor calendar (clinical-ops scope, intentional) |
 | Dashboard | ✅ | many role dashboards + POS-001/002 widget boards |
 | Reporting | ✅ | `/api/reports/*` |
-| Search Index | 🟡 | PostgreSQL |
-| Approval | ✅ | `change_requests` |
+| Search Index | ✅ | Platform Search Service (`lib/platform/search.ts`) |
+| Approval | ✅ | `change_requests` + generic workflow engine |
 | Activity Timeline | ✅ | `audit_log` / activity feeds |
 | Knowledge Reference | ✅ | frameworks/competencies/taxonomies |
-| Configuration Profile | 🟡 | templates + per-entity settings |
-| Collaboration | ⬜ | not built |
+| Configuration Profile | 🟡 | templates + per-entity settings + WCE-001 workspace config engine (resolver/Designer/versioning); no universal config service |
+| Collaboration | ⬜ | not built (buildable — next: `plat_comments` threaded comments/mentions, needs a migration) |
 | Audit Timeline | ✅ | audit feeds |
 
 ## PDS-000 — Platform Data Services (data architecture)
@@ -122,23 +122,34 @@ provides it, honest where it doesn't self-manage the infra.
 
 ---
 
+## Built since the first conformance pass
+
+The original backlog is now shipped and verified: Background Job runner + registry
+(POS-001F), Deployment recording (`plat_deployments`), multi-channel Notification
+service (PFS §12 / POS-001H), AI Runtime Gateway governance (PFS §15), real-time SSE
+push (POS-001J), the generic Workflow/Approval engine (PCS §10 / POS-001D), and this
+cycle's **Platform Search Service** (PFS Search / PCS Search Index), **Unified Document
+Service** (PCS Document) and **Localization Resource Service** (PFS Localization).
+
 ## Genuine gaps worth building next (in priority order)
 
-These are the items that are *both* missing *and* buildable in this stack —
-distinct from blueprint elements that only matter at enterprise infra scale:
+Both missing *and* buildable in this stack (Supabase + Next) — distinct from the
+infra-scale blueprint elements below:
 
-1. **Background Job runner + registry** — record cron/report runs so the
-   Background Jobs and job-health widgets go live (POS-001F / POS-002 queues).
-2. **Deployment recording** — write a `plat_deployments` row on release so
-   Deployments Today / Last Deployment / release history populate.
-3. **Multi-channel Notification service** — extend `/api/notifications` to
-   email/SMS with delivery tracking (PFS Notification, POS-001H).
-4. **AI Runtime Gateway governance** — central token accounting, model routing
-   and usage analytics over the existing `/api/ai/*` (PFS-000 §15) → lights up
-   the AI Operations widget.
-5. **Real-time push (SSE)** — replace 30s polling on the widget boards.
-6. **Generic Workflow/Approval engine** — promote `change_requests` into a
-   configurable multi-type approval service (PCS Workflow, POS-001D).
+1. **Collaboration primitive** — `plat_comments` threaded comments / @-mentions on any
+   entity (PCS Collaboration). The one remaining buildable gap that needs a migration.
+2. **Write-path Document service** — upload, versioning and retention policies over the
+   read-only document index (PCS Document write-side).
+3. **Universal service-config store** — generalise WCE-001 beyond workspace config into
+   a platform-wide configuration service (PFS Configuration / PCS Configuration Profile).
+4. **Translation-management workflow** — import/export and per-tenant overrides over the
+   Localization Resource Service seed bundles.
 
-Everything above the line is implemented and verified; everything below is a
-deliberate, honest backlog rather than a hidden gap.
+## Honest infra-scale gaps (deliberately not built)
+
+Faking these in a single-Postgres + Vercel deployment would be dishonest, so they stay
+⬜/🟡 with rationale: async **Messaging broker**, **Integration Gateway** (HL7/FHIR/SCIM),
+dedicated **search engine** (Elasticsearch/OpenSearch), and **Redis / queue / TSDB /
+data-warehouse / vector / event store**. Generic **Task/Scheduling/Calendar** stay
+clinical-ops-scoped by intent. Everything here is a deliberate, honest backlog rather
+than a hidden gap.
