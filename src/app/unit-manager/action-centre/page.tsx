@@ -1,7 +1,7 @@
 import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import Link from "next/link";
-import { loadExecutiveActionCentre, loadUnitDepartments } from "@/lib/operations/unit-command";
+import { loadExecutiveActionCentre, loadExecActionModules, loadUnitDepartments } from "@/lib/operations/unit-command";
 import UnitCommandTabs from "../UnitCommandTabs";
 import UnitFilters from "../UnitFilters";
 
@@ -36,6 +36,22 @@ function Donut({ segments, total }: { segments: { n: number; color: string }[]; 
   return <div className="relative w-28 h-28 shrink-0"><div className="w-28 h-28 rounded-full" style={{ background: sum > 0 ? `conic-gradient(${stops})` : "#f1f5f9" }} /><div className="absolute inset-[24%] rounded-full bg-white flex flex-col items-center justify-center"><span className="text-xl font-bold text-gray-900">{total}</span><span className="text-[9px] text-gray-400">Total</span></div></div>;
 }
 
+function ModulePanel({ icon, title, color, stats, breakdown, href, linkLabel, provisioned, note }: { icon: string; title: string; color: string; stats: [string, any, string?][]; breakdown: any[]; href: string; linkLabel: string; provisioned: boolean; note?: string }) {
+  return (
+    <div className={`${card} p-4 flex flex-col`}>
+      <div className="flex items-center gap-1.5 mb-2"><span className="text-sm">{icon}</span><h3 className="text-[10px] font-bold uppercase tracking-wide" style={{ color }}>{title}</h3></div>
+      <div className="flex gap-3 mb-2">
+        {stats.map(([l, v, tone]) => <div key={l}><p className={`text-lg font-bold tabular-nums ${tone ?? "text-gray-900"}`}>{provisioned ? v : "—"}</p><p className="text-[9px] text-gray-400 leading-tight">{l}</p></div>)}
+      </div>
+      <div className="space-y-0.5 mb-2 flex-1">
+        {breakdown.slice(0, 5).map((b: any, i: number) => <div key={i} className="flex items-center justify-between text-[11px]"><span className="text-gray-500 truncate">{b.label}</span><b className={b.n == null ? "text-gray-300" : "text-gray-700"}>{b.n == null ? "—" : b.n}</b></div>)}
+      </div>
+      {note && <p className="text-[9px] text-gray-400 mb-1">{note}</p>}
+      <Link href={href} className="text-[10px] font-semibold mt-auto" style={{ color }}>{linkLabel} →</Link>
+    </div>
+  );
+}
+
 export default async function ExecutiveActionsCentre({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   const sp = await searchParams;
   const dept = typeof sp.dept === "string" ? sp.dept : undefined;
@@ -48,8 +64,9 @@ export default async function ExecutiveActionsCentre({ searchParams }: { searchP
   if (!roles.some(r => ["hospital_admin", "super_admin"].includes(r))) redirect("/dashboard");
 
   const isSuper = roles.includes("super_admin");
-  const [d, departments] = await Promise.all([
+  const [d, mods, departments] = await Promise.all([
     loadExecutiveActionCentre(admin, profile?.hospital_id ?? null, isSuper, dept) as Promise<any>,
+    loadExecActionModules(admin, profile?.hospital_id ?? null, isSuper) as Promise<any>,
     loadUnitDepartments(admin, profile?.hospital_id ?? null, isSuper),
   ]);
   const c = d.counts;
@@ -126,6 +143,25 @@ export default async function ExecutiveActionsCentre({ searchParams }: { searchP
             <div className="space-y-1.5">{statusRows.map(([l, n, col]) => (<div key={l} className="flex items-center gap-2 text-xs"><span className="w-20 text-gray-500 shrink-0">{l}</span><div className="flex-1 h-2 rounded-full bg-gray-100 overflow-hidden"><div className="h-full rounded-full" style={{ width: `${(n / maxStatus) * 100}%`, background: col }} /></div><b className="text-gray-700 tabular-nums w-6 text-right">{n}</b></div>))}</div>
           </div>
         </div>
+      </div>
+
+      {/* UMW-005A — five module summary panels */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-4">
+        <ModulePanel icon="✅" title="Approvals" color="#8b5cf6" provisioned={false}
+          stats={[["Pending", mods.approvals.pending], ["Due Today", mods.approvals.dueToday], ["Overdue", mods.approvals.overdue]]}
+          breakdown={mods.approvals.breakdown} href="#" linkLabel="View approvals" note="No approval-request store yet — honest state." />
+        <ModulePanel icon="⚠" title="Escalations" color="#ef4444" provisioned={mods.escalations.provisioned}
+          stats={[["Open", mods.escalations.open], ["Critical", mods.escalations.critical, "text-rose-600"], ["Awaiting", mods.escalations.awaiting]]}
+          breakdown={mods.escalations.breakdown} href="/supervisor/quality-safety" linkLabel="View escalations" />
+        <ModulePanel icon="📈" title="CAPA & Improvement" color="#14b8a6" provisioned={mods.capa.provisioned}
+          stats={[["Open CAPAs", mods.capa.open], ["Overdue", mods.capa.overdue, "text-rose-600"], ["On Track", mods.capa.onTrack, "text-green-600"]]}
+          breakdown={mods.capa.breakdown} href="/supervisor/quality-safety" linkLabel="View CAPA register" />
+        <ModulePanel icon="🎓" title="Competency Validations" color="#3b82f6" provisioned={mods.competency.provisioned}
+          stats={[["Pending", mods.competency.pending], ["Expired", mods.competency.expired, "text-rose-600"], ["Due ≤7d", mods.competency.dueThisWeek, "text-amber-600"]]}
+          breakdown={mods.competency.breakdown} href="/unit-manager/competency" linkLabel="View validations" note="Sub-categories via Competency Engine (next phase)." />
+        <ModulePanel icon="🕐" title="History & Audit" color="#6b7280" provisioned={mods.history.provisioned}
+          stats={[["Events", mods.history.total], ["This Week", mods.history.thisWeek], ["Period", mods.history.thisPeriod]]}
+          breakdown={mods.history.breakdown} href="#" linkLabel="View audit trail" />
       </div>
 
       {/* AI recs + upcoming + quick actions */}

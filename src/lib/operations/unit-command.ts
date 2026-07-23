@@ -405,3 +405,65 @@ export async function loadExecutiveActionCentre(admin: any, hid: string | null, 
   const honestChannels = ["Leave Requests", "Staffing Requests", "Policy Approvals", "Budget Requests", "Executive Messages"];
   return { items, counts, distribution, byStatus, aiRecommendations, upcomingDue, honestChannels };
 }
+
+// ── Executive Actions Modules (UMW-005A) ─────────────────────────────────────
+// The five module summary cards: Approvals, Escalations, CAPA & Improvement,
+// Competency Validations and History & Audit. Escalations/CAPA/History and the
+// competency pending/expiry counts are live from real stores; the Approvals inbox
+// (overtime/leave/roster/policy/procurement) has no backing store yet → honest.
+export async function loadExecActionModules(admin: any, hid: string | null, isSuper: boolean) {
+  const scope = scoped(isSuper, hid);
+  const today = new Date().toISOString().slice(0, 10);
+  const wk = new Date(); wk.setDate(wk.getDate() + 7); const weekAhead = wk.toISOString().slice(0, 10);
+  const d30 = new Date(); d30.setDate(d30.getDate() - 30); const since30 = d30.toISOString();
+  const d7 = new Date(); d7.setDate(d7.getDate() - 7); const since7 = d7.toISOString();
+  const cap = (s?: string) => (s ? s[0].toUpperCase() + s.slice(1).replace(/_/g, " ") : "Other");
+  const groupCount = (rows: any[], key: string) => { const m: Record<string, number> = {}; for (const r of rows) { const k = r[key] ?? "other"; m[k] = (m[k] ?? 0) + 1; } return Object.entries(m).map(([label, n]) => ({ label: cap(label), n })).sort((a, b) => b.n - a.n).slice(0, 6); };
+
+  // Escalations (live).
+  let escalations: any = { provisioned: false, open: 0, critical: 0, awaiting: 0, breakdown: [] };
+  try {
+    const { data, error } = await scope(admin.from("op_escalations").select("level, status, escalation_type").neq("status", "resolved").neq("status", "cancelled").limit(1000));
+    if (!error) { const r = data ?? []; escalations = { provisioned: true, open: r.length, critical: r.filter((x: any) => x.level >= 4).length, awaiting: r.filter((x: any) => x.status === "acknowledged").length, breakdown: groupCount(r, "escalation_type") }; }
+  } catch { /* fail-soft */ }
+
+  // CAPA & Improvement (live).
+  let capa: any = { provisioned: false, open: 0, overdue: 0, onTrack: 0, breakdown: [] };
+  try {
+    const { data, error } = await scope(admin.from("op_quality_actions").select("action_type, status, due_at").in("status", ["open", "in_progress", "overdue"]).limit(1000));
+    if (!error) { const r = data ?? []; capa = { provisioned: true, open: r.length, overdue: r.filter((x: any) => x.status === "overdue" || (x.due_at && x.due_at.slice(0, 10) < today)).length, onTrack: r.filter((x: any) => x.status === "in_progress").length, breakdown: groupCount(r, "action_type") }; }
+  } catch { /* fail-soft */ }
+
+  // Competency validations (live counts; sub-category breakdown needs the Competency Engine — honest).
+  let competency: any = { provisioned: false, pending: 0, expired: 0, dueThisWeek: 0, breakdown: [] };
+  try {
+    const { data: cyc } = await scope(admin.from("competency_cycles").select("id").eq("status", "active").limit(3000));
+    const ids = (cyc ?? []).map((c: any) => c.id);
+    let pending = 0;
+    if (ids.length) { const { data: sc } = await admin.from("competency_scores").select("id", { count: "exact", head: false }).in("cycle_id", ids).eq("is_passing", true).eq("educator_validated", false).limit(1000); pending = (sc ?? []).length; }
+    const { data: decs, error } = await scope(admin.from("competency_decisions").select("outcome, expiry_date").limit(20000));
+    if (error && !ids.length) throw error;
+    const dd = decs ?? [];
+    const expired = dd.filter((x: any) => x.outcome === "expired" || (x.expiry_date && x.expiry_date < today)).length;
+    const dueThisWeek = dd.filter((x: any) => x.expiry_date && x.expiry_date >= today && x.expiry_date <= weekAhead).length;
+    competency = { provisioned: true, pending, expired, dueThisWeek, breakdown: [{ label: "Validation pending", n: pending }, { label: "Expired", n: expired }, { label: "Expiring ≤7d", n: dueThisWeek }] };
+  } catch { /* fail-soft */ }
+
+  // History & Audit (live, from audit_log).
+  let history: any = { provisioned: false, total: 0, thisWeek: 0, thisPeriod: 0, breakdown: [] };
+  try {
+    const { data, error } = await scope(admin.from("audit_log").select("entity_type, action, created_at").gte("created_at", since30).order("created_at", { ascending: false }).limit(4000));
+    if (!error) {
+      const r = data ?? [];
+      const cat = (e: string, a: string) => { const s = `${e ?? ""} ${a ?? ""}`.toLowerCase(); if (/escalat/.test(s)) return "Escalations"; if (/quality|capa|incident/.test(s)) return "CAPA Actions"; if (/competen|decision|score/.test(s)) return "Competency Decisions"; if (/task|approv|assign|broadcast|shift|staff/.test(s)) return "Approvals"; return "Other Activities"; };
+      const buckets: Record<string, number> = {};
+      for (const x of r) { const k = cat(x.entity_type, x.action); buckets[k] = (buckets[k] ?? 0) + 1; }
+      history = { provisioned: true, total: r.length, thisPeriod: r.length, thisWeek: r.filter((x: any) => x.created_at >= since7).length, breakdown: Object.entries(buckets).map(([label, n]) => ({ label, n })).sort((a, b) => b.n - a.n) };
+    }
+  } catch { /* fail-soft */ }
+
+  // Approvals — no dedicated request store yet (honest).
+  const approvals = { provisioned: false, pending: 0, dueToday: 0, overdue: 0, breakdown: [{ label: "Overtime", n: null }, { label: "Leave", n: null }, { label: "Roster changes", n: null }, { label: "Policy & documents", n: null }, { label: "Procurement", n: null }] };
+
+  return { approvals, escalations, capa, competency, history };
+}
