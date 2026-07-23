@@ -147,9 +147,9 @@ export default async function ExecutiveActionsCentre({ searchParams }: { searchP
 
       {/* UMW-005A — five module summary panels */}
       <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-4">
-        <ModulePanel icon="✅" title="Approvals" color="#8b5cf6" provisioned={false}
+        <ModulePanel icon="✅" title="Approvals" color="#8b5cf6" provisioned={mods.approvals.provisioned}
           stats={[["Pending", mods.approvals.pending], ["Due Today", mods.approvals.dueToday], ["Overdue", mods.approvals.overdue]]}
-          breakdown={mods.approvals.breakdown} href="#" linkLabel="View approvals" note="No approval-request store yet — honest state." />
+          breakdown={mods.approvals.breakdown} href="/unit-manager/approvals" linkLabel="View approvals" />
         <ModulePanel icon="⚠" title="Escalations" color="#ef4444" provisioned={mods.escalations.provisioned}
           stats={[["Open", mods.escalations.open], ["Critical", mods.escalations.critical, "text-rose-600"], ["Awaiting", mods.escalations.awaiting]]}
           breakdown={mods.escalations.breakdown} href="/supervisor/quality-safety" linkLabel="View escalations" />

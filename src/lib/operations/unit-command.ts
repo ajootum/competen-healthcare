@@ -462,8 +462,13 @@ export async function loadExecActionModules(admin: any, hid: string | null, isSu
     }
   } catch { /* fail-soft */ }
 
-  // Approvals — no dedicated request store yet (honest).
-  const approvals = { provisioned: false, pending: 0, dueToday: 0, overdue: 0, breakdown: [{ label: "Overtime", n: null }, { label: "Leave", n: null }, { label: "Roster changes", n: null }, { label: "Policy & documents", n: null }, { label: "Procurement", n: null }] };
+  // Approvals — live from the approval_requests store (migration 077), fail-soft.
+  let approvals: any = { provisioned: false, pending: 0, dueToday: 0, overdue: 0, breakdown: [] };
+  try {
+    const nowIso = new Date().toISOString();
+    const { data, error } = await scope(admin.from("approval_requests").select("category, due_at").in("status", ["waiting", "pending_info", "returned", "delegated", "escalated"]).limit(1000));
+    if (!error) { const r = data ?? []; approvals = { provisioned: true, pending: r.length, dueToday: r.filter((x: any) => x.due_at && x.due_at.slice(0, 10) === today).length, overdue: r.filter((x: any) => x.due_at && x.due_at < nowIso).length, breakdown: groupCount(r, "category") }; }
+  } catch { /* fail-soft */ }
 
   return { approvals, escalations, capa, competency, history };
 }
