@@ -50,7 +50,7 @@ const NAV_GROUPS: { title: string; items: NavItem[] }[] = [
   { title: "Workforce Management", items: [
     { label: "Overview",             href: "/unit-manager/workforce-management", icon: "👥" },
     { label: "Staffing Engine",      href: "/unit-manager/workforce-management/staffing-engine", icon: "🧑‍⚕️" },
-    { label: "Team Assignments",     icon: "🧩", soon: true },
+    { label: "Team Assignments",     href: "/unit-manager/workforce-management/team-assignments", icon: "🧩" },
     { label: "Roster & Scheduling",  icon: "🗓️", soon: true },
     { label: "Competency Readiness", icon: "🎯", soon: true },
     { label: "Break Management",     icon: "☕", soon: true },

@@ -8,7 +8,7 @@ import { usePathname } from "next/navigation";
 const TABS: { label: string; href: string; built?: boolean }[] = [
   { label: "Overview", href: "/unit-manager/workforce-management", built: true },
   { label: "Staffing Engine", href: "/unit-manager/workforce-management/staffing-engine", built: true },
-  { label: "Team Assignments", href: "/unit-manager/workforce-management/team-assignments" },
+  { label: "Team Assignments", href: "/unit-manager/workforce-management/team-assignments", built: true },
   { label: "Roster & Scheduling", href: "/unit-manager/workforce-management/roster" },
   { label: "Competency Readiness", href: "/unit-manager/workforce-management/competency-readiness" },
   { label: "Break Management", href: "/unit-manager/workforce-management/breaks" },
