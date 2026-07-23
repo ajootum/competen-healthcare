@@ -10,7 +10,7 @@ const TABS: { label: string; href: string; built?: boolean }[] = [
   { label: "Demand Optimiser", href: "/unit-manager/scheduling-engine/demand-optimiser", built: true },
   { label: "Scheduling Engine", href: "/unit-manager/scheduling-engine#scheduling" },
   { label: "Constraints & Rules", href: "/unit-manager/scheduling-engine/constraints", built: true },
-  { label: "Competency Matching", href: "#" },
+  { label: "Competency Matching", href: "/unit-manager/scheduling-engine/competency-matching", built: true },
   { label: "Scenario Planner", href: "#" },
   { label: "What-if Simulator", href: "#" },
   { label: "Recommendations", href: "#" },
