@@ -12,6 +12,7 @@ const TABS: { label: string; href: string; built?: boolean }[] = [
   { label: "Constraints & Rules", href: "/unit-manager/scheduling-engine/constraints", built: true },
   { label: "Competency Matching", href: "/unit-manager/scheduling-engine/competency-matching", built: true },
   { label: "Fairness", href: "/unit-manager/scheduling-engine/fairness", built: true },
+  { label: "Cost Optimisation", href: "/unit-manager/scheduling-engine/cost", built: true },
   { label: "Scenario Planner", href: "#" },
   { label: "What-if Simulator", href: "#" },
   { label: "Recommendations", href: "#" },
