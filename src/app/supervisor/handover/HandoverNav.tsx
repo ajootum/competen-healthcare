@@ -11,7 +11,7 @@ const TABS: { label: string; href: string; built?: boolean }[] = [
   { label: "Dashboard", href: "/supervisor/handover", built: true },
   { label: "Outgoing Shift", href: "/supervisor/handover/outgoing" },
   { label: "Incoming Shift", href: "/supervisor/handover/incoming" },
-  { label: "Patient Handover Board", href: "/supervisor/handover/board" },
+  { label: "Patient Handover Board", href: "/supervisor/handover/board", built: true },
   { label: "SBAR Builder", href: "/supervisor/handover/sbar" },
   { label: "JBI Audit", href: "/supervisor/handover/jbi" },
   { label: "Handover Tasks", href: "/supervisor/handover/tasks" },
