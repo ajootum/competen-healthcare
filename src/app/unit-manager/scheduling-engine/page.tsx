@@ -2,8 +2,10 @@ import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { loadSchedulingEngine } from "@/lib/operations/scheduling-engine";
+import { loadRosterForWeek, mondayOf } from "@/lib/operations/roster-solver";
 import { loadUnitDepartments } from "@/lib/operations/unit-command";
 import UnitFilters from "../UnitFilters";
+import RosterControls from "./RosterControls";
 
 export const dynamic = "force-dynamic";
 
@@ -27,7 +29,9 @@ function Metric({ label, value, sub }: { label: string; value: any; sub?: string
   return <div className={`${card} p-3`}><p className="text-[10px] text-gray-500 uppercase tracking-wide">{label}</p><p className="text-lg font-bold text-gray-900 mt-0.5">{value}</p>{sub && <p className="text-[10px] text-gray-400">{sub}</p>}</div>;
 }
 
-export default async function SchedulingEngine() {
+export default async function SchedulingEngine({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
+  const sp = await searchParams;
+  const rshift = sp.rshift === "night" ? "night" : "day";
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect("/login");
@@ -36,17 +40,21 @@ export default async function SchedulingEngine() {
   const roles: string[] = (profile?.roles?.length ? profile.roles : [profile?.role]).filter(Boolean);
   if (!roles.some((r: string) => ["hospital_admin", "super_admin"].includes(r))) redirect("/dashboard");
   const isSuper = roles.includes("super_admin");
+  const hid = profile?.hospital_id ?? null;
+  const weekStart = mondayOf();
 
-  const [d, departments] = await Promise.all([
-    loadSchedulingEngine(admin, profile?.hospital_id ?? null, isSuper) as Promise<any>,
-    loadUnitDepartments(admin, profile?.hospital_id ?? null, isSuper),
+  const [d, departments, rosterData] = await Promise.all([
+    loadSchedulingEngine(admin, hid, isSuper) as Promise<any>,
+    loadUnitDepartments(admin, hid, isSuper),
+    loadRosterForWeek(admin, hid, isSuper, weekStart) as Promise<any>,
   ]);
+  const roster = rosterData?.provisioned ? rosterData.roster : null;
 
   const header = (
     <>
       <div className="flex items-start justify-between gap-3 flex-wrap">
         <div className="flex items-center gap-2"><span className="text-xl">🗓️</span><div><h1 className="text-2xl font-bold text-gray-900 tracking-tight">AI Workforce Scheduling Engine</h1><p className="text-sm text-gray-500">Intelligent scheduling that matches the right people to the right shifts — demand, competency &amp; contract aware.</p></div></div>
-        <div className="flex items-center gap-2"><span className="flex items-center gap-1.5 text-[11px] text-emerald-700"><span className="w-2 h-2 rounded-full bg-emerald-500" />Online</span><UnitFilters departments={departments} /><span className="text-xs font-semibold rounded-lg py-2 px-3 bg-emerald-600/90 text-white cursor-default" title="Roster generation + publish need a roster store + solver — next phase">✨ Generate Roster</span></div>
+        <div className="flex items-center gap-2"><span className="flex items-center gap-1.5 text-[11px] text-emerald-700"><span className="w-2 h-2 rounded-full bg-emerald-500" />Online</span><UnitFilters departments={departments} /><RosterControls week={weekStart} roster={roster} /></div>
       </div>
       <div className="flex gap-1 border-b border-gray-200 overflow-x-auto">
         {TABS.map((t, i) => <span key={t} className={`shrink-0 text-xs px-3 py-2 border-b-2 -mb-px font-medium ${i === 0 ? "border-emerald-600 text-emerald-700" : "border-transparent text-gray-300"}`} title={i === 0 ? "" : "Next phase"}>{t}</span>)}
@@ -57,6 +65,24 @@ export default async function SchedulingEngine() {
   if (!d.ready) return <div className="space-y-4">{header}<div className="bg-amber-50 border border-amber-200 rounded-xl p-6"><p className="font-semibold text-amber-900">⚙️ Insufficient planning data</p><p className="text-sm text-amber-800 mt-1">The scheduling engine needs establishment demand (op_beds / op_staffing_standards) and live assignments to compute a schedule.</p></div></div>;
 
   const c = d.coverage, dm = d.demand, cm = d.competency, cost = d.cost, f = d.fairness, km = d.keyMetrics;
+
+  // Persisted roster grid (real, solver-generated) for the selected shift
+  const rAsg = (rosterData?.assignments ?? []).filter((a: any) => a.shift_type === rshift);
+  const rDays: string[] = rosterData?.days ?? [];
+  const roleRank: Record<string, number> = { charge: 0, nurse: 1, doctor: 2, therapist: 3, support: 4 };
+  const gridUnits = [...new Set(rAsg.map((a: any) => a.unit_name))];
+  const gridRows = gridUnits.flatMap((unit: any) => {
+    const uRoles = [...new Set(rAsg.filter((a: any) => a.unit_name === unit).map((a: any) => a.role))].sort((a: any, b: any) => (roleRank[a] ?? 9) - (roleRank[b] ?? 9));
+    return uRoles.map((role: any) => ({
+      unit, role, isSup: role === "charge",
+      cells: rDays.map(date => {
+        const slots = rAsg.filter((a: any) => a.unit_name === unit && a.role === role && a.shift_date === date);
+        const filled = slots.filter((s: any) => s.status === "assigned");
+        return { required: slots.length, filled: filled.length, names: filled.map((s: any) => s.staff_name), validated: filled.length > 0 && filled.every((s: any) => s.competency_validated) };
+      }),
+    }));
+  });
+  const roleLabel: Record<string, string> = { charge: "Shift Supervisor", nurse: "RN", support: "Support", doctor: "Doctor", therapist: "Allied" };
   return (
     <div className="space-y-4">
       {header}
@@ -93,14 +119,33 @@ export default async function SchedulingEngine() {
       </div>
 
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
-        {/* Draft roster (honest) */}
+        {/* Draft roster (real, solver-generated) */}
         <div className={`${card} p-5 xl:col-span-2`}>
-          <h3 className="text-sm font-bold text-gray-900 mb-2">Draft roster preview</h3>
-          <div className="border border-dashed border-gray-200 rounded-lg p-5 text-center">
-            <p className="text-3xl mb-1">🗓️</p>
-            <p className="text-sm font-semibold text-gray-700">Roster generation is a next-phase build</p>
-            <p className="text-[11px] text-gray-400 mt-1 max-w-lg mx-auto">Generating a named weekly roster (assigning specific staff to each unit&apos;s day/night shift slots) needs an optimising solver and a versioned roster store. Rather than fabricate staff-in-cells, the engine currently surfaces the real demand-vs-coverage above and the constraint risks alongside. The solver, what-if scenarios and publish/approve flow are the next build — the demand foundation (<Link href="/unit-manager/workforce-management/establishment" className="text-emerald-700 hover:underline">Establishment engine</Link>) is already live.</p>
+          <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
+            <h3 className="text-sm font-bold text-gray-900">Draft roster preview {roster && <span className={`text-[10px] px-1.5 py-0.5 rounded ${roster.status === "published" ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-700"}`}>{roster.status === "published" ? "Published" : "Draft"}</span>}</h3>
+            {roster && <div className="flex gap-1"><Link href="/unit-manager/scheduling-engine" className={`text-[10px] px-2 py-1 rounded-full ${rshift === "day" ? "bg-emerald-600 text-white" : "bg-gray-100 text-gray-500"}`}>Day (07–19)</Link><Link href="/unit-manager/scheduling-engine?rshift=night" className={`text-[10px] px-2 py-1 rounded-full ${rshift === "night" ? "bg-emerald-600 text-white" : "bg-gray-100 text-gray-500"}`}>Night (19–07)</Link></div>}
           </div>
+          {!rosterData?.provisioned ? (
+            <div className="border border-dashed border-gray-200 rounded-lg p-5 text-center"><p className="text-3xl mb-1">🗓️</p><p className="text-sm font-semibold text-gray-700">Roster store not provisioned</p><p className="text-[11px] text-gray-400 mt-1">Run migration <code>080</code> to enable roster generation, then use <b>Generate Roster</b>.</p></div>
+          ) : !roster ? (
+            <div className="border border-dashed border-gray-200 rounded-lg p-5 text-center"><p className="text-3xl mb-1">✨</p><p className="text-sm font-semibold text-gray-700">No roster for week of {weekStart}</p><p className="text-[11px] text-gray-400 mt-1">Press <b>Generate Roster</b> above — the solver fills each unit&apos;s day/night posts from real establishment demand + available staff, preferring competency-current clinicians.</p></div>
+          ) : (
+            <div className="overflow-x-auto"><table className="w-full text-[11px]">
+              <thead><tr className="text-gray-400 text-left border-b border-gray-100"><th className="py-1.5 pr-2 font-medium">Unit</th><th className="py-1.5 pr-2 font-medium">Role</th>{rDays.map(dt => <th key={dt} className="py-1.5 px-1 font-medium text-center">{dt.slice(5)}</th>)}</tr></thead>
+              <tbody>{gridRows.map((row: any, i: number) => (
+                <tr key={i} className="border-b border-gray-50">
+                  <td className="py-1.5 pr-2 text-gray-700">{i === 0 || gridRows[i - 1].unit !== row.unit ? row.unit : ""}</td>
+                  <td className={`py-1.5 pr-2 ${row.isSup ? "text-violet-700 font-medium" : "text-gray-600"}`}>{roleLabel[row.role] ?? row.role}</td>
+                  {row.cells.map((cell: any, j: number) => {
+                    const dot = cell.required === 0 ? "bg-gray-200" : cell.filled >= cell.required ? "bg-emerald-500" : cell.filled > 0 ? "bg-amber-400" : "bg-rose-400";
+                    return <td key={j} className="py-1.5 px-1 text-center"><div className="flex items-center justify-center gap-1"><span className={`w-1.5 h-1.5 rounded-full shrink-0 ${dot}`} /><span className="text-gray-700 tabular-nums" title={cell.names.join(", ")}>{cell.filled}/{cell.required}{!cell.validated && cell.filled > 0 ? "*" : ""}</span></div></td>;
+                  })}
+                </tr>
+              ))}</tbody>
+            </table>
+            <div className="flex items-center gap-3 mt-2 pt-2 border-t border-gray-100 text-[10px] text-gray-400"><span className="flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />Covered</span><span className="flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-amber-400" />Partial</span><span className="flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-rose-400" />Uncovered</span><span>* = override (no validated competency)</span><span className="ml-auto">{roster.slots_filled}/{roster.slots_total} posts · {roster.coverage_score}% cover · {roster.competency_score ?? "—"}% competency</span></div>
+            </div>
+          )}
         </div>
 
         {/* Constraint & risk alerts */}
@@ -125,7 +170,7 @@ export default async function SchedulingEngine() {
         </div>
       </div>
 
-      <p className="text-[11px] text-gray-400 pb-4">The AI Workforce Scheduling Engine (WSE-001) is the platform scheduling service&apos;s review dashboard. Coverage, required-vs-assigned, competency match, fairness and constraint alerts are computed from the <Link href="/unit-manager/workforce-management/establishment" className="text-emerald-700 hover:underline">Establishment engine</Link>&apos;s demand + live assignments (op_patient_assignments.competency_validated) + expiring competencies; cost/overtime/agency are derived from FTE gaps at a transparent blended rate (£{cost.rate}/hr). The optimising roster generator (named staff → shift slots), what-if simulator, scenario planner and publish/approve workflow need a roster store + solver — honest next-phase. No roster is published without Unit Manager approval; unsafe coverage/competency blocks publication unless an authorised override is recorded. <Link href="/unit-manager" className="text-emerald-700 hover:underline">← Unit Manager</Link></p>
+      <p className="text-[11px] text-gray-400 pb-4">The AI Workforce Scheduling Engine (WSE-001) is the platform scheduling service&apos;s review dashboard. Coverage, required-vs-assigned, competency match, fairness and constraint alerts are computed from the <Link href="/unit-manager/workforce-management/establishment" className="text-emerald-700 hover:underline">Establishment engine</Link>&apos;s demand + live assignments (op_patient_assignments.competency_validated) + expiring competencies; cost/overtime/agency are derived from FTE gaps at a transparent blended rate (£{cost.rate}/hr). The roster generator is now REAL (WSE-001B, migration 080): a greedy demand-matching solver fills each unit&apos;s day/night posts from establishment demand + available staff (max 4 shifts/wk, one shift/day, competency-preferred), persists a versioned draft to op_rosters/op_roster_assignments and publishes on approval — no roster is published without Unit Manager approval, and below-safe coverage blocks publication unless an override reason is recorded. Unfilled posts are stored as &apos;uncovered&apos; (never fabricated). Availability uses the current staff pool (no future-leave store yet); the what-if simulator &amp; scenario planner remain next-phase. <Link href="/unit-manager" className="text-emerald-700 hover:underline">← Unit Manager</Link></p>
     </div>
   );
 }
