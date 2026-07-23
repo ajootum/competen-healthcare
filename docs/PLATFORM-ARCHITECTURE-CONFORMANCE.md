@@ -103,7 +103,7 @@ provides it, honest where it doesn't self-manage the infra.
 | Activity Timeline | ✅ | `audit_log` / activity feeds |
 | Knowledge Reference | ✅ | frameworks/competencies/taxonomies |
 | Configuration Profile | 🟡 | templates + per-entity settings + WCE-001 workspace config engine (resolver/Designer/versioning); no universal config service |
-| Collaboration | ⬜ | not built (buildable — next: `plat_comments` threaded comments/mentions, needs a migration) |
+| Collaboration | ✅ | comment primitive (`lib/platform/collaboration.ts`, `plat_comments`/078, `/api/platform/comments`) — threaded comments + @-mentions, soft edit/delete, moderation console; entity-page embedding + mention→notification next-phase |
 | Audit Timeline | ✅ | audit feeds |
 
 ## PDS-000 — Platform Data Services (data architecture)
@@ -129,21 +129,22 @@ The original backlog is now shipped and verified: Background Job runner + regist
 service (PFS §12 / POS-001H), AI Runtime Gateway governance (PFS §15), real-time SSE
 push (POS-001J), the generic Workflow/Approval engine (PCS §10 / POS-001D), and this
 cycle's **Platform Search Service** (PFS Search / PCS Search Index), **Unified Document
-Service** (PCS Document) and **Localization Resource Service** (PFS Localization).
+Service** (PCS Document), **Localization Resource Service** (PFS Localization) and the
+**Collaboration primitive** (PCS Collaboration — `plat_comments`, migration 078).
 
 ## Genuine gaps worth building next (in priority order)
 
 Both missing *and* buildable in this stack (Supabase + Next) — distinct from the
 infra-scale blueprint elements below:
 
-1. **Collaboration primitive** — `plat_comments` threaded comments / @-mentions on any
-   entity (PCS Collaboration). The one remaining buildable gap that needs a migration.
-2. **Write-path Document service** — upload, versioning and retention policies over the
+1. **Write-path Document service** — upload, versioning and retention policies over the
    read-only document index (PCS Document write-side).
-3. **Universal service-config store** — generalise WCE-001 beyond workspace config into
+2. **Universal service-config store** — generalise WCE-001 beyond workspace config into
    a platform-wide configuration service (PFS Configuration / PCS Configuration Profile).
-4. **Translation-management workflow** — import/export and per-tenant overrides over the
+3. **Translation-management workflow** — import/export and per-tenant overrides over the
    Localization Resource Service seed bundles.
+4. **Collaboration entity-embedding** — surface `loadThread` on CAPA/escalation/tenant
+   pages and resolve @-mentions to notifications (the primitive itself is now built).
 
 ## Honest infra-scale gaps (deliberately not built)
 
