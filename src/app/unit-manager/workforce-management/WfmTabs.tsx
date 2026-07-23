@@ -7,6 +7,7 @@ import { usePathname } from "next/navigation";
 // tabs link, unbuilt render muted ("next phase") instead of dead-linking.
 const TABS: { label: string; href: string; built?: boolean }[] = [
   { label: "Overview", href: "/unit-manager/workforce-management", built: true },
+  { label: "Establishment & Demand", href: "/unit-manager/workforce-management/establishment", built: true },
   { label: "Staffing Engine", href: "/unit-manager/workforce-management/staffing-engine", built: true },
   { label: "Team Assignments", href: "/unit-manager/workforce-management/team-assignments", built: true },
   { label: "Roster & Scheduling", href: "/unit-manager/workforce-management/roster" },

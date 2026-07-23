@@ -49,6 +49,7 @@ const NAV_GROUPS: { title: string; items: NavItem[] }[] = [
   ] },
   { title: "Workforce Management", items: [
     { label: "Overview",             href: "/unit-manager/workforce-management", icon: "👥" },
+    { label: "Establishment & Demand", href: "/unit-manager/workforce-management/establishment", icon: "📐" },
     { label: "Staffing Engine",      href: "/unit-manager/workforce-management/staffing-engine", icon: "🧑‍⚕️" },
     { label: "Team Assignments",     href: "/unit-manager/workforce-management/team-assignments", icon: "🧩" },
     { label: "Roster & Scheduling",  icon: "🗓️", soon: true },
