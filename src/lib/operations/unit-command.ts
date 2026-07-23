@@ -318,55 +318,90 @@ export async function loadShiftIntelligence(admin: any, hid: string | null, isSu
   return { provisioned: true as const, count: cur.length, kpis, matrix, trend, heat, dow: DOW, bestShift, worstShift, recentReviews, aiSummary, recommendations, insights };
 }
 
-// ── Executive Action Centre (UMW-003 §3) ─────────────────────────────────────
-// Single management work queue aggregated from the real operational + quality +
-// competency stores. Categories with no backing store (leave, staffing requests,
-// budget, policy approvals) are reported to the page as honest empty channels.
+// ── Executive Actions Centre (UMW-005) ───────────────────────────────────────
+// The Unit Manager's unified decision & approval queue — approvals, escalations,
+// CAPA/improvement actions and competency validations from the real operational,
+// quality and competency stores, prioritised by clinical risk + urgency, with
+// distribution/status analytics, AI-ranked recommendations, upcoming deadlines and
+// a completed-this-period count. Additional request channels (leave, staffing,
+// policy, budget, executive messages) have no backing store yet → honest.
+// Normalised item state for the status analytics.
+const STATE_OF: Record<string, string> = {
+  open: "Open", reported: "Open", overdue: "Open",
+  pending: "Pending", awaiting_action: "Pending",
+  in_progress: "In Progress", investigating: "In Progress", acknowledged: "In Progress",
+};
 export async function loadExecutiveActionCentre(admin: any, hid: string | null, isSuper: boolean, dept?: string) {
   const scope = scoped(isSuper, hid);
   const today = new Date().toISOString().slice(0, 10);
+  const since = new Date(); since.setDate(since.getDate() - 30); const since30 = since.toISOString().slice(0, 10);
   const items: any[] = [];
 
-  // Escalations (Critical Alerts channel) — department via the linked patient.
   try {
-    const { data } = await scope(admin.from("op_escalations").select("id, level, summary, escalation_type, status, created_at, profiles!raised_by(full_name), op_patients!patient_id(label, department_id)").neq("status", "resolved").neq("status", "cancelled").order("level", { ascending: false }).limit(50));
-    for (const e of data ?? []) { if (dept && e.op_patients?.department_id !== dept) continue; items.push({ id: e.id, channel: "Escalation", priority: e.level >= 4 ? "High" : e.level >= 3 ? "Medium" : "Low", item: `Escalation L${e.level}${e.op_patients?.label ? ` · ${e.op_patients.label}` : ""}`, details: e.summary ?? e.escalation_type ?? "—", by: e.profiles?.full_name ?? "—", at: e.created_at, status: e.status }); }
+    const { data } = await scope(admin.from("op_escalations").select("id, level, summary, escalation_type, status, created_at, response_deadline, profiles!raised_by(full_name), assigned:profiles!assigned_responder(full_name), op_patients!patient_id(label, department_id)").neq("status", "resolved").neq("status", "cancelled").order("level", { ascending: false }).limit(60));
+    for (const e of data ?? []) { if (dept && e.op_patients?.department_id !== dept) continue; items.push({ id: e.id, type: "Escalation", priority: e.level >= 4 ? "High" : e.level >= 3 ? "Medium" : "Low", item: `Escalation L${e.level}${e.op_patients?.label ? ` · ${e.op_patients.label}` : ""}`, details: e.summary ?? e.escalation_type ?? "—", by: e.profiles?.full_name ?? "—", owner: e.assigned?.full_name ?? "—", at: e.created_at, due: e.response_deadline ? e.response_deadline.slice(0, 10) : null, status: e.status, state: STATE_OF[e.status] ?? "Open", critical: e.level >= 4 }); }
   } catch { /* pre-migration */ }
 
-  // Incident reviews (op_incidents, migration 073) — department via the linked shift.
   try {
-    const { data } = await scope(admin.from("op_incidents").select("id, incident_type, severity, status, created_at, description, reported_by_name, near_miss, profiles!reported_by(full_name), op_shifts!shift_id(department_id)").in("status", ["reported", "investigating", "awaiting_action"]).order("created_at", { ascending: false }).limit(50));
-    for (const i of data ?? []) { if (dept && i.op_shifts?.department_id !== dept) continue; items.push({ id: i.id, channel: "Incident Review", priority: i.severity === "high" || i.severity === "critical" ? "High" : "Medium", item: `${i.incident_type} incident${i.near_miss ? " (near miss)" : ""}`, details: i.description ?? `${i.incident_type} · ${i.status}`, by: i.profiles?.full_name ?? i.reported_by_name ?? "—", at: i.created_at, status: i.status }); }
+    const { data } = await scope(admin.from("op_incidents").select("id, incident_type, severity, status, created_at, description, reported_by_name, near_miss, profiles!reported_by(full_name), op_shifts!shift_id(department_id)").in("status", ["reported", "investigating", "awaiting_action"]).order("created_at", { ascending: false }).limit(60));
+    for (const i of data ?? []) { if (dept && i.op_shifts?.department_id !== dept) continue; items.push({ id: i.id, type: "Incident", priority: i.severity === "high" || i.severity === "critical" ? "High" : "Medium", item: `${i.incident_type} incident${i.near_miss ? " (near miss)" : ""}`, details: i.description ?? `${i.incident_type} · ${i.status}`, by: i.profiles?.full_name ?? i.reported_by_name ?? "—", owner: "—", at: i.created_at, due: null, status: i.status, state: STATE_OF[i.status] ?? "Open", critical: i.severity === "critical" }); }
   } catch { /* pre-migration */ }
 
-  // Improvement / CAPA actions (op_quality_actions, migration 073) — dept via shift.
   try {
-    const { data } = await scope(admin.from("op_quality_actions").select("id, title, action_type, status, priority, due_at, owner_name, created_at, op_shifts!shift_id(department_id)").in("status", ["open", "in_progress", "overdue"]).order("created_at", { ascending: false }).limit(50));
-    for (const a of data ?? []) { if (dept && a.op_shifts?.department_id !== dept) continue; items.push({ id: a.id, channel: "Improvement Action", priority: a.priority === "high" ? "High" : a.status === "overdue" ? "High" : "Medium", item: a.title ?? a.action_type, details: `${a.action_type.replace(/_/g, " ")} · ${a.status}`, by: a.owner_name ?? "Quality", at: a.created_at, due: a.due_at ? a.due_at.slice(0, 10) : null, status: a.status }); }
+    const { data } = await scope(admin.from("op_quality_actions").select("id, title, action_type, status, priority, due_at, owner_name, created_at, op_shifts!shift_id(department_id)").in("status", ["open", "in_progress", "overdue"]).order("created_at", { ascending: false }).limit(60));
+    for (const a of data ?? []) { if (dept && a.op_shifts?.department_id !== dept) continue; items.push({ id: a.id, type: "Improvement", priority: a.priority === "high" ? "High" : a.status === "overdue" ? "High" : "Medium", item: a.title ?? a.action_type, details: `${a.action_type.replace(/_/g, " ")} · ${a.status}`, by: a.owner_name ?? "Quality", owner: a.owner_name ?? "—", at: a.created_at, due: a.due_at ? a.due_at.slice(0, 10) : null, status: a.status, state: STATE_OF[a.status] ?? "Open", critical: false }); }
   } catch { /* pre-migration */ }
 
-  // Competency approvals — passing scores awaiting educator validation. No
-  // department dimension in the competency store, so only shown unit-wide.
   if (!dept) try {
     const { data: cyc } = await scope(admin.from("competency_cycles").select("id").eq("status", "active").limit(3000));
     const ids = (cyc ?? []).map((c: any) => c.id);
     if (ids.length) {
       const { data: scores } = await admin.from("competency_scores").select("id, created_at, is_passing, educator_validated").in("cycle_id", ids).eq("is_passing", true).eq("educator_validated", false).limit(200);
-      for (const s of scores ?? []) items.push({ id: s.id, channel: "Competency Approval", priority: "Medium", item: "Validation pending", details: "Passing score awaiting educator validation", by: "Assessment", at: s.created_at, status: "pending" });
+      for (const s of scores ?? []) items.push({ id: s.id, type: "Competency", priority: "Medium", item: "Validation pending", details: "Passing score awaiting educator validation", by: "Assessment", owner: "Educator", at: s.created_at, due: null, status: "pending", state: "Pending", critical: false });
     }
   } catch { /* pre-migration */ }
 
-  // Derived queue metrics.
-  const overdue = items.filter(i => i.due && i.due < today).length;
-  const dueToday = items.filter(i => i.due === today).length;
+  // Completed this period (last 30 days) — real resolved/closed/completed counts.
+  let completed = 0;
+  try {
+    const [rEsc, rInc, rQa] = await Promise.all([
+      scope(admin.from("op_escalations").select("id", { count: "exact", head: true }).eq("status", "resolved").gte("resolved_at", since30)),
+      scope(admin.from("op_incidents").select("id", { count: "exact", head: true }).eq("status", "closed").gte("updated_at", since30)),
+      scope(admin.from("op_quality_actions").select("id", { count: "exact", head: true }).eq("status", "completed").gte("updated_at", since30)),
+    ]);
+    completed = (rEsc.error ? 0 : rEsc.count ?? 0) + (rInc.error ? 0 : rInc.count ?? 0) + (rQa.error ? 0 : rQa.count ?? 0);
+  } catch { /* fail-soft */ }
+
+  // AI priority ranking: critical clinical first, then High, then overdue, then age.
+  const rank = (i: any) => (i.critical ? 0 : 0) + ({ High: 1, Medium: 3, Low: 5 } as any)[i.priority] + (i.due && i.due < today ? -1 : 0);
+  items.sort((a, b) => rank(a) - rank(b) || (a.at < b.at ? 1 : -1));
+
   const counts = {
     total: items.length,
     high: items.filter(i => i.priority === "High").length,
-    dueToday, overdue,
-    pending: items.filter(i => ["pending", "reported", "open", "acknowledged"].includes(i.status)).length,
+    dueToday: items.filter(i => i.due === today).length,
+    overdue: items.filter(i => i.due && i.due < today).length,
+    inProgress: items.filter(i => i.state === "In Progress").length,
+    completed,
   };
-  // Channels with no backing store yet — reported honestly, not faked.
-  const honestChannels = ["Leave Requests", "Staffing Requests", "Budget Requests", "Policy Approvals", "Executive Messages"];
 
-  return { items: items.sort((a, b) => ({ High: 0, Medium: 1, Low: 2 } as any)[a.priority] - ({ High: 0, Medium: 1, Low: 2 } as any)[b.priority]), counts, honestChannels };
+  // Distribution by category + status breakdown.
+  const TYPES = ["Escalation", "Approval", "Improvement", "Incident", "Competency"];
+  const distribution = TYPES.map(t => ({ type: t, n: items.filter(i => i.type === t).length })).filter(d => d.n > 0)
+    .map(d => ({ ...d, pct: items.length ? Math.round((d.n / items.length) * 100) : 0 }));
+  const byStatus = { Open: items.filter(i => i.state === "Open").length, Pending: items.filter(i => i.state === "Pending").length, "In Progress": counts.inProgress, "On Hold": 0, Completed: completed };
+
+  // AI recommended priority actions (top of the ranked queue with a reason).
+  const aiRecommendations = items.slice(0, 3).map(i => ({
+    title: i.item, type: i.type,
+    reason: i.critical ? "Critical clinical risk — review within 30 minutes." : i.priority === "High" ? "High operational impact — action recommended." : i.due && i.due < today ? "Overdue — resolve to clear the backlog." : "Pending review.",
+    action: i.type === "Approval" || i.type === "Improvement" ? "Approve" : i.type === "Competency" ? "Validate" : "Review",
+  }));
+
+  // Upcoming due dates (items with a deadline, soonest first).
+  const upcomingDue = items.filter(i => i.due).sort((a, b) => (a.due < b.due ? -1 : 1)).slice(0, 4)
+    .map(i => ({ item: i.item, due: i.due, overdue: i.due < today, dueToday: i.due === today }));
+
+  const honestChannels = ["Leave Requests", "Staffing Requests", "Policy Approvals", "Budget Requests", "Executive Messages"];
+  return { items, counts, distribution, byStatus, aiRecommendations, upcomingDue, honestChannels };
 }
