@@ -186,58 +186,136 @@ export async function loadUnitOperationsCentre(admin: any, hid: string | null, i
   };
 }
 
-// ── Shift Intelligence (UMW-003 §2) ──────────────────────────────────────────
-// Compares performance across shifts + supervisors from persisted shift_metrics.
+// ── Shift Intelligence (UMW-004) ─────────────────────────────────────────────
+// Enterprise cross-shift intelligence over persisted shift_metrics (the per-shift
+// performance snapshot). Derives performance/pressure/safety/workforce scores, a
+// shift-type comparison matrix, multi-metric trend, risk heat map, best/worst
+// shift and rule-based AI summary + management recommendations, with period-over-
+// period deltas. Handover quality (op_handovers unwritten) and precise escalation
+// medians beyond resolved rows are honest states.
+const avg = (arr: any[], f: (x: any) => number | null | undefined) => { const v = arr.map(f).filter((x): x is number => x != null); return v.length ? v.reduce((a, b) => a + b, 0) / v.length : null; };
+const median = (v: number[]) => { if (!v.length) return null; const s = [...v].sort((a, b) => a - b); const m = Math.floor(s.length / 2); return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2; };
+const bucketOf = (st: string) => (st === "evening" ? "evening" : st === "night" || st === "on_call" ? "night" : "day");
+const DOW = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+
+// Per-shift derived scores (0–100) from a shift_metrics row.
+function enrich(r: any) {
+  const cov = r.staffing_rostered ? Math.round(((r.staffing_present ?? 0) / r.staffing_rostered) * 100) : null;
+  const gap = (r.staffing_rostered ?? 0) - (r.staffing_present ?? 0);
+  const esc = r.open_escalations ?? 0, inc = r.incident_count ?? 0, occ = r.bed_occupancy_pct ?? 0, hi = r.high_acuity_count ?? 0;
+  const pressure = Math.round(0.35 * occ + 0.25 * Math.min(100, hi * 15) + 0.25 * Math.min(100, esc * 20) + 0.15 * Math.min(100, Math.max(0, gap) * 25));
+  const safetyParts = [r.observation_compliance_pct, Math.max(0, 100 - inc * 20), Math.max(0, 100 - esc * 10)].filter((x: any) => x != null) as number[];
+  const safety = safetyParts.length ? Math.round(safetyParts.reduce((a, b) => a + b, 0) / safetyParts.length) : null;
+  const wfParts = [cov, r.skill_mix_compliance_pct, r.task_completion_pct].filter((x: any) => x != null) as number[];
+  const workforce = wfParts.length ? Math.round(wfParts.reduce((a, b) => a + b, 0) / wfParts.length) : null;
+  return {
+    date: r.op_shifts.shift_date, shift_type: r.op_shifts.shift_type, bucket: bucketOf(r.op_shifts.shift_type),
+    supervisor: r.op_shifts.profiles?.full_name ?? "—",
+    performance: r.overall_score, pressure, safety, workforce, coverage: cov, staffingGap: gap,
+    occupancy: occ, acuity: hi, escalations: esc, incidents: inc,
+    taskCompletion: r.task_completion_pct, obsCompliance: r.observation_compliance_pct, skillMix: r.skill_mix_compliance_pct,
+  };
+}
+
 export async function loadShiftIntelligence(admin: any, hid: string | null, isSuper: boolean, opts: { dept?: string; period?: string } = {}) {
   const scope = scoped(isSuper, hid);
   const res = await scope(admin.from("shift_metrics")
-    .select("overall_score, staffing_present, staffing_rostered, open_escalations, incident_count, bed_occupancy_pct, task_completion_pct, computed_at, op_shifts!shift_id(shift_date, shift_type, department_id, profiles!supervisor_id(full_name))")
-    .order("computed_at", { ascending: false }).limit(400));
-  if (missing(res.error)) return { provisioned: false as const, shifts: [], trend: [], supervisors: [], topIssues: [] };
-  const cutoff = periodCutoff(opts.period);
-  const rows = (res.data ?? []).filter((r: any) => r.op_shifts
-    && (!opts.dept || r.op_shifts.department_id === opts.dept)
-    && (r.op_shifts.shift_date ?? "") >= cutoff);
+    .select("overall_score, staffing_present, staffing_rostered, skill_mix_compliance_pct, observation_compliance_pct, open_escalations, incident_count, high_acuity_count, bed_occupancy_pct, task_completion_pct, computed_at, op_shifts!shift_id(shift_date, shift_type, department_id, profiles!supervisor_id(full_name))")
+    .order("computed_at", { ascending: false }).limit(600));
+  if (missing(res.error)) return { provisioned: false as const, count: 0 };
 
-  const shifts = rows.map((r: any) => ({
-    date: r.op_shifts.shift_date, shift_type: r.op_shifts.shift_type,
-    supervisor: r.op_shifts.profiles?.full_name ?? "—",
-    health: r.overall_score, escalations: r.open_escalations ?? 0, incidents: r.incident_count ?? 0,
-    staffingGap: (r.staffing_rostered ?? 0) - (r.staffing_present ?? 0),
-    occupancy: r.bed_occupancy_pct, taskCompletion: r.task_completion_pct,
-  }));
+  const days = PERIOD_DAYS[opts.period ?? "7d"] ?? 7;
+  const curCut = periodCutoff(opts.period);
+  const prevD = new Date(); prevD.setDate(prevD.getDate() - (days * 2 - 1)); const prevCut = prevD.toISOString().slice(0, 10);
+  const all = (res.data ?? []).filter((r: any) => r.op_shifts && (!opts.dept || r.op_shifts.department_id === opts.dept)).map(enrich);
+  const cur = all.filter((s: any) => s.date >= curCut);
+  const prev = all.filter((s: any) => s.date >= prevCut && s.date < curCut);
 
-  // Health-score trend grouped by shift type (chronological).
-  const byType: Record<string, { date: string; score: number }[]> = { day: [], evening: [], night: [] };
-  for (const s of [...shifts].reverse()) {
-    const bucket = s.shift_type === "evening" ? "evening" : s.shift_type === "night" || s.shift_type === "on_call" ? "night" : "day";
-    if (s.health != null) byType[bucket].push({ date: s.date, score: s.health });
-  }
-  const trend = Object.entries(byType).map(([type, series]) => ({ type, series: series.slice(-14) }));
+  // Escalation burden (resolved response times + critical count) over the current period.
+  let critical = 0, medianResolution: number | null = null;
+  try {
+    const escRes = await scope(admin.from("op_escalations").select("level, created_at, resolved_at").gte("created_at", curCut).limit(1000));
+    const escs = escRes.data ?? [];
+    critical = escs.filter((e: any) => e.level >= 4).length;
+    const durs = escs.filter((e: any) => e.resolved_at).map((e: any) => (new Date(e.resolved_at).getTime() - new Date(e.created_at).getTime()) / 60000).filter((m: number) => m >= 0);
+    medianResolution = median(durs);
+  } catch { /* fail-soft */ }
 
-  // Supervisor performance aggregate.
-  const bySup = new Map<string, { name: string; shifts: number; totalHealth: number; healthN: number; escalations: number }>();
-  for (const s of shifts) {
-    const m = bySup.get(s.supervisor) ?? { name: s.supervisor, shifts: 0, totalHealth: 0, healthN: 0, escalations: 0 };
-    m.shifts++; m.escalations += s.escalations; if (s.health != null) { m.totalHealth += s.health; m.healthN++; }
-    bySup.set(s.supervisor, m);
-  }
-  const supervisors = [...bySup.values()].filter(s => s.name !== "—")
-    .map(s => ({ name: s.name, shifts: s.shifts, avgHealth: s.healthN ? Math.round(s.totalHealth / s.healthN) : null, avgEscalations: s.shifts ? +(s.escalations / s.shifts).toFixed(1) : 0 }))
-    .sort((a, b) => (b.avgHealth ?? 0) - (a.avgHealth ?? 0));
+  const roundOrNull = (x: number | null) => (x == null ? null : Math.round(x));
+  const delta = (c: number | null, p: number | null) => (c == null || p == null ? null : Math.round(c - p));
+  const kpi = (f: (x: any) => number | null) => ({ value: roundOrNull(avg(cur, f)), delta: delta(avg(cur, f), avg(prev, f)) });
+  const kpis = {
+    performance: kpi(s => s.performance), pressure: kpi(s => s.pressure), safety: kpi(s => s.safety),
+    workforce: kpi(s => s.workforce), taskCompletion: kpi(s => s.taskCompletion),
+    escalationBurden: { value: cur.reduce((a: number, s: any) => a + s.escalations, 0), critical, medianResolution: medianResolution != null ? Math.round(medianResolution) : null },
+  };
 
-  // Recurring operational risks (rule-based over the window).
-  const topIssues: { rank: number; title: string; sub: string }[] = [];
-  const staffingGapShifts = shifts.filter((s: any) => s.staffingGap > 0).length;
-  if (staffingGapShifts) topIssues.push({ rank: topIssues.length + 1, title: "Staffing gaps recurring", sub: `${staffingGapShifts} of ${shifts.length} shifts understaffed` });
-  const highEsc = shifts.filter((s: any) => s.escalations >= 3).length;
-  if (highEsc) topIssues.push({ rank: topIssues.length + 1, title: "Elevated escalations", sub: `${highEsc} shift(s) with ≥3 open escalations` });
-  const incidentShifts = shifts.filter((s: any) => s.incidents > 0).length;
-  if (incidentShifts) topIssues.push({ rank: topIssues.length + 1, title: "Incidents logged", sub: `${incidentShifts} shift(s) recorded an incident` });
-  const lowTask = shifts.filter((s: any) => s.taskCompletion != null && s.taskCompletion < 70).length;
-  if (lowTask) topIssues.push({ rank: topIssues.length + 1, title: "Task completion below target", sub: `${lowTask} shift(s) under 70% task completion` });
+  // Comparison matrix by shift-type bucket.
+  const buckets = ["day", "evening", "night"] as const;
+  const byBucket = (b: string) => cur.filter((s: any) => s.bucket === b);
+  const prevByBucket = (b: string) => prev.filter((s: any) => s.bucket === b);
+  const trendArrow = (metric: (x: any) => number | null, invert = false) => (b: string) => {
+    const c = avg(byBucket(b), metric), p = avg(prevByBucket(b), metric);
+    if (c == null || p == null || Math.abs(c - p) < 0.5) return "→";
+    return (c > p) === !invert ? "↑" : "↓";
+  };
+  const matrixRow = (metric: string, f: (x: any) => number | null, fmt: (n: number | null) => string, target: string, invert = false) => ({
+    metric, target, day: fmt(roundOrNull(avg(byBucket("day"), f))), evening: fmt(roundOrNull(avg(byBucket("evening"), f))), night: fmt(roundOrNull(avg(byBucket("night"), f))),
+    trend: trendArrow(f, invert)("day"),
+  });
+  const pct = (n: number | null) => (n == null ? "—" : `${n}%`);
+  const num = (n: number | null) => (n == null ? "—" : `${n}`);
+  const matrix = [
+    matrixRow("Average Occupancy", s => s.occupancy, pct, "< 85%", true),
+    matrixRow("High-Acuity Patients", s => s.acuity, num, "—"),
+    matrixRow("Staffing Coverage", s => s.coverage, pct, "≥ 95%"),
+    matrixRow("Task Completion", s => s.taskCompletion, pct, "≥ 90%"),
+    matrixRow("Observation Compliance", s => s.obsCompliance, pct, "≥ 95%"),
+    matrixRow("Open Escalations", s => s.escalations, num, "0", true),
+    matrixRow("Incidents", s => s.incidents, num, "0", true),
+  ];
 
-  return { provisioned: true as const, shifts, trend, supervisors, topIssues };
+  // Multi-metric trend by date.
+  const dates = [...new Set(cur.map((s: any) => s.date))].sort();
+  const trend = dates.slice(-14).map(dt => { const day = cur.filter((s: any) => s.date === dt); return { date: dt as string, performance: roundOrNull(avg(day, s => s.performance)), pressure: roundOrNull(avg(day, s => s.pressure)), staffing: roundOrNull(avg(day, s => s.coverage)), obs: roundOrNull(avg(day, s => s.obsCompliance)) }; });
+
+  // Risk heat map — day-of-week × shift-type bucket (lower score = higher risk).
+  const risk = (score: number | null) => score == null ? "none" : score >= 85 ? "low" : score >= 70 ? "medium" : score >= 50 ? "high" : "critical";
+  const heat = buckets.map(b => ({ bucket: b, cells: DOW.map((_, i) => { const cells = cur.filter((s: any) => s.bucket === b && ((new Date(s.date).getDay() + 6) % 7) === i); const sc = roundOrNull(avg(cells, s => s.performance)); return { score: sc, risk: risk(sc), n: cells.length }; }) }));
+
+  // Best / worst shift.
+  const scored = cur.filter((s: any) => s.performance != null).sort((a: any, b: any) => b.performance - a.performance);
+  const bestShift = scored[0] ?? null;
+  const worstShift = scored.length ? scored[scored.length - 1] : null;
+
+  // Recent reviews (latest shifts).
+  const recentReviews = [...cur].sort((a: any, b: any) => (b.date > a.date ? 1 : -1)).slice(0, 6);
+
+  // AI summary + recommendations + insights (rule-based over the window).
+  const bAvg = (b: string) => roundOrNull(avg(byBucket(b), s => s.performance));
+  const worstBucket = buckets.map(b => ({ b, s: bAvg(b) })).filter(x => x.s != null).sort((a, b) => (a.s! - b.s!))[0];
+  const aiSummary = cur.length === 0 ? "No completed shifts captured in this period." : [
+    worstBucket ? `${worstBucket.b[0].toUpperCase()}${worstBucket.b.slice(1)} shifts performed ${worstBucket.b === "day" ? "" : "below day shifts "}at ${worstBucket.s}% average performance.` : "",
+    kpis.escalationBurden.value ? `${kpis.escalationBurden.value} escalation(s)${critical ? `, ${critical} critical` : ""} across ${cur.length} shifts.` : "",
+    kpis.safety.value != null ? `Average safety ${kpis.safety.value}%; workforce effectiveness ${kpis.workforce.value ?? "—"}%.` : "",
+  ].filter(Boolean).join(" ");
+
+  const recommendations: { sev: string; title: string; due: string }[] = [];
+  if (worstBucket && worstBucket.s != null && worstBucket.s < 75) recommendations.push({ sev: "High", title: `Increase senior coverage on ${worstBucket.b} shifts`, due: "2 days" });
+  if (avg(cur, s => s.obsCompliance) != null && (avg(cur, s => s.obsCompliance) as number) < 90) recommendations.push({ sev: "High", title: "Investigate observation delays", due: "3 days" });
+  if (critical) recommendations.push({ sev: "Critical", title: `Review ${critical} critical escalation(s)`, due: "today" });
+  if (avg(cur, s => s.staffingGap) != null && (avg(cur, s => s.staffingGap) as number) > 0) recommendations.push({ sev: "Medium", title: "Close recurring staffing gaps", due: "5 days" });
+  if (avg(cur, s => s.taskCompletion) != null && (avg(cur, s => s.taskCompletion) as number) < 90) recommendations.push({ sev: "Medium", title: "Standardise task handover acceptance", due: "7 days" });
+
+  const insights: string[] = [];
+  const nightAvg = bAvg("night"), dayAvg = bAvg("day");
+  if (nightAvg != null && dayAvg != null && nightAvg < dayAvg) insights.push(`Night shifts run ${dayAvg - nightAvg} points below day shifts.`);
+  if (critical) insights.push(`${critical} critical escalation(s) in the period — concentrate senior review there.`);
+  if (kpis.escalationBurden.medianResolution != null) insights.push(`Median escalation resolution ${kpis.escalationBurden.medianResolution} min.`);
+  const lowObs = cur.filter((s: any) => s.obsCompliance != null && s.obsCompliance < 90).length;
+  if (lowObs) insights.push(`${lowObs} of ${cur.length} shifts under 90% observation compliance.`);
+
+  return { provisioned: true as const, count: cur.length, kpis, matrix, trend, heat, dow: DOW, bestShift, worstShift, recentReviews, aiSummary, recommendations, insights };
 }
 
 // ── Executive Action Centre (UMW-003 §3) ─────────────────────────────────────
