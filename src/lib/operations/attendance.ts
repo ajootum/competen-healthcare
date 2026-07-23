@@ -119,3 +119,31 @@ export async function loadAttendance(admin: any, hid: string | null, isSuper: bo
     roleBreakdown, register, replacementPool: replacementPool.slice(0, 20), distribution, alerts, timeline,
   };
 }
+
+// Operational absence classification (op_leave_records, migration 083) — merges the latest
+// same-day leave classification onto the absent register. Operational fields only (§15.4).
+export const LEAVE_LABEL: Record<string, string> = {
+  sick: "Sick leave", annual: "Annual leave", maternity_parental: "Maternity / parental", compassionate: "Compassionate", study: "Study leave", official_duty: "Official duty", training: "Training", emergency: "Emergency", unpaid: "Unpaid leave", suspension: "Suspension", occupational_restriction: "Occupational restriction", administrative: "Administrative", unauthorised: "Unauthorised", no_show: "No-show", unknown: "Unclassified",
+};
+
+export async function loadAbsenceLeave(admin: any, hid: string | null, isSuper: boolean) {
+  const base = await loadAttendance(admin, hid, isSuper);
+  if (!base.ready) return { ready: false as const };
+  const absent = base.register.filter((r: any) => r.status === "absent");
+  const staffIds = base.register.map((r: any) => r.staffId).filter(Boolean);
+  const today = new Date().toISOString().slice(0, 10);
+  const byStaff = new Map<string, any>();
+  if (staffIds.length) {
+    try {
+      const q = admin.from("op_leave_records").select("staff_id, absence_type, expected_return, replacement_required, leave_approval_status, operational_impact, created_at").in("staff_id", staffIds).eq("absence_date", today).order("created_at", { ascending: false });
+      const { data } = await (isSuper ? q : q.eq("hospital_id", hid ?? NONE));
+      for (const l of data ?? []) if (!byStaff.has(l.staff_id)) byStaff.set(l.staff_id, l);
+    } catch { /* store not provisioned */ }
+  }
+  const rows = absent.map((r: any) => ({ ...r, leave: byStaff.get(r.staffId) ?? null }));
+  const classified = rows.filter((r: any) => r.leave).length;
+  const types = [...new Set(rows.filter((r: any) => r.leave).map((r: any) => r.leave.absence_type))];
+  const byType = types.map(t => ({ type: t, label: LEAVE_LABEL[t as string] ?? t, count: rows.filter((r: any) => r.leave?.absence_type === t).length })).sort((a, b) => b.count - a.count);
+  const replacementOutstanding = rows.filter((r: any) => r.leave?.replacement_required).length;
+  return { ready: true as const, absent: rows, classified, total: absent.length, byType, replacementOutstanding, kpis: base.kpis };
+}
