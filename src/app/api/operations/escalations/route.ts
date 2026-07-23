@@ -68,6 +68,27 @@ export async function PATCH(req: Request) {
   if (!row) return NextResponse.json({ error: "Not found" }, { status: 404 });
   if (!isSuper(c) && row.hospital_id !== c.hospitalId) return forbidden("Out of scope");
   const b = await req.json().catch(() => ({}));
+
+  // Escalations Workspace decision actions (UMW-EA-002) — audited. Backward-compatible:
+  // the legacy { status } path below still works for the supervisor console.
+  if (b.action) {
+    const upd: any = {};
+    if (b.action === "acknowledge") upd.status = "acknowledged";
+    else if (b.action === "assign") upd.assigned_responder = b.assign_to ?? c.userId;
+    else if (b.action === "escalate") {
+      const { data: cur } = await admin.from("op_escalations").select("level").eq("id", id).maybeSingle();
+      const lvl = Math.min(5, (cur?.level ?? 1) + 1);
+      upd.level = lvl; upd.severity = SEV_BY_LEVEL[lvl];
+      const dl = new Date(); dl.setMinutes(dl.getMinutes() + (lvl >= 4 ? 15 : lvl === 3 ? 60 : 240)); upd.response_deadline = dl.toISOString();
+    } else if (b.action === "resolve" || b.action === "close") {
+      upd.status = "resolved"; upd.resolution = b.resolution?.trim() || null; upd.resolved_at = new Date().toISOString();
+    } else return badRequest("unknown action");
+    const { data, error } = await admin.from("op_escalations").update(upd).eq("id", id).select().maybeSingle();
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    await admin.from("audit_log").insert({ actor_id: c.userId, action: `escalation_${b.action}`, entity_type: "op_escalation", entity_id: id, hospital_id: row.hospital_id, new_value: upd });
+    return NextResponse.json(data ?? { ok: true });
+  }
+
   if (!["acknowledged", "resolved", "cancelled"].includes(b.status)) return badRequest("valid status required");
   const update: any = { status: b.status };
   if (b.status === "resolved") { update.resolution = b.resolution?.trim() || null; update.resolved_at = new Date().toISOString(); }

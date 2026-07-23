@@ -152,7 +152,7 @@ export default async function ExecutiveActionsCentre({ searchParams }: { searchP
           breakdown={mods.approvals.breakdown} href="/unit-manager/approvals" linkLabel="View approvals" />
         <ModulePanel icon="⚠" title="Escalations" color="#ef4444" provisioned={mods.escalations.provisioned}
           stats={[["Open", mods.escalations.open], ["Critical", mods.escalations.critical, "text-rose-600"], ["Awaiting", mods.escalations.awaiting]]}
-          breakdown={mods.escalations.breakdown} href="/supervisor/quality-safety" linkLabel="View escalations" />
+          breakdown={mods.escalations.breakdown} href="/unit-manager/escalations" linkLabel="View escalations" />
         <ModulePanel icon="📈" title="CAPA & Improvement" color="#14b8a6" provisioned={mods.capa.provisioned}
           stats={[["Open CAPAs", mods.capa.open], ["Overdue", mods.capa.overdue, "text-rose-600"], ["On Track", mods.capa.onTrack, "text-green-600"]]}
           breakdown={mods.capa.breakdown} href="/supervisor/quality-safety" linkLabel="View CAPA register" />
