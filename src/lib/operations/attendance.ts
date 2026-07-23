@@ -147,3 +147,26 @@ export async function loadAbsenceLeave(admin: any, hid: string | null, isSuper: 
   const replacementOutstanding = rows.filter((r: any) => r.leave?.replacement_required).length;
   return { ready: true as const, absent: rows, classified, total: absent.length, byType, replacementOutstanding, kpis: base.kpis };
 }
+
+// Replacement & Redeployment (op_replacement_requests, migration 083) — the request workflow
+// over the current-shift gaps + eligible candidate pool. Fail-soft if the store is empty.
+export async function loadReplacement(admin: any, hid: string | null, isSuper: boolean) {
+  const base = await loadAttendance(admin, hid, isSuper);
+  if (!base.ready) return { ready: false as const };
+  const absent = base.register.filter((r: any) => r.status === "absent");
+  const shiftIds = [...new Set(base.register.map((r: any) => r.shiftId))];
+  let requests: any[] = [];
+  if (shiftIds.length) {
+    try {
+      const q = admin.from("op_replacement_requests").select("id, shift_id, role, reason, priority, status, is_redeployment, selected_staff_name, absent_staff_id, requested_by_name, requested_at").in("shift_id", shiftIds).order("requested_at", { ascending: false }).limit(50);
+      const { data } = await (isSuper ? q : q.eq("hospital_id", hid ?? NONE));
+      requests = (data ?? []).map((r: any) => ({ ...r, roleLabel: ROLE_LABEL[r.role] ?? r.role }));
+    } catch { /* store not provisioned */ }
+  }
+  const OPEN = (s: string) => !["filled", "redeployed", "cancelled", "declined"].includes(s);
+  const open = requests.filter((r: any) => OPEN(r.status));
+  const filledToday = requests.filter((r: any) => ["filled", "redeployed"].includes(r.status)).length;
+  const reqByStaff = new Set(open.map((r: any) => r.absent_staff_id).filter(Boolean));
+  const gaps = absent.map((r: any) => ({ ...r, hasRequest: reqByStaff.has(r.staffId) }));
+  return { ready: true as const, gaps, requests, open, filledToday, pool: base.replacementPool ?? [], kpis: base.kpis };
+}
