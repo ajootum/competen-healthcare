@@ -4,6 +4,7 @@ import Link from "next/link";
 import { loadWorkforceOps } from "@/lib/operations/workforce-ops";
 import { loadUnitDepartments } from "@/lib/operations/unit-command";
 import UnitFilters from "../UnitFilters";
+import WfmTabs from "./WfmTabs";
 
 export const dynamic = "force-dynamic";
 
@@ -17,7 +18,6 @@ export const dynamic = "force-dynamic";
 
 const card = "bg-white rounded-xl border border-gray-200";
 const STATUS_BADGE: Record<string, string> = { Good: "bg-emerald-50 text-emerald-700", "At Risk": "bg-amber-50 text-amber-700", "Below Required": "bg-rose-50 text-rose-700", "—": "bg-gray-100 text-gray-500" };
-const TABS = ["Overview", "Staffing Engine", "Team Assignments", "Roster & Scheduling", "Competency Readiness", "Break Management", "Supervisor Notes", "Analytics"];
 
 function Kpi({ label, value, sub, tone, icon }: { label: string; value: any; sub?: string; tone?: string; icon?: string }) {
   return <div className={`${card} p-4`}><div className="flex items-start justify-between"><p className="text-xs text-gray-500">{label}</p>{icon && <span className="text-base opacity-40">{icon}</span>}</div><p className={`text-2xl font-bold tabular-nums mt-1 ${tone ?? "text-gray-900"}`}>{value}</p>{sub && <p className="text-[11px] text-gray-400 mt-0.5">{sub}</p>}</div>;
@@ -44,9 +44,7 @@ export default async function WorkforceManagement() {
         <div><h1 className="text-2xl font-bold text-gray-900 tracking-tight">Workforce Management</h1><p className="text-sm text-gray-500">Plan, allocate and optimise your workforce to deliver safe, efficient care.</p></div>
         <UnitFilters departments={departments} />
       </div>
-      <div className="flex gap-1 border-b border-gray-200 overflow-x-auto">
-        {TABS.map((t, i) => <span key={t} className={`shrink-0 text-xs px-3 py-2 border-b-2 -mb-px font-medium ${i === 0 ? "border-emerald-600 text-emerald-700" : "border-transparent text-gray-300"}`} title={i === 0 ? "" : "Next phase"}>{t}</span>)}
-      </div>
+      <WfmTabs />
     </>
   );
 
