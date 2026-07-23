@@ -1,18 +1,19 @@
 import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import Link from "next/link";
-import { loadRosterGovernance } from "@/lib/operations/roster-governance";
+import { loadRosterGovernance, loadApprovalStores } from "@/lib/operations/roster-governance";
 import { loadUnitDepartments } from "@/lib/operations/unit-command";
 import UnitFilters from "../../../UnitFilters";
 import RosterGovTabs from "../RosterGovTabs";
+import ApprovalWorkflow from "./ApprovalWorkflow";
 
 export const dynamic = "force-dynamic";
 
 // Approval & Publication (UMW-WFM-004 §15) — controls formal authorisation and release of the
 // official roster. Submission preconditions + publishability are REAL (governance validation);
-// publication itself is wired on the Scheduling Engine (RosterControls → /api/operations/
-// rosters, audited publish_roster). The configurable multi-step approval chain + attestation
-// records need a roster_approval store → honest next-phase.
+// the configurable multi-step approval chain + publication record are REAL over op_roster_
+// approvals / op_roster_publications (migration 082). Operational status flip stays on the
+// Scheduling Engine; staff-acknowledgement delivery is next-phase.
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 const card = "bg-white rounded-xl border border-gray-200";
@@ -28,8 +29,9 @@ export default async function ApprovalPublication() {
   if (!roles.some((r: string) => ["hospital_admin", "super_admin"].includes(r))) redirect("/dashboard");
   const isSuper = roles.includes("super_admin");
 
-  const [d, departments] = await Promise.all([
+  const [d, ap, departments] = await Promise.all([
     loadRosterGovernance(admin, profile?.hospital_id ?? null, isSuper) as Promise<any>,
+    loadApprovalStores(admin, profile?.hospital_id ?? null, isSuper) as Promise<any>,
     loadUnitDepartments(admin, profile?.hospital_id ?? null, isSuper),
   ]);
 
@@ -56,13 +58,6 @@ export default async function ApprovalPublication() {
     { label: "Assurance score ≥ 75 (review threshold)", ok: (a.score ?? 0) >= 75 },
   ];
   const canSubmit = preconds.every(p => p.ok);
-  const CHAIN = [
-    { role: "Roster Officer", cond: "Review", when: "Always" },
-    { role: "Unit Manager", cond: "Approve", when: "Always" },
-    { role: "Nursing Administration", cond: "Approve critical exception", when: "When a critical exception is accepted" },
-    { role: "HR / Finance", cond: "Approve", when: "When contract/leave or overtime thresholds exceeded" },
-    { role: "Publication", cond: "Authorise release", when: "Final step" },
-  ];
 
   return (
     <div className="space-y-4">
@@ -97,14 +92,31 @@ export default async function ApprovalPublication() {
         </div>
       </div>
 
-      {/* Approval chain */}
-      <div className={`${card} p-5`}>
-        <h3 className="text-sm font-bold text-gray-900 mb-3">Configurable approval workflow <span className="text-[10px] text-gray-400 font-normal">§15.2 · conditional steps</span></h3>
-        <ol className="space-y-0">{CHAIN.map((s, i) => (<li key={i} className="flex items-start gap-3 py-2 border-b border-gray-50 last:border-0"><span className="shrink-0 w-5 h-5 rounded-full bg-gray-100 text-gray-500 text-[10px] font-bold flex items-center justify-center mt-0.5">{i + 1}</span><div className="flex-1 min-w-0"><div className="flex items-center justify-between gap-2 flex-wrap"><p className="text-xs font-semibold text-gray-800">{s.role}</p><span className="text-[10px] text-gray-400">{s.when}</span></div><p className="text-[11px] text-gray-500">{s.cond}</p></div></li>))}</ol>
-        <p className="text-[10px] text-gray-400 mt-2">The stateful approval chain (approve / approve-with-conditions / return / reject / delegate) with attestation records + segregation of duties (BR-013) needs a roster_approval store → next-phase. Publication itself is wired &amp; audited on the Scheduling Engine.</p>
+      {/* Real approval chain + publication */}
+      <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
+        <div className={`${card} p-5 xl:col-span-2`}>
+          <h3 className="text-sm font-bold text-gray-900 mb-3">Approval workflow <span className="text-[10px] text-gray-400 font-normal">§15.2 · submit → decide → publish</span></h3>
+          {ap.provisioned === false || ap.hasRoster === false ? <p className="text-sm text-gray-400">Approval store unavailable.</p> : <ApprovalWorkflow rosterId={ap.rosterId} approvals={ap.approvals} submitted={ap.submitted} allApproved={ap.allApproved} publishable={a.publishable} published={!!ap.latestPublication} />}
+          <p className="text-[10px] text-gray-400 mt-2">Real over op_roster_approvals. A reject/return records comments (BR-007). Conditional approvers + segregation-of-duties enforcement are next-phase.</p>
+        </div>
+        <div className={`${card} p-5`}>
+          <h3 className="text-sm font-bold text-gray-900 mb-2">Publication &amp; acknowledgement</h3>
+          {ap.latestPublication ? (
+            <div className="rounded-lg border border-emerald-100 bg-emerald-50/40 p-3">
+              <p className="text-sm font-bold text-emerald-700">Published v{ap.latestPublication.version}</p>
+              <p className="text-[11px] text-gray-600 mt-0.5">{fmtDate(ap.latestPublication.published_at)}{ap.latestPublication.published_by_name ? ` · ${ap.latestPublication.published_by_name}` : ""}</p>
+              <div className="mt-2 grid grid-cols-3 gap-2 text-center">
+                <div><p className="text-[9px] text-gray-500 uppercase">Notified</p><p className="text-sm font-bold text-gray-800">{ap.ackSummary.notified}</p></div>
+                <div><p className="text-[9px] text-gray-500 uppercase">Ack&apos;d</p><p className="text-sm font-bold text-emerald-600">{ap.ackSummary.acknowledged}</p></div>
+                <div><p className="text-[9px] text-gray-500 uppercase">Concerns</p><p className={`text-sm font-bold ${ap.ackSummary.concerns ? "text-amber-600" : "text-gray-400"}`}>{ap.ackSummary.concerns}</p></div>
+              </div>
+            </div>
+          ) : <p className="text-sm text-gray-400">Not published. Record publication once all steps are approved.</p>}
+          <p className="text-[10px] text-gray-400 mt-2">Staff-acknowledgement delivery (notify → view → acknowledge) needs the notification service → next-phase. The operational status flip stays on the <Link href="/unit-manager/scheduling-engine" className="text-emerald-700 hover:underline">Scheduling Engine</Link>.</p>
+        </div>
       </div>
 
-      <p className="text-[11px] text-gray-400 pb-4">Approval &amp; Publication (UMW-WFM-004 §15). Preconditions + publishability are real over the governance validation; publication updates downstream staff/shift workspaces once released. <Link href="/unit-manager/workforce-management/roster-governance" className="text-emerald-700 hover:underline">← Governance Overview</Link></p>
+      <p className="text-[11px] text-gray-400 pb-4">Approval &amp; Publication (UMW-WFM-004 §15). Preconditions + publishability are real; the approval chain + publication record are real over op_roster_approvals / op_roster_publications. <Link href="/unit-manager/workforce-management/roster-governance" className="text-emerald-700 hover:underline">← Governance Overview</Link></p>
     </div>
   );
 }

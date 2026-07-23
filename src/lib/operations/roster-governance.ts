@@ -228,3 +228,22 @@ export async function loadPlannedVsActualView(admin: any, hid: string | null, is
   const confirmed = actuals.length;
   return { provisioned: true as const, hasRoster: true as const, rosterId: roster.id, plannedPosts, confirmed, attended, variances, actuals, planned: asg.map((a: any) => ({ id: a.id, unit: a.unit_name, date: a.shift_date, shift: a.shift_type, staff: a.staff_name, role: a.role })) };
 }
+
+// Approval & Publication (§15) — the op_roster_approvals chain + op_roster_publications record +
+// op_roster_acknowledgements summary for the current roster.
+export async function loadApprovalStores(admin: any, hid: string | null, isSuper: boolean) {
+  const rw = await loadRosterForWeek(admin, hid, isSuper, mondayOf());
+  if (!(rw as any).provisioned) return { provisioned: false as const };
+  const roster = (rw as any).roster;
+  if (!roster) return { provisioned: true as const, hasRoster: false as const };
+  const scope = (q: any) => (isSuper ? q : q.eq("hospital_id", hid ?? NONE));
+  let approvals: any[] = [], publications: any[] = [];
+  let ackSummary = { notified: 0, acknowledged: 0, concerns: 0 };
+  try { const { data } = await scope(admin.from("op_roster_approvals").select("id, stage_order, approval_stage, approver_role, approver_name, status, decision, comments, acted_at").eq("roster_id", roster.id).order("stage_order")); approvals = data ?? []; } catch { /* store absent */ }
+  try { const { data } = await scope(admin.from("op_roster_publications").select("id, publication_status, published_at, published_by_name, recipient_count, version, created_at").eq("roster_id", roster.id).order("created_at", { ascending: false })); publications = data ?? []; } catch { /* store absent */ }
+  const latestPublication = publications[0] ?? null;
+  if (latestPublication) { try { const { data } = await admin.from("op_roster_acknowledgements").select("acknowledged_at, concern_raised").eq("roster_publication_id", latestPublication.id); ackSummary = { notified: (data ?? []).length, acknowledged: (data ?? []).filter((a: any) => a.acknowledged_at).length, concerns: (data ?? []).filter((a: any) => a.concern_raised).length }; } catch { /* store absent */ } }
+  const submitted = approvals.length > 0;
+  const allApproved = submitted && approvals.every((a: any) => ["approved", "approved_with_conditions"].includes(a.status));
+  return { provisioned: true as const, hasRoster: true as const, rosterId: roster.id, rosterStatus: roster.status, approvals, submitted, allApproved, publications, latestPublication, ackSummary };
+}
