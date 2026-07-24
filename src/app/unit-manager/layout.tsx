@@ -77,6 +77,7 @@ const NAV_GROUPS: { title: string; items: NavItem[] }[] = [
     { label: "Patient Flow",      href: "/unit-manager/patient-operations/flow", icon: "🔄" },
     { label: "Bed & Capacity",    href: "/unit-manager/patient-operations/beds", icon: "🛏️" },
     { label: "Ward Map",          href: "/unit-manager/patient-operations/ward-map", icon: "🗺️" },
+    { label: "Governance",        href: "/unit-manager/patient-operations/governance", icon: "🛡️" },
     { label: "Clinical Safety",   href: "/unit-manager/patient-operations/safety", icon: "🚨" },
     { label: "Patient Card",      href: "/unit-manager/patient-operations/patient-card", icon: "🪪" },
     { label: "Timeline",          href: "/unit-manager/patient-operations/timeline", icon: "🕐" },

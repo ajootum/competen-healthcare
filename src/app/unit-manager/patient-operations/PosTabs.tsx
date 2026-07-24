@@ -3,18 +3,18 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
-// Patient Operations section tabs (POS-001 §2). Shared across the section. Built
-// tabs link; the two operational data-entry surfaces (POS-106 Operations Centre,
-// POS-109 Documentation) render muted "next phase" instead of dead-linking. Keep
-// in sync with POS_MODULES in lib/operations/patient-operations.ts and the Patient
-// Operations group in unit-manager/layout.tsx.
+// Patient Operations section tabs (POS-001 §2). Shared across the section — all built.
+// Per POS-106A the UMW hosts "Patient Operations Governance" (Governance Mode), not a
+// data-entry Operations Centre; operational entry lives in the SSW. Keep in sync with
+// POS_MODULES in lib/operations/patient-operations.ts and the Patient Operations group
+// in unit-manager/layout.tsx.
 const TABS: { label: string; href: string; built?: boolean }[] = [
   { label: "Dashboard", href: "/unit-manager/patient-operations", built: true },
   { label: "Census & Registry", href: "/unit-manager/patient-operations/census", built: true },
   { label: "Patient Flow", href: "/unit-manager/patient-operations/flow", built: true },
   { label: "Bed & Capacity", href: "/unit-manager/patient-operations/beds", built: true },
   { label: "Ward Map", href: "/unit-manager/patient-operations/ward-map", built: true },
-  { label: "Operations Centre", href: "/unit-manager/patient-operations/operations-centre", built: true },
+  { label: "Patient Operations Governance", href: "/unit-manager/patient-operations/governance", built: true },
   { label: "Clinical Safety", href: "/unit-manager/patient-operations/safety", built: true },
   { label: "Patient Card", href: "/unit-manager/patient-operations/patient-card", built: true },
   { label: "Documentation", href: "/unit-manager/patient-operations/documentation", built: true },

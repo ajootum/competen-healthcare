@@ -41,6 +41,7 @@ const NAV_GROUPS: { group: string; items: NavItem[] }[] = [
     { label: "Bed & Capacity",               href: "/supervisor/bed-management",       icon: "🛏️" },
     { label: "Ward Map",                     href: "/supervisor/ward-map",            icon: "🗺️" },
     { label: "Patient Operations Centre",    href: "/supervisor/patient-ops-center",  icon: "🗂️" },
+    { label: "Operations Centre",            href: "/supervisor/patient-operations/operations-centre", icon: "🧾" },
     { label: "Clinical Safety",              href: "/supervisor/clinical-safety",     icon: "🛡️" },
     { label: "Patient Cards",                href: "/supervisor/patient-list",        icon: "🪪" },
   ]},
