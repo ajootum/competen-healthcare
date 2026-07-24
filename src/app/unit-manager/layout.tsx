@@ -83,14 +83,16 @@ const NAV_GROUPS: { title: string; items: NavItem[] }[] = [
     { label: "Timeline",          href: "/unit-manager/patient-operations/timeline", icon: "🕐" },
     { label: "Analytics",         href: "/unit-manager/patient-operations/analytics", icon: "📈" },
   ] },
+  // Competency Management — the deep competency-operations modules live in the Competency Office
+  // (CMO) workspace; these cross-link there (UMW managers are in-scope for /competency-office).
   { title: "Competency Management", items: [
     { label: "Competency Dashboard", href: "/unit-manager/competency",   icon: "🪪" },
-    { label: "Compliance",           icon: "✔️", soon: true },
-    { label: "Credential Management", icon: "🎓", soon: true },
+    { label: "Compliance",           href: "/competency-office/compliance", icon: "✔️" },
+    { label: "Credential Management", href: "/competency-office/credentialing", icon: "🎓" },
     { label: "Assessment Status",    href: "/unit-manager/assessment",    icon: "📝" },
-    { label: "Validation Queue",     icon: "🗂️", soon: true },
-    { label: "Competency Analytics", icon: "📊", soon: true },
-    { label: "Competency Frameworks", icon: "🧩", soon: true },
+    { label: "Validation Queue",     href: "/competency-office/validation", icon: "🗂️" },
+    { label: "Competency Analytics", href: "/competency-office/analytics", icon: "📊" },
+    { label: "Competency Frameworks", href: "/competency-office/frameworks", icon: "🧩" },
   ] },
   { title: "Learning & Development", items: [
     { label: "Learning Dashboard",   href: "/unit-manager/learning", icon: "📚" },
