@@ -4,37 +4,79 @@ import Link from "next/link";
 
 export const dynamic = "force-dynamic";
 
-// CPO-001 modules that reuse an existing management surface or are a later phase.
+// CMO-001 competency-operations modules. Each surfaces live data on the dashboard and routes to its
+// authoritative operational surface (§6 data sources) until it gains a dedicated in-workspace page.
 
 const SECTIONS: Record<string, { title: string; blurb: string; link?: { label: string; href: string } }> = {
+  readiness: {
+    title: "Workforce Readiness (CMO-002)",
+    blurb: "Required vs available competencies by unit — deployability and coverage. The live readiness summary (organisation readiness, high-risk units, workforce-by-CPU) is on your dashboard; per-clinician unit readiness drills into the Unit Manager competency view.",
+    link: { label: "Open unit workforce readiness", href: "/unit-manager/competency" },
+  },
+  library: {
+    title: "Competency Library (CMO-003)",
+    blurb: "The governed catalogue of competencies, domains and standards. The competency hierarchy is authored and versioned in the Framework Manager.",
+    link: { label: "Open the Framework Manager", href: "/competency-office/frameworks" },
+  },
+  assessments: {
+    title: "Assessments (CMO-006)",
+    blurb: "Assessment cycles, scheduling, execution and scoring. Assessments-today is summarised on your dashboard; cycles and scoring are managed in the competency assessment surface.",
+    link: { label: "Open assessment cycles", href: "/admin/competencies" },
+  },
+  evidence: {
+    title: "Evidence Centre (CMO-007)",
+    blurb: "The evidence-submission and review queue backing competency validation. Evidence is reviewed and linked to competencies and credentials in the educator evidence workspace.",
+    link: { label: "Open the Evidence Centre", href: "/educator/evidence" },
+  },
+  validation: {
+    title: "Competency Validation (CMO-008)",
+    blurb: "Governed validation of competency decisions (validate / return / defer). Readiness recalculates immediately on validation. The awaiting-validation count is on your dashboard.",
+    link: { label: "Open the validation queue", href: "/unit-manager/competency-validations" },
+  },
+  passports: {
+    title: "Professional Passports (CMO-009)",
+    blurb: "The portable competency passport per practitioner — competencies, credentials and readiness composed from the governed record. Viewed in the assessor passport surface and each practitioner's own passport.",
+    link: { label: "Open professional passports", href: "/assessor/passports" },
+  },
+  credentialing: {
+    title: "Credentialing (CMO-010)",
+    blurb: "The credential register — issue, verify, renew and track expiry of professional credentials. Expiring credentials feed the dashboard's expiry widgets.",
+    link: { label: "Open the credential register", href: "/admin/credentials" },
+  },
+  learning: {
+    title: "Learning Integration (CMO-011)",
+    blurb: "Assign learning against competency gaps and track completion. Learning pathways and curricula are mapped to competencies in the curriculum surface.",
+    link: { label: "Open learning & curricula", href: "/admin/curricula" },
+  },
+  ai: {
+    title: "AI Competency Intelligence (CMO-012)",
+    blurb: "Predictive gap, risk and recommendation intelligence. Explainable rule-based recommendations are live on your dashboard; the full predictive suite is a later phase.",
+    link: { label: "Open the Dashboard", href: "/competency-office" },
+  },
+  analytics: {
+    title: "Analytics (CMO-013)",
+    blurb: "Enterprise competency attainment, coverage, gaps and trend analytics. Live compliance and domain readiness are summarised on your dashboard; the full analytics suite lives in the competency intelligence workspace.",
+    link: { label: "Open competency analytics", href: "/admin/competencies" },
+  },
+  settings: {
+    title: "Settings (CMO-014)",
+    blurb: "Competency operations configuration — readiness thresholds, expiry windows, governance and lifecycle policy. A later phase.",
+  },
+  // Retained legacy routes (not in the CMO-001 sidebar but still resolvable).
   templates: {
-    title: "Position Templates (CPO-004)",
-    blurb: "Map governed competencies and CPUs to organisational positions. Position templates are built and versioned in the Workforce Assignment Engine, which provisions competencies, learning and assessments from each template.",
+    title: "Position Templates",
+    blurb: "Map governed competencies and CPUs to organisational positions, built and versioned in the Workforce Assignment Engine.",
     link: { label: "Open Position Templates", href: "/admin/positions" },
   },
   governance: {
-    title: "Competency Governance (CPO-005)",
+    title: "Competency Governance",
     blurb: "Approve framework and CPU changes, manage governance committees and control content lifecycle. Pending approvals and in-review content counts are on your dashboard.",
     link: { label: "Open the governance / approvals queue", href: "/admin/approvals" },
   },
-  analytics: {
-    title: "Competency Analytics (CPO-006)",
-    blurb: "Enterprise competency attainment, coverage, gaps and trend analytics. Live compliance is summarised on your dashboard; the full analytics suite lives in the competency intelligence workspace.",
-    link: { label: "Open competency analytics", href: "/admin/competencies" },
-  },
-  ai: {
-    title: "AI Competency Intelligence (CPO-007)",
-    blurb: "AI framework-optimisation, gap-prediction and standards recommendations. A later CPO phase; the governed data it reasons over is already live on your dashboard.",
-    link: { label: "Open the Dashboard", href: "/competency-office" },
-  },
   reports: {
-    title: "Reports (CPO-008)",
-    blurb: "Exportable governance and competency reports across frameworks, CPUs and compliance. A later phase; executive reporting already covers much of this.",
+    title: "Reports",
+    blurb: "Exportable governance and competency reports across frameworks, CPUs and compliance. Executive reporting covers much of this today.",
     link: { label: "Open executive reporting", href: "/admin/executive" },
-  },
-  settings: {
-    title: "Settings (CPO-009)",
-    blurb: "Competency Office configuration, governance thresholds and lifecycle policy. A later phase.",
   },
 };
 

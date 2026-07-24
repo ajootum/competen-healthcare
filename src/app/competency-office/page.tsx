@@ -1,20 +1,26 @@
 import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import Link from "next/link";
-import { loadCompetencyOfficeDashboard } from "@/lib/competency-office-data";
+import { loadCmoDashboard } from "@/lib/cmo-dashboard";
 
 export const dynamic = "force-dynamic";
 
-// Competency Office Dashboard (CPO-001) — enterprise competency governance KPIs.
+// Competency Operations Dashboard (CMO-001) — the operational command centre for competency
+// readiness, enterprise to individual. The 12 spec widgets are computed once in loadCmoDashboard
+// from live competency data (competency_decisions + framework/CPU governance). Real: readiness,
+// expiries, workforce-by-CPU, risk alerts, domain readiness, validation queue, activity and
+// rule-based (explainable) AI recommendations. Honest next-phase: readiness TREND lines (need a
+// readiness_snapshots history) and per-widget export/filter (workspace-level).
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 const card = "bg-white rounded-xl border border-gray-200 p-5";
-const pct = (n: number) => (n >= 85 ? "text-green-600" : n >= 60 ? "text-amber-600" : "text-red-600");
+const pctTone = (n: number) => (n >= 85 ? "text-emerald-600" : n >= 70 ? "text-amber-600" : "text-rose-600");
+const barTone = (n: number) => (n >= 85 ? "bg-emerald-500" : n >= 70 ? "bg-amber-400" : "bg-rose-500");
 
 function Kpi({ n, label, tone, sub, href }: { n: any; label: string; tone?: string; sub?: string; href?: string }) {
   const inner = (
     <div className={`${card} ${href ? "hover:border-teal-300 transition-colors" : ""}`}>
-      <div className={`text-3xl font-bold tabular-nums ${tone ?? "text-gray-900"}`}>{n}</div>
+      <div className={`text-2xl font-bold tabular-nums ${tone ?? "text-gray-900"}`}>{n}</div>
       <div className="text-xs text-gray-500 mt-1">{label}</div>
       {sub && <div className="text-[11px] text-gray-400 mt-0.5">{sub}</div>}
     </div>
@@ -22,21 +28,7 @@ function Kpi({ n, label, tone, sub, href }: { n: any; label: string; tone?: stri
   return href ? <Link href={href}>{inner}</Link> : inner;
 }
 
-function Bar({ segments }: { segments: { n: number; color: string; label: string }[] }) {
-  const total = segments.reduce((s, x) => s + x.n, 0) || 1;
-  return (
-    <>
-      <div className="flex h-5 rounded-md overflow-hidden border border-gray-200 mb-2">
-        {segments.map((s, i) => s.n ? <div key={i} style={{ width: `${(s.n / total) * 100}%`, background: s.color }} title={`${s.label}: ${s.n}`} /> : null)}
-      </div>
-      <div className="flex flex-wrap gap-3 text-xs text-gray-500">
-        {segments.map((s, i) => <span key={i}><span className="inline-block w-2.5 h-2.5 rounded-sm mr-1 align-middle" style={{ background: s.color }} />{s.label}: <b className="text-gray-800">{s.n}</b></span>)}
-      </div>
-    </>
-  );
-}
-
-export default async function CompetencyOfficeDashboard() {
+export default async function CompetencyOperationsDashboard() {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect("/login");
@@ -45,98 +37,127 @@ export default async function CompetencyOfficeDashboard() {
   const roles: string[] = (profile?.roles?.length ? profile.roles : [profile?.role]).filter(Boolean);
   if (!roles.some(r => ["hospital_admin", "educator", "super_admin"].includes(r))) redirect("/dashboard");
 
-  const d = await loadCompetencyOfficeDashboard(admin, profile?.hospital_id ?? null, roles.includes("super_admin"));
-  const { frameworks: fw, competencyCount, cpus, templates, pendingApprovals, compliance, activeCycles } = d;
-  const { data: notifs } = await admin.from("notifications").select("title, created_at").eq("user_id", user.id).order("created_at", { ascending: false }).limit(5);
+  const d = await loadCmoDashboard(admin, profile?.hospital_id ?? null, roles.includes("super_admin"));
+  const h = d.header;
 
   return (
     <div className="space-y-5">
       <div>
-        <h1 className="text-2xl font-bold text-gray-900">Competency Office</h1>
-        <p className="text-sm text-gray-500 mt-1">Enterprise competency governance — frameworks, CPUs, standards and compliance · {profile?.full_name}</p>
+        <h1 className="text-2xl font-bold text-gray-900">Competency Operations Dashboard</h1>
+        <p className="text-sm text-gray-500 mt-1">Real-time competency readiness — enterprise to individual · {profile?.full_name}</p>
       </div>
 
-      {/* Enterprise competency KPIs */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        <Kpi n={fw.total} label="Competency frameworks" sub={`${fw.published} published`} href="/competency-office/frameworks" />
-        <Kpi n={competencyCount} label="Governed competencies" href="/competency-office/frameworks" />
-        <Kpi n={cpus.total} label="Clinical Practice Units" sub={`${cpus.published} published`} href="/competency-office/cpus" />
-        <Kpi n={templates.active} label="Active position templates" sub={`${templates.positions} positions`} href="/competency-office/templates" />
-        <Kpi n={`${compliance.coverage}%`} label="Competency compliance" tone={pct(compliance.coverage)} sub={`${compliance.current}/${compliance.total} current`} href="/competency-office/analytics" />
-        <Kpi n={pendingApprovals} label="Pending approvals" tone={pendingApprovals ? "text-amber-600" : undefined} href="/competency-office/governance" />
-        <Kpi n={activeCycles} label="Assessment cycles active" href="/competency-office/analytics" />
-        <Kpi n={fw.inReview + cpus.inReview} label="Content in review" tone={fw.inReview + cpus.inReview ? "text-amber-600" : undefined} href="/competency-office/governance" />
+      {/* Header KPI row */}
+      <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-7 gap-3">
+        <Kpi n={`${d.readiness.score}%`} label="Organisation readiness" tone={pctTone(d.readiness.score)} sub={`${d.readiness.current}/${d.readiness.total} current`} href="/competency-office/readiness" />
+        <Kpi n={d.highRiskUnits.length} label="High-risk units" tone={d.highRiskUnits.length ? "text-rose-600" : "text-gray-400"} sub={`below ${d.highRiskThreshold}%`} href="/competency-office/readiness" />
+        <Kpi n={d.expiring.d30} label="Expiring ≤30 days" tone={d.expiring.d30 ? "text-amber-600" : "text-gray-400"} sub={`${d.expiring.individuals} individuals`} href="/competency-office/credentialing" />
+        <Kpi n={d.assessments.provisioned ? d.assessments.total : "—"} label="Assessments today" sub={d.assessments.provisioned ? `${d.assessments.completed} completed` : "cycle data"} href="/competency-office/assessments" />
+        <Kpi n={d.awaitingValidation} label="Awaiting validation" tone={d.awaitingValidation ? "text-amber-600" : "text-gray-400"} href="/competency-office/validation" />
+        <Kpi n={h.competencies} label="Governed competencies" sub={`${h.frameworks} frameworks`} href="/competency-office/frameworks" />
+        <Kpi n={h.cpus} label="Clinical Practice Units" sub={`${h.activeCycles} active cycles`} href="/competency-office/cpus" />
       </div>
 
-      <div className="grid md:grid-cols-2 gap-5">
-        {/* Framework status */}
+      {/* Operational readiness row */}
+      <div className="grid grid-cols-1 xl:grid-cols-2 gap-5">
+        {/* Organisation Readiness */}
         <div className={card}>
-          <h3 className="font-semibold text-gray-900 mb-3">Framework status</h3>
-          {fw.total === 0 && <p className="text-sm text-gray-400">No frameworks in scope yet.</p>}
-          {fw.total > 0 && <Bar segments={[
-            { n: fw.published, color: "#22c55e", label: "Published" },
-            { n: fw.inReview, color: "#f59e0b", label: "In review" },
-            { n: fw.draft, color: "#94a3b8", label: "Draft" },
-          ]} />}
-          <div className="mt-3 pt-3 border-t flex gap-4 text-xs text-gray-500">
-            <span>Core: <b className="text-gray-800">{fw.core}</b></span>
-            <span>Specialty: <b className="text-gray-800">{fw.specialty}</b></span>
-            <span>Role: <b className="text-gray-800">{fw.role}</b></span>
+          <div className="flex items-center justify-between mb-3"><h3 className="font-semibold text-gray-900">Organisation Readiness</h3><span className="text-[11px] text-gray-400">weighted, live</span></div>
+          <div className="flex items-center gap-5">
+            <div className="relative w-24 h-24 shrink-0">
+              <div className="w-24 h-24 rounded-full" style={{ background: `conic-gradient(${d.readiness.score >= 85 ? "#10b981" : d.readiness.score >= 70 ? "#f59e0b" : "#ef4444"} 0% ${d.readiness.score}%, #f3f4f6 ${d.readiness.score}% 100%)` }} />
+              <div className="absolute inset-[22%] rounded-full bg-white flex flex-col items-center justify-center"><span className={`text-lg font-bold ${pctTone(d.readiness.score)}`}>{d.readiness.score}%</span><span className="text-[8px] text-gray-400">ready</span></div>
+            </div>
+            <div className="flex-1 text-sm">
+              <div className="flex justify-between py-1 border-b border-gray-50"><span className="text-gray-500">Current competencies</span><b className="tabular-nums">{d.readiness.current}</b></div>
+              <div className="flex justify-between py-1 border-b border-gray-50"><span className="text-gray-500">Total governed</span><b className="tabular-nums">{d.readiness.total}</b></div>
+              <div className="flex justify-between py-1"><span className="text-gray-500">Expiring 30/60/90</span><b className="tabular-nums">{d.expiring.d30}/{d.expiring.d60}/{d.expiring.d90}</b></div>
+            </div>
           </div>
+          <p className="text-[10px] text-gray-400 mt-3">Trend lines need a retained readiness-snapshot history — honest next-phase. Business rule: readiness recalculates immediately after validation.</p>
         </div>
 
-        {/* CPU lifecycle */}
+        {/* Workforce Readiness Table (by CPU) */}
         <div className={card}>
-          <h3 className="font-semibold text-gray-900 mb-3">CPU lifecycle</h3>
-          {cpus.total === 0 && <p className="text-sm text-gray-400">No CPUs in the library yet.</p>}
-          {cpus.total > 0 && <Bar segments={[
-            { n: cpus.published, color: "#0d9488", label: "Published" },
-            { n: cpus.approved, color: "#3b82f6", label: "Approved" },
-            { n: cpus.inReview, color: "#f59e0b", label: "In review" },
-            { n: cpus.draft, color: "#94a3b8", label: "Draft" },
-            { n: cpus.archived, color: "#e5e7eb", label: "Archived" },
-          ]} />}
-          <p className="text-xs text-gray-400 mt-3"><Link href="/competency-office/cpus" className="text-teal-600 hover:underline">Manage CPU library →</Link></p>
+          <div className="flex items-center justify-between mb-3"><h3 className="font-semibold text-gray-900">Workforce Readiness</h3><Link href="/competency-office/readiness" className="text-[11px] text-teal-600 hover:underline">Drill down →</Link></div>
+          {!d.decisionsReady || d.workforceByCpu.length === 0 ? <p className="text-sm text-gray-400">No competency decisions with a CPU yet.</p> : (
+            <div className="space-y-2">
+              {d.workforceByCpu.slice(0, 6).map(u => (
+                <div key={u.id} className="text-xs"><div className="flex items-center justify-between mb-0.5"><span className="text-gray-700 truncate">{u.name}</span><span className={`tabular-nums font-semibold ${pctTone(u.pct)}`}>{u.pct}% <span className="text-gray-400 font-normal">({u.current}/{u.total})</span></span></div><div className="w-full h-1.5 rounded-full bg-gray-100 overflow-hidden"><div className={`h-full ${barTone(u.pct)}`} style={{ width: `${u.pct}%` }} /></div></div>
+              ))}
+              <p className="text-[10px] text-gray-400 pt-1">Required vs available competencies by Clinical Practice Unit.</p>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Risk & analytics row */}
+      <div className="grid grid-cols-1 xl:grid-cols-3 gap-5">
+        {/* High Risk Units */}
+        <div className={card}>
+          <h3 className="font-semibold text-gray-900 mb-3">High Risk Units</h3>
+          {d.highRiskUnits.length === 0 ? <p className="text-sm text-gray-400">No units below the {d.highRiskThreshold}% threshold. 🎉</p> : (
+            <div className="space-y-1.5">{d.highRiskUnits.slice(0, 6).map(u => (
+              <div key={u.id} className="flex items-center justify-between text-xs"><span className="text-gray-700 truncate">{u.name}</span><span className="text-rose-600 font-semibold tabular-nums">{u.pct}%</span></div>
+            ))}</div>
+          )}
         </div>
 
-        {/* Governance approvals */}
+        {/* Competency Risk Alerts */}
         <div className={card}>
-          <h3 className="font-semibold text-gray-900 mb-3">Governance</h3>
-          <div className="grid grid-cols-2 gap-3 text-sm">
-            <div className="flex justify-between"><span className="text-gray-500">Pending approvals</span><b className={`tabular-nums ${pendingApprovals ? "text-amber-600" : ""}`}>{pendingApprovals}</b></div>
-            <div className="flex justify-between"><span className="text-gray-500">Frameworks in review</span><b className="tabular-nums">{fw.inReview}</b></div>
-            <div className="flex justify-between"><span className="text-gray-500">CPUs in review</span><b className="tabular-nums">{cpus.inReview}</b></div>
-          </div>
-          <p className="text-xs text-gray-400 mt-3"><Link href="/competency-office/governance" className="text-teal-600 hover:underline">Open governance queue →</Link></p>
+          <h3 className="font-semibold text-gray-900 mb-3">Competency Risk Alerts</h3>
+          {d.risks.length === 0 ? <p className="text-sm text-gray-400">No critical competency risks.</p> : (
+            <div className="space-y-2">{d.risks.slice(0, 5).map((r, i) => (
+              <div key={i} className="flex items-start gap-2"><span className={`w-1.5 h-1.5 rounded-full mt-1.5 shrink-0 ${r.severity === "high" ? "bg-rose-500" : "bg-amber-400"}`} /><div><p className="text-xs font-medium text-gray-800">{r.label}</p><p className="text-[11px] text-gray-500">{r.detail}</p></div></div>
+            ))}</div>
+          )}
         </div>
 
-        {/* Quick actions */}
+        {/* Competency Domain Chart */}
         <div className={card}>
-          <h3 className="font-semibold text-gray-900 mb-3">Quick actions</h3>
-          <div className="grid grid-cols-2 gap-2 text-sm">
-            {[["🗂️ Manage frameworks", "/competency-office/frameworks"], ["🏥 CPU library", "/competency-office/cpus"], ["🧩 Position templates", "/admin/positions"], ["⚖️ Governance queue", "/admin/approvals"], ["🎛️ Competency studio", "/admin/studio"], ["📈 Analytics", "/competency-office/analytics"]].map(([label, href]) => (
+          <h3 className="font-semibold text-gray-900 mb-3">Readiness by Domain</h3>
+          {d.domains.length === 0 ? <p className="text-sm text-gray-400">Domain readiness needs competency-to-domain mapping.</p> : (
+            <div className="space-y-2">{d.domains.slice(0, 6).map(dom => (
+              <div key={dom.name} className="text-xs"><div className="flex items-center justify-between mb-0.5"><span className="text-gray-700 truncate">{dom.name}</span><span className={`tabular-nums font-semibold ${pctTone(dom.pct)}`}>{dom.pct}%</span></div><div className="w-full h-1.5 rounded-full bg-gray-100 overflow-hidden"><div className={`h-full ${barTone(dom.pct)}`} style={{ width: `${dom.pct}%` }} /></div></div>
+            ))}</div>
+          )}
+        </div>
+      </div>
+
+      {/* Activity & AI row */}
+      <div className="grid grid-cols-1 xl:grid-cols-3 gap-5">
+        {/* AI Recommendations */}
+        <div className={`${card} bg-gradient-to-br from-teal-50/40 to-white`}>
+          <h3 className="font-semibold text-gray-900 mb-3 flex items-center gap-2">✨ AI Recommendations <span className="text-[10px] font-normal text-gray-400">explainable</span></h3>
+          {d.ai.length === 0 ? <p className="text-sm text-gray-400">No priority actions — competency operations are on track.</p> : (
+            <div className="space-y-2">{d.ai.slice(0, 5).map((a, i) => (
+              <div key={i} className="rounded-lg border border-gray-100 p-2.5"><div className="flex items-start justify-between gap-2"><p className="text-xs text-gray-800 flex-1">{a.text}</p><span className={`text-[9px] px-1.5 py-0.5 rounded shrink-0 ${a.priority === "high" ? "bg-rose-50 text-rose-700" : a.priority === "medium" ? "bg-amber-50 text-amber-700" : "bg-gray-100 text-gray-500"}`}>{a.priority}</span></div><p className="text-[10px] text-gray-400 mt-1">Why: {a.why}</p></div>
+            ))}</div>
+          )}
+        </div>
+
+        {/* Activity Feed */}
+        <div className={card}>
+          <h3 className="font-semibold text-gray-900 mb-3">Activity Feed</h3>
+          {d.activity.length === 0 ? <p className="text-sm text-gray-400">No recent competency activity.</p> : (
+            <div className="divide-y divide-gray-50">{d.activity.map((a: any) => (
+              <div key={a.id} className="flex items-center justify-between gap-2 py-1.5 text-xs"><span className="text-gray-700 truncate">{(a.action ?? "").replace(/_/g, " ")}</span><span className="text-gray-400 shrink-0">{a.actor?.full_name ?? "—"}</span></div>
+            ))}</div>
+          )}
+        </div>
+
+        {/* Quick Actions */}
+        <div className={card}>
+          <h3 className="font-semibold text-gray-900 mb-3">Quick Actions</h3>
+          <div className="grid grid-cols-1 gap-2 text-sm">
+            {[["📋 Assessments", "/competency-office/assessments"], ["📎 Evidence Centre", "/competency-office/evidence"], ["✅ Validation queue", "/competency-office/validation"], ["🎓 Credentialing", "/competency-office/credentialing"], ["📈 Analytics", "/competency-office/analytics"]].map(([label, href]) => (
               <Link key={href} href={href} className="border border-gray-200 rounded-lg px-3 py-2 text-gray-700 hover:border-teal-300 hover:text-teal-700 transition-colors">{label}</Link>
             ))}
           </div>
         </div>
-
-        {/* Notifications */}
-        <div className={card}>
-          <h3 className="font-semibold text-gray-900 mb-3">Notifications</h3>
-          {(notifs ?? []).length === 0 && <p className="text-sm text-gray-400">Nothing new.</p>}
-          <div className="space-y-1.5">
-            {(notifs ?? []).map((n: any, i: number) => (
-              <div key={i} className="flex items-center gap-2 text-sm"><span className="text-gray-800 truncate">{n.title}</span><span className="ml-auto text-xs text-gray-400">{new Date(n.created_at).toLocaleDateString()}</span></div>
-            ))}
-          </div>
-        </div>
-
-        {/* AI competency intelligence — later phase */}
-        <div className={`${card} border-dashed`}>
-          <h3 className="font-semibold text-gray-900 mb-1">AI Competency Intelligence</h3>
-          <p className="text-sm text-gray-400">Framework-optimisation, gap-prediction and standards recommendations arrive in a later CPO phase. The governed data it reasons over — frameworks, CPUs, compliance — is already live above.</p>
-        </div>
       </div>
+
+      <p className="text-[11px] text-gray-400 pb-4">Competency Operations Dashboard (CMO-001) over the live competency spine (competency_decisions) + framework/CPU governance. Real: organisation readiness, workforce readiness by CPU, high-risk units, expiring competencies (30/60/90) &amp; individuals, competency risk alerts, domain readiness, validation queue, activity and rule-based explainable AI recommendations. Honest next-phase: readiness trend history (needs readiness_snapshots), assessments-today where cycle data is sparse, and per-widget export/filter. Every calculation is tenant-scoped; readiness recalculates on validation.</p>
     </div>
   );
 }

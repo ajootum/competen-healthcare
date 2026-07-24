@@ -8,20 +8,27 @@ import SidebarToggle from "@/components/SidebarToggle";
 import { highestRole, type AppRole } from "@/lib/roles";
 import { workspaceLinksForUser } from "@/lib/workspace-links";
 
-// Competency Office Workspace (CPO-001) — enterprise governance of competency
-// frameworks, CPUs, position templates, standards and lifecycle. Role-scoped to
-// the competency office (coordinators, educators, chief competency officer).
+// Competency Office Workspace — CMO-001 Competency Operations Dashboard. The primary operational
+// workspace for competency readiness enterprise-to-individual: 14 competency-operations modules
+// (§4). Dashboard, Frameworks/Library and CPUs are real; the operational modules surface live data
+// on the dashboard and route to their authoritative surfaces (§6 data sources) until each gains a
+// dedicated in-workspace page. Role-scoped to competency leads, educators and admins.
 
 const NAV = [
-  { label: "Dashboard",             href: "/competency-office",            icon: "📊", exact: true },
-  { label: "Framework Manager",     href: "/competency-office/frameworks", icon: "🗂️" },
-  { label: "CPU Library",           href: "/competency-office/cpus",       icon: "🏥" },
-  { label: "Position Templates",    href: "/competency-office/templates",  icon: "🧩" },
-  { label: "Competency Governance", href: "/competency-office/governance", icon: "⚖️" },
-  { label: "Competency Analytics",  href: "/competency-office/analytics",  icon: "📈" },
-  { label: "AI Intelligence",       href: "/competency-office/ai",         icon: "✨" },
-  { label: "Reports",               href: "/competency-office/reports",    icon: "🧾" },
-  { label: "Settings",              href: "/competency-office/settings",   icon: "⚙️" },
+  { label: "Competency Dashboard",      href: "/competency-office",              icon: "📊", exact: true },
+  { label: "Workforce Readiness",       href: "/competency-office/readiness",    icon: "🎯" },
+  { label: "Competency Library",        href: "/competency-office/library",      icon: "📚" },
+  { label: "Clinical Practice Units",   href: "/competency-office/cpus",          icon: "🏥" },
+  { label: "Frameworks & Standards",    href: "/competency-office/frameworks",    icon: "🗂️" },
+  { label: "Assessments",               href: "/competency-office/assessments",   icon: "📝" },
+  { label: "Evidence Centre",           href: "/competency-office/evidence",      icon: "📎" },
+  { label: "Competency Validation",     href: "/competency-office/validation",    icon: "✅" },
+  { label: "Professional Passports",    href: "/competency-office/passports",     icon: "🪪" },
+  { label: "Credentialing",             href: "/competency-office/credentialing", icon: "🎓" },
+  { label: "Learning Integration",      href: "/competency-office/learning",      icon: "📖" },
+  { label: "AI Competency Intelligence", href: "/competency-office/ai",           icon: "✨" },
+  { label: "Analytics",                 href: "/competency-office/analytics",     icon: "📈" },
+  { label: "Settings",                  href: "/competency-office/settings",      icon: "⚙️" },
 ];
 
 const ALLOWED = ["hospital_admin", "educator", "super_admin"];
