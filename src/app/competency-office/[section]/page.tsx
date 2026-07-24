@@ -18,11 +18,6 @@ const SECTIONS: Record<string, { title: string; blurb: string; link?: { label: s
     blurb: "The governed catalogue of competencies, domains and standards. The competency hierarchy is authored and versioned in the Framework Manager.",
     link: { label: "Open the Framework Manager", href: "/competency-office/frameworks" },
   },
-  assessments: {
-    title: "Assessments (CMO-006)",
-    blurb: "Assessment cycles, scheduling, execution and scoring. Assessments-today is summarised on your dashboard; cycles and scoring are managed in the competency assessment surface.",
-    link: { label: "Open assessment cycles", href: "/admin/competencies" },
-  },
   evidence: {
     title: "Evidence Centre (CMO-007)",
     blurb: "The evidence-submission and review queue backing competency validation. Evidence is reviewed and linked to competencies and credentials in the educator evidence workspace.",
