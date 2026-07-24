@@ -38,11 +38,6 @@ const SECTIONS: Record<string, { title: string; blurb: string; link?: { label: s
     blurb: "The portable competency passport per practitioner — competencies, credentials and readiness composed from the governed record. Viewed in the assessor passport surface and each practitioner's own passport.",
     link: { label: "Open professional passports", href: "/assessor/passports" },
   },
-  credentialing: {
-    title: "Credentialing (CMO-010)",
-    blurb: "The credential register — issue, verify, renew and track expiry of professional credentials. Expiring credentials feed the dashboard's expiry widgets.",
-    link: { label: "Open the credential register", href: "/admin/credentials" },
-  },
   learning: {
     title: "Learning Integration (CMO-011)",
     blurb: "Assign learning against competency gaps and track completion. Learning pathways and curricula are mapped to competencies in the curriculum surface.",
