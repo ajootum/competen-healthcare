@@ -15,6 +15,7 @@ const TABS: { label: string; href: string; built?: boolean }[] = [
   { label: "Exceptions & Approvals", href: "/unit-manager/workforce-management/exceptions-approvals", built: true },
   { label: "Development & Readiness", href: "/unit-manager/workforce-management/development", built: true },
   { label: "Analytics & Reports", href: "/unit-manager/workforce-management/analytics", built: true },
+  { label: "Configuration", href: "/unit-manager/workforce-management/configuration", built: true },
   { label: "Competency Readiness", href: "/unit-manager/workforce-management/competency-readiness" },
   { label: "Break Management", href: "/unit-manager/workforce-management/breaks" },
   { label: "Supervisor Notes", href: "/unit-manager/workforce-management/supervisor-notes" },
