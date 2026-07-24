@@ -30,10 +30,11 @@ export const POS_MODULES: { code: string; name: string; href?: string; built: bo
   { code: "POS-106", name: "Operations Centre",         href: "/unit-manager/patient-operations/operations-centre", built: true },
   { code: "POS-107", name: "Clinical Safety Centre",    href: "/unit-manager/patient-operations/safety",         built: true },
   { code: "POS-108", name: "Patient Card Workspace",    href: "/unit-manager/patient-operations/patient-card",   built: true },
-  { code: "POS-109", name: "Operational Documentation", href: "/unit-manager/patient-operations/documentation",  built: false, note: "needs a documentation store" },
+  { code: "POS-109", name: "Operational Documentation", href: "/unit-manager/patient-operations/documentation",  built: true },
   { code: "POS-110", name: "Patient Timeline Engine",   href: "/unit-manager/patient-operations/timeline",       built: true },
   { code: "POS-111", name: "Operational Analytics",     href: "/unit-manager/patient-operations/analytics",      built: true },
   { code: "POS-112", name: "Configuration & Rules",     href: "/unit-manager/patient-operations/configuration",  built: true },
+  // NOTE: all twelve POS modules are now real workspaces (POS-106/109/112 deepened onto stores).
 ];
 
 // POS-001 §5 downstream consumers of the operational dataset.
