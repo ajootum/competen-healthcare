@@ -8,6 +8,11 @@ export const dynamic = "force-dynamic";
 // authoritative operational surface (§6 data sources) until it gains a dedicated in-workspace page.
 
 const SECTIONS: Record<string, { title: string; blurb: string; link?: { label: string; href: string } }> = {
+  compliance: {
+    title: "Compliance Centre (CMO-002)",
+    blurb: "Mandatory competency compliance by organisation, hospital, unit and role, with regulatory mappings (SafeCare, JCI, tenant standards), expiry monitoring and remediation. The live compliance score and expiry tracking are on your dashboard; the full regulatory-mapping and remediation-workflow engine is a later phase.",
+    link: { label: "Open competency analytics", href: "/competency-office/analytics" },
+  },
   readiness: {
     title: "Workforce Readiness (CMO-002)",
     blurb: "Required vs available competencies by unit — deployability and coverage. The live readiness summary (organisation readiness, high-risk units, workforce-by-CPU) is on your dashboard; per-clinician unit readiness drills into the Unit Manager competency view.",

@@ -38,6 +38,11 @@ export async function loadCmoDashboard(admin: any, hid: string | null, isSuper: 
     current: office.compliance.current,
     total: office.compliance.total,
   };
+  // Compliance Score (CMO-001 KPI) — distinct from readiness: % of governed competencies that are
+  // both VALIDATED and current (mandatory-compliance proxy). Real, and genuinely ≤ readiness.
+  const validatedCurrent = latest.filter(d => d.validated_at && isCurrent(d)).length;
+  const complianceScore = latest.length ? Math.round((validatedCurrent / latest.length) * 100) : 0;
+  const daysTo = (dateStr: string) => Math.round((new Date(dateStr).getTime() - Date.now()) / 86400000);
 
   // Expiring competencies — currently valid but expiring within 30/60/90 days.
   const expiringIn = (from: string, to: string) => latest.filter(d => PASSING.includes(d.outcome) && d.expiry_date && d.expiry_date >= from && d.expiry_date < to);
@@ -105,6 +110,35 @@ export async function loadCmoDashboard(admin: any, hid: string | null, isSuper: 
     activity = (au ?? []).filter((a: any) => /competenc|assess|evidence|validat|passport|credential|decision/i.test(a.action ?? "")).slice(0, 12);
   } catch { /* fail-soft */ }
 
+  // ── Named enrichment for the operational widgets (people + competency names) ─────────────────
+  const expiringSorted = [...exp30, ...exp60].sort((a, b) => (a.expiry_date ?? "").localeCompare(b.expiry_date ?? "")).slice(0, 6);
+  const valAwaiting = latest.filter(d => !d.validated_at && (d.validation_outcome == null || d.validation_outcome === "returned" || d.validation_outcome === "deferred")).slice(0, 6);
+  const needNurse = [...new Set([...expiringSorted, ...valAwaiting].map(d => d.nurse_id).filter(Boolean))];
+  const needComp = [...new Set([...expiringSorted, ...valAwaiting].map(d => d.competency_id).filter(Boolean))];
+  const nurseInfo = new Map<string, { name: string; role: string }>();
+  const compName = new Map<string, string>();
+  if (needNurse.length) { try { const { data } = await admin.from("profiles").select("id, full_name, role").in("id", needNurse).limit(2000); (data ?? []).forEach((p: any) => nurseInfo.set(p.id, { name: p.full_name ?? "—", role: (p.role ?? "").replace(/_/g, " ") })); } catch { /* fail-soft */ } }
+  if (needComp.length) { try { const { data } = await admin.from("framework_competencies").select("id, name").in("id", needComp).limit(5000); (data ?? []).forEach((c: any) => compName.set(c.id, c.name)); } catch { /* fail-soft */ } }
+  const expiringPeople = expiringSorted.map(d => ({ name: nurseInfo.get(d.nurse_id)?.name ?? "—", role: nurseInfo.get(d.nurse_id)?.role ?? "", competency: compName.get(d.competency_id) ?? "Competency", days: d.expiry_date ? daysTo(d.expiry_date) : null }));
+  const validationList = valAwaiting.map(d => ({ nurse: nurseInfo.get(d.nurse_id)?.name ?? "—", competency: compName.get(d.competency_id) ?? "Competency", status: d.validation_outcome === "returned" || d.validation_outcome === "deferred" ? "review" : "pending" }));
+
+  // ── Assessment activity feed (recent) + recent-updates counts ────────────────────────────────
+  let assessmentActivity: any[] = [];
+  try {
+    const { data: cycles } = await scope(admin.from("competency_cycles").select("id").limit(2000));
+    const cycleIds = (cycles ?? []).map((c: any) => c.id);
+    const q = isSuper ? admin.from("assessments").select("method, status, created_at").order("created_at", { ascending: false }).limit(8)
+      : (cycleIds.length ? admin.from("assessments").select("method, status, created_at").in("cycle_id", cycleIds).order("created_at", { ascending: false }).limit(8) : null);
+    if (q) { const { data } = await q; assessmentActivity = (data ?? []).map((a: any) => ({ method: (a.method ?? "assessment").replace(/_/g, " "), status: a.status, at: a.created_at })); }
+  } catch { /* fail-soft */ }
+
+  // Recent updates — counts of recent competency events by type (audit_log). Honest "recent", best-effort.
+  const recentUpdates = { evidence: 0, assessments: 0, competencies: 0, frameworks: 0 };
+  try {
+    const { data: au } = await scope(admin.from("audit_log").select("action").order("created_at", { ascending: false }).limit(200));
+    (au ?? []).forEach((a: any) => { const act = a.action ?? ""; if (/evidence/i.test(act)) recentUpdates.evidence++; else if (/assess/i.test(act)) recentUpdates.assessments++; else if (/competenc|validat|decision/i.test(act)) recentUpdates.competencies++; else if (/framework/i.test(act)) recentUpdates.frameworks++; });
+  } catch { /* fail-soft */ }
+
   // ── Competency risk alerts (from live state) ─────────────────────────────────────────────────
   const criticalFailures = latest.filter(d => d.critical_failure).length;
   const expiredMandatory = latest.filter(d => d.expiry_date && d.expiry_date < T && PASSING.includes(d.outcome)).length;
@@ -129,7 +163,8 @@ export async function loadCmoDashboard(admin: any, hid: string | null, isSuper: 
       frameworks: office.frameworks.total, competencies: office.competencyCount, cpus: office.cpus.total,
       compliance: office.compliance.coverage, activeCycles: office.activeCycles, pendingApprovals: office.pendingApprovals,
     },
-    readiness, expiring, awaitingValidation, workforceByCpu, highRiskUnits, domains, assessments, activity, risks, ai,
+    readiness, complianceScore, expiring, awaitingValidation, workforceByCpu, highRiskUnits, domains, assessments, activity, risks, ai,
+    expiringPeople, validationList, assessmentActivity, recentUpdates,
     highRiskThreshold: HIGH_RISK,
   };
 }

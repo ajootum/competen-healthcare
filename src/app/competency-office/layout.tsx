@@ -8,27 +8,29 @@ import SidebarToggle from "@/components/SidebarToggle";
 import { highestRole, type AppRole } from "@/lib/roles";
 import { workspaceLinksForUser } from "@/lib/workspace-links";
 
-// Competency Office Workspace — CMO-001 Competency Operations Dashboard. The primary operational
-// workspace for competency readiness enterprise-to-individual: 14 competency-operations modules
-// (§4). Dashboard, Frameworks/Library and CPUs are real; the operational modules surface live data
-// on the dashboard and route to their authoritative surfaces (§6 data sources) until each gains a
-// dedicated in-workspace page. Role-scoped to competency leads, educators and admins.
+// Competency Management Operations workspace (CMO-000) — Competency Intelligence. The enterprise
+// competency engine: seven CMO modules (§2 information architecture) plus a quick-actions rail.
+// The Dashboard, Frameworks and CPUs are real; the operational modules surface live data on the
+// dashboard and route to their authoritative surfaces (§6) until each gains a dedicated page.
+// Role-scoped to competency leads, educators and admins.
 
 const NAV = [
-  { label: "Competency Dashboard",      href: "/competency-office",              icon: "📊", exact: true },
-  { label: "Workforce Readiness",       href: "/competency-office/readiness",    icon: "🎯" },
-  { label: "Competency Library",        href: "/competency-office/library",      icon: "📚" },
-  { label: "Clinical Practice Units",   href: "/competency-office/cpus",          icon: "🏥" },
-  { label: "Frameworks & Standards",    href: "/competency-office/frameworks",    icon: "🗂️" },
-  { label: "Assessments",               href: "/competency-office/assessments",   icon: "📝" },
-  { label: "Evidence Centre",           href: "/competency-office/evidence",      icon: "📎" },
-  { label: "Competency Validation",     href: "/competency-office/validation",    icon: "✅" },
-  { label: "Professional Passports",    href: "/competency-office/passports",     icon: "🪪" },
-  { label: "Credentialing",             href: "/competency-office/credentialing", icon: "🎓" },
-  { label: "Learning Integration",      href: "/competency-office/learning",      icon: "📖" },
-  { label: "AI Competency Intelligence", href: "/competency-office/ai",           icon: "✨" },
-  { label: "Analytics",                 href: "/competency-office/analytics",     icon: "📈" },
-  { label: "Settings",                  href: "/competency-office/settings",      icon: "⚙️" },
+  { label: "Competency Dashboard",  href: "/competency-office",              icon: "📊", exact: true },
+  { label: "Compliance Centre",     href: "/competency-office/compliance",   icon: "✔️" },
+  { label: "Credential Management", href: "/competency-office/credentialing", icon: "🎓" },
+  { label: "Assessment Status",     href: "/competency-office/assessments",  icon: "📝" },
+  { label: "Validation Queue",      href: "/competency-office/validation",   icon: "✅" },
+  { label: "Competency Analytics",  href: "/competency-office/analytics",    icon: "📈" },
+  { label: "Competency Frameworks", href: "/competency-office/frameworks",   icon: "🗂️" },
+];
+
+// Quick-actions rail (§5) — cross-links to the authoritative surface for each action.
+const QUICK_ACTIONS = [
+  { label: "Create Assessment",   href: "/admin/competencies",           icon: "📝" },
+  { label: "Upload Evidence",     href: "/educator/evidence",            icon: "📎" },
+  { label: "Add Competency",      href: "/competency-office/frameworks", icon: "➕" },
+  { label: "Assign Learning",     href: "/admin/curricula",              icon: "📖" },
+  { label: "Run Readiness Report", href: "/competency-office/readiness", icon: "🧾" },
 ];
 
 const ALLOWED = ["hospital_admin", "educator", "super_admin"];
@@ -66,7 +68,7 @@ export default async function CompetencyOfficeLayout({ children }: { children: R
           <span className="w-7 h-7 rounded bg-teal-500 flex items-center justify-center text-white font-bold text-sm shrink-0">C</span>
           <span className="min-w-0">
             <span className="block text-white font-semibold text-sm leading-tight">Competen</span>
-            <span className="block text-teal-300/60 text-[10px] leading-tight">Competency Office</span>
+            <span className="block text-teal-300/60 text-[10px] leading-tight">Competency Intelligence</span>
           </span>
           <span className="flex-1" />
           <Link href="/dashboard" className="text-[11px] text-teal-100/70 border border-teal-800 rounded-lg px-2.5 py-1">⊞ My Dashboard</Link>
@@ -85,8 +87,8 @@ export default async function CompetencyOfficeLayout({ children }: { children: R
             <div className="w-7 h-7 rounded bg-teal-500 flex items-center justify-center text-white font-bold text-sm">C</div>
             <span className="text-white font-semibold text-sm" data-sb-label>Competen</span>
           </Link>
-          <div className="px-3 mb-4" data-sb-label>
-            <span className="text-[10px] font-bold text-teal-400/70 uppercase tracking-widest">Competency Office</span>
+          <div className="px-3 mb-2" data-sb-label>
+            <span className="text-[10px] font-bold text-teal-400/70 uppercase tracking-widest">Competency Operations</span>
           </div>
 
           <nav className="flex flex-col gap-0.5 flex-1 overflow-y-auto">
@@ -95,6 +97,18 @@ export default async function CompetencyOfficeLayout({ children }: { children: R
                 className="flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm text-teal-100/70 hover:bg-teal-800/50 hover:text-white transition-colors"
                 activeClassName="flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm bg-teal-700/60 text-white font-medium" />
             ))}
+
+            <div className="px-3 mt-4 mb-1.5" data-sb-label>
+              <span className="text-[10px] font-bold text-teal-400/70 uppercase tracking-widest">Quick Actions</span>
+            </div>
+            {QUICK_ACTIONS.map(({ label, href, icon }) => (
+              <Link key={label} href={href} data-sb-item title={label} className="flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm text-teal-100/60 hover:bg-teal-800/50 hover:text-white transition-colors">
+                <span className="w-5 text-center text-sm">{icon}</span>
+                <span data-sb-label className="flex-1">{label}</span>
+                <span data-sb-label className="text-teal-400/40">›</span>
+              </Link>
+            ))}
+
             <div className="my-2 border-t border-teal-800/30" />
             <Link href="/dashboard" data-sb-item title="My Dashboard" className="flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm text-teal-100/40 hover:bg-teal-800/50 hover:text-white transition-colors">
               <span className="w-5 text-center text-sm">⊞</span>
@@ -107,7 +121,7 @@ export default async function CompetencyOfficeLayout({ children }: { children: R
               <div className="w-7 h-7 rounded-full bg-amber-400 flex items-center justify-center text-amber-900 text-xs font-bold">{profile?.full_name?.[0] ?? "C"}</div>
               <div className="flex-1 min-w-0" data-sb-label>
                 <p className="text-white text-xs font-medium truncate">{profile?.full_name}</p>
-                <p className="text-amber-300/60 text-[10px]">Competency Office</p>
+                <p className="text-amber-300/60 text-[10px]">Competency Intelligence</p>
               </div>
             </div>
             {(userRoles.length > 1 || workspaces.length > 0) && <div className="mb-2" data-sb-label><RoleSwitcher roles={userRoles} activeRole={activeRole} workspaces={workspaces} /></div>}
