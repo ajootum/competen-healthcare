@@ -27,7 +27,7 @@ export const POS_MODULES: { code: string; name: string; href?: string; built: bo
   { code: "POS-103", name: "Patient Flow Command",      href: "/unit-manager/patient-operations/flow",           built: true },
   { code: "POS-104", name: "Bed & Capacity",            href: "/unit-manager/patient-operations/beds",           built: true },
   { code: "POS-105", name: "Interactive Ward Map",      href: "/unit-manager/patient-operations/ward-map",       built: true },
-  { code: "POS-106", name: "Operations Centre",         href: "/unit-manager/patient-operations/operations-centre", built: false, note: "operational data entry — SSW" },
+  { code: "POS-106", name: "Operations Centre",         href: "/unit-manager/patient-operations/operations-centre", built: true },
   { code: "POS-107", name: "Clinical Safety Centre",    href: "/unit-manager/patient-operations/safety",         built: true },
   { code: "POS-108", name: "Patient Card Workspace",    href: "/unit-manager/patient-operations/patient-card",   built: true },
   { code: "POS-109", name: "Operational Documentation", href: "/unit-manager/patient-operations/documentation",  built: false, note: "needs a documentation store" },
