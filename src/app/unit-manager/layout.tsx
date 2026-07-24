@@ -69,12 +69,18 @@ const NAV_GROUPS: { title: string; items: NavItem[] }[] = [
     { label: "Analytics & Reports",      href: "/unit-manager/workforce-management/analytics", icon: "📊" },
     { label: "Configuration",            href: "/unit-manager/workforce-management/configuration", icon: "🔧" },
   ] },
+  // Patient Operations Platform (POS-001) — the operational source of truth. Primary
+  // surfaces here; the full twelve modules are the in-page tab bar (PosTabs).
   { title: "Patient Operations", items: [
-    { label: "Unit Census",     icon: "🧑‍🤝‍🧑", soon: true },
-    { label: "Patient Flow",    icon: "🔄", soon: true },
-    { label: "Bed & Capacity",  icon: "🛏️", soon: true },
-    { label: "Ward Map",        icon: "🗺️", soon: true },
-    { label: "Clinical Alerts", icon: "🚨", soon: true },
+    { label: "Dashboard",         href: "/unit-manager/patient-operations", icon: "📊", exact: true },
+    { label: "Census & Registry", href: "/unit-manager/patient-operations/census", icon: "🧑‍🤝‍🧑" },
+    { label: "Patient Flow",      href: "/unit-manager/patient-operations/flow", icon: "🔄" },
+    { label: "Bed & Capacity",    href: "/unit-manager/patient-operations/beds", icon: "🛏️" },
+    { label: "Ward Map",          href: "/unit-manager/patient-operations/ward-map", icon: "🗺️" },
+    { label: "Clinical Safety",   href: "/unit-manager/patient-operations/safety", icon: "🚨" },
+    { label: "Patient Card",      href: "/unit-manager/patient-operations/patient-card", icon: "🪪" },
+    { label: "Timeline",          href: "/unit-manager/patient-operations/timeline", icon: "🕐" },
+    { label: "Analytics",         href: "/unit-manager/patient-operations/analytics", icon: "📈" },
   ] },
   { title: "Competency Management", items: [
     { label: "Competency Dashboard", href: "/unit-manager/competency",   icon: "🪪" },
