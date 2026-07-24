@@ -43,11 +43,6 @@ const SECTIONS: Record<string, { title: string; blurb: string; link?: { label: s
     blurb: "Predictive gap, risk and recommendation intelligence. Explainable rule-based recommendations are live on your dashboard; the full predictive suite is a later phase.",
     link: { label: "Open the Dashboard", href: "/competency-office" },
   },
-  analytics: {
-    title: "Analytics (CMO-013)",
-    blurb: "Enterprise competency attainment, coverage, gaps and trend analytics. Live compliance and domain readiness are summarised on your dashboard; the full analytics suite lives in the competency intelligence workspace.",
-    link: { label: "Open competency analytics", href: "/admin/competencies" },
-  },
   settings: {
     title: "Settings (CMO-014)",
     blurb: "Competency operations configuration — readiness thresholds, expiry windows, governance and lifecycle policy. A later phase.",
