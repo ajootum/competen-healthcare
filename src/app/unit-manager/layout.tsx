@@ -97,12 +97,12 @@ const NAV_GROUPS: { title: string; items: NavItem[] }[] = [
     { label: "Competency Frameworks", href: "/competency-office/frameworks", icon: "🧩" },
   ] },
   { title: "Learning & Development", items: [
-    { label: "Learning Dashboard",   href: "/unit-manager/learning", icon: "📚" },
-    { label: "Mandatory Learning",   icon: "📌", soon: true },
-    { label: "Professional Development", icon: "🚀", soon: true },
-    { label: "Career Pathways",      icon: "🧗", soon: true },
-    { label: "Education Planning",   icon: "🗓️", soon: true },
-    { label: "Learning Analytics",   icon: "📊", soon: true },
+    { label: "Learning Dashboard",   href: "/unit-manager/learning", icon: "📚", exact: true },
+    { label: "Mandatory Learning",   href: "/unit-manager/learning/mandatory", icon: "📌" },
+    { label: "Professional Development", href: "/unit-manager/learning/development", icon: "🚀" },
+    { label: "Career Pathways",      href: "/unit-manager/learning/pathways", icon: "🧗" },
+    { label: "Education Planning",   href: "/unit-manager/learning/schedule", icon: "🗓️" },
+    { label: "Learning Analytics",   href: "/unit-manager/learning/analytics", icon: "📊" },
   ] },
   { title: "Quality & Safety", items: [
     { label: "Quality Dashboard",    href: "/unit-manager/quality", icon: "🛡️" },

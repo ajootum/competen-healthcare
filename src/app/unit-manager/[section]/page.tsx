@@ -8,11 +8,6 @@ export const dynamic = "force-dynamic";
 // phase. Honest about what's live and where the detail lives.
 
 const SECTIONS: Record<string, { title: string; blurb: string; link?: { label: string; href: string } }> = {
-  learning: {
-    title: "Learning Oversight (UMG-005)",
-    blurb: "Track the unit's learning compliance — assigned pathways, mandatory training and completion. The unit's live completion rate is summarised on your dashboard; assignment and content management live in the education workspace.",
-    link: { label: "Open the learning library", href: "/admin/resources" },
-  },
   assessment: {
     title: "Assessment Oversight (UMG-006)",
     blurb: "Oversee competency assessment across the unit — active cycles, scheduled assessments and validations pending sign-off. Live counts are on your dashboard; run and review cycles in the assessment tools.",
