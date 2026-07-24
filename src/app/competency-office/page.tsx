@@ -19,15 +19,29 @@ const riskOf = (n: number) => (n >= 90 ? { label: "Low Risk", tone: "bg-emerald-
 const todayLabel = () => new Date().toLocaleDateString([], { day: "numeric", month: "short", year: "numeric" });
 const DOMAIN_COLORS = ["#3b82f6", "#10b981", "#f59e0b", "#ef4444", "#8b5cf6", "#ec4899", "#14b8a6", "#f97316"];
 
-function Kpi({ icon, tint, label, value, sub, href }: { icon: string; tint: string; label: string; value: any; sub?: string; href: string }) {
+// Trend sparkline (real, from readiness snapshots — renders only with ≥2 days of history).
+function Sparkline({ series, color }: { series: number[]; color: string }) {
+  if (!series || series.length < 2) return null;
+  const w = 100, h = 26, max = Math.max(...series), min = Math.min(...series), range = (max - min) || 1;
+  const pts = series.map((v, i) => `${(i / (series.length - 1)) * w},${h - ((v - min) / range) * (h - 4) - 2}`).join(" ");
+  return <svg width="100%" height={h} viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="none" aria-hidden className="mt-2"><polyline points={pts} fill="none" stroke={color} strokeWidth={1.5} strokeLinejoin="round" strokeLinecap="round" /></svg>;
+}
+
+function Kpi({ icon, tint, label, value, sub, tone, href, trend }: { icon: string; tint: string; label: string; value: any; sub?: string; tone?: string; href: string; trend?: { series: number[]; delta: number | null; good: "up" | "down"; unit?: string; color: string } }) {
+  const delta = trend?.delta;
+  const showDelta = delta != null && delta !== 0;
+  const good = showDelta && ((delta! > 0 && trend!.good === "up") || (delta! < 0 && trend!.good === "down"));
   return (
     <Link href={href} className={`${card} p-4 hover:border-teal-300 transition-colors block`}>
       <div className="flex items-center gap-2.5 mb-2">
         <span className={`w-8 h-8 rounded-lg flex items-center justify-center text-sm ${tint}`}>{icon}</span>
         <span className="text-xs font-medium text-gray-500 leading-tight">{label}</span>
       </div>
-      <div className="text-3xl font-bold tabular-nums text-gray-900">{value}</div>
-      {sub && <div className="text-[11px] text-gray-400 mt-0.5">{sub}</div>}
+      <div className={`text-3xl font-bold tabular-nums ${tone ?? "text-gray-900"}`}>{value}</div>
+      {showDelta
+        ? <div className={`text-[11px] mt-0.5 font-medium ${good ? "text-emerald-600" : "text-rose-600"}`}>{delta! > 0 ? "↑" : "↓"} {Math.abs(delta!)}{trend!.unit ?? ""} vs yesterday</div>
+        : sub && <div className="text-[11px] text-gray-400 mt-0.5">{sub}</div>}
+      {trend && <Sparkline series={trend.series} color={trend.color} />}
     </Link>
   );
 }
@@ -69,12 +83,12 @@ export default async function CompetencyDashboard() {
 
       {/* KPI row */}
       <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
-        <Kpi icon="🛡️" tint="bg-emerald-50" label="Organisation Readiness" value={`${d.readiness.score}%`} sub={`${d.readiness.current}/${d.readiness.total} current`} href="/competency-office/readiness" />
-        <Kpi icon="⚠️" tint="bg-rose-50" label="At Risk Units" value={d.highRiskUnits.length} sub={`below ${d.highRiskThreshold}%`} href="/competency-office/readiness" />
-        <Kpi icon="📅" tint="bg-amber-50" label="Expiring (30 Days)" value={d.expiring.d30} sub={`${d.expiring.individuals} individuals`} href="/competency-office/credentialing" />
-        <Kpi icon="📋" tint="bg-sky-50" label="Assessments Today" value={d.assessments.provisioned ? d.assessments.total : "—"} sub={d.assessments.provisioned ? `${d.assessments.completed} completed` : "cycle data"} href="/competency-office/assessments" />
-        <Kpi icon="📁" tint="bg-violet-50" label="Evidence Pending" value={d.awaitingValidation} sub="awaiting validation" href="/competency-office/validation" />
-        <Kpi icon="✨" tint="bg-teal-50" label="Compliance Score" value={`${d.complianceScore}%`} sub="validated & current" href="/competency-office/compliance" />
+        <Kpi icon="🛡️" tint="bg-emerald-50" label="Organisation Readiness" value={`${d.readiness.score}%`} sub={`${d.readiness.current}/${d.readiness.total} current`} href="/competency-office/readiness" trend={d.trends ? { ...d.trends.readiness, good: "up", unit: "%", color: "#10b981" } : undefined} />
+        <Kpi icon="⚠️" tint="bg-rose-50" label="At Risk Units" value={d.highRiskUnits.length} sub={`below ${d.highRiskThreshold}%`} href="/competency-office/readiness" trend={d.trends ? { ...d.trends.atRisk, good: "down", color: "#ef4444" } : undefined} />
+        <Kpi icon="📅" tint="bg-amber-50" label="Expiring (30 Days)" value={d.expiring.d30} sub={`${d.expiring.individuals} individuals`} href="/competency-office/credentialing" trend={d.trends ? { ...d.trends.expiring, good: "down", color: "#f59e0b" } : undefined} />
+        <Kpi icon="📋" tint="bg-sky-50" label="Assessments Today" value={d.assessments.provisioned ? d.assessments.total : "—"} sub={d.assessments.provisioned ? `${d.assessments.completed} completed` : "cycle data"} href="/competency-office/assessments" trend={d.trends ? { ...d.trends.assessments, good: "up", color: "#0ea5e9" } : undefined} />
+        <Kpi icon="📁" tint="bg-violet-50" label="Evidence Pending" value={d.awaitingValidation} sub="awaiting validation" href="/competency-office/validation" trend={d.trends ? { ...d.trends.evidence, good: "down", color: "#8b5cf6" } : undefined} />
+        <Kpi icon="✨" tint="bg-teal-50" label="Compliance Score" value={`${d.complianceScore}%`} sub="validated & current" href="/competency-office/compliance" trend={d.trends ? { ...d.trends.compliance, good: "up", unit: "%", color: "#14b8a6" } : undefined} />
       </div>
 
       {/* Operational readiness + risk + domain row */}
@@ -199,7 +213,7 @@ export default async function CompetencyDashboard() {
         </div>
       </div>
 
-      <p className="text-[11px] text-gray-400 pb-4">Competency Dashboard (CMO-001) over the live competency spine (competency_decisions) + framework/CPU governance. Real: readiness, compliance, at-risk units, expiring competencies &amp; named individuals, workforce readiness by unit, risk alerts, domain readiness, validation queue, assessment activity, recent updates and rule-based explainable AI insights. Honest next-phase: trend deltas &amp; sparklines (need a readiness-snapshot history), By-Department/Role grouping and per-widget export/filter.</p>
+      <p className="text-[11px] text-gray-400 pb-4">Competency Dashboard (CMO-001) over the live competency spine (competency_decisions) + framework/CPU governance. Real: readiness, compliance, at-risk units, expiring competencies &amp; named individuals, workforce readiness by unit, risk alerts, domain readiness, validation queue, assessment activity, recent updates, rule-based explainable AI insights and the KPI trend sparklines/deltas (daily readiness snapshots, migration 088 — sparklines build once ≥2 days are recorded; per-hospital, so no trend at enterprise scope yet). Honest next-phase: By-Department/Role grouping, per-widget export/filter and enterprise-aggregate trends.</p>
     </div>
   );
 }

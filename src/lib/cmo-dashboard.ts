@@ -156,8 +156,39 @@ export async function loadCmoDashboard(admin: any, hid: string | null, isSuper: 
   if (awaitingValidation) ai.push({ text: `Clear the validation queue — ${awaitingValidation} decision(s) awaiting review`, action: "Validate", priority: "medium", why: "Readiness recalculates on validation" });
   if (domains.length && domains[0].pct < 75) ai.push({ text: `Focus development on ${domains[0].name} (${domains[0].pct}% readiness — lowest domain)`, action: "Review domain", priority: "low", why: "Lowest-readiness competency domain" });
 
+  // ── Trend snapshots (CMO-001) — record today's KPIs, read history for sparklines + deltas ────
+  // Per-hospital daily snapshot (migration 088), idempotent on view. Enterprise/super trend needs
+  // aggregation — honest next-phase, so no sparkline at super scope. Fail-soft pre-migration.
+  let trends: any = null;
+  if (hid && !isSuper) {
+    try {
+      await admin.from("competency_readiness_snapshots").upsert({
+        hospital_id: hid, snapshot_date: T,
+        readiness_score: readiness.score, compliance_score: complianceScore,
+        at_risk_units: highRiskUnits.length, expiring_30: expiring.d30,
+        assessments_today: assessments.total, evidence_pending: awaitingValidation, updated_at: new Date().toISOString(),
+      }, { onConflict: "hospital_id,snapshot_date" });
+      const { data: snaps } = await admin.from("competency_readiness_snapshots")
+        .select("readiness_score, compliance_score, at_risk_units, expiring_30, assessments_today, evidence_pending")
+        .eq("hospital_id", hid).order("snapshot_date", { ascending: true }).limit(14);
+      const rows = (snaps ?? []) as any[];
+      const series = (k: string) => rows.map(r => r[k] ?? 0);
+      const delta = (k: string) => rows.length >= 2 ? (rows[rows.length - 1][k] ?? 0) - (rows[rows.length - 2][k] ?? 0) : null;
+      trends = {
+        points: rows.length,
+        readiness: { series: series("readiness_score"), delta: delta("readiness_score") },
+        atRisk: { series: series("at_risk_units"), delta: delta("at_risk_units") },
+        expiring: { series: series("expiring_30"), delta: delta("expiring_30") },
+        assessments: { series: series("assessments_today"), delta: delta("assessments_today") },
+        evidence: { series: series("evidence_pending"), delta: delta("evidence_pending") },
+        compliance: { series: series("compliance_score"), delta: delta("compliance_score") },
+      };
+    } catch { trends = null; }
+  }
+
   return {
     ready: decisionsReady || office.compliance.total > 0,
+    trends,
     decisionsReady,
     header: {
       frameworks: office.frameworks.total, competencies: office.competencyCount, cpus: office.cpus.total,

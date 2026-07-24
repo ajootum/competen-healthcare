@@ -26,11 +26,11 @@ const NAV = [
 
 // Quick-actions rail (§5) — cross-links to the authoritative surface for each action.
 const QUICK_ACTIONS = [
-  { label: "Create Assessment",   href: "/admin/competencies",           icon: "📝" },
-  { label: "Upload Evidence",     href: "/educator/evidence",            icon: "📎" },
-  { label: "Add Competency",      href: "/competency-office/frameworks", icon: "➕" },
-  { label: "Assign Learning",     href: "/admin/curricula",              icon: "📖" },
-  { label: "Run Readiness Report", href: "/competency-office/readiness", icon: "🧾" },
+  { label: "Create Assessment",   href: "/admin/competencies",           icon: "📝", tint: "bg-emerald-500/90" },
+  { label: "Upload Evidence",     href: "/educator/evidence",            icon: "📎", tint: "bg-sky-500/90" },
+  { label: "Add Competency",      href: "/competency-office/frameworks", icon: "➕", tint: "bg-amber-500/90" },
+  { label: "Assign Learning",     href: "/admin/curricula",              icon: "📖", tint: "bg-violet-500/90" },
+  { label: "Run Readiness Report", href: "/competency-office/readiness", icon: "🧾", tint: "bg-teal-500/90" },
 ];
 
 const ALLOWED = ["hospital_admin", "educator", "super_admin"];
@@ -84,8 +84,11 @@ export default async function CompetencyOfficeLayout({ children }: { children: R
         <aside data-sidebar className="hidden md:flex w-56 h-screen bg-[#0a2e38] flex-col py-6 px-4 fixed top-0 left-0 z-20">
           <SidebarToggle />
           <Link href="/competency-office" className="flex items-center gap-2 mb-6 px-2" data-sb-item>
-            <div className="w-7 h-7 rounded bg-teal-500 flex items-center justify-center text-white font-bold text-sm">C</div>
-            <span className="text-white font-semibold text-sm" data-sb-label>Competen</span>
+            <div className="w-8 h-8 rounded-lg bg-teal-500 flex items-center justify-center text-white font-bold text-sm shrink-0">C</div>
+            <span className="min-w-0" data-sb-label>
+              <span className="block text-white font-bold text-sm leading-tight tracking-wide">COMPETEN</span>
+              <span className="block text-teal-300/60 text-[9px] leading-tight">Competency Intelligence</span>
+            </span>
           </Link>
           <div className="px-3 mb-2" data-sb-label>
             <span className="text-[10px] font-bold text-teal-400/70 uppercase tracking-widest">Competency Operations</span>
@@ -101,9 +104,9 @@ export default async function CompetencyOfficeLayout({ children }: { children: R
             <div className="px-3 mt-4 mb-1.5" data-sb-label>
               <span className="text-[10px] font-bold text-teal-400/70 uppercase tracking-widest">Quick Actions</span>
             </div>
-            {QUICK_ACTIONS.map(({ label, href, icon }) => (
-              <Link key={label} href={href} data-sb-item title={label} className="flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm text-teal-100/60 hover:bg-teal-800/50 hover:text-white transition-colors">
-                <span className="w-5 text-center text-sm">{icon}</span>
+            {QUICK_ACTIONS.map(({ label, href, icon, tint }) => (
+              <Link key={label} href={href} data-sb-item title={label} className="flex items-center gap-2.5 px-3 py-1.5 rounded-lg text-sm text-teal-100/70 hover:bg-teal-800/50 hover:text-white transition-colors">
+                <span className={`w-6 h-6 rounded-md flex items-center justify-center text-[11px] shrink-0 ${tint}`}>{icon}</span>
                 <span data-sb-label className="flex-1">{label}</span>
                 <span data-sb-label className="text-teal-400/40">›</span>
               </Link>
