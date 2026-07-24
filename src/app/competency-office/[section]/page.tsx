@@ -23,11 +23,6 @@ const SECTIONS: Record<string, { title: string; blurb: string; link?: { label: s
     blurb: "The evidence-submission and review queue backing competency validation. Evidence is reviewed and linked to competencies and credentials in the educator evidence workspace.",
     link: { label: "Open the Evidence Centre", href: "/educator/evidence" },
   },
-  validation: {
-    title: "Competency Validation (CMO-008)",
-    blurb: "Governed validation of competency decisions (validate / return / defer). Readiness recalculates immediately on validation. The awaiting-validation count is on your dashboard.",
-    link: { label: "Open the validation queue", href: "/unit-manager/competency-validations" },
-  },
   passports: {
     title: "Professional Passports (CMO-009)",
     blurb: "The portable competency passport per practitioner — competencies, credentials and readiness composed from the governed record. Viewed in the assessor passport surface and each practitioner's own passport.",
