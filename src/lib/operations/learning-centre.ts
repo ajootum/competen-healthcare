@@ -84,6 +84,34 @@ export async function loadLearningCentre(admin: any, hid: string | null, isSuper
     }
   } catch { /* fail-soft */ }
 
+  // ── LDS-001 operational layer (learning_assignments / learning_enrolments, migration 089) ────
+  // Real assignment/enrolment/completion tracking; fail-soft + provisioned-aware (empty until seeded).
+  const learning = { provisioned: true, total: 0, active: 0, completed: 0, inProgress: 0, notStarted: 0, overdue: 0, dueSoon: 0, exempt: 0, completionRate: 0, mandatoryCompliance: null as number | null, activeAssignments: 0, overdueList: [] as any[] };
+  try {
+    const { data: enr, error } = await scope(admin.from("learning_enrolments")
+      .select("status, progress_pct, mandatory, due_date, completed_at, user_id, profiles!user_id(full_name, role), course:learning_courses!course_id(title)")
+      .limit(20000));
+    if (error) throw error;
+    const rows = (enr ?? []) as any[];
+    learning.total = rows.length;
+    learning.completed = rows.filter(e => e.status === "completed").length;
+    learning.inProgress = rows.filter(e => e.status === "in_progress").length;
+    learning.notStarted = rows.filter(e => e.status === "not_started").length;
+    learning.exempt = rows.filter(e => e.status === "exempt").length;
+    const isOverdue = (e: any) => e.status === "overdue" || (e.mandatory && !["completed", "exempt"].includes(e.status) && e.due_date && e.due_date < T);
+    learning.overdue = rows.filter(isOverdue).length;
+    learning.dueSoon = rows.filter(e => !["completed", "exempt"].includes(e.status) && e.due_date && e.due_date >= T && e.due_date <= d30).length;
+    learning.active = rows.filter(e => ["not_started", "in_progress", "overdue"].includes(e.status)).length;
+    const nonExempt = learning.total - learning.exempt;
+    learning.completionRate = nonExempt ? Math.round((learning.completed / nonExempt) * 100) : 0;
+    const mand = rows.filter(e => e.mandatory);
+    learning.mandatoryCompliance = mand.length ? Math.round((mand.filter(e => e.status === "completed").length / mand.length) * 100) : null;
+    learning.overdueList = rows.filter(isOverdue).sort((a, b) => (a.due_date ?? "").localeCompare(b.due_date ?? "")).slice(0, 8)
+      .map(e => ({ name: e.profiles?.full_name ?? "—", role: (e.profiles?.role ?? "").replace(/_/g, " "), course: e.course?.title ?? "Course", due: e.due_date }));
+    const { count } = await scope(admin.from("learning_assignments").select("id", { count: "exact", head: true }).eq("active", true));
+    learning.activeAssignments = count ?? 0;
+  } catch { learning.provisioned = false; }
+
   // Recent learning/competency activity.
   let activity: any[] = [];
   try {
@@ -91,5 +119,5 @@ export async function loadLearningCentre(admin: any, hid: string | null, isSuper
     activity = (au ?? []).filter((a: any) => /learn|competenc|assess|pathway|curricul|develop|validat/i.test(a.action ?? "")).slice(0, 10);
   } catch { /* fail-soft */ }
 
-  return { provisioned: provisioned || office.compliance.total > 0, ready: provisioned || office.compliance.total > 0, compliance, gaps, byRole, priorityStaff, catalogue, recommended, activity };
+  return { provisioned: provisioned || office.compliance.total > 0, ready: provisioned || office.compliance.total > 0, compliance, gaps, byRole, priorityStaff, catalogue, recommended, activity, learning };
 }

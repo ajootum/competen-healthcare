@@ -52,18 +52,48 @@ export default async function LearningCentre() {
   if (!d.ready) return <div className="space-y-4">{header}<div className="bg-amber-50 border border-amber-200 rounded-xl p-6"><p className="font-semibold text-amber-900">⚙️ No competency data yet</p><p className="text-sm text-amber-800 mt-1">Learning oversight activates once competency decisions are recorded for this unit.</p></div></div>;
 
   const g = d.gaps;
+  const L = d.learning ?? { provisioned: false, total: 0 };
+  const hasEnrol = L.provisioned && L.total > 0;
+  const compliancePct = hasEnrol && L.mandatoryCompliance != null ? L.mandatoryCompliance : d.compliance.pct;
+  const mandatoryOverdue = hasEnrol ? L.overdue : g.expired;
+  const due30 = hasEnrol ? L.dueSoon : g.expiring;
   return (
     <div className="space-y-4">
       {header}
 
-      {/* KPI cards */}
+      {/* KPI cards — real over learning enrolments (LDS-001) when present, competency-proxy otherwise */}
       <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
-        <Kpi icon="🛡️" tint="bg-emerald-50" label="Overall Compliance" value={`${d.compliance.pct}%`} tone={pctTone(d.compliance.pct)} sub={`${d.compliance.current}/${d.compliance.total} current`} href="/unit-manager/learning/mandatory" />
-        <Kpi icon="⛔" tint="bg-rose-50" label="Mandatory Overdue" value={g.expired} tone={g.expired ? "text-rose-600" : "text-gray-400"} sub="expired competency" href="/unit-manager/learning/mandatory" />
-        <Kpi icon="📅" tint="bg-amber-50" label="Due in 30 Days" value={g.expiring} tone={g.expiring ? "text-amber-600" : "text-gray-400"} sub="expiring competency" href="/unit-manager/learning/mandatory" />
-        <Kpi icon="🎯" tint="bg-sky-50" label="Learning Gaps" value={g.none} tone={g.none ? "text-sky-600" : "text-gray-400"} sub={`${g.staffAffected} staff affected`} href="#priority" />
+        <Kpi icon="🛡️" tint="bg-emerald-50" label="Overall Compliance" value={`${compliancePct}%`} tone={pctTone(compliancePct)} sub={hasEnrol ? "mandatory completion" : `${d.compliance.current}/${d.compliance.total} current`} href="/unit-manager/learning/mandatory" />
+        <Kpi icon="⛔" tint="bg-rose-50" label="Mandatory Overdue" value={mandatoryOverdue} tone={mandatoryOverdue ? "text-rose-600" : "text-gray-400"} sub={hasEnrol ? "assignments overdue" : "expired competency"} href="/unit-manager/learning/mandatory" />
+        <Kpi icon="📅" tint="bg-amber-50" label="Due in 30 Days" value={due30} tone={due30 ? "text-amber-600" : "text-gray-400"} sub={hasEnrol ? "assignments due" : "expiring competency"} href="/unit-manager/learning/mandatory" />
+        <Kpi icon="📋" tint="bg-sky-50" label="Active Assignments" value={hasEnrol ? L.active : "—"} tone={hasEnrol ? (L.active ? "text-sky-600" : "text-gray-400") : "text-gray-300"} sub={hasEnrol ? `${L.activeAssignments} assignment rule(s)` : L.provisioned ? "none assigned yet" : "run migration 089"} href="#enrolment" />
+        <Kpi icon="✅" tint="bg-teal-50" label="Completion Rate" value={hasEnrol ? `${L.completionRate}%` : "—"} tone={hasEnrol ? pctTone(L.completionRate) : "text-gray-300"} sub={hasEnrol ? `${L.completed}/${L.total - L.exempt} done` : "enrolment tracking"} href="#enrolment" />
         <Kpi icon="📚" tint="bg-violet-50" label="Learning Catalogue" value={d.catalogue.provisioned ? d.catalogue.resources : "—"} sub={d.catalogue.provisioned ? `${d.catalogue.pathways} pathways · ${d.catalogue.curricula} curricula` : "catalogue"} href="/admin/resources" />
-        <Kpi icon="⏱️" tint="bg-gray-50" label="Protected Learning" value="—" tone="text-gray-300" sub="PLT store next-phase" href="/unit-manager/learning/schedule" />
+      </div>
+
+      {/* Assignment & Enrolment (LDS-001 operational layer) */}
+      <div id="enrolment" className={`${card} p-5 scroll-mt-4`}>
+        <div className="flex items-center justify-between mb-3"><h3 className="font-semibold text-gray-900 text-sm">Assignment &amp; Enrolment <span className="text-[10px] font-normal text-gray-400">LDS-001 operational layer</span></h3><Link href="/admin/curricula" className="text-[11px] text-emerald-600 hover:underline">Assign →</Link></div>
+        {!L.provisioned ? (
+          <div className="border border-dashed border-gray-200 rounded-lg p-5 text-center"><p className="text-sm text-gray-500">The learning operations store (migration 089) isn&apos;t applied yet.</p><p className="text-[11px] text-gray-400 mt-1">Once applied, active assignments, completion and mandatory-overdue track over real enrolments.</p></div>
+        ) : L.total === 0 ? (
+          <div className="border border-dashed border-gray-200 rounded-lg p-5 text-center"><p className="text-sm text-gray-500">No learning enrolments yet — assignment tracking activates once learning is assigned.</p><p className="text-[11px] text-gray-400 mt-1">Compliance and overdue above fall back to competency currency until then.</p></div>
+        ) : (
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            <div className="grid grid-cols-4 gap-2 text-center content-start">
+              <div className="rounded-lg bg-emerald-50 py-2"><p className="text-lg font-bold text-emerald-700 tabular-nums">{L.completed}</p><p className="text-[10px] text-emerald-600">Completed</p></div>
+              <div className="rounded-lg bg-sky-50 py-2"><p className="text-lg font-bold text-sky-700 tabular-nums">{L.inProgress}</p><p className="text-[10px] text-sky-600">In progress</p></div>
+              <div className="rounded-lg bg-gray-50 py-2"><p className="text-lg font-bold text-gray-700 tabular-nums">{L.notStarted}</p><p className="text-[10px] text-gray-500">Not started</p></div>
+              <div className="rounded-lg bg-rose-50 py-2"><p className="text-lg font-bold text-rose-700 tabular-nums">{L.overdue}</p><p className="text-[10px] text-rose-600">Overdue</p></div>
+            </div>
+            <div>
+              <p className="text-[11px] font-semibold text-gray-500 uppercase tracking-wide mb-1.5">Overdue mandatory</p>
+              {L.overdueList.length === 0 ? <p className="text-sm text-gray-400">No overdue mandatory learning. 🎉</p> : (
+                <div className="space-y-1">{L.overdueList.slice(0, 5).map((o: any, i: number) => (<div key={i} className="flex items-center justify-between gap-2 text-xs"><span className="min-w-0 truncate"><span className="text-gray-700">{o.name}</span> <span className="text-gray-400">{o.course}</span></span><span className="text-rose-600 shrink-0">{o.due ?? "—"}</span></div>))}</div>
+              )}
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Heat map + priority queue + recommended */}
@@ -109,7 +139,7 @@ export default async function LearningCentre() {
         </div>
       </div>
 
-      <p className="text-[11px] text-gray-400 pb-4">Learning Oversight &amp; Development Centre (UMG-005) over the competency spine (competency_decisions) + learning catalogue (curricula / learning_pathways / learning_resources / resource_competencies). Real: learning compliance, mandatory-overdue &amp; due-30 (from competency expiries), learning gaps + affected staff, the by-role heat map, priority queue and gap-mapped recommended learning. Honest next-phase: per-staff learning assignment tracking, protected-learning-time (with safe-staffing validation), individual development plans and career-pathway progression — each needs its store. Content &amp; assignment live in the <Link href="/admin/curricula" className="text-emerald-700 hover:underline">education workspace</Link>. Source: competency + learning services; calculated {todayLabel()}.</p>
+      <p className="text-[11px] text-gray-400 pb-4">Learning Oversight &amp; Development Centre (UMG-005) over the competency spine (competency_decisions) + learning catalogue (curricula / learning_pathways / learning_resources / resource_competencies). Real: learning compliance, mandatory-overdue &amp; due-30, active assignments and completion over the LDS-001 operational layer (learning_assignments / learning_enrolments, migration 089) — falling back to competency currency where no learning is assigned yet; plus learning gaps + affected staff, the by-role heat map, priority queue and gap-mapped recommended learning (always real). Honest next-phase: protected-learning-time (with safe-staffing validation before approval), individual development plans and career-pathway progression — each needs its store. Content &amp; assignment live in the <Link href="/admin/curricula" className="text-emerald-700 hover:underline">education workspace</Link>. Source: competency + learning services; calculated {todayLabel()}.</p>
     </div>
   );
 }
