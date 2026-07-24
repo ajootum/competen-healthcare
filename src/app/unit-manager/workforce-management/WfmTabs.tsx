@@ -3,8 +3,9 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
-// Workforce Management section tabs (UMW-WFM-000). Shared across the section; built
-// tabs link, unbuilt render muted ("next phase") instead of dead-linking.
+// Workforce Management section tabs (UMW-WFM-000). Section COMPLETE — all ten
+// modules (WFM-001..009 + Overview) are built and link. Keep in sync with the
+// Workforce Management group in unit-manager/layout.tsx.
 const TABS: { label: string; href: string; built?: boolean }[] = [
   { label: "Overview", href: "/unit-manager/workforce-management", built: true },
   { label: "Unit Workforce Planning", href: "/unit-manager/workforce-management/establishment", built: true },
@@ -16,10 +17,6 @@ const TABS: { label: string; href: string; built?: boolean }[] = [
   { label: "Development & Readiness", href: "/unit-manager/workforce-management/development", built: true },
   { label: "Analytics & Reports", href: "/unit-manager/workforce-management/analytics", built: true },
   { label: "Configuration", href: "/unit-manager/workforce-management/configuration", built: true },
-  { label: "Competency Readiness", href: "/unit-manager/workforce-management/competency-readiness" },
-  { label: "Break Management", href: "/unit-manager/workforce-management/breaks" },
-  { label: "Supervisor Notes", href: "/unit-manager/workforce-management/supervisor-notes" },
-  { label: "Analytics", href: "/unit-manager/workforce-management/analytics" },
 ];
 
 export default function WfmTabs() {

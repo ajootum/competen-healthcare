@@ -55,16 +55,19 @@ const NAV_GROUPS: { title: string; items: NavItem[] }[] = [
     { label: "Shift Intelligence",      href: "/unit-manager/shift-intelligence",    icon: "🧭" },
     { label: "Executive Actions",       href: "/unit-manager/action-centre",         icon: "✅" },
   ] },
+  // Workforce Management (UMW-WFM-001..009) — section COMPLETE: all ten modules
+  // are live. Keep in sync with WfmTabs.tsx (the in-page section tab bar).
   { title: "Workforce Management", items: [
-    { label: "Overview",             href: "/unit-manager/workforce-management", icon: "👥" },
-    { label: "Unit Workforce Planning", href: "/unit-manager/workforce-management/establishment", icon: "📐" },
-    { label: "Staffing Engine",      href: "/unit-manager/workforce-management/staffing-engine", icon: "🧑‍⚕️" },
-    { label: "Team Assignments",     href: "/unit-manager/workforce-management/team-assignments", icon: "🧩" },
-    { label: "Roster & Scheduling",  icon: "🗓️", soon: true },
-    { label: "Competency Readiness", icon: "🎯", soon: true },
-    { label: "Break Management",     icon: "☕", soon: true },
-    { label: "Supervisor Notes",     icon: "📝", soon: true },
-    { label: "Analytics",            icon: "📊", soon: true },
+    { label: "Overview",                 href: "/unit-manager/workforce-management", icon: "👥", exact: true },
+    { label: "Unit Workforce Planning",  href: "/unit-manager/workforce-management/establishment", icon: "📐" },
+    { label: "Staffing Engine",          href: "/unit-manager/workforce-management/staffing-engine", icon: "🧑‍⚕️" },
+    { label: "Team Assignments",         href: "/unit-manager/workforce-management/team-assignments", icon: "🧩" },
+    { label: "Roster Governance",        href: "/unit-manager/workforce-management/roster-governance", icon: "🗓️" },
+    { label: "Availability & Attendance", href: "/unit-manager/workforce-management/attendance", icon: "📋" },
+    { label: "Exceptions & Approvals",   href: "/unit-manager/workforce-management/exceptions-approvals", icon: "⚖️" },
+    { label: "Development & Readiness",   href: "/unit-manager/workforce-management/development", icon: "🎯" },
+    { label: "Analytics & Reports",      href: "/unit-manager/workforce-management/analytics", icon: "📊" },
+    { label: "Configuration",            href: "/unit-manager/workforce-management/configuration", icon: "🔧" },
   ] },
   { title: "Patient Operations", items: [
     { label: "Unit Census",     icon: "🧑‍🤝‍🧑", soon: true },
