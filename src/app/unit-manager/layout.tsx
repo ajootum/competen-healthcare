@@ -46,10 +46,10 @@ const NAV_GROUPS: { title: string; items: NavItem[] }[] = [
     { label: "Unit Workforce Planning",  href: "/unit-manager/workforce-management/establishment", icon: "📐" },
     { label: "AI Scheduling Engine",     href: "/unit-manager/scheduling-engine", icon: "🗓️" },
     { label: "Competency Engine",        href: "/unit-manager/competency", icon: "🎯" },
-    // Workforce analytics is live (WFM-008 Analytics & Reports); intelligence stays "soon" —
-    // there is no dedicated workforce-intelligence surface built yet (honest, not a dead link).
+    // Workforce analytics = WFM-008 Analytics & Reports; intelligence = the rule-based Workforce
+    // Intelligence Engine (risk / gaps / deployment recommendations over the live workforce).
     { label: "Workforce Analytics Engine",   href: "/unit-manager/workforce-management/analytics", icon: "📊" },
-    { label: "Workforce Intelligence Engine", icon: "🧠", soon: true },
+    { label: "Workforce Intelligence Engine", href: "/unit-manager/workforce-intelligence", icon: "🧠" },
   ] },
   { title: "Unit Command", items: [
     { label: "Overview Dashboard",      href: "/unit-manager",                       icon: "📊", exact: true },
