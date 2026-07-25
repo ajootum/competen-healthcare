@@ -96,6 +96,7 @@ export default async function PlatformOperations() {
     { label: "Localization", desc: "Locales & translations", icon: "🌐", href: "/super-admin/platform-ops/localization" },
     { label: "Collaboration", desc: "Comments & mentions", icon: "💬", href: "/super-admin/platform-ops/collaboration" },
     { label: "Configuration Registry", desc: "Object catalogue (WCE-002)", icon: "🗂️", href: "/super-admin/platform-ops/registry" },
+    { label: "Experience Composer", desc: "Per-scope config (WCE-003)", icon: "🎚️", href: "/super-admin/platform-ops/composer" },
   ];
 
   const modules = [
@@ -107,6 +108,7 @@ export default async function PlatformOperations() {
     { n: 6, label: "Monitoring & Operations", desc: "Health, alerts, logs, events, backups", icon: "📡", href: "/super-admin/platform-ops/monitoring", live: true },
     { n: 7, label: "Workspace Configuration Engine", desc: "No-code config of workspaces, sections & modules — inheritance, versioning & rollback", icon: "🎛️", href: "/super-admin/platform-ops/configuration", live: true },
     { n: 8, label: "Configuration Registry", desc: "WCE-002 — authoritative catalogue of every configurable platform object (keys, hierarchy, safety class, override policy)", icon: "🗂️", href: "/super-admin/platform-ops/registry", live: true },
+    { n: 9, label: "Tenant Experience Composer", desc: "WCE-003 — governed per-scope configuration overview integrating the registry (what's configurable) with runtime overrides (what's configured)", icon: "🎚️", href: "/super-admin/platform-ops/composer", live: true },
   ];
 
   return (
@@ -214,7 +216,7 @@ export default async function PlatformOperations() {
       </div>
 
       {/* Module directory */}
-      <Panel title="Platform Operations — 8 modules">
+      <Panel title="Platform Operations — 9 modules">
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
           {modules.map(m => {
             const Wrap: any = m.live ? Link : "div";
