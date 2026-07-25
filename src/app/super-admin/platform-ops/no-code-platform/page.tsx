@@ -27,6 +27,7 @@ function Stat({ label, value, sub, tone }: { label: string; value: any; sub?: st
 // The 18 core platform components (§4) mapped to their real implementation.
 const COMPONENTS: { name: string; status: string; via?: string; href?: string }[] = [
   { name: "Configuration Registry", status: "live", via: "WCE-002", href: "/super-admin/platform-ops/registry" },
+  { name: "Metadata Repository", status: "live", via: "WCE-002 store", href: "/super-admin/platform-ops/registry" },
   { name: "Runtime Rendering Engine", status: "partial", via: "config overrides", href: "/super-admin/platform-ops/configuration" },
   { name: "Workspace Builder", status: "live", via: "WCE-001", href: "/super-admin/platform-ops/configuration" },
   { name: "Module Builder", status: "live", via: "WCE-005", href: "/super-admin/platform-ops/catalogue" },
@@ -41,7 +42,9 @@ const COMPONENTS: { name: string; status: string; via?: string; href?: string }[
   { name: "Theme Designer", status: "partial", via: "Workspaces", href: "/super-admin/platform-ops/workspaces" },
   { name: "Publishing Pipeline", status: "live", via: "WCE-004", href: "/super-admin/platform-ops/governance" },
   { name: "Sandbox", status: "next" },
+  { name: "Dependency Graph Service", status: "next" },
   { name: "Marketplace", status: "next" },
+  { name: "Configuration SDK", status: "next" },
   { name: "Version Control", status: "live", via: "WCE-004", href: "/super-admin/platform-ops/governance" },
   { name: "Audit & Security", status: "live", via: "WCE-004", href: "/super-admin/platform-ops/governance" },
 ];
@@ -57,6 +60,26 @@ const ROADMAP: { n: number; capability: string; outcome: string; status: string 
   { n: 6, capability: "SDK", outcome: "Partner extensions", status: "next" },
 ];
 const PRINCIPLES = ["Metadata-first", "Configuration over customization", "Runtime composition", "Tenant isolation", "API-first", "Event-driven", "Auditability", "Extensibility", "Backward compatibility"];
+// §6 Runtime flow — the login→render resolution sequence.
+const RUNTIME_FLOW = ["Resolve tenant", "Resolve role(s)", "Resolve feature flags", "Build navigation", "Resolve workspace", "Load dashboards", "Resolve widgets", "Bind data sources", "Apply permissions", "Render interface", "Subscribe to live updates"];
+// §8 Configuration APIs — the canonical /config/* contract mapped to the real endpoint (or next-phase).
+const APIS: { method: string; endpoint: string; purpose: string; status: string; via?: string }[] = [
+  { method: "GET", endpoint: "/config/workspaces", purpose: "Retrieve workspace metadata", status: "partial", via: "/api/platform/workspace-config" },
+  { method: "POST", endpoint: "/config/publish", purpose: "Publish configuration", status: "live", via: "/api/governance/config" },
+  { method: "GET", endpoint: "/config/widgets", purpose: "Retrieve widget definitions", status: "partial", via: "/api/registry" },
+  { method: "POST", endpoint: "/config/validate", purpose: "Validate package", status: "partial", via: "governance classify" },
+  { method: "POST", endpoint: "/config/import", purpose: "Import package", status: "next" },
+  { method: "GET", endpoint: "/config/dependencies", purpose: "Dependency graph", status: "next" },
+];
+// §10 Publishing pipeline — 11 stages; Draft/Review/Approval/Publish are live via WCE-004.
+const PIPELINE: { stage: string; status: string }[] = [
+  { stage: "Draft", status: "live" }, { stage: "Validation", status: "partial" }, { stage: "Dependency Analysis", status: "next" },
+  { stage: "Review", status: "live" }, { stage: "Approval", status: "live" }, { stage: "Package Build", status: "next" },
+  { stage: "Sandbox Test", status: "next" }, { stage: "Publish", status: "live" }, { stage: "Cache Refresh", status: "partial" },
+  { stage: "Runtime Event Broadcast", status: "next" }, { stage: "Monitoring", status: "partial" },
+];
+// §11 Performance targets (targets, not measured).
+const PERF: [string, string][] = [["Dashboard load", "< 2 s"], ["Widget render", "< 500 ms"], ["Publish", "< 30 s"], ["Availability", "> 99.9%"], ["Rollback", "< 2 min"], ["Horizontal scaling", "Supported"]];
 
 export default async function NoCodePlatform() {
   const supabase = await createClient();
@@ -104,7 +127,7 @@ export default async function NoCodePlatform() {
       {/* Core platform components → real status */}
       <div className={`${card} p-5`}>
         <h2 className="font-semibold text-gray-900 text-sm mb-1">Core Platform Components</h2>
-        <p className="text-[11px] text-gray-400 mb-4">The eighteen platform components (§4), each mapped to its live implementation, a partial capability, or an honest next-phase build.</p>
+        <p className="text-[11px] text-gray-400 mb-4">The core platform components (§4), each mapped to its live implementation, a partial capability, or an honest next-phase build.</p>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5">
           {COMPONENTS.map(c => {
             const inner = (
@@ -115,6 +138,16 @@ export default async function NoCodePlatform() {
             );
             return c.href ? <Link key={c.name} href={c.href}>{inner}</Link> : <div key={c.name}>{inner}</div>;
           })}
+        </div>
+      </div>
+
+      {/* §6 Runtime flow */}
+      <div className={`${card} p-5`}>
+        <h2 className="font-semibold text-gray-900 text-sm mb-1">Runtime Flow</h2>
+        <p className="text-[11px] text-gray-400 mb-3">At login the runtime composes the interface from metadata — no hard-coded screens.</p>
+        <div className="flex flex-wrap items-center gap-1.5">
+          <span className="text-[11px] font-semibold bg-gray-900 text-white rounded px-2 py-1">Login</span>
+          {RUNTIME_FLOW.map(s => <span key={s} className="flex items-center gap-1.5"><span className="text-gray-300 text-[10px]">→</span><span className="text-[11px] bg-indigo-50 text-indigo-700 rounded px-2 py-1">{s}</span></span>)}
         </div>
       </div>
 
@@ -137,6 +170,15 @@ export default async function NoCodePlatform() {
         </div>
       </div>
 
+      {/* §10 Publishing pipeline */}
+      <div className={`${card} p-5`}>
+        <h2 className="font-semibold text-gray-900 text-sm mb-1">Publishing Pipeline</h2>
+        <p className="text-[11px] text-gray-400 mb-3">The eleven-stage publish path (§10). Draft, Review, Approval and Publish are governed live by WCE-004; the remaining stages are next-phase.</p>
+        <div className="flex flex-wrap items-center gap-1.5">
+          {PIPELINE.map((p, i) => <span key={p.stage} className="flex items-center gap-1.5">{i > 0 && <span className="text-gray-300 text-[10px]">→</span>}<span className={`inline-flex items-center gap-1 text-[11px] rounded px-2 py-1 border ${ST[p.status].cls}`}><span className={`w-1.5 h-1.5 rounded-full ${ST[p.status].dot}`} />{p.stage}</span></span>)}
+        </div>
+      </div>
+
       {/* Implementation roadmap → real status */}
       <div className={`${card} p-5`}>
         <h2 className="font-semibold text-gray-900 text-sm mb-4">Implementation Roadmap</h2>
@@ -151,11 +193,34 @@ export default async function NoCodePlatform() {
         </div>
       </div>
 
+      {/* §8 APIs + §11 performance targets */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        <div className={`${card} p-5 lg:col-span-2`}>
+          <h2 className="font-semibold text-gray-900 text-sm mb-3">Configuration APIs</h2>
+          <div className="space-y-1.5">
+            {APIS.map(a => (
+              <div key={a.endpoint} className="flex items-center gap-2 text-[11px]">
+                <span className={`font-bold w-10 shrink-0 ${a.method === "GET" ? "text-sky-600" : "text-orange-600"}`}>{a.method}</span>
+                <code className="text-gray-700 font-mono shrink-0">{a.endpoint}</code>
+                <span className="text-gray-400 truncate hidden sm:inline">{a.purpose}{a.via ? ` · ${a.via}` : ""}</span>
+                <span className="ml-auto shrink-0"><Badge s={a.status} /></span>
+              </div>
+            ))}
+          </div>
+        </div>
+        <div className={`${card} p-5`}>
+          <h2 className="font-semibold text-gray-900 text-sm mb-3">Performance Targets</h2>
+          <div className="space-y-1.5">{PERF.map(([m, t]) => <div key={m} className="flex items-center justify-between text-[11px]"><span className="text-gray-500">{m}</span><b className="tabular-nums text-gray-800">{t}</b></div>)}</div>
+          <p className="text-[10px] text-gray-400 mt-2">Targets (§11) — not yet instrumented.</p>
+        </div>
+      </div>
+
       {/* Principles */}
       <div className={`${card} p-5`}>
         <h2 className="font-semibold text-gray-900 text-sm mb-3">Architectural Principles</h2>
         <div className="flex flex-wrap gap-1.5">{PRINCIPLES.map(p => <span key={p} className="text-[11px] bg-indigo-50/60 text-indigo-700 rounded-full px-2.5 py-1">{p}</span>)}</div>
         <p className="text-[11px] text-gray-400 mt-3">Security: RBAC + ABAC, tenant isolation, immutable audit log, approval workflows and rollback snapshots — enforced by the WCE-004 governance service. Full encrypted-store + digital-signature publishing is next-phase.</p>
+        <div className="mt-3 rounded-lg bg-indigo-50/60 border border-indigo-100 p-3"><p className="text-[11px] text-indigo-800"><b>Platform mandate (§13):</b> all future functional modules consume NCP configuration services rather than hard-coded implementations.</p></div>
       </div>
     </div>
   );
