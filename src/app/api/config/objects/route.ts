@@ -220,6 +220,34 @@ export async function PATCH(req: Request) {
     def.inherits = realRefs;
     deps = [...deps.filter((d: any) => d?.type !== "PERMISSION_REF"), ...realRefs.map((k: string) => ({ type: "PERMISSION_REF", objectKey: k }))];
   }
+  // NCP-009 navigation — a role-aware menu tree (one level of nesting) + landing + quick actions; linked
+  // MODULE/PAGE/DASHBOARD objects become NAV_TARGET deps.
+  if (obj.object_type === "NAVIGATION_SECTION") {
+    const NAV = ["sidebar", "top", "tabbed", "tree", "mega", "wizard"];
+    const items = Array.isArray(def.items) ? def.items : [];
+    const keys = new Set<string>(); const targetRefs = new Set<string>();
+    const checkItem = (it: any): string | null => {
+      if (!it?.key || !/^[a-z][a-z0-9_]*$/.test(it.key)) return `Invalid item key "${it?.key ?? ""}" — lowercase letters/numbers/underscore`;
+      if (keys.has(it.key)) return `Duplicate item key "${it.key}"`;
+      keys.add(it.key);
+      if (!String(it.label ?? "").trim()) return `Item "${it.key}" needs a label`;
+      if (typeof it.target === "string" && it.target) targetRefs.add(it.target);
+      return null;
+    };
+    for (const it of items) {
+      const e = checkItem(it); if (e) return badRequest(e);
+      for (const k of (Array.isArray(it.children) ? it.children : [])) { const e2 = checkItem(k); if (e2) return badRequest(e2); }
+    }
+    if (def.navType && !NAV.includes(def.navType)) return badRequest("Invalid navigation type");
+    for (const q of (Array.isArray(def.quickActions) ? def.quickActions : [])) {
+      if (!String(q?.label ?? "").trim()) return badRequest("Every quick action needs a label");
+      if (typeof q.target === "string" && q.target) targetRefs.add(q.target);
+    }
+    if (typeof def.landing === "string" && def.landing) targetRefs.add(def.landing);
+    def.itemCount = items.length;
+    const realRefs = targetRefs.size ? (((await admin.from("configuration_registry_objects").select("object_key").in("object_key", [...targetRefs])).data) ?? []).map((r: any) => r.object_key) : [];
+    deps = [...deps.filter((d: any) => d?.type !== "NAV_TARGET"), ...realRefs.map((k: string) => ({ type: "NAV_TARGET", objectKey: k }))];
+  }
 
   const { error } = await admin.from("configuration_registry_objects").update({ definition: def, dependencies: deps, updated_at: new Date().toISOString(), updated_by: userId }).eq("object_key", object_key);
   if (error) return missing(error) ? NextResponse.json({ error: "Run migration 094 to enable object definitions" }, { status: 409 }) : badRequest(error.message);
