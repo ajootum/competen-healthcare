@@ -31,19 +31,19 @@ const COMPONENTS: { name: string; status: string; via?: string; href?: string }[
   { name: "Runtime Rendering Engine", status: "partial", via: "config overrides", href: "/super-admin/platform-ops/configuration" },
   { name: "Workspace Builder", status: "live", via: "WCE-001", href: "/super-admin/platform-ops/configuration" },
   { name: "Module Builder", status: "live", via: "WCE-005", href: "/super-admin/platform-ops/catalogue" },
-  { name: "Dashboard Builder", status: "partial", via: "Workspaces", href: "/super-admin/platform-ops/workspaces" },
+  { name: "Dashboard Builder", status: "live", via: "NCP-006", href: "/super-admin/platform-ops/reports" },
   { name: "Widget Builder", status: "live", via: "WCE-005", href: "/super-admin/platform-ops/catalogue" },
-  { name: "Form Builder", status: "next" },
-  { name: "Workflow Builder", status: "next" },
-  { name: "Business Rules Engine", status: "next" },
+  { name: "Form Builder", status: "live", via: "NCP-003", href: "/super-admin/platform-ops/forms" },
+  { name: "Workflow Builder", status: "live", via: "NCP-004", href: "/super-admin/platform-ops/workflows" },
+  { name: "Business Rules Engine", status: "live", via: "NCP-007", href: "/super-admin/platform-ops/rules" },
   { name: "AI Configuration Studio", status: "partial", via: "AI Gateway", href: "/super-admin/platform-ops/ai-gateway" },
-  { name: "Reporting Studio", status: "next" },
-  { name: "Navigation Builder", status: "partial", via: "Workspaces", href: "/super-admin/platform-ops/workspaces" },
+  { name: "Reporting Studio", status: "live", via: "NCP-006", href: "/super-admin/platform-ops/reports" },
+  { name: "Navigation Builder", status: "live", via: "NCP-009", href: "/super-admin/platform-ops/navigation" },
   { name: "Theme Designer", status: "partial", via: "Workspaces", href: "/super-admin/platform-ops/workspaces" },
   { name: "Publishing Pipeline", status: "live", via: "WCE-004", href: "/super-admin/platform-ops/governance" },
   { name: "Sandbox", status: "next" },
   { name: "Dependency Graph Service", status: "live", via: "NCP", href: "/super-admin/platform-ops/dependencies" },
-  { name: "Marketplace", status: "next" },
+  { name: "Marketplace", status: "partial", via: "NCP-011", href: "/super-admin/platform-ops/packages" },
   { name: "Configuration SDK", status: "next" },
   { name: "Version Control", status: "live", via: "WCE-004", href: "/super-admin/platform-ops/governance" },
   { name: "Audit & Security", status: "live", via: "WCE-004", href: "/super-admin/platform-ops/governance" },
@@ -60,7 +60,7 @@ const BUILDERS: { code: string; name: string; status: string; href?: string; via
   { code: "NCP-008", name: "Role, Permission & Visibility Designer", status: "live", href: "/super-admin/platform-ops/permissions" },
   { code: "NCP-009", name: "Navigation & Experience Designer", status: "live", href: "/super-admin/platform-ops/navigation" },
   { code: "NCP-010", name: "Data Source & Integration Mapper", status: "live", href: "/super-admin/platform-ops/integration-mapper" },
-  { code: "NCP-011", name: "Template, Package & Marketplace Manager", status: "next" },
+  { code: "NCP-011", name: "Template, Package & Marketplace Manager", status: "live", href: "/super-admin/platform-ops/packages" },
 ];
 const META_OBJECTS = ["Workspace", "Module", "Dashboard", "Widget", "Form", "Workflow", "Business Rule", "AI Assistant", "Navigation Item", "Theme", "Report"];
 const INHERITANCE = ["Platform", "Enterprise", "Hospital", "Department", "Unit", "User"];
@@ -70,7 +70,7 @@ const ROADMAP: { n: number; capability: string; outcome: string; status: string 
   { n: 2, capability: "Runtime Engine", outcome: "Dynamic UI", status: "partial" },
   { n: 3, capability: "Builders", outcome: "Visual configuration", status: "partial" },
   { n: 4, capability: "Governance", outcome: "Publishing & versioning", status: "live" },
-  { n: 5, capability: "Marketplace", outcome: "Reusable packages", status: "next" },
+  { n: 5, capability: "Marketplace", outcome: "Reusable packages", status: "partial" },
   { n: 6, capability: "SDK", outcome: "Partner extensions", status: "next" },
 ];
 const PRINCIPLES = ["Metadata-first", "Configuration over customization", "Runtime composition", "Tenant isolation", "API-first", "Event-driven", "Auditability", "Extensibility", "Backward compatibility"];
@@ -88,7 +88,7 @@ const APIS: { method: string; endpoint: string; purpose: string; status: string;
 // §10 Publishing pipeline — 11 stages; Draft/Review/Approval/Publish are live via WCE-004.
 const PIPELINE: { stage: string; status: string }[] = [
   { stage: "Draft", status: "live" }, { stage: "Validation", status: "partial" }, { stage: "Dependency Analysis", status: "live" },
-  { stage: "Review", status: "live" }, { stage: "Approval", status: "live" }, { stage: "Package Build", status: "next" },
+  { stage: "Review", status: "live" }, { stage: "Approval", status: "live" }, { stage: "Package Build", status: "partial" },
   { stage: "Sandbox Test", status: "next" }, { stage: "Publish", status: "live" }, { stage: "Cache Refresh", status: "partial" },
   { stage: "Runtime Event Broadcast", status: "next" }, { stage: "Monitoring", status: "partial" },
 ];
