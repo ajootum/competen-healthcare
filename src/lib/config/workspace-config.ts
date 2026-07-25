@@ -12,7 +12,7 @@ export type Settings = { enabled: boolean; label?: string; order?: number };
 
 export const SCOPE_ORDER: Record<string, number> = { platform: 0, tenant: 1, hospital: 2, unit: 3, role: 4, user: 5 };
 
-function applies(row: OverrideRow, ctx: ScopeCtx): boolean {
+export function applies(row: OverrideRow, ctx: ScopeCtx): boolean {
   switch (row.scope_type) {
     case "platform": return true;
     case "tenant": return !!ctx.tenantId && row.scope_ref === ctx.tenantId;
