@@ -278,12 +278,9 @@ export default async function PassportPage() {
       {/* Header */}
       <div className="flex flex-wrap items-center justify-between gap-3 mb-5">
         <div>
-          <div className="flex items-center gap-2 text-xs text-gray-400 mb-1">
-            <Link href="/dashboard" className="hover:text-gray-600">Dashboard</Link>
-            <span>/</span>
-            <span className="text-gray-700 font-medium">Competency Passport</span>
-          </div>
-          <h1 className="text-xl font-bold text-gray-900">Competency Passport</h1>
+          <p className="text-[11px] font-semibold text-blue-600 uppercase tracking-wide mb-0.5">Personal Workspace</p>
+          <h1 className="text-xl font-bold text-gray-900">My Competencies &amp; Professional Passport</h1>
+          <p className="text-sm text-gray-500 mt-0.5">Track, validate and showcase your skills, credentials and professional growth.</p>
         </div>
         <Link href="/dashboard/passport/print"
           className="inline-flex items-center gap-1.5 text-sm font-semibold text-white bg-teal-600 hover:bg-teal-700 px-4 py-2 rounded-lg transition-colors">
