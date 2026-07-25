@@ -18,7 +18,7 @@ export const ENUMS = {
   configurability_class: ["mandatory_configurable", "optional", "conditional", "user_personalisable"],
   safety_classification: ["non_clinical", "administrative", "operational", "clinical_support", "clinical_safety_relevant", "clinical_safety_critical", "security_critical", "regulatory_critical", "financial_control_critical"],
   config_level: ["PLATFORM", "ENTERPRISE", "TENANT", "UNIT", "USER"],
-  metric_direction: ["higher_is_better", "lower_is_better"],
+  metric_direction: ["lower_better", "higher_better"],
   field_type: ["text", "textarea", "number", "date", "datetime", "dropdown", "multiselect", "radio", "checkbox", "toggle", "signature", "file", "rating", "email", "phone", "patient_lookup", "staff_lookup", "currency", "url"],
   node_type: ["start", "task", "decision", "approval", "timer", "notification", "integration", "ai_action", "end"],
   viz: ["kpi_card", "table", "pivot", "line", "bar", "pie", "heatmap", "treemap", "scatter", "map", "gauge", "timeline", "calendar", "trend", "custom"],

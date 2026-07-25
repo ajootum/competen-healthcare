@@ -64,7 +64,7 @@ const BUILDERS: { code: string; name: string; status: string; href?: string; via
 ];
 // The platform-services tier (NCP-012..020) — the runtime + governance services beneath the builders.
 const SERVICES: { code: string; name: string; status: string; href?: string; via?: string }[] = [
-  { code: "NCP-012", name: "Testing & Simulation Centre", status: "next" },
+  { code: "NCP-012", name: "Testing & Simulation Centre", status: "live", href: "/super-admin/platform-ops/testing" },
   { code: "NCP-013", name: "Analytics & Optimisation Centre", status: "live", href: "/super-admin/platform-ops/analytics" },
   { code: "NCP-014", name: "AI Configuration Copilot", status: "next" },
   { code: "NCP-015", name: "Runtime & Resolution Engine", status: "partial", via: "config overrides", href: "/super-admin/platform-ops/configuration" },
