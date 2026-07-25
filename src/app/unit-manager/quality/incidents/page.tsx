@@ -1,26 +1,84 @@
 import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
+import Link from "next/link";
 import { loadIncidentCentre } from "@/lib/operations/incident-centre";
 import { loadUnitDepartments } from "@/lib/operations/unit-command";
 import UnitFilters from "../../UnitFilters";
 import QualityTabs from "../QualityTabs";
-import { qcard, QHeader, Kpi, Pipe, StackedTrend, TrendLegend, NextPhase, CrossLink } from "../widgets";
+import IncidentInbox from "./IncidentInbox";
 
 export const dynamic = "force-dynamic";
 
-// Incident Management (UMG-QS-002) — the Unit Manager's oversight lens over the incident register
-// (op_incidents). Real: KPIs, the report→investigate→awaiting-action→closed lifecycle, incident-by-type and
-// by-severity, the 6-month severity trend, RCA-pending flag and the named register. Incidents are created /
-// investigated in the Shift Supervisor Quality & Safety centre (the authoritative surface). Fail-soft.
+// Incident Management Centre (UMG-QS-002) — aligned to the detailed spec + mockup. The executive incident
+// dashboard: KPI ribbon with period-over-period deltas + sparklines (total / critical / median investigation
+// time are real from the incident timestamps; current-state KPIs show the live value), the 6-month severity
+// trend (line), incidents by category and by severity (donuts), the triage inbox, investigation-progress
+// stages, recent critical incidents and quick access. Consolidation over op_incidents — no store forked.
 /* eslint-disable @typescript-eslint/no-explicit-any */
-const TREND_META = [
+const card = "bg-white rounded-xl border border-gray-200";
+const INC_META = [
   { key: "critical", label: "Critical", color: "#ef4444" },
-  { key: "high", label: "High", color: "#f97316" },
-  { key: "medium", label: "Medium", color: "#f59e0b" },
-  { key: "low", label: "Low", color: "#22c55e" },
-  { key: "nearMiss", label: "Near Miss", color: "#14b8a6" },
+  { key: "major", label: "Major", color: "#f97316" },
+  { key: "moderate", label: "Moderate", color: "#f59e0b" },
+  { key: "minor", label: "Minor", color: "#22c55e" },
+  { key: "nearMiss", label: "Near Miss", color: "#3b82f6" },
 ];
-const sevTone = (s: string) => (s === "critical" ? "bg-rose-100 text-rose-700" : s === "high" ? "bg-orange-100 text-orange-700" : s === "medium" ? "bg-amber-100 text-amber-700" : "bg-emerald-100 text-emerald-700");
+const QUICK = [
+  { label: "Report New Incident", sub: "Create a new incident report", icon: "📝", tint: "bg-emerald-50", href: "/supervisor/quality-safety" },
+  { label: "Investigation Centre", sub: "Manage investigations", icon: "🔎", tint: "bg-sky-50", href: "/supervisor/quality-safety" },
+  { label: "RCA Workspace", sub: "Perform root cause analysis", icon: "🧩", tint: "bg-orange-50", href: "/supervisor/quality-safety" },
+  { label: "CAPA Actions", sub: "Manage corrective actions", icon: "🗂️", tint: "bg-violet-50", href: "/unit-manager/capa" },
+  { label: "Incident Analytics", sub: "Trends and benchmarks", icon: "📊", tint: "bg-teal-50", href: "/unit-manager/quality/analytics" },
+  { label: "Lessons Learned", sub: "Share learning & alerts", icon: "💡", tint: "bg-pink-50", href: "/unit-manager/quality/ai" },
+  { label: "Regulatory Reporting", sub: "External notifications", icon: "📤", tint: "bg-amber-50", href: "/unit-manager/quality/mortality" },
+  { label: "Configuration", sub: "Incident settings", icon: "⚙️", tint: "bg-gray-50", href: "/unit-manager/settings" },
+];
+
+function Spark({ series, color }: { series: number[]; color: string }) {
+  if (!series || series.length < 2 || series.every(v => v === series[0])) return <div className="h-6" />;
+  const max = Math.max(...series), min = Math.min(...series), rng = max - min || 1;
+  const pts = series.map((v, i) => `${(i / (series.length - 1)) * 100},${22 - ((v - min) / rng) * 20}`).join(" ");
+  return <svg viewBox="0 0 100 24" preserveAspectRatio="none" className="w-full h-6"><polyline points={pts} fill="none" stroke={color} strokeWidth="2" vectorEffect="non-scaling-stroke" /></svg>;
+}
+function Delta({ v, unit, prev, invert }: { v: number | null | undefined; unit: string; prev: string; invert?: boolean }) {
+  if (v == null) return <span className="text-[10px] text-gray-300">no prior period</span>;
+  if (v === 0) return <span className="text-[10px] text-gray-400">no change vs {prev}</span>;
+  const good = invert ? v < 0 : v > 0;
+  return <span className={`text-[10px] font-medium ${good ? "text-emerald-600" : "text-rose-600"}`}>{v > 0 ? "↑" : "↓"} {Math.abs(v)}{unit} vs {prev}</span>;
+}
+function MultiLine({ labels, series, max }: { labels: string[]; series: { color: string; data: number[] }[]; max: number }) {
+  const W = 320, H = 150, pad = 8;
+  const x = (i: number) => pad + (i / Math.max(1, labels.length - 1)) * (W - 2 * pad);
+  const y = (v: number) => H - 18 - (v / (max || 1)) * (H - 30);
+  return (
+    <svg viewBox={`0 0 ${W} ${H}`} className="w-full" style={{ height: 150 }}>
+      {[0, 0.5, 1].map((f, i) => <line key={i} x1={pad} x2={W - pad} y1={y(max * f)} y2={y(max * f)} stroke="#f1f5f9" strokeWidth="1" />)}
+      {series.map((s, si) => <polyline key={si} points={s.data.map((v, i) => `${x(i)},${y(v)}`).join(" ")} fill="none" stroke={s.color} strokeWidth="2" vectorEffect="non-scaling-stroke" />)}
+      {series.map((s, si) => s.data.map((v, i) => <circle key={`${si}-${i}`} cx={x(i)} cy={y(v)} r="2" fill={s.color} />))}
+      {labels.map((l, i) => <text key={i} x={x(i)} y={H - 4} textAnchor="middle" className="fill-gray-400" style={{ fontSize: 8 }}>{l}</text>)}
+    </svg>
+  );
+}
+// Multi-segment donut (prefix-sum arcs — no render-scope mutation).
+function SegDonut({ segments, total }: { segments: { n: number; color: string }[]; total: number }) {
+  const sum = segments.reduce((a, s) => a + s.n, 0) || 1;
+  const active = segments.filter(s => s.n > 0);
+  const grad = active.length
+    ? `conic-gradient(${active.map((s, i) => { const before = active.slice(0, i).reduce((a, x) => a + x.n, 0); return `${s.color} ${(before / sum) * 360}deg ${((before + s.n) / sum) * 360}deg`; }).join(", ")})`
+    : "conic-gradient(#f1f5f9 0deg 360deg)";
+  return <div className="relative w-[128px] h-[128px] shrink-0" style={{ background: grad, borderRadius: "9999px" }}><div className="absolute inset-[18px] bg-white rounded-full flex flex-col items-center justify-center"><span className="text-2xl font-bold text-gray-900 tabular-nums leading-none">{total}</span><span className="text-[10px] text-gray-400">Total</span></div></div>;
+}
+
+function Kpi({ icon, tint, label, value, unit, sub, tone, spark, sparkColor, delta, deltaUnit, deltaInvert, prev }: any) {
+  return (
+    <div className={`${card} p-4`}>
+      <div className="flex items-center justify-between mb-1.5"><div className="flex items-center gap-2"><span className={`w-7 h-7 rounded-lg flex items-center justify-center text-sm ${tint}`}>{icon}</span><span className="text-[11px] font-medium text-gray-500 uppercase tracking-wide">{label}</span></div><span className="text-[10px] text-gray-300">ⓘ</span></div>
+      <div className={`text-2xl font-bold tabular-nums ${tone ?? "text-gray-900"}`}>{value}{unit && <span className="text-sm font-medium text-gray-400 ml-1">{unit}</span>}</div>
+      {spark ? <div className="mt-1"><Spark series={spark} color={sparkColor} /></div> : sub && <div className="text-[10px] text-gray-400 mt-0.5">{sub}</div>}
+      {delta !== undefined && <div className="mt-1"><Delta v={delta} unit={deltaUnit ?? "%"} prev={prev} invert={deltaInvert} /></div>}
+    </div>
+  );
+}
 
 export default async function IncidentManagement() {
   const supabase = await createClient();
@@ -41,8 +99,12 @@ export default async function IncidentManagement() {
   const header = (
     <>
       <div className="flex items-start justify-between gap-3 flex-wrap">
-        <QHeader code="UMG-QS-002" title="Incident Management" subtitle="Incident & near-miss register, investigation lifecycle and RCA oversight" />
-        <UnitFilters departments={departments} />
+        <div className="flex items-center gap-2"><span className="w-9 h-9 rounded-lg bg-rose-50 flex items-center justify-center text-lg">🛡️</span><div><h1 className="text-2xl font-bold text-gray-900 tracking-tight">Incident Management Centre <span className="text-gray-300 font-medium text-lg">(UMG-QS-002)</span></h1><p className="text-sm text-gray-500">Report, investigate and manage incidents to improve patient safety and quality of care</p></div></div>
+        <div className="flex items-center gap-2">
+          <UnitFilters departments={departments} />
+          <Link href="/unit-manager/quality/incidents" className="text-xs border border-gray-200 rounded-lg px-3 py-2 text-gray-600 hover:bg-gray-50">↻ Refresh</Link>
+          <Link href="/supervisor/quality-safety" className="text-xs bg-rose-600 text-white rounded-lg px-3 py-2 hover:bg-rose-700 font-medium">+ Report Incident</Link>
+        </div>
       </div>
       <QualityTabs />
     </>
@@ -50,70 +112,96 @@ export default async function IncidentManagement() {
 
   if (!d.provisioned) return <div className="space-y-4">{header}<div className="bg-amber-50 border border-amber-200 rounded-xl p-6"><p className="font-semibold text-amber-900">⚙️ Incident register not provisioned</p><p className="text-sm text-amber-800 mt-1">Apply migration 073 (op_incidents) to enable incident management.</p></div></div>;
 
-  const k = d.kpis;
+  const k = d.kpis, prev = d.trend.months[4] ?? "prev";
+  const catSum = d.category.reduce((a: number, c: any) => a + c.n, 0);
+  const sevSum = d.severity.reduce((a: number, s: any) => a + s.n, 0);
 
   return (
     <div className="space-y-4">
       {header}
 
+      {/* ── KPI ribbon ─────────────────────────────────────────────────────── */}
       <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
-        <Kpi icon="🚩" tint="bg-rose-50" label="Open Incidents" value={k.open} tone={k.open ? "text-rose-600" : "text-gray-400"} sub={`${k.total} total`} />
-        <Kpi icon="❗" tint="bg-orange-50" label="Critical Open" value={k.critical} tone={k.critical ? "text-rose-600" : "text-gray-400"} sub="need RCA" />
-        <Kpi icon="🔎" tint="bg-sky-50" label="Investigating" value={k.investigating} sub="under review" />
-        <Kpi icon="⏳" tint="bg-amber-50" label="Awaiting Action" value={k.awaitingAction} sub="corrective action" />
-        <Kpi icon="🤏" tint="bg-teal-50" label="Near Misses" value={k.nearMiss} sub="reported" />
-        <Kpi icon="✅" tint="bg-emerald-50" label="Closure Rate" value={`${k.closureRate}%`} sub={k.avgClose != null ? `avg ${k.avgClose}d to close` : "—"} />
+        <Kpi icon="🗂️" tint="bg-sky-50" label="Total Incidents" value={k.total} sub={`${k.totalAll} all-time`} spark={k.sparks.total} sparkColor="#0ea5e9" delta={k.deltas.total} prev={prev} deltaInvert />
+        <Kpi icon="❗" tint="bg-rose-50" label="Critical Incidents" value={k.criticalOpen} tone={k.criticalOpen ? "text-rose-600" : "text-gray-400"} spark={k.sparks.critical} sparkColor="#ef4444" delta={k.deltas.critical} prev={prev} deltaInvert />
+        <Kpi icon="🔎" tint="bg-orange-50" label="Open Investigations" value={k.openInvestigations} sub="in progress" />
+        <Kpi icon="🧩" tint="bg-violet-50" label="Awaiting RCA" value={k.awaitingRca} tone={k.awaitingRca ? "text-violet-600" : "text-gray-400"} sub="need root-cause" />
+        <Kpi icon="⏱️" tint="bg-amber-50" label="Overdue Actions" value={k.overdueActions} tone={k.overdueActions ? "text-amber-600" : "text-gray-400"} sub="open > 30 days" />
+        <Kpi icon="🕐" tint="bg-teal-50" label="Median Investigation" value={k.medianDays != null ? k.medianDays : "—"} unit={k.medianDays != null ? "days" : ""} spark={k.sparks.median} sparkColor="#14b8a6" delta={k.deltas.median} deltaUnit="d" prev={prev} deltaInvert />
       </div>
 
-      {d.kpis.rcaPending > 0 && (
-        <div className="bg-rose-50 border border-rose-200 rounded-xl p-4">
-          <p className="text-sm font-semibold text-rose-900">⚠️ {d.kpis.rcaPending} critical/sentinel incident{d.kpis.rcaPending === 1 ? "" : "s"} awaiting root-cause analysis</p>
-          <p className="text-xs text-rose-700 mt-0.5">Business rule: critical incidents require an RCA and corrective action before closure.</p>
-          <div className="mt-2 space-y-1">{d.rcaList.map((r: any, i: number) => <div key={i} className="text-xs text-rose-800 flex items-center gap-2"><span className={`text-[10px] font-semibold rounded px-1.5 py-0.5 ${sevTone(r.severity)}`}>{r.type}</span><span className="truncate">{r.desc}</span></div>)}</div>
-        </div>
-      )}
-
+      {/* ── Trend · category · severity ────────────────────────────────────── */}
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
-        <div className={`${qcard} p-5`}>
+        <div className={`${card} p-5`}>
           <h3 className="font-semibold text-gray-900 text-sm mb-1">Incident Trend <span className="text-[10px] text-gray-400 font-normal">last 6 months</span></h3>
-          {d.hasData ? <><StackedTrend months={d.trend.months} series={d.trend.series} meta={TREND_META} /><TrendLegend meta={TREND_META} /></> : <p className="text-sm text-gray-400 py-10 text-center">No incidents recorded.</p>}
+          {d.hasData ? (
+            <div className="flex gap-3">
+              <div className="flex-1 min-w-0"><MultiLine labels={d.trend.months} max={Math.max(1, ...INC_META.map(m => Math.max(...(d.trend.series[m.key] ?? [0]))))} series={INC_META.map(m => ({ color: m.color, data: d.trend.series[m.key] ?? [] }))} /></div>
+              <div className="w-24 shrink-0 space-y-1 pt-1">{INC_META.map(m => <div key={m.key} className="flex items-center justify-between text-[11px]"><span className="flex items-center gap-1 text-gray-500"><span className="w-2 h-2 rounded-sm" style={{ background: m.color }} />{m.label}</span><b className="tabular-nums text-gray-700">{d.trend.totals[m.key] ?? 0}</b></div>)}</div>
+            </div>
+          ) : <p className="text-sm text-gray-400 py-10 text-center">No incidents recorded.</p>}
         </div>
 
-        <div className={`${qcard} p-5`}>
-          <h3 className="font-semibold text-gray-900 text-sm mb-3">Investigation Lifecycle</h3>
-          <div className="space-y-2">{d.lifecycle.map((s: any) => <Pipe key={s.key} label={s.label} n={s.n} total={k.total || 1} color={s.key === "closed" ? "#94a3b8" : s.key === "awaiting_action" ? "#f59e0b" : s.key === "investigating" ? "#3b82f6" : "#ef4444"} />)}</div>
+        <div className={`${card} p-5`}>
+          <h3 className="font-semibold text-gray-900 text-sm mb-3">Incidents by Category</h3>
+          {d.category.length ? <div className="flex items-center gap-4">
+            <SegDonut total={catSum} segments={d.category.map((c: any) => ({ n: c.n, color: c.color }))} />
+            <div className="text-[11px] text-gray-600 space-y-1 min-w-0 flex-1">{d.category.slice(0, 6).map((c: any) => <div key={c.type} className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full shrink-0" style={{ background: c.color }} /><span className="text-gray-600 truncate flex-1">{c.label}</span><b className="tabular-nums text-gray-700">{c.n}</b><span className="text-gray-300 tabular-nums">({c.pct}%)</span></div>)}</div>
+          </div> : <p className="text-sm text-gray-400 py-8 text-center">No incidents.</p>}
         </div>
 
-        <div className={`${qcard} p-5`}>
-          <h3 className="font-semibold text-gray-900 text-sm mb-3">By Severity</h3>
-          <div className="space-y-2">{d.bySeverity.map((s: any) => <div key={s.key} className="flex items-center justify-between text-xs"><span className={`text-[10px] font-semibold rounded px-1.5 py-0.5 ${sevTone(s.key)}`}>{s.label}</span><span className="text-gray-500">{s.open} open <span className="text-gray-300">/ {s.n} total</span></span></div>)}</div>
-          <h3 className="font-semibold text-gray-900 text-sm mt-4 mb-2">By Type</h3>
-          <div className="space-y-1">{d.byType.slice(0, 6).map((t: any) => <div key={t.type} className="flex items-center justify-between text-xs"><span className="text-gray-600">{t.label}</span><b className="tabular-nums text-gray-800">{t.open}<span className="text-gray-300 font-normal"> / {t.n}</span></b></div>)}</div>
+        <div className={`${card} p-5`}>
+          <h3 className="font-semibold text-gray-900 text-sm mb-3">Severity Distribution</h3>
+          {sevSum > 0 ? <div className="flex items-center gap-4">
+            <SegDonut total={sevSum} segments={d.severity.map((s: any) => ({ n: s.n, color: s.color }))} />
+            <div className="text-[11px] text-gray-600 space-y-1 min-w-0 flex-1">{d.severity.map((s: any) => <div key={s.key} className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full shrink-0" style={{ background: s.color }} /><span className="text-gray-600 flex-1">{s.label}</span><b className="tabular-nums text-gray-700">{s.n}</b><span className="text-gray-300 tabular-nums">({s.pct}%)</span></div>)}</div>
+          </div> : <p className="text-sm text-gray-400 py-8 text-center">No incidents.</p>}
         </div>
       </div>
 
-      <div className={`${qcard} p-5`}>
-        <div className="flex items-center justify-between mb-3"><h3 className="font-semibold text-gray-900 text-sm">Incident Register <span className="text-[10px] text-gray-400 font-normal">most recent</span></h3><CrossLink href="/supervisor/quality-safety">Report / investigate incidents</CrossLink></div>
-        {d.register.length ? (
-          <div className="overflow-x-auto">
-            <table className="w-full text-xs">
-              <thead><tr className="text-left text-gray-400 border-b border-gray-100"><th className="py-1.5 font-medium">Type</th><th className="py-1.5 font-medium">Severity</th><th className="py-1.5 font-medium">Description</th><th className="py-1.5 font-medium">Patient</th><th className="py-1.5 font-medium">Status</th><th className="py-1.5 font-medium text-right">Reported</th></tr></thead>
-              <tbody>{d.register.map((r: any) => (
-                <tr key={r.id} className="border-b border-gray-50">
-                  <td className="py-2 text-gray-700 whitespace-nowrap">{r.type}{r.nearMiss && <span className="ml-1 text-[9px] text-teal-600">near-miss</span>}</td>
-                  <td className="py-2"><span className={`text-[10px] font-semibold rounded px-1.5 py-0.5 ${sevTone(r.severity)}`}>{r.severity}</span></td>
-                  <td className="py-2 text-gray-600 max-w-[220px] truncate" title={r.desc}>{r.desc}{!r.hasAction && r.statusKey !== "closed" && <span className="ml-1 text-[9px] text-amber-500">no action</span>}</td>
-                  <td className="py-2 text-gray-500">{r.patient ?? "—"}</td>
-                  <td className="py-2 text-gray-500">{r.status}</td>
-                  <td className="py-2 text-right text-gray-400 tabular-nums">{(r.at ?? "").slice(0, 10)}</td>
-                </tr>
-              ))}</tbody>
-            </table>
-          </div>
-        ) : <p className="text-sm text-gray-400 py-6 text-center">No incidents in the register yet.</p>}
+      {/* ── Inbox · investigation progress · recent critical ───────────────── */}
+      <div className="grid grid-cols-1 xl:grid-cols-4 gap-4">
+        <div className={`${card} p-5 xl:col-span-2`}>
+          <h3 className="font-semibold text-gray-900 text-sm mb-2">Incident Inbox &amp; Triage Queue</h3>
+          <IncidentInbox rows={d.inbox} counts={d.triageCounts} />
+        </div>
+
+        <div className={`${card} p-5`}>
+          <h3 className="font-semibold text-gray-900 text-sm mb-3">Investigation Progress</h3>
+          <div className="space-y-2.5">{d.investigationProgress.map((s: any) => (
+            <div key={s.key}><div className="flex items-center justify-between text-xs mb-0.5"><span className="text-gray-600">{s.label}</span><b className="tabular-nums text-gray-800">{s.n} <span className="text-gray-300 font-normal">({s.pct}%)</span></b></div><div className="w-full h-2 rounded-full bg-gray-100 overflow-hidden"><div className="h-full rounded-full" style={{ width: `${s.pct}%`, background: s.color }} /></div></div>
+          ))}</div>
+          <p className="text-[10px] text-gray-400 mt-3">Stages reflect the incident lifecycle statuses. A distinct RCA-in-progress stage is next-phase.</p>
+        </div>
+
+        <div className={`${card} p-5`}>
+          <div className="flex items-center justify-between mb-3"><h3 className="font-semibold text-gray-900 text-sm">Recent Critical</h3><Link href="/supervisor/quality-safety" className="text-[11px] text-rose-700 hover:underline">View all →</Link></div>
+          {d.recentCritical.length ? <div className="space-y-2">{d.recentCritical.map((r: any) => (
+            <div key={r.id} className="rounded-lg border border-gray-100 p-2.5">
+              <div className="flex items-center justify-between gap-2"><span className="text-[10px] text-gray-400 tabular-nums">{r.ref}</span><span className="text-[9px] font-semibold rounded px-1.5 py-0.5 bg-rose-100 text-rose-700">Critical</span></div>
+              <p className="text-xs text-gray-700 mt-0.5 line-clamp-2">{r.title}</p>
+              <p className="text-[10px] text-gray-400 mt-0.5">{r.at} · {r.status.replace("_", " ")}</p>
+            </div>
+          ))}</div> : <p className="text-sm text-gray-400 py-6 text-center">No critical incidents open. 🎉</p>}
+        </div>
       </div>
 
-      <NextPhase>Incident Management (UMG-QS-002) over the incident register (op_incidents, migration 073). Real: KPIs, the report→investigate→awaiting-action→closed lifecycle, incident by type &amp; severity, the 6-month severity trend, the RCA-pending flag (critical/sentinel open without a corrective action — §6 business rule) and the named register. Incidents are created and investigated in the Shift Supervisor Quality &amp; Safety centre (the authoritative surface, linked above). Honest next-phase: the structured root-cause taxonomy and the full RCA workflow (fishbone / 5-whys). Gate hospital_admin/super_admin.</NextPhase>
+      {/* ── Quick access ───────────────────────────────────────────────────── */}
+      <div className={`${card} p-5`}>
+        <h3 className="font-semibold text-gray-900 text-sm mb-3">Quick Access</h3>
+        <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-8 gap-2">{QUICK.map(q => (
+          <Link key={q.label} href={q.href} className="rounded-lg border border-gray-100 p-3 hover:border-rose-200 hover:shadow-sm transition-all text-center">
+            <span className={`w-9 h-9 rounded-lg ${q.tint} flex items-center justify-center text-base mx-auto mb-1.5`}>{q.icon}</span>
+            <p className="text-[11px] font-medium text-gray-800 leading-tight">{q.label}</p>
+            <p className="text-[9px] text-gray-400 mt-0.5 leading-tight">{q.sub}</p>
+          </Link>
+        ))}</div>
+      </div>
+
+      <div className="flex items-center justify-between flex-wrap gap-2 text-[10px] text-gray-400 pb-4">
+        <span>Data sources: Shift Supervisor Workspace · Patient Operations · Audit &amp; Compliance · CAPA &amp; Improvement · Risk Register · Clinical Indicators</span>
+        <span className="flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-emerald-500" /> Incident register live · consolidation over op_incidents (migration 073)</span>
+      </div>
     </div>
   );
 }
