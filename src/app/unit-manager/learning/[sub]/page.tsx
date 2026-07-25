@@ -8,11 +8,6 @@ export const dynamic = "force-dynamic";
 // Learning sub-modules (UMG-005). Each surfaces its live status on the Learning Dashboard and routes
 // to its authoritative surface (educator / competency workspace), or notes its next-phase store.
 const SUBS: Record<string, { title: string; blurb: string; link?: { label: string; href: string } }> = {
-  schedule: {
-    title: "Education Schedule",
-    blurb: "The education calendar — classroom, simulation, OSCE, orientation, bedside teaching, CPD and protected learning time with roster conflict checking. Assessment scheduling is live; an education-session + protected-learning-time store (with safe-staffing validation before approval) is an honest next-phase build.",
-    link: { label: "Open the assessment calendar", href: "/competency-office/assessments" },
-  },
   analytics: {
     title: "Learning Analytics",
     blurb: "Compliance and completion trends, learning hours, remediation success, pathway progression, attendance, cost of training and drill-down analytics. Live compliance and competency-gap analytics are on the dashboard; the full learning-analytics suite lives in the competency analytics workspace.",
