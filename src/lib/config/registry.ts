@@ -5,6 +5,7 @@
 // relationship tables (spec §32) are next-phase. Every write is audited. Fail-soft (pre-migration → empty).
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { WORKSPACE_CATALOG } from "@/lib/config/workspace-catalog";
+import { WIDGET_CATALOG, widgetObjectKey } from "@/lib/config/widget-catalog";
 
 const missing = (e: any) => /does not exist|schema cache/i.test(String(e?.message ?? ""));
 
@@ -99,6 +100,17 @@ export async function syncRegistryFromCatalog(admin: any, actorId: string | null
       });
     });
   });
+
+  // Shared widget library (WCE-005) — register the catalogued widget primitives as WIDGET objects, so widgets
+  // carry a configuration contract in the registry (parented under a shared library grouping).
+  push({ object_key: "shared.widget_library", object_type: "NAVIGATION_SECTION", display_name: "Shared Widget Library", description: "Reusable widget primitives catalogued in WCE-005.", parent_object_key: "platform.competen", configurability_class: "mandatory_configurable", safety_classification: "operational", override_policy: "restricted", default_enabled: true, mandatory: false, configuration_owner: "PLATFORM", owner_team: "Platform", allowed_config_levels: ["PLATFORM"], dependencies: [], tags: ["widgets"], display_order: 1, route: null, data_source_key: null });
+  WIDGET_CATALOG.forEach((w, wi) => push({
+    object_key: widgetObjectKey(w.key), object_type: "WIDGET", display_name: w.name, description: w.description,
+    parent_object_key: "shared.widget_library", configurability_class: w.mandatory ? "mandatory_configurable" : "optional",
+    safety_classification: w.safety, override_policy: "restricted", default_enabled: true, mandatory: !!w.mandatory,
+    configuration_owner: "TENANT", owner_team: "Platform", route: null, data_source_key: w.dataSource,
+    allowed_config_levels: ["PLATFORM", "ENTERPRISE", "TENANT", "UNIT", "USER"], dependencies: [], tags: [w.category], display_order: wi,
+  }));
 
   // Upsert — preserve created_at/created_by on existing, set them on insert.
   const { data: existing } = await admin.from("configuration_registry_objects").select("object_key").limit(20000);

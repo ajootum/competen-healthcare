@@ -98,6 +98,7 @@ export default async function PlatformOperations() {
     { label: "Configuration Registry", desc: "Object catalogue (WCE-002)", icon: "🗂️", href: "/super-admin/platform-ops/registry" },
     { label: "Experience Composer", desc: "Per-scope config (WCE-003)", icon: "🎚️", href: "/super-admin/platform-ops/composer" },
     { label: "Config Governance", desc: "Change requests (WCE-004)", icon: "🛂", href: "/super-admin/platform-ops/governance" },
+    { label: "Module & Widget Catalogue", desc: "Config contracts (WCE-005)", icon: "🧱", href: "/super-admin/platform-ops/catalogue" },
   ];
 
   const modules = [
@@ -111,6 +112,7 @@ export default async function PlatformOperations() {
     { n: 8, label: "Configuration Registry", desc: "WCE-002 — authoritative catalogue of every configurable platform object (keys, hierarchy, safety class, override policy)", icon: "🗂️", href: "/super-admin/platform-ops/registry", live: true },
     { n: 9, label: "Tenant Experience Composer", desc: "WCE-003 — governed per-scope configuration overview integrating the registry (what's configurable) with runtime overrides (what's configured)", icon: "🎚️", href: "/super-admin/platform-ops/composer", live: true },
     { n: 10, label: "Configuration Governance", desc: "WCE-004 — governed change pathway: risk classification, review routing, approval, release & rollback (registry-driven)", icon: "🛂", href: "/super-admin/platform-ops/governance", live: true },
+    { n: 11, label: "Module & Widget Catalogue", desc: "WCE-005 — detailed catalogue of every configurable module & widget with configuration contracts and completeness scoring", icon: "🧱", href: "/super-admin/platform-ops/catalogue", live: true },
   ];
 
   return (
@@ -218,7 +220,7 @@ export default async function PlatformOperations() {
       </div>
 
       {/* Module directory */}
-      <Panel title="Platform Operations — 10 modules">
+      <Panel title="Platform Operations — 11 modules">
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
           {modules.map(m => {
             const Wrap: any = m.live ? Link : "div";
