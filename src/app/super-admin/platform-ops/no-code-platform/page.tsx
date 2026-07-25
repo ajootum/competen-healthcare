@@ -50,7 +50,7 @@ const COMPONENTS: { name: string; status: string; via?: string; href?: string }[
 ];
 // The detailed builder specs (NCP-001..011) — Phase 3 "Builders", each mapped to its build status.
 const BUILDERS: { code: string; name: string; status: string; href?: string; via?: string }[] = [
-  { code: "NCP-001", name: "Page & Layout Composer", status: "next" },
+  { code: "NCP-001", name: "Page & Layout Composer", status: "live", href: "/super-admin/platform-ops/pages" },
   { code: "NCP-002", name: "Widget Builder", status: "partial", via: "WCE-005", href: "/super-admin/platform-ops/catalogue" },
   { code: "NCP-003", name: "Form & Data-Capture Builder", status: "live", href: "/super-admin/platform-ops/forms" },
   { code: "NCP-004", name: "Workflow & Automation Builder", status: "next" },

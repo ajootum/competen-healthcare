@@ -116,6 +116,26 @@ export async function PATCH(req: Request) {
     }
     def.rowCount = Array.isArray(def.rows) ? def.rows.length : 0;
   }
+  if (obj.object_type === "PAGE") {
+    const grid = Number(def.grid) || 12;
+    const rows = Array.isArray(def.rows) ? def.rows : [];
+    const widgetRefs = new Set<string>();
+    for (let ri = 0; ri < rows.length; ri++) {
+      const cols = Array.isArray(rows[ri]?.columns) ? rows[ri].columns : [];
+      let sum = 0;
+      for (const col of cols) {
+        const span = Number(col?.span);
+        if (!Number.isInteger(span) || span < 1 || span > grid) return badRequest(`Row ${ri + 1}: column span must be 1–${grid}`);
+        sum += span;
+        if (typeof col?.widget === "string" && col.widget.startsWith("widget.")) widgetRefs.add(col.widget);
+      }
+      if (sum > grid) return badRequest(`Row ${ri + 1}: column spans total ${sum}, exceeding the ${grid}-column grid`);
+    }
+    def.rowCount = rows.length;
+    // Wire referenced widgets into dependencies (real registry keys), so the graph + gate account for them.
+    const realRefs = widgetRefs.size ? (((await admin.from("configuration_registry_objects").select("object_key").in("object_key", [...widgetRefs])).data) ?? []).map((r: any) => r.object_key) : [];
+    deps = [...deps.filter((d: any) => d?.type !== "WIDGET_REF"), ...realRefs.map((k: string) => ({ type: "WIDGET_REF", objectKey: k }))];
+  }
 
   const { error } = await admin.from("configuration_registry_objects").update({ definition: def, dependencies: deps, updated_at: new Date().toISOString(), updated_by: userId }).eq("object_key", object_key);
   if (error) return missing(error) ? NextResponse.json({ error: "Run migration 094 to enable object definitions" }, { status: 409 }) : badRequest(error.message);
