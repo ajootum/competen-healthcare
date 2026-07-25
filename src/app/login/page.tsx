@@ -25,14 +25,11 @@ export default function LoginPage() {
       setError(data.error ?? "Invalid email or password");
       setLoading(false);
     } else {
-      const portals: Record<string, string> = {
-        nurse:          "/dashboard",
-        hospital_admin: "/admin/dashboard",
-        assessor:       "/assessor",
-        educator:       "/educator",
-        super_admin:    "/super-admin",
-      };
-      window.location.href = portals[data.role] ?? "/dashboard";
+      // PW-014 §1 / PW-AC-01 — universal landing: every authenticated user lands in the
+      // Personal Workspace, which aggregates their work across all entitled workspaces.
+      // Functional portals (admin/assessor/educator/super-admin/org workspaces) are reached
+      // from there via the Workspace Launcher and the sidebar role switcher, not at login.
+      window.location.href = "/dashboard";
     }
   }
 

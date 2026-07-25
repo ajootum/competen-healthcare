@@ -6,8 +6,9 @@ import MobileSidebar from "./MobileSidebar";
 import RoleSwitcher from "@/components/RoleSwitcher";
 import NavLink from "@/components/NavLink";
 import SidebarToggle from "@/components/SidebarToggle";
-import { highestRole, type AppRole } from "@/lib/roles";
+import { highestRole, ROLE_CONFIG, ROLE_PRIORITY, type AppRole } from "@/lib/roles";
 import { workspaceLinksForUser } from "@/lib/workspace-links";
+import ActiveContextBanner from "./ActiveContextBanner";
 
 // Personal Workspace shell (PW-000/PW-001) — flat left nav + global top bar (search + profile) + Current Shift
 // card, aligned to the high-fidelity mockup. Nav items map to the real worker surfaces that back them; the
@@ -30,6 +31,13 @@ export default async function DashboardLayout({ children }: { children: React.Re
   const cookieStore = await cookies();
   const activeRole = (cookieStore.get("active_role")?.value ?? highestRole(userRoles)) as AppRole;
   const workspaces = await workspaceLinksForUser(admin, user.id, userRoles);
+
+  // Universal-landing context (PW-014 PW-AC-01/05): everyone lands here, so surface the user's primary functional
+  // workspace for a one-click jump. Prefer their highest non-nurse AppRole portal, else their first org workspace.
+  const funcRole = ROLE_PRIORITY.find(r => r !== "nurse" && userRoles.includes(r));
+  const primaryWorkspace = funcRole
+    ? { label: ROLE_CONFIG[funcRole].label, href: ROLE_CONFIG[funcRole].portal }
+    : workspaces[0] ? { label: workspaces[0].label, href: workspaces[0].href } : null;
 
   // Real badge counts + current shift (fail-soft).
   const q = async (p: Promise<any>) => { try { const r = await p; return r ?? {}; } catch { return {}; } };
@@ -143,6 +151,8 @@ export default async function DashboardLayout({ children }: { children: React.Re
               <div className="leading-tight"><p className="text-xs font-semibold text-gray-800">{profile?.full_name}</p><p className="text-[10px] text-gray-400">{shift?.ward ?? profile?.role?.replace(/_/g, " ")}</p></div>
             </div>
           </header>
+
+          <ActiveContextBanner roleLabel={ROLE_CONFIG[activeRole]?.label ?? activeRole} primary={primaryWorkspace} />
 
           <main className="flex-1 px-4 md:px-6 pt-16 md:pt-6 pb-8">{children}</main>
         </div>

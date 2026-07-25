@@ -29,12 +29,9 @@ export default function SignupPage() {
         setConfirmSent(true);
         setLoading(false);
       } else {
-        const portals: Record<string, string> = {
-          nurse:    "/dashboard",
-          assessor: "/assessor",
-          educator: "/educator",
-        };
-        window.location.href = portals[data.role] ?? "/dashboard";
+        // PW-014 §1 / PW-AC-01 — universal landing: land every user in the Personal Workspace
+        // regardless of role; functional portals are reached from there via the launcher.
+        window.location.href = "/dashboard";
       }
     } catch (err) {
       setError("Network error: " + String(err));
