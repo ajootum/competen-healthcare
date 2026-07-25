@@ -194,7 +194,11 @@ export default async function UnitManagerLayout({ children }: { children: React.
     .map(g => ({ ...g, items: g.items
       .filter(it => { const p = ITEM_CFG[it.label]; return !p || isEnabled(cfgRows, cfgCtx, p); })
       .map(it => it.label === "Clinical Alerts" && clinicalAlerts ? { ...it, badge: clinicalAlerts } : it) }));
-  const mobileItems = visibleGroups.flatMap(g => g.items.filter(i => i.href));
+  // Dedupe destinations that intentionally appear in more than one nav group (e.g.
+  // "Unit Workforce Planning" sits under both Platform Engines and Workforce Management)
+  // — otherwise the flattened mobile bar renders duplicate pills with colliding React keys.
+  const mobileItems = visibleGroups.flatMap(g => g.items.filter(i => i.href))
+    .filter((it, i, arr) => arr.findIndex(x => x.href === it.href) === i);
 
   if (!userRoles.some(r => ALLOWED.includes(r))) {
     return (
