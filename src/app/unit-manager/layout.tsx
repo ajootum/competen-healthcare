@@ -109,7 +109,7 @@ const NAV_GROUPS: { title: string; items: NavItem[] }[] = [
   // authoritative surface: CAPA → the CAPA Centre, Patient Safety → the Clinical Safety centre (both real),
   // the rest via the section's honest cross-link pages. Full module list is the in-page tab bar (QualityTabs).
   { title: "Quality & Safety", items: [
-    { label: "Quality Dashboard",    href: "/unit-manager/quality", icon: "🛡️" },
+    { label: "Quality Dashboard",    href: "/unit-manager/quality", icon: "🛡️", exact: true },
     { label: "Incidents",            href: "/unit-manager/quality/incidents", icon: "🚩" },
     { label: "Audit Centre",         href: "/unit-manager/quality/audits", icon: "🔍" },
     { label: "Improvement Projects", href: "/unit-manager/capa", icon: "📈" },
