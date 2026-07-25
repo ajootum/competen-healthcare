@@ -42,7 +42,7 @@ const COMPONENTS: { name: string; status: string; via?: string; href?: string }[
   { name: "Theme Designer", status: "partial", via: "Workspaces", href: "/super-admin/platform-ops/workspaces" },
   { name: "Publishing Pipeline", status: "live", via: "WCE-004", href: "/super-admin/platform-ops/governance" },
   { name: "Sandbox", status: "next" },
-  { name: "Dependency Graph Service", status: "next" },
+  { name: "Dependency Graph Service", status: "live", via: "NCP", href: "/super-admin/platform-ops/dependencies" },
   { name: "Marketplace", status: "next" },
   { name: "Configuration SDK", status: "next" },
   { name: "Version Control", status: "live", via: "WCE-004", href: "/super-admin/platform-ops/governance" },
@@ -69,11 +69,11 @@ const APIS: { method: string; endpoint: string; purpose: string; status: string;
   { method: "GET", endpoint: "/config/widgets", purpose: "Retrieve widget definitions", status: "partial", via: "/api/registry" },
   { method: "POST", endpoint: "/config/validate", purpose: "Validate package", status: "partial", via: "governance classify" },
   { method: "POST", endpoint: "/config/import", purpose: "Import package", status: "next" },
-  { method: "GET", endpoint: "/config/dependencies", purpose: "Dependency graph", status: "next" },
+  { method: "GET", endpoint: "/config/dependencies", purpose: "Dependency graph", status: "live", via: "/api/config/dependencies" },
 ];
 // §10 Publishing pipeline — 11 stages; Draft/Review/Approval/Publish are live via WCE-004.
 const PIPELINE: { stage: string; status: string }[] = [
-  { stage: "Draft", status: "live" }, { stage: "Validation", status: "partial" }, { stage: "Dependency Analysis", status: "next" },
+  { stage: "Draft", status: "live" }, { stage: "Validation", status: "partial" }, { stage: "Dependency Analysis", status: "partial" },
   { stage: "Review", status: "live" }, { stage: "Approval", status: "live" }, { stage: "Package Build", status: "next" },
   { stage: "Sandbox Test", status: "next" }, { stage: "Publish", status: "live" }, { stage: "Cache Refresh", status: "partial" },
   { stage: "Runtime Event Broadcast", status: "next" }, { stage: "Monitoring", status: "partial" },
