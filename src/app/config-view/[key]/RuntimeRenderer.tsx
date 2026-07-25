@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { Tile, WidgetCard } from "./widgets";
 
 // Metadata-driven runtime renderer (NCP-015) — renders a composed configuration object as the real surface the
 // current user sees: only enabled widgets/tiles and only role-visible navigation. Navigation items backed by a
@@ -63,8 +64,7 @@ export default function RuntimeRenderer({ composed, ctx }: { composed: any; ctx:
             <div key={ri} className="grid gap-2" style={{ gridTemplateColumns: `repeat(${m.grid}, minmax(0,1fr))` }}>
               {row.columns.filter((c: any) => c.shown).map((col: any, ci: number) => (
                 <div key={ci} className={`${card} p-4 min-h-[72px]`} style={{ gridColumn: `span ${col.span} / span ${col.span}` }}>
-                  <p className="text-sm font-medium text-gray-800">{col.widget?.name ?? "—"}</p>
-                  {col.widget && !col.widget.external && <p className="text-[10px] text-gray-400 mt-0.5">widget</p>}
+                  <WidgetCard widget={col.widget} />
                 </div>
               ))}
             </div>
@@ -76,10 +76,8 @@ export default function RuntimeRenderer({ composed, ctx }: { composed: any; ctx:
       {m.kind === "dashboard" && (
         <div className="grid gap-2" style={{ gridTemplateColumns: "repeat(12, minmax(0,1fr))" }}>
           {m.tiles.filter((t: any) => t.shown).map((t: any) => (
-            <div key={t.key} className={`${card} p-4 min-h-[80px]`} style={{ gridColumn: `span ${t.span || 4} / span ${t.span || 4}` }}>
-              <p className="text-[10px] text-gray-400 uppercase tracking-wide">{t.viz}</p>
-              <p className="text-sm font-medium text-gray-800 truncate">{t.title || t.key}</p>
-              {t.metric && <p className="text-[11px] text-indigo-500 mt-1 truncate">↳ {t.metric.name}</p>}
+            <div key={t.key} className={`${card} p-4 min-h-[92px]`} style={{ gridColumn: `span ${t.span || 4} / span ${t.span || 4}` }}>
+              <Tile tile={t} />
             </div>
           ))}
           {m.tiles.every((t: any) => !t.shown) && <div className={`${card} p-8 text-center text-sm text-gray-400 col-span-12`}>No tiles are enabled in your context.</div>}
@@ -90,7 +88,7 @@ export default function RuntimeRenderer({ composed, ctx }: { composed: any; ctx:
         <div className={`${card} p-3 max-w-xs`}><NavMenu items={m.items} /></div>
       )}
 
-      <p className="text-[11px] text-gray-400">This surface is composed entirely from configuration for your context — nothing here is hard-coded. Widget and metric bodies are typed placeholders until concrete components are bound.</p>
+      <p className="text-[11px] text-gray-400">This surface is composed entirely from configuration for your context — nothing here is hard-coded. Widgets render their configured spec (target, RAG thresholds, data source); live numeric values arrive with the metric calculation runtime (NCP-005 next-phase).</p>
     </div>
   );
 }

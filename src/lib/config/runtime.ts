@@ -56,9 +56,9 @@ export async function composeRuntime(admin: any, objectKey: string, ctx: ScopeCt
   if (type === "NAVIGATION_SECTION") for (const it of (def.items ?? [])) { if (typeof it?.target === "string" && it.target) refKeys.add(it.target); for (const ch of (it?.children ?? [])) if (typeof ch?.target === "string" && ch.target) refKeys.add(ch.target); }
 
   const { rows } = await loadConfigOverrides(admin);
-  const { data: refRows } = refKeys.size ? await admin.from("configuration_registry_objects").select("object_key, object_type, display_name, default_enabled").in("object_key", [...refKeys]) : { data: [] };
-  const refMap = new Map<string, RegObj>(((refRows ?? []) as RegObj[]).map(o => [o.object_key, o]));
-  const resolveRef = (key: string) => { const ro = refMap.get(key); if (!ro) return { key, name: key, enabled: true, external: true }; const r = resolveFromRows(ro, rows, ctx); return { key, name: r.effective.label, enabled: r.effective.enabled, external: false }; };
+  const { data: refRows } = refKeys.size ? await admin.from("configuration_registry_objects").select("object_key, object_type, display_name, default_enabled, definition").in("object_key", [...refKeys]) : { data: [] };
+  const refMap = new Map<string, any>(((refRows ?? []) as any[]).map(o => [o.object_key, o]));
+  const resolveRef = (key: string) => { const ro = refMap.get(key); if (!ro) return { key, name: key, enabled: true, external: true }; const r = resolveFromRows(ro, rows, ctx); return { key, name: r.effective.label, enabled: r.effective.enabled, external: false, kind: ro.object_type, definition: ro.definition ?? {} }; };
 
   let model: any = null; let included = 0, excluded = 0;
   const roleOk = (roles?: string) => { const list = String(roles ?? "").split(",").map(s => s.trim().toLowerCase()).filter(Boolean); return list.length === 0 || list.some(r => (ctx.roles ?? []).map(x => x.toLowerCase()).includes(r)); };
