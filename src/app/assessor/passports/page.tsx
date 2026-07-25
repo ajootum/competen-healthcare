@@ -139,6 +139,17 @@ export default async function PassportCentrePage({ searchParams }: { searchParam
     const { data: nurseLogs } = await admin.from("skill_log_entries")
       .select("skill_name, status, created_at").eq("nurse_id", sel.id)
       .order("created_at", { ascending: false }).limit(3);
+    // Entrustment decisions (clinical_authorizations) — the other governed competency
+    // outcome. Folded into the passport timeline so they're visible here, not only in
+    // admin/authorizations + the learner's own passport.
+    const { data: nurseAuths } = await admin.from("clinical_authorizations")
+      .select("scope, authorization_level, entrustment_level, status, effective_date, created_at")
+      .eq("nurse_id", sel.id).in("status", ["active", "suspended"])
+      .order("effective_date", { ascending: false }).limit(4);
+    const auths = ((nurseAuths ?? []) as unknown as {
+      scope: string | null; authorization_level: string | null; entrustment_level: string | null;
+      status: string; effective_date: string | null; created_at: string | null;
+    }[]).filter(a => a.created_at || a.effective_date);
     timeline = [
       ...nurseDecs.map(d => ({
         at: d.created_at,
@@ -152,7 +163,13 @@ export default async function PassportCentrePage({ searchParams }: { searchParam
         chip: l.status === "verified" ? "Verified" : l.status === "pending" ? "Pending" : l.status.replace(/_/g, " "),
         good: l.status === "verified",
       }))),
-    ].sort((a, b) => b.at.localeCompare(a.at)).slice(0, 6);
+      ...auths.map(au => ({
+        at: (au.created_at ?? au.effective_date) as string,
+        label: `Entrustment: ${au.scope ?? au.authorization_level ?? "clinical privilege"}`,
+        chip: au.status === "suspended" ? "Suspended" : (au.entrustment_level?.replace(/_/g, " ") ?? au.authorization_level ?? "Authorized"),
+        good: au.status === "active",
+      })),
+    ].sort((a, b) => b.at.localeCompare(a.at)).slice(0, 8);
 
     const byCpu = new Map<string, { name: string; pass: number; total: number; nearestDue: string | null }>();
     for (const d of latest.filter(x => x.nurse_id === sel.id)) {
