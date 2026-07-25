@@ -113,6 +113,7 @@ export default async function PlatformOperations() {
     { n: 9, label: "Tenant Experience Composer", desc: "WCE-003 — governed per-scope configuration overview integrating the registry (what's configurable) with runtime overrides (what's configured)", icon: "🎚️", href: "/super-admin/platform-ops/composer", live: true },
     { n: 10, label: "Configuration Governance", desc: "WCE-004 — governed change pathway: risk classification, review routing, approval, release & rollback (registry-driven)", icon: "🛂", href: "/super-admin/platform-ops/governance", live: true },
     { n: 11, label: "Module & Widget Catalogue", desc: "WCE-005 — detailed catalogue of every configurable module & widget with configuration contracts and completeness scoring", icon: "🧱", href: "/super-admin/platform-ops/catalogue", live: true },
+    { n: 12, label: "No-Code Configuration Platform", desc: "NCP-000 — the metadata-driven no-code platform foundation & architecture: the umbrella that ties WCE-001..005 together, with live component + roadmap status", icon: "🧩", href: "/super-admin/platform-ops/no-code-platform", live: true },
   ];
 
   return (
