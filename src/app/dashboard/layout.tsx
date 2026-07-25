@@ -54,7 +54,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
   const NAV = [
     { label: "Dashboard", href: "/dashboard", icon: "🏠", exact: true },
     { label: "My Tasks", href: "/dashboard/tasks", icon: "☑️", badge: taskCount ?? 0 },
-    { label: "Calendar", href: "/dashboard/shift", icon: "📅" },
+    { label: "Calendar", href: "/dashboard/calendar", icon: "📅" },
     { label: "Notifications", href: "/dashboard/notifications", icon: "🔔", badge: unreadCount ?? 0 },
     { label: "Messages", href: "/dashboard/notifications", icon: "💬", badge: msgCount ?? 0 },
     { label: "My Learning", href: "/dashboard/learning", icon: "📚" },
