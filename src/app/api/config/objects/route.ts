@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getCaller, isResponse, isSuper, forbidden, badRequest } from "@/lib/api-auth";
+import { captureSnapshot } from "@/lib/config/versioning";
 
 // Configuration Studio — no-code authoring of a governed configuration object. POST creates a DRAFT object in
 // the WCE-002 registry (source:"studio"); the client then raises a WCE-004 change request for it, so it flows
@@ -252,5 +253,6 @@ export async function PATCH(req: Request) {
   const { error } = await admin.from("configuration_registry_objects").update({ definition: def, dependencies: deps, updated_at: new Date().toISOString(), updated_by: userId }).eq("object_key", object_key);
   if (error) return missing(error) ? NextResponse.json({ error: "Run migration 094 to enable object definitions" }, { status: 409 }) : badRequest(error.message);
   await admin.from("configuration_registry_audit").insert({ object_key, action: "define", actor_id: userId, new_value: def });
+  await captureSnapshot(admin, object_key, "defined", userId); // best-effort NCP-018 version snapshot (no-op if 096 unapplied)
   return NextResponse.json({ ok: true, definition: def });
 }

@@ -70,7 +70,7 @@ const SERVICES: { code: string; name: string; status: string; href?: string; via
   { code: "NCP-015", name: "Runtime & Resolution Engine", status: "partial", via: "config overrides", href: "/super-admin/platform-ops/configuration" },
   { code: "NCP-016", name: "Schema & Object Model", status: "live", href: "/super-admin/platform-ops/schema" },
   { code: "NCP-017", name: "Dependency Manager", status: "partial", via: "NCP graph", href: "/super-admin/platform-ops/dependencies" },
-  { code: "NCP-018", name: "Versioning & Audit Service", status: "partial", via: "WCE-004", href: "/super-admin/platform-ops/governance" },
+  { code: "NCP-018", name: "Versioning & Audit Service", status: "live", href: "/super-admin/platform-ops/versions" },
   { code: "NCP-019", name: "Publishing Service", status: "partial", via: "WCE-004", href: "/super-admin/platform-ops/governance" },
   { code: "NCP-020", name: "Migration Toolkit", status: "next" },
 ];
