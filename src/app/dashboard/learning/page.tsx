@@ -5,6 +5,7 @@ import { OUTCOME_CONFIG } from "@/lib/ckcm";
 import { aiStatus } from "@/lib/ai/config";
 import CoachPanel from "./CoachPanel";
 import LearningWorkspace, { type PathwayItem } from "./LearningWorkspace";
+import MandatoryLearning from "./MandatoryLearning";
 
 // My Learning Pathway — competency-first development workspace (Volume 5
 // spec). Every recommendation originates from the decision record and shows
@@ -53,6 +54,22 @@ export default async function LearningPathwayPage() {
         .eq("pathway_id", pathway.id).order("sort_order")
     : { data: [] as PathwayItem[] };
   const items = (rawItems ?? []) as PathwayItem[];
+
+  // ── My assigned training (Loop 2: learning_enrolments the UMW mandatory-compliance lens reads) ──
+  const todayStr = new Date().toISOString().slice(0, 10);
+  type EnrolRow = { id: string; status: string; progress_pct: number | null; mandatory: boolean; due_date: string | null; course: { title: string | null; course_type: string | null } | null };
+  const { data: enrolRows } = await admin.from("learning_enrolments")
+    .select("id, status, progress_pct, mandatory, due_date, completed_at, course:learning_courses!course_id(title, course_type)")
+    .eq("user_id", user.id).limit(60);
+  const enrolments = ((enrolRows ?? []) as unknown as EnrolRow[]).map(e => ({
+    id: e.id, title: e.course?.title ?? "Assigned course", courseType: (e.course?.course_type ?? "").replace(/_/g, " "),
+    status: e.status, progress: e.progress_pct ?? (e.status === "completed" ? 100 : 0), mandatory: e.mandatory, dueDate: e.due_date,
+    overdue: !!(e.due_date && e.due_date < todayStr && !["completed", "exempt"].includes(e.status)),
+    dueLabel: e.due_date ? new Date(e.due_date).toLocaleDateString(undefined, { month: "short", day: "numeric" }) : null,
+  })).sort((a, b) => {
+    const rank = (x: { status: string; overdue: boolean }) => (x.status === "completed" ? 3 : x.overdue ? 0 : x.status === "in_progress" ? 1 : 2);
+    return rank(a) - rank(b) || String(a.dueDate ?? "9").localeCompare(String(b.dueDate ?? "9"));
+  });
 
   // ── Readiness from the governed record ──
   const seen = new Set<string>();
@@ -168,6 +185,9 @@ export default async function LearningPathwayPage() {
           ))}
         </div>
       </div>
+
+      {/* My assigned training (Loop 2 → UMW mandatory compliance) */}
+      <div className="mb-5"><MandatoryLearning items={enrolments} /></div>
 
       <div className="grid grid-cols-1 xl:grid-cols-[1fr_300px] gap-5">
         {/* Main column */}
