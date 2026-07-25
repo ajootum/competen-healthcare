@@ -8,11 +8,6 @@ export const dynamic = "force-dynamic";
 // Learning sub-modules (UMG-005). Each surfaces its live status on the Learning Dashboard and routes
 // to its authoritative surface (educator / competency workspace), or notes its next-phase store.
 const SUBS: Record<string, { title: string; blurb: string; link?: { label: string; href: string } }> = {
-  mandatory: {
-    title: "Mandatory Learning",
-    blurb: "The mandatory education catalogue, staff compliance register, overdue and due-soon items, new-starter requirements, exemptions and the assignment workflow. Live compliance, overdue (expired competency) and due-30 counts are on the dashboard; assignment and content are managed in the education workspace.",
-    link: { label: "Open learning & curricula", href: "/admin/curricula" },
-  },
   development: {
     title: "Professional Development",
     blurb: "Individual Development Plans, leadership and specialty development, CPD, mentorship, research, improvement projects, progress reviews and evidence. A development-plan store with the review workflow is an honest next-phase build.",
