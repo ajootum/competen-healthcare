@@ -105,7 +105,22 @@ export async function loadPersonalWorkspace(admin: any, userId: string, profile:
 
   const perfBacked = performance.filter(p => p.pct != null).length;
 
+  // ── Top KPI summary bar ──
+  const backedPerf = performance.filter(p => p.pct != null).map(p => p.pct as number);
+  const myScore = compliance ?? (backedPerf.length ? Math.round(backedPerf.reduce((a, b) => a + b, 0) / backedPerf.length) : null);
+  const dayStart = new Date(); dayStart.setHours(0, 0, 0, 0);
+  const dayEnd = dayStart.getTime() + dayMs;
+  const tasksDueToday = tasks.filter((t: any) => t.due && new Date(t.due).getTime() < dayEnd).length;
+  const summary = {
+    myScore,
+    tasksDueToday: tasksDueToday || tasks.length,
+    patientsAssigned: patients.length,
+    messagesUnread: msgs.length,
+    alertsHighPriority: highRisk + taskRows.filter((t: any) => (t.priority === "urgent" || t.priority === "high") && t.due && new Date(t.due).getTime() < now).length,
+  };
+
   return {
+    summary,
     firstName: (profile?.full_name ?? "there").split(" ")[0],
     fullName: profile?.full_name, role: profile?.role,
     patients, competencies: { validated, pending, expiring, expired, remediation, total: compTotal, compliance },

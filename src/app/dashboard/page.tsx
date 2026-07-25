@@ -61,12 +61,32 @@ export default async function PersonalWorkspacePage() {
   const now = nowMs();
   const greeting = hour < 12 ? "Good Morning" : hour < 17 ? "Good Afternoon" : "Good Evening";
   const comp = d.competencies;
+  const s = d.summary;
+  const SUMMARY = [
+    { icon: "🎯", label: "My Score", value: s.myScore != null ? `${s.myScore}%` : "—", tone: s.myScore != null && s.myScore >= 85 ? "text-emerald-600" : "text-amber-600", sub: null, href: "/dashboard/passport" },
+    { icon: "📋", label: "Tasks", value: s.tasksDueToday, tone: s.tasksDueToday ? "text-rose-600" : "text-gray-900", sub: "Due Today", href: "/dashboard/shift" },
+    { icon: "👥", label: "Patients", value: s.patientsAssigned, tone: "text-gray-900", sub: "Assigned", href: "/dashboard/shift" },
+    { icon: "✉️", label: "Messages", value: s.messagesUnread, tone: s.messagesUnread ? "text-rose-600" : "text-gray-900", sub: "Unread", href: "/dashboard/notifications" },
+    { icon: "⚠️", label: "Alerts", value: s.alertsHighPriority, tone: s.alertsHighPriority ? "text-rose-600" : "text-gray-900", sub: "High Priority", href: "/dashboard/notifications" },
+  ];
 
   return (
     <div className="max-w-7xl space-y-4">
-      <div className="flex items-start justify-between gap-3 flex-wrap">
-        <div><h1 className="text-2xl font-bold text-gray-900 tracking-tight">{greeting}, {d.firstName} 👋</h1><p className="text-sm text-gray-400">{date}</p></div>
-        <Link href="/dashboard/billing" className="text-xs font-medium text-gray-600 border border-gray-200 rounded-lg px-3 py-1.5 hover:bg-gray-50">⚙ Customize Dashboard</Link>
+      <div className="flex items-start justify-between gap-4 flex-wrap">
+        <div>
+          <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide">Personal Dashboard</p>
+          <h1 className="text-2xl font-bold text-gray-900 tracking-tight">{greeting}, {d.firstName} 👋</h1>
+          <p className="text-sm text-gray-400">{date}</p>
+        </div>
+        <div className={`${card} p-1.5 flex items-center divide-x divide-gray-100`}>
+          {SUMMARY.map(k => (
+            <Link key={k.label} href={k.href} className="px-3.5 py-1 flex flex-col items-center hover:bg-gray-50 rounded-lg transition-colors min-w-[74px]">
+              <span className="text-[10px] text-gray-400 flex items-center gap-1">{k.icon} {k.label}</span>
+              <span className={`text-lg font-bold tabular-nums ${k.tone}`}>{k.value}</span>
+              {k.sub && <span className="text-[9px] text-gray-400">{k.sub}</span>}
+            </Link>
+          ))}
+        </div>
       </div>
 
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
