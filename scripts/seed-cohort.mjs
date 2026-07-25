@@ -318,7 +318,7 @@ if (framework) {
     comps.forEach((c, ci) => {
       const p = at(PLANS, i + ci * 2);
       decRows.push({
-        cycle_id: cycleId, nurse_id: s.id, cpu_id: c.cpu_id ?? null, competency_id: c.id, framework_id: framework.id,
+        cycle_id: cycleId, nurse_id: s.id, hospital_id: hospitalId, cpu_id: c.cpu_id ?? null, competency_id: c.id, framework_id: framework.id,
         outcome: p.outcome, maturity: p.maturity, decided_by: assessorId, decided_by_name: assessorName,
         effective_date: dateFromNow(-at([10, 30, 60], i)),
         expiry_date: p.exp == null ? null : dateFromNow(p.exp),
