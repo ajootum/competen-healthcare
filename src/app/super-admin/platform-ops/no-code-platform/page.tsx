@@ -73,7 +73,7 @@ const APIS: { method: string; endpoint: string; purpose: string; status: string;
 ];
 // §10 Publishing pipeline — 11 stages; Draft/Review/Approval/Publish are live via WCE-004.
 const PIPELINE: { stage: string; status: string }[] = [
-  { stage: "Draft", status: "live" }, { stage: "Validation", status: "partial" }, { stage: "Dependency Analysis", status: "partial" },
+  { stage: "Draft", status: "live" }, { stage: "Validation", status: "partial" }, { stage: "Dependency Analysis", status: "live" },
   { stage: "Review", status: "live" }, { stage: "Approval", status: "live" }, { stage: "Package Build", status: "next" },
   { stage: "Sandbox Test", status: "next" }, { stage: "Publish", status: "live" }, { stage: "Cache Refresh", status: "partial" },
   { stage: "Runtime Event Broadcast", status: "next" }, { stage: "Monitoring", status: "partial" },

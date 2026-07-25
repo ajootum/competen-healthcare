@@ -91,3 +91,20 @@ export async function loadDependencyGraph(admin: any) {
     broken: broken.slice(0, 20), topImpact, nodes, dependsOn: dependsObj, dependents: dependentsObj,
   };
 }
+
+// Publish gate (NCP-000 §10 "Dependency Analysis") — a change may not be published if the configuration
+// graph leaves a circular dependency or a broken reference. Scoped to the change's affected objects when
+// declared, else evaluated globally (a CR with no declared scope is treated conservatively). Fail-open when
+// the registry is not provisioned — governance should not be blocked by an absent graph.
+export async function dependencyGate(admin: any, affectedKeys: string[]): Promise<{ ok: boolean; cycles: string[][]; broken: { from: string; to: string; kind: string }[]; reason?: string }> {
+  const g = await loadDependencyGraph(admin);
+  if (!g.provisioned) return { ok: true, cycles: [], broken: [] };
+  const affected = new Set((affectedKeys ?? []).filter(Boolean));
+  const touchesCycle = (c: string[]) => affected.size === 0 || c.some(k => affected.has(k));
+  const touchesBroken = (b: { from: string; to: string }) => affected.size === 0 || affected.has(b.from) || affected.has(b.to);
+  const cycles = g.cycleKeys.filter(touchesCycle);
+  const broken = g.broken.filter(touchesBroken);
+  const ok = cycles.length === 0 && broken.length === 0;
+  const reason = ok ? undefined : [cycles.length ? `${cycles.length} circular dependency chain(s)` : null, broken.length ? `${broken.length} broken reference(s)` : null].filter(Boolean).join(" + ");
+  return { ok, cycles, broken, reason };
+}

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getCaller, isResponse, forbidden, badRequest, isSuper } from "@/lib/api-auth";
 import { loadRegistry } from "@/lib/config/registry";
 import { classifyChange } from "@/lib/config/governance";
+import { dependencyGate } from "@/lib/config/dependency-graph";
 
 // Configuration Governance (WCE-004) API — change-request lifecycle. Super-admin gated. Risk + required
 // reviews are derived from the WCE-002 registry (§43). Separation of duties (§21): for high/critical changes
@@ -91,6 +92,14 @@ export async function POST(req: Request) {
     }
     case "publish": {
       if (cr.status !== "approved" && !(cr.change_type === "emergency" && cr.status === "draft")) return badRequest("Only an approved change (or an emergency) can be published");
+      // NCP-000 §10 Dependency Analysis gate — a change may not go live if it leaves a circular dependency
+      // or a broken reference in the configuration graph. Integrity is non-negotiable, so emergencies are
+      // gated here too. Fail-open only when the registry itself is unprovisioned (nothing to analyse).
+      const gate = await dependencyGate(admin, Array.isArray(cr.affected_objects) ? cr.affected_objects : []);
+      if (!gate.ok) {
+        await audit(admin, cr, "publish_blocked", userId, actorName, gate.reason ?? "dependency analysis failed", { status: cr.status }, { cycles: gate.cycles.length, broken: gate.broken.length });
+        return NextResponse.json({ error: `Dependency Analysis blocked publish — ${gate.reason}. Resolve in the Dependency Graph before publishing.`, cycles: gate.cycles, broken: gate.broken }, { status: 422 });
+      }
       await admin.from("configuration_change_requests").update({ status: "published", updated_at: new Date().toISOString() }).eq("id", cr.id);
       await audit(admin, cr, cr.change_type === "emergency" ? "emergency" : "published", userId, actorName, b.reason ?? null, { status: cr.status }, { status: "published" });
       return NextResponse.json({ ok: true });
