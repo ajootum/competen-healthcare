@@ -9,23 +9,46 @@ type ObjRow = { object_key: string; object_type: string; display_name: string };
 
 const input = "border border-gray-200 rounded px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-indigo-400 bg-white";
 const LEVEL_TONE: Record<string, string> = { platform_default: "bg-gray-100 text-gray-600", platform: "bg-gray-100 text-gray-600", tenant: "bg-indigo-100 text-indigo-700", hospital: "bg-sky-100 text-sky-700", unit: "bg-teal-100 text-teal-700", role: "bg-amber-100 text-amber-700", user: "bg-violet-100 text-violet-700" };
+const COMPOSABLE = ["PAGE", "DASHBOARD", "NAVIGATION_SECTION"];
+
+function NavTree({ items, depth = 0 }: { items: any[]; depth?: number }) {
+  return <>{items.map((it: any) => (
+    <div key={it.key}>
+      <div className={`flex items-center gap-1.5 text-[11px] py-0.5 ${it.visible ? "text-gray-700" : "text-gray-300 line-through"}`} style={{ paddingLeft: depth * 14 }}>
+        <span className="w-3 text-center">{it.icon || (depth ? "◦" : "•")}</span>
+        <span className="truncate">{it.label || it.key}</span>
+        {!it.visible && <span className="text-[9px] text-rose-400 no-underline">hidden · {it.reason}</span>}
+        {it.target && it.visible && <span className="text-[9px] text-indigo-400">→ {it.target.name}</span>}
+      </div>
+      {it.children?.length > 0 && <NavTree items={it.children} depth={depth + 1} />}
+    </div>
+  ))}</>;
+}
 
 export default function RuntimeResolver({ objects }: { objects: ObjRow[] }) {
   const [q, setQ] = useState("");
   const [object, setObject] = useState<string>("");
   const [ctx, setCtx] = useState({ tenant: "", hospital: "", unit: "", roles: "" });
   const [res, setRes] = useState<any | null>(null);
+  const [composed, setComposed] = useState<any | null>(null);
   const [busy, setBusy] = useState(false); const [msg, setMsg] = useState<string | null>(null);
 
   const filtered = objects.filter(o => !q || o.display_name.toLowerCase().includes(q.toLowerCase()) || o.object_key.includes(q.toLowerCase())).slice(0, 200);
 
   async function resolve() {
     if (!object) { setMsg("Pick an object to resolve."); return; }
-    setBusy(true); setMsg(null); setRes(null);
+    setBusy(true); setMsg(null); setRes(null); setComposed(null);
     const p = new URLSearchParams({ object, tenant: ctx.tenant, hospital: ctx.hospital, unit: ctx.unit, roles: ctx.roles });
     const r = await fetch(`/api/config/runtime?${p.toString()}`);
-    const j = await r.json().catch(() => ({})); setBusy(false);
-    if (r.ok) setRes(j); else setMsg(j?.error || "Resolve failed.");
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok) { setBusy(false); setMsg(j?.error || "Resolve failed."); return; }
+    setRes(j);
+    if (COMPOSABLE.includes(j.object?.type)) {
+      const cr = await fetch(`/api/config/runtime?${p.toString()}&compose=1`);
+      const cj = await cr.json().catch(() => ({}));
+      if (cr.ok && cj.composable) setComposed(cj);
+    }
+    setBusy(false);
   }
 
   const card = "bg-white rounded-xl border border-gray-200";
@@ -76,6 +99,45 @@ export default function RuntimeResolver({ objects }: { objects: ObjRow[] }) {
               {(res.allowedLevels ?? []).map((l: string) => <span key={l} className="text-[10px] bg-gray-50 border border-gray-100 rounded px-1.5 py-0.5 text-gray-500">{l}</span>)}
               <span className="text-[10px] text-gray-400 ml-auto font-mono">{res.cacheKey}</span>
             </div>
+
+            {composed && (
+              <div className="mt-5 pt-4 border-t border-gray-100">
+                <div className="flex items-center justify-between mb-2">
+                  <p className="text-[11px] font-semibold text-gray-500">Composed runtime model <span className="font-normal text-gray-400">· what renders in this context</span></p>
+                  <span className="text-[10px] text-gray-400">{composed.stats.included} shown · {composed.stats.excluded} hidden · {composed.stats.references} ref(s)</span>
+                </div>
+
+                {composed.model.kind === "page" && (
+                  <div className="space-y-1.5">
+                    {composed.model.rows.map((row: any, ri: number) => (
+                      <div key={ri} className="grid gap-1.5" style={{ gridTemplateColumns: `repeat(${composed.model.grid}, minmax(0,1fr))` }}>
+                        {row.columns.map((col: any, ci: number) => (
+                          <div key={ci} className={`rounded-md border px-2 py-1.5 min-h-[40px] ${col.shown ? "bg-white border-gray-200" : "bg-gray-50 border-dashed border-gray-200 opacity-50"}`} style={{ gridColumn: `span ${col.span} / span ${col.span}` }}>
+                            <p className={`text-[11px] font-medium truncate ${col.shown ? "text-gray-800" : "text-gray-400 line-through"}`}>{col.widget?.name ?? "—"}</p>
+                            {col.widget && !col.shown && <p className="text-[9px] text-rose-400">disabled here</p>}
+                          </div>
+                        ))}
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {composed.model.kind === "dashboard" && (
+                  <div className="grid gap-1.5" style={{ gridTemplateColumns: "repeat(12, minmax(0,1fr))" }}>
+                    {composed.model.tiles.map((t: any) => (
+                      <div key={t.key} className={`rounded-md border px-2 py-1.5 min-h-[44px] ${t.shown ? "bg-white border-gray-200" : "bg-gray-50 border-dashed border-gray-200 opacity-50"}`} style={{ gridColumn: `span ${t.span || 4} / span ${t.span || 4}` }}>
+                        <p className={`text-[11px] font-medium truncate ${t.shown ? "text-gray-800" : "text-gray-400 line-through"}`}>{t.title || t.key}</p>
+                        {t.metric && <p className={`text-[9px] truncate ${t.metric.enabled ? "text-indigo-500" : "text-rose-400"}`}>↳ {t.metric.name}{!t.metric.enabled ? " (off)" : ""}</p>}
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {composed.model.kind === "navigation" && (
+                  <div className="bg-white border border-gray-200 rounded-md p-2 max-w-xs"><NavTree items={composed.model.items} /></div>
+                )}
+              </div>
+            )}
           </>
         )}
       </div>

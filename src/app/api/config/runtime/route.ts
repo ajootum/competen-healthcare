@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getCaller, isResponse, isSuper, forbidden, badRequest } from "@/lib/api-auth";
-import { resolveRuntime } from "@/lib/config/runtime";
+import { resolveRuntime, composeRuntime } from "@/lib/config/runtime";
 
 // Configuration Runtime & Resolution Engine (NCP-015) — GET /config/runtime?object=&tenant=&hospital=&unit=&roles=
 // resolves an object's effective settings for that context, with a full precedence trace + cache key. Without an
@@ -22,6 +22,13 @@ export async function GET(req: Request) {
     roles: (u.searchParams.get("roles") || "").split(",").map(s => s.trim()).filter(Boolean),
     userId: u.searchParams.get("user") || null,
   };
+  // ?compose=1 assembles the executable runtime model (page/dashboard/navigation) for this context.
+  if (u.searchParams.get("compose") === "1") {
+    const cm = await composeRuntime(admin, object, ctx);
+    if (!(cm as any).provisioned) return NextResponse.json({ error: "Configuration registry not provisioned" }, { status: 409 });
+    if (!(cm as any).found) return badRequest("Object not found in the registry");
+    return NextResponse.json(cm);
+  }
   const r = await resolveRuntime(admin, object, ctx);
   if (!(r as any).provisioned) return NextResponse.json({ error: "Configuration registry not provisioned" }, { status: 409 });
   if (!(r as any).found) return badRequest("Object not found in the registry");

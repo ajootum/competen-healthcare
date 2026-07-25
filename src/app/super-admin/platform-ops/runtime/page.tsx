@@ -47,7 +47,7 @@ export default async function RuntimePage() {
       </div>
 
       <RuntimeResolver objects={(objects ?? []) as any[]} />
-      <p className="text-[11px] text-gray-400">The engine merges the WCE-001 override layers with deterministic precedence and records which layer set each value. Runtime service composition (assembling pages/widgets/forms into an executable model) and a distributed resolution cache (NCP-015 §6/§7) are next-phase.</p>
+      <p className="text-[11px] text-gray-400">The engine merges the WCE-001 override layers with deterministic precedence, records which layer set each value, and <b>composes</b> pages, dashboards and navigation into the enabled-filtered model a user in that context would actually see. A distributed resolution cache (NCP-015 §7) is next-phase.</p>
     </div>
   );
 }
