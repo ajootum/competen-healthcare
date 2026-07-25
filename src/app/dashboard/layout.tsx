@@ -61,7 +61,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
     { label: "My Competencies", href: "/dashboard/passport", icon: "🎯" },
     { label: "Documents", href: "/dashboard/library", icon: "📄" },
     { label: "AI Assistant", href: "/dashboard/copilot", icon: "✨" },
-    { label: "Workspaces", href: "/dashboard/career", icon: "🧭" },
+    { label: "Workspaces", href: "/dashboard/launcher", icon: "🧭" },
     { label: "Profile", href: "/dashboard/billing", icon: "👤" },
     { label: "Preferences", href: "/dashboard/billing", icon: "⚙️" },
   ];
