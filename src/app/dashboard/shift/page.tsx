@@ -1,6 +1,7 @@
 import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import CurrentShiftClient from "./CurrentShiftClient";
+import ReportIncident from "./ReportIncident";
 
 export const dynamic = "force-dynamic";
 
@@ -15,5 +16,10 @@ export default async function CurrentShiftPage() {
   const admin = createAdminClient() as any;
   const probe = await admin.from("op_observations").select("id").limit(1);
   const ready = !(probe.error && /does not exist|schema cache/i.test(probe.error.message ?? ""));
-  return <CurrentShiftClient ready={ready} />;
+  return (
+    <div className="space-y-4">
+      <CurrentShiftClient ready={ready} />
+      <ReportIncident ready={ready} />
+    </div>
+  );
 }

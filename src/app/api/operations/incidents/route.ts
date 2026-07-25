@@ -16,7 +16,9 @@ const migrationGate = (e: any) =>
 export async function POST(req: Request) {
   const c = await getCaller();
   if (isResponse(c)) return c;
-  if (!isStaff(c)) return forbidden();
+  // Frontline reporting is a safety right: any authenticated user (incl. healthcare workers) may REPORT an
+  // incident. hospital_id + reported_by are bound to the caller below, so scope cannot be spoofed. The
+  // investigation lifecycle (PATCH) stays staff-tier.
   const b = await req.json().catch(() => ({}));
   if (!String(b.description ?? "").trim()) return badRequest("description required");
   const type = INCIDENT_TYPES.includes(b.incident_type) ? b.incident_type : "other";
