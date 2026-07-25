@@ -1,19 +1,59 @@
 import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
-import { loadAccreditationCenter } from "@/lib/super-admin/gov-accreditation";
+import Link from "next/link";
+import { loadAccreditationReadiness } from "@/lib/operations/accreditation-readiness";
 import QualityTabs from "../QualityTabs";
-import { qcard, QHeader, Kpi, Donut, Rag, NextPhase, CrossLink } from "../widgets";
 
 export const dynamic = "force-dynamic";
 
-// Accreditation Readiness (UMG-QS-005) — reuses the Regulatory & Accreditation Center loader
-// (loadAccreditationCenter / GOV-001.6): per-framework readiness computed from REAL self-assessments
-// (gov_standard_assessments) against the EQOS standards catalogue, plus the surveys/inspections calendar and
-// the regulatory obligations calendar. This is the enterprise accreditation programme (frameworks like JCI /
-// SafeCare are org-level); the fuller assessment + evidence repository live in the accreditation workspace.
+// Accreditation Readiness Centre (UMG-QS-005) — aligned to the detailed spec + mockup. Consolidation over the
+// real accreditation stores (gov_standard_assessments / quality_standards / quality_frameworks / gov_surveys /
+// gov_obligations / capa_actions); no store forked. Real: framework readiness + trend (recomputed from the
+// insert-only assessment history), the compliance-status breakdown, standards-at-risk, gap analysis, evidence
+// completeness, survey readiness, the calendar and AI insights. Honest next-phase (spec §9 entities with no
+// store): the ActionPlan work queue owner/due/progress, the EvidenceItem repository, PolicyLink and training.
 /* eslint-disable @typescript-eslint/no-explicit-any */
+const card = "bg-white rounded-xl border border-gray-200";
 const pctTone = (p: number | null) => (p == null ? "text-gray-300" : p >= 85 ? "text-emerald-600" : p >= 70 ? "text-amber-600" : "text-rose-600");
 const barTone = (p: number) => (p >= 85 ? "#10b981" : p >= 70 ? "#f59e0b" : "#ef4444");
+const riskTone = (r: string) => (r === "High" ? "bg-rose-100 text-rose-700" : r === "Medium" ? "bg-amber-100 text-amber-700" : "bg-emerald-100 text-emerald-700");
+const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+const monthAbbr = (dateStr: string) => { const mi = Number((dateStr ?? "").slice(5, 7)) - 1; return mi >= 0 && mi < 12 ? MONTHS[mi] : ""; };
+const QUICK = [
+  { label: "Standards Library", icon: "📚", tint: "bg-sky-50" }, { label: "Measurable Elements", icon: "📋", tint: "bg-indigo-50" },
+  { label: "Evidence Repository", icon: "📁", tint: "bg-violet-50" }, { label: "Mock Surveys", icon: "👥", tint: "bg-teal-50" },
+  { label: "Gap Analysis", icon: "🔍", tint: "bg-rose-50" }, { label: "Action Plans", icon: "✅", tint: "bg-emerald-50" },
+  { label: "Document Manager", icon: "🗂️", tint: "bg-amber-50" }, { label: "Survey Readiness", icon: "🎯", tint: "bg-orange-50" },
+  { label: "Reports & Analytics", icon: "📊", tint: "bg-pink-50" }, { label: "AI Insights", icon: "🧠", tint: "bg-fuchsia-50" },
+];
+
+function Spark({ series, color }: { series: number[]; color: string }) {
+  if (!series || series.length < 2 || series.every(v => v === series[0])) return <div className="h-5" />;
+  const max = Math.max(...series), min = Math.min(...series), rng = max - min || 1;
+  const pts = series.map((v, i) => `${(i / (series.length - 1)) * 100},${18 - ((v - min) / rng) * 16}`).join(" ");
+  return <svg viewBox="0 0 100 20" preserveAspectRatio="none" className="w-full h-5"><polyline points={pts} fill="none" stroke={color} strokeWidth="2" vectorEffect="non-scaling-stroke" /></svg>;
+}
+function Delta({ v, unit = "%", invert }: { v: number | null | undefined; unit?: string; invert?: boolean }) {
+  if (v == null || v === 0) return <span className="text-[10px] text-gray-400">vs last period</span>;
+  const good = invert ? v < 0 : v > 0;
+  return <span className={`text-[10px] font-medium ${good ? "text-emerald-600" : "text-rose-600"}`}>{v > 0 ? "↑" : "↓"} {Math.abs(v)}{unit} vs Apr</span>;
+}
+function Kpi({ icon, tint, label, value, unit, sub, tone, spark, sparkColor, delta, deltaUnit, deltaInvert }: any) {
+  return (
+    <div className={`${card} p-3.5`}>
+      <div className="flex items-center gap-1.5 mb-1"><span className={`w-6 h-6 rounded-md flex items-center justify-center text-xs shrink-0 ${tint}`}>{icon}</span><span className="text-[9px] font-medium text-gray-500 uppercase tracking-wide truncate">{label}</span></div>
+      <div className={`text-xl font-bold tabular-nums ${tone ?? "text-gray-900"}`}>{value}{unit && <span className="text-xs font-medium text-gray-400 ml-0.5">{unit}</span>}</div>
+      {spark ? <div className="mt-0.5"><Spark series={spark} color={sparkColor} /></div> : sub && <div className="text-[9px] text-gray-400 mt-0.5 leading-tight">{sub}</div>}
+      {delta !== undefined && <div className="mt-0.5"><Delta v={delta} unit={deltaUnit} invert={deltaInvert} /></div>}
+    </div>
+  );
+}
+function SegDonut({ segs, total, label }: { segs: { n: number; color: string }[]; total: number; label: string }) {
+  const sum = segs.reduce((s, x) => s + x.n, 0) || 1;
+  const active = segs.filter(s => s.n > 0);
+  const grad = active.length ? `conic-gradient(${active.map((s, i) => { const before = active.slice(0, i).reduce((a, x) => a + x.n, 0); return `${s.color} ${(before / sum) * 360}deg ${((before + s.n) / sum) * 360}deg`; }).join(", ")})` : "#f1f5f9";
+  return <div className="relative w-32 h-32 shrink-0"><div className="w-32 h-32 rounded-full" style={{ background: grad }} /><div className="absolute inset-[24%] rounded-full bg-white flex flex-col items-center justify-center text-center"><span className="text-2xl font-bold text-gray-900 leading-none">{total}</span><span className="text-[8px] text-gray-400 leading-tight px-1">{label}</span></div></div>;
+}
 
 export default async function AccreditationReadiness() {
   const supabase = await createClient();
@@ -24,87 +64,135 @@ export default async function AccreditationReadiness() {
   const roles: string[] = (profile?.roles?.length ? profile.roles : [profile?.role]).filter(Boolean);
   if (!roles.some((r: string) => ["hospital_admin", "super_admin"].includes(r))) redirect("/dashboard");
 
-  const d = await loadAccreditationCenter(admin).catch(() => null) as any;
+  const d = await loadAccreditationReadiness(admin).catch(() => null) as any;
 
   const header = (
     <>
-      <QHeader code="UMG-QS-005" title="Accreditation Readiness" subtitle="Framework readiness, surveys and the regulatory calendar · enterprise programme" />
+      <div className="flex items-start justify-between gap-3 flex-wrap">
+        <div className="flex items-center gap-2"><span className="w-9 h-9 rounded-lg bg-teal-50 flex items-center justify-center text-lg">🏅</span><div><h1 className="text-2xl font-bold text-gray-900 tracking-tight">Accreditation Readiness Centre</h1><p className="text-sm text-gray-500">Monitor, manage and improve accreditation readiness across all standards · enterprise programme</p></div></div>
+        <div className="flex items-center gap-2"><Link href="/unit-manager/quality/accreditation" className="text-xs border border-gray-200 rounded-lg px-3 py-2 text-gray-600 hover:bg-gray-50">↻ Refresh</Link><Link href="/quality-accreditation" className="text-xs bg-teal-600 text-white rounded-lg px-3 py-2 hover:bg-teal-700 font-medium">+ Add Evidence</Link></div>
+      </div>
       <QualityTabs />
     </>
   );
 
-  if (!d || !d.ready) return <div className="space-y-4">{header}<div className="bg-amber-50 border border-amber-200 rounded-xl p-6"><p className="font-semibold text-amber-900">⚙️ Accreditation self-assessments not provisioned</p><p className="text-sm text-amber-800 mt-1">Apply migration 061 (gov_standard_assessments) and record framework self-assessments to compute readiness.</p></div></div>;
+  if (!d || !d.provisioned) return <div className="space-y-4">{header}<div className="bg-amber-50 border border-amber-200 rounded-xl p-6"><p className="font-semibold text-amber-900">⚙️ Accreditation self-assessments not provisioned</p><p className="text-sm text-amber-800 mt-1">Apply migration 061 (gov_standard_assessments) and record framework self-assessments to compute readiness.</p></div></div>;
 
   const k = d.kpis;
-  const assessedTotal = (k.met ?? 0) + (k.partially ?? 0) + (k.notMet ?? 0);
 
   return (
     <div className="space-y-4">
       {header}
 
-      <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
-        <Kpi icon="🏅" tint="bg-teal-50" label="Overall Readiness" value={k.overall != null ? `${k.overall}%` : "—"} tone={pctTone(k.overall)} sub="self-assessment" />
-        <Kpi icon="✅" tint="bg-emerald-50" label="Met" value={k.met ?? 0} tone="text-emerald-600" sub="standards" />
-        <Kpi icon="🟡" tint="bg-amber-50" label="Partially Met" value={k.partially ?? 0} tone="text-amber-600" sub="standards" />
-        <Kpi icon="🔴" tint="bg-rose-50" label="Not Met" value={k.notMet ?? 0} tone={k.notMet ? "text-rose-600" : "text-gray-400"} sub="standards" />
-        <Kpi icon="📄" tint="bg-sky-50" label="Evidence Gaps" value={k.evidenceGaps ?? 0} tone={k.evidenceGaps ? "text-amber-600" : "text-gray-400"} sub="no evidence" />
-        <Kpi icon="📋" tint="bg-indigo-50" label="Open Actions" value={d.openActions ?? 0} sub="CAPA" />
+      {/* ── KPI ribbon (7) ─────────────────────────────────────────────────── */}
+      <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-7 gap-2.5">
+        <Kpi icon="🎯" tint="bg-teal-50" label="Overall Readiness" value={k.overall != null ? `${k.overall}%` : "—"} tone={pctTone(k.overall)} spark={k.trendSpark} sparkColor="#14b8a6" delta={k.overallDelta} />
+        <Kpi icon="🏥" tint="bg-emerald-50" label="SafeCare" value={k.safecare?.readiness != null ? `${k.safecare.readiness}%` : "—"} tone={pctTone(k.safecare?.readiness ?? null)} delta={k.safecare?.delta} />
+        <Kpi icon="⚕️" tint="bg-violet-50" label="JCI Readiness" value={k.jci?.readiness != null ? `${k.jci.readiness}%` : "—"} tone={pctTone(k.jci?.readiness ?? null)} delta={k.jci?.delta} />
+        <Kpi icon="🏛️" tint="bg-amber-50" label="National Standards" value={k.national?.readiness != null ? `${k.national.readiness}%` : "—"} tone={pctTone(k.national?.readiness ?? null)} delta={k.national?.delta} />
+        <Kpi icon="📁" tint="bg-sky-50" label="Evidence Complete" value={k.evidenceComplete != null ? `${k.evidenceComplete}%` : "—"} tone={pctTone(k.evidenceComplete)} delta={k.evidenceDelta} />
+        <Kpi icon="🚩" tint="bg-rose-50" label="High Risk Standards" value={k.highRisk} tone={k.highRisk ? "text-rose-600" : "text-gray-400"} delta={k.highRiskDelta} deltaUnit="" deltaInvert />
+        <Kpi icon="📅" tint="bg-indigo-50" label="Survey Countdown" value={k.surveyCountdown != null ? k.surveyCountdown : "—"} unit={k.surveyCountdown != null ? "d" : ""} sub={k.nextSurveyName ? `to ${k.nextSurveyName} survey` : "no survey scheduled"} />
       </div>
 
+      {/* ── Frameworks · compliance status · standards at risk ─────────────── */}
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
-        <div className={`${qcard} p-5`}>
-          <h3 className="font-semibold text-gray-900 text-sm mb-3">Overall Readiness</h3>
-          <div className="flex items-center gap-4">
-            <Donut pct={k.overall ?? 0} color="#14b8a6" center={k.overall != null ? `${k.overall}%` : "—"} sub="ready" />
-            <div className="text-[11px] text-gray-600 space-y-1.5 min-w-0">
-              <div className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-sm bg-emerald-500" /><span className="text-gray-500">Met</span><b className="ml-auto tabular-nums text-gray-700">{k.met ?? 0}</b></div>
-              <div className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-sm bg-amber-400" /><span className="text-gray-500">Partially met</span><b className="ml-auto tabular-nums text-gray-700">{k.partially ?? 0}</b></div>
-              <div className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-sm bg-rose-500" /><span className="text-gray-500">Not met</span><b className="ml-auto tabular-nums text-gray-700">{k.notMet ?? 0}</b></div>
-              <div className="border-t border-gray-100 pt-1.5 flex items-center gap-1.5"><span className="text-gray-500">Not assessed</span><b className="ml-auto tabular-nums text-gray-500">{k.notAssessed ?? 0}</b></div>
+        <div className={`${card} p-5`}>
+          <h3 className="font-semibold text-gray-900 text-sm mb-3">Readiness by Framework</h3>
+          {d.perFramework.length ? <div className="space-y-2.5">{d.perFramework.map((f: any) => (
+            <div key={f.id} className="flex items-center gap-2 text-xs"><span className="text-gray-600 w-28 truncate" title={f.name}>{f.code}</span><div className="flex-1 h-2 rounded-full bg-gray-100 overflow-hidden"><div className="h-full rounded-full" style={{ width: `${f.readiness ?? 0}%`, background: barTone(f.readiness ?? 0) }} /></div><b className={`tabular-nums w-9 text-right ${pctTone(f.readiness)}`}>{f.readiness != null ? `${f.readiness}%` : "—"}</b><span className={`w-10 text-right tabular-nums text-[10px] ${f.delta == null ? "text-gray-300" : f.delta >= 0 ? "text-emerald-600" : "text-rose-600"}`}>{f.delta == null ? "—" : `${f.delta >= 0 ? "↑" : "↓"}${Math.abs(f.delta)}%`}</span></div>
+          ))}</div> : <p className="text-sm text-gray-400 py-8 text-center">No frameworks assessed.</p>}
+        </div>
+
+        <div className={`${card} p-5`}>
+          <h3 className="font-semibold text-gray-900 text-sm mb-3">Compliance Status Overview</h3>
+          {d.totalElements > 0 ? <div className="flex items-center gap-4">
+            <SegDonut total={d.totalElements} label="Measurable Elements" segs={d.complianceStatus.map((s: any) => ({ n: s.n, color: s.color }))} />
+            <div className="text-[11px] text-gray-600 space-y-1.5 flex-1 min-w-0">{d.complianceStatus.map((s: any) => <div key={s.key} className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full shrink-0" style={{ background: s.color }} /><span className="text-gray-600 flex-1">{s.label}</span><b className="tabular-nums text-gray-700">{s.n}</b><span className="text-gray-300 tabular-nums">({s.pct}%)</span></div>)}</div>
+          </div> : <p className="text-sm text-gray-400 py-8 text-center">No measurable elements assessed.</p>}
+        </div>
+
+        <div className={`${card} p-5`}>
+          <h3 className="font-semibold text-gray-900 text-sm mb-3">Top Standards at Risk</h3>
+          {d.atRisk.length ? <div className="space-y-1.5">{d.atRisk.map((a: any, i: number) => (
+            <div key={i} className="flex items-center gap-2 text-xs"><div className="min-w-0 flex-1"><p className="text-gray-700 truncate" title={a.title}>{a.ref}</p><p className="text-[10px] text-gray-400 truncate">{a.framework}</p></div><span className={`text-[10px] font-semibold rounded px-1.5 py-0.5 shrink-0 ${riskTone(a.risk)}`}>{a.risk}</span><div className="w-10 h-1.5 rounded-full bg-gray-100 overflow-hidden shrink-0"><div className="h-full rounded-full" style={{ width: `${a.compliance}%`, background: barTone(a.compliance) }} /></div></div>
+          ))}</div> : <p className="text-sm text-gray-400 py-8 text-center">No standards at risk. 🎉</p>}
+        </div>
+      </div>
+
+      {/* ── Work queue · gap analysis · survey readiness ───────────────────── */}
+      <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
+        <div className={`${card} p-5`}>
+          <div className="flex items-center justify-between mb-2 gap-2 flex-wrap"><h3 className="font-semibold text-gray-900 text-sm">Accreditation Work Queue</h3><div className="flex gap-1 text-[10px]"><span className="px-2 py-0.5 rounded-full bg-teal-600 text-white">All {d.queueCounts.all}</span><span className="px-2 py-0.5 rounded-full bg-rose-50 text-rose-600">At Risk {d.queueCounts.atRisk}</span><span className="px-2 py-0.5 rounded-full bg-amber-50 text-amber-600">Awaiting Verif. {d.queueCounts.awaitingVerification}</span></div></div>
+          {d.workQueue.length ? (
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs">
+                <thead><tr className="text-left text-gray-400 border-b border-gray-100"><th className="py-1.5 font-medium">ID</th><th className="py-1.5 font-medium">Title</th><th className="py-1.5 font-medium">Framework</th><th className="py-1.5 font-medium">Type</th><th className="py-1.5 font-medium">Priority</th><th className="py-1.5 font-medium">Status</th></tr></thead>
+                <tbody>{d.workQueue.slice(0, 8).map((w: any, i: number) => (
+                  <tr key={i} className="border-b border-gray-50">
+                    <td className="py-2 text-gray-400 tabular-nums whitespace-nowrap font-mono text-[10px]">{w.id}</td>
+                    <td className="py-2 text-gray-700 max-w-[160px] truncate" title={w.title}>{w.title}</td>
+                    <td className="py-2 text-gray-500">{w.framework}</td>
+                    <td className="py-2 text-gray-500">{w.type}</td>
+                    <td className="py-2"><span className={`text-[10px] font-semibold rounded px-1.5 py-0.5 ${riskTone(w.priority)}`}>{w.priority}</span></td>
+                    <td className="py-2 text-gray-500">{w.status}</td>
+                  </tr>
+                ))}</tbody>
+              </table>
+              <p className="text-[10px] text-gray-400 mt-2">Derived from real assessment gaps. Owner / due date / progress (the ActionPlan store) are next-phase.</p>
             </div>
+          ) : <p className="text-sm text-gray-400 py-8 text-center">No open accreditation gaps. 🎉</p>}
+        </div>
+
+        <div className={`${card} p-5`}>
+          <h3 className="font-semibold text-gray-900 text-sm mb-3">Gap Analysis Summary</h3>
+          <div className="space-y-2.5">
+            <div className="flex items-center justify-between text-sm"><span className="text-gray-600">Total Gaps Identified</span><b className="tabular-nums text-gray-900">{d.gap.total}</b></div>
+            <div className="flex items-center justify-between text-xs"><span className="flex items-center gap-1.5 text-gray-600"><span className="w-1.5 h-1.5 rounded-full bg-rose-500" />High Priority Gaps</span><b className="tabular-nums text-rose-600">{d.gap.high}</b></div>
+            <div className="flex items-center justify-between text-xs"><span className="flex items-center gap-1.5 text-gray-600"><span className="w-1.5 h-1.5 rounded-full bg-amber-400" />Medium Priority Gaps</span><b className="tabular-nums text-amber-600">{d.gap.medium}</b></div>
+            <div className="flex items-center justify-between text-xs"><span className="flex items-center gap-1.5 text-gray-600"><span className="w-1.5 h-1.5 rounded-full bg-sky-400" />Not Yet Assessed</span><b className="tabular-nums text-gray-600">{d.gap.low}</b></div>
+            <div className="border-t border-gray-100 pt-2 flex items-center justify-between text-xs"><span className="flex items-center gap-1.5 text-gray-600"><span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />Closed This Month</span><b className="tabular-nums text-emerald-600">{d.gap.closedThisMonth}</b></div>
           </div>
-          <p className="text-[10px] text-gray-400 mt-3">Readiness = met (1) + partially-met (0.5) over {assessedTotal} assessed standards.</p>
         </div>
 
-        <div className={`${qcard} p-5 xl:col-span-2`}>
-          <h3 className="font-semibold text-gray-900 text-sm mb-3">Framework Readiness</h3>
-          {d.perFramework.length ? <div className="space-y-3">{d.perFramework.map((f: any) => (
-            <div key={f.id}>
-              <div className="flex items-center justify-between text-xs mb-0.5"><span className="text-gray-700 font-medium">{f.code} <span className="text-gray-400 font-normal">{f.name}</span></span><b className={`tabular-nums ${pctTone(f.readiness)}`}>{f.readiness != null ? `${f.readiness}%` : "—"}</b></div>
-              <div className="w-full h-2 rounded-full bg-gray-100 overflow-hidden"><div className="h-full rounded-full" style={{ width: `${f.readiness ?? 0}%`, background: barTone(f.readiness ?? 0) }} /></div>
-              <p className="text-[10px] text-gray-400 mt-0.5">{f.assessed}/{f.known} assessed · {f.met} met · {f.partially} partial · {f.notMet} not met</p>
-            </div>
-          ))}</div> : <p className="text-sm text-gray-400 py-8 text-center">No frameworks assessed yet.</p>}
+        <div className={`${card} p-5`}>
+          <h3 className="font-semibold text-gray-900 text-sm mb-3">Survey Readiness</h3>
+          <div className="flex items-center gap-4">
+            <div className="relative w-24 h-24 shrink-0" style={{ background: `conic-gradient(#10b981 ${(d.surveyReadiness ?? 0) * 3.6}deg, #f1f5f9 0)`, borderRadius: "9999px" }}><div className="absolute inset-[18%] bg-white rounded-full flex flex-col items-center justify-center"><span className="text-xl font-bold text-gray-900">{d.surveyReadiness != null ? `${d.surveyReadiness}%` : "—"}</span><span className="text-[8px] text-gray-400">Ready</span></div></div>
+            <div className="text-[11px] space-y-1 flex-1 min-w-0">{d.readinessChecklist.map((c: any) => <div key={c.label} className="flex items-center gap-1.5"><span className={c.pct != null ? "text-emerald-500" : "text-gray-300"}>{c.pct != null ? "✓" : "○"}</span><span className="text-gray-600 flex-1 truncate">{c.label}</span><b className={`tabular-nums ${c.pct != null ? "text-gray-700" : "text-gray-300"}`}>{c.pct != null ? `${c.pct}%` : "—"}</b></div>)}</div>
+          </div>
+          <p className="text-[9px] text-gray-400 mt-2">Policies / training completeness need policy &amp; learning linkage (next-phase).</p>
         </div>
       </div>
 
+      {/* ── Calendar · quick access · AI insights ──────────────────────────── */}
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
-        <div className={`${qcard} p-5`}>
-          <h3 className="font-semibold text-gray-900 text-sm mb-3">Upcoming Surveys</h3>
-          {d.surveysReady && d.surveys.upcoming.length ? <div className="space-y-2">{d.surveys.upcoming.map((s: any) => (
-            <div key={s.id} className="flex items-start gap-2 text-xs"><span className={`w-1.5 h-1.5 rounded-full mt-1.5 shrink-0 ${s.dueSoon ? "bg-amber-400" : "bg-sky-400"}`} /><div className="min-w-0"><p className="text-gray-800 truncate">{s.title}</p><p className="text-[10px] text-gray-400">{s.fw ?? "—"} · {s.type} · {s.date ?? "unscheduled"}</p></div></div>
-          ))}</div> : <p className="text-sm text-gray-400 py-6 text-center">No upcoming surveys.{d.surveysReady ? "" : " (survey store not provisioned)"}</p>}
-          {d.surveys.completed > 0 && <div className="mt-3 pt-2 border-t border-gray-100 flex gap-2 text-[10px]"><Rag tone="green" label={`${d.surveys.outcomes.passed} passed`} /><Rag tone="amber" label={`${d.surveys.outcomes.conditions} conditions`} /><Rag tone="red" label={`${d.surveys.outcomes.failed} failed`} /></div>}
-        </div>
-
-        <div className={`${qcard} p-5`}>
-          <h3 className="font-semibold text-gray-900 text-sm mb-3">Regulatory Calendar</h3>
+        <div className={`${card} p-5`}>
+          <h3 className="font-semibold text-gray-900 text-sm mb-3">Accreditation Calendar</h3>
           {d.calendar.length ? <div className="space-y-2">{d.calendar.map((c: any, i: number) => (
-            <div key={i} className="flex items-center justify-between gap-2 text-xs"><div className="min-w-0"><p className="text-gray-700 truncate">{c.title}</p><p className="text-[10px] text-gray-400 capitalize">{c.domain}</p></div><span className={`text-[10px] font-medium shrink-0 ${c.overdue ? "text-rose-600" : c.dueSoon ? "text-amber-600" : "text-gray-400"}`}>{c.date}</span></div>
-          ))}</div> : <p className="text-sm text-gray-400 py-6 text-center">No regulatory obligations due.</p>}
+            <div key={i} className="flex items-center gap-2 text-xs"><div className="w-10 shrink-0 text-center"><p className="text-[9px] text-gray-400 uppercase">{monthAbbr(c.date)}</p><p className="text-sm font-bold text-gray-700 leading-none">{(c.date ?? "").slice(8, 10)}</p></div><div className="min-w-0 flex-1"><p className="text-gray-700 truncate">{c.title}</p><p className="text-[10px] text-gray-400 capitalize truncate">{c.type}</p></div><span className={`text-[9px] font-semibold rounded px-1.5 py-0.5 shrink-0 ${c.status === "overdue" ? "bg-rose-100 text-rose-700" : c.dueSoon ? "bg-amber-100 text-amber-700" : "bg-sky-100 text-sky-700"}`}>{c.status === "overdue" ? "Overdue" : c.dueSoon ? "Due Soon" : "Scheduled"}</span></div>
+          ))}</div> : <p className="text-sm text-gray-400 py-6 text-center">No scheduled surveys or obligations.</p>}
         </div>
 
-        <div className={`${qcard} p-5`}>
-          <h3 className="font-semibold text-gray-900 text-sm mb-3">Recent Assessments</h3>
-          {d.recent.length ? <div className="space-y-1.5">{d.recent.map((r: any, i: number) => (
-            <div key={i} className="flex items-center justify-between gap-2 text-xs py-0.5"><div className="min-w-0"><p className="text-gray-700 truncate">{r.fw} {r.ref}</p><p className="text-[10px] text-gray-400 truncate">{r.title ?? ""}</p></div><Rag tone={r.status === "met" ? "green" : r.status === "partially_met" ? "amber" : r.status === "not_met" ? "red" : "gray"} label={r.status.replace(/_/g, " ")} /></div>
-          ))}</div> : <p className="text-sm text-gray-400 py-6 text-center">No assessments recorded.</p>}
+        <div className={`${card} p-5`}>
+          <h3 className="font-semibold text-gray-900 text-sm mb-3">Quick Access</h3>
+          <div className="grid grid-cols-3 sm:grid-cols-5 gap-2">{QUICK.map(q => (
+            <Link key={q.label} href="/quality-accreditation" className="rounded-lg border border-gray-100 p-2 hover:border-teal-200 hover:bg-teal-50/40 transition-all text-center"><span className={`w-8 h-8 rounded-lg ${q.tint} flex items-center justify-center text-sm mx-auto mb-1`}>{q.icon}</span><p className="text-[9px] font-medium text-gray-700 leading-tight">{q.label}</p></Link>
+          ))}</div>
+        </div>
+
+        <div className={`${card} p-5`}>
+          <div className="flex items-center gap-2 mb-3"><span className="w-7 h-7 rounded-lg bg-violet-50 flex items-center justify-center text-sm">🤖</span><h3 className="font-semibold text-gray-900 text-sm">AI Accreditation Insights</h3></div>
+          {d.ai.length ? <div className="space-y-2">{d.ai.map((a: any, i: number) => (
+            <div key={i} className="flex items-start gap-2 rounded-lg border border-gray-100 p-2.5"><span className={`w-1.5 h-1.5 rounded-full mt-1.5 shrink-0 ${a.tone === "rose" ? "bg-rose-500" : a.tone === "amber" ? "bg-amber-400" : a.tone === "sky" ? "bg-sky-400" : "bg-emerald-500"}`} /><div className="min-w-0 flex-1"><p className="text-xs font-medium text-gray-800 leading-snug">{a.text}</p><p className="text-[10px] text-gray-400 truncate">{a.detail}</p></div><span className="text-[10px] text-gray-400 shrink-0">conf {a.confidence}%</span></div>
+          ))}</div> : <p className="text-sm text-gray-400 py-6 text-center">No accreditation signals to action right now.</p>}
         </div>
       </div>
 
-      <div className="flex items-center gap-3"><CrossLink href="/quality-accreditation">Open the full accreditation workspace</CrossLink></div>
-
-      <NextPhase>Accreditation Readiness (UMG-QS-005) reuses the Regulatory &amp; Accreditation Center: per-framework readiness computed from real self-assessments (gov_standard_assessments, migration 061) against the EQOS standards catalogue, the surveys/inspections register (gov_surveys) and the regulatory-obligations calendar. Accreditation frameworks (JCI, SafeCare, MOH) are an enterprise programme, so this is enterprise-scoped. Recording self-assessments and managing the evidence repository happen in the accreditation workspace. Gate hospital_admin/super_admin.</NextPhase>
+      <div className="flex items-center justify-between flex-wrap gap-2 text-[10px] text-gray-400 pb-4">
+        <span>Data sources: Audit &amp; Compliance · CAPA &amp; Improvement · Incident Management · Risk Register · Clinical Indicators · Learning &amp; Competency</span>
+        <span className="flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-emerald-500" /> Enterprise accreditation programme · consolidation over gov_standard_assessments (migration 061)</span>
+      </div>
     </div>
   );
 }
