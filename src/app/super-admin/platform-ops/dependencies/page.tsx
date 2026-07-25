@@ -32,13 +32,13 @@ export default async function DependencyGraphPage() {
       <div className="flex items-center gap-2 text-xs text-gray-400">
         <Link href="/super-admin/platform-ops" className="hover:text-gray-600">Platform Operations</Link><span>/</span>
         <Link href="/super-admin/platform-ops/no-code-platform" className="hover:text-gray-600">No-Code Platform</Link><span>/</span>
-        <span className="text-gray-700 font-medium">Dependency Graph</span>
+        <span className="text-gray-700 font-medium">Dependency Manager</span>
       </div>
       <div className="flex items-start gap-3">
         <span className="w-10 h-10 rounded-lg bg-indigo-50 flex items-center justify-center text-xl">🕸️</span>
         <div>
-          <h1 className="text-2xl font-bold text-gray-900 tracking-tight">Dependency Graph Service</h1>
-          <p className="text-sm text-gray-500">Trace configuration dependencies, analyse change impact (blast radius) and detect circular or broken references across the registry — the publishing pipeline&apos;s Dependency Analysis stage.</p>
+          <h1 className="text-2xl font-bold text-gray-900 tracking-tight">Dependency Manager <span className="text-gray-300 font-medium text-lg">(NCP-017)</span></h1>
+          <p className="text-sm text-gray-500">Trace configuration dependencies, analyse change impact (blast radius) and validate the graph — circular, broken and orphaned references — as the deployment guard for safe publishing.</p>
         </div>
       </div>
     </>
@@ -51,12 +51,13 @@ export default async function DependencyGraphPage() {
     <div className="space-y-5 max-w-6xl">
       {header}
 
-      <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
+      <div className="grid grid-cols-2 lg:grid-cols-6 gap-3">
         <Stat label="Objects" value={s.nodes} sub="in the graph" />
         <Stat label="Dependency Edges" value={s.edges} sub="containment + explicit" />
         <Stat label="Circular Dependencies" value={s.cycles} tone={s.cycles ? "text-rose-600" : "text-emerald-600"} sub={s.cycles ? "publish blocker" : "none — acyclic"} />
         <Stat label="Broken References" value={s.broken} tone={s.broken ? "text-amber-600" : "text-emerald-600"} sub={s.broken ? "unresolved deps/parents" : "all resolved"} />
-        <Stat label="Max Blast Radius" value={s.maxImpact} sub="most-depended-on object" />
+        <Stat label="Orphaned" value={s.orphans} tone={s.orphans ? "text-sky-600" : "text-emerald-600"} sub={s.orphans ? "isolated objects" : "none isolated"} />
+        <Stat label="Max Blast Radius" value={s.maxImpact} sub="most-depended-on" />
       </div>
 
       {s.cycles > 0 && (
@@ -70,6 +71,14 @@ export default async function DependencyGraphPage() {
         <div className="bg-amber-50 border border-amber-200 rounded-xl p-4">
           <p className="font-semibold text-amber-900 text-sm">{s.broken} broken reference{s.broken === 1 ? "" : "s"} — an object points to a {`{parent/dependency}`} that is not in the registry</p>
           <div className="mt-2 space-y-1">{g.broken.map((b: any, i: number) => <p key={i} className="text-[11px] text-amber-800 font-mono">{b.from} <span className="text-amber-400">─{b.kind}→</span> {b.to} <span className="text-amber-500">(missing)</span></p>)}</div>
+        </div>
+      )}
+
+      {g.orphans.length > 0 && (
+        <div className={`${card} p-4`}>
+          <p className="font-semibold text-gray-900 text-sm mb-1">Orphaned Objects <span className="text-gray-300 font-normal">— {g.orphans.length}</span></p>
+          <p className="text-[10px] text-gray-400 mb-3">Depend on nothing and nothing depends on them — wire them into a page/dashboard/menu, or retire.</p>
+          <div className="flex flex-wrap gap-1.5">{g.orphans.map((o: any) => <span key={o.key} className="text-[11px] bg-sky-50 border border-sky-100 text-sky-700 rounded px-2 py-0.5">{o.label} <span className="text-sky-400 text-[9px]">{o.type.replace(/_/g, " ")}</span></span>)}</div>
         </div>
       )}
 

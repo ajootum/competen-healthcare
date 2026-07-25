@@ -74,6 +74,11 @@ export async function loadDependencyGraph(admin: any) {
     .map(o => ({ key: o.object_key, label: o.display_name ?? o.object_key, type: o.object_type, safety: o.safety_classification, impact: transitiveClosure(dependents, o.object_key).size }))
     .filter(o => o.impact > 0).sort((a, b) => b.impact - a.impact).slice(0, 8);
 
+  // Orphaned / isolated objects — depend on nothing and nothing depends on them (candidates to wire or retire).
+  const orphans = objects
+    .filter(o => !dependsOn.has(o.object_key) && !dependents.has(o.object_key) && !["PLATFORM", "PRODUCT_SUITE", "WORKSPACE"].includes(o.object_type))
+    .map(o => ({ key: o.object_key, label: o.display_name ?? o.object_key, type: o.object_type, status: o.status }));
+
   // Serialise for the client explorer.
   const nodes = objects.map(o => ({ key: o.object_key, label: o.display_name ?? o.object_key, type: o.object_type, status: o.status, safety: o.safety_classification, cls: o.configurability_class }));
   const dependsObj: Record<string, string[]> = {}; dependsOn.forEach((s, k) => { dependsObj[k] = [...s]; });
@@ -84,11 +89,12 @@ export async function loadDependencyGraph(admin: any) {
     roots: objects.filter(o => !dependsOn.has(o.object_key)).length,     // depend on nothing (top of the tree)
     leaves: objects.filter(o => !dependents.has(o.object_key)).length,   // nothing depends on them (safe to change)
     maxImpact: topImpact[0]?.impact ?? 0,
+    orphans: orphans.length,
   };
 
   return {
     provisioned: true as const, stats, cycles: cycles.map(c => c.map(label)), cycleKeys: cycles,
-    broken: broken.slice(0, 20), topImpact, nodes, dependsOn: dependsObj, dependents: dependentsObj,
+    broken: broken.slice(0, 20), topImpact, orphans: orphans.slice(0, 30), nodes, dependsOn: dependsObj, dependents: dependentsObj,
   };
 }
 
