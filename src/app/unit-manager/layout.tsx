@@ -126,6 +126,7 @@ const NAV_GROUPS: { title: string; items: NavItem[] }[] = [
     { label: "AI Quality Intelligence", href: "/unit-manager/quality/ai", icon: "🤖" },
   ] },
   { title: "Operations & Capacity", items: [
+    { label: "Performance Dashboard", href: "/unit-manager/ops-performance", icon: "📈" },
     { label: "Capacity Dashboard",   href: "/unit-manager/operations", icon: "🏥" },
     { label: "Equipment Readiness",  icon: "🩺", soon: true },
     { label: "Resource Management",  icon: "📦", soon: true },
