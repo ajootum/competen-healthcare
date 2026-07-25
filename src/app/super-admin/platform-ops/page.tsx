@@ -114,6 +114,7 @@ export default async function PlatformOperations() {
     { n: 10, label: "Configuration Governance", desc: "WCE-004 — governed change pathway: risk classification, review routing, approval, release & rollback (registry-driven)", icon: "🛂", href: "/super-admin/platform-ops/governance", live: true },
     { n: 11, label: "Module & Widget Catalogue", desc: "WCE-005 — detailed catalogue of every configurable module & widget with configuration contracts and completeness scoring", icon: "🧱", href: "/super-admin/platform-ops/catalogue", live: true },
     { n: 12, label: "No-Code Configuration Platform", desc: "NCP-000 — the metadata-driven no-code platform foundation & architecture: the umbrella that ties WCE-001..005 together, with live component + roadmap status", icon: "🧩", href: "/super-admin/platform-ops/no-code-platform", live: true },
+    { n: 13, label: "Product Portfolio & Suites", desc: "PCS-PORT-001 — package products into commercial suites, map them to workspaces, and license per tenant. Licensing composes into runtime entitlement.", icon: "📦", href: "/super-admin/platform-ops/portfolio", live: true },
   ];
 
   return (
