@@ -153,6 +153,42 @@ export async function PATCH(req: Request) {
     }
     def.nodeCount = nodes.length;
   }
+  // NCP-006 dashboards — visualisation tiles bound to metrics on a 12-col grid; bound metrics become deps.
+  if (obj.object_type === "DASHBOARD") {
+    const VIZ = ["kpi_card", "table", "pivot", "line", "bar", "pie", "heatmap", "treemap", "scatter", "map", "gauge", "timeline", "calendar", "trend", "custom"];
+    const tiles = Array.isArray(def.tiles) ? def.tiles : [];
+    const keys = new Set<string>(); const metricRefs = new Set<string>();
+    for (const t of tiles) {
+      if (!t?.key || !/^[a-z][a-z0-9_]*$/.test(t.key)) return badRequest(`Invalid tile key "${t?.key ?? ""}" — lowercase letters/numbers/underscore`);
+      if (keys.has(t.key)) return badRequest(`Duplicate tile key "${t.key}"`);
+      keys.add(t.key);
+      if (!VIZ.includes(t.viz)) return badRequest(`Tile "${t.key}": invalid visualisation`);
+      if (!String(t.title ?? "").trim()) return badRequest(`Tile "${t.key}" needs a title`);
+      const span = Number(t.span);
+      if (!Number.isInteger(span) || span < 1 || span > 12) return badRequest(`Tile "${t.key}": span must be 1–12`);
+      if (typeof t.metric === "string" && t.metric) metricRefs.add(t.metric);
+    }
+    def.tileCount = tiles.length;
+    const realRefs = metricRefs.size ? (((await admin.from("configuration_registry_objects").select("object_key").in("object_key", [...metricRefs])).data) ?? []).map((r: any) => r.object_key) : [];
+    deps = [...deps.filter((d: any) => d?.type !== "METRIC_REF"), ...realRefs.map((k: string) => ({ type: "METRIC_REF", objectKey: k }))];
+  }
+  // NCP-006 reports — ordered sections (cover/summary/kpi/table/chart/narrative/page_break); bound metrics → deps.
+  if (obj.object_type === "REPORT") {
+    const SECT = ["cover", "summary", "kpi_band", "table", "chart", "narrative", "page_break"];
+    const sections = Array.isArray(def.sections) ? def.sections : [];
+    const keys = new Set<string>(); const metricRefs = new Set<string>();
+    for (const s of sections) {
+      if (!s?.key || !/^[a-z][a-z0-9_]*$/.test(s.key)) return badRequest(`Invalid section key "${s?.key ?? ""}" — lowercase letters/numbers/underscore`);
+      if (keys.has(s.key)) return badRequest(`Duplicate section key "${s.key}"`);
+      keys.add(s.key);
+      if (!SECT.includes(s.type)) return badRequest(`Section "${s.key}": invalid type`);
+      if (s.type !== "page_break" && !String(s.title ?? "").trim()) return badRequest(`Section "${s.key}" needs a title`);
+      if (typeof s.metric === "string" && s.metric) metricRefs.add(s.metric);
+    }
+    def.sectionCount = sections.length;
+    const realRefs = metricRefs.size ? (((await admin.from("configuration_registry_objects").select("object_key").in("object_key", [...metricRefs])).data) ?? []).map((r: any) => r.object_key) : [];
+    deps = [...deps.filter((d: any) => d?.type !== "METRIC_REF"), ...realRefs.map((k: string) => ({ type: "METRIC_REF", objectKey: k }))];
+  }
 
   const { error } = await admin.from("configuration_registry_objects").update({ definition: def, dependencies: deps, updated_at: new Date().toISOString(), updated_by: userId }).eq("object_key", object_key);
   if (error) return missing(error) ? NextResponse.json({ error: "Run migration 094 to enable object definitions" }, { status: 409 }) : badRequest(error.message);
