@@ -19,6 +19,13 @@ export async function POST(req: Request) {
 
   const admin = c.admin;
 
+  // The learner (nurse) this cycle belongs to. competency_scores / domain_scores are
+  // nurse-scoped: the CMO, Unit Manager, reports and analytics lenses all filter by
+  // nurse_id, so every rollup row MUST carry it or skill-scored competencies are
+  // silently dropped (and feed NULL scores into the decision engine). Mirrors recomputeAll().
+  const { data: cycleRow } = await admin.from("competency_cycles").select("nurse_id").eq("id", cycle_id).single();
+  const nurseId = cycleRow?.nurse_id ?? null;
+
   // Upsert all skill scores
   const rows = scores.map((s: { skill_id: string; competency_id: string; domain_id: string; framework_id: string; score: number; notes?: string }) => ({
     cycle_id,
@@ -53,13 +60,18 @@ export async function POST(req: Request) {
     await admin.from("competency_scores").upsert({
       cycle_id,
       competency_id,
+      nurse_id:    nurseId,
       domain_id,
       framework_id,
       assessor_count: skillScores.length,
       avg_score:   parseFloat(avg.toFixed(2)),
       final_score: final,
+      score:       final,          // canonical column the nurse-scoped lenses + decisions.ts read
       level_label: benner.label,
+      label:       benner.label,   // canonical column (matches recomputeAll)
       is_passing:  isPassing(final),
+      assessed_at: new Date().toISOString(),
+      educator_validated: false,   // a fresh score requires re-validation
     }, { onConflict: "cycle_id,competency_id" });
   }
 
@@ -80,11 +92,15 @@ export async function POST(req: Request) {
     await admin.from("domain_scores").upsert({
       cycle_id,
       domain_id,
+      nurse_id:         nurseId,
       framework_id,
+      score:            parseFloat(avg.toFixed(2)),   // canonical (matches recomputeDomainScore)
+      label:            getBennerLabel(Math.round(avg)).label,
       avg_score:        parseFloat(avg.toFixed(2)),
       competency_count: compScores.length,
       passing_count:    passing,
       is_passing:       passing === compScores.length,
+      assessed_at:      new Date().toISOString(),
     }, { onConflict: "cycle_id,domain_id" });
   }
 
