@@ -15,6 +15,7 @@ export const EVENT = {
   POLICY_ACK_REQUIRED: "policy.acknowledgement.required",
   ENTITLEMENT_REVOKED: "workspace.entitlement.revoked",
   CREDENTIAL_EXPIRY_UPDATED: "credential.expiry.updated",
+  BREAK_GLASS_INVOKED: "security.break_glass.invoked",
 } as const;
 export type EventType = (typeof EVENT)[keyof typeof EVENT] | (string & {});
 
