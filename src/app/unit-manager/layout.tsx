@@ -113,7 +113,7 @@ const NAV_GROUPS: { title: string; items: NavItem[] }[] = [
   // sub-modules don't all highlight it. CAPA + Patient Safety route to their authoritative
   // surfaces (/unit-manager/capa, /patient-operations/safety).
   { title: "Quality & Safety", items: [
-    { label: "Exec. Dashboard",         href: "/unit-manager/quality", icon: "🛡️", exact: true },
+    { label: "Executive Dashboard",     href: "/unit-manager/quality", icon: "🛡️", exact: true },
     { label: "Incident Management",     href: "/unit-manager/quality/incidents", icon: "🚩" },
     { label: "Audit & Compliance",      href: "/unit-manager/quality/audits", icon: "🔍" },
     { label: "CAPA & Improvement",      href: "/unit-manager/capa", icon: "📈" },
