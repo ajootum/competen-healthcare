@@ -61,10 +61,12 @@ console.log("\n── Unit Manager · Mandatory Learning ────");
   console.log(`  compliance: ${total ? Math.round((completed / total) * 100) : 0}% complete`);
 }
 
-// ── Competency readiness (scopes through nurse_id) ──────────────────────────
+// ── Competency readiness (scope by hospital_id, EXACTLY as the lenses do — the
+// decision engine stamps hospital_id; a nurse_id scope here would over-count vs
+// what CMO/UMW/HEX actually render) ─────────────────────────────────────────
 console.log("\n── CMO / UMW · Competency readiness ─────");
 {
-  const { data } = await db.from("competency_decisions").select("outcome, expiry_date").in("nurse_id", nurseIds);
+  const { data } = await db.from("competency_decisions").select("outcome, expiry_date").eq("hospital_id", H);
   const t = tally(data ?? [], "outcome");
   const expired = (data ?? []).filter((r) => r.expiry_date && daysUntil(r.expiry_date) < 0).length;
   const soon = (data ?? []).filter((r) => r.expiry_date && daysUntil(r.expiry_date) >= 0 && daysUntil(r.expiry_date) <= 60).length;
@@ -89,7 +91,15 @@ console.log("\n── Unit Manager · Quality & Safety ──────");
   const nm = (inc ?? []).filter((r) => r.near_miss).length;
   console.log(`  incidents: ${(inc ?? []).length}  [${fmt(tally(inc ?? [], "status"))}]  near_miss=${nm}`);
   const { data: capa } = await db.from("op_quality_actions").select("status, action_type").eq("hospital_id", H);
-  console.log(`  quality actions: ${(capa ?? []).length}  [${fmt(tally(capa ?? [], "status"))}]`);
+  console.log(`  op quality actions (operational): ${(capa ?? []).length}  [${fmt(tally(capa ?? [], "status"))}]`);
+  // Governance layer — what the UMW/HEX landing quality KPI actually reads.
+  const { data: aud } = await db.from("audits").select("status, compliance_pct").eq("hospital_id", H);
+  const doneAud = (aud ?? []).filter((a) => a.status === "completed" && a.compliance_pct != null);
+  const avgComp = doneAud.length ? Math.round(doneAud.reduce((s, a) => s + Number(a.compliance_pct), 0) / doneAud.length) : null;
+  console.log(`  audits (governance):     ${(aud ?? []).length}  avg compliance=${avgComp}%`);
+  const { data: gcapa } = await db.from("capa_actions").select("status, priority").eq("hospital_id", H);
+  const openG = (gcapa ?? []).filter((c) => !["completed", "verified", "closed"].includes(c.status));
+  console.log(`  CAPA (governance):       ${(gcapa ?? []).length}  [${fmt(tally(gcapa ?? [], "status"))}]  open=${openG.length}`);
 }
 
 // ── Operations ──────────────────────────────────────────────────────────────
