@@ -96,15 +96,15 @@ export default function PortfolioConsole({ data }: { data: any }) {
         ) : (
           <div className="overflow-x-auto">
             <table className="text-[12px] border-collapse">
-              <thead><tr><th className="text-left px-2 py-1 sticky left-0 bg-white">Tenant</th>{data.products.map((p: any) => <th key={p.id} className="px-2 py-1 text-gray-600 font-medium whitespace-nowrap" title={p.code}>{p.name}</th>)}</tr></thead>
+              <thead><tr><th className="text-left px-2 py-1 sticky left-0 bg-white">Tenant</th>{data.products.map((p: any) => <th key={p.code} className="px-2 py-1 text-gray-600 font-medium whitespace-nowrap" title={p.code}>{p.name}</th>)}</tr></thead>
               <tbody>
                 {data.tenants.map((t: any) => (
                   <tr key={t.id} className="border-t border-gray-50">
                     <td className="px-2 py-1 font-medium text-gray-700 sticky left-0 bg-white whitespace-nowrap">{t.name ?? t.slug ?? t.id.slice(0, 8)}</td>
                     {data.products.map((p: any) => {
-                      const on = licensed.has(`${t.id}:${p.id}`);
-                      return <td key={p.id} className="px-2 py-1 text-center">
-                        <button onClick={() => call(on ? "DELETE" : "POST", on ? { query: `type=license&tenant_id=${t.id}&product_id=${p.id}` } : { body: { type: "license", tenant_id: t.id, product_id: p.id } })} disabled={pending} className={`w-5 h-5 rounded ${on ? "bg-emerald-500 text-white" : "bg-gray-100 text-gray-300 hover:bg-gray-200"}`}>{on ? "✓" : ""}</button>
+                      const on = licensed.has(`${t.id}:${p.code}`);
+                      return <td key={p.code} className="px-2 py-1 text-center">
+                        <button onClick={() => call(on ? "DELETE" : "POST", on ? { query: `type=license&tenant_id=${t.id}&product_code=${encodeURIComponent(p.code)}` } : { body: { type: "license", tenant_id: t.id, product_code: p.code } })} disabled={pending} className={`w-5 h-5 rounded ${on ? "bg-emerald-500 text-white" : "bg-gray-100 text-gray-300 hover:bg-gray-200"}`}>{on ? "✓" : ""}</button>
                       </td>;
                     })}
                   </tr>
@@ -118,7 +118,7 @@ export default function PortfolioConsole({ data }: { data: any }) {
   );
 }
 
-// Product row with workspace mapping (Product Assignment) + dependency count.
+// Product row (a plat_products catalogue entry) with workspace mapping (Product Assignment) + dependency count.
 function ProductRow({ p, data, call, pending }: any) {
   const [ws, setWs] = useState("");
   const unmapped = data.workspaceKeys.filter((w: any) => !p.workspaces.includes(w.key));
@@ -126,19 +126,19 @@ function ProductRow({ p, data, call, pending }: any) {
     <div className="bg-white border border-gray-100 rounded p-2">
       <div className="flex items-center gap-2 flex-wrap">
         <span className="text-[12px] font-medium text-gray-800">{p.name}</span>
-        {p.code && <span className="text-[9px] font-mono text-gray-400">{p.code}</span>}
-        <span className="text-[9px] rounded px-1 bg-blue-50 text-blue-700">{p.license_type}</span>
+        <span className="text-[9px] font-mono text-gray-400">{p.code}</span>
+        <span className="text-[9px] rounded px-1 bg-blue-50 text-blue-700">{p.is_core ? "core" : "add-on"}</span>
         <span className="text-[9px] text-gray-400">{p.licensedTenants} licensed · {p.workspaces.length} workspace{p.workspaces.length === 1 ? "" : "s"}</span>
         <span className="flex-1" />
-        <button onClick={() => call("DELETE", { query: `type=product&id=${p.id}` })} disabled={pending} className="text-[9px] text-gray-400 hover:text-rose-600">Archive</button>
+        <button onClick={() => call("DELETE", { query: `type=product&code=${encodeURIComponent(p.code)}` })} disabled={pending} className="text-[9px] text-gray-400 hover:text-rose-600" title="Remove from suite (keeps the catalogue entry)">Unassign</button>
       </div>
       <div className="flex items-center gap-1.5 flex-wrap mt-1.5">
         {p.workspaces.map((k: string) => (
-          <span key={k} className="inline-flex items-center gap-1 text-[10px] bg-indigo-50 text-indigo-700 rounded px-1.5 py-0.5">{k}<button onClick={() => call("DELETE", { query: `type=mapping&product_id=${p.id}&workspace_key=${encodeURIComponent(k)}` })} disabled={pending} className="hover:text-rose-600">×</button></span>
+          <span key={k} className="inline-flex items-center gap-1 text-[10px] bg-indigo-50 text-indigo-700 rounded px-1.5 py-0.5">{k}<button onClick={() => call("DELETE", { query: `type=mapping&product_code=${encodeURIComponent(p.code)}&workspace_key=${encodeURIComponent(k)}` })} disabled={pending} className="hover:text-rose-600">×</button></span>
         ))}
         {unmapped.length > 0 && <span className="inline-flex items-center gap-1">
           <select value={ws} onChange={e => setWs(e.target.value)} className="text-[10px] border border-gray-200 rounded px-1 py-0.5"><option value="">+ map workspace…</option>{unmapped.map((w: any) => <option key={w.key} value={w.key}>{w.label} ({w.key})</option>)}</select>
-          {ws && <button onClick={() => { call("POST", { body: { type: "mapping", product_id: p.id, workspace_key: ws } }); setWs(""); }} disabled={pending} className="text-[10px] font-medium text-blue-600">add</button>}
+          {ws && <button onClick={() => { call("POST", { body: { type: "mapping", product_code: p.code, workspace_key: ws } }); setWs(""); }} disabled={pending} className="text-[10px] font-medium text-blue-600">add</button>}
         </span>}
       </div>
     </div>

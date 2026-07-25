@@ -8,26 +8,26 @@ const q = async (p: Promise<any>) => { try { const r = await p; return r?.error 
 
 export type TenantLicensing = {
   provisioned: boolean;                     // false = licensing store absent → treat everything as available
-  gated: Map<string, Set<string>>;          // workspace_key → product_ids that gate it (mapped = licence-gated)
-  licensedProducts: Set<string>;            // product_ids actively licensed for this tenant (valid today)
+  gated: Map<string, Set<string>>;          // workspace_key → product_codes that gate it (mapped = licence-gated)
+  licensedProducts: Set<string>;            // product_codes actively licensed for this tenant (valid today)
 };
 
 export async function loadTenantLicensing(admin: any, tenantId: string | null): Promise<TenantLicensing> {
   const empty: TenantLicensing = { provisioned: false, gated: new Map(), licensedProducts: new Set() };
 
-  const mapRes = await q(admin.from("product_workspaces").select("product_id, workspace_key"));
+  const mapRes = await q(admin.from("product_workspaces").select("product_code, workspace_key"));
   if (!mapRes.provisioned) return empty; // store not provisioned → fail-open
   const gated = new Map<string, Set<string>>();
-  for (const m of mapRes.data as any[]) { const s = gated.get(m.workspace_key) ?? new Set<string>(); s.add(m.product_id); gated.set(m.workspace_key, s); }
+  for (const m of mapRes.data as any[]) { const s = gated.get(m.workspace_key) ?? new Set<string>(); s.add(m.product_code); gated.set(m.workspace_key, s); }
 
   // No tenant context → cannot evaluate licences → fail-open (available), never silently deny.
   if (!tenantId) return { provisioned: true, gated: new Map(), licensedProducts: new Set() };
 
   const today = new Date().toISOString().slice(0, 10);
-  const licRes = await q(admin.from("tenant_product_licenses").select("product_id, status, valid_from, valid_to").eq("tenant_id", tenantId).eq("status", "active"));
+  const licRes = await q(admin.from("tenant_product_licenses").select("product_code, status, valid_from, valid_to").eq("tenant_id", tenantId).eq("status", "active"));
   const licensedProducts = new Set<string>();
   for (const l of licRes.data as any[]) {
-    if ((!l.valid_from || l.valid_from <= today) && (!l.valid_to || l.valid_to >= today)) licensedProducts.add(l.product_id);
+    if ((!l.valid_from || l.valid_from <= today) && (!l.valid_to || l.valid_to >= today)) licensedProducts.add(l.product_code);
   }
   return { provisioned: true, gated, licensedProducts };
 }
