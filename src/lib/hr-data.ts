@@ -74,22 +74,17 @@ export async function loadHrDashboard(admin: any, hid: string | null, isSuper: b
     competency.coverage = latest.length ? Math.round((current / latest.length) * 100) : 0;
   } catch { /* pre-migration */ }
 
-  // ── Mandatory learning compliance (pathway completion across the workforce)
+  // ── Mandatory learning compliance — completion of mandatory learning_enrolments
+  // across the workforce (the authoritative mandatory-training record, hospital-scoped;
+  // the worker "My Training" surface + assignments write it). Pathway items are
+  // development, not compliance, so they are a separate metric.
   const learning = { total: 0, completed: 0, compliance: 0 };
   try {
-    // Match the headcount definition of a nurse — scalar role OR nurse in roles[].
-    const { data: nurses } = await scope(admin.from("profiles").select("id").or("role.eq.nurse,roles.cs.{nurse}").limit(4000));
-    const nurseIds = (nurses ?? []).map((n: any) => n.id);
-    if (nurseIds.length) {
-      const { data: pws } = await admin.from("learning_pathways").select("id").in("nurse_id", nurseIds).limit(4000);
-      const pwIds = (pws ?? []).map((p: any) => p.id);
-      if (pwIds.length) {
-        const { data: items } = await admin.from("pathway_items").select("status").in("pathway_id", pwIds).limit(20000);
-        learning.total = (items ?? []).length;
-        learning.completed = (items ?? []).filter((i: any) => i.status === "completed").length;
-        learning.compliance = learning.total ? Math.round((learning.completed / learning.total) * 100) : 0;
-      }
-    }
+    const { data: enrols } = await scope(admin.from("learning_enrolments").select("status").eq("mandatory", true).limit(20000));
+    const rows = enrols ?? [];
+    learning.total = rows.length;
+    learning.completed = rows.filter((e: any) => e.status === "completed").length;
+    learning.compliance = learning.total ? Math.round((learning.completed / learning.total) * 100) : 0;
   } catch { /* ignore */ }
 
   return { headcount, employment, positions, competency, learning };

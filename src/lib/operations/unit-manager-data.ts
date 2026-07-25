@@ -69,21 +69,17 @@ export async function loadUnitManagerDashboard(admin: any, hid: string | null, i
     }
   } catch { /* pre-migration */ }
 
-  // Learning compliance — pathway-item completion across the unit's workforce.
+  // Mandatory learning compliance — completion of mandatory learning_enrolments across
+  // the unit (hospital-scoped; the authoritative mandatory-training record the worker
+  // "My Training" surface + assignments write). Pathway items are development, not
+  // compliance, so they are a separate metric.
   const learning = { total: 0, completed: 0, compliance: 0 };
   try {
-    const { data: nurses } = await scope(admin.from("profiles").select("id").eq("role", "nurse").limit(2000));
-    const nurseIds = (nurses ?? []).map((n: any) => n.id);
-    if (nurseIds.length) {
-      const { data: pws } = await admin.from("learning_pathways").select("id").in("nurse_id", nurseIds).limit(2000);
-      const pwIds = (pws ?? []).map((p: any) => p.id);
-      if (pwIds.length) {
-        const { data: items } = await admin.from("pathway_items").select("status").in("pathway_id", pwIds).limit(8000);
-        learning.total = (items ?? []).length;
-        learning.completed = (items ?? []).filter((i: any) => i.status === "completed").length;
-        learning.compliance = learning.total ? Math.round((learning.completed / learning.total) * 100) : 0;
-      }
-    }
+    const { data: enrols } = await scope(admin.from("learning_enrolments").select("status").eq("mandatory", true).limit(20000));
+    const rows = enrols ?? [];
+    learning.total = rows.length;
+    learning.completed = rows.filter((i: any) => i.status === "completed").length;
+    learning.compliance = learning.total ? Math.round((learning.completed / learning.total) * 100) : 0;
   } catch { /* ignore */ }
 
   return { ready, ops: data, capability, quality, staffCount, assessment, learning };
