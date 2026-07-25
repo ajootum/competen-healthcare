@@ -71,7 +71,7 @@ const SERVICES: { code: string; name: string; status: string; href?: string; via
   { code: "NCP-016", name: "Schema & Object Model", status: "live", href: "/super-admin/platform-ops/schema" },
   { code: "NCP-017", name: "Dependency Manager", status: "live", href: "/super-admin/platform-ops/dependencies" },
   { code: "NCP-018", name: "Versioning & Audit Service", status: "live", href: "/super-admin/platform-ops/versions" },
-  { code: "NCP-019", name: "Publishing Service", status: "partial", via: "WCE-004", href: "/super-admin/platform-ops/governance" },
+  { code: "NCP-019", name: "Publishing Service", status: "live", href: "/super-admin/platform-ops/releases" },
   { code: "NCP-020", name: "Migration Toolkit", status: "live", href: "/super-admin/platform-ops/migration" },
 ];
 const META_OBJECTS = ["Workspace", "Module", "Dashboard", "Widget", "Form", "Workflow", "Business Rule", "AI Assistant", "Navigation Item", "Theme", "Report"];
