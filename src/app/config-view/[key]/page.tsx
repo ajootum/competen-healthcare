@@ -19,7 +19,7 @@ export default async function ConfigViewPage({ params }: { params: Promise<{ key
   const admin = createAdminClient() as any;
 
   const ctx = await callerContext(admin, user.id);
-  const composed: any = await composeRuntime(admin, decodeURIComponent(key), ctx);
+  const composed: any = await composeRuntime(admin, decodeURIComponent(key), ctx, { withValues: true });
   if (!composed || !composed.provisioned || !composed.found) notFound();
 
   return <RuntimeRenderer composed={composed} ctx={ctx} />;

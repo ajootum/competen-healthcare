@@ -7,6 +7,7 @@
 
 const VIZ_ICON: Record<string, string> = { kpi_card: "▦", table: "▤", pivot: "⊞", line: "📈", bar: "📊", pie: "◔", heatmap: "▩", treemap: "▬", scatter: "⁘", map: "🗺", gauge: "◑", timeline: "▭", calendar: "🗓", trend: "↗", custom: "✦" };
 const CHART = new Set(["line", "bar", "pie", "scatter", "heatmap", "treemap", "map", "timeline", "calendar"]);
+const RAG_TEXT: Record<string, string> = { green: "text-emerald-600", amber: "text-amber-600", red: "text-rose-600" };
 
 // RAG band derived from the metric's real thresholds + direction (order flips with direction).
 function RagBand({ def }: { def: any }) {
@@ -30,6 +31,8 @@ export function Tile({ tile }: { tile: any }) {
   const icon = VIZ_ICON[tile.viz] ?? "▦";
   const target = def?.target;
   const unit = def?.unit ?? "";
+  const live = m && typeof m.value === "number"; // live computed value present
+  const ragCol = live && m.rag ? (RAG_TEXT[m.rag] ?? "text-gray-900") : "text-gray-900";
 
   return (
     <div className="h-full flex flex-col">
@@ -37,12 +40,15 @@ export function Tile({ tile }: { tile: any }) {
       <p className="text-sm font-medium text-gray-800 truncate">{tile.title || tile.key}</p>
       {m ? (
         <div className="mt-auto pt-1">
-          {CHART.has(tile.viz) ? (
+          {live ? (
+            <p className={`text-2xl font-bold tabular-nums ${ragCol}`}>{m.value}<span className="text-xs text-gray-400 font-normal ml-0.5">{unit}</span>{target != null && target !== "" && <span className="block text-[9px] text-gray-400 font-normal">target {target}{unit}</span>}</p>
+          ) : CHART.has(tile.viz) ? (
             <div className="rounded bg-gradient-to-t from-indigo-50 to-transparent border-b-2 border-indigo-200 h-8 flex items-end justify-center"><span className="text-[9px] text-indigo-300 mb-1">{m.name}</span></div>
           ) : (
-            <p className="text-lg font-bold text-gray-900 tabular-nums">{target != null && target !== "" ? <>{target}<span className="text-xs text-gray-400 font-normal ml-0.5">{unit}</span></> : <span className="text-sm text-gray-300 font-normal">{m.name}</span>}<span className="block text-[9px] text-gray-400 font-normal">{target != null && target !== "" ? "target" : ""}</span></p>
+            <p className="text-lg font-bold text-gray-900 tabular-nums">{target != null && target !== "" ? <>{target}<span className="text-xs text-gray-400 font-normal ml-0.5">{unit}</span></> : <span className="text-sm text-gray-300 font-normal">{m.name}</span>}{target != null && target !== "" && <span className="block text-[9px] text-gray-400 font-normal">target</span>}</p>
           )}
           <RagBand def={def} />
+          {m.unresolved?.length > 0 && <p className="text-[8px] text-gray-300 mt-1 truncate" title={m.unresolved.join(", ")}>needs: {m.unresolved.join(", ")}</p>}
         </div>
       ) : (
         <p className="text-[10px] text-gray-300 mt-auto pt-2">no metric bound</p>

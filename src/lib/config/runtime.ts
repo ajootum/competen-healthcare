@@ -5,6 +5,7 @@
 // with a per-node trace. Builds on the WCE-001 override store. A distributed cache (§7) is next-phase.
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { loadConfigOverrides, applies, SCOPE_ORDER, type ScopeCtx, type OverrideRow } from "@/lib/config/workspace-config";
+import { computeMetric, type MetricValue } from "@/lib/config/metric-runtime";
 
 export type TraceLayer = { level: string; scopeRef: string | null; contributed: Record<string, any>; note?: string };
 type RegObj = { object_key: string; object_type: string; display_name: string; status?: string; default_enabled?: boolean; allowed_config_levels?: any; safety_classification?: string; override_policy?: string };
@@ -41,7 +42,7 @@ export async function resolveRuntime(admin: any, objectKey: string, ctx: ScopeCt
 // Compose a resolved object into the executable model a user in this context would see. PAGE → enabled-filtered
 // layout; DASHBOARD → tiles with their bound metric resolved; NAVIGATION_SECTION → the menu tree filtered by role
 // visibility and target availability. Every referenced object is resolved through the same layered engine.
-export async function composeRuntime(admin: any, objectKey: string, ctx: ScopeCtx) {
+export async function composeRuntime(admin: any, objectKey: string, ctx: ScopeCtx, opts: { withValues?: boolean } = {}) {
   const { data: obj, error } = await admin.from("configuration_registry_objects")
     .select("object_key, object_type, display_name, default_enabled, definition").eq("object_key", objectKey).maybeSingle();
   if (error && /does not exist|schema cache/i.test(error.message ?? "")) return { provisioned: false as const };
@@ -73,7 +74,18 @@ export async function composeRuntime(admin: any, objectKey: string, ctx: ScopeCt
     }));
     model = { kind: "page", grid, rows: outRows };
   } else if (type === "DASHBOARD") {
-    const tiles = (def.tiles ?? []).map((t: any) => { const metric = t.metric ? resolveRef(t.metric) : null; const shown = !metric || metric.enabled; if (shown) included++; else excluded++; return { key: t.key, viz: t.viz, title: t.title, span: t.span, metric, shown }; });
+    const memo = new Map<string, MetricValue>();
+    const tiles: any[] = [];
+    for (const t of (def.tiles ?? [])) {
+      const metric: any = t.metric ? resolveRef(t.metric) : null;
+      if (metric && opts.withValues && !metric.external && metric.enabled) {
+        if (!memo.has(t.metric)) memo.set(t.metric, await computeMetric(admin, t.metric, ctx));
+        const mv = memo.get(t.metric)!; metric.value = mv.value; metric.rag = mv.rag ?? null; metric.unresolved = mv.unresolved ?? [];
+      }
+      const shown = !metric || metric.enabled;
+      if (shown) included++; else excluded++;
+      tiles.push({ key: t.key, viz: t.viz, title: t.title, span: t.span, metric, shown });
+    }
     model = { kind: "dashboard", tiles };
   } else if (type === "NAVIGATION_SECTION") {
     const mapItem = (it: any): any => {

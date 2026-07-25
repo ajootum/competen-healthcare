@@ -2,6 +2,7 @@ import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import MetricEditor from "./MetricEditor";
+import { listDataFunctions } from "@/lib/config/metric-runtime";
 
 export const dynamic = "force-dynamic";
 
@@ -59,7 +60,14 @@ export default async function MetricsBuilder() {
         <Stat label="Awaiting Definition" value={list.length - defined} tone={list.length - defined ? "text-amber-600" : "text-emerald-600"} sub="need a formula" />
       </div>
       <MetricEditor metrics={list} />
-      <p className="text-[11px] text-gray-400">The formula + thresholds persist onto the metric object and its references wire into the dependency graph. The live calculation runtime, historical snapshots, benchmarking and AI narrative (NCP-005 §6/§9) are next-phase.</p>
+
+      <div className={`${card} p-4`}>
+        <p className="text-[11px] font-semibold text-gray-500 mb-1">Live data functions <span className="font-normal text-gray-400">· reference these in a formula for a computed value</span></p>
+        <p className="text-[10px] text-gray-400 mb-2">A formula using only these tokens (and arithmetic + round/abs/min/max/avg/sum/pct/ratio) computes a real, hospital-scoped value at runtime — e.g. <span className="font-mono text-gray-500">pct(open_escalations, patients)</span>.</p>
+        <div className="flex flex-wrap gap-1.5">{listDataFunctions().map(f => <span key={f.name} className="text-[10px] bg-gray-50 border border-gray-100 rounded px-1.5 py-0.5"><span className="font-mono text-indigo-600">{f.name}</span> <span className="text-gray-400">· {f.label}</span></span>)}</div>
+      </div>
+
+      <p className="text-[11px] text-gray-400">The formula + thresholds persist onto the metric object and its references wire into the dependency graph. The <b>live calculation runtime</b> now computes values from the data functions above (visible on metadata-driven surfaces via the Runtime Engine); historical snapshots, benchmarking and AI narrative (NCP-005 §6/§9) remain next-phase.</p>
     </div>
   );
 }
