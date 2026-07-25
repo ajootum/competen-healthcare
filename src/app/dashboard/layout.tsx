@@ -56,7 +56,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
     { label: "My Tasks", href: "/dashboard/tasks", icon: "☑️", badge: taskCount ?? 0 },
     { label: "Calendar", href: "/dashboard/calendar", icon: "📅" },
     { label: "Notifications", href: "/dashboard/notifications", icon: "🔔", badge: unreadCount ?? 0 },
-    { label: "Messages", href: "/dashboard/notifications", icon: "💬", badge: msgCount ?? 0 },
+    { label: "Messages", href: "/dashboard/messages", icon: "💬", badge: msgCount ?? 0 },
     { label: "My Learning", href: "/dashboard/learning", icon: "📚" },
     { label: "My Competencies", href: "/dashboard/passport", icon: "🎯" },
     { label: "Documents", href: "/dashboard/library", icon: "📄" },
@@ -130,7 +130,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
             <span className="flex-1" />
             <Link href="/dashboard/copilot" className="text-gray-400 hover:text-blue-600" title="AI Assistant">✨</Link>
             <a href="mailto:gabriel@semacast.com" className="text-gray-400 hover:text-gray-600" title="Help">❓</a>
-            <Link href="/dashboard/notifications" className="text-gray-400 hover:text-gray-600" title="Messages">💬</Link>
+            <Link href="/dashboard/messages" className="text-gray-400 hover:text-gray-600" title="Messages">💬</Link>
             <Link href="/dashboard/notifications" className="relative text-gray-400 hover:text-gray-600" title="Notifications">🔔{(unreadCount ?? 0) > 0 && <span className="absolute -top-1.5 -right-1.5 bg-rose-500 text-white text-[8px] font-bold rounded-full w-3.5 h-3.5 flex items-center justify-center">{unreadCount}</span>}</Link>
             <div className="flex items-center gap-2 border-l border-gray-200 pl-3">
               {profile?.avatar_url ? (
