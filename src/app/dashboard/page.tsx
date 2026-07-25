@@ -5,9 +5,10 @@ import { Suspense } from "react";
 import { type AppRole } from "@/lib/roles";
 import { workspaceLinksForUser } from "@/lib/workspace-links";
 import { loadPersonalWorkspace } from "@/lib/personal-workspace";
-import { resolveDashboardManifest, inZone, type ManifestEntry } from "@/lib/orchestration/dashboard-manifest";
+import { resolveDashboardManifest, resolveDashboardControls, inZone, type ManifestEntry } from "@/lib/orchestration/dashboard-manifest";
 import { WIDGET_COMPONENTS, DEFAULT_DASHBOARD_MANIFEST } from "./dashboard-registry";
 import WidgetBoundary from "./WidgetBoundary";
+import CustomizeDashboard from "./CustomizeDashboard";
 import type { WidgetCtx } from "./widgets";
 
 // Personal Workspace (PW-000 / PW-001) — now COMPOSED from a resolved widget manifest (PW-014 WS2). Which widgets
@@ -44,10 +45,12 @@ export default async function PersonalWorkspacePage() {
   if (!profile) redirect("/login");
   const userRoles: AppRole[] = (profile.roles?.length ? profile.roles : [profile.role]).filter(Boolean) as AppRole[];
 
-  const [d, workspaces, manifest] = await Promise.all([
+  const scopeCtx = { tenantId: profile.tenant_id ?? null, hospitalId: profile.hospital_id ?? null, unitId: profile.unit_id ?? null, roles: userRoles, userId: user.id };
+  const [d, workspaces, manifest, controls] = await Promise.all([
     loadPersonalWorkspace(admin, user.id, profile) as Promise<any>,
     workspaceLinksForUser(admin, user.id, userRoles).catch(() => []),
-    resolveDashboardManifest(admin, { tenantId: profile.tenant_id ?? null, hospitalId: profile.hospital_id ?? null, unitId: profile.unit_id ?? null, roles: userRoles, userId: user.id }, DEFAULT_DASHBOARD_MANIFEST),
+    resolveDashboardManifest(admin, scopeCtx, DEFAULT_DASHBOARD_MANIFEST),
+    resolveDashboardControls(admin, scopeCtx, DEFAULT_DASHBOARD_MANIFEST),
   ]);
 
   const { hour, date } = clock();
@@ -73,6 +76,8 @@ export default async function PersonalWorkspacePage() {
           <h1 className="text-2xl font-bold text-gray-900 tracking-tight">{greeting}, {d.firstName} 👋</h1>
           <p className="text-sm text-gray-400">{date}</p>
         </div>
+        <div className="flex items-center gap-2 flex-wrap justify-end">
+        <CustomizeDashboard controls={controls} />
         <div className={`${card} p-1.5 flex items-center divide-x divide-gray-100`}>
           {SUMMARY.map(k => (
             <Link key={k.label} href={k.href} className="px-3.5 py-1 flex flex-col items-center hover:bg-gray-50 rounded-lg transition-colors min-w-[74px]">
@@ -81,6 +86,7 @@ export default async function PersonalWorkspacePage() {
               {k.sub && <span className="text-[9px] text-gray-400">{k.sub}</span>}
             </Link>
           ))}
+        </div>
         </div>
       </div>
 
