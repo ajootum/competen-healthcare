@@ -4,6 +4,15 @@ import { redirect, notFound } from "next/navigation";
 import Link from "next/link";
 import AssessmentForm from "./AssessmentForm";
 
+// Overall recommendation labels (assessment_sessions.recommendation check constraint).
+const REC: Record<string, { label: string; cls: string }> = {
+  competent:                  { label: "Competent",                cls: "bg-green-100 text-green-700" },
+  competent_with_supervision: { label: "Competent w/ Supervision", cls: "bg-teal-100 text-teal-700" },
+  needs_development:          { label: "Needs Development",         cls: "bg-amber-100 text-amber-700" },
+  reassessment_required:      { label: "Reassessment Required",    cls: "bg-orange-100 text-orange-700" },
+  critical_failure:           { label: "Critical Failure",         cls: "bg-red-100 text-red-700" },
+};
+
 export default async function CycleAssessPage({ params }: { params: Promise<{ cycleId: string }> }) {
   const { cycleId } = await params;
   const supabase = await createClient();
@@ -58,6 +67,14 @@ export default async function CycleAssessPage({ params }: { params: Promise<{ cy
     .eq("scale_id", "00000000-0000-0000-0000-000000000001")
     .order("score");
 
+  // Conducted assessment sessions for this cycle — overall recommendation +
+  // e-signed attestation (assessment_sessions, migration 032). Surfaced below.
+  const { data: sessions } = await admin
+    .from("assessment_sessions")
+    .select("id, method, location, duration_seconds, scored_count, recommendation, strengths, improvements, assessor_signature_path, learner_signature_path, witness_name, witness_signature_path, created_at, profiles!assessor_id(full_name)")
+    .eq("cycle_id", cycleId)
+    .order("created_at", { ascending: false });
+
   const nurse = cycle.profiles as unknown as { id: string; full_name: string } | null;
 
   return (
@@ -83,6 +100,44 @@ export default async function CycleAssessPage({ params }: { params: Promise<{ cy
         levels={levels ?? []}
         assessorId={user.id}
       />
+
+      {(sessions ?? []).length > 0 && (
+        <div className="mt-8">
+          <h2 className="text-sm font-semibold text-gray-900 mb-3">Conducted Assessment Sessions</h2>
+          <div className="space-y-3">
+            {(sessions ?? []).map(s => {
+              const rec = s.recommendation ? REC[s.recommendation] : null;
+              const assessor = (s.profiles as unknown as { full_name: string } | null)?.full_name ?? "Assessor";
+              const sigs = [
+                s.assessor_signature_path && "Assessor",
+                s.learner_signature_path && "Learner",
+                s.witness_signature_path && (s.witness_name || "Witness"),
+              ].filter(Boolean) as string[];
+              const mins = s.duration_seconds ? Math.round(s.duration_seconds / 60) : null;
+              return (
+                <div key={s.id} className="bg-white border border-gray-100 rounded-xl p-4">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium text-gray-800">{assessor} · <span className="capitalize">{(s.method ?? "").replace(/_/g, " ")}</span></p>
+                      <p className="text-[11px] text-gray-400">
+                        {new Date(s.created_at).toLocaleString()} · {s.scored_count ?? 0} scored{mins ? ` · ${mins} min` : ""}{s.location ? ` · ${s.location}` : ""}
+                      </p>
+                    </div>
+                    {rec && <span className={`text-[10px] font-bold px-2 py-0.5 rounded shrink-0 ${rec.cls}`}>{rec.label}</span>}
+                  </div>
+                  {(s.strengths || s.improvements) && (
+                    <div className="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-2 text-[11px] text-gray-600">
+                      {s.strengths && <p><span className="font-semibold text-gray-500">Strengths:</span> {s.strengths}</p>}
+                      {s.improvements && <p><span className="font-semibold text-gray-500">To develop:</span> {s.improvements}</p>}
+                    </div>
+                  )}
+                  {sigs.length > 0 && <p className="text-[10px] text-gray-400 mt-2">✍️ Signed attestation: {sigs.join(", ")}</p>}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
