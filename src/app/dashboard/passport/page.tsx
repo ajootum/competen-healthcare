@@ -78,7 +78,7 @@ export default async function PassportPage() {
       .select("competency_id, cycle_id, score, label, is_passing, assessed_at, educator_validated, framework_competencies(id, name, framework_domains(id, name, frameworks(id, name, library)))")
       .eq("nurse_id", user.id).order("assessed_at", { ascending: false }),
     admin.from("competency_decisions")
-      .select("competency_id, outcome, maturity, effective_date, expiry_date, critical_failure, validation_outcome, created_at, framework_competencies(id, name, framework_domains(name, frameworks(name)))")
+      .select("competency_id, outcome, maturity, effective_date, expiry_date, critical_failure, evidence_summary, validation_outcome, created_at, framework_competencies(id, name, framework_domains(name, frameworks(name)))")
       .eq("nurse_id", user.id).order("created_at", { ascending: false }),
     admin.from("clinical_authorizations")
       .select("id, authorization_number, authorization_type, authorization_level, status, scope, conditions, expiry_date")
@@ -149,6 +149,7 @@ export default async function PassportPage() {
     competency_id: string; outcome: DecisionOutcome; maturity: Maturity | null;
     effective_date: string; expiry_date: string | null; critical_failure: boolean;
     validated: boolean; name: string; domain_name: string; framework_name: string;
+    evidence_summary: string | null;
   };
   const dseen = new Set<string>();
   const decisions: DecisionEntry[] = [];
@@ -164,6 +165,7 @@ export default async function PassportPage() {
       validated: d.validation_outcome === "validated",
       name: comp.name, domain_name: comp.framework_domains?.name ?? "—",
       framework_name: comp.framework_domains?.frameworks?.name ?? "—",
+      evidence_summary: (d as { evidence_summary?: string | null }).evidence_summary ?? null,
     });
   }
   const competentCount = decisions.filter(d => OUTCOME_CONFIG[d.outcome]?.passing && (!d.expiry_date || new Date(d.expiry_date).getTime() > nowMs())).length;
@@ -557,6 +559,7 @@ export default async function PassportPage() {
                       {d.framework_name} · {d.domain_name}
                       {employerByCompetency.get(d.competency_id) ? <> · 🏥 {employerByCompetency.get(d.competency_id)}</> : null}
                     </p>
+                    {d.evidence_summary && <p className="text-[10px] text-gray-400/90 mt-0.5 truncate" title={d.evidence_summary}>📎 {d.evidence_summary}</p>}
                   </div>
                   {d.maturity && <span className="text-[10px] text-gray-500 hidden sm:inline">{MATURITY_LABELS[d.maturity]}</span>}
                   {d.validated && <span className="text-[10px] bg-blue-50 text-blue-600 px-1.5 py-0.5 rounded font-semibold">Validated</span>}

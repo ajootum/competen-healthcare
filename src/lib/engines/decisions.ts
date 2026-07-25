@@ -67,13 +67,44 @@ export async function generateDecisionsForCycle(
     .returns<{ competency_id: string }[]>();
   const zeroScored = new Set((critAssessments ?? []).map(a => a.competency_id));
 
+  // Evidence sufficiency (§E): documentary evidence the learner has linked to these
+  // competencies. Wired into each decision below — recorded as the decision's
+  // evidentiary basis (evidence_summary), and a validated 'competent' sign-off with
+  // NO evidence on file is stepped to competent_with_conditions (still passing; the
+  // condition is that supporting evidence be filed). Direct assessment stays primary.
+  const { data: evidenceRows } = await admin
+    .from("evidence")
+    .select("competency_id, file_name, note")
+    .eq("owner_id", nurseId)
+    .in("competency_id", compIds)
+    .returns<{ competency_id: string | null; file_name: string | null; note: string | null }[]>();
+  const evByComp = new Map<string, { count: number; labels: string[] }>();
+  for (const e of evidenceRows ?? []) {
+    if (!e.competency_id) continue;
+    const g = evByComp.get(e.competency_id) ?? { count: 0, labels: [] };
+    g.count++;
+    if (g.labels.length < 3) g.labels.push((e.note?.trim() || e.file_name || "evidence").slice(0, 60));
+    evByComp.set(e.competency_id, g);
+  }
+
   const today = new Date();
   const rows = scores.map(s => {
     const score = s.score as number | null;
     const isPassing = !!s.is_passing;
     const validated = !!s.educator_validated;
     const criticalFailure = zeroScored.has(s.competency_id);
-    const outcome = outcomeFor(score, isPassing, validated, criticalFailure);
+    const baseOutcome = outcomeFor(score, isPassing, validated, criticalFailure);
+
+    // Evidence as an input: record the evidentiary basis, and step a validated
+    // 'competent' with no filed evidence to competent_with_conditions.
+    const ev = evByComp.get(s.competency_id);
+    const evCount = ev?.count ?? 0;
+    const outcome = baseOutcome === "competent" && evCount === 0 ? "competent_with_conditions" : baseOutcome;
+    const evidenceSummary = evCount > 0
+      ? `${evCount} evidence item${evCount === 1 ? "" : "s"} on file: ${ev!.labels.join("; ")}${evCount > ev!.labels.length ? "; …" : ""}.`
+      : baseOutcome === "competent"
+        ? "Competent on assessment; no documentary evidence filed — supporting evidence to be added."
+        : "No documentary evidence linked.";
 
     const cpuId = cpuByComp.get(s.competency_id) ?? null;
     const months = (cpuId && cpuMonths.get(cpuId)) || 12;
@@ -94,6 +125,7 @@ export async function generateDecisionsForCycle(
       effective_date: today.toISOString().slice(0, 10),
       expiry_date: passing ? expiry.toISOString().slice(0, 10) : null,
       critical_failure: criticalFailure,
+      evidence_summary: evidenceSummary,
       validated_by: validated ? decidedBy : null,
       validated_at: validated ? today.toISOString() : null,
       validation_outcome: validated ? "validated" : null,
