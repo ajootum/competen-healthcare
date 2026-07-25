@@ -104,14 +104,18 @@ const NAV_GROUPS: { title: string; items: NavItem[] }[] = [
     { label: "Education Planning",   href: "/unit-manager/learning/schedule", icon: "🗓️" },
     { label: "Learning Analytics",   href: "/unit-manager/learning/analytics", icon: "📊" },
   ] },
+  // Quality & Safety (UMG-QS-001..011) — the Command Centre is the real exec dashboard (consolidation over
+  // op_incidents / op_quality_actions / audits / gov_risks / quality_indicators). Sub-modules route to their
+  // authoritative surface: CAPA → the CAPA Centre, Patient Safety → the Clinical Safety centre (both real),
+  // the rest via the section's honest cross-link pages. Full module list is the in-page tab bar (QualityTabs).
   { title: "Quality & Safety", items: [
     { label: "Quality Dashboard",    href: "/unit-manager/quality", icon: "🛡️" },
-    { label: "Incidents",            icon: "🚩", soon: true },
-    { label: "Audit Centre",         icon: "🔍", soon: true },
-    { label: "Improvement Projects", icon: "📈", soon: true },
-    { label: "Accreditation Readiness", icon: "🏅", soon: true },
-    { label: "Risk Register",        icon: "⚠️", soon: true },
-    { label: "Patient Safety",       icon: "🚑", soon: true },
+    { label: "Incidents",            href: "/unit-manager/quality/incidents", icon: "🚩" },
+    { label: "Audit Centre",         href: "/unit-manager/quality/audits", icon: "🔍" },
+    { label: "Improvement Projects", href: "/unit-manager/capa", icon: "📈" },
+    { label: "Accreditation Readiness", href: "/unit-manager/quality/accreditation", icon: "🏅" },
+    { label: "Risk Register",        href: "/unit-manager/quality/risk", icon: "⚠️" },
+    { label: "Patient Safety",       href: "/unit-manager/patient-operations/safety", icon: "🚑" },
   ] },
   { title: "Operations & Capacity", items: [
     { label: "Capacity Dashboard",   href: "/unit-manager/operations", icon: "🏥" },
