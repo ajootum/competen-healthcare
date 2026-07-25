@@ -93,6 +93,17 @@ export async function PATCH(req: Request) {
     const registryRefs = v.refs.length ? (((await admin.from("configuration_registry_objects").select("object_key").in("object_key", v.refs)).data) ?? []).map((r: any) => r.object_key) : [];
     deps = [...deps.filter((d: any) => d?.type !== "METRIC_REF"), ...registryRefs.map((k: string) => ({ type: "METRIC_REF", objectKey: k }))];
   }
+  if (obj.object_type === "FORM") {
+    const fields = Array.isArray(def.fields) ? def.fields : [];
+    const seen = new Set<string>();
+    for (const fl of fields) {
+      if (!fl?.key || !/^[a-z][a-z0-9_]*$/.test(fl.key)) return badRequest(`Invalid field key "${fl?.key ?? ""}" — lowercase letters/numbers/underscore`);
+      if (seen.has(fl.key)) return badRequest(`Duplicate field key "${fl.key}"`);
+      seen.add(fl.key);
+      if (!String(fl.label ?? "").trim()) return badRequest(`Field "${fl.key}" needs a label`);
+    }
+    def.fieldCount = fields.length;
+  }
 
   const { error } = await admin.from("configuration_registry_objects").update({ definition: def, dependencies: deps, updated_at: new Date().toISOString(), updated_by: userId }).eq("object_key", object_key);
   if (error) return missing(error) ? NextResponse.json({ error: "Run migration 094 to enable object definitions" }, { status: 409 }) : badRequest(error.message);
