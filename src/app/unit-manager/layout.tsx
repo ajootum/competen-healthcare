@@ -122,7 +122,7 @@ const NAV_GROUPS: { title: string; items: NavItem[] }[] = [
     { label: "Patient Safety Centre",   href: "/unit-manager/quality/patient-safety", icon: "🚑" },
     { label: "Clinical Indicators",     href: "/unit-manager/quality/indicators", icon: "📊" },
     { label: "Mortality & Morbidity",   href: "/unit-manager/quality/mortality", icon: "🩺" },
-    { label: "Quality Analytics",       href: "/unit-manager/quality/analytics", icon: "📉" },
+    { label: "Executive Command Centre", href: "/unit-manager/quality/analytics", icon: "📉" },
     { label: "AI Quality Intelligence", href: "/unit-manager/quality/ai", icon: "🤖" },
   ] },
   { title: "Operations & Capacity", items: [

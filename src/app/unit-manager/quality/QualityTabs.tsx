@@ -17,7 +17,7 @@ const TABS: { label: string; href: string }[] = [
   { label: "Patient Safety", href: "/unit-manager/quality/patient-safety" },
   { label: "Clinical Indicators", href: "/unit-manager/quality/indicators" },
   { label: "Mortality & Morbidity", href: "/unit-manager/quality/mortality" },
-  { label: "Quality Analytics", href: "/unit-manager/quality/analytics" },
+  { label: "Executive Command Centre", href: "/unit-manager/quality/analytics" },
   { label: "AI Quality Intelligence", href: "/unit-manager/quality/ai" },
 ];
 
