@@ -136,6 +136,23 @@ export async function PATCH(req: Request) {
     const realRefs = widgetRefs.size ? (((await admin.from("configuration_registry_objects").select("object_key").in("object_key", [...widgetRefs])).data) ?? []).map((r: any) => r.object_key) : [];
     deps = [...deps.filter((d: any) => d?.type !== "WIDGET_REF"), ...realRefs.map((k: string) => ({ type: "WIDGET_REF", objectKey: k }))];
   }
+  if (obj.object_type === "WORKFLOW") {
+    const NODE_TYPES = ["start", "task", "decision", "approval", "timer", "notification", "integration", "ai_action", "end"];
+    const nodes = Array.isArray(def.nodes) ? def.nodes : [];
+    const trans = Array.isArray(def.transitions) ? def.transitions : [];
+    const keys = new Set<string>();
+    for (const n of nodes) {
+      if (!n?.key || !/^[a-z][a-z0-9_]*$/.test(n.key)) return badRequest(`Invalid node key "${n?.key ?? ""}" — lowercase letters/numbers/underscore`);
+      if (keys.has(n.key)) return badRequest(`Duplicate node key "${n.key}"`);
+      keys.add(n.key);
+      if (!NODE_TYPES.includes(n.type)) return badRequest(`Node "${n.key}": invalid type`);
+      if (!String(n.label ?? "").trim()) return badRequest(`Node "${n.key}" needs a label`);
+    }
+    for (const tr of trans) {
+      if (!keys.has(tr?.from) || !keys.has(tr?.to)) return badRequest(`Transition references an unknown node (${tr?.from ?? "?"} → ${tr?.to ?? "?"})`);
+    }
+    def.nodeCount = nodes.length;
+  }
 
   const { error } = await admin.from("configuration_registry_objects").update({ definition: def, dependencies: deps, updated_at: new Date().toISOString(), updated_by: userId }).eq("object_key", object_key);
   if (error) return missing(error) ? NextResponse.json({ error: "Run migration 094 to enable object definitions" }, { status: 409 }) : badRequest(error.message);
