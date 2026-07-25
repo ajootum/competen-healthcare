@@ -158,7 +158,8 @@ export default async function NoCodePlatform() {
       {/* Detailed builders (NCP-001..011) */}
       <div className={`${card} p-5`}>
         <h2 className="font-semibold text-gray-900 text-sm mb-1">Configuration Builders <span className="text-gray-300 font-normal">(NCP-001..011)</span></h2>
-        <p className="text-[11px] text-gray-400 mb-4">The Phase-3 no-code builders, each with a detailed spec — built in dependency order (data binding first).</p>
+        <p className="text-[11px] text-gray-400 mb-3">The Phase-3 no-code builders, each with a detailed spec — built in dependency order (data binding first).</p>
+        <Link href="/super-admin/platform-ops/studio" className="inline-flex items-center gap-1.5 text-[11px] font-medium text-indigo-700 bg-indigo-50 rounded-lg px-2.5 py-1 mb-4 hover:bg-indigo-100">🛠️ Author any of these as a governed object in the Configuration Studio →</Link>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5">
           {BUILDERS.map(b => {
             const inner = (
