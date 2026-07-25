@@ -119,7 +119,7 @@ const NAV_GROUPS: { title: string; items: NavItem[] }[] = [
     { label: "CAPA & Improvement",      href: "/unit-manager/capa", icon: "📈" },
     { label: "Accreditation Readiness", href: "/unit-manager/quality/accreditation", icon: "🏅" },
     { label: "Risk Register",           href: "/unit-manager/quality/risk", icon: "⚠️" },
-    { label: "Patient Safety Centre",   href: "/unit-manager/patient-operations/safety", icon: "🚑" },
+    { label: "Patient Safety Centre",   href: "/unit-manager/quality/patient-safety", icon: "🚑" },
     { label: "Clinical Indicators",     href: "/unit-manager/quality/indicators", icon: "📊" },
     { label: "Mortality & Morbidity",   href: "/unit-manager/quality/mortality", icon: "🩺" },
     { label: "Quality Analytics",       href: "/unit-manager/quality/analytics", icon: "📉" },

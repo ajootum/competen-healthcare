@@ -4,9 +4,9 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 // Quality & Safety Command Centre (UMG-QS-001) section tabs — the eleven modules. The Executive Dashboard
-// is the real command centre; CAPA & Improvement and Patient Safety route to their existing authoritative
-// surfaces (/unit-manager/capa, /unit-manager/patient-operations/safety); the rest surface their live status
-// and cross-link to the authoritative store, or note a next-phase module.
+// and Patient Safety Centre are real dashboards; CAPA & Improvement routes to its existing authoritative
+// surface (/unit-manager/capa); the rest surface their live status and cross-link to the authoritative
+// store, or note a next-phase module.
 const TABS: { label: string; href: string }[] = [
   { label: "Exec Dashboard", href: "/unit-manager/quality" },
   { label: "Incidents", href: "/unit-manager/quality/incidents" },
@@ -14,7 +14,7 @@ const TABS: { label: string; href: string }[] = [
   { label: "CAPA & Improvement", href: "/unit-manager/capa" },
   { label: "Accreditation", href: "/unit-manager/quality/accreditation" },
   { label: "Risk Register", href: "/unit-manager/quality/risk" },
-  { label: "Patient Safety", href: "/unit-manager/patient-operations/safety" },
+  { label: "Patient Safety", href: "/unit-manager/quality/patient-safety" },
   { label: "Clinical Indicators", href: "/unit-manager/quality/indicators" },
   { label: "Mortality & Morbidity", href: "/unit-manager/quality/mortality" },
   { label: "Quality Analytics", href: "/unit-manager/quality/analytics" },
