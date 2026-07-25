@@ -56,7 +56,7 @@ const BUILDERS: { code: string; name: string; status: string; href?: string; via
   { code: "NCP-004", name: "Workflow & Automation Builder", status: "next" },
   { code: "NCP-005", name: "Metrics & Indicator Builder", status: "live", href: "/super-admin/platform-ops/metrics" },
   { code: "NCP-006", name: "Report & Dashboard Builder", status: "next" },
-  { code: "NCP-007", name: "Rules & Decision Engine", status: "next" },
+  { code: "NCP-007", name: "Rules & Decision Engine", status: "live", href: "/super-admin/platform-ops/rules" },
   { code: "NCP-008", name: "Role, Permission & Visibility Designer", status: "next" },
   { code: "NCP-009", name: "Navigation & Experience Designer", status: "next" },
   { code: "NCP-010", name: "Data Source & Integration Mapper", status: "live", href: "/super-admin/platform-ops/integration-mapper" },

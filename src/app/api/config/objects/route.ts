@@ -104,6 +104,18 @@ export async function PATCH(req: Request) {
     }
     def.fieldCount = fields.length;
   }
+  if (obj.object_type === "BUSINESS_RULE") {
+    const conds = Array.isArray(def.conditions) ? def.conditions : [];
+    const acts = Array.isArray(def.actions) ? def.actions : [];
+    if (!acts.length) return badRequest("A decision table needs at least one action (output) column");
+    const seen = new Set<string>();
+    for (const col of [...conds, ...acts]) {
+      if (!col?.key || !/^[a-z][a-z0-9_]*$/.test(col.key)) return badRequest(`Invalid column key "${col?.key ?? ""}" — lowercase letters/numbers/underscore`);
+      if (seen.has(col.key)) return badRequest(`Duplicate column key "${col.key}"`);
+      seen.add(col.key);
+    }
+    def.rowCount = Array.isArray(def.rows) ? def.rows.length : 0;
+  }
 
   const { error } = await admin.from("configuration_registry_objects").update({ definition: def, dependencies: deps, updated_at: new Date().toISOString(), updated_by: userId }).eq("object_key", object_key);
   if (error) return missing(error) ? NextResponse.json({ error: "Run migration 094 to enable object definitions" }, { status: 409 }) : badRequest(error.message);
