@@ -66,7 +66,7 @@ const BUILDERS: { code: string; name: string; status: string; href?: string; via
 const SERVICES: { code: string; name: string; status: string; href?: string; via?: string }[] = [
   { code: "NCP-012", name: "Testing & Simulation Centre", status: "live", href: "/super-admin/platform-ops/testing" },
   { code: "NCP-013", name: "Analytics & Optimisation Centre", status: "live", href: "/super-admin/platform-ops/analytics" },
-  { code: "NCP-014", name: "AI Configuration Copilot", status: "next" },
+  { code: "NCP-014", name: "AI Configuration Copilot", status: "live", href: "/super-admin/platform-ops/copilot" },
   { code: "NCP-015", name: "Runtime & Resolution Engine", status: "live", href: "/super-admin/platform-ops/runtime" },
   { code: "NCP-016", name: "Schema & Object Model", status: "live", href: "/super-admin/platform-ops/schema" },
   { code: "NCP-017", name: "Dependency Manager", status: "live", href: "/super-admin/platform-ops/dependencies" },
