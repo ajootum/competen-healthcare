@@ -48,6 +48,20 @@ const COMPONENTS: { name: string; status: string; via?: string; href?: string }[
   { name: "Version Control", status: "live", via: "WCE-004", href: "/super-admin/platform-ops/governance" },
   { name: "Audit & Security", status: "live", via: "WCE-004", href: "/super-admin/platform-ops/governance" },
 ];
+// The detailed builder specs (NCP-001..011) — Phase 3 "Builders", each mapped to its build status.
+const BUILDERS: { code: string; name: string; status: string; href?: string; via?: string }[] = [
+  { code: "NCP-001", name: "Page & Layout Composer", status: "next" },
+  { code: "NCP-002", name: "Widget Builder", status: "partial", via: "WCE-005", href: "/super-admin/platform-ops/catalogue" },
+  { code: "NCP-003", name: "Form & Data-Capture Builder", status: "next" },
+  { code: "NCP-004", name: "Workflow & Automation Builder", status: "next" },
+  { code: "NCP-005", name: "Metrics & Indicator Builder", status: "next" },
+  { code: "NCP-006", name: "Report & Dashboard Builder", status: "next" },
+  { code: "NCP-007", name: "Rules & Decision Engine", status: "next" },
+  { code: "NCP-008", name: "Role, Permission & Visibility Designer", status: "next" },
+  { code: "NCP-009", name: "Navigation & Experience Designer", status: "next" },
+  { code: "NCP-010", name: "Data Source & Integration Mapper", status: "live", href: "/super-admin/platform-ops/integration-mapper" },
+  { code: "NCP-011", name: "Template, Package & Marketplace Manager", status: "next" },
+];
 const META_OBJECTS = ["Workspace", "Module", "Dashboard", "Widget", "Form", "Workflow", "Business Rule", "AI Assistant", "Navigation Item", "Theme", "Report"];
 const INHERITANCE = ["Platform", "Enterprise", "Hospital", "Department", "Unit", "User"];
 const LIFECYCLE = ["Draft", "Review", "Approved", "Published", "Active", "Archived"];
@@ -137,6 +151,23 @@ export default async function NoCodePlatform() {
               </div>
             );
             return c.href ? <Link key={c.name} href={c.href}>{inner}</Link> : <div key={c.name}>{inner}</div>;
+          })}
+        </div>
+      </div>
+
+      {/* Detailed builders (NCP-001..011) */}
+      <div className={`${card} p-5`}>
+        <h2 className="font-semibold text-gray-900 text-sm mb-1">Configuration Builders <span className="text-gray-300 font-normal">(NCP-001..011)</span></h2>
+        <p className="text-[11px] text-gray-400 mb-4">The Phase-3 no-code builders, each with a detailed spec — built in dependency order (data binding first).</p>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5">
+          {BUILDERS.map(b => {
+            const inner = (
+              <div className={`flex items-center justify-between gap-2 rounded-lg border border-gray-100 p-3 ${b.href ? "hover:border-indigo-200 hover:bg-indigo-50/30 transition-colors" : ""}`}>
+                <div className="min-w-0"><p className="text-xs font-medium text-gray-800 truncate">{b.name}</p><p className="text-[10px] text-gray-400">{b.code}{b.via ? ` · ${b.via}` : ""}</p></div>
+                <Badge s={b.status} />
+              </div>
+            );
+            return b.href ? <Link key={b.code} href={b.href}>{inner}</Link> : <div key={b.code}>{inner}</div>;
           })}
         </div>
       </div>
