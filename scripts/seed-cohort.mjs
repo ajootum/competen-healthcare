@@ -275,14 +275,25 @@ console.log(`  ✓ ${credRows.length} professional credentials`);
 
 // ── competency decisions (feeds CMO/UMW readiness + reassessment forecast) ───
 // competency_decisions has no hospital_id — it scopes through nurse_id → profile.hospital_id.
+// framework_competencies links to its framework via framework_domains
+// (domain_id → framework_id), NOT a direct framework_id column. Resolve that
+// join, then prefer a foundational clinical framework for the AMU ward.
 let framework = null, comps = [];
 {
-  const { data: fws } = await db.from("frameworks").select("id, name");
-  for (const f of fws ?? []) {
-    const { data: fc } = await db.from("framework_competencies")
-      .select("id, code, name, cpu_id, framework_id").eq("framework_id", f.id).limit(3);
-    if ((fc?.length ?? 0) >= 2) { framework = f; comps = fc; break; }
+  const { data: domains } = await db.from("framework_domains").select("id, framework_id");
+  const domToFw = new Map((domains ?? []).map((d) => [d.id, d.framework_id]));
+  const { data: allComps } = await db.from("framework_competencies").select("id, code, name, domain_id, cpu_id");
+  const byFw = new Map();
+  for (const c of allComps ?? []) {
+    const fw = domToFw.get(c.domain_id);
+    if (fw) { if (!byFw.has(fw)) byFw.set(fw, []); byFw.get(fw).push(c); }
   }
+  const { data: fws } = await db.from("frameworks").select("id, name");
+  const eligible = (fws ?? []).filter((f) => (byFw.get(f.id)?.length ?? 0) >= 2);
+  const prefer = ["core nursing", "acute care", "intensive", "emergency", "medical"];
+  for (const p of prefer) { framework = eligible.find((f) => (f.name ?? "").toLowerCase().includes(p)); if (framework) break; }
+  framework ??= eligible[0] ?? null;
+  if (framework) comps = byFw.get(framework.id).slice(0, 3);
 }
 if (framework) {
   // outcome / maturity / expiry(days) plans — mostly competent, a tail of gaps + expiring.
