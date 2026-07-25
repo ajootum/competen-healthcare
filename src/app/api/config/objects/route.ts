@@ -189,6 +189,37 @@ export async function PATCH(req: Request) {
     const realRefs = metricRefs.size ? (((await admin.from("configuration_registry_objects").select("object_key").in("object_key", [...metricRefs])).data) ?? []).map((r: any) => r.object_key) : [];
     deps = [...deps.filter((d: any) => d?.type !== "METRIC_REF"), ...realRefs.map((k: string) => ({ type: "METRIC_REF", objectKey: k }))];
   }
+  // NCP-008 permission sets — RBAC grants + ABAC visibility rules; inherited sets become PERMISSION_REF deps.
+  if (obj.object_type === "PERMISSION") {
+    const RES = ["workspace", "module", "dashboard", "widget", "form", "field", "record", "report", "workflow", "ai_assistant", "administration", "configuration"];
+    const ACT = ["view", "create", "edit", "delete", "execute", "approve", "configure", "admin"];
+    const ATTR = ["role", "profession", "department", "facility", "enterprise", "unit", "location", "shift", "competency_status", "certification", "patient_context", "feature_flag", "tenant_config", "workflow_state", "device_type", "custom"];
+    const OPS = ["is", "is_not", "in", "not_in", "exists"];
+    const grants = Array.isArray(def.grants) ? def.grants : [];
+    const rules = Array.isArray(def.rules) ? def.rules : [];
+    const gkeys = new Set<string>();
+    for (const g of grants) {
+      if (!g?.key || !/^[a-z][a-z0-9_]*$/.test(g.key)) return badRequest(`Invalid grant key "${g?.key ?? ""}" — lowercase letters/numbers/underscore`);
+      if (gkeys.has(g.key)) return badRequest(`Duplicate grant key "${g.key}"`);
+      gkeys.add(g.key);
+      if (!RES.includes(g.resource)) return badRequest(`Grant "${g.key}": invalid resource type`);
+      if (!ACT.includes(g.action)) return badRequest(`Grant "${g.key}": invalid action`);
+      if (g.effect !== "allow" && g.effect !== "deny") return badRequest(`Grant "${g.key}": effect must be allow or deny`);
+    }
+    const rkeys = new Set<string>();
+    for (const r of rules) {
+      if (!r?.key || !/^[a-z][a-z0-9_]*$/.test(r.key)) return badRequest(`Invalid rule key "${r?.key ?? ""}" — lowercase letters/numbers/underscore`);
+      if (rkeys.has(r.key)) return badRequest(`Duplicate rule key "${r.key}"`);
+      rkeys.add(r.key);
+      if (!ATTR.includes(r.attribute)) return badRequest(`Rule "${r.key}": invalid attribute`);
+      if (!OPS.includes(r.operator)) return badRequest(`Rule "${r.key}": invalid operator`);
+    }
+    def.grantCount = grants.length;
+    const inh = Array.isArray(def.inherits) ? def.inherits.filter((x: any) => typeof x === "string" && x && x !== object_key) : [];
+    const realRefs = inh.length ? (((await admin.from("configuration_registry_objects").select("object_key").in("object_key", inh)).data) ?? []).map((r: any) => r.object_key) : [];
+    def.inherits = realRefs;
+    deps = [...deps.filter((d: any) => d?.type !== "PERMISSION_REF"), ...realRefs.map((k: string) => ({ type: "PERMISSION_REF", objectKey: k }))];
+  }
 
   const { error } = await admin.from("configuration_registry_objects").update({ definition: def, dependencies: deps, updated_at: new Date().toISOString(), updated_by: userId }).eq("object_key", object_key);
   if (error) return missing(error) ? NextResponse.json({ error: "Run migration 094 to enable object definitions" }, { status: 409 }) : badRequest(error.message);
