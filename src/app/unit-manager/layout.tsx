@@ -39,7 +39,7 @@ const ITEM_CFG: Record<string, string> = {
 // Unit Command modules (+ a few group landings that reuse an existing surface or
 // the [section] placeholder) are live; every other sub-module is marked "soon"
 // rather than shown as a dead link — honest about what is and isn't built.
-type NavItem = { label: string; href?: string; icon: string; exact?: boolean; soon?: boolean; badge?: number };
+type NavItem = { label: string; href?: string; icon: string; exact?: boolean; soon?: boolean; badge?: number; code?: string };
 const NAV_GROUPS: { title: string; items: NavItem[] }[] = [
   { title: "Platform Engines", items: [
     { label: "Workforce Planning Studio", href: "/unit-manager/planning-studio", icon: "🏗️" },
@@ -108,14 +108,22 @@ const NAV_GROUPS: { title: string; items: NavItem[] }[] = [
   // op_incidents / op_quality_actions / audits / gov_risks / quality_indicators). Sub-modules route to their
   // authoritative surface: CAPA → the CAPA Centre, Patient Safety → the Clinical Safety centre (both real),
   // the rest via the section's honest cross-link pages. Full module list is the in-page tab bar (QualityTabs).
+  // Quality & Safety (UMG-QS-001..011) — the full eleven-module command centre; codes +
+  // labels mirror the in-page QualityTabs and each module's page header. Exec Dashboard is
+  // exact-match so its sub-modules don't all highlight it. CAPA + Patient Safety route to
+  // their authoritative surfaces (/unit-manager/capa, /patient-operations/safety).
   { title: "Quality & Safety", items: [
-    { label: "Quality Dashboard",    href: "/unit-manager/quality", icon: "🛡️", exact: true },
-    { label: "Incidents",            href: "/unit-manager/quality/incidents", icon: "🚩" },
-    { label: "Audit Centre",         href: "/unit-manager/quality/audits", icon: "🔍" },
-    { label: "Improvement Projects", href: "/unit-manager/capa", icon: "📈" },
-    { label: "Accreditation Readiness", href: "/unit-manager/quality/accreditation", icon: "🏅" },
-    { label: "Risk Register",        href: "/unit-manager/quality/risk", icon: "⚠️" },
-    { label: "Patient Safety",       href: "/unit-manager/patient-operations/safety", icon: "🚑" },
+    { code: "UMG-QS-001", label: "Exec. Dashboard",         href: "/unit-manager/quality", icon: "🛡️", exact: true },
+    { code: "UMG-QS-002", label: "Incident Management",     href: "/unit-manager/quality/incidents", icon: "🚩" },
+    { code: "UMG-QS-003", label: "Audit & Compliance",      href: "/unit-manager/quality/audits", icon: "🔍" },
+    { code: "UMG-QS-004", label: "CAPA & Improvement",      href: "/unit-manager/capa", icon: "📈" },
+    { code: "UMG-QS-005", label: "Accreditation Readiness", href: "/unit-manager/quality/accreditation", icon: "🏅" },
+    { code: "UMG-QS-006", label: "Risk Register",           href: "/unit-manager/quality/risk", icon: "⚠️" },
+    { code: "UMG-QS-007", label: "Patient Safety Centre",   href: "/unit-manager/patient-operations/safety", icon: "🚑" },
+    { code: "UMG-QS-008", label: "Clinical Indicators",     href: "/unit-manager/quality/indicators", icon: "📊" },
+    { code: "UMG-QS-009", label: "Mortality & Morbidity",   href: "/unit-manager/quality/mortality", icon: "🩺" },
+    { code: "UMG-QS-010", label: "Quality Analytics",       href: "/unit-manager/quality/analytics", icon: "📉" },
+    { code: "UMG-QS-011", label: "AI Quality Intelligence", href: "/unit-manager/quality/ai", icon: "🤖" },
   ] },
   { title: "Operations & Capacity", items: [
     { label: "Capacity Dashboard",   href: "/unit-manager/operations", icon: "🏥" },
@@ -257,7 +265,7 @@ export default async function UnitManagerLayout({ children }: { children: React.
                   )}
                 </span>
               ) : (
-                <NavLink key={group.title + item.label} href={item.href} icon={item.icon} label={item.label} exact={item.exact}
+                <NavLink key={group.title + item.label} href={item.href} icon={item.icon} label={item.label} exact={item.exact} code={item.code}
                   className="flex items-center gap-2.5 px-3 py-1.5 rounded-lg text-sm text-teal-100/70 hover:bg-teal-800/50 hover:text-white transition-colors"
                   activeClassName="flex items-center gap-2.5 px-3 py-1.5 rounded-lg text-sm bg-teal-700/60 text-white font-medium" />
               ));
