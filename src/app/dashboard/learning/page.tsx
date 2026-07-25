@@ -1,288 +1,197 @@
 import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import Link from "next/link";
-import { OUTCOME_CONFIG } from "@/lib/ckcm";
-import { aiStatus } from "@/lib/ai/config";
-import CoachPanel from "./CoachPanel";
-import LearningWorkspace, { type PathwayItem } from "./LearningWorkspace";
-import MandatoryLearning from "./MandatoryLearning";
+import { loadLearningCentre } from "@/lib/learning-centre";
 
-// My Learning Pathway — competency-first development workspace (Volume 5
-// spec). Every recommendation originates from the decision record and shows
-// its reason; progress is toward competency, not course completion. Widgets
-// without backing data (streaks, goals, weekly calendar) are omitted.
+// PW-006 My Learning Centre — the person's course-centric learning hub over real learning_enrolments / cpd_logs /
+// learning_pathways. KPI ribbon, Continue Learning, Learning Plan, Recommended, domain Pathways, CPD summary
+// donut, rule-based Achievements, learning calendar + AI assistant handoff. The deep competency-first pathway
+// view lives at /dashboard/learning/pathway. Server-rendered; renders REAL, honestly lighter than the persona.
+export const dynamic = "force-dynamic";
 
-const SCORE_COLORS = ["#ef4444", "#f97316", "#eab308", "#14b8a6", "#0d9488", "#3b82f6", "#8b5cf6"];
-const dayMs = 86400000;
-// Server component renders once per request, so "now" is stable for a render.
-const nowMs = () => Date.now();
-const fmt = (iso: string | null) => iso ? new Date(iso).toLocaleDateString(undefined, { month: "short", day: "numeric" }) : "—";
+const fmtDate = (d: string) => new Date(d).toLocaleDateString("en-GB", { day: "numeric", month: "short" });
 
-const JOURNEY = ["📝 Assessment", "📚 Learning", "🧪 Simulation", "🏥 Clinical Practice", "🛡️ Validation", "✅ Competent", "🪪 Passport Updated"];
+function Kpi({ icon, label, value, sub, tint }: { icon: string; label: string; value: string | number; sub: string; tint: string }) {
+  return (
+    <div className="bg-white rounded-xl border border-gray-200 p-4">
+      <div className={`w-9 h-9 rounded-lg flex items-center justify-center text-lg ${tint}`}>{icon}</div>
+      <p className="text-2xl font-bold text-gray-900 mt-2">{value}</p>
+      <p className="text-[12px] font-medium text-gray-700">{label}</p>
+      <p className="text-[11px] text-gray-400">{sub}</p>
+    </div>
+  );
+}
 
-export default async function LearningPathwayPage() {
+export default async function LearningCentrePage() {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect("/login");
+  const admin = createAdminClient() as any; // eslint-disable-line @typescript-eslint/no-explicit-any
+  const { data: profile } = await admin.from("profiles").select("full_name, hospital_id").eq("id", user.id).single();
 
-  const admin = createAdminClient();
+  const d = await loadLearningCentre(admin, user.id, profile);
 
-  const [
-    { data: pathway }, { data: decisions }, { data: compScores },
-    { data: skillScores }, { data: attempts }, { data: cpdLogs },
-  ] = await Promise.all([
-    admin.from("learning_pathways").select("id, title, status, generated_at")
-      .eq("nurse_id", user.id).order("generated_at", { ascending: false }).limit(1).maybeSingle(),
-    admin.from("competency_decisions")
-      .select("competency_id, outcome, expiry_date, created_at, framework_competencies(name, framework_domains(name))")
-      .eq("nurse_id", user.id).order("created_at", { ascending: false }),
-    admin.from("competency_scores")
-      .select("competency_id, score, assessed_at, framework_competencies(framework_domains(name))")
-      .eq("nurse_id", user.id).order("assessed_at", { ascending: false }),
-    admin.from("skill_scores")
-      .select("skill_id, score, competency_skills(name), competency_cycles!inner(nurse_id)")
-      .eq("competency_cycles.nurse_id", user.id).order("assessed_at", { ascending: false }).limit(100),
-    admin.from("knowledge_attempts")
-      .select("bank_id, score, passed, completed_at, question_banks(name)")
-      .eq("nurse_id", user.id).order("completed_at", { ascending: false }).limit(20),
-    admin.from("cpd_logs").select("hours").eq("user_id", user.id),
-  ]);
+  // CPD donut geometry.
+  const cpdTotal = d.cpdSummary.reduce((s: number, c: any) => s + c.pts, 0) || 1; // eslint-disable-line @typescript-eslint/no-explicit-any
+  const R = 46, C = 2 * Math.PI * R;
+  const cpdSegs = d.cpdSummary.map((c: any, i: number) => ({ ...c, len: (c.pts / cpdTotal) * C, offset: d.cpdSummary.slice(0, i).reduce((s: number, x: any) => s + (x.pts / cpdTotal) * C, 0) })); // eslint-disable-line @typescript-eslint/no-explicit-any
 
-  const { data: rawItems } = pathway
-    ? await admin.from("pathway_items")
-        .select("id, competency_name, reason, resource_title, resource_type, status, sort_order")
-        .eq("pathway_id", pathway.id).order("sort_order")
-    : { data: [] as PathwayItem[] };
-  const items = (rawItems ?? []) as PathwayItem[];
-
-  // ── My assigned training (Loop 2: learning_enrolments the UMW mandatory-compliance lens reads) ──
-  const todayStr = new Date().toISOString().slice(0, 10);
-  type EnrolRow = { id: string; status: string; progress_pct: number | null; mandatory: boolean; due_date: string | null; course: { title: string | null; course_type: string | null } | null };
-  const { data: enrolRows } = await admin.from("learning_enrolments")
-    .select("id, status, progress_pct, mandatory, due_date, completed_at, course:learning_courses!course_id(title, course_type)")
-    .eq("user_id", user.id).limit(60);
-  const enrolments = ((enrolRows ?? []) as unknown as EnrolRow[]).map(e => ({
-    id: e.id, title: e.course?.title ?? "Assigned course", courseType: (e.course?.course_type ?? "").replace(/_/g, " "),
-    status: e.status, progress: e.progress_pct ?? (e.status === "completed" ? 100 : 0), mandatory: e.mandatory, dueDate: e.due_date,
-    overdue: !!(e.due_date && e.due_date < todayStr && !["completed", "exempt"].includes(e.status)),
-    dueLabel: e.due_date ? new Date(e.due_date).toLocaleDateString(undefined, { month: "short", day: "numeric" }) : null,
-  })).sort((a, b) => {
-    const rank = (x: { status: string; overdue: boolean }) => (x.status === "completed" ? 3 : x.overdue ? 0 : x.status === "in_progress" ? 1 : 2);
-    return rank(a) - rank(b) || String(a.dueDate ?? "9").localeCompare(String(b.dueDate ?? "9"));
-  });
-
-  // ── Readiness from the governed record ──
-  const seen = new Set<string>();
-  let assessed = 0, current = 0;
-  const upcoming: { name: string; domain: string; expiry: string; days: number }[] = [];
-  for (const d of decisions ?? []) {
-    if (seen.has(d.competency_id)) continue;
-    seen.add(d.competency_id);
-    assessed++;
-    const comp = d.framework_competencies as unknown as { name: string; framework_domains: { name: string } | null } | null;
-    const expired = d.expiry_date && new Date(d.expiry_date).getTime() < nowMs();
-    if (OUTCOME_CONFIG[d.outcome as keyof typeof OUTCOME_CONFIG]?.passing && !expired) {
-      current++;
-      if (d.expiry_date) {
-        const days = Math.ceil((new Date(d.expiry_date).getTime() - nowMs()) / dayMs);
-        if (days <= 120) upcoming.push({ name: comp?.name ?? "Competency", domain: comp?.framework_domains?.name ?? "—", expiry: d.expiry_date, days });
-      }
-    }
-  }
-  upcoming.sort((a, b) => a.days - b.days);
-  const readiness = assessed ? Math.round((current / assessed) * 100) : 0;
-
-  const done = items.filter(i => i.status === "completed").length;
-  const inProgress = items.filter(i => i.status === "in_progress").length;
-  const highPriority = items.filter(i => i.status !== "completed" && /expir|critical|remediat|not yet/i.test(i.reason ?? "")).length;
-
-  // ── Domain progress (best score per competency) ──
-  const bestSeen = new Set<string>();
-  const byDomain = new Map<string, { sum: number; n: number }>();
-  for (const cs of compScores ?? []) {
-    if (bestSeen.has(cs.competency_id)) continue;
-    bestSeen.add(cs.competency_id);
-    const dom = (cs.framework_competencies as unknown as { framework_domains: { name: string } | null } | null)?.framework_domains?.name ?? "—";
-    const v = byDomain.get(dom) ?? { sum: 0, n: 0 };
-    v.sum += cs.score; v.n++;
-    byDomain.set(dom, v);
-  }
-  const domains = [...byDomain.entries()]
-    .map(([name, v]) => ({ name, avg: v.sum / v.n, pct: Math.round((v.sum / v.n / 6) * 100) }))
-    .sort((a, b) => a.pct - b.pct);
-
-  // ── Clinical practice suggestions: weakest scored skills (spec §7) ──
-  const skillBest = new Map<string, { name: string; best: number }>();
-  for (const s of (skillScores ?? []) as unknown as { skill_id: string; score: number; competency_skills: { name: string } | null }[]) {
-    const cur = skillBest.get(s.skill_id);
-    if (!cur || s.score > cur.best) skillBest.set(s.skill_id, { name: s.competency_skills?.name ?? "Skill", best: s.score });
-  }
-  const practice = [...skillBest.values()].filter(s => s.best < 3).sort((a, b) => a.best - b.best).slice(0, 4);
-
-  // ── Recently completed (items + passed quizzes) ──
-  const recent = [
-    ...items.filter(i => i.status === "completed").map(i => ({ icon: "✅", text: i.resource_title ?? i.competency_name ?? "Pathway item", at: null as string | null })),
-    ...((attempts ?? []) as unknown as { passed: boolean; score: number; completed_at: string; question_banks: { name: string } | null }[])
-      .filter(a => a.passed)
-      .map(a => ({ icon: "❓", text: `${a.question_banks?.name ?? "Knowledge test"} — ${a.score}%`, at: a.completed_at })),
-  ].slice(0, 5);
-
-  // ── Analytics (spec §8) — only measures the data supports ──
-  const quizAvg = (attempts ?? []).length
-    ? Math.round((attempts ?? []).reduce((s, a) => s + a.score, 0) / (attempts ?? []).length) : null;
-  const totalScores = [...byDomain.values()].reduce((s, v) => s + v.n, 0);
-  const scoreAvg = totalScores
-    ? Math.round([...byDomain.values()].reduce((s, v) => s + v.sum, 0) / totalScores * 10) / 10
-    : null;
-  const cpdHours = (cpdLogs ?? []).reduce((s, l) => s + Number(l.hours), 0);
-
-  const card = "bg-white rounded-xl border border-gray-100";
+  const TABS = [{ label: "My Learning", href: "/dashboard/learning", active: true }, { label: "Competency Pathway", href: "/dashboard/learning/pathway" }, { label: "Certifications", href: "/dashboard/certificates" }, { label: "CPD & Credits", href: "/dashboard/cpd" }, { label: "Achievements", href: "#achievements" }];
+  const coachPrompt = `I'm a nurse planning my learning. Live picture: ${d.kpis.inProgress} courses in progress, ${d.kpis.completed} completed, ${d.cpdPointsYear} CPD points this year${d.cpdTarget ? ` (${d.cpdHoursYear}h of ${d.cpdTarget}h target)` : ""}, ${d.overdueMandatory} overdue mandatory. Recommend what to prioritise and why.`;
 
   return (
-    <div className="max-w-6xl">
-      <div className="flex items-center gap-2 text-xs text-gray-400 mb-4">
-        <Link href="/dashboard" className="hover:text-gray-600">Dashboard</Link>
-        <span>/</span>
-        <span className="text-gray-700 font-medium">Learning Pathway</span>
-      </div>
-
-      <div className="mb-5">
-        <h1 className="text-xl font-bold text-gray-900">My Learning Pathway</h1>
-        <p className="text-gray-400 text-sm mt-0.5">Personalised from your competency decisions — targeted at your current gaps.</p>
-      </div>
-
-      {/* Readiness header (spec §2) */}
-      <div className={`${card} p-5 mb-5`}>
-        <div className="flex flex-col md:flex-row md:items-center gap-5">
-          <div className="flex-1">
-            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Overall competency readiness</p>
-            <p className="text-4xl font-extrabold text-gray-900 mt-1">{readiness}%</p>
-            <p className="text-[10px] text-gray-400">{assessed ? `${current} of ${assessed} assessed competencies current` : "no assessed competencies yet"}</p>
-            <div className="h-2.5 bg-gray-100 rounded-full overflow-hidden mt-2 max-w-sm">
-              <div className="h-full bg-teal-500 rounded-full" style={{ width: `${Math.max(readiness, 2)}%` }} />
-            </div>
-          </div>
-          <div className="grid grid-cols-3 gap-3 text-center">
-            {[
-              [done, "Complete", "text-green-600"],
-              [inProgress, "In progress", "text-blue-600"],
-              [highPriority, "High priority", highPriority ? "text-red-500" : "text-gray-400"],
-            ].map(([v, l, c]) => (
-              <div key={l as string} className="bg-gray-50/70 rounded-lg px-4 py-2.5">
-                <p className={`text-xl font-bold ${c}`}>{v}</p>
-                <p className="text-[9px] text-gray-400">{l}</p>
-              </div>
-            ))}
-          </div>
+    <div className="max-w-[1500px] mx-auto space-y-5">
+      {/* Header */}
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <p className="text-[11px] font-semibold text-blue-600 uppercase tracking-wide">Personal Workspace</p>
+          <h1 className="text-2xl font-bold text-gray-900">My Learning Centre</h1>
+          <p className="text-sm text-gray-500 mt-0.5">Your personalised learning hub — track progress, continue learning and achieve your goals.</p>
         </div>
-        {/* Learning journey (spec §4) */}
-        <div className="flex flex-wrap items-center gap-1.5 mt-4 pt-4 border-t border-gray-50">
-          {JOURNEY.map((step, i) => (
-            <span key={step} className="flex items-center gap-1.5">
-              <span className="text-[10px] font-medium text-gray-500 bg-gray-50 rounded-full px-2.5 py-1">{step}</span>
-              {i < JOURNEY.length - 1 && <span className="text-gray-300 text-[10px]">→</span>}
-            </span>
-          ))}
-        </div>
+        <Link href="/dashboard/cpd" className="text-sm font-medium text-white bg-blue-600 rounded-lg px-3 py-2 hover:bg-blue-500">Log CPD</Link>
       </div>
 
-      {/* My assigned training (Loop 2 → UMW mandatory compliance) */}
-      <div className="mb-5"><MandatoryLearning items={enrolments} /></div>
+      {/* KPI ribbon */}
+      <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
+        <Kpi icon="⏱️" label="Learning Hours" value={d.kpis.hoursThisMonth} sub="This month" tint="bg-blue-50" />
+        <Kpi icon="📘" label="In Progress" value={d.kpis.inProgress} sub="Continue learning" tint="bg-indigo-50" />
+        <Kpi icon="✅" label="Completed" value={d.kpis.completed} sub="All time" tint="bg-emerald-50" />
+        <Kpi icon="🎖️" label="Certificates" value={d.kpis.certificates} sub="Earned" tint="bg-amber-50" />
+        <Kpi icon="⭐" label="CPD Points" value={d.kpis.cpdPointsYear} sub="This year" tint="bg-cyan-50" />
+        <Kpi icon="🔥" label="Learning Streak" value={d.kpis.streak} sub={d.kpis.streak === 1 ? "day" : "days"} tint="bg-rose-50" />
+      </div>
 
-      <div className="grid grid-cols-1 xl:grid-cols-[1fr_300px] gap-5">
+      {/* Tabs */}
+      <div className="flex flex-wrap items-center gap-1 border-b border-gray-200">
+        {TABS.map(t => (
+          <Link key={t.label} href={t.href} className={`px-3 py-2 text-sm font-medium border-b-2 -mb-px transition-colors ${t.active ? "border-blue-600 text-blue-700" : "border-transparent text-gray-500 hover:text-gray-800"}`}>{t.label}</Link>
+        ))}
+      </div>
+
+      <div className="grid lg:grid-cols-3 gap-5 items-start">
         {/* Main column */}
-        <div className="min-w-0 flex flex-col gap-5">
-          <LearningWorkspace items={items} />
-
-          {/* Clinical practice suggestions (spec §7) */}
-          {practice.length > 0 && (
-            <div className={`${card} p-5`}>
-              <div className="flex items-center justify-between mb-3">
-                <h2 className="font-semibold text-gray-900 text-sm">Clinical Practice Suggestions</h2>
-                <Link href="/dashboard/logbook" className="text-xs text-teal-600 hover:underline">Skills Logbook →</Link>
-              </div>
-              <p className="text-[10px] text-gray-400 mb-3">Skills scored below Competent — practise these under supervision; new scores update your logbook and passport.</p>
-              <div className="grid sm:grid-cols-2 gap-2">
-                {practice.map(s => (
-                  <div key={s.name} className="flex items-center gap-2.5 border border-gray-100 rounded-lg px-3 py-2">
-                    <span className="w-6 h-6 rounded-full text-white text-[10px] font-bold flex items-center justify-center shrink-0"
-                      style={{ backgroundColor: SCORE_COLORS[s.best] ?? "#9ca3af" }}>{s.best}</span>
-                    <span className="text-xs text-gray-700">{s.name}</span>
+        <div className="lg:col-span-2 space-y-5">
+          {/* Continue Learning */}
+          <div className="bg-white rounded-xl border border-gray-200 p-4">
+            <div className="flex items-center justify-between mb-3"><h2 className="text-sm font-semibold text-gray-900">Continue Learning</h2><Link href="/dashboard/courses" className="text-[12px] font-medium text-blue-600 hover:underline">View all →</Link></div>
+            {d.continueLearning.length > 0 ? (
+              <div className="space-y-3">
+                {d.continueLearning.map((e: any) => ( // eslint-disable-line @typescript-eslint/no-explicit-any
+                  <div key={e.id} className="flex items-center gap-3">
+                    <div className="w-11 h-11 rounded-lg bg-gradient-to-br from-blue-500 to-indigo-500 flex items-center justify-center text-white text-lg shrink-0">📖</div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-semibold text-gray-800 truncate">{e.course.title}</p>
+                      <div className="flex items-center gap-2 text-[11px] text-gray-400 mt-0.5"><span>{d.courseTypeLabel[e.course.course_type] ?? "Course"}</span>{e.mandatory && <span className="text-amber-600 font-medium">Mandatory</span>}{e.due_date && <span>· Due {fmtDate(e.due_date)}</span>}</div>
+                      <div className="mt-1.5 h-1.5 rounded-full bg-gray-100 overflow-hidden"><div className="h-full rounded-full bg-blue-500" style={{ width: `${e.progress_pct ?? 0}%` }} /></div>
+                    </div>
+                    <div className="text-right shrink-0"><p className="text-sm font-bold text-blue-600">{e.progress_pct ?? 0}%</p><Link href="/dashboard/courses" className="text-[11px] font-medium text-gray-500 hover:text-blue-600">Continue</Link></div>
                   </div>
                 ))}
               </div>
-            </div>
-          )}
+            ) : <p className="text-sm text-gray-400 py-8 text-center">No courses in progress. Browse the <Link href="/dashboard/courses" className="text-blue-600 hover:underline">catalogue</Link> to enrol.</p>}
+          </div>
 
-          {/* AI Clinical Coach (spec §9) */}
-          {aiStatus().configured && <CoachPanel />}
+          {/* Recommended */}
+          <div className="bg-white rounded-xl border border-gray-200 p-4">
+            <h2 className="text-sm font-semibold text-gray-900 mb-3">Recommended for You</h2>
+            {d.recommended.length > 0 ? (
+              <div className="grid sm:grid-cols-2 xl:grid-cols-3 gap-3">
+                {d.recommended.map((c: any) => ( // eslint-disable-line @typescript-eslint/no-explicit-any
+                  <Link key={c.id} href="/dashboard/courses" className="border border-gray-100 rounded-lg p-3 hover:border-blue-200 hover:bg-blue-50/40 transition-colors">
+                    <div className="w-full h-16 rounded-md bg-gradient-to-br from-slate-100 to-blue-100 flex items-center justify-center text-2xl mb-2">🎓</div>
+                    <p className="text-[13px] font-semibold text-gray-800 leading-snug line-clamp-2">{c.title}</p>
+                    <div className="flex items-center gap-2 mt-1 text-[11px] text-gray-400"><span>{d.courseTypeLabel[c.course_type] ?? "Course"}</span>{c.mandatory && <span className="text-amber-600 font-medium">Mandatory</span>}</div>
+                  </Link>
+                ))}
+              </div>
+            ) : <p className="text-sm text-gray-400 py-6 text-center">You&apos;re enrolled in all available courses.</p>}
+          </div>
+
+          {/* Learning Pathways */}
+          <div className="bg-white rounded-xl border border-gray-200 p-4">
+            <div className="flex items-center justify-between mb-3"><h2 className="text-sm font-semibold text-gray-900">Learning Pathways</h2><Link href="/dashboard/courses" className="text-[12px] font-medium text-blue-600 hover:underline">Explore all →</Link></div>
+            {d.pathways.length > 0 ? (
+              <div className="grid sm:grid-cols-2 gap-3">
+                {d.pathways.map((p: any) => ( // eslint-disable-line @typescript-eslint/no-explicit-any
+                  <div key={p.name} className="flex items-center gap-3 border border-gray-100 rounded-lg p-3">
+                    <div className="w-9 h-9 rounded-lg bg-blue-50 flex items-center justify-center text-blue-600">🧭</div>
+                    <div className="min-w-0"><p className="text-[13px] font-semibold text-gray-800 truncate">{p.name}</p><p className="text-[11px] text-gray-400">{p.n} course{p.n === 1 ? "" : "s"}</p></div>
+                  </div>
+                ))}
+              </div>
+            ) : <p className="text-sm text-gray-400 py-6 text-center">No competency-linked pathways in the catalogue yet.</p>}
+          </div>
         </div>
 
         {/* Right rail */}
-        <div className="flex flex-col gap-5">
-          {/* Domain progress (spec §5) */}
-          <div className={`${card} p-5`}>
-            <div className="flex items-center justify-between mb-3">
-              <h2 className="font-semibold text-gray-900 text-sm">Progress by Domain</h2>
-              <Link href="/dashboard/passport" className="text-xs text-teal-600 hover:underline">Passport →</Link>
-            </div>
-            {domains.length ? domains.map(d => (
-              <div key={d.name} className="flex items-center gap-2.5 py-1.5">
-                <span className="text-[11px] text-gray-700 w-28 truncate">{d.name}</span>
-                <div className="flex-1 h-1.5 bg-gray-100 rounded-full overflow-hidden">
-                  <div className="h-full rounded-full" style={{ width: `${d.pct}%`, backgroundColor: SCORE_COLORS[Math.round(d.avg)] ?? "#9ca3af" }} />
-                </div>
-                <span className="text-[10px] font-bold text-gray-600 w-8 text-right">{d.pct}%</span>
+        <div className="space-y-5">
+          {/* Learning Plan */}
+          <div id="plan" className="bg-white rounded-xl border border-gray-200 p-4">
+            <div className="flex items-center justify-between mb-2"><h3 className="text-sm font-semibold text-gray-900">My Learning Plan</h3><Link href="/dashboard/learning/pathway" className="text-[11px] font-medium text-blue-600 hover:underline">Details →</Link></div>
+            {d.plan ? (
+              <div>
+                <p className="text-[13px] font-semibold text-gray-800">{d.plan.title}</p>
+                <div className="flex items-center justify-between text-[11px] text-gray-500 mt-2 mb-1"><span>Progress</span><span className="font-semibold text-gray-700">{d.plan.progress}%</span></div>
+                <div className="h-2 rounded-full bg-gray-100 overflow-hidden"><div className="h-full rounded-full bg-emerald-500" style={{ width: `${d.plan.progress}%` }} /></div>
+                <p className="text-[11px] text-gray-400 mt-1">{d.plan.done} of {d.plan.total} items complete</p>
+                {d.plan.nextMilestone && <div className="mt-3 bg-blue-50/60 rounded-lg p-2.5"><p className="text-[10px] font-semibold text-blue-700 uppercase tracking-wide">Next Milestone</p><p className="text-[12px] font-medium text-gray-800 mt-0.5">{d.plan.nextMilestone.resource_title ?? d.plan.nextMilestone.competency_name}</p>{d.plan.nextMilestone.reason && <p className="text-[10px] text-gray-500">{d.plan.nextMilestone.reason}</p>}</div>}
               </div>
-            )) : <p className="text-xs text-gray-400 text-center py-4">Populates as assessors score you. 📊</p>}
+            ) : <p className="text-xs text-gray-400 py-4 text-center">No active development plan. Your assessor generates one from competency decisions.</p>}
           </div>
 
-          {/* Upcoming renewals (spec §2 timeline) */}
-          <div className={`${card} p-5`}>
-            <h2 className="font-semibold text-gray-900 text-sm mb-3">Upcoming Renewals</h2>
-            {upcoming.length ? upcoming.slice(0, 4).map(u => (
-              <div key={u.name} className="flex items-center gap-2.5 py-1.5 border-b border-gray-50 last:border-0">
-                <div className="w-10 text-center bg-gray-50 rounded-lg py-1 shrink-0">
-                  <p className="text-[8px] font-bold text-teal-600 uppercase">{new Date(u.expiry).toLocaleDateString(undefined, { month: "short" })}</p>
-                  <p className="text-xs font-bold text-gray-800">{new Date(u.expiry).getDate()}</p>
-                </div>
-                <div className="min-w-0 flex-1">
-                  <p className="text-[11px] text-gray-800 truncate">{u.name}</p>
-                  <p className="text-[9px] text-gray-400">{u.domain}</p>
-                </div>
-                <span className={`text-[9px] font-bold shrink-0 ${u.days <= 30 ? "text-red-500" : "text-amber-600"}`}>{u.days}d</span>
+          {/* Learning calendar */}
+          <div className="bg-white rounded-xl border border-gray-200 p-4">
+            <h3 className="text-sm font-semibold text-gray-900 mb-3">Learning Calendar</h3>
+            {d.calendar.length > 0 ? (
+              <div className="space-y-2.5">
+                {d.calendar.map((c: any, i: number) => ( // eslint-disable-line @typescript-eslint/no-explicit-any
+                  <div key={i} className="flex items-center gap-2.5">
+                    <div className="w-9 h-9 rounded-lg bg-indigo-50 flex flex-col items-center justify-center shrink-0"><span className="text-[9px] font-bold text-indigo-600 uppercase leading-none">{new Date(c.date).toLocaleDateString("en-GB", { month: "short" })}</span><span className="text-sm font-bold text-indigo-700 leading-none">{new Date(c.date).getDate()}</span></div>
+                    <div className="min-w-0"><p className="text-[12px] font-medium text-gray-800 truncate">{c.title}</p><p className="text-[10px] text-gray-400">{c.type} · due {fmtDate(c.date)}</p></div>
+                  </div>
+                ))}
               </div>
-            )) : <p className="text-xs text-gray-400 text-center py-4">Nothing due within 120 days. ✅</p>}
+            ) : <p className="text-xs text-gray-400 py-4 text-center">No scheduled learning.</p>}
           </div>
 
-          {/* Recently completed */}
-          <div className={`${card} p-5`}>
-            <h2 className="font-semibold text-gray-900 text-sm mb-3">Recently Completed</h2>
-            {recent.length ? recent.map((r, i) => (
-              <div key={i} className="flex items-center gap-2 py-1.5 border-b border-gray-50 last:border-0">
-                <span className="text-xs">{r.icon}</span>
-                <p className="text-[11px] text-gray-700 flex-1 truncate">{r.text}</p>
-                {r.at && <span className="text-[9px] text-gray-400 shrink-0" suppressHydrationWarning>{fmt(r.at)}</span>}
+          {/* CPD summary donut */}
+          <div className="bg-white rounded-xl border border-gray-200 p-4">
+            <div className="flex items-center justify-between mb-3"><h3 className="text-sm font-semibold text-gray-900">CPD Summary</h3><Link href="/dashboard/cpd" className="text-[11px] font-medium text-blue-600 hover:underline">Dashboard →</Link></div>
+            {d.cpdSummary.length > 0 ? (
+              <div className="flex items-center gap-4">
+                <svg width="120" height="120" viewBox="0 0 120 120" className="shrink-0">
+                  <circle cx="60" cy="60" r={R} fill="none" stroke="#f1f5f9" strokeWidth="14" />
+                  {cpdSegs.map((c: any, i: number) => <circle key={i} cx="60" cy="60" r={R} fill="none" stroke={c.color} strokeWidth="14" strokeDasharray={`${c.len} ${C - c.len}`} strokeDashoffset={-c.offset} transform="rotate(-90 60 60)" />) /* eslint-disable-line @typescript-eslint/no-explicit-any */}
+                  <text x="60" y="56" textAnchor="middle" className="fill-gray-900 font-bold" fontSize="18">{d.cpdPointsYear}</text>
+                  <text x="60" y="72" textAnchor="middle" className="fill-gray-400" fontSize="8">Points</text>
+                </svg>
+                <div className="space-y-1.5 text-[12px] flex-1">
+                  {d.cpdSummary.map((c: any) => ( // eslint-disable-line @typescript-eslint/no-explicit-any
+                    <div key={c.label} className="flex items-center gap-2"><span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ background: c.color }} /><span className="text-gray-600 truncate">{c.label}</span><span className="ml-auto font-semibold text-gray-900">{c.pts}</span></div>
+                  ))}
+                </div>
               </div>
-            )) : <p className="text-xs text-gray-400 text-center py-4">Completed learning appears here. 🎓</p>}
+            ) : <p className="text-xs text-gray-400 py-4 text-center">No CPD logged this year.</p>}
           </div>
 
-          {/* Analytics (spec §8) */}
-          <div className={`${card} p-5`}>
-            <h2 className="font-semibold text-gray-900 text-sm mb-3">Your Numbers</h2>
-            <div className="grid grid-cols-2 gap-2 text-center">
-              {[
-                [quizAvg !== null ? `${quizAvg}%` : "—", "Avg quiz score"],
-                [scoreAvg !== null ? `${scoreAvg}/6` : "—", "Avg assessment"],
-                [cpdHours || "—", "CPD hours"],
-                [`${done}/${items.length || "—"}`, "Pathway items"],
-              ].map(([v, l]) => (
-                <div key={l as string} className="bg-gray-50/70 rounded-lg py-2.5">
-                  <p className="text-base font-bold text-gray-900">{v}</p>
-                  <p className="text-[9px] text-gray-400">{l}</p>
+          {/* Achievements */}
+          <div id="achievements" className="bg-white rounded-xl border border-gray-200 p-4">
+            <h3 className="text-sm font-semibold text-gray-900 mb-3">Achievements</h3>
+            <div className="grid grid-cols-4 gap-2">
+              {d.achievements.map((a: any) => ( // eslint-disable-line @typescript-eslint/no-explicit-any
+                <div key={a.label} className={`flex flex-col items-center text-center ${a.earned ? "" : "opacity-30 grayscale"}`}>
+                  <div className="w-11 h-11 rounded-full flex items-center justify-center text-xl" style={{ background: `${a.color}18` }}>{a.icon}</div>
+                  <p className="text-[9px] font-medium text-gray-600 mt-1 leading-tight">{a.label}</p>
                 </div>
               ))}
             </div>
+          </div>
+
+          {/* Learning Assistant */}
+          <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-xl border border-blue-100 p-4">
+            <h3 className="text-sm font-semibold text-gray-900 mb-1">✨ Learning Assistant</h3>
+            <p className="text-[12px] text-gray-600 mb-3">Need help choosing what to learn next?</p>
+            <Link href={`/dashboard/copilot?scenario=${encodeURIComponent(coachPrompt)}`} className="block text-center text-sm font-medium text-white bg-blue-600 rounded-lg py-2 hover:bg-blue-500">Get Recommendations</Link>
           </div>
         </div>
       </div>
