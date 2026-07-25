@@ -10,30 +10,10 @@ export const dynamic = "force-dynamic";
 // the audit/accreditation workspace, the enterprise risk register), or honestly notes a next-phase module.
 /* eslint-disable @typescript-eslint/no-explicit-any */
 const SUBS: Record<string, { code: string; title: string; blurb: string; link?: { label: string; href: string }; phase: "live" | "next" }> = {
-  incidents: {
-    code: "UMG-QS-002", title: "Incident Management",
-    blurb: "Incident and near-miss register with the report → investigate → RCA → CAPA lifecycle. The command centre already surfaces the live incident trend, critical-incident count and patient-safety breakdown from the incident register (op_incidents). Incidents are created and investigated in the Shift Supervisor Quality & Safety centre, the authoritative surface.",
-    link: { label: "Open incident register (Shift Supervisor)", href: "/supervisor/quality-safety" }, phase: "live",
-  },
-  audits: {
-    code: "UMG-QS-003", title: "Audit & Compliance Centre",
-    blurb: "Clinical audit scheduling, checklists, findings and compliance scoring. The command centre surfaces live audit compliance and open findings; the full audit workspace (audits + audit_findings, with auto-CAPA on failed critical criteria) is the authoritative surface.",
-    link: { label: "Open Quality & Accreditation workspace", href: "/quality-accreditation" }, phase: "live",
-  },
   accreditation: {
     code: "UMG-QS-005", title: "Accreditation Readiness",
     blurb: "Framework-by-framework accreditation readiness (JCI, SafeCare), evidence repository and mock-survey scoring. The command centre shows the audit-compliance-derived readiness; the framework assessment and evidence repository live in the accreditation workspace.",
     link: { label: "Open accreditation workspace", href: "/quality-accreditation" }, phase: "live",
-  },
-  risk: {
-    code: "UMG-QS-006", title: "Enterprise Risk Register",
-    blurb: "The 5×5 enterprise risk register (gov_risks): likelihood × impact scoring, treatment, controls and residual risk. The command centre already renders the live risk heat map and top risks from this register; high risks (rating ≥ 15) escalate to Executive Actions. The full register with controls lives in Governance & Compliance.",
-    link: { label: "Open enterprise risk register (Governance)", href: "/super-admin/governance/risk" }, phase: "live",
-  },
-  indicators: {
-    code: "UMG-QS-008", title: "Clinical Indicators",
-    blurb: "Clinical quality indicators (quality_indicators) with targets, thresholds and periodic measurements. Indicator definitions and measurement history live in the quality workspace; the command centre summarises the active-indicator count.",
-    link: { label: "Open Quality & Accreditation workspace", href: "/quality-accreditation" }, phase: "live",
   },
   analytics: {
     code: "UMG-QS-010", title: "Quality Analytics",
