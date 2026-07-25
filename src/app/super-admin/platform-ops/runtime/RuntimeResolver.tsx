@@ -104,7 +104,10 @@ export default function RuntimeResolver({ objects }: { objects: ObjRow[] }) {
               <div className="mt-5 pt-4 border-t border-gray-100">
                 <div className="flex items-center justify-between mb-2">
                   <p className="text-[11px] font-semibold text-gray-500">Composed runtime model <span className="font-normal text-gray-400">· what renders in this context</span></p>
-                  <span className="text-[10px] text-gray-400">{composed.stats.included} shown · {composed.stats.excluded} hidden · {composed.stats.references} ref(s)</span>
+                  <div className="flex items-center gap-2">
+                    <span className="text-[10px] text-gray-400">{composed.stats.included} shown · {composed.stats.excluded} hidden · {composed.stats.references} ref(s)</span>
+                    <a href={`/config-view/${encodeURIComponent(res.object.key)}`} target="_blank" rel="noopener" className="text-[10px] font-medium text-indigo-700 border border-indigo-200 rounded px-1.5 py-0.5 hover:bg-indigo-50">Open live view ↗</a>
+                  </div>
                 </div>
 
                 {composed.model.kind === "page" && (
