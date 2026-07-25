@@ -6,6 +6,7 @@
 
 // Versioned event-type namespace (§8 examples). Add new types here so the taxonomy has one source of truth.
 export const EVENT = {
+  TASK_COMPLETED: "task.completed",
   ASSESSMENT_COMPLETED: "assessment.completed",
   LEARNING_COURSE_COMPLETED: "learning.course.completed",
   STAFFING_APPROVAL_DECIDED: "staffing.approval.decided",

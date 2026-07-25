@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getCaller, isResponse, badRequest } from "@/lib/api-auth";
+import { emitLearningCompleted } from "@/lib/orchestration/producers";
 
 // Worker self-service learning API — closes Loop 2 (worker learning → learning_enrolments → UMW mandatory
 // compliance). A logged-in user may update the status/progress of THEIR OWN enrolment only: the write is
@@ -29,9 +30,11 @@ export async function PATCH(req: Request) {
       : { status: "not_started", progress_pct: 0, completed_at: null, updated_at: now };
 
   // Self-scoped: the compound match means a row that isn't the caller's own updates 0 rows → 403.
-  const { data, error } = await admin.from("learning_enrolments").update(patch).eq("id", id).eq("user_id", userId).select("id, status, progress_pct, hospital_id").maybeSingle();
+  const { data, error } = await admin.from("learning_enrolments").update(patch).eq("id", id).eq("user_id", userId).select("id, status, progress_pct, hospital_id, course_id, user_id").maybeSingle();
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   if (!data) return NextResponse.json({ error: "Not your enrolment" }, { status: 403 });
   await admin.from("audit_log").insert({ actor_id: userId, action: "self_update_learning_enrolment", entity_type: "learning_enrolment", entity_id: id, hospital_id: data.hospital_id ?? null, new_value: { status: patch.status } });
+  // PW-014 WS4/P2 — publish a domain event on course completion (fail-soft).
+  if (data.status === "completed") await emitLearningCompleted(admin, data, userId);
   return NextResponse.json({ id: data.id, status: data.status, progress_pct: data.progress_pct });
 }

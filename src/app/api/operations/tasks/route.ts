@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getCaller, isResponse, isStaff, isSuper, forbidden, badRequest, assertProfileScope } from "@/lib/api-auth";
+import { emitTaskCompleted } from "@/lib/orchestration/producers";
 import { notify } from "@/lib/notify";
 
 // Clinical Tasks (COE Task domain). Supervisors assign; the assigned worker
@@ -96,5 +97,7 @@ export async function PATCH(req: Request) {
   if (b.status === "completed") { update.completed_at = new Date().toISOString(); update.completed_by = c.userId; }
   const { data, error } = await admin.from("op_tasks").update(update).eq("id", id).select().single();
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  // PW-014 WS4/P2 — publish a domain event on completion (fail-soft; never blocks the request).
+  if (b.status === "completed") await emitTaskCompleted(admin, data, c.userId);
   return NextResponse.json(data);
 }

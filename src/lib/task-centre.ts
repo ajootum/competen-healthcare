@@ -48,7 +48,7 @@ export async function loadTaskCentre(admin: any, userId: string, profile: any) {
   if (patIds.length) (await q(admin.from("op_patients").select("id, label").in("id", patIds))).forEach((p: any) => patLabel.set(p.id, p.label));
   for (const t of opTasks) {
     const prio = t.priority === "urgent" || t.priority === "high" ? "high" : t.priority === "low" ? "low" : "medium";
-    tasks.push({ id: t.id, title: t.description, module: t.patient_id ? "PCE" : "OPS", priority: prio, due: t.due_at, status: dueStatus(t.due_at, now), related: t.patient_id ? patLabel.get(t.patient_id) ?? "Patient" : null, origin: t.assigned_by === userId ? "created" : t.assigned_by ? "delegated" : "assigned" });
+    tasks.push({ id: t.id, actionId: `op_task:${t.id}`, sourceType: "op_task", execution: t.patient_id ? "deep_link" : "direct", title: t.description, module: t.patient_id ? "PCE" : "OPS", priority: prio, due: t.due_at, status: dueStatus(t.due_at, now), related: t.patient_id ? patLabel.get(t.patient_id) ?? "Patient" : null, origin: t.assigned_by === userId ? "created" : t.assigned_by ? "delegated" : "assigned" });
   }
 
   // ── Learning enrolments (LDS) ──
@@ -57,7 +57,7 @@ export async function loadTaskCentre(admin: any, userId: string, profile: any) {
   const courseTitle = new Map<string, string>();
   if (courseIds.length) (await q(admin.from("learning_courses").select("id, title").in("id", courseIds))).forEach((c: any) => courseTitle.set(c.id, c.title));
   for (const e of enrol) {
-    tasks.push({ id: `l-${e.id}`, title: `Complete ${courseTitle.get(e.course_id) ?? "mandatory module"}`, module: "LMS", priority: e.mandatory ? "high" : "medium", due: e.due_date, status: dueStatus(e.due_date, now), related: null, origin: "assigned" });
+    tasks.push({ id: `l-${e.id}`, actionId: `learning_enrolment:${e.id}`, sourceType: "learning_enrolment", execution: "deep_link", title: `Complete ${courseTitle.get(e.course_id) ?? "mandatory module"}`, module: "LMS", priority: e.mandatory ? "high" : "medium", due: e.due_date, status: dueStatus(e.due_date, now), related: null, origin: "assigned" });
   }
 
   // ── Competency (CMO) — expiring/expired/remediation ──
@@ -68,13 +68,13 @@ export async function loadTaskCentre(admin: any, userId: string, profile: any) {
   if (compIds.length) (await q(admin.from("framework_competencies").select("id, name").in("id", compIds))).forEach((c: any) => compName.set(c.id, c.name));
   for (const d of attn) {
     const expired = d.expiry_date && new Date(d.expiry_date).getTime() < now;
-    tasks.push({ id: `c-${d.id}`, title: `${d.outcome === "requires_remediation" ? "Remediate" : "Renew"} ${compName.get(d.competency_id) ?? "competency"}`, module: "CMO", priority: expired || d.outcome === "requires_remediation" ? "high" : "medium", due: d.expiry_date, status: d.outcome === "requires_remediation" ? "Action Required" : dueStatus(d.expiry_date, now), related: null, origin: "assigned" });
+    tasks.push({ id: `c-${d.id}`, actionId: `competency_decision:${d.id}`, sourceType: "competency_decision", execution: "deep_link", title: `${d.outcome === "requires_remediation" ? "Remediate" : "Renew"} ${compName.get(d.competency_id) ?? "competency"}`, module: "CMO", priority: expired || d.outcome === "requires_remediation" ? "high" : "medium", due: d.expiry_date, status: d.outcome === "requires_remediation" ? "Action Required" : dueStatus(d.expiry_date, now), related: null, origin: "assigned" });
   }
 
   // ── Quality actions (QMS) owned by this user (owner_name match) ──
   if (profile?.full_name && profile?.hospital_id) {
     const qa = await q(admin.from("op_quality_actions").select("id, title, priority, due_at, status").eq("hospital_id", profile.hospital_id).eq("owner_name", profile.full_name).not("status", "in", "(completed)").limit(200));
-    for (const a of qa) tasks.push({ id: `q-${a.id}`, title: a.title, module: "QMS", priority: a.priority === "high" ? "high" : a.priority === "low" ? "low" : "medium", due: a.due_at, status: dueStatus(a.due_at, now), related: null, origin: "assigned" });
+    for (const a of qa) tasks.push({ id: `q-${a.id}`, actionId: `op_quality_action:${a.id}`, sourceType: "op_quality_action", execution: "deep_link", title: a.title, module: "QMS", priority: a.priority === "high" ? "high" : a.priority === "low" ? "low" : "medium", due: a.due_at, status: dueStatus(a.due_at, now), related: null, origin: "assigned" });
   }
 
   // Enrich each with SLA + module meta.

@@ -2,6 +2,7 @@ import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { loadTaskCentre } from "@/lib/task-centre";
+import CompleteAction from "@/components/actions/CompleteAction";
 
 // PW-002 Universal Task & Action Centre — one intelligent work queue aggregating every actionable item
 // across the platform (Patient Care, Learning, Competency, Quality…) for the signed-in user. Server-rendered;
@@ -173,7 +174,7 @@ export default async function TaskCentrePage({ searchParams }: { searchParams: P
                     <td className="px-3 py-3 text-gray-600 whitespace-nowrap">{t.due ? new Date(t.due).toLocaleDateString("en-GB", { day: "numeric", month: "short" }) : "—"}</td>
                     <td className="px-3 py-3"><span className={`text-[11px] font-medium rounded-full px-2 py-0.5 ring-1 whitespace-nowrap ${statusPill(t.status)}`}>{t.status}</span></td>
                     <td className={`px-3 py-3 text-[12px] font-medium whitespace-nowrap ${t.overdue ? "text-rose-600" : "text-gray-500"}`}>{t.sla}</td>
-                    <td className="px-3 py-3 text-right"><Link href={modHref[t.module] ?? "/dashboard"} className="text-[12px] font-medium text-blue-600 hover:underline whitespace-nowrap">Open →</Link></td>
+                    <td className="px-3 py-3 text-right"><div className="flex items-center justify-end gap-2.5 whitespace-nowrap">{t.execution === "direct" && t.actionId && <CompleteAction actionId={t.actionId} />}<Link href={modHref[t.module] ?? "/dashboard"} className="text-[12px] font-medium text-blue-600 hover:underline">Open →</Link></div></td>
                   </tr>
                 ))}
                 {shown.length === 0 && (
