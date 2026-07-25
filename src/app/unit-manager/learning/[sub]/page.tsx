@@ -8,11 +8,6 @@ export const dynamic = "force-dynamic";
 // Learning sub-modules (UMG-005). Each surfaces its live status on the Learning Dashboard and routes
 // to its authoritative surface (educator / competency workspace), or notes its next-phase store.
 const SUBS: Record<string, { title: string; blurb: string; link?: { label: string; href: string } }> = {
-  pathways: {
-    title: "Career Pathways",
-    blurb: "Role progression with required competencies, experience, assessments, leadership milestones, mentor approval and a readiness score. The learning-pathway catalogue exists; per-staff pathway PROGRESSION tracking is an honest next-phase build.",
-    link: { label: "Open learning pathways", href: "/admin/curricula" },
-  },
   schedule: {
     title: "Education Schedule",
     blurb: "The education calendar — classroom, simulation, OSCE, orientation, bedside teaching, CPD and protected learning time with roster conflict checking. Assessment scheduling is live; an education-session + protected-learning-time store (with safe-staffing validation before approval) is an honest next-phase build.",
