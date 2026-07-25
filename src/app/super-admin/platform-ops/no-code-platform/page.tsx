@@ -62,6 +62,18 @@ const BUILDERS: { code: string; name: string; status: string; href?: string; via
   { code: "NCP-010", name: "Data Source & Integration Mapper", status: "live", href: "/super-admin/platform-ops/integration-mapper" },
   { code: "NCP-011", name: "Template, Package & Marketplace Manager", status: "live", href: "/super-admin/platform-ops/packages" },
 ];
+// The platform-services tier (NCP-012..020) — the runtime + governance services beneath the builders.
+const SERVICES: { code: string; name: string; status: string; href?: string; via?: string }[] = [
+  { code: "NCP-012", name: "Testing & Simulation Centre", status: "next" },
+  { code: "NCP-013", name: "Analytics & Optimisation Centre", status: "next" },
+  { code: "NCP-014", name: "AI Configuration Copilot", status: "next" },
+  { code: "NCP-015", name: "Runtime & Resolution Engine", status: "partial", via: "config overrides", href: "/super-admin/platform-ops/configuration" },
+  { code: "NCP-016", name: "Schema & Object Model", status: "live", href: "/super-admin/platform-ops/schema" },
+  { code: "NCP-017", name: "Dependency Manager", status: "partial", via: "NCP graph", href: "/super-admin/platform-ops/dependencies" },
+  { code: "NCP-018", name: "Versioning & Audit Service", status: "partial", via: "WCE-004", href: "/super-admin/platform-ops/governance" },
+  { code: "NCP-019", name: "Publishing Service", status: "partial", via: "WCE-004", href: "/super-admin/platform-ops/governance" },
+  { code: "NCP-020", name: "Migration Toolkit", status: "next" },
+];
 const META_OBJECTS = ["Workspace", "Module", "Dashboard", "Widget", "Form", "Workflow", "Business Rule", "AI Assistant", "Navigation Item", "Theme", "Report"];
 const INHERITANCE = ["Platform", "Enterprise", "Hospital", "Department", "Unit", "User"];
 const LIFECYCLE = ["Draft", "Review", "Approved", "Published", "Active", "Archived"];
@@ -162,6 +174,23 @@ export default async function NoCodePlatform() {
         <Link href="/super-admin/platform-ops/studio" className="inline-flex items-center gap-1.5 text-[11px] font-medium text-indigo-700 bg-indigo-50 rounded-lg px-2.5 py-1 mb-4 hover:bg-indigo-100">🛠️ Author any of these as a governed object in the Configuration Studio →</Link>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5">
           {BUILDERS.map(b => {
+            const inner = (
+              <div className={`flex items-center justify-between gap-2 rounded-lg border border-gray-100 p-3 ${b.href ? "hover:border-indigo-200 hover:bg-indigo-50/30 transition-colors" : ""}`}>
+                <div className="min-w-0"><p className="text-xs font-medium text-gray-800 truncate">{b.name}</p><p className="text-[10px] text-gray-400">{b.code}{b.via ? ` · ${b.via}` : ""}</p></div>
+                <Badge s={b.status} />
+              </div>
+            );
+            return b.href ? <Link key={b.code} href={b.href}>{inner}</Link> : <div key={b.code}>{inner}</div>;
+          })}
+        </div>
+      </div>
+
+      {/* Platform services (NCP-012..020) */}
+      <div className={`${card} p-5`}>
+        <h2 className="font-semibold text-gray-900 text-sm mb-1">Platform Services <span className="text-gray-300 font-normal">(NCP-012..020)</span></h2>
+        <p className="text-[11px] text-gray-400 mb-3">The runtime + governance services beneath the builders — schema, testing, analytics, versioning, publishing, dependencies, migration, runtime resolution and the AI copilot.</p>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5">
+          {SERVICES.map(b => {
             const inner = (
               <div className={`flex items-center justify-between gap-2 rounded-lg border border-gray-100 p-3 ${b.href ? "hover:border-indigo-200 hover:bg-indigo-50/30 transition-colors" : ""}`}>
                 <div className="min-w-0"><p className="text-xs font-medium text-gray-800 truncate">{b.name}</p><p className="text-[10px] text-gray-400">{b.code}{b.via ? ` · ${b.via}` : ""}</p></div>
