@@ -5,6 +5,7 @@
 // must call. Reads only identity/role columns; fail-soft. Acting roles (context_assignment) are stubbed for WS1+.
 import { orgRolesOf, highestRole, type AppRole, type OrgRole } from "@/lib/roles";
 import { WORKSPACE_REGISTRY, loadWorkspaceRegistry, type RegisteredWorkspace } from "@/lib/orchestration/registry";
+import { loadTenantLicensing, isWorkspaceLicensed } from "@/lib/orchestration/licensing";
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 export type EntitledWorkspace = RegisteredWorkspace & { reason: "personal" | "portal" | "org_role" };
@@ -45,9 +46,15 @@ export async function resolveEntitlements(admin: any, userId: string, activeRole
   const isSuper = roles.includes("super_admin");
   const activeRole = (activeRoleHint && roles.includes(activeRoleHint as AppRole) ? activeRoleHint : highestRole(roles)) as AppRole;
 
-  const registry = await loadWorkspaceRegistry(admin);
+  const [registry, licensing] = await Promise.all([
+    loadWorkspaceRegistry(admin),
+    loadTenantLicensing(admin, profile.tenant_id ?? null),
+  ]);
   const workspaces: EntitledWorkspace[] = registry
     .filter(w => w.enabled)
+    // Compose licensing with entitlement (PCS-PORT-001): available iff LICENSED and ENTITLED. Fail-open — an
+    // unmapped workspace / unknown tenant / unprovisioned store all pass, so nothing changes until configured.
+    .filter(w => isWorkspaceLicensed(licensing, w.key))
     .map(w => { const reason = admit(w, roles, orgRoles); return reason ? { ...w, reason } : null; })
     .filter(Boolean) as EntitledWorkspace[];
 
