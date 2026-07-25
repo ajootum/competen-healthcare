@@ -9,6 +9,21 @@ import { getCaller, isResponse, isSuper, forbidden, badRequest } from "@/lib/api
 const TYPES = ["MODULE", "WIDGET", "PAGE", "DASHBOARD", "REPORT", "METRIC", "FORM", "WORKFLOW", "BUSINESS_RULE", "NAVIGATION_SECTION", "PERMISSION", "DATA_SOURCE"];
 const CLASSES = ["mandatory_configurable", "optional", "conditional", "user_personalisable"];
 const SAFETY = ["non_clinical", "administrative", "operational", "clinical_support", "clinical_safety_relevant", "clinical_safety_critical", "security_critical", "regulatory_critical", "financial_control_critical"];
+const missing = (e: any) => /does not exist|schema cache/i.test(String(e?.message ?? ""));
+
+// Lightweight metric-formula validation (NCP-005 §8): balanced parentheses, allowed tokens, self-reference.
+const FUNCS = new Set(["sum", "avg", "count", "ratio", "min", "max", "round", "abs", "pct", "if", "coalesce"]);
+function validateFormula(formula: string, selfKey: string): { ok: boolean; error?: string; refs: string[] } {
+  const f = formula.trim();
+  if (!f) return { ok: true, refs: [] };
+  let depth = 0;
+  for (const ch of f) { if (ch === "(") depth++; else if (ch === ")") { if (--depth < 0) return { ok: false, error: "Unbalanced parentheses", refs: [] }; } }
+  if (depth !== 0) return { ok: false, error: "Unbalanced parentheses", refs: [] };
+  if (!/^[\w\s.+\-*/(),%<>=?:]+$/.test(f)) return { ok: false, error: "Formula contains unsupported characters", refs: [] };
+  const refs = [...new Set([...f.matchAll(/[a-zA-Z_][a-zA-Z0-9_.]*/g)].map(m => m[0]).filter(t => !FUNCS.has(t.toLowerCase())))];
+  if (refs.includes(selfKey)) return { ok: false, error: "Formula references itself — a circular dependency", refs };
+  return { ok: true, refs };
+}
 
 export async function POST(req: Request) {
   const c = await getCaller();
@@ -51,4 +66,36 @@ export async function POST(req: Request) {
   if (error) return badRequest(error.message);
   await admin.from("configuration_registry_audit").insert({ object_key, action: "authored", actor_id: userId, actor_name: me?.full_name ?? null, new_value: { object_type, source: "studio" } });
   return NextResponse.json({ ok: true, object: data });
+}
+
+// PATCH — save the type-specific definition body onto an object. For a METRIC this is the formula +
+// aggregation + target + thresholds + direction; the formula is validated and its metric references are
+// wired into the object's dependencies so the dependency graph + publish gate account for them.
+export async function PATCH(req: Request) {
+  const c = await getCaller();
+  if (isResponse(c)) return c;
+  if (!isSuper(c)) return forbidden("Configuration authoring is platform super-admin only");
+  const admin = (c as any).admin, userId = (c as any).userId;
+  const b = await req.json().catch(() => ({}));
+  const object_key = String(b.object_key ?? "").trim().toLowerCase();
+  if (!object_key) return badRequest("object_key required");
+
+  const { data: obj, error: e0 } = await admin.from("configuration_registry_objects").select("object_key, object_type, dependencies").eq("object_key", object_key).maybeSingle();
+  if (e0 && missing(e0)) return NextResponse.json({ error: "Registry not provisioned — run migration 092" }, { status: 409 });
+  if (!obj) return badRequest("Object not found");
+
+  const def: any = { ...(b.definition ?? {}) };
+  let deps: any[] = Array.isArray(obj.dependencies) ? obj.dependencies : [];
+  if (obj.object_type === "METRIC") {
+    const v = validateFormula(String(def.formula ?? ""), object_key);
+    if (!v.ok) return badRequest(v.error!);
+    def.refs = v.refs;
+    const registryRefs = v.refs.length ? (((await admin.from("configuration_registry_objects").select("object_key").in("object_key", v.refs)).data) ?? []).map((r: any) => r.object_key) : [];
+    deps = [...deps.filter((d: any) => d?.type !== "METRIC_REF"), ...registryRefs.map((k: string) => ({ type: "METRIC_REF", objectKey: k }))];
+  }
+
+  const { error } = await admin.from("configuration_registry_objects").update({ definition: def, dependencies: deps, updated_at: new Date().toISOString(), updated_by: userId }).eq("object_key", object_key);
+  if (error) return missing(error) ? NextResponse.json({ error: "Run migration 094 to enable object definitions" }, { status: 409 }) : badRequest(error.message);
+  await admin.from("configuration_registry_audit").insert({ object_key, action: "define", actor_id: userId, new_value: def });
+  return NextResponse.json({ ok: true, definition: def });
 }
