@@ -57,7 +57,30 @@ const SUPERVISOR: CatalogWorkspace = {
   ],
 };
 
-export const WORKSPACE_CATALOG: CatalogWorkspace[] = [UNIT_MANAGER, SUPERVISOR];
+// Personal Workspace — WIRED: the Personal Dashboard consults the engine via resolveDashboardManifest, so
+// disabling/reordering a widget module here changes the live dashboard (PW-014 WS2 / PW-AC-06). Module paths are
+// exactly the `personal.dashboard.<widgetKey>` keys the manifest resolver reads.
+const PERSONAL: CatalogWorkspace = {
+  key: "personal", label: "Personal Workspace", route: "/dashboard", wired: true,
+  sections: [
+    { key: "dashboard", label: "Personal Dashboard", path: "personal.dashboard", canDisable: false, modules: [
+      m("personal.dashboard", "ai-briefing", "AI Shift Briefing"),
+      m("personal.dashboard", "priorities", "Today's Priorities"),
+      m("personal.dashboard", "patients", "My Patients"),
+      m("personal.dashboard", "tasks", "Tasks Requiring Action"),
+      m("personal.dashboard", "performance", "My Performance"),
+      m("personal.dashboard", "competencies", "My Competencies"),
+      m("personal.dashboard", "ai-assistant", "AI Assistant"),
+      m("personal.dashboard", "schedule", "Today's Schedule"),
+      m("personal.dashboard", "notifications", "Recent Notifications"),
+      m("personal.dashboard", "messages", "Messages"),
+      m("personal.dashboard", "quick-actions", "Quick Actions"),
+      m("personal.dashboard", "workspaces", "My Workspaces"),
+    ] },
+  ],
+};
+
+export const WORKSPACE_CATALOG: CatalogWorkspace[] = [UNIT_MANAGER, SUPERVISOR, PERSONAL];
 
 export function findWorkspace(key: string) { return WORKSPACE_CATALOG.find(w => w.key === key); }
 
