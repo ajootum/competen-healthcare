@@ -73,7 +73,7 @@ export default async function LearningCentre() {
 
       {/* Assignment & Enrolment (LDS-001 operational layer) */}
       <div id="enrolment" className={`${card} p-5 scroll-mt-4`}>
-        <div className="flex items-center justify-between mb-3"><h3 className="font-semibold text-gray-900 text-sm">Assignment &amp; Enrolment <span className="text-[10px] font-normal text-gray-400">LDS-001 operational layer</span></h3><Link href="/admin/curricula" className="text-[11px] text-emerald-600 hover:underline">Assign →</Link></div>
+        <div className="flex items-center justify-between mb-3"><h3 className="font-semibold text-gray-900 text-sm">Assignment &amp; Enrolment <span className="text-[10px] font-normal text-gray-400">LDS-001 operational layer</span></h3><Link href="/unit-manager/learning/assign" className="text-[11px] text-emerald-600 hover:underline">Assign →</Link></div>
         {!L.provisioned ? (
           <div className="border border-dashed border-gray-200 rounded-lg p-5 text-center"><p className="text-sm text-gray-500">The learning operations store (migration 089) isn&apos;t applied yet.</p><p className="text-[11px] text-gray-400 mt-1">Once applied, active assignments, completion and mandatory-overdue track over real enrolments.</p></div>
         ) : L.total === 0 ? (
@@ -106,7 +106,7 @@ export default async function LearningCentre() {
         </div>
 
         <div id="priority" className={`${card} p-5 scroll-mt-4`}>
-          <div className="flex items-center justify-between mb-3"><h3 className="font-semibold text-gray-900 text-sm">Priority Queue</h3><Link href="/admin/curricula" className="text-[11px] text-emerald-600 hover:underline">Assign learning →</Link></div>
+          <div className="flex items-center justify-between mb-3"><h3 className="font-semibold text-gray-900 text-sm">Priority Queue</h3><Link href="/unit-manager/learning/assign" className="text-[11px] text-emerald-600 hover:underline">Assign learning →</Link></div>
           {d.priorityStaff.length === 0 ? <p className="text-sm text-gray-400">No staff with learning gaps. 🎉</p> : (
             <div className="space-y-1.5">{d.priorityStaff.map((s: any, i: number) => (<div key={i} className="flex items-center justify-between gap-2 text-xs"><div className="flex items-center gap-2 min-w-0"><span className="w-6 h-6 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center text-[10px] font-bold shrink-0">{(s.name?.[0] ?? "?").toUpperCase()}</span><div className="min-w-0"><p className="text-gray-800 truncate">{s.name}</p><p className="text-[10px] text-gray-400 capitalize">{s.role}</p></div></div><span className="text-rose-600 font-semibold tabular-nums shrink-0">{s.gaps} gaps</span></div>))}</div>
           )}

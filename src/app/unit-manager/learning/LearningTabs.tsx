@@ -13,6 +13,7 @@ const TABS: { label: string; href: string }[] = [
   { label: "Career Pathways", href: "/unit-manager/learning/pathways" },
   { label: "Education Schedule", href: "/unit-manager/learning/schedule" },
   { label: "Learning Analytics", href: "/unit-manager/learning/analytics" },
+  { label: "Assign Learning", href: "/unit-manager/learning/assign" },
 ];
 
 export default function LearningTabs() {
