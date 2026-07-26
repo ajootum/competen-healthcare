@@ -1,59 +1,106 @@
-import { createClient, createAdminClient } from "@/lib/supabase/server";
-import { redirect } from "next/navigation";
+import { qaGuard, Head, Tabs, Stat, Card, Pill, Donut, Legend, Trend, Bars, Table, QuickActions, Foot, ragPct, T } from "../_ui";
+import { loadAuditCentre } from "@/lib/qaw/audit-centre";
 import Link from "next/link";
 
 export const dynamic = "force-dynamic";
 
-// Clinical Audit Centre (QAS-003) — audits and their compliance/findings.
+// QAW-002 Clinical Audit Centre — plan, execute and monitor clinical & operational audits.
 /* eslint-disable @typescript-eslint/no-explicit-any */
-
-const NONE = "00000000-0000-0000-0000-000000000000";
-const pct = (n: number) => (n >= 85 ? "text-green-600" : n >= 60 ? "text-amber-600" : "text-red-600");
+const TABS = ["Overview", "Audit Plan", "My Audits", "Audit Schedule", "Templates", "Data Collection", "Findings", "Follow-up", "Reports"];
+const STATUS_TONE: Record<string, string> = { completed: "emerald", in_progress: "amber", planned: "slate" };
+const cap = (s: string) => (s ? s[0].toUpperCase() + s.slice(1).replace(/_/g, " ") : s);
 
 export default async function AuditCentrePage() {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) redirect("/login");
-  const admin = createAdminClient() as any;
-  const { data: profile } = await admin.from("profiles").select("role, roles, hospital_id").eq("id", user.id).single();
-  const roles: string[] = (profile?.roles?.length ? profile.roles : [profile?.role]).filter(Boolean);
-  if (!roles.some(r => ["hospital_admin", "super_admin", "assessor"].includes(r))) redirect("/dashboard");
-  const isSuper = roles.includes("super_admin"); const hid = profile?.hospital_id ?? null;
-
-  const q = admin.from("audits").select("id, title, audit_type, status, compliance_pct, items_not_met, conducted_by_name, conducted_at").order("created_at", { ascending: false }).limit(200);
-  const { data: audits } = await (isSuper ? q : q.eq("hospital_id", hid ?? NONE));
-  const rows = audits ?? [];
-  const card = "bg-white rounded-xl border border-gray-200 p-5";
+  const { admin, isSuper, hid } = await qaGuard();
+  const d = await loadAuditCentre(admin, hid, isSuper);
+  const head = <Head code="QAW-002 · Quality & Accreditation" title="Clinical Audit Centre" sub="Plan, execute and monitor clinical and operational audits." action={{ label: "+ New audit", href: "/assessor/quality" }} />;
+  if (!d.provisioned) return <div className="space-y-4">{head}<Tabs tabs={TABS} active="Overview" />{/* pre-migration */}<Card><p className="text-sm text-gray-400">The audit store is not provisioned yet.</p></Card></div>;
+  const k = d.kpis;
 
   return (
-    <div className="space-y-5">
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">Clinical Audit Centre</h1>
-          <p className="text-sm text-gray-500 mt-1">{rows.length} audits · concurrent, retrospective and clinical.</p>
-        </div>
-        <Link href="/assessor/quality" className="shrink-0 text-sm font-medium text-white bg-teal-600 hover:bg-teal-700 rounded-lg px-4 py-2">Run an audit →</Link>
+    <div className="space-y-4">
+      {head}
+      <Tabs tabs={TABS} active="Overview" />
+
+      <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
+        <Stat icon="📋" tone="blue" label="Audits (this period)" value={k.total} sub={`${d.trend.at(-1)?.completed ?? 0} this month`} />
+        <Stat icon="✅" tone="emerald" label="Completed" value={k.completed} sub={`${k.completionRate}% completion`} />
+        <Stat icon="🕓" tone="amber" label="In progress" value={k.inProgress} />
+        <Stat icon="🗓️" tone="slate" label="Planned" value={k.planned} />
+        <Stat icon="🔎" tone="violet" label="Findings" value={k.findings} sub="not-met items" />
+        <Stat icon="⚠️" tone="rose" label="Critical findings" value={k.critical} sub={k.critical ? "need action" : "none open"} />
       </div>
-      <div className={card}>
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead><tr className="text-left text-xs text-gray-500 border-b"><th className="py-2 pr-3">Audit</th><th className="pr-3">Type</th><th className="pr-3">Compliance</th><th className="pr-3">Findings</th><th className="pr-3">By</th><th>Status</th></tr></thead>
-            <tbody>
-              {rows.length === 0 && <tr><td colSpan={6} className="py-3 text-gray-400">No audits recorded yet.</td></tr>}
-              {rows.map((a: any) => (
-                <tr key={a.id} className="border-b last:border-0">
-                  <td className="py-2.5 pr-3 font-medium text-gray-800">{a.title ?? "—"}</td>
-                  <td className="pr-3 text-xs text-gray-500">{(a.audit_type ?? "").replace(/_/g, " ")}</td>
-                  <td className={`pr-3 tabular-nums font-medium ${a.compliance_pct != null ? pct(a.compliance_pct) : "text-gray-400"}`}>{a.compliance_pct != null ? `${a.compliance_pct}%` : "—"}</td>
-                  <td className={`pr-3 tabular-nums ${a.items_not_met ? "text-amber-600" : "text-gray-500"}`}>{a.items_not_met ?? 0} not met</td>
-                  <td className="pr-3 text-xs text-gray-400">{a.conducted_by_name ?? "—"}</td>
-                  <td><span className={`text-[10px] px-2 py-0.5 rounded-full ${a.status === "completed" ? "bg-green-100 text-green-700" : "bg-amber-100 text-amber-700"}`}>{a.status}</span></td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+
+      <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
+        <Card title="Audit activity" className="xl:col-span-2" right={<Link href="/assessor/quality" className="text-teal-600 hover:underline">Run an audit →</Link>}>
+          <Table cols={["Audit", "Type", "Area", "Compliance", "Status"]} rows={d.recent.map((a: any) => [
+            <span key="t" className="font-medium text-gray-800">{a.title}</span>,
+            <span key="ty" className="text-gray-500">{cap(a.type)}</span>,
+            <span key="ar" className="text-gray-500">{a.area ?? "—"}</span>,
+            <span key="c" className={`font-semibold tabular-nums ${a.compliance != null ? T(ragPct(a.compliance)).text : "text-gray-300"}`}>{a.compliance != null ? `${a.compliance}%` : "—"}</span>,
+            <Pill key="s" text={cap(a.status)} tone={STATUS_TONE[a.status] ?? "slate"} />,
+          ])} empty="No audits recorded yet." />
+        </Card>
+
+        <Card title="Audit status summary">
+          <div className="flex items-center gap-3">
+            <Donut segments={d.statusBreak} total={k.total} label="Total audits" size={140} />
+            <Legend items={d.statusBreak.map((s: any) => ({ label: s.label, value: s.value, tone: s.tone, pct: k.total ? Math.round((s.value / k.total) * 100) : 0 }))} />
+          </div>
+          <div className="grid grid-cols-2 gap-3 mt-3 pt-3 border-t border-gray-100">
+            <div><p className="text-[11px] text-gray-400">Average compliance</p><p className={`text-xl font-bold tabular-nums ${k.avgCompliance != null ? T(ragPct(k.avgCompliance)).text : "text-gray-300"}`}>{k.avgCompliance != null ? `${k.avgCompliance}%` : "—"}</p></div>
+            <div><p className="text-[11px] text-gray-400">Critical findings</p><p className={`text-xl font-bold tabular-nums ${k.critical ? "text-rose-600" : "text-gray-900"}`}>{k.critical}</p></div>
+          </div>
+        </Card>
       </div>
+
+      <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
+        <Card title="Findings breakdown" right="by result">
+          <Bars items={d.findingsTier.map((f: any) => ({ label: f.label, pct: k.findings + (d.findingsTier[2]?.value ?? 0) ? Math.round((f.value / Math.max(1, d.findingsTier.reduce((s: number, x: any) => s + x.value, 0))) * 100) : 0, tone: f.tone, value: f.value }))} />
+          <p className="text-[10px] text-gray-400 mt-2">The store records <code>is_critical</code> per finding (not a 4-tier priority), so findings are reported as Critical / other not-met / met — honestly, not invented tiers.</p>
+        </Card>
+
+        <Card title="Audit trend" right="last 6 months">
+          <Trend points={d.trend.map((b: any) => b.completed)} labels={d.trend.map((b: any) => b.label)} tone="teal" />
+          <p className="text-[10px] text-gray-400 mt-1 text-center">Completed audits per month (live from conducted date).</p>
+        </Card>
+
+        <Card title="Coverage by area">
+          {d.coverage.length ? <div className="space-y-2">{d.coverage.map((c: any, i: number) => (
+            <div key={i} className="flex items-center gap-2 text-[12.5px]">
+              <span className="text-gray-700 truncate flex-1">{c.area}</span>
+              <span className="text-gray-400 tabular-nums">{c.completed}/{c.total}</span>
+              <span className={`font-semibold tabular-nums w-11 text-right ${c.compliance != null ? T(ragPct(c.compliance)).text : "text-gray-300"}`}>{c.compliance != null ? `${c.compliance}%` : "—"}</span>
+            </div>
+          ))}</div> : <p className="text-sm text-gray-400 py-4 text-center">No area data.</p>}
+        </Card>
+      </div>
+
+      <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+        <Card title="Overdue follow-ups" right={`${d.openFollowUps} open`}>
+          <Table cols={["Action", "Owner", "Due", "Overdue"]} rows={d.overdueFollowUps.map((c: any) => [
+            <span key="t" className="text-gray-800">{c.title}</span>,
+            <span key="o" className="text-gray-500">{c.owner_name ?? "—"}</span>,
+            <span key="d" className="text-gray-500 tabular-nums">{c.due_date}</span>,
+            <Pill key="x" text={`${c.daysOver}d`} tone="rose" />,
+          ])} empty="No overdue corrective actions. ✅" />
+        </Card>
+
+        <Card title="Quick actions">
+          <QuickActions actions={[
+            { icon: "➕", label: "Create new audit", href: "/assessor/quality" },
+            { icon: "🗓️", label: "Audit schedule", href: "/quality-accreditation/audits" },
+            { icon: "🔎", label: "Review findings", href: "/quality-accreditation/improvements" },
+            { icon: "🛠️", label: "Follow-up actions", href: "/quality-accreditation/improvements" },
+            { icon: "📊", label: "Analytics", href: "/quality-accreditation/analytics" },
+            { icon: "🎯", label: "Standards", href: "/quality-accreditation/standards" },
+            { icon: "📄", label: "Evidence", href: "/quality-accreditation/documents" },
+            { icon: "⚠️", label: "Risk register", href: "/quality-accreditation/risk" },
+          ]} />
+        </Card>
+      </div>
+
+      <Foot>QAW-002 — live over the <code>audits</code> + <code>audit_findings</code> stores and the corrective actions they generate (<code>capa_actions</code>). KPIs, status mix, trend, area coverage and overdue follow-ups are all real and tenant-scoped. Audit <em>plans, schedules and reusable templates</em> (templates reference the competency framework&apos;s checklist items) are the next build phase; the deeper tabs above are section markers until then.</Foot>
     </div>
   );
 }

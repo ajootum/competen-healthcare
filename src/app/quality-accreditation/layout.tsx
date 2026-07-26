@@ -13,15 +13,21 @@ import { workspaceLinksForUser } from "@/lib/workspace-links";
 // managers, accreditation coordinators, safety officers and audit teams.
 
 const NAV = [
-  { label: "Dashboard",              href: "/quality-accreditation",              icon: "📊", exact: true },
-  { label: "Accreditation Standards", href: "/quality-accreditation/standards",   icon: "🎯" },
-  { label: "Clinical Audit Centre",  href: "/quality-accreditation/audits",       icon: "📋" },
-  { label: "Improvement Plans",      href: "/quality-accreditation/improvements", icon: "🛠️" },
-  { label: "Risk Management",        href: "/quality-accreditation/risk",         icon: "⚠️" },
-  { label: "Compliance Monitoring",  href: "/quality-accreditation/compliance",   icon: "✅" },
-  { label: "Analytics",              href: "/quality-accreditation/analytics",    icon: "📈" },
-  { label: "AI Quality Intelligence", href: "/quality-accreditation/ai",          icon: "✨" },
-  { label: "Settings",               href: "/quality-accreditation/settings",     icon: "⚙️" },
+  { label: "Dashboard",              href: "/quality-accreditation",               icon: "📊", exact: true },
+  { label: "Accreditation Standards", href: "/quality-accreditation/standards",    icon: "🎯" },
+  { label: "Clinical Audit Centre",  href: "/quality-accreditation/audits",        icon: "📋" },
+  { label: "Improvement & CAPA",     href: "/quality-accreditation/improvements",  icon: "🛠️" },
+  { label: "Risk Management",        href: "/quality-accreditation/risk",          icon: "⚠️" },
+  { label: "Compliance Monitoring",  href: "/quality-accreditation/compliance",    icon: "✅" },
+  { label: "Quality Indicators",     href: "/quality-accreditation/indicators",    icon: "📏" },
+  { label: "Analytics & Reporting",  href: "/quality-accreditation/analytics",     icon: "📈" },
+  { label: "Documents & Evidence",   href: "/quality-accreditation/documents",     icon: "📄" },
+  { label: "Accreditation Readiness", href: "/quality-accreditation/readiness",    icon: "🗂️" },
+  { label: "Incident & Safety",      href: "/quality-accreditation/safety",        icon: "🚑" },
+  { label: "Governance & Committees", href: "/quality-accreditation/governance",   icon: "🏛️" },
+  { label: "AI Quality Intelligence", href: "/quality-accreditation/ai",           icon: "✨" },
+  { label: "Audit Trail & Regulatory", href: "/quality-accreditation/audit-trail", icon: "🧾" },
+  { label: "Administration",         href: "/quality-accreditation/administration", icon: "⚙️" },
 ];
 
 const ALLOWED = ["hospital_admin", "super_admin", "assessor"];
