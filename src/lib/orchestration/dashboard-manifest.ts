@@ -11,7 +11,7 @@ import { loadConfigOverrides, applies, SCOPE_ORDER, type ScopeCtx, type Override
 export type WidgetZone = "main" | "rail" | "full";
 export type WidgetState = "required" | "locked" | "optional";
 export type ManifestEntry = { key: string; label: string; zone: WidgetZone; order: number; span: 1 | 2; state?: WidgetState };
-export type DashboardControl = { key: string; label: string; zone: WidgetZone; state: WidgetState; visible: boolean; canToggle: boolean };
+export type DashboardControl = { key: string; label: string; zone: WidgetZone; order: number; state: WidgetState; visible: boolean; canToggle: boolean };
 
 export const DASHBOARD_CONFIG_PREFIX = "personal.dashboard";
 
@@ -59,10 +59,13 @@ export async function resolveDashboardManifest(admin: any, ctx: ScopeCtx, defaul
 // optional widgets the org hasn't disabled (required/locked are surfaced but locked in the UI too).
 export async function resolveDashboardControls(admin: any, ctx: ScopeCtx, defaults: ManifestEntry[]): Promise<DashboardControl[]> {
   const { rows } = await loadConfigOverrides(admin);
-  return resolveAll(rows, ctx, defaults).map(r => ({
-    key: r.entry.key, label: r.entry.label, zone: r.entry.zone, state: r.state, visible: r.visible,
-    canToggle: r.state === "optional" && !r.adminDisabled,
-  }));
+  const zoneRank: Record<WidgetZone, number> = { main: 0, rail: 1, full: 2 };
+  return resolveAll(rows, ctx, defaults)
+    .map(r => ({
+      key: r.entry.key, label: r.entry.label, zone: r.entry.zone, order: r.entry.order, state: r.state, visible: r.visible,
+      canToggle: r.state === "optional" && !r.adminDisabled,
+    }))
+    .sort((a, b) => zoneRank[a.zone] - zoneRank[b.zone] || a.order - b.order || a.key.localeCompare(b.key));
 }
 
 export const inZone = (manifest: ManifestEntry[], zone: WidgetZone) => manifest.filter(e => e.zone === zone);

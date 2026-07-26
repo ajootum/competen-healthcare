@@ -52,5 +52,12 @@ await db.from("workspace_config_overrides").delete().eq("scope_type", "user").eq
 rows = await loadRows();
 console.log(`\nAfter reset: messages visible=${resolve(rows, ctx, "messages").visible} ${resolve(rows, ctx, "messages").visible ? "✅ restored" : "❌"}`);
 
+// 4) Reorder — user sets 'priorities' order=5 (< ai-briefing default 10) → priorities sorts first in Main.
+await db.from("workspace_config_overrides").insert({ scope_type: "user", scope_ref: u.id, config_path: "personal.dashboard.priorities", published: { order: 5 } });
+rows = await loadRows();
+const ord = (key, def) => { const path = `personal.dashboard.${key}`; const usr = mergeAt(rows, ctx, path, (st) => st === "user"); const adm = mergeAt(rows, ctx, path, (st) => st !== "user"); return usr.order ?? adm.order ?? def; };
+const oPri = ord("priorities", 20), oBrief = ord("ai-briefing", 10);
+console.log(`Reorder: priorities order=${oPri}, ai-briefing order=${oBrief} → priorities first in Main? ${oPri < oBrief ? "✅" : "❌"}`);
+
 await clean();
 console.log("\ncleaned up seeded overrides. ✅ policy-before-preference personalization verified.");
