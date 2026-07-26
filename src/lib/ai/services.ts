@@ -154,3 +154,73 @@ export async function loadAiRecommendations(admin: any) {
     top: [...all].sort((a, b) => b.confidence - a.confidence).slice(0, 12),
   };
 }
+
+// ── AIS-002 Context Resolution Engine (context source registry) ──
+export async function loadAiContext(admin: any) {
+  const res = await soft(admin.from("ais_context_sources").select("*").order("domain"));
+  if (res.error && missing(res.error)) return { provisioned: false as const };
+  const sources = (res.data ?? []) as any[];
+  const DOMAINS = ["user", "workspace", "tenant", "security", "knowledge", "workflow", "memory", "business"];
+  return {
+    provisioned: true as const, sources,
+    kpis: { total: sources.length, active: sources.filter(s => s.status === "active").length, domains: new Set(sources.map(s => s.domain)).size },
+    byDomain: DOMAINS.map(d => ({ domain: d, source: sources.find(s => s.domain === d) ?? null })).filter(x => x.source),
+  };
+}
+
+// ── AIS-003 Knowledge & Semantic Search (source registry) ──
+export async function loadAiKnowledge(admin: any) {
+  const res = await soft(admin.from("ais_knowledge_sources").select("*").order("doc_count", { ascending: false }));
+  if (res.error && missing(res.error)) return { provisioned: false as const };
+  const sources = (res.data ?? []) as any[];
+  return {
+    provisioned: true as const, sources,
+    kpis: { total: sources.length, indexed: sources.filter(s => s.indexed).length, documents: sources.reduce((a, s) => a + Number(s.doc_count || 0), 0), indexing: sources.filter(s => s.status === "indexing").length, coverage: sources.length ? Math.round((sources.filter(s => s.indexed).length / sources.length) * 100) : 0 },
+    byDomain: groupN(sources, "domain"),
+  };
+}
+
+// ── AIS-005 Action & Workflow Orchestrator (action registry) ──
+export async function loadAiActions(admin: any) {
+  const res = await soft(admin.from("ais_actions").select("*").order("executions", { ascending: false }));
+  if (res.error && missing(res.error)) return { provisioned: false as const };
+  const actions = (res.data ?? []) as any[];
+  return {
+    provisioned: true as const, actions,
+    kpis: { total: actions.length, active: actions.filter(a => a.status === "active").length, needApproval: actions.filter(a => a.requires_approval).length, executions: actions.reduce((a, x) => a + Number(x.executions || 0), 0), avgSuccess: actions.length ? Math.round(actions.reduce((a, x) => a + Number(x.success_rate || 0), 0) / actions.length) : 0 },
+    byTrigger: groupN(actions, "trigger"),
+  };
+}
+
+// ── AIS-008 Governance, Security & Explainability (policies + REAL gateway safety metrics) ──
+export async function loadAiGovConsole(admin: any) {
+  const [polRes, gov] = await Promise.all([soft(admin.from("ais_policies").select("*").order("category")), loadAiGovernance(admin).catch(() => null as any)]);
+  if (polRes.error && missing(polRes.error)) return { provisioned: false as const };
+  const policies = (polRes.data ?? []) as any[];
+  const s = gov?.summary ?? {};
+  const CATS = ["safety", "privacy", "access", "content", "model", "audit"];
+  return {
+    provisioned: true as const, policies,
+    kpis: {
+      policies: policies.length, enforced: policies.filter(p => p.enforcement === "enforce").length, monitored: policies.filter(p => p.enforcement === "monitor").length,
+      refusals24h: s.refusals24h ?? 0, errors24h: s.errors24h ?? 0,
+      governanceScore: Math.max(0, Math.min(100, 100 - (s.errors24h ?? 0) * 2)),
+      safetyCoverage: policies.length ? Math.round((policies.filter(p => p.enforcement === "enforce").length / policies.length) * 100) : 0,
+    },
+    byCategory: CATS.map(c => ({ category: c, items: policies.filter(p => p.category === c) })).filter(g => g.items.length),
+    // Real safety events from the gateway telemetry.
+    safetyEvents: (gov?.recent ?? []).filter((r: any) => r.status !== "ok").slice(0, 8).map((r: any) => ({ operation: r.operation, model: r.model, status: r.status, at: r.at })),
+    telemetryReady: s.ready ?? false,
+  };
+}
+
+// ── AIS-011 Evaluation harness (for the Observability page's testing/eval section) ──
+export async function loadAiEvals(admin: any) {
+  const res = await soft(admin.from("ais_evals").select("*").order("last_run", { ascending: false }));
+  if (res.error && missing(res.error)) return { evals: [] as any[], provisioned: false };
+  const evals = (res.data ?? []) as any[];
+  return {
+    provisioned: true, evals,
+    kpis: { total: evals.length, passing: evals.filter(e => e.passed).length, avgScore: evals.length ? Math.round(evals.reduce((a, e) => a + Number(e.score || 0), 0) / evals.length) : 0, runs: evals.reduce((a, e) => a + Number(e.runs || 0), 0) },
+  };
+}

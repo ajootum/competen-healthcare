@@ -29,9 +29,13 @@ export function Head({ code, title, sub, right }: { code: string; title: string;
 
 const MODULES: [string, string, string][] = [
   ["001", "Control Plane", "/super-admin/ai/services"],
+  ["002", "Context", "/super-admin/ai/services/context"],
+  ["003", "Knowledge", "/super-admin/ai/services/knowledge"],
   ["004", "Skills", "/super-admin/ai/services/skills"],
+  ["005", "Actions", "/super-admin/ai/services/actions"],
   ["006", "Recommendations", "/super-admin/ai/services/recommendations"],
   ["007", "Prompts", "/super-admin/ai/services/prompts"],
+  ["008", "Governance", "/super-admin/ai/services/governance"],
   ["009", "Models", "/super-admin/ai/services/models"],
   ["010", "Config", "/super-admin/ai/services/config"],
   ["011", "Observability", "/super-admin/ai/services/observability"],

@@ -1,4 +1,4 @@
-import { loadAiObservability } from "@/lib/ai/services";
+import { loadAiObservability, loadAiEvals } from "@/lib/ai/services";
 import { aisGuard, Head, Tabs, Card, Stat, Pill, Bars, Provision, Foot } from "../_ui";
 
 export const dynamic = "force-dynamic";
@@ -10,7 +10,7 @@ const STATUS_TONE: Record<string, string> = { ok: "emerald", refusal: "amber", e
 
 export default async function ObservabilityPage() {
   const { admin } = await aisGuard();
-  const d = await loadAiObservability(admin) as any;
+  const [d, ev] = await Promise.all([loadAiObservability(admin), loadAiEvals(admin)]) as any[];
   const head = <Head code="AIS-011 · AI Services Platform" title="AI Observability, Testing & Evaluation" sub="End-to-end telemetry over every AI call the platform makes — volume, tokens, cost, latency, errors and refusals, from the real plat_ai_requests gateway log." />;
   if (!d.provisioned) return <div className="max-w-[1500px] space-y-4">{head}<Tabs active="011" /><Provision /></div>;
 
@@ -64,6 +64,21 @@ export default async function ObservabilityPage() {
           </div></div>
         ) : <p className="text-sm text-gray-400 py-6 text-center">No requests logged yet — telemetry appears here automatically as the platform generates.</p>}
       </Card>
+
+      {ev.provisioned && ev.evals.length > 0 && (
+        <Card title="Evaluation & Testing" right={<span className="text-[11px] text-gray-400">{ev.kpis.passing}/{ev.kpis.total} passing · avg {ev.kpis.avgScore}% · {ev.kpis.runs.toLocaleString()} runs</span>}>
+          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-2">
+            {ev.evals.map((e: any) => (
+              <div key={e.id} className="flex items-center gap-2 border border-gray-100 rounded-lg p-2.5">
+                <span className={`w-2 h-2 rounded-full shrink-0 ${e.passed ? "bg-emerald-500" : "bg-rose-500"}`} />
+                <div className="min-w-0 flex-1"><p className="text-[12px] font-medium text-gray-900 leading-tight truncate">{e.name}</p><p className="text-[10px] text-gray-400">{e.eval_type} · {e.target} · {e.runs} runs</p></div>
+                <span className={`text-[13px] font-bold tabular-nums ${Number(e.score) >= 90 ? "text-emerald-600" : Number(e.score) >= 80 ? "text-amber-600" : "text-rose-600"}`}>{e.score}%</span>
+              </div>
+            ))}
+          </div>
+          <p className="text-[10px] text-gray-400 mt-2">Eval definitions &amp; scores from ais_evals. The automated harness that runs these on schedule (LLM-judge quality, safety red-team, groundedness, prompt-regression) executes against the live models — backend engineering (epic).</p>
+        </Card>
+      )}
 
       <Foot>AIS-011 — observability over the real plat_ai_requests written by the AI Runtime Gateway&apos;s generate() choke point (one row per server-side AI call: model, tier, tokens, latency, cost, status). Aggregation reuses the gateway&apos;s own loadAiGovernance(). Automated eval harness, quality benchmarking and prompt-regression testing are the next phase (P3).</Foot>
     </div>
