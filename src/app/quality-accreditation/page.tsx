@@ -1,136 +1,123 @@
-import { createClient, createAdminClient } from "@/lib/supabase/server";
-import { redirect } from "next/navigation";
-import Link from "next/link";
+import { qaGuard, Head, Stat, Card, Pill, Donut, Legend, Trend, Bars, Table, QuickActions, Foot, T, ragPct } from "./_ui";
 import { loadQualityDashboard } from "@/lib/quality-accreditation-data";
+import { loadStandards } from "@/lib/qaw/standards";
+import { loadRiskCentre } from "@/lib/qaw/risk-centre";
+import Link from "next/link";
 
 export const dynamic = "force-dynamic";
 
-// Quality & Accreditation Dashboard (QAS-001).
+// Quality & Accreditation Workspace — command-centre overview aggregating the 14 QAW modules over
+// real tenant-scoped data. Every KPI links into the module that owns it.
 /* eslint-disable @typescript-eslint/no-explicit-any */
-
-const card = "bg-white rounded-xl border border-gray-200 p-5";
-const pct = (n: number) => (n >= 85 ? "text-green-600" : n >= 60 ? "text-amber-600" : "text-red-600");
-
-function Kpi({ n, label, tone, sub, href }: { n: any; label: string; tone?: string; sub?: string; href?: string }) {
-  const inner = (
-    <div className={`${card} ${href ? "hover:border-teal-300 transition-colors" : ""}`}>
-      <div className={`text-3xl font-bold tabular-nums ${tone ?? "text-gray-900"}`}>{n}</div>
-      <div className="text-xs text-gray-500 mt-1">{label}</div>
-      {sub && <div className="text-[11px] text-gray-400 mt-0.5">{sub}</div>}
-    </div>
-  );
-  return href ? <Link href={href}>{inner}</Link> : inner;
-}
+const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+const STATUS_TONE: Record<string, string> = { completed: "emerald", in_progress: "amber", planned: "slate" };
 
 export default async function QualityDashboard() {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) redirect("/login");
-  const admin = createAdminClient() as any;
-  const { data: profile } = await admin.from("profiles").select("full_name, role, roles, hospital_id").eq("id", user.id).single();
-  const roles: string[] = (profile?.roles?.length ? profile.roles : [profile?.role]).filter(Boolean);
-  if (!roles.some(r => ["hospital_admin", "super_admin", "assessor"].includes(r))) redirect("/dashboard");
-  const isSuper = roles.includes("super_admin");
-  const hid = profile?.hospital_id ?? null;
+  const { admin, isSuper, hid, fullName } = await qaGuard();
+  const [core, standards, risk] = await Promise.all([
+    loadQualityDashboard(admin, hid, isSuper),
+    loadStandards(admin, hid, isSuper),
+    loadRiskCentre(admin, hid, isSuper),
+  ]);
 
-  const d = await loadQualityDashboard(admin, hid, isSuper);
-  const { audits, findings, capa, improvements, standards, indicators, accreditationReadiness, complianceScore, riskItems } = d;
+  const scope = (q: any) => (isSuper ? q : q.eq("hospital_id", hid ?? "00000000-0000-0000-0000-000000000000"));
+  const { data: auditRows } = await scope(admin.from("audits").select("title, audit_type, area, status, compliance_pct, conducted_at").order("conducted_at", { ascending: false }).limit(6));
+  const recentAudits = (auditRows ?? []) as any[];
 
-  // Recent audits for the audit schedule widget.
-  let recentAudits: any[] = [];
+  // Compliance & quality trend from daily snapshots.
+  let trend: { label: string; value: number }[] = [];
   try {
-    const q = admin.from("audits").select("title, audit_type, status, compliance_pct, conducted_at").order("created_at", { ascending: false }).limit(6);
-    const { data } = await (isSuper ? q : q.eq("hospital_id", hid ?? "00000000-0000-0000-0000-000000000000"));
-    recentAudits = data ?? [];
-  } catch { /* pre-migration */ }
-  const { data: notifs } = await admin.from("notifications").select("title, created_at").eq("user_id", user.id).order("created_at", { ascending: false }).limit(5);
+    const { data: snaps } = await scope(admin.from("quality_score_snapshots").select("snapshot_date, compliance_score").order("snapshot_date", { ascending: false }).limit(180));
+    const byMonth = new Map<string, number>();
+    (snaps ?? []).forEach((s: any) => { const k = String(s.snapshot_date).slice(0, 7); if (!byMonth.has(k) && s.compliance_score != null) byMonth.set(k, Math.round(Number(s.compliance_score))); });
+    trend = [...byMonth.entries()].sort((a, b) => a[0].localeCompare(b[0])).slice(-6).map(([k, v]) => ({ label: MONTHS[Number(k.slice(5, 7)) - 1], value: v }));
+  } catch { /* optional */ }
+
+  const capaOpen = core.capa.open, overdue = core.capa.overdue, onTrack = Math.max(0, capaOpen - overdue);
+  const planDonut = [
+    { label: "On track", value: onTrack, tone: "emerald" },
+    { label: "Overdue", value: overdue, tone: "rose" },
+  ];
+  const stdMet = standards.provisioned ? standards.kpis.overall : null;
+  const highRisks = risk.provisioned ? risk.kpis.extreme + risk.kpis.high : 0;
 
   return (
-    <div className="space-y-5">
-      <div>
-        <h1 className="text-2xl font-bold text-gray-900">Quality &amp; Accreditation</h1>
-        <p className="text-sm text-gray-500 mt-1">Clinical quality, accreditation readiness, audit and improvement · {profile?.full_name}</p>
-      </div>
+    <div className="space-y-4">
+      <Head title="Quality & Accreditation" sub={`Clinical quality, accreditation readiness, audits and improvement · ${fullName}`} action={{ label: "Open AI copilot →", href: "/quality-accreditation/ai" }} />
 
-      {/* Quality KPI cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        <Kpi n={complianceScore != null ? `${complianceScore}%` : "—"} label="Compliance score" tone={complianceScore != null ? pct(complianceScore) : undefined} sub="mean audit compliance" href="/quality-accreditation/audits" />
-        <Kpi n={accreditationReadiness != null ? `${accreditationReadiness}%` : "—"} label="Accreditation readiness" tone={accreditationReadiness != null ? pct(accreditationReadiness) : undefined} href="/quality-accreditation/standards" />
-        <Kpi n={findings.open} label="Open audit findings" tone={findings.critical ? "text-red-600" : findings.open ? "text-amber-600" : undefined} sub={`${findings.critical} critical`} href="/quality-accreditation/audits" />
-        <Kpi n={capa.open} label="Open improvement actions" tone={capa.overdue ? "text-red-600" : undefined} sub={`${capa.overdue} overdue`} href="/quality-accreditation/improvements" />
-        <Kpi n={audits.total} label="Audits" sub={`${audits.completed} completed · ${audits.planned + audits.inProgress} in progress`} href="/quality-accreditation/audits" />
-        <Kpi n={improvements.active} label="Improvement projects" sub={`${improvements.total} total`} href="/quality-accreditation/improvements" />
-        <Kpi n={standards} label="Quality standards" sub={`${indicators} indicators`} href="/quality-accreditation/standards" />
-        <Kpi n={riskItems} label="Risk items" tone={riskItems ? "text-red-600" : undefined} sub="open high-priority actions" href="/quality-accreditation/risk" />
+        <Stat icon="📋" tone={core.complianceScore != null ? ragPct(core.complianceScore) : "slate"} label="Compliance score" value={core.complianceScore != null ? `${core.complianceScore}%` : "—"} sub="mean audit compliance" />
+        <Stat icon="🎯" tone={stdMet != null ? ragPct(stdMet) : "slate"} label="Standards met" value={stdMet != null ? `${stdMet}%` : "—"} sub="of assessed" />
+        <Stat icon="⚠️" tone="rose" label="Open critical findings" value={core.findings.critical} sub={`${core.findings.open} open total`} />
+        <Stat icon="🛠️" tone={overdue ? "rose" : "amber"} label="Open improvement actions" value={core.capa.open} sub={`${overdue} overdue`} />
+        <Stat icon="📋" tone="blue" label="Audits" value={core.audits.total} sub={`${core.audits.completed} completed`} />
+        <Stat icon="📈" tone="teal" label="Improvement projects" value={core.improvements.active} sub={`${core.improvements.total} total`} />
+        <Stat icon="📏" tone="indigo" label="Active indicators" value={core.indicators} sub={`${core.standards} standards`} />
+        <Stat icon="🔴" tone={highRisks ? "rose" : "emerald"} label="High risks" value={highRisks} sub="register high/extreme" />
       </div>
 
-      <div className="grid md:grid-cols-2 gap-5">
-        {/* Audit schedule / recent */}
-        <div className={card}>
-          <h3 className="font-semibold text-gray-900 mb-3">Audit activity</h3>
-          {recentAudits.length === 0 && <p className="text-sm text-gray-400">No audits recorded yet.</p>}
-          <div className="divide-y">
-            {recentAudits.map((a: any, i: number) => (
-              <div key={i} className="py-2 flex items-center gap-2 text-sm">
-                <span className="text-gray-800 truncate">{a.title ?? a.audit_type}</span>
-                <span className="text-xs text-gray-400">{(a.audit_type ?? "").replace(/_/g, " ")}</span>
-                {a.compliance_pct != null && <span className={`ml-auto text-xs font-medium ${pct(a.compliance_pct)}`}>{a.compliance_pct}%</span>}
-                <span className={`text-[10px] px-2 py-0.5 rounded-full ${a.status === "completed" ? "bg-green-100 text-green-700" : "bg-amber-100 text-amber-700"}`}>{a.status}</span>
-              </div>
-            ))}
-          </div>
-        </div>
+      <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
+        <Card title="Audit activity" className="xl:col-span-2" right={<Link href="/quality-accreditation/audits" className="text-teal-600 hover:underline">View all →</Link>}>
+          <Table cols={["Audit", "Type", "Area", "Compliance", "Status"]} rows={recentAudits.map((a: any) => [
+            <span key="t" className="font-medium text-gray-800">{a.title}</span>,
+            <span key="ty" className="text-gray-500 capitalize">{(a.audit_type ?? "").replace(/_/g, " ")}</span>,
+            <span key="ar" className="text-gray-500">{a.area ?? "—"}</span>,
+            <span key="c" className={`font-semibold tabular-nums ${a.compliance_pct != null ? T(ragPct(Number(a.compliance_pct))).text : "text-gray-300"}`}>{a.compliance_pct != null ? `${Math.round(Number(a.compliance_pct))}%` : "—"}</span>,
+            <Pill key="s" text={(a.status ?? "").replace(/_/g, " ")} tone={STATUS_TONE[a.status] ?? "slate"} />,
+          ])} empty="No audits recorded yet." />
+        </Card>
 
-        {/* Improvement plan status */}
-        <div className={card}>
-          <h3 className="font-semibold text-gray-900 mb-3">Improvement plan status</h3>
-          <div className="grid grid-cols-2 gap-3 text-sm">
-            <div className="flex justify-between"><span className="text-gray-500">Open actions</span><b className="tabular-nums">{capa.open}</b></div>
-            <div className="flex justify-between"><span className="text-gray-500">Overdue</span><b className={`tabular-nums ${capa.overdue ? "text-red-600" : ""}`}>{capa.overdue}</b></div>
-            <div className="flex justify-between"><span className="text-gray-500">High priority</span><b className={`tabular-nums ${capa.critical ? "text-orange-600" : ""}`}>{capa.critical}</b></div>
-            <div className="flex justify-between"><span className="text-gray-500">Active projects</span><b className="tabular-nums">{improvements.active}</b></div>
+        <Card title="Improvement plan status">
+          <div className="flex items-center gap-3">
+            <Donut segments={planDonut} total={capaOpen} label="Open actions" size={130} />
+            <Legend items={[...planDonut.map((s: any) => ({ label: s.label, value: s.value, tone: s.tone })), { label: "High priority", value: core.capa.critical, tone: "amber" }, { label: "Active projects", value: core.improvements.active, tone: "blue" }]} />
           </div>
-          <p className="text-xs text-gray-400 mt-3"><Link href="/quality-accreditation/improvements" className="text-teal-600 hover:underline">Manage improvement plans →</Link></p>
-        </div>
-
-        {/* Risk summary */}
-        <div className={card}>
-          <h3 className="font-semibold text-gray-900 mb-3">Risk summary</h3>
-          <div className="grid grid-cols-2 gap-3 text-sm">
-            <div className="flex justify-between"><span className="text-gray-500">Critical findings</span><b className={`tabular-nums ${findings.critical ? "text-red-600" : ""}`}>{findings.critical}</b></div>
-            <div className="flex justify-between"><span className="text-gray-500">High-priority actions</span><b className={`tabular-nums ${capa.critical ? "text-orange-600" : ""}`}>{capa.critical}</b></div>
-            <div className="flex justify-between"><span className="text-gray-500">Overdue actions</span><b className={`tabular-nums ${capa.overdue ? "text-red-600" : ""}`}>{capa.overdue}</b></div>
-          </div>
-          <p className="text-xs text-gray-400 mt-3">Derived from critical audit findings and corrective actions.</p>
-        </div>
-
-        {/* Quick actions */}
-        <div className={card}>
-          <h3 className="font-semibold text-gray-900 mb-3">Quick actions</h3>
-          <div className="grid grid-cols-2 gap-2 text-sm">
-            {[["📋 Audit centre", "/quality-accreditation/audits"], ["🛠️ Improvement plans", "/quality-accreditation/improvements"], ["🎯 Standards", "/quality-accreditation/standards"], ["🩹 Run a clinical audit", "/assessor/quality"], ["📈 Accreditation report", "/admin/accreditation"], ["🛡️ Quality workspace", "/admin/quality"]].map(([label, href]) => (
-              <Link key={href} href={href} className="border border-gray-200 rounded-lg px-3 py-2 text-gray-700 hover:border-teal-300 hover:text-teal-700 transition-colors">{label}</Link>
-            ))}
-          </div>
-        </div>
-
-        {/* Notifications */}
-        <div className={card}>
-          <h3 className="font-semibold text-gray-900 mb-3">Notifications</h3>
-          {(notifs ?? []).length === 0 && <p className="text-sm text-gray-400">Nothing new.</p>}
-          <div className="space-y-1.5">
-            {(notifs ?? []).map((n: any, i: number) => (
-              <div key={i} className="flex items-center gap-2 text-sm"><span className="text-gray-800 truncate">{n.title}</span><span className="ml-auto text-xs text-gray-400">{new Date(n.created_at).toLocaleDateString()}</span></div>
-            ))}
-          </div>
-        </div>
-
-        {/* AI Quality Intelligence — later phase */}
-        <div className={`${card} border-dashed`}>
-          <h3 className="font-semibold text-gray-900 mb-1">AI Quality Intelligence</h3>
-          <p className="text-sm text-gray-400">Quality AI (risk prediction, root-cause and accreditation-readiness recommendations) arrives in a later QAS phase. The audit, findings and compliance data it reasons over is already live above.</p>
-        </div>
+          <p className="text-[11px] text-gray-400 mt-2"><Link href="/quality-accreditation/improvements" className="text-teal-600 hover:underline">Manage improvement plans →</Link></p>
+        </Card>
       </div>
+
+      <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
+        <Card title="Compliance trend" className="xl:col-span-2" right="last 6 months">
+          {trend.length >= 2 ? <><Trend points={trend.map((t: any) => t.value)} labels={trend.map((t: any) => t.label)} tone="teal" suffix="%" target={85} /><p className="text-[10px] text-gray-400 text-center mt-1">Compliance score per month (daily snapshots) · dashed = 85% target.</p></> : <p className="text-sm text-gray-400 py-8 text-center">Not enough snapshot history yet for a trend.</p>}
+        </Card>
+
+        <Card title="Standards compliance by framework">
+          {standards.provisioned && standards.byFramework.length ? <Bars items={standards.byFramework.map((f: any) => ({ label: f.label, pct: f.pct, tone: f.tone, value: `${f.pct}%` }))} /> : <p className="text-sm text-gray-400 py-6 text-center">No framework assessments yet.</p>}
+        </Card>
+      </div>
+
+      <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
+        <Card title="Top risk categories" right={<Link href="/quality-accreditation/risk" className="text-teal-600 hover:underline">Risk register →</Link>}>
+          {risk.provisioned && risk.byCategory.length ? <Bars items={risk.byCategory.slice(0, 6).map((c: any) => ({ label: c.label, pct: risk.kpis.total ? Math.round((c.value / risk.kpis.total) * 100) : 0, tone: c.tone, value: c.value }))} /> : <p className="text-sm text-gray-400 py-6 text-center">No risks registered.</p>}
+        </Card>
+
+        <Card title="AI Quality Insight">
+          <div className="bg-gradient-to-br from-violet-50 to-blue-50 border border-violet-100 rounded-lg p-3">
+            <p className="text-[13px] text-gray-800 leading-relaxed">
+              {core.findings.critical ? `${core.findings.critical} critical audit finding${core.findings.critical > 1 ? "s" : ""} and ` : ""}
+              {overdue ? `${overdue} overdue action${overdue > 1 ? "s" : ""} ` : "no overdue actions "}
+              need attention. {highRisks ? `${highRisks} high/extreme risk${highRisks > 1 ? "s are" : " is"} open on the register.` : "The risk register is stable."}
+            </p>
+            <Link href="/quality-accreditation/ai" className="mt-2 inline-block text-[12px] font-medium text-violet-700 hover:underline">Ask the live quality copilot →</Link>
+          </div>
+          <p className="text-[10px] text-gray-400 mt-2">Snapshot is rule-based; the AI centre runs a real LLM grounded in this data.</p>
+        </Card>
+
+        <Card title="Jump to a module">
+          <QuickActions actions={[
+            { icon: "🎯", label: "Standards", href: "/quality-accreditation/standards" },
+            { icon: "📋", label: "Audits", href: "/quality-accreditation/audits" },
+            { icon: "✅", label: "Compliance", href: "/quality-accreditation/compliance" },
+            { icon: "📏", label: "Indicators", href: "/quality-accreditation/indicators" },
+            { icon: "🗂️", label: "Readiness", href: "/quality-accreditation/readiness" },
+            { icon: "🚑", label: "Safety", href: "/quality-accreditation/safety" },
+            { icon: "🏛️", label: "Governance", href: "/quality-accreditation/governance" },
+            { icon: "🧾", label: "Audit trail", href: "/quality-accreditation/audit-trail" },
+          ]} />
+        </Card>
+      </div>
+
+      <Foot>Quality & Accreditation command centre — every figure is live and tenant-scoped, aggregated across the 14 QAW modules (audits, findings, CAPA, improvement projects, standards assessments, indicators and the risk register); the compliance trend reads the daily <code>quality_score_snapshots</code>. Each KPI and panel links into the module that owns it.</Foot>
     </div>
   );
 }
