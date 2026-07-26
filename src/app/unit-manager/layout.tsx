@@ -141,14 +141,18 @@ const NAV_GROUPS: { title: string; items: NavItem[] }[] = [
     { label: "Operations Config & Rules", href: "/unit-manager/ops-command/config-rules", icon: "⚙️" }, // OPC-010 (→ UMW-CFG)
     { label: "Audit, Reporting & Analytics", href: "/unit-manager/ops-command/analytics", icon: "📉" }, // OPC-011
   ] },
+  // UMW-PA-001..009 Performance Analytics — metadata-driven KPI + balanced-scorecard + benchmark analytics over the
+  // performance stores (migration 108); operational KPIs resolve live from op_ops_snapshots.
   { title: "Performance Analytics", items: [
-    { label: "Unit Scorecard",       icon: "🏆", soon: true },
-    { label: "Workforce Analytics",  icon: "👥", soon: true },
-    { label: "Clinical Analytics",   icon: "🩻", soon: true },
-    { label: "Competency Analytics", icon: "🪪", soon: true },
-    { label: "Financial Analytics",  icon: "💹", soon: true },
-    { label: "Benchmarking",         icon: "📊", soon: true },
-    { label: "Executive Reports",    href: "/unit-manager/reports", icon: "🧾" },
+    { label: "Unit Performance Dashboard", href: "/unit-manager/performance", icon: "📊", exact: true }, // PA-001
+    { label: "KPI & Scorecard Centre",     href: "/unit-manager/performance/scorecard", icon: "🎯" },    // PA-002
+    { label: "Trends & Benchmarking",      href: "/unit-manager/performance/trends", icon: "📈" },        // PA-003
+    { label: "Workforce Analytics",        href: "/unit-manager/performance/workforce", icon: "👥" },     // PA-004
+    { label: "Operational Analytics",      href: "/unit-manager/performance/operational", icon: "⚙️" },   // PA-005
+    { label: "Financial Analytics",        href: "/unit-manager/performance/financial", icon: "💷" },     // PA-006
+    { label: "Predictive & AI Intelligence", href: "/unit-manager/performance/predictive", icon: "🔮" }, // PA-007
+    { label: "Executive Reporting & Governance", href: "/unit-manager/performance/reporting", icon: "🧾" }, // PA-008
+    { label: "Performance Configuration",  href: "/unit-manager/performance/configuration", icon: "🔧" }, // PA-009
   ] },
   { title: "AI & Intelligence", items: [
     { label: "AI Unit Copilot",      href: "/unit-manager/ai", icon: "✨" },
