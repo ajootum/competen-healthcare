@@ -130,9 +130,9 @@ const NAV_GROUPS: { title: string; items: NavItem[] }[] = [
   // to their authoritative operational surface where one exists, else honest next-phase.
   { title: "Operational Command", items: [
     { label: "Command Dashboard",        href: "/unit-manager/ops-performance", icon: "🎛️" },        // OPC-001
-    { label: "Live Unit Status",         href: "/unit-manager/operations", icon: "🏥" },              // OPC-002
-    { label: "Capacity & Bed Coordination", href: "/unit-manager/patient-operations/beds", icon: "🛏️" }, // OPC-003
-    { label: "Staffing & Assignment Oversight", href: "/unit-manager/workforce-management/team-assignments", icon: "🧑‍⚕️" }, // OPC-004
+    { label: "Live Unit Status",         href: "/unit-manager/ops-command/live-status", icon: "🏥" },  // OPC-002
+    { label: "Capacity & Bed Coordination", href: "/unit-manager/ops-command/capacity", icon: "🛏️" },  // OPC-003
+    { label: "Staffing & Assignment Oversight", href: "/unit-manager/ops-command/staffing", icon: "🧑‍⚕️" }, // OPC-004
     { label: "Patient Flow Coordination", href: "/unit-manager/patient-operations", icon: "🔄" },      // OPC-005
     { label: "Safety & Escalation",      href: "/unit-manager/quality/incidents", icon: "🚨" },        // OPC-006
     { label: "Operational Action Manager", href: "/unit-manager/action-centre", icon: "✅" },          // OPC-007
