@@ -125,15 +125,22 @@ const NAV_GROUPS: { title: string; items: NavItem[] }[] = [
     { label: "Executive Command Centre", href: "/unit-manager/quality/analytics", icon: "📉" },
     { label: "AI Quality Intelligence", href: "/unit-manager/quality/ai", icon: "🤖" },
   ] },
-  { title: "Operations & Capacity", items: [
-    { label: "Performance Dashboard", href: "/unit-manager/ops-performance", icon: "📈" },
-    { label: "Capacity Dashboard",   href: "/unit-manager/operations", icon: "🏥" },
-    { label: "Equipment Readiness",  icon: "🩺", soon: true },
-    { label: "Resource Management",  icon: "📦", soon: true },
-    { label: "Stock & Consumables",  icon: "🧰", soon: true },
-    { label: "Budget Monitoring",    href: "/unit-manager/budget", icon: "💷" },
-    { label: "Operational Forecasting", icon: "🔮", soon: true },
-    { label: "Service Continuity",   icon: "♻️", soon: true },
+  // UMW-OPC-001..011 Operational Command Centre (updated architecture: real-time command/coordination/execution;
+  // AI & Config split out to UMW-AI / UMW-CFG). Command Dashboard is the real command-centre; other modules route
+  // to their authoritative operational surface where one exists, else honest next-phase.
+  { title: "Operational Command", items: [
+    { label: "Command Dashboard",        href: "/unit-manager/ops-performance", icon: "🎛️" },        // OPC-001
+    { label: "Live Unit Status",         href: "/unit-manager/operations", icon: "🏥" },              // OPC-002
+    { label: "Capacity & Bed Coordination", href: "/unit-manager/patient-operations/beds", icon: "🛏️" }, // OPC-003
+    { label: "Staffing & Assignment Oversight", href: "/unit-manager/workforce-management/team-assignments", icon: "🧑‍⚕️" }, // OPC-004
+    { label: "Patient Flow Coordination", href: "/unit-manager/patient-operations", icon: "🔄" },      // OPC-005
+    { label: "Safety & Escalation",      href: "/unit-manager/quality/incidents", icon: "🚨" },        // OPC-006
+    { label: "Operational Action Manager", href: "/unit-manager/action-centre", icon: "✅" },          // OPC-007
+    { label: "Shift Timeline & Handover", href: "/unit-manager/shift-intelligence", icon: "🕒" },      // OPC-008
+    { label: "Operational Forecasting",  icon: "🔮", soon: true },                                     // OPC-009
+    { label: "Operations Config & Rules", icon: "⚙️", soon: true },                                    // OPC-010 (→ UMW-CFG)
+    { label: "Audit, Reporting & Analytics", href: "/unit-manager/history-audit", icon: "📉" },        // OPC-011
+    { label: "Budget Monitoring",        href: "/unit-manager/budget", icon: "💷" },
   ] },
   { title: "Performance Analytics", items: [
     { label: "Unit Scorecard",       icon: "🏆", soon: true },
