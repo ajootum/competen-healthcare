@@ -1,5 +1,6 @@
 import { loadPaPredictive } from "@/lib/analytics/performance-modules";
 import { paGuard, Head, Tabs, Card, Kpi, Ring, Pill, Provision, Foot } from "../_ui";
+import AiCopilotPanel from "@/components/AiCopilotPanel";
 
 export const dynamic = "force-dynamic";
 
@@ -20,6 +21,7 @@ export default async function PredictivePage() {
   return (
     <div className="max-w-[1500px] space-y-4">
       {head}<Tabs active="007" />
+      <AiCopilotPanel endpoint="/api/performance/copilot" title="Predictive Performance — live copilot" sublabel="Grounded in your live balanced scorecard, KPI RAG status & trends · logged to the AI gateway" placeholder="Ask where you're off target, what's declining, what to prioritise…" prompts={["Performance briefing", "What's off target?", "What's trending down?", "Top improvement priorities"]} />
       {d.empty && <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-[12px] text-amber-800">No predictions seeded yet — the <code className="font-mono">pa_predictions</code> table returned empty. Re-run migration 108 + the seed to populate. The risk heatmap below is derived from live KPI RAG status.</div>}
 
       <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-7 gap-3">
@@ -68,7 +70,7 @@ export default async function PredictivePage() {
         </Card>
       </div>
 
-      <Foot>UMW-PA-007 — predictive intelligence over pa_predictions + the live KPI risk heatmap. Predictions/recommendations are seeded, explainable intents (with confidence + est. benefit); the risk heatmap is computed live from current KPI RAG status. Wiring a governed AI model + scenario simulation is the next phase.</Foot>
+      <Foot>UMW-PA-007 — predictive intelligence over pa_predictions + the live KPI risk heatmap, now paired with a <strong>live LLM copilot</strong> (top) wired to the real AI Runtime Gateway and grounded in the same balanced scorecard. The seeded predictions/recommendations below are explainable intents (confidence + est. benefit) and the heatmap is computed live from current KPI RAG status; the copilot adds natural-language analysis on demand and logs every call to the AI Services Platform (AIS-011 / AIS-008). Scenario simulation is the next phase.</Foot>
     </div>
   );
 }

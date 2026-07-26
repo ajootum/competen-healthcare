@@ -1,5 +1,6 @@
 import { loadAiOrchestrator } from "@/lib/priorities/modules";
 import { ppeGuard, Head, ModuleNav, Card, Stat, Pill, Provision, Foot } from "../_ui";
+import AiCopilotPanel from "@/components/AiCopilotPanel";
 
 export const dynamic = "force-dynamic";
 
@@ -19,6 +20,7 @@ export default async function AiOrchestratorPage() {
     <div className="max-w-[1400px] space-y-4">
       {head}
       <ModuleNav active="007" />
+      <AiCopilotPanel endpoint="/api/priorities/copilot" title="AI Priority Orchestrator — live copilot" sublabel="Grounded in your live objectives, priorities, weights & approvals · logged to the AI gateway" placeholder="Ask about conflicts, drift, alignment or capacity…" prompts={["Strategic priority briefing", "Where are we drifting?", "Any conflicting priorities?", "What's unmeasurable?"]} />
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         <Stat label="Recommendations" value={k.recommendations} sub="actionable" tone="text-teal-600" />
         <Stat label="Conflicts" value={k.conflicts} sub="competing priorities" tone={k.conflicts ? "text-amber-600" : undefined} />
@@ -39,7 +41,7 @@ export default async function AiOrchestratorPage() {
         ))}</div> : <p className="text-sm text-gray-400 py-8 text-center">No orchestration insights — the strategic model is healthy. ✅</p>}
       </Card>
 
-      <Foot>PPE-007 — intelligence over the framework. These are <strong>rule-based</strong> insights (conflict / drift / hygiene / capacity / governance), each traceable to the objective or priority that triggered it — deliberately explainable rather than an opaque model. Wiring an LLM copilot for natural-language strategy drafting &amp; summaries is the next phase; the acceptance-tracking loop needs a decisions store.</Foot>
+      <Foot>PPE-007 — intelligence over the framework. Two complementary layers: the <strong>rule-based</strong> insights below (conflict / drift / hygiene / capacity / governance), each traceable to the objective or priority that triggered it — deliberately explainable — and the <strong>live LLM copilot</strong> above, wired to the real AI Runtime Gateway and grounded in the same framework data for natural-language strategy briefings &amp; summaries. Every copilot call is logged to the AI Services Platform (AIS-011 Observability / AIS-008 Governance). The acceptance-tracking loop still needs a decisions store.</Foot>
     </div>
   );
 }

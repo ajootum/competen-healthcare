@@ -1,5 +1,6 @@
 import { loadAdmAi } from "@/lib/admin/admin-modules";
 import { admGuard, Head, Tabs, Card, Kpi, Ring, Pill, Provision, Foot } from "../_ui";
+import AiCopilotPanel from "@/components/AiCopilotPanel";
 
 export const dynamic = "force-dynamic";
 
@@ -15,9 +16,11 @@ export default async function AiAssistantPage() {
   if (!d.provisioned) return <div className="max-w-[1500px] space-y-4">{head}<Tabs active="009" /><Provision module="the AI Assistant" part="part 2" /></div>;
 
   const k = d.kpis;
+  const chips = (((d.prompts as string[]) ?? []).slice(0, 4));
   return (
     <div className="max-w-[1500px] space-y-4">
       {head}<Tabs active="009" />
+      <AiCopilotPanel endpoint="/api/administration/copilot" title="AI Administration Assistant — live copilot" sublabel="Grounded in your live documents, assets, changes, config & delegations · logged to the AI gateway" placeholder="Ask what needs attention across administration…" prompts={chips.length ? chips : ["Administration briefing", "What needs attention?", "Document & compliance risks", "Change approval backlog"]} />
       <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-7 gap-3">
         <div className="bg-white border border-gray-200 rounded-xl p-3.5 flex items-center gap-2"><Ring pct={k.avgConfidence} size={56} /><div><p className="text-[11px] text-gray-500 uppercase tracking-wide leading-tight">AI Confidence</p><p className="text-[11px] text-blue-600 font-medium">avg</p></div></div>
         <Kpi label="Recommendations" value={k.recommendations} sub={`${k.highImpact} high impact`} tone="text-blue-600" />
@@ -52,10 +55,10 @@ export default async function AiAssistantPage() {
             <div key={i} className="flex items-center gap-2 rounded-lg bg-gray-50 border border-gray-100 px-3 py-2"><span className="text-blue-500">✦</span><span className="text-[12px] text-gray-700">{p}</span></div>
           ))}
         </div>
-        <p className="text-[10px] text-gray-400 mt-2">Conversational administration wires an LLM copilot over the platform AI services (next phase) — with permission enforcement, human approval for privileged actions and mandatory explainability.</p>
+        <p className="text-[10px] text-gray-400 mt-2">These asks are now <strong>live</strong> — click any chip in the copilot above to run it against the real AI Runtime Gateway, grounded in this unit&apos;s administration data. Permission enforcement, human approval for privileged actions and mandatory explainability still apply; the copilot advises, it does not execute changes.</p>
       </Card>
 
-      <Foot>UMW-ADM-009 — AI administration over adm_ai_recommendations + adm_automations. Recommendations (explainable, with confidence + impact) and automations are real from the stores; the conversational NL copilot, knowledge retrieval and continuous-learning loop are the next integration phase. AI never bypasses permissions; privileged actions require approval.</Foot>
+      <Foot>UMW-ADM-009 — AI administration over adm_ai_recommendations + adm_automations, now with a <strong>live LLM copilot</strong> (top) wired to the real AI Runtime Gateway and grounded in the unit&apos;s documents, assets, changes, config, delegations &amp; capacity. Every copilot call logs to the AI Services Platform (AIS-011 Observability / AIS-008 Governance). The seeded recommendations (explainable, confidence + impact) and automations remain real from the stores; knowledge retrieval and the continuous-learning loop are the next phase. AI never bypasses permissions; privileged actions require approval.</Foot>
     </div>
   );
 }
