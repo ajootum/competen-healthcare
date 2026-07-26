@@ -13,6 +13,10 @@ export default function RoleSwitcher({ roles, activeRole, workspaces = [] }: {
   // Which dedicated workspace (if any) we're currently inside — matched by path,
   // so the trigger and the "Active" marker reflect where the user actually is.
   const activeWs = workspaces.find(w => pathname === w.href || pathname.startsWith(w.href + "/"));
+  // On the universal landing (/dashboard*) the active context IS the Personal Workspace itself — not the user's
+  // role portal — so present it as "Personal Workspace" for every account (matches ActiveContextBanner), rather
+  // than the role label (e.g. "Admin"). Role portals keep their own names since their paths aren't under /dashboard.
+  const onPersonal = pathname === "/dashboard" || pathname.startsWith("/dashboard/");
 
   // Nothing to switch between → render nothing.
   if (roles.length + workspaces.length <= 1) return null;
@@ -36,8 +40,8 @@ export default function RoleSwitcher({ roles, activeRole, workspaces = [] }: {
     setOpen(false);
   }
 
-  const currentIcon = activeWs ? activeWs.icon : ROLE_CONFIG[activeRole].icon;
-  const currentLabel = activeWs ? activeWs.label : ROLE_CONFIG[activeRole].label;
+  const currentIcon = activeWs ? activeWs.icon : onPersonal ? "🏠" : ROLE_CONFIG[activeRole].icon;
+  const currentLabel = activeWs ? activeWs.label : onPersonal ? "Personal Workspace" : ROLE_CONFIG[activeRole].label;
 
   return (
     <div className="relative">
@@ -57,7 +61,7 @@ export default function RoleSwitcher({ roles, activeRole, workspaces = [] }: {
             <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest px-3 pt-3 pb-1">Switch Portal</p>
             {roles.map(role => {
               const cfg = ROLE_CONFIG[role];
-              const isActive = role === activeRole && !activeWs;
+              const isActive = role === activeRole && !activeWs && !onPersonal;
               return (
                 <button
                   key={role}

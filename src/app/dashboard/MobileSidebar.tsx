@@ -73,7 +73,7 @@ export default function MobileSidebar({ fullName, role, isAdmin, unread = 0, ava
           <span className="w-7 h-7 rounded bg-teal-500 flex items-center justify-center text-white font-bold text-sm shrink-0">C</span>
           <span className="min-w-0">
             <span className="block text-white font-semibold text-sm leading-tight truncate">Competen</span>
-            <span className="block text-teal-400/60 text-[10px] leading-tight">Nurse Workspace</span>
+            <span className="block text-teal-400/60 text-[10px] leading-tight">Personal Workspace</span>
           </span>
         </Link>
         <span className="flex-1" />
