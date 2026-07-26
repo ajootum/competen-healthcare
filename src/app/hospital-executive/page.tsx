@@ -1,175 +1,123 @@
-import { createClient, createAdminClient } from "@/lib/supabase/server";
-import { redirect } from "next/navigation";
+import { hexGuard, Head, Stat, Card, Pill, Ring, Foot, T, ragPct } from "./_ui";
+import { loadExecHome } from "@/lib/hex/dashboard";
 import Link from "next/link";
-import { loadExecutiveDashboard } from "@/lib/executive-data";
 
 export const dynamic = "force-dynamic";
 
-// Hospital Executive Dashboard (HEX-001) — the 30-second enterprise view.
+// HEX-001 Executive Dashboard — the 30-second enterprise view aggregating all HEX domains.
 /* eslint-disable @typescript-eslint/no-explicit-any */
-
-const card = "bg-white rounded-xl border border-gray-200 p-5";
-const tone = (n: number | null) => (n == null ? "text-gray-300" : n >= 85 ? "text-green-600" : n >= 60 ? "text-amber-600" : "text-red-600");
-const barCls = (n: number) => (n >= 85 ? "bg-green-500" : n >= 60 ? "bg-amber-500" : "bg-red-500");
-const sevCls: Record<string, string> = {
-  high: "bg-red-50 border-red-200 text-red-700",
-  medium: "bg-amber-50 border-amber-200 text-amber-700",
-  low: "bg-gray-50 border-gray-200 text-gray-500",
-};
-const statusCls: Record<string, string> = {
-  active: "bg-teal-100 text-teal-700", measuring: "bg-blue-100 text-blue-700", planning: "bg-indigo-100 text-indigo-700",
-  completed: "bg-green-100 text-green-700", closed: "bg-gray-100 text-gray-500",
-};
-
-function Kpi({ n, label, tone: t, sub, href }: { n: any; label: string; tone?: string; sub?: string; href?: string }) {
-  const inner = (
-    <div className={`${card} ${href ? "hover:border-teal-300 transition-colors" : ""}`}>
-      <div className={`text-3xl font-bold tabular-nums ${t ?? "text-gray-900"}`}>{n}</div>
-      <div className="text-xs text-gray-500 mt-1">{label}</div>
-      {sub && <div className="text-[11px] text-gray-400 mt-0.5">{sub}</div>}
-    </div>
-  );
-  return href ? <Link href={href}>{inner}</Link> : inner;
-}
+const ST_TONE: Record<string, string> = { active: "emerald", planned: "slate", paused: "amber", completed: "blue", cancelled: "rose", measuring: "blue", planning: "indigo", closed: "slate" };
 
 export default async function ExecutiveDashboard() {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) redirect("/login");
-  const admin = createAdminClient() as any;
-  const { data: profile } = await admin.from("profiles").select("full_name, role, roles, hospital_id").eq("id", user.id).single();
-  const roles: string[] = (profile?.roles?.length ? profile.roles : [profile?.role]).filter(Boolean);
-  if (!roles.some(r => ["hospital_admin", "super_admin"].includes(r))) redirect("/dashboard");
-
-  const d = await loadExecutiveDashboard(admin, profile?.hospital_id ?? null, roles.includes("super_admin"));
-  const { hr, quality, scorecard, readinessIndex, risk, riskTotal, riskHigh, initiatives, initiativeStats } = d;
-  const { data: notifs } = await admin.from("notifications").select("title, created_at").eq("user_id", user.id).order("created_at", { ascending: false }).limit(5);
+  const { admin, isSuper, hid, fullName } = await hexGuard();
+  const d = await loadExecHome(admin, hid, isSuper);
+  const k = d.kpis, wf = d.workforce, sf = d.safety;
+  const pct = (v: any) => (v != null ? `${Math.round(Number(v))}%` : "—");
 
   return (
-    <div className="space-y-5">
-      <div>
-        <h1 className="text-2xl font-bold text-gray-900">Hospital Executive</h1>
-        <p className="text-sm text-gray-500 mt-1">Enterprise oversight — workforce, competency, quality, risk &amp; strategy in one lens · {profile?.full_name}</p>
+    <div className="space-y-4">
+      <Head title="Executive Dashboard" sub={`Enterprise oversight — performance, quality, risk & strategy in one view · ${fullName}`} action={{ label: "AI copilot →", href: "/hospital-executive/intelligence" }} />
+
+      <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
+        <Stat icon="🎯" tone={k.readiness != null ? ragPct(k.readiness) : "slate"} label="Organisational readiness" value={pct(k.readiness)} sub="composite index" />
+        <Stat icon="👥" tone="blue" label="Total workforce" value={k.workforce} />
+        <Stat icon="🩺" tone={k.quality != null ? ragPct(k.quality) : "slate"} label="Quality compliance" value={pct(k.quality)} />
+        <Stat icon="⚠️" tone={k.highRisks ? "rose" : "emerald"} label="High-severity risks" value={k.highRisks} />
+        <Stat icon="💼" tone={k.vacancies ? "amber" : "emerald"} label="Vacancies" value={k.vacancies} />
+        <Stat icon="🚀" tone="violet" label="Open initiatives" value={k.initiatives} />
       </div>
 
-      {/* Executive KPI cards */}
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
-        <Kpi n={readinessIndex == null ? "—" : `${readinessIndex}%`} label="Organisational readiness" tone={tone(readinessIndex)} sub="composite index" href="/hospital-executive/scorecard" />
-        <Kpi n={hr.headcount.total} label="Total workforce" sub={`${hr.headcount.nurse} clinical`} href="/human-resources" />
-        <Kpi n={quality.accreditationReadiness == null ? "—" : `${quality.accreditationReadiness}%`} label="Quality compliance" tone={tone(quality.accreditationReadiness)} sub={`${quality.audits.completed} audits`} href="/quality-accreditation" />
-        <Kpi n={riskHigh} label="High-severity risks" tone={riskHigh ? "text-red-600" : "text-gray-900"} sub={`${riskTotal} open items`} href="/hospital-executive/risk" />
-        <Kpi n={hr.positions.vacant} label="Vacancies" tone={hr.positions.vacant ? "text-amber-600" : "text-gray-900"} sub={`${d.fillRate}% established filled`} href="/human-resources/planning" />
-        <Kpi n={initiativeStats.active} label="Open initiatives" sub={`${initiativeStats.total} total`} href="/hospital-executive/strategy" />
-      </div>
-
-      <div className="grid lg:grid-cols-2 gap-5">
-        {/* Hospital performance scorecard + readiness index */}
-        <div className={card}>
-          <div className="flex items-baseline justify-between mb-3">
-            <h3 className="font-semibold text-gray-900">Hospital performance scorecard</h3>
-            {readinessIndex != null && <span className={`text-2xl font-bold tabular-nums ${tone(readinessIndex)}`}>{readinessIndex}%</span>}
-          </div>
-          <div className="space-y-3">
-            {scorecard.map((s) => (
-              <Link key={s.name} href={s.href} className="block group">
-                <div className="flex justify-between text-sm mb-1">
-                  <span className="text-gray-700 group-hover:text-teal-700">{s.name}</span>
-                  <span className={`font-medium ${tone(s.score)}`}>{s.score == null ? "—" : `${s.score}%`}</span>
-                </div>
-                <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
-                  <div className={`h-full ${s.score == null ? "bg-gray-200" : barCls(s.score)}`} style={{ width: `${s.score ?? 0}%` }} />
-                </div>
-                <p className="text-[11px] text-gray-400 mt-0.5">{s.detail}</p>
-              </Link>
-            ))}
-          </div>
-          <p className="text-[11px] text-gray-400 mt-3">Composite of the domains that have live data. Rows marked “—” have no records yet.</p>
-        </div>
-
-        {/* Risk heat map */}
-        <div className={card}>
-          <div className="flex items-baseline justify-between mb-3">
-            <h3 className="font-semibold text-gray-900">Enterprise risk heat map</h3>
-            <Link href="/hospital-executive/risk" className="text-xs text-teal-600 hover:underline">Full register →</Link>
+      <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
+        <Card title="Performance scorecard">
+          <div className="flex items-center gap-3 mb-3">
+            <Ring pct={k.readiness ?? 0} size={72} />
+            <div className="text-[11px] text-gray-500">Overall organisational readiness — a composite of the domains that have live data. Rows marked &ldquo;—&rdquo; have no records yet.</div>
           </div>
           <div className="space-y-2">
-            {risk.map((r) => (
-              <Link key={r.label} href={r.href} className={`flex items-center justify-between gap-3 border rounded-lg px-3 py-2 text-sm transition-colors ${r.count ? sevCls[r.severity] : "bg-gray-50 border-gray-200 text-gray-400"}`}>
-                <span className="flex items-center gap-2">
-                  <span className="text-[10px] font-semibold uppercase tracking-wide">{r.count ? r.severity : "clear"}</span>
-                  <span className={r.count ? "" : "text-gray-400"}>{r.label}</span>
-                </span>
-                <span className="text-base font-bold tabular-nums">{r.count}</span>
-              </Link>
-            ))}
-          </div>
-        </div>
-
-        {/* Workforce readiness index */}
-        <div className={card}>
-          <h3 className="font-semibold text-gray-900 mb-3">Workforce readiness</h3>
-          <div className="grid grid-cols-2 gap-3 text-sm">
-            <div className="flex justify-between"><span className="text-gray-500">Establishment fill</span><b className={`tabular-nums ${tone(hr.positions.establishment ? d.fillRate : null)}`}>{hr.positions.establishment ? `${d.fillRate}%` : "—"}</b></div>
-            <div className="flex justify-between"><span className="text-gray-500">Competency currency</span><b className={`tabular-nums ${tone(hr.competency.total ? hr.competency.coverage : null)}`}>{hr.competency.total ? `${hr.competency.coverage}%` : "—"}</b></div>
-            <div className="flex justify-between"><span className="text-gray-500">Learning compliance</span><b className={`tabular-nums ${tone(hr.learning.total ? hr.learning.compliance : null)}`}>{hr.learning.total ? `${hr.learning.compliance}%` : "—"}</b></div>
-            <div className="flex justify-between"><span className="text-gray-500">In onboarding</span><b className="tabular-nums">{hr.employment.orientation + hr.employment.probation}</b></div>
-            <div className="flex justify-between"><span className="text-gray-500">New starters (30d)</span><b className="tabular-nums text-teal-700">{hr.employment.newStarters}</b></div>
-            <div className="flex justify-between"><span className="text-gray-500">Established posts</span><b className="tabular-nums">{hr.positions.establishment}</b></div>
-          </div>
-          <Link href="/human-resources" className="mt-3 inline-block text-xs text-teal-600 hover:underline">Open Human Resources →</Link>
-        </div>
-
-        {/* Strategic initiative tracker */}
-        <div className={card}>
-          <div className="flex items-baseline justify-between mb-3">
-            <h3 className="font-semibold text-gray-900">Strategic initiatives</h3>
-            <Link href="/hospital-executive/strategy" className="text-xs text-teal-600 hover:underline">Strategy Centre →</Link>
-          </div>
-          {initiatives.length === 0 && <p className="text-sm text-gray-400">No improvement initiatives logged yet. Start one in the Quality &amp; Accreditation workspace.</p>}
-          <div className="space-y-1.5">
-            {initiatives.slice(0, 5).map((i, idx) => (
-              <div key={idx} className="flex items-center gap-2 text-sm">
-                <span className="text-gray-800 truncate flex-1">{i.title}</span>
-                <span className={`shrink-0 text-[10px] px-2 py-0.5 rounded-full ${statusCls[i.status] ?? "bg-gray-100 text-gray-500"}`}>{i.status.replace(/_/g, " ")}</span>
+            {d.scorecard.map((s: any, i: number) => (
+              <div key={i}>
+                <div className="flex items-center justify-between text-[12px] mb-1"><Link href={s.href} className="text-gray-700 hover:text-teal-700">{s.name}</Link><span className={`font-semibold tabular-nums ${s.score != null ? T(ragPct(s.score)).text : "text-gray-300"}`}>{s.score != null ? `${s.score}%` : "—"}</span></div>
+                <div className="h-1.5 rounded-full bg-gray-100 overflow-hidden"><div className={`h-full rounded-full ${s.score != null ? T(ragPct(s.score)).bar : ""}`} style={{ width: `${s.score ?? 0}%` }} /></div>
               </div>
             ))}
           </div>
-        </div>
+        </Card>
 
-        {/* Financial summary — honest: no finance source connected */}
-        <div className={`${card} border-dashed`}>
-          <h3 className="font-semibold text-gray-900 mb-1">Financial intelligence</h3>
-          <span className="inline-block text-[10px] font-semibold uppercase tracking-wider text-gray-400 bg-gray-50 border border-gray-200 rounded-full px-2.5 py-1 mb-2">Connect a finance system</span>
-          <p className="text-sm text-gray-400">Competen holds no financial ledgers, so revenue, cost and margin analytics activate when a finance/ERP system is integrated. Workforce establishment and vacancy — the people-cost drivers already on platform — are live in Workforce readiness above.</p>
-        </div>
+        <Card title="Enterprise risk" right={<Link href="/hospital-executive/risk" className="text-teal-600 hover:underline">Full register →</Link>}>
+          <div className="flex items-center gap-2 mb-3">
+            <span className={`text-3xl font-bold tabular-nums ${k.highRisks ? "text-rose-600" : "text-emerald-600"}`}>{k.highRisks}</span>
+            <span className="text-[12px] text-gray-500">high / extreme risks open on the register</span>
+          </div>
+          {d.topRisks.length ? <div className="space-y-1.5">{d.topRisks.map((r: any, i: number) => (
+            <div key={i} className="flex items-center gap-2 text-[12px]"><span className="text-gray-800 truncate flex-1">{r.title}</span><span className="text-gray-400 capitalize text-[10px]">{r.category}</span><span className="inline-flex items-center justify-center w-6 h-6 rounded text-[11px] font-bold" style={{ backgroundColor: T(r.score >= 15 ? "rose" : r.score >= 10 ? "amber" : "blue").hex + "22", color: T(r.score >= 15 ? "rose" : r.score >= 10 ? "amber" : "blue").hex }}>{r.score}</span></div>
+          ))}</div> : <p className="text-sm text-gray-400 py-2 text-center">No risks registered.</p>}
+        </Card>
 
-        {/* Notifications */}
-        <div className={card}>
-          <h3 className="font-semibold text-gray-900 mb-3">Notifications</h3>
-          {(notifs ?? []).length === 0 && <p className="text-sm text-gray-400">Nothing new.</p>}
-          <div className="space-y-1.5">
-            {(notifs ?? []).map((n: any, i: number) => (
-              <div key={i} className="flex items-center gap-2 text-sm"><span className="text-gray-800 truncate">{n.title}</span><span className="ml-auto text-xs text-gray-400">{new Date(n.created_at).toLocaleDateString()}</span></div>
+        <Card title="Strategic initiatives" right={<Link href="/hospital-executive/strategy" className="text-teal-600 hover:underline">Strategy →</Link>}>
+          {d.initiatives.length ? <div className="space-y-2">{d.initiatives.map((i: any, idx: number) => (
+            <div key={idx}>
+              <div className="flex items-center justify-between text-[12px] mb-0.5"><span className="text-gray-700 truncate pr-2">{i.title}</span>{i.progress != null ? <span className="font-medium text-gray-800 tabular-nums">{i.progress}%</span> : <Pill text={(i.status ?? "").replace(/_/g, " ")} tone={ST_TONE[i.status] ?? "slate"} />}</div>
+              {i.progress != null && <div className="h-1.5 rounded-full bg-gray-100 overflow-hidden"><div className="h-full rounded-full bg-teal-500" style={{ width: `${i.progress}%` }} /></div>}
+            </div>
+          ))}</div> : <p className="text-sm text-gray-400 py-4 text-center">No initiatives yet.</p>}
+        </Card>
+      </div>
+
+      <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
+        <Card title="Workforce readiness" right={<Link href="/hospital-executive/workforce" className="text-teal-600 hover:underline">Workforce →</Link>}>
+          <div className="flex items-center gap-3">
+            <Ring pct={wf.fill ?? 0} size={64} tone="blue" />
+            <div className="text-[12px] space-y-1 flex-1">
+              <div className="flex justify-between"><span className="text-gray-500">Establishment fill</span><b className="tabular-nums">{pct(wf.fill)}</b></div>
+              <div className="flex justify-between"><span className="text-gray-500">Competency currency</span><b className="tabular-nums">{pct(wf.competency)}</b></div>
+              <div className="flex justify-between"><span className="text-gray-500">Learning compliance</span><b className="tabular-nums">{pct(wf.learning)}</b></div>
+              <div className="flex justify-between"><span className="text-gray-500">Vacancies</span><b className="tabular-nums">{wf.vacant}</b></div>
+            </div>
+          </div>
+        </Card>
+
+        <Card title="Quality & safety overview" right={<Link href="/hospital-executive/quality" className="text-teal-600 hover:underline">Quality →</Link>}>
+          <div className="grid grid-cols-2 gap-2 text-[12px]">
+            {[["Patient safety index", sf.index != null ? `${sf.index}%` : "—"], ["Patient safety events", sf.pse ?? "—"], ["Medication errors", sf.medErrors ?? "—"], ["Infection rate", sf.infection != null ? `${sf.infection}%` : "—"], ["Mortality index", sf.mortality ?? "—"], ["Readmissions (30d)", sf.readmission != null ? `${sf.readmission}%` : "—"]].map(([l, v]: any, i: number) => (
+              <div key={i} className="border border-gray-100 rounded-lg px-2.5 py-1.5"><p className="text-[10px] text-gray-400 leading-tight">{l}</p><p className="text-sm font-semibold text-gray-800 tabular-nums">{v}</p></div>
             ))}
           </div>
-        </div>
+        </Card>
+
+        <Card title="Financial snapshot" right={<Link href="/hospital-executive/financial" className="text-teal-600 hover:underline">Financial →</Link>}>
+          <div className="flex flex-col items-center justify-center py-5 text-center">
+            <span className="text-2xl mb-1">💷</span>
+            <p className="text-[12px] text-gray-500">Operating finance connects when ready.</p>
+            <p className="text-[10px] text-gray-400 mt-1">Cost-centre budget vs actual is live in the Financial module; revenue, expenditure and cash flow require a finance-system integration (not fabricated).</p>
+          </div>
+        </Card>
       </div>
 
-      {/* Quick actions */}
-      <div className={card}>
-        <h3 className="font-semibold text-gray-900 mb-3">Quick actions</h3>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-sm">
-          {[["🧠 Executive Command Center", "/admin/executive"], ["📊 Performance scorecard", "/hospital-executive/scorecard"], ["⚠️ Enterprise risk", "/hospital-executive/risk"], ["🎯 Strategy Centre", "/hospital-executive/strategy"], ["👥 Human Resources", "/human-resources"], ["🎯 Quality & Accreditation", "/quality-accreditation"], ["🏛️ Competency Office", "/competency-office"], ["📄 Reports", "/hospital-executive/reports"]].map(([label, href]) => (
-            <Link key={href} href={href} className="border border-gray-200 rounded-lg px-3 py-2 text-gray-700 hover:border-teal-300 hover:text-teal-700 transition-colors">{label}</Link>
-          ))}
-        </div>
+      <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
+        <Card title="AI executive summary" className="xl:col-span-2">
+          <div className="bg-gradient-to-br from-violet-50 to-blue-50 border border-violet-100 rounded-lg p-3">
+            <p className="text-[13px] text-gray-800 leading-relaxed">
+              Organisational readiness is {pct(k.readiness)}{d.objProgress != null ? `, with strategic objectives averaging ${d.objProgress}% progress` : ""}.
+              {k.highRisks ? ` ${k.highRisks} high/extreme risk${k.highRisks > 1 ? "s are" : " is"} open` : " Enterprise risk is within tolerance"}
+              {d.action.overdueCapa ? ` and ${d.action.overdueCapa} corrective action${d.action.overdueCapa > 1 ? "s are" : " is"} overdue.` : "."}
+              {d.action.criticalFindings ? ` ${d.action.criticalFindings} critical quality finding${d.action.criticalFindings > 1 ? "s need" : " needs"} attention.` : ""}
+            </p>
+            <Link href="/hospital-executive/intelligence" className="mt-2 inline-block text-[12px] font-medium text-violet-700 hover:underline">Open the live executive copilot →</Link>
+          </div>
+          <p className="text-[10px] text-gray-400 mt-2">At-a-glance rule-based summary; the Executive Intelligence centre runs a real LLM grounded in this data.</p>
+        </Card>
+
+        <Card title="Executive action centre">
+          <div className="space-y-2 text-[12.5px]">
+            <Link href="/hospital-executive/quality" className="flex items-center justify-between border border-gray-100 rounded-lg px-3 py-2 hover:border-teal-300"><span className="text-gray-600">Critical quality findings</span><b className={`tabular-nums ${d.action.criticalFindings ? "text-rose-600" : "text-gray-900"}`}>{d.action.criticalFindings}</b></Link>
+            <Link href="/quality-accreditation/improvements" className="flex items-center justify-between border border-gray-100 rounded-lg px-3 py-2 hover:border-teal-300"><span className="text-gray-600">Overdue corrective actions</span><b className={`tabular-nums ${d.action.overdueCapa ? "text-rose-600" : "text-gray-900"}`}>{d.action.overdueCapa}</b></Link>
+            <Link href="/hospital-executive/risk" className="flex items-center justify-between border border-gray-100 rounded-lg px-3 py-2 hover:border-teal-300"><span className="text-gray-600">High / extreme risks</span><b className={`tabular-nums ${d.action.highRisks ? "text-amber-600" : "text-gray-900"}`}>{d.action.highRisks}</b></Link>
+            <Link href="/hospital-executive/workforce" className="flex items-center justify-between border border-gray-100 rounded-lg px-3 py-2 hover:border-teal-300"><span className="text-gray-600">Vacant established roles</span><b className={`tabular-nums ${d.action.vacancies ? "text-amber-600" : "text-gray-900"}`}>{d.action.vacancies}</b></Link>
+          </div>
+        </Card>
       </div>
 
-      {/* AI executive insights — later phase */}
-      <div className={`${card} border-dashed`}>
-        <h3 className="font-semibold text-gray-900 mb-1">AI Executive Advisor</h3>
-        <p className="text-sm text-gray-400">Board-narrative generation, scenario modelling and strategic recommendations arrive in a later HEX phase. The readiness, quality, risk and initiative signals it reasons over are already live above.</p>
-      </div>
+      <Foot>HEX-001 — the executive command centre, aggregating the HR + Quality scorecard (<code>loadExecutiveDashboard</code>), strategic initiatives &amp; objectives (<code>ppe_*</code>), the risk register (<code>gov_risks</code>) and the latest quality/ops snapshots. Every figure is live, tenant-scoped, and reconciles with its owning module (each panel links through). Operating finance is shown as connect-when-ready, never fabricated.</Foot>
     </div>
   );
 }
