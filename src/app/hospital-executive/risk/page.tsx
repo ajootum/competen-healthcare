@@ -1,79 +1,94 @@
-import { createClient, createAdminClient } from "@/lib/supabase/server";
-import { redirect } from "next/navigation";
+import { hexGuard, Head, Tabs, Stat, Card, Pill, Donut, Legend, Trend, Foot, T } from "../_ui";
+import { loadExecRisk } from "@/lib/hex/risk";
 import Link from "next/link";
-import { loadExecutiveDashboard } from "@/lib/executive-data";
 
 export const dynamic = "force-dynamic";
 
-// Enterprise Risk (HEX-007) — the executive risk register, derived from open
-// corrective actions, audit findings, competency lapses and vacancies.
+// HEX-008 Enterprise Risk Management (executive lens) over the real risk register.
 /* eslint-disable @typescript-eslint/no-explicit-any */
+const TABS = ["Risk Dashboard", "Risk Register", "Heat Maps", "Risk Categories", "Mitigations", "Analytics", "Scenario Planning", "Business Continuity", "Reports"];
+const IMPACT = ["Insignificant", "Minor", "Moderate", "Major", "Catastrophic"];
+const LIKELI: Record<number, string> = { 5: "Almost certain", 4: "Likely", 3: "Possible", 2: "Unlikely", 1: "Rare" };
+const ST_TONE: Record<string, string> = { open: "amber", mitigating: "blue", accepted: "emerald", escalated: "rose", closed: "slate" };
 
-const card = "bg-white rounded-xl border border-gray-200 p-5";
-const sev: Record<string, { chip: string; dot: string; label: string }> = {
-  high: { chip: "bg-red-50 border-red-200", dot: "bg-red-500", label: "text-red-700" },
-  medium: { chip: "bg-amber-50 border-amber-200", dot: "bg-amber-500", label: "text-amber-700" },
-  low: { chip: "bg-gray-50 border-gray-200", dot: "bg-gray-300", label: "text-gray-500" },
-};
-
-export default async function EnterpriseRisk() {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) redirect("/login");
-  const admin = createAdminClient() as any;
-  const { data: profile } = await admin.from("profiles").select("role, roles, hospital_id").eq("id", user.id).single();
-  const roles: string[] = (profile?.roles?.length ? profile.roles : [profile?.role]).filter(Boolean);
-  if (!roles.some(r => ["hospital_admin", "super_admin"].includes(r))) redirect("/dashboard");
-
-  const d = await loadExecutiveDashboard(admin, profile?.hospital_id ?? null, roles.includes("super_admin"));
-  const { risk, riskTotal, riskHigh } = d;
-  const active = risk.filter(r => r.count > 0);
-  const clear = risk.filter(r => r.count === 0);
+export default async function ExecRiskPage() {
+  const { admin, isSuper, hid } = await hexGuard();
+  const d = await loadExecRisk(admin, hid, isSuper);
+  const head = <Head code="HEX-008 · Hospital Executive" title="Enterprise Risk Management" sub="Enterprise risk intelligence — monitor, predict, mitigate." action={{ label: "AI Risk Advisor →", href: "/hospital-executive/intelligence" }} />;
+  if (!d.provisioned) return <div className="space-y-4">{head}<Tabs tabs={TABS} active="Risk Dashboard" /><Card><p className="text-sm text-gray-400">The risk register (<code>gov_risks</code>) is not provisioned yet.</p></Card></div>;
+  const r = d.r, k = r.kpis;
+  const ctrlTotal = r.ctrlEff.reduce((s: number, e: any) => s + e.value, 0);
+  const ctrlEffective = r.ctrlEff.filter((e: any) => ["effective", "partially effective"].includes(e.label)).reduce((s: number, e: any) => s + e.value, 0);
+  const ctrlPct = ctrlTotal ? Math.round((ctrlEffective / ctrlTotal) * 100) : null;
 
   return (
-    <div className="space-y-5">
-      <div>
-        <h1 className="text-2xl font-bold text-gray-900">Enterprise Risk</h1>
-        <p className="text-sm text-gray-500 mt-1">Open, actionable risks across quality, competency and workforce — each drills into its source.</p>
+    <div className="space-y-4">
+      {head}
+      <Tabs tabs={TABS} active="Risk Dashboard" />
+
+      <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-7 gap-3">
+        <Stat icon="🎯" tone={d.scoreTone} label="Enterprise risk score" value={d.score} sub={d.scoreBand} />
+        <Stat icon="🔴" tone="rose" label="High & extreme" value={k.extreme + k.high} sub={`${k.extreme} extreme`} />
+        <Stat icon="⏰" tone={d.mitigation.overdue ? "rose" : "emerald"} label="Overdue mitigations" value={d.mitigation.overdue} sub={`of ${d.mitigation.total} actions`} />
+        <Stat icon="🛡️" tone={d.appetite ? "amber" : "emerald"} label="Above appetite" value={d.appetite} sub="high/extreme" />
+        <Stat icon="📈" tone="violet" label="Emerging risks" value={d.emerging.length} sub="last 60 days" />
+        <Stat icon="✓" tone="teal" label="Control effectiveness" value={ctrlPct != null ? `${ctrlPct}%` : "—"} sub={`${k.controls} controls`} />
+        <Stat icon="📋" tone="blue" label="Total risks" value={k.total} sub="active register" />
       </div>
 
-      <div className="grid grid-cols-3 gap-3">
-        <div className={card}><div className="text-3xl font-bold tabular-nums text-gray-900">{riskTotal}</div><div className="text-xs text-gray-500 mt-1">Open risk items</div></div>
-        <div className={card}><div className={`text-3xl font-bold tabular-nums ${riskHigh ? "text-red-600" : "text-gray-900"}`}>{riskHigh}</div><div className="text-xs text-gray-500 mt-1">High severity</div></div>
-        <div className={card}><div className="text-3xl font-bold tabular-nums text-green-600">{clear.length}</div><div className="text-xs text-gray-500 mt-1">Categories clear</div></div>
-      </div>
-
-      <div className={card}>
-        <h3 className="font-semibold text-gray-900 mb-3">Risk register</h3>
-        {active.length === 0 && <p className="text-sm text-green-700">✅ No open risks across the tracked categories.</p>}
-        <div className="space-y-2">
-          {active.map((r) => {
-            const s = sev[r.severity];
-            return (
-              <Link key={r.label} href={r.href} className={`flex items-center gap-3 border rounded-lg px-4 py-3 hover:shadow-sm transition-shadow ${s.chip}`}>
-                <span className={`w-2.5 h-2.5 rounded-full ${s.dot}`} />
-                <span className="text-sm text-gray-800 flex-1">{r.label}</span>
-                <span className={`text-[10px] font-semibold uppercase tracking-wide ${s.label}`}>{r.severity}</span>
-                <span className="text-lg font-bold tabular-nums text-gray-900 w-10 text-right">{r.count}</span>
-                <span className="text-gray-300">→</span>
-              </Link>
-            );
-          })}
-        </div>
-      </div>
-
-      {clear.length > 0 && (
-        <div className={card}>
-          <h3 className="font-semibold text-gray-900 mb-3">Clear</h3>
-          <div className="flex flex-wrap gap-2">
-            {clear.map((r) => (
-              <span key={r.label} className="text-xs text-gray-500 bg-gray-50 border border-gray-200 rounded-full px-3 py-1">✓ {r.label}</span>
-            ))}
+      <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
+        <Card title="Enterprise risk heat map" className="xl:col-span-2" right="likelihood × impact">
+          <div className="overflow-x-auto">
+            <div className="min-w-[440px]">
+              <div className="flex"><div className="w-24 shrink-0" /><div className="flex-1 grid grid-cols-5 gap-1">{IMPACT.map(im => <div key={im} className="text-[9px] text-gray-400 text-center leading-tight">{im}</div>)}</div></div>
+              {r.heat.map((row: any) => (
+                <div key={row.likelihood} className="flex items-center mt-1">
+                  <div className="w-24 shrink-0 text-[10px] text-gray-500 text-right pr-2">{LIKELI[row.likelihood]}</div>
+                  <div className="flex-1 grid grid-cols-5 gap-1">{row.cells.map((c: any) => <div key={c.impact} className="h-9 rounded flex items-center justify-center text-[13px] font-bold tabular-nums" style={{ backgroundColor: T(c.tone).hex + (c.count ? "26" : "12"), color: c.count ? T(c.tone).hex : "#cbd5e1" }}>{c.count}</div>)}</div>
+                </div>
+              ))}
+              <div className="flex mt-1"><div className="w-24 shrink-0" /><div className="flex-1 text-center text-[9px] text-gray-400 uppercase tracking-wide">Impact →</div></div>
+            </div>
           </div>
-        </div>
-      )}
+          <div className="flex gap-3 mt-2">{r.bandLegend.map((b: any) => <span key={b.label} className="flex items-center gap-1 text-[11px]"><span className="w-2.5 h-2.5 rounded-sm" style={{ backgroundColor: T(b.tone).hex }} />{b.label} ({b.value})</span>)}</div>
+        </Card>
 
-      <p className="text-[11px] text-gray-400">Risk categories are derived live from the Quality &amp; Accreditation, Competency and Human Resources workspaces. A dedicated enterprise risk-register module (owned risks with likelihood × impact scoring) is a later HEX phase.</p>
+        <Card title="Top risks" right="by inherent score">
+          <div className="space-y-1.5">
+            {r.topRisks.map((risk: any, i: number) => (
+              <div key={i} className="flex items-center gap-2 text-[12px]">
+                <span className="text-gray-400 tabular-nums w-4">{i + 1}</span>
+                <span className="text-gray-800 truncate flex-1">{risk.title}</span>
+                <span className="inline-flex items-center justify-center w-6 h-6 rounded text-[11px] font-bold" style={{ backgroundColor: T(risk.tone).hex + "22", color: T(risk.tone).hex }}>{risk.score}</span>
+                <Pill text={risk.status} tone={ST_TONE[risk.status] ?? "slate"} />
+              </div>
+            ))}
+            {!r.topRisks.length && <p className="text-sm text-gray-400 py-4 text-center">No risks registered.</p>}
+          </div>
+        </Card>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+        <Card title="Risks by category"><div className="flex items-center gap-2"><Donut segments={r.byCategory} total={k.total} label="Risks" size={118} /><Legend items={r.byCategory.slice(0, 6).map((c: any) => ({ label: c.label, value: c.value, tone: c.tone }))} /></div></Card>
+        <Card title="Risks by level"><div className="flex items-center gap-2"><Donut segments={r.bandLegend} total={k.total} label="Risks" size={118} /><Legend items={r.bandLegend.filter((b: any) => b.value).map((b: any) => ({ label: b.label, value: b.value, tone: b.tone }))} /></div></Card>
+        <Card title="Mitigation status"><div className="flex items-center gap-2"><Donut segments={d.mitigation.donut} total={d.mitigation.total} label="Actions" size={118} /><Legend items={d.mitigation.donut.filter((m: any) => m.value).map((m: any) => ({ label: m.label, value: m.value, tone: m.tone }))} /></div></Card>
+        <Card title="Control effectiveness">{r.ctrlEff.some((e: any) => e.value) ? <Legend items={r.ctrlEff.filter((e: any) => e.value).map((e: any) => ({ label: e.label, value: e.value, tone: e.tone }))} /> : <p className="text-sm text-gray-400 py-4 text-center">No controls registered.</p>}</Card>
+      </div>
+
+      <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
+        <Card title="Risk trend" className="xl:col-span-2" right="high-risk, last 6 months">
+          {r.trend.length >= 2 ? <><Trend points={r.trend.map((t: any) => t.value)} labels={r.trend.map((t: any) => t.label)} tone="rose" /><p className="text-[10px] text-gray-400 text-center mt-1">Open high/extreme risks per month (daily snapshots).</p></> : <p className="text-sm text-gray-400 py-8 text-center">Not enough snapshot history yet.</p>}
+        </Card>
+
+        <Card title="Top emerging risks" right="last 60 days">
+          {d.emerging.length ? <div className="space-y-2">{d.emerging.map((e: any, i: number) => (
+            <div key={i} className="flex items-center gap-2 text-[12px]"><div className="min-w-0 flex-1"><p className="text-gray-800 truncate">{e.title}</p><p className="text-[10px] text-gray-400 capitalize">{e.category} · {e.when}</p></div><span className="tabular-nums font-semibold text-gray-700">{e.score}</span></div>
+          ))}</div> : <p className="text-sm text-gray-400 py-6 text-center">No new risks in the last 60 days.</p>}
+          <p className="text-[10px] text-gray-400 mt-2"><Link href="/hospital-executive/intelligence" className="text-teal-600 hover:underline">Ask the AI Risk Advisor →</Link></p>
+        </Card>
+      </div>
+
+      <Foot>HEX-008 — executive lens over the real risk register (<code>gov_risks</code> + <code>gov_controls</code>). Heat map, top risks, category/level mix, control effectiveness and the high-risk trend are live and tenant-scoped; the enterprise risk score is a transparent weighted composite of the band distribution, mitigation status reads the corrective-action queue (<code>capa_actions</code>), and emerging risks are the register&apos;s newest entries. Risk-appetite thresholds and scenario/business-continuity modules are the next build phase.</Foot>
     </div>
   );
 }

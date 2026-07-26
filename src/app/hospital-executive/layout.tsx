@@ -13,16 +13,19 @@ import { workspaceLinksForUser } from "@/lib/workspace-links";
 // readiness, quality, risk, strategy and executive reporting in one lens.
 
 const NAV = [
-  { label: "Executive Dashboard",     href: "/hospital-executive",             icon: "🛰️", exact: true },
-  { label: "Executive Intelligence",  href: "/hospital-executive/intelligence", icon: "🧠" },
-  { label: "Workforce Intelligence",  href: "/hospital-executive/workforce",   icon: "👥" },
-  { label: "Financial Intelligence",  href: "/hospital-executive/financial",   icon: "💷" },
-  { label: "Organisational Performance", href: "/hospital-executive/scorecard", icon: "📊" },
-  { label: "Strategy Centre",         href: "/hospital-executive/strategy",    icon: "🎯" },
-  { label: "Enterprise Risk",         href: "/hospital-executive/risk",        icon: "⚠️" },
-  { label: "Executive Reports",       href: "/hospital-executive/reports",     icon: "📄" },
-  { label: "AI Executive Advisor",    href: "/hospital-executive/ai",          icon: "✨" },
-  { label: "Settings",                href: "/hospital-executive/settings",    icon: "⚙️" },
+  { label: "Executive Dashboard",      href: "/hospital-executive",               icon: "🛰️", exact: true },
+  { label: "Executive Intelligence",   href: "/hospital-executive/intelligence",  icon: "🧠" },
+  { label: "Performance Centre",       href: "/hospital-executive/performance",   icon: "📊" },
+  { label: "Workforce Intelligence",   href: "/hospital-executive/workforce",     icon: "👥" },
+  { label: "Financial Intelligence",   href: "/hospital-executive/financial",     icon: "💷" },
+  { label: "Operations Intelligence",  href: "/hospital-executive/operations",    icon: "🏥" },
+  { label: "Quality & Governance",     href: "/hospital-executive/quality",       icon: "🩺" },
+  { label: "Enterprise Risk",          href: "/hospital-executive/risk",          icon: "⚠️" },
+  { label: "Strategy & Transformation", href: "/hospital-executive/strategy",     icon: "🎯" },
+  { label: "Collaboration & Governance", href: "/hospital-executive/collaboration", icon: "🤝" },
+  { label: "Reports & Board Papers",   href: "/hospital-executive/reports",       icon: "📄" },
+  { label: "AI Executive Advisor",     href: "/hospital-executive/ai",            icon: "✨" },
+  { label: "Executive Configuration",  href: "/hospital-executive/administration", icon: "⚙️" },
 ];
 
 const ALLOWED = ["hospital_admin", "super_admin"];
