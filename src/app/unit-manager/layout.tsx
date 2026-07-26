@@ -133,9 +133,9 @@ const NAV_GROUPS: { title: string; items: NavItem[] }[] = [
     { label: "Live Unit Status",         href: "/unit-manager/ops-command/live-status", icon: "🏥" },  // OPC-002
     { label: "Capacity & Bed Coordination", href: "/unit-manager/ops-command/capacity", icon: "🛏️" },  // OPC-003
     { label: "Staffing & Assignment Oversight", href: "/unit-manager/ops-command/staffing", icon: "🧑‍⚕️" }, // OPC-004
-    { label: "Patient Flow Coordination", href: "/unit-manager/patient-operations", icon: "🔄" },      // OPC-005
-    { label: "Safety & Escalation",      href: "/unit-manager/quality/incidents", icon: "🚨" },        // OPC-006
-    { label: "Operational Action Manager", href: "/unit-manager/action-centre", icon: "✅" },          // OPC-007
+    { label: "Patient Flow Coordination", href: "/unit-manager/ops-command/patient-flow", icon: "🔄" }, // OPC-005
+    { label: "Safety & Escalation",      href: "/unit-manager/ops-command/safety", icon: "🚨" },        // OPC-006
+    { label: "Operational Action Manager", href: "/unit-manager/ops-command/actions", icon: "✅" },     // OPC-007
     { label: "Shift Timeline & Handover", href: "/unit-manager/shift-intelligence", icon: "🕒" },      // OPC-008
     { label: "Operational Forecasting",  icon: "🔮", soon: true },                                     // OPC-009
     { label: "Operations Config & Rules", icon: "⚙️", soon: true },                                    // OPC-010 (→ UMW-CFG)
