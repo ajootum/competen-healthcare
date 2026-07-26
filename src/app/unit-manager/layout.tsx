@@ -23,7 +23,7 @@ const SECTION_CFG: Record<string, string> = {
   "Operations & Capacity": "unit-manager.operations-capacity",
   "Performance Analytics": "unit-manager.analytics",
   "AI & Intelligence": "unit-manager.ai",
-  "Administration & Tools": "unit-manager.admin",
+  "Administration & Configuration": "unit-manager.admin",
 };
 const ITEM_CFG: Record<string, string> = {
   "Unit Operations Centre": "unit-manager.unit-command.operations-centre",
@@ -163,14 +163,19 @@ const NAV_GROUPS: { title: string; items: NavItem[] }[] = [
     { label: "Predictive Analytics", icon: "🔮", soon: true },
     { label: "Executive Recommendations", icon: "💡", soon: true },
   ] },
-  { title: "Administration & Tools", items: [
-    { label: "Team Communications",  icon: "💬", soon: true },
-    { label: "Reports & Exports",    href: "/unit-manager/reports", icon: "🧾" },
-    { label: "Policies & Documents", icon: "📄", soon: true },
-    { label: "Templates & Forms",    icon: "🗒️", soon: true },
-    { label: "Unit Configuration",   icon: "🔧", soon: true },
-    { label: "Workspace Settings",   href: "/unit-manager/settings", icon: "⚙️" },
-    { label: "Activity Log",         icon: "📜", soon: true },
+  // UMW-ADM-001..009 Administration & Configuration — no-code unit admin over adm_* stores (migrations 109/110),
+  // reusing op_beds / departments / positions / break_glass for structure & governance.
+  { title: "Administration & Configuration", items: [
+    { label: "Admin Dashboard",       href: "/unit-manager/administration", icon: "🗂️", exact: true },        // ADM-001
+    { label: "Unit Structure",        href: "/unit-manager/administration/structure", icon: "🏛️" },           // ADM-002
+    { label: "Policies & Documents",  href: "/unit-manager/administration/documents", icon: "📄" },            // ADM-003
+    { label: "Resources & Assets",    href: "/unit-manager/administration/assets", icon: "🖥️" },              // ADM-004
+    { label: "Forms & Registers",     href: "/unit-manager/administration/forms", icon: "📋" },                // ADM-005
+    { label: "Configuration Centre",  href: "/unit-manager/administration/configuration", icon: "🔧" },        // ADM-006
+    { label: "Permissions & Governance", href: "/unit-manager/administration/governance", icon: "🛡️" },       // ADM-007
+    { label: "Audit & Change Management", href: "/unit-manager/administration/change", icon: "🕓" },           // ADM-008
+    { label: "AI Administration Assistant", href: "/unit-manager/administration/ai-assistant", icon: "🤖" },   // ADM-009
+    { label: "Workspace Settings",    href: "/unit-manager/settings", icon: "⚙️" },
   ] },
 ];
 
