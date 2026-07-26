@@ -2,6 +2,7 @@ import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { cookies } from "next/headers";
 import Link from "next/link";
+import ScopeFilter from "@/components/ScopeFilter";
 
 // Shared presentational + guard kit for the Quality & Accreditation Workspace (QAW-000..014).
 // Pure server-safe components (static SVG charts, cards, pills) so every module renders the same
@@ -22,9 +23,13 @@ export async function qaGuard() {
   const roles: string[] = (profile?.roles?.length ? profile.roles : [profile?.role]).filter(Boolean);
   if (!roles.some(r => ALLOWED.includes(r))) redirect("/dashboard");
   const cookieStore = await cookies();
-  const hospitalCookie = cookieStore.get("active_hospital")?.value ?? null;
-  const isSuper = roles.includes("super_admin");
-  const hid = profile?.hospital_id ?? hospitalCookie ?? null;
+  const selected = cookieStore.get("active_hospital")?.value ?? null;
+  const isSuperRole = roles.includes("super_admin");
+  // super_admin may scope to a chosen hospital (or "all"); everyone else is fixed to their own hospital.
+  let hid: string | null, isSuper: boolean;
+  if (isSuperRole && selected && selected !== "all") { hid = selected; isSuper = false; }
+  else if (isSuperRole) { hid = null; isSuper = true; }
+  else { hid = profile?.hospital_id ?? null; isSuper = false; }
   return { admin, user, profile, roles, isSuper, hid, fullName: profile?.full_name ?? "Quality lead" };
 }
 
@@ -44,8 +49,8 @@ export const TONE: Record<string, { text: string; chip: string; dot: string; bar
 export const T = (k?: string) => TONE[k ?? "slate"] ?? TONE.slate;
 export const ragPct = (n: number) => (n >= 85 ? "emerald" : n >= 60 ? "amber" : "rose");
 
-// ── Page header with title, sub, optional right-hand primary action + a display-only period chip.
-export function Head({ title, code, sub, period, action }: { title: string; code?: string; sub?: string; period?: string; action?: { label: string; href: string } }) {
+// ── Page header with title, sub, a real hospital-scope filter (ScopeFilter) + optional primary action.
+export function Head({ title, code, sub, action }: { title: string; code?: string; sub?: string; action?: { label: string; href: string } }) {
   return (
     <div className="flex flex-wrap items-start justify-between gap-3">
       <div className="min-w-0">
@@ -54,7 +59,7 @@ export function Head({ title, code, sub, period, action }: { title: string; code
         {sub && <p className="text-sm text-gray-500 mt-1 max-w-3xl">{sub}</p>}
       </div>
       <div className="flex items-center gap-2 shrink-0">
-        <span className="hidden sm:inline-flex items-center gap-1.5 text-[12px] text-gray-500 border border-gray-200 rounded-lg px-2.5 py-1.5 bg-white">📅 {period ?? "This month"}</span>
+        <ScopeFilter />
         {action && <Link href={action.href} className="text-sm font-medium text-white bg-teal-600 hover:bg-teal-700 rounded-lg px-3.5 py-1.5">{action.label}</Link>}
       </div>
     </div>

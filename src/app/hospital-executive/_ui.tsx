@@ -21,8 +21,12 @@ export async function hexGuard() {
   const roles: string[] = (profile?.roles?.length ? profile.roles : [profile?.role]).filter(Boolean);
   if (!roles.some(r => ALLOWED.includes(r))) redirect("/dashboard");
   const cookieStore = await cookies();
-  const hospitalCookie = cookieStore.get("active_hospital")?.value ?? null;
-  const isSuper = roles.includes("super_admin");
-  const hid = profile?.hospital_id ?? hospitalCookie ?? null;
+  const selected = cookieStore.get("active_hospital")?.value ?? null;
+  const isSuperRole = roles.includes("super_admin");
+  // super_admin may scope to a chosen hospital (or "all"); everyone else is fixed to their own hospital.
+  let hid: string | null, isSuper: boolean;
+  if (isSuperRole && selected && selected !== "all") { hid = selected; isSuper = false; }
+  else if (isSuperRole) { hid = null; isSuper = true; }
+  else { hid = profile?.hospital_id ?? null; isSuper = false; }
   return { admin, user, profile, roles, isSuper, hid, fullName: profile?.full_name ?? "Executive" };
 }
