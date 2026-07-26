@@ -98,6 +98,7 @@ const AI_NAV = [
     { label: "4. Enterprise Intelligence", href: "/super-admin/ai/enterprise", icon: "🏢" },
     { label: "5. AI Studio & Automation", href: "/super-admin/ai/studio", icon: "🛠️" },
     { label: "6. Intelligence Analytics", href: "/super-admin/ai/analytics", icon: "📈" },
+    { label: "7. AI Services Platform", href: "/super-admin/ai/services", icon: "🛰️" },
   ]},
   { group: "QUICK ACCESS", items: [
     { label: "AI Assistant Chat", href: "/super-admin/assistant", icon: "💬" },
