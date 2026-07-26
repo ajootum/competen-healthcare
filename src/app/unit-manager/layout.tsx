@@ -140,7 +140,6 @@ const NAV_GROUPS: { title: string; items: NavItem[] }[] = [
     { label: "Operational Forecasting",  href: "/unit-manager/ops-command/forecasting", icon: "🔮" },   // OPC-009
     { label: "Operations Config & Rules", href: "/unit-manager/ops-command/config-rules", icon: "⚙️" }, // OPC-010 (→ UMW-CFG)
     { label: "Audit, Reporting & Analytics", href: "/unit-manager/ops-command/analytics", icon: "📉" }, // OPC-011
-    { label: "Budget Monitoring",        href: "/unit-manager/budget", icon: "💷" },
   ] },
   { title: "Performance Analytics", items: [
     { label: "Unit Scorecard",       icon: "🏆", soon: true },
