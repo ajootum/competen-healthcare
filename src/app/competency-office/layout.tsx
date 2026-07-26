@@ -22,6 +22,21 @@ const NAV = [
   { label: "Validation Queue",      href: "/competency-office/validation",   icon: "✅" },
   { label: "Competency Analytics",  href: "/competency-office/analytics",    icon: "📈" },
   { label: "Competency Frameworks", href: "/competency-office/frameworks",   icon: "🗂️" },
+  // CMO-008..020 expansion — gap/planning/assignment + certifications/privileging/review + standards/publishing/
+  // accreditation/config + AI/readiness/forecasting. Over cmo_* stores (migrations 114/115) + reused competency_*.
+  { label: "Gap Management",        href: "/competency-office/gaps",          icon: "🕳️" },   // CMO-008
+  { label: "Enterprise Planning",   href: "/competency-office/planning",      icon: "🗺️" },   // CMO-009
+  { label: "Assignment Centre",     href: "/competency-office/assignments",   icon: "🧩" },    // CMO-010
+  { label: "Certification Manager", href: "/competency-office/certifications", icon: "📜" },   // CMO-011
+  { label: "Clinical Privileging",  href: "/competency-office/privileging",   icon: "🏥" },    // CMO-012
+  { label: "Review Board",          href: "/competency-office/review-board",  icon: "⚖️" },    // CMO-013
+  { label: "Standards Library",     href: "/competency-office/standards",     icon: "📚" },    // CMO-014
+  { label: "Publishing Centre",     href: "/competency-office/publishing",    icon: "🚀" },    // CMO-015
+  { label: "Accreditation Mapping", href: "/competency-office/accreditation", icon: "🏅" },    // CMO-016
+  { label: "AI Intelligence",       href: "/competency-office/ai-intelligence", icon: "🤖" },  // CMO-017
+  { label: "Workforce Readiness",   href: "/competency-office/readiness",     icon: "🎯" },    // CMO-018
+  { label: "Forecasting",           href: "/competency-office/forecasting",   icon: "🔮" },    // CMO-019
+  { label: "Configuration & Rules", href: "/competency-office/configuration", icon: "🔧" },    // CMO-020
 ];
 
 // Quick-actions rail (§5) — cross-links to the authoritative surface for each action.
