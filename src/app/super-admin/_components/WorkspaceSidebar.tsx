@@ -41,6 +41,16 @@ const GENERAL_NAV = [
     { label: "Control Plane", href: "/super-admin/platform-ops/control-plane", icon: "🧭" },
     { label: "Platform Workspace", href: "/platform-admin", icon: "🛰️" },
   ]},
+  { group: "STRATEGY & PRIORITIES", items: [
+    { label: "Strategy Manager", href: "/super-admin/priorities", icon: "🎯" },
+    { label: "Priority Distribution", href: "/super-admin/priorities/distribution", icon: "🌊" },
+    { label: "Goal → Action", href: "/super-admin/priorities/actions", icon: "⚡" },
+    { label: "Personalisation", href: "/super-admin/priorities/personalisation", icon: "🧩" },
+    { label: "Campaigns", href: "/super-admin/priorities/campaigns", icon: "📣" },
+    { label: "Priority Analytics", href: "/super-admin/priorities/analytics", icon: "📊" },
+    { label: "AI Orchestrator", href: "/super-admin/priorities/ai", icon: "🧠" },
+    { label: "Governance", href: "/super-admin/priorities/governance", icon: "✅" },
+  ]},
   { group: "CLINICAL KNOWLEDGE PLATFORM", items: [
     { label: "Open CKP →", href: "/super-admin/ckp", icon: "📚" },
   ]},
