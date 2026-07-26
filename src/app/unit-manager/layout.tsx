@@ -136,10 +136,10 @@ const NAV_GROUPS: { title: string; items: NavItem[] }[] = [
     { label: "Patient Flow Coordination", href: "/unit-manager/ops-command/patient-flow", icon: "🔄" }, // OPC-005
     { label: "Safety & Escalation",      href: "/unit-manager/ops-command/safety", icon: "🚨" },        // OPC-006
     { label: "Operational Action Manager", href: "/unit-manager/ops-command/actions", icon: "✅" },     // OPC-007
-    { label: "Shift Timeline & Handover", href: "/unit-manager/shift-intelligence", icon: "🕒" },      // OPC-008
-    { label: "Operational Forecasting",  icon: "🔮", soon: true },                                     // OPC-009
-    { label: "Operations Config & Rules", icon: "⚙️", soon: true },                                    // OPC-010 (→ UMW-CFG)
-    { label: "Audit, Reporting & Analytics", href: "/unit-manager/history-audit", icon: "📉" },        // OPC-011
+    { label: "Shift Timeline & Handover", href: "/unit-manager/ops-command/handover", icon: "🕒" },     // OPC-008
+    { label: "Operational Forecasting",  href: "/unit-manager/ops-command/forecasting", icon: "🔮" },   // OPC-009
+    { label: "Operations Config & Rules", href: "/unit-manager/ops-command/config-rules", icon: "⚙️" }, // OPC-010 (→ UMW-CFG)
+    { label: "Audit, Reporting & Analytics", href: "/unit-manager/ops-command/analytics", icon: "📉" }, // OPC-011
     { label: "Budget Monitoring",        href: "/unit-manager/budget", icon: "💷" },
   ] },
   { title: "Performance Analytics", items: [

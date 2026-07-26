@@ -22,8 +22,8 @@ const asg = await q(db.from("op_patient_assignments").select("competency_validat
 const equip = await q(db.from("op_equipment").select("status").eq("hospital_id", H));
 const safety = await q(db.from("op_safety_alerts").select("category, severity, active").eq("hospital_id", H));
 const esc = await q(db.from("op_escalations").select("status, severity").eq("hospital_id", H));
-const snaps = await q(db.from("op_ops_snapshots").select("*").eq("hospital_id", H).eq("period_type", "day").order("period"));
-const cur = snaps[snaps.length - 1] ?? {};
+const snaps = await q(db.from("op_ops_snapshots").select("*").eq("hospital_id", H).order("period"));
+const cur = snaps.filter((s) => s.period_type === "day").at(-1) ?? {};
 
 const totalBeds = beds.length, occ = beds.filter((b) => b.status === "occupied").length;
 const occupancy = pct(occ, totalBeds);
@@ -51,4 +51,16 @@ console.log(`  role mix ............ ${JSON.stringify(roles)}`);
 console.log(`  active assignments .. ${asg.length}  (validated ${asg.filter((a) => a.competency_validated).length})`);
 console.log(`  absent .............. ${staff.filter((s) => s.status === "absent").length}`);
 
-console.log("\n✅ ops-modules mirror ran clean.");
+const icu = beds.filter((b) => b.bed_type === "critical_care");
+const dailySnaps = snaps.filter((s) => s.period_type === "day");
+const monthlySnaps = snaps.filter((s) => s.period_type === "month");
+const mn = (a) => (a.length ? Math.round(a.reduce((x, y) => x + (Number(y) || 0), 0) / a.length) : 0);
+console.log("\nOPC-009 Forecasting:");
+console.log(`  Daily history ....... ${dailySnaps.length}d  avg occ ${mn(dailySnaps.map((s) => s.occupancy_pct))}%`);
+console.log(`  ICU (critical_care) . ${icu.filter((b) => b.status === "occupied").length}/${icu.length} occupied`);
+
+console.log("\nOPC-011 Audit & Analytics:");
+console.log(`  Total admissions .... ${dailySnaps.reduce((a, s) => a + (s.admissions || 0), 0)}  discharges ${dailySnaps.reduce((a, s) => a + (s.discharges || 0), 0)}`);
+console.log(`  Monthly snapshots ... ${monthlySnaps.length}`);
+
+console.log("\n✅ ops-modules mirror ran clean (OPC-002/003/004/009/011).");
