@@ -1,5 +1,6 @@
 import { fetchCmoSuite } from "@/lib/competency/cmo-suite";
 import { cmoGuard, Head, Card, Kpi, Bars, Pill, Provision, Foot } from "../_cmo-ui";
+import CmoCopilot from "./CmoCopilot";
 
 export const dynamic = "force-dynamic";
 
@@ -22,6 +23,7 @@ export default async function AiIntelligencePage() {
   return (
     <div className="max-w-[1400px] space-y-4">
       {head}
+      <CmoCopilot />
       <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-3">
         <Kpi label="Recommendations" value={recs.length} sub="actionable" tone="text-teal-600" />
         <Kpi label="High Impact" value={highImpact.length} sub="prioritised" tone={highImpact.length ? "text-rose-600" : undefined} />
@@ -47,7 +49,7 @@ export default async function AiIntelligencePage() {
         </Card>
       </div>
 
-      <Foot>CMO-017 — AI competency intelligence over cmo_ai_recommendations (gap / risk / readiness / certification / privileging / planning). Recommendations are explainable, confidence-scored insights over the competency data; wiring a governed LLM copilot (via the AI Services Platform) and the acceptance/feedback loop are the next phase.</Foot>
+      <Foot>CMO-017 — AI competency intelligence: the <strong>live copilot</strong> above calls the real AI Runtime Gateway (src/lib/ai/client.ts generate()) grounded in your competency data, and every call is logged to plat_ai_requests → visible in the AI Services Platform (AIS-011 Observability, AIS-008 Governance). The confidence-scored cards below are the standing rule-based signals over cmo_ai_recommendations. If AI isn&apos;t configured (no ANTHROPIC_API_KEY) the copilot degrades gracefully and these remain. Acceptance/feedback loop is the next phase.</Foot>
     </div>
   );
 }
