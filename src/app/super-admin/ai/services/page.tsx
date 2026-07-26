@@ -13,15 +13,15 @@ const MODULE_MAP: [string, string, string, string][] = [
   ["001", "Global Copilot Platform", "live", "Copilot routes (/api/copilot) + AI Runtime Gateway"],
   ["002", "Context Resolution Engine", "backend", "Runtime: signed context assembly (src/lib/ai/*)"],
   ["003", "Knowledge & Semantic Search", "backend", "RAG: embeddings + vector index (+ source registry P3)"],
-  ["004", "Skills & Plugin Framework", "phase2", "Skill registry (P2) + invocation sandbox (backend)"],
-  ["005", "Action & Workflow Orchestrator", "phase2", "Registry (P2) + execution runtime (backend)"],
-  ["006", "Recommendation & Prediction", "live", "adm_ai_recommendations + pa_predictions + PPE AI"],
-  ["007", "Prompt & Conversation", "phase2", "Prompt/persona registry (P2)"],
+  ["004", "Skills & Plugin Framework", "live", "Phase 2: ais_skills registry (+ invocation sandbox backend)"],
+  ["005", "Action & Workflow Orchestrator", "phase3", "Registry + execution runtime (backend)"],
+  ["006", "Recommendation & Prediction", "live", "Phase 2: aggregation over adm_ai_recommendations + pa_predictions"],
+  ["007", "Prompt & Conversation", "live", "Phase 2: ais_prompt_templates + ais_personas"],
   ["008", "Governance & Explainability", "phase3", "Policy + audit console (P3); gateway tracks refusals"],
-  ["009", "Model Mgmt & Provider Abstraction", "live", "Phase 1 — this: ais_providers / ais_models registry"],
-  ["010", "Configuration & No-Code", "phase2", "Composes with WCE + ai/config (P2)"],
-  ["011", "Observability, Testing & Eval", "live", "Phase 1 — this: plat_ai_requests telemetry (+ eval P3)"],
-  ["012", "Agent Framework", "phase2", "Agent registry (P2) + execution runtime (backend)"],
+  ["009", "Model Mgmt & Provider Abstraction", "live", "Phase 1: ais_providers / ais_models registry"],
+  ["010", "Configuration & No-Code", "live", "Phase 2: ais_config (+ composes with WCE)"],
+  ["011", "Observability, Testing & Eval", "live", "Phase 1: plat_ai_requests telemetry (+ eval P3)"],
+  ["012", "Agent Framework", "live", "Phase 2: ais_agents registry (+ execution runtime backend)"],
 ];
 const MOD_TONE: Record<string, { pill: string; dot: string; label: string }> = { live: { pill: "emerald", dot: "bg-emerald-500", label: "Live" }, phase2: { pill: "amber", dot: "bg-amber-500", label: "Phase 2" }, phase3: { pill: "blue", dot: "bg-blue-500", label: "Phase 3" }, backend: { pill: "slate", dot: "bg-gray-400", label: "Backend epic" } };
 

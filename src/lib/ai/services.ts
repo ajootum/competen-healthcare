@@ -80,3 +80,77 @@ export async function loadAiObservability(admin: any) {
 
   return { provisioned: true as const, summary: gov.summary, byModel: gov.byModel, byOperation: gov.byOperation, byTier: gov.byTier, recent: gov.recent, trend, windowRows: rows.length };
 }
+
+const mean = (a: number[]) => (a.length ? Math.round(a.reduce((x, y) => x + y, 0) / a.length) : 0);
+const groupN = (rows: any[], key: string) => Object.entries(rows.reduce((acc: Record<string, number>, r) => { const k = r[key] ?? "other"; acc[k] = (acc[k] ?? 0) + 1; return acc; }, {})).map(([label, n]) => ({ label, n: n as number })).sort((a, b) => b.n - a.n);
+
+// ── AIS-007 Prompt & Conversation Framework (prompt templates + personas) ──
+export async function loadAiPrompts(admin: any) {
+  const [tplRes, persRes] = await Promise.all([soft(admin.from("ais_prompt_templates").select("*").order("usage", { ascending: false })), soft(admin.from("ais_personas").select("*"))]);
+  if (tplRes.error && missing(tplRes.error)) return { provisioned: false as const };
+  const templates = (tplRes.data ?? []) as any[]; const personas = (persRes.data ?? []) as any[];
+  return {
+    provisioned: true as const, templates, personas,
+    kpis: { templates: templates.length, active: templates.filter(t => t.status === "active").length, personas: personas.length, usage: templates.reduce((a, t) => a + Number(t.usage || 0), 0), workspaces: new Set(templates.map(t => t.workspace).filter(Boolean)).size },
+    byCategory: groupN(templates, "category"), byWorkspace: groupN(templates, "workspace"),
+  };
+}
+
+// ── AIS-004 Skills & Plugin Framework ──
+export async function loadAiSkills(admin: any) {
+  const res = await soft(admin.from("ais_skills").select("*").order("invocations", { ascending: false }));
+  if (res.error && missing(res.error)) return { provisioned: false as const };
+  const skills = (res.data ?? []) as any[];
+  return {
+    provisioned: true as const, skills,
+    kpis: { total: skills.length, active: skills.filter(s => s.status === "active").length, write: skills.filter(s => s.scope === "write").length, needApproval: skills.filter(s => s.requires_approval).length, external: skills.filter(s => s.category === "external").length, invocations: skills.reduce((a, s) => a + Number(s.invocations || 0), 0) },
+    byCategory: groupN(skills, "category"),
+  };
+}
+
+// ── AIS-012 Agent Framework ──
+export async function loadAiAgents(admin: any) {
+  const res = await soft(admin.from("ais_agents").select("*").order("runs", { ascending: false }));
+  if (res.error && missing(res.error)) return { provisioned: false as const };
+  const agents = (res.data ?? []) as any[];
+  return {
+    provisioned: true as const, agents,
+    kpis: { total: agents.length, active: agents.filter(a => a.status === "active").length, act: agents.filter(a => a.autonomy === "act").length, runs: agents.reduce((a, x) => a + Number(x.runs || 0), 0), workspaces: new Set(agents.map(a => a.workspace).filter(Boolean)).size, avgSkills: agents.length ? Math.round(agents.reduce((a, x) => a + (x.skills?.length ?? 0), 0) / agents.length) : 0 },
+    byAutonomy: [["assist", agents.filter(a => a.autonomy === "assist").length], ["suggest", agents.filter(a => a.autonomy === "suggest").length], ["act", agents.filter(a => a.autonomy === "act").length]].map(([label, n]) => ({ label, n })).filter(x => (x.n as number) > 0),
+  };
+}
+
+// ── AIS-010 Configuration & No-Code ──
+export async function loadAiConfig(admin: any) {
+  const res = await soft(admin.from("ais_config").select("*").order("category"));
+  if (res.error && missing(res.error)) return { provisioned: false as const };
+  const items = (res.data ?? []) as any[];
+  const CATS = ["copilot", "model", "safety", "routing", "feature", "knowledge"];
+  return {
+    provisioned: true as const, items,
+    kpis: { total: items.length, active: items.filter(i => i.status === "active").length, inherited: items.filter(i => i.source === "inherited").length, local: items.filter(i => i.source === "local").length, categories: new Set(items.map(i => i.category)).size },
+    byCategory: CATS.map(c => ({ category: c, items: items.filter(i => i.category === c) })).filter(g => g.items.length),
+  };
+}
+
+// ── AIS-006 Recommendation & Prediction Engine (aggregate the platform's REAL AI rec/prediction data) ──
+export async function loadAiRecommendations(admin: any) {
+  const [admRes, paRes] = await Promise.all([
+    soft(admin.from("adm_ai_recommendations").select("title, detail, category, confidence, impact, status")),
+    soft(admin.from("pa_predictions").select("title, detail, kind, confidence, risk, impact, horizon, benefit")),
+  ]);
+  const adm = (admRes.data ?? []).map((r: any) => ({ source: "Administration", kind: "recommendation", title: r.title, detail: r.detail, category: r.category, confidence: Number(r.confidence || 0), impact: r.impact, status: r.status }));
+  const pa = (paRes.data ?? []).map((r: any) => ({ source: "Performance", kind: r.kind, title: r.title, detail: r.detail, category: r.kind, confidence: Number(r.confidence || 0), impact: r.impact ?? r.risk, benefit: Number(r.benefit || 0), horizon: r.horizon }));
+  const all = [...adm, ...pa];
+  if (!all.length) return { provisioned: true as const, hasData: false, all: [] };
+  return {
+    provisioned: true as const, hasData: true,
+    kpis: {
+      total: all.length, recommendations: all.filter(r => r.kind === "recommendation").length, predictions: all.filter(r => r.kind === "prediction").length,
+      risks: all.filter(r => r.kind === "risk" || r.impact === "high").length, avgConfidence: mean(all.map(r => r.confidence).filter(Boolean)),
+      benefit: pa.reduce((a: number, r: any) => a + (r.benefit || 0), 0), highImpact: all.filter(r => r.impact === "high").length,
+    },
+    bySource: groupN(all, "source"), byKind: groupN(all, "kind"),
+    top: [...all].sort((a, b) => b.confidence - a.confidence).slice(0, 12),
+  };
+}
