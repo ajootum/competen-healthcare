@@ -1,5 +1,8 @@
 import { ogsGuard, Head, Stat, Card, Pill, Donut, Legend, Table, Foot, T } from "../_ui";
 import { loadOgsDelegation } from "@/lib/ogs/delegation";
+import DelegateForm from "./DelegateForm";
+
+const NONE = "00000000-0000-0000-0000-000000000000";
 
 export const dynamic = "force-dynamic";
 
@@ -16,6 +19,10 @@ export default async function OgsDelegationCentre() {
   if (!d.provisioned) return <div className="space-y-4">{head}<Card><p className="text-sm text-gray-400">The delegation store (<code>adm_delegations</code>) is not provisioned yet. Once its migration is applied, this module lights up with live delegations and authority coverage.</p></Card></div>;
   const k = d.kpis;
 
+  const peopleQ = admin.from("profiles").select("id, full_name, role").order("full_name").limit(500);
+  const { data: peopleRows } = await (isSuper ? peopleQ : peopleQ.eq("hospital_id", hid ?? NONE));
+  const people = ((peopleRows ?? []) as any[]).map(p => ({ id: p.id, full_name: p.full_name, role: p.role }));
+
   return (
     <div className="space-y-4">
       {head}
@@ -27,6 +34,8 @@ export default async function OgsDelegationCentre() {
         <Stat icon="🛡️" tone={k.authorityCoverage != null && k.authorityCoverage >= 85 ? "emerald" : "amber"} label="Authority coverage" value={k.authorityCoverage != null ? `${k.authorityCoverage}%` : "—"} sub="active offices chaired" />
         <Stat icon="📋" tone="indigo" label="Total delegations" value={k.totalDelegations} sub="all statuses" />
       </div>
+
+      <DelegateForm people={people} scopeHid={hid} isSuper={isSuper} />
 
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
         <Card title="Office authority structure" className="xl:col-span-2" right="chair = full authority">
