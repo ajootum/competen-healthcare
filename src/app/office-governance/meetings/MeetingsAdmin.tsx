@@ -15,7 +15,7 @@ type AgendaItem = { id: string; seq: number; title: string; description: string 
 type Sig = { signerName: string | null; signerRole: string | null; signedAt: string | null };
 type Decision = { id: string; title: string; description: string | null; decisionType: string; outcome: string; votesFor: number; votesAgainst: number; votesAbstain: number; decidedAt: string | null; recordedByName: string | null; signatures: Sig[] };
 type Action = { id: string; title: string; ownerName: string | null; dueDate: string | null; status: string };
-type Meeting = { id: string; officeId: string; officeName: string; title: string; meetingType: string; scheduledAt: string | null; location: string | null; status: string; requiredQuorum: number; chairedByName: string | null; minutes: string | null; heldAt: string | null; attendance: Attendee[]; invited: number; present: number; quorumMet: boolean; agenda: AgendaItem[]; decisions: Decision[]; actions: Action[] };
+type Meeting = { id: string; officeId: string; officeName: string; title: string; meetingType: string; scheduledAt: string | null; location: string | null; status: string; requiredQuorum: number; chairedByName: string | null; minutes: string | null; heldAt: string | null; attendance: Attendee[]; invited: number; present: number; quorumMet: boolean; agenda: AgendaItem[]; decisions: Decision[]; actions: Action[]; minutesSignatures: Sig[] };
 type Call = (url: string, method: string, body?: any) => Promise<any>;
 
 const M_TONE: Record<string, string> = { scheduled: "bg-blue-100 text-blue-700", in_progress: "bg-amber-100 text-amber-700", held: "bg-emerald-100 text-emerald-700", cancelled: "bg-gray-200 text-gray-600" };
@@ -196,7 +196,7 @@ function MeetingDetail({ meeting: m, people, busy, call, refresh }: { meeting: M
       {/* Minutes */}
       {(m.status === "in_progress" || m.status === "held") && (
         <div className="bg-white rounded-lg border border-gray-100 p-2.5">
-          <p className="text-[11px] font-semibold text-gray-600 mb-1.5">Minutes</p>
+          <div className="flex items-center justify-between mb-1.5"><p className="text-[11px] font-semibold text-gray-600">Minutes</p><OgsSignButton entityType="minutes" entityId={m.id} signatures={m.minutesSignatures} /></div>
           <textarea className={`${inp} w-full`} rows={2} value={minutes} onChange={e => setMinutes(e.target.value)} placeholder="Meeting minutes / summary" />
           <div className="flex justify-end mt-1"><button disabled={busy} onClick={saveMinutes} className="text-[12px] bg-gray-800 text-white rounded-lg px-3 py-1 disabled:opacity-40">Save minutes</button></div>
         </div>

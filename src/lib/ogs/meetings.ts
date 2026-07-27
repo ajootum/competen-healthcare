@@ -46,6 +46,17 @@ export async function loadOgsMeetings(admin: any, hid: string | null, isSuper: b
   const sigByDec = new Map<string, any[]>();
   decSigs.forEach(s => { const a = sigByDec.get(s.entity_id) ?? []; a.push(s); sigByDec.set(s.entity_id, a); });
 
+  // Signatures on meeting minutes (entity_id = meeting id; fail-soft).
+  let minSigs: any[] = [];
+  for (let i = 0; i < ids.length; i += 200) {
+    if (!ids.length) break;
+    const { data, error } = await admin.from("ogs_signatures").select("entity_id, signer_name, signer_role, signed_at").eq("entity_type", "minutes").in("entity_id", ids.slice(i, i + 200)).limit(20000);
+    if (error) break;
+    minSigs = minSigs.concat(data ?? []);
+  }
+  const sigByMeeting = new Map<string, any[]>();
+  minSigs.forEach(s => { const a = sigByMeeting.get(s.entity_id) ?? []; a.push(s); sigByMeeting.set(s.entity_id, a); });
+
   const group = (rows: any[]) => { const m = new Map<string, any[]>(); rows.forEach(r => { const a = m.get(r.meeting_id) ?? []; a.push(r); m.set(r.meeting_id, a); }); return m; };
   const attBy = group(attAll), agBy = group(agAll), decBy = group(decAll), actBy = group(actAll);
 
@@ -62,6 +73,7 @@ export async function loadOgsMeetings(admin: any, hid: string | null, isSuper: b
       requiredQuorum, chairedByName: m.chaired_by_name, minutes: m.minutes, heldAt: m.held_at,
       attendance: att, invited: att.length, present, quorumMet: present >= requiredQuorum,
       agenda, decisions, actions,
+      minutesSignatures: (sigByMeeting.get(m.id) ?? []).map(s => ({ signerName: s.signer_name, signerRole: s.signer_role, signedAt: s.signed_at })),
     };
   });
 

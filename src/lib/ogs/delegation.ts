@@ -64,6 +64,7 @@ export async function loadOgsDelegation(admin: any, hid: string | null, isSuper:
 
   // Delegation register — active first, then scheduled / expired / revoked. Type derived from valid_to.
   const delegationRows = del.map(d => ({
+    id: d.id,
     position: d.position ?? "—",
     delegate: nameOf(d.delegate_id),
     delegatedBy: nameOf(d.delegated_by),

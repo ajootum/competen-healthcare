@@ -1,6 +1,7 @@
 import { ogsGuard, Head, Stat, Card, Pill, Donut, Legend, Table, Foot, T } from "../_ui";
 import { loadOgsDelegation } from "@/lib/ogs/delegation";
 import DelegateForm from "./DelegateForm";
+import RevokeButton from "./RevokeButton";
 
 const NONE = "00000000-0000-0000-0000-000000000000";
 
@@ -76,7 +77,7 @@ export default async function OgsDelegationCentre() {
             <Pill key="t" text={r.type} tone={r.type === "Permanent" ? "indigo" : "amber"} />,
             <span key="vf" className="tabular-nums text-gray-500">{r.validFrom}</span>,
             <span key="vt" className="tabular-nums text-gray-500">{r.validTo}</span>,
-            <Pill key="s" text={r.status} tone={STATUS_TONE[r.status] ?? "slate"} />,
+            <span key="s" className="inline-flex items-center"><Pill text={r.status} tone={STATUS_TONE[r.status] ?? "slate"} /><RevokeButton id={r.id} status={r.status} /></span>,
           ])}
           empty="No delegations recorded."
         />
