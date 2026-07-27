@@ -65,6 +65,10 @@ export async function POST(req: Request) {
   // 4) Immutable constituting transition.
   await c.admin.from("ogs_lifecycle_transitions").insert({ office_id: office.id, from_state: null, to_state: status, reason: `Office constituted${activate ? " and activated" : " (proposed)"}`, actor_name: actor });
 
+  // 5) Activation-readiness snapshot at constitution (audit artifact; fail-soft until migration 121).
+  const hasCharter = !!clean(b.purpose), hasChair = !!chairId, hasQuorum = quorum > 0, ready = hasCharter && hasChair && hasQuorum;
+  await c.admin.from("ogs_activation_checklist").insert({ office_id: office.id, hospital_id: hospitalId, has_name: true, has_charter: hasCharter, has_chair: hasChair, has_quorum: hasQuorum, ready, activated: activate, created_by: c.userId });
+
   await c.admin.from("audit_log").insert({ actor_id: c.userId, actor_name: actor, action: "constitute_office", entity_type: "ogs_office", entity_id: office.id, hospital_id: hospitalId, new_value: { name, office_type: officeType, status } });
   return NextResponse.json(office, { status: 201 });
 }

@@ -41,6 +41,9 @@ export default async function OfficeDetailPage({ params }: { params: Promise<{ i
   const { data: transRows } = await admin.from("ogs_lifecycle_transitions").select("from_state, to_state, reason, actor_name, occurred_at").eq("office_id", id).order("occurred_at", { ascending: false }).limit(50);
   const transitions = (transRows ?? []) as any[];
 
+  // Activation-readiness snapshot (fail-soft — table exists once migration 121 is applied).
+  const { data: checklist } = await admin.from("ogs_activation_checklist").select("has_name, has_charter, has_chair, has_quorum, ready, activated, created_at").eq("office_id", id).order("created_at", { ascending: false }).limit(1).maybeSingle();
+
   return (
     <div className="space-y-4">
       <Head code="OGS-001 · Office Governance System" title={office.name} sub={`${office.officeType} office · ${office.scopeType} scope · ${office.authoritySource ?? "authority not set"}`} action={{ label: "Manage →", href: "/office-governance/offices" }} />
@@ -53,6 +56,18 @@ export default async function OfficeDetailPage({ params }: { params: Promise<{ i
         <Stat icon="📌" tone={openActions ? "amber" : "emerald"} label="Open actions" value={openActions} />
         <Stat icon="📜" tone="teal" label="Charter versions" value={office.charters.length} />
       </div>
+
+      {checklist && (
+        <Card title="Activation readiness" right="at constitution">
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[12px]">
+            {([["Name", checklist.has_name], ["Charter", checklist.has_charter], ["Chair", checklist.has_chair], ["Quorum", checklist.has_quorum]] as [string, boolean][]).map(([label, ok]) => (
+              <span key={label} className="inline-flex items-center gap-1"><span className={ok ? "text-emerald-600" : "text-rose-500"}>{ok ? "✓" : "✕"}</span><span className="text-gray-600">{label}</span></span>
+            ))}
+            <span className="ml-auto"><Pill text={checklist.ready ? (checklist.activated ? "Activated" : "Ready") : "Constituted below gate"} tone={checklist.ready ? "emerald" : "amber"} /></span>
+          </div>
+          <p className="text-[10px] text-gray-400 mt-1.5">Readiness snapshot recorded when the office was constituted{checklist.created_at ? ` on ${fmtDate(checklist.created_at)}` : ""}.</p>
+        </Card>
+      )}
 
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
         <Card title="Charter" className="xl:col-span-2" right={current ? <Pill text={`${current.version} · ${current.approvalStatus}`} tone={CH_TONE[current.approvalStatus] ?? "slate"} /> : undefined}>
