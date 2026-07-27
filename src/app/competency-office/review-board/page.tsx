@@ -1,61 +1,82 @@
-import { fetchCmoSuite, pct } from "@/lib/competency/cmo-suite";
-import { cmoGuard, Head, Card, Kpi, Donut, Bars, Provision, Foot } from "../_cmo-ui";
+import { loadCmoReview } from "@/lib/competency/cmo-governance";
+import { cmoGuard, Head, Card, Kpi, Bars, Pill, Provision, Foot } from "../_cmo-ui";
+import Link from "next/link";
 
 export const dynamic = "force-dynamic";
 
-// CMO-013 Competency Review Board — governance over competency decisions (appeals, escalations, sign-off). Lens over
-// the competency_decisions spine (the authoritative decision outcomes).
+// COMP-011 Review & Approval Centre — multi-stage governance review of competencies submitted from
+// Competency Studio (technical → clinical → governance → approval), over the real approval engine.
 /* eslint-disable @typescript-eslint/no-explicit-any */
-const OUTCOME_COLOR = ["#22c55e", "#f59e0b", "#ef4444", "#3b82f6", "#a855f7", "#94a3b8"];
-const passing = (o: any) => /competent|pass|achiev|met|proficient|approv/i.test(String(o));
-const escalate = (o: any) => /refer|escalat|appeal|review|not/i.test(String(o));
+const fmt = (t: string | null) => { if (!t) return "—"; try { return new Date(t).toLocaleDateString("en-GB", { day: "2-digit", month: "short" }); } catch { return "—"; } };
+const FUNCTIONS = [
+  ["🔍", "Review metadata", "Inspect competency definition, requirements & evidence rules"],
+  ["🔀", "Compare versions", "Diff the submitted version against the current published one"],
+  ["↩️", "Request revisions", "Return to Competency Studio for edits (Office never edits definitions)"],
+  ["✅", "Approve / reject", "Authorised approvers record a governed decision"],
+  ["👥", "Assign reviewers", "Route to technical, clinical and governance reviewers"],
+  ["⏱️", "Track SLA & due dates", "Monitor turnaround and escalate breaches"],
+];
 
-export default async function ReviewBoardPage() {
+export default async function ReviewApprovalPage() {
   const { admin, isSuper, hid } = await cmoGuard();
-  const d = await fetchCmoSuite(admin, hid, isSuper);
-  const head = <Head code="CMO-013 · Competency Office" title="Competency Review Board" sub="Structured governance for reviewing, approving, escalating and documenting competency decisions across the enterprise." />;
-  if (!d.provisioned) return <div className="max-w-[1400px] space-y-4">{head}<Provision module="the Review Board" /></div>;
-
-  const decisions = d.decisions;
-  const byOutcome = Object.entries(decisions.reduce((acc: Record<string, number>, x: any) => { const o = x.outcome ?? "pending"; acc[o] = (acc[o] ?? 0) + 1; return acc; }, {})).map(([label, n]) => ({ label: String(label).replace(/_/g, " "), n: n as number, raw: label })).sort((a, b) => b.n - a.n);
-  const total = decisions.length;
-  const escalations = decisions.filter((x: any) => escalate(x.outcome)).length;
-  const approved = decisions.filter((x: any) => passing(x.outcome)).length;
-  // Governance actions from the review lens: AI recs + overdue assignments needing board attention.
-  const boardActions = d.aiRecs.filter((r: any) => ["privileging", "risk", "gap"].includes(r.category)).slice(0, 6);
+  const d = await loadCmoReview(admin, hid, isSuper);
+  const head = <Head code="COMP-011 · Competency Office" title="Review & Approval Centre" sub="Multi-stage governance review of competencies submitted from Competency Studio — technical, clinical and governance review through to approval." />;
+  if (!d.provisioned) return <div className="max-w-[1400px] space-y-4">{head}<Provision module="the Review & Approval Centre" /></div>;
+  const k = d.kpis;
 
   return (
     <div className="max-w-[1400px] space-y-4">
       {head}
+
       <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
-        <Kpi label="Decisions" value={total} sub="on record" />
-        <Kpi label="Approved / Competent" value={approved} sub={total ? `${pct(approved, total)}%` : "—"} tone="text-emerald-600" />
-        <Kpi label="Escalations / Referrals" value={escalations} sub="board review" tone={escalations ? "text-amber-600" : undefined} />
-        <Kpi label="Outcome Types" value={byOutcome.length} sub="categories" />
-        <Kpi label="Board Actions" value={boardActions.length} sub="follow-up" />
-        <Kpi label="Frameworks in Cycle" value={d.frameworks.length} sub="under review" />
+        <Kpi label="Pending reviews" value={k.pending} sub="in the queue" tone={k.pending ? "text-amber-600" : undefined} />
+        <Kpi label="Technical review" value={k.technical} />
+        <Kpi label="Clinical review" value={k.clinical} />
+        <Kpi label="Governance review" value={k.governance} />
+        <Kpi label="Approval pending" value={k.approval} sub="final sign-off" tone={k.approval ? "text-violet-600" : undefined} />
+        <Kpi label="Overdue (>14d)" value={k.overdue} sub={k.avgAge != null ? `avg ${k.avgAge}d` : "SLA"} tone={k.overdue ? "text-rose-600" : undefined} />
       </div>
 
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
-        <Card title="Decision Outcomes">
-          {total ? <div className="flex items-center gap-3">
-            <Donut segs={byOutcome.map((o, i) => ({ n: o.n, color: OUTCOME_COLOR[i % OUTCOME_COLOR.length] }))} total={total} centre={total} sub="decisions" size={100} />
-            <div className="flex-1 space-y-1 text-[11px]">{byOutcome.slice(0, 6).map((o, i) => <div key={o.raw} className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full" style={{ background: OUTCOME_COLOR[i % OUTCOME_COLOR.length] }} /><span className="text-gray-600 flex-1 capitalize truncate">{o.label}</span><span className="font-semibold text-gray-900">{o.n}</span></div>)}</div>
-          </div> : <p className="text-sm text-gray-400 py-6 text-center">No decisions recorded yet.</p>}
+        <Card title="Submission & review queue" className="xl:col-span-2" right={<Link href="/competency-office/publishing" className="text-[11px] text-teal-600 hover:underline">Publication pipeline →</Link>}>
+          {d.queue.length ? <div className="space-y-1">
+            <div className="flex items-center text-[10px] text-gray-400 uppercase tracking-wide px-1"><span className="flex-1">Competency</span><span className="w-32">Stage</span><span className="w-16 text-center">Step</span><span className="w-16 text-right">Age</span></div>
+            {d.queue.map((r: any, i: number) => (
+              <div key={i} className="flex items-center px-1 py-1.5 text-[12px] border-b border-gray-50"><span className="flex-1 text-gray-800 truncate">{r.entity}</span><span className="w-32"><Pill text={r.stage} tone={r.stage === "Approval" ? "violet" : r.stage.startsWith("Technical") ? "blue" : r.stage.startsWith("Clinical") ? "teal" : "amber"} /></span><span className="w-16 text-center text-gray-500 tabular-nums">{r.step ?? "—"}/{r.total ?? "—"}</span><span className={`w-16 text-right tabular-nums ${r.overdue ? "text-rose-600 font-semibold" : "text-gray-400"}`}>{r.age}d</span></div>
+            ))}
+          </div> : <div className="py-8 text-center"><p className="text-sm text-gray-400">No competencies awaiting review.</p><p className="text-[10px] text-gray-400 mt-1">The multi-stage queue populates from <code>plat_approval_requests</code> as Competency Studio submits competencies for governance.</p></div>}
         </Card>
 
-        <Card title="Outcome Breakdown" className="xl:col-span-2">
-          {byOutcome.length ? <Bars rows={byOutcome.map(o => ({ label: o.label, n: o.n, extra: `${o.n} (${pct(o.n, total)}%)` }))} /> : <p className="text-sm text-gray-400 py-6 text-center">No decision data.</p>}
+        <Card title="Review stage breakdown">
+          <Bars rows={d.stageBreak.map((s: any) => ({ label: s.label, n: s.value }))} colors={["#3b82f6", "#14b8a6", "#f59e0b", "#a855f7"]} />
+          <p className="text-[10px] text-gray-400 mt-2">Pending items by governance stage. Each competency flows technical → clinical → governance → approval before publication.</p>
         </Card>
       </div>
 
-      <Card title="Board Follow-Up Actions" right={<span className="text-[11px] text-gray-400">from AI governance intelligence</span>}>
-        {boardActions.length ? <div className="space-y-2">{boardActions.map((r: any) => (
-          <div key={r.id} className="flex items-start gap-2"><span className="w-1.5 h-1.5 rounded-full bg-teal-400 mt-1.5 shrink-0" /><div className="min-w-0 flex-1"><p className="text-[12px] text-gray-800 leading-tight">{r.title}</p><p className="text-[10px] text-gray-400">{r.detail}</p></div></div>
-        ))}</div> : <p className="text-sm text-gray-400 py-4 text-center">No board actions pending.</p>}
+      <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+        <Card title="Recent approval decisions" right={<span className="text-[11px] text-gray-400">{k.decided30} in 30 days</span>}>
+          {d.recentDecisions.length ? <div className="space-y-2">{d.recentDecisions.map((x: any, i: number) => (
+            <div key={i} className="flex items-center gap-2 text-[12px] border-b border-gray-50 pb-1.5"><Pill text={x.decision} tone={x.decision === "approved" ? "emerald" : "rose"} /><div className="min-w-0 flex-1"><p className="text-gray-700 truncate">{x.note ?? `Step ${x.step} decision`}</p><p className="text-[10px] text-gray-400">{x.actor ?? "—"}</p></div><span className="text-gray-400 tabular-nums shrink-0">{fmt(x.when)}</span></div>
+          ))}</div> : <p className="text-sm text-gray-400 py-6 text-center">No approval decisions recorded in the last 30 days.</p>}
+        </Card>
+
+        <Card title="Revision & change requests" right={<span className="text-[11px] text-gray-400">{d.openChanges} open</span>}>
+          {d.changeReviews.length ? <div className="space-y-2">{d.changeReviews.map((c: any, i: number) => (
+            <div key={i} className="flex items-center gap-2 text-[12px] border-b border-gray-50 pb-1.5"><div className="min-w-0 flex-1"><p className="text-gray-800 truncate">{c.entity}</p><p className="text-[10px] text-gray-400">{c.by ?? "—"} · {fmt(c.when)}</p></div><Pill text={c.kind} tone={c.kind === "major" ? "rose" : c.kind === "revision" ? "amber" : "blue"} /><Pill text={c.status} tone={c.status === "approved" || c.status === "implemented" ? "emerald" : c.status === "rejected" ? "rose" : "amber"} /></div>
+          ))}</div> : <p className="text-sm text-gray-400 py-6 text-center">No competency revision requests.</p>}
+        </Card>
+      </div>
+
+      <Card title="Review functions" right={<span className="text-[11px] text-gray-400">governed workflow</span>}>
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-2.5">
+          {FUNCTIONS.map(([icon, label, desc], i) => (
+            <div key={i} className="flex items-start gap-2.5 border border-gray-100 rounded-xl p-3"><span className="text-lg shrink-0">{icon}</span><span className="min-w-0"><span className="block text-[12.5px] font-medium text-gray-800 leading-tight">{label}</span><span className="block text-[10.5px] text-gray-400 leading-tight mt-0.5">{desc}</span></span></div>
+          ))}
+        </div>
+        <p className="text-[10px] text-gray-400 mt-2">The review pipeline, stage split, decisions and change requests are live. The interactive write actions (approve / reject / request-revision / assign-reviewer with digital signature) run through the governed workflow engine and are the next build phase — no competency publishes without a recorded approval.</p>
       </Card>
 
-      <Foot>CMO-013 — review-board governance over the competency_decisions spine (the authoritative decision outcomes) + AI governance intelligence for follow-up. Outcome distribution and escalations are real; the meeting/agenda manager, case triage, voting engine and immutable minutes are the next phase.</Foot>
+      <Foot>COMP-011 — live over the real approval substrate: <code>plat_approval_requests</code> + <code>plat_approval_decisions</code> (multi-stage review &amp; decisions) and <code>change_requests</code> (revision requests for competency / framework entities). Authoring stays in Competency Studio; the Office reviews and approves. Digital signatures and the interactive approve/reject/assign write-actions are the next phase.</Foot>
     </div>
   );
 }
