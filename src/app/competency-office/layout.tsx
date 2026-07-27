@@ -16,6 +16,7 @@ import { workspaceLinksForUser } from "@/lib/workspace-links";
 
 const NAV = [
   { label: "Competency Dashboard",  href: "/competency-office",              icon: "📊", exact: true },
+  { label: "Lifecycle Engine",      href: "/competency-office/lifecycle",    icon: "🔄" },    // CMO-004
   { label: "Compliance Centre",     href: "/competency-office/compliance",   icon: "✔️" },
   { label: "Credential Management", href: "/competency-office/credentialing", icon: "🎓" },
   { label: "Assessment Status",     href: "/competency-office/assessments",  icon: "📝" },
@@ -36,6 +37,8 @@ const NAV = [
   { label: "AI Intelligence",       href: "/competency-office/ai-intelligence", icon: "🤖" },  // CMO-017
   { label: "Workforce Readiness",   href: "/competency-office/readiness",     icon: "🎯" },    // CMO-018
   { label: "Forecasting",           href: "/competency-office/forecasting",   icon: "🔮" },    // CMO-019
+  { label: "Office & Membership",   href: "/competency-office/membership",   icon: "🏛️" },    // CMO-003
+  { label: "Workspace Integration", href: "/competency-office/integration",  icon: "🔗" },    // CMO-005
   { label: "Configuration & Rules", href: "/competency-office/configuration", icon: "🔧" },    // CMO-020
 ];
 
