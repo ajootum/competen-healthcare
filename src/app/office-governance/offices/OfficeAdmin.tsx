@@ -10,8 +10,15 @@ import { OFFICE_TYPES, SCOPE_TYPES, APPOINTMENT_ROLES, APPOINTMENT_ROLE_LABEL, S
 
 type Person = { id: string; full_name: string | null; role: string | null };
 type Appt = { id: string; personId: string | null; personName: string | null; role: string };
-type Office = { id: string; name: string; officeType: string; scopeType: string; status: string; authoritySource: string | null; chairName: string | null; quorum: number; nextReview: string | null; charterVersion: string | null; establishedAt: string | null; memberCount: number; appointments: Appt[] };
+type Charter = { id: string; version: string; purpose: string | null; mandate: string | null; quorumRule: string | null; decisionRule: string | null; effectiveFrom: string | null; reviewDate: string | null; approvedBy: string | null; approvalStatus: string; createdAt: string | null };
+type Office = { id: string; name: string; officeType: string; scopeType: string; status: string; authoritySource: string | null; chairName: string | null; quorum: number; nextReview: string | null; charterVersion: string | null; establishedAt: string | null; memberCount: number; appointments: Appt[]; charters: Charter[] };
 type Call = (url: string, method: string, body?: any) => Promise<any>;
+
+function bumpVersion(v: string | null): string {
+  const m = /^v?(\d+)\.(\d+)$/.exec(v ?? "");
+  if (m) return `v${m[1]}.${Number(m[2]) + 1}`;
+  return "v1.1";
+}
 
 const STATUS_TONE: Record<string, string> = { active: "bg-emerald-100 text-emerald-700", approved: "bg-emerald-100 text-emerald-700", under_review: "bg-amber-100 text-amber-700", pending_approval: "bg-amber-100 text-amber-700", proposed: "bg-blue-100 text-blue-700", in_design: "bg-blue-100 text-blue-700", suspended: "bg-rose-100 text-rose-700", restructuring: "bg-amber-100 text-amber-700", closing: "bg-rose-100 text-rose-700", dissolved: "bg-gray-200 text-gray-600", archived: "bg-gray-200 text-gray-600", template: "bg-gray-100 text-gray-500" };
 const title = (s: string) => (s ? s[0].toUpperCase() + s.slice(1) : s);
@@ -177,6 +184,79 @@ function OfficeManage({ office, people, busy, call, onChange }: { office: Office
           <p className="text-[10px] text-gray-400 mt-2">Charter {office.charterVersion ?? "—"} · review {office.nextReview ?? "—"}</p>
         </div>
       </div>
+      <CharterSection office={office} busy={busy} call={call} onChange={onChange} />
+    </div>
+  );
+}
+
+const CH_STATUS_TONE: Record<string, string> = { approved: "bg-emerald-100 text-emerald-700", draft: "bg-blue-100 text-blue-700", pending: "bg-amber-100 text-amber-700", superseded: "bg-gray-200 text-gray-500" };
+
+function CharterSection({ office, busy, call, onChange }: { office: Office; busy: boolean; call: Call; onChange: () => void }) {
+  const [amending, setAmending] = useState(false);
+  const current = office.charters.find(c => c.version === office.charterVersion) ?? office.charters[0] ?? null;
+  const history = office.charters.filter(c => c.id !== current?.id);
+
+  const [version, setVersion] = useState(bumpVersion(office.charterVersion));
+  const [purpose, setPurpose] = useState(current?.purpose ?? "");
+  const [mandate, setMandate] = useState(current?.mandate ?? "");
+  const [quorumRule, setQuorumRule] = useState(current?.quorumRule ?? "");
+  const [decisionRule, setDecisionRule] = useState(current?.decisionRule ?? "");
+  const [reviewDate, setReviewDate] = useState("");
+  const [status, setStatus] = useState("approved");
+
+  async function submit() {
+    if (!version.trim()) return;
+    const r = await call(`/api/office-governance/offices/${office.id}/charter`, "POST", { version, purpose, mandate, quorum_rule: quorumRule, decision_rule: decisionRule, review_date: reviewDate || null, approval_status: status });
+    if (r) { setAmending(false); onChange(); }
+  }
+  const inp = "border border-gray-200 rounded-lg px-2 py-1 text-[12px]";
+  const lbl = "text-[11px] text-gray-500 mb-0.5 block";
+
+  return (
+    <div className="mt-3 bg-white rounded-lg border border-gray-100 p-2.5">
+      <div className="flex items-center justify-between mb-1.5">
+        <p className="text-[11px] font-semibold text-gray-600">Charter</p>
+        <button onClick={() => setAmending(v => !v)} className="text-[11px] text-teal-600 hover:underline">{amending ? "Cancel" : "Amend charter"}</button>
+      </div>
+      {current ? (
+        <div className="text-[12px] text-gray-700 space-y-1">
+          <div className="flex items-center gap-2"><span className="font-semibold">{current.version}</span><span className={`text-[10px] px-1.5 py-0.5 rounded-full ${CH_STATUS_TONE[current.approvalStatus] ?? "bg-gray-100 text-gray-600"}`}>{current.approvalStatus}</span><span className="text-[10px] text-gray-400">effective {current.effectiveFrom ?? "—"} · review {current.reviewDate ?? "—"}</span></div>
+          {current.purpose && <p><span className="text-gray-400 text-[10px] uppercase tracking-wide">Purpose</span><br />{current.purpose}</p>}
+          {current.mandate && <p><span className="text-gray-400 text-[10px] uppercase tracking-wide">Mandate</span><br />{current.mandate}</p>}
+          {(current.quorumRule || current.decisionRule) && <p className="text-[11px] text-gray-500">{current.quorumRule ?? ""}{current.quorumRule && current.decisionRule ? " · " : ""}{current.decisionRule ?? ""}</p>}
+        </div>
+      ) : <p className="text-[11px] text-gray-400">No charter on record.</p>}
+
+      {amending && (
+        <div className="mt-2 border-t border-gray-100 pt-2 space-y-1.5">
+          <div className="grid grid-cols-2 gap-2">
+            <div><label className={lbl}>New version</label><input className={`${inp} w-full`} value={version} onChange={e => setVersion(e.target.value)} /></div>
+            <div><label className={lbl}>Status</label><select className={`${inp} w-full`} value={status} onChange={e => setStatus(e.target.value)}>{["approved", "draft", "pending"].map(s => <option key={s} value={s}>{s[0].toUpperCase() + s.slice(1)}</option>)}</select></div>
+          </div>
+          <div><label className={lbl}>Purpose</label><textarea className={`${inp} w-full`} rows={2} value={purpose} onChange={e => setPurpose(e.target.value)} /></div>
+          <div><label className={lbl}>Mandate</label><textarea className={`${inp} w-full`} rows={2} value={mandate} onChange={e => setMandate(e.target.value)} /></div>
+          <div className="grid grid-cols-2 gap-2">
+            <div><label className={lbl}>Quorum rule</label><input className={`${inp} w-full`} value={quorumRule} onChange={e => setQuorumRule(e.target.value)} /></div>
+            <div><label className={lbl}>Decision rule</label><input className={`${inp} w-full`} value={decisionRule} onChange={e => setDecisionRule(e.target.value)} /></div>
+          </div>
+          <div className="grid grid-cols-2 gap-2 items-end">
+            <div><label className={lbl}>Review date</label><input type="date" className={`${inp} w-full`} value={reviewDate} onChange={e => setReviewDate(e.target.value)} /></div>
+            <div className="flex justify-end"><button disabled={busy || !version.trim()} onClick={submit} className="text-[12px] bg-teal-600 text-white rounded-lg px-3 py-1.5 disabled:opacity-40">Adopt new version</button></div>
+          </div>
+          <p className="text-[10px] text-gray-400">Adopting supersedes the current version and points the office at {version || "the new version"}.</p>
+        </div>
+      )}
+
+      {history.length > 0 && (
+        <div className="mt-2 border-t border-gray-100 pt-1.5">
+          <p className="text-[10px] text-gray-400 mb-1">Version history</p>
+          <div className="space-y-0.5">
+            {history.map(h => (
+              <div key={h.id} className="flex items-center gap-2 text-[11px] text-gray-500"><span className="font-medium text-gray-600">{h.version}</span><span className={`text-[9px] px-1 py-0.5 rounded-full ${CH_STATUS_TONE[h.approvalStatus] ?? "bg-gray-100"}`}>{h.approvalStatus}</span><span className="text-gray-400">{h.createdAt ? new Date(h.createdAt).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" }) : ""}</span></div>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
