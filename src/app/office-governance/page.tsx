@@ -8,6 +8,7 @@ export const dynamic = "force-dynamic";
 // appointing, delegating and overseeing offices across the organisation.
 /* eslint-disable @typescript-eslint/no-explicit-any */
 const LEVEL_TONE: Record<string, string> = { Enterprise: "violet", Country: "indigo", Facility: "teal", Department: "blue", Specialty: "amber" };
+const STATUS_TONE: Record<string, string> = { active: "emerald", approved: "emerald", under_review: "amber", pending_approval: "amber", proposed: "blue", in_design: "blue", suspended: "rose", restructuring: "amber", closing: "rose", dissolved: "slate", archived: "slate" };
 
 export default async function OgsCommandCentre() {
   const { admin, isSuper, hid, fullName } = await ogsGuard();
@@ -49,7 +50,7 @@ export default async function OgsCommandCentre() {
                     <td className="py-2 pr-3 text-gray-500">{o.chair ?? <span className="text-rose-500">unfilled</span>}</td>
                     <td className="py-2 pr-3 tabular-nums text-gray-500">{o.members}/{o.quorum}</td>
                     <td className="py-2 pr-3"><span className={`font-semibold tabular-nums ${o.health >= 85 ? "text-emerald-600" : o.health >= 60 ? "text-amber-600" : "text-rose-600"}`}>{o.health}%</span></td>
-                    <td className="py-2"><Pill text={o.active ? "active" : "inactive"} tone={o.active ? "emerald" : "slate"} /></td>
+                    <td className="py-2"><Pill text={(o.status ?? (o.active ? "active" : "inactive")).replace(/_/g, " ")} tone={STATUS_TONE[o.status] ?? (o.active ? "emerald" : "slate")} /></td>
                   </tr>
                 ))}
                 {!d.officeCards.length && <tr><td colSpan={6} className="py-6 text-center text-gray-400">No offices registered.</td></tr>}
@@ -72,7 +73,7 @@ export default async function OgsCommandCentre() {
               </div>
             ))}
           </div>
-          <p className="text-[10px] text-gray-400 mt-1">Grounded in office active-state + quorum. The full charter-approval lifecycle (Proposed→In-design→Approved→Active→Under-review→Dissolved) with activation gates is the next-phase <code>ogs_offices</code> model.</p>
+          <p className="text-[10px] text-gray-400 mt-1">{d.source === "ogs" ? <>Real office lifecycle states from the first-class <code>ogs_offices</code> model (Proposed→In-design→Approved→Active→Under-review→Suspended→Dissolved). Activation gates &amp; state-change workflows are the next build.</> : <>Grounded in office active-state + quorum. Apply migrations 116/117 to light up the full <code>ogs_offices</code> lifecycle states.</>}</p>
         </Card>
 
         <Card title="Key governance alerts">
@@ -100,7 +101,22 @@ export default async function OgsCommandCentre() {
         </Card>
       </div>
 
-      <Foot>OGS-000 — the Office Governance System command centre, grounded in the real governance stores: <code>governance_committees</code> (offices), <code>committee_members</code> (appointments), <code>adm_delegations</code> (delegations), <code>change_requests</code> (governance decisions) and <code>audit_log</code> (governance events). Office health &amp; compliance are transparent composites (active + chaired + at-quorum). The full OGS domain model — office charters, meetings &amp; votes, immutable lifecycle transitions, activation checklists — and the write-workflows (constitute / appoint / delegate / dissolve) are the next-phase foundation migration; the Education &amp; Research governance offices are greenfield.</Foot>
+      {d.transitions?.length ? (
+        <Card title="Recent lifecycle transitions" right="immutable record">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-1">
+            {d.transitions.map((t: any, i: number) => (
+              <div key={i} className="flex items-center gap-2 text-[12px] border-b border-gray-50 py-1">
+                <span className="text-gray-800 font-medium truncate flex-1">{t.office}</span>
+                {t.from && <span className="text-gray-400 text-[11px]">{String(t.from).replace(/_/g, " ")} →</span>}
+                <Pill text={String(t.to ?? "").replace(/_/g, " ")} tone={STATUS_TONE[t.to] ?? "blue"} />
+                <span className="text-gray-400 text-[10px] w-20 text-right tabular-nums">{t.when ? new Date(t.when).toLocaleDateString("en-GB", { day: "2-digit", month: "short" }) : ""}</span>
+              </div>
+            ))}
+          </div>
+        </Card>
+      ) : null}
+
+      <Foot>OGS-000 — the Office Governance System command centre. Offices, appointments, charters and immutable lifecycle transitions now come from the first-class <code>ogs_offices</code> model (migrations 116/117), with automatic fail-soft fallback to the <code>governance_committees</code> / <code>committee_members</code> mapping until it is applied. Delegations (<code>adm_delegations</code>), governance decisions (<code>change_requests</code>) and events (<code>audit_log</code>) remain their own stores. Office health &amp; compliance are transparent composites (active + chaired + at-quorum). The write-workflows (constitute / appoint / delegate / dissolve), meetings &amp; votes and activation gates are the next build; the Education &amp; Research governance offices are greenfield.</Foot>
     </div>
   );
 }

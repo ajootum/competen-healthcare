@@ -6,7 +6,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { NONE } from "@/app/office-governance/_ui";
 
-export type Appointment = { personId: string | null; personName: string | null; role: string; status: string };
+export type Appointment = { personId: string | null; personName: string | null; role: string; status: string; createdAt: string | null };
 export type ResolvedOffice = {
   id: string;
   source: "ogs" | "committee";
@@ -46,7 +46,7 @@ export async function resolveOffices(admin: any, hid: string | null, isSuper: bo
     const ids = rows.map(o => o.id);
     let appts: any[] = [];
     for (let i = 0; i < ids.length; i += 200) {
-      const { data } = await admin.from("ogs_office_appointments").select("office_id, person_id, person_name, role, status").in("office_id", ids.slice(i, i + 200)).limit(20000);
+      const { data } = await admin.from("ogs_office_appointments").select("office_id, person_id, person_name, role, status, created_at").in("office_id", ids.slice(i, i + 200)).limit(20000);
       appts = appts.concat(data ?? []);
     }
     const nameMap = await resolveNames(admin, [...appts.filter(a => a.person_id && !a.person_name).map(a => a.person_id), ...rows.filter(o => o.chair_id && !o.chair_name).map(o => o.chair_id)]);
@@ -63,7 +63,7 @@ export async function resolveOffices(admin: any, hid: string | null, isSuper: bo
         chairName: o.chair_name ?? (chairAppt ? (chairAppt.person_name ?? nameMap.get(chairAppt.person_id) ?? "Appointed") : null),
         quorum: o.quorum ?? 3, memberCount: oa.length, charterVersion: o.charter_version ?? null,
         nextReview: o.next_review_date ?? null, establishedAt: o.established_at ?? null,
-        appointments: oa.map(a => ({ personId: a.person_id ?? null, personName: a.person_name ?? nameMap.get(a.person_id) ?? null, role: a.role, status: a.status })),
+        appointments: oa.map(a => ({ personId: a.person_id ?? null, personName: a.person_name ?? nameMap.get(a.person_id) ?? null, role: a.role, status: a.status, createdAt: a.created_at ?? null })),
       };
     });
     return { source: "ogs", offices };
@@ -93,7 +93,7 @@ export async function resolveOffices(admin: any, hid: string | null, isSuper: bo
       chairId: chair?.profile_id ?? null, chairName: chair ? (nameMap.get(chair.profile_id) ?? "Appointed") : null,
       quorum: c.quorum ?? 1, memberCount: cm.length, charterVersion: null,
       nextReview: null, establishedAt: c.created_at ? String(c.created_at).slice(0, 10) : null,
-      appointments: cm.map(m => ({ personId: m.profile_id, personName: nameMap.get(m.profile_id) ?? null, role: m.role, status: "active" })),
+      appointments: cm.map(m => ({ personId: m.profile_id, personName: nameMap.get(m.profile_id) ?? null, role: m.role, status: "active", createdAt: m.created_at ?? null })),
     };
   });
   return { source: "committee", offices };
