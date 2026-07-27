@@ -153,6 +153,12 @@ export default async function CompetencyOfficeLayout({ children }: { children: R
             ))}
 
             <div className="my-2 border-t border-teal-800/30" />
+            {userRoles.some(r => ["hospital_admin", "super_admin"].includes(r)) && (
+              <Link href="/office-governance" data-sb-item title="Office Governance" className="flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm text-teal-100/40 hover:bg-teal-800/50 hover:text-white transition-colors">
+                <span className="w-5 text-center text-sm">🏛️</span>
+                <span data-sb-label>Office Governance</span>
+              </Link>
+            )}
             <Link href="/dashboard" data-sb-item title="My Dashboard" className="flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm text-teal-100/40 hover:bg-teal-800/50 hover:text-white transition-colors">
               <span className="w-5 text-center text-sm">⊞</span>
               <span data-sb-label>My Dashboard</span>

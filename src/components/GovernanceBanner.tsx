@@ -65,6 +65,20 @@ export function GovernanceBanner({ office, href = "/office-governance" }: { offi
         <Fact label="Established" value={fmt(office.establishedAt)} />
         <Fact label="Next review" value={fmt(office.nextReview)} />
       </div>
+      {office.bound && office.id && (
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-3 pt-2 border-t border-slate-700/60 text-[11px]">
+          <span className="text-slate-500 uppercase tracking-[0.1em] text-[9px]">Governance</span>
+          <Link href={`/office-governance/offices/${office.id}`} className="text-slate-300 hover:text-white">Dashboard</Link>
+          <span className="text-slate-600">·</span>
+          <Link href="/office-governance/meetings" className="text-slate-300 hover:text-white">Meetings &amp; votes</Link>
+          <span className="text-slate-600">·</span>
+          <Link href="/office-governance/decisions" className="text-slate-300 hover:text-white">Decisions</Link>
+          <span className="text-slate-600">·</span>
+          <Link href="/office-governance/offices" className="text-slate-300 hover:text-white">Manage</Link>
+          <span className="text-slate-600">·</span>
+          <Link href="/office-governance" className="text-slate-300 hover:text-white">Command centre</Link>
+        </div>
+      )}
       {!office.bound && (
         <p className="text-[10px] text-slate-400 mt-2">Showing this workspace&apos;s default governance identity — not yet bound to a constituted Office. Constituting an office in the Office Governance System will bind it here.</p>
       )}
