@@ -1,4 +1,5 @@
 import { createClient, createAdminClient } from "@/lib/supabase/server";
+import { holdsOfficeAppointment } from "@/lib/ogs/office";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { loadCredentialManagement } from "@/lib/credential-management";
@@ -37,7 +38,7 @@ export default async function CredentialDashboard() {
   const admin = createAdminClient() as any;
   const { data: profile } = await admin.from("profiles").select("role, roles, hospital_id").eq("id", user.id).single();
   const roles: string[] = (profile?.roles?.length ? profile.roles : [profile?.role]).filter(Boolean);
-  if (!roles.some(r => ["hospital_admin", "educator", "super_admin"].includes(r))) redirect("/dashboard");
+  if (!roles.some(r => ["hospital_admin", "educator", "super_admin"].includes(r)) && !(await holdsOfficeAppointment(admin, "competency", profile?.hospital_id ?? null, roles.includes("super_admin"), user.id))) redirect("/dashboard");
 
   const d = await loadCredentialManagement(admin, profile?.hospital_id ?? null, roles.includes("super_admin"));
   const k = d.kpis;

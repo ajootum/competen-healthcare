@@ -3,7 +3,7 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { loadCmoDashboard } from "@/lib/cmo-dashboard";
 import { loadCmoGovernance } from "@/lib/competency/cmo-governance";
-import { officeForWorkspace } from "@/lib/ogs/office";
+import { officeForWorkspace, holdsOfficeAppointment } from "@/lib/ogs/office";
 import { GovernanceBanner } from "@/components/GovernanceBanner";
 
 export const dynamic = "force-dynamic";
@@ -56,8 +56,11 @@ export default async function CompetencyDashboard() {
   const admin = createAdminClient() as any;
   const { data: profile } = await admin.from("profiles").select("full_name, role, roles, hospital_id").eq("id", user.id).single();
   const roles: string[] = (profile?.roles?.length ? profile.roles : [profile?.role]).filter(Boolean);
-  if (!roles.some(r => ["hospital_admin", "educator", "super_admin"].includes(r))) redirect("/dashboard");
   const isSuper = roles.includes("super_admin");
+  // R001 appointment-based access (additive): a role holder OR an active Competency Office member may enter.
+  const roleOk = roles.some(r => ["hospital_admin", "educator", "super_admin"].includes(r));
+  const apptOk = roleOk ? false : await holdsOfficeAppointment(admin, "competency", profile?.hospital_id ?? null, isSuper, user.id);
+  if (!roleOk && !apptOk) redirect("/dashboard");
 
   const [d, gov, hosp, office] = await Promise.all([
     loadCmoDashboard(admin, profile?.hospital_id ?? null, isSuper),

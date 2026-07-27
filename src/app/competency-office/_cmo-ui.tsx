@@ -3,6 +3,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
+import { holdsOfficeAppointment } from "@/lib/ogs/office";
 
 export async function cmoGuard() {
   const supabase = await createClient();
@@ -11,8 +12,13 @@ export async function cmoGuard() {
   const admin = createAdminClient() as any;
   const { data: profile } = await admin.from("profiles").select("role, roles, hospital_id").eq("id", user.id).single();
   const roles: string[] = (profile?.roles?.length ? profile.roles : [profile?.role]).filter(Boolean);
-  if (!roles.some((r: string) => ["hospital_admin", "educator", "super_admin"].includes(r))) redirect("/dashboard");
-  return { admin, isSuper: roles.includes("super_admin"), hid: (profile?.hospital_id ?? null) as string | null };
+  const isSuper = roles.includes("super_admin");
+  const hid = (profile?.hospital_id ?? null) as string | null;
+  // R001 appointment-based access (additive): a role holder OR an active Competency Office member may enter.
+  const roleOk = roles.some((r: string) => ["hospital_admin", "educator", "super_admin"].includes(r));
+  const apptOk = roleOk ? false : await holdsOfficeAppointment(admin, "competency", hid, isSuper, user.id);
+  if (!roleOk && !apptOk) redirect("/dashboard");
+  return { admin, isSuper, hid };
 }
 
 export const PILL: Record<string, string> = { slate: "bg-gray-100 text-gray-600", blue: "bg-blue-50 text-blue-700", emerald: "bg-emerald-50 text-emerald-700", amber: "bg-amber-50 text-amber-700", rose: "bg-rose-50 text-rose-700", violet: "bg-violet-50 text-violet-700", teal: "bg-teal-50 text-teal-700" };

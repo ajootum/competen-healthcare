@@ -180,3 +180,14 @@ export async function officeForWorkspace(admin: any, key: keyof typeof MATCHERS,
   const viewer = viewerId ? resolved.appointments.find(a => a.personId === viewerId) ?? null : null;
   return { ...resolved, bound: !!office, icon: m.icon, viewerRole: viewer?.role ?? null };
 }
+
+// Additive access helper (R001 appointment-based access): true when `userId` holds an ACTIVE appointment in
+// the workspace's constituted office. Fail-soft — returns false when no office is constituted (so it can only
+// ever GRANT access on top of role checks, never remove it; safe even before any office exists).
+export async function holdsOfficeAppointment(admin: any, key: keyof typeof MATCHERS, hid: string | null, isSuper: boolean, userId?: string | null): Promise<boolean> {
+  if (!userId) return false;
+  try {
+    const office = await officeForWorkspace(admin, key, hid, isSuper, userId);
+    return office.bound && office.viewerRole != null;
+  } catch { return false; }
+}

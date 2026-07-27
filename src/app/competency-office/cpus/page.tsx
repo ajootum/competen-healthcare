@@ -1,4 +1,5 @@
 import { createClient, createAdminClient } from "@/lib/supabase/server";
+import { holdsOfficeAppointment } from "@/lib/ogs/office";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 
@@ -19,9 +20,9 @@ export default async function CpuLibraryPage() {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect("/login");
   const admin = createAdminClient() as any;
-  const { data: profile } = await admin.from("profiles").select("role, roles").eq("id", user.id).single();
+  const { data: profile } = await admin.from("profiles").select("role, roles, hospital_id").eq("id", user.id).single();
   const roles: string[] = (profile?.roles?.length ? profile.roles : [profile?.role]).filter(Boolean);
-  if (!roles.some(r => ["hospital_admin", "educator", "super_admin"].includes(r))) redirect("/dashboard");
+  if (!roles.some(r => ["hospital_admin", "educator", "super_admin"].includes(r)) && !(await holdsOfficeAppointment(admin, "competency", profile?.hospital_id ?? null, roles.includes("super_admin"), user.id))) redirect("/dashboard");
 
   const { data: cpus } = await admin.from("clinical_practice_units")
     .select("id, name, code, risk_category, reassessment_months, pub_status, version_num").order("name").limit(2000);
