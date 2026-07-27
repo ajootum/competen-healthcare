@@ -2,6 +2,8 @@ import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { loadHrDashboard } from "@/lib/hr-data";
+import { officeForWorkspace } from "@/lib/ogs/office";
+import { GovernanceBanner } from "@/components/GovernanceBanner";
 
 export const dynamic = "force-dynamic";
 
@@ -45,7 +47,11 @@ export default async function HrDashboard() {
   const roles: string[] = (profile?.roles?.length ? profile.roles : [profile?.role]).filter(Boolean);
   if (!roles.some(r => ["hospital_admin", "super_admin"].includes(r))) redirect("/dashboard");
 
-  const d = await loadHrDashboard(admin, profile?.hospital_id ?? null, roles.includes("super_admin"));
+  const isSuper = roles.includes("super_admin");
+  const [d, office] = await Promise.all([
+    loadHrDashboard(admin, profile?.hospital_id ?? null, isSuper),
+    officeForWorkspace(admin, "hr", profile?.hospital_id ?? null, isSuper, user.id),
+  ]);
   const { headcount, employment, positions, competency, learning } = d;
   const { data: notifs } = await admin.from("notifications").select("title, created_at").eq("user_id", user.id).order("created_at", { ascending: false }).limit(5);
   const fillRate = positions.establishment ? Math.round((positions.filled / positions.establishment) * 100) : 0;
@@ -56,6 +62,9 @@ export default async function HrDashboard() {
         <h1 className="text-2xl font-bold text-gray-900">Human Resources</h1>
         <p className="text-sm text-gray-500 mt-1">Workforce administration — headcount, positions, onboarding &amp; compliance · {profile?.full_name}</p>
       </div>
+
+      {/* OGS R001 — this workspace operates as a governed Office */}
+      <GovernanceBanner office={office} />
 
       {/* HR KPI cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
