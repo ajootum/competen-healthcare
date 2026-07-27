@@ -140,6 +140,7 @@ export const WORKSPACE_CATALOGUE: (WorkspaceLink & { orgRoles: OrgRole[]; appRol
   { label: "Quality & Accreditation", icon: "🎯", href: "/quality-accreditation", orgRoles: ["chief_officer","org_admin","quality_manager","governance_committee"],               appRoles: ["hospital_admin","super_admin","assessor"] },
   { label: "Human Resources",         icon: "👥", href: "/human-resources",       orgRoles: ["chief_officer","org_admin","hr_manager"],                                          appRoles: ["hospital_admin","super_admin"] },
   { label: "Hospital Executive",      icon: "🛰️", href: "/hospital-executive",    orgRoles: ["chief_officer","org_admin"],                                                       appRoles: ["hospital_admin","super_admin"] },
+  { label: "Office Governance",       icon: "🏛️", href: "/office-governance",     orgRoles: ["chief_officer","org_admin","governance_committee"],                                 appRoles: ["hospital_admin","super_admin"] },
   { label: "Organisation Admin",      icon: "🗂️", href: "/organisation-admin",    orgRoles: ["chief_officer","org_admin","it_admin"],                                            appRoles: ["hospital_admin","super_admin"] },
   { label: "Enterprise Governance",   icon: "🏛️", href: "/enterprise-governance", orgRoles: ["chief_officer","org_admin","governance_committee"],                                 appRoles: ["hospital_admin","super_admin"] },
 ];
