@@ -1,5 +1,7 @@
 import { hexGuard, Head, Stat, Card, Pill, Ring, Foot, T, ragPct } from "./_ui";
 import { loadExecHome } from "@/lib/hex/dashboard";
+import { officeForWorkspace } from "@/lib/ogs/office";
+import { GovernanceBanner } from "@/components/GovernanceBanner";
 import Link from "next/link";
 
 export const dynamic = "force-dynamic";
@@ -9,14 +11,20 @@ export const dynamic = "force-dynamic";
 const ST_TONE: Record<string, string> = { active: "emerald", planned: "slate", paused: "amber", completed: "blue", cancelled: "rose", measuring: "blue", planning: "indigo", closed: "slate" };
 
 export default async function ExecutiveDashboard() {
-  const { admin, isSuper, hid, fullName } = await hexGuard();
-  const d = await loadExecHome(admin, hid, isSuper);
+  const { admin, user, isSuper, hid, fullName } = await hexGuard();
+  const [d, office] = await Promise.all([
+    loadExecHome(admin, hid, isSuper),
+    officeForWorkspace(admin, "executive", hid, isSuper, user.id),
+  ]);
   const k = d.kpis, wf = d.workforce, sf = d.safety;
   const pct = (v: any) => (v != null ? `${Math.round(Number(v))}%` : "—");
 
   return (
     <div className="space-y-4">
       <Head title="Executive Dashboard" sub={`Enterprise oversight — performance, quality, risk & strategy in one view · ${fullName}`} action={{ label: "AI copilot →", href: "/hospital-executive/intelligence" }} />
+
+      {/* OGS R001 — this workspace operates as a governed Office */}
+      <GovernanceBanner office={office} />
 
       <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
         <Stat icon="🎯" tone={k.readiness != null ? ragPct(k.readiness) : "slate"} label="Organisational readiness" value={pct(k.readiness)} sub="composite index" />

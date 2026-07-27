@@ -2,6 +2,8 @@ import { qaGuard, Head, Stat, Card, Pill, Donut, Legend, Trend, Bars, Table, Qui
 import { loadQualityDashboard } from "@/lib/quality-accreditation-data";
 import { loadStandards } from "@/lib/qaw/standards";
 import { loadRiskCentre } from "@/lib/qaw/risk-centre";
+import { officeForWorkspace } from "@/lib/ogs/office";
+import { GovernanceBanner } from "@/components/GovernanceBanner";
 import Link from "next/link";
 
 export const dynamic = "force-dynamic";
@@ -13,11 +15,12 @@ const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "
 const STATUS_TONE: Record<string, string> = { completed: "emerald", in_progress: "amber", planned: "slate" };
 
 export default async function QualityDashboard() {
-  const { admin, isSuper, hid, fullName } = await qaGuard();
-  const [core, standards, risk] = await Promise.all([
+  const { admin, user, isSuper, hid, fullName } = await qaGuard();
+  const [core, standards, risk, office] = await Promise.all([
     loadQualityDashboard(admin, hid, isSuper),
     loadStandards(admin, hid, isSuper),
     loadRiskCentre(admin, hid, isSuper),
+    officeForWorkspace(admin, "quality", hid, isSuper, user.id),
   ]);
 
   const scope = (q: any) => (isSuper ? q : q.eq("hospital_id", hid ?? "00000000-0000-0000-0000-000000000000"));
@@ -44,6 +47,9 @@ export default async function QualityDashboard() {
   return (
     <div className="space-y-4">
       <Head title="Quality & Accreditation" sub={`Clinical quality, accreditation readiness, audits and improvement · ${fullName}`} action={{ label: "Open AI copilot →", href: "/quality-accreditation/ai" }} />
+
+      {/* OGS R001 — this workspace operates as a governed Office */}
+      <GovernanceBanner office={office} />
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         <Stat icon="📋" tone={core.complianceScore != null ? ragPct(core.complianceScore) : "slate"} label="Compliance score" value={core.complianceScore != null ? `${core.complianceScore}%` : "—"} sub="mean audit compliance" />

@@ -3,6 +3,8 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { loadCmoDashboard } from "@/lib/cmo-dashboard";
 import { loadCmoGovernance } from "@/lib/competency/cmo-governance";
+import { officeForWorkspace } from "@/lib/ogs/office";
+import { GovernanceBanner } from "@/components/GovernanceBanner";
 
 export const dynamic = "force-dynamic";
 
@@ -57,10 +59,11 @@ export default async function CompetencyDashboard() {
   if (!roles.some(r => ["hospital_admin", "educator", "super_admin"].includes(r))) redirect("/dashboard");
   const isSuper = roles.includes("super_admin");
 
-  const [d, gov, hosp] = await Promise.all([
+  const [d, gov, hosp, office] = await Promise.all([
     loadCmoDashboard(admin, profile?.hospital_id ?? null, isSuper),
     loadCmoGovernance(admin, profile?.hospital_id ?? null, isSuper),
     profile?.hospital_id ? admin.from("hospitals").select("name").eq("id", profile.hospital_id).maybeSingle() : Promise.resolve({ data: null }),
+    officeForWorkspace(admin, "competency", profile?.hospital_id ?? null, isSuper, user.id),
   ]);
   const GOV_HEX: Record<string, string> = { slate: "#94a3b8", amber: "#f59e0b", blue: "#3b82f6", violet: "#a855f7", emerald: "#22c55e" };
   const hospitalName = isSuper ? "Enterprise" : (hosp?.data?.name ?? "Your hospital");
@@ -82,6 +85,9 @@ export default async function CompetencyDashboard() {
           <span className="text-xs bg-white border border-gray-200 rounded-lg px-3 py-2 text-gray-700">📅 {todayLabel()}</span>
         </div>
       </div>
+
+      {/* OGS R001 — this workspace operates as a governed Office */}
+      <GovernanceBanner office={office} />
 
       {/* COMP-011 governance & publication strip — the Office governs (approve, publish, version, monitor) */}
       {gov.provisioned && (
