@@ -38,7 +38,7 @@ export default async function OgsCommandCentre() {
           </div>
         </Card>
 
-        <Card title="Office governance status" className="xl:col-span-2">
+        <Card title="Office governance status" className="xl:col-span-2" right={<Link href="/office-governance/offices" className="text-teal-600 hover:underline">Constitute / manage →</Link>}>
           <div className="overflow-x-auto">
             <table className="w-full text-[12.5px]">
               <thead><tr className="text-left text-[10px] uppercase tracking-wide text-gray-400 border-b border-gray-100"><th className="pb-2 pr-3 font-medium">Office</th><th className="pb-2 pr-3 font-medium">Level</th><th className="pb-2 pr-3 font-medium">Chair</th><th className="pb-2 pr-3 font-medium">Members</th><th className="pb-2 pr-3 font-medium">Health</th><th className="pb-2 font-medium">Status</th></tr></thead>

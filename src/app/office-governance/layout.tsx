@@ -14,6 +14,7 @@ import { workspaceLinksForUser } from "@/lib/workspace-links";
 
 const NAV = [
   { label: "Office Governance",       href: "/office-governance",              icon: "🏛️", exact: true },
+  { label: "Offices — Constitute & Manage", href: "/office-governance/offices", icon: "🏛" },
   { label: "Authority & Delegation",  href: "/office-governance/delegations",  icon: "🗝️" },
   { label: "Meetings & Decisions",    href: "/office-governance/decisions",    icon: "⚖️" },
   { label: "Performance & Analytics", href: "/office-governance/analytics",    icon: "📊" },

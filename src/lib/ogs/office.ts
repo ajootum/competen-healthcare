@@ -108,6 +108,37 @@ const MATCHERS: Record<string, { types: string[]; re: RegExp; defaultName: strin
   hr: { types: ["hr"], re: /workforce|human resource|people|\bhr\b/i, defaultName: "HR Office", authority: "Chief People Officer", icon: "👥" },
 };
 
+// Management loader — reads the FIRST-CLASS office model directly (ids for office + appointments), for the
+// write-workflow admin surface. Unlike resolveOffices it does NOT fall back to committees: the management
+// UI acts on real ogs_* rows, so an unmigrated tenant gets provisioned:false (constitute-your-first-office).
+export type AdminAppointment = { id: string; personId: string | null; personName: string | null; role: string };
+export type AdminOffice = {
+  id: string; name: string; officeType: string; scopeType: string; status: string;
+  authoritySource: string | null; chairName: string | null; quorum: number; nextReview: string | null;
+  charterVersion: string | null; establishedAt: string | null; memberCount: number; appointments: AdminAppointment[];
+};
+
+export async function loadOfficeAdmin(admin: any, hid: string | null, isSuper: boolean): Promise<{ provisioned: boolean; offices: AdminOffice[] }> {
+  const scope = (q: any) => (isSuper ? q : q.eq("hospital_id", hid ?? NONE));
+  const res = await scope(admin.from("ogs_offices").select("id, name, office_type, scope_type, status, authority_source, chair_name, quorum, next_review_date, charter_version, established_at").order("created_at", { ascending: true }).limit(2000));
+  if (res.error) return { provisioned: false, offices: [] };
+  const rows = (res.data ?? []) as any[];
+  const ids = rows.map(o => o.id);
+  let appts: any[] = [];
+  for (let i = 0; i < ids.length; i += 200) {
+    if (!ids.length) break;
+    const { data } = await admin.from("ogs_office_appointments").select("id, office_id, person_id, person_name, role, status").in("office_id", ids.slice(i, i + 200)).eq("status", "active").limit(20000);
+    appts = appts.concat(data ?? []);
+  }
+  const byOffice = new Map<string, any[]>();
+  appts.forEach(a => { const arr = byOffice.get(a.office_id) ?? []; arr.push(a); byOffice.set(a.office_id, arr); });
+  const offices: AdminOffice[] = rows.map(o => {
+    const oa = byOffice.get(o.id) ?? [];
+    return { id: o.id, name: o.name, officeType: o.office_type ?? "governance", scopeType: o.scope_type ?? "hospital", status: o.status ?? "active", authoritySource: o.authority_source ?? null, chairName: o.chair_name ?? null, quorum: o.quorum ?? 3, nextReview: o.next_review_date ?? null, charterVersion: o.charter_version ?? null, establishedAt: o.established_at ?? null, memberCount: oa.length, appointments: oa.map(a => ({ id: a.id, personId: a.person_id ?? null, personName: a.person_name ?? null, role: a.role })) };
+  });
+  return { provisioned: true, offices };
+}
+
 export type WorkspaceOffice = ResolvedOffice & { bound: boolean; icon: string; viewerRole: string | null };
 
 export async function officeForWorkspace(admin: any, key: keyof typeof MATCHERS, hid: string | null, isSuper: boolean, viewerId?: string | null): Promise<WorkspaceOffice> {
