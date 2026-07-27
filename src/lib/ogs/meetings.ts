@@ -67,3 +67,18 @@ export async function loadOgsMeetings(admin: any, hid: string | null, isSuper: b
     offices, meetings,
   };
 }
+
+// The formal office-decision log — every ogs_decisions row across meetings, with office + vote tally, for the
+// OGS-004 Decisions Register. provisioned:false until migrations 118/119 are applied.
+export async function loadFormalDecisions(admin: any, hid: string | null, isSuper: boolean) {
+  const scope = (q: any) => (isSuper ? q : q.eq("hospital_id", hid ?? NONE));
+  const res = await scope(admin.from("ogs_decisions").select("id, office_id, meeting_id, title, decision_type, outcome, votes_for, votes_against, votes_abstain, decided_at, recorded_by_name").order("decided_at", { ascending: false, nullsFirst: false }).limit(100));
+  if (res.error) return { provisioned: false as const, decisions: [] as any[], kpis: { total: 0, carried: 0, carriedRate: null as number | null } };
+  const rows = (res.data ?? []) as any[];
+  const offIds = [...new Set(rows.map(r => r.office_id).filter(Boolean))];
+  const nameById = new Map<string, string>();
+  if (offIds.length) { const { data } = await admin.from("ogs_offices").select("id, name").in("id", offIds); ((data ?? []) as any[]).forEach(o => nameById.set(o.id, o.name)); }
+  const decisions = rows.map(r => ({ id: r.id, office: nameById.get(r.office_id) ?? "Office", title: r.title, type: r.decision_type, outcome: r.outcome, votesFor: r.votes_for ?? 0, votesAgainst: r.votes_against ?? 0, votesAbstain: r.votes_abstain ?? 0, decidedAt: r.decided_at, recordedByName: r.recorded_by_name }));
+  const carried = rows.filter(r => r.outcome === "carried").length;
+  return { provisioned: true as const, decisions, kpis: { total: rows.length, carried, carriedRate: rows.length ? Math.round((carried / rows.length) * 100) : null } };
+}

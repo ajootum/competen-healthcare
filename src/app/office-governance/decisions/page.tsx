@@ -1,5 +1,7 @@
 import { ogsGuard, Head, Stat, Card, Pill, Donut, Legend, Bars, Table, Foot } from "../_ui";
 import { loadOgsDecisions } from "@/lib/ogs/decisions";
+import { loadFormalDecisions } from "@/lib/ogs/meetings";
+import Link from "next/link";
 
 export const dynamic = "force-dynamic";
 
@@ -17,6 +19,8 @@ export default async function OgsDecisions() {
   const head = <Head code="OGS-004 · Office Governance System" title="Meetings, Decisions & Governance" sub="Plan meetings, capture decisions and ensure governance follow-through." />;
   if (!d.provisioned) return <div className="space-y-4">{head}<Card><p className="text-sm text-gray-400">The governance decision register (<code>change_requests</code>) is not provisioned yet. Once its migration is applied, this module lights up with live decisions and approvals.</p></Card></div>;
   const k = d.kpis;
+  const formal = await loadFormalDecisions(admin, hid, isSuper);
+  const OUT_TONE: Record<string, string> = { carried: "emerald", rejected: "rose", deferred: "amber", tabled: "slate" };
 
   return (
     <div className="space-y-4">
@@ -89,7 +93,26 @@ export default async function OgsDecisions() {
         ) : <p className="text-sm text-gray-400 py-6 text-center">No approval decisions recorded yet.</p>}
       </Card>
 
-      <Foot>OGS-004 — the <strong>decisions</strong> side is live over <code>change_requests</code> (the organisation-wide governance decision / change register) and the platform approval engine <code>plat_approval_requests</code> / <code>plat_approval_decisions</code> (the multi-step approval queue &amp; recent decisions). Meetings, agendas, attendance, quorum tracking, minutes and formal voting have no store yet — the full meeting lifecycle is the entirely next-phase OGS-004 engine and is not fabricated here.</Foot>
+      <Card title="Formal office decisions" right={<Link href="/office-governance/meetings" className="text-teal-600 hover:underline">Meetings &amp; Votes →</Link>}>
+        {formal.provisioned && formal.decisions.length ? (
+          <Table
+            cols={["Decision", "Office", "Type", "Votes (for / against / abstain)", "Decided", "Outcome"]}
+            rows={formal.decisions.map((r: any) => [
+              <span key="t" className="font-medium text-gray-800">{r.title}</span>,
+              <span key="o" className="text-gray-600">{r.office}</span>,
+              <span key="ty" className="text-gray-500 capitalize">{r.type}</span>,
+              <span key="v" className="tabular-nums text-gray-600">{r.votesFor} / {r.votesAgainst} / {r.votesAbstain}</span>,
+              <span key="d" className="tabular-nums text-gray-500">{r.decidedAt ? new Date(r.decidedAt).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" }) : "—"}</span>,
+              <Pill key="out" text={r.outcome} tone={OUT_TONE[r.outcome] ?? "slate"} />,
+            ])}
+            empty="No formal decisions recorded."
+          />
+        ) : (
+          <p className="text-sm text-gray-400 py-6 text-center">{formal.provisioned ? <>No formal office decisions recorded yet — record them in <Link href="/office-governance/meetings" className="text-teal-600 hover:underline">Meetings &amp; Votes</Link>.</> : <>Run migrations 118/119 to enable formal meeting decisions &amp; voting.</>}</p>
+        )}
+      </Card>
+
+      <Foot>OGS-004 — the register aggregates three real sources: <code>change_requests</code> (the organisation-wide governance decision / change register), the platform approval engine <code>plat_approval_requests</code> / <code>plat_approval_decisions</code> (the multi-step approval queue &amp; recent decisions), and now <strong>formal office decisions</strong> from <code>ogs_decisions</code> — the vote-tallied resolutions taken at office meetings (see <Link href="/office-governance/meetings" className="text-teal-600 hover:underline">Meetings &amp; Votes</Link> for the full meeting lifecycle: agenda, attendance, quorum, minutes and voting). Per-member roll-call voting and e-signatures are the next refinement.</Foot>
     </div>
   );
 }
