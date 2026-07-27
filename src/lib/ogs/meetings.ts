@@ -34,6 +34,18 @@ export async function loadOgsMeetings(admin: any, hid: string | null, isSuper: b
   const decAll = await child("ogs_decisions", "id, meeting_id, title, description, decision_type, outcome, votes_for, votes_against, votes_abstain, decided_at, recorded_by_name");
   const actAll = await child("ogs_office_actions", "id, meeting_id, title, owner_name, due_date, status");
 
+  // Signatures on decisions (fail-soft — ogs_signatures may not exist until migration 120).
+  const decIds = decAll.map(d => d.id);
+  let decSigs: any[] = [];
+  for (let i = 0; i < decIds.length; i += 200) {
+    if (!decIds.length) break;
+    const { data, error } = await admin.from("ogs_signatures").select("entity_id, signer_name, signer_role, signed_at").eq("entity_type", "decision").in("entity_id", decIds.slice(i, i + 200)).limit(20000);
+    if (error) break;
+    decSigs = decSigs.concat(data ?? []);
+  }
+  const sigByDec = new Map<string, any[]>();
+  decSigs.forEach(s => { const a = sigByDec.get(s.entity_id) ?? []; a.push(s); sigByDec.set(s.entity_id, a); });
+
   const group = (rows: any[]) => { const m = new Map<string, any[]>(); rows.forEach(r => { const a = m.get(r.meeting_id) ?? []; a.push(r); m.set(r.meeting_id, a); }); return m; };
   const attBy = group(attAll), agBy = group(agAll), decBy = group(decAll), actBy = group(actAll);
 
@@ -41,7 +53,7 @@ export async function loadOgsMeetings(admin: any, hid: string | null, isSuper: b
     const att = (attBy.get(m.id) ?? []).map(a => ({ id: a.id, personId: a.person_id, personName: a.person_name, role: a.role, status: a.status }));
     const present = att.filter(a => a.status === "present").length;
     const agenda = (agBy.get(m.id) ?? []).map(a => ({ id: a.id, seq: a.seq, title: a.title, description: a.description, itemType: a.item_type, status: a.status })).sort((a, b) => (a.seq ?? 0) - (b.seq ?? 0));
-    const decisions = (decBy.get(m.id) ?? []).map(d => ({ id: d.id, title: d.title, description: d.description, decisionType: d.decision_type, outcome: d.outcome, votesFor: d.votes_for ?? 0, votesAgainst: d.votes_against ?? 0, votesAbstain: d.votes_abstain ?? 0, decidedAt: d.decided_at, recordedByName: d.recorded_by_name }));
+    const decisions = (decBy.get(m.id) ?? []).map(d => ({ id: d.id, title: d.title, description: d.description, decisionType: d.decision_type, outcome: d.outcome, votesFor: d.votes_for ?? 0, votesAgainst: d.votes_against ?? 0, votesAbstain: d.votes_abstain ?? 0, decidedAt: d.decided_at, recordedByName: d.recorded_by_name, signatures: (sigByDec.get(d.id) ?? []).map(s => ({ signerName: s.signer_name, signerRole: s.signer_role, signedAt: s.signed_at })) }));
     const actions = (actBy.get(m.id) ?? []).map(a => ({ id: a.id, title: a.title, ownerName: a.owner_name, dueDate: a.due_date, status: a.status }));
     const requiredQuorum = m.required_quorum ?? 3;
     return {

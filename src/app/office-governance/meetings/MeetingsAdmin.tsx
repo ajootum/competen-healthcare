@@ -1,6 +1,7 @@
 "use client";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { OgsSignButton } from "@/components/OgsSignButton";
 
 // OGS-004 meetings & votes client surface — schedule meetings, mark attendance (live quorum), run the agenda,
 // record decisions with vote tallies and manage actions. Talks to /api/office-governance/meetings*; every
@@ -11,7 +12,8 @@ type Person = { id: string; full_name: string | null; role: string | null };
 type OfficeOpt = { id: string; name: string; quorum: number; status: string };
 type Attendee = { id: string; personId: string | null; personName: string | null; role: string | null; status: string };
 type AgendaItem = { id: string; seq: number; title: string; description: string | null; itemType: string; status: string };
-type Decision = { id: string; title: string; description: string | null; decisionType: string; outcome: string; votesFor: number; votesAgainst: number; votesAbstain: number; decidedAt: string | null; recordedByName: string | null };
+type Sig = { signerName: string | null; signerRole: string | null; signedAt: string | null };
+type Decision = { id: string; title: string; description: string | null; decisionType: string; outcome: string; votesFor: number; votesAgainst: number; votesAbstain: number; decidedAt: string | null; recordedByName: string | null; signatures: Sig[] };
 type Action = { id: string; title: string; ownerName: string | null; dueDate: string | null; status: string };
 type Meeting = { id: string; officeId: string; officeName: string; title: string; meetingType: string; scheduledAt: string | null; location: string | null; status: string; requiredQuorum: number; chairedByName: string | null; minutes: string | null; heldAt: string | null; attendance: Attendee[]; invited: number; present: number; quorumMet: boolean; agenda: AgendaItem[]; decisions: Decision[]; actions: Action[] };
 type Call = (url: string, method: string, body?: any) => Promise<any>;
@@ -162,10 +164,13 @@ function MeetingDetail({ meeting: m, people, busy, call, refresh }: { meeting: M
         <div className="space-y-1.5 mb-2">
           {m.decisions.length === 0 && <p className="text-[11px] text-gray-400">No decisions recorded.</p>}
           {m.decisions.map(d => (
-            <div key={d.id} className="flex items-center gap-2 text-[12px] border-b border-gray-50 pb-1">
-              <span className="flex-1 min-w-0"><span className="text-gray-800 truncate block">{d.title}</span><span className="text-[10px] text-gray-400">{d.decisionType} · {d.recordedByName ?? "—"}</span></span>
-              <span className="text-[10px] text-gray-500 tabular-nums whitespace-nowrap">✓{d.votesFor} ✕{d.votesAgainst} ~{d.votesAbstain}</span>
-              <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${OUT_TONE[d.outcome] ?? "bg-gray-100"}`}>{d.outcome}</span>
+            <div key={d.id} className="border-b border-gray-50 pb-1">
+              <div className="flex items-center gap-2 text-[12px]">
+                <span className="flex-1 min-w-0 truncate text-gray-800">{d.title}</span>
+                <span className="text-[10px] text-gray-500 tabular-nums whitespace-nowrap">✓{d.votesFor} ✕{d.votesAgainst} ~{d.votesAbstain}</span>
+                <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${OUT_TONE[d.outcome] ?? "bg-gray-100"}`}>{d.outcome}</span>
+              </div>
+              <div className="flex items-center gap-2 mt-0.5"><span className="text-[10px] text-gray-400">{d.decisionType} · {d.recordedByName ?? "—"}</span><span className="ml-auto"><OgsSignButton entityType="decision" entityId={d.id} signatures={d.signatures} /></span></div>
             </div>
           ))}
         </div>

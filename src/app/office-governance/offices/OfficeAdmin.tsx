@@ -3,6 +3,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { OFFICE_TYPES, SCOPE_TYPES, APPOINTMENT_ROLES, APPOINTMENT_ROLE_LABEL, STATE_LABEL, allowedNext } from "@/lib/ogs/lifecycle";
+import { OgsSignButton } from "@/components/OgsSignButton";
 
 // OGS write-workflow client surface — Constitute New Office wizard + per-office lifecycle & appointment
 // management. Talks to /api/office-governance/offices*; every success calls router.refresh() so the server
@@ -11,7 +12,7 @@ import { OFFICE_TYPES, SCOPE_TYPES, APPOINTMENT_ROLES, APPOINTMENT_ROLE_LABEL, S
 
 type Person = { id: string; full_name: string | null; role: string | null };
 type Appt = { id: string; personId: string | null; personName: string | null; role: string };
-type Charter = { id: string; version: string; purpose: string | null; mandate: string | null; quorumRule: string | null; decisionRule: string | null; effectiveFrom: string | null; reviewDate: string | null; approvedBy: string | null; approvalStatus: string; createdAt: string | null };
+type Charter = { id: string; version: string; purpose: string | null; mandate: string | null; quorumRule: string | null; decisionRule: string | null; effectiveFrom: string | null; reviewDate: string | null; approvedBy: string | null; approvalStatus: string; createdAt: string | null; signatures: { signerName: string | null; signerRole: string | null; signedAt: string | null }[] };
 type Office = { id: string; name: string; officeType: string; scopeType: string; status: string; authoritySource: string | null; chairName: string | null; quorum: number; nextReview: string | null; charterVersion: string | null; establishedAt: string | null; memberCount: number; appointments: Appt[]; charters: Charter[] };
 type Call = (url: string, method: string, body?: any) => Promise<any>;
 
@@ -224,7 +225,7 @@ function CharterSection({ office, busy, call, onChange }: { office: Office; busy
       </div>
       {current ? (
         <div className="text-[12px] text-gray-700 space-y-1">
-          <div className="flex items-center gap-2"><span className="font-semibold">{current.version}</span><span className={`text-[10px] px-1.5 py-0.5 rounded-full ${CH_STATUS_TONE[current.approvalStatus] ?? "bg-gray-100 text-gray-600"}`}>{current.approvalStatus}</span><span className="text-[10px] text-gray-400">effective {current.effectiveFrom ?? "—"} · review {current.reviewDate ?? "—"}</span></div>
+          <div className="flex items-center gap-2 flex-wrap"><span className="font-semibold">{current.version}</span><span className={`text-[10px] px-1.5 py-0.5 rounded-full ${CH_STATUS_TONE[current.approvalStatus] ?? "bg-gray-100 text-gray-600"}`}>{current.approvalStatus}</span><span className="text-[10px] text-gray-400">effective {current.effectiveFrom ?? "—"} · review {current.reviewDate ?? "—"}</span><span className="ml-auto"><OgsSignButton entityType="charter" entityId={current.id} signatures={current.signatures} /></span></div>
           {current.purpose && <p><span className="text-gray-400 text-[10px] uppercase tracking-wide">Purpose</span><br />{current.purpose}</p>}
           {current.mandate && <p><span className="text-gray-400 text-[10px] uppercase tracking-wide">Mandate</span><br />{current.mandate}</p>}
           {(current.quorumRule || current.decisionRule) && <p className="text-[11px] text-gray-500">{current.quorumRule ?? ""}{current.quorumRule && current.decisionRule ? " · " : ""}{current.decisionRule ?? ""}</p>}

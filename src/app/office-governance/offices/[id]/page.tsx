@@ -2,6 +2,7 @@ import { ogsGuard, Head, Stat, Card, Pill, Table, Foot } from "../../_ui";
 import { loadOfficeAdmin } from "@/lib/ogs/office";
 import { loadOgsMeetings } from "@/lib/ogs/meetings";
 import { STATE_LABEL, APPOINTMENT_ROLE_LABEL } from "@/lib/ogs/lifecycle";
+import { OgsSignButton } from "@/components/OgsSignButton";
 import Link from "next/link";
 
 export const dynamic = "force-dynamic";
@@ -57,7 +58,7 @@ export default async function OfficeDetailPage({ params }: { params: Promise<{ i
         <Card title="Charter" className="xl:col-span-2" right={current ? <Pill text={`${current.version} · ${current.approvalStatus}`} tone={CH_TONE[current.approvalStatus] ?? "slate"} /> : undefined}>
           {current ? (
             <div className="text-[13px] text-gray-700 space-y-2">
-              <p className="text-[11px] text-gray-400">Effective {fmtDate(current.effectiveFrom)} · review {fmtDate(current.reviewDate)} · approved by {current.approvedBy ?? "—"}</p>
+              <div className="flex items-center gap-2 flex-wrap"><p className="text-[11px] text-gray-400">Effective {fmtDate(current.effectiveFrom)} · review {fmtDate(current.reviewDate)} · approved by {current.approvedBy ?? "—"}</p><span className="ml-auto"><OgsSignButton entityType="charter" entityId={current.id} signatures={current.signatures} /></span></div>
               {current.purpose && <div><p className="text-[10px] uppercase tracking-wide text-gray-400">Purpose</p><p>{current.purpose}</p></div>}
               {current.mandate && <div><p className="text-[10px] uppercase tracking-wide text-gray-400">Mandate</p><p>{current.mandate}</p></div>}
               {(current.quorumRule || current.decisionRule) && <p className="text-[12px] text-gray-500">{current.quorumRule ?? ""}{current.quorumRule && current.decisionRule ? " · " : ""}{current.decisionRule ?? ""}</p>}

@@ -112,7 +112,8 @@ const MATCHERS: Record<string, { types: string[]; re: RegExp; defaultName: strin
 // write-workflow admin surface. Unlike resolveOffices it does NOT fall back to committees: the management
 // UI acts on real ogs_* rows, so an unmigrated tenant gets provisioned:false (constitute-your-first-office).
 export type AdminAppointment = { id: string; personId: string | null; personName: string | null; role: string };
-export type CharterVersion = { id: string; version: string; purpose: string | null; mandate: string | null; quorumRule: string | null; decisionRule: string | null; effectiveFrom: string | null; reviewDate: string | null; approvedBy: string | null; approvalStatus: string; createdAt: string | null };
+export type CharterSignature = { signerName: string | null; signerRole: string | null; signedAt: string | null };
+export type CharterVersion = { id: string; version: string; purpose: string | null; mandate: string | null; quorumRule: string | null; decisionRule: string | null; effectiveFrom: string | null; reviewDate: string | null; approvedBy: string | null; approvalStatus: string; createdAt: string | null; signatures: CharterSignature[] };
 export type AdminOffice = {
   id: string; name: string; officeType: string; scopeType: string; status: string;
   authoritySource: string | null; chairName: string | null; quorum: number; nextReview: string | null;
@@ -141,8 +142,20 @@ export async function loadOfficeAdmin(admin: any, hid: string | null, isSuper: b
     const { data } = await admin.from("ogs_office_charters").select("id, office_id, version, purpose, mandate, quorum_rule, decision_rule, effective_from, review_date, approved_by, approval_status, created_at").in("office_id", ids.slice(i, i + 200)).limit(20000);
     charterRows = charterRows.concat(data ?? []);
   }
+  // Signatures on charters (fail-soft — ogs_signatures may not exist until migration 120).
+  const charterIds = charterRows.map(c => c.id);
+  let charterSigs: any[] = [];
+  for (let i = 0; i < charterIds.length; i += 200) {
+    if (!charterIds.length) break;
+    const { data, error } = await admin.from("ogs_signatures").select("entity_id, signer_name, signer_role, signed_at").eq("entity_type", "charter").in("entity_id", charterIds.slice(i, i + 200)).limit(20000);
+    if (error) break;
+    charterSigs = charterSigs.concat(data ?? []);
+  }
+  const sigByCharter = new Map<string, any[]>();
+  charterSigs.forEach(s => { const a = sigByCharter.get(s.entity_id) ?? []; a.push(s); sigByCharter.set(s.entity_id, a); });
+
   const chBy = new Map<string, CharterVersion[]>();
-  charterRows.forEach(c => { const arr = chBy.get(c.office_id) ?? []; arr.push({ id: c.id, version: c.version, purpose: c.purpose, mandate: c.mandate, quorumRule: c.quorum_rule, decisionRule: c.decision_rule, effectiveFrom: c.effective_from, reviewDate: c.review_date, approvedBy: c.approved_by, approvalStatus: c.approval_status ?? "approved", createdAt: c.created_at }); chBy.set(c.office_id, arr); });
+  charterRows.forEach(c => { const arr = chBy.get(c.office_id) ?? []; arr.push({ id: c.id, version: c.version, purpose: c.purpose, mandate: c.mandate, quorumRule: c.quorum_rule, decisionRule: c.decision_rule, effectiveFrom: c.effective_from, reviewDate: c.review_date, approvedBy: c.approved_by, approvalStatus: c.approval_status ?? "approved", createdAt: c.created_at, signatures: (sigByCharter.get(c.id) ?? []).map(s => ({ signerName: s.signer_name, signerRole: s.signer_role, signedAt: s.signed_at })) }); chBy.set(c.office_id, arr); });
 
   const offices: AdminOffice[] = rows.map(o => {
     const oa = byOffice.get(o.id) ?? [];
