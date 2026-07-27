@@ -2,6 +2,7 @@ import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { loadCmoDashboard } from "@/lib/cmo-dashboard";
+import { loadCmoGovernance } from "@/lib/competency/cmo-governance";
 
 export const dynamic = "force-dynamic";
 
@@ -56,10 +57,12 @@ export default async function CompetencyDashboard() {
   if (!roles.some(r => ["hospital_admin", "educator", "super_admin"].includes(r))) redirect("/dashboard");
   const isSuper = roles.includes("super_admin");
 
-  const [d, hosp] = await Promise.all([
+  const [d, gov, hosp] = await Promise.all([
     loadCmoDashboard(admin, profile?.hospital_id ?? null, isSuper),
+    loadCmoGovernance(admin, profile?.hospital_id ?? null, isSuper),
     profile?.hospital_id ? admin.from("hospitals").select("name").eq("id", profile.hospital_id).maybeSingle() : Promise.resolve({ data: null }),
   ]);
+  const GOV_HEX: Record<string, string> = { slate: "#94a3b8", amber: "#f59e0b", blue: "#3b82f6", violet: "#a855f7", emerald: "#22c55e" };
   const hospitalName = isSuper ? "Enterprise" : (hosp?.data?.name ?? "Your hospital");
   const domTotal = d.domains.reduce((s: number, x: any) => s + x.total, 0) || 1;
   const donut = d.domains.length
@@ -77,9 +80,32 @@ export default async function CompetencyDashboard() {
         <div className="flex items-center gap-2">
           <span className="text-xs bg-white border border-gray-200 rounded-lg px-3 py-2 text-gray-700">🏥 {hospitalName}</span>
           <span className="text-xs bg-white border border-gray-200 rounded-lg px-3 py-2 text-gray-700">📅 {todayLabel()}</span>
-          <span className="text-xs bg-white border border-gray-200 rounded-lg px-3 py-2 text-gray-400">☰ Filters</span>
         </div>
       </div>
+
+      {/* COMP-011 governance & publication strip — the Office governs (approve, publish, version, monitor) */}
+      {gov.provisioned && (
+        <div className={`${card} p-4`}>
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="font-semibold text-gray-900 text-sm">Governance &amp; Publication</h3>
+            <Link href="/competency-office/publishing" className="text-[11px] text-teal-600 hover:underline">Governance hub →</Link>
+          </div>
+          <div className="flex items-center gap-1 overflow-x-auto">
+            {gov.pipeline.map((s: any, i: number) => (
+              <div key={s.stage} className="flex items-center gap-1 shrink-0">
+                <div className="flex flex-col items-center text-center w-[88px]">
+                  <span className="w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold tabular-nums" style={{ backgroundColor: (GOV_HEX[s.tone] ?? "#94a3b8") + "22", color: GOV_HEX[s.tone] ?? "#94a3b8" }}>{s.n}</span>
+                  <span className="text-[10.5px] text-gray-600 mt-1 leading-tight">{s.stage}</span>
+                </div>
+                {i < gov.pipeline.length - 1 && <span className="text-gray-300">→</span>}
+              </div>
+            ))}
+            <div className="border-l border-gray-100 h-10 mx-2 shrink-0" />
+            <div className="shrink-0 text-center px-2"><p className={`text-lg font-bold tabular-nums ${gov.kpis.approvalPending ? "text-violet-600" : "text-gray-900"}`}>{gov.kpis.approvalPending}</p><p className="text-[10px] text-gray-400">approval pending</p></div>
+            <div className="shrink-0 text-center px-2"><p className={`text-lg font-bold tabular-nums ${gov.kpis.retiringSoon ? "text-rose-600" : "text-gray-900"}`}>{gov.kpis.retiringSoon}</p><p className="text-[10px] text-gray-400">review due</p></div>
+          </div>
+        </div>
+      )}
 
       {/* KPI row */}
       <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
