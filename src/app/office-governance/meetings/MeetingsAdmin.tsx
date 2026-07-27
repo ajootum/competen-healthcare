@@ -107,6 +107,7 @@ function ScheduleForm({ offices, scopeHid, isSuper, busy, call, onDone }: { offi
 
 function MeetingDetail({ meeting: m, people, busy, call, refresh }: { meeting: Meeting; people: Person[]; busy: boolean; call: Call; refresh: () => void }) {
   const base = `/api/office-governance/meetings/${m.id}`;
+  const presentAttendees = m.attendance.filter(a => a.status === "present" && a.personId).map(a => ({ id: a.personId as string, name: a.personName ?? "Member" }));
   const [minutes, setMinutes] = useState(m.minutes ?? "");
   const [agendaTitle, setAgendaTitle] = useState("");
   const [actTitle, setActTitle] = useState(""); const [actOwner, setActOwner] = useState(""); const [actDue, setActDue] = useState("");
@@ -168,7 +169,7 @@ function MeetingDetail({ meeting: m, people, busy, call, refresh }: { meeting: M
             </div>
           ))}
         </div>
-        <DecisionForm base={base} people={people} busy={busy} call={call} refresh={refresh} />
+        <DecisionForm base={base} people={people} attendees={presentAttendees} busy={busy} call={call} refresh={refresh} />
       </div>
 
       {/* Actions */}
@@ -199,33 +200,61 @@ function MeetingDetail({ meeting: m, people, busy, call, refresh }: { meeting: M
   );
 }
 
-function DecisionForm({ base, people, busy, call, refresh }: { base: string; people: Person[]; busy: boolean; call: Call; refresh: () => void }) {
+function DecisionForm({ base, people, attendees, busy, call, refresh }: { base: string; people: Person[]; attendees: { id: string; name: string }[]; busy: boolean; call: Call; refresh: () => void }) {
   const [open, setOpen] = useState(false);
   const [title, setTitle] = useState(""); const [type, setType] = useState("resolution"); const [outcome, setOutcome] = useState("carried");
+  const [mode, setMode] = useState<"rollcall" | "tally">(attendees.length ? "rollcall" : "tally");
   const [vf, setVf] = useState(0); const [va, setVa] = useState(0); const [vab, setVab] = useState(0);
+  const [roll, setRoll] = useState<Record<string, "for" | "against" | "abstain">>({});
   const [actTitle, setActTitle] = useState(""); const [actOwner, setActOwner] = useState("");
+
+  const useRoll = mode === "rollcall" && attendees.length > 0;
+  const rc = attendees.map(a => roll[a.id] ?? "abstain");
+  const tallyFor = useRoll ? rc.filter(v => v === "for").length : vf;
+  const tallyAgainst = useRoll ? rc.filter(v => v === "against").length : va;
+  const tallyAbstain = useRoll ? rc.filter(v => v === "abstain").length : vab;
+
   async function submit() {
     if (!title.trim()) return;
-    const body: any = { title, decision_type: type, outcome, votes_for: vf, votes_against: va, votes_abstain: vab };
+    const body: any = { title, decision_type: type, outcome };
+    if (useRoll) body.votes = attendees.map(a => ({ voter_id: a.id, vote: roll[a.id] ?? "abstain" }));
+    else { body.votes_for = vf; body.votes_against = va; body.votes_abstain = vab; }
     if (actTitle.trim()) body.action = { title: actTitle, owner_id: actOwner || null };
     const r = await call(`${base}/decisions`, "POST", body);
-    if (r) { setTitle(""); setVf(0); setVa(0); setVab(0); setActTitle(""); setActOwner(""); setOpen(false); refresh(); }
+    if (r) { setTitle(""); setVf(0); setVa(0); setVab(0); setRoll({}); setActTitle(""); setActOwner(""); setOpen(false); refresh(); }
   }
   if (!open) return <button onClick={() => setOpen(true)} className="text-[12px] text-teal-600 hover:underline">＋ Record a decision</button>;
+  const voteBtn = (aId: string, v: "for" | "against" | "abstain") => { const active = (roll[aId] ?? "abstain") === v; const on = v === "for" ? "bg-emerald-600 text-white" : v === "against" ? "bg-rose-600 text-white" : "bg-gray-500 text-white"; return <button key={v} type="button" onClick={() => setRoll(r => ({ ...r, [aId]: v }))} className={`text-[10px] w-5 py-0.5 rounded ${active ? on : "text-gray-400 hover:text-gray-700"}`}>{v[0].toUpperCase()}</button>; };
   return (
     <div className="border-t border-gray-100 pt-2 space-y-1.5">
       <input className={`${inp} w-full`} value={title} onChange={e => setTitle(e.target.value)} placeholder="Decision / resolution" />
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-1.5">
+      <div className="grid grid-cols-2 gap-1.5">
         <select className={inp} value={type} onChange={e => setType(e.target.value)}>{["resolution", "approval", "policy", "endorsement"].map(t => <option key={t} value={t}>{t[0].toUpperCase() + t.slice(1)}</option>)}</select>
         <select className={inp} value={outcome} onChange={e => setOutcome(e.target.value)}>{["carried", "rejected", "deferred", "tabled"].map(t => <option key={t} value={t}>{t[0].toUpperCase() + t.slice(1)}</option>)}</select>
-        <label className="flex items-center gap-1 text-[11px] text-gray-500">For<input type="number" min={0} className={`${inp} w-full`} value={vf} onChange={e => setVf(+e.target.value)} /></label>
-        <label className="flex items-center gap-1 text-[11px] text-gray-500">Ag<input type="number" min={0} className={`${inp} w-full`} value={va} onChange={e => setVa(+e.target.value)} /></label>
-        <label className="flex items-center gap-1 text-[11px] text-gray-500">Abs<input type="number" min={0} className={`${inp} w-full`} value={vab} onChange={e => setVab(+e.target.value)} /></label>
       </div>
+      <div className="flex items-center gap-2">
+        <span className="text-[11px] text-gray-500">Votes:</span>
+        {attendees.length > 0 && <div className="flex gap-1">{(["rollcall", "tally"] as const).map(md => <button key={md} type="button" onClick={() => setMode(md)} className={`text-[10px] px-2 py-0.5 rounded ${mode === md ? "bg-gray-800 text-white" : "text-gray-500 border border-gray-200"}`}>{md === "rollcall" ? "Roll-call" : "Tally"}</button>)}</div>}
+        <span className="text-[11px] text-gray-600 tabular-nums ml-auto">✓{tallyFor} ✕{tallyAgainst} ~{tallyAbstain}</span>
+      </div>
+      {useRoll ? (
+        <div className="space-y-0.5 max-h-40 overflow-y-auto border border-gray-100 rounded-lg p-1.5">
+          {attendees.map(a => (
+            <div key={a.id} className="flex items-center gap-1.5 text-[12px]"><span className="flex-1 truncate text-gray-700">{a.name}</span>{voteBtn(a.id, "for")}{voteBtn(a.id, "against")}{voteBtn(a.id, "abstain")}</div>
+          ))}
+        </div>
+      ) : (
+        <div className="grid grid-cols-3 gap-1.5">
+          <label className="flex items-center gap-1 text-[11px] text-gray-500">For<input type="number" min={0} className={`${inp} w-full`} value={vf} onChange={e => setVf(+e.target.value)} /></label>
+          <label className="flex items-center gap-1 text-[11px] text-gray-500">Against<input type="number" min={0} className={`${inp} w-full`} value={va} onChange={e => setVa(+e.target.value)} /></label>
+          <label className="flex items-center gap-1 text-[11px] text-gray-500">Abstain<input type="number" min={0} className={`${inp} w-full`} value={vab} onChange={e => setVab(+e.target.value)} /></label>
+        </div>
+      )}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-1.5">
         <input className={inp} value={actTitle} onChange={e => setActTitle(e.target.value)} placeholder="Follow-up action (optional)" />
         <select className={inp} value={actOwner} onChange={e => setActOwner(e.target.value)} disabled={!actTitle.trim()}><option value="">— action owner —</option>{people.map(p => <option key={p.id} value={p.id}>{p.full_name ?? "Unnamed"}</option>)}</select>
       </div>
+      {useRoll && <p className="text-[10px] text-gray-400">Roll-call over the {attendees.length} present member{attendees.length === 1 ? "" : "s"} — the tally is derived and each member&apos;s vote recorded. Mark attendance &ldquo;present&rdquo; to include a member.</p>}
       <div className="flex justify-end gap-2"><button onClick={() => setOpen(false)} className="text-[12px] text-gray-500">Cancel</button><button disabled={busy || !title.trim()} onClick={submit} className="text-[12px] bg-teal-600 text-white rounded-lg px-3 py-1 disabled:opacity-40">Record decision</button></div>
     </div>
   );

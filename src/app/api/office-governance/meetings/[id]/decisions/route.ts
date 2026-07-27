@@ -25,14 +25,28 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   const decisionType = DECISION_TYPES.includes(b.decision_type) ? b.decision_type : "resolution";
   const outcome = OUTCOMES.includes(b.outcome) ? b.outcome : "carried";
 
+  // Roll-call (per-member votes) overrides the manual tally when present.
+  const roll = (Array.isArray(b.votes) ? b.votes : []).filter((v: any) => v && typeof v.voter_id === "string" && ["for", "against", "abstain"].includes(v.vote));
+  const tally = roll.length
+    ? { votes_for: roll.filter((v: any) => v.vote === "for").length, votes_against: roll.filter((v: any) => v.vote === "against").length, votes_abstain: roll.filter((v: any) => v.vote === "abstain").length }
+    : { votes_for: nn(b.votes_for), votes_against: nn(b.votes_against), votes_abstain: nn(b.votes_abstain) };
+
   const { data: me } = await c.admin.from("profiles").select("full_name").eq("id", c.userId).single();
   const { data: decision, error } = await c.admin.from("ogs_decisions").insert({
     office_id: meeting.office_id, meeting_id: id, agenda_item_id: clean(b.agenda_item_id), hospital_id: meeting.hospital_id ?? null,
     title, description: clean(b.description), decision_type: decisionType, outcome,
-    votes_for: nn(b.votes_for), votes_against: nn(b.votes_against), votes_abstain: nn(b.votes_abstain),
+    ...tally,
     decided_at: new Date().toISOString(), recorded_by: c.userId, recorded_by_name: me?.full_name ?? null,
   }).select("id, title, outcome").single();
   if (error) return meetingMigrationGate(error) ?? NextResponse.json({ error: error.message }, { status: 500 });
+
+  // Record the roll-call vote of each member.
+  if (roll.length) {
+    const voterIds = [...new Set(roll.map((v: any) => v.voter_id))];
+    const { data: profs } = await c.admin.from("profiles").select("id, full_name").in("id", voterIds);
+    const nameById = new Map<string, string>(((profs ?? []) as any[]).map(p => [p.id, p.full_name]));
+    await c.admin.from("ogs_votes").insert(roll.map((v: any) => ({ decision_id: decision.id, voter_id: v.voter_id, voter_name: nameById.get(v.voter_id) ?? null, vote: v.vote })));
+  }
 
   // Optional follow-up action arising from the decision.
   const actionTitle = clean(b.action?.title);
@@ -43,6 +57,6 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     await c.admin.from("ogs_office_actions").insert({ office_id: meeting.office_id, meeting_id: id, decision_id: decision.id, hospital_id: meeting.hospital_id ?? null, title: actionTitle, owner_id: ownerId, owner_name: ownerName, due_date: clean(b.action?.due_date), status: "open" });
   }
 
-  await c.admin.from("audit_log").insert({ actor_id: c.userId, actor_name: me?.full_name ?? null, action: "record_decision", entity_type: "ogs_decision", entity_id: decision.id, hospital_id: meeting.hospital_id ?? null, new_value: { title, outcome, votes: { for: nn(b.votes_for), against: nn(b.votes_against), abstain: nn(b.votes_abstain) } } });
+  await c.admin.from("audit_log").insert({ actor_id: c.userId, actor_name: me?.full_name ?? null, action: "record_decision", entity_type: "ogs_decision", entity_id: decision.id, hospital_id: meeting.hospital_id ?? null, new_value: { title, outcome, votes: { for: tally.votes_for, against: tally.votes_against, abstain: tally.votes_abstain }, roll_call: roll.length } });
   return NextResponse.json(decision, { status: 201 });
 }
