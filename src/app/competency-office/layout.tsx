@@ -14,33 +14,50 @@ import { workspaceLinksForUser } from "@/lib/workspace-links";
 // dashboard and route to their authoritative surfaces (§6) until each gains a dedicated page.
 // Role-scoped to competency leads, educators and admins.
 
-const NAV = [
-  { label: "Competency Dashboard",  href: "/competency-office",              icon: "📊", exact: true },
-  { label: "Lifecycle Engine",      href: "/competency-office/lifecycle",    icon: "🔄" },    // CMO-004
-  { label: "Compliance Centre",     href: "/competency-office/compliance",   icon: "✔️" },
-  { label: "Credential Management", href: "/competency-office/credentialing", icon: "🎓" },
-  { label: "Assessment Status",     href: "/competency-office/assessments",  icon: "📝" },
-  { label: "Validation Queue",      href: "/competency-office/validation",   icon: "✅" },
-  { label: "Competency Analytics",  href: "/competency-office/analytics",    icon: "📈" },
-  { label: "Competency Frameworks", href: "/competency-office/frameworks",   icon: "🗂️" },
-  // CMO-008..020 expansion — gap/planning/assignment + certifications/privileging/review + standards/publishing/
-  // accreditation/config + AI/readiness/forecasting. Over cmo_* stores (migrations 114/115) + reused competency_*.
-  { label: "Gap Management",        href: "/competency-office/gaps",          icon: "🕳️" },   // CMO-008
-  { label: "Enterprise Planning",   href: "/competency-office/planning",      icon: "🗺️" },   // CMO-009
-  { label: "Assignment Centre",     href: "/competency-office/assignments",   icon: "🧩" },    // CMO-010
-  { label: "Certification Manager", href: "/competency-office/certifications", icon: "📜" },   // CMO-011
-  { label: "Clinical Privileging",  href: "/competency-office/privileging",   icon: "🏥" },    // CMO-012
-  { label: "Review & Approval",     href: "/competency-office/review-board",  icon: "⚖️" },    // COMP-011
-  { label: "Standards Library",     href: "/competency-office/standards",     icon: "📚" },    // CMO-014
-  { label: "Governance & Publication", href: "/competency-office/publishing", icon: "🚀" },    // COMP-011
-  { label: "Accreditation Mapping", href: "/competency-office/accreditation", icon: "🏅" },    // CMO-016
-  { label: "AI Intelligence",       href: "/competency-office/ai-intelligence", icon: "🤖" },  // CMO-017
-  { label: "Workforce Readiness",   href: "/competency-office/readiness",     icon: "🎯" },    // CMO-018
-  { label: "Forecasting",           href: "/competency-office/forecasting",   icon: "🔮" },    // CMO-019
-  { label: "Office & Membership",   href: "/competency-office/membership",   icon: "🏛️" },    // CMO-003
-  { label: "Workspace Integration", href: "/competency-office/integration",  icon: "🔗" },    // CMO-005
-  { label: "Configuration & Rules", href: "/competency-office/configuration", icon: "🔧" },    // CMO-020
+// CMO-000/001 workflow-oriented navigation — the 8 L1 sections. All 23 modules grouped beneath them.
+const NAV_SECTIONS: { section: string; items: { label: string; href: string; icon: string; exact?: boolean }[] }[] = [
+  { section: "Executive", items: [
+    { label: "Executive Dashboard", href: "/competency-office", icon: "📊", exact: true },
+  ] },
+  { section: "Competency Governance", items: [
+    { label: "Lifecycle Engine", href: "/competency-office/lifecycle", icon: "🔄" },           // CMO-004
+    { label: "Competency Frameworks", href: "/competency-office/frameworks", icon: "🗂️" },
+    { label: "Standards Library", href: "/competency-office/standards", icon: "📚" },
+    { label: "Governance & Publication", href: "/competency-office/publishing", icon: "🚀" },   // COMP-011
+    { label: "Review & Approval", href: "/competency-office/review-board", icon: "⚖️" },        // COMP-011
+  ] },
+  { section: "Assessment Operations", items: [
+    { label: "Assessment Status", href: "/competency-office/assessments", icon: "📝" },
+    { label: "Validation Queue", href: "/competency-office/validation", icon: "✅" },
+  ] },
+  { section: "Competency Assurance", items: [
+    { label: "Compliance Centre", href: "/competency-office/compliance", icon: "✔️" },
+    { label: "Accreditation Mapping", href: "/competency-office/accreditation", icon: "🏅" },
+    { label: "Workforce Readiness", href: "/competency-office/readiness", icon: "🎯" },
+  ] },
+  { section: "Credential Management", items: [
+    { label: "Credential Management", href: "/competency-office/credentialing", icon: "🎓" },
+    { label: "Certification Manager", href: "/competency-office/certifications", icon: "📜" },
+    { label: "Clinical Privileging", href: "/competency-office/privileging", icon: "🏥" },
+  ] },
+  { section: "Improvement Centre", items: [
+    { label: "Gap Management", href: "/competency-office/gaps", icon: "🕳️" },
+    { label: "Enterprise Planning", href: "/competency-office/planning", icon: "🗺️" },
+    { label: "Forecasting", href: "/competency-office/forecasting", icon: "🔮" },
+  ] },
+  { section: "Analytics & Intelligence", items: [
+    { label: "Competency Analytics", href: "/competency-office/analytics", icon: "📈" },
+    { label: "AI Intelligence", href: "/competency-office/ai-intelligence", icon: "🤖" },
+  ] },
+  { section: "Office Administration", items: [
+    { label: "Assignment Centre", href: "/competency-office/assignments", icon: "🧩" },         // CMO-010
+    { label: "Office & Membership", href: "/competency-office/membership", icon: "🏛️" },        // CMO-003
+    { label: "Workspace Integration", href: "/competency-office/integration", icon: "🔗" },     // CMO-005
+    { label: "Configuration & Rules", href: "/competency-office/configuration", icon: "🔧" },   // CMO-020
+  ] },
 ];
+// Flat list for the mobile nav strip.
+const NAV = NAV_SECTIONS.flatMap(s => s.items);
 
 // Quick-actions rail (§5) — cross-links to the authoritative surface for each action.
 const QUICK_ACTIONS = [
@@ -113,10 +130,15 @@ export default async function CompetencyOfficeLayout({ children }: { children: R
           </div>
 
           <nav className="flex flex-col gap-0.5 flex-1 overflow-y-auto">
-            {NAV.map(({ label, href, icon, exact }) => (
-              <NavLink key={label} href={href} icon={icon} label={label} exact={exact}
-                className="flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm text-teal-100/70 hover:bg-teal-800/50 hover:text-white transition-colors"
-                activeClassName="flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm bg-teal-700/60 text-white font-medium" />
+            {NAV_SECTIONS.map(({ section, items }) => (
+              <div key={section}>
+                {section !== "Executive" && <div className="px-3 mt-3 mb-1" data-sb-label><span className="text-[10px] font-bold text-teal-400/60 uppercase tracking-widest">{section}</span></div>}
+                {items.map(({ label, href, icon, exact }) => (
+                  <NavLink key={label} href={href} icon={icon} label={label} exact={exact}
+                    className="flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm text-teal-100/70 hover:bg-teal-800/50 hover:text-white transition-colors"
+                    activeClassName="flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm bg-teal-700/60 text-white font-medium" />
+                ))}
+              </div>
             ))}
 
             <div className="px-3 mt-4 mb-1.5" data-sb-label>
