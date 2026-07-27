@@ -5,7 +5,7 @@
 import Link from "next/link";
 
 type Office = {
-  name: string; icon: string; officeType: string; scopeType: string; status: string;
+  id: string; name: string; icon: string; officeType: string; scopeType: string; status: string;
   authoritySource: string | null; chairName: string | null; quorum: number; memberCount: number;
   charterVersion: string | null; nextReview: string | null; establishedAt: string | null;
   bound: boolean; viewerRole: string | null; source: "ogs" | "committee";
@@ -38,6 +38,7 @@ function Fact({ label, value }: { label: string; value: string }) {
 export function GovernanceBanner({ office, href = "/office-governance" }: { office: Office; href?: string }) {
   const st = STATE[office.status] ?? { label: (office.status ?? "—").replace(/_/g, " "), dot: "bg-slate-400", text: "text-slate-200" };
   const fmt = (d: string | null) => (d ? new Date(d).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" }) : "—");
+  const target = office.bound && office.id ? `/office-governance/offices/${office.id}` : href;
   return (
     <div className="rounded-xl bg-gradient-to-r from-slate-900 to-slate-800 border border-slate-700 px-4 py-3 text-white">
       <div className="flex items-start justify-between gap-4 flex-wrap">
@@ -54,7 +55,7 @@ export function GovernanceBanner({ office, href = "/office-governance" }: { offi
         </div>
         <div className="flex items-center gap-3">
           {office.viewerRole && <span className="text-[10px] bg-white/10 rounded-full px-2 py-1 text-slate-100 whitespace-nowrap">Your role: {ROLE_LABEL[office.viewerRole] ?? office.viewerRole}</span>}
-          <Link href={href} className="text-[11px] text-slate-200 hover:text-white border border-slate-600 rounded-lg px-2.5 py-1.5 whitespace-nowrap">Governance →</Link>
+          <Link href={target} className="text-[11px] text-slate-200 hover:text-white border border-slate-600 rounded-lg px-2.5 py-1.5 whitespace-nowrap">{office.bound && office.id ? "Open office →" : "Governance →"}</Link>
         </div>
       </div>
       <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-5 gap-x-4 gap-y-2 mt-3 pt-3 border-t border-slate-700/60">

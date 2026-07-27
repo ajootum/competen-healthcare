@@ -1,6 +1,7 @@
 "use client";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { OFFICE_TYPES, SCOPE_TYPES, APPOINTMENT_ROLES, APPOINTMENT_ROLE_LABEL, STATE_LABEL, allowedNext } from "@/lib/ogs/lifecycle";
 
 // OGS write-workflow client surface — Constitute New Office wizard + per-office lifecycle & appointment
@@ -53,13 +54,16 @@ export default function OfficeAdmin({ offices, people, scopeHid, isSuper }: { of
         {offices.length === 0 && <p className="text-sm text-gray-400 p-6 text-center">No offices constituted yet. Use &ldquo;Constitute new office&rdquo; above to create the first one.</p>}
         {offices.map(o => (
           <div key={o.id}>
-            <button onClick={() => setManageId(id => (id === o.id ? null : o.id))} className="w-full flex items-center gap-3 p-3 text-left hover:bg-gray-50">
-              <span className="font-medium text-gray-800 text-[13px] flex-1 truncate">{o.name}</span>
-              <span className="text-[10px] text-gray-400 hidden md:inline">{title(o.officeType.replace(/_/g, " "))} · {o.scopeType}</span>
-              <span className="text-[11px] text-gray-500 tabular-nums">{o.memberCount}/{o.quorum}</span>
-              <span className={`text-[10px] px-2 py-0.5 rounded-full ${STATUS_TONE[o.status] ?? "bg-gray-100 text-gray-600"}`}>{STATE_LABEL[o.status] ?? o.status}</span>
-              <span className="text-gray-300 text-xs w-3">{manageId === o.id ? "▲" : "▼"}</span>
-            </button>
+            <div className="flex items-center hover:bg-gray-50">
+              <button onClick={() => setManageId(id => (id === o.id ? null : o.id))} className="flex-1 min-w-0 flex items-center gap-3 p-3 text-left">
+                <span className="font-medium text-gray-800 text-[13px] flex-1 truncate">{o.name}</span>
+                <span className="text-[10px] text-gray-400 hidden md:inline">{title(o.officeType.replace(/_/g, " "))} · {o.scopeType}</span>
+                <span className="text-[11px] text-gray-500 tabular-nums">{o.memberCount}/{o.quorum}</span>
+                <span className={`text-[10px] px-2 py-0.5 rounded-full ${STATUS_TONE[o.status] ?? "bg-gray-100 text-gray-600"}`}>{STATE_LABEL[o.status] ?? o.status}</span>
+                <span className="text-gray-300 text-xs w-3">{manageId === o.id ? "▲" : "▼"}</span>
+              </button>
+              <Link href={`/office-governance/offices/${o.id}`} className="px-3 text-[11px] text-teal-600 hover:underline shrink-0 whitespace-nowrap">open →</Link>
+            </div>
             {manageId === o.id && <OfficeManage office={o} people={people} busy={busy} call={call} onChange={() => router.refresh()} />}
           </div>
         ))}
