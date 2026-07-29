@@ -99,7 +99,7 @@ const STUDIO_NAV = [
     { label: "Dependencies", href: "/super-admin/studio/dependencies", icon: "🔗" },
     { label: "Rules Engine", href: "/super-admin/studio/rules", icon: "⚙️" },
     { label: "Mapping Studio", href: "/super-admin/studio/mapping", icon: "🗺️" },
-    { label: "Assessment Studio", href: "/super-admin/assessment-methods", icon: "🩺" },
+    { label: "Assessment Studio", href: "/super-admin/studio/assessment", icon: "🩺" },
     { label: "Skills Library", href: "/super-admin/studio/skills", icon: "✋" },
     { label: "Checklists", href: "/super-admin/studio/checklists", icon: "☑️" },
     { label: "Practices & CPUs", href: "/super-admin/studio/cpus", icon: "🏥" },

@@ -91,7 +91,7 @@ export default async function StudioPage() {
   const CORE: Mod[] = [
     { code: "CST-001", icon: "🧬", label: "Framework Designer", desc: "Design framework → domain → category → competency hierarchies with live validation.", href: "/super-admin/content", stat: `${frameworks} frameworks · ${domains} domains` },
     { code: "CST-002", icon: "🪪", label: "Competency Builder", desc: "Author competencies — behaviours, indicators, criteria, evidence & metadata.", href: "/super-admin/content", stat: `${comps} competencies` },
-    { code: "CST-003", icon: "🩺", label: "Assessment Studio", desc: "OSCE, DOPS, Mini-CEX, MCQ & viva — blueprints, scoring rules and rubrics.", href: "/super-admin/assessment-methods", stat: `${methods} configs · ${banks} banks` },
+    { code: "CST-003", icon: "🩺", label: "Assessment Studio", desc: "The 17-module assessment platform — frameworks, blueprints, items, OSCE, workplace, scoring & psychometrics.", href: "/super-admin/studio/assessment", stat: `${methods} configs · ${banks} banks` },
     { code: "CST-004", icon: "📎", label: "Evidence Studio", desc: "Evidence requirements per CPU — types, quantities, validity and verification.", href: "/super-admin/content", stat: `${cpus} CPUs` },
     { code: "CST-005", icon: "📚", label: "Learning Path Studio", desc: "Programmes, curricula and the learning-resource library with competency coverage.", href: "/super-admin/studio/learning", stat: `${pathways} pathways` },
     { code: "CST-006", icon: "🎬", label: "Simulation Studio", desc: "Author, version and govern simulation scenarios linked to competencies. Visual flow-builder is next-phase.", href: "/super-admin/studio/simulations" },
