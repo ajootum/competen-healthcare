@@ -3,6 +3,7 @@
 import { useState, useCallback } from "react";
 import Link from "next/link";
 import { assetHref, TYPE_LABEL, STATUS_ORDER, ASSET_ENGINES, type AssetRow } from "@/lib/assets/service";
+import AssetFiles from "./AssetFiles";
 
 type Facets = { byType: Record<string, number>; byStatus: Record<string, number>; total: number };
 type Status = { total: number; byType: Record<string, number>; lastIndexedAt: string | null; types: number };
@@ -43,6 +44,7 @@ export default function AssetBrowser({ initialRows, initialTotal, initialFacets,
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [filesFor, setFilesFor] = useState<string | null>(null);
   // Facets, index status and overlay coverage are recomputed server-side (a refresh reloads the page).
   const facets: Facets = initialFacets;
   const status: Status = initialStatus;
@@ -144,13 +146,23 @@ export default function AssetBrowser({ initialRows, initialTotal, initialFacets,
         ) : (
           <div className="divide-y divide-gray-50">
             {rows.map(r => (
-              <Link key={r.id} href={assetHref(r.object_type, r.object_id)} className="flex items-center gap-3 px-4 py-2.5 hover:bg-gray-50/60 group">
-                <span className="text-[9px] font-semibold text-gray-500 bg-gray-50 border border-gray-100 rounded px-1.5 py-0.5 shrink-0 w-28 text-center truncate">{TYPE_LABEL[r.object_type] ?? r.object_type}</span>
-                <span className="text-sm font-medium text-gray-800 group-hover:text-teal-700 truncate flex-1">{r.name || "Untitled"}</span>
-                <span className="text-[10px] text-gray-400 shrink-0 hidden sm:inline">{r.hospital_id ? "Tenant" : "Enterprise"}</span>
-                <span className="text-[10px] text-gray-400 shrink-0 w-10 text-right tabular-nums hidden sm:inline">v{r.version ?? "1.0"}</span>
-                <StatusBadge s={r.status} />
-              </Link>
+              <div key={r.id}>
+                <div className="flex items-center gap-3 px-4 py-2.5 hover:bg-gray-50/60 group">
+                  <Link href={assetHref(r.object_type, r.object_id)} className="flex items-center gap-3 min-w-0 flex-1">
+                    <span className="text-[9px] font-semibold text-gray-500 bg-gray-50 border border-gray-100 rounded px-1.5 py-0.5 shrink-0 w-28 text-center truncate">{TYPE_LABEL[r.object_type] ?? r.object_type}</span>
+                    <span className="text-sm font-medium text-gray-800 group-hover:text-teal-700 truncate">{r.name || "Untitled"}</span>
+                  </Link>
+                  <span className="text-[10px] text-gray-400 shrink-0 hidden sm:inline">{r.hospital_id ? "Tenant" : "Enterprise"}</span>
+                  <span className="text-[10px] text-gray-400 shrink-0 w-10 text-right tabular-nums hidden sm:inline">v{r.version ?? "1.0"}</span>
+                  <StatusBadge s={r.status} />
+                  <button onClick={() => setFilesFor(filesFor === r.id ? null : r.id)} className={`text-xs shrink-0 rounded px-1.5 py-0.5 border transition-colors ${filesFor === r.id ? "bg-teal-50 border-teal-200" : "border-gray-200 hover:border-teal-200"}`} title="Files" aria-label="Files">📎</button>
+                </div>
+                {filesFor === r.id && (
+                  <div className="px-4 pb-3">
+                    <AssetFiles objectType={r.object_type} objectId={r.object_id} />
+                  </div>
+                )}
+              </div>
             ))}
           </div>
         )}
