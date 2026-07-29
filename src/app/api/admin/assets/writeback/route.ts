@@ -19,7 +19,8 @@ export async function POST(req: Request) {
   if (!objectType || !objectId) return NextResponse.json({ error: "object_type and object_id are required" }, { status: 400 });
   if (!status && !version) return NextResponse.json({ error: "Provide a status and/or version" }, { status: 400 });
 
-  const r = await writeBackAsset(c.admin, { objectType, objectId, status, version });
+  const { data: me } = await c.admin.from("profiles").select("full_name").eq("id", c.userId).maybeSingle();
+  const r = await writeBackAsset(c.admin, { objectType, objectId, status, version, actor: { id: c.userId, name: me?.full_name ?? null } });
   if (!r.ok) return NextResponse.json({ error: r.error }, { status: 400 });
 
   await c.admin.from("audit_log").insert({

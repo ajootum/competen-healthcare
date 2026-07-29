@@ -7,8 +7,15 @@
 // osce_station→no column) are rejected with a pointer, never silently faked. Every write is audited.
 
 import { ASSET_STATUS_SUPPORT, ASSET_VERSION_EDITABLE, ASSET_GOVERNED_ELSEWHERE, TYPE_LABEL } from "@/lib/assets/service";
+import { transitionFramework, type FrameworkAction } from "@/lib/competency/framework-lifecycle";
 
 type Admin = any;
+
+// Framework (W3): status changes route through the governed lifecycle engine (pub_status + version snapshot
+// + approvals + audit), never a raw column write. Canonical status → framework lifecycle action.
+const FRAMEWORK_STATUS_ACTION: Record<string, FrameworkAction> = {
+  draft: "revert", in_review: "submit_review", published: "publish", archived: "archive",
+};
 
 // object_type → { source table, canonical-status → native-column write }. Only editable types appear.
 const ADAPTERS: Record<string, { table: string; toNativeStatus: (c: string) => Record<string, any> }> = {
@@ -21,13 +28,26 @@ const ADAPTERS: Record<string, { table: string; toNativeStatus: (c: string) => R
   learning_resource: { table: "learning_resources", toNativeStatus: c => ({ is_active: c === "active" }) },
 };
 
-export type WriteBackResult = { ok: boolean; status?: string; version?: string; error?: string };
+export type WriteBackResult = { ok: boolean; status?: string; version?: string; warning?: string; error?: string };
 
 export async function writeBackAsset(
   admin: Admin,
-  input: { objectType: string; objectId: string; status?: string; version?: string }
+  input: { objectType: string; objectId: string; status?: string; version?: string; actor: { id: string; name: string | null } }
 ): Promise<WriteBackResult> {
   const { objectType, objectId, status, version } = input;
+
+  // Framework (W3) → governed lifecycle transition, not a raw write.
+  if (objectType === "framework") {
+    if (version) return { ok: false, error: "Framework versions are bumped automatically on publish." };
+    if (!status) return { ok: false, error: "Choose a status" };
+    const action = FRAMEWORK_STATUS_ACTION[status];
+    if (!action) return { ok: false, error: `Framework supports: ${Object.keys(FRAMEWORK_STATUS_ACTION).join(", ")}` };
+    const r = await transitionFramework(admin, objectId, action, input.actor);
+    if (!r.ok) return { ok: false, error: r.error };
+    await admin.from("cap_assets").update({ status, indexed_at: new Date().toISOString() }).eq("object_type", "framework").eq("object_id", objectId);
+    return { ok: true, status, warning: r.warning };
+  }
+
   const adapter = ADAPTERS[objectType];
   if (!adapter) {
     return { ok: false, error: ASSET_GOVERNED_ELSEWHERE[objectType] ?? `${TYPE_LABEL[objectType] ?? objectType} has no editable source status — edit it in its source surface.` };

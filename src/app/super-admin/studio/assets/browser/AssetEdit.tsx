@@ -42,7 +42,7 @@ export default function AssetEdit({ objectType, objectId, currentStatus, current
     const j = await r.json().catch(() => ({}));
     setBusy(false);
     if (!r.ok) { setMsg(j.error ?? "Save failed"); return; }
-    setMsg("Saved.");
+    setMsg(j.warning ? `Saved — ${j.warning}` : "Saved.");
     onSaved(j.status, j.version);
   }
 

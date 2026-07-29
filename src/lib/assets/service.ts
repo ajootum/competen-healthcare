@@ -47,16 +47,18 @@ export function assetHref(type: string, id: string): string {
   }
 }
 
-// CAP-001 Phase 4 write-back — which canonical statuses each type can PERSIST to its source and round-trip
-// cleanly through a refresh, and whether it has an editable version. Shared by writeback.ts + the row editor.
+// CAP-001 Phase 4 write-back — which canonical statuses each type can PERSIST and round-trip cleanly through
+// a refresh, and whether it has an editable version. Shared by writeback.ts + the row editor.
+//   • framework (W3) — routed through the GOVERNED lifecycle engine (pub_status + version snapshot + audit),
+//     not a raw write; is_active is inert so it's never touched. Its statuses are the 4 lifecycle actions.
+//   • Boolean-status types (skill/question_bank/learning_resource) persist only active↔archived via is_active.
 // Deliberately excluded (a codebase audit showed why, not an oversight):
-//   • framework — is_active is INERT (never transitioned); its real lifecycle is pub_status, governed by the
-//     framework lifecycle engine. Write-back must route there (W3), not poke a dead flag.
-//   • publication — cmo_publications is select-only/inert; governed by the Publishing engine.
+//   • publication — cmo_publications is select-only/inert with NO write path anywhere; governed by the
+//     Publishing engine. Making it editable would mean building a publish pipeline for a seed artifact.
 //   • competency / blueprint / osce_station — no source status column (kept advisory on the index).
 //   • cpu.version_num — display-only, never written by any code; so cpu has status but no editable version.
-// Boolean-status types (skill/question_bank/learning_resource) persist only active↔archived via is_active.
 export const ASSET_STATUS_SUPPORT: Record<string, string[]> = {
+  framework: ["draft", "in_review", "published", "archived"],
   cpu: ["draft", "in_review", "approved", "published", "archived"],
   knowledge_object: ["draft", "active", "archived"],
   simulation: ["draft", "published", "archived"],
@@ -70,7 +72,6 @@ export const ASSET_VERSION_EDITABLE: Record<string, "text"> = {
 };
 // Types that ARE governed, just not here — the editor points the user to the right surface.
 export const ASSET_GOVERNED_ELSEWHERE: Record<string, string> = {
-  framework: "Frameworks are governed by the framework lifecycle — set status from the framework surface.",
   publication: "Publications are governed by the Publishing engine.",
 };
 
