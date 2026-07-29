@@ -100,7 +100,7 @@ export default async function AssetPlatformPage() {
     { code: "CAP-012", icon: "🌐", label: "Translation & Localisation", desc: "Track asset translations into target locales — coverage, status and translators.", href: "/super-admin/studio/translations" },
   ];
   const SEARCH_AI: Mod[] = [
-    { code: "CAP-006", icon: "🔍", label: "Search & Discovery", desc: "Keyword and faceted asset search. Semantic/vector search is next-phase.", href: "/super-admin/studio" },
+    { code: "CAP-006", icon: "🔍", label: "Search & Discovery", desc: "Hybrid keyword + vector asset search — semantic recall over the whole repository.", href: "/super-admin/studio/assets/search" },
     { code: "CAP-011", icon: "✨", label: "AI Asset Intelligence", desc: "AI recommendations, duplicate detection and quality scoring on the governed gateway.", href: "/super-admin/assistant" },
     { code: "CAP-014", icon: "📈", label: "Asset Analytics", desc: "Utilisation, adoption, quality and coverage analytics across assets.", href: "/competency-office/analytics" },
     { code: "CAP-016", icon: "🔧", label: "Configuration Engine", desc: "No-code platform configuration and asset-type registry.", href: "/super-admin/platform-ops/configuration" },
