@@ -62,7 +62,7 @@ export default async function ValidationDashboard() {
         <Kpi icon="✅" tint="bg-emerald-50" label="Approved Today" value={k.approvedToday} sub="validated today" href="/competency-office/validation/history" />
         <Kpi icon="👥" tint="bg-violet-50" label="Committee Queue" value="—" tone="text-gray-300" sub="committee store next-phase" href="/competency-office/validation/committee" />
         <Kpi icon="⚖️" tint="bg-orange-50" label="Appeals" value="—" tone="text-gray-300" sub="appeals store next-phase" href="/competency-office/validation/appeals" />
-        <Kpi icon="✨" tint="bg-teal-50" label="AI Confidence" value="—" tone="text-gray-300" sub="evidence scoring next-phase" href="/competency-office/validation/ai" />
+        <Kpi icon="✨" tint="bg-teal-50" label="Evidence Confidence" value={k.avgConfidence != null ? `${k.avgConfidence}%` : "—"} tone={k.avgConfidence == null ? "text-gray-300" : k.avgConfidence >= 80 ? "text-emerald-600" : k.avgConfidence >= 60 ? "text-amber-600" : "text-rose-600"} sub={d.confidenceBands ? `${d.confidenceBands.high} high · ${d.confidenceBands.low} low` : "mean of all decisions"} href="/competency-office/validation/pending" />
       </div>
 
       {/* Pending queue + history */}
@@ -70,8 +70,8 @@ export default async function ValidationDashboard() {
         <div className={`${card} p-5`}>
           <div className="flex items-center justify-between mb-3"><h3 className="font-semibold text-gray-900 text-sm">Pending Validation <span className="text-[10px] font-normal text-gray-400">oldest first</span></h3><Link href="/unit-manager/competency-validations" className="text-[11px] text-teal-600 hover:underline">Review →</Link></div>
           {d.pendingList.length === 0 ? <p className="text-sm text-gray-400">Validation queue clear. 🎉</p> : (
-            <div className="overflow-x-auto"><table className="w-full text-xs"><thead><tr className="text-[10px] uppercase tracking-wide text-gray-400 text-left border-b border-gray-100"><th className="py-1.5 font-medium">Staff</th><th className="py-1.5 font-medium">Competency</th><th className="py-1.5 font-medium">Outcome</th><th className="py-1.5 font-medium text-right">Waiting</th></tr></thead>
-              <tbody>{d.pendingList.map((p: any) => (<tr key={p.id} className="border-b border-gray-50"><td className="py-1.5 text-gray-700">{p.name}</td><td className="py-1.5 text-gray-600 truncate max-w-[10rem]">{p.competency}</td><td className="py-1.5 text-gray-500">{p.outcome}</td><td className={`py-1.5 text-right tabular-nums font-medium ${p.overdue ? "text-rose-600" : "text-gray-500"}`}>{p.age != null ? `${p.age}d` : "—"}</td></tr>))}</tbody>
+            <div className="overflow-x-auto"><table className="w-full text-xs"><thead><tr className="text-[10px] uppercase tracking-wide text-gray-400 text-left border-b border-gray-100"><th className="py-1.5 font-medium">Staff</th><th className="py-1.5 font-medium">Competency</th><th className="py-1.5 font-medium">Outcome</th><th className="py-1.5 font-medium text-right">Confidence</th><th className="py-1.5 font-medium text-right">Waiting</th></tr></thead>
+              <tbody>{d.pendingList.map((p: any) => (<tr key={p.id} className="border-b border-gray-50"><td className="py-1.5 text-gray-700">{p.name}</td><td className="py-1.5 text-gray-600 truncate max-w-[10rem]">{p.competency}</td><td className="py-1.5 text-gray-500">{p.outcome}</td><td className="py-1.5 text-right tabular-nums"><span className={p.confidence >= 80 ? "text-emerald-600" : p.confidence >= 60 ? "text-amber-600" : "text-rose-600"}>{p.confidence}%</span></td><td className={`py-1.5 text-right tabular-nums font-medium ${p.overdue ? "text-rose-600" : "text-gray-500"}`}>{p.age != null ? `${p.age}d` : "—"}</td></tr>))}</tbody>
             </table></div>
           )}
         </div>
@@ -104,7 +104,7 @@ export default async function ValidationDashboard() {
         </div>
       </div>
 
-      <p className="text-[11px] text-gray-400 pb-4">Validation Queue (CMO-005 §3) over the governed validation object (competency_decisions). Real: pending validation, near/past-SLA (≥7 days), rejected, approved-today, the named pending queue, recent history and rule-based explainable AI insights. The approve/reject/request-evidence workflow (validator cannot approve own submission; reason code required — §5) lives in the <Link href="/unit-manager/competency-validations" className="text-teal-700 hover:underline">validation surfaces</Link>. Honest next-phase: committee review, appeals, AI evidence-quality scoring and configurable SLA — each needs its own store. Source: validation services; calculated {todayLabel()}.</p>
+      <p className="text-[11px] text-gray-400 pb-4">Validation Queue (CMO-005 §3) over the governed validation object (competency_decisions). Real: pending validation, near/past-SLA (≥7 days), rejected, approved-today, the named pending queue, recent history and rule-based explainable AI insights. The approve/reject/request-evidence workflow (validator cannot approve own submission; reason code required — §5) lives in the <Link href="/unit-manager/competency-validations" className="text-teal-700 hover:underline">validation surfaces</Link>. Evidence Confidence (COMP-022) is now real — computed on read from verification status, outcome, recency and maturity, with a critical-failure penalty (a persisted per-evidence confidence score is a further step). Honest next-phase: committee review, appeals and configurable SLA — each needs its own store. Source: validation services; calculated {todayLabel()}.</p>
     </div>
   );
 }
