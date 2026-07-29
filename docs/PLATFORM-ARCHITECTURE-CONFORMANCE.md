@@ -110,7 +110,7 @@ provides it, honest where it doesn't self-manage the infra.
 
 | Element | Status | Evidence / Notes |
 |---|---|---|
-| Multi-tenant data model (tenant→org→site→dept→unit→user) | ✅ | tenant hierarchy + `tenant_id` scoping |
+| Multi-tenant data model (tenant→org→site→dept→unit→user) | 🟡 | Hierarchy is REAL as registry tables + FKs (`tenants`/`enterprises`/`organisations`→`hospitals`→`ent_divisions`/`departments`/`units`; migs 006/041/052; Enterprise Admin writes them). But tenant **isolation scopes on `hospital_id` only** (~408 refs / 276 files; `scope()` in ~130 modules). `tenant_id` exists (mig 041) yet is used in only ~6 landlord-plane files — **not** for data scoping. Country is free-text (no table). See `docs/CAP-001-org-tenancy-scope.md`. |
 | Master data (people, orgs, frameworks, dictionaries) | ✅ | core tables + `ent_*` |
 | Operational data (admissions, assessments, tasks, scheduling) | ✅ | `op_*`, assessment/learning tables |
 | Immutable audit / versioning | ✅ | `audit_log`, `plat_audit_events`, `change_requests` history |
