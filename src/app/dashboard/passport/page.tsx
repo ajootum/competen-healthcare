@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { OUTCOME_CONFIG, MATURITY_LABELS, AUTH_TYPE_LABELS, AUTH_STATUS_CONFIG, CREDENTIAL_TYPE_LABELS, CREDENTIAL_STATUS_CONFIG, RECOGNITION_TYPE_LABELS, type DecisionOutcome, type Maturity, type AuthorizationType, type AuthStatus } from "@/lib/ckcm";
 import { ROLE_CONFIG, type AppRole } from "@/lib/roles";
+import AiCopilotPanel from "@/components/AiCopilotPanel";
 
 // Competency Passport 2.0 — the clinician's living professional record
 // (Passport 2.0 Developer Specification). Identity, readiness gauge, KPI row,
@@ -286,6 +287,17 @@ export default async function PassportPage() {
           className="inline-flex items-center gap-1.5 text-sm font-semibold text-white bg-teal-600 hover:bg-teal-700 px-4 py-2 rounded-lg transition-colors">
           🖨️ Print / Export
         </Link>
+      </div>
+
+      {/* COMP-025 — worker-facing competency coach (grounded in the caller's own record) */}
+      <div className="mb-5">
+        <AiCopilotPanel
+          endpoint="/api/me/copilot"
+          title="Your Competency Coach"
+          sublabel="Ask about your readiness, gaps and next steps — grounded in your own record, private to you"
+          prompts={["Why am I not ready?", "What's expiring soon?", "What evidence do I need?", "My next best action?"]}
+          placeholder="Ask about your competencies…"
+        />
       </div>
 
       {/* Identity + readiness + status */}
