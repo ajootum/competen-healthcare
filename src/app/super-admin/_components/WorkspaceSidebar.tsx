@@ -109,6 +109,7 @@ const STUDIO_NAV = [
     { label: "Marketplace", href: "/super-admin/studio/marketplace", icon: "🛍️" },
     { label: "Knowledge Objects", href: "/super-admin/studio/knowledge", icon: "🫀" },
     { label: "Case Studies", href: "/super-admin/studio/cases", icon: "🧑‍⚕️" },
+    { label: "Learning Paths", href: "/super-admin/studio/learning", icon: "📚" },
     { label: "Ownership", href: "/super-admin/studio/responsibilities", icon: "🧾" },
     { label: "Import CPU Document", href: "/super-admin/studio/import", icon: "📥" },
   ]},
