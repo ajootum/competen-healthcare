@@ -40,6 +40,7 @@ const NAV_SECTIONS: { section: string; items: { label: string; href: string; ico
   { section: "Credential Management", items: [
     { label: "Credential Management", href: "/competency-office/credentialing", icon: "🎓" },
     { label: "Certification Manager", href: "/competency-office/certifications", icon: "📜" },
+    { label: "Recertification & Renewal", href: "/competency-office/recertification", icon: "♻️" }, // COMP-020
     { label: "Clinical Privileging", href: "/competency-office/privileging", icon: "🏥" },
     { label: "Mobility & Recognition", href: "/competency-office/recognition", icon: "🌍" },     // COMP-024
   ] },
