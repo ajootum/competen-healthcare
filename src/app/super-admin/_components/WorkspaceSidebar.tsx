@@ -104,6 +104,7 @@ const STUDIO_NAV = [
     { label: "Checklists", href: "/super-admin/studio/checklists", icon: "☑️" },
     { label: "Practices & CPUs", href: "/super-admin/studio/cpus", icon: "🏥" },
     { label: "Question Banks", href: "/super-admin/studio/questions", icon: "❓" },
+    { label: "Template Library", href: "/super-admin/studio/templates", icon: "🧩" },
     { label: "Knowledge Objects", href: "/super-admin/studio/knowledge", icon: "🫀" },
     { label: "Case Studies", href: "/super-admin/studio/cases", icon: "🧑‍⚕️" },
     { label: "Ownership", href: "/super-admin/studio/responsibilities", icon: "🧾" },

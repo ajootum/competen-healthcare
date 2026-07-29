@@ -104,7 +104,7 @@ export default async function StudioPage() {
   ];
 
   const REFERENCE: Mod[] = [
-    { code: "CST-102", icon: "🧩", label: "Template Library", desc: "Reusable competency, assessment and blueprint starter templates.", planned: true },
+    { code: "CST-102", icon: "🧩", label: "Template Library", desc: "Catalogue of reusable assets — frameworks, skills, question banks, checklists, CPUs — ready to clone.", href: "/super-admin/studio/templates" },
     { code: "CST-103", icon: "📐", label: "Blueprint Designer", desc: "Specialty blueprints — pathways, sequencing, assessment and evidence maps.", href: "/super-admin/content", stat: "per-CPU blueprints" },
     { code: "CST-104", icon: "🗺️", label: "Mapping Studio", desc: "Traceability matrix — competency ↔ assessment / evidence / learning / skills / CPU, with coverage gaps.", href: "/super-admin/studio/mapping" },
     { code: "CST-105", icon: "🔗", label: "Dependency Manager", desc: "Prerequisite, co-requisite, recommended and inherited graphs — cycle-checked progression.", href: "/super-admin/studio/dependencies", stat: "cycle-checked" },
