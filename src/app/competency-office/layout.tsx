@@ -43,12 +43,14 @@ const NAV_SECTIONS: { section: string; items: { label: string; href: string; ico
   ] },
   { section: "Improvement Centre", items: [
     { label: "Gap Management", href: "/competency-office/gaps", icon: "🕳️" },
+    { label: "Remediation Centre", href: "/competency-office/remediation", icon: "🩺" },        // COMP-021
     { label: "Quality Feedback Loop", href: "/competency-office/quality-feedback", icon: "🔁" }, // COMP-028
     { label: "Enterprise Planning", href: "/competency-office/planning", icon: "🗺️" },
     { label: "Forecasting", href: "/competency-office/forecasting", icon: "🔮" },
   ] },
   { section: "Analytics & Intelligence", items: [
     { label: "Competency Analytics", href: "/competency-office/analytics", icon: "📈" },
+    { label: "Benchmarking", href: "/competency-office/benchmarking", icon: "🏆" },             // COMP-026
     { label: "AI Intelligence", href: "/competency-office/ai-intelligence", icon: "🤖" },
   ] },
   { section: "Office Administration", items: [
