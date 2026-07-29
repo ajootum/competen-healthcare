@@ -55,6 +55,9 @@ const GENERAL_NAV = [
     { label: "Open Competency Studio →", href: "/super-admin/studio", icon: "🎨" },
     { label: "Asset Repository", href: "/super-admin/studio/assets", icon: "🗄️" },
   ]},
+  { group: "COMPETENCY DELIVERY", items: [
+    { label: "Open Competency Delivery →", href: "/super-admin/delivery", icon: "🎓" },
+  ]},
   { group: "CLINICAL KNOWLEDGE PLATFORM", items: [
     { label: "Open CKP →", href: "/super-admin/ckp", icon: "📚" },
   ]},
