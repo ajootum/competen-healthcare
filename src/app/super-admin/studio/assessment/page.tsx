@@ -86,7 +86,7 @@ export default async function AssessmentStudioPage() {
     { code: "CST-039", icon: "🎭", label: "OSCE & Simulation", desc: "OSCE stations, standardized patients, rubrics, debriefing and simulation scenarios.", href: "/super-admin/ckp/assessment", stat: `${stations} stations` },
     { code: "CST-040", icon: "🤝", label: "Professional Behaviour", desc: "Observable behaviour indicators across professionalism, communication, teamwork, ethics — BARS anchors.", href: "/super-admin/studio/behaviour" },
     { code: "CST-041", icon: "🔄", label: "360° Assessment", desc: "Multisource feedback — weighted respondent groups (self / peer / supervisor / patient), anonymous.", href: "/super-admin/studio/three-sixty" },
-    { code: "CST-042", icon: "📁", label: "Portfolio Assessment", desc: "Longitudinal evidence, reflection, case & procedure logs with milestone reviews.", planned: true },
+    { code: "CST-042", icon: "📁", label: "Portfolio Assessment", desc: "Portfolio templates — required-evidence sections, artefact counts and weighting.", href: "/super-admin/studio/portfolio" },
   ];
   const SCORING: Mod[] = [
     { code: "CST-043", icon: "⚖️", label: "Scoring & Decision Rules", desc: "Scoring models, pass/fail, critical failure, entrustment and mastery decision logic.", href: "/super-admin/studio/rules" },
