@@ -120,7 +120,7 @@ const STUDIO_NAV = [
   { group: "QUICK ACCESS", items: [
     { label: "AI Design Assistant", href: "/super-admin/assistant", icon: "✨" },
     { label: "Archive & Repository", href: "/super-admin/ckp/repository", icon: "🗄️" },
-    { label: "Standards Mapping", href: "/competency-office/standards", icon: "📏" },
+    { label: "Standards Mapping", href: "/super-admin/studio/standards", icon: "📏" },
     { label: "Clinical Knowledge Platform", href: "/super-admin/ckp", icon: "📚" },
   ]},
 ];

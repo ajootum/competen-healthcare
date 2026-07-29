@@ -108,7 +108,7 @@ export default async function StudioPage() {
     { code: "CST-103", icon: "📐", label: "Blueprint Designer", desc: "Specialty blueprints — pathways, sequencing, assessment and evidence maps.", href: "/super-admin/content", stat: "per-CPU blueprints" },
     { code: "CST-104", icon: "🗺️", label: "Mapping Studio", desc: "Traceability matrix — competency ↔ assessment / evidence / learning / skills / CPU, with coverage gaps.", href: "/super-admin/studio/mapping" },
     { code: "CST-105", icon: "🔗", label: "Dependency Manager", desc: "Prerequisite, co-requisite, recommended and inherited graphs — cycle-checked progression.", href: "/super-admin/studio/dependencies", stat: "cycle-checked" },
-    { code: "CST-108", icon: "📏", label: "Standards Mapping", desc: "Map assets to WHO, JCI, SafeCare, MOH and council standards.", href: "/competency-office/standards", stat: "library live · mapping Phase 2" },
+    { code: "CST-108", icon: "📏", label: "Standards Mapping", desc: "Map competencies to WHO, JCI, SafeCare, MOH and council standards — coverage & regulatory traceability.", href: "/super-admin/studio/standards", stat: "mapping centre" },
     { code: "CST-109", icon: "📦", label: "Package Manager", desc: "Bundle competencies into deployable specialty and role packages.", planned: true },
     { code: "CST-110", icon: "🛍️", label: "Marketplace", desc: "Discover, license and install competency packages across the ecosystem.", planned: true },
     { code: "CST-111", icon: "📥", label: "Migration & Import", desc: "Import authored CPU documents → competencies, skills, rules and questions.", href: "/super-admin/studio/import" },

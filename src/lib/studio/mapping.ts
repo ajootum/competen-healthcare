@@ -43,12 +43,13 @@ export async function loadMappingStudio(admin: any, hid: string | null, isSuper:
     }
     return { set: s, count: counter.n };
   };
-  const [meth, evid, learn, skill, methFw] = await Promise.all([
+  const [meth, evid, learn, skill, methFw, stdMap] = await Promise.all([
     gatherSet("assessment_method_configs", "competency_id", compIds),
     gatherSet("evidence_matrix", "cpu_id", cpuIds),
     gatherSet("resource_competencies", "competency_id", compIds),
     gatherSet("competency_skills", "competency_id", compIds),
     gatherSet("assessment_method_configs", "framework_id", fwIds),
+    gatherSet("competency_standard_mappings", "competency_id", compIds),
   ]);
 
   const total = comps.length;
@@ -65,7 +66,7 @@ export async function loadMappingStudio(admin: any, hid: string | null, isSuper:
     { key: "evidence", label: "Competency ↔ Evidence", links: evid.count, coverage: cov(hasEvidence), color: "#14b8a6" },
     { key: "learning", label: "Competency ↔ Learning", links: learn.count, coverage: cov(hasLearning), color: "#f59e0b" },
     { key: "skills", label: "Competency ↔ Skills", links: skill.count, coverage: cov(hasSkills), color: "#0ea5e9" },
-    { key: "standards", label: "Competency ↔ Standards", links: 0, coverage: 0, color: "#94a3b8", pending: true },
+    { key: "standards", label: "Competency ↔ Standards", links: stdMap.count, coverage: cov((c: any) => stdMap.set.has(c.id)), color: "#ec4899" },
     { key: "role", label: "Competency ↔ Clinical Role", links: 0, coverage: 0, color: "#94a3b8", pending: true },
   ];
 
