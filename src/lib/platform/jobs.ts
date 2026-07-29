@@ -11,6 +11,7 @@ import { loadKnowledgeIntelligence } from "@/lib/super-admin/ckp-intelligence";
 import { runTaskAutomation } from "@/lib/operations/task-automation";
 import { runOrchestration } from "@/lib/delivery/orchestrator";
 import { scanReminders } from "@/lib/delivery/reminders";
+import { processEvents } from "@/lib/delivery/consumer";
 
 export type JobDef = { key: string; name: string; description: string; category: string; schedule: string; runnable: boolean };
 
@@ -25,6 +26,7 @@ export const JOB_REGISTRY: JobDef[] = [
   { key: "task_automation", name: "Task Automation", description: "Fire recurring & event-triggered tasks from active task templates across all tenants.", category: "operations", schedule: "0 * * * *", runnable: true },
   { key: "delivery_orchestration", name: "Competency Delivery Orchestration", description: "Evaluate active assignment rules and materialise pending competency deliveries across all tenants (CDP-001).", category: "competency", schedule: "0 4 * * *", runnable: true },
   { key: "learning_reminders", name: "Learning Reminders", description: "Proactively remind learners of expiring credentials and competencies, once per due milestone (CDP-011).", category: "competency", schedule: "0 6 * * *", runnable: true },
+  { key: "delivery_event_consumer", name: "Delivery Event Consumer", description: "Drain delivery-relevant domain events; auto-remediate failed assessments (CDP-015).", category: "competency", schedule: "0 * * * *", runnable: true },
 ];
 
 const HANDLERS: Record<string, (admin: any) => Promise<string>> = {
@@ -77,6 +79,12 @@ const HANDLERS: Record<string, (admin: any) => Promise<string>> = {
     const r = await scanReminders(admin);
     if (r.sent) await emitPlatformEvent(admin, { event_type: "learning.reminders_sent", severity: "info", payload: { sent: r.sent, by_kind: r.byKind } });
     return `${r.sent} reminder(s) sent${r.sent ? ` · ${Object.entries(r.byKind).map(([k, v]) => `${k}:${v}`).join(", ")}` : ""}`;
+  },
+  delivery_event_consumer: async (admin) => {
+    const r = await processEvents(admin);
+    if (!r.ok) throw new Error(r.error ?? "consumer failed");
+    if (r.remediated) await emitPlatformEvent(admin, { event_type: "delivery.remediations_queued", severity: "info", payload: { remediated: r.remediated } });
+    return `${r.processed} event(s) processed · ${r.remediated} remediation(s)`;
   },
 };
 

@@ -79,7 +79,7 @@ export default async function DeliveryPlatformPage() {
     { code: "CDP-001", icon: "🧭", label: "Delivery Orchestrator", desc: "Evaluates active assignment rules and materialises pending competency deliveries (+ emits competency.assigned events); runs daily via cron. Reacting to inbound events is the next layer.", href: "/super-admin/delivery/orchestrator", status: "real" },
     { code: "CDP-008", icon: "📣", label: "Assignment & Campaign Manager", desc: "Standing assignment rules (COMP-018) plus deadline-driven learning campaigns: target a cohort, launch → materialise assignments + events, track live compliance.", href: "/super-admin/delivery/campaigns", status: "real" },
     { code: "CDP-014", icon: "⚖️", label: "Governance & Delivery Config", desc: "WCE governs workspace composition; learning-delivery policy (cadence/escalation/routing) is the gap.", href: "/super-admin/platform-ops/configuration", status: "partial" },
-    { code: "CDP-015", icon: "🔌", label: "APIs & Event Bus", desc: "domain_events outbox + typed emit helpers are real; the event consumer/dispatcher that drives side-effects is the gap.", href: "/competency-office/integration", status: "partial" },
+    { code: "CDP-015", icon: "🔌", label: "APIs & Event Bus", desc: "domain_events outbox + typed emit helpers + a reactive CONSUMER that drains the outbox and auto-remediates failed assessments (hourly cron). Real APIs across the delivery engines.", href: "/super-admin/delivery/events", status: "real" },
   ];
   const EXPERIENCE: Mod[] = [
     { code: "CDP-002", icon: "🎓", label: "Learning Experience Platform", desc: "Courses, resources, pathways and the enrol→progress→complete runtime — live across the worker, educator & LDS surfaces.", href: "/unit-manager/learning", status: "real" },
@@ -142,7 +142,7 @@ export default async function DeliveryPlatformPage() {
 
       <div className="bg-violet-50 border border-violet-100 rounded-xl p-4">
         <p className="text-[11px] text-violet-900">
-          <span className="font-bold">One delivery runtime, many surfaces.</span> Most of CDP already exists — the learning, assessment, coaching, certification and analytics engines are live in the worker/educator/office surfaces. The load-bearing gap is a real <span className="font-semibold">delivery orchestrator</span>: the outbox (domain_events), assignment rules, snapshots and a cron runner all exist, but nothing yet consumes events or evaluates rule triggers to schedule and push delivery. Closing that loop (CDP-001 + CDP-015) turns these surfaces into an actual runtime — that is the next build.
+          <span className="font-bold">One delivery runtime, many surfaces.</span> The runtime is now real end-to-end: the <span className="font-semibold">orchestrator</span> evaluates rules to schedule delivery (CDP-001) and a reactive <span className="font-semibold">consumer</span> drains the outbox to auto-remediate (CDP-015), alongside live reinforcement (SM-2), campaigns, scheduled reminders and adaptive testing — all over the learning/assessment/coaching/certification/analytics engines that already existed. Offline/mobile and external-LMS/SCORM remain the honestly-flagged, infrastructure-heavy next phase.
         </p>
       </div>
     </div>
