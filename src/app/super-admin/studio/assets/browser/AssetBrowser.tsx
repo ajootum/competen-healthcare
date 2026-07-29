@@ -36,7 +36,9 @@ function fmtDate(s: string | null) {
   return isNaN(d.getTime()) ? "never" : d.toLocaleString();
 }
 
-export default function AssetBrowser({ initialRows, initialTotal, initialFacets, initialStatus, initialOverlays }: { initialRows: AssetRow[]; initialTotal: number; initialFacets: Facets; initialStatus: Status; initialOverlays: Overlays }) {
+type OrgOpt = { id: string; name: string };
+
+export default function AssetBrowser({ initialRows, initialTotal, initialFacets, initialStatus, initialOverlays, orgOptions }: { initialRows: AssetRow[]; initialTotal: number; initialFacets: Facets; initialStatus: Status; initialOverlays: Overlays; orgOptions: OrgOpt[] }) {
   const [rows, setRows] = useState<AssetRow[]>(initialRows);
   const [total, setTotal] = useState(initialTotal);
   const [type, setType] = useState<string>("");
@@ -47,24 +49,27 @@ export default function AssetBrowser({ initialRows, initialTotal, initialFacets,
   const [busy, setBusy] = useState(false);
   const [filesFor, setFilesFor] = useState<string | null>(null);
   const [editFor, setEditFor] = useState<string | null>(null);
+  const [org, setOrg] = useState("");
   // Facets, index status and overlay coverage are recomputed server-side (a refresh reloads the page).
   const facets: Facets = initialFacets;
   const status: Status = initialStatus;
   const overlays: Overlays = initialOverlays;
+  const orgName = new Map(orgOptions.map(o => [o.id, o.name]));
 
-  const load = useCallback(async (next: { type?: string; status?: string; q?: string; page?: number }) => {
-    const t = next.type ?? type, st = next.status ?? statusFilter, query = next.q ?? q, pg = next.page ?? 1;
+  const load = useCallback(async (next: { type?: string; status?: string; q?: string; org?: string; page?: number }) => {
+    const t = next.type ?? type, st = next.status ?? statusFilter, query = next.q ?? q, og = next.org ?? org, pg = next.page ?? 1;
     setLoading(true);
     const params = new URLSearchParams();
     if (t) params.set("type", t);
     if (st) params.set("status", st);
     if (query.trim()) params.set("q", query.trim());
+    if (og) params.set("org", og);
     params.set("page", String(pg));
     const r = await fetch(`/api/admin/assets?${params.toString()}`);
     const j = await r.json().catch(() => ({ rows: [], total: 0 }));
     setLoading(false);
     setRows(j.rows ?? []); setTotal(j.total ?? 0); setPage(pg);
-  }, [type, statusFilter, q]);
+  }, [type, statusFilter, q, org]);
 
   async function refresh() {
     setBusy(true);
@@ -129,6 +134,16 @@ export default function AssetBrowser({ initialRows, initialTotal, initialFacets,
             <Chip key={s} active={statusFilter === s} onClick={() => { setStatusFilter(s); load({ status: s, page: 1 }); }}>{s.replace("_", " ")} ({facets.byStatus[s]})</Chip>
           ))}
         </div>
+        {orgOptions.length > 0 && (
+          <div className="flex items-center gap-2 pt-2 border-t border-gray-50">
+            <span className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide shrink-0">Organisation</span>
+            <select value={org} onChange={e => { setOrg(e.target.value); load({ org: e.target.value, page: 1 }); }} className="text-xs border border-gray-200 rounded-lg px-2 py-1 focus:outline-none focus:ring-1 focus:ring-teal-400">
+              <option value="">All organisations</option>
+              {orgOptions.map(o => <option key={o.id} value={o.id}>{o.name}</option>)}
+            </select>
+            <span className="text-[10px] text-gray-400 hidden sm:inline">rolls assets up to the org that owns their hospital · visibility, not an access boundary</span>
+          </div>
+        )}
       </div>
 
       {/* Results */}
@@ -154,7 +169,7 @@ export default function AssetBrowser({ initialRows, initialTotal, initialFacets,
                     <span className="text-[9px] font-semibold text-gray-500 bg-gray-50 border border-gray-100 rounded px-1.5 py-0.5 shrink-0 w-28 text-center truncate">{TYPE_LABEL[r.object_type] ?? r.object_type}</span>
                     <span className="text-sm font-medium text-gray-800 group-hover:text-teal-700 truncate">{r.name || "Untitled"}</span>
                   </Link>
-                  <span className="text-[10px] text-gray-400 shrink-0 hidden sm:inline">{r.hospital_id ? "Tenant" : "Enterprise"}</span>
+                  <span className="text-[10px] text-gray-400 shrink-0 hidden sm:inline truncate max-w-[8rem]" title={r.hospital_id ? "Hospital-scoped" : "Global / shared"}>{!r.hospital_id ? "Global" : (r.organisation_id && orgName.get(r.organisation_id)) || "Hospital"}</span>
                   <span className="text-[10px] text-gray-400 shrink-0 w-10 text-right tabular-nums hidden sm:inline">v{r.version ?? "1.0"}</span>
                   <StatusBadge s={r.status} />
                   <button onClick={() => setEditFor(editFor === r.id ? null : r.id)} className={`text-xs shrink-0 rounded px-1.5 py-0.5 border transition-colors ${editFor === r.id ? "bg-teal-50 border-teal-200" : "border-gray-200 hover:border-teal-200"}`} title="Govern status/version" aria-label="Edit status">✎</button>

@@ -11,6 +11,7 @@ export type AssetRow = {
   object_id: string;
   name: string | null;
   hospital_id: string | null;
+  organisation_id?: string | null;
   status: string | null;
   version: string | null;
   language: string | null;
@@ -92,18 +93,43 @@ function scoped(q: any, opts: { hospitalId?: string | null; isSuper?: boolean })
 
 export async function listAssets(
   admin: Admin,
-  opts: { type?: string; status?: string; q?: string; hospitalId?: string | null; isSuper?: boolean; page?: number; pageSize?: number }
+  opts: { type?: string; status?: string; q?: string; organisationId?: string; hospitalId?: string | null; isSuper?: boolean; page?: number; pageSize?: number }
 ): Promise<{ rows: AssetRow[]; total: number; page: number; pageSize: number }> {
   const page = Math.max(opts.page ?? 1, 1);
   const pageSize = Math.min(Math.max(opts.pageSize ?? 25, 1), 100);
-  let q = admin.from("cap_assets").select("id,object_type,object_id,name,hospital_id,status,version,language,source_created_at,indexed_at", { count: "exact" });
-  if (opts.type) q = q.eq("object_type", opts.type);
-  if (opts.status) q = q.eq("status", opts.status);
-  if (opts.q) q = q.ilike("name", `%${opts.q}%`);
-  q = scoped(q, opts);
-  q = q.order("indexed_at", { ascending: false }).range((page - 1) * pageSize, page * pageSize - 1);
-  const { data, count } = await q;
+  const base = "id,object_type,object_id,name,hospital_id,status,version,language,source_created_at,indexed_at";
+  // Try with the org dimension (migration 142); fall back without it so a pre-142 DB still lists.
+  const build = (withOrg: boolean) => {
+    let q = admin.from("cap_assets").select(withOrg ? `${base},organisation_id` : base, { count: "exact" });
+    if (opts.type) q = q.eq("object_type", opts.type);
+    if (opts.status) q = q.eq("status", opts.status);
+    if (opts.q) q = q.ilike("name", `%${opts.q}%`);
+    if (withOrg && opts.organisationId) q = q.eq("organisation_id", opts.organisationId);
+    q = scoped(q, opts);
+    return q.order("indexed_at", { ascending: false }).range((page - 1) * pageSize, page * pageSize - 1);
+  };
+  const withOrg = await build(true);
+  let { data, count } = withOrg;
+  if (withOrg.error && /organisation_id|column|does not exist|schema cache/i.test(withOrg.error.message || "")) {
+    ({ data, count } = await build(false));
+  }
   return { rows: (data ?? []) as AssetRow[], total: count ?? 0, page, pageSize };
+}
+
+// T2: does cap_assets carry the org dimension yet (migration 142)? Gates the Browser's org filter.
+export async function assetsHaveOrgDimension(admin: Admin): Promise<boolean> {
+  const r = await admin.from("cap_assets").select("organisation_id").limit(1);
+  return !r.error;
+}
+
+// Organisation options for the Browser filter (id + name). Resilient if the table is absent.
+export async function assetOrgOptions(admin: Admin): Promise<{ id: string; name: string }[]> {
+  try {
+    const { data } = await admin.from("organisations").select("id, name").order("name").limit(500);
+    return (data ?? []) as { id: string; name: string }[];
+  } catch {
+    return [];
+  }
 }
 
 // Facet counts for the filter rail: assets by type and by status. Head counts keep it index-only (no rows

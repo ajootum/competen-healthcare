@@ -15,6 +15,7 @@ export async function GET(req: Request) {
       type: p.get("type") || undefined,
       status: p.get("status") || undefined,
       q: p.get("q")?.trim() || undefined,
+      organisationId: p.get("org") || undefined,
       isSuper: true,
       page: parseInt(p.get("page") || "1", 10) || 1,
       pageSize: parseInt(p.get("pageSize") || "25", 10) || 25,

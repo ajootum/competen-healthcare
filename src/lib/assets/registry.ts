@@ -42,7 +42,7 @@ async function fetchAll(admin: Admin, table: string, select: string): Promise<Ro
 // Tenant resolvers for the 7 chain-tenant tables (only 5/12 carry hospital_id directly). Built once per
 // refresh from the FK chains: competency→domain→framework.hospital_id; cpu→practice→domain→framework;
 // blueprint/bank/knowledge→cpu; osce_station→exam.hospital_id.
-type Resolvers = { domain: Map<string, string | null>; cpu: Map<string, string | null>; exam: Map<string, string | null> };
+type Resolvers = { domain: Map<string, string | null>; cpu: Map<string, string | null>; exam: Map<string, string | null>; orgOf: Map<string, string | null>; tenantOf: Map<string, string | null> };
 
 async function buildResolvers(admin: Admin): Promise<Resolvers> {
   const [fw, dom, pr, cpus, exams] = await Promise.all([
@@ -57,7 +57,18 @@ async function buildResolvers(admin: Admin): Promise<Resolvers> {
   const practice = new Map<string, string | null>(pr.map(r => [r.id, domain.get(r.domain_id) ?? null]));
   const cpu = new Map<string, string | null>(cpus.map(r => [r.id, practice.get(r.practice_id) ?? null]));
   const exam = new Map<string, string | null>(exams.map(r => [r.id, r.hospital_id ?? null]));
-  return { domain, cpu, exam };
+
+  // T1: hospital → org / tenant (migrations 006/041). Resilient — if those columns are absent, the dimension
+  // simply stays null. Every asset's org/tenant is derived from its resolved hospital_id.
+  let orgOf = new Map<string, string | null>();
+  let tenantOf = new Map<string, string | null>();
+  try {
+    const hosp = await fetchAll(admin, "hospitals", "id,organisation_id,tenant_id");
+    orgOf = new Map(hosp.map(h => [h.id, h.organisation_id ?? null]));
+    tenantOf = new Map(hosp.map(h => [h.id, h.tenant_id ?? null]));
+  } catch { /* org/tenant columns absent → dimension stays null */ }
+
+  return { domain, cpu, exam, orgOf, tenantOf };
 }
 
 type Source = {
@@ -118,6 +129,11 @@ export async function refreshAssets(admin: Admin): Promise<{ ok: boolean; total:
   const errors: Record<string, string> = {};
   let total = 0;
 
+  // T1: only write the org/tenant snapshot if cap_assets has those columns (migration 142). The probe keeps a
+  // pre-142 DB from erroring on every upsert.
+  const orgProbe = await admin.from("cap_assets").select("organisation_id").limit(1);
+  const hasOrgDim = !orgProbe.error;
+
   for (const src of SOURCES) {
     try {
       let rows: Row[];
@@ -128,20 +144,25 @@ export async function refreshAssets(admin: Admin): Promise<{ ok: boolean; total:
         if (src.selectFallback && /does not exist|schema cache|column/i.test(msg)) rows = await fetchAll(admin, src.table, src.selectFallback);
         else throw e;
       }
-      const mapped = rows.map(r => ({
-        object_type: src.type,
-        object_id: r.id, // every source table keys on a uuid `id`
-        name: (src.name(r) ?? "").toString().slice(0, 300) || null,
-        owner_id: src.owner(r),
-        hospital_id: src.tenant(r, resolvers),
-        domain: null as string | null,
-        status: src.status(r),
-        version: src.version(r),
-        language: "en",
-        source_created_at: src.created(r),
-        source_updated_at: src.updated(r),
-        indexed_at: now,
-      }));
+      const mapped = rows.map(r => {
+        const hid = src.tenant(r, resolvers);
+        return {
+          object_type: src.type,
+          object_id: r.id, // every source table keys on a uuid `id`
+          name: (src.name(r) ?? "").toString().slice(0, 300) || null,
+          owner_id: src.owner(r),
+          hospital_id: hid,
+          domain: null as string | null,
+          status: src.status(r),
+          version: src.version(r),
+          language: "en",
+          source_created_at: src.created(r),
+          source_updated_at: src.updated(r),
+          indexed_at: now,
+          // org/tenant derive from the resolved hospital (migration 142); omitted pre-142 so the upsert works.
+          ...(hasOrgDim ? { organisation_id: hid ? resolvers.orgOf.get(hid) ?? null : null, tenant_id: hid ? resolvers.tenantOf.get(hid) ?? null : null } : {}),
+        };
+      });
       for (let i = 0; i < mapped.length; i += 500) {
         const chunk = mapped.slice(i, i + 500);
         const { error } = await admin.from("cap_assets").upsert(chunk, { onConflict: "object_type,object_id" });
