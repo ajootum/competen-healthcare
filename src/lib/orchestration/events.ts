@@ -17,6 +17,7 @@ export const EVENT = {
   CREDENTIAL_EXPIRY_UPDATED: "credential.expiry.updated",
   BREAK_GLASS_INVOKED: "security.break_glass.invoked",
   COMPETENCY_ASSIGNED: "competency.assigned",       // CDP-001 delivery orchestrator materialised a delivery
+  CAMPAIGN_LAUNCHED: "campaign.launched",           // CDP-008 learning campaign broadcast
 } as const;
 export type EventType = (typeof EVENT)[keyof typeof EVENT] | (string & {});
 

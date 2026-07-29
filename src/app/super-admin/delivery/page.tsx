@@ -77,7 +77,7 @@ export default async function DeliveryPlatformPage() {
 
   const ORCHESTRATION: Mod[] = [
     { code: "CDP-001", icon: "🧭", label: "Delivery Orchestrator", desc: "Evaluates active assignment rules and materialises pending competency deliveries (+ emits competency.assigned events); runs daily via cron. Reacting to inbound events is the next layer.", href: "/super-admin/delivery/orchestrator", status: "real" },
-    { code: "CDP-008", icon: "📣", label: "Assignment & Campaign Manager", desc: "Targeted competency assignment is real; the enterprise campaign / cohort broadcast engine is the gap.", href: "/competency-office/assignment-rules", status: "partial" },
+    { code: "CDP-008", icon: "📣", label: "Assignment & Campaign Manager", desc: "Standing assignment rules (COMP-018) plus deadline-driven learning campaigns: target a cohort, launch → materialise assignments + events, track live compliance.", href: "/super-admin/delivery/campaigns", status: "real" },
     { code: "CDP-014", icon: "⚖️", label: "Governance & Delivery Config", desc: "WCE governs workspace composition; learning-delivery policy (cadence/escalation/routing) is the gap.", href: "/super-admin/platform-ops/configuration", status: "partial" },
     { code: "CDP-015", icon: "🔌", label: "APIs & Event Bus", desc: "domain_events outbox + typed emit helpers are real; the event consumer/dispatcher that drives side-effects is the gap.", href: "/competency-office/integration", status: "partial" },
   ];
