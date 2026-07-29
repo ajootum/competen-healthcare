@@ -78,7 +78,7 @@ export default async function AssessmentStudioPage() {
   const ITEMS: Mod[] = [
     { code: "CST-034", icon: "✍️", label: "Question Authoring", desc: "MCQ, EMQ, clinical case, image/ECG, calculation — rich clinical item editor with review workflow.", href: "/super-admin/studio/questions", stat: `${banks} banks` },
     { code: "CST-035", icon: "🗄️", label: "Question Bank", desc: "Governed enterprise item repository — libraries, search, versioning, psychometric stats.", href: "/super-admin/studio/questions" },
-    { code: "CST-036", icon: "🎯", label: "Adaptive Examination", desc: "Blueprint-compliant adaptive delivery — real-time difficulty, exposure control, mastery decisions.", planned: true },
+    { code: "CST-036", icon: "🎯", label: "Adaptive Examination", desc: "Adaptive exam blueprints — item pool, length, difficulty progression and mastery stopping rules.", href: "/super-admin/studio/adaptive" },
   ];
   const PERFORMANCE: Mod[] = [
     { code: "CST-037", icon: "☑️", label: "Skills Checklist Designer", desc: "Procedure steps, critical steps, performance criteria and evidence for procedural assessment.", href: "/super-admin/studio/checklists", stat: `${checklists} checklists` },
