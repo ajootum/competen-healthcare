@@ -283,10 +283,16 @@ export default async function PassportPage() {
           <h1 className="text-xl font-bold text-gray-900">My Competencies &amp; Professional Passport</h1>
           <p className="text-sm text-gray-500 mt-0.5">Track, validate and showcase your skills, credentials and professional growth.</p>
         </div>
-        <Link href="/dashboard/passport/print"
-          className="inline-flex items-center gap-1.5 text-sm font-semibold text-white bg-teal-600 hover:bg-teal-700 px-4 py-2 rounded-lg transition-colors">
-          🖨️ Print / Export
-        </Link>
+        <div className="flex items-center gap-2">
+          <Link href="/dashboard/passport/share"
+            className="inline-flex items-center gap-1.5 text-sm font-semibold text-teal-700 bg-teal-50 hover:bg-teal-100 border border-teal-200 px-4 py-2 rounded-lg transition-colors">
+            🔗 Share / Verify
+          </Link>
+          <Link href="/dashboard/passport/print"
+            className="inline-flex items-center gap-1.5 text-sm font-semibold text-white bg-teal-600 hover:bg-teal-700 px-4 py-2 rounded-lg transition-colors">
+            🖨️ Print / Export
+          </Link>
+        </div>
       </div>
 
       {/* COMP-025 — worker-facing competency coach (grounded in the caller's own record) */}
