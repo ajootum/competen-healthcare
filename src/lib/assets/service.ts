@@ -47,6 +47,33 @@ export function assetHref(type: string, id: string): string {
   }
 }
 
+// CAP-001 Phase 4 write-back — which canonical statuses each type can PERSIST to its source and round-trip
+// cleanly through a refresh, and whether it has an editable version. Shared by writeback.ts + the row editor.
+// Deliberately excluded (a codebase audit showed why, not an oversight):
+//   • framework — is_active is INERT (never transitioned); its real lifecycle is pub_status, governed by the
+//     framework lifecycle engine. Write-back must route there (W3), not poke a dead flag.
+//   • publication — cmo_publications is select-only/inert; governed by the Publishing engine.
+//   • competency / blueprint / osce_station — no source status column (kept advisory on the index).
+//   • cpu.version_num — display-only, never written by any code; so cpu has status but no editable version.
+// Boolean-status types (skill/question_bank/learning_resource) persist only active↔archived via is_active.
+export const ASSET_STATUS_SUPPORT: Record<string, string[]> = {
+  cpu: ["draft", "in_review", "approved", "published", "archived"],
+  knowledge_object: ["draft", "active", "archived"],
+  simulation: ["draft", "published", "archived"],
+  package: ["draft", "published", "archived"],
+  skill: ["active", "archived"],
+  question_bank: ["active", "archived"],
+  learning_resource: ["active", "archived"],
+};
+export const ASSET_VERSION_EDITABLE: Record<string, "text"> = {
+  simulation: "text", package: "text",
+};
+// Types that ARE governed, just not here — the editor points the user to the right surface.
+export const ASSET_GOVERNED_ELSEWHERE: Record<string, string> = {
+  framework: "Frameworks are governed by the framework lifecycle — set status from the framework surface.",
+  publication: "Publications are governed by the Publishing engine.",
+};
+
 // The CAP governance engines this repository composes (the façade targets — CAP-004/007/010/015).
 export const ASSET_ENGINES = [
   { label: "Publishing", href: "/competency-office/publishing", desc: "Govern release" },

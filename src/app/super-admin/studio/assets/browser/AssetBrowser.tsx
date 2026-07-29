@@ -4,6 +4,7 @@ import { useState, useCallback } from "react";
 import Link from "next/link";
 import { assetHref, TYPE_LABEL, STATUS_ORDER, ASSET_ENGINES, type AssetRow } from "@/lib/assets/service";
 import AssetFiles from "./AssetFiles";
+import AssetEdit from "./AssetEdit";
 
 type Facets = { byType: Record<string, number>; byStatus: Record<string, number>; total: number };
 type Status = { total: number; byType: Record<string, number>; lastIndexedAt: string | null; types: number };
@@ -45,6 +46,7 @@ export default function AssetBrowser({ initialRows, initialTotal, initialFacets,
   const [loading, setLoading] = useState(false);
   const [busy, setBusy] = useState(false);
   const [filesFor, setFilesFor] = useState<string | null>(null);
+  const [editFor, setEditFor] = useState<string | null>(null);
   // Facets, index status and overlay coverage are recomputed server-side (a refresh reloads the page).
   const facets: Facets = initialFacets;
   const status: Status = initialStatus;
@@ -155,8 +157,15 @@ export default function AssetBrowser({ initialRows, initialTotal, initialFacets,
                   <span className="text-[10px] text-gray-400 shrink-0 hidden sm:inline">{r.hospital_id ? "Tenant" : "Enterprise"}</span>
                   <span className="text-[10px] text-gray-400 shrink-0 w-10 text-right tabular-nums hidden sm:inline">v{r.version ?? "1.0"}</span>
                   <StatusBadge s={r.status} />
+                  <button onClick={() => setEditFor(editFor === r.id ? null : r.id)} className={`text-xs shrink-0 rounded px-1.5 py-0.5 border transition-colors ${editFor === r.id ? "bg-teal-50 border-teal-200" : "border-gray-200 hover:border-teal-200"}`} title="Govern status/version" aria-label="Edit status">✎</button>
                   <button onClick={() => setFilesFor(filesFor === r.id ? null : r.id)} className={`text-xs shrink-0 rounded px-1.5 py-0.5 border transition-colors ${filesFor === r.id ? "bg-teal-50 border-teal-200" : "border-gray-200 hover:border-teal-200"}`} title="Files" aria-label="Files">📎</button>
                 </div>
+                {editFor === r.id && (
+                  <div className="px-4 pb-3">
+                    <AssetEdit objectType={r.object_type} objectId={r.object_id} currentStatus={r.status} currentVersion={r.version}
+                      onSaved={(s, v) => setRows(rows.map(x => x.id === r.id ? { ...x, status: s ?? x.status, version: v ?? x.version } : x))} />
+                  </div>
+                )}
                 {filesFor === r.id && (
                   <div className="px-4 pb-3">
                     <AssetFiles objectType={r.object_type} objectId={r.object_id} />
