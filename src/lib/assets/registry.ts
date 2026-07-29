@@ -108,7 +108,7 @@ export const ASSET_TYPES = SOURCES.map(s => s.type);
 // Refresh the cap_assets index from every source. Upsert on (object_type, object_id) so it is safe to
 // re-run repeatedly; existing rows are updated in place and indexed_at is refreshed. Per-source failures
 // are captured, not fatal — a missing/renamed source never blocks the rest.
-export async function refreshAssets(admin: Admin): Promise<{ ok: boolean; total: number; byType: Record<string, number>; errors: Record<string, string> }> {
+export async function refreshAssets(admin: Admin): Promise<{ ok: boolean; total: number; byType: Record<string, number>; errors: Record<string, string>; overlays: Record<string, { linked: number; total: number }> }> {
   const resolvers = await buildResolvers(admin);
   const now = new Date().toISOString();
   const byType: Record<string, number> = {};
@@ -143,7 +143,78 @@ export async function refreshAssets(admin: Admin): Promise<{ ok: boolean; total:
       errors[src.type] = e instanceof Error ? e.message : "failed";
     }
   }
-  return { ok: Object.keys(errors).length === 0, total, byType, errors };
+  // Promote cap_assets to the referential centre: relink the overlays to the freshly-populated header.
+  // Best-effort — a relink failure (e.g. migration 140 not yet applied) never fails the populate.
+  let overlays: Record<string, { linked: number; total: number }> = {};
+  try { await relinkOverlays(admin); overlays = await overlayLinkStatus(admin); } catch { /* overlay columns absent pre-140 */ }
+  return { ok: Object.keys(errors).length === 0, total, byType, errors, overlays };
+}
+
+// CAP-001 Phase 4 — overlay spine. Re-link each single-asset overlay to cap_assets by matching its (type,id)
+// to the header, reconciling the few divergent type names. Done in JS (not SQL) so a missing overlay table
+// or column (e.g. a migration not yet applied) is caught per-overlay and simply left unlinked, never fatal.
+// Only rows whose link actually changed are written, so re-runs are cheap. Called after each populate.
+type OverlayDef = { label: string; table: string; typeCol: string; idCol: string; alias: (t: string) => string };
+const OVERLAY_DEFS: OverlayDef[] = [
+  { label: "Tags", table: "object_tags", typeCol: "object_type", idCol: "object_id", alias: t => t },
+  { label: "Translations", table: "cap_asset_translations", typeCol: "asset_type", idCol: "asset_id", alias: t => (t === "osce" ? "osce_station" : t) },
+  { label: "Package items", table: "competency_package_items", typeCol: "item_type", idCol: "item_id", alias: t => t },
+  { label: "Embeddings", table: "knowledge_embeddings", typeCol: "object_type", idCol: "object_id", alias: t => (t === "resource" ? "learning_resource" : t) },
+];
+
+export async function relinkOverlays(admin: Admin): Promise<{ ok: boolean; linked: Record<string, number>; errors: Record<string, string> }> {
+  const linked: Record<string, number> = {};
+  const errors: Record<string, string> = {};
+  const idMap = new Map<string, string>(); // `${canonical_type}|${object_id}` -> cap_assets.id
+  try {
+    const assets = await fetchAll(admin, "cap_assets", "id,object_type,object_id");
+    for (const a of assets) idMap.set(`${a.object_type}|${a.object_id}`, a.id);
+  } catch (e) {
+    return { ok: false, linked, errors: { cap_assets: e instanceof Error ? e.message : "unavailable" } };
+  }
+  for (const d of OVERLAY_DEFS) {
+    try {
+      const rows = await fetchAll(admin, d.table, `id,${d.typeCol},${d.idCol},cap_asset_id`);
+      const pending: { id: string; target: string | null }[] = [];
+      let count = 0;
+      for (const r of rows) {
+        const target = r[d.idCol] ? idMap.get(`${d.alias(String(r[d.typeCol]))}|${r[d.idCol]}`) ?? null : null;
+        if (target) count++;
+        if (target !== (r.cap_asset_id ?? null)) pending.push({ id: r.id, target });
+      }
+      for (let i = 0; i < pending.length; i += 25) {
+        await Promise.all(pending.slice(i, i + 25).map(p => admin.from(d.table).update({ cap_asset_id: p.target }).eq("id", p.id)));
+      }
+      linked[d.label] = count;
+    } catch (e) {
+      errors[d.label] = e instanceof Error ? e.message : "unavailable";
+    }
+  }
+  return { ok: Object.keys(errors).length === 0, linked, errors };
+}
+
+// Link coverage per overlay (linked / total) for the browser's index panel. Resilient: an overlay whose
+// cap_asset_id column doesn't exist yet (pre-140) reports 0/0 rather than breaking the caller.
+export async function overlayLinkStatus(admin: Admin): Promise<Record<string, { linked: number; total: number }>> {
+  const overlays: [string, string][] = [
+    ["object_tags", "Tags"],
+    ["cap_asset_translations", "Translations"],
+    ["competency_package_items", "Package items"],
+    ["knowledge_embeddings", "Embeddings"],
+  ];
+  const out: Record<string, { linked: number; total: number }> = {};
+  for (const [table, label] of overlays) {
+    try {
+      const [{ count: total }, { count: linked }] = await Promise.all([
+        admin.from(table).select("id", { count: "exact", head: true }),
+        admin.from(table).select("id", { count: "exact", head: true }).not("cap_asset_id", "is", null),
+      ]);
+      out[label] = { total: total ?? 0, linked: linked ?? 0 };
+    } catch {
+      out[label] = { total: 0, linked: 0 };
+    }
+  }
+  return out;
 }
 
 // Index status for the admin panel: per-type counts + total + last refresh time. No provider dependency

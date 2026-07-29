@@ -6,6 +6,7 @@ import { assetHref, TYPE_LABEL, STATUS_ORDER, ASSET_ENGINES, type AssetRow } fro
 
 type Facets = { byType: Record<string, number>; byStatus: Record<string, number>; total: number };
 type Status = { total: number; byType: Record<string, number>; lastIndexedAt: string | null; types: number };
+type Overlays = Record<string, { linked: number; total: number }>;
 
 const STATUS_STYLE: Record<string, string> = {
   draft: "text-gray-500 bg-gray-50 border-gray-100",
@@ -33,7 +34,7 @@ function fmtDate(s: string | null) {
   return isNaN(d.getTime()) ? "never" : d.toLocaleString();
 }
 
-export default function AssetBrowser({ initialRows, initialTotal, initialFacets, initialStatus }: { initialRows: AssetRow[]; initialTotal: number; initialFacets: Facets; initialStatus: Status }) {
+export default function AssetBrowser({ initialRows, initialTotal, initialFacets, initialStatus, initialOverlays }: { initialRows: AssetRow[]; initialTotal: number; initialFacets: Facets; initialStatus: Status; initialOverlays: Overlays }) {
   const [rows, setRows] = useState<AssetRow[]>(initialRows);
   const [total, setTotal] = useState(initialTotal);
   const [type, setType] = useState<string>("");
@@ -42,9 +43,10 @@ export default function AssetBrowser({ initialRows, initialTotal, initialFacets,
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(false);
   const [busy, setBusy] = useState(false);
-  // Facets and index status are recomputed server-side (a refresh reloads the page), so read them from props.
+  // Facets, index status and overlay coverage are recomputed server-side (a refresh reloads the page).
   const facets: Facets = initialFacets;
   const status: Status = initialStatus;
+  const overlays: Overlays = initialOverlays;
 
   const load = useCallback(async (next: { type?: string; status?: string; q?: string; page?: number }) => {
     const t = next.type ?? type, st = next.status ?? statusFilter, query = next.q ?? q, pg = next.page ?? 1;
@@ -90,6 +92,19 @@ export default function AssetBrowser({ initialRows, initialTotal, initialFacets,
             <Link key={e.href} href={e.href} className="text-[10px] font-semibold text-gray-500 bg-gray-50 hover:bg-teal-50 hover:text-teal-700 border border-gray-100 rounded px-2 py-1" title={e.desc}>{e.label} →</Link>
           ))}
         </div>
+        {Object.keys(overlays).length > 0 && (
+          <div className="mt-3 pt-3 border-t border-gray-50">
+            <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide mb-1.5">Overlays linked to the header</p>
+            <div className="flex flex-wrap gap-1.5">
+              {Object.entries(overlays).map(([label, o]) => {
+                const pct = o.total ? Math.round((o.linked / o.total) * 100) : 0;
+                const tone = o.total === 0 ? "text-gray-300 border-gray-100" : o.linked === o.total ? "text-teal-700 bg-teal-50 border-teal-100" : "text-amber-700 bg-amber-50 border-amber-100";
+                return <span key={label} className={`text-[10px] font-semibold border rounded px-2 py-1 ${tone}`}>{label} {o.linked}/{o.total}{o.total ? ` · ${pct}%` : ""}</span>;
+              })}
+            </div>
+            <p className="text-[10px] text-gray-400 mt-1.5">A real cap_asset_id FK — rows whose type has no asset counterpart (policy, guideline, learning-pathway) stay unlinked by design.</p>
+          </div>
+        )}
       </div>
 
       {/* Filters */}
