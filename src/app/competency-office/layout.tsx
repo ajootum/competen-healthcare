@@ -43,6 +43,7 @@ const NAV_SECTIONS: { section: string; items: { label: string; href: string; ico
   ] },
   { section: "Improvement Centre", items: [
     { label: "Gap Management", href: "/competency-office/gaps", icon: "🕳️" },
+    { label: "Quality Feedback Loop", href: "/competency-office/quality-feedback", icon: "🔁" }, // COMP-028
     { label: "Enterprise Planning", href: "/competency-office/planning", icon: "🗺️" },
     { label: "Forecasting", href: "/competency-office/forecasting", icon: "🔮" },
   ] },
