@@ -28,6 +28,17 @@ export function emitLearningCompleted(admin: any, enrolment: any, actorId: strin
   });
 }
 
+export function emitAssessmentCompleted(admin: any, score: any, actorId: string | null, actorName?: string | null) {
+  return emitDomainEvent(admin, {
+    event_type: EVENT.ASSESSMENT_COMPLETED,
+    subject_type: "competency_score", subject_id: score.id,
+    hospital_id: score.hospital_id ?? null,
+    actor_id: actorId, actor_name: actorName ?? null,
+    sensitivity: "internal",
+    payload: { cycle_id: score.cycle_id ?? null, validated: true },
+  });
+}
+
 export function emitApprovalDecided(admin: any, approval: any, actorId: string | null, decision: string) {
   return emitDomainEvent(admin, {
     event_type: EVENT.STAFFING_APPROVAL_DECIDED,

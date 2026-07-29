@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCaller, isResponse, isEducator, forbidden, badRequest, assertCycleScope } from "@/lib/api-auth";
+import { emitAssessmentCompleted } from "@/lib/orchestration/producers";
 
 export async function POST(req: NextRequest) {
   const c = await getCaller();
@@ -43,6 +44,9 @@ export async function POST(req: NextRequest) {
       actor_id: c.userId, actor_name: me?.full_name ?? null,
       action: "educator_validate", entity_type: "competency_score", entity_id: competency_score_id,
     });
+    // COMP-029 — publish a domain event on competency validation (fail-soft; feeds the event bus + CMO integration lens).
+    const { data: cyc } = await c.admin.from("competency_cycles").select("hospital_id").eq("id", score.cycle_id).maybeSingle();
+    await emitAssessmentCompleted(c.admin, { id: competency_score_id, cycle_id: score.cycle_id, hospital_id: cyc?.hospital_id ?? null }, c.userId, me?.full_name ?? null);
     return NextResponse.json({ ok: true });
   }
 
