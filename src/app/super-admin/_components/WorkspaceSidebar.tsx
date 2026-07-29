@@ -96,6 +96,7 @@ const STUDIO_NAV = [
   { group: "COMPETENCY STUDIO", items: [
     { label: "Studio Home", href: "/super-admin/studio", icon: "🎨" },
     { label: "Framework & Competency", href: "/super-admin/content", icon: "🧬" },
+    { label: "Dependencies", href: "/super-admin/studio/dependencies", icon: "🔗" },
     { label: "Assessment Studio", href: "/super-admin/assessment-methods", icon: "🩺" },
     { label: "Skills Library", href: "/super-admin/studio/skills", icon: "✋" },
     { label: "Checklists", href: "/super-admin/studio/checklists", icon: "☑️" },

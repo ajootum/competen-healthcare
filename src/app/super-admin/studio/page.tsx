@@ -107,7 +107,7 @@ export default async function StudioPage() {
     { code: "CST-102", icon: "🧩", label: "Template Library", desc: "Reusable competency, assessment and blueprint starter templates.", planned: true },
     { code: "CST-103", icon: "📐", label: "Blueprint Designer", desc: "Specialty blueprints — pathways, sequencing, assessment and evidence maps.", href: "/super-admin/content", stat: "per-CPU blueprints" },
     { code: "CST-104", icon: "🗺️", label: "Mapping Studio", desc: "Map competencies ↔ roles, curricula, assessments, evidence and objectives.", planned: true },
-    { code: "CST-105", icon: "🔗", label: "Dependency Manager", desc: "Prerequisite, co-requisite, equivalency and critical-path graphs.", planned: true },
+    { code: "CST-105", icon: "🔗", label: "Dependency Manager", desc: "Prerequisite, co-requisite, recommended and inherited graphs — cycle-checked progression.", href: "/super-admin/studio/dependencies", stat: "cycle-checked" },
     { code: "CST-108", icon: "📏", label: "Standards Mapping", desc: "Map assets to WHO, JCI, SafeCare, MOH and council standards.", href: "/competency-office/standards", stat: "library live · mapping Phase 2" },
     { code: "CST-109", icon: "📦", label: "Package Manager", desc: "Bundle competencies into deployable specialty and role packages.", planned: true },
     { code: "CST-110", icon: "🛍️", label: "Marketplace", desc: "Discover, license and install competency packages across the ecosystem.", planned: true },
