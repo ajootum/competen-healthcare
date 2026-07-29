@@ -58,6 +58,7 @@ const NAV_SECTIONS: { section: string; items: { label: string; href: string; ico
   ] },
   { section: "Office Administration", items: [
     { label: "Assignment Centre", href: "/competency-office/assignments", icon: "🧩" },         // CMO-010
+    { label: "Assignment Rules", href: "/competency-office/assignment-rules", icon: "⚙️" },     // COMP-018
     { label: "Office & Membership", href: "/competency-office/membership", icon: "🏛️" },        // CMO-003
     { label: "Workspace Integration", href: "/competency-office/integration", icon: "🔗" },     // CMO-005
     { label: "Configuration & Rules", href: "/competency-office/configuration", icon: "🔧" },   // CMO-020
