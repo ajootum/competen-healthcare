@@ -96,7 +96,7 @@ export default async function DeliveryPlatformPage() {
   ];
   const REACH: Mod[] = [
     { code: "CDP-010", icon: "📈", label: "Learning Analytics & Impact", desc: "Learner / cohort / course / faculty / trend analytics + readiness snapshots. Causal learning-impact is partial.", href: "/unit-manager/learning/analytics", status: "real" },
-    { code: "CDP-011", icon: "🔔", label: "Notifications & Engagement", desc: "In-app notifications + delivery tracking are real; scheduled reminders, omnichannel (email/push) & gamification are the gap.", href: "/dashboard/notifications", status: "partial" },
+    { code: "CDP-011", icon: "🔔", label: "Notifications & Engagement", desc: "In-app notifications + a scheduled reminder engine (daily cron nudges learners before credentials/competencies expire, deduped). Omnichannel (email/push) & gamification are next.", href: "/super-admin/delivery/reminders", status: "real" },
     { code: "CDP-012", icon: "📴", label: "Offline & Mobile Learning", desc: "PWA, offline sync, downloadable content. Net-new (infrastructure-heavy).", status: "gap" },
     { code: "CDP-013", icon: "🔗", label: "External Content & LMS Integration", desc: "SCORM / xAPI / LTI, external LMS import & record sync. Net-new.", status: "gap" },
   ];
