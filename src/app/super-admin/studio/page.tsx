@@ -98,7 +98,7 @@ export default async function StudioPage() {
     { code: "CST-007", icon: "⚙️", label: "Rules Engine", desc: "Consolidated Rules Library — progression, scoring, evidence, critical-failure and recertification rules.", href: "/super-admin/studio/rules", stat: `${rules} assignment rules` },
     { code: "CST-008", icon: "🚦", label: "Publishing & Versioning", desc: "Governed draft → review → approve → release → rollback with impact analysis.", href: "/competency-office/publishing", stat: `${publications} publications` },
     { code: "CST-009", icon: "✨", label: "AI Design Assistant", desc: "Draft, gap-check & optimise assets on the governed AI gateway — human-approved.", href: "/super-admin/assistant" },
-    { code: "CST-010", icon: "🧪", label: "Testing & Sandbox", desc: "Persona-driven preview and test-before-publish for authored content.", planned: true },
+    { code: "CST-010", icon: "🧪", label: "Testing & Sandbox", desc: "Release-readiness gate — completeness, coverage, structure and dependency checks before publish.", href: "/super-admin/studio/testing" },
     { code: "CST-011", icon: "📊", label: "Analytics & Optimisation", desc: "Content quality, adoption, outcome and benchmark analytics across the portfolio.", href: "/competency-office/analytics" },
     { code: "CST-012", icon: "🔌", label: "Integration & API", desc: "Publish approved assets to every workspace over the governed event backbone.", href: "/competency-office/integration" },
   ];

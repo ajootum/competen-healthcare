@@ -113,6 +113,7 @@ const STUDIO_NAV = [
     { label: "Import CPU Document", href: "/super-admin/studio/import", icon: "📥" },
   ]},
   { group: "GOVERNANCE & PUBLISHING", items: [
+    { label: "Release Readiness", href: "/super-admin/studio/testing", icon: "🧪" },
     { label: "Publishing & Versioning", href: "/competency-office/publishing", icon: "🚦" },
     { label: "Review & Governance", href: "/competency-office/review-board", icon: "⚖️" },
     { label: "Lifecycle Management", href: "/competency-office/lifecycle-state", icon: "♻️" },
