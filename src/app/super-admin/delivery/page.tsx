@@ -78,7 +78,7 @@ export default async function DeliveryPlatformPage() {
   const ORCHESTRATION: Mod[] = [
     { code: "CDP-001", icon: "🧭", label: "Delivery Orchestrator", desc: "Evaluates active assignment rules and materialises pending competency deliveries (+ emits competency.assigned events); runs daily via cron. Reacting to inbound events is the next layer.", href: "/super-admin/delivery/orchestrator", status: "real" },
     { code: "CDP-008", icon: "📣", label: "Assignment & Campaign Manager", desc: "Standing assignment rules (COMP-018) plus deadline-driven learning campaigns: target a cohort, launch → materialise assignments + events, track live compliance.", href: "/super-admin/delivery/campaigns", status: "real" },
-    { code: "CDP-014", icon: "⚖️", label: "Governance & Delivery Config", desc: "WCE governs workspace composition; learning-delivery policy (cadence/escalation/routing) is the gap.", href: "/super-admin/platform-ops/configuration", status: "partial" },
+    { code: "CDP-014", icon: "⚖️", label: "Governance & Delivery Config", desc: "Delivery policy the runtime engines read live: reminder lead time, auto-remediation on/off, orchestration on/off, default campaign deadline. WCE governs composition; this governs delivery.", href: "/super-admin/delivery/config", status: "real" },
     { code: "CDP-015", icon: "🔌", label: "APIs & Event Bus", desc: "domain_events outbox + typed emit helpers + a reactive CONSUMER that drains the outbox and auto-remediates failed assessments (hourly cron). Real APIs across the delivery engines.", href: "/super-admin/delivery/events", status: "real" },
   ];
   const EXPERIENCE: Mod[] = [
@@ -130,7 +130,7 @@ export default async function DeliveryPlatformPage() {
       {/* Coverage summary */}
       <div className="flex items-center gap-2 mb-5 text-[11px]">
         <span className="font-semibold text-teal-700 bg-teal-50 border border-teal-100 rounded-lg px-2.5 py-1">{nReal} live</span>
-        <span className="font-semibold text-amber-600 bg-amber-50 border border-amber-100 rounded-lg px-2.5 py-1">{nPartial} partial (runtime loop)</span>
+        {nPartial > 0 && <span className="font-semibold text-amber-600 bg-amber-50 border border-amber-100 rounded-lg px-2.5 py-1">{nPartial} partial (runtime loop)</span>}
         <span className="font-semibold text-gray-400 bg-gray-50 border border-gray-100 rounded-lg px-2.5 py-1">{nGap} planned (net-new)</span>
       </div>
 

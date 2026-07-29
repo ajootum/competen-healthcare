@@ -7,6 +7,7 @@
 // delivered is skipped). A cron job (platform/jobs.ts → delivery_orchestration) runs it automatically per tenant.
 
 import { emitDomainEvent, EVENT } from "@/lib/orchestration/events";
+import { resolveDeliveryConfig } from "@/lib/delivery/config";
 
 type Admin = any;
 const NONE = "00000000-0000-0000-0000-000000000000";
@@ -60,6 +61,9 @@ export async function loadDeliveryQueue(admin: Admin, hid: string | null, isSupe
 }
 
 export async function runOrchestration(admin: Admin, hid: string | null, isSuper: boolean, actor: { id: string | null; name: string | null }) {
+  if (!(await resolveDeliveryConfig(admin, hid)).orchestration_enabled) {
+    return { ok: true as const, created: 0, skipped: 0, events: 0, disabled: true as const }; // CDP-014 policy: orchestration paused
+  }
   const rules = await loadRules(admin, hid, isSuper);
   if (rules === null) return { ok: false as const, error: "Assignment rules not provisioned (migration 125)", created: 0, skipped: 0, events: 0 };
   const asg = await ruleAssignments(admin, hid, isSuper);

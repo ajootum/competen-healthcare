@@ -6,15 +6,16 @@
 // + competency_decisions (011) + profiles. No fabricated recipients.
 
 import { notify } from "@/lib/notify";
+import { resolveDeliveryConfig } from "@/lib/delivery/config";
 
 type Admin = any;
 const NONE = "00000000-0000-0000-0000-000000000000";
-const HORIZON_DAYS = 30;
 
 export async function scanReminders(admin: Admin) {
+  const horizonDays = (await resolveDeliveryConfig(admin)).reminder_horizon_days; // CDP-014 governs the lead time
   const today = new Date();
   const todayStr = today.toISOString().slice(0, 10);
-  const horizonStr = new Date(today.getTime() + HORIZON_DAYS * 864e5).toISOString().slice(0, 10);
+  const horizonStr = new Date(today.getTime() + horizonDays * 864e5).toISOString().slice(0, 10);
 
   type Cand = { kind: string; subject_id: string; nurse_id: string; due_date: string; label: string; title: string; body: string; href: string };
   const candidates: Cand[] = [];
@@ -69,7 +70,8 @@ export async function loadReminderStatus(admin: Admin, hid: string | null, isSup
   const scope = (q: any) => (isSuper ? q : q.eq("hospital_id", hid ?? NONE));
   const totalRes = await scope(admin.from("cdp_reminders").select("id", { count: "exact", head: true }));
   if (totalRes.error) return { provisioned: false as const };
-  const horizon = new Date(Date.now() + HORIZON_DAYS * 864e5).toISOString().slice(0, 10);
+  const horizonDays = (await resolveDeliveryConfig(admin)).reminder_horizon_days;
+  const horizon = new Date(Date.now() + horizonDays * 864e5).toISOString().slice(0, 10);
   const [credRes, compRes, recentRes, upCred, upComp] = await Promise.all([
     scope(admin.from("cdp_reminders").select("id", { count: "exact", head: true }).eq("kind", "credential_expiry")),
     scope(admin.from("cdp_reminders").select("id", { count: "exact", head: true }).eq("kind", "competency_expiry")),

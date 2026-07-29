@@ -7,6 +7,7 @@
 // (143) + notify() (029/056). No fabricated recipients — the learner is the event's actor.
 
 import { notify } from "@/lib/notify";
+import { resolveDeliveryConfig } from "@/lib/delivery/config";
 
 type Admin = any;
 const NONE = "00000000-0000-0000-0000-000000000000";
@@ -41,13 +42,18 @@ export async function processEvents(admin: Admin, limit = 300) {
   const { data: events, error } = await admin.from("domain_events").select("id, event_type, actor_id, payload").eq("status", "pending").order("occurred_at", { ascending: true }).limit(limit);
   if (error) return { ok: false as const, error: error.message, processed: 0, remediated: 0, byAction: {} as Record<string, number> };
 
+  const autoRemediate = (await resolveDeliveryConfig(admin)).auto_remediation; // CDP-014 policy gate
   let processed = 0, remediated = 0;
   const byAction: Record<string, number> = {};
   for (const ev of (events ?? []) as any[]) {
     let action: string;
     if (ev.event_type === REMEDIATE) {
-      try { action = await handleAssessmentCompleted(admin, ev); } catch { action = "error"; }
-      if (action === "remediation_queued") remediated++;
+      if (!autoRemediate) {
+        action = "remediation_disabled"; // policy off — acknowledge & drain, no card/notify
+      } else {
+        try { action = await handleAssessmentCompleted(admin, ev); } catch { action = "error"; }
+        if (action === "remediation_queued") remediated++;
+      }
     } else if (ACK_ONLY.has(ev.event_type)) {
       action = "acknowledged";
     } else {
