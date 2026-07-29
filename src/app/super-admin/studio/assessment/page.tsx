@@ -85,7 +85,7 @@ export default async function AssessmentStudioPage() {
     { code: "CST-038", icon: "🩺", label: "Workplace Assessment", desc: "DOPS, Mini-CEX, CBD, EPA and longitudinal observation with entrustment decisions.", href: "/super-admin/assessment-methods" },
     { code: "CST-039", icon: "🎭", label: "OSCE & Simulation", desc: "OSCE stations, standardized patients, rubrics, debriefing and simulation scenarios.", href: "/super-admin/ckp/assessment", stat: `${stations} stations` },
     { code: "CST-040", icon: "🤝", label: "Professional Behaviour", desc: "Professionalism, communication, teamwork, ethics and leadership — BARS-based behaviour assessment.", planned: true },
-    { code: "CST-041", icon: "🔄", label: "360° Assessment", desc: "Multisource feedback — self / peer / supervisor / patient — anonymous, weighted, insight-driven.", planned: true },
+    { code: "CST-041", icon: "🔄", label: "360° Assessment", desc: "Multisource feedback — weighted respondent groups (self / peer / supervisor / patient), anonymous.", href: "/super-admin/studio/three-sixty" },
     { code: "CST-042", icon: "📁", label: "Portfolio Assessment", desc: "Longitudinal evidence, reflection, case & procedure logs with milestone reviews.", planned: true },
   ];
   const SCORING: Mod[] = [
