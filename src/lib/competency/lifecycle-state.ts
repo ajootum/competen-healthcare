@@ -34,6 +34,21 @@ export async function transitionLifecycle(admin: any, p: { hospitalId: string | 
   } catch { /* fail-soft */ }
 }
 
+// A single worker's own lifecycle — their competency states + recent transitions, for the passport timeline.
+export async function loadWorkerLifecycle(admin: any, nurseId: string): Promise<{ provisioned: boolean; total: number; distribution: any[]; transitions: any[] }> {
+  const sRes = await admin.from("competency_lifecycle_state").select("state").eq("nurse_id", nurseId).limit(5000);
+  if (sRes.error) return { provisioned: false, total: 0, distribution: [], transitions: [] };
+  const rows = (sRes.data ?? []) as any[];
+  const count = (s: string) => rows.filter(r => r.state === s).length;
+  const distribution = LIFECYCLE_STATES.map(s => ({ state: s, label: STATE_LABEL[s], color: STATE_COLOR[s], n: count(s) })).filter(x => x.n > 0);
+  let events: any[] = [];
+  try { const { data } = await admin.from("lifecycle_events").select("from_state, to_state, reason, occurred_at, competency_id").eq("nurse_id", nurseId).order("occurred_at", { ascending: false }).limit(12); events = (data ?? []) as any[]; } catch { events = []; }
+  const cIds = [...new Set(events.map(e => e.competency_id).filter(Boolean))] as string[];
+  const cName = new Map<string, string>(); if (cIds.length) { const { data } = await admin.from("framework_competencies").select("id, name").in("id", cIds.slice(0, 200)); ((data ?? []) as any[]).forEach(c => cName.set(c.id, c.name)); }
+  const transitions = events.map(e => ({ competency: cName.get(e.competency_id) ?? "Competency", from: e.from_state, to: e.to_state, reason: e.reason, when: e.occurred_at }));
+  return { provisioned: true, total: rows.length, distribution, transitions };
+}
+
 export async function loadLifecycleStates(admin: any, hid: string | null, isSuper: boolean) {
   const scope = (q: any) => (isSuper ? q : q.eq("hospital_id", hid ?? NONE));
   const res = await scope(admin.from("competency_lifecycle_state").select("state, updated_at").limit(50000));

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getCaller, isResponse, isEducator, isSuper, forbidden, badRequest } from "@/lib/api-auth";
+import { transitionLifecycle } from "@/lib/competency/lifecycle-state";
 
 // COMP-020 — competency recertification & renewal management. POST opens a renewal against an expiring competency
 // or certification with a chosen renewal path; PATCH advances its status (or switches the path). Competency-office
@@ -61,7 +62,7 @@ export async function PATCH(req: Request) {
   if (!Object.keys(patch).length) return badRequest("nothing to update");
 
   // Scope-check the target row (super = unscoped; otherwise it must belong to the caller's hospital).
-  const { data: row } = await c.admin.from("cmo_renewals").select("id, hospital_id").eq("id", id).maybeSingle();
+  const { data: row } = await c.admin.from("cmo_renewals").select("id, hospital_id, nurse_id, subject_type, subject_id").eq("id", id).maybeSingle();
   if (!row) return NextResponse.json({ error: "Not found" }, { status: 404 });
   if (!isSuper(c) && row.hospital_id && row.hospital_id !== c.hospitalId) return forbidden("Out of scope");
 
@@ -69,5 +70,9 @@ export async function PATCH(req: Request) {
   if (error) return migrationGate(error) ?? NextResponse.json({ error: error.message }, { status: 500 });
 
   await c.admin.from("audit_log").insert({ actor_id: c.userId, action: "update_renewal", entity_type: "cmo_renewal", entity_id: id, hospital_id: row.hospital_id ?? null, new_value: patch });
+  // COMP-017 — a completed competency renewal advances the lifecycle state to Renewed (subject_id = competency_id; fail-soft).
+  if (patch.status === "completed" && row.subject_type === "competency" && row.subject_id && row.nurse_id) {
+    await transitionLifecycle(c.admin, { hospitalId: row.hospital_id ?? null, nurseId: row.nurse_id, competencyId: row.subject_id, toState: "renewed", reason: "Recertification renewal completed", actorId: c.userId });
+  }
   return NextResponse.json(data);
 }

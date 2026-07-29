@@ -4,6 +4,7 @@ import Link from "next/link";
 import { OUTCOME_CONFIG, MATURITY_LABELS, AUTH_TYPE_LABELS, AUTH_STATUS_CONFIG, CREDENTIAL_TYPE_LABELS, CREDENTIAL_STATUS_CONFIG, RECOGNITION_TYPE_LABELS, type DecisionOutcome, type Maturity, type AuthorizationType, type AuthStatus } from "@/lib/ckcm";
 import { ROLE_CONFIG, type AppRole } from "@/lib/roles";
 import AiCopilotPanel from "@/components/AiCopilotPanel";
+import { loadWorkerLifecycle, STATE_LABEL, STATE_COLOR } from "@/lib/competency/lifecycle-state";
 
 // Competency Passport 2.0 — the clinician's living professional record
 // (Passport 2.0 Developer Specification). Identity, readiness gauge, KPI row,
@@ -115,6 +116,9 @@ export default async function PassportPage() {
     id: string; role_title: string; status: string; start_date: string; end_date: string | null;
     organisations: { name: string } | null; hospitals: { name: string } | null; departments: { name: string } | null;
   }[]);
+
+  // COMP-017 — this worker's own competency lifecycle (persisted state machine, migration 126; fail-soft to empty).
+  const lifecycle = await loadWorkerLifecycle(admin, user.id);
 
   // ── Best score per competency ──
   type CompEntry = {
@@ -378,6 +382,48 @@ export default async function PassportPage() {
               );
             })}
           </div>
+        </div>
+      )}
+
+      {/* COMP-017 — persisted competency lifecycle (live state machine over migration 126) */}
+      {lifecycle.provisioned && lifecycle.total > 0 && (
+        <div className={`${card} p-5 mb-5`}>
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="font-semibold text-gray-900 text-sm">Competency Lifecycle</h2>
+            <span className="text-[9px] text-gray-400">{lifecycle.total} tracked competenc{lifecycle.total === 1 ? "y" : "ies"} · live state &amp; transition history</span>
+          </div>
+          <div className="flex flex-wrap gap-2 mb-4">
+            {lifecycle.distribution.map((s: { state: string; label: string; color: string; n: number }) => (
+              <span key={s.state} className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-gray-700 bg-gray-50 border border-gray-100 px-2.5 py-1 rounded-full">
+                <span className="w-2 h-2 rounded-full" style={{ backgroundColor: s.color }} />
+                {s.label}
+                <b className="text-gray-900">{s.n}</b>
+              </span>
+            ))}
+          </div>
+          {lifecycle.transitions.length > 0 ? (
+            <div className="flex flex-col gap-0">
+              {lifecycle.transitions.map((t: { competency: string; from: string | null; to: string; reason: string | null; when: string | null }, i: number) => (
+                <div key={i} className="flex gap-3">
+                  <div className="flex flex-col items-center">
+                    <span className="w-3 h-3 rounded-full border-2 border-white shadow-sm" style={{ backgroundColor: STATE_COLOR[t.to] ?? "#9ca3af" }} />
+                    {i < lifecycle.transitions.length - 1 && <span className="w-0.5 flex-1 bg-gray-100" />}
+                  </div>
+                  <div className={`flex-1 flex flex-wrap items-baseline gap-x-2 gap-y-0.5 ${i < lifecycle.transitions.length - 1 ? "pb-3" : ""}`}>
+                    <span className="text-sm font-semibold text-gray-800 min-w-0">{t.competency}</span>
+                    <span className="text-[11px] text-gray-500">
+                      {t.from ? <>{STATE_LABEL[t.from] ?? t.from} <span className="text-gray-300">→</span> </> : null}
+                      <b style={{ color: STATE_COLOR[t.to] }}>{STATE_LABEL[t.to] ?? t.to}</b>
+                    </span>
+                    {t.reason && <span className="text-[10px] text-gray-400">· {t.reason}</span>}
+                    <span className="text-[10px] text-gray-400 ml-auto">{fmt(t.when)}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="text-xs text-gray-400">Current states are shown above; transitions will appear here as your competencies are assessed, validated and renewed.</p>
+          )}
         </div>
       )}
 

@@ -1,6 +1,7 @@
 import { createAdminClient } from "@/lib/supabase/server";
 import { generatePathwayForNurse } from "@/lib/engines/pathways";
 import { maturityFromScore, outcomeFor } from "@/lib/engines/outcomes";
+import { transitionLifecycle, mapDecisionToState } from "@/lib/competency/lifecycle-state";
 import { notify } from "@/lib/notify";
 
 export { maturityFromScore, outcomeFor };
@@ -144,6 +145,11 @@ export async function generateDecisionsForCycle(
         Object.entries(r).filter(([k]) => k !== "hospital_id" && k !== "organisation_id")))));
   }
   if (error) throw new Error(error.message);
+
+  // COMP-017 — advance the persisted competency lifecycle state for each decided competency (fail-soft; migration 126).
+  for (const r of rows) {
+    await transitionLifecycle(admin, { hospitalId: r.hospital_id ?? null, nurseId, competencyId: r.competency_id, toState: mapDecisionToState(r.outcome, r.expiry_date), reason: "Assessment decision recorded" });
+  }
 
   // Refresh the nurse's learning pathway from the new decision gaps (best-effort)
   try { await generatePathwayForNurse(admin, nurseId); } catch { /* non-fatal */ }
