@@ -10,7 +10,7 @@
 
 Build write-back as a **governed edit-through surface with per-type adapters — not a normalization of the 12 source tables.** Let a super-admin change an asset's status/version *from the unified Asset Browser*, and have that change written back to the source table **in the source's own native convention** (set `frameworks.is_active`, `clinical_practice_units.pub_status`, `simulation_scenarios.version`, …), routing through the governed chokepoints that already exist (the publishing engine; the COMP-017 lifecycle state machine) wherever they apply.
 
-The literal reading of "write-back" — add one canonical `status`/`version` column to all 12 tables, backfill, re-point every reader to it, and rewrite every writer — is a genuine **multi-quarter re-platform with a 171-file blast radius** and real data-loss/regression risk. It is **out of scope** here and stays flagged as the deep normalization.
+The literal reading of "write-back" — add one canonical `status`/`version` column to all 12 tables, backfill, re-point every reader to it, and rewrite every writer — is a genuine **multi-quarter re-platform: a 12-table migration + ~12 write-path rewrites + re-pointing ~80–130 status-read files** (most of which can't move off the source tables), with real data-loss/regression risk. It is **out of scope** here and stays flagged as the deep normalization.
 
 Why edit-through wins, from the CAP-001 audit:
 
@@ -26,9 +26,9 @@ Why edit-through wins, from the CAP-001 audit:
 
 | | Variant | Direction | Touches source schema? | Re-points readers? | Blast radius |
 |---|---|---|---|---|---|
-| **A** | **Normalize** — canonical `status`/`version` column on all 12 tables; readers/writers use it | source ← canonical column | **Yes (12 tables)** | **Yes (all status reads)** | **171 files, multi-quarter** |
-| **B** | **Edit-through** — unified surface writes each source's *native* status/version via per-type adapters | Browser → source (native) | No | No | ~12 adapters + 1 API + UI |
-| **C** | **Flip authority** — `cap_assets` becomes the read source of truth; source tables mirror it | cap_assets → source | No (new table) | **Yes (all status reads → cap_assets)** | **171 files** |
+| **A** | **Normalize** — canonical `status`/`version` column on all 12 tables; readers/writers use it | source ← canonical column | **Yes (12 tables)** | **Yes (~80–130 files)** | **12-table migration + ~12 write rewrites + ~80–130 read re-points, multi-quarter** |
+| **B** | **Edit-through** — unified surface writes each source's *native* status/version via per-type adapters | Browser → source (native) | No | No | **~7 adapters (mostly pre-existing) + 1 API + UI** |
+| **C** | **Flip authority** — `cap_assets` becomes the read source of truth; source tables mirror it | cap_assets → source | No (new table) | **Yes (~80–130 files)** | **~80–130 read re-points** |
 
 Today `cap_assets.status/version` are **derived, advisory snapshots** — the populator normalizes them on read; the source stays authoritative and disagrees with itself. Write-back's *value* is being able to **govern lifecycle from the unified surface and have it stick**. Variant **B** delivers exactly that value at a fraction of A/C's cost.
 
@@ -56,7 +56,16 @@ The write-back does **not** start from nothing. Three governed chokepoints exist
 - **COMP-017 lifecycle state machine** (`competency_lifecycle_state` + `transitionLifecycle`, wired into educator/validate) — a governed state machine, though currently scoped to competency *achievement* lifecycle, not asset authoring. Reusable pattern; possibly reusable table.
 - **Per-type Studio authoring APIs** (`/api/studio/*`, `/api/content/*`) — where each source table's status is set today (e.g. a CPU's `pub_status`, a package's `status`). These are the natural hook points for adapters.
 
-> The precise write-site vs read-site split across the 12 tables is being quantified by a codebase sweep; the numbers slot into §5. The established figure is that **171 files** touch these tables overall, with status/version **writes a small concentrated subset** and **reads the bulk** — which is exactly why re-pointing reads (A/C) is the expensive part and writing native status (B) is cheap.
+**The real numbers (codebase sweep):**
+- **Status/version WRITE sites = ~12 files** across ~8 per-type routes. Most types already funnel their status write through **one** route.
+- **Status/version READ sites = ~80–130 files** (`.eq("status"|"pub_status"|"is_active")` filters alone = 261 hits / 162 files; `pub_status` in ~50 files). **An order of magnitude larger than the write side** — and most `.select()` status *alongside* source-only columns, so they can't simply re-point to the header. This read re-point is what makes Variant A expensive.
+- **4 tables already have a clean, audited status chokepoint** (`knowledge_objects`, `simulation_scenarios`, `competency_packages`, and frameworks' lifecycle — though duplicated across two routes). 3 are ungoverned field-writes/soft-deletes (`cpu`, `learning_resources`, `skill_library`/`question_banks`). 1 has **no write path at all** (`cmo_publications`, select-only). 3 have no status column.
+
+**Two data schisms the sweep surfaced (both variants must reckon with them):**
+- **`frameworks.is_active` is inert** — only ever read/filtered and set `true` at insert, **never transitioned**; the real framework lifecycle is `pub_status`. Yet the current populator derives framework status *from `is_active`*, so **the advisory index today mislabels every framework's status** — concrete proof of the drift risk. → Write-back therefore excludes `framework` and routes it through the lifecycle engine (W3), rather than poking a dead flag.
+- **Inert version columns** — `clinical_practice_units.version_num` and `cmo_publications.version` are **never written** by any code (display-only), and frameworks carries *two* version encodings. → Write-back offers version editing only where it's real (`simulation`, `package`).
+
+> The adapter layer this needs **already exists 2–3×** on the read side (`registry.ts` 12 adapters, `publishing-tools.ts` 8 adapters). Variant B largely *promotes existing read-adapters to also write*.
 
 ---
 
@@ -64,7 +73,7 @@ The write-back does **not** start from nothing. Three governed chokepoints exist
 
 - **Lossy collapse.** `is_active=true` → `active` or `published`? `framework_competencies` has *no* status — inventing one changes semantics. `version_num int` (cpu) vs `version text` (sim) don't share a scheme. Any single column is a lossy, opinionated rewrite of authoritative data.
 - **Dual-write forever.** Until *every* reader moves to the canonical column, both the native column and the canonical must be kept in sync on every write — a permanent maintenance tax and a bug farm.
-- **Re-point 171 files.** Every `.eq("is_active", true)`, every `.pub_status` read, every status filter across the platform would have to change to read the canonical source. That *is* the re-platform.
+- **Re-point ~80–130 status-read files.** Every `.eq("is_active", true)`, every `.pub_status` read, every status filter (261 filter hits across 162 files) would have to change to read the canonical source — and most `.select()` status alongside source-only columns, so they can't just point at the header. That *is* the re-platform.
 - **RLS + concurrency.** Writing normalized state onto 12 differently-scoped tables multiplies the surface for cross-tenant and race regressions.
 
 Variant B avoids all four: no new column, no dual-write, no re-point, and it writes through each table's existing (RLS-correct) path.
@@ -77,16 +86,16 @@ Variant B avoids all four: no new column, no dual-write, no re-point, and it wri
 A small `src/lib/assets/writeback.ts` with one adapter per type mapping a **canonical intent** (`setStatus(canonical)`, `setVersion(semver)`) to the source's native write:
 
 ```
-framework          → is_active = (canonical ∈ {active,published})           [+ pub_status if present]
-skill / question_bank / learning_resource → is_active = (canonical ∈ {active,published})
-cpu                → pub_status = mapCanonicalToPubStatus(canonical); version_num = major(semver)
-knowledge_object   → status = mapCanonicalToKoStatus(canonical)
-simulation / package → status = canonical; version = semver
-publication        → route through the PUBLISHING ENGINE (governed), not a raw update
-framework_competency / blueprint / osce_station → (no native status) → recorded on cap_assets only, flagged advisory
+cpu                → pub_status = canonical (draft|in_review|approved|published|archived)   [version_num inert → no version edit]
+knowledge_object   → status = canonical (archived → 'retired')
+simulation/package → status = canonical (draft|published|archived); version = semver text
+skill / question_bank / learning_resource → is_active = (canonical == 'active')             [active ↔ archived only]
+framework          → NOT here — is_active is inert; route through the framework lifecycle engine (W3)
+publication        → NOT here — cmo_publications is select-only; governed by the Publishing engine
+framework_competency / blueprint / osce_station → NOT here — no source status column
 ```
 
-Types with no native status column keep write-back **advisory** (recorded on `cap_assets`, labeled "not persisted to source") rather than fabricating a column — honest, not silently lossy.
+Excluded types get a **pointer to the right surface**, not a fabricated control — honest, not silently lossy. Boolean-status types offer only `active`/`archived` (the states `is_active` can round-trip). After a write, `cap_assets` is updated to the chosen status so the index stays consistent, and it round-trips through the next refresh because each write lands in the column the populator reads.
 
 ### 5b. Route through existing governance
 - **Publish transitions** (`→ published`) and **version bumps** go through the **publishing engine** where the type participates in it — so publish stays governed/e-signed/immutable, not a raw column poke.
