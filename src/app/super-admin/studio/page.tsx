@@ -118,7 +118,7 @@ export default async function StudioPage() {
   const GOVERNANCE: Mod[] = [
     { code: "CST-101", icon: "♻️", label: "Lifecycle Management", desc: "Every asset from request to retirement — persisted state machine.", href: "/competency-office/lifecycle-state" },
     { code: "CST-106", icon: "⚖️", label: "Review & Governance", desc: "Committee review, standards compliance, decisions and e-sign-off.", href: "/competency-office/review-board" },
-    { code: "CST-107", icon: "✅", label: "Quality Assurance", desc: "QA scorecards and outcome→competency feedback. Content-lint centre is Phase 2.", href: "/competency-office/quality-feedback" },
+    { code: "CST-107", icon: "✅", label: "Quality Assurance", desc: "Content-quality linter over authored competencies — completeness, assessment integrity, evidence coverage.", href: "/super-admin/studio/qa" },
   ];
 
   return (

@@ -110,7 +110,7 @@ const STUDIO_NAV = [
     { label: "Publishing & Versioning", href: "/competency-office/publishing", icon: "🚦" },
     { label: "Review & Governance", href: "/competency-office/review-board", icon: "⚖️" },
     { label: "Lifecycle Management", href: "/competency-office/lifecycle-state", icon: "♻️" },
-    { label: "Quality Assurance", href: "/competency-office/quality-feedback", icon: "✅" },
+    { label: "Quality Assurance", href: "/super-admin/studio/qa", icon: "✅" },
     { label: "Analytics", href: "/competency-office/analytics", icon: "📊" },
     { label: "Approval Queue", href: "/admin/approvals", icon: "🗳️" },
   ]},
