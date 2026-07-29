@@ -110,7 +110,7 @@ export default async function StudioPage() {
     { code: "CST-105", icon: "🔗", label: "Dependency Manager", desc: "Prerequisite, co-requisite, recommended and inherited graphs — cycle-checked progression.", href: "/super-admin/studio/dependencies", stat: "cycle-checked" },
     { code: "CST-108", icon: "📏", label: "Standards Mapping", desc: "Map competencies to WHO, JCI, SafeCare, MOH and council standards — coverage & regulatory traceability.", href: "/super-admin/studio/standards", stat: "mapping centre" },
     { code: "CST-109", icon: "📦", label: "Package Manager", desc: "Bundle competencies and assets into versioned, deployable packages.", href: "/super-admin/studio/packages", stat: "package builder" },
-    { code: "CST-110", icon: "🛍️", label: "Marketplace", desc: "Discover, license and install competency packages across the ecosystem.", planned: true },
+    { code: "CST-110", icon: "🛍️", label: "Marketplace", desc: "Discover and adopt published competency packages across the enterprise.", href: "/super-admin/studio/marketplace" },
     { code: "CST-111", icon: "📥", label: "Migration & Import", desc: "Import authored CPU documents → competencies, skills, rules and questions.", href: "/super-admin/studio/import" },
     { code: "CST-112", icon: "🗄️", label: "Archive & Repository", desc: "Long-term preservation, enterprise search and controlled restore of retired assets.", href: "/super-admin/ckp/repository" },
   ];

@@ -106,6 +106,7 @@ const STUDIO_NAV = [
     { label: "Question Banks", href: "/super-admin/studio/questions", icon: "❓" },
     { label: "Template Library", href: "/super-admin/studio/templates", icon: "🧩" },
     { label: "Package Manager", href: "/super-admin/studio/packages", icon: "📦" },
+    { label: "Marketplace", href: "/super-admin/studio/marketplace", icon: "🛍️" },
     { label: "Knowledge Objects", href: "/super-admin/studio/knowledge", icon: "🫀" },
     { label: "Case Studies", href: "/super-admin/studio/cases", icon: "🧑‍⚕️" },
     { label: "Ownership", href: "/super-admin/studio/responsibilities", icon: "🧾" },
