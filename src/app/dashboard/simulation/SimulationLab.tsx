@@ -44,6 +44,10 @@ export default function SimulationLab({ scenarios, cases }: { scenarios: Scenari
 
   return (
     <div>
+      <div className="flex items-center justify-between gap-3 mb-4 bg-teal-50 border border-teal-100 rounded-xl px-4 py-2.5">
+        <p className="text-[12px] text-teal-900">Rehearsed a scenario? Log a debrief to capture deliberate practice.</p>
+        <Link href="/dashboard/simulation/practice" className="text-xs font-semibold text-teal-700 hover:underline shrink-0">Practice &amp; debrief →</Link>
+      </div>
       {/* Filters */}
       <div className="flex flex-wrap items-center gap-2 mb-4">
         {categories.map(c => (

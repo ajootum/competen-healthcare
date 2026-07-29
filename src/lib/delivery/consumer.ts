@@ -35,7 +35,7 @@ async function handleAssessmentCompleted(admin: Admin, ev: any): Promise<string>
 
 const REMEDIATE = "assessment.completed";
 // Known delivery events with no reactive side-effect (the emitter already did the work) — acknowledge & drain.
-const ACK_ONLY = new Set(["competency.assigned", "campaign.launched", "learning.course.completed", "task.completed", "credential.expiry.updated", "policy.acknowledgement.required"]);
+const ACK_ONLY = new Set(["competency.assigned", "campaign.launched", "simulation.completed", "learning.course.completed", "task.completed", "credential.expiry.updated", "policy.acknowledgement.required"]);
 
 export async function processEvents(admin: Admin, limit = 300) {
   const { data: events, error } = await admin.from("domain_events").select("id, event_type, actor_id, payload").eq("status", "pending").order("occurred_at", { ascending: true }).limit(limit);

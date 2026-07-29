@@ -87,7 +87,7 @@ export default async function DeliveryPlatformPage() {
     { code: "CDP-004", icon: "🔁", label: "Microlearning & Reinforcement", desc: "SM-2 spaced-repetition cards generated from achieved competencies; learners self-grade recall so retention doesn't decay. Learner loop at /dashboard/reinforcement.", href: "/super-admin/delivery/reinforcement", status: "real" },
   ];
   const PRACTICE: Mod[] = [
-    { code: "CDP-005", icon: "🎬", label: "Clinical Simulation & Practice", desc: "Scenario authoring + branching delivery are real; flow-builder / mock-code orchestration is next-phase.", href: "/super-admin/studio/simulations", status: "partial" },
+    { code: "CDP-005", icon: "🎬", label: "Clinical Simulation & Practice", desc: "Scenario authoring + branching runtime + persisted practice sessions with structured debrief, self-rating and reinforcement follow-up. Learners log at /dashboard/simulation/practice.", href: "/super-admin/delivery/simulation", status: "real" },
     { code: "CDP-006", icon: "📝", label: "Assessment Delivery", desc: "Quiz / OSCE / DOPS / Mini-CEX delivery, attempts, sessions, scoring & evidence — all live.", href: "/assessor", status: "real" },
   ];
   const COACHING: Mod[] = [
