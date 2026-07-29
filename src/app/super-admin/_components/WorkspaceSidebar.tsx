@@ -51,6 +51,9 @@ const GENERAL_NAV = [
     { label: "AI Orchestrator", href: "/super-admin/priorities/ai", icon: "🧠" },
     { label: "Governance", href: "/super-admin/priorities/governance", icon: "✅" },
   ]},
+  { group: "COMPETENCY STUDIO", items: [
+    { label: "Open Competency Studio →", href: "/super-admin/studio", icon: "🎨" },
+  ]},
   { group: "CLINICAL KNOWLEDGE PLATFORM", items: [
     { label: "Open CKP →", href: "/super-admin/ckp", icon: "📚" },
   ]},
@@ -86,6 +89,36 @@ const CKP_NAV = [
     { label: "Create Policy", href: "/super-admin/policy-manager", icon: "📋" },
     { label: "AI Authoring Assistant", href: "/super-admin/assistant", icon: "✨" },
     { label: "Knowledge Search", href: "/super-admin/assistant", icon: "🔍" },
+  ]},
+];
+
+const STUDIO_NAV = [
+  { group: "COMPETENCY STUDIO", items: [
+    { label: "Studio Home", href: "/super-admin/studio", icon: "🎨" },
+    { label: "Framework & Competency", href: "/super-admin/content", icon: "🧬" },
+    { label: "Assessment Studio", href: "/super-admin/assessment-methods", icon: "🩺" },
+    { label: "Skills Library", href: "/super-admin/studio/skills", icon: "✋" },
+    { label: "Checklists", href: "/super-admin/studio/checklists", icon: "☑️" },
+    { label: "Practices & CPUs", href: "/super-admin/studio/cpus", icon: "🏥" },
+    { label: "Question Banks", href: "/super-admin/studio/questions", icon: "❓" },
+    { label: "Knowledge Objects", href: "/super-admin/studio/knowledge", icon: "🫀" },
+    { label: "Case Studies", href: "/super-admin/studio/cases", icon: "🧑‍⚕️" },
+    { label: "Ownership", href: "/super-admin/studio/responsibilities", icon: "🧾" },
+    { label: "Import CPU Document", href: "/super-admin/studio/import", icon: "📥" },
+  ]},
+  { group: "GOVERNANCE & PUBLISHING", items: [
+    { label: "Publishing & Versioning", href: "/competency-office/publishing", icon: "🚦" },
+    { label: "Review & Governance", href: "/competency-office/review-board", icon: "⚖️" },
+    { label: "Lifecycle Management", href: "/competency-office/lifecycle-state", icon: "♻️" },
+    { label: "Quality Assurance", href: "/competency-office/quality-feedback", icon: "✅" },
+    { label: "Analytics", href: "/competency-office/analytics", icon: "📊" },
+    { label: "Approval Queue", href: "/admin/approvals", icon: "🗳️" },
+  ]},
+  { group: "QUICK ACCESS", items: [
+    { label: "AI Design Assistant", href: "/super-admin/assistant", icon: "✨" },
+    { label: "Archive & Repository", href: "/super-admin/ckp/repository", icon: "🗄️" },
+    { label: "Standards Mapping", href: "/competency-office/standards", icon: "📏" },
+    { label: "Clinical Knowledge Platform", href: "/super-admin/ckp", icon: "📚" },
   ]},
 ];
 
@@ -145,18 +178,19 @@ const SYS_NAV = [
   ]},
 ];
 
-const OVERVIEW_HREFS = new Set(["/super-admin", "/super-admin/ckp", "/super-admin/ai", "/super-admin/governance", "/super-admin/system"]);
+const OVERVIEW_HREFS = new Set(["/super-admin", "/super-admin/ckp", "/super-admin/ai", "/super-admin/governance", "/super-admin/system", "/super-admin/studio", "/super-admin/content"]);
 
 export default function WorkspaceSidebar({ profileName, roles, activeRole, workspaces }: { profileName: string | null; roles: AppRole[]; activeRole: AppRole; workspaces: any[] }) {
   const pathname = usePathname();
   const inCkp = pathname.startsWith("/super-admin/ckp");
+  const inStudio = pathname.startsWith("/super-admin/studio") || pathname.startsWith("/super-admin/content") || pathname.startsWith("/super-admin/assessment-methods");
   const inAi = pathname === "/super-admin/ai" || pathname.startsWith("/super-admin/ai/");
   const inGov = pathname === "/super-admin/governance" || pathname.startsWith("/super-admin/governance/");
   const inSys = pathname === "/super-admin/system" || pathname.startsWith("/super-admin/system/");
-  const inWorkspace = inCkp || inAi || inGov || inSys;
-  const nav = inCkp ? CKP_NAV : inAi ? AI_NAV : inGov ? GOV_NAV : inSys ? SYS_NAV : GENERAL_NAV;
-  const home = inCkp ? "/super-admin/ckp" : inAi ? "/super-admin/ai" : inGov ? "/super-admin/governance" : inSys ? "/super-admin/system" : "/super-admin";
-  const subtitle = inCkp ? "Clinical Knowledge Platform" : inAi ? "AI & Intelligence" : inGov ? "Governance & Compliance" : inSys ? "System & Security" : "Mission Control";
+  const inWorkspace = inCkp || inStudio || inAi || inGov || inSys;
+  const nav = inCkp ? CKP_NAV : inStudio ? STUDIO_NAV : inAi ? AI_NAV : inGov ? GOV_NAV : inSys ? SYS_NAV : GENERAL_NAV;
+  const home = inCkp ? "/super-admin/ckp" : inStudio ? "/super-admin/studio" : inAi ? "/super-admin/ai" : inGov ? "/super-admin/governance" : inSys ? "/super-admin/system" : "/super-admin";
+  const subtitle = inCkp ? "Clinical Knowledge Platform" : inStudio ? "Competency Studio" : inAi ? "AI & Intelligence" : inGov ? "Governance & Compliance" : inSys ? "System & Security" : "Mission Control";
 
   return (
     <>
