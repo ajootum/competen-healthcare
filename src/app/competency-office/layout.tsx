@@ -41,6 +41,7 @@ const NAV_SECTIONS: { section: string; items: { label: string; href: string; ico
     { label: "Credential Management", href: "/competency-office/credentialing", icon: "🎓" },
     { label: "Certification Manager", href: "/competency-office/certifications", icon: "📜" },
     { label: "Clinical Privileging", href: "/competency-office/privileging", icon: "🏥" },
+    { label: "Mobility & Recognition", href: "/competency-office/recognition", icon: "🌍" },     // COMP-024
   ] },
   { section: "Improvement Centre", items: [
     { label: "Gap Management", href: "/competency-office/gaps", icon: "🕳️" },
