@@ -83,7 +83,7 @@ export default async function DeliveryPlatformPage() {
   ];
   const EXPERIENCE: Mod[] = [
     { code: "CDP-002", icon: "🎓", label: "Learning Experience Platform", desc: "Courses, resources, pathways and the enrol→progress→complete runtime — live across the worker, educator & LDS surfaces.", href: "/unit-manager/learning", status: "real" },
-    { code: "CDP-003", icon: "🧬", label: "Adaptive Learning Engine", desc: "Adaptive-exam blueprints are authored; the real-time item-selection delivery runtime is the gap.", href: "/super-admin/studio/adaptive", status: "partial" },
+    { code: "CDP-003", icon: "🧬", label: "Adaptive Learning Engine", desc: "Real computerised adaptive testing (1PL/Rasch ability estimate, max-information item selection, SE stopping) over the authored blueprints. Learners take it at /dashboard/adaptive.", href: "/super-admin/studio/adaptive", status: "real" },
     { code: "CDP-004", icon: "🔁", label: "Microlearning & Reinforcement", desc: "SM-2 spaced-repetition cards generated from achieved competencies; learners self-grade recall so retention doesn't decay. Learner loop at /dashboard/reinforcement.", href: "/super-admin/delivery/reinforcement", status: "real" },
   ];
   const PRACTICE: Mod[] = [
