@@ -82,7 +82,7 @@ export default async function AssetPlatformPage() {
   const assetTypes = ASSETS.filter(a => a.value > 0).length;
 
   const REPOSITORY: Mod[] = [
-    { code: "CAP-001", icon: "🗄️", label: "Asset Repository", desc: "Central store of every competency asset — this catalogue is its single-source-of-truth view.", href: "/super-admin/studio" },
+    { code: "CAP-001", icon: "🗄️", label: "Asset Repository", desc: "Browse, filter and search the governed index of every competency asset — one header over all 12 source types.", href: "/super-admin/studio/assets/browser" },
     { code: "CAP-002", icon: "🏷️", label: "Metadata & Classification", desc: "Tags, taxonomy and classification across all asset types.", href: "/super-admin/metadata" },
     { code: "CAP-007", icon: "🔗", label: "Relationship Engine", desc: "Prerequisite, equivalency and dependency links between assets.", href: "/super-admin/studio/dependencies" },
     { code: "CAP-008", icon: "🗺️", label: "Clinical Knowledge Mapping", desc: "Map assets to clinical knowledge, standards and the knowledge graph.", href: "/super-admin/studio/mapping" },
@@ -114,7 +114,10 @@ export default async function AssetPlatformPage() {
           <h1 className="text-xl font-bold text-gray-900">Asset Repository</h1>
           <p className="text-gray-400 text-sm mt-0.5">The single source of truth — every competency asset, governed once and reused everywhere across the ecosystem.</p>
         </div>
-        <Link href="/super-admin/studio" className="text-xs font-semibold text-gray-500 hover:text-teal-700 border border-gray-200 rounded-lg px-3 py-2">← Studio</Link>
+        <div className="flex items-center gap-2 shrink-0">
+          <Link href="/super-admin/studio/assets/browser" className="text-xs font-semibold text-white bg-teal-600 hover:bg-teal-700 rounded-lg px-3 py-2">Browse assets →</Link>
+          <Link href="/super-admin/studio" className="text-xs font-semibold text-gray-500 hover:text-teal-700 border border-gray-200 rounded-lg px-3 py-2">← Studio</Link>
+        </div>
       </div>
 
       {/* Repository summary */}
