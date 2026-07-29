@@ -9,6 +9,7 @@
 import { emitPlatformEvent } from "./events";
 import { loadKnowledgeIntelligence } from "@/lib/super-admin/ckp-intelligence";
 import { runTaskAutomation } from "@/lib/operations/task-automation";
+import { runOrchestration } from "@/lib/delivery/orchestrator";
 
 export type JobDef = { key: string; name: string; description: string; category: string; schedule: string; runnable: boolean };
 
@@ -21,6 +22,7 @@ export const JOB_REGISTRY: JobDef[] = [
   { key: "knowledge_intelligence_scan", name: "Knowledge Intelligence Scan", description: "Recompute knowledge health, coverage, gaps and duplicates; snapshot to the platform event log.", category: "knowledge", schedule: "0 5 * * *", runnable: true },
   { key: "scheduled_reports", name: "Scheduled Reports", description: "Deliver due report schedules to recipients.", category: "reports", schedule: "0 6 * * *", runnable: false },
   { key: "task_automation", name: "Task Automation", description: "Fire recurring & event-triggered tasks from active task templates across all tenants.", category: "operations", schedule: "0 * * * *", runnable: true },
+  { key: "delivery_orchestration", name: "Competency Delivery Orchestration", description: "Evaluate active assignment rules and materialise pending competency deliveries across all tenants (CDP-001).", category: "competency", schedule: "0 4 * * *", runnable: true },
 ];
 
 const HANDLERS: Record<string, (admin: any) => Promise<string>> = {
@@ -62,6 +64,12 @@ const HANDLERS: Record<string, (admin: any) => Promise<string>> = {
     if (!r.ok) throw new Error(r.error ?? "automation failed");
     if (r.generated) await emitPlatformEvent(admin, { event_type: "tasks.automation_fired", severity: "info", payload: { generated: r.generated, templates: r.details.length } });
     return `${r.generated} task(s) generated from ${r.details.length} template(s)${r.details.length ? ` · ${r.details.slice(0, 4).join(", ")}` : ""}`;
+  },
+  delivery_orchestration: async (admin) => {
+    const r = await runOrchestration(admin, null, true, { id: null, name: "System" });
+    if (!r.ok) throw new Error(r.error ?? "orchestration failed");
+    if (r.created) await emitPlatformEvent(admin, { event_type: "delivery.orchestration_ran", severity: "info", payload: { created: r.created, events: r.events } });
+    return `${r.created} delivery(ies) materialised${r.skipped ? ` · ${r.skipped} skipped` : ""} · ${r.events} event(s)`;
   },
 };
 
