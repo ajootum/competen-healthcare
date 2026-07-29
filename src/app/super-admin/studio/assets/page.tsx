@@ -97,7 +97,7 @@ export default async function AssetPlatformPage() {
     { code: "CAP-005", icon: "🛰️", label: "Distribution Engine", desc: "Distribute published assets to workspaces via packages and the marketplace.", href: "/super-admin/studio/marketplace" },
     { code: "CAP-010", icon: "🧩", label: "Reuse Engine", desc: "Clone, template and reuse assets enterprise-wide.", href: "/super-admin/studio/templates" },
     { code: "CAP-013", icon: "📥", label: "Import / Export", desc: "Import authored documents and export asset bundles.", href: "/super-admin/studio/import" },
-    { code: "CAP-012", icon: "🌐", label: "Translation & Localisation", desc: "Multi-language asset versions and locale management.", planned: true },
+    { code: "CAP-012", icon: "🌐", label: "Translation & Localisation", desc: "Track asset translations into target locales — coverage, status and translators.", href: "/super-admin/studio/translations" },
   ];
   const SEARCH_AI: Mod[] = [
     { code: "CAP-006", icon: "🔍", label: "Search & Discovery", desc: "Keyword and faceted asset search. Semantic/vector search is next-phase.", href: "/super-admin/studio" },
