@@ -95,7 +95,7 @@ export default async function StudioPage() {
     { code: "CST-004", icon: "📎", label: "Evidence Studio", desc: "Evidence requirements per CPU — types, quantities, validity and verification.", href: "/super-admin/content", stat: `${cpus} CPUs` },
     { code: "CST-005", icon: "📚", label: "Learning Path Studio", desc: "Sequence learning journeys linked to competencies, remediation and CPD.", href: "/admin/resources", stat: `${pathways} pathways` },
     { code: "CST-006", icon: "🎬", label: "Simulation Studio", desc: "Branching scenarios, mock codes & team sims. AI drafting is live; a versioned scenario store is Phase 2.", href: "/educator/simulation" },
-    { code: "CST-007", icon: "⚙️", label: "Rules Engine", desc: "Progression, scoring, recertification & automation. Assignment rules live; a unified engine consolidates in Phase 2.", href: "/competency-office/assignment-rules", stat: `${rules} assignment rules` },
+    { code: "CST-007", icon: "⚙️", label: "Rules Engine", desc: "Consolidated Rules Library — progression, scoring, evidence, critical-failure and recertification rules.", href: "/super-admin/studio/rules", stat: `${rules} assignment rules` },
     { code: "CST-008", icon: "🚦", label: "Publishing & Versioning", desc: "Governed draft → review → approve → release → rollback with impact analysis.", href: "/competency-office/publishing", stat: `${publications} publications` },
     { code: "CST-009", icon: "✨", label: "AI Design Assistant", desc: "Draft, gap-check & optimise assets on the governed AI gateway — human-approved.", href: "/super-admin/assistant" },
     { code: "CST-010", icon: "🧪", label: "Testing & Sandbox", desc: "Persona-driven preview and test-before-publish for authored content.", planned: true },
