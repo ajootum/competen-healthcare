@@ -90,7 +90,7 @@ export default async function AssessmentStudioPage() {
   ];
   const SCORING: Mod[] = [
     { code: "CST-043", icon: "⚖️", label: "Scoring & Decision Rules", desc: "Scoring models, pass/fail, critical failure, entrustment and mastery decision logic.", href: "/super-admin/studio/rules" },
-    { code: "CST-044", icon: "📏", label: "Standard Setting", desc: "Defensible cut scores — Angoff, Ebel, Bookmark, Borderline — with panel management.", planned: true },
+    { code: "CST-044", icon: "📏", label: "Standard Setting", desc: "Defensible cut scores — Angoff-family judge ratings, computed cut and real pass-rate impact.", href: "/super-admin/studio/standard-setting" },
     { code: "CST-045", icon: "📊", label: "Quality & Psychometrics", desc: "Item difficulty, discrimination, distractor analysis and KR-20 — computed from real attempts.", href: "/super-admin/studio/psychometrics" },
   ];
   const GOVERNANCE: Mod[] = [
