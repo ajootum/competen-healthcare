@@ -95,6 +95,7 @@ const CKP_NAV = [
 const STUDIO_NAV = [
   { group: "COMPETENCY STUDIO", items: [
     { label: "Studio Home", href: "/super-admin/studio", icon: "🎨" },
+    { label: "Asset Repository", href: "/super-admin/studio/assets", icon: "🗄️" },
     { label: "Framework & Competency", href: "/super-admin/content", icon: "🧬" },
     { label: "Dependencies", href: "/super-admin/studio/dependencies", icon: "🔗" },
     { label: "Rules Engine", href: "/super-admin/studio/rules", icon: "⚙️" },
