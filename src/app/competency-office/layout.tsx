@@ -22,6 +22,7 @@ const NAV_SECTIONS: { section: string; items: { label: string; href: string; ico
   ] },
   { section: "Competency Governance", items: [
     { label: "Lifecycle Engine", href: "/competency-office/lifecycle", icon: "🔄" },           // CMO-004
+    { label: "Lifecycle State Machine", href: "/competency-office/lifecycle-state", icon: "🧬" }, // COMP-017
     { label: "Competency Frameworks", href: "/competency-office/frameworks", icon: "🗂️" },
     { label: "Standards Library", href: "/competency-office/standards", icon: "📚" },
     { label: "Governance & Publication", href: "/competency-office/publishing", icon: "🚀" },   // COMP-011
