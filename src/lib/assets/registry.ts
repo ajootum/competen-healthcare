@@ -64,6 +64,7 @@ type Source = {
   type: string;
   table: string;
   select: string;
+  selectFallback?: string; // used if `select` names a column that isn't migrated yet (e.g. frameworks.pub_status)
   tenant: (r: Row, m: Resolvers) => string | null;
   name: (r: Row) => string;
   status: (r: Row) => string;
@@ -77,8 +78,10 @@ type Source = {
 // has no native status/version/owner, we default honestly (competencies inherit "active"; the 8 without a
 // version column default "1.0"); domain enrichment is deferred to Phase 3.
 export const SOURCES: Source[] = [
-  { type: "framework", table: "frameworks", select: "id,name,hospital_id,is_active,created_at",
-    tenant: r => r.hospital_id ?? null, name: r => r.name, status: r => normStatus(r.is_active), version: () => "1.0", owner: () => null, created: r => r.created_at ?? null, updated: () => null },
+  // Framework status is its pub_status lifecycle (mig 127) — NOT is_active, which is inert (set true at
+  // insert, never transitioned). Fall back to is_active only where pub_status isn't migrated yet.
+  { type: "framework", table: "frameworks", select: "id,name,hospital_id,pub_status,is_active,created_at", selectFallback: "id,name,hospital_id,is_active,created_at",
+    tenant: r => r.hospital_id ?? null, name: r => r.name, status: r => normStatus(r.pub_status || (r.is_active ? "active" : "archived")), version: () => "1.0", owner: () => null, created: r => r.created_at ?? null, updated: () => null },
   { type: "competency", table: "framework_competencies", select: "id,name,domain_id,created_at",
     tenant: (r, m) => m.domain.get(r.domain_id) ?? null, name: r => r.name, status: () => "active", version: () => "1.0", owner: () => null, created: r => r.created_at ?? null, updated: () => null },
   { type: "skill", table: "skill_library", select: "id,name,is_active,created_by,created_at",
@@ -117,7 +120,14 @@ export async function refreshAssets(admin: Admin): Promise<{ ok: boolean; total:
 
   for (const src of SOURCES) {
     try {
-      const rows = await fetchAll(admin, src.table, src.select);
+      let rows: Row[];
+      try {
+        rows = await fetchAll(admin, src.table, src.select);
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e);
+        if (src.selectFallback && /does not exist|schema cache|column/i.test(msg)) rows = await fetchAll(admin, src.table, src.selectFallback);
+        else throw e;
+      }
       const mapped = rows.map(r => ({
         object_type: src.type,
         object_id: r.id, // every source table keys on a uuid `id`
