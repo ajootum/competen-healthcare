@@ -8,7 +8,7 @@ import { emitObservationCompleted } from "@/lib/orchestration/producers";
 // op_escalation (spec: EscalationTriggered).
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
-const TYPES = ["vital_signs", "neuro", "respiratory", "cardiovascular", "fluid_balance", "pain", "sedation", "pews", "gcs", "specialty"];
+const TYPES = ["vital_signs", "neuro", "respiratory", "cardiovascular", "fluid_balance", "pain", "sedation", "pews", "gcs", "specialty", "post_procedure", "post_medication"];
 const SEV_BY_LEVEL = ["routine", "routine", "urgent", "high", "emergency", "critical"];
 
 async function assignedToPatient(admin: any, patientId: string, staffId: string) {

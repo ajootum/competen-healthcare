@@ -102,7 +102,7 @@ export async function loadPatientOne(admin: any, userId: string, patientId: stri
 
   const dayBack = new Date(now - 48 * 3.6e6).toISOString();
   const soft = (q: Promise<any>) => q.then((r: any) => (r.error && !migrationMissingErr(r.error) ? { data: [] } : r), () => ({ data: [] }));
-  const [obs, meds, medEvents, tasks, alerts, escs, concerns, notes, acuityHist, workloadHist, messages] = await Promise.all([
+  const [obs, meds, medEvents, tasks, alerts, escs, concerns, notes, acuityHist, workloadHist, messages, deviceRows] = await Promise.all([
     soft(admin.from("op_observations").select("*").eq("patient_id", patientId).order("due_at", { ascending: true }).limit(200)),
     soft(admin.from("op_med_schedule").select("*").eq("patient_id", patientId).gte("scheduled_at", dayBack).order("scheduled_at", { ascending: true }).limit(100)),
     soft(admin.from("op_med_administrations").select("*, op_med_schedule!schedule_id(drug_name, route)").eq("patient_id", patientId).order("administered_at", { ascending: false }).limit(50)),
@@ -114,7 +114,17 @@ export async function loadPatientOne(admin: any, userId: string, patientId: stri
     soft(admin.from("op_acuity_assessments").select("*").eq("patient_id", patientId).order("assessed_at", { ascending: false }).limit(30)),
     soft(admin.from("op_workload_assessments").select("*").eq("patient_id", patientId).order("assessed_at", { ascending: false }).limit(30)),
     soft(admin.from("op_messages").select("*").eq("patient_id", patientId).order("created_at", { ascending: false }).limit(20)),
+    soft(admin.from("op_patient_devices").select("*").eq("patient_id", patientId).order("inserted_at", { ascending: false }).limit(50)),
   ]);
+
+  // Devices & lines (158): line-days + dwell review flags (IPC convention:
+  // central lines / catheters 7 days, peripheral IVs 3 days).
+  const DWELL_REVIEW: Record<string, number> = { central_line: 7, urinary_catheter: 7, peripheral_iv: 3 };
+  const devices = ((deviceRows.data ?? []) as any[]).map((dv: any) => {
+    const end = dv.removed_at ? +new Date(dv.removed_at) : now;
+    const lineDays = Math.max(0, Math.floor((end - +new Date(dv.inserted_at)) / 86400e3));
+    return { ...dv, lineDays, reviewDue: !dv.removed_at && DWELL_REVIEW[dv.device_type] != null && lineDays >= DWELL_REVIEW[dv.device_type] };
+  });
 
   const medRows = (meds.data ?? []).map((m: any) => ({ ...m, effective_status: effectiveStatus(m, now) }));
   const activeAlerts = (alerts.data ?? []).filter((a: any) => a.active);
@@ -151,6 +161,8 @@ export async function loadPatientOne(admin: any, userId: string, patientId: stri
     ...(alerts.data ?? []).map((a: any) => ({ at: a.created_at, icon: "🛡️", text: `Safety alert — ${String(a.category).replace(/_/g, " ")} (${a.severity})`, tone: "text-red-700" })),
     ...(escs.data ?? []).map((e: any) => ({ at: e.created_at, icon: "⬆️", text: `Escalation L${e.level} — ${e.summary}`, tone: "text-red-700" })),
     ...(notes.data ?? []).map((n: any) => ({ at: n.created_at, icon: "🗒️", text: `Note — ${n.note}` })),
+    ...devices.map((dv: any) => ({ at: dv.inserted_at, icon: "🔌", text: `Device recorded — ${String(dv.device_type).replace(/_/g, " ")}${dv.site ? ` (${dv.site})` : ""}` })),
+    ...devices.filter((dv: any) => dv.removed_at).map((dv: any) => ({ at: dv.removed_at, icon: "🔌", text: `Device removed — ${String(dv.device_type).replace(/_/g, " ")} after ${dv.lineDays} day${dv.lineDays === 1 ? "" : "s"}` })),
   ].filter(t => t.at).sort((a, b) => +new Date(b.at) - +new Date(a.at)).slice(0, 30);
 
   return {
@@ -158,5 +170,6 @@ export async function loadPatientOne(admin: any, userId: string, patientId: stri
     patient: p, assignments, assignedToMe, ctx,
     acuityHistory: acuityHist.data ?? [], workloadHistory: workloadHist.data ?? [],
     messages: messages.data ?? [], timeline: tl,
+    devices: { active: devices.filter((dv: any) => !dv.removed_at), removed: devices.filter((dv: any) => dv.removed_at).slice(0, 10) },
   };
 }

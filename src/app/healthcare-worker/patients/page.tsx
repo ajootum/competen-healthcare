@@ -161,7 +161,8 @@ export default async function MyPatientsPage({ searchParams }: { searchParams: P
     return true;
   });
   const ranked = [...filtered].sort((a: any, b: any) => (ctxOf(b).cnci?.score ?? 0) - (ctxOf(a).cnci?.score ?? 0));
-  const priorityView = view === "priority";
+  const activeView = ["priority", "bedmap", "clinical"].includes(view ?? "") ? view! : "list";
+  const priorityView = activeView === "priority";
 
   const counts = {
     all: patients.length,
@@ -169,7 +170,11 @@ export default async function MyPatientsPage({ searchParams }: { searchParams: P
     secondary: patients.filter((a: any) => a.assignment_type !== "primary").length,
     high: patients.filter((a: any) => ["high", "critical"].includes(a.op_patients.acuity_level)).length,
   };
-  const tabHref = (f: string) => `/healthcare-worker/patients?${new URLSearchParams({ ...(priorityView ? { view: "priority" } : {}), ...(f !== "all" ? { filter: f } : {}), ...(needle ? { q: needle } : {}) }).toString()}`;
+  const tabHref = (f: string) => `/healthcare-worker/patients?${new URLSearchParams({ ...(activeView !== "list" ? { view: activeView } : {}), ...(f !== "all" ? { filter: f } : {}), ...(needle ? { q: needle } : {}) }).toString()}`;
+  const viewHref = (v: string) => `/healthcare-worker/patients?${new URLSearchParams({ ...(v !== "list" ? { view: v } : {}), ...(activeFilter !== "all" ? { filter: activeFilter } : {}), ...(needle ? { q: needle } : {}) }).toString()}`;
+  const viewToggle = (v: string, label: string) => (
+    <Link key={v} href={viewHref(v)} className={`px-3 py-1.5 rounded-lg text-xs font-medium ${activeView === v ? "bg-emerald-600 text-white" : "bg-white border border-gray-300 text-gray-600 hover:bg-gray-50"}`}>{label}</Link>
+  );
   const tab = (f: string, label: string, n: number) => (
     <Link key={f} href={tabHref(f)}
       className={`px-3 py-1.5 rounded-lg text-xs font-medium ${activeFilter === f ? "bg-emerald-600 text-white" : "bg-white border border-gray-300 text-gray-600 hover:bg-gray-50"}`}>
@@ -184,9 +189,11 @@ export default async function MyPatientsPage({ searchParams }: { searchParams: P
           <h1 className="text-2xl font-bold text-gray-900">My Patients</h1>
           <p className="text-sm text-gray-500 mt-1">Your primary operational workspace — CNCI drives the order; open any patient for their full workspace.</p>
         </div>
-        <div className="flex gap-1.5 self-center">
-          <Link href={`/healthcare-worker/patients${activeFilter !== "all" ? `?filter=${activeFilter}` : ""}`} className={`px-3 py-1.5 rounded-lg text-xs font-medium ${!priorityView ? "bg-emerald-600 text-white" : "bg-white border border-gray-300 text-gray-600 hover:bg-gray-50"}`}>List view</Link>
-          <Link href={`/healthcare-worker/patients?view=priority${activeFilter !== "all" ? `&filter=${activeFilter}` : ""}`} className={`px-3 py-1.5 rounded-lg text-xs font-medium ${priorityView ? "bg-emerald-600 text-white" : "bg-white border border-gray-300 text-gray-600 hover:bg-gray-50"}`}>Priority view</Link>
+        <div className="flex flex-wrap gap-1.5 self-center">
+          {viewToggle("list", "List")}
+          {viewToggle("priority", "Priority")}
+          {viewToggle("bedmap", "Bed map")}
+          {viewToggle("clinical", "Clinical status")}
         </div>
       </div>
 
@@ -235,6 +242,62 @@ export default async function MyPatientsPage({ searchParams }: { searchParams: P
         <div className={card}><Empty>No active patient assignments. Accepted assignments appear here; offers wait in your Assignment Inbox.</Empty></div>
       ) : ranked.length === 0 ? (
         <div className={card}><Empty>No patients match this filter{needle ? ` and search “${needle}”` : ""}.</Empty></div>
+      ) : activeView === "bedmap" ? (
+        <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-3">
+          {[...ranked].sort((a: any, b: any) => String(a.op_patients.op_beds?.label ?? "zzz").localeCompare(String(b.op_patients.op_beds?.label ?? "zzz"))).map((a: any) => {
+            const p = a.op_patients; const ctx = ctxOf(a);
+            return (
+              <Link key={p.id} href={`/healthcare-worker/patients/${p.id}`}
+                className={`rounded-xl border p-3 hover:shadow-sm transition-shadow ${p.acuity_level === "critical" ? "bg-red-50 border-red-200" : p.acuity_level === "high" ? "bg-amber-50 border-amber-200" : p.isolation_status !== "none" ? "bg-purple-50 border-purple-200" : "bg-white border-gray-200"}`}>
+                <p className="text-lg font-bold text-gray-900">{p.op_beds?.label ?? "No bed"}</p>
+                <p className="text-sm text-gray-700 truncate">{p.label}</p>
+                <div className="flex flex-wrap items-center gap-1 mt-1.5">
+                  {ctx.cnci && <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-bold tabular-nums ${cnciTone(ctx.cnci.band)}`}>{ctx.cnci.score}</span>}
+                  <AcuityChip level={p.acuity_level} />
+                  {ctx.pews != null && <span className={`text-[10px] font-semibold tabular-nums ${ewsColor(ctx.pews)}`}>PEWS {ctx.pews}</span>}
+                </div>
+              </Link>
+            );
+          })}
+        </div>
+      ) : activeView === "clinical" ? (
+        <div className={`${card} overflow-x-auto`}>
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="text-left text-[11px] uppercase tracking-wide text-gray-400 border-b border-gray-100">
+                <th className="py-1.5 pr-2 font-medium">Patient</th>
+                <th className="py-1.5 px-1 font-medium">CNCI</th>
+                <th className="py-1.5 px-1 font-medium">PEWS</th>
+                <th className="py-1.5 px-1 font-medium">Acuity</th>
+                <th className="py-1.5 px-1 font-medium">Workload</th>
+                <th className="py-1.5 px-1 font-medium">Meds Due</th>
+                <th className="py-1.5 px-1 font-medium">Obs Due</th>
+                <th className="py-1.5 px-1 font-medium">Tasks</th>
+                <th className="py-1.5 pl-1 font-medium">Concerns</th>
+              </tr>
+            </thead>
+            <tbody>
+              {ranked.map((a: any) => {
+                const p = a.op_patients; const ctx = ctxOf(a);
+                const medsDue = (ctx.medsOpen ?? []).filter((m: any) => ["due", "overdue", "delayed"].includes(m.effective_status)).length;
+                const wl = ctx.workloadLatest != null ? `${Math.round(Number(ctx.workloadLatest.percentage))}%` : "—";
+                return (
+                  <tr key={p.id} className="border-b border-gray-50 hover:bg-gray-50/60">
+                    <td className="py-2 pr-2"><Link href={`/healthcare-worker/patients/${p.id}`} className="font-medium text-gray-800 hover:text-emerald-700">{p.op_beds?.label ? `${p.op_beds.label} · ` : ""}{p.label}</Link></td>
+                    <td className="py-2 px-1">{ctx.cnci && <span className={`text-xs px-1.5 py-0.5 rounded-full font-bold tabular-nums ${cnciTone(ctx.cnci.band)}`}>{ctx.cnci.score}</span>}</td>
+                    <td className={`py-2 px-1 font-semibold tabular-nums ${ewsColor(ctx.pews)}`}>{ctx.pews ?? "—"}</td>
+                    <td className="py-2 px-1"><AcuityChip level={p.acuity_level} /></td>
+                    <td className="py-2 px-1 tabular-nums text-gray-700">{wl}</td>
+                    <td className={`py-2 px-1 tabular-nums ${medsDue > 0 ? "text-orange-600 font-semibold" : "text-gray-300"}`}>{medsDue}</td>
+                    <td className={`py-2 px-1 tabular-nums ${(ctx.obsDue ?? []).length > 0 ? "text-orange-600 font-semibold" : "text-gray-300"}`}>{(ctx.obsDue ?? []).length}</td>
+                    <td className={`py-2 px-1 tabular-nums ${(ctx.tasks ?? []).length > 0 ? "text-gray-800" : "text-gray-300"}`}>{(ctx.tasks ?? []).length}</td>
+                    <td className={`py-2 pl-1 tabular-nums ${(ctx.concerns ?? []).length > 0 ? "text-red-600 font-semibold" : "text-gray-300"}`}>{(ctx.concerns ?? []).length}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
       ) : priorityView ? (
         <div className="space-y-4">
           {CNCI_BANDS.map(band => {

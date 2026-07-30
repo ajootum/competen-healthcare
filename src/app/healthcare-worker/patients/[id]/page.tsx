@@ -5,6 +5,7 @@ import { loadPatientOne } from "@/lib/hww/patients";
 import { cnciTone } from "@/lib/hww/cnci";
 import { card, label, titleCase, fmtTime, fmtWhen, AcuityChip, RiskChip, PrioChip, Chip, SectionCard, Empty, ewsColor } from "@/lib/hww/kit";
 import TransferRequest from "./TransferRequest";
+import { AddDevice, RemoveDevice } from "./DeviceActions";
 
 // Patient Workspace (HWW-ARCH-002 S7) — everything about ONE patient in one
 // place: clinical snapshot, CNCI with its drivers, scores + trend, next due,
@@ -188,6 +189,27 @@ export default async function PatientWorkspacePage({ params }: { params: Promise
             {c.concerns.map((cn: any) => <p key={cn.id} className="text-gray-700">🚩 {titleCase(cn.category)} ({titleCase(cn.priority)}) — {cn.description}</p>)}
           </div>
           <Link href="/healthcare-worker/concerns" className="text-[10px] text-emerald-700 hover:underline">Raise a concern →</Link>
+        </SectionCard>
+
+        <SectionCard icon="🔌" title="Devices & Lines" count={d.devices.active.length}>
+          <div className="space-y-1.5 max-h-48 overflow-y-auto text-xs">
+            {d.devices.active.length === 0 && <Empty>No indwelling devices recorded.</Empty>}
+            {d.devices.active.map((dv: any) => (
+              <p key={dv.id} className="flex items-center gap-2 text-gray-700">
+                <span className="flex-1 min-w-0 truncate">{titleCase(dv.device_type)}{dv.site ? ` — ${dv.site}` : ""}</span>
+                <span className={`tabular-nums ${dv.reviewDue ? "text-red-600 font-semibold" : "text-gray-400"}`}>{dv.lineDays}d{dv.reviewDue ? " ⚠ review" : ""}</span>
+                <RemoveDevice id={dv.id} />
+              </p>
+            ))}
+            {d.devices.removed.map((dv: any) => (
+              <p key={dv.id} className="flex items-center gap-2 text-gray-400">
+                <span className="flex-1 min-w-0 truncate line-through">{titleCase(dv.device_type)}</span>
+                <span className="tabular-nums">{dv.lineDays}d dwell</span>
+              </p>
+            ))}
+          </div>
+          <AddDevice patientId={p.id} />
+          <p className="text-[10px] text-gray-400 mt-1.5">Dwell reviews: central lines &amp; catheters at 7 days, peripheral IVs at 3 (IPC convention). Insertion documentation stays in the clinical record.</p>
         </SectionCard>
 
         <SectionCard icon="💬" title="Patient-Context Messages" count={d.messages.length}>

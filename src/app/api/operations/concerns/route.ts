@@ -147,6 +147,16 @@ export async function PATCH(req: Request) {
       acknowledged_by: null, acknowledged_at: null,   // a re-route resets acknowledgement
     }).eq("id", b.id);
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    // ADD-001B RoutingDecision HISTORY (migration 158): every routing decision
+    // is retained; the concern row keeps only the current destination. Fail-soft
+    // pre-158.
+    {
+      const { data: me2 } = await admin.from("profiles").select("full_name").eq("id", c.userId).single();
+      await admin.from("op_concern_routings").insert({
+        hospital_id: concern.hospital_id, concern_id: b.id, routed_to: b.routed_to,
+        routed_by: c.userId, routed_by_name: me2?.full_name ?? null,
+      }).then((x: any) => x, () => {});
+    }
     await audit(c, "concern_routed", b.id, concern.hospital_id, { routed_to: b.routed_to });
     return NextResponse.json({ ok: true });
   }
