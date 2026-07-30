@@ -157,14 +157,18 @@ const NAV_GROUPS: { title: string; items: NavItem[] }[] = [
     { label: "Executive Reporting & Governance", href: "/unit-manager/performance/reporting", icon: "🧾" }, // PA-008
     { label: "Performance Configuration",  href: "/unit-manager/performance/configuration", icon: "🔧" }, // PA-009
   ] },
+  // AI & Intelligence (UMG-AI) — the Command Centre + Executive Recommendations are the unit-scoped cross-domain
+  // hub (consolidated signals + live copilot); the per-domain intelligence lenses route to their authoritative
+  // surfaces (ops performance, workforce intelligence engine, patient analytics, quality AI, predictive) rather
+  // than being duplicated.
   { title: "AI & Intelligence", items: [
-    { label: "AI Unit Copilot",      href: "/unit-manager/ai", icon: "✨" },
-    { label: "Operational Intelligence", icon: "🧠", soon: true },
-    { label: "Workforce Intelligence", icon: "👥", soon: true },
-    { label: "Patient Intelligence", icon: "🩺", soon: true },
-    { label: "Quality Intelligence", icon: "🛡️", soon: true },
-    { label: "Predictive Analytics", icon: "🔮", soon: true },
-    { label: "Executive Recommendations", icon: "💡", soon: true },
+    { label: "AI Command Centre",         href: "/unit-manager/ai", icon: "✨", exact: true },
+    { label: "Executive Recommendations", href: "/unit-manager/ai/recommendations", icon: "💡" },
+    { label: "Operational Intelligence",  href: "/unit-manager/ops-performance", icon: "🧠" },
+    { label: "Workforce Intelligence",    href: "/unit-manager/workforce-intelligence", icon: "👥" },
+    { label: "Patient Intelligence",      href: "/unit-manager/patient-operations/analytics", icon: "🩺" },
+    { label: "Quality Intelligence",      href: "/unit-manager/quality/ai", icon: "🛡️" },
+    { label: "Predictive Analytics",      href: "/unit-manager/performance/predictive", icon: "🔮" },
   ] },
   // UMW-ADM-001..009 Administration & Configuration — no-code unit admin over adm_* stores (migrations 109/110),
   // reusing op_beds / departments / positions / break_glass for structure & governance.
