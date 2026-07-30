@@ -41,6 +41,7 @@ const NAV_GROUPS: { group: string; items: NavItem[] }[] = [
     { label: "Bed & Capacity",               href: "/supervisor/bed-management",       icon: "🛏️" },
     { label: "Ward Map",                     href: "/supervisor/ward-map",            icon: "🗺️" },
     { label: "Nurse Concerns",               href: "/supervisor/concerns",            icon: "🚩", badge: "concerns" },
+    { label: "Census & Assignment",          href: "/supervisor/census",              icon: "🗂️", badge: "transfersPending" },
     { label: "Patient Operations Centre",    href: "/supervisor/patient-ops-center",  icon: "🗂️" },
     { label: "Operations Centre",            href: "/supervisor/patient-operations/operations-centre", icon: "🧾" },
     { label: "Clinical Safety",              href: "/supervisor/clinical-safety",     icon: "🛡️" },
@@ -149,7 +150,7 @@ export default async function SupervisorLayout({ children }: { children: React.R
   const bScope = (q: any) => (bSuper ? q : q.eq("hospital_id", bHid ?? bNONE));
   const bNum = (r: any) => (r?.error ? 0 : r?.count ?? 0);
   const OPEN_TASK = "(completed,verified,cancelled)";
-  const [unreadRes, escRes, taskRes, critRes, safetyRes, obsRes, handRes, concernRes] = await Promise.all([
+  const [unreadRes, escRes, taskRes, critRes, safetyRes, obsRes, handRes, concernRes, xferRes] = await Promise.all([
     admin.from("notifications").select("id", { count: "exact", head: true }).eq("user_id", user.id).eq("read", false),
     bScope(admin.from("op_escalations").select("id", { count: "exact", head: true })).in("status", ["open", "acknowledged"]),
     bScope(admin.from("op_tasks").select("id", { count: "exact", head: true })).not("status", "in", OPEN_TASK),
@@ -158,12 +159,14 @@ export default async function SupervisorLayout({ children }: { children: React.R
     bScope(admin.from("op_observations").select("id", { count: "exact", head: true })).eq("status", "overdue"),
     bScope(admin.from("op_handovers").select("status").order("created_at", { ascending: false }).limit(1)),
     bScope(admin.from("op_concerns").select("id", { count: "exact", head: true })).in("status", ["open", "in_progress", "carried_forward"]),
+    bScope(admin.from("op_patient_transfers").select("id", { count: "exact", head: true })).eq("status", "pending"),
   ]);
   const badges: Record<string, number> = {
     unread: bNum(unreadRes), escalations: bNum(escRes), openTasks: bNum(taskRes),
     criticalTasks: bNum(critRes), safety: bNum(safetyRes), overdueObs: bNum(obsRes),
     handover: (!handRes.error && handRes.data?.[0] && handRes.data[0].status !== "accepted") ? 1 : 0,
     concerns: bNum(concernRes),
+    transfersPending: bNum(xferRes),
   };
   const groupBadge = (items: NavItem[]) =>
     [...new Set(items.filter(i => i.href && !i.soon && i.badge).map(i => i.badge!))].reduce((n, k) => n + (badges[k] ?? 0), 0);

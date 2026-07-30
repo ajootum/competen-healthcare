@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getCaller, isResponse, isStaff, isSuper, forbidden, badRequest, isAssignedToPatient } from "@/lib/api-auth";
 import { notify } from "@/lib/notify";
 import { recordAcuity, recordWorkload, loadMyAssessments, validateToolForPatient, OVERLOAD_THRESHOLD } from "@/lib/hww/assessments";
+import { maybeAutoRebalance } from "@/lib/hww/assignment-engine";
 
 // Acuity & Workload assessments API (HWW-WARD/ICU, migration 153).
 //   GET → the caller's assessment lens (patients + history + workload aggregate)
@@ -105,6 +106,13 @@ export async function POST(req: Request) {
         href: "/supervisor/team-assignments",
       });
     }
+  }
+
+  // AE-001 S7 continuous rebalancing: significant acuity changes and workload
+  // overloads regenerate the assignment recommendation (throttled, fail-soft).
+  if ((kind === "acuity" && r.significant) || (kind === "workload" && r.overloaded)) {
+    await maybeAutoRebalance(admin, p.hospital_id ?? c.hospitalId, kind === "acuity" ? `significant acuity change — ${p.label}` : `workload overload — ${me?.full_name ?? "nurse"}`,
+      (supId, body) => notify([supId], { type: "op_assignment", title: "Rebalancing recommendation regenerated", body, href: "/supervisor/assignment-engine" }).then(() => {}));
   }
 
   return NextResponse.json({ ok: true, assessment: r.assessment, significant: r.significant ?? false, aggregate: r.aggregate ?? null, overloaded: r.overloaded ?? false }, { status: 201 });

@@ -275,6 +275,41 @@ export async function generateRecommendation(admin: any, opts: { hospitalId: str
   return { ok: true as const, runId, migrationMissing, shift: ctx.shift, context: { nurses: ctx.nurses, patients: ctx.patients, maxPerNurse: ctx.maxPerNurse }, ...result, rebalance: { keeps, moves, fresh } };
 }
 
+// ── Continuous rebalancing (AE-001 S7) ──────────────────────────────────────
+// Significant operational events (acuity change, workload overload, escalation
+// raised) auto-generate a fresh recommendation run for the tenant's active
+// shift and notify its supervisor — THROTTLED (skip when a run newer than 15
+// minutes exists for the shift) and strictly fail-soft: rebalancing never
+// breaks the originating clinical request. The charge nurse still reviews and
+// publishes; nothing is auto-published.
+export const REBALANCE_THROTTLE_MIN = 15;
+
+export async function maybeAutoRebalance(admin: any, hospitalId: string | null, trigger: string, notifyFn?: (supervisorId: string, body: string) => Promise<void>): Promise<{ triggered: boolean; reason: string }> {
+  try {
+    let sq = admin.from("op_shifts").select("id, supervisor_id").eq("status", "active").order("created_at", { ascending: false }).limit(1);
+    if (hospitalId) sq = sq.eq("hospital_id", hospitalId);
+    const { data: shifts } = await sq;
+    const shift = shifts?.[0];
+    if (!shift) return { triggered: false, reason: "no active shift" };
+
+    const since = new Date(Date.now() - REBALANCE_THROTTLE_MIN * 60e3).toISOString();
+    const { data: recent, error: probeErr } = await admin.from("op_assignment_recommendations")
+      .select("id").eq("shift_id", shift.id).gte("created_at", since).limit(1);
+    if (probeErr) return { triggered: false, reason: "recommendation store unavailable (migration 155)" };
+    if (recent?.length) return { triggered: false, reason: "throttled (recent run exists)" };
+
+    const r = await generateRecommendation(admin, { hospitalId, isSuperUser: !hospitalId, actorId: null, actorName: `auto — ${trigger}` });
+    if (!r.ok) return { triggered: false, reason: r.error };
+
+    if (shift.supervisor_id && notifyFn) {
+      await notifyFn(shift.supervisor_id, `Trigger: ${trigger}. ${r.proposals.length} proposals, ${r.gaps.length} gaps, ${r.riskAlerts.length} alerts — review before publishing.`).catch(() => {});
+    }
+    return { triggered: true, reason: trigger };
+  } catch (e: any) {
+    return { triggered: false, reason: String(e?.message ?? e) };
+  }
+}
+
 // ── Publish (the charge nurse's approve/override act) ────────────────────────
 // Mirrors the single-assignment API semantics per pair: end the existing
 // active primary, insert the new assignment with competency_validated and the

@@ -111,12 +111,14 @@ async function main() {
     if (hpErr) { console.log("Could not seed harness patient:", hpErr.message); }
     else {
       const res = await publishPairs(admin, [{ patient_id: hp.id, staff_id: anyNurse.id }], { id: anyNurse.id, name: "harness" });
-      check(res[0]?.ok === true, "publish creates a real primary assignment", res[0]?.error);
-      const { data: asg } = await admin.from("op_patient_assignments").select("id, assignment_type, status, competency_validated").eq("patient_id", hp.id).eq("status", "active");
-      check((asg ?? []).length === 1 && asg![0].assignment_type === "primary", "exactly one active primary exists");
-      // Re-publish same pair → no-op keep (no duplicate).
+      check(res[0]?.ok === true, "publish creates a primary offer", res[0]?.error);
+      // WARD-003 contract: publishing OFFERS the assignment — it enters
+      // pending_acceptance and responsibility does NOT move until the nurse accepts.
+      const { data: asg } = await admin.from("op_patient_assignments").select("id, assignment_type, status, acceptance_status").eq("patient_id", hp.id).in("status", ["pending_acceptance", "active"]);
+      check((asg ?? []).length === 1 && asg![0].status === "pending_acceptance" && asg![0].acceptance_status === "pending", "offer is PENDING — responsibility has not moved", asg?.[0]?.status);
+      // Re-publish same pair → keeps the same pending offer (no duplicate).
       const res2 = await publishPairs(admin, [{ patient_id: hp.id, staff_id: anyNurse.id }], { id: anyNurse.id, name: "harness" });
-      check(res2[0]?.ok === true && res2[0]?.assignment_id === asg![0].id, "same-nurse re-publish keeps the existing record (no duplicate)");
+      check(res2[0]?.ok === true && res2[0]?.assignment_id === asg![0].id, "same-nurse re-publish keeps the pending offer (no duplicate)");
       const bad = await publishPairs(admin, [{ patient_id: "00000000-0000-0000-0000-00000000dead", staff_id: anyNurse.id }], { id: anyNurse.id });
       check(bad[0]?.ok === false, "invented patient fails per-pair without throwing");
       // Cleanup (assignments cascade with the patient).
