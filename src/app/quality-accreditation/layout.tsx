@@ -7,6 +7,7 @@ import NavLink from "@/components/NavLink";
 import SidebarToggle from "@/components/SidebarToggle";
 import { highestRole, type AppRole } from "@/lib/roles";
 import { workspaceLinksForUser } from "@/lib/workspace-links";
+import { holdsOfficeAppointment } from "@/lib/ogs/office";
 
 // Quality & Accreditation Workspace (QAS-001) — enterprise clinical quality,
 // accreditation, audit, compliance and improvement. Role-scoped to quality
@@ -38,14 +39,18 @@ export default async function QualityAccreditationLayout({ children }: { childre
   if (!user) redirect("/login");
 
   const admin = createAdminClient();
-  const { data: profile } = await admin.from("profiles").select("full_name, role, roles").eq("id", user.id).single();
+  const { data: profile } = await admin.from("profiles").select("full_name, role, roles, hospital_id").eq("id", user.id).single();
   const userRoles: AppRole[] = (profile?.roles?.length ? profile.roles : [profile?.role]).filter(Boolean) as AppRole[];
   const cookieStore = await cookies();
   const activeRole = (cookieStore.get("active_role")?.value ?? highestRole(userRoles)) as AppRole;
   // Dedicated org-role workspaces this user can switch into.
   const workspaces = await workspaceLinksForUser(admin, user.id, userRoles);
 
-  if (!userRoles.some(r => ALLOWED.includes(r))) {
+  // R001 appointment-based access (additive, mirrors CMO): a role holder OR an active Quality Office appointee
+  // may enter. Fail-soft — no OGS tables / no appointment → role-only, nothing removed.
+  const roleOk = userRoles.some(r => ALLOWED.includes(r));
+  const apptOk = roleOk ? false : await holdsOfficeAppointment(admin, "quality", (profile?.hospital_id as string) ?? null, userRoles.includes("super_admin"), user.id);
+  if (!roleOk && !apptOk) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
