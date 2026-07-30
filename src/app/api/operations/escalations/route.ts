@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getCaller, isResponse, isStaff, isSuper, forbidden, badRequest, assertProfileScope } from "@/lib/api-auth";
+import { getCaller, isResponse, isStaff, isSuper, forbidden, badRequest, assertProfileScope, myPatientIds } from "@/lib/api-auth";
 import { notify } from "@/lib/notify";
 
 // Operational Escalations (COE Escalation domain — 5 levels).
@@ -10,12 +10,22 @@ const SEV_BY_LEVEL = ["routine", "routine", "urgent", "high", "emergency", "crit
 export async function GET() {
   const c = await getCaller();
   if (isResponse(c)) return c;
-  if (!isStaff(c)) return forbidden();
   const admin = c.admin as any;
   let q = admin.from("op_escalations")
     .select("*, op_patients!patient_id(label), profiles!raised_by(full_name)")
     .neq("status", "resolved").neq("status", "cancelled").order("level", { ascending: false }).order("created_at", { ascending: false }).limit(200);
-  if (!isSuper(c)) q = q.eq("hospital_id", c.hospitalId ?? "00000000-0000-0000-0000-000000000000");
+  if (isStaff(c)) {
+    // Coordinator tier: the tenant-wide queue.
+    if (!isSuper(c)) q = q.eq("hospital_id", c.hospitalId ?? "00000000-0000-0000-0000-000000000000");
+  } else {
+    // Frontline tier (HWW-SAF-001): a nurse sees the escalations she RAISED,
+    // those assigned to her to respond, and any on her ASSIGNED patients —
+    // never the whole ward queue. Ownership/assignment IS the scope.
+    const mine = await myPatientIds(c);
+    const legs = [`raised_by.eq.${c.userId}`, `assigned_responder.eq.${c.userId}`];
+    if (mine.length) legs.push(`patient_id.in.(${mine.join(",")})`);
+    q = q.or(legs.join(","));
+  }
   const { data, error } = await q;
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   return NextResponse.json({ escalations: data ?? [] });

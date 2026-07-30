@@ -1,13 +1,17 @@
 import { NextResponse } from "next/server";
-import { getCaller, isResponse, isSupervisor, isSuper, forbidden, badRequest, subjectHospital } from "@/lib/api-auth";
+import { getCaller, isResponse, isSupervisor, isSuper, forbidden, badRequest, subjectHospital, isAssignedToPatient } from "@/lib/api-auth";
 import { JBI_DOMAINS, JBI_MAX, classify } from "@/lib/operations/handover";
 
-// Handover Centre mutation API (SSW-HC-004..011) over op_handovers / op_handover_items
-// / op_handover_clarifications / op_handover_audits. One action-dispatched POST powers
-// the interactive modules: create a handover, save/edit SBAR, review/accept/complete a
-// patient handover, raise/answer a clarification, and submit a JBI audit. Supervisor
-// tier (assessor/hospital_admin/super_admin), tenant-scoped, every action audit-logged.
-// 409 hint until migration 079 runs.
+// Handover Centre mutation API (SSW-HC-004..011 + HWW-HND-001) over op_handovers /
+// op_handover_items / op_handover_clarifications / op_handover_audits. One action-
+// dispatched POST powers the interactive modules: create a handover, save/edit SBAR,
+// review/accept/complete a patient handover, raise/answer a clarification, and submit
+// a JBI audit. Two tiers:
+//   Supervisor (assessor/hospital_admin/super_admin) — every action, any patient.
+//   Frontline nurse (HWW-HND-001 nurse-to-nurse handover) — SBAR/review/accept/
+//     complete/clarify ONLY for patients she holds an active assignment on; the
+//     JBI audit stays supervisory (it is a QA instrument about handover quality).
+// Tenant-scoped, every action audit-logged. 409 hint until migration 079 runs.
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 const NONE = "00000000-0000-0000-0000-000000000000";
@@ -43,12 +47,13 @@ async function audit(c: any, action: string, entityId: string | null, name?: str
 export async function POST(req: Request) {
   const c = await getCaller();
   if (isResponse(c)) return c;
-  if (!isSupervisor(c)) return forbidden();
   const b = await req.json().catch(() => ({}));
   const action = String(b.action ?? "");
 
   try {
     if (action === "create") {
+      // Any clinician may open the shift handover (the outgoing nurse starts
+      // her own SBAR preparation when no handover is open yet).
       const h = await ensureHandover(c);
       if ("error" in h) return migrationGate(h.error) ?? NextResponse.json({ error: h.error.message }, { status: 500 });
       await audit(c, "handover_create", h.id);
@@ -56,6 +61,9 @@ export async function POST(req: Request) {
     }
 
     if (!b.patient_id) return badRequest("patient_id required");
+    // Item-level actions: supervisors any patient; a frontline nurse only the
+    // patients she is actively assigned to (nurse-to-nurse handover).
+    if (!isSupervisor(c) && !(await isAssignedToPatient(c, b.patient_id))) return forbidden("Not your patient");
     const h = await ensureHandover(c);
     if ("error" in h) return migrationGate(h.error) ?? NextResponse.json({ error: h.error.message }, { status: 500 });
     const it = await ensureItem(c, h.id, b.patient_id);
@@ -95,9 +103,17 @@ export async function POST(req: Request) {
 export async function PATCH(req: Request) {
   const c = await getCaller();
   if (isResponse(c)) return c;
-  if (!isSupervisor(c)) return forbidden();
   const b = await req.json().catch(() => ({}));
   const action = String(b.action ?? "");
+  // The JBI audit is a supervisory QA instrument; clarifications are open to the
+  // frontline for THEIR patients (the incoming nurse asks, the outgoing answers).
+  if (action === "jbi_audit" && !isSupervisor(c)) return forbidden();
+  if ((action === "clarify" || action === "answer") && !isSupervisor(c)) {
+    const pid = action === "clarify"
+      ? b.patient_id
+      : (await c.admin.from("op_handover_clarifications").select("patient_id").eq("id", b.id ?? "00000000-0000-0000-0000-000000000000").maybeSingle()).data?.patient_id;
+    if (!(await isAssignedToPatient(c, pid))) return forbidden("Not your patient");
+  }
   const { data: me } = await c.admin.from("profiles").select("full_name").eq("id", c.userId).single();
 
   try {

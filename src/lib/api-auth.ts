@@ -128,3 +128,21 @@ export async function subjectHospital(c: Caller, table: string, id: string | nul
   const h = (data as Record<string, unknown> | null)?.[col] as string | null | undefined;
   return h ?? c.hospitalId ?? null;
 }
+
+// True when the caller holds an ACTIVE patient assignment (op_patient_assignments)
+// for this patient — the HWW frontline access rule: a bedside clinician below
+// staff tier acts on and reads about THEIR OWN assigned patients, nothing wider.
+export async function isAssignedToPatient(c: Caller, patientId: string | null | undefined): Promise<boolean> {
+  if (!patientId) return false;
+  const { data } = await c.admin.from("op_patient_assignments").select("id")
+    .eq("patient_id", patientId).eq("staff_id", c.userId).eq("status", "active").limit(1).maybeSingle();
+  return !!data;
+}
+
+// The ids of every patient currently assigned to the caller — for self-scoped
+// list queries (a nurse's escalation/safety-alert feed).
+export async function myPatientIds(c: Caller): Promise<string[]> {
+  const { data } = await c.admin.from("op_patient_assignments").select("patient_id")
+    .eq("staff_id", c.userId).eq("status", "active").limit(100);
+  return ((data ?? []) as { patient_id: string | null }[]).map(r => r.patient_id).filter(Boolean) as string[];
+}

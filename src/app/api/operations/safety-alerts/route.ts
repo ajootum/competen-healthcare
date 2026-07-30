@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getCaller, isResponse, isStaff, isSuper, forbidden, badRequest, assertProfileScope } from "@/lib/api-auth";
+import { getCaller, isResponse, isStaff, isSuper, forbidden, badRequest, assertProfileScope, myPatientIds } from "@/lib/api-auth";
 
 // Safety Alerts (COE Patient Safety domain).
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -10,12 +10,21 @@ const SEV = ["low", "medium", "high"];
 export async function GET() {
   const c = await getCaller();
   if (isResponse(c)) return c;
-  if (!isStaff(c)) return forbidden();
   const admin = c.admin as any;
   let q = admin.from("op_safety_alerts")
     .select("*, op_patients!patient_id(label)")
     .eq("active", true).order("severity", { ascending: false }).order("created_at", { ascending: false }).limit(200);
-  if (!isSuper(c)) q = q.eq("hospital_id", c.hospitalId ?? "00000000-0000-0000-0000-000000000000");
+  if (isStaff(c)) {
+    // Coordinator tier: the tenant-wide board.
+    if (!isSuper(c)) q = q.eq("hospital_id", c.hospitalId ?? "00000000-0000-0000-0000-000000000000");
+  } else {
+    // Frontline tier (HWW-SAF-001): alerts a nurse raised, owns, or that sit on
+    // her assigned patients — ownership/assignment IS the scope.
+    const mine = await myPatientIds(c);
+    const legs = [`created_by.eq.${c.userId}`, `owner_id.eq.${c.userId}`];
+    if (mine.length) legs.push(`patient_id.in.(${mine.join(",")})`);
+    q = q.or(legs.join(","));
+  }
   const { data, error } = await q;
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   return NextResponse.json({ alerts: data ?? [] });

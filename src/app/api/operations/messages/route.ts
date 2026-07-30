@@ -1,10 +1,13 @@
 import { NextResponse } from "next/server";
-import { getCaller, isResponse, isStaff, isSuper, forbidden, badRequest } from "@/lib/api-auth";
+import { getCaller, isResponse, isSuper, forbidden, badRequest } from "@/lib/api-auth";
 import { CONTEXT_TYPES } from "@/lib/operations/communication-centre";
 
-// Team Communications (SSW-COM-001 §Team Communications). GET lists recent messages
-// for a channel; POST sends a context-aware message (team/patient/task/direct).
-// Supervisor tier, tenant-scoped, audit-logged; 409 migration hint until 072 runs.
+// Team Communications (SSW-COM-001 §Team Communications + HWW-COM-001). GET lists
+// recent messages for a channel; POST sends a context-aware message (team/patient/
+// task/direct). ANY authenticated clinician on the tenant participates — op_messages
+// is the shared ward communication board (no private-DM model), and HWW-COM-001
+// makes bedside nurses first-class participants. Tenant-scoped, audit-logged;
+// 409 migration hint until 072 runs.
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 const NONE = "00000000-0000-0000-0000-000000000000";
@@ -14,7 +17,6 @@ const migrationGate = (e: any) =>
 export async function GET(req: Request) {
   const c = await getCaller();
   if (isResponse(c)) return c;
-  if (!isStaff(c)) return forbidden();
   const channel = new URL(req.url).searchParams.get("channel");
   let q = c.admin.from("op_messages").select("id, channel, context_type, body, author_name, created_at").order("created_at", { ascending: false }).limit(100);
   if (!isSuper(c)) q = q.eq("hospital_id", c.hospitalId ?? NONE);
@@ -27,7 +29,6 @@ export async function GET(req: Request) {
 export async function POST(req: Request) {
   const c = await getCaller();
   if (isResponse(c)) return c;
-  if (!isStaff(c)) return forbidden();
   const b = await req.json().catch(() => ({}));
   if (!String(b.body ?? "").trim()) return badRequest("body required");
   const context = CONTEXT_TYPES.includes(b.context_type) ? b.context_type : "team";
