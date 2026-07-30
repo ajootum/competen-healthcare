@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getCaller, isResponse, isStaff, isSuper, forbidden, badRequest } from "@/lib/api-auth";
 import { loadThread, loadCollaboration } from "@/lib/platform/collaboration";
+import { COMMENT_ENTITIES, COMMENT_ENTITY_TYPES, isCommentEntity } from "@/lib/platform/comment-entities";
 
 // Collaboration Service API (PCS-000 Collaboration) over plat_comments. GET returns a
 // single-entity thread (?entity_type=&entity_id=) or the platform activity feed. POST
@@ -31,11 +32,28 @@ export async function POST(req: Request) {
   if (!String(b.body ?? "").trim()) return badRequest("body required");
   const mentions = Array.isArray(b.mentions) ? b.mentions.filter((x: any) => typeof x === "string").slice(0, 50) : [];
 
+  // A comment must name a KNOWN entity type. While this was free text the comment's subject — and therefore its
+  // tenant — was unresolvable, so every comment took the author's hospital and a super_admin's landed unscoped
+  // in every tenant's feed. Unknown types are rejected rather than written unscopeable.
+  const entityType = String(b.entity_type ?? "platform_note");
+  if (!isCommentEntity(entityType)) return badRequest(`Unknown entity_type. Expected one of: ${COMMENT_ENTITY_TYPES.join(", ")}`);
+  const entity = COMMENT_ENTITIES[entityType];
+  const entityId = b.entity_id ?? c.hospitalId ?? NONE;
+
+  // Where the type maps to a table, the subject owns the comment's tenant — and must exist and be in scope.
+  let commentHospital = c.hospitalId ?? (isSuper(c) ? null : NONE);
+  if (entity.table && b.entity_id) {
+    const { data: subj } = await c.admin.from(entity.table).select("hospital_id").eq("id", b.entity_id).maybeSingle();
+    if (!subj) return NextResponse.json({ error: `${entity.label} not found` }, { status: 404 });
+    if (!isSuper(c) && subj.hospital_id && subj.hospital_id !== c.hospitalId) return forbidden(`${entity.label} out of scope`);
+    commentHospital = (subj.hospital_id as string | null) ?? commentHospital;
+  }
+
   const { data: me } = await c.admin.from("profiles").select("full_name").eq("id", c.userId).single();
   const { data, error } = await c.admin.from("plat_comments").insert({
-    hospital_id: c.hospitalId ?? (isSuper(c) ? null : NONE),
-    entity_type: String(b.entity_type ?? "platform_note").slice(0, 60),
-    entity_id: b.entity_id ?? c.hospitalId ?? NONE,
+    hospital_id: commentHospital,
+    entity_type: entityType,
+    entity_id: entityId,
     parent_id: b.parent_id ?? null, body: String(b.body).trim(), mentions,
     author_id: c.userId, author_name: me?.full_name ?? null,
   }).select("id, entity_type, entity_id, parent_id").single();
