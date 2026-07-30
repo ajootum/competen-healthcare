@@ -88,7 +88,7 @@ export default async function PerformancePlatformPage() {
     { code: "CAPM-004", icon: "🏛️", label: "Organizational Capability", desc: "Enterprise capability & readiness. The Hospital Executive workspace owns the executive capability view — cross-linked.", href: "/hospital-executive", status: "linked" },
   ];
   const IMPROVE: Mod[] = [
-    { code: "CAPM-006", icon: "📊", label: "Benchmarking & Maturity", desc: "Compare competency maturity across units/departments/hospitals. Seeded comparators exist in PA trends; real computed cross-unit benchmarking is the gap.", href: "/unit-manager/performance/trends", status: "partial" },
+    { code: "CAPM-006", icon: "📊", label: "Benchmarking & Maturity", desc: "Real cross-department competency benchmarking — a composite capability score (coverage + Benner maturity + currency) per department, ranked and benchmarked against the enterprise mean, with an organisational maturity level.", href: "/super-admin/performance/benchmarking", status: "real" },
     { code: "CAPM-007", icon: "🛠️", label: "Performance Improvement Planner", desc: "Turn performance gaps into improvement plans. Owned by the CAPA centre (op_quality_actions) + PA improvement projects + remediation — cross-linked.", href: "/unit-manager/capa", status: "linked" },
     { code: "CAPM-009", icon: "🔮", label: "Workforce Capability Forecasting", desc: "Forecast future capability, shortages and succession readiness. Predictive surfaces exist (PA-007, workforce intelligence); a real forecast model is the next layer.", href: "/unit-manager/performance/predictive", status: "linked" },
   ];
