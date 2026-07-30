@@ -61,6 +61,9 @@ const GENERAL_NAV = [
   { group: "COMPETENCY ASSURANCE", items: [
     { label: "Open Competency Assurance →", href: "/super-admin/assurance", icon: "🛡️" },
   ]},
+  { group: "COMPETENCY PERFORMANCE", items: [
+    { label: "Open Competency Performance →", href: "/super-admin/performance", icon: "📈" },
+  ]},
   { group: "CLINICAL KNOWLEDGE PLATFORM", items: [
     { label: "Open CKP →", href: "/super-admin/ckp", icon: "📚" },
   ]},
