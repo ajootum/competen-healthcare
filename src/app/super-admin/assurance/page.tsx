@@ -97,7 +97,7 @@ export default async function AssurancePlatformPage() {
   const ACTION_INTEL: Mod[] = [
     { code: "CAPA-008", icon: "🛠️", label: "Corrective Action Manager", desc: "Corrective / preventive / improvement action lifecycle from assurance findings. Live over op_quality_actions in the CAPA centre — cross-linked.", href: "/unit-manager/capa", status: "linked" },
     { code: "CAPA-009", icon: "📊", label: "Organizational Assurance Dashboard", desc: "One enterprise assurance SCORE consolidating the live engines + cross-linked signals, with a per-domain breakdown and a ranked, deep-linked risk list. The executive assurance view.", href: "/super-admin/assurance/dashboard", status: "real" },
-    { code: "CAPA-010", icon: "🤖", label: "AI Assurance Intelligence", desc: "Predict emerging risks, recommend reassessments, explain assurance scores — via the governed live-copilot pattern over the assurance signals. Building here.", status: "gap" },
+    { code: "CAPA-010", icon: "🤖", label: "AI Assurance Intelligence", desc: "A live copilot grounded in the enterprise assurance score, domains and ranked risks — predicts, recommends and explains over the real signals via the governed AI gateway. Advises; never acts.", href: "/super-admin/assurance/ai", status: "real" },
   ];
 
   const all = [...RULES_AUDIT, ...ASSESS_EVIDENCE, ...DRIFT_COMPLIANCE, ...ACTION_INTEL];
