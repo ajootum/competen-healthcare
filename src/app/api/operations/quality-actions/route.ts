@@ -22,9 +22,19 @@ export async function POST(req: Request) {
   const priority = PRIO.includes(b.priority) ? b.priority : "medium";
   const due = b.due_hours ? new Date(Date.now() + Number(b.due_hours) * 3600e3).toISOString() : null;
 
+  // shift_id was accepted unvalidated: a CAPA could be attached to another tenant's shift and filed under the
+  // caller's hospital. When a shift is named it owns the record's tenant; standalone actions keep the caller's.
+  let actionHospital = c.hospitalId ?? (isSuper(c) ? null : NONE);
+  if (b.shift_id) {
+    const { data: s } = await c.admin.from("op_shifts").select("hospital_id").eq("id", b.shift_id).maybeSingle();
+    if (!s) return NextResponse.json({ error: "Shift not found" }, { status: 404 });
+    if (!isSuper(c) && s.hospital_id !== c.hospitalId) return forbidden("Shift out of scope");
+    actionHospital = (s.hospital_id as string | null) ?? actionHospital;
+  }
+
   const { data: me } = await c.admin.from("profiles").select("full_name").eq("id", c.userId).single();
   const { data, error } = await c.admin.from("op_quality_actions").insert({
-    hospital_id: c.hospitalId ?? (isSuper(c) ? null : NONE), shift_id: b.shift_id ?? null,
+    hospital_id: actionHospital, shift_id: b.shift_id ?? null,
     action_type: type, title: String(b.title).trim(), description: b.description?.trim() || null,
     priority, status: "open", owner_name: b.owner_name?.trim() || me?.full_name || null, due_at: due,
     created_by: c.userId, created_by_name: me?.full_name ?? null,

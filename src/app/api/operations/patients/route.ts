@@ -31,11 +31,14 @@ export async function POST(req: Request) {
   const b = await req.json().catch(() => ({}));
   if (!b.label?.trim()) return badRequest("label required (operational identifier — not full PHI)");
   const admin = c.admin as any;
-  const hospitalId = isSuper(c) ? (b.hospital_id ?? c.hospitalId) : c.hospitalId;
+  let hospitalId = isSuper(c) ? (b.hospital_id ?? c.hospitalId) : c.hospitalId;
   if (b.department_id) {
     const { data: d } = await admin.from("departments").select("hospital_id").eq("id", b.department_id).maybeSingle();
     if (!d) return NextResponse.json({ error: "Department not found" }, { status: 404 });
     if (!isSuper(c) && d.hospital_id !== c.hospitalId) return forbidden("Department out of scope");
+    // The department is authoritative — a patient record must not be admitted into a different tenant than the
+    // department they are placed in. Every downstream op_* record inherits this hospital_id.
+    hospitalId = d.hospital_id ?? hospitalId;
   }
   // Verify a client-supplied bed belongs to the caller's hospital — else a foreign
   // bed_id leaks its label back on read and lets discharge flip its status (below).

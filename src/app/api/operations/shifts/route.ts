@@ -30,12 +30,14 @@ export async function POST(req: Request) {
   const b = await req.json().catch(() => ({}));
   if (!TYPES.includes(b.shift_type)) return badRequest("valid shift_type required");
   const admin = c.admin as any;
-  const hospitalId = isSuper(c) ? (b.hospital_id ?? c.hospitalId) : c.hospitalId;
+  let hospitalId = isSuper(c) ? (b.hospital_id ?? c.hospitalId) : c.hospitalId;
 
   if (b.department_id) {
     const { data: d } = await admin.from("departments").select("hospital_id").eq("id", b.department_id).maybeSingle();
     if (!d) return NextResponse.json({ error: "Department not found" }, { status: 404 });
     if (!isSuper(c) && d.hospital_id !== c.hospitalId) return forbidden("Department out of scope");
+    // The department is authoritative — a shift must not be created in a tenant other than its department's.
+    hospitalId = d.hospital_id ?? hospitalId;
   }
 
   const { data, error } = await admin.from("op_shifts").insert({

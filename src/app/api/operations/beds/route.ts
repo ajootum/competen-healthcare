@@ -26,11 +26,14 @@ export async function POST(req: Request) {
   const b = await req.json().catch(() => ({}));
   if (!b.label?.trim()) return badRequest("label required");
   const admin = c.admin as any;
-  const hospitalId = isSuper(c) ? (b.hospital_id ?? c.hospitalId) : c.hospitalId;
+  let hospitalId = isSuper(c) ? (b.hospital_id ?? c.hospitalId) : c.hospitalId;
   if (b.department_id) {
     const { data: d } = await admin.from("departments").select("hospital_id").eq("id", b.department_id).maybeSingle();
     if (!d) return NextResponse.json({ error: "Department not found" }, { status: 404 });
     if (!isSuper(c) && d.hospital_id !== c.hospitalId) return forbidden("Department out of scope");
+    // The department is authoritative: without this a super supplying a mismatched hospital_id would create a
+    // bed in one tenant attached to another tenant's department — silently, since the column is NOT NULL.
+    hospitalId = d.hospital_id ?? hospitalId;
   }
   const { data, error } = await admin.from("op_beds").insert({
     hospital_id: hospitalId, department_id: b.department_id ?? null, unit_id: b.unit_id ?? null,

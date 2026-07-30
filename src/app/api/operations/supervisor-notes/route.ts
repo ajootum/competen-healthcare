@@ -22,9 +22,18 @@ export async function POST(req: Request) {
   const type = NOTE_TYPES.includes(b.note_type) ? b.note_type : "general";
   const priority = PRIORITIES.includes(b.priority) ? b.priority : "medium";
 
+  // Same as quality-actions: shift_id was unvalidated, so a note could be attached to another tenant's shift.
+  let noteHospital = c.hospitalId ?? (isSuper(c) ? null : NONE);
+  if (b.shift_id) {
+    const { data: s } = await c.admin.from("op_shifts").select("hospital_id").eq("id", b.shift_id).maybeSingle();
+    if (!s) return NextResponse.json({ error: "Shift not found" }, { status: 404 });
+    if (!isSuper(c) && s.hospital_id !== c.hospitalId) return forbidden("Shift out of scope");
+    noteHospital = (s.hospital_id as string | null) ?? noteHospital;
+  }
+
   const { data: me } = await c.admin.from("profiles").select("full_name").eq("id", c.userId).single();
   const { data, error } = await c.admin.from("op_supervisor_notes").insert({
-    hospital_id: c.hospitalId ?? (isSuper(c) ? null : NONE), shift_id: b.shift_id ?? null,
+    hospital_id: noteHospital, shift_id: b.shift_id ?? null,
     note_type: type, title: b.title?.trim() || null, body: String(b.body).trim(),
     priority, status: type === "action_item" ? "open" : "closed",
     author_id: c.userId, author_name: me?.full_name ?? null,
