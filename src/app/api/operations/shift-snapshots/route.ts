@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getCaller, isResponse, isSupervisor, isSuper, forbidden, badRequest } from "@/lib/api-auth";
+import { getCaller, isResponse, isSupervisor, isSuper, forbidden, badRequest, subjectHospital } from "@/lib/api-auth";
 import { loadShiftCommand } from "@/lib/operations/shift-command";
 import { SNAPSHOT_KINDS } from "@/lib/operations/shift-closure";
 
@@ -36,8 +36,11 @@ export async function POST(req: Request) {
     ratioCompliance: sc.ratioCompliance,
   };
   const { data: me } = await c.admin.from("profiles").select("full_name").eq("id", c.userId).single();
+  // Same as shift-metrics: the shift resolved for a super_admin is unscoped, so the immutable snapshot must
+  // take the shift's own tenant rather than the caller's.
+  const shiftHospital = await subjectHospital(c, "op_shifts", sc.shiftId);
   const { data, error } = await c.admin.from("shift_snapshots").insert({
-    shift_id: sc.shiftId, hospital_id: c.hospitalId ?? null, kind,
+    shift_id: sc.shiftId, hospital_id: shiftHospital, kind,
     census: sc.patientBoard.length, occupied_beds: o.occupied, total_beds: o.totalBeds,
     present_staff: o.present, rostered_staff: o.rostered,
     open_alerts: o.incidents, active_escalations: o.escalations,

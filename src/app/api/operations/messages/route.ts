@@ -32,15 +32,17 @@ export async function POST(req: Request) {
   if (!String(b.body ?? "").trim()) return badRequest("body required");
   const context = CONTEXT_TYPES.includes(b.context_type) ? b.context_type : "team";
 
+  let patientHospital: string | null = null;
   if (b.patient_id) {
     const { data: p } = await c.admin.from("op_patients").select("hospital_id").eq("id", b.patient_id).maybeSingle();
     if (!p) return NextResponse.json({ error: "Patient not found" }, { status: 404 });
     if (!isSuper(c) && p.hospital_id !== c.hospitalId) return forbidden("Patient out of scope");
+    patientHospital = (p.hospital_id as string | null) ?? null;   // patient-context message → patient's tenant
   }
 
   const { data: me } = await c.admin.from("profiles").select("full_name").eq("id", c.userId).single();
   const { data, error } = await c.admin.from("op_messages").insert({
-    hospital_id: c.hospitalId ?? (isSuper(c) ? null : NONE), shift_id: b.shift_id ?? null,
+    hospital_id: patientHospital ?? c.hospitalId ?? (isSuper(c) ? null : NONE), shift_id: b.shift_id ?? null,
     channel: String(b.channel ?? "General").trim() || "General", context_type: context,
     patient_id: b.patient_id ?? null, body: String(b.body).trim(),
     author_id: c.userId, author_name: me?.full_name ?? null,

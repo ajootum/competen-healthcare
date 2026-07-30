@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getCaller, isResponse, isSupervisor, isSuper, forbidden, badRequest } from "@/lib/api-auth";
+import { getCaller, isResponse, isSupervisor, isSuper, forbidden, badRequest, subjectHospital } from "@/lib/api-auth";
 import { loadShiftCommand } from "@/lib/operations/shift-command";
 import { computeShiftMetrics } from "@/lib/operations/shift-metrics";
 
@@ -22,8 +22,11 @@ export async function POST() {
   if (!m.ready) return badRequest("no active shift to compute metrics for");
 
   const { data: me } = await c.admin.from("profiles").select("full_name").eq("id", c.userId).single();
+  // loadShiftCommand is UNSCOPED for a super_admin, so the resolved shift may belong to any tenant — scope the
+  // metrics row to the shift's own hospital rather than the caller's (which is null for super).
+  const shiftHospital = await subjectHospital(c, "op_shifts", m.shiftId);
   const { data, error } = await c.admin.from("shift_metrics").upsert({
-    shift_id: m.shiftId, hospital_id: c.hospitalId ?? null, ...m.kpis, metrics: m.kpis,
+    shift_id: m.shiftId, hospital_id: shiftHospital, ...m.kpis, metrics: m.kpis,
     computed_by: c.userId, computed_by_name: me?.full_name ?? null, updated_at: new Date().toISOString(),
   }, { onConflict: "shift_id" }).select("id, overall_score").single();
   if (error) return migrationGate(error) ?? NextResponse.json({ error: error.message }, { status: 500 });

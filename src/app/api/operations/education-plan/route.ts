@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getCaller, isResponse, hasRole, isSuper, forbidden, badRequest } from "@/lib/api-auth";
+import { getCaller, isResponse, hasRole, isSuper, forbidden, badRequest, subjectHospital } from "@/lib/api-auth";
 
 // Education Planning API (LDS-005). Create education plans, milestones, study-leave and sponsorship
 // requests, and decide/update them. Manager-gated; tenant-scoped; audited. Sponsorship approval is
@@ -18,10 +18,21 @@ export async function POST(req: Request) {
   if (!hid) return badRequest("hospital context required");
   const audit = (action: string, entity_type: string, entity_id: string, new_value: any) => admin.from("audit_log").insert({ actor_id: c.userId, action, entity_type, entity_id, hospital_id: hid, new_value });
 
+  // These records are about a NAMED LEARNER (or a plan that belongs to one), so they take the subject's tenant.
+  // Neither user_id nor plan_id was scope-checked, so an admin could file another tenant's nurse's study-leave
+  // or sponsorship request into their own hospital; the guard closes that and the derived id files it correctly.
+  const scopeToSubject = async (table: string, id: string | null | undefined) => {
+    const h = await subjectHospital(c, table, id);
+    if (id && !isSuper(c) && h !== c.hospitalId) return { err: forbidden("Subject out of scope"), hid: null };
+    return { err: null, hid: h ?? hid };
+  };
+
   if (b.action === "create_plan") {
     if (!b.user_id || !b.programme_title) return badRequest("user_id and programme_title required");
+    const s = await scopeToSubject("profiles", b.user_id);
+    if (s.err) return s.err;
     const { data, error } = await admin.from("education_plans").insert({
-      hospital_id: hid, user_id: b.user_id, programme_title: b.programme_title, institution: b.institution || null,
+      hospital_id: s.hid, user_id: b.user_id, programme_title: b.programme_title, institution: b.institution || null,
       study_mode: b.study_mode || null, start_date: b.start_date || null, expected_completion: b.expected_completion || null,
       objective: b.objective || null, adviser: b.adviser || null, status: "active", progress_pct: 0, created_by: c.userId,
     }).select().single();
@@ -31,21 +42,27 @@ export async function POST(req: Request) {
   }
   if (b.action === "add_milestone") {
     if (!b.plan_id || !b.name) return badRequest("plan_id and name required");
-    const { data, error } = await admin.from("education_milestones").insert({ hospital_id: hid, plan_id: b.plan_id, name: b.name, planned_date: b.planned_date || null, sort_order: b.sort_order || 0, status: "pending" }).select().single();
+    const s = await scopeToSubject("education_plans", b.plan_id);
+    if (s.err) return s.err;
+    const { data, error } = await admin.from("education_milestones").insert({ hospital_id: s.hid, plan_id: b.plan_id, name: b.name, planned_date: b.planned_date || null, sort_order: b.sort_order || 0, status: "pending" }).select().single();
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
     await audit("add_education_milestone", "education_milestone", data.id, { name: b.name });
     return NextResponse.json(data, { status: 201 });
   }
   if (b.action === "study_leave") {
     if (!b.user_id || !b.days) return badRequest("user_id and days required");
-    const { data, error } = await admin.from("study_leave_requests").insert({ hospital_id: hid, plan_id: b.plan_id || null, user_id: b.user_id, leave_type: b.leave_type || "study", days: b.days, start_date: b.start_date || null, end_date: b.end_date || null, reason: b.reason || null, status: "requested", created_by: c.userId }).select().single();
+    const s = await scopeToSubject("profiles", b.user_id);
+    if (s.err) return s.err;
+    const { data, error } = await admin.from("study_leave_requests").insert({ hospital_id: s.hid, plan_id: b.plan_id || null, user_id: b.user_id, leave_type: b.leave_type || "study", days: b.days, start_date: b.start_date || null, end_date: b.end_date || null, reason: b.reason || null, status: "requested", created_by: c.userId }).select().single();
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
     await audit("request_study_leave", "study_leave_request", data.id, { days: b.days });
     return NextResponse.json(data, { status: 201 });
   }
   if (b.action === "sponsorship") {
     if (!b.user_id || b.amount == null) return badRequest("user_id and amount required");
-    const { data, error } = await admin.from("sponsorship_requests").insert({ hospital_id: hid, plan_id: b.plan_id || null, user_id: b.user_id, source: b.source || "employer", amount: b.amount, currency: b.currency || "UGX", notes: b.notes || null, status: "requested", created_by: c.userId }).select().single();
+    const s = await scopeToSubject("profiles", b.user_id);
+    if (s.err) return s.err;
+    const { data, error } = await admin.from("sponsorship_requests").insert({ hospital_id: s.hid, plan_id: b.plan_id || null, user_id: b.user_id, source: b.source || "employer", amount: b.amount, currency: b.currency || "UGX", notes: b.notes || null, status: "requested", created_by: c.userId }).select().single();
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
     await audit("request_sponsorship", "sponsorship_request", data.id, { amount: b.amount });
     return NextResponse.json(data, { status: 201 });

@@ -31,11 +31,12 @@ export async function POST(req: Request) {
   const level = Number(b.level);
   if (!Number.isInteger(level) || level < 1 || level > 5) return badRequest("level must be 1–5");
   const admin = c.admin as any;
-  const hospitalId = isSuper(c) ? (b.hospital_id ?? c.hospitalId) : c.hospitalId;
+  let hospitalId = isSuper(c) ? (b.hospital_id ?? c.hospitalId) : c.hospitalId;
   if (b.patient_id) {
     const { data: p } = await admin.from("op_patients").select("hospital_id").eq("id", b.patient_id).maybeSingle();
     if (!p) return NextResponse.json({ error: "Patient not found" }, { status: 404 });
     if (!isSuper(c) && p.hospital_id !== c.hospitalId) return forbidden("Patient out of scope");
+    hospitalId = p.hospital_id ?? hospitalId;   // the escalation belongs to the patient's tenant
   }
   // A named responder must be in the caller's hospital (we notify them below).
   if (b.assigned_responder) {

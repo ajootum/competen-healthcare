@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getCaller, isResponse, hasRole, isSuper, isSupervisor, forbidden, badRequest } from "@/lib/api-auth";
+import { getCaller, isResponse, hasRole, isSuper, isSupervisor, forbidden, badRequest, subjectHospital } from "@/lib/api-auth";
 import { templateByKey } from "@/lib/operations/pos-form-templates";
 
 // Patient Operations governance API (POS-106A §13). The Unit Manager Governance Mode operating on
@@ -23,8 +23,15 @@ export async function POST(req: Request) {
 
   if (b.action === "create_exception") {
     if (!b.exception_type || !b.reason || !b.reason_category) return badRequest("exception_type, reason_category and reason required");
+    // Derive the tenant from whichever subject the exception is about (the sibling "request_amendment" branch
+    // below already does this via inst.hospital_id). Neither FK was scope-checked here, so a caller could file
+    // an exception about another tenant's patient/form under their own hospital.
+    const exceptionHospital = b.patient_id
+      ? await subjectHospital(c, "op_patients", b.patient_id)
+      : b.form_instance_id ? await subjectHospital(c, "op_form_instances", b.form_instance_id) : hid;
+    if (!isSuper(c) && exceptionHospital !== c.hospitalId) return forbidden("Subject out of scope");
     const { data, error } = await admin.from("op_exceptions").insert({
-      hospital_id: hid, patient_id: b.patient_id || null, form_instance_id: b.form_instance_id || null,
+      hospital_id: exceptionHospital ?? hid, patient_id: b.patient_id || null, form_instance_id: b.form_instance_id || null,
       exception_type: b.exception_type, rule_ref: b.rule_ref || null, reason_category: b.reason_category, reason: b.reason,
       risk_level: b.risk_level || null, temporary_controls: b.temporary_controls || null,
       requester_id: c.userId, requester_role: c.role ?? null, effective_from: b.effective_from || null, expiry: b.expiry || null, status: "requested",
