@@ -4,6 +4,7 @@ import Link from "next/link";
 import { loadOrganisationalLearning } from "@/lib/cgr/learning";
 import ProposeLink from "./ProposeLink";
 import LinkDecisions from "./LinkDecisions";
+import SuggestLinks from "./SuggestLinks";
 
 // CGR-027 — Organisational Learning & Knowledge Transformation. Two layers, kept honestly distinct:
 // CAUSAL (competency_learning_links, mig 150 — proven signal→change closure) above OPERATIONAL (op_incidents —
@@ -69,8 +70,9 @@ export default async function OrganisationalLearningPage() {
               <h2 className="text-xs font-bold text-gray-400 uppercase tracking-widest">Proven closure — signal caused change</h2>
               <span className="text-[9px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-100 rounded px-1.5 py-0.5">CAUSAL</span>
               {L.ready && (
-                <div className="ml-auto flex items-center gap-2">
+                <div className="ml-auto flex items-center gap-2 flex-wrap">
                   {d.candidates.unlinkedTotal > 0 && <span className="text-[10px] text-gray-400">{d.candidates.unlinkedTotal} unlinked signal{d.candidates.unlinkedTotal === 1 ? "" : "s"}</span>}
+                  <SuggestLinks unlinked={d.candidates.unlinkedTotal} />
                   <ProposeLink signals={d.candidates.signals} competencies={d.candidates.competencies} />
                 </div>
               )}
