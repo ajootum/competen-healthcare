@@ -85,16 +85,19 @@ const NAV_GROUPS: { title: string; items: NavItem[] }[] = [
     { label: "Timeline",          href: "/unit-manager/patient-operations/timeline", icon: "🕐" },
     { label: "Analytics",         href: "/unit-manager/patient-operations/analytics", icon: "📈" },
   ] },
-  // Competency Management — the deep competency-operations modules live in the Competency Office
-  // (CMO) workspace; these cross-link there (UMW managers are in-scope for /competency-office).
+  // Competency Management (UMG-CM) — the unit-scoped manager lens: a Command Centre + dedicated Coverage,
+  // Expiries and Delivered-Assignments surfaces over the real competency system. Deep org-wide governance
+  // (analytics / credentialing / frameworks) still cross-links to the Competency Office (managers are in-scope).
   { title: "Competency Management", items: [
-    { label: "Competency Dashboard", href: "/unit-manager/competency",   icon: "🪪" },
-    { label: "Compliance",           href: "/competency-office/compliance", icon: "✔️" },
-    { label: "Credential Management", href: "/competency-office/credentialing", icon: "🎓" },
-    { label: "Assessment Status",    href: "/unit-manager/assessment",    icon: "📝" },
-    { label: "Validation Queue",     href: "/competency-office/validation", icon: "🗂️" },
-    { label: "Competency Analytics", href: "/competency-office/analytics", icon: "📊" },
-    { label: "Competency Frameworks", href: "/competency-office/frameworks", icon: "🧩" },
+    { label: "Command Centre",        href: "/unit-manager/competency",   icon: "🎯", exact: true },
+    { label: "Coverage & Gaps",       href: "/unit-manager/competency/coverage", icon: "📊" },
+    { label: "Expiries & Recert",     href: "/unit-manager/competency/recertification", icon: "⏳" },
+    { label: "Delivered Assignments", href: "/unit-manager/competency/assignments", icon: "📬" },
+    { label: "Validation Queue",      href: "/unit-manager/competency-validations", icon: "🗂️" },
+    { label: "Assessment Status",     href: "/unit-manager/assessment",    icon: "📝" },
+    { label: "Competency Analytics",  href: "/competency-office/analytics", icon: "📈" },
+    { label: "Credentialing",         href: "/competency-office/credentialing", icon: "🎓" },
+    { label: "Frameworks",            href: "/competency-office/frameworks", icon: "🧩" },
   ] },
   { title: "Learning & Development", items: [
     { label: "Learning Dashboard",   href: "/unit-manager/learning", icon: "📚", exact: true },

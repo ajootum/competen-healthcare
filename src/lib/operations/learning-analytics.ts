@@ -166,7 +166,7 @@ export async function loadLearningAnalytics(admin: any, hid: string | null, isSu
 // Competency-coverage heatmap — latest decision per nurse:competency → domain × Benner maturity band.
 // Real distribution from competency_decisions; each cell is the % of the domain's achieved decisions at that
 // maturity band (rows sum ~100). Fail-soft + provisioned-aware.
-async function loadCoverageHeatmap(admin: any, hid: string | null, isSuper: boolean) {
+export async function loadCoverageHeatmap(admin: any, hid: string | null, isSuper: boolean) {
   const scope = (q: any) => (isSuper ? q : q.eq("hospital_id", hid ?? NONE));
   const levels = BANDS.map(b => b.label);
   const { data, error } = await scope(admin.from("competency_decisions")
