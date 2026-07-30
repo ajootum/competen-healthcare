@@ -9,50 +9,46 @@ import SidebarToggle from "@/components/SidebarToggle";
 import { highestRole, type AppRole } from "@/lib/roles";
 import { workspaceLinksForUser } from "@/lib/workspace-links";
 
-// Healthcare Worker Workspace (HWW-001 / HWW-WARD-001) — the bedside nurse's
-// own operational workspace: my shift → my patients → assessments →
-// observations → medications → tasks → safety → communication → handover.
-// The frontline lens over the SAME op_* operational spine the Shift Supervisor
-// (/supervisor) and Unit Manager (/unit-manager) workspaces govern — scoped to
-// the caller's own assignment, never the whole ward's controls.
-// Gate: nurses (primary), team leaders/charge nurses (assessor tier, per
-// HWW-WARD-001 §2), and admins for support. Modules without a built surface
-// yet are shown muted ("soon") rather than as dead links.
+// Healthcare Worker Workspace (HWW-001 / HWW-WARD-001 / HWW-ARCH-002) — the
+// bedside nurse's patient-centred operational workspace. ARCH-002 is the
+// authoritative navigation: one flat sidebar in workflow order (dashboard →
+// patients → tasks → medications → assessments → handover → communications →
+// quality & safety → AI → reports), personal-productivity items stay in the
+// Personal Workspace, and a live CURRENT SHIFT card anchors the sidebar.
+// Gate: nurses (primary), team leaders/charge nurses (assessor tier), admins.
 /* eslint-disable @typescript-eslint/no-explicit-any */
 type NavItem = { label: string; href?: string; icon: string; exact?: boolean; soon?: boolean; badge?: string };
+type NavEntry = { item: NavItem } | { group: string; items: NavItem[] };
 
-const DASHBOARD: NavItem = { label: "Ward Dashboard", href: "/healthcare-worker", icon: "🖥️", exact: true };
-
-// HWW-WARD-001 §4 functional modules (+ ICU variant modules surface within
-// Acuity/Workload when the unit is critical care, + Nurse Concerns HWW-ADD-001).
-const NAV_GROUPS: { group: string; items: NavItem[] }[] = [
-  { group: "My Shift", items: [
-    { label: "My Patients",      href: "/healthcare-worker/patients",      icon: "🧑‍⚕️" },
-    { label: "Task Centre",      href: "/healthcare-worker/tasks",         icon: "✅", badge: "myTasks" },
-    { label: "Shift Summary",    href: "/healthcare-worker/shift-summary", icon: "📋" },
-  ]},
-  { group: "Clinical Assessment", items: [
+// HWW-ARCH-002 S3 sidebar, verbatim order. "Assessments" and "Quality &
+// Safety" expand to their live modules; Reports = the shift report surface.
+const NAV: NavEntry[] = [
+  { item: { label: "Shift Dashboard", href: "/healthcare-worker", icon: "🏠", exact: true } },
+  { item: { label: "My Patients", href: "/healthcare-worker/patients", icon: "🧑‍⚕️" } },
+  { item: { label: "My Tasks", href: "/healthcare-worker/tasks", icon: "✅", badge: "myTasks" } },
+  { item: { label: "Medication Schedule", href: "/healthcare-worker/medications", icon: "💊" } },
+  { group: "Assessments", items: [
     { label: "Observations & PEWS", href: "/healthcare-worker/observations", icon: "📈", badge: "obsDue" },
-    { label: "Acuity Assessment",   href: "/healthcare-worker/acuity",       icon: "🌡️" },
-    { label: "Workload Assessment", href: "/healthcare-worker/workload",     icon: "⚖️" },
+    { label: "Acuity Assessment", href: "/healthcare-worker/acuity", icon: "🌡️" },
+    { label: "Workload Assessment", href: "/healthcare-worker/workload", icon: "⚖️" },
   ]},
-  { group: "Care Coordination", items: [
-    { label: "Medication Summary",   href: "/healthcare-worker/medications",   icon: "💊" },
-    { label: "Nurse Concerns",       href: "/healthcare-worker/concerns",      icon: "🚩", badge: "concerns" },
-    { label: "Safety & Escalation",  href: "/healthcare-worker/safety",        icon: "🛡️", badge: "alerts" },
-    { label: "Communication",        href: "/healthcare-worker/communication", icon: "💬", badge: "unread" },
-    { label: "Handover (SBAR)",      href: "/healthcare-worker/handover",      icon: "🔄" },
+  { item: { label: "Handover", href: "/healthcare-worker/handover", icon: "🔄" } },
+  { item: { label: "Communications", href: "/healthcare-worker/communication", icon: "💬", badge: "unread" } },
+  { group: "Quality & Safety", items: [
+    { label: "Safety & Escalation", href: "/healthcare-worker/safety", icon: "🛡️", badge: "alerts" },
+    { label: "Nurse Concerns", href: "/healthcare-worker/concerns", icon: "🚩", badge: "concerns" },
   ]},
-  { group: "Intelligence", items: [
-    { label: "AI Copilot", href: "/healthcare-worker/copilot", icon: "✨" },
-  ]},
+  { item: { label: "Clinical AI Copilot", href: "/healthcare-worker/copilot", icon: "✨" } },
+  { item: { label: "Reports", href: "/healthcare-worker/shift-summary", icon: "📋" } },
+  { item: { label: "Tools & Settings", icon: "⚙️", soon: true } },
 ];
 
-// HWW-WARD-001 §2 — Staff Nurse / Team Leader primary (nurse + assessor tiers);
-// admins for support. Educators are not a listed HWW audience.
 const ALLOWED = ["nurse", "assessor", "hospital_admin", "super_admin"];
 const linkCls = "flex items-center gap-2.5 px-3 py-1.5 rounded-lg text-[13px] text-emerald-100/70 hover:bg-emerald-800/50 hover:text-white transition-colors";
 const activeCls = "flex items-center gap-2.5 px-3 py-1.5 rounded-lg text-[13px] bg-emerald-700/60 text-white font-medium";
+
+const fmtT = (iso: string | null) => iso ? new Date(iso).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: false }) : "--:--";
+const dur = (ms: number) => `${Math.floor(ms / 3.6e6)}h ${Math.floor((ms % 3.6e6) / 6e4)}m`;
 
 export default async function HealthcareWorkerLayout({ children }: { children: React.ReactNode }) {
   const supabase = await createClient();
@@ -79,12 +75,11 @@ export default async function HealthcareWorkerLayout({ children }: { children: R
     );
   }
 
-  // Live nav badges — the nurse's OWN counts (self-scoped, unlike the
-  // supervisor's hospital-wide counts). Fail-soft: errors resolve to 0.
+  // Live nav badges — the nurse's OWN counts. Fail-soft: errors resolve to 0.
   const bNum = (r: any) => (r?.error ? 0 : r?.count ?? 0);
   const { data: myAsg } = await admin.from("op_patient_assignments").select("patient_id").eq("staff_id", user.id).eq("status", "active").limit(100);
   const myPatientIds = ((myAsg ?? []) as any[]).map(r => r.patient_id).filter(Boolean);
-  const [unreadRes, taskRes, concernRes, actionRes, obsRes, alertRes] = await Promise.all([
+  const [unreadRes, taskRes, concernRes, actionRes, obsRes, alertRes, shiftRes] = await Promise.all([
     admin.from("notifications").select("id", { count: "exact", head: true }).eq("user_id", user.id).eq("read", false),
     admin.from("op_tasks").select("id", { count: "exact", head: true }).eq("assigned_to", user.id).not("status", "in", "(completed,verified,cancelled)"),
     admin.from("op_concerns").select("id", { count: "exact", head: true }).eq("raised_by", user.id).in("status", ["open", "in_progress", "carried_forward"]),
@@ -95,12 +90,47 @@ export default async function HealthcareWorkerLayout({ children }: { children: R
     myPatientIds.length
       ? admin.from("op_safety_alerts").select("id", { count: "exact", head: true }).in("patient_id", myPatientIds).eq("active", true)
       : Promise.resolve({ count: 0, error: null }),
+    admin.from("op_shift_staff")
+      .select("status, op_shifts!shift_id(shift_date, shift_type, status, starts_at, ends_at, units!unit_id(name), departments!department_id(name))")
+      .eq("staff_id", user.id).limit(20),
   ]);
   const badges: Record<string, number> = { unread: bNum(unreadRes), myTasks: bNum(taskRes), obsDue: bNum(obsRes), alerts: bNum(alertRes), concerns: bNum(concernRes) + bNum(actionRes) };
   const groupBadge = (items: NavItem[]) =>
     [...new Set(items.filter(i => i.href && !i.soon && i.badge).map(i => i.badge!))].reduce((n, k) => n + (badges[k] ?? 0), 0);
 
-  const mobileItems = [...new Map([DASHBOARD, ...NAV_GROUPS.flatMap(g => g.items)].filter(i => i.href && !i.soon).map(i => [i.href, i] as const)).values()];
+  // CURRENT SHIFT card (ARCH-002 mockup): the caller's active shift with a
+  // live elapsed/remaining progress bar — server-computed each request.
+  const activeShift = ((shiftRes.data ?? []) as any[]).map(d => d.op_shifts).find((s: any) => s?.status === "active") ?? null;
+  let shiftCard: { label: string; ward: string | null; window: string; elapsed: string; remaining: string; pct: number } | null = null;
+  if (activeShift?.starts_at && activeShift?.ends_at) {
+    const now = Date.now();
+    const start = +new Date(activeShift.starts_at), end = +new Date(activeShift.ends_at);
+    const pct = Math.max(0, Math.min(100, ((now - start) / Math.max(1, end - start)) * 100));
+    shiftCard = {
+      label: `${String(activeShift.shift_type ?? "").replace(/_/g, " ").replace(/\b\w/g, (ch: string) => ch.toUpperCase())} Shift`,
+      ward: activeShift.units?.name ?? activeShift.departments?.name ?? null,
+      window: `${fmtT(activeShift.starts_at)} – ${fmtT(activeShift.ends_at)}`,
+      elapsed: dur(Math.max(0, now - start)),
+      remaining: now >= end ? "ended" : dur(end - now),
+      pct: Math.round(pct),
+    };
+  }
+
+  const allItems: NavItem[] = NAV.flatMap(e => ("item" in e ? [e.item] : e.items));
+  const mobileItems = [...new Map(allItems.filter(i => i.href && !i.soon).map(i => [i.href, i] as const)).values()];
+
+  const renderItem = ({ label, href, icon, exact, soon, badge }: NavItem) => soon || !href ? (
+    <span key={label} title={`${label} — coming soon`} data-sb-item
+      className="flex items-center gap-2.5 px-3 py-1.5 rounded-lg text-[13px] text-emerald-100/25 cursor-default select-none">
+      <span className="w-5 text-center text-sm leading-none opacity-60">{icon}</span>
+      <span className="flex-1" data-sb-label>{label}</span>
+      <span className="text-[8px] font-bold uppercase tracking-wider bg-emerald-950 text-emerald-400/40 rounded px-1 py-0.5" data-sb-label>soon</span>
+    </span>
+  ) : (
+    <NavLink key={label} href={href} icon={icon} label={label} exact={exact}
+      badge={badge ? badges[badge] : undefined}
+      className={linkCls} activeClassName={activeCls} />
+  );
 
   return (
     <div className="min-h-screen bg-gray-50 font-[family-name:var(--font-geist-sans)]">
@@ -133,36 +163,37 @@ export default async function HealthcareWorkerLayout({ children }: { children: R
           </Link>
 
           <nav className="flex flex-col gap-0.5 flex-1 overflow-y-auto">
-            <NavLink href={DASHBOARD.href!} icon={DASHBOARD.icon} label={DASHBOARD.label} exact={DASHBOARD.exact}
-              className={linkCls} activeClassName={activeCls} />
-            <div className="my-1.5 border-t border-emerald-800/30" />
-            {NAV_GROUPS.map(({ group, items }) => {
-              const nodes = items.map(({ label, href, icon, exact, soon, badge }) => soon || !href ? (
-                <span key={label} title={`${label} — coming soon`} data-sb-item
-                  className="flex items-center gap-2.5 px-3 py-1.5 rounded-lg text-[13px] text-emerald-100/25 cursor-default select-none">
-                  <span className="w-5 text-center text-sm leading-none opacity-60">{icon}</span>
-                  <span className="flex-1" data-sb-label>{label}</span>
-                  <span className="text-[8px] font-bold uppercase tracking-wider bg-emerald-950 text-emerald-400/40 rounded px-1 py-0.5" data-sb-label>soon</span>
-                </span>
-              ) : (
-                <NavLink key={label} href={href} icon={icon} label={label} exact={exact}
-                  badge={badge ? badges[badge] : undefined}
-                  className={linkCls} activeClassName={activeCls} />
-              ));
-              return (
-                <NavGroup key={group} title={group} hrefs={items.filter(i => i.href).map(i => i.href!.split(/[?#]/)[0])}
-                  badge={groupBadge(items)}
-                  headerClass="text-[9px] font-bold uppercase tracking-widest text-emerald-400/50">{nodes}</NavGroup>
-              );
-            })}
+            {NAV.map(e => "item" in e ? renderItem(e.item) : (
+              <NavGroup key={e.group} title={e.group} hrefs={e.items.filter(i => i.href).map(i => i.href!.split(/[?#]/)[0])}
+                badge={groupBadge(e.items)}
+                headerClass="text-[9px] font-bold uppercase tracking-widest text-emerald-400/50">
+                {e.items.map(renderItem)}
+              </NavGroup>
+            ))}
             <div className="my-2 border-t border-emerald-800/30" />
-            <Link href="/dashboard" data-sb-item title="My Dashboard" className="flex items-center gap-2.5 px-3 py-1.5 rounded-lg text-[13px] text-emerald-100/40 hover:bg-emerald-800/50 hover:text-white transition-colors">
+            <Link href="/dashboard" data-sb-item title="Personal Workspace" className="flex items-center gap-2.5 px-3 py-1.5 rounded-lg text-[13px] text-emerald-100/40 hover:bg-emerald-800/50 hover:text-white transition-colors">
               <span className="w-5 text-center text-sm">⊞</span>
-              <span data-sb-label>My Dashboard</span>
+              <span data-sb-label>Personal Workspace</span>
             </Link>
           </nav>
 
-          <div className="pt-4 border-t border-emerald-800/60">
+          {/* CURRENT SHIFT card (ARCH-002) — live window + progress */}
+          {shiftCard && (
+            <div className="mx-1 mb-2 rounded-xl bg-emerald-900/60 border border-emerald-800/60 p-3" data-sb-label>
+              <div className="flex items-center justify-between">
+                <span className="text-[9px] font-bold uppercase tracking-widest text-emerald-400/70">Current Shift</span>
+                <span className="flex items-center gap-1 text-[9px] text-emerald-400">● In Progress</span>
+              </div>
+              <p className="text-white text-xs font-semibold mt-1">{shiftCard.window} · {shiftCard.label}</p>
+              {shiftCard.ward && <p className="text-emerald-200/60 text-[10px]">{shiftCard.ward}</p>}
+              <div className="h-1.5 rounded-full bg-emerald-950 overflow-hidden mt-2">
+                <div className="h-full rounded-full bg-emerald-400" style={{ width: `${shiftCard.pct}%` }} />
+              </div>
+              <p className="text-emerald-200/60 text-[10px] mt-1">{shiftCard.elapsed} elapsed · {shiftCard.remaining} remaining</p>
+            </div>
+          )}
+
+          <div className="pt-3 border-t border-emerald-800/60">
             <div className="flex items-center gap-2 px-3 py-2">
               <div className="w-7 h-7 rounded-full bg-emerald-400 flex items-center justify-center text-emerald-950 text-xs font-bold">{profile?.full_name?.[0] ?? "N"}</div>
               <div className="flex-1 min-w-0" data-sb-label>
