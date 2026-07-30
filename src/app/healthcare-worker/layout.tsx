@@ -8,41 +8,61 @@ import NavGroup from "@/components/NavGroup";
 import SidebarToggle from "@/components/SidebarToggle";
 import { highestRole, type AppRole } from "@/lib/roles";
 import { workspaceLinksForUser } from "@/lib/workspace-links";
-import { buildShiftCard } from "@/lib/hww/my-shift";
+import { buildShiftCard, loadShiftWidget } from "@/lib/hww/my-shift";
 
-// Healthcare Worker Workspace (HWW-001 / HWW-WARD-001 / HWW-ARCH-002) — the
-// bedside nurse's patient-centred operational workspace. ARCH-002 is the
-// authoritative navigation: one flat sidebar in workflow order (dashboard →
-// patients → tasks → medications → assessments → handover → communications →
-// quality & safety → AI → reports), personal-productivity items stay in the
-// Personal Workspace, and a live CURRENT SHIFT card anchors the sidebar.
-// Gate: nurses (primary), team leaders/charge nurses (assessor tier), admins.
+// Healthcare Worker Workspace shell (HWW-001 / ARCH-002 / UI-001) — the
+// bedside nurse's patient-centred workspace. UI-001 is the authoritative
+// sidebar: WORKFLOW-FIRST sections (Home / Shift / Clinical / Communication /
+// Quality Events / Intelligence / Tools), My Patients ahead of the Assignment
+// Inbox, live badges (tasks, medications, messages, escalations, inbox,
+// concerns), a rich CURRENT SHIFT widget (patients, tasks, medications due,
+// break status, progress), a user PROFILE menu replacing the bare Personal
+// Workspace link, and the Clinical AI Copilot as a persistent floating action.
+// Config-driven role-adaptive navigation (Doctor/Therapist/Pharmacist
+// variants) is the platform's next step — this ships the nurse workspace per
+// the spec's structure. Gate: nurse (primary), assessor tier, admins.
 /* eslint-disable @typescript-eslint/no-explicit-any */
 type NavItem = { label: string; href?: string; icon: string; exact?: boolean; soon?: boolean; badge?: string };
-type NavEntry = { item: NavItem } | { group: string; items: NavItem[] };
+type NavEntry = { item: NavItem } | { group: string; icon?: string; items: NavItem[] };
+type NavSection = { section: string | null; entries: NavEntry[] };
 
-// HWW-ARCH-002 S3 sidebar, verbatim order. "Assessments" and "Quality &
-// Safety" expand to their live modules; Reports = the shift report surface.
-const NAV: NavEntry[] = [
-  { item: { label: "Shift Dashboard", href: "/healthcare-worker", icon: "🏠", exact: true } },
-  { item: { label: "Assignment Inbox", href: "/healthcare-worker/inbox", icon: "📥", badge: "inbox" } },
-  { item: { label: "My Patients", href: "/healthcare-worker/patients", icon: "🧑‍⚕️" } },
-  { item: { label: "My Tasks", href: "/healthcare-worker/tasks", icon: "✅", badge: "myTasks" } },
-  { item: { label: "Medication Schedule", href: "/healthcare-worker/medications", icon: "💊" } },
-  { group: "Assessments", items: [
-    { label: "Observations & PEWS", href: "/healthcare-worker/observations", icon: "📈", badge: "obsDue" },
-    { label: "Acuity Assessment", href: "/healthcare-worker/acuity", icon: "🌡️" },
-    { label: "Workload Assessment", href: "/healthcare-worker/workload", icon: "⚖️" },
+// HWW-UI-001 sidebar — sections in workflow order; collapsible groups only
+// where the spec shows them (Clinical Assessment).
+const NAV: NavSection[] = [
+  { section: null, entries: [
+    { item: { label: "Home", href: "/healthcare-worker", icon: "🏠", exact: true } },
   ]},
-  { item: { label: "Handover", href: "/healthcare-worker/handover", icon: "🔄" } },
-  { item: { label: "Communications", href: "/healthcare-worker/communication", icon: "💬", badge: "unread" } },
-  { group: "Quality & Safety", items: [
-    { label: "Safety & Escalation", href: "/healthcare-worker/safety", icon: "🛡️", badge: "alerts" },
-    { label: "Nurse Concerns", href: "/healthcare-worker/concerns", icon: "🚩", badge: "concerns" },
+  { section: "Shift", entries: [
+    { item: { label: "My Patients", href: "/healthcare-worker/patients", icon: "🧑‍⚕️" } },
+    { item: { label: "My Tasks", href: "/healthcare-worker/tasks", icon: "✅", badge: "myTasks" } },
+    { item: { label: "Medication Schedule", href: "/healthcare-worker/medications", icon: "💊", badge: "medsDue" } },
+    { item: { label: "Assignment Inbox", href: "/healthcare-worker/inbox", icon: "📥", badge: "inbox" } },
+    { item: { label: "Handover", href: "/healthcare-worker/handover", icon: "🔄" } },
   ]},
-  { item: { label: "Clinical AI Copilot", href: "/healthcare-worker/copilot", icon: "✨" } },
-  { item: { label: "Reports", href: "/healthcare-worker/shift-summary", icon: "📋" } },
-  { item: { label: "Tools & Settings", icon: "⚙️", soon: true } },
+  { section: "Clinical", entries: [
+    { group: "Clinical Assessment", items: [
+      { label: "Observations & PEWS", href: "/healthcare-worker/observations", icon: "📈", badge: "obsDue" },
+      { label: "Acuity Assessment", href: "/healthcare-worker/acuity", icon: "🌡️" },
+      { label: "Workload Assessment", href: "/healthcare-worker/workload", icon: "⚖️" },
+    ]},
+    { item: { label: "Escalations", href: "/healthcare-worker/safety", icon: "🚨", badge: "alerts" } },
+    { item: { label: "Procedures", icon: "🩹", soon: true } },
+  ]},
+  { section: "Communication", entries: [
+    { item: { label: "Messages", href: "/healthcare-worker/communication", icon: "💬", badge: "unread" } },
+    { item: { label: "Unit Announcements", href: "/healthcare-worker/communication#announcements", icon: "📣" } },
+  ]},
+  { section: "Quality Events", entries: [
+    { item: { label: "Incidents", href: "/healthcare-worker/safety#incidents", icon: "🚩" } },
+    { item: { label: "Nurse Concerns", href: "/healthcare-worker/concerns", icon: "⚠️", badge: "concerns" } },
+  ]},
+  { section: "Intelligence", entries: [
+    { item: { label: "AI Copilot", href: "/healthcare-worker/copilot", icon: "✨" } },
+  ]},
+  { section: "Tools", entries: [
+    { item: { label: "Reports", href: "/healthcare-worker/shift-summary", icon: "📋" } },
+    { item: { label: "Settings", href: "/dashboard/preferences", icon: "⚙️" } },
+  ]},
 ];
 
 const ALLOWED = ["nurse", "assessor", "hospital_admin", "super_admin"];
@@ -74,7 +94,7 @@ export default async function HealthcareWorkerLayout({ children }: { children: R
     );
   }
 
-  // Live nav badges — the nurse's OWN counts. Fail-soft: errors resolve to 0.
+  // Live badges — the nurse's OWN counts. Fail-soft: errors resolve to 0.
   const bNum = (r: any) => (r?.error ? 0 : r?.count ?? 0);
   const { data: myAsg } = await admin.from("op_patient_assignments").select("patient_id").eq("staff_id", user.id).eq("status", "active").limit(100);
   const myPatientIds = ((myAsg ?? []) as any[]).map(r => r.patient_id).filter(Boolean);
@@ -90,22 +110,26 @@ export default async function HealthcareWorkerLayout({ children }: { children: R
       ? admin.from("op_safety_alerts").select("id", { count: "exact", head: true }).in("patient_id", myPatientIds).eq("active", true)
       : Promise.resolve({ count: 0, error: null }),
     admin.from("op_shift_staff")
-      .select("status, op_shifts!shift_id(shift_date, shift_type, status, starts_at, ends_at, units!unit_id(name), departments!department_id(name))")
+      .select("status, op_shifts!shift_id(id, shift_date, shift_type, status, starts_at, ends_at, units!unit_id(name), departments!department_id(name))")
       .eq("staff_id", user.id).limit(20),
     admin.from("op_patient_assignments").select("id", { count: "exact", head: true }).eq("staff_id", user.id).eq("status", "pending_acceptance"),
     admin.from("op_patient_transfers").select("id", { count: "exact", head: true }).eq("receiving_staff_id", user.id).eq("status", "awaiting_acceptance"),
   ]);
-  const badges: Record<string, number> = { unread: bNum(unreadRes), myTasks: bNum(taskRes), obsDue: bNum(obsRes), alerts: bNum(alertRes), concerns: bNum(concernRes) + bNum(actionRes), inbox: bNum(pendAsgRes) + bNum(pendXferRes) };
+
+  const activeShift = ((shiftRes.data ?? []) as any[]).map(d => d.op_shifts).find((s: any) => s?.status === "active") ?? null;
+  const shiftCard = buildShiftCard(activeShift);
+  const widget = await loadShiftWidget(admin, user.id, myPatientIds, activeShift?.id ?? null);
+
+  const badges: Record<string, number> = {
+    unread: bNum(unreadRes), myTasks: bNum(taskRes), obsDue: bNum(obsRes), alerts: bNum(alertRes),
+    concerns: bNum(concernRes) + bNum(actionRes), inbox: bNum(pendAsgRes) + bNum(pendXferRes),
+    medsDue: widget.medsDue,
+  };
   const groupBadge = (items: NavItem[]) =>
     [...new Set(items.filter(i => i.href && !i.soon && i.badge).map(i => i.badge!))].reduce((n, k) => n + (badges[k] ?? 0), 0);
 
-  // CURRENT SHIFT card (ARCH-002 mockup): the caller's active shift with a
-  // live elapsed/remaining progress bar — computed in the lib (render-pure).
-  const activeShift = ((shiftRes.data ?? []) as any[]).map(d => d.op_shifts).find((s: any) => s?.status === "active") ?? null;
-  const shiftCard = buildShiftCard(activeShift);
-
-  const allItems: NavItem[] = NAV.flatMap(e => ("item" in e ? [e.item] : e.items));
-  const mobileItems = [...new Map(allItems.filter(i => i.href && !i.soon).map(i => [i.href, i] as const)).values()];
+  const allItems: NavItem[] = NAV.flatMap(s => s.entries.flatMap(e => ("item" in e ? [e.item] : e.items)));
+  const mobileItems = [...new Map(allItems.filter(i => i.href && !i.soon).map(i => [i.href!.split(/[?#]/)[0], i] as const)).values()];
 
   const renderItem = ({ label, href, icon, exact, soon, badge }: NavItem) => soon || !href ? (
     <span key={label} title={`${label} — coming soon`} data-sb-item
@@ -120,6 +144,15 @@ export default async function HealthcareWorkerLayout({ children }: { children: R
       className={linkCls} activeClassName={activeCls} />
   );
 
+  const PROFILE_LINKS = [
+    { label: "My Profile", href: "/dashboard/profile", icon: "🙍" },
+    { label: "Competency Passport", href: "/dashboard/passport", icon: "🎖️" },
+    { label: "My Learning", href: "/dashboard/learning", icon: "📚" },
+    { label: "Documents", href: "/dashboard/documents", icon: "📄" },
+    { label: "Preferences", href: "/dashboard/preferences", icon: "⚙️" },
+    { label: "Personal Workspace", href: "/dashboard", icon: "⊞" },
+  ];
+
   return (
     <div className="min-h-screen bg-gray-50 font-[family-name:var(--font-geist-sans)]">
       <header className="md:hidden fixed top-0 left-0 right-0 z-40 bg-[#0a2f23] shadow-lg">
@@ -130,7 +163,7 @@ export default async function HealthcareWorkerLayout({ children }: { children: R
             <span className="block text-emerald-300/60 text-[10px] leading-tight">Healthcare Worker Workspace</span>
           </span>
           <span className="flex-1" />
-          <Link href="/dashboard" className="text-[11px] text-emerald-100/70 border border-emerald-800 rounded-lg px-2.5 py-1">⊞ My Dashboard</Link>
+          <Link href="/dashboard" className="text-[11px] text-emerald-100/70 border border-emerald-800 rounded-lg px-2.5 py-1">⊞ Personal</Link>
         </div>
         <nav className="flex gap-1 overflow-x-auto px-3 pb-2">
           {mobileItems.map(({ label, href }) => (
@@ -151,44 +184,59 @@ export default async function HealthcareWorkerLayout({ children }: { children: R
           </Link>
 
           <nav className="flex flex-col gap-0.5 flex-1 overflow-y-auto">
-            {NAV.map(e => "item" in e ? renderItem(e.item) : (
-              <NavGroup key={e.group} title={e.group} hrefs={e.items.filter(i => i.href).map(i => i.href!.split(/[?#]/)[0])}
-                badge={groupBadge(e.items)}
-                headerClass="text-[9px] font-bold uppercase tracking-widest text-emerald-400/50">
-                {e.items.map(renderItem)}
-              </NavGroup>
+            {NAV.map((s, i) => (
+              <div key={s.section ?? `s${i}`} className="flex flex-col gap-0.5">
+                {s.section && <p className="px-3 pt-2.5 pb-0.5 text-[9px] font-bold uppercase tracking-widest text-emerald-400/50" data-sb-label>{s.section}</p>}
+                {s.entries.map(e => "item" in e ? renderItem(e.item) : (
+                  <NavGroup key={e.group} title={e.group} hrefs={e.items.filter(i2 => i2.href).map(i2 => i2.href!.split(/[?#]/)[0])}
+                    badge={groupBadge(e.items)}
+                    headerClass="text-[11px] font-semibold text-emerald-100/60">
+                    {e.items.map(renderItem)}
+                  </NavGroup>
+                ))}
+              </div>
             ))}
-            <div className="my-2 border-t border-emerald-800/30" />
-            <Link href="/dashboard" data-sb-item title="Personal Workspace" className="flex items-center gap-2.5 px-3 py-1.5 rounded-lg text-[13px] text-emerald-100/40 hover:bg-emerald-800/50 hover:text-white transition-colors">
-              <span className="w-5 text-center text-sm">⊞</span>
-              <span data-sb-label>Personal Workspace</span>
-            </Link>
           </nav>
 
-          {/* CURRENT SHIFT card (ARCH-002) — live window + progress */}
+          {/* CURRENT SHIFT widget (UI-001): counts + break status + progress */}
           {shiftCard && (
             <div className="mx-1 mb-2 rounded-xl bg-emerald-900/60 border border-emerald-800/60 p-3" data-sb-label>
               <div className="flex items-center justify-between">
                 <span className="text-[9px] font-bold uppercase tracking-widest text-emerald-400/70">Current Shift</span>
                 <span className="flex items-center gap-1 text-[9px] text-emerald-400">● In Progress</span>
               </div>
-              <p className="text-white text-xs font-semibold mt-1">{shiftCard.window} · {shiftCard.label}</p>
-              {shiftCard.ward && <p className="text-emerald-200/60 text-[10px]">{shiftCard.ward}</p>}
+              <p className="text-white text-xs font-semibold mt-1">{shiftCard.window}{shiftCard.ward ? ` · ${shiftCard.ward}` : ""}</p>
+              <div className="grid grid-cols-3 gap-1 mt-1.5 text-center">
+                <div><p className="text-white text-sm font-bold tabular-nums">{myPatientIds.length}</p><p className="text-emerald-200/50 text-[8px] uppercase">Patients</p></div>
+                <div><p className="text-white text-sm font-bold tabular-nums">{badges.myTasks}</p><p className="text-emerald-200/50 text-[8px] uppercase">Tasks</p></div>
+                <div><p className="text-white text-sm font-bold tabular-nums">{badges.medsDue}</p><p className="text-emerald-200/50 text-[8px] uppercase">Meds Due</p></div>
+              </div>
               <div className="h-1.5 rounded-full bg-emerald-950 overflow-hidden mt-2">
                 <div className="h-full rounded-full bg-emerald-400" style={{ width: `${shiftCard.pct}%` }} />
               </div>
-              <p className="text-emerald-200/60 text-[10px] mt-1">{shiftCard.elapsed} elapsed · {shiftCard.remaining} remaining</p>
+              <p className="text-emerald-200/60 text-[10px] mt-1">{shiftCard.remaining} remaining{widget.breakLabel ? ` · ☕ ${widget.breakLabel}` : ""}</p>
             </div>
           )}
 
+          {/* User profile menu (UI-001: replaces the bare Personal Workspace link) */}
           <div className="pt-3 border-t border-emerald-800/60">
-            <div className="flex items-center gap-2 px-3 py-2">
-              <div className="w-7 h-7 rounded-full bg-emerald-400 flex items-center justify-center text-emerald-950 text-xs font-bold">{profile?.full_name?.[0] ?? "N"}</div>
-              <div className="flex-1 min-w-0" data-sb-label>
-                <p className="text-white text-xs font-medium truncate">{profile?.full_name}</p>
-                <p className="text-emerald-300/60 text-[10px]">Healthcare Worker</p>
+            <details className="group" data-sb-label>
+              <summary className="flex items-center gap-2 px-3 py-2 cursor-pointer list-none rounded-lg hover:bg-emerald-800/30">
+                <div className="w-7 h-7 rounded-full bg-emerald-400 flex items-center justify-center text-emerald-950 text-xs font-bold">{profile?.full_name?.[0] ?? "N"}</div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-white text-xs font-medium truncate">{profile?.full_name}</p>
+                  <p className="text-emerald-300/60 text-[10px]">Healthcare Worker</p>
+                </div>
+                <span className="text-emerald-300/60 text-[10px] transition-transform group-open:rotate-180">▾</span>
+              </summary>
+              <div className="mt-1 mb-1 flex flex-col gap-0.5">
+                {PROFILE_LINKS.map(l => (
+                  <Link key={l.href} href={l.href} className="flex items-center gap-2 px-3 py-1 rounded-lg text-[12px] text-emerald-100/60 hover:bg-emerald-800/40 hover:text-white transition-colors">
+                    <span className="w-4 text-center text-xs">{l.icon}</span>{l.label}
+                  </Link>
+                ))}
               </div>
-            </div>
+            </details>
             {(userRoles.length > 1 || workspaces.length > 0) && <div className="mb-2" data-sb-label><RoleSwitcher roles={userRoles} activeRole={activeRole} workspaces={workspaces} /></div>}
             <form action="/api/auth/logout" method="POST">
               <button type="submit" data-sb-item className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm text-emerald-100/50 hover:bg-emerald-800/30 hover:text-white transition-colors">
@@ -199,6 +247,12 @@ export default async function HealthcareWorkerLayout({ children }: { children: R
         </aside>
 
         <main data-content className="flex-1 md:ml-56 px-4 md:px-6 pt-24 md:pt-8 pb-8 max-w-7xl">{children}</main>
+
+        {/* Clinical AI Copilot — persistent floating action (UI-001) */}
+        <Link href="/healthcare-worker/copilot" title="Clinical AI Copilot"
+          className="fixed bottom-6 right-6 z-30 w-12 h-12 rounded-full bg-emerald-600 hover:bg-emerald-700 text-white text-xl flex items-center justify-center shadow-lg shadow-emerald-900/30 transition-colors">
+          ✨
+        </Link>
       </div>
     </div>
   );

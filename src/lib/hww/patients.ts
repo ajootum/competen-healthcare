@@ -36,7 +36,7 @@ export function decorateContext(patient: any, ctx: any): { cnci: CnciResult; pew
 
 export async function loadMyPatientWorkspace(admin: any, userId: string, now = Date.now()) {
   const { data: asg } = await admin.from("op_patient_assignments")
-    .select("id, assignment_type, competency_validated, started_at, op_patients!patient_id(id, label, patient_ref, age_years, diagnosis, consultant, current_stage, acuity_level, dependency_level, isolation_status, risk_level, operational_status, op_beds!bed_id(label, bed_type), departments!department_id(name))")
+    .select("id, assignment_type, competency_validated, started_at, op_patients!patient_id(id, label, patient_ref, age_years, diagnosis, consultant, current_stage, acuity_level, dependency_level, isolation_status, risk_level, operational_status, created_at, op_beds!bed_id(label, bed_type), departments!department_id(name))")
     .eq("staff_id", userId).eq("status", "active").limit(50);
   const patients = ((asg ?? []) as any[]).filter(a => a.op_patients);
   const ids = patients.map(a => a.op_patients.id);

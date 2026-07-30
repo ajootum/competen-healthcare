@@ -124,6 +124,41 @@ export function buildShiftCard(activeShift: any | null, now = Date.now()): Shift
   };
 }
 
+// ── Sidebar live extras (HWW-UI-001 shift status widget) ────────────────────
+// Medications-due badge + break status for the sidebar, computed here so the
+// layout stays render-pure. Break status reads the REAL op_staff_breaks rows
+// (mig 069): an in-progress break shows remaining time; otherwise the next
+// scheduled one today.
+export async function loadShiftWidget(admin: any, userId: string, patientIds: string[], shiftId: string | null, now = Date.now()) {
+  const in60 = new Date(now + 60 * 60e3).toISOString();
+  const soft = (p: Promise<any>) => p.then((r: any) => r, () => ({ data: [], count: 0 }));
+  const [medsRes, breakRes] = await Promise.all([
+    patientIds.length
+      ? soft(admin.from("op_med_schedule").select("id", { count: "exact", head: true })
+          .in("patient_id", patientIds).in("status", ["scheduled", "due", "overdue", "delayed"]).lte("scheduled_at", in60))
+      : Promise.resolve({ count: 0 }),
+    shiftId
+      ? soft(admin.from("op_staff_breaks").select("break_type, status, scheduled_at, started_at, ended_at, duration_min")
+          .eq("staff_id", userId).eq("shift_id", shiftId).limit(10))
+      : Promise.resolve({ data: [] }),
+  ]);
+
+  let breakLabel: string | null = null;
+  const rows = (breakRes.data ?? []) as any[];
+  const active = rows.find(b => b.started_at && !b.ended_at);
+  if (active) {
+    const total = (active.duration_min ?? 15) * 60e3;
+    const left = Math.max(0, total - (now - +new Date(active.started_at)));
+    breakLabel = left > 0 ? `Break — ${Math.ceil(left / 60e3)} min remaining` : "Break overrunning";
+  } else {
+    const next = rows.filter(b => b.scheduled_at && !b.ended_at && +new Date(b.scheduled_at) > now)
+      .sort((a, b) => +new Date(a.scheduled_at) - +new Date(b.scheduled_at))[0];
+    if (next) breakLabel = `Break at ${new Date(next.scheduled_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: false })}`;
+  }
+
+  return { medsDue: (medsRes as any).count ?? 0, breakLabel };
+}
+
 // ── Ward context (HWW-WARD-001 Ward Dashboard) ──────────────────────────────
 // The unit-level operational picture around the nurse's shift: census + acuity
 // mix, bed occupancy and who is on duty. Scoped to the shift's unit when set,

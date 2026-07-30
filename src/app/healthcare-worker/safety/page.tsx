@@ -81,6 +81,7 @@ export default async function SafetyPage() {
         </SectionCard>
       </div>
 
+      <div id="incidents" className="scroll-mt-24">
       <SectionCard icon="🚩" title="My Incident Reports (7 days)" count={data.incidents.length}>
         <div className="divide-y divide-gray-50">
           {data.incidents.length === 0 && <Empty>None reported this week. Incidents and near-misses feed the quality &amp; learning loop — report freely, it is never a blame record.</Empty>}
@@ -97,6 +98,7 @@ export default async function SafetyPage() {
           ))}
         </div>
       </SectionCard>
+      </div>
 
       <p className="text-center text-[11px] text-gray-400 pt-1">
         Escalation pathway: you → team leader → shift supervisor → medical team → rapid response. Queue management and resolution live with your coordinator; you always see the state of what you raised.

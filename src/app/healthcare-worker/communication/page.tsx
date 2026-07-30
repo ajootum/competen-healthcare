@@ -46,7 +46,8 @@ export default async function CommunicationPage() {
       <ChatPanel channels={channels} />
 
       <div className="grid lg:grid-cols-2 gap-5">
-        <SectionCard icon="📣" title="Broadcasts" count={broadcasts.length}>
+        <div id="announcements" className="scroll-mt-24">
+        <SectionCard icon="📣" title="Unit Announcements" count={broadcasts.length}>
           <div className="divide-y divide-gray-100">
             {broadcasts.length === 0 && <Empty>No broadcasts. Ward and hospital announcements from your coordinators land here.</Empty>}
             {broadcasts.map((b: any) => (
@@ -68,6 +69,7 @@ export default async function CommunicationPage() {
             ))}
           </div>
         </SectionCard>
+        </div>
 
         <SectionCard icon="🔔" title="My Notifications" count={notifications.length}>
           <div className="divide-y divide-gray-50 max-h-96 overflow-y-auto">
