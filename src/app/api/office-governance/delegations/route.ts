@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getCaller, isResponse, isAdmin, isSuper, forbidden, badRequest, assertProfileScope, assertRowScope } from "@/lib/api-auth";
+import { getCaller, isResponse, isAdmin, isSuper, forbidden, badRequest, assertProfileScope, assertRowScope, subjectHospital } from "@/lib/api-auth";
 
 // OGS write-workflow — delegate authority (OGS-003). POST records a delegation of a position/authority to a
 // person for a period (adm_delegations, the same store the delegation centre reads). PATCH revokes one.
@@ -30,7 +30,10 @@ export async function POST(req: Request) {
   const validTo = clean(b.valid_to);
   if (validTo && validTo < validFrom) return badRequest("valid_to must be on or after valid_from");
   const status = validFrom > today() ? "scheduled" : "active";
-  const hospitalId = isSuper(c) ? (clean(b.hospital_id) ?? null) : (c.hospitalId ?? NONE);
+  // Delegated authority belongs to the DELEGATE's tenant. assertProfileScope returns early for super_admin, so
+  // without this a platform-level delegation lands unscoped and shows up in every tenant's delegation centre.
+  const delegateHospital = await subjectHospital(c, "profiles", delegateId);
+  const hospitalId = isSuper(c) ? (delegateHospital ?? clean(b.hospital_id) ?? null) : (c.hospitalId ?? NONE);
 
   const { data: me } = await c.admin.from("profiles").select("full_name").eq("id", c.userId).single();
   const { data, error } = await c.admin.from("adm_delegations").insert({

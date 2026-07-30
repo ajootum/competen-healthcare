@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getCaller, isResponse, isEducator, isSuper, forbidden, badRequest } from "@/lib/api-auth";
+import { getCaller, isResponse, isEducator, isSuper, forbidden, badRequest, subjectHospital } from "@/lib/api-auth";
 import { transitionLifecycle } from "@/lib/competency/lifecycle-state";
 
 // COMP-020 — competency recertification & renewal management. POST opens a renewal against an expiring competency
@@ -29,7 +29,8 @@ export async function POST(req: Request) {
 
   const { data: me } = await c.admin.from("profiles").select("full_name").eq("id", c.userId).single();
   const { data, error } = await c.admin.from("cmo_renewals").insert({
-    hospital_id: c.hospitalId ?? null,
+    // A recertification record belongs to the NURSE's tenant, not the educator's who opened it.
+    hospital_id: await subjectHospital(c, "profiles", clean(b.nurse_id)),
     subject_type: subjectType, subject_id: subjectId, subject_name: subjectName,
     nurse_id: clean(b.nurse_id), nurse_name: clean(b.nurse_name),
     expiry_date: clean(b.expiry_date), renewal_path: path, status: "pending",

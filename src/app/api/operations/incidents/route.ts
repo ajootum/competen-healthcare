@@ -24,15 +24,20 @@ export async function POST(req: Request) {
   const type = INCIDENT_TYPES.includes(b.incident_type) ? b.incident_type : "other";
   const severity = SEV.includes(b.severity) ? b.severity : "medium";
 
+  // The incident belongs to the PATIENT's tenant, not the reporter's. Capturing it here (rather than only
+  // using it for the guard) is what keeps a super_admin's report from landing unscoped and being counted in
+  // every tenant's safety statistics.
+  let subjectHospital: string | null = null;
   if (b.patient_id) {
     const { data: p } = await c.admin.from("op_patients").select("hospital_id").eq("id", b.patient_id).maybeSingle();
     if (!p) return NextResponse.json({ error: "Patient not found" }, { status: 404 });
     if (!isSuper(c) && p.hospital_id !== c.hospitalId) return forbidden("Patient out of scope");
+    subjectHospital = (p.hospital_id as string | null) ?? null;
   }
 
   const { data: me } = await c.admin.from("profiles").select("full_name").eq("id", c.userId).single();
   const { data, error } = await c.admin.from("op_incidents").insert({
-    hospital_id: c.hospitalId ?? (isSuper(c) ? null : NONE), shift_id: b.shift_id ?? null,
+    hospital_id: subjectHospital ?? c.hospitalId ?? (isSuper(c) ? null : NONE), shift_id: b.shift_id ?? null,
     incident_type: type, severity, near_miss: !!b.near_miss, patient_id: b.patient_id ?? null,
     description: String(b.description).trim(), status: "reported",
     reported_by: c.userId, reported_by_name: me?.full_name ?? null,

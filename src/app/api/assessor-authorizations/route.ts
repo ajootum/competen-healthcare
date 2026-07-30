@@ -16,10 +16,13 @@ export async function POST(req: Request) {
   if (scopeErr) return scopeErr;
 
   const admin = c.admin;
+  // The grant belongs to the AUTHORIZED USER's tenant, not the granter's. assertProfileScope returns early for
+  // super_admin, so without this a platform-level grant lands unscoped and becomes effective in every tenant.
+  const { data: subject } = await admin.from("profiles").select("hospital_id").eq("id", user_id).maybeSingle();
   const { data: me } = await admin.from("profiles").select("full_name").eq("id", c.userId).single();
   const { data, error } = await admin.from("assessor_authorizations").insert({
     user_id,
-    hospital_id: c.hospitalId ?? null,
+    hospital_id: (subject?.hospital_id as string | null) ?? c.hospitalId ?? null,
     cpu_id: cpu_id || null,
     independence: independence ?? "independent",
     valid_until: valid_until || null,

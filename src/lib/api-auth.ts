@@ -114,3 +114,17 @@ export async function assertCompetencyScope(c: Caller, competencyId: string, opt
 export function scopeHospitalIds(c: Caller): string[] | null {
   return isSuper(c) ? null : (c.hospitalId ? [c.hospitalId] : ["__none__"]);
 }
+
+// Resolve the tenant a NEW row should belong to when that row is ABOUT another record (a patient, a nurse, an
+// incident, a shift…). Use this instead of `hospital_id: c.hospitalId` on any subject-bound insert.
+//
+// Why: `c.hospitalId` is the CALLER's hospital. For a super_admin it is null, so a subject-bound row written
+// with it lands UNSCOPED and is then read and counted across every tenant; for a cross-hospital admin it files
+// the row under the WRONG tenant. The row belongs to its subject's hospital. Falls back to the caller's hospital
+// when the subject has no tenant of its own (shared/master records, external guidelines).
+export async function subjectHospital(c: Caller, table: string, id: string | null | undefined, col = "hospital_id"): Promise<string | null> {
+  if (!id) return c.hospitalId ?? null;
+  const { data } = await c.admin.from(table).select(col).eq("id", id).maybeSingle();
+  const h = (data as Record<string, unknown> | null)?.[col] as string | null | undefined;
+  return h ?? c.hospitalId ?? null;
+}

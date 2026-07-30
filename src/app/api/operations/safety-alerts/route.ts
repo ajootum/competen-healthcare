@@ -28,11 +28,14 @@ export async function POST(req: Request) {
   const b = await req.json().catch(() => ({}));
   if (!CATS.includes(b.category)) return badRequest("valid category required");
   const admin = c.admin as any;
-  const hospitalId = isSuper(c) ? (b.hospital_id ?? c.hospitalId) : c.hospitalId;
+  let hospitalId = isSuper(c) ? (b.hospital_id ?? c.hospitalId) : c.hospitalId;
   if (b.patient_id) {
     const { data: p } = await admin.from("op_patients").select("hospital_id").eq("id", b.patient_id).maybeSingle();
     if (!p) return NextResponse.json({ error: "Patient not found" }, { status: 404 });
     if (!isSuper(c) && p.hospital_id !== c.hospitalId) return forbidden("Patient out of scope");
+    // The alert belongs to the PATIENT's tenant — authoritative over both the caller's and any client-supplied
+    // hospital_id, which for a super could otherwise be null or simply not match the patient.
+    hospitalId = p.hospital_id ?? hospitalId;
   }
   // A named owner must be in the caller's hospital; otherwise default to the caller.
   if (b.owner_id && b.owner_id !== c.userId) {

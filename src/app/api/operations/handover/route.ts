@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getCaller, isResponse, isSupervisor, isSuper, forbidden, badRequest } from "@/lib/api-auth";
+import { getCaller, isResponse, isSupervisor, isSuper, forbidden, badRequest, subjectHospital } from "@/lib/api-auth";
 import { JBI_DOMAINS, JBI_MAX, classify } from "@/lib/operations/handover";
 
 // Handover Centre mutation API (SSW-HC-004..011) over op_handovers / op_handover_items
@@ -105,7 +105,7 @@ export async function PATCH(req: Request) {
       if (!String(b.question ?? "").trim()) return badRequest("question required");
       const h = await ensureHandover(c);
       if ("error" in h) return migrationGate(h.error) ?? NextResponse.json({ error: h.error.message }, { status: 500 });
-      const { data, error } = await c.admin.from("op_handover_clarifications").insert({ hospital_id: c.hospitalId ?? null, handover_id: h.id, patient_id: b.patient_id ?? null, question: String(b.question).trim(), asked_by: c.userId, asked_by_name: me?.full_name ?? null, status: "pending" }).select("id").single();
+      const { data, error } = await c.admin.from("op_handover_clarifications").insert({ hospital_id: await subjectHospital(c, "op_patients", b.patient_id ?? null), handover_id: h.id, patient_id: b.patient_id ?? null, question: String(b.question).trim(), asked_by: c.userId, asked_by_name: me?.full_name ?? null, status: "pending" }).select("id").single();
       if (error) return migrationGate(error) ?? NextResponse.json({ error: error.message }, { status: 500 });
       await audit(c, "handover_clarification_raised", data.id);
       return NextResponse.json({ ok: true, id: data.id }, { status: 201 });
@@ -129,7 +129,8 @@ export async function PATCH(req: Request) {
       if ("error" in h) return migrationGate(h.error) ?? NextResponse.json({ error: h.error.message }, { status: 500 });
       const it = await ensureItem(c, h.id, b.patient_id);
       if ("error" in it) return migrationGate(it.error) ?? NextResponse.json({ error: it.error.message }, { status: 500 });
-      const { data, error } = await c.admin.from("op_handover_audits").insert({ hospital_id: c.hospitalId ?? null, handover_id: h.id, item_id: it.id, patient_id: b.patient_id, auditor_id: c.userId, auditor_name: me?.full_name ?? null, checklist, total_score: total, max_score: JBI_MAX, compliance_pct: pct, classification: classify(pct), duration_seconds: b.duration_seconds ?? null, follow_up_note: b.follow_up_note ?? null }).select("id").single();
+      // JBI handover-compliance evidence about a specific patient — scope to that patient's tenant.
+      const { data, error } = await c.admin.from("op_handover_audits").insert({ hospital_id: await subjectHospital(c, "op_patients", b.patient_id), handover_id: h.id, item_id: it.id, patient_id: b.patient_id, auditor_id: c.userId, auditor_name: me?.full_name ?? null, checklist, total_score: total, max_score: JBI_MAX, compliance_pct: pct, classification: classify(pct), duration_seconds: b.duration_seconds ?? null, follow_up_note: b.follow_up_note ?? null }).select("id").single();
       if (error) return migrationGate(error) ?? NextResponse.json({ error: error.message }, { status: 500 });
       await c.admin.from("op_handover_items").update({ jbi_score: pct, jbi_checklist: checklist, updated_at: new Date().toISOString() }).eq("id", it.id);
       await audit(c, "handover_jbi_audit", data.id, `${pct}% ${classify(pct)}`);

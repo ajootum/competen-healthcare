@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getCaller, isResponse, forbidden, isStaff, assertProfileScope, assertRowScope } from "@/lib/api-auth";
+import { getCaller, isResponse, forbidden, isStaff, assertProfileScope, assertRowScope, subjectHospital } from "@/lib/api-auth";
 
 // POST — create an assessment plan (+ optional items/assessors)
 export async function POST(req: Request) {
@@ -18,7 +18,9 @@ export async function POST(req: Request) {
 
   const { data: plan, error } = await c.admin.from("assessment_plans").insert({
     name,
-    hospital_id: c.hospitalId ?? null, // tenant is the caller's, never client-supplied
+    // A learner-bound plan belongs to that learner's tenant; templates (no nurse_id) keep the caller's.
+    // Never client-supplied either way.
+    hospital_id: await subjectHospital(c, "profiles", nurse_id ?? null),
     programme_type: programme_type ?? "annual",
     scheduling_rule: scheduling_rule ?? "fixed",
     nurse_id: nurse_id ?? null,
