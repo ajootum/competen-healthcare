@@ -2,6 +2,7 @@ import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { loadMyPatientWorkspace } from "@/lib/hww/patients";
+import { cnciTone, CNCI_BANDS } from "@/lib/hww/cnci";
 import { card, titleCase, fmtTime, fmtWhen, AcuityChip, RiskChip, PrioChip, Chip, Empty, ewsColor } from "@/lib/hww/kit";
 
 // My Patient Assignment / Patient Summary (HWW-WARD-001 S4.2/S4.3/S5) — the
@@ -37,13 +38,19 @@ function PatientCard({ a, ctx }: { a: any; ctx: any }) {
     <div className={card}>
       {/* Context header */}
       <div className="flex flex-wrap items-center gap-2">
-        <h3 className="font-bold text-gray-900 text-lg">{p.label}</h3>
+        <Link href={`/healthcare-worker/patients/${p.id}`} className="font-bold text-gray-900 text-lg hover:text-emerald-700">{p.label}</Link>
         {p.op_beds?.label && <span className="text-sm text-gray-500">{p.op_beds.label}</span>}
         {a.assignment_type === "primary" && <span className="text-[9px] text-emerald-600 uppercase font-semibold">primary</span>}
+        {ctx.cnci && (
+          <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-bold tabular-nums ${cnciTone(ctx.cnci.band)}`}>
+            {ctx.cnci.score}<span className="font-normal">{titleCase(ctx.cnci.band)}</span>
+          </span>
+        )}
         <AcuityChip level={p.acuity_level} />
         <RiskChip level={p.risk_level} />
         {p.isolation_status !== "none" && <Chip tone="bg-purple-100 text-purple-700">{titleCase(p.isolation_status)} isolation</Chip>}
         {p.op_beds?.bed_type === "critical_care" && <Chip tone="bg-sky-100 text-sky-700">ICU</Chip>}
+        {ctx.reassess?.due && <Chip tone="bg-orange-100 text-orange-700">Reassess</Chip>}
         <span className="ml-auto text-xs text-gray-400">{titleCase(p.operational_status)}</span>
       </div>
       <p className="text-xs text-gray-500 mt-1">
@@ -135,27 +142,70 @@ function PatientCard({ a, ctx }: { a: any; ctx: any }) {
   );
 }
 
-export default async function MyPatientsPage() {
+export default async function MyPatientsPage({ searchParams }: { searchParams: Promise<{ view?: string }> }) {
+  const { view } = await searchParams;
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect("/login");
   const admin = createAdminClient();
   const { patients, byPatient } = await loadMyPatientWorkspace(admin, user.id);
+  const priorityView = view === "priority";
+  const ranked = [...patients].sort((a: any, b: any) => (byPatient.get(b.op_patients.id)?.cnci?.score ?? 0) - (byPatient.get(a.op_patients.id)?.cnci?.score ?? 0));
+
+  const toggle = (label: string, href: string, active: boolean) => (
+    <Link href={href} className={`px-3 py-1.5 rounded-lg text-xs font-medium ${active ? "bg-emerald-600 text-white" : "bg-white border border-gray-300 text-gray-600 hover:bg-gray-50"}`}>{label}</Link>
+  );
 
   return (
     <div className="space-y-5">
-      <div>
-        <h1 className="text-2xl font-bold text-gray-900">My Patient Assignment</h1>
-        <p className="text-sm text-gray-500 mt-1">The full operational workspace for each patient assigned to you — context, scores, schedules, safety and coordination in one place.</p>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">My Patients</h1>
+          <p className="text-sm text-gray-500 mt-1">Your primary operational workspace — CNCI drives the priority view; open any patient for their full workspace.</p>
+        </div>
+        <div className="flex gap-1.5 self-center">
+          {toggle("List view", "/healthcare-worker/patients", !priorityView)}
+          {toggle("Priority view", "/healthcare-worker/patients?view=priority", priorityView)}
+        </div>
       </div>
 
       {patients.length === 0 ? (
         <div className={card}>
           <Empty>No active patient assignments. Your coordinator allocates patients in the Clinical Operations Centre; they appear here with their full operational picture.</Empty>
         </div>
+      ) : priorityView ? (
+        <div className="space-y-4">
+          {CNCI_BANDS.map(band => {
+            const group = ranked.filter((a: any) => byPatient.get(a.op_patients.id)?.cnci?.band === band.key);
+            if (!group.length) return null;
+            return (
+              <div key={band.key} className={card}>
+                <div className="flex items-center gap-2 mb-2">
+                  <span className={`text-xs font-bold px-2.5 py-0.5 rounded-full ${band.tone}`}>{band.label}</span>
+                  <span className="text-xs text-gray-400">{group.length} patient{group.length === 1 ? "" : "s"} · CNCI {band.min}+</span>
+                </div>
+                <div className="divide-y divide-gray-50">
+                  {group.map((a: any) => {
+                    const p = a.op_patients; const ctx = byPatient.get(p.id) ?? {};
+                    return (
+                      <div key={p.id} className="py-2 flex flex-wrap items-center gap-2 text-sm">
+                        <span className={`font-bold tabular-nums w-8 ${band.dot}`}>{ctx.cnci?.score ?? "—"}</span>
+                        <Link href={`/healthcare-worker/patients/${p.id}`} className="font-medium text-gray-800 hover:text-emerald-700">{p.op_beds?.label ? `${p.op_beds.label} · ` : ""}{p.label}</Link>
+                        <AcuityChip level={p.acuity_level} />
+                        {ctx.pews != null && <span className={`text-xs font-semibold tabular-nums ${ewsColor(ctx.pews)}`}>PEWS {ctx.pews}</span>}
+                        {ctx.reassess?.due && <Chip tone="bg-orange-100 text-orange-700">Reassess</Chip>}
+                        <span className="ml-auto text-[11px] text-gray-400">{(ctx.cnci?.drivers ?? []).slice(0, 2).join(" · ")}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            );
+          })}
+        </div>
       ) : (
         <div className="grid xl:grid-cols-2 gap-5">
-          {patients.map((a: any) => <PatientCard key={a.op_patients.id} a={a} ctx={byPatient.get(a.op_patients.id) ?? {}} />)}
+          {ranked.map((a: any) => <PatientCard key={a.op_patients.id} a={a} ctx={byPatient.get(a.op_patients.id) ?? {}} />)}
         </div>
       )}
 
