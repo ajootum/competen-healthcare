@@ -102,6 +102,28 @@ export async function loadMyShift(admin: any, userId: string): Promise<MyShift> 
   };
 }
 
+// ── CURRENT SHIFT sidebar card (HWW-ARCH-002) ───────────────────────────────
+// Live window + elapsed/remaining + progress, computed here so layouts stay
+// render-pure (no clock reads in components).
+export type ShiftCard = { label: string; ward: string | null; window: string; elapsed: string; remaining: string; pct: number };
+
+const fmtT = (iso: string | null) => iso ? new Date(iso).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: false }) : "--:--";
+const dur = (ms: number) => `${Math.floor(ms / 3.6e6)}h ${Math.floor((ms % 3.6e6) / 6e4)}m`;
+
+export function buildShiftCard(activeShift: any | null, now = Date.now()): ShiftCard | null {
+  if (!activeShift?.starts_at || !activeShift?.ends_at) return null;
+  const start = +new Date(activeShift.starts_at), end = +new Date(activeShift.ends_at);
+  const pct = Math.max(0, Math.min(100, ((now - start) / Math.max(1, end - start)) * 100));
+  return {
+    label: `${String(activeShift.shift_type ?? "").replace(/_/g, " ").replace(/\b\w/g, (ch: string) => ch.toUpperCase())} Shift`,
+    ward: activeShift.units?.name ?? activeShift.departments?.name ?? null,
+    window: `${fmtT(activeShift.starts_at)} – ${fmtT(activeShift.ends_at)}`,
+    elapsed: dur(Math.max(0, now - start)),
+    remaining: now >= end ? "ended" : dur(end - now),
+    pct: Math.round(pct),
+  };
+}
+
 // ── Ward context (HWW-WARD-001 Ward Dashboard) ──────────────────────────────
 // The unit-level operational picture around the nurse's shift: census + acuity
 // mix, bed occupancy and who is on duty. Scoped to the shift's unit when set,

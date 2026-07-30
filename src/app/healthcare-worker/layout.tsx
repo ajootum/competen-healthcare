@@ -8,6 +8,7 @@ import NavGroup from "@/components/NavGroup";
 import SidebarToggle from "@/components/SidebarToggle";
 import { highestRole, type AppRole } from "@/lib/roles";
 import { workspaceLinksForUser } from "@/lib/workspace-links";
+import { buildShiftCard } from "@/lib/hww/my-shift";
 
 // Healthcare Worker Workspace (HWW-001 / HWW-WARD-001 / HWW-ARCH-002) — the
 // bedside nurse's patient-centred operational workspace. ARCH-002 is the
@@ -46,9 +47,6 @@ const NAV: NavEntry[] = [
 const ALLOWED = ["nurse", "assessor", "hospital_admin", "super_admin"];
 const linkCls = "flex items-center gap-2.5 px-3 py-1.5 rounded-lg text-[13px] text-emerald-100/70 hover:bg-emerald-800/50 hover:text-white transition-colors";
 const activeCls = "flex items-center gap-2.5 px-3 py-1.5 rounded-lg text-[13px] bg-emerald-700/60 text-white font-medium";
-
-const fmtT = (iso: string | null) => iso ? new Date(iso).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: false }) : "--:--";
-const dur = (ms: number) => `${Math.floor(ms / 3.6e6)}h ${Math.floor((ms % 3.6e6) / 6e4)}m`;
 
 export default async function HealthcareWorkerLayout({ children }: { children: React.ReactNode }) {
   const supabase = await createClient();
@@ -99,22 +97,9 @@ export default async function HealthcareWorkerLayout({ children }: { children: R
     [...new Set(items.filter(i => i.href && !i.soon && i.badge).map(i => i.badge!))].reduce((n, k) => n + (badges[k] ?? 0), 0);
 
   // CURRENT SHIFT card (ARCH-002 mockup): the caller's active shift with a
-  // live elapsed/remaining progress bar — server-computed each request.
+  // live elapsed/remaining progress bar — computed in the lib (render-pure).
   const activeShift = ((shiftRes.data ?? []) as any[]).map(d => d.op_shifts).find((s: any) => s?.status === "active") ?? null;
-  let shiftCard: { label: string; ward: string | null; window: string; elapsed: string; remaining: string; pct: number } | null = null;
-  if (activeShift?.starts_at && activeShift?.ends_at) {
-    const now = Date.now();
-    const start = +new Date(activeShift.starts_at), end = +new Date(activeShift.ends_at);
-    const pct = Math.max(0, Math.min(100, ((now - start) / Math.max(1, end - start)) * 100));
-    shiftCard = {
-      label: `${String(activeShift.shift_type ?? "").replace(/_/g, " ").replace(/\b\w/g, (ch: string) => ch.toUpperCase())} Shift`,
-      ward: activeShift.units?.name ?? activeShift.departments?.name ?? null,
-      window: `${fmtT(activeShift.starts_at)} – ${fmtT(activeShift.ends_at)}`,
-      elapsed: dur(Math.max(0, now - start)),
-      remaining: now >= end ? "ended" : dur(end - now),
-      pct: Math.round(pct),
-    };
-  }
+  const shiftCard = buildShiftCard(activeShift);
 
   const allItems: NavItem[] = NAV.flatMap(e => ("item" in e ? [e.item] : e.items));
   const mobileItems = [...new Map(allItems.filter(i => i.href && !i.soon).map(i => [i.href, i] as const)).values()];
