@@ -51,6 +51,7 @@ const NAV_SECTIONS: { section: string; items: { label: string; href: string; ico
     { label: "Quality Feedback Loop", href: "/competency-office/quality-feedback", icon: "🔁" }, // COMP-028
     { label: "Enterprise Planning", href: "/competency-office/planning", icon: "🗺️" },
     { label: "Forecasting", href: "/competency-office/forecasting", icon: "🔮" },
+    { label: "Campaigns & Initiatives", href: "/competency-office/campaigns", icon: "📣" }, // CMO-011
   ] },
   { section: "Analytics & Intelligence", items: [
     { label: "Competency Analytics", href: "/competency-office/analytics", icon: "📈" },
