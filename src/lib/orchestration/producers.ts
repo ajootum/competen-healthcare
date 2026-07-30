@@ -49,3 +49,19 @@ export function emitApprovalDecided(admin: any, approval: any, actorId: string |
     payload: { category: approval.category ?? null, decision },
   });
 }
+
+// A worker was deployed onto a shift via a GOVERNED OVERRIDE of the COMP-027 readiness gate (an unresolved
+// critical competency failure). This crosses the workspace boundary: the shift supervisor's action must reach
+// the Competency Office's remediation loop. Clinical sensitivity (patient-facing deployment). Consumed by the
+// delivery event consumer (src/lib/delivery/consumer.ts → handleShiftOverride).
+export function emitShiftAssignmentChanged(admin: any, args: { shiftId: string; staffId: string; hospitalId: string | null; readiness: any }, actorId: string | null, actorName?: string | null) {
+  const r = args.readiness ?? {};
+  return emitDomainEvent(admin, {
+    event_type: EVENT.SHIFT_ASSIGNMENT_CHANGED,
+    subject_type: "op_shift_staff", subject_id: `${args.shiftId}:${args.staffId}`,
+    hospital_id: args.hospitalId ?? null,
+    actor_id: actorId, actor_name: actorName ?? null,
+    sensitivity: "clinical",
+    payload: { shift_id: args.shiftId, staff_id: args.staffId, override: true, hospital_id: args.hospitalId ?? null, critical_failures: r.criticalFailures ?? 0, critical_competencies: r.criticalCompetencies ?? [], expired_count: r.expiredCount ?? 0, reason: r.reason ?? null },
+  });
+}

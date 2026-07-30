@@ -1,10 +1,12 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 // CDP-015 — delivery event consumer. The orchestrator, campaigns and adaptive engine all EMIT to the
-// domain_events outbox (102); this is the reactive side the triage found missing. It drains pending
-// delivery-relevant events and acts: a FAILED assessment auto-remediates (notify + a reinforcement card);
-// known events with no side-effect are acknowledged; unknown types are left pending for other consumers.
-// A cron (delivery_event_consumer) drains it regularly. Real over domain_events + cdp_reinforcement_cards
-// (143) + notify() (029/056). No fabricated recipients — the learner is the event's actor.
+// domain_events outbox (102); this is the reactive side the triage found missing. It drains pending events and
+// acts: a FAILED assessment auto-remediates (notify + a reinforcement card); a GOVERNED OVERRIDE deployment
+// (shift.assignment.changed, PW-014) opens the same remediation loop — the cross-workspace reaction that carries
+// a shift supervisor's override into Competency-Office remediation; known events with no side-effect are
+// acknowledged; unknown types are left pending for other consumers. Both remediation paths honour the CDP-014
+// auto_remediation policy. A cron (delivery_event_consumer) drains it regularly. Real over domain_events +
+// cdp_reinforcement_cards (143) + notify() (029/056). No fabricated recipients — the worker is the event's subject.
 
 import { notify } from "@/lib/notify";
 import { resolveDeliveryConfig } from "@/lib/delivery/config";
@@ -34,7 +36,36 @@ async function handleAssessmentCompleted(admin: Admin, ev: any): Promise<string>
   return "remediation_queued";
 }
 
+// Governed override deployment (shift.assignment.changed, PW-014) → open the Competency Office remediation loop
+// for the worker: notify them + seed a reinforcement card for each unresolved critical competency. This is the
+// CROSS-WORKSPACE reaction — a shift supervisor's override past the COMP-027 readiness gate now reaches
+// competency remediation instead of dying in audit_log. Re-derives the criticals from the authoritative record
+// (competency_decisions) rather than trusting the event payload's names.
+async function handleShiftOverride(admin: Admin, ev: any): Promise<string> {
+  const p = ev.payload ?? {};
+  if (!p.override) return "no_action";
+  const worker = p.staff_id;
+  if (!worker) return "no_recipient";
+  let decs: any[] = [];
+  try {
+    const { data } = await admin.from("competency_decisions").select("competency_id, outcome, critical_failure, framework_competencies(name)").eq("nurse_id", worker).eq("critical_failure", true).limit(500);
+    decs = data ?? [];
+  } catch { decs = []; }
+  const critical = decs.filter(d => d.competency_id && ["requires_remediation", "not_yet_competent", "expired"].includes(String(d.outcome)));
+  await notify([worker], { type: "remediation", title: "Competency remediation required", body: "You were deployed under a governed override with unresolved critical competencies — a remediation review has been queued for you.", href: "/dashboard/reinforcement" });
+  const { data: prof } = await admin.from("profiles").select("hospital_id").eq("id", worker).maybeSingle();
+  for (const d of critical.slice(0, 10)) {
+    const name = (Array.isArray(d.framework_competencies) ? d.framework_competencies[0]?.name : d.framework_competencies?.name) ?? "Competency";
+    await admin.from("cdp_reinforcement_cards").upsert(
+      { hospital_id: prof?.hospital_id ?? p.hospital_id ?? null, nurse_id: worker, competency_id: d.competency_id, subject: name, prompt: `Critical competency to close out — you were deployed under override on "${name}". Recall the key steps, indications and safety checks.`, source: "shift_override", next_review_at: today() },
+      { onConflict: "nurse_id,competency_id", ignoreDuplicates: true },
+    ).catch(() => {});
+  }
+  return "remediation_queued";
+}
+
 const REMEDIATE = "assessment.completed";
+const SHIFT_OVERRIDE = "shift.assignment.changed";
 // Known delivery events with no reactive side-effect (the emitter already did the work) — acknowledge & drain.
 const ACK_ONLY = new Set(["competency.assigned", "campaign.launched", "simulation.completed", "learning.course.completed", "task.completed", "credential.expiry.updated", "policy.acknowledgement.required"]);
 
@@ -52,6 +83,13 @@ export async function processEvents(admin: Admin, limit = 300) {
         action = "remediation_disabled"; // policy off — acknowledge & drain, no card/notify
       } else {
         try { action = await handleAssessmentCompleted(admin, ev); } catch { action = "error"; }
+        if (action === "remediation_queued") remediated++;
+      }
+    } else if (ev.event_type === SHIFT_OVERRIDE) {
+      if (!autoRemediate) {
+        action = "remediation_disabled"; // policy off — acknowledge & drain
+      } else {
+        try { action = await handleShiftOverride(admin, ev); } catch { action = "error"; }
         if (action === "remediation_queued") remediated++;
       }
     } else if (ACK_ONLY.has(ev.event_type)) {
