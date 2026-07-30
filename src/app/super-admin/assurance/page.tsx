@@ -91,7 +91,7 @@ export default async function AssurancePlatformPage() {
     { code: "CAPA-005", icon: "⚖️", label: "Assessor Reliability Engine", desc: "Per-assessor scoring behaviour — mean score, variance, leniency/severity vs peers and inter-rater agreement — over real assessments + skill_scores (assessor_id + score). A calibration watchlist flags outliers.", href: "/super-admin/assurance/assessor-reliability", status: "real" },
   ];
   const DRIFT_COMPLIANCE: Mod[] = [
-    { code: "CAPA-006", icon: "📉", label: "Competency Drift Analytics", desc: "Workforce competency decay and improvement over time — expiry pressure, outcome trends, a drift index — over competency_decisions. Genuinely new; building here.", status: "gap" },
+    { code: "CAPA-006", icon: "📉", label: "Competency Drift Analytics", desc: "Workforce competency change over time — decay vs improvement across reassessments, expiry pressure, a composite drift index and per-competency hotspots — over competency_decisions.", href: "/super-admin/assurance/drift", status: "real" },
     { code: "CAPA-007", icon: "🏅", label: "Compliance & Accreditation Monitor", desc: "JCI / SafeCare / MoH readiness, gaps and remediation. Fully owned by the Quality & Accreditation workspace — cross-linked, not duplicated.", href: "/quality-accreditation/compliance", status: "linked" },
   ];
   const ACTION_INTEL: Mod[] = [
