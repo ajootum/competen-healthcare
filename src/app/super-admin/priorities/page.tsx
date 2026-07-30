@@ -147,7 +147,7 @@ export default async function StrategyManagerPage() {
         </Card>
       </div>
 
-      <Foot>PPE-001 — the strategy layer over the priority framework (ppe_strategic_themes / ppe_objectives / ppe_key_results / ppe_priorities / ppe_campaigns / ppe_approvals / ppe_audit). All data is real from the framework stores; objectives cascade via parent_id and feed the resolution engine (see PPE-002 Distribution). Authoring UIs (create/publish/approve) are the next build phase — this is the authoritative read model over seeded strategy.</Foot>
+      <Foot>PPE-001 — the strategy layer over the priority framework (ppe_strategic_themes / ppe_objectives / ppe_key_results / ppe_priorities / ppe_campaigns / ppe_approvals / ppe_audit). All data is real from the framework stores; objectives cascade via parent_id and feed the resolution engine (see PPE-002 Distribution). Objective authoring is now live — create + the draft→pending→published→archived lifecycle (submit-for-approval materialises a governance request); priority / theme / campaign authoring and multi-step workflows are the next phase.</Foot>
     </div>
   );
 }

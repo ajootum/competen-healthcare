@@ -1,5 +1,6 @@
 import { loadGovernance } from "@/lib/priorities/modules";
 import { ppeGuard, Head, ModuleNav, Card, Stat, Pill, Provision, Foot, STATUS_TONE } from "../_ui";
+import ApprovalDecisions from "./ApprovalDecisions";
 
 export const dynamic = "force-dynamic";
 
@@ -37,6 +38,7 @@ export default async function GovernancePage() {
                 <Pill text={a.state} tone={STATUS_TONE[a.state]} />
               </div>
               <div className="flex items-center justify-between mt-1.5 text-[10px] text-gray-400"><span>by {a.requester} · step {a.step}/{a.total_steps}</span>{a.decision_reason && <span className="text-amber-600 truncate max-w-[55%]">“{a.decision_reason}”</span>}</div>
+              {a.state === "pending" && <ApprovalDecisions id={a.id} />}
             </div>
           ))}</div> : <p className="text-sm text-gray-400 py-6 text-center">Queue clear. ✅</p>}
           {d.byEntity.length > 0 && <div className="flex gap-2 mt-3 pt-3 border-t border-gray-100 text-[10px] text-gray-500">{d.byEntity.map((e: any) => <span key={e.type} className="capitalize">{e.type}: <b className="text-gray-800">{e.n}</b></span>)}</div>}
@@ -55,7 +57,7 @@ export default async function GovernancePage() {
         ))}</div> : <p className="text-sm text-gray-400 py-4 text-center">No audit entries.</p>}
       </Card>
 
-      <Foot>PPE-008 — governance over ppe_approvals + the immutable ppe_audit trail. Approval queue, decisions and audit are real from the framework. Approval-workflow designer &amp; electronic-signature capture are the next build phase; decision routing is currently seeded per entity.</Foot>
+      <Foot>PPE-008 — governance over ppe_approvals + the immutable ppe_audit trail. Approve / reject / request-changes decisions are now live — they transition the linked objective (pending→published / →draft) and write the immutable audit trail. The multi-step approval-workflow designer &amp; electronic-signature capture remain the next phase.</Foot>
     </div>
   );
 }
