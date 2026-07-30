@@ -1,5 +1,6 @@
 import { loadStrategyManager } from "@/lib/priorities/strategy";
 import { ppeGuard, Head, ModuleNav, Card, Stat, Pill, Progress, Ring, Provision, Foot, STATUS_TONE } from "./_ui";
+import { NewObjectiveButton, ObjectiveControls } from "./StrategyAuthor";
 
 export const dynamic = "force-dynamic";
 
@@ -16,10 +17,12 @@ export default async function StrategyManagerPage() {
   if (!d.provisioned) return <div className="max-w-[1400px] space-y-4">{head}<ModuleNav active="001" /><Provision module="the Strategy Manager" /></div>;
 
   const k = d.kpis;
+  const themes = (d.themeCards ?? []).map((t: any) => ({ id: t.id, name: t.name }));
   return (
     <div className="max-w-[1400px] space-y-4">
       {head}
       <ModuleNav active="001" />
+      <div className="flex justify-end"><NewObjectiveButton themes={themes} /></div>
 
       {/* KPI ribbon */}
       <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-8 gap-3">
@@ -78,6 +81,7 @@ export default async function StrategyManagerPage() {
                     ))}
                   </div>
                 )}
+                <ObjectiveControls objective={{ id: o.id, status: o.status, title: o.title }} />
               </div>
             ))}
           </div>
