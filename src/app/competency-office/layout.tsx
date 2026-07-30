@@ -21,6 +21,7 @@ const NAV_SECTIONS: { section: string; items: { label: string; href: string; ico
     { label: "Executive Dashboard", href: "/competency-office", icon: "📊", exact: true },
   ] },
   { section: "Competency Governance", items: [
+    { label: "Program Management", href: "/competency-office/program-management", icon: "📋" }, // CMO-006
     { label: "Lifecycle Engine", href: "/competency-office/lifecycle", icon: "🔄" },           // CMO-004
     { label: "Lifecycle State Machine", href: "/competency-office/lifecycle-state", icon: "🧬" }, // COMP-017
     { label: "Competency Frameworks", href: "/competency-office/frameworks", icon: "🗂️" },
