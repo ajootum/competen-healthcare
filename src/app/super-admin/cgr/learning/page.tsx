@@ -2,6 +2,8 @@ import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { loadOrganisationalLearning } from "@/lib/cgr/learning";
+import ProposeLink from "./ProposeLink";
+import LinkDecisions from "./LinkDecisions";
 
 // CGR-027 — Organisational Learning & Knowledge Transformation. Two layers, kept honestly distinct:
 // CAUSAL (competency_learning_links, mig 150 — proven signal→change closure) above OPERATIONAL (op_incidents —
@@ -63,9 +65,15 @@ export default async function OrganisationalLearningPage() {
         <div className="space-y-4">
           {/* ── LAYER 1: causal closure ── */}
           <div>
-            <div className="flex items-center gap-2 mb-2">
+            <div className="flex items-center gap-2 mb-2 flex-wrap">
               <h2 className="text-xs font-bold text-gray-400 uppercase tracking-widest">Proven closure — signal caused change</h2>
               <span className="text-[9px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-100 rounded px-1.5 py-0.5">CAUSAL</span>
+              {L.ready && (
+                <div className="ml-auto flex items-center gap-2">
+                  {d.candidates.unlinkedTotal > 0 && <span className="text-[10px] text-gray-400">{d.candidates.unlinkedTotal} unlinked signal{d.candidates.unlinkedTotal === 1 ? "" : "s"}</span>}
+                  <ProposeLink signals={d.candidates.signals} competencies={d.candidates.competencies} />
+                </div>
+              )}
             </div>
 
             {!L.ready ? (
@@ -112,7 +120,10 @@ export default async function OrganisationalLearningPage() {
                               <td className="py-2 px-2 text-[12px] text-gray-700 truncate max-w-[180px]">{r.target}</td>
                               <td className="py-2 px-2 text-[11px] text-gray-500">{r.linkType}</td>
                               <td className="py-2 px-2 text-center text-[11px] tabular-nums">{r.days == null ? <span className="text-gray-300">—</span> : <span className="font-semibold text-gray-700">{r.days}</span>}</td>
-                              <td className="py-2 pr-4 pl-2"><span className={`text-[10px] font-bold border rounded px-1.5 py-0.5 ${(STATUS_META[r.status] ?? STATUS_META.proposed).cls}`}>{(STATUS_META[r.status] ?? STATUS_META.proposed).label}</span></td>
+                              <td className="py-2 pr-4 pl-2">
+                                <span className={`text-[10px] font-bold border rounded px-1.5 py-0.5 ${(STATUS_META[r.status] ?? STATUS_META.proposed).cls}`}>{(STATUS_META[r.status] ?? STATUS_META.proposed).label}</span>
+                                <LinkDecisions id={r.id} status={r.status} />
+                              </td>
                             </tr>
                           ))}
                         </tbody>

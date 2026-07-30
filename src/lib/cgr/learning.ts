@@ -21,10 +21,11 @@ const label = (s: string) => (s || "other").replace(/_/g, " ").replace(/^\w/, (c
 const median = (xs: number[]) => (xs.length ? xs.slice().sort((a, b) => a - b)[Math.floor(xs.length / 2)] : null);
 
 export async function loadOrganisationalLearning(admin: Admin) {
-  const [incRes, crRes, linkRes] = await Promise.all([
-    admin.from("op_incidents").select("id, incident_type, severity, near_miss, status, corrective_action, created_at, closed_at").order("created_at", { ascending: false }).limit(5000),
+  const [incRes, crRes, linkRes, compRes] = await Promise.all([
+    admin.from("op_incidents").select("id, incident_type, severity, near_miss, status, corrective_action, description, created_at, closed_at").order("created_at", { ascending: false }).limit(5000),
     admin.from("change_requests").select("status, change_kind, created_at").limit(2000),
     admin.from("competency_learning_links").select("id, source_type, source_id, source_ref, signal_date, target_type, target_name, link_type, rationale, status, proposed_by_ai, confirmed_by_name, confirmed_at, implemented_at, created_at").order("created_at", { ascending: false }).limit(2000),
+    admin.from("framework_competencies").select("id, name, code").order("name").limit(400),
   ]);
 
   const incidents = (incRes.error ? [] : incRes.data ?? []) as any[];
@@ -113,8 +114,22 @@ export async function loadOrganisationalLearning(admin: Admin) {
     { step: "Loop closed (proven)", n: byStatus.implemented, note: "change implemented from signal" },
   ];
 
+  // Candidates for proposing a link — structured records only, so source_id/target_id are real FKs (the unique
+  // edge index and the causal duration both depend on that). Unlinked signals first: those are the open loops.
+  const competencies = ((compRes.error ? [] : compRes.data ?? []) as any[]).map((c) => ({ id: c.id, name: c.code ? `${c.name} (${c.code})` : c.name }));
+  const unlinkedSignals = incidents
+    .filter((i) => !linkedSourceIds.has(i.id))
+    .slice(0, 40)
+    .map((i) => ({
+      id: i.id,
+      label: `${label(i.incident_type)}${i.description ? ` — ${String(i.description).slice(0, 60)}` : ""}`,
+      date: i.created_at ? String(i.created_at).slice(0, 10) : null,
+      severity: i.severity,
+    }));
+
   return {
     provisioned: total > 0 || crs.length > 0 || links.length > 0,
+    candidates: { signals: unlinkedSignals, competencies, unlinkedTotal: incidents.length - linkedSourceIds.size },
     linkage: {
       ready: linkageReady,
       total: links.length,
