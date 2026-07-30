@@ -1,4 +1,4 @@
--- 153: HWW-WARD-001 §4 / HWW-ICU-001 §6-7 / HWW-AE-001 §3 — Acuity & Workload assessment stores.
+-- 153: HWW-WARD-001 S4 / HWW-ICU-001 S6-7 / HWW-AE-001 S3 - Acuity & Workload assessment stores.
 -- The reassessment spine of the bedside workspace: patients are scored REPEATEDLY through a shift with full
 -- history ("continuous reassessment"), and these scores are the Assignment & Workload Engine's primary inputs.
 -- One generic pair with a framework discriminator, not ICU-specific tables:
@@ -7,9 +7,9 @@
 --   op_workload_assessments framework 'nas' (Nursing Activities Score, Miranda 2003 weightings, score = % of
 --                           one nurse's capacity) or 'ward' (ward workload components)
 -- domains/items jsonb hold the per-component selections so the instrument stays inspectable; score/level are
--- computed server-side by the shipped engine (src/lib/hww/assessments.ts) — never trusted from the client.
--- significant_change flags reassessments that jump ≥4 points or change level ("acuity changes trigger
--- assignment review", WARD-001 §10) — the recording engine also syncs op_patients.acuity_level so every
+-- computed server-side by the shipped engine (src/lib/hww/assessments.ts) - never trusted from the client.
+-- significant_change flags reassessments that jump >=4 points or change level ("acuity changes trigger
+-- assignment review", WARD-001 S10) - the recording engine also syncs op_patients.acuity_level so every
 -- existing surface (dashboards, safety centre, ward map) sees the new state immediately.
 -- Tenancy: rows belong to the PATIENT's hospital (subject-scoped). Plain, idempotent statements only
 -- (no do-blocks). RLS = authenticated read; service-role writes.
@@ -26,7 +26,7 @@ create table if not exists op_acuity_assessments (
   level          text not null check (level in ('stable','moderate','high','critical')),
   domains        jsonb not null default '{}'::jsonb,        -- per-domain 0-3 component scores
   previous_score int,                                       -- latest prior score at recording time
-  significant_change boolean not null default false,        -- |Δ| >= 4 or level change vs previous
+  significant_change boolean not null default false,        -- abs(delta) >= 4 or level change vs previous
   assessed_by    uuid references profiles(id) on delete set null,
   assessed_by_name text,
   assessed_at    timestamptz not null default now(),
