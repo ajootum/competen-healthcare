@@ -2,10 +2,12 @@ import { NextResponse } from "next/server";
 import { getCaller, isResponse, isStaff, isSuper, forbidden, badRequest } from "@/lib/api-auth";
 import { BROADCAST_PRIORITIES } from "@/lib/operations/communication-centre";
 
-// Broadcast Centre (SSW-COM-001 §Broadcast Centre). GET lists broadcasts; POST
-// creates a ward/hospital broadcast (priority, audience, expiry, emergency);
-// PATCH acknowledges one (recorded per recipient for ack-rate tracking).
-// Supervisor tier, tenant-scoped, audit-logged; 409 hint until 072 runs.
+// Broadcast Centre (SSW-COM-001 §Broadcast Centre + HWW-COM-001). GET lists
+// broadcasts; POST creates a ward/hospital broadcast (staff tier); PATCH
+// acknowledges one (recorded per recipient for ack-rate tracking). Reading and
+// SELF-acknowledging are open to every clinician on the tenant — nurses are
+// the broadcast AUDIENCE ("All Staff"), and an ack-rate that excludes them is
+// meaningless. Tenant-scoped, audit-logged; 409 hint until 072 runs.
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 const NONE = "00000000-0000-0000-0000-000000000000";
@@ -15,7 +17,6 @@ const migrationGate = (e: any) =>
 export async function GET() {
   const c = await getCaller();
   if (isResponse(c)) return c;
-  if (!isStaff(c)) return forbidden();
   let q = c.admin.from("op_broadcasts").select("*").order("created_at", { ascending: false }).limit(50);
   if (!isSuper(c)) q = q.eq("hospital_id", c.hospitalId ?? NONE);
   const { data, error } = await q;
@@ -55,7 +56,6 @@ export async function POST(req: Request) {
 export async function PATCH(req: Request) {
   const c = await getCaller();
   if (isResponse(c)) return c;
-  if (!isStaff(c)) return forbidden();
   const id = new URL(req.url).searchParams.get("id");
   if (!id) return badRequest("id required");
   const { data: bc } = await c.admin.from("op_broadcasts").select("hospital_id, title").eq("id", id).maybeSingle();

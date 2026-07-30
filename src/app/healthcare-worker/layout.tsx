@@ -29,7 +29,7 @@ const NAV_GROUPS: { group: string; items: NavItem[] }[] = [
   { group: "My Shift", items: [
     { label: "My Patients",      href: "/healthcare-worker/patients",      icon: "🧑‍⚕️" },
     { label: "Task Centre",      href: "/healthcare-worker/tasks",         icon: "✅", badge: "myTasks" },
-    { label: "Shift Summary",    href: "/healthcare-worker/shift-summary", icon: "📋", soon: true },
+    { label: "Shift Summary",    href: "/healthcare-worker/shift-summary", icon: "📋" },
   ]},
   { group: "Clinical Assessment", items: [
     { label: "Observations & PEWS", href: "/healthcare-worker/observations", icon: "📈", badge: "obsDue" },
@@ -39,9 +39,9 @@ const NAV_GROUPS: { group: string; items: NavItem[] }[] = [
   { group: "Care Coordination", items: [
     { label: "Medication Summary",   href: "/healthcare-worker/medications",   icon: "💊" },
     { label: "Nurse Concerns",       href: "/healthcare-worker/concerns",      icon: "🚩", badge: "concerns" },
-    { label: "Safety & Escalation",  href: "/healthcare-worker/safety",        icon: "🛡️", badge: "alerts", soon: true },
-    { label: "Communication",        href: "/healthcare-worker/communication", icon: "💬", badge: "unread", soon: true },
-    { label: "Handover (SBAR)",      href: "/healthcare-worker/handover",      icon: "🔄", soon: true },
+    { label: "Safety & Escalation",  href: "/healthcare-worker/safety",        icon: "🛡️", badge: "alerts" },
+    { label: "Communication",        href: "/healthcare-worker/communication", icon: "💬", badge: "unread" },
+    { label: "Handover (SBAR)",      href: "/healthcare-worker/handover",      icon: "🔄" },
   ]},
   { group: "Intelligence", items: [
     { label: "AI Copilot", href: "/healthcare-worker/copilot", icon: "✨", soon: true },
@@ -84,7 +84,7 @@ export default async function HealthcareWorkerLayout({ children }: { children: R
   const bNum = (r: any) => (r?.error ? 0 : r?.count ?? 0);
   const { data: myAsg } = await admin.from("op_patient_assignments").select("patient_id").eq("staff_id", user.id).eq("status", "active").limit(100);
   const myPatientIds = ((myAsg ?? []) as any[]).map(r => r.patient_id).filter(Boolean);
-  const [unreadRes, taskRes, concernRes, actionRes, obsRes] = await Promise.all([
+  const [unreadRes, taskRes, concernRes, actionRes, obsRes, alertRes] = await Promise.all([
     admin.from("notifications").select("id", { count: "exact", head: true }).eq("user_id", user.id).eq("read", false),
     admin.from("op_tasks").select("id", { count: "exact", head: true }).eq("assigned_to", user.id).not("status", "in", "(completed,verified,cancelled)"),
     admin.from("op_concerns").select("id", { count: "exact", head: true }).eq("raised_by", user.id).in("status", ["open", "in_progress", "carried_forward"]),
@@ -92,8 +92,11 @@ export default async function HealthcareWorkerLayout({ children }: { children: R
     myPatientIds.length
       ? admin.from("op_observations").select("id", { count: "exact", head: true }).in("patient_id", myPatientIds).in("status", ["due", "overdue"])
       : Promise.resolve({ count: 0, error: null }),
+    myPatientIds.length
+      ? admin.from("op_safety_alerts").select("id", { count: "exact", head: true }).in("patient_id", myPatientIds).eq("active", true)
+      : Promise.resolve({ count: 0, error: null }),
   ]);
-  const badges: Record<string, number> = { unread: bNum(unreadRes), myTasks: bNum(taskRes), obsDue: bNum(obsRes), alerts: 0, concerns: bNum(concernRes) + bNum(actionRes) };
+  const badges: Record<string, number> = { unread: bNum(unreadRes), myTasks: bNum(taskRes), obsDue: bNum(obsRes), alerts: bNum(alertRes), concerns: bNum(concernRes) + bNum(actionRes) };
   const groupBadge = (items: NavItem[]) =>
     [...new Set(items.filter(i => i.href && !i.soon && i.badge).map(i => i.badge!))].reduce((n, k) => n + (badges[k] ?? 0), 0);
 
