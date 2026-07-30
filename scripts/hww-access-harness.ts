@@ -46,7 +46,7 @@ async function main() {
     const legs = [...legsBase];
     if (mine.length) legs.push(`patient_id.in.(${mine.join(",")})`);
     const { data, error } = await activeFilter(admin.from(table).select("id")).or(legs.join(","));
-    return { ids: new Set((data ?? []).map((r: any) => r.id)), error };
+    return { ids: new Set<string>((data ?? []).map((r: any) => r.id as string)), error };
   };
   // Independent union of the legs, one query each.
   const unionQuery = async (table: string, eqCols: string[], user: string, mine: string[], activeFilter: (q: any) => any) => {

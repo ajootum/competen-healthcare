@@ -38,7 +38,7 @@ const NAV_GROUPS: { group: string; items: NavItem[] }[] = [
   ]},
   { group: "Care Coordination", items: [
     { label: "Medication Summary",   href: "/healthcare-worker/medications",   icon: "💊", soon: true },
-    { label: "Nurse Concerns",       href: "/healthcare-worker/concerns",      icon: "🚩", soon: true },
+    { label: "Nurse Concerns",       href: "/healthcare-worker/concerns",      icon: "🚩", badge: "concerns" },
     { label: "Safety & Escalation",  href: "/healthcare-worker/safety",        icon: "🛡️", badge: "alerts", soon: true },
     { label: "Communication",        href: "/healthcare-worker/communication", icon: "💬", badge: "unread", soon: true },
     { label: "Handover (SBAR)",      href: "/healthcare-worker/handover",      icon: "🔄", soon: true },
@@ -82,11 +82,13 @@ export default async function HealthcareWorkerLayout({ children }: { children: R
   // Live nav badges — the nurse's OWN counts (self-scoped, unlike the
   // supervisor's hospital-wide counts). Fail-soft: errors resolve to 0.
   const bNum = (r: any) => (r?.error ? 0 : r?.count ?? 0);
-  const [unreadRes, taskRes] = await Promise.all([
+  const [unreadRes, taskRes, concernRes, actionRes] = await Promise.all([
     admin.from("notifications").select("id", { count: "exact", head: true }).eq("user_id", user.id).eq("read", false),
     admin.from("op_tasks").select("id", { count: "exact", head: true }).eq("assigned_to", user.id).not("status", "in", "(completed,verified,cancelled)"),
+    admin.from("op_concerns").select("id", { count: "exact", head: true }).eq("raised_by", user.id).in("status", ["open", "in_progress", "carried_forward"]),
+    admin.from("op_concern_actions").select("id", { count: "exact", head: true }).eq("owner_id", user.id).in("status", ["open", "in_progress"]),
   ]);
-  const badges: Record<string, number> = { unread: bNum(unreadRes), myTasks: bNum(taskRes), obsDue: 0, alerts: 0 };
+  const badges: Record<string, number> = { unread: bNum(unreadRes), myTasks: bNum(taskRes), obsDue: 0, alerts: 0, concerns: bNum(concernRes) + bNum(actionRes) };
   const groupBadge = (items: NavItem[]) =>
     [...new Set(items.filter(i => i.href && !i.soon && i.badge).map(i => i.badge!))].reduce((n, k) => n + (badges[k] ?? 0), 0);
 
