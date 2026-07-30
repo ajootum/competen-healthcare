@@ -1,14 +1,23 @@
-// Acuity & Workload assessment engine (HWW-WARD-001 / HWW-ICU-001 §6-7,
-// migration 153) — the reassessment spine. Two instrument families:
-//   Acuity: Competen Ward Acuity + Competen ICU Acuity Assessment — six
-//     domains scored 0-3 (max 18), banded to the op_patients acuity vocabulary.
-//   Workload: Nursing Activities Score (NAS, Miranda et al. 2003 weightings,
-//     score = % of one nurse's capacity, max 176.8) + Competen Ward Workload.
-// Scores are computed HERE, server-side, from the component selections — the
-// client's preview is cosmetic, never trusted. Recording syncs
-// op_patients.acuity_level so every existing surface sees the new state, and
-// flags significant changes (|Δ| ≥ 4 or level change) for assignment review.
+// Acuity & Workload assessment engine (migrations 153 + 157) — the
+// reassessment spine, now instrument-aware (v2 specs):
+//   Acuity: PEWS (ward, recorded total 0-15 + category-3 trigger -> colour
+//     band), CIAF (ICU composite /100 -> A1-A5), plus the legacy 6-domain
+//     ward/icu instruments kept readable for historical rows.
+//   Workload: NAS (Miranda activities, now banded I1-I5 with ratios) and the
+//     12-domain Ward Workload (0-3 each + modifiers -> W1-W5 with ratios);
+//     legacy checkbox 'ward' rows stay readable.
+// UNIT-ASM-001: the tool is RESOLVED from the patient's care location — new
+// submissions with any other tool are rejected (409) by validateToolForPatient.
+// Scores are computed HERE, server-side — the client's preview is cosmetic.
+// Recording syncs op_patients.acuity_level (via each instrument's spine
+// mapping) and flags significant changes for assignment review. Professional
+// overrides require a reason and are stored alongside the computed level.
 /* eslint-disable @typescript-eslint/no-explicit-any */
+
+import {
+  computePews, computeCiaf, computeWard12, levelFromBands, validateOverride,
+  resolveUnitType, TOOLSET, I_LEVELS, W_LEVELS,
+} from "@/lib/hww/instruments";
 
 // ── Acuity instruments ───────────────────────────────────────────────────────
 
@@ -170,24 +179,71 @@ async function subjectPatient(admin: any, patientId: string) {
 
 const migrationMissingErr = (e: any) => /does not exist|schema cache/i.test(String(e?.message ?? ""));
 
-export async function recordAcuity(admin: any, input: Ctx & { domains: any }): Promise<RecordResult> {
-  const { score, level, errors } = computeAcuity(input.framework, input.domains);
-  if (errors.length) return { ok: false, status: 400, error: errors.join("; ") };
+// Significant-change thresholds per instrument (drives assignment review).
+const SIG_DELTA: Record<string, number> = { pews: 2, ciaf: 10, ward: 4, icu: 4 };
+
+export async function recordAcuity(admin: any, input: Ctx & { domains?: any; payload?: any }): Promise<RecordResult> {
+  const payload = input.payload ?? input.domains ?? {};
+  let score: number, level: string, classification: string, category3 = false;
+  let components: any = {};
+  let reassessMinutes: number | null = null;
+  let domains: any = {};
+
+  if (input.framework === "pews") {
+    const r = computePews({ total: payload.total, category3: payload.category3 });
+    if (r.errors.length) return { ok: false, status: 400, error: r.errors.join("; ") };
+    score = r.score; level = r.spineLevel; classification = r.classification;
+    category3 = !!payload.category3; reassessMinutes = r.reassessMinutes;
+    domains = { total: r.score, category3 };
+  } else if (input.framework === "ciaf") {
+    const r = computeCiaf(payload);
+    if (r.errors.length) return { ok: false, status: 400, error: r.errors.join("; ") };
+    score = r.score; level = r.spineLevel; classification = r.level;
+    components = r.components;
+    domains = { aacn: payload.aacn, rass: payload.rass, cam: payload.cam, organ_supports: payload.organ_supports ?? [], risk_modifiers: payload.risk_modifiers ?? [] };
+  } else {
+    const r = computeAcuity(input.framework, payload);
+    if (r.errors.length) return { ok: false, status: 400, error: r.errors.join("; ") };
+    score = r.score; level = r.level; classification = r.level;
+    domains = payload;
+  }
+
   const p = await subjectPatient(admin, input.patientId);
   if (!p) return { ok: false, status: 404, error: "Patient not found" };
 
   const { data: prior } = await admin.from("op_acuity_assessments")
-    .select("score, level").eq("patient_id", p.id).order("assessed_at", { ascending: false }).limit(1).maybeSingle();
-  const significant = isSignificantChange(score, level, prior?.score ?? null, prior?.level ?? null);
+    .select("score, level, classification, framework").eq("patient_id", p.id).order("assessed_at", { ascending: false }).limit(1).maybeSingle();
+  // Significant vs a prior reading of the SAME instrument (cross-instrument
+  // deltas are not comparable — a unit transfer resets the baseline).
+  const comparable = prior && prior.framework === input.framework;
+  const significant = comparable
+    ? Math.abs(score - prior.score) >= (SIG_DELTA[input.framework] ?? 4) || (prior.classification ?? prior.level) !== classification
+    : false;
 
-  const { data, error } = await admin.from("op_acuity_assessments").insert({
+  const row: any = {
     hospital_id: p.hospital_id, department_id: p.department_id ?? null, unit_id: p.unit_id ?? null,
     patient_id: p.id, shift_id: input.shiftId ?? null,
-    framework: input.framework, score, level, domains: input.domains,
-    previous_score: prior?.score ?? null, significant_change: significant,
+    framework: input.framework, score, level, domains,
+    classification, category3, components,
+    previous_score: comparable ? prior.score : null, significant_change: significant,
     assessed_by: input.assessedBy ?? null, assessed_by_name: input.assessedByName ?? null,
     notes: input.notes?.trim() || null,
-  }).select().single();
+  };
+  if (reassessMinutes != null) row.reassess_by = new Date(Date.now() + reassessMinutes * 60e3).toISOString();
+
+  let { data, error } = await admin.from("op_acuity_assessments").insert(row).select().single();
+  if (error && /classification|category3|components|reassess_by|check constraint/i.test(String(error.message))) {
+    // Pre-157 fallback: the new columns/constraints are absent — persist the
+    // legacy shape (v2 instruments still need 157 for scores above 18).
+    if (score > 18) return { ok: false, status: 503, error: "Apply migration 157 to enable the v2 instruments." };
+    const legacy = await admin.from("op_acuity_assessments").insert({
+      hospital_id: row.hospital_id, department_id: row.department_id, unit_id: row.unit_id,
+      patient_id: row.patient_id, shift_id: row.shift_id, framework: input.framework === "pews" ? "ward" : input.framework === "ciaf" ? "icu" : input.framework,
+      score, level, domains, previous_score: row.previous_score, significant_change: significant,
+      assessed_by: row.assessed_by, assessed_by_name: row.assessed_by_name, notes: row.notes,
+    }).select().single();
+    data = legacy.data; error = legacy.error;
+  }
   if (error) return { ok: false, status: migrationMissingErr(error) ? 503 : 500, error: migrationMissingErr(error) ? "Apply migration 153 to enable assessments." : error.message };
 
   // Sync the operational spine: every surface reads op_patients.acuity_level.
@@ -196,19 +252,77 @@ export async function recordAcuity(admin: any, input: Ctx & { domains: any }): P
   return { ok: true, assessment: data, significant };
 }
 
-export async function recordWorkload(admin: any, input: Ctx & { items: any }): Promise<RecordResult> {
-  const { score, percentage, errors } = computeWorkload(input.framework, input.items);
-  if (errors.length) return { ok: false, status: 400, error: errors.join("; ") };
+// UNIT-ASM-001 server-side validation: the tool must be the one RESOLVED from
+// the patient's care location. Wrong-tool submissions are 409-rejected with
+// the right tool named. Legacy instruments are read-only history.
+export async function validateToolForPatient(admin: any, patientId: string, kind: "acuity" | "workload", framework: string): Promise<{ ok: true; unitType: string } | { ok: false; status: number; error: string }> {
+  const { data: p } = await admin.from("op_patients").select("id, op_beds!bed_id(bed_type)").eq("id", patientId).maybeSingle();
+  if (!p) return { ok: false, status: 404, error: "Patient not found" };
+  const unitType = resolveUnitType((p as any).op_beds?.bed_type ?? null);
+  const allowed = kind === "acuity" ? TOOLSET[unitType].acuity : TOOLSET[unitType].workload;
+  if (framework !== allowed) {
+    const label = kind === "acuity" ? TOOLSET[unitType].acuityLabel : TOOLSET[unitType].workloadLabel;
+    return { ok: false, status: 409, error: `Tool '${framework}' is not applicable to this patient's care location (${unitType.toUpperCase()}) — use ${label} ('${allowed}').` };
+  }
+  return { ok: true, unitType };
+}
+
+export async function recordWorkload(admin: any, input: Ctx & { items?: any; payload?: any; overrideLevel?: string | null; overrideReason?: string | null }): Promise<RecordResult> {
+  let score: number, percentage: number, level: string | null = null, ratio: string | null = null;
+  let items: any, modifiers: any = [];
+
+  if (input.framework === "ward12") {
+    const r = computeWard12({ domains: input.payload?.domains ?? input.payload, modifiers: input.payload?.modifiers });
+    if (r.errors.length) return { ok: false, status: 400, error: r.errors.join("; ") };
+    score = r.score;
+    // W-scale: percentage expresses the score against the 36-point domain max
+    // so cross-patient aggregation (nurse cumulative load) stays meaningful.
+    percentage = Math.round((r.score / 36) * 100 * 10) / 10;
+    level = r.level; ratio = r.ratio;
+    items = input.payload?.domains ?? input.payload; modifiers = input.payload?.modifiers ?? [];
+  } else {
+    const r = computeWorkload(input.framework, input.payload ?? input.items);
+    if (r.errors.length) return { ok: false, status: 400, error: r.errors.join("; ") };
+    score = r.score; percentage = r.percentage;
+    items = input.payload ?? input.items;
+    if (input.framework === "nas") {
+      const band = levelFromBands(score, I_LEVELS);
+      level = band.level; ratio = band.ratio;
+    }
+  }
+
+  // Professional-judgement override (mandatory reason; must be a valid level).
+  const bands = input.framework === "ward12" ? W_LEVELS : input.framework === "nas" ? I_LEVELS : null;
+  if (bands) {
+    const oErr = validateOverride(bands, input.overrideLevel, input.overrideReason);
+    if (oErr.length) return { ok: false, status: 400, error: oErr.join("; ") };
+  }
+
   const p = await subjectPatient(admin, input.patientId);
   if (!p) return { ok: false, status: 404, error: "Patient not found" };
 
-  const { data, error } = await admin.from("op_workload_assessments").insert({
+  const row: any = {
     hospital_id: p.hospital_id, department_id: p.department_id ?? null, unit_id: p.unit_id ?? null,
     patient_id: p.id, shift_id: input.shiftId ?? null,
-    framework: input.framework, items: input.items, score, percentage,
+    framework: input.framework, items, score, percentage,
+    level, ratio, modifiers,
+    override_level: input.overrideLevel || null,
+    override_reason: input.overrideLevel ? String(input.overrideReason ?? "").trim() : null,
     assessed_by: input.assessedBy ?? null, assessed_by_name: input.assessedByName ?? null,
     notes: input.notes?.trim() || null,
-  }).select().single();
+  };
+  let { data, error } = await admin.from("op_workload_assessments").insert(row).select().single();
+  if (error && /level|ratio|modifiers|override|check constraint/i.test(String(error.message))) {
+    // Pre-157 fallback: persist the legacy shape (ward12 needs 157's framework value).
+    if (input.framework === "ward12") return { ok: false, status: 503, error: "Apply migration 157 to enable the 12-domain ward workload." };
+    const legacy = await admin.from("op_workload_assessments").insert({
+      hospital_id: row.hospital_id, department_id: row.department_id, unit_id: row.unit_id,
+      patient_id: row.patient_id, shift_id: row.shift_id,
+      framework: input.framework, items, score, percentage,
+      assessed_by: row.assessed_by, assessed_by_name: row.assessed_by_name, notes: row.notes,
+    }).select().single();
+    data = legacy.data; error = legacy.error;
+  }
   if (error) return { ok: false, status: migrationMissingErr(error) ? 503 : 500, error: migrationMissingErr(error) ? "Apply migration 153 to enable assessments." : error.message };
 
   // The recording nurse's cumulative load = latest percentage per patient she
@@ -242,13 +356,19 @@ export async function loadMyAssessments(admin: any, userId: string) {
   const { data: asg } = await admin.from("op_patient_assignments")
     .select("assignment_type, op_patients!patient_id(id, label, acuity_level, isolation_status, operational_status, op_beds!bed_id(label, bed_type))")
     .eq("staff_id", userId).eq("status", "active").limit(50);
-  const patients = ((asg ?? []) as any[]).filter(a => a.op_patients).map(a => ({
-    ...a.op_patients,
-    assignment_type: a.assignment_type,
-    bed: a.op_patients.op_beds?.label ?? null,
-    // ICU framework default when the patient occupies a critical-care bed.
-    default_framework: a.op_patients.op_beds?.bed_type === "critical_care" ? "icu" : "ward",
-  }));
+  const patients = ((asg ?? []) as any[]).filter(a => a.op_patients).map(a => {
+    const unitType = resolveUnitType(a.op_patients.op_beds?.bed_type ?? null);
+    return {
+      ...a.op_patients,
+      assignment_type: a.assignment_type,
+      bed: a.op_patients.op_beds?.label ?? null,
+      // UNIT-ASM-001: the toolset is RESOLVED from the care location — the UI
+      // never offers a tool picker.
+      unit_type: unitType,
+      tools: TOOLSET[unitType],
+      default_framework: unitType,
+    };
+  });
   const ids = patients.map(p => p.id);
 
   let acuity: any[] = [], workload: any[] = [];
@@ -287,5 +407,6 @@ export async function loadMyAssessments(admin: any, userId: string) {
     acuityReassessed24h: within24h(acuity),
     workloadReassessed24h: within24h(workload),
     aggregate: agg,
+    loadedAt: Date.now(),   // pages compare reassess_by against this (render-pure)
   };
 }

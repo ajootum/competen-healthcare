@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { getCaller, isResponse, isStaff, isSuper, forbidden, badRequest, isAssignedToPatient } from "@/lib/api-auth";
 import { notify } from "@/lib/notify";
-import { recordAcuity, recordWorkload, loadMyAssessments, OVERLOAD_THRESHOLD } from "@/lib/hww/assessments";
+import { recordAcuity, recordWorkload, loadMyAssessments, validateToolForPatient, OVERLOAD_THRESHOLD } from "@/lib/hww/assessments";
 
 // Acuity & Workload assessments API (HWW-WARD/ICU, migration 153).
 //   GET → the caller's assessment lens (patients + history + workload aggregate)
@@ -65,9 +65,15 @@ export async function POST(req: Request) {
     assessedBy: c.userId, assessedByName: me?.full_name ?? null,
   };
 
+  // UNIT-ASM-001: the tool must be the one resolved from the patient's care
+  // location — wrong-tool submissions are rejected (409) with the right tool
+  // named. Users never pick tools manually.
+  const tool = await validateToolForPatient(admin, ctx.patientId, kind as "acuity" | "workload", ctx.framework);
+  if (!tool.ok) return NextResponse.json({ error: tool.error }, { status: tool.status });
+
   const r = kind === "acuity"
-    ? await recordAcuity(admin, { ...ctx, domains: b.domains })
-    : await recordWorkload(admin, { ...ctx, items: b.items });
+    ? await recordAcuity(admin, { ...ctx, payload: b.payload ?? b.domains })
+    : await recordWorkload(admin, { ...ctx, payload: b.payload ?? b.items, overrideLevel: b.override_level, overrideReason: b.override_reason });
   if (!r.ok) return NextResponse.json({ error: r.error }, { status: r.status });
 
   await admin.from("audit_log").insert({

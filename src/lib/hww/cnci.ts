@@ -8,7 +8,8 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 export type CnciInput = {
-  acuityScore: number | null;        // 0-18 measured (153); null → level fallback
+  acuityScore: number | null;        // measured score in ITS instrument's scale; null → level fallback
+  acuityMax?: number;                // the instrument's maximum (18 legacy, 15 PEWS, 100 CIAF)
   acuityLevel: string;               // stable|moderate|high|critical
   workloadPct: number | null;        // latest NAS/ward %
   pewsLatest: number | null;
@@ -57,10 +58,12 @@ const r0 = (n: number) => Math.round(n);
 export function computeCnci(i: CnciInput): CnciResult {
   const drivers: string[] = [];
 
-  // Acuity (0-30): measured score preferred, coarse level otherwise.
-  const acuityBase = i.acuityScore ?? LEVEL_SCORE[i.acuityLevel] ?? 7;
-  const acuity = Math.min(CNCI_WEIGHTS.acuity, (acuityBase / 18) * CNCI_WEIGHTS.acuity);
-  if (acuityBase >= 12) drivers.push(`acuity ${i.acuityScore != null ? `${i.acuityScore}/18` : i.acuityLevel}`);
+  // Acuity (0-30): measured score preferred (normalised by ITS instrument's
+  // maximum — 18 legacy, 15 PEWS, 100 CIAF), coarse level otherwise.
+  const max = i.acuityMax && i.acuityMax > 0 ? i.acuityMax : 18;
+  const acuityRatio = i.acuityScore != null ? Math.min(1, i.acuityScore / max) : (LEVEL_SCORE[i.acuityLevel] ?? 7) / 18;
+  const acuity = Math.min(CNCI_WEIGHTS.acuity, acuityRatio * CNCI_WEIGHTS.acuity);
+  if (acuityRatio >= 12 / 18) drivers.push(`acuity ${i.acuityScore != null ? `${i.acuityScore}/${max}` : i.acuityLevel}`);
 
   // Workload (0-15): 120% of one nurse's capacity saturates the component.
   const wl = i.workloadPct ?? 0;
@@ -110,9 +113,11 @@ export function pewsTrend(latest: number | null, prev: number | null): "up" | "d
 // Assemble a CnciInput from the row shapes the HWW loaders already produce —
 // one place that maps store rows to index signals, shared by the dashboard,
 // My Patients and the patient workspace.
+const ACUITY_MAX_BY_FRAMEWORK: Record<string, number> = { pews: 15, ciaf: 100, ward: 18, icu: 18 };
+
 export function cnciInputFromRows(args: {
   patient: { acuity_level: string; isolation_status?: string | null; risk_level?: string | null };
-  acuityLatest?: { score: number; significant_change?: boolean } | null;
+  acuityLatest?: { score: number; framework?: string; significant_change?: boolean } | null;
   workloadLatest?: { percentage: number } | null;
   observations?: any[];              // this patient's op_observations rows
   meds?: any[];                      // this patient's op_med_schedule rows (effective_status applied)
@@ -127,6 +132,7 @@ export function cnciInputFromRows(args: {
   const meds = args.meds ?? [];
   return {
     acuityScore: args.acuityLatest?.score ?? null,
+    acuityMax: ACUITY_MAX_BY_FRAMEWORK[args.acuityLatest?.framework ?? "ward"] ?? 18,
     acuityLevel: args.patient.acuity_level,
     workloadPct: args.workloadLatest != null ? Number(args.workloadLatest.percentage) : null,
     pewsLatest: recorded[0]?.ews_score ?? null,
