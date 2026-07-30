@@ -66,6 +66,7 @@ const NAV_SECTIONS: { section: string; items: { label: string; href: string; ico
     { label: "Office & Membership", href: "/competency-office/membership", icon: "🏛️" },        // CMO-003
     { label: "Workspace Integration", href: "/competency-office/integration", icon: "🔗" },     // CMO-005
     { label: "Configuration & Rules", href: "/competency-office/configuration", icon: "🔧" },   // CMO-020
+    { label: "Operating Model", href: "/competency-office/operating-model", icon: "🏛️" },       // CMO-017
   ] },
 ];
 // Flat list for the mobile nav strip.
