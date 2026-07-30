@@ -87,7 +87,7 @@ export default async function AssurancePlatformPage() {
   ];
   const ASSESS_EVIDENCE: Mod[] = [
     { code: "CAPA-003", icon: "🎯", label: "Assessment Quality Engine", desc: "Classical item analysis — per-question difficulty (p-value) and discrimination (upper-minus-lower), a flagged-item review queue and by-category quality — over the real quiz_attempts + questions store.", href: "/super-admin/assurance/assessment-quality", status: "real" },
-    { code: "CAPA-004", icon: "📎", label: "Evidence Integrity Platform", desc: "Authenticity, completeness and chain-of-custody of competency evidence. The evidence store is real; verification/tamper/retention columns are a migration away (partial).", href: "/educator/analytics/accreditation/evidence", status: "partial" },
+    { code: "CAPA-004", icon: "📎", label: "Evidence Integrity Platform", desc: "Verification lifecycle over competency evidence — a review queue (verify/flag/reject), integrity issues (expired / suspected duplicates) and an immutable chain-of-custody log. Real over evidence + integrity events (mig 149).", href: "/super-admin/assurance/evidence", status: "real" },
     { code: "CAPA-005", icon: "⚖️", label: "Assessor Reliability Engine", desc: "Per-assessor scoring behaviour — mean score, variance, leniency/severity vs peers and inter-rater agreement — over real assessments + skill_scores (assessor_id + score). A calibration watchlist flags outliers.", href: "/super-admin/assurance/assessor-reliability", status: "real" },
   ];
   const DRIFT_COMPLIANCE: Mod[] = [
@@ -128,9 +128,9 @@ export default async function AssurancePlatformPage() {
 
       <div className="flex flex-wrap items-center gap-2 mb-5 text-[11px]">
         {nReal > 0 && <span className="font-semibold text-teal-700 bg-teal-50 border border-teal-100 rounded-lg px-2.5 py-1">{nReal} live</span>}
-        <span className="font-semibold text-blue-600 bg-blue-50 border border-blue-100 rounded-lg px-2.5 py-1">{nLinked} linked (existing surface)</span>
-        <span className="font-semibold text-amber-600 bg-amber-50 border border-amber-100 rounded-lg px-2.5 py-1">{nPartial} partial</span>
-        <span className="font-semibold text-gray-400 bg-gray-50 border border-gray-100 rounded-lg px-2.5 py-1">{nGap} planned</span>
+        {nLinked > 0 && <span className="font-semibold text-blue-600 bg-blue-50 border border-blue-100 rounded-lg px-2.5 py-1">{nLinked} linked (existing surface)</span>}
+        {nPartial > 0 && <span className="font-semibold text-amber-600 bg-amber-50 border border-amber-100 rounded-lg px-2.5 py-1">{nPartial} partial</span>}
+        {nGap > 0 && <span className="font-semibold text-gray-400 bg-gray-50 border border-gray-100 rounded-lg px-2.5 py-1">{nGap} planned</span>}
       </div>
 
       <Layer title="Rules & Audit · CAPA-001/002" mods={RULES_AUDIT} />
