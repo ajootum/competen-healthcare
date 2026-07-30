@@ -113,7 +113,7 @@ export default async function CgrPlatformPage() {
     { code: "CGR-026", icon: "🩺", label: "Clinical Practice Intelligence & Outcome Correlation", desc: "Does validated competency track better outcomes? Owned by the Competency-to-Outcome correlation engine — cross-linked.", href: "/super-admin/performance/correlation", status: "linked" },
     { code: "CGR-027", icon: "🔄", label: "Organisational Learning & Knowledge Transformation", desc: "Turn incidents and audits into competency evolution. Owned by the Quality → Competency feedback loop — cross-linked.", href: "/competency-office/quality-feedback", status: "linked" },
     { code: "CGR-028", icon: "🎯", label: "Enterprise Readiness & Capability Assurance", desc: "Is the org/service ready to safely deliver? Owned by the Readiness rollup + enterprise governance — cross-linked.", href: "/competency-office/readiness", status: "linked" },
-    { code: "CGR-029", icon: "🛰️", label: "Strategic Decision Intelligence & Executive Assurance", desc: "Executive decision support on capability, risk and investment. Owned outright by the Hospital Executive workspace — cross-linked.", href: "/hospital-executive", status: "linked" },
+    { code: "CGR-029", icon: "🛰️", label: "Strategic Decision Intelligence & Executive Assurance", desc: "The board-level governance assurance statement — an assurance rating with the evidence behind it, the strategic risk register, regulatory exposure and investment priorities. Broad executive intelligence cross-links to HEX.", href: "/super-admin/cgr/executive", status: "real" },
     { code: "CGR-030", icon: "🌐", label: "Global Ecosystem Platform", desc: "Vision for a global inter-organisation competency-governance network. A narrative horizon — planned.", status: "gap" },
   ];
 
