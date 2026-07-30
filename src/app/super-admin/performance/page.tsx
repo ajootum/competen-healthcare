@@ -94,7 +94,7 @@ export default async function PerformancePlatformPage() {
   ];
   const EXEC: Mod[] = [
     { code: "CAPM-008", icon: "🛰️", label: "Executive Performance Intelligence", desc: "Strategic executive performance visibility & board reporting. The Hospital Executive workspace owns this outright — cross-linked.", href: "/hospital-executive/performance", status: "linked" },
-    { code: "CAPM-010", icon: "🤖", label: "AI Performance Intelligence", desc: "Predict trends, recommend interventions and explain KPI movement via the governed live-copilot pattern over the performance signals. Building here.", status: "gap" },
+    { code: "CAPM-010", icon: "🤖", label: "AI Performance Intelligence", desc: "A live copilot grounded in the balanced scorecard + the competency-to-outcome correlation — predicts, recommends and explains over real performance signals via the governed AI gateway. Treats correlation as directional, never causal.", href: "/super-admin/performance/ai", status: "real" },
   ];
 
   const all = [...METRICS, ...INTEL, ...IMPROVE, ...EXEC];
