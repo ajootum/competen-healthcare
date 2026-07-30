@@ -102,6 +102,53 @@ async function main() {
     const doctorish = await resolveHwwNavigation(admin, { ...wardCtx, roles: ["nurse"], professions: ["doctor"] });
     check(flat(doctorish).length === withRule.length, "an unknown profession still resolves (rules are additive, not exclusive)");
 
+    // ── 4b. Configuration registry (migration 159) ──
+    // The registry is what makes each entry DISCOVERABLE + configurable in the
+    // super-admin Designer. Runtime never depends on it, so this phase is
+    // skipped (not failed) when 159 has not been applied.
+    console.log("\n── Configuration registry (mig 159) ──");
+    const { data: regRows, error: regErr } = await admin.from("configuration_registry_objects")
+      .select("object_key, object_type, configurability_class, override_policy, default_enabled, status")
+      .like("object_key", "workspace.healthcare-worker%");
+    if (regErr) {
+      console.log(`  (registry unavailable: ${regErr.message})`);
+    } else if (!regRows?.length) {
+      console.log("  (migration 159 not applied — registry phase skipped)");
+    } else {
+      const reg = regRows as any[];
+      check(reg.length === 25, "workspace + 6 sections + 18 modules registered", `${reg.length}/25`);
+      check(reg.filter(r => r.object_type === "NAVIGATION_SECTION").length === 6, "6 navigation sections registered");
+      check(reg.filter(r => r.object_type === "MODULE").length === 18, "18 modules registered");
+
+      // Every catalogue entry must have a registry row (and vice versa) — a
+      // drift check that fails loudly if the two ever diverge.
+      // Registry object_key is 'workspace.<config_path>'; the resolver's config
+      // path is `${HWW_CONFIG_PREFIX}.${rule.key}` — compare on that.
+      const regKeys = new Set(reg.filter(r => r.object_type === "MODULE").map(r => r.object_key.replace(/^workspace\./, "")));
+      const missing = HWW_NAV_CATALOGUE.filter(c => !regKeys.has(`${HWW_CONFIG_PREFIX}.${c.key}`)).map(c => c.key);
+      const orphaned = [...regKeys].filter(k => !HWW_NAV_CATALOGUE.some(c => `${HWW_CONFIG_PREFIX}.${c.key}` === k));
+      check(missing.length === 0, "every catalogue module has a registry row", missing.join(", "));
+      check(orphaned.length === 0, "no orphaned registry rows", orphaned.join(", "));
+
+      // Safety policy: the modules a nurse must never lose are display-only.
+      const locked = ["clinical.escalations", "quality.incidents", "shift.assignment-inbox", "shift.my-patients"];
+      const lockedOk = locked.every(k => {
+        const r = reg.find(x => x.object_key === `workspace.healthcare-worker.${k}`);
+        return r?.configurability_class === "mandatory_locked" && r?.override_policy === "local_display_only";
+      });
+      check(lockedOk, "safety-critical modules are mandatory_locked / display-only", locked.join(", "));
+
+      // Close the loop: registry object + published override -> resolved runtime.
+      if (hid) {
+        const { resolveRuntime } = await import("../src/lib/config/runtime");
+        await putOverride("hospital", hid, `${HWW_CONFIG_PREFIX}.tools.reports`, { label: "Shift Reports" });
+        const rt: any = await resolveRuntime(admin, "workspace.healthcare-worker.tools.reports", { hospitalId: hid, roles: ["nurse"] });
+        check(rt.provisioned && rt.found, "registry object resolves through the WCE runtime");
+        check(rt.effective?.label === "Shift Reports", "runtime returns the hospital override's label", rt.effective?.label ?? "");
+        check((rt.trace ?? []).some((t: any) => t.level === "hospital"), "resolution trace records the hospital layer");
+      }
+    }
+
     // ── 5. Unit context from real beds ──
     console.log("\n── resolveUnitContext (real beds) ──");
     const { data: asg } = await admin.from("op_patient_assignments")
