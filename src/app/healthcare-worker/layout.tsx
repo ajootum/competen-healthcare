@@ -37,7 +37,7 @@ const NAV_GROUPS: { group: string; items: NavItem[] }[] = [
     { label: "Workload Assessment", href: "/healthcare-worker/workload",     icon: "⚖️" },
   ]},
   { group: "Care Coordination", items: [
-    { label: "Medication Summary",   href: "/healthcare-worker/medications",   icon: "💊", soon: true },
+    { label: "Medication Summary",   href: "/healthcare-worker/medications",   icon: "💊" },
     { label: "Nurse Concerns",       href: "/healthcare-worker/concerns",      icon: "🚩", badge: "concerns" },
     { label: "Safety & Escalation",  href: "/healthcare-worker/safety",        icon: "🛡️", badge: "alerts", soon: true },
     { label: "Communication",        href: "/healthcare-worker/communication", icon: "💬", badge: "unread", soon: true },
