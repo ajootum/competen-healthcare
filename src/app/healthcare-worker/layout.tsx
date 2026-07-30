@@ -33,8 +33,8 @@ const NAV_GROUPS: { group: string; items: NavItem[] }[] = [
   ]},
   { group: "Clinical Assessment", items: [
     { label: "Observations & PEWS", href: "/healthcare-worker/observations", icon: "📈", badge: "obsDue", soon: true },
-    { label: "Acuity Assessment",   href: "/healthcare-worker/acuity",       icon: "🌡️", soon: true },
-    { label: "Workload Assessment", href: "/healthcare-worker/workload",     icon: "⚖️", soon: true },
+    { label: "Acuity Assessment",   href: "/healthcare-worker/acuity",       icon: "🌡️" },
+    { label: "Workload Assessment", href: "/healthcare-worker/workload",     icon: "⚖️" },
   ]},
   { group: "Care Coordination", items: [
     { label: "Medication Summary",   href: "/healthcare-worker/medications",   icon: "💊", soon: true },
