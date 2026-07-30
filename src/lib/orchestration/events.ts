@@ -19,6 +19,12 @@ export const EVENT = {
   COMPETENCY_ASSIGNED: "competency.assigned",       // CDP-001 delivery orchestrator materialised a delivery
   CAMPAIGN_LAUNCHED: "campaign.launched",           // CDP-008 learning campaign broadcast
   SIMULATION_COMPLETED: "simulation.completed",     // CDP-005 practice session logged
+  // HWW-OPS-001 bedside operational event catalogue
+  OBSERVATION_COMPLETED: "observation.completed",   // op_observation recorded (incl. PEWS)
+  MEDICATION_ADMINISTERED: "medication.administered", // op_med_administration outcome recorded
+  ESCALATION_RAISED: "escalation.raised",           // op_escalation opened
+  CONCERN_RAISED: "concern.raised",                 // op_concern raised (HWW-ADD-001)
+  HANDOVER_ACCEPTED: "handover.accepted",           // op_handover_item responsibility transferred
 } as const;
 export type EventType = (typeof EVENT)[keyof typeof EVENT] | (string & {});
 

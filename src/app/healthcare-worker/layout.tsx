@@ -44,7 +44,7 @@ const NAV_GROUPS: { group: string; items: NavItem[] }[] = [
     { label: "Handover (SBAR)",      href: "/healthcare-worker/handover",      icon: "🔄" },
   ]},
   { group: "Intelligence", items: [
-    { label: "AI Copilot", href: "/healthcare-worker/copilot", icon: "✨", soon: true },
+    { label: "AI Copilot", href: "/healthcare-worker/copilot", icon: "✨" },
   ]},
 ];
 

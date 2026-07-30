@@ -50,6 +50,66 @@ export function emitApprovalDecided(admin: any, approval: any, actorId: string |
   });
 }
 
+// ── HWW-OPS-001 bedside event producers ──────────────────────────────────────
+// The operational spine's missing catalogue entries: every bedside act that
+// downstream intelligence (shift metrics, quality, competency evidence) feeds
+// on. All patient-linked → 'clinical' sensitivity; minimal payloads.
+
+export function emitObservationCompleted(admin: any, obs: any, actorId: string | null) {
+  return emitDomainEvent(admin, {
+    event_type: EVENT.OBSERVATION_COMPLETED,
+    subject_type: "op_observation", subject_id: obs.id,
+    hospital_id: obs.hospital_id ?? null,
+    actor_id: actorId,
+    sensitivity: "clinical",
+    payload: { patient_id: obs.patient_id ?? null, observation_type: obs.observation_type ?? null, ews_score: obs.ews_score ?? null, escalated: !!obs.escalation_triggered },
+  });
+}
+
+export function emitMedicationAdministered(admin: any, event: any, actorId: string | null) {
+  return emitDomainEvent(admin, {
+    event_type: EVENT.MEDICATION_ADMINISTERED,
+    subject_type: "op_med_administration", subject_id: event.id,
+    hospital_id: event.hospital_id ?? null,
+    actor_id: actorId,
+    sensitivity: "clinical",
+    payload: { patient_id: event.patient_id ?? null, outcome: event.outcome ?? null, delay_minutes: event.delay_minutes ?? 0, witnessed: !!event.witness_id, escalated: !!event.escalation_id },
+  });
+}
+
+export function emitEscalationRaised(admin: any, esc: any, actorId: string | null) {
+  return emitDomainEvent(admin, {
+    event_type: EVENT.ESCALATION_RAISED,
+    subject_type: "op_escalation", subject_id: esc.id,
+    hospital_id: esc.hospital_id ?? null,
+    actor_id: actorId,
+    sensitivity: "clinical",
+    payload: { patient_id: esc.patient_id ?? null, level: esc.level ?? null, escalation_type: esc.escalation_type ?? null },
+  });
+}
+
+export function emitConcernRaised(admin: any, concern: any, actorId: string | null) {
+  return emitDomainEvent(admin, {
+    event_type: EVENT.CONCERN_RAISED,
+    subject_type: "op_concern", subject_id: concern.id,
+    hospital_id: concern.hospital_id ?? null,
+    actor_id: actorId,
+    sensitivity: "clinical",
+    payload: { patient_id: concern.patient_id ?? null, category: concern.category ?? null, priority: concern.priority ?? null, ward_round: !!concern.ward_round, ss_review: !!concern.ss_review },
+  });
+}
+
+export function emitHandoverAccepted(admin: any, args: { itemId: string; patientId: string | null; hospitalId: string | null }, actorId: string | null) {
+  return emitDomainEvent(admin, {
+    event_type: EVENT.HANDOVER_ACCEPTED,
+    subject_type: "op_handover_item", subject_id: args.itemId,
+    hospital_id: args.hospitalId ?? null,
+    actor_id: actorId,
+    sensitivity: "clinical",
+    payload: { patient_id: args.patientId ?? null },
+  });
+}
+
 // A worker was deployed onto a shift via a GOVERNED OVERRIDE of the COMP-027 readiness gate (an unresolved
 // critical competency failure). This crosses the workspace boundary: the shift supervisor's action must reach
 // the Competency Office's remediation loop. Clinical sensitivity (patient-facing deployment). Consumed by the

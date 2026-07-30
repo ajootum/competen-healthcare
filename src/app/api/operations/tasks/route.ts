@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getCaller, isResponse, isStaff, isSuper, forbidden, badRequest, assertProfileScope } from "@/lib/api-auth";
 import { emitTaskCompleted } from "@/lib/orchestration/producers";
+import { evidenceFromTask } from "@/lib/hww/evidence";
 import { notify } from "@/lib/notify";
 
 // Clinical Tasks (COE Task domain). Supervisors assign; the assigned worker
@@ -99,6 +100,11 @@ export async function PATCH(req: Request) {
   const { data, error } = await admin.from("op_tasks").update(update).eq("id", id).select().single();
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   // PW-014 WS4/P2 — publish a domain event on completion (fail-soft; never blocks the request).
-  if (b.status === "completed") await emitTaskCompleted(admin, data, c.userId);
+  if (b.status === "completed") {
+    await emitTaskCompleted(admin, data, c.userId);
+    // HWW-TSK-001 Competency Evidence Generator: a completed PROCEDURAL task
+    // writes a pending skill-log entry for the performer (fail-soft, idempotent).
+    await evidenceFromTask(admin, data);
+  }
   return NextResponse.json(data);
 }

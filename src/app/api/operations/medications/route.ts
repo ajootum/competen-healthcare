@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { getCaller, isResponse, isStaff, isSuper, forbidden, badRequest, isAssignedToPatient } from "@/lib/api-auth";
 import { validateScheduleEntry, recordAdministration, loadMyMedications, effectiveStatus } from "@/lib/hww/medications";
+import { evidenceFromMedication } from "@/lib/hww/evidence";
+import { emitMedicationAdministered } from "@/lib/orchestration/producers";
 
 // Medication Coordination API (HWW-MED-001, migration 154). Operational only —
 // no prescribing, no dose calculation; dose is a display string from source.
@@ -97,6 +99,9 @@ export async function POST(req: Request) {
       hospital_id: r.event.hospital_id,
       new_value: { schedule_id: b.schedule_id, delay_minutes: r.delayMinutes, escalated: r.escalated, witnessed: !!b.witness_id },
     }).then((x: any) => x, () => {});
+    // HWW-OPS-001 event + TSK-001 evidence bridge (both fail-soft).
+    await emitMedicationAdministered(admin, r.event, c.userId);
+    if (r.event.outcome === "administered") await evidenceFromMedication(admin, r.event, r.schedule);
     return NextResponse.json({ ok: true, event: r.event, schedule: r.schedule, escalated: r.escalated, delay_minutes: r.delayMinutes }, { status: 201 });
   }
 

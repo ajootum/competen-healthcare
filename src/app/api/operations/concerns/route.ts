@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getCaller, isResponse, isStaff, isSuper, forbidden, badRequest, isAssignedToPatient } from "@/lib/api-auth";
 import { notify } from "@/lib/notify";
+import { emitConcernRaised } from "@/lib/orchestration/producers";
 import {
   validateConcern, loadMyConcerns, loadConcernQueue,
   ROUTE_DESTINATIONS, ACTIVE_CONCERN_STATUSES, TASK_PRIORITY_BY_CONCERN,
@@ -65,6 +66,8 @@ export async function POST(req: Request) {
   if (error) return migrationGate(error) ?? NextResponse.json({ error: error.message }, { status: 500 });
 
   await audit(c, "concern_raised", data.id, p.hospital_id, { category: b.category, priority: b.priority, ward_round: !!b.ward_round, ss_review: !!b.ss_review });
+  // HWW-OPS-001 catalogue event (fail-soft).
+  await emitConcernRaised(admin, { id: data.id, hospital_id: p.hospital_id, patient_id: p.id, category: b.category, priority: b.priority, ward_round: !!b.ward_round, ss_review: !!b.ss_review }, c.userId);
 
   // Push to the SSW: supervisor attention or high priority notifies the
   // caller's active-shift supervisor (real notification, only when one exists).

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getCaller, isResponse, isStaff, isSuper, forbidden, badRequest, assertProfileScope, myPatientIds } from "@/lib/api-auth";
+import { emitEscalationRaised } from "@/lib/orchestration/producers";
 import { notify } from "@/lib/notify";
 
 // Operational Escalations (COE Escalation domain — 5 levels).
@@ -64,6 +65,7 @@ export async function POST(req: Request) {
   }).select().single();
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   await admin.from("audit_log").insert({ actor_id: c.userId, action: "raise_escalation", entity_type: "op_escalation", entity_id: data.id, hospital_id: hospitalId, new_value: { level, type: b.escalation_type } });
+  await emitEscalationRaised(admin, data, c.userId);   // HWW-OPS-001 catalogue event (fail-soft)
   if (b.assigned_responder) await notify([b.assigned_responder], { type: "op_escalation", title: `Escalation (Level ${level})`, body: b.summary.trim(), href: "/admin/operations" });
   return NextResponse.json(data, { status: 201 });
 }

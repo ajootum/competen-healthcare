@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getCaller, isResponse, isSupervisor, isSuper, forbidden, badRequest, subjectHospital, isAssignedToPatient } from "@/lib/api-auth";
+import { emitHandoverAccepted } from "@/lib/orchestration/producers";
 import { JBI_DOMAINS, JBI_MAX, classify } from "@/lib/operations/handover";
 
 // Handover Centre mutation API (SSW-HC-004..011 + HWW-HND-001) over op_handovers /
@@ -93,6 +94,10 @@ export async function POST(req: Request) {
     const { error } = await c.admin.from("op_handover_items").update(patch).eq("id", it.id);
     if (error) return migrationGate(error) ?? NextResponse.json({ error: error.message }, { status: 500 });
     await audit(c, act, it.id, b.patient_label);
+    // HWW-OPS-001 catalogue event: responsibility transferred (fail-soft).
+    if (action === "accept") {
+      await emitHandoverAccepted(c.admin, { itemId: it.id, patientId: b.patient_id, hospitalId: await subjectHospital(c, "op_patients", b.patient_id) }, c.userId);
+    }
     return NextResponse.json({ ok: true, item_id: it.id });
   } catch (e: any) {
     return migrationGate(e) ?? NextResponse.json({ error: String(e?.message ?? e) }, { status: 500 });
