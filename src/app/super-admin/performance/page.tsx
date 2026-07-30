@@ -80,7 +80,7 @@ export default async function PerformancePlatformPage() {
 
   const METRICS: Mod[] = [
     { code: "CAPM-001", icon: "📐", label: "Performance Metrics Engine", desc: "Standardised competency-performance KPIs. The metadata-driven balanced-scorecard engine (pa_* metrics) is live in the Performance workspace; competency-specific KPIs are the next layer.", href: "/unit-manager/performance/scorecard", status: "linked" },
-    { code: "CAPM-005", icon: "🔗", label: "Competency-to-Outcome Correlation", desc: "The analytical core — does higher competency correlate with better outcomes? Correlates per-hospital competency coverage against real outcome rates (readmission, escalation, safe-staffing, incidents). Genuinely new; building here.", status: "gap" },
+    { code: "CAPM-005", icon: "🔗", label: "Competency-to-Outcome Correlation", desc: "The analytical core — does higher competency go with better outcomes? Pearson correlation of per-department competency coverage against real safety outcomes (observation compliance, escalation rate), honest about ecological/small-N.", href: "/super-admin/performance/correlation", status: "real" },
   ];
   const INTEL: Mod[] = [
     { code: "CAPM-002", icon: "🧑‍⚕️", label: "Individual Performance Intelligence", desc: "A 360° per-worker performance profile fusing competency, assessment, learning and outcomes. Per-nurse pieces exist (COMP-012, passport); the fused profile is the gap.", href: "/competency-office/analytics", status: "partial" },
