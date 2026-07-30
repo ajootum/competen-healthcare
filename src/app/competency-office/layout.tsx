@@ -36,6 +36,7 @@ const NAV_SECTIONS: { section: string; items: { label: string; href: string; ico
     { label: "Compliance Centre", href: "/competency-office/compliance", icon: "✔️" },
     { label: "Accreditation Mapping", href: "/competency-office/accreditation", icon: "🏅" },
     { label: "Workforce Readiness", href: "/competency-office/readiness", icon: "🎯" },
+    { label: "Workforce Mapping", href: "/competency-office/workforce-mapping", icon: "🗺️" },   // CMO-007
     { label: "Readiness States", href: "/competency-office/readiness-states", icon: "🚦" },     // COMP-019
   ] },
   { section: "Credential Management", items: [
