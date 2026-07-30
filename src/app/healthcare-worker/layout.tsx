@@ -9,61 +9,20 @@ import SidebarToggle from "@/components/SidebarToggle";
 import { highestRole, type AppRole } from "@/lib/roles";
 import { workspaceLinksForUser } from "@/lib/workspace-links";
 import { buildShiftCard, loadShiftWidget } from "@/lib/hww/my-shift";
+import { resolveHwwNavigation, resolveUnitContext, type ResolvedItem } from "@/lib/hww/navigation";
+import { orgRolesOf } from "@/lib/roles";
 
 // Healthcare Worker Workspace shell (HWW-001 / ARCH-002 / UI-001) — the
-// bedside nurse's patient-centred workspace. UI-001 is the authoritative
-// sidebar: WORKFLOW-FIRST sections (Home / Shift / Clinical / Communication /
-// Quality Events / Intelligence / Tools), My Patients ahead of the Assignment
-// Inbox, live badges (tasks, medications, messages, escalations, inbox,
-// concerns), a rich CURRENT SHIFT widget (patients, tasks, medications due,
-// break status, progress), a user PROFILE menu replacing the bare Personal
-// Workspace link, and the Clinical AI Copilot as a persistent floating action.
-// Config-driven role-adaptive navigation (Doctor/Therapist/Pharmacist
-// variants) is the platform's next step — this ships the nurse workspace per
-// the spec's structure. Gate: nurse (primary), assessor tier, admins.
+// bedside nurse's patient-centred workspace. The sidebar is GENERATED from
+// workspace configuration (src/lib/hww/navigation.ts + the WCE override
+// store), not hard-coded: workflow-first sections, role- and unit-adaptive
+// visibility, and hospital-level enable/rename/reorder without a deployment.
+// Plus live badges, the CURRENT SHIFT widget (patients, tasks, medications
+// due, break status, progress), a user PROFILE menu, and the Clinical AI
+// Copilot as a persistent floating action.
+// Gate: nurse (primary), assessor tier, admins.
 /* eslint-disable @typescript-eslint/no-explicit-any */
-type NavItem = { label: string; href?: string; icon: string; exact?: boolean; soon?: boolean; badge?: string };
-type NavEntry = { item: NavItem } | { group: string; icon?: string; items: NavItem[] };
-type NavSection = { section: string | null; entries: NavEntry[] };
-
-// HWW-UI-001 sidebar — sections in workflow order; collapsible groups only
-// where the spec shows them (Clinical Assessment).
-const NAV: NavSection[] = [
-  { section: null, entries: [
-    { item: { label: "Home", href: "/healthcare-worker", icon: "🏠", exact: true } },
-  ]},
-  { section: "Shift", entries: [
-    { item: { label: "My Patients", href: "/healthcare-worker/patients", icon: "🧑‍⚕️" } },
-    { item: { label: "My Tasks", href: "/healthcare-worker/tasks", icon: "✅", badge: "myTasks" } },
-    { item: { label: "Medication Schedule", href: "/healthcare-worker/medications", icon: "💊", badge: "medsDue" } },
-    { item: { label: "Assignment Inbox", href: "/healthcare-worker/inbox", icon: "📥", badge: "inbox" } },
-    { item: { label: "Handover", href: "/healthcare-worker/handover", icon: "🔄" } },
-  ]},
-  { section: "Clinical", entries: [
-    { group: "Clinical Assessment", items: [
-      { label: "Observations & PEWS", href: "/healthcare-worker/observations", icon: "📈", badge: "obsDue" },
-      { label: "Acuity Assessment", href: "/healthcare-worker/acuity", icon: "🌡️" },
-      { label: "Workload Assessment", href: "/healthcare-worker/workload", icon: "⚖️" },
-    ]},
-    { item: { label: "Escalations", href: "/healthcare-worker/safety", icon: "🚨", badge: "alerts" } },
-    { item: { label: "Procedures", icon: "🩹", soon: true } },
-  ]},
-  { section: "Communication", entries: [
-    { item: { label: "Messages", href: "/healthcare-worker/communication", icon: "💬", badge: "unread" } },
-    { item: { label: "Unit Announcements", href: "/healthcare-worker/communication#announcements", icon: "📣" } },
-  ]},
-  { section: "Quality Events", entries: [
-    { item: { label: "Incidents", href: "/healthcare-worker/safety#incidents", icon: "🚩" } },
-    { item: { label: "Nurse Concerns", href: "/healthcare-worker/concerns", icon: "⚠️", badge: "concerns" } },
-  ]},
-  { section: "Intelligence", entries: [
-    { item: { label: "AI Copilot", href: "/healthcare-worker/copilot", icon: "✨" } },
-  ]},
-  { section: "Tools", entries: [
-    { item: { label: "Reports", href: "/healthcare-worker/shift-summary", icon: "📋" } },
-    { item: { label: "Settings", href: "/dashboard/preferences", icon: "⚙️" } },
-  ]},
-];
+type NavItem = ResolvedItem;
 
 const ALLOWED = ["nurse", "assessor", "hospital_admin", "super_admin"];
 const linkCls = "flex items-center gap-2.5 px-3 py-1.5 rounded-lg text-[13px] text-emerald-100/70 hover:bg-emerald-800/50 hover:text-white transition-colors";
@@ -75,7 +34,7 @@ export default async function HealthcareWorkerLayout({ children }: { children: R
   if (!user) redirect("/login");
 
   const admin = createAdminClient();
-  const { data: profile } = await admin.from("profiles").select("full_name, role, roles, hospital_id").eq("id", user.id).single();
+  const { data: profile } = await admin.from("profiles").select("full_name, role, roles, org_role, org_roles, hospital_id").eq("id", user.id).single();
   const userRoles: AppRole[] = (profile?.roles?.length ? profile.roles : [profile?.role]).filter(Boolean) as AppRole[];
   const cookieStore = await cookies();
   const activeRole = (cookieStore.get("active_role")?.value ?? highestRole(userRoles)) as AppRole;
@@ -110,7 +69,7 @@ export default async function HealthcareWorkerLayout({ children }: { children: R
       ? admin.from("op_safety_alerts").select("id", { count: "exact", head: true }).in("patient_id", myPatientIds).eq("active", true)
       : Promise.resolve({ count: 0, error: null }),
     admin.from("op_shift_staff")
-      .select("status, op_shifts!shift_id(id, shift_date, shift_type, status, starts_at, ends_at, units!unit_id(name), departments!department_id(name))")
+      .select("status, op_shifts!shift_id(id, shift_date, shift_type, status, starts_at, ends_at, unit_id, units!unit_id(name), departments!department_id(name))")
       .eq("staff_id", user.id).limit(20),
     admin.from("op_patient_assignments").select("id", { count: "exact", head: true }).eq("staff_id", user.id).eq("status", "pending_acceptance"),
     admin.from("op_patient_transfers").select("id", { count: "exact", head: true }).eq("receiving_staff_id", user.id).eq("status", "awaiting_acceptance"),
@@ -128,18 +87,30 @@ export default async function HealthcareWorkerLayout({ children }: { children: R
   const groupBadge = (items: NavItem[]) =>
     [...new Set(items.filter(i => i.href && !i.soon && i.badge).map(i => i.badge!))].reduce((n, k) => n + (badges[k] ?? 0), 0);
 
+  // Config-driven navigation (UI-001): catalogue + WCE overrides, filtered by
+  // the caller's roles/professions and their resolved unit context.
+  const unitType = await resolveUnitContext(admin, user.id, activeShift?.unit_id ?? null);
+  const { sections: NAV } = await resolveHwwNavigation(admin, {
+    hospitalId: profile?.hospital_id ?? null,
+    unitId: activeShift?.unit_id ?? null,
+    userId: user.id,
+    roles: userRoles,
+    professions: orgRolesOf(profile as any).filter(Boolean) as string[],
+    unitType,
+  });
+
   const allItems: NavItem[] = NAV.flatMap(s => s.entries.flatMap(e => ("item" in e ? [e.item] : e.items)));
   const mobileItems = [...new Map(allItems.filter(i => i.href && !i.soon).map(i => [i.href!.split(/[?#]/)[0], i] as const)).values()];
 
-  const renderItem = ({ label, href, icon, exact, soon, badge }: NavItem) => soon || !href ? (
-    <span key={label} title={`${label} — coming soon`} data-sb-item
+  const renderItem = ({ key, label, href, icon, exact, soon, badge }: NavItem) => soon || !href ? (
+    <span key={key} title={`${label} — coming soon`} data-sb-item
       className="flex items-center gap-2.5 px-3 py-1.5 rounded-lg text-[13px] text-emerald-100/25 cursor-default select-none">
       <span className="w-5 text-center text-sm leading-none opacity-60">{icon}</span>
       <span className="flex-1" data-sb-label>{label}</span>
       <span className="text-[8px] font-bold uppercase tracking-wider bg-emerald-950 text-emerald-400/40 rounded px-1 py-0.5" data-sb-label>soon</span>
     </span>
   ) : (
-    <NavLink key={label} href={href} icon={icon} label={label} exact={exact}
+    <NavLink key={key} href={href} icon={icon} label={label} exact={exact}
       badge={badge ? badges[badge] : undefined}
       className={linkCls} activeClassName={activeCls} />
   );
