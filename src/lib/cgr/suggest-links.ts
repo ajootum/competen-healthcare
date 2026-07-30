@@ -52,7 +52,7 @@ export async function suggestLearningLinks(
   opts: { userId?: string | null; hospitalId?: string | null; createdByName?: string | null; dryRun?: boolean } = {},
 ): Promise<SuggestOutcome> {
   const [incRes, linkRes, compRes] = await Promise.all([
-    admin.from("op_incidents").select("id, incident_type, severity, description, created_at").order("created_at", { ascending: false }).limit(300),
+    admin.from("op_incidents").select("id, hospital_id, incident_type, severity, description, created_at").order("created_at", { ascending: false }).limit(300),
     admin.from("competency_learning_links").select("source_id").limit(2000),
     admin.from("framework_competencies").select("id, name, code").order("name").limit(MAX_COMPS),
   ]);
@@ -162,7 +162,10 @@ export async function suggestLearningLinks(
     const s: any = sigById.get(p.incident_id);
     const conf = typeof p.confidence === "number" ? Math.max(0, Math.min(1, p.confidence)) : null;
     const row = {
-      hospital_id: opts.hospitalId ?? null,
+      // Scope to the SIGNAL's hospital, not the caller's. A link about incident X belongs to X's tenant
+      // regardless of who ran the suggester — using the caller's hospital left super-admin runs unscoped
+      // (hospitalId is null for super_admin), so links leaked across tenant boundaries in reads and counts.
+      hospital_id: s?.hospital_id ?? opts.hospitalId ?? null,
       source_type: "incident",
       source_id: p.incident_id,
       source_ref: `${(s?.incident_type ?? "event").replace(/_/g, " ")}${s?.description ? ` — ${String(s.description).slice(0, 60)}` : ""}`,

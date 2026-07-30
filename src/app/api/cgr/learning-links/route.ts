@@ -31,8 +31,17 @@ export async function POST(req: Request) {
 
   const { data: me } = await c.admin.from("profiles").select("full_name").eq("id", c.userId).single();
 
+  // Scope to the SIGNAL's hospital where the signal is a real record — a link about incident X belongs to X's
+  // tenant regardless of who raised it. Falls back to the caller's hospital for unstructured signals
+  // (guidelines, regulatory changes), which have no tenant of their own.
+  let scopeHospital: string | null = c.hospitalId;
+  if (sourceId && (sourceType ?? "incident") === "incident") {
+    const { data: src } = await c.admin.from("op_incidents").select("hospital_id").eq("id", sourceId).maybeSingle();
+    if (src?.hospital_id) scopeHospital = src.hospital_id as string;
+  }
+
   const row: any = {
-    hospital_id: c.hospitalId,
+    hospital_id: scopeHospital,
     source_type: sourceType ?? "incident",
     source_id: sourceId ?? null,
     source_ref: sourceRef ?? null,

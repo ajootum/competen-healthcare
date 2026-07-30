@@ -33,7 +33,9 @@ async function main() {
 
   console.log(`── Running suggester (${write ? "LIVE — will insert" : "DRY RUN — no writes"}) ──`);
   const t0 = Date.now();
-  const r = await suggestLearningLinks(admin, { userId: null, hospitalId: null, createdByName: "harness", dryRun: !write });
+  // No human ran this interactively, so created_by stays null and the name says exactly what produced the row.
+  // Attributing it to a real person would be false provenance on something that becomes governance evidence.
+  const r = await suggestLearningLinks(admin, { userId: null, hospitalId: null, createdByName: "AI suggester (automated run)", dryRun: !write });
   const secs = ((Date.now() - t0) / 1000).toFixed(1);
 
   if (!r.ok) { console.error("FAILED:", r.error); process.exit(1); }
