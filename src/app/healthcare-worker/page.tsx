@@ -1,141 +1,75 @@
 import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import Link from "next/link";
-import { loadMyShift, loadWardContext } from "@/lib/hww/my-shift";
-import {
-  card, label, titleCase, fmtTime, fmtDateLong, fmtWhen,
-  AcuityChip, RiskChip, PrioChip, EwsBadge, StatCard, SectionCard, Empty, ewsColor,
-} from "@/lib/hww/kit";
+import { loadShiftCommandCentre } from "@/lib/hww/command-centre";
+import { buildShiftCard } from "@/lib/hww/my-shift";
+import { cnciTone } from "@/lib/hww/cnci";
+import { card, label, titleCase, fmtTime, fmtWhen, AcuityChip, Chip, StatCard, SectionCard, Empty, PrioChip, ewsColor } from "@/lib/hww/kit";
 
-// Ward Dashboard (HWW-WARD-001 §4.1) — the bedside nurse's landing picture:
-// my current shift, my patient assignment ranked by clinical signal, the
-// ward context around me (census, acuity mix, occupancy, who is on duty),
-// my open tasks and every active alert on my patients. Server-rendered over
-// the same loadMyShift engine the /api/operations/my-shift route serves.
-// Real op_* data only — nothing here is fabricated.
+// Shift Dashboard — the Shift Command Centre (HWW-ARCH-002 S5): greeting +
+// shift context, six operational KPIs, the CNCI-ranked My Patients table
+// (acuity, workload, priority index, next due, trend, reassessment prompts),
+// today's REAL timeline (shift window, ward rounds, due clusters), the
+// deterministic AI shift briefing, safety alerts, due queues, tasks and
+// this-shift performance. Every number is a live operational record.
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 export const dynamic = "force-dynamic";
 
-export default async function WardDashboard() {
+const TREND = { up: { icon: "↗", cls: "text-red-600" }, down: { icon: "↘", cls: "text-green-600" }, flat: { icon: "→", cls: "text-gray-400" } } as const;
+const TL_DOT: Record<string, string> = { shift: "bg-emerald-500", round: "bg-indigo-400", due: "bg-amber-400", handover: "bg-purple-400" };
+
+export default async function ShiftCommandCentre() {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect("/login");
   const admin = createAdminClient();
+  const { data: profile } = await admin.from("profiles").select("full_name").eq("id", user.id).single();
 
-  const data = await loadMyShift(admin, user.id);
-  const ward = await loadWardContext(admin, data.shift);
-  const { shift, patients, tasks, observations, safetyAlerts, escalations } = data;
-
-  const latestEws = (pid: string) => {
-    const w = observations.filter((o: any) => o.patient_id === pid && o.ews_score != null);
-    if (!w.length) return null;
-    return w.sort((a: any, b: any) => new Date(b.recorded_at ?? b.created_at ?? 0).getTime() - new Date(a.recorded_at ?? a.created_at ?? 0).getTime())[0].ews_score as number;
-  };
-  const dueObs = (pid: string) => observations.filter((o: any) => o.patient_id === pid && (o.status === "due" || o.status === "overdue")).length;
-  const patientAlerts = (pid: string) => safetyAlerts.filter((a: any) => a.patient_id === pid).length;
-
-  const obsDue = observations.filter((o: any) => o.status === "due").length;
-  const obsOverdue = observations.filter((o: any) => o.status === "overdue").length;
-  const urgentTasks = tasks.filter((t: any) => t.priority === "urgent").length;
-  const highAcuity = patients.filter((a: any) => ["high", "critical"].includes(a.op_patients.acuity_level)).length;
-  const onDuty = !!shift && (shift.duty_status === "on_duty" || shift.status === "active");
-
-  // Severity-ranked alert feed from real signals (safety alerts, escalations,
-  // critical acuity, overdue observations) — same composition as HWW-012.
-  const alertItems: { sev: "high" | "med" | "low"; label: string; note?: string | null; when?: string | null }[] = [
-    ...safetyAlerts.map((a: any) => ({ sev: (a.severity === "high" ? "high" : a.severity === "medium" ? "med" : "low") as any, label: `${titleCase(a.category)} — ${a.op_patients?.label ?? "patient"}`, note: a.note, when: a.created_at })),
-    ...escalations.map((e: any) => ({ sev: (e.level >= 4 ? "high" : e.level >= 2 ? "med" : "low") as any, label: `Escalation L${e.level} — ${e.op_patients?.label ?? ""}`, note: e.summary, when: e.created_at })),
-    ...patients.filter((a: any) => a.op_patients.acuity_level === "critical").map((a: any) => ({ sev: "high" as any, label: `${a.op_patients.label} — Critical acuity`, note: a.op_patients.op_beds?.label ?? null, when: null })),
-    ...observations.filter((o: any) => o.status === "overdue").map((o: any) => ({ sev: "med" as any, label: `Observation overdue — ${o.op_patients?.label ?? ""}`, note: titleCase(o.observation_type), when: o.due_at })),
-  ];
-  const sevRank = { high: 0, med: 1, low: 2 };
-  alertItems.sort((a, b) => sevRank[a.sev] - sevRank[b.sev]);
-
-  const shiftName = shift?.shift_type ? titleCase(shift.shift_type) + (/(shift|call)/i.test(shift.shift_type) ? "" : " Shift") : null;
+  const d = await loadShiftCommandCentre(admin, user.id);
+  const shiftCard = buildShiftCard(d.shift ? { starts_at: d.shift.starts_at, ends_at: d.shift.ends_at, shift_type: d.shift.shift_type, units: { name: d.shift.unit }, departments: { name: d.shift.department } } : null);
+  const firstName = (profile?.full_name ?? "").split(" ")[0] || "there";
+  const onDuty = !!d.shift && (d.shift.duty_status === "on_duty" || d.shift.status === "active");
+  const obsOverdueRows = d.observations.filter((o: any) => o.status === "overdue");
+  const tasksTop = d.tasks.slice(0, 5);
 
   return (
     <div className="space-y-5">
-      {/* Header + shift context */}
+      {/* Greeting + shift context */}
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Ward Dashboard</h1>
-          <p className="text-sm text-gray-500 mt-1">Your shift, your patients and the ward around you — live operational data.</p>
+          <h1 className="text-2xl font-bold text-gray-900">{d.greeting}, {firstName} 👋</h1>
+          <p className="text-sm text-gray-500 mt-1">Here&apos;s your shift overview — CNCI drives the order; deal with the top of the table first.</p>
         </div>
-        {shift ? (
-          <div className="flex items-center gap-3 bg-white border border-gray-200 rounded-xl px-4 py-2.5">
-            <span className="text-lg">🗓️</span>
-            <div className="leading-tight">
-              <p className="text-sm font-semibold text-gray-800">{fmtDateLong(shift.shift_date)}</p>
-              <p className="text-xs text-gray-500">
-                {shiftName ?? "Shift"}{shift.starts_at ? ` · ${fmtTime(shift.starts_at)} – ${fmtTime(shift.ends_at)}` : ""}
-                {shift.unit || shift.department ? ` · ${shift.unit ?? shift.department}` : ""}
-              </p>
-            </div>
-            <span className={`text-[11px] font-semibold px-2.5 py-1 rounded-full ${onDuty ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-500"}`}>{onDuty ? "On Duty" : "Off Duty"}</span>
-          </div>
-        ) : (
-          <Link href="/dashboard/shift" className="text-sm text-emerald-700 hover:underline self-center">Interactive shift view →</Link>
-        )}
+        <div className="flex items-center gap-2">
+          {d.shift && (
+            <span className={`text-[11px] font-semibold px-2.5 py-1 rounded-full ${onDuty ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-500"}`}>{onDuty ? "In Progress" : "Off Duty"}</span>
+          )}
+          <Link href="/healthcare-worker/shift-summary" className="px-3.5 py-2 rounded-lg border border-red-200 text-red-700 text-sm font-medium hover:bg-red-50">⏻ End-of-shift →</Link>
+        </div>
       </div>
 
-      {!shift && (
+      {!d.shift && (
         <div className={card}>
           <p className="font-semibold text-gray-800">You are not currently deployed on an active shift.</p>
-          <p className="text-sm text-gray-500 mt-1">When your supervisor rosters you onto a shift in the Shift Operations Centre, your unit, supervisor and ward context appear here. Any patients or tasks already assigned to you are shown below.</p>
+          <p className="text-sm text-gray-500 mt-1">When your supervisor rosters you on, your full command centre appears here. Anything already assigned to you is shown below.</p>
         </div>
       )}
 
-      {/* KPI row — my own operational load */}
-      <div className="grid sm:grid-cols-2 xl:grid-cols-4 gap-4">
-        <StatCard icon="🧑‍⚕️" title="My Patients" value={patients.length}
-          sub={highAcuity > 0 ? <span className="text-orange-600 font-medium">{highAcuity} high/critical acuity</span> : "No high-acuity patients"} />
-        <StatCard icon="✅" title="Open Tasks" value={tasks.length}
-          sub={urgentTasks > 0 ? <span className="text-red-600 font-medium">{urgentTasks} urgent</span> : "None urgent"} />
-        <StatCard icon="📈" title="Observations" value={obsDue + obsOverdue} tone={obsOverdue > 0 ? "text-orange-600" : undefined}
-          sub={obsOverdue > 0 ? <span className="text-red-600 font-medium">{obsOverdue} overdue</span> : `${obsDue} due`} />
-        <StatCard icon="🛡️" title="Active Alerts" value={safetyAlerts.length + escalations.length} tone={safetyAlerts.length + escalations.length > 0 ? "text-red-600" : undefined}
-          sub={`${safetyAlerts.length} safety · ${escalations.length} escalations`} />
+      {/* Six KPI tiles (mockup row) */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-3">
+        <StatCard icon="🧑‍⚕️" title="Assigned Patients" value={d.kpis.patients} sub={<Link href="/healthcare-worker/patients" className="text-emerald-700 hover:underline">View all patients →</Link>} />
+        <StatCard icon="🔴" title="High Priority" value={d.kpis.highPriority} tone={d.kpis.highPriority > 0 ? "text-red-600" : undefined} sub="CNCI high / critical" />
+        <StatCard icon="💊" title="Medications Due" value={d.kpis.medsDueSoon} tone={d.meds.kpis.overdue > 0 ? "text-red-600" : undefined} sub={d.meds.kpis.overdue ? `${d.meds.kpis.overdue} overdue` : "in the due window"} />
+        <StatCard icon="📈" title="Obs Overdue" value={d.kpis.obsOverdue} tone={d.kpis.obsOverdue > 0 ? "text-orange-600" : undefined} sub={<Link href="/healthcare-worker/observations" className="text-emerald-700 hover:underline">view queue →</Link>} />
+        <StatCard icon="🛡️" title="Safety Alerts" value={d.kpis.safetyAlerts} tone={d.kpis.safetyAlerts > 0 ? "text-red-600" : undefined} sub="alerts + escalations" />
+        <StatCard icon="🕐" title="Shift Time" value={shiftCard ? shiftCard.window : "—"} sub={shiftCard ? `${shiftCard.remaining} remaining` : "not deployed"} />
       </div>
 
-      {/* Ward context — the unit around me (real census/beds/staffing) */}
-      {ward && (
-        <div className={card}>
-          <div className="flex items-center gap-2 mb-3"><span className="text-lg">🏥</span><span className={label}>Ward Context — {shift?.unit ?? shift?.department ?? "My Unit"}</span></div>
-          <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            <div>
-              <p className="text-xl font-bold text-gray-900 tabular-nums">{ward.census}</p>
-              <p className="text-xs text-gray-500">patients on the ward{ward.isolation > 0 ? ` · ${ward.isolation} in isolation` : ""}</p>
-            </div>
-            <div>
-              <p className="text-sm text-gray-600 mb-1">Acuity mix</p>
-              <div className="flex flex-wrap gap-1">
-                {(["critical", "high", "moderate", "stable"] as const).filter(k => ward.acuity[k] > 0).map(k => (
-                  <span key={k} className="inline-flex items-center gap-1 text-[11px]"><AcuityChip level={k} /><span className="tabular-nums text-gray-600">{ward.acuity[k]}</span></span>
-                ))}
-                {Object.values(ward.acuity).every(v => v === 0) && <span className="text-xs text-gray-400">No admitted patients recorded</span>}
-              </div>
-            </div>
-            <div>
-              {ward.beds ? (
-                <>
-                  <p className="text-xl font-bold text-gray-900 tabular-nums">{ward.beds.occupied}<span className="text-sm text-gray-400 font-normal">/{ward.beds.total}</span></p>
-                  <p className="text-xs text-gray-500">beds occupied</p>
-                </>
-              ) : <p className="text-xs text-gray-400">Bed register is department-level for this shift.</p>}
-            </div>
-            <div>
-              <p className="text-xl font-bold text-gray-900 tabular-nums">{ward.onDuty}<span className="text-sm text-gray-400 font-normal">/{ward.staff.length}</span></p>
-              <p className="text-xs text-gray-500">staff on duty · {ward.staff.filter(x => x.role === "nurse").length} nurses{shift?.supervisor ? ` · supervisor ${shift.supervisor}` : ""}</p>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* My patients */}
-      <SectionCard icon="👥" title="My Patient Assignment" count={patients.length}
-        right={<Link href="/dashboard/shift" className="text-xs text-emerald-700 hover:underline">Record care →</Link>}>
-        {patients.length === 0 ? (
+      {/* CNCI-ranked My Patients table */}
+      <SectionCard icon="👥" title="My Patients" count={d.rows.length}
+        right={<Link href="/healthcare-worker/patients" className="text-xs text-emerald-700 hover:underline">View all →</Link>}>
+        {d.rows.length === 0 ? (
           <Empty>No patients assigned. Your coordinator allocates patients in the Clinical Operations Centre.</Empty>
         ) : (
           <div className="overflow-x-auto -mx-1">
@@ -143,80 +77,165 @@ export default async function WardDashboard() {
               <thead>
                 <tr className="text-left text-[11px] uppercase tracking-wide text-gray-400 border-b border-gray-100">
                   <th className="py-1.5 pr-2 font-medium">Patient</th>
-                  <th className="py-1.5 px-1 font-medium">Bed</th>
                   <th className="py-1.5 px-1 font-medium">Acuity</th>
+                  <th className="py-1.5 px-1 font-medium">Workload</th>
+                  <th className="py-1.5 px-1 font-medium">CNCI (Priority)</th>
                   <th className="py-1.5 px-1 font-medium">PEWS</th>
-                  <th className="py-1.5 px-1 font-medium">Risk</th>
-                  <th className="py-1.5 px-1 font-medium">Obs</th>
-                  <th className="py-1.5 pl-1 font-medium">Flags</th>
+                  <th className="py-1.5 px-1 font-medium">Next Due</th>
+                  <th className="py-1.5 pl-1 font-medium">Trend</th>
                 </tr>
               </thead>
               <tbody>
-                {patients.map((a: any) => {
-                  const p = a.op_patients; const ews = latestEws(p.id); const due = dueObs(p.id); const al = patientAlerts(p.id);
+                {d.rows.map((r: any) => {
+                  const p = r.patient;
+                  const t = r.trend ? TREND[r.trend as keyof typeof TREND] : null;
                   return (
-                    <tr key={p.id} className="border-b border-gray-50">
+                    <tr key={p.id} className="border-b border-gray-50 hover:bg-gray-50/60">
                       <td className="py-2 pr-2">
-                        <span className="font-medium text-gray-800">{p.label}</span>
-                        {a.assignment_type === "primary" && <span className="ml-1.5 text-[9px] text-emerald-600 uppercase">primary</span>}
+                        <Link href={`/healthcare-worker/patients/${p.id}`} className="font-medium text-gray-800 hover:text-emerald-700">
+                          {p.op_beds?.label ? `${p.op_beds.label} · ` : ""}{p.label}
+                        </Link>
+                        {r.reassess.due && <span className="block text-[9px] text-orange-600 font-semibold" title={r.reassess.reason ?? ""}>reassessment recommended</span>}
                       </td>
-                      <td className="py-2 px-1 text-gray-500">{p.op_beds?.label ?? "—"}</td>
-                      <td className="py-2 px-1"><AcuityChip level={p.acuity_level} /></td>
-                      <td className={`py-2 px-1 tabular-nums ${ewsColor(ews)}`}><EwsBadge score={ews} /></td>
-                      <td className="py-2 px-1"><RiskChip level={p.risk_level} /></td>
-                      <td className="py-2 px-1 text-xs">{due > 0 ? <span className="text-orange-600 font-medium">{due} due</span> : <span className="text-gray-300">—</span>}</td>
-                      <td className="py-2 pl-1">
-                        {p.isolation_status !== "none" && <span className="text-[10px] px-1.5 py-0.5 rounded bg-purple-100 text-purple-700 mr-1">{titleCase(p.isolation_status)}</span>}
-                        {al > 0 ? <span className="text-red-500" title={`${al} active safety alert${al === 1 ? "" : "s"}`}>●</span> : (p.isolation_status === "none" ? <span className="text-gray-300">—</span> : null)}
+                      <td className="py-2 px-1"><AcuityChip level={p.acuity_level} />{r.acuityScore != null && <span className="ml-1 text-[10px] text-gray-400 tabular-nums">{r.acuityScore}/18</span>}</td>
+                      <td className="py-2 px-1 tabular-nums text-gray-700">{r.workloadPct != null ? `${Number(r.workloadPct).toFixed(0)}%` : "—"}</td>
+                      <td className="py-2 px-1">
+                        <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-bold tabular-nums ${cnciTone(r.cnci.band)}`}>
+                          {r.cnci.score}<span className="font-normal">{titleCase(r.cnci.band)}</span>
+                        </span>
                       </td>
+                      <td className={`py-2 px-1 font-semibold tabular-nums ${ewsColor(r.pews)}`}>{r.pews ?? "—"}</td>
+                      <td className="py-2 px-1 text-xs">
+                        {r.nextDue ? (
+                          <span className={r.nextDue.overdue ? "text-red-600 font-semibold" : "text-gray-600"}>
+                            {r.nextDue.overdue ? "OVERDUE — " : `${fmtTime(r.nextDue.at)} — `}{r.nextDue.label}
+                          </span>
+                        ) : <span className="text-gray-300">—</span>}
+                      </td>
+                      <td className={`py-2 pl-1 text-base font-bold ${t?.cls ?? "text-gray-300"}`}>{t?.icon ?? "—"}</td>
                     </tr>
                   );
                 })}
               </tbody>
             </table>
-            <p className="text-[10px] text-gray-400 mt-2">Age &amp; diagnosis live in the clinical record, not the operational roster. Use the interactive shift view to record observations, request assistance or report incidents.</p>
+            <p className="text-[10px] text-gray-400 mt-2">CNCI — Composite Nursing Care Index: acuity + workload + safety risk + time-critical work + trend. ● Critical (80-100) · High (60-79) · Moderate (30-59) · Low (0-29). Hover a reassessment prompt for its reason.</p>
           </div>
         )}
       </SectionCard>
 
-      {/* Alerts + tasks */}
+      {/* Timeline + briefing/alerts */}
       <div className="grid lg:grid-cols-2 gap-5">
-        <SectionCard icon="⚠️" title="Priority Alerts" count={alertItems.length}>
-          <div className="space-y-2 max-h-80 overflow-y-auto">
-            {alertItems.length === 0 && <Empty>No active alerts for your patients.</Empty>}
-            {alertItems.slice(0, 14).map((a, i) => (
-              <div key={i} className="flex items-start gap-2 text-sm">
-                <span className={`mt-1 w-2 h-2 rounded-full shrink-0 ${a.sev === "high" ? "bg-red-500" : a.sev === "med" ? "bg-amber-500" : "bg-gray-300"}`} />
-                <div className="min-w-0 flex-1">
-                  <p className="text-gray-700 leading-tight">{a.label}</p>
-                  {a.note && <p className="text-[11px] text-gray-400 truncate">{a.note}</p>}
+        <SectionCard icon="🕐" title="Today's Timeline">
+          {d.timeline.length === 0 ? <Empty>No active shift — the timeline builds from your shift window, ward round schedule and due items.</Empty> : (
+            <div className="space-y-0.5 max-h-96 overflow-y-auto">
+              {d.timeline.map((e: any, i: number) => (
+                <div key={i} className="flex items-start gap-3 py-1.5">
+                  <span className="text-xs text-gray-500 tabular-nums w-11 shrink-0 mt-0.5">{e.time}</span>
+                  <span className={`mt-1.5 w-2 h-2 rounded-full shrink-0 ${TL_DOT[e.kind] ?? "bg-gray-300"}`} />
+                  <div className="min-w-0">
+                    <p className="text-sm text-gray-800 leading-tight">{e.label}</p>
+                    {e.detail && <p className="text-[11px] text-gray-400">{e.detail}</p>}
+                  </div>
                 </div>
-                {a.when && <span className="text-[10px] text-gray-400 shrink-0">{fmtWhen(a.when)}</span>}
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          )}
         </SectionCard>
 
-        <SectionCard icon="✅" title="My Open Tasks" count={tasks.length}
-          right={<Link href="/dashboard/shift" className="text-xs text-emerald-700 hover:underline">Work tasks →</Link>}>
-          <div className="divide-y divide-gray-50 max-h-80 overflow-y-auto">
-            {tasks.length === 0 && <Empty>No open tasks. Tasks arrive from your supervisor, care plans and ward routines.</Empty>}
-            {tasks.slice(0, 10).map((t: any) => (
-              <div key={t.id} className="py-2 flex items-start gap-2 text-sm">
-                <span className="text-xs text-gray-500 tabular-nums w-11 shrink-0 mt-0.5">{t.due_at ? fmtTime(t.due_at) : "--:--"}</span>
-                <div className="flex-1 min-w-0">
-                  <p className="text-gray-800 leading-tight">{t.description}</p>
-                  <p className="text-[11px] text-gray-400">{t.op_patients?.label ? `${t.op_patients.label} · ` : ""}{titleCase(t.status)}</p>
-                </div>
-                <PrioChip p={t.priority} />
-              </div>
-            ))}
+        <div className="space-y-5">
+          <div className={`${card} border-emerald-200 bg-emerald-50/30`}>
+            <div className="flex items-center justify-between mb-2">
+              <h3 className="font-semibold text-gray-900 flex items-center gap-2">✨ Shift Briefing</h3>
+              <span className="text-[10px] text-gray-400">derived live from your records</span>
+            </div>
+            <ul className="space-y-1.5">
+              {d.briefing.map((b: string, i: number) => (
+                <li key={i} className="flex items-start gap-2 text-sm text-gray-700"><span className="text-emerald-500 mt-0.5">●</span>{b}</li>
+              ))}
+            </ul>
+            <Link href="/healthcare-worker/copilot" className="inline-block mt-3 text-xs font-medium text-emerald-700 hover:underline">View detailed insights (AI copilot) →</Link>
           </div>
-        </SectionCard>
+
+          <SectionCard icon="🛡️" title="Recent Safety Alerts" count={d.safetyAlerts.length + d.escalations.length}
+            right={<Link href="/healthcare-worker/safety" className="text-xs text-emerald-700 hover:underline">View all →</Link>}>
+            <div className="space-y-2 max-h-44 overflow-y-auto">
+              {d.safetyAlerts.length + d.escalations.length === 0 && <Empty>No active alerts on your patients.</Empty>}
+              {[...d.safetyAlerts.map((a: any) => ({ sev: a.severity === "high" ? "high" : "med", text: `${titleCase(a.category)} — ${a.op_patients?.label ?? ""}`, when: a.created_at })),
+                ...d.escalations.map((e: any) => ({ sev: e.level >= 4 ? "high" : "med", text: `Escalation L${e.level} — ${e.op_patients?.label ?? ""}`, when: e.created_at }))]
+                .slice(0, 6).map((a: any, i: number) => (
+                  <div key={i} className="flex items-start gap-2 text-sm">
+                    <span className={`mt-1 w-2 h-2 rounded-full shrink-0 ${a.sev === "high" ? "bg-red-500" : "bg-amber-500"}`} />
+                    <span className="text-gray-700 flex-1 min-w-0 truncate">{a.text}</span>
+                    <span className="text-[10px] text-gray-400 shrink-0">{fmtWhen(a.when)}</span>
+                  </div>
+                ))}
+            </div>
+          </SectionCard>
+        </div>
       </div>
 
+      {/* Due queues + tasks + performance */}
+      <div className="grid md:grid-cols-2 xl:grid-cols-4 gap-5">
+        <div className={card}>
+          <div className="flex items-center justify-between mb-2"><span className={label}>Medications Due Soon</span><Link href="/healthcare-worker/medications" className="text-[10px] text-emerald-700 hover:underline">View all →</Link></div>
+          {d.meds.queue.length === 0 ? <Empty>Nothing due.</Empty> : d.meds.queue.slice(0, 5).map((m: any) => (
+            <p key={m.id} className="text-xs text-gray-600 py-1 flex items-center gap-2">
+              <span className={`tabular-nums ${m.effective_status === "overdue" ? "text-red-600 font-semibold" : "text-gray-500"}`}>{fmtTime(m.scheduled_at)}</span>
+              <span className="flex-1 min-w-0 truncate">{m.drug_name}{m.dose_display ? ` ${m.dose_display}` : ""}</span>
+              <span className="text-gray-400">{m.op_patients?.label}</span>
+              {m.high_risk && <span className="text-orange-600 text-[9px] font-bold">HR</span>}
+            </p>
+          ))}
+        </div>
+        <div className={card}>
+          <div className="flex items-center justify-between mb-2"><span className={label}>Assessments Overdue</span><Link href="/healthcare-worker/observations" className="text-[10px] text-emerald-700 hover:underline">Go →</Link></div>
+          {obsOverdueRows.length === 0 ? <Empty>None overdue.</Empty> : obsOverdueRows.slice(0, 5).map((o: any) => (
+            <p key={o.id} className="text-xs text-gray-600 py-1 flex items-center gap-2">
+              <span className="text-red-600 font-semibold">OVERDUE</span>
+              <span className="flex-1 min-w-0 truncate">{o.op_patients?.label} — {titleCase(o.observation_type)}</span>
+            </p>
+          ))}
+        </div>
+        <div className={card}>
+          <div className="flex items-center justify-between mb-2"><span className={label}>Tasks Requiring Action</span><Link href="/healthcare-worker/tasks" className="text-[10px] text-emerald-700 hover:underline">Go to My Tasks →</Link></div>
+          {tasksTop.length === 0 ? <Empty>No open tasks.</Empty> : tasksTop.map((t: any) => (
+            <p key={t.id} className="text-xs text-gray-600 py-1 flex items-center gap-2">
+              <span className="text-gray-500 tabular-nums">{t.due_at ? fmtTime(t.due_at) : "--:--"}</span>
+              <span className="flex-1 min-w-0 truncate">{t.description}</span>
+              <PrioChip p={t.priority} />
+            </p>
+          ))}
+        </div>
+        <div className={card}>
+          <span className={label}>My Performance (This Shift)</span>
+          <div className="grid grid-cols-2 gap-x-4 gap-y-2 mt-2">
+            <div><p className="text-xl font-bold tabular-nums text-gray-900">{d.performance.medOnTimePct != null ? `${d.performance.medOnTimePct}%` : "—"}</p><p className="text-[10px] text-gray-500">med admin on time ({d.performance.medsAdministered} given)</p></div>
+            <div><p className="text-xl font-bold tabular-nums text-gray-900">{d.performance.obsRecorded}</p><p className="text-[10px] text-gray-500">observations recorded</p></div>
+            <div><p className="text-xl font-bold tabular-nums text-gray-900">{d.performance.tasksCompleted}</p><p className="text-[10px] text-gray-500">tasks completed</p></div>
+            <div><p className={`text-xl font-bold tabular-nums ${d.performance.safetyEvents > 0 ? "text-orange-600" : "text-gray-900"}`}>{d.performance.safetyEvents}</p><p className="text-[10px] text-gray-500">safety events raised</p></div>
+          </div>
+        </div>
+      </div>
+
+      {/* Ward context strip */}
+      {d.ward && (
+        <div className={card}>
+          <div className="flex flex-wrap items-center gap-x-8 gap-y-2 text-sm text-gray-600">
+            <span className={label}>Ward Context</span>
+            <span><span className="font-bold tabular-nums text-gray-900">{d.ward.census}</span> patients on the ward{d.ward.isolation > 0 ? ` · ${d.ward.isolation} isolation` : ""}</span>
+            {d.ward.beds && <span><span className="font-bold tabular-nums text-gray-900">{d.ward.beds.occupied}/{d.ward.beds.total}</span> beds occupied</span>}
+            <span><span className="font-bold tabular-nums text-gray-900">{d.ward.onDuty}/{d.ward.staff.length}</span> staff on duty</span>
+            <span className="flex flex-wrap gap-1">
+              {(["critical", "high", "moderate", "stable"] as const).filter(k => d.ward!.acuity[k] > 0).map(k => (
+                <span key={k} className="inline-flex items-center gap-1"><Chip tone={{ critical: "bg-red-100 text-red-700", high: "bg-orange-100 text-orange-700", moderate: "bg-yellow-100 text-yellow-700", stable: "bg-green-100 text-green-700" }[k]}>{k}</Chip><span className="tabular-nums text-xs">{d.ward!.acuity[k]}</span></span>
+              ))}
+            </span>
+          </div>
+        </div>
+      )}
+
       <p className="text-center text-[11px] text-gray-400 pt-1">
-        All data is live from the operational spine (shifts, assignments, observations, tasks, alerts). Assessment, medication, concerns and handover modules come online as they are built — muted entries in the sidebar are not yet live.
+        Every number on this page is a live operational record — nothing is fabricated. The briefing is derived deterministically from your own data; the copilot adds reasoning on request.
       </p>
     </div>
   );
