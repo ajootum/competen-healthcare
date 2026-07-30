@@ -102,7 +102,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
               <p className="text-white text-xs font-semibold mt-1">{SHIFT_TIMES[shift.type] ?? ""}</p>
               <p className="text-blue-200/60 text-[10px]">{shift.ward}</p>
               <p className="text-blue-200/60 text-[10px]">{SHIFT_LABEL[shift.type] ?? ""}</p>
-              <Link href="/dashboard/shift" className="block text-center text-[11px] font-medium text-white bg-blue-600 hover:bg-blue-500 rounded-lg py-1.5 mt-2">Open Shift Workspace</Link>
+              <Link href="/healthcare-worker" className="block text-center text-[11px] font-medium text-white bg-blue-600 hover:bg-blue-500 rounded-lg py-1.5 mt-2">Open Shift Workspace</Link>
             </> : <>
               <span className="text-[10px] font-semibold text-blue-200/70 uppercase tracking-wide">Current Shift</span>
               <p className="text-blue-200/60 text-[11px] mt-1">No active shift.</p>

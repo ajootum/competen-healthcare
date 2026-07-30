@@ -134,6 +134,7 @@ export function portalRoleFromOrgRole(orgRole: OrgRole): AppRole {
 export type WorkspaceLink = { label: string; icon: string; href: string };
 
 export const WORKSPACE_CATALOGUE: (WorkspaceLink & { orgRoles: OrgRole[]; appRoles: AppRole[] })[] = [
+  { label: "Healthcare Worker",       icon: "🩺", href: "/healthcare-worker",     orgRoles: ["healthcare_worker","leader","charge_nurse","shift_supervisor"],                    appRoles: ["nurse","assessor","hospital_admin","super_admin"] },
   { label: "Shift Supervisor",        icon: "🖥️", href: "/supervisor",            orgRoles: ["chief_officer","org_admin","manager","shift_supervisor","charge_nurse","leader"], appRoles: ["assessor","hospital_admin","super_admin"] },
   { label: "Unit Manager",            icon: "📊", href: "/unit-manager",          orgRoles: ["chief_officer","org_admin","manager"],                                             appRoles: ["hospital_admin","super_admin"] },
   { label: "Competency Office",       icon: "🏛️", href: "/competency-office",     orgRoles: ["chief_officer","org_admin","governance_committee","competency_coordinator"],       appRoles: ["hospital_admin","educator","super_admin"] },
