@@ -49,6 +49,7 @@ const NAV_GROUPS: { group: string; items: NavItem[] }[] = [
   { group: "Workforce Operations", items: [
     { label: "Staffing Allocation",  href: "/supervisor/workforce-operations",         icon: "👥" },
     { label: "Team Assignments",     href: "/supervisor/team-assignments",             icon: "🧩" },
+    { label: "Assignment Engine",    href: "/supervisor/assignment-engine",            icon: "🧠" },
     { label: "Competency Readiness", href: "/supervisor/workforce-operations#competency", icon: "🎖️" },
     { label: "Break Management",     href: "/supervisor/workforce-operations#break",   icon: "☕" },
     { label: "Supervisor Notes",     href: "/supervisor/workforce-operations#break",   icon: "🗒️" },
