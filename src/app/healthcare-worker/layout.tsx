@@ -27,12 +27,12 @@ const DASHBOARD: NavItem = { label: "Ward Dashboard", href: "/healthcare-worker"
 // Acuity/Workload when the unit is critical care, + Nurse Concerns HWW-ADD-001).
 const NAV_GROUPS: { group: string; items: NavItem[] }[] = [
   { group: "My Shift", items: [
-    { label: "My Patients",      href: "/healthcare-worker/patients",      icon: "🧑‍⚕️", soon: true },
-    { label: "Task Centre",      href: "/healthcare-worker/tasks",         icon: "✅", badge: "myTasks", soon: true },
+    { label: "My Patients",      href: "/healthcare-worker/patients",      icon: "🧑‍⚕️" },
+    { label: "Task Centre",      href: "/healthcare-worker/tasks",         icon: "✅", badge: "myTasks" },
     { label: "Shift Summary",    href: "/healthcare-worker/shift-summary", icon: "📋", soon: true },
   ]},
   { group: "Clinical Assessment", items: [
-    { label: "Observations & PEWS", href: "/healthcare-worker/observations", icon: "📈", badge: "obsDue", soon: true },
+    { label: "Observations & PEWS", href: "/healthcare-worker/observations", icon: "📈", badge: "obsDue" },
     { label: "Acuity Assessment",   href: "/healthcare-worker/acuity",       icon: "🌡️" },
     { label: "Workload Assessment", href: "/healthcare-worker/workload",     icon: "⚖️" },
   ]},
@@ -82,13 +82,18 @@ export default async function HealthcareWorkerLayout({ children }: { children: R
   // Live nav badges — the nurse's OWN counts (self-scoped, unlike the
   // supervisor's hospital-wide counts). Fail-soft: errors resolve to 0.
   const bNum = (r: any) => (r?.error ? 0 : r?.count ?? 0);
-  const [unreadRes, taskRes, concernRes, actionRes] = await Promise.all([
+  const { data: myAsg } = await admin.from("op_patient_assignments").select("patient_id").eq("staff_id", user.id).eq("status", "active").limit(100);
+  const myPatientIds = ((myAsg ?? []) as any[]).map(r => r.patient_id).filter(Boolean);
+  const [unreadRes, taskRes, concernRes, actionRes, obsRes] = await Promise.all([
     admin.from("notifications").select("id", { count: "exact", head: true }).eq("user_id", user.id).eq("read", false),
     admin.from("op_tasks").select("id", { count: "exact", head: true }).eq("assigned_to", user.id).not("status", "in", "(completed,verified,cancelled)"),
     admin.from("op_concerns").select("id", { count: "exact", head: true }).eq("raised_by", user.id).in("status", ["open", "in_progress", "carried_forward"]),
     admin.from("op_concern_actions").select("id", { count: "exact", head: true }).eq("owner_id", user.id).in("status", ["open", "in_progress"]),
+    myPatientIds.length
+      ? admin.from("op_observations").select("id", { count: "exact", head: true }).in("patient_id", myPatientIds).in("status", ["due", "overdue"])
+      : Promise.resolve({ count: 0, error: null }),
   ]);
-  const badges: Record<string, number> = { unread: bNum(unreadRes), myTasks: bNum(taskRes), obsDue: 0, alerts: 0, concerns: bNum(concernRes) + bNum(actionRes) };
+  const badges: Record<string, number> = { unread: bNum(unreadRes), myTasks: bNum(taskRes), obsDue: bNum(obsRes), alerts: 0, concerns: bNum(concernRes) + bNum(actionRes) };
   const groupBadge = (items: NavItem[]) =>
     [...new Set(items.filter(i => i.href && !i.soon && i.badge).map(i => i.badge!))].reduce((n, k) => n + (badges[k] ?? 0), 0);
 
