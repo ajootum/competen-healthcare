@@ -4,6 +4,7 @@ import Link from "next/link";
 import { loadPatientOne } from "@/lib/hww/patients";
 import { cnciTone } from "@/lib/hww/cnci";
 import { card, label, titleCase, fmtTime, fmtWhen, AcuityChip, RiskChip, PrioChip, Chip, SectionCard, Empty, ewsColor } from "@/lib/hww/kit";
+import TransferRequest from "./TransferRequest";
 
 // Patient Workspace (HWW-ARCH-002 S7) — everything about ONE patient in one
 // place: clinical snapshot, CNCI with its drivers, scores + trend, next due,
@@ -31,6 +32,17 @@ export default async function PatientWorkspacePage({ params }: { params: Promise
   const d = await loadPatientOne(admin, user.id, id);
   if (!d.found) {
     return <div className={card}><Empty>Patient not found.</Empty></div>;
+  }
+
+  // Transfer receiving-nurse candidates: co-staff on my current active shift.
+  const { data: dep } = await admin.from("op_shift_staff")
+    .select("shift_id, op_shifts!shift_id(status)").eq("staff_id", user.id).limit(20);
+  const activeShiftId = ((dep ?? []) as any[]).find(x => x.op_shifts?.status === "active")?.shift_id ?? null;
+  let coStaff: { id: string; name: string }[] = [];
+  if (activeShiftId) {
+    const { data: staff } = await admin.from("op_shift_staff")
+      .select("staff_id, profiles!staff_id(id, full_name)").eq("shift_id", activeShiftId).neq("staff_id", user.id).limit(50);
+    coStaff = ((staff ?? []) as any[]).filter(s => s.profiles).map(s => ({ id: s.profiles.id, name: s.profiles.full_name ?? "Colleague" }));
   }
   if (!d.assignedToMe && !isStaffUser) {
     return (
@@ -68,7 +80,10 @@ export default async function PatientWorkspacePage({ params }: { params: Promise
             <p className="text-xs text-gray-400 mt-0.5">Care team: {d.assignments.map((a: any) => `${a.profiles?.full_name ?? "—"}${a.assignment_type === "primary" ? " (primary)" : ""}`).join(" · ")}</p>
           )}
         </div>
-        <Link href="/healthcare-worker/patients" className="text-sm text-emerald-700 hover:underline self-center">← My Patients</Link>
+        <div className="flex flex-col items-end gap-2 self-center">
+          <Link href="/healthcare-worker/patients" className="text-sm text-emerald-700 hover:underline">← My Patients</Link>
+          <TransferRequest patientId={p.id} coStaff={coStaff} />
+        </div>
       </div>
 
       {/* CNCI + scores strip */}

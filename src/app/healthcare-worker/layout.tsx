@@ -25,6 +25,7 @@ type NavEntry = { item: NavItem } | { group: string; items: NavItem[] };
 // Safety" expand to their live modules; Reports = the shift report surface.
 const NAV: NavEntry[] = [
   { item: { label: "Shift Dashboard", href: "/healthcare-worker", icon: "🏠", exact: true } },
+  { item: { label: "Assignment Inbox", href: "/healthcare-worker/inbox", icon: "📥", badge: "inbox" } },
   { item: { label: "My Patients", href: "/healthcare-worker/patients", icon: "🧑‍⚕️" } },
   { item: { label: "My Tasks", href: "/healthcare-worker/tasks", icon: "✅", badge: "myTasks" } },
   { item: { label: "Medication Schedule", href: "/healthcare-worker/medications", icon: "💊" } },
@@ -77,7 +78,7 @@ export default async function HealthcareWorkerLayout({ children }: { children: R
   const bNum = (r: any) => (r?.error ? 0 : r?.count ?? 0);
   const { data: myAsg } = await admin.from("op_patient_assignments").select("patient_id").eq("staff_id", user.id).eq("status", "active").limit(100);
   const myPatientIds = ((myAsg ?? []) as any[]).map(r => r.patient_id).filter(Boolean);
-  const [unreadRes, taskRes, concernRes, actionRes, obsRes, alertRes, shiftRes] = await Promise.all([
+  const [unreadRes, taskRes, concernRes, actionRes, obsRes, alertRes, shiftRes, pendAsgRes, pendXferRes] = await Promise.all([
     admin.from("notifications").select("id", { count: "exact", head: true }).eq("user_id", user.id).eq("read", false),
     admin.from("op_tasks").select("id", { count: "exact", head: true }).eq("assigned_to", user.id).not("status", "in", "(completed,verified,cancelled)"),
     admin.from("op_concerns").select("id", { count: "exact", head: true }).eq("raised_by", user.id).in("status", ["open", "in_progress", "carried_forward"]),
@@ -91,8 +92,10 @@ export default async function HealthcareWorkerLayout({ children }: { children: R
     admin.from("op_shift_staff")
       .select("status, op_shifts!shift_id(shift_date, shift_type, status, starts_at, ends_at, units!unit_id(name), departments!department_id(name))")
       .eq("staff_id", user.id).limit(20),
+    admin.from("op_patient_assignments").select("id", { count: "exact", head: true }).eq("staff_id", user.id).eq("status", "pending_acceptance"),
+    admin.from("op_patient_transfers").select("id", { count: "exact", head: true }).eq("receiving_staff_id", user.id).eq("status", "awaiting_acceptance"),
   ]);
-  const badges: Record<string, number> = { unread: bNum(unreadRes), myTasks: bNum(taskRes), obsDue: bNum(obsRes), alerts: bNum(alertRes), concerns: bNum(concernRes) + bNum(actionRes) };
+  const badges: Record<string, number> = { unread: bNum(unreadRes), myTasks: bNum(taskRes), obsDue: bNum(obsRes), alerts: bNum(alertRes), concerns: bNum(concernRes) + bNum(actionRes), inbox: bNum(pendAsgRes) + bNum(pendXferRes) };
   const groupBadge = (items: NavItem[]) =>
     [...new Set(items.filter(i => i.href && !i.soon && i.badge).map(i => i.badge!))].reduce((n, k) => n + (badges[k] ?? 0), 0);
 

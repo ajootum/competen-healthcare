@@ -70,9 +70,9 @@ export async function POST(req: Request) {
       if (staffId !== c.userId) {
         await notify([staffId], {
           type: "op_assignment",
-          title: `Patient allocation updated — ${count} patient${count === 1 ? "" : "s"}`,
-          body: "Your assignment for this shift was published by the assignment engine. Open My Patients for the full picture.",
-          href: "/healthcare-worker/patients",
+          title: `${count} patient assignment${count === 1 ? "" : "s"} awaiting your acceptance`,
+          body: "The assignment engine allocated patients to you. Accept in your Assignment Inbox to take responsibility — until then the current nurse remains accountable.",
+          href: "/healthcare-worker/inbox",
         });
       }
     }

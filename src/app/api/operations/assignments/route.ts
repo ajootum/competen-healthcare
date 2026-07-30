@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getCaller, isResponse, isSupervisor, isSuper, forbidden, badRequest, assertProfileScope } from "@/lib/api-auth";
+import { notify } from "@/lib/notify";
 
 // Patient Assignment (COE Assignment domain). A patient must always have an
 // active responsible clinician; assignment is competency-validated unless an
@@ -33,25 +34,47 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Clinician has no current validated competency — provide override_reason to proceed (emergency override).", requires_override: true }, { status: 422 });
   }
 
-  // A patient has one active primary clinician — end any existing primary on reassignment.
-  if (assignmentType === "primary") {
-    await admin.from("op_patient_assignments").update({ status: "ended", ended_at: new Date().toISOString() })
-      .eq("patient_id", b.patient_id).eq("assignment_type", "primary").eq("status", "active");
-  }
-
-  const { data, error } = await admin.from("op_patient_assignments").insert({
+  // WARD-003 acceptance flow: the assignment enters PENDING_ACCEPTANCE — the
+  // current nurse keeps responsibility until the receiving nurse accepts (the
+  // existing primary is ended at ACCEPTANCE, in the state engine, not here).
+  // Pre-migration-156 fallback: the old check constraint rejects the new
+  // status — degrade to the legacy immediate-active behaviour.
+  const base = {
     hospital_id: patient.hospital_id, patient_id: b.patient_id, staff_id: b.staff_id, shift_id: b.shift_id ?? null,
     assignment_type: assignmentType, competency_validated: competencyValidated,
     override_reason: competencyValidated ? null : (b.override_reason?.trim() || null),
-    status: "active", created_by: c.userId,
-  }).select().single();
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    created_by: c.userId,
+  };
+  let data: any = null;
+  let pendingFlow = true;
+  {
+    const r = await admin.from("op_patient_assignments").insert({ ...base, status: "pending_acceptance", acceptance_status: "pending" }).select().single();
+    if (r.error && /check constraint|acceptance_status|column/i.test(r.error.message)) {
+      pendingFlow = false;
+      if (assignmentType === "primary") {
+        await admin.from("op_patient_assignments").update({ status: "ended", ended_at: new Date().toISOString() })
+          .eq("patient_id", b.patient_id).eq("assignment_type", "primary").eq("status", "active");
+      }
+      const legacy = await admin.from("op_patient_assignments").insert({ ...base, status: "active" }).select().single();
+      if (legacy.error) return NextResponse.json({ error: legacy.error.message }, { status: 500 });
+      data = legacy.data;
+    } else if (r.error) {
+      return NextResponse.json({ error: r.error.message }, { status: 500 });
+    } else data = r.data;
+  }
   await admin.from("audit_log").insert({
     actor_id: c.userId, action: "assign_patient", entity_type: "op_patient_assignment", entity_id: data.id,
     entity_name: patient.label, hospital_id: patient.hospital_id,
-    new_value: { staff_id: b.staff_id, type: assignmentType, competency_validated: competencyValidated, override: !competencyValidated },
+    new_value: { staff_id: b.staff_id, type: assignmentType, competency_validated: competencyValidated, override: !competencyValidated, awaiting_acceptance: pendingFlow },
   });
-  return NextResponse.json({ ...data, competency_validated: competencyValidated }, { status: 201 });
+  if (pendingFlow && b.staff_id !== c.userId) {
+    await notify([b.staff_id], {
+      type: "op_assignment", title: `New patient assignment — ${patient.label}`,
+      body: "Accept in your Assignment Inbox to take responsibility. Until then the current nurse remains accountable.",
+      href: "/healthcare-worker/inbox",
+    });
+  }
+  return NextResponse.json({ ...data, competency_validated: competencyValidated, awaiting_acceptance: pendingFlow }, { status: 201 });
 }
 
 export async function GET(req: Request) {

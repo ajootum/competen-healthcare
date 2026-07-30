@@ -297,30 +297,53 @@ export async function publishPairs(admin: any, pairs: { patient_id: string; staf
       continue;
     }
 
-    // Skip a no-op (already this nurse's active primary) — continuity keeps the existing record.
-    const { data: existing } = await admin.from("op_patient_assignments").select("id, staff_id")
-      .eq("patient_id", pair.patient_id).eq("assignment_type", "primary").eq("status", "active").limit(1).maybeSingle();
-    if (existing?.staff_id === pair.staff_id) {
-      results.push({ ...pair, ok: true, assignment_id: existing.id, competency_validated: competencyValidated });
+    // No-ops: already this nurse's ACTIVE primary (continuity keeps the
+    // record) or already PENDING with this nurse (don't spam duplicates).
+    const { data: existingRows } = await admin.from("op_patient_assignments").select("id, staff_id, status")
+      .eq("patient_id", pair.patient_id).eq("assignment_type", "primary").in("status", ["active", "pending_acceptance"]).limit(5);
+    const same = ((existingRows ?? []) as any[]).find(x => x.staff_id === pair.staff_id);
+    if (same) {
+      results.push({ ...pair, ok: true, assignment_id: same.id, competency_validated: competencyValidated });
       continue;
     }
-    if (existing) {
-      await admin.from("op_patient_assignments").update({ status: "ended", ended_at: new Date().toISOString() }).eq("id", existing.id);
+    // A different nurse's stale PENDING offer is superseded; the ACTIVE
+    // assignment stays until the new nurse ACCEPTS (WARD-003 rule).
+    const stalePending = ((existingRows ?? []) as any[]).filter(x => x.status === "pending_acceptance");
+    for (const sp of stalePending) {
+      await admin.from("op_patient_assignments").update({ status: "ended", ended_at: new Date().toISOString() }).eq("id", sp.id);
     }
 
-    const { data, error } = await admin.from("op_patient_assignments").insert({
-      hospital_id: patient.hospital_id, patient_id: pair.patient_id, staff_id: pair.staff_id,
-      assignment_type: "primary", competency_validated: competencyValidated,
-      override_reason: competencyValidated ? null : (pair.override_reason?.trim() || null),
-      status: "active", created_by: actor.id ?? null,
-    }).select("id").single();
-    if (error) { results.push({ ...pair, ok: false, error: error.message }); continue; }
+    let data: any = null;
+    let pendingFlow = true;
+    {
+      const r = await admin.from("op_patient_assignments").insert({
+        hospital_id: patient.hospital_id, patient_id: pair.patient_id, staff_id: pair.staff_id,
+        assignment_type: "primary", competency_validated: competencyValidated,
+        override_reason: competencyValidated ? null : (pair.override_reason?.trim() || null),
+        status: "pending_acceptance", acceptance_status: "pending", created_by: actor.id ?? null,
+      }).select("id").single();
+      if (r.error && /check constraint|acceptance_status|column/i.test(r.error.message)) {
+        // Pre-migration-156 fallback: legacy immediate-active behaviour.
+        pendingFlow = false;
+        const active = ((existingRows ?? []) as any[]).find(x => x.status === "active");
+        if (active) await admin.from("op_patient_assignments").update({ status: "ended", ended_at: new Date().toISOString() }).eq("id", active.id);
+        const legacy = await admin.from("op_patient_assignments").insert({
+          hospital_id: patient.hospital_id, patient_id: pair.patient_id, staff_id: pair.staff_id,
+          assignment_type: "primary", competency_validated: competencyValidated,
+          override_reason: competencyValidated ? null : (pair.override_reason?.trim() || null),
+          status: "active", created_by: actor.id ?? null,
+        }).select("id").single();
+        if (legacy.error) { results.push({ ...pair, ok: false, error: legacy.error.message }); continue; }
+        data = legacy.data;
+      } else if (r.error) { results.push({ ...pair, ok: false, error: r.error.message }); continue; }
+      else data = r.data;
+    }
 
     await admin.from("audit_log").insert({
       actor_id: actor.id, actor_name: actor.name ?? null, action: "assign_patient",
       entity_type: "op_patient_assignment", entity_id: data.id, entity_name: patient.label,
       hospital_id: patient.hospital_id,
-      new_value: { staff_id: pair.staff_id, type: "primary", competency_validated: competencyValidated, override: !competencyValidated, via: "assignment_engine" },
+      new_value: { staff_id: pair.staff_id, type: "primary", competency_validated: competencyValidated, override: !competencyValidated, via: "assignment_engine", awaiting_acceptance: pendingFlow },
     }).then((x: any) => x, () => {});
     results.push({ ...pair, ok: true, assignment_id: data.id, competency_validated: competencyValidated });
   }
