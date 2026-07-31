@@ -4,6 +4,7 @@ import { useState, useRef, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import SidebarToggle from "@/components/SidebarToggle";
+import ShortcutBinder from "./ShortcutBinder";
 
 // Platform Global Header (PUI-002 + HWW-UI-002) — ONE header, every workspace.
 //
@@ -108,6 +109,8 @@ export default function GlobalHeader({
   return (
     <header className="sticky top-0 z-40 bg-white border-b border-gray-200 h-14 flex items-center gap-2 px-3 md:px-4"
       style={{ fontFamily: "var(--cmp-font-sans)" }}>
+      {/* PUI-005 s2: binds the documented shortcuts. Mounted here so every workspace gets them. */}
+      <ShortcutBinder />
       {/* ── Left: toggle + logo + workspace title ── */}
       {showSidebarToggle && <SidebarToggle variant="header" />}
       <Link href={workspaceHref} className="flex items-center gap-2 min-w-0 shrink-0">

@@ -344,7 +344,7 @@ export function KpiRibbon({ kpis, note }: { kpis: Kpi[]; note?: string }) {
 // ── Dashboard section wrapper with an honest as-of stamp (PUI-007 s1 "Timely", s11 "Provide context") ──
 export function ChartCard({ title, sub, asOf, source, children, action }: {
   title: string; sub?: string; asOf?: string | null; source?: string;
-  children: React.ReactNode; action?: React.ReactNode;
+  children?: React.ReactNode; action?: React.ReactNode;
 }) {
   return (
     <section className={cardClass}>

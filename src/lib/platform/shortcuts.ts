@@ -15,15 +15,18 @@ export type Shortcut = {
   behaviour?: "focus-search" | "toggle-help";
 };
 
+// NOT INCLUDED, deliberately: the spec's mockup shows a "/" focus-search shortcut, but the platform has no
+// global search to focus — the one search box that existed was decorative and was removed. A documented key
+// that does nothing is worse than an absent one, so "/" returns here when a real global search does.
+// Escape is likewise absent: it is handled locally by each menu, dialog and drawer, which is where focus
+// restoration belongs, and a global handler would fight them.
 export const SHORTCUTS: Shortcut[] = [
-  { combo: "/",              display: "/",            action: "Focus search",            behaviour: "focus-search" },
-  { combo: "n",              display: "N",            action: "Open notifications",      href: "/dashboard/notifications" },
-  { combo: "m",              display: "M",            action: "Open messages",           href: "/dashboard/messages" },
-  { combo: "g+h",            display: "G then H",     action: "Go to your dashboard",     href: "/dashboard" },
-  { combo: "g+p",            display: "G then P",     action: "Go to Competency Passport", href: "/dashboard/passport" },
-  { combo: "g+l",            display: "G then L",     action: "Go to Learning",           href: "/dashboard/learning" },
-  { combo: "?",              display: "?",            action: "Keyboard shortcuts help",  href: "/dashboard/help" },
-  { combo: "escape",         display: "Esc",          action: "Close menu or dialog",     behaviour: "toggle-help" },
+  { combo: "n",   display: "N",            action: "Open notifications",        href: "/dashboard/notifications" },
+  { combo: "m",   display: "M",            action: "Open messages",             href: "/dashboard/messages" },
+  { combo: "g+h", display: "G then H",     action: "Go to your dashboard",      href: "/dashboard" },
+  { combo: "g+p", display: "G then P",     action: "Go to Competency Passport", href: "/dashboard/passport" },
+  { combo: "g+l", display: "G then L",     action: "Go to Learning",            href: "/dashboard/learning" },
+  { combo: "?",   display: "?",            action: "Keyboard shortcuts help",   href: "/dashboard/help" },
 ];
 
 // A shortcut must never fire while the user is typing, or "/" becomes unusable in any note field.
