@@ -2,6 +2,7 @@ import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { loadUnassignedQueue } from "@/lib/hww/census";
 import { AssignPatient, RouteTransfer } from "./CensusActions";
+import { cardClass } from "@/components/ui/primitives";
 
 // Census & Assignment (HWW-WARD-002, supervisor side) — the loop-closer the
 // engine was missing a surface for: the UNASSIGNED QUEUE (offer patients to
@@ -13,7 +14,7 @@ import { AssignPatient, RouteTransfer } from "./CensusActions";
 
 export const dynamic = "force-dynamic";
 
-const card = "bg-white rounded-xl border border-gray-200 p-5";
+const card = cardClass;
 const titleCase = (s: string | null | undefined) => (s ?? "").replace(/_/g, " ").replace(/\b\w/g, ch => ch.toUpperCase());
 const fmtWhen = (iso: string | null) => iso ? new Date(iso).toLocaleString([], { hour: "2-digit", minute: "2-digit", day: "numeric", month: "short" }) : "";
 const ACUITY: Record<string, string> = { stable: "bg-green-100 text-green-700", moderate: "bg-yellow-100 text-yellow-700", high: "bg-orange-100 text-orange-700", critical: "bg-red-100 text-red-700" };

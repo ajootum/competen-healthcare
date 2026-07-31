@@ -2,6 +2,7 @@ import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { loadPatientOps } from "@/lib/operations/patient-ops";
+import { cardClass } from "@/components/ui/primitives";
 
 export const dynamic = "force-dynamic";
 
@@ -12,7 +13,7 @@ export const dynamic = "force-dynamic";
 // the Phase-3 shift-updates table and are shown as an honest placeholder for now.
 /* eslint-disable @typescript-eslint/no-explicit-any */
 const NONE = "00000000-0000-0000-0000-000000000000";
-const card = "bg-white rounded-xl border border-gray-200 p-5";
+const card = cardClass;
 
 // Map the stored current_stage onto the spec's patient-journey buckets.
 const JOURNEY: { label: string; stages: string[] }[] = [

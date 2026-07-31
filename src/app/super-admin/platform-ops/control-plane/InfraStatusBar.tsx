@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
+import { cardClass } from "@/components/ui/primitives";
 
 // POS-002 Infrastructure Status Bar — consumes /api/runtime/status live and
 // refreshes on an interval (no page reload), the reference "widgets fed by
@@ -39,7 +40,7 @@ export default function InfraStatusBar({ initial }: { initial: any }) {
   const time = stamp ? new Date(stamp).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" }) : "";
 
   return (
-    <div className="bg-white rounded-xl border border-gray-200 p-5">
+    <div className={cardClass}>
       <div className="flex items-center justify-between mb-3">
         <h2 className="font-semibold text-gray-900 text-[15px]">Infrastructure Status Bar <span className="ml-2 text-[10px] font-medium text-gray-400">{data?.summary?.live}/{data?.summary?.total} live · POS-002</span></h2>
         <div className="flex items-center gap-2 text-xs text-gray-400">

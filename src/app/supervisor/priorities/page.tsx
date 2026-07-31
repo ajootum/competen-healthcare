@@ -2,6 +2,7 @@ import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { loadShiftCommand, fmtTime, titleCase } from "@/lib/operations/shift-command";
+import { cardClass } from "@/components/ui/primitives";
 
 export const dynamic = "force-dynamic";
 
@@ -13,7 +14,7 @@ export const dynamic = "force-dynamic";
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 const NONE = "00000000-0000-0000-0000-000000000000";
-const card = "bg-white rounded-xl border border-gray-200 p-5";
+const card = cardClass;
 const CATS = ["Patient Safety", "Workforce", "Operations", "Documentation", "Compliance"];
 const SEV_TONE: Record<string, string> = { critical: "bg-red-100 text-red-700", high: "bg-orange-100 text-orange-700", medium: "bg-amber-100 text-amber-700" };
 const SEV_DOT: Record<string, string> = { critical: "bg-red-500", high: "bg-orange-500", medium: "bg-amber-500" };

@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { CONTEXT_TYPES, BROADCAST_PRIORITIES } from "@/lib/operations/communication-centre";
+import { cardClass } from "@/components/ui/primitives";
 
 // Communication console (SSW-COM-001) — send a context-aware message or a
 // ward/hospital broadcast (with priority, audience, expiry, emergency mode).
@@ -30,7 +31,7 @@ export default function CommsConsole({ messagesProvisioned, broadcastsProvisione
   const gated = (tab === "message" && !messagesProvisioned) || (tab === "broadcast" && !broadcastsProvisioned);
 
   return (
-    <div className="bg-white rounded-xl border border-gray-200 p-5">
+    <div className={cardClass}>
       <div className="flex items-center gap-2 mb-3">
         {(["message", "broadcast"] as const).map(t => (
           <button key={t} onClick={() => { setTab(t); setOk(null); setErr(null); }} className={`text-xs font-semibold px-3 py-1.5 rounded-lg ${tab === t ? "bg-teal-600 text-white" : "bg-gray-50 text-gray-600 border border-gray-200"}`}>{t === "message" ? "💬 New Message" : "📣 Send Broadcast"}</button>

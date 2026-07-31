@@ -2,6 +2,7 @@ import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { loadShiftCommand, fmtTime, titleCase } from "@/lib/operations/shift-command";
+import { cardClass } from "@/components/ui/primitives";
 
 export const dynamic = "force-dynamic";
 
@@ -12,7 +13,7 @@ export const dynamic = "force-dynamic";
 // and are shown as an honest note rather than fabricated.
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
-const card = "bg-white rounded-xl border border-gray-200 p-5";
+const card = cardClass;
 const hm = (h: number | null) => h == null ? "—" : `${Math.max(0, Math.floor(h))}h ${Math.max(0, Math.round((h % 1) * 60))}m`;
 const ROLE_FILTERS = ["charge", "nurse", "support", "float", "educator", "assessor"];
 const GROUP_TONE: Record<string, string> = { "High Risk": "text-red-600", "PEWS Review": "text-orange-600", "Isolation": "text-purple-600", "Observation": "text-amber-600", "Discharge Ready": "text-teal-600", "Theatre": "text-indigo-600", "Stable": "text-green-600" };

@@ -4,6 +4,7 @@ import Link from "next/link";
 import { loadPatientOpsCenter } from "@/lib/operations/patient-ops-center";
 import PatientCensusConsole from "./PatientCensusConsole";
 import AdmissionsWorkflow from "./AdmissionsWorkflow";
+import { cardClass } from "@/components/ui/primitives";
 
 export const dynamic = "force-dynamic";
 
@@ -14,7 +15,7 @@ export const dynamic = "force-dynamic";
 // from op_* data; the registry holds no PHI, so identity fields are honest states.
 /* eslint-disable @typescript-eslint/no-explicit-any */
 const NONE = "00000000-0000-0000-0000-000000000000";
-const card = "bg-white rounded-xl border border-gray-200 p-5";
+const card = cardClass;
 const tc = (s: string) => (s ?? "").replace(/_/g, " ").split(" ").filter(Boolean).map(w => w[0].toUpperCase() + w.slice(1)).join(" ");
 const fmt = (iso: string | null) => iso ? new Date(iso).toLocaleString([], { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", hour12: false }) : "";
 

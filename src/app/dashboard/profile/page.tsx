@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { loadProfileIdentity } from "@/lib/profile-identity";
 import type { AppRole } from "@/lib/roles";
+import { cardClass } from "@/components/ui/primitives";
 
 // PW-011 Profile & Professional Identity — the user's own professional profile over real profiles /
 // professional_credentials / competency_decisions. Summary cards, profile card, About Me, Professional Summary,
@@ -65,7 +66,7 @@ export default async function ProfilePage() {
         <div className="lg:col-span-2 space-y-5">
           <div className="grid sm:grid-cols-[220px_minmax(0,1fr)] gap-5">
             {/* Profile card */}
-            <div className="bg-white rounded-xl border border-gray-200 p-5 text-center">
+            <div className={`${cardClass} text-center`}>
               {p.avatarUrl ? (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img src={p.avatarUrl} alt="" className="w-24 h-24 rounded-full object-cover mx-auto border-2 border-gray-100" />
@@ -85,7 +86,7 @@ export default async function ProfilePage() {
 
             {/* About + professional summary */}
             <div className="space-y-5">
-              <div className="bg-white rounded-xl border border-gray-200 p-5">
+              <div className={cardClass}>
                 <div className="flex items-center justify-between mb-2"><h2 className="text-sm font-semibold text-gray-900">About Me</h2><Link href="/dashboard/billing" className="text-[11px] font-medium text-blue-600 hover:underline">Edit</Link></div>
                 <Field label="Preferred Name" value={p.fullName.split(" ")[0]} />
                 <Field label="Role" value={p.role} />
@@ -94,7 +95,7 @@ export default async function ProfilePage() {
                 <Field label="Contact" value={p.phone} />
                 <Field label="Email" value={p.email} />
               </div>
-              <div className="bg-white rounded-xl border border-gray-200 p-5">
+              <div className={cardClass}>
                 <h2 className="text-sm font-semibold text-gray-900 mb-2">Professional Summary</h2>
                 <Field label="Primary Role" value={p.role} />
                 <Field label="Professional Level" value={`${d.kpis.professionalLevel.label} (Level ${d.kpis.professionalLevel.num})`} />
@@ -106,7 +107,7 @@ export default async function ProfilePage() {
           </div>
 
           {/* Identity badges */}
-          <div className="bg-white rounded-xl border border-gray-200 p-5">
+          <div className={cardClass}>
             <h2 className="text-sm font-semibold text-gray-900 mb-3">Professional Identity Badges</h2>
             <div className="flex flex-wrap gap-3">
               {d.badges.map((b: any, i: number) => ( // eslint-disable-line @typescript-eslint/no-explicit-any
@@ -121,7 +122,7 @@ export default async function ProfilePage() {
           </div>
 
           {/* Credentials & Licences */}
-          <div className="bg-white rounded-xl border border-gray-200 p-5">
+          <div className={cardClass}>
             <div className="flex items-center justify-between mb-3"><h2 className="text-sm font-semibold text-gray-900">Credentials &amp; Licences</h2><Link href="/dashboard/certificates" className="text-[11px] font-medium text-blue-600 hover:underline">Manage →</Link></div>
             {d.credentials.length > 0 ? (
               <div className="overflow-x-auto"><table className="w-full text-sm">
@@ -142,7 +143,7 @@ export default async function ProfilePage() {
           </div>
 
           {/* Professional network */}
-          <div className="bg-white rounded-xl border border-gray-200 p-5">
+          <div className={cardClass}>
             <h2 className="text-sm font-semibold text-gray-900 mb-3">Professional Network &amp; Connections</h2>
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
               <div><p className="text-2xl font-bold text-gray-900">{d.network.teamCount}</p><p className="text-[11px] text-gray-500">Team Members</p></div>

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useMemo } from "react";
+import { cardClass } from "@/components/ui/primitives";
 
 // WCE-005 catalogue browser — the widget library reference (§13). Search + category filter over the
 // catalogued widget primitives; the detail pane shows each widget's configuration contract (§12): layout,
@@ -23,7 +24,7 @@ export default function CatalogueBrowser({ widgets, categories }: { widgets: any
   }), [widgets, q, cat]);
 
   return (
-    <div className="bg-white rounded-xl border border-gray-200 p-5">
+    <div className={cardClass}>
       <div className="flex items-center justify-between gap-2 mb-3 flex-wrap">
         <h2 className="text-sm font-bold text-gray-900">Widget Library <span className="text-[10px] text-gray-400 font-normal">{widgets.length} catalogued primitives</span></h2>
         <div className="flex items-center gap-2">

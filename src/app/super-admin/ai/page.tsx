@@ -2,6 +2,7 @@ import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { loadAiPlatform } from "@/lib/super-admin/ai";
+import { cardClass } from "@/components/ui/primitives";
 
 export const dynamic = "force-dynamic";
 
@@ -86,7 +87,7 @@ export default async function AiIntelligencePlatform() {
         {p.modules.map((m: any) => {
           const ac = ACCENT[m.n] ?? ACCENT[1];
           return (
-            <div key={m.n} className="bg-white rounded-xl border border-gray-200 p-5 flex flex-col hover:border-teal-300 hover:shadow-sm transition-all">
+            <div key={m.n} className={`${cardClass} flex flex-col hover:border-teal-300 hover:shadow-sm transition-all`}>
               <div className="flex items-start justify-between gap-2 mb-3">
                 <div className="flex items-start gap-2.5 min-w-0">
                   <span className={`w-7 h-7 rounded-lg ${ac.badge} flex items-center justify-center text-sm font-bold shrink-0`}>{m.n}</span>
@@ -119,7 +120,7 @@ export default async function AiIntelligencePlatform() {
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         {/* AI Operations Status */}
-        <div className="bg-white rounded-xl border border-gray-200 p-5">
+        <div className={cardClass}>
           <div className="flex items-center justify-between mb-3">
             <h2 className="font-semibold text-gray-900 text-[15px]">AI Operations Status</h2>
             <Link href="/super-admin/ai/operations" className="text-xs text-teal-700 hover:underline">View all →</Link>
@@ -146,7 +147,7 @@ export default async function AiIntelligencePlatform() {
         </div>
 
         {/* Copilot Spotlight */}
-        <div className="bg-white rounded-xl border border-gray-200 p-5 lg:col-span-2">
+        <div className={`${cardClass} lg:col-span-2`}>
           <div className="flex items-center justify-between mb-3">
             <h2 className="font-semibold text-gray-900 text-[15px]">Copilot Spotlight</h2>
             <span className="text-[10px] text-gray-400">usage today · live from AI runtime</span>

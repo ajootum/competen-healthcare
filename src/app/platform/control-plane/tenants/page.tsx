@@ -3,12 +3,13 @@ import Link from "next/link";
 import { getLandlordCaller } from "@/lib/platform/landlord";
 import { loadTenantRegistry } from "@/lib/platform/tenant-registry";
 import TenantActions from "./TenantActions";
+import { cardClass } from "@/components/ui/primitives";
 
 export const dynamic = "force-dynamic";
 
 // Global Tenant Registry (LCP-001 §1).
 /* eslint-disable @typescript-eslint/no-explicit-any */
-const card = "bg-white rounded-xl border border-gray-200 p-5";
+const card = cardClass;
 const statusCls: Record<string, string> = {
   active: "bg-green-100 text-green-700", trial: "bg-blue-100 text-blue-700", prospect: "bg-indigo-100 text-indigo-700",
   suspended: "bg-amber-100 text-amber-700", archived: "bg-gray-100 text-gray-500", deleted: "bg-red-100 text-red-600",

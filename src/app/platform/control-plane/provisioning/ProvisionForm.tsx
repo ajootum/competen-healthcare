@@ -1,6 +1,7 @@
 "use client";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { cardClass } from "@/components/ui/primitives";
 
 type Template = { code: string; name: string; departments: number; plan: string };
 
@@ -34,7 +35,7 @@ export default function ProvisionForm({ templates }: { templates: Template[] }) 
   const sel = templates.find(t => t.code === templateCode);
 
   return (
-    <form onSubmit={submit} className="bg-white rounded-xl border border-gray-200 p-5 space-y-4 max-w-lg">
+    <form onSubmit={submit} className={`${cardClass} space-y-4 max-w-lg`}>
       <div>
         <label className="block text-xs font-medium text-gray-600 mb-1">Tenant name</label>
         <input value={name} onChange={e => setName(e.target.value)} placeholder="e.g. CURE Children's Hospital Uganda" className={field} required />

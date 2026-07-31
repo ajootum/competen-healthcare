@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { cardClass } from "@/components/ui/primitives";
 
 // Task Board (SSW-TSK-001 §Task Board) — Kanban over the real op_tasks lifecycle.
 // Columns map to statuses (New → Accepted → In Progress → Awaiting Review →
@@ -38,7 +39,7 @@ export default function TaskBoard({ columns, editable }: { columns: any[]; edita
   }
 
   return (
-    <div className="bg-white rounded-xl border border-gray-200 p-5">
+    <div className={cardClass}>
       <div className="flex items-center justify-between mb-3">
         <h2 className="text-sm font-bold text-gray-900">Task Board <span className="text-gray-400 font-normal">· all active tasks</span></h2>
         <span className="text-[10px] text-gray-400">drag a card between columns, or use its action to advance</span>

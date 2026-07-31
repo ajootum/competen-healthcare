@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { loadPatientOps, STATE_TONE } from "@/lib/operations/patient-ops";
 import FlowBlockersPanel from "./FlowBlockersPanel";
+import { cardClass } from "@/components/ui/primitives";
 
 export const dynamic = "force-dynamic";
 
@@ -13,7 +14,7 @@ export const dynamic = "force-dynamic";
 // blocker tracking are surfaced as honest callouts, never fabricated.
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
-const card = "bg-white rounded-xl border border-gray-200 p-5";
+const card = cardClass;
 
 const ACTIONS: { label: string; href: string }[] = [
   { label: "Allocate Bed", href: "/supervisor/bed-management" },

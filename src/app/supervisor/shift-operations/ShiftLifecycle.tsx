@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { cardClass } from "@/components/ui/primitives";
 
 // Shift-lifecycle state machine (SSW-002 §7) with a readiness-GATED transition
 // control (§10 / §25 / §26). The engine computes the blocking reasons; the button
@@ -39,7 +40,7 @@ export default function ShiftLifecycle({ states, index, subState, shiftStatus, g
     : subState === "Degraded Operations" ? "bg-amber-100 text-amber-700 border-amber-200" : "";
 
   return (
-    <div className="bg-white rounded-xl border border-gray-200 p-5">
+    <div className={cardClass}>
       <div className="flex items-center justify-between gap-3 mb-3 flex-wrap">
         <div>
           <div className="flex items-center gap-2">

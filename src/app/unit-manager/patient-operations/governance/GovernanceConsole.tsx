@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { templateByKey } from "@/lib/operations/pos-form-templates";
+import { cardClass } from "@/components/ui/primitives";
 
 // Unit Manager Governance actions (POS-106A §10.2). Decide exceptions and amendment requests over
 // the shared POS-106 objects. Approving an amendment creates a new linked version (original preserved);
@@ -42,7 +43,7 @@ export default function GovernanceConsole({ exceptions, amendments, returned }: 
       {msg && <div className={`fixed bottom-4 right-4 z-50 text-sm rounded-lg px-4 py-2.5 shadow-lg ${msg.kind === "ok" ? "bg-emerald-600 text-white" : "bg-rose-600 text-white"}`}>{msg.text}</div>}
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
         {/* Exception queue */}
-        <div className="bg-white rounded-xl border border-gray-200 p-5">
+        <div className={cardClass}>
           <h3 className="text-sm font-bold text-gray-900 mb-3">Exception approvals <span className="text-[10px] font-normal text-gray-400">§13.1</span></h3>
           {exceptions.length === 0 ? <p className="text-sm text-gray-400">No exceptions awaiting decision.</p> : (
             <div className="space-y-2">
@@ -63,7 +64,7 @@ export default function GovernanceConsole({ exceptions, amendments, returned }: 
         </div>
 
         {/* Amendment queue */}
-        <div className="bg-white rounded-xl border border-gray-200 p-5">
+        <div className={cardClass}>
           <h3 className="text-sm font-bold text-gray-900 mb-3">Amendment requests <span className="text-[10px] font-normal text-gray-400">§13.2</span></h3>
           {amendments.length === 0 ? <p className="text-sm text-gray-400">No amendment requests.</p> : (
             <div className="space-y-2">
@@ -82,7 +83,7 @@ export default function GovernanceConsole({ exceptions, amendments, returned }: 
       </div>
 
       {/* Returned / deficient forms */}
-      <div className="bg-white rounded-xl border border-gray-200 p-5">
+      <div className={cardClass}>
         <h3 className="text-sm font-bold text-gray-900 mb-3">Deficient forms <span className="text-[10px] font-normal text-gray-400">returned / to review</span></h3>
         {returned.length === 0 ? <p className="text-sm text-gray-400">No returned forms.</p> : (
           <div className="divide-y divide-gray-50">

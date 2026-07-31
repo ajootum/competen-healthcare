@@ -1,11 +1,12 @@
 import { redirect } from "next/navigation";
 import { getLandlordCaller } from "@/lib/platform/landlord";
+import { cardClass } from "@/components/ui/primitives";
 
 export const dynamic = "force-dynamic";
 
 // Global Audit Centre (LCP-001 §16) — the landlord-plane action trail.
 /* eslint-disable @typescript-eslint/no-explicit-any */
-const card = "bg-white rounded-xl border border-gray-200 p-5";
+const card = cardClass;
 const titleCase = (s: string) => s.split(/[_\s]+/).filter(Boolean).map(w => w[0].toUpperCase() + w.slice(1)).join(" ");
 
 export default async function AuditCentrePage() {

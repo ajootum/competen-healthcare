@@ -2,6 +2,7 @@ import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { loadWorkloadIntelligence } from "@/lib/operations/workload-intelligence";
+import { cardClass } from "@/components/ui/primitives";
 
 // Workforce Workload Intelligence (SSW-WFM-004) — the supervisor's view of the
 // instrument data the bedside produces. HWW records Ward PEWS / ICU CIAF acuity
@@ -15,7 +16,7 @@ import { loadWorkloadIntelligence } from "@/lib/operations/workload-intelligence
 
 export const dynamic = "force-dynamic";
 
-const card = "bg-white rounded-xl border border-gray-200 p-5";
+const card = cardClass;
 const label = "text-[11px] font-semibold text-gray-400 uppercase tracking-wider";
 const titleCase = (s: string | null | undefined) => (s ?? "").replace(/_/g, " ").replace(/\b\w/g, ch => ch.toUpperCase());
 const fmtWhen = (iso: string | null) => iso ? new Date(iso).toLocaleString([], { hour: "2-digit", minute: "2-digit", day: "numeric", month: "short" }) : "";

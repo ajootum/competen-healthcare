@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { DOC_TEMPLATES, docTemplateByKey } from "@/lib/operations/doc-templates";
+import { cardClass } from "@/components/ui/primitives";
 
 // Operational Documentation console (POS-109). Generate a document from live operational data,
 // preview the content snapshot, then sign it (electronic signature §6) or regenerate a fresh
@@ -46,7 +47,7 @@ export default function DocumentationConsole({ patients, documents }: { patients
       {msg && <div className={`fixed bottom-4 right-4 z-50 text-sm rounded-lg px-4 py-2.5 shadow-lg ${msg.kind === "ok" ? "bg-emerald-600 text-white" : "bg-rose-600 text-white"}`}>{msg.text}</div>}
 
       {/* Generate panel */}
-      <div className="bg-white rounded-xl border border-gray-200 p-5">
+      <div className={cardClass}>
         <h3 className="text-sm font-bold text-gray-900 mb-3">Generate a document</h3>
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           <label className="text-xs text-gray-500 sm:col-span-1">Template
@@ -61,7 +62,7 @@ export default function DocumentationConsole({ patients, documents }: { patients
       </div>
 
       {/* Recent documents */}
-      <div className="bg-white rounded-xl border border-gray-200 p-5">
+      <div className={cardClass}>
         <h3 className="text-sm font-bold text-gray-900 mb-3">Recent documents</h3>
         {documents.length === 0 ? <p className="text-sm text-gray-400">No documents generated yet. Generate one above.</p> : (
           <div className="divide-y divide-gray-50">

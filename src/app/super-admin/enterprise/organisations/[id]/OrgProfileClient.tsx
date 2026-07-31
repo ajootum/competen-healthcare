@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import { cardClass } from "@/components/ui/primitives";
 
 // Organisation profile (ENT-001 §1) — header, lifecycle actions and tabbed
 // detail. Every figure is live; thin governance fields are marked honestly.
@@ -13,7 +14,7 @@ const BADGE: Record<string, string> = {
   suspended: "bg-rose-50 text-rose-700", restricted: "bg-orange-50 text-orange-700", archived: "bg-gray-100 text-gray-500", closed: "bg-gray-100 text-gray-500",
 };
 const TABS = ["Overview", "Structure", "Facilities", "Users", "Subscription", "Governance", "Audit"] as const;
-const card = "bg-white rounded-xl border border-gray-200 p-5";
+const card = cardClass;
 const relTime = (iso?: string | null) => { if (!iso) return ""; const s = Math.floor((Date.now() - new Date(iso).getTime()) / 1000); if (s < 3600) return `${Math.floor(s / 60)} min ago`; if (s < 86400) return `${Math.floor(s / 3600)} hr ago`; return `${Math.floor(s / 86400)} d ago`; };
 
 function Row({ label, value }: { label: string; value: React.ReactNode }) {

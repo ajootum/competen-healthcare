@@ -3,6 +3,7 @@
 import { useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { OBJECT_TYPE_LABEL, CLASS_LABEL, SAFETY_LABEL } from "@/lib/config/registry";
+import { cardClass } from "@/components/ui/primitives";
 
 // WCE-002 registry explorer — search / filter the registered objects (§19.2/19.3) with a detail pane
 // (§19.4), plus the "sync from catalogue" action. Read-only over the registry; the schema editor and
@@ -38,7 +39,7 @@ export default function RegistryExplorer({ objects }: { objects: any[] }) {
   }
 
   return (
-    <div className="bg-white rounded-xl border border-gray-200 p-5">
+    <div className={cardClass}>
       <div className="flex items-center justify-between gap-2 mb-3 flex-wrap">
         <h2 className="text-sm font-bold text-gray-900">Object Explorer <span className="text-[10px] text-gray-400 font-normal">{objects.length} registered</span></h2>
         <div className="flex items-center gap-2">

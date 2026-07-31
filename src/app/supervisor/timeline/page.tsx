@@ -2,6 +2,7 @@ import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { loadShiftCommand, fmtTime } from "@/lib/operations/shift-command";
+import { cardClass } from "@/components/ui/primitives";
 
 export const dynamic = "force-dynamic";
 
@@ -13,7 +14,7 @@ export const dynamic = "force-dynamic";
 // honest callout rather than fabricated statuses.
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
-const card = "bg-white rounded-xl border border-gray-200 p-5";
+const card = cardClass;
 const hm = (h: number | null) => h == null ? "—" : `${Math.max(0, Math.floor(h))}h ${Math.max(0, Math.round((h % 1) * 60))}m`;
 
 export default async function ShiftTimeline() {

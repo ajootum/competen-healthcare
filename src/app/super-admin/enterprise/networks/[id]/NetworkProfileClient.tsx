@@ -3,12 +3,13 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import { cardClass } from "@/components/ui/primitives";
 
 // Network profile (ENT-001 §2) — header, tabs and member-organisation management.
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 const TABS = ["Overview", "Member Organisations", "Countries", "Governance", "Audit"] as const;
-const card = "bg-white rounded-xl border border-gray-200 p-5";
+const card = cardClass;
 const ORG_BADGE: Record<string, string> = { active: "bg-green-50 text-green-700", onboarding: "bg-amber-50 text-amber-700", draft: "bg-gray-100 text-gray-600", suspended: "bg-rose-50 text-rose-700" };
 const relTime = (iso?: string | null) => { if (!iso) return ""; const s = Math.floor((Date.now() - new Date(iso).getTime()) / 1000); if (s < 3600) return `${Math.floor(s / 60)} min ago`; if (s < 86400) return `${Math.floor(s / 3600)} hr ago`; return `${Math.floor(s / 86400)} d ago`; };
 

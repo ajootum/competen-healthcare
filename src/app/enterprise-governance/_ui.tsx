@@ -1,10 +1,11 @@
 import Link from "next/link";
 import type { OrgRow } from "@/lib/enterprise-governance-data";
+import { cardClass } from "@/components/ui/primitives";
 
 // Shared presentational pieces for the Enterprise Governance workspace.
 // (Underscore-prefixed file — not an App Router route.)
 
-export const card = "bg-white rounded-xl border border-gray-200 p-5";
+export const card = cardClass;
 export const tone = (n: number | null) => (n == null ? "text-gray-300" : n >= 85 ? "text-green-600" : n >= 60 ? "text-amber-600" : "text-red-600");
 export const barCls = (n: number) => (n >= 85 ? "bg-green-500" : n >= 60 ? "bg-amber-500" : "bg-red-500");
 export const pctText = (n: number | null) => (n == null ? "—" : `${n}%`);

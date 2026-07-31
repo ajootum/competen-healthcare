@@ -2,12 +2,13 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { getLandlordCaller } from "@/lib/platform/landlord";
 import { loadSecurity } from "@/lib/platform/phase3";
+import { cardClass } from "@/components/ui/primitives";
 
 export const dynamic = "force-dynamic";
 
 // Security Operations (SEC-001) — SOC view over the audit & event streams.
 /* eslint-disable @typescript-eslint/no-explicit-any */
-const card = "bg-white rounded-xl border border-gray-200 p-5";
+const card = cardClass;
 const titleCase = (s: string) => s.split(/[_\s]+/).filter(Boolean).map(w => w[0].toUpperCase() + w.slice(1)).join(" ");
 
 export default async function SecurityPage() {

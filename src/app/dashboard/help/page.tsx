@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { SHORTCUTS } from "@/lib/platform/shortcuts";
 import tokens from "@/lib/design/tokens";
+import { cardClass } from "@/components/ui/primitives";
 
 // Help & Support (PUI-002 "User Menu Standard", PUI-005 s2 keyboard navigation).
 //
@@ -13,7 +14,7 @@ import tokens from "@/lib/design/tokens";
 
 export const dynamic = "force-dynamic";
 
-const card = "bg-white rounded-xl border border-gray-200 p-5";
+const card = cardClass;
 
 function Kbd({ combo }: { combo: string }) {
   return (

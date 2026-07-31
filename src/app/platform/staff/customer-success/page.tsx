@@ -1,12 +1,13 @@
 import { redirect } from "next/navigation";
 import { getLandlordCaller } from "@/lib/platform/landlord";
 import { loadCustomerSuccess } from "@/lib/platform/staff-data";
+import { cardClass } from "@/components/ui/primitives";
 
 export const dynamic = "force-dynamic";
 
 // Customer Success (PCS-001) — tenant health across the platform.
 /* eslint-disable @typescript-eslint/no-explicit-any */
-const card = "bg-white rounded-xl border border-gray-200 p-5";
+const card = cardClass;
 const bandCls: Record<string, string> = { healthy: "bg-green-100 text-green-700", watch: "bg-amber-100 text-amber-700", at_risk: "bg-red-100 text-red-700" };
 const bar = (n: number) => (n >= 70 ? "bg-green-500" : n >= 40 ? "bg-amber-500" : "bg-red-500");
 

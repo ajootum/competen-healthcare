@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useMemo } from "react";
+import { cardClass } from "@/components/ui/primitives";
 
 // Log explorer (SYS-001.6) — client-side filter over the recent audit stream
 // (actor, action, entity, category, free text). Operates on the real events the
@@ -26,7 +27,7 @@ export default function LogExplorer({ events }: { events: Event[] }) {
   }, [events, q, cat]);
 
   return (
-    <div className="bg-white rounded-xl border border-gray-200 p-5">
+    <div className={cardClass}>
       <div className="flex items-center gap-2 mb-3 flex-wrap">
         <h2 className="font-semibold text-gray-900 text-[15px] mr-auto">Log Explorer</h2>
         <input value={q} onChange={e => setQ(e.target.value)} placeholder="Filter by actor, action, entity…" className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500/40 w-56" />

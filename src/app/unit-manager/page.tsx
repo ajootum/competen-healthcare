@@ -5,6 +5,7 @@ import { loadUnitManagerDashboard } from "@/lib/operations/unit-manager-data";
 import { filterOpsByDept, loadUnitDepartments } from "@/lib/operations/unit-command";
 import UnitCommandTabs from "./UnitCommandTabs";
 import UnitFilters from "./UnitFilters";
+import { cardClass } from "@/components/ui/primitives";
 
 export const dynamic = "force-dynamic";
 
@@ -15,7 +16,7 @@ export const dynamic = "force-dynamic";
 // no backing store and are shown as honest states.
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
-const card = "bg-white rounded-xl border border-gray-200 p-5";
+const card = cardClass;
 const pct = (n: number) => (n >= 85 ? "text-green-600" : n >= 60 ? "text-amber-600" : "text-red-600");
 
 function Kpi({ n, label, tone, sub, href }: { n: any; label: string; tone?: string; sub?: string; href?: string }) {

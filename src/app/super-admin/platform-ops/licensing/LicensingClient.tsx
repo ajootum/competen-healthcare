@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { cardClass } from "@/components/ui/primitives";
 
 // Licensing & Subscription Centre (POP-001 §5) — plans table with create/edit,
 // subscriptions/seats, and upcoming renewals. Billing history isn't stored, so
@@ -50,7 +51,7 @@ export default function LicensingClient({ planRows, renewals, currency }: { plan
       </div>
 
       {/* Renewals */}
-      <div className="bg-white rounded-xl border border-gray-200 p-5">
+      <div className={cardClass}>
         <h2 className="font-semibold text-gray-900 mb-3">Upcoming renewals</h2>
         {renewals.length === 0 ? <p className="text-sm text-gray-400">No scheduled renewals.</p> : (
           <div className="space-y-2">

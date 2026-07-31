@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { loadUnitIntelligence } from "@/lib/operations/ai-intelligence";
 import AiTabs from "../AiTabs";
+import { cardClass } from "@/components/ui/primitives";
 
 // AI & Intelligence → Executive Recommendations (UMG-AI). The full prioritised cross-domain recommendation
 // queue — the same consolidated signals as the command centre, grouped by domain, each routing to its
@@ -24,7 +25,7 @@ export default async function RecommendationsPage() {
   if (!roles.some(r => ["hospital_admin", "super_admin"].includes(r))) redirect("/dashboard");
 
   const d = await loadUnitIntelligence(admin, profile?.hospital_id ?? null, roles.includes("super_admin"));
-  const card = "bg-white rounded-xl border border-gray-200 p-5";
+  const card = cardClass;
   const recs: any[] = d.recommendations ?? [];
   const byDomain = [...new Set(recs.map(r => r.domain))].map(dom => ({ domain: dom, items: recs.filter(r => r.domain === dom) }));
 

@@ -4,6 +4,7 @@ import { cookies } from "next/headers";
 import Link from "next/link";
 import { ROLE_CONFIG, highestRole, type AppRole } from "@/lib/roles";
 import { workspaceLinksForUser } from "@/lib/workspace-links";
+import { cardClass } from "@/components/ui/primitives";
 
 // PW-010 Workspace Launcher & Switcher — a role-aware entry point to every workspace the signed-in user is
 // authorised for: their AppRole portals (ROLE_CONFIG) + org-role workspaces (workspaceLinksForUser), plus the
@@ -62,7 +63,7 @@ export default async function LauncherPage() {
       <div className="grid lg:grid-cols-[minmax(0,1fr)_300px] gap-5 items-start">
         <div className="space-y-5">
           {/* Current workspace */}
-          <div className="bg-white rounded-xl border border-gray-200 p-5">
+          <div className={cardClass}>
             <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide mb-3">Current Workspace</p>
             <div className="flex flex-wrap items-center gap-4">
               <div className="w-12 h-12 rounded-xl bg-blue-600 flex items-center justify-center text-white text-xl shrink-0">🧑‍⚕️</div>
@@ -82,7 +83,7 @@ export default async function LauncherPage() {
           </div>
 
           {/* My workspaces */}
-          <div className="bg-white rounded-xl border border-gray-200 p-5">
+          <div className={cardClass}>
             <div className="flex items-center justify-between mb-3"><h2 className="text-sm font-semibold text-gray-900">My Workspaces <span className="text-gray-400 font-normal">({workspaces.length})</span></h2></div>
             <p className="text-[12px] text-gray-500 mb-4">All workspaces you have access to based on your roles and permissions.</p>
             {workspaces.length > 0 ? (

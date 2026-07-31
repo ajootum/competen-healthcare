@@ -2,11 +2,12 @@ import { redirect } from "next/navigation";
 import { getLandlordCaller } from "@/lib/platform/landlord";
 import { loadSupport } from "@/lib/platform/staff-data";
 import SupportClient from "./SupportClient";
+import { cardClass } from "@/components/ui/primitives";
 
 export const dynamic = "force-dynamic";
 
 // Support (SUP-001) — the platform support ticket queue.
-const card = "bg-white rounded-xl border border-gray-200 p-5";
+const card = cardClass;
 
 export default async function SupportPage() {
   const caller = await getLandlordCaller();

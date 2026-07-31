@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { cardClass } from "@/components/ui/primitives";
 
 // Bed status controls (SSW-PO-001 §6) — reserve / block / release / request
 // cleaning for a bed via the existing /api/operations/beds PATCH. Occupied beds
@@ -35,7 +36,7 @@ export default function BedControls({ beds }: { beds: any[] }) {
   }
 
   return (
-    <div className="bg-white rounded-xl border border-gray-200 p-5">
+    <div className={cardClass}>
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h3 className="font-semibold text-gray-900">Bed status controls</h3>
         <select className={`${input} w-56`} value={bed} onChange={e => setBed(e.target.value)}>

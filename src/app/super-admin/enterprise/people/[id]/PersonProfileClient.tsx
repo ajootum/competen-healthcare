@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import { cardClass } from "@/components/ui/primitives";
 
 // Person profile (ENT-001 §5) — Person / Position / Roles / Workspace access,
 // with live editing of position, roles, employment and account status.
@@ -10,7 +11,7 @@ import Link from "next/link";
 
 const BADGE: Record<string, string> = { active: "bg-green-50 text-green-700", invited: "bg-blue-50 text-blue-700", suspended: "bg-rose-50 text-rose-700", deactivated: "bg-gray-100 text-gray-500", left: "bg-gray-100 text-gray-500" };
 const TABS = ["Overview", "Position & Roles", "Workspace Access", "Audit"] as const;
-const card = "bg-white rounded-xl border border-gray-200 p-5";
+const card = cardClass;
 const relTime = (iso?: string | null) => { if (!iso) return ""; const s = Math.floor((Date.now() - new Date(iso).getTime()) / 1000); if (s < 3600) return `${Math.floor(s / 60)} min ago`; if (s < 86400) return `${Math.floor(s / 3600)} hr ago`; return `${Math.floor(s / 86400)} d ago`; };
 const input = "w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500/40";
 function Row({ label, value }: { label: string; value: React.ReactNode }) {

@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { RECURRENCES, RECURRENCE_LABEL, TRIGGERS, TRIGGER_LABEL, PRIORITIES } from "@/lib/operations/task-templates";
+import { cardClass } from "@/components/ui/primitives";
 
 // Workflow & Automation (SSW-TSK-001) — reusable task templates. Create a template
 // with recurrence/trigger config, then generate a real task from it on demand
@@ -24,7 +25,7 @@ export default function WorkflowPanel({ provisioned, templates, editable }: { pr
 
   if (!provisioned) {
     return (
-      <div className="bg-white rounded-xl border border-gray-200 p-5" id="workflow">
+      <div className={cardClass} id="workflow">
         <h2 className="text-sm font-bold text-gray-900">Workflow &amp; Automation</h2>
         <div className="mt-3 rounded-lg border border-dashed border-gray-200 bg-gray-50/60 p-4 text-center">
           <p className="text-sm text-gray-500">Task templates not provisioned</p>
@@ -73,7 +74,7 @@ export default function WorkflowPanel({ provisioned, templates, editable }: { pr
   }
 
   return (
-    <div className="bg-white rounded-xl border border-gray-200 p-5" id="workflow">
+    <div className={cardClass} id="workflow">
       <div className="flex items-center justify-between mb-3">
         <div><h2 className="text-sm font-bold text-gray-900">Workflow &amp; Automation</h2><p className="text-[10px] text-gray-500">Reusable task templates · recurrence &amp; event triggers</p></div>
         {editable && (

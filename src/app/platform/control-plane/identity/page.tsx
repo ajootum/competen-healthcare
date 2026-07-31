@@ -2,12 +2,13 @@ import { redirect } from "next/navigation";
 import { getLandlordCaller } from "@/lib/platform/landlord";
 import { loadIdentity } from "@/lib/platform/phase3";
 import IdentityForm from "./IdentityForm";
+import { cardClass } from "@/components/ui/primitives";
 
 export const dynamic = "force-dynamic";
 
 // Identity & Federation (LCP-001 §19).
 /* eslint-disable @typescript-eslint/no-explicit-any */
-const card = "bg-white rounded-xl border border-gray-200 p-5";
+const card = cardClass;
 
 export default async function IdentityPage() {
   const caller = await getLandlordCaller();

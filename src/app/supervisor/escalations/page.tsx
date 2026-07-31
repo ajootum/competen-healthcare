@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { loadEscalations } from "@/lib/operations/escalations-workspace";
 import EscalationActions from "./EscalationActions";
+import { cardClass } from "@/components/ui/primitives";
 
 // Clinical Escalation Centre (SSW-CCR-003) — the supervisor's escalation
 // command surface. Until now the sidebar BADGED escalations in two groups and
@@ -16,7 +17,7 @@ import EscalationActions from "./EscalationActions";
 
 export const dynamic = "force-dynamic";
 
-const card = "bg-white rounded-xl border border-gray-200 p-5";
+const card = cardClass;
 const label = "text-[11px] font-semibold text-gray-400 uppercase tracking-wider";
 const titleCase = (s: string | null | undefined) => (s ?? "").replace(/_/g, " ").replace(/\b\w/g, ch => ch.toUpperCase());
 const fmtWhen = (iso: string | null) => iso ? new Date(iso).toLocaleString([], { hour: "2-digit", minute: "2-digit", day: "numeric", month: "short" }) : "";

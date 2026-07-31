@@ -2,6 +2,7 @@ import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { loadCkp } from "@/lib/super-admin/ckp";
+import { cardClass } from "@/components/ui/primitives";
 
 export const dynamic = "force-dynamic";
 
@@ -47,7 +48,7 @@ export default async function ClinicalKnowledgePlatform() {
         {ckp.modules.map((m: any) => {
           const ac = ACCENT[m.n] ?? ACCENT[1];
           return (
-            <div key={m.n} className="bg-white rounded-xl border border-gray-200 p-5 flex flex-col hover:border-teal-300 hover:shadow-sm transition-all">
+            <div key={m.n} className={`${cardClass} flex flex-col hover:border-teal-300 hover:shadow-sm transition-all`}>
               <div className="flex items-start justify-between gap-2 mb-3">
                 <div className="flex items-start gap-2.5 min-w-0">
                   <span className={`w-7 h-7 rounded-lg ${ac.badge} flex items-center justify-center text-sm font-bold shrink-0`}>{m.n}</span>

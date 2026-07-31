@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { REVIEW_LABEL, RISK_TONE } from "@/lib/config/governance";
+import { cardClass } from "@/components/ui/primitives";
 
 // WCE-004 governance console — create change requests (risk + reviews auto-derived from the registry on the
 // server) and drive the lifecycle (submit → review → approve → publish → verify → rollback). Separation of
@@ -41,7 +42,7 @@ export default function GovernanceConsole({ list, objectKeys }: { list: any[]; o
   const review = (id: string) => { const rt = window.prompt("Review type (product / technical / clinical_safety / security / data_governance / ai_governance / tenant_approval / enterprise_approval / release_manager):"); if (!rt) return; const dec = window.prompt("Decision (approve / approve_conditions / request_changes / reject):", "approve"); if (!dec) return; const findings = window.prompt("Findings (optional):") || undefined; post({ action: "review", id, review_type: rt.trim(), decision: dec.trim(), findings }, "Review recorded"); };
 
   return (
-    <div className="bg-white rounded-xl border border-gray-200 p-5">
+    <div className={cardClass}>
       {msg && <div className={`fixed bottom-4 right-4 z-50 text-sm rounded-lg px-4 py-2.5 shadow-lg ${msg.kind === "ok" ? "bg-emerald-600 text-white" : "bg-rose-600 text-white"}`}>{msg.text}</div>}
       <div className="flex items-center justify-between mb-3"><h2 className="text-sm font-bold text-gray-900">Change Requests</h2><button onClick={() => setOpen(o => !o)} className="text-xs bg-teal-600 text-white rounded-lg px-3 py-1.5 hover:bg-teal-700 font-medium">{open ? "Close" : "+ New Change Request"}</button></div>
 

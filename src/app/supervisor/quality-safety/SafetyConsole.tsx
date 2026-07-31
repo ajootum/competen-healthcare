@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { INCIDENT_TYPES, QUALITY_TYPES, QUALITY_TYPE_LABEL } from "@/lib/operations/quality-safety";
+import { cardClass } from "@/components/ui/primitives";
 
 // Safety console (SSW-QSE-001) — report an incident/near-miss or create a quality
 // action (CAPA / audit / PDSA / RCA / improvement project / policy review).
@@ -33,7 +34,7 @@ export default function SafetyConsole({ incidentsProvisioned, qaProvisioned }: {
   const gated = (tab === "incident" && !incidentsProvisioned) || (tab === "capa" && !qaProvisioned);
 
   return (
-    <div className="bg-white rounded-xl border border-gray-200 p-5">
+    <div className={cardClass}>
       <div className="flex items-center gap-2 mb-3">
         <button onClick={() => { setTab("incident"); setOk(null); setErr(null); }} className={`text-xs font-semibold px-3 py-1.5 rounded-lg ${tab === "incident" ? "bg-rose-600 text-white" : "bg-gray-50 text-gray-600 border border-gray-200"}`}>🚩 Report Incident</button>
         <button onClick={() => { setTab("capa"); setOk(null); setErr(null); }} className={`text-xs font-semibold px-3 py-1.5 rounded-lg ${tab === "capa" ? "bg-teal-600 text-white" : "bg-gray-50 text-gray-600 border border-gray-200"}`}>✅ Create CAPA</button>

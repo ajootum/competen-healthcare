@@ -1,6 +1,7 @@
 import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { loadActivityAnalytics, ACT_CAT } from "@/lib/activity-analytics";
+import { cardClass } from "@/components/ui/primitives";
 
 // PW-013 Activity Timeline & Productivity Analytics — unified activity timeline + productivity metrics over the
 // user's real audit_log + derived record activity. Server-rendered, read-only. Reports real activity counts and
@@ -67,7 +68,7 @@ export default async function ActivityAnalyticsPage() {
 
       <div className="grid lg:grid-cols-[minmax(0,1fr)_340px] gap-5 items-start">
         {/* Activity timeline */}
-        <div className="bg-white rounded-xl border border-gray-200 p-5">
+        <div className={cardClass}>
           <h2 className="text-sm font-semibold text-gray-900 mb-4">Activity Timeline</h2>
           {d.timeline.length > 0 ? (
             <div className="space-y-5">
@@ -158,7 +159,7 @@ export default async function ActivityAnalyticsPage() {
 
       {/* Bottom row */}
       <div className="grid lg:grid-cols-3 gap-5">
-        <div className="bg-white rounded-xl border border-gray-200 p-5">
+        <div className={cardClass}>
           <h3 className="text-sm font-semibold text-gray-900 mb-3">Activity by Module</h3>
           {d.byModule.length > 0 ? (
             <div className="space-y-2.5">
@@ -172,7 +173,7 @@ export default async function ActivityAnalyticsPage() {
           ) : <p className="text-xs text-gray-400 py-4 text-center">No module activity yet.</p>}
         </div>
 
-        <div className="bg-white rounded-xl border border-gray-200 p-5">
+        <div className={cardClass}>
           <h3 className="text-sm font-semibold text-gray-900 mb-3">Top Activities</h3>
           {d.topActivities.length > 0 ? (
             <div className="space-y-2">
@@ -183,7 +184,7 @@ export default async function ActivityAnalyticsPage() {
           ) : <p className="text-xs text-gray-400 py-4 text-center">No activity yet.</p>}
         </div>
 
-        <div className="bg-white rounded-xl border border-gray-200 p-5">
+        <div className={cardClass}>
           <h3 className="text-sm font-semibold text-gray-900 mb-3">Productivity Insights</h3>
           <div className="space-y-2.5">
             {d.insights.map((ins: any, i: number) => ( // eslint-disable-line @typescript-eslint/no-explicit-any

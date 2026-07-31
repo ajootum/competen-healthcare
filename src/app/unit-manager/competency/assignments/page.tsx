@@ -2,6 +2,7 @@ import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import CompetencyTabs from "../CompetencyTabs";
 import { loadDeliveredAssignments } from "@/lib/operations/competency-centre";
+import { cardClass } from "@/components/ui/primitives";
 
 // Competency Management → Delivered Assignments (UMG-CM). The competency assignments the CDP delivery engine
 // landed on this unit — materialised from standing assignment rules (COMP-018) and learning campaigns (CDP-008)
@@ -23,7 +24,7 @@ export default async function DeliveredAssignmentsPage() {
   if (!roles.some(r => ["hospital_admin", "super_admin"].includes(r))) redirect("/dashboard");
 
   const d = await loadDeliveredAssignments(admin, profile?.hospital_id ?? null, roles.includes("super_admin"));
-  const card = "bg-white rounded-xl border border-gray-200 p-5";
+  const card = cardClass;
 
   return (
     <div className="space-y-5">

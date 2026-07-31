@@ -1,13 +1,14 @@
 import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { loadPlatformAdmin } from "@/lib/platform-admin-data";
+import { cardClass } from "@/components/ui/primitives";
 
 export const dynamic = "force-dynamic";
 
 // Platform Analytics (PSA-010) — tenant/user growth, role mix and activity.
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
-const card = "bg-white rounded-xl border border-gray-200 p-5";
+const card = cardClass;
 const titleCase = (s: string) => s.split(/[_\s]+/).filter(Boolean).map(w => w[0].toUpperCase() + w.slice(1)).join(" ");
 
 export default async function AnalyticsPage() {

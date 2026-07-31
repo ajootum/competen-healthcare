@@ -2,11 +2,12 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { getLandlordCaller } from "@/lib/platform/landlord";
 import { loadTenantRegistry } from "@/lib/platform/tenant-registry";
+import { cardClass } from "@/components/ui/primitives";
 
 export const dynamic = "force-dynamic";
 
 // Landlord Control Plane — Overview (LCP-001).
-const card = "bg-white rounded-xl border border-gray-200 p-5";
+const card = cardClass;
 
 export default async function ControlPlaneOverview() {
   const caller = await getLandlordCaller();

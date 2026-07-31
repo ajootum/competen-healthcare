@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { loadMdt, MDT_SERVICES, MEETING_TYPES, DECISION_CATEGORIES } from "@/lib/operations/mdt";
 import { MeetingControls, AttendanceRow, ActionControls, ReferralControls, DecisionCapture } from "./MdtActions";
+import { cardClass } from "@/components/ui/primitives";
 
 // Multidisciplinary Team (MDT) Coordination (SSW-CCR-005, migration 160).
 //
@@ -18,7 +19,7 @@ import { MeetingControls, AttendanceRow, ActionControls, ReferralControls, Decis
 
 export const dynamic = "force-dynamic";
 
-const card = "bg-white rounded-xl border border-gray-200 p-5";
+const card = cardClass;
 const titleCase = (s: string | null | undefined) => (s ?? "").replace(/_/g, " ").replace(/\b\w/g, ch => ch.toUpperCase());
 const when = (t: string | null) => t ? new Date(t).toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }) : "—";
 const serviceLabel = (k: string) => MDT_SERVICES.find(s => s.key === k)?.label ?? titleCase(k);

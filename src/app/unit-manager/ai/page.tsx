@@ -4,6 +4,7 @@ import Link from "next/link";
 import { loadUnitIntelligence } from "@/lib/operations/ai-intelligence";
 import AiCopilotPanel from "@/components/AiCopilotPanel";
 import AiTabs from "./AiTabs";
+import { cardClass } from "@/components/ui/primitives";
 
 // AI & Intelligence (UMG-AI) command centre — the unit's cross-domain intelligence hub. Consolidates the
 // rule-based AI signals every domain loader already computes into one prioritised view, adds a LIVE copilot
@@ -24,7 +25,7 @@ export default async function UnitAiPage() {
   if (!roles.some(r => ["hospital_admin", "super_admin"].includes(r))) redirect("/dashboard");
 
   const d = await loadUnitIntelligence(admin, profile?.hospital_id ?? null, roles.includes("super_admin"));
-  const card = "bg-white rounded-xl border border-gray-200 p-5";
+  const card = cardClass;
 
   return (
     <div className="space-y-5">

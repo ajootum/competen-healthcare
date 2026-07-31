@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { TRANSFER_REASONS, TRANSFER_REASON_LABEL } from "@/lib/operations/shift-closure";
+import { cardClass } from "@/components/ui/primitives";
 
 // Closure & command transfer (SSW-002 §18 / §8). Capture an immutable end-of-shift
 // snapshot (metrics computed server-side) and transfer operational command to the
@@ -28,7 +29,7 @@ export default function ClosurePanel({ shiftId, provisioned, snapshots, transfer
 
   if (!provisioned) {
     return (
-      <div className="bg-white rounded-xl border border-gray-200 p-5">
+      <div className={cardClass}>
         <h2 className="text-sm font-bold text-gray-900">Closure &amp; Command Transfer</h2>
         <div className="mt-3 rounded-lg border border-dashed border-gray-200 bg-gray-50/60 p-4 text-center">
           <p className="text-sm text-gray-500">Closure snapshots not provisioned</p>
@@ -76,7 +77,7 @@ export default function ClosurePanel({ shiftId, provisioned, snapshots, transfer
   const latest = snapshots[0];
 
   return (
-    <div className="bg-white rounded-xl border border-gray-200 p-5">
+    <div className={cardClass}>
       <div className="flex items-center justify-between mb-3">
         <div>
           <h2 className="text-sm font-bold text-gray-900">Closure &amp; Command Transfer</h2>

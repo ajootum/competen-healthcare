@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { NEXT_STATUS } from "@/lib/enterprise/templates";
+import { cardClass } from "@/components/ui/primitives";
 
 // Enterprise Template profile (ENT-001 §6) — lifecycle, versioning and the
 // deployment workflow (organisation templates provision a new organisation).
@@ -11,7 +12,7 @@ import { NEXT_STATUS } from "@/lib/enterprise/templates";
 
 const STATUS_BADGE: Record<string, string> = { draft: "bg-gray-100 text-gray-600", review: "bg-amber-50 text-amber-700", approved: "bg-sky-50 text-sky-700", published: "bg-green-50 text-green-700", assigned: "bg-violet-50 text-violet-700", retired: "bg-gray-100 text-gray-400" };
 const TYPE_ICON: Record<string, string> = { organisation: "🏛️", facility: "🏥", department: "🗂️", unit: "🔹", role: "🪪", workspace: "🖥️", structure: "🏗️" };
-const card = "bg-white rounded-xl border border-gray-200 p-5";
+const card = cardClass;
 const input = "w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500/40";
 const relTime = (iso?: string | null) => { if (!iso) return ""; const s = Math.floor((Date.now() - new Date(iso).getTime()) / 1000); if (s < 3600) return `${Math.floor(s / 60)} min ago`; if (s < 86400) return `${Math.floor(s / 3600)} hr ago`; return `${Math.floor(s / 86400)} d ago`; };
 

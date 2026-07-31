@@ -1,6 +1,7 @@
 import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import Link from "next/link";
+import { cardClass } from "@/components/ui/primitives";
 
 export const dynamic = "force-dynamic";
 
@@ -40,7 +41,7 @@ export default async function WorkforcePlanningPage() {
   }
   const depts = [...byDept.values()].sort((a, b) => b.establishment - a.establishment);
   const totalEst = positions.length, totalFilled = filled.size;
-  const card = "bg-white rounded-xl border border-gray-200 p-5";
+  const card = cardClass;
 
   return (
     <div className="space-y-5">

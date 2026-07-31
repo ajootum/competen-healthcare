@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { cardClass } from "@/components/ui/primitives";
 
 // AI Insights & Recommendations (LDS-006) — the recommendations are generated server-side from live state
 // (rule-based + explainable, each with a "why"); this client shell just buckets them by audience tab. No
@@ -25,7 +26,7 @@ export default function AiInsights({ items }: { items: any[] }) {
   const count = (k: string) => items.filter(i => i.audience === k).length;
 
   return (
-    <div className="bg-white rounded-xl border border-gray-200 p-5">
+    <div className={cardClass}>
       <div className="flex items-center gap-2 mb-3">
         <span className="w-7 h-7 rounded-lg bg-violet-50 flex items-center justify-center text-sm">🤖</span>
         <h3 className="font-semibold text-gray-900 text-sm">AI Insights &amp; Recommendations</h3>

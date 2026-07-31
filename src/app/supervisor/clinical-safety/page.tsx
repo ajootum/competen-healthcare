@@ -2,6 +2,7 @@ import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { loadPatientOps, fmtTime, titleCase, ewsColor, STATE_TONE } from "@/lib/operations/patient-ops";
+import { cardClass } from "@/components/ui/primitives";
 
 export const dynamic = "force-dynamic";
 
@@ -12,7 +13,7 @@ export const dynamic = "force-dynamic";
 // clinical decisions. No safety signal is fabricated.
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
-const card = "bg-white rounded-xl border border-gray-200 p-5";
+const card = cardClass;
 const SAFETY = "/supervisor/operations?section=safety";
 
 const SEV_TONE: Record<string, string> = {

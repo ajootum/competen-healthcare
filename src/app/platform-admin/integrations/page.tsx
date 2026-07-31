@@ -2,13 +2,14 @@ import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { loadPlatformAdmin } from "@/lib/platform-admin-data";
+import { cardClass } from "@/components/ui/primitives";
 
 export const dynamic = "force-dynamic";
 
 // Integration Centre (PSA-007) — connected services and external systems.
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
-const card = "bg-white rounded-xl border border-gray-200 p-5";
+const card = cardClass;
 const badge: Record<string, { cls: string; label: string; dot: string }> = {
   live: { cls: "bg-green-50 border-green-200", label: "Live", dot: "bg-green-500" },
   native: { cls: "bg-teal-50 border-teal-200", label: "Platform-native", dot: "bg-teal-400" },

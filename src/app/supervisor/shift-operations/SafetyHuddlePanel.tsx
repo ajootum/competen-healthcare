@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { cardClass } from "@/components/ui/primitives";
 
 // Pre-shift safety huddle (SSW-002 §6.7). Record the team briefing — concerns,
 // risks and planned actions — and complete it. Completing satisfies the
@@ -35,7 +36,7 @@ export default function SafetyHuddlePanel({ shiftId, provisioned, huddle, editab
 
   if (!provisioned) {
     return (
-      <div className="bg-white rounded-xl border border-gray-200 p-5">
+      <div className={cardClass}>
         <h2 className="text-sm font-bold text-gray-900">Safety Huddle</h2>
         <div className="mt-3 rounded-lg border border-dashed border-gray-200 bg-gray-50/60 p-4 text-center">
           <p className="text-sm text-gray-500">Safety huddle not provisioned</p>
@@ -60,7 +61,7 @@ export default function SafetyHuddlePanel({ shiftId, provisioned, huddle, editab
   }
 
   return (
-    <div className="bg-white rounded-xl border border-gray-200 p-5">
+    <div className={cardClass}>
       <div className="flex items-center justify-between mb-2">
         <div>
           <h2 className="text-sm font-bold text-gray-900">Safety Huddle</h2>

@@ -2,13 +2,14 @@ import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { loadOrgAdminDashboard } from "@/lib/org-admin-data";
+import { cardClass } from "@/components/ui/primitives";
 
 export const dynamic = "force-dynamic";
 
 // Organisation Administration Dashboard (ADM-001).
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
-const card = "bg-white rounded-xl border border-gray-200 p-5";
+const card = cardClass;
 const titleCase = (s: string) => s.split(/[_\s]+/).filter(Boolean).map(w => w[0].toUpperCase() + w.slice(1)).join(" ");
 const intDot: Record<string, string> = { live: "bg-green-500", native: "bg-teal-400", off: "bg-gray-300" };
 

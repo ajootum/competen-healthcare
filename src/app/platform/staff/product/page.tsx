@@ -3,12 +3,13 @@ import Link from "next/link";
 import { getLandlordCaller } from "@/lib/platform/landlord";
 import { loadProduct } from "@/lib/platform/phase3";
 import ProductToggle from "./ProductToggle";
+import { cardClass } from "@/components/ui/primitives";
 
 export const dynamic = "force-dynamic";
 
 // Product Management (PRD-001).
 /* eslint-disable @typescript-eslint/no-explicit-any */
-const card = "bg-white rounded-xl border border-gray-200 p-5";
+const card = cardClass;
 
 export default async function ProductPage() {
   const caller = await getLandlordCaller();

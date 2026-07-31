@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import CompetencyTabs from "../CompetencyTabs";
 import { loadRecertPipeline } from "@/lib/operations/competency-centre";
+import { cardClass } from "@/components/ui/primitives";
 
 // Competency Management → Expiries & Recertification (UMG-CM). A dated pipeline of what lapses when, over the
 // two real expiry sources: professional_credentials and competency_decisions. Read-only — renewals run through
@@ -24,7 +25,7 @@ export default async function RecertPage() {
   if (!roles.some(r => ["hospital_admin", "super_admin"].includes(r))) redirect("/dashboard");
 
   const p = await loadRecertPipeline(admin, profile?.hospital_id ?? null, roles.includes("super_admin"));
-  const card = "bg-white rounded-xl border border-gray-200 p-5";
+  const card = cardClass;
 
   return (
     <div className="space-y-5">

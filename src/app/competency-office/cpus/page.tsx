@@ -2,6 +2,7 @@ import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { holdsOfficeAppointment } from "@/lib/ogs/office";
 import { redirect } from "next/navigation";
 import Link from "next/link";
+import { cardClass } from "@/components/ui/primitives";
 
 export const dynamic = "force-dynamic";
 
@@ -28,7 +29,7 @@ export default async function CpuLibraryPage() {
     .select("id, name, code, risk_category, reassessment_months, pub_status, version_num").order("name").limit(2000);
   const rows = cpus ?? [];
   const published = rows.filter((c: any) => c.pub_status === "published").length;
-  const card = "bg-white rounded-xl border border-gray-200 p-5";
+  const card = cardClass;
 
   return (
     <div className="space-y-5">

@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { cardClass } from "@/components/ui/primitives";
 
 // Patient Operations configuration editor (POS-112). Inline-edit an editable rule; saving versions
 // the override through /api/operations/pos-config (append-a-new-version, effective-dated, audited).
@@ -32,7 +33,7 @@ export default function ConfigConsole({ domains }: { domains: any[] }) {
       {msg && <div className={`fixed bottom-4 right-4 z-50 text-sm rounded-lg px-4 py-2.5 shadow-lg ${msg.kind === "ok" ? "bg-emerald-600 text-white" : "bg-rose-600 text-white"}`}>{msg.text}</div>}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         {domains.map(d => (
-          <div key={d.domain} className="bg-white rounded-xl border border-gray-200 p-5">
+          <div key={d.domain} className={cardClass}>
             <h3 className="text-sm font-bold text-gray-900 mb-1 flex items-center gap-2">{d.icon} {d.name}</h3>
             <p className="text-[11px] text-gray-400 mb-3">{d.consumerNote}</p>
             <div className="divide-y divide-gray-50">

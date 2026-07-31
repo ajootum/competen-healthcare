@@ -3,13 +3,14 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import { cardClass } from "@/components/ui/primitives";
 
 // Facility profile (ENT-001 §3) — header, lifecycle actions and tabbed detail.
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 const BADGE: Record<string, string> = { draft: "bg-gray-100 text-gray-600", onboarding: "bg-amber-50 text-amber-700", active: "bg-green-50 text-green-700", suspended: "bg-rose-50 text-rose-700", archived: "bg-gray-100 text-gray-500" };
 const TABS = ["Overview", "Departments", "People", "Services", "Governance", "Audit"] as const;
-const card = "bg-white rounded-xl border border-gray-200 p-5";
+const card = cardClass;
 const relTime = (iso?: string | null) => { if (!iso) return ""; const s = Math.floor((Date.now() - new Date(iso).getTime()) / 1000); if (s < 3600) return `${Math.floor(s / 60)} min ago`; if (s < 86400) return `${Math.floor(s / 3600)} hr ago`; return `${Math.floor(s / 86400)} d ago`; };
 
 function Row({ label, value }: { label: string; value: React.ReactNode }) {

@@ -1,6 +1,7 @@
 "use client";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { cardClass } from "@/components/ui/primitives";
 
 // Configure a tenant's SSO/IdP (LCP-001 §19). Stores config; enforcement pending.
 export default function IdentityForm({ tenants }: { tenants: { id: string; name: string }[] }) {
@@ -25,7 +26,7 @@ export default function IdentityForm({ tenants }: { tenants: { id: string; name:
   };
   const field = "border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-violet-400";
   return (
-    <form onSubmit={submit} className="bg-white rounded-xl border border-gray-200 p-5 space-y-3 max-w-md">
+    <form onSubmit={submit} className={`${cardClass} space-y-3 max-w-md`}>
       <h3 className="font-semibold text-gray-900">Configure tenant SSO</h3>
       <select value={tenantId} onChange={e => setTenantId(e.target.value)} className={`${field} w-full`} required>
         <option value="">Select tenant…</option>

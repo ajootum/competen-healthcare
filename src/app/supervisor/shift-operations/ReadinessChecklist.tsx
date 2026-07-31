@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { cardClass } from "@/components/ui/primitives";
 
 // Pre-shift readiness checklist (SSW-002 §6.4 / §9.3). Mandatory items gate
 // activation — completing them clears the READINESS_INCOMPLETE blocker on the
@@ -23,7 +24,7 @@ export default function ReadinessChecklist({ shiftId, items, provisioned, mandat
 
   if (!provisioned) {
     return (
-      <div className="bg-white rounded-xl border border-gray-200 p-5">
+      <div className={cardClass}>
         <h2 className="text-sm font-bold text-gray-900">Shift Readiness</h2>
         <div className="mt-3 rounded-lg border border-dashed border-gray-200 bg-gray-50/60 p-4 text-center">
           <p className="text-sm text-gray-500">Readiness checklist not provisioned</p>
@@ -55,7 +56,7 @@ export default function ReadinessChecklist({ shiftId, items, provisioned, mandat
   const pct = mandatoryTotal ? Math.round((mandatoryComplete / mandatoryTotal) * 100) : 100;
 
   return (
-    <div className="bg-white rounded-xl border border-gray-200 p-5">
+    <div className={cardClass}>
       <div className="flex items-center justify-between mb-3">
         <div>
           <h2 className="text-sm font-bold text-gray-900">Shift Readiness</h2>

@@ -2,6 +2,7 @@ import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { loadShiftAttendance } from "@/lib/operations/shift-attendance";
+import { cardClass } from "@/components/ui/primitives";
 
 // Shift Attendance & Fatigue (SSW-WFM-001 / WFM-003) — the supervisor's lens
 // over attendance for the shift they are actually running.
@@ -15,7 +16,7 @@ import { loadShiftAttendance } from "@/lib/operations/shift-attendance";
 
 export const dynamic = "force-dynamic";
 
-const card = "bg-white rounded-xl border border-gray-200 p-5";
+const card = cardClass;
 const label = "text-[11px] font-semibold text-gray-400 uppercase tracking-wider";
 const titleCase = (s: string | null | undefined) => (s ?? "").replace(/_/g, " ").replace(/\b\w/g, ch => ch.toUpperCase());
 const time = (t: string | null) => t ? new Date(t).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "—";

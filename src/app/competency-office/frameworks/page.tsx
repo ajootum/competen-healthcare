@@ -2,6 +2,7 @@ import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { holdsOfficeAppointment } from "@/lib/ogs/office";
 import { redirect } from "next/navigation";
 import Link from "next/link";
+import { cardClass } from "@/components/ui/primitives";
 
 export const dynamic = "force-dynamic";
 
@@ -44,7 +45,7 @@ export default async function FrameworkManagerPage() {
     }
   }
 
-  const card = "bg-white rounded-xl border border-gray-200 p-5";
+  const card = cardClass;
   return (
     <div className="space-y-5">
       <div className="flex items-start justify-between gap-3">

@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { METRIC_DEFS } from "@/lib/operations/shift-metrics";
+import { cardClass } from "@/components/ui/primitives";
 
 // Persisted shift metrics (SSW-002 §19). Live KPIs are always shown (derived by
 // the engine); when the metrics table exists, the supervisor can persist them for
@@ -38,7 +39,7 @@ export default function ShiftMetricsPanel({ shiftId, provisioned, live, persiste
   const trendMax = Math.max(1, ...trend.map(t => t.overall_score ?? 0));
 
   return (
-    <div className="bg-white rounded-xl border border-gray-200 p-5">
+    <div className={cardClass}>
       <div className="flex items-center justify-between mb-3">
         <div>
           <h2 className="text-sm font-bold text-gray-900">Shift Metrics</h2>

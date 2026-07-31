@@ -4,6 +4,7 @@ import Link from "next/link";
 import { loadPatientOps, fmtTime, titleCase, ewsColor, STATE_TONE, BED_TONE } from "@/lib/operations/patient-ops";
 import BedTurnaroundPanel from "./BedTurnaroundPanel";
 import BedControls from "./BedControls";
+import { cardClass } from "@/components/ui/primitives";
 
 export const dynamic = "force-dynamic";
 
@@ -14,7 +15,7 @@ export const dynamic = "force-dynamic";
 // surfaced as honest callouts, never fabricated.
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
-const card = "bg-white rounded-xl border border-gray-200 p-5";
+const card = cardClass;
 
 // Human labels + text/colour legend keyed to bed status (BED_TONE gives border/bg).
 const STATUS_LABEL: Record<string, string> = {

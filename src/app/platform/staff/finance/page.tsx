@@ -2,12 +2,13 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { getLandlordCaller } from "@/lib/platform/landlord";
 import { loadFinance } from "@/lib/platform/staff-data";
+import { cardClass } from "@/components/ui/primitives";
 
 export const dynamic = "force-dynamic";
 
 // Finance (FIN-001) — subscription economics across the platform.
 /* eslint-disable @typescript-eslint/no-explicit-any */
-const card = "bg-white rounded-xl border border-gray-200 p-5";
+const card = cardClass;
 const money = (n: number, c: string) => `${c} ${Number(n).toLocaleString(undefined, { maximumFractionDigits: 0 })}`;
 
 export default async function FinancePage() {

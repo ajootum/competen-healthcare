@@ -2,11 +2,12 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { getLandlordCaller } from "@/lib/platform/landlord";
 import { loadAiOps } from "@/lib/platform/phase3";
+import { cardClass } from "@/components/ui/primitives";
 
 export const dynamic = "force-dynamic";
 
 // AI Operations (AIS-001).
-const card = "bg-white rounded-xl border border-gray-200 p-5";
+const card = cardClass;
 const provLabel = (p: string | null) => (p === "anthropic" ? "Anthropic" : p === "openai" ? "OpenAI" : p === "gemini" ? "Gemini" : p ?? "—");
 
 export default async function AiOpsPage() {

@@ -1,6 +1,6 @@
 "use client";
 import { useState } from "react";
-import { Badge } from "@/components/ui/primitives";
+import { Badge, cardClass } from "@/components/ui/primitives";
 
 // UMW-TLS-005 client. Every control is disabled when policy locks it, and the reason is shown next to it —
 // a control that silently refuses to save would be worse than no control.
@@ -63,7 +63,7 @@ export default function PersonalisationForm({ groups, provisioned }: { groups: a
       )}
 
       {groups.map((g: any) => (
-        <div key={g.key} className="bg-white rounded-xl border border-gray-200 p-5">
+        <div key={g.key} className={cardClass}>
           <h2 className="text-sm font-bold text-gray-900 mb-3">{g.label}</h2>
           <div className="space-y-3.5">
             {g.items.map((i: any) => {

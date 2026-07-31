@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { cardClass } from "@/components/ui/primitives";
 
 // Automation runner canvas — runs a real background job on demand via
 // POST /api/jobs?key=<job> (POS-001F job runner, super_admin). Shows the live
@@ -28,7 +29,7 @@ export default function JobRunner({ jobs, title = "Run Automation" }: { jobs: Jo
   }
 
   return (
-    <div className="bg-white rounded-xl border border-gray-200 p-5">
+    <div className={cardClass}>
       <h2 className="font-semibold text-gray-900 text-[15px] mb-3">{title}</h2>
       {runnable.length === 0 ? <p className="text-sm text-gray-400">No on-demand automations registered.</p> : (
         <div className="flex flex-wrap items-center gap-2">

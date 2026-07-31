@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { cardClass } from "@/components/ui/primitives";
 
 // Flow Blockers panel (SSW-005 Patient Flow) — logs and resolves real blockers on
 // patient movement via /api/operations/flow-blockers, alongside the auto-detected
@@ -38,7 +39,7 @@ export default function FlowBlockersPanel({ blockers, auto, patients, configRead
   }
 
   return (
-    <div className="bg-white rounded-xl border border-gray-200 p-5">
+    <div className={cardClass}>
       <div className="flex items-center justify-between">
         <h3 className="font-semibold text-gray-900">Flow blockers</h3>
         <span className="text-[11px] text-gray-400">{blockers.length} logged · {auto.length} auto-detected</span>

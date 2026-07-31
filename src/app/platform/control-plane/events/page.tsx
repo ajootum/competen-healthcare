@@ -2,12 +2,13 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { getLandlordCaller } from "@/lib/platform/landlord";
 import { loadEventCentre } from "@/lib/platform/events";
+import { cardClass } from "@/components/ui/primitives";
 
 export const dynamic = "force-dynamic";
 
 // Global Event Centre (LCP-001 §15).
 /* eslint-disable @typescript-eslint/no-explicit-any */
-const card = "bg-white rounded-xl border border-gray-200 p-5";
+const card = cardClass;
 const sevCls: Record<string, string> = { info: "bg-gray-100 text-gray-600", warning: "bg-amber-100 text-amber-700", critical: "bg-red-100 text-red-700" };
 
 export default async function EventCentrePage() {

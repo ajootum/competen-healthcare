@@ -12,10 +12,11 @@ import { loadAssignmentContext, DEFAULT_WORKLOAD_BY_ACUITY, OVERLOAD_PCT } from 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 import ReviewBoard from "./ReviewBoard";
+import { cardClass } from "@/components/ui/primitives";
 
 export const dynamic = "force-dynamic";
 
-const card = "bg-white rounded-xl border border-gray-200 p-5";
+const card = cardClass;
 const titleCase = (s: string | null | undefined) => (s ?? "").replace(/_/g, " ").replace(/\b\w/g, ch => ch.toUpperCase());
 const fmtWhen = (iso: string | null) => iso ? new Date(iso).toLocaleString([], { hour: "2-digit", minute: "2-digit", day: "numeric", month: "short" }) : "";
 const STATUS_TONE: Record<string, string> = {

@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { cardClass } from "@/components/ui/primitives";
 
 // Ward Configuration client (SSW-001) — Director of Nursing setup for beds,
 // staffing standards and the round schedule. After every write it calls
@@ -15,7 +16,7 @@ const BED_TYPES = ["standard", "critical_care", "isolation", "paediatric", "thea
 const BED_STATUS = ["available", "occupied", "reserved", "cleaning", "out_of_service"];
 const titleCase = (s: string) => (s ?? "").replace(/_/g, " ").split(" ").filter(Boolean).map(w => w[0].toUpperCase() + w.slice(1)).join(" ");
 
-const card = "bg-white rounded-xl border border-gray-200 p-5";
+const card = cardClass;
 const input = "border border-gray-300 rounded-lg px-2.5 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500/40";
 const btn = "px-3 py-1.5 rounded-lg bg-teal-600 text-white text-sm font-medium hover:bg-teal-700 disabled:opacity-50";
 const btnGhost = "px-2 py-1 rounded-lg border border-gray-300 text-xs text-gray-600 hover:bg-gray-50 disabled:opacity-50";

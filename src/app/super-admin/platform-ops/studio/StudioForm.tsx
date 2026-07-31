@@ -1,6 +1,7 @@
 "use client";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { cardClass } from "@/components/ui/primitives";
 
 // Configuration Studio authoring form. Creates a draft registry object (POST /api/config/objects), then raises
 // a governance change request for it (POST /api/governance/config) so it is governed + dependency-gated from
@@ -37,7 +38,7 @@ export default function StudioForm({ existingKeys, sources }: { existingKeys: st
   }
 
   return (
-    <div className="bg-white rounded-xl border border-gray-200 p-5">
+    <div className={cardClass}>
       <h2 className="font-semibold text-gray-900 text-sm mb-1">Author a Configuration Object</h2>
       <p className="text-[11px] text-gray-400 mb-4">Create a governed object of any builder type. It enters the registry as a <b>draft</b> and a change request is raised — it goes active only through governance + the dependency gate.</p>
 

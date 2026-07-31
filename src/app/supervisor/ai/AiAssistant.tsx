@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { cardClass } from "@/components/ui/primitives";
 
 // AI Assistant (SSW-AI-001 §7) — natural-language chat grounded on the live shift
 // snapshot via /api/operations/copilot. Suggested questions seed common queries;
@@ -32,7 +33,7 @@ export default function AiAssistant() {
   }
 
   return (
-    <div className="bg-white rounded-xl border border-gray-200 p-5">
+    <div className={cardClass}>
       <div className="flex items-center gap-2 mb-3"><span className="w-6 h-6 rounded-lg bg-teal-100 text-teal-700 flex items-center justify-center text-[11px] font-bold">6</span><h3 className="text-xs font-bold text-gray-900">AI Assistant</h3></div>
       <div className="flex gap-2 mb-2">
         <input value={q} onChange={e => setQ(e.target.value)} onKeyDown={e => e.key === "Enter" && ask(q)} placeholder="Ask me anything about your shift…" className="flex-1 text-xs border border-gray-200 rounded-lg px-2 py-1.5" />

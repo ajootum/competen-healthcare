@@ -1,6 +1,7 @@
 "use client";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { cardClass } from "@/components/ui/primitives";
 
 type Ticket = { id: string; subject: string; status: string; priority: string; tenant_name: string | null; requester_name: string | null; created_at: string | null };
 const statusCls: Record<string, string> = { open: "bg-blue-100 text-blue-700", pending: "bg-amber-100 text-amber-700", resolved: "bg-green-100 text-green-700", closed: "bg-gray-100 text-gray-500" };
@@ -31,7 +32,7 @@ export default function SupportClient({ tickets, tenants }: { tickets: Ticket[];
   const field = "border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-violet-400";
   return (
     <div className="grid lg:grid-cols-3 gap-5 items-start">
-      <form onSubmit={create} className="bg-white rounded-xl border border-gray-200 p-5 space-y-3">
+      <form onSubmit={create} className={`${cardClass} space-y-3`}>
         <h3 className="font-semibold text-gray-900">New ticket</h3>
         <input value={subject} onChange={e => setSubject(e.target.value)} placeholder="Subject" className={`${field} w-full`} required />
         <select value={tenantId} onChange={e => setTenantId(e.target.value)} className={`${field} w-full`}>
@@ -44,7 +45,7 @@ export default function SupportClient({ tickets, tenants }: { tickets: Ticket[];
         <button type="submit" disabled={busy || !subject.trim()} className="w-full bg-violet-600 hover:bg-violet-700 disabled:opacity-50 text-white text-sm font-medium rounded-lg px-4 py-2">{busy ? "Creating…" : "Create ticket"}</button>
       </form>
 
-      <div className="lg:col-span-2 bg-white rounded-xl border border-gray-200 p-5">
+      <div className={`${cardClass} lg:col-span-2`}>
         <h3 className="font-semibold text-gray-900 mb-3">Queue</h3>
         {tickets.length === 0 && <p className="text-sm text-gray-400">No tickets. Create one to get started.</p>}
         <div className="divide-y divide-gray-100">

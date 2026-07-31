@@ -2,6 +2,7 @@ import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { loadConcernQueue, isOverdue } from "@/lib/hww/concerns";
 import QueueActions from "./QueueActions";
+import { cardClass } from "@/components/ui/primitives";
 
 // Nurse Concerns Queue (HWW-ADD-001 §SSW Integration) — the supervisor's review
 // surface: every active bedside concern on the tenant, priority-ranked with
@@ -13,7 +14,7 @@ import QueueActions from "./QueueActions";
 
 export const dynamic = "force-dynamic";
 
-const card = "bg-white rounded-xl border border-gray-200 p-5";
+const card = cardClass;
 const titleCase = (s: string | null | undefined) => (s ?? "").replace(/_/g, " ").replace(/\b\w/g, ch => ch.toUpperCase());
 const fmtWhen = (iso: string | null) => iso ? new Date(iso).toLocaleString([], { hour: "2-digit", minute: "2-digit", day: "numeric", month: "short" }) : "";
 const PRIO_TONE: Record<string, string> = { immediate: "bg-red-100 text-red-700", urgent: "bg-orange-100 text-orange-700", today: "bg-amber-100 text-amber-700", routine: "bg-gray-100 text-gray-500" };

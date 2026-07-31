@@ -2,13 +2,14 @@ import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { loadOrgAdminDashboard } from "@/lib/org-admin-data";
+import { cardClass } from "@/components/ui/primitives";
 
 export const dynamic = "force-dynamic";
 
 // Organisation Structure (ADM-002) — organisation → facilities → departments.
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
-const card = "bg-white rounded-xl border border-gray-200 p-5";
+const card = cardClass;
 
 export default async function OrgStructurePage() {
   const supabase = await createClient();

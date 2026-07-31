@@ -2,6 +2,7 @@ import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import ClinicalToolkit from "./ClinicalToolkit";
+import { cardClass } from "@/components/ui/primitives";
 
 export const dynamic = "force-dynamic";
 
@@ -28,7 +29,7 @@ export default async function Toolkit() {
 
       <ClinicalToolkit />
 
-      <div className="bg-white rounded-xl border border-gray-200 p-5">
+      <div className={cardClass}>
         <h2 className="text-sm font-bold text-gray-900 mb-2">Reference Library</h2>
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
           {["Protocols & Guidelines", "Policy Library", "Competency References"].map(t => (

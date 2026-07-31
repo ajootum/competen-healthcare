@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { cardClass } from "@/components/ui/primitives";
 
 // Patient Census + Patient Card drawer (SSW-003 §8 / §10). Interactive: tab
 // filters, row selection opens the operational Patient Card drawer with the full
@@ -27,7 +28,7 @@ export default function PatientCensusConsole({ records, tabs }: { records: any[]
   return (
     <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
       {/* Census table */}
-      <div className="xl:col-span-2 bg-white rounded-xl border border-gray-200 p-5">
+      <div className={`${cardClass} xl:col-span-2`}>
         <div className="flex items-center gap-2 mb-3 flex-wrap">
           <h2 className="text-sm font-bold text-gray-900 mr-1">Patient Census</h2>
           {tabs.map((t) => (
@@ -79,7 +80,7 @@ export default function PatientCensusConsole({ records, tabs }: { records: any[]
       </div>
 
       {/* Patient Card drawer */}
-      <div className="bg-white rounded-xl border border-gray-200 p-5">
+      <div className={cardClass}>
         {!sel ? <p className="text-sm text-gray-400 text-center py-10">Select a patient to view their operational card.</p> : (
           <>
             <div className="flex items-start justify-between gap-2 mb-3 pb-3 border-b border-gray-100">

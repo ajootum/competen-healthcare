@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { ASSIGNMENT_TYPES, ASSIGNMENT_SOURCES, TYPE_LABEL, SOURCE_LABEL } from "@/lib/operations/supervisor-assignments";
+import { cardClass } from "@/components/ui/primitives";
 
 // Supervisor assignment & confirmation (SSW-002 §6.3 / §8 / §9.2). Assign a
 // supervisor to the shift, then confirm or decline. Confirming a PRIMARY sets the
@@ -27,7 +28,7 @@ export default function SupervisorPanel({ shiftId, provisioned, assignments, sta
 
   if (!provisioned) {
     return (
-      <div className="bg-white rounded-xl border border-gray-200 p-5">
+      <div className={cardClass}>
         <h2 className="text-sm font-bold text-gray-900">Command &amp; Supervisor Assignment</h2>
         <div className="mt-3 rounded-lg border border-dashed border-gray-200 bg-gray-50/60 p-4 text-center">
           <p className="text-sm text-gray-500">Supervisor assignments not provisioned</p>
@@ -72,7 +73,7 @@ export default function SupervisorPanel({ shiftId, provisioned, assignments, sta
   const sel = "text-xs border border-gray-200 rounded-lg px-2 py-1.5 bg-white";
 
   return (
-    <div className="bg-white rounded-xl border border-gray-200 p-5">
+    <div className={cardClass}>
       <h2 className="text-sm font-bold text-gray-900">Command &amp; Supervisor Assignment</h2>
       <p className="text-[11px] text-gray-500 mb-3">One accountable command owner per shift — confirming a primary establishes command (SSW-002 §8).</p>
 

@@ -7,6 +7,7 @@ import { loadUnitDepartments } from "@/lib/operations/unit-command";
 import UnitFilters from "../../UnitFilters";
 import PosTabs from "../PosTabs";
 import ConfigConsole from "./ConfigConsole";
+import { cardClass } from "@/components/ui/primitives";
 
 export const dynamic = "force-dynamic";
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -54,7 +55,7 @@ export default async function PatientOpsConfiguration() {
 
       {/* Recent changes + honest next-phase domains */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <div className="bg-white rounded-xl border border-gray-200 p-5">
+        <div className={cardClass}>
           <h3 className="text-sm font-bold text-gray-900 mb-3">Recent configuration changes</h3>
           {d.recent.length === 0 ? <p className="text-sm text-gray-400">No overrides yet — all rules on platform defaults.</p> : (
             <div className="divide-y divide-gray-50">
@@ -68,7 +69,7 @@ export default async function PatientOpsConfiguration() {
           )}
         </div>
 
-        <div className="bg-white rounded-xl border border-gray-200 p-5">
+        <div className={cardClass}>
           <h3 className="text-sm font-bold text-gray-900 mb-3">Further configuration <span className="text-[10px] font-normal text-gray-400">next-phase</span></h3>
           <div className="space-y-2">
             {CONFIG_NEXT_PHASE.map(x => (

@@ -1,11 +1,12 @@
 import { redirect } from "next/navigation";
 import { getLandlordCaller } from "@/lib/platform/landlord";
+import { cardClass } from "@/components/ui/primitives";
 
 export const dynamic = "force-dynamic";
 
 // Subscription & Licensing (LCP-001 §4).
 /* eslint-disable @typescript-eslint/no-explicit-any */
-const card = "bg-white rounded-xl border border-gray-200 p-5";
+const card = cardClass;
 const ent = (e: any, k: string) => (e && e[k] != null ? String(e[k]) : "∞");
 
 export default async function SubscriptionsPage() {

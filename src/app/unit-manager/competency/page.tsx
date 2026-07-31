@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { loadCompetencyCentre } from "@/lib/operations/competency-centre";
 import CompetencyTabs from "./CompetencyTabs";
+import { cardClass } from "@/components/ui/primitives";
 
 // Competency Management (UMG-CM) command centre — the Unit Manager's lens over the unit's competency posture:
 // coverage & deployability, credential expiries, pending validations and the competency assignments the CDP
@@ -25,7 +26,7 @@ export default async function CompetencyCommandPage() {
   if (!roles.some(r => ["hospital_admin", "super_admin"].includes(r))) redirect("/dashboard");
 
   const c = await loadCompetencyCentre(admin, profile?.hospital_id ?? null, roles.includes("super_admin"));
-  const card = "bg-white rounded-xl border border-gray-200 p-5";
+  const card = cardClass;
   const r: any = c.readiness ?? {};
   const roleCoverage: any[] = r.roleCoverage ?? [];
   const risks: any[] = r.risks ?? [];

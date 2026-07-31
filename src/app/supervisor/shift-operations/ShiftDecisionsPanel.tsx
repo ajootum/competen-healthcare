@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { DECISION_TYPES, DECISION_TYPE_LABEL } from "@/lib/operations/shift-records";
+import { cardClass } from "@/components/ui/primitives";
 
 // Material operational decisions (SSW-002 §6.8 / §5.4). Log a decision (type +
 // summary + reason) and review/close it. Writes through the audited API.
@@ -25,7 +26,7 @@ export default function ShiftDecisionsPanel({ shiftId, provisioned, decisions, e
 
   if (!provisioned) {
     return (
-      <div className="bg-white rounded-xl border border-gray-200 p-5">
+      <div className={cardClass}>
         <h2 className="text-sm font-bold text-gray-900">Operational Decisions</h2>
         <div className="mt-3 rounded-lg border border-dashed border-gray-200 bg-gray-50/60 p-4 text-center">
           <p className="text-sm text-gray-500">Decision log not provisioned</p>
@@ -64,7 +65,7 @@ export default function ShiftDecisionsPanel({ shiftId, provisioned, decisions, e
   const sel = "text-xs border border-gray-200 rounded-lg px-2 py-1.5 bg-white";
 
   return (
-    <div className="bg-white rounded-xl border border-gray-200 p-5">
+    <div className={cardClass}>
       <div className="flex items-center justify-between mb-3">
         <div>
           <h2 className="text-sm font-bold text-gray-900">Operational Decisions</h2>

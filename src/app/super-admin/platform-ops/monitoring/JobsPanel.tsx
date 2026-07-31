@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useCallback } from "react";
+import { cardClass } from "@/components/ui/primitives";
 
 // POS-001F Jobs panel — the background-job registry with last-run status and an
 // on-demand "Run" per runnable job, plus recent run history. Fed by /api/jobs.
@@ -39,7 +40,7 @@ export default function JobsPanel({ initial }: { initial: any }) {
   const s = data?.summary ?? {};
 
   return (
-    <div className="bg-white rounded-xl border border-gray-200 p-5">
+    <div className={cardClass}>
       <div className="flex items-center justify-between mb-3">
         <h2 className="font-semibold text-gray-900 text-[15px]">Operational Jobs &amp; Backups
           {s.ready && <span className="ml-2 text-[10px] font-medium text-gray-400">{s.runs24h} runs 24h{s.failed24h ? ` · ${s.failed24h} failed` : ""}</span>}

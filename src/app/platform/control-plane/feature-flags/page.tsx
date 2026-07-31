@@ -2,12 +2,13 @@ import { redirect } from "next/navigation";
 import { getLandlordCaller } from "@/lib/platform/landlord";
 import { loadFeatureFlags } from "@/lib/platform/feature-flags";
 import FlagAssign from "./FlagAssign";
+import { cardClass } from "@/components/ui/primitives";
 
 export const dynamic = "force-dynamic";
 
 // Feature Flag Management (LCP-001 §9).
 /* eslint-disable @typescript-eslint/no-explicit-any */
-const card = "bg-white rounded-xl border border-gray-200 p-5";
+const card = cardClass;
 
 export default async function FeatureFlagsPage() {
   const caller = await getLandlordCaller();

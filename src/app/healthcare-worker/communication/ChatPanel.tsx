@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { cardClass } from "@/components/ui/primitives";
 
 // Team messaging (HWW-COM-001) over the ward board (op_messages): channel
 // switcher, live feed (30s poll) and composer — the nurse is a first-class
@@ -46,7 +47,7 @@ export default function ChatPanel({ channels: initialChannels }: { channels: str
   }
 
   return (
-    <div className="bg-white rounded-xl border border-gray-200 p-5">
+    <div className={cardClass}>
       <div className="flex flex-wrap items-center gap-1.5 mb-3">
         <h3 className="font-semibold text-gray-900 mr-2">💬 Team Channels</h3>
         {channels.map(ch => (

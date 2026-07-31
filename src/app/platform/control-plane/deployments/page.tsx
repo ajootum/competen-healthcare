@@ -3,12 +3,13 @@ import Link from "next/link";
 import { getLandlordCaller } from "@/lib/platform/landlord";
 import { loadDeployments } from "@/lib/platform/phase3";
 import DeployForm from "./DeployForm";
+import { cardClass } from "@/components/ui/primitives";
 
 export const dynamic = "force-dynamic";
 
 // Deployments — platform release log (LCP-001 §7).
 /* eslint-disable @typescript-eslint/no-explicit-any */
-const card = "bg-white rounded-xl border border-gray-200 p-5";
+const card = cardClass;
 const chan: Record<string, string> = { stable: "bg-green-100 text-green-700", staged: "bg-amber-100 text-amber-700", canary: "bg-blue-100 text-blue-700" };
 
 export default async function DeploymentsPage() {

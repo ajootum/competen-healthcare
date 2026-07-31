@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { cardClass } from "@/components/ui/primitives";
 
 // Admissions workflow (SSW-PO-001 §8) — registers an operational admission. This
 // is the single entry point that adds a patient to the census: confirming it
@@ -39,7 +40,7 @@ export default function AdmissionsWorkflow({ departments, beds }: { departments:
   }
 
   return (
-    <div className="bg-white rounded-xl border border-gray-200 p-5">
+    <div className={cardClass}>
       <div className="flex items-center justify-between">
         <div>
           <h3 className="font-semibold text-gray-900 flex items-center gap-2">🆕 Admissions</h3>

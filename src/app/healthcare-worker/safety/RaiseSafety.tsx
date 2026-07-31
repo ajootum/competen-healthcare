@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { cardClass } from "@/components/ui/primitives";
 
 // Frontline raise actions (HWW-SAF-001 5-step pathway, steps 1-2): request
 // assistance (escalation L1-5), raise a safety alert, or report an incident —
@@ -42,7 +43,7 @@ export default function RaiseSafety({ patients }: { patients: { id: string; labe
   }
 
   return (
-    <div className="bg-white rounded-xl border border-gray-200 p-5 space-y-3">
+    <div className={`${cardClass} space-y-3`}>
       <div className="flex flex-wrap items-center gap-2">
         <h3 className="font-semibold text-gray-900">Raise</h3>
         <button className={tab(kind === "escalation")} onClick={() => setKind(kind === "escalation" ? "" : "escalation")}>🆘 Request assistance</button>

@@ -4,13 +4,14 @@ import Link from "next/link";
 import { loadHrDashboard } from "@/lib/hr-data";
 import { officeForWorkspace } from "@/lib/ogs/office";
 import { GovernanceBanner } from "@/components/GovernanceBanner";
+import { cardClass } from "@/components/ui/primitives";
 
 export const dynamic = "force-dynamic";
 
 // Human Resources Dashboard (HRM-001).
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
-const card = "bg-white rounded-xl border border-gray-200 p-5";
+const card = cardClass;
 const pct = (n: number) => (n >= 85 ? "text-green-600" : n >= 60 ? "text-amber-600" : "text-red-600");
 
 function Kpi({ n, label, tone, sub, href }: { n: any; label: string; tone?: string; sub?: string; href?: string }) {

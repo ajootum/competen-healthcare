@@ -1,6 +1,7 @@
 import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import Link from "next/link";
+import { cardClass } from "@/components/ui/primitives";
 
 export const dynamic = "force-dynamic";
 
@@ -56,7 +57,7 @@ export default async function StaffRecordsPage() {
     if (rs.includes("hospital_admin") || rs.includes("super_admin")) return "Admin";
     return "Healthcare worker";
   };
-  const card = "bg-white rounded-xl border border-gray-200 p-5";
+  const card = cardClass;
 
   return (
     <div className="space-y-5">

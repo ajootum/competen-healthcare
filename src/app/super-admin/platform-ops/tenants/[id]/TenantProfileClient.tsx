@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import { cardClass } from "@/components/ui/primitives";
 
 // Tenant profile (POP-001 §2) — header, lifecycle, plan assignment, seats and
 // per-tenant feature toggles, with tabbed detail.
@@ -11,7 +12,7 @@ import Link from "next/link";
 const BADGE: Record<string, string> = { prospect: "bg-gray-100 text-gray-600", trial: "bg-amber-50 text-amber-700", active: "bg-green-50 text-green-700", suspended: "bg-rose-50 text-rose-700", archived: "bg-gray-100 text-gray-500", deleted: "bg-gray-100 text-gray-400" };
 const HEALTH_TONE: Record<string, string> = { Healthy: "text-green-600", Trial: "text-amber-600", "Over limit": "text-orange-600", Suspended: "text-rose-600", Inactive: "text-gray-400" };
 const TABS = ["Overview", "Subscription", "Usage & Features", "Facilities", "Audit"] as const;
-const card = "bg-white rounded-xl border border-gray-200 p-5";
+const card = cardClass;
 const relTime = (iso?: string | null) => { if (!iso) return ""; const s = Math.floor((Date.now() - new Date(iso).getTime()) / 1000); if (s < 3600) return `${Math.floor(s / 60)} min ago`; if (s < 86400) return `${Math.floor(s / 3600)} hr ago`; return `${Math.floor(s / 86400)} d ago`; };
 function Row({ label, value }: { label: string; value: React.ReactNode }) {
   return <div className="flex justify-between gap-4 py-1.5 border-b border-gray-50 last:border-0"><span className="text-gray-500">{label}</span><span className="text-gray-800 text-right">{value ?? <span className="text-gray-300">—</span>}</span></div>;

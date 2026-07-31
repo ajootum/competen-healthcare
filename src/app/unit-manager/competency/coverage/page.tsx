@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import CompetencyTabs from "../CompetencyTabs";
 import { loadWorkforceReadiness } from "@/lib/operations/workforce-readiness";
 import { loadCoverageHeatmap } from "@/lib/operations/learning-analytics";
+import { cardClass } from "@/components/ui/primitives";
 
 // Competency Management → Coverage & Gaps (UMG-CM). Where the unit is competent, where it isn't, and where a
 // single person is the only cover. Real over competency_decisions (role coverage + maturity heatmap) — the
@@ -27,7 +28,7 @@ export default async function CoverageGapsPage() {
     loadWorkforceReadiness(admin, hid, isSuper).catch(() => ({ ready: false })),
     loadCoverageHeatmap(admin, hid, isSuper).catch(() => ({ provisioned: false, levels: [], rows: [] })),
   ]);
-  const card = "bg-white rounded-xl border border-gray-200 p-5";
+  const card = cardClass;
   const roleCoverage: any[] = wr.roleCoverage ?? [];
   const noCoverage: any[] = wr.noCoverage ?? [];
   const singleDep: any[] = wr.singleDep ?? [];

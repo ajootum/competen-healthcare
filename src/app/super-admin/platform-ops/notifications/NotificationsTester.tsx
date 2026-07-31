@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { cardClass } from "@/components/ui/primitives";
 
 // POS-001H — fire a test notification across every channel and show the
 // per-channel delivery result inline.
@@ -28,7 +29,7 @@ export default function NotificationsTester() {
   }
 
   return (
-    <div className="bg-white rounded-xl border border-gray-200 p-5">
+    <div className={cardClass}>
       <div className="flex items-center justify-between mb-3">
         <h2 className="font-semibold text-gray-900 text-[15px]">Test Delivery</h2>
         <button onClick={send} disabled={busy} className="text-sm font-semibold bg-teal-600 hover:bg-teal-700 text-white rounded-lg px-3.5 py-2 disabled:opacity-60">{busy ? "Sending…" : "Send test to me"}</button>

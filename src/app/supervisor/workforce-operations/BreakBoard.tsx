@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { BREAK_TYPES } from "@/lib/operations/workforce-breaks-notes";
+import { cardClass } from "@/components/ui/primitives";
 
 // Break Management workspace (SSW-WFO-001 §4). Live break board — schedule a
 // break, start/end it, and see overdue/upcoming with compliance. Writes through
@@ -24,7 +25,7 @@ export default function BreakBoard({ shiftId, data, staff, editable }: {
 
   if (!data || data.provisioned === false) {
     return (
-      <div className="bg-white rounded-xl border border-gray-200 p-5">
+      <div className={cardClass}>
         <div className="flex items-center gap-2 mb-2"><span className="w-7 h-7 rounded-lg bg-orange-100 text-orange-700 flex items-center justify-center text-sm font-bold">4</span><div><h2 className="text-sm font-bold text-gray-900 leading-tight">Break Management</h2><p className="text-[10px] text-gray-500">Break scheduling, compliance &amp; fatigue</p></div></div>
         <div className="mt-3 rounded-lg border border-dashed border-gray-200 bg-gray-50/60 p-4 text-center">
           <p className="text-sm text-gray-500">Break management not provisioned</p>
@@ -59,7 +60,7 @@ export default function BreakBoard({ shiftId, data, staff, editable }: {
   const sel = "text-xs border border-gray-200 rounded-lg px-2 py-1.5 bg-white";
 
   return (
-    <div className="bg-white rounded-xl border border-gray-200 p-5">
+    <div className={cardClass}>
       <div className="flex items-center gap-2 mb-3"><span className="w-7 h-7 rounded-lg bg-orange-100 text-orange-700 flex items-center justify-center text-sm font-bold">4</span><div><h2 className="text-sm font-bold text-gray-900 leading-tight">Break Management</h2><p className="text-[10px] text-gray-500">Break scheduling, compliance &amp; fatigue</p></div></div>
 
       <div className="grid grid-cols-3 gap-2 mb-3">

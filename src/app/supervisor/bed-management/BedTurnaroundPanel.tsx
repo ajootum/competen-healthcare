@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { cardClass } from "@/components/ui/primitives";
 
 // Bed Turnaround panel (SSW-005 Bed Management) — tracks each bed cycle through
 // vacated -> cleaning requested -> cleaning -> inspection -> ready via
@@ -39,7 +40,7 @@ export default function BedTurnaroundPanel({ turnaround, cleaningBeds, configRea
   const startable = cleaningBeds.filter((b: any) => !trackedBedIds.has(b.id));
 
   return (
-    <div className="bg-white rounded-xl border border-gray-200 p-5">
+    <div className={cardClass}>
       <div className="flex items-center justify-between mb-3">
         <h2 className="font-semibold text-gray-900">Bed turnaround</h2>
         <span className="text-xs text-gray-400 tabular-nums">{turnaround.length} active</span>

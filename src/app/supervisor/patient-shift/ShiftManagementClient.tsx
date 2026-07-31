@@ -3,13 +3,14 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import { cardClass } from "@/components/ui/primitives";
 
 // Patient Shift Management client — the per-patient shift worklist + summary +
 // exceptions. Review / Mark updated / Complete handover post to
 // /api/operations/shift-updates, then router.refresh() re-pulls server state.
 /* eslint-disable @typescript-eslint/no-explicit-any */
 const ewsColor = (n: number | null) => n == null ? "text-gray-400" : n >= 7 ? "text-red-600" : n >= 5 ? "text-orange-600" : n >= 3 ? "text-yellow-600" : "text-green-600";
-const card = "bg-white rounded-xl border border-gray-200 p-5";
+const card = cardClass;
 const chip = "text-[10px] px-2 py-0.5 rounded-full";
 const U_TONE: Record<string, string> = { due: "bg-gray-100 text-gray-500", updated: "bg-green-100 text-green-700", overdue: "bg-red-100 text-red-700" };
 

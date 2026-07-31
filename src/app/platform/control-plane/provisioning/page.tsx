@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { getLandlordCaller } from "@/lib/platform/landlord";
 import ProvisionForm from "./ProvisionForm";
+import { cardClass } from "@/components/ui/primitives";
 
 export const dynamic = "force-dynamic";
 
@@ -35,7 +36,7 @@ export default async function ProvisioningPage() {
       ) : (
         <div className="grid lg:grid-cols-2 gap-5 items-start">
           <ProvisionForm templates={templates} />
-          <div className="bg-white rounded-xl border border-gray-200 p-5">
+          <div className={cardClass}>
             <h3 className="font-semibold text-gray-900 mb-3">Available templates</h3>
             <div className="space-y-2">
               {templates.map(t => (

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { cardClass } from "@/components/ui/primitives";
 
 // Professional Toolkit clinical calculators (SSW-CONF-001 §3). Pure client-side,
 // deterministic tools implemented from standard validated formulas — NEWS2 (RCP
@@ -65,7 +66,7 @@ export default function ClinicalToolkit() {
   const disclaimer = <p className="text-[10px] text-gray-400 mt-3 pt-2 border-t border-gray-50">Computed from clinician-entered values using standard formulas. Always verify against your local protocol — not a substitute for clinical judgement.</p>;
 
   return (
-    <div className="bg-white rounded-xl border border-gray-200 p-5">
+    <div className={cardClass}>
       <div className="flex items-center gap-2 mb-4 flex-wrap">
         {TABS.map(t => (<button key={t} onClick={() => setTab(t)} className={`text-xs font-semibold px-3 py-1.5 rounded-lg ${tab === t ? "bg-teal-600 text-white" : "bg-gray-50 text-gray-600 border border-gray-200"}`}>{t}</button>))}
       </div>

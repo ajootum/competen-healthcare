@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import { cardClass } from "@/components/ui/primitives";
 
 // Patient Card client (SSW-PO-001 §4) — header + operational actions + tabbed
 // record (Overview / Timeline / Notes / Tasks / Alerts). Every write goes through
@@ -19,7 +20,7 @@ const STATUSES = ["expected", "admitted", "transfer_pending", "discharge_pending
 const SAFETY_CATS = ["deterioration", "fall_risk", "pressure_injury", "medication", "infection", "device", "environmental", "patient_id"];
 const ACUITY_TONE: Record<string, string> = { stable: "bg-green-100 text-green-700", moderate: "bg-yellow-100 text-yellow-700", high: "bg-orange-100 text-orange-700", critical: "bg-red-100 text-red-700" };
 
-const card = "bg-white rounded-xl border border-gray-200 p-5";
+const card = cardClass;
 const input = "w-full border border-gray-300 rounded-lg px-2.5 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500/40";
 const btn = "px-3 py-1.5 rounded-lg bg-teal-600 text-white text-sm font-medium hover:bg-teal-700 disabled:opacity-50";
 const chip = "text-[11px] font-medium px-2 py-0.5 rounded-full";

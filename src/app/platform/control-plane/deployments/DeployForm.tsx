@@ -1,6 +1,7 @@
 "use client";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { cardClass } from "@/components/ui/primitives";
 
 // Record a platform release (LCP-001 §7).
 export default function DeployForm() {
@@ -23,7 +24,7 @@ export default function DeployForm() {
   };
   const field = "border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-violet-400";
   return (
-    <form onSubmit={submit} className="bg-white rounded-xl border border-gray-200 p-5 space-y-3 max-w-md">
+    <form onSubmit={submit} className={`${cardClass} space-y-3 max-w-md`}>
       <h3 className="font-semibold text-gray-900">Record a release</h3>
       <div className="flex gap-2">
         <input value={version} onChange={e => setVersion(e.target.value)} placeholder="version e.g. 2026.7.1" className={`${field} flex-1`} required />

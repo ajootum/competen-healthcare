@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { cardClass } from "@/components/ui/primitives";
 
 // Grounded ask canvas — one-shot question to the real CKCM-grounded assistant
 // (POST /api/ai/assistant). Renders the live answer with model + source count in
@@ -24,7 +25,7 @@ export default function AskPanel({ title, placeholder, prompts }: { title: strin
   }
 
   return (
-    <div className="bg-white rounded-xl border border-gray-200 p-5">
+    <div className={cardClass}>
       <h2 className="font-semibold text-gray-900 text-[15px] mb-3">{title}</h2>
       <div className="flex gap-2">
         <input value={q} onChange={e => setQ(e.target.value)} onKeyDown={e => { if (e.key === "Enter") ask(q); }} placeholder={placeholder}

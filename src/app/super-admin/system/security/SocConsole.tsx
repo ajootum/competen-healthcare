@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { cardClass } from "@/components/ui/primitives";
 
 // SOC response console (SYS-001.3) — controlled containment actions. The spec's
 // automated responses (session revocation, temporary lock, token invalidation)
@@ -45,7 +46,7 @@ export default function SocConsole({ users }: { users: Picker[] }) {
   }
 
   return (
-    <div className="bg-white rounded-xl border border-gray-200 p-5">
+    <div className={cardClass}>
       <div className="flex items-center gap-2 mb-3 flex-wrap">
         <h2 className="font-semibold text-gray-900 text-[15px] mr-auto">Response &amp; Containment</h2>
         {msg && <span className={`text-xs rounded-lg px-2.5 py-1 ${msg.k === "ok" ? "bg-green-50 text-green-800" : "bg-amber-50 text-amber-800"}`}>{msg.t}</span>}
