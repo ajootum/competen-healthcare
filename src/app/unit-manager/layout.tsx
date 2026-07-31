@@ -178,6 +178,7 @@ const NAV_GROUPS: { title: string; items: NavItem[] }[] = [
     { label: "Team & Assignments",    href: "/unit-manager/workforce-management/team-assignments", icon: "🧩" },// TLS-001
     { label: "Roles & Permissions",   href: "/unit-manager/administration/governance", icon: "🛡️" },           // TLS-002
     { label: "Development & Readiness", href: "/unit-manager/workforce-management/development", icon: "🎯" },   // TLS-003
+    { label: "Personalisation",       href: "/unit-manager/personalisation", icon: "🎨" },                      // TLS-005
   ] },
   // UMW-ADM-001..009 Administration & Configuration — no-code unit admin over adm_* stores (migrations 109/110),
   // reusing op_beds / departments / positions / break_glass for structure & governance.
