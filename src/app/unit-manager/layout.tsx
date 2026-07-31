@@ -191,7 +191,8 @@ const DOMAINS: Domain[] = [
     { label: "Policies & Documents",    href: "/unit-manager/administration/documents",      icon: "📄" },              // ADM-003
     { label: "Forms & Registers",       href: "/unit-manager/administration/forms",          icon: "📋" },              // ADM-005
     { label: "Configuration Centre",    href: "/unit-manager/administration/configuration",  icon: "🔧" },              // ADM-006
-    { label: "Permissions & Governance", href: "/unit-manager/administration/governance",    icon: "🛡️" },              // ADM-007 / TLS-002
+    { label: "Roles & Permissions",     href: "/unit-manager/administration/permissions",    icon: "🔐" },              // TLS-002
+    { label: "Permissions & Governance", href: "/unit-manager/administration/governance",    icon: "🛡️" },              // ADM-007
     { label: "Audit & Change Management", href: "/unit-manager/administration/change",       icon: "🕓" },              // ADM-008
     { label: "AI Administration Assistant", href: "/unit-manager/administration/ai-assistant", icon: "🤖" },            // ADM-009
     { label: "Operations Config & Rules", href: "/unit-manager/ops-command/config-rules",    icon: "⚙️" },              // OPC-010

@@ -1,0 +1,4508 @@
+{
+  "entries": [
+    {
+      "path": "/api/account/avatar",
+      "kind": "api",
+      "gate": {
+        "kind": "auth-only",
+        "roles": [],
+        "appointment": false,
+        "evidence": "if (!user) redirect(...)"
+      }
+    },
+    {
+      "path": "/api/account/password",
+      "kind": "api",
+      "gate": {
+        "kind": "auth-only",
+        "roles": [],
+        "appointment": false,
+        "evidence": "if (!user) redirect(...)"
+      }
+    },
+    {
+      "path": "/api/account/profile",
+      "kind": "api",
+      "gate": {
+        "kind": "auth-only",
+        "roles": [],
+        "appointment": false,
+        "evidence": "if (!user) redirect(...)"
+      }
+    },
+    {
+      "path": "/api/admin/assets",
+      "kind": "api",
+      "gate": {
+        "kind": "role-list",
+        "roles": [
+          "super_admin"
+        ],
+        "appointment": false,
+        "evidence": "isSuper"
+      }
+    },
+    {
+      "path": "/api/admin/assets/files",
+      "kind": "api",
+      "gate": {
+        "kind": "role-list",
+        "roles": [
+          "super_admin"
+        ],
+        "appointment": false,
+        "evidence": "isSuper"
+      }
+    },
+    {
+      "path": "/api/admin/assets/refresh",
+      "kind": "api",
+      "gate": {
+        "kind": "role-list",
+        "roles": [
+          "super_admin"
+        ],
+        "appointment": false,
+        "evidence": "isSuper"
+      }
+    },
+    {
+      "path": "/api/admin/assets/writeback",
+      "kind": "api",
+      "gate": {
+        "kind": "role-list",
+        "roles": [
+          "super_admin"
+        ],
+        "appointment": false,
+        "evidence": "isSuper"
+      }
+    },
+    {
+      "path": "/api/admin/delivery/campaigns",
+      "kind": "api",
+      "gate": {
+        "kind": "role-list",
+        "roles": [
+          "super_admin"
+        ],
+        "appointment": false,
+        "evidence": "isSuper"
+      }
+    },
+    {
+      "path": "/api/admin/delivery/config",
+      "kind": "api",
+      "gate": {
+        "kind": "role-list",
+        "roles": [
+          "super_admin"
+        ],
+        "appointment": false,
+        "evidence": "isSuper"
+      }
+    },
+    {
+      "path": "/api/admin/delivery/events",
+      "kind": "api",
+      "gate": {
+        "kind": "role-list",
+        "roles": [
+          "super_admin"
+        ],
+        "appointment": false,
+        "evidence": "isSuper"
+      }
+    },
+    {
+      "path": "/api/admin/delivery/orchestrate",
+      "kind": "api",
+      "gate": {
+        "kind": "role-list",
+        "roles": [
+          "super_admin"
+        ],
+        "appointment": false,
+        "evidence": "isSuper"
+      }
+    },
+    {
+      "path": "/api/admin/delivery/reinforcement",
+      "kind": "api",
+      "gate": {
+        "kind": "role-list",
+        "roles": [
+          "super_admin"
+        ],
+        "appointment": false,
+        "evidence": "isSuper"
+      }
+    },
+    {
+      "path": "/api/admin/delivery/reminders",
+      "kind": "api",
+      "gate": {
+        "kind": "role-list",
+        "roles": [
+          "super_admin"
+        ],
+        "appointment": false,
+        "evidence": "isSuper"
+      }
+    },
+    {
+      "path": "/api/admin/departments",
+      "kind": "api",
+      "gate": {
+        "kind": "role-list",
+        "roles": [
+          "hospital_admin",
+          "super_admin"
+        ],
+        "appointment": false,
+        "evidence": "ADMIN_ROLES"
+      }
+    },
+    {
+      "path": "/api/admin/embeddings/reindex",
+      "kind": "api",
+      "gate": {
+        "kind": "role-list",
+        "roles": [
+          "super_admin"
+        ],
+        "appointment": false,
+        "evidence": "isSuper"
+      }
+    },
+    {
+      "path": "/api/admin/studio",
+      "kind": "api",
+      "gate": {
+        "kind": "auth-only",
+        "roles": [],
+        "appointment": false,
+        "evidence": "if (!user) redirect(...)"
+      }
+    },
+    {
+      "path": "/api/admin/units",
+      "kind": "api",
+      "gate": {
+        "kind": "role-list",
+        "roles": [
+          "hospital_admin",
+          "super_admin"
+        ],
+        "appointment": false,
+        "evidence": "ADMIN_ROLES"
+      }
+    },
+    {
+      "path": "/api/administration/copilot",
+      "kind": "api",
+      "gate": {
+        "kind": "auth-only",
+        "roles": [],
+        "appointment": false,
+        "evidence": "if (!user) redirect(...)"
+      }
+    },
+    {
+      "path": "/api/ai/assess",
+      "kind": "api",
+      "gate": {
+        "kind": "role-list",
+        "roles": [
+          "assessor",
+          "educator",
+          "senior_educator",
+          "clinical_educator",
+          "curriculum_lead",
+          "assessment_lead",
+          "simulation_lead",
+          "quality_reviewer",
+          "education_administrator",
+          "program_director",
+          "hospital_admin",
+          "super_admin"
+        ],
+        "appointment": false,
+        "evidence": "STAFF_ROLES"
+      }
+    },
+    {
+      "path": "/api/ai/assistant",
+      "kind": "api",
+      "gate": {
+        "kind": "auth-only",
+        "roles": [],
+        "appointment": false,
+        "evidence": "if (!user) redirect(...)"
+      }
+    },
+    {
+      "path": "/api/ai/coach",
+      "kind": "api",
+      "gate": {
+        "kind": "auth-only",
+        "roles": [],
+        "appointment": false,
+        "evidence": "getCaller() with no role predicate"
+      }
+    },
+    {
+      "path": "/api/ai/governance",
+      "kind": "api",
+      "gate": {
+        "kind": "auth-only",
+        "roles": [],
+        "appointment": false,
+        "evidence": "if (!user) redirect(...)"
+      }
+    },
+    {
+      "path": "/api/ai/health",
+      "kind": "api",
+      "gate": {
+        "kind": "role-list",
+        "roles": [
+          "super_admin"
+        ],
+        "appointment": false,
+        "evidence": "isSuper"
+      }
+    },
+    {
+      "path": "/api/ai/insights",
+      "kind": "api",
+      "gate": {
+        "kind": "auth-only",
+        "roles": [],
+        "appointment": false,
+        "evidence": "if (!user) redirect(...)"
+      }
+    },
+    {
+      "path": "/api/ai/osce",
+      "kind": "api",
+      "gate": {
+        "kind": "auth-only",
+        "roles": [],
+        "appointment": false,
+        "evidence": "if (!user) redirect(...)"
+      }
+    },
+    {
+      "path": "/api/ai/report",
+      "kind": "api",
+      "gate": {
+        "kind": "auth-only",
+        "roles": [],
+        "appointment": false,
+        "evidence": "if (!user) redirect(...)"
+      }
+    },
+    {
+      "path": "/api/ai/simulation",
+      "kind": "api",
+      "gate": {
+        "kind": "auth-only",
+        "roles": [],
+        "appointment": false,
+        "evidence": "if (!user) redirect(...)"
+      }
+    },
+    {
+      "path": "/api/appeals",
+      "kind": "api",
+      "gate": {
+        "kind": "auth-only",
+        "roles": [],
+        "appointment": false,
+        "evidence": "if (!user) redirect(...)"
+      }
+    },
+    {
+      "path": "/api/assess/submit",
+      "kind": "api",
+      "gate": {
+        "kind": "auth-only",
+        "roles": [],
+        "appointment": false,
+        "evidence": "if (!user) redirect(...)"
+      }
+    },
+    {
+      "path": "/api/assessment-plans",
+      "kind": "api",
+      "gate": {
+        "kind": "role-list",
+        "roles": [
+          "assessor",
+          "educator",
+          "senior_educator",
+          "clinical_educator",
+          "curriculum_lead",
+          "assessment_lead",
+          "simulation_lead",
+          "quality_reviewer",
+          "education_administrator",
+          "program_director",
+          "hospital_admin",
+          "super_admin"
+        ],
+        "appointment": false,
+        "evidence": "STAFF_ROLES"
+      }
+    },
+    {
+      "path": "/api/assessments",
+      "kind": "api",
+      "gate": {
+        "kind": "role-list",
+        "roles": [
+          "assessor",
+          "educator",
+          "senior_educator",
+          "clinical_educator",
+          "curriculum_lead",
+          "assessment_lead",
+          "simulation_lead",
+          "quality_reviewer",
+          "education_administrator",
+          "program_director",
+          "hospital_admin",
+          "super_admin"
+        ],
+        "appointment": false,
+        "evidence": "STAFF_ROLES | isSuper"
+      }
+    },
+    {
+      "path": "/api/assessor-authorizations",
+      "kind": "api",
+      "gate": {
+        "kind": "role-list",
+        "roles": [
+          "hospital_admin",
+          "super_admin"
+        ],
+        "appointment": false,
+        "evidence": "ADMIN_ROLES"
+      }
+    },
+    {
+      "path": "/api/assessor/entrustment",
+      "kind": "api",
+      "gate": {
+        "kind": "auth-only",
+        "roles": [],
+        "appointment": false,
+        "evidence": "if (!user) redirect(...)"
+      }
+    },
+    {
+      "path": "/api/assurance/copilot",
+      "kind": "api",
+      "gate": {
+        "kind": "single-role",
+        "roles": [
+          "super_admin"
+        ],
+        "appointment": false,
+        "evidence": "if (!roles.includes(\"super_admin\"))"
+      }
+    },
+    {
+      "path": "/api/assurance/evidence",
+      "kind": "api",
+      "gate": {
+        "kind": "role-list",
+        "roles": [
+          "super_admin"
+        ],
+        "appointment": false,
+        "evidence": "isSuper"
+      }
+    },
+    {
+      "path": "/api/auth/login",
+      "kind": "api",
+      "gate": {
+        "kind": "unknown",
+        "roles": [],
+        "appointment": false,
+        "evidence": null
+      }
+    },
+    {
+      "path": "/api/auth/logout",
+      "kind": "api",
+      "gate": {
+        "kind": "unknown",
+        "roles": [],
+        "appointment": false,
+        "evidence": null
+      }
+    },
+    {
+      "path": "/api/auth/signup",
+      "kind": "api",
+      "gate": {
+        "kind": "unknown",
+        "roles": [],
+        "appointment": false,
+        "evidence": null
+      }
+    },
+    {
+      "path": "/api/auth/switch-role",
+      "kind": "api",
+      "gate": {
+        "kind": "auth-only",
+        "roles": [],
+        "appointment": false,
+        "evidence": "if (!user) redirect(...)"
+      }
+    },
+    {
+      "path": "/api/authorizations",
+      "kind": "api",
+      "gate": {
+        "kind": "role-list",
+        "roles": [
+          "educator",
+          "senior_educator",
+          "clinical_educator",
+          "curriculum_lead",
+          "assessment_lead",
+          "simulation_lead",
+          "education_administrator",
+          "program_director",
+          "hospital_admin",
+          "super_admin"
+        ],
+        "appointment": false,
+        "evidence": "EDUCATOR_ROLES"
+      }
+    },
+    {
+      "path": "/api/capm/copilot",
+      "kind": "api",
+      "gate": {
+        "kind": "single-role",
+        "roles": [
+          "super_admin"
+        ],
+        "appointment": false,
+        "evidence": "if (!roles.includes(\"super_admin\"))"
+      }
+    },
+    {
+      "path": "/api/cgr/copilot",
+      "kind": "api",
+      "gate": {
+        "kind": "single-role",
+        "roles": [
+          "super_admin"
+        ],
+        "appointment": false,
+        "evidence": "if (!roles.includes(\"super_admin\"))"
+      }
+    },
+    {
+      "path": "/api/cgr/learning-links",
+      "kind": "api",
+      "gate": {
+        "kind": "role-list",
+        "roles": [],
+        "appointment": false,
+        "evidence": "requireRole(c, [...new Set([...EDUCATOR_ROLES, ...ADMIN_ROLES]"
+      }
+    },
+    {
+      "path": "/api/cgr/learning-links/suggest",
+      "kind": "api",
+      "gate": {
+        "kind": "role-list",
+        "roles": [],
+        "appointment": false,
+        "evidence": "requireRole(c, [...new Set([...EDUCATOR_ROLES, ...ADMIN_ROLES]"
+      }
+    },
+    {
+      "path": "/api/cgr/service-profiles",
+      "kind": "api",
+      "gate": {
+        "kind": "role-list",
+        "roles": [
+          "hospital_admin",
+          "super_admin"
+        ],
+        "appointment": false,
+        "evidence": "requireRole(c, ADMIN_ROLES)"
+      }
+    },
+    {
+      "path": "/api/clinical-cases",
+      "kind": "api",
+      "gate": {
+        "kind": "auth-only",
+        "roles": [],
+        "appointment": false,
+        "evidence": "if (!user) redirect(...)"
+      }
+    },
+    {
+      "path": "/api/competency/assignment-rules",
+      "kind": "api",
+      "gate": {
+        "kind": "role-list",
+        "roles": [
+          "educator",
+          "senior_educator",
+          "clinical_educator",
+          "curriculum_lead",
+          "assessment_lead",
+          "simulation_lead",
+          "education_administrator",
+          "program_director",
+          "hospital_admin",
+          "super_admin"
+        ],
+        "appointment": false,
+        "evidence": "EDUCATOR_ROLES | isSuper"
+      }
+    },
+    {
+      "path": "/api/competency/assignment-rules/[id]/apply",
+      "kind": "api",
+      "gate": {
+        "kind": "role-list",
+        "roles": [
+          "educator",
+          "senior_educator",
+          "clinical_educator",
+          "curriculum_lead",
+          "assessment_lead",
+          "simulation_lead",
+          "education_administrator",
+          "program_director",
+          "hospital_admin",
+          "super_admin"
+        ],
+        "appointment": false,
+        "evidence": "EDUCATOR_ROLES | isSuper"
+      }
+    },
+    {
+      "path": "/api/competency/copilot",
+      "kind": "api",
+      "gate": {
+        "kind": "auth-only",
+        "roles": [],
+        "appointment": false,
+        "evidence": "if (!user) redirect(...)"
+      }
+    },
+    {
+      "path": "/api/competency/equivalencies",
+      "kind": "api",
+      "gate": {
+        "kind": "role-list",
+        "roles": [
+          "educator",
+          "senior_educator",
+          "clinical_educator",
+          "curriculum_lead",
+          "assessment_lead",
+          "simulation_lead",
+          "education_administrator",
+          "program_director",
+          "hospital_admin",
+          "super_admin"
+        ],
+        "appointment": false,
+        "evidence": "EDUCATOR_ROLES | isSuper"
+      }
+    },
+    {
+      "path": "/api/competency/renewals",
+      "kind": "api",
+      "gate": {
+        "kind": "role-list",
+        "roles": [
+          "educator",
+          "senior_educator",
+          "clinical_educator",
+          "curriculum_lead",
+          "assessment_lead",
+          "simulation_lead",
+          "education_administrator",
+          "program_director",
+          "hospital_admin",
+          "super_admin"
+        ],
+        "appointment": false,
+        "evidence": "EDUCATOR_ROLES | isSuper"
+      }
+    },
+    {
+      "path": "/api/config/copilot",
+      "kind": "api",
+      "gate": {
+        "kind": "role-list",
+        "roles": [
+          "super_admin"
+        ],
+        "appointment": false,
+        "evidence": "isSuper"
+      }
+    },
+    {
+      "path": "/api/config/dependencies",
+      "kind": "api",
+      "gate": {
+        "kind": "role-list",
+        "roles": [
+          "super_admin"
+        ],
+        "appointment": false,
+        "evidence": "isSuper"
+      }
+    },
+    {
+      "path": "/api/config/integrations",
+      "kind": "api",
+      "gate": {
+        "kind": "role-list",
+        "roles": [
+          "super_admin"
+        ],
+        "appointment": false,
+        "evidence": "isSuper"
+      }
+    },
+    {
+      "path": "/api/config/metrics/compute",
+      "kind": "api",
+      "gate": {
+        "kind": "role-list",
+        "roles": [
+          "super_admin"
+        ],
+        "appointment": false,
+        "evidence": "isSuper"
+      }
+    },
+    {
+      "path": "/api/config/migration",
+      "kind": "api",
+      "gate": {
+        "kind": "role-list",
+        "roles": [
+          "super_admin"
+        ],
+        "appointment": false,
+        "evidence": "isSuper"
+      }
+    },
+    {
+      "path": "/api/config/objects",
+      "kind": "api",
+      "gate": {
+        "kind": "role-list",
+        "roles": [
+          "super_admin"
+        ],
+        "appointment": false,
+        "evidence": "isSuper"
+      }
+    },
+    {
+      "path": "/api/config/packages",
+      "kind": "api",
+      "gate": {
+        "kind": "role-list",
+        "roles": [
+          "super_admin"
+        ],
+        "appointment": false,
+        "evidence": "isSuper"
+      }
+    },
+    {
+      "path": "/api/config/planning",
+      "kind": "api",
+      "gate": {
+        "kind": "role-list",
+        "roles": [
+          "super_admin"
+        ],
+        "appointment": false,
+        "evidence": "isSuper"
+      }
+    },
+    {
+      "path": "/api/config/releases",
+      "kind": "api",
+      "gate": {
+        "kind": "role-list",
+        "roles": [
+          "super_admin"
+        ],
+        "appointment": false,
+        "evidence": "isSuper"
+      }
+    },
+    {
+      "path": "/api/config/runtime",
+      "kind": "api",
+      "gate": {
+        "kind": "role-list",
+        "roles": [
+          "super_admin"
+        ],
+        "appointment": false,
+        "evidence": "isSuper"
+      }
+    },
+    {
+      "path": "/api/config/schema",
+      "kind": "api",
+      "gate": {
+        "kind": "role-list",
+        "roles": [
+          "super_admin"
+        ],
+        "appointment": false,
+        "evidence": "isSuper"
+      }
+    },
+    {
+      "path": "/api/config/tests",
+      "kind": "api",
+      "gate": {
+        "kind": "role-list",
+        "roles": [
+          "super_admin"
+        ],
+        "appointment": false,
+        "evidence": "isSuper"
+      }
+    },
+    {
+      "path": "/api/config/versions",
+      "kind": "api",
+      "gate": {
+        "kind": "role-list",
+        "roles": [
+          "super_admin"
+        ],
+        "appointment": false,
+        "evidence": "isSuper"
+      }
+    },
+    {
+      "path": "/api/content/adopt",
+      "kind": "api",
+      "gate": {
+        "kind": "role-list",
+        "roles": [
+          "educator",
+          "senior_educator",
+          "clinical_educator",
+          "curriculum_lead",
+          "assessment_lead",
+          "simulation_lead",
+          "education_administrator",
+          "program_director",
+          "hospital_admin",
+          "super_admin"
+        ],
+        "appointment": false,
+        "evidence": "EDUCATOR_ROLES"
+      }
+    },
+    {
+      "path": "/api/content/checklist-items",
+      "kind": "api",
+      "gate": {
+        "kind": "auth-only",
+        "roles": [],
+        "appointment": false,
+        "evidence": "if (!user) redirect(...)"
+      }
+    },
+    {
+      "path": "/api/content/checklists",
+      "kind": "api",
+      "gate": {
+        "kind": "role-list",
+        "roles": [
+          "educator",
+          "senior_educator",
+          "clinical_educator",
+          "curriculum_lead",
+          "assessment_lead",
+          "simulation_lead",
+          "education_administrator",
+          "program_director",
+          "hospital_admin",
+          "super_admin"
+        ],
+        "appointment": false,
+        "evidence": "EDUCATOR_ROLES"
+      }
+    },
+    {
+      "path": "/api/content/competencies",
+      "kind": "api",
+      "gate": {
+        "kind": "role-list",
+        "roles": [
+          "educator",
+          "senior_educator",
+          "clinical_educator",
+          "curriculum_lead",
+          "assessment_lead",
+          "simulation_lead",
+          "education_administrator",
+          "program_director",
+          "hospital_admin",
+          "super_admin"
+        ],
+        "appointment": false,
+        "evidence": "EDUCATOR_ROLES"
+      }
+    },
+    {
+      "path": "/api/content/cpus",
+      "kind": "api",
+      "gate": {
+        "kind": "single-role",
+        "roles": [
+          "super_admin"
+        ],
+        "appointment": false,
+        "evidence": "role !== \"super_admin\""
+      }
+    },
+    {
+      "path": "/api/content/cpus/[cpuId]/config",
+      "kind": "api",
+      "gate": {
+        "kind": "role-list",
+        "roles": [
+          "assessor",
+          "educator",
+          "senior_educator",
+          "clinical_educator",
+          "curriculum_lead",
+          "assessment_lead",
+          "simulation_lead",
+          "quality_reviewer",
+          "education_administrator",
+          "program_director",
+          "hospital_admin",
+          "super_admin"
+        ],
+        "appointment": false,
+        "evidence": "STAFF_ROLES | isSuper"
+      }
+    },
+    {
+      "path": "/api/content/criteria",
+      "kind": "api",
+      "gate": {
+        "kind": "role-list",
+        "roles": [
+          "educator",
+          "senior_educator",
+          "clinical_educator",
+          "curriculum_lead",
+          "assessment_lead",
+          "simulation_lead",
+          "education_administrator",
+          "program_director",
+          "hospital_admin",
+          "super_admin"
+        ],
+        "appointment": false,
+        "evidence": "EDUCATOR_ROLES"
+      }
+    },
+    {
+      "path": "/api/content/domains",
+      "kind": "api",
+      "gate": {
+        "kind": "role-list",
+        "roles": [
+          "educator",
+          "senior_educator",
+          "clinical_educator",
+          "curriculum_lead",
+          "assessment_lead",
+          "simulation_lead",
+          "education_administrator",
+          "program_director",
+          "hospital_admin",
+          "super_admin"
+        ],
+        "appointment": false,
+        "evidence": "EDUCATOR_ROLES"
+      }
+    },
+    {
+      "path": "/api/content/frameworks",
+      "kind": "api",
+      "gate": {
+        "kind": "role-list",
+        "roles": [
+          "assessor",
+          "educator",
+          "senior_educator",
+          "clinical_educator",
+          "curriculum_lead",
+          "assessment_lead",
+          "simulation_lead",
+          "quality_reviewer",
+          "education_administrator",
+          "program_director",
+          "hospital_admin",
+          "super_admin"
+        ],
+        "appointment": false,
+        "evidence": "STAFF_ROLES | isSuper"
+      }
+    },
+    {
+      "path": "/api/content/frameworks/[frameworkId]/impact",
+      "kind": "api",
+      "gate": {
+        "kind": "role-list",
+        "roles": [
+          "educator",
+          "senior_educator",
+          "clinical_educator",
+          "curriculum_lead",
+          "assessment_lead",
+          "simulation_lead",
+          "education_administrator",
+          "program_director",
+          "hospital_admin",
+          "super_admin"
+        ],
+        "appointment": false,
+        "evidence": "EDUCATOR_ROLES"
+      }
+    },
+    {
+      "path": "/api/content/lifecycle",
+      "kind": "api",
+      "gate": {
+        "kind": "single-role",
+        "roles": [
+          "super_admin"
+        ],
+        "appointment": false,
+        "evidence": "if (!roles.includes(\"super_admin\"))"
+      }
+    },
+    {
+      "path": "/api/content/methods",
+      "kind": "api",
+      "gate": {
+        "kind": "role-list",
+        "roles": [
+          "educator",
+          "senior_educator",
+          "clinical_educator",
+          "curriculum_lead",
+          "assessment_lead",
+          "simulation_lead",
+          "education_administrator",
+          "program_director",
+          "hospital_admin",
+          "super_admin"
+        ],
+        "appointment": false,
+        "evidence": "EDUCATOR_ROLES"
+      }
+    },
+    {
+      "path": "/api/content/practices",
+      "kind": "api",
+      "gate": {
+        "kind": "single-role",
+        "roles": [
+          "super_admin"
+        ],
+        "appointment": false,
+        "evidence": "role !== \"super_admin\""
+      }
+    },
+    {
+      "path": "/api/content/review",
+      "kind": "api",
+      "gate": {
+        "kind": "role-list",
+        "roles": [
+          "educator",
+          "senior_educator",
+          "clinical_educator",
+          "curriculum_lead",
+          "assessment_lead",
+          "simulation_lead",
+          "education_administrator",
+          "program_director",
+          "hospital_admin",
+          "super_admin"
+        ],
+        "appointment": false,
+        "evidence": "EDUCATOR_ROLES"
+      }
+    },
+    {
+      "path": "/api/content/skills",
+      "kind": "api",
+      "gate": {
+        "kind": "role-list",
+        "roles": [
+          "educator",
+          "senior_educator",
+          "clinical_educator",
+          "curriculum_lead",
+          "assessment_lead",
+          "simulation_lead",
+          "education_administrator",
+          "program_director",
+          "hospital_admin",
+          "super_admin"
+        ],
+        "appointment": false,
+        "evidence": "EDUCATOR_ROLES"
+      }
+    },
+    {
+      "path": "/api/context/unit",
+      "kind": "api",
+      "gate": {
+        "kind": "auth-only",
+        "roles": [],
+        "appointment": false,
+        "evidence": "if (!user) redirect(...)"
+      }
+    },
+    {
+      "path": "/api/copilot",
+      "kind": "api",
+      "gate": {
+        "kind": "auth-only",
+        "roles": [],
+        "appointment": false,
+        "evidence": "getCaller() with no role predicate"
+      }
+    },
+    {
+      "path": "/api/courses/enroll",
+      "kind": "api",
+      "gate": {
+        "kind": "auth-only",
+        "roles": [],
+        "appointment": false,
+        "evidence": "if (!user) redirect(...)"
+      }
+    },
+    {
+      "path": "/api/courses/progress",
+      "kind": "api",
+      "gate": {
+        "kind": "auth-only",
+        "roles": [],
+        "appointment": false,
+        "evidence": "if (!user) redirect(...)"
+      }
+    },
+    {
+      "path": "/api/cpd",
+      "kind": "api",
+      "gate": {
+        "kind": "auth-only",
+        "roles": [],
+        "appointment": false,
+        "evidence": "if (!user) redirect(...)"
+      }
+    },
+    {
+      "path": "/api/credentials",
+      "kind": "api",
+      "gate": {
+        "kind": "role-list",
+        "roles": [
+          "assessor",
+          "educator",
+          "senior_educator",
+          "clinical_educator",
+          "curriculum_lead",
+          "assessment_lead",
+          "simulation_lead",
+          "quality_reviewer",
+          "education_administrator",
+          "program_director",
+          "hospital_admin",
+          "super_admin"
+        ],
+        "appointment": false,
+        "evidence": "STAFF_ROLES"
+      }
+    },
+    {
+      "path": "/api/cron/jobs",
+      "kind": "api",
+      "gate": {
+        "kind": "service",
+        "roles": [],
+        "appointment": false,
+        "evidence": "CRON_SECRET"
+      }
+    },
+    {
+      "path": "/api/cron/reports",
+      "kind": "api",
+      "gate": {
+        "kind": "service",
+        "roles": [],
+        "appointment": false,
+        "evidence": "CRON_SECRET"
+      }
+    },
+    {
+      "path": "/api/curricula",
+      "kind": "api",
+      "gate": {
+        "kind": "role-list",
+        "roles": [
+          "educator",
+          "senior_educator",
+          "clinical_educator",
+          "curriculum_lead",
+          "assessment_lead",
+          "simulation_lead",
+          "education_administrator",
+          "program_director",
+          "hospital_admin",
+          "super_admin"
+        ],
+        "appointment": false,
+        "evidence": "EDUCATOR_ROLES"
+      }
+    },
+    {
+      "path": "/api/cycles",
+      "kind": "api",
+      "gate": {
+        "kind": "role-list",
+        "roles": [
+          "assessor",
+          "educator",
+          "senior_educator",
+          "clinical_educator",
+          "curriculum_lead",
+          "assessment_lead",
+          "simulation_lead",
+          "quality_reviewer",
+          "education_administrator",
+          "program_director",
+          "hospital_admin",
+          "super_admin"
+        ],
+        "appointment": false,
+        "evidence": "STAFF_ROLES | EDUCATOR_ROLES | isSuper"
+      }
+    },
+    {
+      "path": "/api/cycles/[cycleId]/complete",
+      "kind": "api",
+      "gate": {
+        "kind": "role-list",
+        "roles": [
+          "educator",
+          "senior_educator",
+          "clinical_educator",
+          "curriculum_lead",
+          "assessment_lead",
+          "simulation_lead",
+          "education_administrator",
+          "program_director",
+          "hospital_admin",
+          "super_admin"
+        ],
+        "appointment": false,
+        "evidence": "EDUCATOR_ROLES"
+      }
+    },
+    {
+      "path": "/api/cycles/[cycleId]/decisions",
+      "kind": "api",
+      "gate": {
+        "kind": "role-list",
+        "roles": [
+          "assessor",
+          "educator",
+          "senior_educator",
+          "clinical_educator",
+          "curriculum_lead",
+          "assessment_lead",
+          "simulation_lead",
+          "quality_reviewer",
+          "education_administrator",
+          "program_director",
+          "hospital_admin",
+          "super_admin"
+        ],
+        "appointment": false,
+        "evidence": "STAFF_ROLES | EDUCATOR_ROLES"
+      }
+    },
+    {
+      "path": "/api/cycles/[cycleId]/panel",
+      "kind": "api",
+      "gate": {
+        "kind": "role-list",
+        "roles": [
+          "hospital_admin",
+          "super_admin",
+          "assessor",
+          "educator",
+          "senior_educator",
+          "clinical_educator",
+          "curriculum_lead",
+          "assessment_lead",
+          "simulation_lead",
+          "quality_reviewer",
+          "education_administrator",
+          "program_director"
+        ],
+        "appointment": false,
+        "evidence": "ADMIN_ROLES | STAFF_ROLES | EDUCATOR_ROLES"
+      }
+    },
+    {
+      "path": "/api/design/tokens",
+      "kind": "api",
+      "gate": {
+        "kind": "none",
+        "roles": [],
+        "appointment": false,
+        "evidence": "no access check found in this file"
+      }
+    },
+    {
+      "path": "/api/educator/ai-validate",
+      "kind": "api",
+      "gate": {
+        "kind": "role-list",
+        "roles": [
+          "educator",
+          "senior_educator",
+          "clinical_educator",
+          "curriculum_lead",
+          "assessment_lead",
+          "simulation_lead",
+          "education_administrator",
+          "program_director",
+          "hospital_admin",
+          "super_admin"
+        ],
+        "appointment": false,
+        "evidence": "EDUCATOR_ROLES"
+      }
+    },
+    {
+      "path": "/api/educator/search",
+      "kind": "api",
+      "gate": {
+        "kind": "auth-only",
+        "roles": [],
+        "appointment": false,
+        "evidence": "if (!user) redirect(...)"
+      }
+    },
+    {
+      "path": "/api/educator/validate",
+      "kind": "api",
+      "gate": {
+        "kind": "role-list",
+        "roles": [
+          "educator",
+          "senior_educator",
+          "clinical_educator",
+          "curriculum_lead",
+          "assessment_lead",
+          "simulation_lead",
+          "education_administrator",
+          "program_director",
+          "hospital_admin",
+          "super_admin"
+        ],
+        "appointment": false,
+        "evidence": "EDUCATOR_ROLES"
+      }
+    },
+    {
+      "path": "/api/enterprise/facilities",
+      "kind": "api",
+      "gate": {
+        "kind": "role-list",
+        "roles": [
+          "super_admin"
+        ],
+        "appointment": false,
+        "evidence": "isSuper"
+      }
+    },
+    {
+      "path": "/api/enterprise/networks",
+      "kind": "api",
+      "gate": {
+        "kind": "role-list",
+        "roles": [
+          "super_admin"
+        ],
+        "appointment": false,
+        "evidence": "isSuper"
+      }
+    },
+    {
+      "path": "/api/enterprise/organisations",
+      "kind": "api",
+      "gate": {
+        "kind": "role-list",
+        "roles": [
+          "super_admin"
+        ],
+        "appointment": false,
+        "evidence": "isSuper"
+      }
+    },
+    {
+      "path": "/api/enterprise/people",
+      "kind": "api",
+      "gate": {
+        "kind": "role-list",
+        "roles": [
+          "super_admin"
+        ],
+        "appointment": false,
+        "evidence": "isSuper"
+      }
+    },
+    {
+      "path": "/api/enterprise/structure",
+      "kind": "api",
+      "gate": {
+        "kind": "role-list",
+        "roles": [
+          "super_admin"
+        ],
+        "appointment": false,
+        "evidence": "isSuper"
+      }
+    },
+    {
+      "path": "/api/enterprise/templates",
+      "kind": "api",
+      "gate": {
+        "kind": "role-list",
+        "roles": [
+          "super_admin"
+        ],
+        "appointment": false,
+        "evidence": "isSuper"
+      }
+    },
+    {
+      "path": "/api/evidence",
+      "kind": "api",
+      "gate": {
+        "kind": "auth-only",
+        "roles": [],
+        "appointment": false,
+        "evidence": "if (!user) redirect(...)"
+      }
+    },
+    {
+      "path": "/api/exec-scope",
+      "kind": "api",
+      "gate": {
+        "kind": "auth-only",
+        "roles": [],
+        "appointment": false,
+        "evidence": "if (!user) redirect(...)"
+      }
+    },
+    {
+      "path": "/api/executive-ai/copilot",
+      "kind": "api",
+      "gate": {
+        "kind": "auth-only",
+        "roles": [],
+        "appointment": false,
+        "evidence": "if (!user) redirect(...)"
+      }
+    },
+    {
+      "path": "/api/governance/accreditation",
+      "kind": "api",
+      "gate": {
+        "kind": "role-list",
+        "roles": [
+          "hospital_admin",
+          "super_admin",
+          "assessor",
+          "educator",
+          "senior_educator",
+          "clinical_educator",
+          "curriculum_lead",
+          "assessment_lead",
+          "simulation_lead",
+          "quality_reviewer",
+          "education_administrator",
+          "program_director"
+        ],
+        "appointment": false,
+        "evidence": "ADMIN_ROLES | STAFF_ROLES"
+      }
+    },
+    {
+      "path": "/api/governance/committees",
+      "kind": "api",
+      "gate": {
+        "kind": "role-list",
+        "roles": [
+          "hospital_admin",
+          "super_admin"
+        ],
+        "appointment": false,
+        "evidence": "ADMIN_ROLES | isSuper"
+      }
+    },
+    {
+      "path": "/api/governance/config",
+      "kind": "api",
+      "gate": {
+        "kind": "role-list",
+        "roles": [
+          "super_admin"
+        ],
+        "appointment": false,
+        "evidence": "isSuper"
+      }
+    },
+    {
+      "path": "/api/governance/obligations",
+      "kind": "api",
+      "gate": {
+        "kind": "role-list",
+        "roles": [
+          "hospital_admin",
+          "super_admin",
+          "assessor",
+          "educator",
+          "senior_educator",
+          "clinical_educator",
+          "curriculum_lead",
+          "assessment_lead",
+          "simulation_lead",
+          "quality_reviewer",
+          "education_administrator",
+          "program_director"
+        ],
+        "appointment": false,
+        "evidence": "ADMIN_ROLES | STAFF_ROLES"
+      }
+    },
+    {
+      "path": "/api/governance/risks",
+      "kind": "api",
+      "gate": {
+        "kind": "role-list",
+        "roles": [
+          "hospital_admin",
+          "super_admin",
+          "assessor",
+          "educator",
+          "senior_educator",
+          "clinical_educator",
+          "curriculum_lead",
+          "assessment_lead",
+          "simulation_lead",
+          "quality_reviewer",
+          "education_administrator",
+          "program_director"
+        ],
+        "appointment": false,
+        "evidence": "ADMIN_ROLES | STAFF_ROLES"
+      }
+    },
+    {
+      "path": "/api/governance/surveys",
+      "kind": "api",
+      "gate": {
+        "kind": "role-list",
+        "roles": [
+          "hospital_admin",
+          "super_admin",
+          "assessor",
+          "educator",
+          "senior_educator",
+          "clinical_educator",
+          "curriculum_lead",
+          "assessment_lead",
+          "simulation_lead",
+          "quality_reviewer",
+          "education_administrator",
+          "program_director"
+        ],
+        "appointment": false,
+        "evidence": "ADMIN_ROLES | STAFF_ROLES"
+      }
+    },
+    {
+      "path": "/api/graph/rebuild",
+      "kind": "api",
+      "gate": {
+        "kind": "single-role",
+        "roles": [
+          "super_admin"
+        ],
+        "appointment": false,
+        "evidence": "role !== \"super_admin\""
+      }
+    },
+    {
+      "path": "/api/hww/copilot",
+      "kind": "api",
+      "gate": {
+        "kind": "auth-only",
+        "roles": [],
+        "appointment": false,
+        "evidence": "if (!user) redirect(...)"
+      }
+    },
+    {
+      "path": "/api/import",
+      "kind": "api",
+      "gate": {
+        "kind": "role-list",
+        "roles": [
+          "hospital_admin",
+          "super_admin"
+        ],
+        "appointment": false,
+        "evidence": "ADMIN_ROLES | isSuper"
+      }
+    },
+    {
+      "path": "/api/import/cpu",
+      "kind": "api",
+      "gate": {
+        "kind": "single-role",
+        "roles": [
+          "super_admin"
+        ],
+        "appointment": false,
+        "evidence": "role !== \"super_admin\""
+      }
+    },
+    {
+      "path": "/api/jobs",
+      "kind": "api",
+      "gate": {
+        "kind": "role-list",
+        "roles": [
+          "super_admin"
+        ],
+        "appointment": false,
+        "evidence": "isSuper"
+      }
+    },
+    {
+      "path": "/api/knowledge",
+      "kind": "api",
+      "gate": {
+        "kind": "auth-only",
+        "roles": [],
+        "appointment": false,
+        "evidence": "if (!user) redirect(...)"
+      }
+    },
+    {
+      "path": "/api/knowledge-objects",
+      "kind": "api",
+      "gate": {
+        "kind": "auth-only",
+        "roles": [],
+        "appointment": false,
+        "evidence": "if (!user) redirect(...)"
+      }
+    },
+    {
+      "path": "/api/learning/my-enrolments",
+      "kind": "api",
+      "gate": {
+        "kind": "auth-only",
+        "roles": [],
+        "appointment": false,
+        "evidence": "getCaller() with no role predicate"
+      }
+    },
+    {
+      "path": "/api/learning/pathway-items",
+      "kind": "api",
+      "gate": {
+        "kind": "auth-only",
+        "roles": [],
+        "appointment": false,
+        "evidence": "if (!user) redirect(...)"
+      }
+    },
+    {
+      "path": "/api/learning/resources",
+      "kind": "api",
+      "gate": {
+        "kind": "role-list",
+        "roles": [
+          "educator",
+          "senior_educator",
+          "clinical_educator",
+          "curriculum_lead",
+          "assessment_lead",
+          "simulation_lead",
+          "education_administrator",
+          "program_director",
+          "hospital_admin",
+          "super_admin"
+        ],
+        "appointment": false,
+        "evidence": "EDUCATOR_ROLES"
+      }
+    },
+    {
+      "path": "/api/library",
+      "kind": "api",
+      "gate": {
+        "kind": "auth-only",
+        "roles": [],
+        "appointment": false,
+        "evidence": "if (!user) redirect(...)"
+      }
+    },
+    {
+      "path": "/api/logbook",
+      "kind": "api",
+      "gate": {
+        "kind": "auth-only",
+        "roles": [],
+        "appointment": false,
+        "evidence": "getCaller() with no role predicate"
+      }
+    },
+    {
+      "path": "/api/me/actions/[id]/execute",
+      "kind": "api",
+      "gate": {
+        "kind": "auth-only",
+        "roles": [],
+        "appointment": false,
+        "evidence": "if (!user) redirect(...)"
+      }
+    },
+    {
+      "path": "/api/me/adaptive",
+      "kind": "api",
+      "gate": {
+        "kind": "auth-only",
+        "roles": [],
+        "appointment": false,
+        "evidence": "getCaller() with no role predicate"
+      }
+    },
+    {
+      "path": "/api/me/break-glass",
+      "kind": "api",
+      "gate": {
+        "kind": "auth-only",
+        "roles": [],
+        "appointment": false,
+        "evidence": "if (!user) redirect(...)"
+      }
+    },
+    {
+      "path": "/api/me/copilot",
+      "kind": "api",
+      "gate": {
+        "kind": "auth-only",
+        "roles": [],
+        "appointment": false,
+        "evidence": "if (!user) redirect(...)"
+      }
+    },
+    {
+      "path": "/api/me/dashboard-prefs",
+      "kind": "api",
+      "gate": {
+        "kind": "auth-only",
+        "roles": [],
+        "appointment": false,
+        "evidence": "if (!user) redirect(...)"
+      }
+    },
+    {
+      "path": "/api/me/reinforcement",
+      "kind": "api",
+      "gate": {
+        "kind": "auth-only",
+        "roles": [],
+        "appointment": false,
+        "evidence": "getCaller() with no role predicate"
+      }
+    },
+    {
+      "path": "/api/me/simulation",
+      "kind": "api",
+      "gate": {
+        "kind": "auth-only",
+        "roles": [],
+        "appointment": false,
+        "evidence": "getCaller() with no role predicate"
+      }
+    },
+    {
+      "path": "/api/me/workspaces",
+      "kind": "api",
+      "gate": {
+        "kind": "auth-only",
+        "roles": [],
+        "appointment": false,
+        "evidence": "if (!user) redirect(...)"
+      }
+    },
+    {
+      "path": "/api/messages",
+      "kind": "api",
+      "gate": {
+        "kind": "auth-only",
+        "roles": [],
+        "appointment": false,
+        "evidence": "if (!user) redirect(...)"
+      }
+    },
+    {
+      "path": "/api/messages/channel",
+      "kind": "api",
+      "gate": {
+        "kind": "auth-only",
+        "roles": [],
+        "appointment": false,
+        "evidence": "if (!user) redirect(...)"
+      }
+    },
+    {
+      "path": "/api/metadata",
+      "kind": "api",
+      "gate": {
+        "kind": "single-role",
+        "roles": [
+          "super_admin"
+        ],
+        "appointment": false,
+        "evidence": "role !== \"super_admin\""
+      }
+    },
+    {
+      "path": "/api/metadata/tags",
+      "kind": "api",
+      "gate": {
+        "kind": "role-list",
+        "roles": [
+          "assessor",
+          "educator",
+          "senior_educator",
+          "clinical_educator",
+          "curriculum_lead",
+          "assessment_lead",
+          "simulation_lead",
+          "quality_reviewer",
+          "education_administrator",
+          "program_director",
+          "hospital_admin",
+          "super_admin"
+        ],
+        "appointment": false,
+        "evidence": "STAFF_ROLES | EDUCATOR_ROLES"
+      }
+    },
+    {
+      "path": "/api/notifications",
+      "kind": "api",
+      "gate": {
+        "kind": "auth-only",
+        "roles": [],
+        "appointment": false,
+        "evidence": "if (!user) redirect(...)"
+      }
+    },
+    {
+      "path": "/api/notifications/state",
+      "kind": "api",
+      "gate": {
+        "kind": "auth-only",
+        "roles": [],
+        "appointment": false,
+        "evidence": "if (!user) redirect(...)"
+      }
+    },
+    {
+      "path": "/api/notifications/test",
+      "kind": "api",
+      "gate": {
+        "kind": "role-list",
+        "roles": [
+          "super_admin"
+        ],
+        "appointment": false,
+        "evidence": "isSuper"
+      }
+    },
+    {
+      "path": "/api/office-governance/copilot",
+      "kind": "api",
+      "gate": {
+        "kind": "auth-only",
+        "roles": [],
+        "appointment": false,
+        "evidence": "if (!user) redirect(...)"
+      }
+    },
+    {
+      "path": "/api/office-governance/delegations",
+      "kind": "api",
+      "gate": {
+        "kind": "role-list",
+        "roles": [
+          "hospital_admin",
+          "super_admin"
+        ],
+        "appointment": false,
+        "evidence": "ADMIN_ROLES"
+      }
+    },
+    {
+      "path": "/api/office-governance/meetings",
+      "kind": "api",
+      "gate": {
+        "kind": "role-list",
+        "roles": [
+          "hospital_admin",
+          "super_admin"
+        ],
+        "appointment": false,
+        "evidence": "ADMIN_ROLES | isSuper"
+      }
+    },
+    {
+      "path": "/api/office-governance/meetings/[id]",
+      "kind": "api",
+      "gate": {
+        "kind": "role-list",
+        "roles": [
+          "hospital_admin",
+          "super_admin"
+        ],
+        "appointment": false,
+        "evidence": "ADMIN_ROLES"
+      }
+    },
+    {
+      "path": "/api/office-governance/meetings/[id]/actions",
+      "kind": "api",
+      "gate": {
+        "kind": "role-list",
+        "roles": [
+          "hospital_admin",
+          "super_admin"
+        ],
+        "appointment": false,
+        "evidence": "ADMIN_ROLES"
+      }
+    },
+    {
+      "path": "/api/office-governance/meetings/[id]/agenda",
+      "kind": "api",
+      "gate": {
+        "kind": "role-list",
+        "roles": [
+          "hospital_admin",
+          "super_admin"
+        ],
+        "appointment": false,
+        "evidence": "ADMIN_ROLES"
+      }
+    },
+    {
+      "path": "/api/office-governance/meetings/[id]/attendance",
+      "kind": "api",
+      "gate": {
+        "kind": "role-list",
+        "roles": [
+          "hospital_admin",
+          "super_admin"
+        ],
+        "appointment": false,
+        "evidence": "ADMIN_ROLES"
+      }
+    },
+    {
+      "path": "/api/office-governance/meetings/[id]/decisions",
+      "kind": "api",
+      "gate": {
+        "kind": "role-list",
+        "roles": [
+          "hospital_admin",
+          "super_admin"
+        ],
+        "appointment": false,
+        "evidence": "ADMIN_ROLES"
+      }
+    },
+    {
+      "path": "/api/office-governance/offices",
+      "kind": "api",
+      "gate": {
+        "kind": "role-list",
+        "roles": [
+          "hospital_admin",
+          "super_admin"
+        ],
+        "appointment": false,
+        "evidence": "ADMIN_ROLES"
+      }
+    },
+    {
+      "path": "/api/office-governance/offices/[id]",
+      "kind": "api",
+      "gate": {
+        "kind": "role-list",
+        "roles": [
+          "hospital_admin",
+          "super_admin"
+        ],
+        "appointment": false,
+        "evidence": "ADMIN_ROLES | isSuper"
+      }
+    },
+    {
+      "path": "/api/office-governance/offices/[id]/appointments",
+      "kind": "api",
+      "gate": {
+        "kind": "role-list",
+        "roles": [
+          "hospital_admin",
+          "super_admin"
+        ],
+        "appointment": false,
+        "evidence": "ADMIN_ROLES | isSuper"
+      }
+    },
+    {
+      "path": "/api/office-governance/offices/[id]/charter",
+      "kind": "api",
+      "gate": {
+        "kind": "role-list",
+        "roles": [
+          "hospital_admin",
+          "super_admin"
+        ],
+        "appointment": false,
+        "evidence": "ADMIN_ROLES | isSuper"
+      }
+    },
+    {
+      "path": "/api/office-governance/sign",
+      "kind": "api",
+      "gate": {
+        "kind": "role-list",
+        "roles": [
+          "hospital_admin",
+          "super_admin"
+        ],
+        "appointment": false,
+        "evidence": "ADMIN_ROLES | isSuper"
+      }
+    },
+    {
+      "path": "/api/operations/approvals",
+      "kind": "api",
+      "gate": {
+        "kind": "role-list",
+        "roles": [
+          "assessor",
+          "educator",
+          "senior_educator",
+          "clinical_educator",
+          "curriculum_lead",
+          "assessment_lead",
+          "simulation_lead",
+          "quality_reviewer",
+          "education_administrator",
+          "program_director",
+          "hospital_admin",
+          "super_admin"
+        ],
+        "appointment": false,
+        "evidence": "STAFF_ROLES | SUPERVISOR_ROLES"
+      }
+    },
+    {
+      "path": "/api/operations/assessments",
+      "kind": "api",
+      "gate": {
+        "kind": "role-list",
+        "roles": [
+          "assessor",
+          "educator",
+          "senior_educator",
+          "clinical_educator",
+          "curriculum_lead",
+          "assessment_lead",
+          "simulation_lead",
+          "quality_reviewer",
+          "education_administrator",
+          "program_director",
+          "hospital_admin",
+          "super_admin"
+        ],
+        "appointment": false,
+        "evidence": "STAFF_ROLES | isSuper"
+      }
+    },
+    {
+      "path": "/api/operations/assignment-engine",
+      "kind": "api",
+      "gate": {
+        "kind": "role-list",
+        "roles": [
+          "assessor",
+          "hospital_admin",
+          "super_admin"
+        ],
+        "appointment": false,
+        "evidence": "SUPERVISOR_ROLES | isSuper"
+      }
+    },
+    {
+      "path": "/api/operations/assignments",
+      "kind": "api",
+      "gate": {
+        "kind": "role-list",
+        "roles": [
+          "assessor",
+          "hospital_admin",
+          "super_admin"
+        ],
+        "appointment": false,
+        "evidence": "SUPERVISOR_ROLES | isSuper"
+      }
+    },
+    {
+      "path": "/api/operations/attendance",
+      "kind": "api",
+      "gate": {
+        "kind": "role-list",
+        "roles": [
+          "assessor",
+          "hospital_admin",
+          "super_admin"
+        ],
+        "appointment": false,
+        "evidence": "SUPERVISOR_ROLES | isSuper"
+      }
+    },
+    {
+      "path": "/api/operations/attendance-corrections",
+      "kind": "api",
+      "gate": {
+        "kind": "role-list",
+        "roles": [
+          "assessor",
+          "hospital_admin",
+          "super_admin"
+        ],
+        "appointment": false,
+        "evidence": "SUPERVISOR_ROLES | isSuper"
+      }
+    },
+    {
+      "path": "/api/operations/attendance-exceptions",
+      "kind": "api",
+      "gate": {
+        "kind": "role-list",
+        "roles": [
+          "assessor",
+          "hospital_admin",
+          "super_admin"
+        ],
+        "appointment": false,
+        "evidence": "SUPERVISOR_ROLES | isSuper"
+      }
+    },
+    {
+      "path": "/api/operations/availability",
+      "kind": "api",
+      "gate": {
+        "kind": "role-list",
+        "roles": [
+          "assessor",
+          "hospital_admin",
+          "super_admin"
+        ],
+        "appointment": false,
+        "evidence": "SUPERVISOR_ROLES | isSuper"
+      }
+    },
+    {
+      "path": "/api/operations/bed-turnaround",
+      "kind": "api",
+      "gate": {
+        "kind": "role-list",
+        "roles": [
+          "assessor",
+          "hospital_admin",
+          "super_admin"
+        ],
+        "appointment": false,
+        "evidence": "SUPERVISOR_ROLES | isSuper"
+      }
+    },
+    {
+      "path": "/api/operations/beds",
+      "kind": "api",
+      "gate": {
+        "kind": "role-list",
+        "roles": [
+          "assessor",
+          "educator",
+          "senior_educator",
+          "clinical_educator",
+          "curriculum_lead",
+          "assessment_lead",
+          "simulation_lead",
+          "quality_reviewer",
+          "education_administrator",
+          "program_director",
+          "hospital_admin",
+          "super_admin"
+        ],
+        "appointment": false,
+        "evidence": "STAFF_ROLES | isSuper"
+      }
+    },
+    {
+      "path": "/api/operations/broadcasts",
+      "kind": "api",
+      "gate": {
+        "kind": "role-list",
+        "roles": [
+          "assessor",
+          "educator",
+          "senior_educator",
+          "clinical_educator",
+          "curriculum_lead",
+          "assessment_lead",
+          "simulation_lead",
+          "quality_reviewer",
+          "education_administrator",
+          "program_director",
+          "hospital_admin",
+          "super_admin"
+        ],
+        "appointment": false,
+        "evidence": "STAFF_ROLES | isSuper"
+      }
+    },
+    {
+      "path": "/api/operations/census",
+      "kind": "api",
+      "gate": {
+        "kind": "role-list",
+        "roles": [
+          "assessor",
+          "educator",
+          "senior_educator",
+          "clinical_educator",
+          "curriculum_lead",
+          "assessment_lead",
+          "simulation_lead",
+          "quality_reviewer",
+          "education_administrator",
+          "program_director",
+          "hospital_admin",
+          "super_admin"
+        ],
+        "appointment": false,
+        "evidence": "STAFF_ROLES | SUPERVISOR_ROLES | isSuper"
+      }
+    },
+    {
+      "path": "/api/operations/command-transfer",
+      "kind": "api",
+      "gate": {
+        "kind": "role-list",
+        "roles": [
+          "assessor",
+          "hospital_admin",
+          "super_admin"
+        ],
+        "appointment": false,
+        "evidence": "SUPERVISOR_ROLES | isSuper"
+      }
+    },
+    {
+      "path": "/api/operations/concerns",
+      "kind": "api",
+      "gate": {
+        "kind": "role-list",
+        "roles": [
+          "assessor",
+          "educator",
+          "senior_educator",
+          "clinical_educator",
+          "curriculum_lead",
+          "assessment_lead",
+          "simulation_lead",
+          "quality_reviewer",
+          "education_administrator",
+          "program_director",
+          "hospital_admin",
+          "super_admin"
+        ],
+        "appointment": false,
+        "evidence": "STAFF_ROLES | isSuper"
+      }
+    },
+    {
+      "path": "/api/operations/copilot",
+      "kind": "api",
+      "gate": {
+        "kind": "role-list",
+        "roles": [
+          "assessor",
+          "educator",
+          "senior_educator",
+          "clinical_educator",
+          "curriculum_lead",
+          "assessment_lead",
+          "simulation_lead",
+          "quality_reviewer",
+          "education_administrator",
+          "program_director",
+          "hospital_admin",
+          "super_admin"
+        ],
+        "appointment": false,
+        "evidence": "STAFF_ROLES"
+      }
+    },
+    {
+      "path": "/api/operations/devices",
+      "kind": "api",
+      "gate": {
+        "kind": "role-list",
+        "roles": [
+          "assessor",
+          "educator",
+          "senior_educator",
+          "clinical_educator",
+          "curriculum_lead",
+          "assessment_lead",
+          "simulation_lead",
+          "quality_reviewer",
+          "education_administrator",
+          "program_director",
+          "hospital_admin",
+          "super_admin"
+        ],
+        "appointment": false,
+        "evidence": "STAFF_ROLES | isSuper"
+      }
+    },
+    {
+      "path": "/api/operations/education-plan",
+      "kind": "api",
+      "gate": {
+        "kind": "role-list",
+        "roles": [
+          "super_admin",
+          "hospital_admin"
+        ],
+        "appointment": false,
+        "evidence": "isSuper"
+      }
+    },
+    {
+      "path": "/api/operations/escalations",
+      "kind": "api",
+      "gate": {
+        "kind": "role-list",
+        "roles": [
+          "assessor",
+          "educator",
+          "senior_educator",
+          "clinical_educator",
+          "curriculum_lead",
+          "assessment_lead",
+          "simulation_lead",
+          "quality_reviewer",
+          "education_administrator",
+          "program_director",
+          "hospital_admin",
+          "super_admin"
+        ],
+        "appointment": false,
+        "evidence": "STAFF_ROLES | isSuper"
+      }
+    },
+    {
+      "path": "/api/operations/flow-blockers",
+      "kind": "api",
+      "gate": {
+        "kind": "role-list",
+        "roles": [
+          "assessor",
+          "hospital_admin",
+          "super_admin"
+        ],
+        "appointment": false,
+        "evidence": "SUPERVISOR_ROLES | isSuper"
+      }
+    },
+    {
+      "path": "/api/operations/handover",
+      "kind": "api",
+      "gate": {
+        "kind": "role-list",
+        "roles": [
+          "assessor",
+          "hospital_admin",
+          "super_admin"
+        ],
+        "appointment": false,
+        "evidence": "SUPERVISOR_ROLES"
+      }
+    },
+    {
+      "path": "/api/operations/incidents",
+      "kind": "api",
+      "gate": {
+        "kind": "role-list",
+        "roles": [
+          "assessor",
+          "educator",
+          "senior_educator",
+          "clinical_educator",
+          "curriculum_lead",
+          "assessment_lead",
+          "simulation_lead",
+          "quality_reviewer",
+          "education_administrator",
+          "program_director",
+          "hospital_admin",
+          "super_admin"
+        ],
+        "appointment": false,
+        "evidence": "STAFF_ROLES | isSuper"
+      }
+    },
+    {
+      "path": "/api/operations/learning-assign",
+      "kind": "api",
+      "gate": {
+        "kind": "role-list",
+        "roles": [
+          "super_admin",
+          "hospital_admin"
+        ],
+        "appointment": false,
+        "evidence": "isSuper"
+      }
+    },
+    {
+      "path": "/api/operations/leave",
+      "kind": "api",
+      "gate": {
+        "kind": "role-list",
+        "roles": [
+          "assessor",
+          "hospital_admin",
+          "super_admin"
+        ],
+        "appointment": false,
+        "evidence": "SUPERVISOR_ROLES | isSuper"
+      }
+    },
+    {
+      "path": "/api/operations/mdt",
+      "kind": "api",
+      "gate": {
+        "kind": "role-list",
+        "roles": [
+          "assessor",
+          "hospital_admin",
+          "super_admin"
+        ],
+        "appointment": false,
+        "evidence": "SUPERVISOR_ROLES | isSuper"
+      }
+    },
+    {
+      "path": "/api/operations/medications",
+      "kind": "api",
+      "gate": {
+        "kind": "role-list",
+        "roles": [
+          "assessor",
+          "educator",
+          "senior_educator",
+          "clinical_educator",
+          "curriculum_lead",
+          "assessment_lead",
+          "simulation_lead",
+          "quality_reviewer",
+          "education_administrator",
+          "program_director",
+          "hospital_admin",
+          "super_admin"
+        ],
+        "appointment": false,
+        "evidence": "STAFF_ROLES | isSuper"
+      }
+    },
+    {
+      "path": "/api/operations/messages",
+      "kind": "api",
+      "gate": {
+        "kind": "role-list",
+        "roles": [
+          "super_admin"
+        ],
+        "appointment": false,
+        "evidence": "isSuper"
+      }
+    },
+    {
+      "path": "/api/operations/my-shift",
+      "kind": "api",
+      "gate": {
+        "kind": "auth-only",
+        "roles": [],
+        "appointment": false,
+        "evidence": "getCaller() with no role predicate"
+      }
+    },
+    {
+      "path": "/api/operations/notes",
+      "kind": "api",
+      "gate": {
+        "kind": "role-list",
+        "roles": [
+          "assessor",
+          "hospital_admin",
+          "super_admin"
+        ],
+        "appointment": false,
+        "evidence": "SUPERVISOR_ROLES | isSuper"
+      }
+    },
+    {
+      "path": "/api/operations/observations",
+      "kind": "api",
+      "gate": {
+        "kind": "role-list",
+        "roles": [
+          "assessor",
+          "educator",
+          "senior_educator",
+          "clinical_educator",
+          "curriculum_lead",
+          "assessment_lead",
+          "simulation_lead",
+          "quality_reviewer",
+          "education_administrator",
+          "program_director",
+          "hospital_admin",
+          "super_admin"
+        ],
+        "appointment": false,
+        "evidence": "STAFF_ROLES | isSuper"
+      }
+    },
+    {
+      "path": "/api/operations/patients",
+      "kind": "api",
+      "gate": {
+        "kind": "role-list",
+        "roles": [
+          "assessor",
+          "hospital_admin",
+          "super_admin"
+        ],
+        "appointment": false,
+        "evidence": "SUPERVISOR_ROLES | isSuper"
+      }
+    },
+    {
+      "path": "/api/operations/pos-config",
+      "kind": "api",
+      "gate": {
+        "kind": "role-list",
+        "roles": [
+          "hospital_admin",
+          "super_admin"
+        ],
+        "appointment": false,
+        "evidence": "hasRole"
+      }
+    },
+    {
+      "path": "/api/operations/pos-documents",
+      "kind": "api",
+      "gate": {
+        "kind": "role-list",
+        "roles": [
+          "super_admin",
+          "hospital_admin"
+        ],
+        "appointment": false,
+        "evidence": "isSuper"
+      }
+    },
+    {
+      "path": "/api/operations/pos-forms",
+      "kind": "api",
+      "gate": {
+        "kind": "role-list",
+        "roles": [
+          "super_admin",
+          "hospital_admin"
+        ],
+        "appointment": false,
+        "evidence": "isSuper"
+      }
+    },
+    {
+      "path": "/api/operations/pos-governance",
+      "kind": "api",
+      "gate": {
+        "kind": "role-list",
+        "roles": [
+          "assessor",
+          "hospital_admin",
+          "super_admin"
+        ],
+        "appointment": false,
+        "evidence": "SUPERVISOR_ROLES | isSuper"
+      }
+    },
+    {
+      "path": "/api/operations/quality-actions",
+      "kind": "api",
+      "gate": {
+        "kind": "role-list",
+        "roles": [
+          "assessor",
+          "educator",
+          "senior_educator",
+          "clinical_educator",
+          "curriculum_lead",
+          "assessment_lead",
+          "simulation_lead",
+          "quality_reviewer",
+          "education_administrator",
+          "program_director",
+          "hospital_admin",
+          "super_admin"
+        ],
+        "appointment": false,
+        "evidence": "STAFF_ROLES | isSuper"
+      }
+    },
+    {
+      "path": "/api/operations/readiness",
+      "kind": "api",
+      "gate": {
+        "kind": "role-list",
+        "roles": [
+          "assessor",
+          "hospital_admin",
+          "super_admin"
+        ],
+        "appointment": false,
+        "evidence": "SUPERVISOR_ROLES | isSuper"
+      }
+    },
+    {
+      "path": "/api/operations/replacement",
+      "kind": "api",
+      "gate": {
+        "kind": "role-list",
+        "roles": [
+          "assessor",
+          "hospital_admin",
+          "super_admin"
+        ],
+        "appointment": false,
+        "evidence": "SUPERVISOR_ROLES | isSuper"
+      }
+    },
+    {
+      "path": "/api/operations/roster-actuals",
+      "kind": "api",
+      "gate": {
+        "kind": "role-list",
+        "roles": [
+          "super_admin",
+          "hospital_admin"
+        ],
+        "appointment": false,
+        "evidence": "isSuper"
+      }
+    },
+    {
+      "path": "/api/operations/roster-amendments",
+      "kind": "api",
+      "gate": {
+        "kind": "role-list",
+        "roles": [
+          "super_admin",
+          "hospital_admin"
+        ],
+        "appointment": false,
+        "evidence": "isSuper"
+      }
+    },
+    {
+      "path": "/api/operations/roster-approvals",
+      "kind": "api",
+      "gate": {
+        "kind": "role-list",
+        "roles": [
+          "super_admin",
+          "hospital_admin"
+        ],
+        "appointment": false,
+        "evidence": "isSuper"
+      }
+    },
+    {
+      "path": "/api/operations/roster-exceptions",
+      "kind": "api",
+      "gate": {
+        "kind": "role-list",
+        "roles": [
+          "super_admin",
+          "hospital_admin"
+        ],
+        "appointment": false,
+        "evidence": "isSuper"
+      }
+    },
+    {
+      "path": "/api/operations/rosters",
+      "kind": "api",
+      "gate": {
+        "kind": "role-list",
+        "roles": [
+          "super_admin"
+        ],
+        "appointment": false,
+        "evidence": "isSuper"
+      }
+    },
+    {
+      "path": "/api/operations/round-schedule",
+      "kind": "api",
+      "gate": {
+        "kind": "role-list",
+        "roles": [
+          "assessor",
+          "educator",
+          "senior_educator",
+          "clinical_educator",
+          "curriculum_lead",
+          "assessment_lead",
+          "simulation_lead",
+          "quality_reviewer",
+          "education_administrator",
+          "program_director",
+          "hospital_admin",
+          "super_admin"
+        ],
+        "appointment": false,
+        "evidence": "STAFF_ROLES | isSuper"
+      }
+    },
+    {
+      "path": "/api/operations/safety-alerts",
+      "kind": "api",
+      "gate": {
+        "kind": "role-list",
+        "roles": [
+          "assessor",
+          "educator",
+          "senior_educator",
+          "clinical_educator",
+          "curriculum_lead",
+          "assessment_lead",
+          "simulation_lead",
+          "quality_reviewer",
+          "education_administrator",
+          "program_director",
+          "hospital_admin",
+          "super_admin"
+        ],
+        "appointment": false,
+        "evidence": "STAFF_ROLES | isSuper"
+      }
+    },
+    {
+      "path": "/api/operations/safety-huddles",
+      "kind": "api",
+      "gate": {
+        "kind": "role-list",
+        "roles": [
+          "assessor",
+          "hospital_admin",
+          "super_admin"
+        ],
+        "appointment": false,
+        "evidence": "SUPERVISOR_ROLES | isSuper"
+      }
+    },
+    {
+      "path": "/api/operations/shift-decisions",
+      "kind": "api",
+      "gate": {
+        "kind": "role-list",
+        "roles": [
+          "assessor",
+          "hospital_admin",
+          "super_admin"
+        ],
+        "appointment": false,
+        "evidence": "SUPERVISOR_ROLES | isSuper"
+      }
+    },
+    {
+      "path": "/api/operations/shift-metrics",
+      "kind": "api",
+      "gate": {
+        "kind": "role-list",
+        "roles": [
+          "assessor",
+          "hospital_admin",
+          "super_admin"
+        ],
+        "appointment": false,
+        "evidence": "SUPERVISOR_ROLES"
+      }
+    },
+    {
+      "path": "/api/operations/shift-snapshots",
+      "kind": "api",
+      "gate": {
+        "kind": "role-list",
+        "roles": [
+          "assessor",
+          "hospital_admin",
+          "super_admin"
+        ],
+        "appointment": false,
+        "evidence": "SUPERVISOR_ROLES"
+      }
+    },
+    {
+      "path": "/api/operations/shift-staff",
+      "kind": "api",
+      "gate": {
+        "kind": "role-list",
+        "roles": [
+          "assessor",
+          "hospital_admin",
+          "super_admin"
+        ],
+        "appointment": false,
+        "evidence": "SUPERVISOR_ROLES | isSuper"
+      }
+    },
+    {
+      "path": "/api/operations/shift-supervisors",
+      "kind": "api",
+      "gate": {
+        "kind": "role-list",
+        "roles": [
+          "assessor",
+          "hospital_admin",
+          "super_admin"
+        ],
+        "appointment": false,
+        "evidence": "SUPERVISOR_ROLES | isSuper"
+      }
+    },
+    {
+      "path": "/api/operations/shift-updates",
+      "kind": "api",
+      "gate": {
+        "kind": "role-list",
+        "roles": [
+          "assessor",
+          "hospital_admin",
+          "super_admin"
+        ],
+        "appointment": false,
+        "evidence": "SUPERVISOR_ROLES | isSuper"
+      }
+    },
+    {
+      "path": "/api/operations/shifts",
+      "kind": "api",
+      "gate": {
+        "kind": "role-list",
+        "roles": [
+          "assessor",
+          "hospital_admin",
+          "super_admin"
+        ],
+        "appointment": false,
+        "evidence": "SUPERVISOR_ROLES | isSuper"
+      }
+    },
+    {
+      "path": "/api/operations/staff-breaks",
+      "kind": "api",
+      "gate": {
+        "kind": "role-list",
+        "roles": [
+          "assessor",
+          "hospital_admin",
+          "super_admin"
+        ],
+        "appointment": false,
+        "evidence": "SUPERVISOR_ROLES | isSuper"
+      }
+    },
+    {
+      "path": "/api/operations/staffing-standards",
+      "kind": "api",
+      "gate": {
+        "kind": "role-list",
+        "roles": [
+          "assessor",
+          "educator",
+          "senior_educator",
+          "clinical_educator",
+          "curriculum_lead",
+          "assessment_lead",
+          "simulation_lead",
+          "quality_reviewer",
+          "education_administrator",
+          "program_director",
+          "hospital_admin",
+          "super_admin"
+        ],
+        "appointment": false,
+        "evidence": "STAFF_ROLES | isSuper"
+      }
+    },
+    {
+      "path": "/api/operations/supervisor-notes",
+      "kind": "api",
+      "gate": {
+        "kind": "role-list",
+        "roles": [
+          "assessor",
+          "hospital_admin",
+          "super_admin"
+        ],
+        "appointment": false,
+        "evidence": "SUPERVISOR_ROLES | isSuper"
+      }
+    },
+    {
+      "path": "/api/operations/task-automation",
+      "kind": "api",
+      "gate": {
+        "kind": "role-list",
+        "roles": [
+          "assessor",
+          "hospital_admin",
+          "super_admin"
+        ],
+        "appointment": false,
+        "evidence": "SUPERVISOR_ROLES"
+      }
+    },
+    {
+      "path": "/api/operations/task-templates",
+      "kind": "api",
+      "gate": {
+        "kind": "role-list",
+        "roles": [
+          "assessor",
+          "hospital_admin",
+          "super_admin"
+        ],
+        "appointment": false,
+        "evidence": "SUPERVISOR_ROLES | isSuper"
+      }
+    },
+    {
+      "path": "/api/operations/tasks",
+      "kind": "api",
+      "gate": {
+        "kind": "role-list",
+        "roles": [
+          "assessor",
+          "educator",
+          "senior_educator",
+          "clinical_educator",
+          "curriculum_lead",
+          "assessment_lead",
+          "simulation_lead",
+          "quality_reviewer",
+          "education_administrator",
+          "program_director",
+          "hospital_admin",
+          "super_admin"
+        ],
+        "appointment": false,
+        "evidence": "STAFF_ROLES | isSuper"
+      }
+    },
+    {
+      "path": "/api/osce/candidates",
+      "kind": "api",
+      "gate": {
+        "kind": "auth-only",
+        "roles": [],
+        "appointment": false,
+        "evidence": "if (!user) redirect(...)"
+      }
+    },
+    {
+      "path": "/api/osce/exams",
+      "kind": "api",
+      "gate": {
+        "kind": "auth-only",
+        "roles": [],
+        "appointment": false,
+        "evidence": "if (!user) redirect(...)"
+      }
+    },
+    {
+      "path": "/api/osce/results",
+      "kind": "api",
+      "gate": {
+        "kind": "auth-only",
+        "roles": [],
+        "appointment": false,
+        "evidence": "if (!user) redirect(...)"
+      }
+    },
+    {
+      "path": "/api/passport/share",
+      "kind": "api",
+      "gate": {
+        "kind": "auth-only",
+        "roles": [],
+        "appointment": false,
+        "evidence": "if (!user) redirect(...)"
+      }
+    },
+    {
+      "path": "/api/passports/request-evidence",
+      "kind": "api",
+      "gate": {
+        "kind": "auth-only",
+        "roles": [],
+        "appointment": false,
+        "evidence": "if (!user) redirect(...)"
+      }
+    },
+    {
+      "path": "/api/performance/copilot",
+      "kind": "api",
+      "gate": {
+        "kind": "auth-only",
+        "roles": [],
+        "appointment": false,
+        "evidence": "if (!user) redirect(...)"
+      }
+    },
+    {
+      "path": "/api/personalisation/preferences",
+      "kind": "api",
+      "gate": {
+        "kind": "auth-only",
+        "roles": [],
+        "appointment": false,
+        "evidence": "if (!user) redirect(...)"
+      }
+    },
+    {
+      "path": "/api/personalisation/views",
+      "kind": "api",
+      "gate": {
+        "kind": "auth-only",
+        "roles": [],
+        "appointment": false,
+        "evidence": "if (!user) redirect(...)"
+      }
+    },
+    {
+      "path": "/api/platform/approvals",
+      "kind": "api",
+      "gate": {
+        "kind": "role-list",
+        "roles": [
+          "super_admin"
+        ],
+        "appointment": false,
+        "evidence": "isSuper"
+      }
+    },
+    {
+      "path": "/api/platform/comments",
+      "kind": "api",
+      "gate": {
+        "kind": "role-list",
+        "roles": [
+          "assessor",
+          "educator",
+          "senior_educator",
+          "clinical_educator",
+          "curriculum_lead",
+          "assessment_lead",
+          "simulation_lead",
+          "quality_reviewer",
+          "education_administrator",
+          "program_director",
+          "hospital_admin",
+          "super_admin"
+        ],
+        "appointment": false,
+        "evidence": "STAFF_ROLES | isSuper"
+      }
+    },
+    {
+      "path": "/api/platform/deployments",
+      "kind": "api",
+      "gate": {
+        "kind": "platform-role",
+        "roles": [
+          "platform_operations",
+          "platform_super_admin",
+          "engineer"
+        ],
+        "appointment": false,
+        "evidence": "landlordCan(caller, \"platform_operations\", \"platform_super_admin\", \"engineer\")"
+      }
+    },
+    {
+      "path": "/api/platform/documents",
+      "kind": "api",
+      "gate": {
+        "kind": "role-list",
+        "roles": [
+          "super_admin"
+        ],
+        "appointment": false,
+        "evidence": "isSuper"
+      }
+    },
+    {
+      "path": "/api/platform/flags/assign",
+      "kind": "api",
+      "gate": {
+        "kind": "platform-role",
+        "roles": [
+          "platform_operations",
+          "platform_super_admin",
+          "product_manager"
+        ],
+        "appointment": false,
+        "evidence": "landlordCan(caller, \"platform_operations\", \"platform_super_admin\", \"product_manager\")"
+      }
+    },
+    {
+      "path": "/api/platform/identity",
+      "kind": "api",
+      "gate": {
+        "kind": "platform-role",
+        "roles": [
+          "platform_operations",
+          "platform_super_admin",
+          "security_operator"
+        ],
+        "appointment": false,
+        "evidence": "landlordCan(caller, \"platform_operations\", \"platform_super_admin\", \"security_operator\")"
+      }
+    },
+    {
+      "path": "/api/platform/localization",
+      "kind": "api",
+      "gate": {
+        "kind": "auth-only",
+        "roles": [],
+        "appointment": false,
+        "evidence": "getCaller() with no role predicate"
+      }
+    },
+    {
+      "path": "/api/platform/operations",
+      "kind": "api",
+      "gate": {
+        "kind": "role-list",
+        "roles": [
+          "super_admin"
+        ],
+        "appointment": false,
+        "evidence": "isSuper"
+      }
+    },
+    {
+      "path": "/api/platform/operations/stream",
+      "kind": "api",
+      "gate": {
+        "kind": "role-list",
+        "roles": [
+          "super_admin"
+        ],
+        "appointment": false,
+        "evidence": "isSuper"
+      }
+    },
+    {
+      "path": "/api/platform/plans",
+      "kind": "api",
+      "gate": {
+        "kind": "role-list",
+        "roles": [
+          "super_admin"
+        ],
+        "appointment": false,
+        "evidence": "isSuper"
+      }
+    },
+    {
+      "path": "/api/platform/portfolio",
+      "kind": "api",
+      "gate": {
+        "kind": "role-list",
+        "roles": [
+          "super_admin"
+        ],
+        "appointment": false,
+        "evidence": "isSuper"
+      }
+    },
+    {
+      "path": "/api/platform/products/toggle",
+      "kind": "api",
+      "gate": {
+        "kind": "platform-role",
+        "roles": [
+          "platform_operations",
+          "platform_super_admin",
+          "product_manager"
+        ],
+        "appointment": false,
+        "evidence": "landlordCan(caller, \"platform_operations\", \"platform_super_admin\", \"product_manager\")"
+      }
+    },
+    {
+      "path": "/api/platform/provision",
+      "kind": "api",
+      "gate": {
+        "kind": "platform-role",
+        "roles": [
+          "platform_operations",
+          "platform_super_admin"
+        ],
+        "appointment": false,
+        "evidence": "landlordCan(caller, \"platform_operations\", \"platform_super_admin\")"
+      }
+    },
+    {
+      "path": "/api/platform/search",
+      "kind": "api",
+      "gate": {
+        "kind": "role-list",
+        "roles": [
+          "super_admin"
+        ],
+        "appointment": false,
+        "evidence": "isSuper"
+      }
+    },
+    {
+      "path": "/api/platform/support/tickets",
+      "kind": "api",
+      "gate": {
+        "kind": "platform-role",
+        "roles": [
+          "platform_operations",
+          "platform_super_admin",
+          "support",
+          "customer_success"
+        ],
+        "appointment": false,
+        "evidence": "landlordCan(caller, \"platform_operations\", \"platform_super_admin\", \"support\", \"customer_success\")"
+      }
+    },
+    {
+      "path": "/api/platform/tenants",
+      "kind": "api",
+      "gate": {
+        "kind": "role-list",
+        "roles": [
+          "super_admin"
+        ],
+        "appointment": false,
+        "evidence": "isSuper"
+      }
+    },
+    {
+      "path": "/api/platform/tenants/[id]/status",
+      "kind": "api",
+      "gate": {
+        "kind": "platform-role",
+        "roles": [
+          "platform_operations",
+          "platform_super_admin"
+        ],
+        "appointment": false,
+        "evidence": "landlordCan(caller, \"platform_operations\", \"platform_super_admin\")"
+      }
+    },
+    {
+      "path": "/api/platform/tenants/[id]/subscription",
+      "kind": "api",
+      "gate": {
+        "kind": "platform-role",
+        "roles": [
+          "platform_operations",
+          "platform_super_admin",
+          "finance"
+        ],
+        "appointment": false,
+        "evidence": "landlordCan(caller, \"platform_operations\", \"platform_super_admin\", \"finance\")"
+      }
+    },
+    {
+      "path": "/api/platform/workspace-config",
+      "kind": "api",
+      "gate": {
+        "kind": "role-list",
+        "roles": [
+          "super_admin"
+        ],
+        "appointment": false,
+        "evidence": "isSuper"
+      }
+    },
+    {
+      "path": "/api/platform/workspaces",
+      "kind": "api",
+      "gate": {
+        "kind": "role-list",
+        "roles": [
+          "super_admin"
+        ],
+        "appointment": false,
+        "evidence": "isSuper"
+      }
+    },
+    {
+      "path": "/api/policies",
+      "kind": "api",
+      "gate": {
+        "kind": "role-list",
+        "roles": [
+          "hospital_admin",
+          "super_admin",
+          "assessor",
+          "educator",
+          "senior_educator",
+          "clinical_educator",
+          "curriculum_lead",
+          "assessment_lead",
+          "simulation_lead",
+          "quality_reviewer",
+          "education_administrator",
+          "program_director"
+        ],
+        "appointment": false,
+        "evidence": "ADMIN_ROLES | STAFF_ROLES | isSuper"
+      }
+    },
+    {
+      "path": "/api/preferences",
+      "kind": "api",
+      "gate": {
+        "kind": "auth-only",
+        "roles": [],
+        "appointment": false,
+        "evidence": "if (!user) redirect(...)"
+      }
+    },
+    {
+      "path": "/api/priorities/approvals",
+      "kind": "api",
+      "gate": {
+        "kind": "role-list",
+        "roles": [
+          "super_admin"
+        ],
+        "appointment": false,
+        "evidence": "isSuper"
+      }
+    },
+    {
+      "path": "/api/priorities/copilot",
+      "kind": "api",
+      "gate": {
+        "kind": "single-role",
+        "roles": [
+          "super_admin"
+        ],
+        "appointment": false,
+        "evidence": "if (!roles.includes(\"super_admin\"))"
+      }
+    },
+    {
+      "path": "/api/priorities/objectives",
+      "kind": "api",
+      "gate": {
+        "kind": "role-list",
+        "roles": [
+          "super_admin"
+        ],
+        "appointment": false,
+        "evidence": "isSuper"
+      }
+    },
+    {
+      "path": "/api/quality",
+      "kind": "api",
+      "gate": {
+        "kind": "role-list",
+        "roles": [
+          "hospital_admin",
+          "super_admin"
+        ],
+        "appointment": false,
+        "evidence": "ADMIN_ROLES"
+      }
+    },
+    {
+      "path": "/api/quality-ai/copilot",
+      "kind": "api",
+      "gate": {
+        "kind": "auth-only",
+        "roles": [],
+        "appointment": false,
+        "evidence": "if (!user) redirect(...)"
+      }
+    },
+    {
+      "path": "/api/quality/audits",
+      "kind": "api",
+      "gate": {
+        "kind": "role-list",
+        "roles": [
+          "assessor",
+          "educator",
+          "hospital_admin",
+          "super_admin"
+        ],
+        "appointment": false,
+        "evidence": "hasRole"
+      }
+    },
+    {
+      "path": "/api/quality/capa",
+      "kind": "api",
+      "gate": {
+        "kind": "auth-only",
+        "roles": [],
+        "appointment": false,
+        "evidence": "if (!user) redirect(...)"
+      }
+    },
+    {
+      "path": "/api/quiz/attempt",
+      "kind": "api",
+      "gate": {
+        "kind": "auth-only",
+        "roles": [],
+        "appointment": false,
+        "evidence": "if (!user) redirect(...)"
+      }
+    },
+    {
+      "path": "/api/recognitions",
+      "kind": "api",
+      "gate": {
+        "kind": "role-list",
+        "roles": [
+          "assessor",
+          "educator",
+          "senior_educator",
+          "clinical_educator",
+          "curriculum_lead",
+          "assessment_lead",
+          "simulation_lead",
+          "quality_reviewer",
+          "education_administrator",
+          "program_director",
+          "hospital_admin",
+          "super_admin"
+        ],
+        "appointment": false,
+        "evidence": "STAFF_ROLES"
+      }
+    },
+    {
+      "path": "/api/registry",
+      "kind": "api",
+      "gate": {
+        "kind": "role-list",
+        "roles": [
+          "super_admin"
+        ],
+        "appointment": false,
+        "evidence": "isSuper"
+      }
+    },
+    {
+      "path": "/api/reports/admin-cpd",
+      "kind": "api",
+      "gate": {
+        "kind": "auth-only",
+        "roles": [],
+        "appointment": false,
+        "evidence": "if (!user) redirect(...)"
+      }
+    },
+    {
+      "path": "/api/reports/analytics",
+      "kind": "api",
+      "gate": {
+        "kind": "auth-only",
+        "roles": [],
+        "appointment": false,
+        "evidence": "if (!user) redirect(...)"
+      }
+    },
+    {
+      "path": "/api/reports/custom",
+      "kind": "api",
+      "gate": {
+        "kind": "auth-only",
+        "roles": [],
+        "appointment": false,
+        "evidence": "if (!user) redirect(...)"
+      }
+    },
+    {
+      "path": "/api/reports/definitions",
+      "kind": "api",
+      "gate": {
+        "kind": "auth-only",
+        "roles": [],
+        "appointment": false,
+        "evidence": "if (!user) redirect(...)"
+      }
+    },
+    {
+      "path": "/api/reports/evidence",
+      "kind": "api",
+      "gate": {
+        "kind": "auth-only",
+        "roles": [],
+        "appointment": false,
+        "evidence": "if (!user) redirect(...)"
+      }
+    },
+    {
+      "path": "/api/reports/history",
+      "kind": "api",
+      "gate": {
+        "kind": "auth-only",
+        "roles": [],
+        "appointment": false,
+        "evidence": "if (!user) redirect(...)"
+      }
+    },
+    {
+      "path": "/api/reports/learners",
+      "kind": "api",
+      "gate": {
+        "kind": "auth-only",
+        "roles": [],
+        "appointment": false,
+        "evidence": "if (!user) redirect(...)"
+      }
+    },
+    {
+      "path": "/api/reports/osce",
+      "kind": "api",
+      "gate": {
+        "kind": "auth-only",
+        "roles": [],
+        "appointment": false,
+        "evidence": "if (!user) redirect(...)"
+      }
+    },
+    {
+      "path": "/api/reports/passports",
+      "kind": "api",
+      "gate": {
+        "kind": "auth-only",
+        "roles": [],
+        "appointment": false,
+        "evidence": "if (!user) redirect(...)"
+      }
+    },
+    {
+      "path": "/api/reports/quality",
+      "kind": "api",
+      "gate": {
+        "kind": "auth-only",
+        "roles": [],
+        "appointment": false,
+        "evidence": "if (!user) redirect(...)"
+      }
+    },
+    {
+      "path": "/api/reports/schedules",
+      "kind": "api",
+      "gate": {
+        "kind": "auth-only",
+        "roles": [],
+        "appointment": false,
+        "evidence": "if (!user) redirect(...)"
+      }
+    },
+    {
+      "path": "/api/reports/validations",
+      "kind": "api",
+      "gate": {
+        "kind": "auth-only",
+        "roles": [],
+        "appointment": false,
+        "evidence": "if (!user) redirect(...)"
+      }
+    },
+    {
+      "path": "/api/runtime/[...path]",
+      "kind": "api",
+      "gate": {
+        "kind": "role-list",
+        "roles": [
+          "super_admin"
+        ],
+        "appointment": false,
+        "evidence": "isSuper"
+      }
+    },
+    {
+      "path": "/api/runtime/stream",
+      "kind": "api",
+      "gate": {
+        "kind": "role-list",
+        "roles": [
+          "super_admin"
+        ],
+        "appointment": false,
+        "evidence": "isSuper"
+      }
+    },
+    {
+      "path": "/api/schedule",
+      "kind": "api",
+      "gate": {
+        "kind": "auth-only",
+        "roles": [],
+        "appointment": false,
+        "evidence": "if (!user) redirect(...)"
+      }
+    },
+    {
+      "path": "/api/schedules",
+      "kind": "api",
+      "gate": {
+        "kind": "single-role",
+        "roles": [
+          "super_admin"
+        ],
+        "appointment": false,
+        "evidence": "role !== \"super_admin\""
+      }
+    },
+    {
+      "path": "/api/scoring/levels",
+      "kind": "api",
+      "gate": {
+        "kind": "single-role",
+        "roles": [
+          "super_admin"
+        ],
+        "appointment": false,
+        "evidence": "role !== \"super_admin\""
+      }
+    },
+    {
+      "path": "/api/scoring/scales",
+      "kind": "api",
+      "gate": {
+        "kind": "single-role",
+        "roles": [
+          "super_admin"
+        ],
+        "appointment": false,
+        "evidence": "role !== \"super_admin\""
+      }
+    },
+    {
+      "path": "/api/scoring/skills",
+      "kind": "api",
+      "gate": {
+        "kind": "role-list",
+        "roles": [
+          "assessor",
+          "educator",
+          "senior_educator",
+          "clinical_educator",
+          "curriculum_lead",
+          "assessment_lead",
+          "simulation_lead",
+          "quality_reviewer",
+          "education_administrator",
+          "program_director",
+          "hospital_admin",
+          "super_admin"
+        ],
+        "appointment": false,
+        "evidence": "STAFF_ROLES"
+      }
+    },
+    {
+      "path": "/api/search",
+      "kind": "api",
+      "gate": {
+        "kind": "auth-only",
+        "roles": [],
+        "appointment": false,
+        "evidence": "getCaller() with no role predicate"
+      }
+    },
+    {
+      "path": "/api/senior-assessors",
+      "kind": "api",
+      "gate": {
+        "kind": "auth-only",
+        "roles": [],
+        "appointment": false,
+        "evidence": "if (!user) redirect(...)"
+      }
+    },
+    {
+      "path": "/api/studio",
+      "kind": "api",
+      "gate": {
+        "kind": "auth-only",
+        "roles": [],
+        "appointment": false,
+        "evidence": "getCaller() with no role predicate"
+      }
+    },
+    {
+      "path": "/api/studio/adaptive",
+      "kind": "api",
+      "gate": {
+        "kind": "role-list",
+        "roles": [
+          "educator",
+          "senior_educator",
+          "clinical_educator",
+          "curriculum_lead",
+          "assessment_lead",
+          "simulation_lead",
+          "education_administrator",
+          "program_director",
+          "hospital_admin",
+          "super_admin"
+        ],
+        "appointment": false,
+        "evidence": "EDUCATOR_ROLES | isSuper"
+      }
+    },
+    {
+      "path": "/api/studio/authoring",
+      "kind": "api",
+      "gate": {
+        "kind": "auth-only",
+        "roles": [],
+        "appointment": false,
+        "evidence": "if (!user) redirect(...)"
+      }
+    },
+    {
+      "path": "/api/studio/behaviour",
+      "kind": "api",
+      "gate": {
+        "kind": "role-list",
+        "roles": [
+          "educator",
+          "senior_educator",
+          "clinical_educator",
+          "curriculum_lead",
+          "assessment_lead",
+          "simulation_lead",
+          "education_administrator",
+          "program_director",
+          "hospital_admin",
+          "super_admin"
+        ],
+        "appointment": false,
+        "evidence": "EDUCATOR_ROLES | isSuper"
+      }
+    },
+    {
+      "path": "/api/studio/behaviour/indicators",
+      "kind": "api",
+      "gate": {
+        "kind": "role-list",
+        "roles": [
+          "educator",
+          "senior_educator",
+          "clinical_educator",
+          "curriculum_lead",
+          "assessment_lead",
+          "simulation_lead",
+          "education_administrator",
+          "program_director",
+          "hospital_admin",
+          "super_admin"
+        ],
+        "appointment": false,
+        "evidence": "EDUCATOR_ROLES | isSuper"
+      }
+    },
+    {
+      "path": "/api/studio/dependencies",
+      "kind": "api",
+      "gate": {
+        "kind": "role-list",
+        "roles": [
+          "educator",
+          "senior_educator",
+          "clinical_educator",
+          "curriculum_lead",
+          "assessment_lead",
+          "simulation_lead",
+          "education_administrator",
+          "program_director",
+          "hospital_admin",
+          "super_admin"
+        ],
+        "appointment": false,
+        "evidence": "EDUCATOR_ROLES | isSuper"
+      }
+    },
+    {
+      "path": "/api/studio/packages",
+      "kind": "api",
+      "gate": {
+        "kind": "role-list",
+        "roles": [
+          "educator",
+          "senior_educator",
+          "clinical_educator",
+          "curriculum_lead",
+          "assessment_lead",
+          "simulation_lead",
+          "education_administrator",
+          "program_director",
+          "hospital_admin",
+          "super_admin"
+        ],
+        "appointment": false,
+        "evidence": "EDUCATOR_ROLES | isSuper"
+      }
+    },
+    {
+      "path": "/api/studio/packages/items",
+      "kind": "api",
+      "gate": {
+        "kind": "role-list",
+        "roles": [
+          "educator",
+          "senior_educator",
+          "clinical_educator",
+          "curriculum_lead",
+          "assessment_lead",
+          "simulation_lead",
+          "education_administrator",
+          "program_director",
+          "hospital_admin",
+          "super_admin"
+        ],
+        "appointment": false,
+        "evidence": "EDUCATOR_ROLES | isSuper"
+      }
+    },
+    {
+      "path": "/api/studio/portfolio",
+      "kind": "api",
+      "gate": {
+        "kind": "role-list",
+        "roles": [
+          "educator",
+          "senior_educator",
+          "clinical_educator",
+          "curriculum_lead",
+          "assessment_lead",
+          "simulation_lead",
+          "education_administrator",
+          "program_director",
+          "hospital_admin",
+          "super_admin"
+        ],
+        "appointment": false,
+        "evidence": "EDUCATOR_ROLES | isSuper"
+      }
+    },
+    {
+      "path": "/api/studio/portfolio/sections",
+      "kind": "api",
+      "gate": {
+        "kind": "role-list",
+        "roles": [
+          "educator",
+          "senior_educator",
+          "clinical_educator",
+          "curriculum_lead",
+          "assessment_lead",
+          "simulation_lead",
+          "education_administrator",
+          "program_director",
+          "hospital_admin",
+          "super_admin"
+        ],
+        "appointment": false,
+        "evidence": "EDUCATOR_ROLES | isSuper"
+      }
+    },
+    {
+      "path": "/api/studio/simulations",
+      "kind": "api",
+      "gate": {
+        "kind": "role-list",
+        "roles": [
+          "educator",
+          "senior_educator",
+          "clinical_educator",
+          "curriculum_lead",
+          "assessment_lead",
+          "simulation_lead",
+          "education_administrator",
+          "program_director",
+          "hospital_admin",
+          "super_admin"
+        ],
+        "appointment": false,
+        "evidence": "EDUCATOR_ROLES | isSuper"
+      }
+    },
+    {
+      "path": "/api/studio/standard-settings",
+      "kind": "api",
+      "gate": {
+        "kind": "role-list",
+        "roles": [
+          "educator",
+          "senior_educator",
+          "clinical_educator",
+          "curriculum_lead",
+          "assessment_lead",
+          "simulation_lead",
+          "education_administrator",
+          "program_director",
+          "hospital_admin",
+          "super_admin"
+        ],
+        "appointment": false,
+        "evidence": "EDUCATOR_ROLES | isSuper"
+      }
+    },
+    {
+      "path": "/api/studio/standard-settings/judgements",
+      "kind": "api",
+      "gate": {
+        "kind": "role-list",
+        "roles": [
+          "educator",
+          "senior_educator",
+          "clinical_educator",
+          "curriculum_lead",
+          "assessment_lead",
+          "simulation_lead",
+          "education_administrator",
+          "program_director",
+          "hospital_admin",
+          "super_admin"
+        ],
+        "appointment": false,
+        "evidence": "EDUCATOR_ROLES | isSuper"
+      }
+    },
+    {
+      "path": "/api/studio/standards-mappings",
+      "kind": "api",
+      "gate": {
+        "kind": "role-list",
+        "roles": [
+          "educator",
+          "senior_educator",
+          "clinical_educator",
+          "curriculum_lead",
+          "assessment_lead",
+          "simulation_lead",
+          "education_administrator",
+          "program_director",
+          "hospital_admin",
+          "super_admin"
+        ],
+        "appointment": false,
+        "evidence": "EDUCATOR_ROLES | isSuper"
+      }
+    },
+    {
+      "path": "/api/studio/three-sixty",
+      "kind": "api",
+      "gate": {
+        "kind": "role-list",
+        "roles": [
+          "educator",
+          "senior_educator",
+          "clinical_educator",
+          "curriculum_lead",
+          "assessment_lead",
+          "simulation_lead",
+          "education_administrator",
+          "program_director",
+          "hospital_admin",
+          "super_admin"
+        ],
+        "appointment": false,
+        "evidence": "EDUCATOR_ROLES | isSuper"
+      }
+    },
+    {
+      "path": "/api/studio/three-sixty/groups",
+      "kind": "api",
+      "gate": {
+        "kind": "role-list",
+        "roles": [
+          "educator",
+          "senior_educator",
+          "clinical_educator",
+          "curriculum_lead",
+          "assessment_lead",
+          "simulation_lead",
+          "education_administrator",
+          "program_director",
+          "hospital_admin",
+          "super_admin"
+        ],
+        "appointment": false,
+        "evidence": "EDUCATOR_ROLES | isSuper"
+      }
+    },
+    {
+      "path": "/api/studio/translations",
+      "kind": "api",
+      "gate": {
+        "kind": "role-list",
+        "roles": [
+          "educator",
+          "senior_educator",
+          "clinical_educator",
+          "curriculum_lead",
+          "assessment_lead",
+          "simulation_lead",
+          "education_administrator",
+          "program_director",
+          "hospital_admin",
+          "super_admin"
+        ],
+        "appointment": false,
+        "evidence": "EDUCATOR_ROLES | isSuper"
+      }
+    },
+    {
+      "path": "/api/super-admin/facilities",
+      "kind": "api",
+      "gate": {
+        "kind": "single-role",
+        "roles": [
+          "super_admin"
+        ],
+        "appointment": false,
+        "evidence": "role !== \"super_admin\""
+      }
+    },
+    {
+      "path": "/api/super-admin/import",
+      "kind": "api",
+      "gate": {
+        "kind": "single-role",
+        "roles": [
+          "super_admin"
+        ],
+        "appointment": false,
+        "evidence": "role !== \"super_admin\""
+      }
+    },
+    {
+      "path": "/api/super-admin/organisations",
+      "kind": "api",
+      "gate": {
+        "kind": "single-role",
+        "roles": [
+          "super_admin"
+        ],
+        "appointment": false,
+        "evidence": "role !== \"super_admin\""
+      }
+    },
+    {
+      "path": "/api/super-admin/users",
+      "kind": "api",
+      "gate": {
+        "kind": "single-role",
+        "roles": [
+          "super_admin"
+        ],
+        "appointment": false,
+        "evidence": "role !== \"super_admin\""
+      }
+    },
+    {
+      "path": "/api/super-admin/users/actions",
+      "kind": "api",
+      "gate": {
+        "kind": "single-role",
+        "roles": [
+          "super_admin"
+        ],
+        "appointment": false,
+        "evidence": "role !== \"super_admin\""
+      }
+    },
+    {
+      "path": "/api/super-admin/users/hospitals",
+      "kind": "api",
+      "gate": {
+        "kind": "role-list",
+        "roles": [
+          "hospital_admin",
+          "super_admin"
+        ],
+        "appointment": false,
+        "evidence": "ADMIN_ROLES"
+      }
+    },
+    {
+      "path": "/api/super-admin/users/list",
+      "kind": "api",
+      "gate": {
+        "kind": "single-role",
+        "roles": [
+          "super_admin"
+        ],
+        "appointment": false,
+        "evidence": "role !== \"super_admin\""
+      }
+    },
+    {
+      "path": "/api/support/interventions",
+      "kind": "api",
+      "gate": {
+        "kind": "auth-only",
+        "roles": [],
+        "appointment": false,
+        "evidence": "if (!user) redirect(...)"
+      }
+    },
+    {
+      "path": "/api/support/referrals",
+      "kind": "api",
+      "gate": {
+        "kind": "auth-only",
+        "roles": [],
+        "appointment": false,
+        "evidence": "if (!user) redirect(...)"
+      }
+    },
+    {
+      "path": "/api/support/sessions",
+      "kind": "api",
+      "gate": {
+        "kind": "auth-only",
+        "roles": [],
+        "appointment": false,
+        "evidence": "if (!user) redirect(...)"
+      }
+    },
+    {
+      "path": "/api/system/recovery",
+      "kind": "api",
+      "gate": {
+        "kind": "role-list",
+        "roles": [
+          "hospital_admin",
+          "super_admin",
+          "assessor",
+          "educator",
+          "senior_educator",
+          "clinical_educator",
+          "curriculum_lead",
+          "assessment_lead",
+          "simulation_lead",
+          "quality_reviewer",
+          "education_administrator",
+          "program_director"
+        ],
+        "appointment": false,
+        "evidence": "ADMIN_ROLES | STAFF_ROLES"
+      }
+    },
+    {
+      "path": "/api/unit-manager/copilot",
+      "kind": "api",
+      "gate": {
+        "kind": "auth-only",
+        "roles": [],
+        "appointment": false,
+        "evidence": "if (!user) redirect(...)"
+      }
+    },
+    {
+      "path": "/api/workflows",
+      "kind": "api",
+      "gate": {
+        "kind": "role-list",
+        "roles": [
+          "hospital_admin",
+          "super_admin",
+          "educator",
+          "senior_educator",
+          "clinical_educator",
+          "curriculum_lead",
+          "assessment_lead",
+          "simulation_lead",
+          "education_administrator",
+          "program_director"
+        ],
+        "appointment": false,
+        "evidence": "ADMIN_ROLES | EDUCATOR_ROLES | isSuper"
+      }
+    },
+    {
+      "path": "/api/workforce/assignments",
+      "kind": "api",
+      "gate": {
+        "kind": "role-list",
+        "roles": [
+          "hospital_admin",
+          "super_admin"
+        ],
+        "appointment": false,
+        "evidence": "ADMIN_ROLES | isSuper"
+      }
+    },
+    {
+      "path": "/api/workforce/position-library",
+      "kind": "api",
+      "gate": {
+        "kind": "role-list",
+        "roles": [
+          "hospital_admin",
+          "super_admin"
+        ],
+        "appointment": false,
+        "evidence": "ADMIN_ROLES | isSuper"
+      }
+    },
+    {
+      "path": "/api/workforce/position-templates",
+      "kind": "api",
+      "gate": {
+        "kind": "role-list",
+        "roles": [
+          "hospital_admin",
+          "super_admin"
+        ],
+        "appointment": false,
+        "evidence": "ADMIN_ROLES"
+      }
+    },
+    {
+      "path": "/api/workforce/positions",
+      "kind": "api",
+      "gate": {
+        "kind": "role-list",
+        "roles": [
+          "hospital_admin",
+          "super_admin"
+        ],
+        "appointment": false,
+        "evidence": "ADMIN_ROLES | isSuper"
+      }
+    },
+    {
+      "path": "/admin",
+      "kind": "workspace",
+      "gate": {
+        "kind": "auth-only",
+        "roles": [],
+        "appointment": false,
+        "evidence": "if (!user) redirect(...)"
+      }
+    },
+    {
+      "path": "/assessor",
+      "kind": "workspace",
+      "gate": {
+        "kind": "single-role",
+        "roles": [
+          "assessor"
+        ],
+        "appointment": false,
+        "evidence": "if (!userRoles.includes(\"assessor\"))"
+      }
+    },
+    {
+      "path": "/competency-office",
+      "kind": "workspace",
+      "gate": {
+        "kind": "role-list",
+        "roles": [
+          "hospital_admin",
+          "educator",
+          "super_admin"
+        ],
+        "appointment": true,
+        "evidence": "const ALLOWED = [\"hospital_admin\", \"educator\", \"super_admin\"]"
+      }
+    },
+    {
+      "path": "/competency-studio",
+      "kind": "workspace",
+      "gate": {
+        "kind": "role-list",
+        "roles": [
+          "hospital_admin",
+          "educator",
+          "assessor",
+          "super_admin"
+        ],
+        "appointment": false,
+        "evidence": "const ALLOWED = [\"hospital_admin\", \"educator\", \"assessor\", \"super_admin\"]"
+      }
+    },
+    {
+      "path": "/dashboard",
+      "kind": "workspace",
+      "gate": {
+        "kind": "auth-only",
+        "roles": [],
+        "appointment": false,
+        "evidence": "if (!user) redirect(...)"
+      }
+    },
+    {
+      "path": "/educator",
+      "kind": "workspace",
+      "gate": {
+        "kind": "single-role",
+        "roles": [
+          "educator"
+        ],
+        "appointment": false,
+        "evidence": "if (!userRoles.includes(\"educator\"))"
+      }
+    },
+    {
+      "path": "/enterprise-governance",
+      "kind": "workspace",
+      "gate": {
+        "kind": "role-list",
+        "roles": [
+          "hospital_admin",
+          "super_admin"
+        ],
+        "appointment": false,
+        "evidence": "const ALLOWED = [\"hospital_admin\", \"super_admin\"]"
+      }
+    },
+    {
+      "path": "/healthcare-worker",
+      "kind": "workspace",
+      "gate": {
+        "kind": "role-list",
+        "roles": [
+          "nurse",
+          "assessor",
+          "hospital_admin",
+          "super_admin"
+        ],
+        "appointment": false,
+        "evidence": "const ALLOWED = [\"nurse\", \"assessor\", \"hospital_admin\", \"super_admin\"]"
+      }
+    },
+    {
+      "path": "/hospital-executive",
+      "kind": "workspace",
+      "gate": {
+        "kind": "role-list",
+        "roles": [
+          "hospital_admin",
+          "super_admin"
+        ],
+        "appointment": true,
+        "evidence": "const ALLOWED = [\"hospital_admin\", \"super_admin\"]"
+      }
+    },
+    {
+      "path": "/human-resources",
+      "kind": "workspace",
+      "gate": {
+        "kind": "role-list",
+        "roles": [
+          "hospital_admin",
+          "super_admin"
+        ],
+        "appointment": false,
+        "evidence": "const ALLOWED = [\"hospital_admin\", \"super_admin\"]"
+      }
+    },
+    {
+      "path": "/office-governance",
+      "kind": "workspace",
+      "gate": {
+        "kind": "role-list",
+        "roles": [
+          "hospital_admin",
+          "super_admin"
+        ],
+        "appointment": false,
+        "evidence": "const ALLOWED = [\"hospital_admin\", \"super_admin\"]"
+      }
+    },
+    {
+      "path": "/organisation-admin",
+      "kind": "workspace",
+      "gate": {
+        "kind": "role-list",
+        "roles": [
+          "hospital_admin",
+          "super_admin"
+        ],
+        "appointment": false,
+        "evidence": "const ALLOWED = [\"hospital_admin\", \"super_admin\"]"
+      }
+    },
+    {
+      "path": "/platform-admin",
+      "kind": "workspace",
+      "gate": {
+        "kind": "single-role",
+        "roles": [
+          "super_admin"
+        ],
+        "appointment": false,
+        "evidence": "if (!userRoles.includes(\"super_admin\"))"
+      }
+    },
+    {
+      "path": "/quality-accreditation",
+      "kind": "workspace",
+      "gate": {
+        "kind": "role-list",
+        "roles": [
+          "hospital_admin",
+          "super_admin",
+          "assessor"
+        ],
+        "appointment": true,
+        "evidence": "const ALLOWED = [\"hospital_admin\", \"super_admin\", \"assessor\"]"
+      }
+    },
+    {
+      "path": "/super-admin",
+      "kind": "workspace",
+      "gate": {
+        "kind": "single-role",
+        "roles": [
+          "super_admin"
+        ],
+        "appointment": false,
+        "evidence": "if (!userRoles.includes(\"super_admin\"))"
+      }
+    },
+    {
+      "path": "/supervisor",
+      "kind": "workspace",
+      "gate": {
+        "kind": "role-list",
+        "roles": [
+          "assessor",
+          "hospital_admin",
+          "super_admin"
+        ],
+        "appointment": false,
+        "evidence": "const ALLOWED = [\"assessor\", \"hospital_admin\", \"super_admin\"]"
+      }
+    },
+    {
+      "path": "/unit-manager",
+      "kind": "workspace",
+      "gate": {
+        "kind": "role-list",
+        "roles": [
+          "hospital_admin",
+          "super_admin"
+        ],
+        "appointment": false,
+        "evidence": "const ALLOWED = [\"hospital_admin\", \"super_admin\"]"
+      }
+    }
+  ]
+}
