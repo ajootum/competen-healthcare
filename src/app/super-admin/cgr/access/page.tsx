@@ -2,6 +2,7 @@ import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { loadGovernanceAccess } from "@/lib/cgr/access";
+import { Kpi } from "../_kit";
 
 // CGR-014 — Competency Governance Security, Privacy & Access Control. The governance access map, the
 // separation-of-duties check (author AND approver of the same object), assessor independence and permission
@@ -20,16 +21,6 @@ const CONTROLS = [
   { name: "Full audit logging", note: "Every governance action recorded (audit_log + domain events)" },
   { name: "Tenant isolation", note: "Hospital / tenant scoping on governed data" },
 ];
-
-function Kpi({ label, value, sub, tone }: { label: string; value: string | number; sub?: string; tone?: string }) {
-  return (
-    <div className="bg-white rounded-xl border border-gray-100 p-3.5">
-      <p className="text-[10px] text-gray-400 font-medium uppercase tracking-wide leading-tight">{label}</p>
-      <p className={`text-2xl font-bold mt-1 ${tone ?? "text-gray-900"}`}>{value}</p>
-      {sub && <p className="text-[10px] text-gray-400 mt-0.5">{sub}</p>}
-    </div>
-  );
-}
 
 export default async function GovernanceAccessPage() {
   const supabase = await createClient();

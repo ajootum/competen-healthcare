@@ -2,6 +2,7 @@ import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { loadGovernanceRegistry, type GovRecord, type GovState } from "@/lib/cgr/registry";
+import { Kpi } from "../_kit";
 
 // CGR-001 — Competency Governance Registry & Master Control. The Registry Explorer + Governance Profile:
 // one governance record per competency DEFINITION, joined live from the real governance spine (risk,
@@ -21,16 +22,6 @@ const RISK_META: Record<string, string> = {
   standard: "text-gray-600 bg-gray-50 border-gray-200",
   low: "text-slate-500 bg-slate-50 border-slate-200",
 };
-
-function Kpi({ label, value, sub, tone }: { label: string; value: string | number; sub?: string; tone?: string }) {
-  return (
-    <div className="bg-white rounded-xl border border-gray-100 p-3.5">
-      <p className="text-[10px] text-gray-400 font-medium uppercase tracking-wide leading-tight">{label}</p>
-      <p className={`text-2xl font-bold mt-1 ${tone ?? "text-gray-900"}`}>{value}</p>
-      {sub && <p className="text-[10px] text-gray-400 mt-0.5">{sub}</p>}
-    </div>
-  );
-}
 
 function ScoreBar({ v }: { v: number }) {
   const tone = v >= 75 ? "bg-emerald-500" : v >= 45 ? "bg-amber-500" : "bg-rose-500";

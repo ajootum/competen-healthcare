@@ -2,6 +2,7 @@ import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { loadGovernanceBenchmarking } from "@/lib/cgr/benchmarking";
+import { Kpi } from "../_kit";
 
 // CGR-022 — Competency Governance Global Benchmarking & Comparative Intelligence. Benchmarks governance maturity
 // per domain + framework against the enterprise mean (gap, leading/lagging bands, peer-learning exemplars).
@@ -16,16 +17,6 @@ const BAND_META: Record<string, { label: string; cls: string }> = {
 };
 const barTone = (v: number) => (v >= 75 ? "bg-emerald-500" : v >= 45 ? "bg-amber-500" : "bg-rose-500");
 const gapFmt = (g: number) => (g > 0 ? `+${g}` : `${g}`);
-
-function Kpi({ label, value, sub, tone }: { label: string; value: string | number; sub?: string; tone?: string }) {
-  return (
-    <div className="bg-white rounded-xl border border-gray-100 p-3.5">
-      <p className="text-[10px] text-gray-400 font-medium uppercase tracking-wide leading-tight">{label}</p>
-      <p className={`text-2xl font-bold mt-1 ${tone ?? "text-gray-900"}`}>{value}</p>
-      {sub && <p className="text-[10px] text-gray-400 mt-0.5">{sub}</p>}
-    </div>
-  );
-}
 
 function BenchTable({ rows, mean }: { rows: any[]; mean: number }) {
   return (

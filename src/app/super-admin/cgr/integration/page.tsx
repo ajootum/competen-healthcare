@@ -2,6 +2,7 @@ import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { loadIntegrationHealth } from "@/lib/cgr/integration";
+import { Kpi } from "../_kit";
 
 // CGR-013 — Competency Governance Interoperability & Integration. The event-driven integration health monitor
 // over the real governance event bus (domain_events): processing success, retry/dead-letter backlog, event flow
@@ -25,16 +26,6 @@ const INTERNAL = [
   { key: "COMP", name: "Competency Workflow", exchange: "Assessment requirements, status, validation" },
   { key: "CMO", name: "Competency Office", exchange: "Programs, workforce requirements, implementation" },
 ];
-
-function Kpi({ label, value, sub, tone }: { label: string; value: string | number; sub?: string; tone?: string }) {
-  return (
-    <div className="bg-white rounded-xl border border-gray-100 p-3.5">
-      <p className="text-[10px] text-gray-400 font-medium uppercase tracking-wide leading-tight">{label}</p>
-      <p className={`text-2xl font-bold mt-1 ${tone ?? "text-gray-900"}`}>{value}</p>
-      {sub && <p className="text-[10px] text-gray-400 mt-0.5">{sub}</p>}
-    </div>
-  );
-}
 
 export default async function IntegrationHealthPage() {
   const supabase = await createClient();

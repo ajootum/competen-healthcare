@@ -2,6 +2,7 @@ import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { loadExecutiveAssurance } from "@/lib/cgr/executive";
+import { Kpi } from "../_kit";
 
 // CGR-029 — Strategic Decision Intelligence & Executive Assurance. The board-level competency-governance
 // assurance statement (§8): assurance rating + the evidence behind it, strategic risk register, regulatory
@@ -19,16 +20,6 @@ const RISK_META: Record<string, string> = {
   critical: "text-rose-700 bg-rose-50 border-rose-100",
   high: "text-orange-700 bg-orange-50 border-orange-100",
 };
-
-function Kpi({ label, value, sub, tone }: { label: string; value: string | number; sub?: string; tone?: string }) {
-  return (
-    <div className="bg-white rounded-xl border border-gray-100 p-3.5">
-      <p className="text-[10px] text-gray-400 font-medium uppercase tracking-wide leading-tight">{label}</p>
-      <p className={`text-2xl font-bold mt-1 ${tone ?? "text-gray-900"}`}>{value}</p>
-      {sub && <p className="text-[10px] text-gray-400 mt-0.5">{sub}</p>}
-    </div>
-  );
-}
 
 export default async function ExecutiveAssurancePage() {
   const supabase = await createClient();

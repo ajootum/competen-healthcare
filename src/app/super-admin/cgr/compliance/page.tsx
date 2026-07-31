@@ -2,6 +2,7 @@ import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { loadComplianceReporting } from "@/lib/cgr/compliance";
+import { Kpi } from "../_kit";
 
 // CGR-011 — Competency Governance Compliance Reporting & Regulatory Assurance. A compliance report composing the
 // registry compliance dimensions (score + risk rating + evidence-pack summary) with the real accreditation
@@ -18,16 +19,6 @@ const STATUS_META: Record<string, { label: string; cls: string }> = {
 };
 const RATING_TONE: Record<string, string> = { Low: "text-emerald-600", Moderate: "text-amber-600", High: "text-orange-600", Critical: "text-rose-600", "—": "text-gray-900" };
 const barTone = (v: number) => (v >= 80 ? "bg-emerald-500" : v >= 50 ? "bg-amber-500" : "bg-rose-500");
-
-function Kpi({ label, value, sub, tone }: { label: string; value: string | number; sub?: string; tone?: string }) {
-  return (
-    <div className="bg-white rounded-xl border border-gray-100 p-3.5">
-      <p className="text-[10px] text-gray-400 font-medium uppercase tracking-wide leading-tight">{label}</p>
-      <p className={`text-2xl font-bold mt-1 ${tone ?? "text-gray-900"}`}>{value}</p>
-      {sub && <p className="text-[10px] text-gray-400 mt-0.5">{sub}</p>}
-    </div>
-  );
-}
 
 export default async function ComplianceReportingPage() {
   const supabase = await createClient();

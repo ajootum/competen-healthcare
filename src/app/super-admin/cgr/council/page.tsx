@@ -2,6 +2,7 @@ import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { loadGovernanceCouncil } from "@/lib/cgr/council";
+import { Kpi } from "../_kit";
 
 // CGR-010 — Competency Governance Operating Model & Council. The LIVE council structure (governance_committees +
 // members + what each governs) with accountability coverage, above the office's STATED operating model (decision
@@ -36,16 +37,6 @@ const MEETINGS = [
   { name: "Governance Council", cadence: "Quarterly", focus: "Strategic assurance · regulatory alignment · maturity" },
   { name: "Executive Review", cadence: "Quarterly / Semiannual", focus: "Organisational readiness · workforce risk" },
 ];
-
-function Kpi({ label, value, sub, tone }: { label: string; value: string | number; sub?: string; tone?: string }) {
-  return (
-    <div className="bg-white rounded-xl border border-gray-100 p-3.5">
-      <p className="text-[10px] text-gray-400 font-medium uppercase tracking-wide leading-tight">{label}</p>
-      <p className={`text-2xl font-bold mt-1 ${tone ?? "text-gray-900"}`}>{value}</p>
-      {sub && <p className="text-[10px] text-gray-400 mt-0.5">{sub}</p>}
-    </div>
-  );
-}
 
 export default async function GovernanceCouncilPage() {
   const supabase = await createClient();

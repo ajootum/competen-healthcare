@@ -2,6 +2,7 @@ import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { loadGovernanceMarketplace } from "@/lib/cgr/marketplace";
+import { Kpi } from "../_kit";
 
 // CGR-021 — Competency Governance Marketplace & External Standards Exchange. The governance-resource catalog:
 // packages by domain, the shared-vs-private split, publication readiness and licensing over the real package
@@ -26,16 +27,6 @@ const ROLES = [
 ];
 const LIFECYCLE = ["Discovery", "Review", "Local validation", "Approval", "Deployment", "Monitoring"];
 const cap = (s: string) => (s || "").replace(/^\w/, (c) => c.toUpperCase());
-
-function Kpi({ label, value, sub, tone }: { label: string; value: string | number; sub?: string; tone?: string }) {
-  return (
-    <div className="bg-white rounded-xl border border-gray-100 p-3.5">
-      <p className="text-[10px] text-gray-400 font-medium uppercase tracking-wide leading-tight">{label}</p>
-      <p className={`text-2xl font-bold mt-1 ${tone ?? "text-gray-900"}`}>{value}</p>
-      {sub && <p className="text-[10px] text-gray-400 mt-0.5">{sub}</p>}
-    </div>
-  );
-}
 
 export default async function GovernanceMarketplacePage() {
   const supabase = await createClient();

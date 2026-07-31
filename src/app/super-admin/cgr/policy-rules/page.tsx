@@ -2,6 +2,7 @@ import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { loadPolicyRules } from "@/lib/cgr/policy-rules";
+import { Kpi } from "../_kit";
 
 // CGR-008 — Competency Governance Policy & Rules Engine. Makes the enforced governance rules explicit with live
 // population compliance, the risk-tiered governance posture, and the real configured thresholds (review
@@ -17,16 +18,6 @@ const RISK_META: Record<string, { label: string; cls: string; bar: string }> = {
 };
 const CAT_TONE: Record<string, string> = { Ownership: "bg-blue-50 text-blue-700 border-blue-100", Compliance: "bg-indigo-50 text-indigo-700 border-indigo-100", Lifecycle: "bg-amber-50 text-amber-700 border-amber-100", Evidence: "bg-cyan-50 text-cyan-700 border-cyan-100", Approval: "bg-emerald-50 text-emerald-700 border-emerald-100" };
 const complTone = (v: number) => (v >= 80 ? "bg-emerald-500" : v >= 50 ? "bg-amber-500" : "bg-rose-500");
-
-function Kpi({ label, value, sub, tone }: { label: string; value: string | number; sub?: string; tone?: string }) {
-  return (
-    <div className="bg-white rounded-xl border border-gray-100 p-3.5">
-      <p className="text-[10px] text-gray-400 font-medium uppercase tracking-wide leading-tight">{label}</p>
-      <p className={`text-2xl font-bold mt-1 ${tone ?? "text-gray-900"}`}>{value}</p>
-      {sub && <p className="text-[10px] text-gray-400 mt-0.5">{sub}</p>}
-    </div>
-  );
-}
 
 export default async function PolicyRulesPage() {
   const supabase = await createClient();

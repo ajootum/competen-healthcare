@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { loadRegulatoryIntelligence, type StdEntry, type DomainGap } from "@/lib/cgr/standards";
 import type { GovRecord } from "@/lib/cgr/registry";
+import { Kpi } from "../_kit";
 
 // CGR-002 — Regulatory Intelligence & Standards Mapping. The intelligence lens over the competency↔standard
 // mappings: a Standards Library (distinct clauses in use), Compliance Gap detection (unmapped / weakly-mapped
@@ -18,16 +19,6 @@ const RISK_META: Record<string, string> = {
   low: "text-slate-500 bg-slate-50 border-slate-200",
 };
 const bodyLabel = (b: string) => BODY_LABEL[b] ?? b.charAt(0).toUpperCase() + b.slice(1);
-
-function Kpi({ label, value, sub, tone }: { label: string; value: string | number; sub?: string; tone?: string }) {
-  return (
-    <div className="bg-white rounded-xl border border-gray-100 p-3.5">
-      <p className="text-[10px] text-gray-400 font-medium uppercase tracking-wide leading-tight">{label}</p>
-      <p className={`text-2xl font-bold mt-1 ${tone ?? "text-gray-900"}`}>{value}</p>
-      {sub && <p className="text-[10px] text-gray-400 mt-0.5">{sub}</p>}
-    </div>
-  );
-}
 
 function CoverageBar({ s }: { s: StdEntry }) {
   const tot = s.mappings || 1;

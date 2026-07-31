@@ -2,6 +2,7 @@ import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { loadChangeControl } from "@/lib/cgr/change-control";
+import { Kpi } from "../_kit";
 
 // CGR-004 — Competency Change Control & Lifecycle Management. Change log + impact assessment + version/lifecycle
 // over the real stores. Change authoring cross-links to the review board / lifecycle management. Super-admin.
@@ -26,16 +27,6 @@ const PUB_META: Record<string, { label: string; dot: string }> = {
   published: { label: "Published", dot: "bg-emerald-600" },
   archived: { label: "Archived", dot: "bg-gray-400" },
 };
-
-function Kpi({ label, value, sub, tone }: { label: string; value: string | number; sub?: string; tone?: string }) {
-  return (
-    <div className="bg-white rounded-xl border border-gray-100 p-3.5">
-      <p className="text-[10px] text-gray-400 font-medium uppercase tracking-wide leading-tight">{label}</p>
-      <p className={`text-2xl font-bold mt-1 ${tone ?? "text-gray-900"}`}>{value}</p>
-      {sub && <p className="text-[10px] text-gray-400 mt-0.5">{sub}</p>}
-    </div>
-  );
-}
 
 export default async function ChangeControlPage() {
   const supabase = await createClient();

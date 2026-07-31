@@ -2,6 +2,7 @@ import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { loadGovernanceAnalytics } from "@/lib/cgr/analytics";
+import { Kpi } from "../_kit";
 
 // CGR-016 — Competency Governance Analytics, Metrics & Continuous Improvement. The trend + improvement layer:
 // governance readiness/compliance over time, maturity progression, and the ranked continuous-improvement
@@ -16,16 +17,6 @@ const IMPACT_META: Record<string, { label: string; cls: string }> = {
 };
 const deltaFmt = (v: number | null) => (v == null ? "—" : v > 0 ? `+${v}` : `${v}`);
 const deltaTone = (v: number | null) => (v == null ? "text-gray-900" : v > 0 ? "text-emerald-600" : v < 0 ? "text-rose-600" : "text-gray-900");
-
-function Kpi({ label, value, sub, tone }: { label: string; value: string | number; sub?: string; tone?: string }) {
-  return (
-    <div className="bg-white rounded-xl border border-gray-100 p-3.5">
-      <p className="text-[10px] text-gray-400 font-medium uppercase tracking-wide leading-tight">{label}</p>
-      <p className={`text-2xl font-bold mt-1 ${tone ?? "text-gray-900"}`}>{value}</p>
-      {sub && <p className="text-[10px] text-gray-400 mt-0.5">{sub}</p>}
-    </div>
-  );
-}
 
 function polyline(trend: any[], key: string): string {
   if (trend.length < 2) return "";

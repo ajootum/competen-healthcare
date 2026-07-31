@@ -2,6 +2,7 @@ import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { loadGovernanceRisk } from "@/lib/cgr/exceptions";
+import { Kpi } from "../_kit";
 
 // CGR-009 — Competency Governance Exception, Escalation & Risk. The escalation queue (registry concerns →
 // classified risk + escalation level), the governance risk register, and the real time-boxed exceptions
@@ -21,16 +22,6 @@ const LEVEL_META: Record<number, { label: string; cls: string }> = {
   2: { label: "L2 · Department", cls: "text-amber-700 bg-amber-50 border-amber-100" },
   1: { label: "L1 · Owner", cls: "text-blue-700 bg-blue-50 border-blue-100" },
 };
-
-function Kpi({ label, value, sub, tone }: { label: string; value: string | number; sub?: string; tone?: string }) {
-  return (
-    <div className="bg-white rounded-xl border border-gray-100 p-3.5">
-      <p className="text-[10px] text-gray-400 font-medium uppercase tracking-wide leading-tight">{label}</p>
-      <p className={`text-2xl font-bold mt-1 ${tone ?? "text-gray-900"}`}>{value}</p>
-      {sub && <p className="text-[10px] text-gray-400 mt-0.5">{sub}</p>}
-    </div>
-  );
-}
 
 export default async function GovernanceRiskPage() {
   const supabase = await createClient();

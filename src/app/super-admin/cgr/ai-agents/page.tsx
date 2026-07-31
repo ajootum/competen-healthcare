@@ -2,6 +2,7 @@ import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { loadGovernanceAI } from "@/lib/cgr/ai-agents";
+import { Kpi } from "../_kit";
 
 // CGR-023 — Competency Governance AI Agent & Autonomous Assurance. The governed-AI view: the 5 governance agents
 // mapped to their live surfaces, real AI activity over the governed gateway, the model registry, and the
@@ -18,16 +19,6 @@ const AGENTS = [
   { name: "Regulatory Monitoring", fn: "Monitor standards, recommend reviews", href: "/super-admin/cgr/standards", live: false },
 ];
 const CANNOT = ["approve competencies", "alter clinical requirements", "accept organisational risk", "override governance decisions"];
-
-function Kpi({ label, value, sub, tone }: { label: string; value: string | number; sub?: string; tone?: string }) {
-  return (
-    <div className="bg-white rounded-xl border border-gray-100 p-3.5">
-      <p className="text-[10px] text-gray-400 font-medium uppercase tracking-wide leading-tight">{label}</p>
-      <p className={`text-2xl font-bold mt-1 ${tone ?? "text-gray-900"}`}>{value}</p>
-      {sub && <p className="text-[10px] text-gray-400 mt-0.5">{sub}</p>}
-    </div>
-  );
-}
 
 function Bars({ rows, max, tone }: { rows: { label: string; count: number; hi?: boolean }[]; max: number; tone?: string }) {
   return (

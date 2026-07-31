@@ -2,6 +2,7 @@ import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { loadGovernanceAudit } from "@/lib/cgr/audit";
+import { Kpi } from "../_kit";
 
 // CGR-005 — Competency Audit & Evidence Assurance. The governance audit trail (continuous action-history across
 // the CGR engines) + an evidence-assurance headline. The deep statistical assurance (evidence integrity,
@@ -25,16 +26,6 @@ const dotTone = (action: string) => {
   if (a.includes("approv") || a.includes("publish")) return "bg-emerald-500";
   return "bg-gray-300";
 };
-
-function Kpi({ label, value, sub, tone }: { label: string; value: string | number; sub?: string; tone?: string }) {
-  return (
-    <div className="bg-white rounded-xl border border-gray-100 p-3.5">
-      <p className="text-[10px] text-gray-400 font-medium uppercase tracking-wide leading-tight">{label}</p>
-      <p className={`text-2xl font-bold mt-1 ${tone ?? "text-gray-900"}`}>{value}</p>
-      {sub && <p className="text-[10px] text-gray-400 mt-0.5">{sub}</p>}
-    </div>
-  );
-}
 
 export default async function GovernanceAuditPage() {
   const supabase = await createClient();
