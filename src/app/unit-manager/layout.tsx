@@ -170,6 +170,15 @@ const NAV_GROUPS: { title: string; items: NavItem[] }[] = [
     { label: "Quality Intelligence",      href: "/unit-manager/quality/ai", icon: "🛡️" },
     { label: "Predictive Analytics",      href: "/unit-manager/performance/predictive", icon: "🔮" },
   ] },
+  // UMW-TLS-001..005 Team & Leadership Support. TLS-004 is the communication hub; the others route to the
+  // authoritative surface that already owns them rather than being duplicated (team = WFM-004 assignments,
+  // development = WFM-008, permissions = ADM-007).
+  { title: "Team & Leadership", items: [
+    { label: "Communications Hub",    href: "/unit-manager/communications", icon: "📣" },                      // TLS-004
+    { label: "Team & Assignments",    href: "/unit-manager/workforce-management/team-assignments", icon: "🧩" },// TLS-001
+    { label: "Roles & Permissions",   href: "/unit-manager/administration/governance", icon: "🛡️" },           // TLS-002
+    { label: "Development & Readiness", href: "/unit-manager/workforce-management/development", icon: "🎯" },   // TLS-003
+  ] },
   // UMW-ADM-001..009 Administration & Configuration — no-code unit admin over adm_* stores (migrations 109/110),
   // reusing op_beds / departments / positions / break_glass for structure & governance.
   { title: "Administration & Configuration", items: [
