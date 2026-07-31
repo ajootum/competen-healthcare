@@ -3,12 +3,13 @@ import { redirect } from "next/navigation";
 import { cookies } from "next/headers";
 import Link from "next/link";
 import MobileSidebar from "./MobileSidebar";
-import RoleSwitcher from "@/components/RoleSwitcher";
 import NavLink from "@/components/NavLink";
 import SidebarToggle from "@/components/SidebarToggle";
 import { highestRole, ROLE_CONFIG, ROLE_PRIORITY, type AppRole } from "@/lib/roles";
-import { workspaceLinksForUser } from "@/lib/workspace-links";
 import ActiveContextBanner from "./ActiveContextBanner";
+import { workspaceLinksForUser } from "@/lib/workspace-links";
+import GlobalHeader from "@/components/platform/GlobalHeader";
+import { loadHeaderContext } from "@/lib/platform/header";
 
 // Personal Workspace shell (PW-000/PW-001) — flat left nav + global top bar (search + profile) + Current Shift
 // card, aligned to the high-fidelity mockup. Nav items map to the real worker surfaces that back them; the
@@ -26,14 +27,17 @@ export default async function DashboardLayout({ children }: { children: React.Re
   const admin = createAdminClient() as any;
 
   const { data: profile } = await admin.from("profiles").select("full_name, role, roles, avatar_url, hospital_id").eq("id", user.id).single();
-  const firstName = profile?.full_name?.split(" ")[0] ?? "Nurse";
+
+  // One resolver for every workspace, so the header cannot drift between them (PUI-002).
+
+  const header = await loadHeaderContext(admin, user.id, { currentHref: "/dashboard" });
   const userRoles: AppRole[] = (profile?.roles?.length ? profile.roles : [profile?.role]).filter(Boolean) as AppRole[];
   const cookieStore = await cookies();
   const activeRole = (cookieStore.get("active_role")?.value ?? highestRole(userRoles)) as AppRole;
-  const workspaces = await workspaceLinksForUser(admin, user.id, userRoles);
 
   // Universal-landing context (PW-014 PW-AC-01/05): everyone lands here, so surface the user's primary functional
   // workspace for a one-click jump. Prefer their highest non-nurse AppRole portal, else their first org workspace.
+  const workspaces = await workspaceLinksForUser(admin, user.id, userRoles);
   const funcRole = ROLE_PRIORITY.find(r => r !== "nurse" && userRoles.includes(r));
   const primaryWorkspace = funcRole
     ? { label: ROLE_CONFIG[funcRole].label, href: ROLE_CONFIG[funcRole].portal }
@@ -79,6 +83,34 @@ export default async function DashboardLayout({ children }: { children: React.Re
     <div className="min-h-screen bg-gray-50 font-[family-name:var(--font-geist-sans)]">
       <MobileSidebar fullName={profile?.full_name ?? "Nurse"} role={profile?.role ?? "nurse"} isAdmin={profile?.role === "hospital_admin"} unread={unreadCount ?? 0} avatarUrl={profile?.avatar_url ?? null} />
 
+      <a href="#main-content" className="cmp-skip-link">Skip to main content</a>
+      <div className="hidden md:block md:ml-56">
+        <GlobalHeader
+          workspaceTitle="Dashboard"
+          workspaceHref="/dashboard"
+          user={header.user}
+          workspaces={header.workspaces}
+          units={header.units}
+          activeUnitId={header.activeUnitId}
+          notifications={header.notifications}
+          messages={header.messages}
+        />
+      </div>
+
+      <a href="#main-content" className="cmp-skip-link">Skip to main content</a>
+      <div className="hidden md:block md:ml-56">
+        <GlobalHeader
+          workspaceTitle="Personal Workspace"
+          workspaceHref="/dashboard"
+          user={header.user}
+          workspaces={header.workspaces}
+          units={header.units}
+          activeUnitId={header.activeUnitId}
+          notifications={header.notifications}
+          messages={header.messages}
+        />
+      </div>
+
       <div className="flex">
         <aside data-sidebar className="hidden md:flex w-56 h-screen bg-[#0f1b3d] flex-col py-5 px-3 fixed top-0 left-0 z-20">
           <SidebarToggle />
@@ -114,47 +146,15 @@ export default async function DashboardLayout({ children }: { children: React.Re
             <span><span className="block text-white text-[11px] font-medium">Need Help?</span><span className="block text-blue-300/70 text-[10px]">Contact Support</span></span>
           </a>
 
-          <div className="pt-3 mt-2 border-t border-blue-900/60">
-            <div className="flex items-center gap-2 px-2 py-1.5">
-              {profile?.avatar_url ? (
-                // eslint-disable-next-line @next/next/no-img-element -- avatar from Supabase storage
-                <img src={profile.avatar_url} alt="" className="w-7 h-7 rounded-full object-cover border border-blue-800" />
-              ) : (
-                <div className="w-7 h-7 rounded-full bg-blue-500 flex items-center justify-center text-white text-xs font-bold">{firstName[0]}</div>
-              )}
-              <div className="flex-1 min-w-0" data-sb-label><p className="text-white text-xs font-medium truncate">{profile?.full_name}</p><p className="text-blue-300/60 text-[10px] capitalize">{profile?.role?.replace(/_/g, " ")}</p></div>
-            </div>
-            {(userRoles.length > 1 || workspaces.length > 0) && <div className="mb-1" data-sb-label><RoleSwitcher roles={userRoles} activeRole={activeRole} workspaces={workspaces} /></div>}
-            <form action="/api/auth/logout" method="POST"><button type="submit" data-sb-item className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm text-blue-200/50 hover:bg-blue-900/30 hover:text-white transition-colors"><span className="w-5 text-center">↩</span><span data-sb-label>Sign out</span></button></form>
-          </div>
+          {/* PUI-002: user controls live in the global header; the sidebar is workflow navigation only. */}
         </aside>
 
         <div data-content className="flex-1 md:ml-56 min-h-screen flex flex-col">
-          {/* Global top bar — search + profile (PW-001 §Layout) */}
-          <header className="hidden md:flex items-center gap-3 px-6 h-14 border-b border-gray-200 bg-white sticky top-0 z-10">
-            <div className="flex-1 max-w-md relative">
-              <input placeholder="Search anything…" className="w-full border border-gray-200 rounded-lg pl-9 pr-3 py-2 text-sm bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500/20" />
-              <span className="absolute left-3 top-2.5 text-gray-400 text-sm">🔍</span>
-            </div>
-            <span className="flex-1" />
-            <Link href="/dashboard/copilot" className="text-gray-400 hover:text-blue-600" title="AI Assistant">✨</Link>
-            <a href="mailto:gabriel@semacast.com" className="text-gray-400 hover:text-gray-600" title="Help">❓</a>
-            <Link href="/dashboard/messages" className="text-gray-400 hover:text-gray-600" title="Messages">💬</Link>
-            <Link href="/dashboard/notifications" className="relative text-gray-400 hover:text-gray-600" title="Notifications">🔔{(unreadCount ?? 0) > 0 && <span className="absolute -top-1.5 -right-1.5 bg-rose-500 text-white text-[8px] font-bold rounded-full w-3.5 h-3.5 flex items-center justify-center">{unreadCount}</span>}</Link>
-            <div className="flex items-center gap-2 border-l border-gray-200 pl-3">
-              {profile?.avatar_url ? (
-                // eslint-disable-next-line @next/next/no-img-element -- avatar from Supabase storage
-                <img src={profile.avatar_url} alt="" className="w-8 h-8 rounded-full object-cover" />
-              ) : (
-                <div className="w-8 h-8 rounded-full bg-blue-500 flex items-center justify-center text-white text-xs font-bold">{firstName[0]}</div>
-              )}
-              <div className="leading-tight"><p className="text-xs font-semibold text-gray-800">{profile?.full_name}</p><p className="text-[10px] text-gray-400">{shift?.ward ?? profile?.role?.replace(/_/g, " ")}</p></div>
-            </div>
-          </header>
+          {/* PUI-002: the bespoke top bar is replaced by the shared GlobalHeader above. */}
 
           <ActiveContextBanner roleLabel={ROLE_CONFIG[activeRole]?.label ?? activeRole} primary={primaryWorkspace} />
 
-          <main className="flex-1 px-4 md:px-6 pt-16 md:pt-6 pb-8">{children}</main>
+          <main id="main-content" className="flex-1 px-4 md:px-6 pt-16 md:pt-6 pb-8">{children}</main>
         </div>
       </div>
     </div>

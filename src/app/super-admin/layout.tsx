@@ -4,6 +4,8 @@ import { cookies } from "next/headers";
 import Link from "next/link";
 import { workspaceLinksForUser } from "@/lib/workspace-links";
 import SidebarToggle from "@/components/SidebarToggle";
+import GlobalHeader from "@/components/platform/GlobalHeader";
+import { loadHeaderContext } from "@/lib/platform/header";
 import WorkspaceSidebar from "./_components/WorkspaceSidebar";
 import { highestRole, type AppRole } from "@/lib/roles";
 
@@ -28,6 +30,8 @@ export default async function SuperAdminLayout({ children }: { children: React.R
   const activeRole = (cookieStore.get("active_role")?.value ?? highestRole(userRoles)) as AppRole;
   // Dedicated org-role workspaces this user can switch into (normally none for landlord-only super admins).
   const workspaces = await workspaceLinksForUser(admin, user.id, userRoles);
+  // One resolver for every workspace, so the header cannot drift between them (PUI-002).
+  const header = await loadHeaderContext(admin, user.id, { currentHref: "/super-admin" });
 
   if (!userRoles.includes("super_admin")) {
     return (
@@ -44,6 +48,20 @@ export default async function SuperAdminLayout({ children }: { children: React.R
 
   return (
     <div className="min-h-screen bg-gray-50 font-[family-name:var(--font-geist-sans)]">
+      <a href="#main-content" className="cmp-skip-link">Skip to main content</a>
+      <div className="hidden md:block md:ml-56">
+        <GlobalHeader
+          workspaceTitle="Platform Super Admin"
+          workspaceHref="/super-admin"
+          user={header.user}
+          workspaces={header.workspaces}
+          units={header.units}
+          activeUnitId={header.activeUnitId}
+          notifications={header.notifications}
+          messages={header.messages}
+        />
+      </div>
+
       <div className="flex">
         <aside data-sidebar className="hidden md:flex w-56 h-screen bg-[#0f1923] flex-col py-6 px-4 fixed top-0 left-0 z-20">
           <SidebarToggle />
@@ -52,7 +70,7 @@ export default async function SuperAdminLayout({ children }: { children: React.R
 
         {/* Pages stay readable at max-w-6xl; a workspace page opts out of the
             cap by rendering data-wide on its root (rule in globals.css). */}
-        <main data-content className="flex-1 md:ml-56 px-4 md:px-6 py-8 max-w-6xl">
+        <main id="main-content" data-content className="flex-1 md:ml-56 px-4 md:px-6 py-8 max-w-6xl">
           {children}
         </main>
       </div>

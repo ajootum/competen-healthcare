@@ -7,6 +7,8 @@ import SidebarToggle from "@/components/SidebarToggle";
 import WorkspaceSwitcher from "@/components/WorkspaceSwitcher";
 import { type AppRole } from "@/lib/roles";
 import { workspaceLinksForUser } from "@/lib/workspace-links";
+import GlobalHeader from "@/components/platform/GlobalHeader";
+import { loadHeaderContext } from "@/lib/platform/header";
 
 // Educator Workspace sidebar — enterprise education operations centre
 // (Final Dashboard & Sidebar Enhancement Specification). Grouped navigation
@@ -150,6 +152,8 @@ export default async function EducatorLayout({ children }: { children: React.Rea
     .select("full_name, role, roles, hospital_id, avatar_url")
     .eq("id", user.id)
     .single();
+  // One resolver for every workspace, so the header cannot drift between them (PUI-002).
+  const header = await loadHeaderContext(adminClient, user.id, { currentHref: "/educator" });
 
   const userRoles: AppRole[] = (profile?.roles?.length ? profile.roles : [profile?.role]).filter(Boolean) as AppRole[];
   // Dedicated org-role workspaces this user can switch into.
@@ -217,6 +221,20 @@ export default async function EducatorLayout({ children }: { children: React.Rea
         </nav>
       </header>
 
+      <a href="#main-content" className="cmp-skip-link">Skip to main content</a>
+      <div className="hidden md:block md:ml-60">
+        <GlobalHeader
+          workspaceTitle="Educator Workspace"
+          workspaceHref="/educator"
+          user={header.user}
+          workspaces={header.workspaces}
+          units={header.units}
+          activeUnitId={header.activeUnitId}
+          notifications={header.notifications}
+          messages={header.messages}
+        />
+      </div>
+
       <div className="flex">
         <aside data-sidebar className="hidden md:flex w-60 h-screen bg-[#1a0a38] flex-col py-6 px-4 fixed top-0 left-0 z-20">
           <SidebarToggle />
@@ -227,7 +245,6 @@ export default async function EducatorLayout({ children }: { children: React.Rea
               <span className="block text-purple-300/60 text-[9px] leading-tight">Educator Workspace</span>
             </span>
           </Link>
-          <div data-sb-label><WorkspaceSwitcher roles={userRoles} activeRole="educator" workspaces={workspaces} /></div>
 
           <nav className="flex flex-col gap-0.5 flex-1 overflow-y-auto">
             {NAV_GROUPS.map(({ group, items }) => {
@@ -268,35 +285,10 @@ export default async function EducatorLayout({ children }: { children: React.Rea
             })}
           </nav>
 
-          <div className="pt-4 border-t border-purple-900/60">
-            <div className="flex items-center gap-2 px-3 py-2">
-              {profile?.avatar_url ? (
-                // eslint-disable-next-line @next/next/no-img-element -- avatar from Supabase storage
-                <img src={profile.avatar_url} alt="" className="w-7 h-7 rounded-full object-cover border border-purple-800" />
-              ) : (
-                <div className="w-7 h-7 rounded-full bg-purple-500 flex items-center justify-center text-white text-xs font-bold">
-                  {profile?.full_name?.[0] ?? "E"}
-                </div>
-              )}
-              <div className="flex-1 min-w-0" data-sb-label>
-                <p className="text-white text-xs font-medium truncate">{profile?.full_name}</p>
-                <p className="text-purple-300/60 text-[10px]">Educator</p>
-              </div>
-            </div>
-            <div className="mb-2" data-sb-label>
-              <WorkspaceSwitcher roles={userRoles} activeRole="educator" workspaces={workspaces} variant="footer" />
-            </div>
-            <form action="/api/auth/logout" method="POST">
-              <button type="submit" data-sb-item
-                className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm text-purple-200/40 hover:bg-purple-900/30 hover:text-white transition-colors">
-                <span className="w-5 text-center">↩</span>
-                <span data-sb-label>Sign out</span>
-              </button>
-            </form>
-          </div>
+          {/* PUI-002: user controls live in the global header; the sidebar is workflow navigation only. */}
         </aside>
 
-        <main data-content className="flex-1 md:ml-60 px-4 md:px-6 pt-24 md:pt-8 pb-8">
+        <main id="main-content" data-content className="flex-1 md:ml-60 px-4 md:px-6 pt-24 md:pt-8 pb-8">
           {children}
         </main>
       </div>

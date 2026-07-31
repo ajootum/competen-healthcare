@@ -1,13 +1,12 @@
 import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
-import { cookies } from "next/headers";
 import Link from "next/link";
-import RoleSwitcher from "@/components/RoleSwitcher";
 import NavLink from "@/components/NavLink";
 import SidebarToggle from "@/components/SidebarToggle";
-import { highestRole, type AppRole } from "@/lib/roles";
-import { workspaceLinksForUser } from "@/lib/workspace-links";
+import { type AppRole } from "@/lib/roles";
 import { holdsOfficeAppointment } from "@/lib/ogs/office";
+import GlobalHeader from "@/components/platform/GlobalHeader";
+import { loadHeaderContext } from "@/lib/platform/header";
 
 // Hospital Executive Workspace (HEX-001) — strategic oversight for hospital
 // leadership (CEO/CNO/CMO/COO/CFO/Directors): enterprise scorecard, workforce
@@ -38,11 +37,9 @@ export default async function ExecutiveLayout({ children }: { children: React.Re
 
   const admin = createAdminClient();
   const { data: profile } = await admin.from("profiles").select("full_name, role, roles, hospital_id").eq("id", user.id).single();
+  // One resolver for every workspace, so the header cannot drift between them (PUI-002).
+  const header = await loadHeaderContext(admin, user.id, { currentHref: "/hospital-executive" });
   const userRoles: AppRole[] = (profile?.roles?.length ? profile.roles : [profile?.role]).filter(Boolean) as AppRole[];
-  const cookieStore = await cookies();
-  const activeRole = (cookieStore.get("active_role")?.value ?? highestRole(userRoles)) as AppRole;
-  // Dedicated org-role workspaces this user can switch into.
-  const workspaces = await workspaceLinksForUser(admin, user.id, userRoles);
 
   // R001 appointment-based access (additive, mirrors CMO): a role holder OR an active Executive Office appointee
   // may enter. Fail-soft — no OGS tables / no appointment → role-only, nothing removed.
@@ -80,6 +77,20 @@ export default async function ExecutiveLayout({ children }: { children: React.Re
         </nav>
       </header>
 
+      <a href="#main-content" className="cmp-skip-link">Skip to main content</a>
+      <div className="hidden md:block md:ml-56">
+        <GlobalHeader
+          workspaceTitle="Hospital Executive"
+          workspaceHref="/hospital-executive"
+          user={header.user}
+          workspaces={header.workspaces}
+          units={header.units}
+          activeUnitId={header.activeUnitId}
+          notifications={header.notifications}
+          messages={header.messages}
+        />
+      </div>
+
       <div className="flex">
         <aside data-sidebar className="hidden md:flex w-56 h-screen bg-[#0a2e38] flex-col py-6 px-4 fixed top-0 left-0 z-20">
           <SidebarToggle />
@@ -110,24 +121,10 @@ export default async function ExecutiveLayout({ children }: { children: React.Re
             </Link>
           </nav>
 
-          <div className="pt-4 border-t border-teal-800/60">
-            <div className="flex items-center gap-2 px-3 py-2">
-              <div className="w-7 h-7 rounded-full bg-amber-400 flex items-center justify-center text-amber-900 text-xs font-bold">{profile?.full_name?.[0] ?? "E"}</div>
-              <div className="flex-1 min-w-0" data-sb-label>
-                <p className="text-white text-xs font-medium truncate">{profile?.full_name}</p>
-                <p className="text-amber-300/60 text-[10px]">Hospital Executive</p>
-              </div>
-            </div>
-            {(userRoles.length > 1 || workspaces.length > 0) && <div className="mb-2" data-sb-label><RoleSwitcher roles={userRoles} activeRole={activeRole} workspaces={workspaces} /></div>}
-            <form action="/api/auth/logout" method="POST">
-              <button type="submit" data-sb-item className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm text-teal-100/50 hover:bg-teal-800/30 hover:text-white transition-colors">
-                <span className="w-5 text-center">↩</span><span data-sb-label>Sign out</span>
-              </button>
-            </form>
-          </div>
+          {/* PUI-002: user controls live in the global header; the sidebar is workflow navigation only. */}
         </aside>
 
-        <main data-content className="flex-1 md:ml-56 px-4 md:px-6 pt-24 md:pt-8 pb-8 max-w-7xl">{children}</main>
+        <main id="main-content" data-content className="flex-1 md:ml-56 px-4 md:px-6 pt-24 md:pt-8 pb-8 max-w-7xl">{children}</main>
       </div>
     </div>
   );

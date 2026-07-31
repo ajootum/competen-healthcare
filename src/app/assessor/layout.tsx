@@ -5,7 +5,9 @@ import NavLink from "@/components/NavLink";
 import NavGroup from "@/components/NavGroup";
 import SidebarToggle from "@/components/SidebarToggle";
 import WorkspaceSwitcher from "@/components/WorkspaceSwitcher";
-import { ORG_ROLE_CONFIG, orgRolesOf, workspacesFor, type AppRole, type OrgRole } from "@/lib/roles";
+import { orgRolesOf, workspacesFor, type AppRole } from "@/lib/roles";
+import GlobalHeader from "@/components/platform/GlobalHeader";
+import { loadHeaderContext } from "@/lib/platform/header";
 
 // Assessor Workspace sidebar — Assessment Operations Centre structure
 // (Enterprise Assessor Workspace V2 mockup). Items whose module doesn't exist
@@ -91,6 +93,8 @@ export default async function AssessorLayout({ children }: { children: React.Rea
     .select("full_name, role, roles, avatar_url")
     .eq("id", user.id)
     .single();
+  // One resolver for every workspace, so the header cannot drift between them (PUI-002).
+  const header = await loadHeaderContext(adminClient, user.id, { currentHref: "/assessor" });
 
   const userRoles: AppRole[] = (profile?.roles?.length ? profile.roles : [profile?.role]).filter(Boolean) as AppRole[];
 
@@ -100,7 +104,6 @@ export default async function AssessorLayout({ children }: { children: React.Rea
     .eq("id", user.id)
     .returns<{ org_role: string | null; org_roles: string[] | null }[]>()
     .maybeSingle();
-  const orgRole = (!orgError && orgProfile ? orgProfile.org_role as OrgRole : null) ?? null;
   // Dedicated org-role workspaces this user can switch into.
   const workspaces = workspacesFor(orgRolesOf(!orgError ? orgProfile : null), userRoles);
 
@@ -128,8 +131,6 @@ export default async function AssessorLayout({ children }: { children: React.Rea
   ]);
   const badgeValue = { queue: queueCount ?? 0, logbook: logbookCount ?? 0, unread: unreadCount ?? 0 };
 
-  const orgRoleCfg = orgRole ? ORG_ROLE_CONFIG[orgRole] : null;
-  const portalLabel = orgRoleCfg?.label ?? "Assessor";
 
   return (
     <div className="min-h-screen bg-gray-50 font-[family-name:var(--font-geist-sans)]">
@@ -163,6 +164,20 @@ export default async function AssessorLayout({ children }: { children: React.Rea
         </nav>
       </header>
 
+      <a href="#main-content" className="cmp-skip-link">Skip to main content</a>
+      <div className="hidden md:block md:ml-60">
+        <GlobalHeader
+          workspaceTitle="Competency Management Platform"
+          workspaceHref="/assessor"
+          user={header.user}
+          workspaces={header.workspaces}
+          units={header.units}
+          activeUnitId={header.activeUnitId}
+          notifications={header.notifications}
+          messages={header.messages}
+        />
+      </div>
+
       <div className="flex">
         <aside data-sidebar className="hidden md:flex w-60 h-screen bg-[#0f172a] flex-col py-6 px-4 fixed top-0 left-0 z-20">
           <SidebarToggle />
@@ -173,7 +188,6 @@ export default async function AssessorLayout({ children }: { children: React.Rea
               <span className="block text-indigo-300/60 text-[9px] leading-tight">Competency Management Platform</span>
             </span>
           </Link>
-          <div data-sb-label><WorkspaceSwitcher roles={userRoles} activeRole="assessor" workspaces={workspaces} /></div>
 
           <nav className="flex flex-col gap-0.5 flex-1 overflow-y-auto">
             {NAV_GROUPS.map(({ group, items }) => {
@@ -199,35 +213,10 @@ export default async function AssessorLayout({ children }: { children: React.Rea
             })}
           </nav>
 
-          <div className="pt-4 border-t border-slate-800/60">
-            <div className="flex items-center gap-2 px-3 py-2">
-              {profile?.avatar_url ? (
-                // eslint-disable-next-line @next/next/no-img-element -- avatar from Supabase storage
-                <img src={profile.avatar_url} alt="" className="w-7 h-7 rounded-full object-cover border border-indigo-800" />
-              ) : (
-                <div className="w-7 h-7 rounded-full bg-indigo-500 flex items-center justify-center text-white text-xs font-bold">
-                  {profile?.full_name?.[0] ?? "A"}
-                </div>
-              )}
-              <div className="flex-1 min-w-0" data-sb-label>
-                <p className="text-white text-xs font-medium truncate">{profile?.full_name}</p>
-                <p className="text-indigo-300/60 text-[10px]">{portalLabel}</p>
-              </div>
-            </div>
-            <div className="mb-2" data-sb-label>
-              <WorkspaceSwitcher roles={userRoles} activeRole="assessor" workspaces={workspaces} variant="footer" />
-            </div>
-            <form action="/api/auth/logout" method="POST">
-              <button type="submit" data-sb-item
-                className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm text-slate-500 hover:bg-slate-800/30 hover:text-white transition-colors">
-                <span className="w-5 text-center">↩</span>
-                <span data-sb-label>Sign out</span>
-              </button>
-            </form>
-          </div>
+          {/* PUI-002: user controls live in the global header; the sidebar is workflow navigation only. */}
         </aside>
 
-        <main data-content className="flex-1 md:ml-60 px-4 md:px-6 pt-24 md:pt-8 pb-8">
+        <main id="main-content" data-content className="flex-1 md:ml-60 px-4 md:px-6 pt-24 md:pt-8 pb-8">
           {children}
         </main>
       </div>
