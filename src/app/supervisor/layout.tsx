@@ -61,7 +61,7 @@ export default async function SupervisorLayout({ children }: { children: React.R
   const bScope = (q: any) => (bSuper ? q : q.eq("hospital_id", bHid ?? bNONE));
   const bNum = (r: any) => (r?.error ? 0 : r?.count ?? 0);
   const OPEN_TASK = "(completed,verified,cancelled)";
-  const [unreadRes, escRes, taskRes, critRes, safetyRes, obsRes, handRes, concernRes, xferRes] = await Promise.all([
+  const [unreadRes, escRes, taskRes, critRes, safetyRes, obsRes, handRes, concernRes, xferRes, mdtRes] = await Promise.all([
     admin.from("notifications").select("id", { count: "exact", head: true }).eq("user_id", user.id).eq("read", false),
     bScope(admin.from("op_escalations").select("id", { count: "exact", head: true })).in("status", ["open", "acknowledged"]),
     bScope(admin.from("op_tasks").select("id", { count: "exact", head: true })).not("status", "in", OPEN_TASK),
@@ -71,6 +71,8 @@ export default async function SupervisorLayout({ children }: { children: React.R
     bScope(admin.from("op_handovers").select("status").order("created_at", { ascending: false }).limit(1)),
     bScope(admin.from("op_concerns").select("id", { count: "exact", head: true })).in("status", ["open", "in_progress", "carried_forward"]),
     bScope(admin.from("op_patient_transfers").select("id", { count: "exact", head: true })).eq("status", "pending"),
+    // MDT demand: patients awaiting review + actions still open (migration 160).
+    bScope(admin.from("op_mdt_referrals").select("id", { count: "exact", head: true })).eq("status", "awaiting_review"),
   ]);
   const badges: Record<string, number> = {
     unread: bNum(unreadRes), escalations: bNum(escRes), openTasks: bNum(taskRes),
@@ -78,6 +80,7 @@ export default async function SupervisorLayout({ children }: { children: React.R
     handover: (!handRes.error && handRes.data?.[0] && handRes.data[0].status !== "accepted") ? 1 : 0,
     concerns: bNum(concernRes),
     transfersPending: bNum(xferRes),
+    mdtActions: bNum(mdtRes),
   };
   // ── Resolve the sidebar from workspace configuration (SSW nav engine) ───────
   // Catalogue in code, sparse overrides in the DB, resolved platform -> tenant

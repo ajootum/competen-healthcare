@@ -116,7 +116,7 @@ export const SSW_NAV_CATALOGUE: SswNavRule[] = [
   // ── Clinical Coordination: the escalation + concern loop with the bedside ──
   { key: "clinical-coordination.escalations", section: "Clinical Coordination", label: "Escalation Centre", href: "/supervisor/escalations", icon: "\u{2B06}️", badge: "escalations", order: 600 },
   { key: "clinical-coordination.concerns", section: "Clinical Coordination", label: "Nurse Concerns", href: "/supervisor/concerns", icon: "\u{1F6A9}", badge: "concerns", order: 610 },
-  { key: "clinical-coordination.mdt", section: "Clinical Coordination", label: "MDT Coordination", icon: "\u{1F91D}", soon: true, order: 620 },
+  { key: "clinical-coordination.mdt", section: "Clinical Coordination", label: "MDT Coordination", href: "/supervisor/mdt", icon: "\u{1F91D}", badge: "mdtActions", order: 620 },
 
   // ── Task Centre ──
   { key: "task-centre.board", section: "Task Centre", label: "Task Board", href: "/supervisor/task-center", icon: "\u{1F4CB}", badge: "openTasks", order: 700 },
