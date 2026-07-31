@@ -62,16 +62,24 @@ function importPath(from: string, kit: string): string {
 }
 
 function main() {
-  const [name, kitArg] = process.argv.slice(2).filter(a => !a.startsWith("--"));
+  const positional = process.argv.slice(2).filter((a, i, arr) => !a.startsWith("--") && arr[i - 1] !== "--as");
+  const [name, kitArg] = positional;
   const dry = process.argv.includes("--dry");
-  if (!name || !kitArg) { console.log("usage: <Name> <kit-path> [--dry]"); process.exit(1); }
+  // --as lets the kit's export have a different name from the local one it replaces. The import is then
+  // ALIASED back to the local name, so every existing <Card> in the file keeps working and the codemod
+  // never has to rename JSX — renaming call sites would be an edit this guard cannot verify.
+  const localName = process.argv.includes("--as") ? process.argv[process.argv.indexOf("--as") + 1] : null;
+  if (!name || !kitArg) { console.log("usage: <Name> <kit-path> [--as <LocalName>] [--dry]"); process.exit(1); }
 
   const kitFile = join(ROOT, kitArg);
   const kit = findComponent(readFileSync(kitFile, "utf8"), name);
   if (!kit) { console.log(`the kit does not define ${name}`); process.exit(1); }
   // The kit's `export function X` and a page's `function X` differ by one keyword — compare the bodies
   // with that normalised away, so the guard tests the implementation and not the modifier.
-  const kitHash = hash(kit.body.replace(/^export\s+/, ""));
+  // The component NAME is normalised out as well, so an alias-rename is not mistaken for a different
+  // implementation. Everything else must still match character for character.
+  const nameless = (b: string, n: string) => b.replace(/^export\s+/, "").replace(new RegExp(`function\\s+${n}\\b`), "function _");
+  const kitHash = hash(nameless(kit.body, name));
 
   const targets = walk(join(ROOT, "src/app")).filter(f => f !== kitFile);
   const migrated: string[] = [];
@@ -79,15 +87,17 @@ function main() {
 
   for (const f of targets) {
     const src = readFileSync(f, "utf8");
-    const found = findComponent(src, name);
+    const found = findComponent(src, localName ?? name);
     if (!found) continue;
     const rel = relative(ROOT, f).replace(/\\/g, "/");
-    if (hash(found.body.replace(/^export\s+/, "")) !== kitHash) { refused.push(rel); continue; }
+    if (hash(nameless(found.body, localName ?? name)) !== kitHash) { refused.push(rel); continue; }
 
     // Remove the local definition, then import the identical one.
     let out = src.slice(0, found.start) + src.slice(found.end);
     out = out.replace(/\n{3,}/g, "\n\n");
-    const spec = `import { ${name} } from "${importPath(f, kitFile)}";`;
+    const spec = localName && localName !== name
+      ? `import { ${name} as ${localName} } from "${importPath(f, kitFile)}";`
+      : `import { ${name} } from "${importPath(f, kitFile)}";`;
     const imports = [...out.matchAll(/^import .*?;$/gm)];
     if (!imports.length) { refused.push(rel + " (no import to anchor to)"); continue; }
     const last = imports[imports.length - 1];

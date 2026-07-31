@@ -2,6 +2,7 @@ import Link from "next/link";
 import { requireEducatorAccess } from "@/lib/educator-access";
 import { loadAssessmentIntelligence, type NavNode, type Tint } from "@/lib/assessment-intelligence";
 import CommandBar from "./CommandBar";
+import { DarkCard as Card } from "../../../../components/ui/primitives";
 
 // Assessment Intelligence Workspace (spec v1.0 + mockup) — the AI-powered
 // assessment quality & governance centre inside AI & Intelligence. Dark command-
@@ -69,18 +70,6 @@ function Donut({ slices, center, sub }: { slices: { label: string; n: number; co
         })}
       </svg>
       <div className="absolute inset-0 flex flex-col items-center justify-center"><span className="text-lg font-extrabold text-white">{center}</span><span className="text-[8px] text-slate-500">{sub}</span></div>
-    </div>
-  );
-}
-
-function Card({ title, tag, children, muted = false }: { title: string; tag?: string; children: React.ReactNode; muted?: boolean }) {
-  return (
-    <div className={`rounded-2xl border p-4 ${muted ? "bg-white/[0.015] border-white/5" : "bg-white/[0.03] border-white/10"}`}>
-      <div className="flex items-center gap-2 mb-3">
-        <p className={`text-[11px] font-bold uppercase tracking-widest ${muted ? "text-slate-500" : "text-slate-400"}`}>{title}</p>
-        {tag && <span className="ml-auto text-[8px] font-bold uppercase tracking-wide text-slate-500">{tag}</span>}
-      </div>
-      {children}
     </div>
   );
 }

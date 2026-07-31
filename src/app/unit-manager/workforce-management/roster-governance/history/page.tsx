@@ -4,6 +4,7 @@ import Link from "next/link";
 import { loadUnitDepartments } from "@/lib/operations/unit-command";
 import UnitFilters from "../../../UnitFilters";
 import RosterGovTabs from "../RosterGovTabs";
+import { Kpi } from "../../_kit";
 
 export const dynamic = "force-dynamic";
 
@@ -25,10 +26,6 @@ const weekAgoISO = () => new Date(Date.now() - 7 * 864e5).toISOString();
 function when(iso: string): string { const mins = Math.round((new Date().getTime() - new Date(iso).getTime()) / 60000); if (mins < 60) return `${Math.max(1, mins)}m ago`; const h = Math.round(mins / 60); if (h < 24) return `${h}h ago`; return new Date(iso).toLocaleDateString("en-GB", { day: "numeric", month: "short" }); }
 
 const REPORTS = ["Roster Governance Summary", "Coverage Compliance", "Skill-Mix Compliance", "Supervisor Coverage", "Working-Time & Rest", "Overtime Exposure", "Roster Fairness", "Roster Exceptions", "Exception Override", "Approval Timeliness", "Publication & Acknowledgement", "Roster Amendment", "Planned-vs-Actual", "Roster Cost Variance", "Roster Stability"];
-
-function Kpi({ label, value, tone }: { label: string; value: any; tone?: string }) {
-  return <div className={`${card} p-4`}><p className="text-xs text-gray-500">{label}</p><p className={`text-2xl font-bold tabular-nums mt-1 ${tone ?? "text-gray-900"}`}>{value}</p></div>;
-}
 
 export default async function HistoryReports() {
   const supabase = await createClient();

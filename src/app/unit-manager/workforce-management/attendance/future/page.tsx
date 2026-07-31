@@ -6,6 +6,7 @@ import { loadUnitDepartments } from "@/lib/operations/unit-command";
 import UnitFilters from "../../../UnitFilters";
 import AttendanceTabs from "../AttendanceTabs";
 import AvailabilityActions from "./AvailabilityActions";
+import { Kpi } from "../../_kit";
 
 export const dynamic = "force-dynamic";
 
@@ -20,10 +21,6 @@ const card = "bg-white rounded-xl border border-gray-200";
 const AVAIL_TONE: Record<string, string> = { unavailable: "bg-rose-50 text-rose-700", temporarily_unavailable: "bg-amber-50 text-amber-700", on_call: "bg-sky-50 text-sky-700", standby: "bg-sky-50 text-sky-700" };
 const fmtD = (iso?: string | null) => iso ? new Date(iso).toLocaleDateString("en-GB", { day: "numeric", month: "short" }) : "—";
 const HORIZONS = ["Next shift", "Next 24h", "Next 72h", "Next 7 days", "Next 14 days", "Current roster period", "Next roster period"];
-
-function Kpi({ label, value, tone }: { label: string; value: any; tone?: string }) {
-  return <div className={`${card} p-4`}><p className="text-xs text-gray-500">{label}</p><p className={`text-2xl font-bold tabular-nums mt-1 ${tone ?? "text-gray-900"}`}>{value}</p></div>;
-}
 
 export default async function FutureAvailability() {
   const supabase = await createClient();

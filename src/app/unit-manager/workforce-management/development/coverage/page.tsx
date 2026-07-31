@@ -5,6 +5,7 @@ import { loadWorkforceReadiness } from "@/lib/operations/workforce-readiness";
 import { loadUnitDepartments } from "@/lib/operations/unit-command";
 import UnitFilters from "../../../UnitFilters";
 import DevTabs from "../DevTabs";
+import { Kpi } from "../../_kit";
 
 export const dynamic = "force-dynamic";
 
@@ -16,10 +17,6 @@ export const dynamic = "force-dynamic";
 const card = "bg-white rounded-xl border border-gray-200";
 const COV = (pct: number | null, total: number, current: number) => current === 0 ? { label: "No validated coverage", tone: "bg-rose-50 text-rose-700" } : current === 1 ? { label: "Covered but concentrated", tone: "bg-amber-50 text-amber-700" } : (pct ?? 0) >= 90 ? { label: "Fully covered", tone: "bg-emerald-50 text-emerald-700" } : (pct ?? 0) >= 60 ? { label: "Marginal coverage", tone: "bg-amber-50 text-amber-700" } : { label: "Gap exists", tone: "bg-rose-50 text-rose-700" };
 const SKILL_TONE: Record<string, string> = { Current: "bg-emerald-500", Expiring: "bg-amber-400", Expired: "bg-rose-500", None: "bg-gray-300" };
-
-function Kpi({ label, value, tone }: { label: string; value: any; tone?: string }) {
-  return <div className={`${card} p-4`}><p className="text-xs text-gray-500">{label}</p><p className={`text-2xl font-bold tabular-nums mt-1 ${tone ?? "text-gray-900"}`}>{value}</p></div>;
-}
 
 export default async function CompetencyCoverage() {
   const supabase = await createClient();

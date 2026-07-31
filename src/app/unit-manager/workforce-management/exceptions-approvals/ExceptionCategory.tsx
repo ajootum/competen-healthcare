@@ -5,6 +5,7 @@ import { loadWorkforceExceptions } from "@/lib/operations/workforce-exceptions";
 import { loadUnitDepartments } from "@/lib/operations/unit-command";
 import UnitFilters from "../../UnitFilters";
 import WfmExcTabs from "./WfmExcTabs";
+import { Kpi } from "../_kit";
 
 export const dynamic = "force-dynamic";
 
@@ -17,10 +18,6 @@ const card = "bg-white rounded-xl border border-gray-200";
 const SEV: Record<string, string> = { critical: "bg-rose-50 text-rose-700", high: "bg-amber-50 text-amber-700", moderate: "bg-sky-50 text-sky-700", low: "bg-gray-100 text-gray-500" };
 const DOT: Record<string, string> = { critical: "bg-rose-500", high: "bg-amber-500", moderate: "bg-sky-500", low: "bg-gray-400" };
 const PRI: Record<string, string> = { critical: "bg-rose-50 text-rose-700", high: "bg-amber-50 text-amber-700", medium: "bg-sky-50 text-sky-700", low: "bg-gray-100 text-gray-500" };
-
-function Kpi({ label, value, tone }: { label: string; value: any; tone?: string }) {
-  return <div className={`${card} p-4`}><p className="text-xs text-gray-500">{label}</p><p className={`text-2xl font-bold tabular-nums mt-1 ${tone ?? "text-gray-900"}`}>{value}</p></div>;
-}
 
 export default async function ExceptionCategory({ title, subtitle, exTabs, apprCats, note }: { title: string; subtitle: string; exTabs: string[] | null; apprCats: string[] | null; note?: string }) {
   const supabase = await createClient();

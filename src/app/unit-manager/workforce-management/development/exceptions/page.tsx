@@ -5,6 +5,7 @@ import { loadWorkforceReadiness } from "@/lib/operations/workforce-readiness";
 import { loadUnitDepartments } from "@/lib/operations/unit-command";
 import UnitFilters from "../../../UnitFilters";
 import DevTabs from "../DevTabs";
+import { Kpi } from "../../_kit";
 
 export const dynamic = "force-dynamic";
 
@@ -16,10 +17,6 @@ export const dynamic = "force-dynamic";
 const card = "bg-white rounded-xl border border-gray-200";
 const SEV: Record<string, string> = { critical: "bg-rose-50 text-rose-700", high: "bg-amber-50 text-amber-700", moderate: "bg-sky-50 text-sky-700" };
 const DOT: Record<string, string> = { critical: "bg-rose-500", high: "bg-amber-500", moderate: "bg-sky-500" };
-
-function Kpi({ label, value, tone }: { label: string; value: any; tone?: string }) {
-  return <div className={`${card} p-4`}><p className="text-xs text-gray-500">{label}</p><p className={`text-2xl font-bold tabular-nums mt-1 ${tone ?? "text-gray-900"}`}>{value}</p></div>;
-}
 
 export default async function ReadinessExceptions() {
   const supabase = await createClient();

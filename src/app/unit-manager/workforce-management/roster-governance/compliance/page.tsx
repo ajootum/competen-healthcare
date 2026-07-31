@@ -5,6 +5,7 @@ import { loadConstraintEngine } from "@/lib/operations/constraint-engine";
 import { loadUnitDepartments } from "@/lib/operations/unit-command";
 import UnitFilters from "../../../UnitFilters";
 import RosterGovTabs from "../RosterGovTabs";
+import { Kpi } from "../../_kit";
 
 export const dynamic = "force-dynamic";
 
@@ -19,10 +20,6 @@ const ST: Record<string, string> = { Pass: "bg-emerald-50 text-emerald-700", War
 const SEV: Record<string, string> = { Pass: "text-gray-400", Medium: "text-sky-600", High: "text-amber-600", Critical: "text-rose-600" };
 // Rule classification (§11.3)
 const CLASS: Record<string, string> = { "Minimum staffing ratios": "Hard", "Mandatory Shift Supervisor coverage": "Hard", "Mandatory competencies": "Hard", "Maximum weekly hours (48h / 4 shifts)": "Soft", "Minimum rest between shifts": "Soft", "Rotation & workload fairness": "Advisory" };
-
-function Kpi({ label, value, tone }: { label: string; value: any; tone?: string }) {
-  return <div className={`${card} p-4`}><p className="text-xs text-gray-500">{label}</p><p className={`text-2xl font-bold tabular-nums mt-1 ${tone ?? "text-gray-900"}`}>{value}</p></div>;
-}
 
 export default async function ComplianceConstraints() {
   const supabase = await createClient();

@@ -231,3 +231,28 @@ export function Th({ children, align = "left" }: { children: React.ReactNode; al
     </th>
   );
 }
+
+// ── Dark surface ─────────────────────────────────────────────────────────────
+// The library was light-only, so the workspaces that run on a dark ground — the educator AI surfaces, 21
+// files of them — had no component to use and hand-wrote their own. That is not those pages being sloppy;
+// it is the library not covering what the app does, and the fix is to cover it rather than to relight
+// pages that are dark on purpose.
+//
+// This is the SUPERSET of the two variants found in the wild: identical to the `muted` one character for
+// character, and render-equivalent to the plain one when `muted` is false — the class sets are the same,
+// only their written order differs. scripts/pui-migration-harness.ts asserts that equivalence, so the
+// claim is checked rather than eyeballed.
+//
+// Deliberately NOT tokenised. Rewriting these values as --cmp-* would change how 21 pages look, which is a
+// design decision and not part of a de-duplication pass.
+export function DarkCard({ title, tag, children, muted = false }: { title: string; tag?: string; children: React.ReactNode; muted?: boolean }) {
+  return (
+    <div className={`rounded-2xl border p-4 ${muted ? "bg-white/[0.015] border-white/5" : "bg-white/[0.03] border-white/10"}`}>
+      <div className="flex items-center gap-2 mb-3">
+        <p className={`text-[11px] font-bold uppercase tracking-widest ${muted ? "text-slate-500" : "text-slate-400"}`}>{title}</p>
+        {tag && <span className="ml-auto text-[8px] font-bold uppercase tracking-wide text-slate-500">{tag}</span>}
+      </div>
+      {children}
+    </div>
+  );
+}

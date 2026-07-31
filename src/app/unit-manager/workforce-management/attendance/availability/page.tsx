@@ -5,6 +5,7 @@ import { loadAttendance, ROLE_LABEL } from "@/lib/operations/attendance";
 import { loadUnitDepartments } from "@/lib/operations/unit-command";
 import UnitFilters from "../../../UnitFilters";
 import AttendanceTabs from "../AttendanceTabs";
+import { Kpi } from "../../_kit";
 
 export const dynamic = "force-dynamic";
 
@@ -22,10 +23,6 @@ const CAT: Record<string, { badge: string; dot: string }> = {
   "Available (redeploy/overtime)": { badge: "bg-violet-50 text-violet-700", dot: "bg-violet-500" },
   "Unavailable (absent)": { badge: "bg-rose-50 text-rose-700", dot: "bg-rose-500" },
 };
-
-function Kpi({ label, value, tone }: { label: string; value: any; tone?: string }) {
-  return <div className={`${card} p-4`}><p className="text-xs text-gray-500">{label}</p><p className={`text-2xl font-bold tabular-nums mt-1 ${tone ?? "text-gray-900"}`}>{value}</p></div>;
-}
 
 export default async function StaffAvailability() {
   const supabase = await createClient();

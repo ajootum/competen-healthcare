@@ -5,6 +5,7 @@ import { loadAttendance } from "@/lib/operations/attendance";
 import { loadUnitDepartments } from "@/lib/operations/unit-command";
 import UnitFilters from "../../../UnitFilters";
 import AttendanceTabs from "../AttendanceTabs";
+import { Kpi } from "../../_kit";
 
 export const dynamic = "force-dynamic";
 
@@ -23,10 +24,6 @@ const SEVERITY = [
 ];
 const bandOf = (m: number) => SEVERITY.find(s => m >= s.min && m <= s.max) ?? SEVERITY[0];
 const PATTERNS = ["Repeated late arrival", "Repeated early departure", "Frequent Monday/weekend absence", "Absence around leave", "Absence near public holidays", "Recurring missed clock-out", "Repeated correction", "Repeated no-show", "Abnormal attendance across units"];
-
-function Kpi({ label, value, tone }: { label: string; value: any; tone?: string }) {
-  return <div className={`${card} p-4`}><p className="text-xs text-gray-500">{label}</p><p className={`text-2xl font-bold tabular-nums mt-1 ${tone ?? "text-gray-900"}`}>{value}</p></div>;
-}
 
 export default async function LateEarly() {
   const supabase = await createClient();

@@ -5,6 +5,7 @@ import { loadRosterCoverage } from "@/lib/operations/roster-governance";
 import { loadUnitDepartments } from "@/lib/operations/unit-command";
 import UnitFilters from "../../../UnitFilters";
 import RosterGovTabs from "../RosterGovTabs";
+import { Kpi } from "../../_kit";
 
 export const dynamic = "force-dynamic";
 
@@ -21,10 +22,6 @@ const OUT: Record<string, { bg: string; badge: string; label: string }> = {
   critical: { bg: "bg-rose-500", badge: "bg-rose-50 text-rose-700", label: "Critical" },
 };
 const fmtD = (iso: string) => new Date(iso).toLocaleDateString("en-GB", { weekday: "short", day: "numeric" });
-
-function Kpi({ label, value, tone }: { label: string; value: any; tone?: string }) {
-  return <div className={`${card} p-4`}><p className="text-xs text-gray-500">{label}</p><p className={`text-2xl font-bold tabular-nums mt-1 ${tone ?? "text-gray-900"}`}>{value}</p></div>;
-}
 
 export default async function CoverageSafety() {
   const supabase = await createClient();
