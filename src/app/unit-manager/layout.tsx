@@ -65,6 +65,7 @@ const NAV_GROUPS: { title: string; items: NavItem[] }[] = [
     { label: "Team Assignments",         href: "/unit-manager/workforce-management/team-assignments", icon: "🧩" },
     { label: "Roster Governance",        href: "/unit-manager/workforce-management/roster-governance", icon: "🗓️" },
     { label: "Availability & Attendance", href: "/unit-manager/workforce-management/attendance", icon: "📋" },
+    { label: "Wellbeing & Fatigue",      href: "/unit-manager/wellbeing", icon: "💚" },
     { label: "Exceptions & Approvals",   href: "/unit-manager/workforce-management/exceptions-approvals", icon: "⚖️" },
     { label: "Development & Readiness",   href: "/unit-manager/workforce-management/development", icon: "🎯" },
     { label: "Analytics & Reports",      href: "/unit-manager/workforce-management/analytics", icon: "📊" },

@@ -17,12 +17,14 @@
 // judgement of any individual.
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
+import { computeFatigue, DEFAULT_THRESHOLDS } from "@/lib/workforce/fatigue";
+
 const NONE = "00000000-0000-0000-0000-000000000000";
 const DAY = 86400000;
 
 // Consecutive-day and hour thresholds mirror the roster-governance rules already
 // used in the UMW (excess_hours / insufficient_rest exception categories).
-const FATIGUE = { consecutiveDays: 5, weekHours: 48, restHours: 11 };
+const FATIGUE = DEFAULT_THRESHOLDS;
 
 export async function loadShiftAttendance(admin: any, hid: string | null, isSuper: boolean, now = Date.now()) {
   const scope = (q: any) => (isSuper ? q : q.eq("hospital_id", hid ?? NONE));
@@ -116,79 +118,25 @@ export async function loadShiftAttendance(admin: any, hid: string | null, isSupe
   const present = roster.filter(r => ["on_duty", "late", "departed"].includes(r.state)).length;
   const verified = roster.filter(r => r.checkInAt).length;
 
-  // ── Fatigue exposure from ROSTERED shifts in the trailing 7 days ──
+  // ── Fatigue exposure — the SHARED engine (src/lib/workforce/fatigue.ts) ──
+  // Previously computed inline here. The Unit Manager needs the same numbers over a longer window, and two
+  // copies would eventually disagree, at which point a supervisor and their manager would see different
+  // answers to "is this nurse overworked". One implementation, both workspaces.
+  const nameOf = (sid: string) =>
+    staff.find(s => s.staff_id === sid)?.profiles?.full_name
+    ?? events.find(e => e.staff_id === sid)?.staff_name
+    ?? actuals.find(a => a.staff_id === sid)?.staff_name ?? "Staff";
+  const onShift = new Set(staff.map(s => s.staff_id));
   const weekRows = ((weekStaffRes.data ?? []) as any[])
     .filter(r => r.op_shifts && (isSuper || r.op_shifts.hospital_id === hid))
     .filter(r => {
       const d = r.op_shifts.shift_date;
       return d && d >= new Date(now - 7 * DAY).toISOString().slice(0, 10) && d <= today;
-    });
-  const hoursOf = (s: any) => {
-    if (s.starts_at && s.ends_at) {
-      const h = (new Date(s.ends_at).getTime() - new Date(s.starts_at).getTime()) / 3.6e6;
-      if (h > 0 && h <= 24) return Math.round(h * 10) / 10;
-    }
-    return null;   // unrecorded start/end -> counted as a shift, not as hours
-  };
-  const fatigueMap = new Map<string, any>();
-  for (const r of weekRows) {
-    const f = fatigueMap.get(r.staff_id) ?? { staffId: r.staff_id, dates: new Set<string>(), hours: 0, hoursKnown: 0, shifts: 0, nights: 0, ends: [] as string[], starts: [] as string[] };
-    f.dates.add(r.op_shifts.shift_date);
-    f.shifts++;
-    const h = hoursOf(r.op_shifts);
-    if (h != null) { f.hours += h; f.hoursKnown++; }
-    if (r.op_shifts.shift_type === "night") f.nights++;
-    if (r.op_shifts.ends_at) f.ends.push(r.op_shifts.ends_at);
-    if (r.op_shifts.starts_at) f.starts.push(r.op_shifts.starts_at);
-    fatigueMap.set(r.staff_id, f);
-  }
-  const nameOf = (sid: string) =>
-    staff.find(s => s.staff_id === sid)?.profiles?.full_name
-    ?? events.find(e => e.staff_id === sid)?.staff_name
-    ?? actuals.find(a => a.staff_id === sid)?.staff_name ?? "Staff";
-
-  // Longest run of consecutive rostered days.
-  const consecutive = (dates: Set<string>) => {
-    const sorted = [...dates].sort();
-    let best = 0, run = 0, prev: number | null = null;
-    for (const d of sorted) {
-      const t = new Date(`${d}T00:00:00Z`).getTime();
-      run = prev != null && t - prev === DAY ? run + 1 : 1;
-      prev = t; best = Math.max(best, run);
-    }
-    return best;
-  };
-  // Shortest gap between a shift ending and the next starting.
-  const shortestRest = (f: any) => {
-    const ends = f.ends.map((e: string) => new Date(e).getTime()).sort((a: number, b: number) => a - b);
-    const starts = f.starts.map((s: string) => new Date(s).getTime()).sort((a: number, b: number) => a - b);
-    let min: number | null = null;
-    for (const e of ends) {
-      const next = starts.find((s: number) => s > e);
-      if (next == null) continue;
-      const gap = (next - e) / 3.6e6;
-      if (min == null || gap < min) min = gap;
-    }
-    return min == null ? null : Math.round(min * 10) / 10;
-  };
-  const onShift = new Set(staff.map(s => s.staff_id));
-  const fatigue = [...fatigueMap.values()].map(f => {
-    const days = consecutive(f.dates);
-    const hours = Math.round(f.hours * 10) / 10;
-    const rest = shortestRest(f);
-    const flags: string[] = [];
-    if (days >= FATIGUE.consecutiveDays) flags.push(`${days} consecutive days rostered`);
-    if (f.hoursKnown && hours >= FATIGUE.weekHours) flags.push(`${hours}h rostered in 7 days`);
-    if (rest != null && rest < FATIGUE.restHours) flags.push(`${rest}h between shifts`);
-    if (f.nights >= 4) flags.push(`${f.nights} night shifts`);
-    return {
-      staffId: f.staffId, name: nameOf(f.staffId), onShift: onShift.has(f.staffId),
-      shifts: f.shifts, days: f.dates.size, consecutive: days, nights: f.nights,
-      hours: f.hoursKnown ? hours : null,
-      hoursPartial: f.hoursKnown < f.shifts,   // some shifts had no start/end recorded
-      rest, flags,
-    };
-  }).filter(f => f.flags.length > 0).sort((a, b) => b.flags.length - a.flags.length || b.consecutive - a.consecutive);
+    })
+    .map(r => ({ staffId: r.staff_id, date: r.op_shifts.shift_date, startsAt: r.op_shifts.starts_at, endsAt: r.op_shifts.ends_at, shiftType: r.op_shifts.shift_type }));
+  const fatigue = computeFatigue(weekRows, FATIGUE)
+    .filter(f => f.flags.length > 0)
+    .map(f => ({ ...f, name: nameOf(f.staffId), onShift: onShift.has(f.staffId) }));
 
   // ── Planned vs actual variance for the week (roster governance record) ──
   const attended = actuals.filter(a => a.attendance_status === "attended").length;
