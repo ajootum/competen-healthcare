@@ -31,9 +31,18 @@ export async function POST(req: Request) {
 
   // The unit must exist AND belong to the caller's hospital — super_admin excepted, since they legitimately
   // operate across tenants. Scoping off the SUBJECT row, never off the request body.
-  const { data: unit } = await admin.from("units").select("id, name, hospital_id").eq("id", unitId).maybeSingle();
+  //
+  // A unit's hospital is reached THROUGH its department: `units` has department_id, and `departments` has
+  // hospital_id. Selecting units.hospital_id directly (as this once did) errors, which made the endpoint
+  // return 404 for every unit and silently disabled the whole selector. Found by
+  // scripts/schema-drift-audit.ts.
+  const { data: unit, error: unitErr } = await admin.from("units")
+    .select("id, name, department_id, departments!department_id(hospital_id)")
+    .eq("id", unitId).maybeSingle();
+  if (unitErr) return NextResponse.json({ error: unitErr.message }, { status: 500 });
   if (!unit) return NextResponse.json({ error: "Unit not found" }, { status: 404 });
-  if (!roles.includes("super_admin") && unit.hospital_id !== profile?.hospital_id) {
+  const unitHospital = (unit as { departments?: { hospital_id?: string | null } | null }).departments?.hospital_id ?? null;
+  if (!roles.includes("super_admin") && unitHospital !== profile?.hospital_id) {
     return NextResponse.json({ error: "That unit is not in your hospital" }, { status: 403 });
   }
 

@@ -59,7 +59,9 @@ export default async function CpuWorkspacePage({ params }: { params: Promise<{ c
       .eq("cpu_id", cpuId).maybeSingle(),
     admin.from("evidence_matrix").select("evidence_type, min_quantity, is_critical").eq("cpu_id", cpuId),
     admin.from("question_banks").select("id, name, pass_mark").eq("cpu_id", cpuId).eq("is_active", true).limit(1).maybeSingle(),
-    admin.from("knowledge_objects").select("id, title, knowledge_type").eq("cpu_id", cpuId).neq("status", "retired").order("sort_order"),
+    // knowledge_objects has no sort_order; ordering by it errored, so the knowledge list came back EMPTY
+    // rather than merely unsorted. `code` is the stable human-facing ordering key on this table.
+    admin.from("knowledge_objects").select("id, title, knowledge_type").eq("cpu_id", cpuId).neq("status", "retired").order("code"),
     admin.from("clinical_cases").select("id, title").eq("cpu_id", cpuId).neq("status", "retired"),
     admin.from("competency_decisions").select("nurse_id, competency_id, outcome, created_at").eq("cpu_id", cpuId),
   ]);

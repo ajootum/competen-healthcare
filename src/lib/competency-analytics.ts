@@ -92,7 +92,9 @@ export async function loadCompetencyAnalytics(admin: Admin, hospitalId: string):
     admin.from("framework_domains").select("id, name, framework_id, frameworks(name)").limit(2000),
     admin.from("clinical_practice_units").select("id, reassessment_months, risk_category").limit(2000),
     nurseIds.length ? admin.from("competency_scores").select("nurse_id, competency_id, domain_id, score, is_passing, assessed_at").in("nurse_id", nurseIds).limit(8000) : noRows,
-    nurseIds.length ? admin.from("competency_decisions").select("nurse_id, competency_id, domain_id, outcome, maturity, expiry_date, validated_at, created_at").in("nurse_id", nurseIds).limit(8000) : noRows,
+    // competency_decisions has no domain_id (that lives on competency_scores). Selecting it errored, so
+    // every decision-derived figure here was empty. Found by scripts/schema-drift-audit.ts.
+    nurseIds.length ? admin.from("competency_decisions").select("nurse_id, competency_id, outcome, maturity, expiry_date, validated_at, created_at").in("nurse_id", nurseIds).limit(8000) : noRows,
     admin.from("competency_skills").select("id, competency_id, name").eq("is_active", true).limit(8000),
     nurseIds.length ? admin.from("skill_log_entries").select("nurse_id, skill_id, skill_name, competency_id, supervision_level, status, performed_at").in("nurse_id", nurseIds).limit(8000) : noRows,
     admin.from("resource_competencies").select("competency_id").limit(8000),

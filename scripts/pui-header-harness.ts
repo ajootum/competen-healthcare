@@ -10,7 +10,6 @@
 // layouts, not of any one of them, and the only way it stays true as workspaces are added is if something
 // fails when a new layout hand-rolls its own header instead of rendering the shared one.
 //   npx --yes tsx scripts/pui-header-harness.ts
-/* eslint-disable @typescript-eslint/no-explicit-any */
 
 import fs from "node:fs";
 import path from "node:path";
@@ -124,8 +123,16 @@ async function main() {
 
   // ── The unit selector is tenant-safe (PUI-002: unit selector configurable per tenant) ──
   const unitRoute = fs.readFileSync(path.join(APP, "api/context/unit/route.ts"), "utf8");
-  check(unitRoute.includes("unit.hospital_id !== profile?.hospital_id"),
-    "the unit selector validates the unit against the CALLER'S hospital");
+  // THIS CHECK USED TO PASS WHILE THE FEATURE WAS ENTIRELY BROKEN. It matched the literal string
+  // `unit.hospital_id !== profile?.hospital_id` — which was present in the source, but `units` has no
+  // hospital_id column, so the query errored, the route 404'd on every unit, and the selector never worked.
+  // A source grep proves a string exists, not that it does anything. It now checks the CORRECT model
+  // (a unit's hospital is reached through its department) and the schema-drift audit checks the columns
+  // are real, which is the part a grep can never do.
+  check(/departments!department_id\(hospital_id\)/.test(unitRoute),
+    "the unit selector resolves a unit's hospital THROUGH its department (units has no hospital_id)");
+  check(/unitHospital !== profile\?\.hospital_id/.test(unitRoute),
+    "and refuses a unit outside the caller's hospital");
   check(unitRoute.includes("httpOnly: true"), "the unit cookie is httpOnly, so client script cannot forge it");
   check(unitRoute.includes('cookieStore.delete("active_unit")'), "selecting All units clears the cookie");
 

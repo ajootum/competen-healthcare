@@ -60,8 +60,14 @@ export async function loadHeaderContext(
     profile?.organisation_id
       ? soft(admin.from("organisations").select("name").eq("id", profile.organisation_id).maybeSingle())
       : Promise.resolve({ data: null }),
+    // Units belong to DEPARTMENTS, and departments to hospitals — `units` has no hospital_id. Filtering
+    // units directly on hospital_id silently returned nothing (the error was swallowed by soft()), so the
+    // unit selector never rendered at all. Found by scripts/schema-drift-audit.ts.
     profile?.hospital_id
-      ? soft(admin.from("units").select("id, name").eq("hospital_id", profile.hospital_id).order("name").limit(100))
+      ? soft(admin.from("units")
+          .select("id, name, departments!department_id(hospital_id)")
+          .eq("departments.hospital_id", profile.hospital_id)
+          .order("name").limit(100))
       : Promise.resolve({ data: [] }),
     // Both badges come from `notifications`, the only PER-USER read/unread store there is. Message-type
     // notifications go to the envelope, everything else to the bell, so the two never double-count the

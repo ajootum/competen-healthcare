@@ -23,17 +23,11 @@ export async function GET() {
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
-  // Fetch sub_role separately to be safe
-  const { data: subRoles } = await admin
-    .from("profiles")
-    .select("id, sub_role");
-
-  const subRoleMap = Object.fromEntries((subRoles ?? []).map(r => [r.id, r.sub_role]));
-
-  const merged = (profiles ?? []).map(p => ({
-    ...p,
-    sub_role: subRoleMap[p.id] ?? null,
-  }));
+  // `profiles` has no sub_role column on this schema. The second query fetched it "separately to be safe",
+  // errored, and the resulting map was always empty — so every sub_role was null anyway, at the cost of a
+  // full extra scan of profiles on every request. The field is kept in the response so consumers' shape is
+  // unchanged, but it is now honestly and cheaply null. Found by scripts/schema-drift-audit.ts.
+  const merged = (profiles ?? []).map(p => ({ ...p, sub_role: null as string | null }));
 
   return NextResponse.json({ profiles: merged });
 }

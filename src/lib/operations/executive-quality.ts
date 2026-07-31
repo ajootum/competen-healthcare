@@ -32,7 +32,7 @@ export async function loadExecutiveQuality(admin: any, hid: string | null, isSup
   // Improvement portfolio + executive actions — op_quality_actions register.
   let portfolio: any = null; let actions: any[] = [];
   try {
-    const { data } = await scope(admin.from("op_quality_actions").select("id, title, action_type, status, priority, owner_name, due_date")).limit(5000);
+    const { data } = await scope(admin.from("op_quality_actions").select("id, title, action_type, status, priority, owner_name, due_at")).limit(5000);
     const qa = (data ?? []) as any[];
     const cnt = (f: (a: any) => boolean) => qa.filter(f).length;
     portfolio = {
@@ -41,8 +41,8 @@ export async function loadExecutiveQuality(admin: any, hid: string | null, isSup
       delayed: cnt(a => a.status === "overdue"), completed: cnt(a => a.status === "completed"), notStarted: cnt(a => a.status === "open" && a.priority !== "high"),
     };
     const now = Date.now(); const soon = now + 7 * 86400000;
-    actions = qa.filter(a => a.status !== "completed" && a.due_date).sort((a, b) => (a.due_date < b.due_date ? -1 : 1)).slice(0, 6)
-      .map(a => ({ action: a.title, owner: a.owner_name ?? "—", due: a.due_date, priority: a.priority ?? "medium", status: a.status, dueSoon: new Date(a.due_date).getTime() <= soon }));
+    actions = qa.filter(a => a.status !== "completed" && a.due_at).sort((a, b) => (a.due_at < b.due_at ? -1 : 1)).slice(0, 6)
+      .map(a => ({ action: a.title, owner: a.owner_name ?? "—", due: a.due_at, priority: a.priority ?? "medium", status: a.status, dueSoon: new Date(a.due_at).getTime() <= soon }));
   } catch { /* fail-soft */ }
   const actionsDue = actions.filter(a => a.dueSoon).length || (qc.actionQueue?.length ?? 0);
 

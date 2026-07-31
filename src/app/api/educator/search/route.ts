@@ -50,8 +50,10 @@ export async function GET(req: Request) {
     compQuery,
     admin.from("courses").select("id, title")
       .ilike("title", like).limit(5),
-    admin.from("questions").select("id, topic, question_text")
-      .or(`topic.ilike.${like},question_text.ilike.${like}`).limit(5),
+    // questions stores the stem in `content` and the grouping in `category` - there is no
+    // question_text/topic. The old names errored, so question search returned nothing.
+    admin.from("questions").select("id, category, content")
+      .or(`category.ilike.${like},content.ilike.${like}`).limit(5),
   ]);
 
   return NextResponse.json({
@@ -60,7 +62,7 @@ export async function GET(req: Request) {
     courses: (courses.data ?? []).map(r => ({ id: r.id, name: r.title })),
     questions: (questions.data ?? []).map(r => ({
       id: r.id,
-      name: r.topic ? `${r.topic}: ${r.question_text?.slice(0, 60) ?? ""}` : (r.question_text?.slice(0, 60) ?? "Question"),
+      name: r.category ? `${r.category}: ${r.content?.slice(0, 60) ?? ""}` : (r.content?.slice(0, 60) ?? "Question"),
     })),
   });
 }

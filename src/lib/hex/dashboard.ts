@@ -38,7 +38,12 @@ export async function loadExecHome(admin: any, hid: string | null, isSuper: bool
   let snap: any = {};
   try { const { data } = await scope(admin.from("op_ops_snapshots").select("occupancy_pct, safe_staffing_score").eq("period_type", "day").order("period", { ascending: false }).limit(1)); snap = (data ?? [])[0] ?? {}; } catch { /* optional */ }
   let qsnap: any = {};
-  try { const { data } = await scope(admin.from("quality_score_snapshots").select("safety_index, patient_safety_events, medication_errors, infection_rate, mortality_index, readmission_rate").order("snapshot_date", { ascending: false }).limit(1)); qsnap = (data ?? [])[0] ?? {}; } catch { /* optional */ }
+  // quality_score_snapshots has NO medication_errors / infection_rate / mortality_index / readmission_rate.
+  // Selecting them failed the WHOLE query, so safety_index and patient_safety_events — which do exist — were
+  // lost with them and the executive safety panel rendered entirely blank. Found by
+  // scripts/schema-drift-audit.ts. Only real columns are selected; the four with no source stay null, and
+  // the consumers below already render null as "no data" rather than zero.
+  try { const { data } = await scope(admin.from("quality_score_snapshots").select("safety_index, patient_safety_events").order("snapshot_date", { ascending: false }).limit(1)); qsnap = (data ?? [])[0] ?? {}; } catch { /* optional */ }
 
   return {
     d, readiness: d.readinessIndex, scorecard: d.scorecard,
