@@ -5,6 +5,7 @@ import { loadWorkforceConfig } from "@/lib/operations/workforce-config";
 import { loadUnitDepartments } from "@/lib/operations/unit-command";
 import UnitFilters from "../../UnitFilters";
 import ConfigTabs from "./ConfigTabs";
+import { KpiWithSub as Kpi } from "../_kit";
 
 export const dynamic = "force-dynamic";
 
@@ -16,10 +17,6 @@ export const dynamic = "force-dynamic";
 const card = "bg-white rounded-xl border border-gray-200";
 const DSTATUS: Record<string, string> = { configured: "bg-[var(--cmp-surface-success)] text-emerald-700", partial: "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]", "next-phase": "bg-gray-100 text-gray-400" };
 const fmtDate = (iso?: string | null) => iso ? new Date(iso).toLocaleDateString("en-GB", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }) : "—";
-
-function Kpi({ label, value, sub, tone }: { label: string; value: any; sub?: string; tone?: string }) {
-  return <div className={`${card} p-4`}><p className="text-xs text-gray-500">{label}</p><p className={`text-2xl font-bold tabular-nums mt-1 ${tone ?? "text-gray-900"}`}>{value}</p>{sub && <p className="text-[11px] text-gray-400 mt-0.5">{sub}</p>}</div>;
-}
 
 export default async function ConfigurationDashboard() {
   const supabase = await createClient();

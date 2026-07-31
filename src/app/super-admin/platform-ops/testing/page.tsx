@@ -2,6 +2,7 @@ import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import TestCentre from "./TestCentre";
+import { Stat } from "../_kit";
 
 export const dynamic = "force-dynamic";
 
@@ -9,10 +10,6 @@ export const dynamic = "force-dynamic";
 // live config objects (schema/dependency/metric/rule/permission/status), executed server-side, gating promotion.
 // Sandbox provisioning, synthetic data and load testing (NCP-012 §4/§6) are next-phase. Super-admin.
 /* eslint-disable @typescript-eslint/no-explicit-any */
-const card = "bg-white rounded-xl border border-gray-200";
-function Stat({ label, value, tone, sub }: { label: string; value: any; tone?: string; sub?: string }) {
-  return <div className={`${card} p-4`}><p className="text-[10px] text-gray-500 uppercase tracking-wide">{label}</p><p className={`text-2xl font-bold tabular-nums mt-0.5 ${tone ?? "text-gray-900"}`}>{value}</p>{sub && <p className="text-[10px] text-gray-400 mt-0.5">{sub}</p>}</div>;
-}
 
 export default async function TestingPage() {
   const supabase = await createClient();

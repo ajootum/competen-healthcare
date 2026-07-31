@@ -5,6 +5,7 @@ import { loadWorkforceOps } from "@/lib/operations/workforce-ops";
 import { loadUnitDepartments } from "@/lib/operations/unit-command";
 import UnitFilters from "../../../UnitFilters";
 import StaffEngineTabs from "../StaffEngineTabs";
+import { KpiWithSub as Kpi } from "../../_kit";
 
 export const dynamic = "force-dynamic";
 
@@ -21,10 +22,6 @@ const card = "bg-white rounded-xl border border-gray-200";
 const STATE = (cov: number | null): "SAFE" | "WATCH" | "CRITICAL" | "UNKNOWN" => cov == null ? "UNKNOWN" : cov >= 100 ? "SAFE" : cov >= 75 ? "WATCH" : "CRITICAL";
 const STATE_BADGE: Record<string, string> = { SAFE: "bg-[var(--cmp-surface-success)] text-emerald-700", WATCH: "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]", CRITICAL: "bg-[var(--cmp-surface-error)] text-[var(--cmp-text-error)]", UNKNOWN: "bg-gray-100 text-gray-500" };
 const STATE_DOT: Record<string, string> = { SAFE: "bg-[var(--cmp-color-success)]", WATCH: "bg-[var(--cmp-color-warning)]", CRITICAL: "bg-[var(--cmp-color-error)]", UNKNOWN: "bg-gray-300" };
-
-function Kpi({ label, value, sub, tone }: { label: string; value: any; sub?: string; tone?: string }) {
-  return <div className={`${card} p-4`}><p className="text-xs text-gray-500">{label}</p><p className={`text-2xl font-bold tabular-nums mt-1 ${tone ?? "text-gray-900"}`}>{value}</p>{sub && <p className="text-[11px] text-gray-400 mt-0.5">{sub}</p>}</div>;
-}
 
 export default async function RealTimeCoverage() {
   const supabase = await createClient();

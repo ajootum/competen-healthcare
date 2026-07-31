@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { OBJECT_SCHEMAS } from "@/lib/config/schema";
 import SchemaExplorer from "./SchemaExplorer";
+import { Stat } from "../_kit";
 
 export const dynamic = "force-dynamic";
 
@@ -10,10 +11,6 @@ export const dynamic = "force-dynamic";
 // registry envelope + definition shape (the single source of truth the 8 designers enforce) and validate a
 // candidate definition live. Schema-version migration + compatibility matrix are next-phase. Super-admin.
 /* eslint-disable @typescript-eslint/no-explicit-any */
-const card = "bg-white rounded-xl border border-gray-200";
-function Stat({ label, value, tone, sub }: { label: string; value: any; tone?: string; sub?: string }) {
-  return <div className={`${card} p-4`}><p className="text-[10px] text-gray-500 uppercase tracking-wide">{label}</p><p className={`text-2xl font-bold tabular-nums mt-0.5 ${tone ?? "text-gray-900"}`}>{value}</p>{sub && <p className="text-[10px] text-gray-400 mt-0.5">{sub}</p>}</div>;
-}
 
 export default async function SchemaPage() {
   const supabase = await createClient();

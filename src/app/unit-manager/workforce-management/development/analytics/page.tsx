@@ -5,6 +5,7 @@ import { loadWorkforceReadiness } from "@/lib/operations/workforce-readiness";
 import { loadUnitDepartments } from "@/lib/operations/unit-command";
 import UnitFilters from "../../../UnitFilters";
 import DevTabs from "../DevTabs";
+import { KpiWithSub as Kpi } from "../../_kit";
 
 export const dynamic = "force-dynamic";
 
@@ -16,10 +17,6 @@ export const dynamic = "force-dynamic";
 
 const card = "bg-white rounded-xl border border-gray-200";
 const REPORTS = ["Unit readiness", "Competency coverage", "Critical competency gap", "Mandatory learning compliance", "Overdue learning", "Credential expiry", "Orientation progress", "Supervision requirement", "Staff deployability", "Development-plan status", "Assessment backlog", "Cross-training pipeline", "Succession readiness", "Critical-role dependency", "Readiness exception", "Learning impact", "Time-to-readiness", "Data completeness"];
-
-function Kpi({ label, value, sub, tone }: { label: string; value: any; sub?: string; tone?: string }) {
-  return <div className={`${card} p-4`}><p className="text-xs text-gray-500">{label}</p><p className={`text-2xl font-bold tabular-nums mt-1 ${tone ?? "text-gray-900"}`}>{value}</p>{sub && <p className="text-[11px] text-gray-400 mt-0.5">{sub}</p>}</div>;
-}
 
 export default async function DevAnalytics() {
   const supabase = await createClient();

@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { loadDependencyGraph } from "@/lib/config/dependency-graph";
 import DependencyExplorer from "./DependencyExplorer";
+import { Stat } from "../_kit";
 
 export const dynamic = "force-dynamic";
 
@@ -11,9 +12,7 @@ export const dynamic = "force-dynamic";
 // and broken-reference detection. Powers the pipeline's "Dependency Analysis" stage. Super-admin gated.
 /* eslint-disable @typescript-eslint/no-explicit-any */
 const card = "bg-white rounded-xl border border-gray-200";
-function Stat({ label, value, tone, sub }: { label: string; value: any; tone?: string; sub?: string }) {
-  return <div className={`${card} p-4`}><p className="text-[10px] text-gray-500 uppercase tracking-wide">{label}</p><p className={`text-2xl font-bold tabular-nums mt-0.5 ${tone ?? "text-gray-900"}`}>{value}</p>{sub && <p className="text-[10px] text-gray-400 mt-0.5">{sub}</p>}</div>;
-}
+
 const impactTone = (n: number) => (n >= 10 ? "bg-[var(--cmp-color-error)] text-white" : n >= 3 ? "bg-[var(--cmp-color-warning)] text-white" : "bg-[var(--cmp-color-success)] text-emerald-950");
 
 export default async function DependencyGraphPage() {

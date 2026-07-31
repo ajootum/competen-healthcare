@@ -2,6 +2,7 @@ import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import PageComposer from "./PageComposer";
+import { Stat } from "../_kit";
 
 export const dynamic = "force-dynamic";
 
@@ -10,10 +11,7 @@ export const dynamic = "force-dynamic";
 // a WYSIWYG canvas; persists onto object.definition (migration 094). Free-form positioning, responsive
 // breakpoint overrides, theme references and the runtime layout renderer are honest next-phase. Super-admin.
 /* eslint-disable @typescript-eslint/no-explicit-any */
-const card = "bg-white rounded-xl border border-gray-200";
-function Stat({ label, value, tone, sub }: { label: string; value: any; tone?: string; sub?: string }) {
-  return <div className={`${card} p-4`}><p className="text-[10px] text-gray-500 uppercase tracking-wide">{label}</p><p className={`text-2xl font-bold tabular-nums mt-0.5 ${tone ?? "text-gray-900"}`}>{value}</p>{sub && <p className="text-[10px] text-gray-400 mt-0.5">{sub}</p>}</div>;
-}
+
 const COMPONENTS = [
   { value: "component.heading", label: "▸ Heading" }, { value: "component.kpi_strip", label: "▸ KPI Strip" },
   { value: "component.action_bar", label: "▸ Action Bar" }, { value: "component.nav_zone", label: "▸ Navigation Zone" },

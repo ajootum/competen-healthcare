@@ -2,6 +2,7 @@ import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import FormDesigner from "./FormDesigner";
+import { Stat } from "../_kit";
 
 export const dynamic = "force-dynamic";
 
@@ -10,10 +11,6 @@ export const dynamic = "force-dynamic";
 // persists the field metadata onto the object's `definition` (migration 094). Conditional logic, validation
 // rules, workflow binding, offline capture and the runtime form renderer are honest next-phase. Super-admin.
 /* eslint-disable @typescript-eslint/no-explicit-any */
-const card = "bg-white rounded-xl border border-gray-200";
-function Stat({ label, value, tone, sub }: { label: string; value: any; tone?: string; sub?: string }) {
-  return <div className={`${card} p-4`}><p className="text-[10px] text-gray-500 uppercase tracking-wide">{label}</p><p className={`text-2xl font-bold tabular-nums mt-0.5 ${tone ?? "text-gray-900"}`}>{value}</p>{sub && <p className="text-[10px] text-gray-400 mt-0.5">{sub}</p>}</div>;
-}
 
 export default async function FormsBuilder() {
   const supabase = await createClient();

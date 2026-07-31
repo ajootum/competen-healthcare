@@ -22,3 +22,11 @@ export const card = "bg-white rounded-xl border border-gray-200";
 export function Kpi({ label, value, tone }: { label: string; value: any; tone?: string }) {
   return <div className={`${card} p-4`}><p className="text-xs text-gray-500">{label}</p><p className={`text-2xl font-bold tabular-nums mt-1 ${tone ?? "text-gray-900"}`}>{value}</p></div>;
 }
+
+// The SAME tile with a sub-label, written out verbatim in 14 more pages. Kept as a second export rather than
+// folded into `Kpi` with an optional `sub`: that would be a rewrite of both bodies, and the codemod's guard
+// can only vouch for a swap it can hash-match. Consumers import it aliased back to their local name, so no
+// call site changes. Merging the two into one component is a deliberate edit for another day.
+export function KpiWithSub({ label, value, sub, tone }: { label: string; value: any; sub?: string; tone?: string }) {
+  return <div className={`${card} p-4`}><p className="text-xs text-gray-500">{label}</p><p className={`text-2xl font-bold tabular-nums mt-1 ${tone ?? "text-gray-900"}`}>{value}</p>{sub && <p className="text-[11px] text-gray-400 mt-0.5">{sub}</p>}</div>;
+}

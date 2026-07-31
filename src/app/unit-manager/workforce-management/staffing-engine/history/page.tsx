@@ -4,6 +4,7 @@ import Link from "next/link";
 import { loadUnitDepartments } from "@/lib/operations/unit-command";
 import UnitFilters from "../../../UnitFilters";
 import StaffEngineTabs from "../StaffEngineTabs";
+import { KpiWithSub as Kpi } from "../../_kit";
 
 export const dynamic = "force-dynamic";
 
@@ -32,10 +33,6 @@ const ACTIONS: Record<string, { label: string; tone: string; group: string }> = 
   command_transfer_initiated: { label: "Command transfer", tone: "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]", group: "Escalation" },
 };
 const ACTION_KEYS = Object.keys(ACTIONS);
-
-function Kpi({ label, value, sub, tone }: { label: string; value: any; sub?: string; tone?: string }) {
-  return <div className={`${card} p-4`}><p className="text-xs text-gray-500">{label}</p><p className={`text-2xl font-bold tabular-nums mt-1 ${tone ?? "text-gray-900"}`}>{value}</p>{sub && <p className="text-[11px] text-gray-400 mt-0.5">{sub}</p>}</div>;
-}
 
 const weekAgoISO = () => new Date(Date.now() - 7 * 864e5).toISOString();
 
