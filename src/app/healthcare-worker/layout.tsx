@@ -1,13 +1,12 @@
 import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
-import { cookies } from "next/headers";
 import Link from "next/link";
-import RoleSwitcher from "@/components/RoleSwitcher";
 import NavLink from "@/components/NavLink";
 import NavGroup from "@/components/NavGroup";
 import SidebarToggle from "@/components/SidebarToggle";
-import { highestRole, type AppRole } from "@/lib/roles";
-import { workspaceLinksForUser } from "@/lib/workspace-links";
+import { type AppRole } from "@/lib/roles";
+import GlobalHeader from "@/components/platform/GlobalHeader";
+import { loadHeaderContext } from "@/lib/platform/header";
 import { buildShiftCard, loadShiftWidget } from "@/lib/hww/my-shift";
 import { resolveHwwNavigation, resolveUnitContext, type ResolvedItem } from "@/lib/hww/navigation";
 import { orgRolesOf } from "@/lib/roles";
@@ -36,9 +35,6 @@ export default async function HealthcareWorkerLayout({ children }: { children: R
   const admin = createAdminClient();
   const { data: profile } = await admin.from("profiles").select("full_name, role, roles, org_role, org_roles, hospital_id").eq("id", user.id).single();
   const userRoles: AppRole[] = (profile?.roles?.length ? profile.roles : [profile?.role]).filter(Boolean) as AppRole[];
-  const cookieStore = await cookies();
-  const activeRole = (cookieStore.get("active_role")?.value ?? highestRole(userRoles)) as AppRole;
-  const workspaces = await workspaceLinksForUser(admin, user.id, userRoles);
 
   if (!userRoles.some(r => ALLOWED.includes(r))) {
     return (
@@ -89,6 +85,8 @@ export default async function HealthcareWorkerLayout({ children }: { children: R
 
   // Config-driven navigation (UI-001): catalogue + WCE overrides, filtered by
   // the caller's roles/professions and their resolved unit context.
+  // One resolver, every workspace — so the header cannot drift between them (PUI-002).
+  const header = await loadHeaderContext(admin, user.id, { currentHref: "/healthcare-worker" });
   const unitType = await resolveUnitContext(admin, user.id, activeShift?.unit_id ?? null);
   const { sections: NAV } = await resolveHwwNavigation(admin, {
     hospitalId: profile?.hospital_id ?? null,
@@ -115,15 +113,6 @@ export default async function HealthcareWorkerLayout({ children }: { children: R
       className={linkCls} activeClassName={activeCls} />
   );
 
-  const PROFILE_LINKS = [
-    { label: "My Profile", href: "/dashboard/profile", icon: "🙍" },
-    { label: "Competency Passport", href: "/dashboard/passport", icon: "🎖️" },
-    { label: "My Learning", href: "/dashboard/learning", icon: "📚" },
-    { label: "Documents", href: "/dashboard/documents", icon: "📄" },
-    { label: "Preferences", href: "/dashboard/preferences", icon: "⚙️" },
-    { label: "Personal Workspace", href: "/dashboard", icon: "⊞" },
-  ];
-
   return (
     <div className="min-h-screen bg-gray-50 font-[family-name:var(--font-geist-sans)]">
       <header className="md:hidden fixed top-0 left-0 right-0 z-40 bg-[#0a2f23] shadow-lg">
@@ -142,6 +131,21 @@ export default async function HealthcareWorkerLayout({ children }: { children: R
           ))}
         </nav>
       </header>
+
+      {/* Global header (PUI-002 / HWW-UI-002) — identical in every workspace. */}
+      <a href="#main-content" className="cmp-skip-link">Skip to main content</a>
+      <div className="hidden md:block md:ml-56">
+        <GlobalHeader
+          workspaceTitle="Healthcare Worker Workspace"
+          workspaceHref="/healthcare-worker"
+          user={header.user}
+          workspaces={header.workspaces}
+          units={header.units}
+          activeUnitId={header.activeUnitId}
+          notifications={header.notifications}
+          messages={header.messages}
+        />
+      </div>
 
       <div className="flex">
         <aside data-sidebar className="hidden md:flex w-56 h-screen bg-[#0a2f23] flex-col py-6 px-4 fixed top-0 left-0 z-20">
@@ -189,35 +193,11 @@ export default async function HealthcareWorkerLayout({ children }: { children: R
             </div>
           )}
 
-          {/* User profile menu (UI-001: replaces the bare Personal Workspace link) */}
-          <div className="pt-3 border-t border-emerald-800/60">
-            <details className="group" data-sb-label>
-              <summary className="flex items-center gap-2 px-3 py-2 cursor-pointer list-none rounded-lg hover:bg-emerald-800/30">
-                <div className="w-7 h-7 rounded-full bg-emerald-400 flex items-center justify-center text-emerald-950 text-xs font-bold">{profile?.full_name?.[0] ?? "N"}</div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-white text-xs font-medium truncate">{profile?.full_name}</p>
-                  <p className="text-emerald-300/60 text-[10px]">Healthcare Worker</p>
-                </div>
-                <span className="text-emerald-300/60 text-[10px] transition-transform group-open:rotate-180">▾</span>
-              </summary>
-              <div className="mt-1 mb-1 flex flex-col gap-0.5">
-                {PROFILE_LINKS.map(l => (
-                  <Link key={l.href} href={l.href} className="flex items-center gap-2 px-3 py-1 rounded-lg text-[12px] text-emerald-100/60 hover:bg-emerald-800/40 hover:text-white transition-colors">
-                    <span className="w-4 text-center text-xs">{l.icon}</span>{l.label}
-                  </Link>
-                ))}
-              </div>
-            </details>
-            {(userRoles.length > 1 || workspaces.length > 0) && <div className="mb-2" data-sb-label><RoleSwitcher roles={userRoles} activeRole={activeRole} workspaces={workspaces} /></div>}
-            <form action="/api/auth/logout" method="POST">
-              <button type="submit" data-sb-item className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm text-emerald-100/50 hover:bg-emerald-800/30 hover:text-white transition-colors">
-                <span className="w-5 text-center">↩</span><span data-sb-label>Sign out</span>
-              </button>
-            </form>
-          </div>
+          {/* HWW-UI-002: "Bottom of sidebar reserved for Current Shift status widget only." The profile
+              menu, workspace switcher and Sign Out that used to sit here now live in the global header. */}
         </aside>
 
-        <main data-content className="flex-1 md:ml-56 px-4 md:px-6 pt-24 md:pt-8 pb-8 max-w-7xl">{children}</main>
+        <main id="main-content" data-content className="flex-1 md:ml-56 px-4 md:px-6 pt-24 md:pt-4 pb-8 max-w-7xl">{children}</main>
 
         {/* Clinical AI Copilot — persistent floating action (UI-001) */}
         <Link href="/healthcare-worker/copilot" title="Clinical AI Copilot"
