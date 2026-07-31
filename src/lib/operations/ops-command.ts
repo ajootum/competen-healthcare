@@ -30,8 +30,14 @@ export async function loadOperationalCommand(admin: any, hid: string | null, isS
     dept(scope(admin.from("op_beds").select("id, label, status, department_id"))).limit(500),
     dept(scope(admin.from("op_patients").select("id, label, acuity_level, risk_level, operational_status, isolation_status, bed_id, department_id"))).limit(1000),
     scope(admin.from("op_shifts").select("id, shift_date, status, department_id")).gte("shift_date", new Date(nowMs() - dayMs).toISOString().slice(0, 10)).limit(50),
-    scope(admin.from("op_escalations").select("id, reason, severity, status, created_at")).gte("created_at", since24).order("created_at", { ascending: false }).limit(30).then((r: any) => r, () => ({ data: [] })),
-    scope(admin.from("op_safety_alerts").select("id, message, severity, created_at")).gte("created_at", since24).limit(50).then((r: any) => r, () => ({ data: [] })),
+    // The column is `summary` — selecting a non-existent `reason` made PostgREST error, the fail-soft
+    // swallowed it, and this dashboard silently reported ZERO escalations forever. Caught by the upward
+    // cross-workspace sweep, which saw HEX count an escalation that never reached the UMW.
+    scope(admin.from("op_escalations").select("id, summary, severity, status, created_at")).gte("created_at", since24).order("created_at", { ascending: false }).limit(30).then((r: any) => r, () => ({ data: [] })),
+    // Same defect as the escalation query above: the column is `note`, not `message`, and `active` was never
+    // selected — so this dashboard reported ZERO safety incidents forever and could not tell an active alert
+    // from a stood-down one.
+    scope(admin.from("op_safety_alerts").select("id, note, severity, active, created_at")).gte("created_at", since24).limit(50).then((r: any) => r, () => ({ data: [] })),
     scope(admin.from("op_tasks").select("id, priority, status")).not("status", "in", "(completed,verified,cancelled)").limit(1000).then((r: any) => r, () => ({ data: [] })),
     scope(admin.from("op_flow_blockers").select("id, category, detail, created_at")).limit(100).then((r: any) => r, () => ({ data: [] })),
     scope(admin.from("op_ops_snapshots").select("*")).order("period", { ascending: true }).then((r: any) => r, () => ({ data: [], error: null })),
@@ -102,15 +108,18 @@ export async function loadOperationalCommand(admin: any, hid: string | null, isS
 
   // ── Critical alerts (compose escalations + safety + blockers) ──
   const alerts = [
-    ...escalations.slice(0, 3).map(e => ({ icon: "⚠️", tone: "rose", title: e.reason ?? "Escalation", sub: e.severity ? `${e.severity} severity` : "Requires review", at: e.created_at })),
+    ...escalations.slice(0, 3).map(e => ({ icon: "⚠️", tone: "rose", title: e.summary ?? "Escalation", sub: e.severity ? `${e.severity} severity` : "Requires review", at: e.created_at })),
     ...blockers.filter(b => /discharge/.test(String(b.category))).slice(0, 2).map(b => ({ icon: "🟡", tone: "amber", title: `Discharge delay${b.detail ? ` – ${b.detail}` : ""}`, sub: "Flow blocker", at: b.created_at })),
-    ...safety.slice(0, 2).map(s => ({ icon: "🛡️", tone: "amber", title: s.message ?? "Safety alert", sub: s.severity ?? "Safety", at: s.created_at })),
+    ...safety.filter(s => s.active !== false).slice(0, 2).map(s => ({ icon: "🛡️", tone: "amber", title: s.note ?? "Safety alert", sub: s.severity ?? "Safety", at: s.created_at })),
   ].sort((a, b) => new Date(b.at ?? 0).getTime() - new Date(a.at ?? 0).getTime()).slice(0, 6);
 
   // ── KPI ribbon ──
-  const safetyIncidents24 = safety.length;
+  // "closed" is NOT an op_escalations status (the enum is open|acknowledged|resolved|cancelled), so the old
+  // `status !== "closed"` filter excluded nothing and counted resolved escalations as open. This now matches
+  // the rule HEX already used, so the two layers agree.
+  const safetyIncidents24 = safety.filter(s => s.active !== false).length;
   const criticalTasks = taskSummary.critical + taskSummary.high;
-  const escalations24 = escalations.filter(e => e.status !== "closed").length;
+  const escalations24 = escalations.filter(e => !["resolved", "cancelled"].includes(String(e.status))).length;
   // Unit health score — composite of occupancy comfort, safe staffing, low incidents/escalations.
   const occ = totalBeds ? pct(occupied, totalBeds) : (cur.occupancy_pct ?? 0);
   const occComfort = occ >= 95 ? 40 : occ >= 88 ? 70 : occ >= 60 ? 95 : 80;
