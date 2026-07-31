@@ -39,6 +39,7 @@ const NAV_GROUPS: { group: string; items: NavItem[] }[] = [
     { label: "Patient Census",               href: "/supervisor/patient-list",        icon: "👤" },
     { label: "Patient Flow",                 href: "/supervisor/patient-flow",        icon: "🔀" },
     { label: "Bed & Capacity",               href: "/supervisor/bed-management",       icon: "🛏️" },
+    { label: "Resource & Capacity",          href: "/supervisor/resources",            icon: "🏗️" },
     { label: "Ward Map",                     href: "/supervisor/ward-map",            icon: "🗺️" },
     { label: "Nurse Concerns",               href: "/supervisor/concerns",            icon: "🚩", badge: "concerns" },
     { label: "Census & Assignment",          href: "/supervisor/census",              icon: "🗂️", badge: "transfersPending" },
