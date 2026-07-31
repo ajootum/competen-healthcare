@@ -170,6 +170,12 @@ const NAV_GROUPS: { title: string; items: NavItem[] }[] = [
     { label: "Quality Intelligence",      href: "/unit-manager/quality/ai", icon: "🛡️" },
     { label: "Predictive Analytics",      href: "/unit-manager/performance/predictive", icon: "🔮" },
   ] },
+  // UMW-RES-001/002 Resource Operations. Consumables, stock and readiness are migration 165; equipment and
+  // the asset register are the stores that already owned them (op_equipment / adm_assets / op_resources).
+  { title: "Resource Operations", items: [
+    { label: "Resource Operations",   href: "/unit-manager/resources", icon: "📦" },                            // RES-001
+    { label: "Assets & Biomedical",   href: "/unit-manager/administration/assets", icon: "🖥️" },               // RES-002
+  ] },
   // UMW-TLS-001..005 Team & Leadership Support. TLS-004 is the communication hub; the others route to the
   // authoritative surface that already owns them rather than being duplicated (team = WFM-004 assignments,
   // development = WFM-008, permissions = ADM-007).
