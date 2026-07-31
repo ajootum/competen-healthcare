@@ -31,7 +31,7 @@ const NAV_GROUPS: { group: string; items: NavItem[] }[] = [
     { label: "Shift Dashboard",   href: "/supervisor/shift-operations",            icon: "🖥️" },
     { label: "Shift Planning & Activation", href: "/supervisor/shift-activation",   icon: "🚀" },
     { label: "Handover Centre",   href: "/supervisor/handover",                    icon: "🔄", badge: "handover" },
-    { label: "Escalation Centre", href: "/supervisor/operations?section=safety",   icon: "⬆️", badge: "escalations" },
+    { label: "Escalation Centre", href: "/supervisor/escalations",                  icon: "⬆️", badge: "escalations" },
     { label: "Shift Analytics",   href: "/supervisor/operational-intelligence",     icon: "📈" },
   ]},
   { group: "Patient Operations", items: [
@@ -75,7 +75,7 @@ const NAV_GROUPS: { group: string; items: NavItem[] }[] = [
     { label: "Safety Command Centre",    href: "/supervisor/quality-safety",            icon: "🛡️", badge: "safety" },
     { label: "Observation & Monitoring", href: "/supervisor/quality-safety",            icon: "📈", badge: "overdueObs" },
     { label: "Incident & Event Mgmt",    href: "/supervisor/quality-safety",            icon: "🚩" },
-    { label: "Escalation Centre",        href: "/supervisor/quality-safety",            icon: "⬆️", badge: "escalations" },
+    { label: "Escalation Centre",        href: "/supervisor/escalations",               icon: "⬆️", badge: "escalations" },
     { label: "Quality Improvement",      href: "/supervisor/quality-safety",            icon: "✅" },
     { label: "Clinical Governance",      href: "/supervisor/quality-safety",            icon: "⚖️" },
     { label: "Safety Analytics",         href: "/supervisor/quality-safety",            icon: "📊" },
