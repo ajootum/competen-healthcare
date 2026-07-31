@@ -20,7 +20,7 @@ export default function ShareManager({ tokens }: { tokens: Token[] }) {
 
   const origin = typeof window !== "undefined" ? window.location.origin : "";
   const statusOf = (t: Token) => (t.revoked ? "revoked" : t.expires_at && new Date(t.expires_at) < new Date() ? "expired" : "active");
-  const STATUS_TONE: Record<string, string> = { active: "bg-emerald-100 text-emerald-700", expired: "bg-amber-100 text-amber-700", revoked: "bg-gray-200 text-gray-500" };
+  const STATUS_TONE: Record<string, string> = { active: "bg-[var(--cmp-surface-success)] text-emerald-700", expired: "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]", revoked: "bg-gray-200 text-gray-500" };
 
   async function create() {
     setBusy(true); setErr(null);
@@ -40,7 +40,7 @@ export default function ShareManager({ tokens }: { tokens: Token[] }) {
   const inp = "border border-gray-200 rounded-lg px-2.5 py-1.5 text-[13px]";
   return (
     <div className="space-y-4">
-      {err && <div className="bg-rose-50 border border-rose-200 text-rose-700 rounded-lg px-3 py-2 text-[12px]">{err}</div>}
+      {err && <div className="bg-[var(--cmp-surface-error)] border border-[var(--cmp-color-error)] text-[var(--cmp-text-error)] rounded-lg px-3 py-2 text-[12px]">{err}</div>}
 
       <div className="bg-white rounded-xl border border-gray-200 p-4">
         <div className="flex items-center justify-between">
@@ -69,7 +69,7 @@ export default function ShareManager({ tokens }: { tokens: Token[] }) {
               </div>
               <span className={`text-[10px] px-2 py-0.5 rounded-full ${STATUS_TONE[st]}`}>{st}</span>
               {st === "active" && <button onClick={() => copy(t.token)} className="text-[12px] text-teal-600 hover:underline">{copied === t.token ? "✓ copied" : "copy link"}</button>}
-              {st === "active" && <button disabled={busy} onClick={() => revoke(t.id)} className="text-[12px] text-rose-500 hover:text-rose-700 disabled:opacity-40">revoke</button>}
+              {st === "active" && <button disabled={busy} onClick={() => revoke(t.id)} className="text-[12px] text-rose-500 hover:text-[var(--cmp-text-error)] disabled:opacity-40">revoke</button>}
             </div>
           );
         })}

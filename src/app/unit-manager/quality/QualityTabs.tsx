@@ -27,7 +27,7 @@ export default function QualityTabs() {
     <div className="flex gap-1 border-b border-gray-200 overflow-x-auto">
       {TABS.map(t => {
         const active = path === t.href;
-        return <Link key={t.href} href={t.href} className={`shrink-0 text-xs px-3 py-2 border-b-2 -mb-px font-medium transition-colors ${active ? "border-rose-600 text-rose-700" : "border-transparent text-gray-400 hover:text-gray-600"}`}>{t.label}</Link>;
+        return <Link key={t.href} href={t.href} className={`shrink-0 text-xs px-3 py-2 border-b-2 -mb-px font-medium transition-colors ${active ? "border-rose-600 text-[var(--cmp-text-error)]" : "border-transparent text-gray-400 hover:text-gray-600"}`}>{t.label}</Link>;
       })}
     </div>
   );

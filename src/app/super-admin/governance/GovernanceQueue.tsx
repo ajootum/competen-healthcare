@@ -40,7 +40,7 @@ export default function GovernanceQueue({ queue }: { queue: Item[] }) {
 
   return (
     <div>
-      {msg && <p className={`text-xs rounded-lg px-2.5 py-1.5 mb-2 ${msg.k === "ok" ? "bg-green-50 text-green-800" : "bg-amber-50 text-amber-800"}`}>{msg.t}</p>}
+      {msg && <p className={`text-xs rounded-lg px-2.5 py-1.5 mb-2 ${msg.k === "ok" ? "bg-[var(--cmp-surface-success)] text-green-800" : "bg-[var(--cmp-surface-warning)] text-amber-800"}`}>{msg.t}</p>}
       <div className="divide-y divide-gray-50">
         {queue.map(q => (
           <div key={`${q.source}-${q.id}`} className="py-2">
@@ -50,11 +50,11 @@ export default function GovernanceQueue({ queue }: { queue: Item[] }) {
                 <p className="text-[10px] text-gray-400 capitalize">{q.sub}{q.step ? ` · ${q.step}` : ""}{q.by ? ` · ${q.by}` : ""} · {relTime(q.at)}</p>
               </div>
               <button onClick={() => decide(q, "approved")} disabled={busyId !== null}
-                className="text-[11px] font-semibold text-white bg-green-600 hover:bg-green-700 rounded-lg px-2.5 py-1 disabled:opacity-50 shrink-0">
+                className="text-[11px] font-semibold text-white bg-[var(--cmp-color-success)] hover:bg-green-700 rounded-lg px-2.5 py-1 disabled:opacity-50 shrink-0">
                 {busyId === q.id ? "…" : "Approve"}
               </button>
               <button onClick={() => decide(q, "rejected")} disabled={busyId !== null}
-                className="text-[11px] font-semibold text-rose-700 bg-rose-50 hover:bg-rose-100 border border-rose-200 rounded-lg px-2.5 py-1 disabled:opacity-50 shrink-0">
+                className="text-[11px] font-semibold text-[var(--cmp-text-error)] bg-[var(--cmp-surface-error)] hover:bg-[var(--cmp-surface-error)] border border-[var(--cmp-color-error)] rounded-lg px-2.5 py-1 disabled:opacity-50 shrink-0">
                 Reject
               </button>
             </div>

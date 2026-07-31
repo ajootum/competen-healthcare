@@ -9,10 +9,10 @@ import { loadCompetencyTwin } from "@/lib/cgr/twin";
 export const dynamic = "force-dynamic";
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
-const tone = (v: number) => (v >= 75 ? "text-emerald-600" : v >= 55 ? "text-amber-600" : "text-rose-600");
-const bar = (v: number) => (v >= 75 ? "bg-emerald-500" : v >= 55 ? "bg-amber-500" : "bg-rose-500");
+const tone = (v: number) => (v >= 75 ? "text-[var(--cmp-text-success)]" : v >= 55 ? "text-[var(--cmp-text-warning)]" : "text-[var(--cmp-text-error)]");
+const bar = (v: number) => (v >= 75 ? "bg-[var(--cmp-color-success)]" : v >= 55 ? "bg-[var(--cmp-color-warning)]" : "bg-[var(--cmp-color-error)]");
 const RISK_META: Record<string, string> = {
-  critical: "text-rose-700 bg-rose-50 border-rose-100", high: "text-orange-700 bg-orange-50 border-orange-100",
+  critical: "text-[var(--cmp-text-error)] bg-[var(--cmp-surface-error)] border-[var(--cmp-color-error)]", high: "text-orange-700 bg-[var(--cmp-surface-warning)] border-[var(--cmp-color-warning)]",
   standard: "text-gray-600 bg-gray-50 border-gray-200", low: "text-slate-500 bg-slate-50 border-slate-200",
 };
 
@@ -41,12 +41,12 @@ export default async function CompetencyTwinPage() {
     <div className="max-w-[1400px]">
       <div className="flex items-start justify-between gap-3 mb-5">
         <div>
-          <p className="text-[11px] font-semibold text-emerald-600 uppercase tracking-widest mb-0.5">CGR-024 · Competency Governance</p>
+          <p className="text-[11px] font-semibold text-[var(--cmp-text-success)] uppercase tracking-widest mb-0.5">CGR-024 · Competency Governance</p>
           <h1 className="text-xl font-bold text-gray-900">Digital Competency Twin</h1>
           <p className="text-gray-400 text-sm mt-0.5">What is the current competency state of the workforce — not just who is signed off, but how confident that signature is. Modelled at individual, team and organisational level.</p>
         </div>
         <div className="flex gap-2 shrink-0">
-          <Link href="/competency-office/readiness-states" className="text-xs font-semibold text-emerald-700 hover:text-emerald-800 border border-emerald-200 bg-emerald-50 rounded-lg px-3 py-2">Readiness states →</Link>
+          <Link href="/competency-office/readiness-states" className="text-xs font-semibold text-emerald-700 hover:text-emerald-800 border border-[var(--cmp-color-success)] bg-[var(--cmp-surface-success)] rounded-lg px-3 py-2">Readiness states →</Link>
           <Link href="/super-admin/cgr" className="text-xs font-semibold text-gray-500 hover:text-emerald-700 border border-gray-200 rounded-lg px-3 py-2">← CGR</Link>
         </div>
       </div>
@@ -58,9 +58,9 @@ export default async function CompetencyTwinPage() {
           <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
             <Kpi label="Organisational state" value={d.orgState} sub="/100 confidence-weighted" t={tone(d.orgState)} />
             <Kpi label="People modelled" value={d.totals.people} sub={`${d.totals.records} competency states`} />
-            <Kpi label="Unvalidated" value={d.totals.unvalidated} sub="no independent validation" t={d.totals.unvalidated ? "text-amber-600" : "text-gray-900"} />
-            <Kpi label="Stale" value={d.totals.stale} sub="late in the cert window" t={d.totals.stale ? "text-amber-600" : "text-gray-900"} />
-            <Kpi label="Critical weak" value={d.totals.criticalWeak} sub="high-risk, low state" t={d.totals.criticalWeak ? "text-rose-600" : "text-gray-900"} />
+            <Kpi label="Unvalidated" value={d.totals.unvalidated} sub="no independent validation" t={d.totals.unvalidated ? "text-[var(--cmp-text-warning)]" : "text-gray-900"} />
+            <Kpi label="Stale" value={d.totals.stale} sub="late in the cert window" t={d.totals.stale ? "text-[var(--cmp-text-warning)]" : "text-gray-900"} />
+            <Kpi label="Critical weak" value={d.totals.criticalWeak} sub="high-risk, low state" t={d.totals.criticalWeak ? "text-[var(--cmp-text-error)]" : "text-gray-900"} />
             <Kpi label="Teams" value={d.teams.length} sub="department twins" />
           </div>
 
@@ -103,8 +103,8 @@ export default async function CompetencyTwinPage() {
                       <td className="py-2 pl-4 pr-2 text-[12px] font-medium text-gray-800">{t.name}</td>
                       <td className="py-2 px-2 text-center text-[12px] text-gray-600 tabular-nums">{t.people}</td>
                       <td className="py-2 px-2 text-center text-[11px] text-gray-500 tabular-nums">{t.records}</td>
-                      <td className="py-2 px-2 text-center text-[11px] tabular-nums"><span className={t.unvalidated ? "text-amber-600 font-semibold" : "text-gray-400"}>{t.unvalidated}</span></td>
-                      <td className="py-2 px-2 text-center text-[11px] tabular-nums"><span className={t.criticalWeak ? "text-rose-600 font-semibold" : "text-gray-400"}>{t.criticalWeak}</span></td>
+                      <td className="py-2 px-2 text-center text-[11px] tabular-nums"><span className={t.unvalidated ? "text-[var(--cmp-text-warning)] font-semibold" : "text-gray-400"}>{t.unvalidated}</span></td>
+                      <td className="py-2 px-2 text-center text-[11px] tabular-nums"><span className={t.criticalWeak ? "text-[var(--cmp-text-error)] font-semibold" : "text-gray-400"}>{t.criticalWeak}</span></td>
                       <td className="py-2 pr-4 pl-2">
                         <div className="flex items-center gap-2">
                           <div className="flex-1 h-1.5 rounded-full bg-gray-100 overflow-hidden"><div className={`h-full ${bar(t.state)}`} style={{ width: `${t.state}%` }} /></div>
@@ -138,11 +138,11 @@ export default async function CompetencyTwinPage() {
                 <tbody>
                   {d.individuals.map((p: any) => (
                     <tr key={p.id} className="border-t border-gray-50">
-                      <td className="py-2 pl-4 pr-2 text-[12px] font-medium text-gray-800">{p.name}{p.criticalWeak > 0 && <span className="ml-1.5 text-[9px] font-bold text-rose-700 bg-rose-50 border border-rose-100 rounded px-1">{p.criticalWeak} critical</span>}</td>
+                      <td className="py-2 pl-4 pr-2 text-[12px] font-medium text-gray-800">{p.name}{p.criticalWeak > 0 && <span className="ml-1.5 text-[9px] font-bold text-[var(--cmp-text-error)] bg-[var(--cmp-surface-error)] border border-[var(--cmp-color-error)] rounded px-1">{p.criticalWeak} critical</span>}</td>
                       <td className="py-2 px-2 text-[11px] text-gray-500">{p.department ?? "—"}</td>
                       <td className="py-2 px-2 text-center text-[12px] text-gray-600 tabular-nums">{p.competencies}</td>
-                      <td className="py-2 px-2 text-center text-[11px] tabular-nums"><span className={p.unvalidated ? "text-amber-600" : "text-gray-400"}>{p.unvalidated}</span></td>
-                      <td className="py-2 px-2 text-center text-[11px] tabular-nums"><span className={p.stale ? "text-amber-600" : "text-gray-400"}>{p.stale}</span></td>
+                      <td className="py-2 px-2 text-center text-[11px] tabular-nums"><span className={p.unvalidated ? "text-[var(--cmp-text-warning)]" : "text-gray-400"}>{p.unvalidated}</span></td>
+                      <td className="py-2 px-2 text-center text-[11px] tabular-nums"><span className={p.stale ? "text-[var(--cmp-text-warning)]" : "text-gray-400"}>{p.stale}</span></td>
                       <td className="py-2 px-2">
                         <span className="text-[11px] text-gray-600">{p.weakest.competency}</span>
                         <span className={`ml-1 text-[9px] font-bold border rounded px-1 capitalize ${RISK_META[p.weakest.risk] ?? RISK_META.standard}`}>{p.weakest.risk}</span>
@@ -161,13 +161,13 @@ export default async function CompetencyTwinPage() {
             </div>
           </div>
 
-          <div className="bg-amber-50 border border-amber-100 rounded-xl p-4">
+          <div className="bg-[var(--cmp-surface-warning)] border border-[var(--cmp-color-warning)] rounded-xl p-4">
             <p className="text-[11px] text-amber-900 leading-relaxed">
               <span className="font-bold">What this models, and what it doesn&apos;t.</span> Four of the five §6 dimensions are computed from real decision records — capability (outcome × Benner maturity), evidence confidence (independent validation + recorded evidence), recency (position in the certification window) and risk weighting (critical/high competencies are penalised harder for the same weakness). <span className="font-semibold">Practice exposure is not modelled</span>: nothing links a worker&apos;s shift or patient activity to a specific competency, so it is shown as unavailable rather than proxied by something that would look like evidence and isn&apos;t. Forecasting and scenario simulation (§7) need that link plus a trend history, and are not claimed here.
             </p>
           </div>
 
-          <p className="text-[11px] text-gray-400 leading-relaxed">This is deliberately <span className="font-medium">not</span> the same view as <Link href="/competency-office/readiness-states" className="text-emerald-600 hover:underline">Readiness States (COMP-019)</Link>, which resolves outcome + expiry into seven categorical states. Two people can both read &ldquo;Ready&rdquo; there while one holds a validated expert decision on a low-risk competency and the other an unvalidated novice decision on a critical one — the twin separates them. Per the CGR mandate, AI may model and predict but never determines competence without evidence or replaces the assessment process.</p>
+          <p className="text-[11px] text-gray-400 leading-relaxed">This is deliberately <span className="font-medium">not</span> the same view as <Link href="/competency-office/readiness-states" className="text-[var(--cmp-text-success)] hover:underline">Readiness States (COMP-019)</Link>, which resolves outcome + expiry into seven categorical states. Two people can both read &ldquo;Ready&rdquo; there while one holds a validated expert decision on a low-risk competency and the other an unvalidated novice decision on a critical one — the twin separates them. Per the CGR mandate, AI may model and predict but never determines competence without evidence or replaces the assessment process.</p>
         </div>
       )}
     </div>

@@ -41,7 +41,7 @@ export default function IdentityForm({ tenants }: { tenants: { id: string; name:
         <label className="flex items-center gap-1.5"><input type="checkbox" checked={scimEnabled} onChange={e => setScim(e.target.checked)} /> SCIM</label>
       </div>
       <button type="submit" disabled={busy || !tenantId} className="w-full bg-violet-600 hover:bg-violet-700 disabled:opacity-50 text-white text-sm font-medium rounded-lg px-4 py-2">{busy ? "Saving…" : "Save configuration"}</button>
-      {msg && <p className={`text-xs ${msg === "saved" ? "text-green-600" : "text-red-500"}`}>{msg}</p>}
+      {msg && <p className={`text-xs ${msg === "saved" ? "text-[var(--cmp-text-success)]" : "text-red-500"}`}>{msg}</p>}
       <p className="text-[11px] text-gray-400">Saved as a configuration; enforcement activates when the auth provider is wired.</p>
     </form>
   );

@@ -31,9 +31,9 @@ export default async function ControlPlaneOverview() {
       </div>
 
       {!reg.ready && (
-        <div className="bg-amber-50 border border-amber-200 rounded-xl p-5">
+        <div className="bg-[var(--cmp-surface-warning)] border border-[var(--cmp-color-warning)] rounded-xl p-5">
           <h3 className="font-semibold text-amber-800 text-sm">⚠ Control-plane schema not yet applied</h3>
-          <p className="text-sm text-amber-700 mt-1">The tenant &amp; control-plane tables come from migrations <code className="font-mono text-xs bg-amber-100 px-1 rounded">040</code>, <code className="font-mono text-xs bg-amber-100 px-1 rounded">041</code>, <code className="font-mono text-xs bg-amber-100 px-1 rounded">042</code>. Apply them in the Supabase SQL editor (in order); these surfaces populate automatically once they land. Nothing here is fabricated in the meantime.</p>
+          <p className="text-sm text-[var(--cmp-text-warning)] mt-1">The tenant &amp; control-plane tables come from migrations <code className="font-mono text-xs bg-[var(--cmp-surface-warning)] px-1 rounded">040</code>, <code className="font-mono text-xs bg-[var(--cmp-surface-warning)] px-1 rounded">041</code>, <code className="font-mono text-xs bg-[var(--cmp-surface-warning)] px-1 rounded">042</code>. Apply them in the Supabase SQL editor (in order); these surfaces populate automatically once they land. Nothing here is fabricated in the meantime.</p>
         </div>
       )}
 

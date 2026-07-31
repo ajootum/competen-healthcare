@@ -74,7 +74,7 @@ export default async function DepartmentReportsPage() {
                     <td className="py-1.5 text-center text-gray-600">{avgScoreOf(r.a30) ?? "—"}</td>
                     <td className="py-1.5 text-center text-gray-600">{r.a30.length}</td>
                     <td className="py-1.5 text-center"><PctChip v={r.decided ? Math.round(r.validated / r.decided * 100) : null} /></td>
-                    <td className="py-1.5 text-center">{r.overdue ? <span className="font-bold text-red-600">{r.overdue}</span> : <span className="text-gray-300">0</span>}</td>
+                    <td className="py-1.5 text-center">{r.overdue ? <span className="font-bold text-[var(--cmp-text-critical)]">{r.overdue}</span> : <span className="text-gray-300">0</span>}</td>
                   </tr>
                 ))}
               </tbody>

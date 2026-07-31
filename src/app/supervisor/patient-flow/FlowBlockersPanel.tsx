@@ -44,13 +44,13 @@ export default function FlowBlockersPanel({ blockers, auto, patients, configRead
         <h3 className="font-semibold text-gray-900">Flow blockers</h3>
         <span className="text-[11px] text-gray-400">{blockers.length} logged · {auto.length} auto-detected</span>
       </div>
-      {msg && <div className={`mt-2 text-sm rounded-lg px-3 py-1.5 ${msg.kind === "ok" ? "bg-green-50 text-green-800" : "bg-amber-50 text-amber-800"}`}>{msg.text}</div>}
+      {msg && <div className={`mt-2 text-sm rounded-lg px-3 py-1.5 ${msg.kind === "ok" ? "bg-[var(--cmp-surface-success)] text-green-800" : "bg-[var(--cmp-surface-warning)] text-amber-800"}`}>{msg.text}</div>}
 
       {/* Logged blockers (resolvable) */}
       <div className="mt-3 space-y-1.5">
         {configReady && blockers.length === 0 && <p className="text-sm text-gray-400">No logged blockers.</p>}
         {blockers.map((b: any) => (
-          <div key={b.id} className="flex items-start gap-2 rounded-lg border border-amber-100 bg-amber-50/50 px-3 py-2">
+          <div key={b.id} className="flex items-start gap-2 rounded-lg border border-[var(--cmp-color-warning)] bg-[var(--cmp-surface-warning)]/50 px-3 py-2">
             <span className="text-amber-500 mt-0.5">▲</span>
             <div className="min-w-0 flex-1">
               <p className="text-sm font-medium text-gray-800">{LABEL[b.category] ?? b.category}{b.op_patients?.label ? ` — ${b.op_patients.label}` : ""}</p>
@@ -84,7 +84,7 @@ export default function FlowBlockersPanel({ blockers, auto, patients, configRead
             className="text-sm font-medium text-white bg-teal-600 hover:bg-teal-700 rounded-lg px-3 py-1.5">Log blocker</button>
         </div>
       ) : (
-        <p className="text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mt-3">Apply migration <code className="bg-amber-100 px-1 rounded font-mono">048-flow-blockers.sql</code> to log &amp; resolve blockers. Auto-detected blockers above are live now.</p>
+        <p className="text-[11px] text-[var(--cmp-text-warning)] bg-[var(--cmp-surface-warning)] border border-[var(--cmp-color-warning)] rounded-lg px-3 py-2 mt-3">Apply migration <code className="bg-[var(--cmp-surface-warning)] px-1 rounded font-mono">048-flow-blockers.sql</code> to log &amp; resolve blockers. Auto-detected blockers above are live now.</p>
       )}
     </div>
   );

@@ -16,8 +16,8 @@ export const dynamic = "force-dynamic";
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 const card = "bg-white rounded-xl border border-gray-200";
-const pctTone = (n: number) => (n >= 90 ? "text-emerald-600" : n >= 75 ? "text-amber-600" : "text-rose-600");
-const cellTone = (n: number) => (n >= 90 ? "bg-emerald-500" : n >= 80 ? "bg-amber-400" : n >= 70 ? "bg-orange-400" : "bg-rose-500");
+const pctTone = (n: number) => (n >= 90 ? "text-[var(--cmp-text-success)]" : n >= 75 ? "text-[var(--cmp-text-warning)]" : "text-[var(--cmp-text-error)]");
+const cellTone = (n: number) => (n >= 90 ? "bg-[var(--cmp-color-success)]" : n >= 80 ? "bg-[var(--cmp-color-warning)]" : n >= 70 ? "bg-[var(--cmp-color-warning)]" : "bg-[var(--cmp-color-error)]");
 const todayLabel = () => new Date().toLocaleDateString([], { day: "numeric", month: "short", year: "numeric" });
 
 function Kpi({ icon, tint, label, value, sub, tone, href }: { icon: string; tint: string; label: string; value: any; sub?: string; tone?: string; href: string }) {
@@ -55,7 +55,7 @@ export default async function ComplianceDashboard() {
       <ComplianceTabs />
     </>
   );
-  if (!d.ready) return <div className="space-y-4">{header}<div className="bg-amber-50 border border-amber-200 rounded-xl p-6"><p className="font-semibold text-amber-900">⚙️ Coming online</p><p className="text-sm text-amber-800 mt-1">Competency compliance activates once competency decisions are recorded for this tenant.</p></div></div>;
+  if (!d.ready) return <div className="space-y-4">{header}<div className="bg-[var(--cmp-surface-warning)] border border-[var(--cmp-color-warning)] rounded-xl p-6"><p className="font-semibold text-amber-900">⚙️ Coming online</p><p className="text-sm text-amber-800 mt-1">Competency compliance activates once competency decisions are recorded for this tenant.</p></div></div>;
 
   return (
     <div className="space-y-4">
@@ -63,11 +63,11 @@ export default async function ComplianceDashboard() {
 
       {/* KPI row (§5) */}
       <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
-        <Kpi icon="🛡️" tint="bg-emerald-50" label="Overall Compliance" value={`${d.overallCompliance}%`} tone={pctTone(d.overallCompliance)} sub="validated & current" href="/competency-office/compliance" />
+        <Kpi icon="🛡️" tint="bg-[var(--cmp-surface-success)]" label="Overall Compliance" value={`${d.overallCompliance}%`} tone={pctTone(d.overallCompliance)} sub="validated & current" href="/competency-office/compliance" />
         <Kpi icon="✔️" tint="bg-teal-50" label="Mandatory Competencies" value={`${d.mandatory.completion}%`} tone={pctTone(d.mandatory.completion)} sub={`${d.mandatory.complete} complete · ${d.mandatory.overdue} overdue`} href="/competency-office/compliance/mandatory" />
-        <Kpi icon="📅" tint="bg-amber-50" label="Expiring in 30 Days" value={d.expiring.d30 + d.credentials.expiring} tone={d.expiring.d30 + d.credentials.expiring ? "text-amber-600" : "text-gray-400"} sub={`${d.expiring.d30} comp · ${d.credentials.expiring} cred`} href="/competency-office/compliance/credentials" />
-        <Kpi icon="⚠️" tint="bg-rose-50" label="High-Risk Staff" value={d.highRiskStaff.length} tone={d.highRiskStaff.length ? "text-rose-600" : "text-gray-400"} sub="hard-stop gaps" href="/competency-office/compliance" />
-        <Kpi icon="🏅" tint="bg-sky-50" label="Accreditation" value={d.accreditation.provisioned ? d.accreditation.standards : "—"} tone="text-gray-900" sub={d.accreditation.provisioned ? `${d.accreditation.frameworks} standards frameworks` : "standards mapping next-phase"} href="/competency-office/compliance/accreditation" />
+        <Kpi icon="📅" tint="bg-[var(--cmp-surface-warning)]" label="Expiring in 30 Days" value={d.expiring.d30 + d.credentials.expiring} tone={d.expiring.d30 + d.credentials.expiring ? "text-[var(--cmp-text-warning)]" : "text-gray-400"} sub={`${d.expiring.d30} comp · ${d.credentials.expiring} cred`} href="/competency-office/compliance/credentials" />
+        <Kpi icon="⚠️" tint="bg-[var(--cmp-surface-error)]" label="High-Risk Staff" value={d.highRiskStaff.length} tone={d.highRiskStaff.length ? "text-[var(--cmp-text-error)]" : "text-gray-400"} sub="hard-stop gaps" href="/competency-office/compliance" />
+        <Kpi icon="🏅" tint="bg-[var(--cmp-surface-information)]" label="Accreditation" value={d.accreditation.provisioned ? d.accreditation.standards : "—"} tone="text-gray-900" sub={d.accreditation.provisioned ? `${d.accreditation.frameworks} standards frameworks` : "standards mapping next-phase"} href="/competency-office/compliance/accreditation" />
         <Kpi icon="📄" tint="bg-violet-50" label="Open Exceptions" value="—" tone="text-gray-300" sub="exception store next-phase" href="/competency-office/compliance/exceptions" />
       </div>
 
@@ -95,7 +95,7 @@ export default async function ComplianceDashboard() {
           <h3 className="font-semibold text-gray-900 text-sm mb-3">High-Risk Staff <span className="text-[10px] font-normal text-gray-400">hard-stop</span></h3>
           {d.highRiskStaff.length === 0 ? <p className="text-sm text-gray-400">No hard-stop compliance gaps. 🎉</p> : (
             <div className="space-y-1.5">{d.highRiskStaff.slice(0, 6).map((s: any) => (
-              <div key={s.id} className="flex items-center justify-between gap-2 text-xs"><div className="flex items-center gap-2 min-w-0"><span className="w-6 h-6 rounded-full bg-rose-100 text-rose-700 flex items-center justify-center text-[10px] font-bold shrink-0">{(s.name?.[0] ?? "?").toUpperCase()}</span><div className="min-w-0"><p className="text-gray-800 truncate">{s.name}</p><p className="text-[10px] text-gray-400">{s.reason}</p></div></div><span className="text-rose-600 font-semibold tabular-nums shrink-0">{s.score}</span></div>
+              <div key={s.id} className="flex items-center justify-between gap-2 text-xs"><div className="flex items-center gap-2 min-w-0"><span className="w-6 h-6 rounded-full bg-[var(--cmp-surface-error)] text-[var(--cmp-text-error)] flex items-center justify-center text-[10px] font-bold shrink-0">{(s.name?.[0] ?? "?").toUpperCase()}</span><div className="min-w-0"><p className="text-gray-800 truncate">{s.name}</p><p className="text-[10px] text-gray-400">{s.reason}</p></div></div><span className="text-[var(--cmp-text-error)] font-semibold tabular-nums shrink-0">{s.score}</span></div>
             ))}</div>
           )}
         </div>
@@ -107,7 +107,7 @@ export default async function ComplianceDashboard() {
           <div className="flex items-center justify-between mb-3"><h3 className="font-semibold text-gray-900 text-sm">Expiring Compliance</h3><Link href="/competency-office/compliance/credentials" className="text-[11px] text-teal-600 hover:underline">All →</Link></div>
           {expiringAll.length === 0 ? <p className="text-sm text-gray-400">Nothing expiring in 30 days.</p> : (
             <div className="space-y-2">{expiringAll.map((x: any, i: number) => (
-              <div key={i} className="flex items-center justify-between gap-2"><div className="min-w-0"><p className="text-xs font-medium text-gray-800 truncate">{x.name}</p><p className="text-[10px] text-gray-400 truncate">{x.kind}: {x.requirement}</p></div><span className={`text-[10px] font-medium shrink-0 ${x.days <= 7 ? "text-rose-600" : x.days <= 14 ? "text-amber-600" : "text-gray-500"}`}>{x.days}d</span></div>
+              <div key={i} className="flex items-center justify-between gap-2"><div className="min-w-0"><p className="text-xs font-medium text-gray-800 truncate">{x.name}</p><p className="text-[10px] text-gray-400 truncate">{x.kind}: {x.requirement}</p></div><span className={`text-[10px] font-medium shrink-0 ${x.days <= 7 ? "text-[var(--cmp-text-error)]" : x.days <= 14 ? "text-[var(--cmp-text-warning)]" : "text-gray-500"}`}>{x.days}d</span></div>
             ))}</div>
           )}
         </div>
@@ -117,9 +117,9 @@ export default async function ComplianceDashboard() {
           {!d.credentials.provisioned ? <p className="text-sm text-gray-400">Credential register not provisioned.</p> : d.credentials.total === 0 ? <p className="text-sm text-gray-400">No credentials on record.</p> : (
             <>
               <div className="grid grid-cols-3 gap-2 text-center mb-3">
-                <div className="rounded-lg bg-emerald-50 py-2"><p className="text-lg font-bold text-emerald-700 tabular-nums">{d.credentials.valid}</p><p className="text-[10px] text-emerald-600">Valid</p></div>
-                <div className="rounded-lg bg-amber-50 py-2"><p className="text-lg font-bold text-amber-700 tabular-nums">{d.credentials.expiring}</p><p className="text-[10px] text-amber-600">Expiring</p></div>
-                <div className="rounded-lg bg-rose-50 py-2"><p className="text-lg font-bold text-rose-700 tabular-nums">{d.credentials.expired}</p><p className="text-[10px] text-rose-600">Expired</p></div>
+                <div className="rounded-lg bg-[var(--cmp-surface-success)] py-2"><p className="text-lg font-bold text-emerald-700 tabular-nums">{d.credentials.valid}</p><p className="text-[10px] text-[var(--cmp-text-success)]">Valid</p></div>
+                <div className="rounded-lg bg-[var(--cmp-surface-warning)] py-2"><p className="text-lg font-bold text-[var(--cmp-text-warning)] tabular-nums">{d.credentials.expiring}</p><p className="text-[10px] text-[var(--cmp-text-warning)]">Expiring</p></div>
+                <div className="rounded-lg bg-[var(--cmp-surface-error)] py-2"><p className="text-lg font-bold text-[var(--cmp-text-error)] tabular-nums">{d.credentials.expired}</p><p className="text-[10px] text-[var(--cmp-text-error)]">Expired</p></div>
               </div>
               <Link href="/admin/credentials" className="text-[11px] text-teal-600 hover:underline">Open credential register →</Link>
             </>
@@ -130,7 +130,7 @@ export default async function ComplianceDashboard() {
           <h3 className="font-semibold text-gray-900 text-sm mb-3 flex items-center gap-2">✨ AI Compliance Insights <span className="text-[10px] font-normal text-gray-400">explainable</span></h3>
           {d.ai.length === 0 ? <p className="text-sm text-gray-400">No priority compliance actions.</p> : (
             <div className="space-y-2">{d.ai.slice(0, 4).map((a: any, i: number) => (
-              <div key={i} className="rounded-lg border border-gray-100 p-2.5"><div className="flex items-start justify-between gap-2"><p className="text-xs text-gray-800 flex-1">{a.text}</p><span className={`text-[9px] px-1.5 py-0.5 rounded shrink-0 ${a.priority === "high" ? "bg-rose-50 text-rose-700" : a.priority === "medium" ? "bg-amber-50 text-amber-700" : "bg-gray-100 text-gray-500"}`}>{a.priority}</span></div><p className="text-[10px] text-gray-400 mt-1">Why: {a.why}</p></div>
+              <div key={i} className="rounded-lg border border-gray-100 p-2.5"><div className="flex items-start justify-between gap-2"><p className="text-xs text-gray-800 flex-1">{a.text}</p><span className={`text-[9px] px-1.5 py-0.5 rounded shrink-0 ${a.priority === "high" ? "bg-[var(--cmp-surface-error)] text-[var(--cmp-text-error)]" : a.priority === "medium" ? "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]" : "bg-gray-100 text-gray-500"}`}>{a.priority}</span></div><p className="text-[10px] text-gray-400 mt-1">Why: {a.why}</p></div>
             ))}</div>
           )}
         </div>

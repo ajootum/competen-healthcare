@@ -13,10 +13,10 @@ export const dynamic = "force-dynamic";
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 const card = "bg-white rounded-xl border border-gray-200";
-const scoreTone = (n: number | null) => (n == null ? "text-gray-300" : n >= 90 ? "text-green-600" : n >= 75 ? "text-amber-600" : "text-rose-600");
-const LEVEL_TONE: Record<string, string> = { High: "bg-rose-50 text-rose-700", Medium: "bg-amber-50 text-amber-700", Low: "bg-green-50 text-green-700", Increasing: "bg-orange-50 text-orange-700", Stable: "bg-gray-100 text-gray-600" };
-const INSIGHT_TONE: Record<string, string> = { high: "border-rose-100 bg-rose-50/40", medium: "border-amber-100 bg-amber-50/40", rec: "border-violet-100 bg-violet-50/40", info: "border-blue-100 bg-blue-50/40" };
-const barTone = (n: number | null) => (n == null ? "bg-gray-200" : n >= 90 ? "bg-green-500" : n >= 75 ? "bg-amber-500" : "bg-rose-500");
+const scoreTone = (n: number | null) => (n == null ? "text-gray-300" : n >= 90 ? "text-[var(--cmp-text-success)]" : n >= 75 ? "text-[var(--cmp-text-warning)]" : "text-[var(--cmp-text-error)]");
+const LEVEL_TONE: Record<string, string> = { High: "bg-[var(--cmp-surface-error)] text-[var(--cmp-text-error)]", Medium: "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]", Low: "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]", Increasing: "bg-[var(--cmp-surface-warning)] text-orange-700", Stable: "bg-gray-100 text-gray-600" };
+const INSIGHT_TONE: Record<string, string> = { high: "border-[var(--cmp-color-error)] bg-[var(--cmp-surface-error)]/40", medium: "border-[var(--cmp-color-warning)] bg-[var(--cmp-surface-warning)]/40", rec: "border-violet-100 bg-violet-50/40", info: "border-[var(--cmp-color-information)] bg-[var(--cmp-surface-information)]/40" };
+const barTone = (n: number | null) => (n == null ? "bg-gray-200" : n >= 90 ? "bg-[var(--cmp-color-success)]" : n >= 75 ? "bg-[var(--cmp-color-warning)]" : "bg-[var(--cmp-color-error)]");
 
 export default async function OperationalIntelligence() {
   const supabase = await createClient();
@@ -30,7 +30,7 @@ export default async function OperationalIntelligence() {
   const hid = profile?.hospital_id ?? null;
 
   const d = await loadOperationalIntelligence(admin, hid, isSuper);
-  if (!d.ready) return (<div className="space-y-4"><h1 className="text-2xl font-bold text-gray-900">Operational Intelligence Centre</h1><div className="bg-amber-50 border border-amber-200 rounded-xl p-6"><p className="font-semibold text-amber-900">⚙️ Coming online</p><p className="text-sm text-amber-800 mt-1">Activates once the Clinical Operations Engine is provisioned.</p></div></div>);
+  if (!d.ready) return (<div className="space-y-4"><h1 className="text-2xl font-bold text-gray-900">Operational Intelligence Centre</h1><div className="bg-[var(--cmp-surface-warning)] border border-[var(--cmp-color-warning)] rounded-xl p-6"><p className="font-semibold text-amber-900">⚙️ Coming online</p><p className="text-sm text-amber-800 mt-1">Activates once the Clinical Operations Engine is provisioned.</p></div></div>);
   const k = d.kpis, sp = d.shiftPerf, p = d.patient, w = d.workforce, s = d.safety;
 
   const healthDonut = `conic-gradient(${k.healthScore != null && k.healthScore >= 75 ? "#22c55e" : "#f59e0b"} ${(k.healthScore ?? 0) * 3.6}deg, #e5e7eb ${(k.healthScore ?? 0) * 3.6}deg 360deg)`;
@@ -38,9 +38,9 @@ export default async function OperationalIntelligence() {
 
   const kpis = [
     { label: "Overall Shift Health Score", donut: healthDonut, value: k.healthScore == null ? "—" : `${k.healthScore}%`, sub: k.healthScore != null && k.healthScore >= 75 ? "Good" : "Attention" },
-    { label: "Operational Pressure", value: k.pressureLabel, sub: `${k.pressure}/100`, tone: k.pressure >= 70 ? "text-rose-600" : k.pressure >= 40 ? "text-amber-600" : "text-green-600" },
+    { label: "Operational Pressure", value: k.pressureLabel, sub: `${k.pressure}/100`, tone: k.pressure >= 70 ? "text-[var(--cmp-text-error)]" : k.pressure >= 40 ? "text-[var(--cmp-text-warning)]" : "text-[var(--cmp-text-success)]" },
     { label: "Capacity Utilisation", value: k.capacity == null ? "—" : `${k.capacity}%`, sub: `${k.occupied} / ${k.totalBeds} beds` },
-    { label: "Safety Status", value: k.safetyStatus, sub: `${k.criticalAlerts} critical`, tone: k.safetyStatus === "Good" ? "text-green-600" : "text-rose-600" },
+    { label: "Safety Status", value: k.safetyStatus, sub: `${k.criticalAlerts} critical`, tone: k.safetyStatus === "Good" ? "text-[var(--cmp-text-success)]" : "text-[var(--cmp-text-error)]" },
     { label: "Tasks Completion", value: k.taskCompletion == null ? "—" : `${k.taskCompletion}%`, sub: `${k.completedTasks} / ${k.totalTasks} tasks`, tone: scoreTone(k.taskCompletion) },
     { label: "Communication", value: k.commsResponse == null ? "—" : `${k.commsResponse}%`, sub: "Ack rate" },
   ];
@@ -49,7 +49,7 @@ export default async function OperationalIntelligence() {
     <div data-wide className="space-y-4">
       <div className="flex items-start justify-between gap-3 flex-wrap">
         <div><h1 className="text-2xl font-bold text-gray-900 tracking-tight">Operational Intelligence Centre</h1><p className="text-sm text-gray-500">Real-time insights, analytics and predictions to drive better decisions this shift.</p></div>
-        <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded-full bg-green-100 text-green-700 flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-green-500" />Live</span>
+        <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded-full bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)] flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-[var(--cmp-color-success)]" />Live</span>
       </div>
 
       {/* KPI strip */}
@@ -72,7 +72,7 @@ export default async function OperationalIntelligence() {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {/* 1. Shift Performance */}
             <div className={`${card} p-5`}>
-              <div className="flex items-center gap-2 mb-3"><span className="w-6 h-6 rounded-lg bg-blue-100 text-blue-700 flex items-center justify-center text-[11px] font-bold">1</span><h3 className="text-xs font-bold text-gray-900">Shift Performance Intelligence</h3></div>
+              <div className="flex items-center gap-2 mb-3"><span className="w-6 h-6 rounded-lg bg-[var(--cmp-surface-information)] text-blue-700 flex items-center justify-center text-[11px] font-bold">1</span><h3 className="text-xs font-bold text-gray-900">Shift Performance Intelligence</h3></div>
               <div className="mb-3"><div className="flex items-center justify-between text-[10px] text-gray-500 mb-1"><span>{sp.phase}</span><span>{sp.elapsedPct == null ? "" : `${sp.elapsedPct}% elapsed`}</span></div><div className="h-2 bg-gray-100 rounded-full overflow-hidden"><div className="h-full bg-teal-500 rounded-full" style={{ width: `${sp.elapsedPct ?? 0}%` }} /></div></div>
               <div className="grid grid-cols-2 gap-1.5 text-xs">{[["Admissions", sp.admissions], ["Discharges", sp.discharges], ["Transfers", sp.transfers], ["Avg LOS", sp.avgLos == null ? "—" : `${sp.avgLos}d`]].map(([l, v]: any) => (<div key={l} className="flex items-center justify-between rounded border border-gray-100 px-2 py-1"><span className="text-gray-600">{l}</span><span className="font-semibold text-gray-900">{v}</span></div>))}</div>
             </div>
@@ -97,7 +97,7 @@ export default async function OperationalIntelligence() {
 
             {/* 4. Safety & Quality Intelligence */}
             <div className={`${card} p-5`}>
-              <div className="flex items-center gap-2 mb-3"><span className="w-6 h-6 rounded-lg bg-rose-100 text-rose-700 flex items-center justify-center text-[11px] font-bold">4</span><h3 className="text-xs font-bold text-gray-900">Safety &amp; Quality Intelligence</h3></div>
+              <div className="flex items-center gap-2 mb-3"><span className="w-6 h-6 rounded-lg bg-[var(--cmp-surface-error)] text-[var(--cmp-text-error)] flex items-center justify-center text-[11px] font-bold">4</span><h3 className="text-xs font-bold text-gray-900">Safety &amp; Quality Intelligence</h3></div>
               <div className="flex items-end gap-1 h-16 mb-2">{s.incidentTrend.map((t: any, i: number) => (<div key={i} className="flex-1 flex flex-col items-center gap-0.5"><div className="w-full bg-rose-300 rounded-t" style={{ height: `${(t.n / s.trendMax) * 100}%`, minHeight: t.n > 0 ? "3px" : "0" }} /><span className="text-[7px] text-gray-400">{t.day.split(" ")[1]}</span></div>))}</div>
               <div className="grid grid-cols-2 gap-1.5 text-xs">{[["Incidents", s.incidents], ["Near Misses", s.nearMisses], ["Med. Errors", s.medicationErrors], ["Falls", s.falls]].map(([l, v]: any) => (<div key={l} className="flex items-center justify-between rounded border border-gray-100 px-2 py-1"><span className="text-gray-600">{l}</span><span className="font-semibold text-gray-900">{v}</span></div>))}</div>
             </div>
@@ -114,7 +114,7 @@ export default async function OperationalIntelligence() {
 
             {/* 6. Operational Reporting */}
             <div className={`${card} p-5`}>
-              <div className="flex items-center gap-2 mb-3"><span className="w-6 h-6 rounded-lg bg-amber-100 text-amber-700 flex items-center justify-center text-[11px] font-bold">6</span><h3 className="text-xs font-bold text-gray-900">Operational Reporting</h3></div>
+              <div className="flex items-center gap-2 mb-3"><span className="w-6 h-6 rounded-lg bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)] flex items-center justify-center text-[11px] font-bold">6</span><h3 className="text-xs font-bold text-gray-900">Operational Reporting</h3></div>
               <div className="space-y-1">{["Shift Report", "Daily / Weekly / Monthly", "Executive Report", "Custom Report", "Scheduled Reports", "Export (PDF / Excel)"].map((r) => (<div key={r} className="flex items-center gap-2 text-xs text-gray-600"><span className="w-1.5 h-1.5 rounded-full bg-gray-300" />{r}</div>))}</div>
               <p className="text-[10px] text-gray-400 mt-2">Report generation &amp; export are a follow-up phase.</p>
             </div>

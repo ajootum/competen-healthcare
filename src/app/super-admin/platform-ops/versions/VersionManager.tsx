@@ -10,7 +10,7 @@ type Snap = { version: number; action: string; change_reason?: string; restored_
 type Diff = { path: string; kind: "added" | "removed" | "changed"; before?: unknown; after?: unknown };
 
 const input = "border border-gray-200 rounded px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-indigo-400 bg-white";
-const AB: Record<string, string> = { defined: "bg-indigo-100 text-indigo-700", captured: "bg-gray-100 text-gray-600", published: "bg-emerald-100 text-emerald-700", restored: "bg-amber-100 text-amber-700" };
+const AB: Record<string, string> = { defined: "bg-indigo-100 text-indigo-700", captured: "bg-gray-100 text-gray-600", published: "bg-[var(--cmp-surface-success)] text-emerald-700", restored: "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]" };
 const short = (v: unknown) => { const s = typeof v === "string" ? v : JSON.stringify(v); return s == null ? "∅" : s.length > 60 ? s.slice(0, 60) + "…" : s; };
 const when = (s: string) => { try { return new Date(s).toLocaleString(); } catch { return s; } };
 
@@ -97,7 +97,7 @@ export default function VersionManager({ objects }: { objects: ObjRow[] }) {
                       <div className="space-y-1 max-h-52 overflow-y-auto">
                         {diff.map((d, i) => (
                           <div key={i} className="text-[11px] flex items-start gap-1.5">
-                            <span className={`font-semibold w-14 shrink-0 ${d.kind === "added" ? "text-emerald-600" : d.kind === "removed" ? "text-rose-600" : "text-amber-600"}`}>{d.kind}</span>
+                            <span className={`font-semibold w-14 shrink-0 ${d.kind === "added" ? "text-[var(--cmp-text-success)]" : d.kind === "removed" ? "text-[var(--cmp-text-error)]" : "text-[var(--cmp-text-warning)]"}`}>{d.kind}</span>
                             <span className="font-mono text-gray-600 shrink-0">{d.path}</span>
                             <span className="text-gray-400">{d.kind === "changed" ? <>{short(d.before)} <span className="text-gray-300">→</span> {short(d.after)}</> : d.kind === "added" ? short(d.after) : short(d.before)}</span>
                           </div>
@@ -118,13 +118,13 @@ export default function VersionManager({ objects }: { objects: ObjRow[] }) {
                       <span className="text-[10px] text-gray-400">{s.actor_name ?? "—"}</span>
                       <span className="text-[10px] text-gray-300">{when(s.created_at)}</span>
                       <span className="text-[9px] text-gray-300 font-mono">{s.checksum}</span>
-                      {i !== 0 && <button onClick={() => restore(s.version)} disabled={busy} className="text-[10px] font-medium text-amber-700 border border-amber-200 rounded px-1.5 py-0.5 hover:bg-amber-50 disabled:opacity-40">Restore</button>}
+                      {i !== 0 && <button onClick={() => restore(s.version)} disabled={busy} className="text-[10px] font-medium text-[var(--cmp-text-warning)] border border-[var(--cmp-color-warning)] rounded px-1.5 py-0.5 hover:bg-[var(--cmp-surface-warning)] disabled:opacity-40">Restore</button>}
                     </div>
                   ))}
                 </div>
               </>
             )}
-            {msg && <p className={`text-xs mt-3 ${msg.startsWith("✓") ? "text-emerald-600" : "text-rose-600"}`}>{msg}</p>}
+            {msg && <p className={`text-xs mt-3 ${msg.startsWith("✓") ? "text-[var(--cmp-text-success)]" : "text-[var(--cmp-text-error)]"}`}>{msg}</p>}
           </>
         )}
       </div>

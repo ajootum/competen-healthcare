@@ -281,10 +281,10 @@ export default async function ReportsCentrePage() {
       {/* KPI row */}
       <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-8 gap-2 mb-4">
         {KPI.map(k => (
-          <div key={k.label} className={`bg-white border rounded-xl px-3 py-2.5 ${k.alert ? "border-red-200 bg-red-50/40" : "border-gray-200"}`}>
+          <div key={k.label} className={`bg-white border rounded-xl px-3 py-2.5 ${k.alert ? "border-[var(--cmp-color-critical)] bg-[var(--cmp-surface-critical)]/40" : "border-gray-200"}`}>
             <div className="flex items-baseline gap-1.5">
-              <p className={`text-lg font-bold ${k.alert ? "text-red-600" : "text-gray-900"}`}>{k.value}</p>
-              {k.d && <span className={`text-[9px] font-bold ${k.d.startsWith("▼") ? "text-red-500" : k.d.startsWith("▲") ? "text-green-600" : "text-gray-400"}`}>{k.d}</span>}
+              <p className={`text-lg font-bold ${k.alert ? "text-[var(--cmp-text-critical)]" : "text-gray-900"}`}>{k.value}</p>
+              {k.d && <span className={`text-[9px] font-bold ${k.d.startsWith("▼") ? "text-red-500" : k.d.startsWith("▲") ? "text-[var(--cmp-text-success)]" : "text-gray-400"}`}>{k.d}</span>}
             </div>
             <p className="text-[9px] font-bold text-gray-400 uppercase tracking-wider leading-tight">{k.label}</p>
             <p className="text-[8px] text-gray-400 mt-0.5">{k.sub}</p>
@@ -353,11 +353,11 @@ export default async function ReportsCentrePage() {
                         <td className="py-1.5 text-gray-700">{r.dep} <span className="text-gray-300">({r.nurses})</span></td>
                         <td className="py-1.5 text-center">
                           {r.passRate != null
-                            ? <span className={`font-bold px-1.5 py-0.5 rounded text-[10px] ${r.passRate >= 80 ? "bg-green-100 text-green-700" : r.passRate >= 60 ? "bg-amber-100 text-amber-700" : "bg-red-100 text-red-600"}`}>{r.passRate}%</span>
+                            ? <span className={`font-bold px-1.5 py-0.5 rounded text-[10px] ${r.passRate >= 80 ? "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]" : r.passRate >= 60 ? "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]" : "bg-[var(--cmp-surface-critical)] text-[var(--cmp-text-critical)]"}`}>{r.passRate}%</span>
                             : <span className="text-gray-300">—</span>}
                         </td>
                         <td className="py-1.5 text-center text-gray-600">{r.a30}</td>
-                        <td className="py-1.5 text-center">{r.overdue ? <span className="font-bold text-red-600">{r.overdue}</span> : <span className="text-gray-300">0</span>}</td>
+                        <td className="py-1.5 text-center">{r.overdue ? <span className="font-bold text-[var(--cmp-text-critical)]">{r.overdue}</span> : <span className="text-gray-300">0</span>}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -368,14 +368,14 @@ export default async function ReportsCentrePage() {
             <div className="bg-white border border-gray-200 rounded-xl p-4">
               <p className="text-sm font-bold text-gray-900 mb-3">Learner Risk <span className="text-[10px] font-normal text-gray-400">(from decision records)</span></p>
               <div className="grid grid-cols-3 gap-2 mb-3">
-                <div className="bg-red-50 border border-red-100 rounded-lg p-2.5 text-center">
-                  <p className="text-xl font-bold text-red-600">{highRisk}</p><p className="text-[8px] font-bold text-red-400 uppercase">High risk</p>
+                <div className="bg-[var(--cmp-surface-critical)] border border-[var(--cmp-color-critical)] rounded-lg p-2.5 text-center">
+                  <p className="text-xl font-bold text-[var(--cmp-text-critical)]">{highRisk}</p><p className="text-[8px] font-bold text-red-400 uppercase">High risk</p>
                 </div>
-                <div className="bg-amber-50 border border-amber-100 rounded-lg p-2.5 text-center">
-                  <p className="text-xl font-bold text-amber-600">{medRisk}</p><p className="text-[8px] font-bold text-amber-400 uppercase">Medium</p>
+                <div className="bg-[var(--cmp-surface-warning)] border border-[var(--cmp-color-warning)] rounded-lg p-2.5 text-center">
+                  <p className="text-xl font-bold text-[var(--cmp-text-warning)]">{medRisk}</p><p className="text-[8px] font-bold text-amber-400 uppercase">Medium</p>
                 </div>
-                <div className="bg-green-50 border border-green-100 rounded-lg p-2.5 text-center">
-                  <p className="text-xl font-bold text-green-600">{lowRisk}</p><p className="text-[8px] font-bold text-green-400 uppercase">Low</p>
+                <div className="bg-[var(--cmp-surface-success)] border border-[var(--cmp-color-success)] rounded-lg p-2.5 text-center">
+                  <p className="text-xl font-bold text-[var(--cmp-text-success)]">{lowRisk}</p><p className="text-[8px] font-bold text-green-400 uppercase">Low</p>
                 </div>
               </div>
               <p className="text-xs text-gray-600">{nurseIds.size} learners analysed — high = critical failure on record; medium = failed or expired competencies. No predictive scoring.</p>
@@ -392,16 +392,16 @@ export default async function ReportsCentrePage() {
                 {weakest.length ? weakest.map(c => (
                   <div key={c.name} className="flex items-center gap-2 text-[11px] py-0.5">
                     <span className="text-gray-600 flex-1 truncate">{c.name}</span>
-                    <span className="font-bold text-red-600">{c.pct}%</span>
+                    <span className="font-bold text-[var(--cmp-text-critical)]">{c.pct}%</span>
                   </div>
                 )) : <p className="text-xs text-gray-400">Needs ≥2 decisions per competency.</p>}
               </div>
               <div>
-                <p className="text-[10px] font-bold text-green-600 uppercase tracking-widest mb-1.5">Strongest</p>
+                <p className="text-[10px] font-bold text-[var(--cmp-text-success)] uppercase tracking-widest mb-1.5">Strongest</p>
                 {strongest.length ? strongest.map(c => (
                   <div key={c.name} className="flex items-center gap-2 text-[11px] py-0.5">
                     <span className="text-gray-600 flex-1 truncate">{c.name}</span>
-                    <span className="font-bold text-green-600">{c.pct}%</span>
+                    <span className="font-bold text-[var(--cmp-text-success)]">{c.pct}%</span>
                   </div>
                 )) : <p className="text-xs text-gray-400">—</p>}
               </div>
@@ -411,7 +411,7 @@ export default async function ReportsCentrePage() {
                   {expBuckets.map((n, i) => (
                     <div key={i} className="flex-1 flex flex-col items-center gap-0.5" title={`${n} expiring`}>
                       <span className="text-[9px] font-bold text-gray-700">{n}</span>
-                      <div className="w-full bg-amber-400 rounded-t" style={{ height: `${Math.max(3, n / Math.max(1, ...expBuckets) * 40)}px` }} />
+                      <div className="w-full bg-[var(--cmp-color-warning)] rounded-t" style={{ height: `${Math.max(3, n / Math.max(1, ...expBuckets) * 40)}px` }} />
                       <span className="text-[8px] text-gray-400">M{i + 1}</span>
                     </div>
                   ))}
@@ -428,10 +428,10 @@ export default async function ReportsCentrePage() {
               <div className="grid grid-cols-5 gap-1 text-center mb-3">
                 {[
                   ["Submitted", ev30.length, "text-gray-900"],
-                  ["Approved", ev30.filter(e => e.status === "verified").length, "text-green-600"],
-                  ["Rejected", ev30.filter(e => e.status === "rejected").length, "text-red-600"],
-                  ["Returned", ev30.filter(e => e.status === "changes_requested").length, "text-amber-600"],
-                  ["Pending", backlog, "text-blue-600"],
+                  ["Approved", ev30.filter(e => e.status === "verified").length, "text-[var(--cmp-text-success)]"],
+                  ["Rejected", ev30.filter(e => e.status === "rejected").length, "text-[var(--cmp-text-critical)]"],
+                  ["Returned", ev30.filter(e => e.status === "changes_requested").length, "text-[var(--cmp-text-warning)]"],
+                  ["Pending", backlog, "text-[var(--cmp-text-information)]"],
                 ].map(([l, n, cls]) => (
                   <div key={l as string}>
                     <p className={`text-base font-bold ${cls}`}>{n as number}</p>

@@ -52,7 +52,7 @@ export default async function PatientList() {
   const po = await loadPatientOps(admin, profile?.hospital_id ?? null, roles.includes("super_admin"));
   if (!po.ready) return (
     <div className="space-y-4"><h1 className="text-2xl font-bold text-gray-900">Patient List</h1>
-      <div className="bg-amber-50 border border-amber-200 rounded-xl p-6"><p className="font-semibold text-amber-900">⚙️ Coming online</p><p className="text-sm text-amber-800 mt-2">The Clinical Operations Engine tables aren&apos;t provisioned yet.</p></div></div>
+      <div className="bg-[var(--cmp-surface-warning)] border border-[var(--cmp-color-warning)] rounded-xl p-6"><p className="font-semibold text-amber-900">⚙️ Coming online</p><p className="text-sm text-amber-800 mt-2">The Clinical Operations Engine tables aren&apos;t provisioned yet.</p></div></div>
   );
 
   const { active, summary, copilot } = po;
@@ -61,15 +61,15 @@ export default async function PatientList() {
   // Summary KPI banner.
   const kpis: { label: string; n: number; tone: string }[] = [
     { label: "Total patients", n: summary.total, tone: "text-gray-900" },
-    { label: "High risk", n: summary.highRisk, tone: summary.highRisk ? "text-red-600" : "text-gray-400" },
-    { label: "Observation / review", n: summary.review, tone: summary.review ? "text-amber-600" : "text-gray-400" },
-    { label: "Stable", n: stable, tone: "text-green-600" },
+    { label: "High risk", n: summary.highRisk, tone: summary.highRisk ? "text-[var(--cmp-text-critical)]" : "text-gray-400" },
+    { label: "Observation / review", n: summary.review, tone: summary.review ? "text-[var(--cmp-text-warning)]" : "text-gray-400" },
+    { label: "Stable", n: stable, tone: "text-[var(--cmp-text-success)]" },
     { label: "Isolation", n: summary.isolation, tone: summary.isolation ? "text-fuchsia-600" : "text-gray-400" },
     { label: "Discharge ready", n: summary.dischargesExpected, tone: "text-teal-600" },
-    { label: "Admissions expected", n: summary.admissionsExpected, tone: "text-sky-600" },
-    { label: "Transfers pending", n: summary.transfersPending, tone: summary.transfersPending ? "text-sky-600" : "text-gray-400" },
+    { label: "Admissions expected", n: summary.admissionsExpected, tone: "text-[var(--cmp-text-information)]" },
+    { label: "Transfers pending", n: summary.transfersPending, tone: summary.transfersPending ? "text-[var(--cmp-text-information)]" : "text-gray-400" },
     { label: "Theatre", n: summary.theatre, tone: summary.theatre ? "text-indigo-600" : "text-gray-400" },
-    { label: "Unassigned", n: summary.unassigned, tone: summary.unassigned ? "text-red-600" : "text-gray-400" },
+    { label: "Unassigned", n: summary.unassigned, tone: summary.unassigned ? "text-[var(--cmp-text-critical)]" : "text-gray-400" },
   ];
 
   // State filter chips — counts for each clinical state actually present.
@@ -163,12 +163,12 @@ export default async function PatientList() {
                     </div>
                   </td>
                   <td className="px-4 py-2.5 whitespace-nowrap">
-                    {p.nurse ? <span className="text-gray-700">{firstName(p.nurse)}</span> : <span className="text-red-600 font-medium">Unassigned</span>}
+                    {p.nurse ? <span className="text-gray-700">{firstName(p.nurse)}</span> : <span className="text-[var(--cmp-text-critical)] font-medium">Unassigned</span>}
                   </td>
                   <td className="px-4 py-2.5 whitespace-nowrap text-gray-500">{p.consultant ?? "—"}</td>
                   <td className="px-4 py-2.5 whitespace-nowrap">{p.stage ? <span className="text-[10px] px-2 py-0.5 rounded-full bg-teal-50 text-teal-700">{titleCase(p.stage)}</span> : <span className="text-gray-300">—</span>}</td>
                   <td className="px-4 py-2.5 whitespace-nowrap text-gray-500 tabular-nums">{fmtTime(p.lastObs)}</td>
-                  <td className={`px-4 py-2.5 whitespace-nowrap tabular-nums ${p.overdueObs ? "text-red-600 font-medium" : "text-gray-500"}`}>{fmtTime(p.nextReview)}</td>
+                  <td className={`px-4 py-2.5 whitespace-nowrap tabular-nums ${p.overdueObs ? "text-[var(--cmp-text-critical)] font-medium" : "text-gray-500"}`}>{fmtTime(p.nextReview)}</td>
                   <td className="px-4 py-2.5">
                     <div className="flex flex-wrap gap-1 max-w-[16rem]">
                       {p.flags.length === 0 && <span className="text-[11px] text-gray-300">—</span>}

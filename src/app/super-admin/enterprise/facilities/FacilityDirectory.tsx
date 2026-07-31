@@ -8,7 +8,7 @@ import { COUNTRIES } from "@/lib/countries";
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 const TYPES = ["hospital", "clinic", "health_center", "nursing_home", "diagnostic_center"];
-const STATUS_BADGE: Record<string, string> = { draft: "bg-gray-100 text-gray-600", onboarding: "bg-amber-50 text-amber-700", active: "bg-green-50 text-green-700", suspended: "bg-rose-50 text-rose-700", archived: "bg-gray-100 text-gray-500" };
+const STATUS_BADGE: Record<string, string> = { draft: "bg-gray-100 text-gray-600", onboarding: "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]", active: "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]", suspended: "bg-[var(--cmp-surface-error)] text-[var(--cmp-text-error)]", archived: "bg-gray-100 text-gray-500" };
 const input = "w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500/40";
 
 export default function FacilityDirectory({ rows, orgs }: { rows: any[]; orgs: any[] }) {
@@ -59,7 +59,7 @@ export default function FacilityDirectory({ rows, orgs }: { rows: any[]; orgs: a
             {filtered.length === 0 && <tr><td colSpan={7} className="px-4 py-8 text-center text-gray-400">No facilities match.</td></tr>}
             {filtered.map(r => (
               <tr key={r.id} onClick={() => router.push(`/super-admin/enterprise/facilities/${r.id}`)} className="border-b border-gray-50 hover:bg-gray-50/60 cursor-pointer">
-                <td className="px-4 py-3"><div className="flex items-center gap-2"><span className="w-7 h-7 rounded-lg bg-sky-50 flex items-center justify-center text-sm shrink-0">🏥</span><div className="min-w-0"><p className="font-medium text-gray-900 truncate">{r.name}</p>{r.code && <p className="text-[10px] text-gray-400">{r.code}</p>}</div></div></td>
+                <td className="px-4 py-3"><div className="flex items-center gap-2"><span className="w-7 h-7 rounded-lg bg-[var(--cmp-surface-information)] flex items-center justify-center text-sm shrink-0">🏥</span><div className="min-w-0"><p className="font-medium text-gray-900 truncate">{r.name}</p>{r.code && <p className="text-[10px] text-gray-400">{r.code}</p>}</div></div></td>
                 <td className="px-4 py-3 text-gray-500">{r.org ?? <span className="text-gray-300">Unlinked</span>}</td>
                 <td className="px-4 py-3 text-gray-600 capitalize">{(r.type ?? "").replace(/_/g, " ")}</td>
                 <td className="px-4 py-3 text-gray-600">{[r.city, r.country].filter(Boolean).join(", ")}</td>
@@ -87,7 +87,7 @@ export default function FacilityDirectory({ rows, orgs }: { rows: any[]; orgs: a
                 <div><label className="text-xs font-semibold text-gray-600 mb-1 block">City</label><input value={form.city} onChange={set("city")} className={input} placeholder="e.g. Mbale" /></div>
               </div>
               <div><label className="text-xs font-semibold text-gray-600 mb-1 block">Organisation</label><select value={form.organisation_id} onChange={set("organisation_id")} className={input}><option value="">— Unlinked —</option>{orgs.map(o => <option key={o.id} value={o.id}>{o.name}</option>)}</select></div>
-              {err && <p className="text-xs text-red-600 bg-red-50 rounded-lg px-3 py-2">{err}</p>}
+              {err && <p className="text-xs text-[var(--cmp-text-critical)] bg-[var(--cmp-surface-critical)] rounded-lg px-3 py-2">{err}</p>}
               <div className="flex gap-2 pt-1">
                 <button onClick={() => setOpen(false)} className="flex-1 py-2 border border-gray-200 rounded-lg text-sm text-gray-600 hover:bg-gray-50">Cancel</button>
                 <button onClick={create} disabled={saving} className="flex-1 py-2 bg-teal-600 text-white rounded-lg text-sm font-semibold hover:bg-teal-700 disabled:opacity-60">{saving ? "Creating…" : "Create"}</button>

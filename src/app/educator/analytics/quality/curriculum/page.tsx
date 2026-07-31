@@ -31,7 +31,7 @@ export default async function Curriculum() {
         <div className="bg-white border border-gray-100 rounded-2xl p-5">
           <h2 className="text-sm font-bold text-gray-900 mb-3">Curriculum Quality Scorecard</h2>
           <div className="flex flex-col gap-2">{bars.map(([l, v]) => (
-            <div key={l} className="flex items-center gap-2 text-[11px]"><span className="text-gray-500 w-32">{l}</span><div className="flex-1 h-2 bg-gray-100 rounded-full overflow-hidden"><div className={`h-full rounded-full ${(v ?? 0) >= 70 ? "bg-green-500" : (v ?? 0) >= 40 ? "bg-amber-400" : "bg-red-400"}`} style={{ width: `${v ?? 0}%` }} /></div><span className="font-bold text-gray-700 w-9 text-right">{pct(v)}</span></div>
+            <div key={l} className="flex items-center gap-2 text-[11px]"><span className="text-gray-500 w-32">{l}</span><div className="flex-1 h-2 bg-gray-100 rounded-full overflow-hidden"><div className={`h-full rounded-full ${(v ?? 0) >= 70 ? "bg-[var(--cmp-color-success)]" : (v ?? 0) >= 40 ? "bg-[var(--cmp-color-warning)]" : "bg-[var(--cmp-color-critical)]"}`} style={{ width: `${v ?? 0}%` }} /></div><span className="font-bold text-gray-700 w-9 text-right">{pct(v)}</span></div>
           ))}</div>
           <Link href="/educator/analytics/curriculum" className="inline-block mt-3 text-[11px] font-semibold text-purple-600 hover:underline">Full curriculum analytics →</Link>
         </div>

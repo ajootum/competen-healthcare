@@ -25,7 +25,7 @@ export default function GenerateRecs() {
         className="w-full text-[11px] font-bold text-white bg-purple-600 rounded-lg px-3 py-2 hover:bg-purple-700 disabled:opacity-50 transition-colors">
         {busy ? "Analysing…" : "✨ Generate AI Recommendations"}
       </button>
-      {error && <p className="text-[10px] text-red-600 mt-1.5">{error}</p>}
+      {error && <p className="text-[10px] text-[var(--cmp-text-critical)] mt-1.5">{error}</p>}
       {text && (
         <div className="mt-2 bg-purple-50/60 border border-purple-100 rounded-lg p-2.5">
           <p className="text-[11px] text-gray-700 whitespace-pre-wrap leading-relaxed max-h-56 overflow-y-auto">{text}</p>

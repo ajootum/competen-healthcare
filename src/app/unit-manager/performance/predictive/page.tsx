@@ -8,21 +8,21 @@ export const dynamic = "force-dynamic";
 // KPI risk heatmap. Rule-based/seeded intelligence (explainable), not an opaque model. Gate admin.
 /* eslint-disable @typescript-eslint/no-explicit-any */
 const money = (n: number) => (n >= 1000 ? `$${Math.round(n / 1000)}k` : `$${Math.round(n)}`);
-const HEAT = (n: number) => (n === 0 ? "bg-gray-50 text-gray-300" : n <= 1 ? "bg-emerald-100 text-emerald-700" : n <= 2 ? "bg-amber-100 text-amber-700" : "bg-rose-100 text-rose-700");
+const HEAT = (n: number) => (n === 0 ? "bg-gray-50 text-gray-300" : n <= 1 ? "bg-[var(--cmp-surface-success)] text-emerald-700" : n <= 2 ? "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]" : "bg-[var(--cmp-surface-error)] text-[var(--cmp-text-error)]");
 
 export default async function PredictivePage() {
   const { admin, isSuper, hid } = await paGuard();
   const d = await loadPaPredictive(admin, hid, isSuper) as any;
   const head = <Head code="UMW-PA-007 · Performance Analytics" title="Predictive Performance & AI Intelligence Centre" sub="AI-assisted intelligence — predict performance, surface emerging risks and recommend high-impact interventions, each explainable and traceable." />;
   if (!d.provisioned) return <div className="max-w-[1500px] space-y-4">{head}<Tabs active="007" /><Provision module="Predictive & AI Intelligence" /></div>;
-  if (!d.hasData) return <div className="max-w-[1500px] space-y-4">{head}<Tabs active="007" /><div className="bg-blue-50 border border-blue-200 rounded-xl p-6 text-sm text-blue-800">Seed the performance stores first.</div></div>;
+  if (!d.hasData) return <div className="max-w-[1500px] space-y-4">{head}<Tabs active="007" /><div className="bg-[var(--cmp-surface-information)] border border-[var(--cmp-color-information)] rounded-xl p-6 text-sm text-blue-800">Seed the performance stores first.</div></div>;
 
   const r = d.ribbon;
   return (
     <div className="max-w-[1500px] space-y-4">
       {head}<Tabs active="007" />
       <AiCopilotPanel endpoint="/api/performance/copilot" title="Predictive Performance — live copilot" sublabel="Grounded in your live balanced scorecard, KPI RAG status & trends · logged to the AI gateway" placeholder="Ask where you're off target, what's declining, what to prioritise…" prompts={["Performance briefing", "What's off target?", "What's trending down?", "Top improvement priorities"]} />
-      {d.empty && <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-[12px] text-amber-800">No predictions seeded yet — the <code className="font-mono">pa_predictions</code> table returned empty. Re-run migration 108 + the seed to populate. The risk heatmap below is derived from live KPI RAG status.</div>}
+      {d.empty && <div className="bg-[var(--cmp-surface-warning)] border border-[var(--cmp-color-warning)] rounded-lg p-3 text-[12px] text-amber-800">No predictions seeded yet — the <code className="font-mono">pa_predictions</code> table returned empty. Re-run migration 108 + the seed to populate. The risk heatmap below is derived from live KPI RAG status.</div>}
 
       <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-7 gap-3">
         <div className="bg-white border border-gray-200 rounded-xl p-3.5 flex items-center gap-2"><Ring pct={r.aiScore || 0} size={60} /><div><p className="text-[11px] text-gray-500 uppercase tracking-wide leading-tight">AI Performance</p><p className="text-[11px] text-indigo-600 font-medium">avg confidence</p></div></div>
@@ -59,7 +59,7 @@ export default async function PredictivePage() {
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
         <Card title="AI Recommendations" right={<span className="text-[11px] text-gray-400">ranked by impact</span>}>
           {d.recommendations.length ? <div className="space-y-2">{d.recommendations.map((p: any, i: number) => (
-            <div key={i} className="flex items-start gap-2 border border-gray-100 rounded-lg p-2.5"><span className="w-7 h-7 rounded-lg bg-indigo-50 flex items-center justify-center text-sm shrink-0">💡</span><div className="min-w-0 flex-1"><div className="flex items-center gap-1.5 flex-wrap"><p className="text-[12px] font-medium text-gray-900">{p.title}</p><Pill text={`${p.impact} impact`} tone={p.impact === "high" ? "rose" : "amber"} /></div><p className="text-[11px] text-gray-500">{p.detail}</p></div><div className="text-right shrink-0"><p className="text-[12px] font-semibold text-emerald-600">{money(p.benefit)}</p><p className="text-[10px] text-gray-400">{p.confidence}%</p></div></div>
+            <div key={i} className="flex items-start gap-2 border border-gray-100 rounded-lg p-2.5"><span className="w-7 h-7 rounded-lg bg-indigo-50 flex items-center justify-center text-sm shrink-0">💡</span><div className="min-w-0 flex-1"><div className="flex items-center gap-1.5 flex-wrap"><p className="text-[12px] font-medium text-gray-900">{p.title}</p><Pill text={`${p.impact} impact`} tone={p.impact === "high" ? "rose" : "amber"} /></div><p className="text-[11px] text-gray-500">{p.detail}</p></div><div className="text-right shrink-0"><p className="text-[12px] font-semibold text-[var(--cmp-text-success)]">{money(p.benefit)}</p><p className="text-[10px] text-gray-400">{p.confidence}%</p></div></div>
           ))}</div> : <p className="text-sm text-gray-400 py-4 text-center">No recommendations.</p>}
         </Card>
 

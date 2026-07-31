@@ -27,10 +27,10 @@ export default async function OfficeMembershipPage() {
       <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
         <Kpi label="Competency Offices" value={k.offices} sub="governance committees" />
         <Kpi label="Total Members" value={k.members} sub="distinct people" />
-        <Kpi label="Chairs appointed" value={k.chairs} sub={k.officesNoChair ? `${k.officesNoChair} office${k.officesNoChair > 1 ? "s" : ""} without a chair` : "every office chaired"} tone={k.officesNoChair ? "text-amber-600" : "text-emerald-600"} />
-        <Kpi label="Delegations active" value={k.delegationsActive ?? "—"} sub={d.delegationsTableOk ? "acting authority" : "store not provisioned"} tone={k.delegationsActive ? "text-blue-600" : undefined} />
+        <Kpi label="Chairs appointed" value={k.chairs} sub={k.officesNoChair ? `${k.officesNoChair} office${k.officesNoChair > 1 ? "s" : ""} without a chair` : "every office chaired"} tone={k.officesNoChair ? "text-[var(--cmp-text-warning)]" : "text-[var(--cmp-text-success)]"} />
+        <Kpi label="Delegations active" value={k.delegationsActive ?? "—"} sub={d.delegationsTableOk ? "acting authority" : "store not provisioned"} tone={k.delegationsActive ? "text-[var(--cmp-text-information)]" : undefined} />
         <Kpi label="Reviewers" value={k.reviewers} sub="review role" />
-        <Kpi label="Membership compliance" value={`${k.compliancePct}%`} sub="chaired & at quorum" tone={k.compliancePct >= 80 ? "text-emerald-600" : k.compliancePct >= 50 ? "text-amber-600" : "text-rose-600"} />
+        <Kpi label="Membership compliance" value={`${k.compliancePct}%`} sub="chaired & at quorum" tone={k.compliancePct >= 80 ? "text-[var(--cmp-text-success)]" : k.compliancePct >= 50 ? "text-[var(--cmp-text-warning)]" : "text-[var(--cmp-text-error)]"} />
       </div>
 
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
@@ -81,7 +81,7 @@ export default async function OfficeMembershipPage() {
               <span className="w-24"><Pill text={o.level} tone={d.levelTone[o.level] ?? "slate"} /></span>
               <span className="w-16 text-center text-gray-700 tabular-nums">{o.memberCount}</span>
               <span className="w-40 text-gray-600 truncate">{o.chairName ?? "— vacant"}</span>
-              <span className={`w-20 text-center tabular-nums ${o.meetsQuorum ? "text-gray-500" : "text-rose-600 font-semibold"}`}>{o.memberCount}/{o.quorum || "—"}</span>
+              <span className={`w-20 text-center tabular-nums ${o.meetsQuorum ? "text-gray-500" : "text-[var(--cmp-text-error)] font-semibold"}`}>{o.memberCount}/{o.quorum || "—"}</span>
               <span className="w-20 text-right"><Pill text={o.active ? "active" : "inactive"} tone={o.active ? "emerald" : "slate"} /></span>
             </div>
           ))}

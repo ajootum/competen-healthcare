@@ -36,7 +36,7 @@ export default async function SeniorAssessorsPage() {
       </div>
 
       {seniors.length === 0 && (
-        <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 mb-4 text-xs text-amber-800">
+        <div className="bg-[var(--cmp-surface-warning)] border border-[var(--cmp-color-warning)] rounded-xl px-4 py-3 mb-4 text-xs text-amber-800">
           ⚠️ No senior assessors yet — escalated evidence will wait until you appoint at least one
           (hospital admins can also decide escalations).
         </div>
@@ -59,7 +59,7 @@ export default async function SeniorAssessorsPage() {
                 )}
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-semibold text-gray-900 truncate">
-                    {a.full_name}{a.is_senior_assessor && <span className="ml-2 text-[9px] font-bold bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded align-middle">⭐ SENIOR</span>}
+                    {a.full_name}{a.is_senior_assessor && <span className="ml-2 text-[9px] font-bold bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)] px-1.5 py-0.5 rounded align-middle">⭐ SENIOR</span>}
                   </p>
                   <p className="text-[10px] text-gray-400 capitalize">{(a.roles?.length ? a.roles : [a.role]).join(", ").replace(/_/g, " ")}</p>
                 </div>

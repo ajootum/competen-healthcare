@@ -9,7 +9,7 @@ import CurriculumNav from "../CurriculumNav";
 // stores — shown honestly.
 
 export const dynamic = "force-dynamic";
-const SEV_CLS: Record<string, string> = { Critical: "bg-red-50 text-red-600", High: "bg-amber-50 text-amber-600", Medium: "bg-yellow-50 text-yellow-700", Low: "bg-green-50 text-green-600" };
+const SEV_CLS: Record<string, string> = { Critical: "bg-[var(--cmp-surface-critical)] text-[var(--cmp-text-critical)]", High: "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]", Medium: "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]", Low: "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]" };
 const QUICK = [["Create Improvement Plan", "/educator/plans"], ["Assign Owner", "/educator/interventions"], ["Launch Curriculum Review", "/educator/studio/curriculum"], ["Generate Gap Report", "/educator/validation-analytics"]];
 
 export default async function Gaps() {

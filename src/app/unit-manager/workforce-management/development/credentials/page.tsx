@@ -43,7 +43,7 @@ export default async function CredentialsExpiry() {
     </>
   );
 
-  if (!d.ready) return <div className="space-y-4">{header}<div className="bg-amber-50 border border-amber-200 rounded-xl p-6"><p className="font-semibold text-amber-900">⚙️ No operational data</p></div></div>;
+  if (!d.ready) return <div className="space-y-4">{header}<div className="bg-[var(--cmp-surface-warning)] border border-[var(--cmp-color-warning)] rounded-xl p-6"><p className="font-semibold text-amber-900">⚙️ No operational data</p></div></div>;
 
   const k = d.kpis;
   const rows = [...d.expiredStaff.map((s: any) => ({ ...s, bucket: "Expired" })), ...d.expiringStaff.map((s: any) => ({ ...s, bucket: "Expiring ≤30d" }))];
@@ -52,10 +52,10 @@ export default async function CredentialsExpiry() {
       {header}
 
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        <Kpi label="Expired" value={k.credentialsExpired} tone={k.credentialsExpired ? "text-rose-600" : "text-emerald-600"} />
-        <Kpi label="Expiring ≤30d" value={k.credentialsExpiring} tone={k.credentialsExpiring ? "text-amber-600" : "text-emerald-600"} />
-        <Kpi label="Current" value={k.fullyDeployable + k.renewalDue - k.credentialsExpiring} tone="text-emerald-600" />
-        <Kpi label="No record" value={k.noRecord} tone={k.noRecord ? "text-amber-600" : undefined} />
+        <Kpi label="Expired" value={k.credentialsExpired} tone={k.credentialsExpired ? "text-[var(--cmp-text-error)]" : "text-[var(--cmp-text-success)]"} />
+        <Kpi label="Expiring ≤30d" value={k.credentialsExpiring} tone={k.credentialsExpiring ? "text-[var(--cmp-text-warning)]" : "text-[var(--cmp-text-success)]"} />
+        <Kpi label="Current" value={k.fullyDeployable + k.renewalDue - k.credentialsExpiring} tone="text-[var(--cmp-text-success)]" />
+        <Kpi label="No record" value={k.noRecord} tone={k.noRecord ? "text-[var(--cmp-text-warning)]" : undefined} />
       </div>
 
       <div className={`${card} p-5`}>
@@ -63,7 +63,7 @@ export default async function CredentialsExpiry() {
         {rows.length === 0 ? <p className="text-sm text-gray-400">No expired or expiring credentials. 🎉</p> : (
           <div className="overflow-x-auto"><table className="w-full text-xs">
             <thead><tr className="text-gray-400 text-left border-b border-gray-100"><th className="py-2 pr-3 font-medium">Staff</th><th className="py-2 pr-3 font-medium">Role</th><th className="py-2 pr-3 font-medium">Bucket</th><th className="py-2 font-medium">Deployment impact</th></tr></thead>
-            <tbody>{rows.map((s: any, i: number) => (<tr key={i} className="border-b border-gray-50"><td className="py-2 pr-3 text-gray-800 font-medium">{s.name}</td><td className="py-2 pr-3 text-gray-500">{ROLE_LABEL[s.role] ?? s.role}</td><td className="py-2 pr-3"><span className={`text-[9px] px-1.5 py-0.5 rounded ${s.bucket === "Expired" ? "bg-rose-50 text-rose-700" : "bg-amber-50 text-amber-700"}`}>{s.bucket}</span></td><td className="py-2 text-gray-500">{s.bucket === "Expired" ? "Blocks independent deployment (BR-WDR-004)" : "Renew before expiry"}</td></tr>))}</tbody>
+            <tbody>{rows.map((s: any, i: number) => (<tr key={i} className="border-b border-gray-50"><td className="py-2 pr-3 text-gray-800 font-medium">{s.name}</td><td className="py-2 pr-3 text-gray-500">{ROLE_LABEL[s.role] ?? s.role}</td><td className="py-2 pr-3"><span className={`text-[9px] px-1.5 py-0.5 rounded ${s.bucket === "Expired" ? "bg-[var(--cmp-surface-error)] text-[var(--cmp-text-error)]" : "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]"}`}>{s.bucket}</span></td><td className="py-2 text-gray-500">{s.bucket === "Expired" ? "Blocks independent deployment (BR-WDR-004)" : "Renew before expiry"}</td></tr>))}</tbody>
           </table></div>
         )}
         <p className="text-[10px] text-gray-400 mt-2">Currency is from competency_decisions.expiry_date. Configurable expiry alerts (180/90/60/30/14/7d), issuing-body verification and evidence upload need a dedicated credentialing store → next-phase. A revoked/suspended credential can&apos;t be operationally overridden (BR-WDR-013).</p>

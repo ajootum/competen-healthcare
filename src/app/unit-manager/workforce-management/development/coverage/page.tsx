@@ -15,8 +15,8 @@ export const dynamic = "force-dynamic";
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 const card = "bg-white rounded-xl border border-gray-200";
-const COV = (pct: number | null, total: number, current: number) => current === 0 ? { label: "No validated coverage", tone: "bg-rose-50 text-rose-700" } : current === 1 ? { label: "Covered but concentrated", tone: "bg-amber-50 text-amber-700" } : (pct ?? 0) >= 90 ? { label: "Fully covered", tone: "bg-emerald-50 text-emerald-700" } : (pct ?? 0) >= 60 ? { label: "Marginal coverage", tone: "bg-amber-50 text-amber-700" } : { label: "Gap exists", tone: "bg-rose-50 text-rose-700" };
-const SKILL_TONE: Record<string, string> = { Current: "bg-emerald-500", Expiring: "bg-amber-400", Expired: "bg-rose-500", None: "bg-gray-300" };
+const COV = (pct: number | null, total: number, current: number) => current === 0 ? { label: "No validated coverage", tone: "bg-[var(--cmp-surface-error)] text-[var(--cmp-text-error)]" } : current === 1 ? { label: "Covered but concentrated", tone: "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]" } : (pct ?? 0) >= 90 ? { label: "Fully covered", tone: "bg-[var(--cmp-surface-success)] text-emerald-700" } : (pct ?? 0) >= 60 ? { label: "Marginal coverage", tone: "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]" } : { label: "Gap exists", tone: "bg-[var(--cmp-surface-error)] text-[var(--cmp-text-error)]" };
+const SKILL_TONE: Record<string, string> = { Current: "bg-[var(--cmp-color-success)]", Expiring: "bg-[var(--cmp-color-warning)]", Expired: "bg-[var(--cmp-color-error)]", None: "bg-gray-300" };
 
 export default async function CompetencyCoverage() {
   const supabase = await createClient();
@@ -43,7 +43,7 @@ export default async function CompetencyCoverage() {
     </>
   );
 
-  if (!d.ready) return <div className="space-y-4">{header}<div className="bg-amber-50 border border-amber-200 rounded-xl p-6"><p className="font-semibold text-amber-900">⚙️ No operational data</p></div></div>;
+  if (!d.ready) return <div className="space-y-4">{header}<div className="bg-[var(--cmp-surface-warning)] border border-[var(--cmp-color-warning)] rounded-xl p-6"><p className="font-semibold text-amber-900">⚙️ No operational data</p></div></div>;
 
   const skillTotal = d.skillMix.reduce((n: number, s: any) => n + s.n, 0) || 1;
   return (
@@ -51,9 +51,9 @@ export default async function CompetencyCoverage() {
       {header}
 
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        <Kpi label="Roles covered" value={d.roleCoverage.filter((r: any) => r.current >= 2).length} tone="text-emerald-600" />
-        <Kpi label="No coverage" value={d.noCoverage.length} tone={d.noCoverage.length ? "text-rose-600" : "text-emerald-600"} />
-        <Kpi label="Single-person dependency" value={d.singleDep.length} tone={d.singleDep.length ? "text-amber-600" : "text-emerald-600"} />
+        <Kpi label="Roles covered" value={d.roleCoverage.filter((r: any) => r.current >= 2).length} tone="text-[var(--cmp-text-success)]" />
+        <Kpi label="No coverage" value={d.noCoverage.length} tone={d.noCoverage.length ? "text-[var(--cmp-text-error)]" : "text-[var(--cmp-text-success)]"} />
+        <Kpi label="Single-person dependency" value={d.singleDep.length} tone={d.singleDep.length ? "text-[var(--cmp-text-warning)]" : "text-[var(--cmp-text-success)]"} />
         <Kpi label="Match score" value={d.kpis.matchScore != null ? `${d.kpis.matchScore}%` : "—"} />
       </div>
 
@@ -74,7 +74,7 @@ export default async function CompetencyCoverage() {
         <div className="space-y-4 xl:col-span-1">
           <div className={`${card} p-5`}>
             <h3 className="text-sm font-bold text-gray-900 mb-2">Dependency risk <span className="text-[10px] text-gray-400 font-normal">§12.3</span></h3>
-            {d.noCoverage.length === 0 && d.singleDep.length === 0 ? <p className="text-sm text-gray-400">No single-person dependencies. 🎉</p> : <div className="space-y-1.5">{[...d.noCoverage.map((r: any) => ({ ...r, kind: "No coverage" })), ...d.singleDep.map((r: any) => ({ ...r, kind: "Single-person" }))].map((r: any, i: number) => (<div key={i} className="flex items-center justify-between text-xs rounded-lg border border-gray-100 p-2"><span className="text-gray-700">{r.label}</span><span className={`text-[9px] px-1.5 py-0.5 rounded ${r.kind === "No coverage" ? "bg-rose-50 text-rose-700" : "bg-amber-50 text-amber-700"}`}>{r.kind}</span></div>))}</div>}
+            {d.noCoverage.length === 0 && d.singleDep.length === 0 ? <p className="text-sm text-gray-400">No single-person dependencies. 🎉</p> : <div className="space-y-1.5">{[...d.noCoverage.map((r: any) => ({ ...r, kind: "No coverage" })), ...d.singleDep.map((r: any) => ({ ...r, kind: "Single-person" }))].map((r: any, i: number) => (<div key={i} className="flex items-center justify-between text-xs rounded-lg border border-gray-100 p-2"><span className="text-gray-700">{r.label}</span><span className={`text-[9px] px-1.5 py-0.5 rounded ${r.kind === "No coverage" ? "bg-[var(--cmp-surface-error)] text-[var(--cmp-text-error)]" : "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]"}`}>{r.kind}</span></div>))}</div>}
             <p className="text-[10px] text-gray-400 mt-2">Single-person dependency is a key workforce risk (BR-WDR-016) — cross-train to reduce concentration.</p>
           </div>
           <div className={`${card} p-5`}>

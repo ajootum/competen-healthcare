@@ -8,8 +8,8 @@ import { loadAssessorReliability } from "@/lib/assurance/assessor-reliability";
 export const dynamic = "force-dynamic";
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
-const TONE: Record<string, string> = { emerald: "text-emerald-700 bg-emerald-50 border-emerald-100", amber: "text-amber-700 bg-amber-50 border-amber-100", rose: "text-rose-700 bg-rose-50 border-rose-100" };
-const relTone = (n: number) => (n >= 80 ? "text-emerald-600" : n >= 60 ? "text-amber-600" : "text-rose-600");
+const TONE: Record<string, string> = { emerald: "text-emerald-700 bg-[var(--cmp-surface-success)] border-[var(--cmp-color-success)]", amber: "text-[var(--cmp-text-warning)] bg-[var(--cmp-surface-warning)] border-[var(--cmp-color-warning)]", rose: "text-[var(--cmp-text-error)] bg-[var(--cmp-surface-error)] border-[var(--cmp-color-error)]" };
+const relTone = (n: number) => (n >= 80 ? "text-[var(--cmp-text-success)]" : n >= 60 ? "text-[var(--cmp-text-warning)]" : "text-[var(--cmp-text-error)]");
 
 export default async function AssessorReliabilityPage() {
   const supabase = await createClient();
@@ -35,7 +35,7 @@ export default async function AssessorReliabilityPage() {
       </div>
 
       {!q.provisioned ? (
-        <div className="bg-amber-50 border border-amber-100 rounded-xl p-4"><p className="text-[13px] text-amber-900">Assessment data isn&apos;t provisioned — the reliability engine reads <code className="text-[11px]">assessments</code> + <code className="text-[11px]">skill_scores</code>.</p></div>
+        <div className="bg-[var(--cmp-surface-warning)] border border-[var(--cmp-color-warning)] rounded-xl p-4"><p className="text-[13px] text-amber-900">Assessment data isn&apos;t provisioned — the reliability engine reads <code className="text-[11px]">assessments</code> + <code className="text-[11px]">skill_scores</code>.</p></div>
       ) : q.empty ? (
         <div className="bg-white border border-gray-100 rounded-xl p-6"><p className="text-sm text-gray-400">No scored assessments recorded yet. Once assessors score competencies, per-assessor reliability populates here automatically.</p></div>
       ) : (
@@ -45,8 +45,8 @@ export default async function AssessorReliabilityPage() {
               { label: "Assessors", value: q.kpis.assessors, tone: "text-gray-900" },
               { label: "Assessments scored", value: q.kpis.assessments, tone: "text-gray-900" },
               { label: "Peer mean score", value: `${q.kpis.globalMean}/6`, tone: "text-indigo-600" },
-              { label: "Within tolerance", value: `${q.kpis.withinTolerance}/${q.kpis.judged}`, tone: "text-emerald-600" },
-              { label: "Calibration watch", value: q.kpis.watchlist, tone: q.kpis.watchlist ? "text-rose-600" : "text-gray-900" },
+              { label: "Within tolerance", value: `${q.kpis.withinTolerance}/${q.kpis.judged}`, tone: "text-[var(--cmp-text-success)]" },
+              { label: "Calibration watch", value: q.kpis.watchlist, tone: q.kpis.watchlist ? "text-[var(--cmp-text-error)]" : "text-gray-900" },
               { label: "Inter-rater agree", value: q.kpis.interRaterAgreement != null ? `${q.kpis.interRaterAgreement}%` : "—", tone: "text-gray-900" },
             ].map(k => (
               <div key={k.label} className={`${card} p-3.5`}><p className={`text-xl font-bold tabular-nums ${k.tone}`}>{k.value}</p><p className="text-[10px] text-gray-400 font-medium mt-0.5 leading-tight">{k.label}</p></div>
@@ -85,7 +85,7 @@ export default async function AssessorReliabilityPage() {
                         <td className="py-2 px-4 text-gray-800 truncate max-w-[160px]">{a.name}{a.lowConfidence && <span className="ml-1 text-[9px] text-gray-400">·low n</span>}</td>
                         <td className="py-2 px-2 text-gray-500 tabular-nums text-right">{a.n}</td>
                         <td className="py-2 px-2 text-gray-700 tabular-nums text-right">{a.meanScore}</td>
-                        <td className={`py-2 px-2 tabular-nums text-right font-medium ${a.deviation > 0 ? "text-amber-600" : a.deviation < 0 ? "text-rose-600" : "text-gray-400"}`}>{a.deviation > 0 ? "+" : ""}{a.deviation}</td>
+                        <td className={`py-2 px-2 tabular-nums text-right font-medium ${a.deviation > 0 ? "text-[var(--cmp-text-warning)]" : a.deviation < 0 ? "text-[var(--cmp-text-error)]" : "text-gray-400"}`}>{a.deviation > 0 ? "+" : ""}{a.deviation}</td>
                         <td className="py-2 px-2"><span className={`text-[9px] font-bold uppercase tracking-wide border rounded px-1.5 py-0.5 ${TONE[a.tendencyTone]}`}>{a.tendency}</span></td>
                         <td className="py-2 px-2 text-gray-500 tabular-nums text-right">{a.stdev}</td>
                         <td className={`py-2 px-4 tabular-nums text-right font-bold ${a.lowConfidence ? "text-gray-300" : relTone(a.reliability)}`}>{a.lowConfidence ? "—" : a.reliability}</td>

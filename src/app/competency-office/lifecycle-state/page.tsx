@@ -21,14 +21,14 @@ export default async function LifecycleStatePage() {
   return (
     <div className="space-y-4">
       {head}
-      {d.empty && <div className="bg-blue-50 border border-blue-200 rounded-xl p-3 text-[12px] text-blue-800">No lifecycle states recorded yet — states seed from competency decisions and transition as competencies are assigned, assessed, validated and expire.</div>}
+      {d.empty && <div className="bg-[var(--cmp-surface-information)] border border-[var(--cmp-color-information)] rounded-xl p-3 text-[12px] text-blue-800">No lifecycle states recorded yet — states seed from competency decisions and transition as competencies are assigned, assessed, validated and expire.</div>}
 
       <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
         <Kpi label="Competencies tracked" value={k.total} />
-        <Kpi label="Active / current" value={k.active} tone="text-emerald-600" sub="competent + renewed" />
-        <Kpi label="Needs attention" value={k.attention} tone={k.attention ? "text-rose-600" : "text-gray-900"} sub="expired / remediation / suspended" />
-        <Kpi label="In progress" value={k.inProgress} tone="text-blue-600" sub="assigned → under review" />
-        <Kpi label="Renewed" value={k.renewed} tone="text-emerald-600" />
+        <Kpi label="Active / current" value={k.active} tone="text-[var(--cmp-text-success)]" sub="competent + renewed" />
+        <Kpi label="Needs attention" value={k.attention} tone={k.attention ? "text-[var(--cmp-text-error)]" : "text-gray-900"} sub="expired / remediation / suspended" />
+        <Kpi label="In progress" value={k.inProgress} tone="text-[var(--cmp-text-information)]" sub="assigned → under review" />
+        <Kpi label="Renewed" value={k.renewed} tone="text-[var(--cmp-text-success)]" />
         <Kpi label="Transitions (30d)" value={k.transitions30d} sub="logged events" />
       </div>
 

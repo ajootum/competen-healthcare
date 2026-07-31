@@ -16,7 +16,7 @@ const CATS = ["clinical", "operational", "analytics", "governance", "workforce",
 const LICENSES = ["proprietary", "open", "subscription", "enterprise"];
 const PRICING = ["included", "subscription", "one_time", "usage_based"];
 const VIS = ["private", "enterprise", "public"];
-const ST: Record<string, string> = { draft: "bg-gray-100 text-gray-600", validated: "bg-sky-100 text-sky-700", published: "bg-emerald-100 text-emerald-700", deprecated: "bg-amber-100 text-amber-700", retired: "bg-gray-100 text-gray-400" };
+const ST: Record<string, string> = { draft: "bg-gray-100 text-gray-600", validated: "bg-[var(--cmp-surface-information)] text-[var(--cmp-text-information)]", published: "bg-[var(--cmp-surface-success)] text-emerald-700", deprecated: "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]", retired: "bg-gray-100 text-gray-400" };
 const input = "border border-gray-200 rounded px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-indigo-400 bg-white";
 
 function closure(members: string[], dep: Record<string, string[]>): Set<string> {
@@ -110,7 +110,7 @@ export default function PackageBuilder({ packages, objects, dependsOn }: { packa
                         <span className="text-[8px] px-1 py-px rounded bg-gray-100 text-gray-500 shrink-0">{o?.object_type ?? "?"}</span>
                         <span className="text-gray-700 truncate flex-1">{o?.display_name ?? k}</span>
                         {dep && <span className="text-[8px] text-indigo-400" title="also required by another member">dep</span>}
-                        <button onClick={() => toggle(k)} className="text-gray-300 hover:text-rose-600">✕</button>
+                        <button onClick={() => toggle(k)} className="text-gray-300 hover:text-[var(--cmp-text-error)]">✕</button>
                       </div>
                     ); })}
                   </div>
@@ -136,22 +136,22 @@ export default function PackageBuilder({ packages, objects, dependsOn }: { packa
             </div>
 
             {/* Dependency resolver — the signature piece */}
-            <div className={`rounded-lg border p-3 ${complete ? "bg-emerald-50 border-emerald-200" : "bg-rose-50 border-rose-200"}`}>
+            <div className={`rounded-lg border p-3 ${complete ? "bg-[var(--cmp-surface-success)] border-[var(--cmp-color-success)]" : "bg-[var(--cmp-surface-error)] border-[var(--cmp-color-error)]"}`}>
               <div className="flex items-center justify-between">
                 <p className={`text-xs font-semibold ${complete ? "text-emerald-800" : "text-rose-800"}`}>{complete ? `✓ Dependency-complete — ${members.length} member(s), ${required.size} satisfied` : `✕ ${missingDeps.length} required object(s) missing from the bundle`}</p>
-                {!complete && <button onClick={addMissing} className="text-[11px] font-medium text-white bg-rose-600 hover:bg-rose-700 rounded px-2.5 py-1">Add all missing</button>}
+                {!complete && <button onClick={addMissing} className="text-[11px] font-medium text-white bg-[var(--cmp-color-error)] hover:bg-rose-700 rounded px-2.5 py-1">Add all missing</button>}
               </div>
               {!complete && (
                 <div className="mt-2 flex flex-wrap gap-1.5">
-                  {missingDeps.map(k => { const o = byKey.get(k); return <button key={k} onClick={() => toggle(k)} className="text-[10px] bg-white border border-rose-200 text-rose-700 rounded px-1.5 py-0.5 hover:bg-rose-100" title="click to add">{o ? o.display_name : k} +</button>; })}
+                  {missingDeps.map(k => { const o = byKey.get(k); return <button key={k} onClick={() => toggle(k)} className="text-[10px] bg-white border border-[var(--cmp-color-error)] text-[var(--cmp-text-error)] rounded px-1.5 py-0.5 hover:bg-[var(--cmp-surface-error)]" title="click to add">{o ? o.display_name : k} +</button>; })}
                 </div>
               )}
             </div>
 
-            {msg && <p className={`text-xs mt-3 ${msg.startsWith("✓") ? "text-emerald-600" : "text-rose-600"}`}>{msg}</p>}
+            {msg && <p className={`text-xs mt-3 ${msg.startsWith("✓") ? "text-[var(--cmp-text-success)]" : "text-[var(--cmp-text-error)]"}`}>{msg}</p>}
             <div className="flex items-center justify-end gap-2 mt-4">
               <button onClick={() => save(false)} disabled={busy} className="text-sm font-medium text-indigo-700 border border-indigo-200 rounded-lg px-4 py-2 hover:bg-indigo-50 disabled:opacity-50">{busy ? "…" : "Save"}</button>
-              <button onClick={() => save(true)} disabled={busy || !complete || members.length === 0} title={!complete ? "Resolve missing dependencies first" : members.length === 0 ? "Add members first" : "Publish to the marketplace"} className="text-sm font-medium text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg px-4 py-2 disabled:opacity-40">Publish</button>
+              <button onClick={() => save(true)} disabled={busy || !complete || members.length === 0} title={!complete ? "Resolve missing dependencies first" : members.length === 0 ? "Add members first" : "Publish to the marketplace"} className="text-sm font-medium text-white bg-[var(--cmp-color-success)] hover:bg-emerald-700 rounded-lg px-4 py-2 disabled:opacity-40">Publish</button>
             </div>
           </>
         )}

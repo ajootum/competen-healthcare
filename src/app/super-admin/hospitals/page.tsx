@@ -31,7 +31,7 @@ export default async function AllHospitalsPage() {
 
   const tierBadge: Record<string, string> = {
     free:         "bg-gray-100 text-gray-600",
-    professional: "bg-blue-100 text-blue-700",
+    professional: "bg-[var(--cmp-surface-information)] text-blue-700",
     enterprise:   "bg-purple-100 text-purple-700",
   };
 
@@ -68,7 +68,7 @@ export default async function AllHospitalsPage() {
                 <tr key={h.id} className="hover:bg-gray-50/40">
                   <td className="px-5 py-3.5">
                     <div className="flex items-center gap-2.5">
-                      <div className="w-8 h-8 rounded-lg bg-rose-50 flex items-center justify-center text-rose-600 text-sm shrink-0">🏥</div>
+                      <div className="w-8 h-8 rounded-lg bg-[var(--cmp-surface-error)] flex items-center justify-center text-[var(--cmp-text-error)] text-sm shrink-0">🏥</div>
                       <div>
                         <p className="font-medium text-gray-900">{h.name}</p>
                         <p className="text-[10px] text-gray-400 font-mono mt-0.5">{h.id.slice(0, 8)}…</p>

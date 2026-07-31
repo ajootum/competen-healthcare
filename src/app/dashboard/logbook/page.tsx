@@ -112,7 +112,7 @@ export default async function SkillsLogbookPage() {
             {[
               { label: "Knows (P1)", sub: "Observed practice", value: miller.p1, cls: "text-gray-500" },
               { label: "Knows How (P2)", sub: "Supervised practice", value: miller.p2, cls: "text-teal-600" },
-              { label: "Shows How (P3)", sub: "Independent performance", value: miller.p3, cls: "text-green-600" },
+              { label: "Shows How (P3)", sub: "Independent performance", value: miller.p3, cls: "text-[var(--cmp-text-success)]" },
             ].map(m => (
               <div key={m.label} className="bg-gray-50/70 rounded-lg py-3">
                 <p className="text-lg">🔺</p>

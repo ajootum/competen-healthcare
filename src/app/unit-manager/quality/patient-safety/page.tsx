@@ -43,10 +43,10 @@ function Tile({ icon, tint, label, n }: { icon: string; tint: string; label: str
   );
 }
 
-const scoreTone = (s: number | null) => (s == null ? "text-gray-400" : s >= 85 ? "text-emerald-600" : s >= 70 ? "text-amber-600" : "text-rose-600");
+const scoreTone = (s: number | null) => (s == null ? "text-gray-400" : s >= 85 ? "text-[var(--cmp-text-success)]" : s >= 70 ? "text-[var(--cmp-text-warning)]" : "text-[var(--cmp-text-error)]");
 const scoreWord = (s: number | null) => (s == null ? "—" : s >= 85 ? "Good" : s >= 70 ? "Fair" : "Needs focus");
-const riskTone = (s: number) => (s >= 8 ? "bg-rose-500 text-white" : s >= 7 ? "bg-orange-400 text-white" : "bg-amber-300 text-amber-900");
-const aiTint: Record<string, string> = { red: "bg-rose-50 text-rose-600", amber: "bg-amber-50 text-amber-600", purple: "bg-violet-50 text-violet-600" };
+const riskTone = (s: number) => (s >= 8 ? "bg-[var(--cmp-color-error)] text-white" : s >= 7 ? "bg-[var(--cmp-color-warning)] text-white" : "bg-amber-300 text-amber-900");
+const aiTint: Record<string, string> = { red: "bg-[var(--cmp-surface-error)] text-[var(--cmp-text-error)]", amber: "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]", purple: "bg-violet-50 text-violet-600" };
 
 export default async function PatientSafetyCentre() {
   const supabase = await createClient();
@@ -67,30 +67,30 @@ export default async function PatientSafetyCentre() {
   const header = (
     <>
       <div className="flex items-start justify-between gap-3 flex-wrap">
-        <div className="flex items-center gap-2"><span className="w-9 h-9 rounded-lg bg-rose-50 flex items-center justify-center text-lg">🛡️</span><div><h1 className="text-2xl font-bold text-gray-900 tracking-tight">Patient Safety Centre <span className="text-gray-300 font-medium text-lg">(UMG-QS-007)</span></h1><p className="text-sm text-gray-500">Proactively monitor, prevent and improve patient safety across the unit.</p></div></div>
+        <div className="flex items-center gap-2"><span className="w-9 h-9 rounded-lg bg-[var(--cmp-surface-error)] flex items-center justify-center text-lg">🛡️</span><div><h1 className="text-2xl font-bold text-gray-900 tracking-tight">Patient Safety Centre <span className="text-gray-300 font-medium text-lg">(UMG-QS-007)</span></h1><p className="text-sm text-gray-500">Proactively monitor, prevent and improve patient safety across the unit.</p></div></div>
         <div className="flex items-center gap-2">
           <UnitFilters departments={departments} />
           <Link href="/unit-manager/quality/patient-safety" className="text-xs border border-gray-200 rounded-lg px-3 py-2 text-gray-600 hover:bg-gray-50">↻ Refresh</Link>
-          <Link href="/supervisor/quality-safety" className="text-xs bg-rose-600 text-white rounded-lg px-3 py-2 hover:bg-rose-700 font-medium">+ Report Event</Link>
+          <Link href="/supervisor/quality-safety" className="text-xs bg-[var(--cmp-color-error)] text-white rounded-lg px-3 py-2 hover:bg-rose-700 font-medium">+ Report Event</Link>
         </div>
       </div>
       <QualityTabs />
     </>
   );
 
-  if (!d.provisioned) return <div className="space-y-4">{header}<div className="bg-amber-50 border border-amber-200 rounded-xl p-6"><p className="font-semibold text-amber-900">⚙️ Safety operations not provisioned</p><p className="text-sm text-amber-800 mt-1">Apply migration 073 (op_incidents / op_quality_actions) to enable the Patient Safety Centre.</p></div></div>;
+  if (!d.provisioned) return <div className="space-y-4">{header}<div className="bg-[var(--cmp-surface-warning)] border border-[var(--cmp-color-warning)] rounded-xl p-6"><p className="font-semibold text-amber-900">⚙️ Safety operations not provisioned</p><p className="text-sm text-amber-800 mt-1">Apply migration 073 (op_incidents / op_quality_actions) to enable the Patient Safety Centre.</p></div></div>;
 
   const rb = d.ribbon;
   const KPIS = [
-    { icon: "🛡️", tint: "bg-emerald-50 text-emerald-600", label: "Overall Safety Score", value: rb.safetyScore == null ? "—" : `${rb.safetyScore}%`, sub: scoreWord(rb.safetyScore), tone: scoreTone(rb.safetyScore) },
-    { icon: "⚠️", tint: "bg-rose-50 text-rose-600", label: "Safety Events", value: rb.events, sub: "last 30 days" },
-    { icon: "🚨", tint: "bg-rose-50 text-rose-600", label: "Serious Events", value: rb.serious, sub: "high / critical", tone: rb.serious ? "text-rose-600" : undefined },
-    { icon: "🛟", tint: "bg-sky-50 text-sky-600", label: "Near Misses", value: rb.nearMisses, sub: "reported (no harm)" },
-    { icon: "🤕", tint: "bg-amber-50 text-amber-600", label: "Falls", value: rb.falls, sub: "incidents · 30d" },
-    { icon: "💊", tint: "bg-orange-50 text-orange-600", label: "Medication Errors", value: rb.medErrors, sub: "incidents · 30d" },
-    { icon: "🦠", tint: "bg-emerald-50 text-emerald-600", label: "HAI", value: rb.hai, sub: "infections · 30d" },
-    { icon: "🩹", tint: "bg-amber-50 text-amber-600", label: "Pressure Injuries", value: rb.pressure, sub: "incidents · 30d" },
-    { icon: "🆔", tint: "bg-sky-50 text-sky-600", label: "ID Compliance", value: rb.idCompliance == null ? "—" : `${rb.idCompliance}%`, sub: rb.idCompliance == null ? "next-phase" : "" },
+    { icon: "🛡️", tint: "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]", label: "Overall Safety Score", value: rb.safetyScore == null ? "—" : `${rb.safetyScore}%`, sub: scoreWord(rb.safetyScore), tone: scoreTone(rb.safetyScore) },
+    { icon: "⚠️", tint: "bg-[var(--cmp-surface-error)] text-[var(--cmp-text-error)]", label: "Safety Events", value: rb.events, sub: "last 30 days" },
+    { icon: "🚨", tint: "bg-[var(--cmp-surface-error)] text-[var(--cmp-text-error)]", label: "Serious Events", value: rb.serious, sub: "high / critical", tone: rb.serious ? "text-[var(--cmp-text-error)]" : undefined },
+    { icon: "🛟", tint: "bg-[var(--cmp-surface-information)] text-[var(--cmp-text-information)]", label: "Near Misses", value: rb.nearMisses, sub: "reported (no harm)" },
+    { icon: "🤕", tint: "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]", label: "Falls", value: rb.falls, sub: "incidents · 30d" },
+    { icon: "💊", tint: "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]", label: "Medication Errors", value: rb.medErrors, sub: "incidents · 30d" },
+    { icon: "🦠", tint: "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]", label: "HAI", value: rb.hai, sub: "infections · 30d" },
+    { icon: "🩹", tint: "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]", label: "Pressure Injuries", value: rb.pressure, sub: "incidents · 30d" },
+    { icon: "🆔", tint: "bg-[var(--cmp-surface-information)] text-[var(--cmp-text-information)]", label: "ID Compliance", value: rb.idCompliance == null ? "—" : `${rb.idCompliance}%`, sub: rb.idCompliance == null ? "next-phase" : "" },
     { icon: "📈", tint: "bg-violet-50 text-violet-600", label: "Deterioration Detected", value: rb.deterioration == null ? "—" : `${rb.deterioration}%`, sub: "concern → escalation" },
   ];
 
@@ -158,7 +158,7 @@ export default async function PatientSafetyCentre() {
               {d.projects.map((p: any, i: number) => (
                 <div key={i}>
                   <div className="flex items-center justify-between gap-2 mb-0.5"><span className="text-xs text-gray-700 truncate">{p.title}</span><Rag tone={p.tone} label={p.status.replace(/_/g, " ")} /></div>
-                  <div className="w-full h-2 rounded-full bg-gray-100 overflow-hidden"><div className="h-full rounded-full bg-rose-500" style={{ width: `${p.progress}%` }} /></div>
+                  <div className="w-full h-2 rounded-full bg-gray-100 overflow-hidden"><div className="h-full rounded-full bg-[var(--cmp-color-error)]" style={{ width: `${p.progress}%` }} /></div>
                   <p className="text-[10px] text-gray-400 mt-0.5">{p.owner}{p.due ? ` · due ${p.due}` : ""}</p>
                 </div>
               ))}
@@ -199,13 +199,13 @@ export default async function PatientSafetyCentre() {
         </div>
         <div className={`${card} p-4`}>
           <p className="font-semibold text-gray-900 text-sm mb-2">Never Events Register</p>
-          <div className={`rounded-lg p-3 mb-2 flex items-center gap-3 ${d.neverEvents.thisYear ? "bg-rose-50" : "bg-emerald-50"}`}>
-            <span className={`text-2xl font-bold tabular-nums ${d.neverEvents.thisYear ? "text-rose-600" : "text-emerald-600"}`}>{d.neverEvents.thisYear}</span>
+          <div className={`rounded-lg p-3 mb-2 flex items-center gap-3 ${d.neverEvents.thisYear ? "bg-[var(--cmp-surface-error)]" : "bg-[var(--cmp-surface-success)]"}`}>
+            <span className={`text-2xl font-bold tabular-nums ${d.neverEvents.thisYear ? "text-[var(--cmp-text-error)]" : "text-[var(--cmp-text-success)]"}`}>{d.neverEvents.thisYear}</span>
             <span className="text-[11px] text-gray-600">Never Events this year (sentinel)</span>
           </div>
           {d.neverEvents.list.length ? d.neverEvents.list.map((n: any, i: number) => (
             <div key={i} className="flex items-center justify-between gap-2 py-1 border-t border-gray-50"><span className="text-[11px] text-gray-700 truncate">{n.title}</span><span className="text-[10px] text-gray-400 shrink-0">{n.at}</span></div>
-          )) : <p className="text-[11px] text-emerald-600">No sentinel events on record — well done.</p>}
+          )) : <p className="text-[11px] text-[var(--cmp-text-success)]">No sentinel events on record — well done.</p>}
         </div>
         <div className={`${card} p-4`}>
           <p className="font-semibold text-gray-900 text-sm mb-2">Learning From Events</p>

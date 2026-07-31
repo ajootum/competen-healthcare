@@ -60,7 +60,7 @@ export default function SmartQueue({ tasks, workload }: {
       </div>
 
       {tasks.length === 0 ? (
-        <div className="bg-white rounded-xl border border-green-100 p-6 text-sm text-green-700">
+        <div className="bg-white rounded-xl border border-[var(--cmp-color-success)] p-6 text-sm text-[var(--cmp-text-success)]">
           ✅ Queue clear — no generated assessment work. Tasks appear here from role requirements, evidence gaps, expiries and pending entrustment decisions.
         </div>
       ) : (
@@ -104,22 +104,22 @@ export default function SmartQueue({ tasks, workload }: {
                           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-2">
                             <div>
                               <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">Evidence</p>
-                              <p className="text-xs text-green-700">✓ {t.evidence.complete} competencies current</p>
-                              {t.evidence.gaps.map(g => <p key={g} className="text-xs text-amber-700">→ Gap: {g}</p>)}
-                              {t.evidence.expired.map(g => <p key={g} className="text-xs text-red-600">✗ Expired: {g}</p>)}
-                              {t.evidence.expiring.map(g => <p key={g} className="text-xs text-amber-600">⏰ Expiring: {g}</p>)}
+                              <p className="text-xs text-[var(--cmp-text-success)]">✓ {t.evidence.complete} competencies current</p>
+                              {t.evidence.gaps.map(g => <p key={g} className="text-xs text-[var(--cmp-text-warning)]">→ Gap: {g}</p>)}
+                              {t.evidence.expired.map(g => <p key={g} className="text-xs text-[var(--cmp-text-critical)]">✗ Expired: {g}</p>)}
+                              {t.evidence.expiring.map(g => <p key={g} className="text-xs text-[var(--cmp-text-warning)]">⏰ Expiring: {g}</p>)}
                             </div>
                             <div>
                               <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">Critical safety elements</p>
                               {t.criticalItems.length === 0
                                 ? <p className="text-xs text-gray-400">None defined</p>
-                                : t.criticalItems.map(c => <p key={c} className="text-xs text-red-600">⛔ {c}</p>)}
+                                : t.criticalItems.map(c => <p key={c} className="text-xs text-[var(--cmp-text-critical)]">⛔ {c}</p>)}
                             </div>
                             <div>
                               <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">Blueprint methods</p>
                               <div className="flex flex-wrap gap-1">
                                 {t.methods.map(m => (
-                                  <span key={m} className="text-[10px] bg-blue-50 text-blue-600 px-1.5 py-0.5 rounded">{METHOD_LABELS[m] ?? m}</span>
+                                  <span key={m} className="text-[10px] bg-[var(--cmp-surface-information)] text-[var(--cmp-text-information)] px-1.5 py-0.5 rounded">{METHOD_LABELS[m] ?? m}</span>
                                 ))}
                               </div>
                               <p className="text-[10px] text-gray-400 mt-2">Decision required: <b>{t.decisionRequired}</b></p>
@@ -160,8 +160,8 @@ export default function SmartQueue({ tasks, workload }: {
             <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1">Entrustment decision</p>
             <p className="font-bold text-gray-900">{entrustFor.nurseName}</p>
             <p className="text-sm text-gray-500 mb-1">{entrustFor.cpuName}</p>
-            <p className="text-[11px] text-green-700 mb-4">✓ {entrustFor.evidence.complete}/{entrustFor.evidence.complete + entrustFor.evidence.gaps.length} competencies current — evidence supports authorization</p>
-            {error && <div className="bg-red-50 text-red-600 text-sm rounded-lg px-3 py-2 mb-3">{error}</div>}
+            <p className="text-[11px] text-[var(--cmp-text-success)] mb-4">✓ {entrustFor.evidence.complete}/{entrustFor.evidence.complete + entrustFor.evidence.gaps.length} competencies current — evidence supports authorization</p>
+            {error && <div className="bg-[var(--cmp-surface-critical)] text-[var(--cmp-text-critical)] text-sm rounded-lg px-3 py-2 mb-3">{error}</div>}
             <div className="flex flex-col gap-1.5 mb-4">
               {Object.entries(ENTRUSTMENT_LABELS).map(([k, v]) => (
                 <label key={k} className={`flex items-center gap-2.5 px-3 py-2 rounded-lg border cursor-pointer transition-colors ${

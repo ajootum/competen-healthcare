@@ -38,7 +38,7 @@ export default async function Standards() {
           <h2 className="text-sm font-bold text-gray-900 mb-3">Compliance by Area</h2>
           {d.byArea.length === 0 ? <p className="text-xs text-gray-400">No audits recorded yet.</p> : (
             <div className="flex flex-col gap-2">{d.byArea.map(a => (
-              <div key={a.area} className="flex items-center gap-2"><span className="text-[11px] text-gray-500 w-36 truncate">{a.area}</span><div className="flex-1 h-2 bg-gray-100 rounded-full overflow-hidden"><div className={`h-full rounded-full ${a.pct >= 80 ? "bg-green-500" : a.pct >= 60 ? "bg-amber-400" : "bg-red-400"}`} style={{ width: `${a.pct}%` }} /></div><span className="text-[10px] font-bold text-gray-600 w-9 text-right">{a.pct}%</span></div>
+              <div key={a.area} className="flex items-center gap-2"><span className="text-[11px] text-gray-500 w-36 truncate">{a.area}</span><div className="flex-1 h-2 bg-gray-100 rounded-full overflow-hidden"><div className={`h-full rounded-full ${a.pct >= 80 ? "bg-[var(--cmp-color-success)]" : a.pct >= 60 ? "bg-[var(--cmp-color-warning)]" : "bg-[var(--cmp-color-critical)]"}`} style={{ width: `${a.pct}%` }} /></div><span className="text-[10px] font-bold text-gray-600 w-9 text-right">{a.pct}%</span></div>
             ))}</div>
           )}
           <p className="text-[9px] text-gray-300 mt-3">Derived from recorded audit measurable elements. A dedicated standards catalogue (with per-standard measurable elements) is on the roadmap.</p>

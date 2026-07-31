@@ -51,9 +51,9 @@ export default async function CpdAcademyPage() {
 
   const KPI = [
     { label: "Available Courses", value: (courses ?? []).length, sub: `across ${categories.length} categor${categories.length === 1 ? "y" : "ies"}`, color: "text-gray-900" },
-    { label: "Currently Learning", value: inProgress.length, sub: "in progress", color: "text-blue-600" },
-    { label: "Completed", value: completed.length, sub: "courses completed", color: "text-green-600" },
-    { label: "CPD Credits", value: courseCpd + loggedCpd, sub: `${courseCpd} from courses · ${loggedCpd} logged`, color: "text-amber-600" },
+    { label: "Currently Learning", value: inProgress.length, sub: "in progress", color: "text-[var(--cmp-text-information)]" },
+    { label: "Completed", value: completed.length, sub: "courses completed", color: "text-[var(--cmp-text-success)]" },
+    { label: "CPD Credits", value: courseCpd + loggedCpd, sub: `${courseCpd} from courses · ${loggedCpd} logged`, color: "text-[var(--cmp-text-warning)]" },
     { label: "Specialty", value: profile?.specialization ?? "—", sub: profile?.specialization ? "your focus area" : "not set", color: "text-violet-700", small: true },
   ];
 
@@ -96,7 +96,7 @@ export default async function CpdAcademyPage() {
                     <div className="flex-1 min-w-[200px]">
                       <p className="text-base font-bold text-gray-900">
                         {c.title}
-                        <span className="ml-2 text-[9px] font-bold bg-blue-50 text-blue-600 px-1.5 py-0.5 rounded capitalize">{c.level}</span>
+                        <span className="ml-2 text-[9px] font-bold bg-[var(--cmp-surface-information)] text-[var(--cmp-text-information)] px-1.5 py-0.5 rounded capitalize">{c.level}</span>
                       </p>
                       <p className="text-[11px] text-gray-400 mt-0.5">
                         {c.category} · {c.duration_hours}h · {c.cpd_points} CPD credits

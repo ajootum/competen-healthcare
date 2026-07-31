@@ -12,11 +12,11 @@ export type CapaRow = {
 };
 
 const PRIORITY_CLS: Record<string, string> = {
-  high: "bg-red-100 text-red-700", medium: "bg-amber-100 text-amber-700", low: "bg-gray-100 text-gray-600",
+  high: "bg-[var(--cmp-surface-critical)] text-[var(--cmp-text-critical)]", medium: "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]", low: "bg-gray-100 text-gray-600",
 };
 const STATUS_CLS: Record<string, string> = {
-  open: "bg-blue-100 text-blue-700", in_progress: "bg-indigo-100 text-indigo-700",
-  completed: "bg-green-100 text-green-700", verified: "bg-teal-100 text-teal-700", closed: "bg-gray-100 text-gray-500",
+  open: "bg-[var(--cmp-surface-information)] text-blue-700", in_progress: "bg-indigo-100 text-indigo-700",
+  completed: "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]", verified: "bg-teal-100 text-teal-700", closed: "bg-gray-100 text-gray-500",
 };
 const NEXT: Record<string, { to: string; label: string }> = {
   open: { to: "in_progress", label: "Start" },
@@ -103,7 +103,7 @@ export default function CapaBoard({ rows, owners, startOpen }: {
         </button>
       </div>
 
-      {error && <p className="text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2 mb-3">{error}</p>}
+      {error && <p className="text-xs text-[var(--cmp-text-critical)] bg-[var(--cmp-surface-critical)] border border-[var(--cmp-color-critical)] rounded-lg px-3 py-2 mb-3">{error}</p>}
 
       {showNew && (
         <div className="bg-white border border-indigo-200 rounded-xl p-4 mb-4">
@@ -135,7 +135,7 @@ export default function CapaBoard({ rows, owners, startOpen }: {
 
       <div className="space-y-2">
         {visible.map(r => (
-          <div key={r.id} className={`bg-white border rounded-xl px-4 py-3 ${r.overdue ? "border-red-200" : "border-gray-200"}`}>
+          <div key={r.id} className={`bg-white border rounded-xl px-4 py-3 ${r.overdue ? "border-[var(--cmp-color-critical)]" : "border-gray-200"}`}>
             <div className="flex items-start gap-2 flex-wrap">
               <div className="flex-1 min-w-[220px]">
                 <p className="text-sm font-medium text-gray-800">{r.title}</p>
@@ -149,7 +149,7 @@ export default function CapaBoard({ rows, owners, startOpen }: {
               </div>
               <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded uppercase ${PRIORITY_CLS[r.priority] ?? ""}`}>{r.priority}</span>
               <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded uppercase ${STATUS_CLS[r.status] ?? ""}`}>{r.status.replace("_", " ")}</span>
-              {r.overdue && <span className="text-[9px] font-bold px-1.5 py-0.5 rounded uppercase bg-red-500 text-white">overdue</span>}
+              {r.overdue && <span className="text-[9px] font-bold px-1.5 py-0.5 rounded uppercase bg-[var(--cmp-color-critical)] text-white">overdue</span>}
               {NEXT[r.status] && (
                 <button onClick={() => (r.status === "in_progress" && evidenceFor !== r.id) ? setEvidenceFor(r.id) : advance(r)}
                   disabled={busy === r.id}

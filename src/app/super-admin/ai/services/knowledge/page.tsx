@@ -20,8 +20,8 @@ export default async function KnowledgePage() {
       <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-3">
         <Stat label="Knowledge Sources" value={k.total} sub={`${k.indexed} indexed`} />
         <Stat label="Documents" value={k.documents.toLocaleString()} sub="retrievable" tone="text-violet-700" />
-        <Stat label="Index Coverage" value={`${k.coverage}%`} sub="sources indexed" tone={k.coverage >= 80 ? "text-emerald-600" : "text-amber-600"} />
-        <Stat label="Indexing" value={k.indexing} sub="in progress" tone={k.indexing ? "text-amber-600" : undefined} />
+        <Stat label="Index Coverage" value={`${k.coverage}%`} sub="sources indexed" tone={k.coverage >= 80 ? "text-[var(--cmp-text-success)]" : "text-[var(--cmp-text-warning)]"} />
+        <Stat label="Indexing" value={k.indexing} sub="in progress" tone={k.indexing ? "text-[var(--cmp-text-warning)]" : undefined} />
         <Stat label="Domains" value={d.byDomain.length} sub="knowledge types" />
       </div>
 
@@ -30,7 +30,7 @@ export default async function KnowledgePage() {
           <div className="space-y-1">
             <div className="flex items-center text-[10px] text-gray-400 uppercase tracking-wide px-1"><span className="flex-1">Source</span><span className="w-28">Domain</span><span className="w-40">System</span><span className="w-20 text-right">Docs</span><span className="w-24 text-right">Indexed</span></div>
             {d.sources.map((s: any) => (
-              <div key={s.id} className="flex items-center px-1 py-1.5 text-[12px] border-b border-gray-50"><span className="flex-1 text-gray-800 truncate">{s.name}</span><span className="w-28"><Pill text={s.domain} tone={s.domain === "structured" ? "blue" : s.domain === "configuration" ? "violet" : "teal"} /></span><span className="w-40 text-gray-400 text-[10px] font-mono truncate">{s.source_type}</span><span className="w-20 text-right text-gray-900 tabular-nums font-semibold">{Number(s.doc_count).toLocaleString()}</span><span className="w-24 text-right text-[11px]">{s.indexed ? <span className="text-emerald-600">{fmtT(s.last_indexed)}</span> : <span className="text-amber-600">indexing…</span>}</span></div>
+              <div key={s.id} className="flex items-center px-1 py-1.5 text-[12px] border-b border-gray-50"><span className="flex-1 text-gray-800 truncate">{s.name}</span><span className="w-28"><Pill text={s.domain} tone={s.domain === "structured" ? "blue" : s.domain === "configuration" ? "violet" : "teal"} /></span><span className="w-40 text-gray-400 text-[10px] font-mono truncate">{s.source_type}</span><span className="w-20 text-right text-gray-900 tabular-nums font-semibold">{Number(s.doc_count).toLocaleString()}</span><span className="w-24 text-right text-[11px]">{s.indexed ? <span className="text-[var(--cmp-text-success)]">{fmtT(s.last_indexed)}</span> : <span className="text-[var(--cmp-text-warning)]">indexing…</span>}</span></div>
             ))}
           </div>
         </Card>

@@ -53,7 +53,7 @@ export default function ArchitectureBuilder({ frameworks, domains }: { framework
     <div className="bg-white rounded-xl border border-gray-200">
       <div className="flex items-center gap-2 p-3 border-b border-gray-100 flex-wrap">
         <h2 className="font-semibold text-gray-900 text-[15px] mr-auto">Architecture Builder</h2>
-        {msg && <span className={`text-xs rounded-lg px-2.5 py-1 ${msg.k === "ok" ? "bg-green-50 text-green-800" : "bg-amber-50 text-amber-800"}`}>{msg.t}</span>}
+        {msg && <span className={`text-xs rounded-lg px-2.5 py-1 ${msg.k === "ok" ? "bg-[var(--cmp-surface-success)] text-green-800" : "bg-[var(--cmp-surface-warning)] text-amber-800"}`}>{msg.t}</span>}
         <div className="flex items-center gap-1">
           {TABS.map((t, i) => (
             <div key={t.key} className="flex items-center gap-1">
@@ -79,7 +79,7 @@ export default function ArchitectureBuilder({ frameworks, domains }: { framework
           <div className="grid sm:grid-cols-2 gap-3">
             <div><label className={label}>Framework *</label><select value={form.framework_id ?? ""} onChange={set("framework_id")} className={input}><option value="">— Select framework —</option>{frameworks.map(f => <option key={f.id} value={f.id}>{f.label}</option>)}</select></div>
             <div><label className={label}>Domain name *</label><input value={form.name ?? ""} onChange={set("name")} className={input} placeholder="e.g. Haemodynamic Monitoring" /></div>
-            {frameworks.length === 0 && <p className="sm:col-span-2 text-[11px] text-amber-600">No frameworks yet — create a framework first.</p>}
+            {frameworks.length === 0 && <p className="sm:col-span-2 text-[11px] text-[var(--cmp-text-warning)]">No frameworks yet — create a framework first.</p>}
           </div>
         )}
 
@@ -88,7 +88,7 @@ export default function ArchitectureBuilder({ frameworks, domains }: { framework
             <div><label className={label}>Domain *</label><select value={form.domain_id ?? ""} onChange={set("domain_id")} className={input}><option value="">— Select domain —</option>{domains.map(d => <option key={d.id} value={d.id}>{d.label}</option>)}</select></div>
             <div><label className={label}>Competency name *</label><input value={form.name ?? ""} onChange={set("name")} className={input} placeholder="e.g. Interpret arterial blood gases" /></div>
             <div className="sm:col-span-2"><label className={label}>Description</label><textarea value={form.description ?? ""} onChange={set("description")} rows={3} className={input} /></div>
-            {domains.length === 0 && <p className="sm:col-span-2 text-[11px] text-amber-600">No domains yet — create a framework and a domain first.</p>}
+            {domains.length === 0 && <p className="sm:col-span-2 text-[11px] text-[var(--cmp-text-warning)]">No domains yet — create a framework and a domain first.</p>}
           </div>
         )}
 

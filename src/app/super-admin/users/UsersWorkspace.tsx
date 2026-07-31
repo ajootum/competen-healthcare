@@ -26,16 +26,16 @@ const ROLE_BADGE: Record<string, string> = {
   nurse:          "bg-teal-100 text-teal-700",
   assessor:       "bg-indigo-100 text-indigo-700",
   educator:       "bg-purple-100 text-purple-700",
-  hospital_admin: "bg-amber-100 text-amber-700",
-  super_admin:    "bg-rose-100 text-rose-700",
+  hospital_admin: "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]",
+  super_admin:    "bg-[var(--cmp-surface-error)] text-[var(--cmp-text-error)]",
 };
 const STATUS_UI = {
-  active:    { label: "Active",    pill: "bg-green-100 text-green-700",  dot: "bg-green-500" },
-  pending:   { label: "Pending",   pill: "bg-amber-100 text-amber-700",  dot: "bg-amber-400" },
-  suspended: { label: "Suspended", pill: "bg-red-100 text-red-700",      dot: "bg-red-500" },
+  active:    { label: "Active",    pill: "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]",  dot: "bg-[var(--cmp-color-success)]" },
+  pending:   { label: "Pending",   pill: "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]",  dot: "bg-[var(--cmp-color-warning)]" },
+  suspended: { label: "Suspended", pill: "bg-[var(--cmp-surface-critical)] text-[var(--cmp-text-critical)]",      dot: "bg-[var(--cmp-color-critical)]" },
 } as const;
 
-const AVATAR_TINTS = ["bg-teal-600", "bg-indigo-600", "bg-rose-600", "bg-amber-600", "bg-violet-600", "bg-sky-600"];
+const AVATAR_TINTS = ["bg-teal-600", "bg-indigo-600", "bg-[var(--cmp-color-error)]", "bg-[var(--cmp-color-warning)]", "bg-violet-600", "bg-[var(--cmp-color-information)]"];
 const tint = (id: string) => AVATAR_TINTS[[...id].reduce((s, ch) => s + ch.charCodeAt(0), 0) % AVATAR_TINTS.length];
 
 const relTime = (iso: string | null) => {
@@ -128,9 +128,9 @@ export default function UsersWorkspace({
     return { count: members.length, sub: members.length ? `${Math.round((active / members.length) * 100)}% active` : "none yet" };
   };
   const STAT_CARDS = [
-    { label: "Total Users", icon: "👥", tintBg: "bg-sky-50", count: users.length, sub: `${users.filter(isActive).length} active` },
-    { label: "Super Admins", icon: "🛡️", tintBg: "bg-rose-50", ...cardFor("super_admin") },
-    { label: "Admins", icon: "🏛️", tintBg: "bg-amber-50", ...cardFor("hospital_admin") },
+    { label: "Total Users", icon: "👥", tintBg: "bg-[var(--cmp-surface-information)]", count: users.length, sub: `${users.filter(isActive).length} active` },
+    { label: "Super Admins", icon: "🛡️", tintBg: "bg-[var(--cmp-surface-error)]", ...cardFor("super_admin") },
+    { label: "Admins", icon: "🏛️", tintBg: "bg-[var(--cmp-surface-warning)]", ...cardFor("hospital_admin") },
     { label: "Educators", icon: "🎓", tintBg: "bg-purple-50", ...cardFor("educator") },
     { label: "Assessors", icon: "🩺", tintBg: "bg-indigo-50", ...cardFor("assessor") },
     { label: "Healthcare Workers", icon: "🧑‍⚕️", tintBg: "bg-teal-50", ...cardFor("nurse") },
@@ -251,7 +251,7 @@ export default function UsersWorkspace({
             <div className={`w-8 h-8 rounded-lg ${c.tintBg} flex items-center justify-center text-sm mb-2`}>{c.icon}</div>
             <p className="text-2xl font-bold text-gray-900">{c.count}</p>
             <p className="text-[11px] text-gray-500 font-medium">{c.label}</p>
-            <p className="text-[9px] text-green-600 mt-0.5">{c.sub}</p>
+            <p className="text-[9px] text-[var(--cmp-text-success)] mt-0.5">{c.sub}</p>
           </div>
         ))}
       </div>
@@ -320,9 +320,9 @@ export default function UsersWorkspace({
                   setBulkOpen(false);
                   if (window.confirm(`Suspend ${selected.size} selected user(s)? They will be unable to sign in until reactivated.`)) bulkAct("suspend", "Suspended");
                 }} disabled={busy}
-                  className="w-full text-left px-3 py-1.5 text-xs text-red-600 hover:bg-gray-50">⛔ Suspend selected</button>
+                  className="w-full text-left px-3 py-1.5 text-xs text-[var(--cmp-text-critical)] hover:bg-gray-50">⛔ Suspend selected</button>
                 <button onClick={() => { setBulkOpen(false); bulkAct("unsuspend", "Reactivated"); }} disabled={busy}
-                  className="w-full text-left px-3 py-1.5 text-xs text-green-700 hover:bg-gray-50">✓ Reactivate selected</button>
+                  className="w-full text-left px-3 py-1.5 text-xs text-[var(--cmp-text-success)] hover:bg-gray-50">✓ Reactivate selected</button>
               </div>
             </>
           )}
@@ -337,7 +337,7 @@ export default function UsersWorkspace({
       </div>
 
       {notice && (
-        <p className={`text-xs rounded-lg px-3 py-2 mb-2 border ${notice.kind === "ok" ? "text-green-700 bg-green-50 border-green-100" : "text-red-600 bg-red-50 border-red-100"}`}>
+        <p className={`text-xs rounded-lg px-3 py-2 mb-2 border ${notice.kind === "ok" ? "text-[var(--cmp-text-success)] bg-[var(--cmp-surface-success)] border-[var(--cmp-color-success)]" : "text-[var(--cmp-text-critical)] bg-[var(--cmp-surface-critical)] border-[var(--cmp-color-critical)]"}`}>
           {notice.text} <button onClick={() => setNotice(null)} className="underline ml-1">dismiss</button>
         </p>
       )}
@@ -426,17 +426,17 @@ export default function UsersWorkspace({
                             )}
                             {u.status === "suspended" ? (
                               <button onClick={() => { setMenuFor(null); act(u.id, "unsuspend", `Reactivated ${u.name}`); }}
-                                className="w-full text-left px-3 py-1.5 text-xs text-green-700 hover:bg-gray-50">✓ Reactivate account</button>
+                                className="w-full text-left px-3 py-1.5 text-xs text-[var(--cmp-text-success)] hover:bg-gray-50">✓ Reactivate account</button>
                             ) : u.id !== currentUserId && (
                               <button onClick={() => {
                                 setMenuFor(null);
                                 if (window.confirm(`Suspend ${u.name}? They will be unable to sign in until reactivated.`)) act(u.id, "suspend", `Suspended ${u.name}`);
                               }}
-                                className="w-full text-left px-3 py-1.5 text-xs text-red-600 hover:bg-gray-50">⛔ Suspend account</button>
+                                className="w-full text-left px-3 py-1.5 text-xs text-[var(--cmp-text-critical)] hover:bg-gray-50">⛔ Suspend account</button>
                             )}
                             {u.id !== currentUserId && (
                               <button onClick={() => { setMenuFor(null); removeUser(u); }}
-                                className="w-full text-left px-3 py-1.5 text-xs text-red-600 hover:bg-gray-50 border-t border-gray-50">🗑 Delete account…</button>
+                                className="w-full text-left px-3 py-1.5 text-xs text-[var(--cmp-text-critical)] hover:bg-gray-50 border-t border-gray-50">🗑 Delete account…</button>
                             )}
                           </div>
                         </>
@@ -463,9 +463,9 @@ export default function UsersWorkspace({
         <div className="bg-white rounded-xl border border-gray-100 p-5">
           <p className="text-[9px] font-bold text-gray-400 uppercase tracking-widest mb-3">Status legend</p>
           <div className="flex flex-col gap-2 text-xs text-gray-600">
-            <p><span className="inline-block w-2 h-2 rounded-full bg-green-500 mr-2" /><b>Active</b> — user can sign in; email verified</p>
-            <p><span className="inline-block w-2 h-2 rounded-full bg-amber-400 mr-2" /><b>Pending</b> — invitation sent or email not yet verified</p>
-            <p><span className="inline-block w-2 h-2 rounded-full bg-red-500 mr-2" /><b>Suspended</b> — sign-in blocked until reactivated</p>
+            <p><span className="inline-block w-2 h-2 rounded-full bg-[var(--cmp-color-success)] mr-2" /><b>Active</b> — user can sign in; email verified</p>
+            <p><span className="inline-block w-2 h-2 rounded-full bg-[var(--cmp-color-warning)] mr-2" /><b>Pending</b> — invitation sent or email not yet verified</p>
+            <p><span className="inline-block w-2 h-2 rounded-full bg-[var(--cmp-color-critical)] mr-2" /><b>Suspended</b> — sign-in blocked until reactivated</p>
           </div>
         </div>
         <div className="bg-white rounded-xl border border-gray-100 p-5">

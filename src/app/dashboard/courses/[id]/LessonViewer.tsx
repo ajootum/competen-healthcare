@@ -57,7 +57,7 @@ export default function LessonViewer({ courseId, lessons, initialProgress, initi
                   active === i ? "bg-teal-50 text-teal-700 font-medium" : "text-gray-600 hover:bg-gray-50"
                 }`}>
                 <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs shrink-0 font-semibold ${
-                  completed.has(i) || courseCompleted ? "bg-green-500 text-white" : active === i ? "bg-teal-600 text-white" : "bg-gray-100 text-gray-400"
+                  completed.has(i) || courseCompleted ? "bg-[var(--cmp-color-success)] text-white" : active === i ? "bg-teal-600 text-white" : "bg-gray-100 text-gray-400"
                 }`}>
                   {completed.has(i) || courseCompleted ? "✓" : i + 1}
                 </div>
@@ -107,8 +107,8 @@ export default function LessonViewer({ courseId, lessons, initialProgress, initi
           </button>
 
           {courseCompleted ? (
-            <div className="flex items-center gap-2 text-green-600 font-semibold text-sm">
-              <span className="w-6 h-6 rounded-full bg-green-500 text-white flex items-center justify-center text-xs">✓</span>
+            <div className="flex items-center gap-2 text-[var(--cmp-text-success)] font-semibold text-sm">
+              <span className="w-6 h-6 rounded-full bg-[var(--cmp-color-success)] text-white flex items-center justify-center text-xs">✓</span>
               Course Complete — Certificate Earned
             </div>
           ) : completed.has(active) ? (

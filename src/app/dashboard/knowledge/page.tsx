@@ -102,12 +102,12 @@ export default async function KnowledgeHubPage() {
                   {k.summary && <p className="text-[11px] text-gray-400 mt-1 line-clamp-2">{k.summary}</p>}
                   <div className="flex items-center gap-1.5 mt-2.5">
                     {(k.clinical_practice_units as unknown as { name: string } | null)?.name && (
-                      <span className="text-[9px] font-semibold bg-blue-50 text-blue-600 px-1.5 py-0.5 rounded truncate max-w-[140px]">
+                      <span className="text-[9px] font-semibold bg-[var(--cmp-surface-information)] text-[var(--cmp-text-information)] px-1.5 py-0.5 rounded truncate max-w-[140px]">
                         {(k.clinical_practice_units as unknown as { name: string }).name}
                       </span>
                     )}
                     {k.evidence_level && (
-                      <span className="text-[9px] font-semibold bg-green-50 text-green-700 px-1.5 py-0.5 rounded">Evidence: {k.evidence_level}</span>
+                      <span className="text-[9px] font-semibold bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)] px-1.5 py-0.5 rounded">Evidence: {k.evidence_level}</span>
                     )}
                     <span className="ml-auto text-[10px] text-teal-600 font-semibold">Read →</span>
                   </div>
@@ -129,7 +129,7 @@ export default async function KnowledgeHubPage() {
                 <p className="text-sm font-medium text-gray-800 group-hover:text-teal-700 leading-snug">{c.title}</p>
                 <div className="flex items-center gap-1.5 mt-2.5">
                   {(c.clinical_practice_units as unknown as { name: string } | null)?.name && (
-                    <span className="text-[9px] font-semibold bg-blue-50 text-blue-600 px-1.5 py-0.5 rounded truncate max-w-[140px]">
+                    <span className="text-[9px] font-semibold bg-[var(--cmp-surface-information)] text-[var(--cmp-text-information)] px-1.5 py-0.5 rounded truncate max-w-[140px]">
                       {(c.clinical_practice_units as unknown as { name: string }).name}
                     </span>
                   )}

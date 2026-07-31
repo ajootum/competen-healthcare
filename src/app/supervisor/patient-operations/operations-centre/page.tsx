@@ -18,7 +18,7 @@ export const dynamic = "force-dynamic";
 const card = "bg-white rounded-xl border border-gray-200";
 const tname = (k: string) => templateByKey(k)?.name ?? k;
 const fmtDateTime = (iso: string) => { const d = new Date(iso); return `${d.toLocaleDateString([], { day: "2-digit", month: "short" })} ${d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: false })}`; };
-const STATE_TONE: Record<string, string> = { draft: "bg-gray-100 text-gray-600", in_progress: "bg-sky-100 text-sky-700", submitted: "bg-indigo-100 text-indigo-700", awaiting_verification: "bg-violet-100 text-violet-700", returned: "bg-amber-100 text-amber-700", verified: "bg-emerald-100 text-emerald-700", finalised: "bg-emerald-100 text-emerald-700" };
+const STATE_TONE: Record<string, string> = { draft: "bg-gray-100 text-gray-600", in_progress: "bg-[var(--cmp-surface-information)] text-[var(--cmp-text-information)]", submitted: "bg-indigo-100 text-indigo-700", awaiting_verification: "bg-violet-100 text-violet-700", returned: "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]", verified: "bg-[var(--cmp-surface-success)] text-emerald-700", finalised: "bg-[var(--cmp-surface-success)] text-emerald-700" };
 
 export default async function SswOperationsCentre() {
   const supabase = await createClient();
@@ -38,15 +38,15 @@ export default async function SswOperationsCentre() {
       <p className="text-sm text-gray-500">Capture an operational event once — it persists, times-stamps, updates state and distributes everywhere.</p>
     </div>
   );
-  if (!d.ready) return <div className="space-y-4">{header}<div className="bg-amber-50 border border-amber-200 rounded-xl p-6"><p className="font-semibold text-amber-900">⚙️ Coming online</p><p className="text-sm text-amber-800 mt-1">The Clinical Operations Engine isn&apos;t provisioned for this unit yet.</p></div></div>;
+  if (!d.ready) return <div className="space-y-4">{header}<div className="bg-[var(--cmp-surface-warning)] border border-[var(--cmp-color-warning)] rounded-xl p-6"><p className="font-semibold text-amber-900">⚙️ Coming online</p><p className="text-sm text-amber-800 mt-1">The Clinical Operations Engine isn&apos;t provisioned for this unit yet.</p></div></div>;
 
   const w = d.widgets;
   const widgets = [
     { label: "Active patients", value: w.activePatients, href: "/supervisor/patient-list", icon: "🧑‍🤝‍🧑", tone: "text-gray-900" },
-    { label: "Forms awaiting", value: w.formsAwaiting, href: "#my-pending", icon: "📝", tone: w.formsAwaiting ? "text-sky-600" : "text-gray-400" },
-    { label: "Overdue actions", value: w.overdueActions, href: "#overdue", icon: "⏰", tone: w.overdueActions ? "text-rose-600" : "text-gray-400" },
-    { label: "Active escalations", value: w.activeEscalations, href: "#escalations", icon: "🚨", tone: w.activeEscalations ? "text-rose-600" : "text-gray-400" },
-    { label: "Pending transfers", value: w.pendingTransfers, href: "/supervisor/patient-flow", icon: "🔄", tone: w.pendingTransfers ? "text-amber-600" : "text-gray-400" },
+    { label: "Forms awaiting", value: w.formsAwaiting, href: "#my-pending", icon: "📝", tone: w.formsAwaiting ? "text-[var(--cmp-text-information)]" : "text-gray-400" },
+    { label: "Overdue actions", value: w.overdueActions, href: "#overdue", icon: "⏰", tone: w.overdueActions ? "text-[var(--cmp-text-error)]" : "text-gray-400" },
+    { label: "Active escalations", value: w.activeEscalations, href: "#escalations", icon: "🚨", tone: w.activeEscalations ? "text-[var(--cmp-text-error)]" : "text-gray-400" },
+    { label: "Pending transfers", value: w.pendingTransfers, href: "/supervisor/patient-flow", icon: "🔄", tone: w.pendingTransfers ? "text-[var(--cmp-text-warning)]" : "text-gray-400" },
     { label: "Expected discharges", value: w.expectedDischarges, href: "/supervisor/patient-flow", icon: "🏠", tone: "text-teal-600" },
   ];
   const patients = d.po.active.map((p: any) => ({ id: p.id, label: `${p.bed ? p.bed + " · " : ""}${p.label}`, state: p.state }));
@@ -96,7 +96,7 @@ export default async function SswOperationsCentre() {
           {q.escalations.map((e: any) => (
             <div key={e.id} className="flex items-center justify-between gap-2 py-1.5 border-b border-gray-50 text-xs">
               <span className="flex items-center gap-2 min-w-0"><span className="text-gray-700 truncate">{e.patient}</span><span className="text-gray-400">L{e.level}</span></span>
-              <span className="flex items-center gap-2"><span className={`text-[10px] px-1.5 py-0.5 rounded ${["critical", "high", "emergency"].includes(e.severity) ? "bg-rose-50 text-rose-700" : "bg-amber-50 text-amber-700"}`}>{e.severity}</span><Link href="/supervisor/clinical-safety" className="text-emerald-700 hover:underline">Open</Link></span>
+              <span className="flex items-center gap-2"><span className={`text-[10px] px-1.5 py-0.5 rounded ${["critical", "high", "emergency"].includes(e.severity) ? "bg-[var(--cmp-surface-error)] text-[var(--cmp-text-error)]" : "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]"}`}>{e.severity}</span><Link href="/supervisor/clinical-safety" className="text-emerald-700 hover:underline">Open</Link></span>
             </div>
           ))}
         </Queue>
@@ -132,7 +132,7 @@ function Row({ patient, label, state, overdue, at }: { patient: string; label: s
       <span className="flex items-center gap-2 min-w-0"><span className="text-gray-700 truncate">{patient}</span><span className="text-gray-400 truncate">{label}</span></span>
       <span className="flex items-center gap-2 shrink-0">
         {at && <span className="text-[10px] text-gray-400 tabular-nums">{fmtDateTime(at)}</span>}
-        {overdue && <span className="text-[10px] px-1.5 py-0.5 rounded bg-rose-50 text-rose-700">overdue</span>}
+        {overdue && <span className="text-[10px] px-1.5 py-0.5 rounded bg-[var(--cmp-surface-error)] text-[var(--cmp-text-error)]">overdue</span>}
         <span className={`text-[10px] px-1.5 py-0.5 rounded ${STATE_TONE[state] ?? "bg-gray-100 text-gray-600"}`}>{state.replace(/_/g, " ")}</span>
       </span>
     </div>

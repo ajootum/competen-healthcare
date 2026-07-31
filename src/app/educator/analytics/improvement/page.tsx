@@ -18,13 +18,13 @@ export default async function ImprovementLanding() {
 
   const summary = [
     { icon: "📋", tint: "bg-purple-50 text-purple-600", label: "Active Improvement Plans", value: "—", sub: "no plan store" },
-    { icon: "🔧", tint: "bg-blue-50 text-blue-600", label: "Open CAPAs", value: String(E.openCapas) },
-    { icon: "⚠️", tint: "bg-red-50 text-red-600", label: "Critical Risks", value: String(E.criticalRisks) },
-    { icon: "⏰", tint: "bg-orange-50 text-orange-600", label: "Overdue Actions", value: String(E.overdueActions), sub: "CAPA" },
+    { icon: "🔧", tint: "bg-[var(--cmp-surface-information)] text-[var(--cmp-text-information)]", label: "Open CAPAs", value: String(E.openCapas) },
+    { icon: "⚠️", tint: "bg-[var(--cmp-surface-critical)] text-[var(--cmp-text-critical)]", label: "Critical Risks", value: String(E.criticalRisks) },
+    { icon: "⏰", tint: "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]", label: "Overdue Actions", value: String(E.overdueActions), sub: "CAPA" },
     { icon: "🎯", tint: "bg-teal-50 text-teal-600", label: "Action Completion", value: pct(E.completionRate) },
-    { icon: "🔗", tint: "bg-green-50 text-green-600", label: "Effectiveness Verified", value: "—", sub: "soon" },
+    { icon: "🔗", tint: "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]", label: "Effectiveness Verified", value: "—", sub: "soon" },
     { icon: "🛡️", tint: "bg-indigo-50 text-indigo-600", label: "Risk Reduction", value: "—", sub: "soon" },
-    { icon: "⭐", tint: "bg-amber-50 text-amber-600", label: "Overall Improvement", value: E.overallScore !== null ? String(E.overallScore) : "—", sub: "/100" },
+    { icon: "⭐", tint: "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]", label: "Overall Improvement", value: E.overallScore !== null ? String(E.overallScore) : "—", sub: "/100" },
   ];
   const metric: Record<string, string> = {
     plans: "no store — soon",

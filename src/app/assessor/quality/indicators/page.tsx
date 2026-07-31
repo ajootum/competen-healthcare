@@ -113,12 +113,12 @@ export default async function QualityIndicatorsPage() {
 
       <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
         {INDICATORS.map(ind => (
-          <div key={ind.name} className={`bg-white border rounded-xl p-4 ${ind.bad ? "border-red-200" : ind.good ? "border-green-200" : "border-gray-200"}`}>
+          <div key={ind.name} className={`bg-white border rounded-xl p-4 ${ind.bad ? "border-[var(--cmp-color-critical)]" : ind.good ? "border-[var(--cmp-color-success)]" : "border-gray-200"}`}>
             <div className="flex items-center gap-2 mb-1">
               <span className="text-base">{ind.icon}</span>
               <p className="text-[11px] font-bold text-gray-700 leading-tight">{ind.name}</p>
             </div>
-            <p className={`text-2xl font-bold ${ind.bad ? "text-red-600" : ind.good ? "text-green-600" : "text-gray-900"}`}>{ind.value}</p>
+            <p className={`text-2xl font-bold ${ind.bad ? "text-[var(--cmp-text-critical)]" : ind.good ? "text-[var(--cmp-text-success)]" : "text-gray-900"}`}>{ind.value}</p>
             <p className="text-[10px] text-gray-400">{ind.n}</p>
             <p className="text-[9px] text-gray-400 mt-2 leading-snug border-t border-gray-50 pt-2">{ind.how}</p>
           </div>

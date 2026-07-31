@@ -11,7 +11,7 @@ export const dynamic = "force-dynamic";
 // widget library (§12–13). Deeper per-object property/override/test-requirement tables are next-phase.
 /* eslint-disable @typescript-eslint/no-explicit-any */
 const card = "bg-white rounded-xl border border-gray-200";
-const pctTone = (p: number) => (p >= 85 ? "text-emerald-600" : p >= 70 ? "text-amber-600" : "text-rose-600");
+const pctTone = (p: number) => (p >= 85 ? "text-[var(--cmp-text-success)]" : p >= 70 ? "text-[var(--cmp-text-warning)]" : "text-[var(--cmp-text-error)]");
 
 function Stat({ label, value, tone }: { label: string; value: any; tone?: string }) {
   return <div className={`${card} p-3.5`}><p className="text-[10px] text-gray-500 uppercase tracking-wide">{label}</p><p className={`text-2xl font-bold tabular-nums mt-0.5 ${tone ?? "text-gray-900"}`}>{value}</p></div>;
@@ -42,17 +42,17 @@ export default async function ModuleWidgetCatalogue() {
       {header}
 
       {!s.registryProvisioned && (
-        <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800"><span className="font-semibold">Registry not provisioned.</span> The widget contracts below are code-defined and browsable now; run <code className="font-mono text-[12px] bg-amber-100 px-1 rounded">migration 092</code> and sync the <Link href="/super-admin/platform-ops/registry" className="underline">registry</Link> to register them (WCE-002 integration).</div>
+        <div className="rounded-xl border border-[var(--cmp-color-warning)] bg-[var(--cmp-surface-warning)] px-4 py-3 text-sm text-amber-800"><span className="font-semibold">Registry not provisioned.</span> The widget contracts below are code-defined and browsable now; run <code className="font-mono text-[12px] bg-[var(--cmp-surface-warning)] px-1 rounded">migration 092</code> and sync the <Link href="/super-admin/platform-ops/registry" className="underline">registry</Link> to register them (WCE-002 integration).</div>
       )}
 
       {/* Catalogue dashboard */}
       <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
         <Stat label="Catalogue Records" value={s.catalogueRecords} />
         <Stat label="Widgets Catalogued" value={s.widgetsCatalogued} />
-        <Stat label="Widgets Registered" value={`${s.widgetsRegistered}/${s.widgetsCatalogued}`} tone={s.widgetsRegistered === s.widgetsCatalogued ? "text-emerald-600" : "text-amber-600"} />
+        <Stat label="Widgets Registered" value={`${s.widgetsRegistered}/${s.widgetsCatalogued}`} tone={s.widgetsRegistered === s.widgetsCatalogued ? "text-[var(--cmp-text-success)]" : "text-[var(--cmp-text-warning)]"} />
         <Stat label="Modules" value={s.modules} />
         <Stat label="Avg Completeness" value={`${s.avgCompleteness}%`} tone={pctTone(s.avgCompleteness)} />
-        <Stat label="Below Threshold" value={s.belowThreshold} tone={s.belowThreshold ? "text-amber-600" : "text-emerald-600"} />
+        <Stat label="Below Threshold" value={s.belowThreshold} tone={s.belowThreshold ? "text-[var(--cmp-text-warning)]" : "text-[var(--cmp-text-success)]"} />
       </div>
 
       {/* Widget library browser */}

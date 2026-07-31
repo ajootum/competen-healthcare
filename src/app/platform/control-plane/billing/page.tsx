@@ -26,7 +26,7 @@ export default async function BillingPage() {
         <p className="text-sm text-gray-500 mt-1">Tenant billing accounts. Invoices &amp; payments activate when a payment gateway is connected.</p>
       </div>
       {!ready ? (
-        <div className="bg-amber-50 border border-amber-200 rounded-xl p-5 text-sm text-amber-700">Apply migration <code className="font-mono text-xs">043</code> to activate billing accounts.</div>
+        <div className="bg-[var(--cmp-surface-warning)] border border-[var(--cmp-color-warning)] rounded-xl p-5 text-sm text-[var(--cmp-text-warning)]">Apply migration <code className="font-mono text-xs">043</code> to activate billing accounts.</div>
       ) : (
         <div className={card}>
           <h3 className="font-semibold text-gray-900 mb-3">Billing accounts <span className="text-gray-400 font-normal">· {accounts.length}</span></h3>

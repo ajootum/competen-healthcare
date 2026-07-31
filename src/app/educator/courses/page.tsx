@@ -33,9 +33,9 @@ export default async function CpdCoursesPage() {
   });
 
   const levelColors: Record<string, string> = {
-    beginner: "bg-green-100 text-green-700",
-    intermediate: "bg-amber-100 text-amber-700",
-    advanced: "bg-red-100 text-red-700",
+    beginner: "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]",
+    intermediate: "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]",
+    advanced: "bg-[var(--cmp-surface-critical)] text-[var(--cmp-text-critical)]",
   };
 
   const cpd = (cpdRows ?? []) as { hours: number; activity_type: string; activity_date: string; user_id: string }[];
@@ -102,7 +102,7 @@ export default async function CpdCoursesPage() {
                   <td className="px-4 py-3.5 text-center text-xs text-gray-600">{c.enrolled}</td>
                   <td className="px-4 py-3.5 text-center text-xs text-gray-600">{c.completed}</td>
                   <td className="px-4 py-3.5 text-center">
-                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded ${c.is_published ? "bg-green-100 text-green-700" : "bg-amber-100 text-amber-700"}`}>
+                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded ${c.is_published ? "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]" : "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]"}`}>
                       {c.is_published ? "Published" : "Draft"}
                     </span>
                   </td>

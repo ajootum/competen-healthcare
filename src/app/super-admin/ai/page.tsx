@@ -14,11 +14,11 @@ export const dynamic = "force-dynamic";
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 const ACCENT: Record<number, { badge: string; action: string }> = {
-  1: { badge: "bg-blue-100 text-blue-700", action: "bg-blue-600 hover:bg-blue-700" },
+  1: { badge: "bg-[var(--cmp-surface-information)] text-blue-700", action: "bg-[var(--cmp-color-information)] hover:bg-blue-700" },
   2: { badge: "bg-teal-100 text-teal-700", action: "bg-teal-600 hover:bg-teal-700" },
   3: { badge: "bg-violet-100 text-violet-700", action: "bg-violet-600 hover:bg-violet-700" },
-  4: { badge: "bg-orange-100 text-orange-700", action: "bg-orange-600 hover:bg-orange-700" },
-  5: { badge: "bg-rose-100 text-rose-700", action: "bg-rose-600 hover:bg-rose-700" },
+  4: { badge: "bg-[var(--cmp-surface-warning)] text-orange-700", action: "bg-[var(--cmp-color-warning)] hover:bg-orange-700" },
+  5: { badge: "bg-[var(--cmp-surface-error)] text-[var(--cmp-text-error)]", action: "bg-[var(--cmp-color-error)] hover:bg-rose-700" },
   6: { badge: "bg-indigo-100 text-indigo-700", action: "bg-indigo-600 hover:bg-indigo-700" },
 };
 const TRUST = ["🔐 Secure & Compliant", "📎 Evidence Grounded", "🧑‍⚕️ Human-in-the-Loop", "🔍 Transparent & Explainable", "⚖️ Governed & Audited", "📈 Scalable & Reliable"];
@@ -46,10 +46,10 @@ export default async function AiIntelligencePlatform() {
   const o = p.opsStatus;
 
   const ribbon = [
-    { label: "AI Health", value: pct(r.aiHealth), icon: "🛡️", tone: r.aiHealth != null && r.aiHealth >= 95 ? "text-green-600" : r.aiHealth == null ? "text-gray-400" : "text-amber-600" },
+    { label: "AI Health", value: pct(r.aiHealth), icon: "🛡️", tone: r.aiHealth != null && r.aiHealth >= 95 ? "text-[var(--cmp-text-success)]" : r.aiHealth == null ? "text-gray-400" : "text-[var(--cmp-text-warning)]" },
     { label: "Running Agents", value: big(r.runningAgents), icon: "🤖" },
     { label: "Queued Jobs", value: big(r.queuedJobs), icon: "🗂️" },
-    { label: "Failed Jobs", value: big(r.failedJobs), icon: "⚠️", tone: (r.failedJobs ?? 0) > 0 ? "text-rose-600" : undefined },
+    { label: "Failed Jobs", value: big(r.failedJobs), icon: "⚠️", tone: (r.failedJobs ?? 0) > 0 ? "text-[var(--cmp-text-error)]" : undefined },
     { label: "Models Online", value: big(r.modelsOnline), icon: "🧠" },
     { label: "Inference Requests", value: big(r.inferenceRequests), icon: "📊" },
     { label: "Avg Response", value: ms(r.avgResponseMs), icon: "⚡" },
@@ -64,7 +64,7 @@ export default async function AiIntelligencePlatform() {
           <p className="text-sm text-gray-500">The enterprise intelligence layer powering every Competen engine — six modules.</p>
         </div>
         <div className="flex items-center gap-2">
-          <span className={`text-xs font-medium px-2.5 py-1 rounded-lg ${o.configured ? "bg-green-50 text-green-700" : "bg-amber-50 text-amber-700"}`}>{o.configured ? `● ${o.provider} configured` : "AI not configured"}</span>
+          <span className={`text-xs font-medium px-2.5 py-1 rounded-lg ${o.configured ? "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]" : "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]"}`}>{o.configured ? `● ${o.provider} configured` : "AI not configured"}</span>
           <span className="text-xs text-gray-400 tabular-nums">Updated {new Date(p.generatedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span>
         </div>
       </div>
@@ -140,7 +140,7 @@ export default async function AiIntelligencePlatform() {
             ].map(([label, value, ok]: any) => (
               <div key={label} className="flex items-center justify-between">
                 <span className="text-gray-500">{label}</span>
-                <span className={`tabular-nums font-medium ${ok === false ? "text-amber-600" : "text-gray-800"}`}>{String(value)}</span>
+                <span className={`tabular-nums font-medium ${ok === false ? "text-[var(--cmp-text-warning)]" : "text-gray-800"}`}>{String(value)}</span>
               </div>
             ))}
           </div>

@@ -49,7 +49,7 @@ export default async function AuditCentrePage() {
           </div>
           <div className="grid grid-cols-2 gap-3 mt-3 pt-3 border-t border-gray-100">
             <div><p className="text-[11px] text-gray-400">Average compliance</p><p className={`text-xl font-bold tabular-nums ${k.avgCompliance != null ? T(ragPct(k.avgCompliance)).text : "text-gray-300"}`}>{k.avgCompliance != null ? `${k.avgCompliance}%` : "—"}</p></div>
-            <div><p className="text-[11px] text-gray-400">Critical findings</p><p className={`text-xl font-bold tabular-nums ${k.critical ? "text-rose-600" : "text-gray-900"}`}>{k.critical}</p></div>
+            <div><p className="text-[11px] text-gray-400">Critical findings</p><p className={`text-xl font-bold tabular-nums ${k.critical ? "text-[var(--cmp-text-error)]" : "text-gray-900"}`}>{k.critical}</p></div>
           </div>
         </Card>
       </div>

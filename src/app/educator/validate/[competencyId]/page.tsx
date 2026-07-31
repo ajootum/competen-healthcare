@@ -93,7 +93,7 @@ export default async function ValidatePage({
             {compScore.score}
           </div>
           <p className="text-[10px] text-gray-400 mt-1">{SCORE_LABELS[compScore.score]}</p>
-          <span className={`text-[10px] font-bold px-2 py-0.5 rounded mt-1 inline-block ${compScore.is_passing ? "bg-green-50 text-green-600" : "bg-red-50 text-red-500"}`}>
+          <span className={`text-[10px] font-bold px-2 py-0.5 rounded mt-1 inline-block ${compScore.is_passing ? "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]" : "bg-[var(--cmp-surface-critical)] text-red-500"}`}>
             {compScore.is_passing ? "Passing" : "Not Passing"}
           </span>
         </div>

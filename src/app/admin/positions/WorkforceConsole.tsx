@@ -109,13 +109,13 @@ function AssignTab({ data, support, ui }: TabProps) {
           <div className="space-y-1.5">
             {(pipeline.steps ?? []).map((s: any, i: number) => (
               <div key={i} className="flex items-start gap-2 text-sm">
-                <span className={s.ok ? "text-green-600" : "text-red-500"}>{s.ok ? "✓" : "✕"}</span>
+                <span className={s.ok ? "text-[var(--cmp-text-success)]" : "text-red-500"}>{s.ok ? "✓" : "✕"}</span>
                 <span className="font-medium text-gray-800 capitalize w-28 shrink-0">{s.step}</span>
                 <span className="text-gray-500 text-xs pt-0.5">{s.detail}</span>
               </div>
             ))}
             <div className="mt-3 pt-2 border-t text-xs">
-              Result: <span className={pipeline.status === "complete" ? "text-green-600 font-semibold" : pipeline.status === "partial" ? "text-amber-600 font-semibold" : "text-red-600 font-semibold"}>{pipeline.status}</span>
+              Result: <span className={pipeline.status === "complete" ? "text-[var(--cmp-text-success)] font-semibold" : pipeline.status === "partial" ? "text-[var(--cmp-text-warning)] font-semibold" : "text-[var(--cmp-text-critical)] font-semibold"}>{pipeline.status}</span>
             </div>
           </div>
         )}
@@ -156,7 +156,7 @@ function LibraryTab({ data, ui }: TabProps) {
             <div key={l.id} className="py-2.5 flex items-center gap-3">
               <span className="font-medium text-gray-800 text-sm">{l.name}</span>
               <span className="text-xs text-gray-400">{l.category} · {l.level}{l.specialty ? ` · ${l.specialty}` : ""}</span>
-              <span className={`ml-auto text-[10px] px-2 py-0.5 rounded-full ${l.status === "active" ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-500"}`}>{l.status}</span>
+              <span className={`ml-auto text-[10px] px-2 py-0.5 rounded-full ${l.status === "active" ? "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]" : "bg-gray-100 text-gray-500"}`}>{l.status}</span>
             </div>
           ))}
         </div>
@@ -224,7 +224,7 @@ function TemplatesTab({ data, support, ui }: TabProps) {
             <div key={t.id} className="py-2.5">
               <div className="flex items-center gap-2">
                 <span className="font-medium text-gray-800 text-sm">v{t.version}</span>
-                <span className={`text-[10px] px-2 py-0.5 rounded-full ${t.status === "active" ? "bg-green-100 text-green-700" : t.status === "draft" ? "bg-amber-100 text-amber-700" : "bg-gray-100 text-gray-500"}`}>{t.status}</span>
+                <span className={`text-[10px] px-2 py-0.5 rounded-full ${t.status === "active" ? "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]" : t.status === "draft" ? "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]" : "bg-gray-100 text-gray-500"}`}>{t.status}</span>
                 {t.status === "draft" && <button className={`${btnGhost} ml-auto`} disabled={ui.busy} onClick={() => publish(t.id)}>Publish</button>}
               </div>
               <p className="text-xs text-gray-500 mt-1">Workspaces: {(t.workspaces ?? []).join(", ") || "none"} · {(t.framework_ids ?? []).length} framework(s) · {(t.resource_ids ?? []).length} resource(s) · {(t.cpu_ids ?? []).length} CPU(s)</p>
@@ -263,7 +263,7 @@ function PositionsTab({ data, support, ui }: TabProps) {
             {support.departments.map((d: any) => <option key={d.id} value={d.id}>{d.name}</option>)}
           </select>
           <button className={btn} disabled={ui.busy} onClick={create}>Create position</button>
-          {activeTemplates.length === 0 && <p className="text-xs text-amber-600">Publish a template first.</p>}
+          {activeTemplates.length === 0 && <p className="text-xs text-[var(--cmp-text-warning)]">Publish a template first.</p>}
         </div>
       </div>
       <div className={`${card} md:col-span-2`}>
@@ -274,7 +274,7 @@ function PositionsTab({ data, support, ui }: TabProps) {
             <div key={p.id} className="py-2.5 flex items-center gap-3">
               <span className="font-medium text-gray-800 text-sm">{p.title}</span>
               <span className="text-xs text-gray-400">{p.departments?.name ?? "—"} · template v{p.position_templates?.version} · {(p.position_templates?.workspaces ?? []).join(", ")}</span>
-              <span className={`ml-auto text-[10px] px-2 py-0.5 rounded-full ${p.status === "active" ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-500"}`}>{p.status}</span>
+              <span className={`ml-auto text-[10px] px-2 py-0.5 rounded-full ${p.status === "active" ? "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]" : "bg-gray-100 text-gray-500"}`}>{p.status}</span>
             </div>
           ))}
         </div>
@@ -304,7 +304,7 @@ function AssignmentsTab({ data, ui }: TabProps) {
                 <td className="py-2.5 pr-3 font-medium text-gray-800">{a.profiles?.full_name ?? "—"}</td>
                 <td className="pr-3 text-gray-600">{a.positions?.title ?? "—"}</td>
                 <td className="pr-3 text-gray-500">{a.assignment_type}</td>
-                <td className="pr-3"><span className={`text-[10px] px-2 py-0.5 rounded-full ${a.provisioning_status === "complete" ? "bg-green-100 text-green-700" : a.provisioning_status === "partial" ? "bg-amber-100 text-amber-700" : "bg-gray-100 text-gray-500"}`}>{a.provisioning_status}</span></td>
+                <td className="pr-3"><span className={`text-[10px] px-2 py-0.5 rounded-full ${a.provisioning_status === "complete" ? "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]" : a.provisioning_status === "partial" ? "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]" : "bg-gray-100 text-gray-500"}`}>{a.provisioning_status}</span></td>
                 <td className="pr-3"><span className={`text-[10px] px-2 py-0.5 rounded-full ${a.status === "active" ? "bg-teal-100 text-teal-700" : "bg-gray-100 text-gray-500"}`}>{a.status}</span></td>
                 <td className="text-right">{a.status === "active" && <button className={btnGhost} disabled={ui.busy} onClick={() => terminate(a.id)}>End</button>}</td>
               </tr>
@@ -332,9 +332,9 @@ export default function WorkforceConsole({ ready, data, support }: { ready: bool
     return (
       <div className="space-y-4">
         <h1 className="text-2xl font-bold text-gray-900">Positions &amp; Onboarding</h1>
-        <div className="bg-amber-50 border border-amber-200 rounded-xl p-6">
+        <div className="bg-[var(--cmp-surface-warning)] border border-[var(--cmp-color-warning)] rounded-xl p-6">
           <p className="font-semibold text-amber-900">⚙️ One setup step remaining</p>
-          <p className="text-sm text-amber-800 mt-2">The Workforce Assignment Engine needs its database tables. Apply migration <code className="bg-amber-100 px-1.5 py-0.5 rounded font-mono text-xs">037-workforce-assignment.sql</code> in the Supabase SQL editor, then reload this page.</p>
+          <p className="text-sm text-amber-800 mt-2">The Workforce Assignment Engine needs its database tables. Apply migration <code className="bg-[var(--cmp-surface-warning)] px-1.5 py-0.5 rounded font-mono text-xs">037-workforce-assignment.sql</code> in the Supabase SQL editor, then reload this page.</p>
         </div>
       </div>
     );
@@ -348,7 +348,7 @@ export default function WorkforceConsole({ ready, data, support }: { ready: bool
         <p className="text-sm text-gray-500 mt-1">Assign employees to positions — the Workforce Assignment Engine provisions their workspaces, competencies, learning, assessments and passport automatically.</p>
       </div>
 
-      {msg && <div className={`text-sm rounded-lg px-4 py-2.5 ${msg.kind === "ok" ? "bg-green-50 text-green-800 border border-green-200" : "bg-red-50 text-red-800 border border-red-200"}`}>{msg.text}</div>}
+      {msg && <div className={`text-sm rounded-lg px-4 py-2.5 ${msg.kind === "ok" ? "bg-[var(--cmp-surface-success)] text-green-800 border border-[var(--cmp-color-success)]" : "bg-[var(--cmp-surface-critical)] text-red-800 border border-[var(--cmp-color-critical)]"}`}>{msg.text}</div>}
 
       <div className="flex gap-1 border-b border-gray-200">
         {TABS.map(t => (

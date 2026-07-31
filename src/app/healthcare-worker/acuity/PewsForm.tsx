@@ -9,7 +9,7 @@ import { classifyPews } from "@/lib/hww/instruments";
 // Competen records the ALREADY-CALCULATED total from the approved chart — it
 // never computes PEWS from vitals. The server reclassifies authoritatively.
 
-const btn = "px-3.5 py-2 rounded-lg bg-emerald-600 text-white text-sm font-medium hover:bg-emerald-700 disabled:opacity-50";
+const btn = "px-3.5 py-2 rounded-lg bg-[var(--cmp-color-success)] text-white text-sm font-medium hover:bg-emerald-700 disabled:opacity-50";
 const input = "w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/40";
 
 export default function PewsForm({ patientId, patientLabel }: { patientId: string; patientLabel: string }) {
@@ -39,7 +39,7 @@ export default function PewsForm({ patientId, patientLabel }: { patientId: strin
   if (!open) return <button className="px-2.5 py-1 rounded-lg border border-gray-300 text-xs text-gray-700 hover:bg-gray-50" onClick={() => setOpen(true)}>+ Record PEWS</button>;
 
   return (
-    <div className="mt-3 border border-emerald-200 rounded-lg p-4 space-y-3 bg-emerald-50/30 w-full">
+    <div className="mt-3 border border-[var(--cmp-color-success)] rounded-lg p-4 space-y-3 bg-[var(--cmp-surface-success)]/30 w-full">
       <div className="flex flex-wrap items-center gap-2">
         <h4 className="text-sm font-semibold text-gray-800">Record PEWS — {patientLabel}</h4>
         {band && (
@@ -53,7 +53,7 @@ export default function PewsForm({ patientId, patientLabel }: { patientId: strin
         <div className="grid grid-cols-8 gap-1.5">
           {Array.from({ length: 16 }, (_, n) => (
             <button key={n} onClick={() => setTotal(n)}
-              className={`py-2 rounded-lg text-sm font-semibold tabular-nums border transition-colors ${total === n ? "bg-emerald-600 text-white border-emerald-600" : "bg-white text-gray-700 border-gray-300 hover:bg-gray-50"}`}>
+              className={`py-2 rounded-lg text-sm font-semibold tabular-nums border transition-colors ${total === n ? "bg-[var(--cmp-color-success)] text-white border-emerald-600" : "bg-white text-gray-700 border-gray-300 hover:bg-gray-50"}`}>
               {n}
             </button>
           ))}
@@ -65,12 +65,12 @@ export default function PewsForm({ patientId, patientLabel }: { patientId: strin
         <div className="flex gap-1.5">
           {[true, false].map(v => (
             <button key={String(v)} onClick={() => setCat3(v)}
-              className={`px-4 py-1.5 rounded-lg text-sm font-medium border ${cat3 === v ? (v ? "bg-red-600 text-white border-red-600" : "bg-emerald-600 text-white border-emerald-600") : "bg-white text-gray-700 border-gray-300 hover:bg-gray-50"}`}>
+              className={`px-4 py-1.5 rounded-lg text-sm font-medium border ${cat3 === v ? (v ? "bg-[var(--cmp-color-critical)] text-white border-red-600" : "bg-[var(--cmp-color-success)] text-white border-emerald-600") : "bg-white text-gray-700 border-gray-300 hover:bg-gray-50"}`}>
               {v ? "Yes" : "No"}
             </button>
           ))}
         </div>
-        {cat3 && <p className="text-[11px] text-red-600 mt-1">Special trigger — classification forces Critical (red) regardless of total.</p>}
+        {cat3 && <p className="text-[11px] text-[var(--cmp-text-critical)] mt-1">Special trigger — classification forces Critical (red) regardless of total.</p>}
       </div>
 
       {band && (
@@ -80,7 +80,7 @@ export default function PewsForm({ patientId, patientLabel }: { patientId: strin
       )}
 
       <input className={input} placeholder="Notes (optional)" value={notes} onChange={e => setNotes(e.target.value)} />
-      {err && <p className="text-xs text-amber-700">{err}</p>}
+      {err && <p className="text-xs text-[var(--cmp-text-warning)]">{err}</p>}
       <button className={btn} disabled={busy || total == null || cat3 == null} onClick={submit}>{busy ? "Saving…" : "Save PEWS"}</button>
       <p className="text-[10px] text-gray-400">Vital signs and PEWS components stay on the approved clinical chart — this records the total for operational classification, escalation and reassessment tracking.</p>
     </div>

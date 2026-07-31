@@ -9,7 +9,7 @@ import CompetencyNav from "../CompetencyNav";
 // gap store — shown honestly.
 
 export const dynamic = "force-dynamic";
-const RISK_CLS: Record<string, string> = { High: "bg-red-50 text-red-600", Medium: "bg-amber-50 text-amber-600", Low: "bg-gray-100 text-gray-500" };
+const RISK_CLS: Record<string, string> = { High: "bg-[var(--cmp-surface-critical)] text-[var(--cmp-text-critical)]", Medium: "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]", Low: "bg-gray-100 text-gray-500" };
 const QUICK = [["Create Improvement Plan", "/educator/plans"], ["Assign Remediation", "/educator/interventions"], ["Schedule Reassessment", "/educator/meetings"], ["Notify Learners", "/educator/communication"]];
 
 export default async function Gaps() {

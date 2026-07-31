@@ -335,7 +335,7 @@ export default async function CareerGrowthPage() {
             ) : (
               <div className="flex flex-col gap-3">
                 <div className="flex items-start gap-2.5">
-                  <span className="w-8 h-8 rounded-lg bg-green-50 flex items-center justify-center text-sm shrink-0">💪</span>
+                  <span className="w-8 h-8 rounded-lg bg-[var(--cmp-surface-success)] flex items-center justify-center text-sm shrink-0">💪</span>
                   <div>
                     <p className="text-[9px] font-bold text-gray-400 uppercase tracking-widest">Top strength</p>
                     <p className="text-xs text-gray-800">
@@ -346,7 +346,7 @@ export default async function CareerGrowthPage() {
                   </div>
                 </div>
                 <div className="flex items-start gap-2.5">
-                  <span className="w-8 h-8 rounded-lg bg-red-50 flex items-center justify-center text-sm shrink-0">🎯</span>
+                  <span className="w-8 h-8 rounded-lg bg-[var(--cmp-surface-critical)] flex items-center justify-center text-sm shrink-0">🎯</span>
                   <div>
                     <p className="text-[9px] font-bold text-gray-400 uppercase tracking-widest">Focus area</p>
                     <p className="text-xs text-gray-800">
@@ -371,7 +371,7 @@ export default async function CareerGrowthPage() {
               <div className="flex flex-wrap gap-3">
                 {(recognitions ?? []).slice(0, 4).map((r, i) => (
                   <div key={i} className="text-center w-[72px]">
-                    <span className="inline-flex w-12 h-12 rounded-full bg-amber-50 border border-amber-100 items-center justify-center text-xl">🏅</span>
+                    <span className="inline-flex w-12 h-12 rounded-full bg-[var(--cmp-surface-warning)] border border-[var(--cmp-color-warning)] items-center justify-center text-xl">🏅</span>
                     <p className="text-[9px] font-semibold text-gray-700 leading-tight mt-1">{r.title}</p>
                   </div>
                 ))}

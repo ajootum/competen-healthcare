@@ -9,9 +9,9 @@ import { useRouter } from "next/navigation";
 // (BR-EXA-003, enforced server-side).
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
-const PRI: Record<string, string> = { critical: "bg-rose-50 text-rose-700", high: "bg-amber-50 text-amber-700", medium: "bg-sky-50 text-sky-700", low: "bg-gray-100 text-gray-500" };
-const ST: Record<string, string> = { waiting: "bg-amber-50 text-amber-700", pending_info: "bg-sky-50 text-sky-700", returned: "bg-sky-50 text-sky-700", delegated: "bg-violet-50 text-violet-700", escalated: "bg-orange-50 text-orange-700" };
-const AI: Record<string, string> = { approve: "text-emerald-600", reject: "text-rose-600", review: "text-amber-600", escalate: "text-orange-600", request_info: "text-sky-600" };
+const PRI: Record<string, string> = { critical: "bg-[var(--cmp-surface-error)] text-[var(--cmp-text-error)]", high: "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]", medium: "bg-[var(--cmp-surface-information)] text-[var(--cmp-text-information)]", low: "bg-gray-100 text-gray-500" };
+const ST: Record<string, string> = { waiting: "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]", pending_info: "bg-[var(--cmp-surface-information)] text-[var(--cmp-text-information)]", returned: "bg-[var(--cmp-surface-information)] text-[var(--cmp-text-information)]", delegated: "bg-violet-50 text-violet-700", escalated: "bg-[var(--cmp-surface-warning)] text-orange-700" };
+const AI: Record<string, string> = { approve: "text-[var(--cmp-text-success)]", reject: "text-[var(--cmp-text-error)]", review: "text-[var(--cmp-text-warning)]", escalate: "text-[var(--cmp-text-warning)]", request_info: "text-[var(--cmp-text-information)]" };
 
 export default function QueueActions({ rows }: { rows: any[] }) {
   const router = useRouter();
@@ -31,7 +31,7 @@ export default function QueueActions({ rows }: { rows: any[] }) {
   if (rows.length === 0) return <p className="text-sm text-gray-400">No requests awaiting your decision. 🎉</p>;
   return (
     <div>
-      {err && <div className="mb-2 text-xs text-rose-600 bg-rose-50 border border-rose-100 rounded-lg px-3 py-2">{err}</div>}
+      {err && <div className="mb-2 text-xs text-[var(--cmp-text-error)] bg-[var(--cmp-surface-error)] border border-[var(--cmp-color-error)] rounded-lg px-3 py-2">{err}</div>}
       <div className="overflow-x-auto"><table className="w-full text-xs">
         <thead><tr className="text-gray-400 text-left border-b border-gray-100"><th className="py-2 pr-3 font-medium">Request</th><th className="py-2 pr-3 font-medium">Category</th><th className="py-2 pr-3 font-medium">Priority</th><th className="py-2 pr-3 font-medium">Status</th><th className="py-2 pr-3 font-medium">AI</th><th className="py-2 font-medium">Decision</th></tr></thead>
         <tbody>{rows.map((r: any) => { const b = busy === r.id; return (
@@ -43,12 +43,12 @@ export default function QueueActions({ rows }: { rows: any[] }) {
             <td className="py-2 pr-3"><span className={`text-[10px] font-medium capitalize ${AI[r.ai_recommendation] ?? "text-gray-400"}`}>{r.ai_recommendation ?? "—"}</span></td>
             <td className="py-2"><div className="flex flex-col gap-1">
               <div className="flex gap-1 flex-wrap">
-                <button disabled={b} onClick={() => decide(r.id, "approve")} className="text-[10px] px-2 py-1 rounded border border-emerald-200 text-emerald-700 hover:bg-emerald-50 disabled:opacity-40">Approve</button>
-                <button disabled={b} onClick={() => decide(r.id, "reject")} className="text-[10px] px-2 py-1 rounded border border-rose-200 text-rose-700 hover:bg-rose-50 disabled:opacity-40">Reject</button>
-                <button disabled={b} onClick={() => decide(r.id, "return")} className="text-[10px] px-2 py-1 rounded border border-sky-200 text-sky-700 hover:bg-sky-50 disabled:opacity-40">Return</button>
-                <button disabled={b} onClick={() => decide(r.id, "escalate")} className="text-[10px] px-2 py-1 rounded border border-orange-200 text-orange-700 hover:bg-orange-50 disabled:opacity-40">Escalate</button>
+                <button disabled={b} onClick={() => decide(r.id, "approve")} className="text-[10px] px-2 py-1 rounded border border-[var(--cmp-color-success)] text-emerald-700 hover:bg-[var(--cmp-surface-success)] disabled:opacity-40">Approve</button>
+                <button disabled={b} onClick={() => decide(r.id, "reject")} className="text-[10px] px-2 py-1 rounded border border-[var(--cmp-color-error)] text-[var(--cmp-text-error)] hover:bg-[var(--cmp-surface-error)] disabled:opacity-40">Reject</button>
+                <button disabled={b} onClick={() => decide(r.id, "return")} className="text-[10px] px-2 py-1 rounded border border-[var(--cmp-color-information)] text-[var(--cmp-text-information)] hover:bg-[var(--cmp-surface-information)] disabled:opacity-40">Return</button>
+                <button disabled={b} onClick={() => decide(r.id, "escalate")} className="text-[10px] px-2 py-1 rounded border border-[var(--cmp-color-warning)] text-orange-700 hover:bg-[var(--cmp-surface-warning)] disabled:opacity-40">Escalate</button>
               </div>
-              <input value={note[r.id] ?? ""} onChange={e => setNote(n => ({ ...n, [r.id]: e.target.value }))} placeholder="note / reason" className="text-[10px] border border-gray-200 rounded px-1.5 py-1 w-44 focus:outline-none focus:border-emerald-300" />
+              <input value={note[r.id] ?? ""} onChange={e => setNote(n => ({ ...n, [r.id]: e.target.value }))} placeholder="note / reason" className="text-[10px] border border-gray-200 rounded px-1.5 py-1 w-44 focus:outline-none focus:border-[var(--cmp-color-success)]" />
             </div></td>
           </tr>); })}</tbody>
       </table></div>

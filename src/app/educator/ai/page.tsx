@@ -11,7 +11,7 @@ import { WORKSPACES, NODE_POS } from "./workspaces";
 export const dynamic = "force-dynamic";
 
 const hourNow = () => new Date().getHours();
-const PRIO_CLS: Record<string, string> = { High: "bg-red-500/20 text-red-300 border-red-500/30", Medium: "bg-amber-500/20 text-amber-300 border-amber-500/30", Low: "bg-sky-500/20 text-sky-300 border-sky-500/30" };
+const PRIO_CLS: Record<string, string> = { High: "bg-[var(--cmp-color-critical)]/20 text-red-300 border-red-500/30", Medium: "bg-[var(--cmp-color-warning)]/20 text-amber-300 border-amber-500/30", Low: "bg-[var(--cmp-color-information)]/20 text-sky-300 border-sky-500/30" };
 
 export default async function AiHub() {
   const { admin, hospitalId, name } = await requireEducatorAccess();

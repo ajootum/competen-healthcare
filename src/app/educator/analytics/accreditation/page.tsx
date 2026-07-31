@@ -19,12 +19,12 @@ export default async function AccreditationLanding() {
 
   const summary = [
     { icon: "🛡️", tint: "bg-purple-50 text-purple-600", label: "Overall Compliance", value: pct(E.overallCompliance), sub: "recorded audits" },
-    { icon: "📋", tint: "bg-green-50 text-green-600", label: "Accreditation Readiness", value: pct(E.accreditationReadiness) },
-    { icon: "🗄️", tint: "bg-blue-50 text-blue-600", label: "Evidence Items", value: String(E.evidenceCount) },
+    { icon: "📋", tint: "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]", label: "Accreditation Readiness", value: pct(E.accreditationReadiness) },
+    { icon: "🗄️", tint: "bg-[var(--cmp-surface-information)] text-[var(--cmp-text-information)]", label: "Evidence Items", value: String(E.evidenceCount) },
     { icon: "✅", tint: "bg-teal-50 text-teal-600", label: "Audit Readiness", value: pct(E.auditReadiness) },
-    { icon: "🚩", tint: "bg-red-50 text-red-600", label: "Findings", value: String(E.criticalFindings), sub: "non-compliant + critical" },
+    { icon: "🚩", tint: "bg-[var(--cmp-surface-critical)] text-[var(--cmp-text-critical)]", label: "Findings", value: String(E.criticalFindings), sub: "non-compliant + critical" },
     { icon: "📄", tint: "bg-indigo-50 text-indigo-600", label: "Docs Due Review", value: "—", sub: "no document store" },
-    { icon: "📈", tint: "bg-amber-50 text-amber-600", label: "Improvement Closure", value: pct(E.closureRate) },
+    { icon: "📈", tint: "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]", label: "Improvement Closure", value: pct(E.closureRate) },
   ];
   const distTotal = d.standards.distribution.reduce((s, x) => s + x.n, 0);
   const Circ = 2 * Math.PI * 40;
@@ -72,7 +72,7 @@ export default async function AccreditationLanding() {
           <h2 className="text-sm font-bold text-gray-900 mb-3">Compliance by Area</h2>
           {d.standards.byArea.length === 0 ? <p className="text-xs text-gray-400">No audit areas recorded yet.</p> : (
             <div className="flex flex-col gap-1.5">{d.standards.byArea.map(a => (
-              <div key={a.area} className="flex items-center gap-2"><span className="text-[10px] text-gray-500 w-36 truncate">{a.area}</span><div className="flex-1 h-2 bg-gray-100 rounded-full overflow-hidden"><div className={`h-full rounded-full ${a.pct >= 80 ? "bg-green-500" : a.pct >= 60 ? "bg-amber-400" : "bg-red-400"}`} style={{ width: `${a.pct}%` }} /></div><span className="text-[10px] font-bold text-gray-600 w-9 text-right">{a.pct}%</span></div>
+              <div key={a.area} className="flex items-center gap-2"><span className="text-[10px] text-gray-500 w-36 truncate">{a.area}</span><div className="flex-1 h-2 bg-gray-100 rounded-full overflow-hidden"><div className={`h-full rounded-full ${a.pct >= 80 ? "bg-[var(--cmp-color-success)]" : a.pct >= 60 ? "bg-[var(--cmp-color-warning)]" : "bg-[var(--cmp-color-critical)]"}`} style={{ width: `${a.pct}%` }} /></div><span className="text-[10px] font-bold text-gray-600 w-9 text-right">{a.pct}%</span></div>
             ))}</div>
           )}
         </div>

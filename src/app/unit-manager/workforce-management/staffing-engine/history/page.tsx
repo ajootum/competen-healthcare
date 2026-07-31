@@ -19,17 +19,17 @@ const NONE = "00000000-0000-0000-0000-000000000000";
 
 // Staffing-relevant audit actions the engine orchestrates
 const ACTIONS: Record<string, { label: string; tone: string; group: string }> = {
-  deploy_staff: { label: "Staff deployed", tone: "bg-emerald-50 text-emerald-700", group: "Deployment" },
-  open_shift: { label: "Shift opened", tone: "bg-emerald-50 text-emerald-700", group: "Deployment" },
-  generate_roster: { label: "Roster generated", tone: "bg-blue-50 text-blue-700", group: "Roster" },
-  publish_roster: { label: "Roster published", tone: "bg-blue-50 text-blue-700", group: "Roster" },
+  deploy_staff: { label: "Staff deployed", tone: "bg-[var(--cmp-surface-success)] text-emerald-700", group: "Deployment" },
+  open_shift: { label: "Shift opened", tone: "bg-[var(--cmp-surface-success)] text-emerald-700", group: "Deployment" },
+  generate_roster: { label: "Roster generated", tone: "bg-[var(--cmp-surface-information)] text-blue-700", group: "Roster" },
+  publish_roster: { label: "Roster published", tone: "bg-[var(--cmp-surface-information)] text-blue-700", group: "Roster" },
   archive_roster: { label: "Roster archived", tone: "bg-gray-100 text-gray-600", group: "Roster" },
   publish_planning_config: { label: "Planning config published", tone: "bg-violet-50 text-violet-700", group: "Config" },
   compute_shift_metrics: { label: "Shift metrics computed", tone: "bg-gray-100 text-gray-600", group: "Metrics" },
-  schedule_break: { label: "Break scheduled", tone: "bg-sky-50 text-sky-700", group: "Breaks" },
-  raise_escalation: { label: "Escalation raised", tone: "bg-amber-50 text-amber-700", group: "Escalation" },
-  raise_safety_alert: { label: "Safety alert raised", tone: "bg-rose-50 text-rose-700", group: "Escalation" },
-  command_transfer_initiated: { label: "Command transfer", tone: "bg-amber-50 text-amber-700", group: "Escalation" },
+  schedule_break: { label: "Break scheduled", tone: "bg-[var(--cmp-surface-information)] text-[var(--cmp-text-information)]", group: "Breaks" },
+  raise_escalation: { label: "Escalation raised", tone: "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]", group: "Escalation" },
+  raise_safety_alert: { label: "Safety alert raised", tone: "bg-[var(--cmp-surface-error)] text-[var(--cmp-text-error)]", group: "Escalation" },
+  command_transfer_initiated: { label: "Command transfer", tone: "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]", group: "Escalation" },
 };
 const ACTION_KEYS = Object.keys(ACTIONS);
 
@@ -93,15 +93,15 @@ export default async function StaffingHistory() {
       {header}
 
       {!provisioned ? (
-        <div className="bg-amber-50 border border-amber-200 rounded-xl p-6"><p className="font-semibold text-amber-900">⚙️ Audit store not provisioned</p><p className="text-sm text-amber-800 mt-1">The audit_log table isn&apos;t available yet. Decision history appears once staffing actions are recorded.</p></div>
+        <div className="bg-[var(--cmp-surface-warning)] border border-[var(--cmp-color-warning)] rounded-xl p-6"><p className="font-semibold text-amber-900">⚙️ Audit store not provisioned</p><p className="text-sm text-amber-800 mt-1">The audit_log table isn&apos;t available yet. Decision history appears once staffing actions are recorded.</p></div>
       ) : (
         <>
           <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-5 gap-3">
             <Kpi label="Decisions (7d)" value={recent.length} sub="Staffing actions" />
-            <Kpi label="Deployments" value={deployments} sub="Staff & shifts" tone="text-emerald-600" />
-            <Kpi label="Roster ops" value={rosterOps} sub="Generated / published" tone="text-blue-600" />
+            <Kpi label="Deployments" value={deployments} sub="Staff & shifts" tone="text-[var(--cmp-text-success)]" />
+            <Kpi label="Roster ops" value={rosterOps} sub="Generated / published" tone="text-[var(--cmp-text-information)]" />
             <Kpi label="Config changes" value={configChanges} sub="Planning model" tone="text-violet-600" />
-            <Kpi label="Escalations" value={escalations} sub="Raised in period" tone={escalations ? "text-amber-600" : undefined} />
+            <Kpi label="Escalations" value={escalations} sub="Raised in period" tone={escalations ? "text-[var(--cmp-text-warning)]" : undefined} />
           </div>
 
           <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">

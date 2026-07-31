@@ -14,11 +14,11 @@ export type Person = { id: string; name: string; role: string };
 export type Learner = { id: string; name: string; dept: string };
 
 const URGENCY_CLS: Record<string, string> = {
-  high: "bg-red-100 text-red-700", medium: "bg-amber-100 text-amber-700", low: "bg-gray-100 text-gray-600",
+  high: "bg-[var(--cmp-surface-critical)] text-[var(--cmp-text-critical)]", medium: "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]", low: "bg-gray-100 text-gray-600",
 };
 const STATUS_CLS: Record<string, string> = {
-  open: "bg-blue-100 text-blue-700", accepted: "bg-indigo-100 text-indigo-700",
-  resolved: "bg-green-100 text-green-700", declined: "bg-gray-100 text-gray-400",
+  open: "bg-[var(--cmp-surface-information)] text-blue-700", accepted: "bg-indigo-100 text-indigo-700",
+  resolved: "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]", declined: "bg-gray-100 text-gray-400",
 };
 const NEXT: Record<string, { to: string; label: string }[]> = {
   open: [{ to: "accepted", label: "Accept" }, { to: "resolved", label: "Resolve…" }, { to: "declined", label: "Decline…" }],
@@ -95,7 +95,7 @@ export default function ReferralsBoard({ referrals, learners, referees, startOpe
         </button>
       </div>
 
-      {error && <p className="text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2 mb-3">{error}</p>}
+      {error && <p className="text-xs text-[var(--cmp-text-critical)] bg-[var(--cmp-surface-critical)] border border-[var(--cmp-color-critical)] rounded-lg px-3 py-2 mb-3">{error}</p>}
 
       {showNew && (
         <div className="bg-white border border-purple-200 rounded-xl p-4 mb-4">

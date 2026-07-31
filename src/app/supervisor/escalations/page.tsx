@@ -21,9 +21,9 @@ const card = cardClass;
 const label = "text-[11px] font-semibold text-gray-400 uppercase tracking-wider";
 const titleCase = (s: string | null | undefined) => (s ?? "").replace(/_/g, " ").replace(/\b\w/g, ch => ch.toUpperCase());
 const fmtWhen = (iso: string | null) => iso ? new Date(iso).toLocaleString([], { hour: "2-digit", minute: "2-digit", day: "numeric", month: "short" }) : "";
-const BUCKET: Record<string, string> = { Critical: "bg-red-100 text-red-700", High: "bg-orange-100 text-orange-700", Medium: "bg-amber-100 text-amber-700", Low: "bg-gray-100 text-gray-500" };
-const STATUS: Record<string, string> = { open: "bg-red-100 text-red-700", acknowledged: "bg-blue-100 text-blue-700", resolved: "bg-green-100 text-green-700" };
-const ewsColor = (n: number | null) => n == null ? "text-gray-400" : n >= 7 ? "text-red-600" : n >= 5 ? "text-orange-600" : n >= 3 ? "text-yellow-600" : "text-green-600";
+const BUCKET: Record<string, string> = { Critical: "bg-[var(--cmp-surface-critical)] text-[var(--cmp-text-critical)]", High: "bg-[var(--cmp-surface-warning)] text-orange-700", Medium: "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]", Low: "bg-gray-100 text-gray-500" };
+const STATUS: Record<string, string> = { open: "bg-[var(--cmp-surface-critical)] text-[var(--cmp-text-critical)]", acknowledged: "bg-[var(--cmp-surface-information)] text-blue-700", resolved: "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]" };
+const ewsColor = (n: number | null) => n == null ? "text-gray-400" : n >= 7 ? "text-[var(--cmp-text-critical)]" : n >= 5 ? "text-[var(--cmp-text-warning)]" : n >= 3 ? "text-[var(--cmp-text-warning)]" : "text-[var(--cmp-text-success)]";
 
 // SSW-CCR-003 S5 — the escalation workflow, rendered as the operational
 // contract this page implements.
@@ -123,12 +123,12 @@ export default async function EscalationCentrePage({ searchParams }: { searchPar
       </div>
 
       <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-4">
-        <Kpi label="Active escalations" value={k.open} tone={k.open > 0 ? "text-red-600" : undefined} />
-        <Kpi label="Critical (L4-5)" value={k.critical} tone={k.critical > 0 ? "text-red-600" : undefined} sub="immediate action" />
-        <Kpi label="Pending acknowledgement" value={pendingAck} tone={pendingAck > 0 ? "text-amber-600" : undefined} />
-        <Kpi label="Past response deadline" value={overdueN} tone={overdueN > 0 ? "text-red-600" : undefined} sub="SLA breached" />
+        <Kpi label="Active escalations" value={k.open} tone={k.open > 0 ? "text-[var(--cmp-text-critical)]" : undefined} />
+        <Kpi label="Critical (L4-5)" value={k.critical} tone={k.critical > 0 ? "text-[var(--cmp-text-critical)]" : undefined} sub="immediate action" />
+        <Kpi label="Pending acknowledgement" value={pendingAck} tone={pendingAck > 0 ? "text-[var(--cmp-text-warning)]" : undefined} />
+        <Kpi label="Past response deadline" value={overdueN} tone={overdueN > 0 ? "text-[var(--cmp-text-critical)]" : undefined} sub="SLA breached" />
         <Kpi label="Avg response" value={k.avgResponse != null ? `${k.avgResponse}m` : "—"} sub="raised → resolved" />
-        <Kpi label="Resolved this week" value={k.resolvedThisWeek} tone="text-green-700" />
+        <Kpi label="Resolved this week" value={k.resolvedThisWeek} tone="text-[var(--cmp-text-success)]" />
       </div>
 
       {d.aiWarn.length > 0 && (
@@ -136,7 +136,7 @@ export default async function EscalationCentrePage({ searchParams }: { searchPar
           <p className={label}>Escalation intelligence</p>
           <div className="mt-2 space-y-1">
             {d.aiWarn.map((w: any, i: number) => (
-              <p key={i} className={`text-sm ${w.tone === "red" ? "text-red-700" : "text-amber-700"}`}>⚠ <span className="font-medium">{w.title}</span> — {w.sub}</p>
+              <p key={i} className={`text-sm ${w.tone === "red" ? "text-[var(--cmp-text-critical)]" : "text-[var(--cmp-text-warning)]"}`}>⚠ <span className="font-medium">{w.title}</span> — {w.sub}</p>
             ))}
           </div>
           <p className="text-[10px] text-gray-400 mt-2">Rule-based over the live queue — deterministic, not a model prediction.</p>
@@ -154,7 +154,7 @@ export default async function EscalationCentrePage({ searchParams }: { searchPar
           {d.board.map((e: any) => {
             const dueMin = e.response_deadline ? Math.round((new Date(e.response_deadline).getTime() - Date.parse(new Date().toISOString())) / 60000) : null;
             return (
-              <div key={e.id} className={`py-3 ${e.overdue ? "bg-red-50/40 -mx-2 px-2 rounded-lg" : ""}`}>
+              <div key={e.id} className={`py-3 ${e.overdue ? "bg-[var(--cmp-surface-critical)]/40 -mx-2 px-2 rounded-lg" : ""}`}>
                 <div className="flex flex-wrap items-center gap-2">
                   <span className="font-bold text-gray-800">L{e.level}</span>
                   <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${BUCKET[e.bucket] ?? BUCKET.Low}`}>{e.bucket}</span>
@@ -162,8 +162,8 @@ export default async function EscalationCentrePage({ searchParams }: { searchPar
                   <span className="text-sm font-medium text-gray-800">{e.patientLabel ?? e.area}</span>
                   <span className="text-xs text-gray-400">{titleCase(e.escalation_type)}</span>
                   {e.overdue
-                    ? <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-red-100 text-red-700 font-semibold">SLA BREACHED</span>
-                    : dueMin != null && <span className={`text-[11px] tabular-nums ${dueMin <= 15 ? "text-orange-600 font-semibold" : "text-gray-400"}`}>{dueMin}m to respond</span>}
+                    ? <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-[var(--cmp-surface-critical)] text-[var(--cmp-text-critical)] font-semibold">SLA BREACHED</span>
+                    : dueMin != null && <span className={`text-[11px] tabular-nums ${dueMin <= 15 ? "text-[var(--cmp-text-warning)] font-semibold" : "text-gray-400"}`}>{dueMin}m to respond</span>}
                   <span className="ml-auto text-[11px] text-gray-400">{e.reporter} · {e.elapsedMin}m ago{e.owner ? ` · owner ${e.owner}` : ""}</span>
                 </div>
                 <p className="text-sm text-gray-600 mt-0.5">{e.summary}</p>
@@ -185,8 +185,8 @@ export default async function EscalationCentrePage({ searchParams }: { searchPar
                 <span className="font-medium text-gray-800">{p.patient}</span>
                 <span className="text-xs text-gray-400">{p.ward}</span>
                 <span className={`font-bold tabular-nums ${ewsColor(p.pews)}`}>PEWS {p.pews}</span>
-                {p.trend && <span className={`text-sm font-bold ${p.trend === "up" ? "text-red-600" : p.trend === "down" ? "text-green-600" : "text-gray-400"}`}>{p.trend === "up" ? "↗" : p.trend === "down" ? "↘" : "→"}</span>}
-                {p.escalated && <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-red-100 text-red-700">auto-escalated</span>}
+                {p.trend && <span className={`text-sm font-bold ${p.trend === "up" ? "text-[var(--cmp-text-critical)]" : p.trend === "down" ? "text-[var(--cmp-text-success)]" : "text-gray-400"}`}>{p.trend === "up" ? "↗" : p.trend === "down" ? "↘" : "→"}</span>}
+                {p.escalated && <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-[var(--cmp-surface-critical)] text-[var(--cmp-text-critical)]">auto-escalated</span>}
                 <span className="ml-auto text-[11px] text-gray-400">{fmtWhen(p.at)}</span>
               </p>
             ))}
@@ -204,7 +204,7 @@ export default async function EscalationCentrePage({ searchParams }: { searchPar
               <div className="flex flex-wrap gap-1.5">
                 {responders.map(r => (
                   <span key={r.id} className="inline-flex items-center gap-1.5 text-xs bg-gray-50 border border-gray-200 rounded-full px-2.5 py-1">
-                    <span className={`w-1.5 h-1.5 rounded-full ${r.status === "on_duty" ? "bg-green-500" : "bg-gray-300"}`} />
+                    <span className={`w-1.5 h-1.5 rounded-full ${r.status === "on_duty" ? "bg-[var(--cmp-color-success)]" : "bg-gray-300"}`} />
                     {r.name}<span className="text-gray-400">{titleCase(r.role)}</span>
                   </span>
                 ))}
@@ -259,8 +259,8 @@ export default async function EscalationCentrePage({ searchParams }: { searchPar
             return (
               <div key={t.date} className="flex-1 flex flex-col items-center gap-1">
                 <div className="w-full flex items-end justify-center gap-0.5 h-20">
-                  <div className="w-2.5 bg-red-400 rounded-t" style={{ height: `${(t.opened / max) * 100}%` }} title={`${t.opened} opened`} />
-                  <div className="w-2.5 bg-green-400 rounded-t" style={{ height: `${(t.resolved / max) * 100}%` }} title={`${t.resolved} resolved`} />
+                  <div className="w-2.5 bg-[var(--cmp-color-critical)] rounded-t" style={{ height: `${(t.opened / max) * 100}%` }} title={`${t.opened} opened`} />
+                  <div className="w-2.5 bg-[var(--cmp-color-success)] rounded-t" style={{ height: `${(t.resolved / max) * 100}%` }} title={`${t.resolved} resolved`} />
                 </div>
                 <span className="text-[9px] text-gray-400">{t.date.slice(5)}</span>
               </div>

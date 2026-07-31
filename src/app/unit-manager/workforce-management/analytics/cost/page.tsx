@@ -53,9 +53,9 @@ export default async function CostAnalytics() {
 
       <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-3">
         <Kpi label="Est. labour" value={`£${(k.totalLabour / 1000).toFixed(1)}k`} sub="This cycle (provisional)" foot="ⁱ" />
-        <Kpi label="Budget variance" value={k.variance != null ? `${k.variance >= 0 ? "+" : ""}£${Math.round(k.variance / 100) / 10}k` : "—"} tone={k.variance != null && k.variance > 0 ? "text-rose-600" : "text-emerald-600"} foot="WF-UTL-001" />
-        <Kpi label="Overtime hours" value={`${k.overtimeHours}h`} sub={`£${k.overtimePremium.toLocaleString()} premium`} tone={k.overtimeHours ? "text-amber-600" : undefined} foot="WF-OT-001" />
-        <Kpi label="Agency projected" value={`£${k.agencyProjected.toLocaleString()}`} sub={`${k.agencyShifts} shifts`} tone={k.agencyProjected ? "text-amber-600" : "text-emerald-600"} />
+        <Kpi label="Budget variance" value={k.variance != null ? `${k.variance >= 0 ? "+" : ""}£${Math.round(k.variance / 100) / 10}k` : "—"} tone={k.variance != null && k.variance > 0 ? "text-[var(--cmp-text-error)]" : "text-[var(--cmp-text-success)]"} foot="WF-UTL-001" />
+        <Kpi label="Overtime hours" value={`${k.overtimeHours}h`} sub={`£${k.overtimePremium.toLocaleString()} premium`} tone={k.overtimeHours ? "text-[var(--cmp-text-warning)]" : undefined} foot="WF-OT-001" />
+        <Kpi label="Agency projected" value={`£${k.agencyProjected.toLocaleString()}`} sub={`${k.agencyShifts} shifts`} tone={k.agencyProjected ? "text-[var(--cmp-text-warning)]" : "text-[var(--cmp-text-success)]"} />
         <Kpi label="Cost / patient-day" value={k.costPerPatientDay != null ? `£${k.costPerPatientDay}` : "—"} foot="WF-UTL-001" />
         <Kpi label="Month-end est." value={`£${(k.monthEnd / 1000).toFixed(0)}k`} sub="×4.33 projection" />
       </div>
@@ -67,7 +67,7 @@ export default async function CostAnalytics() {
         </div>
         <div className={`${card} p-5`}>
           <h3 className="text-sm font-bold text-gray-900 mb-3">Cost recommendations <span className="text-[10px] text-gray-400 font-normal">WA-CO-007</span></h3>
-          {(d.recs ?? []).length === 0 ? <p className="text-sm text-gray-400">No recommendations.</p> : <div className="space-y-2">{d.recs.map((r: any, i: number) => (<div key={i} className="rounded-lg border border-gray-100 p-2.5"><div className="flex items-center justify-between gap-2"><p className="text-xs font-semibold text-gray-800">{r.title}</p>{r.saving ? <span className="text-[10px] text-emerald-600 font-semibold">£{r.saving.toLocaleString()}</span> : null}</div><p className="text-[11px] text-gray-500">{r.sub}</p></div>))}</div>}
+          {(d.recs ?? []).length === 0 ? <p className="text-sm text-gray-400">No recommendations.</p> : <div className="space-y-2">{d.recs.map((r: any, i: number) => (<div key={i} className="rounded-lg border border-gray-100 p-2.5"><div className="flex items-center justify-between gap-2"><p className="text-xs font-semibold text-gray-800">{r.title}</p>{r.saving ? <span className="text-[10px] text-[var(--cmp-text-success)] font-semibold">£{r.saving.toLocaleString()}</span> : null}</div><p className="text-[11px] text-gray-500">{r.sub}</p></div>))}</div>}
           <p className="text-[10px] text-gray-400 mt-2">Overtime is provisional until payroll reconciliation (WF-OT-001). Cost-reconciliation vs payroll accepted/rejected values needs the finance integration → next-phase.</p>
         </div>
       </div>

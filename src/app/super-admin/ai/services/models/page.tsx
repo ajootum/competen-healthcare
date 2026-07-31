@@ -23,10 +23,10 @@ export default async function ModelsPage() {
       <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
         <Stat label="Providers" value={k.providers} sub={`${k.activeProviders} active`} />
         <Stat label="Models" value={k.models} sub="registered" />
-        <Stat label="Active Models" value={k.activeModels} sub="available" tone="text-emerald-600" />
-        <Stat label="Preview" value={k.preview} sub="not GA" tone={k.preview ? "text-amber-600" : undefined} />
+        <Stat label="Active Models" value={k.activeModels} sub="available" tone="text-[var(--cmp-text-success)]" />
+        <Stat label="Preview" value={k.preview} sub="not GA" tone={k.preview ? "text-[var(--cmp-text-warning)]" : undefined} />
         <Stat label="Deprecated" value={k.deprecated} sub="phase-out" tone={k.deprecated ? "text-gray-500" : undefined} />
-        <Stat label="Active Provider" value={<span className="capitalize text-lg">{d.activeProvider ?? "none"}</span>} sub={d.aiConfigured ? "configured" : "not configured"} tone={d.aiConfigured ? "text-emerald-600" : "text-amber-600"} />
+        <Stat label="Active Provider" value={<span className="capitalize text-lg">{d.activeProvider ?? "none"}</span>} sub={d.aiConfigured ? "configured" : "not configured"} tone={d.aiConfigured ? "text-[var(--cmp-text-success)]" : "text-[var(--cmp-text-warning)]"} />
       </div>
 
       {d.providers.map((p: any) => (

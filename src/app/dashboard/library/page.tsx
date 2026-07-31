@@ -46,22 +46,22 @@ export default async function DocumentLibraryPage({ searchParams }: { searchPara
       {/* Header */}
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <p className="text-[11px] font-semibold text-blue-600 uppercase tracking-wide">Personal Workspace</p>
+          <p className="text-[11px] font-semibold text-[var(--cmp-text-information)] uppercase tracking-wide">Personal Workspace</p>
           <h1 className="text-2xl font-bold text-gray-900">Documents &amp; Knowledge Library</h1>
           <p className="text-sm text-gray-500 mt-0.5">Find, access and manage all your essential documents, policies, guidelines and knowledge resources.</p>
         </div>
-        <Link href="/dashboard/copilot" className="text-sm font-medium text-white bg-blue-600 rounded-lg px-3 py-2 hover:bg-blue-500">✨ Ask AI</Link>
+        <Link href="/dashboard/copilot" className="text-sm font-medium text-white bg-[var(--cmp-color-information)] rounded-lg px-3 py-2 hover:bg-[var(--cmp-color-information)]">✨ Ask AI</Link>
       </div>
 
       {/* KPI ribbon */}
       <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-7 gap-3">
-        <Kpi icon="📚" label="Total Documents" value={d.kpis.total} sub="In library" tint="bg-blue-50" />
+        <Kpi icon="📚" label="Total Documents" value={d.kpis.total} sub="In library" tint="bg-[var(--cmp-surface-information)]" />
         <Kpi icon="📁" label="My Documents" value={d.kpis.myDocs} sub="Authored by you" tint="bg-indigo-50" />
         <Kpi icon="📖" label="Knowledge" value={d.kpis.knowledge} sub="Articles + cases" tint="bg-violet-50" />
-        <Kpi icon="🛡️" label="Mandatory" value={d.kpis.mandatory} sub="Policies" tint="bg-rose-50" />
-        <Kpi icon="⏰" label="Review Soon" value={d.kpis.reviewSoon} sub="Within 30 days" tint="bg-amber-50" />
+        <Kpi icon="🛡️" label="Mandatory" value={d.kpis.mandatory} sub="Policies" tint="bg-[var(--cmp-surface-error)]" />
+        <Kpi icon="⏰" label="Review Soon" value={d.kpis.reviewSoon} sub="Within 30 days" tint="bg-[var(--cmp-surface-warning)]" />
         <Kpi icon="🗂️" label="Categories" value={d.kpis.categories} sub="Content types" tint="bg-cyan-50" />
-        <Kpi icon="🆕" label="Added (7d)" value={d.kpis.added7d} sub="Recently" tint="bg-emerald-50" />
+        <Kpi icon="🆕" label="Added (7d)" value={d.kpis.added7d} sub="Recently" tint="bg-[var(--cmp-surface-success)]" />
       </div>
 
       <LibrarySearch />
@@ -70,9 +70,9 @@ export default async function DocumentLibraryPage({ searchParams }: { searchPara
         {/* Browse tree */}
         <div className="bg-white rounded-xl border border-gray-200 p-3 space-y-1">
           <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide px-2 pb-1">Browse</p>
-          <Link href="/dashboard/library" className={`flex items-center justify-between px-2.5 py-1.5 rounded-lg text-sm ${!type ? "bg-blue-50 text-blue-700 font-medium" : "text-gray-600 hover:bg-gray-50"}`}><span>📚 All Documents</span><span className="text-[11px] text-gray-400">{d.totalShown}</span></Link>
+          <Link href="/dashboard/library" className={`flex items-center justify-between px-2.5 py-1.5 rounded-lg text-sm ${!type ? "bg-[var(--cmp-surface-information)] text-blue-700 font-medium" : "text-gray-600 hover:bg-gray-50"}`}><span>📚 All Documents</span><span className="text-[11px] text-gray-400">{d.totalShown}</span></Link>
           {d.browse.map((b: any) => ( // eslint-disable-line @typescript-eslint/no-explicit-any
-            <Link key={b.type} href={`/dashboard/library?type=${b.type}`} className={`flex items-center justify-between px-2.5 py-1.5 rounded-lg text-sm ${type === b.type ? "bg-blue-50 text-blue-700 font-medium" : "text-gray-600 hover:bg-gray-50"}`}><span className="truncate">{b.icon} {b.label}</span><span className="text-[11px] text-gray-400 shrink-0 ml-1">{b.n}</span></Link>
+            <Link key={b.type} href={`/dashboard/library?type=${b.type}`} className={`flex items-center justify-between px-2.5 py-1.5 rounded-lg text-sm ${type === b.type ? "bg-[var(--cmp-surface-information)] text-blue-700 font-medium" : "text-gray-600 hover:bg-gray-50"}`}><span className="truncate">{b.icon} {b.label}</span><span className="text-[11px] text-gray-400 shrink-0 ml-1">{b.n}</span></Link>
           ))}
         </div>
 
@@ -88,11 +88,11 @@ export default async function DocumentLibraryPage({ searchParams }: { searchPara
               <tbody className="divide-y divide-gray-50">
                 {rows.map((doc: any) => ( // eslint-disable-line @typescript-eslint/no-explicit-any
                   <tr key={`${doc.type}-${doc.id}`} className="hover:bg-gray-50/60">
-                    <td className="px-4 py-3"><div className="flex items-center gap-2"><span className="text-base shrink-0">{doc.meta.icon}</span><span className="font-medium text-gray-800 leading-tight">{doc.name}{doc.review_date && new Date(doc.review_date).getTime() <= reviewCutoff && <span className="ml-1.5 text-[10px] font-medium text-amber-700 bg-amber-50 rounded px-1">review due</span>}</span></div></td>
+                    <td className="px-4 py-3"><div className="flex items-center gap-2"><span className="text-base shrink-0">{doc.meta.icon}</span><span className="font-medium text-gray-800 leading-tight">{doc.name}{doc.review_date && new Date(doc.review_date).getTime() <= reviewCutoff && <span className="ml-1.5 text-[10px] font-medium text-[var(--cmp-text-warning)] bg-[var(--cmp-surface-warning)] rounded px-1">review due</span>}</span></div></td>
                     <td className="px-3 py-3"><span className="inline-flex items-center gap-1 text-[11px] font-medium rounded-md px-1.5 py-0.5" style={{ background: `${doc.meta.color}15`, color: doc.meta.color }}>{doc.meta.label}</span></td>
                     <td className="px-3 py-3 text-gray-500 text-[12px] capitalize">{doc.category}</td>
                     <td className="px-3 py-3 text-gray-500 text-[12px] whitespace-nowrap">{fmtDate(doc.modified)}</td>
-                    <td className="px-3 py-3 text-right"><Link href={doc.meta.href} className="text-[12px] font-medium text-blue-600 hover:underline">Open →</Link></td>
+                    <td className="px-3 py-3 text-right"><Link href={doc.meta.href} className="text-[12px] font-medium text-[var(--cmp-text-information)] hover:underline">Open →</Link></td>
                   </tr>
                 ))}
                 {rows.length === 0 && <tr><td colSpan={5} className="px-4 py-16 text-center text-sm text-gray-400">No documents in this category.</td></tr>}
@@ -130,7 +130,7 @@ export default async function DocumentLibraryPage({ searchParams }: { searchPara
                 {d.mandatoryList.map((m: any) => ( // eslint-disable-line @typescript-eslint/no-explicit-any
                   <div key={m.id} className="flex items-start gap-2"><span className="text-blue-500 text-sm shrink-0">📋</span><div className="min-w-0"><p className="text-[12px] font-medium text-gray-800 leading-tight truncate">{m.name}</p><p className="text-[10px] text-gray-400">{m.review_date ? `Review by ${fmtDate(m.review_date)}` : "No review date"}</p></div></div>
                 ))}
-                <Link href="/dashboard/library?type=policy" className="block text-center text-[12px] font-medium text-blue-600 hover:underline pt-1">View all policies →</Link>
+                <Link href="/dashboard/library?type=policy" className="block text-center text-[12px] font-medium text-[var(--cmp-text-information)] hover:underline pt-1">View all policies →</Link>
               </div>
             ) : <p className="text-xs text-gray-400 py-4 text-center">No mandatory documents.</p>}
           </div>

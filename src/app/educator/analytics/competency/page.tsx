@@ -16,10 +16,10 @@ export default async function CompetencyLanding() {
 
   const summary = [
     { icon: "🗂️", tint: "bg-purple-50 text-purple-600", label: "Coverage", value: pct(d.coverage.cards.assessmentRate), sub: `${d.coverage.cards.fully}/${d.coverage.cards.total} fully` },
-    { icon: "🎯", tint: "bg-blue-50 text-blue-600", label: "Achievement", value: pct(d.achievement.cards.overall), sub: `${d.achievement.cards.achieved} achieved` },
-    { icon: "🧩", tint: "bg-amber-50 text-amber-600", label: "Critical Gaps", value: String(d.gaps.cards.critical), sub: `${d.gaps.cards.total} total` },
+    { icon: "🎯", tint: "bg-[var(--cmp-surface-information)] text-[var(--cmp-text-information)]", label: "Achievement", value: pct(d.achievement.cards.overall), sub: `${d.achievement.cards.achieved} achieved` },
+    { icon: "🧩", tint: "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]", label: "Critical Gaps", value: String(d.gaps.cards.critical), sub: `${d.gaps.cards.total} total` },
     { icon: "🛠️", tint: "bg-indigo-50 text-indigo-600", label: "Skill Mastery", value: pct(d.skills.cards.independentRate), sub: `${d.skills.cards.total} skills` },
-    { icon: "🔁", tint: "bg-rose-50 text-rose-600", label: "Reassessment Due", value: String(d.achievement.cards.reassessDue), sub: "expired competencies" },
+    { icon: "🔁", tint: "bg-[var(--cmp-surface-error)] text-[var(--cmp-text-error)]", label: "Reassessment Due", value: String(d.achievement.cards.reassessDue), sub: "expired competencies" },
     { icon: "🚀", tint: "bg-teal-50 text-teal-600", label: "Workforce Readiness", value: pct(d.domains.cards.readiness), sub: "avg domain achievement" },
   ];
   const atRisk = d.achievement.byLearner.filter(l => l.status === "At Risk");
@@ -57,8 +57,8 @@ export default async function CompetencyLanding() {
           <h2 className="text-sm font-bold text-gray-900 mb-3">Domain Performance</h2>
           {d.domains.cards.highest ? (
             <div className="space-y-2">
-              <div className="flex items-center justify-between rounded-lg bg-green-50/60 border border-green-100 px-3 py-2"><span className="text-[11px] text-gray-600 truncate">↑ {d.domains.cards.highest.name}</span><span className="text-sm font-bold text-green-700">{d.domains.cards.highest.pct}%</span></div>
-              {d.domains.cards.lowest && <div className="flex items-center justify-between rounded-lg bg-red-50/60 border border-red-100 px-3 py-2"><span className="text-[11px] text-gray-600 truncate">↓ {d.domains.cards.lowest.name}</span><span className="text-sm font-bold text-red-600">{d.domains.cards.lowest.pct}%</span></div>}
+              <div className="flex items-center justify-between rounded-lg bg-[var(--cmp-surface-success)]/60 border border-[var(--cmp-color-success)] px-3 py-2"><span className="text-[11px] text-gray-600 truncate">↑ {d.domains.cards.highest.name}</span><span className="text-sm font-bold text-[var(--cmp-text-success)]">{d.domains.cards.highest.pct}%</span></div>
+              {d.domains.cards.lowest && <div className="flex items-center justify-between rounded-lg bg-[var(--cmp-surface-critical)]/60 border border-[var(--cmp-color-critical)] px-3 py-2"><span className="text-[11px] text-gray-600 truncate">↓ {d.domains.cards.lowest.name}</span><span className="text-sm font-bold text-[var(--cmp-text-critical)]">{d.domains.cards.lowest.pct}%</span></div>}
               <p className="text-[10px] text-gray-400">Avg domain score {pct(d.domains.cards.avgScore)} · {d.domains.scorecards.length} domains assessed</p>
             </div>
           ) : <p className="text-xs text-gray-400">No domain scores recorded yet.</p>}
@@ -71,7 +71,7 @@ export default async function CompetencyLanding() {
           {d.gaps.register.length === 0 ? <p className="text-xs text-gray-400">No competency gaps detected. ✅</p> : (
             <div className="flex flex-col gap-1.5">
               {d.gaps.register.slice(0, 4).map(g => (
-                <div key={g.id} className="flex items-center gap-2 text-[11px]"><span className="flex-1 truncate text-gray-700">{g.name}</span><span className={`text-[9px] font-bold px-1.5 py-0.5 rounded ${g.risk === "High" ? "bg-red-50 text-red-600" : g.risk === "Medium" ? "bg-amber-50 text-amber-600" : "bg-gray-100 text-gray-500"}`}>{g.risk}</span><span className="text-gray-400 w-10 text-right">gap {g.gap}</span></div>
+                <div key={g.id} className="flex items-center gap-2 text-[11px]"><span className="flex-1 truncate text-gray-700">{g.name}</span><span className={`text-[9px] font-bold px-1.5 py-0.5 rounded ${g.risk === "High" ? "bg-[var(--cmp-surface-critical)] text-[var(--cmp-text-critical)]" : g.risk === "Medium" ? "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]" : "bg-gray-100 text-gray-500"}`}>{g.risk}</span><span className="text-gray-400 w-10 text-right">gap {g.gap}</span></div>
               ))}
             </div>
           )}
@@ -106,7 +106,7 @@ export default async function CompetencyLanding() {
           {atRisk.length === 0 ? <p className="text-xs text-gray-400">No learners flagged at risk. 🎉</p> : (
             <div className="flex flex-col gap-2">
               {atRisk.slice(0, 5).map(l => (
-                <div key={l.id} className="flex items-center gap-2 text-[11px]"><span className="w-6 h-6 rounded-full bg-red-50 text-red-600 flex items-center justify-center text-[9px] font-bold">{l.name.split(" ").map(w => w[0]).slice(0, 2).join("")}</span><span className="flex-1 truncate text-gray-700">{l.name}</span><span className="text-gray-400">{l.pctAchieved}% achieved</span></div>
+                <div key={l.id} className="flex items-center gap-2 text-[11px]"><span className="w-6 h-6 rounded-full bg-[var(--cmp-surface-critical)] text-[var(--cmp-text-critical)] flex items-center justify-center text-[9px] font-bold">{l.name.split(" ").map(w => w[0]).slice(0, 2).join("")}</span><span className="flex-1 truncate text-gray-700">{l.name}</span><span className="text-gray-400">{l.pctAchieved}% achieved</span></div>
               ))}
             </div>
           )}

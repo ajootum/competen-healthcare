@@ -7,7 +7,7 @@ import { loadWorkforceMapping } from "@/lib/competency/workforce-mapping";
 export const dynamic = "force-dynamic";
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
-const covTone = (n: number | null) => (n == null ? "text-gray-300" : n >= 90 ? "text-emerald-600" : n >= 50 ? "text-amber-600" : "text-rose-600");
+const covTone = (n: number | null) => (n == null ? "text-gray-300" : n >= 90 ? "text-[var(--cmp-text-success)]" : n >= 50 ? "text-[var(--cmp-text-warning)]" : "text-[var(--cmp-text-error)]");
 
 export default async function WorkforceMappingPage() {
   const { admin, isSuper, hid } = await cmoGuard();
@@ -15,7 +15,7 @@ export default async function WorkforceMappingPage() {
 
   const head = <Head code="CMO-007 · Workforce Mapping" title="Competency Workforce Mapping" sub="Map roles to the competencies required for safe, high-quality care — and see how well each role's workforce covers its profile." />;
   if (!d.provisioned) {
-    return <div className="space-y-4">{head}<div className="bg-amber-50 border border-amber-200 rounded-xl p-6"><p className="text-sm text-amber-800">Workforce mapping isn&apos;t provisioned — it reads role competency profiles from <code className="font-mono">cmo_assignment_rules</code> (migration 125).</p></div></div>;
+    return <div className="space-y-4">{head}<div className="bg-[var(--cmp-surface-warning)] border border-[var(--cmp-color-warning)] rounded-xl p-6"><p className="text-sm text-amber-800">Workforce mapping isn&apos;t provisioned — it reads role competency profiles from <code className="font-mono">cmo_assignment_rules</code> (migration 125).</p></div></div>;
   }
 
   const k = d.kpis;
@@ -27,9 +27,9 @@ export default async function WorkforceMappingPage() {
         <Kpi label="Roles" value={k.roles} sub={`${k.rolesMapped} mapped`} />
         <Kpi label="Competency profiles" value={k.profiles} sub="role → competencies" tone="text-teal-600" />
         <Kpi label="Workforce mapped" value={k.workforceMapped} sub={`${k.mappingCoverage}% of staff`} />
-        <Kpi label="Profile coverage" value={k.avgProfileCoverage != null ? `${k.avgProfileCoverage}%` : "—"} sub="avg achieved" tone={k.avgProfileCoverage != null && k.avgProfileCoverage < 60 ? "text-amber-600" : "text-gray-900"} />
-        <Kpi label="Unmapped roles" value={k.unmappedRoles} sub="no profile" tone={k.unmappedRoles ? "text-amber-600" : "text-gray-900"} />
-        <Kpi label="Critical gaps" value={k.criticalGaps} sub="< 25% coverage" tone={k.criticalGaps ? "text-rose-600" : "text-gray-900"} />
+        <Kpi label="Profile coverage" value={k.avgProfileCoverage != null ? `${k.avgProfileCoverage}%` : "—"} sub="avg achieved" tone={k.avgProfileCoverage != null && k.avgProfileCoverage < 60 ? "text-[var(--cmp-text-warning)]" : "text-gray-900"} />
+        <Kpi label="Unmapped roles" value={k.unmappedRoles} sub="no profile" tone={k.unmappedRoles ? "text-[var(--cmp-text-warning)]" : "text-gray-900"} />
+        <Kpi label="Critical gaps" value={k.criticalGaps} sub="< 25% coverage" tone={k.criticalGaps ? "text-[var(--cmp-text-error)]" : "text-gray-900"} />
       </div>
 
       <Card title="Role → competency mapping" right={<span className="text-[11px] text-gray-400">coverage = achieved share of the role&apos;s required competencies</span>}>
@@ -77,7 +77,7 @@ export default async function WorkforceMappingPage() {
           {d.unmapped.length === 0 ? <p className="text-sm text-gray-400 py-4 text-center">Every role with staff has a competency profile. ✅</p> : (
             <div className="space-y-1.5">
               {d.unmapped.map((r: any) => (
-                <div key={r.role} className="flex items-center gap-2 text-[13px]"><span className="w-2 h-2 rounded-full bg-amber-500 shrink-0" /><span className="text-gray-700 flex-1 truncate">{r.label}</span><span className="text-[11px] text-gray-400">{r.staff} staff</span></div>
+                <div key={r.role} className="flex items-center gap-2 text-[13px]"><span className="w-2 h-2 rounded-full bg-[var(--cmp-color-warning)] shrink-0" /><span className="text-gray-700 flex-1 truncate">{r.label}</span><span className="text-[11px] text-gray-400">{r.staff} staff</span></div>
               ))}
             </div>
           )}

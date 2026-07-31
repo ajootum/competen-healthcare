@@ -35,7 +35,7 @@ export function NewApprovalButton({ provisioned }: { provisioned: boolean }) {
           </div>
           <select value={f.impact} onChange={e => setF({ ...f, impact: e.target.value })} className={inp}>{["high", "medium", "low"].map(p => <option key={p} value={p}>{p} impact</option>)}</select>
           <textarea placeholder="Reason / context" value={f.reason} onChange={e => setF({ ...f, reason: e.target.value })} className={`${inp} h-16 resize-none`} />
-          {err && <p className="text-[10px] text-rose-600">{err}</p>}
+          {err && <p className="text-[10px] text-[var(--cmp-text-error)]">{err}</p>}
           <div className="flex gap-2"><button onClick={create} disabled={busy} className="flex-1 text-xs font-semibold bg-teal-600 text-white rounded-lg py-1.5">Submit</button><button onClick={() => setOpen(false)} className="text-xs text-gray-500 px-3">Cancel</button></div>
         </div>
       )}
@@ -62,16 +62,16 @@ export default function ApprovalActions({ selectedId }: { selectedId?: string | 
   return (
     <div className="space-y-2">
       <div className="grid grid-cols-3 gap-2">
-        <button onClick={() => decide("approve", false)} disabled={!!busy} className={`${BTN} bg-green-600 text-white col-span-1`}>Approve</button>
-        <button onClick={() => decide("approve_conditions", true)} disabled={!!busy} className={`${BTN} border border-green-500 text-green-700 col-span-1`}>Conditions</button>
-        <button onClick={() => decide("reject", true)} disabled={!!busy} className={`${BTN} bg-rose-600 text-white col-span-1`}>Reject</button>
+        <button onClick={() => decide("approve", false)} disabled={!!busy} className={`${BTN} bg-[var(--cmp-color-success)] text-white col-span-1`}>Approve</button>
+        <button onClick={() => decide("approve_conditions", true)} disabled={!!busy} className={`${BTN} border border-green-500 text-[var(--cmp-text-success)] col-span-1`}>Conditions</button>
+        <button onClick={() => decide("reject", true)} disabled={!!busy} className={`${BTN} bg-[var(--cmp-color-error)] text-white col-span-1`}>Reject</button>
       </div>
       <div className="grid grid-cols-3 gap-2">
         <button onClick={() => decide("return", true)} disabled={!!busy} className={`${BTN} border border-gray-200 text-gray-600`}>Return</button>
         <button onClick={() => decide("request_info", true)} disabled={!!busy} className={`${BTN} border border-gray-200 text-gray-600`}>Request Info</button>
         <button onClick={() => decide("delegate", true)} disabled={!!busy} className={`${BTN} border border-gray-200 text-gray-600`}>Delegate</button>
       </div>
-      {err && <p className="text-[10px] text-rose-600">{err}</p>}
+      {err && <p className="text-[10px] text-[var(--cmp-text-error)]">{err}</p>}
     </div>
   );
 }

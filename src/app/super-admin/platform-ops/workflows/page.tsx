@@ -48,15 +48,15 @@ export default async function WorkflowsBuilder() {
     </>
   );
 
-  if (notReady) return <div className="space-y-5 max-w-6xl">{header}<div className="bg-amber-50 border border-amber-200 rounded-xl p-6"><p className="font-semibold text-amber-900">⚙️ Not provisioned</p><p className="text-sm text-amber-800 mt-1">Apply migration 092 (registry) + 094 (object definition), then author a Workflow in the <Link href="/super-admin/platform-ops/studio" className="underline">Configuration Studio</Link>.</p></div></div>;
+  if (notReady) return <div className="space-y-5 max-w-6xl">{header}<div className="bg-[var(--cmp-surface-warning)] border border-[var(--cmp-color-warning)] rounded-xl p-6"><p className="font-semibold text-amber-900">⚙️ Not provisioned</p><p className="text-sm text-amber-800 mt-1">Apply migration 092 (registry) + 094 (object definition), then author a Workflow in the <Link href="/super-admin/platform-ops/studio" className="underline">Configuration Studio</Link>.</p></div></div>;
 
   return (
     <div className="space-y-5 max-w-6xl">
       {header}
       <div className="grid grid-cols-3 gap-3">
         <Stat label="Workflow Objects" value={list.length} sub="governed in the registry" />
-        <Stat label="With Flow" value={withFlow} tone="text-emerald-600" sub="nodes composed" />
-        <Stat label="Awaiting Design" value={list.length - withFlow} tone={list.length - withFlow ? "text-amber-600" : "text-emerald-600"} sub="no nodes yet" />
+        <Stat label="With Flow" value={withFlow} tone="text-[var(--cmp-text-success)]" sub="nodes composed" />
+        <Stat label="Awaiting Design" value={list.length - withFlow} tone={list.length - withFlow ? "text-[var(--cmp-text-warning)]" : "text-[var(--cmp-text-success)]"} sub="no nodes yet" />
       </div>
       <WorkflowBuilder workflows={list} />
       <p className="text-[11px] text-gray-400">Nodes + transitions persist onto the workflow object. The runtime workflow engine, SLA/escalation execution, retries, checkpoints, live integrations and monitoring (NCP-004 §6/§7) are next-phase.</p>

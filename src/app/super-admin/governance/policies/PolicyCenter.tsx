@@ -69,7 +69,7 @@ export default function PolicyCenter({ frameworks, policies }: { frameworks: Pic
     <div className="bg-white rounded-xl border border-gray-200">
       <div className="flex items-center gap-2 p-3 border-b border-gray-100 flex-wrap">
         <h2 className="font-semibold text-gray-900 text-[15px] mr-auto">Policy Center</h2>
-        {msg && <span className={`text-xs rounded-lg px-2.5 py-1 ${msg.k === "ok" ? "bg-green-50 text-green-800" : "bg-amber-50 text-amber-800"}`}>{msg.t}</span>}
+        {msg && <span className={`text-xs rounded-lg px-2.5 py-1 ${msg.k === "ok" ? "bg-[var(--cmp-surface-success)] text-green-800" : "bg-[var(--cmp-surface-warning)] text-amber-800"}`}>{msg.t}</span>}
         <div className="flex gap-1">
           {TABS.map(b => (
             <button key={b.key} onClick={() => switchTab(b.key)} className={`text-xs font-medium rounded-lg px-2.5 py-1.5 border ${tab === b.key ? "bg-teal-50 border-teal-300 text-teal-700" : "border-gray-200 text-gray-500 hover:bg-gray-50"}`}>{b.icon} {b.label}</button>
@@ -94,7 +94,7 @@ export default function PolicyCenter({ frameworks, policies }: { frameworks: Pic
         {tab === "approve" && (
           <div className="grid sm:grid-cols-2 gap-3">
             <div className="sm:col-span-2"><label className={label}>Policy *</label><select value={form.policy_id ?? ""} onChange={set("policy_id")} className={input}><option value="">— Select policy —</option>{policies.map(p => <option key={p.id} value={p.id}>{p.label}</option>)}</select></div>
-            {policies.length === 0 && <p className="sm:col-span-2 text-[11px] text-amber-600">No active policies yet — create one first.</p>}
+            {policies.length === 0 && <p className="sm:col-span-2 text-[11px] text-[var(--cmp-text-warning)]">No active policies yet — create one first.</p>}
             <p className="sm:col-span-2 text-[11px] text-gray-400">Opens a governed 2-step approval (technical review → governance approval) in the platform engine, with per-step decision audit. Decide it in Platform Ops → Approvals.</p>
           </div>
         )}

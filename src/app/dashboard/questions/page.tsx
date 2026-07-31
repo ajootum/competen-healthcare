@@ -78,8 +78,8 @@ export default async function KnowledgeAssessmentPage() {
 
   const KPI = [
     { label: "Knowledge Score", value: knowledgeScore !== null ? `${knowledgeScore}%` : "—", sub: "practice + governed tests", color: "text-gray-900" },
-    { label: "Questions Answered", value: allAttempts.length, sub: "practice attempts", color: "text-blue-600" },
-    { label: "Accuracy", value: practiceAccuracy !== null ? `${practiceAccuracy}%` : "—", sub: `${correct} correct`, color: practiceAccuracy !== null && practiceAccuracy >= 70 ? "text-green-600" : "text-amber-600" },
+    { label: "Questions Answered", value: allAttempts.length, sub: "practice attempts", color: "text-[var(--cmp-text-information)]" },
+    { label: "Accuracy", value: practiceAccuracy !== null ? `${practiceAccuracy}%` : "—", sub: `${correct} correct`, color: practiceAccuracy !== null && practiceAccuracy >= 70 ? "text-[var(--cmp-text-success)]" : "text-[var(--cmp-text-warning)]" },
     { label: "Weak Areas", value: weak.length, sub: weak.length ? weak.map(w => w.cat).slice(0, 2).join(", ") : "none identified", color: weak.length ? "text-red-500" : "text-gray-400" },
     { label: "Governed Tests", value: bankRows.length, sub: `${[...bestByBank.values()].filter(b => b.passed).length} passed`, color: "text-violet-600" },
   ];
@@ -120,7 +120,7 @@ export default async function KnowledgeAssessmentPage() {
                   <span className="text-sm w-5">{CATEGORY_ICON[m.cat] ?? "📘"}</span>
                   <span className="text-[11px] text-gray-700 w-32 truncate">{m.cat}</span>
                   <div className="flex-1 h-1.5 bg-gray-100 rounded-full overflow-hidden">
-                    <div className={`h-full rounded-full ${m.pct >= 70 ? "bg-green-500" : m.pct >= 50 ? "bg-amber-500" : "bg-red-400"}`}
+                    <div className={`h-full rounded-full ${m.pct >= 70 ? "bg-[var(--cmp-color-success)]" : m.pct >= 50 ? "bg-[var(--cmp-color-warning)]" : "bg-[var(--cmp-color-critical)]"}`}
                       style={{ width: `${Math.max(m.pct, 2)}%` }} />
                   </div>
                   <span className="text-[10px] font-bold text-gray-600 w-16 text-right">{m.pct}% · {m.n}q</span>
@@ -148,7 +148,7 @@ export default async function KnowledgeAssessmentPage() {
                       </p>
                     </div>
                     {best && (
-                      <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded shrink-0 ${best.passed ? "bg-green-50 text-green-700" : "bg-amber-50 text-amber-700"}`}>
+                      <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded shrink-0 ${best.passed ? "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]" : "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]"}`}>
                         {best.passed ? `Passed ${best.score}%` : `Best ${best.score}%`}
                       </span>
                     )}

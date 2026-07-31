@@ -11,20 +11,20 @@ import { Kpi } from "../_kit";
 export const dynamic = "force-dynamic";
 
 const STATE_META: Record<GovState, { label: string; cls: string; dot: string }> = {
-  governed: { label: "Governed", cls: "text-emerald-700 bg-emerald-50 border-emerald-100", dot: "bg-emerald-500" },
-  monitor: { label: "Monitor", cls: "text-amber-700 bg-amber-50 border-amber-100", dot: "bg-amber-500" },
-  at_risk: { label: "At risk", cls: "text-rose-700 bg-rose-50 border-rose-100", dot: "bg-rose-500" },
+  governed: { label: "Governed", cls: "text-emerald-700 bg-[var(--cmp-surface-success)] border-[var(--cmp-color-success)]", dot: "bg-[var(--cmp-color-success)]" },
+  monitor: { label: "Monitor", cls: "text-[var(--cmp-text-warning)] bg-[var(--cmp-surface-warning)] border-[var(--cmp-color-warning)]", dot: "bg-[var(--cmp-color-warning)]" },
+  at_risk: { label: "At risk", cls: "text-[var(--cmp-text-error)] bg-[var(--cmp-surface-error)] border-[var(--cmp-color-error)]", dot: "bg-[var(--cmp-color-error)]" },
   ungoverned: { label: "Ungoverned", cls: "text-gray-500 bg-gray-50 border-gray-200", dot: "bg-gray-400" },
 };
 const RISK_META: Record<string, string> = {
-  critical: "text-rose-700 bg-rose-50 border-rose-100",
-  high: "text-orange-700 bg-orange-50 border-orange-100",
+  critical: "text-[var(--cmp-text-error)] bg-[var(--cmp-surface-error)] border-[var(--cmp-color-error)]",
+  high: "text-orange-700 bg-[var(--cmp-surface-warning)] border-[var(--cmp-color-warning)]",
   standard: "text-gray-600 bg-gray-50 border-gray-200",
   low: "text-slate-500 bg-slate-50 border-slate-200",
 };
 
 function ScoreBar({ v }: { v: number }) {
-  const tone = v >= 75 ? "bg-emerald-500" : v >= 45 ? "bg-amber-500" : "bg-rose-500";
+  const tone = v >= 75 ? "bg-[var(--cmp-color-success)]" : v >= 45 ? "bg-[var(--cmp-color-warning)]" : "bg-[var(--cmp-color-error)]";
   return (
     <div className="flex items-center gap-1.5">
       <div className="w-14 h-1.5 rounded-full bg-gray-100 overflow-hidden">
@@ -49,18 +49,18 @@ function Row({ r }: { r: GovRecord }) {
       </td>
       <td className="py-2 px-2"><span className={`text-[10px] font-bold border rounded px-1.5 py-0.5 capitalize ${RISK_META[r.risk] ?? RISK_META.standard}`}>{r.risk}</span></td>
       <td className="py-2 px-2">
-        {r.owner ? <span className="text-[12px] text-gray-700">{r.owner}</span> : <span className="text-[11px] font-semibold text-rose-600">Unowned</span>}
+        {r.owner ? <span className="text-[12px] text-gray-700">{r.owner}</span> : <span className="text-[11px] font-semibold text-[var(--cmp-text-error)]">Unowned</span>}
         {r.governanceRoles > 0 && <span className="text-[10px] text-gray-400 ml-1">+{r.governanceRoles}</span>}
       </td>
       <td className="py-2 px-2 text-center">
-        {r.standards > 0 ? <span className="text-[12px] text-gray-700 tabular-nums">{r.standards}<span className="text-gray-300">/</span><span className="text-emerald-600">{r.standardsFull}</span></span> : <span className="text-[11px] text-gray-300">—</span>}
+        {r.standards > 0 ? <span className="text-[12px] text-gray-700 tabular-nums">{r.standards}<span className="text-gray-300">/</span><span className="text-[var(--cmp-text-success)]">{r.standardsFull}</span></span> : <span className="text-[11px] text-gray-300">—</span>}
       </td>
       <td className="py-2 px-2 text-center">
         {r.decisions > 0 ? <span className="text-[12px] text-gray-700 tabular-nums">{r.decisions}{r.latestVersion > 0 && <span className="text-[10px] text-gray-400"> ·v{r.latestVersion}</span>}</span> : <span className="text-[11px] text-gray-300">—</span>}
       </td>
       <td className="py-2 px-2">
-        {r.reviewDue ? <span className={`text-[11px] tabular-nums ${r.reviewOverdue ? "font-bold text-rose-600" : "text-gray-500"}`}>{r.reviewDue}{r.reviewOverdue && " ⚠"}</span> : <span className="text-[11px] text-gray-300">not set</span>}
-        {r.openChanges > 0 && <span className="ml-1 text-[9px] font-bold text-blue-600 bg-blue-50 border border-blue-100 rounded px-1">{r.openChanges} CR</span>}
+        {r.reviewDue ? <span className={`text-[11px] tabular-nums ${r.reviewOverdue ? "font-bold text-[var(--cmp-text-error)]" : "text-gray-500"}`}>{r.reviewDue}{r.reviewOverdue && " ⚠"}</span> : <span className="text-[11px] text-gray-300">not set</span>}
+        {r.openChanges > 0 && <span className="ml-1 text-[9px] font-bold text-[var(--cmp-text-information)] bg-[var(--cmp-surface-information)] border border-[var(--cmp-color-information)] rounded px-1">{r.openChanges} CR</span>}
       </td>
       <td className="py-2 px-2"><ScoreBar v={r.score} /></td>
       <td className="py-2 pl-2"><StatePill s={r.state} /></td>
@@ -84,7 +84,7 @@ export default async function GovernanceRegistryPage() {
     <div className="max-w-[1400px]">
       <div className="flex items-start justify-between gap-3 mb-5">
         <div>
-          <p className="text-[11px] font-semibold text-emerald-600 uppercase tracking-widest mb-0.5">CGR-001 · Competency Governance Registry</p>
+          <p className="text-[11px] font-semibold text-[var(--cmp-text-success)] uppercase tracking-widest mb-0.5">CGR-001 · Competency Governance Registry</p>
           <h1 className="text-xl font-bold text-gray-900">Governance Registry &amp; Master Control</h1>
           <p className="text-gray-400 text-sm mt-0.5">One governance record per competency — who owns it, what evidence and standards back it, when it&apos;s due for review, and its risk. The single source of truth for competency governance.</p>
         </div>
@@ -99,12 +99,12 @@ export default async function GovernanceRegistryPage() {
         <>
           <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-7 gap-3 mb-5">
             <Kpi label="Competencies" value={d.total} sub={d.capped ? `showing top ${d.loaded}` : "in registry"} />
-            <Kpi label="Avg governance" value={`${k.avgScore}`} sub="completeness /100" tone={k.avgScore >= 75 ? "text-emerald-600" : k.avgScore >= 45 ? "text-amber-600" : "text-rose-600"} />
-            <Kpi label="With owner" value={`${k.ownerPct}%`} sub={`${k.withOwner} assigned`} tone={k.ownerPct >= 80 ? "text-emerald-600" : "text-gray-900"} />
-            <Kpi label="Regulatory-mapped" value={`${k.standardsPct}%`} sub={`${k.withStandards} mapped`} tone={k.standardsPct >= 80 ? "text-emerald-600" : "text-gray-900"} />
+            <Kpi label="Avg governance" value={`${k.avgScore}`} sub="completeness /100" tone={k.avgScore >= 75 ? "text-[var(--cmp-text-success)]" : k.avgScore >= 45 ? "text-[var(--cmp-text-warning)]" : "text-[var(--cmp-text-error)]"} />
+            <Kpi label="With owner" value={`${k.ownerPct}%`} sub={`${k.withOwner} assigned`} tone={k.ownerPct >= 80 ? "text-[var(--cmp-text-success)]" : "text-gray-900"} />
+            <Kpi label="Regulatory-mapped" value={`${k.standardsPct}%`} sub={`${k.withStandards} mapped`} tone={k.standardsPct >= 80 ? "text-[var(--cmp-text-success)]" : "text-gray-900"} />
             <Kpi label="Evidence-backed" value={`${k.evidencePct}%`} sub="have decisions" />
-            <Kpi label="Overdue reviews" value={k.overdue} sub="past review date" tone={k.overdue ? "text-rose-600" : "text-gray-900"} />
-            <Kpi label="High/critical risk" value={k.highRisk} sub="need assurance" tone={k.highRisk ? "text-orange-600" : "text-gray-900"} />
+            <Kpi label="Overdue reviews" value={k.overdue} sub="past review date" tone={k.overdue ? "text-[var(--cmp-text-error)]" : "text-gray-900"} />
+            <Kpi label="High/critical risk" value={k.highRisk} sub="need assurance" tone={k.highRisk ? "text-[var(--cmp-text-warning)]" : "text-gray-900"} />
           </div>
 
           {/* Governance state distribution */}
@@ -157,7 +157,7 @@ export default async function GovernanceRegistryPage() {
             </div>
           </div>
 
-          <div className="mt-5 bg-emerald-50 border border-emerald-100 rounded-xl p-4">
+          <div className="mt-5 bg-[var(--cmp-surface-success)] border border-[var(--cmp-color-success)] rounded-xl p-4">
             <p className="text-[11px] text-emerald-900 leading-relaxed">
               <span className="font-bold">Every fact here is real.</span> Risk comes from the competency library, ownership &amp; review dates from content responsibilities (CST-023), regulatory mappings from the Standards Mapping Centre (CST-108), decisions &amp; versions from governed competency decisions, and open change requests from change control. The governance <span className="font-semibold">state</span> and <span className="font-semibold">completeness score</span> are derived from those facts — a competency is &ldquo;governed&rdquo; only when it has an owner, regulatory alignment, a current review date, supporting evidence and an approved parent framework. Authoring the missing pieces happens in <Link href="/super-admin/studio/responsibilities" className="font-semibold underline">Ownership</Link>, <Link href="/super-admin/studio/standards" className="font-semibold underline">Standards Mapping</Link> and <Link href="/competency-office/review-board" className="font-semibold underline">Review &amp; Governance</Link>.
             </p>

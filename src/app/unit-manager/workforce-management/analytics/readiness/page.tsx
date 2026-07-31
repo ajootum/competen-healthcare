@@ -44,7 +44,7 @@ export default async function ReadinessAnalytics() {
     </>
   );
 
-  if (!d.ready) return <div className="space-y-4">{header}<div className="bg-amber-50 border border-amber-200 rounded-xl p-6"><p className="font-semibold text-amber-900">⚙️ No readiness data</p></div></div>;
+  if (!d.ready) return <div className="space-y-4">{header}<div className="bg-[var(--cmp-surface-warning)] border border-[var(--cmp-color-warning)] rounded-xl p-6"><p className="font-semibold text-amber-900">⚙️ No readiness data</p></div></div>;
 
   const k = d.kpis;
   return (
@@ -52,22 +52,22 @@ export default async function ReadinessAnalytics() {
       {header}
 
       <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-3">
-        <Kpi label="Readiness score" value={d.score != null ? d.score : "—"} sub={d.band} tone={d.band === "Ready" || d.band === "Mostly ready" ? "text-emerald-600" : "text-amber-600"} foot="WF-RDY-001" />
-        <Kpi label="Fully deployable" value={k.fullyDeployable} sub={`of ${k.total}`} tone="text-emerald-600" />
-        <Kpi label="Requiring supervision" value={k.requiringSupervision} tone={k.requiringSupervision ? "text-amber-600" : "text-emerald-600"} />
+        <Kpi label="Readiness score" value={d.score != null ? d.score : "—"} sub={d.band} tone={d.band === "Ready" || d.band === "Mostly ready" ? "text-[var(--cmp-text-success)]" : "text-[var(--cmp-text-warning)]"} foot="WF-RDY-001" />
+        <Kpi label="Fully deployable" value={k.fullyDeployable} sub={`of ${k.total}`} tone="text-[var(--cmp-text-success)]" />
+        <Kpi label="Requiring supervision" value={k.requiringSupervision} tone={k.requiringSupervision ? "text-[var(--cmp-text-warning)]" : "text-[var(--cmp-text-success)]"} />
         <Kpi label="Competency match" value={k.matchScore != null ? `${k.matchScore}%` : "—"} foot="WF-CMP-001" />
-        <Kpi label="Credentials expiring" value={k.credentialsExpiring} sub={k.credentialsExpired ? `${k.credentialsExpired} expired` : "≤30d"} tone={k.credentialsExpired ? "text-rose-600" : k.credentialsExpiring ? "text-amber-600" : "text-emerald-600"} foot="WF-CMP-001" />
-        <Kpi label="Critical gaps" value={k.criticalGaps} tone={k.criticalGaps ? "text-rose-600" : "text-emerald-600"} />
+        <Kpi label="Credentials expiring" value={k.credentialsExpiring} sub={k.credentialsExpired ? `${k.credentialsExpired} expired` : "≤30d"} tone={k.credentialsExpired ? "text-[var(--cmp-text-error)]" : k.credentialsExpiring ? "text-[var(--cmp-text-warning)]" : "text-[var(--cmp-text-success)]"} foot="WF-CMP-001" />
+        <Kpi label="Critical gaps" value={k.criticalGaps} tone={k.criticalGaps ? "text-[var(--cmp-text-error)]" : "text-[var(--cmp-text-success)]"} />
       </div>
 
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
         <div className={`${card} p-5`}>
           <h3 className="text-sm font-bold text-gray-900 mb-3">Competency compliance by role <span className="text-[10px] text-gray-400 font-normal">WA-RD-002</span></h3>
-          {d.roleCoverage.length === 0 ? <p className="text-sm text-gray-400">No competency data.</p> : <div className="space-y-2">{d.roleCoverage.map((r: any) => (<div key={r.role} className="flex items-center gap-3 text-xs"><span className="text-gray-700 w-28 truncate">{r.label}</span><div className="flex-1 h-1.5 rounded-full bg-gray-100 overflow-hidden"><div className={`h-full rounded-full ${(r.pct ?? 0) >= 90 ? "bg-emerald-500" : (r.pct ?? 0) >= 60 ? "bg-amber-400" : "bg-rose-400"}`} style={{ width: `${r.pct ?? 0}%` }} /></div><span className="text-gray-600 w-14 text-right">{r.current}/{r.total}</span></div>))}</div>}
+          {d.roleCoverage.length === 0 ? <p className="text-sm text-gray-400">No competency data.</p> : <div className="space-y-2">{d.roleCoverage.map((r: any) => (<div key={r.role} className="flex items-center gap-3 text-xs"><span className="text-gray-700 w-28 truncate">{r.label}</span><div className="flex-1 h-1.5 rounded-full bg-gray-100 overflow-hidden"><div className={`h-full rounded-full ${(r.pct ?? 0) >= 90 ? "bg-[var(--cmp-color-success)]" : (r.pct ?? 0) >= 60 ? "bg-[var(--cmp-color-warning)]" : "bg-[var(--cmp-color-error)]"}`} style={{ width: `${r.pct ?? 0}%` }} /></div><span className="text-gray-600 w-14 text-right">{r.current}/{r.total}</span></div>))}</div>}
         </div>
         <div className={`${card} p-5`}>
           <h3 className="text-sm font-bold text-gray-900 mb-3">Readiness gap drivers <span className="text-[10px] text-gray-400 font-normal">WA-RD-007</span></h3>
-          {d.risks.length === 0 ? <p className="text-sm text-gray-400">No readiness risks. 🎉</p> : <div className="space-y-1.5">{d.risks.slice(0, 6).map((r: any, i: number) => (<div key={i} className="flex items-center justify-between text-xs rounded-lg border border-gray-100 p-2"><span className="text-gray-700 truncate">{r.title}</span><span className={`text-[9px] px-1.5 py-0.5 rounded shrink-0 ${r.severity === "critical" ? "bg-rose-50 text-rose-700" : r.severity === "high" ? "bg-amber-50 text-amber-700" : "bg-sky-50 text-sky-700"}`}>{r.severity}</span></div>))}</div>}
+          {d.risks.length === 0 ? <p className="text-sm text-gray-400">No readiness risks. 🎉</p> : <div className="space-y-1.5">{d.risks.slice(0, 6).map((r: any, i: number) => (<div key={i} className="flex items-center justify-between text-xs rounded-lg border border-gray-100 p-2"><span className="text-gray-700 truncate">{r.title}</span><span className={`text-[9px] px-1.5 py-0.5 rounded shrink-0 ${r.severity === "critical" ? "bg-[var(--cmp-surface-error)] text-[var(--cmp-text-error)]" : r.severity === "high" ? "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]" : "bg-[var(--cmp-surface-information)] text-[var(--cmp-text-information)]"}`}>{r.severity}</span></div>))}</div>}
           <p className="text-[10px] text-gray-400 mt-2">Readiness trend + development-plan progress need history + development stores → next-phase.</p>
         </div>
       </div>

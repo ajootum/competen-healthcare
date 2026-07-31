@@ -12,9 +12,9 @@ import CommandBar from "./CommandBar";
 
 export const dynamic = "force-dynamic";
 
-const TINT_DOT: Record<Tint, string> = { green: "bg-emerald-400", amber: "bg-amber-400", red: "bg-rose-400", muted: "bg-slate-600" };
+const TINT_DOT: Record<Tint, string> = { green: "bg-[var(--cmp-color-success)]", amber: "bg-[var(--cmp-color-warning)]", red: "bg-[var(--cmp-color-error)]", muted: "bg-slate-600" };
 const RISK_CLS: Record<string, string> = { Low: "text-emerald-400", Medium: "text-amber-400", High: "text-rose-400" };
-const SEV_CLS: Record<string, string> = { High: "bg-rose-500/20 text-rose-300 border-rose-500/30", Medium: "bg-amber-500/20 text-amber-300 border-amber-500/30", Low: "bg-sky-500/20 text-sky-300 border-sky-500/30" };
+const SEV_CLS: Record<string, string> = { High: "bg-[var(--cmp-color-error)]/20 text-rose-300 border-rose-500/30", Medium: "bg-[var(--cmp-color-warning)]/20 text-amber-300 border-amber-500/30", Low: "bg-[var(--cmp-color-information)]/20 text-sky-300 border-sky-500/30" };
 const healthColor = (v: number | null): string => (v === null ? "#64748b" : v >= 90 ? "#22c55e" : v >= 70 ? "#84cc16" : v >= 50 ? "#f59e0b" : "#ef4444");
 
 function Card({ title, tag, children }: { title: string; tag?: string; children: React.ReactNode }) {
@@ -123,7 +123,7 @@ export default async function AccreditationIntelligencePage() {
                     <span className={`inline-block mt-1.5 w-6 h-1 rounded-full ${TINT_DOT[k.tint]}`} />
                   </div>
                 ))}
-                <div className="rounded-xl bg-rose-500/10 border border-rose-500/25 p-3"><p className="text-2xl font-extrabold text-rose-300">{d.criticalGaps}</p><p className="text-[10px] text-slate-400 leading-tight mt-0.5">Critical Gaps</p></div>
+                <div className="rounded-xl bg-[var(--cmp-color-error)]/10 border border-rose-500/25 p-3"><p className="text-2xl font-extrabold text-rose-300">{d.criticalGaps}</p><p className="text-[10px] text-slate-400 leading-tight mt-0.5">Critical Gaps</p></div>
               </div>
             </Card>
 
@@ -171,9 +171,9 @@ export default async function AccreditationIntelligencePage() {
                 <div className="flex items-center gap-3">
                   <Donut slices={[{ label: "On Track", n: d.actions.onTrack, color: "#22c55e" }, { label: "At Risk", n: d.actions.atRisk, color: "#f59e0b" }, { label: "Overdue", n: d.actions.overdue, color: "#ef4444" }]} center={d.actions.total ? `${Math.round((d.actions.onTrack / Math.max(1, d.actions.onTrack + d.actions.atRisk + d.actions.overdue)) * 100)}%` : "—"} sub="on track" />
                   <div className="flex-1 min-w-0 flex flex-col gap-1 text-[10px]">
-                    <div className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-emerald-400" /><span className="text-slate-300 flex-1">On Track</span><span className="text-slate-400">{d.actions.onTrack}</span></div>
-                    <div className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-amber-400" /><span className="text-slate-300 flex-1">At Risk</span><span className="text-slate-400">{d.actions.atRisk}</span></div>
-                    <div className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-rose-400" /><span className="text-slate-300 flex-1">Overdue</span><span className="text-slate-400">{d.actions.overdue}</span></div>
+                    <div className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-[var(--cmp-color-success)]" /><span className="text-slate-300 flex-1">On Track</span><span className="text-slate-400">{d.actions.onTrack}</span></div>
+                    <div className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-[var(--cmp-color-warning)]" /><span className="text-slate-300 flex-1">At Risk</span><span className="text-slate-400">{d.actions.atRisk}</span></div>
+                    <div className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-[var(--cmp-color-error)]" /><span className="text-slate-300 flex-1">Overdue</span><span className="text-slate-400">{d.actions.overdue}</span></div>
                   </div>
                 </div>
               </Card>
@@ -182,9 +182,9 @@ export default async function AccreditationIntelligencePage() {
                 <div className="flex items-center gap-3">
                   <Donut slices={[{ label: "Current", n: d.policy.current, color: "#22c55e" }, { label: "Due", n: d.policy.due, color: "#f59e0b" }, { label: "Overdue", n: d.policy.overdue, color: "#ef4444" }]} center={`${d.policy.currency ?? "—"}%`} sub="current" />
                   <div className="flex-1 min-w-0 flex flex-col gap-1 text-[10px]">
-                    <div className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-emerald-400" /><span className="text-slate-300 flex-1">Current</span><span className="text-slate-400">{d.policy.current}</span></div>
-                    <div className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-amber-400" /><span className="text-slate-300 flex-1">Due for review</span><span className="text-slate-400">{d.policy.due}</span></div>
-                    <div className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-rose-400" /><span className="text-slate-300 flex-1">Overdue</span><span className="text-slate-400">{d.policy.overdue}</span></div>
+                    <div className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-[var(--cmp-color-success)]" /><span className="text-slate-300 flex-1">Current</span><span className="text-slate-400">{d.policy.current}</span></div>
+                    <div className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-[var(--cmp-color-warning)]" /><span className="text-slate-300 flex-1">Due for review</span><span className="text-slate-400">{d.policy.due}</span></div>
+                    <div className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-[var(--cmp-color-error)]" /><span className="text-slate-300 flex-1">Overdue</span><span className="text-slate-400">{d.policy.overdue}</span></div>
                   </div>
                 </div>
               </Card>

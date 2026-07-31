@@ -38,7 +38,7 @@ export default function WorkspaceDirectory({ groups, canEdit }: { groups: any[];
     <div className="space-y-4">
       <div className="flex flex-wrap items-center gap-2">
         <input value={q} onChange={e => setQ(e.target.value)} placeholder="Search workspaces…" className={`${input} w-64`} />
-        {msg && <span className={`text-sm rounded-lg px-3 py-1.5 ${msg.k === "ok" ? "bg-green-50 text-green-800" : "bg-amber-50 text-amber-800"}`}>{msg.t}</span>}
+        {msg && <span className={`text-sm rounded-lg px-3 py-1.5 ${msg.k === "ok" ? "bg-[var(--cmp-surface-success)] text-green-800" : "bg-[var(--cmp-surface-warning)] text-amber-800"}`}>{msg.t}</span>}
       </div>
 
       {filtered.map(g => (
@@ -54,7 +54,7 @@ export default function WorkspaceDirectory({ groups, canEdit }: { groups: any[];
                   <div className="flex items-center gap-2 flex-wrap">
                     <span className="font-medium text-gray-900 truncate">{w.name}</span>
                     {w.customized && <span className="text-[9px] font-medium px-1.5 py-0.5 rounded bg-violet-50 text-violet-700">customised</span>}
-                    {!w.enabled && <span className="text-[9px] font-medium px-1.5 py-0.5 rounded bg-rose-50 text-rose-700">disabled</span>}
+                    {!w.enabled && <span className="text-[9px] font-medium px-1.5 py-0.5 rounded bg-[var(--cmp-surface-error)] text-[var(--cmp-text-error)]">disabled</span>}
                   </div>
                   <p className="text-[11px] text-gray-400 truncate">{w.route} · {w.audience.map(roleLabel).join(", ")}</p>
                 </div>
@@ -62,13 +62,13 @@ export default function WorkspaceDirectory({ groups, canEdit }: { groups: any[];
                 {canEdit ? (
                   <>
                     <button onClick={() => patch(w.key, { is_enabled: !w.enabled }, w.enabled ? "Disabled" : "Enabled")} disabled={busyKey === w.key}
-                      className={`text-[11px] font-medium rounded-full px-2.5 py-0.5 border shrink-0 disabled:opacity-40 ${w.enabled ? "bg-green-50 border-green-200 text-green-700" : "bg-gray-50 border-gray-200 text-gray-500"}`}>
+                      className={`text-[11px] font-medium rounded-full px-2.5 py-0.5 border shrink-0 disabled:opacity-40 ${w.enabled ? "bg-[var(--cmp-surface-success)] border-[var(--cmp-color-success)] text-[var(--cmp-text-success)]" : "bg-gray-50 border-gray-200 text-gray-500"}`}>
                       {w.enabled ? "On" : "Off"}
                     </button>
                     <button onClick={() => setEditing(w)} className="text-xs font-medium text-teal-700 hover:underline shrink-0">Edit</button>
                   </>
                 ) : (
-                  <span className={`text-[11px] font-medium px-2 py-0.5 rounded shrink-0 ${w.enabled ? "bg-green-50 text-green-700" : "bg-gray-100 text-gray-500"}`}>{w.enabled ? "Enabled" : "Disabled"}</span>
+                  <span className={`text-[11px] font-medium px-2 py-0.5 rounded shrink-0 ${w.enabled ? "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]" : "bg-gray-100 text-gray-500"}`}>{w.enabled ? "Enabled" : "Disabled"}</span>
                 )}
               </div>
             ))}
@@ -117,7 +117,7 @@ function EditModal({ w, busy, onClose, onSave, onReset }: any) {
           </div>
           <label className="flex items-center gap-2 text-sm text-gray-600"><input type="checkbox" checked={form.is_enabled} onChange={e => set("is_enabled", e.target.checked)} /> Enabled</label>
           <div className="flex items-center gap-2 pt-1">
-            {w.customized && <button onClick={onReset} disabled={busy} className="text-xs text-gray-500 hover:text-rose-600 mr-auto">Reset to defaults</button>}
+            {w.customized && <button onClick={onReset} disabled={busy} className="text-xs text-gray-500 hover:text-[var(--cmp-text-error)] mr-auto">Reset to defaults</button>}
             <button onClick={onClose} className="px-4 py-2 border border-gray-200 rounded-lg text-sm text-gray-600 hover:bg-gray-50">Cancel</button>
             <button onClick={() => onSave({ label: form.label, icon: form.icon, description: form.description, accent: form.accent, is_enabled: form.is_enabled, audience: form.audience })} disabled={busy || !form.label.trim()} className="px-4 py-2 bg-teal-600 text-white rounded-lg text-sm font-semibold hover:bg-teal-700 disabled:opacity-60">{busy ? "Saving…" : "Save"}</button>
           </div>

@@ -8,7 +8,7 @@ import CompetencyNav from "../CompetencyNav";
 
 export const dynamic = "force-dynamic";
 const pct = (v: number | null) => v !== null ? `${v}%` : "—";
-const RISK_CLS: Record<string, string> = { "At Risk": "bg-red-50 text-red-600", "On Track": "bg-blue-50 text-blue-600", Excellent: "bg-green-50 text-green-600" };
+const RISK_CLS: Record<string, string> = { "At Risk": "bg-[var(--cmp-surface-critical)] text-[var(--cmp-text-critical)]", "On Track": "bg-[var(--cmp-surface-information)] text-[var(--cmp-text-information)]", Excellent: "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]" };
 
 export default async function Achievement() {
   const { admin, hospitalId } = await requireEducatorAccess();
@@ -63,7 +63,7 @@ export default async function Achievement() {
               {d.byMethod.map(m => (
                 <div key={m.label} className="flex flex-col items-center gap-1 flex-1">
                   <span className="text-[10px] font-bold text-gray-700">{pct(m.pct)}</span>
-                  <div className="w-full bg-blue-400 rounded-t" style={{ height: `${((m.pct ?? 0) / 100) * 90}px` }} />
+                  <div className="w-full bg-[var(--cmp-color-information)] rounded-t" style={{ height: `${((m.pct ?? 0) / 100) * 90}px` }} />
                   <span className="text-[8px] text-gray-400 text-center leading-tight">{m.label}<br />({m.n})</span>
                 </div>
               ))}

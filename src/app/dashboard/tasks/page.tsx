@@ -11,13 +11,13 @@ import CompleteAction from "@/components/actions/CompleteAction";
 export const dynamic = "force-dynamic";
 
 const modHref: Record<string, string> = { PCE: "/dashboard/shift", OPS: "/dashboard/shift", LMS: "/dashboard/learning", CMO: "/dashboard/passport", QMS: "/dashboard/shift", HCM: "/dashboard/billing" };
-const prioPill: Record<string, string> = { high: "bg-rose-50 text-rose-700 ring-rose-200", medium: "bg-amber-50 text-amber-700 ring-amber-200", low: "bg-slate-50 text-slate-600 ring-slate-200" };
+const prioPill: Record<string, string> = { high: "bg-[var(--cmp-surface-error)] text-[var(--cmp-text-error)] ring-rose-200", medium: "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)] ring-amber-200", low: "bg-slate-50 text-slate-600 ring-slate-200" };
 const prioDot: Record<string, string> = { high: "#f43f5e", medium: "#f59e0b", low: "#94a3b8" };
 function statusPill(s: string) {
-  if (s === "Overdue" || s === "Action Required") return "bg-rose-50 text-rose-700 ring-rose-200";
-  if (s === "Due Today") return "bg-amber-50 text-amber-700 ring-amber-200";
-  if (s === "Due Tomorrow") return "bg-orange-50 text-orange-700 ring-orange-200";
-  return "bg-blue-50 text-blue-700 ring-blue-200";
+  if (s === "Overdue" || s === "Action Required") return "bg-[var(--cmp-surface-error)] text-[var(--cmp-text-error)] ring-rose-200";
+  if (s === "Due Today") return "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)] ring-amber-200";
+  if (s === "Due Tomorrow") return "bg-[var(--cmp-surface-warning)] text-orange-700 ring-orange-200";
+  return "bg-[var(--cmp-surface-information)] text-blue-700 ring-blue-200";
 }
 
 function Kpi({ label, value, tone, sub }: { label: string; value: number; tone: string; sub?: string }) {
@@ -85,37 +85,37 @@ export default async function TaskCentrePage({ searchParams }: { searchParams: P
       {/* Header */}
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <p className="text-[11px] font-semibold text-blue-600 uppercase tracking-wide">Personal Workspace</p>
+          <p className="text-[11px] font-semibold text-[var(--cmp-text-information)] uppercase tracking-wide">Personal Workspace</p>
           <h1 className="text-2xl font-bold text-gray-900">Task &amp; Action Centre</h1>
           <p className="text-sm text-gray-500 mt-0.5">Every actionable item across your workspaces, in one intelligent queue.</p>
         </div>
         <div className="flex items-center gap-2">
           <Link href="/dashboard/preferences" className="text-sm font-medium text-gray-600 border border-gray-200 rounded-lg px-3 py-2 hover:bg-gray-50">⚙ Configure</Link>
-          <Link href="/dashboard/shift" className="text-sm font-medium text-white bg-blue-600 rounded-lg px-3 py-2 hover:bg-blue-500">+ New Task</Link>
+          <Link href="/dashboard/shift" className="text-sm font-medium text-white bg-[var(--cmp-color-information)] rounded-lg px-3 py-2 hover:bg-[var(--cmp-color-information)]">+ New Task</Link>
         </div>
       </div>
 
       {/* KPI ribbon */}
       <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
         <Kpi label="Total Tasks" value={d.kpis.total} tone="text-gray-900" />
-        <Kpi label="Overdue" value={d.kpis.overdue} tone="text-rose-600" sub="Needs attention" />
-        <Kpi label="Due Today" value={d.kpis.dueToday} tone="text-amber-600" />
-        <Kpi label="Completed (7d)" value={d.kpis.completed7d} tone="text-emerald-600" />
-        <Kpi label="High Priority" value={d.kpis.highPriority} tone="text-blue-600" />
+        <Kpi label="Overdue" value={d.kpis.overdue} tone="text-[var(--cmp-text-error)]" sub="Needs attention" />
+        <Kpi label="Due Today" value={d.kpis.dueToday} tone="text-[var(--cmp-text-warning)]" />
+        <Kpi label="Completed (7d)" value={d.kpis.completed7d} tone="text-[var(--cmp-text-success)]" />
+        <Kpi label="High Priority" value={d.kpis.highPriority} tone="text-[var(--cmp-text-information)]" />
       </div>
 
       {/* AI Prioritisation Assistant */}
       {d.ranked.length > 0 && (
-        <div className="rounded-xl border border-blue-200 bg-gradient-to-br from-blue-50 to-indigo-50 p-4">
+        <div className="rounded-xl border border-[var(--cmp-color-information)] bg-gradient-to-br from-blue-50 to-indigo-50 p-4">
           <div className="flex items-center gap-2 mb-2.5">
             <span className="text-lg">✨</span>
             <h2 className="text-sm font-semibold text-gray-900">AI Prioritisation</h2>
-            <span className="text-[10px] font-medium text-blue-700 bg-blue-100 rounded-full px-2 py-0.5">Rule-based priority engine</span>
+            <span className="text-[10px] font-medium text-blue-700 bg-[var(--cmp-surface-information)] rounded-full px-2 py-0.5">Rule-based priority engine</span>
           </div>
           <div className="grid md:grid-cols-3 gap-2.5">
             {d.ranked.map((r: any, i: number) => ( // eslint-disable-line @typescript-eslint/no-explicit-any
-              <div key={i} className="bg-white/70 rounded-lg border border-blue-100 p-3">
-                <div className="flex items-center gap-2 mb-1"><span className="w-5 h-5 rounded-full bg-blue-600 text-white text-[11px] font-bold flex items-center justify-center">{i + 1}</span><span className="text-[10px] font-semibold text-rose-600 uppercase tracking-wide">{r.reason}</span></div>
+              <div key={i} className="bg-white/70 rounded-lg border border-[var(--cmp-color-information)] p-3">
+                <div className="flex items-center gap-2 mb-1"><span className="w-5 h-5 rounded-full bg-[var(--cmp-color-information)] text-white text-[11px] font-bold flex items-center justify-center">{i + 1}</span><span className="text-[10px] font-semibold text-[var(--cmp-text-error)] uppercase tracking-wide">{r.reason}</span></div>
                 <p className="text-sm font-medium text-gray-800 line-clamp-2">{r.title}</p>
                 <p className="text-[11px] text-gray-500 mt-1">{r.impact}</p>
               </div>
@@ -128,7 +128,7 @@ export default async function TaskCentrePage({ searchParams }: { searchParams: P
       <div className="flex flex-wrap items-center gap-1 border-b border-gray-200">
         {TABS.map(t => (
           <Link key={t.k} href={qp({ tab: t.k, module, priority })} className={`px-3 py-2 text-sm font-medium border-b-2 -mb-px transition-colors ${tab === t.k ? "border-blue-600 text-blue-700" : "border-transparent text-gray-500 hover:text-gray-800"}`}>
-            {t.label} <span className={`ml-1 text-[11px] rounded-full px-1.5 py-0.5 ${tab === t.k ? "bg-blue-100 text-blue-700" : "bg-gray-100 text-gray-500"}`}>{t.n}</span>
+            {t.label} <span className={`ml-1 text-[11px] rounded-full px-1.5 py-0.5 ${tab === t.k ? "bg-[var(--cmp-surface-information)] text-blue-700" : "bg-gray-100 text-gray-500"}`}>{t.n}</span>
           </Link>
         ))}
       </div>
@@ -136,13 +136,13 @@ export default async function TaskCentrePage({ searchParams }: { searchParams: P
       {/* Filters */}
       <div className="flex flex-wrap items-center gap-2">
         <span className="text-xs font-medium text-gray-400">Filter:</span>
-        <Link href={qp({ tab, module: undefined, priority })} className={`text-xs rounded-full px-3 py-1.5 ring-1 ${!module ? "bg-blue-600 text-white ring-blue-600" : "bg-white text-gray-600 ring-gray-200 hover:bg-gray-50"}`}>All Modules</Link>
+        <Link href={qp({ tab, module: undefined, priority })} className={`text-xs rounded-full px-3 py-1.5 ring-1 ${!module ? "bg-[var(--cmp-color-information)] text-white ring-blue-600" : "bg-white text-gray-600 ring-gray-200 hover:bg-gray-50"}`}>All Modules</Link>
         {d.byModule.map((m: any) => ( // eslint-disable-line @typescript-eslint/no-explicit-any
-          <Link key={m.code} href={qp({ tab, module: m.code, priority })} className={`text-xs rounded-full px-3 py-1.5 ring-1 ${module === m.code ? "bg-blue-600 text-white ring-blue-600" : "bg-white text-gray-600 ring-gray-200 hover:bg-gray-50"}`}>{m.icon} {m.label} ({m.n})</Link>
+          <Link key={m.code} href={qp({ tab, module: m.code, priority })} className={`text-xs rounded-full px-3 py-1.5 ring-1 ${module === m.code ? "bg-[var(--cmp-color-information)] text-white ring-blue-600" : "bg-white text-gray-600 ring-gray-200 hover:bg-gray-50"}`}>{m.icon} {m.label} ({m.n})</Link>
         ))}
         <span className="mx-1 text-gray-200">|</span>
         {["high", "medium", "low"].map(p => (
-          <Link key={p} href={qp({ tab, module, priority: priority === p ? undefined : p })} className={`text-xs rounded-full px-3 py-1.5 ring-1 capitalize ${priority === p ? "bg-blue-600 text-white ring-blue-600" : "bg-white text-gray-600 ring-gray-200 hover:bg-gray-50"}`}>{p} priority</Link>
+          <Link key={p} href={qp({ tab, module, priority: priority === p ? undefined : p })} className={`text-xs rounded-full px-3 py-1.5 ring-1 capitalize ${priority === p ? "bg-[var(--cmp-color-information)] text-white ring-blue-600" : "bg-white text-gray-600 ring-gray-200 hover:bg-gray-50"}`}>{p} priority</Link>
         ))}
       </div>
 
@@ -173,8 +173,8 @@ export default async function TaskCentrePage({ searchParams }: { searchParams: P
                     <td className="px-3 py-3"><span className={`inline-flex items-center gap-1 text-[11px] font-medium rounded-full px-2 py-0.5 ring-1 capitalize ${prioPill[t.priority]}`}><span className="w-1.5 h-1.5 rounded-full" style={{ background: prioDot[t.priority] }} />{t.priority}</span></td>
                     <td className="px-3 py-3 text-gray-600 whitespace-nowrap">{t.due ? new Date(t.due).toLocaleDateString("en-GB", { day: "numeric", month: "short" }) : "—"}</td>
                     <td className="px-3 py-3"><span className={`text-[11px] font-medium rounded-full px-2 py-0.5 ring-1 whitespace-nowrap ${statusPill(t.status)}`}>{t.status}</span></td>
-                    <td className={`px-3 py-3 text-[12px] font-medium whitespace-nowrap ${t.overdue ? "text-rose-600" : "text-gray-500"}`}>{t.sla}</td>
-                    <td className="px-3 py-3 text-right"><div className="flex items-center justify-end gap-2.5 whitespace-nowrap">{t.execution === "direct" && t.actionId && <CompleteAction actionId={t.actionId} />}<Link href={modHref[t.module] ?? "/dashboard"} className="text-[12px] font-medium text-blue-600 hover:underline">Open →</Link></div></td>
+                    <td className={`px-3 py-3 text-[12px] font-medium whitespace-nowrap ${t.overdue ? "text-[var(--cmp-text-error)]" : "text-gray-500"}`}>{t.sla}</td>
+                    <td className="px-3 py-3 text-right"><div className="flex items-center justify-end gap-2.5 whitespace-nowrap">{t.execution === "direct" && t.actionId && <CompleteAction actionId={t.actionId} />}<Link href={modHref[t.module] ?? "/dashboard"} className="text-[12px] font-medium text-[var(--cmp-text-information)] hover:underline">Open →</Link></div></td>
                   </tr>
                 ))}
                 {shown.length === 0 && (
@@ -220,9 +220,9 @@ export default async function TaskCentrePage({ searchParams }: { searchParams: P
             {d.approvals.length > 0 ? (
               <div className="space-y-2">
                 {d.approvals.map((a: any) => ( // eslint-disable-line @typescript-eslint/no-explicit-any
-                  <div key={a.category} className="flex items-center justify-between text-sm"><span className="capitalize text-gray-600">{a.category}</span><span className="font-semibold text-gray-900 bg-amber-50 text-amber-700 rounded-full px-2 text-[12px]">{a.n}</span></div>
+                  <div key={a.category} className="flex items-center justify-between text-sm"><span className="capitalize text-gray-600">{a.category}</span><span className="font-semibold text-gray-900 bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)] rounded-full px-2 text-[12px]">{a.n}</span></div>
                 ))}
-                <Link href="/supervisor/approvals" className="block text-center text-[12px] font-medium text-blue-600 hover:underline pt-1">Review queue →</Link>
+                <Link href="/supervisor/approvals" className="block text-center text-[12px] font-medium text-[var(--cmp-text-information)] hover:underline pt-1">Review queue →</Link>
               </div>
             ) : <p className="text-xs text-gray-400 py-4 text-center">No approvals awaiting you.</p>}
           </div>
@@ -235,7 +235,7 @@ export default async function TaskCentrePage({ searchParams }: { searchParams: P
                 {d.calendar.map((c: any, i: number) => ( // eslint-disable-line @typescript-eslint/no-explicit-any
                   <div key={i} className="flex gap-3 text-sm"><span className="text-[11px] font-medium text-gray-400 w-24 shrink-0">{c.time}</span><span className="text-gray-700">{c.title}</span></div>
                 ))}
-                <Link href="/dashboard/shift" className="block text-center text-[12px] font-medium text-blue-600 hover:underline pt-1">Open schedule →</Link>
+                <Link href="/dashboard/shift" className="block text-center text-[12px] font-medium text-[var(--cmp-text-information)] hover:underline pt-1">Open schedule →</Link>
               </div>
             ) : <p className="text-xs text-gray-400 py-4 text-center">No shift scheduled today.</p>}
           </div>

@@ -9,10 +9,10 @@ type Staff = { id: string; full_name: string; role: string };
 const LEVELS = ["enterprise", "country", "facility", "department", "specialty"] as const;
 const LEVEL_CLS: Record<string, string> = {
   enterprise: "bg-violet-100 text-violet-700",
-  country:    "bg-blue-100 text-blue-700",
+  country:    "bg-[var(--cmp-surface-information)] text-blue-700",
   facility:   "bg-teal-100 text-teal-700",
-  department: "bg-amber-100 text-amber-700",
-  specialty:  "bg-rose-100 text-rose-700",
+  department: "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]",
+  specialty:  "bg-[var(--cmp-surface-error)] text-[var(--cmp-text-error)]",
 };
 
 export default function CommitteesManager({ initialCommittees, staff }: { initialCommittees: Committee[]; staff: Staff[] }) {
@@ -47,7 +47,7 @@ export default function CommitteesManager({ initialCommittees, staff }: { initia
     <div className="flex flex-col gap-4">
       <div className="flex justify-end">
         <button onClick={create} disabled={busy}
-          className="px-4 py-2 bg-rose-600 text-white text-sm font-semibold rounded-lg hover:bg-rose-700 disabled:opacity-50">
+          className="px-4 py-2 bg-[var(--cmp-color-error)] text-white text-sm font-semibold rounded-lg hover:bg-rose-700 disabled:opacity-50">
           + New Committee
         </button>
       </div>
@@ -70,17 +70,17 @@ export default function CommitteesManager({ initialCommittees, staff }: { initia
                   className="text-[11px] border border-gray-200 rounded px-2 py-1">
                   {LEVELS.map(l => <option key={l} value={l}>{l}</option>)}
                 </select>
-                <button onClick={() => del(c)} className="px-2.5 py-1 text-xs text-red-500 border border-red-100 rounded-lg hover:bg-red-50">Delete</button>
+                <button onClick={() => del(c)} className="px-2.5 py-1 text-xs text-red-500 border border-[var(--cmp-color-critical)] rounded-lg hover:bg-[var(--cmp-surface-critical)]">Delete</button>
               </div>
             </div>
             <div className="px-5 py-3">
               <div className="flex flex-wrap gap-1.5 mb-2">
                 {members.map(m => (
-                  <span key={m.id} className="group inline-flex items-center gap-1 text-xs bg-rose-50 border border-rose-100 text-rose-700 pl-2.5 pr-1.5 py-0.5 rounded-full">
+                  <span key={m.id} className="group inline-flex items-center gap-1 text-xs bg-[var(--cmp-surface-error)] border border-[var(--cmp-color-error)] text-[var(--cmp-text-error)] pl-2.5 pr-1.5 py-0.5 rounded-full">
                     {m.profiles?.full_name ?? "—"}
                     {m.role === "chair" && <span className="text-[9px] font-bold">★</span>}
                     <button onClick={() => api("PATCH", { id: c.id, action: "remove_member", profile_id: m.profiles?.id })}
-                      className="opacity-0 group-hover:opacity-100 text-red-400 hover:text-red-600 transition-opacity leading-none px-0.5">×</button>
+                      className="opacity-0 group-hover:opacity-100 text-red-400 hover:text-[var(--cmp-text-critical)] transition-opacity leading-none px-0.5">×</button>
                   </span>
                 ))}
                 {!members.length && <p className="text-[11px] text-gray-300 italic">No members yet</p>}
@@ -93,7 +93,7 @@ export default function CommitteesManager({ initialCommittees, staff }: { initia
                   {available.map(s => <option key={s.id} value={s.id}>{s.full_name} ({s.role})</option>)}
                 </select>
               ) : (
-                <button onClick={() => setAddMemberFor(c.id)} className="text-[11px] text-rose-600 font-semibold hover:underline">+ Add member</button>
+                <button onClick={() => setAddMemberFor(c.id)} className="text-[11px] text-[var(--cmp-text-error)] font-semibold hover:underline">+ Add member</button>
               )}
             </div>
           </div>

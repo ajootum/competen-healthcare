@@ -62,11 +62,11 @@ export default async function RiskEnginePage() {
                 <tr key={f.id}>
                   <td className="py-1.5 text-gray-800 font-medium">{f.name}</td>
                   <td className="py-1.5 text-gray-500">{f.dept}</td>
-                  <td className="py-1.5 text-center">{f.critical ? <span className="font-bold text-red-600">{f.critical}</span> : <span className="text-gray-300">0</span>}</td>
+                  <td className="py-1.5 text-center">{f.critical ? <span className="font-bold text-[var(--cmp-text-critical)]">{f.critical}</span> : <span className="text-gray-300">0</span>}</td>
                   <td className="py-1.5 text-center text-gray-600">{f.failed}</td>
                   <td className="py-1.5 text-center text-gray-600">{f.expired}</td>
                   <td className="py-1.5 text-center">
-                    <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded uppercase ${f.level === "high" ? "bg-red-100 text-red-700" : "bg-amber-100 text-amber-700"}`}>{f.level}</span>
+                    <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded uppercase ${f.level === "high" ? "bg-[var(--cmp-surface-critical)] text-[var(--cmp-text-critical)]" : "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]"}`}>{f.level}</span>
                   </td>
                 </tr>
               ))}

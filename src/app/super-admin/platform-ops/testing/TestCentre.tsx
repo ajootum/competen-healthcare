@@ -23,7 +23,7 @@ const TYPES = [
 const TM = Object.fromEntries(TYPES.map(t => [t.v, t]));
 const FILTER: Record<string, string> = { metric_rag: "METRIC", rule_decision: "BUSINESS_RULE", permission_policy: "PERMISSION" };
 const input = "border border-gray-200 rounded px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-indigo-400 bg-white";
-const ST: Record<string, string> = { draft: "bg-gray-100 text-gray-600", passing: "bg-emerald-100 text-emerald-700", failing: "bg-rose-100 text-rose-700" };
+const ST: Record<string, string> = { draft: "bg-gray-100 text-gray-600", passing: "bg-[var(--cmp-surface-success)] text-emerald-700", failing: "bg-[var(--cmp-surface-error)] text-[var(--cmp-text-error)]" };
 const freeKey = (have: Set<string>) => { let n = 1; while (have.has(`case_${n}`)) n++; return `case_${n}`; };
 const pretty = (o: any) => { try { return JSON.stringify(o ?? {}, null, 0); } catch { return "{}"; } };
 const toLocal = (s?: Suite): LocalCase[] => (s?.cases ?? []).map((c: any) => ({ key: c.key, name: c.name ?? "", test_type: c.test_type, object_key: c.object_key, inputsStr: pretty(c.inputs), expectedStr: pretty(c.expected) }));
@@ -105,30 +105,30 @@ export default function TestCentre({ suites, objects }: { suites: Suite[]; objec
         {!selS ? <p className="text-sm text-gray-400 py-16 text-center">Select or create a test suite.</p> : (
           <>
             <div className="flex items-center justify-between mb-3">
-              <h3 className="text-sm font-semibold text-gray-900 flex items-center gap-2">{selS.name}{gate && <span className={`text-[10px] px-1.5 py-0.5 rounded ${gate === "pass" ? "bg-emerald-100 text-emerald-700" : "bg-rose-100 text-rose-700"}`}>gate: {gate === "pass" ? "promotable" : "blocked"}</span>}</h3>
+              <h3 className="text-sm font-semibold text-gray-900 flex items-center gap-2">{selS.name}{gate && <span className={`text-[10px] px-1.5 py-0.5 rounded ${gate === "pass" ? "bg-[var(--cmp-surface-success)] text-emerald-700" : "bg-[var(--cmp-surface-error)] text-[var(--cmp-text-error)]"}`}>gate: {gate === "pass" ? "promotable" : "blocked"}</span>}</h3>
               <div className="flex items-center gap-2">
                 <button onClick={addCase} className="text-xs font-medium text-indigo-700 border border-indigo-200 rounded-lg px-2.5 py-1 hover:bg-indigo-50">+ Case</button>
-                <button onClick={run} disabled={busy || cases.length === 0} className="text-sm font-medium text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg px-3 py-1.5 disabled:opacity-40">{busy ? "Running…" : "▶ Run"}</button>
+                <button onClick={run} disabled={busy || cases.length === 0} className="text-sm font-medium text-white bg-[var(--cmp-color-success)] hover:bg-emerald-700 rounded-lg px-3 py-1.5 disabled:opacity-40">{busy ? "Running…" : "▶ Run"}</button>
               </div>
             </div>
 
             {cases.length === 0 ? <p className="text-xs text-gray-400 py-4 text-center">Add test cases that assert outcomes against your config objects.</p> : (
               <div className="space-y-2 mb-3">
                 {cases.map((c, i) => { const res = resFor(c.key); return (
-                  <div key={c.key} className={`border rounded-lg p-2.5 ${res ? (res.pass ? "border-emerald-200 bg-emerald-50/40" : "border-rose-200 bg-rose-50/40") : "border-gray-100"}`}>
+                  <div key={c.key} className={`border rounded-lg p-2.5 ${res ? (res.pass ? "border-[var(--cmp-color-success)] bg-[var(--cmp-surface-success)]/40" : "border-[var(--cmp-color-error)] bg-[var(--cmp-surface-error)]/40") : "border-gray-100"}`}>
                     <div className="flex items-center gap-1.5 flex-wrap mb-1.5">
-                      {res && <span className={`text-xs font-bold ${res.pass ? "text-emerald-600" : "text-rose-600"}`}>{res.pass ? "✓" : "✕"}</span>}
+                      {res && <span className={`text-xs font-bold ${res.pass ? "text-[var(--cmp-text-success)]" : "text-[var(--cmp-text-error)]"}`}>{res.pass ? "✓" : "✕"}</span>}
                       <input className={`${input} flex-1 min-w-[8rem]`} value={c.name} onChange={e => patch(i, { name: e.target.value })} placeholder="Case name" />
                       <select className={`${input} w-40`} value={c.test_type} onChange={e => patch(i, { test_type: e.target.value, object_key: "" })}>{TYPES.map(t => <option key={t.v} value={t.v}>{t.l}</option>)}</select>
                       <select className={`${input} w-40`} value={c.object_key} onChange={e => patch(i, { object_key: e.target.value })}><option value="">target…</option>{objsFor(c.test_type).map(o => <option key={o.object_key} value={o.object_key}>{o.display_name}</option>)}</select>
-                      <button onClick={() => setCases(cs => cs.filter((_, j) => j !== i))} className="text-gray-300 hover:text-rose-600 text-xs">✕</button>
+                      <button onClick={() => setCases(cs => cs.filter((_, j) => j !== i))} className="text-gray-300 hover:text-[var(--cmp-text-error)] text-xs">✕</button>
                     </div>
                     <div className="flex items-center gap-1.5">
                       <input className={`${input} flex-1 font-mono`} value={c.inputsStr} onChange={e => patch(i, { inputsStr: e.target.value })} placeholder={TM[c.test_type]?.hint.inputs} title="inputs (JSON)" />
                       <span className="text-gray-300 text-xs">⇒</span>
                       <input className={`${input} flex-1 font-mono`} value={c.expectedStr} onChange={e => patch(i, { expectedStr: e.target.value })} placeholder={TM[c.test_type]?.hint.expected} title="expected (JSON)" />
                     </div>
-                    {res && <p className={`text-[10px] mt-1 ${res.pass ? "text-emerald-600" : "text-rose-600"}`}>{res.detail}</p>}
+                    {res && <p className={`text-[10px] mt-1 ${res.pass ? "text-[var(--cmp-text-success)]" : "text-[var(--cmp-text-error)]"}`}>{res.detail}</p>}
                   </div>
                 ); })}
               </div>
@@ -138,7 +138,7 @@ export default function TestCentre({ suites, objects }: { suites: Suite[]; objec
               <span className="text-[11px] text-gray-400">Six executable test types run against the live object definitions.</span>
               <button onClick={save} disabled={busy} className="text-sm font-medium text-indigo-700 border border-indigo-200 rounded-lg px-3 py-1.5 hover:bg-indigo-50 disabled:opacity-50">Save</button>
             </div>
-            {msg && <p className={`text-xs mt-2 ${msg.includes("passed") && gate === "pass" ? "text-emerald-600" : msg.includes("passed") ? "text-amber-600" : "text-rose-600"}`}>{msg}</p>}
+            {msg && <p className={`text-xs mt-2 ${msg.includes("passed") && gate === "pass" ? "text-[var(--cmp-text-success)]" : msg.includes("passed") ? "text-[var(--cmp-text-warning)]" : "text-[var(--cmp-text-error)]"}`}>{msg}</p>}
           </>
         )}
       </div>

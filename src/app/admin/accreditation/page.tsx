@@ -3,15 +3,15 @@ import { redirect } from "next/navigation";
 import { qualityReport } from "@/lib/engines/quality";
 
 const STATUS_UI = {
-  pass: { icon: "✓", cls: "bg-green-50 text-green-700 border-green-100" },
-  warn: { icon: "⚠", cls: "bg-amber-50 text-amber-700 border-amber-100" },
-  fail: { icon: "✗", cls: "bg-red-50 text-red-600 border-red-100" },
+  pass: { icon: "✓", cls: "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)] border-[var(--cmp-color-success)]" },
+  warn: { icon: "⚠", cls: "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)] border-[var(--cmp-color-warning)]" },
+  fail: { icon: "✗", cls: "bg-[var(--cmp-surface-critical)] text-[var(--cmp-text-critical)] border-[var(--cmp-color-critical)]" },
 } as const;
 
 const FLAG_UI: Record<string, { label: string; cls: string }> = {
-  consistent: { label: "Consistent", cls: "bg-green-100 text-green-700" },
-  lenient:    { label: "Tends lenient", cls: "bg-amber-100 text-amber-700" },
-  strict:     { label: "Tends strict", cls: "bg-blue-100 text-blue-700" },
+  consistent: { label: "Consistent", cls: "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]" },
+  lenient:    { label: "Tends lenient", cls: "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]" },
+  strict:     { label: "Tends strict", cls: "bg-[var(--cmp-surface-information)] text-blue-700" },
 };
 
 export default async function AccreditationPage() {
@@ -24,7 +24,7 @@ export default async function AccreditationPage() {
   if (!profile || !["hospital_admin", "super_admin"].includes(profile.role)) redirect("/dashboard");
 
   const report = await qualityReport(admin, profile.hospital_id ?? "");
-  const scoreColor = report.score >= 85 ? "text-green-600" : report.score >= 60 ? "text-amber-600" : "text-red-600";
+  const scoreColor = report.score >= 85 ? "text-[var(--cmp-text-success)]" : report.score >= 60 ? "text-[var(--cmp-text-warning)]" : "text-[var(--cmp-text-critical)]";
 
   return (
     <div className="max-w-4xl">
@@ -93,7 +93,7 @@ export default async function AccreditationPage() {
                     <td className="px-5 py-3 font-medium text-gray-800 text-xs">{a.name}</td>
                     <td className="px-4 py-3 text-center text-xs text-gray-600">{a.count}</td>
                     <td className="px-4 py-3 text-center text-sm font-bold text-gray-800">{a.avg}</td>
-                    <td className={`px-4 py-3 text-center text-xs font-semibold ${a.delta > 0 ? "text-amber-600" : a.delta < 0 ? "text-blue-600" : "text-gray-400"}`}>
+                    <td className={`px-4 py-3 text-center text-xs font-semibold ${a.delta > 0 ? "text-[var(--cmp-text-warning)]" : a.delta < 0 ? "text-[var(--cmp-text-information)]" : "text-gray-400"}`}>
                       {a.delta > 0 ? "+" : ""}{a.delta}
                     </td>
                     <td className="px-5 py-3 text-right">

@@ -75,7 +75,7 @@ export default function ScheduledClient({ rows, definitions, staff }: {
         </button>
       </div>
 
-      {error && <p className="text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{error}</p>}
+      {error && <p className="text-xs text-[var(--cmp-text-critical)] bg-[var(--cmp-surface-critical)] border border-[var(--cmp-color-critical)] rounded-lg px-3 py-2">{error}</p>}
 
       {showNew && (
         <div className="bg-white border border-indigo-200 rounded-xl p-4">
@@ -131,7 +131,7 @@ export default function ScheduledClient({ rows, definitions, staff }: {
               </div>
               <button onClick={() => toggle(r)} disabled={busy === r.id}
                 className={`text-[10px] font-bold px-2.5 py-1 rounded-lg border transition-colors disabled:opacity-40 ${
-                  r.active ? "text-green-700 border-green-300 bg-green-50" : "text-gray-400 border-gray-200"}`}>
+                  r.active ? "text-[var(--cmp-text-success)] border-[var(--cmp-color-success)] bg-[var(--cmp-surface-success)]" : "text-gray-400 border-gray-200"}`}>
                 {r.active ? "● Active" : "○ Paused"}
               </button>
               <button onClick={() => remove(r.id)} className="text-[10px] text-gray-300 hover:text-red-500 px-1">✕</button>

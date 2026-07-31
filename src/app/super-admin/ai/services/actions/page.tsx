@@ -21,7 +21,7 @@ export default async function ActionsPage() {
         <Stat label="Actions" value={k.total} sub={`${k.active} active`} />
         <Stat label="Need Approval" value={k.needApproval} sub="human-in-loop" tone="text-violet-700" />
         <Stat label="Executions" value={k.executions.toLocaleString()} sub="all-time" />
-        <Stat label="Avg Success" value={`${k.avgSuccess}%`} sub="completion" tone="text-emerald-600" />
+        <Stat label="Avg Success" value={`${k.avgSuccess}%`} sub="completion" tone="text-[var(--cmp-text-success)]" />
         <Stat label="Triggers" value={d.byTrigger.length} sub="pathways" />
       </div>
 
@@ -30,7 +30,7 @@ export default async function ActionsPage() {
           <div className="space-y-1">
             <div className="flex items-center text-[10px] text-gray-400 uppercase tracking-wide px-1"><span className="flex-1">Action</span><span className="w-24">Type</span><span className="w-28">Trigger</span><span className="w-16 text-center">Approval</span><span className="w-20 text-right">Executions</span><span className="w-16 text-right">Success</span></div>
             {d.actions.map((a: any) => (
-              <div key={a.id} className="flex items-center px-1 py-1.5 text-[12px] border-b border-gray-50"><span className="flex-1 text-gray-800 truncate">{a.name}</span><span className="w-24 text-gray-500 text-[11px]">{a.action_type}</span><span className="w-28"><Pill text={a.trigger} tone={TRIGGER_TONE[a.trigger]} /></span><span className="w-16 text-center">{a.requires_approval ? <span className="text-violet-600 text-[11px]">✓</span> : <span className="text-gray-300">—</span>}</span><span className="w-20 text-right text-gray-900 tabular-nums font-semibold">{Number(a.executions).toLocaleString()}</span><span className="w-16 text-right text-emerald-600 tabular-nums font-semibold">{Math.round(Number(a.success_rate || 0))}%</span></div>
+              <div key={a.id} className="flex items-center px-1 py-1.5 text-[12px] border-b border-gray-50"><span className="flex-1 text-gray-800 truncate">{a.name}</span><span className="w-24 text-gray-500 text-[11px]">{a.action_type}</span><span className="w-28"><Pill text={a.trigger} tone={TRIGGER_TONE[a.trigger]} /></span><span className="w-16 text-center">{a.requires_approval ? <span className="text-violet-600 text-[11px]">✓</span> : <span className="text-gray-300">—</span>}</span><span className="w-20 text-right text-gray-900 tabular-nums font-semibold">{Number(a.executions).toLocaleString()}</span><span className="w-16 text-right text-[var(--cmp-text-success)] tabular-nums font-semibold">{Math.round(Number(a.success_rate || 0))}%</span></div>
             ))}
           </div>
         </Card>

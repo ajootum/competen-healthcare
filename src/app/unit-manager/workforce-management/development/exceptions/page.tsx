@@ -15,8 +15,8 @@ export const dynamic = "force-dynamic";
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 const card = "bg-white rounded-xl border border-gray-200";
-const SEV: Record<string, string> = { critical: "bg-rose-50 text-rose-700", high: "bg-amber-50 text-amber-700", moderate: "bg-sky-50 text-sky-700" };
-const DOT: Record<string, string> = { critical: "bg-rose-500", high: "bg-amber-500", moderate: "bg-sky-500" };
+const SEV: Record<string, string> = { critical: "bg-[var(--cmp-surface-error)] text-[var(--cmp-text-error)]", high: "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]", moderate: "bg-[var(--cmp-surface-information)] text-[var(--cmp-text-information)]" };
+const DOT: Record<string, string> = { critical: "bg-[var(--cmp-color-error)]", high: "bg-[var(--cmp-color-warning)]", moderate: "bg-[var(--cmp-color-information)]" };
 
 export default async function ReadinessExceptions() {
   const supabase = await createClient();
@@ -43,7 +43,7 @@ export default async function ReadinessExceptions() {
     </>
   );
 
-  if (!d.ready) return <div className="space-y-4">{header}<div className="bg-amber-50 border border-amber-200 rounded-xl p-6"><p className="font-semibold text-amber-900">⚙️ No operational data</p></div></div>;
+  if (!d.ready) return <div className="space-y-4">{header}<div className="bg-[var(--cmp-surface-warning)] border border-[var(--cmp-color-warning)] rounded-xl p-6"><p className="font-semibold text-amber-900">⚙️ No operational data</p></div></div>;
 
   const critical = d.risks.filter((r: any) => r.severity === "critical").length;
   return (
@@ -51,10 +51,10 @@ export default async function ReadinessExceptions() {
       {header}
 
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        <Kpi label="Readiness exceptions" value={d.risks.length} tone={d.risks.length ? "text-gray-900" : "text-emerald-600"} />
-        <Kpi label="Critical" value={critical} tone={critical ? "text-rose-600" : "text-emerald-600"} />
-        <Kpi label="Expired credentials" value={d.kpis.credentialsExpired} tone={d.kpis.credentialsExpired ? "text-rose-600" : "text-emerald-600"} />
-        <Kpi label="Single-person deps" value={d.singleDep.length} tone={d.singleDep.length ? "text-amber-600" : "text-emerald-600"} />
+        <Kpi label="Readiness exceptions" value={d.risks.length} tone={d.risks.length ? "text-gray-900" : "text-[var(--cmp-text-success)]"} />
+        <Kpi label="Critical" value={critical} tone={critical ? "text-[var(--cmp-text-error)]" : "text-[var(--cmp-text-success)]"} />
+        <Kpi label="Expired credentials" value={d.kpis.credentialsExpired} tone={d.kpis.credentialsExpired ? "text-[var(--cmp-text-error)]" : "text-[var(--cmp-text-success)]"} />
+        <Kpi label="Single-person deps" value={d.singleDep.length} tone={d.singleDep.length ? "text-[var(--cmp-text-warning)]" : "text-[var(--cmp-text-success)]"} />
       </div>
 
       <div className={`${card} p-5`}>

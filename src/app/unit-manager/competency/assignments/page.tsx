@@ -12,7 +12,7 @@ export const dynamic = "force-dynamic";
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 const METHOD_LABEL: Record<string, string> = { rule: "Rule", campaign: "Campaign", role_based: "Role-based", manual: "Manual" };
-const STATUS_CLS: Record<string, string> = { completed: "bg-emerald-50 text-emerald-600", in_progress: "bg-blue-50 text-blue-600", assigned: "bg-gray-100 text-gray-500", overdue: "bg-rose-50 text-rose-600", exempt: "bg-gray-50 text-gray-400" };
+const STATUS_CLS: Record<string, string> = { completed: "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]", in_progress: "bg-[var(--cmp-surface-information)] text-[var(--cmp-text-information)]", assigned: "bg-gray-100 text-gray-500", overdue: "bg-[var(--cmp-surface-error)] text-[var(--cmp-text-error)]", exempt: "bg-gray-50 text-gray-400" };
 
 export default async function DeliveredAssignmentsPage() {
   const supabase = await createClient();
@@ -35,7 +35,7 @@ export default async function DeliveredAssignmentsPage() {
       <CompetencyTabs />
 
       {!d.provisioned ? (
-        <div className="bg-amber-50 border border-amber-200 rounded-xl p-6 text-sm text-amber-800">Assignment delivery isn&apos;t provisioned for this unit yet.</div>
+        <div className="bg-[var(--cmp-surface-warning)] border border-[var(--cmp-color-warning)] rounded-xl p-6 text-sm text-amber-800">Assignment delivery isn&apos;t provisioned for this unit yet.</div>
       ) : d.kpis.total === 0 ? (
         <div className={card}><p className="text-sm text-gray-400">No competency assignments have been delivered to this unit yet. The delivery orchestrator materialises these from active assignment rules and launched campaigns.</p></div>
       ) : (
@@ -43,9 +43,9 @@ export default async function DeliveredAssignmentsPage() {
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
             {[
               { label: "Delivered", value: d.kpis.total, tone: "text-gray-900" },
-              { label: "Completed", value: `${d.kpis.completionPct ?? 0}%`, tone: "text-emerald-600", sub: `${d.kpis.completed} of ${d.kpis.total}` },
+              { label: "Completed", value: `${d.kpis.completionPct ?? 0}%`, tone: "text-[var(--cmp-text-success)]", sub: `${d.kpis.completed} of ${d.kpis.total}` },
               { label: "Open", value: d.kpis.open, tone: "text-gray-900" },
-              { label: "Overdue", value: d.kpis.overdue, tone: d.kpis.overdue ? "text-rose-600" : "text-gray-900" },
+              { label: "Overdue", value: d.kpis.overdue, tone: d.kpis.overdue ? "text-[var(--cmp-text-error)]" : "text-gray-900" },
             ].map(k => (
               <div key={k.label} className={card}><div className={`text-2xl font-bold tabular-nums ${k.tone}`}>{k.value}</div><div className="text-xs text-gray-500 mt-1 font-medium">{k.label}</div>{k.sub && <div className="text-[10px] text-gray-400">{k.sub}</div>}</div>
             ))}

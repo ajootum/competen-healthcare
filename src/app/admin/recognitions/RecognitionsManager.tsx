@@ -87,7 +87,7 @@ export default function RecognitionsManager({ workers, recognitions }: { workers
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2">
                 <p className="font-semibold text-gray-900 text-sm">{r.title}</p>
-                <span className="text-[10px] bg-amber-50 text-amber-700 px-2 py-0.5 rounded font-semibold">{t.label}</span>
+                <span className="text-[10px] bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)] px-2 py-0.5 rounded font-semibold">{t.label}</span>
               </div>
               <p className="text-xs text-gray-600 mt-0.5">{r.profiles?.full_name ?? "—"}</p>
               {r.description && <p className="text-[11px] text-gray-400 mt-1 italic">&ldquo;{r.description}&rdquo;</p>}
@@ -95,7 +95,7 @@ export default function RecognitionsManager({ workers, recognitions }: { workers
                 {new Date(r.awarded_at).toLocaleDateString()}{r.awarded_by_name && ` · awarded by ${r.awarded_by_name}`}
               </p>
             </div>
-            <button onClick={() => del(r)} className="px-2.5 py-1 text-xs text-red-500 border border-red-100 rounded-lg hover:bg-red-50 shrink-0">Remove</button>
+            <button onClick={() => del(r)} className="px-2.5 py-1 text-xs text-red-500 border border-[var(--cmp-color-critical)] rounded-lg hover:bg-[var(--cmp-surface-critical)] shrink-0">Remove</button>
           </div>
         );
       })}

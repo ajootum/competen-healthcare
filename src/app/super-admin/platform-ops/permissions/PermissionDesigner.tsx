@@ -99,12 +99,12 @@ export default function PermissionDesigner({ permissions }: { permissions: Obj[]
               <div className="space-y-1.5 mb-4">
                 {grants.map((g, i) => (
                   <div key={g.key} className="flex items-center gap-1.5 border border-gray-100 rounded-lg px-2.5 py-1.5 flex-wrap">
-                    <button onClick={() => setGrants(gs => gs.map((x, j) => j === i ? { ...x, effect: x.effect === "allow" ? "deny" : "allow" } : x))} className={`text-[10px] font-semibold rounded px-2 py-0.5 w-14 shrink-0 ${g.effect === "allow" ? "bg-emerald-100 text-emerald-700" : "bg-rose-100 text-rose-700"}`}>{g.effect}</button>
+                    <button onClick={() => setGrants(gs => gs.map((x, j) => j === i ? { ...x, effect: x.effect === "allow" ? "deny" : "allow" } : x))} className={`text-[10px] font-semibold rounded px-2 py-0.5 w-14 shrink-0 ${g.effect === "allow" ? "bg-[var(--cmp-surface-success)] text-emerald-700" : "bg-[var(--cmp-surface-error)] text-[var(--cmp-text-error)]"}`}>{g.effect}</button>
                     <select className={`${input} w-32`} value={g.resource} onChange={e => setGrants(gs => gs.map((x, j) => j === i ? { ...x, resource: e.target.value } : x))}>{RES.map(r => <option key={r} value={r}>{r}</option>)}</select>
                     <input className={`${input} w-32`} value={g.resourceKey ?? ""} onChange={e => setGrants(gs => gs.map((x, j) => j === i ? { ...x, resourceKey: e.target.value } : x))} placeholder="key (opt · * = any)" />
                     <select className={`${input} w-24`} value={g.action} onChange={e => setGrants(gs => gs.map((x, j) => j === i ? { ...x, action: e.target.value } : x))}>{ACT.map(a => <option key={a} value={a}>{a}</option>)}</select>
                     <span className="text-[9px] text-gray-300 font-mono">{g.key}</span>
-                    <button onClick={() => setGrants(gs => gs.filter((_, j) => j !== i))} className="text-gray-300 hover:text-rose-600 text-xs ml-auto">✕</button>
+                    <button onClick={() => setGrants(gs => gs.filter((_, j) => j !== i))} className="text-gray-300 hover:text-[var(--cmp-text-error)] text-xs ml-auto">✕</button>
                   </div>
                 ))}
               </div>
@@ -120,7 +120,7 @@ export default function PermissionDesigner({ permissions }: { permissions: Obj[]
                     <select className={`${input} w-28`} value={r.operator} onChange={e => setRules(rs => rs.map((x, j) => j === i ? { ...x, operator: e.target.value } : x))}>{OPS.map(o => <option key={o.v} value={o.v}>{o.l}</option>)}</select>
                     {r.operator !== "exists" && <input className={`${input} flex-1 min-w-[6rem]`} value={r.value} onChange={e => setRules(rs => rs.map((x, j) => j === i ? { ...x, value: e.target.value } : x))} placeholder="value" />}
                     <span className="text-[9px] text-gray-300 font-mono">{r.key}</span>
-                    <button onClick={() => setRules(rs => rs.filter((_, j) => j !== i))} className="text-gray-300 hover:text-rose-600 text-xs">✕</button>
+                    <button onClick={() => setRules(rs => rs.filter((_, j) => j !== i))} className="text-gray-300 hover:text-[var(--cmp-text-error)] text-xs">✕</button>
                   </div>
                 ))}
               </div>
@@ -154,16 +154,16 @@ export default function PermissionDesigner({ permissions }: { permissions: Obj[]
                   {attrsUsed.map(a => <label key={a} className="flex items-center gap-1 text-[11px]"><span className="text-gray-500">{a}</span><input className={`${input} w-24`} value={ctx[a] ?? ""} onChange={e => setCtx(c => ({ ...c, [a]: e.target.value }))} placeholder="value" /></label>)}
                 </div>
               )}
-              <div className={`text-xs font-medium mb-2 ${applies ? "text-emerald-700" : "text-rose-700"}`}>{applies ? "✓ This set applies in this context" : `✕ Not applicable — ${failing.length} rule(s) not met (${failing.map(f => f.attribute).join(", ")})`}</div>
+              <div className={`text-xs font-medium mb-2 ${applies ? "text-emerald-700" : "text-[var(--cmp-text-error)]"}`}>{applies ? "✓ This set applies in this context" : `✕ Not applicable — ${failing.length} rule(s) not met (${failing.map(f => f.attribute).join(", ")})`}</div>
               {applies && (effective.length === 0 ? <p className="text-[11px] text-gray-400">No grants defined.</p> : (
                 <div className="space-y-0.5">
-                  {effective.map(g => <div key={`${g.resource}|${g.resourceKey}|${g.action}`} className="flex items-center gap-2 text-[11px]"><span className={`font-semibold w-12 ${g.effect === "allow" ? "text-emerald-600" : "text-rose-600"}`}>{g.effect}</span><span className="text-gray-700">{g.action}</span><span className="text-gray-400">on</span><span className="text-gray-700">{g.resource}{g.resourceKey ? `:${g.resourceKey}` : ""}</span></div>)}
+                  {effective.map(g => <div key={`${g.resource}|${g.resourceKey}|${g.action}`} className="flex items-center gap-2 text-[11px]"><span className={`font-semibold w-12 ${g.effect === "allow" ? "text-[var(--cmp-text-success)]" : "text-[var(--cmp-text-error)]"}`}>{g.effect}</span><span className="text-gray-700">{g.action}</span><span className="text-gray-400">on</span><span className="text-gray-700">{g.resource}{g.resourceKey ? `:${g.resourceKey}` : ""}</span></div>)}
                 </div>
               ))}
               {inherits.length > 0 && <p className="text-[10px] text-gray-400 mt-2">+ {inherits.length} inherited set(s) layered at runtime (not shown here).</p>}
             </div>
 
-            {msg && <p className={`text-xs mt-3 ${msg.startsWith("✓") ? "text-emerald-600" : "text-rose-600"}`}>{msg}</p>}
+            {msg && <p className={`text-xs mt-3 ${msg.startsWith("✓") ? "text-[var(--cmp-text-success)]" : "text-[var(--cmp-text-error)]"}`}>{msg}</p>}
             <div className="flex items-center justify-end mt-4"><button onClick={save} disabled={busy} className="text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg px-4 py-2 disabled:opacity-50">{busy ? "Saving…" : "Save permission set"}</button></div>
           </>
         )}

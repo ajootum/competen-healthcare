@@ -4,12 +4,12 @@ import { redirect } from "next/navigation";
 import MethodsManager from "./MethodsManager";
 
 const METHOD_LABELS: Record<string, { label: string; icon: string; color: string }> = {
-  knowledge:            { label: "Knowledge Assessment",    icon: "📝", color: "bg-blue-50 text-blue-700" },
+  knowledge:            { label: "Knowledge Assessment",    icon: "📝", color: "bg-[var(--cmp-surface-information)] text-blue-700" },
   direct_observation:   { label: "Direct Observation",      icon: "👁️",  color: "bg-teal-50 text-teal-700" },
   simulation:           { label: "Simulation",              icon: "🎮", color: "bg-violet-50 text-violet-700" },
-  osce:                 { label: "OSCE",                    icon: "🏥", color: "bg-rose-50 text-rose-700" },
-  concurrent_audit:     { label: "Concurrent Audit",        icon: "📋", color: "bg-amber-50 text-amber-700" },
-  retrospective_audit:  { label: "Retrospective/Chart Audit",icon: "🗂️", color: "bg-orange-50 text-orange-700" },
+  osce:                 { label: "OSCE",                    icon: "🏥", color: "bg-[var(--cmp-surface-error)] text-[var(--cmp-text-error)]" },
+  concurrent_audit:     { label: "Concurrent Audit",        icon: "📋", color: "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]" },
+  retrospective_audit:  { label: "Retrospective/Chart Audit",icon: "🗂️", color: "bg-[var(--cmp-surface-warning)] text-orange-700" },
   logbook:              { label: "Logbook",                 icon: "📓", color: "bg-indigo-50 text-indigo-700" },
 };
 

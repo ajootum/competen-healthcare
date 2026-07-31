@@ -18,7 +18,7 @@ const TYPE_LABEL: Record<string, string> = {
   validation_meeting: "Validation meeting", other: "Other",
 };
 const STATUS_CLS: Record<string, string> = {
-  scheduled: "bg-blue-100 text-blue-700", completed: "bg-green-100 text-green-700", cancelled: "bg-gray-100 text-gray-400",
+  scheduled: "bg-[var(--cmp-surface-information)] text-blue-700", completed: "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]", cancelled: "bg-gray-100 text-gray-400",
 };
 
 export default function CoachingBoard({ sessions, learners, startOpen }: {
@@ -94,7 +94,7 @@ export default function CoachingBoard({ sessions, learners, startOpen }: {
         </button>
       </div>
 
-      {error && <p className="text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2 mb-3">{error}</p>}
+      {error && <p className="text-xs text-[var(--cmp-text-critical)] bg-[var(--cmp-surface-critical)] border border-[var(--cmp-color-critical)] rounded-lg px-3 py-2 mb-3">{error}</p>}
 
       {showNew && (
         <div className="bg-white border border-purple-200 rounded-xl p-4 mb-4">
@@ -139,21 +139,21 @@ export default function CoachingBoard({ sessions, learners, startOpen }: {
               {s.status === "scheduled" && (
                 <>
                   <button onClick={() => setNoteFor(noteFor === s.id ? null : s.id)}
-                    className="text-[10px] font-semibold text-green-700 border border-green-300 rounded-lg px-2.5 py-1 hover:bg-green-50">Complete…</button>
+                    className="text-[10px] font-semibold text-[var(--cmp-text-success)] border border-[var(--cmp-color-success)] rounded-lg px-2.5 py-1 hover:bg-[var(--cmp-surface-success)]">Complete…</button>
                   <button onClick={() => cancel(s.id)} disabled={busy === s.id}
-                    className="text-[10px] font-semibold text-red-600 border border-red-200 rounded-lg px-2.5 py-1 hover:bg-red-50 disabled:opacity-40">Cancel</button>
+                    className="text-[10px] font-semibold text-[var(--cmp-text-critical)] border border-[var(--cmp-color-critical)] rounded-lg px-2.5 py-1 hover:bg-[var(--cmp-surface-critical)] disabled:opacity-40">Cancel</button>
                 </>
               )}
             </div>
             {(s.focus || s.goals) && <p className="text-[11px] text-gray-500 mt-1">{s.focus}{s.focus && s.goals ? " — " : ""}{s.goals}</p>}
-            {s.followUp && <p className="text-[10px] text-amber-600 mt-0.5">Follow-up: {s.followUp}</p>}
+            {s.followUp && <p className="text-[10px] text-[var(--cmp-text-warning)] mt-0.5">Follow-up: {s.followUp}</p>}
             {s.notes && <p className="text-[11px] text-gray-600 mt-1 italic">Notes: {s.notes}</p>}
             {noteFor === s.id && (
               <div className="flex items-center gap-2 mt-2">
                 <input value={note} onChange={e => setNote(e.target.value)} autoFocus placeholder="Session notes / outcomes…"
                   className="flex-1 text-[11px] border border-gray-200 rounded-lg px-2.5 py-1.5 text-gray-600 focus:outline-none focus:border-purple-400" />
                 <button onClick={() => complete(s.id)} disabled={busy === s.id}
-                  className="text-[10px] font-bold text-white bg-green-600 rounded-lg px-3 py-1.5 hover:bg-green-700 disabled:opacity-40">Save &amp; complete</button>
+                  className="text-[10px] font-bold text-white bg-[var(--cmp-color-success)] rounded-lg px-3 py-1.5 hover:bg-green-700 disabled:opacity-40">Save &amp; complete</button>
               </div>
             )}
           </div>

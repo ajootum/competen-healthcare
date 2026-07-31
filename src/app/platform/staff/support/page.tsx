@@ -21,13 +21,13 @@ export default async function SupportPage() {
         <p className="text-sm text-gray-500 mt-1">The platform support queue — raise and track tenant support tickets.</p>
       </div>
       {!ready ? (
-        <div className="bg-amber-50 border border-amber-200 rounded-xl p-5 text-sm text-amber-700">Apply migration <code className="font-mono text-xs">043</code> to activate the support queue.</div>
+        <div className="bg-[var(--cmp-surface-warning)] border border-[var(--cmp-color-warning)] rounded-xl p-5 text-sm text-[var(--cmp-text-warning)]">Apply migration <code className="font-mono text-xs">043</code> to activate the support queue.</div>
       ) : (
         <>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-            <div className={card}><div className="text-3xl font-bold tabular-nums text-blue-600">{counts.open}</div><div className="text-xs text-gray-500 mt-1">Open</div></div>
-            <div className={card}><div className="text-3xl font-bold tabular-nums text-amber-600">{counts.pending}</div><div className="text-xs text-gray-500 mt-1">Pending</div></div>
-            <div className={card}><div className="text-3xl font-bold tabular-nums text-green-600">{counts.resolved}</div><div className="text-xs text-gray-500 mt-1">Resolved</div></div>
+            <div className={card}><div className="text-3xl font-bold tabular-nums text-[var(--cmp-text-information)]">{counts.open}</div><div className="text-xs text-gray-500 mt-1">Open</div></div>
+            <div className={card}><div className="text-3xl font-bold tabular-nums text-[var(--cmp-text-warning)]">{counts.pending}</div><div className="text-xs text-gray-500 mt-1">Pending</div></div>
+            <div className={card}><div className="text-3xl font-bold tabular-nums text-[var(--cmp-text-success)]">{counts.resolved}</div><div className="text-xs text-gray-500 mt-1">Resolved</div></div>
             <div className={card}><div className="text-3xl font-bold tabular-nums text-gray-500">{counts.closed}</div><div className="text-xs text-gray-500 mt-1">Closed</div></div>
           </div>
           <SupportClient tickets={tickets} tenants={tenants} />

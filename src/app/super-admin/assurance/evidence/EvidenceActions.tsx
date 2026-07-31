@@ -22,10 +22,10 @@ export default function EvidenceActions({ id }: { id: string }) {
   const btn = "text-[11px] font-semibold border rounded-md px-2 py-0.5 disabled:opacity-50 transition-colors";
   return (
     <div className="flex items-center gap-1.5 shrink-0">
-      <button onClick={() => run("verify")} disabled={!!busy} className={`${btn} text-emerald-700 border-emerald-200 hover:bg-emerald-50`}>{busy === "verify" ? "…" : "Verify"}</button>
-      <button onClick={() => run("flag")} disabled={!!busy} className={`${btn} text-amber-700 border-amber-200 hover:bg-amber-50`}>Flag</button>
-      <button onClick={() => run("reject")} disabled={!!busy} className={`${btn} text-rose-700 border-rose-200 hover:bg-rose-50`}>Reject</button>
-      {err && <span className="text-[10px] text-rose-600">{err}</span>}
+      <button onClick={() => run("verify")} disabled={!!busy} className={`${btn} text-emerald-700 border-[var(--cmp-color-success)] hover:bg-[var(--cmp-surface-success)]`}>{busy === "verify" ? "…" : "Verify"}</button>
+      <button onClick={() => run("flag")} disabled={!!busy} className={`${btn} text-[var(--cmp-text-warning)] border-[var(--cmp-color-warning)] hover:bg-[var(--cmp-surface-warning)]`}>Flag</button>
+      <button onClick={() => run("reject")} disabled={!!busy} className={`${btn} text-[var(--cmp-text-error)] border-[var(--cmp-color-error)] hover:bg-[var(--cmp-surface-error)]`}>Reject</button>
+      {err && <span className="text-[10px] text-[var(--cmp-text-error)]">{err}</span>}
     </div>
   );
 }

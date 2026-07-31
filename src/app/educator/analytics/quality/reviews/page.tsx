@@ -8,7 +8,7 @@ import QualityNav from "../QualityNav";
 // corrective actions (CAPA) are shown as the improvement-action proxy.
 
 export const dynamic = "force-dynamic";
-const STATUS_CLS: Record<string, string> = { completed: "bg-green-50 text-green-600", closed: "bg-green-50 text-green-600", open: "bg-amber-50 text-amber-600", in_progress: "bg-blue-50 text-blue-600" };
+const STATUS_CLS: Record<string, string> = { completed: "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]", closed: "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]", open: "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]", in_progress: "bg-[var(--cmp-surface-information)] text-[var(--cmp-text-information)]" };
 
 export default async function Reviews() {
   const { admin, hospitalId } = await requireEducatorAccess();
@@ -25,7 +25,7 @@ export default async function Reviews() {
     <div className="max-w-[1200px]">
       <QualityNav active="reviews" />
       <div className="mb-2"><StatTiles tiles={tiles} cols="grid-cols-2 md:grid-cols-4" /></div>
-      <p className="text-[10px] text-amber-600 bg-amber-50 border border-amber-100 rounded-lg px-3 py-2 mb-5">ℹ️ {d.note}</p>
+      <p className="text-[10px] text-[var(--cmp-text-warning)] bg-[var(--cmp-surface-warning)] border border-[var(--cmp-color-warning)] rounded-lg px-3 py-2 mb-5">ℹ️ {d.note}</p>
 
       <div className="bg-white border border-gray-100 rounded-2xl p-5">
         <div className="flex items-center justify-between mb-3"><h2 className="text-sm font-bold text-gray-900">Improvement Actions (CAPA)</h2><Link href="/educator/plans" className="text-[11px] font-semibold text-purple-600 hover:underline">Improvement plans →</Link></div>

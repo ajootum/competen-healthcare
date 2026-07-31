@@ -19,7 +19,7 @@ export const dynamic = "force-dynamic";
 const card = "bg-white rounded-xl border border-gray-200";
 const relTime = (iso?: string | null) => { if (!iso) return ""; const s = Math.floor((Date.now() - new Date(iso).getTime()) / 1000); if (s < 60) return "just now"; if (s < 3600) return `${Math.floor(s / 60)}m ago`; if (s < 86400) return `${Math.floor(s / 3600)}h ago`; return `${Math.floor(s / 86400)}d ago`; };
 const tc = (s: string) => (s ?? "").replace(/_/g, " ").replace(/\b\w/g, m => m.toUpperCase());
-const scoreTone = (n: number | null) => (n == null ? "text-gray-300" : n >= 90 ? "text-green-600" : n >= 75 ? "text-amber-600" : "text-rose-600");
+const scoreTone = (n: number | null) => (n == null ? "text-gray-300" : n >= 90 ? "text-[var(--cmp-text-success)]" : n >= 75 ? "text-[var(--cmp-text-warning)]" : "text-[var(--cmp-text-error)]");
 const PRIO_C: Record<string, string> = { Critical: "#ef4444", High: "#f59e0b", Medium: "#3b82f6", Low: "#22c55e" };
 
 export default async function TaskCentre() {
@@ -38,10 +38,10 @@ export default async function TaskCentre() {
 
   const kpis = [
     ["Total Tasks", k.total, "All active tasks", ""],
-    ["Overdue", k.overdue, `${k.overduePct}% of total`, k.overdue ? "text-rose-600" : ""],
-    ["Due Soon (≤1hr)", k.dueSoon, `${k.dueSoonPct}% of total`, k.dueSoon ? "text-amber-600" : ""],
-    ["In Progress", k.inProgress, `${k.inProgressPct}% of total`, "text-blue-600"],
-    ["Completed", k.completed, `${k.completedPct ?? 0}% of total`, "text-green-600"],
+    ["Overdue", k.overdue, `${k.overduePct}% of total`, k.overdue ? "text-[var(--cmp-text-error)]" : ""],
+    ["Due Soon (≤1hr)", k.dueSoon, `${k.dueSoonPct}% of total`, k.dueSoon ? "text-[var(--cmp-text-warning)]" : ""],
+    ["In Progress", k.inProgress, `${k.inProgressPct}% of total`, "text-[var(--cmp-text-information)]"],
+    ["Completed", k.completed, `${k.completedPct ?? 0}% of total`, "text-[var(--cmp-text-success)]"],
     ["On Track (SLA)", sla.compliance == null ? "—" : `${sla.compliance}%`, `${sla.atRisk} at risk · ${sla.breached} breached`, scoreTone(sla.compliance)],
   ];
 
@@ -55,7 +55,7 @@ export default async function TaskCentre() {
           <h1 className="text-2xl font-bold text-gray-900 tracking-tight">Task Centre</h1>
           <p className="text-sm text-gray-500">Operational task coordination engine — assign, track and complete all tasks across the shift.</p>
         </div>
-        <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded-full bg-green-100 text-green-700 flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-green-500" />Live</span>
+        <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded-full bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)] flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-[var(--cmp-color-success)]" />Live</span>
       </div>
 
       {/* KPI strip */}
@@ -91,7 +91,7 @@ export default async function TaskCentre() {
             {d.timeline.length === 0 ? <p className="text-sm text-gray-400">No task events yet.</p> : d.timeline.map((e: any, i: number) => (
               <div key={i} className="flex items-center gap-2.5 py-1.5">
                 <span className="text-[11px] text-gray-400 tabular-nums w-14 shrink-0">{relTime(e.at)}</span>
-                <span className={`w-2 h-2 rounded-full shrink-0 ${e.done ? "bg-green-500" : e.status === "in_progress" ? "bg-blue-500" : "bg-gray-300"}`} />
+                <span className={`w-2 h-2 rounded-full shrink-0 ${e.done ? "bg-[var(--cmp-color-success)]" : e.status === "in_progress" ? "bg-[var(--cmp-color-information)]" : "bg-gray-300"}`} />
                 <span className="text-xs text-gray-700 truncate flex-1">{e.label}</span>
                 <span className="text-[9px] text-gray-400 shrink-0">{tc(e.status)}</span>
               </div>
@@ -119,11 +119,11 @@ export default async function TaskCentre() {
         </div>
 
         <div className={`${card} p-5`}>
-          <h2 className="text-sm font-bold text-gray-900 mb-3">Overdue Tasks <span className="text-rose-600 font-normal">({d.escalations.overdue})</span></h2>
+          <h2 className="text-sm font-bold text-gray-900 mb-3">Overdue Tasks <span className="text-[var(--cmp-text-error)] font-normal">({d.escalations.overdue})</span></h2>
           {d.escalations.escalatedTasks.length === 0 ? <p className="text-sm text-gray-400">✅ No overdue tasks.</p> : (
             <div className="space-y-1.5">
               {d.escalations.escalatedTasks.slice(0, 5).map((t: any, i: number) => (
-                <div key={i} className="flex items-center gap-2 rounded-lg border border-gray-100 px-2 py-1.5"><div className="min-w-0 flex-1"><p className="text-xs text-gray-800 truncate">{t.desc}{t.bed ? ` · ${t.bed}` : ""}</p><p className="text-[9px] text-gray-400">{tc(t.type ?? "task")}</p></div><span className="text-[10px] font-semibold text-rose-600 shrink-0">+{t.overdueMin}m</span></div>
+                <div key={i} className="flex items-center gap-2 rounded-lg border border-gray-100 px-2 py-1.5"><div className="min-w-0 flex-1"><p className="text-xs text-gray-800 truncate">{t.desc}{t.bed ? ` · ${t.bed}` : ""}</p><p className="text-[9px] text-gray-400">{tc(t.type ?? "task")}</p></div><span className="text-[10px] font-semibold text-[var(--cmp-text-error)] shrink-0">+{t.overdueMin}m</span></div>
               ))}
             </div>
           )}
@@ -134,7 +134,7 @@ export default async function TaskCentre() {
           {d.assignment.teamWorkload.length === 0 ? <p className="text-sm text-gray-400">No assigned tasks.</p> : (
             <div className="space-y-2">
               {d.assignment.teamWorkload.slice(0, 6).map((w: any, i: number) => (
-                <div key={i}><div className="flex items-center justify-between text-xs mb-0.5"><span className="text-gray-600 truncate">{w.name}</span><span className="tabular-nums text-gray-500">{w.n} task{w.n === 1 ? "" : "s"}</span></div><div className="h-1.5 bg-gray-100 rounded-full overflow-hidden"><div className={`h-full rounded-full ${w.n >= d.assignment.maxLoad ? "bg-rose-500" : w.n >= d.assignment.maxLoad * 0.6 ? "bg-amber-500" : "bg-green-500"}`} style={{ width: `${(w.n / d.assignment.maxLoad) * 100}%` }} /></div></div>
+                <div key={i}><div className="flex items-center justify-between text-xs mb-0.5"><span className="text-gray-600 truncate">{w.name}</span><span className="tabular-nums text-gray-500">{w.n} task{w.n === 1 ? "" : "s"}</span></div><div className="h-1.5 bg-gray-100 rounded-full overflow-hidden"><div className={`h-full rounded-full ${w.n >= d.assignment.maxLoad ? "bg-[var(--cmp-color-error)]" : w.n >= d.assignment.maxLoad * 0.6 ? "bg-[var(--cmp-color-warning)]" : "bg-[var(--cmp-color-success)]"}`} style={{ width: `${(w.n / d.assignment.maxLoad) * 100}%` }} /></div></div>
               ))}
             </div>
           )}
@@ -144,7 +144,7 @@ export default async function TaskCentre() {
           <h2 className="text-sm font-bold text-gray-900 mb-3">Task Performance <span className="text-gray-400 font-normal">· today</span></h2>
           <div className="flex flex-col items-center">
             <div className="relative w-24 h-24 rounded-full" style={{ background: `conic-gradient(${wi.completionRate != null && wi.completionRate >= 90 ? "#22c55e" : wi.completionRate != null && wi.completionRate >= 75 ? "#f59e0b" : "#ef4444"} ${(wi.completionRate ?? 0) * 3.6}deg, #e5e7eb ${(wi.completionRate ?? 0) * 3.6}deg 360deg)` }}><div className="absolute inset-[10px] bg-white rounded-full flex flex-col items-center justify-center"><span className={`text-lg font-bold ${scoreTone(wi.completionRate)}`}>{wi.completionRate == null ? "—" : `${wi.completionRate}%`}</span><span className="text-[8px] text-gray-400">completion</span></div></div>
-            <p className="text-[11px] text-gray-400 mt-2">Target 90% · {sla.atRisk} at risk · <span className="text-rose-600">{sla.breached} breached</span></p>
+            <p className="text-[11px] text-gray-400 mt-2">Target 90% · {sla.atRisk} at risk · <span className="text-[var(--cmp-text-error)]">{sla.breached} breached</span></p>
           </div>
         </div>
       </div>

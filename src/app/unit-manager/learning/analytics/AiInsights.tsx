@@ -14,11 +14,11 @@ const TABS: { key: string; label: string }[] = [
   { key: "executives", label: "For Executives" },
 ];
 const tone: Record<string, string> = {
-  high: "border-rose-200 bg-rose-50/40",
-  medium: "border-amber-200 bg-amber-50/40",
-  low: "border-emerald-200 bg-emerald-50/40",
+  high: "border-[var(--cmp-color-error)] bg-[var(--cmp-surface-error)]/40",
+  medium: "border-[var(--cmp-color-warning)] bg-[var(--cmp-surface-warning)]/40",
+  low: "border-[var(--cmp-color-success)] bg-[var(--cmp-surface-success)]/40",
 };
-const dot: Record<string, string> = { high: "bg-rose-500", medium: "bg-amber-400", low: "bg-emerald-500" };
+const dot: Record<string, string> = { high: "bg-[var(--cmp-color-error)]", medium: "bg-[var(--cmp-color-warning)]", low: "bg-[var(--cmp-color-success)]" };
 
 export default function AiInsights({ items }: { items: any[] }) {
   const [tab, setTab] = useState("learners");

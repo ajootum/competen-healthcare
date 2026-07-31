@@ -14,7 +14,7 @@ export default function SoonModule({ active, note, kpis, needs, links, cols = "g
     <div className="max-w-[1200px]">
       <AccreditationNav active={active} />
       <div className="mb-2"><StatTiles tiles={tiles} cols={cols} /></div>
-      <p className="text-[10px] text-amber-600 bg-amber-50 border border-amber-100 rounded-lg px-3 py-2 mb-5">ℹ️ {note}</p>
+      <p className="text-[10px] text-[var(--cmp-text-warning)] bg-[var(--cmp-surface-warning)] border border-[var(--cmp-color-warning)] rounded-lg px-3 py-2 mb-5">ℹ️ {note}</p>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 items-start">
         <div className="bg-white border border-gray-100 rounded-2xl p-5">

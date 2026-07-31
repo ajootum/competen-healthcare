@@ -103,7 +103,7 @@ export default function ChecklistBuilder({ skills, checklists, items }: {
 
       {/* MIDDLE — items editor */}
       <div className="bg-white rounded-xl border border-gray-100 p-5 self-start">
-        {error && <div className="bg-red-50 text-red-600 text-sm rounded-lg px-3 py-2 mb-3">{error}</div>}
+        {error && <div className="bg-[var(--cmp-surface-critical)] text-[var(--cmp-text-critical)] text-sm rounded-lg px-3 py-2 mb-3">{error}</div>}
         {!selected ? (
           <p className="text-sm text-gray-400 py-8 text-center">Select or create a checklist to edit its items.</p>
         ) : (
@@ -129,7 +129,7 @@ export default function ChecklistBuilder({ skills, checklists, items }: {
                             {i.evidence_required && ` · evidence: ${i.evidence_required}`}
                           </p>
                         </div>
-                        {i.is_critical && <span className="text-[9px] bg-red-50 text-red-600 px-1.5 py-0.5 rounded font-bold shrink-0">CRITICAL FAIL</span>}
+                        {i.is_critical && <span className="text-[9px] bg-[var(--cmp-surface-critical)] text-[var(--cmp-text-critical)] px-1.5 py-0.5 rounded font-bold shrink-0">CRITICAL FAIL</span>}
                         <button disabled={busy} title="Delete item"
                           onClick={async () => { setBusy(true); await fetch(`/api/studio?kind=checklist_item&id=${i.id}`, { method: "DELETE" }); setBusy(false); router.refresh(); }}
                           className="text-gray-300 hover:text-red-500 text-xs shrink-0">✕</button>

@@ -36,7 +36,7 @@ export function ConcernRowActions({ id, status }: { id: string; status: string }
 
   return (
     <div className="mt-2 space-y-2">
-      {err && <p className="text-xs text-amber-700">{err}</p>}
+      {err && <p className="text-xs text-[var(--cmp-text-warning)]">{err}</p>}
       {resolving ? (
         <div className="flex flex-wrap items-center gap-2">
           <input className={`${input} flex-1 min-w-[220px]`} placeholder="Resolution notes (operational closure)" value={notes} onChange={e => setNotes(e.target.value)} />

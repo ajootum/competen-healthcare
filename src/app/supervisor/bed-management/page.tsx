@@ -22,7 +22,7 @@ const STATUS_LABEL: Record<string, string> = {
   occupied: "Occupied", available: "Available", reserved: "Reserved", cleaning: "Cleaning", out_of_service: "Maintenance",
 };
 const STATUS_DOT: Record<string, string> = {
-  occupied: "bg-gray-400", available: "bg-blue-500", reserved: "bg-violet-500", cleaning: "bg-orange-500", out_of_service: "bg-gray-500",
+  occupied: "bg-gray-400", available: "bg-[var(--cmp-color-information)]", reserved: "bg-violet-500", cleaning: "bg-[var(--cmp-color-warning)]", out_of_service: "bg-gray-500",
 };
 
 export default async function BedManagement() {
@@ -36,7 +36,7 @@ export default async function BedManagement() {
   const po = await loadPatientOps(admin, profile?.hospital_id ?? null, roles.includes("super_admin"));
   if (!po.ready) return (
     <div className="space-y-4"><h1 className="text-2xl font-bold text-gray-900">Bed Management</h1>
-      <div className="bg-amber-50 border border-amber-200 rounded-xl p-6"><p className="font-semibold text-amber-900">⚙️ Coming online</p><p className="text-sm text-amber-800 mt-2">The Clinical Operations Engine tables aren&apos;t provisioned yet.</p></div></div>
+      <div className="bg-[var(--cmp-surface-warning)] border border-[var(--cmp-color-warning)] rounded-xl p-6"><p className="font-semibold text-amber-900">⚙️ Coming online</p><p className="text-sm text-amber-800 mt-2">The Clinical Operations Engine tables aren&apos;t provisioned yet.</p></div></div>
   );
 
   const { capacity, bedBoard, cleaningBeds } = po;
@@ -45,13 +45,13 @@ export default async function BedManagement() {
   const kpis: { label: string; n: number; sub?: string; tone: string }[] = [
     { label: "Total beds", n: capacity.total, tone: "text-gray-900" },
     { label: "Occupied", n: capacity.occupied, sub: `${capacity.occPct}% occupancy`, tone: "text-gray-900" },
-    { label: "Available", n: capacity.available, tone: "text-blue-600" },
+    { label: "Available", n: capacity.available, tone: "text-[var(--cmp-text-information)]" },
     { label: "Reserved", n: capacity.reserved, tone: "text-violet-600" },
-    { label: "Cleaning", n: capacity.cleaning, tone: "text-orange-600" },
+    { label: "Cleaning", n: capacity.cleaning, tone: "text-[var(--cmp-text-warning)]" },
     { label: "Maintenance", n: capacity.maintenance, tone: "text-gray-600" },
-    { label: "Isolation", n: capacity.isolation, tone: "text-rose-600" },
+    { label: "Isolation", n: capacity.isolation, tone: "text-[var(--cmp-text-error)]" },
     { label: "Expected vacancies", n: capacity.expectedVacancies, sub: "discharges due", tone: "text-teal-600" },
-    { label: "Expected demand", n: capacity.expectedDemand, sub: "admissions expected", tone: "text-amber-600" },
+    { label: "Expected demand", n: capacity.expectedDemand, sub: "admissions expected", tone: "text-[var(--cmp-text-warning)]" },
   ];
 
   const BedTile = ({ b }: { b: any }) => (
@@ -100,7 +100,7 @@ export default async function BedManagement() {
         ))}
         <div className={card + " py-4 flex flex-col justify-center"}>
           <div className="flex items-baseline justify-between"><span className="text-xs text-gray-500">Occupancy</span><span className="text-sm font-semibold tabular-nums text-gray-900">{capacity.occPct}%</span></div>
-          <div className="h-2 bg-gray-100 rounded-full overflow-hidden mt-2"><div className={`h-full rounded-full ${capacity.occPct >= 90 ? "bg-red-500" : capacity.occPct >= 80 ? "bg-amber-500" : "bg-teal-500"}`} style={{ width: `${Math.min(capacity.occPct, 100)}%` }} /></div>
+          <div className="h-2 bg-gray-100 rounded-full overflow-hidden mt-2"><div className={`h-full rounded-full ${capacity.occPct >= 90 ? "bg-[var(--cmp-color-critical)]" : capacity.occPct >= 80 ? "bg-[var(--cmp-color-warning)]" : "bg-teal-500"}`} style={{ width: `${Math.min(capacity.occPct, 100)}%` }} /></div>
           <p className="text-[10px] text-gray-400 mt-1.5 tabular-nums">{capacity.occupied} / {capacity.total} occupied</p>
         </div>
       </div>
@@ -144,15 +144,15 @@ export default async function BedManagement() {
               <p className="text-xs text-gray-600 mt-1">Expected vacancies</p>
               <p className="text-[10px] text-gray-400">discharges due to free beds</p>
             </div>
-            <div className="rounded-lg border border-amber-200 bg-amber-50/40 p-3">
-              <p className="text-2xl font-bold tabular-nums text-amber-700">{capacity.expectedDemand}</p>
+            <div className="rounded-lg border border-[var(--cmp-color-warning)] bg-[var(--cmp-surface-warning)]/40 p-3">
+              <p className="text-2xl font-bold tabular-nums text-[var(--cmp-text-warning)]">{capacity.expectedDemand}</p>
               <p className="text-xs text-gray-600 mt-1">Expected demand</p>
               <p className="text-[10px] text-gray-400">admissions expected in</p>
             </div>
           </div>
           <div className="grid grid-cols-2 gap-3 mt-3 text-sm">
-            <div className="flex items-center justify-between rounded-lg border border-gray-100 px-3 py-2"><span className="text-gray-500">Free now</span><span className="font-semibold tabular-nums text-blue-600">{capacity.available}</span></div>
-            <div className="flex items-center justify-between rounded-lg border border-gray-100 px-3 py-2"><span className="text-gray-500">Net position</span><span className={`font-semibold tabular-nums ${capacity.available + capacity.expectedVacancies - capacity.expectedDemand < 0 ? "text-red-600" : "text-green-600"}`}>{capacity.available + capacity.expectedVacancies - capacity.expectedDemand >= 0 ? "+" : ""}{capacity.available + capacity.expectedVacancies - capacity.expectedDemand}</span></div>
+            <div className="flex items-center justify-between rounded-lg border border-gray-100 px-3 py-2"><span className="text-gray-500">Free now</span><span className="font-semibold tabular-nums text-[var(--cmp-text-information)]">{capacity.available}</span></div>
+            <div className="flex items-center justify-between rounded-lg border border-gray-100 px-3 py-2"><span className="text-gray-500">Net position</span><span className={`font-semibold tabular-nums ${capacity.available + capacity.expectedVacancies - capacity.expectedDemand < 0 ? "text-[var(--cmp-text-critical)]" : "text-[var(--cmp-text-success)]"}`}>{capacity.available + capacity.expectedVacancies - capacity.expectedDemand >= 0 ? "+" : ""}{capacity.available + capacity.expectedVacancies - capacity.expectedDemand}</span></div>
           </div>
           <div className="mt-3 rounded-lg bg-gray-50 border border-gray-100 px-3 py-2.5">
             <p className="text-[11px] text-gray-500 leading-relaxed">

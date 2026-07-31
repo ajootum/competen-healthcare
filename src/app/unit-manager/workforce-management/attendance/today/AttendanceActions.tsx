@@ -11,10 +11,10 @@ import { useRouter } from "next/navigation";
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 const STATUS: Record<string, { label: string; badge: string; dot: string }> = {
-  on_duty: { label: "Present", badge: "bg-emerald-50 text-emerald-700", dot: "bg-emerald-500" },
-  confirmed: { label: "Confirmed", badge: "bg-sky-50 text-sky-700", dot: "bg-sky-500" },
-  assigned: { label: "Not reported", badge: "bg-amber-50 text-amber-700", dot: "bg-amber-500" },
-  absent: { label: "Absent", badge: "bg-rose-50 text-rose-700", dot: "bg-rose-500" },
+  on_duty: { label: "Present", badge: "bg-[var(--cmp-surface-success)] text-emerald-700", dot: "bg-[var(--cmp-color-success)]" },
+  confirmed: { label: "Confirmed", badge: "bg-[var(--cmp-surface-information)] text-[var(--cmp-text-information)]", dot: "bg-[var(--cmp-color-information)]" },
+  assigned: { label: "Not reported", badge: "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]", dot: "bg-[var(--cmp-color-warning)]" },
+  absent: { label: "Absent", badge: "bg-[var(--cmp-surface-error)] text-[var(--cmp-text-error)]", dot: "bg-[var(--cmp-color-error)]" },
   off_duty: { label: "Completed", badge: "bg-gray-100 text-gray-500", dot: "bg-gray-400" },
 };
 const FILTERS = [
@@ -63,10 +63,10 @@ export default function AttendanceActions({ rows }: { rows: any[] }) {
   return (
     <div>
       <div className="flex items-center gap-2 flex-wrap mb-3">
-        <div className="flex gap-1">{FILTERS.map(f => (<button key={f.key} onClick={() => setFilter(f.key)} className={`text-[11px] px-2.5 py-1 rounded-full border ${filter === f.key ? "border-emerald-300 bg-emerald-50 text-emerald-700" : "border-gray-200 text-gray-500 hover:bg-gray-50"}`}>{f.label}</button>))}</div>
-        <input value={q} onChange={e => setQ(e.target.value)} placeholder="Search staff…" className="ml-auto text-xs border border-gray-200 rounded-lg px-2.5 py-1.5 w-44 focus:outline-none focus:border-emerald-300" />
+        <div className="flex gap-1">{FILTERS.map(f => (<button key={f.key} onClick={() => setFilter(f.key)} className={`text-[11px] px-2.5 py-1 rounded-full border ${filter === f.key ? "border-[var(--cmp-color-success)] bg-[var(--cmp-surface-success)] text-emerald-700" : "border-gray-200 text-gray-500 hover:bg-gray-50"}`}>{f.label}</button>))}</div>
+        <input value={q} onChange={e => setQ(e.target.value)} placeholder="Search staff…" className="ml-auto text-xs border border-gray-200 rounded-lg px-2.5 py-1.5 w-44 focus:outline-none focus:border-[var(--cmp-color-success)]" />
       </div>
-      {err && <div className="mb-2 text-xs text-rose-600 bg-rose-50 border border-rose-100 rounded-lg px-3 py-2">{err}</div>}
+      {err && <div className="mb-2 text-xs text-[var(--cmp-text-error)] bg-[var(--cmp-surface-error)] border border-[var(--cmp-color-error)] rounded-lg px-3 py-2">{err}</div>}
       <div className="overflow-x-auto"><table className="w-full text-xs">
         <thead><tr className="text-gray-400 text-left border-b border-gray-100"><th className="py-2 pr-3 font-medium">Staff</th><th className="py-2 pr-3 font-medium">Role</th><th className="py-2 pr-3 font-medium">Unit / shift</th><th className="py-2 pr-3 font-medium">Attendance</th><th className="py-2 pr-3 font-medium">Arrival</th><th className="py-2 font-medium">Actions</th></tr></thead>
         <tbody>{shown.length === 0 ? <tr><td colSpan={6} className="py-6 text-center text-gray-400">No staff match.</td></tr> : shown.map(r => { const s = STATUS[r.status] ?? STATUS.assigned; const b = busy === r.id; return (
@@ -75,11 +75,11 @@ export default function AttendanceActions({ rows }: { rows: any[] }) {
             <td className="py-2 pr-3 text-gray-500">{r.roleLabel}</td>
             <td className="py-2 pr-3 text-gray-500 capitalize">{r.unit} · {r.shiftType}</td>
             <td className="py-2 pr-3"><span className="inline-flex items-center gap-1.5"><span className={`w-1.5 h-1.5 rounded-full ${s.dot}`} /><span className={`text-[9px] px-1.5 py-0.5 rounded ${s.badge}`}>{s.label}</span></span></td>
-            <td className="py-2 pr-3 whitespace-nowrap">{r.arrivalAt ? <span className="text-gray-600">{new Date(r.arrivalAt).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}{(r.minutesLate ?? 0) > 0 && <span className="text-amber-600 font-semibold"> +{r.minutesLate}m</span>}</span> : <span className="text-gray-300">—</span>}</td>
+            <td className="py-2 pr-3 whitespace-nowrap">{r.arrivalAt ? <span className="text-gray-600">{new Date(r.arrivalAt).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}{(r.minutesLate ?? 0) > 0 && <span className="text-[var(--cmp-text-warning)] font-semibold"> +{r.minutesLate}m</span>}</span> : <span className="text-gray-300">—</span>}</td>
             <td className="py-2"><div className="flex gap-1 flex-wrap items-center">
-              {r.status !== "on_duty" && <button disabled={b} onClick={() => record(r, "check_in")} className="text-[10px] px-2 py-1 rounded border border-emerald-200 text-emerald-700 hover:bg-emerald-50 disabled:opacity-40">Confirm present</button>}
-              {r.status === "assigned" && <button disabled={b} onClick={() => record(r, "acknowledge")} className="text-[10px] px-2 py-1 rounded border border-sky-200 text-sky-700 hover:bg-sky-50 disabled:opacity-40">Acknowledge</button>}
-              {r.status !== "absent" && <button disabled={b} onClick={() => record(r, "mark_absent")} className="text-[10px] px-2 py-1 rounded border border-rose-200 text-rose-700 hover:bg-rose-50 disabled:opacity-40">Mark absent</button>}
+              {r.status !== "on_duty" && <button disabled={b} onClick={() => record(r, "check_in")} className="text-[10px] px-2 py-1 rounded border border-[var(--cmp-color-success)] text-emerald-700 hover:bg-[var(--cmp-surface-success)] disabled:opacity-40">Confirm present</button>}
+              {r.status === "assigned" && <button disabled={b} onClick={() => record(r, "acknowledge")} className="text-[10px] px-2 py-1 rounded border border-[var(--cmp-color-information)] text-[var(--cmp-text-information)] hover:bg-[var(--cmp-surface-information)] disabled:opacity-40">Acknowledge</button>}
+              {r.status !== "absent" && <button disabled={b} onClick={() => record(r, "mark_absent")} className="text-[10px] px-2 py-1 rounded border border-[var(--cmp-color-error)] text-[var(--cmp-text-error)] hover:bg-[var(--cmp-surface-error)] disabled:opacity-40">Mark absent</button>}
               {r.status === "on_duty" && <button disabled={b} onClick={() => record(r, "check_out")} className="text-[10px] px-2 py-1 rounded border border-gray-200 text-gray-600 hover:bg-gray-50 disabled:opacity-40">Completed</button>}
               <button disabled={b} onClick={() => setCorrect(correct === r.id ? null : r.id)} className="text-[10px] px-2 py-1 rounded border border-violet-200 text-violet-700 hover:bg-violet-50 disabled:opacity-40" title="Correct — preserves the original record">Correct</button>
               {correct === r.id && <span className="inline-flex items-center gap-1"><select value={corrStatus} onChange={e => setCorrStatus(e.target.value)} className="text-[10px] border border-gray-200 rounded px-1 py-0.5"><option value="">→ status</option>{CORR_STATUS.filter(s => s.v !== r.status).map(s => <option key={s.v} value={s.v}>{s.l}</option>)}</select><input value={corrReason} onChange={e => setCorrReason(e.target.value)} placeholder="reason" className="text-[10px] border border-gray-200 rounded px-1 py-0.5 w-24" /><button disabled={b} onClick={() => saveCorrection(r)} className="text-[10px] px-1.5 py-0.5 rounded bg-violet-600 text-white disabled:opacity-40">Save</button></span>}

@@ -44,7 +44,7 @@ export default async function BenchmarkingPage() {
         <h3 className="font-semibold text-gray-900 mb-3">Organisation comparison</h3>
         <BenchmarkTable rows={benchmark} />
       </div>
-      {truncated && <p className="text-[11px] text-amber-600">Figures are based on the most recent records and may be capped at this platform scale.</p>}
+      {truncated && <p className="text-[11px] text-[var(--cmp-text-warning)]">Figures are based on the most recent records and may be capped at this platform scale.</p>}
       <p className="text-[11px] text-gray-400">Competency currency = share of the latest assessed decisions that are passing and unexpired. Quality compliance = average compliance of completed audits. Organisations with no records show “—”.</p>
     </div>
   );

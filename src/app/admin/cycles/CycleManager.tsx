@@ -147,7 +147,7 @@ export default function CycleManager({ nurses, frameworks }: { nurses: Nurse[]; 
               </div>
             </div>
 
-            {error && <p className="mt-3 text-xs text-red-500 bg-red-50 rounded-lg px-3 py-2">{error}</p>}
+            {error && <p className="mt-3 text-xs text-red-500 bg-[var(--cmp-surface-critical)] rounded-lg px-3 py-2">{error}</p>}
 
             <div className="flex gap-2 mt-5">
               <button onClick={() => setOpen(false)} className="flex-1 py-2 border border-gray-200 rounded-lg text-sm text-gray-600">Cancel</button>

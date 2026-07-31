@@ -24,9 +24,9 @@ export default async function AccreditationPage() {
       {head}
       <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
         <Kpi label="Mappings" value={accr.length} sub="requirements" />
-        <Kpi label="Compliant" value={accr.filter((a: any) => a.compliance_status === "compliant").length} sub={`${accr.length ? pct(accr.filter((a: any) => a.compliance_status === "compliant").length, accr.length) : 0}%`} tone="text-emerald-600" />
-        <Kpi label="Partial" value={accr.filter((a: any) => a.compliance_status === "partial").length} sub="in progress" tone="text-amber-600" />
-        <Kpi label="Gaps" value={gaps.length} sub="need action" tone={gaps.length ? "text-rose-600" : undefined} />
+        <Kpi label="Compliant" value={accr.filter((a: any) => a.compliance_status === "compliant").length} sub={`${accr.length ? pct(accr.filter((a: any) => a.compliance_status === "compliant").length, accr.length) : 0}%`} tone="text-[var(--cmp-text-success)]" />
+        <Kpi label="Partial" value={accr.filter((a: any) => a.compliance_status === "partial").length} sub="in progress" tone="text-[var(--cmp-text-warning)]" />
+        <Kpi label="Gaps" value={gaps.length} sub="need action" tone={gaps.length ? "text-[var(--cmp-text-error)]" : undefined} />
         <Kpi label="Avg Coverage" value={`${avgCoverage}%`} sub="across standards" />
         <Kpi label="Standards" value={byStandard.length} sub="frameworks" />
       </div>
@@ -41,7 +41,7 @@ export default async function AccreditationPage() {
 
         <Card title="Coverage by Standard" className="xl:col-span-2">
           <div className="space-y-2.5">{byStandard.map((s: any) => (
-            <div key={s.standard}><div className="flex items-center justify-between text-[12px] mb-0.5"><span className="text-gray-700">{s.standard} <span className="text-gray-400 text-[10px]">({s.n} requirements)</span></span><span className="font-semibold text-gray-900">{s.coverage}%</span></div><Progress pct={s.coverage} tone={s.coverage >= 90 ? "bg-emerald-500" : s.coverage >= 70 ? "bg-amber-500" : "bg-rose-500"} /></div>
+            <div key={s.standard}><div className="flex items-center justify-between text-[12px] mb-0.5"><span className="text-gray-700">{s.standard} <span className="text-gray-400 text-[10px]">({s.n} requirements)</span></span><span className="font-semibold text-gray-900">{s.coverage}%</span></div><Progress pct={s.coverage} tone={s.coverage >= 90 ? "bg-[var(--cmp-color-success)]" : s.coverage >= 70 ? "bg-[var(--cmp-color-warning)]" : "bg-[var(--cmp-color-error)]"} /></div>
           ))}</div>
         </Card>
       </div>
@@ -50,7 +50,7 @@ export default async function AccreditationPage() {
         {gaps.length ? <div className="space-y-1">
           <div className="flex items-center text-[10px] text-gray-400 uppercase tracking-wide px-1"><span className="w-20">Standard</span><span className="flex-1">Requirement</span><span className="w-40">Mapped Competency</span><span className="w-16 text-right">Coverage</span><span className="w-20 text-right">Status</span></div>
           {gaps.map((a: any) => (
-            <div key={a.id} className="flex items-center px-1 py-1 text-[12px] border-b border-gray-50"><span className="w-20 text-gray-700">{a.standard}</span><span className="flex-1 text-gray-800 truncate">{a.requirement}</span><span className="w-40 text-gray-500 truncate text-[11px]">{a.mapped_competency ?? "—"}</span><span className="w-16 text-right tabular-nums text-rose-600 font-semibold">{Math.round(Number(a.coverage_pct || 0))}%</span><span className="w-20 text-right"><Pill text={a.compliance_status} tone={STATUS_TONE[a.compliance_status]} /></span></div>
+            <div key={a.id} className="flex items-center px-1 py-1 text-[12px] border-b border-gray-50"><span className="w-20 text-gray-700">{a.standard}</span><span className="flex-1 text-gray-800 truncate">{a.requirement}</span><span className="w-40 text-gray-500 truncate text-[11px]">{a.mapped_competency ?? "—"}</span><span className="w-16 text-right tabular-nums text-[var(--cmp-text-error)] font-semibold">{Math.round(Number(a.coverage_pct || 0))}%</span><span className="w-20 text-right"><Pill text={a.compliance_status} tone={STATUS_TONE[a.compliance_status]} /></span></div>
           ))}
         </div> : <p className="text-sm text-gray-400 py-4 text-center">All requirements mapped &amp; compliant. ✅</p>}
       </Card>

@@ -26,7 +26,7 @@ export default function NavLink({ href, icon, label, className, activeClassName,
       <span className="w-5 text-center text-sm leading-none">{icon}</span>
       <span className="flex-1" data-sb-label>{label}</span>
       {!!badge && (
-        <span className="ml-auto bg-red-500 text-white text-[9px] font-bold rounded-full min-w-[16px] h-4 px-1 flex items-center justify-center" data-sb-label>
+        <span className="ml-auto bg-[var(--cmp-color-critical)] text-white text-[9px] font-bold rounded-full min-w-[16px] h-4 px-1 flex items-center justify-center" data-sb-label>
           {badge > 99 ? "99+" : badge}
         </span>
       )}

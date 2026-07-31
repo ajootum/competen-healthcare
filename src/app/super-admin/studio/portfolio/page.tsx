@@ -33,7 +33,7 @@ export default async function PortfolioPage() {
       </div>
 
       {!pf.provisioned ? (
-        <div className="bg-amber-50 border border-amber-100 rounded-xl p-6 text-sm text-amber-800">Run migration 135 (<code className="text-[11px]">cst_portfolio_templates</code>) to enable the Portfolio designer.</div>
+        <div className="bg-[var(--cmp-surface-warning)] border border-[var(--cmp-color-warning)] rounded-xl p-6 text-sm text-amber-800">Run migration 135 (<code className="text-[11px]">cst_portfolio_templates</code>) to enable the Portfolio designer.</div>
       ) : (
         <>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-5">

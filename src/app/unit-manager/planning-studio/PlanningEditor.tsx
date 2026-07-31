@@ -33,7 +33,7 @@ export default function PlanningEditor({ initial, version }: { initial: any; ver
   if (!open) return (
     <div className="flex items-center justify-between">
       <p className="text-xs text-gray-500">Config v{version || "—"} · engines consume published values, falling back to defaults.</p>
-      <button onClick={() => setOpen(true)} className="text-xs font-semibold rounded-lg py-2 px-3 bg-blue-600 text-white">Edit planning parameters</button>
+      <button onClick={() => setOpen(true)} className="text-xs font-semibold rounded-lg py-2 px-3 bg-[var(--cmp-color-information)] text-white">Edit planning parameters</button>
     </div>
   );
 
@@ -53,10 +53,10 @@ export default function PlanningEditor({ initial, version }: { initial: any; ver
           <label key={k} className="text-[11px]"><span className="text-gray-600 block mb-0.5">{label}</span><input type="number" min={1} max={12} step={1} value={s.demandRatios[k]} onChange={e => setS({ ...s, demandRatios: { ...s.demandRatios, [k]: Number(e.target.value) } })} className="w-full text-xs rounded border border-gray-200 px-2 py-1.5" /></label>
         ))}</div>
       </div>
-      {err && <p className="text-[10px] text-rose-600">{err}</p>}
-      {msg && <p className="text-[10px] text-emerald-600">{msg}</p>}
+      {err && <p className="text-[10px] text-[var(--cmp-text-error)]">{err}</p>}
+      {msg && <p className="text-[10px] text-[var(--cmp-text-success)]">{msg}</p>}
       <div className="flex gap-2">
-        <button onClick={publish} disabled={busy} className="text-xs font-semibold rounded-lg py-2 px-4 bg-blue-600 text-white disabled:opacity-50">{busy ? "Publishing…" : "Validate & Publish"}</button>
+        <button onClick={publish} disabled={busy} className="text-xs font-semibold rounded-lg py-2 px-4 bg-[var(--cmp-color-information)] text-white disabled:opacity-50">{busy ? "Publishing…" : "Validate & Publish"}</button>
         <button onClick={() => { setOpen(false); setMsg(null); setErr(null); }} className="text-xs font-semibold rounded-lg py-2 px-3 border border-gray-200 text-gray-600">Close</button>
       </div>
       <p className="text-[10px] text-gray-400">Publishing validates &amp; clamps values, bumps the version and audit-logs the change. Draft workflow &amp; version rollback are next-phase.</p>

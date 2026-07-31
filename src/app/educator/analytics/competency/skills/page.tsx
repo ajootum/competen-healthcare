@@ -9,7 +9,7 @@ import CompetencyNav from "../CompetencyNav";
 
 export const dynamic = "force-dynamic";
 const pct = (v: number | null) => v !== null ? `${v}%` : "—";
-const STATUS_CLS: Record<string, string> = { verified: "bg-green-50 text-green-600", pending: "bg-amber-50 text-amber-600", escalated: "bg-red-50 text-red-600" };
+const STATUS_CLS: Record<string, string> = { verified: "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]", pending: "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]", escalated: "bg-[var(--cmp-surface-critical)] text-[var(--cmp-text-critical)]" };
 
 export default async function Skills() {
   const { admin, hospitalId } = await requireEducatorAccess();

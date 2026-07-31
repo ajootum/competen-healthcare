@@ -9,10 +9,10 @@ import { loadAssessmentQuality } from "@/lib/assurance/assessment-quality";
 export const dynamic = "force-dynamic";
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
-const TONE: Record<string, string> = { emerald: "text-emerald-700 bg-emerald-50 border-emerald-100", amber: "text-amber-700 bg-amber-50 border-amber-100", rose: "text-rose-700 bg-rose-50 border-rose-100" };
-const healthTone = (n: number) => (n >= 80 ? "text-emerald-600" : n >= 60 ? "text-amber-600" : "text-rose-600");
-const dTone = (d: number | null) => (d == null ? "text-gray-300" : d < 0 ? "text-rose-600" : d < 0.15 ? "text-amber-600" : "text-emerald-600");
-const pTone = (p: number) => (p < 0.2 || p > 0.95 ? "text-rose-600" : p > 0.9 ? "text-amber-600" : "text-gray-700");
+const TONE: Record<string, string> = { emerald: "text-emerald-700 bg-[var(--cmp-surface-success)] border-[var(--cmp-color-success)]", amber: "text-[var(--cmp-text-warning)] bg-[var(--cmp-surface-warning)] border-[var(--cmp-color-warning)]", rose: "text-[var(--cmp-text-error)] bg-[var(--cmp-surface-error)] border-[var(--cmp-color-error)]" };
+const healthTone = (n: number) => (n >= 80 ? "text-[var(--cmp-text-success)]" : n >= 60 ? "text-[var(--cmp-text-warning)]" : "text-[var(--cmp-text-error)]");
+const dTone = (d: number | null) => (d == null ? "text-gray-300" : d < 0 ? "text-[var(--cmp-text-error)]" : d < 0.15 ? "text-[var(--cmp-text-warning)]" : "text-[var(--cmp-text-success)]");
+const pTone = (p: number) => (p < 0.2 || p > 0.95 ? "text-[var(--cmp-text-error)]" : p > 0.9 ? "text-[var(--cmp-text-warning)]" : "text-gray-700");
 
 export default async function AssessmentQualityPage() {
   const supabase = await createClient();
@@ -38,7 +38,7 @@ export default async function AssessmentQualityPage() {
       </div>
 
       {!q.provisioned ? (
-        <div className="bg-amber-50 border border-amber-100 rounded-xl p-4"><p className="text-[13px] text-amber-900">Attempt data isn&apos;t provisioned — quality analysis reads <code className="text-[11px]">quiz_attempts</code> + <code className="text-[11px]">questions</code>.</p></div>
+        <div className="bg-[var(--cmp-surface-warning)] border border-[var(--cmp-color-warning)] rounded-xl p-4"><p className="text-[13px] text-amber-900">Attempt data isn&apos;t provisioned — quality analysis reads <code className="text-[11px]">quiz_attempts</code> + <code className="text-[11px]">questions</code>.</p></div>
       ) : q.empty ? (
         <div className="bg-white border border-gray-100 rounded-xl p-6"><p className="text-sm text-gray-400">No scored question attempts yet. Once learners answer questions, item difficulty and discrimination populate here automatically.</p></div>
       ) : (
@@ -49,7 +49,7 @@ export default async function AssessmentQualityPage() {
               { label: "Items analysed", value: q.kpis.items, tone: "text-gray-900", sub: `${q.kpis.attempts} attempts` },
               { label: "Avg difficulty", value: q.kpis.avgDifficulty, tone: "text-indigo-600", sub: "p-value 0–1" },
               { label: "Avg discrimination", value: q.kpis.avgDiscrimination ?? "—", tone: "text-indigo-600", sub: `${q.kpis.discriminable} scored` },
-              { label: "Flagged items", value: q.kpis.flagged, tone: q.kpis.flagged ? "text-rose-600" : "text-gray-900", sub: "need review" },
+              { label: "Flagged items", value: q.kpis.flagged, tone: q.kpis.flagged ? "text-[var(--cmp-text-error)]" : "text-gray-900", sub: "need review" },
               { label: "Attempts", value: q.kpis.attempts, tone: "text-gray-900", sub: "analysed" },
             ].map(k => (
               <div key={k.label} className={`${card} p-3.5`}><p className={`text-xl font-bold tabular-nums ${k.tone}`}>{k.value}</p><p className="text-[10px] text-gray-400 font-medium mt-0.5 leading-tight">{k.label}</p><p className="text-[9px] text-gray-300 leading-tight">{k.sub}</p></div>

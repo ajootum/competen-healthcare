@@ -12,7 +12,7 @@ import { useRouter } from "next/navigation";
 type RosterRow = { id: string; name: string; role: string; status: string; area?: string | null; nextBreak?: string | null };
 type Staff = { id: string; name: string; role: string };
 const ROLES = ["nurse", "charge", "support", "float", "doctor", "therapist", "educator", "assessor"];
-const STATUS_BADGE: Record<string, string> = { on_duty: "bg-emerald-50 text-emerald-700", confirmed: "bg-blue-50 text-blue-700", assigned: "bg-gray-100 text-gray-600", off_duty: "bg-amber-50 text-amber-700", absent: "bg-rose-50 text-rose-700" };
+const STATUS_BADGE: Record<string, string> = { on_duty: "bg-[var(--cmp-surface-success)] text-emerald-700", confirmed: "bg-[var(--cmp-surface-information)] text-blue-700", assigned: "bg-gray-100 text-gray-600", off_duty: "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]", absent: "bg-[var(--cmp-surface-error)] text-[var(--cmp-text-error)]" };
 const cap = (s: string) => (s ? s.replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase()) : "");
 
 async function api(method: string, body: Record<string, unknown>, id?: string) {
@@ -43,19 +43,19 @@ export default function StaffingEngine({ shiftId, roster, available, presetRole 
     <div className="space-y-3">
       <div className="flex items-center gap-2">
         <div className="relative flex-1"><input value={q} onChange={e => setQ(e.target.value)} placeholder="Search staff…" className="w-full text-xs rounded-lg border border-gray-200 pl-8 pr-3 py-2 focus:border-emerald-400 focus:outline-none" /><span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400 text-xs">🔍</span></div>
-        <button onClick={() => setManage(m => !m)} className={`text-xs font-semibold rounded-lg py-2 px-3 ${manage ? "bg-emerald-600 text-white" : "border border-gray-200 text-gray-600"}`}>{manage ? "Done" : "Manage"}</button>
+        <button onClick={() => setManage(m => !m)} className={`text-xs font-semibold rounded-lg py-2 px-3 ${manage ? "bg-[var(--cmp-color-success)] text-white" : "border border-gray-200 text-gray-600"}`}>{manage ? "Done" : "Manage"}</button>
       </div>
 
       {manage && (
-        <div className="rounded-lg border border-emerald-100 bg-emerald-50/40 p-3">
+        <div className="rounded-lg border border-[var(--cmp-color-success)] bg-[var(--cmp-surface-success)]/40 p-3">
           <p className="text-xs font-bold text-gray-800 mb-2">Deploy staff to shift</p>
           <div className="flex flex-wrap items-center gap-2">
             <select value={pick} onChange={e => setPick(e.target.value)} className="text-xs rounded-lg border border-gray-200 px-2 py-2 min-w-[170px]"><option value="">Select staff…</option>{available.map(s => <option key={s.id} value={s.id}>{s.name}{s.role ? ` · ${cap(s.role)}` : ""}</option>)}</select>
             <select value={role} onChange={e => setRole(e.target.value)} className="text-xs rounded-lg border border-gray-200 px-2 py-2">{ROLES.map(r => <option key={r} value={r}>{cap(r)}</option>)}</select>
-            <button disabled={!pick || !!busy} onClick={() => run("deploy", async () => { await api("POST", { shift_id: shiftId, staff_id: pick, role, status: "assigned" }); setPick(""); })} className="text-xs font-semibold rounded-lg py-2 px-3 bg-emerald-600 text-white disabled:opacity-50">{busy === "deploy" ? "Deploying…" : "+ Deploy"}</button>
+            <button disabled={!pick || !!busy} onClick={() => run("deploy", async () => { await api("POST", { shift_id: shiftId, staff_id: pick, role, status: "assigned" }); setPick(""); })} className="text-xs font-semibold rounded-lg py-2 px-3 bg-[var(--cmp-color-success)] text-white disabled:opacity-50">{busy === "deploy" ? "Deploying…" : "+ Deploy"}</button>
             {available.length === 0 && <span className="text-[11px] text-gray-400">All hospital staff already on this shift.</span>}
           </div>
-          <p className="text-[10px] text-amber-600 mt-2">Restricted clinical roles require mandatory-competency validation before deployment — a next-phase gate.</p>
+          <p className="text-[10px] text-[var(--cmp-text-warning)] mt-2">Restricted clinical roles require mandatory-competency validation before deployment — a next-phase gate.</p>
         </div>
       )}
 
@@ -73,9 +73,9 @@ export default function StaffingEngine({ shiftId, roster, available, presetRole 
                   <td className="py-2 pr-3 text-gray-500">{r.nextBreak ?? "—"}</td>
                   {manage && <td className="py-2"><div className="flex flex-wrap gap-1">
                     {([["confirmed", "Confirm"], ["on_duty", "On duty"], ["off_duty", "Off"], ["absent", "Absent"]] as [string, string][]).filter(([s]) => s !== r.status).map(([s, lbl]) => (
-                      <button key={s} disabled={!!busy} onClick={() => run(`${r.id}-${s}`, () => api("PATCH", { status: s }, r.id))} className="text-[10px] rounded border border-gray-200 px-1.5 py-1 text-gray-600 hover:border-emerald-300 disabled:opacity-50">{lbl}</button>
+                      <button key={s} disabled={!!busy} onClick={() => run(`${r.id}-${s}`, () => api("PATCH", { status: s }, r.id))} className="text-[10px] rounded border border-gray-200 px-1.5 py-1 text-gray-600 hover:border-[var(--cmp-color-success)] disabled:opacity-50">{lbl}</button>
                     ))}
-                    <button disabled={!!busy} onClick={() => run(`${r.id}-del`, () => api("DELETE", {}, r.id))} className="text-[10px] rounded border border-rose-200 px-1.5 py-1 text-rose-600 hover:bg-rose-50 disabled:opacity-50" title="Stand down / remove">✕</button>
+                    <button disabled={!!busy} onClick={() => run(`${r.id}-del`, () => api("DELETE", {}, r.id))} className="text-[10px] rounded border border-[var(--cmp-color-error)] px-1.5 py-1 text-[var(--cmp-text-error)] hover:bg-[var(--cmp-surface-error)] disabled:opacity-50" title="Stand down / remove">✕</button>
                   </div></td>}
                 </tr>
               ))}
@@ -83,7 +83,7 @@ export default function StaffingEngine({ shiftId, roster, available, presetRole 
           </table>
         </div>
       )}
-      {err && <p className="text-[11px] text-rose-600">{err}</p>}
+      {err && <p className="text-[11px] text-[var(--cmp-text-error)]">{err}</p>}
     </div>
   );
 }

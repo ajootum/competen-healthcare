@@ -16,14 +16,14 @@ const fmt = (iso: string) => {
   return d.slice(0, 16);
 };
 const FAMILY_TONE: Record<string, string> = {
-  Approvals: "bg-emerald-500", Rejections: "bg-rose-500", "Change control": "bg-blue-500", "Competency decisions": "bg-teal-500",
-  Standards: "bg-indigo-500", Publication: "bg-emerald-600", Lifecycle: "bg-amber-500", "AI governance": "bg-violet-500",
-  Assessment: "bg-sky-500", Evidence: "bg-cyan-500", "Other governance": "bg-gray-400",
+  Approvals: "bg-[var(--cmp-color-success)]", Rejections: "bg-[var(--cmp-color-error)]", "Change control": "bg-[var(--cmp-color-information)]", "Competency decisions": "bg-teal-500",
+  Standards: "bg-indigo-500", Publication: "bg-[var(--cmp-color-success)]", Lifecycle: "bg-[var(--cmp-color-warning)]", "AI governance": "bg-violet-500",
+  Assessment: "bg-[var(--cmp-color-information)]", Evidence: "bg-cyan-500", "Other governance": "bg-gray-400",
 };
 const dotTone = (action: string) => {
   const a = (action || "").toLowerCase();
-  if (a.includes("reject")) return "bg-rose-500";
-  if (a.includes("approv") || a.includes("publish")) return "bg-emerald-500";
+  if (a.includes("reject")) return "bg-[var(--cmp-color-error)]";
+  if (a.includes("approv") || a.includes("publish")) return "bg-[var(--cmp-color-success)]";
   return "bg-gray-300";
 };
 
@@ -44,12 +44,12 @@ export default async function GovernanceAuditPage() {
     <div className="max-w-[1400px]">
       <div className="flex items-start justify-between gap-3 mb-5">
         <div>
-          <p className="text-[11px] font-semibold text-emerald-600 uppercase tracking-widest mb-0.5">CGR-005 · Competency Governance</p>
+          <p className="text-[11px] font-semibold text-[var(--cmp-text-success)] uppercase tracking-widest mb-0.5">CGR-005 · Competency Governance</p>
           <h1 className="text-xl font-bold text-gray-900">Audit &amp; Evidence Assurance</h1>
           <p className="text-gray-400 text-sm mt-0.5">Can we prove the competency system is effective, current, evidence-based and audit-ready? The continuous governance audit trail plus the evidence-assurance headline.</p>
         </div>
         <div className="flex gap-2 shrink-0">
-          <Link href="/super-admin/assurance" className="text-xs font-semibold text-emerald-700 hover:text-emerald-800 border border-emerald-200 bg-emerald-50 rounded-lg px-3 py-2">Assurance engines →</Link>
+          <Link href="/super-admin/assurance" className="text-xs font-semibold text-emerald-700 hover:text-emerald-800 border border-[var(--cmp-color-success)] bg-[var(--cmp-surface-success)] rounded-lg px-3 py-2">Assurance engines →</Link>
           <Link href="/super-admin/cgr" className="text-xs font-semibold text-gray-500 hover:text-emerald-700 border border-gray-200 rounded-lg px-3 py-2">← CGR</Link>
         </div>
       </div>
@@ -63,8 +63,8 @@ export default async function GovernanceAuditPage() {
             <Kpi label="Last 7 days" value={d.last7} sub="recent activity" />
             <Kpi label="Last 30 days" value={d.last30} sub="continuous monitoring" />
             <Kpi label="Distinct actors" value={d.actors} sub="accountable users" />
-            <Kpi label="Evidence-backed" value={a ? `${a.evidencePct}%` : "—"} sub="have decisions" tone={a && a.evidencePct >= 70 ? "text-emerald-600" : "text-gray-900"} />
-            <Kpi label="Overdue reviews" value={a ? a.overdue : "—"} sub="review compliance" tone={a && a.overdue ? "text-rose-600" : "text-gray-900"} />
+            <Kpi label="Evidence-backed" value={a ? `${a.evidencePct}%` : "—"} sub="have decisions" tone={a && a.evidencePct >= 70 ? "text-[var(--cmp-text-success)]" : "text-gray-900"} />
+            <Kpi label="Overdue reviews" value={a ? a.overdue : "—"} sub="review compliance" tone={a && a.overdue ? "text-[var(--cmp-text-error)]" : "text-gray-900"} />
           </div>
 
           {/* Evidence assurance headline — deep engines owned by CAPA, cross-linked */}
@@ -72,19 +72,19 @@ export default async function GovernanceAuditPage() {
             <div className="bg-white rounded-xl border border-gray-100 p-4">
               <div className="flex items-center justify-between mb-3">
                 <p className="text-xs font-bold text-gray-500 uppercase tracking-widest">Evidence assurance</p>
-                <p className="text-[10px] text-gray-400">headline from the registry · deep engines in <Link href="/super-admin/assurance" className="text-emerald-600 hover:underline">CAPA Assurance</Link></p>
+                <p className="text-[10px] text-gray-400">headline from the registry · deep engines in <Link href="/super-admin/assurance" className="text-[var(--cmp-text-success)] hover:underline">CAPA Assurance</Link></p>
               </div>
               <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-                <div className="border border-gray-100 rounded-lg p-3"><p className={`text-xl font-bold tabular-nums ${a.avgScore >= 75 ? "text-emerald-600" : a.avgScore >= 45 ? "text-amber-600" : "text-rose-600"}`}>{a.avgScore}</p><p className="text-[10px] text-gray-500">assurance score /100</p></div>
+                <div className="border border-gray-100 rounded-lg p-3"><p className={`text-xl font-bold tabular-nums ${a.avgScore >= 75 ? "text-[var(--cmp-text-success)]" : a.avgScore >= 45 ? "text-[var(--cmp-text-warning)]" : "text-[var(--cmp-text-error)]"}`}>{a.avgScore}</p><p className="text-[10px] text-gray-500">assurance score /100</p></div>
                 <div className="border border-gray-100 rounded-lg p-3"><p className="text-xl font-bold text-gray-900 tabular-nums">{a.evidencePct}%</p><p className="text-[10px] text-gray-500">evidence-backed</p></div>
                 <div className="border border-gray-100 rounded-lg p-3"><p className="text-xl font-bold text-gray-900 tabular-nums">{a.ownerPct}%</p><p className="text-[10px] text-gray-500">owned</p></div>
                 <div className="border border-gray-100 rounded-lg p-3"><p className="text-xl font-bold text-gray-900 tabular-nums">{a.standardsPct}%</p><p className="text-[10px] text-gray-500">regulatory-mapped</p></div>
-                <div className="border border-gray-100 rounded-lg p-3"><p className={`text-xl font-bold tabular-nums ${a.atRisk ? "text-rose-600" : "text-gray-900"}`}>{a.atRisk}</p><p className="text-[10px] text-gray-500">at-risk / ungoverned</p></div>
+                <div className="border border-gray-100 rounded-lg p-3"><p className={`text-xl font-bold tabular-nums ${a.atRisk ? "text-[var(--cmp-text-error)]" : "text-gray-900"}`}>{a.atRisk}</p><p className="text-[10px] text-gray-500">at-risk / ungoverned</p></div>
               </div>
               <div className="flex flex-wrap gap-2 mt-3 text-[10px]">
-                <Link href="/super-admin/assurance/evidence" className="text-emerald-700 bg-emerald-50 border border-emerald-100 rounded-full px-2 py-0.5 hover:bg-emerald-100">Evidence integrity →</Link>
-                <Link href="/super-admin/assurance/assessor-reliability" className="text-emerald-700 bg-emerald-50 border border-emerald-100 rounded-full px-2 py-0.5 hover:bg-emerald-100">Assessor reliability →</Link>
-                <Link href="/super-admin/assurance/drift" className="text-emerald-700 bg-emerald-50 border border-emerald-100 rounded-full px-2 py-0.5 hover:bg-emerald-100">Competency drift →</Link>
+                <Link href="/super-admin/assurance/evidence" className="text-emerald-700 bg-[var(--cmp-surface-success)] border border-[var(--cmp-color-success)] rounded-full px-2 py-0.5 hover:bg-[var(--cmp-surface-success)]">Evidence integrity →</Link>
+                <Link href="/super-admin/assurance/assessor-reliability" className="text-emerald-700 bg-[var(--cmp-surface-success)] border border-[var(--cmp-color-success)] rounded-full px-2 py-0.5 hover:bg-[var(--cmp-surface-success)]">Assessor reliability →</Link>
+                <Link href="/super-admin/assurance/drift" className="text-emerald-700 bg-[var(--cmp-surface-success)] border border-[var(--cmp-color-success)] rounded-full px-2 py-0.5 hover:bg-[var(--cmp-surface-success)]">Competency drift →</Link>
                 <Link href="/unit-manager/capa" className="text-gray-500 bg-gray-50 border border-gray-100 rounded-full px-2 py-0.5 hover:bg-gray-100">Findings & corrective actions →</Link>
               </div>
             </div>
@@ -95,7 +95,7 @@ export default async function GovernanceAuditPage() {
             <div className="lg:col-span-2 bg-white rounded-xl border border-gray-100 overflow-hidden">
               <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
                 <p className="text-sm font-bold text-gray-800">Governance Audit Trail</p>
-                <p className="text-[10px] text-gray-400">newest first · <Link href="/super-admin/audit" className="text-emerald-600 hover:underline">full log →</Link></p>
+                <p className="text-[10px] text-gray-400">newest first · <Link href="/super-admin/audit" className="text-[var(--cmp-text-success)] hover:underline">full log →</Link></p>
               </div>
               {d.feed.length === 0 ? (
                 <div className="p-6 text-center"><p className="text-sm text-gray-400">No governance events recorded yet.</p></div>
@@ -148,7 +148,7 @@ export default async function GovernanceAuditPage() {
             </div>
           </div>
 
-          <p className="text-[11px] text-gray-400 leading-relaxed">Every entry is a real recorded action — the governance audit trail joins the audit log and the domain-event stream, scoped to competency governance, so every approval, change, decision, mapping and lifecycle transition is traceable to an actor and time (§4.4 transparency). The evidence-assurance headline derives from the registry; the deep statistical assurance — evidence integrity, assessor reliability and competency drift — is owned by the <Link href="/super-admin/assurance" className="text-emerald-600 hover:underline">CAPA Assurance platform</Link>, and findings &amp; corrective actions by the CAPA centre. Per the CGR mandate, AI may summarise findings and flag audit risk but never closes findings or determines compliance.</p>
+          <p className="text-[11px] text-gray-400 leading-relaxed">Every entry is a real recorded action — the governance audit trail joins the audit log and the domain-event stream, scoped to competency governance, so every approval, change, decision, mapping and lifecycle transition is traceable to an actor and time (§4.4 transparency). The evidence-assurance headline derives from the registry; the deep statistical assurance — evidence integrity, assessor reliability and competency drift — is owned by the <Link href="/super-admin/assurance" className="text-[var(--cmp-text-success)] hover:underline">CAPA Assurance platform</Link>, and findings &amp; corrective actions by the CAPA centre. Per the CGR mandate, AI may summarise findings and flag audit risk but never closes findings or determines compliance.</p>
         </div>
       )}
     </div>

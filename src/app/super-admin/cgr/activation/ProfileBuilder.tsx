@@ -50,14 +50,14 @@ export function ProfileBuilder({ competencies }: { competencies: Competency[] })
   if (!open) {
     return (
       <div className="flex items-center gap-2">
-        <button onClick={() => setOpen(true)} className="text-[11px] font-semibold text-emerald-700 border border-emerald-200 bg-emerald-50 hover:bg-emerald-100 rounded-lg px-3 py-1.5 transition-colors">+ Define a service profile</button>
-        {ok && <span className="text-[11px] text-emerald-600 font-medium">Profile created as draft — activate it to start gating.</span>}
+        <button onClick={() => setOpen(true)} className="text-[11px] font-semibold text-emerald-700 border border-[var(--cmp-color-success)] bg-[var(--cmp-surface-success)] hover:bg-[var(--cmp-surface-success)] rounded-lg px-3 py-1.5 transition-colors">+ Define a service profile</button>
+        {ok && <span className="text-[11px] text-[var(--cmp-text-success)] font-medium">Profile created as draft — activate it to start gating.</span>}
       </div>
     );
   }
 
   return (
-    <div className="bg-white rounded-xl border border-emerald-200 p-4">
+    <div className="bg-white rounded-xl border border-[var(--cmp-color-success)] p-4">
       <div className="flex items-center justify-between mb-3">
         <p className="text-sm font-bold text-gray-800">Define a service profile</p>
         <button onClick={() => setOpen(false)} className="text-[11px] text-gray-400 hover:text-gray-600">Close</button>
@@ -87,12 +87,12 @@ export function ProfileBuilder({ competencies }: { competencies: Competency[] })
           </div>
         ))}
       </div>
-      <button onClick={() => setRows((rs) => [...rs, blank()])} className="text-[11px] text-emerald-600 hover:underline mb-3">+ add requirement</button>
+      <button onClick={() => setRows((rs) => [...rs, blank()])} className="text-[11px] text-[var(--cmp-text-success)] hover:underline mb-3">+ add requirement</button>
 
       <div className="flex items-center gap-2">
-        <button onClick={submit} disabled={!valid || busy} className="text-[11px] font-semibold text-white bg-emerald-600 hover:bg-emerald-700 disabled:opacity-40 disabled:hover:bg-emerald-600 rounded-lg px-3 py-1.5 transition-colors">{busy ? "Creating…" : "Create draft profile"}</button>
+        <button onClick={submit} disabled={!valid || busy} className="text-[11px] font-semibold text-white bg-[var(--cmp-color-success)] hover:bg-emerald-700 disabled:opacity-40 disabled:hover:bg-[var(--cmp-color-success)] rounded-lg px-3 py-1.5 transition-colors">{busy ? "Creating…" : "Create draft profile"}</button>
         <span className="text-[10px] text-gray-400">Created as draft — activation is a separate governance act. Unmet critical requirements block activation readiness.</span>
-        {err && <span className="text-[11px] text-rose-600 font-medium">{err}</span>}
+        {err && <span className="text-[11px] text-[var(--cmp-text-error)] font-medium">{err}</span>}
       </div>
     </div>
   );
@@ -115,9 +115,9 @@ export function ProfileStatus({ id, status }: { id: string; status: string }) {
   const btn = "text-[10px] font-semibold border rounded px-1.5 py-0.5 disabled:opacity-40 transition-colors";
   return (
     <span className="inline-flex items-center gap-1">
-      {status === "draft" && <button onClick={() => set("active")} disabled={busy} className={`${btn} text-emerald-700 border-emerald-200 hover:bg-emerald-50`}>{busy ? "…" : "Activate"}</button>}
+      {status === "draft" && <button onClick={() => set("active")} disabled={busy} className={`${btn} text-emerald-700 border-[var(--cmp-color-success)] hover:bg-[var(--cmp-surface-success)]`}>{busy ? "…" : "Activate"}</button>}
       {status === "active" && <button onClick={() => set("retired")} disabled={busy} className={`${btn} text-gray-500 border-gray-200 hover:bg-gray-50`}>{busy ? "…" : "Retire"}</button>}
-      {err && <span className="text-[10px] text-rose-600">{err}</span>}
+      {err && <span className="text-[10px] text-[var(--cmp-text-error)]">{err}</span>}
     </span>
   );
 }

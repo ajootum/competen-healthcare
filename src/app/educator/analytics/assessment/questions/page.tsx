@@ -10,7 +10,7 @@ import AssessmentNav from "../AssessmentNav";
 
 export const dynamic = "force-dynamic";
 const pct = (v: number | null) => v !== null ? `${v}%` : "—";
-const DIFF_CLS: Record<string, string> = { easy: "bg-green-50 text-green-600", medium: "bg-amber-50 text-amber-600", hard: "bg-red-50 text-red-600" };
+const DIFF_CLS: Record<string, string> = { easy: "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]", medium: "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]", hard: "bg-[var(--cmp-surface-critical)] text-[var(--cmp-text-critical)]" };
 
 export default async function Questions() {
   const { admin, hospitalId } = await requireEducatorAccess();
@@ -61,7 +61,7 @@ export default async function Questions() {
         <div className="bg-white border border-gray-100 rounded-2xl p-5">
           <h2 className="text-sm font-bold text-gray-900 mb-3">By Category</h2>
           <div className="flex flex-col gap-1.5">{d.byCategory.map(x => (
-            <div key={x.label} className="flex items-center gap-2"><span className="text-[10px] text-gray-500 w-24 truncate">{x.label}</span><div className="flex-1 h-2 bg-gray-100 rounded-full overflow-hidden"><div className="h-full bg-blue-400 rounded-full" style={{ width: `${(x.n / catMax) * 100}%` }} /></div><span className="text-[10px] font-bold text-gray-600 w-6 text-right">{x.n}</span></div>
+            <div key={x.label} className="flex items-center gap-2"><span className="text-[10px] text-gray-500 w-24 truncate">{x.label}</span><div className="flex-1 h-2 bg-gray-100 rounded-full overflow-hidden"><div className="h-full bg-[var(--cmp-color-information)] rounded-full" style={{ width: `${(x.n / catMax) * 100}%` }} /></div><span className="text-[10px] font-bold text-gray-600 w-6 text-right">{x.n}</span></div>
           ))}</div>
         </div>
       </div>

@@ -61,7 +61,7 @@ export default function AssetFiles({ objectType, objectId }: { objectType: strin
           <input type="file" className="hidden" onChange={upload} disabled={busy} />
         </label>
       </div>
-      {err && <p className="text-[11px] text-amber-700 bg-amber-50 border border-amber-100 rounded px-2 py-1 mb-2">{err}</p>}
+      {err && <p className="text-[11px] text-[var(--cmp-text-warning)] bg-[var(--cmp-surface-warning)] border border-[var(--cmp-color-warning)] rounded px-2 py-1 mb-2">{err}</p>}
       {loading ? (
         <p className="text-[11px] text-gray-400">Loading…</p>
       ) : files.length === 0 ? (
@@ -76,7 +76,7 @@ export default function AssetFiles({ objectType, objectId }: { objectType: strin
                 <p className="text-[10px] text-gray-400">{fmtSize(f.size_bytes)}{f.uploaded_by_name ? ` · ${f.uploaded_by_name}` : ""}</p>
               </div>
               {f.url && <a href={f.url} target="_blank" rel="noopener noreferrer" className="text-[11px] font-semibold text-teal-700 hover:underline shrink-0">Download</a>}
-              <button onClick={() => del(f.id)} disabled={busy} className="text-[11px] font-semibold text-rose-400 hover:text-rose-600 disabled:opacity-40 shrink-0">Remove</button>
+              <button onClick={() => del(f.id)} disabled={busy} className="text-[11px] font-semibold text-rose-400 hover:text-[var(--cmp-text-error)] disabled:opacity-40 shrink-0">Remove</button>
             </div>
           ))}
         </div>

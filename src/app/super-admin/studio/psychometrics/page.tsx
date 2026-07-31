@@ -11,7 +11,7 @@ export const dynamic = "force-dynamic";
 
 const pColor = (p: number) => (p < 0.2 ? "#ef4444" : p > 0.9 ? "#f59e0b" : p >= 0.4 && p <= 0.8 ? "#10b981" : "#3b82f6");
 const dColor = (d: number) => (d >= 0.3 ? "#10b981" : d >= 0.2 ? "#f59e0b" : "#ef4444");
-const relTone = (v: number | null) => (v == null ? "text-gray-300" : v >= 0.8 ? "text-teal-600" : v >= 0.7 ? "text-amber-600" : "text-red-600");
+const relTone = (v: number | null) => (v == null ? "text-gray-300" : v >= 0.8 ? "text-teal-600" : v >= 0.7 ? "text-[var(--cmp-text-warning)]" : "text-[var(--cmp-text-critical)]");
 
 export default async function PsychometricsPage({ searchParams }: { searchParams: Promise<{ bank?: string }> }) {
   const sp = await searchParams;
@@ -99,7 +99,7 @@ export default async function PsychometricsPage({ searchParams }: { searchParams
                         <div key={k.label}><p className={`text-lg font-bold ${k.tone}`}>{k.value}</p><p className="text-[10px] text-gray-400">{k.label}</p></div>
                       ))}
                     </div>
-                    {detail.reliability!.flagged > 0 && <p className="text-[11px] text-amber-600 mt-2">⚠ {detail.reliability!.flagged} item{detail.reliability!.flagged === 1 ? "" : "s"} flagged for review (too easy/hard or low discrimination).</p>}
+                    {detail.reliability!.flagged > 0 && <p className="text-[11px] text-[var(--cmp-text-warning)] mt-2">⚠ {detail.reliability!.flagged} item{detail.reliability!.flagged === 1 ? "" : "s"} flagged for review (too easy/hard or low discrimination).</p>}
                   </div>
 
                   {/* Item analysis */}
@@ -125,7 +125,7 @@ export default async function PsychometricsPage({ searchParams }: { searchParams
                               <td className="py-2 px-2 text-center text-gray-400">{it.responses}</td>
                               <td className="py-2 px-2">
                                 <div className="flex flex-wrap gap-1">
-                                  {it.flags.length === 0 ? <span className="text-[10px] text-teal-600">✓ ok</span> : it.flags.map(f => <span key={f} className="text-[9px] font-semibold text-amber-600 bg-amber-50 border border-amber-100 rounded px-1.5 py-0.5">{f}</span>)}
+                                  {it.flags.length === 0 ? <span className="text-[10px] text-teal-600">✓ ok</span> : it.flags.map(f => <span key={f} className="text-[9px] font-semibold text-[var(--cmp-text-warning)] bg-[var(--cmp-surface-warning)] border border-[var(--cmp-color-warning)] rounded px-1.5 py-0.5">{f}</span>)}
                                 </div>
                               </td>
                             </tr>

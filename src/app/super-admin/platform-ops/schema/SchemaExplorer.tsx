@@ -20,7 +20,7 @@ function FieldTable({ fields }: { fields: FieldSpec[] }) {
             <tr key={f.key} className="border-t border-gray-100 align-top">
               <td className="py-1 pr-3"><span className="font-mono text-gray-700">{f.key}</span><span className="text-gray-400 block text-[10px]">{f.label}</span></td>
               <td className="py-1 pr-3"><span className="text-indigo-600">{f.type}{f.of ? `<${f.of}>` : ""}</span>{f.keyed && <span className="text-[9px] text-gray-400 block">keyed</span>}</td>
-              <td className="py-1 pr-3">{f.required ? <span className="text-rose-600">●</span> : <span className="text-gray-300">○</span>}</td>
+              <td className="py-1 pr-3">{f.required ? <span className="text-[var(--cmp-text-error)]">●</span> : <span className="text-gray-300">○</span>}</td>
               <td className="py-1 text-gray-500">{f.enum ? <span className="text-[10px] font-mono text-gray-500">{f.enum.join(" · ")}</span> : (f.note ?? "")}</td>
             </tr>
           ))}
@@ -80,11 +80,11 @@ export default function SchemaExplorer({ schemas, counts }: { schemas: ObjectSch
               <textarea className={`${input} w-full font-mono h-28 resize-y`} value={json} onChange={e => setJson(e.target.value)} spellCheck={false} placeholder={`{ "formula": "..." }`} />
               <div className="flex items-center gap-3 mt-2">
                 <button onClick={validate} disabled={busy} className="text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg px-3 py-1.5 disabled:opacity-50">{busy ? "Validating…" : "Validate"}</button>
-                {res && <span className={`text-xs font-medium ${res.ok ? "text-emerald-600" : "text-rose-600"}`}>{res.ok ? "✓ Valid against schema" : `✕ ${res.errors} error(s)`}{res.warnings ? ` · ${res.warnings} warning(s)` : ""}</span>}
+                {res && <span className={`text-xs font-medium ${res.ok ? "text-[var(--cmp-text-success)]" : "text-[var(--cmp-text-error)]"}`}>{res.ok ? "✓ Valid against schema" : `✕ ${res.errors} error(s)`}{res.warnings ? ` · ${res.warnings} warning(s)` : ""}</span>}
               </div>
               {res && res.issues.length > 0 && (
                 <div className="mt-2 space-y-0.5">
-                  {res.issues.map((i, k) => <div key={k} className={`text-[11px] flex items-start gap-1.5 ${i.severity === "error" ? "text-rose-600" : "text-amber-600"}`}><span className="font-mono shrink-0">{i.severity === "error" ? "✕" : "!"}</span><span className="font-mono text-gray-500">{i.path}</span><span>— {i.message}</span></div>)}
+                  {res.issues.map((i, k) => <div key={k} className={`text-[11px] flex items-start gap-1.5 ${i.severity === "error" ? "text-[var(--cmp-text-error)]" : "text-[var(--cmp-text-warning)]"}`}><span className="font-mono shrink-0">{i.severity === "error" ? "✕" : "!"}</span><span className="font-mono text-gray-500">{i.path}</span><span>— {i.message}</span></div>)}
                 </div>
               )}
             </div>

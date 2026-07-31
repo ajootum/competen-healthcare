@@ -16,7 +16,7 @@ export const dynamic = "force-dynamic";
 const card = "bg-white rounded-xl border border-gray-200";
 const relTime = (iso?: string | null) => { if (!iso) return ""; const s = Math.floor((Date.now() - new Date(iso).getTime()) / 1000); if (s < 60) return "just now"; if (s < 3600) return `${Math.floor(s / 60)}m ago`; if (s < 86400) return `${Math.floor(s / 3600)}h ago`; return `${Math.floor(s / 86400)}d ago`; };
 const dash = (n: number | null | undefined) => (n == null ? "—" : n.toLocaleString());
-const SEV_TONE: Record<string, string> = { critical: "bg-rose-50 text-rose-700", high: "bg-orange-50 text-orange-700", medium: "bg-amber-50 text-amber-700", low: "bg-gray-100 text-gray-600" };
+const SEV_TONE: Record<string, string> = { critical: "bg-[var(--cmp-surface-error)] text-[var(--cmp-text-error)]", high: "bg-[var(--cmp-surface-warning)] text-orange-700", medium: "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]", low: "bg-gray-100 text-gray-600" };
 
 export default async function ClinicalIntelligence() {
   const supabase = await createClient();
@@ -32,13 +32,13 @@ export default async function ClinicalIntelligence() {
 
   const kpiCards = [
     { label: "Clinical AI (24h)", value: dash(k.clinicalReq24h), icon: "🩺", iconBg: "bg-teal-50" },
-    { label: "High-Risk Alerts", value: dash(k.highRiskAlerts), icon: "🚨", iconBg: "bg-rose-50", tone: (k.highRiskAlerts ?? 0) > 0 ? "text-rose-600" : undefined },
-    { label: "Escalations", value: dash(k.escalations), icon: "⛑️", iconBg: "bg-orange-50", tone: (k.escalations ?? 0) > 0 ? "text-orange-600" : undefined },
-    { label: "Pathways", value: dash(k.pathways), icon: "🧭", iconBg: "bg-sky-50" },
+    { label: "High-Risk Alerts", value: dash(k.highRiskAlerts), icon: "🚨", iconBg: "bg-[var(--cmp-surface-error)]", tone: (k.highRiskAlerts ?? 0) > 0 ? "text-[var(--cmp-text-error)]" : undefined },
+    { label: "Escalations", value: dash(k.escalations), icon: "⛑️", iconBg: "bg-[var(--cmp-surface-warning)]", tone: (k.escalations ?? 0) > 0 ? "text-[var(--cmp-text-warning)]" : undefined },
+    { label: "Pathways", value: dash(k.pathways), icon: "🧭", iconBg: "bg-[var(--cmp-surface-information)]" },
     { label: "Competencies", value: dash(k.competencies), icon: "🎯", iconBg: "bg-violet-50" },
-    { label: "Evidence", value: dash(k.evidence), icon: "📎", iconBg: "bg-blue-50" },
+    { label: "Evidence", value: dash(k.evidence), icon: "📎", iconBg: "bg-[var(--cmp-surface-information)]" },
     { label: "Guidelines", value: dash(k.policies), icon: "📋", iconBg: "bg-indigo-50" },
-    { label: "Awaiting Review", value: dash(k.awaitingReview), icon: "👀", iconBg: "bg-amber-50", tone: (k.awaitingReview ?? 0) > 0 ? "text-amber-600" : undefined },
+    { label: "Awaiting Review", value: dash(k.awaitingReview), icon: "👀", iconBg: "bg-[var(--cmp-surface-warning)]", tone: (k.awaitingReview ?? 0) > 0 ? "text-[var(--cmp-text-warning)]" : undefined },
   ];
 
   return (

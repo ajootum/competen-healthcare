@@ -14,7 +14,7 @@ import { AssignmentActions, TransferAccept } from "./InboxActions";
 
 export const dynamic = "force-dynamic";
 
-const XFER_TONE: Record<string, string> = { pending: "bg-gray-100 text-gray-500", awaiting_acceptance: "bg-amber-100 text-amber-700", completed: "bg-green-100 text-green-700", cancelled: "bg-gray-100 text-gray-400" };
+const XFER_TONE: Record<string, string> = { pending: "bg-gray-100 text-gray-500", awaiting_acceptance: "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]", completed: "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]", cancelled: "bg-gray-100 text-gray-400" };
 
 export default async function AssignmentInboxPage() {
   const supabase = await createClient();
@@ -31,15 +31,15 @@ export default async function AssignmentInboxPage() {
       </div>
 
       {d.migrationMissing && (
-        <div className="bg-amber-50 border border-amber-200 rounded-xl p-5">
+        <div className="bg-[var(--cmp-surface-warning)] border border-[var(--cmp-color-warning)] rounded-xl p-5">
           <p className="font-semibold text-amber-900">⚙️ State engine not yet enabled</p>
-          <p className="text-sm text-amber-800 mt-1">Apply migration <code className="bg-amber-100 px-1.5 py-0.5 rounded font-mono text-xs">156-assignment-state-engine.sql</code> to enable the acceptance workflow.</p>
+          <p className="text-sm text-amber-800 mt-1">Apply migration <code className="bg-[var(--cmp-surface-warning)] px-1.5 py-0.5 rounded font-mono text-xs">156-assignment-state-engine.sql</code> to enable the acceptance workflow.</p>
         </div>
       )}
 
       <div className="grid sm:grid-cols-3 gap-4">
         <StatCard icon="📥" title="Awaiting My Acceptance" value={d.pendingAssignments.length} tone={d.pendingAssignments.length > 0 ? "text-emerald-700" : undefined} sub="assignments offered to me" />
-        <StatCard icon="🔁" title="Incoming Transfers" value={d.incomingTransfers.length} tone={d.incomingTransfers.length > 0 ? "text-amber-600" : undefined} sub="awaiting my acceptance" />
+        <StatCard icon="🔁" title="Incoming Transfers" value={d.incomingTransfers.length} tone={d.incomingTransfers.length > 0 ? "text-[var(--cmp-text-warning)]" : undefined} sub="awaiting my acceptance" />
         <StatCard icon="📤" title="My Open Transfers" value={d.outgoingTransfers.length} sub="initiated by me, in flight" />
       </div>
 
@@ -56,7 +56,7 @@ export default async function AssignmentInboxPage() {
                     <span className="font-medium text-gray-800">{p?.op_beds?.label ? `${p.op_beds.label} · ` : ""}{p?.label ?? "Patient"}</span>
                     <AcuityChip level={p?.acuity_level} />
                     {p?.isolation_status && p.isolation_status !== "none" && <Chip tone="bg-purple-100 text-purple-700">{titleCase(p.isolation_status)}</Chip>}
-                    <Chip tone="bg-blue-100 text-blue-700">{titleCase(a.assignment_type)}</Chip>
+                    <Chip tone="bg-[var(--cmp-surface-information)] text-blue-700">{titleCase(a.assignment_type)}</Chip>
                     <span className="ml-auto text-xs text-gray-400">assigned by {a.assigner?.full_name ?? "supervisor"} · {fmtWhen(a.started_at)}</span>
                   </div>
                   {p?.diagnosis && <p className="text-xs text-gray-500 mt-0.5">{p.diagnosis}</p>}

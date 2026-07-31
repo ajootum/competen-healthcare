@@ -49,15 +49,15 @@ export default async function PermissionsBuilder() {
     </>
   );
 
-  if (notReady) return <div className="space-y-5 max-w-6xl">{header}<div className="bg-amber-50 border border-amber-200 rounded-xl p-6"><p className="font-semibold text-amber-900">⚙️ Not provisioned</p><p className="text-sm text-amber-800 mt-1">Apply migration 092 (registry) + 094 (object definition), then author a Permission object in the <Link href="/super-admin/platform-ops/studio" className="underline">Configuration Studio</Link>.</p></div></div>;
+  if (notReady) return <div className="space-y-5 max-w-6xl">{header}<div className="bg-[var(--cmp-surface-warning)] border border-[var(--cmp-color-warning)] rounded-xl p-6"><p className="font-semibold text-amber-900">⚙️ Not provisioned</p><p className="text-sm text-amber-800 mt-1">Apply migration 092 (registry) + 094 (object definition), then author a Permission object in the <Link href="/super-admin/platform-ops/studio" className="underline">Configuration Studio</Link>.</p></div></div>;
 
   return (
     <div className="space-y-5 max-w-6xl">
       {header}
       <div className="grid grid-cols-3 gap-3">
         <Stat label="Permission Sets" value={listP.length} sub="governed in the registry" />
-        <Stat label="With Grants" value={withGrants} tone="text-emerald-600" sub="RBAC configured" />
-        <Stat label="With Visibility Rules" value={withRules} tone={withRules ? "text-sky-600" : undefined} sub="ABAC-scoped" />
+        <Stat label="With Grants" value={withGrants} tone="text-[var(--cmp-text-success)]" sub="RBAC configured" />
+        <Stat label="With Visibility Rules" value={withRules} tone={withRules ? "text-[var(--cmp-text-information)]" : undefined} sub="ABAC-scoped" />
       </div>
       <PermissionDesigner permissions={listP} />
       <p className="text-[11px] text-gray-400">Grants + rules + inheritance persist onto the object (inherited sets become PERMISSION_REF dependencies). The authorization runtime (&lt;20ms decisions), visibility resolver, field masking, delegated administration and dual-approval publishing (NCP-008 §3/§8/§10) are next-phase.</p>

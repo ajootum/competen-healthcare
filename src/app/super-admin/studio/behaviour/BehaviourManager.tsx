@@ -51,7 +51,7 @@ export default function BehaviourManager({ assessments }: { assessments: any[] }
           <select value={scale} onChange={e => setScale(e.target.value)} className={`${inp} sm:w-44`}>{SCALES.map(s => <option key={s.v} value={s.v}>{s.label}</option>)}</select>
           <button onClick={create} disabled={busy} className="text-xs font-semibold text-white bg-teal-600 hover:bg-teal-700 disabled:opacity-50 rounded-lg px-4 py-2 whitespace-nowrap">{busy ? "…" : "Create"}</button>
         </div>
-        {err && <p className="text-[11px] text-red-600 mt-1">{err}</p>}
+        {err && <p className="text-[11px] text-[var(--cmp-text-critical)] mt-1">{err}</p>}
       </div>
 
       {assessments.length === 0 ? (
@@ -64,7 +64,7 @@ export default function BehaviourManager({ assessments }: { assessments: any[] }
             <span className={`text-[9px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded border ${STATUS_TONE[a.status] ?? STATUS_TONE.draft}`}>{a.status}</span>
             <div className="ml-auto flex items-center gap-2 text-xs text-gray-500">
               <span>{a.indicators.length} indicator{a.indicators.length === 1 ? "" : "s"} · {a.domains} domain{a.domains === 1 ? "" : "s"}</span>
-              {a.critical > 0 && <span className="text-red-600">{a.critical} critical</span>}
+              {a.critical > 0 && <span className="text-[var(--cmp-text-critical)]">{a.critical} critical</span>}
               <button onClick={() => del(a.id)} disabled={busy} className="text-gray-300 hover:text-red-500" title="Delete">✕</button>
             </div>
           </div>
@@ -77,7 +77,7 @@ export default function BehaviourManager({ assessments }: { assessments: any[] }
                     <div key={i.id} className="flex items-start gap-2 py-1.5 text-xs">
                       <span className="text-[9px] font-semibold text-gray-500 bg-gray-50 border border-gray-100 rounded px-1.5 py-0.5 shrink-0 mt-0.5 w-28 text-center">{domLabel(i.domain)}</span>
                       <div className="flex-1 min-w-0">
-                        <p className="text-gray-800">{i.statement} {i.critical && <span className="text-[9px] font-bold text-red-600">CRITICAL</span>}</p>
+                        <p className="text-gray-800">{i.statement} {i.critical && <span className="text-[9px] font-bold text-[var(--cmp-text-critical)]">CRITICAL</span>}</p>
                         {(i.positive || i.negative) && <p className="text-[10px] text-gray-400">{i.positive ? `＋ ${i.positive}` : ""}{i.positive && i.negative ? "  ·  " : ""}{i.negative ? `− ${i.negative}` : ""}</p>}
                       </div>
                       <button onClick={() => removeI(i.id)} disabled={busy} className="text-gray-300 hover:text-red-500 shrink-0" title="Remove">✕</button>

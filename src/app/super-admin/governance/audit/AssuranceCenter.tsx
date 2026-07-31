@@ -75,7 +75,7 @@ export default function AssuranceCenter({ openCapas }: { openCapas: Picker[] }) 
     <div className="bg-white rounded-xl border border-gray-200">
       <div className="flex items-center gap-2 p-3 border-b border-gray-100 flex-wrap">
         <h2 className="font-semibold text-gray-900 text-[15px] mr-auto">Assurance Center</h2>
-        {msg && <span className={`text-xs rounded-lg px-2.5 py-1 ${msg.k === "ok" ? "bg-green-50 text-green-800" : "bg-amber-50 text-amber-800"}`}>{msg.t}</span>}
+        {msg && <span className={`text-xs rounded-lg px-2.5 py-1 ${msg.k === "ok" ? "bg-[var(--cmp-surface-success)] text-green-800" : "bg-[var(--cmp-surface-warning)] text-amber-800"}`}>{msg.t}</span>}
         <div className="flex gap-1">
           {TABS.map(b => (
             <button key={b.key} onClick={() => switchTab(b.key)} className={`text-xs font-medium rounded-lg px-2.5 py-1.5 border ${tab === b.key ? "bg-teal-50 border-teal-300 text-teal-700" : "border-gray-200 text-gray-500 hover:bg-gray-50"}`}>{b.icon} {b.label}</button>
@@ -109,7 +109,7 @@ export default function AssuranceCenter({ openCapas }: { openCapas: Picker[] }) 
             <div><label className={label}>Corrective action *</label><select value={form.capa_id ?? ""} onChange={set("capa_id")} className={input}><option value="">— Select open CAPA —</option>{openCapas.map(c => <option key={c.id} value={c.id}>{c.label}</option>)}</select></div>
             <div><label className={label}>Advance to *</label><select value={form.status ?? ""} onChange={set("status")} className={input}><option value="">— Select status —</option>{Object.entries(CAPA_STATUSES).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select></div>
             <div className="sm:col-span-2"><label className={label}>Evidence note</label><textarea value={form.evidence_note ?? ""} onChange={set("evidence_note")} rows={2} className={input} placeholder="What was done / how effectiveness was verified" /></div>
-            {openCapas.length === 0 && <p className="sm:col-span-2 text-[11px] text-amber-600">No open corrective actions.</p>}
+            {openCapas.length === 0 && <p className="sm:col-span-2 text-[11px] text-[var(--cmp-text-warning)]">No open corrective actions.</p>}
             <p className="sm:col-span-2 text-[11px] text-gray-400">The workflow is forward-only (open → in progress → completed → verified → closed); the server rejects backwards moves.</p>
           </div>
         )}

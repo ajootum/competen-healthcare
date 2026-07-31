@@ -35,7 +35,7 @@ function news2(rr: number, spo2: number, o2: boolean, sbp: number, pulse: number
   return { score, risk, anyThree, items };
 }
 
-const RISK_TONE: Record<string, string> = { High: "text-rose-600", Medium: "text-orange-600", "Low-Medium": "text-amber-600", Low: "text-green-600" };
+const RISK_TONE: Record<string, string> = { High: "text-[var(--cmp-text-error)]", Medium: "text-[var(--cmp-text-warning)]", "Low-Medium": "text-[var(--cmp-text-warning)]", Low: "text-[var(--cmp-text-success)]" };
 const TABS = ["NEWS2", "Infusion", "Fluids", "BMI", "Converter"] as const;
 
 export default function ClinicalToolkit() {
@@ -90,7 +90,7 @@ export default function ClinicalToolkit() {
               <div><p className={`text-sm font-bold ${RISK_TONE[nRes.risk]}`}>{nRes.risk} clinical risk</p><p className="text-[11px] text-gray-500">{nRes.risk === "High" ? "Urgent/emergency response; continuous monitoring." : nRes.risk === "Medium" ? "Urgent review by a clinician competent in acute illness." : nRes.anyThree ? "A single parameter scored 3 — review advised." : "Routine monitoring per local frequency."}</p></div>
             </div>
           )}
-          <div className="mt-2 flex flex-wrap gap-1">{nRes?.items.map(([l, s]) => (<span key={l} className={`text-[9px] px-1.5 py-0.5 rounded ${s === 3 ? "bg-rose-50 text-rose-700" : s >= 1 ? "bg-amber-50 text-amber-700" : "bg-gray-50 text-gray-500"}`}>{l} +{s}</span>))}</div>
+          <div className="mt-2 flex flex-wrap gap-1">{nRes?.items.map(([l, s]) => (<span key={l} className={`text-[9px] px-1.5 py-0.5 rounded ${s === 3 ? "bg-[var(--cmp-surface-error)] text-[var(--cmp-text-error)]" : s >= 1 ? "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]" : "bg-gray-50 text-gray-500"}`}>{l} +{s}</span>))}</div>
           <p className="text-[10px] text-gray-400 mt-2">Scale 1 SpO₂. Use Scale 2 for patients with target 88–92% (hypercapnic respiratory failure) — not modelled here.</p>
           {disclaimer}
         </div>
@@ -127,7 +127,7 @@ export default function ClinicalToolkit() {
       {tab === "BMI" && (
         <div>
           <div className="grid grid-cols-2 gap-3 max-w-sm"><Field label="Height" unit="cm" value={b.h} onChange={(v: string) => setB({ ...b, h: v })} /><Field label="Weight" unit="kg" value={b.w} onChange={(v: string) => setB({ ...b, w: v })} /></div>
-          <div className="mt-4 flex items-center gap-4"><div className="text-center"><p className="text-3xl font-bold text-gray-900">{bmi == null ? "—" : bmi.toFixed(1)}</p><p className="text-[10px] text-gray-400">BMI kg/m²</p></div><p className={`text-sm font-bold ${bmiCat === "Normal" ? "text-green-600" : bmiCat === "Obese" ? "text-rose-600" : "text-amber-600"}`}>{bmiCat}</p></div>
+          <div className="mt-4 flex items-center gap-4"><div className="text-center"><p className="text-3xl font-bold text-gray-900">{bmi == null ? "—" : bmi.toFixed(1)}</p><p className="text-[10px] text-gray-400">BMI kg/m²</p></div><p className={`text-sm font-bold ${bmiCat === "Normal" ? "text-[var(--cmp-text-success)]" : bmiCat === "Obese" ? "text-[var(--cmp-text-error)]" : "text-[var(--cmp-text-warning)]"}`}>{bmiCat}</p></div>
           {disclaimer}
         </div>
       )}

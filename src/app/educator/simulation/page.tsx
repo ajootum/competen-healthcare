@@ -13,8 +13,8 @@ import { EduHeader } from "../ui";
 export const dynamic = "force-dynamic";
 
 const DIFF_CLS: Record<string, string> = {
-  Easy: "bg-green-100 text-green-700", Medium: "bg-amber-100 text-amber-700", Hard: "bg-red-100 text-red-600",
-  beginner: "bg-green-100 text-green-700", intermediate: "bg-amber-100 text-amber-700", advanced: "bg-red-100 text-red-600",
+  Easy: "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]", Medium: "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]", Hard: "bg-[var(--cmp-surface-critical)] text-[var(--cmp-text-critical)]",
+  beginner: "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]", intermediate: "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]", advanced: "bg-[var(--cmp-surface-critical)] text-[var(--cmp-text-critical)]",
 };
 
 export default async function EducatorSimulationPage() {

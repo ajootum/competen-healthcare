@@ -53,15 +53,15 @@ export default async function MetricDictionary() {
 
       <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
         <div className={`${card} p-4`}><p className="text-xs text-gray-500">Registered metrics</p><p className="text-2xl font-bold text-gray-900 mt-1">{METRICS.length}</p></div>
-        <div className={`${card} p-4`}><p className="text-xs text-gray-500">Computed live</p><p className="text-2xl font-bold text-emerald-600 mt-1">{liveCount}</p></div>
-        <div className={`${card} p-4`}><p className="text-xs text-gray-500">Awaiting source store</p><p className="text-2xl font-bold text-amber-600 mt-1">{METRICS.length - liveCount}</p></div>
+        <div className={`${card} p-4`}><p className="text-xs text-gray-500">Computed live</p><p className="text-2xl font-bold text-[var(--cmp-text-success)] mt-1">{liveCount}</p></div>
+        <div className={`${card} p-4`}><p className="text-xs text-gray-500">Awaiting source store</p><p className="text-2xl font-bold text-[var(--cmp-text-warning)] mt-1">{METRICS.length - liveCount}</p></div>
       </div>
 
       <div className={`${card} p-5`}>
         <h3 className="text-sm font-bold text-gray-900 mb-3">Metric catalogue <span className="text-[10px] text-gray-400 font-normal">§8 · single definition reused across dashboards + reports</span></h3>
         <div className="overflow-x-auto"><table className="w-full text-xs">
           <thead><tr className="text-gray-400 text-left border-b border-gray-100"><th className="py-2 pr-3 font-medium">Key</th><th className="py-2 pr-3 font-medium">Name</th><th className="py-2 pr-3 font-medium">Formula</th><th className="py-2 pr-3 font-medium">Critical rule</th><th className="py-2 font-medium">Status</th></tr></thead>
-          <tbody>{METRICS.map(m => (<tr key={m.key} className="border-b border-gray-50 align-top"><td className="py-2 pr-3 font-mono text-[10px] text-gray-500 whitespace-nowrap">{m.key}</td><td className="py-2 pr-3 text-gray-800 font-medium">{m.name}</td><td className="py-2 pr-3 text-gray-600 font-mono text-[10px]">{m.formula}</td><td className="py-2 pr-3 text-gray-500">{m.rule}</td><td className="py-2"><span className={`text-[9px] px-1.5 py-0.5 rounded ${m.live ? "bg-emerald-50 text-emerald-700" : "bg-gray-100 text-gray-400"}`}>{m.live ? "Live" : "Next phase"}</span></td></tr>))}</tbody>
+          <tbody>{METRICS.map(m => (<tr key={m.key} className="border-b border-gray-50 align-top"><td className="py-2 pr-3 font-mono text-[10px] text-gray-500 whitespace-nowrap">{m.key}</td><td className="py-2 pr-3 text-gray-800 font-medium">{m.name}</td><td className="py-2 pr-3 text-gray-600 font-mono text-[10px]">{m.formula}</td><td className="py-2 pr-3 text-gray-500">{m.rule}</td><td className="py-2"><span className={`text-[9px] px-1.5 py-0.5 rounded ${m.live ? "bg-[var(--cmp-surface-success)] text-emerald-700" : "bg-gray-100 text-gray-400"}`}>{m.live ? "Live" : "Next phase"}</span></td></tr>))}</tbody>
         </table></div>
         <p className="text-[10px] text-gray-400 mt-2">Every KPI carries a stable metric key + version (§8). Times stored UTC, rendered in tenant timezone; half-open periods [start, end); late facts trigger recompute + a &ldquo;revised&rdquo; status (§8.1). Metric owner/steward, version history and lineage editing need a metric-registry store → next-phase.</p>
       </div>

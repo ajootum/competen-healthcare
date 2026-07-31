@@ -16,7 +16,7 @@ import CiafForm from "./CiafForm";
 
 export const dynamic = "force-dynamic";
 
-const A_TONE: Record<string, string> = { A1: "bg-green-100 text-green-700", A2: "bg-yellow-100 text-yellow-800", A3: "bg-orange-100 text-orange-700", A4: "bg-red-100 text-red-700", A5: "bg-red-100 text-red-700" };
+const A_TONE: Record<string, string> = { A1: "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]", A2: "bg-[var(--cmp-surface-warning)] text-yellow-800", A3: "bg-[var(--cmp-surface-warning)] text-orange-700", A4: "bg-[var(--cmp-surface-critical)] text-[var(--cmp-text-critical)]", A5: "bg-[var(--cmp-surface-critical)] text-[var(--cmp-text-critical)]" };
 
 function ClassificationChip({ a }: { a: any }) {
   if (a.framework === "pews") {
@@ -50,19 +50,19 @@ export default async function AcuityPage() {
       </div>
 
       {data.migrationMissing && (
-        <div className="bg-amber-50 border border-amber-200 rounded-xl p-5">
+        <div className="bg-[var(--cmp-surface-warning)] border border-[var(--cmp-color-warning)] rounded-xl p-5">
           <p className="font-semibold text-amber-900">⚙️ Store not yet enabled</p>
-          <p className="text-sm text-amber-800 mt-1">Apply migrations <code className="bg-amber-100 px-1.5 py-0.5 rounded font-mono text-xs">153</code> + <code className="bg-amber-100 px-1.5 py-0.5 rounded font-mono text-xs">157</code> to enable assessments.</p>
+          <p className="text-sm text-amber-800 mt-1">Apply migrations <code className="bg-[var(--cmp-surface-warning)] px-1.5 py-0.5 rounded font-mono text-xs">153</code> + <code className="bg-[var(--cmp-surface-warning)] px-1.5 py-0.5 rounded font-mono text-xs">157</code> to enable assessments.</p>
         </div>
       )}
 
       <div className="grid sm:grid-cols-2 xl:grid-cols-4 gap-4">
         <StatCard icon="🧑‍⚕️" title="My Patients" value={data.patients.length} sub={`${latestAll.length} with a recorded assessment`} />
         <StatCard icon="🌡️" title="High / Critical" value={latestAll.filter((a: any) => ["high", "critical"].includes(a.level)).length}
-          tone={latestAll.some((a: any) => a.level === "critical") ? "text-red-600" : undefined} sub="by latest classification" />
+          tone={latestAll.some((a: any) => a.level === "critical") ? "text-[var(--cmp-text-critical)]" : undefined} sub="by latest classification" />
         <StatCard icon="⚡" title="Significant Changes" value={latestAll.filter((a: any) => a.significant_change).length}
-          tone={latestAll.some((a: any) => a.significant_change) ? "text-orange-600" : undefined} sub="vs the prior reading" />
-        <StatCard icon="⏰" title="Reassessment Overdue" value={reassessOverdue} tone={reassessOverdue > 0 ? "text-red-600" : undefined} sub="past the band's interval" />
+          tone={latestAll.some((a: any) => a.significant_change) ? "text-[var(--cmp-text-warning)]" : undefined} sub="vs the prior reading" />
+        <StatCard icon="⏰" title="Reassessment Overdue" value={reassessOverdue} tone={reassessOverdue > 0 ? "text-[var(--cmp-text-critical)]" : undefined} sub="past the band's interval" />
       </div>
 
       <SectionCard icon="🌡️" title="My Patients" count={data.patients.length}>
@@ -80,9 +80,9 @@ export default async function AcuityPage() {
                     <span className="font-medium text-gray-800">{p.label}</span>
                     {p.bed && <span className="text-xs text-gray-400">{p.bed}</span>}
                     <AcuityChip level={p.acuity_level} />
-                    <Chip tone={p.unit_type === "icu" ? "bg-sky-100 text-sky-700" : "bg-emerald-50 text-emerald-700"}>{p.tools.acuityLabel}</Chip>
-                    {a?.significant_change && <Chip tone="bg-orange-100 text-orange-700">Significant change</Chip>}
-                    {reassessDue && <Chip tone="bg-red-100 text-red-700">Reassessment overdue</Chip>}
+                    <Chip tone={p.unit_type === "icu" ? "bg-[var(--cmp-surface-information)] text-[var(--cmp-text-information)]" : "bg-[var(--cmp-surface-success)] text-emerald-700"}>{p.tools.acuityLabel}</Chip>
+                    {a?.significant_change && <Chip tone="bg-[var(--cmp-surface-warning)] text-orange-700">Significant change</Chip>}
+                    {reassessDue && <Chip tone="bg-[var(--cmp-surface-critical)] text-[var(--cmp-text-critical)]">Reassessment overdue</Chip>}
                     <span className="ml-auto" />
                     {p.unit_type === "icu"
                       ? <CiafForm patientId={p.id} patientLabel={p.label} />
@@ -92,7 +92,7 @@ export default async function AcuityPage() {
                     <div className="mt-1.5 text-sm text-gray-600 flex flex-wrap items-center gap-x-4 gap-y-1">
                       <ClassificationChip a={a} />
                       <span className="text-xs text-gray-400">{a.assessed_by_name ?? "—"} · {fmtWhen(a.assessed_at)}</span>
-                      {a.reassess_by && <span className={`text-xs ${reassessDue ? "text-red-600 font-medium" : "text-gray-400"}`}>reassess by {fmtWhen(a.reassess_by)}</span>}
+                      {a.reassess_by && <span className={`text-xs ${reassessDue ? "text-[var(--cmp-text-critical)] font-medium" : "text-gray-400"}`}>reassess by {fmtWhen(a.reassess_by)}</span>}
                       {h.length > 1 && (
                         <span className="text-xs text-gray-400 tabular-nums">
                           History: {h.slice().reverse().map((x: any) => `${x.score}/${acuityMaxFor(x.framework)}`).join(" → ")}

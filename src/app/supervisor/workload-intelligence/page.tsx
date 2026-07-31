@@ -20,12 +20,12 @@ const card = cardClass;
 const label = "text-[11px] font-semibold text-gray-400 uppercase tracking-wider";
 const titleCase = (s: string | null | undefined) => (s ?? "").replace(/_/g, " ").replace(/\b\w/g, ch => ch.toUpperCase());
 const fmtWhen = (iso: string | null) => iso ? new Date(iso).toLocaleString([], { hour: "2-digit", minute: "2-digit", day: "numeric", month: "short" }) : "";
-const ACUITY: Record<string, string> = { stable: "bg-green-100 text-green-700", moderate: "bg-yellow-100 text-yellow-700", high: "bg-orange-100 text-orange-700", critical: "bg-red-100 text-red-700" };
+const ACUITY: Record<string, string> = { stable: "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]", moderate: "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]", high: "bg-[var(--cmp-surface-warning)] text-orange-700", critical: "bg-[var(--cmp-surface-critical)] text-[var(--cmp-text-critical)]" };
 const LEVEL_TONE: Record<string, string> = {
-  W1: "bg-green-100 text-green-700", W2: "bg-lime-100 text-lime-700", W3: "bg-yellow-100 text-yellow-800", W4: "bg-orange-100 text-orange-700", W5: "bg-red-100 text-red-700",
-  I1: "bg-green-100 text-green-700", I2: "bg-lime-100 text-lime-700", I3: "bg-yellow-100 text-yellow-800", I4: "bg-orange-100 text-orange-700", I5: "bg-red-100 text-red-700",
+  W1: "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]", W2: "bg-lime-100 text-lime-700", W3: "bg-[var(--cmp-surface-warning)] text-yellow-800", W4: "bg-[var(--cmp-surface-warning)] text-orange-700", W5: "bg-[var(--cmp-surface-critical)] text-[var(--cmp-text-critical)]",
+  I1: "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]", I2: "bg-lime-100 text-lime-700", I3: "bg-[var(--cmp-surface-warning)] text-yellow-800", I4: "bg-[var(--cmp-surface-warning)] text-orange-700", I5: "bg-[var(--cmp-surface-critical)] text-[var(--cmp-text-critical)]",
 };
-const bar = (pct: number) => pct >= 100 ? "bg-red-500" : pct >= 70 ? "bg-orange-400" : pct >= 40 ? "bg-amber-400" : "bg-teal-500";
+const bar = (pct: number) => pct >= 100 ? "bg-[var(--cmp-color-critical)]" : pct >= 70 ? "bg-[var(--cmp-color-warning)]" : pct >= 40 ? "bg-[var(--cmp-color-warning)]" : "bg-teal-500";
 
 function Kpi({ label: l, value, tone, sub }: { label: string; value: React.ReactNode; tone?: string; sub?: React.ReactNode }) {
   return (
@@ -50,9 +50,9 @@ export default async function WorkloadIntelligencePage() {
     return (
       <div className="space-y-5">
         <h1 className="text-2xl font-bold text-gray-900">Workforce Workload Intelligence</h1>
-        <div className="bg-amber-50 border border-amber-200 rounded-xl p-5">
+        <div className="bg-[var(--cmp-surface-warning)] border border-[var(--cmp-color-warning)] rounded-xl p-5">
           <p className="font-semibold text-amber-900">⚙️ Assessment stores not enabled</p>
-          <p className="text-sm text-amber-800 mt-1">Apply migrations <code className="bg-amber-100 px-1.5 py-0.5 rounded font-mono text-xs">153</code> + <code className="bg-amber-100 px-1.5 py-0.5 rounded font-mono text-xs">157</code> to enable acuity and workload measurement.</p>
+          <p className="text-sm text-amber-800 mt-1">Apply migrations <code className="bg-[var(--cmp-surface-warning)] px-1.5 py-0.5 rounded font-mono text-xs">153</code> + <code className="bg-[var(--cmp-surface-warning)] px-1.5 py-0.5 rounded font-mono text-xs">157</code> to enable acuity and workload measurement.</p>
         </div>
       </div>
     );
@@ -81,11 +81,11 @@ export default async function WorkloadIntelligencePage() {
 
       <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-4">
         <Kpi label="Measured workload" value={`${k.totalMeasured}%`} sub={`≈ ${k.nurseEquivalents} nurse-equivalents`} />
-        <Kpi label="Assessment coverage" value={`${k.coverage}%`} tone={k.coverage < 60 ? "text-orange-600" : undefined} sub={`${k.assessed}/${k.census} patients assessed`} />
+        <Kpi label="Assessment coverage" value={`${k.coverage}%`} tone={k.coverage < 60 ? "text-[var(--cmp-text-warning)]" : undefined} sub={`${k.assessed}/${k.census} patients assessed`} />
         <Kpi label="Avg per patient" value={k.avgPerPatient != null ? `${k.avgPerPatient}%` : "—"} sub="of one nurse's capacity" />
-        <Kpi label="Nurses carrying load" value={k.nursesOnLoad} sub={`${k.overloadedNurses} over capacity`} tone={k.overloadedNurses > 0 ? "text-red-600" : undefined} />
-        <Kpi label="High / critical acuity" value={k.highAcuity} tone={k.highAcuity > 0 ? "text-orange-600" : undefined} sub="of the census" />
-        <Kpi label="Unmeasured patients" value={d.unassessed.length} tone={d.unassessed.length > 0 ? "text-amber-600" : undefined} sub="no workload assessment yet" />
+        <Kpi label="Nurses carrying load" value={k.nursesOnLoad} sub={`${k.overloadedNurses} over capacity`} tone={k.overloadedNurses > 0 ? "text-[var(--cmp-text-critical)]" : undefined} />
+        <Kpi label="High / critical acuity" value={k.highAcuity} tone={k.highAcuity > 0 ? "text-[var(--cmp-text-warning)]" : undefined} sub="of the census" />
+        <Kpi label="Unmeasured patients" value={d.unassessed.length} tone={d.unassessed.length > 0 ? "text-[var(--cmp-text-warning)]" : undefined} sub="no workload assessment yet" />
       </div>
 
       {/* Unsafe workload monitor */}
@@ -94,7 +94,7 @@ export default async function WorkloadIntelligencePage() {
           <p className={label}>Unsafe workload monitor</p>
           <div className="mt-2 space-y-1">
             {d.unsafe.map((u: any, i: number) => (
-              <p key={i} className={`text-sm ${u.severity === "high" ? "text-red-700" : "text-amber-700"}`}>⚠ {u.text}</p>
+              <p key={i} className={`text-sm ${u.severity === "high" ? "text-[var(--cmp-text-critical)]" : "text-[var(--cmp-text-warning)]"}`}>⚠ {u.text}</p>
             ))}
           </div>
         </div>
@@ -114,10 +114,10 @@ export default async function WorkloadIntelligencePage() {
                   <div className="flex-1 h-2.5 rounded-full bg-gray-100 overflow-hidden">
                     <div className={`h-full rounded-full ${bar(n.load)}`} style={{ width: `${Math.min(100, n.load)}%` }} />
                   </div>
-                  <span className={`text-xs tabular-nums w-28 text-right ${n.overloaded ? "text-red-600 font-semibold" : "text-gray-500"}`}>
+                  <span className={`text-xs tabular-nums w-28 text-right ${n.overloaded ? "text-[var(--cmp-text-critical)] font-semibold" : "text-gray-500"}`}>
                     {n.load}% · {n.count} pt{n.count === 1 ? "" : "s"}
                   </span>
-                  {n.highAcuity > 0 && <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-orange-100 text-orange-700">{n.highAcuity} high</span>}
+                  {n.highAcuity > 0 && <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-[var(--cmp-surface-warning)] text-orange-700">{n.highAcuity} high</span>}
                   {n.unassessed > 0 && <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-gray-100 text-gray-500" title="patients with no workload assessment">{n.unassessed}?</span>}
                 </div>
               ))}
@@ -226,12 +226,12 @@ export default async function WorkloadIntelligencePage() {
             <tbody>
               {d.patients.slice(0, 40).map((p: any) => (
                 <tr key={p.id} className="border-b border-gray-50">
-                  <td className="py-2 pr-2 font-medium text-gray-800">{p.bed ? `${p.bed} · ` : ""}{p.label}{p.icu && <span className="ml-1 text-[9px] text-sky-600">ICU</span>}{p.isolation && <span className="ml-1 text-[9px] text-purple-600">ISO</span>}</td>
+                  <td className="py-2 pr-2 font-medium text-gray-800">{p.bed ? `${p.bed} · ` : ""}{p.label}{p.icu && <span className="ml-1 text-[9px] text-[var(--cmp-text-information)]">ICU</span>}{p.isolation && <span className="ml-1 text-[9px] text-purple-600">ISO</span>}</td>
                   <td className="py-2 px-1 text-xs text-gray-500">{p.unit}</td>
                   <td className="py-2 px-1"><span className={`text-[10px] px-1.5 py-0.5 rounded-full ${ACUITY[p.acuityLevel] ?? ACUITY.stable}`}>{titleCase(p.acuityLevel)}</span></td>
                   <td className="py-2 px-1 text-xs tabular-nums text-gray-600">
                     {p.acuityScore != null ? `${p.acuityScore}${p.acuityFramework === "ciaf" ? "/100" : p.acuityFramework === "pews" ? " PEWS" : "/18"}` : "—"}
-                    {p.acuitySignificant && <span className="ml-1 text-[9px] text-orange-600">Δ</span>}
+                    {p.acuitySignificant && <span className="ml-1 text-[9px] text-[var(--cmp-text-warning)]">Δ</span>}
                   </td>
                   <td className="py-2 px-1">
                     {p.workloadPct != null ? (
@@ -241,10 +241,10 @@ export default async function WorkloadIntelligencePage() {
                           <span className={`block h-full rounded-full ${bar(p.workloadPct)}`} style={{ width: `${Math.min(100, p.workloadPct)}%` }} />
                         </span>
                       </span>
-                    ) : <span className="text-xs text-amber-600">unmeasured</span>}
+                    ) : <span className="text-xs text-[var(--cmp-text-warning)]">unmeasured</span>}
                   </td>
                   <td className="py-2 px-1">{p.workloadLevel ? <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${LEVEL_TONE[p.workloadLevel] ?? "bg-gray-100 text-gray-500"}`}>{p.workloadLevel}{p.workloadRatio ? ` · ${p.workloadRatio}` : ""}</span> : <span className="text-gray-300">—</span>}</td>
-                  <td className={`py-2 px-1 text-xs tabular-nums ${p.highRiskMeds > 0 ? "text-orange-600 font-semibold" : "text-gray-500"}`}>{p.openMeds}{p.highRiskMeds > 0 ? ` (${p.highRiskMeds} HR)` : ""}</td>
+                  <td className={`py-2 px-1 text-xs tabular-nums ${p.highRiskMeds > 0 ? "text-[var(--cmp-text-warning)] font-semibold" : "text-gray-500"}`}>{p.openMeds}{p.highRiskMeds > 0 ? ` (${p.highRiskMeds} HR)` : ""}</td>
                   <td className="py-2 pl-1 text-[11px] text-gray-400">{p.workloadAt ? fmtWhen(p.workloadAt) : "never"}</td>
                 </tr>
               ))}
@@ -252,7 +252,7 @@ export default async function WorkloadIntelligencePage() {
           </table>
         </div>
         {d.unassessed.length > 0 && (
-          <p className="text-[11px] text-amber-700 mt-2">
+          <p className="text-[11px] text-[var(--cmp-text-warning)] mt-2">
             {d.unassessed.length} patient{d.unassessed.length === 1 ? "" : "s"} have never been workload-assessed — their contribution is UNMEASURED, not zero. Totals above count only assessed patients.
           </p>
         )}

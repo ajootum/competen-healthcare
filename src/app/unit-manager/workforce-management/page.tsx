@@ -17,7 +17,7 @@ export const dynamic = "force-dynamic";
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 const card = "bg-white rounded-xl border border-gray-200";
-const STATUS_BADGE: Record<string, string> = { Good: "bg-emerald-50 text-emerald-700", "At Risk": "bg-amber-50 text-amber-700", "Below Required": "bg-rose-50 text-rose-700", "—": "bg-gray-100 text-gray-500" };
+const STATUS_BADGE: Record<string, string> = { Good: "bg-[var(--cmp-surface-success)] text-emerald-700", "At Risk": "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]", "Below Required": "bg-[var(--cmp-surface-error)] text-[var(--cmp-text-error)]", "—": "bg-gray-100 text-gray-500" };
 
 function Kpi({ label, value, sub, tone, icon }: { label: string; value: any; sub?: string; tone?: string; icon?: string }) {
   return <div className={`${card} p-4`}><div className="flex items-start justify-between"><p className="text-xs text-gray-500">{label}</p>{icon && <span className="text-base opacity-40">{icon}</span>}</div><p className={`text-2xl font-bold tabular-nums mt-1 ${tone ?? "text-gray-900"}`}>{value}</p>{sub && <p className="text-[11px] text-gray-400 mt-0.5">{sub}</p>}</div>;
@@ -48,7 +48,7 @@ export default async function WorkforceManagement() {
     </>
   );
 
-  if (!w.ready) return <div className="space-y-4">{header}<div className="bg-amber-50 border border-amber-200 rounded-xl p-6"><p className="font-semibold text-amber-900">⚙️ No active shift / operational data</p><p className="text-sm text-amber-800 mt-1">Workforce Management activates once an operational shift with staffing is running for this unit.</p></div></div>;
+  if (!w.ready) return <div className="space-y-4">{header}<div className="bg-[var(--cmp-surface-warning)] border border-[var(--cmp-color-warning)] rounded-xl p-6"><p className="font-semibold text-amber-900">⚙️ No active shift / operational data</p><p className="text-sm text-amber-800 mt-1">Workforce Management activates once an operational shift with staffing is running for this unit.</p></div></div>;
 
   const ov = w.overviewTotal;
   const skill = w.skillMix;
@@ -77,10 +77,10 @@ export default async function WorkforceManagement() {
 
       <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-3">
         <Kpi label="Staff on shift" value={`${ov.present}/${ov.planned}`} sub={coveragePct != null ? `${coveragePct}% coverage` : "coverage n/a"} icon="👥" />
-        <Kpi label="Skill mix score" value={skill.pct != null ? `${skill.pct}%` : "—"} sub={skill.pct != null ? (skill.pct >= 85 ? "Optimal" : skill.pct >= 70 ? "Adequate" : "Review") : "No competency data"} icon="🛡️" tone={skill.pct != null && skill.pct >= 85 ? "text-emerald-600" : undefined} />
-        <Kpi label="Overtime risk" value={overtimeRisk} sub="Derived from gaps" icon="⏰" tone={overtimeRisk === "High" ? "text-rose-600" : overtimeRisk === "Medium" ? "text-amber-600" : "text-emerald-600"} />
-        <Kpi label="Breaks due" value={breaksDue ?? "—"} sub={breaksDue != null ? "Within 60 min" : "Run migration 069"} icon="☕" tone={breaksDue ? "text-amber-600" : undefined} />
-        <Kpi label="Open shifts" value={w.openShiftCount ?? 0} sub="Require action" icon="📅" tone={(w.openShiftCount ?? 0) ? "text-rose-600" : undefined} />
+        <Kpi label="Skill mix score" value={skill.pct != null ? `${skill.pct}%` : "—"} sub={skill.pct != null ? (skill.pct >= 85 ? "Optimal" : skill.pct >= 70 ? "Adequate" : "Review") : "No competency data"} icon="🛡️" tone={skill.pct != null && skill.pct >= 85 ? "text-[var(--cmp-text-success)]" : undefined} />
+        <Kpi label="Overtime risk" value={overtimeRisk} sub="Derived from gaps" icon="⏰" tone={overtimeRisk === "High" ? "text-[var(--cmp-text-error)]" : overtimeRisk === "Medium" ? "text-[var(--cmp-text-warning)]" : "text-[var(--cmp-text-success)]"} />
+        <Kpi label="Breaks due" value={breaksDue ?? "—"} sub={breaksDue != null ? "Within 60 min" : "Run migration 069"} icon="☕" tone={breaksDue ? "text-[var(--cmp-text-warning)]" : undefined} />
+        <Kpi label="Open shifts" value={w.openShiftCount ?? 0} sub="Require action" icon="📅" tone={(w.openShiftCount ?? 0) ? "text-[var(--cmp-text-error)]" : undefined} />
         <Kpi label="Leave / absent" value={w.absence?.total ?? 0} sub="Today" icon="🏖️" />
       </div>
 
@@ -90,7 +90,7 @@ export default async function WorkforceManagement() {
           <h3 className="text-sm font-bold text-gray-900 mb-3">Staffing overview</h3>
           <table className="w-full text-xs"><thead><tr className="text-gray-400 text-left border-b border-gray-100"><th className="py-1.5 font-medium">Role</th><th className="py-1.5 font-medium text-right">Req</th><th className="py-1.5 font-medium text-right">On</th><th className="py-1.5 font-medium text-right">Cover</th><th className="py-1.5 font-medium text-right">Status</th></tr></thead>
             <tbody>{w.staffingOverview.map((r: any) => (<tr key={r.role} className="border-b border-gray-50"><td className="py-1.5 text-gray-700">{r.label}</td><td className="py-1.5 text-right text-gray-600">{r.required ?? "—"}</td><td className="py-1.5 text-right text-gray-600">{r.present}</td><td className="py-1.5 text-right font-semibold">{r.coverage != null ? `${r.coverage}%` : "—"}</td><td className="py-1.5 text-right"><span className={`text-[9px] px-1.5 py-0.5 rounded ${STATUS_BADGE[r.status]}`}>{r.status}</span></td></tr>))}</tbody>
-            <tfoot><tr className="border-t border-gray-200"><td className="py-1.5 font-bold text-gray-800">Overall</td><td className="py-1.5 text-right font-bold">{ov.required ?? "—"}</td><td className="py-1.5 text-right font-bold">{ov.present}</td><td className="py-1.5 text-right font-bold text-emerald-600" colSpan={2}>{coveragePct != null ? `${coveragePct}%` : "—"}</td></tr></tfoot>
+            <tfoot><tr className="border-t border-gray-200"><td className="py-1.5 font-bold text-gray-800">Overall</td><td className="py-1.5 text-right font-bold">{ov.required ?? "—"}</td><td className="py-1.5 text-right font-bold">{ov.present}</td><td className="py-1.5 text-right font-bold text-[var(--cmp-text-success)]" colSpan={2}>{coveragePct != null ? `${coveragePct}%` : "—"}</td></tr></tfoot>
           </table>
         </div>
 
@@ -98,13 +98,13 @@ export default async function WorkforceManagement() {
         <div className={`${card} p-5 xl:col-span-1`}>
           <h3 className="text-sm font-bold text-gray-900 mb-2">Coverage by time</h3>
           <div className="border border-dashed border-gray-200 rounded-lg p-4 text-center"><p className="text-sm text-gray-500">A 24-hour coverage timeline needs per-hour staffing history, which isn&apos;t captured yet.</p><p className="text-[11px] text-gray-400 mt-1">Showing current coverage instead — the hourly trend is an honest next-phase state.</p></div>
-          <div className="mt-3"><div className="flex items-center justify-between text-xs mb-1"><span className="text-gray-600">Present vs required (now)</span><b>{ov.present}/{ov.required ?? "—"}</b></div><div className="w-full h-3 rounded-full bg-gray-100 overflow-hidden"><div className={`h-full ${coveragePct != null && coveragePct >= 90 ? "bg-emerald-500" : coveragePct != null && coveragePct >= 75 ? "bg-amber-400" : "bg-rose-400"}`} style={{ width: `${Math.min(100, coveragePct ?? 0)}%` }} /></div></div>
+          <div className="mt-3"><div className="flex items-center justify-between text-xs mb-1"><span className="text-gray-600">Present vs required (now)</span><b>{ov.present}/{ov.required ?? "—"}</b></div><div className="w-full h-3 rounded-full bg-gray-100 overflow-hidden"><div className={`h-full ${coveragePct != null && coveragePct >= 90 ? "bg-[var(--cmp-color-success)]" : coveragePct != null && coveragePct >= 75 ? "bg-[var(--cmp-color-warning)]" : "bg-[var(--cmp-color-error)]"}`} style={{ width: `${Math.min(100, coveragePct ?? 0)}%` }} /></div></div>
         </div>
 
         {/* Top alerts */}
         <div className={`${card} p-5 xl:col-span-1`}>
           <h3 className="text-sm font-bold text-gray-900 mb-3">Top alerts</h3>
-          {alerts.length === 0 ? <p className="text-sm text-gray-400">No workforce alerts. 🎉</p> : <div className="space-y-2">{alerts.map((a, i) => (<div key={i} className="flex items-start gap-2.5"><span className={`w-7 h-7 rounded-lg flex items-center justify-center text-sm shrink-0 ${a.tone === "rose" ? "bg-rose-50" : a.tone === "amber" ? "bg-amber-50" : "bg-gray-50"}`}>{a.icon}</span><div><p className="text-xs font-semibold text-gray-800">{a.title}</p><p className="text-[11px] text-gray-500">{a.sub}</p></div></div>))}</div>}
+          {alerts.length === 0 ? <p className="text-sm text-gray-400">No workforce alerts. 🎉</p> : <div className="space-y-2">{alerts.map((a, i) => (<div key={i} className="flex items-start gap-2.5"><span className={`w-7 h-7 rounded-lg flex items-center justify-center text-sm shrink-0 ${a.tone === "rose" ? "bg-[var(--cmp-surface-error)]" : a.tone === "amber" ? "bg-[var(--cmp-surface-warning)]" : "bg-gray-50"}`}>{a.icon}</span><div><p className="text-xs font-semibold text-gray-800">{a.title}</p><p className="text-[11px] text-gray-500">{a.sub}</p></div></div>))}</div>}
         </div>
       </div>
 
@@ -112,14 +112,14 @@ export default async function WorkforceManagement() {
         {/* Assignments by role */}
         <div className={`${card} p-5 xl:col-span-1`}>
           <h3 className="text-sm font-bold text-gray-900 mb-3">Today&apos;s assignments <span className="text-[10px] text-gray-400 font-normal">by role</span></h3>
-          <div className="space-y-2">{w.staffingOverview.map((r: any) => (<div key={r.role} className="text-xs"><div className="flex items-center justify-between mb-0.5"><span className="text-gray-700">{r.label}</span><span className="text-gray-500">{r.present}/{r.required ?? "—"} · {r.assigned} pt</span></div><div className="w-full h-1.5 rounded-full bg-gray-100 overflow-hidden"><div className={`h-full rounded-full ${r.status === "Good" ? "bg-emerald-500" : r.status === "At Risk" ? "bg-amber-400" : "bg-rose-400"}`} style={{ width: `${Math.min(100, r.coverage ?? 0)}%` }} /></div></div>))}</div>
+          <div className="space-y-2">{w.staffingOverview.map((r: any) => (<div key={r.role} className="text-xs"><div className="flex items-center justify-between mb-0.5"><span className="text-gray-700">{r.label}</span><span className="text-gray-500">{r.present}/{r.required ?? "—"} · {r.assigned} pt</span></div><div className="w-full h-1.5 rounded-full bg-gray-100 overflow-hidden"><div className={`h-full rounded-full ${r.status === "Good" ? "bg-[var(--cmp-color-success)]" : r.status === "At Risk" ? "bg-[var(--cmp-color-warning)]" : "bg-[var(--cmp-color-error)]"}`} style={{ width: `${Math.min(100, r.coverage ?? 0)}%` }} /></div></div>))}</div>
           <p className="text-[10px] text-gray-400 mt-2">By-unit breakdown needs per-unit establishment (honest next-phase).</p>
         </div>
 
         {/* Open shifts / gaps */}
         <div className={`${card} p-5 xl:col-span-1`}>
           <h3 className="text-sm font-bold text-gray-900 mb-3">Shifts requiring staff</h3>
-          {(w.openShifts ?? []).length === 0 ? <p className="text-sm text-gray-400">No open shifts — all roles covered.</p> : <div className="space-y-2">{(w.openShifts ?? []).map((u: any, i: number) => (<div key={i} className="flex items-center justify-between rounded-lg border border-gray-100 p-2.5"><div><p className="text-xs font-semibold text-gray-800">{u.role}</p><p className="text-[11px] text-gray-500">{u.positions} position{u.positions === 1 ? "" : "s"} open</p></div><span className={`text-[10px] px-1.5 py-0.5 rounded ${u.urgency === "Urgent" ? "bg-rose-50 text-rose-700" : "bg-amber-50 text-amber-700"}`}>{u.urgency}</span></div>))}</div>}
+          {(w.openShifts ?? []).length === 0 ? <p className="text-sm text-gray-400">No open shifts — all roles covered.</p> : <div className="space-y-2">{(w.openShifts ?? []).map((u: any, i: number) => (<div key={i} className="flex items-center justify-between rounded-lg border border-gray-100 p-2.5"><div><p className="text-xs font-semibold text-gray-800">{u.role}</p><p className="text-[11px] text-gray-500">{u.positions} position{u.positions === 1 ? "" : "s"} open</p></div><span className={`text-[10px] px-1.5 py-0.5 rounded ${u.urgency === "Urgent" ? "bg-[var(--cmp-surface-error)] text-[var(--cmp-text-error)]" : "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]"}`}>{u.urgency}</span></div>))}</div>}
           <p className="text-[10px] text-gray-400 mt-2">Future roster scheduling is a next-phase build — these are current-shift gaps.</p>
         </div>
 
@@ -128,7 +128,7 @@ export default async function WorkforceManagement() {
           <h3 className="text-sm font-bold text-gray-900 mb-3">Skill mix snapshot</h3>
           {skill.total === 0 || skill.pct == null ? <div className="text-center py-6"><p className="text-3xl mb-2">🛡️</p><p className="text-sm text-gray-500">No competency scores for on-shift staff yet.</p></div> : (
             <div className="flex items-center gap-4"><div className="relative w-24 h-24 shrink-0"><div className="w-24 h-24 rounded-full" style={{ background: `conic-gradient(#10b981 0% ${(skill.compliant / skill.total) * 100}%, #f59e0b ${(skill.compliant / skill.total) * 100}% ${((skill.compliant + skill.minor) / skill.total) * 100}%, #ef4444 ${((skill.compliant + skill.minor) / skill.total) * 100}% 100%)` }} /><div className="absolute inset-[22%] rounded-full bg-white flex flex-col items-center justify-center"><span className="text-base font-bold text-gray-900">{skill.pct}%</span><span className="text-[8px] text-gray-400">Skill mix</span></div></div>
-              <div className="text-[11px] space-y-1 flex-1"><div className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-sm bg-emerald-500" /><span className="text-gray-600 flex-1">Compliant</span><b>{skill.compliant}</b></div><div className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-sm bg-amber-500" /><span className="text-gray-600 flex-1">Developing</span><b>{skill.minor}</b></div><div className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-sm bg-rose-500" /><span className="text-gray-600 flex-1">Below required</span><b>{skill.major}</b></div></div>
+              <div className="text-[11px] space-y-1 flex-1"><div className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-sm bg-[var(--cmp-color-success)]" /><span className="text-gray-600 flex-1">Compliant</span><b>{skill.compliant}</b></div><div className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-sm bg-[var(--cmp-color-warning)]" /><span className="text-gray-600 flex-1">Developing</span><b>{skill.minor}</b></div><div className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-sm bg-[var(--cmp-color-error)]" /><span className="text-gray-600 flex-1">Below required</span><b>{skill.major}</b></div></div>
             </div>
           )}
           <p className="text-[10px] text-gray-400 mt-2">Competency compliance of on-shift staff (real). Expert/novice proficiency tiers aren&apos;t stored.</p>

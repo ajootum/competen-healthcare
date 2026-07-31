@@ -13,8 +13,8 @@ export const dynamic = "force-dynamic";
 // switching, configurable KPI definitions, external benchmarking and drill-down/export.
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
-const pctTone = (n: number) => (n >= 90 ? "text-emerald-600" : n >= 75 ? "text-amber-600" : "text-rose-600");
-const cellTone = (n: number) => (n >= 90 ? "bg-emerald-500" : n >= 80 ? "bg-amber-400" : n >= 70 ? "bg-orange-400" : "bg-rose-500");
+const pctTone = (n: number) => (n >= 90 ? "text-[var(--cmp-text-success)]" : n >= 75 ? "text-[var(--cmp-text-warning)]" : "text-[var(--cmp-text-error)]");
+const cellTone = (n: number) => (n >= 90 ? "bg-[var(--cmp-color-success)]" : n >= 80 ? "bg-[var(--cmp-color-warning)]" : n >= 70 ? "bg-[var(--cmp-color-warning)]" : "bg-[var(--cmp-color-error)]");
 
 function Line({ series, color }: { series: number[]; color: string }) {
   const nums = (series ?? []).map(Number);
@@ -44,7 +44,7 @@ export default async function CompetencyAnalytics() {
   if (!d.ready) return (
     <div className="max-w-[1400px] space-y-4">
       {head}
-      <div className="bg-amber-50 border border-amber-200 rounded-xl p-6"><p className="font-semibold text-amber-900">⚙️ Coming online</p><p className="text-sm text-amber-800 mt-1">Competency analytics activate once competency decisions are recorded for this tenant.</p></div>
+      <div className="bg-[var(--cmp-surface-warning)] border border-[var(--cmp-color-warning)] rounded-xl p-6"><p className="font-semibold text-amber-900">⚙️ Coming online</p><p className="text-sm text-amber-800 mt-1">Competency analytics activate once competency decisions are recorded for this tenant.</p></div>
     </div>
   );
 
@@ -102,7 +102,7 @@ export default async function CompetencyAnalytics() {
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
         <Card title="Risk Matrix" right={<span className="text-[11px] text-gray-400">units below 70%</span>}>
           {d.highRiskUnits.length === 0 ? <p className="text-sm text-gray-400">No high-risk units. 🎉</p> : (
-            <div className="space-y-1.5">{d.highRiskUnits.slice(0, 8).map((u: any) => (<div key={u.id} className="flex items-center justify-between text-xs"><span className="text-gray-700 truncate">{u.name}</span><span className="flex items-center gap-2"><span className="text-rose-600 font-semibold tabular-nums">{u.pct}%</span><span className="text-gray-400">({u.current}/{u.total})</span></span></div>))}</div>
+            <div className="space-y-1.5">{d.highRiskUnits.slice(0, 8).map((u: any) => (<div key={u.id} className="flex items-center justify-between text-xs"><span className="text-gray-700 truncate">{u.name}</span><span className="flex items-center gap-2"><span className="text-[var(--cmp-text-error)] font-semibold tabular-nums">{u.pct}%</span><span className="text-gray-400">({u.current}/{u.total})</span></span></div>))}</div>
           )}
         </Card>
 
@@ -111,7 +111,7 @@ export default async function CompetencyAnalytics() {
             <div className="grid grid-cols-2 gap-2 mb-3">{signals.map((s) => {
               const has = s.delta != null, dv = Number(s.delta), flat = !has || dv === 0;
               const good = has && !flat && (s.invert ? dv < 0 : dv > 0);
-              const tone = flat ? "text-gray-400" : good ? "text-emerald-600" : "text-rose-600";
+              const tone = flat ? "text-gray-400" : good ? "text-[var(--cmp-text-success)]" : "text-[var(--cmp-text-error)]";
               const arrow = !has ? "" : dv > 0 ? "▲" : dv < 0 ? "▼" : "▬";
               return <div key={s.label} className="border border-gray-100 rounded-lg px-2.5 py-1.5"><p className="text-[10px] text-gray-500 truncate">{s.label}</p><p className={`text-sm font-semibold tabular-nums ${tone}`}>{arrow} {has ? Math.abs(dv) : "—"}</p></div>;
             })}</div>

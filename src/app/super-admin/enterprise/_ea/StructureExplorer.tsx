@@ -40,7 +40,7 @@ export default function StructureExplorer({ networks, standalone }: { networks: 
       {open[o.id] && o.facilities.map((f: any) => (
         <div key={f.id}>
           <Node label={f.name} kind="facility" depth={depth + 1} hasChildren={f.departments.length > 0} open={open[f.id]} onToggle={() => t(f.id)}
-            href="/super-admin/hospitals" badge={f.active ? "Active" : "Pending"} badgeTone={f.active ? "bg-green-50 text-green-600" : "bg-amber-50 text-amber-600"} />
+            href="/super-admin/hospitals" badge={f.active ? "Active" : "Pending"} badgeTone={f.active ? "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]" : "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]"} />
           {open[f.id] && f.departments.map((d: any) => (
             <div key={d.id}>
               <Node label={d.name} kind="department" depth={depth + 2} hasChildren={d.units.length > 0} open={open[d.id]} onToggle={d.units.length ? () => t(d.id) : undefined} />

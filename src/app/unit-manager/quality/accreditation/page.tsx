@@ -14,16 +14,16 @@ export const dynamic = "force-dynamic";
 // store): the ActionPlan work queue owner/due/progress, the EvidenceItem repository, PolicyLink and training.
 /* eslint-disable @typescript-eslint/no-explicit-any */
 const card = "bg-white rounded-xl border border-gray-200";
-const pctTone = (p: number | null) => (p == null ? "text-gray-300" : p >= 85 ? "text-emerald-600" : p >= 70 ? "text-amber-600" : "text-rose-600");
+const pctTone = (p: number | null) => (p == null ? "text-gray-300" : p >= 85 ? "text-[var(--cmp-text-success)]" : p >= 70 ? "text-[var(--cmp-text-warning)]" : "text-[var(--cmp-text-error)]");
 const barTone = (p: number) => (p >= 85 ? "#10b981" : p >= 70 ? "#f59e0b" : "#ef4444");
-const riskTone = (r: string) => (r === "High" ? "bg-rose-100 text-rose-700" : r === "Medium" ? "bg-amber-100 text-amber-700" : "bg-emerald-100 text-emerald-700");
+const riskTone = (r: string) => (r === "High" ? "bg-[var(--cmp-surface-error)] text-[var(--cmp-text-error)]" : r === "Medium" ? "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]" : "bg-[var(--cmp-surface-success)] text-emerald-700");
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 const monthAbbr = (dateStr: string) => { const mi = Number((dateStr ?? "").slice(5, 7)) - 1; return mi >= 0 && mi < 12 ? MONTHS[mi] : ""; };
 const QUICK = [
-  { label: "Standards Library", icon: "📚", tint: "bg-sky-50" }, { label: "Measurable Elements", icon: "📋", tint: "bg-indigo-50" },
+  { label: "Standards Library", icon: "📚", tint: "bg-[var(--cmp-surface-information)]" }, { label: "Measurable Elements", icon: "📋", tint: "bg-indigo-50" },
   { label: "Evidence Repository", icon: "📁", tint: "bg-violet-50" }, { label: "Mock Surveys", icon: "👥", tint: "bg-teal-50" },
-  { label: "Gap Analysis", icon: "🔍", tint: "bg-rose-50" }, { label: "Action Plans", icon: "✅", tint: "bg-emerald-50" },
-  { label: "Document Manager", icon: "🗂️", tint: "bg-amber-50" }, { label: "Survey Readiness", icon: "🎯", tint: "bg-orange-50" },
+  { label: "Gap Analysis", icon: "🔍", tint: "bg-[var(--cmp-surface-error)]" }, { label: "Action Plans", icon: "✅", tint: "bg-[var(--cmp-surface-success)]" },
+  { label: "Document Manager", icon: "🗂️", tint: "bg-[var(--cmp-surface-warning)]" }, { label: "Survey Readiness", icon: "🎯", tint: "bg-[var(--cmp-surface-warning)]" },
   { label: "Reports & Analytics", icon: "📊", tint: "bg-pink-50" }, { label: "AI Insights", icon: "🧠", tint: "bg-fuchsia-50" },
 ];
 
@@ -36,7 +36,7 @@ function Spark({ series, color }: { series: number[]; color: string }) {
 function Delta({ v, unit = "%", invert }: { v: number | null | undefined; unit?: string; invert?: boolean }) {
   if (v == null || v === 0) return <span className="text-[10px] text-gray-400">vs last period</span>;
   const good = invert ? v < 0 : v > 0;
-  return <span className={`text-[10px] font-medium ${good ? "text-emerald-600" : "text-rose-600"}`}>{v > 0 ? "↑" : "↓"} {Math.abs(v)}{unit} vs Apr</span>;
+  return <span className={`text-[10px] font-medium ${good ? "text-[var(--cmp-text-success)]" : "text-[var(--cmp-text-error)]"}`}>{v > 0 ? "↑" : "↓"} {Math.abs(v)}{unit} vs Apr</span>;
 }
 function Kpi({ icon, tint, label, value, unit, sub, tone, spark, sparkColor, delta, deltaUnit, deltaInvert }: any) {
   return (
@@ -76,7 +76,7 @@ export default async function AccreditationReadiness() {
     </>
   );
 
-  if (!d || !d.provisioned) return <div className="space-y-4">{header}<div className="bg-amber-50 border border-amber-200 rounded-xl p-6"><p className="font-semibold text-amber-900">⚙️ Accreditation self-assessments not provisioned</p><p className="text-sm text-amber-800 mt-1">Apply migration 061 (gov_standard_assessments) and record framework self-assessments to compute readiness.</p></div></div>;
+  if (!d || !d.provisioned) return <div className="space-y-4">{header}<div className="bg-[var(--cmp-surface-warning)] border border-[var(--cmp-color-warning)] rounded-xl p-6"><p className="font-semibold text-amber-900">⚙️ Accreditation self-assessments not provisioned</p><p className="text-sm text-amber-800 mt-1">Apply migration 061 (gov_standard_assessments) and record framework self-assessments to compute readiness.</p></div></div>;
 
   const k = d.kpis;
 
@@ -87,11 +87,11 @@ export default async function AccreditationReadiness() {
       {/* ── KPI ribbon (7) ─────────────────────────────────────────────────── */}
       <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-7 gap-2.5">
         <Kpi icon="🎯" tint="bg-teal-50" label="Overall Readiness" value={k.overall != null ? `${k.overall}%` : "—"} tone={pctTone(k.overall)} spark={k.trendSpark} sparkColor="#14b8a6" delta={k.overallDelta} />
-        <Kpi icon="🏥" tint="bg-emerald-50" label="SafeCare" value={k.safecare?.readiness != null ? `${k.safecare.readiness}%` : "—"} tone={pctTone(k.safecare?.readiness ?? null)} delta={k.safecare?.delta} />
+        <Kpi icon="🏥" tint="bg-[var(--cmp-surface-success)]" label="SafeCare" value={k.safecare?.readiness != null ? `${k.safecare.readiness}%` : "—"} tone={pctTone(k.safecare?.readiness ?? null)} delta={k.safecare?.delta} />
         <Kpi icon="⚕️" tint="bg-violet-50" label="JCI Readiness" value={k.jci?.readiness != null ? `${k.jci.readiness}%` : "—"} tone={pctTone(k.jci?.readiness ?? null)} delta={k.jci?.delta} />
-        <Kpi icon="🏛️" tint="bg-amber-50" label="National Standards" value={k.national?.readiness != null ? `${k.national.readiness}%` : "—"} tone={pctTone(k.national?.readiness ?? null)} delta={k.national?.delta} />
-        <Kpi icon="📁" tint="bg-sky-50" label="Evidence Complete" value={k.evidenceComplete != null ? `${k.evidenceComplete}%` : "—"} tone={pctTone(k.evidenceComplete)} delta={k.evidenceDelta} />
-        <Kpi icon="🚩" tint="bg-rose-50" label="High Risk Standards" value={k.highRisk} tone={k.highRisk ? "text-rose-600" : "text-gray-400"} delta={k.highRiskDelta} deltaUnit="" deltaInvert />
+        <Kpi icon="🏛️" tint="bg-[var(--cmp-surface-warning)]" label="National Standards" value={k.national?.readiness != null ? `${k.national.readiness}%` : "—"} tone={pctTone(k.national?.readiness ?? null)} delta={k.national?.delta} />
+        <Kpi icon="📁" tint="bg-[var(--cmp-surface-information)]" label="Evidence Complete" value={k.evidenceComplete != null ? `${k.evidenceComplete}%` : "—"} tone={pctTone(k.evidenceComplete)} delta={k.evidenceDelta} />
+        <Kpi icon="🚩" tint="bg-[var(--cmp-surface-error)]" label="High Risk Standards" value={k.highRisk} tone={k.highRisk ? "text-[var(--cmp-text-error)]" : "text-gray-400"} delta={k.highRiskDelta} deltaUnit="" deltaInvert />
         <Kpi icon="📅" tint="bg-indigo-50" label="Survey Countdown" value={k.surveyCountdown != null ? k.surveyCountdown : "—"} unit={k.surveyCountdown != null ? "d" : ""} sub={k.nextSurveyName ? `to ${k.nextSurveyName} survey` : "no survey scheduled"} />
       </div>
 
@@ -100,7 +100,7 @@ export default async function AccreditationReadiness() {
         <div className={`${card} p-5`}>
           <h3 className="font-semibold text-gray-900 text-sm mb-3">Readiness by Framework</h3>
           {d.perFramework.length ? <div className="space-y-2.5">{d.perFramework.map((f: any) => (
-            <div key={f.id} className="flex items-center gap-2 text-xs"><span className="text-gray-600 w-28 truncate" title={f.name}>{f.code}</span><div className="flex-1 h-2 rounded-full bg-gray-100 overflow-hidden"><div className="h-full rounded-full" style={{ width: `${f.readiness ?? 0}%`, background: barTone(f.readiness ?? 0) }} /></div><b className={`tabular-nums w-9 text-right ${pctTone(f.readiness)}`}>{f.readiness != null ? `${f.readiness}%` : "—"}</b><span className={`w-10 text-right tabular-nums text-[10px] ${f.delta == null ? "text-gray-300" : f.delta >= 0 ? "text-emerald-600" : "text-rose-600"}`}>{f.delta == null ? "—" : `${f.delta >= 0 ? "↑" : "↓"}${Math.abs(f.delta)}%`}</span></div>
+            <div key={f.id} className="flex items-center gap-2 text-xs"><span className="text-gray-600 w-28 truncate" title={f.name}>{f.code}</span><div className="flex-1 h-2 rounded-full bg-gray-100 overflow-hidden"><div className="h-full rounded-full" style={{ width: `${f.readiness ?? 0}%`, background: barTone(f.readiness ?? 0) }} /></div><b className={`tabular-nums w-9 text-right ${pctTone(f.readiness)}`}>{f.readiness != null ? `${f.readiness}%` : "—"}</b><span className={`w-10 text-right tabular-nums text-[10px] ${f.delta == null ? "text-gray-300" : f.delta >= 0 ? "text-[var(--cmp-text-success)]" : "text-[var(--cmp-text-error)]"}`}>{f.delta == null ? "—" : `${f.delta >= 0 ? "↑" : "↓"}${Math.abs(f.delta)}%`}</span></div>
           ))}</div> : <p className="text-sm text-gray-400 py-8 text-center">No frameworks assessed.</p>}
         </div>
 
@@ -123,7 +123,7 @@ export default async function AccreditationReadiness() {
       {/* ── Work queue · gap analysis · survey readiness ───────────────────── */}
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
         <div className={`${card} p-5`}>
-          <div className="flex items-center justify-between mb-2 gap-2 flex-wrap"><h3 className="font-semibold text-gray-900 text-sm">Accreditation Work Queue</h3><div className="flex gap-1 text-[10px]"><span className="px-2 py-0.5 rounded-full bg-teal-600 text-white">All {d.queueCounts.all}</span><span className="px-2 py-0.5 rounded-full bg-rose-50 text-rose-600">At Risk {d.queueCounts.atRisk}</span><span className="px-2 py-0.5 rounded-full bg-amber-50 text-amber-600">Awaiting Verif. {d.queueCounts.awaitingVerification}</span></div></div>
+          <div className="flex items-center justify-between mb-2 gap-2 flex-wrap"><h3 className="font-semibold text-gray-900 text-sm">Accreditation Work Queue</h3><div className="flex gap-1 text-[10px]"><span className="px-2 py-0.5 rounded-full bg-teal-600 text-white">All {d.queueCounts.all}</span><span className="px-2 py-0.5 rounded-full bg-[var(--cmp-surface-error)] text-[var(--cmp-text-error)]">At Risk {d.queueCounts.atRisk}</span><span className="px-2 py-0.5 rounded-full bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]">Awaiting Verif. {d.queueCounts.awaitingVerification}</span></div></div>
           {d.workQueue.length ? (
             <div className="overflow-x-auto">
               <table className="w-full text-xs">
@@ -148,10 +148,10 @@ export default async function AccreditationReadiness() {
           <h3 className="font-semibold text-gray-900 text-sm mb-3">Gap Analysis Summary</h3>
           <div className="space-y-2.5">
             <div className="flex items-center justify-between text-sm"><span className="text-gray-600">Total Gaps Identified</span><b className="tabular-nums text-gray-900">{d.gap.total}</b></div>
-            <div className="flex items-center justify-between text-xs"><span className="flex items-center gap-1.5 text-gray-600"><span className="w-1.5 h-1.5 rounded-full bg-rose-500" />High Priority Gaps</span><b className="tabular-nums text-rose-600">{d.gap.high}</b></div>
-            <div className="flex items-center justify-between text-xs"><span className="flex items-center gap-1.5 text-gray-600"><span className="w-1.5 h-1.5 rounded-full bg-amber-400" />Medium Priority Gaps</span><b className="tabular-nums text-amber-600">{d.gap.medium}</b></div>
-            <div className="flex items-center justify-between text-xs"><span className="flex items-center gap-1.5 text-gray-600"><span className="w-1.5 h-1.5 rounded-full bg-sky-400" />Not Yet Assessed</span><b className="tabular-nums text-gray-600">{d.gap.low}</b></div>
-            <div className="border-t border-gray-100 pt-2 flex items-center justify-between text-xs"><span className="flex items-center gap-1.5 text-gray-600"><span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />Closed This Month</span><b className="tabular-nums text-emerald-600">{d.gap.closedThisMonth}</b></div>
+            <div className="flex items-center justify-between text-xs"><span className="flex items-center gap-1.5 text-gray-600"><span className="w-1.5 h-1.5 rounded-full bg-[var(--cmp-color-error)]" />High Priority Gaps</span><b className="tabular-nums text-[var(--cmp-text-error)]">{d.gap.high}</b></div>
+            <div className="flex items-center justify-between text-xs"><span className="flex items-center gap-1.5 text-gray-600"><span className="w-1.5 h-1.5 rounded-full bg-[var(--cmp-color-warning)]" />Medium Priority Gaps</span><b className="tabular-nums text-[var(--cmp-text-warning)]">{d.gap.medium}</b></div>
+            <div className="flex items-center justify-between text-xs"><span className="flex items-center gap-1.5 text-gray-600"><span className="w-1.5 h-1.5 rounded-full bg-[var(--cmp-color-information)]" />Not Yet Assessed</span><b className="tabular-nums text-gray-600">{d.gap.low}</b></div>
+            <div className="border-t border-gray-100 pt-2 flex items-center justify-between text-xs"><span className="flex items-center gap-1.5 text-gray-600"><span className="w-1.5 h-1.5 rounded-full bg-[var(--cmp-color-success)]" />Closed This Month</span><b className="tabular-nums text-[var(--cmp-text-success)]">{d.gap.closedThisMonth}</b></div>
           </div>
         </div>
 
@@ -170,7 +170,7 @@ export default async function AccreditationReadiness() {
         <div className={`${card} p-5`}>
           <h3 className="font-semibold text-gray-900 text-sm mb-3">Accreditation Calendar</h3>
           {d.calendar.length ? <div className="space-y-2">{d.calendar.map((c: any, i: number) => (
-            <div key={i} className="flex items-center gap-2 text-xs"><div className="w-10 shrink-0 text-center"><p className="text-[9px] text-gray-400 uppercase">{monthAbbr(c.date)}</p><p className="text-sm font-bold text-gray-700 leading-none">{(c.date ?? "").slice(8, 10)}</p></div><div className="min-w-0 flex-1"><p className="text-gray-700 truncate">{c.title}</p><p className="text-[10px] text-gray-400 capitalize truncate">{c.type}</p></div><span className={`text-[9px] font-semibold rounded px-1.5 py-0.5 shrink-0 ${c.status === "overdue" ? "bg-rose-100 text-rose-700" : c.dueSoon ? "bg-amber-100 text-amber-700" : "bg-sky-100 text-sky-700"}`}>{c.status === "overdue" ? "Overdue" : c.dueSoon ? "Due Soon" : "Scheduled"}</span></div>
+            <div key={i} className="flex items-center gap-2 text-xs"><div className="w-10 shrink-0 text-center"><p className="text-[9px] text-gray-400 uppercase">{monthAbbr(c.date)}</p><p className="text-sm font-bold text-gray-700 leading-none">{(c.date ?? "").slice(8, 10)}</p></div><div className="min-w-0 flex-1"><p className="text-gray-700 truncate">{c.title}</p><p className="text-[10px] text-gray-400 capitalize truncate">{c.type}</p></div><span className={`text-[9px] font-semibold rounded px-1.5 py-0.5 shrink-0 ${c.status === "overdue" ? "bg-[var(--cmp-surface-error)] text-[var(--cmp-text-error)]" : c.dueSoon ? "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]" : "bg-[var(--cmp-surface-information)] text-[var(--cmp-text-information)]"}`}>{c.status === "overdue" ? "Overdue" : c.dueSoon ? "Due Soon" : "Scheduled"}</span></div>
           ))}</div> : <p className="text-sm text-gray-400 py-6 text-center">No scheduled surveys or obligations.</p>}
         </div>
 
@@ -184,14 +184,14 @@ export default async function AccreditationReadiness() {
         <div className={`${card} p-5`}>
           <div className="flex items-center gap-2 mb-3"><span className="w-7 h-7 rounded-lg bg-violet-50 flex items-center justify-center text-sm">🤖</span><h3 className="font-semibold text-gray-900 text-sm">AI Accreditation Insights</h3></div>
           {d.ai.length ? <div className="space-y-2">{d.ai.map((a: any, i: number) => (
-            <div key={i} className="flex items-start gap-2 rounded-lg border border-gray-100 p-2.5"><span className={`w-1.5 h-1.5 rounded-full mt-1.5 shrink-0 ${a.tone === "rose" ? "bg-rose-500" : a.tone === "amber" ? "bg-amber-400" : a.tone === "sky" ? "bg-sky-400" : "bg-emerald-500"}`} /><div className="min-w-0 flex-1"><p className="text-xs font-medium text-gray-800 leading-snug">{a.text}</p><p className="text-[10px] text-gray-400 truncate">{a.detail}</p></div><span className="text-[10px] text-gray-400 shrink-0">conf {a.confidence}%</span></div>
+            <div key={i} className="flex items-start gap-2 rounded-lg border border-gray-100 p-2.5"><span className={`w-1.5 h-1.5 rounded-full mt-1.5 shrink-0 ${a.tone === "rose" ? "bg-[var(--cmp-color-error)]" : a.tone === "amber" ? "bg-[var(--cmp-color-warning)]" : a.tone === "sky" ? "bg-[var(--cmp-color-information)]" : "bg-[var(--cmp-color-success)]"}`} /><div className="min-w-0 flex-1"><p className="text-xs font-medium text-gray-800 leading-snug">{a.text}</p><p className="text-[10px] text-gray-400 truncate">{a.detail}</p></div><span className="text-[10px] text-gray-400 shrink-0">conf {a.confidence}%</span></div>
           ))}</div> : <p className="text-sm text-gray-400 py-6 text-center">No accreditation signals to action right now.</p>}
         </div>
       </div>
 
       <div className="flex items-center justify-between flex-wrap gap-2 text-[10px] text-gray-400 pb-4">
         <span>Data sources: Audit &amp; Compliance · CAPA &amp; Improvement · Incident Management · Risk Register · Clinical Indicators · Learning &amp; Competency</span>
-        <span className="flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-emerald-500" /> Enterprise accreditation programme · consolidation over gov_standard_assessments (migration 061)</span>
+        <span className="flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-[var(--cmp-color-success)]" /> Enterprise accreditation programme · consolidation over gov_standard_assessments (migration 061)</span>
       </div>
     </div>
   );

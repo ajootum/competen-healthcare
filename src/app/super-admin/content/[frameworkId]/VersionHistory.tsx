@@ -55,7 +55,7 @@ export default function VersionHistory({ versions }: { versions: Version[] }) {
               >
                 <div className="flex items-center gap-3">
                   <div className={`w-8 h-8 rounded-lg flex items-center justify-center text-xs font-bold shrink-0 ${
-                    i === 0 ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-500"
+                    i === 0 ? "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]" : "bg-gray-100 text-gray-500"
                   }`}>
                     v{v.version_num}
                   </div>
@@ -63,7 +63,7 @@ export default function VersionHistory({ versions }: { versions: Version[] }) {
                     <div className="flex items-center gap-2">
                       <p className="text-sm font-medium text-gray-900">
                         Version {v.version_num}
-                        {i === 0 && <span className="ml-1.5 text-[10px] bg-green-100 text-green-700 font-bold px-1.5 py-0.5 rounded">Current</span>}
+                        {i === 0 && <span className="ml-1.5 text-[10px] bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)] font-bold px-1.5 py-0.5 rounded">Current</span>}
                       </p>
                     </div>
                     <p className="text-[10px] text-gray-400">

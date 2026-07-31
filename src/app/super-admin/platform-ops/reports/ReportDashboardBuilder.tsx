@@ -57,7 +57,7 @@ function KeyValRows({ rows, setRows, prefix, noun }: { rows: NF[]; setRows: (fn:
             <input className={`${input} flex-1`} value={f.label} onChange={e => setRows(r => r.map((x, j) => j === i ? { ...x, label: e.target.value } : x))} placeholder={`${noun} label`} />
             <select className={`${input} w-28`} value={f.type} onChange={e => setRows(r => r.map((x, j) => j === i ? { ...x, type: e.target.value } : x))}>{FIELD_TYPES.map(t => <option key={t} value={t}>{t}</option>)}</select>
             <span className="text-[9px] text-gray-300 font-mono">{f.key}</span>
-            <button onClick={() => setRows(r => r.filter((_, j) => j !== i))} className="text-gray-300 hover:text-rose-600 text-xs">✕</button>
+            <button onClick={() => setRows(r => r.filter((_, j) => j !== i))} className="text-gray-300 hover:text-[var(--cmp-text-error)] text-xs">✕</button>
           </div>
         ))}
       </div>
@@ -108,7 +108,7 @@ export default function ReportDashboardBuilder({ objects, metrics }: { objects: 
         <div className="space-y-1 max-h-[520px] overflow-y-auto">
           {objects.map(o => (
             <button key={o.object_key} onClick={() => pick(o.object_key)} className={`w-full text-left rounded-lg px-2.5 py-1.5 transition-colors ${selKey === o.object_key ? "bg-indigo-50 ring-1 ring-indigo-200" : "hover:bg-gray-50"}`}>
-              <p className="text-xs font-medium text-gray-800 truncate flex items-center gap-1.5"><span className={`text-[8px] px-1 py-px rounded ${o.object_type === "DASHBOARD" ? "bg-sky-100 text-sky-700" : "bg-violet-100 text-violet-700"}`}>{o.object_type === "DASHBOARD" ? "DASH" : "RPT"}</span>{o.display_name}</p>
+              <p className="text-xs font-medium text-gray-800 truncate flex items-center gap-1.5"><span className={`text-[8px] px-1 py-px rounded ${o.object_type === "DASHBOARD" ? "bg-[var(--cmp-surface-information)] text-[var(--cmp-text-information)]" : "bg-violet-100 text-violet-700"}`}>{o.object_type === "DASHBOARD" ? "DASH" : "RPT"}</span>{o.display_name}</p>
               <p className="text-[10px] text-gray-400 truncate">{o.object_type === "DASHBOARD" ? `${o.definition?.tiles?.length ?? 0} tile(s)` : `${o.definition?.sections?.length ?? 0} section(s)`}</p>
             </button>
           ))}
@@ -132,7 +132,7 @@ export default function ReportDashboardBuilder({ objects, metrics }: { objects: 
                         <input className={`${input} flex-1 min-w-[7rem]`} value={t.title} onChange={e => setTiles(ts => ts.map((x, j) => j === i ? { ...x, title: e.target.value } : x))} placeholder="Tile title" />
                         <MetricSelect value={t.metric ?? ""} onChange={v => setTiles(ts => ts.map((x, j) => j === i ? { ...x, metric: v } : x))} metrics={metrics} />
                         <select className={`${input} w-16`} value={t.span} onChange={e => setTiles(ts => ts.map((x, j) => j === i ? { ...x, span: Number(e.target.value) } : x))} title="grid span">{SPANS.map(s => <option key={s} value={s}>{s}/12</option>)}</select>
-                        <button onClick={() => setTiles(ts => ts.filter((_, j) => j !== i))} className="text-gray-300 hover:text-rose-600 text-xs">✕</button>
+                        <button onClick={() => setTiles(ts => ts.filter((_, j) => j !== i))} className="text-gray-300 hover:text-[var(--cmp-text-error)] text-xs">✕</button>
                       </div>
                     ))}
                   </div>
@@ -188,7 +188,7 @@ export default function ReportDashboardBuilder({ objects, metrics }: { objects: 
                         {s.type !== "page_break" && <input className={`${input} flex-1 min-w-[7rem]`} value={s.title} onChange={e => setSections(ss => ss.map((x, j) => j === i ? { ...x, title: e.target.value } : x))} placeholder="Section title" />}
                         {["kpi_band", "table", "chart"].includes(s.type) && <MetricSelect value={s.metric ?? ""} onChange={v => setSections(ss => ss.map((x, j) => j === i ? { ...x, metric: v } : x))} metrics={metrics} />}
                         <span className="text-[9px] text-gray-300 font-mono">{s.key}</span>
-                        <button onClick={() => setSections(ss => ss.filter((_, j) => j !== i))} className="text-gray-300 hover:text-rose-600 text-xs">✕</button>
+                        <button onClick={() => setSections(ss => ss.filter((_, j) => j !== i))} className="text-gray-300 hover:text-[var(--cmp-text-error)] text-xs">✕</button>
                       </div>
                     ))}
                   </div>
@@ -232,7 +232,7 @@ export default function ReportDashboardBuilder({ objects, metrics }: { objects: 
               </>
             )}
 
-            {msg && <p className={`text-xs mt-3 ${msg.startsWith("✓") ? "text-emerald-600" : "text-rose-600"}`}>{msg}</p>}
+            {msg && <p className={`text-xs mt-3 ${msg.startsWith("✓") ? "text-[var(--cmp-text-success)]" : "text-[var(--cmp-text-error)]"}`}>{msg}</p>}
             <div className="flex items-center justify-end mt-4"><button onClick={save} disabled={busy} className="text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg px-4 py-2 disabled:opacity-50">{busy ? "Saving…" : `Save ${isDash ? "dashboard" : "report"}`}</button></div>
           </>
         )}

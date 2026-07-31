@@ -26,7 +26,7 @@ export default async function AuditCentrePage() {
         <p className="text-sm text-gray-500 mt-1">Every landlord-plane action — provisioning, lifecycle, configuration — with actor, target and reason.</p>
       </div>
       {!ready ? (
-        <div className="bg-amber-50 border border-amber-200 rounded-xl p-5 text-sm text-amber-700">Apply migrations <code className="font-mono text-xs">040–042</code> to activate the audit centre.</div>
+        <div className="bg-[var(--cmp-surface-warning)] border border-[var(--cmp-color-warning)] rounded-xl p-5 text-sm text-[var(--cmp-text-warning)]">Apply migrations <code className="font-mono text-xs">040–042</code> to activate the audit centre.</div>
       ) : (
         <div className={card}>
           {events.length === 0 && <p className="text-sm text-gray-400">No landlord actions recorded yet. Provisioning a tenant writes the first event.</p>}

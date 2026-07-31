@@ -8,8 +8,8 @@ export const dynamic = "force-dynamic";
 // UMW-OPC-006 Safety & Escalation Oversight — live risks, incidents, escalation timing and a bed-level risk hotspot
 // over op_safety_alerts + op_escalations + op_patients. Dark command surface. Gate hospital_admin/super_admin.
 /* eslint-disable @typescript-eslint/no-explicit-any */
-const RISK_TONE: Record<string, string> = { high: "bg-rose-500/90 text-white", medium: "bg-amber-500/90 text-slate-900", low: "bg-emerald-500/90 text-slate-900", empty: "bg-slate-700/40 text-slate-500 border border-slate-600" };
-const bandDot = (b: string) => (b === "high" ? "bg-rose-500" : b === "medium" ? "bg-amber-500" : "bg-slate-500");
+const RISK_TONE: Record<string, string> = { high: "bg-[var(--cmp-color-error)]/90 text-white", medium: "bg-[var(--cmp-color-warning)]/90 text-slate-900", low: "bg-[var(--cmp-color-success)]/90 text-slate-900", empty: "bg-slate-700/40 text-slate-500 border border-slate-600" };
+const bandDot = (b: string) => (b === "high" ? "bg-[var(--cmp-color-error)]" : b === "medium" ? "bg-[var(--cmp-color-warning)]" : "bg-slate-500");
 const fmtElapsed = (m: number) => (m >= 60 ? `${Math.floor(m / 60)}h ${m % 60}m` : `${m}m`);
 
 export default async function SafetyPage({ searchParams }: { searchParams: Promise<{ dept?: string }> }) {
@@ -21,7 +21,7 @@ export default async function SafetyPage({ searchParams }: { searchParams: Promi
   ]);
 
   const strip = <TopStrip code="UMW-OPC-006 · Operational Command" title="Safety & Escalation Oversight" departments={departments} />;
-  if (!d.provisioned) return <div className="space-y-4">{strip}<div className="bg-amber-50 border border-amber-200 rounded-xl p-6"><p className="font-semibold text-amber-900">⚙️ Operational stores not provisioned</p><p className="text-sm text-amber-800 mt-1">Apply migration 038 then seed safety + escalations.</p></div></div>;
+  if (!d.provisioned) return <div className="space-y-4">{strip}<div className="bg-[var(--cmp-surface-warning)] border border-[var(--cmp-color-warning)] rounded-xl p-6"><p className="font-semibold text-amber-900">⚙️ Operational stores not provisioned</p><p className="text-sm text-amber-800 mt-1">Apply migration 038 then seed safety + escalations.</p></div></div>;
 
   const k = d.kpis;
   const maxTrend = Math.max(1, ...d.trend.map((t: any) => t.n));
@@ -64,7 +64,7 @@ export default async function SafetyPage({ searchParams }: { searchParams: Promi
                 <div key={l} className="rounded-lg bg-slate-800/50 p-2"><p className={`text-base font-bold tabular-nums ${tone}`}>{v}</p><p className="text-[9px] text-slate-400 leading-tight">{l}</p></div>
               ))}
             </div>
-            <div className="space-y-1">{d.workflow.map((w: any) => <div key={w.stage} className="flex items-center gap-2 text-[10px]"><span className="text-slate-400 w-24">{w.stage}</span><div className="flex-1 h-1.5 rounded-full bg-slate-700 overflow-hidden"><div className="h-full rounded-full bg-blue-500" style={{ width: `${(w.n / Math.max(1, d.workflow[0].n)) * 100}%` }} /></div><span className="text-white tabular-nums w-6 text-right">{w.n}</span></div>)}</div>
+            <div className="space-y-1">{d.workflow.map((w: any) => <div key={w.stage} className="flex items-center gap-2 text-[10px]"><span className="text-slate-400 w-24">{w.stage}</span><div className="flex-1 h-1.5 rounded-full bg-slate-700 overflow-hidden"><div className="h-full rounded-full bg-[var(--cmp-color-information)]" style={{ width: `${(w.n / Math.max(1, d.workflow[0].n)) * 100}%` }} /></div><span className="text-white tabular-nums w-6 text-right">{w.n}</span></div>)}</div>
           </Card>
 
           <Card title="Live Alert Feed">
@@ -82,7 +82,7 @@ export default async function SafetyPage({ searchParams }: { searchParams: Promi
 
           <Card title="Incident Trend" right={<span className="text-[9px] text-slate-500">7 days</span>}>
             <div className="flex items-end gap-1.5 h-24">{d.trend.map((t: any) => (
-              <div key={t.d} className="flex-1 flex flex-col items-center gap-1" title={`${t.d}: ${t.n}`}><div className="w-full bg-rose-500/70 rounded-t" style={{ height: `${(t.n / maxTrend) * 76}px` }} /><span className="text-[7px] text-slate-500">{t.d}</span></div>
+              <div key={t.d} className="flex-1 flex flex-col items-center gap-1" title={`${t.d}: ${t.n}`}><div className="w-full bg-[var(--cmp-color-error)]/70 rounded-t" style={{ height: `${(t.n / maxTrend) * 76}px` }} /><span className="text-[7px] text-slate-500">{t.d}</span></div>
             ))}</div>
           </Card>
 
@@ -95,7 +95,7 @@ export default async function SafetyPage({ searchParams }: { searchParams: Promi
 
           <Card title="Risk Hotspot Map">
             <div className="grid grid-cols-6 gap-1.5">{d.hotspot.map((b: any) => <div key={b.label} title={`${b.label} · ${b.risk} risk`} className={`aspect-square rounded-md flex items-center justify-center text-[9px] font-semibold ${RISK_TONE[b.risk]}`}>{String(b.label).replace(/\D/g, "").slice(-3) || b.label}</div>)}</div>
-            <div className="flex flex-wrap gap-x-3 gap-y-1 mt-3 text-[10px] text-slate-400"><span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-rose-500" />High</span><span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-amber-500" />Medium</span><span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-emerald-500" />Low</span><span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-slate-600" />Empty</span></div>
+            <div className="flex flex-wrap gap-x-3 gap-y-1 mt-3 text-[10px] text-slate-400"><span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-[var(--cmp-color-error)]" />High</span><span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-[var(--cmp-color-warning)]" />Medium</span><span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-[var(--cmp-color-success)]" />Low</span><span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-slate-600" />Empty</span></div>
           </Card>
         </div>
       </div>

@@ -89,7 +89,7 @@ export default async function AssessorAssessPage({ searchParams }: { searchParam
         )}
 
         {!hospitalId ? (
-          <div className="bg-amber-50 border border-amber-200 rounded-xl p-6 text-sm text-amber-800">
+          <div className="bg-[var(--cmp-surface-warning)] border border-[var(--cmp-color-warning)] rounded-xl p-6 text-sm text-amber-800">
             Your assessor account is not linked to a hospital. Ask a hospital administrator to link you.
           </div>
         ) : !(nurses ?? []).length ? (
@@ -143,9 +143,9 @@ export default async function AssessorAssessPage({ searchParams }: { searchParam
     return (
       <div className="max-w-2xl">
         <h1 className="sr-only">Conduct Assessment</h1>
-        <div className="bg-amber-50 border border-amber-200 rounded-xl p-6">
+        <div className="bg-[var(--cmp-surface-warning)] border border-[var(--cmp-color-warning)] rounded-xl p-6">
           <p className="text-amber-800 font-semibold mb-1">No active cycle found</p>
-          <p className="text-amber-700 text-sm mb-3">This clinician does not have an active competency cycle. Create one from the Admin panel before assessing.</p>
+          <p className="text-[var(--cmp-text-warning)] text-sm mb-3">This clinician does not have an active competency cycle. Create one from the Admin panel before assessing.</p>
           <Link href="/assessor/assess" className="text-sm text-indigo-600 hover:underline">← Back to session setup</Link>
         </div>
       </div>

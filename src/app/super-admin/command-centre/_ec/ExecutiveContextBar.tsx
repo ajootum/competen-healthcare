@@ -40,10 +40,10 @@ export default function ExecutiveContextBar({ rangeDays, generatedAt }: { rangeD
       <div className="ml-auto flex items-end gap-2">
         <span className="text-[11px] text-gray-400 pb-1.5 tabular-nums">Updated {time}</span>
         <button onClick={() => setAuto(a => !a)}
-          className={`flex flex-col gap-0.5 rounded-lg border px-3 py-1.5 ${auto ? "border-green-200 bg-green-50" : "border-gray-200 bg-white"}`}>
+          className={`flex flex-col gap-0.5 rounded-lg border px-3 py-1.5 ${auto ? "border-[var(--cmp-color-success)] bg-[var(--cmp-surface-success)]" : "border-gray-200 bg-white"}`}>
           <span className={lab}>Auto Refresh</span>
-          <span className={`text-sm font-medium inline-flex items-center gap-1.5 ${auto ? "text-green-700" : "text-gray-500"}`}>
-            <span className={`w-1.5 h-1.5 rounded-full ${auto ? (refreshing ? "bg-green-400 animate-ping" : "bg-green-500") : "bg-gray-400"}`} />{auto ? "Live" : "Off"}
+          <span className={`text-sm font-medium inline-flex items-center gap-1.5 ${auto ? "text-[var(--cmp-text-success)]" : "text-gray-500"}`}>
+            <span className={`w-1.5 h-1.5 rounded-full ${auto ? (refreshing ? "bg-[var(--cmp-color-success)] animate-ping" : "bg-[var(--cmp-color-success)]") : "bg-gray-400"}`} />{auto ? "Live" : "Off"}
           </span>
         </button>
       </div>

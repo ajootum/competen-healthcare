@@ -54,7 +54,7 @@ export function NewObjectiveButton({ themes }: { themes: Theme[] }) {
           </select>
           <div className="flex items-center gap-1.5"><input type="number" min={0} max={100} value={f.target_pct} onChange={e => setF({ ...f, target_pct: Math.max(0, Math.min(100, Number(e.target.value) || 0)) })} className={`${input} text-right tabular-nums`} /><span className="text-[11px] text-gray-400 shrink-0">% target</span></div>
         </div>
-        {err && <p className="text-[11px] text-rose-600">{err}</p>}
+        {err && <p className="text-[11px] text-[var(--cmp-text-error)]">{err}</p>}
         <div className="flex items-center gap-2 pt-0.5">
           <button onClick={submit} disabled={busy} className="text-sm font-semibold text-white bg-teal-600 hover:bg-teal-700 disabled:opacity-50 rounded-lg px-3.5 py-1.5">{busy ? "Creating…" : "Create draft"}</button>
           <span className="text-[11px] text-gray-400">Created as a draft — submit or publish from its row.</span>
@@ -66,11 +66,11 @@ export function NewObjectiveButton({ themes }: { themes: Theme[] }) {
 
 const ACTIONS: Record<string, { action: string; label: string; cls: string }[]> = {
   draft: [
-    { action: "submit", label: "Submit", cls: "text-amber-700 border-amber-200 hover:bg-amber-50" },
-    { action: "publish", label: "Publish", cls: "text-emerald-700 border-emerald-200 hover:bg-emerald-50" },
+    { action: "submit", label: "Submit", cls: "text-[var(--cmp-text-warning)] border-[var(--cmp-color-warning)] hover:bg-[var(--cmp-surface-warning)]" },
+    { action: "publish", label: "Publish", cls: "text-emerald-700 border-[var(--cmp-color-success)] hover:bg-[var(--cmp-surface-success)]" },
   ],
   pending: [
-    { action: "publish", label: "Approve & publish", cls: "text-emerald-700 border-emerald-200 hover:bg-emerald-50" },
+    { action: "publish", label: "Approve & publish", cls: "text-emerald-700 border-[var(--cmp-color-success)] hover:bg-[var(--cmp-surface-success)]" },
     { action: "withdraw", label: "Withdraw", cls: "text-gray-600 border-gray-200 hover:bg-gray-50" },
   ],
   published: [
@@ -102,7 +102,7 @@ export function ObjectiveControls({ objective }: { objective: { id: string; stat
           {busy === a.action ? "…" : a.label}
         </button>
       ))}
-      {err && <span className="text-[10px] text-rose-600">{err}</span>}
+      {err && <span className="text-[10px] text-[var(--cmp-text-error)]">{err}</span>}
     </div>
   );
 }

@@ -39,8 +39,8 @@ export default async function AtRiskLearnersPage() {
   }).sort((a, b) => b.issues - a.issues);
 
   const LEVEL_CLS: Record<string, string> = {
-    critical: "bg-red-600 text-white", high: "bg-red-100 text-red-700",
-    moderate: "bg-amber-100 text-amber-700", low: "bg-green-100 text-green-700",
+    critical: "bg-[var(--cmp-color-critical)] text-white", high: "bg-[var(--cmp-surface-critical)] text-[var(--cmp-text-critical)]",
+    moderate: "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]", low: "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]",
   };
 
   return (

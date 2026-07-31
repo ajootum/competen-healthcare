@@ -42,7 +42,7 @@ export default function PracticeLog({ scenarios, initialHistory }: { scenarios: 
         <div className="flex flex-wrap items-center gap-2">
           <span className="text-[10px] text-gray-400 font-medium">Outcome</span>
           <button onClick={() => setOutcome("completed")} className={`text-xs font-semibold rounded-lg px-3 py-1.5 border ${outcome === "completed" ? "bg-teal-50 border-teal-200 text-teal-700" : "border-gray-200 text-gray-500"}`}>Completed confidently</button>
-          <button onClick={() => setOutcome("needs_practice")} className={`text-xs font-semibold rounded-lg px-3 py-1.5 border ${outcome === "needs_practice" ? "bg-amber-50 border-amber-200 text-amber-700" : "border-gray-200 text-gray-500"}`}>Needs more practice</button>
+          <button onClick={() => setOutcome("needs_practice")} className={`text-xs font-semibold rounded-lg px-3 py-1.5 border ${outcome === "needs_practice" ? "bg-[var(--cmp-surface-warning)] border-[var(--cmp-color-warning)] text-[var(--cmp-text-warning)]" : "border-gray-200 text-gray-500"}`}>Needs more practice</button>
         </div>
         <div className="flex flex-wrap gap-3">
           <label className="flex items-center gap-1.5 text-xs text-gray-600"><span className="text-[10px] text-gray-400">Confidence 1–5</span><input value={rating} onChange={e => setRating(e.target.value)} type="number" min={1} max={5} className="w-16 text-xs border border-gray-200 rounded-lg px-2 py-1.5" /></label>
@@ -67,7 +67,7 @@ export default function PracticeLog({ scenarios, initialHistory }: { scenarios: 
               <div key={s.id} className="flex items-center gap-3 px-4 py-2.5">
                 <span className="text-sm text-gray-800 truncate flex-1">{s.scenario_name ?? "Practice session"}</span>
                 {s.self_rating != null && <span className="text-[10px] text-gray-400 shrink-0">conf {s.self_rating}/5</span>}
-                <span className={`text-[8px] font-bold uppercase tracking-wide border rounded px-1.5 py-0.5 shrink-0 ${s.outcome === "needs_practice" ? "text-amber-700 bg-amber-50 border-amber-100" : "text-teal-700 bg-teal-50 border-teal-100"}`}>{s.outcome === "needs_practice" ? "Practice" : "Done"}</span>
+                <span className={`text-[8px] font-bold uppercase tracking-wide border rounded px-1.5 py-0.5 shrink-0 ${s.outcome === "needs_practice" ? "text-[var(--cmp-text-warning)] bg-[var(--cmp-surface-warning)] border-[var(--cmp-color-warning)]" : "text-teal-700 bg-teal-50 border-teal-100"}`}>{s.outcome === "needs_practice" ? "Practice" : "Done"}</span>
               </div>
             ))}
           </div>

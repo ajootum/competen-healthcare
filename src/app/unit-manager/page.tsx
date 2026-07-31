@@ -17,7 +17,7 @@ export const dynamic = "force-dynamic";
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 const card = cardClass;
-const pct = (n: number) => (n >= 85 ? "text-green-600" : n >= 60 ? "text-amber-600" : "text-red-600");
+const pct = (n: number) => (n >= 85 ? "text-[var(--cmp-text-success)]" : n >= 60 ? "text-[var(--cmp-text-warning)]" : "text-[var(--cmp-text-critical)]");
 
 function Kpi({ n, label, tone, sub, href }: { n: any; label: string; tone?: string; sub?: string; href?: string }) {
   const inner = (
@@ -83,7 +83,7 @@ export default async function UnitManagerDashboard({ searchParams }: { searchPar
   // Derived Unit Health Score = mean of the available compliance signals (honest: labelled derived).
   const health = [capability?.coverage, learning?.compliance, quality?.avgCompliance].filter((x: any) => x != null) as number[];
   const healthScore = health.length ? Math.round(health.reduce((a, b) => a + b, 0) / health.length) : null;
-  const status = highEsc ? { label: "Escalation", tone: "text-rose-600", dot: "bg-rose-500" } : escalations.length ? { label: "Attention", tone: "text-amber-600", dot: "bg-amber-500" } : { label: "Stable", tone: "text-green-600", dot: "bg-green-500" };
+  const status = highEsc ? { label: "Escalation", tone: "text-[var(--cmp-text-error)]", dot: "bg-[var(--cmp-color-error)]" } : escalations.length ? { label: "Attention", tone: "text-[var(--cmp-text-warning)]", dot: "bg-[var(--cmp-color-warning)]" } : { label: "Stable", tone: "text-[var(--cmp-text-success)]", dot: "bg-[var(--cmp-color-success)]" };
 
   return (
     <div className="space-y-4">
@@ -96,14 +96,14 @@ export default async function UnitManagerDashboard({ searchParams }: { searchPar
       {/* Unit header card */}
       <div className={`${card} flex flex-wrap items-center gap-x-8 gap-y-3`}>
         <div><p className="text-[10px] text-gray-400 uppercase">Unit</p><p className="text-sm font-bold text-gray-900">{activeShift?.departments?.name ?? "Unit overview"}</p></div>
-        <div><p className="text-[10px] text-gray-400 uppercase">Occupancy</p><p className="text-sm font-bold text-gray-900">{occupied} / {beds.length} <span className={occPct >= 90 ? "text-rose-600" : "text-gray-400"}>{beds.length ? `${occPct}%` : ""}</span></p></div>
+        <div><p className="text-[10px] text-gray-400 uppercase">Occupancy</p><p className="text-sm font-bold text-gray-900">{occupied} / {beds.length} <span className={occPct >= 90 ? "text-[var(--cmp-text-error)]" : "text-gray-400"}>{beds.length ? `${occPct}%` : ""}</span></p></div>
         <div><p className="text-[10px] text-gray-400 uppercase">Current Shift</p><p className="text-sm font-bold text-gray-900 capitalize">{activeShift?.shift_type?.replace(/_/g, " ") ?? "—"}</p></div>
         <div><p className="text-[10px] text-gray-400 uppercase">Shift Supervisor</p><p className="text-sm font-bold text-gray-900">{activeShift?.profiles?.full_name ?? "—"}</p></div>
         <div><p className="text-[10px] text-gray-400 uppercase">Unit Health</p><p className={`text-sm font-bold ${healthScore != null ? pct(healthScore) : "text-gray-400"}`}>{healthScore != null ? `${healthScore}%` : "—"}</p></div>
         <div><p className="text-[10px] text-gray-400 uppercase">Status</p><p className={`text-sm font-bold flex items-center gap-1.5 ${status.tone}`}><span className={`w-2 h-2 rounded-full ${status.dot}`} />{status.label}</p></div>
       </div>
 
-      {!d.ready && <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 text-sm text-amber-800">Clinical Operations tables aren&apos;t provisioned yet — operational KPIs show —; competency, learning and quality still populate from existing data.</div>}
+      {!d.ready && <div className="bg-[var(--cmp-surface-warning)] border border-[var(--cmp-color-warning)] rounded-xl p-4 text-sm text-amber-800">Clinical Operations tables aren&apos;t provisioned yet — operational KPIs show —; competency, learning and quality still populate from existing data.</div>}
 
       {/* 4 KPI groups */}
       <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-4 gap-4">
@@ -112,8 +112,8 @@ export default async function UnitManagerDashboard({ searchParams }: { searchPar
           <Kpi n={dischargePending} label="Discharges Pending" />
           <Kpi n={transferPending} label="Transfers Pending" />
           <Kpi n={patients.length} label="Current Census" />
-          <Kpi n={occPct ? `${occPct}%` : "—"} label="Occupancy" tone={occPct >= 90 ? "text-rose-600" : undefined} />
-          <Kpi n={escalations.length} label="Escalations" tone={highEsc ? "text-rose-600" : undefined} href="/unit-manager/operations-centre" />
+          <Kpi n={occPct ? `${occPct}%` : "—"} label="Occupancy" tone={occPct >= 90 ? "text-[var(--cmp-text-error)]" : undefined} />
+          <Kpi n={escalations.length} label="Escalations" tone={highEsc ? "text-[var(--cmp-text-error)]" : undefined} href="/unit-manager/operations-centre" />
         </Group>
         <Group title="Workforce" icon="👥">
           <Kpi n={onDuty.length} label="Staff on Duty" />
@@ -127,16 +127,16 @@ export default async function UnitManagerDashboard({ searchParams }: { searchPar
           <Kpi n={`${capability?.coverage ?? 0}%`} label="Compliance" tone={pct(capability?.coverage ?? 0)} href="/unit-manager/competency" />
           <Kpi n={learning?.compliance ?? 0} label="Learning %" tone={pct(learning?.compliance ?? 0)} href="/unit-manager/learning" />
           <Kpi n={assessment?.activeCycles ?? 0} label="Active Cycles" />
-          <Kpi n={capability?.expiring ?? 0} label="Expiring 60d" tone={capability?.expiring ? "text-amber-600" : undefined} />
-          <Kpi n={assessment?.pendingValidations ?? 0} label="Validations" tone={assessment?.pendingValidations ? "text-amber-600" : undefined} href="/unit-manager/assessment" />
-          <Kpi n={capability?.gaps ?? 0} label="Dev. Gaps" tone={capability?.gaps ? "text-amber-600" : undefined} />
+          <Kpi n={capability?.expiring ?? 0} label="Expiring 60d" tone={capability?.expiring ? "text-[var(--cmp-text-warning)]" : undefined} />
+          <Kpi n={assessment?.pendingValidations ?? 0} label="Validations" tone={assessment?.pendingValidations ? "text-[var(--cmp-text-warning)]" : undefined} href="/unit-manager/assessment" />
+          <Kpi n={capability?.gaps ?? 0} label="Dev. Gaps" tone={capability?.gaps ? "text-[var(--cmp-text-warning)]" : undefined} />
         </Group>
         <Group title="Quality" icon="🛡️">
-          <Kpi n={quality?.openCapa ?? 0} label="Open Improvements" tone={quality?.criticalCapa ? "text-rose-600" : undefined} href="/unit-manager/quality" />
-          <Kpi n={quality?.criticalCapa ?? 0} label="High Priority" tone={quality?.criticalCapa ? "text-rose-600" : undefined} />
+          <Kpi n={quality?.openCapa ?? 0} label="Open Improvements" tone={quality?.criticalCapa ? "text-[var(--cmp-text-error)]" : undefined} href="/unit-manager/quality" />
+          <Kpi n={quality?.criticalCapa ?? 0} label="High Priority" tone={quality?.criticalCapa ? "text-[var(--cmp-text-error)]" : undefined} />
           <Kpi n={quality?.avgCompliance != null ? `${quality.avgCompliance}%` : "—"} label="Audit Compliance" tone={quality?.avgCompliance != null ? pct(quality.avgCompliance) : undefined} />
           <Kpi n={quality?.audits ?? 0} label="Audits" />
-          <Kpi n={escalations.length} label="Escalations" tone={highEsc ? "text-rose-600" : undefined} />
+          <Kpi n={escalations.length} label="Escalations" tone={highEsc ? "text-[var(--cmp-text-error)]" : undefined} />
           <Kpi n="—" label="Safety Score" sub="derived soon" />
         </Group>
       </div>
@@ -169,7 +169,7 @@ export default async function UnitManagerDashboard({ searchParams }: { searchPar
               occPct >= 90 ? { t: `High occupancy (${occPct}%) — bed availability risk`, tone: "amber" } : null,
               (quality?.criticalCapa ?? 0) > 0 ? { t: `${quality.criticalCapa} high-priority improvement action(s) open`, tone: "amber" } : null,
             ].filter(Boolean).slice(0, 4).map((x: any, i: number) => (
-              <div key={i} className="flex items-start gap-2"><span className={`mt-1 w-1.5 h-1.5 rounded-full ${x.tone === "red" ? "bg-rose-500" : "bg-amber-500"}`} /><p className="text-xs text-gray-600">{x.t}</p></div>
+              <div key={i} className="flex items-start gap-2"><span className={`mt-1 w-1.5 h-1.5 rounded-full ${x.tone === "red" ? "bg-[var(--cmp-color-error)]" : "bg-[var(--cmp-color-warning)]"}`} /><p className="text-xs text-gray-600">{x.t}</p></div>
             ))}
             {![capability?.expiring, highEsc, occPct >= 90, quality?.criticalCapa].some(Boolean) && <p className="text-sm text-gray-400">No priority risks flagged.</p>}
           </div>

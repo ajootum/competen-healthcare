@@ -42,7 +42,7 @@ export default function ApprovalQueue({ queue, workflows, canAct }: { queue: any
     <div className="bg-white rounded-xl border border-gray-200">
       <div className="flex flex-wrap items-center gap-2 p-3 border-b border-gray-100">
         <h2 className="font-semibold text-gray-900 mr-auto">Approval Queue <span className="text-gray-400 font-normal text-sm">({queue.length})</span></h2>
-        {msg && <span className={`text-xs rounded-lg px-2.5 py-1 ${msg.k === "ok" ? "bg-green-50 text-green-800" : "bg-amber-50 text-amber-800"}`}>{msg.t}</span>}
+        {msg && <span className={`text-xs rounded-lg px-2.5 py-1 ${msg.k === "ok" ? "bg-[var(--cmp-surface-success)] text-green-800" : "bg-[var(--cmp-surface-warning)] text-amber-800"}`}>{msg.t}</span>}
         {canAct && (
           <div className="flex items-center gap-2">
             <select value={wf} onChange={e => setWf(e.target.value)} className="border border-gray-300 rounded-lg px-2 py-1.5 text-sm">{workflows.map(w => <option key={w.key} value={w.key}>{w.name}</option>)}</select>
@@ -67,8 +67,8 @@ export default function ApprovalQueue({ queue, workflows, canAct }: { queue: any
               </div>
               {canAct ? (
                 <div className="flex items-center gap-1.5 shrink-0">
-                  <button onClick={() => act(item, "approved")} disabled={busy?.startsWith(item.id)} className="text-[11px] font-medium rounded-lg border border-green-200 text-green-700 hover:bg-green-50 px-2.5 py-1 disabled:opacity-40">Approve</button>
-                  <button onClick={() => act(item, "rejected")} disabled={busy?.startsWith(item.id)} className="text-[11px] font-medium rounded-lg border border-rose-200 text-rose-700 hover:bg-rose-50 px-2.5 py-1 disabled:opacity-40">Reject</button>
+                  <button onClick={() => act(item, "approved")} disabled={busy?.startsWith(item.id)} className="text-[11px] font-medium rounded-lg border border-[var(--cmp-color-success)] text-[var(--cmp-text-success)] hover:bg-[var(--cmp-surface-success)] px-2.5 py-1 disabled:opacity-40">Approve</button>
+                  <button onClick={() => act(item, "rejected")} disabled={busy?.startsWith(item.id)} className="text-[11px] font-medium rounded-lg border border-[var(--cmp-color-error)] text-[var(--cmp-text-error)] hover:bg-[var(--cmp-surface-error)] px-2.5 py-1 disabled:opacity-40">Reject</button>
                 </div>
               ) : <span className="text-[10px] text-gray-400 shrink-0">pending</span>}
             </div>

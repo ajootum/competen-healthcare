@@ -50,7 +50,7 @@ export default async function Effectiveness() {
                   <td className="py-2 pr-3 text-gray-500 capitalize">{c.program}</td>
                   <td className="py-2 pr-3 text-gray-600">{pct(c.completion)}</td>
                   <td className="py-2 pr-3 text-gray-600">{pct(c.attainment)}</td>
-                  <td className="py-2 pr-3"><span className={`font-bold px-1.5 py-0.5 rounded text-[10px] ${(c.quality ?? 0) >= 70 ? "bg-green-50 text-green-700" : (c.quality ?? 0) >= 50 ? "bg-amber-50 text-amber-700" : "bg-red-50 text-red-600"}`}>{pct(c.quality)}</span></td>
+                  <td className="py-2 pr-3"><span className={`font-bold px-1.5 py-0.5 rounded text-[10px] ${(c.quality ?? 0) >= 70 ? "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]" : (c.quality ?? 0) >= 50 ? "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]" : "bg-[var(--cmp-surface-critical)] text-[var(--cmp-text-critical)]"}`}>{pct(c.quality)}</span></td>
                 </tr>
               ))}</tbody>
             </table></div>

@@ -18,7 +18,7 @@ export const dynamic = "force-dynamic";
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 const card = "bg-white rounded-xl border border-gray-200";
-const heatColor = (pct: number) => (pct >= 60 ? "bg-emerald-500/80 text-white" : pct >= 40 ? "bg-emerald-400/60 text-emerald-900" : pct >= 20 ? "bg-amber-300/60 text-amber-900" : pct > 0 ? "bg-orange-300/50 text-orange-900" : "bg-gray-50 text-gray-300");
+const heatColor = (pct: number) => (pct >= 60 ? "bg-[var(--cmp-color-success)]/80 text-white" : pct >= 40 ? "bg-[var(--cmp-color-success)]/60 text-emerald-900" : pct >= 20 ? "bg-amber-300/60 text-amber-900" : pct > 0 ? "bg-orange-300/50 text-orange-900" : "bg-gray-50 text-gray-300");
 const MAT_LABEL = ["Novice", "Advanced Beginner", "Competent", "Proficient", "Expert"];
 
 // Single-value conic ring.
@@ -62,7 +62,7 @@ function Spark({ series, color }: { series: number[]; color: string }) {
 function Delta({ v, invert }: { v: number | null | undefined; invert?: boolean }) {
   if (v == null || v === 0) return <span className="text-[11px] text-gray-400">—</span>;
   const good = invert ? v < 0 : v > 0;
-  return <span className={`text-[11px] font-medium ${good ? "text-emerald-600" : "text-rose-600"}`}>{v > 0 ? "↑" : "↓"} {Math.abs(v)}</span>;
+  return <span className={`text-[11px] font-medium ${good ? "text-[var(--cmp-text-success)]" : "text-[var(--cmp-text-error)]"}`}>{v > 0 ? "↑" : "↓"} {Math.abs(v)}</span>;
 }
 
 // Capability radar — the five/six LDS pillars as real 0-100 axes.
@@ -113,7 +113,7 @@ export default async function LearningAnalytics() {
     </>
   );
 
-  if (!d.ready) return <div className="space-y-4">{header}<div className="bg-amber-50 border border-amber-200 rounded-xl p-6"><p className="font-semibold text-amber-900">⚙️ Learning analytics warming up</p><p className="text-sm text-amber-800 mt-1">This intelligence layer consolidates mandatory learning, competency, professional development, career progression and education planning. Once any of those has live data, the dashboards populate automatically.</p></div></div>;
+  if (!d.ready) return <div className="space-y-4">{header}<div className="bg-[var(--cmp-surface-warning)] border border-[var(--cmp-color-warning)] rounded-xl p-6"><p className="font-semibold text-amber-900">⚙️ Learning analytics warming up</p><p className="text-sm text-amber-800 mt-1">This intelligence layer consolidates mandatory learning, competency, professional development, career progression and education planning. Once any of those has live data, the dashboards populate automatically.</p></div></div>;
 
   // Real average maturity (/5) from the coverage heatmap.
   const heat = d.heatmap;
@@ -263,14 +263,14 @@ export default async function LearningAnalytics() {
         <AiInsights items={d.ai} />
 
         <div className={`${card} p-5`}>
-          <div className="flex items-center gap-2 mb-3"><span className="w-7 h-7 rounded-lg bg-rose-50 flex items-center justify-center text-sm">⚠️</span><h3 className="font-semibold text-gray-900 text-sm">Compliance Risk Alert</h3></div>
+          <div className="flex items-center gap-2 mb-3"><span className="w-7 h-7 rounded-lg bg-[var(--cmp-surface-error)] flex items-center justify-center text-sm">⚠️</span><h3 className="font-semibold text-gray-900 text-sm">Compliance Risk Alert</h3></div>
           {d.risks.length ? (
             <div className="overflow-x-auto">
               <table className="w-full text-xs">
                 <thead><tr className="text-left text-gray-400 border-b border-gray-100"><th className="py-1.5 font-medium">Risk</th><th className="py-1.5 font-medium">Area</th><th className="py-1.5 font-medium text-right">Affected</th><th className="py-1.5 font-medium text-right">Score</th><th className="py-1.5 font-medium text-right">Window</th></tr></thead>
                 <tbody>{d.risks.map((r: any, i: number) => (
                   <tr key={i} className="border-b border-gray-50">
-                    <td className="py-2"><span className={`inline-flex items-center gap-1 font-medium ${r.level === "High" ? "text-rose-600" : r.level === "Medium" ? "text-amber-600" : "text-emerald-600"}`}><span className={`w-1.5 h-1.5 rounded-full ${r.level === "High" ? "bg-rose-500" : r.level === "Medium" ? "bg-amber-400" : "bg-emerald-500"}`} />{r.level}</span></td>
+                    <td className="py-2"><span className={`inline-flex items-center gap-1 font-medium ${r.level === "High" ? "text-[var(--cmp-text-error)]" : r.level === "Medium" ? "text-[var(--cmp-text-warning)]" : "text-[var(--cmp-text-success)]"}`}><span className={`w-1.5 h-1.5 rounded-full ${r.level === "High" ? "bg-[var(--cmp-color-error)]" : r.level === "Medium" ? "bg-[var(--cmp-color-warning)]" : "bg-[var(--cmp-color-success)]"}`} />{r.level}</span></td>
                     <td className="py-2 text-gray-700 max-w-[180px] truncate" title={r.area}>{r.area}<span className="block text-[10px] text-gray-400">{r.kind}</span></td>
                     <td className="py-2 text-right tabular-nums text-gray-700">{r.affected}</td>
                     <td className="py-2 text-right tabular-nums font-semibold text-gray-800">{r.score}%</td>

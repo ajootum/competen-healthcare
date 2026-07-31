@@ -15,8 +15,8 @@ export const dynamic = "force-dynamic";
 /* eslint-disable @typescript-eslint/no-explicit-any */
 const card = "bg-white rounded-xl border border-gray-200";
 const ST: Record<string, { label: string; cls: string; dot: string }> = {
-  live: { label: "Live", cls: "bg-emerald-50 text-emerald-700 border-emerald-100", dot: "bg-emerald-500" },
-  partial: { label: "Partial", cls: "bg-amber-50 text-amber-700 border-amber-100", dot: "bg-amber-500" },
+  live: { label: "Live", cls: "bg-[var(--cmp-surface-success)] text-emerald-700 border-[var(--cmp-color-success)]", dot: "bg-[var(--cmp-color-success)]" },
+  partial: { label: "Partial", cls: "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)] border-[var(--cmp-color-warning)]", dot: "bg-[var(--cmp-color-warning)]" },
   next: { label: "Next-phase", cls: "bg-gray-50 text-gray-500 border-gray-100", dot: "bg-gray-300" },
 };
 function Badge({ s }: { s: string }) { const t = ST[s]; return <span className={`inline-flex items-center gap-1 text-[10px] font-semibold rounded-full px-2 py-0.5 border ${t.cls}`}><span className={`w-1.5 h-1.5 rounded-full ${t.dot}`} />{t.label}</span>; }
@@ -147,7 +147,7 @@ export default async function NoCodePlatform() {
         <Stat label="Configurable Objects" value={objectCount ?? "—"} sub={objectCount == null ? "registry next-phase" : "in the registry (WCE-002)"} />
         <Stat label="Governed Change Requests" value={crCount ?? "—"} sub={crCount == null ? "governance next-phase" : "in the pipeline (WCE-004)"} />
         <Stat label="Catalogue Completeness" value={completeness == null ? "—" : `${completeness}%`} sub="widget config contracts (WCE-005)" />
-        <Stat label="Platform Components Live" value={`${liveCount}/${COMPONENTS.length}`} sub={`${partialCount} partial · foundation established`} tone="text-emerald-600" />
+        <Stat label="Platform Components Live" value={`${liveCount}/${COMPONENTS.length}`} sub={`${partialCount} partial · foundation established`} tone="text-[var(--cmp-text-success)]" />
       </div>
 
       {/* Core platform components → real status */}
@@ -261,7 +261,7 @@ export default async function NoCodePlatform() {
           <div className="space-y-1.5">
             {APIS.map(a => (
               <div key={a.endpoint} className="flex items-center gap-2 text-[11px]">
-                <span className={`font-bold w-10 shrink-0 ${a.method === "GET" ? "text-sky-600" : "text-orange-600"}`}>{a.method}</span>
+                <span className={`font-bold w-10 shrink-0 ${a.method === "GET" ? "text-[var(--cmp-text-information)]" : "text-[var(--cmp-text-warning)]"}`}>{a.method}</span>
                 <code className="text-gray-700 font-mono shrink-0">{a.endpoint}</code>
                 <span className="text-gray-400 truncate hidden sm:inline">{a.purpose}{a.via ? ` · ${a.via}` : ""}</span>
                 <span className="ml-auto shrink-0"><Badge s={a.status} /></span>

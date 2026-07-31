@@ -17,9 +17,9 @@ export const dynamic = "force-dynamic";
 
 const card = "bg-white rounded-xl border border-gray-200";
 const SUBTABS = ["Overview", "Clinical Constraints", "Workforce Constraints", "Labour Rules", "Organisation Policies", "Override Management", "Validation Results", "Rule Library", "Audit & History", "Settings"];
-const SEV: Record<string, string> = { Critical: "bg-rose-50 text-rose-700", High: "bg-amber-50 text-amber-700", Medium: "bg-blue-50 text-blue-700", Low: "bg-gray-100 text-gray-600", Pass: "bg-emerald-50 text-emerald-700" };
-const STATUS_DOT: Record<string, string> = { Pass: "bg-emerald-500", Warning: "bg-amber-500", Override: "bg-amber-500", Blocked: "bg-rose-500" };
-const CAT_COLOR: Record<string, string> = { Clinical: "text-rose-600", Competency: "text-violet-600", Workforce: "text-blue-600", Fairness: "text-amber-600" };
+const SEV: Record<string, string> = { Critical: "bg-[var(--cmp-surface-error)] text-[var(--cmp-text-error)]", High: "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]", Medium: "bg-[var(--cmp-surface-information)] text-blue-700", Low: "bg-gray-100 text-gray-600", Pass: "bg-[var(--cmp-surface-success)] text-emerald-700" };
+const STATUS_DOT: Record<string, string> = { Pass: "bg-[var(--cmp-color-success)]", Warning: "bg-[var(--cmp-color-warning)]", Override: "bg-[var(--cmp-color-warning)]", Blocked: "bg-[var(--cmp-color-error)]" };
+const CAT_COLOR: Record<string, string> = { Clinical: "text-[var(--cmp-text-error)]", Competency: "text-violet-600", Workforce: "text-[var(--cmp-text-information)]", Fairness: "text-[var(--cmp-text-warning)]" };
 
 function Kpi({ label, value, sub, tone, icon }: { label: string; value: any; sub?: string; tone?: string; icon?: string }) {
   return <div className={`${card} p-4`}><div className="flex items-start justify-between"><p className="text-xs text-gray-500">{label}</p>{icon && <span className="text-base opacity-40">{icon}</span>}</div><p className={`text-2xl font-bold tabular-nums mt-1 ${tone ?? "text-gray-900"}`}>{value}</p>{sub && <p className="text-[11px] text-gray-400 mt-0.5">{sub}</p>}</div>;
@@ -48,12 +48,12 @@ export default async function ConstraintEngine() {
       </div>
       <SchedulingTabs />
       <div className="flex gap-1 overflow-x-auto -mt-1">
-        {SUBTABS.map((t, i) => <span key={t} className={`shrink-0 text-[11px] px-2.5 py-1.5 rounded-full font-medium ${i === 0 ? "bg-emerald-50 text-emerald-700" : "text-gray-300"}`} title={i === 0 ? "" : "Next phase"}>{t}</span>)}
+        {SUBTABS.map((t, i) => <span key={t} className={`shrink-0 text-[11px] px-2.5 py-1.5 rounded-full font-medium ${i === 0 ? "bg-[var(--cmp-surface-success)] text-emerald-700" : "text-gray-300"}`} title={i === 0 ? "" : "Next phase"}>{t}</span>)}
       </div>
     </>
   );
 
-  if (!d.provisioned) return <div className="space-y-4">{header}<div className="bg-amber-50 border border-amber-200 rounded-xl p-6"><p className="font-semibold text-amber-900">⚙️ Roster store not provisioned</p><p className="text-sm text-amber-800 mt-1">Run migration <code>080</code> and generate a roster — the Constraint Engine validates it.</p></div></div>;
+  if (!d.provisioned) return <div className="space-y-4">{header}<div className="bg-[var(--cmp-surface-warning)] border border-[var(--cmp-color-warning)] rounded-xl p-6"><p className="font-semibold text-amber-900">⚙️ Roster store not provisioned</p><p className="text-sm text-amber-800 mt-1">Run migration <code>080</code> and generate a roster — the Constraint Engine validates it.</p></div></div>;
   if (!d.hasRoster) return <div className="space-y-4">{header}<div className={`${card} p-8 text-center`}><p className="text-3xl mb-2">🛡️</p><p className="text-sm font-semibold text-gray-700">No roster to validate for week of {d.weekStart}</p><p className="text-xs text-gray-400 mt-1">Generate a roster in the <Link href="/unit-manager/scheduling-engine" className="text-emerald-700 hover:underline">Scheduling Engine</Link> — constraint validation runs automatically over it.</p></div></div>;
 
   const k = d.kpis;
@@ -62,11 +62,11 @@ export default async function ConstraintEngine() {
       {header}
 
       <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-3">
-        <Kpi label="Compliance score" value={`${k.complianceScore}%`} sub={k.complianceScore >= 95 ? "Publishable" : k.critical ? "Blocked" : "Review"} icon="🛡️" tone={k.complianceScore >= 95 ? "text-emerald-600" : k.critical ? "text-rose-600" : "text-amber-600"} />
-        <Kpi label="Critical violations" value={k.critical} sub="Publication blocked" icon="⛔" tone={k.critical ? "text-rose-600" : "text-emerald-600"} />
-        <Kpi label="Warnings" value={k.warnings} sub="Advisory" icon="⚠️" tone={k.warnings ? "text-amber-600" : undefined} />
-        <Kpi label="Blocked / uncovered" value={k.blocked} sub="Posts unfilled" icon="🚫" tone={k.blocked ? "text-rose-600" : undefined} />
-        <Kpi label="Override requests" value={k.overrideRequests} sub="Need approval" icon="✋" tone={k.overrideRequests ? "text-amber-600" : undefined} />
+        <Kpi label="Compliance score" value={`${k.complianceScore}%`} sub={k.complianceScore >= 95 ? "Publishable" : k.critical ? "Blocked" : "Review"} icon="🛡️" tone={k.complianceScore >= 95 ? "text-[var(--cmp-text-success)]" : k.critical ? "text-[var(--cmp-text-error)]" : "text-[var(--cmp-text-warning)]"} />
+        <Kpi label="Critical violations" value={k.critical} sub="Publication blocked" icon="⛔" tone={k.critical ? "text-[var(--cmp-text-error)]" : "text-[var(--cmp-text-success)]"} />
+        <Kpi label="Warnings" value={k.warnings} sub="Advisory" icon="⚠️" tone={k.warnings ? "text-[var(--cmp-text-warning)]" : undefined} />
+        <Kpi label="Blocked / uncovered" value={k.blocked} sub="Posts unfilled" icon="🚫" tone={k.blocked ? "text-[var(--cmp-text-error)]" : undefined} />
+        <Kpi label="Override requests" value={k.overrideRequests} sub="Need approval" icon="✋" tone={k.overrideRequests ? "text-[var(--cmp-text-warning)]" : undefined} />
         <Kpi label="Overrides recorded" value={k.overrides} sub="On this roster" icon="📝" />
       </div>
 
@@ -92,7 +92,7 @@ export default async function ConstraintEngine() {
         {/* Rule compliance by unit */}
         <div className={`${card} p-5`}>
           <h3 className="text-sm font-bold text-gray-900 mb-3">Rule compliance by unit</h3>
-          {d.byUnit.length === 0 ? <p className="text-sm text-gray-400">No units.</p> : <div className="space-y-2">{d.byUnit.map((u: any) => (<div key={u.unit} className="text-xs"><div className="flex items-center justify-between mb-0.5"><span className="text-gray-700">{u.unit}</span><span className="text-gray-500">{u.pct}%{u.violations ? ` · ${u.violations} issue(s)` : ""}</span></div><div className="w-full h-1.5 rounded-full bg-gray-100 overflow-hidden"><div className={`h-full rounded-full ${u.pct >= 95 ? "bg-emerald-500" : u.pct >= 80 ? "bg-amber-400" : "bg-rose-400"}`} style={{ width: `${u.pct}%` }} /></div></div>))}</div>}
+          {d.byUnit.length === 0 ? <p className="text-sm text-gray-400">No units.</p> : <div className="space-y-2">{d.byUnit.map((u: any) => (<div key={u.unit} className="text-xs"><div className="flex items-center justify-between mb-0.5"><span className="text-gray-700">{u.unit}</span><span className="text-gray-500">{u.pct}%{u.violations ? ` · ${u.violations} issue(s)` : ""}</span></div><div className="w-full h-1.5 rounded-full bg-gray-100 overflow-hidden"><div className={`h-full rounded-full ${u.pct >= 95 ? "bg-[var(--cmp-color-success)]" : u.pct >= 80 ? "bg-[var(--cmp-color-warning)]" : "bg-[var(--cmp-color-error)]"}`} style={{ width: `${u.pct}%` }} /></div></div>))}</div>}
         </div>
 
         {/* Top violated rules */}

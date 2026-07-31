@@ -25,10 +25,10 @@ export function StatTiles({ tiles, cols = "grid-cols-2 md:grid-cols-4" }: { tile
   return (
     <div className={`grid ${cols} gap-2 mb-5`}>
       {tiles.map(k => (
-        <div key={k.label} className={`bg-white border rounded-xl px-3 py-2.5 ${k.alert ? "border-red-200 bg-red-50/40" : "border-gray-200"}`}>
+        <div key={k.label} className={`bg-white border rounded-xl px-3 py-2.5 ${k.alert ? "border-[var(--cmp-color-critical)] bg-[var(--cmp-surface-critical)]/40" : "border-gray-200"}`}>
           <div className="flex items-baseline gap-1.5">
-            <p className={`text-lg font-bold ${k.alert ? "text-red-600" : "text-gray-900"}`}>{k.value}</p>
-            {k.d && <span className={`text-[9px] font-bold ${k.d.startsWith("▼") ? "text-red-500" : k.d.startsWith("▲") ? "text-green-600" : "text-gray-400"}`}>{k.d}</span>}
+            <p className={`text-lg font-bold ${k.alert ? "text-[var(--cmp-text-critical)]" : "text-gray-900"}`}>{k.value}</p>
+            {k.d && <span className={`text-[9px] font-bold ${k.d.startsWith("▼") ? "text-red-500" : k.d.startsWith("▲") ? "text-[var(--cmp-text-success)]" : "text-gray-400"}`}>{k.d}</span>}
           </div>
           <p className="text-[9px] font-bold text-gray-400 uppercase tracking-wider leading-tight">{k.label}</p>
           {k.sub && <p className="text-[8px] text-gray-400 mt-0.5">{k.sub}</p>}
@@ -41,7 +41,7 @@ export function StatTiles({ tiles, cols = "grid-cols-2 md:grid-cols-4" }: { tile
 export function PctChip({ v }: { v: number | null }) {
   if (v == null) return <span className="text-gray-300">—</span>;
   return (
-    <span className={`font-bold px-1.5 py-0.5 rounded text-[10px] ${v >= 80 ? "bg-green-100 text-green-700" : v >= 60 ? "bg-amber-100 text-amber-700" : "bg-red-100 text-red-600"}`}>
+    <span className={`font-bold px-1.5 py-0.5 rounded text-[10px] ${v >= 80 ? "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]" : v >= 60 ? "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]" : "bg-[var(--cmp-surface-critical)] text-[var(--cmp-text-critical)]"}`}>
       {v}%
     </span>
   );

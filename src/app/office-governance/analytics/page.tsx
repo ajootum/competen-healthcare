@@ -9,7 +9,7 @@ export const dynamic = "force-dynamic";
 /* eslint-disable @typescript-eslint/no-explicit-any */
 const LEVEL_TONE: Record<string, string> = { enterprise: "violet", country: "indigo", facility: "teal", department: "blue", specialty: "amber" };
 const cap = (s?: string | null) => (s ? s[0].toUpperCase() + s.slice(1) : "—");
-const healthTone = (n: number) => (n >= 85 ? "text-emerald-600" : n >= 60 ? "text-amber-600" : "text-rose-600");
+const healthTone = (n: number) => (n >= 85 ? "text-[var(--cmp-text-success)]" : n >= 60 ? "text-[var(--cmp-text-warning)]" : "text-[var(--cmp-text-error)]");
 
 export default async function OgsAnalytics() {
   const { admin, isSuper, hid } = await ogsGuard();

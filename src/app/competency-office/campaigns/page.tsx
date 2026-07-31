@@ -9,7 +9,7 @@ import { loadCampaigns } from "@/lib/delivery/campaigns";
 export const dynamic = "force-dynamic";
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
-const compTone = (n: number | null) => (n == null ? "text-gray-300" : n >= 80 ? "text-emerald-600" : n >= 50 ? "text-amber-600" : "text-rose-600");
+const compTone = (n: number | null) => (n == null ? "text-gray-300" : n >= 80 ? "text-[var(--cmp-text-success)]" : n >= 50 ? "text-[var(--cmp-text-warning)]" : "text-[var(--cmp-text-error)]");
 // Date.now()/new Date() must live in module helpers, not the render body (react-hooks/purity).
 const todayISO = () => new Date().toISOString().slice(0, 10);
 const horizonISO = (days: number) => new Date(Date.now() + days * 864e5).toISOString().slice(0, 10);
@@ -20,7 +20,7 @@ export default async function CmoCampaignsPage() {
 
   const head = <Head code="CMO-011 · Campaigns & Initiatives" title="Competency Campaign & Initiative Management" sub="Launch, monitor and measure organisation-wide competency improvement initiatives — live participation and compliance." />;
   if (!d.provisioned) {
-    return <div className="space-y-4">{head}<div className="bg-amber-50 border border-amber-200 rounded-xl p-6"><p className="text-sm text-amber-800">Campaigns aren&apos;t provisioned — apply migration <code className="font-mono">144</code> (<code className="font-mono">cdp_campaigns</code>).</p></div></div>;
+    return <div className="space-y-4">{head}<div className="bg-[var(--cmp-surface-warning)] border border-[var(--cmp-color-warning)] rounded-xl p-6"><p className="text-sm text-amber-800">Campaigns aren&apos;t provisioned — apply migration <code className="font-mono">144</code> (<code className="font-mono">cdp_campaigns</code>).</p></div></div>;
   }
 
   const camps: any[] = d.campaigns ?? [];
@@ -41,10 +41,10 @@ export default async function CmoCampaignsPage() {
       <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
         <Kpi label="Active campaigns" value={d.kpis.active} sub={`${d.kpis.total} total`} tone="text-teal-600" />
         <Kpi label="Workforce reach" value={d.kpis.reach} sub="in active cohorts" />
-        <Kpi label="Avg compliance" value={avgCompliance != null ? `${avgCompliance}%` : "—"} sub="active campaigns" tone={avgCompliance != null && avgCompliance < 60 ? "text-amber-600" : "text-gray-900"} />
+        <Kpi label="Avg compliance" value={avgCompliance != null ? `${avgCompliance}%` : "—"} sub="active campaigns" tone={avgCompliance != null && avgCompliance < 60 ? "text-[var(--cmp-text-warning)]" : "text-gray-900"} />
         <Kpi label="Mandatory" value={d.kpis.mandatory} sub="open" />
-        <Kpi label="Due ≤30 days" value={dueSoon.length} sub="deadlines" tone={dueSoon.length ? "text-amber-600" : "text-gray-900"} />
-        <Kpi label="At risk" value={atRisk.length} sub="< 50% compliance" tone={atRisk.length ? "text-rose-600" : "text-gray-900"} />
+        <Kpi label="Due ≤30 days" value={dueSoon.length} sub="deadlines" tone={dueSoon.length ? "text-[var(--cmp-text-warning)]" : "text-gray-900"} />
+        <Kpi label="At risk" value={atRisk.length} sub="< 50% compliance" tone={atRisk.length ? "text-[var(--cmp-text-error)]" : "text-gray-900"} />
       </div>
 
       <Card title="Active campaigns" right={<span className="text-[11px] text-gray-400">{active.length} running · live compliance</span>}>
@@ -95,7 +95,7 @@ export default async function CmoCampaignsPage() {
             {[["active", "emerald"], ["draft", "slate"], ["closed", "slate"]].map(([st, tone]) => {
               const n = camps.filter(c => c.status === st).length;
               return (
-                <div key={st} className="flex items-center gap-2 text-[12px]"><Pill text={st} tone={tone} /><div className="flex-1 h-2 rounded-full bg-gray-100 overflow-hidden"><div className={`h-full rounded-full ${st === "active" ? "bg-emerald-500" : "bg-gray-300"}`} style={{ width: `${camps.length ? (n / camps.length) * 100 : 0}%` }} /></div><span className="text-gray-900 font-semibold tabular-nums w-8 text-right">{n}</span></div>
+                <div key={st} className="flex items-center gap-2 text-[12px]"><Pill text={st} tone={tone} /><div className="flex-1 h-2 rounded-full bg-gray-100 overflow-hidden"><div className={`h-full rounded-full ${st === "active" ? "bg-[var(--cmp-color-success)]" : "bg-gray-300"}`} style={{ width: `${camps.length ? (n / camps.length) * 100 : 0}%` }} /></div><span className="text-gray-900 font-semibold tabular-nums w-8 text-right">{n}</span></div>
               );
             })}
           </div>

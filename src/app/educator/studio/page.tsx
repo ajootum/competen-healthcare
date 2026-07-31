@@ -71,7 +71,7 @@ export default async function EducationStudioPage() {
           <div className="flex items-stretch gap-1.5 overflow-x-auto pb-1">
             {PIPE.map((s, i) => (
               <div key={s.key} className="flex items-center gap-1.5 shrink-0">
-                <div className={`rounded-lg border px-3 py-2.5 w-[110px] text-center ${s.key === "published" ? "border-green-200 bg-green-50/60" : "border-gray-100 bg-gray-50/60"}`}>
+                <div className={`rounded-lg border px-3 py-2.5 w-[110px] text-center ${s.key === "published" ? "border-[var(--cmp-color-success)] bg-[var(--cmp-surface-success)]/60" : "border-gray-100 bg-gray-50/60"}`}>
                   <p className="text-lg">{s.icon}</p>
                   <p className="text-xl font-bold text-gray-900">{p.pipeline[s.key]}</p>
                   <p className="text-[9px] font-bold text-gray-400 uppercase tracking-wider">{s.label}</p>
@@ -88,7 +88,7 @@ export default async function EducationStudioPage() {
               {health.map(h => (
                 <Link key={h.label} href={h.href} className="flex items-center gap-2 text-[11px] text-gray-700 hover:text-purple-700">
                   <span className="flex-1">{h.label} <span className="text-gray-400">· {h.note}</span></span>
-                  <span className="text-[10px] font-bold bg-amber-100 text-amber-700 rounded-full px-1.5 py-0.5">{h.n}</span>
+                  <span className="text-[10px] font-bold bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)] rounded-full px-1.5 py-0.5">{h.n}</span>
                 </Link>
               ))}
             </div>

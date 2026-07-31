@@ -30,7 +30,7 @@ export default function ConfigConsole({ domains }: { domains: any[] }) {
 
   return (
     <>
-      {msg && <div className={`fixed bottom-4 right-4 z-50 text-sm rounded-lg px-4 py-2.5 shadow-lg ${msg.kind === "ok" ? "bg-emerald-600 text-white" : "bg-rose-600 text-white"}`}>{msg.text}</div>}
+      {msg && <div className={`fixed bottom-4 right-4 z-50 text-sm rounded-lg px-4 py-2.5 shadow-lg ${msg.kind === "ok" ? "bg-[var(--cmp-color-success)] text-white" : "bg-[var(--cmp-color-error)] text-white"}`}>{msg.text}</div>}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         {domains.map(d => (
           <div key={d.domain} className={cardClass}>
@@ -47,7 +47,7 @@ export default function ConfigConsole({ domains }: { domains: any[] }) {
                       <div className="flex items-center gap-1.5 shrink-0">
                         <input type="number" min={0} value={draft} onChange={e => setDraft(e.target.value)} className="w-20 border border-gray-300 rounded-lg px-2 py-1 text-sm text-right focus:outline-none focus:ring-2 focus:ring-emerald-500/40" />
                         <span className="text-[11px] text-gray-400 w-6">{unit(rule.type)}</span>
-                        <button onClick={() => save(d.domain, rule)} disabled={busy} className="text-[11px] font-medium text-white bg-emerald-600 rounded px-2 py-1 hover:bg-emerald-700 disabled:opacity-50">Save</button>
+                        <button onClick={() => save(d.domain, rule)} disabled={busy} className="text-[11px] font-medium text-white bg-[var(--cmp-color-success)] rounded px-2 py-1 hover:bg-emerald-700 disabled:opacity-50">Save</button>
                         <button onClick={() => setEditing(null)} className="text-[11px] text-gray-400 hover:text-gray-600">Cancel</button>
                       </div>
                     ) : (

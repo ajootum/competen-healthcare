@@ -44,19 +44,19 @@ export default async function ProfilePage() {
       {/* Header */}
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <p className="text-[11px] font-semibold text-blue-600 uppercase tracking-wide">Personal Workspace</p>
+          <p className="text-[11px] font-semibold text-[var(--cmp-text-information)] uppercase tracking-wide">Personal Workspace</p>
           <h1 className="text-2xl font-bold text-gray-900">Profile &amp; Professional Identity</h1>
           <p className="text-sm text-gray-500 mt-0.5">Manage your personal and professional information, credentials, preferences and privacy.</p>
         </div>
-        <Link href="/dashboard/billing" className="text-sm font-medium text-white bg-blue-600 rounded-lg px-3 py-2 hover:bg-blue-500">Edit Profile</Link>
+        <Link href="/dashboard/billing" className="text-sm font-medium text-white bg-[var(--cmp-color-information)] rounded-lg px-3 py-2 hover:bg-[var(--cmp-color-information)]">Edit Profile</Link>
       </div>
 
       {/* KPI ribbon */}
       <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
-        <Kpi icon="✅" label="Profile Completeness" value={`${d.kpis.completeness}%`} sub={d.kpis.completeness >= 80 ? "Excellent" : "Add more detail"} tint="bg-emerald-50" />
+        <Kpi icon="✅" label="Profile Completeness" value={`${d.kpis.completeness}%`} sub={d.kpis.completeness >= 80 ? "Excellent" : "Add more detail"} tint="bg-[var(--cmp-surface-success)]" />
         <Kpi icon="🛡️" label="Professional Level" value={d.kpis.professionalLevel.label} sub={`Level ${d.kpis.professionalLevel.num}`} tint="bg-violet-50" />
-        <Kpi icon="🎖️" label="Active Credentials" value={d.kpis.activeCredentials} sub="Active" tint="bg-blue-50" />
-        <Kpi icon="🏅" label="Certifications" value={d.kpis.certifications} sub="On record" tint="bg-amber-50" />
+        <Kpi icon="🎖️" label="Active Credentials" value={d.kpis.activeCredentials} sub="Active" tint="bg-[var(--cmp-surface-information)]" />
+        <Kpi icon="🏅" label="Certifications" value={d.kpis.certifications} sub="On record" tint="bg-[var(--cmp-surface-warning)]" />
         <Kpi icon="🔗" label="Identities Linked" value={d.kpis.linkedIdentities} sub="Role portals" tint="bg-cyan-50" />
         <Kpi icon="📅" label="Last Updated" value={d.kpis.lastUpdated ?? "—"} sub="Profile" tint="bg-slate-50" />
       </div>
@@ -71,9 +71,9 @@ export default async function ProfilePage() {
                 // eslint-disable-next-line @next/next/no-img-element
                 <img src={p.avatarUrl} alt="" className="w-24 h-24 rounded-full object-cover mx-auto border-2 border-gray-100" />
               ) : (
-                <div className="w-24 h-24 rounded-full bg-blue-500 text-white text-2xl font-bold flex items-center justify-center mx-auto">{initials}</div>
+                <div className="w-24 h-24 rounded-full bg-[var(--cmp-color-information)] text-white text-2xl font-bold flex items-center justify-center mx-auto">{initials}</div>
               )}
-              <span className="inline-block mt-3 text-[10px] font-semibold text-emerald-700 bg-emerald-50 rounded-full px-2 py-0.5 capitalize">● {p.accountStatus}</span>
+              <span className="inline-block mt-3 text-[10px] font-semibold text-emerald-700 bg-[var(--cmp-surface-success)] rounded-full px-2 py-0.5 capitalize">● {p.accountStatus}</span>
               <p className="text-lg font-bold text-gray-900 mt-2">{p.fullName}</p>
               <p className="text-[12px] text-gray-500 capitalize">{p.specialization ?? p.role}</p>
               <dl className="text-left mt-4 pt-4 border-t border-gray-100 text-[12px] space-y-1.5">
@@ -87,7 +87,7 @@ export default async function ProfilePage() {
             {/* About + professional summary */}
             <div className="space-y-5">
               <div className={cardClass}>
-                <div className="flex items-center justify-between mb-2"><h2 className="text-sm font-semibold text-gray-900">About Me</h2><Link href="/dashboard/billing" className="text-[11px] font-medium text-blue-600 hover:underline">Edit</Link></div>
+                <div className="flex items-center justify-between mb-2"><h2 className="text-sm font-semibold text-gray-900">About Me</h2><Link href="/dashboard/billing" className="text-[11px] font-medium text-[var(--cmp-text-information)] hover:underline">Edit</Link></div>
                 <Field label="Preferred Name" value={p.fullName.split(" ")[0]} />
                 <Field label="Role" value={p.role} />
                 <Field label="Specialization" value={p.specialization} />
@@ -114,7 +114,7 @@ export default async function ProfilePage() {
                 <div key={i} className="flex flex-col items-center w-24 text-center">
                   <div className="w-14 h-14 rounded-xl flex items-center justify-center text-white text-lg font-bold" style={{ background: b.color }}>{b.label.split(" ").map((w: string) => w[0]).slice(0, 2).join("").toUpperCase()}</div>
                   <p className="text-[10px] font-medium text-gray-600 mt-1.5 leading-tight capitalize line-clamp-2">{b.label}</p>
-                  <span className="text-[9px] text-emerald-600 font-semibold">{i === 0 ? "Role" : "Verified"}</span>
+                  <span className="text-[9px] text-[var(--cmp-text-success)] font-semibold">{i === 0 ? "Role" : "Verified"}</span>
                 </div>
               ))}
               {d.badges.length === 1 && <p className="text-[12px] text-gray-400 self-center">Verified credentials appear here as badges.</p>}
@@ -123,7 +123,7 @@ export default async function ProfilePage() {
 
           {/* Credentials & Licences */}
           <div className={cardClass}>
-            <div className="flex items-center justify-between mb-3"><h2 className="text-sm font-semibold text-gray-900">Credentials &amp; Licences</h2><Link href="/dashboard/certificates" className="text-[11px] font-medium text-blue-600 hover:underline">Manage →</Link></div>
+            <div className="flex items-center justify-between mb-3"><h2 className="text-sm font-semibold text-gray-900">Credentials &amp; Licences</h2><Link href="/dashboard/certificates" className="text-[11px] font-medium text-[var(--cmp-text-information)] hover:underline">Manage →</Link></div>
             {d.credentials.length > 0 ? (
               <div className="overflow-x-auto"><table className="w-full text-sm">
                 <thead><tr className="text-left text-[11px] font-semibold text-gray-500 uppercase border-b border-gray-100"><th className="py-2">Credential</th><th className="py-2">Type</th><th className="py-2">Issuer</th><th className="py-2">Expiry</th><th className="py-2">Status</th></tr></thead>
@@ -134,12 +134,12 @@ export default async function ProfilePage() {
                       <td className="py-2.5 text-gray-500 text-[12px]">{CRED_LABEL[c.credential_type] ?? c.credential_type}</td>
                       <td className="py-2.5 text-gray-500 text-[12px]">{c.issuing_body ?? "—"}</td>
                       <td className="py-2.5 text-gray-500 text-[12px]">{c.expiryLabel ?? "—"}</td>
-                      <td className="py-2.5"><span className={`text-[11px] font-medium rounded-full px-2 py-0.5 ${c.status === "active" ? "bg-emerald-50 text-emerald-700" : "bg-gray-100 text-gray-500"}`}>{c.status}</span></td>
+                      <td className="py-2.5"><span className={`text-[11px] font-medium rounded-full px-2 py-0.5 ${c.status === "active" ? "bg-[var(--cmp-surface-success)] text-emerald-700" : "bg-gray-100 text-gray-500"}`}>{c.status}</span></td>
                     </tr>
                   ))}
                 </tbody>
               </table></div>
-            ) : <p className="text-sm text-gray-400 py-6 text-center">No credentials on record yet. <Link href="/dashboard/certificates" className="text-blue-600 hover:underline">Add one</Link>.</p>}
+            ) : <p className="text-sm text-gray-400 py-6 text-center">No credentials on record yet. <Link href="/dashboard/certificates" className="text-[var(--cmp-text-information)] hover:underline">Add one</Link>.</p>}
           </div>
 
           {/* Professional network */}
@@ -160,7 +160,7 @@ export default async function ProfilePage() {
             <dl className="space-y-2 text-[12px]">
               <div className="flex items-center justify-between"><dt className="text-gray-400">Login Email</dt><dd className="text-gray-700 font-medium truncate max-w-[150px]">{d.identity.email}</dd></div>
               <div className="flex items-center justify-between"><dt className="text-gray-400">Phone</dt><dd className="text-gray-700">{d.identity.phone ?? "—"}</dd></div>
-              <div className="flex items-center justify-between"><dt className="text-gray-400">Account Status</dt><dd className="text-emerald-600 font-medium capitalize">{d.identity.accountStatus}</dd></div>
+              <div className="flex items-center justify-between"><dt className="text-gray-400">Account Status</dt><dd className="text-[var(--cmp-text-success)] font-medium capitalize">{d.identity.accountStatus}</dd></div>
               <div className="flex items-center justify-between"><dt className="text-gray-400">Role Portals</dt><dd className="text-gray-700 capitalize">{d.identity.roles.map(r => r.replace(/_/g, " ")).join(", ")}</dd></div>
             </dl>
           </div>
@@ -178,7 +178,7 @@ export default async function ProfilePage() {
           <div className="bg-white rounded-xl border border-gray-200 p-4">
             <h3 className="text-sm font-semibold text-gray-900 mb-2">Activity &amp; Audit</h3>
             <p className="text-[12px] text-gray-500 mb-2">Your profile is used across Competen to personalise your experience and maintain your professional record.</p>
-            <Link href="/dashboard/activity" className="text-[12px] font-medium text-blue-600 hover:underline">View activity log →</Link>
+            <Link href="/dashboard/activity" className="text-[12px] font-medium text-[var(--cmp-text-information)] hover:underline">View activity log →</Link>
           </div>
         </div>
       </div>

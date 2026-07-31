@@ -11,7 +11,7 @@ import { cardClass } from "@/components/ui/primitives";
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 const fmt = (iso?: string | null) => iso ? new Date(iso).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: false }) : "—";
-const scoreTone = (n: number | null) => (n == null ? "text-gray-300" : n >= 90 ? "text-green-600" : n >= 75 ? "text-amber-600" : "text-rose-600");
+const scoreTone = (n: number | null) => (n == null ? "text-gray-300" : n >= 90 ? "text-[var(--cmp-text-success)]" : n >= 75 ? "text-[var(--cmp-text-warning)]" : "text-[var(--cmp-text-error)]");
 
 export default function BreakBoard({ shiftId, data, staff, editable }: {
   shiftId: string | null; data: any; staff: { id: string; name: string; role: string }[]; editable: boolean;
@@ -26,7 +26,7 @@ export default function BreakBoard({ shiftId, data, staff, editable }: {
   if (!data || data.provisioned === false) {
     return (
       <div className={cardClass}>
-        <div className="flex items-center gap-2 mb-2"><span className="w-7 h-7 rounded-lg bg-orange-100 text-orange-700 flex items-center justify-center text-sm font-bold">4</span><div><h2 className="text-sm font-bold text-gray-900 leading-tight">Break Management</h2><p className="text-[10px] text-gray-500">Break scheduling, compliance &amp; fatigue</p></div></div>
+        <div className="flex items-center gap-2 mb-2"><span className="w-7 h-7 rounded-lg bg-[var(--cmp-surface-warning)] text-orange-700 flex items-center justify-center text-sm font-bold">4</span><div><h2 className="text-sm font-bold text-gray-900 leading-tight">Break Management</h2><p className="text-[10px] text-gray-500">Break scheduling, compliance &amp; fatigue</p></div></div>
         <div className="mt-3 rounded-lg border border-dashed border-gray-200 bg-gray-50/60 p-4 text-center">
           <p className="text-sm text-gray-500">Break management not provisioned</p>
           <p className="text-[11px] text-gray-400 mt-1">Run migration <span className="font-mono">069-workforce-breaks-notes</span> for the live break board.</p>
@@ -61,10 +61,10 @@ export default function BreakBoard({ shiftId, data, staff, editable }: {
 
   return (
     <div className={cardClass}>
-      <div className="flex items-center gap-2 mb-3"><span className="w-7 h-7 rounded-lg bg-orange-100 text-orange-700 flex items-center justify-center text-sm font-bold">4</span><div><h2 className="text-sm font-bold text-gray-900 leading-tight">Break Management</h2><p className="text-[10px] text-gray-500">Break scheduling, compliance &amp; fatigue</p></div></div>
+      <div className="flex items-center gap-2 mb-3"><span className="w-7 h-7 rounded-lg bg-[var(--cmp-surface-warning)] text-orange-700 flex items-center justify-center text-sm font-bold">4</span><div><h2 className="text-sm font-bold text-gray-900 leading-tight">Break Management</h2><p className="text-[10px] text-gray-500">Break scheduling, compliance &amp; fatigue</p></div></div>
 
       <div className="grid grid-cols-3 gap-2 mb-3">
-        {[["Due for Break", data.dueForBreak, "text-gray-900"], ["On Break Now", data.onBreakNow, "text-blue-600"], ["Overdue Breaks", data.overdue, data.overdue > 0 ? "text-rose-600" : "text-gray-900"]].map(([l, n, tone]: any) => (
+        {[["Due for Break", data.dueForBreak, "text-gray-900"], ["On Break Now", data.onBreakNow, "text-[var(--cmp-text-information)]"], ["Overdue Breaks", data.overdue, data.overdue > 0 ? "text-[var(--cmp-text-error)]" : "text-gray-900"]].map(([l, n, tone]: any) => (
           <div key={l} className="rounded-lg border border-gray-100 p-2 text-center"><p className={`text-xl font-bold tabular-nums ${tone}`}>{n}</p><p className="text-[9px] text-gray-500">{l}</p></div>
         ))}
       </div>
@@ -83,9 +83,9 @@ export default function BreakBoard({ shiftId, data, staff, editable }: {
           <p className="text-[10px] font-semibold text-gray-400 uppercase mb-1">Overdue breaks</p>
           <div className="space-y-1">
             {data.overdueList.slice(0, 4).map((r: any) => (
-              <div key={r.id} className="flex items-center gap-2 rounded-lg border border-rose-100 bg-rose-50/40 px-2 py-1">
+              <div key={r.id} className="flex items-center gap-2 rounded-lg border border-[var(--cmp-color-error)] bg-[var(--cmp-surface-error)]/40 px-2 py-1">
                 <span className="text-xs text-gray-800 flex-1 truncate">{r.name} <span className="text-gray-400">{r.role}</span></span>
-                <span className="text-[10px] font-semibold text-rose-600">+{r.overdueMin}m</span>
+                <span className="text-[10px] font-semibold text-[var(--cmp-text-error)]">+{r.overdueMin}m</span>
                 {editable && <button onClick={() => move(r.id, "on_break")} disabled={busy === r.id} className="text-[10px] text-teal-700 hover:underline">start</button>}
               </div>
             ))}
@@ -98,9 +98,9 @@ export default function BreakBoard({ shiftId, data, staff, editable }: {
           <p className="text-[10px] font-semibold text-gray-400 uppercase mb-1">On break now</p>
           <div className="space-y-1">
             {data.onBreakList.map((r: any) => (
-              <div key={r.id} className="flex items-center gap-2 rounded-lg border border-blue-100 bg-blue-50/40 px-2 py-1">
+              <div key={r.id} className="flex items-center gap-2 rounded-lg border border-[var(--cmp-color-information)] bg-[var(--cmp-surface-information)]/40 px-2 py-1">
                 <span className="text-xs text-gray-800 flex-1 truncate">{r.name} <span className="text-gray-400">· since {fmt(r.since)}</span></span>
-                {editable && <button onClick={() => move(r.id, "completed")} disabled={busy === r.id} className="text-[10px] text-green-700 hover:underline">end break</button>}
+                {editable && <button onClick={() => move(r.id, "completed")} disabled={busy === r.id} className="text-[10px] text-[var(--cmp-text-success)] hover:underline">end break</button>}
               </div>
             ))}
           </div>
@@ -129,7 +129,7 @@ export default function BreakBoard({ shiftId, data, staff, editable }: {
           </div>
         </div>
       )}
-      {err && <p className="text-[11px] text-rose-600 mt-2">{err}</p>}
+      {err && <p className="text-[11px] text-[var(--cmp-text-error)] mt-2">{err}</p>}
     </div>
   );
 }

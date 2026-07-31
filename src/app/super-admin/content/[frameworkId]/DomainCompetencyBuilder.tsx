@@ -103,7 +103,7 @@ export default function DomainCompetencyBuilder({ frameworkId, domains }: { fram
                   Edit
                 </button>
                 <button onClick={() => setModal({ type: "delete-domain", id: domain.id, name: domain.name })}
-                  className="px-2.5 py-1 text-xs text-red-500 border border-red-100 rounded-lg hover:bg-red-50">
+                  className="px-2.5 py-1 text-xs text-red-500 border border-[var(--cmp-color-critical)] rounded-lg hover:bg-[var(--cmp-surface-critical)]">
                   Delete
                 </button>
                 <button onClick={() => openAdd({ type: "add-competency", domainId: domain.id })}
@@ -130,7 +130,7 @@ export default function DomainCompetencyBuilder({ frameworkId, domains }: { fram
                       </button>
                       <button
                         onClick={() => setModal({ type: "delete-competency", id: comp.id, name: comp.name })}
-                        className="px-2 py-0.5 text-[11px] text-red-500 border border-red-100 rounded hover:bg-red-50">
+                        className="px-2 py-0.5 text-[11px] text-red-500 border border-[var(--cmp-color-critical)] rounded hover:bg-[var(--cmp-surface-critical)]">
                         Delete
                       </button>
                       <button
@@ -154,7 +154,7 @@ export default function DomainCompetencyBuilder({ frameworkId, domains }: { fram
                         </button>
                         <button
                           onClick={() => setModal({ type: "delete-skill", id: skill.id, name: skill.name })}
-                          className="opacity-0 group-hover:opacity-100 text-red-400 hover:text-red-600 transition-opacity leading-none px-0.5"
+                          className="opacity-0 group-hover:opacity-100 text-red-400 hover:text-[var(--cmp-text-critical)] transition-opacity leading-none px-0.5"
                           title="Remove skill">
                           ×
                         </button>
@@ -227,7 +227,7 @@ export default function DomainCompetencyBuilder({ frameworkId, domains }: { fram
               <button onClick={save} disabled={saving}
                 className={`flex-1 py-2 rounded-lg text-sm font-semibold disabled:opacity-50 ${
                   isDelete
-                    ? "bg-red-500 text-white hover:bg-red-600"
+                    ? "bg-[var(--cmp-color-critical)] text-white hover:bg-[var(--cmp-color-critical)]"
                     : "bg-teal-600 text-white hover:bg-teal-700"
                 }`}>
                 {saving ? "…" : isDelete ? "Delete" : isEdit ? "Save changes" : "Add"}

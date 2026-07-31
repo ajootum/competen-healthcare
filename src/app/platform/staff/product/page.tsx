@@ -23,7 +23,7 @@ export default async function ProductPage() {
         <p className="text-sm text-gray-500 mt-1">The platform&apos;s products &amp; modules — default enablement and per-tenant gating via feature flags.</p>
       </div>
       {!ready ? (
-        <div className="bg-amber-50 border border-amber-200 rounded-xl p-5 text-sm text-amber-700">Apply migrations <code className="font-mono text-xs">042–043</code> to load the product catalogue.</div>
+        <div className="bg-[var(--cmp-surface-warning)] border border-[var(--cmp-color-warning)] rounded-xl p-5 text-sm text-[var(--cmp-text-warning)]">Apply migrations <code className="font-mono text-xs">042–043</code> to load the product catalogue.</div>
       ) : (
         <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-3">
           {products.map((p: any) => (

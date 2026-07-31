@@ -47,7 +47,7 @@ export default function TranslationManager({ translations }: { translations: any
           <input value={translator} onChange={e => setTranslator(e.target.value)} placeholder="Translator (optional)" className={`${inp} lg:w-40`} />
           <button onClick={add} disabled={busy} className="text-xs font-semibold text-white bg-teal-600 hover:bg-teal-700 disabled:opacity-50 rounded-lg px-4 py-2 whitespace-nowrap">{busy ? "…" : "Add"}</button>
         </div>
-        {err && <p className="text-[11px] text-red-600 mt-1">{err}</p>}
+        {err && <p className="text-[11px] text-[var(--cmp-text-critical)] mt-1">{err}</p>}
       </div>
 
       <div className="bg-white rounded-xl border border-gray-100 p-4">

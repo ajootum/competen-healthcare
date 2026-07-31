@@ -46,7 +46,7 @@ export default async function ShiftRulesConfig() {
 
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
         <div className={`${card} p-5`}>
-          <h3 className="text-sm font-bold text-gray-900 mb-3">Working-time rules <span className="text-[10px] text-emerald-600 font-normal">live · wps_config</span></h3>
+          <h3 className="text-sm font-bold text-gray-900 mb-3">Working-time rules <span className="text-[10px] text-[var(--cmp-text-success)] font-normal">live · wps_config</span></h3>
           <div className="space-y-1.5"><Param label="Shift length" value={s.shiftHours} unit="h" /><Param label="Shifts / day" value={s.shiftsPerDay} /><Param label="Max shifts / week" value={s.maxShiftsWeek} /><Param label="Max weekly hours" value={(s.shiftHours ?? 0) * (s.maxShiftsWeek ?? 0)} unit="h" /></div>
           <Link href="/unit-manager/planning-studio" className="mt-3 inline-block text-[11px] font-semibold text-emerald-700 hover:underline">Edit in Planning Studio ↗</Link>
         </div>

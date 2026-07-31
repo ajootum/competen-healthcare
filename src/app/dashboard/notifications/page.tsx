@@ -10,7 +10,7 @@ import MarkRead from "@/components/notifications/MarkRead";
 // mark-read is a live client action against /api/notifications. Renders the person's REAL feed.
 export const dynamic = "force-dynamic";
 
-const prioPill: Record<string, string> = { high: "bg-rose-50 text-rose-700 ring-rose-200", medium: "bg-amber-50 text-amber-700 ring-amber-200", low: "bg-slate-50 text-slate-600 ring-slate-200" };
+const prioPill: Record<string, string> = { high: "bg-[var(--cmp-surface-error)] text-[var(--cmp-text-error)] ring-rose-200", medium: "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)] ring-amber-200", low: "bg-slate-50 text-slate-600 ring-slate-200" };
 const fmt = (t: string) => { const d = new Date(t); return d.toLocaleDateString("en-GB", { day: "numeric", month: "short" }) + " · " + d.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" }); };
 
 function Kpi({ label, value, tone, sub, icon }: { label: string; value: number; tone: string; sub?: string; icon: string }) {
@@ -26,12 +26,12 @@ function Kpi({ label, value, tone, sub, icon }: { label: string; value: number; 
 function Row({ n, selHref }: { n: any; selHref: string }) { // eslint-disable-line @typescript-eslint/no-explicit-any
   const c = CAT[n.category];
   return (
-    <div className={`flex gap-3 px-4 py-3 border-l-2 ${n.read ? "border-transparent opacity-70" : n.priority === "high" ? "border-rose-400 bg-rose-50/40" : "border-blue-300"} hover:bg-gray-50/60`}>
+    <div className={`flex gap-3 px-4 py-3 border-l-2 ${n.read ? "border-transparent opacity-70" : n.priority === "high" ? "border-rose-400 bg-[var(--cmp-surface-error)]/40" : "border-[var(--cmp-color-information)]"} hover:bg-gray-50/60`}>
       <span className="text-lg shrink-0 mt-0.5">{n.icon}</span>
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2 flex-wrap">
           <Link href={selHref} className="text-sm font-semibold text-gray-800 hover:text-blue-700 truncate">{n.title}</Link>
-          {!n.read && <span className="w-1.5 h-1.5 rounded-full bg-blue-500 shrink-0" />}
+          {!n.read && <span className="w-1.5 h-1.5 rounded-full bg-[var(--cmp-color-information)] shrink-0" />}
         </div>
         {n.body && <p className="text-[12px] text-gray-500 mt-0.5 line-clamp-1">{n.body}</p>}
         <div className="flex items-center gap-2 mt-1">
@@ -41,7 +41,7 @@ function Row({ n, selHref }: { n: any; selHref: string }) { // eslint-disable-li
       </div>
       <div className="text-right shrink-0 flex flex-col items-end gap-1">
         <span className="text-[11px] text-gray-400 whitespace-nowrap">{fmt(n.time)}</span>
-        {n.href && <Link href={n.href} className="text-[11px] font-medium text-blue-600 hover:underline">Take action →</Link>}
+        {n.href && <Link href={n.href} className="text-[11px] font-medium text-[var(--cmp-text-information)] hover:underline">Take action →</Link>}
         {n.real && !n.read && <MarkRead id={n.id} label="Mark read" />}
       </div>
     </div>
@@ -79,7 +79,7 @@ export default async function NotificationCentrePage({ searchParams }: { searchP
       {/* Header */}
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <p className="text-[11px] font-semibold text-blue-600 uppercase tracking-wide">Personal Workspace</p>
+          <p className="text-[11px] font-semibold text-[var(--cmp-text-information)] uppercase tracking-wide">Personal Workspace</p>
           <h1 className="text-2xl font-bold text-gray-900">Notification Centre</h1>
           <p className="text-sm text-gray-500 mt-0.5">All your important updates, alerts and communications in one place.</p>
         </div>
@@ -92,9 +92,9 @@ export default async function NotificationCentrePage({ searchParams }: { searchP
       {/* KPI ribbon */}
       <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
         <Kpi label="Total" value={d.kpis.total} tone="text-gray-900" sub={`Unread: ${d.kpis.unread}`} icon="🔔" />
-        <Kpi label="High Priority" value={d.kpis.high} tone="text-rose-600" sub="Requires attention" icon="❗" />
-        <Kpi label="Due Today" value={d.kpis.dueToday} tone="text-amber-600" sub="Action needed" icon="⏰" />
-        <Kpi label="This Week" value={d.kpis.thisWeek} tone="text-blue-600" sub="Scheduled" icon="🗓️" />
+        <Kpi label="High Priority" value={d.kpis.high} tone="text-[var(--cmp-text-error)]" sub="Requires attention" icon="❗" />
+        <Kpi label="Due Today" value={d.kpis.dueToday} tone="text-[var(--cmp-text-warning)]" sub="Action needed" icon="⏰" />
+        <Kpi label="This Week" value={d.kpis.thisWeek} tone="text-[var(--cmp-text-information)]" sub="Scheduled" icon="🗓️" />
         <Kpi label="Archived" value={d.kpis.archived} tone="text-gray-500" sub="Read" icon="🗄️" />
       </div>
 
@@ -102,13 +102,13 @@ export default async function NotificationCentrePage({ searchParams }: { searchP
         {/* Left category panel */}
         <div className="bg-white rounded-xl border border-gray-200 p-3 space-y-1">
           <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide px-2 pb-1">Categories</p>
-          <Link href={qp({ unread })} className={`flex items-center justify-between px-2.5 py-1.5 rounded-lg text-sm ${!cat ? "bg-blue-50 text-blue-700 font-medium" : "text-gray-600 hover:bg-gray-50"}`}><span>🔔 All Notifications</span><span className="text-[11px] text-gray-400">{d.feed.length}</span></Link>
+          <Link href={qp({ unread })} className={`flex items-center justify-between px-2.5 py-1.5 rounded-lg text-sm ${!cat ? "bg-[var(--cmp-surface-information)] text-blue-700 font-medium" : "text-gray-600 hover:bg-gray-50"}`}><span>🔔 All Notifications</span><span className="text-[11px] text-gray-400">{d.feed.length}</span></Link>
           {d.categories.map((c: any) => ( // eslint-disable-line @typescript-eslint/no-explicit-any
-            <Link key={c.key} href={qp({ cat: c.key, unread })} className={`flex items-center justify-between px-2.5 py-1.5 rounded-lg text-sm ${cat === c.key ? "bg-blue-50 text-blue-700 font-medium" : "text-gray-600 hover:bg-gray-50"}`}><span className="truncate">{c.icon} {c.label}</span><span className="text-[11px] text-gray-400 shrink-0 ml-1">{c.n}</span></Link>
+            <Link key={c.key} href={qp({ cat: c.key, unread })} className={`flex items-center justify-between px-2.5 py-1.5 rounded-lg text-sm ${cat === c.key ? "bg-[var(--cmp-surface-information)] text-blue-700 font-medium" : "text-gray-600 hover:bg-gray-50"}`}><span className="truncate">{c.icon} {c.label}</span><span className="text-[11px] text-gray-400 shrink-0 ml-1">{c.n}</span></Link>
           ))}
           <div className="pt-2 mt-1 border-t border-gray-100">
             <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide px-2 pb-1">View</p>
-            <Link href={qp({ cat, unread: unread === "1" ? undefined : "1" })} className={`flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-sm ${unread === "1" ? "bg-blue-50 text-blue-700 font-medium" : "text-gray-600 hover:bg-gray-50"}`}>{unread === "1" ? "☑" : "☐"} Unread only</Link>
+            <Link href={qp({ cat, unread: unread === "1" ? undefined : "1" })} className={`flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-sm ${unread === "1" ? "bg-[var(--cmp-surface-information)] text-blue-700 font-medium" : "text-gray-600 hover:bg-gray-50"}`}>{unread === "1" ? "☑" : "☐"} Unread only</Link>
           </div>
         </div>
 
@@ -120,7 +120,7 @@ export default async function NotificationCentrePage({ searchParams }: { searchP
           </div>
           <div className="divide-y divide-gray-50">
             {high.length > 0 && <>
-              <p className="px-4 pt-2 pb-1 text-[10px] font-bold text-rose-600 uppercase tracking-wide">High Priority</p>
+              <p className="px-4 pt-2 pb-1 text-[10px] font-bold text-[var(--cmp-text-error)] uppercase tracking-wide">High Priority</p>
               {high.map(n => <Row key={n.id} n={n} selHref={qp({ cat, unread, sel: n.id })} />)}
             </>}
             {today.length > 0 && <>
@@ -149,10 +149,10 @@ export default async function NotificationCentrePage({ searchParams }: { searchP
                 <dl className="mt-3 space-y-1.5 text-[12px]">
                   <div className="flex justify-between"><dt className="text-gray-400">Source</dt><dd className="text-gray-700 font-medium">{detail.source}</dd></div>
                   <div className="flex justify-between"><dt className="text-gray-400">When</dt><dd className="text-gray-700">{fmt(detail.time)}</dd></div>
-                  <div className="flex justify-between"><dt className="text-gray-400">Status</dt><dd className={detail.read ? "text-gray-500" : "text-blue-600 font-medium"}>{detail.read ? "Read" : "Unread"}</dd></div>
+                  <div className="flex justify-between"><dt className="text-gray-400">Status</dt><dd className={detail.read ? "text-gray-500" : "text-[var(--cmp-text-information)] font-medium"}>{detail.read ? "Read" : "Unread"}</dd></div>
                 </dl>
                 <div className="mt-4 space-y-2">
-                  {detail.href && <Link href={detail.href} className="block text-center text-sm font-medium text-white bg-blue-600 rounded-lg py-2 hover:bg-blue-500">Take Action</Link>}
+                  {detail.href && <Link href={detail.href} className="block text-center text-sm font-medium text-white bg-[var(--cmp-color-information)] rounded-lg py-2 hover:bg-[var(--cmp-color-information)]">Take Action</Link>}
                   {detail.real && !detail.read && <MarkRead id={detail.id} label="Mark as Read" className="block w-full text-center text-sm font-medium text-gray-600 border border-gray-200 rounded-lg py-2 hover:bg-gray-50" />}
                 </div>
               </div>

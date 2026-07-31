@@ -10,21 +10,21 @@ export const dynamic = "force-dynamic";
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 const KIND_META: Record<string, string> = {
-  major: "text-rose-700 bg-rose-50 border-rose-100",
-  minor: "text-amber-700 bg-amber-50 border-amber-100",
-  revision: "text-blue-700 bg-blue-50 border-blue-100",
+  major: "text-[var(--cmp-text-error)] bg-[var(--cmp-surface-error)] border-[var(--cmp-color-error)]",
+  minor: "text-[var(--cmp-text-warning)] bg-[var(--cmp-surface-warning)] border-[var(--cmp-color-warning)]",
+  revision: "text-blue-700 bg-[var(--cmp-surface-information)] border-[var(--cmp-color-information)]",
 };
 const CR_STATUS_META: Record<string, { label: string; cls: string }> = {
-  open: { label: "Open", cls: "text-amber-700 bg-amber-50 border-amber-100" },
-  approved: { label: "Approved", cls: "text-emerald-700 bg-emerald-50 border-emerald-100" },
-  implemented: { label: "Implemented", cls: "text-emerald-700 bg-emerald-50 border-emerald-100" },
-  rejected: { label: "Rejected", cls: "text-rose-700 bg-rose-50 border-rose-100" },
+  open: { label: "Open", cls: "text-[var(--cmp-text-warning)] bg-[var(--cmp-surface-warning)] border-[var(--cmp-color-warning)]" },
+  approved: { label: "Approved", cls: "text-emerald-700 bg-[var(--cmp-surface-success)] border-[var(--cmp-color-success)]" },
+  implemented: { label: "Implemented", cls: "text-emerald-700 bg-[var(--cmp-surface-success)] border-[var(--cmp-color-success)]" },
+  rejected: { label: "Rejected", cls: "text-[var(--cmp-text-error)] bg-[var(--cmp-surface-error)] border-[var(--cmp-color-error)]" },
 };
 const PUB_META: Record<string, { label: string; dot: string }> = {
   draft: { label: "Draft", dot: "bg-gray-300" },
-  in_review: { label: "In review", dot: "bg-amber-400" },
-  approved: { label: "Approved", dot: "bg-emerald-400" },
-  published: { label: "Published", dot: "bg-emerald-600" },
+  in_review: { label: "In review", dot: "bg-[var(--cmp-color-warning)]" },
+  approved: { label: "Approved", dot: "bg-[var(--cmp-color-success)]" },
+  published: { label: "Published", dot: "bg-[var(--cmp-color-success)]" },
   archived: { label: "Archived", dot: "bg-gray-400" },
 };
 
@@ -46,12 +46,12 @@ export default async function ChangeControlPage() {
     <div className="max-w-[1400px]">
       <div className="flex items-start justify-between gap-3 mb-5">
         <div>
-          <p className="text-[11px] font-semibold text-emerald-600 uppercase tracking-widest mb-0.5">CGR-004 · Competency Governance</p>
+          <p className="text-[11px] font-semibold text-[var(--cmp-text-success)] uppercase tracking-widest mb-0.5">CGR-004 · Competency Governance</p>
           <h1 className="text-xl font-bold text-gray-900">Change Control &amp; Lifecycle</h1>
           <p className="text-gray-400 text-sm mt-0.5">What changed, why, who is affected, and how it&apos;s safely implemented — controlled change with impact assessment and version integrity.</p>
         </div>
         <div className="flex gap-2 shrink-0">
-          <Link href="/competency-office/lifecycle-state" className="text-xs font-semibold text-emerald-700 hover:text-emerald-800 border border-emerald-200 bg-emerald-50 rounded-lg px-3 py-2">Lifecycle →</Link>
+          <Link href="/competency-office/lifecycle-state" className="text-xs font-semibold text-emerald-700 hover:text-emerald-800 border border-[var(--cmp-color-success)] bg-[var(--cmp-surface-success)] rounded-lg px-3 py-2">Lifecycle →</Link>
           <Link href="/super-admin/cgr" className="text-xs font-semibold text-gray-500 hover:text-emerald-700 border border-gray-200 rounded-lg px-3 py-2">← CGR</Link>
         </div>
       </div>
@@ -62,11 +62,11 @@ export default async function ChangeControlPage() {
         <div className="space-y-4">
           <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
             <Kpi label="Change requests" value={k.totalChanges} sub="controlled changes" />
-            <Kpi label="Open" value={k.open} sub="in flight" tone={k.open ? "text-amber-600" : "text-gray-900"} />
-            <Kpi label="Through workflow" value={k.throughWorkflowPct == null ? "—" : `${k.throughWorkflowPct}%`} sub="approved/implemented" tone={k.throughWorkflowPct != null && k.throughWorkflowPct >= 60 ? "text-emerald-600" : "text-gray-900"} />
+            <Kpi label="Open" value={k.open} sub="in flight" tone={k.open ? "text-[var(--cmp-text-warning)]" : "text-gray-900"} />
+            <Kpi label="Through workflow" value={k.throughWorkflowPct == null ? "—" : `${k.throughWorkflowPct}%`} sub="approved/implemented" tone={k.throughWorkflowPct != null && k.throughWorkflowPct >= 60 ? "text-[var(--cmp-text-success)]" : "text-gray-900"} />
             <Kpi label="Impact-assessed" value={k.withImpactPct == null ? "—" : `${k.withImpactPct}%`} sub="have an impact record" />
             <Kpi label="Frameworks versioned" value={`${k.versioned}/${k.frameworks}`} sub="semantic version set" />
-            <Kpi label="Overdue reviews" value={k.overdueReviews} sub="past review date" tone={k.overdueReviews ? "text-rose-600" : "text-gray-900"} />
+            <Kpi label="Overdue reviews" value={k.overdueReviews} sub="past review date" tone={k.overdueReviews ? "text-[var(--cmp-text-error)]" : "text-gray-900"} />
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
@@ -77,7 +77,7 @@ export default async function ChangeControlPage() {
                 <p className="text-[10px] text-gray-400">controlled-change register · recent</p>
               </div>
               {d.changeLog.length === 0 ? (
-                <div className="p-6 text-center"><p className="text-sm text-gray-400">No change requests raised yet. <Link href="/competency-office/review-board" className="text-emerald-600 hover:underline">Raise a change →</Link></p></div>
+                <div className="p-6 text-center"><p className="text-sm text-gray-400">No change requests raised yet. <Link href="/competency-office/review-board" className="text-[var(--cmp-text-success)] hover:underline">Raise a change →</Link></p></div>
               ) : (
                 <div className="overflow-x-auto">
                   <table className="w-full min-w-[640px]">
@@ -96,7 +96,7 @@ export default async function ChangeControlPage() {
                             <p className="text-[10px] text-gray-400 line-clamp-1">{c.entityType}{c.rationale ? ` · ${c.rationale}` : ""}</p>
                           </td>
                           <td className="py-2 px-2"><span className={`text-[10px] font-bold border rounded px-1.5 py-0.5 capitalize ${KIND_META[c.kind] ?? KIND_META.revision}`}>{c.kind}</span></td>
-                          <td className="py-2 px-2">{c.hasImpact ? <span className="text-[10px] text-emerald-600 font-semibold">assessed</span> : <span className="text-[10px] text-gray-300">—</span>}</td>
+                          <td className="py-2 px-2">{c.hasImpact ? <span className="text-[10px] text-[var(--cmp-text-success)] font-semibold">assessed</span> : <span className="text-[10px] text-gray-300">—</span>}</td>
                           <td className="py-2 px-2 text-[11px] text-gray-500 tabular-nums">{c.effectiveDate ?? "—"}</td>
                           <td className="py-2 pr-4 pl-2"><span className={`text-[10px] font-bold border rounded px-1.5 py-0.5 ${(CR_STATUS_META[c.status] ?? CR_STATUS_META.open).cls}`}>{(CR_STATUS_META[c.status] ?? CR_STATUS_META.open).label}</span></td>
                         </tr>
@@ -112,7 +112,7 @@ export default async function ChangeControlPage() {
               <p className="text-xs font-bold text-gray-500 uppercase tracking-widest mb-3">Change breakdown</p>
               <p className="text-[10px] font-semibold text-gray-400 uppercase mb-1.5">By status</p>
               <div className="space-y-1 mb-3">
-                {[["open", "bg-amber-400"], ["approved", "bg-emerald-500"], ["implemented", "bg-emerald-600"], ["rejected", "bg-rose-500"]].map(([s, tone]) => (
+                {[["open", "bg-[var(--cmp-color-warning)]"], ["approved", "bg-[var(--cmp-color-success)]"], ["implemented", "bg-[var(--cmp-color-success)]"], ["rejected", "bg-[var(--cmp-color-error)]"]].map(([s, tone]) => (
                   <div key={s} className="flex items-center gap-2">
                     <span className="text-[11px] text-gray-500 w-24 shrink-0 capitalize">{s}</span>
                     <div className="flex-1 h-2.5 rounded bg-gray-50 overflow-hidden"><div className={`h-full ${tone} rounded`} style={{ width: `${(d.byStatus[s as string] / Math.max(1, k.totalChanges)) * 100}%` }} /></div>
@@ -136,7 +136,7 @@ export default async function ChangeControlPage() {
           <div className="bg-white rounded-xl border border-gray-100 overflow-hidden">
             <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
               <p className="text-sm font-bold text-gray-800">Impact Assessment — change blast radius</p>
-              <p className="text-[10px] text-gray-400">frameworks with open changes first · <Link href="/super-admin/studio/dependencies" className="text-emerald-600 hover:underline">dependency graph →</Link></p>
+              <p className="text-[10px] text-gray-400">frameworks with open changes first · <Link href="/super-admin/studio/dependencies" className="text-[var(--cmp-text-success)] hover:underline">dependency graph →</Link></p>
             </div>
             {d.impacts.length === 0 ? (
               <div className="p-6 text-center"><p className="text-sm text-gray-400">No frameworks to assess yet.</p></div>
@@ -147,12 +147,12 @@ export default async function ChangeControlPage() {
                     <div className="flex items-center justify-between gap-2 mb-2">
                       <div className="flex items-center gap-2 min-w-0">
                         <p className="text-[13px] font-semibold text-gray-800 truncate">{im.name}</p>
-                        {im.hasOpenChange && <span className="text-[9px] font-bold text-amber-700 bg-amber-50 border border-amber-100 rounded px-1.5 py-0.5 shrink-0">open change</span>}
+                        {im.hasOpenChange && <span className="text-[9px] font-bold text-[var(--cmp-text-warning)] bg-[var(--cmp-surface-warning)] border border-[var(--cmp-color-warning)] rounded px-1.5 py-0.5 shrink-0">open change</span>}
                       </div>
                       <span className="text-[11px] text-gray-400 shrink-0"><span className="font-bold text-gray-700 tabular-nums">{im.blastRadius}</span> objects affected{im.edges > 0 && ` · ${im.edges} edges`}</span>
                     </div>
                     <div className="flex items-center gap-2">
-                      <div className="flex-1 h-1.5 rounded-full bg-gray-100 overflow-hidden"><div className="h-full bg-emerald-500" style={{ width: `${(im.blastRadius / impactMax) * 100}%` }} /></div>
+                      <div className="flex-1 h-1.5 rounded-full bg-gray-100 overflow-hidden"><div className="h-full bg-[var(--cmp-color-success)]" style={{ width: `${(im.blastRadius / impactMax) * 100}%` }} /></div>
                     </div>
                     <div className="flex flex-wrap gap-1.5 mt-2">
                       {im.affected.map((a: any) => <span key={a.label} className="text-[10px] text-gray-500 bg-gray-50 border border-gray-100 rounded px-1.5 py-0.5">{a.label} <span className="font-semibold text-gray-700">{a.count}</span></span>)}
@@ -177,7 +177,7 @@ export default async function ChangeControlPage() {
                   </div>
                 ))}
               </div>
-              <p className="text-[10px] text-gray-400 mt-2.5">{k.retired} archived (retired). Per-worker competency lifecycle → <Link href="/competency-office/lifecycle-state" className="text-emerald-600 hover:underline">state machine</Link>.</p>
+              <p className="text-[10px] text-gray-400 mt-2.5">{k.retired} archived (retired). Per-worker competency lifecycle → <Link href="/competency-office/lifecycle-state" className="text-[var(--cmp-text-success)] hover:underline">state machine</Link>.</p>
             </div>
 
             <div className="bg-white rounded-xl border border-gray-100 overflow-hidden">
@@ -196,7 +196,7 @@ export default async function ChangeControlPage() {
                           <td className="py-2 pl-4 pr-2 text-[12px] font-medium text-gray-800">{v.name}</td>
                           <td className="py-2 px-2"><span className="text-[11px] font-mono text-gray-500">v{v.version}</span></td>
                           <td className="py-2 px-2"><span className="inline-flex items-center gap-1 text-[10px] text-gray-500"><span className={`w-1.5 h-1.5 rounded-full ${(PUB_META[v.pubStatus] ?? PUB_META.draft).dot}`} />{(PUB_META[v.pubStatus] ?? PUB_META.draft).label}</span></td>
-                          <td className="py-2 pr-4 pl-2 text-right text-[10px] tabular-nums">{v.reviewDate ? <span className={v.reviewOverdue ? "text-rose-600 font-semibold" : "text-gray-400"}>{v.reviewDate}{v.reviewOverdue && " ⚠"}</span> : <span className="text-gray-300">no review</span>}</td>
+                          <td className="py-2 pr-4 pl-2 text-right text-[10px] tabular-nums">{v.reviewDate ? <span className={v.reviewOverdue ? "text-[var(--cmp-text-error)] font-semibold" : "text-gray-400"}>{v.reviewDate}{v.reviewOverdue && " ⚠"}</span> : <span className="text-gray-300">no review</span>}</td>
                         </tr>
                       ))}
                     </tbody>
@@ -206,7 +206,7 @@ export default async function ChangeControlPage() {
             </div>
           </div>
 
-          <p className="text-[11px] text-gray-400 leading-relaxed">Every figure is live: the change log is the controlled-change register (change_requests), impact is computed by walking the real governed hierarchy + dependency graph, and version integrity comes from the framework semantic versions + lifecycle status. This is the change-control <span className="font-medium">workspace</span> — raising and approving changes happens in <Link href="/competency-office/review-board" className="text-emerald-600 hover:underline">the review board</Link> and <Link href="/competency-office/lifecycle-state" className="text-emerald-600 hover:underline">lifecycle management</Link>, where controlled change, version integrity and safe transition are enforced. Per the CGR mandate, AI may summarise impacts but never retires competencies or approves changes.</p>
+          <p className="text-[11px] text-gray-400 leading-relaxed">Every figure is live: the change log is the controlled-change register (change_requests), impact is computed by walking the real governed hierarchy + dependency graph, and version integrity comes from the framework semantic versions + lifecycle status. This is the change-control <span className="font-medium">workspace</span> — raising and approving changes happens in <Link href="/competency-office/review-board" className="text-[var(--cmp-text-success)] hover:underline">the review board</Link> and <Link href="/competency-office/lifecycle-state" className="text-[var(--cmp-text-success)] hover:underline">lifecycle management</Link>, where controlled change, version integrity and safe transition are enforced. Per the CGR mandate, AI may summarise impacts but never retires competencies or approves changes.</p>
         </div>
       )}
     </div>

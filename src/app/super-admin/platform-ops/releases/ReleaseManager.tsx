@@ -14,7 +14,7 @@ const CHANNELS = ["dev", "qa", "uat", "pilot", "production"];
 const ROLLOUTS = ["immediate", "scheduled", "phased", "canary"];
 const STAGES = ["draft", "validated", "approved", "published", "activated"];
 const input = "border border-gray-200 rounded px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-indigo-400 bg-white";
-const ST: Record<string, string> = { draft: "bg-gray-100 text-gray-600", validated: "bg-sky-100 text-sky-700", approved: "bg-indigo-100 text-indigo-700", scheduled: "bg-violet-100 text-violet-700", published: "bg-amber-100 text-amber-700", activated: "bg-emerald-100 text-emerald-700", rolled_back: "bg-rose-100 text-rose-700", failed: "bg-rose-100 text-rose-700" };
+const ST: Record<string, string> = { draft: "bg-gray-100 text-gray-600", validated: "bg-[var(--cmp-surface-information)] text-[var(--cmp-text-information)]", approved: "bg-indigo-100 text-indigo-700", scheduled: "bg-violet-100 text-violet-700", published: "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]", activated: "bg-[var(--cmp-surface-success)] text-emerald-700", rolled_back: "bg-[var(--cmp-surface-error)] text-[var(--cmp-text-error)]", failed: "bg-[var(--cmp-surface-error)] text-[var(--cmp-text-error)]" };
 const stageIdx = (s: string) => s === "scheduled" ? 3 : s === "rolled_back" ? 4 : s === "failed" ? 0 : STAGES.indexOf(s);
 
 export default function ReleaseManager({ releases, objects }: { releases: Release[]; objects: ObjRow[] }) {
@@ -97,7 +97,7 @@ export default function ReleaseManager({ releases, objects }: { releases: Releas
 
             {/* Pipeline */}
             <div className="flex items-center gap-1 mb-4">
-              {STAGES.map((s, i) => <span key={s} className="flex items-center gap-1"><span className={`text-[10px] px-2 py-0.5 rounded-full ${i <= cur ? (status === "failed" && i === 0 ? "bg-rose-100 text-rose-700" : "bg-emerald-100 text-emerald-700") : "bg-gray-100 text-gray-400"}`}>{s}</span>{i < STAGES.length - 1 && <span className="text-gray-300 text-[10px]">→</span>}</span>)}
+              {STAGES.map((s, i) => <span key={s} className="flex items-center gap-1"><span className={`text-[10px] px-2 py-0.5 rounded-full ${i <= cur ? (status === "failed" && i === 0 ? "bg-[var(--cmp-surface-error)] text-[var(--cmp-text-error)]" : "bg-[var(--cmp-surface-success)] text-emerald-700") : "bg-gray-100 text-gray-400"}`}>{s}</span>{i < STAGES.length - 1 && <span className="text-gray-300 text-[10px]">→</span>}</span>)}
             </div>
 
             {/* Settings */}
@@ -116,10 +116,10 @@ export default function ReleaseManager({ releases, objects }: { releases: Releas
               </div>
               <div>
                 {selR.validation && (
-                  <div className={`rounded-lg border p-3 mb-3 ${selR.validation.ok ? "border-emerald-200 bg-emerald-50" : "border-rose-200 bg-rose-50"}`}>
-                    <p className={`text-xs font-semibold ${selR.validation.ok ? "text-emerald-700" : "text-rose-700"}`}>{selR.validation.ok ? "✓ Validated" : "✕ Validation issues"}</p>
-                    {selR.validation.schemaErrors?.length > 0 && <div className="mt-1 space-y-0.5">{selR.validation.schemaErrors.map((e: string, i: number) => <p key={i} className="text-[10px] text-rose-600">{e}</p>)}</div>}
-                    {selR.validation.depReason && <p className="text-[10px] text-rose-600 mt-1">Dependencies: {selR.validation.depReason}</p>}
+                  <div className={`rounded-lg border p-3 mb-3 ${selR.validation.ok ? "border-[var(--cmp-color-success)] bg-[var(--cmp-surface-success)]" : "border-[var(--cmp-color-error)] bg-[var(--cmp-surface-error)]"}`}>
+                    <p className={`text-xs font-semibold ${selR.validation.ok ? "text-emerald-700" : "text-[var(--cmp-text-error)]"}`}>{selR.validation.ok ? "✓ Validated" : "✕ Validation issues"}</p>
+                    {selR.validation.schemaErrors?.length > 0 && <div className="mt-1 space-y-0.5">{selR.validation.schemaErrors.map((e: string, i: number) => <p key={i} className="text-[10px] text-[var(--cmp-text-error)]">{e}</p>)}</div>}
+                    {selR.validation.depReason && <p className="text-[10px] text-[var(--cmp-text-error)] mt-1">Dependencies: {selR.validation.depReason}</p>}
                   </div>
                 )}
                 {events.length > 0 && <>
@@ -129,14 +129,14 @@ export default function ReleaseManager({ releases, objects }: { releases: Releas
               </div>
             </div>
 
-            {msg && <p className={`text-xs mb-2 ${msg.startsWith("✓") ? "text-emerald-600" : "text-rose-600"}`}>{msg}</p>}
+            {msg && <p className={`text-xs mb-2 ${msg.startsWith("✓") ? "text-[var(--cmp-text-success)]" : "text-[var(--cmp-text-error)]"}`}>{msg}</p>}
             <div className="flex items-center justify-end gap-2 flex-wrap">
               <button onClick={save} disabled={busy} className={`${btn} text-indigo-700 border border-indigo-200 hover:bg-indigo-50`}>Save</button>
-              <button onClick={() => act("validate")} disabled={busy || sel.size === 0} className={`${btn} text-sky-700 border border-sky-200 hover:bg-sky-50`}>Validate</button>
+              <button onClick={() => act("validate")} disabled={busy || sel.size === 0} className={`${btn} text-[var(--cmp-text-information)] border border-[var(--cmp-color-information)] hover:bg-[var(--cmp-surface-information)]`}>Validate</button>
               {status === "validated" && <button onClick={() => act("approve")} disabled={busy} className={`${btn} text-white bg-indigo-600 hover:bg-indigo-700`}>Approve</button>}
-              {status === "approved" && <button onClick={() => act("publish")} disabled={busy} className={`${btn} text-white bg-amber-600 hover:bg-amber-700`}>Publish</button>}
-              {["published", "scheduled"].includes(status) && <button onClick={() => act("activate")} disabled={busy} className={`${btn} text-white bg-emerald-600 hover:bg-emerald-700`}>Activate</button>}
-              {status === "activated" && <button onClick={() => act("rollback")} disabled={busy} className={`${btn} text-amber-700 border border-amber-200 hover:bg-amber-50`}>Roll back</button>}
+              {status === "approved" && <button onClick={() => act("publish")} disabled={busy} className={`${btn} text-white bg-[var(--cmp-color-warning)] hover:bg-amber-700`}>Publish</button>}
+              {["published", "scheduled"].includes(status) && <button onClick={() => act("activate")} disabled={busy} className={`${btn} text-white bg-[var(--cmp-color-success)] hover:bg-emerald-700`}>Activate</button>}
+              {status === "activated" && <button onClick={() => act("rollback")} disabled={busy} className={`${btn} text-[var(--cmp-text-warning)] border border-[var(--cmp-color-warning)] hover:bg-[var(--cmp-surface-warning)]`}>Roll back</button>}
             </div>
           </>
         )}

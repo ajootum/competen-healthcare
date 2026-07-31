@@ -36,7 +36,7 @@ export default function SafetyConsole({ incidentsProvisioned, qaProvisioned }: {
   return (
     <div className={cardClass}>
       <div className="flex items-center gap-2 mb-3">
-        <button onClick={() => { setTab("incident"); setOk(null); setErr(null); }} className={`text-xs font-semibold px-3 py-1.5 rounded-lg ${tab === "incident" ? "bg-rose-600 text-white" : "bg-gray-50 text-gray-600 border border-gray-200"}`}>🚩 Report Incident</button>
+        <button onClick={() => { setTab("incident"); setOk(null); setErr(null); }} className={`text-xs font-semibold px-3 py-1.5 rounded-lg ${tab === "incident" ? "bg-[var(--cmp-color-error)] text-white" : "bg-gray-50 text-gray-600 border border-gray-200"}`}>🚩 Report Incident</button>
         <button onClick={() => { setTab("capa"); setOk(null); setErr(null); }} className={`text-xs font-semibold px-3 py-1.5 rounded-lg ${tab === "capa" ? "bg-teal-600 text-white" : "bg-gray-50 text-gray-600 border border-gray-200"}`}>✅ Create CAPA</button>
       </div>
 
@@ -50,7 +50,7 @@ export default function SafetyConsole({ incidentsProvisioned, qaProvisioned }: {
             <label className="flex items-center gap-1 text-[11px] text-gray-600"><input type="checkbox" checked={inc.near_miss} onChange={e => setInc({ ...inc, near_miss: e.target.checked })} /> Near miss</label>
           </div>
           <textarea value={inc.description} onChange={e => setInc({ ...inc, description: e.target.value })} rows={2} placeholder="What happened…" className="w-full text-xs border border-gray-200 rounded-lg px-2 py-1.5 resize-none" />
-          <button onClick={() => post("/api/operations/incidents", inc, () => setInc({ incident_type: "medication", severity: "medium", near_miss: false, description: "" }), "Incident reported")} disabled={!inc.description.trim() || busy} className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-rose-600 text-white hover:bg-rose-700 disabled:opacity-50">{busy ? "…" : "Report incident"}</button>
+          <button onClick={() => post("/api/operations/incidents", inc, () => setInc({ incident_type: "medication", severity: "medium", near_miss: false, description: "" }), "Incident reported")} disabled={!inc.description.trim() || busy} className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-[var(--cmp-color-error)] text-white hover:bg-rose-700 disabled:opacity-50">{busy ? "…" : "Report incident"}</button>
         </div>
       ) : (
         <div className="space-y-2">
@@ -64,8 +64,8 @@ export default function SafetyConsole({ incidentsProvisioned, qaProvisioned }: {
           <button onClick={() => post("/api/operations/quality-actions", { ...qa, due_hours: qa.due_hours ? Number(qa.due_hours) : undefined }, () => setQa({ action_type: "capa", title: "", priority: "medium", description: "", due_hours: "" }), "Action created")} disabled={!qa.title.trim() || busy} className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-teal-600 text-white hover:bg-teal-700 disabled:opacity-50">{busy ? "…" : "Create action"}</button>
         </div>
       )}
-      {ok && <p className="text-[11px] text-green-600 mt-2">{ok}</p>}
-      {err && <p className="text-[11px] text-rose-600 mt-2">{err}</p>}
+      {ok && <p className="text-[11px] text-[var(--cmp-text-success)] mt-2">{ok}</p>}
+      {err && <p className="text-[11px] text-[var(--cmp-text-error)] mt-2">{err}</p>}
     </div>
   );
 }

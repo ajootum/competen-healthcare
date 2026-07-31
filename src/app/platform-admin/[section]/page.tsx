@@ -56,10 +56,10 @@ export default async function PsaSectionPage({ params }: { params: Promise<{ sec
     <div className="space-y-4 max-w-2xl">
       <h1 className="text-2xl font-bold text-gray-900">{s.title}</h1>
       <div className="bg-white border border-gray-200 rounded-xl p-6">
-        <span className="inline-block text-[10px] font-semibold uppercase tracking-wider text-rose-600 bg-rose-50 border border-rose-100 rounded-full px-2.5 py-1 mb-3">{s.links?.length ? "Reuses existing surface" : "Not measured in-app"}</span>
+        <span className="inline-block text-[10px] font-semibold uppercase tracking-wider text-[var(--cmp-text-error)] bg-[var(--cmp-surface-error)] border border-[var(--cmp-color-error)] rounded-full px-2.5 py-1 mb-3">{s.links?.length ? "Reuses existing surface" : "Not measured in-app"}</span>
         <p className="text-sm text-gray-600 leading-relaxed">{s.blurb}</p>
         {s.links?.map((l) => (
-          <Link key={l.href} href={l.href} className="mt-3 block text-sm font-medium text-rose-700 hover:underline">{l.label} →</Link>
+          <Link key={l.href} href={l.href} className="mt-3 block text-sm font-medium text-[var(--cmp-text-error)] hover:underline">{l.label} →</Link>
         ))}
       </div>
     </div>

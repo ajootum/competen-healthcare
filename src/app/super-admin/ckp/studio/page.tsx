@@ -16,7 +16,7 @@ const card = "bg-white rounded-xl border border-gray-200";
 const fmt = (n: number) => n.toLocaleString();
 const relTime = (iso?: string | null) => { if (!iso) return ""; const s = Math.floor((Date.now() - new Date(iso).getTime()) / 1000); if (s < 60) return "just now"; if (s < 3600) return `${Math.floor(s / 60)} min ago`; if (s < 86400) return `${Math.floor(s / 3600)} hr ago`; return `${Math.floor(s / 86400)} d ago`; };
 
-const STATUS_BADGE: Record<string, string> = { draft: "bg-gray-100 text-gray-600", in_review: "bg-amber-50 text-amber-700", approved: "bg-blue-50 text-blue-700", published: "bg-green-50 text-green-700", active: "bg-green-50 text-green-700", retired: "bg-gray-100 text-gray-400", archived: "bg-gray-100 text-gray-400" };
+const STATUS_BADGE: Record<string, string> = { draft: "bg-gray-100 text-gray-600", in_review: "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]", approved: "bg-[var(--cmp-surface-information)] text-blue-700", published: "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]", active: "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]", retired: "bg-gray-100 text-gray-400", archived: "bg-gray-100 text-gray-400" };
 
 // Asset builders → the real authoring surface each opens. `soon` = no surface yet.
 const BUILDERS = [
@@ -47,8 +47,8 @@ export default async function KnowledgeStudio() {
   const kpiCards = [
     { label: "Total Assets", value: fmt(k.total), icon: "📦", iconBg: "bg-violet-50" },
     { label: "Draft Assets", value: fmt(k.drafts), icon: "📝", iconBg: "bg-gray-50" },
-    { label: "Awaiting Review", value: fmt(k.awaitingReview), icon: "👀", iconBg: "bg-amber-50", tone: k.awaitingReview ? "text-amber-600" : undefined },
-    { label: "Published", value: fmt(k.published), icon: "✅", iconBg: "bg-green-50", tone: "text-green-600" },
+    { label: "Awaiting Review", value: fmt(k.awaitingReview), icon: "👀", iconBg: "bg-[var(--cmp-surface-warning)]", tone: k.awaitingReview ? "text-[var(--cmp-text-warning)]" : undefined },
+    { label: "Published", value: fmt(k.published), icon: "✅", iconBg: "bg-[var(--cmp-surface-success)]", tone: "text-[var(--cmp-text-success)]" },
     { label: "Archived", value: fmt(k.archived), icon: "🗄️", iconBg: "bg-gray-50", tone: "text-gray-400" },
     { label: "AI Suggestions", value: fmt(k.suggestions), icon: "✨", iconBg: "bg-teal-50", tone: k.suggestions ? "text-teal-600" : undefined },
   ];
@@ -89,7 +89,7 @@ export default async function KnowledgeStudio() {
               return (
                 <Wrap key={b.label} {...(b.soon ? {} : { href: b.href })} className={`flex items-center gap-2.5 rounded-lg border border-gray-100 p-3 ${b.soon ? "opacity-60" : "hover:border-teal-300 hover:bg-teal-50/40 transition-colors"}`}>
                   <span className="w-8 h-8 rounded-lg bg-gray-50 flex items-center justify-center text-sm shrink-0">{b.icon}</span>
-                  <div className="min-w-0"><p className="text-sm font-medium text-gray-800 leading-tight">{b.label}</p>{b.soon && <p className="text-[9px] text-amber-600">soon</p>}</div>
+                  <div className="min-w-0"><p className="text-sm font-medium text-gray-800 leading-tight">{b.label}</p>{b.soon && <p className="text-[9px] text-[var(--cmp-text-warning)]">soon</p>}</div>
                 </Wrap>
               );
             })}

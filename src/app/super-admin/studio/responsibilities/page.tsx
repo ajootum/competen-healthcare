@@ -57,7 +57,7 @@ export default async function ResponsibilitiesPage() {
       </div>
 
       {orphanCpus.length > 0 && (
-        <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 mb-5 text-sm text-amber-800">
+        <div className="bg-[var(--cmp-surface-warning)] border border-[var(--cmp-color-warning)] rounded-xl px-4 py-3 mb-5 text-sm text-amber-800">
           ⚠️ {orphanCpus.length} CPU{orphanCpus.length !== 1 ? "s" : ""} without a Product Owner: {orphanCpus.map(c => c.name).join(", ")}
         </div>
       )}

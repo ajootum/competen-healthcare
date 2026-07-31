@@ -46,7 +46,7 @@ export default async function DevAnalytics() {
     </>
   );
 
-  if (!d.ready) return <div className="space-y-4">{header}<div className="bg-amber-50 border border-amber-200 rounded-xl p-6"><p className="font-semibold text-amber-900">⚙️ No operational data</p></div></div>;
+  if (!d.ready) return <div className="space-y-4">{header}<div className="bg-[var(--cmp-surface-warning)] border border-[var(--cmp-color-warning)] rounded-xl p-6"><p className="font-semibold text-amber-900">⚙️ No operational data</p></div></div>;
 
   const k = d.kpis;
   const deployableRate = k.total ? Math.round((k.fullyDeployable / k.total) * 100) : null;
@@ -60,12 +60,12 @@ export default async function DevAnalytics() {
       {header}
 
       <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-3">
-        <Kpi label="Fully deployable rate" value={deployableRate != null ? `${deployableRate}%` : "—"} sub="Deployable ÷ active" tone={deployableRate != null && deployableRate >= 80 ? "text-emerald-600" : "text-amber-600"} />
-        <Kpi label="Critical coverage" value={`${criticalCoverage}%`} sub="Roles with coverage" tone={criticalCoverage >= 90 ? "text-emerald-600" : "text-amber-600"} />
+        <Kpi label="Fully deployable rate" value={deployableRate != null ? `${deployableRate}%` : "—"} sub="Deployable ÷ active" tone={deployableRate != null && deployableRate >= 80 ? "text-[var(--cmp-text-success)]" : "text-[var(--cmp-text-warning)]"} />
+        <Kpi label="Critical coverage" value={`${criticalCoverage}%`} sub="Roles with coverage" tone={criticalCoverage >= 90 ? "text-[var(--cmp-text-success)]" : "text-[var(--cmp-text-warning)]"} />
         <Kpi label="Credential currency" value={k.matchScore != null ? `${k.matchScore}%` : "—"} sub="Current ÷ required" />
-        <Kpi label="Supervision dependency" value={supervisionDep != null ? `${supervisionDep}%` : "—"} sub="Requiring supervision" tone={supervisionDep && supervisionDep > 25 ? "text-amber-600" : undefined} />
-        <Kpi label="Critical-skill concentration" value={`${concentration}%`} sub="Single/no-dep roles" tone={concentration ? "text-rose-600" : "text-emerald-600"} />
-        <Kpi label="Expired credentials" value={k.credentialsExpired} tone={k.credentialsExpired ? "text-rose-600" : "text-emerald-600"} />
+        <Kpi label="Supervision dependency" value={supervisionDep != null ? `${supervisionDep}%` : "—"} sub="Requiring supervision" tone={supervisionDep && supervisionDep > 25 ? "text-[var(--cmp-text-warning)]" : undefined} />
+        <Kpi label="Critical-skill concentration" value={`${concentration}%`} sub="Single/no-dep roles" tone={concentration ? "text-[var(--cmp-text-error)]" : "text-[var(--cmp-text-success)]"} />
+        <Kpi label="Expired credentials" value={k.credentialsExpired} tone={k.credentialsExpired ? "text-[var(--cmp-text-error)]" : "text-[var(--cmp-text-success)]"} />
       </div>
 
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">

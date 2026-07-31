@@ -148,7 +148,7 @@ export default function CPDClient({ initialLogs, totalHours, targetHours }: {
             </div>
           </div>
           {submitError && (
-            <p className="text-xs text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2 mb-3">{submitError}</p>
+            <p className="text-xs text-[var(--cmp-text-critical)] bg-[var(--cmp-surface-critical)] border border-[var(--cmp-color-critical)] rounded-lg px-3 py-2 mb-3">{submitError}</p>
           )}
           <div className="flex gap-3">
             <button type="submit" disabled={loading}
@@ -186,7 +186,7 @@ export default function CPDClient({ initialLogs, totalHours, targetHours }: {
                 <p className="text-xs text-gray-400">{log.cpd_points} pts</p>
               </div>
               {log.verified && (
-                <span className="text-[10px] bg-green-50 text-green-600 px-2 py-0.5 rounded font-medium">Verified</span>
+                <span className="text-[10px] bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)] px-2 py-0.5 rounded font-medium">Verified</span>
               )}
             </div>
           ))}

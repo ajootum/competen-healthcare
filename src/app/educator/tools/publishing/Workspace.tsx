@@ -14,10 +14,10 @@ const TABS = ["Publication Manager", "Release Management", "Version Control", "A
 type Tab = typeof TABS[number];
 
 const STATUS_CLS: Record<StatusKind, string> = {
-  published: "bg-emerald-100 text-emerald-700", ready: "bg-teal-100 text-teal-700", draft: "bg-gray-100 text-gray-600",
-  review: "bg-amber-100 text-amber-700", scheduled: "bg-blue-100 text-blue-700", archived: "bg-gray-100 text-gray-500", deprecated: "bg-rose-100 text-rose-700",
+  published: "bg-[var(--cmp-surface-success)] text-emerald-700", ready: "bg-teal-100 text-teal-700", draft: "bg-gray-100 text-gray-600",
+  review: "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]", scheduled: "bg-[var(--cmp-surface-information)] text-blue-700", archived: "bg-gray-100 text-gray-500", deprecated: "bg-[var(--cmp-surface-error)] text-[var(--cmp-text-error)]",
 };
-const APPROVAL_CLS: Record<ApprovalKind, string> = { approved: "text-emerald-600", review: "text-amber-600", none: "text-gray-400", archived: "text-gray-300" };
+const APPROVAL_CLS: Record<ApprovalKind, string> = { approved: "text-[var(--cmp-text-success)]", review: "text-[var(--cmp-text-warning)]", none: "text-gray-400", archived: "text-gray-300" };
 const CHECK_ICON = { done: "✓", warn: "!", pending: "○" } as const;
 const CHECK_CLS = { done: "text-emerald-500", warn: "text-amber-500", pending: "text-gray-300" } as const;
 const GOVERNANCE = ["Educator", "Senior Educator", "Curriculum Committee", "Quality Office", "Education Director", "Published"];
@@ -184,7 +184,7 @@ export default function Workspace({ resources, typeCounts, statusCounts, activit
               <div className="flex items-center gap-1.5 overflow-x-auto pb-2 mb-4">
                 {GOVERNANCE.map((step, i) => (
                   <div key={step} className="flex items-center gap-1.5 shrink-0">
-                    <span className={`text-[11px] font-semibold rounded-full px-3 py-1.5 ${i === GOVERNANCE.length - 1 ? "bg-emerald-50 text-emerald-700 border border-emerald-200" : "bg-gray-50 text-gray-600 border border-gray-200"}`}>{step}</span>
+                    <span className={`text-[11px] font-semibold rounded-full px-3 py-1.5 ${i === GOVERNANCE.length - 1 ? "bg-[var(--cmp-surface-success)] text-emerald-700 border border-[var(--cmp-color-success)]" : "bg-gray-50 text-gray-600 border border-gray-200"}`}>{step}</span>
                     {i < GOVERNANCE.length - 1 && <span className="text-gray-300 text-xs">→</span>}
                   </div>
                 ))}
@@ -204,7 +204,7 @@ export default function Workspace({ resources, typeCounts, statusCounts, activit
             <div className="rounded-2xl bg-white border border-gray-200 shadow-sm p-5">
               <p className="text-[11px] font-bold uppercase tracking-widest text-gray-500 mb-1">Archived &amp; Retired</p>
               <p className="text-[11px] text-gray-400 mb-3">Resources currently in an archived or deprecated state. Retention policies and historical restore need the archive store.</p>
-              {archived.length === 0 ? <p className="text-[12px] text-emerald-600">Nothing archived — every resource is active.</p> : (
+              {archived.length === 0 ? <p className="text-[12px] text-[var(--cmp-text-success)]">Nothing archived — every resource is active.</p> : (
                 <div className="flex flex-col divide-y divide-gray-100">
                   {archived.map(r => (
                     <div key={r.id} className="flex items-center gap-3 py-2.5"><span className="text-base">{r.icon}</span><span className="flex-1 text-[13px] text-gray-800 truncate">{r.title}</span><span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${STATUS_CLS[r.statusKind]}`}>{r.status}</span></div>
@@ -222,7 +222,7 @@ export default function Workspace({ resources, typeCounts, statusCounts, activit
               </div>
               <div className="rounded-2xl bg-white border border-gray-200 shadow-sm p-5">
                 <p className="text-[11px] font-bold uppercase tracking-widest text-gray-500 mb-3">Resources by Status</p>
-                <BarList bars={statusCounts} tint={b => b.kind === "published" ? "bg-emerald-500" : b.kind === "review" ? "bg-amber-500" : b.kind === "archived" || b.kind === "deprecated" ? "bg-gray-400" : "bg-blue-400"} />
+                <BarList bars={statusCounts} tint={b => b.kind === "published" ? "bg-[var(--cmp-color-success)]" : b.kind === "review" ? "bg-[var(--cmp-color-warning)]" : b.kind === "archived" || b.kind === "deprecated" ? "bg-gray-400" : "bg-[var(--cmp-color-information)]"} />
               </div>
               <p className="text-[10px] text-gray-400">Approval time, release success rate, rollback frequency and adoption metrics require the release &amp; publish-job store — shown once connected.</p>
             </div>

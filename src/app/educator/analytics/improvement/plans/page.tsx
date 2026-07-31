@@ -16,7 +16,7 @@ export default async function Plans() {
     <div className="max-w-[1200px]">
       <ImprovementNav active="plans" />
       <div className="mb-2"><StatTiles tiles={tiles} cols="grid-cols-2 md:grid-cols-3 xl:grid-cols-5" /></div>
-      <p className="text-[10px] text-amber-600 bg-amber-50 border border-amber-100 rounded-lg px-3 py-2 mb-5">ℹ️ No improvement-plan store exists yet. The guided plan builder (SMART objectives, milestones, action register, owners, dependencies and effectiveness verification) is on the roadmap. Corrective actions are tracked live under CAPA.</p>
+      <p className="text-[10px] text-[var(--cmp-text-warning)] bg-[var(--cmp-surface-warning)] border border-[var(--cmp-color-warning)] rounded-lg px-3 py-2 mb-5">ℹ️ No improvement-plan store exists yet. The guided plan builder (SMART objectives, milestones, action register, owners, dependencies and effectiveness verification) is on the roadmap. Corrective actions are tracked live under CAPA.</p>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 items-start">
         <div className="bg-white border border-gray-100 rounded-2xl p-5">

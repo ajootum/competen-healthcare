@@ -17,7 +17,7 @@ export const dynamic = "force-dynamic";
 const card = cardClass;
 const titleCase = (s: string | null | undefined) => (s ?? "").replace(/_/g, " ").replace(/\b\w/g, ch => ch.toUpperCase());
 const fmtWhen = (iso: string | null) => iso ? new Date(iso).toLocaleString([], { hour: "2-digit", minute: "2-digit", day: "numeric", month: "short" }) : "";
-const ACUITY: Record<string, string> = { stable: "bg-green-100 text-green-700", moderate: "bg-yellow-100 text-yellow-700", high: "bg-orange-100 text-orange-700", critical: "bg-red-100 text-red-700" };
+const ACUITY: Record<string, string> = { stable: "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]", moderate: "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]", high: "bg-[var(--cmp-surface-warning)] text-orange-700", critical: "bg-[var(--cmp-surface-critical)] text-[var(--cmp-text-critical)]" };
 
 export default async function CensusAssignmentPage() {
   const supabase = await createClient();
@@ -64,22 +64,22 @@ export default async function CensusAssignmentPage() {
       </div>
 
       {migrationMissing && (
-        <div className="bg-amber-50 border border-amber-200 rounded-xl p-5">
+        <div className="bg-[var(--cmp-surface-warning)] border border-[var(--cmp-color-warning)] rounded-xl p-5">
           <p className="font-semibold text-amber-900">⚙️ State engine not yet enabled</p>
-          <p className="text-sm text-amber-800 mt-1">Apply migration <code className="bg-amber-100 px-1.5 py-0.5 rounded font-mono text-xs">156-assignment-state-engine.sql</code>.</p>
+          <p className="text-sm text-amber-800 mt-1">Apply migration <code className="bg-[var(--cmp-surface-warning)] px-1.5 py-0.5 rounded font-mono text-xs">156-assignment-state-engine.sql</code>.</p>
         </div>
       )}
 
       <div className="grid sm:grid-cols-2 xl:grid-cols-4 gap-4">
-        <div className={card}><p className={`text-2xl font-bold tabular-nums ${queue.unassigned.length > 0 ? "text-red-600" : "text-gray-900"}`}>{queue.unassigned.length}</p><p className="text-xs text-gray-500 mt-0.5">unassigned patients (no owner, no offer)</p></div>
-        <div className={card}><p className={`text-2xl font-bold tabular-nums ${queue.pendingAcceptance.length > 0 ? "text-amber-600" : "text-gray-900"}`}>{queue.pendingAcceptance.length}</p><p className="text-xs text-gray-500 mt-0.5">offers awaiting nurse acceptance</p></div>
-        <div className={card}><p className={`text-2xl font-bold tabular-nums ${needRouting.length > 0 ? "text-orange-600" : "text-gray-900"}`}>{needRouting.length}</p><p className="text-xs text-gray-500 mt-0.5">transfers needing a receiving nurse</p></div>
+        <div className={card}><p className={`text-2xl font-bold tabular-nums ${queue.unassigned.length > 0 ? "text-[var(--cmp-text-critical)]" : "text-gray-900"}`}>{queue.unassigned.length}</p><p className="text-xs text-gray-500 mt-0.5">unassigned patients (no owner, no offer)</p></div>
+        <div className={card}><p className={`text-2xl font-bold tabular-nums ${queue.pendingAcceptance.length > 0 ? "text-[var(--cmp-text-warning)]" : "text-gray-900"}`}>{queue.pendingAcceptance.length}</p><p className="text-xs text-gray-500 mt-0.5">offers awaiting nurse acceptance</p></div>
+        <div className={card}><p className={`text-2xl font-bold tabular-nums ${needRouting.length > 0 ? "text-[var(--cmp-text-warning)]" : "text-gray-900"}`}>{needRouting.length}</p><p className="text-xs text-gray-500 mt-0.5">transfers needing a receiving nurse</p></div>
         <div className={card}><p className="text-2xl font-bold tabular-nums text-gray-900">{awaiting.length}</p><p className="text-xs text-gray-500 mt-0.5">transfers awaiting receiving acceptance</p></div>
       </div>
 
       <div className={card}>
         <h3 className="font-semibold text-gray-900 mb-2 flex items-center gap-2">🗂️ Unassigned Queue <span className="text-gray-400 font-normal">({queue.unassigned.length})</span></h3>
-        {nurses.length === 0 && <p className="text-xs text-amber-700 mb-2">No nurse-tier staff present on an active shift — activate and staff a shift to offer assignments.</p>}
+        {nurses.length === 0 && <p className="text-xs text-[var(--cmp-text-warning)] mb-2">No nurse-tier staff present on an active shift — activate and staff a shift to offer assignments.</p>}
         <div className="divide-y divide-gray-100">
           {queue.unassigned.length === 0 && !migrationMissing && <p className="text-sm text-gray-400">Every patient on the census has an owner or a live offer. New admissions land here.</p>}
           {queue.unassigned.map((p: any) => (
@@ -133,7 +133,7 @@ export default async function CensusAssignmentPage() {
             {awaiting.map((t: any) => (
               <p key={t.id} className="py-2 text-sm text-gray-700 flex flex-wrap items-center gap-2">
                 <span className="font-medium">{t.op_patients?.label}</span>
-                <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-700">Awaiting acceptance</span>
+                <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]">Awaiting acceptance</span>
                 <span className="text-xs text-gray-400 ml-auto">→ {t.receiver?.full_name ?? "—"}</span>
               </p>
             ))}

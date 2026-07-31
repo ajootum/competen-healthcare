@@ -16,8 +16,8 @@ export const dynamic = "force-dynamic";
 const card = "bg-white rounded-xl border border-gray-200";
 const dash = (n: number | null | undefined) => (n == null ? "—" : n.toLocaleString());
 const relTime = (iso?: string | null) => { if (!iso) return "never"; const s = Math.floor((Date.now() - new Date(iso).getTime()) / 1000); if (s < 60) return "just now"; if (s < 3600) return `${Math.floor(s / 60)}m ago`; if (s < 86400) return `${Math.floor(s / 3600)}h ago`; return `${Math.floor(s / 86400)}d ago`; };
-const readyTone = (n: number | null) => (n == null ? "text-gray-300" : n >= 90 ? "text-green-600" : n >= 60 ? "text-amber-600" : "text-rose-600");
-const OUT_TONE: Record<string, string> = { passed: "bg-green-50 text-green-700", partial: "bg-amber-50 text-amber-700", failed: "bg-rose-50 text-rose-700", pending: "bg-gray-100 text-gray-500" };
+const readyTone = (n: number | null) => (n == null ? "text-gray-300" : n >= 90 ? "text-[var(--cmp-text-success)]" : n >= 60 ? "text-[var(--cmp-text-warning)]" : "text-[var(--cmp-text-error)]");
+const OUT_TONE: Record<string, string> = { passed: "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]", partial: "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]", failed: "bg-[var(--cmp-surface-error)] text-[var(--cmp-text-error)]", pending: "bg-gray-100 text-gray-500" };
 const KIND_LABEL: Record<string, string> = { dr_test: "DR test", restore_request: "Restore", backup_verification: "Backup verify", privacy_request: "Privacy", retention_review: "Retention" };
 
 export default async function DataProtectionRecovery() {
@@ -33,11 +33,11 @@ export default async function DataProtectionRecovery() {
   const k = d.kpis;
 
   const kpiCards = [
-    { label: "Database", value: k.dbHealthy ? "Healthy" : "Degraded", icon: "🗄️", iconBg: k.dbHealthy ? "bg-green-50" : "bg-rose-50", tone: k.dbHealthy ? "text-green-600" : "text-rose-600" },
+    { label: "Database", value: k.dbHealthy ? "Healthy" : "Degraded", icon: "🗄️", iconBg: k.dbHealthy ? "bg-[var(--cmp-surface-success)]" : "bg-[var(--cmp-surface-error)]", tone: k.dbHealthy ? "text-[var(--cmp-text-success)]" : "text-[var(--cmp-text-error)]" },
     { label: "DR Readiness", value: k.drReadiness == null ? "—" : `${k.drReadiness}%`, icon: "🛟", iconBg: "bg-violet-50", tone: readyTone(k.drReadiness) },
-    { label: "DR Tests", value: dash(k.drTests), icon: "🧪", iconBg: "bg-blue-50" },
+    { label: "DR Tests", value: dash(k.drTests), icon: "🧪", iconBg: "bg-[var(--cmp-surface-information)]" },
     { label: "Restore Requests", value: dash(k.restoreRequests), icon: "♻️", iconBg: "bg-teal-50" },
-    { label: "Open Restores", value: dash(k.openRestores), icon: "⏳", iconBg: "bg-amber-50", tone: (k.openRestores ?? 0) > 0 ? "text-amber-600" : undefined },
+    { label: "Open Restores", value: dash(k.openRestores), icon: "⏳", iconBg: "bg-[var(--cmp-surface-warning)]", tone: (k.openRestores ?? 0) > 0 ? "text-[var(--cmp-text-warning)]" : undefined },
     { label: "Data Events (30d)", value: dash(k.dataEvents30), icon: "📊", iconBg: "bg-gray-50" },
   ];
 
@@ -52,8 +52,8 @@ export default async function DataProtectionRecovery() {
       </div>
 
       {!d.ready && (
-        <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-          <span className="font-semibold">Recovery event log not enabled.</span> Run <code className="font-mono text-[12px] bg-amber-100 px-1 rounded">supabase/migrations/063-system-recovery-events.sql</code> to log DR tests and recovery requests. Database health and the data-protection posture below are live regardless.
+        <div className="rounded-xl border border-[var(--cmp-color-warning)] bg-[var(--cmp-surface-warning)] px-4 py-3 text-sm text-amber-800">
+          <span className="font-semibold">Recovery event log not enabled.</span> Run <code className="font-mono text-[12px] bg-[var(--cmp-surface-warning)] px-1 rounded">supabase/migrations/063-system-recovery-events.sql</code> to log DR tests and recovery requests. Database health and the data-protection posture below are live regardless.
         </div>
       )}
 
@@ -130,7 +130,7 @@ export default async function DataProtectionRecovery() {
             {d.posture.map((p: any) => (
               <div key={p.label} className="flex items-center justify-between rounded-lg border border-gray-100 px-3 py-2">
                 <span className="text-xs text-gray-700">{p.label}</span>
-                <span className={`text-[10px] font-medium text-right ${p.on === true ? "text-green-600" : p.on === false ? "text-rose-500" : "text-gray-400"}`}>{p.value}</span>
+                <span className={`text-[10px] font-medium text-right ${p.on === true ? "text-[var(--cmp-text-success)]" : p.on === false ? "text-rose-500" : "text-gray-400"}`}>{p.value}</span>
               </div>
             ))}
           </div>
@@ -145,7 +145,7 @@ export default async function DataProtectionRecovery() {
           </div>
           <div className="grid grid-cols-2 gap-2 mb-3">
             <div className="rounded-lg border border-gray-100 p-2.5 text-center"><p className="text-xl font-bold text-gray-900 tabular-nums">{dash(d.dataAccess.events30)}</p><p className="text-[9px] text-gray-500">data events</p></div>
-            <div className="rounded-lg border border-gray-100 p-2.5 text-center"><p className={`text-xl font-bold tabular-nums ${d.dataAccess.deletions30 > 0 ? "text-rose-600" : "text-gray-900"}`}>{dash(d.dataAccess.deletions30)}</p><p className="text-[9px] text-gray-500">deletions</p></div>
+            <div className="rounded-lg border border-gray-100 p-2.5 text-center"><p className={`text-xl font-bold tabular-nums ${d.dataAccess.deletions30 > 0 ? "text-[var(--cmp-text-error)]" : "text-gray-900"}`}>{dash(d.dataAccess.deletions30)}</p><p className="text-[9px] text-gray-500">deletions</p></div>
           </div>
           {d.dataAccess.recent.length > 0 && (
             <div className="space-y-1 pt-2 border-t border-gray-50">
@@ -167,7 +167,7 @@ export default async function DataProtectionRecovery() {
               {Object.entries(d.obligations.byDomain).map(([domain, n]: any) => (
                 <div key={domain} className="flex items-center justify-between text-xs"><span className="text-gray-600 capitalize">{String(domain).replace(/_/g, " ")}</span><span className="tabular-nums text-gray-500">{n}</span></div>
               ))}
-              {d.obligations.nonCompliant > 0 && <p className="text-[11px] text-rose-600 pt-2 border-t border-gray-50">{d.obligations.nonCompliant} non-compliant / at-risk</p>}
+              {d.obligations.nonCompliant > 0 && <p className="text-[11px] text-[var(--cmp-text-error)] pt-2 border-t border-gray-50">{d.obligations.nonCompliant} non-compliant / at-risk</p>}
             </div>
           )}
           <p className="text-[10px] text-gray-400 mt-3">Data-privacy, documentation and cybersecurity obligations from the compliance register (Governance module 3).</p>

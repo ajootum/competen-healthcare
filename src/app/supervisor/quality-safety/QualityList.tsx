@@ -7,8 +7,8 @@ import { QUALITY_TYPE_LABEL } from "@/lib/operations/quality-safety";
 // Quality-action list (SSW-QSE-001 §5) — advance CAPA/audit/PDSA status inline.
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
-const PRIO_TONE: Record<string, string> = { high: "bg-orange-50 text-orange-700", medium: "bg-amber-50 text-amber-700", low: "bg-gray-100 text-gray-600" };
-const ST_TONE: Record<string, string> = { open: "text-gray-600", in_progress: "text-blue-600", overdue: "text-rose-600", completed: "text-green-600" };
+const PRIO_TONE: Record<string, string> = { high: "bg-[var(--cmp-surface-warning)] text-orange-700", medium: "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]", low: "bg-gray-100 text-gray-600" };
+const ST_TONE: Record<string, string> = { open: "text-gray-600", in_progress: "text-[var(--cmp-text-information)]", overdue: "text-[var(--cmp-text-error)]", completed: "text-[var(--cmp-text-success)]" };
 const NEXT: Record<string, { status: string; label: string }> = { open: { status: "in_progress", label: "start" }, in_progress: { status: "completed", label: "complete" }, overdue: { status: "completed", label: "complete" } };
 
 export default function QualityList({ actions, editable }: { actions: any[]; editable: boolean }) {
@@ -39,7 +39,7 @@ export default function QualityList({ actions, editable }: { actions: any[]; edi
           </div>
         );
       })}
-      {err && <p className="text-[11px] text-rose-600 mt-1">{err}</p>}
+      {err && <p className="text-[11px] text-[var(--cmp-text-error)] mt-1">{err}</p>}
     </div>
   );
 }

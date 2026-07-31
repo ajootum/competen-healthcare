@@ -9,7 +9,7 @@ import { FIVE_RIGHTS } from "@/lib/hww/medications";
 // omit (reason required for the latter two). The engine enforces the witness
 // rule and raises the delay escalation server-side.
 
-const btn = "px-3 py-1.5 rounded-lg bg-emerald-600 text-white text-xs font-medium hover:bg-emerald-700 disabled:opacity-50";
+const btn = "px-3 py-1.5 rounded-lg bg-[var(--cmp-color-success)] text-white text-xs font-medium hover:bg-emerald-700 disabled:opacity-50";
 const btnGhost = "px-2.5 py-1 rounded-lg border border-gray-300 text-xs text-gray-700 hover:bg-gray-50 disabled:opacity-50";
 const input = "border border-gray-300 rounded-lg px-2.5 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-emerald-500/40";
 
@@ -44,7 +44,7 @@ export default function AdministerMed({ scheduleId, drug, requiresDoubleCheck, c
   if (!open) return <button className={btnGhost} onClick={() => setOpen(true)}>Record</button>;
 
   return (
-    <div className="mt-2 w-full border border-emerald-200 bg-emerald-50/30 rounded-lg p-3 space-y-2.5">
+    <div className="mt-2 w-full border border-[var(--cmp-color-success)] bg-[var(--cmp-surface-success)]/30 rounded-lg p-3 space-y-2.5">
       <div className="flex items-center justify-between">
         <span className="text-xs font-semibold text-gray-800">Safety verification — {drug}</span>
         <button className="text-xs text-gray-400 hover:text-gray-600" onClick={() => setOpen(false)}>Close</button>
@@ -62,7 +62,7 @@ export default function AdministerMed({ scheduleId, drug, requiresDoubleCheck, c
           <option value="">{requiresDoubleCheck ? "Witness (required)" : "Witness (optional)"}</option>
           {coStaff.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
         </select>
-        {requiresDoubleCheck && <span className="text-[10px] text-orange-600 font-medium">Independent double-check configured</span>}
+        {requiresDoubleCheck && <span className="text-[10px] text-[var(--cmp-text-warning)] font-medium">Independent double-check configured</span>}
       </div>
       {mode === "" ? (
         <div className="flex flex-wrap gap-1.5">
@@ -77,7 +77,7 @@ export default function AdministerMed({ scheduleId, drug, requiresDoubleCheck, c
           <button className={btnGhost} onClick={() => setMode("")}>Back</button>
         </div>
       )}
-      {err && <p className="text-xs text-amber-700">{err}</p>}
+      {err && <p className="text-xs text-[var(--cmp-text-warning)]">{err}</p>}
       <p className="text-[10px] text-gray-400">Delays over 60 min (high-risk) or 120 min (any) automatically escalate to your coordinator.</p>
     </div>
   );

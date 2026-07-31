@@ -107,7 +107,7 @@ export default function SkillBuilder({ skills, links, competencies }: {
         <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-4">
           {selected ? "Edit skill" : "New skill"}
         </p>
-        {error && <div className="bg-red-50 text-red-600 text-sm rounded-lg px-3 py-2 mb-3">{error}</div>}
+        {error && <div className="bg-[var(--cmp-surface-critical)] text-[var(--cmp-text-critical)] text-sm rounded-lg px-3 py-2 mb-3">{error}</div>}
         <div className="flex flex-col gap-3">
           <div>
             <span className={label}>Skill name</span>
@@ -142,7 +142,7 @@ export default function SkillBuilder({ skills, links, competencies }: {
             </button>
             {selected && (
               <button disabled={busy} onClick={retire}
-                className="text-sm text-red-500 hover:bg-red-50 px-3 py-2 rounded-lg transition-colors">Retire</button>
+                className="text-sm text-red-500 hover:bg-[var(--cmp-surface-critical)] px-3 py-2 rounded-lg transition-colors">Retire</button>
             )}
           </div>
         </div>

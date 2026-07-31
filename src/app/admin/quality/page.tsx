@@ -75,8 +75,8 @@ export default async function QualityPage() {
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
         {[
           { label: "Quality Objects", value: (qos ?? []).length, color: "text-teal-600" },
-          { label: "Indicators on target", value: `${onTarget}/${indicatorRows.length}`, color: "text-green-600" },
-          { label: "Escalation breaches", value: breaches, color: breaches > 0 ? "text-red-600" : "text-gray-400" },
+          { label: "Indicators on target", value: `${onTarget}/${indicatorRows.length}`, color: "text-[var(--cmp-text-success)]" },
+          { label: "Escalation breaches", value: breaches, color: breaches > 0 ? "text-[var(--cmp-text-critical)]" : "text-gray-400" },
           { label: "Active improvements", value: activeImprovements, color: "text-violet-600" },
         ].map(({ label, value, color }) => (
           <div key={label} className="bg-white rounded-xl p-4 border border-gray-100">

@@ -16,11 +16,11 @@ export const dynamic = "force-dynamic";
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 const card = "bg-white rounded-xl border border-gray-200";
-const PRI: Record<string, string> = { critical: "bg-rose-50 text-rose-700", high: "bg-amber-50 text-amber-700", medium: "bg-blue-50 text-blue-700", low: "bg-gray-100 text-gray-500" };
-const IMPACT: Record<string, string> = { high: "text-rose-600", medium: "text-amber-600", low: "text-gray-500" };
-const REC_TONE: Record<string, string> = { approve: "text-green-600", review: "text-amber-600", reject: "text-rose-600", escalate: "text-rose-600", request_info: "text-blue-600" };
+const PRI: Record<string, string> = { critical: "bg-[var(--cmp-surface-error)] text-[var(--cmp-text-error)]", high: "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]", medium: "bg-[var(--cmp-surface-information)] text-blue-700", low: "bg-gray-100 text-gray-500" };
+const IMPACT: Record<string, string> = { high: "text-[var(--cmp-text-error)]", medium: "text-[var(--cmp-text-warning)]", low: "text-gray-500" };
+const REC_TONE: Record<string, string> = { approve: "text-[var(--cmp-text-success)]", review: "text-[var(--cmp-text-warning)]", reject: "text-[var(--cmp-text-error)]", escalate: "text-[var(--cmp-text-error)]", request_info: "text-[var(--cmp-text-information)]" };
 const STATUS_LABEL: Record<string, string> = { waiting: "Waiting", pending_info: "Pending Info", returned: "Returned", delegated: "Delegated", escalated: "Escalated", approved: "Approved", rejected: "Rejected" };
-const DOT: Record<string, string> = { red: "bg-rose-500", amber: "bg-amber-500", blue: "bg-blue-500" };
+const DOT: Record<string, string> = { red: "bg-[var(--cmp-color-error)]", amber: "bg-[var(--cmp-color-warning)]", blue: "bg-[var(--cmp-color-information)]" };
 const relTime = (iso?: string | null) => { if (!iso) return "—"; const s = Math.floor((Date.now() - new Date(iso).getTime()) / 1000); if (s < 3600) return `${Math.max(1, Math.floor(s / 60))}m ago`; if (s < 86400) return `${Math.floor(s / 3600)}h ago`; return `${Math.floor(s / 86400)}d ago`; };
 const slaPercent = (submittedAt: string, slaHours: number) => Math.min(100, Math.round(((Date.now() - new Date(submittedAt).getTime()) / ((slaHours || 24) * 3600000)) * 100));
 const TABS = ["Approval Dashboard", "Approval Queue", "Approval Categories", "Decision History", "Approval Analytics", "SLA Monitor", "Approval Calendar"];
@@ -60,7 +60,7 @@ export default async function ApprovalsWorkspace({ searchParams }: { searchParam
     </>
   );
 
-  if (!provisioned) return <div className="space-y-4">{header}<div className="bg-amber-50 border border-amber-200 rounded-xl p-6"><p className="font-semibold text-amber-900">⚙️ Approvals store not provisioned</p><p className="text-sm text-amber-800 mt-1">Run <code className="font-mono bg-amber-100 px-1 rounded">migration 077-approval-requests.sql</code> to enable the Approvals workspace.</p></div></div>;
+  if (!provisioned) return <div className="space-y-4">{header}<div className="bg-[var(--cmp-surface-warning)] border border-[var(--cmp-color-warning)] rounded-xl p-6"><p className="font-semibold text-amber-900">⚙️ Approvals store not provisioned</p><p className="text-sm text-amber-800 mt-1">Run <code className="font-mono bg-[var(--cmp-surface-warning)] px-1 rounded">migration 077-approval-requests.sql</code> to enable the Approvals workspace.</p></div></div>;
 
   const k = d.kpis; const sel = d.selected;
   const slaBar = sel ? slaPercent(sel.submitted_at, sel.sla_hours) : 0;
@@ -72,12 +72,12 @@ export default async function ApprovalsWorkspace({ searchParams }: { searchParam
       {/* 7 KPIs */}
       <div className="grid grid-cols-2 sm:grid-cols-4 xl:grid-cols-7 gap-3">
         <Kpi label="Pending Approvals" value={k.pending} sub="All open items" icon="📥" />
-        <Kpi label="Due Today" value={k.dueToday} sub="Needs attention" tone={k.dueToday ? "text-amber-600" : undefined} icon="📅" />
-        <Kpi label="High Priority" value={k.highPriority} sub="Critical attention" tone={k.highPriority ? "text-rose-600" : undefined} icon="⚠" />
-        <Kpi label="Overdue" value={k.overdue} sub="Past due" tone={k.overdue ? "text-rose-600" : undefined} icon="⏰" />
+        <Kpi label="Due Today" value={k.dueToday} sub="Needs attention" tone={k.dueToday ? "text-[var(--cmp-text-warning)]" : undefined} icon="📅" />
+        <Kpi label="High Priority" value={k.highPriority} sub="Critical attention" tone={k.highPriority ? "text-[var(--cmp-text-error)]" : undefined} icon="⚠" />
+        <Kpi label="Overdue" value={k.overdue} sub="Past due" tone={k.overdue ? "text-[var(--cmp-text-error)]" : undefined} icon="⏰" />
         <Kpi label="Avg Waiting Time" value={k.avgWaitingHrs != null ? `${k.avgWaitingHrs}h` : "—"} sub="Open requests" icon="⏳" />
-        <Kpi label="Completed Today" value={k.completedToday} sub="Approved / rejected" tone="text-green-600" icon="✅" />
-        <Kpi label="Approval Health" value={`${k.health}%`} sub={k.health >= 80 ? "Good" : k.health >= 60 ? "Watch" : "At risk"} tone={k.health >= 80 ? "text-green-600" : k.health >= 60 ? "text-amber-600" : "text-rose-600"} />
+        <Kpi label="Completed Today" value={k.completedToday} sub="Approved / rejected" tone="text-[var(--cmp-text-success)]" icon="✅" />
+        <Kpi label="Approval Health" value={`${k.health}%`} sub={k.health >= 80 ? "Good" : k.health >= 60 ? "Watch" : "At risk"} tone={k.health >= 80 ? "text-[var(--cmp-text-success)]" : k.health >= 60 ? "text-[var(--cmp-text-warning)]" : "text-[var(--cmp-text-error)]"} />
       </div>
 
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
@@ -123,7 +123,7 @@ export default async function ApprovalsWorkspace({ searchParams }: { searchParam
                 <p className={`text-sm font-bold capitalize ${REC_TONE[sel.ai_recommendation] ?? "text-gray-600"}`}>{sel.ai_recommendation ?? "—"}{sel.ai_confidence ? ` · ${sel.ai_confidence}% confidence` : ""}</p>
                 {sel.ai_reasoning && <p className="text-[11px] text-gray-600 mt-0.5">{sel.ai_reasoning}</p>}
               </div>
-              <div className="mt-3"><p className="text-[10px] font-semibold text-gray-500 uppercase mb-1">SLA — {sel.sla_hours}h target</p><div className="h-2 rounded-full bg-gray-100 overflow-hidden"><div className={`h-full ${slaBar >= 100 ? "bg-rose-500" : slaBar >= 75 ? "bg-amber-500" : "bg-green-500"}`} style={{ width: `${slaBar}%` }} /></div><p className="text-[10px] text-gray-400 mt-0.5">{slaBar >= 100 ? "Overdue" : `${100 - slaBar}% of SLA remaining`}</p></div>
+              <div className="mt-3"><p className="text-[10px] font-semibold text-gray-500 uppercase mb-1">SLA — {sel.sla_hours}h target</p><div className="h-2 rounded-full bg-gray-100 overflow-hidden"><div className={`h-full ${slaBar >= 100 ? "bg-[var(--cmp-color-error)]" : slaBar >= 75 ? "bg-[var(--cmp-color-warning)]" : "bg-[var(--cmp-color-success)]"}`} style={{ width: `${slaBar}%` }} /></div><p className="text-[10px] text-gray-400 mt-0.5">{slaBar >= 100 ? "Overdue" : `${100 - slaBar}% of SLA remaining`}</p></div>
               {["approved", "rejected"].includes(sel.status) ? (
                 <div className="mt-3 rounded-lg bg-gray-50 p-2.5"><p className="text-xs text-gray-600">Decided <b className="capitalize">{sel.status}</b> by {sel.decided_by_name ?? "—"} · {relTime(sel.decided_at)}</p>{sel.decision_note && <p className="text-[11px] text-gray-500 mt-0.5">“{sel.decision_note}”</p>}</div>
               ) : (
@@ -157,7 +157,7 @@ export default async function ApprovalsWorkspace({ searchParams }: { searchParam
         <div className={`${card} p-5`}>
           <h3 className="text-sm font-bold text-gray-900 mb-3">Recently Completed</h3>
           {d.recentlyCompleted.length === 0 ? <p className="text-sm text-gray-400">No decisions recorded yet.</p> : (
-            <div className="space-y-1.5">{d.recentlyCompleted.map((r: any) => (<div key={r.id} className="flex items-center gap-2 text-xs"><span className={r.status === "approved" ? "text-green-600" : "text-rose-600"}>{r.status === "approved" ? "✓" : "✕"}</span><span className="text-gray-700 flex-1 truncate">{r.title}</span><span className={`capitalize ${r.status === "approved" ? "text-green-600" : "text-rose-600"}`}>{r.status}</span><span className="text-gray-400">{relTime(r.decided_at)}</span></div>))}</div>
+            <div className="space-y-1.5">{d.recentlyCompleted.map((r: any) => (<div key={r.id} className="flex items-center gap-2 text-xs"><span className={r.status === "approved" ? "text-[var(--cmp-text-success)]" : "text-[var(--cmp-text-error)]"}>{r.status === "approved" ? "✓" : "✕"}</span><span className="text-gray-700 flex-1 truncate">{r.title}</span><span className={`capitalize ${r.status === "approved" ? "text-[var(--cmp-text-success)]" : "text-[var(--cmp-text-error)]"}`}>{r.status}</span><span className="text-gray-400">{relTime(r.decided_at)}</span></div>))}</div>
           )}
         </div>
       </div>

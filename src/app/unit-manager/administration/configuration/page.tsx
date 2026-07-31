@@ -20,10 +20,10 @@ export default async function ConfigurationPage() {
     <div className="max-w-[1500px] space-y-4">
       {head}<Tabs active="006" />
       <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-8 gap-3">
-        <div className="bg-white border border-gray-200 rounded-xl p-3.5 flex items-center gap-2"><Ring pct={k.health} size={56} /><div><p className="text-[11px] text-gray-500 uppercase tracking-wide leading-tight">Config Health</p><p className="text-[11px] text-emerald-600 font-medium">Good</p></div></div>
+        <div className="bg-white border border-gray-200 rounded-xl p-3.5 flex items-center gap-2"><Ring pct={k.health} size={56} /><div><p className="text-[11px] text-gray-500 uppercase tracking-wide leading-tight">Config Health</p><p className="text-[11px] text-[var(--cmp-text-success)] font-medium">Good</p></div></div>
         <Kpi label="Active Configs" value={k.active} sub="live" />
-        <Kpi label="Pending Changes" value={k.pending} sub="in review" tone={k.pending ? "text-amber-600" : undefined} />
-        <Kpi label="Published" value={k.published} sub="deployed" tone="text-emerald-600" />
+        <Kpi label="Pending Changes" value={k.pending} sub="in review" tone={k.pending ? "text-[var(--cmp-text-warning)]" : undefined} />
+        <Kpi label="Published" value={k.published} sub="deployed" tone="text-[var(--cmp-text-success)]" />
         <Kpi label="Local Overrides" value={k.local} sub="unit-specific" />
         <Kpi label="Inherited" value={k.inherited} sub="from org" />
         <Kpi label="Total Items" value={k.total} sub="configurations" />
@@ -46,7 +46,7 @@ export default async function ConfigurationPage() {
 
         <Card title="Integration Status">
           {d.integrations.length ? <div className="space-y-2 text-[12px]">{d.integrations.map((i: any) => (
-            <div key={i.name} className="flex items-center gap-2"><span className={`w-2 h-2 rounded-full ${i.status === "active" || i.status === "published" ? "bg-emerald-500" : i.status === "in_review" ? "bg-amber-500" : "bg-gray-400"}`} /><span className="text-gray-700 flex-1 truncate">{i.name}</span><Pill text={i.status === "active" || i.status === "published" ? "connected" : i.status} tone={i.status === "active" || i.status === "published" ? "emerald" : "amber"} /></div>
+            <div key={i.name} className="flex items-center gap-2"><span className={`w-2 h-2 rounded-full ${i.status === "active" || i.status === "published" ? "bg-[var(--cmp-color-success)]" : i.status === "in_review" ? "bg-[var(--cmp-color-warning)]" : "bg-gray-400"}`} /><span className="text-gray-700 flex-1 truncate">{i.name}</span><Pill text={i.status === "active" || i.status === "published" ? "connected" : i.status} tone={i.status === "active" || i.status === "published" ? "emerald" : "amber"} /></div>
           ))}</div> : <p className="text-sm text-gray-400 py-4 text-center">No integrations.</p>}
         </Card>
       </div>
@@ -58,15 +58,15 @@ export default async function ConfigurationPage() {
 
         <Card title="Inheritance & Overrides">
           <div className="grid grid-cols-2 gap-2 text-center">
-            <div className="rounded-lg bg-blue-50 p-3"><p className="text-2xl font-bold text-blue-700 tabular-nums">{k.inherited}</p><p className="text-[10px] text-gray-500">Inherited from org</p></div>
-            <div className="rounded-lg bg-amber-50 p-3"><p className="text-2xl font-bold text-amber-700 tabular-nums">{k.local}</p><p className="text-[10px] text-gray-500">Local overrides</p></div>
+            <div className="rounded-lg bg-[var(--cmp-surface-information)] p-3"><p className="text-2xl font-bold text-blue-700 tabular-nums">{k.inherited}</p><p className="text-[10px] text-gray-500">Inherited from org</p></div>
+            <div className="rounded-lg bg-[var(--cmp-surface-warning)] p-3"><p className="text-2xl font-bold text-[var(--cmp-text-warning)] tabular-nums">{k.local}</p><p className="text-[10px] text-gray-500">Local overrides</p></div>
           </div>
           <p className="text-[10px] text-gray-400 mt-2">Precedence: Platform → Enterprise → Organization → Unit → Role → User (WCE).</p>
         </Card>
 
         <Card title="Recent Changes">
           <div className="space-y-2">{d.recent.map((c: any) => (
-            <div key={c.id} className="flex items-center gap-2"><span className="w-1.5 h-1.5 rounded-full bg-blue-400 shrink-0" /><span className="text-[12px] text-gray-800 flex-1 truncate">{c.name}</span><Pill text={c.status} tone={STATUS_TONE[c.status]} /></div>
+            <div key={c.id} className="flex items-center gap-2"><span className="w-1.5 h-1.5 rounded-full bg-[var(--cmp-color-information)] shrink-0" /><span className="text-[12px] text-gray-800 flex-1 truncate">{c.name}</span><Pill text={c.status} tone={STATUS_TONE[c.status]} /></div>
           ))}</div>
         </Card>
       </div>

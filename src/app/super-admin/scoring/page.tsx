@@ -48,8 +48,8 @@ export default async function ScoringPage() {
                   </div>
                   <div className="flex items-center gap-2">
                     {level.is_passing
-                      ? <span className="text-[10px] bg-green-50 text-green-600 font-semibold px-2 py-0.5 rounded">Passing</span>
-                      : <span className="text-[10px] bg-red-50 text-red-500 px-2 py-0.5 rounded">Not passing</span>}
+                      ? <span className="text-[10px] bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)] font-semibold px-2 py-0.5 rounded">Passing</span>
+                      : <span className="text-[10px] bg-[var(--cmp-surface-critical)] text-red-500 px-2 py-0.5 rounded">Not passing</span>}
                   </div>
                 </div>
               ))}

@@ -71,7 +71,7 @@ export default async function EducatorAssessmentsPage() {
                 const c = a.competency_cycles as unknown as { nurse_id: string };
                 return (
                   <div key={a.id} className="flex items-center gap-2 text-[11px] py-1">
-                    <span className={`w-5 h-5 rounded text-[10px] font-bold flex items-center justify-center shrink-0 ${(a.score as number) >= 3 ? "bg-green-100 text-green-700" : "bg-red-100 text-red-600"}`}>{a.score}</span>
+                    <span className={`w-5 h-5 rounded text-[10px] font-bold flex items-center justify-center shrink-0 ${(a.score as number) >= 3 ? "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]" : "bg-[var(--cmp-surface-critical)] text-[var(--cmp-text-critical)]"}`}>{a.score}</span>
                     <span className="text-gray-800 font-medium truncate">{nameOf.get(c.nurse_id) ?? "—"}</span>
                     <span className="text-gray-400 truncate flex-1">{(a.framework_competencies as unknown as { name: string } | null)?.name ?? "—"}</span>
                     <span className="text-[9px] text-gray-400 shrink-0">{METHOD_LABELS[a.method as AssessmentMethod] ?? a.method}</span>

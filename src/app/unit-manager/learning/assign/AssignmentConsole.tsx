@@ -11,7 +11,7 @@ import { useRouter } from "next/navigation";
 const card = "bg-white rounded-xl border border-gray-200";
 const input = "w-full border border-gray-300 rounded-lg px-2.5 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/40";
 const tc = (s: string) => (s ?? "").replace(/_/g, " ").split(" ").filter(Boolean).map(w => w[0].toUpperCase() + w.slice(1)).join(" ");
-const STATUS_TONE: Record<string, string> = { completed: "bg-emerald-50 text-emerald-700", in_progress: "bg-sky-50 text-sky-700", not_started: "bg-gray-100 text-gray-600", overdue: "bg-rose-50 text-rose-700", exempt: "bg-gray-100 text-gray-500", failed: "bg-rose-50 text-rose-700" };
+const STATUS_TONE: Record<string, string> = { completed: "bg-[var(--cmp-surface-success)] text-emerald-700", in_progress: "bg-[var(--cmp-surface-information)] text-[var(--cmp-text-information)]", not_started: "bg-gray-100 text-gray-600", overdue: "bg-[var(--cmp-surface-error)] text-[var(--cmp-text-error)]", exempt: "bg-gray-100 text-gray-500", failed: "bg-[var(--cmp-surface-error)] text-[var(--cmp-text-error)]" };
 
 export default function AssignmentConsole({ courses, roles, assignments, enrolments }: { courses: any[]; roles: string[]; assignments: any[]; enrolments: any[] }) {
   const router = useRouter();
@@ -54,7 +54,7 @@ export default function AssignmentConsole({ courses, roles, assignments, enrolme
 
   return (
     <>
-      {msg && <div className={`fixed bottom-4 right-4 z-50 text-sm rounded-lg px-4 py-2.5 shadow-lg ${msg.kind === "ok" ? "bg-emerald-600 text-white" : "bg-rose-600 text-white"}`}>{msg.text}</div>}
+      {msg && <div className={`fixed bottom-4 right-4 z-50 text-sm rounded-lg px-4 py-2.5 shadow-lg ${msg.kind === "ok" ? "bg-[var(--cmp-color-success)] text-white" : "bg-[var(--cmp-color-error)] text-white"}`}>{msg.text}</div>}
 
       {/* Assign */}
       <div className={`${card} p-5`}>
@@ -72,14 +72,14 @@ export default function AssignmentConsole({ courses, roles, assignments, enrolme
           </label>
           <div className="flex items-end gap-2">
             <label className="flex items-center gap-1.5 text-xs text-gray-600"><input type="checkbox" checked={mandatory} onChange={e => setMandatory(e.target.checked)} /> Mandatory</label>
-            <button onClick={assign} disabled={busy || !courseId} className="ml-auto text-sm rounded-lg bg-emerald-600 text-white px-4 py-2 hover:bg-emerald-700 disabled:opacity-50">Assign</button>
+            <button onClick={assign} disabled={busy || !courseId} className="ml-auto text-sm rounded-lg bg-[var(--cmp-color-success)] text-white px-4 py-2 hover:bg-emerald-700 disabled:opacity-50">Assign</button>
           </div>
         </div>
         {newCourse && (
           <div className="mt-3 flex items-end gap-2 flex-wrap border-t border-gray-100 pt-3">
             <label className="text-xs text-gray-500 flex-1 min-w-[12rem]">New course title<input className={input} placeholder="e.g. Sepsis Management" value={newTitle} onChange={e => setNewTitle(e.target.value)} /></label>
             <label className="flex items-center gap-1.5 text-xs text-gray-600 pb-2"><input type="checkbox" checked={newMandatory} onChange={e => setNewMandatory(e.target.checked)} /> Mandatory</label>
-            <button onClick={createCourse} disabled={busy || !newTitle.trim()} className="text-sm rounded-lg border border-emerald-200 text-emerald-700 px-3.5 py-2 hover:bg-emerald-50 disabled:opacity-50">Create course</button>
+            <button onClick={createCourse} disabled={busy || !newTitle.trim()} className="text-sm rounded-lg border border-[var(--cmp-color-success)] text-emerald-700 px-3.5 py-2 hover:bg-[var(--cmp-surface-success)] disabled:opacity-50">Create course</button>
           </div>
         )}
         <p className="text-[11px] text-gray-400 mt-3">Assigning creates one enrolment per matching staff member (status not-started). Managers may assign approved learning (UMG-005).</p>

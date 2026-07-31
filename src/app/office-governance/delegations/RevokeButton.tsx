@@ -18,5 +18,5 @@ export default function RevokeButton({ id, status }: { id: string; status: strin
       router.refresh();
     } catch { setErr("Network error"); } finally { setBusy(false); }
   }
-  return <button disabled={busy} onClick={revoke} className="text-[10px] text-rose-500 hover:text-rose-700 disabled:opacity-40 ml-2" title={err ?? "Revoke this delegation"}>{busy ? "…" : "revoke"}</button>;
+  return <button disabled={busy} onClick={revoke} className="text-[10px] text-rose-500 hover:text-[var(--cmp-text-error)] disabled:opacity-40 ml-2" title={err ?? "Revoke this delegation"}>{busy ? "…" : "revoke"}</button>;
 }

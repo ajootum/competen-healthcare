@@ -11,9 +11,9 @@ import { I_LEVELS, levelFromBands } from "@/lib/hww/instruments";
 // staffing ratio live, and a professional-judgement override with mandatory
 // reason. The server recomputes authoritatively.
 
-const btn = "px-3.5 py-2 rounded-lg bg-emerald-600 text-white text-sm font-medium hover:bg-emerald-700 disabled:opacity-50";
+const btn = "px-3.5 py-2 rounded-lg bg-[var(--cmp-color-success)] text-white text-sm font-medium hover:bg-emerald-700 disabled:opacity-50";
 const input = "w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/40";
-const I_TONE: Record<string, string> = { I1: "bg-green-100 text-green-700", I2: "bg-lime-100 text-lime-700", I3: "bg-yellow-100 text-yellow-800", I4: "bg-orange-100 text-orange-700", I5: "bg-red-100 text-red-700" };
+const I_TONE: Record<string, string> = { I1: "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]", I2: "bg-lime-100 text-lime-700", I3: "bg-[var(--cmp-surface-warning)] text-yellow-800", I4: "bg-[var(--cmp-surface-warning)] text-orange-700", I5: "bg-[var(--cmp-surface-critical)] text-[var(--cmp-text-critical)]" };
 
 export default function NasForm({ patientId, patientLabel }: { patientId: string; patientLabel: string }) {
   const router = useRouter();
@@ -67,7 +67,7 @@ export default function NasForm({ patientId, patientLabel }: { patientId: string
   if (!open) return <button className="px-2.5 py-1 rounded-lg border border-gray-300 text-xs text-gray-700 hover:bg-gray-50" onClick={() => setOpen(true)}>+ Assess (NAS)</button>;
 
   return (
-    <div className="mt-3 border border-emerald-200 rounded-lg p-4 space-y-3 bg-emerald-50/30 w-full">
+    <div className="mt-3 border border-[var(--cmp-color-success)] rounded-lg p-4 space-y-3 bg-[var(--cmp-surface-success)]/30 w-full">
       <div className="flex flex-wrap items-center gap-2">
         <h4 className="text-sm font-semibold text-gray-800">NAS Workload — {patientLabel}</h4>
         <span className={`text-[11px] font-bold px-2.5 py-0.5 rounded-full tabular-nums ${I_TONE[preview.band.level] ?? I_TONE.I1}`}>
@@ -117,7 +117,7 @@ export default function NasForm({ patientId, patientLabel }: { patientId: string
         )}
       </div>
 
-      {err && <p className="text-xs text-amber-700">{err}</p>}
+      {err && <p className="text-xs text-[var(--cmp-text-warning)]">{err}</p>}
       <button className={btn} disabled={busy || selected.length === 0} onClick={submit}>{busy ? "Recording…" : "Record NAS"}</button>
       <p className="text-[10px] text-gray-400">Bands: I1 0-20 (1:3) · I2 21-40 (1:2) · I3 41-60 (1:1) · I4 61-80 (1:1 + support) · I5 81+ (dedicated) — Competen defaults, configurable. Level changes trigger assignment review.</p>
     </div>

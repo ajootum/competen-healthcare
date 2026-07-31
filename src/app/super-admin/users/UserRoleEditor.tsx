@@ -303,7 +303,7 @@ export default function UserRoleEditor({
                 </div>
               )}
 
-              {error && <p className="text-xs text-red-500 bg-red-50 rounded-lg px-3 py-2">{error}</p>}
+              {error && <p className="text-xs text-red-500 bg-[var(--cmp-surface-critical)] rounded-lg px-3 py-2">{error}</p>}
             </div>
 
             <div className="px-6 pb-6 flex gap-3 sticky bottom-0 bg-white pt-2 border-t border-gray-50">

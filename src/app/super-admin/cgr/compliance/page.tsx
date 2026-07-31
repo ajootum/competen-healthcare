@@ -12,13 +12,13 @@ export const dynamic = "force-dynamic";
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 const STATUS_META: Record<string, { label: string; cls: string }> = {
-  compliant: { label: "Compliant", cls: "text-emerald-700 bg-emerald-50 border-emerald-100" },
-  partial: { label: "Partial", cls: "text-amber-700 bg-amber-50 border-amber-100" },
-  gap: { label: "Gap", cls: "text-rose-700 bg-rose-50 border-rose-100" },
+  compliant: { label: "Compliant", cls: "text-emerald-700 bg-[var(--cmp-surface-success)] border-[var(--cmp-color-success)]" },
+  partial: { label: "Partial", cls: "text-[var(--cmp-text-warning)] bg-[var(--cmp-surface-warning)] border-[var(--cmp-color-warning)]" },
+  gap: { label: "Gap", cls: "text-[var(--cmp-text-error)] bg-[var(--cmp-surface-error)] border-[var(--cmp-color-error)]" },
   not_mapped: { label: "Not mapped", cls: "text-gray-500 bg-gray-50 border-gray-200" },
 };
-const RATING_TONE: Record<string, string> = { Low: "text-emerald-600", Moderate: "text-amber-600", High: "text-orange-600", Critical: "text-rose-600", "—": "text-gray-900" };
-const barTone = (v: number) => (v >= 80 ? "bg-emerald-500" : v >= 50 ? "bg-amber-500" : "bg-rose-500");
+const RATING_TONE: Record<string, string> = { Low: "text-[var(--cmp-text-success)]", Moderate: "text-[var(--cmp-text-warning)]", High: "text-[var(--cmp-text-warning)]", Critical: "text-[var(--cmp-text-error)]", "—": "text-gray-900" };
+const barTone = (v: number) => (v >= 80 ? "bg-[var(--cmp-color-success)]" : v >= 50 ? "bg-[var(--cmp-color-warning)]" : "bg-[var(--cmp-color-error)]");
 
 export default async function ComplianceReportingPage() {
   const supabase = await createClient();
@@ -37,12 +37,12 @@ export default async function ComplianceReportingPage() {
     <div className="max-w-[1400px]">
       <div className="flex items-start justify-between gap-3 mb-5">
         <div>
-          <p className="text-[11px] font-semibold text-emerald-600 uppercase tracking-widest mb-0.5">CGR-011 · Competency Governance</p>
+          <p className="text-[11px] font-semibold text-[var(--cmp-text-success)] uppercase tracking-widest mb-0.5">CGR-011 · Competency Governance</p>
           <h1 className="text-xl font-bold text-gray-900">Compliance Reporting &amp; Regulatory Assurance</h1>
           <p className="text-gray-400 text-sm mt-0.5">Can we demonstrate, through reliable evidence, that our competency system meets regulatory, organisational and professional requirements? Evidence-based, real-time, audit-ready.</p>
         </div>
         <div className="flex gap-2 shrink-0">
-          <Link href="/quality-accreditation/accreditation" className="text-xs font-semibold text-emerald-700 hover:text-emerald-800 border border-emerald-200 bg-emerald-50 rounded-lg px-3 py-2">Report builder →</Link>
+          <Link href="/quality-accreditation/accreditation" className="text-xs font-semibold text-emerald-700 hover:text-emerald-800 border border-[var(--cmp-color-success)] bg-[var(--cmp-surface-success)] rounded-lg px-3 py-2">Report builder →</Link>
           <Link href="/super-admin/cgr" className="text-xs font-semibold text-gray-500 hover:text-emerald-700 border border-gray-200 rounded-lg px-3 py-2">← CGR</Link>
         </div>
       </div>
@@ -54,10 +54,10 @@ export default async function ComplianceReportingPage() {
           <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
             <Kpi label="Compliance score" value={d.complianceScore == null ? "—" : `${d.complianceScore}`} sub="/100 composite" tone={d.complianceScore == null ? "text-gray-900" : barTone(d.complianceScore).replace("bg-", "text-")} />
             <Kpi label="Risk rating" value={d.riskRating} sub="overall exposure" tone={RATING_TONE[d.riskRating]} />
-            <Kpi label="Accreditation readiness" value={d.accreditation.readiness == null ? "—" : `${d.accreditation.readiness}%`} sub={`${d.accreditation.total} requirements`} tone={d.accreditation.readiness == null ? "text-gray-900" : d.accreditation.readiness >= 80 ? "text-emerald-600" : "text-amber-600"} />
+            <Kpi label="Accreditation readiness" value={d.accreditation.readiness == null ? "—" : `${d.accreditation.readiness}%`} sub={`${d.accreditation.total} requirements`} tone={d.accreditation.readiness == null ? "text-gray-900" : d.accreditation.readiness >= 80 ? "text-[var(--cmp-text-success)]" : "text-[var(--cmp-text-warning)]"} />
             <Kpi label="Evidence completeness" value={s ? `${s.evidence}%` : "—"} sub="evidence-backed" />
-            <Kpi label="Overdue reviews" value={s ? s.overdue : "—"} sub="currency gaps" tone={s && s.overdue ? "text-rose-600" : "text-gray-900"} />
-            <Kpi label="Open requirements" value={openReqs} sub="partial or gap" tone={openReqs ? "text-amber-600" : "text-gray-900"} />
+            <Kpi label="Overdue reviews" value={s ? s.overdue : "—"} sub="currency gaps" tone={s && s.overdue ? "text-[var(--cmp-text-error)]" : "text-gray-900"} />
+            <Kpi label="Open requirements" value={openReqs} sub="partial or gap" tone={openReqs ? "text-[var(--cmp-text-warning)]" : "text-gray-900"} />
           </div>
 
           {/* Compliance scorecard */}
@@ -86,7 +86,7 @@ export default async function ComplianceReportingPage() {
                 <p className="text-[10px] text-gray-400">weakest first</p>
               </div>
               {d.standards.length === 0 ? (
-                <div className="p-6 text-center"><p className="text-sm text-gray-400">No accreditation requirements recorded. <Link href="/competency-office/accreditation" className="text-emerald-600 hover:underline">Map requirements →</Link></p></div>
+                <div className="p-6 text-center"><p className="text-sm text-gray-400">No accreditation requirements recorded. <Link href="/competency-office/accreditation" className="text-[var(--cmp-text-success)] hover:underline">Map requirements →</Link></p></div>
               ) : (
                 <div className="overflow-x-auto">
                   <table className="w-full min-w-[520px]">
@@ -101,7 +101,7 @@ export default async function ComplianceReportingPage() {
                         <tr key={st.standard} className="border-t border-gray-50">
                           <td className="py-2 pl-4 pr-2 text-[12px] font-semibold text-gray-800">{st.standard}</td>
                           <td className="py-2 px-2 text-center text-[12px] text-gray-600 tabular-nums">{st.requirements}</td>
-                          <td className="py-2 px-2 text-center text-[11px] tabular-nums"><span className="text-emerald-600 font-semibold">{st.compliant}</span><span className="text-gray-300">/</span><span className="text-amber-600">{st.partial}</span><span className="text-gray-300">/</span><span className="text-rose-600">{st.gap}</span></td>
+                          <td className="py-2 px-2 text-center text-[11px] tabular-nums"><span className="text-[var(--cmp-text-success)] font-semibold">{st.compliant}</span><span className="text-gray-300">/</span><span className="text-[var(--cmp-text-warning)]">{st.partial}</span><span className="text-gray-300">/</span><span className="text-[var(--cmp-text-error)]">{st.gap}</span></td>
                           <td className="py-2 pr-4 pl-2">
                             <div className="flex items-center gap-2">
                               <div className="flex-1 h-1.5 rounded-full bg-gray-100 overflow-hidden"><div className={`h-full ${barTone(st.readiness)}`} style={{ width: `${st.readiness}%` }} /></div>
@@ -125,11 +125,11 @@ export default async function ComplianceReportingPage() {
                 <>
                   <div className="grid grid-cols-2 gap-2">
                     <div className="border border-gray-100 rounded-lg p-3"><p className="text-xl font-bold text-gray-900 tabular-nums">{s.governed}</p><p className="text-[10px] text-gray-500">governed competencies</p></div>
-                    <div className="border border-gray-100 rounded-lg p-3"><p className={`text-xl font-bold tabular-nums ${s.assurance >= 75 ? "text-emerald-600" : "text-gray-900"}`}>{s.assurance}</p><p className="text-[10px] text-gray-500">assurance score</p></div>
+                    <div className="border border-gray-100 rounded-lg p-3"><p className={`text-xl font-bold tabular-nums ${s.assurance >= 75 ? "text-[var(--cmp-text-success)]" : "text-gray-900"}`}>{s.assurance}</p><p className="text-[10px] text-gray-500">assurance score</p></div>
                     <div className="border border-gray-100 rounded-lg p-3"><p className="text-xl font-bold text-gray-900 tabular-nums">{s.regulatory}%</p><p className="text-[10px] text-gray-500">regulatory alignment</p></div>
-                    <div className="border border-gray-100 rounded-lg p-3"><p className={`text-xl font-bold tabular-nums ${s.atRisk ? "text-rose-600" : "text-gray-900"}`}>{s.atRisk}</p><p className="text-[10px] text-gray-500">at-risk / ungoverned</p></div>
+                    <div className="border border-gray-100 rounded-lg p-3"><p className={`text-xl font-bold tabular-nums ${s.atRisk ? "text-[var(--cmp-text-error)]" : "text-gray-900"}`}>{s.atRisk}</p><p className="text-[10px] text-gray-500">at-risk / ungoverned</p></div>
                   </div>
-                  <p className="text-[10px] text-gray-400 mt-3">An evidence package for accreditation includes competency records, approval history (<Link href="/super-admin/cgr/approvals" className="text-emerald-600 hover:underline">CGR-003</Link>), audit results (<Link href="/super-admin/cgr/audit" className="text-emerald-600 hover:underline">CGR-005</Link>) and improvement actions.</p>
+                  <p className="text-[10px] text-gray-400 mt-3">An evidence package for accreditation includes competency records, approval history (<Link href="/super-admin/cgr/approvals" className="text-[var(--cmp-text-success)] hover:underline">CGR-003</Link>), audit results (<Link href="/super-admin/cgr/audit" className="text-[var(--cmp-text-success)] hover:underline">CGR-005</Link>) and improvement actions.</p>
                 </>
               )}
             </div>
@@ -142,7 +142,7 @@ export default async function ComplianceReportingPage() {
               <p className="text-[10px] text-gray-400">requirement → evidence → status → action · non-compliant first</p>
             </div>
             {d.requirements.length === 0 ? (
-              <div className="p-6 text-center"><p className="text-sm text-emerald-600 font-medium">{d.accreditation.total > 0 ? "Every recorded requirement is compliant." : "No accreditation requirements recorded yet."}</p></div>
+              <div className="p-6 text-center"><p className="text-sm text-[var(--cmp-text-success)] font-medium">{d.accreditation.total > 0 ? "Every recorded requirement is compliant." : "No accreditation requirements recorded yet."}</p></div>
             ) : (
               <div className="overflow-x-auto">
                 <table className="w-full min-w-[680px]">
@@ -169,7 +169,7 @@ export default async function ComplianceReportingPage() {
             )}
           </div>
 
-          <p className="text-[11px] text-gray-400 leading-relaxed">Every compliance statement is traceable to source: the compliance score and dimensions are computed live from the governance registry, and the regulatory requirement register is the real accreditation store (requirement → mapped competency → evidence count → compliance status). Report building, accreditation surveys and regulatory submissions are owned by <Link href="/quality-accreditation/accreditation" className="text-emerald-600 hover:underline">Quality &amp; Accreditation</Link>; competency accreditation mapping by the <Link href="/competency-office/accreditation" className="text-emerald-600 hover:underline">Competency Office</Link>. Per the CGR mandate, AI may generate compliance summaries and prepare evidence packages but never declares compliance or approves submissions.</p>
+          <p className="text-[11px] text-gray-400 leading-relaxed">Every compliance statement is traceable to source: the compliance score and dimensions are computed live from the governance registry, and the regulatory requirement register is the real accreditation store (requirement → mapped competency → evidence count → compliance status). Report building, accreditation surveys and regulatory submissions are owned by <Link href="/quality-accreditation/accreditation" className="text-[var(--cmp-text-success)] hover:underline">Quality &amp; Accreditation</Link>; competency accreditation mapping by the <Link href="/competency-office/accreditation" className="text-[var(--cmp-text-success)] hover:underline">Competency Office</Link>. Per the CGR mandate, AI may generate compliance summaries and prepare evidence packages but never declares compliance or approves submissions.</p>
         </div>
       )}
     </div>

@@ -14,7 +14,7 @@ export const dynamic = "force-dynamic";
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 const card = "bg-white rounded-xl border border-gray-200";
-const CLS_BADGE: Record<string, string> = { Excellent: "bg-emerald-50 text-emerald-700", Good: "bg-green-50 text-green-700", Fair: "bg-amber-50 text-amber-700", "Needs Improvement": "bg-rose-50 text-rose-700" };
+const CLS_BADGE: Record<string, string> = { Excellent: "bg-[var(--cmp-surface-success)] text-emerald-700", Good: "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]", Fair: "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]", "Needs Improvement": "bg-[var(--cmp-surface-error)] text-[var(--cmp-text-error)]" };
 const stamp = (iso?: string | null) => (iso ? `${iso.slice(11, 16)}` : "—");
 
 function Kpi({ label, value, sub, tone }: { label: string; value: any; sub?: string; tone?: string }) {
@@ -34,7 +34,7 @@ export default async function JBIAuditEngine({ searchParams }: { searchParams: P
 
   const d = await loadHandoverContext(admin, profile?.hospital_id ?? null, roles.includes("super_admin"));
   const header = (<><div className="flex items-center gap-2"><span className="text-xl">🛡️</span><div><h1 className="text-2xl font-bold text-gray-900 tracking-tight">JBI Handover Audit Engine</h1><p className="text-sm text-gray-500">Audit bedside handovers using the JBI Handover Checklist.</p></div></div><HandoverNav /></>);
-  if (!d.ready) return <div className="space-y-4">{header}<div className="bg-amber-50 border border-amber-200 rounded-xl p-6"><p className="font-semibold text-amber-900">⚙️ Operational data not provisioned</p></div></div>;
+  if (!d.ready) return <div className="space-y-4">{header}<div className="bg-[var(--cmp-surface-warning)] border border-[var(--cmp-color-warning)] rounded-xl p-6"><p className="font-semibold text-amber-900">⚙️ Operational data not provisioned</p></div></div>;
 
   const audits = d.audits;
   const today = new Date().toISOString().slice(0, 10);
@@ -52,9 +52,9 @@ export default async function JBIAuditEngine({ searchParams }: { searchParams: P
       {header}
       <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-3">
         <Kpi label="Audits Today" value={todays.length} sub={`${audits.length} total`} />
-        <Kpi label="Compliance Rate" value={compliance != null ? `${compliance}%` : "—"} sub={compliance != null ? "Average" : "No audits yet"} tone={compliance != null && compliance >= 85 ? "text-emerald-600" : undefined} />
-        <Kpi label="High Quality" value={highQ} sub="≥ 85%" tone="text-emerald-600" />
-        <Kpi label="Needs Improvement" value={needsImp} sub="< 70%" tone={needsImp ? "text-rose-600" : undefined} />
+        <Kpi label="Compliance Rate" value={compliance != null ? `${compliance}%` : "—"} sub={compliance != null ? "Average" : "No audits yet"} tone={compliance != null && compliance >= 85 ? "text-[var(--cmp-text-success)]" : undefined} />
+        <Kpi label="High Quality" value={highQ} sub="≥ 85%" tone="text-[var(--cmp-text-success)]" />
+        <Kpi label="Needs Improvement" value={needsImp} sub="< 70%" tone={needsImp ? "text-[var(--cmp-text-error)]" : undefined} />
         <Kpi label="Patients" value={d.rows.length} sub="Auditable" />
         <Kpi label="Domains" value={JBI_DOMAINS.length} sub="JBI checklist" />
       </div>
@@ -64,7 +64,7 @@ export default async function JBIAuditEngine({ searchParams }: { searchParams: P
         <div className={`${card} p-5 xl:col-span-2`}>
           {!selected ? <p className="text-sm text-gray-400 py-8 text-center">No patients to audit.</p> : (
             <>
-              <div className="flex items-center gap-2 mb-3 flex-wrap">{d.rows.slice(0, 8).map((p: any) => <Link key={p.patientId} href={`/supervisor/handover/jbi?patient=${p.patientId}`} className={`text-[10px] px-2 py-1 rounded-full ${selected.patientId === p.patientId ? "bg-emerald-600 text-white" : "bg-gray-100 text-gray-500 hover:bg-gray-200"}`}>{p.bed ? `Bed ${p.bed}` : p.label}</Link>)}</div>
+              <div className="flex items-center gap-2 mb-3 flex-wrap">{d.rows.slice(0, 8).map((p: any) => <Link key={p.patientId} href={`/supervisor/handover/jbi?patient=${p.patientId}`} className={`text-[10px] px-2 py-1 rounded-full ${selected.patientId === p.patientId ? "bg-[var(--cmp-color-success)] text-white" : "bg-gray-100 text-gray-500 hover:bg-gray-200"}`}>{p.bed ? `Bed ${p.bed}` : p.label}</Link>)}</div>
               <JbiAudit patientId={selected.patientId} patientLabel={selected.bed ? `Bed ${selected.bed} · ${selected.label}` : selected.label} />
             </>
           )}
@@ -73,7 +73,7 @@ export default async function JBIAuditEngine({ searchParams }: { searchParams: P
         {/* Domain performance */}
         <div className={`${card} p-5`}>
           <h3 className="text-sm font-bold text-gray-900 mb-3">Checklist Domain Performance</h3>
-          {audits.length === 0 ? <p className="text-sm text-gray-400">No audits recorded yet. Complete an audit to see domain trends.</p> : <div className="space-y-2">{domainPerf.map(x => (<div key={x.label} className="text-xs"><div className="flex items-center justify-between mb-0.5"><span className="text-gray-700">{x.label}</span><span className="text-gray-400">{x.avg != null ? `${x.avg}%` : "—"}</span></div><div className="w-full h-1.5 rounded-full bg-gray-100 overflow-hidden"><div className={`h-full rounded-full ${(x.avg ?? 0) >= 85 ? "bg-emerald-500" : (x.avg ?? 0) >= 70 ? "bg-amber-400" : "bg-rose-400"}`} style={{ width: `${x.avg ?? 0}%` }} /></div></div>))}</div>}
+          {audits.length === 0 ? <p className="text-sm text-gray-400">No audits recorded yet. Complete an audit to see domain trends.</p> : <div className="space-y-2">{domainPerf.map(x => (<div key={x.label} className="text-xs"><div className="flex items-center justify-between mb-0.5"><span className="text-gray-700">{x.label}</span><span className="text-gray-400">{x.avg != null ? `${x.avg}%` : "—"}</span></div><div className="w-full h-1.5 rounded-full bg-gray-100 overflow-hidden"><div className={`h-full rounded-full ${(x.avg ?? 0) >= 85 ? "bg-[var(--cmp-color-success)]" : (x.avg ?? 0) >= 70 ? "bg-[var(--cmp-color-warning)]" : "bg-[var(--cmp-color-error)]"}`} style={{ width: `${x.avg ?? 0}%` }} /></div></div>))}</div>}
         </div>
       </div>
 

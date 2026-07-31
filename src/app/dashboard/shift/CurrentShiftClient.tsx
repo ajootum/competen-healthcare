@@ -26,10 +26,10 @@ const card = cardClass;
 const input = "w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500/40";
 const btn = "px-3.5 py-2 rounded-lg bg-teal-600 text-white text-sm font-medium hover:bg-teal-700 disabled:opacity-50";
 const btnGhost = "px-2.5 py-1 rounded-lg border border-gray-300 text-xs text-gray-700 hover:bg-gray-50 disabled:opacity-50";
-const RISK: Record<string, string> = { low: "bg-green-100 text-green-700", medium: "bg-amber-100 text-amber-700", high: "bg-red-100 text-red-700" };
-const ACUITY: Record<string, string> = { stable: "bg-green-100 text-green-700", moderate: "bg-yellow-100 text-yellow-700", high: "bg-orange-100 text-orange-700", critical: "bg-red-100 text-red-700" };
-const ewsColor = (n: number | null) => n == null ? "text-gray-400" : n >= 7 ? "text-red-600" : n >= 5 ? "text-orange-600" : n >= 3 ? "text-yellow-600" : "text-green-600";
-const PRIO: Record<string, string> = { urgent: "bg-red-100 text-red-700", high: "bg-orange-100 text-orange-700", normal: "bg-gray-100 text-gray-500", low: "bg-gray-100 text-gray-400" };
+const RISK: Record<string, string> = { low: "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]", medium: "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]", high: "bg-[var(--cmp-surface-critical)] text-[var(--cmp-text-critical)]" };
+const ACUITY: Record<string, string> = { stable: "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]", moderate: "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]", high: "bg-[var(--cmp-surface-warning)] text-orange-700", critical: "bg-[var(--cmp-surface-critical)] text-[var(--cmp-text-critical)]" };
+const ewsColor = (n: number | null) => n == null ? "text-gray-400" : n >= 7 ? "text-[var(--cmp-text-critical)]" : n >= 5 ? "text-[var(--cmp-text-warning)]" : n >= 3 ? "text-[var(--cmp-text-warning)]" : "text-[var(--cmp-text-success)]";
+const PRIO: Record<string, string> = { urgent: "bg-[var(--cmp-surface-critical)] text-[var(--cmp-text-critical)]", high: "bg-[var(--cmp-surface-warning)] text-orange-700", normal: "bg-gray-100 text-gray-500", low: "bg-gray-100 text-gray-400" };
 
 const fmtTime = (iso: string | null) => iso ? new Date(iso).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: false }) : "--:--";
 const fmtDateLong = (d: string | null) => d ? new Date(d + "T00:00:00").toLocaleDateString([], { weekday: "short", day: "numeric", month: "long", year: "numeric" }) : "";
@@ -83,9 +83,9 @@ export default function CurrentShiftClient({ ready }: { ready: boolean }) {
   if (!ready) return (
     <div className="space-y-4">
       <h1 className="text-2xl font-bold text-gray-900">Current Shift</h1>
-      <div className="bg-amber-50 border border-amber-200 rounded-xl p-6">
+      <div className="bg-[var(--cmp-surface-warning)] border border-[var(--cmp-color-warning)] rounded-xl p-6">
         <p className="font-semibold text-amber-900">⚙️ Coming online</p>
-        <p className="text-sm text-amber-800 mt-2">The operational shift module needs migration <code className="bg-amber-100 px-1.5 py-0.5 rounded font-mono text-xs">039-clinical-observations.sql</code> applied. Check back shortly.</p>
+        <p className="text-sm text-amber-800 mt-2">The operational shift module needs migration <code className="bg-[var(--cmp-surface-warning)] px-1.5 py-0.5 rounded font-mono text-xs">039-clinical-observations.sql</code> applied. Check back shortly.</p>
       </div>
     </div>
   );
@@ -180,12 +180,12 @@ export default function CurrentShiftClient({ ready }: { ready: boolean }) {
               <p className="text-sm font-semibold text-gray-800">{fmtDateLong(shift.shift_date)}</p>
               <p className="text-xs text-gray-500">{shiftName ?? "Shift"} {shift.starts_at ? `${fmtTime(shift.starts_at)} – ${fmtTime(shift.ends_at)}` : ""}</p>
             </div>
-            <span className={`text-[11px] font-semibold px-2.5 py-1 rounded-full ${onDuty ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-500"}`}>{onDuty ? "On Duty" : "Off Duty"}</span>
+            <span className={`text-[11px] font-semibold px-2.5 py-1 rounded-full ${onDuty ? "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]" : "bg-gray-100 text-gray-500"}`}>{onDuty ? "On Duty" : "Off Duty"}</span>
           </div>
         )}
       </div>
 
-      {msg && <div className={`text-sm rounded-lg px-4 py-2.5 ${msg.kind === "ok" ? "bg-green-50 text-green-800 border border-green-200" : "bg-amber-50 text-amber-800 border border-amber-200"}`}>{msg.text}</div>}
+      {msg && <div className={`text-sm rounded-lg px-4 py-2.5 ${msg.kind === "ok" ? "bg-[var(--cmp-surface-success)] text-green-800 border border-[var(--cmp-color-success)]" : "bg-[var(--cmp-surface-warning)] text-amber-800 border border-[var(--cmp-color-warning)]"}`}>{msg.text}</div>}
 
       {loading && <div className={card}><p className="text-sm text-gray-400">Loading your shift…</p></div>}
 
@@ -205,7 +205,7 @@ export default function CurrentShiftClient({ ready }: { ready: boolean }) {
             <p className="text-sm text-gray-500">{shiftName ?? "Shift"}</p>
             <p className="text-xl font-bold text-gray-900 tabular-nums mt-0.5">{shift.starts_at ? `${fmtTime(shift.starts_at)} – ${fmtTime(shift.ends_at)}` : "—"}</p>
             {shift.ends_at && <p className="text-xs text-gray-500 mt-1">⏱ {remaining(shift.ends_at, now)} remaining</p>}
-            <span className={`inline-block mt-2 text-[11px] font-semibold px-2 py-0.5 rounded-full ${onDuty ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-500"}`}>{onDuty ? "On Duty" : "Off Duty"}</span>
+            <span className={`inline-block mt-2 text-[11px] font-semibold px-2 py-0.5 rounded-full ${onDuty ? "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]" : "bg-gray-100 text-gray-500"}`}>{onDuty ? "On Duty" : "Off Duty"}</span>
           </div>
 
           {/* Assigned Unit */}
@@ -378,7 +378,7 @@ export default function CurrentShiftClient({ ready }: { ready: boolean }) {
             {alertItems.length === 0 && <p className="text-sm text-gray-400">No active alerts for your patients.</p>}
             {alertItems.slice(0, 12).map((a, i) => (
               <div key={i} className="flex items-start gap-2 text-sm">
-                <span className={`mt-1 w-2 h-2 rounded-full shrink-0 ${a.sev === "high" ? "bg-red-500" : a.sev === "med" ? "bg-amber-500" : "bg-gray-300"}`} />
+                <span className={`mt-1 w-2 h-2 rounded-full shrink-0 ${a.sev === "high" ? "bg-[var(--cmp-color-critical)]" : a.sev === "med" ? "bg-[var(--cmp-color-warning)]" : "bg-gray-300"}`} />
                 <div className="min-w-0">
                   <p className="text-gray-700 leading-tight">{a.label}</p>
                   {a.note && <p className="text-[11px] text-gray-400 truncate">{a.note}</p>}
@@ -405,7 +405,7 @@ export default function CurrentShiftClient({ ready }: { ready: boolean }) {
           </div>
 
           {showRaise && (
-            <div className="bg-red-50/50 border border-red-100 rounded-lg p-3 mb-3 space-y-2">
+            <div className="bg-[var(--cmp-surface-critical)]/50 border border-[var(--cmp-color-critical)] rounded-lg p-3 mb-3 space-y-2">
               <div className="flex flex-wrap gap-2">
                 <select className={`${input} sm:w-48`} value={eLevel} onChange={e => setELevel(e.target.value)}>{[1, 2, 3, 4, 5].map(l => <option key={l} value={l}>L{l} · {["routine", "urgent", "high", "emergency", "critical"][l - 1]}</option>)}</select>
                 <input className={`${input} flex-1`} placeholder="What do you need help with?" value={eSummary} onChange={e => setESummary(e.target.value)} />
@@ -414,7 +414,7 @@ export default function CurrentShiftClient({ ready }: { ready: boolean }) {
             </div>
           )}
           {showSafety && (
-            <div className="bg-orange-50/50 border border-orange-100 rounded-lg p-3 mb-3 space-y-2">
+            <div className="bg-[var(--cmp-surface-warning)]/50 border border-[var(--cmp-color-warning)] rounded-lg p-3 mb-3 space-y-2">
               <div className="flex flex-wrap gap-2">
                 <select className={`${input} sm:w-48`} value={aCat} onChange={e => setACat(e.target.value)}>{SAFETY_CATS.map(cat => <option key={cat} value={cat}>{titleCase(cat)}</option>)}</select>
                 <input className={`${input} flex-1`} placeholder="Note (optional)" value={aNote} onChange={e => setANote(e.target.value)} />
@@ -441,7 +441,7 @@ export default function CurrentShiftClient({ ready }: { ready: boolean }) {
                 <div key={o.id} className="py-2 flex items-center gap-2 text-sm">
                   <span className="text-gray-700">{titleCase(o.observation_type)}</span>
                   {o.ews_score != null && <span className={`font-medium ${ewsColor(o.ews_score)}`}>PEWS {o.ews_score}</span>}
-                  {o.escalation_triggered && <span className="text-[10px] px-1.5 py-0.5 rounded bg-red-100 text-red-700">escalated</span>}
+                  {o.escalation_triggered && <span className="text-[10px] px-1.5 py-0.5 rounded bg-[var(--cmp-surface-critical)] text-[var(--cmp-text-critical)]">escalated</span>}
                   <span className="ml-auto text-xs text-gray-400">{o.status === "due" ? "due" : o.recorded_at ? new Date(o.recorded_at).toLocaleString() : ""}</span>
                 </div>
               ))}

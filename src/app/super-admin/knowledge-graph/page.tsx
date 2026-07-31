@@ -33,7 +33,7 @@ export default async function KnowledgeGraphPage() {
       </div>
 
       {/* AI readiness banner */}
-      <div className={`rounded-xl px-5 py-4 mb-6 border ${ai.configured ? "bg-green-50 border-green-100" : "bg-amber-50 border-amber-100"}`}>
+      <div className={`rounded-xl px-5 py-4 mb-6 border ${ai.configured ? "bg-[var(--cmp-surface-success)] border-[var(--cmp-color-success)]" : "bg-[var(--cmp-surface-warning)] border-[var(--cmp-color-warning)]"}`}>
         <div className="flex items-center gap-2">
           <span className="text-lg">{ai.configured ? "🟢" : "🟡"}</span>
           <div>

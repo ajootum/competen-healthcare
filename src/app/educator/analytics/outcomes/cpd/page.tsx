@@ -27,7 +27,7 @@ export default async function Cpd() {
     <div className="max-w-[1200px]">
       <OutcomesNav active="cpd" />
       <div className="mb-2"><StatTiles tiles={tiles} cols="grid-cols-2 md:grid-cols-4" /></div>
-      <p className="text-[10px] text-amber-600 bg-amber-50 border border-amber-100 rounded-lg px-3 py-2 mb-5">ℹ️ {C.note || "No CPD activity has been logged yet."} CPD hours, credits, plans and category tracking need a CPD activity store — shown honestly rather than simulated. Recommended CPD below links to real published courses.</p>
+      <p className="text-[10px] text-[var(--cmp-text-warning)] bg-[var(--cmp-surface-warning)] border border-[var(--cmp-color-warning)] rounded-lg px-3 py-2 mb-5">ℹ️ {C.note || "No CPD activity has been logged yet."} CPD hours, credits, plans and category tracking need a CPD activity store — shown honestly rather than simulated. Recommended CPD below links to real published courses.</p>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-4 items-start">
         {/* CPD by category (soon) */}

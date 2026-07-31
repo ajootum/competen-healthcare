@@ -15,8 +15,8 @@ export const dynamic = "force-dynamic";
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 const card = "bg-white rounded-xl border border-gray-200";
-const RISK_DOT: Record<string, string> = { "High Risk": "bg-rose-500", "At Risk": "bg-amber-500", "Stable": "bg-emerald-500" };
-const RISK_BADGE: Record<string, string> = { "High Risk": "bg-rose-50 text-rose-700", "At Risk": "bg-amber-50 text-amber-700", "Stable": "bg-emerald-50 text-emerald-700" };
+const RISK_DOT: Record<string, string> = { "High Risk": "bg-[var(--cmp-color-error)]", "At Risk": "bg-[var(--cmp-color-warning)]", "Stable": "bg-[var(--cmp-color-success)]" };
+const RISK_BADGE: Record<string, string> = { "High Risk": "bg-[var(--cmp-surface-error)] text-[var(--cmp-text-error)]", "At Risk": "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]", "Stable": "bg-[var(--cmp-surface-success)] text-emerald-700" };
 
 function Kpi({ label, value, sub, tone, icon }: { label: string; value: any; sub?: string; tone?: string; icon?: string }) {
   return <div className={`${card} p-3.5`}><div className="flex items-start justify-between"><p className="text-[10px] text-gray-500 uppercase tracking-wide">{label}</p>{icon && <span className="text-sm opacity-50">{icon}</span>}</div><p className={`text-2xl font-bold tabular-nums mt-0.5 ${tone ?? "text-gray-900"}`}>{value}</p>{sub && <p className="text-[10px] text-gray-400">{sub}</p>}</div>;
@@ -54,7 +54,7 @@ export default async function HandoverCentreDashboard() {
     </>
   );
 
-  if (!d.ready) return <div className="space-y-4">{header}<div className="bg-amber-50 border border-amber-200 rounded-xl p-6"><p className="font-semibold text-amber-900">⚙️ Operational data not provisioned</p><p className="text-sm text-amber-800 mt-1">The clinical-operations stores (op_*) aren&apos;t available for this tenant yet. Run the operational migrations to activate the Handover Centre.</p></div></div>;
+  if (!d.ready) return <div className="space-y-4">{header}<div className="bg-[var(--cmp-surface-warning)] border border-[var(--cmp-color-warning)] rounded-xl p-6"><p className="font-semibold text-amber-900">⚙️ Operational data not provisioned</p><p className="text-sm text-amber-800 mt-1">The clinical-operations stores (op_*) aren&apos;t available for this tenant yet. Run the operational migrations to activate the Handover Centre.</p></div></div>;
 
   const k = d.kpis;
   const board = [...d.rows].sort((a: any, b: any) => { const o: Record<string, number> = { "High Risk": 0, "At Risk": 1, "Stable": 2 }; return (o[a.risk] - o[b.risk]) || ((b.pews ?? 0) - (a.pews ?? 0)); }).slice(0, 6);
@@ -74,28 +74,28 @@ export default async function HandoverCentreDashboard() {
 
       <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-5 gap-3">
         <Kpi label="Patients" value={k.patients} sub="Total in scope" icon="🧑‍🤝‍🧑" />
-        <Kpi label="Handed Over" value={k.completed} sub={`${k.progress}% complete`} tone="text-emerald-600" icon="✅" />
-        <Kpi label="Pending" value={k.pending} sub="Remaining" tone={k.pending ? "text-amber-600" : undefined} icon="⏳" />
-        <Kpi label="Critical Patients" value={k.critical} sub="High risk" tone={k.critical ? "text-rose-600" : undefined} icon="⚠️" />
+        <Kpi label="Handed Over" value={k.completed} sub={`${k.progress}% complete`} tone="text-[var(--cmp-text-success)]" icon="✅" />
+        <Kpi label="Pending" value={k.pending} sub="Remaining" tone={k.pending ? "text-[var(--cmp-text-warning)]" : undefined} icon="⏳" />
+        <Kpi label="Critical Patients" value={k.critical} sub="High risk" tone={k.critical ? "text-[var(--cmp-text-error)]" : undefined} icon="⚠️" />
         <Kpi label="Escalations" value={k.escalations} sub="Active" tone={k.escalations ? "text-violet-600" : undefined} icon="⬆️" />
         <Kpi label="Outstanding Tasks" value={k.tasks} sub="Open" icon="🗒️" />
-        <Kpi label="Overdue Tasks" value={overdueTasks} sub="Past due" tone={overdueTasks ? "text-rose-600" : undefined} icon="⏰" />
-        <Kpi label="JBI Compliance" value={k.jbiCompliance != null ? `${k.jbiCompliance}%` : "—"} sub={k.jbiCompliance != null ? "Avg audit" : "No audits yet"} tone={k.jbiCompliance != null && k.jbiCompliance >= 85 ? "text-emerald-600" : undefined} icon="🛡️" />
+        <Kpi label="Overdue Tasks" value={overdueTasks} sub="Past due" tone={overdueTasks ? "text-[var(--cmp-text-error)]" : undefined} icon="⏰" />
+        <Kpi label="JBI Compliance" value={k.jbiCompliance != null ? `${k.jbiCompliance}%` : "—"} sub={k.jbiCompliance != null ? "Avg audit" : "No audits yet"} tone={k.jbiCompliance != null && k.jbiCompliance >= 85 ? "text-[var(--cmp-text-success)]" : undefined} icon="🛡️" />
         <Kpi label="Avg Handover" value={k.avgHandoverMins != null ? `${k.avgHandoverMins}m` : "—"} sub="Not timed yet" icon="⏱️" />
-        <Kpi label="Shift Risk" value={shiftRisk} sub="Derived" tone={shiftRisk === "High" ? "text-rose-600" : shiftRisk === "Medium" ? "text-amber-600" : "text-emerald-600"} icon="📊" />
+        <Kpi label="Shift Risk" value={shiftRisk} sub="Derived" tone={shiftRisk === "High" ? "text-[var(--cmp-text-error)]" : shiftRisk === "Medium" ? "text-[var(--cmp-text-warning)]" : "text-[var(--cmp-text-success)]"} icon="📊" />
       </div>
 
       {/* Progress */}
       <div className={`${card} p-5`}>
         <div className="flex items-center justify-between mb-2"><h3 className="text-sm font-bold text-gray-900">Overall Shift Handover Progress</h3><span className="text-sm font-bold text-gray-900">{k.progress}% <span className="text-xs text-gray-400 font-normal">{k.completed} of {k.patients} patients</span></span></div>
-        <div className="w-full h-3 rounded-full bg-gray-100 overflow-hidden"><div className="h-full rounded-full bg-emerald-500" style={{ width: `${k.progress}%` }} /></div>
+        <div className="w-full h-3 rounded-full bg-gray-100 overflow-hidden"><div className="h-full rounded-full bg-[var(--cmp-color-success)]" style={{ width: `${k.progress}%` }} /></div>
       </div>
 
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
         {/* Workflow */}
         <div className={`${card} p-5`}>
           <h3 className="text-sm font-bold text-gray-900 mb-3">Handover Workflow</h3>
-          <div className="space-y-3">{WORKFLOW.map(([t, sub], i) => (<div key={i} className="flex gap-2.5"><div className="w-6 h-6 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-700 flex items-center justify-center text-[11px] font-bold shrink-0">{i + 1}</div><div><p className="text-xs font-semibold text-gray-800">{t}</p><p className="text-[11px] text-gray-500">{sub}</p></div></div>))}</div>
+          <div className="space-y-3">{WORKFLOW.map(([t, sub], i) => (<div key={i} className="flex gap-2.5"><div className="w-6 h-6 rounded-full bg-[var(--cmp-surface-success)] border border-[var(--cmp-color-success)] text-emerald-700 flex items-center justify-center text-[11px] font-bold shrink-0">{i + 1}</div><div><p className="text-xs font-semibold text-gray-800">{t}</p><p className="text-[11px] text-gray-500">{sub}</p></div></div>))}</div>
         </div>
 
         {/* JBI compliance */}
@@ -112,7 +112,7 @@ export default async function HandoverCentreDashboard() {
         <div className={`${card} p-5`}>
           <div className="flex items-center justify-between mb-3"><h3 className="text-sm font-bold text-gray-900">Handover Tasks</h3><Link href="/supervisor/handover/tasks" className="text-[11px] text-emerald-700 hover:underline">View all →</Link></div>
           {topTasks.length === 0 ? <p className="text-sm text-gray-400">No outstanding tasks. 🎉</p> : (
-            <div className="space-y-1.5">{topTasks.map((t: any) => (<div key={t.id} className="flex items-center gap-2 text-xs"><span className={`w-1.5 h-1.5 rounded-full shrink-0 ${t.priority === "urgent" ? "bg-rose-500" : t.priority === "high" ? "bg-amber-500" : "bg-gray-300"}`} /><span className="text-gray-700 flex-1 truncate">{t.description}</span><span className="text-gray-400 truncate max-w-[80px]">{t.op_patients?.label ?? "—"}</span></div>))}</div>
+            <div className="space-y-1.5">{topTasks.map((t: any) => (<div key={t.id} className="flex items-center gap-2 text-xs"><span className={`w-1.5 h-1.5 rounded-full shrink-0 ${t.priority === "urgent" ? "bg-[var(--cmp-color-error)]" : t.priority === "high" ? "bg-[var(--cmp-color-warning)]" : "bg-gray-300"}`} /><span className="text-gray-700 flex-1 truncate">{t.description}</span><span className="text-gray-400 truncate max-w-[80px]">{t.op_patients?.label ?? "—"}</span></div>))}</div>
           )}
         </div>
       </div>
@@ -123,7 +123,7 @@ export default async function HandoverCentreDashboard() {
           <div className="flex items-center justify-between mb-3"><h3 className="text-sm font-bold text-gray-900 flex items-center gap-1.5"><span>🤖</span>AI Handover Assistant — Shift Summary</h3><Link href="/supervisor/handover/ai" className="text-[11px] text-emerald-700 hover:underline">View AI insights →</Link></div>
           <ul className="space-y-1.5 mb-3">{aiBullets.map((b, i) => <li key={i} className="text-xs text-gray-700 flex gap-2"><span className="text-emerald-500">•</span>{b}</li>)}</ul>
           <div className="grid grid-cols-3 gap-3 pt-3 border-t border-gray-100">
-            <div><p className="text-[10px] text-gray-500 uppercase">Shift Risk Score</p><p className={`text-lg font-bold ${shiftRisk === "High" ? "text-rose-600" : shiftRisk === "Medium" ? "text-amber-600" : "text-emerald-600"}`}>{shiftRisk}</p></div>
+            <div><p className="text-[10px] text-gray-500 uppercase">Shift Risk Score</p><p className={`text-lg font-bold ${shiftRisk === "High" ? "text-[var(--cmp-text-error)]" : shiftRisk === "Medium" ? "text-[var(--cmp-text-warning)]" : "text-[var(--cmp-text-success)]"}`}>{shiftRisk}</p></div>
             <div><p className="text-[10px] text-gray-500 uppercase">Handover Quality</p><p className="text-lg font-bold text-gray-900">{k.jbiCompliance != null ? `${k.jbiCompliance}%` : "—"}</p></div>
             <div><p className="text-[10px] text-gray-500 uppercase">Patients Pending</p><p className="text-lg font-bold text-gray-900">{k.pending}</p></div>
           </div>
@@ -134,7 +134,7 @@ export default async function HandoverCentreDashboard() {
           <div className="flex items-center justify-between mb-3"><h3 className="text-sm font-bold text-gray-900">Patient Handover Board</h3><Link href="/supervisor/handover/board" className="text-[11px] text-emerald-700 hover:underline">View all →</Link></div>
           {board.length === 0 ? <p className="text-sm text-gray-400">No patients in scope.</p> : (
             <div className="space-y-2">{board.map((p: any) => (
-              <Link key={p.patientId} href="/supervisor/handover/board" className="block rounded-lg border border-gray-100 p-2.5 hover:border-emerald-200 hover:bg-emerald-50/30">
+              <Link key={p.patientId} href="/supervisor/handover/board" className="block rounded-lg border border-gray-100 p-2.5 hover:border-[var(--cmp-color-success)] hover:bg-[var(--cmp-surface-success)]/30">
                 <div className="flex items-center justify-between"><span className="text-xs font-semibold text-gray-800">{p.bed ? `Bed ${p.bed} · ` : ""}{p.label}</span><span className="text-xs font-bold text-gray-900">PEWS {p.pews ?? "—"}</span></div>
                 <div className="flex items-center justify-between mt-1"><span className={`text-[10px] px-1.5 py-0.5 rounded ${RISK_BADGE[p.risk]}`}>{p.risk}</span><span className="flex items-center gap-2 text-[10px] text-gray-400"><span>🗒️ {p.openTasks}</span><span>⬆️ {p.escalations}</span><span className={`w-1.5 h-1.5 rounded-full ${RISK_DOT[p.risk]}`} /></span></div>
               </Link>
@@ -144,8 +144,8 @@ export default async function HandoverCentreDashboard() {
       </div>
 
       <div className="flex flex-wrap gap-2">
-        <Link href="/supervisor/handover/outgoing" className="text-xs font-semibold rounded-lg py-2.5 px-4 bg-emerald-600 text-white">Start Outgoing Handover →</Link>
-        <Link href="/supervisor/handover/incoming" className="text-xs font-semibold rounded-lg py-2.5 px-4 border border-emerald-300 text-emerald-700">Review Incoming Handover</Link>
+        <Link href="/supervisor/handover/outgoing" className="text-xs font-semibold rounded-lg py-2.5 px-4 bg-[var(--cmp-color-success)] text-white">Start Outgoing Handover →</Link>
+        <Link href="/supervisor/handover/incoming" className="text-xs font-semibold rounded-lg py-2.5 px-4 border border-[var(--cmp-color-success)] text-emerald-700">Review Incoming Handover</Link>
         <Link href="/supervisor/handover/reports" className="text-xs font-semibold rounded-lg py-2.5 px-4 border border-gray-200 text-gray-600">Handover Reports</Link>
       </div>
 

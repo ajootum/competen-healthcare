@@ -40,7 +40,7 @@ export default async function CgrAiPage() {
     <div className="max-w-5xl">
       <div className="flex items-start justify-between gap-3 mb-5">
         <div>
-          <p className="text-[11px] font-semibold text-emerald-600 uppercase tracking-widest mb-0.5">CGR-007 · Competency Governance</p>
+          <p className="text-[11px] font-semibold text-[var(--cmp-text-success)] uppercase tracking-widest mb-0.5">CGR-007 · Competency Governance</p>
           <h1 className="text-xl font-bold text-gray-900">Governance Intelligence &amp; Predictive Risk</h1>
           <p className="text-gray-400 text-sm mt-0.5">Ask the governance copilot — it flags ownership, regulatory, review and evidence gaps and prioritises risk over the live registry. It recommends; it never approves or changes standards.</p>
         </div>
@@ -64,10 +64,10 @@ export default async function CgrAiPage() {
           ) : (
             <>
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-3">
-                <div className="border border-gray-100 rounded-lg p-3"><p className={`text-2xl font-bold tabular-nums ${k.avgScore >= 75 ? "text-emerald-600" : k.avgScore >= 45 ? "text-amber-600" : "text-rose-600"}`}>{k.avgScore}</p><p className="text-[10px] text-gray-500">avg governance /100</p></div>
+                <div className="border border-gray-100 rounded-lg p-3"><p className={`text-2xl font-bold tabular-nums ${k.avgScore >= 75 ? "text-[var(--cmp-text-success)]" : k.avgScore >= 45 ? "text-[var(--cmp-text-warning)]" : "text-[var(--cmp-text-error)]"}`}>{k.avgScore}</p><p className="text-[10px] text-gray-500">avg governance /100</p></div>
                 <div className="border border-gray-100 rounded-lg p-3"><p className="text-2xl font-bold text-gray-900 tabular-nums">{k.ownerPct}%</p><p className="text-[10px] text-gray-500">with owner</p></div>
-                <div className="border border-gray-100 rounded-lg p-3"><p className={`text-2xl font-bold tabular-nums ${k.overdue ? "text-rose-600" : "text-gray-900"}`}>{k.overdue}</p><p className="text-[10px] text-gray-500">overdue reviews</p></div>
-                <div className="border border-gray-100 rounded-lg p-3"><p className={`text-2xl font-bold tabular-nums ${d.states.at_risk + d.states.ungoverned ? "text-amber-600" : "text-gray-900"}`}>{d.states.at_risk + d.states.ungoverned}</p><p className="text-[10px] text-gray-500">at-risk / ungoverned</p></div>
+                <div className="border border-gray-100 rounded-lg p-3"><p className={`text-2xl font-bold tabular-nums ${k.overdue ? "text-[var(--cmp-text-error)]" : "text-gray-900"}`}>{k.overdue}</p><p className="text-[10px] text-gray-500">overdue reviews</p></div>
+                <div className="border border-gray-100 rounded-lg p-3"><p className={`text-2xl font-bold tabular-nums ${d.states.at_risk + d.states.ungoverned ? "text-[var(--cmp-text-warning)]" : "text-gray-900"}`}>{d.states.at_risk + d.states.ungoverned}</p><p className="text-[10px] text-gray-500">at-risk / ungoverned</p></div>
               </div>
               {flagged.length > 0 ? (
                 <div>
@@ -80,7 +80,7 @@ export default async function CgrAiPage() {
                       </div>
                     ))}
                   </div>
-                  <p className="text-[10px] text-gray-400 mt-2"><Link href="/super-admin/cgr/registry" className="text-emerald-600 hover:underline">Full registry →</Link></p>
+                  <p className="text-[10px] text-gray-400 mt-2"><Link href="/super-admin/cgr/registry" className="text-[var(--cmp-text-success)] hover:underline">Full registry →</Link></p>
                 </div>
               ) : (
                 <p className="text-[11px] text-gray-400">No competencies currently at governance risk.</p>
@@ -93,7 +93,7 @@ export default async function CgrAiPage() {
         <div className={`${card} p-4`}>
           <p className="text-[11px] font-semibold text-gray-500 mb-3">Intelligence lenses</p>
           <div className="flex flex-wrap gap-1.5">
-            {AGENTS.map((a) => <span key={a} className="text-[10px] text-emerald-700 bg-emerald-50 border border-emerald-100 rounded-full px-2 py-0.5">{a}</span>)}
+            {AGENTS.map((a) => <span key={a} className="text-[10px] text-emerald-700 bg-[var(--cmp-surface-success)] border border-[var(--cmp-color-success)] rounded-full px-2 py-0.5">{a}</span>)}
           </div>
           <p className="text-[10px] text-gray-400 mt-3">The copilot reasons over the governance registry, then explains and prioritises in plain language.</p>
         </div>

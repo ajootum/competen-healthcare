@@ -23,14 +23,14 @@ export default async function AssetsPage() {
     <div className="max-w-[1500px] space-y-4">
       {head}<Tabs active="004" />
       <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-8 gap-3">
-        <Kpi label="Asset Readiness" value={`${k.readiness}%`} sub="in service" tone={k.readiness >= 85 ? "text-emerald-600" : "text-amber-600"} />
+        <Kpi label="Asset Readiness" value={`${k.readiness}%`} sub="in service" tone={k.readiness >= 85 ? "text-[var(--cmp-text-success)]" : "text-[var(--cmp-text-warning)]"} />
         <Kpi label="Availability" value={`${k.availability}%`} sub="usable" />
         <Kpi label="Total Assets" value={k.total} sub="registered" />
-        <Kpi label="Maintenance Due" value={k.maintDue} sub="next 30 days" tone={k.maintDue ? "text-amber-600" : undefined} />
-        <Kpi label="Calibration Due" value={k.calDue} sub="next 30 days" tone={k.calDue ? "text-amber-600" : undefined} />
-        <Kpi label="Assets Down" value={k.down} sub="maint. + OOS" tone={k.down ? "text-rose-600" : undefined} />
+        <Kpi label="Maintenance Due" value={k.maintDue} sub="next 30 days" tone={k.maintDue ? "text-[var(--cmp-text-warning)]" : undefined} />
+        <Kpi label="Calibration Due" value={k.calDue} sub="next 30 days" tone={k.calDue ? "text-[var(--cmp-text-warning)]" : undefined} />
+        <Kpi label="Assets Down" value={k.down} sub="maint. + OOS" tone={k.down ? "text-[var(--cmp-text-error)]" : undefined} />
         <Kpi label="Utilisation" value={`${k.utilisation}%`} sub="average" />
-        <Kpi label="Warranty Covered" value={`${k.warrantyCovered}%`} sub="under warranty" tone="text-emerald-600" />
+        <Kpi label="Warranty Covered" value={`${k.warrantyCovered}%`} sub="under warranty" tone="text-[var(--cmp-text-success)]" />
       </div>
 
       <div className="grid grid-cols-1 xl:grid-cols-4 gap-4">

@@ -43,7 +43,7 @@ export default async function AmendmentsSwaps() {
     </>
   );
 
-  if (!d.provisioned) return <div className="space-y-4">{header}<div className="bg-amber-50 border border-amber-200 rounded-xl p-6"><p className="font-semibold text-amber-900">⚙️ Roster store not provisioned</p></div></div>;
+  if (!d.provisioned) return <div className="space-y-4">{header}<div className="bg-[var(--cmp-surface-warning)] border border-[var(--cmp-color-warning)] rounded-xl p-6"><p className="font-semibold text-amber-900">⚙️ Roster store not provisioned</p></div></div>;
   if (!d.hasRoster) return <div className="space-y-4">{header}<div className="bg-white border border-gray-200 rounded-xl p-6"><p className="font-semibold text-gray-800">No roster for the current week</p><p className="text-sm text-gray-500 mt-1">Generate one in the <Link href="/unit-manager/scheduling-engine" className="text-emerald-700 hover:underline">Scheduling Engine</Link>.</p></div></div>;
 
   return (
@@ -51,8 +51,8 @@ export default async function AmendmentsSwaps() {
       {header}
 
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        <Kpi label="Open amendments" value={d.open.length} tone={d.open.length ? "text-amber-600" : "text-emerald-600"} />
-        <Kpi label="Applied" value={d.appliedCount} tone="text-emerald-600" />
+        <Kpi label="Open amendments" value={d.open.length} tone={d.open.length ? "text-[var(--cmp-text-warning)]" : "text-[var(--cmp-text-success)]"} />
+        <Kpi label="Applied" value={d.appliedCount} tone="text-[var(--cmp-text-success)]" />
         <Kpi label="Total logged" value={d.amendments.length} />
         <Kpi label="Roster status" value={d.rosterStatus} />
       </div>

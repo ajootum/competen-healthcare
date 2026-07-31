@@ -81,12 +81,12 @@ export default async function RulesTemplates() {
           <div className="space-y-1.5 max-h-[22rem] overflow-y-auto pr-1">{FAMILIES.map(f => (
             <div key={f.name} className="flex items-start justify-between gap-2 rounded-lg border border-gray-100 p-2.5">
               <div className="min-w-0"><p className="text-xs font-semibold text-gray-800">{f.name}</p><p className="text-[10px] text-gray-400">{f.cfg}</p></div>
-              <span className={`shrink-0 text-[9px] px-1.5 py-0.5 rounded ${f.live ? "bg-emerald-50 text-emerald-700" : "bg-gray-100 text-gray-400"}`}>{f.live ? "Live" : "Next phase"}</span>
+              <span className={`shrink-0 text-[9px] px-1.5 py-0.5 rounded ${f.live ? "bg-[var(--cmp-surface-success)] text-emerald-700" : "bg-gray-100 text-gray-400"}`}>{f.live ? "Live" : "Next phase"}</span>
             </div>))}</div>
         </div>
       </div>
 
-      <div className="bg-amber-50 border border-amber-200 rounded-xl p-5">
+      <div className="bg-[var(--cmp-surface-warning)] border border-[var(--cmp-color-warning)] rounded-xl p-5">
         <p className="font-semibold text-amber-900">⚙️ Rule editor, versioning &amp; simulation — next phase</p>
         <p className="text-sm text-amber-800 mt-1">The schema-driven rule/template editor, effective-dated versioning (draft → review → approved → scheduled → active → superseded), sandbox simulation and the approval/publication queue need a governance rules store (<span className="font-mono text-[11px]">assignment_rule</span> / <span className="font-mono text-[11px]">assignment_template</span> per TAG §11). Coverage &amp; ratio rules are already live and editable in the planning parameters; the rest are shown honestly as reference.</p>
       </div>

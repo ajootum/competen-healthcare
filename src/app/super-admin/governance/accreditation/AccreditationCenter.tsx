@@ -86,7 +86,7 @@ export default function AccreditationCenter({ frameworks, refsByFramework, surve
     <div className="bg-white rounded-xl border border-gray-200">
       <div className="flex items-center gap-2 p-3 border-b border-gray-100 flex-wrap">
         <h2 className="font-semibold text-gray-900 text-[15px] mr-auto">Accreditation Center</h2>
-        {msg && <span className={`text-xs rounded-lg px-2.5 py-1 ${msg.k === "ok" ? "bg-green-50 text-green-800" : "bg-amber-50 text-amber-800"}`}>{msg.t}</span>}
+        {msg && <span className={`text-xs rounded-lg px-2.5 py-1 ${msg.k === "ok" ? "bg-[var(--cmp-surface-success)] text-green-800" : "bg-[var(--cmp-surface-warning)] text-amber-800"}`}>{msg.t}</span>}
         <div className="flex gap-1">
           {TABS.map(b => (
             <button key={b.key} onClick={() => switchTab(b.key)} className={`text-xs font-medium rounded-lg px-2.5 py-1.5 border ${tab === b.key ? "bg-teal-50 border-teal-300 text-teal-700" : "border-gray-200 text-gray-500 hover:bg-gray-50"}`}>{b.icon} {b.label}</button>
@@ -131,7 +131,7 @@ export default function AccreditationCenter({ frameworks, refsByFramework, surve
             <div><label className={label}>Advance to</label><select value={form.status ?? ""} onChange={set("status")} className={input}><option value="">— Unchanged —</option>{Object.entries(SURVEY_STATUSES).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select></div>
             <div><label className={label}>Outcome <span className="font-normal text-gray-400">(completes the survey)</span></label><select value={form.outcome ?? ""} onChange={set("outcome")} className={input}><option value="">— Not yet —</option>{Object.entries(OUTCOMES).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select></div>
             <div className="sm:col-span-2"><label className={label}>Result / findings note</label><textarea value={form.result_note ?? ""} onChange={set("result_note")} rows={2} className={input} placeholder="Preliminary findings, final results…" /></div>
-            {surveys.length === 0 && <p className="sm:col-span-2 text-[11px] text-amber-600">No active surveys — schedule one first.</p>}
+            {surveys.length === 0 && <p className="sm:col-span-2 text-[11px] text-[var(--cmp-text-warning)]">No active surveys — schedule one first.</p>}
           </div>
         )}
 

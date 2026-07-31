@@ -35,7 +35,7 @@ export default async function PatientFlow() {
   const po = await loadPatientOps(admin, profile?.hospital_id ?? null, roles.includes("super_admin"));
   if (!po.ready) return (
     <div className="space-y-4"><h1 className="text-2xl font-bold text-gray-900">Patient Flow</h1>
-      <div className="bg-amber-50 border border-amber-200 rounded-xl p-6"><p className="font-semibold text-amber-900">⚙️ Coming online</p><p className="text-sm text-amber-800 mt-2">The Clinical Operations Engine tables aren&apos;t provisioned yet.</p></div></div>
+      <div className="bg-[var(--cmp-surface-warning)] border border-[var(--cmp-color-warning)] rounded-xl p-6"><p className="font-semibold text-amber-900">⚙️ Coming online</p><p className="text-sm text-amber-800 mt-2">The Clinical Operations Engine tables aren&apos;t provisioned yet.</p></div></div>
   );
 
   const { flow, blockers, flowMetrics } = po;
@@ -44,7 +44,7 @@ export default async function PatientFlow() {
   // B) Flow summary KPIs (each is a live count off the shared flow pipeline).
   const kpis = [
     { label: "Expected admissions", n: flow.expected.length + flow.awaitingBed.length, tone: "text-gray-900" },
-    { label: "Awaiting bed", n: flow.awaitingBed.length, tone: flow.awaitingBed.length ? "text-orange-600" : "text-gray-400" },
+    { label: "Awaiting bed", n: flow.awaitingBed.length, tone: flow.awaitingBed.length ? "text-[var(--cmp-text-warning)]" : "text-gray-400" },
     { label: "In care", n: flow.inCare.length, tone: "text-teal-700" },
     { label: "Transfer / Theatre", n: flow.transferTheatre.length, tone: flow.transferTheatre.length ? "text-indigo-600" : "text-gray-400" },
     { label: "Discharge ready", n: flow.dischargeReady.length, tone: flow.dischargeReady.length ? "text-teal-600" : "text-gray-400" },
@@ -54,7 +54,7 @@ export default async function PatientFlow() {
   // C) Kanban pipeline columns — Expected → Awaiting Bed → In Care → Transfer/Theatre → Discharge Ready → Discharged.
   const columns: { title: string; list: any[]; dot: string }[] = [
     { title: "Expected", list: flow.expected, dot: "bg-gray-400" },
-    { title: "Awaiting Bed", list: flow.awaitingBed, dot: "bg-orange-500" },
+    { title: "Awaiting Bed", list: flow.awaitingBed, dot: "bg-[var(--cmp-color-warning)]" },
     { title: "In Care", list: flow.inCare, dot: "bg-teal-500" },
     { title: "Transfer / Theatre", list: flow.transferTheatre, dot: "bg-indigo-500" },
     { title: "Discharge Ready", list: flow.dischargeReady, dot: "bg-teal-400" },

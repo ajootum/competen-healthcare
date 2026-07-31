@@ -12,8 +12,8 @@ import { cardClass } from "@/components/ui/primitives";
 export const dynamic = "force-dynamic";
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
-const TONE: Record<string, string> = { red: "border-rose-200 bg-rose-50", amber: "border-amber-200 bg-amber-50", blue: "border-blue-200 bg-blue-50", gray: "border-gray-200 bg-gray-50", green: "border-emerald-200 bg-emerald-50" };
-const DOT: Record<string, string> = { red: "bg-rose-500", amber: "bg-amber-500", blue: "bg-blue-500", gray: "bg-gray-300", green: "bg-emerald-500" };
+const TONE: Record<string, string> = { red: "border-[var(--cmp-color-error)] bg-[var(--cmp-surface-error)]", amber: "border-[var(--cmp-color-warning)] bg-[var(--cmp-surface-warning)]", blue: "border-[var(--cmp-color-information)] bg-[var(--cmp-surface-information)]", gray: "border-gray-200 bg-gray-50", green: "border-[var(--cmp-color-success)] bg-[var(--cmp-surface-success)]" };
+const DOT: Record<string, string> = { red: "bg-[var(--cmp-color-error)]", amber: "bg-[var(--cmp-color-warning)]", blue: "bg-[var(--cmp-color-information)]", gray: "bg-gray-300", green: "bg-[var(--cmp-color-success)]" };
 
 export default async function UnitAiPage() {
   const supabase = await createClient();
@@ -44,15 +44,15 @@ export default async function UnitAiPage() {
       />
 
       {!d.provisioned ? (
-        <div className="bg-amber-50 border border-amber-200 rounded-xl p-6 text-sm text-amber-800">Unit intelligence isn&apos;t available yet — once competency and operational data exists, the hub consolidates it here automatically. The copilot above also relies on this data.</div>
+        <div className="bg-[var(--cmp-surface-warning)] border border-[var(--cmp-color-warning)] rounded-xl p-6 text-sm text-amber-800">Unit intelligence isn&apos;t available yet — once competency and operational data exists, the hub consolidates it here automatically. The copilot above also relies on this data.</div>
       ) : (
         <>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
             {[
               { label: "AI health", value: d.aiHealth != null ? `${d.aiHealth}` : "—", tone: "text-gray-900", sub: "composite" },
               { label: "Confidence", value: d.confidence != null ? `${d.confidence}%` : "—", tone: "text-violet-600", sub: "signal-backed" },
-              { label: "Critical signals", value: d.criticalCount, tone: d.criticalCount ? "text-rose-600" : "text-gray-900", sub: "act now" },
-              { label: "Warnings", value: d.warnCount, tone: d.warnCount ? "text-amber-600" : "text-gray-900", sub: "watch" },
+              { label: "Critical signals", value: d.criticalCount, tone: d.criticalCount ? "text-[var(--cmp-text-error)]" : "text-gray-900", sub: "act now" },
+              { label: "Warnings", value: d.warnCount, tone: d.warnCount ? "text-[var(--cmp-text-warning)]" : "text-gray-900", sub: "watch" },
             ].map(k => (
               <div key={k.label} className={card}><div className={`text-2xl font-bold tabular-nums ${k.tone}`}>{k.value}</div><div className="text-xs text-gray-500 mt-1 font-medium">{k.label}</div><div className="text-[10px] text-gray-400">{k.sub}</div></div>
             ))}

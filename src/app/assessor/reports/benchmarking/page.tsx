@@ -75,7 +75,7 @@ export default async function BenchmarkingPage() {
                     <td className="py-1.5 text-center text-gray-400">{r.passPrev != null ? `${r.passPrev}%` : "—"}</td>
                     <td className="py-1.5 text-center text-[10px] font-bold">
                       {r.pass != null && r.passPrev != null
-                        ? <span className={r.pass >= r.passPrev ? "text-green-600" : "text-red-500"}>{r.pass >= r.passPrev ? "▲" : "▼"} {Math.abs(r.pass - r.passPrev)}</span>
+                        ? <span className={r.pass >= r.passPrev ? "text-[var(--cmp-text-success)]" : "text-red-500"}>{r.pass >= r.passPrev ? "▲" : "▼"} {Math.abs(r.pass - r.passPrev)}</span>
                         : <span className="text-gray-300">—</span>}
                     </td>
                   </tr>

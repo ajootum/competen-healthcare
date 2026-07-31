@@ -46,7 +46,7 @@ export default function ToolGrid({ modules }: { modules: HubModule[] }) {
               <span className="text-[11px] text-gray-400">{m.live ? <span className="font-semibold text-gray-600">{(m.count ?? 0).toLocaleString()}</span> : "—"} {m.countLabel}</span>
               <Link href={`/educator/tools/professional/${m.slug}`} className="text-[12px] font-semibold text-violet-600 hover:text-violet-700 flex items-center gap-1">Open Tool →</Link>
             </div>
-            {!m.live && <span className="mt-2 text-[9px] font-bold uppercase tracking-wider text-amber-600 bg-amber-50 rounded px-1.5 py-0.5 self-start">scaffold · store soon</span>}
+            {!m.live && <span className="mt-2 text-[9px] font-bold uppercase tracking-wider text-[var(--cmp-text-warning)] bg-[var(--cmp-surface-warning)] rounded px-1.5 py-0.5 self-start">scaffold · store soon</span>}
           </div>
         ))}
       </div>

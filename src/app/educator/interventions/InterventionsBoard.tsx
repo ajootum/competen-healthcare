@@ -14,11 +14,11 @@ export type InterventionRow = {
 export type Learner = { id: string; name: string; dept: string };
 
 const STATUS_CLS: Record<string, string> = {
-  planned: "bg-gray-100 text-gray-600", in_progress: "bg-blue-100 text-blue-700",
-  review: "bg-amber-100 text-amber-700", completed: "bg-green-100 text-green-700",
+  planned: "bg-gray-100 text-gray-600", in_progress: "bg-[var(--cmp-surface-information)] text-blue-700",
+  review: "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]", completed: "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]",
 };
 const OUTCOME_CLS: Record<string, string> = {
-  successful: "bg-green-100 text-green-700", partially_successful: "bg-amber-100 text-amber-700", unsuccessful: "bg-red-100 text-red-600",
+  successful: "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]", partially_successful: "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]", unsuccessful: "bg-[var(--cmp-surface-critical)] text-[var(--cmp-text-critical)]",
 };
 const NEXT: Record<string, { to: string; label: string }> = {
   planned: { to: "in_progress", label: "Start" },
@@ -90,7 +90,7 @@ export default function InterventionsBoard({ items, learners, startOpen }: {
         </button>
       </div>
 
-      {error && <p className="text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2 mb-3">{error}</p>}
+      {error && <p className="text-xs text-[var(--cmp-text-critical)] bg-[var(--cmp-surface-critical)] border border-[var(--cmp-color-critical)] rounded-lg px-3 py-2 mb-3">{error}</p>}
 
       {showNew && (
         <div className="bg-white border border-purple-200 rounded-xl p-4 mb-4">
@@ -128,7 +128,7 @@ export default function InterventionsBoard({ items, learners, startOpen }: {
               {i.competency && <span className="text-[10px] text-gray-400">{i.competency}</span>}
               <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded uppercase ${STATUS_CLS[i.status] ?? ""}`}>{i.status.replace("_", " ")}</span>
               {i.outcome && <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded uppercase ${OUTCOME_CLS[i.outcome]}`}>{i.outcome.replace("_", " ")}</span>}
-              {i.reviewDate && i.status !== "completed" && <span className="text-[10px] text-amber-600">review {i.reviewDate}</span>}
+              {i.reviewDate && i.status !== "completed" && <span className="text-[10px] text-[var(--cmp-text-warning)]">review {i.reviewDate}</span>}
               <span className="flex-1" />
               {NEXT[i.status] && (
                 <button onClick={() => i.status === "review" ? setCompleteFor(completeFor === i.id ? null : i.id) : advance(i, NEXT[i.status].to)}
@@ -152,7 +152,7 @@ export default function InterventionsBoard({ items, learners, startOpen }: {
                 <input value={outcomeNote} onChange={e => setOutcomeNote(e.target.value)} placeholder="Outcome note…"
                   className="flex-1 min-w-[160px] text-[11px] border border-gray-200 rounded-lg px-2.5 py-1.5 text-gray-600 focus:outline-none focus:border-purple-400" />
                 <button onClick={() => advance(i, "completed")} disabled={busy === i.id}
-                  className="text-[10px] font-bold text-white bg-green-600 rounded-lg px-3 py-1.5 hover:bg-green-700 disabled:opacity-40">Record outcome</button>
+                  className="text-[10px] font-bold text-white bg-[var(--cmp-color-success)] rounded-lg px-3 py-1.5 hover:bg-green-700 disabled:opacity-40">Record outcome</button>
               </div>
             )}
           </div>

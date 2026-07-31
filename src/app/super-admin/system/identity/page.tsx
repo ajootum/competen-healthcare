@@ -16,7 +16,7 @@ export const dynamic = "force-dynamic";
 const card = "bg-white rounded-xl border border-gray-200";
 const dash = (n: number | null | undefined) => (n == null ? "—" : n.toLocaleString());
 const relTime = (iso?: string | null) => { if (!iso) return "never"; const s = Math.floor((Date.now() - new Date(iso).getTime()) / 1000); if (s < 60) return "just now"; if (s < 3600) return `${Math.floor(s / 60)}m ago`; if (s < 86400) return `${Math.floor(s / 3600)}h ago`; return `${Math.floor(s / 86400)}d ago`; };
-const ROLE_BADGE: Record<string, string> = { super_admin: "bg-rose-50 text-rose-700", hospital_admin: "bg-violet-50 text-violet-700", educator: "bg-blue-50 text-blue-700", assessor: "bg-teal-50 text-teal-700", nurse: "bg-green-50 text-green-700" };
+const ROLE_BADGE: Record<string, string> = { super_admin: "bg-[var(--cmp-surface-error)] text-[var(--cmp-text-error)]", hospital_admin: "bg-violet-50 text-violet-700", educator: "bg-[var(--cmp-surface-information)] text-blue-700", assessor: "bg-teal-50 text-teal-700", nurse: "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]" };
 
 export default async function IdentityAccessManagement() {
   const supabase = await createClient();
@@ -31,11 +31,11 @@ export default async function IdentityAccessManagement() {
   const k = d.kpis;
 
   const kpiCards = [
-    { label: "Total Identities", value: dash(k.total), icon: "👥", iconBg: "bg-blue-50" },
-    { label: "Active (24h)", value: dash(k.active24h), icon: "🟢", iconBg: "bg-green-50", tone: "text-green-600" },
+    { label: "Total Identities", value: dash(k.total), icon: "👥", iconBg: "bg-[var(--cmp-surface-information)]" },
+    { label: "Active (24h)", value: dash(k.active24h), icon: "🟢", iconBg: "bg-[var(--cmp-surface-success)]", tone: "text-[var(--cmp-text-success)]" },
     { label: "Active (7d)", value: dash(k.active7d), icon: "📅", iconBg: "bg-teal-50" },
-    { label: "Pending Invites", value: dash(k.pendingInvites), icon: "✉️", iconBg: "bg-amber-50", tone: (k.pendingInvites ?? 0) > 0 ? "text-amber-600" : undefined },
-    { label: "Suspended", value: dash(k.suspended), icon: "⛔", iconBg: "bg-rose-50", tone: (k.suspended ?? 0) > 0 ? "text-rose-600" : undefined },
+    { label: "Pending Invites", value: dash(k.pendingInvites), icon: "✉️", iconBg: "bg-[var(--cmp-surface-warning)]", tone: (k.pendingInvites ?? 0) > 0 ? "text-[var(--cmp-text-warning)]" : undefined },
+    { label: "Suspended", value: dash(k.suspended), icon: "⛔", iconBg: "bg-[var(--cmp-surface-error)]", tone: (k.suspended ?? 0) > 0 ? "text-[var(--cmp-text-error)]" : undefined },
     { label: "Active SSO Configs", value: dash(k.ssoActive), icon: "🌐", iconBg: "bg-violet-50" },
   ];
 
@@ -50,7 +50,7 @@ export default async function IdentityAccessManagement() {
       </div>
 
       {!d.authReady && (
-        <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+        <div className="rounded-xl border border-[var(--cmp-color-warning)] bg-[var(--cmp-surface-warning)] px-4 py-3 text-sm text-amber-800">
           <span className="font-semibold">Auth directory unavailable.</span> Identity KPIs and the directory need the Supabase Auth admin API — check the service-role key.
         </div>
       )}
@@ -90,7 +90,7 @@ export default async function IdentityAccessManagement() {
                       <td className="px-3 py-2"><p className="text-gray-800 leading-tight">{u.name ?? "—"}</p><p className="text-[10px] text-gray-400">{u.email}</p></td>
                       <td className="px-3 py-2"><span className="flex flex-wrap gap-1">{u.roles.map((r: string) => <span key={r} className={`text-[9px] font-medium px-1.5 py-0.5 rounded ${ROLE_BADGE[r] ?? "bg-gray-100 text-gray-600"}`}>{r.replace(/_/g, " ")}</span>)}</span></td>
                       <td className="px-3 py-2 text-right text-[11px] text-gray-500 tabular-nums">{relTime(u.lastSignIn)}</td>
-                      <td className="px-3 py-2 text-right"><span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded ${u.banned ? "bg-rose-50 text-rose-700" : u.neverSignedIn ? "bg-amber-50 text-amber-700" : "bg-green-50 text-green-700"}`}>{u.banned ? "suspended" : u.neverSignedIn ? "invited" : "active"}</span></td>
+                      <td className="px-3 py-2 text-right"><span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded ${u.banned ? "bg-[var(--cmp-surface-error)] text-[var(--cmp-text-error)]" : u.neverSignedIn ? "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]" : "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]"}`}>{u.banned ? "suspended" : u.neverSignedIn ? "invited" : "active"}</span></td>
                     </tr>
                   ))}
                 </tbody>
@@ -145,7 +145,7 @@ export default async function IdentityAccessManagement() {
             ].map(([l, v, on]: any) => (
               <div key={l} className="flex items-center justify-between rounded-lg border border-gray-100 px-3 py-2">
                 <span className="text-xs text-gray-700">{l}</span>
-                <span className={`text-[10px] font-medium ${on ? "text-green-600" : "text-gray-400"}`}>{v}</span>
+                <span className={`text-[10px] font-medium ${on ? "text-[var(--cmp-text-success)]" : "text-gray-400"}`}>{v}</span>
               </div>
             ))}
           </div>
@@ -163,7 +163,7 @@ export default async function IdentityAccessManagement() {
                 <div key={i} className="flex items-center gap-2.5 rounded-lg border border-gray-100 p-2.5">
                   <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-violet-50 text-violet-700 uppercase shrink-0">{c.protocol}</span>
                   <div className="min-w-0 flex-1"><p className="text-xs text-gray-800 truncate">{c.tenant}</p><p className="text-[9px] text-gray-400">{c.provider}{c.mfaRequired ? " · MFA required (config)" : ""}{c.scim ? " · SCIM" : ""}</p></div>
-                  <span className={`text-[9px] font-semibold px-1.5 py-0.5 rounded shrink-0 ${c.active ? "bg-green-50 text-green-700" : "bg-gray-100 text-gray-400"}`}>{c.active ? "active" : "saved"}</span>
+                  <span className={`text-[9px] font-semibold px-1.5 py-0.5 rounded shrink-0 ${c.active ? "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]" : "bg-gray-100 text-gray-400"}`}>{c.active ? "active" : "saved"}</span>
                 </div>
               ))}
             </div>

@@ -45,7 +45,7 @@ export default async function IntegrationMapper() {
     </>
   );
 
-  if (!d.provisioned) return <div className="space-y-5 max-w-6xl">{header}<div className="bg-amber-50 border border-amber-200 rounded-xl p-6"><p className="font-semibold text-amber-900">⚙️ Registry not provisioned</p><p className="text-sm text-amber-800 mt-1">Binding coverage is computed from the Configuration Registry. Apply migration 092 and run <Link href="/super-admin/platform-ops/registry" className="underline">Sync from catalogue</Link>.</p></div></div>;
+  if (!d.provisioned) return <div className="space-y-5 max-w-6xl">{header}<div className="bg-[var(--cmp-surface-warning)] border border-[var(--cmp-color-warning)] rounded-xl p-6"><p className="font-semibold text-amber-900">⚙️ Registry not provisioned</p><p className="text-sm text-amber-800 mt-1">Binding coverage is computed from the Configuration Registry. Apply migration 092 and run <Link href="/super-admin/platform-ops/registry" className="underline">Sync from catalogue</Link>.</p></div></div>;
 
   const s = d.stats;
   return (
@@ -55,8 +55,8 @@ export default async function IntegrationMapper() {
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         <Stat label="Registered Data Sources" value={s.sources} sub="referenced by objects" />
         <Stat label="Connector Types" value={s.connectorTypes} sub="supported (§5)" />
-        <Stat label="Binding Coverage" value={`${s.coverage}%`} tone={s.coverage >= 80 ? "text-emerald-600" : s.coverage >= 40 ? "text-amber-600" : "text-rose-600"} sub={`${s.bound}/${s.configurable} configurable objects bound`} />
-        <Stat label="Unbound Objects" value={s.unbound} tone={s.unbound ? "text-amber-600" : "text-emerald-600"} sub={s.unbound ? "need a data source" : "all bound"} />
+        <Stat label="Binding Coverage" value={`${s.coverage}%`} tone={s.coverage >= 80 ? "text-[var(--cmp-text-success)]" : s.coverage >= 40 ? "text-[var(--cmp-text-warning)]" : "text-[var(--cmp-text-error)]"} sub={`${s.bound}/${s.configurable} configurable objects bound`} />
+        <Stat label="Unbound Objects" value={s.unbound} tone={s.unbound ? "text-[var(--cmp-text-warning)]" : "text-[var(--cmp-text-success)]"} sub={s.unbound ? "need a data source" : "all bound"} />
       </div>
 
       {/* Connector catalogue */}
@@ -86,10 +86,10 @@ export default async function IntegrationMapper() {
           <p className="text-[11px] text-gray-400 mb-3">Configurable objects with no data source — bind these so the runtime can render live data.</p>
           {d.gap.length ? (
             <>
-              <div className="flex flex-wrap gap-2 mb-3">{d.gap.map((g: any) => <span key={g.type} className="text-[11px] bg-amber-50 text-amber-700 border border-amber-100 rounded-full px-2 py-0.5">{TYPE_LABEL[g.type] ?? g.type}: {g.n}</span>)}</div>
+              <div className="flex flex-wrap gap-2 mb-3">{d.gap.map((g: any) => <span key={g.type} className="text-[11px] bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)] border border-[var(--cmp-color-warning)] rounded-full px-2 py-0.5">{TYPE_LABEL[g.type] ?? g.type}: {g.n}</span>)}</div>
               <div className="space-y-1 max-h-56 overflow-y-auto">{d.unboundList.map((o: any) => <div key={o.key} className="flex items-center gap-2 text-[11px]"><span className="text-[9px] font-semibold rounded px-1.5 py-0.5 bg-gray-100 text-gray-500 shrink-0">{TYPE_LABEL[o.type] ?? o.type}</span><span className="text-gray-600 truncate">{o.label}</span></div>)}</div>
             </>
-          ) : <p className="text-xs text-emerald-600 py-6 text-center">✓ Every configurable object is bound to a data source.</p>}
+          ) : <p className="text-xs text-[var(--cmp-text-success)] py-6 text-center">✓ Every configurable object is bound to a data source.</p>}
         </div>
       </div>
 

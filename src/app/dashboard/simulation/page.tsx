@@ -50,7 +50,7 @@ export default async function SimulationLabPage() {
       <div className="bg-[#0a2e38] rounded-2xl p-6 mb-5 text-white">
         <div className="flex flex-wrap items-center gap-6">
           <div className="flex-1 min-w-[260px]">
-            <span className="text-[9px] font-bold bg-amber-400 text-amber-950 px-2 py-0.5 rounded">AI-POWERED</span>
+            <span className="text-[9px] font-bold bg-[var(--cmp-color-warning)] text-amber-950 px-2 py-0.5 rounded">AI-POWERED</span>
             <h2 className="text-lg font-bold mt-2">Interactive Clinical Simulations</h2>
             <p className="text-[12px] text-teal-100/70 mt-1 leading-relaxed max-w-lg">
               Text-based scenarios run live by the AI Clinical Coach — it presents the patient, reacts

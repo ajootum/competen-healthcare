@@ -47,7 +47,7 @@ export default async function KnowledgeTestPage({ params }: { params: Promise<{ 
         <div className="bg-white rounded-xl border border-gray-100 px-5 py-3 mb-5 flex flex-wrap gap-3">
           <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest self-center">Previous attempts</span>
           {(attempts ?? []).map((a, i) => (
-            <span key={i} className={`text-[11px] font-bold px-2 py-0.5 rounded ${a.passed ? "bg-green-50 text-green-700" : "bg-red-50 text-red-600"}`}>
+            <span key={i} className={`text-[11px] font-bold px-2 py-0.5 rounded ${a.passed ? "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]" : "bg-[var(--cmp-surface-critical)] text-[var(--cmp-text-critical)]"}`}>
               {a.score}% {a.passed ? "✓" : "✗"} · {new Date(a.completed_at).toLocaleDateString()}
             </span>
           ))}

@@ -22,11 +22,11 @@ export default async function LifecyclePage() {
 
       <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
         <Kpi label="Total competencies" value={k.defined} sub={`${k.active} active`} />
-        <Kpi label="In development" value={k.inDevelopment} sub="draft" tone="text-blue-600" />
+        <Kpi label="In development" value={k.inDevelopment} sub="draft" tone="text-[var(--cmp-text-information)]" />
         <Kpi label="Assigned" value={k.assigned} sub="to people/groups" />
-        <Kpi label="In progress" value={k.inProgress} sub="assessment" tone="text-amber-600" />
-        <Kpi label="Competent" value={k.competent} sub="achieved" tone="text-emerald-600" />
-        <Kpi label="Expiring soon" value={k.expiringSoon} sub="≤ 30 days" tone={k.expiringSoon ? "text-rose-600" : undefined} />
+        <Kpi label="In progress" value={k.inProgress} sub="assessment" tone="text-[var(--cmp-text-warning)]" />
+        <Kpi label="Competent" value={k.competent} sub="achieved" tone="text-[var(--cmp-text-success)]" />
+        <Kpi label="Expiring soon" value={k.expiringSoon} sub="≤ 30 days" tone={k.expiringSoon ? "text-[var(--cmp-text-error)]" : undefined} />
       </div>
 
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">

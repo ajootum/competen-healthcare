@@ -63,7 +63,7 @@ export default async function PlanningStudio() {
     </div>
   );
 
-  if (!est.ready) return <div className="space-y-4">{header}<div className="bg-amber-50 border border-amber-200 rounded-xl p-6"><p className="font-semibold text-amber-900">⚙️ No operational data</p><p className="text-sm text-amber-800 mt-1">The studio needs bed capacity + staffing standards to compute establishment.</p></div></div>;
+  if (!est.ready) return <div className="space-y-4">{header}<div className="bg-[var(--cmp-surface-warning)] border border-[var(--cmp-color-warning)] rounded-xl p-6"><p className="font-semibold text-amber-900">⚙️ No operational data</p><p className="text-sm text-amber-800 mt-1">The studio needs bed capacity + staffing standards to compute establishment.</p></div></div>;
 
   const k = est.kpis;
   const configured = est.configured;
@@ -88,9 +88,9 @@ export default async function PlanningStudio() {
         <Kpi label="Units configured" value={units} sub="Active units" icon="🏢" />
         <Kpi label="Approved establishment" value={k.totalRequired} sub="FTE" icon="👥" />
         <Kpi label="Current workforce" value={k.totalAvailable} sub="FTE (rostered)" icon="🧑‍⚕️" />
-        <Kpi label="Vacancies" value={k.vacancyFte > 0 ? k.vacancyFte : 0} sub={k.totalRequired ? `${Math.round((Math.max(0, k.vacancyFte) / k.totalRequired) * 100)}%` : ""} icon="🪑" tone={k.vacancyFte > 0 ? "text-amber-600" : "text-emerald-600"} />
-        <Kpi label="Coverage today" value={k.coverageCompliance != null ? `${k.coverageCompliance}%` : "—"} sub="vs demand" icon="🛡️" tone={k.coverageCompliance != null && k.coverageCompliance >= 90 ? "text-emerald-600" : undefined} />
-        <Kpi label="Config status" value={configured ? "Valid" : "Defaults"} sub={configured ? `v${est.configVersion} published` : "Using platform defaults"} icon="✅" tone={configured ? "text-emerald-600" : "text-amber-600"} />
+        <Kpi label="Vacancies" value={k.vacancyFte > 0 ? k.vacancyFte : 0} sub={k.totalRequired ? `${Math.round((Math.max(0, k.vacancyFte) / k.totalRequired) * 100)}%` : ""} icon="🪑" tone={k.vacancyFte > 0 ? "text-[var(--cmp-text-warning)]" : "text-[var(--cmp-text-success)]"} />
+        <Kpi label="Coverage today" value={k.coverageCompliance != null ? `${k.coverageCompliance}%` : "—"} sub="vs demand" icon="🛡️" tone={k.coverageCompliance != null && k.coverageCompliance >= 90 ? "text-[var(--cmp-text-success)]" : undefined} />
+        <Kpi label="Config status" value={configured ? "Valid" : "Defaults"} sub={configured ? `v${est.configVersion} published` : "Using platform defaults"} icon="✅" tone={configured ? "text-[var(--cmp-text-success)]" : "text-[var(--cmp-text-warning)]"} />
       </div>
 
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
@@ -99,7 +99,7 @@ export default async function PlanningStudio() {
           <h3 className="text-sm font-bold text-gray-900 mb-3">Configuration readiness</h3>
           <div className="flex items-center gap-4">
             <div className="relative w-24 h-24 shrink-0"><div className="w-24 h-24 rounded-full" style={{ background: `conic-gradient(#10b981 ${readiness}%, #f1f5f9 0)` }} /><div className="absolute inset-[20%] rounded-full bg-white flex flex-col items-center justify-center"><span className="text-lg font-bold text-gray-900">{readiness}%</span><span className="text-[8px] text-gray-400">Ready</span></div></div>
-            <div className="text-[11px] space-y-0.5 flex-1">{checks.map(c => (<div key={c.label} className="flex items-center justify-between"><span className="text-gray-600 flex items-center gap-1"><span className={c.ok ? "text-emerald-600" : "text-gray-300"}>{c.ok ? "✓" : "○"}</span>{c.label}</span><span className={c.ok ? "text-emerald-600" : "text-gray-400"}>{c.ok ? "Complete" : "Pending"}</span></div>))}</div>
+            <div className="text-[11px] space-y-0.5 flex-1">{checks.map(c => (<div key={c.label} className="flex items-center justify-between"><span className="text-gray-600 flex items-center gap-1"><span className={c.ok ? "text-[var(--cmp-text-success)]" : "text-gray-300"}>{c.ok ? "✓" : "○"}</span>{c.label}</span><span className={c.ok ? "text-[var(--cmp-text-success)]" : "text-gray-400"}>{c.ok ? "Complete" : "Pending"}</span></div>))}</div>
           </div>
         </div>
 
@@ -107,11 +107,11 @@ export default async function PlanningStudio() {
         <div className={`${card} p-5 xl:col-span-2`}>
           <h3 className="text-sm font-bold text-gray-900 mb-3">Data flow &amp; engine integration</h3>
           <div className="space-y-1.5 text-xs">
-            <div className="rounded-lg bg-blue-50 border border-blue-100 p-2 text-center font-semibold text-blue-800">WPS-001 Workforce Planning Studio <span className="font-normal text-blue-500">(single source of truth)</span></div>
+            <div className="rounded-lg bg-[var(--cmp-surface-information)] border border-[var(--cmp-color-information)] p-2 text-center font-semibold text-blue-800">WPS-001 Workforce Planning Studio <span className="font-normal text-blue-500">(single source of truth)</span></div>
             <p className="text-center text-gray-300">↓</p>
-            <Link href="/unit-manager/workforce-management/establishment" className="block rounded-lg bg-emerald-50 border border-emerald-100 p-2 text-center font-semibold text-emerald-800 hover:bg-emerald-100">UMW-WFP-001 Unit Workforce Planning</Link>
+            <Link href="/unit-manager/workforce-management/establishment" className="block rounded-lg bg-[var(--cmp-surface-success)] border border-[var(--cmp-color-success)] p-2 text-center font-semibold text-emerald-800 hover:bg-[var(--cmp-surface-success)]">UMW-WFP-001 Unit Workforce Planning</Link>
             <p className="text-center text-gray-300">↓</p>
-            <Link href="/unit-manager/scheduling-engine/demand-optimiser" className="block rounded-lg bg-sky-50 border border-sky-100 p-2 text-center font-semibold text-sky-800 hover:bg-sky-100">WSE-001A Demand Optimiser</Link>
+            <Link href="/unit-manager/scheduling-engine/demand-optimiser" className="block rounded-lg bg-[var(--cmp-surface-information)] border border-[var(--cmp-color-information)] p-2 text-center font-semibold text-sky-800 hover:bg-[var(--cmp-surface-information)]">WSE-001A Demand Optimiser</Link>
             <p className="text-center text-gray-300">↓</p>
             <div className="rounded-lg bg-violet-50 border border-violet-100 p-2"><p className="text-center font-semibold text-violet-800 mb-1">WSE-001B–J AI Scheduling Engines</p><div className="flex flex-wrap justify-center gap-1">{[["Scheduling", "/unit-manager/scheduling-engine"], ["Constraint", "/unit-manager/scheduling-engine/constraints"], ["Competency", "/unit-manager/scheduling-engine/competency-matching"], ["Fairness", "/unit-manager/scheduling-engine/fairness"], ["Cost", "/unit-manager/scheduling-engine/cost"], ["Scenario", "/unit-manager/scheduling-engine/scenarios"], ["What-if", "/unit-manager/scheduling-engine/what-if"], ["Recommend", "/unit-manager/scheduling-engine/recommendations"], ["Explain", "/unit-manager/scheduling-engine/explainability"]].map(([l, h]) => <Link key={l} href={h} className="text-[10px] px-1.5 py-0.5 rounded bg-white border border-violet-100 text-violet-700 hover:border-violet-300">{l}</Link>)}</div></div>
             <p className="text-center text-gray-300">↓</p>
@@ -130,7 +130,7 @@ export default async function PlanningStudio() {
         {/* Config modules */}
         <div className={`${card} p-5 xl:col-span-2`}>
           <h3 className="text-sm font-bold text-gray-900 mb-3">Configuration modules</h3>
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">{MODULES.map(m => { const El: any = m.href ? Link : "div"; return (<El key={m.n} {...(m.href ? { href: m.href } : {})} className={`rounded-lg border border-gray-100 p-2.5 ${m.href ? "hover:border-blue-300 hover:bg-blue-50/30" : "opacity-60"}`}><div className="flex items-center gap-1.5 mb-0.5"><span>{m.icon}</span><span className="text-[10px] font-bold text-gray-400">{m.n}</span></div><p className="text-[11px] font-semibold text-gray-800 leading-tight">{m.label}</p><p className="text-[9px] text-gray-400 leading-tight mt-0.5">{m.desc}</p>{!m.href && <span className="text-[8px] text-amber-500">soon</span>}</El>); })}</div>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">{MODULES.map(m => { const El: any = m.href ? Link : "div"; return (<El key={m.n} {...(m.href ? { href: m.href } : {})} className={`rounded-lg border border-gray-100 p-2.5 ${m.href ? "hover:border-[var(--cmp-color-information)] hover:bg-[var(--cmp-surface-information)]/30" : "opacity-60"}`}><div className="flex items-center gap-1.5 mb-0.5"><span>{m.icon}</span><span className="text-[10px] font-bold text-gray-400">{m.n}</span></div><p className="text-[11px] font-semibold text-gray-800 leading-tight">{m.label}</p><p className="text-[9px] text-gray-400 leading-tight mt-0.5">{m.desc}</p>{!m.href && <span className="text-[8px] text-amber-500">soon</span>}</El>); })}</div>
         </div>
 
         {/* Recent changes */}

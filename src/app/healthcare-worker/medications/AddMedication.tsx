@@ -9,7 +9,7 @@ import { MED_ROUTES } from "@/lib/hww/medications";
 // ordered so the shift can coordinate it.
 
 const input = "w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/40";
-const btn = "px-3.5 py-2 rounded-lg bg-emerald-600 text-white text-sm font-medium hover:bg-emerald-700 disabled:opacity-50";
+const btn = "px-3.5 py-2 rounded-lg bg-[var(--cmp-color-success)] text-white text-sm font-medium hover:bg-emerald-700 disabled:opacity-50";
 
 function nextHourLocal(): string {
   const d = new Date();
@@ -58,12 +58,12 @@ export default function AddMedication({ patients }: { patients: { id: string; la
   }
 
   return (
-    <div className="bg-white rounded-xl border border-emerald-200 p-5 space-y-3">
+    <div className="bg-white rounded-xl border border-[var(--cmp-color-success)] p-5 space-y-3">
       <div className="flex items-center justify-between">
         <h3 className="font-semibold text-gray-900">💊 Add schedule entry</h3>
         <button className="text-xs text-gray-400 hover:text-gray-600" onClick={() => setOpen(false)}>Close</button>
       </div>
-      {err && <p className="text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">{err}</p>}
+      {err && <p className="text-sm text-[var(--cmp-text-warning)] bg-[var(--cmp-surface-warning)] border border-[var(--cmp-color-warning)] rounded-lg px-3 py-2">{err}</p>}
       <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-2">
         <label className="text-sm"><span className="text-gray-600 text-xs">Patient</span>
           <select className={input} value={patientId} onChange={e => setPatientId(e.target.value)}>

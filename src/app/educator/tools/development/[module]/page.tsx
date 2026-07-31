@@ -14,9 +14,9 @@ const fmtDate = (iso: string | null) => iso ? new Date(iso).toLocaleDateString(u
 const daysUntil = (iso: string | null) => iso ? Math.round((new Date(iso).getTime() - Date.now()) / 864e5) : null;
 
 const STATUS_CLS: Record<string, string> = {
-  valid: "bg-emerald-100 text-emerald-700", active: "bg-emerald-100 text-emerald-700", verified: "bg-emerald-100 text-emerald-700",
-  "expiring soon": "bg-amber-100 text-amber-700", "renewal due": "bg-amber-100 text-amber-700", "under verification": "bg-blue-100 text-blue-700",
-  expired: "bg-rose-100 text-rose-700", suspended: "bg-rose-100 text-rose-700", revoked: "bg-rose-100 text-rose-700",
+  valid: "bg-[var(--cmp-surface-success)] text-emerald-700", active: "bg-[var(--cmp-surface-success)] text-emerald-700", verified: "bg-[var(--cmp-surface-success)] text-emerald-700",
+  "expiring soon": "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]", "renewal due": "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]", "under verification": "bg-[var(--cmp-surface-information)] text-blue-700",
+  expired: "bg-[var(--cmp-surface-error)] text-[var(--cmp-text-error)]", suspended: "bg-[var(--cmp-surface-error)] text-[var(--cmp-text-error)]", revoked: "bg-[var(--cmp-surface-error)] text-[var(--cmp-text-error)]",
 };
 const cls = (s: string) => STATUS_CLS[s.toLowerCase()] ?? "bg-gray-100 text-gray-600";
 
@@ -44,7 +44,7 @@ export default async function DevModulePage({ params }: { params: Promise<{ modu
           <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight text-gray-900">{m.title}</h1>
           <p className="text-gray-500 text-sm">{m.blurb}</p>
         </div>
-        <span className={`ml-auto self-center text-[10px] font-bold uppercase tracking-wider rounded-lg px-2.5 py-1 whitespace-nowrap ${m.live ? "text-emerald-600 bg-emerald-50 border border-emerald-100" : "text-amber-600 bg-amber-50 border border-amber-100"}`}>{m.live ? "Live data" : "Scaffold · store soon"}</span>
+        <span className={`ml-auto self-center text-[10px] font-bold uppercase tracking-wider rounded-lg px-2.5 py-1 whitespace-nowrap ${m.live ? "text-[var(--cmp-text-success)] bg-[var(--cmp-surface-success)] border border-[var(--cmp-color-success)]" : "text-[var(--cmp-text-warning)] bg-[var(--cmp-surface-warning)] border border-[var(--cmp-color-warning)]"}`}>{m.live ? "Live data" : "Scaffold · store soon"}</span>
       </div>
 
       <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_320px] gap-5">
@@ -69,7 +69,7 @@ export default async function DevModulePage({ params }: { params: Promise<{ modu
               {cpd.length === 0 ? <p className="text-[12px] text-gray-400">No CPD activities logged yet.</p> : (
                 <div className="flex flex-col divide-y divide-gray-100">
                   {cpd.map(c => (
-                    <div key={c.id} className="flex items-center gap-3 py-2.5"><span className="text-base shrink-0">⏱️</span><span className="flex-1 min-w-0"><span className="block text-[13px] font-medium text-gray-800 truncate">{c.title}</span><span className="text-[10px] text-gray-400">{c.type} · {fmtDate(c.date)}</span></span><span className="text-[12px] font-semibold text-gray-700">{c.hours}h</span>{c.verified && <span className="text-[9px] font-bold uppercase text-emerald-600 bg-emerald-50 rounded px-1.5 py-0.5">verified</span>}</div>
+                    <div key={c.id} className="flex items-center gap-3 py-2.5"><span className="text-base shrink-0">⏱️</span><span className="flex-1 min-w-0"><span className="block text-[13px] font-medium text-gray-800 truncate">{c.title}</span><span className="text-[10px] text-gray-400">{c.type} · {fmtDate(c.date)}</span></span><span className="text-[12px] font-semibold text-gray-700">{c.hours}h</span>{c.verified && <span className="text-[9px] font-bold uppercase text-[var(--cmp-text-success)] bg-[var(--cmp-surface-success)] rounded px-1.5 py-0.5">verified</span>}</div>
                   ))}
                 </div>
               )}
@@ -83,7 +83,7 @@ export default async function DevModulePage({ params }: { params: Promise<{ modu
               {credentials.length === 0 ? <p className="text-[12px] text-gray-400">No credentials on record yet.</p> : (
                 <div className="flex flex-col divide-y divide-gray-100">
                   {credentials.map(c => { const dl = daysUntil(c.expiry); return (
-                    <div key={c.id} className="flex items-center gap-3 py-2.5"><span className="text-base shrink-0">🏅</span><span className="flex-1 min-w-0"><span className="block text-[13px] font-medium text-gray-800 truncate">{c.title}</span><span className="text-[10px] text-gray-400">{c.issuer} · {c.kind}{c.expiry ? ` · exp ${fmtDate(c.expiry)}` : ""}</span></span>{dl !== null && dl >= 0 && dl <= 90 && <span className="text-[9px] font-bold uppercase text-amber-600 bg-amber-50 rounded px-1.5 py-0.5">{dl}d</span>}<span className={`text-[9px] font-bold uppercase px-1.5 py-0.5 rounded ${cls(c.status)}`}>{c.status}</span></div>
+                    <div key={c.id} className="flex items-center gap-3 py-2.5"><span className="text-base shrink-0">🏅</span><span className="flex-1 min-w-0"><span className="block text-[13px] font-medium text-gray-800 truncate">{c.title}</span><span className="text-[10px] text-gray-400">{c.issuer} · {c.kind}{c.expiry ? ` · exp ${fmtDate(c.expiry)}` : ""}</span></span>{dl !== null && dl >= 0 && dl <= 90 && <span className="text-[9px] font-bold uppercase text-[var(--cmp-text-warning)] bg-[var(--cmp-surface-warning)] rounded px-1.5 py-0.5">{dl}d</span>}<span className={`text-[9px] font-bold uppercase px-1.5 py-0.5 rounded ${cls(c.status)}`}>{c.status}</span></div>
                   ); })}
                 </div>
               )}
@@ -99,7 +99,7 @@ export default async function DevModulePage({ params }: { params: Promise<{ modu
                   {courses.map(c => (
                     <div key={c.id}>
                       <div className="flex items-center justify-between text-[12px] mb-1"><span className="text-gray-800 font-medium truncate">{c.title}</span><span className="text-gray-400">{c.completed ? "Completed" : `${c.progress}%`}</span></div>
-                      <div className="w-full bg-gray-100 rounded-full h-1.5"><div className={`h-full rounded-full ${c.completed ? "bg-emerald-500" : "bg-violet-500"}`} style={{ width: `${c.completed ? 100 : c.progress}%` }} /></div>
+                      <div className="w-full bg-gray-100 rounded-full h-1.5"><div className={`h-full rounded-full ${c.completed ? "bg-[var(--cmp-color-success)]" : "bg-violet-500"}`} style={{ width: `${c.completed ? 100 : c.progress}%` }} /></div>
                     </div>
                   ))}
                 </div>
@@ -114,7 +114,7 @@ export default async function DevModulePage({ params }: { params: Promise<{ modu
               {domainScores.length === 0 ? <p className="text-[12px] text-gray-400">No competency assessment recorded for your account yet.</p> : (
                 <div className="flex flex-col divide-y divide-gray-100">
                   {domainScores.map((s, i) => (
-                    <div key={i} className="flex items-center gap-3 py-2 text-[12px]"><span className="flex-1 text-gray-700 truncate">{s.name}</span><span className="text-gray-500">{s.level}</span><span className={`text-[9px] font-bold uppercase px-1.5 py-0.5 rounded ${s.passing ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"}`}>{s.passing ? "achieved" : "developing"}</span></div>
+                    <div key={i} className="flex items-center gap-3 py-2 text-[12px]"><span className="flex-1 text-gray-700 truncate">{s.name}</span><span className="text-gray-500">{s.level}</span><span className={`text-[9px] font-bold uppercase px-1.5 py-0.5 rounded ${s.passing ? "bg-[var(--cmp-surface-success)] text-emerald-700" : "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]"}`}>{s.passing ? "achieved" : "developing"}</span></div>
                   ))}
                 </div>
               )}
@@ -126,7 +126,7 @@ export default async function DevModulePage({ params }: { params: Promise<{ modu
             <div className="rounded-2xl bg-white border border-gray-200 shadow-sm p-5">
               <div className="flex items-center justify-between mb-3">
                 <p className="text-[11px] font-bold uppercase tracking-widest text-gray-500">What This Module Manages</p>
-                <span className="text-[9px] font-bold uppercase tracking-wider text-amber-600 bg-amber-50 rounded px-1.5 py-0.5">store soon</span>
+                <span className="text-[9px] font-bold uppercase tracking-wider text-[var(--cmp-text-warning)] bg-[var(--cmp-surface-warning)] rounded px-1.5 py-0.5">store soon</span>
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {groups.map(g => (
@@ -145,7 +145,7 @@ export default async function DevModulePage({ params }: { params: Promise<{ modu
         <div className="flex flex-col gap-5 min-w-0">
           <div className="rounded-2xl bg-white border border-gray-200 shadow-sm p-4">
             <p className="text-[11px] font-bold uppercase tracking-widest text-gray-500 mb-3">Credential Deadlines</p>
-            {deadlines.length === 0 ? <p className="text-[12px] text-emerald-600">No credential deadlines.</p> : (
+            {deadlines.length === 0 ? <p className="text-[12px] text-[var(--cmp-text-success)]">No credential deadlines.</p> : (
               <div className="flex flex-col gap-2.5">
                 {deadlines.map((dl, i) => (
                   <div key={i} className="flex items-start gap-2.5"><span className="w-6 h-6 rounded-lg bg-gray-100 flex items-center justify-center text-[10px] shrink-0">⏰</span><div className="min-w-0 flex-1"><p className="text-[12px] text-gray-800 leading-tight truncate">{dl.title}</p><p className={`text-[10px] ${dl.tone}`}>{dl.date ? fmtDate(dl.date) + " · " : ""}{dl.sub}</p></div></div>

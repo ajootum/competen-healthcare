@@ -11,7 +11,7 @@ import { cardClass } from "@/components/ui/primitives";
 export const dynamic = "force-dynamic";
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
-const barCls = (n: number) => (n >= 85 ? "bg-emerald-500" : n >= 60 ? "bg-amber-500" : "bg-rose-500");
+const barCls = (n: number) => (n >= 85 ? "bg-[var(--cmp-color-success)]" : n >= 60 ? "bg-[var(--cmp-color-warning)]" : "bg-[var(--cmp-color-error)]");
 const heatCls = (pct: number) => (pct >= 40 ? "bg-teal-600 text-white" : pct >= 20 ? "bg-teal-300 text-teal-900" : pct > 0 ? "bg-teal-100 text-teal-700" : "bg-gray-50 text-gray-300");
 
 export default async function CoverageGapsPage() {
@@ -42,15 +42,15 @@ export default async function CoverageGapsPage() {
       <CompetencyTabs />
 
       {!wr.ready ? (
-        <div className="bg-amber-50 border border-amber-200 rounded-xl p-6 text-sm text-amber-800">Competency coverage data isn&apos;t available for this unit yet.</div>
+        <div className="bg-[var(--cmp-surface-warning)] border border-[var(--cmp-color-warning)] rounded-xl p-6 text-sm text-amber-800">Competency coverage data isn&apos;t available for this unit yet.</div>
       ) : (
         <>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
             {[
               { label: "Readiness score", value: wr.score != null ? `${wr.score}%` : "—", sub: wr.band, tone: "text-gray-900" },
-              { label: "Fully deployable", value: wr.kpis?.fullyDeployable ?? 0, sub: `of ${wr.kpis?.total ?? 0}`, tone: "text-emerald-600" },
-              { label: "No validated cover", value: noCoverage.length, sub: "roles", tone: "text-rose-600" },
-              { label: "Single-person cover", value: singleDep.length, sub: "roles", tone: "text-amber-600" },
+              { label: "Fully deployable", value: wr.kpis?.fullyDeployable ?? 0, sub: `of ${wr.kpis?.total ?? 0}`, tone: "text-[var(--cmp-text-success)]" },
+              { label: "No validated cover", value: noCoverage.length, sub: "roles", tone: "text-[var(--cmp-text-error)]" },
+              { label: "Single-person cover", value: singleDep.length, sub: "roles", tone: "text-[var(--cmp-text-warning)]" },
             ].map(k => (
               <div key={k.label} className={card}><div className={`text-2xl font-bold tabular-nums ${k.tone}`}>{k.value}</div><div className="text-xs text-gray-500 mt-1 font-medium">{k.label}</div><div className="text-[10px] text-gray-400">{k.sub}</div></div>
             ))}
@@ -61,13 +61,13 @@ export default async function CoverageGapsPage() {
               <div className={card}>
                 <h3 className="font-semibold text-gray-900 text-sm mb-2">No validated coverage</h3>
                 {noCoverage.length === 0 ? <p className="text-sm text-gray-400">Every role has validated cover.</p> : (
-                  <div className="space-y-1.5">{noCoverage.map((r: any) => (<div key={r.role} className="flex items-center gap-2 text-sm"><span className="w-2 h-2 rounded-full bg-rose-500 shrink-0" /><span className="text-gray-700 flex-1 truncate">{r.label}</span><span className="text-[11px] text-gray-400">0/{r.total}</span></div>))}</div>
+                  <div className="space-y-1.5">{noCoverage.map((r: any) => (<div key={r.role} className="flex items-center gap-2 text-sm"><span className="w-2 h-2 rounded-full bg-[var(--cmp-color-error)] shrink-0" /><span className="text-gray-700 flex-1 truncate">{r.label}</span><span className="text-[11px] text-gray-400">0/{r.total}</span></div>))}</div>
                 )}
               </div>
               <div className={card}>
                 <h3 className="font-semibold text-gray-900 text-sm mb-2">Single-person dependency</h3>
                 {singleDep.length === 0 ? <p className="text-sm text-gray-400">No single-person dependencies.</p> : (
-                  <div className="space-y-1.5">{singleDep.map((r: any) => (<div key={r.role} className="flex items-center gap-2 text-sm"><span className="w-2 h-2 rounded-full bg-amber-500 shrink-0" /><span className="text-gray-700 flex-1 truncate">{r.label}</span><span className="text-[11px] text-gray-400">1/{r.total} — cross-train</span></div>))}</div>
+                  <div className="space-y-1.5">{singleDep.map((r: any) => (<div key={r.role} className="flex items-center gap-2 text-sm"><span className="w-2 h-2 rounded-full bg-[var(--cmp-color-warning)] shrink-0" /><span className="text-gray-700 flex-1 truncate">{r.label}</span><span className="text-[11px] text-gray-400">1/{r.total} — cross-train</span></div>))}</div>
                 )}
               </div>
             </div>

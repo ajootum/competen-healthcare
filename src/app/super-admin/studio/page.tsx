@@ -27,7 +27,7 @@ function ModuleCard({ m }: { m: Mod }) {
           <p className="text-[9px] font-bold text-gray-300 tracking-widest">{m.code}</p>
           <p className={`font-bold text-sm leading-tight ${m.planned ? "text-gray-500" : "text-gray-900 group-hover:text-teal-700"}`}>{m.label}</p>
         </div>
-        {m.planned && <span className="ml-auto shrink-0 text-[8px] font-bold uppercase tracking-wide text-amber-600 bg-amber-50 border border-amber-100 px-1.5 py-0.5 rounded">Planned</span>}
+        {m.planned && <span className="ml-auto shrink-0 text-[8px] font-bold uppercase tracking-wide text-[var(--cmp-text-warning)] bg-[var(--cmp-surface-warning)] border border-[var(--cmp-color-warning)] px-1.5 py-0.5 rounded">Planned</span>}
       </div>
       <p className="text-[11px] text-gray-400 leading-relaxed">{m.desc}</p>
       {m.stat && <p className="text-[10px] font-semibold text-teal-600 mt-2">{m.stat}</p>}
@@ -81,8 +81,8 @@ export default async function StudioPage() {
   ];
 
   const ATTENTION = [
-    { label: "Draft frameworks", value: drafts, icon: "📝", href: "/super-admin/content", on: drafts > 0, tone: "text-blue-600" },
-    { label: "Awaiting review", value: inReview, icon: "⚖️", href: "/admin/approvals", on: inReview > 0, tone: "text-amber-600" },
+    { label: "Draft frameworks", value: drafts, icon: "📝", href: "/super-admin/content", on: drafts > 0, tone: "text-[var(--cmp-text-information)]" },
+    { label: "Awaiting review", value: inReview, icon: "⚖️", href: "/admin/approvals", on: inReview > 0, tone: "text-[var(--cmp-text-warning)]" },
     { label: "Ready to publish", value: readyToPublish, icon: "🚀", href: "/competency-office/publishing", on: readyToPublish > 0, tone: "text-teal-600" },
     { label: "Framework reviews due", value: reviewsDue, icon: "⏰", href: "/super-admin/content", on: reviewsDue > 0, tone: "text-red-500" },
     { label: "Ownership reviews due", value: respDue, icon: "🧾", href: "/super-admin/studio/responsibilities", on: respDue > 0, tone: "text-red-500" },

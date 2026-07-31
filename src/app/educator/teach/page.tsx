@@ -140,7 +140,7 @@ export default async function TeachAndAssessPage() {
                 {TODO.map(t => (
                   <Link key={t.label} href={t.href} className="flex items-center gap-2 text-[11px] text-gray-700 hover:text-purple-700">
                     <span>{t.icon}</span><span className="flex-1">{t.label}</span>
-                    <span className="text-[10px] font-bold bg-red-100 text-red-700 rounded-full px-1.5 py-0.5">{t.n}</span>
+                    <span className="text-[10px] font-bold bg-[var(--cmp-surface-critical)] text-[var(--cmp-text-critical)] rounded-full px-1.5 py-0.5">{t.n}</span>
                   </Link>
                 ))}
               </div>
@@ -157,7 +157,7 @@ export default async function TeachAndAssessPage() {
                       <PctChip v={p.pct} />
                     </div>
                     <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
-                      <div className={`h-full rounded-full ${p.pct >= 80 ? "bg-green-500" : p.pct >= 60 ? "bg-amber-400" : "bg-red-400"}`} style={{ width: `${p.pct}%` }} />
+                      <div className={`h-full rounded-full ${p.pct >= 80 ? "bg-[var(--cmp-color-success)]" : p.pct >= 60 ? "bg-[var(--cmp-color-warning)]" : "bg-[var(--cmp-color-critical)]"}`} style={{ width: `${p.pct}%` }} />
                     </div>
                   </div>
                 ))}

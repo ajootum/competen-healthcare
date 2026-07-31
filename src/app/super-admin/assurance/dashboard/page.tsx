@@ -9,11 +9,11 @@ import { loadAssuranceDashboard } from "@/lib/assurance/assurance-dashboard";
 export const dynamic = "force-dynamic";
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
-const BAND: Record<string, string> = { emerald: "text-emerald-600", amber: "text-amber-600", rose: "text-rose-600" };
-const RISK: Record<string, string> = { red: "border-rose-200 bg-rose-50", amber: "border-amber-200 bg-amber-50", gray: "border-gray-200 bg-gray-50" };
-const DOT: Record<string, string> = { red: "bg-rose-500", amber: "bg-amber-500", gray: "bg-gray-300" };
-const barTone = (n: number) => (n >= 85 ? "bg-emerald-500" : n >= 70 ? "bg-amber-500" : "bg-rose-500");
-const scoreTone = (n: number) => (n >= 85 ? "text-emerald-600" : n >= 70 ? "text-amber-600" : "text-rose-600");
+const BAND: Record<string, string> = { emerald: "text-[var(--cmp-text-success)]", amber: "text-[var(--cmp-text-warning)]", rose: "text-[var(--cmp-text-error)]" };
+const RISK: Record<string, string> = { red: "border-[var(--cmp-color-error)] bg-[var(--cmp-surface-error)]", amber: "border-[var(--cmp-color-warning)] bg-[var(--cmp-surface-warning)]", gray: "border-gray-200 bg-gray-50" };
+const DOT: Record<string, string> = { red: "bg-[var(--cmp-color-error)]", amber: "bg-[var(--cmp-color-warning)]", gray: "bg-gray-300" };
+const barTone = (n: number) => (n >= 85 ? "bg-[var(--cmp-color-success)]" : n >= 70 ? "bg-[var(--cmp-color-warning)]" : "bg-[var(--cmp-color-error)]");
+const scoreTone = (n: number) => (n >= 85 ? "text-[var(--cmp-text-success)]" : n >= 70 ? "text-[var(--cmp-text-warning)]" : "text-[var(--cmp-text-error)]");
 
 export default async function AssuranceDashboardPage() {
   const supabase = await createClient();
@@ -56,7 +56,7 @@ export default async function AssuranceDashboardPage() {
                 { label: "Competencies assessed", value: q.headline.assessed },
                 { label: "Assessors profiled", value: q.headline.assessors },
                 { label: "Corrective actions", value: q.headline.actions },
-                { label: "High-risk staff", value: q.headline.highRisk, tone: q.headline.highRisk ? "text-rose-600" : "text-gray-900" },
+                { label: "High-risk staff", value: q.headline.highRisk, tone: q.headline.highRisk ? "text-[var(--cmp-text-error)]" : "text-gray-900" },
               ].map(k => (
                 <div key={k.label} className={`${card} p-4`}><p className={`text-2xl font-bold tabular-nums ${k.tone ?? "text-gray-900"}`}>{k.value}</p><p className="text-[11px] text-gray-400 font-medium mt-0.5">{k.label}</p></div>
               ))}

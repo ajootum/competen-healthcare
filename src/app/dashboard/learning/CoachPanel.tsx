@@ -37,7 +37,7 @@ export default function CoachPanel() {
           {busy ? "Your coach is thinking…" : "🤖 Get AI coaching on my gaps"}
         </button>
       )}
-      {error && <p className="mt-2 text-xs text-amber-600">{error}</p>}
+      {error && <p className="mt-2 text-xs text-[var(--cmp-text-warning)]">{error}</p>}
     </div>
   );
 }

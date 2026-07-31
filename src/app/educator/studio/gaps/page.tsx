@@ -92,7 +92,7 @@ export default async function GapAnalysisPage() {
                   <td className="py-1.5 text-center"><Dot ok={r.knowledge} /></td>
                   <td className="py-1.5 text-center"><Dot ok={r.assessed} /></td>
                   <td className="py-1.5 text-center">
-                    <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${r.gaps === 0 ? "bg-green-100 text-green-700" : r.gaps >= 3 ? "bg-red-100 text-red-600" : "bg-amber-100 text-amber-700"}`}>{r.covered}/4</span>
+                    <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${r.gaps === 0 ? "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]" : r.gaps >= 3 ? "bg-[var(--cmp-surface-critical)] text-[var(--cmp-text-critical)]" : "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]"}`}>{r.covered}/4</span>
                   </td>
                 </tr>
               ))}

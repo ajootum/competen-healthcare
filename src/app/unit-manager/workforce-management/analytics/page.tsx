@@ -15,11 +15,11 @@ export const dynamic = "force-dynamic";
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 const card = "bg-white rounded-xl border border-gray-200";
-const COV: Record<string, string> = { "Fully covered": "text-emerald-600", "Below target": "text-amber-600", "Below minimum": "text-rose-600", "—": "text-gray-400" };
+const COV: Record<string, string> = { "Fully covered": "text-[var(--cmp-text-success)]", "Below target": "text-[var(--cmp-text-warning)]", "Below minimum": "text-[var(--cmp-text-error)]", "—": "text-gray-400" };
 
 function Kpi({ label, value, sub, tone, foot, href }: { label: string; value: any; sub?: string; tone?: string; foot?: string; href?: string }) {
   const inner = <><div className="flex items-start justify-between"><p className="text-xs text-gray-500">{label}</p>{foot && <span className="text-[9px] text-gray-300">{foot}</span>}</div><p className={`text-2xl font-bold tabular-nums mt-1 ${tone ?? "text-gray-900"}`}>{value}</p>{sub && <p className="text-[11px] text-gray-400 mt-0.5">{sub}</p>}</>;
-  return href ? <Link href={href} className={`${card} p-4 block hover:border-emerald-200`}>{inner}</Link> : <div className={`${card} p-4`}>{inner}</div>;
+  return href ? <Link href={href} className={`${card} p-4 block hover:border-[var(--cmp-color-success)]`}>{inner}</Link> : <div className={`${card} p-4`}>{inner}</div>;
 }
 
 export default async function AnalyticsOverview() {
@@ -47,7 +47,7 @@ export default async function AnalyticsOverview() {
     </>
   );
 
-  if (!d.ready) return <div className="space-y-4">{header}<div className="bg-amber-50 border border-amber-200 rounded-xl p-6"><p className="font-semibold text-amber-900">⚙️ No operational data</p><p className="text-sm text-amber-800 mt-1">Analytics activate once operational shifts, attendance and competency records exist.</p></div></div>;
+  if (!d.ready) return <div className="space-y-4">{header}<div className="bg-[var(--cmp-surface-warning)] border border-[var(--cmp-color-warning)] rounded-xl p-6"><p className="font-semibold text-amber-900">⚙️ No operational data</p><p className="text-sm text-amber-800 mt-1">Analytics activate once operational shifts, attendance and competency records exist.</p></div></div>;
 
   const k = d.kpis;
   const funnelMax = Math.max(1, ...d.funnel.map((f: any) => f.n));
@@ -57,12 +57,12 @@ export default async function AnalyticsOverview() {
 
       {/* Row 1 — 6 KPI cards (§5.1) */}
       <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-3">
-        <Kpi label="Workforce position" value={`${k.present}/${k.expected}`} sub={k.gap ? `${k.gap} gap` : "no gap"} tone={k.gap ? "text-amber-600" : "text-emerald-600"} foot="ⁱ" href="/unit-manager/workforce-management/analytics/coverage" />
+        <Kpi label="Workforce position" value={`${k.present}/${k.expected}`} sub={k.gap ? `${k.gap} gap` : "no gap"} tone={k.gap ? "text-[var(--cmp-text-warning)]" : "text-[var(--cmp-text-success)]"} foot="ⁱ" href="/unit-manager/workforce-management/analytics/coverage" />
         <Kpi label="Coverage" value={k.coveragePct != null ? `${k.coveragePct}%` : "—"} sub={k.coverageState} tone={COV[k.coverageState]} foot="WF-COV-001" href="/unit-manager/workforce-management/analytics/coverage" />
-        <Kpi label="Attendance" value={k.presentRate != null ? `${k.presentRate}%` : "—"} sub={`${k.absent} absent · ${k.late} late`} tone={k.presentRate != null && k.presentRate >= 90 ? "text-emerald-600" : "text-amber-600"} foot="WF-ATT-001" href="/unit-manager/workforce-management/analytics/attendance" />
-        <Kpi label="Readiness" value={k.readinessScore != null ? `${k.readinessScore}` : "—"} sub={k.readinessBand} tone={k.readinessBand === "Ready" || k.readinessBand === "Mostly ready" ? "text-emerald-600" : "text-amber-600"} foot="WF-RDY-001" href="/unit-manager/workforce-management/analytics/readiness" />
-        <Kpi label="Overtime" value={k.overtimeHours != null ? `${k.overtimeHours}h` : "—"} sub={k.overtimePremium ? `£${k.overtimePremium.toLocaleString()} premium` : "this cycle"} tone={k.overtimeHours ? "text-amber-600" : undefined} foot="WF-OT-001" href="/unit-manager/workforce-management/analytics/cost" />
-        <Kpi label="Open exceptions" value={k.openExceptions} sub={`${k.criticalExceptions} critical · ${k.overdueExceptions} overdue`} tone={k.criticalExceptions ? "text-rose-600" : k.openExceptions ? "text-amber-600" : "text-emerald-600"} foot="WF-EXC-001" href="/unit-manager/workforce-management/analytics/exceptions" />
+        <Kpi label="Attendance" value={k.presentRate != null ? `${k.presentRate}%` : "—"} sub={`${k.absent} absent · ${k.late} late`} tone={k.presentRate != null && k.presentRate >= 90 ? "text-[var(--cmp-text-success)]" : "text-[var(--cmp-text-warning)]"} foot="WF-ATT-001" href="/unit-manager/workforce-management/analytics/attendance" />
+        <Kpi label="Readiness" value={k.readinessScore != null ? `${k.readinessScore}` : "—"} sub={k.readinessBand} tone={k.readinessBand === "Ready" || k.readinessBand === "Mostly ready" ? "text-[var(--cmp-text-success)]" : "text-[var(--cmp-text-warning)]"} foot="WF-RDY-001" href="/unit-manager/workforce-management/analytics/readiness" />
+        <Kpi label="Overtime" value={k.overtimeHours != null ? `${k.overtimeHours}h` : "—"} sub={k.overtimePremium ? `£${k.overtimePremium.toLocaleString()} premium` : "this cycle"} tone={k.overtimeHours ? "text-[var(--cmp-text-warning)]" : undefined} foot="WF-OT-001" href="/unit-manager/workforce-management/analytics/cost" />
+        <Kpi label="Open exceptions" value={k.openExceptions} sub={`${k.criticalExceptions} critical · ${k.overdueExceptions} overdue`} tone={k.criticalExceptions ? "text-[var(--cmp-text-error)]" : k.openExceptions ? "text-[var(--cmp-text-warning)]" : "text-[var(--cmp-text-success)]"} foot="WF-EXC-001" href="/unit-manager/workforce-management/analytics/exceptions" />
       </div>
 
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">

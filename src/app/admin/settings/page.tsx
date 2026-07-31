@@ -78,7 +78,7 @@ export default function SettingsPage() {
 
   const tierBadge: Record<string, string> = {
     free:         "bg-gray-100 text-gray-600",
-    professional: "bg-blue-100 text-blue-700",
+    professional: "bg-[var(--cmp-surface-information)] text-blue-700",
     enterprise:   "bg-purple-100 text-purple-700",
   };
 
@@ -90,7 +90,7 @@ export default function SettingsPage() {
       </div>
 
       {error && (
-        <div className="bg-red-50 border border-red-200 rounded-xl p-4 mb-4 text-sm text-red-700">{error}</div>
+        <div className="bg-[var(--cmp-surface-critical)] border border-[var(--cmp-color-critical)] rounded-xl p-4 mb-4 text-sm text-[var(--cmp-text-critical)]">{error}</div>
       )}
 
       {/* Hospital settings */}

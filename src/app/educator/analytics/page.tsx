@@ -20,7 +20,7 @@ function TrendChip({ trend, goodUp }: { trend: { pct: number; dir: "up" | "down"
   if (!trend) return null;
   const good = (trend.dir === "up") === goodUp;
   return (
-    <span className={`text-[10px] font-bold ${good ? "text-green-600" : "text-red-500"}`}>
+    <span className={`text-[10px] font-bold ${good ? "text-[var(--cmp-text-success)]" : "text-red-500"}`}>
       {trend.dir === "up" ? "▲" : "▼"} {trend.pct}%
     </span>
   );
@@ -33,10 +33,10 @@ export default async function AnalyticsOverview() {
 
   const kpiCards = [
     { icon: "👥", tint: "bg-purple-50 text-purple-600", label: "Active Learners", value: String(K.activeLearners.value), sub: `${K.activeLearners.active30} active · 30d`, trend: K.activeLearners.trend, goodUp: true, href: "/educator/students" },
-    { icon: "📗", tint: "bg-green-50 text-green-600", label: "Course Completion", value: K.courseCompletion.pct !== null ? `${K.courseCompletion.pct}%` : "—", sub: K.courseCompletion.total ? `${K.courseCompletion.completed}/${K.courseCompletion.total} enrolments` : "No enrolments yet", trend: K.courseCompletion.trend, goodUp: true, href: "/educator/courses" },
-    { icon: "🛡️", tint: "bg-blue-50 text-blue-600", label: "Avg. Competency Score", value: K.avgCompetency.pct !== null ? `${K.avgCompetency.pct}%` : "—", sub: K.avgCompetency.raw !== null ? `${K.avgCompetency.raw.toFixed(1)}/6 · 30d` : "No scores · 30d", trend: K.avgCompetency.trend, goodUp: true, href: "/educator/analytics/competency" },
-    { icon: "🎯", tint: "bg-orange-50 text-orange-600", label: "Assessment Pass Rate", value: K.passRate.pct !== null ? `${K.passRate.pct}%` : "—", sub: "last 30 days", trend: K.passRate.trend, goodUp: true, href: "/educator/assessments" },
-    { icon: "⚠️", tint: "bg-red-50 text-red-600", label: "At-Risk Learners", value: String(K.atRisk.count), sub: "live risk flags", trend: null, goodUp: false, href: "/educator/at-risk" },
+    { icon: "📗", tint: "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]", label: "Course Completion", value: K.courseCompletion.pct !== null ? `${K.courseCompletion.pct}%` : "—", sub: K.courseCompletion.total ? `${K.courseCompletion.completed}/${K.courseCompletion.total} enrolments` : "No enrolments yet", trend: K.courseCompletion.trend, goodUp: true, href: "/educator/courses" },
+    { icon: "🛡️", tint: "bg-[var(--cmp-surface-information)] text-[var(--cmp-text-information)]", label: "Avg. Competency Score", value: K.avgCompetency.pct !== null ? `${K.avgCompetency.pct}%` : "—", sub: K.avgCompetency.raw !== null ? `${K.avgCompetency.raw.toFixed(1)}/6 · 30d` : "No scores · 30d", trend: K.avgCompetency.trend, goodUp: true, href: "/educator/analytics/competency" },
+    { icon: "🎯", tint: "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]", label: "Assessment Pass Rate", value: K.passRate.pct !== null ? `${K.passRate.pct}%` : "—", sub: "last 30 days", trend: K.passRate.trend, goodUp: true, href: "/educator/assessments" },
+    { icon: "⚠️", tint: "bg-[var(--cmp-surface-critical)] text-[var(--cmp-text-critical)]", label: "At-Risk Learners", value: String(K.atRisk.count), sub: "live risk flags", trend: null, goodUp: false, href: "/educator/at-risk" },
     { icon: "⏳", tint: "bg-teal-50 text-teal-600", label: "CPD Compliance", value: K.cpdCompliance.pct !== null ? `${K.cpdCompliance.pct}%` : "—", sub: K.cpdCompliance.note || "—", trend: null, goodUp: true, href: "/educator/courses" },
   ];
 
@@ -156,7 +156,7 @@ export default async function AnalyticsOverview() {
         <div className="bg-white border border-gray-100 rounded-2xl p-5">
           <div className="flex items-center justify-between mb-2">
             <h2 className="text-sm font-bold text-gray-900">Program Quality Summary</h2>
-            {d.overallQuality !== null && <span className={`text-xs font-extrabold ${d.overallQuality >= 80 ? "text-green-600" : d.overallQuality >= 60 ? "text-amber-600" : "text-red-500"}`}>{d.overallQuality}%</span>}
+            {d.overallQuality !== null && <span className={`text-xs font-extrabold ${d.overallQuality >= 80 ? "text-[var(--cmp-text-success)]" : d.overallQuality >= 60 ? "text-[var(--cmp-text-warning)]" : "text-red-500"}`}>{d.overallQuality}%</span>}
           </div>
           <div className="flex flex-col gap-1.5">
             {d.quality.map(q => (
@@ -165,7 +165,7 @@ export default async function AnalyticsOverview() {
                 {q.backed && q.pct !== null ? (
                   <>
                     <div className="flex-1 h-1.5 bg-gray-100 rounded-full overflow-hidden">
-                      <div className={`h-full rounded-full ${q.pct >= 80 ? "bg-green-500" : q.pct >= 60 ? "bg-blue-500" : q.pct >= 40 ? "bg-amber-400" : "bg-red-400"}`} style={{ width: `${q.pct}%` }} />
+                      <div className={`h-full rounded-full ${q.pct >= 80 ? "bg-[var(--cmp-color-success)]" : q.pct >= 60 ? "bg-[var(--cmp-color-information)]" : q.pct >= 40 ? "bg-[var(--cmp-color-warning)]" : "bg-[var(--cmp-color-critical)]"}`} style={{ width: `${q.pct}%` }} />
                     </div>
                     <span className="font-bold text-gray-700 w-8 text-right shrink-0">{q.pct}%</span>
                   </>
@@ -243,7 +243,7 @@ export default async function AnalyticsOverview() {
         <div className="bg-white border border-gray-100 rounded-2xl p-5">
           <h2 className="text-sm font-bold text-gray-900 mb-1">Assessment Performance</h2>
           <div className="flex items-center gap-3 mb-2 text-[9px]">
-            <span className="flex items-center gap-1 text-gray-500"><span className="w-2 h-2 rounded-full bg-green-500" />Pass rate</span>
+            <span className="flex items-center gap-1 text-gray-500"><span className="w-2 h-2 rounded-full bg-[var(--cmp-color-success)]" />Pass rate</span>
             <span className="flex items-center gap-1 text-gray-500"><span className="w-2 h-2 rounded-full bg-purple-500" />Avg score</span>
           </div>
           {d.assessmentPerf.every(a => a.n === 0) ? (
@@ -258,7 +258,7 @@ export default async function AnalyticsOverview() {
                   </div>
                   {a.n > 0 && (
                     <div className="flex flex-col gap-0.5 mt-0.5">
-                      <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden"><div className="h-full rounded-full bg-green-500" style={{ width: `${a.passRate ?? 0}%` }} /></div>
+                      <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden"><div className="h-full rounded-full bg-[var(--cmp-color-success)]" style={{ width: `${a.passRate ?? 0}%` }} /></div>
                       <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden"><div className="h-full rounded-full bg-purple-500" style={{ width: `${a.avg ?? 0}%` }} /></div>
                     </div>
                   )}
@@ -281,14 +281,14 @@ export default async function AnalyticsOverview() {
             <div className="flex flex-col gap-2">
               {d.topAtRisk.map(r => (
                 <div key={r.id} className="flex items-center gap-2">
-                  <span className="w-7 h-7 rounded-full bg-red-50 text-red-600 flex items-center justify-center text-[10px] font-bold shrink-0">
+                  <span className="w-7 h-7 rounded-full bg-[var(--cmp-surface-critical)] text-[var(--cmp-text-critical)] flex items-center justify-center text-[10px] font-bold shrink-0">
                     {r.name.split(" ").map(w => w[0]).slice(0, 2).join("")}
                   </span>
                   <div className="min-w-0 flex-1">
                     <p className="text-[12px] font-semibold text-gray-800 truncate">{r.name}</p>
                     <p className="text-[10px] text-gray-400 truncate">{r.program}</p>
                   </div>
-                  <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded shrink-0 ${r.level === "High" ? "bg-red-50 text-red-600" : r.level === "Medium" ? "bg-amber-50 text-amber-600" : "bg-gray-100 text-gray-500"}`}>
+                  <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded shrink-0 ${r.level === "High" ? "bg-[var(--cmp-surface-critical)] text-[var(--cmp-text-critical)]" : r.level === "Medium" ? "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]" : "bg-gray-100 text-gray-500"}`}>
                     {r.level} · {r.score}
                   </span>
                 </div>

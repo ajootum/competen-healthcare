@@ -41,8 +41,8 @@ export default async function Domains() {
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
               {d.scorecards.map(dm => (
                 <div key={dm.id} className="border border-gray-100 rounded-xl p-3">
-                  <div className="flex items-center justify-between mb-1"><p className="text-[11px] font-bold text-gray-800 truncate" title={dm.name}>{shortDom(dm.name)}</p>{dm.trend && <span className={`text-[9px] font-bold ${dm.trend.dir === "up" ? "text-green-600" : "text-red-500"}`}>{dm.trend.dir === "up" ? "▲" : "▼"}{dm.trend.pct}%</span>}</div>
-                  <div className="flex items-center gap-2 mb-1"><div className="flex-1 h-1.5 bg-gray-100 rounded-full overflow-hidden"><div className={`h-full rounded-full ${(dm.avgScore ?? 0) >= 70 ? "bg-green-500" : (dm.avgScore ?? 0) >= 50 ? "bg-amber-400" : "bg-red-400"}`} style={{ width: `${dm.avgScore ?? 0}%` }} /></div><span className="text-[10px] font-bold text-gray-700 w-9 text-right">{pct(dm.avgScore)}</span></div>
+                  <div className="flex items-center justify-between mb-1"><p className="text-[11px] font-bold text-gray-800 truncate" title={dm.name}>{shortDom(dm.name)}</p>{dm.trend && <span className={`text-[9px] font-bold ${dm.trend.dir === "up" ? "text-[var(--cmp-text-success)]" : "text-red-500"}`}>{dm.trend.dir === "up" ? "▲" : "▼"}{dm.trend.pct}%</span>}</div>
+                  <div className="flex items-center gap-2 mb-1"><div className="flex-1 h-1.5 bg-gray-100 rounded-full overflow-hidden"><div className={`h-full rounded-full ${(dm.avgScore ?? 0) >= 70 ? "bg-[var(--cmp-color-success)]" : (dm.avgScore ?? 0) >= 50 ? "bg-[var(--cmp-color-warning)]" : "bg-[var(--cmp-color-critical)]"}`} style={{ width: `${dm.avgScore ?? 0}%` }} /></div><span className="text-[10px] font-bold text-gray-700 w-9 text-right">{pct(dm.avgScore)}</span></div>
                   <div className="flex items-center gap-3 text-[9px] text-gray-400"><span>Cov {dm.coverage}%</span><span>Ach {pct(dm.achievement)}</span><span>Gaps {dm.gaps}</span>{dm.atRisk > 0 && <span className="text-red-500">{dm.atRisk} at-risk</span>}</div>
                 </div>
               ))}

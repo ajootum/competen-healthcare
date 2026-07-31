@@ -51,7 +51,7 @@ export default async function EducationPlanning() {
       <LearningTabs />
     </>
   );
-  if (!d.provisioned) return <div className="space-y-4">{header}<div className="bg-amber-50 border border-amber-200 rounded-xl p-6"><p className="font-semibold text-amber-900">⚙️ Education planning store not provisioned</p><p className="text-sm text-amber-800 mt-1">Apply migration 090 (education_plans / milestones / study_leave / sponsorship) to enable this centre.</p></div></div>;
+  if (!d.provisioned) return <div className="space-y-4">{header}<div className="bg-[var(--cmp-surface-warning)] border border-[var(--cmp-color-warning)] rounded-xl p-6"><p className="font-semibold text-amber-900">⚙️ Education planning store not provisioned</p><p className="text-sm text-amber-800 mt-1">Apply migration 090 (education_plans / milestones / study_leave / sponsorship) to enable this centre.</p></div></div>;
 
   const k = d.kpis, cur = d.currency;
   const studyPct = k.studyEntitlement ? Math.round((k.studyDaysApproved / k.studyEntitlement) * 100) : 0;
@@ -63,13 +63,13 @@ export default async function EducationPlanning() {
       {/* KPI row */}
       <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-8 gap-3">
         <Kpi icon="🎓" tint="bg-violet-50" label="Active Education Plans" value={k.activePlans} sub="in progress" />
-        <Kpi icon="📖" tint="bg-sky-50" label="Programme Progress" value={`${k.avgProgress}%`} sub="avg completion" />
-        <Kpi icon="✅" tint="bg-emerald-50" label="Milestones" value={`${k.milestonesCompleted}/${k.milestonesTotal}`} sub="completed" />
-        <Kpi icon="💰" tint="bg-amber-50" label="Funding Approved" value={money(k.fundingApproved, cur)} sub="total" />
+        <Kpi icon="📖" tint="bg-[var(--cmp-surface-information)]" label="Programme Progress" value={`${k.avgProgress}%`} sub="avg completion" />
+        <Kpi icon="✅" tint="bg-[var(--cmp-surface-success)]" label="Milestones" value={`${k.milestonesCompleted}/${k.milestonesTotal}`} sub="completed" />
+        <Kpi icon="💰" tint="bg-[var(--cmp-surface-warning)]" label="Funding Approved" value={money(k.fundingApproved, cur)} sub="total" />
         <Kpi icon="💵" tint="bg-teal-50" label="Funding Utilised" value={money(k.fundingUtilised, cur)} sub={k.fundingApproved ? `${Math.round((k.fundingUtilised / k.fundingApproved) * 100)}% used` : "—"} />
         <Kpi icon="📅" tint="bg-indigo-50" label="Study Leave" value={`${k.studyDaysApproved}/${k.studyEntitlement}`} sub={`${studyPct}% days`} />
-        <Kpi icon="⚠️" tint="bg-rose-50" label="Plans at Risk" value={k.plansAtRisk} tone={k.plansAtRisk ? "text-rose-600" : "text-gray-400"} sub="need attention" />
-        <Kpi icon="🕐" tint="bg-orange-50" label="Pending Approvals" value={k.pendingApprovals} tone={k.pendingApprovals ? "text-amber-600" : "text-gray-400"} sub="awaiting" />
+        <Kpi icon="⚠️" tint="bg-[var(--cmp-surface-error)]" label="Plans at Risk" value={k.plansAtRisk} tone={k.plansAtRisk ? "text-[var(--cmp-text-error)]" : "text-gray-400"} sub="need attention" />
+        <Kpi icon="🕐" tint="bg-[var(--cmp-surface-warning)]" label="Pending Approvals" value={k.pendingApprovals} tone={k.pendingApprovals ? "text-[var(--cmp-text-warning)]" : "text-gray-400"} sub="awaiting" />
       </div>
 
       {!d.hasData && <div className="bg-white border border-dashed border-gray-200 rounded-xl p-4 text-center text-sm text-gray-500">No education plans yet — create one below to start tracking programmes, milestones, study leave and sponsorship.</div>}
@@ -92,7 +92,7 @@ export default async function EducationPlanning() {
           <div className={`${card} p-5`}>
             <h3 className="font-semibold text-gray-900 text-sm mb-3">Education Plan Risk</h3>
             {d.risks.length === 0 ? <p className="text-sm text-gray-400">No education risks. 🎉</p> : (
-              <div className="space-y-2">{d.risks.map((r: any, i: number) => (<div key={i} className="flex items-start gap-2"><span className={`w-1.5 h-1.5 rounded-full mt-1.5 shrink-0 ${r.severity === "high" ? "bg-rose-500" : "bg-amber-400"}`} /><div className="min-w-0"><p className="text-xs font-medium text-gray-800 truncate">{r.label}</p><p className="text-[11px] text-gray-500 truncate">{r.detail}</p></div></div>))}</div>
+              <div className="space-y-2">{d.risks.map((r: any, i: number) => (<div key={i} className="flex items-start gap-2"><span className={`w-1.5 h-1.5 rounded-full mt-1.5 shrink-0 ${r.severity === "high" ? "bg-[var(--cmp-color-error)]" : "bg-[var(--cmp-color-warning)]"}`} /><div className="min-w-0"><p className="text-xs font-medium text-gray-800 truncate">{r.label}</p><p className="text-[11px] text-gray-500 truncate">{r.detail}</p></div></div>))}</div>
             )}
           </div>
         </div>

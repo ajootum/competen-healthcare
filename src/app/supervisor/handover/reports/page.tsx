@@ -30,7 +30,7 @@ export default async function HandoverReports() {
 
   const d = await loadHandoverContext(admin, profile?.hospital_id ?? null, roles.includes("super_admin"));
   const header = (<><div className="flex items-center gap-2"><span className="text-xl">📊</span><div><h1 className="text-2xl font-bold text-gray-900 tracking-tight">Handover Reports &amp; Analytics</h1><p className="text-sm text-gray-500">Comprehensive insights into handover quality, safety, compliance and performance.</p></div></div><HandoverNav /></>);
-  if (!d.ready) return <div className="space-y-4">{header}<div className="bg-amber-50 border border-amber-200 rounded-xl p-6"><p className="font-semibold text-amber-900">⚙️ Operational data not provisioned</p></div></div>;
+  if (!d.ready) return <div className="space-y-4">{header}<div className="bg-[var(--cmp-surface-warning)] border border-[var(--cmp-color-warning)] rounded-xl p-6"><p className="font-semibold text-amber-900">⚙️ Operational data not provisioned</p></div></div>;
 
   const audits = d.audits;
   const classes = ["Excellent", "Good", "Fair", "Needs Improvement"].map(c => ({ label: c, n: audits.filter((a: any) => a.classification === c).length })).filter(x => x.n);
@@ -48,10 +48,10 @@ export default async function HandoverReports() {
       {header}
       <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-3">
         <Kpi label="Total Handovers" value={d.rows.length} sub="Patients in scope" />
-        <Kpi label="JBI Compliance" value={d.kpis.jbiCompliance != null ? `${d.kpis.jbiCompliance}%` : "—"} sub={totalAudits ? `${totalAudits} audits` : "No audits yet"} tone={d.kpis.jbiCompliance != null && d.kpis.jbiCompliance >= 85 ? "text-emerald-600" : undefined} />
-        <Kpi label="High Risk Patients" value={d.kpis.critical} sub="This period" tone={d.kpis.critical ? "text-rose-600" : undefined} />
-        <Kpi label="Overdue Tasks" value={overdue} sub="Open" tone={overdue ? "text-rose-600" : undefined} />
-        <Kpi label="Acceptance Rate" value={acceptanceRate != null ? `${acceptanceRate}%` : "—"} sub="Patients accepted" tone={acceptanceRate === 100 ? "text-emerald-600" : undefined} />
+        <Kpi label="JBI Compliance" value={d.kpis.jbiCompliance != null ? `${d.kpis.jbiCompliance}%` : "—"} sub={totalAudits ? `${totalAudits} audits` : "No audits yet"} tone={d.kpis.jbiCompliance != null && d.kpis.jbiCompliance >= 85 ? "text-[var(--cmp-text-success)]" : undefined} />
+        <Kpi label="High Risk Patients" value={d.kpis.critical} sub="This period" tone={d.kpis.critical ? "text-[var(--cmp-text-error)]" : undefined} />
+        <Kpi label="Overdue Tasks" value={overdue} sub="Open" tone={overdue ? "text-[var(--cmp-text-error)]" : undefined} />
+        <Kpi label="Acceptance Rate" value={acceptanceRate != null ? `${acceptanceRate}%` : "—"} sub="Patients accepted" tone={acceptanceRate === 100 ? "text-[var(--cmp-text-success)]" : undefined} />
         <Kpi label="Avg Duration" value={d.kpis.avgHandoverMins != null ? `${d.kpis.avgHandoverMins}m` : "—"} sub="Not timed yet" />
       </div>
 
@@ -64,12 +64,12 @@ export default async function HandoverReports() {
         </div>
         <div className={`${card} p-5`}>
           <h3 className="text-sm font-bold text-gray-900 mb-3">Handover Outcomes</h3>
-          <div className="space-y-2">{[["Safe Handovers (Stable)", d.rows.filter((r: any) => r.risk === "Stable").length, "bg-emerald-500"], ["Requires Monitoring (At Risk)", d.rows.filter((r: any) => r.risk === "At Risk").length, "bg-amber-500"], ["High Risk", d.kpis.critical, "bg-rose-500"]].map(([l, n, clr]) => (<div key={l as string} className="text-xs"><div className="flex items-center justify-between mb-0.5"><span className="text-gray-700">{l as string}</span><b>{n as number}</b></div><div className="w-full h-1.5 rounded-full bg-gray-100 overflow-hidden"><div className={`h-full rounded-full ${clr as string}`} style={{ width: `${d.rows.length ? ((n as number) / d.rows.length) * 100 : 0}%` }} /></div></div>))}</div>
+          <div className="space-y-2">{[["Safe Handovers (Stable)", d.rows.filter((r: any) => r.risk === "Stable").length, "bg-[var(--cmp-color-success)]"], ["Requires Monitoring (At Risk)", d.rows.filter((r: any) => r.risk === "At Risk").length, "bg-[var(--cmp-color-warning)]"], ["High Risk", d.kpis.critical, "bg-[var(--cmp-color-error)]"]].map(([l, n, clr]) => (<div key={l as string} className="text-xs"><div className="flex items-center justify-between mb-0.5"><span className="text-gray-700">{l as string}</span><b>{n as number}</b></div><div className="w-full h-1.5 rounded-full bg-gray-100 overflow-hidden"><div className={`h-full rounded-full ${clr as string}`} style={{ width: `${d.rows.length ? ((n as number) / d.rows.length) * 100 : 0}%` }} /></div></div>))}</div>
           <p className="text-[10px] text-gray-400 mt-2 pt-2 border-t border-gray-100">Total: {d.rows.length} patients</p>
         </div>
         <div className={`${card} p-5`}>
           <h3 className="text-sm font-bold text-gray-900 mb-3">Supervisor Performance</h3>
-          {supervisors.length === 0 ? <p className="text-sm text-gray-400">No audit data yet.</p> : <div className="space-y-1.5">{supervisors.map(s => (<div key={s.name} className="flex items-center gap-2 text-xs"><span className="text-gray-700 flex-1 truncate">{s.name}</span><span className="text-gray-400">{s.n} audits</span><b className={s.avg >= 85 ? "text-emerald-600" : s.avg >= 70 ? "text-amber-600" : "text-rose-600"}>{s.avg}%</b></div>))}</div>}
+          {supervisors.length === 0 ? <p className="text-sm text-gray-400">No audit data yet.</p> : <div className="space-y-1.5">{supervisors.map(s => (<div key={s.name} className="flex items-center gap-2 text-xs"><span className="text-gray-700 flex-1 truncate">{s.name}</span><span className="text-gray-400">{s.n} audits</span><b className={s.avg >= 85 ? "text-[var(--cmp-text-success)]" : s.avg >= 70 ? "text-[var(--cmp-text-warning)]" : "text-[var(--cmp-text-error)]"}>{s.avg}%</b></div>))}</div>}
         </div>
       </div>
 

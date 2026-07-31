@@ -32,7 +32,7 @@ export default async function StudioSimulationsPage() {
       </div>
 
       {!sim.provisioned ? (
-        <div className="bg-amber-50 border border-amber-100 rounded-xl p-6 text-sm text-amber-800">Run migration 131 (<code className="text-[11px]">simulation_scenarios</code>) to enable the Simulation Studio.</div>
+        <div className="bg-[var(--cmp-surface-warning)] border border-[var(--cmp-color-warning)] rounded-xl p-6 text-sm text-amber-800">Run migration 131 (<code className="text-[11px]">simulation_scenarios</code>) to enable the Simulation Studio.</div>
       ) : (
         <>
           <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-3 mb-5">

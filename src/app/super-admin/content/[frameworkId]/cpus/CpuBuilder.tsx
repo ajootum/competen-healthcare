@@ -100,7 +100,7 @@ export default function CpuBuilder({
                       </div>
                       <div className="flex items-center gap-1.5">
                         <button onClick={() => renamePractice(practice)} className="px-2 py-0.5 text-[11px] text-gray-500 border border-gray-200 rounded hover:bg-gray-100">Edit</button>
-                        <button onClick={() => deletePractice(practice)} className="px-2 py-0.5 text-[11px] text-red-500 border border-red-100 rounded hover:bg-red-50">Delete</button>
+                        <button onClick={() => deletePractice(practice)} className="px-2 py-0.5 text-[11px] text-red-500 border border-[var(--cmp-color-critical)] rounded hover:bg-[var(--cmp-surface-critical)]">Delete</button>
                         <button onClick={() => addCpu(practice.id)} className="px-2 py-0.5 text-[11px] text-teal-600 border border-teal-200 rounded hover:bg-teal-50 font-semibold">+ CPU</button>
                       </div>
                     </div>
@@ -124,7 +124,7 @@ export default function CpuBuilder({
                               </div>
                               <div className="flex items-center gap-1.5">
                                 <button onClick={() => setConfigCpu(cpu)} className="px-2 py-0.5 text-[11px] text-teal-600 border border-teal-200 rounded hover:bg-teal-50 font-semibold">Configure</button>
-                                <button onClick={() => deleteCpu(cpu)} className="px-2 py-0.5 text-[11px] text-red-500 border border-red-100 rounded hover:bg-red-50">Delete</button>
+                                <button onClick={() => deleteCpu(cpu)} className="px-2 py-0.5 text-[11px] text-red-500 border border-[var(--cmp-color-critical)] rounded hover:bg-[var(--cmp-surface-critical)]">Delete</button>
                               </div>
                             </div>
                             {/* Competencies assigned to this CPU */}
@@ -133,7 +133,7 @@ export default function CpuBuilder({
                                 <span key={c.id} className="group inline-flex items-center gap-1 text-xs bg-white border border-teal-100 text-teal-700 pl-2.5 pr-1.5 py-0.5 rounded-full">
                                   {c.name}
                                   <button onClick={() => assignCompetency(c.id, null, null)} title="Unassign"
-                                    className="opacity-0 group-hover:opacity-100 text-red-400 hover:text-red-600 transition-opacity leading-none px-0.5">×</button>
+                                    className="opacity-0 group-hover:opacity-100 text-red-400 hover:text-[var(--cmp-text-critical)] transition-opacity leading-none px-0.5">×</button>
                                 </span>
                               ))}
                               {!inCpu.length && <p className="text-[11px] text-gray-300 italic">No competencies assigned</p>}
@@ -151,8 +151,8 @@ export default function CpuBuilder({
 
             {/* Unassigned competencies — quick-assign into a CPU */}
             {unassigned.length > 0 && (
-              <div className="px-5 py-3 border-t border-dashed border-gray-200 bg-amber-50/20">
-                <p className="text-[10px] font-bold text-amber-700 uppercase tracking-widest mb-2">Unassigned competencies ({unassigned.length})</p>
+              <div className="px-5 py-3 border-t border-dashed border-gray-200 bg-[var(--cmp-surface-warning)]/20">
+                <p className="text-[10px] font-bold text-[var(--cmp-text-warning)] uppercase tracking-widest mb-2">Unassigned competencies ({unassigned.length})</p>
                 <div className="flex flex-col gap-1.5">
                   {unassigned.map(c => {
                     const allCpus = doms.flatMap(p => cpusByPractice(p.id).map(cpu => ({ ...cpu, practiceName: p.name })));

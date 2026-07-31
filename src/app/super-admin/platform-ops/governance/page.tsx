@@ -41,7 +41,7 @@ export default async function ConfigurationGovernance() {
 
   if (!gov.provisioned) return (
     <div data-wide className="space-y-4">{header}
-      <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800"><span className="font-semibold">Not provisioned.</span> Run <code className="font-mono text-[12px] bg-amber-100 px-1 rounded">migration 093-config-governance.sql</code> to enable the governance workflow.</div>
+      <div className="rounded-xl border border-[var(--cmp-color-warning)] bg-[var(--cmp-surface-warning)] px-4 py-3 text-sm text-amber-800"><span className="font-semibold">Not provisioned.</span> Run <code className="font-mono text-[12px] bg-[var(--cmp-surface-warning)] px-1 rounded">migration 093-config-governance.sql</code> to enable the governance workflow.</div>
     </div>
   );
 
@@ -54,12 +54,12 @@ export default async function ConfigurationGovernance() {
       {/* Governance dashboard (§7.1) */}
       <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-7 gap-3">
         <Stat label="Open Requests" value={s.openChangeRequests} />
-        <Stat label="Awaiting Review" value={s.awaitingReview} tone={s.awaitingReview ? "text-amber-600" : "text-gray-400"} />
-        <Stat label="Approved · Awaiting Release" value={s.approvedAwaitingRelease} tone={s.approvedAwaitingRelease ? "text-sky-600" : "text-gray-400"} />
-        <Stat label="Published" value={s.published} tone="text-emerald-600" />
-        <Stat label="High / Critical" value={s.highRisk} tone={s.highRisk ? "text-rose-600" : "text-gray-400"} />
-        <Stat label="Emergency (open)" value={s.emergency} tone={s.emergency ? "text-rose-600" : "text-gray-400"} />
-        <Stat label="Rolled Back" value={s.rolledBack} tone={s.rolledBack ? "text-amber-600" : "text-gray-400"} />
+        <Stat label="Awaiting Review" value={s.awaitingReview} tone={s.awaitingReview ? "text-[var(--cmp-text-warning)]" : "text-gray-400"} />
+        <Stat label="Approved · Awaiting Release" value={s.approvedAwaitingRelease} tone={s.approvedAwaitingRelease ? "text-[var(--cmp-text-information)]" : "text-gray-400"} />
+        <Stat label="Published" value={s.published} tone="text-[var(--cmp-text-success)]" />
+        <Stat label="High / Critical" value={s.highRisk} tone={s.highRisk ? "text-[var(--cmp-text-error)]" : "text-gray-400"} />
+        <Stat label="Emergency (open)" value={s.emergency} tone={s.emergency ? "text-[var(--cmp-text-error)]" : "text-gray-400"} />
+        <Stat label="Rolled Back" value={s.rolledBack} tone={s.rolledBack ? "text-[var(--cmp-text-warning)]" : "text-gray-400"} />
       </div>
 
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
@@ -78,7 +78,7 @@ export default async function ConfigurationGovernance() {
         <div className={`${card} p-5`}>
           <h2 className="text-sm font-bold text-gray-900 mb-3">Review Workload</h2>
           {s.reviewWorkload.length === 0 ? <p className="text-sm text-gray-400 py-4">No reviews pending.</p> : (
-            <div className="space-y-1.5">{s.reviewWorkload.map((w: any) => <div key={w.type} className="flex items-center justify-between text-xs"><span className="text-gray-600">{REVIEW_LABEL[w.type] ?? w.type}</span><b className="tabular-nums text-amber-600">{w.n}</b></div>)}</div>
+            <div className="space-y-1.5">{s.reviewWorkload.map((w: any) => <div key={w.type} className="flex items-center justify-between text-xs"><span className="text-gray-600">{REVIEW_LABEL[w.type] ?? w.type}</span><b className="tabular-nums text-[var(--cmp-text-warning)]">{w.n}</b></div>)}</div>
           )}
           <div className="mt-3 pt-2 border-t border-gray-100 text-[11px] text-gray-500 space-y-1"><div className="flex justify-between"><span>Rollback rate</span><b className="tabular-nums">{s.rollbackRate}%</b></div><div className="flex justify-between"><span>Emergency-change rate</span><b className="tabular-nums">{s.emergencyRate}%</b></div></div>
         </div>

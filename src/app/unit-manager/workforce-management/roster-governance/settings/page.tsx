@@ -47,7 +47,7 @@ export default async function GovernanceSettings() {
       </div>
       <RosterGovTabs />
 
-      <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-5">
+      <div className="bg-[var(--cmp-surface-success)] border border-[var(--cmp-color-success)] rounded-xl p-5">
         <p className="font-semibold text-emerald-900">✓ Planning parameters are live in the Workforce Planning Studio</p>
         <p className="text-sm text-emerald-800 mt-1">Contracted hours, leave, staffing ratios, working-time limits and cost multipliers that drive coverage, skill-mix and working-time governance are already tenant-configurable and versioned in <Link href="/unit-manager/planning-studio" className="text-emerald-900 underline font-medium">Workforce Planning Studio (WPS-001)</Link>. Changes flow through the Establishment engine into the whole scheduling &amp; governance chain.</p>
       </div>
@@ -57,7 +57,7 @@ export default async function GovernanceSettings() {
         <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-2">{AREAS.map(a => (
           <div key={a.name} className="flex items-start justify-between gap-2 rounded-lg border border-gray-100 p-3">
             <div className="min-w-0"><p className="text-xs font-semibold text-gray-800">{a.name}</p><p className="text-[10px] text-gray-400 mt-0.5">{a.cfg}</p></div>
-            <span className={`shrink-0 text-[9px] px-1.5 py-0.5 rounded ${a.live ? "bg-emerald-50 text-emerald-700" : "bg-gray-100 text-gray-400"}`}>{a.live ? "Live" : "Next phase"}</span>
+            <span className={`shrink-0 text-[9px] px-1.5 py-0.5 rounded ${a.live ? "bg-[var(--cmp-surface-success)] text-emerald-700" : "bg-gray-100 text-gray-400"}`}>{a.live ? "Live" : "Next phase"}</span>
           </div>
         ))}</div>
         <p className="text-[10px] text-gray-400 mt-3">Every configuration change must be versioned, effective-dated, attributable, rollback-able and must not retroactively alter a previously approved roster (§19.3 / BR-017) — this governance-config store is next-phase.</p>

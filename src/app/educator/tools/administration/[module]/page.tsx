@@ -44,7 +44,7 @@ export default async function AdminModulePage({ params }: { params: Promise<{ mo
           <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight text-gray-900">{m.title}</h1>
           <p className="text-gray-500 text-sm">{m.blurb}</p>
         </div>
-        <span className={`ml-auto self-center text-[10px] font-bold uppercase tracking-wider rounded-lg px-2.5 py-1 whitespace-nowrap ${m.live ? "text-emerald-600 bg-emerald-50 border border-emerald-100" : "text-amber-600 bg-amber-50 border border-amber-100"}`}>{m.live ? "Live data" : "Scaffold · store soon"}</span>
+        <span className={`ml-auto self-center text-[10px] font-bold uppercase tracking-wider rounded-lg px-2.5 py-1 whitespace-nowrap ${m.live ? "text-[var(--cmp-text-success)] bg-[var(--cmp-surface-success)] border border-[var(--cmp-color-success)]" : "text-[var(--cmp-text-warning)] bg-[var(--cmp-surface-warning)] border border-[var(--cmp-color-warning)]"}`}>{m.live ? "Live data" : "Scaffold · store soon"}</span>
       </div>
 
       <div className="flex flex-col gap-5">
@@ -69,7 +69,7 @@ export default async function AdminModulePage({ params }: { params: Promise<{ mo
             <p className="text-[11px] font-bold uppercase tracking-widest text-gray-500 mb-3">Organisation Hierarchy <span className="normal-case font-normal text-gray-400">· live</span></p>
             <div className="flex flex-col gap-2">
               {structure.map((n, i) => (
-                <div key={i} className={`flex items-center gap-3 rounded-xl border border-gray-100 p-3 ${i === 0 ? "bg-emerald-50/40" : ""}`}>
+                <div key={i} className={`flex items-center gap-3 rounded-xl border border-gray-100 p-3 ${i === 0 ? "bg-[var(--cmp-surface-success)]/40" : ""}`}>
                   <span className="text-lg shrink-0">{i === 0 ? "🏛️" : "🏥"}</span>
                   <span className="flex-1 min-w-0"><span className="block text-[13px] font-semibold text-gray-800 truncate">{n.name}</span><span className="text-[10px] text-gray-400">{n.type} · {n.sub}</span></span>
                   <span className="text-[11px] text-gray-500">{n.count} {i === 0 ? "users" : "depts"}</span>
@@ -89,7 +89,7 @@ export default async function AdminModulePage({ params }: { params: Promise<{ mo
                   <thead><tr className="text-[10px] font-bold uppercase tracking-wider text-gray-400 border-y border-gray-100"><th className="px-4 py-2">Program</th><th className="px-2 py-2">Category</th><th className="px-2 py-2">Level</th><th className="px-2 py-2">Status</th><th className="px-2 py-2">Enrolled</th></tr></thead>
                   <tbody>
                     {programs.map(p => (
-                      <tr key={p.id} className="text-[12px] border-b border-gray-50 hover:bg-gray-50"><td className="px-4 py-2.5 font-medium text-gray-800">{p.title}</td><td className="px-2 py-2.5 text-gray-500">{p.category}</td><td className="px-2 py-2.5 text-gray-500">{p.level}</td><td className="px-2 py-2.5"><span className={`text-[9px] font-bold uppercase px-1.5 py-0.5 rounded ${p.status === "Published" ? "bg-emerald-100 text-emerald-700" : "bg-gray-100 text-gray-600"}`}>{p.status}</span></td><td className="px-2 py-2.5 text-gray-600">{p.enrolled}</td></tr>
+                      <tr key={p.id} className="text-[12px] border-b border-gray-50 hover:bg-gray-50"><td className="px-4 py-2.5 font-medium text-gray-800">{p.title}</td><td className="px-2 py-2.5 text-gray-500">{p.category}</td><td className="px-2 py-2.5 text-gray-500">{p.level}</td><td className="px-2 py-2.5"><span className={`text-[9px] font-bold uppercase px-1.5 py-0.5 rounded ${p.status === "Published" ? "bg-[var(--cmp-surface-success)] text-emerald-700" : "bg-gray-100 text-gray-600"}`}>{p.status}</span></td><td className="px-2 py-2.5 text-gray-600">{p.enrolled}</td></tr>
                     ))}
                   </tbody>
                 </table>
@@ -143,7 +143,7 @@ export default async function AdminModulePage({ params }: { params: Promise<{ mo
           <div className="rounded-2xl bg-white border border-gray-200 shadow-sm p-5">
             <div className="flex items-center justify-between mb-3">
               <p className="text-[11px] font-bold uppercase tracking-widest text-gray-500">What This Module Manages</p>
-              <span className="text-[9px] font-bold uppercase tracking-wider text-amber-600 bg-amber-50 rounded px-1.5 py-0.5">store soon</span>
+              <span className="text-[9px] font-bold uppercase tracking-wider text-[var(--cmp-text-warning)] bg-[var(--cmp-surface-warning)] rounded px-1.5 py-0.5">store soon</span>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {groups.map(g => (

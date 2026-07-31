@@ -25,21 +25,21 @@ const time = (t: string | null) => t ? new Date(t).toLocaleTimeString([], { hour
 // neutral-but-visible: it means no clocking record exists, NOT that the person
 // is absent.
 const STATE: Record<string, { label: string; tone: string }> = {
-  no_show:            { label: "No show",       tone: "bg-red-100 text-red-700" },
-  absent:             { label: "Absent",        tone: "bg-rose-100 text-rose-700" },
-  late:               { label: "Late",          tone: "bg-amber-100 text-amber-700" },
+  no_show:            { label: "No show",       tone: "bg-[var(--cmp-surface-critical)] text-[var(--cmp-text-critical)]" },
+  absent:             { label: "Absent",        tone: "bg-[var(--cmp-surface-error)] text-[var(--cmp-text-error)]" },
+  late:               { label: "Late",          tone: "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]" },
   not_recorded:       { label: "Not recorded",  tone: "bg-gray-100 text-gray-500" },
-  on_duty_unverified: { label: "On duty (unverified)", tone: "bg-sky-100 text-sky-700" },
-  on_duty:            { label: "On duty",       tone: "bg-green-100 text-green-700" },
+  on_duty_unverified: { label: "On duty (unverified)", tone: "bg-[var(--cmp-surface-information)] text-[var(--cmp-text-information)]" },
+  on_duty:            { label: "On duty",       tone: "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]" },
   departed:           { label: "Departed",      tone: "bg-teal-50 text-teal-700" },
 };
 const SEV: Record<string, string> = {
-  critical: "bg-red-100 text-red-700", high: "bg-orange-100 text-orange-700",
-  moderate: "bg-amber-100 text-amber-700", low: "bg-gray-100 text-gray-600",
+  critical: "bg-[var(--cmp-surface-critical)] text-[var(--cmp-text-critical)]", high: "bg-[var(--cmp-surface-warning)] text-orange-700",
+  moderate: "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]", low: "bg-gray-100 text-gray-600",
   informational: "bg-gray-100 text-gray-500",
 };
 const PRIORITY: Record<string, string> = {
-  critical: "bg-red-100 text-red-700", high: "bg-orange-100 text-orange-700",
+  critical: "bg-[var(--cmp-surface-critical)] text-[var(--cmp-text-critical)]", high: "bg-[var(--cmp-surface-warning)] text-orange-700",
   normal: "bg-gray-100 text-gray-600", low: "bg-gray-100 text-gray-500",
 };
 
@@ -94,7 +94,7 @@ export default async function ShiftAttendancePage() {
           <h1 className="text-2xl font-bold text-gray-900">Shift Attendance &amp; Fatigue</h1>
           <p className="text-sm text-gray-500 mt-0.5">
             {titleCase(s.type)} shift · {s.date}{s.unit ? ` · ${s.unit}` : ""} ·{" "}
-            <span className={s.status === "active" ? "text-green-700 font-medium" : "text-gray-500"}>{titleCase(s.status)}</span>
+            <span className={s.status === "active" ? "text-[var(--cmp-text-success)] font-medium" : "text-gray-500"}>{titleCase(s.status)}</span>
             {s.startsAt ? ` · ${time(s.startsAt)}–${time(s.endsAt)}` : ""}
           </p>
         </div>
@@ -103,12 +103,12 @@ export default async function ShiftAttendancePage() {
 
       <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3">
         <Kpi label="Rostered" value={k.rostered} sub="staff on this shift" />
-        <Kpi label="Clock-in verified" value={`${k.verification}%`} tone={k.verification >= 90 ? "text-green-700" : k.verification >= 70 ? "text-amber-600" : "text-red-600"} sub={`${k.verified} of ${k.rostered}`} />
-        <Kpi label="Late" value={k.late} tone={k.late ? "text-amber-600" : undefined} />
-        <Kpi label="Absent" value={k.absent} tone={k.absent ? "text-rose-600" : undefined} />
-        <Kpi label="No show" value={k.noShow} tone={k.noShow ? "text-red-600" : undefined} />
-        <Kpi label="Uncovered" value={k.uncovered} tone={k.uncovered ? "text-red-600" : undefined} sub="posts awaiting cover" />
-        <Kpi label="Fatigue flags" value={k.fatigueFlagged} tone={k.fatigueFlagged ? "text-orange-600" : undefined} sub="on this shift" />
+        <Kpi label="Clock-in verified" value={`${k.verification}%`} tone={k.verification >= 90 ? "text-[var(--cmp-text-success)]" : k.verification >= 70 ? "text-[var(--cmp-text-warning)]" : "text-[var(--cmp-text-critical)]"} sub={`${k.verified} of ${k.rostered}`} />
+        <Kpi label="Late" value={k.late} tone={k.late ? "text-[var(--cmp-text-warning)]" : undefined} />
+        <Kpi label="Absent" value={k.absent} tone={k.absent ? "text-[var(--cmp-text-error)]" : undefined} />
+        <Kpi label="No show" value={k.noShow} tone={k.noShow ? "text-[var(--cmp-text-critical)]" : undefined} />
+        <Kpi label="Uncovered" value={k.uncovered} tone={k.uncovered ? "text-[var(--cmp-text-critical)]" : undefined} sub="posts awaiting cover" />
+        <Kpi label="Fatigue flags" value={k.fatigueFlagged} tone={k.fatigueFlagged ? "text-[var(--cmp-text-warning)]" : undefined} sub="on this shift" />
       </div>
 
       {k.notRecorded > 0 && (
@@ -147,14 +147,14 @@ export default async function ShiftAttendancePage() {
                     </td>
                     <td className="py-2 text-gray-600 tabular-nums text-xs">
                       {time(r.checkInAt)}
-                      {r.minutesLate ? <span className="text-amber-600 ml-1">+{r.minutesLate}m</span> : null}
+                      {r.minutesLate ? <span className="text-[var(--cmp-text-warning)] ml-1">+{r.minutesLate}m</span> : null}
                     </td>
                     <td className="py-2 text-gray-600 tabular-nums text-xs">{time(r.checkOutAt)}</td>
                     <td className="py-2 text-gray-400 text-xs">{r.checkInMethod ? titleCase(r.checkInMethod) : "—"}</td>
                     <td className="py-2 text-gray-500 text-xs">
-                      {r.absenceType ? <span className="text-rose-600">{titleCase(r.absenceType)}</span> : null}
-                      {r.replacementRequired ? <span className="ml-1 text-[10px] bg-red-50 text-red-600 rounded px-1">cover needed</span> : null}
-                      {r.exceptions > 0 ? <span className="ml-1 text-[10px] bg-amber-50 text-amber-700 rounded px-1">{r.exceptions} exception{r.exceptions === 1 ? "" : "s"}</span> : null}
+                      {r.absenceType ? <span className="text-[var(--cmp-text-error)]">{titleCase(r.absenceType)}</span> : null}
+                      {r.replacementRequired ? <span className="ml-1 text-[10px] bg-[var(--cmp-surface-critical)] text-[var(--cmp-text-critical)] rounded px-1">cover needed</span> : null}
+                      {r.exceptions > 0 ? <span className="ml-1 text-[10px] bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)] rounded px-1">{r.exceptions} exception{r.exceptions === 1 ? "" : "s"}</span> : null}
                     </td>
                   </tr>
                 ))}
@@ -179,11 +179,11 @@ export default async function ShiftAttendancePage() {
             <ul className="space-y-2">
               {d.fatigue.slice(0, 10).map((f: any) => (
                 <li key={f.staffId} className="flex items-start gap-2">
-                  <span className={`mt-1 w-1.5 h-1.5 rounded-full shrink-0 ${f.onShift ? "bg-orange-500" : "bg-gray-300"}`} />
+                  <span className={`mt-1 w-1.5 h-1.5 rounded-full shrink-0 ${f.onShift ? "bg-[var(--cmp-color-warning)]" : "bg-gray-300"}`} />
                   <div className="min-w-0">
                     <p className="text-sm text-gray-900">
                       {f.name}
-                      {f.onShift && <span className="ml-1.5 text-[10px] font-semibold bg-orange-50 text-orange-700 rounded px-1">on this shift</span>}
+                      {f.onShift && <span className="ml-1.5 text-[10px] font-semibold bg-[var(--cmp-surface-warning)] text-orange-700 rounded px-1">on this shift</span>}
                     </p>
                     <p className="text-[11px] text-gray-500">{f.flags.join(" · ")}</p>
                     <p className="text-[10px] text-gray-400">
@@ -201,7 +201,7 @@ export default async function ShiftAttendancePage() {
         <div className={card}>
           <h2 className="text-sm font-bold text-gray-900 mb-3">
             Open Attendance Exceptions
-            {k.criticalExceptions > 0 && <span className="ml-2 text-[10px] font-semibold bg-red-100 text-red-700 rounded px-1.5 py-0.5">{k.criticalExceptions} critical/high</span>}
+            {k.criticalExceptions > 0 && <span className="ml-2 text-[10px] font-semibold bg-[var(--cmp-surface-critical)] text-[var(--cmp-text-critical)] rounded px-1.5 py-0.5">{k.criticalExceptions} critical/high</span>}
           </h2>
           {d.exceptions.length === 0 ? (
             <p className="text-sm text-gray-500">No unresolved attendance exceptions.</p>
@@ -239,7 +239,7 @@ export default async function ShiftAttendancePage() {
                   <div className="min-w-0">
                     <p className="text-sm text-gray-900">
                       {r.quantity > 1 ? `${r.quantity} × ` : ""}{titleCase(r.role) || "Staff"}
-                      {r.is_redeployment && <span className="ml-1.5 text-[10px] bg-sky-50 text-sky-700 rounded px-1">redeployment</span>}
+                      {r.is_redeployment && <span className="ml-1.5 text-[10px] bg-[var(--cmp-surface-information)] text-[var(--cmp-text-information)] rounded px-1">redeployment</span>}
                     </p>
                     {r.reason && <p className="text-[11px] text-gray-500">{r.reason}</p>}
                     <p className="text-[10px] text-gray-400">
@@ -272,7 +272,7 @@ export default async function ShiftAttendancePage() {
                     </p>
                     {l.operational_impact && <p className="text-[11px] text-gray-500">{l.operational_impact}</p>}
                   </div>
-                  <span className={`text-[10px] font-semibold rounded px-1.5 py-0.5 shrink-0 ${l.leave_approval_status === "approved" ? "bg-green-100 text-green-700" : l.leave_approval_status === "rejected" ? "bg-red-100 text-red-700" : "bg-amber-100 text-amber-700"}`}>{titleCase(l.leave_approval_status)}</span>
+                  <span className={`text-[10px] font-semibold rounded px-1.5 py-0.5 shrink-0 ${l.leave_approval_status === "approved" ? "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]" : l.leave_approval_status === "rejected" ? "bg-[var(--cmp-surface-critical)] text-[var(--cmp-text-critical)]" : "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]"}`}>{titleCase(l.leave_approval_status)}</span>
                 </li>
               ))}
             </ul>
@@ -287,7 +287,7 @@ export default async function ShiftAttendancePage() {
           <p className="text-[11px] text-gray-400 mb-3">From <code className="text-[10px] bg-gray-50 px-1 rounded">op_roster_actuals</code> — only shifts a manager has confirmed appear here, so this trails live attendance above.</p>
           <div className="flex flex-wrap items-center gap-4">
             <div>
-              <p className={`text-2xl font-bold tabular-nums ${d.variance.adherence >= 90 ? "text-green-700" : d.variance.adherence >= 75 ? "text-amber-600" : "text-red-600"}`}>{d.variance.adherence}%</p>
+              <p className={`text-2xl font-bold tabular-nums ${d.variance.adherence >= 90 ? "text-[var(--cmp-text-success)]" : d.variance.adherence >= 75 ? "text-[var(--cmp-text-warning)]" : "text-[var(--cmp-text-critical)]"}`}>{d.variance.adherence}%</p>
               <p className="text-xs text-gray-500">attended as rostered</p>
               <p className="text-[10px] text-gray-400">{d.variance.attended} of {d.variance.total} confirmed</p>
             </div>

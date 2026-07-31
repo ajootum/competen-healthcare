@@ -9,7 +9,7 @@ import EvidenceActions from "./EvidenceActions";
 export const dynamic = "force-dynamic";
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
-const DOT: Record<string, string> = { emerald: "bg-emerald-500", amber: "bg-amber-500", rose: "bg-rose-500", gray: "bg-gray-300" };
+const DOT: Record<string, string> = { emerald: "bg-[var(--cmp-color-success)]", amber: "bg-[var(--cmp-color-warning)]", rose: "bg-[var(--cmp-color-error)]", gray: "bg-gray-300" };
 const fmt = (t: string | null) => { if (!t) return ""; try { return new Date(t).toLocaleDateString("en-GB", { day: "2-digit", month: "short" }); } catch { return ""; } };
 
 export default async function EvidenceIntegrityPage() {
@@ -37,19 +37,19 @@ export default async function EvidenceIntegrityPage() {
       </div>
 
       {!q.provisioned ? (
-        <div className="bg-amber-50 border border-amber-100 rounded-xl p-4"><p className="text-[13px] text-amber-900">Evidence integrity isn&apos;t provisioned — apply migration 149 (<code className="text-[11px]">149-capa-evidence-integrity.sql</code>) to add the verification lifecycle to <code className="text-[11px]">evidence</code>.</p></div>
+        <div className="bg-[var(--cmp-surface-warning)] border border-[var(--cmp-color-warning)] rounded-xl p-4"><p className="text-[13px] text-amber-900">Evidence integrity isn&apos;t provisioned — apply migration 149 (<code className="text-[11px]">149-capa-evidence-integrity.sql</code>) to add the verification lifecycle to <code className="text-[11px]">evidence</code>.</p></div>
       ) : q.empty ? (
         <div className="bg-white border border-gray-100 rounded-xl p-6"><p className="text-sm text-gray-400">No evidence recorded yet. Once competency evidence is uploaded, the verification queue and integrity signals populate here.</p></div>
       ) : (
         <>
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 mb-5">
             {[
-              { label: "Verification rate", value: `${q.kpis.verificationRate}%`, tone: q.kpis.verificationRate >= 80 ? "text-emerald-600" : "text-amber-600", sub: `${q.kpis.verified}/${q.kpis.total}` },
-              { label: "Pending review", value: q.kpis.pending, tone: q.kpis.pending ? "text-amber-600" : "text-gray-900", sub: "backlog" },
-              { label: "Integrity issues", value: q.kpis.integrityIssues, tone: q.kpis.integrityIssues ? "text-rose-600" : "text-gray-900", sub: "flag/reject/expired/dupe" },
-              { label: "Flagged", value: q.kpis.flagged, tone: q.kpis.flagged ? "text-rose-600" : "text-gray-900", sub: "under review" },
-              { label: "Expiring ≤30d", value: q.kpis.expiring, tone: q.kpis.expiring ? "text-amber-600" : "text-gray-900", sub: `${q.kpis.expired} expired` },
-              { label: "Suspected dupes", value: q.kpis.duplicates, tone: q.kpis.duplicates ? "text-amber-600" : "text-gray-900", sub: "same file+size" },
+              { label: "Verification rate", value: `${q.kpis.verificationRate}%`, tone: q.kpis.verificationRate >= 80 ? "text-[var(--cmp-text-success)]" : "text-[var(--cmp-text-warning)]", sub: `${q.kpis.verified}/${q.kpis.total}` },
+              { label: "Pending review", value: q.kpis.pending, tone: q.kpis.pending ? "text-[var(--cmp-text-warning)]" : "text-gray-900", sub: "backlog" },
+              { label: "Integrity issues", value: q.kpis.integrityIssues, tone: q.kpis.integrityIssues ? "text-[var(--cmp-text-error)]" : "text-gray-900", sub: "flag/reject/expired/dupe" },
+              { label: "Flagged", value: q.kpis.flagged, tone: q.kpis.flagged ? "text-[var(--cmp-text-error)]" : "text-gray-900", sub: "under review" },
+              { label: "Expiring ≤30d", value: q.kpis.expiring, tone: q.kpis.expiring ? "text-[var(--cmp-text-warning)]" : "text-gray-900", sub: `${q.kpis.expired} expired` },
+              { label: "Suspected dupes", value: q.kpis.duplicates, tone: q.kpis.duplicates ? "text-[var(--cmp-text-warning)]" : "text-gray-900", sub: "same file+size" },
             ].map(k => (
               <div key={k.label} className={`${card} p-3.5`}><p className={`text-xl font-bold tabular-nums ${k.tone}`}>{k.value}</p><p className="text-[10px] text-gray-400 font-medium mt-0.5 leading-tight">{k.label}</p><p className="text-[9px] text-gray-300 leading-tight">{k.sub}</p></div>
             ))}
@@ -95,7 +95,7 @@ export default async function EvidenceIntegrityPage() {
               {q.suspicious.length === 0 ? <p className="text-xs text-gray-400 py-6 text-center">No duplicate files detected. ✅</p> : (
                 <div className="space-y-2">
                   {q.suspicious.map((s: any, i: number) => (
-                    <div key={i} className="flex items-center gap-2 text-[12px]"><span className="w-1.5 h-1.5 rounded-full bg-amber-500 shrink-0" /><span className="text-gray-700 truncate flex-1" title={s.file}>{s.file}</span><span className="text-[10px] font-semibold text-amber-600 shrink-0">×{s.count}</span></div>
+                    <div key={i} className="flex items-center gap-2 text-[12px]"><span className="w-1.5 h-1.5 rounded-full bg-[var(--cmp-color-warning)] shrink-0" /><span className="text-gray-700 truncate flex-1" title={s.file}>{s.file}</span><span className="text-[10px] font-semibold text-[var(--cmp-text-warning)] shrink-0">×{s.count}</span></div>
                   ))}
                 </div>
               )}

@@ -57,7 +57,7 @@ export function NewFrameworkButton() {
       </select>
       <button onClick={create} disabled={busy || !name.trim()} className="text-[11px] font-bold text-white bg-purple-600 rounded px-2.5 py-1 disabled:opacity-40">{busy ? "…" : "Create"}</button>
       <button onClick={() => { setOpen(false); setErr(null); }} className="text-[11px] text-gray-500 px-1.5">Cancel</button>
-      {err && <span className="text-[10px] text-red-600 w-full">{err}</span>}
+      {err && <span className="text-[10px] text-[var(--cmp-text-critical)] w-full">{err}</span>}
     </div>
   );
 }
@@ -80,10 +80,10 @@ export function PublishControl({ frameworkId, status }: { frameworkId: string; s
   return (
     <div className="flex items-center gap-1.5 flex-wrap">
       {status === "draft" && (
-        <button onClick={() => step("submit_review")} disabled={!!busy} className={`${btn} text-amber-700 bg-amber-50 border border-amber-200 hover:bg-amber-100`}>Submit for review</button>
+        <button onClick={() => step("submit_review")} disabled={!!busy} className={`${btn} text-[var(--cmp-text-warning)] bg-[var(--cmp-surface-warning)] border border-[var(--cmp-color-warning)] hover:bg-[var(--cmp-surface-warning)]`}>Submit for review</button>
       )}
       {(status === "draft" || status === "in_review") && (
-        <button onClick={() => step("publish", "Publish this framework? A version snapshot will be recorded.")} disabled={!!busy} className={`${btn} text-white bg-green-600 hover:bg-green-700`}>{busy === "publish" ? "Publishing…" : "⬆ Publish"}</button>
+        <button onClick={() => step("publish", "Publish this framework? A version snapshot will be recorded.")} disabled={!!busy} className={`${btn} text-white bg-[var(--cmp-color-success)] hover:bg-green-700`}>{busy === "publish" ? "Publishing…" : "⬆ Publish"}</button>
       )}
       {status === "in_review" && (
         <button onClick={() => step("revert")} disabled={!!busy} className={`${btn} text-gray-600 bg-white border border-gray-200 hover:border-gray-300`}>Back to draft</button>
@@ -94,7 +94,7 @@ export function PublishControl({ frameworkId, status }: { frameworkId: string; s
       {status === "archived" && (
         <button onClick={() => step("revert")} disabled={!!busy} className={`${btn} text-purple-700 bg-purple-50 border border-purple-200 hover:bg-purple-100`}>Restore to draft</button>
       )}
-      {err && <span className="text-[10px] text-red-600">{err}</span>}
+      {err && <span className="text-[10px] text-[var(--cmp-text-critical)]">{err}</span>}
     </div>
   );
 }
@@ -180,9 +180,9 @@ export function StructureEditor({ frameworkId, initial }: { frameworkId: string;
       <div className="flex items-center gap-2 mb-2">
         <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest flex-1">Structure Editor · drag to reorder</span>
         {saving && <span className="text-[10px] text-gray-400">Saving…</span>}
-        {!saving && savedAt && <span className="text-[10px] text-green-600">Saved ✓</span>}
+        {!saving && savedAt && <span className="text-[10px] text-[var(--cmp-text-success)]">Saved ✓</span>}
       </div>
-      {err && <p className="text-[10px] text-red-600 mb-2">{err}</p>}
+      {err && <p className="text-[10px] text-[var(--cmp-text-critical)] mb-2">{err}</p>}
 
       <div className="space-y-1.5">
         {doms.map((d, di) => (
@@ -253,7 +253,7 @@ export function PresenceBar({ frameworkId, me }: { frameworkId: string; me: stri
   if (!others.length) return null;
   return (
     <span className="inline-flex items-center gap-1.5 text-[10px] text-purple-700 bg-purple-50 border border-purple-200 rounded-full px-2 py-0.5">
-      <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
+      <span className="w-1.5 h-1.5 rounded-full bg-[var(--cmp-color-success)] animate-pulse" />
       {others.length === 1 ? `${others[0]} is also viewing` : `${others.length} others viewing`}
     </span>
   );

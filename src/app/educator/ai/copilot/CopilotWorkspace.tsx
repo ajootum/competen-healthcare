@@ -30,7 +30,7 @@ const ACT_CARDS: [string, string, string][] = [
   ["📋", "Send for Validation", "/educator/validations"], ["🎯", "Create Remediation Plan", "/educator/interventions"],
   ["🗓️", "Schedule Assessment", "/educator/meetings"], ["🛡️", "Prepare Accreditation", "/educator/analytics/accreditation"],
 ];
-const PRIO_CLS: Record<string, string> = { High: "bg-red-500/20 text-red-300 border-red-500/30", Medium: "bg-amber-500/20 text-amber-300 border-amber-500/30", Low: "bg-sky-500/20 text-sky-300 border-sky-500/30" };
+const PRIO_CLS: Record<string, string> = { High: "bg-[var(--cmp-color-critical)]/20 text-red-300 border-red-500/30", Medium: "bg-[var(--cmp-color-warning)]/20 text-amber-300 border-amber-500/30", Low: "bg-[var(--cmp-color-information)]/20 text-sky-300 border-sky-500/30" };
 
 export default function CopilotWorkspace({ ctx }: { ctx: CopilotContext }) {
   const [messages, setMessages] = useState<Message[]>([]);

@@ -73,9 +73,9 @@ const NAV = NAV_SECTIONS.flatMap(s => s.items);
 
 // Quick-actions rail (§5) — cross-links to the authoritative surface for each action.
 const QUICK_ACTIONS = [
-  { label: "Create Assessment",   href: "/admin/competencies",           icon: "📝", tint: "bg-emerald-500/90" },
-  { label: "Upload Evidence",     href: "/educator/evidence",            icon: "📎", tint: "bg-sky-500/90" },
-  { label: "Add Competency",      href: "/competency-office/frameworks", icon: "➕", tint: "bg-amber-500/90" },
+  { label: "Create Assessment",   href: "/admin/competencies",           icon: "📝", tint: "bg-[var(--cmp-color-success)]/90" },
+  { label: "Upload Evidence",     href: "/educator/evidence",            icon: "📎", tint: "bg-[var(--cmp-color-information)]/90" },
+  { label: "Add Competency",      href: "/competency-office/frameworks", icon: "➕", tint: "bg-[var(--cmp-color-warning)]/90" },
   { label: "Assign Learning",     href: "/admin/curricula",              icon: "📖", tint: "bg-violet-500/90" },
   { label: "Run Readiness Report", href: "/competency-office/readiness", icon: "🧾", tint: "bg-teal-500/90" },
 ];

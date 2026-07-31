@@ -39,13 +39,13 @@ export default function SuggestLinks({ unlinked }: { unlinked: number }) {
             <>
               Analysed <span className="font-semibold text-gray-700">{res.analysed}</span> signals ·{" "}
               <span className="font-semibold text-violet-700">{res.proposed} proposed</span> for review
-              {res.rejected > 0 && <> · <span className="text-amber-700">{res.rejected} discarded</span> (invented ids or weak rationale)</>}
+              {res.rejected > 0 && <> · <span className="text-[var(--cmp-text-warning)]">{res.rejected} discarded</span> (invented ids or weak rationale)</>}
               {res.skipped > 0 && <> · {res.skipped} already linked</>}
             </>
           )}
         </span>
       )}
-      {err && <span className="text-[11px] text-rose-600 font-medium">{err}</span>}
+      {err && <span className="text-[11px] text-[var(--cmp-text-error)] font-medium">{err}</span>}
     </div>
   );
 }

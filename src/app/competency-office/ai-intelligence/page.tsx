@@ -26,7 +26,7 @@ export default async function AiIntelligencePage() {
       <CmoCopilot />
       <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-3">
         <Kpi label="Recommendations" value={recs.length} sub="actionable" tone="text-teal-600" />
-        <Kpi label="High Impact" value={highImpact.length} sub="prioritised" tone={highImpact.length ? "text-rose-600" : undefined} />
+        <Kpi label="High Impact" value={highImpact.length} sub="prioritised" tone={highImpact.length ? "text-[var(--cmp-text-error)]" : undefined} />
         <Kpi label="Avg Confidence" value={`${avgConf}%`} sub="explainable" />
         <Kpi label="Categories" value={byCategory.length} sub="domains" />
         <Kpi label="Open" value={recs.filter((r: any) => r.status === "open").length} sub="awaiting review" />
@@ -41,7 +41,7 @@ export default async function AiIntelligencePage() {
         <Card title="AI Recommendations" className="xl:col-span-2" right={<span className="text-[11px] text-gray-400">by confidence</span>}>
           <div className="space-y-2">{[...recs].sort((a: any, b: any) => Number(b.confidence) - Number(a.confidence)).map((r: any) => (
             <div key={r.id} className="flex items-start gap-3 border border-gray-100 rounded-lg p-2.5">
-              <span className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 text-sm ${r.impact === "high" ? "bg-rose-50" : r.impact === "medium" ? "bg-amber-50" : "bg-blue-50"}`}>{CAT_ICON[r.category] ?? "💡"}</span>
+              <span className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 text-sm ${r.impact === "high" ? "bg-[var(--cmp-surface-error)]" : r.impact === "medium" ? "bg-[var(--cmp-surface-warning)]" : "bg-[var(--cmp-surface-information)]"}`}>{CAT_ICON[r.category] ?? "💡"}</span>
               <div className="min-w-0 flex-1"><div className="flex items-center gap-1.5 flex-wrap"><p className="text-[12px] font-medium text-gray-900">{r.title}</p><Pill text={r.category} tone={CAT_TONE[r.category] ?? "slate"} /><Pill text={`${r.impact} impact`} tone={r.impact === "high" ? "rose" : r.impact === "medium" ? "amber" : "slate"} /></div><p className="text-[11px] text-gray-500 mt-0.5">{r.detail}</p></div>
               <span className="text-[12px] font-semibold text-gray-700 shrink-0">{r.confidence}%</span>
             </div>

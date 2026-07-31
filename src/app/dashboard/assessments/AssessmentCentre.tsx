@@ -23,12 +23,12 @@ export type CentreRow = {
 };
 
 const STATUS_UI: Record<CentreRow["status"], { label: string; cls: string }> = {
-  ready:           { label: "Ready",           cls: "bg-blue-50 text-blue-600" },
-  in_progress:     { label: "In Progress",     cls: "bg-orange-50 text-orange-600" },
-  awaiting_review: { label: "Awaiting Review", cls: "bg-amber-50 text-amber-700" },
-  retake:          { label: "Retake Available", cls: "bg-amber-50 text-amber-700" },
+  ready:           { label: "Ready",           cls: "bg-[var(--cmp-surface-information)] text-[var(--cmp-text-information)]" },
+  in_progress:     { label: "In Progress",     cls: "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]" },
+  awaiting_review: { label: "Awaiting Review", cls: "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]" },
+  retake:          { label: "Retake Available", cls: "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]" },
   completed:       { label: "Completed",       cls: "bg-teal-50 text-teal-700" },
-  validated:       { label: "Validated",       cls: "bg-green-50 text-green-700" },
+  validated:       { label: "Validated",       cls: "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]" },
 };
 
 const CATEGORIES: { key: string; label: string }[] = [

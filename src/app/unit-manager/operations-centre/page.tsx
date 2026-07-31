@@ -17,9 +17,9 @@ export const dynamic = "force-dynamic";
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 const card = "bg-white rounded-xl border border-gray-200";
-const TONE: Record<string, string> = { red: "text-rose-600", amber: "text-amber-600", green: "text-green-600", blue: "text-blue-600", gray: "text-gray-400" };
-const DOT: Record<string, string> = { red: "bg-rose-500", amber: "bg-amber-500", green: "bg-green-500", blue: "bg-blue-500", gray: "bg-gray-300" };
-const SEV: Record<string, string> = { Critical: "bg-rose-50 text-rose-700", High: "bg-amber-50 text-amber-700", Medium: "bg-blue-50 text-blue-700" };
+const TONE: Record<string, string> = { red: "text-[var(--cmp-text-error)]", amber: "text-[var(--cmp-text-warning)]", green: "text-[var(--cmp-text-success)]", blue: "text-[var(--cmp-text-information)]", gray: "text-gray-400" };
+const DOT: Record<string, string> = { red: "bg-[var(--cmp-color-error)]", amber: "bg-[var(--cmp-color-warning)]", green: "bg-[var(--cmp-color-success)]", blue: "bg-[var(--cmp-color-information)]", gray: "bg-gray-300" };
+const SEV: Record<string, string> = { Critical: "bg-[var(--cmp-surface-error)] text-[var(--cmp-text-error)]", High: "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]", Medium: "bg-[var(--cmp-surface-information)] text-blue-700" };
 
 function Kpi({ label, value, sub, tone, accent }: { label: string; value: any; sub?: string; tone?: string; accent?: boolean }) {
   return (
@@ -80,7 +80,7 @@ export default async function UnitOperationsCentre({ searchParams }: { searchPar
       <div className="space-y-4">
         <div className="flex items-start justify-between gap-3 flex-wrap"><div><h1 className="text-2xl font-bold text-gray-900 tracking-tight">Unit Operations Centre</h1><p className="text-sm text-gray-500">Real-time operational overview and predictive insights.</p></div><UnitFilters departments={d.departments} /></div>
         <UnitCommandTabs />
-        <div className="bg-amber-50 border border-amber-200 rounded-xl p-6"><p className="font-semibold text-amber-900">⚙️ Operations tables not provisioned</p><p className="text-sm text-amber-800 mt-1">The Clinical Operations (op_*) tables aren&apos;t available for this tenant yet.</p></div>
+        <div className="bg-[var(--cmp-surface-warning)] border border-[var(--cmp-color-warning)] rounded-xl p-6"><p className="font-semibold text-amber-900">⚙️ Operations tables not provisioned</p><p className="text-sm text-amber-800 mt-1">The Clinical Operations (op_*) tables aren&apos;t available for this tenant yet.</p></div>
       </div>
     );
   }
@@ -92,7 +92,7 @@ export default async function UnitOperationsCentre({ searchParams }: { searchPar
       <div className="flex items-start justify-between gap-3 flex-wrap">
         <div className="flex items-center gap-2">
           <h1 className="text-2xl font-bold text-gray-900 tracking-tight">Unit Operations Centre</h1>
-          <span className="text-[10px] font-bold uppercase px-1.5 py-0.5 rounded bg-green-100 text-green-700 flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />Live</span>
+          <span className="text-[10px] font-bold uppercase px-1.5 py-0.5 rounded bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)] flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-[var(--cmp-color-success)] animate-pulse" />Live</span>
         </div>
         <div className="flex items-center gap-2"><UnitFilters departments={d.departments} showPeriod /><span className="text-[11px] text-gray-400 whitespace-nowrap">Updated {now}</span></div>
       </div>
@@ -101,12 +101,12 @@ export default async function UnitOperationsCentre({ searchParams }: { searchPar
       {/* 1. Executive situation awareness — KPI strip */}
       <div className="grid grid-cols-2 sm:grid-cols-4 xl:grid-cols-8 gap-3">
         <Kpi label="Unit Health Score" value={d.healthScore ?? "—"} sub={d.healthStatus.label} tone={TONE[d.healthStatus.tone]} accent />
-        <Kpi label="Occupancy" value={`${k.occupancyPct}%`} sub={k.occupancy + " beds"} tone={k.occupancyPct >= 90 ? "text-rose-600" : undefined} />
+        <Kpi label="Occupancy" value={`${k.occupancyPct}%`} sub={k.occupancy + " beds"} tone={k.occupancyPct >= 90 ? "text-[var(--cmp-text-error)]" : undefined} />
         <Kpi label="Patients" value={k.patients} sub={`Capacity: ${d.bedStatus.total}`} />
         <Kpi label="Available Beds" value={k.bedsAvailable} sub={d.bedStatus.total ? `${Math.round((k.bedsAvailable / d.bedStatus.total) * 100)}% of capacity` : ""} />
         <Kpi label="Average Acuity" value={k.avgAcuity} sub={Number(k.avgAcuity) >= 3 ? "High" : Number(k.avgAcuity) >= 2 ? "Moderate" : "Low"} />
         <Kpi label="Staff on Duty" value={d.staffing.present} sub={`Rostered: ${d.staffing.rostered}`} />
-        <Kpi label="Safety Events" value={k.safetyEvents} sub={k.safetyCritical ? `${k.safetyCritical} critical` : "none critical"} tone={k.safetyCritical ? "text-rose-600" : undefined} />
+        <Kpi label="Safety Events" value={k.safetyEvents} sub={k.safetyCritical ? `${k.safetyCritical} critical` : "none critical"} tone={k.safetyCritical ? "text-[var(--cmp-text-error)]" : undefined} />
         <Kpi label="Predicted Occupancy" value={k.predictedOccupancy != null ? `${k.predictedOccupancy}%` : "—"} sub="heuristic" />
       </div>
 
@@ -139,9 +139,9 @@ export default async function UnitOperationsCentre({ searchParams }: { searchPar
           <div className="flex items-center gap-3">
             <Donut center={d.kpis.patients} sub="patients" segments={[{ n: d.acuity.high, color: "#ef4444" }, { n: d.acuity.medium, color: "#f59e0b" }, { n: d.acuity.low, color: "#22c55e" }]} />
             <div className="text-[11px] space-y-1">
-              <p><span className="inline-block w-2 h-2 rounded-sm bg-rose-500 mr-1" />High <b>{d.acuity.high}</b></p>
-              <p><span className="inline-block w-2 h-2 rounded-sm bg-amber-500 mr-1" />Medium <b>{d.acuity.medium}</b></p>
-              <p><span className="inline-block w-2 h-2 rounded-sm bg-green-500 mr-1" />Low <b>{d.acuity.low}</b></p>
+              <p><span className="inline-block w-2 h-2 rounded-sm bg-[var(--cmp-color-error)] mr-1" />High <b>{d.acuity.high}</b></p>
+              <p><span className="inline-block w-2 h-2 rounded-sm bg-[var(--cmp-color-warning)] mr-1" />Medium <b>{d.acuity.medium}</b></p>
+              <p><span className="inline-block w-2 h-2 rounded-sm bg-[var(--cmp-color-success)] mr-1" />Low <b>{d.acuity.low}</b></p>
               <p className="text-gray-400 pt-1">Predicted occ. {d.predictive.predictedOccupancy ?? "—"}%</p>
             </div>
           </div>
@@ -152,7 +152,7 @@ export default async function UnitOperationsCentre({ searchParams }: { searchPar
           <h3 className="text-sm font-bold text-gray-900 mb-3">Workforce Status</h3>
           <div className="flex items-center justify-between mb-3">
             <div><p className="text-[10px] text-gray-500 uppercase">Current Ratio</p><p className="text-2xl font-bold text-gray-900">{d.ratio.value}</p></div>
-            <span className={`text-[10px] px-2 py-0.5 rounded-full ${d.ratio.withinTarget ? "bg-green-50 text-green-700" : "bg-amber-50 text-amber-700"}`}>Target {d.ratio.target} · {d.ratio.withinTarget ? "within" : "over"}</span>
+            <span className={`text-[10px] px-2 py-0.5 rounded-full ${d.ratio.withinTarget ? "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]" : "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]"}`}>Target {d.ratio.target} · {d.ratio.withinTarget ? "within" : "over"}</span>
           </div>
           <div className="grid grid-cols-4 gap-1.5 mb-3">
             {[["Present", d.staffing.present], ["Break", d.staffing.onBreak], ["Off", d.staffing.offDuty], ["Rostered", d.staffing.rostered]].map(([l, v]: any) => (
@@ -162,7 +162,7 @@ export default async function UnitOperationsCentre({ searchParams }: { searchPar
           <p className="text-[10px] text-gray-500 mb-1">Competency Readiness</p>
           {d.competencyCoverage == null ? <p className="text-xs text-gray-400">No competency decisions recorded.</p> : (
             <>
-              <div className="flex items-center gap-2"><div className="flex-1 h-2 rounded-full bg-gray-100 overflow-hidden"><div className="h-full bg-green-500" style={{ width: `${d.competencyCoverage}%` }} /></div><span className="text-xs font-bold text-gray-700">{d.competencyCoverage}%</span></div>
+              <div className="flex items-center gap-2"><div className="flex-1 h-2 rounded-full bg-gray-100 overflow-hidden"><div className="h-full bg-[var(--cmp-color-success)]" style={{ width: `${d.competencyCoverage}%` }} /></div><span className="text-xs font-bold text-gray-700">{d.competencyCoverage}%</span></div>
               <p className="text-[10px] text-gray-400 mt-1">Overall unit coverage. Per-specialty breakdown integrates with the Competency Engine (next phase).</p>
             </>
           )}
@@ -235,7 +235,7 @@ export default async function UnitOperationsCentre({ searchParams }: { searchPar
           {d.improvements.length === 0 ? <p className="text-sm text-gray-400">No active improvement projects or CAPA.</p> : (
             <div className="space-y-2">
               {d.improvements.map((p: any, i: number) => (
-                <div key={i} className="flex items-center gap-2 text-xs"><span className="text-gray-700 flex-1 truncate">{p.title}</span><span className="text-gray-400 capitalize">{p.type.replace(/_/g, " ")}</span><span className={`px-1.5 py-0.5 rounded ${p.status === "overdue" ? "bg-rose-50 text-rose-700" : p.status === "in_progress" ? "bg-blue-50 text-blue-700" : "bg-gray-100 text-gray-500"}`}>{p.status.replace(/_/g, " ")}</span><span className="text-gray-400">{p.owner}</span></div>
+                <div key={i} className="flex items-center gap-2 text-xs"><span className="text-gray-700 flex-1 truncate">{p.title}</span><span className="text-gray-400 capitalize">{p.type.replace(/_/g, " ")}</span><span className={`px-1.5 py-0.5 rounded ${p.status === "overdue" ? "bg-[var(--cmp-surface-error)] text-[var(--cmp-text-error)]" : p.status === "in_progress" ? "bg-[var(--cmp-surface-information)] text-blue-700" : "bg-gray-100 text-gray-500"}`}>{p.status.replace(/_/g, " ")}</span><span className="text-gray-400">{p.owner}</span></div>
               ))}
             </div>
           )}
@@ -245,8 +245,8 @@ export default async function UnitOperationsCentre({ searchParams }: { searchPar
         <div className={`${card} p-5 bg-gradient-to-br from-violet-50/50 to-white`}>
           <h3 className="text-sm font-bold text-gray-900 mb-3 flex items-center gap-1.5"><span>✨</span>AI Operational Copilot</h3>
           <div className="flex items-center gap-4 mb-3">
-            <div className="text-center"><p className={`text-2xl font-bold ${d.copilot.shiftRisk == null ? "text-gray-400" : d.copilot.shiftRisk >= 60 ? "text-rose-600" : d.copilot.shiftRisk >= 35 ? "text-amber-600" : "text-green-600"}`}>{d.copilot.shiftRisk != null ? `${d.copilot.shiftRisk}%` : "—"}</p><p className="text-[9px] text-gray-400">Shift Risk</p></div>
-            <div className="text-center"><p className="text-2xl font-bold text-green-600">{d.copilot.expectedHealth ?? "—"}</p><p className="text-[9px] text-gray-400">Expected Health</p></div>
+            <div className="text-center"><p className={`text-2xl font-bold ${d.copilot.shiftRisk == null ? "text-gray-400" : d.copilot.shiftRisk >= 60 ? "text-[var(--cmp-text-error)]" : d.copilot.shiftRisk >= 35 ? "text-[var(--cmp-text-warning)]" : "text-[var(--cmp-text-success)]"}`}>{d.copilot.shiftRisk != null ? `${d.copilot.shiftRisk}%` : "—"}</p><p className="text-[9px] text-gray-400">Shift Risk</p></div>
+            <div className="text-center"><p className="text-2xl font-bold text-[var(--cmp-text-success)]">{d.copilot.expectedHealth ?? "—"}</p><p className="text-[9px] text-gray-400">Expected Health</p></div>
             <div className="flex-1 text-[11px] text-gray-600">
               {d.copilot.recommendations.length === 0 ? <p className="text-gray-400">No priority recommendations.</p> : (
                 <ul className="space-y-0.5">{d.copilot.recommendations.slice(0, 4).map((r: string, i: number) => (<li key={i} className="flex gap-1"><span className="text-violet-500">›</span>{r}</li>))}</ul>

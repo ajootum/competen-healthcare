@@ -10,9 +10,9 @@ import AiCopilotPanel from "@/components/AiCopilotPanel";
 export const dynamic = "force-dynamic";
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
-const RISK: Record<string, string> = { red: "border-rose-200 bg-rose-50", amber: "border-amber-200 bg-amber-50", gray: "border-gray-200 bg-gray-50" };
-const DOT: Record<string, string> = { red: "bg-rose-500", amber: "bg-amber-500", gray: "bg-gray-300" };
-const BAND: Record<string, string> = { emerald: "text-emerald-600", amber: "text-amber-600", rose: "text-rose-600" };
+const RISK: Record<string, string> = { red: "border-[var(--cmp-color-error)] bg-[var(--cmp-surface-error)]", amber: "border-[var(--cmp-color-warning)] bg-[var(--cmp-surface-warning)]", gray: "border-gray-200 bg-gray-50" };
+const DOT: Record<string, string> = { red: "bg-[var(--cmp-color-error)]", amber: "bg-[var(--cmp-color-warning)]", gray: "bg-gray-300" };
+const BAND: Record<string, string> = { emerald: "text-[var(--cmp-text-success)]", amber: "text-[var(--cmp-text-warning)]", rose: "text-[var(--cmp-text-error)]" };
 
 const AGENTS = ["Assessor Reliability", "Competency Drift", "Corrective Action", "Evidence Integrity", "Compliance & Accreditation", "Assurance Score"];
 
@@ -48,7 +48,7 @@ export default async function AssuranceAiPage() {
       />
 
       {!q.provisioned ? (
-        <div className="bg-amber-50 border border-amber-100 rounded-xl p-4 mt-4"><p className="text-[13px] text-amber-900">No assurance signals yet — the copilot needs competency decisions, assessments or corrective actions to reason over.</p></div>
+        <div className="bg-[var(--cmp-surface-warning)] border border-[var(--cmp-color-warning)] rounded-xl p-4 mt-4"><p className="text-[13px] text-amber-900">No assurance signals yet — the copilot needs competency decisions, assessments or corrective actions to reason over.</p></div>
       ) : (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mt-4">
           {/* Score it's grounded in */}

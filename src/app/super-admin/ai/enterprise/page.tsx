@@ -15,7 +15,7 @@ export const dynamic = "force-dynamic";
 const card = "bg-white rounded-xl border border-gray-200";
 const dash = (n: number | null | undefined) => (n == null ? "—" : n.toLocaleString());
 const pct = (n: number | null | undefined) => (n == null ? "—" : `${n}%`);
-const scoreTone = (n: number | null) => (n == null ? "text-gray-300" : n >= 90 ? "text-green-600" : n >= 75 ? "text-teal-600" : n >= 50 ? "text-amber-600" : "text-rose-600");
+const scoreTone = (n: number | null) => (n == null ? "text-gray-300" : n >= 90 ? "text-[var(--cmp-text-success)]" : n >= 75 ? "text-teal-600" : n >= 50 ? "text-[var(--cmp-text-warning)]" : "text-[var(--cmp-text-error)]");
 
 export default async function EnterpriseIntelligence() {
   const supabase = await createClient();
@@ -116,10 +116,10 @@ export default async function EnterpriseIntelligence() {
             {[
               ["Audits", q.audits, "text-gray-900"],
               ["Avg Compliance", q.avgCompliance == null ? "—" : `${q.avgCompliance}%`, "text-gray-900"],
-              ["Fully Met", q.fullyMet, "text-green-600"],
-              ["Open CAPA", q.openCapa, q.openCapa > 0 ? "text-amber-600" : "text-gray-900"],
-              ["High-Priority CAPA", q.openCapaHigh, q.openCapaHigh > 0 ? "text-rose-600" : "text-gray-900"],
-              ["Safety Alerts", q.safetyAlerts, (q.safetyAlerts ?? 0) > 0 ? "text-rose-600" : "text-gray-900"],
+              ["Fully Met", q.fullyMet, "text-[var(--cmp-text-success)]"],
+              ["Open CAPA", q.openCapa, q.openCapa > 0 ? "text-[var(--cmp-text-warning)]" : "text-gray-900"],
+              ["High-Priority CAPA", q.openCapaHigh, q.openCapaHigh > 0 ? "text-[var(--cmp-text-error)]" : "text-gray-900"],
+              ["Safety Alerts", q.safetyAlerts, (q.safetyAlerts ?? 0) > 0 ? "text-[var(--cmp-text-error)]" : "text-gray-900"],
             ].map(([l, v, tone]: any) => (
               <div key={l} className="rounded-lg border border-gray-100 p-3 text-center">
                 <p className={`text-xl font-bold tabular-nums ${tone}`}>{typeof v === "number" ? v.toLocaleString() : v}</p>

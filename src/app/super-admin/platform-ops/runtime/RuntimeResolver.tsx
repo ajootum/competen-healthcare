@@ -8,7 +8,7 @@ import { useState } from "react";
 type ObjRow = { object_key: string; object_type: string; display_name: string };
 
 const input = "border border-gray-200 rounded px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-indigo-400 bg-white";
-const LEVEL_TONE: Record<string, string> = { platform_default: "bg-gray-100 text-gray-600", platform: "bg-gray-100 text-gray-600", tenant: "bg-indigo-100 text-indigo-700", hospital: "bg-sky-100 text-sky-700", unit: "bg-teal-100 text-teal-700", role: "bg-amber-100 text-amber-700", user: "bg-violet-100 text-violet-700" };
+const LEVEL_TONE: Record<string, string> = { platform_default: "bg-gray-100 text-gray-600", platform: "bg-gray-100 text-gray-600", tenant: "bg-indigo-100 text-indigo-700", hospital: "bg-[var(--cmp-surface-information)] text-[var(--cmp-text-information)]", unit: "bg-teal-100 text-teal-700", role: "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]", user: "bg-violet-100 text-violet-700" };
 const COMPOSABLE = ["PAGE", "DASHBOARD", "NAVIGATION_SECTION"];
 
 function NavTree({ items, depth = 0 }: { items: any[]; depth?: number }) {
@@ -70,13 +70,13 @@ export default function RuntimeResolver({ objects }: { objects: ObjRow[] }) {
       </div>
 
       <div className={`${card} p-5 lg:col-span-3`}>
-        {msg && <p className="text-xs text-rose-600 mb-2">{msg}</p>}
+        {msg && <p className="text-xs text-[var(--cmp-text-error)] mb-2">{msg}</p>}
         {!res ? <p className="text-sm text-gray-400 py-16 text-center">Pick an object and a context, then resolve its effective configuration.</p> : (
           <>
             <div className="flex items-center gap-2 mb-3"><h3 className="text-sm font-semibold text-gray-900">{res.object.name}</h3><span className="text-[10px] text-gray-400 font-mono">{res.object.key}</span></div>
 
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
-              <div className={`rounded-lg border p-3 ${res.effective.enabled ? "border-emerald-200 bg-emerald-50" : "border-rose-200 bg-rose-50"}`}><p className="text-[10px] text-gray-500 uppercase">Effective</p><p className={`text-sm font-bold ${res.effective.enabled ? "text-emerald-700" : "text-rose-700"}`}>{res.effective.enabled ? "enabled" : "disabled"}</p></div>
+              <div className={`rounded-lg border p-3 ${res.effective.enabled ? "border-[var(--cmp-color-success)] bg-[var(--cmp-surface-success)]" : "border-[var(--cmp-color-error)] bg-[var(--cmp-surface-error)]"}`}><p className="text-[10px] text-gray-500 uppercase">Effective</p><p className={`text-sm font-bold ${res.effective.enabled ? "text-emerald-700" : "text-[var(--cmp-text-error)]"}`}>{res.effective.enabled ? "enabled" : "disabled"}</p></div>
               <div className="rounded-lg border border-gray-200 p-3"><p className="text-[10px] text-gray-500 uppercase">Label</p><p className="text-sm font-medium text-gray-800 truncate">{res.effective.label}</p></div>
               <div className="rounded-lg border border-gray-200 p-3"><p className="text-[10px] text-gray-500 uppercase">Layers applied</p><p className="text-sm font-bold text-gray-800 tabular-nums">{res.layers}</p></div>
               <div className="rounded-lg border border-gray-200 p-3"><p className="text-[10px] text-gray-500 uppercase">Object status</p><p className="text-sm font-medium text-gray-800">{res.object.status}</p></div>

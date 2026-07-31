@@ -25,7 +25,7 @@ export default function SeniorToggle({ userId, senior }: { userId: string; senio
       <button onClick={toggle} disabled={busy}
         className={`text-[11px] font-semibold px-3 py-1.5 rounded-lg transition-colors disabled:opacity-50 ${
           senior
-            ? "text-amber-700 border border-amber-200 hover:bg-amber-50"
+            ? "text-[var(--cmp-text-warning)] border border-[var(--cmp-color-warning)] hover:bg-[var(--cmp-surface-warning)]"
             : "bg-purple-600 hover:bg-purple-700 text-white"
         }`}>
         {busy ? "…" : senior ? "Revoke senior status" : "⭐ Make senior assessor"}

@@ -15,9 +15,9 @@ type Status = "real" | "linked" | "partial" | "gap";
 type Mod = { code: string; icon: string; label: string; desc: string; href?: string; status: Status };
 
 const BADGE: Record<Status, { text: string; cls: string }> = {
-  real: { text: "Live", cls: "text-emerald-700 bg-emerald-50 border-emerald-100" },
-  linked: { text: "Linked", cls: "text-blue-600 bg-blue-50 border-blue-100" },
-  partial: { text: "Partial", cls: "text-amber-600 bg-amber-50 border-amber-100" },
+  real: { text: "Live", cls: "text-emerald-700 bg-[var(--cmp-surface-success)] border-[var(--cmp-color-success)]" },
+  linked: { text: "Linked", cls: "text-[var(--cmp-text-information)] bg-[var(--cmp-surface-information)] border-[var(--cmp-color-information)]" },
+  partial: { text: "Partial", cls: "text-[var(--cmp-text-warning)] bg-[var(--cmp-surface-warning)] border-[var(--cmp-color-warning)]" },
   gap: { text: "Planned", cls: "text-gray-400 bg-gray-50 border-gray-100" },
 };
 
@@ -38,7 +38,7 @@ function EngineCard({ m }: { m: Mod }) {
   );
   const base = "bg-white rounded-xl border border-gray-100 p-4 block";
   return m.href
-    ? <Link href={m.href} className={`${base} hover:border-emerald-200 hover:shadow-sm transition-all group`}>{inner}</Link>
+    ? <Link href={m.href} className={`${base} hover:border-[var(--cmp-color-success)] hover:shadow-sm transition-all group`}>{inner}</Link>
     : <div className={`${base} opacity-80`}>{inner}</div>;
 }
 
@@ -127,7 +127,7 @@ export default async function CgrPlatformPage() {
     <div className="max-w-6xl">
       <div className="flex items-start justify-between gap-3 mb-5">
         <div>
-          <p className="text-[11px] font-semibold text-emerald-600 uppercase tracking-widest mb-0.5">CGR-000 · Competency Governance &amp; Regulation</p>
+          <p className="text-[11px] font-semibold text-[var(--cmp-text-success)] uppercase tracking-widest mb-0.5">CGR-000 · Competency Governance &amp; Regulation</p>
           <h1 className="text-xl font-bold text-gray-900">Competency Governance &amp; Regulation</h1>
           <p className="text-gray-400 text-sm mt-0.5">The governance operating system — can we trust that every competency is valid, owned, evidence-backed and regulatory-aligned? Studio authors, Delivery runs, Assurance verifies, Performance measures — and Governance proves integrity.</p>
         </div>
@@ -144,9 +144,9 @@ export default async function CgrPlatformPage() {
       </div>
 
       <div className="flex flex-wrap items-center gap-2 mb-5 text-[11px]">
-        {nReal > 0 && <span className="font-semibold text-emerald-700 bg-emerald-50 border border-emerald-100 rounded-lg px-2.5 py-1">{nReal} live</span>}
-        {nLinked > 0 && <span className="font-semibold text-blue-600 bg-blue-50 border border-blue-100 rounded-lg px-2.5 py-1">{nLinked} linked (existing surface)</span>}
-        {nPartial > 0 && <span className="font-semibold text-amber-600 bg-amber-50 border border-amber-100 rounded-lg px-2.5 py-1">{nPartial} partial</span>}
+        {nReal > 0 && <span className="font-semibold text-emerald-700 bg-[var(--cmp-surface-success)] border border-[var(--cmp-color-success)] rounded-lg px-2.5 py-1">{nReal} live</span>}
+        {nLinked > 0 && <span className="font-semibold text-[var(--cmp-text-information)] bg-[var(--cmp-surface-information)] border border-[var(--cmp-color-information)] rounded-lg px-2.5 py-1">{nLinked} linked (existing surface)</span>}
+        {nPartial > 0 && <span className="font-semibold text-[var(--cmp-text-warning)] bg-[var(--cmp-surface-warning)] border border-[var(--cmp-color-warning)] rounded-lg px-2.5 py-1">{nPartial} partial</span>}
         {nGap > 0 && <span className="font-semibold text-gray-400 bg-gray-50 border border-gray-100 rounded-lg px-2.5 py-1">{nGap} planned</span>}
       </div>
 
@@ -155,7 +155,7 @@ export default async function CgrPlatformPage() {
       <Layer title="Analytics, Testing & Release · CGR-016 … 019" mods={DELIVERY} />
       <Layer title="Intelligence & Ecosystem · CGR-020 … 030" mods={ECO} />
 
-      <div className="bg-emerald-50 border border-emerald-100 rounded-xl p-4">
+      <div className="bg-[var(--cmp-surface-success)] border border-[var(--cmp-color-success)] rounded-xl p-4">
         <p className="text-[11px] text-emerald-900">
           <span className="font-bold">One governance layer over the whole competency system.</span> CGR doesn&apos;t re-collect data — it proves the competency machinery is trustworthy. Approval, change control, audit, councils, standards mapping and compliance are already owned by Studio, the Competency Office, Assurance, Office Governance and the enterprise GRC hub (cross-linked, not duplicated); the genuinely-new engine — the <span className="font-semibold">Governance Registry (CGR-001)</span> — is the per-competency source of truth that joins ownership, regulatory alignment, review currency, evidence and change control into one governed record.
         </p>

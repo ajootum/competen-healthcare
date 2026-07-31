@@ -10,7 +10,7 @@ import { cardClass } from "@/components/ui/primitives";
 
 const TABS = ["Overview", "Member Organisations", "Countries", "Governance", "Audit"] as const;
 const card = cardClass;
-const ORG_BADGE: Record<string, string> = { active: "bg-green-50 text-green-700", onboarding: "bg-amber-50 text-amber-700", draft: "bg-gray-100 text-gray-600", suspended: "bg-rose-50 text-rose-700" };
+const ORG_BADGE: Record<string, string> = { active: "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]", onboarding: "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]", draft: "bg-gray-100 text-gray-600", suspended: "bg-[var(--cmp-surface-error)] text-[var(--cmp-text-error)]" };
 const relTime = (iso?: string | null) => { if (!iso) return ""; const s = Math.floor((Date.now() - new Date(iso).getTime()) / 1000); if (s < 3600) return `${Math.floor(s / 60)} min ago`; if (s < 86400) return `${Math.floor(s / 3600)} hr ago`; return `${Math.floor(s / 86400)} d ago`; };
 
 export default function NetworkProfileClient({ data, available }: { data: any; available: any[] }) {
@@ -44,12 +44,12 @@ export default function NetworkProfileClient({ data, available }: { data: any; a
           <span className="w-11 h-11 rounded-xl bg-indigo-50 flex items-center justify-center text-xl shrink-0">🌐</span>
           <div>
             <div className="flex items-center gap-2 flex-wrap"><h1 className="text-xl font-bold text-gray-900">{network.name}</h1>
-              <span className={`text-[10px] font-medium px-2 py-0.5 rounded ${network.status === "active" ? "bg-green-50 text-green-700" : "bg-gray-100 text-gray-500"}`}>{network.status}</span></div>
+              <span className={`text-[10px] font-medium px-2 py-0.5 rounded ${network.status === "active" ? "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]" : "bg-gray-100 text-gray-500"}`}>{network.status}</span></div>
             <p className="text-xs text-gray-500 mt-0.5 capitalize">{(network.type ?? "").replace(/_/g, " ")} · HQ {network.hq}</p>
           </div>
         </div>
       </div>
-      {msg && <div className={`text-sm rounded-lg px-3 py-1.5 ${msg.k === "ok" ? "bg-green-50 text-green-800" : "bg-amber-50 text-amber-800"}`}>{msg.t}</div>}
+      {msg && <div className={`text-sm rounded-lg px-3 py-1.5 ${msg.k === "ok" ? "bg-[var(--cmp-surface-success)] text-green-800" : "bg-[var(--cmp-surface-warning)] text-amber-800"}`}>{msg.t}</div>}
 
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         {[["Member orgs", counts.members], ["Facilities", counts.facilities], ["Users", counts.users], ["Countries", counts.countries]].map(([l, n]) => (
@@ -89,7 +89,7 @@ export default function NetworkProfileClient({ data, available }: { data: any; a
                   <span className="text-base">🏛️</span>
                   <Link href={`/super-admin/enterprise/organisations/${m.id}`} className="flex-1 min-w-0 hover:text-teal-700"><p className="text-sm text-gray-800 truncate">{m.name}</p><p className="text-[10px] text-gray-400 capitalize">{(m.type ?? "").replace(/_/g, " ")} · {m.country}</p></Link>
                   <span className={`text-[10px] px-2 py-0.5 rounded ${ORG_BADGE[m.status] ?? "bg-gray-100 text-gray-600"}`}>{m.status}</span>
-                  <button onClick={() => member("remove_member", m.id)} disabled={busy} className="text-[11px] text-gray-400 hover:text-rose-600 disabled:opacity-40">Remove</button>
+                  <button onClick={() => member("remove_member", m.id)} disabled={busy} className="text-[11px] text-gray-400 hover:text-[var(--cmp-text-error)] disabled:opacity-40">Remove</button>
                 </div>
               ))}
             </div>

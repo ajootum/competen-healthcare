@@ -22,8 +22,8 @@ export default async function QualityPage() {
       </div>
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
         <div className={card}><div className="text-3xl font-bold tabular-nums text-gray-900">{q.audits}</div><div className="text-xs text-gray-500 mt-1">Audits (all tenants)</div></div>
-        <div className={card}><div className="text-3xl font-bold tabular-nums text-green-600">{q.auditsCompleted}</div><div className="text-xs text-gray-500 mt-1">Completed audits</div></div>
-        <div className={card}><div className={`text-3xl font-bold tabular-nums ${q.capaOpen ? "text-amber-600" : "text-gray-900"}`}>{q.capaOpen}</div><div className="text-xs text-gray-500 mt-1">Open CAPA</div></div>
+        <div className={card}><div className="text-3xl font-bold tabular-nums text-[var(--cmp-text-success)]">{q.auditsCompleted}</div><div className="text-xs text-gray-500 mt-1">Completed audits</div></div>
+        <div className={card}><div className={`text-3xl font-bold tabular-nums ${q.capaOpen ? "text-[var(--cmp-text-warning)]" : "text-gray-900"}`}>{q.capaOpen}</div><div className="text-xs text-gray-500 mt-1">Open CAPA</div></div>
         <div className={card}><div className="text-3xl font-bold tabular-nums text-gray-900">{q.improvements}</div><div className="text-xs text-gray-500 mt-1">Improvement projects</div></div>
         <div className={card}><div className="text-3xl font-bold tabular-nums text-violet-700">{q.masterStandards}</div><div className="text-xs text-gray-500 mt-1">Master standards</div></div>
       </div>

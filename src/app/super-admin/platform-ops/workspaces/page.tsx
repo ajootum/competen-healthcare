@@ -31,16 +31,16 @@ export default async function WorkspaceManagement() {
       </div>
 
       {needsMigration && (
-        <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-          <span className="font-semibold">Read-only.</span> Showing the code-defined workspace catalogue. Run <code className="font-mono text-[12px] bg-amber-100 px-1 rounded">supabase/RUN-ME-053-workspace-management.sql</code> to enable editing (enable/disable, rename, theme, audience).
+        <div className="rounded-xl border border-[var(--cmp-color-warning)] bg-[var(--cmp-surface-warning)] px-4 py-3 text-sm text-amber-800">
+          <span className="font-semibold">Read-only.</span> Showing the code-defined workspace catalogue. Run <code className="font-mono text-[12px] bg-[var(--cmp-surface-warning)] px-1 rounded">supabase/RUN-ME-053-workspace-management.sql</code> to enable editing (enable/disable, rename, theme, audience).
         </div>
       )}
 
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
         {[
           { label: "Workspaces", n: summary.total, tone: "text-gray-900" },
-          { label: "Enabled", n: summary.enabled, tone: "text-green-600" },
-          { label: "Disabled", n: summary.disabled, tone: summary.disabled ? "text-rose-600" : "text-gray-300" },
+          { label: "Enabled", n: summary.enabled, tone: "text-[var(--cmp-text-success)]" },
+          { label: "Disabled", n: summary.disabled, tone: summary.disabled ? "text-[var(--cmp-text-error)]" : "text-gray-300" },
           { label: "Customised", n: summary.customized, tone: summary.customized ? "text-violet-600" : "text-gray-300" },
           ...summary.planes.map(p => ({ label: p.label.replace(" Workspaces", "").replace("Platform (Landlord)", "Platform"), n: p.n, tone: "text-gray-700" })),
         ].slice(0, 6).map(k => (

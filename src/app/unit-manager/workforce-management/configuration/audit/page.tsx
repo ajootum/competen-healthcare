@@ -17,11 +17,11 @@ export const dynamic = "force-dynamic";
 const card = "bg-white rounded-xl border border-gray-200";
 const NONE = "00000000-0000-0000-0000-000000000000";
 const ACT: Record<string, { label: string; tone: string }> = {
-  publish_planning_config: { label: "Planning config published", tone: "bg-emerald-50 text-emerald-700" },
-  publish_roster: { label: "Roster published", tone: "bg-blue-50 text-blue-700" },
+  publish_planning_config: { label: "Planning config published", tone: "bg-[var(--cmp-surface-success)] text-emerald-700" },
+  publish_roster: { label: "Roster published", tone: "bg-[var(--cmp-surface-information)] text-blue-700" },
   archive_roster: { label: "Roster archived", tone: "bg-gray-100 text-gray-600" },
-  submit_roster_approval: { label: "Approval submitted", tone: "bg-sky-50 text-sky-700" },
-  decide_roster_approval: { label: "Approval decided", tone: "bg-emerald-50 text-emerald-700" },
+  submit_roster_approval: { label: "Approval submitted", tone: "bg-[var(--cmp-surface-information)] text-[var(--cmp-text-information)]" },
+  decide_roster_approval: { label: "Approval decided", tone: "bg-[var(--cmp-surface-success)] text-emerald-700" },
 };
 const ACT_KEYS = Object.keys(ACT);
 const weekAgoISO = () => new Date(Date.now() - 7 * 864e5).toISOString();
@@ -62,11 +62,11 @@ export default async function ConfigAudit() {
     <div className="space-y-4">
       {header}
       {!provisioned ? (
-        <div className="bg-amber-50 border border-amber-200 rounded-xl p-6"><p className="font-semibold text-amber-900">⚙️ Audit store not provisioned</p></div>
+        <div className="bg-[var(--cmp-surface-warning)] border border-[var(--cmp-color-warning)] rounded-xl p-6"><p className="font-semibold text-amber-900">⚙️ Audit store not provisioned</p></div>
       ) : (<>
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
           <Kpi label="Events (7d)" value={recent} />
-          <Kpi label="Config publishes" value={publishes} tone="text-emerald-600" />
+          <Kpi label="Config publishes" value={publishes} tone="text-[var(--cmp-text-success)]" />
           <Kpi label="Total logged" value={rows.length} />
         </div>
 

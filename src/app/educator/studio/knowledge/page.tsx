@@ -11,8 +11,8 @@ export const dynamic = "force-dynamic";
 type SearchParams = Promise<{ q?: string; type?: string }>;
 
 const STATUS_CLS: Record<string, string> = {
-  published: "bg-green-100 text-green-700", draft: "bg-gray-100 text-gray-600",
-  in_review: "bg-amber-100 text-amber-700", retired: "bg-gray-100 text-gray-400",
+  published: "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]", draft: "bg-gray-100 text-gray-600",
+  in_review: "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]", retired: "bg-gray-100 text-gray-400",
 };
 
 export default async function KnowledgePage({ searchParams }: { searchParams: SearchParams }) {

@@ -64,7 +64,7 @@ export default function ProvisionForm({ templates }: { templates: Template[] }) 
       </button>
 
       {result && (
-        <div className={`rounded-lg p-3 text-sm ${result.ok ? "bg-green-50 border border-green-200 text-green-800" : "bg-red-50 border border-red-200 text-red-700"}`}>
+        <div className={`rounded-lg p-3 text-sm ${result.ok ? "bg-[var(--cmp-surface-success)] border border-[var(--cmp-color-success)] text-green-800" : "bg-[var(--cmp-surface-critical)] border border-[var(--cmp-color-critical)] text-[var(--cmp-text-critical)]"}`}>
           <p className="font-medium">{result.ok ? "✓ Tenant provisioned" : `✗ ${result.error ?? "Failed"}`}</p>
           {result.steps && result.steps.length > 0 && (
             <ul className="mt-1.5 text-xs space-y-0.5 opacity-80">{result.steps.map((s, i) => <li key={i}>· {s}</li>)}</ul>

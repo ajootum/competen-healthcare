@@ -7,7 +7,7 @@ export const dynamic = "force-dynamic";
 // PPE-001 Organizational Objectives & Strategy Manager — the authoritative strategy workspace: themes, objectives/
 // OKRs, key results, the cascade/alignment tree and a governance snapshot. Super-admin gated (layout enforces).
 /* eslint-disable @typescript-eslint/no-explicit-any */
-const KR_TONE: Record<string, string> = { on_track: "bg-emerald-500", at_risk: "bg-amber-500", off_track: "bg-rose-500", achieved: "bg-teal-500" };
+const KR_TONE: Record<string, string> = { on_track: "bg-[var(--cmp-color-success)]", at_risk: "bg-[var(--cmp-color-warning)]", off_track: "bg-[var(--cmp-color-error)]", achieved: "bg-teal-500" };
 
 export default async function StrategyManagerPage() {
   const { admin } = await ppeGuard();
@@ -28,12 +28,12 @@ export default async function StrategyManagerPage() {
       <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-8 gap-3">
         <Stat label="Strategic Themes" value={k.themes} sub="active pillars" />
         <Stat label="Objectives" value={k.objectives} sub={`${k.published} published`} />
-        <Stat label="Avg Progress" value={`${k.avgProgress}%`} sub="published objectives" tone={k.avgProgress >= 70 ? "text-emerald-600" : "text-amber-600"} />
+        <Stat label="Avg Progress" value={`${k.avgProgress}%`} sub="published objectives" tone={k.avgProgress >= 70 ? "text-[var(--cmp-text-success)]" : "text-[var(--cmp-text-warning)]"} />
         <Stat label="Key Results" value={k.keyResults} sub="measurable" />
         <Stat label="Published Priorities" value={k.priorities} sub="in cascade" tone="text-teal-600" />
         <Stat label="Active Campaigns" value={k.campaigns} sub="initiatives" />
-        <Stat label="Draft / Pending" value={`${k.draft}/${k.pending}`} sub="not yet live" tone={k.pending ? "text-amber-600" : undefined} />
-        <Stat label="Pending Approvals" value={k.pendingApprovals} sub="awaiting sign-off" tone={k.pendingApprovals ? "text-amber-600" : undefined} />
+        <Stat label="Draft / Pending" value={`${k.draft}/${k.pending}`} sub="not yet live" tone={k.pending ? "text-[var(--cmp-text-warning)]" : undefined} />
+        <Stat label="Pending Approvals" value={k.pendingApprovals} sub="awaiting sign-off" tone={k.pendingApprovals ? "text-[var(--cmp-text-warning)]" : undefined} />
       </div>
 
       {/* Strategic themes */}
@@ -92,7 +92,7 @@ export default async function StrategyManagerPage() {
             <div className="flex items-center gap-3">
               <Ring pct={d.krStatus.on_track + d.krStatus.achieved ? Math.round(((d.krStatus.on_track + d.krStatus.achieved) / Math.max(1, d.krStatus.on_track + d.krStatus.at_risk + d.krStatus.off_track + d.krStatus.achieved)) * 100) : 0} label="on track" />
               <div className="space-y-1 text-[11px] flex-1">
-                {[["On Track", d.krStatus.on_track, "bg-emerald-500"], ["At Risk", d.krStatus.at_risk, "bg-amber-500"], ["Off Track", d.krStatus.off_track, "bg-rose-500"], ["Achieved", d.krStatus.achieved, "bg-teal-500"]].map(([l, n, c]: any) => (
+                {[["On Track", d.krStatus.on_track, "bg-[var(--cmp-color-success)]"], ["At Risk", d.krStatus.at_risk, "bg-[var(--cmp-color-warning)]"], ["Off Track", d.krStatus.off_track, "bg-[var(--cmp-color-error)]"], ["Achieved", d.krStatus.achieved, "bg-teal-500"]].map(([l, n, c]: any) => (
                   <div key={l} className="flex items-center gap-1.5"><span className={`w-2 h-2 rounded-full ${c}`} /><span className="text-gray-600 flex-1">{l}</span><span className="font-semibold text-gray-900">{n}</span></div>
                 ))}
               </div>
@@ -100,7 +100,7 @@ export default async function StrategyManagerPage() {
           </Card>
           <Card title="Framework Mix">
             <div className="space-y-2 text-[12px]">
-              {[["OKR", d.frameworkMix.okr, "bg-violet-500"], ["Balanced Scorecard", d.frameworkMix.bsc, "bg-blue-500"], ["Custom", d.frameworkMix.custom, "bg-gray-400"]].map(([l, n, c]: any) => (
+              {[["OKR", d.frameworkMix.okr, "bg-violet-500"], ["Balanced Scorecard", d.frameworkMix.bsc, "bg-[var(--cmp-color-information)]"], ["Custom", d.frameworkMix.custom, "bg-gray-400"]].map(([l, n, c]: any) => (
                 <div key={l} className="flex items-center gap-2"><span className={`w-2 h-2 rounded-full ${c}`} /><span className="text-gray-600 flex-1">{l}</span><span className="font-semibold text-gray-900 tabular-nums">{n}</span></div>
               ))}
             </div>

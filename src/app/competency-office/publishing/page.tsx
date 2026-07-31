@@ -23,11 +23,11 @@ export default async function GovernancePublicationPage() {
 
       <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
         <Kpi label="Submitted for review" value={k.submitted} sub="from Studio" />
-        <Kpi label="In review" value={k.inReview} sub="technical → governance" tone="text-amber-600" />
+        <Kpi label="In review" value={k.inReview} sub="technical → governance" tone="text-[var(--cmp-text-warning)]" />
         <Kpi label="Approval pending" value={k.approvalPending} sub="awaiting decision" tone={k.approvalPending ? "text-violet-600" : undefined} />
-        <Kpi label="Approved" value={k.approved} sub="ready to publish" tone="text-blue-600" />
-        <Kpi label="Published" value={k.published} sub="live" tone="text-emerald-600" />
-        <Kpi label="Retiring / review due" value={k.retiringSoon} sub="≤ 90 days" tone={k.retiringSoon ? "text-rose-600" : undefined} />
+        <Kpi label="Approved" value={k.approved} sub="ready to publish" tone="text-[var(--cmp-text-information)]" />
+        <Kpi label="Published" value={k.published} sub="live" tone="text-[var(--cmp-text-success)]" />
+        <Kpi label="Retiring / review due" value={k.retiringSoon} sub="≤ 90 days" tone={k.retiringSoon ? "text-[var(--cmp-text-error)]" : undefined} />
       </div>
 
       <Card title="Governance pipeline" right={<span className="text-[11px] text-gray-400">Studio → review → approval → publication</span>}>
@@ -57,7 +57,7 @@ export default async function GovernancePublicationPage() {
           {d.approvalQueue.length ? <div className="space-y-1">
             <div className="flex items-center text-[10px] text-gray-400 uppercase tracking-wide px-1"><span className="flex-1">Item</span><span className="w-28">Workflow</span><span className="w-16 text-center">Stage</span><span className="w-16 text-right">Age</span></div>
             {d.approvalQueue.map((r: any, i: number) => (
-              <div key={i} className="flex items-center px-1 py-1.5 text-[12px] border-b border-gray-50"><span className="flex-1 text-gray-800 truncate">{r.entity}</span><span className="w-28 text-gray-500 capitalize text-[11px] truncate">{r.workflow}</span><span className="w-16 text-center text-gray-500 tabular-nums">{r.step ?? "—"}/{r.total ?? "—"}</span><span className={`w-16 text-right tabular-nums ${r.overdue ? "text-rose-600 font-semibold" : "text-gray-400"}`}>{r.age}d</span></div>
+              <div key={i} className="flex items-center px-1 py-1.5 text-[12px] border-b border-gray-50"><span className="flex-1 text-gray-800 truncate">{r.entity}</span><span className="w-28 text-gray-500 capitalize text-[11px] truncate">{r.workflow}</span><span className="w-16 text-center text-gray-500 tabular-nums">{r.step ?? "—"}/{r.total ?? "—"}</span><span className={`w-16 text-right tabular-nums ${r.overdue ? "text-[var(--cmp-text-error)] font-semibold" : "text-gray-400"}`}>{r.age}d</span></div>
             ))}
           </div> : <div className="py-6 text-center"><p className="text-sm text-gray-400">No publications awaiting review.</p><p className="text-[10px] text-gray-400 mt-1">Multi-stage reviews are tracked in <code>plat_approval_requests</code> (workflow engine); the queue populates as Studio submits competencies for governance.</p></div>}
         </Card>
@@ -77,7 +77,7 @@ export default async function GovernancePublicationPage() {
           <div className="grid grid-cols-3 gap-2 text-center mb-3">
             <div className="border border-gray-100 rounded-lg p-2"><p className="text-xl font-bold text-gray-900 tabular-nums">{d.versionMgmt.activeFrameworks}</p><p className="text-[10px] text-gray-400">active</p></div>
             <div className="border border-gray-100 rounded-lg p-2"><p className="text-xl font-bold text-gray-900 tabular-nums">{d.versionMgmt.libraries}</p><p className="text-[10px] text-gray-400">libraries</p></div>
-            <div className="border border-gray-100 rounded-lg p-2"><p className={`text-xl font-bold tabular-nums ${d.versionMgmt.reviewDue ? "text-amber-600" : "text-gray-900"}`}>{d.versionMgmt.reviewDue}</p><p className="text-[10px] text-gray-400">review due</p></div>
+            <div className="border border-gray-100 rounded-lg p-2"><p className={`text-xl font-bold tabular-nums ${d.versionMgmt.reviewDue ? "text-[var(--cmp-text-warning)]" : "text-gray-900"}`}>{d.versionMgmt.reviewDue}</p><p className="text-[10px] text-gray-400">review due</p></div>
           </div>
           {d.versionMgmt.byLibrary.length ? <Bars rows={d.versionMgmt.byLibrary.map((l: any) => ({ label: l.label, n: l.value }))} /> : <p className="text-[11px] text-gray-400 text-center">No framework libraries.</p>}
         </Card>

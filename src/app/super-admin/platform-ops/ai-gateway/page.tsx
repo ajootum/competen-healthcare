@@ -15,7 +15,7 @@ const card = "bg-white rounded-xl border border-gray-200";
 const fmt = (n: number) => n.toLocaleString();
 const relTime = (iso?: string | null) => { if (!iso) return ""; const s = Math.floor((Date.now() - new Date(iso).getTime()) / 1000); if (s < 60) return "just now"; if (s < 3600) return `${Math.floor(s / 60)}m ago`; if (s < 86400) return `${Math.floor(s / 3600)}h ago`; return `${Math.floor(s / 86400)}d ago`; };
 const money = (n: number) => `$${(n ?? 0).toFixed(n < 1 ? 4 : 2)}`;
-const STATUS_TONE: Record<string, string> = { ok: "text-green-600", refusal: "text-amber-600", error: "text-rose-600", not_configured: "text-gray-400" };
+const STATUS_TONE: Record<string, string> = { ok: "text-[var(--cmp-text-success)]", refusal: "text-[var(--cmp-text-warning)]", error: "text-[var(--cmp-text-error)]", not_configured: "text-gray-400" };
 
 export default async function AiGatewayConsole() {
   const supabase = await createClient();
@@ -32,16 +32,16 @@ export default async function AiGatewayConsole() {
   const hourlyLimit = Number(process.env.AI_HOURLY_LIMIT ?? 30);
 
   const health = !status.configured ? "Not configured" : s.errors24h > 0 ? "Degraded" : "Operational";
-  const healthTone = !status.configured ? "text-gray-400" : s.errors24h > 0 ? "text-amber-600" : "text-green-600";
-  const healthBg = !status.configured ? "bg-gray-50" : s.errors24h > 0 ? "bg-amber-50" : "bg-green-50";
+  const healthTone = !status.configured ? "text-gray-400" : s.errors24h > 0 ? "text-[var(--cmp-text-warning)]" : "text-[var(--cmp-text-success)]";
+  const healthBg = !status.configured ? "bg-gray-50" : s.errors24h > 0 ? "bg-[var(--cmp-surface-warning)]" : "bg-[var(--cmp-surface-success)]";
 
   const kpis = [
     { label: "Gateway", value: health, icon: status.configured ? "✨" : "🚫", iconBg: healthBg, tone: healthTone, sub: status.provider ? `${status.provider} provider` : "no provider key" },
     { label: "Requests (24h)", value: s.ready ? fmt(s.requests24h) : "—", icon: "🧠", iconBg: "bg-purple-50", sub: s.ready ? `${s.errors24h} errors · ${s.refusals24h} refusals` : "telemetry off", muted: !s.ready },
-    { label: "Tokens (24h)", value: s.ready ? fmt(s.tokens24h) : "—", icon: "🔤", iconBg: "bg-sky-50", sub: "input + output", muted: !s.ready },
+    { label: "Tokens (24h)", value: s.ready ? fmt(s.tokens24h) : "—", icon: "🔤", iconBg: "bg-[var(--cmp-surface-information)]", sub: "input + output", muted: !s.ready },
     { label: "Est. Cost (24h)", value: s.ready ? money(s.cost24h) : "—", icon: "💵", iconBg: "bg-violet-50", sub: "from list pricing", muted: !s.ready },
     { label: "Avg Latency", value: s.avgLatencyMs == null ? "—" : `${s.avgLatencyMs} ms`, icon: "⏱️", iconBg: "bg-teal-50", sub: "per generation", muted: s.avgLatencyMs == null },
-    { label: "Rate Limit", value: `${hourlyLimit}/hr`, icon: "🚦", iconBg: "bg-amber-50", sub: "per user (quota.ts)" },
+    { label: "Rate Limit", value: `${hourlyLimit}/hr`, icon: "🚦", iconBg: "bg-[var(--cmp-surface-warning)]", sub: "per user (quota.ts)" },
   ];
 
   const tiers = status.models ? [["cheap", status.models.cheap], ["reasoning", status.models.reasoning], ["heavy", status.models.heavy], ["embedding", status.models.embedding]] : [];
@@ -57,8 +57,8 @@ export default async function AiGatewayConsole() {
       </div>
 
       {!s.ready && (
-        <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-          <span className="font-semibold">Usage telemetry off.</span> Run <code className="font-mono text-[12px] bg-amber-100 px-1 rounded">supabase/RUN-ME-055-ai-gateway.sql</code> to record AI usage. Provider config below is live; requests/tokens/cost activate after.
+        <div className="rounded-xl border border-[var(--cmp-color-warning)] bg-[var(--cmp-surface-warning)] px-4 py-3 text-sm text-amber-800">
+          <span className="font-semibold">Usage telemetry off.</span> Run <code className="font-mono text-[12px] bg-[var(--cmp-surface-warning)] px-1 rounded">supabase/RUN-ME-055-ai-gateway.sql</code> to record AI usage. Provider config below is live; requests/tokens/cost activate after.
         </div>
       )}
       {!status.configured && (

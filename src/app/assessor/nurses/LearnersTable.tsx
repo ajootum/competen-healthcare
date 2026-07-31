@@ -35,17 +35,17 @@ const TASK_CHIP: Record<string, string> = {
 };
 
 const PRIO_UI = {
-  high:   { label: "High",   cls: "bg-red-50 text-red-600" },
-  medium: { label: "Medium", cls: "bg-amber-50 text-amber-700" },
+  high:   { label: "High",   cls: "bg-[var(--cmp-surface-critical)] text-[var(--cmp-text-critical)]" },
+  medium: { label: "Medium", cls: "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]" },
   low:    { label: "Low",    cls: "bg-gray-100 text-gray-500" },
 };
 
 const STATUS_CLS: Record<LearnerRow["status"], string> = {
-  "In Progress": "bg-blue-50 text-blue-600",
-  "Overdue": "bg-red-50 text-red-600",
+  "In Progress": "bg-[var(--cmp-surface-information)] text-[var(--cmp-text-information)]",
+  "Overdue": "bg-[var(--cmp-surface-critical)] text-[var(--cmp-text-critical)]",
   "Scheduled": "bg-indigo-50 text-indigo-600",
-  "Awaiting Assessment": "bg-amber-50 text-amber-700",
-  "Up to date": "bg-green-50 text-green-700",
+  "Awaiting Assessment": "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]",
+  "Up to date": "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]",
 };
 
 const initials = (name: string) => name.trim().split(/\s+/).slice(0, 2).map(w => w[0]?.toUpperCase() ?? "").join("") || "?";
@@ -56,8 +56,8 @@ const fmtDue = (iso: string) => {
   const dd = new Date(d); dd.setHours(0, 0, 0, 0);
   const diff = Math.round((dd.getTime() - today.getTime()) / 86400000);
   const time = d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-  if (diff === 0) return { top: "Today", sub: time, cls: "text-red-600 font-bold" };
-  if (diff === 1) return { top: "Tomorrow", sub: time, cls: "text-amber-600 font-semibold" };
+  if (diff === 0) return { top: "Today", sub: time, cls: "text-[var(--cmp-text-critical)] font-bold" };
+  if (diff === 1) return { top: "Tomorrow", sub: time, cls: "text-[var(--cmp-text-warning)] font-semibold" };
   return { top: d.toLocaleDateString(undefined, { day: "numeric", month: "short" }), sub: time, cls: "text-gray-700" };
 };
 
@@ -93,10 +93,10 @@ export default function LearnersTable({ rows, kpis }: { rows: LearnerRow[]; kpis
 
   const KPI_TILES = [
     { icon: "👥", value: String(kpis.learners), label: "Assigned Learners", sub: "in your hospital", tint: "bg-indigo-50" },
-    { icon: "📅", value: String(kpis.dueToday), label: "Assessments Due Today", sub: "scheduled sessions", tint: "bg-blue-50" },
-    { icon: "🖊️", value: String(kpis.awaitingEvidence), label: "Awaiting Evidence Review", sub: "logbook entries", tint: "bg-amber-50" },
-    { icon: "🔴", value: String(kpis.overdue), label: "Overdue Assessments", sub: "past scheduled time", tint: "bg-red-50" },
-    { icon: "🛡️", value: kpis.passRate !== null ? `${kpis.passRate}%` : "—", label: "Competency Pass Rate", sub: kpis.passRate !== null ? "of latest decisions" : "no decisions yet", tint: "bg-green-50" },
+    { icon: "📅", value: String(kpis.dueToday), label: "Assessments Due Today", sub: "scheduled sessions", tint: "bg-[var(--cmp-surface-information)]" },
+    { icon: "🖊️", value: String(kpis.awaitingEvidence), label: "Awaiting Evidence Review", sub: "logbook entries", tint: "bg-[var(--cmp-surface-warning)]" },
+    { icon: "🔴", value: String(kpis.overdue), label: "Overdue Assessments", sub: "past scheduled time", tint: "bg-[var(--cmp-surface-critical)]" },
+    { icon: "🛡️", value: kpis.passRate !== null ? `${kpis.passRate}%` : "—", label: "Competency Pass Rate", sub: kpis.passRate !== null ? "of latest decisions" : "no decisions yet", tint: "bg-[var(--cmp-surface-success)]" },
   ];
 
   return (
@@ -204,7 +204,7 @@ export default function LearnersTable({ rows, kpis }: { rows: LearnerRow[]; kpis
                 </thead>
                 <tbody className="divide-y divide-gray-50">
                   {pageRows.map(r => {
-                    const due = r.overdue ? { top: "Overdue", sub: "", cls: "text-red-600 font-bold" } : r.due ? fmtDue(r.due.when) : null;
+                    const due = r.overdue ? { top: "Overdue", sub: "", cls: "text-[var(--cmp-text-critical)] font-bold" } : r.due ? fmtDue(r.due.when) : null;
                     const pct = r.total ? Math.round((r.pass / r.total) * 100) : 0;
                     return (
                       <tr key={r.id} className={`transition-colors cursor-pointer ${openId === r.id ? "bg-indigo-50/40" : "hover:bg-gray-50/60"}`}
@@ -263,7 +263,7 @@ export default function LearnersTable({ rows, kpis }: { rows: LearnerRow[]; kpis
                                 <span className="text-gray-300">{r.pass}/{r.total}</span>
                               </div>
                               <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
-                                <div className={`h-full rounded-full ${pct >= 75 ? "bg-green-500" : pct >= 40 ? "bg-blue-400" : "bg-amber-400"}`}
+                                <div className={`h-full rounded-full ${pct >= 75 ? "bg-[var(--cmp-color-success)]" : pct >= 40 ? "bg-[var(--cmp-color-information)]" : "bg-[var(--cmp-color-warning)]"}`}
                                   style={{ width: `${pct}%` }} />
                               </div>
                             </>
@@ -387,9 +387,9 @@ export default function LearnersTable({ rows, kpis }: { rows: LearnerRow[]; kpis
             <div className="border-t border-gray-50 pt-3 mb-3">
               <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1.5">Alerts</p>
               <div className="flex flex-col gap-1">
-                {open.pendingEvidence > 0 && <p className="text-[10px] text-amber-700">🖊️ {open.pendingEvidence} logbook entr{open.pendingEvidence === 1 ? "y" : "ies"} awaiting verification</p>}
-                {open.expSoon > 0 && <p className="text-[10px] text-red-600">⏳ {open.expSoon} competenc{open.expSoon === 1 ? "y" : "ies"} expiring within 60 days</p>}
-                {open.upcomingSessions > 0 && <p className="text-[10px] text-blue-600">📅 {open.upcomingSessions} session{open.upcomingSessions === 1 ? "" : "s"} scheduled</p>}
+                {open.pendingEvidence > 0 && <p className="text-[10px] text-[var(--cmp-text-warning)]">🖊️ {open.pendingEvidence} logbook entr{open.pendingEvidence === 1 ? "y" : "ies"} awaiting verification</p>}
+                {open.expSoon > 0 && <p className="text-[10px] text-[var(--cmp-text-critical)]">⏳ {open.expSoon} competenc{open.expSoon === 1 ? "y" : "ies"} expiring within 60 days</p>}
+                {open.upcomingSessions > 0 && <p className="text-[10px] text-[var(--cmp-text-information)]">📅 {open.upcomingSessions} session{open.upcomingSessions === 1 ? "" : "s"} scheduled</p>}
                 {open.pendingEvidence === 0 && open.expSoon === 0 && open.upcomingSessions === 0 && (
                   <p className="text-[10px] text-gray-400">Nothing needing attention.</p>
                 )}

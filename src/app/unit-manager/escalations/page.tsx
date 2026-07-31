@@ -16,11 +16,11 @@ export const dynamic = "force-dynamic";
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 const card = "bg-white rounded-xl border border-gray-200";
-const SEV: Record<string, string> = { Critical: "bg-rose-50 text-rose-700", High: "bg-amber-50 text-amber-700", Medium: "bg-blue-50 text-blue-700", Low: "bg-green-50 text-green-700" };
+const SEV: Record<string, string> = { Critical: "bg-[var(--cmp-surface-error)] text-[var(--cmp-text-error)]", High: "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]", Medium: "bg-[var(--cmp-surface-information)] text-blue-700", Low: "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]" };
 const SEV_BAR: Record<string, string> = { Critical: "#ef4444", High: "#f59e0b", Medium: "#3b82f6", Low: "#22c55e" };
 const TYPE_COLOR = ["#ef4444", "#3b82f6", "#f59e0b", "#8b5cf6", "#14b8a6", "#6b7280"];
 const STATUS_LABEL: Record<string, string> = { open: "Awaiting Review", acknowledged: "In Progress", resolved: "Resolved", cancelled: "Cancelled" };
-const DOT: Record<string, string> = { red: "bg-rose-500", amber: "bg-amber-500", blue: "bg-blue-500" };
+const DOT: Record<string, string> = { red: "bg-[var(--cmp-color-error)]", amber: "bg-[var(--cmp-color-warning)]", blue: "bg-[var(--cmp-color-information)]" };
 const elapsed = (m: number) => (m < 60 ? `${m} min` : m < 1440 ? `${Math.floor(m / 60)}h ${m % 60}m` : `${Math.floor(m / 1440)}d`);
 const TABS = ["Escalation Overview", "Escalation Board", "My Escalations", "Escalation Timeline", "Escalation Analytics", "Escalation Reports"];
 
@@ -71,7 +71,7 @@ export default async function EscalationsWorkspace({ searchParams }: { searchPar
     </>
   );
 
-  if (!d.provisioned) return <div className="space-y-4">{header}<div className="bg-amber-50 border border-amber-200 rounded-xl p-6"><p className="font-semibold text-amber-900">⚙️ Operations tables not provisioned</p><p className="text-sm text-amber-800 mt-1">The op_escalations table isn&apos;t available for this tenant yet.</p></div></div>;
+  if (!d.provisioned) return <div className="space-y-4">{header}<div className="bg-[var(--cmp-surface-warning)] border border-[var(--cmp-color-warning)] rounded-xl p-6"><p className="font-semibold text-amber-900">⚙️ Operations tables not provisioned</p><p className="text-sm text-amber-800 mt-1">The op_escalations table isn&apos;t available for this tenant yet.</p></div></div>;
 
   const k = d.kpis; const r = d.review;
   return (
@@ -80,12 +80,12 @@ export default async function EscalationsWorkspace({ searchParams }: { searchPar
 
       <div className="grid grid-cols-2 sm:grid-cols-4 xl:grid-cols-7 gap-3">
         <Kpi label="Open Escalations" value={k.open} sub="Requiring action" icon="⚠" />
-        <Kpi label="Critical" value={k.critical} sub="Immediate action" tone={k.critical ? "text-rose-600" : undefined} icon="🔴" />
-        <Kpi label="High Priority" value={k.highPriority} sub="Needs attention" tone={k.highPriority ? "text-amber-600" : undefined} icon="🔺" />
+        <Kpi label="Critical" value={k.critical} sub="Immediate action" tone={k.critical ? "text-[var(--cmp-text-error)]" : undefined} icon="🔴" />
+        <Kpi label="High Priority" value={k.highPriority} sub="Needs attention" tone={k.highPriority ? "text-[var(--cmp-text-warning)]" : undefined} icon="🔺" />
         <Kpi label="Awaiting Review" value={k.awaitingReview} sub="Unacknowledged" icon="👁" />
         <Kpi label="Avg Response" value={k.avgResponse != null ? `${k.avgResponse}m` : "—"} sub="To resolution" icon="⏱" />
-        <Kpi label="Resolved This Week" value={k.resolvedThisWeek} sub="Closed" tone="text-green-600" icon="✅" />
-        <Kpi label="Escalation Health" value={`${k.health}%`} sub={k.health >= 80 ? "Good" : k.health >= 60 ? "Fair" : "At risk"} tone={k.health >= 80 ? "text-green-600" : k.health >= 60 ? "text-amber-600" : "text-rose-600"} />
+        <Kpi label="Resolved This Week" value={k.resolvedThisWeek} sub="Closed" tone="text-[var(--cmp-text-success)]" icon="✅" />
+        <Kpi label="Escalation Health" value={`${k.health}%`} sub={k.health >= 80 ? "Good" : k.health >= 60 ? "Fair" : "At risk"} tone={k.health >= 80 ? "text-[var(--cmp-text-success)]" : k.health >= 60 ? "text-[var(--cmp-text-warning)]" : "text-[var(--cmp-text-error)]"} />
       </div>
 
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
@@ -106,7 +106,7 @@ export default async function EscalationsWorkspace({ searchParams }: { searchPar
                       <td className="py-2 pr-3 text-gray-800 font-medium max-w-[150px] truncate">{e.summary}</td>
                       <td className="py-2 pr-3 text-gray-500 truncate max-w-[80px]">{e.patientLabel ?? e.area}</td>
                       <td className="py-2 pr-3 text-gray-600 truncate max-w-[80px]">{e.reporter}</td>
-                      <td className={`py-2 pr-3 whitespace-nowrap ${e.overdue ? "text-rose-600" : "text-gray-400"}`}>{elapsed(e.elapsedMin)}</td>
+                      <td className={`py-2 pr-3 whitespace-nowrap ${e.overdue ? "text-[var(--cmp-text-error)]" : "text-gray-400"}`}>{elapsed(e.elapsedMin)}</td>
                       <td className="py-2 pr-3"><span className="px-1.5 py-0.5 rounded bg-gray-100 text-gray-600 text-[10px]">{STATUS_LABEL[e.status] ?? e.status}</span></td>
                       <td className="py-2 pr-3 text-gray-500 truncate max-w-[70px]">{e.owner ?? "—"}</td>
                       <td className="py-2"><Link href={`/unit-manager/escalations?id=${e.id}${dept ? `&dept=${dept}` : ""}`} className="text-teal-700 hover:underline">Review</Link></td>
@@ -126,8 +126,8 @@ export default async function EscalationsWorkspace({ searchParams }: { searchPar
               <div className="flex items-start justify-between mb-2"><div><h3 className="text-sm font-bold text-gray-900">{r.summary}</h3><p className="text-[10px] text-gray-400">{r.patientLabel ? `${r.patientLabel} · ` : ""}{r.area} · reported {elapsed(r.elapsedMin)} ago</p></div><span className={`px-1.5 py-0.5 rounded text-[10px] font-semibold h-fit ${SEV[r.bucket]}`}>{r.bucket}</span></div>
               <div className="mt-2"><p className="text-[10px] font-semibold text-gray-500 uppercase">Situation</p><p className="text-xs text-gray-700">{r.summary}</p><p className="text-[10px] text-gray-400 mt-0.5">Patient age/sex not stored operationally (EMR) — honest.</p></div>
               <div className="mt-3 grid grid-cols-2 gap-2">
-                <div className="rounded-lg bg-rose-50/50 border border-rose-100 p-2.5"><p className="text-[10px] font-bold text-rose-700 uppercase">AI Risk</p><p className="text-lg font-bold text-rose-600">{r.riskScore}/100</p><p className="text-[11px] text-gray-600">{r.riskLabel}</p></div>
-                <div className="rounded-lg border border-gray-100 p-2.5"><p className="text-[10px] font-bold text-gray-500 uppercase">Due In</p><p className={`text-lg font-bold ${r.dueIn != null && r.dueIn < 0 ? "text-rose-600" : "text-gray-800"}`}>{r.dueIn == null ? "—" : r.dueIn < 0 ? "Overdue" : `${r.dueIn}m`}</p><p className="text-[11px] text-gray-500">Level {r.level}</p></div>
+                <div className="rounded-lg bg-[var(--cmp-surface-error)]/50 border border-[var(--cmp-color-error)] p-2.5"><p className="text-[10px] font-bold text-[var(--cmp-text-error)] uppercase">AI Risk</p><p className="text-lg font-bold text-[var(--cmp-text-error)]">{r.riskScore}/100</p><p className="text-[11px] text-gray-600">{r.riskLabel}</p></div>
+                <div className="rounded-lg border border-gray-100 p-2.5"><p className="text-[10px] font-bold text-gray-500 uppercase">Due In</p><p className={`text-lg font-bold ${r.dueIn != null && r.dueIn < 0 ? "text-[var(--cmp-text-error)]" : "text-gray-800"}`}>{r.dueIn == null ? "—" : r.dueIn < 0 ? "Overdue" : `${r.dueIn}m`}</p><p className="text-[11px] text-gray-500">Level {r.level}</p></div>
               </div>
               <div className="mt-3"><p className="text-[10px] font-semibold text-gray-500 uppercase mb-1">Recommended Actions</p><ul className="text-[11px] text-gray-600 space-y-0.5">{r.recommendations.slice(0, 5).map((a: string, i: number) => <li key={i}>✓ {a}</li>)}</ul></div>
               <div className="mt-3 flex items-center justify-between text-[10px] text-gray-400"><span>Owner: <b className="text-gray-600">{r.owner ?? "Unassigned"}</b></span><span>{STATUS_LABEL[r.status]}</span></div>
@@ -153,7 +153,7 @@ export default async function EscalationsWorkspace({ searchParams }: { searchPar
         <div className={`${card} p-5`}>
           <h3 className="text-sm font-bold text-gray-900 mb-2">Escalation Timeline (7 days)</h3>
           <TimelineChart series={d.timeline} />
-          <div className="flex gap-3 text-[10px] mt-1"><span className="flex items-center gap-1"><span className="w-2.5 h-0.5 bg-rose-500" />Opened</span><span className="flex items-center gap-1"><span className="w-2.5 h-0.5 bg-green-500" />Resolved</span></div>
+          <div className="flex gap-3 text-[10px] mt-1"><span className="flex items-center gap-1"><span className="w-2.5 h-0.5 bg-[var(--cmp-color-error)]" />Opened</span><span className="flex items-center gap-1"><span className="w-2.5 h-0.5 bg-[var(--cmp-color-success)]" />Resolved</span></div>
         </div>
       </div>
 
@@ -162,7 +162,7 @@ export default async function EscalationsWorkspace({ searchParams }: { searchPar
         <div className={`${card} p-5`}>
           <h3 className="text-sm font-bold text-gray-900 mb-3">Escalation Hotspots</h3>
           {d.hotspots.length === 0 ? <p className="text-sm text-gray-400">No hotspots.</p> : (
-            <div className="space-y-1.5">{d.hotspots.map((h: any) => { const max = Math.max(1, ...d.hotspots.map((x: any) => x.n)); return <div key={h.label} className="flex items-center gap-2 text-xs"><span className="w-28 text-gray-600 truncate">{h.label}</span><div className="flex-1 h-2 rounded-full bg-gray-100 overflow-hidden"><div className="h-full bg-rose-400 rounded-full" style={{ width: `${(h.n / max) * 100}%` }} /></div><b className="w-5 text-right tabular-nums">{h.n}</b></div>; })}</div>
+            <div className="space-y-1.5">{d.hotspots.map((h: any) => { const max = Math.max(1, ...d.hotspots.map((x: any) => x.n)); return <div key={h.label} className="flex items-center gap-2 text-xs"><span className="w-28 text-gray-600 truncate">{h.label}</span><div className="flex-1 h-2 rounded-full bg-gray-100 overflow-hidden"><div className="h-full bg-[var(--cmp-color-error)] rounded-full" style={{ width: `${(h.n / max) * 100}%` }} /></div><b className="w-5 text-right tabular-nums">{h.n}</b></div>; })}</div>
           )}
         </div>
         <div className={`${card} p-5 bg-gradient-to-br from-violet-50/40 to-white`}>

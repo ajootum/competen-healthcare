@@ -6,8 +6,8 @@ import { cardClass } from "@/components/ui/primitives";
 // (Underscore-prefixed file — not an App Router route.)
 
 export const card = cardClass;
-export const tone = (n: number | null) => (n == null ? "text-gray-300" : n >= 85 ? "text-green-600" : n >= 60 ? "text-amber-600" : "text-red-600");
-export const barCls = (n: number) => (n >= 85 ? "bg-green-500" : n >= 60 ? "bg-amber-500" : "bg-red-500");
+export const tone = (n: number | null) => (n == null ? "text-gray-300" : n >= 85 ? "text-[var(--cmp-text-success)]" : n >= 60 ? "text-[var(--cmp-text-warning)]" : "text-[var(--cmp-text-critical)]");
+export const barCls = (n: number) => (n >= 85 ? "bg-[var(--cmp-color-success)]" : n >= 60 ? "bg-[var(--cmp-color-warning)]" : "bg-[var(--cmp-color-critical)]");
 export const pctText = (n: number | null) => (n == null ? "—" : `${n}%`);
 
 export function ScopeBanner({ mode, name }: { mode: "platform" | "group" | "single"; name: string }) {

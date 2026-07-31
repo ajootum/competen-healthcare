@@ -48,7 +48,7 @@ export default async function LocalizationConsole({ searchParams }: { searchPara
                 <span className="text-gray-700 flex items-center gap-1.5"><span className="font-mono text-[10px] bg-gray-100 rounded px-1">{l.code}</span>{l.native}{l.dir === "rtl" && <span className="text-[9px] text-violet-600">RTL</span>}{l.base && <span className="text-[9px] text-teal-600">base</span>}</span>
                 <span className="text-gray-400">{l.translatedKeys}/{cat.totalKeys} · {l.coverage}%</span>
               </div>
-              <div className="w-full h-1.5 rounded-full bg-gray-100 overflow-hidden"><div className={`h-full rounded-full ${l.coverage >= 100 ? "bg-green-500" : l.coverage >= 60 ? "bg-teal-500" : l.coverage >= 30 ? "bg-amber-400" : "bg-rose-400"}`} style={{ width: `${l.coverage}%` }} /></div>
+              <div className="w-full h-1.5 rounded-full bg-gray-100 overflow-hidden"><div className={`h-full rounded-full ${l.coverage >= 100 ? "bg-[var(--cmp-color-success)]" : l.coverage >= 60 ? "bg-teal-500" : l.coverage >= 30 ? "bg-[var(--cmp-color-warning)]" : "bg-[var(--cmp-color-error)]"}`} style={{ width: `${l.coverage}%` }} /></div>
             </div>
           ))}</div>
         </div>
@@ -66,7 +66,7 @@ export default async function LocalizationConsole({ searchParams }: { searchPara
                   <tr key={e.key} className="border-b border-gray-50">
                     <td className="py-1.5 pr-3 font-mono text-[10px] text-gray-500" dir="ltr">{e.key}</td>
                     <td className="py-1.5 pr-3 text-gray-800">{e.value}</td>
-                    <td className="py-1.5" dir="ltr">{e.translated ? <span className="text-green-600 text-[10px]">translated</span> : <span className="text-amber-500 text-[10px]">fallback</span>}</td>
+                    <td className="py-1.5" dir="ltr">{e.translated ? <span className="text-[var(--cmp-text-success)] text-[10px]">translated</span> : <span className="text-amber-500 text-[10px]">fallback</span>}</td>
                   </tr>
                 ))}
               </tbody>

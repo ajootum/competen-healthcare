@@ -17,8 +17,8 @@ export const dynamic = "force-dynamic";
 type SearchParams = Promise<{ fw?: string }>;
 
 const PUB_CLS: Record<string, string> = {
-  published: "bg-green-100 text-green-700", draft: "bg-gray-100 text-gray-600",
-  in_review: "bg-amber-100 text-amber-700", archived: "bg-gray-100 text-gray-400", retired: "bg-gray-100 text-gray-400",
+  published: "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]", draft: "bg-gray-100 text-gray-600",
+  in_review: "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]", archived: "bg-gray-100 text-gray-400", retired: "bg-gray-100 text-gray-400",
 };
 const LIFECYCLE = ["Draft", "Peer Review", "Committee", "Quality", "Approved", "Published", "Archived"];
 
@@ -173,7 +173,7 @@ export default async function CurriculumEnginePage({ searchParams }: { searchPar
                   {domainRows.map((d, di) => (
                     <div key={di} className="flex items-center gap-2 text-[11px] border-l-2 border-purple-100 pl-2 py-0.5">
                       <span className="text-gray-700 flex-1">{di + 1}. {d.name} <span className="text-gray-300">({d.n})</span></span>
-                      <span className={`text-[8px] font-bold px-1.5 py-0.5 rounded uppercase ${d.status === "complete" ? "bg-green-100 text-green-700" : d.status === "gap" ? "bg-red-100 text-red-600" : d.status === "empty" ? "bg-gray-100 text-gray-400" : "bg-amber-100 text-amber-700"}`}>{d.status}</span>
+                      <span className={`text-[8px] font-bold px-1.5 py-0.5 rounded uppercase ${d.status === "complete" ? "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]" : d.status === "gap" ? "bg-[var(--cmp-surface-critical)] text-[var(--cmp-text-critical)]" : d.status === "empty" ? "bg-gray-100 text-gray-400" : "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]"}`}>{d.status}</span>
                     </div>
                   ))}
                   {!domainRows.length && <p className="text-[10px] text-gray-400">No domains.</p>}
@@ -191,7 +191,7 @@ export default async function CurriculumEnginePage({ searchParams }: { searchPar
               {intel.map((x, i) => (
                 <Link key={i} href="/educator/studio/gaps" className="flex items-center gap-2 text-[11px] text-gray-700 hover:text-purple-700">
                   <span>{x.icon}</span><span className="flex-1">{x.label}</span>
-                  <span className="text-[10px] font-bold bg-amber-100 text-amber-700 rounded-full px-1.5 py-0.5">{x.n}</span>
+                  <span className="text-[10px] font-bold bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)] rounded-full px-1.5 py-0.5">{x.n}</span>
                 </Link>
               ))}
             </div>
@@ -235,7 +235,7 @@ export default async function CurriculumEnginePage({ searchParams }: { searchPar
                     <td className="py-1.5 text-center"><Cell v={d.cov.simulation} /></td>
                     <td className="py-1.5 text-center"><Cell v={d.cov.checklist} /></td>
                     <td className="py-1.5 text-center"><Cell v={d.cov.passport} /></td>
-                    <td className="py-1.5 text-center"><span className={`text-[8px] font-bold px-1.5 py-0.5 rounded uppercase ${d.status === "complete" ? "bg-green-100 text-green-700" : d.status === "gap" ? "bg-red-100 text-red-600" : d.status === "empty" ? "bg-gray-100 text-gray-400" : "bg-amber-100 text-amber-700"}`}>{d.status}</span></td>
+                    <td className="py-1.5 text-center"><span className={`text-[8px] font-bold px-1.5 py-0.5 rounded uppercase ${d.status === "complete" ? "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]" : d.status === "gap" ? "bg-[var(--cmp-surface-critical)] text-[var(--cmp-text-critical)]" : d.status === "empty" ? "bg-gray-100 text-gray-400" : "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]"}`}>{d.status}</span></td>
                   </tr>
                 ))}
               </tbody>
@@ -271,7 +271,7 @@ export default async function CurriculumEnginePage({ searchParams }: { searchPar
             {[["Assessment coverage", comps.length ? Math.round(comps.filter(c => hasAssessed.has(c.id)).length / comps.length * 100) : 0], ["Learning coverage", comps.length ? Math.round(comps.filter(c => hasResource.has(c.id)).length / comps.length * 100) : 0], ["Passport coverage", comps.length ? Math.round(comps.filter(c => hasPassport.has(c.id)).length / comps.length * 100) : 0]].map(([l, v]) => (
               <div key={l as string}>
                 <div className="flex items-center justify-between text-[11px] mb-0.5"><span className="text-gray-600">{l}</span><span className="font-bold text-gray-900">{v as number}%</span></div>
-                <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden"><div className={`h-full rounded-full ${(v as number) >= 80 ? "bg-green-500" : "bg-amber-400"}`} style={{ width: `${v}%` }} /></div>
+                <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden"><div className={`h-full rounded-full ${(v as number) >= 80 ? "bg-[var(--cmp-color-success)]" : "bg-[var(--cmp-color-warning)]"}`} style={{ width: `${v}%` }} /></div>
               </div>
             ))}
           </div>
@@ -316,7 +316,7 @@ export default async function CurriculumEnginePage({ searchParams }: { searchPar
         <Card title="Publishing & Downstream Sync" sub="published content is read directly by these modules — no separate sync layer">
           <div className="flex items-center gap-1.5 flex-wrap">
             {[["Learning Content", "/educator/studio/content"], ["Assessment Design", "/educator/studio/assessment"], ["Blueprint & Mapping", "/educator/studio/mapping"], ["CKO & CPU", "/educator/studio/cko"], ["AI Studio", "/educator/studio/ai"], ["Passports", "/educator/students"]].map(([l, h]) => (
-              <Link key={l} href={h} className="text-[10px] font-semibold text-green-700 bg-green-50 border border-green-100 rounded-lg px-2.5 py-1.5 hover:bg-green-100">✓ {l}</Link>
+              <Link key={l} href={h} className="text-[10px] font-semibold text-[var(--cmp-text-success)] bg-[var(--cmp-surface-success)] border border-[var(--cmp-color-success)] rounded-lg px-2.5 py-1.5 hover:bg-[var(--cmp-surface-success)]">✓ {l}</Link>
             ))}
           </div>
         </Card>

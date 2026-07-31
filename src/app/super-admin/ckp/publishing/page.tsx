@@ -15,7 +15,7 @@ export const dynamic = "force-dynamic";
 const card = "bg-white rounded-xl border border-gray-200";
 const fmt = (n: number) => n.toLocaleString();
 const relTime = (iso?: string | null) => { if (!iso) return ""; const s = Math.floor((Date.now() - new Date(iso).getTime()) / 1000); if (s < 60) return "just now"; if (s < 3600) return `${Math.floor(s / 60)} min ago`; if (s < 86400) return `${Math.floor(s / 3600)} hr ago`; return `${Math.floor(s / 86400)} d ago`; };
-const STAGE_BADGE: Record<string, string> = { "In Review": "bg-amber-50 text-amber-700", Approved: "bg-blue-50 text-blue-700", Published: "bg-green-50 text-green-700", Rejected: "bg-rose-50 text-rose-700" };
+const STAGE_BADGE: Record<string, string> = { "In Review": "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]", Approved: "bg-[var(--cmp-surface-information)] text-blue-700", Published: "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]", Rejected: "bg-[var(--cmp-surface-error)] text-[var(--cmp-text-error)]" };
 
 export default async function PublishingGovernance() {
   const supabase = await createClient();
@@ -31,9 +31,9 @@ export default async function PublishingGovernance() {
   const vc = p.versionControl;
 
   const kpiCards = [
-    { label: "In Review", value: fmt(k.inReview), icon: "👀", iconBg: "bg-amber-50", tone: k.inReview ? "text-amber-600" : undefined },
-    { label: "Pending Approvals", value: fmt(k.pendingApprovals), icon: "✅", iconBg: "bg-blue-50", tone: k.pendingApprovals ? "text-blue-600" : undefined },
-    { label: "Published", value: fmt(k.published), icon: "🚀", iconBg: "bg-green-50", tone: "text-green-600" },
+    { label: "In Review", value: fmt(k.inReview), icon: "👀", iconBg: "bg-[var(--cmp-surface-warning)]", tone: k.inReview ? "text-[var(--cmp-text-warning)]" : undefined },
+    { label: "Pending Approvals", value: fmt(k.pendingApprovals), icon: "✅", iconBg: "bg-[var(--cmp-surface-information)]", tone: k.pendingApprovals ? "text-[var(--cmp-text-information)]" : undefined },
+    { label: "Published", value: fmt(k.published), icon: "🚀", iconBg: "bg-[var(--cmp-surface-success)]", tone: "text-[var(--cmp-text-success)]" },
     { label: "Published (30d)", value: k.publishedThisMonth == null ? "—" : fmt(k.publishedThisMonth), icon: "📈", iconBg: "bg-teal-50", muted: k.publishedThisMonth == null },
     { label: "Archived", value: fmt(k.archived), icon: "🗄️", iconBg: "bg-gray-50", tone: "text-gray-400" },
     { label: "Governance Committees", value: fmt(k.committees), icon: "⚖️", iconBg: "bg-violet-50" },
@@ -121,7 +121,7 @@ export default async function PublishingGovernance() {
         <div className={`${card} p-5`}>
           <h2 className="font-semibold text-gray-900 text-[15px] mb-3">Review Queue</h2>
           <div className="grid grid-cols-2 gap-2">
-            {[["Open", p.reviewQueue.open, "text-amber-600"], ["Approved", p.reviewQueue.approved, "text-green-600"], ["Rejected", p.reviewQueue.rejected, "text-rose-600"], ["Implemented", p.reviewQueue.implemented, "text-blue-600"]].map(([l, n, t]) => (
+            {[["Open", p.reviewQueue.open, "text-[var(--cmp-text-warning)]"], ["Approved", p.reviewQueue.approved, "text-[var(--cmp-text-success)]"], ["Rejected", p.reviewQueue.rejected, "text-[var(--cmp-text-error)]"], ["Implemented", p.reviewQueue.implemented, "text-[var(--cmp-text-information)]"]].map(([l, n, t]) => (
               <div key={l as string} className="rounded-lg border border-gray-100 p-3 text-center"><p className={`text-xl font-bold tabular-nums ${(n as number) ? (t as string) : "text-gray-900"}`}>{fmt(n as number)}</p><p className="text-[10px] text-gray-500">{l}</p></div>
             ))}
           </div>
@@ -136,7 +136,7 @@ export default async function PublishingGovernance() {
           {p.committees.length === 0 ? <p className="text-sm text-gray-400 py-4 text-center">No governance committees configured.</p> : (
             <div className="space-y-1.5">
               {p.committees.slice(0, 6).map((c: any, i: number) => (
-                <div key={i} className="flex items-center justify-between text-sm"><span className="flex items-center gap-2 min-w-0"><span className="text-gray-700 truncate">{c.name}</span>{c.level && <span className="text-[10px] text-gray-400">{c.level}</span>}</span><span className={`text-[10px] shrink-0 ${c.active ? "text-green-600" : "text-gray-400"}`}>{c.active ? "active" : "inactive"}</span></div>
+                <div key={i} className="flex items-center justify-between text-sm"><span className="flex items-center gap-2 min-w-0"><span className="text-gray-700 truncate">{c.name}</span>{c.level && <span className="text-[10px] text-gray-400">{c.level}</span>}</span><span className={`text-[10px] shrink-0 ${c.active ? "text-[var(--cmp-text-success)]" : "text-gray-400"}`}>{c.active ? "active" : "inactive"}</span></div>
               ))}
             </div>
           )}

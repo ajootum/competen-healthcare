@@ -11,10 +11,10 @@ export const dynamic = "force-dynamic";
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 const statusBadge: Record<string, string> = {
-  published: "bg-green-100 text-green-700", approved: "bg-blue-100 text-blue-700",
-  in_review: "bg-amber-100 text-amber-700", draft: "bg-gray-100 text-gray-500", archived: "bg-gray-100 text-gray-400",
+  published: "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]", approved: "bg-[var(--cmp-surface-information)] text-blue-700",
+  in_review: "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]", draft: "bg-gray-100 text-gray-500", archived: "bg-gray-100 text-gray-400",
 };
-const riskBadge: Record<string, string> = { low: "text-green-600", standard: "text-gray-500", high: "text-orange-600", critical: "text-red-600" };
+const riskBadge: Record<string, string> = { low: "text-[var(--cmp-text-success)]", standard: "text-gray-500", high: "text-[var(--cmp-text-warning)]", critical: "text-[var(--cmp-text-critical)]" };
 
 export default async function CpuLibraryPage() {
   const supabase = await createClient();

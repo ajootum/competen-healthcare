@@ -36,11 +36,11 @@ export default function BoardActions({ patientId, patientLabel, reviewed }: { pa
       <div className="flex flex-wrap gap-2">
         <button onClick={clarify} disabled={!!busy} className={`${BTN} border border-gray-200 text-gray-600`}>💬 Ask Clarification</button>
         {reviewed
-          ? <span className={`${BTN} bg-emerald-50 text-emerald-700 cursor-default`}>✓ Reviewed</span>
-          : <button onClick={review} disabled={!!busy} className={`${BTN} bg-emerald-600 text-white`}>{busy === "review" ? "Saving…" : "Mark as Reviewed"}</button>}
+          ? <span className={`${BTN} bg-[var(--cmp-surface-success)] text-emerald-700 cursor-default`}>✓ Reviewed</span>
+          : <button onClick={review} disabled={!!busy} className={`${BTN} bg-[var(--cmp-color-success)] text-white`}>{busy === "review" ? "Saving…" : "Mark as Reviewed"}</button>}
       </div>
-      {err && <p className="text-[10px] text-rose-600">{err}</p>}
-      {msg && <p className="text-[10px] text-emerald-600">{msg}</p>}
+      {err && <p className="text-[10px] text-[var(--cmp-text-error)]">{err}</p>}
+      {msg && <p className="text-[10px] text-[var(--cmp-text-success)]">{msg}</p>}
       <p className="text-[10px] text-gray-400">By reviewing, you confirm you have received handover and will accept responsibility for this patient.</p>
     </div>
   );

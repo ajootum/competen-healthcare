@@ -89,7 +89,7 @@ export default async function ApprovalsPage() {
                   <tr key={a.id} className="hover:bg-gray-50/40">
                     <td className="px-5 py-4">
                       <div className="flex items-center gap-2">
-                        <span className="w-2 h-2 bg-amber-400 rounded-full shrink-0" />
+                        <span className="w-2 h-2 bg-[var(--cmp-color-warning)] rounded-full shrink-0" />
                         <p className="font-medium text-gray-900">{a.framework_name ?? a.framework_id}</p>
                       </div>
                     </td>
@@ -126,7 +126,7 @@ export default async function ApprovalsPage() {
                     <td className="px-5 py-3 font-medium text-gray-800 text-sm">{a.framework_name ?? a.framework_id}</td>
                     <td className="px-4 py-3">
                       <span className={`text-[10px] font-bold px-2 py-0.5 rounded uppercase tracking-wide ${
-                        a.status === "approved" ? "bg-green-100 text-green-700" : "bg-red-100 text-red-600"
+                        a.status === "approved" ? "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]" : "bg-[var(--cmp-surface-critical)] text-[var(--cmp-text-critical)]"
                       }`}>
                         {a.status === "approved" ? "✅ Approved" : "❌ Rejected"}
                       </span>

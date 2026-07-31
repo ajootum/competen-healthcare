@@ -60,9 +60,9 @@ export default async function ExecStrategyPage() {
 
         <Card title="Transformation programs">
           <div className="grid grid-cols-2 gap-2 text-center">
-            <div className="border border-gray-100 rounded-lg p-3"><p className="text-2xl font-bold text-emerald-600 tabular-nums">{tr.onTrack}</p><p className="text-[11px] text-gray-500">On track</p></div>
-            <div className="border border-gray-100 rounded-lg p-3"><p className="text-2xl font-bold text-amber-600 tabular-nums">{tr.atRisk}</p><p className="text-[11px] text-gray-500">At risk</p></div>
-            <div className="border border-gray-100 rounded-lg p-3"><p className="text-2xl font-bold text-blue-600 tabular-nums">{tr.completed}</p><p className="text-[11px] text-gray-500">Completed</p></div>
+            <div className="border border-gray-100 rounded-lg p-3"><p className="text-2xl font-bold text-[var(--cmp-text-success)] tabular-nums">{tr.onTrack}</p><p className="text-[11px] text-gray-500">On track</p></div>
+            <div className="border border-gray-100 rounded-lg p-3"><p className="text-2xl font-bold text-[var(--cmp-text-warning)] tabular-nums">{tr.atRisk}</p><p className="text-[11px] text-gray-500">At risk</p></div>
+            <div className="border border-gray-100 rounded-lg p-3"><p className="text-2xl font-bold text-[var(--cmp-text-information)] tabular-nums">{tr.completed}</p><p className="text-[11px] text-gray-500">Completed</p></div>
             <div className="border border-gray-100 rounded-lg p-3"><p className="text-2xl font-bold text-gray-400 tabular-nums">{tr.notStarted}</p><p className="text-[11px] text-gray-500">Not started</p></div>
           </div>
         </Card>

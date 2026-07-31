@@ -71,7 +71,7 @@ export default function ReportWriterClient({ departments, recent }: {
             className="w-full text-xs font-bold text-white bg-indigo-600 rounded-lg px-4 py-2.5 hover:bg-indigo-700 disabled:opacity-50 transition-colors">
             {busy ? "Writing…" : "✨ Generate Report"}
           </button>
-          {error && <p className="text-xs text-red-600 mt-2">{error}</p>}
+          {error && <p className="text-xs text-[var(--cmp-text-critical)] mt-2">{error}</p>}
         </div>
 
         <div className="bg-white border border-gray-200 rounded-xl p-4 no-print">

@@ -55,7 +55,7 @@ export default async function PlatformAdminLayout({ children }: { children: Reac
     <div className="min-h-screen bg-gray-50 font-[family-name:var(--font-geist-sans)]">
       <header className="md:hidden fixed top-0 left-0 right-0 z-40 bg-[#0f1923] shadow-lg">
         <div className="h-12 flex items-center gap-2 px-3">
-          <span className="w-7 h-7 rounded bg-rose-500 flex items-center justify-center text-white font-bold text-sm shrink-0">C</span>
+          <span className="w-7 h-7 rounded bg-[var(--cmp-color-error)] flex items-center justify-center text-white font-bold text-sm shrink-0">C</span>
           <span className="min-w-0">
             <span className="block text-white font-semibold text-sm leading-tight">Competen</span>
             <span className="block text-rose-300/60 text-[10px] leading-tight">Platform Super Admin</span>
@@ -88,7 +88,7 @@ export default async function PlatformAdminLayout({ children }: { children: Reac
         <aside data-sidebar className="hidden md:flex w-56 h-screen bg-[#0f1923] flex-col py-6 px-4 fixed top-0 left-0 z-20">
           <SidebarToggle />
           <Link href="/platform-admin" className="flex items-center gap-2 mb-6 px-2" data-sb-item>
-            <div className="w-7 h-7 rounded bg-rose-500 flex items-center justify-center text-white font-bold text-sm">C</div>
+            <div className="w-7 h-7 rounded bg-[var(--cmp-color-error)] flex items-center justify-center text-white font-bold text-sm">C</div>
             <span className="text-white font-semibold text-sm" data-sb-label>Competen</span>
           </Link>
           <div className="px-3 mb-4" data-sb-label>

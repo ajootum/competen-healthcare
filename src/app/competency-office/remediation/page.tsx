@@ -25,15 +25,15 @@ export default async function RemediationPage() {
   return (
     <div className="space-y-4">
       {head}
-      {d.empty && <div className="bg-blue-50 border border-blue-200 rounded-xl p-3 text-[12px] text-blue-800">No gap signals or remediation plans captured yet — as competency decisions flag gaps and educators open interventions, this centre tracks the pathway from detection to a restored competency record.</div>}
+      {d.empty && <div className="bg-[var(--cmp-surface-information)] border border-[var(--cmp-color-information)] rounded-xl p-3 text-[12px] text-blue-800">No gap signals or remediation plans captured yet — as competency decisions flag gaps and educators open interventions, this centre tracks the pathway from detection to a restored competency record.</div>}
 
       <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
-        <Kpi label="Open gap signals" value={k.openGaps} sub="requires-remediation / not-yet / expired" tone={k.openGaps ? "text-rose-600" : "text-gray-900"} />
+        <Kpi label="Open gap signals" value={k.openGaps} sub="requires-remediation / not-yet / expired" tone={k.openGaps ? "text-[var(--cmp-text-error)]" : "text-gray-900"} />
         <Kpi label="Active remediation" value={k.activeRemediation} sub="plans in flight" tone="text-teal-600" />
-        <Kpi label="Unaddressed (est.)" value={k.unaddressed} sub="gaps beyond active plans" tone={k.unaddressed ? "text-rose-600" : "text-emerald-600"} />
-        <Kpi label="Reassessment due" value={k.reassessDue} sub={k.overdueReassess ? `${k.overdueReassess} overdue` : "next 14 days"} tone={k.overdueReassess ? "text-rose-600" : k.reassessDue ? "text-amber-600" : "text-gray-900"} />
-        <Kpi label="Success rate" value={k.successRate === null ? "—" : `${k.successRate}%`} sub={`${k.successful}/${k.completedTotal} completed`} tone={k.successRate === null ? "text-gray-900" : k.successRate >= 70 ? "text-emerald-600" : "text-amber-600"} />
-        <Kpi label="Avg days open" value={k.avgDaysOpen} sub="active plans" tone={k.avgDaysOpen > 60 ? "text-amber-600" : "text-gray-900"} />
+        <Kpi label="Unaddressed (est.)" value={k.unaddressed} sub="gaps beyond active plans" tone={k.unaddressed ? "text-[var(--cmp-text-error)]" : "text-[var(--cmp-text-success)]"} />
+        <Kpi label="Reassessment due" value={k.reassessDue} sub={k.overdueReassess ? `${k.overdueReassess} overdue` : "next 14 days"} tone={k.overdueReassess ? "text-[var(--cmp-text-error)]" : k.reassessDue ? "text-[var(--cmp-text-warning)]" : "text-gray-900"} />
+        <Kpi label="Success rate" value={k.successRate === null ? "—" : `${k.successRate}%`} sub={`${k.successful}/${k.completedTotal} completed`} tone={k.successRate === null ? "text-gray-900" : k.successRate >= 70 ? "text-[var(--cmp-text-success)]" : "text-[var(--cmp-text-warning)]"} />
+        <Kpi label="Avg days open" value={k.avgDaysOpen} sub="active plans" tone={k.avgDaysOpen > 60 ? "text-[var(--cmp-text-warning)]" : "text-gray-900"} />
       </div>
 
       {/* The 9-step remediation & development pathway */}
@@ -92,7 +92,7 @@ export default async function RemediationPage() {
           {d.gapByOutcome.length ? (
             <>
               <Bars rows={d.gapByOutcome.map((g: any) => ({ label: g.label, n: g.n }))} colors={d.gapByOutcome.map((g: any) => g.color)} />
-              <p className="text-[10px] text-gray-400 mt-3">Est. <span className="font-semibold text-rose-600">{k.unaddressed}</span> gap signal{k.unaddressed === 1 ? "" : "s"} beyond active plans{d.unattributedGaps > 0 ? ` · ${d.unattributedGaps} not yet attributed to a named competency` : ""}.</p>
+              <p className="text-[10px] text-gray-400 mt-3">Est. <span className="font-semibold text-[var(--cmp-text-error)]">{k.unaddressed}</span> gap signal{k.unaddressed === 1 ? "" : "s"} beyond active plans{d.unattributedGaps > 0 ? ` · ${d.unattributedGaps} not yet attributed to a named competency` : ""}.</p>
             </>
           ) : <p className="text-sm text-gray-400 py-8 text-center">No open gap signals — every competency decision is passing. 🎉</p>}
         </Card>
@@ -105,7 +105,7 @@ export default async function RemediationPage() {
           <div className="space-y-2.5">
             <div className="flex items-center justify-between text-[12.5px]"><span className="text-gray-600">Scheduled coaching sessions</span><span className="tabular-nums font-semibold text-gray-900">{d.coaching.scheduled}</span></div>
             <div className="flex items-center justify-between text-[12.5px]"><span className="text-gray-600">Completed sessions</span><span className="tabular-nums font-semibold text-gray-900">{d.coaching.completed}</span></div>
-            <div className="flex items-center justify-between text-[12.5px]"><span className="text-gray-600">Partially-successful closures</span><span className="tabular-nums font-semibold text-amber-600">{d.coaching.partiallySuccessful}</span></div>
+            <div className="flex items-center justify-between text-[12.5px]"><span className="text-gray-600">Partially-successful closures</span><span className="tabular-nums font-semibold text-[var(--cmp-text-warning)]">{d.coaching.partiallySuccessful}</span></div>
           </div>
           <p className="text-[10px] text-gray-400 mt-3"><code>support_sessions</code> — the coaching / mentorship backing remediation (steps 5 &amp; 9). Zero where not yet provisioned.</p>
         </Card>

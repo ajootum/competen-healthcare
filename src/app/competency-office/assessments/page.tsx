@@ -12,8 +12,8 @@ export const dynamic = "force-dynamic";
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 const card = "bg-white rounded-xl border border-gray-200";
-const pctTone = (n: number) => (n >= 90 ? "text-emerald-600" : n >= 80 ? "text-amber-600" : "text-rose-600");
-const cellTone = (n: number) => (n >= 90 ? "bg-emerald-500" : n >= 80 ? "bg-amber-400" : n >= 70 ? "bg-orange-400" : "bg-rose-500");
+const pctTone = (n: number) => (n >= 90 ? "text-[var(--cmp-text-success)]" : n >= 80 ? "text-[var(--cmp-text-warning)]" : "text-[var(--cmp-text-error)]");
+const cellTone = (n: number) => (n >= 90 ? "bg-[var(--cmp-color-success)]" : n >= 80 ? "bg-[var(--cmp-color-warning)]" : n >= 70 ? "bg-[var(--cmp-color-warning)]" : "bg-[var(--cmp-color-error)]");
 const todayLabel = () => new Date().toLocaleDateString([], { day: "numeric", month: "short", year: "numeric" });
 const DOMAIN_COLORS = ["#3b82f6", "#10b981", "#f59e0b", "#ef4444", "#8b5cf6", "#ec4899"];
 
@@ -61,7 +61,7 @@ export default async function AssessmentStatus() {
       <span className="text-xs bg-white border border-gray-200 rounded-lg px-3 py-2 text-gray-400">☰ Filters</span>
     </div>
   );
-  if (!d.provisioned) return <div className="space-y-4">{header}<div className="bg-amber-50 border border-amber-200 rounded-xl p-6"><p className="font-semibold text-amber-900">⚙️ Assessment engine not provisioned</p><p className="text-sm text-amber-800 mt-1">No assessments or scheduled assessments for this tenant yet.</p></div></div>;
+  if (!d.provisioned) return <div className="space-y-4">{header}<div className="bg-[var(--cmp-surface-warning)] border border-[var(--cmp-color-warning)] rounded-xl p-6"><p className="font-semibold text-amber-900">⚙️ Assessment engine not provisioned</p><p className="text-sm text-amber-800 mt-1">No assessments or scheduled assessments for this tenant yet.</p></div></div>;
 
   return (
     <div className="space-y-4">
@@ -75,11 +75,11 @@ export default async function AssessmentStatus() {
             <div><p className="text-xs text-gray-500">Overall Readiness</p><p className={`text-xl font-bold tabular-nums ${pctTone(k.readiness)}`}>{k.readiness}%</p></div>
           </div>
         </div>
-        <Kpi icon="✅" tint="bg-emerald-50" label="Completed" value={k.completed.toLocaleString()} sub="completed & approved" href="/competency-office/assessments" />
-        <Kpi icon="🕐" tint="bg-amber-50" label="Pending" value={k.pending} tone={k.pending ? "text-amber-600" : "text-gray-400"} sub="scheduled, not done" href="/competency-office/assessments" />
-        <Kpi icon="⚠️" tint="bg-rose-50" label="Overdue" value={k.overdue} tone={k.overdue ? "text-rose-600" : "text-gray-400"} sub="immediate action" href="/competency-office/assessments" />
-        <Kpi icon="❌" tint="bg-orange-50" label="Failed" value={k.failed} tone={k.failed ? "text-rose-600" : "text-gray-400"} sub="below pass — remediate" href="/competency-office/assessments" />
-        <Kpi icon="🔁" tint="bg-violet-50" label="Reassessment Due" value={k.reassessmentDue} tone={k.reassessmentDue ? "text-amber-600" : "text-gray-400"} sub="expiring ≤30 days" href="/competency-office/credentialing" />
+        <Kpi icon="✅" tint="bg-[var(--cmp-surface-success)]" label="Completed" value={k.completed.toLocaleString()} sub="completed & approved" href="/competency-office/assessments" />
+        <Kpi icon="🕐" tint="bg-[var(--cmp-surface-warning)]" label="Pending" value={k.pending} tone={k.pending ? "text-[var(--cmp-text-warning)]" : "text-gray-400"} sub="scheduled, not done" href="/competency-office/assessments" />
+        <Kpi icon="⚠️" tint="bg-[var(--cmp-surface-error)]" label="Overdue" value={k.overdue} tone={k.overdue ? "text-[var(--cmp-text-error)]" : "text-gray-400"} sub="immediate action" href="/competency-office/assessments" />
+        <Kpi icon="❌" tint="bg-[var(--cmp-surface-warning)]" label="Failed" value={k.failed} tone={k.failed ? "text-[var(--cmp-text-error)]" : "text-gray-400"} sub="below pass — remediate" href="/competency-office/assessments" />
+        <Kpi icon="🔁" tint="bg-violet-50" label="Reassessment Due" value={k.reassessmentDue} tone={k.reassessmentDue ? "text-[var(--cmp-text-warning)]" : "text-gray-400"} sub="expiring ≤30 days" href="/competency-office/credentialing" />
       </div>
 
       {/* Overview grid + trend + domain */}
@@ -90,7 +90,7 @@ export default async function AssessmentStatus() {
           {d.overview.length === 0 ? <p className="text-sm text-gray-400">No assessment data yet.</p> : (
             <table className="w-full text-xs">
               <thead><tr className="text-[10px] uppercase tracking-wide text-gray-400 text-left border-b border-gray-100"><th className="py-1.5 font-medium">Type</th><th className="py-1.5 font-medium text-right">Req</th><th className="py-1.5 font-medium text-right">Done</th><th className="py-1.5 font-medium text-right">Pend</th><th className="py-1.5 font-medium text-right">Over</th><th className="py-1.5 font-medium text-right">%</th></tr></thead>
-              <tbody>{d.overview.map((o: any) => (<tr key={o.method} className="border-b border-gray-50"><td className="py-1.5 text-gray-700 truncate max-w-[7rem]">{o.method}</td><td className="py-1.5 text-right text-gray-600 tabular-nums">{o.required}</td><td className="py-1.5 text-right text-gray-600 tabular-nums">{o.completed}</td><td className="py-1.5 text-right text-gray-500 tabular-nums">{o.pending}</td><td className={`py-1.5 text-right tabular-nums ${o.overdue ? "text-rose-600" : "text-gray-400"}`}>{o.overdue}</td><td className={`py-1.5 text-right font-semibold tabular-nums ${pctTone(o.compliance)}`}>{o.compliance}%</td></tr>))}</tbody>
+              <tbody>{d.overview.map((o: any) => (<tr key={o.method} className="border-b border-gray-50"><td className="py-1.5 text-gray-700 truncate max-w-[7rem]">{o.method}</td><td className="py-1.5 text-right text-gray-600 tabular-nums">{o.required}</td><td className="py-1.5 text-right text-gray-600 tabular-nums">{o.completed}</td><td className="py-1.5 text-right text-gray-500 tabular-nums">{o.pending}</td><td className={`py-1.5 text-right tabular-nums ${o.overdue ? "text-[var(--cmp-text-error)]" : "text-gray-400"}`}>{o.overdue}</td><td className={`py-1.5 text-right font-semibold tabular-nums ${pctTone(o.compliance)}`}>{o.compliance}%</td></tr>))}</tbody>
               <tfoot><tr className="border-t border-gray-200 font-bold"><td className="py-1.5 text-gray-800">Total</td><td className="py-1.5 text-right tabular-nums">{overviewTotal.required}</td><td className="py-1.5 text-right tabular-nums">{overviewTotal.completed}</td><td className="py-1.5 text-right tabular-nums">{overviewTotal.pending}</td><td className="py-1.5 text-right tabular-nums">{overviewTotal.overdue}</td><td className="py-1.5 text-right tabular-nums">{overviewTotal.required ? Math.round((overviewTotal.completed / overviewTotal.required) * 100) : 0}%</td></tr></tfoot>
             </table>
           )}
@@ -98,7 +98,7 @@ export default async function AssessmentStatus() {
 
         <div className={`${card} p-5`}>
           <div className="flex items-center justify-between mb-2"><h3 className="font-semibold text-gray-900 text-sm">Assessment Trend</h3><span className="text-[10px] text-gray-400">last 12 weeks</span></div>
-          <div className="flex items-center gap-3 text-[11px] text-gray-500 mb-1"><span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-emerald-500" /> Completed</span><span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-rose-500" /> Failed</span></div>
+          <div className="flex items-center gap-3 text-[11px] text-gray-500 mb-1"><span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-[var(--cmp-color-success)]" /> Completed</span><span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-[var(--cmp-color-error)]" /> Failed</span></div>
           <TrendChart trend={d.trend} />
           <p className="text-[10px] text-gray-400 mt-2">Completed &amp; failed by week (real). Pending/overdue trend lines need retained snapshots — next-phase.</p>
         </div>
@@ -119,14 +119,14 @@ export default async function AssessmentStatus() {
         <div className={`${card} p-5`}>
           <h3 className="font-semibold text-gray-900 text-sm mb-3">Pending Assessments</h3>
           {d.pendingList.length === 0 ? <p className="text-sm text-gray-400">No pending assessments.</p> : (
-            <div className="space-y-2">{d.pendingList.map((p: any, i: number) => (<div key={i} className="flex items-center justify-between gap-2"><div className="min-w-0"><p className="text-xs font-medium text-gray-800 truncate">{p.name}</p><p className="text-[10px] text-gray-400 truncate">{p.assessment}</p></div><span className="text-[10px] text-amber-600 font-medium shrink-0">{p.daysLeft}d left</span></div>))}</div>
+            <div className="space-y-2">{d.pendingList.map((p: any, i: number) => (<div key={i} className="flex items-center justify-between gap-2"><div className="min-w-0"><p className="text-xs font-medium text-gray-800 truncate">{p.name}</p><p className="text-[10px] text-gray-400 truncate">{p.assessment}</p></div><span className="text-[10px] text-[var(--cmp-text-warning)] font-medium shrink-0">{p.daysLeft}d left</span></div>))}</div>
           )}
         </div>
 
         <div className={`${card} p-5`}>
           <h3 className="font-semibold text-gray-900 text-sm mb-3">Overdue Assessments <span className="text-[10px] font-normal text-rose-500">action required</span></h3>
           {d.overdueList.length === 0 ? <p className="text-sm text-gray-400">No overdue assessments. 🎉</p> : (
-            <div className="space-y-2">{d.overdueList.map((o: any, i: number) => (<div key={i} className="flex items-center justify-between gap-2"><div className="min-w-0"><p className="text-xs font-medium text-gray-800 truncate">{o.name}</p><p className="text-[10px] text-gray-400 truncate">{o.assessment}</p></div><span className="text-[10px] text-rose-600 font-medium shrink-0">{o.daysOverdue}d over</span></div>))}</div>
+            <div className="space-y-2">{d.overdueList.map((o: any, i: number) => (<div key={i} className="flex items-center justify-between gap-2"><div className="min-w-0"><p className="text-xs font-medium text-gray-800 truncate">{o.name}</p><p className="text-[10px] text-gray-400 truncate">{o.assessment}</p></div><span className="text-[10px] text-[var(--cmp-text-error)] font-medium shrink-0">{o.daysOverdue}d over</span></div>))}</div>
           )}
         </div>
 
@@ -154,7 +154,7 @@ export default async function AssessmentStatus() {
         <div className={`${card} p-5`}>
           <h3 className="font-semibold text-gray-900 text-sm mb-3 flex items-center gap-2">✨ AI Assessment Insights</h3>
           {d.ai.length === 0 ? <p className="text-sm text-gray-400">No priority assessment actions.</p> : (
-            <div className="space-y-2">{d.ai.slice(0, 4).map((a: any, i: number) => (<div key={i} className="rounded-lg border border-gray-100 p-2.5"><div className="flex items-start justify-between gap-2"><p className="text-xs text-gray-800 flex-1">{a.text}</p><span className={`text-[9px] px-1.5 py-0.5 rounded shrink-0 ${a.priority === "high" ? "bg-rose-50 text-rose-700" : a.priority === "medium" ? "bg-amber-50 text-amber-700" : "bg-gray-100 text-gray-500"}`}>{a.priority}</span></div><p className="text-[10px] text-gray-400 mt-1">Why: {a.why}</p></div>))}</div>
+            <div className="space-y-2">{d.ai.slice(0, 4).map((a: any, i: number) => (<div key={i} className="rounded-lg border border-gray-100 p-2.5"><div className="flex items-start justify-between gap-2"><p className="text-xs text-gray-800 flex-1">{a.text}</p><span className={`text-[9px] px-1.5 py-0.5 rounded shrink-0 ${a.priority === "high" ? "bg-[var(--cmp-surface-error)] text-[var(--cmp-text-error)]" : a.priority === "medium" ? "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]" : "bg-gray-100 text-gray-500"}`}>{a.priority}</span></div><p className="text-[10px] text-gray-400 mt-1">Why: {a.why}</p></div>))}</div>
           )}
         </div>
       </div>

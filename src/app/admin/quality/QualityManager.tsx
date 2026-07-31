@@ -101,7 +101,7 @@ export default function QualityManager({ domains, frameworks, qos, standards, in
 
   return (
     <div className="flex flex-col gap-6">
-      {error && <div className="bg-red-50 text-red-600 text-sm rounded-lg px-4 py-2.5">{error}</div>}
+      {error && <div className="bg-[var(--cmp-surface-critical)] text-[var(--cmp-text-critical)] text-sm rounded-lg px-4 py-2.5">{error}</div>}
 
       {/* ── QUALITY OBJECTS ── */}
       <div>
@@ -165,7 +165,7 @@ export default function QualityManager({ domains, frameworks, qos, standards, in
                       </p>
                       {q.description && <p className="text-[11px] text-gray-400 mt-0.5">{q.description}</p>}
                     </div>
-                    {dm && <span className="text-[10px] bg-blue-50 text-blue-600 px-2 py-0.5 rounded font-medium">{dm.name}</span>}
+                    {dm && <span className="text-[10px] bg-[var(--cmp-surface-information)] text-[var(--cmp-text-information)] px-2 py-0.5 rounded font-medium">{dm.name}</span>}
                     <span className={`text-[10px] font-bold px-2 py-0.5 rounded ${st?.cls}`}>{st?.label ?? q.status}</span>
                   </div>
                   {(stds.length > 0 || inds.length > 0) && (
@@ -272,13 +272,13 @@ export default function QualityManager({ domains, frameworks, qos, standards, in
       <div>
         <div className="flex items-center justify-between mb-3">
           <h2 className="text-xs font-bold text-gray-400 uppercase tracking-widest">Improvement Projects</h2>
-          <button onClick={() => setShowIoForm(v => !v)} className={`${btn} bg-amber-500 hover:bg-amber-600 text-white`}>
+          <button onClick={() => setShowIoForm(v => !v)} className={`${btn} bg-[var(--cmp-color-warning)] hover:bg-[var(--cmp-color-warning)] text-white`}>
             {showIoForm ? "Cancel" : "+ Improvement"}
           </button>
         </div>
 
         {showIoForm && (
-          <div className="bg-white rounded-xl border border-amber-100 p-5 mb-4 flex flex-col gap-3">
+          <div className="bg-white rounded-xl border border-[var(--cmp-color-warning)] p-5 mb-4 flex flex-col gap-3">
             <input className={input} placeholder="Title — e.g. Reduce medication administration errors" value={ioTitle} onChange={e => setIoTitle(e.target.value)} />
             <textarea className={input} rows={2} placeholder="Problem statement" value={ioProblem} onChange={e => setIoProblem(e.target.value)} />
             <textarea className={input} rows={2} placeholder="Aim — measurable goal, e.g. reduce errors by 30% in 6 months" value={ioAim} onChange={e => setIoAim(e.target.value)} />
@@ -296,7 +296,7 @@ export default function QualityManager({ domains, frameworks, qos, standards, in
                 kind: "improvement", title: ioTitle.trim(), quality_object_id: ioQo || null,
                 problem_statement: ioProblem.trim() || null, aim_statement: ioAim.trim() || null, methodology: ioMethod,
               }, () => { setShowIoForm(false); setIoTitle(""); setIoProblem(""); setIoAim(""); setIoQo(""); })}
-              className={`${btn} bg-amber-500 hover:bg-amber-600 text-white self-start`}>
+              className={`${btn} bg-[var(--cmp-color-warning)] hover:bg-[var(--cmp-color-warning)] text-white self-start`}>
               {busy ? "Saving…" : "Create Improvement"}
             </button>
           </div>

@@ -50,7 +50,7 @@ export default async function Blueprint() {
           <div className="bg-white border border-gray-100 rounded-2xl p-5">
             <h2 className="text-sm font-bold text-gray-900 mb-3">Coverage by Area</h2>
             <div className="flex flex-col gap-2">{d.coverageByArea.map(x => (
-              <div key={x.label} className="flex items-center gap-2"><span className="text-[10px] text-gray-500 w-24">{x.label}</span><div className="flex-1 h-2 bg-gray-100 rounded-full overflow-hidden"><div className={`h-full rounded-full ${x.pct >= 70 ? "bg-green-500" : x.pct >= 40 ? "bg-amber-400" : "bg-red-400"}`} style={{ width: `${x.pct}%` }} /></div><span className="text-[10px] font-bold text-gray-600 w-9 text-right">{x.pct}%</span></div>
+              <div key={x.label} className="flex items-center gap-2"><span className="text-[10px] text-gray-500 w-24">{x.label}</span><div className="flex-1 h-2 bg-gray-100 rounded-full overflow-hidden"><div className={`h-full rounded-full ${x.pct >= 70 ? "bg-[var(--cmp-color-success)]" : x.pct >= 40 ? "bg-[var(--cmp-color-warning)]" : "bg-[var(--cmp-color-critical)]"}`} style={{ width: `${x.pct}%` }} /></div><span className="text-[10px] font-bold text-gray-600 w-9 text-right">{x.pct}%</span></div>
             ))}</div>
           </div>
           {/* AI insights */}

@@ -3,10 +3,10 @@ import { redirect } from "next/navigation";
 import CycleCreator from "./CycleCreator";
 
 const CYCLE_COLORS: Record<string, string> = {
-  orientation: "bg-blue-100 text-blue-700",
-  probation:   "bg-yellow-100 text-yellow-700",
-  annual:      "bg-green-100 text-green-700",
-  remediation: "bg-red-100 text-red-700",
+  orientation: "bg-[var(--cmp-surface-information)] text-blue-700",
+  probation:   "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]",
+  annual:      "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]",
+  remediation: "bg-[var(--cmp-surface-critical)] text-[var(--cmp-text-critical)]",
   specialty:   "bg-purple-100 text-purple-700",
 };
 
@@ -120,7 +120,7 @@ export default async function CompetenciesPage() {
           { label: "Nurses on Cycle",     value: nursesWithCycles,                        color: "text-teal-600" },
           { label: "Total Nurses",         value: (nurses ?? []).length,                   color: "text-gray-600" },
           { label: "Competency Avg Score", value: hospitalAvg !== null ? hospitalAvg : "—", color: "text-indigo-600" },
-          { label: "Competent+ Scores",    value: competentCount,                          color: "text-green-600" },
+          { label: "Competent+ Scores",    value: competentCount,                          color: "text-[var(--cmp-text-success)]" },
         ].map(s => (
           <div key={s.label} className="bg-white rounded-xl p-4 border border-gray-100">
             <p className="text-[10px] text-gray-400 font-semibold uppercase tracking-wide mb-1">{s.label}</p>
@@ -178,7 +178,7 @@ export default async function CompetenciesPage() {
                       <div className="flex items-center gap-2">
                         <div className="w-20 h-1.5 bg-gray-100 rounded-full overflow-hidden">
                           <div
-                            className={`h-full rounded-full ${row.pct >= 75 ? "bg-green-500" : row.pct >= 40 ? "bg-amber-400" : "bg-gray-300"}`}
+                            className={`h-full rounded-full ${row.pct >= 75 ? "bg-[var(--cmp-color-success)]" : row.pct >= 40 ? "bg-[var(--cmp-color-warning)]" : "bg-gray-300"}`}
                             style={{ width: `${row.pct}%` }} />
                         </div>
                         <span className="text-xs text-gray-600">{row.scoredCount}/{row.totalComps}</span>
@@ -211,10 +211,10 @@ export default async function CompetenciesPage() {
             const status = f.pub_status ?? "published";
             const statusCfg: Record<string, { label: string; cls: string }> = {
               draft:      { label: "Draft",      cls: "text-gray-500 bg-gray-100" },
-              in_review:  { label: "In Review",  cls: "text-amber-700 bg-amber-50" },
-              approved:   { label: "Approved",   cls: "text-blue-700 bg-blue-50" },
-              published:  { label: "Published",  cls: "text-green-700 bg-green-50" },
-              archived:   { label: "Archived",   cls: "text-red-500 bg-red-50" },
+              in_review:  { label: "In Review",  cls: "text-[var(--cmp-text-warning)] bg-[var(--cmp-surface-warning)]" },
+              approved:   { label: "Approved",   cls: "text-blue-700 bg-[var(--cmp-surface-information)]" },
+              published:  { label: "Published",  cls: "text-[var(--cmp-text-success)] bg-[var(--cmp-surface-success)]" },
+              archived:   { label: "Archived",   cls: "text-red-500 bg-[var(--cmp-surface-critical)]" },
             };
             const sc = statusCfg[status] ?? statusCfg.published;
             return (

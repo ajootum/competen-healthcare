@@ -17,8 +17,8 @@ export const dynamic = "force-dynamic";
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 const card = "bg-white rounded-xl border border-gray-200";
-const pctTone = (n: number) => (n >= 90 ? "text-emerald-600" : n >= 75 ? "text-amber-600" : "text-rose-600");
-const riskOf = (n: number) => (n >= 90 ? { label: "Low Risk", tone: "bg-emerald-50 text-emerald-700" } : n >= 80 ? { label: "Medium Risk", tone: "bg-amber-50 text-amber-700" } : { label: "High Risk", tone: "bg-rose-50 text-rose-700" });
+const pctTone = (n: number) => (n >= 90 ? "text-[var(--cmp-text-success)]" : n >= 75 ? "text-[var(--cmp-text-warning)]" : "text-[var(--cmp-text-error)]");
+const riskOf = (n: number) => (n >= 90 ? { label: "Low Risk", tone: "bg-[var(--cmp-surface-success)] text-emerald-700" } : n >= 80 ? { label: "Medium Risk", tone: "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]" } : { label: "High Risk", tone: "bg-[var(--cmp-surface-error)] text-[var(--cmp-text-error)]" });
 const todayLabel = () => new Date().toLocaleDateString([], { day: "numeric", month: "short", year: "numeric" });
 const DOMAIN_COLORS = ["#3b82f6", "#10b981", "#f59e0b", "#ef4444", "#8b5cf6", "#ec4899", "#14b8a6", "#f97316"];
 
@@ -42,7 +42,7 @@ function Kpi({ icon, tint, label, value, sub, tone, href, trend }: { icon: strin
       </div>
       <div className={`text-3xl font-bold tabular-nums ${tone ?? "text-gray-900"}`}>{value}</div>
       {showDelta
-        ? <div className={`text-[11px] mt-0.5 font-medium ${good ? "text-emerald-600" : "text-rose-600"}`}>{delta! > 0 ? "↑" : "↓"} {Math.abs(delta!)}{trend!.unit ?? ""} vs yesterday</div>
+        ? <div className={`text-[11px] mt-0.5 font-medium ${good ? "text-[var(--cmp-text-success)]" : "text-[var(--cmp-text-error)]"}`}>{delta! > 0 ? "↑" : "↓"} {Math.abs(delta!)}{trend!.unit ?? ""} vs yesterday</div>
         : sub && <div className="text-[11px] text-gray-400 mt-0.5">{sub}</div>}
       {trend && <Sparkline series={trend.series} color={trend.color} />}
     </Link>
@@ -111,17 +111,17 @@ export default async function CompetencyDashboard() {
             ))}
             <div className="border-l border-gray-100 h-10 mx-2 shrink-0" />
             <div className="shrink-0 text-center px-2"><p className={`text-lg font-bold tabular-nums ${gov.kpis.approvalPending ? "text-violet-600" : "text-gray-900"}`}>{gov.kpis.approvalPending}</p><p className="text-[10px] text-gray-400">approval pending</p></div>
-            <div className="shrink-0 text-center px-2"><p className={`text-lg font-bold tabular-nums ${gov.kpis.retiringSoon ? "text-rose-600" : "text-gray-900"}`}>{gov.kpis.retiringSoon}</p><p className="text-[10px] text-gray-400">review due</p></div>
+            <div className="shrink-0 text-center px-2"><p className={`text-lg font-bold tabular-nums ${gov.kpis.retiringSoon ? "text-[var(--cmp-text-error)]" : "text-gray-900"}`}>{gov.kpis.retiringSoon}</p><p className="text-[10px] text-gray-400">review due</p></div>
           </div>
         </div>
       )}
 
       {/* KPI row */}
       <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
-        <Kpi icon="🛡️" tint="bg-emerald-50" label="Organisation Readiness" value={`${d.readiness.score}%`} sub={`${d.readiness.current}/${d.readiness.total} current`} href="/competency-office/readiness" trend={d.trends ? { ...d.trends.readiness, good: "up", unit: "%", color: "#10b981" } : undefined} />
-        <Kpi icon="⚠️" tint="bg-rose-50" label="At Risk Units" value={d.highRiskUnits.length} sub={`below ${d.highRiskThreshold}%`} href="/competency-office/readiness" trend={d.trends ? { ...d.trends.atRisk, good: "down", color: "#ef4444" } : undefined} />
-        <Kpi icon="📅" tint="bg-amber-50" label="Expiring (30 Days)" value={d.expiring.d30} sub={`${d.expiring.individuals} individuals`} href="/competency-office/credentialing" trend={d.trends ? { ...d.trends.expiring, good: "down", color: "#f59e0b" } : undefined} />
-        <Kpi icon="📋" tint="bg-sky-50" label="Assessments Today" value={d.assessments.provisioned ? d.assessments.total : "—"} sub={d.assessments.provisioned ? `${d.assessments.completed} completed` : "cycle data"} href="/competency-office/assessments" trend={d.trends ? { ...d.trends.assessments, good: "up", color: "#0ea5e9" } : undefined} />
+        <Kpi icon="🛡️" tint="bg-[var(--cmp-surface-success)]" label="Organisation Readiness" value={`${d.readiness.score}%`} sub={`${d.readiness.current}/${d.readiness.total} current`} href="/competency-office/readiness" trend={d.trends ? { ...d.trends.readiness, good: "up", unit: "%", color: "#10b981" } : undefined} />
+        <Kpi icon="⚠️" tint="bg-[var(--cmp-surface-error)]" label="At Risk Units" value={d.highRiskUnits.length} sub={`below ${d.highRiskThreshold}%`} href="/competency-office/readiness" trend={d.trends ? { ...d.trends.atRisk, good: "down", color: "#ef4444" } : undefined} />
+        <Kpi icon="📅" tint="bg-[var(--cmp-surface-warning)]" label="Expiring (30 Days)" value={d.expiring.d30} sub={`${d.expiring.individuals} individuals`} href="/competency-office/credentialing" trend={d.trends ? { ...d.trends.expiring, good: "down", color: "#f59e0b" } : undefined} />
+        <Kpi icon="📋" tint="bg-[var(--cmp-surface-information)]" label="Assessments Today" value={d.assessments.provisioned ? d.assessments.total : "—"} sub={d.assessments.provisioned ? `${d.assessments.completed} completed` : "cycle data"} href="/competency-office/assessments" trend={d.trends ? { ...d.trends.assessments, good: "up", color: "#0ea5e9" } : undefined} />
         <Kpi icon="📁" tint="bg-violet-50" label="Evidence Pending" value={d.awaitingValidation} sub="awaiting validation" href="/competency-office/validation" trend={d.trends ? { ...d.trends.evidence, good: "down", color: "#8b5cf6" } : undefined} />
         <Kpi icon="✨" tint="bg-teal-50" label="Compliance Score" value={`${d.complianceScore}%`} sub="validated & current" href="/competency-office/compliance" trend={d.trends ? { ...d.trends.compliance, good: "up", unit: "%", color: "#14b8a6" } : undefined} />
       </div>
@@ -151,7 +151,7 @@ export default async function CompetencyDashboard() {
           <div className="flex items-center justify-between mb-3"><h3 className="font-semibold text-gray-900 text-sm">Competency Risk Alerts</h3><Link href="/competency-office/readiness" className="text-[11px] text-teal-600 hover:underline">View all →</Link></div>
           {d.risks.length === 0 ? <p className="text-sm text-gray-400">No critical competency risks. 🎉</p> : (
             <div className="space-y-2">{d.risks.slice(0, 4).map((r: any, i: number) => (
-              <div key={i} className={`rounded-lg border p-2.5 ${r.severity === "high" ? "border-rose-100 bg-rose-50/40" : "border-amber-100 bg-amber-50/40"}`}>
+              <div key={i} className={`rounded-lg border p-2.5 ${r.severity === "high" ? "border-[var(--cmp-color-error)] bg-[var(--cmp-surface-error)]/40" : "border-[var(--cmp-color-warning)] bg-[var(--cmp-surface-warning)]/40"}`}>
                 <div className="flex items-start gap-2"><span className="text-sm">{r.severity === "high" ? "🩸" : "⚠️"}</span><div className="min-w-0"><p className="text-xs font-semibold text-gray-800">{r.label}</p><p className="text-[11px] text-gray-500">{r.detail}</p></div></div>
               </div>
             ))}</div>
@@ -181,7 +181,7 @@ export default async function CompetencyDashboard() {
           <div className="flex items-center justify-between mb-3"><h3 className="font-semibold text-gray-900 text-sm">Expiring Competencies</h3><Link href="/competency-office/credentialing" className="text-[11px] text-teal-600 hover:underline">All →</Link></div>
           {d.expiringPeople.length === 0 ? <p className="text-sm text-gray-400">Nothing expiring in 60 days.</p> : (
             <div className="space-y-2.5">{d.expiringPeople.map((p: any, i: number) => (
-              <div key={i} className="flex items-center gap-2.5"><span className="w-7 h-7 rounded-full bg-teal-100 text-teal-700 flex items-center justify-center text-xs font-bold shrink-0">{(p.name?.[0] ?? "?").toUpperCase()}</span><div className="min-w-0 flex-1"><p className="text-xs font-medium text-gray-800 truncate">{p.name}</p><p className="text-[10px] text-gray-400 truncate">{p.competency}</p></div>{p.days != null && <span className={`text-[10px] font-medium shrink-0 ${p.days <= 7 ? "text-rose-600" : p.days <= 14 ? "text-amber-600" : "text-gray-500"}`}>{p.days}d</span>}</div>
+              <div key={i} className="flex items-center gap-2.5"><span className="w-7 h-7 rounded-full bg-teal-100 text-teal-700 flex items-center justify-center text-xs font-bold shrink-0">{(p.name?.[0] ?? "?").toUpperCase()}</span><div className="min-w-0 flex-1"><p className="text-xs font-medium text-gray-800 truncate">{p.name}</p><p className="text-[10px] text-gray-400 truncate">{p.competency}</p></div>{p.days != null && <span className={`text-[10px] font-medium shrink-0 ${p.days <= 7 ? "text-[var(--cmp-text-error)]" : p.days <= 14 ? "text-[var(--cmp-text-warning)]" : "text-gray-500"}`}>{p.days}d</span>}</div>
             ))}</div>
           )}
         </div>
@@ -201,7 +201,7 @@ export default async function CompetencyDashboard() {
           <div className="flex items-center justify-between mb-3"><h3 className="font-semibold text-gray-900 text-sm">Validation Queue</h3><Link href="/competency-office/validation" className="text-[11px] text-teal-600 hover:underline">Queue →</Link></div>
           {d.validationList.length === 0 ? <p className="text-sm text-gray-400">Validation queue clear.</p> : (
             <div className="space-y-2.5">{d.validationList.slice(0, 4).map((v: any, i: number) => (
-              <div key={i} className="flex items-center justify-between gap-2"><div className="min-w-0"><p className="text-xs font-medium text-gray-800 truncate">{v.competency}</p><p className="text-[10px] text-gray-400 truncate">{v.nurse}</p></div><span className={`text-[9px] font-medium px-1.5 py-0.5 rounded shrink-0 ${v.status === "review" ? "bg-amber-50 text-amber-700" : "bg-violet-50 text-violet-700"}`}>{v.status}</span></div>
+              <div key={i} className="flex items-center justify-between gap-2"><div className="min-w-0"><p className="text-xs font-medium text-gray-800 truncate">{v.competency}</p><p className="text-[10px] text-gray-400 truncate">{v.nurse}</p></div><span className={`text-[9px] font-medium px-1.5 py-0.5 rounded shrink-0 ${v.status === "review" ? "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]" : "bg-violet-50 text-violet-700"}`}>{v.status}</span></div>
             ))}</div>
           )}
         </div>
@@ -240,8 +240,8 @@ export default async function CompetencyDashboard() {
 
         <div className={`${card} p-5`}>
           <h3 className="font-semibold text-gray-900 text-sm mb-3">System Health</h3>
-          <div className={`rounded-lg p-3 flex items-center gap-2.5 ${d.ready ? "bg-emerald-50" : "bg-amber-50"}`}>
-            <span className={`w-2.5 h-2.5 rounded-full ${d.ready ? "bg-emerald-500" : "bg-amber-500"}`} />
+          <div className={`rounded-lg p-3 flex items-center gap-2.5 ${d.ready ? "bg-[var(--cmp-surface-success)]" : "bg-[var(--cmp-surface-warning)]"}`}>
+            <span className={`w-2.5 h-2.5 rounded-full ${d.ready ? "bg-[var(--cmp-color-success)]" : "bg-[var(--cmp-color-warning)]"}`} />
             <span className={`text-sm font-medium ${d.ready ? "text-emerald-800" : "text-amber-800"}`}>{d.ready ? "Competency data operational" : "Awaiting competency data"}</span>
           </div>
           <p className="text-[10px] text-gray-400 mt-2">As of {todayLabel()}. Every calculation is tenant-scoped; readiness recalculates on validation.</p>

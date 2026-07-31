@@ -42,7 +42,7 @@ export default function NavGroup({ title, hrefs, headerClass, badge, children }:
         <span className="text-[8px] leading-none text-slate-500 transition-transform duration-150 group-open/nav:rotate-90" aria-hidden>▶</span>
         <span className={headerClass} data-sb-label>{title}</span>
         {!!badge && (
-          <span className="ml-auto bg-red-500 text-white text-[9px] font-bold rounded-full min-w-[16px] h-4 px-1 flex items-center justify-center group-open/nav:hidden" data-sb-label>
+          <span className="ml-auto bg-[var(--cmp-color-critical)] text-white text-[9px] font-bold rounded-full min-w-[16px] h-4 px-1 flex items-center justify-center group-open/nav:hidden" data-sb-label>
             {badge > 99 ? "99+" : badge}
           </span>
         )}

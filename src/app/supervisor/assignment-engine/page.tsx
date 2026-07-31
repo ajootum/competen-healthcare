@@ -20,8 +20,8 @@ const card = cardClass;
 const titleCase = (s: string | null | undefined) => (s ?? "").replace(/_/g, " ").replace(/\b\w/g, ch => ch.toUpperCase());
 const fmtWhen = (iso: string | null) => iso ? new Date(iso).toLocaleString([], { hour: "2-digit", minute: "2-digit", day: "numeric", month: "short" }) : "";
 const STATUS_TONE: Record<string, string> = {
-  generated: "bg-blue-100 text-blue-700", published: "bg-green-100 text-green-700",
-  partially_published: "bg-amber-100 text-amber-700", discarded: "bg-gray-100 text-gray-400",
+  generated: "bg-[var(--cmp-surface-information)] text-blue-700", published: "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]",
+  partially_published: "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]", discarded: "bg-gray-100 text-gray-400",
 };
 
 export default async function AssignmentEnginePage() {
@@ -65,9 +65,9 @@ export default async function AssignmentEnginePage() {
       </div>
 
       {migrationMissing && (
-        <div className="bg-amber-50 border border-amber-200 rounded-xl p-5">
+        <div className="bg-[var(--cmp-surface-warning)] border border-[var(--cmp-color-warning)] rounded-xl p-5">
           <p className="font-semibold text-amber-900">⚙️ Decision record not yet enabled</p>
-          <p className="text-sm text-amber-800 mt-1">Apply migration <code className="bg-amber-100 px-1.5 py-0.5 rounded font-mono text-xs">155-assignment-recommendations.sql</code> to persist recommendation runs. Generation still works — runs just are not recorded until then.</p>
+          <p className="text-sm text-amber-800 mt-1">Apply migration <code className="bg-[var(--cmp-surface-warning)] px-1.5 py-0.5 rounded font-mono text-xs">155-assignment-recommendations.sql</code> to persist recommendation runs. Generation still works — runs just are not recorded until then.</p>
         </div>
       )}
 
@@ -94,11 +94,11 @@ export default async function AssignmentEnginePage() {
                   <div key={n.id} className="flex items-center gap-3">
                     <span className="text-sm text-gray-700 w-44 truncate">{n.name}{n.role === "charge" ? " (charge)" : ""}</span>
                     <div className="flex-1 h-2.5 rounded-full bg-gray-100 overflow-hidden">
-                      <div className={`h-full rounded-full ${n.load > OVERLOAD_PCT ? "bg-red-500" : n.load > 80 ? "bg-orange-400" : "bg-teal-500"}`}
+                      <div className={`h-full rounded-full ${n.load > OVERLOAD_PCT ? "bg-[var(--cmp-color-critical)]" : n.load > 80 ? "bg-[var(--cmp-color-warning)]" : "bg-teal-500"}`}
                         style={{ width: `${Math.min(100, n.load)}%` }} />
                     </div>
                     <span className="text-xs tabular-nums text-gray-500 w-24 text-right">{n.load}% · {n.patients} pt{n.patients === 1 ? "" : "s"}</span>
-                    {n.blocked && <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-red-100 text-red-700">blocked</span>}
+                    {n.blocked && <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-[var(--cmp-surface-critical)] text-[var(--cmp-text-critical)]">blocked</span>}
                   </div>
                 ))}
               </div>
@@ -115,10 +115,10 @@ export default async function AssignmentEnginePage() {
             {latest?.status === "generated" && (latest.gaps?.length > 0 || latest.risk_alerts?.length > 0) && (
               <div className="mb-3 space-y-1">
                 {(latest.risk_alerts ?? []).map((a: any, i: number) => (
-                  <p key={i} className={`text-sm ${a.severity === "high" ? "text-red-700" : "text-amber-700"}`}>⚠ {a.text}</p>
+                  <p key={i} className={`text-sm ${a.severity === "high" ? "text-[var(--cmp-text-critical)]" : "text-[var(--cmp-text-warning)]"}`}>⚠ {a.text}</p>
                 ))}
                 {(latest.gaps ?? []).map((g: any) => (
-                  <p key={g.patient_id} className="text-sm text-red-700">⛔ {g.patient}: {g.reason}</p>
+                  <p key={g.patient_id} className="text-sm text-[var(--cmp-text-critical)]">⛔ {g.patient}: {g.reason}</p>
                 ))}
               </div>
             )}

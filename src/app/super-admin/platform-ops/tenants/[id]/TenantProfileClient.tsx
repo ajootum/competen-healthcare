@@ -9,8 +9,8 @@ import { cardClass } from "@/components/ui/primitives";
 // per-tenant feature toggles, with tabbed detail.
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
-const BADGE: Record<string, string> = { prospect: "bg-gray-100 text-gray-600", trial: "bg-amber-50 text-amber-700", active: "bg-green-50 text-green-700", suspended: "bg-rose-50 text-rose-700", archived: "bg-gray-100 text-gray-500", deleted: "bg-gray-100 text-gray-400" };
-const HEALTH_TONE: Record<string, string> = { Healthy: "text-green-600", Trial: "text-amber-600", "Over limit": "text-orange-600", Suspended: "text-rose-600", Inactive: "text-gray-400" };
+const BADGE: Record<string, string> = { prospect: "bg-gray-100 text-gray-600", trial: "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]", active: "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]", suspended: "bg-[var(--cmp-surface-error)] text-[var(--cmp-text-error)]", archived: "bg-gray-100 text-gray-500", deleted: "bg-gray-100 text-gray-400" };
+const HEALTH_TONE: Record<string, string> = { Healthy: "text-[var(--cmp-text-success)]", Trial: "text-[var(--cmp-text-warning)]", "Over limit": "text-[var(--cmp-text-warning)]", Suspended: "text-[var(--cmp-text-error)]", Inactive: "text-gray-400" };
 const TABS = ["Overview", "Subscription", "Usage & Features", "Facilities", "Audit"] as const;
 const card = cardClass;
 const relTime = (iso?: string | null) => { if (!iso) return ""; const s = Math.floor((Date.now() - new Date(iso).getTime()) / 1000); if (s < 3600) return `${Math.floor(s / 60)} min ago`; if (s < 86400) return `${Math.floor(s / 3600)} hr ago`; return `${Math.floor(s / 86400)} d ago`; };
@@ -36,8 +36,8 @@ export default function TenantProfileClient({ data }: { data: any }) {
   const setStatus = (status: string) => { if (status === "archived" && !confirm(`Archive "${tenant.name}"?`)) return; patch({ status }, `Tenant ${status}`); };
 
   const actions = [
-    tenant.status !== "active" && { label: "Activate", status: "active", cls: "border-green-200 text-green-700 hover:bg-green-50" },
-    tenant.status === "active" && { label: "Suspend", status: "suspended", cls: "border-rose-200 text-rose-700 hover:bg-rose-50" },
+    tenant.status !== "active" && { label: "Activate", status: "active", cls: "border-[var(--cmp-color-success)] text-[var(--cmp-text-success)] hover:bg-[var(--cmp-surface-success)]" },
+    tenant.status === "active" && { label: "Suspend", status: "suspended", cls: "border-[var(--cmp-color-error)] text-[var(--cmp-text-error)] hover:bg-[var(--cmp-surface-error)]" },
     tenant.status !== "archived" && { label: "Archive", status: "archived", cls: "border-gray-300 text-gray-600 hover:bg-gray-50" },
   ].filter(Boolean) as any[];
 
@@ -50,7 +50,7 @@ export default function TenantProfileClient({ data }: { data: any }) {
 
       <div className={`${card} flex flex-wrap items-start justify-between gap-3`}>
         <div className="flex items-start gap-3">
-          <span className="w-11 h-11 rounded-xl bg-blue-50 flex items-center justify-center text-xl shrink-0">🏢</span>
+          <span className="w-11 h-11 rounded-xl bg-[var(--cmp-surface-information)] flex items-center justify-center text-xl shrink-0">🏢</span>
           <div>
             <div className="flex items-center gap-2 flex-wrap"><h1 className="text-xl font-bold text-gray-900">{tenant.name}</h1>
               <span className={`text-[10px] font-medium px-2 py-0.5 rounded ${BADGE[tenant.status] ?? "bg-gray-100 text-gray-600"}`}>{tenant.status}</span>
@@ -62,7 +62,7 @@ export default function TenantProfileClient({ data }: { data: any }) {
           {actions.map(a => <button key={a.status} onClick={() => setStatus(a.status)} disabled={busy} className={`text-xs font-medium rounded-lg border px-3 py-1.5 disabled:opacity-40 ${a.cls}`}>{a.label}</button>)}
         </div>
       </div>
-      {msg && <div className={`text-sm rounded-lg px-3 py-1.5 ${msg.k === "ok" ? "bg-green-50 text-green-800" : "bg-amber-50 text-amber-800"}`}>{msg.t}</div>}
+      {msg && <div className={`text-sm rounded-lg px-3 py-1.5 ${msg.k === "ok" ? "bg-[var(--cmp-surface-success)] text-green-800" : "bg-[var(--cmp-surface-warning)] text-amber-800"}`}>{msg.t}</div>}
 
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         {[["Users", userCount], ["Facilities", facilities.length], ["Organisations", orgs.length], ["Seats", subscription?.seats ?? "—"]].map(([l, n]) => (
@@ -115,8 +115,8 @@ export default function TenantProfileClient({ data }: { data: any }) {
                 return (
                   <div key={u.label}>
                     <div className="flex items-center justify-between text-xs mb-0.5"><span className="text-gray-700">{u.label}</span>
-                      <span className={`tabular-nums ${over ? "text-orange-600 font-medium" : "text-gray-500"}`}>{u.used == null ? <span className="text-gray-400">{u.note}</span> : `${u.used}${u.limit != null ? ` / ${u.limit}` : ""}`}{u.limit == null && u.used != null ? " (∞)" : ""}</span></div>
-                    {pct != null && <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden"><div className={`h-full rounded-full ${over ? "bg-orange-500" : "bg-teal-500"}`} style={{ width: `${pct}%` }} /></div>}
+                      <span className={`tabular-nums ${over ? "text-[var(--cmp-text-warning)] font-medium" : "text-gray-500"}`}>{u.used == null ? <span className="text-gray-400">{u.note}</span> : `${u.used}${u.limit != null ? ` / ${u.limit}` : ""}`}{u.limit == null && u.used != null ? " (∞)" : ""}</span></div>
+                    {pct != null && <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden"><div className={`h-full rounded-full ${over ? "bg-[var(--cmp-color-warning)]" : "bg-teal-500"}`} style={{ width: `${pct}%` }} /></div>}
                   </div>
                 );
               })}
@@ -130,7 +130,7 @@ export default function TenantProfileClient({ data }: { data: any }) {
                   <div key={f.key} className="flex items-center justify-between gap-2 py-1">
                     <div className="min-w-0"><p className="text-sm text-gray-800 truncate">{f.key}</p>{f.description && <p className="text-[10px] text-gray-400 truncate">{f.description}</p>}</div>
                     <button onClick={() => patch({ action: "toggle_feature", flag_key: f.key, enabled: !f.enabled }, `Feature ${f.enabled ? "disabled" : "enabled"}`)} disabled={busy}
-                      className={`text-[11px] font-medium rounded-full px-2.5 py-0.5 border shrink-0 disabled:opacity-40 ${f.enabled ? "bg-green-50 border-green-200 text-green-700" : "bg-gray-50 border-gray-200 text-gray-500"}`}>
+                      className={`text-[11px] font-medium rounded-full px-2.5 py-0.5 border shrink-0 disabled:opacity-40 ${f.enabled ? "bg-[var(--cmp-surface-success)] border-[var(--cmp-color-success)] text-[var(--cmp-text-success)]" : "bg-gray-50 border-gray-200 text-gray-500"}`}>
                       {f.enabled ? "On" : "Off"}{f.overridden && <span className="text-[8px] ml-1 opacity-70">·override</span>}
                     </button>
                   </div>
@@ -147,7 +147,7 @@ export default function TenantProfileClient({ data }: { data: any }) {
           {orgs.length === 0 && facilities.length === 0 ? <p className="text-sm text-gray-400">No organisations or facilities under this tenant.</p> : (
             <div className="grid sm:grid-cols-2 gap-4">
               <div><p className="text-[11px] font-semibold text-gray-400 uppercase mb-1">Organisations ({orgs.length})</p>{orgs.map((o: any) => <p key={o.id} className="text-sm text-gray-700 py-1 border-b border-gray-50">🏛️ {o.name}</p>)}{orgs.length === 0 && <p className="text-sm text-gray-300">—</p>}</div>
-              <div><p className="text-[11px] font-semibold text-gray-400 uppercase mb-1">Facilities ({facilities.length})</p>{facilities.map((f: any) => <p key={f.id} className="text-sm text-gray-700 py-1 border-b border-gray-50 flex justify-between">🏥 {f.name}<span className={`text-[10px] ${f.hasAdmin ? "text-green-600" : "text-amber-600"}`}>{f.hasAdmin ? "active" : "pending"}</span></p>)}{facilities.length === 0 && <p className="text-sm text-gray-300">—</p>}</div>
+              <div><p className="text-[11px] font-semibold text-gray-400 uppercase mb-1">Facilities ({facilities.length})</p>{facilities.map((f: any) => <p key={f.id} className="text-sm text-gray-700 py-1 border-b border-gray-50 flex justify-between">🏥 {f.name}<span className={`text-[10px] ${f.hasAdmin ? "text-[var(--cmp-text-success)]" : "text-[var(--cmp-text-warning)]"}`}>{f.hasAdmin ? "active" : "pending"}</span></p>)}{facilities.length === 0 && <p className="text-sm text-gray-300">—</p>}</div>
             </div>
           )}
         </div>

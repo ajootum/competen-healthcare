@@ -16,9 +16,9 @@ export const dynamic = "force-dynamic";
 const card = "bg-white rounded-xl border border-gray-200";
 const dash = (n: number | null | undefined) => (n == null ? "—" : n.toLocaleString());
 const relTime = (iso?: string | null) => { if (!iso) return ""; const s = Math.floor((Date.now() - new Date(iso).getTime()) / 1000); if (s < 60) return "just now"; if (s < 3600) return `${Math.floor(s / 60)}m ago`; if (s < 86400) return `${Math.floor(s / 3600)}h ago`; return `${Math.floor(s / 86400)}d ago`; };
-const scoreTone = (n: number | null) => (n == null ? "text-gray-300" : n >= 90 ? "text-green-600" : n >= 70 ? "text-amber-600" : "text-rose-600");
-const AUDIT_STATUS_BADGE: Record<string, string> = { planned: "bg-blue-50 text-blue-700", in_progress: "bg-amber-50 text-amber-700", completed: "bg-green-50 text-green-700" };
-const CAPA_BADGE: Record<string, string> = { open: "bg-rose-50 text-rose-700", in_progress: "bg-amber-50 text-amber-700", completed: "bg-teal-50 text-teal-700", verified: "bg-green-50 text-green-700", closed: "bg-gray-100 text-gray-500" };
+const scoreTone = (n: number | null) => (n == null ? "text-gray-300" : n >= 90 ? "text-[var(--cmp-text-success)]" : n >= 70 ? "text-[var(--cmp-text-warning)]" : "text-[var(--cmp-text-error)]");
+const AUDIT_STATUS_BADGE: Record<string, string> = { planned: "bg-[var(--cmp-surface-information)] text-blue-700", in_progress: "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]", completed: "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]" };
+const CAPA_BADGE: Record<string, string> = { open: "bg-[var(--cmp-surface-error)] text-[var(--cmp-text-error)]", in_progress: "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]", completed: "bg-teal-50 text-teal-700", verified: "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]", closed: "bg-gray-100 text-gray-500" };
 
 export default async function AuditAssurance() {
   const supabase = await createClient();
@@ -33,12 +33,12 @@ export default async function AuditAssurance() {
   const k = d.kpis;
 
   const kpiCards = [
-    { label: "Total Audits", value: dash(k.total), icon: "📋", iconBg: "bg-blue-50" },
-    { label: "Completed", value: dash(k.completed), icon: "✅", iconBg: "bg-green-50", tone: "text-green-600" },
-    { label: "Planned", value: dash(k.planned), icon: "📅", iconBg: "bg-sky-50" },
-    { label: "In Progress", value: dash(k.inProgress), icon: "⏳", iconBg: "bg-amber-50" },
+    { label: "Total Audits", value: dash(k.total), icon: "📋", iconBg: "bg-[var(--cmp-surface-information)]" },
+    { label: "Completed", value: dash(k.completed), icon: "✅", iconBg: "bg-[var(--cmp-surface-success)]", tone: "text-[var(--cmp-text-success)]" },
+    { label: "Planned", value: dash(k.planned), icon: "📅", iconBg: "bg-[var(--cmp-surface-information)]" },
+    { label: "In Progress", value: dash(k.inProgress), icon: "⏳", iconBg: "bg-[var(--cmp-surface-warning)]" },
     { label: "Avg Compliance", value: k.avgCompliance == null ? "—" : `${k.avgCompliance}%`, icon: "🎯", iconBg: "bg-violet-50", tone: scoreTone(k.avgCompliance == null ? null : Math.round(k.avgCompliance)) },
-    { label: "Critical Findings", value: dash(k.criticalFindings), icon: "🚨", iconBg: "bg-rose-50", tone: (k.criticalFindings ?? 0) > 0 ? "text-rose-600" : undefined },
+    { label: "Critical Findings", value: dash(k.criticalFindings), icon: "🚨", iconBg: "bg-[var(--cmp-surface-error)]", tone: (k.criticalFindings ?? 0) > 0 ? "text-[var(--cmp-text-error)]" : undefined },
   ];
 
   return (
@@ -83,7 +83,7 @@ export default async function AuditAssurance() {
                 <tbody>
                   {d.auditList.map((a: any) => (
                     <tr key={a.id} className="border-b border-gray-50">
-                      <td className="px-3 py-2 text-gray-800">{a.title}{a.plannedFor && <span className="text-[10px] text-sky-600 ml-1.5">{a.plannedFor}</span>}</td>
+                      <td className="px-3 py-2 text-gray-800">{a.title}{a.plannedFor && <span className="text-[10px] text-[var(--cmp-text-information)] ml-1.5">{a.plannedFor}</span>}</td>
                       <td className="px-3 py-2 text-gray-500 capitalize text-[12px]">{a.type}</td>
                       <td className="px-3 py-2 text-gray-500 text-[12px]">{a.area ?? "—"}</td>
                       <td className="px-3 py-2 text-gray-500 text-[12px]">{a.org}</td>
@@ -101,7 +101,7 @@ export default async function AuditAssurance() {
         <div className={`${card} p-5`}>
           <h2 className="font-semibold text-gray-900 text-[15px] mb-3">Findings Summary <span className="text-[10px] text-gray-400">{d.findings.total} total</span></h2>
           <div className="grid grid-cols-3 gap-2 mb-3">
-            {[["Met", d.findings.met, "text-green-600"], ["Not met", d.findings.notMet, "text-rose-600"], ["N/A", d.findings.na, "text-gray-400"]].map(([l, n, tone]: any) => (
+            {[["Met", d.findings.met, "text-[var(--cmp-text-success)]"], ["Not met", d.findings.notMet, "text-[var(--cmp-text-error)]"], ["N/A", d.findings.na, "text-gray-400"]].map(([l, n, tone]: any) => (
               <div key={l} className="rounded-lg border border-gray-100 p-2.5 text-center"><p className={`text-xl font-bold tabular-nums ${n > 0 ? tone : "text-gray-900"}`}>{n}</p><p className="text-[9px] text-gray-500">{l}</p></div>
             ))}
           </div>
@@ -110,7 +110,7 @@ export default async function AuditAssurance() {
               <p className="text-[10px] font-semibold text-gray-400 uppercase">Recent not-met</p>
               {d.recentFindings.map((f: any, i: number) => (
                 <div key={i} className="flex items-start gap-2">
-                  <span className={`w-1.5 h-1.5 rounded-full mt-1.5 shrink-0 ${f.is_critical ? "bg-rose-500" : "bg-amber-400"}`} />
+                  <span className={`w-1.5 h-1.5 rounded-full mt-1.5 shrink-0 ${f.is_critical ? "bg-[var(--cmp-color-error)]" : "bg-[var(--cmp-color-warning)]"}`} />
                   <div className="min-w-0 flex-1"><p className="text-xs text-gray-700 leading-tight">{f.item_text}</p><p className="text-[9px] text-gray-400">{f.is_critical ? "critical · " : ""}{relTime(f.created_at)}</p></div>
                 </div>
               ))}
@@ -125,14 +125,14 @@ export default async function AuditAssurance() {
         <div className={`${card} p-5 lg:col-span-2`}>
           <div className="flex items-center justify-between mb-3">
             <h2 className="font-semibold text-gray-900 text-[15px]">CAPA Workflow <span className="text-[10px] text-gray-400">{d.capa.open} open · {dash(d.capa.closure)}% closure</span></h2>
-            <span className={`text-[10px] font-semibold px-2 py-0.5 rounded ${d.capa.overdue > 0 ? "bg-rose-50 text-rose-700" : "bg-green-50 text-green-700"}`}>{d.capa.overdue} overdue</span>
+            <span className={`text-[10px] font-semibold px-2 py-0.5 rounded ${d.capa.overdue > 0 ? "bg-[var(--cmp-surface-error)] text-[var(--cmp-text-error)]" : "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]"}`}>{d.capa.overdue} overdue</span>
           </div>
           {d.capa.list.length === 0 ? <p className="text-sm text-gray-400 py-6 text-center">No open corrective actions.</p> : (
             <div className="divide-y divide-gray-50">
               {d.capa.list.map((c: any) => (
                 <div key={c.id} className="flex items-center gap-3 py-2.5">
                   <div className="min-w-0 flex-1">
-                    <p className="text-sm text-gray-800 leading-tight truncate">{c.title}{c.overdue && <span className="text-[9px] font-semibold text-rose-600 ml-1.5">OVERDUE</span>}</p>
+                    <p className="text-sm text-gray-800 leading-tight truncate">{c.title}{c.overdue && <span className="text-[9px] font-semibold text-[var(--cmp-text-error)] ml-1.5">OVERDUE</span>}</p>
                     <p className="text-[10px] text-gray-400">{c.priority} priority{c.owner ? ` · ${c.owner}` : ""}{c.due ? ` · due ${c.due}` : ""}</p>
                   </div>
                   <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded shrink-0 ${CAPA_BADGE[c.status] ?? "bg-gray-100 text-gray-600"}`}>{String(c.status).replace(/_/g, " ")}</span>
@@ -142,7 +142,7 @@ export default async function AuditAssurance() {
           )}
           <div className="grid grid-cols-3 gap-2 mt-3 pt-3 border-t border-gray-50">
             {[["< 7 days", d.capa.ageing.fresh], ["7–30 days", d.capa.ageing.week], ["> 30 days", d.capa.ageing.month]].map(([l, n]: any) => (
-              <div key={l} className="rounded-lg border border-gray-100 p-2 text-center"><p className={`text-lg font-bold tabular-nums ${l === "> 30 days" && n > 0 ? "text-rose-600" : "text-gray-900"}`}>{n}</p><p className="text-[9px] text-gray-500">open {l}</p></div>
+              <div key={l} className="rounded-lg border border-gray-100 p-2 text-center"><p className={`text-lg font-bold tabular-nums ${l === "> 30 days" && n > 0 ? "text-[var(--cmp-text-error)]" : "text-gray-900"}`}>{n}</p><p className="text-[9px] text-gray-500">open {l}</p></div>
             ))}
           </div>
         </div>

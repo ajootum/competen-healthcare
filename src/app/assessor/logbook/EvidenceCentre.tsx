@@ -44,9 +44,9 @@ const ageDays = (iso: string) => (Date.now() - new Date(iso).getTime()) / 864000
 const prioOf = (e: EvidenceEntry): "high" | "medium" | "low" =>
   ageDays(e.submittedAt) > 3 ? "high" : ageDays(e.submittedAt) > 1 ? "medium" : "low";
 const PRIO_UI = {
-  high:   { label: "High",   cls: "bg-red-50 text-red-600" },
-  medium: { label: "Medium", cls: "bg-amber-50 text-amber-700" },
-  low:    { label: "Low",    cls: "bg-green-50 text-green-700" },
+  high:   { label: "High",   cls: "bg-[var(--cmp-surface-critical)] text-[var(--cmp-text-critical)]" },
+  medium: { label: "Medium", cls: "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]" },
+  low:    { label: "Low",    cls: "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]" },
 };
 const fmtSize = (b: number) => b >= 1048576 ? `${(b / 1048576).toFixed(1)} MB` : `${Math.max(1, Math.round(b / 1024))} KB`;
 
@@ -163,10 +163,10 @@ export default function EvidenceCentre({ entries, kpis, isSenior }: { entries: E
 
   const KPI_TILES = [
     { icon: "📥", value: String(live.filter(e => e.status === "pending").length), label: "Pending Reviews", sub: "awaiting your review", tint: "bg-indigo-50" },
-    { icon: "✅", value: String(kpis.reviewedToday), label: "Reviewed Today", sub: "completed", tint: "bg-green-50" },
-    { icon: "🔄", value: String(live.filter(e => e.status === "changes_requested").length), label: "Returned for Revision", sub: "awaiting learner action", tint: "bg-amber-50" },
-    { icon: "🚩", value: String(live.filter(e => prioOf(e) === "high").length), label: "High Priority", sub: "waiting 3+ days", tint: "bg-red-50" },
-    { icon: "⏱️", value: kpis.avgHours !== null ? `${kpis.avgHours}h` : "—", label: "Avg Review Time", sub: kpis.avgHours !== null ? "submission → decision" : "no reviews yet", tint: "bg-blue-50" },
+    { icon: "✅", value: String(kpis.reviewedToday), label: "Reviewed Today", sub: "completed", tint: "bg-[var(--cmp-surface-success)]" },
+    { icon: "🔄", value: String(live.filter(e => e.status === "changes_requested").length), label: "Returned for Revision", sub: "awaiting learner action", tint: "bg-[var(--cmp-surface-warning)]" },
+    { icon: "🚩", value: String(live.filter(e => prioOf(e) === "high").length), label: "High Priority", sub: "waiting 3+ days", tint: "bg-[var(--cmp-surface-critical)]" },
+    { icon: "⏱️", value: kpis.avgHours !== null ? `${kpis.avgHours}h` : "—", label: "Avg Review Time", sub: kpis.avgHours !== null ? "submission → decision" : "no reviews yet", tint: "bg-[var(--cmp-surface-information)]" },
   ];
 
   const copilotPrompt = open
@@ -215,8 +215,8 @@ export default function EvidenceCentre({ entries, kpis, isSenior }: { entries: E
           <p className="text-3xl mb-2">🎉</p>
           <p className="text-sm font-semibold text-gray-800">Queue clear — every submission is reviewed</p>
           <div className="grid grid-cols-2 gap-3 max-w-xs mx-auto mt-4">
-            <div><p className="text-xl font-extrabold text-green-600">{kpis.reviewedToday}</p><p className="text-[10px] text-gray-400">reviewed today</p></div>
-            <div><p className="text-xl font-extrabold text-blue-600">{kpis.avgHours !== null ? `${kpis.avgHours}h` : "—"}</p><p className="text-[10px] text-gray-400">avg review time</p></div>
+            <div><p className="text-xl font-extrabold text-[var(--cmp-text-success)]">{kpis.reviewedToday}</p><p className="text-[10px] text-gray-400">reviewed today</p></div>
+            <div><p className="text-xl font-extrabold text-[var(--cmp-text-information)]">{kpis.avgHours !== null ? `${kpis.avgHours}h` : "—"}</p><p className="text-[10px] text-gray-400">avg review time</p></div>
           </div>
           <Link href="/assessor/queue" className="inline-block mt-4 text-xs font-semibold text-indigo-700 border border-indigo-200 hover:bg-indigo-50 px-4 py-2 rounded-lg transition-colors">
             Open Assessment Inbox →
@@ -285,7 +285,7 @@ export default function EvidenceCentre({ entries, kpis, isSenior }: { entries: E
               <div className="bg-gray-900 text-white rounded-xl px-4 py-2.5 flex flex-wrap items-center gap-3">
                 <p className="text-xs font-semibold flex-1">{selected.size} selected</p>
                 <button onClick={() => decide([...selected], "verified")} disabled={busy}
-                  className="text-xs font-semibold bg-green-500 hover:bg-green-600 disabled:opacity-50 text-white px-3 py-1.5 rounded-lg transition-colors">
+                  className="text-xs font-semibold bg-[var(--cmp-color-success)] hover:bg-[var(--cmp-color-success)] disabled:opacity-50 text-white px-3 py-1.5 rounded-lg transition-colors">
                   ✓ Verify selected
                 </button>
                 <button onClick={() => setSelected(new Set())} className="text-xs text-gray-300 hover:text-white">Clear</button>
@@ -337,9 +337,9 @@ export default function EvidenceCentre({ entries, kpis, isSenior }: { entries: E
                         </div>
                         <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded shrink-0 ${prio.cls}`}>{prio.label}</span>
                         <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded shrink-0 ${
-                          e.status === "changes_requested" ? "bg-amber-50 text-amber-700"
+                          e.status === "changes_requested" ? "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]"
                           : e.status === "escalated" ? "bg-purple-50 text-purple-700"
-                          : "bg-blue-50 text-blue-600"
+                          : "bg-[var(--cmp-surface-information)] text-[var(--cmp-text-information)]"
                         }`}>{e.status === "changes_requested" ? "Returned" : e.status === "escalated" ? "⬆ Escalated" : "Awaiting"}</span>
                         <span className={`text-[11px] font-semibold px-3 py-1.5 rounded-lg shrink-0 ${
                           openId === e.id ? "bg-indigo-600 text-white" : "text-indigo-700 border border-indigo-200"
@@ -399,13 +399,13 @@ export default function EvidenceCentre({ entries, kpis, isSenior }: { entries: E
                 <div className="border-t border-gray-50 pt-2.5 mb-2.5">
                   <div className="flex items-center justify-between mb-1.5">
                     <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Evidence Quality Score</p>
-                    <span className={`text-sm font-extrabold ${quality.score >= 80 ? "text-green-600" : quality.score >= 50 ? "text-amber-600" : "text-red-500"}`}>
+                    <span className={`text-sm font-extrabold ${quality.score >= 80 ? "text-[var(--cmp-text-success)]" : quality.score >= 50 ? "text-[var(--cmp-text-warning)]" : "text-red-500"}`}>
                       {quality.score}%
                     </span>
                   </div>
                   <div className="flex flex-col gap-0.5">
                     {quality.criteria.map(c => (
-                      <p key={c.label} className={`text-[10px] ${c.met ? "text-green-700" : "text-gray-400"}`}>
+                      <p key={c.label} className={`text-[10px] ${c.met ? "text-[var(--cmp-text-success)]" : "text-gray-400"}`}>
                         {c.met ? "✓" : "○"} {c.label}
                       </p>
                     ))}
@@ -419,7 +419,7 @@ export default function EvidenceCentre({ entries, kpis, isSenior }: { entries: E
                 <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1.5">Risk Flags</p>
                 <div className="flex flex-col gap-0.5">
                   {flags.map(f => (
-                    <p key={f.text} className={`text-[10px] leading-snug ${f.bad ? "text-red-600" : "text-green-700"}`} suppressHydrationWarning>
+                    <p key={f.text} className={`text-[10px] leading-snug ${f.bad ? "text-[var(--cmp-text-critical)]" : "text-[var(--cmp-text-success)]"}`} suppressHydrationWarning>
                       {f.bad ? "🔴" : "🟢"} {f.text}
                     </p>
                   ))}
@@ -440,7 +440,7 @@ export default function EvidenceCentre({ entries, kpis, isSenior }: { entries: E
                 {tab === "evidence" && (
                   <div>
                     {open.evidence.length === 0 ? (
-                      <p className="text-[10px] text-amber-600">⚠️ No files attached — decide based on the record and your observation.</p>
+                      <p className="text-[10px] text-[var(--cmp-text-warning)]">⚠️ No files attached — decide based on the record and your observation.</p>
                     ) : (
                       <div className="flex flex-col gap-1">
                         {open.evidence.map(v => (
@@ -522,18 +522,18 @@ export default function EvidenceCentre({ entries, kpis, isSenior }: { entries: E
                     <textarea value={comment} onChange={e => setComment(e.target.value)} rows={2}
                       placeholder="Assessor comments (visible to learner)…"
                       className="w-full border border-gray-200 rounded-lg px-3 py-2 text-xs resize-none focus:outline-none focus:ring-2 focus:ring-indigo-100 mb-2" />
-                    {error && <p className="text-[10px] text-red-600 bg-red-50 border border-red-100 rounded-lg px-2 py-1.5 mb-2">{error}</p>}
+                    {error && <p className="text-[10px] text-[var(--cmp-text-critical)] bg-[var(--cmp-surface-critical)] border border-[var(--cmp-color-critical)] rounded-lg px-2 py-1.5 mb-2">{error}</p>}
                     <div className="grid grid-cols-3 gap-1.5">
                       <button onClick={() => decide([open.id], "verified")} disabled={busy}
-                        className="text-[11px] font-semibold bg-green-600 hover:bg-green-700 disabled:opacity-50 text-white py-2 rounded-lg transition-colors">
+                        className="text-[11px] font-semibold bg-[var(--cmp-color-success)] hover:bg-green-700 disabled:opacity-50 text-white py-2 rounded-lg transition-colors">
                         ✓ Verify
                       </button>
                       <button onClick={() => decide([open.id], "changes_requested")} disabled={busy}
-                        className="text-[11px] font-semibold text-amber-700 border border-amber-200 hover:bg-amber-50 disabled:opacity-50 py-2 rounded-lg transition-colors">
+                        className="text-[11px] font-semibold text-[var(--cmp-text-warning)] border border-[var(--cmp-color-warning)] hover:bg-[var(--cmp-surface-warning)] disabled:opacity-50 py-2 rounded-lg transition-colors">
                         🔄 Return
                       </button>
                       <button onClick={() => decide([open.id], "rejected")} disabled={busy}
-                        className="text-[11px] font-semibold text-red-600 border border-red-200 hover:bg-red-50 disabled:opacity-50 py-2 rounded-lg transition-colors">
+                        className="text-[11px] font-semibold text-[var(--cmp-text-critical)] border border-[var(--cmp-color-critical)] hover:bg-[var(--cmp-surface-critical)] disabled:opacity-50 py-2 rounded-lg transition-colors">
                         ✕ Reject
                       </button>
                     </div>

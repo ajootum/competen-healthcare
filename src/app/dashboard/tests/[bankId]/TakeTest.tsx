@@ -30,9 +30,9 @@ export default function TakeTest({ bankId, questions, passMark }: { bankId: stri
   if (result) {
     return (
       <div>
-        <div className={`rounded-xl p-6 mb-6 text-center ${result.passed ? "bg-green-50 border border-green-200" : "bg-red-50 border border-red-200"}`}>
+        <div className={`rounded-xl p-6 mb-6 text-center ${result.passed ? "bg-[var(--cmp-surface-success)] border border-[var(--cmp-color-success)]" : "bg-[var(--cmp-surface-critical)] border border-[var(--cmp-color-critical)]"}`}>
           <p className="text-4xl mb-1">{result.passed ? "🎉" : "📚"}</p>
-          <p className={`text-2xl font-bold ${result.passed ? "text-green-700" : "text-red-600"}`}>{result.score}%</p>
+          <p className={`text-2xl font-bold ${result.passed ? "text-[var(--cmp-text-success)]" : "text-[var(--cmp-text-critical)]"}`}>{result.score}%</p>
           <p className="text-sm text-gray-600 mt-1">
             {result.correct}/{result.total} correct · pass mark {result.pass_mark}% — {result.passed ? "Passed" : "Not yet passed"}
           </p>
@@ -40,12 +40,12 @@ export default function TakeTest({ bankId, questions, passMark }: { bankId: stri
         </div>
         <div className="flex flex-col gap-3 mb-6">
           {result.detail.map((d, i) => (
-            <div key={d.question_id} className={`bg-white rounded-xl border p-4 ${d.correct ? "border-green-100" : "border-red-100"}`}>
+            <div key={d.question_id} className={`bg-white rounded-xl border p-4 ${d.correct ? "border-[var(--cmp-color-success)]" : "border-[var(--cmp-color-critical)]"}`}>
               <p className="text-sm text-gray-800"><b>{i + 1}.</b> {d.content}</p>
-              <p className={`text-xs mt-1.5 ${d.correct ? "text-green-700" : "text-red-600"}`}>
+              <p className={`text-xs mt-1.5 ${d.correct ? "text-[var(--cmp-text-success)]" : "text-[var(--cmp-text-critical)]"}`}>
                 {d.correct ? "✓" : "✗"} Your answer: {d.chosen ?? "—"}
               </p>
-              {!d.correct && <p className="text-xs text-green-700 mt-0.5">Correct: {d.correct_answer}</p>}
+              {!d.correct && <p className="text-xs text-[var(--cmp-text-success)] mt-0.5">Correct: {d.correct_answer}</p>}
               {d.explanation && <p className="text-[11px] text-gray-500 italic mt-1.5">{d.explanation}</p>}
             </div>
           ))}
@@ -65,7 +65,7 @@ export default function TakeTest({ bankId, questions, passMark }: { bankId: stri
 
   return (
     <div>
-      {error && <div className="bg-red-50 text-red-600 text-sm rounded-lg px-4 py-2.5 mb-4">{error}</div>}
+      {error && <div className="bg-[var(--cmp-surface-critical)] text-[var(--cmp-text-critical)] text-sm rounded-lg px-4 py-2.5 mb-4">{error}</div>}
       <div className="flex flex-col gap-4 mb-6">
         {questions.map((q, i) => (
           <div key={q.id} className="bg-white rounded-xl border border-gray-100 p-5">

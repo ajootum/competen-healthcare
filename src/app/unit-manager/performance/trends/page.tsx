@@ -13,7 +13,7 @@ export default async function TrendsPage() {
   const d = await loadPaTrends(admin, hid, isSuper) as any;
   const head = <Head code="UMW-PA-003 · Performance Analytics" title="Performance Trends & Benchmarking Centre" sub="Longitudinal trends, statistical process control, peer benchmarking, ranking and improvement-impact analysis for evidence-based decisions." />;
   if (!d.provisioned) return <div className="max-w-[1500px] space-y-4">{head}<Tabs active="003" /><Provision module="Trends & Benchmarking" /></div>;
-  if (!d.hasData) return <div className="max-w-[1500px] space-y-4">{head}<Tabs active="003" /><div className="bg-blue-50 border border-blue-200 rounded-xl p-6 text-sm text-blue-800">Seed the performance stores first.</div></div>;
+  if (!d.hasData) return <div className="max-w-[1500px] space-y-4">{head}<Tabs active="003" /><div className="bg-[var(--cmp-surface-information)] border border-[var(--cmp-color-information)] rounded-xl p-6 text-sm text-blue-800">Seed the performance stores first.</div></div>;
 
   const r = d.ribbon, t = d.overallTrend, s = d.spc;
   const tMax = Math.max(...t, 1), tMin = Math.min(...t, 0);
@@ -49,7 +49,7 @@ export default async function TrendsPage() {
             <polyline points={s.series.map((v: number, i: number) => `${(i / (s.series.length - 1)) * 260},${sy(v)}`).join(" ")} fill="none" stroke="#4f46e5" strokeWidth="1.5" />
             {s.series.map((v: number, i: number) => <circle key={i} cx={(i / (s.series.length - 1)) * 260} cy={sy(v)} r="2" fill="#4f46e5" />)}
           </svg>
-          <div className="flex justify-between text-[10px] text-gray-400 mt-1"><span className="text-rose-500">UCL {s.ucl}</span><span className="text-emerald-600">CL {s.mean}</span><span className="text-rose-500">LCL {s.lcl}</span></div>
+          <div className="flex justify-between text-[10px] text-gray-400 mt-1"><span className="text-rose-500">UCL {s.ucl}</span><span className="text-[var(--cmp-text-success)]">CL {s.mean}</span><span className="text-rose-500">LCL {s.lcl}</span></div>
         </Card>
       </div>
 
@@ -68,7 +68,7 @@ export default async function TrendsPage() {
 
         <Card title="Improvement Impact">
           <div className="space-y-2">{d.improvement.map((p: any) => (
-            <div key={p.name}><div className="flex items-center justify-between text-[12px] mb-0.5"><span className="text-gray-700 truncate">{p.name}</span><span className="text-emerald-600 font-medium">{money(p.benefit)}</span></div><Progress pct={p.progress} /></div>
+            <div key={p.name}><div className="flex items-center justify-between text-[12px] mb-0.5"><span className="text-gray-700 truncate">{p.name}</span><span className="text-[var(--cmp-text-success)] font-medium">{money(p.benefit)}</span></div><Progress pct={p.progress} /></div>
           ))}</div>
         </Card>
       </div>

@@ -22,10 +22,10 @@ export default async function GovernancePage() {
       <ModuleNav active="008" />
       <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
         <Stat label="Total Requests" value={k.total} sub="all time" />
-        <Stat label="Pending" value={k.pending} sub="awaiting decision" tone={k.pending ? "text-amber-600" : undefined} />
-        <Stat label="Changes Requested" value={k.changesRequested} sub="returned" tone={k.changesRequested ? "text-amber-600" : undefined} />
-        <Stat label="Approved" value={k.approved} sub="signed off" tone="text-emerald-600" />
-        <Stat label="Rejected" value={k.rejected} sub="declined" tone={k.rejected ? "text-rose-600" : undefined} />
+        <Stat label="Pending" value={k.pending} sub="awaiting decision" tone={k.pending ? "text-[var(--cmp-text-warning)]" : undefined} />
+        <Stat label="Changes Requested" value={k.changesRequested} sub="returned" tone={k.changesRequested ? "text-[var(--cmp-text-warning)]" : undefined} />
+        <Stat label="Approved" value={k.approved} sub="signed off" tone="text-[var(--cmp-text-success)]" />
+        <Stat label="Rejected" value={k.rejected} sub="declined" tone={k.rejected ? "text-[var(--cmp-text-error)]" : undefined} />
         <Stat label="Avg Decision" value={k.avgDays != null ? `${k.avgDays}d` : "—"} sub="turnaround" />
       </div>
 
@@ -37,7 +37,7 @@ export default async function GovernancePage() {
                 <div className="min-w-0"><p className="text-[12px] font-medium text-gray-900 leading-tight">{a.entity_title}</p><p className="text-[10px] text-gray-400 capitalize">{a.entity_type} · {a.scopeLabel} · {a.workflow} workflow</p></div>
                 <Pill text={a.state} tone={STATUS_TONE[a.state]} />
               </div>
-              <div className="flex items-center justify-between mt-1.5 text-[10px] text-gray-400"><span>by {a.requester} · step {a.step}/{a.total_steps}</span>{a.decision_reason && <span className="text-amber-600 truncate max-w-[55%]">“{a.decision_reason}”</span>}</div>
+              <div className="flex items-center justify-between mt-1.5 text-[10px] text-gray-400"><span>by {a.requester} · step {a.step}/{a.total_steps}</span>{a.decision_reason && <span className="text-[var(--cmp-text-warning)] truncate max-w-[55%]">“{a.decision_reason}”</span>}</div>
               {a.state === "pending" && <ApprovalDecisions id={a.id} />}
             </div>
           ))}</div> : <p className="text-sm text-gray-400 py-6 text-center">Queue clear. ✅</p>}

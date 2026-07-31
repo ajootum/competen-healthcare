@@ -19,8 +19,8 @@ const card = "bg-white rounded-xl border border-gray-200";
 
 const COLUMNS: { key: string; label: string; tone: string }[] = [
   { key: "expected", label: "Expected", tone: "bg-gray-50" },
-  { key: "awaitingBed", label: "Awaiting bed", tone: "bg-amber-50" },
-  { key: "inCare", label: "In care", tone: "bg-emerald-50" },
+  { key: "awaitingBed", label: "Awaiting bed", tone: "bg-[var(--cmp-surface-warning)]" },
+  { key: "inCare", label: "In care", tone: "bg-[var(--cmp-surface-success)]" },
   { key: "transferTheatre", label: "Transfer / theatre", tone: "bg-indigo-50" },
   { key: "dischargeReady", label: "Discharge ready", tone: "bg-teal-50" },
 ];
@@ -49,7 +49,7 @@ export default async function PatientFlow() {
       <PosTabs />
     </>
   );
-  if (!po.ready) return <div className="space-y-4">{header}<div className="bg-amber-50 border border-amber-200 rounded-xl p-6"><p className="font-semibold text-amber-900">⚙️ Coming online</p><p className="text-sm text-amber-800 mt-1">The Clinical Operations Engine isn&apos;t provisioned for this unit yet.</p></div></div>;
+  if (!po.ready) return <div className="space-y-4">{header}<div className="bg-[var(--cmp-surface-warning)] border border-[var(--cmp-color-warning)] rounded-xl p-6"><p className="font-semibold text-amber-900">⚙️ Coming online</p><p className="text-sm text-amber-800 mt-1">The Clinical Operations Engine isn&apos;t provisioned for this unit yet.</p></div></div>;
 
   const { flow, blockers, flowBlockers, flowBlockersReady, turnaround, turnaroundReady, flowMetrics } = po;
   const metrics = [
@@ -79,7 +79,7 @@ export default async function PatientFlow() {
               <div className="p-2 space-y-1.5 min-h-[80px]">
                 {list.length === 0 && <p className="text-[11px] text-gray-300 text-center py-4">—</p>}
                 {list.slice(0, 12).map((p: any) => (
-                  <Link key={p.id} href={`/unit-manager/patient-operations/patient-card?patient=${p.id}`} className="block rounded-lg border border-gray-100 px-2.5 py-1.5 hover:border-emerald-200 hover:bg-emerald-50/30 transition-colors">
+                  <Link key={p.id} href={`/unit-manager/patient-operations/patient-card?patient=${p.id}`} className="block rounded-lg border border-gray-100 px-2.5 py-1.5 hover:border-[var(--cmp-color-success)] hover:bg-[var(--cmp-surface-success)]/30 transition-colors">
                     <div className="flex items-center justify-between"><span className="text-xs font-medium text-gray-800 truncate">{p.bed ?? p.label}</span>{p.pews != null && <span className={`text-[11px] font-bold tabular-nums ${ewsColor(p.pews)}`}>{p.pews}</span>}</div>
                     <p className="text-[10px] text-gray-400 truncate">{p.nurse ?? "unassigned"}</p>
                   </Link>
@@ -97,8 +97,8 @@ export default async function PatientFlow() {
           <h3 className="text-sm font-bold text-gray-900 mb-3">Flow blockers <span className="text-[10px] font-normal text-gray-400">delayed discharges &amp; capacity holds</span></h3>
           {(blockers.length === 0 && flowBlockers.length === 0) ? <p className="text-sm text-gray-400">No active flow blockers. 🎉</p> : (
             <div className="space-y-1.5">
-              {flowBlockers.map((b: any) => <div key={b.id} className="flex items-center gap-2 text-xs rounded-lg border border-rose-100 bg-rose-50/40 px-3 py-2"><span className="w-1.5 h-1.5 rounded-full bg-rose-500 shrink-0" /><span className="font-medium text-gray-700">{b.category}</span><span className="text-gray-500 truncate">{b.op_patients?.label ?? b.detail}</span></div>)}
-              {blockers.slice(0, 10).map((b: any, i: number) => <div key={i} className="flex items-center gap-2 text-xs rounded-lg border border-gray-100 px-3 py-2"><span className="w-1.5 h-1.5 rounded-full bg-amber-400 shrink-0" /><span className="font-medium text-gray-700">{b.label}</span><span className="text-gray-500 truncate">{b.detail}</span></div>)}
+              {flowBlockers.map((b: any) => <div key={b.id} className="flex items-center gap-2 text-xs rounded-lg border border-[var(--cmp-color-error)] bg-[var(--cmp-surface-error)]/40 px-3 py-2"><span className="w-1.5 h-1.5 rounded-full bg-[var(--cmp-color-error)] shrink-0" /><span className="font-medium text-gray-700">{b.category}</span><span className="text-gray-500 truncate">{b.op_patients?.label ?? b.detail}</span></div>)}
+              {blockers.slice(0, 10).map((b: any, i: number) => <div key={i} className="flex items-center gap-2 text-xs rounded-lg border border-gray-100 px-3 py-2"><span className="w-1.5 h-1.5 rounded-full bg-[var(--cmp-color-warning)] shrink-0" /><span className="font-medium text-gray-700">{b.label}</span><span className="text-gray-500 truncate">{b.detail}</span></div>)}
             </div>
           )}
           {!flowBlockersReady && <p className="text-[10px] text-gray-400 mt-2">Logged flow-blocker store (migration 048) not provisioned — showing live-detected blockers only.</p>}
@@ -107,7 +107,7 @@ export default async function PatientFlow() {
         <div className={`${card} p-5`}>
           <h3 className="text-sm font-bold text-gray-900 mb-3">Bed turnaround <span className="text-[10px] font-normal text-gray-400">active cleans</span></h3>
           {turnaround.length === 0 ? <p className="text-sm text-gray-400">{turnaroundReady ? "No beds in turnaround." : "Turnaround store (migration 049) not provisioned."}</p> : (
-            <div className="space-y-1.5">{turnaround.map((t: any) => <div key={t.id} className="flex items-center justify-between text-xs rounded-lg border border-gray-100 px-3 py-2"><span className="font-medium text-gray-700">{t.op_beds?.label ?? t.bed_id}</span><span className="text-[10px] px-1.5 py-0.5 rounded bg-orange-50 text-orange-700">{t.stage}</span></div>)}</div>
+            <div className="space-y-1.5">{turnaround.map((t: any) => <div key={t.id} className="flex items-center justify-between text-xs rounded-lg border border-gray-100 px-3 py-2"><span className="font-medium text-gray-700">{t.op_beds?.label ?? t.bed_id}</span><span className="text-[10px] px-1.5 py-0.5 rounded bg-[var(--cmp-surface-warning)] text-orange-700">{t.stage}</span></div>)}</div>
           )}
         </div>
       </div>

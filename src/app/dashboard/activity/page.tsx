@@ -8,7 +8,7 @@ import { cardClass } from "@/components/ui/primitives";
 // a derived productivity score; focus/productive-minute durations (no backing store) are intentionally omitted.
 export const dynamic = "force-dynamic";
 
-const CAT_CHIP: Record<string, string> = { "Patient Care": "bg-blue-50 text-blue-700", "Learning & Development": "bg-violet-50 text-violet-700", "Documentation": "bg-amber-50 text-amber-700", "Communication": "bg-sky-50 text-sky-700", "Competency": "bg-emerald-50 text-emerald-700", "Administration": "bg-slate-50 text-slate-600" };
+const CAT_CHIP: Record<string, string> = { "Patient Care": "bg-[var(--cmp-surface-information)] text-blue-700", "Learning & Development": "bg-violet-50 text-violet-700", "Documentation": "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]", "Communication": "bg-[var(--cmp-surface-information)] text-[var(--cmp-text-information)]", "Competency": "bg-[var(--cmp-surface-success)] text-emerald-700", "Administration": "bg-slate-50 text-slate-600" };
 const CAT_ICON: Record<string, string> = { "Patient Care": "👥", "Learning & Development": "📚", "Documentation": "📄", "Communication": "💬", "Competency": "🎯", "Administration": "⚙️" };
 const fmtTime = (t: string) => new Date(t).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
 const dayLabel = (d: string) => { const t = new Date(d + "T00:00:00"); const today = new Date().toISOString().slice(0, 10); const yest = new Date(Date.now() - 86400000).toISOString().slice(0, 10); if (d === today) return "Today"; if (d === yest) return "Yesterday"; return t.toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long" }); };
@@ -48,7 +48,7 @@ export default async function ActivityAnalyticsPage() {
       {/* Header */}
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <p className="text-[11px] font-semibold text-blue-600 uppercase tracking-wide">Personal Workspace</p>
+          <p className="text-[11px] font-semibold text-[var(--cmp-text-information)] uppercase tracking-wide">Personal Workspace</p>
           <h1 className="text-2xl font-bold text-gray-900">Activity Timeline &amp; Productivity Analytics</h1>
           <p className="text-sm text-gray-500 mt-0.5">Track your activity, time usage and productivity to improve your performance and outcomes.</p>
         </div>
@@ -57,13 +57,13 @@ export default async function ActivityAnalyticsPage() {
 
       {/* KPI ribbon */}
       <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-7 gap-3">
-        <Kpi icon="📊" label="Total Activities" value={d.kpis.total} sub="Last 30 days" tint="bg-blue-50" />
-        <Kpi icon="✅" label="Tasks Completed" value={d.kpis.tasksCompleted} sub="Completed" tint="bg-emerald-50" />
+        <Kpi icon="📊" label="Total Activities" value={d.kpis.total} sub="Last 30 days" tint="bg-[var(--cmp-surface-information)]" />
+        <Kpi icon="✅" label="Tasks Completed" value={d.kpis.tasksCompleted} sub="Completed" tint="bg-[var(--cmp-surface-success)]" />
         <Kpi icon="📚" label="Learning Activity" value={d.kpis.learning} sub="Learning events" tint="bg-violet-50" />
-        <Kpi icon="📄" label="Documentation" value={d.kpis.documentation} sub="Doc actions" tint="bg-amber-50" />
-        <Kpi icon="💬" label="Communication" value={d.kpis.communication} sub="Messages" tint="bg-sky-50" />
+        <Kpi icon="📄" label="Documentation" value={d.kpis.documentation} sub="Doc actions" tint="bg-[var(--cmp-surface-warning)]" />
+        <Kpi icon="💬" label="Communication" value={d.kpis.communication} sub="Messages" tint="bg-[var(--cmp-surface-information)]" />
         <Kpi icon="⭐" label="Productivity" value={`${d.kpis.productivity}%`} sub={d.kpis.productivity >= 70 ? "Excellent" : "Improving"} tint="bg-cyan-50" />
-        <Kpi icon="🔥" label="Active Days" value={d.kpis.activeDays} sub="of 30" tint="bg-rose-50" />
+        <Kpi icon="🔥" label="Active Days" value={d.kpis.activeDays} sub="of 30" tint="bg-[var(--cmp-surface-error)]" />
       </div>
 
       <div className="grid lg:grid-cols-[minmax(0,1fr)_340px] gap-5 items-start">
@@ -137,7 +137,7 @@ export default async function ActivityAnalyticsPage() {
               {d.goals.map((g: any) => ( // eslint-disable-line @typescript-eslint/no-explicit-any
                 <div key={g.label}>
                   <div className="flex items-center justify-between text-[11px] mb-1"><span className="text-gray-600">{g.label}</span><span className="font-semibold text-gray-800">{g.current}/{g.target}</span></div>
-                  <div className="h-1.5 rounded-full bg-gray-100 overflow-hidden"><div className="h-full rounded-full bg-emerald-500" style={{ width: `${g.pct}%` }} /></div>
+                  <div className="h-1.5 rounded-full bg-gray-100 overflow-hidden"><div className="h-full rounded-full bg-[var(--cmp-color-success)]" style={{ width: `${g.pct}%` }} /></div>
                 </div>
               ))}
             </div>
@@ -149,7 +149,7 @@ export default async function ActivityAnalyticsPage() {
             {d.achievements.length > 0 ? (
               <div className="space-y-2">
                 {d.achievements.map((a: any, i: number) => ( // eslint-disable-line @typescript-eslint/no-explicit-any
-                  <div key={i} className="flex items-center gap-2.5"><span className="w-8 h-8 rounded-lg bg-amber-50 flex items-center justify-center">🏆</span><div><p className="text-[12px] font-medium text-gray-800">{a.label}</p><p className="text-[10px] text-gray-400">{a.at}</p></div></div>
+                  <div key={i} className="flex items-center gap-2.5"><span className="w-8 h-8 rounded-lg bg-[var(--cmp-surface-warning)] flex items-center justify-center">🏆</span><div><p className="text-[12px] font-medium text-gray-800">{a.label}</p><p className="text-[10px] text-gray-400">{a.at}</p></div></div>
                 ))}
               </div>
             ) : <p className="text-xs text-gray-400 py-3 text-center">Keep going — achievements unlock with activity.</p>}
@@ -166,7 +166,7 @@ export default async function ActivityAnalyticsPage() {
               {d.byModule.map((m: any) => ( // eslint-disable-line @typescript-eslint/no-explicit-any
                 <div key={m.label}>
                   <div className="flex items-center justify-between text-[12px] mb-1"><span className="text-gray-600 capitalize">{m.label}</span><span className="font-semibold text-gray-800">{m.n} · {m.pct}%</span></div>
-                  <div className="h-1.5 rounded-full bg-gray-100 overflow-hidden"><div className="h-full rounded-full bg-blue-500" style={{ width: `${m.pct}%` }} /></div>
+                  <div className="h-1.5 rounded-full bg-gray-100 overflow-hidden"><div className="h-full rounded-full bg-[var(--cmp-color-information)]" style={{ width: `${m.pct}%` }} /></div>
                 </div>
               ))}
             </div>

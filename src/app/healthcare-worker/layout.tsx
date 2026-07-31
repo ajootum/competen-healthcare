@@ -43,7 +43,7 @@ export default async function HealthcareWorkerLayout({ children }: { children: R
           <p className="text-4xl mb-3">🔒</p>
           <h1 className="text-lg font-bold text-gray-900">Access restricted</h1>
           <p className="text-gray-400 text-sm mt-1">The Healthcare Worker Workspace is for bedside clinicians and their team leaders.</p>
-          <Link href="/dashboard" className="mt-4 inline-block text-sm text-emerald-600 hover:underline">← Back to dashboard</Link>
+          <Link href="/dashboard" className="mt-4 inline-block text-sm text-[var(--cmp-text-success)] hover:underline">← Back to dashboard</Link>
         </div>
       </div>
     );
@@ -117,7 +117,7 @@ export default async function HealthcareWorkerLayout({ children }: { children: R
     <div className="min-h-screen bg-gray-50 font-[family-name:var(--font-geist-sans)]">
       <header className="md:hidden fixed top-0 left-0 right-0 z-40 bg-[#0a2f23] shadow-lg">
         <div className="h-12 flex items-center gap-2 px-3">
-          <span className="w-7 h-7 rounded bg-emerald-500 flex items-center justify-center text-white font-bold text-sm shrink-0">C</span>
+          <span className="w-7 h-7 rounded bg-[var(--cmp-color-success)] flex items-center justify-center text-white font-bold text-sm shrink-0">C</span>
           <span className="min-w-0">
             <span className="block text-white font-semibold text-sm leading-tight">Competen</span>
             <span className="block text-emerald-300/60 text-[10px] leading-tight">Healthcare Worker Workspace</span>
@@ -151,7 +151,7 @@ export default async function HealthcareWorkerLayout({ children }: { children: R
         <aside data-sidebar className="hidden md:flex w-56 h-screen bg-[#0a2f23] flex-col py-6 px-4 fixed top-0 left-0 z-20">
           <SidebarToggle />
           <Link href="/healthcare-worker" className="flex items-center gap-2 mb-4 px-2" data-sb-item>
-            <div className="w-7 h-7 rounded bg-emerald-500 flex items-center justify-center text-white font-bold text-sm">C</div>
+            <div className="w-7 h-7 rounded bg-[var(--cmp-color-success)] flex items-center justify-center text-white font-bold text-sm">C</div>
             <span className="min-w-0" data-sb-label>
               <span className="block text-white font-semibold text-sm leading-tight">Competen</span>
               <span className="block text-emerald-300/60 text-[9px] leading-tight">Healthcare Worker Workspace</span>
@@ -187,7 +187,7 @@ export default async function HealthcareWorkerLayout({ children }: { children: R
                 <div><p className="text-white text-sm font-bold tabular-nums">{badges.medsDue}</p><p className="text-emerald-200/50 text-[8px] uppercase">Meds Due</p></div>
               </div>
               <div className="h-1.5 rounded-full bg-emerald-950 overflow-hidden mt-2">
-                <div className="h-full rounded-full bg-emerald-400" style={{ width: `${shiftCard.pct}%` }} />
+                <div className="h-full rounded-full bg-[var(--cmp-color-success)]" style={{ width: `${shiftCard.pct}%` }} />
               </div>
               <p className="text-emerald-200/60 text-[10px] mt-1">{shiftCard.remaining} remaining{widget.breakLabel ? ` · ☕ ${widget.breakLabel}` : ""}</p>
             </div>
@@ -201,7 +201,7 @@ export default async function HealthcareWorkerLayout({ children }: { children: R
 
         {/* Clinical AI Copilot — persistent floating action (UI-001) */}
         <Link href="/healthcare-worker/copilot" title="Clinical AI Copilot"
-          className="fixed bottom-6 right-6 z-30 w-12 h-12 rounded-full bg-emerald-600 hover:bg-emerald-700 text-white text-xl flex items-center justify-center shadow-lg shadow-emerald-900/30 transition-colors">
+          className="fixed bottom-6 right-6 z-30 w-12 h-12 rounded-full bg-[var(--cmp-color-success)] hover:bg-emerald-700 text-white text-xl flex items-center justify-center shadow-lg shadow-emerald-900/30 transition-colors">
           ✨
         </Link>
       </div>

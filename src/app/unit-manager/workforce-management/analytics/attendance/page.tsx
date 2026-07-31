@@ -44,7 +44,7 @@ export default async function AttendanceAnalytics() {
     </>
   );
 
-  if (!d.ready) return <div className="space-y-4">{header}<div className="bg-amber-50 border border-amber-200 rounded-xl p-6"><p className="font-semibold text-amber-900">⚙️ No active shift</p></div></div>;
+  if (!d.ready) return <div className="space-y-4">{header}<div className="bg-[var(--cmp-surface-warning)] border border-[var(--cmp-color-warning)] rounded-xl p-6"><p className="font-semibold text-amber-900">⚙️ No active shift</p></div></div>;
 
   const k = d.kpis;
   const absenceRate = k.expected ? Math.round((k.absent / k.expected) * 100) : null;
@@ -53,17 +53,17 @@ export default async function AttendanceAnalytics() {
       {header}
 
       <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-3">
-        <Kpi label="Attendance rate" value={k.presentRate != null ? `${k.presentRate}%` : "—"} sub="Present ÷ expected" tone={k.presentRate != null && k.presentRate >= 90 ? "text-emerald-600" : "text-amber-600"} foot="WF-ATT-001" />
-        <Kpi label="Absence rate" value={absenceRate != null ? `${absenceRate}%` : "—"} tone={absenceRate ? "text-rose-600" : "text-emerald-600"} foot="WF-ABS-001" />
-        <Kpi label="Late arrivals" value={k.late} tone={k.late ? "text-amber-600" : "text-emerald-600"} foot="WF-PUN-001" />
-        <Kpi label="Not reported" value={k.notReported} tone={k.notReported ? "text-amber-600" : undefined} />
+        <Kpi label="Attendance rate" value={k.presentRate != null ? `${k.presentRate}%` : "—"} sub="Present ÷ expected" tone={k.presentRate != null && k.presentRate >= 90 ? "text-[var(--cmp-text-success)]" : "text-[var(--cmp-text-warning)]"} foot="WF-ATT-001" />
+        <Kpi label="Absence rate" value={absenceRate != null ? `${absenceRate}%` : "—"} tone={absenceRate ? "text-[var(--cmp-text-error)]" : "text-[var(--cmp-text-success)]"} foot="WF-ABS-001" />
+        <Kpi label="Late arrivals" value={k.late} tone={k.late ? "text-[var(--cmp-text-warning)]" : "text-[var(--cmp-text-success)]"} foot="WF-PUN-001" />
+        <Kpi label="Not reported" value={k.notReported} tone={k.notReported ? "text-[var(--cmp-text-warning)]" : undefined} />
         <Kpi label="Coverage after" value={k.coveragePct != null ? `${k.coveragePct}%` : "—"} sub={k.coverageState} foot="WF-COV-001" />
         <Kpi label="Available replacements" value={k.replacements} tone="text-violet-600" />
       </div>
 
       <div className={`${card} p-5`}>
         <h3 className="text-sm font-bold text-gray-900 mb-3">Expected vs present by role <span className="text-[10px] text-gray-400 font-normal">WA-AT-003</span></h3>
-        {d.roleBreakdown.length === 0 ? <p className="text-sm text-gray-400">No role data.</p> : <div className="space-y-2">{d.roleBreakdown.map((rb: any) => { const pct = rb.expected ? Math.round((rb.present / rb.expected) * 100) : 0; return (<div key={rb.role} className="flex items-center gap-3 text-xs"><span className="text-gray-600 w-32 truncate">{rb.label}</span><div className="flex-1 h-2 rounded-full bg-gray-100 overflow-hidden"><div className={`h-full rounded-full ${pct >= 100 ? "bg-emerald-500" : pct >= 80 ? "bg-amber-400" : "bg-rose-400"}`} style={{ width: `${pct}%` }} /></div><span className="text-gray-700 w-16 text-right">{rb.present}/{rb.expected}{rb.absent ? ` · ${rb.absent} abs` : ""}</span></div>); })}</div>}
+        {d.roleBreakdown.length === 0 ? <p className="text-sm text-gray-400">No role data.</p> : <div className="space-y-2">{d.roleBreakdown.map((rb: any) => { const pct = rb.expected ? Math.round((rb.present / rb.expected) * 100) : 0; return (<div key={rb.role} className="flex items-center gap-3 text-xs"><span className="text-gray-600 w-32 truncate">{rb.label}</span><div className="flex-1 h-2 rounded-full bg-gray-100 overflow-hidden"><div className={`h-full rounded-full ${pct >= 100 ? "bg-[var(--cmp-color-success)]" : pct >= 80 ? "bg-[var(--cmp-color-warning)]" : "bg-[var(--cmp-color-error)]"}`} style={{ width: `${pct}%` }} /></div><span className="text-gray-700 w-16 text-right">{rb.present}/{rb.expected}{rb.absent ? ` · ${rb.absent} abs` : ""}</span></div>); })}</div>}
         <p className="text-[10px] text-gray-400 mt-2">Roster publication compliance + stability index draw on Roster Governance; multi-period attendance/absence/leave trends need a history store → next-phase.</p>
       </div>
 

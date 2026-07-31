@@ -14,9 +14,9 @@ import CommandBar from "./CommandBar";
 export const dynamic = "force-dynamic";
 
 const RISK_CLS: Record<string, string> = { Low: "text-emerald-400", Medium: "text-amber-400", High: "text-rose-400" };
-const SEV_CLS: Record<string, string> = { High: "bg-rose-500/20 text-rose-300 border-rose-500/30", Medium: "bg-amber-500/20 text-amber-300 border-amber-500/30", Low: "bg-sky-500/20 text-sky-300 border-sky-500/30" };
+const SEV_CLS: Record<string, string> = { High: "bg-[var(--cmp-color-error)]/20 text-rose-300 border-rose-500/30", Medium: "bg-[var(--cmp-color-warning)]/20 text-amber-300 border-amber-500/30", Low: "bg-[var(--cmp-color-information)]/20 text-sky-300 border-sky-500/30" };
 const STATUS_CLS: Record<string, string> = { "On Track": "text-emerald-400", Improving: "text-sky-400", "At Risk": "text-amber-400", Delayed: "text-rose-400" };
-const IMPACT_CLS: Record<string, string> = { High: "bg-rose-500/20 text-rose-300", Medium: "bg-amber-500/20 text-amber-300", Low: "bg-emerald-500/15 text-emerald-200" };
+const IMPACT_CLS: Record<string, string> = { High: "bg-[var(--cmp-color-error)]/20 text-rose-300", Medium: "bg-[var(--cmp-color-warning)]/20 text-amber-300", Low: "bg-[var(--cmp-color-success)]/15 text-emerald-200" };
 const REC_CLS: Record<string, string> = { yes: "text-emerald-400", maybe: "text-amber-400", no: "text-rose-400" };
 
 function Card({ title, tag, children }: { title: string; tag?: string; children: React.ReactNode }) {
@@ -54,7 +54,7 @@ function TrendChart({ points }: { points: TrendPoint[] }) {
         <path d={path("quality")} fill="none" stroke="#3b82f6" strokeWidth="1.4" />
         {points.map((p, i) => <text key={i} x={xs(i)} y={h + 7} fontSize="6" fill="#64748b" textAnchor="middle">{p.label}</text>)}
       </svg>
-      <div className="flex gap-3 mt-1"><span className="flex items-center gap-1 text-[9px] text-slate-400"><span className="w-2 h-2 rounded-full bg-emerald-500" />Institutional Health</span><span className="flex items-center gap-1 text-[9px] text-slate-400"><span className="w-2 h-2 rounded-full bg-blue-500" />Quality Index</span></div>
+      <div className="flex gap-3 mt-1"><span className="flex items-center gap-1 text-[9px] text-slate-400"><span className="w-2 h-2 rounded-full bg-[var(--cmp-color-success)]" />Institutional Health</span><span className="flex items-center gap-1 text-[9px] text-slate-400"><span className="w-2 h-2 rounded-full bg-[var(--cmp-color-information)]" />Quality Index</span></div>
     </div>
   );
 }

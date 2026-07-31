@@ -86,10 +86,10 @@ export default async function AssessmentSchedulePage() {
 
   const KPIS = [
     { icon: "📅", value: todaySessions.length, label: "Today's Sessions", sub: "on your schedule", tint: "bg-indigo-50" },
-    { icon: "✅", value: completedToday, label: "Completed", sub: "today", tint: "bg-green-50" },
-    { icon: "⏭️", value: remainingToday, label: "Remaining", sub: "still to run today", tint: "bg-blue-50" },
-    { icon: "🔴", value: overdue.length, label: "Overdue", sub: "past scheduled time", tint: "bg-red-50" },
-    { icon: "🗓️", value: weekSessions.length, label: "This Week", sub: "Mon–Sun sessions", tint: "bg-amber-50" },
+    { icon: "✅", value: completedToday, label: "Completed", sub: "today", tint: "bg-[var(--cmp-surface-success)]" },
+    { icon: "⏭️", value: remainingToday, label: "Remaining", sub: "still to run today", tint: "bg-[var(--cmp-surface-information)]" },
+    { icon: "🔴", value: overdue.length, label: "Overdue", sub: "past scheduled time", tint: "bg-[var(--cmp-surface-critical)]" },
+    { icon: "🗓️", value: weekSessions.length, label: "This Week", sub: "Mon–Sun sessions", tint: "bg-[var(--cmp-surface-warning)]" },
   ];
 
   // Conflicts across the hospital's sessions (double-booked assessor/learner)
@@ -208,7 +208,7 @@ export default async function AssessmentSchedulePage() {
                   return (
                     <div key={s.id} className="px-5 py-3 flex items-center gap-3">
                       <div className="w-14 text-center shrink-0">
-                        <p className={`text-xs font-bold ${s.status === "completed" ? "text-green-600" : past && s.status === "scheduled" ? "text-red-600" : "text-indigo-600"}`} suppressHydrationWarning>
+                        <p className={`text-xs font-bold ${s.status === "completed" ? "text-[var(--cmp-text-success)]" : past && s.status === "scheduled" ? "text-[var(--cmp-text-critical)]" : "text-indigo-600"}`} suppressHydrationWarning>
                           {new Date(s.scheduled_for).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
                         </p>
                       </div>
@@ -222,9 +222,9 @@ export default async function AssessmentSchedulePage() {
                         </p>
                       </div>
                       <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded shrink-0 ${
-                        s.status === "completed" ? "bg-green-50 text-green-700"
+                        s.status === "completed" ? "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]"
                         : s.status === "cancelled" ? "bg-gray-100 text-gray-400 line-through"
-                        : past ? "bg-red-50 text-red-600" : "bg-blue-50 text-blue-600"
+                        : past ? "bg-[var(--cmp-surface-critical)] text-[var(--cmp-text-critical)]" : "bg-[var(--cmp-surface-information)] text-[var(--cmp-text-information)]"
                       }`}>
                         {s.status === "completed" ? "Completed" : s.status === "cancelled" ? "Cancelled" : past ? "Overdue" : "Upcoming"}
                       </span>
@@ -288,7 +288,7 @@ export default async function AssessmentSchedulePage() {
         {/* Right rail */}
         <div className="flex flex-col gap-4">
           {/* Conflicts */}
-          <div className={`rounded-2xl p-4 border ${conflicts.length ? "bg-red-50 border-red-100" : "bg-white border-gray-100"}`}>
+          <div className={`rounded-2xl p-4 border ${conflicts.length ? "bg-[var(--cmp-surface-critical)] border-[var(--cmp-color-critical)]" : "bg-white border-gray-100"}`}>
             <h2 className={`text-xs font-bold mb-2 ${conflicts.length ? "text-red-800" : "text-gray-800"}`}>
               ⚠️ Scheduling Conflicts{conflicts.length ? ` (${conflicts.length})` : ""}
             </h2>
@@ -302,7 +302,7 @@ export default async function AssessmentSchedulePage() {
                     <p className="text-[9px] text-red-800/70 leading-snug" suppressHydrationWarning>{c.detail}</p>
                   </div>
                 ))}
-                <Link href="/assessor/calendar" className="text-[10px] font-semibold text-red-700 hover:underline">Resolve in calendar →</Link>
+                <Link href="/assessor/calendar" className="text-[10px] font-semibold text-[var(--cmp-text-critical)] hover:underline">Resolve in calendar →</Link>
               </div>
             )}
             <p className="text-[8px] text-gray-300 mt-2">Checks assessor and learner double-bookings; rooms and leave aren&apos;t tracked.</p>

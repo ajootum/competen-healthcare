@@ -14,8 +14,8 @@ import TaskActions from "./TaskActions";
 export const dynamic = "force-dynamic";
 
 const STATE_TONE: Record<string, string> = {
-  created: "bg-gray-100 text-gray-500", assigned: "bg-blue-100 text-blue-700", accepted: "bg-indigo-100 text-indigo-700",
-  in_progress: "bg-amber-100 text-amber-700", completed: "bg-green-100 text-green-700", verified: "bg-emerald-100 text-emerald-700",
+  created: "bg-gray-100 text-gray-500", assigned: "bg-[var(--cmp-surface-information)] text-blue-700", accepted: "bg-indigo-100 text-indigo-700",
+  in_progress: "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]", completed: "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]", verified: "bg-[var(--cmp-surface-success)] text-emerald-700",
 };
 
 export default async function TaskCentrePage() {
@@ -35,8 +35,8 @@ export default async function TaskCentrePage() {
 
       <div className="grid sm:grid-cols-2 xl:grid-cols-4 gap-4">
         <StatCard icon="✅" title="Open Tasks" value={open.length} sub={`${wardRound} from ward-round actions`} />
-        <StatCard icon="🔴" title="Urgent" value={urgent} tone={urgent > 0 ? "text-red-600" : undefined} sub="priority urgent" />
-        <StatCard icon="⏰" title="Past Due" value={overdue} tone={overdue > 0 ? "text-orange-600" : undefined} sub="due time elapsed" />
+        <StatCard icon="🔴" title="Urgent" value={urgent} tone={urgent > 0 ? "text-[var(--cmp-text-critical)]" : undefined} sub="priority urgent" />
+        <StatCard icon="⏰" title="Past Due" value={overdue} tone={overdue > 0 ? "text-[var(--cmp-text-warning)]" : undefined} sub="due time elapsed" />
         <StatCard icon="🏁" title="Completed (24h)" value={done.length} sub="by you" />
       </div>
 
@@ -47,7 +47,7 @@ export default async function TaskCentrePage() {
           <div className="divide-y divide-gray-100">
             {open.map((t: any) => (
               <div key={t.id} className="py-2.5 flex items-start gap-3">
-                <span className={`text-xs tabular-nums w-12 shrink-0 mt-0.5 ${t.past_due ? "text-red-600 font-semibold" : "text-gray-500"}`}>{t.due_at ? fmtTime(t.due_at) : "--:--"}</span>
+                <span className={`text-xs tabular-nums w-12 shrink-0 mt-0.5 ${t.past_due ? "text-[var(--cmp-text-critical)] font-semibold" : "text-gray-500"}`}>{t.due_at ? fmtTime(t.due_at) : "--:--"}</span>
                 <div className="flex-1 min-w-0">
                   <p className="text-sm text-gray-800 leading-tight">{t.description}</p>
                   <p className="text-[11px] text-gray-400 mt-0.5">

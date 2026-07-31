@@ -22,7 +22,7 @@ export default async function IdentityPage() {
         <p className="text-sm text-gray-500 mt-1">Per-tenant SSO / SAML / OIDC configuration, MFA and SCIM policy.</p>
       </div>
       {!ready ? (
-        <div className="bg-amber-50 border border-amber-200 rounded-xl p-5 text-sm text-amber-700">Apply migration <code className="font-mono text-xs">044</code> to activate identity configuration.</div>
+        <div className="bg-[var(--cmp-surface-warning)] border border-[var(--cmp-color-warning)] rounded-xl p-5 text-sm text-[var(--cmp-text-warning)]">Apply migration <code className="font-mono text-xs">044</code> to activate identity configuration.</div>
       ) : (
         <div className="grid lg:grid-cols-3 gap-5 items-start">
           <IdentityForm tenants={tenants} />
@@ -40,7 +40,7 @@ export default async function IdentityPage() {
                       <td className="pr-3 text-gray-500">{c.provider ?? "—"}</td>
                       <td className="pr-3">{c.mfa_required ? "✓" : "—"}</td>
                       <td className="pr-3">{c.scim_enabled ? "✓" : "—"}</td>
-                      <td className="pr-3"><span className={`text-[10px] px-2 py-0.5 rounded-full ${c.is_active ? "bg-green-100 text-green-700" : "bg-amber-100 text-amber-700"}`}>{c.is_active ? "active" : "configured"}</span></td>
+                      <td className="pr-3"><span className={`text-[10px] px-2 py-0.5 rounded-full ${c.is_active ? "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]" : "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]"}`}>{c.is_active ? "active" : "configured"}</span></td>
                     </tr>
                   ))}
                 </tbody>

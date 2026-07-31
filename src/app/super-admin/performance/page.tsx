@@ -16,8 +16,8 @@ type Mod = { code: string; icon: string; label: string; desc: string; href?: str
 
 const BADGE: Record<Status, { text: string; cls: string }> = {
   real: { text: "Live", cls: "text-teal-700 bg-teal-50 border-teal-100" },
-  linked: { text: "Linked", cls: "text-blue-600 bg-blue-50 border-blue-100" },
-  partial: { text: "Partial", cls: "text-amber-600 bg-amber-50 border-amber-100" },
+  linked: { text: "Linked", cls: "text-[var(--cmp-text-information)] bg-[var(--cmp-surface-information)] border-[var(--cmp-color-information)]" },
+  partial: { text: "Partial", cls: "text-[var(--cmp-text-warning)] bg-[var(--cmp-surface-warning)] border-[var(--cmp-color-warning)]" },
   gap: { text: "Planned", cls: "text-gray-400 bg-gray-50 border-gray-100" },
 };
 
@@ -29,7 +29,7 @@ function EngineCard({ m }: { m: Mod }) {
         <span className="text-xl shrink-0">{m.icon}</span>
         <div className="min-w-0">
           <p className="text-[9px] font-bold text-gray-300 tracking-widest">{m.code}</p>
-          <p className={`font-bold text-sm leading-tight ${m.status === "gap" ? "text-gray-500" : "text-gray-900 group-hover:text-sky-700"}`}>{m.label}</p>
+          <p className={`font-bold text-sm leading-tight ${m.status === "gap" ? "text-gray-500" : "text-gray-900 group-hover:text-[var(--cmp-text-information)]"}`}>{m.label}</p>
         </div>
         <span className={`ml-auto shrink-0 text-[8px] font-bold uppercase tracking-wide border px-1.5 py-0.5 rounded ${b.cls}`}>{b.text}</span>
       </div>
@@ -38,7 +38,7 @@ function EngineCard({ m }: { m: Mod }) {
   );
   const base = "bg-white rounded-xl border border-gray-100 p-4 block";
   return m.href
-    ? <Link href={m.href} className={`${base} hover:border-sky-200 hover:shadow-sm transition-all group`}>{inner}</Link>
+    ? <Link href={m.href} className={`${base} hover:border-[var(--cmp-color-information)] hover:shadow-sm transition-all group`}>{inner}</Link>
     : <div className={`${base} opacity-80`}>{inner}</div>;
 }
 
@@ -111,7 +111,7 @@ export default async function PerformancePlatformPage() {
           <h1 className="text-xl font-bold text-gray-900">Competency Performance</h1>
           <p className="text-gray-400 text-sm mt-0.5">The performance layer — does validated competency demonstrably improve outcomes? Studio authors, Delivery runs, Assurance verifies, and Performance measures the impact.</p>
         </div>
-        <Link href="/super-admin" className="text-xs font-semibold text-gray-500 hover:text-sky-700 border border-gray-200 rounded-lg px-3 py-2 shrink-0">← Mission Control</Link>
+        <Link href="/super-admin" className="text-xs font-semibold text-gray-500 hover:text-[var(--cmp-text-information)] border border-gray-200 rounded-lg px-3 py-2 shrink-0">← Mission Control</Link>
       </div>
 
       <div className="grid grid-cols-3 md:grid-cols-6 gap-3 mb-5">
@@ -125,8 +125,8 @@ export default async function PerformancePlatformPage() {
 
       <div className="flex flex-wrap items-center gap-2 mb-5 text-[11px]">
         {nReal > 0 && <span className="font-semibold text-teal-700 bg-teal-50 border border-teal-100 rounded-lg px-2.5 py-1">{nReal} live</span>}
-        {nLinked > 0 && <span className="font-semibold text-blue-600 bg-blue-50 border border-blue-100 rounded-lg px-2.5 py-1">{nLinked} linked (existing surface)</span>}
-        {nPartial > 0 && <span className="font-semibold text-amber-600 bg-amber-50 border border-amber-100 rounded-lg px-2.5 py-1">{nPartial} partial</span>}
+        {nLinked > 0 && <span className="font-semibold text-[var(--cmp-text-information)] bg-[var(--cmp-surface-information)] border border-[var(--cmp-color-information)] rounded-lg px-2.5 py-1">{nLinked} linked (existing surface)</span>}
+        {nPartial > 0 && <span className="font-semibold text-[var(--cmp-text-warning)] bg-[var(--cmp-surface-warning)] border border-[var(--cmp-color-warning)] rounded-lg px-2.5 py-1">{nPartial} partial</span>}
         {nGap > 0 && <span className="font-semibold text-gray-400 bg-gray-50 border border-gray-100 rounded-lg px-2.5 py-1">{nGap} planned</span>}
       </div>
 
@@ -135,7 +135,7 @@ export default async function PerformancePlatformPage() {
       <Layer title="Benchmarking, Improvement & Forecast · CAPM-006/007/009" mods={IMPROVE} />
       <Layer title="Executive & AI · CAPM-008/010" mods={EXEC} />
 
-      <div className="bg-sky-50 border border-sky-100 rounded-xl p-4">
+      <div className="bg-[var(--cmp-surface-information)] border border-[var(--cmp-color-information)] rounded-xl p-4">
         <p className="text-[11px] text-sky-900">
           <span className="font-bold">One performance layer over the whole competency system.</span> CAPM doesn&apos;t re-collect data — it measures whether the competency machinery is paying off. Individual, team, organisational and executive performance are already owned by the Performance workspace and the Hospital Executive workspace (cross-linked, not duplicated); the genuinely-new engine — <span className="font-semibold">competency-to-outcome correlation</span> — is what this platform adds on top of the real competency, outcome and operational stores.
         </p>

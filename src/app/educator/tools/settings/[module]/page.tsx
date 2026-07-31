@@ -78,7 +78,7 @@ export default async function SettingsModulePage({ params }: { params: Promise<{
               {security.length === 0 ? <p className="text-[12px] text-gray-400">No recorded activity yet.</p> : (
                 <div className="flex flex-col divide-y divide-gray-100">
                   {security.map((s, i) => (
-                    <div key={i} className="flex items-center gap-3 py-2.5 text-[12px]"><span className="w-6 h-6 rounded-lg bg-rose-50 text-rose-500 flex items-center justify-center text-[10px] shrink-0">🔐</span><span className="flex-1 text-gray-700"><span className="font-medium">{s.actor}</span> — {s.action}</span><span className="text-gray-400 whitespace-nowrap">{relTime(s.when)}</span></div>
+                    <div key={i} className="flex items-center gap-3 py-2.5 text-[12px]"><span className="w-6 h-6 rounded-lg bg-[var(--cmp-surface-error)] text-rose-500 flex items-center justify-center text-[10px] shrink-0">🔐</span><span className="flex-1 text-gray-700"><span className="font-medium">{s.actor}</span> — {s.action}</span><span className="text-gray-400 whitespace-nowrap">{relTime(s.when)}</span></div>
                   ))}
                 </div>
               )}
@@ -89,7 +89,7 @@ export default async function SettingsModulePage({ params }: { params: Promise<{
           <div className="rounded-2xl bg-white border border-gray-200 shadow-sm p-5">
             <div className="flex items-center justify-between mb-3">
               <p className="text-[11px] font-bold uppercase tracking-widest text-gray-500">Settings Areas</p>
-              <span className="text-[9px] font-bold uppercase tracking-wider text-amber-600 bg-amber-50 rounded px-1.5 py-0.5">editing soon</span>
+              <span className="text-[9px] font-bold uppercase tracking-wider text-[var(--cmp-text-warning)] bg-[var(--cmp-surface-warning)] rounded px-1.5 py-0.5">editing soon</span>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {m.groups.map(g => (

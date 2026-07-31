@@ -26,8 +26,8 @@ export default function RunDecisions({ cycleId, disabled }: { cycleId: string; d
 
   return (
     <span className="flex items-center gap-2">
-      {result && <span className="text-[10px] font-semibold text-green-600">✓ {result}</span>}
-      {error && <span className="text-[10px] text-red-600">{error}</span>}
+      {result && <span className="text-[10px] font-semibold text-[var(--cmp-text-success)]">✓ {result}</span>}
+      {error && <span className="text-[10px] text-[var(--cmp-text-critical)]">{error}</span>}
       <button onClick={run} disabled={busy || disabled}
         title={disabled ? "Validate the scored competencies first" : "Issue formal decisions for this cycle"}
         className="text-[11px] font-bold text-white bg-purple-600 rounded-lg px-3 py-1.5 hover:bg-purple-700 disabled:opacity-40 transition-colors">

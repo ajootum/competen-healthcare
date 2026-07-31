@@ -26,8 +26,8 @@ export default async function ForecastingPage() {
         <Kpi label="Competencies Forecast" value={fc.length} sub="modelled" />
         <Kpi label="Total Demand" value={totalDemand} sub="required (FTE-competency)" />
         <Kpi label="Current Supply" value={totalSupply} sub="competent staff" />
-        <Kpi label="Projected Gap" value={totalGap} sub="to close" tone={totalGap ? "text-rose-600" : "text-emerald-600"} />
-        <Kpi label="High-Risk" value={highRisk.length} sub="competencies" tone={highRisk.length ? "text-rose-600" : undefined} />
+        <Kpi label="Projected Gap" value={totalGap} sub="to close" tone={totalGap ? "text-[var(--cmp-text-error)]" : "text-[var(--cmp-text-success)]"} />
+        <Kpi label="High-Risk" value={highRisk.length} sub="competencies" tone={highRisk.length ? "text-[var(--cmp-text-error)]" : undefined} />
       </div>
 
       <Card title="Supply vs Demand" right={<span className="text-[11px] text-gray-400">by projected gap</span>}>
@@ -43,7 +43,7 @@ export default async function ForecastingPage() {
                 </div>
                 <span className="text-[10px] text-gray-400 tabular-nums w-16 text-right">{f.current_supply}/{f.demand}</span>
               </div>
-              <span className={`w-16 text-right tabular-nums font-semibold ${f.gap > 0 ? "text-rose-600" : "text-emerald-600"}`}>{f.gap > 0 ? `−${f.gap}` : "0"}</span>
+              <span className={`w-16 text-right tabular-nums font-semibold ${f.gap > 0 ? "text-[var(--cmp-text-error)]" : "text-[var(--cmp-text-success)]"}`}>{f.gap > 0 ? `−${f.gap}` : "0"}</span>
               <span className="w-20 text-right text-gray-400 text-[11px]">{f.horizon}</span>
               <span className="w-16 text-center"><Pill text={f.risk} tone={RISK_TONE[f.risk]} /></span>
             </div>
@@ -54,7 +54,7 @@ export default async function ForecastingPage() {
 
       <Card title="High-Risk Competencies" right={<span className="text-[11px] text-gray-400">prioritise</span>}>
         {highRisk.length ? <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-2">{highRisk.map((f: any) => (
-          <div key={f.id} className="border border-rose-100 bg-rose-50/40 rounded-lg p-2.5"><p className="text-[12px] font-medium text-gray-900">{f.competency}</p><p className="text-[11px] text-gray-500 mt-0.5">Gap of {f.gap} over {f.horizon} — advance recruitment/education.</p></div>
+          <div key={f.id} className="border border-[var(--cmp-color-error)] bg-[var(--cmp-surface-error)]/40 rounded-lg p-2.5"><p className="text-[12px] font-medium text-gray-900">{f.competency}</p><p className="text-[11px] text-gray-500 mt-0.5">Gap of {f.gap} over {f.horizon} — advance recruitment/education.</p></div>
         ))}</div> : <p className="text-sm text-gray-400 py-4 text-center">No high-risk competency shortfalls forecast. ✅</p>}
       </Card>
 

@@ -107,9 +107,9 @@ const stations: Station[] = [
 ];
 
 const diffColors: Record<string, string> = {
-  Easy:   "bg-green-100 text-green-700",
-  Medium: "bg-amber-100 text-amber-700",
-  Hard:   "bg-red-100 text-red-600",
+  Easy:   "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]",
+  Medium: "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]",
+  Hard:   "bg-[var(--cmp-surface-critical)] text-[var(--cmp-text-critical)]",
 };
 
 const rubricItems = [
@@ -179,15 +179,15 @@ function ChecklistModal({ station, onClose }: { station: Station; onClose: () =>
         <div className="shrink-0 border-t border-gray-100 p-4">
           <div className="flex items-center justify-between mb-2">
             <span className="text-xs text-gray-500">{checked.size} of {station.checklist.length} steps completed</span>
-            <span className={`text-sm font-bold ${score >= 70 ? "text-green-600" : "text-gray-500"}`}>{score}%</span>
+            <span className={`text-sm font-bold ${score >= 70 ? "text-[var(--cmp-text-success)]" : "text-gray-500"}`}>{score}%</span>
           </div>
           <div className="h-2.5 bg-gray-100 rounded-full overflow-hidden mb-3">
-            <div className={`h-full rounded-full transition-all duration-300 ${passed ? "bg-green-500" : score >= 50 ? "bg-amber-400" : "bg-gray-300"}`}
+            <div className={`h-full rounded-full transition-all duration-300 ${passed ? "bg-[var(--cmp-color-success)]" : score >= 50 ? "bg-[var(--cmp-color-warning)]" : "bg-gray-300"}`}
               style={{ width: `${score}%` }} />
           </div>
           <div className="flex items-center justify-between">
             {score > 0 && (
-              <p className={`text-xs font-semibold ${passed ? "text-green-600" : "text-amber-600"}`}>
+              <p className={`text-xs font-semibold ${passed ? "text-[var(--cmp-text-success)]" : "text-[var(--cmp-text-warning)]"}`}>
                 {passed ? "✓ Practice complete — well done!" : "Keep going — aim for 70% to pass"}
               </p>
             )}
@@ -271,7 +271,7 @@ export default function OSCEPage() {
       <div className="bg-gradient-to-r from-[#0a2e38] to-teal-800 rounded-2xl p-6 mb-6 text-white">
         <div className="flex items-start justify-between">
           <div>
-            <span className="text-xs bg-amber-400 text-amber-900 font-semibold px-2 py-0.5 rounded mb-3 inline-block">LAUNCHING Q4 2026</span>
+            <span className="text-xs bg-[var(--cmp-color-warning)] text-amber-900 font-semibold px-2 py-0.5 rounded mb-3 inline-block">LAUNCHING Q4 2026</span>
             <h2 className="text-lg font-bold mb-1">Remote OSCE Assessment</h2>
             <p className="text-teal-200/80 text-sm max-w-md">
               Video-based OSCE stations assessed by accredited examiners. Receive a digital certificate accepted by nursing councils across East Africa.
@@ -395,7 +395,7 @@ export default function OSCEPage() {
       {tab === "book" && (
         <div className="flex flex-col gap-6">
           <div className="bg-gradient-to-br from-[#0a2e38] to-teal-800 rounded-2xl p-7 text-white">
-            <span className="text-xs bg-amber-400 text-amber-900 font-bold px-2.5 py-1 rounded mb-4 inline-block">COMING Q4 2026</span>
+            <span className="text-xs bg-[var(--cmp-color-warning)] text-amber-900 font-bold px-2.5 py-1 rounded mb-4 inline-block">COMING Q4 2026</span>
             <h2 className="text-xl font-bold mb-2">Book a Formal OSCE</h2>
             <p className="text-teal-200/80 text-sm max-w-lg mb-5">
               Sit a full OSCE assessment remotely. Each station is recorded and reviewed by an accredited East African nursing examiner. Pass all 5 required stations and receive a digital certificate recognised by your nursing council.
@@ -414,7 +414,7 @@ export default function OSCEPage() {
               ))}
             </div>
             <a href="mailto:gabriel@semacast.com?subject=OSCE Registration Interest"
-              className="inline-block bg-amber-400 text-amber-900 font-semibold text-sm px-6 py-3 rounded-lg hover:bg-amber-300 transition-colors">
+              className="inline-block bg-[var(--cmp-color-warning)] text-amber-900 font-semibold text-sm px-6 py-3 rounded-lg hover:bg-amber-300 transition-colors">
               Register Interest — Email Us
             </a>
           </div>

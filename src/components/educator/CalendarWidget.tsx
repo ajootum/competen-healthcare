@@ -20,8 +20,8 @@ const METHOD_LABELS: Record<string, string> = {
 
 const METHOD_TINT: Record<string, string> = {
   osce: "bg-teal-50 text-teal-700",
-  simulation: "bg-green-50 text-green-700",
-  knowledge: "bg-blue-50 text-blue-600",
+  simulation: "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]",
+  knowledge: "bg-[var(--cmp-surface-information)] text-[var(--cmp-text-information)]",
   direct_observation: "bg-purple-50 text-purple-700",
 };
 

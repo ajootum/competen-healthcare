@@ -17,11 +17,11 @@ export default async function AssessmentLanding() {
 
   const summary = [
     { icon: "⭐", tint: "bg-purple-50 text-purple-600", label: "Quality Index", value: pct(d.performance.cards.qualityIndex), sub: "assessment quality" },
-    { icon: "✅", tint: "bg-green-50 text-green-600", label: "Pass Rate", value: pct(d.performance.cards.passRate), sub: `${d.performance.cards.total} assessments` },
+    { icon: "✅", tint: "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]", label: "Pass Rate", value: pct(d.performance.cards.passRate), sub: `${d.performance.cards.total} assessments` },
     { icon: "🎯", tint: "bg-teal-50 text-teal-600", label: "Reliability", value: "—", sub: "insufficient data" },
     { icon: "🧭", tint: "bg-indigo-50 text-indigo-600", label: "Blueprint Alignment", value: pct(d.blueprint.cards.alignment), sub: `${d.blueprint.cards.missing} gaps` },
-    { icon: "❓", tint: "bg-blue-50 text-blue-600", label: "Question Quality", value: pct(d.questions.cards.total ? Math.round((d.questions.cards.highQuality / d.questions.cards.total) * 100) : null), sub: `${d.questions.cards.total} questions` },
-    { icon: "⚖️", tint: "bg-rose-50 text-rose-600", label: "Difficulty Balance", value: d.difficulty.cards.avgIndex !== null ? d.difficulty.cards.avgIndex.toFixed(2) : "—", sub: "avg facility index" },
+    { icon: "❓", tint: "bg-[var(--cmp-surface-information)] text-[var(--cmp-text-information)]", label: "Question Quality", value: pct(d.questions.cards.total ? Math.round((d.questions.cards.highQuality / d.questions.cards.total) * 100) : null), sub: `${d.questions.cards.total} questions` },
+    { icon: "⚖️", tint: "bg-[var(--cmp-surface-error)] text-[var(--cmp-text-error)]", label: "Difficulty Balance", value: d.difficulty.cards.avgIndex !== null ? d.difficulty.cards.avgIndex.toFixed(2) : "—", sub: "avg facility index" },
   ];
   const trMax = 100;
   const metric: Record<string, string> = {
@@ -52,7 +52,7 @@ export default async function AssessmentLanding() {
         {/* Performance trend */}
         <div className="bg-white border border-gray-100 rounded-2xl p-5 lg:col-span-2">
           <h2 className="text-sm font-bold text-gray-900 mb-1">Assessment Performance Trend <span className="font-normal text-gray-400 text-xs">(6 mo)</span></h2>
-          <div className="flex items-center gap-3 mb-2 text-[9px]"><span className="flex items-center gap-1 text-gray-500"><span className="w-2 h-2 rounded-full bg-purple-500" />Avg Score</span><span className="flex items-center gap-1 text-gray-500"><span className="w-2 h-2 rounded-full bg-green-500" />Pass Rate</span></div>
+          <div className="flex items-center gap-3 mb-2 text-[9px]"><span className="flex items-center gap-1 text-gray-500"><span className="w-2 h-2 rounded-full bg-purple-500" />Avg Score</span><span className="flex items-center gap-1 text-gray-500"><span className="w-2 h-2 rounded-full bg-[var(--cmp-color-success)]" />Pass Rate</span></div>
           {d.performance.trend.every(t => t.avg === null && t.pass === null) ? <p className="text-xs text-gray-400 py-8 text-center">No assessment history yet.</p> : (
             <svg viewBox="0 0 320 100" className="w-full">
               {[0, 50, 100].map(y => <line key={y} x1="22" x2="314" y1={82 - y * 0.7} y2={82 - y * 0.7} stroke="#f3f4f6" strokeWidth="1" />)}

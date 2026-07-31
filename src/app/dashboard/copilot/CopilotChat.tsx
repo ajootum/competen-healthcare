@@ -247,7 +247,7 @@ export default function CopilotChat({ pinned, autoPrompt }: { pinned: PinnedReso
           ) : <p className="text-[10px] text-gray-400">Your questions this session appear here — click to ask again.</p>}
         </div>
 
-        <div className="bg-orange-50 border border-orange-100 rounded-xl p-4">
+        <div className="bg-[var(--cmp-surface-warning)] border border-[var(--cmp-color-warning)] rounded-xl p-4">
           <h2 className="text-xs font-bold text-orange-800 mb-1.5">⚠️ Need escalation?</h2>
           <p className="text-[11px] text-orange-900/80 leading-relaxed">
             If this is an emergency or a patient is deteriorating, stop and escalate immediately —

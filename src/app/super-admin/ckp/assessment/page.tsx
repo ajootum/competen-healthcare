@@ -53,13 +53,13 @@ export default async function AssessmentValidationCentre() {
   const k = a.kpis;
 
   const kpiCards = [
-    { label: "Assessments", value: fmt(k.assessments), icon: "🎯", iconBg: "bg-orange-50" },
-    { label: "Methods", value: fmt(k.methods), icon: "🧪", iconBg: "bg-blue-50", sub: `${k.methodsActive} active` },
+    { label: "Assessments", value: fmt(k.assessments), icon: "🎯", iconBg: "bg-[var(--cmp-surface-warning)]" },
+    { label: "Methods", value: fmt(k.methods), icon: "🧪", iconBg: "bg-[var(--cmp-surface-information)]", sub: `${k.methodsActive} active` },
     { label: "Rubrics & Checklists", value: fmt(k.rubrics), icon: "✅", iconBg: "bg-teal-50" },
     { label: "Blueprints", value: fmt(k.blueprints), icon: "🗺️", iconBg: "bg-violet-50" },
-    { label: "Scoring Scales", value: fmt(k.scoringScales), icon: "📊", iconBg: "bg-sky-50" },
-    { label: "Question Banks", value: fmt(k.questionBanks), icon: "❓", iconBg: "bg-amber-50" },
-    { label: "OSCE Exams", value: fmt(k.osce), icon: "🩺", iconBg: "bg-rose-50" },
+    { label: "Scoring Scales", value: fmt(k.scoringScales), icon: "📊", iconBg: "bg-[var(--cmp-surface-information)]" },
+    { label: "Question Banks", value: fmt(k.questionBanks), icon: "❓", iconBg: "bg-[var(--cmp-surface-warning)]" },
+    { label: "OSCE Exams", value: fmt(k.osce), icon: "🩺", iconBg: "bg-[var(--cmp-surface-error)]" },
     { label: "Reassessment Rules", value: fmt(k.reassessment), icon: "🔄", iconBg: "bg-gray-50", sub: `${k.reassessmentActive} active` },
   ];
 
@@ -74,7 +74,7 @@ export default async function AssessmentValidationCentre() {
     { label: "Certification Rules", icon: "🎓", href: "/super-admin/scoring" },
   ];
 
-  const VAL_TONE: Record<string, string> = { validated: "text-green-600", passed: "text-green-600", pending: "text-amber-600", in_validation: "text-amber-600", requires_review: "text-rose-600", failed: "text-rose-600" };
+  const VAL_TONE: Record<string, string> = { validated: "text-[var(--cmp-text-success)]", passed: "text-[var(--cmp-text-success)]", pending: "text-[var(--cmp-text-warning)]", in_validation: "text-[var(--cmp-text-warning)]", requires_review: "text-[var(--cmp-text-error)]", failed: "text-[var(--cmp-text-error)]" };
 
   return (
     <div data-wide className="space-y-4">

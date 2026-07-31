@@ -78,7 +78,7 @@ export default async function LearnerPerformancePage() {
             <div key={p.id} className="flex items-center gap-2 text-[11px] py-1">
               <span className="text-gray-800 font-medium flex-1 truncate">{p.name}</span>
               <span className="text-gray-400">{p.dept}</span>
-              <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded uppercase ${p.risk === "high" ? "bg-red-100 text-red-700" : "bg-amber-100 text-amber-700"}`}>{p.risk}</span>
+              <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded uppercase ${p.risk === "high" ? "bg-[var(--cmp-surface-critical)] text-[var(--cmp-text-critical)]" : "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]"}`}>{p.risk}</span>
             </div>
           )) : <p className="text-xs text-gray-400">No learners carry risk flags. ✅</p>}
           <Link href="/assessor/remediation" className="mt-2 inline-block text-[11px] font-semibold text-indigo-600 hover:underline">Open Risk &amp; Remediation →</Link>

@@ -10,7 +10,7 @@ import { cardClass } from "@/components/ui/primitives";
 // deployment workflow (organisation templates provision a new organisation).
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
-const STATUS_BADGE: Record<string, string> = { draft: "bg-gray-100 text-gray-600", review: "bg-amber-50 text-amber-700", approved: "bg-sky-50 text-sky-700", published: "bg-green-50 text-green-700", assigned: "bg-violet-50 text-violet-700", retired: "bg-gray-100 text-gray-400" };
+const STATUS_BADGE: Record<string, string> = { draft: "bg-gray-100 text-gray-600", review: "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]", approved: "bg-[var(--cmp-surface-information)] text-[var(--cmp-text-information)]", published: "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]", assigned: "bg-violet-50 text-violet-700", retired: "bg-gray-100 text-gray-400" };
 const TYPE_ICON: Record<string, string> = { organisation: "🏛️", facility: "🏥", department: "🗂️", unit: "🔹", role: "🪪", workspace: "🖥️", structure: "🏗️" };
 const card = cardClass;
 const input = "w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500/40";
@@ -64,7 +64,7 @@ export default function TemplateProfileClient({ data }: { data: any }) {
           {canDeploy && <button onClick={() => setDeploy(true)} className="text-xs font-semibold rounded-lg bg-teal-600 text-white hover:bg-teal-700 px-3 py-1.5">Deploy →</button>}
         </div>
       </div>
-      {msg && <div className={`text-sm rounded-lg px-3 py-1.5 ${msg.k === "ok" ? "bg-green-50 text-green-800" : "bg-amber-50 text-amber-800"}`}>{msg.t}</div>}
+      {msg && <div className={`text-sm rounded-lg px-3 py-1.5 ${msg.k === "ok" ? "bg-[var(--cmp-surface-success)] text-green-800" : "bg-[var(--cmp-surface-warning)] text-amber-800"}`}>{msg.t}</div>}
 
       <div className="grid lg:grid-cols-2 gap-4">
         <div className={card}><h3 className="font-semibold text-gray-900 mb-2">Template</h3>

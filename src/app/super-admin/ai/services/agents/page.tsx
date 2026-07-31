@@ -44,7 +44,7 @@ export default async function AgentsPage() {
         <Card title="Autonomy Distribution">
           <div className="space-y-2.5">
             {d.byAutonomy.map((a: any) => (
-              <div key={a.label}><div className="flex items-center justify-between text-[12px] mb-0.5"><span className="text-gray-700 capitalize">{a.label}</span><span className="font-semibold text-gray-900">{a.n}</span></div><div className="h-2 rounded-full bg-gray-100 overflow-hidden"><div className={`h-full rounded-full ${a.label === "act" ? "bg-violet-500" : a.label === "suggest" ? "bg-amber-500" : "bg-blue-500"}`} style={{ width: `${(a.n / k.total) * 100}%` }} /></div></div>
+              <div key={a.label}><div className="flex items-center justify-between text-[12px] mb-0.5"><span className="text-gray-700 capitalize">{a.label}</span><span className="font-semibold text-gray-900">{a.n}</span></div><div className="h-2 rounded-full bg-gray-100 overflow-hidden"><div className={`h-full rounded-full ${a.label === "act" ? "bg-violet-500" : a.label === "suggest" ? "bg-[var(--cmp-color-warning)]" : "bg-[var(--cmp-color-information)]"}`} style={{ width: `${(a.n / k.total) * 100}%` }} /></div></div>
             ))}
           </div>
           <p className="text-[10px] text-gray-400 mt-3">assist = answers only · suggest = proposes actions for approval · act = executes governed skills (with confirmation for high-impact). No agent bypasses permissions.</p>

@@ -218,7 +218,7 @@ export default function WorkspaceSidebar({ profileName, roles, activeRole, works
   return (
     <>
       <Link href={home} className="flex items-center gap-2 mb-6 px-2" data-sb-item>
-        <div className="w-7 h-7 rounded bg-rose-500 flex items-center justify-center text-white font-bold text-sm">C</div>
+        <div className="w-7 h-7 rounded bg-[var(--cmp-color-error)] flex items-center justify-center text-white font-bold text-sm">C</div>
         <div className="flex flex-col leading-none" data-sb-label>
           <span className="text-white font-semibold text-sm">Competen</span>
           <span className="text-rose-300/70 text-[10px] font-medium">{subtitle}</span>
@@ -249,7 +249,7 @@ export default function WorkspaceSidebar({ profileName, roles, activeRole, works
 
       <div className="pt-4 border-t border-slate-800/60">
         <div className="flex items-center gap-2 px-3 py-2">
-          <div className="w-7 h-7 rounded-full bg-rose-500 flex items-center justify-center text-white text-xs font-bold">{profileName?.[0] ?? "S"}</div>
+          <div className="w-7 h-7 rounded-full bg-[var(--cmp-color-error)] flex items-center justify-center text-white text-xs font-bold">{profileName?.[0] ?? "S"}</div>
           <div className="flex-1 min-w-0" data-sb-label>
             <p className="text-white text-xs font-medium truncate">{profileName}</p>
             <p className="text-rose-300/60 text-[10px]">{inWorkspace ? "Platform Owner" : "Super Admin"}</p>

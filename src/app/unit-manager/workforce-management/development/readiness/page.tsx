@@ -42,7 +42,7 @@ export default async function WorkforceReadiness() {
     </>
   );
 
-  if (!d.ready) return <div className="space-y-4">{header}<div className="bg-amber-50 border border-amber-200 rounded-xl p-6"><p className="font-semibold text-amber-900">⚙️ No operational data</p></div></div>;
+  if (!d.ready) return <div className="space-y-4">{header}<div className="bg-[var(--cmp-surface-warning)] border border-[var(--cmp-color-warning)] rounded-xl p-6"><p className="font-semibold text-amber-900">⚙️ No operational data</p></div></div>;
 
   const k = d.kpis;
   return (
@@ -50,10 +50,10 @@ export default async function WorkforceReadiness() {
       {header}
 
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        <Kpi label="Fully deployable" value={k.fullyDeployable} tone="text-emerald-600" />
-        <Kpi label="Renewal due" value={k.renewalDue} tone={k.renewalDue ? "text-amber-600" : undefined} />
-        <Kpi label="Requiring supervision" value={k.requiringSupervision} tone={k.requiringSupervision ? "text-rose-600" : "text-emerald-600"} />
-        <Kpi label="No record" value={k.noRecord} tone={k.noRecord ? "text-amber-600" : undefined} />
+        <Kpi label="Fully deployable" value={k.fullyDeployable} tone="text-[var(--cmp-text-success)]" />
+        <Kpi label="Renewal due" value={k.renewalDue} tone={k.renewalDue ? "text-[var(--cmp-text-warning)]" : undefined} />
+        <Kpi label="Requiring supervision" value={k.requiringSupervision} tone={k.requiringSupervision ? "text-[var(--cmp-text-error)]" : "text-[var(--cmp-text-success)]"} />
+        <Kpi label="No record" value={k.noRecord} tone={k.noRecord ? "text-[var(--cmp-text-warning)]" : undefined} />
       </div>
 
       <div className={`${card} p-5`}>
@@ -61,7 +61,7 @@ export default async function WorkforceReadiness() {
         {d.register.length === 0 ? <p className="text-sm text-gray-400">No staff with competency records yet.</p> : (
           <div className="overflow-x-auto"><table className="w-full text-xs">
             <thead><tr className="text-gray-400 text-left border-b border-gray-100"><th className="py-2 pr-3 font-medium">Staff</th><th className="py-2 pr-3 font-medium">Role</th><th className="py-2 pr-3 font-medium">Competency</th><th className="py-2 pr-3 font-medium">Readiness</th><th className="py-2 font-medium">Deployable</th></tr></thead>
-            <tbody>{d.register.map((s: any) => (<tr key={s.id} className="border-b border-gray-50"><td className="py-2 pr-3 text-gray-800 font-medium">{s.name}</td><td className="py-2 pr-3 text-gray-500">{ROLE_LABEL[s.role] ?? s.role}</td><td className="py-2 pr-3 text-gray-500">{s.status}</td><td className="py-2 pr-3"><span className={`text-[9px] px-1.5 py-0.5 rounded ${s.readiness.tone}`}>{s.readiness.label}</span></td><td className="py-2">{s.readiness.deployable ? <span className="text-emerald-600 font-semibold">● Yes</span> : <span className="text-amber-600">◐ Supervised / validate</span>}</td></tr>))}</tbody>
+            <tbody>{d.register.map((s: any) => (<tr key={s.id} className="border-b border-gray-50"><td className="py-2 pr-3 text-gray-800 font-medium">{s.name}</td><td className="py-2 pr-3 text-gray-500">{ROLE_LABEL[s.role] ?? s.role}</td><td className="py-2 pr-3 text-gray-500">{s.status}</td><td className="py-2 pr-3"><span className={`text-[9px] px-1.5 py-0.5 rounded ${s.readiness.tone}`}>{s.readiness.label}</span></td><td className="py-2">{s.readiness.deployable ? <span className="text-[var(--cmp-text-success)] font-semibold">● Yes</span> : <span className="text-[var(--cmp-text-warning)]">◐ Supervised / validate</span>}</td></tr>))}</tbody>
           </table></div>
         )}
         <p className="text-[10px] text-gray-400 mt-2">Readiness derived from competency currency (§10.2). A staff member is not fully deployable unless all mandatory role/unit requirements are current (BR-WDR-001); the full multi-dimensional profile (learning, orientation, supervision, development plan) needs those stores. Competency authoring is in <Link href="/unit-manager/competency-validations" className="text-emerald-700 hover:underline">Competency Validations</Link>.</p>

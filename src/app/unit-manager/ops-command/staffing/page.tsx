@@ -19,7 +19,7 @@ export default async function StaffingPage({ searchParams }: { searchParams: Pro
   ]);
 
   const strip = <TopStrip code="UMW-OPC-004 · Operational Command" title="Staffing & Assignment Oversight" departments={departments} />;
-  if (!d.provisioned) return <div className="space-y-4">{strip}<div className="bg-amber-50 border border-amber-200 rounded-xl p-6"><p className="font-semibold text-amber-900">⚙️ Operational stores not provisioned</p><p className="text-sm text-amber-800 mt-1">Apply migration 038 then seed shifts + staff.</p></div></div>;
+  if (!d.provisioned) return <div className="space-y-4">{strip}<div className="bg-[var(--cmp-surface-warning)] border border-[var(--cmp-color-warning)] rounded-xl p-6"><p className="font-semibold text-amber-900">⚙️ Operational stores not provisioned</p><p className="text-sm text-amber-800 mt-1">Apply migration 038 then seed shifts + staff.</p></div></div>;
 
   const k = d.kpis;
   return (
@@ -52,7 +52,7 @@ export default async function StaffingPage({ searchParams }: { searchParams: Pro
           <Card title="Coverage by Skill Mix" className="xl:col-span-2">
             {d.skillMix.length ? <div className="space-y-2 text-[11px]">
               <div className="flex items-center text-[9px] text-slate-500 uppercase tracking-wide"><span className="flex-1">Role</span><span className="w-14 text-right">On Duty</span><span className="w-14 text-right">Rostered</span><span className="w-16 text-right">Share</span></div>
-              {d.skillMix.map((s: any) => <div key={s.role} className="flex items-center"><span className="text-slate-300 flex-1 truncate">{s.role}</span><span className="w-14 text-right text-white tabular-nums">{s.on}</span><span className="w-14 text-right text-slate-400 tabular-nums">{s.total}</span><div className="w-16 flex items-center justify-end gap-1"><div className="w-8 h-1.5 rounded-full bg-slate-700 overflow-hidden"><div className="h-full rounded-full bg-blue-500" style={{ width: `${s.share}%` }} /></div><span className="text-slate-300 tabular-nums text-[10px]">{s.share}%</span></div></div>)}
+              {d.skillMix.map((s: any) => <div key={s.role} className="flex items-center"><span className="text-slate-300 flex-1 truncate">{s.role}</span><span className="w-14 text-right text-white tabular-nums">{s.on}</span><span className="w-14 text-right text-slate-400 tabular-nums">{s.total}</span><div className="w-16 flex items-center justify-end gap-1"><div className="w-8 h-1.5 rounded-full bg-slate-700 overflow-hidden"><div className="h-full rounded-full bg-[var(--cmp-color-information)]" style={{ width: `${s.share}%` }} /></div><span className="text-slate-300 tabular-nums text-[10px]">{s.share}%</span></div></div>)}
             </div> : <p className="text-xs text-slate-400 py-4 text-center">No staff on shift.</p>}
           </Card>
 
@@ -80,8 +80,8 @@ export default async function StaffingPage({ searchParams }: { searchParams: Pro
 
           <Card title="Redeployment & Actions">
             <div className="space-y-2 text-[11px]">
-              {d.unassigned > 0 && <div className="rounded-lg bg-blue-500/10 border border-blue-500/30 p-2.5"><p className="text-blue-300 font-semibold text-[12px]">Assign {d.unassigned} patient{d.unassigned === 1 ? "" : "s"}</p><p className="text-slate-400 text-[10px] mt-0.5">Admitted patients without a named nurse — allocate on Team Assignments.</p></div>}
-              {(d.kpis.vacancies ?? 0) > 0 && <div className="rounded-lg bg-amber-500/10 border border-amber-500/30 p-2.5"><p className="text-amber-300 font-semibold text-[12px]">Fill {d.kpis.vacancies} vacanc{d.kpis.vacancies === 1 ? "y" : "ies"}</p><p className="text-slate-400 text-[10px] mt-0.5">Draw from float pool or agency to reach establishment.</p></div>}
+              {d.unassigned > 0 && <div className="rounded-lg bg-[var(--cmp-color-information)]/10 border border-blue-500/30 p-2.5"><p className="text-blue-300 font-semibold text-[12px]">Assign {d.unassigned} patient{d.unassigned === 1 ? "" : "s"}</p><p className="text-slate-400 text-[10px] mt-0.5">Admitted patients without a named nurse — allocate on Team Assignments.</p></div>}
+              {(d.kpis.vacancies ?? 0) > 0 && <div className="rounded-lg bg-[var(--cmp-color-warning)]/10 border border-amber-500/30 p-2.5"><p className="text-amber-300 font-semibold text-[12px]">Fill {d.kpis.vacancies} vacanc{d.kpis.vacancies === 1 ? "y" : "ies"}</p><p className="text-slate-400 text-[10px] mt-0.5">Draw from float pool or agency to reach establishment.</p></div>}
               <Link href="/unit-manager/workforce-management/team-assignments" className="block text-center rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 py-2 text-[11px] text-slate-200 font-medium">Open Team Assignments →</Link>
               <Link href="/unit-manager/workforce-management/staffing-engine" className="block text-center rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 py-2 text-[11px] text-slate-200 font-medium">Staffing Engine →</Link>
             </div>

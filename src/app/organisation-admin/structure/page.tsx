@@ -75,7 +75,7 @@ export default async function OrgStructurePage() {
           })}
         </div>
       </div>
-      {summary.usersUnattached > 0 && <p className="text-[11px] text-amber-600">{summary.usersUnattached} user{summary.usersUnattached !== 1 ? "s" : ""} not mapped to a listed facility — included in the Users total but not shown under any facility above.</p>}
+      {summary.usersUnattached > 0 && <p className="text-[11px] text-[var(--cmp-text-warning)]">{summary.usersUnattached} user{summary.usersUnattached !== 1 ? "s" : ""} not mapped to a listed facility — included in the Users total but not shown under any facility above.</p>}
     </div>
   );
 }

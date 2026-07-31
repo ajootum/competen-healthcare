@@ -361,7 +361,7 @@ export default async function UnitManagerLayout({ children }: { children: React.
                           <span className="w-5 text-center text-sm">{item.icon}</span>
                           <span data-sb-label className="flex-1 truncate">{item.label}</span>
                           {item.badge ? (
-                            <span className="text-[9px] font-bold bg-rose-500 text-white rounded-full min-w-[16px] h-4 px-1 flex items-center justify-center">{item.badge > 99 ? "99+" : item.badge}</span>
+                            <span className="text-[9px] font-bold bg-[var(--cmp-color-error)] text-white rounded-full min-w-[16px] h-4 px-1 flex items-center justify-center">{item.badge > 99 ? "99+" : item.badge}</span>
                           ) : (
                             <span data-sb-label className="text-[8px] font-bold uppercase tracking-wider bg-teal-950 text-teal-400/40 rounded px-1 py-0.5">soon</span>
                           )}

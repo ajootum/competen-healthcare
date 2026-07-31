@@ -73,7 +73,7 @@ export default async function ResourceCapacityPage() {
                     <Progress value={u.occupancy} label={`${u.unit} occupancy`} showValue={false}
                       tone={u.occupancy >= 90 ? "critical" : u.occupancy >= 75 ? "warning" : "primary"} />
                   </div>
-                  <span className={`text-xs tabular-nums w-28 text-right ${u.occupancy >= 90 ? "text-red-600 font-semibold" : "text-gray-500"}`}>{u.occupancy}% · {u.occupied}/{u.total}</span>
+                  <span className={`text-xs tabular-nums w-28 text-right ${u.occupancy >= 90 ? "text-[var(--cmp-text-critical)] font-semibold" : "text-gray-500"}`}>{u.occupancy}% · {u.occupied}/{u.total}</span>
                 </div>
                 <p className="text-[10px] text-gray-400 ml-[10.5rem]">
                   {u.available} available · {u.cleaning} cleaning · {u.reserved} reserved{u.outOfService ? ` · ${u.outOfService} out of service` : ""}{u.icu ? ` · ${u.icu} ICU` : ""}{u.isolation ? ` · ${u.isolation} isolation` : ""}
@@ -138,7 +138,7 @@ export default async function ResourceCapacityPage() {
             <div className="grid grid-cols-3 gap-3 text-center">
               <div><p className="text-xl font-bold tabular-nums text-gray-900">{d.isolation.beds}</p><p className="text-[10px] text-gray-500">dedicated beds</p></div>
               <div><p className="text-xl font-bold tabular-nums text-gray-900">{d.isolation.available}</p><p className="text-[10px] text-gray-500">available</p></div>
-              <div><p className={`text-xl font-bold tabular-nums ${d.isolation.shortfall > 0 ? "text-red-600" : "text-gray-900"}`}>{d.isolation.patientsRequiring}</p><p className="text-[10px] text-gray-500">patients requiring</p></div>
+              <div><p className={`text-xl font-bold tabular-nums ${d.isolation.shortfall > 0 ? "text-[var(--cmp-text-critical)]" : "text-gray-900"}`}>{d.isolation.patientsRequiring}</p><p className="text-[10px] text-gray-500">patients requiring</p></div>
             </div>
             {d.isolation.byType.length > 0 && (
               <div className="flex flex-wrap gap-1.5 mt-3">
@@ -148,7 +148,7 @@ export default async function ResourceCapacityPage() {
               </div>
             )}
             {d.isolation.shortfall > 0 && (
-              <p className="text-xs text-red-700 mt-2">{d.isolation.shortfall} patient(s) beyond dedicated isolation capacity — siding and cohorting decisions required.</p>
+              <p className="text-xs text-[var(--cmp-text-critical)] mt-2">{d.isolation.shortfall} patient(s) beyond dedicated isolation capacity — siding and cohorting decisions required.</p>
             )}
           </div>
 
@@ -160,7 +160,7 @@ export default async function ResourceCapacityPage() {
               <div className="grid grid-cols-3 gap-3 text-center">
                 <div><p className="text-xl font-bold tabular-nums text-gray-900">{d.icu.total}</p><p className="text-[10px] text-gray-500">ICU beds</p></div>
                 <div><p className="text-xl font-bold tabular-nums text-gray-900">{d.icu.occupied}</p><p className="text-[10px] text-gray-500">occupied</p></div>
-                <div><p className={`text-xl font-bold tabular-nums ${d.icu.available === 0 ? "text-red-600" : "text-green-700"}`}>{d.icu.available}</p><p className="text-[10px] text-gray-500">available</p></div>
+                <div><p className={`text-xl font-bold tabular-nums ${d.icu.available === 0 ? "text-[var(--cmp-text-critical)]" : "text-[var(--cmp-text-success)]"}`}>{d.icu.available}</p><p className="text-[10px] text-gray-500">available</p></div>
               </div>
             )}
           </div>
@@ -185,7 +185,7 @@ export default async function ResourceCapacityPage() {
                     </div>
                     <span className="text-xs tabular-nums text-gray-500 w-24 text-right">{r.available}/{r.total} free</span>
                   </div>
-                  {r.strained > 0 && <p className="text-[10px] text-orange-600 ml-[9.5rem]">{r.strained} flagged high demand</p>}
+                  {r.strained > 0 && <p className="text-[10px] text-[var(--cmp-text-warning)] ml-[9.5rem]">{r.strained} flagged high demand</p>}
                 </div>
               ))}
             </div>
@@ -208,7 +208,7 @@ export default async function ResourceCapacityPage() {
                 {d.turnaroundAging.map((t: any) => (
                   <p key={t.id} className="text-xs text-gray-600 flex items-center gap-2">
                     <span className="text-gray-400">{titleCase(t.stage)}</span>
-                    <span className={`ml-auto tabular-nums ${t.ageMin > 120 ? "text-red-600 font-semibold" : t.ageMin > 60 ? "text-amber-600" : "text-gray-400"}`}>{t.ageMin} min in stage</span>
+                    <span className={`ml-auto tabular-nums ${t.ageMin > 120 ? "text-[var(--cmp-text-critical)] font-semibold" : t.ageMin > 60 ? "text-[var(--cmp-text-warning)]" : "text-gray-400"}`}>{t.ageMin} min in stage</span>
                   </p>
                 ))}
               </div>

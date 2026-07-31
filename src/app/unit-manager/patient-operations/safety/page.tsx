@@ -41,18 +41,18 @@ export default async function ClinicalSafety() {
       <PosTabs />
     </>
   );
-  if (!po.ready) return <div className="space-y-4">{header}<div className="bg-amber-50 border border-amber-200 rounded-xl p-6"><p className="font-semibold text-amber-900">⚙️ Coming online</p><p className="text-sm text-amber-800 mt-1">The Clinical Operations Engine isn&apos;t provisioned for this unit yet.</p></div></div>;
+  if (!po.ready) return <div className="space-y-4">{header}<div className="bg-[var(--cmp-surface-warning)] border border-[var(--cmp-color-warning)] rounded-xl p-6"><p className="font-semibold text-amber-900">⚙️ Coming online</p><p className="text-sm text-amber-800 mt-1">The Clinical Operations Engine isn&apos;t provisioned for this unit yet.</p></div></div>;
 
   const { safetyBanner: sb, alertQueue, compliance, openEsc } = po;
   const monitors = [
-    { label: "High PEWS", value: sb.pewsAlerts, tone: sb.pewsAlerts ? "text-rose-600" : "text-emerald-600", tracked: true },
-    { label: "Deteriorating", value: sb.deteriorating, tone: sb.deteriorating ? "text-orange-600" : "text-emerald-600", tracked: true },
-    { label: "Overdue reviews", value: sb.overdueObs, tone: sb.overdueObs ? "text-amber-600" : "text-emerald-600", tracked: true },
-    { label: "Medication", value: sb.medication, tone: sb.medication ? "text-amber-600" : "text-gray-400", tracked: true },
-    { label: "Falls", value: sb.falls, tone: sb.falls ? "text-amber-600" : "text-gray-400", tracked: true },
-    { label: "Pressure injury", value: sb.pressure, tone: sb.pressure ? "text-amber-600" : "text-gray-400", tracked: true },
+    { label: "High PEWS", value: sb.pewsAlerts, tone: sb.pewsAlerts ? "text-[var(--cmp-text-error)]" : "text-[var(--cmp-text-success)]", tracked: true },
+    { label: "Deteriorating", value: sb.deteriorating, tone: sb.deteriorating ? "text-[var(--cmp-text-warning)]" : "text-[var(--cmp-text-success)]", tracked: true },
+    { label: "Overdue reviews", value: sb.overdueObs, tone: sb.overdueObs ? "text-[var(--cmp-text-warning)]" : "text-[var(--cmp-text-success)]", tracked: true },
+    { label: "Medication", value: sb.medication, tone: sb.medication ? "text-[var(--cmp-text-warning)]" : "text-gray-400", tracked: true },
+    { label: "Falls", value: sb.falls, tone: sb.falls ? "text-[var(--cmp-text-warning)]" : "text-gray-400", tracked: true },
+    { label: "Pressure injury", value: sb.pressure, tone: sb.pressure ? "text-[var(--cmp-text-warning)]" : "text-gray-400", tracked: true },
     { label: "Isolation", value: sb.isolation, tone: sb.isolation ? "text-fuchsia-600" : "text-gray-400", tracked: true },
-    { label: "Rapid response", value: sb.rapidResponse, tone: sb.rapidResponse ? "text-rose-600" : "text-gray-400", tracked: true },
+    { label: "Rapid response", value: sb.rapidResponse, tone: sb.rapidResponse ? "text-[var(--cmp-text-error)]" : "text-gray-400", tracked: true },
     { label: "Sepsis screen", value: "—", tone: "text-gray-300", tracked: false },
   ];
 
@@ -83,7 +83,7 @@ export default async function ClinicalSafety() {
         <div className="flex items-center justify-between mb-3"><h3 className="text-sm font-bold text-gray-900">Prioritised alert queue</h3><Link href="/supervisor/clinical-safety" className="text-[11px] font-medium text-emerald-700 hover:underline">Act on alerts →</Link></div>
         {alertQueue.length === 0 ? <p className="text-sm text-gray-400">No active clinical alerts. 🎉</p> : (
           <div className="overflow-x-auto"><table className="w-full text-xs"><thead><tr className="text-gray-400 text-left border-b border-gray-100"><th className="py-1.5 font-medium">Patient</th><th className="py-1.5 font-medium">Alert</th><th className="py-1.5 font-medium">Severity</th><th className="py-1.5 font-medium">Since</th><th className="py-1.5 font-medium text-right">Action</th></tr></thead>
-            <tbody>{alertQueue.map((a: any, i: number) => (<tr key={i} className="border-b border-gray-50"><td className="py-1.5 text-gray-700">{a.patientId ? <Link href={`/unit-manager/patient-operations/patient-card?patient=${a.patientId}`} className="text-emerald-700 hover:underline">{a.patient}</Link> : a.patient}</td><td className="py-1.5 text-gray-600">{a.type}</td><td className="py-1.5"><span className={`text-[10px] px-1.5 py-0.5 rounded ${a.severity === "critical" || a.severity === "high" || a.severity === "emergency" ? "bg-rose-50 text-rose-700" : a.severity === "moderate" || a.severity === "medium" || a.severity === "urgent" ? "bg-amber-50 text-amber-700" : "bg-gray-100 text-gray-500"}`}>{a.severity}</span></td><td className="py-1.5 text-gray-400 tabular-nums">{fmtTime(a.at)}</td><td className="py-1.5 text-right text-emerald-700">{a.action}</td></tr>))}</tbody>
+            <tbody>{alertQueue.map((a: any, i: number) => (<tr key={i} className="border-b border-gray-50"><td className="py-1.5 text-gray-700">{a.patientId ? <Link href={`/unit-manager/patient-operations/patient-card?patient=${a.patientId}`} className="text-emerald-700 hover:underline">{a.patient}</Link> : a.patient}</td><td className="py-1.5 text-gray-600">{a.type}</td><td className="py-1.5"><span className={`text-[10px] px-1.5 py-0.5 rounded ${a.severity === "critical" || a.severity === "high" || a.severity === "emergency" ? "bg-[var(--cmp-surface-error)] text-[var(--cmp-text-error)]" : a.severity === "moderate" || a.severity === "medium" || a.severity === "urgent" ? "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]" : "bg-gray-100 text-gray-500"}`}>{a.severity}</span></td><td className="py-1.5 text-gray-400 tabular-nums">{fmtTime(a.at)}</td><td className="py-1.5 text-right text-emerald-700">{a.action}</td></tr>))}</tbody>
           </table></div>
         )}
       </div>

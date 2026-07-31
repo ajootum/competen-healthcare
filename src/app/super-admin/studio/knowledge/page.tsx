@@ -51,10 +51,10 @@ export default async function KnowledgePage() {
       </div>
 
       {!installed ? (
-        <div className="bg-amber-50 border border-amber-200 rounded-xl p-5 text-sm text-amber-900">
+        <div className="bg-[var(--cmp-surface-warning)] border border-[var(--cmp-color-warning)] rounded-xl p-5 text-sm text-amber-900">
           <p className="font-semibold">Migration 025 not applied yet</p>
           <p className="mt-1 text-amber-800">
-            Run <code className="bg-amber-100 px-1.5 py-0.5 rounded font-mono text-xs">supabase/migrations/025-knowledge-objects.sql</code> in the Supabase SQL editor, then reload this page.
+            Run <code className="bg-[var(--cmp-surface-warning)] px-1.5 py-0.5 rounded font-mono text-xs">supabase/migrations/025-knowledge-objects.sql</code> in the Supabase SQL editor, then reload this page.
           </p>
         </div>
       ) : (

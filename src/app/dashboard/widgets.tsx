@@ -11,9 +11,9 @@ export type WidgetCtx = { firstName: string; greeting: string; now: number; work
 export type WidgetProps = { d: any; ctx: WidgetCtx };
 
 const card = "bg-white rounded-xl border border-gray-200";
-const prPill: Record<string, string> = { urgent: "bg-rose-100 text-rose-700", high: "bg-rose-100 text-rose-700", normal: "bg-amber-100 text-amber-700", medium: "bg-amber-100 text-amber-700", low: "bg-emerald-100 text-emerald-700" };
+const prPill: Record<string, string> = { urgent: "bg-[var(--cmp-surface-error)] text-[var(--cmp-text-error)]", high: "bg-[var(--cmp-surface-error)] text-[var(--cmp-text-error)]", normal: "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]", medium: "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]", low: "bg-[var(--cmp-surface-success)] text-emerald-700" };
 const prLabel: Record<string, string> = { urgent: "High", high: "High", normal: "Medium", medium: "Medium", low: "Low" };
-const tagTone: Record<string, string> = { "High Risk": "bg-rose-100 text-rose-700", Critical: "bg-rose-100 text-rose-700", "Discharge Plan": "bg-sky-100 text-sky-700", Stable: "bg-emerald-100 text-emerald-700" };
+const tagTone: Record<string, string> = { "High Risk": "bg-[var(--cmp-surface-error)] text-[var(--cmp-text-error)]", Critical: "bg-[var(--cmp-surface-error)] text-[var(--cmp-text-error)]", "Discharge Plan": "bg-[var(--cmp-surface-information)] text-[var(--cmp-text-information)]", Stable: "bg-[var(--cmp-surface-success)] text-emerald-700" };
 const fmtTime = (iso: string | null) => { if (!iso) return ""; try { return new Date(iso).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" }); } catch { return ""; } };
 const relTime = (iso: string | null) => { if (!iso) return ""; try { const m = Math.round((Date.now() - new Date(iso).getTime()) / 60000); return m < 1 ? "now" : m < 60 ? `${m} min ago` : m < 1440 ? `${Math.round(m / 60)} hr ago` : `${Math.round(m / 1440)}d ago`; } catch { return ""; } };
 
@@ -79,7 +79,7 @@ export async function TasksWidget({ d, ctx }: WidgetProps) {
     <div className={`${card} p-5 h-full`}>
       <div className="flex items-center justify-between mb-3"><h2 className="font-semibold text-gray-900 text-sm">📋 Tasks Requiring Action ({d.tasksCount})</h2></div>
       {d.tasks.length ? <div className="space-y-1.5">{d.tasks.slice(0, 6).map((t: any, i: number) => (
-        <div key={i} className="flex items-center gap-2 text-[11px]"><span className="text-gray-300">{t.type === "learning" ? "🎓" : t.type === "competency" ? "🎯" : "☑"}</span><span className="text-gray-700 flex-1 truncate">{t.label}</span><span className="text-gray-400 shrink-0">{t.source}</span>{t.due && <span className={`text-[10px] shrink-0 ${new Date(t.due).getTime() < ctx.now ? "text-rose-600" : "text-gray-400"}`}>{fmtTime(t.due)}</span>}</div>
+        <div key={i} className="flex items-center gap-2 text-[11px]"><span className="text-gray-300">{t.type === "learning" ? "🎓" : t.type === "competency" ? "🎯" : "☑"}</span><span className="text-gray-700 flex-1 truncate">{t.label}</span><span className="text-gray-400 shrink-0">{t.source}</span>{t.due && <span className={`text-[10px] shrink-0 ${new Date(t.due).getTime() < ctx.now ? "text-[var(--cmp-text-error)]" : "text-gray-400"}`}>{fmtTime(t.due)}</span>}</div>
       ))}</div> : <p className="text-[11px] text-gray-400 py-6 text-center">No open tasks.</p>}
       <Link href="/dashboard/tasks" className="text-[10px] text-indigo-600 font-medium mt-2 inline-block">Go to My Tasks →</Link>
     </div>
@@ -102,9 +102,9 @@ export async function CompetenciesWidget({ d }: WidgetProps) {
     <div className={`${card} p-5 h-full`}>
       <div className="flex items-center justify-between mb-3"><h2 className="font-semibold text-gray-900 text-sm">🎯 My Competencies</h2><Link href="/dashboard/passport" className="text-[10px] text-indigo-600">View Passport</Link></div>
       <div className="grid grid-cols-2 gap-2 mb-3">
-        {[["Validated", comp.validated, "text-emerald-600"], ["Pending", comp.pending, "text-amber-600"], ["Expiring", comp.expiring, "text-orange-600"], ["Remediation", comp.remediation, "text-rose-600"]].map(([l, v, t]: any) => (<div key={l} className="text-center bg-gray-50 rounded-lg py-2"><p className={`text-lg font-bold tabular-nums ${t}`}>{v}</p><p className="text-[9px] text-gray-500">{l}</p></div>))}
+        {[["Validated", comp.validated, "text-[var(--cmp-text-success)]"], ["Pending", comp.pending, "text-[var(--cmp-text-warning)]"], ["Expiring", comp.expiring, "text-[var(--cmp-text-warning)]"], ["Remediation", comp.remediation, "text-[var(--cmp-text-error)]"]].map(([l, v, t]: any) => (<div key={l} className="text-center bg-gray-50 rounded-lg py-2"><p className={`text-lg font-bold tabular-nums ${t}`}>{v}</p><p className="text-[9px] text-gray-500">{l}</p></div>))}
       </div>
-      {comp.compliance != null && <><div className="flex items-center justify-between text-[10px] text-gray-500 mb-1"><span>Overall Compliance</span><span className="font-semibold">{comp.compliance}%</span></div><div className="h-2 bg-gray-100 rounded overflow-hidden"><div className="h-full bg-emerald-500 rounded" style={{ width: `${comp.compliance}%` }} /></div></>}
+      {comp.compliance != null && <><div className="flex items-center justify-between text-[10px] text-gray-500 mb-1"><span>Overall Compliance</span><span className="font-semibold">{comp.compliance}%</span></div><div className="h-2 bg-gray-100 rounded overflow-hidden"><div className="h-full bg-[var(--cmp-color-success)] rounded" style={{ width: `${comp.compliance}%` }} /></div></>}
     </div>
   );
 }

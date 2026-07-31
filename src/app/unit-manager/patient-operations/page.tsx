@@ -22,7 +22,7 @@ function Kpi({ label, value, sub, tone, icon }: { label: string; value: any; sub
   return <div className={`${card} p-4`}><div className="flex items-start justify-between"><p className="text-xs text-gray-500">{label}</p>{icon && <span className="text-base opacity-40">{icon}</span>}</div><p className={`text-2xl font-bold tabular-nums mt-1 ${tone ?? "text-gray-900"}`}>{value}</p>{sub && <p className="text-[11px] text-gray-400 mt-0.5">{sub}</p>}</div>;
 }
 
-const BAND_TONE: Record<string, string> = { Normal: "text-emerald-600", Elevated: "text-amber-600", High: "text-rose-600" };
+const BAND_TONE: Record<string, string> = { Normal: "text-[var(--cmp-text-success)]", Elevated: "text-[var(--cmp-text-warning)]", High: "text-[var(--cmp-text-error)]" };
 const BAND_RING: Record<string, string> = { Normal: "#10b981", Elevated: "#f59e0b", High: "#ef4444" };
 
 export default async function PatientOperationsDashboard() {
@@ -50,7 +50,7 @@ export default async function PatientOperationsDashboard() {
     </>
   );
 
-  if (!p.ready) return <div className="space-y-4">{header}<div className="bg-amber-50 border border-amber-200 rounded-xl p-6"><p className="font-semibold text-amber-900">⚙️ No operational data yet</p><p className="text-sm text-amber-800 mt-1">Patient Operations activates once the Clinical Operations Engine (op_shifts / op_patients / op_beds) is provisioned and a unit is operating.</p></div></div>;
+  if (!p.ready) return <div className="space-y-4">{header}<div className="bg-[var(--cmp-surface-warning)] border border-[var(--cmp-color-warning)] rounded-xl p-6"><p className="font-semibold text-amber-900">⚙️ No operational data yet</p><p className="text-sm text-amber-800 mt-1">Patient Operations activates once the Clinical Operations Engine (op_shifts / op_patients / op_beds) is provisioned and a unit is operating.</p></div></div>;
 
   const { po, pressure, workload, today } = p;
   const s = po.summary, cap = po.capacity, comp = po.compliance;
@@ -62,12 +62,12 @@ export default async function PatientOperationsDashboard() {
     { label: "Admissions today", value: today.admissions ?? "—", sub: today.admissions == null ? "movement log" : "logged", icon: "➕" },
     { label: "Discharges today", value: today.discharges ?? "—", sub: today.discharges == null ? "movement log" : "logged", icon: "🏠" },
     { label: "Transfers today", value: today.transfers ?? "—", sub: today.transfers == null ? "movement log" : "logged", icon: "🔄" },
-    { label: "Occupancy", value: `${cap.occPct}%`, sub: `${cap.occupied}/${cap.total} beds`, tone: cap.occPct >= 90 ? "text-rose-600" : cap.occPct >= 80 ? "text-amber-600" : "text-emerald-600", icon: "🛏️" },
-    { label: "Available beds", value: cap.available, sub: `${cap.cleaning} cleaning · ${cap.reserved} reserved`, tone: cap.available ? "text-emerald-600" : "text-rose-600", icon: "🔓" },
-    { label: "High-risk patients", value: s.highRisk, sub: `${s.critical} critical`, tone: s.highRisk ? "text-rose-600" : "text-gray-400", icon: "⚠️" },
-    { label: "Observation compliance", value: comp.observation != null ? `${comp.observation}%` : "—", sub: comp.observation == null ? "no obs data" : comp.observation >= 90 ? "On target" : "Below target", tone: comp.observation != null && comp.observation >= 90 ? "text-emerald-600" : "text-amber-600", icon: "✅" },
-    { label: "Pending reviews", value: pendingReviews, sub: `${s.review} due/overdue`, tone: pendingReviews ? "text-amber-600" : "text-gray-400", icon: "🔎" },
-    { label: "Clinical alerts", value: clinicalAlerts, sub: `${po.openEsc.length} escalation(s)`, tone: clinicalAlerts ? "text-rose-600" : "text-gray-400", icon: "🚨" },
+    { label: "Occupancy", value: `${cap.occPct}%`, sub: `${cap.occupied}/${cap.total} beds`, tone: cap.occPct >= 90 ? "text-[var(--cmp-text-error)]" : cap.occPct >= 80 ? "text-[var(--cmp-text-warning)]" : "text-[var(--cmp-text-success)]", icon: "🛏️" },
+    { label: "Available beds", value: cap.available, sub: `${cap.cleaning} cleaning · ${cap.reserved} reserved`, tone: cap.available ? "text-[var(--cmp-text-success)]" : "text-[var(--cmp-text-error)]", icon: "🔓" },
+    { label: "High-risk patients", value: s.highRisk, sub: `${s.critical} critical`, tone: s.highRisk ? "text-[var(--cmp-text-error)]" : "text-gray-400", icon: "⚠️" },
+    { label: "Observation compliance", value: comp.observation != null ? `${comp.observation}%` : "—", sub: comp.observation == null ? "no obs data" : comp.observation >= 90 ? "On target" : "Below target", tone: comp.observation != null && comp.observation >= 90 ? "text-[var(--cmp-text-success)]" : "text-[var(--cmp-text-warning)]", icon: "✅" },
+    { label: "Pending reviews", value: pendingReviews, sub: `${s.review} due/overdue`, tone: pendingReviews ? "text-[var(--cmp-text-warning)]" : "text-gray-400", icon: "🔎" },
+    { label: "Clinical alerts", value: clinicalAlerts, sub: `${po.openEsc.length} escalation(s)`, tone: clinicalAlerts ? "text-[var(--cmp-text-error)]" : "text-gray-400", icon: "🚨" },
     { label: "Workload index", value: workload.weighted ?? "—", sub: workload.ratio != null ? `${workload.ratio} pt/nurse` : "no nurse assignments", icon: "⚖️" },
     { label: "Isolation", value: s.isolation, sub: "active precautions", tone: s.isolation ? "text-fuchsia-600" : "text-gray-400", icon: "🧫" },
   ];
@@ -106,11 +106,11 @@ export default async function PatientOperationsDashboard() {
         <div className={`${card} p-5`}>
           <h3 className="text-sm font-bold text-gray-900 mb-3">Capacity</h3>
           <div className="flex items-center justify-between text-xs mb-1"><span className="text-gray-600">Occupied</span><b>{cap.occupied}/{cap.total} ({cap.occPct}%)</b></div>
-          <div className="w-full h-3 rounded-full bg-gray-100 overflow-hidden mb-3"><div className={`h-full ${cap.occPct >= 90 ? "bg-rose-500" : cap.occPct >= 80 ? "bg-amber-400" : "bg-emerald-500"}`} style={{ width: `${Math.min(100, cap.occPct)}%` }} /></div>
+          <div className="w-full h-3 rounded-full bg-gray-100 overflow-hidden mb-3"><div className={`h-full ${cap.occPct >= 90 ? "bg-[var(--cmp-color-error)]" : cap.occPct >= 80 ? "bg-[var(--cmp-color-warning)]" : "bg-[var(--cmp-color-success)]"}`} style={{ width: `${Math.min(100, cap.occPct)}%` }} /></div>
           <div className="grid grid-cols-3 gap-2 text-center">
-            <div className="rounded-lg bg-emerald-50 py-2"><p className="text-lg font-bold text-emerald-700 tabular-nums">{cap.available}</p><p className="text-[10px] text-emerald-600">Available</p></div>
-            <div className="rounded-lg bg-sky-50 py-2"><p className="text-lg font-bold text-sky-700 tabular-nums">{cap.expectedVacancies}</p><p className="text-[10px] text-sky-600">Expected free</p></div>
-            <div className="rounded-lg bg-amber-50 py-2"><p className="text-lg font-bold text-amber-700 tabular-nums">{cap.expectedDemand}</p><p className="text-[10px] text-amber-600">Expected demand</p></div>
+            <div className="rounded-lg bg-[var(--cmp-surface-success)] py-2"><p className="text-lg font-bold text-emerald-700 tabular-nums">{cap.available}</p><p className="text-[10px] text-[var(--cmp-text-success)]">Available</p></div>
+            <div className="rounded-lg bg-[var(--cmp-surface-information)] py-2"><p className="text-lg font-bold text-[var(--cmp-text-information)] tabular-nums">{cap.expectedVacancies}</p><p className="text-[10px] text-[var(--cmp-text-information)]">Expected free</p></div>
+            <div className="rounded-lg bg-[var(--cmp-surface-warning)] py-2"><p className="text-lg font-bold text-[var(--cmp-text-warning)] tabular-nums">{cap.expectedDemand}</p><p className="text-[10px] text-[var(--cmp-text-warning)]">Expected demand</p></div>
           </div>
           <p className="text-[10px] text-gray-400 mt-3">Net position from live discharge-ready vs expected-admission counts. A forward capacity forecast needs historical admission/discharge rates — honest next-phase.</p>
         </div>
@@ -129,7 +129,7 @@ export default async function PatientOperationsDashboard() {
         <div className="flex items-center justify-between mb-3"><h3 className="text-sm font-bold text-gray-900">Clinical alerts</h3><Link href="/unit-manager/patient-operations/safety" className="text-[11px] font-medium text-emerald-700 hover:underline">Clinical Safety Centre →</Link></div>
         {po.alertQueue.length === 0 ? <p className="text-sm text-gray-400">No active clinical alerts. 🎉</p> : (
           <div className="overflow-x-auto"><table className="w-full text-xs"><thead><tr className="text-gray-400 text-left border-b border-gray-100"><th className="py-1.5 font-medium">Patient</th><th className="py-1.5 font-medium">Type</th><th className="py-1.5 font-medium">Severity</th><th className="py-1.5 font-medium text-right">Action</th></tr></thead>
-            <tbody>{po.alertQueue.slice(0, 8).map((a: any, i: number) => (<tr key={i} className="border-b border-gray-50"><td className="py-1.5 text-gray-700">{a.patient}</td><td className="py-1.5 text-gray-600">{a.type}</td><td className="py-1.5"><span className={`text-[10px] px-1.5 py-0.5 rounded ${a.severity === "critical" || a.severity === "high" ? "bg-rose-50 text-rose-700" : a.severity === "moderate" || a.severity === "medium" ? "bg-amber-50 text-amber-700" : "bg-gray-100 text-gray-500"}`}>{a.severity}</span></td><td className="py-1.5 text-right text-emerald-700">{a.action}</td></tr>))}</tbody>
+            <tbody>{po.alertQueue.slice(0, 8).map((a: any, i: number) => (<tr key={i} className="border-b border-gray-50"><td className="py-1.5 text-gray-700">{a.patient}</td><td className="py-1.5 text-gray-600">{a.type}</td><td className="py-1.5"><span className={`text-[10px] px-1.5 py-0.5 rounded ${a.severity === "critical" || a.severity === "high" ? "bg-[var(--cmp-surface-error)] text-[var(--cmp-text-error)]" : a.severity === "moderate" || a.severity === "medium" ? "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]" : "bg-gray-100 text-gray-500"}`}>{a.severity}</span></td><td className="py-1.5 text-right text-emerald-700">{a.action}</td></tr>))}</tbody>
           </table></div>
         )}
       </div>

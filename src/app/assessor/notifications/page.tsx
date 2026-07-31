@@ -90,9 +90,9 @@ export default async function AssessorNotificationsPage() {
 
   const SUMMARY = [
     { n: notifications.length, label: "Notifications", cls: "text-gray-900" },
-    { n: unread, label: "Unread", cls: "text-amber-600" },
+    { n: unread, label: "Unread", cls: "text-[var(--cmp-text-warning)]" },
     { n: logbookPending ?? 0, label: "Evidence pending", cls: "text-indigo-600" },
-    { n: (weekSessions ?? []).length, label: "Sessions in 7 days", cls: "text-blue-600" },
+    { n: (weekSessions ?? []).length, label: "Sessions in 7 days", cls: "text-[var(--cmp-text-information)]" },
   ];
 
   const daysTo = (date: string) => Math.max(0, Math.ceil((new Date(date).getTime() - nowMs()) / 86400000));
@@ -104,9 +104,9 @@ export default async function AssessorNotificationsPage() {
       <p className="text-3xl mb-2">🧭</p>
       <p className="text-sm font-semibold text-gray-800">Inbox clear — here&apos;s where things stand</p>
       <div className="grid grid-cols-3 gap-3 max-w-sm mx-auto mt-4">
-        <div><p className="text-xl font-extrabold text-green-600">{doneThisMonth}</p><p className="text-[10px] text-gray-400">completed this month</p></div>
-        <div><p className="text-xl font-extrabold text-amber-600">{logbookPending ?? 0}</p><p className="text-[10px] text-gray-400">evidence pending</p></div>
-        <div><p className="text-xl font-extrabold text-blue-600">{(todaySessions ?? []).length}</p><p className="text-[10px] text-gray-400">sessions today</p></div>
+        <div><p className="text-xl font-extrabold text-[var(--cmp-text-success)]">{doneThisMonth}</p><p className="text-[10px] text-gray-400">completed this month</p></div>
+        <div><p className="text-xl font-extrabold text-[var(--cmp-text-warning)]">{logbookPending ?? 0}</p><p className="text-[10px] text-gray-400">evidence pending</p></div>
+        <div><p className="text-xl font-extrabold text-[var(--cmp-text-information)]">{(todaySessions ?? []).length}</p><p className="text-[10px] text-gray-400">sessions today</p></div>
       </div>
       <Link href="/assessor/queue" className="inline-block mt-4 text-xs font-semibold text-indigo-700 border border-indigo-200 hover:bg-indigo-50 px-4 py-2 rounded-lg transition-colors">
         Open Assessment Inbox →
@@ -177,9 +177,9 @@ export default async function AssessorNotificationsPage() {
                       {(s.profiles as unknown as { full_name: string } | null)?.full_name ?? "—"} · {METHOD_LABELS[s.method] ?? s.method}
                     </span>
                     <span className={`text-[8px] font-bold px-1.5 py-0.5 rounded shrink-0 ${
-                      s.status === "completed" ? "bg-green-50 text-green-700"
+                      s.status === "completed" ? "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]"
                       : s.status === "cancelled" ? "bg-gray-100 text-gray-400"
-                      : "bg-blue-50 text-blue-600"
+                      : "bg-[var(--cmp-surface-information)] text-[var(--cmp-text-information)]"
                     }`}>{s.status === "scheduled" ? "Upcoming" : s.status}</span>
                   </div>
                 ))}

@@ -48,7 +48,7 @@ export default function ThreeSixtyManager({ assessments }: { assessments: any[] 
           <select value={scale} onChange={e => setScale(e.target.value)} className={`${inp} sm:w-44`}>{SCALES.map(s => <option key={s.v} value={s.v}>{s.label}</option>)}</select>
           <button onClick={create} disabled={busy} className="text-xs font-semibold text-white bg-teal-600 hover:bg-teal-700 disabled:opacity-50 rounded-lg px-4 py-2 whitespace-nowrap">{busy ? "…" : "Create"}</button>
         </div>
-        {err && <p className="text-[11px] text-red-600 mt-1">{err}</p>}
+        {err && <p className="text-[11px] text-[var(--cmp-text-critical)] mt-1">{err}</p>}
       </div>
 
       {assessments.length === 0 ? (
@@ -61,7 +61,7 @@ export default function ThreeSixtyManager({ assessments }: { assessments: any[] 
             {a.anonymous && <span className="text-[10px] text-gray-400">anonymous · min {a.minRaters}</span>}
             <span className={`text-[9px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded border ${STATUS_TONE[a.status] ?? STATUS_TONE.draft}`}>{a.status}</span>
             <div className="ml-auto flex items-center gap-2 text-xs">
-              <span className={a.balanced ? "text-teal-600 font-semibold" : a.weightSum > 0 ? "text-amber-600" : "text-gray-400"}>{a.weightSum}% weighted{a.balanced ? " ✓" : ""}</span>
+              <span className={a.balanced ? "text-teal-600 font-semibold" : a.weightSum > 0 ? "text-[var(--cmp-text-warning)]" : "text-gray-400"}>{a.weightSum}% weighted{a.balanced ? " ✓" : ""}</span>
               <span className="text-gray-400">{a.groups.length} group{a.groups.length === 1 ? "" : "s"}</span>
               <button onClick={() => del(a.id)} disabled={busy} className="text-gray-300 hover:text-red-500" title="Delete">✕</button>
             </div>
@@ -82,7 +82,7 @@ export default function ThreeSixtyManager({ assessments }: { assessments: any[] 
                   <div className="flex items-center gap-3 py-1.5 text-xs font-semibold">
                     <span className="w-32 text-gray-500">Total</span>
                     <span className="flex-1" />
-                    <span className={`w-10 text-right ${a.balanced ? "text-teal-600" : "text-amber-600"}`}>{a.weightSum}%</span>
+                    <span className={`w-10 text-right ${a.balanced ? "text-teal-600" : "text-[var(--cmp-text-warning)]"}`}>{a.weightSum}%</span>
                     <span className="w-4" />
                   </div>
                 </div>
@@ -94,7 +94,7 @@ export default function ThreeSixtyManager({ assessments }: { assessments: any[] 
                 {a.balanced && a.status !== "active" && <button onClick={() => setStatus(a.id, "active")} disabled={busy} className="text-[11px] font-semibold text-teal-700 hover:underline sm:ml-2">Activate →</button>}
                 {a.status === "active" && <button onClick={() => setStatus(a.id, "archived")} disabled={busy} className="text-[11px] font-semibold text-gray-400 hover:underline sm:ml-2">Archive</button>}
               </div>
-              {!a.balanced && a.weightSum !== 100 && <p className="text-[10px] text-amber-600 mt-1">Respondent-group weights sum to {a.weightSum}% — adjust to 100% to activate.</p>}
+              {!a.balanced && a.weightSum !== 100 && <p className="text-[10px] text-[var(--cmp-text-warning)] mt-1">Respondent-group weights sum to {a.weightSum}% — adjust to 100% to activate.</p>}
             </div>
           )}
         </div>

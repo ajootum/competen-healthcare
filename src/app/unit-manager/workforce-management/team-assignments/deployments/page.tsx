@@ -53,7 +53,7 @@ export default async function CrossUnitDeployments() {
         ))}
       </div>
 
-      <div className="bg-amber-50 border border-amber-200 rounded-xl p-5">
+      <div className="bg-[var(--cmp-surface-warning)] border border-[var(--cmp-color-warning)] rounded-xl p-5">
         <p className="font-semibold text-amber-900">⚙️ Cross-unit deployment workflow — next phase</p>
         <p className="text-sm text-amber-800 mt-1">A formal cross-unit deployment request/approval store (<span className="font-mono text-[11px]">deployment_request</span> per TAG §11 — origin/destination, role &amp; quantity, time window, competency confirmation, worker acceptance and full lifecycle) is not yet provisioned. Rather than show fabricated requests, this surface stays honest. Today, staffing movement approvals run through <Link href="/unit-manager/approvals" className="text-emerald-800 underline font-medium">Executive Actions › Approvals</Link>.</p>
       </div>
@@ -71,7 +71,7 @@ export default async function CrossUnitDeployments() {
           <div className={`${card} p-5`}>
             <h3 className="text-sm font-bold text-gray-900 mb-2">Where movement runs today</h3>
             <div className="space-y-1.5">
-              {[["Executive Actions › Approvals", "/unit-manager/approvals"], ["Staffing Engine", "/unit-manager/workforce-management/staffing-engine"], ["Staff Availability", "/unit-manager/workforce-management/staffing-engine/availability"]].map(([l, h]) => (<Link key={l} href={h} className="flex items-center justify-between rounded-lg border border-gray-100 px-3 py-2 hover:border-emerald-200 hover:bg-emerald-50/30"><span className="text-xs text-gray-700">{l}</span><span className="text-gray-300">›</span></Link>))}
+              {[["Executive Actions › Approvals", "/unit-manager/approvals"], ["Staffing Engine", "/unit-manager/workforce-management/staffing-engine"], ["Staff Availability", "/unit-manager/workforce-management/staffing-engine/availability"]].map(([l, h]) => (<Link key={l} href={h} className="flex items-center justify-between rounded-lg border border-gray-100 px-3 py-2 hover:border-[var(--cmp-color-success)] hover:bg-[var(--cmp-surface-success)]/30"><span className="text-xs text-gray-700">{l}</span><span className="text-gray-300">›</span></Link>))}
             </div>
           </div>
         </div>

@@ -40,8 +40,8 @@ export default async function KnowledgeReaderPage({ params }: { params: Promise<
 
       <div className="bg-white rounded-xl border border-gray-100 p-6 mb-5">
         <div className="flex flex-wrap items-center gap-2 mb-2">
-          <span className="text-[10px] font-bold bg-rose-50 text-rose-700 px-2 py-0.5 rounded">{t.icon} {t.label}</span>
-          {k.evidence_level && <span className="text-[10px] font-bold bg-green-50 text-green-700 px-2 py-0.5 rounded">Evidence: {k.evidence_level}</span>}
+          <span className="text-[10px] font-bold bg-[var(--cmp-surface-error)] text-[var(--cmp-text-error)] px-2 py-0.5 rounded">{t.icon} {t.label}</span>
+          {k.evidence_level && <span className="text-[10px] font-bold bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)] px-2 py-0.5 rounded">Evidence: {k.evidence_level}</span>}
           {k.code && <span className="text-[10px] font-mono text-gray-400">{k.code}</span>}
         </div>
         <h1 className="text-xl font-bold text-gray-900">{k.title}</h1>

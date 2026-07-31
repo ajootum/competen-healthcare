@@ -75,7 +75,7 @@ export default function BrandingEditor({ hospital }: { hospital: Hospital }) {
           </div>
         </div>
 
-        {error && <p className="text-xs text-red-500 bg-red-50 rounded-lg px-3 py-2">{error}</p>}
+        {error && <p className="text-xs text-red-500 bg-[var(--cmp-surface-critical)] rounded-lg px-3 py-2">{error}</p>}
 
         <div className="flex justify-end">
           <button onClick={save} disabled={saving}

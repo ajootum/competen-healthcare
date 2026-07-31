@@ -94,7 +94,7 @@ export default function WorkflowBuilder({ workflows }: { workflows: Wf[] }) {
                     <input className={`${input} flex-1`} value={n.label} onChange={e => setNode(i, { label: e.target.value })} />
                     {TM[n.type]?.cfg && <input className={`${input} w-40`} value={n.config?.[TM[n.type].cfg!] ?? ""} onChange={e => setCfg(i, TM[n.type].cfg!, e.target.value)} placeholder={TM[n.type].ph} />}
                     <span className="text-[9px] text-gray-300 font-mono shrink-0">{n.key}</span>
-                    <button onClick={() => rmNode(i)} className="text-gray-300 hover:text-rose-600 text-xs shrink-0">✕</button>
+                    <button onClick={() => rmNode(i)} className="text-gray-300 hover:text-[var(--cmp-text-error)] text-xs shrink-0">✕</button>
                   </div>
                 ))}
               </div>
@@ -111,7 +111,7 @@ export default function WorkflowBuilder({ workflows }: { workflows: Wf[] }) {
                   <input className={`${input} w-28`} value={tr.condition} onChange={e => setTr(p => ({ ...p, condition: e.target.value }))} placeholder="condition (opt)" />
                   <button onClick={addTrans} disabled={!tr.from || !tr.to} className="text-xs font-medium text-indigo-700 border border-indigo-200 rounded-lg px-2.5 py-1.5 disabled:opacity-40 hover:bg-indigo-50">+ Link</button>
                 </div>
-                <div className="space-y-1">{d.transitions.map((t, i) => <div key={i} className="flex items-center gap-2 text-[11px] text-gray-600"><span>{nlabel(t.from)}</span><span className="text-gray-300">→{t.condition ? ` [${t.condition}]` : ""} →</span><span>{nlabel(t.to)}</span><button onClick={() => rmTrans(i)} className="text-gray-300 hover:text-rose-600 ml-1">✕</button></div>)}</div>
+                <div className="space-y-1">{d.transitions.map((t, i) => <div key={i} className="flex items-center gap-2 text-[11px] text-gray-600"><span>{nlabel(t.from)}</span><span className="text-gray-300">→{t.condition ? ` [${t.condition}]` : ""} →</span><span>{nlabel(t.to)}</span><button onClick={() => rmTrans(i)} className="text-gray-300 hover:text-[var(--cmp-text-error)] ml-1">✕</button></div>)}</div>
               </div>
             )}
 
@@ -130,7 +130,7 @@ export default function WorkflowBuilder({ workflows }: { workflows: Wf[] }) {
               </div>
             )}
 
-            {msg && <p className={`text-xs mt-3 ${msg.startsWith("✓") ? "text-emerald-600" : "text-rose-600"}`}>{msg}</p>}
+            {msg && <p className={`text-xs mt-3 ${msg.startsWith("✓") ? "text-[var(--cmp-text-success)]" : "text-[var(--cmp-text-error)]"}`}>{msg}</p>}
             <div className="flex items-center justify-end mt-4"><button onClick={save} disabled={busy} className="text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg px-4 py-2 disabled:opacity-50">{busy ? "Saving…" : "Save workflow"}</button></div>
           </>
         )}

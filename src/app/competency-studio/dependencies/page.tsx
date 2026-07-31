@@ -33,19 +33,19 @@ export default async function StudioDependenciesPage() {
       </div>
 
       {!dep.provisioned ? (
-        <div className="bg-amber-50 border border-amber-100 rounded-xl p-6 text-sm text-amber-800">Run migration 128 (<code className="text-[11px]">competency_dependencies</code>) to enable the Dependency Manager.</div>
+        <div className="bg-[var(--cmp-surface-warning)] border border-[var(--cmp-color-warning)] rounded-xl p-6 text-sm text-amber-800">Run migration 128 (<code className="text-[11px]">competency_dependencies</code>) to enable the Dependency Manager.</div>
       ) : (
         <>
           {/* KPIs */}
           <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-7 gap-3 mb-5">
             {[
               { label: "Dependencies", value: dep.kpis.total, tone: "text-gray-900" },
-              { label: "Prerequisites", value: dep.kpis.prerequisite, tone: "text-blue-600" },
-              { label: "Co-requisites", value: dep.kpis.co_requisite, tone: "text-amber-600" },
+              { label: "Prerequisites", value: dep.kpis.prerequisite, tone: "text-[var(--cmp-text-information)]" },
+              { label: "Co-requisites", value: dep.kpis.co_requisite, tone: "text-[var(--cmp-text-warning)]" },
               { label: "Recommended", value: dep.kpis.recommended, tone: "text-teal-600" },
               { label: "Inherited", value: dep.kpis.inherited, tone: "text-violet-600" },
               { label: "Competencies w/ deps", value: dep.kpis.sourced, tone: "text-gray-900" },
-              { label: "Cycles", value: dep.kpis.cycles, tone: dep.kpis.cycles > 0 ? "text-red-600" : "text-gray-300" },
+              { label: "Cycles", value: dep.kpis.cycles, tone: dep.kpis.cycles > 0 ? "text-[var(--cmp-text-critical)]" : "text-gray-300" },
             ].map(k => (
               <div key={k.label} className="bg-white rounded-xl border border-gray-100 p-3.5">
                 <p className={`text-xl font-bold ${k.tone}`}>{k.value}</p>
@@ -56,8 +56,8 @@ export default async function StudioDependenciesPage() {
 
           {/* Cycle warnings */}
           {dep.cycles.length > 0 && (
-            <div className="bg-red-50 border border-red-100 rounded-xl p-4 mb-5">
-              <p className="text-xs font-bold text-red-700 uppercase tracking-widest mb-2">⚠️ Prerequisite cycles detected</p>
+            <div className="bg-[var(--cmp-surface-critical)] border border-[var(--cmp-color-critical)] rounded-xl p-4 mb-5">
+              <p className="text-xs font-bold text-[var(--cmp-text-critical)] uppercase tracking-widest mb-2">⚠️ Prerequisite cycles detected</p>
               <div className="flex flex-col gap-1">
                 {dep.cycles.map((chain, i) => (
                   <p key={i} className="text-xs text-red-800">{chain.join("  →  ")}</p>

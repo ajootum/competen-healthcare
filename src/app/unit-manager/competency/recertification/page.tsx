@@ -11,8 +11,8 @@ import { cardClass } from "@/components/ui/primitives";
 export const dynamic = "force-dynamic";
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
-const KIND_CLS: Record<string, string> = { Credential: "bg-blue-50 text-blue-600", Competency: "bg-violet-50 text-violet-600" };
-const daysCls = (d: number) => (d < 0 ? "text-rose-600" : d <= 30 ? "text-amber-600" : "text-gray-500");
+const KIND_CLS: Record<string, string> = { Credential: "bg-[var(--cmp-surface-information)] text-[var(--cmp-text-information)]", Competency: "bg-violet-50 text-violet-600" };
+const daysCls = (d: number) => (d < 0 ? "text-[var(--cmp-text-error)]" : d <= 30 ? "text-[var(--cmp-text-warning)]" : "text-gray-500");
 const daysLabel = (d: number) => (d < 0 ? `${Math.abs(d)}d overdue` : `in ${d}d`);
 
 export default async function RecertPage() {
@@ -36,15 +36,15 @@ export default async function RecertPage() {
       <CompetencyTabs />
 
       {!p.provisioned ? (
-        <div className="bg-amber-50 border border-amber-200 rounded-xl p-6 text-sm text-amber-800">Credential and competency expiry data isn&apos;t available for this unit yet.</div>
+        <div className="bg-[var(--cmp-surface-warning)] border border-[var(--cmp-color-warning)] rounded-xl p-6 text-sm text-amber-800">Credential and competency expiry data isn&apos;t available for this unit yet.</div>
       ) : (
         <>
           <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
             {[
               { label: "Lapsing ≤ 90 days", value: p.kpis.total, tone: "text-gray-900" },
-              { label: "Already expired", value: p.kpis.expired, tone: "text-rose-600" },
-              { label: "Within 30 days", value: p.kpis.in30, tone: "text-amber-600" },
-              { label: "Credentials", value: p.kpis.credentials, tone: "text-blue-600" },
+              { label: "Already expired", value: p.kpis.expired, tone: "text-[var(--cmp-text-error)]" },
+              { label: "Within 30 days", value: p.kpis.in30, tone: "text-[var(--cmp-text-warning)]" },
+              { label: "Credentials", value: p.kpis.credentials, tone: "text-[var(--cmp-text-information)]" },
               { label: "Competencies", value: p.kpis.competencies, tone: "text-violet-600" },
             ].map(k => (
               <div key={k.label} className={card}><div className={`text-2xl font-bold tabular-nums ${k.tone}`}>{k.value}</div><div className="text-xs text-gray-500 mt-1 font-medium">{k.label}</div></div>

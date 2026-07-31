@@ -17,9 +17,9 @@ export const dynamic = "force-dynamic";
 const card = "bg-white rounded-xl border border-gray-200";
 const dash = (n: number | null | undefined) => (n == null ? "—" : n.toLocaleString());
 const relTime = (iso?: string | null) => { if (!iso) return ""; const s = Math.floor((Date.now() - new Date(iso).getTime()) / 1000); if (s < 60) return "just now"; if (s < 3600) return `${Math.floor(s / 60)}m ago`; if (s < 86400) return `${Math.floor(s / 3600)}h ago`; return `${Math.floor(s / 86400)}d ago`; };
-const readinessTone = (n: number | null) => (n == null ? "text-gray-300" : n >= 80 ? "text-green-600" : n >= 50 ? "text-amber-600" : "text-rose-600");
-const STD_BADGE: Record<string, string> = { met: "bg-green-50 text-green-700", partially_met: "bg-amber-50 text-amber-700", not_met: "bg-rose-50 text-rose-700", not_assessed: "bg-gray-100 text-gray-500" };
-const FW_BADGE: Record<string, string> = { accreditation: "bg-violet-50 text-violet-700", regulatory: "bg-blue-50 text-blue-700", professional: "bg-teal-50 text-teal-700", internal: "bg-gray-100 text-gray-600" };
+const readinessTone = (n: number | null) => (n == null ? "text-gray-300" : n >= 80 ? "text-[var(--cmp-text-success)]" : n >= 50 ? "text-[var(--cmp-text-warning)]" : "text-[var(--cmp-text-error)]");
+const STD_BADGE: Record<string, string> = { met: "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]", partially_met: "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]", not_met: "bg-[var(--cmp-surface-error)] text-[var(--cmp-text-error)]", not_assessed: "bg-gray-100 text-gray-500" };
+const FW_BADGE: Record<string, string> = { accreditation: "bg-violet-50 text-violet-700", regulatory: "bg-[var(--cmp-surface-information)] text-blue-700", professional: "bg-teal-50 text-teal-700", internal: "bg-gray-100 text-gray-600" };
 
 export default async function RegulatoryAccreditationCenter() {
   const supabase = await createClient();
@@ -35,11 +35,11 @@ export default async function RegulatoryAccreditationCenter() {
 
   const kpiCards = [
     { label: "Overall Readiness", value: k.overall == null ? "—" : `${k.overall}%`, icon: "🏛️", iconBg: "bg-violet-50", tone: readinessTone(k.overall) },
-    { label: "Standards Met", value: dash(k.met), icon: "✅", iconBg: "bg-green-50", tone: "text-green-600" },
-    { label: "Partially Met", value: dash(k.partially), icon: "🌓", iconBg: "bg-amber-50", tone: (k.partially ?? 0) > 0 ? "text-amber-600" : undefined },
-    { label: "Not Met", value: dash(k.notMet), icon: "❌", iconBg: "bg-rose-50", tone: (k.notMet ?? 0) > 0 ? "text-rose-600" : undefined },
+    { label: "Standards Met", value: dash(k.met), icon: "✅", iconBg: "bg-[var(--cmp-surface-success)]", tone: "text-[var(--cmp-text-success)]" },
+    { label: "Partially Met", value: dash(k.partially), icon: "🌓", iconBg: "bg-[var(--cmp-surface-warning)]", tone: (k.partially ?? 0) > 0 ? "text-[var(--cmp-text-warning)]" : undefined },
+    { label: "Not Met", value: dash(k.notMet), icon: "❌", iconBg: "bg-[var(--cmp-surface-error)]", tone: (k.notMet ?? 0) > 0 ? "text-[var(--cmp-text-error)]" : undefined },
     { label: "Not Assessed", value: dash(k.notAssessed), icon: "❔", iconBg: "bg-gray-50", tone: "text-gray-400" },
-    { label: "Evidence Gaps", value: dash(k.evidenceGaps), icon: "📎", iconBg: "bg-orange-50", tone: (k.evidenceGaps ?? 0) > 0 ? "text-orange-600" : undefined },
+    { label: "Evidence Gaps", value: dash(k.evidenceGaps), icon: "📎", iconBg: "bg-[var(--cmp-surface-warning)]", tone: (k.evidenceGaps ?? 0) > 0 ? "text-[var(--cmp-text-warning)]" : undefined },
   ];
 
   return (
@@ -53,8 +53,8 @@ export default async function RegulatoryAccreditationCenter() {
       </div>
 
       {!d.ready && (
-        <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-          <span className="font-semibold">Self-assessments not enabled.</span> Run <code className="font-mono text-[12px] bg-amber-100 px-1 rounded">supabase/migrations/061-governance-accreditation.sql</code> to activate per-standard readiness. The framework catalogue, calendar and indicators below are live regardless.
+        <div className="rounded-xl border border-[var(--cmp-color-warning)] bg-[var(--cmp-surface-warning)] px-4 py-3 text-sm text-amber-800">
+          <span className="font-semibold">Self-assessments not enabled.</span> Run <code className="font-mono text-[12px] bg-[var(--cmp-surface-warning)] px-1 rounded">supabase/migrations/061-governance-accreditation.sql</code> to activate per-standard readiness. The framework catalogue, calendar and indicators below are live regardless.
         </div>
       )}
 
@@ -86,7 +86,7 @@ export default async function RegulatoryAccreditationCenter() {
                     <span className="flex items-center gap-1.5 min-w-0"><span className={`text-[9px] font-bold px-1.5 py-0.5 rounded shrink-0 ${FW_BADGE[f.type] ?? "bg-gray-100 text-gray-600"}`}>{f.code}</span><span className="text-gray-600 truncate">{f.name}</span></span>
                     <span className={`tabular-nums shrink-0 ml-2 ${readinessTone(f.readiness)}`}>{f.readiness == null ? "n/a" : `${f.readiness}%`}</span>
                   </div>
-                  <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">{f.readiness != null && <div className={`h-full rounded-full ${f.readiness >= 80 ? "bg-green-500" : f.readiness >= 50 ? "bg-amber-500" : "bg-rose-500"}`} style={{ width: `${f.readiness}%` }} />}</div>
+                  <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">{f.readiness != null && <div className={`h-full rounded-full ${f.readiness >= 80 ? "bg-[var(--cmp-color-success)]" : f.readiness >= 50 ? "bg-[var(--cmp-color-warning)]" : "bg-[var(--cmp-color-error)]"}`} style={{ width: `${f.readiness}%` }} />}</div>
                   <p className="text-[9px] text-gray-400 mt-0.5 tabular-nums">{f.assessed}/{f.known} standards assessed{f.assessed ? ` · ${f.met} met · ${f.partially} partial · ${f.notMet} not met` : ""}</p>
                 </div>
               ))}
@@ -136,9 +136,9 @@ export default async function RegulatoryAccreditationCenter() {
             <div className="space-y-2">
               {d.calendar.map((c: any, i: number) => (
                 <div key={i} className="flex items-center gap-2.5 rounded-lg border border-gray-100 p-2.5">
-                  <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded shrink-0 tabular-nums ${c.overdue ? "bg-rose-50 text-rose-700" : c.dueSoon ? "bg-amber-50 text-amber-700" : "bg-gray-50 text-gray-500"}`}>{c.date}</span>
+                  <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded shrink-0 tabular-nums ${c.overdue ? "bg-[var(--cmp-surface-error)] text-[var(--cmp-text-error)]" : c.dueSoon ? "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]" : "bg-gray-50 text-gray-500"}`}>{c.date}</span>
                   <div className="min-w-0 flex-1"><p className="text-xs text-gray-700 truncate">{c.title}</p><p className="text-[9px] text-gray-400 capitalize">{c.domain}</p></div>
-                  {c.overdue && <span className="text-[9px] font-semibold text-rose-600 shrink-0">OVERDUE</span>}
+                  {c.overdue && <span className="text-[9px] font-semibold text-[var(--cmp-text-error)] shrink-0">OVERDUE</span>}
                 </div>
               ))}
             </div>
@@ -165,17 +165,17 @@ export default async function RegulatoryAccreditationCenter() {
             <span className="text-[10px] text-gray-400">{d.surveys.completed} completed · {d.surveys.outcomes.passed}✓ {d.surveys.outcomes.conditions}◐ {d.surveys.outcomes.failed}✗</span>
           </div>
           {!d.surveysReady ? (
-            <p className="text-xs text-amber-700 bg-amber-50 rounded-lg px-3 py-2 mb-2">Run <code className="font-mono text-[11px]">062-governance-surveys.sql</code> to enable survey management.</p>
+            <p className="text-xs text-[var(--cmp-text-warning)] bg-[var(--cmp-surface-warning)] rounded-lg px-3 py-2 mb-2">Run <code className="font-mono text-[11px]">062-governance-surveys.sql</code> to enable survey management.</p>
           ) : d.surveys.upcoming.length === 0 ? <p className="text-sm text-gray-400 py-4 text-center">No surveys scheduled — plan one above.</p> : (
             <div className="space-y-2 mb-2">
               {d.surveys.upcoming.map((s: any) => (
                 <div key={s.id} className="flex items-center gap-2.5 rounded-lg border border-gray-100 p-2.5">
-                  <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded shrink-0 tabular-nums ${s.dueSoon ? "bg-amber-50 text-amber-700" : "bg-gray-50 text-gray-500"}`}>{s.date ?? "TBD"}</span>
+                  <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded shrink-0 tabular-nums ${s.dueSoon ? "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]" : "bg-gray-50 text-gray-500"}`}>{s.date ?? "TBD"}</span>
                   <div className="min-w-0 flex-1">
                     <p className="text-xs text-gray-800 leading-tight truncate">{s.title}</p>
                     <p className="text-[9px] text-gray-400 capitalize">{String(s.type).replace(/_/g, " ")}{s.fw ? ` · ${s.fw}` : ""}{s.surveyor ? ` · ${s.surveyor}` : ""}</p>
                   </div>
-                  <span className="text-[9px] font-semibold px-1.5 py-0.5 rounded bg-sky-50 text-sky-700 shrink-0 capitalize">{String(s.status).replace(/_/g, " ")}</span>
+                  <span className="text-[9px] font-semibold px-1.5 py-0.5 rounded bg-[var(--cmp-surface-information)] text-[var(--cmp-text-information)] shrink-0 capitalize">{String(s.status).replace(/_/g, " ")}</span>
                 </div>
               ))}
             </div>

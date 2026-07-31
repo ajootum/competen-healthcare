@@ -19,7 +19,7 @@ const card = cardClass;
 const tc = (s: string) => (s ?? "").replace(/_/g, " ").split(" ").filter(Boolean).map(w => w[0].toUpperCase() + w.slice(1)).join(" ");
 const fmt = (iso: string | null) => iso ? new Date(iso).toLocaleString([], { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", hour12: false }) : "";
 
-const ACUITY_DOT: Record<string, string> = { critical: "bg-rose-500", high: "bg-orange-500", moderate: "bg-amber-500", stable: "bg-green-500", low: "bg-green-500" };
+const ACUITY_DOT: Record<string, string> = { critical: "bg-[var(--cmp-color-error)]", high: "bg-[var(--cmp-color-warning)]", moderate: "bg-[var(--cmp-color-warning)]", stable: "bg-[var(--cmp-color-success)]", low: "bg-[var(--cmp-color-success)]" };
 
 export default async function PatientOperationsCenter() {
   const supabase = await createClient();
@@ -45,7 +45,7 @@ export default async function PatientOperationsCenter() {
     return (
       <div className="space-y-4">
         <h1 className="text-2xl font-bold text-gray-900">Patient Operations Center</h1>
-        <div className="bg-amber-50 border border-amber-200 rounded-xl p-6"><p className="font-semibold text-amber-900">⚙️ Coming online</p><p className="text-sm text-amber-800 mt-2">The Clinical Operations Engine tables aren&apos;t provisioned yet. Once applied, the patient operations centre fills with live data.</p></div>
+        <div className="bg-[var(--cmp-surface-warning)] border border-[var(--cmp-color-warning)] rounded-xl p-6"><p className="font-semibold text-amber-900">⚙️ Coming online</p><p className="text-sm text-amber-800 mt-2">The Clinical Operations Engine tables aren&apos;t provisioned yet. Once applied, the patient operations centre fills with live data.</p></div>
       </div>
     );
   }
@@ -53,13 +53,13 @@ export default async function PatientOperationsCenter() {
   const k = d.kpis, cap = d.capacity, obs = d.obsCompliance;
   const kpis = [
     ["Total Patients", k.total, "Current census", ""],
-    ["High Acuity", k.highAcuity, `${k.total ? Math.round((k.highAcuity / k.total) * 100) : 0}% of patients`, k.highAcuity ? "text-orange-600" : ""],
-    ["Critical Risk", k.criticalRisk, "Requiring attention", k.criticalRisk ? "text-rose-600" : ""],
+    ["High Acuity", k.highAcuity, `${k.total ? Math.round((k.highAcuity / k.total) * 100) : 0}% of patients`, k.highAcuity ? "text-[var(--cmp-text-warning)]" : ""],
+    ["Critical Risk", k.criticalRisk, "Requiring attention", k.criticalRisk ? "text-[var(--cmp-text-error)]" : ""],
     ["Occupied Beds", `${k.occupied}/${k.totalBeds}`, `${k.occPct}% occupancy`, ""],
     ["Pending Admissions", k.pendingAdmissions, "Awaiting bed", ""],
     ["Pending Discharges", k.pendingDischarges, "To action", ""],
-    ["Overdue Observations", k.overdueObs, "Requiring action", k.overdueObs ? "text-rose-600" : ""],
-    ["Active Escalations", k.escalations, `${k.criticalEsc} critical`, k.escalations ? "text-amber-600" : ""],
+    ["Overdue Observations", k.overdueObs, "Requiring action", k.overdueObs ? "text-[var(--cmp-text-error)]" : ""],
+    ["Active Escalations", k.escalations, `${k.criticalEsc} critical`, k.escalations ? "text-[var(--cmp-text-warning)]" : ""],
   ];
 
   const capSegs = [["#3b82f6", cap.occupied], ["#22c55e", cap.available], ["#f59e0b", cap.cleaning], ["#94a3b8", cap.reserved], ["#ef4444", cap.blocked]] as [string, number][];
@@ -122,7 +122,7 @@ export default async function PatientOperationsCenter() {
               <div key={r.id} className="flex items-center gap-2 text-sm">
                 <span className={`w-2 h-2 rounded-full shrink-0 ${ACUITY_DOT[r.acuity] ?? "bg-gray-400"}`} />
                 <span className="text-gray-800 flex-1 truncate">{r.label} <span className="text-gray-400 text-xs">{r.bed ?? ""}</span></span>
-                <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded ${r.acuity === "critical" ? "bg-rose-50 text-rose-700" : "bg-orange-50 text-orange-700"}`}>{tc(r.acuity)}</span>
+                <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded ${r.acuity === "critical" ? "bg-[var(--cmp-surface-error)] text-[var(--cmp-text-error)]" : "bg-[var(--cmp-surface-warning)] text-orange-700"}`}>{tc(r.acuity)}</span>
               </div>
             ))}
           </div>
@@ -138,16 +138,16 @@ export default async function PatientOperationsCenter() {
             <>
               <div className="grid grid-cols-6 sm:grid-cols-8 gap-2">
                 {d.wardBeds.map((b: any) => {
-                  const tone = ["cleaning", "out_of_service"].includes(b.status) ? "border-gray-200 bg-gray-50" : b.status === "available" ? "border-blue-200 bg-blue-50/40" : b.acuity === "critical" || b.acuity === "high" ? "border-red-200 bg-red-50/40" : b.acuity === "moderate" ? "border-amber-200 bg-amber-50/40" : "border-green-200 bg-green-50/30";
-                  const dot = ["cleaning", "out_of_service"].includes(b.status) ? "bg-gray-300" : b.status === "available" ? "bg-blue-400" : b.acuity === "critical" || b.acuity === "high" ? "bg-red-500" : b.acuity === "moderate" ? "bg-amber-500" : "bg-green-500";
+                  const tone = ["cleaning", "out_of_service"].includes(b.status) ? "border-gray-200 bg-gray-50" : b.status === "available" ? "border-[var(--cmp-color-information)] bg-[var(--cmp-surface-information)]/40" : b.acuity === "critical" || b.acuity === "high" ? "border-[var(--cmp-color-critical)] bg-[var(--cmp-surface-critical)]/40" : b.acuity === "moderate" ? "border-[var(--cmp-color-warning)] bg-[var(--cmp-surface-warning)]/40" : "border-[var(--cmp-color-success)] bg-[var(--cmp-surface-success)]/30";
+                  const dot = ["cleaning", "out_of_service"].includes(b.status) ? "bg-gray-300" : b.status === "available" ? "bg-[var(--cmp-color-information)]" : b.acuity === "critical" || b.acuity === "high" ? "bg-[var(--cmp-color-critical)]" : b.acuity === "moderate" ? "bg-[var(--cmp-color-warning)]" : "bg-[var(--cmp-color-success)]";
                   return <Link key={b.id} href="/supervisor/ward-map" className={`rounded-lg border ${tone} px-1 py-1.5 text-center hover:shadow-sm`}><p className="text-[10px] font-semibold text-gray-700 truncate">{b.label}</p><span className={`inline-block w-2 h-2 rounded-full my-0.5 ${dot}`} /></Link>;
                 })}
               </div>
               <div className="mt-3 flex flex-wrap gap-3 text-[10px] text-gray-500">
-                <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-green-500" /> Stable</span>
-                <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-amber-500" /> Review</span>
-                <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-red-500" /> High risk</span>
-                <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-blue-400" /> Available</span>
+                <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-[var(--cmp-color-success)]" /> Stable</span>
+                <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-[var(--cmp-color-warning)]" /> Review</span>
+                <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-[var(--cmp-color-critical)]" /> High risk</span>
+                <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-[var(--cmp-color-information)]" /> Available</span>
                 <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-gray-300" /> Not in use</span>
               </div>
             </>

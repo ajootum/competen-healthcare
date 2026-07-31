@@ -16,11 +16,11 @@ export default async function CurriculumLanding() {
 
   const summary = [
     { icon: "🎓", tint: "bg-purple-50 text-purple-600", label: "Curriculum Effectiveness", value: pct(d.effectiveness.cards.effectiveness), sub: `${d.effectiveness.cards.activeCurricula} active` },
-    { icon: "🧭", tint: "bg-blue-50 text-blue-600", label: "Blueprint Integrity", value: pct(d.blueprint.cards.completion), sub: `${d.blueprint.cards.missingLinks} missing links` },
+    { icon: "🧭", tint: "bg-[var(--cmp-surface-information)] text-[var(--cmp-text-information)]", label: "Blueprint Integrity", value: pct(d.blueprint.cards.completion), sub: `${d.blueprint.cards.missingLinks} missing links` },
     { icon: "🎯", tint: "bg-teal-50 text-teal-600", label: "Outcome Attainment", value: pct(d.outcomes.cards.avgAttainment), sub: `${d.outcomes.cards.achieved} achieved` },
     { icon: "💠", tint: "bg-indigo-50 text-indigo-600", label: "CPU Health", value: String(d.cpus.cards.highPerforming), sub: `of ${d.cpus.cards.total} high-performing` },
-    { icon: "🎬", tint: "bg-rose-50 text-rose-600", label: "Content", value: String(d.content.cards.documents + d.content.cards.simulations + d.content.cards.courses), sub: "learning items" },
-    { icon: "🧩", tint: "bg-amber-50 text-amber-600", label: "Critical Gaps", value: String(d.gaps.cards.critical), sub: `${d.gaps.cards.total} total` },
+    { icon: "🎬", tint: "bg-[var(--cmp-surface-error)] text-[var(--cmp-text-error)]", label: "Content", value: String(d.content.cards.documents + d.content.cards.simulations + d.content.cards.courses), sub: "learning items" },
+    { icon: "🧩", tint: "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]", label: "Critical Gaps", value: String(d.gaps.cards.critical), sub: `${d.gaps.cards.total} total` },
   ];
   const effMax = Math.max(1, ...d.effectiveness.trend.map(t => t.value ?? 0));
   const metric: Record<string, string> = {

@@ -12,7 +12,7 @@ import { cardClass } from "@/components/ui/primitives";
 // later phase. Writes through the audited templates API.
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
-const PRIO_TONE: Record<string, string> = { urgent: "bg-rose-50 text-rose-700", high: "bg-orange-50 text-orange-700", normal: "bg-amber-50 text-amber-700", low: "bg-blue-50 text-blue-600" };
+const PRIO_TONE: Record<string, string> = { urgent: "bg-[var(--cmp-surface-error)] text-[var(--cmp-text-error)]", high: "bg-[var(--cmp-surface-warning)] text-orange-700", normal: "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]", low: "bg-[var(--cmp-surface-information)] text-[var(--cmp-text-information)]" };
 const dueISO = (offsetMin: number) => new Date(Date.now() + offsetMin * 60000).toISOString();
 
 export default function WorkflowPanel({ provisioned, templates, editable }: { provisioned: boolean; templates: any[]; editable: boolean }) {
@@ -115,12 +115,12 @@ export default function WorkflowPanel({ provisioned, templates, editable }: { pr
               <p className="text-[10px] text-gray-400 truncate">{RECURRENCE_LABEL[t.recurrence]}{t.trigger_event !== "manual" ? ` · ${TRIGGER_LABEL[t.trigger_event]}` : ""} · due +{t.due_offset_min}m</p>
             </div>
             {editable && <button onClick={() => generate(t)} disabled={busy === t.id} className="text-[10px] font-semibold text-teal-700 hover:underline shrink-0">{busy === t.id ? "…" : "Generate task"}</button>}
-            {editable && <button onClick={() => remove(t.id)} disabled={busy === t.id} className="text-[10px] text-gray-400 hover:text-rose-600 shrink-0">✕</button>}
+            {editable && <button onClick={() => remove(t.id)} disabled={busy === t.id} className="text-[10px] text-gray-400 hover:text-[var(--cmp-text-error)] shrink-0">✕</button>}
           </div>
         ))}
       </div>
       <p className="text-[10px] text-gray-400 mt-2">Templates instantiate real tasks now. Recurrence auto-firing &amp; event-driven auto-generation are configured here; scheduled execution is a later phase.</p>
-      {err && <p className="text-[11px] text-rose-600 mt-2">{err}</p>}
+      {err && <p className="text-[11px] text-[var(--cmp-text-error)] mt-2">{err}</p>}
     </div>
   );
 }

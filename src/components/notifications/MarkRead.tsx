@@ -14,7 +14,7 @@ export default function MarkRead({ id, all, label, className }: { id?: string; a
     if (r?.ok) { setDone(true); router.refresh(); }
   });
   return (
-    <button onClick={go} disabled={pending || done} className={className ?? "text-[12px] font-medium text-blue-600 hover:underline disabled:opacity-50"}>
+    <button onClick={go} disabled={pending || done} className={className ?? "text-[12px] font-medium text-[var(--cmp-text-information)] hover:underline disabled:opacity-50"}>
       {done ? "Read ✓" : pending ? "…" : label}
     </button>
   );

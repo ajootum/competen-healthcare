@@ -11,14 +11,14 @@ type Hit = { object_type: string; object_id: string; title: string; snippet: str
 
 const TYPE_UI: Record<string, { label: string; icon: string; cls: string }> = {
   framework:      { label: "Framework",      icon: "🏛️", cls: "bg-teal-50 text-teal-700" },
-  cpu:            { label: "Practice Unit",  icon: "🏥", cls: "bg-blue-50 text-blue-700" },
+  cpu:            { label: "Practice Unit",  icon: "🏥", cls: "bg-[var(--cmp-surface-information)] text-blue-700" },
   competency:     { label: "Competency",     icon: "🪪", cls: "bg-violet-50 text-violet-700" },
   skill:          { label: "Skill",          icon: "✋", cls: "bg-indigo-50 text-indigo-600" },
-  resource:       { label: "Learning",       icon: "📚", cls: "bg-amber-50 text-amber-700" },
+  resource:       { label: "Learning",       icon: "📚", cls: "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]" },
   policy:         { label: "Policy",         icon: "📜", cls: "bg-gray-100 text-gray-600" },
-  quality_object: { label: "Quality",        icon: "🛡️", cls: "bg-green-50 text-green-700" },
-  knowledge:      { label: "Knowledge",      icon: "🫀", cls: "bg-rose-50 text-rose-700" },
-  case:           { label: "Case Study",     icon: "🧑‍⚕️", cls: "bg-sky-50 text-sky-700" },
+  quality_object: { label: "Quality",        icon: "🛡️", cls: "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]" },
+  knowledge:      { label: "Knowledge",      icon: "🫀", cls: "bg-[var(--cmp-surface-error)] text-[var(--cmp-text-error)]" },
+  case:           { label: "Case Study",     icon: "🧑‍⚕️", cls: "bg-[var(--cmp-surface-information)] text-[var(--cmp-text-information)]" },
 };
 
 // Quick filter chips → the object types they include (spec §3)

@@ -16,7 +16,7 @@ export const dynamic = "force-dynamic";
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 const card = "bg-white rounded-xl border border-gray-200";
-const riskDot = (state: string) => state === "Critical" ? "bg-rose-500" : state === "High Risk" ? "bg-orange-500" : state === "Review Required" || state === "Observation" ? "bg-amber-400" : state === "Discharge Ready" ? "bg-teal-400" : state === "Theatre" ? "bg-indigo-400" : "bg-emerald-400";
+const riskDot = (state: string) => state === "Critical" ? "bg-[var(--cmp-color-error)]" : state === "High Risk" ? "bg-[var(--cmp-color-warning)]" : state === "Review Required" || state === "Observation" ? "bg-[var(--cmp-color-warning)]" : state === "Discharge Ready" ? "bg-teal-400" : state === "Theatre" ? "bg-indigo-400" : "bg-[var(--cmp-color-success)]";
 
 export default async function WardMap() {
   const supabase = await createClient();
@@ -42,7 +42,7 @@ export default async function WardMap() {
       <PosTabs />
     </>
   );
-  if (!po.ready) return <div className="space-y-4">{header}<div className="bg-amber-50 border border-amber-200 rounded-xl p-6"><p className="font-semibold text-amber-900">⚙️ Coming online</p><p className="text-sm text-amber-800 mt-1">The Clinical Operations Engine isn&apos;t provisioned for this unit yet.</p></div></div>;
+  if (!po.ready) return <div className="space-y-4">{header}<div className="bg-[var(--cmp-surface-warning)] border border-[var(--cmp-color-warning)] rounded-xl p-6"><p className="font-semibold text-amber-900">⚙️ Coming online</p><p className="text-sm text-amber-800 mt-1">The Clinical Operations Engine isn&apos;t provisioned for this unit yet.</p></div></div>;
 
   const { zones } = po;
 
@@ -52,10 +52,10 @@ export default async function WardMap() {
 
       {/* Legend */}
       <div className="flex flex-wrap items-center gap-3 text-[11px] text-gray-500">
-        <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-rose-500" /> Critical</span>
-        <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-orange-500" /> High risk</span>
-        <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-amber-400" /> Review / obs</span>
-        <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-emerald-400" /> Stable</span>
+        <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-[var(--cmp-color-error)]" /> Critical</span>
+        <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-[var(--cmp-color-warning)]" /> High risk</span>
+        <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-[var(--cmp-color-warning)]" /> Review / obs</span>
+        <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-[var(--cmp-color-success)]" /> Stable</span>
         <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-teal-400" /> Discharge ready</span>
         <span className="ml-auto text-gray-400">🧫 isolation · numbers = PEWS</span>
       </div>
@@ -66,7 +66,7 @@ export default async function WardMap() {
             <h3 className="text-sm font-bold text-gray-900">{z.name}</h3>
             <div className="flex items-center gap-3 text-[11px] text-gray-500">
               <span>{z.patients} patients</span><span>·</span><span>{z.available} free</span><span>·</span>
-              <span className={z.highRisk ? "text-rose-600 font-medium" : ""}>{z.highRisk} high-acuity</span><span>·</span>
+              <span className={z.highRisk ? "text-[var(--cmp-text-error)] font-medium" : ""}>{z.highRisk} high-acuity</span><span>·</span>
               <span>{z.staff} nurse{z.staff === 1 ? "" : "s"}{z.ratio != null ? ` · ${z.ratio}:1` : ""}</span>
             </div>
           </div>
@@ -74,7 +74,7 @@ export default async function WardMap() {
             {z.beds.map((b: any) => {
               const p = b.patient;
               const cell = (
-                <div className={`rounded-lg border p-2 h-[68px] flex flex-col justify-between ${p ? "border-gray-200 hover:border-emerald-300 hover:shadow-sm" : "border-dashed border-gray-200 bg-gray-50/50"} transition-all`}>
+                <div className={`rounded-lg border p-2 h-[68px] flex flex-col justify-between ${p ? "border-gray-200 hover:border-[var(--cmp-color-success)] hover:shadow-sm" : "border-dashed border-gray-200 bg-gray-50/50"} transition-all`}>
                   <div className="flex items-center justify-between">
                     <span className="text-[11px] font-bold text-gray-700 truncate">{b.label}</span>
                     {p ? <span className={`w-2 h-2 rounded-full shrink-0 ${riskDot(p.state)}`} /> : <span className="text-[9px] text-gray-300 capitalize">{b.status.replace(/_/g, " ")}</span>}

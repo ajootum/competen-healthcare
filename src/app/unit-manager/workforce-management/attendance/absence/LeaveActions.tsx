@@ -41,10 +41,10 @@ function Row({ r }: { r: any }) {
       <td className="py-2 pr-3 text-gray-800 font-medium">{r.name}</td>
       <td className="py-2 pr-3 text-gray-500">{r.roleLabel}</td>
       <td className="py-2 pr-3 text-gray-500 capitalize">{r.unit}</td>
-      <td className="py-2 pr-3"><select value={type} onChange={e => setType(e.target.value)} className="text-[11px] border border-gray-200 rounded px-1.5 py-1 focus:outline-none focus:border-emerald-300"><option value="">— classify —</option>{TYPES.map(t => <option key={t.v} value={t.v}>{t.l}</option>)}</select></td>
-      <td className="py-2 pr-3"><input type="date" value={ret} onChange={e => setRet(e.target.value)} className="text-[11px] border border-gray-200 rounded px-1.5 py-1 focus:outline-none focus:border-emerald-300" /></td>
+      <td className="py-2 pr-3"><select value={type} onChange={e => setType(e.target.value)} className="text-[11px] border border-gray-200 rounded px-1.5 py-1 focus:outline-none focus:border-[var(--cmp-color-success)]"><option value="">— classify —</option>{TYPES.map(t => <option key={t.v} value={t.v}>{t.l}</option>)}</select></td>
+      <td className="py-2 pr-3"><input type="date" value={ret} onChange={e => setRet(e.target.value)} className="text-[11px] border border-gray-200 rounded px-1.5 py-1 focus:outline-none focus:border-[var(--cmp-color-success)]" /></td>
       <td className="py-2 pr-3 text-center"><input type="checkbox" checked={repl} onChange={e => setRepl(e.target.checked)} className="accent-emerald-600" /></td>
-      <td className="py-2"><button disabled={busy} onClick={save} className="text-[10px] px-2 py-1 rounded border border-emerald-200 text-emerald-700 hover:bg-emerald-50 disabled:opacity-40">{busy ? "…" : saved ? "Saved ✓" : "Save"}</button>{err && <span className="block text-[9px] text-rose-600">{err}</span>}</td>
+      <td className="py-2"><button disabled={busy} onClick={save} className="text-[10px] px-2 py-1 rounded border border-[var(--cmp-color-success)] text-emerald-700 hover:bg-[var(--cmp-surface-success)] disabled:opacity-40">{busy ? "…" : saved ? "Saved ✓" : "Save"}</button>{err && <span className="block text-[9px] text-[var(--cmp-text-error)]">{err}</span>}</td>
     </tr>
   );
 }

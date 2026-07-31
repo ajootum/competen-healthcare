@@ -32,14 +32,14 @@ export default async function SimDeliveryPage() {
       </div>
 
       {!q.provisioned ? (
-        <div className="bg-amber-50 border border-amber-100 rounded-xl p-4"><p className="text-[13px] text-amber-900">Simulation practice isn&apos;t provisioned — apply migration 147 (<code className="text-[11px]">cdp_sim_sessions</code>).</p></div>
+        <div className="bg-[var(--cmp-surface-warning)] border border-[var(--cmp-color-warning)] rounded-xl p-4"><p className="text-[13px] text-amber-900">Simulation practice isn&apos;t provisioned — apply migration 147 (<code className="text-[11px]">cdp_sim_sessions</code>).</p></div>
       ) : (
         <>
           <div className="grid grid-cols-3 gap-3 mb-5">
             {[
               { label: "Practice sessions", value: q.kpis.sessions, tone: "text-gray-900" },
               { label: "Learners", value: q.kpis.learners, tone: "text-gray-900" },
-              { label: "Flagged for practice", value: q.kpis.needsPractice, tone: "text-amber-600" },
+              { label: "Flagged for practice", value: q.kpis.needsPractice, tone: "text-[var(--cmp-text-warning)]" },
             ].map(k => (
               <div key={k.label} className="bg-white rounded-xl border border-gray-100 p-3.5">
                 <p className={`text-xl font-bold ${k.tone}`}>{k.value}</p>
@@ -59,7 +59,7 @@ export default async function SimDeliveryPage() {
                     <div key={t.type} className="flex items-center gap-3 px-4 py-2.5">
                       <span className="text-sm text-gray-800 capitalize flex-1">{t.type.replace(/_/g, " ")}</span>
                       <span className="text-[11px] text-gray-400 shrink-0">{t.sessions}</span>
-                      {t.needs > 0 && <span className="text-[9px] font-bold uppercase tracking-wide text-amber-700 bg-amber-50 border border-amber-100 rounded px-1.5 py-0.5 shrink-0">{t.needs} to practise</span>}
+                      {t.needs > 0 && <span className="text-[9px] font-bold uppercase tracking-wide text-[var(--cmp-text-warning)] bg-[var(--cmp-surface-warning)] border border-[var(--cmp-color-warning)] rounded px-1.5 py-0.5 shrink-0">{t.needs} to practise</span>}
                     </div>
                   ))}
                 </div>
@@ -74,7 +74,7 @@ export default async function SimDeliveryPage() {
                   {q.recent.map((r, idx) => (
                     <div key={idx} className="flex items-center gap-2 px-4 py-2.5">
                       <span className="text-sm text-gray-800 truncate flex-1">{r.scenario_name ?? "Practice session"}</span>
-                      <span className={`text-[8px] font-bold uppercase tracking-wide border rounded px-1.5 py-0.5 shrink-0 ${r.outcome === "needs_practice" ? "text-amber-700 bg-amber-50 border-amber-100" : "text-teal-700 bg-teal-50 border-teal-100"}`}>{r.outcome === "needs_practice" ? "Practice" : "Done"}</span>
+                      <span className={`text-[8px] font-bold uppercase tracking-wide border rounded px-1.5 py-0.5 shrink-0 ${r.outcome === "needs_practice" ? "text-[var(--cmp-text-warning)] bg-[var(--cmp-surface-warning)] border-[var(--cmp-color-warning)]" : "text-teal-700 bg-teal-50 border-teal-100"}`}>{r.outcome === "needs_practice" ? "Practice" : "Done"}</span>
                     </div>
                   ))}
                 </div>

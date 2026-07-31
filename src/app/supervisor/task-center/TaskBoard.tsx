@@ -11,8 +11,8 @@ import { cardClass } from "@/components/ui/primitives";
 // (verify requires a coordinator who didn't perform the task).
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
-const PRIO_TONE: Record<string, string> = { Critical: "bg-rose-50 text-rose-700", High: "bg-orange-50 text-orange-700", Medium: "bg-amber-50 text-amber-700", Low: "bg-blue-50 text-blue-600" };
-const COL_TONE: Record<string, string> = { new: "text-gray-600", accepted: "text-blue-600", in_progress: "text-violet-600", awaiting: "text-amber-600", completed: "text-green-600" };
+const PRIO_TONE: Record<string, string> = { Critical: "bg-[var(--cmp-surface-error)] text-[var(--cmp-text-error)]", High: "bg-[var(--cmp-surface-warning)] text-orange-700", Medium: "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]", Low: "bg-[var(--cmp-surface-information)] text-[var(--cmp-text-information)]" };
+const COL_TONE: Record<string, string> = { new: "text-gray-600", accepted: "text-[var(--cmp-text-information)]", in_progress: "text-violet-600", awaiting: "text-[var(--cmp-text-warning)]", completed: "text-[var(--cmp-text-success)]" };
 const NEXT_LABEL: Record<string, string> = { accepted: "Accept", in_progress: "Start", completed: "Complete", verified: "Verify" };
 const fmt = (iso?: string | null) => iso ? new Date(iso).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: false }) : "";
 
@@ -61,14 +61,14 @@ export default function TaskBoard({ columns, editable }: { columns: any[]; edita
                 <div key={c.id}
                   draggable={editable}
                   onDragStart={e => { e.dataTransfer.setData("text/plain", c.id); e.dataTransfer.setData("from", col.key); e.dataTransfer.effectAllowed = "move"; }}
-                  className={`rounded-lg border bg-white p-2 ${editable ? "cursor-grab active:cursor-grabbing" : ""} ${c.overdue ? "border-rose-200" : "border-gray-100"}`}>
+                  className={`rounded-lg border bg-white p-2 ${editable ? "cursor-grab active:cursor-grabbing" : ""} ${c.overdue ? "border-[var(--cmp-color-error)]" : "border-gray-100"}`}>
                   <p className="text-[11px] font-medium text-gray-800 leading-tight line-clamp-2">{c.desc}</p>
                   <div className="flex items-center gap-1 mt-1">
                     {c.bed && <span className="text-[9px] text-gray-400">{c.bed}</span>}
                     <span className={`ml-auto text-[8px] font-semibold px-1 py-0.5 rounded ${PRIO_TONE[c.prioLabel] ?? "bg-gray-100 text-gray-600"}`}>{c.prioLabel}</span>
                   </div>
                   <div className="flex items-center gap-1 mt-1">
-                    {c.due && <span className={`text-[9px] ${c.overdue ? "text-rose-600 font-semibold" : "text-gray-400"}`}>{c.overdue ? "⏱ " : ""}{fmt(c.due)}</span>}
+                    {c.due && <span className={`text-[9px] ${c.overdue ? "text-[var(--cmp-text-error)] font-semibold" : "text-gray-400"}`}>{c.overdue ? "⏱ " : ""}{fmt(c.due)}</span>}
                     {editable && col.next && (
                       <button onClick={() => move(c.id, col.next)} disabled={busy === c.id}
                         className="ml-auto text-[9px] font-semibold text-teal-700 hover:underline disabled:opacity-50">
@@ -82,7 +82,7 @@ export default function TaskBoard({ columns, editable }: { columns: any[]; edita
           </div>
         ))}
       </div>
-      {err && <p className="text-[11px] text-rose-600 mt-2">{err}</p>}
+      {err && <p className="text-[11px] text-[var(--cmp-text-error)] mt-2">{err}</p>}
     </div>
   );
 }

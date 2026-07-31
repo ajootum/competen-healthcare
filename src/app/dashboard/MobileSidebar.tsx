@@ -81,7 +81,7 @@ export default function MobileSidebar({ fullName, role, isAdmin, unread = 0, ava
           className="relative w-10 h-10 rounded-lg flex items-center justify-center text-lg hover:bg-teal-800/50 transition-colors shrink-0">
           🔔
           {unread > 0 && (
-            <span className="absolute top-1 right-1 bg-red-500 text-white text-[9px] font-bold rounded-full min-w-[15px] h-[15px] px-0.5 flex items-center justify-center">
+            <span className="absolute top-1 right-1 bg-[var(--cmp-color-critical)] text-white text-[9px] font-bold rounded-full min-w-[15px] h-[15px] px-0.5 flex items-center justify-center">
               {unread > 99 ? "99+" : unread}
             </span>
           )}
@@ -129,7 +129,7 @@ export default function MobileSidebar({ fullName, role, isAdmin, unread = 0, ava
                 <span className="text-sm leading-none w-5 text-center">{icon}</span>
                 <span className="flex-1">{label}</span>
                 {href === "/dashboard/notifications" && unread > 0 && (
-                  <span className="bg-red-500 text-white text-[9px] font-bold rounded-full min-w-[16px] h-4 px-1 flex items-center justify-center">
+                  <span className="bg-[var(--cmp-color-critical)] text-white text-[9px] font-bold rounded-full min-w-[16px] h-4 px-1 flex items-center justify-center">
                     {unread > 99 ? "99+" : unread}
                   </span>
                 )}

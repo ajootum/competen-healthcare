@@ -44,21 +44,21 @@ export default async function LearningCentrePage() {
       {/* Header */}
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <p className="text-[11px] font-semibold text-blue-600 uppercase tracking-wide">Personal Workspace</p>
+          <p className="text-[11px] font-semibold text-[var(--cmp-text-information)] uppercase tracking-wide">Personal Workspace</p>
           <h1 className="text-2xl font-bold text-gray-900">My Learning Centre</h1>
           <p className="text-sm text-gray-500 mt-0.5">Your personalised learning hub — track progress, continue learning and achieve your goals.</p>
         </div>
-        <Link href="/dashboard/cpd" className="text-sm font-medium text-white bg-blue-600 rounded-lg px-3 py-2 hover:bg-blue-500">Log CPD</Link>
+        <Link href="/dashboard/cpd" className="text-sm font-medium text-white bg-[var(--cmp-color-information)] rounded-lg px-3 py-2 hover:bg-[var(--cmp-color-information)]">Log CPD</Link>
       </div>
 
       {/* KPI ribbon */}
       <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
-        <Kpi icon="⏱️" label="Learning Hours" value={d.kpis.hoursThisMonth} sub="This month" tint="bg-blue-50" />
+        <Kpi icon="⏱️" label="Learning Hours" value={d.kpis.hoursThisMonth} sub="This month" tint="bg-[var(--cmp-surface-information)]" />
         <Kpi icon="📘" label="In Progress" value={d.kpis.inProgress} sub="Continue learning" tint="bg-indigo-50" />
-        <Kpi icon="✅" label="Completed" value={d.kpis.completed} sub="All time" tint="bg-emerald-50" />
-        <Kpi icon="🎖️" label="Certificates" value={d.kpis.certificates} sub="Earned" tint="bg-amber-50" />
+        <Kpi icon="✅" label="Completed" value={d.kpis.completed} sub="All time" tint="bg-[var(--cmp-surface-success)]" />
+        <Kpi icon="🎖️" label="Certificates" value={d.kpis.certificates} sub="Earned" tint="bg-[var(--cmp-surface-warning)]" />
         <Kpi icon="⭐" label="CPD Points" value={d.kpis.cpdPointsYear} sub="This year" tint="bg-cyan-50" />
-        <Kpi icon="🔥" label="Learning Streak" value={d.kpis.streak} sub={d.kpis.streak === 1 ? "day" : "days"} tint="bg-rose-50" />
+        <Kpi icon="🔥" label="Learning Streak" value={d.kpis.streak} sub={d.kpis.streak === 1 ? "day" : "days"} tint="bg-[var(--cmp-surface-error)]" />
       </div>
 
       {/* Tabs */}
@@ -73,7 +73,7 @@ export default async function LearningCentrePage() {
         <div className="lg:col-span-2 space-y-5">
           {/* Continue Learning */}
           <div className="bg-white rounded-xl border border-gray-200 p-4">
-            <div className="flex items-center justify-between mb-3"><h2 className="text-sm font-semibold text-gray-900">Continue Learning</h2><Link href="/dashboard/courses" className="text-[12px] font-medium text-blue-600 hover:underline">View all →</Link></div>
+            <div className="flex items-center justify-between mb-3"><h2 className="text-sm font-semibold text-gray-900">Continue Learning</h2><Link href="/dashboard/courses" className="text-[12px] font-medium text-[var(--cmp-text-information)] hover:underline">View all →</Link></div>
             {d.continueLearning.length > 0 ? (
               <div className="space-y-3">
                 {d.continueLearning.map((e: any) => ( // eslint-disable-line @typescript-eslint/no-explicit-any
@@ -81,14 +81,14 @@ export default async function LearningCentrePage() {
                     <div className="w-11 h-11 rounded-lg bg-gradient-to-br from-blue-500 to-indigo-500 flex items-center justify-center text-white text-lg shrink-0">📖</div>
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-semibold text-gray-800 truncate">{e.course.title}</p>
-                      <div className="flex items-center gap-2 text-[11px] text-gray-400 mt-0.5"><span>{d.courseTypeLabel[e.course.course_type] ?? "Course"}</span>{e.mandatory && <span className="text-amber-600 font-medium">Mandatory</span>}{e.due_date && <span>· Due {fmtDate(e.due_date)}</span>}</div>
-                      <div className="mt-1.5 h-1.5 rounded-full bg-gray-100 overflow-hidden"><div className="h-full rounded-full bg-blue-500" style={{ width: `${e.progress_pct ?? 0}%` }} /></div>
+                      <div className="flex items-center gap-2 text-[11px] text-gray-400 mt-0.5"><span>{d.courseTypeLabel[e.course.course_type] ?? "Course"}</span>{e.mandatory && <span className="text-[var(--cmp-text-warning)] font-medium">Mandatory</span>}{e.due_date && <span>· Due {fmtDate(e.due_date)}</span>}</div>
+                      <div className="mt-1.5 h-1.5 rounded-full bg-gray-100 overflow-hidden"><div className="h-full rounded-full bg-[var(--cmp-color-information)]" style={{ width: `${e.progress_pct ?? 0}%` }} /></div>
                     </div>
-                    <div className="text-right shrink-0"><p className="text-sm font-bold text-blue-600">{e.progress_pct ?? 0}%</p><Link href="/dashboard/courses" className="text-[11px] font-medium text-gray-500 hover:text-blue-600">Continue</Link></div>
+                    <div className="text-right shrink-0"><p className="text-sm font-bold text-[var(--cmp-text-information)]">{e.progress_pct ?? 0}%</p><Link href="/dashboard/courses" className="text-[11px] font-medium text-gray-500 hover:text-[var(--cmp-text-information)]">Continue</Link></div>
                   </div>
                 ))}
               </div>
-            ) : <p className="text-sm text-gray-400 py-8 text-center">No courses in progress. Browse the <Link href="/dashboard/courses" className="text-blue-600 hover:underline">catalogue</Link> to enrol.</p>}
+            ) : <p className="text-sm text-gray-400 py-8 text-center">No courses in progress. Browse the <Link href="/dashboard/courses" className="text-[var(--cmp-text-information)] hover:underline">catalogue</Link> to enrol.</p>}
           </div>
 
           {/* Recommended */}
@@ -97,10 +97,10 @@ export default async function LearningCentrePage() {
             {d.recommended.length > 0 ? (
               <div className="grid sm:grid-cols-2 xl:grid-cols-3 gap-3">
                 {d.recommended.map((c: any) => ( // eslint-disable-line @typescript-eslint/no-explicit-any
-                  <Link key={c.id} href="/dashboard/courses" className="border border-gray-100 rounded-lg p-3 hover:border-blue-200 hover:bg-blue-50/40 transition-colors">
+                  <Link key={c.id} href="/dashboard/courses" className="border border-gray-100 rounded-lg p-3 hover:border-[var(--cmp-color-information)] hover:bg-[var(--cmp-surface-information)]/40 transition-colors">
                     <div className="w-full h-16 rounded-md bg-gradient-to-br from-slate-100 to-blue-100 flex items-center justify-center text-2xl mb-2">🎓</div>
                     <p className="text-[13px] font-semibold text-gray-800 leading-snug line-clamp-2">{c.title}</p>
-                    <div className="flex items-center gap-2 mt-1 text-[11px] text-gray-400"><span>{d.courseTypeLabel[c.course_type] ?? "Course"}</span>{c.mandatory && <span className="text-amber-600 font-medium">Mandatory</span>}</div>
+                    <div className="flex items-center gap-2 mt-1 text-[11px] text-gray-400"><span>{d.courseTypeLabel[c.course_type] ?? "Course"}</span>{c.mandatory && <span className="text-[var(--cmp-text-warning)] font-medium">Mandatory</span>}</div>
                   </Link>
                 ))}
               </div>
@@ -109,12 +109,12 @@ export default async function LearningCentrePage() {
 
           {/* Learning Pathways */}
           <div className="bg-white rounded-xl border border-gray-200 p-4">
-            <div className="flex items-center justify-between mb-3"><h2 className="text-sm font-semibold text-gray-900">Learning Pathways</h2><Link href="/dashboard/courses" className="text-[12px] font-medium text-blue-600 hover:underline">Explore all →</Link></div>
+            <div className="flex items-center justify-between mb-3"><h2 className="text-sm font-semibold text-gray-900">Learning Pathways</h2><Link href="/dashboard/courses" className="text-[12px] font-medium text-[var(--cmp-text-information)] hover:underline">Explore all →</Link></div>
             {d.pathways.length > 0 ? (
               <div className="grid sm:grid-cols-2 gap-3">
                 {d.pathways.map((p: any) => ( // eslint-disable-line @typescript-eslint/no-explicit-any
                   <div key={p.name} className="flex items-center gap-3 border border-gray-100 rounded-lg p-3">
-                    <div className="w-9 h-9 rounded-lg bg-blue-50 flex items-center justify-center text-blue-600">🧭</div>
+                    <div className="w-9 h-9 rounded-lg bg-[var(--cmp-surface-information)] flex items-center justify-center text-[var(--cmp-text-information)]">🧭</div>
                     <div className="min-w-0"><p className="text-[13px] font-semibold text-gray-800 truncate">{p.name}</p><p className="text-[11px] text-gray-400">{p.n} course{p.n === 1 ? "" : "s"}</p></div>
                   </div>
                 ))}
@@ -127,14 +127,14 @@ export default async function LearningCentrePage() {
         <div className="space-y-5">
           {/* Learning Plan */}
           <div id="plan" className="bg-white rounded-xl border border-gray-200 p-4">
-            <div className="flex items-center justify-between mb-2"><h3 className="text-sm font-semibold text-gray-900">My Learning Plan</h3><Link href="/dashboard/learning/pathway" className="text-[11px] font-medium text-blue-600 hover:underline">Details →</Link></div>
+            <div className="flex items-center justify-between mb-2"><h3 className="text-sm font-semibold text-gray-900">My Learning Plan</h3><Link href="/dashboard/learning/pathway" className="text-[11px] font-medium text-[var(--cmp-text-information)] hover:underline">Details →</Link></div>
             {d.plan ? (
               <div>
                 <p className="text-[13px] font-semibold text-gray-800">{d.plan.title}</p>
                 <div className="flex items-center justify-between text-[11px] text-gray-500 mt-2 mb-1"><span>Progress</span><span className="font-semibold text-gray-700">{d.plan.progress}%</span></div>
-                <div className="h-2 rounded-full bg-gray-100 overflow-hidden"><div className="h-full rounded-full bg-emerald-500" style={{ width: `${d.plan.progress}%` }} /></div>
+                <div className="h-2 rounded-full bg-gray-100 overflow-hidden"><div className="h-full rounded-full bg-[var(--cmp-color-success)]" style={{ width: `${d.plan.progress}%` }} /></div>
                 <p className="text-[11px] text-gray-400 mt-1">{d.plan.done} of {d.plan.total} items complete</p>
-                {d.plan.nextMilestone && <div className="mt-3 bg-blue-50/60 rounded-lg p-2.5"><p className="text-[10px] font-semibold text-blue-700 uppercase tracking-wide">Next Milestone</p><p className="text-[12px] font-medium text-gray-800 mt-0.5">{d.plan.nextMilestone.resource_title ?? d.plan.nextMilestone.competency_name}</p>{d.plan.nextMilestone.reason && <p className="text-[10px] text-gray-500">{d.plan.nextMilestone.reason}</p>}</div>}
+                {d.plan.nextMilestone && <div className="mt-3 bg-[var(--cmp-surface-information)]/60 rounded-lg p-2.5"><p className="text-[10px] font-semibold text-blue-700 uppercase tracking-wide">Next Milestone</p><p className="text-[12px] font-medium text-gray-800 mt-0.5">{d.plan.nextMilestone.resource_title ?? d.plan.nextMilestone.competency_name}</p>{d.plan.nextMilestone.reason && <p className="text-[10px] text-gray-500">{d.plan.nextMilestone.reason}</p>}</div>}
               </div>
             ) : <p className="text-xs text-gray-400 py-4 text-center">No active development plan. Your assessor generates one from competency decisions.</p>}
           </div>
@@ -156,7 +156,7 @@ export default async function LearningCentrePage() {
 
           {/* CPD summary donut */}
           <div className="bg-white rounded-xl border border-gray-200 p-4">
-            <div className="flex items-center justify-between mb-3"><h3 className="text-sm font-semibold text-gray-900">CPD Summary</h3><Link href="/dashboard/cpd" className="text-[11px] font-medium text-blue-600 hover:underline">Dashboard →</Link></div>
+            <div className="flex items-center justify-between mb-3"><h3 className="text-sm font-semibold text-gray-900">CPD Summary</h3><Link href="/dashboard/cpd" className="text-[11px] font-medium text-[var(--cmp-text-information)] hover:underline">Dashboard →</Link></div>
             {d.cpdSummary.length > 0 ? (
               <div className="flex items-center gap-4">
                 <svg width="120" height="120" viewBox="0 0 120 120" className="shrink-0">
@@ -188,10 +188,10 @@ export default async function LearningCentrePage() {
           </div>
 
           {/* Learning Assistant */}
-          <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-xl border border-blue-100 p-4">
+          <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-xl border border-[var(--cmp-color-information)] p-4">
             <h3 className="text-sm font-semibold text-gray-900 mb-1">✨ Learning Assistant</h3>
             <p className="text-[12px] text-gray-600 mb-3">Need help choosing what to learn next?</p>
-            <Link href={`/dashboard/copilot?scenario=${encodeURIComponent(coachPrompt)}`} className="block text-center text-sm font-medium text-white bg-blue-600 rounded-lg py-2 hover:bg-blue-500">Get Recommendations</Link>
+            <Link href={`/dashboard/copilot?scenario=${encodeURIComponent(coachPrompt)}`} className="block text-center text-sm font-medium text-white bg-[var(--cmp-color-information)] rounded-lg py-2 hover:bg-[var(--cmp-color-information)]">Get Recommendations</Link>
           </div>
         </div>
       </div>

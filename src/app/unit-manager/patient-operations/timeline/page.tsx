@@ -20,7 +20,7 @@ const card = "bg-white rounded-xl border border-gray-200";
 // Module-level formatter (kept out of the render body for react-hooks/purity).
 const fmtDateTime = (iso: string) => { const d = new Date(iso); return `${d.toLocaleDateString([], { day: "2-digit", month: "short" })} ${d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: false })}`; };
 const EVENT_ICON: Record<string, string> = { admission: "➕", bed_change: "🛏️", transfer: "🔄", theatre: "🔪", recovery: "🌡️", stage_change: "📈", status_change: "🔁", escalation: "🚨", note: "📝", discharge: "🏠" };
-const EVENT_TONE: Record<string, string> = { admission: "bg-sky-100 text-sky-700", transfer: "bg-indigo-100 text-indigo-700", theatre: "bg-violet-100 text-violet-700", escalation: "bg-rose-100 text-rose-700", discharge: "bg-teal-100 text-teal-700", note: "bg-gray-100 text-gray-600" };
+const EVENT_TONE: Record<string, string> = { admission: "bg-[var(--cmp-surface-information)] text-[var(--cmp-text-information)]", transfer: "bg-indigo-100 text-indigo-700", theatre: "bg-violet-100 text-violet-700", escalation: "bg-[var(--cmp-surface-error)] text-[var(--cmp-text-error)]", discharge: "bg-teal-100 text-teal-700", note: "bg-gray-100 text-gray-600" };
 
 export default async function PatientTimeline() {
   const supabase = await createClient();
@@ -46,7 +46,7 @@ export default async function PatientTimeline() {
       <PosTabs />
     </>
   );
-  if (!p.ready) return <div className="space-y-4">{header}<div className="bg-amber-50 border border-amber-200 rounded-xl p-6"><p className="font-semibold text-amber-900">⚙️ Coming online</p><p className="text-sm text-amber-800 mt-1">The Clinical Operations Engine isn&apos;t provisioned for this unit yet.</p></div></div>;
+  if (!p.ready) return <div className="space-y-4">{header}<div className="bg-[var(--cmp-surface-warning)] border border-[var(--cmp-color-warning)] rounded-xl p-6"><p className="font-semibold text-amber-900">⚙️ Coming online</p><p className="text-sm text-amber-800 mt-1">The Clinical Operations Engine isn&apos;t provisioned for this unit yet.</p></div></div>;
 
   const { timeline, timelineReady } = p;
 
@@ -67,7 +67,7 @@ export default async function PatientTimeline() {
             <div className="space-y-3">
               {timeline.map((e: any) => (
                 <div key={e.id} className="relative">
-                  <span className="absolute -left-[15px] top-1 w-3 h-3 rounded-full bg-white border-2 border-emerald-300" />
+                  <span className="absolute -left-[15px] top-1 w-3 h-3 rounded-full bg-white border-2 border-[var(--cmp-color-success)]" />
                   <div className="flex items-start gap-2.5">
                     <span className="text-sm mt-0.5">{EVENT_ICON[e.event_type] ?? "•"}</span>
                     <div className="flex-1 min-w-0">

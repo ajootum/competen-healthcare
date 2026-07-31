@@ -31,7 +31,7 @@ export default async function SubscriptionsPage() {
         <p className="text-sm text-gray-500 mt-1">The plan catalogue and its entitlements. Tenants are attached to a plan at provisioning.</p>
       </div>
       {!ready ? (
-        <div className="bg-amber-50 border border-amber-200 rounded-xl p-5 text-sm text-amber-700">Apply migrations <code className="font-mono text-xs">040–042</code> to load the plan catalogue.</div>
+        <div className="bg-[var(--cmp-surface-warning)] border border-[var(--cmp-color-warning)] rounded-xl p-5 text-sm text-[var(--cmp-text-warning)]">Apply migrations <code className="font-mono text-xs">040–042</code> to load the plan catalogue.</div>
       ) : (
         <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
           {plans.map(pl => {

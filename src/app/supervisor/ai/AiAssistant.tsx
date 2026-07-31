@@ -40,7 +40,7 @@ export default function AiAssistant() {
         <button onClick={() => ask(q)} disabled={!q.trim() || busy} className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-teal-600 text-white hover:bg-teal-700 disabled:opacity-50">{busy ? "…" : "Ask"}</button>
       </div>
       {answer && <div className="rounded-lg bg-teal-50/50 border border-teal-100 p-2.5 mb-2 text-[11px] text-gray-700 whitespace-pre-wrap leading-relaxed max-h-48 overflow-y-auto">{answer}</div>}
-      {err && <div className="rounded-lg bg-amber-50 border border-amber-100 p-2 mb-2 text-[11px] text-amber-700">{err}</div>}
+      {err && <div className="rounded-lg bg-[var(--cmp-surface-warning)] border border-[var(--cmp-color-warning)] p-2 mb-2 text-[11px] text-[var(--cmp-text-warning)]">{err}</div>}
       <div className="space-y-1">
         {SUGGESTIONS.map((s) => (
           <button key={s} onClick={() => { setQ(s); ask(s); }} disabled={busy} className="w-full flex items-center gap-2 text-left rounded-lg border border-gray-100 hover:border-teal-300 hover:bg-teal-50/40 px-2.5 py-1.5 text-[11px] text-gray-700 disabled:opacity-50"><span className="text-gray-400">›</span>{s}</button>

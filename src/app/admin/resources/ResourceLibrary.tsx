@@ -76,7 +76,7 @@ export default function ResourceLibrary({ resources, links, competencies }: { re
               </div>
               <div className="flex items-center gap-1.5">
                 <button onClick={() => setLinkFor(linkFor === r.id ? null : r.id)} className="px-2.5 py-1 text-xs text-teal-600 border border-teal-200 rounded-lg hover:bg-teal-50 font-semibold">Link competencies</button>
-                <button onClick={() => del(r)} className="px-2.5 py-1 text-xs text-red-500 border border-red-100 rounded-lg hover:bg-red-50">Delete</button>
+                <button onClick={() => del(r)} className="px-2.5 py-1 text-xs text-red-500 border border-[var(--cmp-color-critical)] rounded-lg hover:bg-[var(--cmp-surface-critical)]">Delete</button>
               </div>
             </div>
             <div className="px-5 py-3">
@@ -85,7 +85,7 @@ export default function ResourceLibrary({ resources, links, competencies }: { re
                   <span key={l.competency_id} className="group inline-flex items-center gap-1 text-xs bg-teal-50 border border-teal-100 text-teal-700 pl-2.5 pr-1.5 py-0.5 rounded-full">
                     {l.framework_competencies?.name ?? "—"}
                     <button onClick={() => api("PATCH", { id: r.id, action: "unlink", competency_id: l.competency_id })}
-                      className="opacity-0 group-hover:opacity-100 text-red-400 hover:text-red-600 transition-opacity leading-none px-0.5">×</button>
+                      className="opacity-0 group-hover:opacity-100 text-red-400 hover:text-[var(--cmp-text-critical)] transition-opacity leading-none px-0.5">×</button>
                   </span>
                 ))}
                 {!rlinks.length && <p className="text-[11px] text-gray-300 italic">Not linked to any competency yet</p>}

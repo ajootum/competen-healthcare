@@ -14,7 +14,7 @@ type Mod = { code: string; icon: string; label: string; desc: string; href?: str
 
 const BADGE: Record<Status, { text: string; cls: string }> = {
   real: { text: "Live", cls: "text-teal-700 bg-teal-50 border-teal-100" },
-  partial: { text: "Partial", cls: "text-amber-600 bg-amber-50 border-amber-100" },
+  partial: { text: "Partial", cls: "text-[var(--cmp-text-warning)] bg-[var(--cmp-surface-warning)] border-[var(--cmp-color-warning)]" },
   gap: { text: "Planned", cls: "text-gray-400 bg-gray-50 border-gray-100" },
 };
 
@@ -130,7 +130,7 @@ export default async function DeliveryPlatformPage() {
       {/* Coverage summary */}
       <div className="flex items-center gap-2 mb-5 text-[11px]">
         <span className="font-semibold text-teal-700 bg-teal-50 border border-teal-100 rounded-lg px-2.5 py-1">{nReal} live</span>
-        {nPartial > 0 && <span className="font-semibold text-amber-600 bg-amber-50 border border-amber-100 rounded-lg px-2.5 py-1">{nPartial} partial (runtime loop)</span>}
+        {nPartial > 0 && <span className="font-semibold text-[var(--cmp-text-warning)] bg-[var(--cmp-surface-warning)] border border-[var(--cmp-color-warning)] rounded-lg px-2.5 py-1">{nPartial} partial (runtime loop)</span>}
         <span className="font-semibold text-gray-400 bg-gray-50 border border-gray-100 rounded-lg px-2.5 py-1">{nGap} planned (net-new)</span>
       </div>
 

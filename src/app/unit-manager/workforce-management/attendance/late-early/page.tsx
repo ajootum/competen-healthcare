@@ -18,9 +18,9 @@ export const dynamic = "force-dynamic";
 const card = "bg-white rounded-xl border border-gray-200";
 const SEVERITY = [
   { band: "1–5 min", label: "Informational", tone: "bg-gray-100 text-gray-500", min: 1, max: 5 },
-  { band: "6–15 min", label: "Minor", tone: "bg-sky-50 text-sky-700", min: 6, max: 15 },
-  { band: "16–30 min", label: "Significant", tone: "bg-amber-50 text-amber-700", min: 16, max: 30 },
-  { band: "> 30 min", label: "Severe", tone: "bg-orange-50 text-orange-700", min: 31, max: 99999 },
+  { band: "6–15 min", label: "Minor", tone: "bg-[var(--cmp-surface-information)] text-[var(--cmp-text-information)]", min: 6, max: 15 },
+  { band: "16–30 min", label: "Significant", tone: "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]", min: 16, max: 30 },
+  { band: "> 30 min", label: "Severe", tone: "bg-[var(--cmp-surface-warning)] text-orange-700", min: 31, max: 99999 },
 ];
 const bandOf = (m: number) => SEVERITY.find(s => m >= s.min && m <= s.max) ?? SEVERITY[0];
 const PATTERNS = ["Repeated late arrival", "Repeated early departure", "Frequent Monday/weekend absence", "Absence around leave", "Absence near public holidays", "Recurring missed clock-out", "Repeated correction", "Repeated no-show", "Abnormal attendance across units"];
@@ -57,9 +57,9 @@ export default async function LateEarly() {
       {header}
 
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        <Kpi label="Late arrivals" value={late.length} tone={late.length ? "text-amber-600" : "text-emerald-600"} />
-        <Kpi label="Severe (>30m)" value={late.filter((r: any) => r.minutesLate > 30).length} tone={late.filter((r: any) => r.minutesLate > 30).length ? "text-rose-600" : undefined} />
-        <Kpi label="Present" value={d.ready ? d.kpis.present : "—"} tone="text-emerald-600" />
+        <Kpi label="Late arrivals" value={late.length} tone={late.length ? "text-[var(--cmp-text-warning)]" : "text-[var(--cmp-text-success)]"} />
+        <Kpi label="Severe (>30m)" value={late.filter((r: any) => r.minutesLate > 30).length} tone={late.filter((r: any) => r.minutesLate > 30).length ? "text-[var(--cmp-text-error)]" : undefined} />
+        <Kpi label="Present" value={d.ready ? d.kpis.present : "—"} tone="text-[var(--cmp-text-success)]" />
         <Kpi label="Early departures" value="—" tone="text-gray-300" />
       </div>
 
@@ -68,7 +68,7 @@ export default async function LateEarly() {
         {late.length === 0 ? <p className="text-sm text-gray-400">No late arrivals recorded — either everyone was on time, or check-in hasn&apos;t been captured yet on <Link href="/unit-manager/workforce-management/attendance/today" className="text-emerald-700 hover:underline">Today&apos;s Attendance</Link>.</p> : (
           <div className="overflow-x-auto"><table className="w-full text-xs">
             <thead><tr className="text-gray-400 text-left border-b border-gray-100"><th className="py-2 pr-3 font-medium">Staff</th><th className="py-2 pr-3 font-medium">Role</th><th className="py-2 pr-3 font-medium">Unit</th><th className="py-2 pr-3 font-medium">Arrival</th><th className="py-2 pr-3 font-medium text-right">Late by</th><th className="py-2 font-medium">Severity</th></tr></thead>
-            <tbody>{late.map((r: any) => { const bnd = bandOf(r.minutesLate); return (<tr key={r.id} className="border-b border-gray-50"><td className="py-2 pr-3 text-gray-800 font-medium">{r.name}</td><td className="py-2 pr-3 text-gray-500">{r.roleLabel}</td><td className="py-2 pr-3 text-gray-500">{r.unit}</td><td className="py-2 pr-3 text-gray-600">{r.arrivalAt ? new Date(r.arrivalAt).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" }) : "—"}</td><td className="py-2 pr-3 text-right font-semibold text-amber-600">{r.minutesLate}m</td><td className="py-2"><span className={`text-[9px] px-1.5 py-0.5 rounded ${bnd.tone}`}>{bnd.label}</span></td></tr>); })}</tbody>
+            <tbody>{late.map((r: any) => { const bnd = bandOf(r.minutesLate); return (<tr key={r.id} className="border-b border-gray-50"><td className="py-2 pr-3 text-gray-800 font-medium">{r.name}</td><td className="py-2 pr-3 text-gray-500">{r.roleLabel}</td><td className="py-2 pr-3 text-gray-500">{r.unit}</td><td className="py-2 pr-3 text-gray-600">{r.arrivalAt ? new Date(r.arrivalAt).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" }) : "—"}</td><td className="py-2 pr-3 text-right font-semibold text-[var(--cmp-text-warning)]">{r.minutesLate}m</td><td className="py-2"><span className={`text-[9px] px-1.5 py-0.5 rounded ${bnd.tone}`}>{bnd.label}</span></td></tr>); })}</tbody>
           </table></div>
         )}
         <p className="text-[10px] text-gray-400 mt-2">Minutes-late is computed from the shift start (op_shifts.starts_at) at check-in. Grace-period + repeat-lateness thresholds are tenant-configurable (§16.1, next-phase). Early departure needs an early-departure event + shift-end comparison (next-phase).</p>

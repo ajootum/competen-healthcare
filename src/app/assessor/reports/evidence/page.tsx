@@ -90,7 +90,7 @@ export default async function EvidenceAnalyticsPage() {
               <div key={w.label} className="flex-1 flex flex-col items-center gap-1" title={`${w.label}: ${w.sub} submitted, ${w.ver} verified`}>
                 <div className="w-full flex items-end justify-center gap-0.5" style={{ height: "70px" }}>
                   <div className="w-2.5 bg-indigo-400 rounded-t" style={{ height: `${Math.round(w.sub / weekMax * 68)}px` }} />
-                  <div className="w-2.5 bg-green-400 rounded-t" style={{ height: `${Math.round(w.ver / weekMax * 68)}px` }} />
+                  <div className="w-2.5 bg-[var(--cmp-color-success)] rounded-t" style={{ height: `${Math.round(w.ver / weekMax * 68)}px` }} />
                 </div>
                 <span className="text-[8px] text-gray-400">{w.label}</span>
               </div>
@@ -135,7 +135,7 @@ export default async function EvidenceAnalyticsPage() {
                   <span className="text-gray-600">{b.label}</span><span className="font-bold text-gray-900">{b.n}</span>
                 </div>
                 <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
-                  <div className={`h-full rounded-full ${b.label === "15+ days" ? "bg-red-400" : "bg-amber-400"}`} style={{ width: `${Math.round(b.n / ageMax * 100)}%` }} />
+                  <div className={`h-full rounded-full ${b.label === "15+ days" ? "bg-[var(--cmp-color-critical)]" : "bg-[var(--cmp-color-warning)]"}`} style={{ width: `${Math.round(b.n / ageMax * 100)}%` }} />
                 </div>
               </div>
             ))}

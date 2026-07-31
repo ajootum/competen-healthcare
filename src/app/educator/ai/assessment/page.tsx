@@ -13,9 +13,9 @@ import { DarkCard as Card } from "../../../../components/ui/primitives";
 
 export const dynamic = "force-dynamic";
 
-const TINT_DOT: Record<Tint, string> = { green: "bg-emerald-400", amber: "bg-amber-400", red: "bg-rose-400", muted: "bg-slate-600" };
+const TINT_DOT: Record<Tint, string> = { green: "bg-[var(--cmp-color-success)]", amber: "bg-[var(--cmp-color-warning)]", red: "bg-[var(--cmp-color-error)]", muted: "bg-slate-600" };
 const RISK_CLS: Record<string, string> = { Low: "text-emerald-400", Medium: "text-amber-400", High: "text-rose-400" };
-const SEV_CLS: Record<string, string> = { High: "bg-rose-500/20 text-rose-300 border-rose-500/30", Medium: "bg-amber-500/20 text-amber-300 border-amber-500/30", Low: "bg-sky-500/20 text-sky-300 border-sky-500/30" };
+const SEV_CLS: Record<string, string> = { High: "bg-[var(--cmp-color-error)]/20 text-rose-300 border-rose-500/30", Medium: "bg-[var(--cmp-color-warning)]/20 text-amber-300 border-amber-500/30", Low: "bg-[var(--cmp-color-information)]/20 text-sky-300 border-sky-500/30" };
 const PRIO_CLS = SEV_CLS;
 const EV_CLS: Record<string, string> = { Strong: "text-emerald-400", Partial: "text-amber-400", Weak: "text-rose-400", None: "text-slate-500" };
 
@@ -90,7 +90,7 @@ export default async function AssessmentIntelligencePage() {
             <p className="text-slate-400 text-sm">AI-powered Assessment Quality • Alignment • Fairness • Prediction</p>
           </div>
           <div className="ml-auto flex items-center gap-2">
-            <Link href="/educator/analytics/assessment" className="text-[12px] font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-lg px-3 py-2 transition-colors">⬇ Export Report</Link>
+            <Link href="/educator/analytics/assessment" className="text-[12px] font-semibold text-white bg-[var(--cmp-color-information)] hover:bg-blue-700 rounded-lg px-3 py-2 transition-colors">⬇ Export Report</Link>
             <span title="Sharing needs a share-link store — coming soon" className="text-[12px] text-slate-400 bg-white/[0.04] border border-white/10 rounded-lg px-3 py-2 select-none">↗ Share</span>
           </div>
         </div>
@@ -238,7 +238,7 @@ export default async function AssessmentIntelligencePage() {
                     <div key={i} className="rounded-xl bg-white/[0.03] border border-white/10 p-2.5">
                       <p className="text-[12px] font-bold text-white leading-tight">{p.title}</p>
                       <p className="text-[10px] text-slate-400 mt-0.5 leading-snug">{p.reason}</p>
-                      <div className="flex items-center gap-1.5 mt-1.5"><div className="h-1 flex-1 rounded-full bg-white/10 overflow-hidden"><div className="h-full rounded-full bg-blue-500" style={{ width: `${p.confidence}%` }} /></div><span className="text-[9px] text-slate-400">{p.confidence}%</span></div>
+                      <div className="flex items-center gap-1.5 mt-1.5"><div className="h-1 flex-1 rounded-full bg-white/10 overflow-hidden"><div className="h-full rounded-full bg-[var(--cmp-color-information)]" style={{ width: `${p.confidence}%` }} /></div><span className="text-[9px] text-slate-400">{p.confidence}%</span></div>
                     </div>
                   ))}
                 </div>

@@ -9,8 +9,8 @@ import { loadBenchmarking } from "@/lib/performance/benchmarking";
 export const dynamic = "force-dynamic";
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
-const LVL: Record<string, string> = { emerald: "text-emerald-700 bg-emerald-50 border-emerald-100", teal: "text-teal-700 bg-teal-50 border-teal-100", amber: "text-amber-700 bg-amber-50 border-amber-100", rose: "text-rose-700 bg-rose-50 border-rose-100" };
-const capTone = (n: number) => (n >= 80 ? "text-emerald-600" : n >= 60 ? "text-teal-600" : n >= 40 ? "text-amber-600" : "text-rose-600");
+const LVL: Record<string, string> = { emerald: "text-emerald-700 bg-[var(--cmp-surface-success)] border-[var(--cmp-color-success)]", teal: "text-teal-700 bg-teal-50 border-teal-100", amber: "text-[var(--cmp-text-warning)] bg-[var(--cmp-surface-warning)] border-[var(--cmp-color-warning)]", rose: "text-[var(--cmp-text-error)] bg-[var(--cmp-surface-error)] border-[var(--cmp-color-error)]" };
+const capTone = (n: number) => (n >= 80 ? "text-[var(--cmp-text-success)]" : n >= 60 ? "text-teal-600" : n >= 40 ? "text-[var(--cmp-text-warning)]" : "text-[var(--cmp-text-error)]");
 
 export default async function BenchmarkingPage() {
   const supabase = await createClient();
@@ -24,7 +24,7 @@ export default async function BenchmarkingPage() {
   const q = await loadBenchmarking(admin, profile?.hospital_id ?? null, true);
   const card = "bg-white rounded-xl border border-gray-100";
   const distTotal = q.provisioned && !q.empty && !q.insufficient ? q.distribution.reduce((n: number, d: any) => n + d.n, 0) || 1 : 1;
-  const DIST_TONE: Record<string, string> = { Expert: "bg-emerald-500", Proficient: "bg-teal-500", Competent: "bg-amber-500", Developing: "bg-rose-500" };
+  const DIST_TONE: Record<string, string> = { Expert: "bg-[var(--cmp-color-success)]", Proficient: "bg-teal-500", Competent: "bg-[var(--cmp-color-warning)]", Developing: "bg-[var(--cmp-color-error)]" };
 
   return (
     <div className="max-w-5xl">
@@ -34,25 +34,25 @@ export default async function BenchmarkingPage() {
           <h1 className="text-xl font-bold text-gray-900">Benchmarking & Maturity</h1>
           <p className="text-gray-400 text-sm mt-0.5">Which departments lead on competency capability, and how mature the organisation is — every department benchmarked against the enterprise mean.</p>
         </div>
-        <Link href="/super-admin/performance" className="text-xs font-semibold text-gray-500 hover:text-sky-700 border border-gray-200 rounded-lg px-3 py-2 shrink-0">← Performance</Link>
+        <Link href="/super-admin/performance" className="text-xs font-semibold text-gray-500 hover:text-[var(--cmp-text-information)] border border-gray-200 rounded-lg px-3 py-2 shrink-0">← Performance</Link>
       </div>
 
       {!q.provisioned ? (
-        <div className="bg-amber-50 border border-amber-100 rounded-xl p-4"><p className="text-[13px] text-amber-900">Competency data isn&apos;t available — benchmarking reads <code className="text-[11px]">competency_decisions</code> via <code className="text-[11px]">profiles.department_id</code>.</p></div>
+        <div className="bg-[var(--cmp-surface-warning)] border border-[var(--cmp-color-warning)] rounded-xl p-4"><p className="text-[13px] text-amber-900">Competency data isn&apos;t available — benchmarking reads <code className="text-[11px]">competency_decisions</code> via <code className="text-[11px]">profiles.department_id</code>.</p></div>
       ) : q.empty ? (
         <div className="bg-white border border-gray-100 rounded-xl p-6"><p className="text-sm text-gray-400">No department competency data to benchmark yet.</p></div>
       ) : q.insufficient ? (
-        <div className="bg-amber-50 border border-amber-100 rounded-xl p-5"><p className="text-[13px] text-amber-900 font-semibold mb-1">Not enough departments to benchmark</p><p className="text-[12px] text-amber-800">Benchmarking needs at least 2 departments with enough competency decisions. Currently {q.n} qualify.</p></div>
+        <div className="bg-[var(--cmp-surface-warning)] border border-[var(--cmp-color-warning)] rounded-xl p-5"><p className="text-[13px] text-amber-900 font-semibold mb-1">Not enough departments to benchmark</p><p className="text-[12px] text-amber-800">Benchmarking needs at least 2 departments with enough competency decisions. Currently {q.n} qualify.</p></div>
       ) : (
         <>
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 mb-5">
             {[
-              { label: "Enterprise maturity", value: q.kpis.enterpriseLevel, tone: "text-sky-600", sub: `avg ${q.kpis.enterpriseMaturity}/6` },
+              { label: "Enterprise maturity", value: q.kpis.enterpriseLevel, tone: "text-[var(--cmp-text-information)]", sub: `avg ${q.kpis.enterpriseMaturity}/6` },
               { label: "Benchmark score", value: q.kpis.benchmark, tone: "text-gray-900", sub: "enterprise mean" },
               { label: "Departments", value: q.kpis.departments, tone: "text-gray-900", sub: "benchmarked" },
-              { label: "Top score", value: q.kpis.topScore, tone: "text-emerald-600", sub: q.leaders[0]?.department },
+              { label: "Top score", value: q.kpis.topScore, tone: "text-[var(--cmp-text-success)]", sub: q.leaders[0]?.department },
               { label: "Above benchmark", value: q.kpis.aboveBenchmark, tone: "text-gray-900", sub: `of ${q.kpis.departments}` },
-              { label: "Spread", value: q.kpis.spread, tone: q.kpis.spread > 30 ? "text-amber-600" : "text-gray-900", sub: "top→bottom" },
+              { label: "Spread", value: q.kpis.spread, tone: q.kpis.spread > 30 ? "text-[var(--cmp-text-warning)]" : "text-gray-900", sub: "top→bottom" },
             ].map(k => (
               <div key={k.label} className={`${card} p-3.5`}><p className={`text-xl font-bold tabular-nums ${k.tone}`}>{k.value}</p><p className="text-[10px] text-gray-400 font-medium mt-0.5 leading-tight">{k.label}</p><p className="text-[9px] text-gray-300 truncate">{k.sub}</p></div>
             ))}
@@ -76,11 +76,11 @@ export default async function BenchmarkingPage() {
             <div className={`${card} p-4 lg:col-span-2`}>
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <p className="text-[11px] font-semibold text-emerald-600 mb-2">Best practice — leaders</p>
-                  <div className="space-y-1.5">{q.leaders.map((r: any) => (<div key={r.id} className="flex items-center gap-2 text-[12px]"><span className="text-gray-400 tabular-nums w-4">#{r.rank}</span><span className="text-gray-700 flex-1 truncate">{r.department}</span><span className="font-semibold text-emerald-600 tabular-nums">{r.capability}</span></div>))}</div>
+                  <p className="text-[11px] font-semibold text-[var(--cmp-text-success)] mb-2">Best practice — leaders</p>
+                  <div className="space-y-1.5">{q.leaders.map((r: any) => (<div key={r.id} className="flex items-center gap-2 text-[12px]"><span className="text-gray-400 tabular-nums w-4">#{r.rank}</span><span className="text-gray-700 flex-1 truncate">{r.department}</span><span className="font-semibold text-[var(--cmp-text-success)] tabular-nums">{r.capability}</span></div>))}</div>
                 </div>
                 <div>
-                  <p className="text-[11px] font-semibold text-rose-600 mb-2">Improvement priority — laggards</p>
+                  <p className="text-[11px] font-semibold text-[var(--cmp-text-error)] mb-2">Improvement priority — laggards</p>
                   <div className="space-y-1.5">{q.laggards.map((r: any) => (<div key={r.id} className="flex items-center gap-2 text-[12px]"><span className="text-gray-400 tabular-nums w-4">#{r.rank}</span><span className="text-gray-700 flex-1 truncate">{r.department}</span><span className="text-[10px] text-rose-500 shrink-0">−{r.gapToLeader}</span></div>))}</div>
                 </div>
               </div>
@@ -99,7 +99,7 @@ export default async function BenchmarkingPage() {
                       <td className="py-2 px-4 text-gray-400 tabular-nums">{r.rank}</td>
                       <td className="py-2 px-3 text-gray-800 truncate max-w-[160px]">{r.department}<span className="text-[9px] text-gray-400 ml-1">n{r.staff}</span></td>
                       <td className={`py-2 px-2 tabular-nums text-right font-bold ${capTone(r.capability)}`}>{r.capability}</td>
-                      <td className={`py-2 px-2 tabular-nums text-right ${r.delta > 0 ? "text-emerald-600" : r.delta < 0 ? "text-rose-600" : "text-gray-400"}`}>{r.delta > 0 ? "+" : ""}{r.delta}</td>
+                      <td className={`py-2 px-2 tabular-nums text-right ${r.delta > 0 ? "text-[var(--cmp-text-success)]" : r.delta < 0 ? "text-[var(--cmp-text-error)]" : "text-gray-400"}`}>{r.delta > 0 ? "+" : ""}{r.delta}</td>
                       <td className="py-2 px-2 tabular-nums text-right text-gray-500">{r.coverage}%</td>
                       <td className="py-2 px-2 tabular-nums text-right text-gray-500">{r.avgMaturity}</td>
                       <td className="py-2 px-4"><span className={`text-[9px] font-bold uppercase tracking-wide border rounded px-1.5 py-0.5 ${LVL[r.levelTone]}`}>{r.level}</span></td>

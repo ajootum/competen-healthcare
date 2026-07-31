@@ -26,9 +26,9 @@ export default async function AssignmentsPage() {
       {head}
       <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
         <Kpi label="Assignments" value={asg.length} sub="active" />
-        <Kpi label="In Progress" value={asg.filter((a: any) => a.status === "in_progress").length} sub="underway" tone="text-amber-600" />
-        <Kpi label="Completed" value={asg.filter((a: any) => a.status === "completed").length} sub="attained" tone="text-emerald-600" />
-        <Kpi label="Overdue" value={overdue.length} sub="past due" tone={overdue.length ? "text-rose-600" : undefined} />
+        <Kpi label="In Progress" value={asg.filter((a: any) => a.status === "in_progress").length} sub="underway" tone="text-[var(--cmp-text-warning)]" />
+        <Kpi label="Completed" value={asg.filter((a: any) => a.status === "completed").length} sub="attained" tone="text-[var(--cmp-text-success)]" />
+        <Kpi label="Overdue" value={overdue.length} sub="past due" tone={overdue.length ? "text-[var(--cmp-text-error)]" : undefined} />
         <Kpi label="Completion" value={`${asg.length ? Math.round((asg.filter((a: any) => a.status === "completed").length / asg.length) * 100) : 0}%`} sub="rate" />
         <Kpi label="Campaigns" value={new Set(asg.map((a: any) => a.campaign).filter(Boolean)).size} sub="active" />
       </div>

@@ -18,7 +18,7 @@ export default async function ActionsPage({ searchParams }: { searchParams: Prom
   ]);
 
   const strip = <TopStrip code="UMW-OPC-007 · Operational Command" title="Operational Action Manager" departments={departments} />;
-  if (!d.provisioned) return <div className="space-y-4">{strip}<div className="bg-amber-50 border border-amber-200 rounded-xl p-6"><p className="font-semibold text-amber-900">⚙️ Operational stores not provisioned</p><p className="text-sm text-amber-800 mt-1">Apply migration 038 then seed tasks.</p></div></div>;
+  if (!d.provisioned) return <div className="space-y-4">{strip}<div className="bg-[var(--cmp-surface-warning)] border border-[var(--cmp-color-warning)] rounded-xl p-6"><p className="font-semibold text-amber-900">⚙️ Operational stores not provisioned</p><p className="text-sm text-amber-800 mt-1">Apply migration 038 then seed tasks.</p></div></div>;
 
   const k = d.kpis;
   const maxTrend = Math.max(1, ...d.trend.flatMap((t: any) => [t.created, t.completed]));
@@ -52,7 +52,7 @@ export default async function ActionsPage({ searchParams }: { searchParams: Prom
           <Card title="Priority Breakdown"><Bars rows={d.priority} /></Card>
 
           <Card title="Actions by Type">
-            {d.byType.length ? <div className="space-y-2 text-[11px]">{d.byType.map((t: any) => <div key={t.label} className="flex items-center gap-2"><span className="text-slate-300 flex-1 truncate">{t.label}</span><div className="w-14 h-1.5 rounded-full bg-slate-700 overflow-hidden"><div className="h-full rounded-full bg-blue-500" style={{ width: `${t.pct}%` }} /></div><span className="text-white font-semibold tabular-nums w-12 text-right">{t.n} · {t.pct}%</span></div>)}</div> : <p className="text-xs text-slate-400 py-4 text-center">No open actions.</p>}
+            {d.byType.length ? <div className="space-y-2 text-[11px]">{d.byType.map((t: any) => <div key={t.label} className="flex items-center gap-2"><span className="text-slate-300 flex-1 truncate">{t.label}</span><div className="w-14 h-1.5 rounded-full bg-slate-700 overflow-hidden"><div className="h-full rounded-full bg-[var(--cmp-color-information)]" style={{ width: `${t.pct}%` }} /></div><span className="text-white font-semibold tabular-nums w-12 text-right">{t.n} · {t.pct}%</span></div>)}</div> : <p className="text-xs text-slate-400 py-4 text-center">No open actions.</p>}
           </Card>
 
           <Card title="Upcoming Deadlines" right={<span className="text-[9px] text-slate-500">next due</span>}>
@@ -72,7 +72,7 @@ export default async function ActionsPage({ searchParams }: { searchParams: Prom
                   <span className="text-slate-200 flex-1 truncate" title={w.desc}>{w.desc}</span>
                   <span className="text-slate-400 w-20 truncate">{w.owner}</span>
                   <span className="w-16"><Pill text={w.overdue ? "overdue" : w.priority} tone={w.overdue ? "rose" : prTone(w.priority)} /></span>
-                  <span className="w-20 flex items-center justify-end gap-1"><div className="w-10 h-1.5 rounded-full bg-slate-700 overflow-hidden"><div className="h-full rounded-full bg-emerald-500" style={{ width: `${w.progress}%` }} /></div><span className="text-slate-300 tabular-nums text-[10px]">{w.progress}%</span></span>
+                  <span className="w-20 flex items-center justify-end gap-1"><div className="w-10 h-1.5 rounded-full bg-slate-700 overflow-hidden"><div className="h-full rounded-full bg-[var(--cmp-color-success)]" style={{ width: `${w.progress}%` }} /></div><span className="text-slate-300 tabular-nums text-[10px]">{w.progress}%</span></span>
                 </div>
               ))}
             </div> : <p className="text-xs text-slate-400 py-6 text-center">No open actions. ✅</p>}
@@ -92,11 +92,11 @@ export default async function ActionsPage({ searchParams }: { searchParams: Prom
         <Card title="Action Trends" right={<span className="text-[9px] text-slate-500">created vs completed · 7 days</span>}>
           <div className="flex items-end gap-2 h-24">{d.trend.map((t: any) => (
             <div key={t.d} className="flex-1 flex flex-col items-center gap-1" title={`${t.d}: +${t.created} / ✓${t.completed}`}>
-              <div className="w-full flex items-end justify-center gap-0.5" style={{ height: "76px" }}><div className="w-2 bg-blue-500 rounded-t" style={{ height: `${(t.created / maxTrend) * 100}%` }} /><div className="w-2 bg-emerald-500 rounded-t" style={{ height: `${(t.completed / maxTrend) * 100}%` }} /></div>
+              <div className="w-full flex items-end justify-center gap-0.5" style={{ height: "76px" }}><div className="w-2 bg-[var(--cmp-color-information)] rounded-t" style={{ height: `${(t.created / maxTrend) * 100}%` }} /><div className="w-2 bg-[var(--cmp-color-success)] rounded-t" style={{ height: `${(t.completed / maxTrend) * 100}%` }} /></div>
               <span className="text-[7px] text-slate-500">{t.d}</span>
             </div>
           ))}</div>
-          <div className="flex gap-3 mt-1 text-[9px] text-slate-400"><span className="flex items-center gap-1"><span className="w-2 h-2 bg-blue-500 rounded-full" />Created</span><span className="flex items-center gap-1"><span className="w-2 h-2 bg-emerald-500 rounded-full" />Completed</span></div>
+          <div className="flex gap-3 mt-1 text-[9px] text-slate-400"><span className="flex items-center gap-1"><span className="w-2 h-2 bg-[var(--cmp-color-information)] rounded-full" />Created</span><span className="flex items-center gap-1"><span className="w-2 h-2 bg-[var(--cmp-color-success)] rounded-full" />Completed</span></div>
         </Card>
       </div>
 

@@ -15,10 +15,10 @@ export const dynamic = "force-dynamic";
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 const card = "bg-white rounded-xl border border-gray-200";
-const RISK: Record<string, { tone: string; ring: string }> = { Low: { tone: "text-emerald-600", ring: "#10b981" }, Moderate: { tone: "text-amber-600", ring: "#f59e0b" }, High: { tone: "text-orange-600", ring: "#f97316" }, Critical: { tone: "text-rose-600", ring: "#e11d48" } };
-const COV: Record<string, string> = { "Fully covered": "text-emerald-600", "Covered with redeployment": "text-emerald-600", "Below target": "text-amber-600", "Below minimum": "text-rose-600", "—": "text-gray-400" };
-const SEG: Record<string, string> = { emerald: "bg-emerald-500", sky: "bg-sky-500", amber: "bg-amber-500", rose: "bg-rose-500", gray: "bg-gray-300" };
-const ALERT: Record<string, string> = { Critical: "bg-rose-50 text-rose-700 border-rose-100", High: "bg-amber-50 text-amber-700 border-amber-100" };
+const RISK: Record<string, { tone: string; ring: string }> = { Low: { tone: "text-[var(--cmp-text-success)]", ring: "#10b981" }, Moderate: { tone: "text-[var(--cmp-text-warning)]", ring: "#f59e0b" }, High: { tone: "text-[var(--cmp-text-warning)]", ring: "#f97316" }, Critical: { tone: "text-[var(--cmp-text-error)]", ring: "#e11d48" } };
+const COV: Record<string, string> = { "Fully covered": "text-[var(--cmp-text-success)]", "Covered with redeployment": "text-[var(--cmp-text-success)]", "Below target": "text-[var(--cmp-text-warning)]", "Below minimum": "text-[var(--cmp-text-error)]", "—": "text-gray-400" };
+const SEG: Record<string, string> = { emerald: "bg-[var(--cmp-color-success)]", sky: "bg-[var(--cmp-color-information)]", amber: "bg-[var(--cmp-color-warning)]", rose: "bg-[var(--cmp-color-error)]", gray: "bg-gray-300" };
+const ALERT: Record<string, string> = { Critical: "bg-[var(--cmp-surface-error)] text-[var(--cmp-text-error)] border-[var(--cmp-color-error)]", High: "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)] border-[var(--cmp-color-warning)]" };
 
 function Kpi({ label, value, sub, tone, foot }: { label: string; value: any; sub?: string; tone?: string; foot?: string }) {
   return <div className={`${card} p-4`}><div className="flex items-start justify-between"><p className="text-xs text-gray-500">{label}</p>{foot && <span className="text-[9px] text-gray-300" title="Data source">{foot}</span>}</div><p className={`text-2xl font-bold tabular-nums mt-1 ${tone ?? "text-gray-900"}`}>{value}</p>{sub && <p className="text-[11px] text-gray-400 mt-0.5">{sub}</p>}</div>;
@@ -49,7 +49,7 @@ export default async function AttendanceLiveOverview() {
     </>
   );
 
-  if (!d.ready) return <div className="space-y-4">{header}<div className="bg-amber-50 border border-amber-200 rounded-xl p-6"><p className="font-semibold text-amber-900">⚙️ No active shift</p><p className="text-sm text-amber-800 mt-1">Attendance activates once an operational shift with staffing is running. Expected attendance is populated from the approved roster (§39).</p></div></div>;
+  if (!d.ready) return <div className="space-y-4">{header}<div className="bg-[var(--cmp-surface-warning)] border border-[var(--cmp-color-warning)] rounded-xl p-6"><p className="font-semibold text-amber-900">⚙️ No active shift</p><p className="text-sm text-amber-800 mt-1">Attendance activates once an operational shift with staffing is running. Expected attendance is populated from the approved roster (§39).</p></div></div>;
 
   const k = d.kpis;
   const r = RISK[k.riskLevel] ?? RISK.Low;
@@ -62,9 +62,9 @@ export default async function AttendanceLiveOverview() {
       {/* Summary KPI cards (§7.1) */}
       <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-3">
         <Kpi label="Expected today" value={k.expected} sub="Rostered to report" foot="ⁱ" />
-        <Kpi label="Present" value={k.present} sub={k.presentRate != null ? `${k.presentRate}% present rate` : ""} tone="text-emerald-600" foot="ⁱ" />
-        <Kpi label="Not yet reported" value={k.notReported} sub="Scheduled, awaited" tone={k.notReported ? "text-amber-600" : undefined} foot="ⁱ" />
-        <Kpi label="Absent" value={k.absent} sub={k.confirmed ? `${k.confirmed} confirmed` : "For this shift"} tone={k.absent ? "text-rose-600" : "text-emerald-600"} foot="ⁱ" />
+        <Kpi label="Present" value={k.present} sub={k.presentRate != null ? `${k.presentRate}% present rate` : ""} tone="text-[var(--cmp-text-success)]" foot="ⁱ" />
+        <Kpi label="Not yet reported" value={k.notReported} sub="Scheduled, awaited" tone={k.notReported ? "text-[var(--cmp-text-warning)]" : undefined} foot="ⁱ" />
+        <Kpi label="Absent" value={k.absent} sub={k.confirmed ? `${k.confirmed} confirmed` : "For this shift"} tone={k.absent ? "text-[var(--cmp-text-error)]" : "text-[var(--cmp-text-success)]"} foot="ⁱ" />
         <Kpi label="Available replacements" value={k.replacements} sub="Clinical, off-shift" tone="text-violet-600" foot="ⁱ" />
         <Kpi label="Attendance risk" value={k.riskLevel} sub={`${k.pendingActions} pending actions`} tone={r.tone} foot="ⁱ" />
       </div>
@@ -98,7 +98,7 @@ export default async function AttendanceLiveOverview() {
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
         <div className={`${card} p-5 xl:col-span-2`}>
           <h3 className="text-sm font-bold text-gray-900 mb-3">Expected vs present by role</h3>
-          <div className="space-y-2">{d.roleBreakdown.map((rb: any) => { const pct = rb.expected ? Math.round((rb.present / rb.expected) * 100) : 0; return (<div key={rb.role} className="flex items-center gap-3 text-xs"><span className="text-gray-600 w-32 truncate">{rb.label}</span><div className="flex-1 h-2 rounded-full bg-gray-100 overflow-hidden"><div className={`h-full rounded-full ${pct >= 100 ? "bg-emerald-500" : pct >= 80 ? "bg-amber-400" : "bg-rose-400"}`} style={{ width: `${pct}%` }} /></div><span className="text-gray-700 w-16 text-right">{rb.present}/{rb.expected}{rb.absent ? ` · ${rb.absent} abs` : ""}</span></div>); })}</div>
+          <div className="space-y-2">{d.roleBreakdown.map((rb: any) => { const pct = rb.expected ? Math.round((rb.present / rb.expected) * 100) : 0; return (<div key={rb.role} className="flex items-center gap-3 text-xs"><span className="text-gray-600 w-32 truncate">{rb.label}</span><div className="flex-1 h-2 rounded-full bg-gray-100 overflow-hidden"><div className={`h-full rounded-full ${pct >= 100 ? "bg-[var(--cmp-color-success)]" : pct >= 80 ? "bg-[var(--cmp-color-warning)]" : "bg-[var(--cmp-color-error)]"}`} style={{ width: `${pct}%` }} /></div><span className="text-gray-700 w-16 text-right">{rb.present}/{rb.expected}{rb.absent ? ` · ${rb.absent} abs` : ""}</span></div>); })}</div>
           <Link href="/unit-manager/workforce-management/attendance/today" className="mt-3 inline-block text-[11px] font-semibold text-emerald-700 hover:underline">Open today&apos;s attendance register →</Link>
         </div>
         <div className={`${card} p-5`}>

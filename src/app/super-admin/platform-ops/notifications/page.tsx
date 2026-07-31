@@ -15,7 +15,7 @@ const card = "bg-white rounded-xl border border-gray-200";
 const fmt = (n: number) => n.toLocaleString();
 const relTime = (iso?: string | null) => { if (!iso) return ""; const s = Math.floor((Date.now() - new Date(iso).getTime()) / 1000); if (s < 60) return "just now"; if (s < 3600) return `${Math.floor(s / 60)}m ago`; if (s < 86400) return `${Math.floor(s / 3600)}h ago`; return `${Math.floor(s / 86400)}d ago`; };
 const CH_ICON: Record<string, string> = { in_app: "🔔", email: "✉️", sms: "💬", webhook: "🪝", teams: "👥", slack: "🧵" };
-const STATUS_TONE: Record<string, string> = { sent: "text-green-600", failed: "text-rose-600", skipped: "text-gray-400", queued: "text-amber-600" };
+const STATUS_TONE: Record<string, string> = { sent: "text-[var(--cmp-text-success)]", failed: "text-[var(--cmp-text-error)]", skipped: "text-gray-400", queued: "text-[var(--cmp-text-warning)]" };
 
 export default async function NotificationsConsole() {
   const supabase = await createClient();
@@ -30,11 +30,11 @@ export default async function NotificationsConsole() {
 
   const kpis = [
     { label: "Channels Ready", value: `${s.channelsReady}/6`, icon: "📡", iconBg: "bg-teal-50", sub: "with a provider" },
-    { label: "Deliveries (24h)", value: s.ready ? fmt(s.deliveries24h) : "—", icon: "📨", iconBg: "bg-sky-50", sub: s.ready ? `${s.sent24h} sent` : "tracking off", muted: !s.ready },
-    { label: "Failed (24h)", value: s.ready ? fmt(s.failed24h) : "—", icon: "⚠️", iconBg: "bg-rose-50", sub: "delivery errors", tone: s.failed24h ? "text-rose-600" : undefined, muted: !s.ready },
+    { label: "Deliveries (24h)", value: s.ready ? fmt(s.deliveries24h) : "—", icon: "📨", iconBg: "bg-[var(--cmp-surface-information)]", sub: s.ready ? `${s.sent24h} sent` : "tracking off", muted: !s.ready },
+    { label: "Failed (24h)", value: s.ready ? fmt(s.failed24h) : "—", icon: "⚠️", iconBg: "bg-[var(--cmp-surface-error)]", sub: "delivery errors", tone: s.failed24h ? "text-[var(--cmp-text-error)]" : undefined, muted: !s.ready },
     { label: "Skipped (24h)", value: s.ready ? fmt(s.skipped24h) : "—", icon: "⏭️", iconBg: "bg-gray-50", sub: "no provider", muted: !s.ready },
     { label: "In-app Read Rate", value: s.readRate == null ? "—" : `${s.readRate}%`, icon: "👁️", iconBg: "bg-violet-50", sub: `${fmt(s.totalNotifs)} messages`, muted: s.readRate == null },
-    { label: "In-app Messages", value: fmt(s.totalNotifs), icon: "🔔", iconBg: "bg-amber-50", sub: "total stored" },
+    { label: "In-app Messages", value: fmt(s.totalNotifs), icon: "🔔", iconBg: "bg-[var(--cmp-surface-warning)]", sub: "total stored" },
   ];
 
   return (
@@ -48,8 +48,8 @@ export default async function NotificationsConsole() {
       </div>
 
       {!s.ready && (
-        <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-          <span className="font-semibold">Delivery tracking off.</span> Run <code className="font-mono text-[12px] bg-amber-100 px-1 rounded">supabase/RUN-ME-056-notification-delivery.sql</code> to log deliveries. In-app notifications still send; channel providers below are live.
+        <div className="rounded-xl border border-[var(--cmp-color-warning)] bg-[var(--cmp-surface-warning)] px-4 py-3 text-sm text-amber-800">
+          <span className="font-semibold">Delivery tracking off.</span> Run <code className="font-mono text-[12px] bg-[var(--cmp-surface-warning)] px-1 rounded">supabase/RUN-ME-056-notification-delivery.sql</code> to log deliveries. In-app notifications still send; channel providers below are live.
         </div>
       )}
 
@@ -79,7 +79,7 @@ export default async function NotificationsConsole() {
                   <p className="text-sm text-gray-800 capitalize">{ch.channel.replace("_", "-")} <span className="text-[10px] text-gray-400">{ch.provider ? `· ${ch.provider}` : ""}</span></p>
                   <p className="text-[10px] text-gray-400">{s.ready ? `${ch.n} sent ${ch.sent} · failed ${ch.failed} · skipped ${ch.skipped} (24h)` : "tracking off"}</p>
                 </div>
-                <span className={`text-[10px] font-medium px-2 py-0.5 rounded shrink-0 ${ch.ready ? "bg-green-50 text-green-700" : "bg-gray-100 text-gray-500"}`}>{ch.ready ? "Provider ready" : "No provider"}</span>
+                <span className={`text-[10px] font-medium px-2 py-0.5 rounded shrink-0 ${ch.ready ? "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]" : "bg-gray-100 text-gray-500"}`}>{ch.ready ? "Provider ready" : "No provider"}</span>
               </div>
             ))}
           </div>

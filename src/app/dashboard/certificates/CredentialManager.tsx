@@ -98,7 +98,7 @@ export default function CredentialManager({ credentials }: { credentials: OwnCre
             <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">Expiry Date</label>
             <input type="date" value={form.expiry_date} onChange={e => setForm({ ...form, expiry_date: e.target.value })} className={input} />
           </div>
-          {error && <p className="sm:col-span-2 text-xs text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2">{error}</p>}
+          {error && <p className="sm:col-span-2 text-xs text-[var(--cmp-text-critical)] bg-[var(--cmp-surface-critical)] border border-[var(--cmp-color-critical)] rounded-lg px-3 py-2">{error}</p>}
           <div className="sm:col-span-2">
             <button type="submit" disabled={busy}
               className="bg-teal-600 hover:bg-teal-700 disabled:opacity-50 text-white text-sm font-semibold px-5 py-2 rounded-lg transition-colors">
@@ -122,8 +122,8 @@ export default function CredentialManager({ credentials }: { credentials: OwnCre
                 <EvidencePanel credentialId={c.id} initial={c.evidence} canAttach />
               </div>
               <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded shrink-0 ${
-                c.verified ? "bg-green-50 text-green-700"
-                : c.status === "pending_verification" ? "bg-amber-50 text-amber-700"
+                c.verified ? "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]"
+                : c.status === "pending_verification" ? "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]"
                 : "bg-gray-100 text-gray-500"
               }`}>
                 {c.verified ? "Verified" : c.status === "pending_verification" ? "Awaiting verification" : c.status.replace(/_/g, " ")}

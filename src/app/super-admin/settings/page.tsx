@@ -40,7 +40,7 @@ export default function PlatformSettingsPage() {
           ].map(f => (
             <div key={f.label} className="flex items-center justify-between py-2 border-b border-gray-50 last:border-0">
               <span className="text-sm text-gray-700">{f.label}</span>
-              <span className={`text-[10px] font-bold px-2 py-0.5 rounded ${f.status ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-500"}`}>
+              <span className={`text-[10px] font-bold px-2 py-0.5 rounded ${f.status ? "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]" : "bg-gray-100 text-gray-500"}`}>
                 {f.note}
               </span>
             </div>
@@ -48,7 +48,7 @@ export default function PlatformSettingsPage() {
         </div>
       </div>
 
-      <div className="bg-rose-50 border border-rose-100 rounded-xl p-4 text-sm text-rose-800">
+      <div className="bg-[var(--cmp-surface-error)] border border-[var(--cmp-color-error)] rounded-xl p-4 text-sm text-rose-800">
         Full platform configuration (feature toggles, tier limits, CPD targets) is managed via environment variables and the Supabase dashboard. Contact the platform team for changes.
       </div>
     </div>

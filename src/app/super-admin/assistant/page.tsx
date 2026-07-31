@@ -24,7 +24,7 @@ export default async function AssistantPage() {
       </div>
 
       {!ai.configured ? (
-        <div className="bg-amber-50 border border-amber-100 rounded-xl p-6">
+        <div className="bg-[var(--cmp-surface-warning)] border border-[var(--cmp-color-warning)] rounded-xl p-6">
           <p className="text-sm font-semibold text-amber-800">🟡 AI not configured</p>
           <p className="text-xs text-gray-600 mt-2">
             Add an <code className="bg-white px-1 rounded">ANTHROPIC_API_KEY</code> to your <code className="bg-white px-1 rounded">.env.local</code> and Vercel environment variables to enable the assistant.

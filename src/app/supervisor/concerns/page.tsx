@@ -17,8 +17,8 @@ export const dynamic = "force-dynamic";
 const card = cardClass;
 const titleCase = (s: string | null | undefined) => (s ?? "").replace(/_/g, " ").replace(/\b\w/g, ch => ch.toUpperCase());
 const fmtWhen = (iso: string | null) => iso ? new Date(iso).toLocaleString([], { hour: "2-digit", minute: "2-digit", day: "numeric", month: "short" }) : "";
-const PRIO_TONE: Record<string, string> = { immediate: "bg-red-100 text-red-700", urgent: "bg-orange-100 text-orange-700", today: "bg-amber-100 text-amber-700", routine: "bg-gray-100 text-gray-500" };
-const STATUS_TONE: Record<string, string> = { open: "bg-blue-100 text-blue-700", in_progress: "bg-amber-100 text-amber-700", carried_forward: "bg-purple-100 text-purple-700" };
+const PRIO_TONE: Record<string, string> = { immediate: "bg-[var(--cmp-surface-critical)] text-[var(--cmp-text-critical)]", urgent: "bg-[var(--cmp-surface-warning)] text-orange-700", today: "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]", routine: "bg-gray-100 text-gray-500" };
+const STATUS_TONE: Record<string, string> = { open: "bg-[var(--cmp-surface-information)] text-blue-700", in_progress: "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]", carried_forward: "bg-purple-100 text-purple-700" };
 
 function Kpi({ label, value, tone }: { label: string; value: number; tone?: string }) {
   return (
@@ -32,15 +32,15 @@ function Kpi({ label, value, tone }: { label: string; value: number; tone?: stri
 function ConcernRow({ c }: { c: any }) {
   const overdue = isOverdue(c);
   return (
-    <div className={`py-3 ${overdue ? "bg-red-50/40 -mx-2 px-2 rounded-lg" : ""}`}>
+    <div className={`py-3 ${overdue ? "bg-[var(--cmp-surface-critical)]/40 -mx-2 px-2 rounded-lg" : ""}`}>
       <div className="flex flex-wrap items-center gap-2">
         <span className="font-medium text-gray-800">{c.op_patients?.label ?? "Patient"}</span>
         {c.op_patients?.op_beds?.label && <span className="text-xs text-gray-400">{c.op_patients.op_beds.label}</span>}
         <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${PRIO_TONE[c.priority] ?? PRIO_TONE.routine}`}>{titleCase(c.priority)}</span>
         <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${STATUS_TONE[c.status] ?? STATUS_TONE.open}`}>{titleCase(c.status)}</span>
-        {overdue && <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-red-100 text-red-700 font-semibold">Overdue</span>}
+        {overdue && <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-[var(--cmp-surface-critical)] text-[var(--cmp-text-critical)] font-semibold">Overdue</span>}
         {c.ward_round && <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-indigo-100 text-indigo-700">Ward round</span>}
-        {c.ss_review && <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-orange-100 text-orange-700">SS review</span>}
+        {c.ss_review && <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-[var(--cmp-surface-warning)] text-orange-700">SS review</span>}
         {c.routed_to && <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-cyan-100 text-cyan-700">→ {titleCase(c.routed_to)}{c.acknowledged_at ? " ✓" : ""}</span>}
         <span className="ml-auto text-[11px] text-gray-400">{c.raiser?.full_name ?? c.raised_by_name ?? "—"} · {fmtWhen(c.raised_at)}</span>
       </div>
@@ -49,7 +49,7 @@ function ConcernRow({ c }: { c: any }) {
         <div className="mt-1.5 space-y-1">
           {(c.op_concern_actions ?? []).map((a: any) => (
             <p key={a.id} className="text-xs text-gray-500 flex items-center gap-2">
-              <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${a.status === "completed" ? "bg-green-500" : a.status === "cancelled" ? "bg-gray-300" : "bg-amber-500"}`} />
+              <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${a.status === "completed" ? "bg-[var(--cmp-color-success)]" : a.status === "cancelled" ? "bg-gray-300" : "bg-[var(--cmp-color-warning)]"}`} />
               {a.action}
               <span className="text-gray-400">· {a.owner_name ?? "unassigned"}{a.task_id ? " · live task" : ""}</span>
             </p>
@@ -81,18 +81,18 @@ export default async function SupervisorConcernsPage() {
       </div>
 
       {data.migrationMissing && (
-        <div className="bg-amber-50 border border-amber-200 rounded-xl p-5">
+        <div className="bg-[var(--cmp-surface-warning)] border border-[var(--cmp-color-warning)] rounded-xl p-5">
           <p className="font-semibold text-amber-900">⚙️ Store not yet enabled</p>
-          <p className="text-sm text-amber-800 mt-1">Apply migration <code className="bg-amber-100 px-1.5 py-0.5 rounded font-mono text-xs">152-nurse-concerns.sql</code> to enable Nurse Concerns.</p>
+          <p className="text-sm text-amber-800 mt-1">Apply migration <code className="bg-[var(--cmp-surface-warning)] px-1.5 py-0.5 rounded font-mono text-xs">152-nurse-concerns.sql</code> to enable Nurse Concerns.</p>
         </div>
       )}
 
       <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-4">
         <Kpi label="Active concerns" value={data.kpis.active} />
-        <Kpi label="Immediate / urgent" value={data.kpis.immediate + data.kpis.urgent} tone={data.kpis.immediate + data.kpis.urgent > 0 ? "text-red-600" : undefined} />
-        <Kpi label="Overdue" value={data.kpis.overdue} tone={data.kpis.overdue > 0 ? "text-red-600" : undefined} />
+        <Kpi label="Immediate / urgent" value={data.kpis.immediate + data.kpis.urgent} tone={data.kpis.immediate + data.kpis.urgent > 0 ? "text-[var(--cmp-text-critical)]" : undefined} />
+        <Kpi label="Overdue" value={data.kpis.overdue} tone={data.kpis.overdue > 0 ? "text-[var(--cmp-text-critical)]" : undefined} />
         <Kpi label="For ward round" value={data.kpis.wardRound} tone={data.kpis.wardRound > 0 ? "text-indigo-600" : undefined} />
-        <Kpi label="SS review requested" value={data.kpis.ssReview} tone={data.kpis.ssReview > 0 ? "text-orange-600" : undefined} />
+        <Kpi label="SS review requested" value={data.kpis.ssReview} tone={data.kpis.ssReview > 0 ? "text-[var(--cmp-text-warning)]" : undefined} />
         <Kpi label="Carried forward" value={data.kpis.carried} />
       </div>
 

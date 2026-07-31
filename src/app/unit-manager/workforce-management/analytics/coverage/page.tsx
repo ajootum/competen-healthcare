@@ -14,7 +14,7 @@ export const dynamic = "force-dynamic";
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 const card = "bg-white rounded-xl border border-gray-200";
-const ST: Record<string, string> = { Good: "bg-emerald-50 text-emerald-700", "At Risk": "bg-amber-50 text-amber-700", "Below Required": "bg-rose-50 text-rose-700", "—": "bg-gray-100 text-gray-500" };
+const ST: Record<string, string> = { Good: "bg-[var(--cmp-surface-success)] text-emerald-700", "At Risk": "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]", "Below Required": "bg-[var(--cmp-surface-error)] text-[var(--cmp-text-error)]", "—": "bg-gray-100 text-gray-500" };
 
 function Kpi({ label, value, sub, tone, foot }: { label: string; value: any; sub?: string; tone?: string; foot?: string }) {
   return <div className={`${card} p-4`}><div className="flex items-start justify-between"><p className="text-xs text-gray-500">{label}</p>{foot && <span className="text-[9px] text-gray-300">{foot}</span>}</div><p className={`text-2xl font-bold tabular-nums mt-1 ${tone ?? "text-gray-900"}`}>{value}</p>{sub && <p className="text-[11px] text-gray-400 mt-0.5">{sub}</p>}</div>;
@@ -45,14 +45,14 @@ export default async function CoverageAnalytics() {
     </>
   );
 
-  if (!d.ready) return <div className="space-y-4">{header}<div className="bg-amber-50 border border-amber-200 rounded-xl p-6"><p className="font-semibold text-amber-900">⚙️ No active shift</p></div></div>;
+  if (!d.ready) return <div className="space-y-4">{header}<div className="bg-[var(--cmp-surface-warning)] border border-[var(--cmp-color-warning)] rounded-xl p-6"><p className="font-semibold text-amber-900">⚙️ No active shift</p></div></div>;
 
   const t = d.overviewTotal;
   const bridge = [
     { label: "Required", n: t.required ?? 0, tone: "bg-gray-300" },
-    { label: "Rostered", n: t.planned, tone: "bg-sky-400" },
-    { label: "Confirmed", n: t.confirmed, tone: "bg-sky-500" },
-    { label: "Present", n: t.present, tone: "bg-emerald-500" },
+    { label: "Rostered", n: t.planned, tone: "bg-[var(--cmp-color-information)]" },
+    { label: "Confirmed", n: t.confirmed, tone: "bg-[var(--cmp-color-information)]" },
+    { label: "Present", n: t.present, tone: "bg-[var(--cmp-color-success)]" },
   ];
   const bMax = Math.max(1, ...bridge.map(b => b.n));
   return (
@@ -60,12 +60,12 @@ export default async function CoverageAnalytics() {
       {header}
 
       <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-3">
-        <Kpi label="Coverage" value={t.coverage != null ? `${t.coverage}%` : "—"} tone={t.coverage != null && t.coverage >= 90 ? "text-emerald-600" : "text-amber-600"} foot="WF-COV-001" />
+        <Kpi label="Coverage" value={t.coverage != null ? `${t.coverage}%` : "—"} tone={t.coverage != null && t.coverage >= 90 ? "text-[var(--cmp-text-success)]" : "text-[var(--cmp-text-warning)]"} foot="WF-COV-001" />
         <Kpi label="Present / required" value={`${t.present}/${t.required ?? "—"}`} sub={t.variance != null ? `${t.variance >= 0 ? "+" : ""}${t.variance}` : ""} />
         <Kpi label="Skill-mix" value={d.skillMix?.pct != null ? `${d.skillMix.pct}%` : "—"} sub="Competency compliance" foot="WF-CMP-001" />
-        <Kpi label="Open shifts" value={d.openShiftCount ?? 0} tone={(d.openShiftCount ?? 0) ? "text-amber-600" : "text-emerald-600"} />
+        <Kpi label="Open shifts" value={d.openShiftCount ?? 0} tone={(d.openShiftCount ?? 0) ? "text-[var(--cmp-text-warning)]" : "text-[var(--cmp-text-success)]"} />
         <Kpi label="Float pool" value={(d.floatPool ?? []).length} sub="Available" tone="text-violet-600" foot="WA-CV-006" />
-        <Kpi label="Critical gaps" value={d.kpis.criticalGaps ?? 0} tone={(d.kpis.criticalGaps ?? 0) ? "text-rose-600" : "text-emerald-600"} />
+        <Kpi label="Critical gaps" value={d.kpis.criticalGaps ?? 0} tone={(d.kpis.criticalGaps ?? 0) ? "text-[var(--cmp-text-error)]" : "text-[var(--cmp-text-success)]"} />
       </div>
 
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">

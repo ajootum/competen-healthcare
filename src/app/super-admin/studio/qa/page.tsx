@@ -12,8 +12,8 @@ import { loadContentQa } from "@/lib/studio/content-qa";
 export const dynamic = "force-dynamic";
 
 const SEV: Record<string, { cls: string; dot: string; label: string }> = {
-  high: { cls: "text-red-600 bg-red-50 border-red-100", dot: "#ef4444", label: "High" },
-  medium: { cls: "text-amber-600 bg-amber-50 border-amber-100", dot: "#f59e0b", label: "Medium" },
+  high: { cls: "text-[var(--cmp-text-critical)] bg-[var(--cmp-surface-critical)] border-[var(--cmp-color-critical)]", dot: "#ef4444", label: "High" },
+  medium: { cls: "text-[var(--cmp-text-warning)] bg-[var(--cmp-surface-warning)] border-[var(--cmp-color-warning)]", dot: "#f59e0b", label: "Medium" },
   low: { cls: "text-gray-500 bg-gray-50 border-gray-100", dot: "#9ca3af", label: "Low" },
 };
 
@@ -52,10 +52,10 @@ export default async function StudioQaPage() {
             {[
               { label: "Frameworks assessed", value: qa.kpis.frameworks, tone: "text-gray-900" },
               { label: "Competencies", value: qa.kpis.competencies, tone: "text-gray-900" },
-              { label: "Avg completeness", value: `${qa.kpis.avgScore}%`, tone: qa.kpis.avgScore >= 75 ? "text-teal-600" : qa.kpis.avgScore >= 50 ? "text-amber-600" : "text-red-600" },
+              { label: "Avg completeness", value: `${qa.kpis.avgScore}%`, tone: qa.kpis.avgScore >= 75 ? "text-teal-600" : qa.kpis.avgScore >= 50 ? "text-[var(--cmp-text-warning)]" : "text-[var(--cmp-text-critical)]" },
               { label: "Fully complete", value: qa.kpis.fullyComplete, tone: "text-teal-600" },
-              { label: "Issues found", value: qa.kpis.issues, tone: qa.kpis.issues > 0 ? "text-amber-600" : "text-gray-300" },
-              { label: "High severity", value: qa.kpis.high, tone: qa.kpis.high > 0 ? "text-red-600" : "text-gray-300" },
+              { label: "Issues found", value: qa.kpis.issues, tone: qa.kpis.issues > 0 ? "text-[var(--cmp-text-warning)]" : "text-gray-300" },
+              { label: "High severity", value: qa.kpis.high, tone: qa.kpis.high > 0 ? "text-[var(--cmp-text-critical)]" : "text-gray-300" },
             ].map(k => (
               <div key={k.label} className="bg-white rounded-xl border border-gray-100 p-3.5">
                 <p className={`text-xl font-bold ${k.tone}`}>{k.value}</p>
@@ -112,7 +112,7 @@ export default async function StudioQaPage() {
                   <span className="text-[11px] font-bold text-gray-600 w-10 text-right">{f.pct}%</span>
                   <span className="text-[10px] text-gray-400 w-24 text-right">{f.complete}/{f.competencies} complete</span>
                   <div className="hidden lg:flex gap-1 w-40 flex-wrap justify-end">
-                    {f.flags.map(fl => <span key={fl} className="text-[8px] font-semibold text-amber-600 bg-amber-50 border border-amber-100 px-1.5 py-0.5 rounded">{fl}</span>)}
+                    {f.flags.map(fl => <span key={fl} className="text-[8px] font-semibold text-[var(--cmp-text-warning)] bg-[var(--cmp-surface-warning)] border border-[var(--cmp-color-warning)] px-1.5 py-0.5 rounded">{fl}</span>)}
                   </div>
                 </Link>
               ))}

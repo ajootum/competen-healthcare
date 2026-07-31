@@ -23,7 +23,7 @@ const MODULE_MAP: [string, string, string, string][] = [
   ["011", "Observability, Testing & Eval", "live", "Phase 1+3: plat_ai_requests telemetry + eval harness"],
   ["012", "Agent Framework", "live", "Phase 2: ais_agents registry (+ execution runtime backend)"],
 ];
-const MOD_TONE: Record<string, { pill: string; dot: string; label: string }> = { live: { pill: "emerald", dot: "bg-emerald-500", label: "Live" }, phase2: { pill: "amber", dot: "bg-amber-500", label: "Phase 2" }, phase3: { pill: "blue", dot: "bg-blue-500", label: "Phase 3" }, backend: { pill: "slate", dot: "bg-gray-400", label: "Backend epic" } };
+const MOD_TONE: Record<string, { pill: string; dot: string; label: string }> = { live: { pill: "emerald", dot: "bg-[var(--cmp-color-success)]", label: "Live" }, phase2: { pill: "amber", dot: "bg-[var(--cmp-color-warning)]", label: "Phase 2" }, phase3: { pill: "blue", dot: "bg-[var(--cmp-color-information)]", label: "Phase 3" }, backend: { pill: "slate", dot: "bg-gray-400", label: "Backend epic" } };
 
 export default async function AiControlPlanePage() {
   const { admin } = await aisGuard();
@@ -36,27 +36,27 @@ export default async function AiControlPlanePage() {
     <div className="max-w-[1500px] space-y-4">
       {head}<Tabs active="001" />
 
-      <div className={`rounded-xl border p-3 flex items-center gap-3 ${d.aiConfigured ? "bg-emerald-50 border-emerald-200" : "bg-amber-50 border-amber-200"}`}>
-        <span className={`w-2.5 h-2.5 rounded-full ${d.aiConfigured ? "bg-emerald-500" : "bg-amber-500"}`} />
+      <div className={`rounded-xl border p-3 flex items-center gap-3 ${d.aiConfigured ? "bg-[var(--cmp-surface-success)] border-[var(--cmp-color-success)]" : "bg-[var(--cmp-surface-warning)] border-[var(--cmp-color-warning)]"}`}>
+        <span className={`w-2.5 h-2.5 rounded-full ${d.aiConfigured ? "bg-[var(--cmp-color-success)]" : "bg-[var(--cmp-color-warning)]"}`} />
         <p className="text-[13px] text-gray-800">{d.aiConfigured ? <>AI runtime <b>configured</b> — active provider <b className="capitalize">{d.activeProvider}</b>, default model <span className="font-mono">{d.defaultModel?.model_id ?? "—"}</span>.</> : <>AI runtime <b>not configured</b> — set a provider API key (ANTHROPIC_API_KEY) to enable generation. The registry &amp; telemetry below still work.</>}</p>
-        {!k.telemetryReady && <span className="ml-auto text-[11px] text-amber-700">telemetry table not applied</span>}
+        {!k.telemetryReady && <span className="ml-auto text-[11px] text-[var(--cmp-text-warning)]">telemetry table not applied</span>}
       </div>
 
       <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-8 gap-3">
         <Stat label="Requests (24h)" value={k.requests24h.toLocaleString()} sub={`${k.totalRequests.toLocaleString()} total`} />
         <Stat label="Tokens (24h)" value={k.tokens24h >= 1000 ? `${Math.round(k.tokens24h / 1000)}k` : k.tokens24h} sub="in + out" />
         <Stat label="Cost (24h)" value={`$${k.cost24h}`} sub={`$${k.totalCost} total`} tone="text-violet-700" />
-        <Stat label="Errors (24h)" value={k.errors24h} sub="upstream" tone={k.errors24h ? "text-rose-600" : undefined} />
-        <Stat label="Refusals (24h)" value={k.refusals24h} sub="safety" tone={k.refusals24h ? "text-amber-600" : undefined} />
+        <Stat label="Errors (24h)" value={k.errors24h} sub="upstream" tone={k.errors24h ? "text-[var(--cmp-text-error)]" : undefined} />
+        <Stat label="Refusals (24h)" value={k.refusals24h} sub="safety" tone={k.refusals24h ? "text-[var(--cmp-text-warning)]" : undefined} />
         <Stat label="Avg Latency" value={k.avgLatencyMs != null ? `${k.avgLatencyMs}ms` : "—"} sub="24h" />
         <Stat label="Active Providers" value={k.activeProviders} sub="registered" />
-        <Stat label="Active Models" value={k.activeModels} sub="available" tone="text-emerald-600" />
+        <Stat label="Active Models" value={k.activeModels} sub="available" tone="text-[var(--cmp-text-success)]" />
       </div>
 
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
         <Card title="Providers" right={<Link href="/super-admin/ai/services/models" className="text-[11px] text-violet-600 hover:underline">Registry →</Link>}>
           <div className="space-y-2">{d.providers.map((p: any) => (
-            <div key={p.code} className="flex items-center gap-2"><span className={`w-2 h-2 rounded-full ${p.live ? "bg-emerald-500" : p.status === "active" ? "bg-blue-400" : "bg-gray-300"}`} /><div className="min-w-0 flex-1"><p className="text-[12px] text-gray-800 leading-tight">{p.name}</p><p className="text-[10px] text-gray-400 font-mono">{p.code}</p></div>{p.live && <Pill text="configured" tone="emerald" />}<Pill text={p.status} tone={p.status === "active" ? "blue" : "slate"} /></div>
+            <div key={p.code} className="flex items-center gap-2"><span className={`w-2 h-2 rounded-full ${p.live ? "bg-[var(--cmp-color-success)]" : p.status === "active" ? "bg-[var(--cmp-color-information)]" : "bg-gray-300"}`} /><div className="min-w-0 flex-1"><p className="text-[12px] text-gray-800 leading-tight">{p.name}</p><p className="text-[10px] text-gray-400 font-mono">{p.code}</p></div>{p.live && <Pill text="configured" tone="emerald" />}<Pill text={p.status} tone={p.status === "active" ? "blue" : "slate"} /></div>
           ))}</div>
         </Card>
 
@@ -84,7 +84,7 @@ export default async function AiControlPlanePage() {
         </Card>
         <Card title="Recent AI Activity" right={<Link href="/super-admin/ai/services/observability" className="text-[11px] text-violet-600 hover:underline">Observability →</Link>}>
           {d.recent.length ? <div className="space-y-1">{d.recent.slice(0, 8).map((r: any, i: number) => (
-            <div key={i} className="flex items-center gap-2 text-[11px]"><span className={`w-1.5 h-1.5 rounded-full shrink-0 ${r.status === "ok" ? "bg-emerald-400" : r.status === "refusal" ? "bg-amber-400" : "bg-rose-400"}`} /><span className="text-gray-700 flex-1 truncate">{r.operation} · <span className="font-mono text-gray-400">{r.model}</span></span><span className="text-gray-400 tabular-nums">{r.tokens ?? "—"}t</span><span className="text-gray-400">{fmtT(r.at)}</span></div>
+            <div key={i} className="flex items-center gap-2 text-[11px]"><span className={`w-1.5 h-1.5 rounded-full shrink-0 ${r.status === "ok" ? "bg-[var(--cmp-color-success)]" : r.status === "refusal" ? "bg-[var(--cmp-color-warning)]" : "bg-[var(--cmp-color-error)]"}`} /><span className="text-gray-700 flex-1 truncate">{r.operation} · <span className="font-mono text-gray-400">{r.model}</span></span><span className="text-gray-400 tabular-nums">{r.tokens ?? "—"}t</span><span className="text-gray-400">{fmtT(r.at)}</span></div>
           ))}</div> : <p className="text-sm text-gray-400 py-4 text-center">No recent activity.</p>}
         </Card>
       </div>

@@ -110,7 +110,7 @@ export default function NavigationDesigner({ navs, targets }: { navs: Obj[]; tar
                       <LinkPicker item={it} onPatch={p => patchTop(i, p)} targets={targets} />
                       <input className={`${input} w-24`} value={it.roles ?? ""} onChange={e => patchTop(i, { roles: e.target.value })} placeholder="roles (opt)" />
                       <button onClick={() => addChild(i)} className="text-[10px] font-medium text-indigo-700 border border-indigo-200 rounded px-1.5 py-0.5 hover:bg-indigo-50">+ sub</button>
-                      <button onClick={() => rmTop(i)} className="text-gray-300 hover:text-rose-600 text-xs">✕</button>
+                      <button onClick={() => rmTop(i)} className="text-gray-300 hover:text-[var(--cmp-text-error)] text-xs">✕</button>
                     </div>
                     {(it.children ?? []).length > 0 && (
                       <div className="mt-1.5 ml-6 space-y-1 border-l border-gray-100 pl-2">
@@ -121,7 +121,7 @@ export default function NavigationDesigner({ navs, targets }: { navs: Obj[]; tar
                             <input className={`${input} flex-1 min-w-[5rem]`} value={c.label} onChange={e => patchChild(i, ci, { label: e.target.value })} placeholder="Sub-item" />
                             <LinkPicker item={c} onPatch={p => patchChild(i, ci, p)} targets={targets} w="w-32" />
                             <input className={`${input} w-20`} value={c.roles ?? ""} onChange={e => patchChild(i, ci, { roles: e.target.value })} placeholder="roles" />
-                            <button onClick={() => rmChild(i, ci)} className="text-gray-300 hover:text-rose-600 text-xs">✕</button>
+                            <button onClick={() => rmChild(i, ci)} className="text-gray-300 hover:text-[var(--cmp-text-error)] text-xs">✕</button>
                           </div>
                         ))}
                       </div>
@@ -150,7 +150,7 @@ export default function NavigationDesigner({ navs, targets }: { navs: Obj[]; tar
                     <div key={q.key} className="flex items-center gap-1.5">
                       <input className={`${input} flex-1`} value={q.label} onChange={e => setQAs(qq => qq.map((x, j) => j === i ? { ...x, label: e.target.value } : x))} placeholder="Action label" />
                       <LinkPicker item={q} onPatch={p => setQAs(qq => qq.map((x, j) => j === i ? { ...x, ...p } : x))} targets={targets} w="w-28" />
-                      <button onClick={() => setQAs(qq => qq.filter((_, j) => j !== i))} className="text-gray-300 hover:text-rose-600 text-xs">✕</button>
+                      <button onClick={() => setQAs(qq => qq.filter((_, j) => j !== i))} className="text-gray-300 hover:text-[var(--cmp-text-error)] text-xs">✕</button>
                     </div>
                   ))}
                 </div>
@@ -179,7 +179,7 @@ export default function NavigationDesigner({ navs, targets }: { navs: Obj[]; tar
               </div>
             )}
 
-            {msg && <p className={`text-xs mt-3 ${msg.startsWith("✓") ? "text-emerald-600" : "text-rose-600"}`}>{msg}</p>}
+            {msg && <p className={`text-xs mt-3 ${msg.startsWith("✓") ? "text-[var(--cmp-text-success)]" : "text-[var(--cmp-text-error)]"}`}>{msg}</p>}
             <div className="flex items-center justify-end mt-4"><button onClick={save} disabled={busy} className="text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg px-4 py-2 disabled:opacity-50">{busy ? "Saving…" : "Save navigation"}</button></div>
           </>
         )}

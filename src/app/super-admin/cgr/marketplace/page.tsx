@@ -11,13 +11,13 @@ export const dynamic = "force-dynamic";
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 const VIS_META: Record<string, { label: string; cls: string }> = {
-  public: { label: "Public", cls: "text-emerald-700 bg-emerald-50 border-emerald-100" },
-  enterprise: { label: "Enterprise", cls: "text-blue-700 bg-blue-50 border-blue-100" },
+  public: { label: "Public", cls: "text-emerald-700 bg-[var(--cmp-surface-success)] border-[var(--cmp-color-success)]" },
+  enterprise: { label: "Enterprise", cls: "text-blue-700 bg-[var(--cmp-surface-information)] border-[var(--cmp-color-information)]" },
   private: { label: "Private", cls: "text-gray-500 bg-gray-50 border-gray-200" },
 };
 const LICENSE_META: Record<string, string> = {
-  open: "text-emerald-700 bg-emerald-50 border-emerald-100", proprietary: "text-gray-600 bg-gray-50 border-gray-200",
-  subscription: "text-amber-700 bg-amber-50 border-amber-100", enterprise: "text-blue-700 bg-blue-50 border-blue-100",
+  open: "text-emerald-700 bg-[var(--cmp-surface-success)] border-[var(--cmp-color-success)]", proprietary: "text-gray-600 bg-gray-50 border-gray-200",
+  subscription: "text-[var(--cmp-text-warning)] bg-[var(--cmp-surface-warning)] border-[var(--cmp-color-warning)]", enterprise: "text-blue-700 bg-[var(--cmp-surface-information)] border-[var(--cmp-color-information)]",
 };
 const ROLES = [
   { role: "Publisher", note: "Creates and submits resources" },
@@ -46,26 +46,26 @@ export default async function GovernanceMarketplacePage() {
     <div className="max-w-[1400px]">
       <div className="flex items-start justify-between gap-3 mb-5">
         <div>
-          <p className="text-[11px] font-semibold text-emerald-600 uppercase tracking-widest mb-0.5">CGR-021 · Competency Governance</p>
+          <p className="text-[11px] font-semibold text-[var(--cmp-text-success)] uppercase tracking-widest mb-0.5">CGR-021 · Competency Governance</p>
           <h1 className="text-xl font-bold text-gray-900">Marketplace &amp; External Standards Exchange</h1>
           <p className="text-gray-400 text-sm mt-0.5">Discover, adopt and exchange trusted competency governance resources while keeping local accountability — trusted exchange, governance before sharing, local adaptation.</p>
         </div>
         <div className="flex gap-2 shrink-0">
-          <Link href="/super-admin/studio/marketplace" className="text-xs font-semibold text-emerald-700 hover:text-emerald-800 border border-emerald-200 bg-emerald-50 rounded-lg px-3 py-2">Publish / adopt →</Link>
+          <Link href="/super-admin/studio/marketplace" className="text-xs font-semibold text-emerald-700 hover:text-emerald-800 border border-[var(--cmp-color-success)] bg-[var(--cmp-surface-success)] rounded-lg px-3 py-2">Publish / adopt →</Link>
           <Link href="/super-admin/cgr" className="text-xs font-semibold text-gray-500 hover:text-emerald-700 border border-gray-200 rounded-lg px-3 py-2">← CGR</Link>
         </div>
       </div>
 
       {!d.provisioned ? (
-        <div className="bg-white border border-gray-200 rounded-xl p-8 text-center"><p className="text-sm text-gray-400">No governance packages yet. Resources are bundled and published in the <Link href="/super-admin/studio/marketplace" className="text-emerald-600 hover:underline">Studio Marketplace</Link>; once packages exist, the catalog, readiness and exchange metrics compute here.</p></div>
+        <div className="bg-white border border-gray-200 rounded-xl p-8 text-center"><p className="text-sm text-gray-400">No governance packages yet. Resources are bundled and published in the <Link href="/super-admin/studio/marketplace" className="text-[var(--cmp-text-success)] hover:underline">Studio Marketplace</Link>; once packages exist, the catalog, readiness and exchange metrics compute here.</p></div>
       ) : (
         <div className="space-y-4">
           <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
             <Kpi label="Packages" value={k.packages} sub="governance resources" />
-            <Kpi label="Shared" value={k.shared} sub="enterprise + public" tone={k.shared ? "text-emerald-600" : "text-gray-900"} />
+            <Kpi label="Shared" value={k.shared} sub="enterprise + public" tone={k.shared ? "text-[var(--cmp-text-success)]" : "text-gray-900"} />
             <Kpi label="Public" value={k.public} sub="open exchange" />
-            <Kpi label="Publish-ready" value={`${k.complete}/${k.packages}`} sub="complete manifest" tone={k.complete === k.packages && k.packages ? "text-emerald-600" : "text-amber-600"} />
-            <Kpi label="Incomplete" value={k.incomplete} sub="missing dependencies" tone={k.incomplete ? "text-rose-600" : "text-gray-900"} />
+            <Kpi label="Publish-ready" value={`${k.complete}/${k.packages}`} sub="complete manifest" tone={k.complete === k.packages && k.packages ? "text-[var(--cmp-text-success)]" : "text-[var(--cmp-text-warning)]"} />
+            <Kpi label="Incomplete" value={k.incomplete} sub="missing dependencies" tone={k.incomplete ? "text-[var(--cmp-text-error)]" : "text-gray-900"} />
             <Kpi label="Publishers" value={k.publishers} sub="contributors" />
           </div>
 
@@ -80,7 +80,7 @@ export default async function GovernanceMarketplacePage() {
                   {d.categories.map((c: any) => (
                     <div key={c.category} className="flex items-center gap-2">
                       <span className="text-[11px] text-gray-600 w-24 shrink-0 capitalize">{c.category}</span>
-                      <div className="flex-1 h-2 rounded bg-gray-50 overflow-hidden"><div className={`h-full rounded ${c.category === "governance" ? "bg-emerald-500" : "bg-gray-300"}`} style={{ width: `${(c.count / catMax) * 100}%` }} /></div>
+                      <div className="flex-1 h-2 rounded bg-gray-50 overflow-hidden"><div className={`h-full rounded ${c.category === "governance" ? "bg-[var(--cmp-color-success)]" : "bg-gray-300"}`} style={{ width: `${(c.count / catMax) * 100}%` }} /></div>
                       <span className="text-[11px] font-bold text-gray-600 tabular-nums w-6 text-right">{c.count}</span>
                     </div>
                   ))}
@@ -94,13 +94,13 @@ export default async function GovernanceMarketplacePage() {
               <div className="flex h-4 rounded overflow-hidden bg-gray-100 mb-2.5">
                 {(["public", "enterprise", "private"] as const).map((v) => {
                   const w = visTotal ? (d.byVisibility[v] / visTotal) * 100 : 0;
-                  const tone = v === "public" ? "bg-emerald-500" : v === "enterprise" ? "bg-blue-500" : "bg-gray-300";
+                  const tone = v === "public" ? "bg-[var(--cmp-color-success)]" : v === "enterprise" ? "bg-[var(--cmp-color-information)]" : "bg-gray-300";
                   return w > 0 ? <div key={v} className={tone} style={{ width: `${w}%` }} title={`${VIS_META[v].label}: ${d.byVisibility[v]}`} /> : null;
                 })}
               </div>
               <div className="space-y-1">
                 {(["public", "enterprise", "private"] as const).map((v) => (
-                  <div key={v} className="flex items-center justify-between"><span className="flex items-center gap-1.5 text-[11px] text-gray-600"><span className={`w-2 h-2 rounded-full ${v === "public" ? "bg-emerald-500" : v === "enterprise" ? "bg-blue-500" : "bg-gray-300"}`} />{VIS_META[v].label}</span><span className="text-[11px] font-bold text-gray-700 tabular-nums">{d.byVisibility[v]}</span></div>
+                  <div key={v} className="flex items-center justify-between"><span className="flex items-center gap-1.5 text-[11px] text-gray-600"><span className={`w-2 h-2 rounded-full ${v === "public" ? "bg-[var(--cmp-color-success)]" : v === "enterprise" ? "bg-[var(--cmp-color-information)]" : "bg-gray-300"}`} />{VIS_META[v].label}</span><span className="text-[11px] font-bold text-gray-700 tabular-nums">{d.byVisibility[v]}</span></div>
                 ))}
               </div>
             </div>
@@ -134,7 +134,7 @@ export default async function GovernanceMarketplacePage() {
                       <td className="py-2 px-2"><span className={`text-[10px] font-bold border rounded px-1.5 py-0.5 capitalize ${LICENSE_META[p.license] ?? LICENSE_META.proprietary}`}>{p.license}</span></td>
                       <td className="py-2 px-2 text-center text-[12px] text-gray-600 tabular-nums">{p.members}</td>
                       <td className="py-2 px-2"><span className={`text-[10px] font-bold border rounded px-1.5 py-0.5 ${(VIS_META[p.visibility] ?? VIS_META.private).cls}`}>{(VIS_META[p.visibility] ?? VIS_META.private).label}</span></td>
-                      <td className="py-2 pr-4 pl-2">{p.complete ? <span className="text-[11px] font-semibold text-emerald-600">✓</span> : <span className="text-[10px] text-rose-600">{p.missing} missing</span>}</td>
+                      <td className="py-2 pr-4 pl-2">{p.complete ? <span className="text-[11px] font-semibold text-[var(--cmp-text-success)]">✓</span> : <span className="text-[10px] text-[var(--cmp-text-error)]">{p.missing} missing</span>}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -168,7 +168,7 @@ export default async function GovernanceMarketplacePage() {
             </div>
           </div>
 
-          <p className="text-[11px] text-gray-400 leading-relaxed">Every figure is real — the resource catalog, publishers, licensing and exchange visibility come from the package store, and publication readiness is the package manifest completeness (§4.2 governance before sharing). Bundling, publishing and adopting resources happen in the <Link href="/super-admin/studio/marketplace" className="text-emerald-600 hover:underline">Studio Marketplace</Link>; regulatory standards exchange is grounded in <Link href="/super-admin/cgr/standards" className="text-emerald-600 hover:underline">Regulatory Intelligence</Link>. Per the CGR mandate, AI may recommend relevant resources but never approves marketplace publication or overrides local governance.</p>
+          <p className="text-[11px] text-gray-400 leading-relaxed">Every figure is real — the resource catalog, publishers, licensing and exchange visibility come from the package store, and publication readiness is the package manifest completeness (§4.2 governance before sharing). Bundling, publishing and adopting resources happen in the <Link href="/super-admin/studio/marketplace" className="text-[var(--cmp-text-success)] hover:underline">Studio Marketplace</Link>; regulatory standards exchange is grounded in <Link href="/super-admin/cgr/standards" className="text-[var(--cmp-text-success)] hover:underline">Regulatory Intelligence</Link>. Per the CGR mandate, AI may recommend relevant resources but never approves marketplace publication or overrides local governance.</p>
         </div>
       )}
     </div>

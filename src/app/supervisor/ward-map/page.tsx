@@ -27,7 +27,7 @@ export default async function WardMapPage() {
   const po = await loadPatientOps(admin, profile?.hospital_id ?? null, roles.includes("super_admin"));
   if (!po.ready) return (
     <div className="space-y-4"><h1 className="text-2xl font-bold text-gray-900">Ward Map</h1>
-      <div className="bg-amber-50 border border-amber-200 rounded-xl p-6"><p className="font-semibold text-amber-900">⚙️ Coming online</p><p className="text-sm text-amber-800 mt-2">The Clinical Operations Engine tables aren&apos;t provisioned yet.</p></div>
+      <div className="bg-[var(--cmp-surface-warning)] border border-[var(--cmp-color-warning)] rounded-xl p-6"><p className="font-semibold text-amber-900">⚙️ Coming online</p><p className="text-sm text-amber-800 mt-2">The Clinical Operations Engine tables aren&apos;t provisioned yet.</p></div>
     </div>
   );
 
@@ -36,9 +36,9 @@ export default async function WardMapPage() {
   // Header quick-stat strip — all figures are live from the shared model.
   const stats = [
     { label: "Patients in care", value: summary.total, tone: "text-gray-900" },
-    { label: "Occupancy", value: `${capacity.occPct}%`, sub: `${capacity.occupied}/${capacity.total} beds`, tone: capacity.occPct >= 90 ? "text-red-600" : capacity.occPct >= 75 ? "text-orange-600" : "text-green-600" },
-    { label: "High risk", value: summary.highRisk, tone: summary.highRisk ? "text-red-600" : "text-gray-900" },
-    { label: "Available beds", value: capacity.available, tone: capacity.available ? "text-blue-600" : "text-gray-900" },
+    { label: "Occupancy", value: `${capacity.occPct}%`, sub: `${capacity.occupied}/${capacity.total} beds`, tone: capacity.occPct >= 90 ? "text-[var(--cmp-text-critical)]" : capacity.occPct >= 75 ? "text-[var(--cmp-text-warning)]" : "text-[var(--cmp-text-success)]" },
+    { label: "High risk", value: summary.highRisk, tone: summary.highRisk ? "text-[var(--cmp-text-critical)]" : "text-gray-900" },
+    { label: "Available beds", value: capacity.available, tone: capacity.available ? "text-[var(--cmp-text-information)]" : "text-gray-900" },
     { label: "Isolation", value: summary.isolation, tone: summary.isolation ? "text-purple-600" : "text-gray-900" },
     { label: "Zones", value: zones.length, tone: "text-gray-900" },
   ];
@@ -50,13 +50,13 @@ export default async function WardMapPage() {
 
   // Legend — text + colour, never colour alone.
   const legend = [
-    { label: "Stable", cls: "bg-green-100 text-green-700" },
-    { label: "Review / observation", cls: "bg-amber-100 text-amber-700" },
-    { label: "High risk / critical", cls: "bg-red-100 text-red-700" },
+    { label: "Stable", cls: "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]" },
+    { label: "Review / observation", cls: "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]" },
+    { label: "High risk / critical", cls: "bg-[var(--cmp-surface-critical)] text-[var(--cmp-text-critical)]" },
     { label: "Isolation", cls: "bg-purple-100 text-purple-700" },
-    { label: "Available", cls: "bg-blue-100 text-blue-700" },
+    { label: "Available", cls: "bg-[var(--cmp-surface-information)] text-blue-700" },
     { label: "Reserved", cls: "bg-violet-100 text-violet-700" },
-    { label: "Cleaning / maintenance", cls: "bg-orange-100 text-orange-700" },
+    { label: "Cleaning / maintenance", cls: "bg-[var(--cmp-surface-warning)] text-orange-700" },
   ];
 
   const actions = [
@@ -104,7 +104,7 @@ export default async function WardMapPage() {
             </span>
           ))}
           <span className="inline-flex items-center gap-1.5 text-[11px] font-medium rounded-full px-2.5 py-1 bg-purple-50 text-purple-700 border border-purple-200">◐ ISO — isolation precaution</span>
-          <span className="inline-flex items-center gap-1.5 text-[11px] font-medium rounded-full px-2.5 py-1 bg-red-50 text-red-700 border border-red-200">⚠ n — open safety alerts</span>
+          <span className="inline-flex items-center gap-1.5 text-[11px] font-medium rounded-full px-2.5 py-1 bg-[var(--cmp-surface-critical)] text-[var(--cmp-text-critical)] border border-[var(--cmp-color-critical)]">⚠ n — open safety alerts</span>
         </div>
       </div>
 
@@ -119,10 +119,10 @@ export default async function WardMapPage() {
               </h3>
               <div className="flex flex-wrap items-center gap-1.5 text-[10px]">
                 <span className="rounded-full bg-gray-100 text-gray-600 px-2 py-0.5">{zone.patients} patient{zone.patients !== 1 ? "s" : ""}</span>
-                {zone.highRisk > 0 && <span className="rounded-full bg-red-100 text-red-700 px-2 py-0.5">{zone.highRisk} high risk</span>}
-                <span className="rounded-full bg-blue-100 text-blue-700 px-2 py-0.5">{zone.available} available</span>
+                {zone.highRisk > 0 && <span className="rounded-full bg-[var(--cmp-surface-critical)] text-[var(--cmp-text-critical)] px-2 py-0.5">{zone.highRisk} high risk</span>}
+                <span className="rounded-full bg-[var(--cmp-surface-information)] text-blue-700 px-2 py-0.5">{zone.available} available</span>
                 <span className="rounded-full bg-gray-100 text-gray-600 px-2 py-0.5">{zone.staff} staff</span>
-                {zone.alerts > 0 && <span className="rounded-full bg-orange-100 text-orange-700 px-2 py-0.5">{zone.alerts} alert{zone.alerts !== 1 ? "s" : ""}</span>}
+                {zone.alerts > 0 && <span className="rounded-full bg-[var(--cmp-surface-warning)] text-orange-700 px-2 py-0.5">{zone.alerts} alert{zone.alerts !== 1 ? "s" : ""}</span>}
               </div>
             </div>
             {zone.beds.length === 0 ? (
@@ -142,7 +142,7 @@ export default async function WardMapPage() {
                         <span className="text-[10px] font-semibold truncate">{bed.label}</span>
                         <span className="flex items-center gap-1 shrink-0">
                           {p && p.isolation !== "none" && <span className="text-[9px] font-bold text-purple-600" title={`${titleCase(p.isolation)} isolation`}>◐ISO</span>}
-                          {p && p.alerts.length > 0 && <span className="text-[9px] font-bold text-red-600">⚠{p.alerts.length}</span>}
+                          {p && p.alerts.length > 0 && <span className="text-[9px] font-bold text-[var(--cmp-text-critical)]">⚠{p.alerts.length}</span>}
                         </span>
                       </div>
                       {p ? (
@@ -187,11 +187,11 @@ export default async function WardMapPage() {
                   <tr key={z.name} className="border-b border-gray-50">
                     <td className="py-1.5 pr-2 font-medium text-gray-800 truncate max-w-[10rem]">{z.name}</td>
                     <td className="py-1.5 px-1 text-right tabular-nums text-gray-700">{z.patients}</td>
-                    <td className={`py-1.5 px-1 text-right tabular-nums font-semibold ${z.highRisk ? "text-red-600" : "text-gray-400"}`}>{z.highRisk}</td>
+                    <td className={`py-1.5 px-1 text-right tabular-nums font-semibold ${z.highRisk ? "text-[var(--cmp-text-critical)]" : "text-gray-400"}`}>{z.highRisk}</td>
                     <td className="py-1.5 px-1 text-right tabular-nums text-gray-700">{z.staff}</td>
-                    <td className={`py-1.5 px-1 text-right tabular-nums ${z.ratio != null && z.ratio > 4 ? "text-orange-600 font-semibold" : "text-gray-700"}`}>{z.ratio ?? "—"}</td>
-                    <td className={`py-1.5 px-1 text-right tabular-nums ${z.alerts ? "text-orange-600 font-semibold" : "text-gray-400"}`}>{z.alerts}</td>
-                    <td className="py-1.5 px-1 text-right tabular-nums text-blue-600">{z.available}</td>
+                    <td className={`py-1.5 px-1 text-right tabular-nums ${z.ratio != null && z.ratio > 4 ? "text-[var(--cmp-text-warning)] font-semibold" : "text-gray-700"}`}>{z.ratio ?? "—"}</td>
+                    <td className={`py-1.5 px-1 text-right tabular-nums ${z.alerts ? "text-[var(--cmp-text-warning)] font-semibold" : "text-gray-400"}`}>{z.alerts}</td>
+                    <td className="py-1.5 px-1 text-right tabular-nums text-[var(--cmp-text-information)]">{z.available}</td>
                   </tr>
                 ))}
               </tbody>
@@ -207,13 +207,13 @@ export default async function WardMapPage() {
               <p className="text-sm text-gray-500">Acuity is spread evenly across zones — no concentration to rebalance right now.</p>
             )}
             {hotZones.slice(0, 2).map(z => (
-              <div key={z.name} className="rounded-lg border border-amber-200 bg-amber-50/60 px-3 py-2">
+              <div key={z.name} className="rounded-lg border border-[var(--cmp-color-warning)] bg-[var(--cmp-surface-warning)]/60 px-3 py-2">
                 <p className="text-sm text-amber-900"><span className="font-semibold">{z.name}</span> holds {z.highRisk} high-acuity patient{z.highRisk !== 1 ? "s" : ""} with {z.staff} staff{z.ratio != null ? ` (ratio ${z.ratio})` : ""}. Consider rebalancing assignments.</p>
                 <Link href="/supervisor/operations?section=assignments" className="text-[11px] font-medium text-teal-700 hover:underline">Rebalance assignments →</Link>
               </div>
             ))}
             {nurseGap.slice(0, 2).map(z => (
-              <div key={z.name} className="rounded-lg border border-orange-200 bg-orange-50/60 px-3 py-2">
+              <div key={z.name} className="rounded-lg border border-[var(--cmp-color-warning)] bg-[var(--cmp-surface-warning)]/60 px-3 py-2">
                 <p className="text-sm text-orange-900"><span className="font-semibold">{z.name}</span> has {z.patients} patient{z.patients !== 1 ? "s" : ""} but no assigned nurse.</p>
                 <Link href="/supervisor/operations?section=assignments" className="text-[11px] font-medium text-teal-700 hover:underline">Assign staff →</Link>
               </div>
@@ -234,9 +234,9 @@ export default async function WardMapPage() {
         <h3 className="font-semibold text-gray-900 flex items-center gap-2 mb-3">⚡ Ward Actions</h3>
         <div className="grid grid-cols-3 sm:grid-cols-6 gap-2">
           {actions.map(a => (
-            <Link key={a.label} href={a.href} className={`flex flex-col items-center gap-1.5 rounded-lg border py-3 px-1 text-center transition-colors ${a.danger ? "border-red-200 hover:bg-red-50/50" : "border-gray-200 hover:border-teal-300 hover:bg-teal-50/40"}`}>
+            <Link key={a.label} href={a.href} className={`flex flex-col items-center gap-1.5 rounded-lg border py-3 px-1 text-center transition-colors ${a.danger ? "border-[var(--cmp-color-critical)] hover:bg-[var(--cmp-surface-critical)]/50" : "border-gray-200 hover:border-teal-300 hover:bg-teal-50/40"}`}>
               <span className="text-lg">{a.icon}</span>
-              <span className={`text-[10px] leading-tight ${a.danger ? "text-red-600" : "text-gray-600"}`}>{a.label}</span>
+              <span className={`text-[10px] leading-tight ${a.danger ? "text-[var(--cmp-text-critical)]" : "text-gray-600"}`}>{a.label}</span>
             </Link>
           ))}
         </div>

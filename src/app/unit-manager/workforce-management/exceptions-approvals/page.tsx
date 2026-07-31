@@ -14,9 +14,9 @@ export const dynamic = "force-dynamic";
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 const card = "bg-white rounded-xl border border-gray-200";
-const SEV: Record<string, string> = { critical: "bg-rose-50 text-rose-700", high: "bg-amber-50 text-amber-700", moderate: "bg-sky-50 text-sky-700", low: "bg-gray-100 text-gray-500" };
-const DOT: Record<string, string> = { critical: "bg-rose-500", high: "bg-amber-500", moderate: "bg-sky-500", low: "bg-gray-400" };
-const PRI: Record<string, string> = { critical: "bg-rose-50 text-rose-700", high: "bg-amber-50 text-amber-700", medium: "bg-sky-50 text-sky-700", low: "bg-gray-100 text-gray-500" };
+const SEV: Record<string, string> = { critical: "bg-[var(--cmp-surface-error)] text-[var(--cmp-text-error)]", high: "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]", moderate: "bg-[var(--cmp-surface-information)] text-[var(--cmp-text-information)]", low: "bg-gray-100 text-gray-500" };
+const DOT: Record<string, string> = { critical: "bg-[var(--cmp-color-error)]", high: "bg-[var(--cmp-color-warning)]", moderate: "bg-[var(--cmp-color-information)]", low: "bg-gray-400" };
+const PRI: Record<string, string> = { critical: "bg-[var(--cmp-surface-error)] text-[var(--cmp-text-error)]", high: "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]", medium: "bg-[var(--cmp-surface-information)] text-[var(--cmp-text-information)]", low: "bg-gray-100 text-gray-500" };
 const fmtWhen = (iso?: string | null) => iso ? new Date(iso).toLocaleDateString("en-GB", { day: "numeric", month: "short" }) : "—";
 
 function Kpi({ label, value, sub, tone, foot }: { label: string; value: any; sub?: string; tone?: string; foot?: string }) {
@@ -57,10 +57,10 @@ export default async function ExceptionsApprovalsOverview() {
       {/* KPI cards (§8.1) */}
       <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-3">
         <Kpi label="Open exceptions" value={k.openExceptions} sub={`${k.exceptionCount} raised + ${k.awaitingApproval} approvals`} foot="¹" />
-        <Kpi label="Awaiting approval" value={k.awaitingApproval} sub="In the queue" tone={k.awaitingApproval ? "text-amber-600" : "text-emerald-600"} foot="²" />
-        <Kpi label="Critical risks" value={k.critical} sub="Safety / staffing" tone={k.critical ? "text-rose-600" : "text-emerald-600"} foot="³" />
-        <Kpi label="Overdue decisions" value={k.overdue} sub="Past SLA" tone={k.overdue ? "text-rose-600" : "text-emerald-600"} foot="⁴" />
-        <Kpi label="Escalated" value={k.escalated} sub="Higher review" tone={k.escalated ? "text-orange-600" : undefined} foot="⁷" />
+        <Kpi label="Awaiting approval" value={k.awaitingApproval} sub="In the queue" tone={k.awaitingApproval ? "text-[var(--cmp-text-warning)]" : "text-[var(--cmp-text-success)]"} foot="²" />
+        <Kpi label="Critical risks" value={k.critical} sub="Safety / staffing" tone={k.critical ? "text-[var(--cmp-text-error)]" : "text-[var(--cmp-text-success)]"} foot="³" />
+        <Kpi label="Overdue decisions" value={k.overdue} sub="Past SLA" tone={k.overdue ? "text-[var(--cmp-text-error)]" : "text-[var(--cmp-text-success)]"} foot="⁴" />
+        <Kpi label="Escalated" value={k.escalated} sub="Higher review" tone={k.escalated ? "text-[var(--cmp-text-warning)]" : undefined} foot="⁷" />
         <Kpi label="Finance exposure" value={k.financeExposure} sub="Cost approvals" foot="⁵" />
       </div>
 
@@ -71,7 +71,7 @@ export default async function ExceptionsApprovalsOverview() {
           {!d.apprProvisioned ? <p className="text-sm text-gray-400">Approval store (migration 077) not provisioned.</p> : d.priority.length === 0 ? <p className="text-sm text-gray-400">No approvals awaiting a decision. 🎉</p> : (
             <div className="overflow-x-auto"><table className="w-full text-xs">
               <thead><tr className="text-gray-400 text-left border-b border-gray-100"><th className="py-2 pr-3 font-medium">Request</th><th className="py-2 pr-3 font-medium">Category</th><th className="py-2 pr-3 font-medium">Priority</th><th className="py-2 pr-3 font-medium">Requester</th><th className="py-2 font-medium">Due</th></tr></thead>
-              <tbody>{d.priority.map((a: any) => (<tr key={a.id} className="border-b border-gray-50"><td className="py-2 pr-3 text-gray-800 font-medium">{a.title}</td><td className="py-2 pr-3 text-gray-500 capitalize">{a.category}</td><td className="py-2 pr-3"><span className={`text-[9px] px-1.5 py-0.5 rounded ${PRI[a.priority] ?? PRI.medium}`}>{a.priority}</span></td><td className="py-2 pr-3 text-gray-500 truncate max-w-[100px]">{a.requester_name ?? "—"}</td><td className={`py-2 ${a.overdue ? "text-rose-600 font-semibold" : "text-gray-500"}`}>{fmtWhen(a.due_at)}{a.overdue ? " ⚠" : ""}</td></tr>))}</tbody>
+              <tbody>{d.priority.map((a: any) => (<tr key={a.id} className="border-b border-gray-50"><td className="py-2 pr-3 text-gray-800 font-medium">{a.title}</td><td className="py-2 pr-3 text-gray-500 capitalize">{a.category}</td><td className="py-2 pr-3"><span className={`text-[9px] px-1.5 py-0.5 rounded ${PRI[a.priority] ?? PRI.medium}`}>{a.priority}</span></td><td className="py-2 pr-3 text-gray-500 truncate max-w-[100px]">{a.requester_name ?? "—"}</td><td className={`py-2 ${a.overdue ? "text-[var(--cmp-text-error)] font-semibold" : "text-gray-500"}`}>{fmtWhen(a.due_at)}{a.overdue ? " ⚠" : ""}</td></tr>))}</tbody>
             </table></div>
           )}
           <Link href="/unit-manager/workforce-management/exceptions-approvals/queue" className="mt-3 inline-block text-[11px] font-semibold text-emerald-700 hover:underline">Open my approval queue →</Link>
@@ -80,7 +80,7 @@ export default async function ExceptionsApprovalsOverview() {
         {/* Exception distribution (§33) */}
         <div className={`${card} p-5`}>
           <h3 className="text-sm font-bold text-gray-900 mb-3">Exceptions by category</h3>
-          {d.cats.length === 0 ? <p className="text-sm text-gray-400">No workforce exceptions raised.</p> : <div className="space-y-2">{d.cats.map((c: any) => (<div key={c.category} className="flex items-center gap-3 text-xs"><span className="text-gray-600 w-32 truncate">{c.category}</span><div className="flex-1 h-1.5 rounded-full bg-gray-100 overflow-hidden"><div className="h-full bg-emerald-500 rounded-full" style={{ width: `${(c.count / catTotal) * 100}%` }} /></div><span className="font-semibold text-gray-700 w-6 text-right">{c.count}</span></div>))}</div>}
+          {d.cats.length === 0 ? <p className="text-sm text-gray-400">No workforce exceptions raised.</p> : <div className="space-y-2">{d.cats.map((c: any) => (<div key={c.category} className="flex items-center gap-3 text-xs"><span className="text-gray-600 w-32 truncate">{c.category}</span><div className="flex-1 h-1.5 rounded-full bg-gray-100 overflow-hidden"><div className="h-full bg-[var(--cmp-color-success)] rounded-full" style={{ width: `${(c.count / catTotal) * 100}%` }} /></div><span className="font-semibold text-gray-700 w-6 text-right">{c.count}</span></div>))}</div>}
           <p className="text-[10px] text-gray-400 mt-3">Aggregated from replacement, attendance, roster, escalation and leave exceptions.</p>
         </div>
       </div>

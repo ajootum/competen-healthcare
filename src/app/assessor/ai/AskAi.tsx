@@ -30,7 +30,7 @@ export default function AskAi({ endpoint, body, label, doneLabel }: {
         className="no-print text-xs font-bold text-white bg-indigo-600 rounded-lg px-4 py-2 hover:bg-indigo-700 disabled:opacity-50 transition-colors">
         {busy ? "Thinking…" : text ? `↻ ${doneLabel ?? "Regenerate"}` : `✨ ${label}`}
       </button>
-      {error && <p className="text-xs text-red-600 mt-2">{error}</p>}
+      {error && <p className="text-xs text-[var(--cmp-text-critical)] mt-2">{error}</p>}
       {text && (
         <div className="mt-3 bg-indigo-50/60 border border-indigo-100 rounded-lg p-3.5">
           <p className="text-xs text-gray-700 whitespace-pre-wrap leading-relaxed">{text}</p>

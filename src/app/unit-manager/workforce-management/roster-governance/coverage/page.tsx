@@ -16,10 +16,10 @@ export const dynamic = "force-dynamic";
 
 const card = "bg-white rounded-xl border border-gray-200";
 const OUT: Record<string, { bg: string; badge: string; label: string }> = {
-  safe: { bg: "bg-emerald-500", badge: "bg-emerald-50 text-emerald-700", label: "Safe" },
-  warning: { bg: "bg-amber-400", badge: "bg-amber-50 text-amber-700", label: "Warning" },
-  gap: { bg: "bg-orange-500", badge: "bg-orange-50 text-orange-700", label: "Gap" },
-  critical: { bg: "bg-rose-500", badge: "bg-rose-50 text-rose-700", label: "Critical" },
+  safe: { bg: "bg-[var(--cmp-color-success)]", badge: "bg-[var(--cmp-surface-success)] text-emerald-700", label: "Safe" },
+  warning: { bg: "bg-[var(--cmp-color-warning)]", badge: "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]", label: "Warning" },
+  gap: { bg: "bg-[var(--cmp-color-warning)]", badge: "bg-[var(--cmp-surface-warning)] text-orange-700", label: "Gap" },
+  critical: { bg: "bg-[var(--cmp-color-error)]", badge: "bg-[var(--cmp-surface-error)] text-[var(--cmp-text-error)]", label: "Critical" },
 };
 const fmtD = (iso: string) => new Date(iso).toLocaleDateString("en-GB", { weekday: "short", day: "numeric" });
 
@@ -48,7 +48,7 @@ export default async function CoverageSafety() {
     </>
   );
 
-  if (!d.provisioned) return <div className="space-y-4">{header}<div className="bg-amber-50 border border-amber-200 rounded-xl p-6"><p className="font-semibold text-amber-900">⚙️ Roster store not provisioned</p></div></div>;
+  if (!d.provisioned) return <div className="space-y-4">{header}<div className="bg-[var(--cmp-surface-warning)] border border-[var(--cmp-color-warning)] rounded-xl p-6"><p className="font-semibold text-amber-900">⚙️ Roster store not provisioned</p></div></div>;
   if (!d.hasRoster) return <div className="space-y-4">{header}<div className="bg-white border border-gray-200 rounded-xl p-6"><p className="font-semibold text-gray-800">No roster for the current week</p><p className="text-sm text-gray-500 mt-1">Generate one in the <Link href="/unit-manager/scheduling-engine" className="text-emerald-700 hover:underline">Scheduling Engine</Link>.</p></div></div>;
 
   return (
@@ -56,10 +56,10 @@ export default async function CoverageSafety() {
       {header}
 
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        <Kpi label="Safe shifts" value={d.counts.safe} tone="text-emerald-600" />
-        <Kpi label="Warnings" value={d.counts.warning} tone={d.counts.warning ? "text-amber-600" : undefined} />
-        <Kpi label="Gaps" value={d.counts.gap} tone={d.counts.gap ? "text-orange-600" : undefined} />
-        <Kpi label="Critical" value={d.counts.critical} tone={d.counts.critical ? "text-rose-600" : "text-emerald-600"} />
+        <Kpi label="Safe shifts" value={d.counts.safe} tone="text-[var(--cmp-text-success)]" />
+        <Kpi label="Warnings" value={d.counts.warning} tone={d.counts.warning ? "text-[var(--cmp-text-warning)]" : undefined} />
+        <Kpi label="Gaps" value={d.counts.gap} tone={d.counts.gap ? "text-[var(--cmp-text-warning)]" : undefined} />
+        <Kpi label="Critical" value={d.counts.critical} tone={d.counts.critical ? "text-[var(--cmp-text-error)]" : "text-[var(--cmp-text-success)]"} />
       </div>
 
       {/* Coverage heat map */}
@@ -83,7 +83,7 @@ export default async function CoverageSafety() {
         {d.shifts.filter((s: any) => s.outcome !== "safe").length === 0 ? <p className="text-sm text-gray-400">Every shift meets minimum safe staffing. 🎉</p> : (
           <div className="overflow-x-auto"><table className="w-full text-xs">
             <thead><tr className="text-gray-400 text-left border-b border-gray-100"><th className="py-2 pr-3 font-medium">Unit</th><th className="py-2 pr-3 font-medium">Date</th><th className="py-2 pr-3 font-medium">Shift</th><th className="py-2 pr-3 font-medium text-right">Filled</th><th className="py-2 pr-3 font-medium text-right">Gap</th><th className="py-2 pr-3 font-medium">Supervisor</th><th className="py-2 font-medium">Outcome</th></tr></thead>
-            <tbody>{d.shifts.filter((s: any) => s.outcome !== "safe").sort((a: any, b: any) => (a.outcome === "critical" ? 0 : 1) - (b.outcome === "critical" ? 0 : 1) || b.gap - a.gap).map((s: any, i: number) => (<tr key={i} className="border-b border-gray-50"><td className="py-2 pr-3 text-gray-700">{s.unit}</td><td className="py-2 pr-3 text-gray-600 whitespace-nowrap">{fmtD(s.date)}</td><td className="py-2 pr-3 text-gray-500 capitalize">{s.shift}</td><td className="py-2 pr-3 text-right text-gray-600">{s.filled}/{s.posts}</td><td className={`py-2 pr-3 text-right ${s.gap ? "text-rose-600 font-semibold" : "text-gray-400"}`}>{s.gap || "—"}</td><td className="py-2 pr-3">{!s.supPost ? <span className="text-gray-300">n/a</span> : s.supFilled ? <span className="text-emerald-600">✓</span> : <span className="text-rose-600 font-semibold">missing</span>}</td><td className="py-2"><span className={`text-[9px] px-1.5 py-0.5 rounded ${OUT[s.outcome].badge}`}>{OUT[s.outcome].label}</span></td></tr>))}</tbody>
+            <tbody>{d.shifts.filter((s: any) => s.outcome !== "safe").sort((a: any, b: any) => (a.outcome === "critical" ? 0 : 1) - (b.outcome === "critical" ? 0 : 1) || b.gap - a.gap).map((s: any, i: number) => (<tr key={i} className="border-b border-gray-50"><td className="py-2 pr-3 text-gray-700">{s.unit}</td><td className="py-2 pr-3 text-gray-600 whitespace-nowrap">{fmtD(s.date)}</td><td className="py-2 pr-3 text-gray-500 capitalize">{s.shift}</td><td className="py-2 pr-3 text-right text-gray-600">{s.filled}/{s.posts}</td><td className={`py-2 pr-3 text-right ${s.gap ? "text-[var(--cmp-text-error)] font-semibold" : "text-gray-400"}`}>{s.gap || "—"}</td><td className="py-2 pr-3">{!s.supPost ? <span className="text-gray-300">n/a</span> : s.supFilled ? <span className="text-[var(--cmp-text-success)]">✓</span> : <span className="text-[var(--cmp-text-error)] font-semibold">missing</span>}</td><td className="py-2"><span className={`text-[9px] px-1.5 py-0.5 rounded ${OUT[s.outcome].badge}`}>{OUT[s.outcome].label}</span></td></tr>))}</tbody>
           </table></div>
         )}
         <p className="text-[10px] text-gray-400 mt-2">Hard-blocking conditions (§10.6): staffing below minimum, no eligible supervisor, missing critical competency. The candidate-resolution panel (eligible staff ranked for an uncovered shift) reuses the Scheduling Engine solver → resolve in <Link href="/unit-manager/scheduling-engine" className="text-emerald-700 hover:underline">Scheduling Engine</Link>.</p>

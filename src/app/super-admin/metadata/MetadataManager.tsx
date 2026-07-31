@@ -7,8 +7,8 @@ type Term = { id: string; taxonomy_id: string; value: string; code: string | nul
 type Tag = { id: string; name: string; category: string };
 
 const TAG_CAT_CLS: Record<string, string> = {
-  clinical:   "bg-blue-100 text-blue-700",
-  safety:     "bg-red-100 text-red-700",
+  clinical:   "bg-[var(--cmp-surface-information)] text-blue-700",
+  safety:     "bg-[var(--cmp-surface-critical)] text-[var(--cmp-text-critical)]",
   education:  "bg-teal-100 text-teal-700",
   governance: "bg-violet-100 text-violet-700",
   general:    "bg-gray-100 text-gray-600",
@@ -39,7 +39,7 @@ export default function MetadataManager({ taxonomies, terms, tags }: { taxonomie
       <div className="flex gap-1 mb-4">
         {([["taxonomy", "Controlled Vocabularies"], ["tags", "Tags"]] as const).map(([k, label]) => (
           <button key={k} onClick={() => setTab(k)}
-            className={`px-3 py-1.5 text-xs font-semibold rounded-lg ${tab === k ? "bg-rose-600 text-white" : "text-gray-500 hover:bg-gray-100"}`}>
+            className={`px-3 py-1.5 text-xs font-semibold rounded-lg ${tab === k ? "bg-[var(--cmp-color-error)] text-white" : "text-gray-500 hover:bg-gray-100"}`}>
             {label}
           </button>
         ))}
@@ -61,13 +61,13 @@ export default function MetadataManager({ taxonomies, terms, tags }: { taxonomie
                       <span key={t.id} className="group inline-flex items-center gap-1 text-xs bg-gray-50 border border-gray-100 text-gray-700 pl-2.5 pr-1.5 py-0.5 rounded-full">
                         {t.value}
                         <button onClick={() => del("term", t.id)} disabled={busy}
-                          className="opacity-0 group-hover:opacity-100 text-red-400 hover:text-red-600 transition-opacity leading-none px-0.5">×</button>
+                          className="opacity-0 group-hover:opacity-100 text-red-400 hover:text-[var(--cmp-text-critical)] transition-opacity leading-none px-0.5">×</button>
                       </span>
                     ))}
                     {!items.length && <p className="text-[11px] text-gray-300 italic">No terms</p>}
                   </div>
                   <button onClick={() => { const v = prompt(`Add term to "${tax.label}":`); if (v?.trim()) post({ type: "term", taxonomy_id: tax.id, value: v.trim() }); }}
-                    className="text-[11px] text-rose-600 font-semibold hover:underline">+ Add term</button>
+                    className="text-[11px] text-[var(--cmp-text-error)] font-semibold hover:underline">+ Add term</button>
                 </div>
               </div>
             );
@@ -95,7 +95,7 @@ export default function MetadataManager({ taxonomies, terms, tags }: { taxonomie
             ))}
           </div>
           <button onClick={() => { const n = prompt("New tag name:"); if (!n?.trim()) return; const c = prompt("Category (clinical/safety/education/governance/general):", "general"); post({ type: "tag", name: n.trim(), category: c?.trim() || "general" }); }}
-            className="mt-4 px-3 py-1.5 text-xs font-semibold bg-rose-50 text-rose-600 border border-rose-100 rounded-lg hover:bg-rose-100">
+            className="mt-4 px-3 py-1.5 text-xs font-semibold bg-[var(--cmp-surface-error)] text-[var(--cmp-text-error)] border border-[var(--cmp-color-error)] rounded-lg hover:bg-[var(--cmp-surface-error)]">
             + New Tag
           </button>
         </div>

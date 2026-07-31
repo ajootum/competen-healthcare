@@ -69,14 +69,14 @@ export default function ProposeLink({ signals, competencies }: { signals: Signal
   if (!open) {
     return (
       <div className="flex items-center gap-2">
-        <button onClick={() => setOpen(true)} className="text-[11px] font-semibold text-emerald-700 border border-emerald-200 bg-emerald-50 hover:bg-emerald-100 rounded-lg px-3 py-1.5 transition-colors">+ Propose a link</button>
-        {ok && <span className="text-[11px] text-emerald-600 font-medium">Link proposed — awaiting governance confirmation.</span>}
+        <button onClick={() => setOpen(true)} className="text-[11px] font-semibold text-emerald-700 border border-[var(--cmp-color-success)] bg-[var(--cmp-surface-success)] hover:bg-[var(--cmp-surface-success)] rounded-lg px-3 py-1.5 transition-colors">+ Propose a link</button>
+        {ok && <span className="text-[11px] text-[var(--cmp-text-success)] font-medium">Link proposed — awaiting governance confirmation.</span>}
       </div>
     );
   }
 
   return (
-    <div className="bg-white rounded-xl border border-emerald-200 p-4">
+    <div className="bg-white rounded-xl border border-[var(--cmp-color-success)] p-4">
       <div className="flex items-center justify-between mb-3">
         <p className="text-sm font-bold text-gray-800">Propose a learning link</p>
         <button onClick={() => { setOpen(false); reset(); }} className="text-[11px] text-gray-400 hover:text-gray-600">Close</button>
@@ -88,9 +88,9 @@ export default function ProposeLink({ signals, competencies }: { signals: Signal
           <span className={lbl + " mb-0"}>Signal</span>
           <div className="flex gap-1">
             <button onClick={() => setMode("incident")} disabled={!signals.length}
-              className={`text-[10px] font-semibold rounded px-1.5 py-0.5 border disabled:opacity-40 ${mode === "incident" ? "text-emerald-700 bg-emerald-50 border-emerald-200" : "text-gray-500 border-gray-200"}`}>Recorded event</button>
+              className={`text-[10px] font-semibold rounded px-1.5 py-0.5 border disabled:opacity-40 ${mode === "incident" ? "text-emerald-700 bg-[var(--cmp-surface-success)] border-[var(--cmp-color-success)]" : "text-gray-500 border-gray-200"}`}>Recorded event</button>
             <button onClick={() => setMode("other")}
-              className={`text-[10px] font-semibold rounded px-1.5 py-0.5 border ${mode === "other" ? "text-emerald-700 bg-emerald-50 border-emerald-200" : "text-gray-500 border-gray-200"}`}>Other signal</button>
+              className={`text-[10px] font-semibold rounded px-1.5 py-0.5 border ${mode === "other" ? "text-emerald-700 bg-[var(--cmp-surface-success)] border-[var(--cmp-color-success)]" : "text-gray-500 border-gray-200"}`}>Other signal</button>
           </div>
         </div>
 
@@ -131,7 +131,7 @@ export default function ProposeLink({ signals, competencies }: { signals: Signal
         <div className="flex flex-wrap gap-1.5">
           {LINK_TYPES.map((t) => (
             <button key={t.v} onClick={() => setLinkType(t.v)}
-              className={`text-[11px] font-medium rounded-md px-2 py-1 border transition-colors ${linkType === t.v ? "text-emerald-700 bg-emerald-50 border-emerald-200" : "text-gray-500 border-gray-200 hover:bg-gray-50"}`}>{t.l}</button>
+              className={`text-[11px] font-medium rounded-md px-2 py-1 border transition-colors ${linkType === t.v ? "text-emerald-700 bg-[var(--cmp-surface-success)] border-[var(--cmp-color-success)]" : "text-gray-500 border-gray-200 hover:bg-gray-50"}`}>{t.l}</button>
           ))}
         </div>
       </div>
@@ -145,11 +145,11 @@ export default function ProposeLink({ signals, competencies }: { signals: Signal
 
       <div className="flex items-center gap-2">
         <button onClick={submit} disabled={!valid || busy}
-          className="text-[11px] font-semibold text-white bg-emerald-600 hover:bg-emerald-700 disabled:opacity-40 disabled:hover:bg-emerald-600 rounded-lg px-3 py-1.5 transition-colors">
+          className="text-[11px] font-semibold text-white bg-[var(--cmp-color-success)] hover:bg-emerald-700 disabled:opacity-40 disabled:hover:bg-[var(--cmp-color-success)] rounded-lg px-3 py-1.5 transition-colors">
           {busy ? "Proposing…" : "Propose link"}
         </button>
         <span className="text-[10px] text-gray-400">Proposed links require governance confirmation before they count as closed.</span>
-        {err && <span className="text-[11px] text-rose-600 font-medium">{err}</span>}
+        {err && <span className="text-[11px] text-[var(--cmp-text-error)] font-medium">{err}</span>}
       </div>
     </div>
   );

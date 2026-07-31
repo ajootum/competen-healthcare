@@ -11,7 +11,7 @@ export const dynamic = "force-dynamic";
 
 const card = cardClass;
 const badge: Record<string, { cls: string; label: string; dot: string }> = {
-  live: { cls: "bg-green-50 border-green-200 text-green-700", label: "Live", dot: "bg-green-500" },
+  live: { cls: "bg-[var(--cmp-surface-success)] border-[var(--cmp-color-success)] text-[var(--cmp-text-success)]", label: "Live", dot: "bg-[var(--cmp-color-success)]" },
   native: { cls: "bg-teal-50 border-teal-200 text-teal-700", label: "Platform-native", dot: "bg-teal-400" },
   off: { cls: "bg-gray-50 border-gray-200 text-gray-500", label: "Not connected", dot: "bg-gray-300" },
 };
@@ -36,7 +36,7 @@ export default async function IntegrationsPage() {
       </div>
 
       <div className="grid grid-cols-3 gap-3">
-        <div className={card}><div className="text-3xl font-bold tabular-nums text-green-600">{integrationHealth.live}</div><div className="text-xs text-gray-500 mt-1">Live</div></div>
+        <div className={card}><div className="text-3xl font-bold tabular-nums text-[var(--cmp-text-success)]">{integrationHealth.live}</div><div className="text-xs text-gray-500 mt-1">Live</div></div>
         <div className={card}><div className="text-3xl font-bold tabular-nums text-teal-600">{integrationHealth.native}</div><div className="text-xs text-gray-500 mt-1">Platform-native</div></div>
         <div className={card}><div className="text-3xl font-bold tabular-nums text-gray-400">{integrationHealth.off}</div><div className="text-xs text-gray-500 mt-1">Not connected</div></div>
       </div>

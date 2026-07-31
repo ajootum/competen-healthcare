@@ -12,7 +12,7 @@ export const dynamic = "force-dynamic";
 // Type-specific visual designers (form fields, metric formulas, workflow nodes) are honest next-phase.
 /* eslint-disable @typescript-eslint/no-explicit-any */
 const card = "bg-white rounded-xl border border-gray-200";
-const STATUS_TONE: Record<string, string> = { draft: "bg-gray-100 text-gray-600", technical_review: "bg-sky-50 text-sky-700", product_review: "bg-sky-50 text-sky-700", safety_review: "bg-amber-50 text-amber-700", approved: "bg-indigo-50 text-indigo-700", active: "bg-emerald-50 text-emerald-700", published: "bg-emerald-50 text-emerald-700" };
+const STATUS_TONE: Record<string, string> = { draft: "bg-gray-100 text-gray-600", technical_review: "bg-[var(--cmp-surface-information)] text-[var(--cmp-text-information)]", product_review: "bg-[var(--cmp-surface-information)] text-[var(--cmp-text-information)]", safety_review: "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]", approved: "bg-indigo-50 text-indigo-700", active: "bg-[var(--cmp-surface-success)] text-emerald-700", published: "bg-[var(--cmp-surface-success)] text-emerald-700" };
 
 export default async function ConfigurationStudio() {
   const supabase = await createClient();
@@ -47,7 +47,7 @@ export default async function ConfigurationStudio() {
     </>
   );
 
-  if (!provisioned) return <div className="space-y-5 max-w-5xl">{header}<div className="bg-amber-50 border border-amber-200 rounded-xl p-6"><p className="font-semibold text-amber-900">⚙️ Registry not provisioned</p><p className="text-sm text-amber-800 mt-1">Authoring writes to the Configuration Registry. Apply migration 092 and run <Link href="/super-admin/platform-ops/registry" className="underline">Sync from catalogue</Link>.</p></div></div>;
+  if (!provisioned) return <div className="space-y-5 max-w-5xl">{header}<div className="bg-[var(--cmp-surface-warning)] border border-[var(--cmp-color-warning)] rounded-xl p-6"><p className="font-semibold text-amber-900">⚙️ Registry not provisioned</p><p className="text-sm text-amber-800 mt-1">Authoring writes to the Configuration Registry. Apply migration 092 and run <Link href="/super-admin/platform-ops/registry" className="underline">Sync from catalogue</Link>.</p></div></div>;
 
   return (
     <div className="space-y-5 max-w-5xl">

@@ -39,10 +39,10 @@ export default function LicensingClient({ planRows, renewals, currency }: { plan
                   <td className="px-4 py-3"><div className="flex items-center gap-2"><span className="w-7 h-7 rounded-lg bg-violet-50 flex items-center justify-center text-sm shrink-0">🧾</span><div><p className="font-medium text-gray-900">{p.name}</p><p className="text-[10px] text-gray-400">{p.code}</p></div></div></td>
                   <td className="px-4 py-3 text-gray-600 tabular-nums">{p.currency} {p.price}<span className="text-gray-400">/mo</span></td>
                   <td className="px-4 py-3 text-gray-600 tabular-nums">{p.entitlements?.max_users ?? "∞"}</td>
-                  <td className="px-4 py-3">{p.entitlements?.api_access ? <span className="text-green-600">✓</span> : <span className="text-gray-300">—</span>}</td>
+                  <td className="px-4 py-3">{p.entitlements?.api_access ? <span className="text-[var(--cmp-text-success)]">✓</span> : <span className="text-gray-300">—</span>}</td>
                   <td className="px-4 py-3 text-right tabular-nums text-gray-700">{p.tenants}</td>
                   <td className="px-4 py-3 text-right tabular-nums text-gray-700">{p.seats}</td>
-                  <td className="px-4 py-3 text-right"><span className={`text-[10px] font-medium px-2 py-0.5 rounded ${p.active ? "bg-green-50 text-green-700" : "bg-gray-100 text-gray-500"}`}>{p.active ? "Active" : "Inactive"}</span></td>
+                  <td className="px-4 py-3 text-right"><span className={`text-[10px] font-medium px-2 py-0.5 rounded ${p.active ? "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]" : "bg-gray-100 text-gray-500"}`}>{p.active ? "Active" : "Inactive"}</span></td>
                 </tr>
               ))}
             </tbody>
@@ -58,7 +58,7 @@ export default function LicensingClient({ planRows, renewals, currency }: { plan
             {renewals.map((r: any, i: number) => (
               <div key={i} className="flex items-center justify-between text-sm">
                 <div className="min-w-0"><p className="text-gray-800 truncate">{r.tenant}</p><p className="text-[10px] text-gray-400">{r.plan}</p></div>
-                <span className={`text-[11px] tabular-nums shrink-0 ${r.days < 0 ? "text-rose-600" : r.days <= 30 ? "text-amber-600" : "text-gray-500"}`}>{r.days < 0 ? `${-r.days}d overdue` : `in ${r.days}d`}</span>
+                <span className={`text-[11px] tabular-nums shrink-0 ${r.days < 0 ? "text-[var(--cmp-text-error)]" : r.days <= 30 ? "text-[var(--cmp-text-warning)]" : "text-gray-500"}`}>{r.days < 0 ? `${-r.days}d overdue` : `in ${r.days}d`}</span>
               </div>
             ))}
           </div>
@@ -109,7 +109,7 @@ function PlanModal({ mode, plan, currency, saving, err, onClose, onSave }: any) 
             <label className="flex items-center gap-2 text-sm text-gray-600"><input type="checkbox" checked={form.api_access} onChange={set("api_access")} /> API access</label>
             <label className="flex items-center gap-2 text-sm text-gray-600"><input type="checkbox" checked={form.is_active} onChange={set("is_active")} /> Active</label>
           </div>
-          {err && <p className="text-xs text-red-600 bg-red-50 rounded-lg px-3 py-2">{err}</p>}
+          {err && <p className="text-xs text-[var(--cmp-text-critical)] bg-[var(--cmp-surface-critical)] rounded-lg px-3 py-2">{err}</p>}
           <div className="flex gap-2 pt-1">
             <button onClick={onClose} className="flex-1 py-2 border border-gray-200 rounded-lg text-sm text-gray-600 hover:bg-gray-50">Cancel</button>
             <button onClick={() => onSave(form)} disabled={saving || !form.name.trim()} className="flex-1 py-2 bg-teal-600 text-white rounded-lg text-sm font-semibold hover:bg-teal-700 disabled:opacity-60">{saving ? "Saving…" : mode === "create" ? "Create" : "Save"}</button>

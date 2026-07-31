@@ -10,7 +10,7 @@ import { useRouter } from "next/navigation";
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 const input = "w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/40";
-const btn = "px-3.5 py-2 rounded-lg bg-emerald-600 text-white text-sm font-medium hover:bg-emerald-700 disabled:opacity-50";
+const btn = "px-3.5 py-2 rounded-lg bg-[var(--cmp-color-success)] text-white text-sm font-medium hover:bg-emerald-700 disabled:opacity-50";
 const btnGhost = "px-2.5 py-1 rounded-lg border border-gray-300 text-xs text-gray-700 hover:bg-gray-50 disabled:opacity-50";
 
 const FIELDS = [
@@ -60,9 +60,9 @@ export default function SbarForm({ patientId, patientLabel, existing, itemStatus
           <button className={btnGhost} disabled={busy} onClick={() => act({ action: "complete", patient_id: patientId, patient_label: patientLabel })}>Mark completed</button>
         )}
       </div>
-      {err && <p className="text-xs text-amber-700 mt-1">{err}</p>}
+      {err && <p className="text-xs text-[var(--cmp-text-warning)] mt-1">{err}</p>}
       {open && (
-        <div className="mt-2 border border-emerald-200 bg-emerald-50/30 rounded-lg p-3 space-y-2">
+        <div className="mt-2 border border-[var(--cmp-color-success)] bg-[var(--cmp-surface-success)]/30 rounded-lg p-3 space-y-2">
           {FIELDS.map(f => (
             <label key={f.key} className="block text-xs text-gray-600">
               <span className="font-semibold">{f.label}</span>

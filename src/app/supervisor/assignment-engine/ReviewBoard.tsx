@@ -66,8 +66,8 @@ export default function ReviewBoard({ run }: { run: any | null }) {
           </>
         )}
       </div>
-      {err && <p className="text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">{err}</p>}
-      {ok && <p className="text-sm text-emerald-800 bg-emerald-50 border border-emerald-200 rounded-lg px-3 py-2">{ok}</p>}
+      {err && <p className="text-sm text-[var(--cmp-text-warning)] bg-[var(--cmp-surface-warning)] border border-[var(--cmp-color-warning)] rounded-lg px-3 py-2">{err}</p>}
+      {ok && <p className="text-sm text-emerald-800 bg-[var(--cmp-surface-success)] border border-[var(--cmp-color-success)] rounded-lg px-3 py-2">{ok}</p>}
 
       {run?.status === "generated" && proposals.length > 0 && (
         <div className="divide-y divide-gray-100">
@@ -79,8 +79,8 @@ export default function ReviewBoard({ run }: { run: any | null }) {
                 {p.bed && <span className="text-xs text-gray-400">{p.bed}</span>}
                 <span className="text-gray-400 text-sm">→</span>
                 <span className="text-sm font-medium text-teal-700">{p.nurse}</span>
-                {p.continuity && <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-blue-100 text-blue-700">Continuity</span>}
-                {p.needs_override && <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-red-100 text-red-700">Override required</span>}
+                {p.continuity && <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-[var(--cmp-surface-information)] text-blue-700">Continuity</span>}
+                {p.needs_override && <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-[var(--cmp-surface-critical)] text-[var(--cmp-text-critical)]">Override required</span>}
                 {(p.flags ?? []).includes("isolation") && <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-purple-100 text-purple-700">Isolation</span>}
                 <span className="ml-auto text-xs tabular-nums text-gray-500">nurse load {p.load_after}%</span>
               </div>

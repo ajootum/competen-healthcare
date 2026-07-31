@@ -31,7 +31,7 @@ export default async function Evidence() {
           <h2 className="text-sm font-bold text-gray-900 mb-3">Evidence by Type</h2>
           {d.byType.length === 0 ? <p className="text-xs text-gray-400">No evidence uploaded yet.</p> : (
             <div className="flex flex-col gap-1.5">{d.byType.map(x => (
-              <div key={x.label} className="flex items-center gap-2"><span className="text-[11px] text-gray-500 w-32 truncate capitalize">{x.label}</span><div className="flex-1 h-2 bg-gray-100 rounded-full overflow-hidden"><div className="h-full bg-blue-400 rounded-full" style={{ width: `${(x.n / typeMax) * 100}%` }} /></div><span className="text-[10px] font-bold text-gray-600 w-6 text-right">{x.n}</span></div>
+              <div key={x.label} className="flex items-center gap-2"><span className="text-[11px] text-gray-500 w-32 truncate capitalize">{x.label}</span><div className="flex-1 h-2 bg-gray-100 rounded-full overflow-hidden"><div className="h-full bg-[var(--cmp-color-information)] rounded-full" style={{ width: `${(x.n / typeMax) * 100}%` }} /></div><span className="text-[10px] font-bold text-gray-600 w-6 text-right">{x.n}</span></div>
             ))}</div>
           )}
         </div>

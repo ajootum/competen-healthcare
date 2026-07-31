@@ -12,10 +12,10 @@ import WhatIf from "./WhatIf";
 
 export const dynamic = "force-dynamic";
 
-const SEV_CLS: Record<string, string> = { High: "bg-rose-500/20 text-rose-300 border-rose-500/30", Medium: "bg-amber-500/20 text-amber-300 border-amber-500/30", Low: "bg-sky-500/20 text-sky-300 border-sky-500/30" };
+const SEV_CLS: Record<string, string> = { High: "bg-[var(--cmp-color-error)]/20 text-rose-300 border-rose-500/30", Medium: "bg-[var(--cmp-color-warning)]/20 text-amber-300 border-amber-500/30", Low: "bg-[var(--cmp-color-information)]/20 text-sky-300 border-sky-500/30" };
 const DIR = { up: "↑", down: "↓", flat: "→" };
 const DOMAIN_CLS: Record<string, string> = { Assessment: "text-blue-300", Competency: "text-emerald-300", Validation: "text-amber-300", Workforce: "text-rose-300", Resources: "text-cyan-300", Accreditation: "text-pink-300", Learning: "text-violet-300" };
-const HEAT = (n: number, tone: string) => (n === 0 ? "bg-white/[0.02] text-slate-600" : tone === "critical" ? "bg-rose-500/30 text-rose-200" : tone === "high" ? "bg-orange-500/25 text-orange-200" : tone === "medium" ? "bg-amber-500/20 text-amber-200" : "bg-emerald-500/15 text-emerald-200");
+const HEAT = (n: number, tone: string) => (n === 0 ? "bg-white/[0.02] text-slate-600" : tone === "critical" ? "bg-[var(--cmp-color-error)]/30 text-rose-200" : tone === "high" ? "bg-[var(--cmp-color-warning)]/25 text-orange-200" : tone === "medium" ? "bg-[var(--cmp-color-warning)]/20 text-amber-200" : "bg-[var(--cmp-color-success)]/15 text-emerald-200");
 
 function Card({ title, tag, children }: { title: string; tag?: string; children: React.ReactNode }) {
   return (
@@ -150,7 +150,7 @@ export default async function PredictiveIntelligencePage() {
                 <div className="flex flex-col gap-2">
                   {d.scenarios.map(s => (
                     <div key={s.title} className="rounded-xl bg-white/[0.03] border border-white/10 p-2.5">
-                      <div className="flex items-center gap-2"><span className="text-[12px] font-bold text-white flex-1 leading-tight">{s.title}</span><span className={`text-[8px] font-bold uppercase px-1.5 py-0.5 rounded border ${s.tag === "Best Outcome" ? "bg-emerald-500/20 text-emerald-300 border-emerald-500/30" : s.tag === "High Impact" ? "bg-sky-500/20 text-sky-300 border-sky-500/30" : "bg-rose-500/20 text-rose-300 border-rose-500/30"}`}>{s.tag}</span></div>
+                      <div className="flex items-center gap-2"><span className="text-[12px] font-bold text-white flex-1 leading-tight">{s.title}</span><span className={`text-[8px] font-bold uppercase px-1.5 py-0.5 rounded border ${s.tag === "Best Outcome" ? "bg-[var(--cmp-color-success)]/20 text-emerald-300 border-emerald-500/30" : s.tag === "High Impact" ? "bg-[var(--cmp-color-information)]/20 text-sky-300 border-sky-500/30" : "bg-[var(--cmp-color-error)]/20 text-rose-300 border-rose-500/30"}`}>{s.tag}</span></div>
                       <p className="text-[9px] text-slate-400 mt-0.5">{s.detail}</p>
                       <div className="flex items-center gap-3 mt-1.5 text-[9px]"><span className={s.readinessImpact >= 0 ? "text-emerald-400" : "text-rose-400"}>Readiness {s.readinessImpact >= 0 ? "+" : ""}{s.readinessImpact}%</span><span className="text-slate-500">Cost: {s.cost}</span><span className="text-slate-400">Conf {s.confidence}%</span></div>
                     </div>
@@ -175,7 +175,7 @@ export default async function PredictiveIntelligencePage() {
                 <div className="flex flex-col gap-1.5">
                   {d.impact.map((n, i) => (
                     <div key={n.id} className="flex flex-col items-center">
-                      <div className={`w-full text-center rounded-lg border px-2 py-1.5 text-[11px] font-medium ${n.tone === "red" ? "bg-rose-500/15 border-rose-500/30 text-rose-200" : n.tone === "orange" ? "bg-orange-500/15 border-orange-500/30 text-orange-200" : "bg-amber-500/15 border-amber-500/30 text-amber-200"}`}>{n.label}</div>
+                      <div className={`w-full text-center rounded-lg border px-2 py-1.5 text-[11px] font-medium ${n.tone === "red" ? "bg-[var(--cmp-color-error)]/15 border-rose-500/30 text-rose-200" : n.tone === "orange" ? "bg-[var(--cmp-color-warning)]/15 border-orange-500/30 text-orange-200" : "bg-[var(--cmp-color-warning)]/15 border-amber-500/30 text-amber-200"}`}>{n.label}</div>
                       {i < d.impact.length - 1 && <span className="text-slate-600 text-xs leading-none py-0.5">↓</span>}
                     </div>
                   ))}

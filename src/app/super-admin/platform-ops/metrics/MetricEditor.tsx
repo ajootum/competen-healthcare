@@ -32,7 +32,7 @@ function ragOf(v: number, green: number, amber: number, dir: string): string {
   if (dir === "lower_better") return v <= green ? "green" : v <= amber ? "amber" : "red";
   return v >= green ? "green" : v >= amber ? "amber" : "red";
 }
-const RAG_TONE: Record<string, string> = { green: "bg-emerald-500", amber: "bg-amber-400", red: "bg-rose-500" };
+const RAG_TONE: Record<string, string> = { green: "bg-[var(--cmp-color-success)]", amber: "bg-[var(--cmp-color-warning)]", red: "bg-[var(--cmp-color-error)]" };
 
 const toForm = (m?: Metric): Def => {
   const d = m?.definition ?? {};
@@ -101,7 +101,7 @@ export default function MetricEditor({ metrics }: { metrics: Metric[] }) {
             <label className={`${lbl} block`}>Formula
               <textarea className={`${input} font-mono`} rows={2} value={f.formula} onChange={e => set("formula", e.target.value)} placeholder="sum(op_incidents.falls) / op_patients.count * 1000" />
             </label>
-            <div className={`text-[11px] mt-1 flex items-center gap-2 ${v.ok ? "text-emerald-600" : "text-rose-600"}`}>
+            <div className={`text-[11px] mt-1 flex items-center gap-2 ${v.ok ? "text-[var(--cmp-text-success)]" : "text-[var(--cmp-text-error)]"}`}>
               <span>{v.ok ? "✓" : "✗"} {v.msg}</span>
               {v.refs.length > 0 && <span className="text-gray-400">refs: {v.refs.join(", ")}</span>}
             </div>
@@ -119,7 +119,7 @@ export default function MetricEditor({ metrics }: { metrics: Metric[] }) {
 
             {preview && <div className="mt-3 flex items-center gap-2 text-[11px]"><span className="text-gray-500">RAG at {sample}{f.unit}:</span><span className={`w-3 h-3 rounded-full ${RAG_TONE[preview]}`} /><b className="capitalize text-gray-700">{preview}</b></div>}
 
-            {msg && <p className={`text-xs mt-3 ${msg.startsWith("✓") ? "text-emerald-600" : "text-rose-600"}`}>{msg}</p>}
+            {msg && <p className={`text-xs mt-3 ${msg.startsWith("✓") ? "text-[var(--cmp-text-success)]" : "text-[var(--cmp-text-error)]"}`}>{msg}</p>}
             <div className="flex items-center justify-end mt-4">
               <button onClick={save} disabled={busy || !v.ok} className="text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg px-4 py-2 disabled:opacity-50">{busy ? "Saving…" : "Save definition"}</button>
             </div>

@@ -56,7 +56,7 @@ function Panel({ title, href, linkLabel, children, className = "" }: { title: st
   );
 }
 
-const TONE_TEXT: Record<string, string> = { amber: "text-amber-600", orange: "text-orange-600", rose: "text-rose-600", red: "text-red-600", violet: "text-violet-600", teal: "text-teal-600", indigo: "text-indigo-600" };
+const TONE_TEXT: Record<string, string> = { amber: "text-[var(--cmp-text-warning)]", orange: "text-[var(--cmp-text-warning)]", rose: "text-[var(--cmp-text-error)]", red: "text-[var(--cmp-text-critical)]", violet: "text-violet-600", teal: "text-teal-600", indigo: "text-indigo-600" };
 
 export default async function MissionControl() {
   const supabase = await createClient();
@@ -71,13 +71,13 @@ export default async function MissionControl() {
   const { kpis, spark, ops, explorer, unassignedFacilities, missionStatus, activity, activityReady, workspaces, totalUsers, onboarding, health, changedToday, systemAlerts, timeline, counts } = mc;
 
   const kpiCards = [
-    { icon: "💚", iconBg: "bg-green-50", label: "Platform Health", value: kpis.platformHealth.status, sub: kpis.platformHealth.note, tone: "text-green-600", spark: [] as number[], sparkColor: "#16a34a" },
-    { icon: "🛡️", iconBg: "bg-red-50", label: "Critical Alerts", value: fmt(kpis.criticalAlerts), sub: kpis.criticalAlerts ? "Needs attention" : "All clear", tone: kpis.criticalAlerts ? "text-red-600" : "text-gray-900", spark: [] as number[], sparkColor: "#ef4444" },
+    { icon: "💚", iconBg: "bg-[var(--cmp-surface-success)]", label: "Platform Health", value: kpis.platformHealth.status, sub: kpis.platformHealth.note, tone: "text-[var(--cmp-text-success)]", spark: [] as number[], sparkColor: "#16a34a" },
+    { icon: "🛡️", iconBg: "bg-[var(--cmp-surface-critical)]", label: "Critical Alerts", value: fmt(kpis.criticalAlerts), sub: kpis.criticalAlerts ? "Needs attention" : "All clear", tone: kpis.criticalAlerts ? "text-[var(--cmp-text-critical)]" : "text-gray-900", spark: [] as number[], sparkColor: "#ef4444" },
     { icon: "🏛️", iconBg: "bg-violet-50", label: "Enterprise Tenants", value: fmt(kpis.tenants), sub: `${counts.countries} countr${counts.countries === 1 ? "y" : "ies"}`, spark: spark.tenants, sparkColor: "#8b5cf6" },
-    { icon: "👥", iconBg: "bg-blue-50", label: "Active Users", value: fmt(kpis.activeUsers), sub: "across all tenants", spark: spark.users, sparkColor: "#3b82f6" },
+    { icon: "👥", iconBg: "bg-[var(--cmp-surface-information)]", label: "Active Users", value: fmt(kpis.activeUsers), sub: "across all tenants", spark: spark.users, sparkColor: "#3b82f6" },
     { icon: "🧠", iconBg: "bg-purple-50", label: "AI Operations", value: "Standby", sub: "No serving layer provisioned", muted: true },
-    { icon: "📋", iconBg: "bg-amber-50", label: "Pending Approvals", value: kpis.pendingApprovals == null ? "—" : fmt(kpis.pendingApprovals), sub: kpis.pendingApprovals == null ? "Governance module not active" : "governance change requests", tone: "text-amber-600", spark: spark.approvals, sparkColor: "#f59e0b", muted: kpis.pendingApprovals == null },
-    { icon: "🚀", iconBg: "bg-sky-50", label: "Deployments Today", value: "—", sub: "No deploy ledger provisioned", muted: true },
+    { icon: "📋", iconBg: "bg-[var(--cmp-surface-warning)]", label: "Pending Approvals", value: kpis.pendingApprovals == null ? "—" : fmt(kpis.pendingApprovals), sub: kpis.pendingApprovals == null ? "Governance module not active" : "governance change requests", tone: "text-[var(--cmp-text-warning)]", spark: spark.approvals, sparkColor: "#f59e0b", muted: kpis.pendingApprovals == null },
+    { icon: "🚀", iconBg: "bg-[var(--cmp-surface-information)]", label: "Deployments Today", value: "—", sub: "No deploy ledger provisioned", muted: true },
     { icon: "🗄️", iconBg: "bg-teal-50", label: "Background Jobs", value: "Standby", sub: "No worker queue provisioned", muted: true },
   ];
 
@@ -95,7 +95,7 @@ export default async function MissionControl() {
     { label: "Platform Settings", icon: "⚙️", href: "/super-admin/settings" },
   ];
 
-  const alertTone: Record<string, string> = { critical: "bg-red-50 text-red-700 border-red-100", warning: "bg-amber-50 text-amber-700 border-amber-100", info: "bg-blue-50 text-blue-700 border-blue-100" };
+  const alertTone: Record<string, string> = { critical: "bg-[var(--cmp-surface-critical)] text-[var(--cmp-text-critical)] border-[var(--cmp-color-critical)]", warning: "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)] border-[var(--cmp-color-warning)]", info: "bg-[var(--cmp-surface-information)] text-blue-700 border-[var(--cmp-color-information)]" };
 
   return (
     <div data-wide className="space-y-4">
@@ -110,7 +110,7 @@ export default async function MissionControl() {
       <div className={`${card} px-5 py-3.5 flex flex-wrap items-center gap-x-6 gap-y-3 text-sm`}>
         <div className="flex items-center gap-2">
           <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wide">Operations Region</span>
-          <span className="text-[11px] font-semibold text-green-700 bg-green-50 rounded px-2 py-0.5">Production</span>
+          <span className="text-[11px] font-semibold text-[var(--cmp-text-success)] bg-[var(--cmp-surface-success)] rounded px-2 py-0.5">Production</span>
         </div>
         {[
           { l: "Platform Version", v: ops.version },
@@ -128,7 +128,7 @@ export default async function MissionControl() {
             { l: "Database", ok: true }, { l: "Redis", ok: null }, { l: "Queue", ok: null }, { l: "Search", ok: null },
           ].map(s => (
             <span key={s.l} className="inline-flex items-center gap-1.5 text-xs">
-              <span className={`w-1.5 h-1.5 rounded-full ${s.ok === true ? "bg-green-500" : "bg-gray-300"}`} />
+              <span className={`w-1.5 h-1.5 rounded-full ${s.ok === true ? "bg-[var(--cmp-color-success)]" : "bg-gray-300"}`} />
               <span className={s.ok === true ? "text-gray-600" : "text-gray-400"}>{s.l}</span>
             </span>
           ))}
@@ -245,8 +245,8 @@ export default async function MissionControl() {
             </div>
             <div className="flex-1 space-y-1.5">
               {health.services.map(s => {
-                const dot = s.status === "healthy" ? "bg-green-500" : s.status === "degraded" ? "bg-amber-500" : "bg-gray-300";
-                const txt = s.status === "healthy" ? "text-green-600 font-medium" : s.status === "degraded" ? "text-amber-600 font-medium" : "text-gray-400";
+                const dot = s.status === "healthy" ? "bg-[var(--cmp-color-success)]" : s.status === "degraded" ? "bg-[var(--cmp-color-warning)]" : "bg-gray-300";
+                const txt = s.status === "healthy" ? "text-[var(--cmp-text-success)] font-medium" : s.status === "degraded" ? "text-[var(--cmp-text-warning)] font-medium" : "text-gray-400";
                 const label = s.status === "healthy" ? "Healthy" : s.status === "degraded" ? "Degraded" : "Not monitored";
                 return (
                   <div key={s.name} className="flex items-center justify-between text-xs">

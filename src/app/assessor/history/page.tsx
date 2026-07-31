@@ -73,7 +73,7 @@ export default async function AssessmentHistoryPage() {
                 </div>
                 {a.score !== null && (
                   <span className={`w-7 h-7 rounded-full text-white text-xs font-bold flex items-center justify-center shrink-0 ${
-                    a.score >= 3 ? "bg-teal-500" : "bg-orange-400"
+                    a.score >= 3 ? "bg-teal-500" : "bg-[var(--cmp-color-warning)]"
                   }`}>{a.score}</span>
                 )}
               </div>

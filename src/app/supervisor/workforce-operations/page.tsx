@@ -17,9 +17,9 @@ export const dynamic = "force-dynamic";
 
 const card = "bg-white rounded-xl border border-gray-200";
 const tc = (s: string) => (s ?? "").replace(/_/g, " ").replace(/\b\w/g, m => m.toUpperCase());
-const covTone = (n: number | null) => (n == null ? "text-gray-300" : n >= 90 ? "text-green-600" : n >= 75 ? "text-amber-600" : "text-rose-600");
-const OVR_TONE: Record<string, string> = { Good: "bg-green-50 text-green-700", "At Risk": "bg-amber-50 text-amber-700", "Below Required": "bg-rose-50 text-rose-700", "—": "bg-gray-100 text-gray-500" };
-const ACU_TONE: Record<string, string> = { critical: "text-rose-600", high: "text-orange-600", moderate: "text-amber-600", stable: "text-green-600", low: "text-green-600" };
+const covTone = (n: number | null) => (n == null ? "text-gray-300" : n >= 90 ? "text-[var(--cmp-text-success)]" : n >= 75 ? "text-[var(--cmp-text-warning)]" : "text-[var(--cmp-text-error)]");
+const OVR_TONE: Record<string, string> = { Good: "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]", "At Risk": "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]", "Below Required": "bg-[var(--cmp-surface-error)] text-[var(--cmp-text-error)]", "—": "bg-gray-100 text-gray-500" };
+const ACU_TONE: Record<string, string> = { critical: "text-[var(--cmp-text-error)]", high: "text-[var(--cmp-text-warning)]", moderate: "text-[var(--cmp-text-warning)]", stable: "text-[var(--cmp-text-success)]", low: "text-[var(--cmp-text-success)]" };
 
 export default async function WorkforceOperations() {
   const supabase = await createClient();
@@ -37,7 +37,7 @@ export default async function WorkforceOperations() {
     return (
       <div className="space-y-4">
         <h1 className="text-2xl font-bold text-gray-900">Workforce Operations</h1>
-        <div className="bg-amber-50 border border-amber-200 rounded-xl p-6"><p className="font-semibold text-amber-900">⚙️ Coming online</p><p className="text-sm text-amber-800 mt-1">Workforce Operations activates once the Clinical Operations Engine is provisioned.</p></div>
+        <div className="bg-[var(--cmp-surface-warning)] border border-[var(--cmp-color-warning)] rounded-xl p-6"><p className="font-semibold text-amber-900">⚙️ Coming online</p><p className="text-sm text-amber-800 mt-1">Workforce Operations activates once the Clinical Operations Engine is provisioned.</p></div>
       </div>
     );
   }
@@ -47,10 +47,10 @@ export default async function WorkforceOperations() {
     ["Planned Staff", k.planned, "Includes supervisor", ""],
     ["Present Now", k.present, `${k.presentPct ?? "—"}% of planned`, ""],
     ["Assigned", k.assigned, `${k.assignedPct ?? "—"}% of present`, ""],
-    ["Open Shifts", k.openShifts, "Require coverage", k.openShifts ? "text-amber-600" : ""],
-    ["Staffing Variance", k.variancePct == null ? "—" : `${k.variancePct > 0 ? "+" : ""}${k.variancePct}%`, k.variancePct != null && k.variancePct < 0 ? "Below required" : "At/above required", k.variancePct != null && k.variancePct < 0 ? "text-rose-600" : "text-green-600"],
-    ["Overdue Breaks", k.overdueBreaks ?? "—", k.overdueBreaks == null ? "Needs migration 069" : "Require attention", k.overdueBreaks ? "text-rose-600" : "text-gray-400"],
-    ["Critical Gaps", k.criticalGaps, "Competency gap", k.criticalGaps ? "text-rose-600" : ""],
+    ["Open Shifts", k.openShifts, "Require coverage", k.openShifts ? "text-[var(--cmp-text-warning)]" : ""],
+    ["Staffing Variance", k.variancePct == null ? "—" : `${k.variancePct > 0 ? "+" : ""}${k.variancePct}%`, k.variancePct != null && k.variancePct < 0 ? "Below required" : "At/above required", k.variancePct != null && k.variancePct < 0 ? "text-[var(--cmp-text-error)]" : "text-[var(--cmp-text-success)]"],
+    ["Overdue Breaks", k.overdueBreaks ?? "—", k.overdueBreaks == null ? "Needs migration 069" : "Require attention", k.overdueBreaks ? "text-[var(--cmp-text-error)]" : "text-gray-400"],
+    ["Critical Gaps", k.criticalGaps, "Competency gap", k.criticalGaps ? "text-[var(--cmp-text-error)]" : ""],
   ];
 
   const smSeg = [["#22c55e", sm.compliant], ["#f59e0b", sm.minor], ["#ef4444", sm.major]] as [string, number][];
@@ -73,7 +73,7 @@ export default async function WorkforceOperations() {
         {d.shift && (
           <div className="flex items-center gap-2">
             <div className="text-right"><p className="text-xs font-semibold text-gray-700">{d.shift.unit} · {tc(d.shift.shift_type)}</p><p className="text-[11px] text-gray-400">{d.overview.present}/{d.overview.rostered} on duty</p></div>
-            <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded-full ${d.shift.status === "active" ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-500"}`}>{d.shift.status === "active" ? "Live" : d.shift.status}</span>
+            <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded-full ${d.shift.status === "active" ? "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]" : "bg-gray-100 text-gray-500"}`}>{d.shift.status === "active" ? "Live" : d.shift.status}</span>
           </div>
         )}
       </div>
@@ -99,16 +99,16 @@ export default async function WorkforceOperations() {
                     <td className="py-1.5 px-1 tabular-nums text-gray-600">{r.planned}</td>
                     <td className="py-1.5 px-1 tabular-nums text-gray-600">{r.present}</td>
                     <td className="py-1.5 px-1 tabular-nums text-gray-600">{r.assigned}</td>
-                    <td className={`py-1.5 px-1 tabular-nums font-medium ${r.variance == null ? "text-gray-400" : r.variance < 0 ? "text-rose-600" : "text-green-600"}`}>{r.variance == null ? "—" : r.variance > 0 ? `+${r.variance}` : r.variance}</td>
+                    <td className={`py-1.5 px-1 tabular-nums font-medium ${r.variance == null ? "text-gray-400" : r.variance < 0 ? "text-[var(--cmp-text-error)]" : "text-[var(--cmp-text-success)]"}`}>{r.variance == null ? "—" : r.variance > 0 ? `+${r.variance}` : r.variance}</td>
                     <td className="py-1.5 px-1 tabular-nums text-gray-600">{r.coverage == null ? "—" : `${r.coverage}%`}</td>
                     <td className="py-1.5 px-1"><span className={`text-[9px] font-medium px-1.5 py-0.5 rounded ${OVR_TONE[r.status]}`}>{r.status}</span></td>
                   </tr>
                 ))}
                 <tr className="border-t border-gray-200 font-semibold">
                   <td className="py-1.5 px-1 text-gray-900">TOTAL</td><td className="py-1.5 px-1 tabular-nums">{ot.planned}</td><td className="py-1.5 px-1 tabular-nums">{ot.present}</td><td className="py-1.5 px-1 tabular-nums">{ot.assigned}</td>
-                  <td className={`py-1.5 px-1 tabular-nums ${ot.variance < 0 ? "text-rose-600" : "text-green-600"}`}>{ot.variance > 0 ? `+${ot.variance}` : ot.variance}</td>
+                  <td className={`py-1.5 px-1 tabular-nums ${ot.variance < 0 ? "text-[var(--cmp-text-error)]" : "text-[var(--cmp-text-success)]"}`}>{ot.variance > 0 ? `+${ot.variance}` : ot.variance}</td>
                   <td className="py-1.5 px-1 tabular-nums">{ot.coverage == null ? "—" : `${ot.coverage}%`}</td>
-                  <td className="py-1.5 px-1"><span className={`text-[9px] font-medium px-1.5 py-0.5 rounded ${ot.variance < 0 ? "bg-rose-50 text-rose-700" : "bg-green-50 text-green-700"}`}>{ot.variance < 0 ? "Below Required" : "Good"}</span></td>
+                  <td className="py-1.5 px-1"><span className={`text-[9px] font-medium px-1.5 py-0.5 rounded ${ot.variance < 0 ? "bg-[var(--cmp-surface-error)] text-[var(--cmp-text-error)]" : "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]"}`}>{ot.variance < 0 ? "Below Required" : "Good"}</span></td>
                 </tr>
               </tbody>
             </table>
@@ -123,7 +123,7 @@ export default async function WorkforceOperations() {
           </div>
           <div className="mt-3 pt-3 border-t border-gray-100">
             <p className="text-[10px] font-semibold text-gray-400 uppercase mb-1.5">Top Competency Gaps</p>
-            {d.competencyGaps.length === 0 ? <p className="text-xs text-gray-400">No role shortfalls.</p> : d.competencyGaps.slice(0, 3).map((g: any) => (<div key={g.label} className="flex items-center justify-between text-xs"><span className="text-gray-600 truncate">{g.label}</span><span className="text-[10px] font-bold text-rose-600 bg-rose-50 rounded-full w-5 h-5 flex items-center justify-center">{g.count}</span></div>))}
+            {d.competencyGaps.length === 0 ? <p className="text-xs text-gray-400">No role shortfalls.</p> : d.competencyGaps.slice(0, 3).map((g: any) => (<div key={g.label} className="flex items-center justify-between text-xs"><span className="text-gray-600 truncate">{g.label}</span><span className="text-[10px] font-bold text-[var(--cmp-text-error)] bg-[var(--cmp-surface-error)] rounded-full w-5 h-5 flex items-center justify-center">{g.count}</span></div>))}
           </div>
         </div>
 
@@ -143,32 +143,32 @@ export default async function WorkforceOperations() {
       {/* Modules 1–3: Staff Allocation · Team Assignments · Competency Readiness */}
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
         <div className={`${card} p-5`}>
-          <div className="flex items-center gap-2 mb-3"><span className="w-7 h-7 rounded-lg bg-blue-100 text-blue-700 flex items-center justify-center text-sm font-bold">1</span><div><h2 className="text-sm font-bold text-gray-900 leading-tight">Staff Allocation</h2><p className="text-[10px] text-gray-500">Live staffing, attendance &amp; deployment</p></div></div>
+          <div className="flex items-center gap-2 mb-3"><span className="w-7 h-7 rounded-lg bg-[var(--cmp-surface-information)] text-blue-700 flex items-center justify-center text-sm font-bold">1</span><div><h2 className="text-sm font-bold text-gray-900 leading-tight">Staff Allocation</h2><p className="text-[10px] text-gray-500">Live staffing, attendance &amp; deployment</p></div></div>
           <div className="grid grid-cols-3 gap-2 mb-3">
-            {[["Present", d.overview.present, "text-gray-900"], ["Coverage", ot.coverage == null ? "—" : `${ot.coverage}%`, covTone(ot.coverage)], ["Open", d.openShiftCount, d.openShiftCount ? "text-amber-600" : "text-gray-900"]].map(([l, v, tone]: any) => (<div key={l} className="rounded-lg border border-gray-100 p-2 text-center"><p className={`text-lg font-bold tabular-nums ${tone}`}>{v}</p><p className="text-[9px] text-gray-500">{l}</p></div>))}
+            {[["Present", d.overview.present, "text-gray-900"], ["Coverage", ot.coverage == null ? "—" : `${ot.coverage}%`, covTone(ot.coverage)], ["Open", d.openShiftCount, d.openShiftCount ? "text-[var(--cmp-text-warning)]" : "text-gray-900"]].map(([l, v, tone]: any) => (<div key={l} className="rounded-lg border border-gray-100 p-2 text-center"><p className={`text-lg font-bold tabular-nums ${tone}`}>{v}</p><p className="text-[9px] text-gray-500">{l}</p></div>))}
           </div>
           <p className="text-[10px] font-semibold text-gray-400 uppercase mb-1">Float Pool</p>
           <div className="space-y-1 mb-3">
-            {d.floatPool.length === 0 ? <p className="text-xs text-gray-400">No float staff on shift.</p> : d.floatPool.map((f: any, i: number) => (<div key={i} className="flex items-center gap-2 text-xs"><span className="text-gray-700 flex-1 truncate">{f.name}</span><span className={`text-[10px] font-medium px-1.5 py-0.5 rounded ${f.status === "Available" ? "bg-green-50 text-green-700" : "bg-gray-100 text-gray-500"}`}>{f.status}</span></div>))}
+            {d.floatPool.length === 0 ? <p className="text-xs text-gray-400">No float staff on shift.</p> : d.floatPool.map((f: any, i: number) => (<div key={i} className="flex items-center gap-2 text-xs"><span className="text-gray-700 flex-1 truncate">{f.name}</span><span className={`text-[10px] font-medium px-1.5 py-0.5 rounded ${f.status === "Available" ? "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]" : "bg-gray-100 text-gray-500"}`}>{f.status}</span></div>))}
           </div>
           <p className="text-[10px] font-semibold text-gray-400 uppercase mb-1">Open Shifts</p>
           <div className="space-y-1">
-            {d.openShifts.length === 0 ? <p className="text-xs text-gray-400">All positions covered.</p> : d.openShifts.map((o: any, i: number) => (<div key={i} className="flex items-center gap-2 text-xs"><span className="text-gray-700 flex-1 truncate">{o.role}</span><span className="tabular-nums text-gray-500">{o.positions} pos.</span><span className={`text-[10px] font-medium px-1.5 py-0.5 rounded ${o.urgency === "Urgent" ? "bg-rose-50 text-rose-700" : "bg-amber-50 text-amber-700"}`}>{o.urgency}</span></div>))}
+            {d.openShifts.length === 0 ? <p className="text-xs text-gray-400">All positions covered.</p> : d.openShifts.map((o: any, i: number) => (<div key={i} className="flex items-center gap-2 text-xs"><span className="text-gray-700 flex-1 truncate">{o.role}</span><span className="tabular-nums text-gray-500">{o.positions} pos.</span><span className={`text-[10px] font-medium px-1.5 py-0.5 rounded ${o.urgency === "Urgent" ? "bg-[var(--cmp-surface-error)] text-[var(--cmp-text-error)]" : "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]"}`}>{o.urgency}</span></div>))}
           </div>
           <p className="text-[10px] text-gray-400 mt-3">Time-block coverage curve &amp; attendance clocking need a shift-clocking store.</p>
         </div>
 
         <div className={`${card} p-5`}>
-          <div className="flex items-center gap-2 mb-3"><span className="w-7 h-7 rounded-lg bg-green-100 text-green-700 flex items-center justify-center text-sm font-bold">2</span><div><h2 className="text-sm font-bold text-gray-900 leading-tight">Team Assignments</h2><p className="text-[10px] text-gray-500">Patient allocation &amp; workload balancing</p></div></div>
+          <div className="flex items-center gap-2 mb-3"><span className="w-7 h-7 rounded-lg bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)] flex items-center justify-center text-sm font-bold">2</span><div><h2 className="text-sm font-bold text-gray-900 leading-tight">Team Assignments</h2><p className="text-[10px] text-gray-500">Patient allocation &amp; workload balancing</p></div></div>
           <div className="grid grid-cols-4 gap-1.5 mb-3">
-            {[["Patients", w.patients], ["Teams", w.teams], ["Acuity", w.avgAcuity], ["Unassigned", w.unassigned]].map(([l, v]: any) => (<div key={l} className="rounded-lg border border-gray-100 p-1.5 text-center"><p className={`text-base font-bold tabular-nums ${l === "Unassigned" && (v as number) > 0 ? "text-rose-600" : l === "Acuity" ? ACU_TONE[String(v).toLowerCase()] ?? "text-gray-900" : "text-gray-900"}`}>{v}</p><p className="text-[8px] text-gray-500">{l}</p></div>))}
+            {[["Patients", w.patients], ["Teams", w.teams], ["Acuity", w.avgAcuity], ["Unassigned", w.unassigned]].map(([l, v]: any) => (<div key={l} className="rounded-lg border border-gray-100 p-1.5 text-center"><p className={`text-base font-bold tabular-nums ${l === "Unassigned" && (v as number) > 0 ? "text-[var(--cmp-text-error)]" : l === "Acuity" ? ACU_TONE[String(v).toLowerCase()] ?? "text-gray-900" : "text-gray-900"}`}>{v}</p><p className="text-[8px] text-gray-500">{l}</p></div>))}
           </div>
           <div className="space-y-2 max-h-72 overflow-y-auto">
             {d.teams.length === 0 ? <p className="text-xs text-gray-400 py-3 text-center">No nurse-patient teams yet.</p> : d.teams.map((t: any) => (
               <div key={t.id} className="rounded-lg border border-gray-100 p-2">
                 <div className="flex items-center gap-2 mb-1"><span className="text-xs font-semibold text-gray-800 truncate flex-1">{t.name}</span><span className="text-[10px] text-gray-400">{t.count} pt{t.count === 1 ? "" : "s"}{t.high > 0 ? ` · ${t.high} high` : ""}</span></div>
                 <div className="flex flex-wrap gap-1 mb-1">{t.patients.map((p: any, i: number) => (<span key={i} className={`text-[9px] px-1 py-0.5 rounded bg-gray-50 border border-gray-100 ${ACU_TONE[p.acuity] ?? "text-gray-600"}`}>{p.bed ?? p.label}</span>))}</div>
-                <div className="h-1 bg-gray-100 rounded-full overflow-hidden"><div className={`h-full rounded-full ${t.workloadPct >= 80 ? "bg-rose-500" : t.workloadPct >= 60 ? "bg-amber-500" : "bg-green-500"}`} style={{ width: `${Math.min(100, t.workloadPct)}%` }} /></div>
+                <div className="h-1 bg-gray-100 rounded-full overflow-hidden"><div className={`h-full rounded-full ${t.workloadPct >= 80 ? "bg-[var(--cmp-color-error)]" : t.workloadPct >= 60 ? "bg-[var(--cmp-color-warning)]" : "bg-[var(--cmp-color-success)]"}`} style={{ width: `${Math.min(100, t.workloadPct)}%` }} /></div>
               </div>
             ))}
           </div>
@@ -177,14 +177,14 @@ export default async function WorkforceOperations() {
         <div className={`${card} p-5`} id="competency">
           <div className="flex items-center gap-2 mb-3"><span className="w-7 h-7 rounded-lg bg-violet-100 text-violet-700 flex items-center justify-center text-sm font-bold">3</span><div><h2 className="text-sm font-bold text-gray-900 leading-tight">Competency Readiness</h2><p className="text-[10px] text-gray-500">Skill mix, compliance &amp; competency gaps</p></div></div>
           <div className="grid grid-cols-3 gap-2 mb-3">
-            {[["Validated", d.compliance.coverage == null ? "—" : `${d.compliance.coverage}%`, covTone(d.compliance.coverage)], ["Expiring", d.compliance.expiring, d.compliance.expiring > 0 ? "text-amber-600" : "text-gray-900"], ["Supervise", d.compliance.needsSupervision, d.compliance.needsSupervision > 0 ? "text-amber-600" : "text-gray-900"]].map(([l, v, tone]: any) => (<div key={l} className="rounded-lg border border-gray-100 p-2 text-center"><p className={`text-base font-bold tabular-nums ${tone}`}>{v}</p><p className="text-[9px] text-gray-500">{l}</p></div>))}
+            {[["Validated", d.compliance.coverage == null ? "—" : `${d.compliance.coverage}%`, covTone(d.compliance.coverage)], ["Expiring", d.compliance.expiring, d.compliance.expiring > 0 ? "text-[var(--cmp-text-warning)]" : "text-gray-900"], ["Supervise", d.compliance.needsSupervision, d.compliance.needsSupervision > 0 ? "text-[var(--cmp-text-warning)]" : "text-gray-900"]].map(([l, v, tone]: any) => (<div key={l} className="rounded-lg border border-gray-100 p-2 text-center"><p className={`text-base font-bold tabular-nums ${tone}`}>{v}</p><p className="text-[9px] text-gray-500">{l}</p></div>))}
           </div>
           <p className="text-[10px] font-semibold text-gray-400 uppercase mb-1">Coverage by role</p>
           <div className="space-y-1.5">
             {d.staffingOverview.map((r: any) => (
               <div key={r.role}>
                 <div className="flex items-center justify-between text-xs mb-0.5"><span className="text-gray-600 truncate">{r.label}</span><span className={`tabular-nums ${r.coverage == null ? "text-gray-400" : covTone(r.coverage)}`}>{r.present}/{r.required ?? "—"}</span></div>
-                <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden"><div className={`h-full rounded-full ${r.coverage == null ? "bg-gray-200" : r.coverage >= 100 ? "bg-green-500" : r.coverage >= 75 ? "bg-amber-500" : "bg-rose-500"}`} style={{ width: `${Math.min(100, r.coverage ?? 0)}%` }} /></div>
+                <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden"><div className={`h-full rounded-full ${r.coverage == null ? "bg-gray-200" : r.coverage >= 100 ? "bg-[var(--cmp-color-success)]" : r.coverage >= 75 ? "bg-[var(--cmp-color-warning)]" : "bg-[var(--cmp-color-error)]"}`} style={{ width: `${Math.min(100, r.coverage ?? 0)}%` }} /></div>
               </div>
             ))}
           </div>

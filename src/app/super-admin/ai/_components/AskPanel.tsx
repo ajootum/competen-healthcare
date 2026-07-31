@@ -37,7 +37,7 @@ export default function AskPanel({ title, placeholder, prompts }: { title: strin
           <button key={p} onClick={() => { setQ(p); ask(p); }} disabled={busy} className="text-[11px] text-gray-600 bg-gray-50 border border-gray-200 rounded-lg px-2 py-1 hover:border-teal-300 hover:bg-teal-50/40 transition-colors disabled:opacity-50">{p}</button>
         ))}
       </div>
-      {err && <p className="text-xs text-amber-700 bg-amber-50 rounded-lg px-3 py-2 mt-3">{err}</p>}
+      {err && <p className="text-xs text-[var(--cmp-text-warning)] bg-[var(--cmp-surface-warning)] rounded-lg px-3 py-2 mt-3">{err}</p>}
       {answer && (
         <div className="mt-3 rounded-lg border border-gray-100 bg-gray-50/60 p-3">
           <p className="text-sm text-gray-800 whitespace-pre-wrap">{answer.text}</p>

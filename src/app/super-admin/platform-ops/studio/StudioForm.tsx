@@ -43,7 +43,7 @@ export default function StudioForm({ existingKeys, sources }: { existingKeys: st
       <p className="text-[11px] text-gray-400 mb-4">Create a governed object of any builder type. It enters the registry as a <b>draft</b> and a change request is raised — it goes active only through governance + the dependency gate.</p>
 
       {done && (
-        <div className="mb-4 rounded-lg bg-emerald-50 border border-emerald-100 p-3 text-[12px] text-emerald-800">
+        <div className="mb-4 rounded-lg bg-[var(--cmp-surface-success)] border border-[var(--cmp-color-success)] p-3 text-[12px] text-emerald-800">
           ✓ Created draft <code className="font-mono">{done.key}</code>{done.cr ? <> · change request <b>{done.cr}</b> raised.</> : <> — raise a change request in Governance to publish it.</>} <a href="/super-admin/platform-ops/governance" className="underline">Open Governance →</a>
         </div>
       )}
@@ -61,7 +61,7 @@ export default function StudioForm({ existingKeys, sources }: { existingKeys: st
       <datalist id="reg-keys">{existingKeys.slice(0, 400).map(k => <option key={k} value={k} />)}</datalist>
       <datalist id="src-keys">{sources.map(k => <option key={k} value={k} />)}</datalist>
 
-      {err && <p className="text-xs text-rose-600 mt-3">{err}</p>}
+      {err && <p className="text-xs text-[var(--cmp-text-error)] mt-3">{err}</p>}
       <div className="flex items-center justify-end gap-2 mt-4">
         <button onClick={() => { setF({ ...EMPTY }); setErr(null); setDone(null); }} className="text-xs text-gray-500 hover:underline">Clear</button>
         <button onClick={submit} disabled={busy} className="text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg px-4 py-2 disabled:opacity-50">{busy ? "Creating…" : "Create & raise change request"}</button>

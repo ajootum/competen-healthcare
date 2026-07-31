@@ -20,16 +20,16 @@ export default async function ObservabilityPage() {
   return (
     <div className="max-w-[1500px] space-y-4">
       {head}<Tabs active="011" />
-      {!s.ready && <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-[12px] text-amber-800">Telemetry table not applied — apply migration 055 (ai-gateway). Every server-side AI call logs here automatically once ready.</div>}
+      {!s.ready && <div className="bg-[var(--cmp-surface-warning)] border border-[var(--cmp-color-warning)] rounded-lg p-3 text-[12px] text-amber-800">Telemetry table not applied — apply migration 055 (ai-gateway). Every server-side AI call logs here automatically once ready.</div>}
 
       <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-8 gap-3">
         <Stat label="Requests (24h)" value={s.requests24h.toLocaleString()} sub={`${s.totalRequests.toLocaleString()} all-time`} />
         <Stat label="Tokens (24h)" value={s.tokens24h >= 1000 ? `${Math.round(s.tokens24h / 1000)}k` : s.tokens24h} sub="in + out" />
         <Stat label="Cost (24h)" value={`$${s.cost24h}`} sub={`$${s.totalCost} all-time`} tone="text-violet-700" />
         <Stat label="Avg Latency" value={s.avgLatencyMs != null ? `${s.avgLatencyMs}ms` : "—"} sub="24h" />
-        <Stat label="Errors (24h)" value={s.errors24h} sub="upstream" tone={s.errors24h ? "text-rose-600" : undefined} />
-        <Stat label="Refusals (24h)" value={s.refusals24h} sub="safety" tone={s.refusals24h ? "text-amber-600" : undefined} />
-        <Stat label="Success Rate" value={`${s.requests24h ? Math.round(((s.requests24h - s.errors24h - s.refusals24h) / s.requests24h) * 100) : 100}%`} sub="24h" tone="text-emerald-600" />
+        <Stat label="Errors (24h)" value={s.errors24h} sub="upstream" tone={s.errors24h ? "text-[var(--cmp-text-error)]" : undefined} />
+        <Stat label="Refusals (24h)" value={s.refusals24h} sub="safety" tone={s.refusals24h ? "text-[var(--cmp-text-warning)]" : undefined} />
+        <Stat label="Success Rate" value={`${s.requests24h ? Math.round(((s.requests24h - s.errors24h - s.refusals24h) / s.requests24h) * 100) : 100}%`} sub="24h" tone="text-[var(--cmp-text-success)]" />
         <Stat label="Window Rows" value={d.windowRows.toLocaleString()} sub="last 7 days" />
       </div>
 
@@ -39,13 +39,13 @@ export default async function ObservabilityPage() {
             <div key={t.d} className="flex-1 flex flex-col items-center gap-1" title={`${t.d}: ${t.n} calls · $${t.cost} · ${t.err} errors`}>
               <div className="w-full flex items-end justify-center gap-0.5" style={{ height: "104px" }}>
                 <div className="w-2.5 bg-violet-500 rounded-t" style={{ height: `${(t.n / maxN) * 100}%` }} />
-                <div className="w-2.5 bg-emerald-400 rounded-t" style={{ height: `${(t.cost / maxCost) * 100}%` }} />
+                <div className="w-2.5 bg-[var(--cmp-color-success)] rounded-t" style={{ height: `${(t.cost / maxCost) * 100}%` }} />
               </div>
               <span className="text-[8px] text-gray-400">{t.d}</span>
             </div>
           ))}</div>
         ) : <p className="text-sm text-gray-400 py-8 text-center">No telemetry in the last 7 days.</p>}
-        <div className="flex gap-3 mt-1 text-[10px] text-gray-400"><span className="flex items-center gap-1"><span className="w-2 h-2 bg-violet-500 rounded-full" />Requests</span><span className="flex items-center gap-1"><span className="w-2 h-2 bg-emerald-400 rounded-full" />Cost</span></div>
+        <div className="flex gap-3 mt-1 text-[10px] text-gray-400"><span className="flex items-center gap-1"><span className="w-2 h-2 bg-violet-500 rounded-full" />Requests</span><span className="flex items-center gap-1"><span className="w-2 h-2 bg-[var(--cmp-color-success)] rounded-full" />Cost</span></div>
       </Card>
 
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
@@ -70,9 +70,9 @@ export default async function ObservabilityPage() {
           <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-2">
             {ev.evals.map((e: any) => (
               <div key={e.id} className="flex items-center gap-2 border border-gray-100 rounded-lg p-2.5">
-                <span className={`w-2 h-2 rounded-full shrink-0 ${e.passed ? "bg-emerald-500" : "bg-rose-500"}`} />
+                <span className={`w-2 h-2 rounded-full shrink-0 ${e.passed ? "bg-[var(--cmp-color-success)]" : "bg-[var(--cmp-color-error)]"}`} />
                 <div className="min-w-0 flex-1"><p className="text-[12px] font-medium text-gray-900 leading-tight truncate">{e.name}</p><p className="text-[10px] text-gray-400">{e.eval_type} · {e.target} · {e.runs} runs</p></div>
-                <span className={`text-[13px] font-bold tabular-nums ${Number(e.score) >= 90 ? "text-emerald-600" : Number(e.score) >= 80 ? "text-amber-600" : "text-rose-600"}`}>{e.score}%</span>
+                <span className={`text-[13px] font-bold tabular-nums ${Number(e.score) >= 90 ? "text-[var(--cmp-text-success)]" : Number(e.score) >= 80 ? "text-[var(--cmp-text-warning)]" : "text-[var(--cmp-text-error)]"}`}>{e.score}%</span>
               </div>
             ))}
           </div>

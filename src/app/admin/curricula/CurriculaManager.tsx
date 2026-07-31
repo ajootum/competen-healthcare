@@ -80,7 +80,7 @@ export default function CurriculaManager({ curricula, competencies }: { curricul
               </div>
               <div className="flex items-center gap-1.5">
                 <button onClick={() => setExpanded(open ? null : c.id)} className="px-2.5 py-1 text-xs text-gray-600 border border-gray-200 rounded-lg hover:bg-gray-100">{open ? "Close" : "Edit"}</button>
-                <button onClick={() => del("curriculum", c.id)} className="px-2.5 py-1 text-xs text-red-500 border border-red-100 rounded-lg hover:bg-red-50">Delete</button>
+                <button onClick={() => del("curriculum", c.id)} className="px-2.5 py-1 text-xs text-red-500 border border-[var(--cmp-color-critical)] rounded-lg hover:bg-[var(--cmp-surface-critical)]">Delete</button>
               </div>
             </div>
             {open && (
@@ -92,7 +92,7 @@ export default function CurriculaManager({ curricula, competencies }: { curricul
                     {c.curriculum_modules.sort((a, b) => a.sort_order - b.sort_order).map((m, i) => (
                       <div key={m.id} className="flex items-center justify-between text-xs bg-gray-50 rounded-lg px-3 py-1.5">
                         <span className="text-gray-700">{i + 1}. {m.title}</span>
-                        <button onClick={() => del("module", m.id)} className="text-red-400 hover:text-red-600 leading-none">×</button>
+                        <button onClick={() => del("module", m.id)} className="text-red-400 hover:text-[var(--cmp-text-critical)] leading-none">×</button>
                       </div>
                     ))}
                     {!c.curriculum_modules.length && <p className="text-[11px] text-gray-300 italic">No modules yet</p>}
@@ -107,7 +107,7 @@ export default function CurriculaManager({ curricula, competencies }: { curricul
                     {outcomes.map(x => (
                       <span key={x.id} className="group inline-flex items-center gap-1 text-xs bg-teal-50 border border-teal-100 text-teal-700 pl-2.5 pr-1.5 py-0.5 rounded-full">
                         {x.framework_competencies?.name ?? "—"}
-                        <button onClick={() => del("competency", x.id)} className="opacity-0 group-hover:opacity-100 text-red-400 hover:text-red-600 transition-opacity leading-none px-0.5">×</button>
+                        <button onClick={() => del("competency", x.id)} className="opacity-0 group-hover:opacity-100 text-red-400 hover:text-[var(--cmp-text-critical)] transition-opacity leading-none px-0.5">×</button>
                       </span>
                     ))}
                     {!outcomes.length && <p className="text-[11px] text-gray-300 italic">None mapped</p>}

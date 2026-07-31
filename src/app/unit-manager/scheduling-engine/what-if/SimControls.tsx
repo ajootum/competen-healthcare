@@ -45,10 +45,10 @@ export default function SimControls({ params }: { params: { absent: number; surg
       {slider("Census / occupancy surge", surge, setSurge, 50, 5, "%")}
       {slider("Add bank capacity", bank, setBank, 8, 1, " RNs")}
       <div className="flex gap-2 pt-1">
-        <button onClick={simulate} className="flex-1 text-xs font-semibold rounded-lg py-2 px-3 bg-emerald-600 text-white">▶ Simulate</button>
+        <button onClick={simulate} className="flex-1 text-xs font-semibold rounded-lg py-2 px-3 bg-[var(--cmp-color-success)] text-white">▶ Simulate</button>
         <button onClick={discard} className="text-xs font-semibold rounded-lg py-2 px-3 border border-gray-200 text-gray-600">Discard</button>
       </div>
-      <button onClick={apply} disabled={!!busy} className="w-full text-xs font-semibold rounded-lg py-2 px-3 border border-emerald-300 text-emerald-700 disabled:opacity-50">{busy === "apply" ? "Applying…" : "Apply → regenerate live roster"}</button>
+      <button onClick={apply} disabled={!!busy} className="w-full text-xs font-semibold rounded-lg py-2 px-3 border border-[var(--cmp-color-success)] text-emerald-700 disabled:opacity-50">{busy === "apply" ? "Applying…" : "Apply → regenerate live roster"}</button>
       {msg && <p className="text-[10px] text-gray-500">{msg}</p>}
     </div>
   );

@@ -10,11 +10,11 @@ export const dynamic = "force-dynamic";
 
 const VERDICT: Record<string, { label: string; cls: string }> = {
   ready: { label: "Ready", cls: "text-teal-700 bg-teal-50 border-teal-200" },
-  needs_work: { label: "Needs work", cls: "text-amber-700 bg-amber-50 border-amber-200" },
-  blocked: { label: "Blocked", cls: "text-red-700 bg-red-50 border-red-200" },
+  needs_work: { label: "Needs work", cls: "text-[var(--cmp-text-warning)] bg-[var(--cmp-surface-warning)] border-[var(--cmp-color-warning)]" },
+  blocked: { label: "Blocked", cls: "text-[var(--cmp-text-critical)] bg-[var(--cmp-surface-critical)] border-[var(--cmp-color-critical)]" },
 };
 const STATUS_ICON: Record<string, { icon: string; cls: string }> = {
-  pass: { icon: "✓", cls: "text-teal-600" }, warn: { icon: "!", cls: "text-amber-600" }, fail: { icon: "✗", cls: "text-red-600" },
+  pass: { icon: "✓", cls: "text-teal-600" }, warn: { icon: "!", cls: "text-[var(--cmp-text-warning)]" }, fail: { icon: "✗", cls: "text-[var(--cmp-text-critical)]" },
 };
 
 export default async function StudioTestingPage() {
@@ -44,10 +44,10 @@ export default async function StudioTestingPage() {
             {[
               { label: "Frameworks", value: rr.kpis.frameworks, tone: "text-gray-900" },
               { label: "Ready", value: rr.kpis.ready, tone: "text-teal-600" },
-              { label: "Needs work", value: rr.kpis.needsWork, tone: "text-amber-600" },
-              { label: "Blocked", value: rr.kpis.blocked, tone: rr.kpis.blocked > 0 ? "text-red-600" : "text-gray-300" },
-              { label: "Prerequisite cycles", value: rr.kpis.cycles, tone: rr.kpis.cycles > 0 ? "text-red-600" : "text-gray-300" },
-              { label: "High QA issues", value: rr.kpis.highIssues, tone: rr.kpis.highIssues > 0 ? "text-amber-600" : "text-gray-300" },
+              { label: "Needs work", value: rr.kpis.needsWork, tone: "text-[var(--cmp-text-warning)]" },
+              { label: "Blocked", value: rr.kpis.blocked, tone: rr.kpis.blocked > 0 ? "text-[var(--cmp-text-critical)]" : "text-gray-300" },
+              { label: "Prerequisite cycles", value: rr.kpis.cycles, tone: rr.kpis.cycles > 0 ? "text-[var(--cmp-text-critical)]" : "text-gray-300" },
+              { label: "High QA issues", value: rr.kpis.highIssues, tone: rr.kpis.highIssues > 0 ? "text-[var(--cmp-text-warning)]" : "text-gray-300" },
             ].map(k => (
               <div key={k.label} className="bg-white rounded-xl border border-gray-100 p-3.5">
                 <p className={`text-xl font-bold ${k.tone}`}>{k.value}</p>
@@ -58,8 +58,8 @@ export default async function StudioTestingPage() {
 
           {/* Global dependency-cycle gate */}
           {rr.cycles.length > 0 && (
-            <div className="bg-red-50 border border-red-100 rounded-xl p-4 mb-5">
-              <p className="text-xs font-bold text-red-700 uppercase tracking-widest mb-2">⛔ Platform-level blocker · prerequisite cycles</p>
+            <div className="bg-[var(--cmp-surface-critical)] border border-[var(--cmp-color-critical)] rounded-xl p-4 mb-5">
+              <p className="text-xs font-bold text-[var(--cmp-text-critical)] uppercase tracking-widest mb-2">⛔ Platform-level blocker · prerequisite cycles</p>
               {rr.cycles.map((chain, i) => <p key={i} className="text-xs text-red-800">{chain.join("  →  ")}</p>)}
               <p className="text-[10px] text-red-500 mt-2">Resolve in the <Link href="/super-admin/studio/dependencies" className="underline">Dependency Manager</Link> before publishing affected competencies.</p>
             </div>

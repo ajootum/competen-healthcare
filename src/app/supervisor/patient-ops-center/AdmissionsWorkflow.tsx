@@ -48,7 +48,7 @@ export default function AdmissionsWorkflow({ departments, beds }: { departments:
         </div>
         <button onClick={() => setOpen(o => !o)} className="text-sm font-medium text-white bg-teal-600 hover:bg-teal-700 rounded-lg px-3.5 py-2">{open ? "Close" : "New admission"}</button>
       </div>
-      {msg && <div className={`mt-3 text-sm rounded-lg px-4 py-2.5 ${msg.kind === "ok" ? "bg-green-50 text-green-800 border border-green-200" : "bg-amber-50 text-amber-800 border border-amber-200"}`}>{msg.text}</div>}
+      {msg && <div className={`mt-3 text-sm rounded-lg px-4 py-2.5 ${msg.kind === "ok" ? "bg-[var(--cmp-surface-success)] text-green-800 border border-[var(--cmp-color-success)]" : "bg-[var(--cmp-surface-warning)] text-amber-800 border border-[var(--cmp-color-warning)]"}`}>{msg.text}</div>}
       {open && (
         <div className="mt-4 grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
           <label className="text-xs text-gray-500">Operational label *<input className={input} placeholder="Bay 3 · J.M." value={f.label} onChange={e => set("label", e.target.value)} /></label>

@@ -50,7 +50,7 @@ export default async function AssignLearning() {
       <div><h1 className="text-2xl font-bold text-gray-900 tracking-tight">Learning Oversight &amp; Development</h1><p className="text-sm text-gray-500">Assign Learning — assign courses to a role or the whole unit and track completion.</p></div>
       <LearningTabs />
       {!provisioned ? (
-        <div className="bg-amber-50 border border-amber-200 rounded-xl p-6"><p className="font-semibold text-amber-900">⚙️ Learning operations store not provisioned</p><p className="text-sm text-amber-800 mt-1">Apply migration 089 (learning_courses / learning_assignments / learning_enrolments) to enable assignment.</p></div>
+        <div className="bg-[var(--cmp-surface-warning)] border border-[var(--cmp-color-warning)] rounded-xl p-6"><p className="font-semibold text-amber-900">⚙️ Learning operations store not provisioned</p><p className="text-sm text-amber-800 mt-1">Apply migration 089 (learning_courses / learning_assignments / learning_enrolments) to enable assignment.</p></div>
       ) : (
         <AssignmentConsole courses={courses} roles={roleList} assignments={assignments} enrolments={enrolments} />
       )}

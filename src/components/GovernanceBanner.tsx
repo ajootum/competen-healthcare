@@ -12,15 +12,15 @@ type Office = {
 };
 
 const STATE: Record<string, { label: string; dot: string; text: string }> = {
-  active: { label: "Active", dot: "bg-emerald-400", text: "text-emerald-100" },
-  approved: { label: "Approved", dot: "bg-emerald-400", text: "text-emerald-100" },
-  under_review: { label: "Under review", dot: "bg-amber-400", text: "text-amber-100" },
-  pending_approval: { label: "Pending approval", dot: "bg-amber-400", text: "text-amber-100" },
-  proposed: { label: "Proposed", dot: "bg-sky-400", text: "text-sky-100" },
-  in_design: { label: "In design", dot: "bg-sky-400", text: "text-sky-100" },
-  suspended: { label: "Suspended", dot: "bg-rose-400", text: "text-rose-100" },
-  restructuring: { label: "Restructuring", dot: "bg-amber-400", text: "text-amber-100" },
-  closing: { label: "Closing", dot: "bg-rose-400", text: "text-rose-100" },
+  active: { label: "Active", dot: "bg-[var(--cmp-color-success)]", text: "text-emerald-100" },
+  approved: { label: "Approved", dot: "bg-[var(--cmp-color-success)]", text: "text-emerald-100" },
+  under_review: { label: "Under review", dot: "bg-[var(--cmp-color-warning)]", text: "text-amber-100" },
+  pending_approval: { label: "Pending approval", dot: "bg-[var(--cmp-color-warning)]", text: "text-amber-100" },
+  proposed: { label: "Proposed", dot: "bg-[var(--cmp-color-information)]", text: "text-sky-100" },
+  in_design: { label: "In design", dot: "bg-[var(--cmp-color-information)]", text: "text-sky-100" },
+  suspended: { label: "Suspended", dot: "bg-[var(--cmp-color-error)]", text: "text-rose-100" },
+  restructuring: { label: "Restructuring", dot: "bg-[var(--cmp-color-warning)]", text: "text-amber-100" },
+  closing: { label: "Closing", dot: "bg-[var(--cmp-color-error)]", text: "text-rose-100" },
   dissolved: { label: "Dissolved", dot: "bg-gray-400", text: "text-gray-200" },
   archived: { label: "Archived", dot: "bg-gray-400", text: "text-gray-200" },
 };

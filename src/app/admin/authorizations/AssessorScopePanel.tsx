@@ -58,7 +58,7 @@ export default function AssessorScopePanel({ assessors, cpus, grants }: {
       </p>
 
       <div className="bg-white rounded-xl border border-indigo-100 p-5 mb-4">
-        {error && <div className="bg-red-50 text-red-600 text-sm rounded-lg px-3 py-2 mb-3">{error}</div>}
+        {error && <div className="bg-[var(--cmp-surface-critical)] text-[var(--cmp-text-critical)] text-sm rounded-lg px-3 py-2 mb-3">{error}</div>}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-2">
           <select className={input} value={form.user_id} onChange={e => setForm(f => ({ ...f, user_id: e.target.value }))}>
             <option value="">Assessor…</option>
@@ -102,9 +102,9 @@ export default function AssessorScopePanel({ assessors, cpus, grants }: {
                     {g.valid_until ? ` · valid to ${new Date(g.valid_until).toLocaleDateString()}` : " · no expiry"}
                   </p>
                 </div>
-                {expired && <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-red-50 text-red-600">Expired</span>}
+                {expired && <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-[var(--cmp-surface-critical)] text-[var(--cmp-text-critical)]">Expired</span>}
                 <button disabled={busy} onClick={() => revoke(g.id)}
-                  className="text-xs text-gray-400 hover:text-red-500 hover:bg-red-50 px-2 py-1 rounded transition-colors">Revoke</button>
+                  className="text-xs text-gray-400 hover:text-red-500 hover:bg-[var(--cmp-surface-critical)] px-2 py-1 rounded transition-colors">Revoke</button>
               </div>
             );
           })}

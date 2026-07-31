@@ -121,7 +121,7 @@ export default function DeptManager({ hospitalId }: { hospitalId: string }) {
                 </>
               )}
 
-              {error && <p className="text-red-500 text-xs bg-red-50 rounded-lg px-3 py-2">{error}</p>}
+              {error && <p className="text-red-500 text-xs bg-[var(--cmp-surface-critical)] rounded-lg px-3 py-2">{error}</p>}
 
               <div className="flex gap-3 pt-1">
                 <button onClick={() => { setOpen(false); setError(""); }}

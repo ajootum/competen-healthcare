@@ -24,10 +24,10 @@ export default async function IntelligencePage() {
   const heatFrameworks = report.frameworks.filter(f => heatDeptIds.some(d => report.heat[d]?.[f.id]));
 
   const RISK_CARDS = [
-    { label: "Expired", value: report.risk.expired, color: "text-red-600", bg: "bg-red-50" },
-    { label: "Due ≤60d", value: report.risk.dueSoon, color: "text-amber-600", bg: "bg-amber-50" },
-    { label: "Critical Failures", value: report.risk.criticalFailures, color: "text-red-700", bg: "bg-red-50" },
-    { label: "Remediation", value: report.risk.remediation, color: "text-orange-600", bg: "bg-orange-50" },
+    { label: "Expired", value: report.risk.expired, color: "text-[var(--cmp-text-critical)]", bg: "bg-[var(--cmp-surface-critical)]" },
+    { label: "Due ≤60d", value: report.risk.dueSoon, color: "text-[var(--cmp-text-warning)]", bg: "bg-[var(--cmp-surface-warning)]" },
+    { label: "Critical Failures", value: report.risk.criticalFailures, color: "text-[var(--cmp-text-critical)]", bg: "bg-[var(--cmp-surface-critical)]" },
+    { label: "Remediation", value: report.risk.remediation, color: "text-[var(--cmp-text-warning)]", bg: "bg-[var(--cmp-surface-warning)]" },
     { label: "Not Yet Competent", value: report.risk.notYetCompetent, color: "text-gray-600", bg: "bg-gray-50" },
   ];
 
@@ -111,7 +111,7 @@ export default async function IntelligencePage() {
                   <thead>
                     <tr className="border-b border-gray-100 bg-gray-50/50">
                       <th className="text-left px-5 py-3 text-[10px] font-semibold text-gray-400 uppercase tracking-wide">Department</th>
-                      <th className="text-center px-4 py-3 text-[10px] font-semibold text-amber-600 uppercase tracking-wide">≤ 30 days</th>
+                      <th className="text-center px-4 py-3 text-[10px] font-semibold text-[var(--cmp-text-warning)] uppercase tracking-wide">≤ 30 days</th>
                       <th className="text-center px-4 py-3 text-[10px] font-semibold text-gray-400 uppercase tracking-wide">31–60 days</th>
                       <th className="text-center px-4 py-3 text-[10px] font-semibold text-gray-400 uppercase tracking-wide">61–90 days</th>
                     </tr>
@@ -120,14 +120,14 @@ export default async function IntelligencePage() {
                     {report.forecast.byDept.map(d => (
                       <tr key={d.id} className="hover:bg-gray-50/40">
                         <td className="px-5 py-2.5 text-xs font-medium text-gray-800">{d.name}</td>
-                        <td className={`px-4 py-2.5 text-center text-sm font-bold ${d.d30 > 0 ? "text-amber-600" : "text-gray-300"}`}>{d.d30 || "—"}</td>
+                        <td className={`px-4 py-2.5 text-center text-sm font-bold ${d.d30 > 0 ? "text-[var(--cmp-text-warning)]" : "text-gray-300"}`}>{d.d30 || "—"}</td>
                         <td className={`px-4 py-2.5 text-center text-sm ${d.d60 > 0 ? "text-gray-700" : "text-gray-300"}`}>{d.d60 || "—"}</td>
                         <td className={`px-4 py-2.5 text-center text-sm ${d.d90 > 0 ? "text-gray-700" : "text-gray-300"}`}>{d.d90 || "—"}</td>
                       </tr>
                     ))}
                     <tr className="bg-gray-50/50 font-bold">
                       <td className="px-5 py-2.5 text-xs text-gray-800">Total reassessments due</td>
-                      <td className="px-4 py-2.5 text-center text-sm text-amber-700">{report.forecast.d30}</td>
+                      <td className="px-4 py-2.5 text-center text-sm text-[var(--cmp-text-warning)]">{report.forecast.d30}</td>
                       <td className="px-4 py-2.5 text-center text-sm text-gray-800">{report.forecast.d60}</td>
                       <td className="px-4 py-2.5 text-center text-sm text-gray-800">{report.forecast.d90}</td>
                     </tr>

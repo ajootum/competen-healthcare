@@ -31,7 +31,7 @@ export default function EnterpriseExplorer({ orgs, unassigned }: { orgs: any[]; 
           <Row depth={0} hasChildren={o.countries.length > 0} open={openOrg[o.id]} onClick={() => setOpenOrg(s => ({ ...s, [o.id]: !s[o.id] }))}>
             <span className="text-base">🏛️</span>
             <span className="font-semibold text-gray-900 truncate">{o.name}</span>
-            <span className={`ml-1 text-[9px] px-1.5 py-0.5 rounded font-medium ${o.active ? "bg-green-50 text-green-600" : "bg-gray-100 text-gray-500"}`}>{o.active ? "Active" : "Setup"}</span>
+            <span className={`ml-1 text-[9px] px-1.5 py-0.5 rounded font-medium ${o.active ? "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]" : "bg-gray-100 text-gray-500"}`}>{o.active ? "Active" : "Setup"}</span>
             <span className="ml-auto text-[10px] text-gray-400 tabular-nums shrink-0">{o.countryCount} {o.countryCount === 1 ? "country" : "countries"} · {o.facilityCount} facilities</span>
           </Row>
           {openOrg[o.id] && o.countries.map((c: any) => {
@@ -48,7 +48,7 @@ export default function EnterpriseExplorer({ orgs, unassigned }: { orgs: any[]; 
                     <Row depth={2} hasChildren={f.departments.length > 0} open={openFac[f.id]} onClick={f.departments.length ? () => setOpenFac(s => ({ ...s, [f.id]: !s[f.id] })) : undefined}>
                       <span className="text-sm">🏥</span>
                       <Link href="/super-admin/hospitals" onClick={e => e.stopPropagation()} className="text-gray-700 hover:text-teal-700 hover:underline truncate">{f.name}</Link>
-                      <span className={`ml-1.5 text-[9px] px-1.5 py-0.5 rounded font-medium ${f.active ? "bg-green-50 text-green-600" : "bg-amber-50 text-amber-600"}`}>{f.active ? "Active" : "Pending"}</span>
+                      <span className={`ml-1.5 text-[9px] px-1.5 py-0.5 rounded font-medium ${f.active ? "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]" : "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]"}`}>{f.active ? "Active" : "Pending"}</span>
                     </Row>
                     {openFac[f.id] && f.departments.map((d: string, i: number) => (
                       <Row key={i} depth={3}>

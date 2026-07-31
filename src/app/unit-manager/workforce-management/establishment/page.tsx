@@ -58,7 +58,7 @@ export default async function EstablishmentEngine() {
     </>
   );
 
-  if (!d.ready) return <div className="space-y-4">{header}<div className="bg-amber-50 border border-amber-200 rounded-xl p-6"><p className="font-semibold text-amber-900">⚙️ No bed / staffing data</p><p className="text-sm text-amber-800 mt-1">The engine needs bed capacity (op_beds) and staffing standards (op_staffing_standards) to calculate establishment.</p></div></div>;
+  if (!d.ready) return <div className="space-y-4">{header}<div className="bg-[var(--cmp-surface-warning)] border border-[var(--cmp-color-warning)] rounded-xl p-6"><p className="font-semibold text-amber-900">⚙️ No bed / staffing data</p><p className="text-sm text-amber-800 mt-1">The engine needs bed capacity (op_beds) and staffing standards (op_staffing_standards) to calculate establishment.</p></div></div>;
 
   const k = d.kpis; const m = d.model; const a = d.assumptions;
   return (
@@ -68,10 +68,10 @@ export default async function EstablishmentEngine() {
       <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-3">
         <Kpi label="Required FTE" value={k.totalRequired} sub="Budgeted establishment" icon="📊" />
         <Kpi label="Available FTE" value={k.totalAvailable} sub="Rostered headcount" icon="👥" />
-        <Kpi label="Vacancy (gap)" value={k.vacancyFte > 0 ? `${k.vacancyFte}` : "0"} sub={k.vacancyFte > 0 ? "FTE short" : "Fully covered"} icon="⚠️" tone={k.vacancyFte > 0 ? "text-rose-600" : "text-emerald-600"} />
-        <Kpi label="Coverage compliance" value={k.coverageCompliance != null ? `${k.coverageCompliance}%` : "—"} sub={k.coverageCompliance != null && k.coverageCompliance >= 100 ? "Met" : "Below establishment"} icon="🛡️" tone={k.coverageCompliance != null && k.coverageCompliance >= 100 ? "text-emerald-600" : "text-amber-600"} />
+        <Kpi label="Vacancy (gap)" value={k.vacancyFte > 0 ? `${k.vacancyFte}` : "0"} sub={k.vacancyFte > 0 ? "FTE short" : "Fully covered"} icon="⚠️" tone={k.vacancyFte > 0 ? "text-[var(--cmp-text-error)]" : "text-[var(--cmp-text-success)]"} />
+        <Kpi label="Coverage compliance" value={k.coverageCompliance != null ? `${k.coverageCompliance}%` : "—"} sub={k.coverageCompliance != null && k.coverageCompliance >= 100 ? "Met" : "Below establishment"} icon="🛡️" tone={k.coverageCompliance != null && k.coverageCompliance >= 100 ? "text-[var(--cmp-text-success)]" : "text-[var(--cmp-text-warning)]"} />
         <Kpi label="Relief factor" value={k.reliefFactor} sub="Leave / sickness cover" icon="🔁" />
-        <Kpi label="Open positions" value={k.openPositions} sub="Whole posts" icon="🪑" tone={k.openPositions ? "text-rose-600" : "text-emerald-600"} />
+        <Kpi label="Open positions" value={k.openPositions} sub="Whole posts" icon="🪑" tone={k.openPositions ? "text-[var(--cmp-text-error)]" : "text-[var(--cmp-text-success)]"} />
       </div>
 
       {/* Source traceability (spec §5/§10 — every metric to a single authoritative source) */}
@@ -88,7 +88,7 @@ export default async function EstablishmentEngine() {
             <div className="overflow-x-auto"><table className="w-full text-xs">
               <thead><tr className="text-gray-400 text-left border-b border-gray-100"><th className="py-2 pr-3 font-medium">Unit</th><th className="py-2 pr-3 font-medium">Demand model</th><th className="py-2 pr-3 font-medium text-right">Beds</th><th className="py-2 pr-3 font-medium text-right">Occ</th><th className="py-2 pr-3 font-medium text-right">Direct FTE</th><th className="py-2 pr-3 font-medium text-right">Supervisor</th><th className="py-2 pr-3 font-medium text-right">Float</th><th className="py-2 font-medium text-right">Total FTE</th></tr></thead>
               <tbody>{d.units.map((u: any) => (<tr key={u.unit} className="border-b border-gray-50"><td className="py-2 pr-3 text-gray-700">{u.unit}</td><td className="py-2 pr-3"><span className="text-[10px] px-1.5 py-0.5 rounded bg-gray-100 text-gray-600">{u.demandModel}</span></td><td className="py-2 pr-3 text-right text-gray-600">{u.capacity}</td><td className="py-2 pr-3 text-right text-gray-600">{u.occupancyPct != null ? `${u.occupancyPct}%` : u.occupied}</td><td className="py-2 pr-3 text-right text-gray-700">{u.directFte}</td><td className="py-2 pr-3 text-right text-gray-700">{u.supervisorFte}</td><td className="py-2 pr-3 text-right text-gray-600">{u.floatFte}</td><td className="py-2 text-right font-bold text-gray-900">{u.totalFte}</td></tr>))}</tbody>
-              <tfoot><tr className="border-t border-gray-200 font-bold"><td className="py-2 pr-3 text-gray-800" colSpan={7}>Total required establishment</td><td className="py-2 text-right text-emerald-600">{k.totalRequired} FTE</td></tr></tfoot>
+              <tfoot><tr className="border-t border-gray-200 font-bold"><td className="py-2 pr-3 text-gray-800" colSpan={7}>Total required establishment</td><td className="py-2 text-right text-[var(--cmp-text-success)]">{k.totalRequired} FTE</td></tr></tfoot>
             </table></div>
           )}
           <p className="text-[10px] text-gray-400 mt-2">Demand model is set per unit from its dominant bed type (ICU acuity / theatre / paediatric / patient-ratio), supplying the default nurse ratio where op_staffing_standards has none. FTE per continuously-staffed post = {m.ftePerPost} (annual post hours ÷ {m.annualProductive} productive hrs). Charge posts are mandatory (≥1/shift); float pool = {a.floatPoolPct}% of direct care.</p>
@@ -108,7 +108,7 @@ export default async function EstablishmentEngine() {
         {/* Required vs available */}
         <div className={`${card} p-5 xl:col-span-1`}>
           <h3 className="text-sm font-bold text-gray-900 mb-3">Required vs available FTE</h3>
-          {d.requiredVsAvailable.length === 0 ? <p className="text-sm text-gray-400">No establishment computed.</p> : <div className="space-y-2.5">{d.requiredVsAvailable.map((r: any) => (<div key={r.role} className="text-xs"><div className="flex items-center justify-between mb-0.5"><span className="text-gray-700">{r.label}</span><span className="text-gray-500">{r.available}/{r.required}{r.coverage != null && ` · ${r.coverage}%`}</span></div><div className="w-full h-1.5 rounded-full bg-gray-100 overflow-hidden"><div className={`h-full rounded-full ${(r.coverage ?? 0) >= 100 ? "bg-emerald-500" : (r.coverage ?? 0) >= 80 ? "bg-amber-400" : "bg-rose-400"}`} style={{ width: `${Math.min(100, r.coverage ?? 0)}%` }} /></div></div>))}</div>}
+          {d.requiredVsAvailable.length === 0 ? <p className="text-sm text-gray-400">No establishment computed.</p> : <div className="space-y-2.5">{d.requiredVsAvailable.map((r: any) => (<div key={r.role} className="text-xs"><div className="flex items-center justify-between mb-0.5"><span className="text-gray-700">{r.label}</span><span className="text-gray-500">{r.available}/{r.required}{r.coverage != null && ` · ${r.coverage}%`}</span></div><div className="w-full h-1.5 rounded-full bg-gray-100 overflow-hidden"><div className={`h-full rounded-full ${(r.coverage ?? 0) >= 100 ? "bg-[var(--cmp-color-success)]" : (r.coverage ?? 0) >= 80 ? "bg-[var(--cmp-color-warning)]" : "bg-[var(--cmp-color-error)]"}`} style={{ width: `${Math.min(100, r.coverage ?? 0)}%` }} /></div></div>))}</div>}
         </div>
 
         {/* Demand forecast */}
@@ -122,8 +122,8 @@ export default async function EstablishmentEngine() {
         <div className="space-y-4 xl:col-span-1">
           <div className={`${card} p-5`}>
             <h3 className="text-sm font-bold text-gray-900 mb-2">Supervisor coverage</h3>
-            <div className="flex items-center justify-between"><div><p className="text-2xl font-bold text-gray-900">{k.supervisorAvailable}<span className="text-sm text-gray-400"> / {k.supervisorRequired}</span></p><p className="text-[11px] text-gray-400">Charge FTE available / required</p></div><span className={`text-[10px] px-2 py-1 rounded ${k.supervisorAvailable >= k.supervisorRequired ? "bg-emerald-50 text-emerald-700" : "bg-rose-50 text-rose-700"}`}>{k.supervisorAvailable >= k.supervisorRequired ? "Met" : "Short"}</span></div>
-            <p className="text-[10px] text-amber-600 mt-2">Supervisor posts are mandatory per shift unless an authorised override exists.</p>
+            <div className="flex items-center justify-between"><div><p className="text-2xl font-bold text-gray-900">{k.supervisorAvailable}<span className="text-sm text-gray-400"> / {k.supervisorRequired}</span></p><p className="text-[11px] text-gray-400">Charge FTE available / required</p></div><span className={`text-[10px] px-2 py-1 rounded ${k.supervisorAvailable >= k.supervisorRequired ? "bg-[var(--cmp-surface-success)] text-emerald-700" : "bg-[var(--cmp-surface-error)] text-[var(--cmp-text-error)]"}`}>{k.supervisorAvailable >= k.supervisorRequired ? "Met" : "Short"}</span></div>
+            <p className="text-[10px] text-[var(--cmp-text-warning)] mt-2">Supervisor posts are mandatory per shift unless an authorised override exists.</p>
           </div>
           <div className={`${card} p-5`}>
             <h3 className="text-sm font-bold text-gray-900 mb-2">Ratio compliance</h3>
@@ -148,7 +148,7 @@ export default async function EstablishmentEngine() {
           <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-2">{gaps.map((r: any, i: number) => { const posts = Math.ceil(r.gap); const pr = r.gap >= 3 ? "High" : r.gap >= 1 ? "Medium" : "Low"; return (
             <div key={r.role} className="flex items-center justify-between rounded-lg border border-gray-100 p-2.5">
               <div><p className="text-xs font-semibold text-gray-800">{i + 1}. {r.label}</p><p className="text-[11px] text-gray-500">{r.gap} FTE short · ~{posts} post{posts === 1 ? "" : "s"}</p></div>
-              <span className={`text-[9px] px-1.5 py-0.5 rounded ${pr === "High" ? "bg-rose-50 text-rose-700" : pr === "Medium" ? "bg-amber-50 text-amber-700" : "bg-gray-100 text-gray-600"}`}>{pr}</span>
+              <span className={`text-[9px] px-1.5 py-0.5 rounded ${pr === "High" ? "bg-[var(--cmp-surface-error)] text-[var(--cmp-text-error)]" : pr === "Medium" ? "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]" : "bg-gray-100 text-gray-600"}`}>{pr}</span>
             </div>); })}</div>
         ); })()}
         <p className="text-[10px] text-gray-400 mt-2">Derived from required establishment vs available FTE. Live vacancy/recruitment status integrates with HR Recruitment (next-phase). The published establishment target feeds the <Link href="/unit-manager/scheduling-engine" className="text-emerald-700 hover:underline">WSE scheduling engines</Link>.</p>

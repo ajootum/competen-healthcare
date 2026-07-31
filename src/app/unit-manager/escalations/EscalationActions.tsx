@@ -22,14 +22,14 @@ export default function EscalationActions({ id, status }: { id: string; status: 
   return (
     <div className="space-y-2">
       <div className="grid grid-cols-2 gap-2">
-        <button onClick={() => act("acknowledge", false)} disabled={!!busy} className={`${BTN} bg-rose-600 text-white`}>Take Action</button>
+        <button onClick={() => act("acknowledge", false)} disabled={!!busy} className={`${BTN} bg-[var(--cmp-color-error)] text-white`}>Take Action</button>
         <button onClick={() => act("assign", false)} disabled={!!busy} className={`${BTN} border border-gray-200 text-gray-600`}>Assign to me</button>
       </div>
       <div className="grid grid-cols-2 gap-2">
-        <button onClick={() => act("escalate", false)} disabled={!!busy} className={`${BTN} border border-amber-300 text-amber-700`}>Escalate Higher</button>
-        <button onClick={() => act("resolve", true)} disabled={!!busy} className={`${BTN} bg-green-600 text-white`}>Resolve</button>
+        <button onClick={() => act("escalate", false)} disabled={!!busy} className={`${BTN} border border-[var(--cmp-color-warning)] text-[var(--cmp-text-warning)]`}>Escalate Higher</button>
+        <button onClick={() => act("resolve", true)} disabled={!!busy} className={`${BTN} bg-[var(--cmp-color-success)] text-white`}>Resolve</button>
       </div>
-      {err && <p className="text-[10px] text-rose-600">{err}</p>}
+      {err && <p className="text-[10px] text-[var(--cmp-text-error)]">{err}</p>}
     </div>
   );
 }

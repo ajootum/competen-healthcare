@@ -14,12 +14,12 @@ export type Scenario = {
 export type GovernedCase = { id: string; title: string; difficulty: string | null; cpuName: string | null };
 
 const DIFF_CLS: Record<string, string> = {
-  Easy: "bg-green-100 text-green-700",
-  Medium: "bg-amber-100 text-amber-700",
-  Hard: "bg-red-100 text-red-600",
-  beginner: "bg-green-100 text-green-700",
-  intermediate: "bg-amber-100 text-amber-700",
-  advanced: "bg-red-100 text-red-600",
+  Easy: "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]",
+  Medium: "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]",
+  Hard: "bg-[var(--cmp-surface-critical)] text-[var(--cmp-text-critical)]",
+  beginner: "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]",
+  intermediate: "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]",
+  advanced: "bg-[var(--cmp-surface-critical)] text-[var(--cmp-text-critical)]",
 };
 const CAT_ICON: Record<string, string> = {
   Emergency: "🚨", "Critical Care": "❤️", Pediatrics: "👶", Pharmacology: "💊",
@@ -97,7 +97,7 @@ export default function SimulationLab({ scenarios, cases }: { scenarios: Scenari
                 className="bg-white rounded-xl border border-gray-100 hover:border-teal-300 p-4 transition-colors group">
                 <p className="text-sm font-medium text-gray-800 group-hover:text-teal-700 leading-snug">{c.title}</p>
                 <div className="flex items-center gap-1.5 mt-2">
-                  {c.cpuName && <span className="text-[9px] font-semibold bg-blue-50 text-blue-600 px-1.5 py-0.5 rounded truncate max-w-[130px]">{c.cpuName}</span>}
+                  {c.cpuName && <span className="text-[9px] font-semibold bg-[var(--cmp-surface-information)] text-[var(--cmp-text-information)] px-1.5 py-0.5 rounded truncate max-w-[130px]">{c.cpuName}</span>}
                   {c.difficulty && <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded capitalize ${DIFF_CLS[c.difficulty] ?? "bg-gray-100 text-gray-600"}`}>{c.difficulty}</span>}
                   <span className="ml-auto text-[10px] text-teal-600 font-semibold">Work through →</span>
                 </div>

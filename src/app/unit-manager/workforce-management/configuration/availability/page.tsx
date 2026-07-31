@@ -45,7 +45,7 @@ export default async function AvailabilityConfig() {
 
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
         <div className={`${card} p-5`}>
-          <h3 className="text-sm font-bold text-gray-900 mb-3">Leave entitlement <span className="text-[10px] text-emerald-600 font-normal">live · wps_config</span></h3>
+          <h3 className="text-sm font-bold text-gray-900 mb-3">Leave entitlement <span className="text-[10px] text-[var(--cmp-text-success)] font-normal">live · wps_config</span></h3>
           <div className="space-y-1.5"><Param label="Annual leave" value={s.annualLeaveDays} unit="days" /><Param label="Study leave" value={s.studyLeaveDays} unit="days" /><Param label="Sickness allowance" value={s.sicknessDays} unit="days" /><Param label="Public holidays" value={s.publicHolidays} unit="days" /></div>
           <Link href="/unit-manager/planning-studio" className="mt-3 inline-block text-[11px] font-semibold text-emerald-700 hover:underline">Edit in Planning Studio ↗</Link>
         </div>

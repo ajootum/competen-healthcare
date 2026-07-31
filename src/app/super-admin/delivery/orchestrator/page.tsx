@@ -12,8 +12,8 @@ import OrchestratorRunner from "./OrchestratorRunner";
 export const dynamic = "force-dynamic";
 
 const PRIORITY: Record<string, string> = {
-  high: "text-rose-600 bg-rose-50 border-rose-100",
-  medium: "text-amber-600 bg-amber-50 border-amber-100",
+  high: "text-[var(--cmp-text-error)] bg-[var(--cmp-surface-error)] border-[var(--cmp-color-error)]",
+  medium: "text-[var(--cmp-text-warning)] bg-[var(--cmp-surface-warning)] border-[var(--cmp-color-warning)]",
   low: "text-gray-500 bg-gray-50 border-gray-100",
 };
 
@@ -40,7 +40,7 @@ export default async function OrchestratorPage() {
       </div>
 
       {!q.provisioned ? (
-        <div className="bg-amber-50 border border-amber-100 rounded-xl p-4">
+        <div className="bg-[var(--cmp-surface-warning)] border border-[var(--cmp-color-warning)] rounded-xl p-4">
           <p className="text-[13px] text-amber-900">Assignment rules aren&apos;t provisioned yet — apply migration 125 (<code className="text-[11px]">cmo_assignment_rules</code>) and author rules in the Competency Office to enable orchestration.</p>
         </div>
       ) : (
@@ -50,7 +50,7 @@ export default async function OrchestratorPage() {
               { label: "Active rules", value: q.kpis.activeRules, tone: "text-gray-900" },
               { label: "Pending delivery", value: q.kpis.pending, tone: "text-violet-600" },
               { label: "Delivered", value: q.kpis.delivered, tone: "text-teal-600" },
-              { label: "Overdue", value: q.kpis.overdue, tone: "text-rose-600" },
+              { label: "Overdue", value: q.kpis.overdue, tone: "text-[var(--cmp-text-error)]" },
               { label: "Staff reach", value: q.kpis.reach, tone: "text-gray-900" },
             ].map(k => (
               <div key={k.label} className="bg-white rounded-xl border border-gray-100 p-3.5">

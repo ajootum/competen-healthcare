@@ -21,7 +21,7 @@ function ModuleCard({ m }: { m: Mod }) {
           <p className="text-[9px] font-bold text-gray-300 tracking-widest">{m.code}</p>
           <p className={`font-bold text-sm leading-tight ${m.planned ? "text-gray-500" : "text-gray-900 group-hover:text-teal-700"}`}>{m.label}</p>
         </div>
-        {m.planned && <span className="ml-auto shrink-0 text-[8px] font-bold uppercase tracking-wide text-amber-600 bg-amber-50 border border-amber-100 px-1.5 py-0.5 rounded">Planned</span>}
+        {m.planned && <span className="ml-auto shrink-0 text-[8px] font-bold uppercase tracking-wide text-[var(--cmp-text-warning)] bg-[var(--cmp-surface-warning)] border border-[var(--cmp-color-warning)] px-1.5 py-0.5 rounded">Planned</span>}
       </div>
       <p className="text-[11px] text-gray-400 leading-relaxed">{m.desc}</p>
       {m.stat && <p className="text-[10px] font-semibold text-teal-600 mt-2">{m.stat}</p>}

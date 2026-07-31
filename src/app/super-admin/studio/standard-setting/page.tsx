@@ -36,13 +36,13 @@ export default async function StandardSettingPage() {
       </div>
 
       {!ss.provisioned ? (
-        <div className="bg-amber-50 border border-amber-100 rounded-xl p-6 text-sm text-amber-800">Run migration 132 (<code className="text-[11px]">cst_standard_settings</code>) to enable Standard Setting.</div>
+        <div className="bg-[var(--cmp-surface-warning)] border border-[var(--cmp-color-warning)] rounded-xl p-6 text-sm text-amber-800">Run migration 132 (<code className="text-[11px]">cst_standard_settings</code>) to enable Standard Setting.</div>
       ) : (
         <>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-5">
             {[
               { label: "Studies", value: ss.kpis.total, tone: "text-gray-900" },
-              { label: "In progress", value: ss.kpis.active, tone: "text-amber-600" },
+              { label: "In progress", value: ss.kpis.active, tone: "text-[var(--cmp-text-warning)]" },
               { label: "Approved", value: ss.kpis.approved, tone: "text-teal-600" },
               { label: "Draft", value: ss.kpis.draft, tone: "text-gray-500" },
             ].map(k => (

@@ -37,7 +37,7 @@ export default async function StandardsPage() {
             <span key="s" className="tabular-nums text-gray-600">{f.standards}</span>,
             <span key="a" className="tabular-nums text-gray-500">{f.assessed}</span>,
             f.compliance != null
-              ? <span key="c" className="inline-flex items-center gap-2"><span className="w-16 h-1.5 rounded-full bg-gray-100 overflow-hidden inline-block align-middle"><span className={`h-full block rounded-full ${f.compliance >= 85 ? "bg-emerald-500" : f.compliance >= 60 ? "bg-amber-500" : "bg-rose-500"}`} style={{ width: `${f.compliance}%` }} /></span><b className="tabular-nums text-gray-700">{f.compliance}%</b></span>
+              ? <span key="c" className="inline-flex items-center gap-2"><span className="w-16 h-1.5 rounded-full bg-gray-100 overflow-hidden inline-block align-middle"><span className={`h-full block rounded-full ${f.compliance >= 85 ? "bg-[var(--cmp-color-success)]" : f.compliance >= 60 ? "bg-[var(--cmp-color-warning)]" : "bg-[var(--cmp-color-error)]"}`} style={{ width: `${f.compliance}%` }} /></span><b className="tabular-nums text-gray-700">{f.compliance}%</b></span>
               : <span key="c" className="text-gray-300">—</span>,
           ])} empty="No frameworks registered." />
         </Card>

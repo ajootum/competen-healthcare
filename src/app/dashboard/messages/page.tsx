@@ -43,7 +43,7 @@ export default async function MessagingHubPage({ searchParams }: { searchParams:
       {/* Header */}
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <p className="text-[11px] font-semibold text-blue-600 uppercase tracking-wide">Personal Workspace</p>
+          <p className="text-[11px] font-semibold text-[var(--cmp-text-information)] uppercase tracking-wide">Personal Workspace</p>
           <h1 className="text-2xl font-bold text-gray-900">Messaging &amp; Communications</h1>
           <p className="text-sm text-gray-500 mt-0.5">All your messages, conversations and collaborative communications in one place.</p>
         </div>
@@ -51,11 +51,11 @@ export default async function MessagingHubPage({ searchParams }: { searchParams:
 
       {/* KPI ribbon */}
       <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
-        <Kpi label="Recent (24h)" value={d.kpis.unread} icon="💬" tone="text-blue-600" />
+        <Kpi label="Recent (24h)" value={d.kpis.unread} icon="💬" tone="text-[var(--cmp-text-information)]" />
         <Kpi label="Direct" value={d.kpis.direct} icon="👤" tone="text-gray-900" />
         <Kpi label="Groups" value={d.kpis.groups} icon="👥" tone="text-gray-900" />
-        <Kpi label="Broadcasts" value={d.kpis.broadcasts} icon="📢" tone="text-amber-600" />
-        <Kpi label="Mentions" value={d.kpis.mentions} icon="@" tone="text-rose-600" />
+        <Kpi label="Broadcasts" value={d.kpis.broadcasts} icon="📢" tone="text-[var(--cmp-text-warning)]" />
+        <Kpi label="Mentions" value={d.kpis.mentions} icon="@" tone="text-[var(--cmp-text-error)]" />
         <Kpi label="Starred" value={d.kpis.starred} icon="⭐" tone="text-gray-400" />
       </div>
 
@@ -69,13 +69,13 @@ export default async function MessagingHubPage({ searchParams }: { searchParams:
                 const meta = CONTEXT_META[ch.context_type] ?? { color: "#94a3b8", icon: "💬" };
                 const active = ch.name === d.selected;
                 return (
-                  <Link key={ch.name} href={`/dashboard/messages?c=${encodeURIComponent(ch.name)}`} className={`flex gap-2.5 px-3 py-2.5 ${active ? "bg-blue-50" : "hover:bg-gray-50"}`}>
+                  <Link key={ch.name} href={`/dashboard/messages?c=${encodeURIComponent(ch.name)}`} className={`flex gap-2.5 px-3 py-2.5 ${active ? "bg-[var(--cmp-surface-information)]" : "hover:bg-gray-50"}`}>
                     <div className="w-9 h-9 rounded-lg flex items-center justify-center text-white shrink-0" style={{ background: meta.color }}>{meta.icon}</div>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center justify-between gap-1"><p className={`text-[13px] truncate ${active ? "font-semibold text-blue-800" : "font-medium text-gray-800"}`}>{ch.name}</p><span className="text-[10px] text-gray-400 shrink-0">{fmtTime(ch.last.created_at)}</span></div>
                       <p className="text-[11px] text-gray-500 truncate">{ch.last.author_name ? `${ch.last.author_name.split(" ")[0]}: ` : ""}{ch.last.body}</p>
                     </div>
-                    {ch.recent > 0 && <span className="self-center bg-blue-600 text-white text-[10px] font-bold rounded-full min-w-[18px] h-[18px] flex items-center justify-center px-1 shrink-0">{ch.recent}</span>}
+                    {ch.recent > 0 && <span className="self-center bg-[var(--cmp-color-information)] text-white text-[10px] font-bold rounded-full min-w-[18px] h-[18px] flex items-center justify-center px-1 shrink-0">{ch.recent}</span>}
                   </Link>
                 );
               })}
@@ -96,7 +96,7 @@ export default async function MessagingHubPage({ searchParams }: { searchParams:
                   <div className="w-8 h-8 rounded-full bg-gray-200 text-gray-600 text-[11px] font-bold flex items-center justify-center shrink-0">{initials(m.author_name)}</div>
                   <div className={`max-w-[75%] ${m.mine ? "items-end" : ""} flex flex-col`}>
                     <div className="flex items-center gap-2"><span className="text-[11px] font-semibold text-gray-700">{m.mine ? "You" : m.author_name ?? "Unknown"}</span><span className="text-[10px] text-gray-400">{fmtTime(m.created_at)}</span></div>
-                    <div className={`mt-0.5 px-3 py-2 rounded-2xl text-[13px] leading-snug ${m.mine ? "bg-blue-600 text-white rounded-tr-sm" : "bg-gray-100 text-gray-800 rounded-tl-sm"}`}>{m.body}</div>
+                    <div className={`mt-0.5 px-3 py-2 rounded-2xl text-[13px] leading-snug ${m.mine ? "bg-[var(--cmp-color-information)] text-white rounded-tr-sm" : "bg-gray-100 text-gray-800 rounded-tl-sm"}`}>{m.body}</div>
                   </div>
                 </div>
               ))}
@@ -125,7 +125,7 @@ export default async function MessagingHubPage({ searchParams }: { searchParams:
               <h3 className="text-sm font-semibold text-gray-900 mb-3">My Channels</h3>
               <div className="flex flex-wrap gap-1.5">
                 {d.myChannels.map((n: string) => (
-                  <Link key={n} href={`/dashboard/messages?c=${encodeURIComponent(n)}`} className={`text-[11px] rounded-full px-2.5 py-1 ring-1 ${n === d.selected ? "bg-blue-600 text-white ring-blue-600" : "bg-gray-50 text-gray-600 ring-gray-200 hover:bg-gray-100"}`}>{n}</Link>
+                  <Link key={n} href={`/dashboard/messages?c=${encodeURIComponent(n)}`} className={`text-[11px] rounded-full px-2.5 py-1 ring-1 ${n === d.selected ? "bg-[var(--cmp-color-information)] text-white ring-blue-600" : "bg-gray-50 text-gray-600 ring-gray-200 hover:bg-gray-100"}`}>{n}</Link>
                 ))}
               </div>
             </div>

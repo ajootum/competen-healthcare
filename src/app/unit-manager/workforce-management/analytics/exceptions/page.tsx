@@ -44,7 +44,7 @@ export default async function ExceptionsAnalytics() {
     </>
   );
 
-  if (!d.ready) return <div className="space-y-4">{header}<div className="bg-amber-50 border border-amber-200 rounded-xl p-6"><p className="font-semibold text-amber-900">⚙️ No exception data</p></div></div>;
+  if (!d.ready) return <div className="space-y-4">{header}<div className="bg-[var(--cmp-surface-warning)] border border-[var(--cmp-color-warning)] rounded-xl p-6"><p className="font-semibold text-amber-900">⚙️ No exception data</p></div></div>;
 
   const k = d.kpis;
   const catTotal = d.cats.reduce((n: number, c: any) => n + c.count, 0) || 1;
@@ -57,21 +57,21 @@ export default async function ExceptionsAnalytics() {
 
       <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-3">
         <Kpi label="Open exceptions" value={k.openExceptions} sub={`${k.exceptionCount} raised`} foot="WF-EXC-001" />
-        <Kpi label="Critical" value={k.critical} tone={k.critical ? "text-rose-600" : "text-emerald-600"} />
-        <Kpi label="Overdue" value={k.overdue} tone={k.overdue ? "text-rose-600" : "text-emerald-600"} />
-        <Kpi label="Escalated" value={k.escalated} tone={k.escalated ? "text-orange-600" : undefined} />
-        <Kpi label="SLA compliance" value={slaCompliance != null ? `${slaCompliance}%` : "—"} tone={slaCompliance != null && slaCompliance >= 90 ? "text-emerald-600" : "text-amber-600"} foot="WF-EXC-001" />
+        <Kpi label="Critical" value={k.critical} tone={k.critical ? "text-[var(--cmp-text-error)]" : "text-[var(--cmp-text-success)]"} />
+        <Kpi label="Overdue" value={k.overdue} tone={k.overdue ? "text-[var(--cmp-text-error)]" : "text-[var(--cmp-text-success)]"} />
+        <Kpi label="Escalated" value={k.escalated} tone={k.escalated ? "text-[var(--cmp-text-warning)]" : undefined} />
+        <Kpi label="SLA compliance" value={slaCompliance != null ? `${slaCompliance}%` : "—"} tone={slaCompliance != null && slaCompliance >= 90 ? "text-[var(--cmp-text-success)]" : "text-[var(--cmp-text-warning)]"} foot="WF-EXC-001" />
         <Kpi label="Rejection rate" value={decided.length ? `${Math.round((rejected / decided.length) * 100)}%` : "—"} sub={`${decided.length} decided`} />
       </div>
 
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
         <div className={`${card} p-5`}>
           <h3 className="text-sm font-bold text-gray-900 mb-3">Exception volume by category <span className="text-[10px] text-gray-400 font-normal">WA-EX-001</span></h3>
-          {d.cats.length === 0 ? <p className="text-sm text-gray-400">No exceptions.</p> : <div className="space-y-2">{d.cats.map((c: any) => (<div key={c.category} className="flex items-center gap-3 text-xs"><span className="text-gray-600 w-32 truncate">{c.category}</span><div className="flex-1 h-1.5 rounded-full bg-gray-100 overflow-hidden"><div className="h-full bg-emerald-500 rounded-full" style={{ width: `${(c.count / catTotal) * 100}%` }} /></div><span className="font-semibold text-gray-700 w-6 text-right">{c.count}</span></div>))}</div>}
+          {d.cats.length === 0 ? <p className="text-sm text-gray-400">No exceptions.</p> : <div className="space-y-2">{d.cats.map((c: any) => (<div key={c.category} className="flex items-center gap-3 text-xs"><span className="text-gray-600 w-32 truncate">{c.category}</span><div className="flex-1 h-1.5 rounded-full bg-gray-100 overflow-hidden"><div className="h-full bg-[var(--cmp-color-success)] rounded-full" style={{ width: `${(c.count / catTotal) * 100}%` }} /></div><span className="font-semibold text-gray-700 w-6 text-right">{c.count}</span></div>))}</div>}
         </div>
         <div className={`${card} p-5`}>
           <h3 className="text-sm font-bold text-gray-900 mb-3">Active exceptions <span className="text-[10px] text-gray-400 font-normal">critical first</span></h3>
-          {d.exceptions.length === 0 ? <p className="text-sm text-gray-400">No active exceptions. 🎉</p> : <div className="space-y-1.5">{d.exceptions.slice(0, 8).map((e: any, i: number) => (<div key={i} className="flex items-center justify-between text-xs rounded-lg border border-gray-100 p-2"><div className="min-w-0"><p className="text-gray-800 font-medium capitalize truncate">{e.title}</p><p className="text-[10px] text-gray-400">{e.source}</p></div><span className={`text-[9px] px-1.5 py-0.5 rounded shrink-0 ${e.severity === "critical" ? "bg-rose-50 text-rose-700" : e.severity === "high" ? "bg-amber-50 text-amber-700" : "bg-sky-50 text-sky-700"}`}>{e.severity}</span></div>))}</div>}
+          {d.exceptions.length === 0 ? <p className="text-sm text-gray-400">No active exceptions. 🎉</p> : <div className="space-y-1.5">{d.exceptions.slice(0, 8).map((e: any, i: number) => (<div key={i} className="flex items-center justify-between text-xs rounded-lg border border-gray-100 p-2"><div className="min-w-0"><p className="text-gray-800 font-medium capitalize truncate">{e.title}</p><p className="text-[10px] text-gray-400">{e.source}</p></div><span className={`text-[9px] px-1.5 py-0.5 rounded shrink-0 ${e.severity === "critical" ? "bg-[var(--cmp-surface-error)] text-[var(--cmp-text-error)]" : e.severity === "high" ? "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]" : "bg-[var(--cmp-surface-information)] text-[var(--cmp-text-information)]"}`}>{e.severity}</span></div>))}</div>}
           <p className="text-[10px] text-gray-400 mt-2">Cycle-time percentiles + recurrence root-cause need decision-timestamp history → next-phase.</p>
         </div>
       </div>

@@ -36,7 +36,7 @@ export default function TaskActions({ id, status }: { id: string; status: string
 
   return (
     <span className="flex items-center gap-1.5">
-      {err && <span className="text-[10px] text-amber-700">{err}</span>}
+      {err && <span className="text-[10px] text-[var(--cmp-text-warning)]">{err}</span>}
       {nexts.map(n => <button key={n.to} className={btnGhost} disabled={busy} onClick={() => move(n.to)}>{n.label}</button>)}
     </span>
   );

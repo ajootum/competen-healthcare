@@ -84,7 +84,7 @@ export default async function StudioRulesPage() {
                 {s.cycle && <span className="text-[10px] font-semibold text-gray-500 bg-gray-50 border border-gray-100 rounded px-1.5 py-0.5 capitalize">{s.cycle}</span>}
                 <span className="text-gray-500">{s.months ? `Every ${s.months} months` : "—"}</span>
                 <div className="flex gap-1 ml-auto">
-                  {s.triggers.map(t => <span key={t} className="text-[9px] font-semibold text-amber-600 bg-amber-50 border border-amber-100 rounded px-1.5 py-0.5">{t}</span>)}
+                  {s.triggers.map(t => <span key={t} className="text-[9px] font-semibold text-[var(--cmp-text-warning)] bg-[var(--cmp-surface-warning)] border border-[var(--cmp-color-warning)] rounded px-1.5 py-0.5">{t}</span>)}
                   {s.grace != null && <span className="text-[9px] text-gray-400">{s.grace}d grace</span>}
                 </div>
               </div>

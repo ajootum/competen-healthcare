@@ -9,7 +9,7 @@ import { useRouter } from "next/navigation";
 const TYPES = ["central_line", "peripheral_iv", "arterial_line", "urinary_catheter", "ng_tube", "peg_tube", "chest_drain", "wound_drain", "tracheostomy", "ett", "other"];
 const titleCase = (s: string) => s.replace(/_/g, " ").replace(/\b\w/g, ch => ch.toUpperCase());
 const input = "border border-gray-300 rounded-lg px-2.5 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-emerald-500/40";
-const btn = "px-3 py-1.5 rounded-lg bg-emerald-600 text-white text-xs font-medium hover:bg-emerald-700 disabled:opacity-50";
+const btn = "px-3 py-1.5 rounded-lg bg-[var(--cmp-color-success)] text-white text-xs font-medium hover:bg-emerald-700 disabled:opacity-50";
 const btnGhost = "px-2 py-0.5 rounded-lg border border-gray-300 text-[10px] text-gray-700 hover:bg-gray-50 disabled:opacity-50";
 
 export function AddDevice({ patientId }: { patientId: string }) {
@@ -40,7 +40,7 @@ export function AddDevice({ patientId }: { patientId: string }) {
         router.refresh();
       }}>Record</button>
       <button className={btnGhost} onClick={() => setOpen(false)}>Cancel</button>
-      {err && <span className="text-xs text-amber-700 w-full">{err}</span>}
+      {err && <span className="text-xs text-[var(--cmp-text-warning)] w-full">{err}</span>}
     </div>
   );
 }

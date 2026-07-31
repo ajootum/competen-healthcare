@@ -9,11 +9,11 @@ type Facility = { id: string; name: string; type: string; country: string; city:
 const ORG_TYPES = ["government","private","ngo","faith_based","academic"] as const;
 
 const TYPE_COLORS: Record<string, string> = {
-  government:  "bg-blue-100 text-blue-700",
-  private:     "bg-green-100 text-green-700",
+  government:  "bg-[var(--cmp-surface-information)] text-blue-700",
+  private:     "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]",
   ngo:         "bg-purple-100 text-purple-700",
-  faith_based: "bg-amber-100 text-amber-700",
-  academic:    "bg-rose-100 text-rose-700",
+  faith_based: "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]",
+  academic:    "bg-[var(--cmp-surface-error)] text-[var(--cmp-text-error)]",
 };
 
 const FACILITY_ICON: Record<string, string> = {
@@ -21,7 +21,7 @@ const FACILITY_ICON: Record<string, string> = {
 };
 
 const TIER_BADGE: Record<string, string> = {
-  free: "bg-gray-100 text-gray-500", professional: "bg-blue-100 text-blue-700", enterprise: "bg-purple-100 text-purple-700",
+  free: "bg-gray-100 text-gray-500", professional: "bg-[var(--cmp-surface-information)] text-blue-700", enterprise: "bg-purple-100 text-purple-700",
 };
 
 type EditTarget = { kind: "org"; org: Org } | { kind: "facility"; facility: Facility };
@@ -149,15 +149,15 @@ export default function OrgList({
                 <Field label="Phone"><input value={orgForm.phone ?? ""} onChange={e => setOrgForm(p => p && ({...p, phone: e.target.value}))} /></Field>
               </div>
               <Field label="Website"><input value={orgForm.website ?? ""} onChange={e => setOrgForm(p => p && ({...p, website: e.target.value}))} placeholder="https://…" /></Field>
-              {error && <p className="text-red-500 text-xs bg-red-50 rounded-lg px-3 py-2">{error}</p>}
+              {error && <p className="text-red-500 text-xs bg-[var(--cmp-surface-critical)] rounded-lg px-3 py-2">{error}</p>}
               <div className="flex gap-2 pt-1">
                 <button onClick={deleteOrg} disabled={deleting}
-                  className="px-4 py-2 border border-red-200 text-red-600 rounded-lg text-sm hover:bg-red-50 disabled:opacity-50 font-medium">
+                  className="px-4 py-2 border border-[var(--cmp-color-critical)] text-[var(--cmp-text-critical)] rounded-lg text-sm hover:bg-[var(--cmp-surface-critical)] disabled:opacity-50 font-medium">
                   {deleting ? "Deleting…" : "Delete"}
                 </button>
                 <button onClick={() => setEditing(null)} className="flex-1 py-2 border border-gray-200 rounded-lg text-sm text-gray-600 hover:bg-gray-50">Cancel</button>
                 <button onClick={saveOrg} disabled={saving}
-                  className="flex-1 py-2 bg-rose-600 text-white rounded-lg text-sm font-semibold hover:bg-rose-700 disabled:opacity-60">
+                  className="flex-1 py-2 bg-[var(--cmp-color-error)] text-white rounded-lg text-sm font-semibold hover:bg-rose-700 disabled:opacity-60">
                   {saving ? "Saving…" : "Save Changes"}
                 </button>
               </div>
@@ -207,15 +207,15 @@ export default function OrgList({
                   {orgs.map(o => <option key={o.id} value={o.id}>{o.name}</option>)}
                 </select>
               </Field>
-              {error && <p className="text-red-500 text-xs bg-red-50 rounded-lg px-3 py-2">{error}</p>}
+              {error && <p className="text-red-500 text-xs bg-[var(--cmp-surface-critical)] rounded-lg px-3 py-2">{error}</p>}
               <div className="flex gap-2 pt-1">
                 <button onClick={deleteFacility} disabled={deleting}
-                  className="px-4 py-2 border border-red-200 text-red-600 rounded-lg text-sm hover:bg-red-50 disabled:opacity-50 font-medium">
+                  className="px-4 py-2 border border-[var(--cmp-color-critical)] text-[var(--cmp-text-critical)] rounded-lg text-sm hover:bg-[var(--cmp-surface-critical)] disabled:opacity-50 font-medium">
                   {deleting ? "Deleting…" : "Delete"}
                 </button>
                 <button onClick={() => setEditing(null)} className="flex-1 py-2 border border-gray-200 rounded-lg text-sm text-gray-600 hover:bg-gray-50">Cancel</button>
                 <button onClick={saveFacility} disabled={saving}
-                  className="flex-1 py-2 bg-rose-600 text-white rounded-lg text-sm font-semibold hover:bg-rose-700 disabled:opacity-60">
+                  className="flex-1 py-2 bg-[var(--cmp-color-error)] text-white rounded-lg text-sm font-semibold hover:bg-rose-700 disabled:opacity-60">
                   {saving ? "Saving…" : "Save Changes"}
                 </button>
               </div>
@@ -253,7 +253,7 @@ export default function OrgList({
             <div key={org.id} className="bg-white rounded-xl border border-gray-100 overflow-hidden">
               <div className="flex items-center justify-between px-5 py-4 bg-gradient-to-r from-gray-50 to-white border-b border-gray-100">
                 <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-rose-50 flex items-center justify-center text-xl shrink-0">🏛️</div>
+                  <div className="w-10 h-10 rounded-xl bg-[var(--cmp-surface-error)] flex items-center justify-center text-xl shrink-0">🏛️</div>
                   <div>
                     <div className="flex items-center gap-2">
                       <p className="font-bold text-gray-900">{org.name}</p>
@@ -336,8 +336,8 @@ export default function OrgList({
         {/* Unlinked facilities */}
         {facilityByOrg["__none__"] && Object.keys(facilityByOrg["__none__"]).length > 0 && (
           <div className="bg-white rounded-xl border border-dashed border-gray-200 overflow-hidden">
-            <div className="px-5 py-3 border-b border-gray-100 bg-amber-50/30">
-              <p className="text-xs font-semibold text-amber-700">⚠ Unlinked Facilities</p>
+            <div className="px-5 py-3 border-b border-gray-100 bg-[var(--cmp-surface-warning)]/30">
+              <p className="text-xs font-semibold text-[var(--cmp-text-warning)]">⚠ Unlinked Facilities</p>
               <p className="text-[10px] text-gray-400 mt-0.5">These facilities are not linked to any organisation group</p>
             </div>
             {Object.entries(facilityByOrg["__none__"]).map(([country, facs]) => (
@@ -352,7 +352,7 @@ export default function OrgList({
                       <p className="text-sm text-gray-700">{f.name}</p>
                       <p className="text-[10px] text-gray-400">{f.city}</p>
                     </div>
-                    <span className="text-[10px] text-amber-600 bg-amber-50 px-2 py-0.5 rounded">No org linked</span>
+                    <span className="text-[10px] text-[var(--cmp-text-warning)] bg-[var(--cmp-surface-warning)] px-2 py-0.5 rounded">No org linked</span>
                     <button onClick={() => openEditFac(f)}
                       className="text-xs px-2.5 py-1 rounded-lg border border-gray-200 text-gray-400 hover:bg-gray-50 hover:border-gray-300 transition-colors">
                       Edit

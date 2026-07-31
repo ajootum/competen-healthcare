@@ -10,7 +10,7 @@ export const dynamic = "force-dynamic";
 // Deployments — platform release log (LCP-001 §7).
 /* eslint-disable @typescript-eslint/no-explicit-any */
 const card = cardClass;
-const chan: Record<string, string> = { stable: "bg-green-100 text-green-700", staged: "bg-amber-100 text-amber-700", canary: "bg-blue-100 text-blue-700" };
+const chan: Record<string, string> = { stable: "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]", staged: "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]", canary: "bg-[var(--cmp-surface-information)] text-blue-700" };
 
 export default async function DeploymentsPage() {
   const caller = await getLandlordCaller();
@@ -24,7 +24,7 @@ export default async function DeploymentsPage() {
         <p className="text-sm text-gray-500 mt-1">The platform release log. All tenants run the current release; per-tenant capability differences are delivered via feature flags, not code versions.</p>
       </div>
       {!ready ? (
-        <div className="bg-amber-50 border border-amber-200 rounded-xl p-5 text-sm text-amber-700">Apply migration <code className="font-mono text-xs">044</code> to activate the release log.</div>
+        <div className="bg-[var(--cmp-surface-warning)] border border-[var(--cmp-color-warning)] rounded-xl p-5 text-sm text-[var(--cmp-text-warning)]">Apply migration <code className="font-mono text-xs">044</code> to activate the release log.</div>
       ) : (
         <div className="grid lg:grid-cols-3 gap-5 items-start">
           <DeployForm />

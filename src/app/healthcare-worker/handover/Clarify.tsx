@@ -36,7 +36,7 @@ export function AskClarification({ patientId, patientLabel }: { patientId: strin
       <input className={`${input} flex-1 min-w-[200px]`} placeholder="Your question for the outgoing nurse" value={q} onChange={e => setQ(e.target.value)} />
       <button className={btnGhost} disabled={busy || !q.trim()} onClick={ask}>Ask</button>
       <button className={btnGhost} onClick={() => setOpen(false)}>Cancel</button>
-      {err && <span className="text-xs text-amber-700">{err}</span>}
+      {err && <span className="text-xs text-[var(--cmp-text-warning)]">{err}</span>}
     </div>
   );
 }
@@ -63,7 +63,7 @@ export function AnswerClarification({ id }: { id: string }) {
     <div className="flex flex-wrap items-center gap-2 mt-1">
       <input className={`${input} flex-1 min-w-[180px]`} placeholder="Answer…" value={a} onChange={e => setA(e.target.value)} />
       <button className={btnGhost} disabled={busy || !a.trim()} onClick={answer}>Answer</button>
-      {err && <span className="text-xs text-amber-700">{err}</span>}
+      {err && <span className="text-xs text-[var(--cmp-text-warning)]">{err}</span>}
     </div>
   );
 }

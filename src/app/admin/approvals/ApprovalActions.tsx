@@ -43,11 +43,11 @@ export default function ApprovalActions({ approval }: { approval: Approval }) {
     <>
       <div className="flex items-center gap-2">
         <button onClick={() => openModal("approve")}
-          className="px-3 py-1.5 bg-green-600 text-white text-xs font-semibold rounded-lg hover:bg-green-700 transition-colors">
+          className="px-3 py-1.5 bg-[var(--cmp-color-success)] text-white text-xs font-semibold rounded-lg hover:bg-green-700 transition-colors">
           Approve
         </button>
         <button onClick={() => openModal("reject")}
-          className="px-3 py-1.5 border border-red-200 text-red-600 text-xs font-semibold rounded-lg hover:bg-red-50 transition-colors">
+          className="px-3 py-1.5 border border-[var(--cmp-color-critical)] text-[var(--cmp-text-critical)] text-xs font-semibold rounded-lg hover:bg-[var(--cmp-surface-critical)] transition-colors">
           Reject
         </button>
       </div>
@@ -83,17 +83,17 @@ export default function ApprovalActions({ approval }: { approval: Approval }) {
               </div>
 
               {decision === "approve" && (
-                <div className="bg-green-50 border border-green-100 rounded-lg px-3 py-2.5 text-xs text-green-700">
+                <div className="bg-[var(--cmp-surface-success)] border border-[var(--cmp-color-success)] rounded-lg px-3 py-2.5 text-xs text-[var(--cmp-text-success)]">
                   Approving will move this framework to <strong>Approved</strong> status. The platform admin can then publish it.
                 </div>
               )}
               {decision === "reject" && (
-                <div className="bg-red-50 border border-red-100 rounded-lg px-3 py-2.5 text-xs text-red-600">
+                <div className="bg-[var(--cmp-surface-critical)] border border-[var(--cmp-color-critical)] rounded-lg px-3 py-2.5 text-xs text-[var(--cmp-text-critical)]">
                   Rejecting will return this framework to <strong>Draft</strong> status for revision.
                 </div>
               )}
 
-              {error && <p className="text-xs text-red-500 bg-red-50 rounded-lg px-3 py-2">{error}</p>}
+              {error && <p className="text-xs text-red-500 bg-[var(--cmp-surface-critical)] rounded-lg px-3 py-2">{error}</p>}
 
               <div className="flex gap-3">
                 <button onClick={() => setOpen(false)}
@@ -102,7 +102,7 @@ export default function ApprovalActions({ approval }: { approval: Approval }) {
                 </button>
                 <button onClick={submit} disabled={saving}
                   className={`flex-1 py-2.5 rounded-xl text-white text-sm font-semibold disabled:opacity-50 transition-colors ${
-                    decision === "approve" ? "bg-green-600 hover:bg-green-700" : "bg-red-500 hover:bg-red-600"
+                    decision === "approve" ? "bg-[var(--cmp-color-success)] hover:bg-green-700" : "bg-[var(--cmp-color-critical)] hover:bg-[var(--cmp-color-critical)]"
                   }`}>
                   {saving ? "Saving…" : decision === "approve" ? "Approve" : "Reject"}
                 </button>

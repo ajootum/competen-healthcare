@@ -11,13 +11,13 @@ export const dynamic = "force-dynamic";
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 const RISK_META: Record<string, { label: string; cls: string; bar: string }> = {
-  critical: { label: "Critical", cls: "text-rose-700 bg-rose-50 border-rose-100", bar: "bg-rose-500" },
-  high: { label: "High", cls: "text-orange-700 bg-orange-50 border-orange-100", bar: "bg-orange-500" },
+  critical: { label: "Critical", cls: "text-[var(--cmp-text-error)] bg-[var(--cmp-surface-error)] border-[var(--cmp-color-error)]", bar: "bg-[var(--cmp-color-error)]" },
+  high: { label: "High", cls: "text-orange-700 bg-[var(--cmp-surface-warning)] border-[var(--cmp-color-warning)]", bar: "bg-[var(--cmp-color-warning)]" },
   standard: { label: "Standard", cls: "text-gray-600 bg-gray-50 border-gray-200", bar: "bg-gray-400" },
   low: { label: "Low", cls: "text-slate-500 bg-slate-50 border-slate-200", bar: "bg-slate-400" },
 };
-const CAT_TONE: Record<string, string> = { Ownership: "bg-blue-50 text-blue-700 border-blue-100", Compliance: "bg-indigo-50 text-indigo-700 border-indigo-100", Lifecycle: "bg-amber-50 text-amber-700 border-amber-100", Evidence: "bg-cyan-50 text-cyan-700 border-cyan-100", Approval: "bg-emerald-50 text-emerald-700 border-emerald-100" };
-const complTone = (v: number) => (v >= 80 ? "bg-emerald-500" : v >= 50 ? "bg-amber-500" : "bg-rose-500");
+const CAT_TONE: Record<string, string> = { Ownership: "bg-[var(--cmp-surface-information)] text-blue-700 border-[var(--cmp-color-information)]", Compliance: "bg-indigo-50 text-indigo-700 border-indigo-100", Lifecycle: "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)] border-[var(--cmp-color-warning)]", Evidence: "bg-cyan-50 text-cyan-700 border-cyan-100", Approval: "bg-[var(--cmp-surface-success)] text-emerald-700 border-[var(--cmp-color-success)]" };
+const complTone = (v: number) => (v >= 80 ? "bg-[var(--cmp-color-success)]" : v >= 50 ? "bg-[var(--cmp-color-warning)]" : "bg-[var(--cmp-color-error)]");
 
 export default async function PolicyRulesPage() {
   const supabase = await createClient();
@@ -34,12 +34,12 @@ export default async function PolicyRulesPage() {
     <div className="max-w-[1400px]">
       <div className="flex items-start justify-between gap-3 mb-5">
         <div>
-          <p className="text-[11px] font-semibold text-emerald-600 uppercase tracking-widest mb-0.5">CGR-008 · Competency Governance</p>
+          <p className="text-[11px] font-semibold text-[var(--cmp-text-success)] uppercase tracking-widest mb-0.5">CGR-008 · Competency Governance</p>
           <h1 className="text-xl font-bold text-gray-900">Policy &amp; Rules Engine</h1>
           <p className="text-gray-400 text-sm mt-0.5">What governance rules apply, and how well the competency portfolio complies — the enforced ruleset made explicit, with risk-tiered policy and the real configured thresholds.</p>
         </div>
         <div className="flex gap-2 shrink-0">
-          <Link href="/super-admin/policy-manager" className="text-xs font-semibold text-emerald-700 hover:text-emerald-800 border border-emerald-200 bg-emerald-50 rounded-lg px-3 py-2">Author rules →</Link>
+          <Link href="/super-admin/policy-manager" className="text-xs font-semibold text-emerald-700 hover:text-emerald-800 border border-[var(--cmp-color-success)] bg-[var(--cmp-surface-success)] rounded-lg px-3 py-2">Author rules →</Link>
           <Link href="/super-admin/cgr" className="text-xs font-semibold text-gray-500 hover:text-emerald-700 border border-gray-200 rounded-lg px-3 py-2">← CGR</Link>
         </div>
       </div>
@@ -49,7 +49,7 @@ export default async function PolicyRulesPage() {
       ) : (
         <div className="space-y-4">
           <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
-            <Kpi label="Rule compliance" value={d.avgCompliance == null ? "—" : `${d.avgCompliance}%`} sub="avg across rules" tone={d.avgCompliance == null ? "text-gray-900" : d.avgCompliance >= 80 ? "text-emerald-600" : d.avgCompliance >= 50 ? "text-amber-600" : "text-rose-600"} />
+            <Kpi label="Rule compliance" value={d.avgCompliance == null ? "—" : `${d.avgCompliance}%`} sub="avg across rules" tone={d.avgCompliance == null ? "text-gray-900" : d.avgCompliance >= 80 ? "text-[var(--cmp-text-success)]" : d.avgCompliance >= 50 ? "text-[var(--cmp-text-warning)]" : "text-[var(--cmp-text-error)]"} />
             <Kpi label="Active rules" value={d.rules.length} sub="enforced" />
             <Kpi label="Risk tiers" value={d.tiers.length} sub="governance posture" />
             <Kpi label="CPUs governed" value={d.cpuCount} sub="review intervals set" />
@@ -104,9 +104,9 @@ export default async function PolicyRulesPage() {
                       <tr key={t.risk} className="border-t border-gray-50">
                         <td className="py-2 pl-4 pr-2"><span className={`text-[10px] font-bold border rounded px-1.5 py-0.5 ${RISK_META[t.risk].cls}`}>{RISK_META[t.risk].label}</span></td>
                         <td className="py-2 px-2 text-center text-[12px] text-gray-700 tabular-nums">{t.count}</td>
-                        <td className="py-2 px-2 text-center text-[12px] tabular-nums"><span className={t.ownerPct >= 80 ? "text-emerald-600" : t.ownerPct >= 50 ? "text-gray-700" : "text-rose-600"}>{t.ownerPct}%</span></td>
-                        <td className="py-2 px-2 text-center text-[12px] tabular-nums"><span className={t.mappedPct >= 80 ? "text-emerald-600" : "text-gray-600"}>{t.mappedPct}%</span></td>
-                        <td className="py-2 px-2 text-center text-[12px] tabular-nums"><span className={t.reviewPct >= 80 ? "text-emerald-600" : t.reviewPct >= 50 ? "text-amber-600" : "text-rose-600"}>{t.reviewPct}%</span></td>
+                        <td className="py-2 px-2 text-center text-[12px] tabular-nums"><span className={t.ownerPct >= 80 ? "text-[var(--cmp-text-success)]" : t.ownerPct >= 50 ? "text-gray-700" : "text-[var(--cmp-text-error)]"}>{t.ownerPct}%</span></td>
+                        <td className="py-2 px-2 text-center text-[12px] tabular-nums"><span className={t.mappedPct >= 80 ? "text-[var(--cmp-text-success)]" : "text-gray-600"}>{t.mappedPct}%</span></td>
+                        <td className="py-2 px-2 text-center text-[12px] tabular-nums"><span className={t.reviewPct >= 80 ? "text-[var(--cmp-text-success)]" : t.reviewPct >= 50 ? "text-[var(--cmp-text-warning)]" : "text-[var(--cmp-text-error)]"}>{t.reviewPct}%</span></td>
                         <td className="py-2 pr-4 pl-2">
                           <div className="flex items-center gap-2">
                             <div className="flex-1 h-1.5 rounded-full bg-gray-100 overflow-hidden"><div className={`h-full ${complTone(t.avgScore)}`} style={{ width: `${t.avgScore}%` }} /></div>
@@ -170,7 +170,7 @@ export default async function PolicyRulesPage() {
                 ) : (
                   <div className="grid grid-cols-3 gap-2">
                     <div className="border border-gray-100 rounded-lg p-2 text-center"><p className="text-lg font-bold text-gray-800 tabular-nums">{d.evidenceRules.count}</p><p className="text-[10px] text-gray-500">rules</p></div>
-                    <div className="border border-gray-100 rounded-lg p-2 text-center"><p className="text-lg font-bold text-rose-600 tabular-nums">{d.evidenceRules.critical}</p><p className="text-[10px] text-gray-500">critical</p></div>
+                    <div className="border border-gray-100 rounded-lg p-2 text-center"><p className="text-lg font-bold text-[var(--cmp-text-error)] tabular-nums">{d.evidenceRules.critical}</p><p className="text-[10px] text-gray-500">critical</p></div>
                     <div className="border border-gray-100 rounded-lg p-2 text-center"><p className="text-lg font-bold text-gray-800 tabular-nums">{d.evidenceRules.avgValidityMonths ?? "—"}</p><p className="text-[10px] text-gray-500">avg validity mo</p></div>
                   </div>
                 )}
@@ -178,7 +178,7 @@ export default async function PolicyRulesPage() {
             </div>
           </div>
 
-          <p className="text-[11px] text-gray-400 leading-relaxed">Every rule and threshold here is real: compliance rates are evaluated live over the governance registry, and the configured thresholds are the actual stored governance config — reassessment cadence (CPU reassessment intervals), approval rules (assessment blueprints) and evidence requirements (evidence matrix). Authoring and versioning rules/policies happens in <Link href="/super-admin/policy-manager" className="text-emerald-600 hover:underline">the policy manager</Link> and <Link href="/super-admin/studio/rules" className="text-emerald-600 hover:underline">the rules engine</Link>, with rule <Link href="/super-admin/studio/testing" className="text-emerald-600 hover:underline">simulation &amp; testing</Link> before release. Per the CGR mandate, AI may recommend rule improvements but never creates binding rules or overrides governance authority.</p>
+          <p className="text-[11px] text-gray-400 leading-relaxed">Every rule and threshold here is real: compliance rates are evaluated live over the governance registry, and the configured thresholds are the actual stored governance config — reassessment cadence (CPU reassessment intervals), approval rules (assessment blueprints) and evidence requirements (evidence matrix). Authoring and versioning rules/policies happens in <Link href="/super-admin/policy-manager" className="text-[var(--cmp-text-success)] hover:underline">the policy manager</Link> and <Link href="/super-admin/studio/rules" className="text-[var(--cmp-text-success)] hover:underline">the rules engine</Link>, with rule <Link href="/super-admin/studio/testing" className="text-[var(--cmp-text-success)] hover:underline">simulation &amp; testing</Link> before release. Per the CGR mandate, AI may recommend rule improvements but never creates binding rules or overrides governance authority.</p>
         </div>
       )}
     </div>

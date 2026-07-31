@@ -193,10 +193,10 @@ export default async function AssessmentCentrePage() {
 
   const KPI = [
     { label: "Overall Progress", value: `${overallPct}%`, sub: `${doneRows} of ${rows.length || "—"} completed`, color: "text-gray-900" },
-    { label: "Mandatory Remaining", value: mandatoryRemaining, sub: "tests & assessor items", color: mandatoryRemaining ? "text-amber-600" : "text-gray-400" },
+    { label: "Mandatory Remaining", value: mandatoryRemaining, sub: "tests & assessor items", color: mandatoryRemaining ? "text-[var(--cmp-text-warning)]" : "text-gray-400" },
     { label: "Due This Month", value: dueThisMonth, sub: overdueCount ? `${overdueCount} overdue` : "renewals", color: dueThisMonth ? "text-red-500" : "text-gray-400" },
-    { label: "Average Score", value: quizAvg !== null ? `${quizAvg}%` : "—", sub: assessAvg !== null ? `assessments ${assessAvg}/6` : "no attempts yet", color: "text-green-600" },
-    { label: "Competencies Validated", value: latest.length ? `${Math.round((validatedCount / latest.length) * 100)}%` : "—", sub: `${validatedCount} of ${latest.length || "—"} · passport`, color: "text-blue-600", href: "/dashboard/passport" },
+    { label: "Average Score", value: quizAvg !== null ? `${quizAvg}%` : "—", sub: assessAvg !== null ? `assessments ${assessAvg}/6` : "no attempts yet", color: "text-[var(--cmp-text-success)]" },
+    { label: "Competencies Validated", value: latest.length ? `${Math.round((validatedCount / latest.length) * 100)}%` : "—", sub: `${validatedCount} of ${latest.length || "—"} · passport`, color: "text-[var(--cmp-text-information)]", href: "/dashboard/passport" },
   ];
 
   return (
@@ -241,7 +241,7 @@ export default async function AssessmentCentrePage() {
                 </div>
                 <div>
                   <p className="text-xs font-semibold text-gray-800 truncate max-w-[160px]">{u.name}</p>
-                  <p className={`text-[9px] font-bold ${u.days! < 0 ? "text-red-500" : u.days! <= 30 ? "text-red-500" : "text-amber-600"}`}>
+                  <p className={`text-[9px] font-bold ${u.days! < 0 ? "text-red-500" : u.days! <= 30 ? "text-red-500" : "text-[var(--cmp-text-warning)]"}`}>
                     {u.days! < 0 ? `${-u.days!}d overdue` : `${u.days}d remaining`}
                   </p>
                 </div>
@@ -275,7 +275,7 @@ export default async function AssessmentCentrePage() {
                       </p>
                       {a.notes && <p className="text-[11px] text-gray-500 italic mt-1">&ldquo;{a.notes}&rdquo;</p>}
                     </div>
-                    <span className={`text-[9px] font-bold px-2 py-0.5 rounded shrink-0 ${a.status === "validated" ? "bg-green-50 text-green-700" : "bg-teal-50 text-teal-700"}`}>
+                    <span className={`text-[9px] font-bold px-2 py-0.5 rounded shrink-0 ${a.status === "validated" ? "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]" : "bg-teal-50 text-teal-700"}`}>
                       {a.status === "validated" ? "Validated" : "Completed"}
                     </span>
                   </div>
@@ -316,9 +316,9 @@ export default async function AssessmentCentrePage() {
             </div>
             {latest.length ? latest.slice(0, 5).map(l => {
               const state = l.days !== null && l.days < 0 ? { label: "Expired", cls: "text-red-500", icon: "⚠️" }
-                : l.days !== null && l.days <= 60 ? { label: "Reassessment due", cls: "text-amber-600", icon: "🕐" }
-                : l.validated ? { label: "Validated", cls: "text-green-600", icon: "✅" }
-                : l.passing ? { label: "Pending validation", cls: "text-amber-600", icon: "🕐" }
+                : l.days !== null && l.days <= 60 ? { label: "Reassessment due", cls: "text-[var(--cmp-text-warning)]", icon: "🕐" }
+                : l.validated ? { label: "Validated", cls: "text-[var(--cmp-text-success)]", icon: "✅" }
+                : l.passing ? { label: "Pending validation", cls: "text-[var(--cmp-text-warning)]", icon: "🕐" }
                 : { label: "Gap open", cls: "text-orange-500", icon: "🎯" };
               return (
                 <div key={l.name} className="flex items-center gap-2 py-1.5 border-b border-gray-50 last:border-0">

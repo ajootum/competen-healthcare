@@ -16,8 +16,8 @@ import { card, label, titleCase, fmtTime, fmtWhen, AcuityChip, Chip, StatCard, S
 
 export const dynamic = "force-dynamic";
 
-const TREND = { up: { icon: "↗", cls: "text-red-600" }, down: { icon: "↘", cls: "text-green-600" }, flat: { icon: "→", cls: "text-gray-400" } } as const;
-const TL_DOT: Record<string, string> = { shift: "bg-emerald-500", round: "bg-indigo-400", due: "bg-amber-400", handover: "bg-purple-400" };
+const TREND = { up: { icon: "↗", cls: "text-[var(--cmp-text-critical)]" }, down: { icon: "↘", cls: "text-[var(--cmp-text-success)]" }, flat: { icon: "→", cls: "text-gray-400" } } as const;
+const TL_DOT: Record<string, string> = { shift: "bg-[var(--cmp-color-success)]", round: "bg-indigo-400", due: "bg-[var(--cmp-color-warning)]", handover: "bg-purple-400" };
 
 export default async function ShiftCommandCentre() {
   const supabase = await createClient();
@@ -43,9 +43,9 @@ export default async function ShiftCommandCentre() {
         </div>
         <div className="flex items-center gap-2">
           {d.shift && (
-            <span className={`text-[11px] font-semibold px-2.5 py-1 rounded-full ${onDuty ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-500"}`}>{onDuty ? "In Progress" : "Off Duty"}</span>
+            <span className={`text-[11px] font-semibold px-2.5 py-1 rounded-full ${onDuty ? "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]" : "bg-gray-100 text-gray-500"}`}>{onDuty ? "In Progress" : "Off Duty"}</span>
           )}
-          <Link href="/healthcare-worker/shift-summary" className="px-3.5 py-2 rounded-lg border border-red-200 text-red-700 text-sm font-medium hover:bg-red-50">⏻ End-of-shift →</Link>
+          <Link href="/healthcare-worker/shift-summary" className="px-3.5 py-2 rounded-lg border border-[var(--cmp-color-critical)] text-[var(--cmp-text-critical)] text-sm font-medium hover:bg-[var(--cmp-surface-critical)]">⏻ End-of-shift →</Link>
         </div>
       </div>
 
@@ -59,10 +59,10 @@ export default async function ShiftCommandCentre() {
       {/* Six KPI tiles (mockup row) */}
       <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-3">
         <StatCard icon="🧑‍⚕️" title="Assigned Patients" value={d.kpis.patients} sub={<Link href="/healthcare-worker/patients" className="text-emerald-700 hover:underline">View all patients →</Link>} />
-        <StatCard icon="🔴" title="High Priority" value={d.kpis.highPriority} tone={d.kpis.highPriority > 0 ? "text-red-600" : undefined} sub="CNCI high / critical" />
-        <StatCard icon="💊" title="Medications Due" value={d.kpis.medsDueSoon} tone={d.meds.kpis.overdue > 0 ? "text-red-600" : undefined} sub={d.meds.kpis.overdue ? `${d.meds.kpis.overdue} overdue` : "in the due window"} />
-        <StatCard icon="📈" title="Obs Overdue" value={d.kpis.obsOverdue} tone={d.kpis.obsOverdue > 0 ? "text-orange-600" : undefined} sub={<Link href="/healthcare-worker/observations" className="text-emerald-700 hover:underline">view queue →</Link>} />
-        <StatCard icon="🛡️" title="Safety Alerts" value={d.kpis.safetyAlerts} tone={d.kpis.safetyAlerts > 0 ? "text-red-600" : undefined} sub="alerts + escalations" />
+        <StatCard icon="🔴" title="High Priority" value={d.kpis.highPriority} tone={d.kpis.highPriority > 0 ? "text-[var(--cmp-text-critical)]" : undefined} sub="CNCI high / critical" />
+        <StatCard icon="💊" title="Medications Due" value={d.kpis.medsDueSoon} tone={d.meds.kpis.overdue > 0 ? "text-[var(--cmp-text-critical)]" : undefined} sub={d.meds.kpis.overdue ? `${d.meds.kpis.overdue} overdue` : "in the due window"} />
+        <StatCard icon="📈" title="Obs Overdue" value={d.kpis.obsOverdue} tone={d.kpis.obsOverdue > 0 ? "text-[var(--cmp-text-warning)]" : undefined} sub={<Link href="/healthcare-worker/observations" className="text-emerald-700 hover:underline">view queue →</Link>} />
+        <StatCard icon="🛡️" title="Safety Alerts" value={d.kpis.safetyAlerts} tone={d.kpis.safetyAlerts > 0 ? "text-[var(--cmp-text-critical)]" : undefined} sub="alerts + escalations" />
         <StatCard icon="🕐" title="Shift Time" value={shiftCard ? shiftCard.window : "—"} sub={shiftCard ? `${shiftCard.remaining} remaining` : "not deployed"} />
       </div>
 
@@ -95,7 +95,7 @@ export default async function ShiftCommandCentre() {
                         <Link href={`/healthcare-worker/patients/${p.id}`} className="font-medium text-gray-800 hover:text-emerald-700">
                           {p.op_beds?.label ? `${p.op_beds.label} · ` : ""}{p.label}
                         </Link>
-                        {r.reassess.due && <span className="block text-[9px] text-orange-600 font-semibold" title={r.reassess.reason ?? ""}>reassessment recommended</span>}
+                        {r.reassess.due && <span className="block text-[9px] text-[var(--cmp-text-warning)] font-semibold" title={r.reassess.reason ?? ""}>reassessment recommended</span>}
                       </td>
                       <td className="py-2 px-1"><AcuityChip level={p.acuity_level} />{r.acuityScore != null && <span className="ml-1 text-[10px] text-gray-400 tabular-nums">{r.acuityScore}/18</span>}</td>
                       <td className="py-2 px-1 tabular-nums text-gray-700">{r.workloadPct != null ? `${Number(r.workloadPct).toFixed(0)}%` : "—"}</td>
@@ -107,7 +107,7 @@ export default async function ShiftCommandCentre() {
                       <td className={`py-2 px-1 font-semibold tabular-nums ${ewsColor(r.pews)}`}>{r.pews ?? "—"}</td>
                       <td className="py-2 px-1 text-xs">
                         {r.nextDue ? (
-                          <span className={r.nextDue.overdue ? "text-red-600 font-semibold" : "text-gray-600"}>
+                          <span className={r.nextDue.overdue ? "text-[var(--cmp-text-critical)] font-semibold" : "text-gray-600"}>
                             {r.nextDue.overdue ? "OVERDUE — " : `${fmtTime(r.nextDue.at)} — `}{r.nextDue.label}
                           </span>
                         ) : <span className="text-gray-300">—</span>}
@@ -143,7 +143,7 @@ export default async function ShiftCommandCentre() {
         </SectionCard>
 
         <div className="space-y-5">
-          <div className={`${card} border-emerald-200 bg-emerald-50/30`}>
+          <div className={`${card} border-[var(--cmp-color-success)] bg-[var(--cmp-surface-success)]/30`}>
             <div className="flex items-center justify-between mb-2">
               <h3 className="font-semibold text-gray-900 flex items-center gap-2">✨ Shift Briefing</h3>
               <span className="text-[10px] text-gray-400">derived live from your records</span>
@@ -164,7 +164,7 @@ export default async function ShiftCommandCentre() {
                 ...d.escalations.map((e: any) => ({ sev: e.level >= 4 ? "high" : "med", text: `Escalation L${e.level} — ${e.op_patients?.label ?? ""}`, when: e.created_at }))]
                 .slice(0, 6).map((a: any, i: number) => (
                   <div key={i} className="flex items-start gap-2 text-sm">
-                    <span className={`mt-1 w-2 h-2 rounded-full shrink-0 ${a.sev === "high" ? "bg-red-500" : "bg-amber-500"}`} />
+                    <span className={`mt-1 w-2 h-2 rounded-full shrink-0 ${a.sev === "high" ? "bg-[var(--cmp-color-critical)]" : "bg-[var(--cmp-color-warning)]"}`} />
                     <span className="text-gray-700 flex-1 min-w-0 truncate">{a.text}</span>
                     <span className="text-[10px] text-gray-400 shrink-0">{fmtWhen(a.when)}</span>
                   </div>
@@ -180,10 +180,10 @@ export default async function ShiftCommandCentre() {
           <div className="flex items-center justify-between mb-2"><span className={label}>Medications Due Soon</span><Link href="/healthcare-worker/medications" className="text-[10px] text-emerald-700 hover:underline">View all →</Link></div>
           {d.meds.queue.length === 0 ? <Empty>Nothing due.</Empty> : d.meds.queue.slice(0, 5).map((m: any) => (
             <p key={m.id} className="text-xs text-gray-600 py-1 flex items-center gap-2">
-              <span className={`tabular-nums ${m.effective_status === "overdue" ? "text-red-600 font-semibold" : "text-gray-500"}`}>{fmtTime(m.scheduled_at)}</span>
+              <span className={`tabular-nums ${m.effective_status === "overdue" ? "text-[var(--cmp-text-critical)] font-semibold" : "text-gray-500"}`}>{fmtTime(m.scheduled_at)}</span>
               <span className="flex-1 min-w-0 truncate">{m.drug_name}{m.dose_display ? ` ${m.dose_display}` : ""}</span>
               <span className="text-gray-400">{m.op_patients?.label}</span>
-              {m.high_risk && <span className="text-orange-600 text-[9px] font-bold">HR</span>}
+              {m.high_risk && <span className="text-[var(--cmp-text-warning)] text-[9px] font-bold">HR</span>}
             </p>
           ))}
         </div>
@@ -191,7 +191,7 @@ export default async function ShiftCommandCentre() {
           <div className="flex items-center justify-between mb-2"><span className={label}>Assessments Overdue</span><Link href="/healthcare-worker/observations" className="text-[10px] text-emerald-700 hover:underline">Go →</Link></div>
           {obsOverdueRows.length === 0 ? <Empty>None overdue.</Empty> : obsOverdueRows.slice(0, 5).map((o: any) => (
             <p key={o.id} className="text-xs text-gray-600 py-1 flex items-center gap-2">
-              <span className="text-red-600 font-semibold">OVERDUE</span>
+              <span className="text-[var(--cmp-text-critical)] font-semibold">OVERDUE</span>
               <span className="flex-1 min-w-0 truncate">{o.op_patients?.label} — {titleCase(o.observation_type)}</span>
             </p>
           ))}
@@ -212,7 +212,7 @@ export default async function ShiftCommandCentre() {
             <div><p className="text-xl font-bold tabular-nums text-gray-900">{d.performance.medOnTimePct != null ? `${d.performance.medOnTimePct}%` : "—"}</p><p className="text-[10px] text-gray-500">med admin on time ({d.performance.medsAdministered} given)</p></div>
             <div><p className="text-xl font-bold tabular-nums text-gray-900">{d.performance.obsRecorded}</p><p className="text-[10px] text-gray-500">observations recorded</p></div>
             <div><p className="text-xl font-bold tabular-nums text-gray-900">{d.performance.tasksCompleted}</p><p className="text-[10px] text-gray-500">tasks completed</p></div>
-            <div><p className={`text-xl font-bold tabular-nums ${d.performance.safetyEvents > 0 ? "text-orange-600" : "text-gray-900"}`}>{d.performance.safetyEvents}</p><p className="text-[10px] text-gray-500">safety events raised</p></div>
+            <div><p className={`text-xl font-bold tabular-nums ${d.performance.safetyEvents > 0 ? "text-[var(--cmp-text-warning)]" : "text-gray-900"}`}>{d.performance.safetyEvents}</p><p className="text-[10px] text-gray-500">safety events raised</p></div>
           </div>
         </div>
       </div>
@@ -227,7 +227,7 @@ export default async function ShiftCommandCentre() {
             <span><span className="font-bold tabular-nums text-gray-900">{d.ward.onDuty}/{d.ward.staff.length}</span> staff on duty</span>
             <span className="flex flex-wrap gap-1">
               {(["critical", "high", "moderate", "stable"] as const).filter(k => d.ward!.acuity[k] > 0).map(k => (
-                <span key={k} className="inline-flex items-center gap-1"><Chip tone={{ critical: "bg-red-100 text-red-700", high: "bg-orange-100 text-orange-700", moderate: "bg-yellow-100 text-yellow-700", stable: "bg-green-100 text-green-700" }[k]}>{k}</Chip><span className="tabular-nums text-xs">{d.ward!.acuity[k]}</span></span>
+                <span key={k} className="inline-flex items-center gap-1"><Chip tone={{ critical: "bg-[var(--cmp-surface-critical)] text-[var(--cmp-text-critical)]", high: "bg-[var(--cmp-surface-warning)] text-orange-700", moderate: "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]", stable: "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]" }[k]}>{k}</Chip><span className="tabular-nums text-xs">{d.ward!.acuity[k]}</span></span>
               ))}
             </span>
           </div>

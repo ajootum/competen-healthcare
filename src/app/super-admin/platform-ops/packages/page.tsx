@@ -54,17 +54,17 @@ export default async function PackagesBuilder() {
     </>
   );
 
-  if (notReady) return <div className="space-y-5 max-w-6xl">{header}<div className="bg-amber-50 border border-amber-200 rounded-xl p-6"><p className="font-semibold text-amber-900">⚙️ Not provisioned</p><p className="text-sm text-amber-800 mt-1">Apply migration 095 (configuration packages), then create a package here.</p></div></div>;
+  if (notReady) return <div className="space-y-5 max-w-6xl">{header}<div className="bg-[var(--cmp-surface-warning)] border border-[var(--cmp-color-warning)] rounded-xl p-6"><p className="font-semibold text-amber-900">⚙️ Not provisioned</p><p className="text-sm text-amber-800 mt-1">Apply migration 095 (configuration packages), then create a package here.</p></div></div>;
 
   return (
     <div className="space-y-5 max-w-6xl">
       {header}
       <div className="grid grid-cols-3 gap-3">
         <Stat label="Packages" value={listP.length} sub="in the registry" />
-        <Stat label="Published" value={published} tone="text-emerald-600" sub="on the marketplace" />
+        <Stat label="Published" value={published} tone="text-[var(--cmp-text-success)]" sub="on the marketplace" />
         <Stat label="Bundleable Objects" value={objects.length} sub="governed in the registry" />
       </div>
-      {!graph.provisioned && <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 text-sm text-amber-800">The configuration registry (migration 092) is not provisioned, so there are no objects to bundle yet.</div>}
+      {!graph.provisioned && <div className="bg-[var(--cmp-surface-warning)] border border-[var(--cmp-color-warning)] rounded-xl p-4 text-sm text-amber-800">The configuration registry (migration 092) is not provisioned, so there are no objects to bundle yet.</div>}
       <PackageBuilder packages={listP} objects={objects} dependsOn={dependsOn} />
       <p className="text-[11px] text-gray-400">Packages + computed manifests persist to the package registry; publish is gated on dependency-completeness (reusing the WCE-002 dependency graph). The installation engine (transactional deploy, backup, health check), upgrade/rollback, licensing enforcement and the public/enterprise marketplace portal with ratings + analytics (NCP-011 §4/§7/§8) are next-phase.</p>
     </div>

@@ -17,13 +17,13 @@ const card = "bg-white rounded-xl border border-gray-200";
 const NONE = "00000000-0000-0000-0000-000000000000";
 
 const ACTIONS: Record<string, { label: string; tone: string; group: string }> = {
-  assign_patient: { label: "Patient assigned", tone: "bg-emerald-50 text-emerald-700", group: "Assignment" },
-  assign_plan: { label: "Assignment plan", tone: "bg-emerald-50 text-emerald-700", group: "Assignment" },
-  deploy_staff: { label: "Staff deployed", tone: "bg-blue-50 text-blue-700", group: "Deployment" },
+  assign_patient: { label: "Patient assigned", tone: "bg-[var(--cmp-surface-success)] text-emerald-700", group: "Assignment" },
+  assign_plan: { label: "Assignment plan", tone: "bg-[var(--cmp-surface-success)] text-emerald-700", group: "Assignment" },
+  deploy_staff: { label: "Staff deployed", tone: "bg-[var(--cmp-surface-information)] text-blue-700", group: "Deployment" },
   command_transfer_initiated: { label: "Command transfer", tone: "bg-violet-50 text-violet-700", group: "Deployment" },
-  raise_escalation: { label: "Escalation raised", tone: "bg-amber-50 text-amber-700", group: "Escalation" },
-  raise_safety_alert: { label: "Safety alert raised", tone: "bg-rose-50 text-rose-700", group: "Escalation" },
-  schedule_break: { label: "Break scheduled", tone: "bg-sky-50 text-sky-700", group: "Breaks" },
+  raise_escalation: { label: "Escalation raised", tone: "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]", group: "Escalation" },
+  raise_safety_alert: { label: "Safety alert raised", tone: "bg-[var(--cmp-surface-error)] text-[var(--cmp-text-error)]", group: "Escalation" },
+  schedule_break: { label: "Break scheduled", tone: "bg-[var(--cmp-surface-information)] text-[var(--cmp-text-information)]", group: "Breaks" },
 };
 const ACTION_KEYS = Object.keys(ACTIONS);
 
@@ -81,14 +81,14 @@ export default async function TeamGovHistory() {
       {header}
 
       {!provisioned ? (
-        <div className="bg-amber-50 border border-amber-200 rounded-xl p-6"><p className="font-semibold text-amber-900">⚙️ Audit store not provisioned</p><p className="text-sm text-amber-800 mt-1">The audit_log table isn&apos;t available yet. Governance history appears once assignment actions are recorded.</p></div>
+        <div className="bg-[var(--cmp-surface-warning)] border border-[var(--cmp-color-warning)] rounded-xl p-6"><p className="font-semibold text-amber-900">⚙️ Audit store not provisioned</p><p className="text-sm text-amber-800 mt-1">The audit_log table isn&apos;t available yet. Governance history appears once assignment actions are recorded.</p></div>
       ) : (
         <>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
             <Kpi label="Events (7d)" value={recent.length} sub="Governance actions" />
-            <Kpi label="Assignment changes" value={byGroup("Assignment")} sub="Assigned / planned" tone="text-emerald-600" />
-            <Kpi label="Deployments" value={byGroup("Deployment")} sub="Staff moved" tone="text-blue-600" />
-            <Kpi label="Escalations" value={byGroup("Escalation")} sub="Raised in period" tone={byGroup("Escalation") ? "text-amber-600" : undefined} />
+            <Kpi label="Assignment changes" value={byGroup("Assignment")} sub="Assigned / planned" tone="text-[var(--cmp-text-success)]" />
+            <Kpi label="Deployments" value={byGroup("Deployment")} sub="Staff moved" tone="text-[var(--cmp-text-information)]" />
+            <Kpi label="Escalations" value={byGroup("Escalation")} sub="Raised in period" tone={byGroup("Escalation") ? "text-[var(--cmp-text-warning)]" : undefined} />
           </div>
 
           <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">

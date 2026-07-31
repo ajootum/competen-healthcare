@@ -79,8 +79,8 @@ export default function RuleEditor({ rules }: { rules: Rule[] }) {
 
             {/* Columns */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4">
-              <div><p className="text-[11px] font-semibold text-sky-600 mb-1">Conditions (inputs)</p><div className="flex flex-wrap gap-1 items-center">{t.conditions.map(c => <span key={c.key} className="text-[10px] bg-sky-50 text-sky-700 rounded px-1.5 py-0.5 flex items-center gap-1">{c.label}<button onClick={() => rmCol("conditions", c.key)} className="text-sky-400 hover:text-rose-600">✕</button></span>)}<input className={`${input} w-24 inline`} value={newCond} onChange={e => setNewCond(e.target.value)} onKeyDown={e => { if (e.key === "Enter") { addCol("conditions", newCond); setNewCond(""); } }} placeholder="+ condition" /></div></div>
-              <div><p className="text-[11px] font-semibold text-emerald-600 mb-1">Actions (outputs)</p><div className="flex flex-wrap gap-1 items-center">{t.actions.map(c => <span key={c.key} className="text-[10px] bg-emerald-50 text-emerald-700 rounded px-1.5 py-0.5 flex items-center gap-1">{c.label}<button onClick={() => rmCol("actions", c.key)} className="text-emerald-400 hover:text-rose-600">✕</button></span>)}<input className={`${input} w-24 inline`} value={newAct} onChange={e => setNewAct(e.target.value)} onKeyDown={e => { if (e.key === "Enter") { addCol("actions", newAct); setNewAct(""); } }} placeholder="+ action" /></div></div>
+              <div><p className="text-[11px] font-semibold text-[var(--cmp-text-information)] mb-1">Conditions (inputs)</p><div className="flex flex-wrap gap-1 items-center">{t.conditions.map(c => <span key={c.key} className="text-[10px] bg-[var(--cmp-surface-information)] text-[var(--cmp-text-information)] rounded px-1.5 py-0.5 flex items-center gap-1">{c.label}<button onClick={() => rmCol("conditions", c.key)} className="text-sky-400 hover:text-[var(--cmp-text-error)]">✕</button></span>)}<input className={`${input} w-24 inline`} value={newCond} onChange={e => setNewCond(e.target.value)} onKeyDown={e => { if (e.key === "Enter") { addCol("conditions", newCond); setNewCond(""); } }} placeholder="+ condition" /></div></div>
+              <div><p className="text-[11px] font-semibold text-[var(--cmp-text-success)] mb-1">Actions (outputs)</p><div className="flex flex-wrap gap-1 items-center">{t.actions.map(c => <span key={c.key} className="text-[10px] bg-[var(--cmp-surface-success)] text-emerald-700 rounded px-1.5 py-0.5 flex items-center gap-1">{c.label}<button onClick={() => rmCol("actions", c.key)} className="text-emerald-400 hover:text-[var(--cmp-text-error)]">✕</button></span>)}<input className={`${input} w-24 inline`} value={newAct} onChange={e => setNewAct(e.target.value)} onKeyDown={e => { if (e.key === "Enter") { addCol("actions", newAct); setNewAct(""); } }} placeholder="+ action" /></div></div>
             </div>
 
             {/* Decision table */}
@@ -89,7 +89,7 @@ export default function RuleEditor({ rules }: { rules: Rule[] }) {
                 <table className="w-full text-xs">
                   <thead><tr className="bg-gray-50">
                     <th className="p-1 text-gray-400 font-medium w-8">#</th>
-                    {t.conditions.map(c => <th key={c.key} className="p-1.5 text-left text-sky-700 font-semibold">{c.label}</th>)}
+                    {t.conditions.map(c => <th key={c.key} className="p-1.5 text-left text-[var(--cmp-text-information)] font-semibold">{c.label}</th>)}
                     {t.actions.map(c => <th key={c.key} className="p-1.5 text-left text-emerald-700 font-semibold border-l border-gray-200">{c.label}</th>)}
                     <th className="w-12" />
                   </tr></thead>
@@ -99,7 +99,7 @@ export default function RuleEditor({ rules }: { rules: Rule[] }) {
                         <td className="p-1 text-center text-gray-300">{ri + 1}</td>
                         {t.conditions.map(c => <td key={c.key} className="p-1"><input className={input} value={row.conditions[c.key] ?? ""} onChange={e => setCell(ri, "conditions", c.key, e.target.value)} placeholder="any" /></td>)}
                         {t.actions.map(c => <td key={c.key} className="p-1 border-l border-gray-100"><input className={input} value={row.actions[c.key] ?? ""} onChange={e => setCell(ri, "actions", c.key, e.target.value)} /></td>)}
-                        <td className="p-1 whitespace-nowrap text-gray-400"><button onClick={() => moveRow(ri, -1)} className="hover:text-gray-700 px-0.5">↑</button><button onClick={() => moveRow(ri, 1)} className="hover:text-gray-700 px-0.5">↓</button><button onClick={() => rmRow(ri)} className="hover:text-rose-600 px-0.5">✕</button></td>
+                        <td className="p-1 whitespace-nowrap text-gray-400"><button onClick={() => moveRow(ri, -1)} className="hover:text-gray-700 px-0.5">↑</button><button onClick={() => moveRow(ri, 1)} className="hover:text-gray-700 px-0.5">↓</button><button onClick={() => rmRow(ri)} className="hover:text-[var(--cmp-text-error)] px-0.5">✕</button></td>
                       </tr>
                     ))}
                   </tbody>
@@ -119,7 +119,7 @@ export default function RuleEditor({ rules }: { rules: Rule[] }) {
               </div>
             )}
 
-            {msg && <p className={`text-xs mt-3 ${msg.startsWith("✓") ? "text-emerald-600" : "text-rose-600"}`}>{msg}</p>}
+            {msg && <p className={`text-xs mt-3 ${msg.startsWith("✓") ? "text-[var(--cmp-text-success)]" : "text-[var(--cmp-text-error)]"}`}>{msg}</p>}
             <div className="flex items-center justify-end mt-4"><button onClick={save} disabled={busy} className="text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg px-4 py-2 disabled:opacity-50">{busy ? "Saving…" : "Save decision table"}</button></div>
           </>
         )}

@@ -103,7 +103,7 @@ export default function GovernanceConsole({ frameworks, knowledgeObjects, pendin
     <div className="bg-white rounded-xl border border-gray-200">
       <div className="flex items-center gap-2 p-3 border-b border-gray-100 flex-wrap">
         <h2 className="font-semibold text-gray-900 text-[15px] mr-auto">Governance Console</h2>
-        {msg && <span className={`text-xs rounded-lg px-2.5 py-1 ${msg.k === "ok" ? "bg-green-50 text-green-800" : "bg-amber-50 text-amber-800"}`}>{msg.t}</span>}
+        {msg && <span className={`text-xs rounded-lg px-2.5 py-1 ${msg.k === "ok" ? "bg-[var(--cmp-surface-success)] text-green-800" : "bg-[var(--cmp-surface-warning)] text-amber-800"}`}>{msg.t}</span>}
         <div className="flex gap-1 flex-wrap">
           {TABS.map(b => (
             <button key={b.key} onClick={() => switchTab(b.key)} className={`text-xs font-medium rounded-lg px-2.5 py-1.5 border ${tab === b.key ? "bg-teal-50 border-teal-300 text-teal-700" : "border-gray-200 text-gray-500 hover:bg-gray-50"}`}>{b.icon} {b.label}</button>
@@ -125,7 +125,7 @@ export default function GovernanceConsole({ frameworks, knowledgeObjects, pendin
             <div><label className={label}>Pending review *</label><select value={form.approvalId ?? ""} onChange={set("approvalId")} className={input}><option value="">— Select submission —</option>{pendingReviews.map(p => <option key={p.id} value={p.id}>{p.label}</option>)}</select></div>
             <div><label className={label}>Decision *</label><select value={form.decision ?? ""} onChange={set("decision")} className={input}><option value="">— Select decision —</option><option value="approve">Approve (→ approved)</option><option value="reject">Reject (→ back to draft)</option></select></div>
             <div className="sm:col-span-2"><label className={label}>Comment{form.decision === "reject" ? " *" : ""}</label><textarea value={form.comment ?? ""} onChange={set("comment")} rows={2} className={input} placeholder="Review rationale — required when rejecting" /></div>
-            {pendingReviews.length === 0 && <p className="sm:col-span-2 text-[11px] text-amber-600">No pending reviews — submit a framework for review in the Lifecycle tab first.</p>}
+            {pendingReviews.length === 0 && <p className="sm:col-span-2 text-[11px] text-[var(--cmp-text-warning)]">No pending reviews — submit a framework for review in the Lifecycle tab first.</p>}
             <p className="sm:col-span-2 text-[11px] text-gray-400">Separation of duties applies: the submitter cannot decide their own review.</p>
           </div>
         )}

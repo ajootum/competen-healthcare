@@ -74,7 +74,7 @@ export default function WorkflowManager() {
                   <div className="flex items-center justify-between">
                     <span className="text-xs font-bold text-gray-400">Step {step.order}</span>
                     {steps.length > 1 && (
-                      <button onClick={() => removeStep(i)} className="text-[10px] text-red-400 hover:text-red-600">Remove</button>
+                      <button onClick={() => removeStep(i)} className="text-[10px] text-red-400 hover:text-[var(--cmp-text-critical)]">Remove</button>
                     )}
                   </div>
                   <div className="grid grid-cols-2 gap-2">

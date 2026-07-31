@@ -9,9 +9,9 @@ import { AACN_CHARACTERISTICS, RASS_OPTIONS, CAM_OPTIONS, ORGAN_SUPPORTS, CIAF_R
 // modifiers — composited /100 to A1-A5 with a live preview. The server
 // recomputes authoritatively; individual tool results are retained.
 
-const btn = "px-3.5 py-2 rounded-lg bg-emerald-600 text-white text-sm font-medium hover:bg-emerald-700 disabled:opacity-50";
+const btn = "px-3.5 py-2 rounded-lg bg-[var(--cmp-color-success)] text-white text-sm font-medium hover:bg-emerald-700 disabled:opacity-50";
 const input = "w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/40";
-const A_TONE: Record<string, string> = { A1: "bg-green-100 text-green-700", A2: "bg-yellow-100 text-yellow-800", A3: "bg-orange-100 text-orange-700", A4: "bg-red-100 text-red-700", A5: "bg-red-100 text-red-700" };
+const A_TONE: Record<string, string> = { A1: "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]", A2: "bg-[var(--cmp-surface-warning)] text-yellow-800", A3: "bg-[var(--cmp-surface-warning)] text-orange-700", A4: "bg-[var(--cmp-surface-critical)] text-[var(--cmp-text-critical)]", A5: "bg-[var(--cmp-surface-critical)] text-[var(--cmp-text-critical)]" };
 
 export default function CiafForm({ patientId, patientLabel }: { patientId: string; patientLabel: string }) {
   const router = useRouter();
@@ -50,7 +50,7 @@ export default function CiafForm({ patientId, patientLabel }: { patientId: strin
   if (!open) return <button className="px-2.5 py-1 rounded-lg border border-gray-300 text-xs text-gray-700 hover:bg-gray-50" onClick={() => setOpen(true)}>+ Assess (CIAF)</button>;
 
   return (
-    <div className="mt-3 border border-emerald-200 rounded-lg p-4 space-y-3 bg-emerald-50/30 w-full">
+    <div className="mt-3 border border-[var(--cmp-color-success)] rounded-lg p-4 space-y-3 bg-[var(--cmp-surface-success)]/30 w-full">
       <div className="flex flex-wrap items-center gap-2">
         <h4 className="text-sm font-semibold text-gray-800">ICU Composite Acuity — {patientLabel}</h4>
         <span className={`text-[11px] font-bold px-2.5 py-0.5 rounded-full tabular-nums ${A_TONE[preview.level] ?? A_TONE.A1}`}>
@@ -112,7 +112,7 @@ export default function CiafForm({ patientId, patientLabel }: { patientId: strin
 
       <p className="text-[11px] text-gray-500">Components: AACN {preview.components.aacn}/50 · Neuro {preview.components.neuro}/20 · Organ {preview.components.organ}/20 · Risk {preview.components.risk}/10</p>
       <input className={input} placeholder="Notes (optional)" value={notes} onChange={e => setNotes(e.target.value)} />
-      {err && <p className="text-xs text-amber-700">{err}</p>}
+      {err && <p className="text-xs text-[var(--cmp-text-warning)]">{err}</p>}
       <button className={btn} disabled={busy} onClick={submit}>{busy ? "Saving…" : "Save composite acuity"}</button>
       <p className="text-[10px] text-gray-400">Weights and bands are the Competen default profile; organisations refine them through governed configuration. A level change signals assignment review.</p>
     </div>

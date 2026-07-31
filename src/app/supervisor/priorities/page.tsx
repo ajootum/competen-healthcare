@@ -16,8 +16,8 @@ export const dynamic = "force-dynamic";
 const NONE = "00000000-0000-0000-0000-000000000000";
 const card = cardClass;
 const CATS = ["Patient Safety", "Workforce", "Operations", "Documentation", "Compliance"];
-const SEV_TONE: Record<string, string> = { critical: "bg-red-100 text-red-700", high: "bg-orange-100 text-orange-700", medium: "bg-amber-100 text-amber-700" };
-const SEV_DOT: Record<string, string> = { critical: "bg-red-500", high: "bg-orange-500", medium: "bg-amber-500" };
+const SEV_TONE: Record<string, string> = { critical: "bg-[var(--cmp-surface-critical)] text-[var(--cmp-text-critical)]", high: "bg-[var(--cmp-surface-warning)] text-orange-700", medium: "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]" };
+const SEV_DOT: Record<string, string> = { critical: "bg-[var(--cmp-color-critical)]", high: "bg-[var(--cmp-color-warning)]", medium: "bg-[var(--cmp-color-warning)]" };
 
 export default async function TodaysPriorities() {
   const supabase = await createClient();
@@ -33,7 +33,7 @@ export default async function TodaysPriorities() {
   const sc = await loadShiftCommand(admin, hid, isSuper);
   if (!sc.ready) return (
     <div className="space-y-4"><h1 className="text-2xl font-bold text-gray-900">Today&apos;s Priorities</h1>
-      <div className="bg-amber-50 border border-amber-200 rounded-xl p-6"><p className="font-semibold text-amber-900">⚙️ Coming online</p><p className="text-sm text-amber-800 mt-2">The Clinical Operations Engine tables aren&apos;t provisioned yet.</p></div></div>
+      <div className="bg-[var(--cmp-surface-warning)] border border-[var(--cmp-color-warning)] rounded-xl p-6"><p className="font-semibold text-amber-900">⚙️ Coming online</p><p className="text-sm text-amber-800 mt-2">The Clinical Operations Engine tables aren&apos;t provisioned yet.</p></div></div>
   );
 
   // Real task completion (scoped to the active shift where available).
@@ -47,11 +47,11 @@ export default async function TodaysPriorities() {
   const { priorities, counts, copilot, tasks } = sc;
   const byCat = (c: string) => priorities.filter((p: any) => p.category === c).length;
   const summary = [
-    { label: "Critical", n: counts.critical, tone: "text-red-600" },
-    { label: "High", n: counts.high, tone: "text-orange-600" },
-    { label: "Medium", n: counts.medium, tone: "text-amber-600" },
-    { label: "Overdue", n: counts.overdue, tone: counts.overdue ? "text-red-600" : "text-gray-400" },
-    { label: "Completed", n: taskDone ?? 0, tone: "text-green-600" },
+    { label: "Critical", n: counts.critical, tone: "text-[var(--cmp-text-critical)]" },
+    { label: "High", n: counts.high, tone: "text-[var(--cmp-text-warning)]" },
+    { label: "Medium", n: counts.medium, tone: "text-[var(--cmp-text-warning)]" },
+    { label: "Overdue", n: counts.overdue, tone: counts.overdue ? "text-[var(--cmp-text-critical)]" : "text-gray-400" },
+    { label: "Completed", n: taskDone ?? 0, tone: "text-[var(--cmp-text-success)]" },
   ];
 
   // Kanban columns.
@@ -108,7 +108,7 @@ export default async function TodaysPriorities() {
         ))}
         {/* Completed column — real completed/open task ledger */}
         <div className={card}>
-          <h3 className="font-semibold text-gray-900 mb-3 flex items-center gap-2"><span className="w-2 h-2 rounded-full bg-green-500" />Completed <span className="text-gray-400 font-normal">({taskDone ?? 0})</span></h3>
+          <h3 className="font-semibold text-gray-900 mb-3 flex items-center gap-2"><span className="w-2 h-2 rounded-full bg-[var(--cmp-color-success)]" />Completed <span className="text-gray-400 font-normal">({taskDone ?? 0})</span></h3>
           <div className="space-y-2 max-h-[28rem] overflow-y-auto">
             <p className="text-sm text-gray-500">{taskDone ?? 0} of {taskTotal ?? 0} shift tasks complete.</p>
             <div className="pt-2 border-t border-gray-100">
@@ -130,7 +130,7 @@ export default async function TodaysPriorities() {
         <h3 className="font-semibold text-gray-900 flex items-center gap-2 mb-3">✨ AI Prioritiser <span className="text-[10px] font-normal text-gray-400">rule-based, from live data</span></h3>
         <div className="grid sm:grid-cols-2 gap-2">
           {critical.slice(0, 2).map((p: any, i: number) => (
-            <div key={"c" + i} className="flex items-center gap-2 text-sm rounded-lg bg-red-50/50 border border-red-100 px-3 py-2"><span className="text-red-500">▲</span><span className="text-gray-700 flex-1 truncate">Escalate now: {p.title}</span></div>
+            <div key={"c" + i} className="flex items-center gap-2 text-sm rounded-lg bg-[var(--cmp-surface-critical)]/50 border border-[var(--cmp-color-critical)] px-3 py-2"><span className="text-red-500">▲</span><span className="text-gray-700 flex-1 truncate">Escalate now: {p.title}</span></div>
           ))}
           {copilot.slice(0, 4).map((c: any, i: number) => (
             <div key={i} className="flex items-center gap-2 text-sm rounded-lg border border-gray-100 px-3 py-2">

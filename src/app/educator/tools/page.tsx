@@ -24,7 +24,7 @@ const relTime = (iso: string | null): string => {
   const d = Math.floor(h / 24);
   return d === 1 ? "yesterday" : `${d}d ago`;
 };
-const STATUS_CLS: Record<string, string> = { Draft: "bg-gray-100 text-gray-600", Review: "bg-amber-100 text-amber-700", review: "bg-amber-100 text-amber-700", pending: "bg-amber-100 text-amber-700", Published: "bg-emerald-100 text-emerald-700" };
+const STATUS_CLS: Record<string, string> = { Draft: "bg-gray-100 text-gray-600", Review: "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]", review: "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]", pending: "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]", Published: "bg-[var(--cmp-surface-success)] text-emerald-700" };
 
 export default async function ToolsHubPage() {
   const { admin, hospitalId, name } = await requireEducatorAccess();
@@ -100,7 +100,7 @@ export default async function ToolsHubPage() {
 
             <div className="rounded-2xl bg-white border border-gray-200 shadow-sm p-5">
               <p className="text-[11px] font-bold uppercase tracking-widest text-gray-500 mb-3">Pending Approvals</p>
-              {d.approvals.length === 0 ? <p className="text-[12px] text-emerald-600">Nothing awaiting review.</p> : (
+              {d.approvals.length === 0 ? <p className="text-[12px] text-[var(--cmp-text-success)]">Nothing awaiting review.</p> : (
                 <div className="flex flex-col gap-2">
                   {d.approvals.map((a, i) => (
                     <div key={i} className="flex items-center gap-2.5 rounded-lg border border-gray-100 px-2.5 py-2">
@@ -175,7 +175,7 @@ export default async function ToolsHubPage() {
 
           <div className="rounded-2xl bg-white border border-gray-200 shadow-sm p-4">
             <p className="text-[11px] font-bold uppercase tracking-widest text-gray-500 mb-2">Needs Your Attention</p>
-            {d.approvals.length === 0 ? <p className="text-[12px] text-emerald-600">You&apos;re all caught up.</p> : (
+            {d.approvals.length === 0 ? <p className="text-[12px] text-[var(--cmp-text-success)]">You&apos;re all caught up.</p> : (
               <div className="flex flex-col gap-1.5">
                 {d.approvals.slice(0, 4).map((a, i) => (
                   <Link key={i} href="/educator/approvals" className="flex items-center gap-2 text-[11px] text-gray-700 hover:text-violet-700 py-0.5"><span className="text-amber-500">●</span><span className="truncate flex-1">{a.title}</span><span className="text-gray-400 text-[9px]">{a.kind}</span></Link>

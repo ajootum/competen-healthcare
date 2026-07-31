@@ -16,7 +16,7 @@ export default async function OgsWorkflowPage() {
   return (
     <div className="space-y-4">
       {head}
-      {d.empty && <div className="bg-blue-50 border border-blue-200 rounded-xl p-3 text-[12px] text-blue-800">No notifications, delivery attempts or approval requests in the recent window yet — the notification centre, workflow mix and delivery status populate as the notification &amp; approval engines run.</div>}
+      {d.empty && <div className="bg-[var(--cmp-surface-information)] border border-[var(--cmp-color-information)] rounded-xl p-3 text-[12px] text-blue-800">No notifications, delivery attempts or approval requests in the recent window yet — the notification centre, workflow mix and delivery status populate as the notification &amp; approval engines run.</div>}
 
       <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
         <Stat icon="🔔" tone={k.unread ? "amber" : "emerald"} label="Unread notifications" value={k.unread} sub="last 30 days" />
@@ -50,7 +50,7 @@ export default async function OgsWorkflowPage() {
           <span key="w" className="text-gray-500 capitalize">{r.workflow}</span>,
           <span key="s" className="tabular-nums text-gray-500">{r.step}</span>,
           <span key="b" className="text-gray-500">{r.requestedBy}</span>,
-          <span key="a" className={`tabular-nums font-semibold ${r.overdue ? "text-rose-600" : "text-gray-600"}`}>{r.age}d{r.overdue ? " · overdue" : ""}</span>,
+          <span key="a" className={`tabular-nums font-semibold ${r.overdue ? "text-[var(--cmp-text-error)]" : "text-gray-600"}`}>{r.age}d{r.overdue ? " · overdue" : ""}</span>,
         ])} empty="No pending approvals." />
       </Card>
 
@@ -68,11 +68,11 @@ export default async function OgsWorkflowPage() {
         <Card title="Escalations" right="derived · pending >14d">
           {d.escalations.length ? <div className="space-y-2">{d.escalations.map((e: any, i: number) => (
             <div key={i} className="flex items-start gap-2">
-              <span className="w-2 h-2 rounded-full mt-1.5 shrink-0 bg-rose-500" />
+              <span className="w-2 h-2 rounded-full mt-1.5 shrink-0 bg-[var(--cmp-color-error)]" />
               <div className="min-w-0 flex-1"><p className="text-[12px] font-medium text-gray-800 leading-snug truncate">{e.entity}</p><p className="text-[11px] text-gray-500 capitalize">{e.workflow} · {e.requestedBy}</p></div>
-              <span className="text-[11px] font-semibold text-rose-600 tabular-nums shrink-0">{e.age}d</span>
+              <span className="text-[11px] font-semibold text-[var(--cmp-text-error)] tabular-nums shrink-0">{e.age}d</span>
             </div>
-          ))}</div> : <p className="text-sm text-emerald-600 py-6 text-center">No escalations — all pending approvals within the 14-day SLA.</p>}
+          ))}</div> : <p className="text-sm text-[var(--cmp-text-success)] py-6 text-center">No escalations — all pending approvals within the 14-day SLA.</p>}
         </Card>
 
         <Card title="Workflow performance" right="derived from timestamps">

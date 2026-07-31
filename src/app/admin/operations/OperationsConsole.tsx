@@ -33,9 +33,9 @@ const lbl = "text-gray-600 text-xs";
 type UI = { busy: boolean; setBusy: (b: boolean) => void; toast: (k: "ok" | "err", t: string) => void; refresh: () => void };
 type TabProps = { data: any; support: any; ui: UI };
 
-const ACUITY_COLOR: Record<string, string> = { stable: "bg-green-100 text-green-700", moderate: "bg-yellow-100 text-yellow-700", high: "bg-orange-100 text-orange-700", critical: "bg-red-100 text-red-700" };
-const LEVEL_COLOR = (l: number) => l >= 4 ? "bg-red-100 text-red-700" : l === 3 ? "bg-orange-100 text-orange-700" : "bg-yellow-100 text-yellow-700";
-const SEV_COLOR: Record<string, string> = { low: "bg-yellow-100 text-yellow-700", medium: "bg-orange-100 text-orange-700", high: "bg-red-100 text-red-700" };
+const ACUITY_COLOR: Record<string, string> = { stable: "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]", moderate: "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]", high: "bg-[var(--cmp-surface-warning)] text-orange-700", critical: "bg-[var(--cmp-surface-critical)] text-[var(--cmp-text-critical)]" };
+const LEVEL_COLOR = (l: number) => l >= 4 ? "bg-[var(--cmp-surface-critical)] text-[var(--cmp-text-critical)]" : l === 3 ? "bg-[var(--cmp-surface-warning)] text-orange-700" : "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]";
+const SEV_COLOR: Record<string, string> = { low: "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]", medium: "bg-[var(--cmp-surface-warning)] text-orange-700", high: "bg-[var(--cmp-surface-critical)] text-[var(--cmp-text-critical)]" };
 const pretty = (s: string) => (s ?? "").replace(/_/g, " ");
 
 function Stat({ n, label, tone }: { n: number | string; label: string; tone?: string }) {
@@ -63,11 +63,11 @@ function CommandTab({ data }: TabProps) {
         <Stat n={activeShifts} label="Active shifts" tone="text-teal-700" />
         <Stat n={onDuty} label="Staff deployed" />
         <Stat n={data.patients.length} label="Operational patients" />
-        <Stat n={critical} label="Critical acuity" tone={critical ? "text-red-600" : undefined} />
-        <Stat n={`${occPct}%` as any} label={`Bed occupancy (${occ}/${totalBeds})`} tone={occPct >= 90 ? "text-red-600" : occPct >= 75 ? "text-orange-600" : "text-green-700"} />
-        <Stat n={bed("available")} label="Beds available" tone="text-green-700" />
-        <Stat n={data.escalations.length} label="Open escalations" tone={l45 ? "text-red-600" : undefined} />
-        <Stat n={data.alerts.length} label="Active safety alerts" tone={data.alerts.length ? "text-orange-600" : undefined} />
+        <Stat n={critical} label="Critical acuity" tone={critical ? "text-[var(--cmp-text-critical)]" : undefined} />
+        <Stat n={`${occPct}%` as any} label={`Bed occupancy (${occ}/${totalBeds})`} tone={occPct >= 90 ? "text-[var(--cmp-text-critical)]" : occPct >= 75 ? "text-[var(--cmp-text-warning)]" : "text-[var(--cmp-text-success)]"} />
+        <Stat n={bed("available")} label="Beds available" tone="text-[var(--cmp-text-success)]" />
+        <Stat n={data.escalations.length} label="Open escalations" tone={l45 ? "text-[var(--cmp-text-critical)]" : undefined} />
+        <Stat n={data.alerts.length} label="Active safety alerts" tone={data.alerts.length ? "text-[var(--cmp-text-warning)]" : undefined} />
       </div>
 
       <div className="grid md:grid-cols-2 gap-5">
@@ -183,7 +183,7 @@ function ShiftsTab({ data, support, ui }: TabProps) {
               <div key={s.id} className="py-2.5 flex items-center gap-2 text-sm">
                 <span className="font-medium text-gray-800">{s.departments?.name ?? "—"}</span>
                 <span className="text-xs text-gray-400">{s.shift_type} · {s.shift_date} · {cnt} staff{s.profiles?.full_name ? ` · ${s.profiles.full_name}` : ""}</span>
-                <span className={`ml-auto text-[10px] px-2 py-0.5 rounded-full ${s.status === "active" ? "bg-teal-100 text-teal-700" : s.status === "completed" ? "bg-gray-100 text-gray-500" : s.status === "cancelled" ? "bg-red-50 text-red-600" : "bg-yellow-100 text-yellow-700"}`}>{s.status}</span>
+                <span className={`ml-auto text-[10px] px-2 py-0.5 rounded-full ${s.status === "active" ? "bg-teal-100 text-teal-700" : s.status === "completed" ? "bg-gray-100 text-gray-500" : s.status === "cancelled" ? "bg-[var(--cmp-surface-critical)] text-[var(--cmp-text-critical)]" : "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]"}`}>{s.status}</span>
                 {s.status === "planned" && <button className={btnGhost} disabled={ui.busy} onClick={() => setStatus(s.id, "active")}>Activate</button>}
                 {s.status === "active" && <button className={btnGhost} disabled={ui.busy} onClick={() => setStatus(s.id, "completed")}>Complete</button>}
               </div>
@@ -237,7 +237,7 @@ function WardTab({ data, support, ui }: TabProps) {
             {data.beds.map((b: any) => (
               <button key={b.id} disabled={ui.busy} title={`${pretty(b.bed_type)} · ${b.departments?.name ?? ""}`}
                 onClick={() => bedStatus(b.id, b.status === "available" ? "out_of_service" : "available")}
-                className={`text-xs px-2 py-1 rounded border ${b.status === "occupied" ? "bg-red-50 border-red-200 text-red-700" : b.status === "available" ? "bg-green-50 border-green-200 text-green-700" : b.status === "cleaning" ? "bg-blue-50 border-blue-200 text-blue-700" : "bg-gray-100 border-gray-200 text-gray-500"}`}>
+                className={`text-xs px-2 py-1 rounded border ${b.status === "occupied" ? "bg-[var(--cmp-surface-critical)] border-[var(--cmp-color-critical)] text-[var(--cmp-text-critical)]" : b.status === "available" ? "bg-[var(--cmp-surface-success)] border-[var(--cmp-color-success)] text-[var(--cmp-text-success)]" : b.status === "cleaning" ? "bg-[var(--cmp-surface-information)] border-[var(--cmp-color-information)] text-blue-700" : "bg-gray-100 border-gray-200 text-gray-500"}`}>
                 {b.label}
               </button>
             ))}
@@ -312,7 +312,7 @@ function AssignmentsTab({ data, support, ui }: TabProps) {
             <label className={label}><span className={lbl}>Clinician</span><select className={input} value={staffId} onChange={e => setStaffId(e.target.value)}><option value="">Select…</option>{support.staff.map((s: any) => <option key={s.id} value={s.id}>{s.full_name}</option>)}</select></label>
             <label className={label}><span className={lbl}>Type</span><select className={input} value={type} onChange={e => setType(e.target.value)}><option value="primary">primary</option><option value="supporting">supporting</option></select></label>
           </div>
-          {needOverride && <input className={`${input} border-amber-300`} placeholder="Emergency override reason (required)" value={override} onChange={e => setOverride(e.target.value)} />}
+          {needOverride && <input className={`${input} border-[var(--cmp-color-warning)]`} placeholder="Emergency override reason (required)" value={override} onChange={e => setOverride(e.target.value)} />}
           <button className={btn} disabled={ui.busy} onClick={assign}>{needOverride ? "Assign with override" : "Assign"}</button>
         </div>
       </div>
@@ -330,7 +330,7 @@ function AssignmentsTab({ data, support, ui }: TabProps) {
                 {rows.map((a: any) => (
                   <div key={a.id} className="flex items-center gap-2 text-sm mt-1 pl-2">
                     <span className="text-gray-600">{a.assignment_type === "primary" ? "▸" : "·"} {a.profiles?.full_name}</span>
-                    <span className={`text-[10px] px-2 py-0.5 rounded-full ${a.competency_validated ? "bg-green-100 text-green-700" : "bg-amber-100 text-amber-700"}`}>{a.competency_validated ? "validated" : "override"}</span>
+                    <span className={`text-[10px] px-2 py-0.5 rounded-full ${a.competency_validated ? "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]" : "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]"}`}>{a.competency_validated ? "validated" : "override"}</span>
                     <button className={`${btnGhost} ml-auto`} disabled={ui.busy} onClick={() => end(a.id)}>End</button>
                   </div>
                 ))}
@@ -348,7 +348,7 @@ function AssignmentsTab({ data, support, ui }: TabProps) {
 function CareTab({ data, support, ui }: TabProps) {
   const [tPatient, setTPatient] = useState(""); const [tStaff, setTStaff] = useState(""); const [tDesc, setTDesc] = useState(""); const [tPriority, setTPriority] = useState("normal");
   const [oPatient, setOPatient] = useState(""); const [oType, setOType] = useState("vital_signs"); const [oDue, setODue] = useState("");
-  const ewsColor = (n: number | null) => n == null ? "text-gray-400" : n >= 7 ? "text-red-600" : n >= 5 ? "text-orange-600" : "text-gray-600";
+  const ewsColor = (n: number | null) => n == null ? "text-gray-400" : n >= 7 ? "text-[var(--cmp-text-critical)]" : n >= 5 ? "text-[var(--cmp-text-warning)]" : "text-gray-600";
 
   async function assignTask() {
     if (!tStaff || !tDesc.trim()) { ui.toast("err", "Pick a staff member and describe the task"); return; }
@@ -388,7 +388,7 @@ function CareTab({ data, support, ui }: TabProps) {
         </div>
         <div className={card}>
           <h3 className="font-semibold text-gray-900 mb-3">Schedule an observation</h3>
-          {support.careReady === false && <p className="text-xs text-amber-600 mb-2">Observations need migration <code className="font-mono">039-clinical-observations.sql</code> — apply it to enable this.</p>}
+          {support.careReady === false && <p className="text-xs text-[var(--cmp-text-warning)] mb-2">Observations need migration <code className="font-mono">039-clinical-observations.sql</code> — apply it to enable this.</p>}
           <div className="grid grid-cols-3 gap-2">
             <select className={input} value={oPatient} onChange={e => setOPatient(e.target.value)}><option value="">Patient…</option>{data.patients.map((p: any) => <option key={p.id} value={p.id}>{p.label}</option>)}</select>
             <select className={input} value={oType} onChange={e => setOType(e.target.value)}>{OBS_TYPES.map(t => <option key={t} value={t}>{pretty(t)}</option>)}</select>
@@ -405,7 +405,7 @@ function CareTab({ data, support, ui }: TabProps) {
             {data.tasks.length === 0 && <p className="text-sm text-gray-400">No open tasks.</p>}
             {data.tasks.map((t: any) => (
               <div key={t.id} className="py-2 flex items-center gap-2 text-sm">
-                <span className={`text-[10px] px-1.5 py-0.5 rounded ${t.priority === "urgent" ? "bg-red-100 text-red-700" : t.priority === "high" ? "bg-orange-100 text-orange-700" : "bg-gray-100 text-gray-500"}`}>{t.priority}</span>
+                <span className={`text-[10px] px-1.5 py-0.5 rounded ${t.priority === "urgent" ? "bg-[var(--cmp-surface-critical)] text-[var(--cmp-text-critical)]" : t.priority === "high" ? "bg-[var(--cmp-surface-warning)] text-orange-700" : "bg-gray-100 text-gray-500"}`}>{t.priority}</span>
                 <span className="text-gray-800 truncate">{t.description}</span>
                 <span className="text-xs text-gray-400">{t.profiles?.full_name ?? "—"} · {t.status}</span>
                 {t.status === "completed" && <button className={`${btnGhost} ml-auto`} disabled={ui.busy} onClick={() => verifyTask(t.id)}>Verify</button>}
@@ -422,7 +422,7 @@ function CareTab({ data, support, ui }: TabProps) {
                 <span className="text-gray-700">{o.op_patients?.label ?? "—"}</span>
                 <span className="text-xs text-gray-400">{pretty(o.observation_type)}</span>
                 {o.ews_score != null && <span className={`font-medium ${ewsColor(o.ews_score)}`}>EWS {o.ews_score}</span>}
-                {o.escalation_triggered && <span className="text-[10px] px-1.5 py-0.5 rounded bg-red-100 text-red-700">escalated</span>}
+                {o.escalation_triggered && <span className="text-[10px] px-1.5 py-0.5 rounded bg-[var(--cmp-surface-critical)] text-[var(--cmp-text-critical)]">escalated</span>}
                 <span className="ml-auto text-[10px] px-2 py-0.5 rounded-full bg-gray-100 text-gray-500">{o.status}</span>
               </div>
             ))}
@@ -530,9 +530,9 @@ export default function OperationsConsole({ ready, data, support, initialTab }: 
     return (
       <div className="space-y-4">
         <h1 className="text-2xl font-bold text-gray-900">Clinical Operations Centre</h1>
-        <div className="bg-amber-50 border border-amber-200 rounded-xl p-6">
+        <div className="bg-[var(--cmp-surface-warning)] border border-[var(--cmp-color-warning)] rounded-xl p-6">
           <p className="font-semibold text-amber-900">⚙️ One setup step remaining</p>
-          <p className="text-sm text-amber-800 mt-2">The Clinical Operations Engine needs its database tables. Apply migration <code className="bg-amber-100 px-1.5 py-0.5 rounded font-mono text-xs">038-clinical-operations.sql</code> in the Supabase SQL editor, then reload this page.</p>
+          <p className="text-sm text-amber-800 mt-2">The Clinical Operations Engine needs its database tables. Apply migration <code className="bg-[var(--cmp-surface-warning)] px-1.5 py-0.5 rounded font-mono text-xs">038-clinical-operations.sql</code> in the Supabase SQL editor, then reload this page.</p>
         </div>
       </div>
     );
@@ -545,7 +545,7 @@ export default function OperationsConsole({ ready, data, support, initialTab }: 
         <h1 className="text-2xl font-bold text-gray-900">Clinical Operations Centre</h1>
         <p className="text-sm text-gray-500 mt-1">Live shift, ward, patient-assignment and safety coordination for your facility.</p>
       </div>
-      {msg && <div className={`text-sm rounded-lg px-4 py-2.5 ${msg.kind === "ok" ? "bg-green-50 text-green-800 border border-green-200" : "bg-red-50 text-red-800 border border-red-200"}`}>{msg.text}</div>}
+      {msg && <div className={`text-sm rounded-lg px-4 py-2.5 ${msg.kind === "ok" ? "bg-[var(--cmp-surface-success)] text-green-800 border border-[var(--cmp-color-success)]" : "bg-[var(--cmp-surface-critical)] text-red-800 border border-[var(--cmp-color-critical)]"}`}>{msg.text}</div>}
       <div className="flex gap-1 border-b border-gray-200 overflow-x-auto">
         {TABS.map(t => (
           <button key={t} onClick={() => setTab(t)}

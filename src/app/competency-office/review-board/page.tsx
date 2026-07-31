@@ -29,12 +29,12 @@ export default async function ReviewApprovalPage() {
       {head}
 
       <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
-        <Kpi label="Pending reviews" value={k.pending} sub="in the queue" tone={k.pending ? "text-amber-600" : undefined} />
+        <Kpi label="Pending reviews" value={k.pending} sub="in the queue" tone={k.pending ? "text-[var(--cmp-text-warning)]" : undefined} />
         <Kpi label="Technical review" value={k.technical} />
         <Kpi label="Clinical review" value={k.clinical} />
         <Kpi label="Governance review" value={k.governance} />
         <Kpi label="Approval pending" value={k.approval} sub="final sign-off" tone={k.approval ? "text-violet-600" : undefined} />
-        <Kpi label="Overdue (>14d)" value={k.overdue} sub={k.avgAge != null ? `avg ${k.avgAge}d` : "SLA"} tone={k.overdue ? "text-rose-600" : undefined} />
+        <Kpi label="Overdue (>14d)" value={k.overdue} sub={k.avgAge != null ? `avg ${k.avgAge}d` : "SLA"} tone={k.overdue ? "text-[var(--cmp-text-error)]" : undefined} />
       </div>
 
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
@@ -42,7 +42,7 @@ export default async function ReviewApprovalPage() {
           {d.queue.length ? <div className="space-y-1">
             <div className="flex items-center text-[10px] text-gray-400 uppercase tracking-wide px-1"><span className="flex-1">Competency</span><span className="w-32">Stage</span><span className="w-16 text-center">Step</span><span className="w-16 text-right">Age</span></div>
             {d.queue.map((r: any, i: number) => (
-              <div key={i} className="flex items-center px-1 py-1.5 text-[12px] border-b border-gray-50"><span className="flex-1 text-gray-800 truncate">{r.entity}</span><span className="w-32"><Pill text={r.stage} tone={r.stage === "Approval" ? "violet" : r.stage.startsWith("Technical") ? "blue" : r.stage.startsWith("Clinical") ? "teal" : "amber"} /></span><span className="w-16 text-center text-gray-500 tabular-nums">{r.step ?? "—"}/{r.total ?? "—"}</span><span className={`w-16 text-right tabular-nums ${r.overdue ? "text-rose-600 font-semibold" : "text-gray-400"}`}>{r.age}d</span></div>
+              <div key={i} className="flex items-center px-1 py-1.5 text-[12px] border-b border-gray-50"><span className="flex-1 text-gray-800 truncate">{r.entity}</span><span className="w-32"><Pill text={r.stage} tone={r.stage === "Approval" ? "violet" : r.stage.startsWith("Technical") ? "blue" : r.stage.startsWith("Clinical") ? "teal" : "amber"} /></span><span className="w-16 text-center text-gray-500 tabular-nums">{r.step ?? "—"}/{r.total ?? "—"}</span><span className={`w-16 text-right tabular-nums ${r.overdue ? "text-[var(--cmp-text-error)] font-semibold" : "text-gray-400"}`}>{r.age}d</span></div>
             ))}
           </div> : <div className="py-8 text-center"><p className="text-sm text-gray-400">No competencies awaiting review.</p><p className="text-[10px] text-gray-400 mt-1">The multi-stage queue populates from <code>plat_approval_requests</code> as Competency Studio submits competencies for governance.</p></div>}
         </Card>

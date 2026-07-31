@@ -63,7 +63,7 @@ export default function AssetSearch() {
                   <span className="text-sm font-semibold text-gray-800 group-hover:text-teal-700 truncate">{h.title || "Untitled"}</span>
                   <span className="ml-auto flex items-center gap-1 shrink-0">
                     {h.matched?.includes("semantic") && <span className="text-[8px] font-bold uppercase text-violet-600 bg-violet-50 border border-violet-100 rounded px-1 py-0.5">semantic{h.similarity ? ` ${h.similarity}` : ""}</span>}
-                    {h.matched?.includes("keyword") && <span className="text-[8px] font-bold uppercase text-blue-600 bg-blue-50 border border-blue-100 rounded px-1 py-0.5">keyword</span>}
+                    {h.matched?.includes("keyword") && <span className="text-[8px] font-bold uppercase text-[var(--cmp-text-information)] bg-[var(--cmp-surface-information)] border border-[var(--cmp-color-information)] rounded px-1 py-0.5">keyword</span>}
                   </span>
                 </div>
                 {h.snippet && <p className="text-[11px] text-gray-400 leading-relaxed line-clamp-2">{h.snippet}</p>}
@@ -77,14 +77,14 @@ export default function AssetSearch() {
       <div className="bg-white rounded-xl border border-gray-100 p-4">
         <div className="flex items-center justify-between mb-2">
           <h2 className="font-semibold text-gray-900 text-sm">Semantic index</h2>
-          {status && <span className={`text-[10px] font-semibold ${status.configured ? "text-teal-600" : "text-amber-600"}`}>{status.configured ? "provider configured" : "no embedding provider"}</span>}
+          {status && <span className={`text-[10px] font-semibold ${status.configured ? "text-teal-600" : "text-[var(--cmp-text-warning)]"}`}>{status.configured ? "provider configured" : "no embedding provider"}</span>}
         </div>
         {status ? (
           <>
             <div className="grid grid-cols-3 gap-3 mb-3">
               <div><p className="text-lg font-bold text-gray-900">{status.total}</p><p className="text-[10px] text-gray-400">Indexed rows</p></div>
               <div><p className="text-lg font-bold text-teal-600">{status.embedded}</p><p className="text-[10px] text-gray-400">Embedded</p></div>
-              <div><p className="text-lg font-bold text-amber-600">{status.queued}</p><p className="text-[10px] text-gray-400">Queued</p></div>
+              <div><p className="text-lg font-bold text-[var(--cmp-text-warning)]">{status.queued}</p><p className="text-[10px] text-gray-400">Queued</p></div>
             </div>
             <div className="flex gap-2">
               <button onClick={() => reindex("enqueue")} disabled={busy} className="text-xs font-semibold text-gray-700 border border-gray-200 hover:bg-gray-50 rounded-lg px-3 py-1.5">1 · Enqueue assets</button>

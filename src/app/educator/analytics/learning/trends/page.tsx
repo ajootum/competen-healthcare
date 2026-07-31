@@ -15,7 +15,7 @@ const FORECAST_SOON = ["Risk projection", "Expected certification", "Learning de
 
 function chip(t: Trend) {
   if (!t) return <span className="text-[10px] text-gray-300">— no trend</span>;
-  return <span className={`text-[11px] font-bold ${t.dir === "up" ? "text-green-600" : "text-red-500"}`}>{t.dir === "up" ? "▲" : "▼"} {t.pct}%</span>;
+  return <span className={`text-[11px] font-bold ${t.dir === "up" ? "text-[var(--cmp-text-success)]" : "text-red-500"}`}>{t.dir === "up" ? "▲" : "▼"} {t.pct}%</span>;
 }
 // Naive one-step projection: last value + average recent delta. Labelled, not AI.
 function project(series: (number | null)[]): number | null {
@@ -65,7 +65,7 @@ export default async function TrendAnalytics() {
           <h2 className="text-sm font-bold text-gray-900 mb-1">Performance Trend <span className="font-normal text-gray-400 text-xs">(6 months)</span></h2>
           <div className="flex items-center gap-3 mb-2 text-[9px]">
             <span className="flex items-center gap-1 text-gray-500"><span className="w-2 h-2 rounded-full bg-purple-500" />Competency %</span>
-            <span className="flex items-center gap-1 text-gray-500"><span className="w-2 h-2 rounded-full bg-green-500" />Engagement %</span>
+            <span className="flex items-center gap-1 text-gray-500"><span className="w-2 h-2 rounded-full bg-[var(--cmp-color-success)]" />Engagement %</span>
           </div>
           {!hasSeries ? (
             <p className="text-xs text-gray-400 py-8 text-center">Not enough monthly history to chart yet.</p>
@@ -95,9 +95,9 @@ export default async function TrendAnalytics() {
               <span className="text-[11px] text-gray-600">Projected competency</span>
               <span className="text-sm font-bold text-purple-700">{projComp !== null ? `${Math.min(100, projComp)}%` : "—"}</span>
             </div>
-            <div className="flex items-center justify-between rounded-lg bg-green-50/60 border border-green-100 px-3 py-2">
+            <div className="flex items-center justify-between rounded-lg bg-[var(--cmp-surface-success)]/60 border border-[var(--cmp-color-success)] px-3 py-2">
               <span className="text-[11px] text-gray-600">Projected engagement</span>
-              <span className="text-sm font-bold text-green-700">{projEng !== null ? `${Math.min(100, projEng)}%` : "—"}</span>
+              <span className="text-sm font-bold text-[var(--cmp-text-success)]">{projEng !== null ? `${Math.min(100, projEng)}%` : "—"}</span>
             </div>
             {FORECAST_SOON.map(f => (
               <div key={f} className="flex items-center justify-between rounded-lg border border-gray-100 px-3 py-2">

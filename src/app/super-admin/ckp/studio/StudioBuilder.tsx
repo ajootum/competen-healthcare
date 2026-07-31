@@ -52,7 +52,7 @@ export default function StudioBuilder({ domains }: { domains: { id: string; labe
     <div className="bg-white rounded-xl border border-gray-200">
       <div className="flex items-center gap-2 p-3 border-b border-gray-100 flex-wrap">
         <h2 className="font-semibold text-gray-900 text-[15px] mr-auto">Builder Canvas</h2>
-        {msg && <span className={`text-xs rounded-lg px-2.5 py-1 ${msg.k === "ok" ? "bg-green-50 text-green-800" : "bg-amber-50 text-amber-800"}`}>{msg.t}</span>}
+        {msg && <span className={`text-xs rounded-lg px-2.5 py-1 ${msg.k === "ok" ? "bg-[var(--cmp-surface-success)] text-green-800" : "bg-[var(--cmp-surface-warning)] text-amber-800"}`}>{msg.t}</span>}
         <div className="flex gap-1">
           {BUILDERS.map(b => (
             <button key={b.key} onClick={() => switchTab(b.key)} className={`text-xs font-medium rounded-lg px-2.5 py-1.5 border ${tab === b.key ? "bg-teal-50 border-teal-300 text-teal-700" : "border-gray-200 text-gray-500 hover:bg-gray-50"}`}>{b.icon} {b.label}</button>
@@ -76,7 +76,7 @@ export default function StudioBuilder({ domains }: { domains: { id: string; labe
             <div><label className={label}>Name *</label><input value={form.name ?? ""} onChange={set("name")} className={input} placeholder="e.g. Safe medication administration" /></div>
             <div><label className={label}>Domain *</label><select value={form.domain_id ?? ""} onChange={set("domain_id")} className={input}><option value="">— Select domain —</option>{domains.map(d => <option key={d.id} value={d.id}>{d.label}</option>)}</select></div>
             <div className="sm:col-span-2"><label className={label}>Description</label><textarea value={form.description ?? ""} onChange={set("description")} rows={3} className={input} /></div>
-            {domains.length === 0 && <p className="sm:col-span-2 text-[11px] text-amber-600">No domains yet — create a framework and add a domain first.</p>}
+            {domains.length === 0 && <p className="sm:col-span-2 text-[11px] text-[var(--cmp-text-warning)]">No domains yet — create a framework and add a domain first.</p>}
           </div>
         )}
 

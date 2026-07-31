@@ -107,7 +107,7 @@ export default async function WorkspaceSettingsPage() {
             </div>
           </div>
 
-          <div className="rounded-2xl bg-blue-50/60 border border-blue-100 p-4 flex items-center gap-3">
+          <div className="rounded-2xl bg-[var(--cmp-surface-information)]/60 border border-[var(--cmp-color-information)] p-4 flex items-center gap-3">
             <span className="text-xl">💡</span>
             <p className="text-[12px] text-gray-600 flex-1">Tip: changes made at a higher scope (Organization or Tenant) affect settings at lower scopes. Full scope inheritance activates once the configuration store is connected.</p>
           </div>
@@ -126,7 +126,7 @@ export default async function WorkspaceSettingsPage() {
 
           <div className="rounded-2xl bg-white border border-gray-200 shadow-sm p-4">
             <div className="flex items-center justify-between mb-2"><p className="text-[11px] font-bold uppercase tracking-widest text-gray-500">Pending Changes</p></div>
-            <p className="text-[12px] text-emerald-600">No configuration changes pending.</p>
+            <p className="text-[12px] text-[var(--cmp-text-success)]">No configuration changes pending.</p>
             <p className="text-[9px] text-gray-400 mt-1">The change-approval queue populates once editing &amp; the approval workflow are connected.</p>
           </div>
 

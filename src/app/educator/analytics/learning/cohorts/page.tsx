@@ -10,7 +10,7 @@ export const dynamic = "force-dynamic";
 
 const pct = (v: number | null) => v !== null ? `${v}%` : "—";
 const COHORT_COLORS = ["#9333ea", "#10b981", "#f59e0b", "#3b82f6", "#ef4444", "#14b8a6"];
-const RISK_CLS: Record<string, string> = { High: "bg-red-50 text-red-600", Medium: "bg-amber-50 text-amber-600", Low: "bg-blue-50 text-blue-600" };
+const RISK_CLS: Record<string, string> = { High: "bg-[var(--cmp-surface-critical)] text-[var(--cmp-text-critical)]", Medium: "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]", Low: "bg-[var(--cmp-surface-information)] text-[var(--cmp-text-information)]" };
 
 export default async function CohortAnalytics() {
   const { admin, hospitalId } = await requireEducatorAccess();
@@ -50,7 +50,7 @@ export default async function CohortAnalytics() {
               <h2 className="text-sm font-bold text-gray-900 mb-3">Performance Comparison</h2>
               <div className="flex items-center gap-3 mb-3 text-[9px]">
                 <span className="flex items-center gap-1 text-gray-500"><span className="w-2 h-2 rounded-full bg-purple-500" />Competency</span>
-                <span className="flex items-center gap-1 text-gray-500"><span className="w-2 h-2 rounded-full bg-green-500" />Completion</span>
+                <span className="flex items-center gap-1 text-gray-500"><span className="w-2 h-2 rounded-full bg-[var(--cmp-color-success)]" />Completion</span>
               </div>
               <div className="flex flex-col gap-3">
                 {d.table.map(c => (
@@ -58,7 +58,7 @@ export default async function CohortAnalytics() {
                     <p className="text-[11px] font-semibold text-gray-700 mb-1">{c.name} <span className="font-normal text-gray-400">· {c.learners} learners</span></p>
                     <div className="flex flex-col gap-1">
                       <div className="flex items-center gap-2"><div className="flex-1 h-2 bg-gray-100 rounded-full overflow-hidden"><div className="h-full bg-purple-500 rounded-full" style={{ width: `${c.competency ?? 0}%` }} /></div><span className="text-[10px] font-bold text-gray-600 w-9 text-right">{pct(c.competency)}</span></div>
-                      <div className="flex items-center gap-2"><div className="flex-1 h-2 bg-gray-100 rounded-full overflow-hidden"><div className="h-full bg-green-500 rounded-full" style={{ width: `${c.completion ?? 0}%` }} /></div><span className="text-[10px] font-bold text-gray-600 w-9 text-right">{pct(c.completion)}</span></div>
+                      <div className="flex items-center gap-2"><div className="flex-1 h-2 bg-gray-100 rounded-full overflow-hidden"><div className="h-full bg-[var(--cmp-color-success)] rounded-full" style={{ width: `${c.completion ?? 0}%` }} /></div><span className="text-[10px] font-bold text-gray-600 w-9 text-right">{pct(c.completion)}</span></div>
                     </div>
                   </div>
                 ))}

@@ -33,7 +33,7 @@ function useAct() {
 
 function Err({ err }: { err: string | null }) {
   if (!err) return null;
-  return <p className="text-[11px] text-red-600 mt-1">{err}</p>;
+  return <p className="text-[11px] text-[var(--cmp-text-critical)] mt-1">{err}</p>;
 }
 
 // ── Meeting lifecycle: start / complete / cancel ──

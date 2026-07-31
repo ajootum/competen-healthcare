@@ -16,12 +16,12 @@ export const dynamic = "force-dynamic";
 const card = "bg-white rounded-xl border border-gray-200";
 const relTime = (iso?: string | null) => { if (!iso) return ""; const s = Math.floor((Date.now() - new Date(iso).getTime()) / 1000); if (s < 60) return "just now"; if (s < 3600) return `${Math.floor(s / 60)} min ago`; if (s < 86400) return `${Math.floor(s / 3600)} hr ago`; return `${Math.floor(s / 86400)} d ago`; };
 
-const STATUS_DOT: Record<string, string> = { operational: "bg-green-500", slow: "bg-amber-500", degraded: "bg-orange-500", down: "bg-rose-500" };
-const STATUS_TEXT: Record<string, string> = { operational: "text-green-600", slow: "text-amber-600", degraded: "text-orange-600", down: "text-rose-600" };
+const STATUS_DOT: Record<string, string> = { operational: "bg-[var(--cmp-color-success)]", slow: "bg-[var(--cmp-color-warning)]", degraded: "bg-[var(--cmp-color-warning)]", down: "bg-[var(--cmp-color-error)]" };
+const STATUS_TEXT: Record<string, string> = { operational: "text-[var(--cmp-text-success)]", slow: "text-[var(--cmp-text-warning)]", degraded: "text-[var(--cmp-text-warning)]", down: "text-[var(--cmp-text-error)]" };
 const TIER_STYLE: Record<string, { bar: string; chip: string }> = {
-  critical: { bar: "bg-rose-500", chip: "bg-rose-50 text-rose-700" },
-  high: { bar: "bg-orange-500", chip: "bg-orange-50 text-orange-700" },
-  medium: { bar: "bg-amber-500", chip: "bg-amber-50 text-amber-700" },
+  critical: { bar: "bg-[var(--cmp-color-error)]", chip: "bg-[var(--cmp-surface-error)] text-[var(--cmp-text-error)]" },
+  high: { bar: "bg-[var(--cmp-color-warning)]", chip: "bg-[var(--cmp-surface-warning)] text-orange-700" },
+  medium: { bar: "bg-[var(--cmp-color-warning)]", chip: "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]" },
   low: { bar: "bg-gray-300", chip: "bg-gray-100 text-gray-600" },
 };
 
@@ -49,14 +49,14 @@ export default async function MonitoringOperations() {
   const [m, jobs] = await Promise.all([loadMonitoring(admin), loadJobs(admin)]);
   const { kpis, services, servicesSummary, alerts, alertsSummary, events, eventsReady } = m;
 
-  const healthTone = kpis.health === "Healthy" ? "text-green-600" : kpis.health === "Attention" ? "text-amber-600" : "text-rose-600";
-  const healthBg = kpis.health === "Healthy" ? "bg-green-50" : kpis.health === "Attention" ? "bg-amber-50" : "bg-rose-50";
+  const healthTone = kpis.health === "Healthy" ? "text-[var(--cmp-text-success)]" : kpis.health === "Attention" ? "text-[var(--cmp-text-warning)]" : "text-[var(--cmp-text-error)]";
+  const healthBg = kpis.health === "Healthy" ? "bg-[var(--cmp-surface-success)]" : kpis.health === "Attention" ? "bg-[var(--cmp-surface-warning)]" : "bg-[var(--cmp-surface-error)]";
   const healthIcon = kpis.health === "Healthy" ? "💚" : kpis.health === "Attention" ? "⚠️" : "🛑";
 
   const kpiCards = [
     { label: "Overall Health", value: kpis.health, icon: healthIcon, iconBg: healthBg, sub: `${servicesSummary.operational}/${servicesSummary.total} subsystems responding`, tone: healthTone },
-    { label: "Open Alerts", value: kpis.openAlerts == null ? "—" : kpis.openAlerts, icon: "🚨", iconBg: "bg-rose-50", sub: kpis.criticalAlerts ? `${kpis.criticalAlerts} critical` : "none critical", tone: kpis.openAlerts ? "text-rose-600" : undefined },
-    { label: "Events (24h)", value: kpis.events24h == null ? "—" : kpis.events24h, icon: "📜", iconBg: "bg-sky-50", sub: "audit-log entries" },
+    { label: "Open Alerts", value: kpis.openAlerts == null ? "—" : kpis.openAlerts, icon: "🚨", iconBg: "bg-[var(--cmp-surface-error)]", sub: kpis.criticalAlerts ? `${kpis.criticalAlerts} critical` : "none critical", tone: kpis.openAlerts ? "text-[var(--cmp-text-error)]" : undefined },
+    { label: "Events (24h)", value: kpis.events24h == null ? "—" : kpis.events24h, icon: "📜", iconBg: "bg-[var(--cmp-surface-information)]", sub: "audit-log entries" },
     { label: "Avg Probe Latency", value: kpis.avgLatencyMs == null ? "—" : `${kpis.avgLatencyMs} ms`, icon: "⏱️", iconBg: "bg-violet-50", sub: "db round-trip" },
     { label: "Resource Telemetry", value: "—", icon: "📊", iconBg: "bg-teal-50", sub: "Not connected", muted: true },
     { label: "Backups", value: "—", icon: "💾", iconBg: "bg-gray-50", sub: "Not connected", muted: true },

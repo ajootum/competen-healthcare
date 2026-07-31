@@ -77,7 +77,7 @@ export default async function RiskCentrePage() {
                     <td className="py-2 pr-3 font-medium text-gray-800">{r.title}</td>
                     <td className="py-2 pr-3 text-gray-500 capitalize">{r.category}</td>
                     <td className="py-2 pr-3"><span className="inline-flex items-center justify-center w-7 h-7 rounded-lg text-[12px] font-bold" style={{ backgroundColor: T(r.tone).hex + "22", color: T(r.tone).hex }}>{r.score}</span></td>
-                    <td className="py-2 pr-3 tabular-nums text-gray-500">{r.residual}{r.lower && <span className="text-emerald-600"> ↓</span>}</td>
+                    <td className="py-2 pr-3 tabular-nums text-gray-500">{r.residual}{r.lower && <span className="text-[var(--cmp-text-success)]"> ↓</span>}</td>
                     <td className="py-2"><Pill text={r.status} tone={ST_TONE[r.status] ?? "slate"} /></td>
                   </tr>
                 ))}

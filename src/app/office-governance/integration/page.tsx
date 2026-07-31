@@ -17,7 +17,7 @@ export default async function OgsIntegrationPage() {
   return (
     <div className="space-y-4">
       {head}
-      {d.empty && <div className="bg-blue-50 border border-blue-200 rounded-xl p-3 text-[12px] text-blue-800">No domain events emitted yet — the stream, flows and delivery status populate as producers publish to <code>domain_events</code>. The platform-service catalogue and workspace map below are structural.</div>}
+      {d.empty && <div className="bg-[var(--cmp-surface-information)] border border-[var(--cmp-color-information)] rounded-xl p-3 text-[12px] text-blue-800">No domain events emitted yet — the stream, flows and delivery status populate as producers publish to <code>domain_events</code>. The platform-service catalogue and workspace map below are structural.</div>}
 
       <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
         <Stat icon="📡" tone="blue" label="Events processed (today)" value={k.processedToday} />
@@ -54,7 +54,7 @@ export default async function OgsIntegrationPage() {
         <Card title="Workspace integrations" right="structural · live-derived">
           <div className="grid grid-cols-2 gap-2">
             {d.workspaceHealth.map((w: any, i: number) => (
-              <div key={i} className="flex items-center gap-2 border border-gray-100 rounded-lg px-2.5 py-1.5 text-[12px]"><span className={`w-1.5 h-1.5 rounded-full shrink-0 ${w.live ? "bg-emerald-500" : "bg-gray-300"}`} /><span className="text-gray-700 flex-1 truncate">{w.name}</span><span className="text-[10px] text-gray-400">{w.live ? "live" : "—"}</span></div>
+              <div key={i} className="flex items-center gap-2 border border-gray-100 rounded-lg px-2.5 py-1.5 text-[12px]"><span className={`w-1.5 h-1.5 rounded-full shrink-0 ${w.live ? "bg-[var(--cmp-color-success)]" : "bg-gray-300"}`} /><span className="text-gray-700 flex-1 truncate">{w.name}</span><span className="text-[10px] text-gray-400">{w.live ? "live" : "—"}</span></div>
             ))}
           </div>
         </Card>

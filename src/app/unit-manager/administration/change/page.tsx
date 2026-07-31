@@ -21,13 +21,13 @@ export default async function ChangePage() {
     <div className="max-w-[1500px] space-y-4">
       {head}<Tabs active="008" />
       <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-8 gap-3">
-        <div className="bg-white border border-gray-200 rounded-xl p-3.5 flex items-center gap-2"><Ring pct={k.auditHealth} size={56} /><div><p className="text-[11px] text-gray-500 uppercase tracking-wide leading-tight">Audit Health</p><p className="text-[11px] text-emerald-600 font-medium">Good</p></div></div>
+        <div className="bg-white border border-gray-200 rounded-xl p-3.5 flex items-center gap-2"><Ring pct={k.auditHealth} size={56} /><div><p className="text-[11px] text-gray-500 uppercase tracking-wide leading-tight">Audit Health</p><p className="text-[11px] text-[var(--cmp-text-success)] font-medium">Good</p></div></div>
         <Kpi label="Configuration Changes" value={k.total} sub="this period" />
-        <Kpi label="Pending Reviews" value={k.pendingReviews} sub="in workflow" tone={k.pendingReviews ? "text-amber-600" : undefined} />
-        <Kpi label="Deployments" value={k.deployments} sub="published" tone="text-emerald-600" />
-        <Kpi label="Rollbacks" value={k.rollbacks} sub="reverted" tone={k.rollbacks ? "text-rose-600" : undefined} />
-        <Kpi label="High-Risk Changes" value={k.highRisk} sub="need scrutiny" tone={k.highRisk ? "text-rose-600" : undefined} />
-        <Kpi label="Approval Compliance" value={`${k.approvalCompliance}%`} sub="approved/published" tone="text-emerald-600" />
+        <Kpi label="Pending Reviews" value={k.pendingReviews} sub="in workflow" tone={k.pendingReviews ? "text-[var(--cmp-text-warning)]" : undefined} />
+        <Kpi label="Deployments" value={k.deployments} sub="published" tone="text-[var(--cmp-text-success)]" />
+        <Kpi label="Rollbacks" value={k.rollbacks} sub="reverted" tone={k.rollbacks ? "text-[var(--cmp-text-error)]" : undefined} />
+        <Kpi label="High-Risk Changes" value={k.highRisk} sub="need scrutiny" tone={k.highRisk ? "text-[var(--cmp-text-error)]" : undefined} />
+        <Kpi label="Approval Compliance" value={`${k.approvalCompliance}%`} sub="approved/published" tone="text-[var(--cmp-text-success)]" />
         <Kpi label="Affected Users" value={d.impact.affectedUsers.toLocaleString()} sub={`${d.impact.highImpact} high impact`} />
       </div>
 
@@ -66,7 +66,7 @@ export default async function ChangePage() {
         <Card title="Change Impact">
           <div className="grid grid-cols-2 gap-2 text-center">
             <div className="rounded-lg bg-gray-50 p-3"><p className="text-2xl font-bold text-gray-900 tabular-nums">{d.impact.affectedUsers.toLocaleString()}</p><p className="text-[10px] text-gray-500">Potentially affected users</p></div>
-            <div className="rounded-lg bg-rose-50 p-3"><p className="text-2xl font-bold text-rose-700 tabular-nums">{k.highRisk}</p><p className="text-[10px] text-gray-500">High-risk changes</p></div>
+            <div className="rounded-lg bg-[var(--cmp-surface-error)] p-3"><p className="text-2xl font-bold text-[var(--cmp-text-error)] tabular-nums">{k.highRisk}</p><p className="text-[10px] text-gray-500">High-risk changes</p></div>
           </div>
           <p className="text-[10px] text-gray-400 mt-2">Impact scoring, dependency graphs and release scheduling are the next phase.</p>
         </Card>

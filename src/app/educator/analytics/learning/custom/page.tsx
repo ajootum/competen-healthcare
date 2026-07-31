@@ -46,7 +46,7 @@ export default async function CustomBuilder() {
             <div className="flex flex-col gap-1">
               {SOURCES.map(s => (
                 <span key={s.name} className="flex items-center gap-2 text-[11px] rounded-lg border border-gray-100 px-2.5 py-1.5">
-                  <span className={`w-1.5 h-1.5 rounded-full ${s.live ? "bg-green-500" : "bg-gray-200"}`} />
+                  <span className={`w-1.5 h-1.5 rounded-full ${s.live ? "bg-[var(--cmp-color-success)]" : "bg-gray-200"}`} />
                   <span className={s.live ? "text-gray-700" : "text-gray-400"}>{s.name}</span>
                   {!s.live && <span className="ml-auto text-[7px] font-bold uppercase text-gray-300">soon</span>}
                 </span>

@@ -146,10 +146,10 @@ export default async function CertificatesPage() {
   const card = "bg-white rounded-xl border border-gray-100";
 
   const KPI = [
-    { icon: "🪪", value: credRows.length, label: "Professional Credentials", tint: "bg-green-50" },
+    { icon: "🪪", value: credRows.length, label: "Professional Credentials", tint: "bg-[var(--cmp-surface-success)]" },
     { icon: "📜", value: certRows.length, label: "Competency Certificates", tint: "bg-violet-50" },
-    { icon: "🏅", value: badgeRows.length, label: "Badges & Recognitions", tint: "bg-amber-50" },
-    { icon: "⏳", value: expiringSoon, label: "Expiring Soon (90 days)", tint: "bg-blue-50" },
+    { icon: "🏅", value: badgeRows.length, label: "Badges & Recognitions", tint: "bg-[var(--cmp-surface-warning)]" },
+    { icon: "⏳", value: expiringSoon, label: "Expiring Soon (90 days)", tint: "bg-[var(--cmp-surface-information)]" },
   ];
 
   return (
@@ -220,7 +220,7 @@ export default async function CertificatesPage() {
                   <p className="text-[11px] text-gray-800 truncate">{u.title}</p>
                   <p className="text-[9px] text-gray-400" suppressHydrationWarning>Expires {fmt(u.expires)}</p>
                 </div>
-                <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded shrink-0 ${u.days <= 90 ? "bg-amber-50 text-amber-700" : "bg-gray-50 text-gray-500"}`}>
+                <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded shrink-0 ${u.days <= 90 ? "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]" : "bg-gray-50 text-gray-500"}`}>
                   {u.days} days
                 </span>
               </div>

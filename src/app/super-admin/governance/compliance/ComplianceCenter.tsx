@@ -75,7 +75,7 @@ export default function ComplianceCenter({ frameworks, obligations }: { framewor
     <div className="bg-white rounded-xl border border-gray-200">
       <div className="flex items-center gap-2 p-3 border-b border-gray-100 flex-wrap">
         <h2 className="font-semibold text-gray-900 text-[15px] mr-auto">Compliance Center</h2>
-        {msg && <span className={`text-xs rounded-lg px-2.5 py-1 ${msg.k === "ok" ? "bg-green-50 text-green-800" : "bg-amber-50 text-amber-800"}`}>{msg.t}</span>}
+        {msg && <span className={`text-xs rounded-lg px-2.5 py-1 ${msg.k === "ok" ? "bg-[var(--cmp-surface-success)] text-green-800" : "bg-[var(--cmp-surface-warning)] text-amber-800"}`}>{msg.t}</span>}
         <div className="flex gap-1">
           {TABS.map(b => (
             <button key={b.key} onClick={() => switchTab(b.key)} className={`text-xs font-medium rounded-lg px-2.5 py-1.5 border ${tab === b.key ? "bg-teal-50 border-teal-300 text-teal-700" : "border-gray-200 text-gray-500 hover:bg-gray-50"}`}>{b.icon} {b.label}</button>
@@ -107,7 +107,7 @@ export default function ComplianceCenter({ frameworks, obligations }: { framewor
               <div className="sm:col-span-2"><label className={label}>Waiver justification *</label><textarea value={form.waiver_note ?? ""} onChange={set("waiver_note")} rows={2} className={input} placeholder="Why is this obligation waived, until when, and what compensating control applies?" /></div>
             )}
             <div className="sm:col-span-2"><label className={label}>Note</label><textarea value={form.note ?? ""} onChange={set("note")} rows={2} className={input} /></div>
-            {obligations.length === 0 && <p className="sm:col-span-2 text-[11px] text-amber-600">No obligations registered yet — create one first.</p>}
+            {obligations.length === 0 && <p className="sm:col-span-2 text-[11px] text-[var(--cmp-text-warning)]">No obligations registered yet — create one first.</p>}
           </div>
         )}
 

@@ -9,7 +9,7 @@ import AccreditationNav from "../AccreditationNav";
 
 export const dynamic = "force-dynamic";
 const pct = (v: number | null) => v !== null ? `${v}%` : "—";
-const STATUS_CLS: Record<string, string> = { completed: "bg-green-50 text-green-600", closed: "bg-green-50 text-green-600", verified: "bg-green-50 text-green-600", open: "bg-amber-50 text-amber-600", in_progress: "bg-blue-50 text-blue-600" };
+const STATUS_CLS: Record<string, string> = { completed: "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]", closed: "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]", verified: "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]", open: "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]", in_progress: "bg-[var(--cmp-surface-information)] text-[var(--cmp-text-information)]" };
 
 export default async function Improvement() {
   const { admin, hospitalId } = await requireEducatorAccess();
@@ -39,7 +39,7 @@ export default async function Improvement() {
           <h2 className="text-sm font-bold text-gray-900 mb-3">Actions by Source</h2>
           {d.bySource.length === 0 ? <p className="text-xs text-gray-400">No actions recorded.</p> : (
             <div className="flex flex-col gap-2">{d.bySource.map(x => (
-              <div key={x.label} className="flex items-center gap-2"><span className="text-[10px] text-gray-500 w-32 truncate">{x.label}</span><div className="flex-1 h-2 bg-gray-100 rounded-full overflow-hidden"><div className="h-full bg-amber-400 rounded-full" style={{ width: `${(x.n / srcMax) * 100}%` }} /></div><span className="text-[10px] font-bold text-gray-600 w-6 text-right">{x.n}</span></div>
+              <div key={x.label} className="flex items-center gap-2"><span className="text-[10px] text-gray-500 w-32 truncate">{x.label}</span><div className="flex-1 h-2 bg-gray-100 rounded-full overflow-hidden"><div className="h-full bg-[var(--cmp-color-warning)] rounded-full" style={{ width: `${(x.n / srcMax) * 100}%` }} /></div><span className="text-[10px] font-bold text-gray-600 w-6 text-right">{x.n}</span></div>
             ))}</div>
           )}
         </div>

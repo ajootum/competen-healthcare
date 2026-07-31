@@ -15,7 +15,7 @@ export const dynamic = "force-dynamic";
 const card = "bg-white rounded-xl border border-gray-200";
 const dash = (n: number | null | undefined) => (n == null ? "—" : n.toLocaleString());
 const pct = (n: number | null | undefined) => (n == null ? "—" : `${n}%`);
-const PRI_TONE: Record<string, string> = { High: "bg-rose-50 text-rose-700", Medium: "bg-amber-50 text-amber-700", Low: "bg-gray-100 text-gray-600" };
+const PRI_TONE: Record<string, string> = { High: "bg-[var(--cmp-surface-error)] text-[var(--cmp-text-error)]", Medium: "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]", Low: "bg-gray-100 text-gray-600" };
 
 export default async function WorkforceIntelligence() {
   const supabase = await createClient();
@@ -30,13 +30,13 @@ export default async function WorkforceIntelligence() {
   const k = d.kpis;
 
   const kpiCards = [
-    { label: "Open Skill Gaps", value: dash(k.openSkillGaps), icon: "🎯", iconBg: "bg-rose-50", tone: (k.openSkillGaps ?? 0) > 0 ? "text-rose-600" : undefined },
-    { label: "Coverage", value: pct(k.coveragePct), icon: "🛡️", iconBg: "bg-green-50", tone: k.coveragePct != null && k.coveragePct < 80 ? "text-amber-600" : "text-green-600" },
-    { label: "Awaiting Validation", value: dash(k.awaitingValidation), icon: "📋", iconBg: "bg-amber-50", tone: (k.awaitingValidation ?? 0) > 0 ? "text-amber-600" : undefined },
-    { label: "At-Risk Scores", value: dash(k.atRisk), icon: "⚠️", iconBg: "bg-orange-50" },
+    { label: "Open Skill Gaps", value: dash(k.openSkillGaps), icon: "🎯", iconBg: "bg-[var(--cmp-surface-error)]", tone: (k.openSkillGaps ?? 0) > 0 ? "text-[var(--cmp-text-error)]" : undefined },
+    { label: "Coverage", value: pct(k.coveragePct), icon: "🛡️", iconBg: "bg-[var(--cmp-surface-success)]", tone: k.coveragePct != null && k.coveragePct < 80 ? "text-[var(--cmp-text-warning)]" : "text-[var(--cmp-text-success)]" },
+    { label: "Awaiting Validation", value: dash(k.awaitingValidation), icon: "📋", iconBg: "bg-[var(--cmp-surface-warning)]", tone: (k.awaitingValidation ?? 0) > 0 ? "text-[var(--cmp-text-warning)]" : undefined },
+    { label: "At-Risk Scores", value: dash(k.atRisk), icon: "⚠️", iconBg: "bg-[var(--cmp-surface-warning)]" },
     { label: "Staff", value: dash(k.staff), icon: "👥", iconBg: "bg-violet-50" },
-    { label: "Upcoming Shifts", value: dash(k.upcomingShifts), icon: "📅", iconBg: "bg-sky-50" },
-    { label: "Unstaffed Shifts", value: dash(k.unstaffedShifts), icon: "🕳️", iconBg: "bg-rose-50", tone: (k.unstaffedShifts ?? 0) > 0 ? "text-rose-600" : undefined },
+    { label: "Upcoming Shifts", value: dash(k.upcomingShifts), icon: "📅", iconBg: "bg-[var(--cmp-surface-information)]" },
+    { label: "Unstaffed Shifts", value: dash(k.unstaffedShifts), icon: "🕳️", iconBg: "bg-[var(--cmp-surface-error)]", tone: (k.unstaffedShifts ?? 0) > 0 ? "text-[var(--cmp-text-error)]" : undefined },
     { label: "Training Needs", value: dash(k.trainingNeeds), icon: "📚", iconBg: "bg-teal-50" },
   ];
 
@@ -89,7 +89,7 @@ export default async function WorkforceIntelligence() {
             </div>
             <div className="flex-1 text-xs text-gray-500">
               <p><span className="font-semibold text-gray-800 tabular-nums">{d.coverage.validated}</span> of <span className="tabular-nums">{d.coverage.total}</span> competencies have a validated passing score.</p>
-              <p className="mt-1"><span className="tabular-nums">{d.coverage.anyScored}</span> scored at least once · <span className="tabular-nums text-rose-600">{dash(k.openSkillGaps)}</span> with no validated coverage.</p>
+              <p className="mt-1"><span className="tabular-nums">{d.coverage.anyScored}</span> scored at least once · <span className="tabular-nums text-[var(--cmp-text-error)]">{dash(k.openSkillGaps)}</span> with no validated coverage.</p>
             </div>
           </div>
           {d.domainGaps.length === 0 ? <p className="text-sm text-gray-400 py-4 text-center">{d.coverage.total ? "All domains fully covered." : "No competency data yet."}</p> : (
@@ -97,7 +97,7 @@ export default async function WorkforceIntelligence() {
               {d.domainGaps.map((g: any) => (
                 <div key={g.name}>
                   <div className="flex items-center justify-between text-xs mb-0.5"><span className="text-gray-600 truncate">{g.name}</span><span className="tabular-nums text-gray-400 shrink-0 ml-2">{g.covered}/{g.total} · {g.coverage}%</span></div>
-                  <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden"><div className={`h-full rounded-full ${g.coverage < 50 ? "bg-rose-500" : g.coverage < 80 ? "bg-amber-500" : "bg-teal-500"}`} style={{ width: `${g.coverage}%` }} /></div>
+                  <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden"><div className={`h-full rounded-full ${g.coverage < 50 ? "bg-[var(--cmp-color-error)]" : g.coverage < 80 ? "bg-[var(--cmp-color-warning)]" : "bg-teal-500"}`} style={{ width: `${g.coverage}%` }} /></div>
                 </div>
               ))}
             </div>
@@ -131,7 +131,7 @@ export default async function WorkforceIntelligence() {
             <>
               <div className="grid grid-cols-3 gap-2 mb-3">
                 {[["Total", d.roster.total], ["Upcoming", d.roster.upcoming], ["Unstaffed", d.roster.unstaffed]].map(([l, n]: any) => (
-                  <div key={l} className="rounded-lg border border-gray-100 p-2.5 text-center"><p className={`text-lg font-bold tabular-nums ${l === "Unstaffed" && n > 0 ? "text-rose-600" : "text-gray-900"}`}>{n.toLocaleString()}</p><p className="text-[9px] text-gray-500">{l} shifts</p></div>
+                  <div key={l} className="rounded-lg border border-gray-100 p-2.5 text-center"><p className={`text-lg font-bold tabular-nums ${l === "Unstaffed" && n > 0 ? "text-[var(--cmp-text-error)]" : "text-gray-900"}`}>{n.toLocaleString()}</p><p className="text-[9px] text-gray-500">{l} shifts</p></div>
                 ))}
               </div>
               <div className="space-y-1">
@@ -148,7 +148,7 @@ export default async function WorkforceIntelligence() {
         <div className={`${card} p-5`}>
           <h2 className="font-semibold text-gray-900 text-[15px] mb-3">Burnout &amp; Fatigue</h2>
           <div className="text-center py-2">
-            <p className={`text-4xl font-bold tabular-nums ${d.roster.highLoadStaff > 0 ? "text-amber-600" : "text-gray-900"}`}>{d.roster.ready ? d.roster.highLoadStaff : "—"}</p>
+            <p className={`text-4xl font-bold tabular-nums ${d.roster.highLoadStaff > 0 ? "text-[var(--cmp-text-warning)]" : "text-gray-900"}`}>{d.roster.ready ? d.roster.highLoadStaff : "—"}</p>
             <p className="text-xs text-gray-500 mt-1">staff on ≥{d.roster.fatigueThreshold} shifts in 14 days</p>
           </div>
           <p className="text-[10px] text-gray-400 mt-2 pt-2 border-t border-gray-50">An operational load indicator derived from shift assignments — not a medical judgement. Presented for supervisor review; excessive consecutive shifts, incomplete breaks and redeployment refine this signal as those fields are wired.</p>

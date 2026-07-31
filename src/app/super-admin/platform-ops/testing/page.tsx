@@ -49,14 +49,14 @@ export default async function TestingPage() {
     </>
   );
 
-  if (notReady) return <div className="space-y-5 max-w-6xl">{header}<div className="bg-amber-50 border border-amber-200 rounded-xl p-6"><p className="font-semibold text-amber-900">⚙️ Not provisioned</p><p className="text-sm text-amber-800 mt-1">Apply migration 097 (test suites), then author a suite here.</p></div></div>;
+  if (notReady) return <div className="space-y-5 max-w-6xl">{header}<div className="bg-[var(--cmp-surface-warning)] border border-[var(--cmp-color-warning)] rounded-xl p-6"><p className="font-semibold text-amber-900">⚙️ Not provisioned</p><p className="text-sm text-amber-800 mt-1">Apply migration 097 (test suites), then author a suite here.</p></div></div>;
 
   return (
     <div className="space-y-5 max-w-6xl">
       {header}
       <div className="grid grid-cols-3 gap-3">
         <Stat label="Test Suites" value={listS.length} sub="governed test coverage" />
-        <Stat label="Passing" value={passing} tone="text-emerald-600" sub="gate promotable" />
+        <Stat label="Passing" value={passing} tone="text-[var(--cmp-text-success)]" sub="gate promotable" />
         <Stat label="Test Cases" value={cases} sub="across all suites" />
       </div>
       <TestCentre suites={listS} objects={(objects ?? []) as any[]} />

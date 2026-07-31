@@ -13,8 +13,8 @@ type Credential = {
 function expiryFlag(expiry: string | null): { label: string; cls: string } | null {
   if (!expiry) return null;
   const days = Math.ceil((new Date(expiry).getTime() - Date.now()) / 86400000);
-  if (days < 0) return { label: "Expired", cls: "bg-red-50 text-red-600" };
-  if (days <= 90) return { label: `Renews in ${days}d`, cls: "bg-amber-50 text-amber-700" };
+  if (days < 0) return { label: "Expired", cls: "bg-[var(--cmp-surface-critical)] text-[var(--cmp-text-critical)]" };
+  if (days <= 90) return { label: `Renews in ${days}d`, cls: "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]" };
   return null;
 }
 
@@ -96,7 +96,7 @@ export default function CredentialsManager({ workers, credentials }: { workers: 
                 <div className="flex items-center gap-2 flex-wrap">
                   <p className="font-semibold text-gray-900 text-sm">{c.title}</p>
                   <span className={`text-[10px] font-bold px-2 py-0.5 rounded ${st.cls}`}>{st.label}</span>
-                  {c.verified && <span className="text-[10px] bg-blue-50 text-blue-600 px-1.5 py-0.5 rounded font-semibold">✓ Verified</span>}
+                  {c.verified && <span className="text-[10px] bg-[var(--cmp-surface-information)] text-[var(--cmp-text-information)] px-1.5 py-0.5 rounded font-semibold">✓ Verified</span>}
                   {ex && <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${ex.cls}`}>{ex.label}</span>}
                 </div>
                 <p className="text-xs text-gray-600 mt-1">
@@ -110,8 +110,8 @@ export default function CredentialsManager({ workers, credentials }: { workers: 
                 </p>
               </div>
               <div className="flex items-center gap-1.5 shrink-0">
-                {!c.verified && <button onClick={() => api("PATCH", { id: c.id, action: "verify" })} className="px-2.5 py-1 text-xs text-blue-600 border border-blue-200 rounded-lg hover:bg-blue-50">Verify</button>}
-                <button onClick={() => del(c)} className="px-2.5 py-1 text-xs text-red-500 border border-red-100 rounded-lg hover:bg-red-50">Delete</button>
+                {!c.verified && <button onClick={() => api("PATCH", { id: c.id, action: "verify" })} className="px-2.5 py-1 text-xs text-[var(--cmp-text-information)] border border-[var(--cmp-color-information)] rounded-lg hover:bg-[var(--cmp-surface-information)]">Verify</button>}
+                <button onClick={() => del(c)} className="px-2.5 py-1 text-xs text-red-500 border border-[var(--cmp-color-critical)] rounded-lg hover:bg-[var(--cmp-surface-critical)]">Delete</button>
               </div>
             </div>
           </div>

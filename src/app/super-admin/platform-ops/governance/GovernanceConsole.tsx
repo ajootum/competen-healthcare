@@ -11,7 +11,7 @@ import { cardClass } from "@/components/ui/primitives";
 /* eslint-disable @typescript-eslint/no-explicit-any */
 const SCOPES = ["platform", "enterprise", "tenant", "hospital", "unit", "role"];
 const TYPES = ["standard", "normal", "major", "emergency", "security", "clinical_safety", "ai", "template", "rollback", "deprecation"];
-const statusTone = (s: string) => (["published", "verified", "closed"].includes(s) ? "bg-emerald-50 text-emerald-700" : ["rejected", "cancelled", "rolled_back", "failed"].includes(s) ? "bg-gray-100 text-gray-500" : s === "approved" ? "bg-sky-50 text-sky-700" : "bg-amber-50 text-amber-700");
+const statusTone = (s: string) => (["published", "verified", "closed"].includes(s) ? "bg-[var(--cmp-surface-success)] text-emerald-700" : ["rejected", "cancelled", "rolled_back", "failed"].includes(s) ? "bg-gray-100 text-gray-500" : s === "approved" ? "bg-[var(--cmp-surface-information)] text-[var(--cmp-text-information)]" : "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]");
 
 export default function GovernanceConsole({ list, objectKeys }: { list: any[]; objectKeys: { key: string; name: string }[] }) {
   const router = useRouter();
@@ -43,7 +43,7 @@ export default function GovernanceConsole({ list, objectKeys }: { list: any[]; o
 
   return (
     <div className={cardClass}>
-      {msg && <div className={`fixed bottom-4 right-4 z-50 text-sm rounded-lg px-4 py-2.5 shadow-lg ${msg.kind === "ok" ? "bg-emerald-600 text-white" : "bg-rose-600 text-white"}`}>{msg.text}</div>}
+      {msg && <div className={`fixed bottom-4 right-4 z-50 text-sm rounded-lg px-4 py-2.5 shadow-lg ${msg.kind === "ok" ? "bg-[var(--cmp-color-success)] text-white" : "bg-[var(--cmp-color-error)] text-white"}`}>{msg.text}</div>}
       <div className="flex items-center justify-between mb-3"><h2 className="text-sm font-bold text-gray-900">Change Requests</h2><button onClick={() => setOpen(o => !o)} className="text-xs bg-teal-600 text-white rounded-lg px-3 py-1.5 hover:bg-teal-700 font-medium">{open ? "Close" : "+ New Change Request"}</button></div>
 
       {open && (
@@ -98,6 +98,6 @@ export default function GovernanceConsole({ list, objectKeys }: { list: any[]; o
 }
 
 function Btn({ children, onClick, disabled, tone }: { children: any; onClick: () => void; disabled?: boolean; tone?: string }) {
-  const t = tone === "emerald" ? "bg-emerald-600 hover:bg-emerald-700" : tone === "sky" ? "bg-sky-600 hover:bg-sky-700" : tone === "rose" ? "bg-rose-600 hover:bg-rose-700" : tone === "amber" ? "bg-amber-500 hover:bg-amber-600" : tone === "gray" ? "bg-gray-400 hover:bg-gray-500" : "bg-gray-700 hover:bg-gray-800";
+  const t = tone === "emerald" ? "bg-[var(--cmp-color-success)] hover:bg-emerald-700" : tone === "sky" ? "bg-[var(--cmp-color-information)] hover:bg-sky-700" : tone === "rose" ? "bg-[var(--cmp-color-error)] hover:bg-rose-700" : tone === "amber" ? "bg-[var(--cmp-color-warning)] hover:bg-[var(--cmp-color-warning)]" : tone === "gray" ? "bg-gray-400 hover:bg-gray-500" : "bg-gray-700 hover:bg-gray-800";
   return <button onClick={onClick} disabled={disabled} className={`text-[11px] text-white rounded-lg px-2.5 py-1 disabled:opacity-50 ${t}`}>{children}</button>;
 }

@@ -48,12 +48,12 @@ export default async function CostEngine() {
       </div>
       <SchedulingTabs />
       <div className="flex gap-1 overflow-x-auto -mt-1">
-        {SUBTABS.map((t, i) => <span key={t} className={`shrink-0 text-[11px] px-2.5 py-1.5 rounded-full font-medium ${i === 0 ? "bg-emerald-50 text-emerald-700" : "text-gray-300"}`} title={i === 0 ? "" : "Next phase"}>{t}</span>)}
+        {SUBTABS.map((t, i) => <span key={t} className={`shrink-0 text-[11px] px-2.5 py-1.5 rounded-full font-medium ${i === 0 ? "bg-[var(--cmp-surface-success)] text-emerald-700" : "text-gray-300"}`} title={i === 0 ? "" : "Next phase"}>{t}</span>)}
       </div>
     </>
   );
 
-  if (!d.provisioned) return <div className="space-y-4">{header}<div className="bg-amber-50 border border-amber-200 rounded-xl p-6"><p className="font-semibold text-amber-900">⚙️ Roster store not provisioned</p><p className="text-sm text-amber-800 mt-1">Run migration <code>080</code> and generate a roster — the Cost Engine prices it.</p></div></div>;
+  if (!d.provisioned) return <div className="space-y-4">{header}<div className="bg-[var(--cmp-surface-warning)] border border-[var(--cmp-color-warning)] rounded-xl p-6"><p className="font-semibold text-amber-900">⚙️ Roster store not provisioned</p><p className="text-sm text-amber-800 mt-1">Run migration <code>080</code> and generate a roster — the Cost Engine prices it.</p></div></div>;
   if (!d.hasRoster) return <div className="space-y-4">{header}<div className={`${card} p-8 text-center`}><p className="text-3xl mb-2">💷</p><p className="text-sm font-semibold text-gray-700">No roster to cost for week of {d.weekStart}</p><p className="text-xs text-gray-400 mt-1">Generate a roster in the <Link href="/unit-manager/scheduling-engine" className="text-emerald-700 hover:underline">Scheduling Engine</Link> — cost analysis runs over it.</p></div></div>;
 
   const k = d.kpis; const m = d.model;
@@ -64,9 +64,9 @@ export default async function CostEngine() {
 
       <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-3">
         <Kpi label="Total labour cost" value={money(k.totalLabour)} sub="This week" icon="💷" />
-        <Kpi label="Budget vs actual" value={k.variance != null ? `${overBudget ? "+" : ""}${money(k.variance)}` : "—"} sub={k.weeklyBudget != null ? `Budget ${money(k.weeklyBudget)}` : "n/a"} icon="🎯" tone={overBudget ? "text-rose-600" : "text-emerald-600"} />
-        <Kpi label="Overtime cost" value={money(k.overtimePremium)} sub={`${k.overtimeHours} OT hours`} icon="⏰" tone={k.overtimePremium ? "text-amber-600" : undefined} />
-        <Kpi label="Agency spend (proj.)" value={money(k.agencyProjected)} sub={`${k.agencyShifts} uncovered post(s)`} icon="🏥" tone={k.agencyProjected ? "text-rose-600" : "text-emerald-600"} />
+        <Kpi label="Budget vs actual" value={k.variance != null ? `${overBudget ? "+" : ""}${money(k.variance)}` : "—"} sub={k.weeklyBudget != null ? `Budget ${money(k.weeklyBudget)}` : "n/a"} icon="🎯" tone={overBudget ? "text-[var(--cmp-text-error)]" : "text-[var(--cmp-text-success)]"} />
+        <Kpi label="Overtime cost" value={money(k.overtimePremium)} sub={`${k.overtimeHours} OT hours`} icon="⏰" tone={k.overtimePremium ? "text-[var(--cmp-text-warning)]" : undefined} />
+        <Kpi label="Agency spend (proj.)" value={money(k.agencyProjected)} sub={`${k.agencyShifts} uncovered post(s)`} icon="🏥" tone={k.agencyProjected ? "text-[var(--cmp-text-error)]" : "text-[var(--cmp-text-success)]"} />
         <Kpi label="Cost / patient day" value={money(k.costPerPatientDay)} sub="Labour only" icon="🛏️" />
         <Kpi label="Projected month-end" value={money(k.monthEnd)} sub="× 4.33 weeks" icon="📅" />
       </div>
@@ -79,7 +79,7 @@ export default async function CostEngine() {
             <div className="overflow-x-auto"><table className="w-full text-xs">
               <thead><tr className="text-gray-400 text-left border-b border-gray-100"><th className="py-2 pr-3 font-medium">Role</th><th className="py-2 pr-3 font-medium text-right">Rate £/hr</th><th className="py-2 pr-3 font-medium text-right">Hours</th><th className="py-2 pr-3 font-medium text-right">Cost</th><th className="py-2 font-medium text-right">% of labour</th></tr></thead>
               <tbody>{d.roleBreakdown.map((r: any) => (<tr key={r.role} className="border-b border-gray-50"><td className="py-2 pr-3 text-gray-700">{ROLE_LABEL[r.role] ?? r.role}</td><td className="py-2 pr-3 text-right text-gray-500">£{m.roleRate[r.role] ?? m.blendedRate}</td><td className="py-2 pr-3 text-right text-gray-600">{r.hours}</td><td className="py-2 pr-3 text-right font-semibold text-gray-800">{money(r.cost)}</td><td className="py-2 text-right text-gray-500">{r.pct}%</td></tr>))}</tbody>
-              <tfoot><tr className="border-t border-gray-200 font-bold"><td className="py-2 pr-3 text-gray-800" colSpan={3}>Total (incl. night differential + overtime)</td><td className="py-2 pr-3 text-right text-emerald-600" colSpan={2}>{money(k.totalLabour)}</td></tr></tfoot>
+              <tfoot><tr className="border-t border-gray-200 font-bold"><td className="py-2 pr-3 text-gray-800" colSpan={3}>Total (incl. night differential + overtime)</td><td className="py-2 pr-3 text-right text-[var(--cmp-text-success)]" colSpan={2}>{money(k.totalLabour)}</td></tr></tfoot>
             </table></div>
           )}
           <p className="text-[10px] text-gray-400 mt-2">Rates are configurable defaults (base £/hr by role · night +{Math.round((m.nightMultiplier - 1) * 100)}% · overtime ×{m.overtimeMultiplier} above {m.contractHoursWeek}h/wk · agency ×{m.agencyMultiplier}). A per-tenant payroll/finance store is next-phase.</p>
@@ -91,8 +91,8 @@ export default async function CostEngine() {
           {k.weeklyBudget == null ? <p className="text-sm text-gray-400">No establishment budget available.</p> : (
             <>
               <div className="flex items-end justify-between mb-1"><div><p className="text-[10px] text-gray-500 uppercase">Actual</p><p className="text-lg font-bold text-gray-900">{money(k.totalLabour)}</p></div><div className="text-right"><p className="text-[10px] text-gray-500 uppercase">Budget</p><p className="text-lg font-bold text-gray-500">{money(k.weeklyBudget)}</p></div></div>
-              <div className="w-full h-3 rounded-full bg-gray-100 overflow-hidden"><div className={`h-full ${overBudget ? "bg-rose-500" : "bg-emerald-500"}`} style={{ width: `${Math.min(100, Math.round((k.totalLabour / k.weeklyBudget) * 100))}%` }} /></div>
-              <p className={`text-xs mt-2 font-semibold ${overBudget ? "text-rose-600" : "text-emerald-600"}`}>{overBudget ? "Over budget by " : "Under budget by "}{money(Math.abs(k.variance))} ({Math.round((k.variance / k.weeklyBudget) * 100)}%)</p>
+              <div className="w-full h-3 rounded-full bg-gray-100 overflow-hidden"><div className={`h-full ${overBudget ? "bg-[var(--cmp-color-error)]" : "bg-[var(--cmp-color-success)]"}`} style={{ width: `${Math.min(100, Math.round((k.totalLabour / k.weeklyBudget) * 100))}%` }} /></div>
+              <p className={`text-xs mt-2 font-semibold ${overBudget ? "text-[var(--cmp-text-error)]" : "text-[var(--cmp-text-success)]"}`}>{overBudget ? "Over budget by " : "Under budget by "}{money(Math.abs(k.variance))} ({Math.round((k.variance / k.weeklyBudget) * 100)}%)</p>
               <p className="text-[10px] text-gray-400 mt-2">Budget = required establishment FTE × contracted hours × blended rate (establishment-based, not a finance-system budget).</p>
             </>
           )}

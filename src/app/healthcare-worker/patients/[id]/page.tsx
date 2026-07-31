@@ -17,8 +17,8 @@ import { AddDevice, RemoveDevice } from "./DeviceActions";
 export const dynamic = "force-dynamic";
 
 const STAFF = ["assessor", "educator", "lead_educator", "hospital_admin", "super_admin"];
-const MED_TONE: Record<string, string> = { due: "bg-blue-100 text-blue-700", overdue: "bg-red-100 text-red-700", delayed: "bg-amber-100 text-amber-700", scheduled: "bg-gray-100 text-gray-500", in_progress: "bg-indigo-100 text-indigo-700", administered: "bg-green-100 text-green-700", escalated: "bg-red-100 text-red-700", cancelled: "bg-gray-100 text-gray-400" };
-const TREND = { up: { icon: "↗", cls: "text-red-600" }, down: { icon: "↘", cls: "text-green-600" }, flat: { icon: "→", cls: "text-gray-400" } } as const;
+const MED_TONE: Record<string, string> = { due: "bg-[var(--cmp-surface-information)] text-blue-700", overdue: "bg-[var(--cmp-surface-critical)] text-[var(--cmp-text-critical)]", delayed: "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]", scheduled: "bg-gray-100 text-gray-500", in_progress: "bg-indigo-100 text-indigo-700", administered: "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]", escalated: "bg-[var(--cmp-surface-critical)] text-[var(--cmp-text-critical)]", cancelled: "bg-gray-100 text-gray-400" };
+const TREND = { up: { icon: "↗", cls: "text-[var(--cmp-text-critical)]" }, down: { icon: "↘", cls: "text-[var(--cmp-text-success)]" }, flat: { icon: "→", cls: "text-gray-400" } } as const;
 
 export default async function PatientWorkspacePage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -70,7 +70,7 @@ export default async function PatientWorkspacePage({ params }: { params: Promise
             <AcuityChip level={p.acuity_level} />
             <RiskChip level={p.risk_level} />
             {p.isolation_status !== "none" && <Chip tone="bg-purple-100 text-purple-700">{titleCase(p.isolation_status)} isolation</Chip>}
-            {p.op_beds?.bed_type === "critical_care" && <Chip tone="bg-sky-100 text-sky-700">ICU</Chip>}
+            {p.op_beds?.bed_type === "critical_care" && <Chip tone="bg-[var(--cmp-surface-information)] text-[var(--cmp-text-information)]">ICU</Chip>}
           </div>
           <p className="text-sm text-gray-500 mt-1">
             {p.age_years != null ? `${p.age_years} yrs` : "Age not in operational record"}
@@ -99,7 +99,7 @@ export default async function PatientWorkspacePage({ params }: { params: Promise
           <p className={label}>Acuity</p>
           <p className="text-2xl font-bold tabular-nums mt-1 text-gray-900">{c.acuityLatest ? `${c.acuityLatest.score}/18` : "—"}</p>
           <p className="text-xs text-gray-500">{c.acuityLatest ? `${titleCase(c.acuityLatest.level)} · ${fmtWhen(c.acuityLatest.assessed_at)}` : `operational level: ${titleCase(p.acuity_level)}`}</p>
-          {c.reassess.due && <p className="text-[10px] text-orange-600 font-semibold mt-1" title={c.reassess.reason ?? ""}>⚡ Focused reassessment recommended — {c.reassess.reason}</p>}
+          {c.reassess.due && <p className="text-[10px] text-[var(--cmp-text-warning)] font-semibold mt-1" title={c.reassess.reason ?? ""}>⚡ Focused reassessment recommended — {c.reassess.reason}</p>}
           <Link href="/healthcare-worker/acuity" className="text-[10px] text-emerald-700 hover:underline">Assess →</Link>
         </div>
         <div className={card}>
@@ -112,8 +112,8 @@ export default async function PatientWorkspacePage({ params }: { params: Promise
           <p className={label}>Next Due</p>
           {nextMed || nextObs ? (
             <div className="mt-1 space-y-1">
-              {nextMed && <p className={`text-sm ${nextMed.effective_status === "overdue" ? "text-red-600 font-semibold" : "text-gray-800"}`}>💊 {fmtTime(nextMed.scheduled_at)} — {nextMed.drug_name}{nextMed.high_risk ? " (HR)" : ""}</p>}
-              {nextObs && <p className={`text-sm ${nextObs.status === "overdue" ? "text-red-600 font-semibold" : "text-gray-800"}`}>📈 {nextObs.status === "overdue" ? "OVERDUE" : fmtTime(nextObs.due_at)} — {titleCase(nextObs.observation_type)}</p>}
+              {nextMed && <p className={`text-sm ${nextMed.effective_status === "overdue" ? "text-[var(--cmp-text-critical)] font-semibold" : "text-gray-800"}`}>💊 {fmtTime(nextMed.scheduled_at)} — {nextMed.drug_name}{nextMed.high_risk ? " (HR)" : ""}</p>}
+              {nextObs && <p className={`text-sm ${nextObs.status === "overdue" ? "text-[var(--cmp-text-critical)] font-semibold" : "text-gray-800"}`}>📈 {nextObs.status === "overdue" ? "OVERDUE" : fmtTime(nextObs.due_at)} — {titleCase(nextObs.observation_type)}</p>}
             </div>
           ) : <p className="text-sm text-gray-400 mt-1">Nothing due right now.</p>}
           <p className="text-xs text-gray-500 mt-1">{c.workloadPct != null ? `Workload ${Number(c.workloadPct).toFixed(0)}%` : "No workload assessment yet"} · <Link href="/healthcare-worker/workload" className="text-emerald-700 hover:underline">assess →</Link></p>
@@ -145,7 +145,7 @@ export default async function PatientWorkspacePage({ params }: { params: Promise
                   <span className="tabular-nums text-gray-500 w-24 shrink-0">{fmtWhen(m.scheduled_at)}</span>
                   <span className="flex-1 min-w-0 truncate">{m.drug_name}{m.dose_display ? ` ${m.dose_display}` : ""} · {String(m.route).toUpperCase()}</span>
                   <Chip tone={MED_TONE[m.effective_status] ?? MED_TONE.scheduled}>{titleCase(m.effective_status)}</Chip>
-                  {m.high_risk && <span className="text-orange-600 text-[9px] font-bold">HR</span>}
+                  {m.high_risk && <span className="text-[var(--cmp-text-warning)] text-[9px] font-bold">HR</span>}
                 </p>
               ))}
             </div>
@@ -172,7 +172,7 @@ export default async function PatientWorkspacePage({ params }: { params: Promise
           {d.acuityHistory.length === 0 && d.workloadHistory.length === 0 ? <Empty>No scored assessments yet.</Empty> : (
             <div className="space-y-1 max-h-48 overflow-y-auto text-xs text-gray-600">
               {d.acuityHistory.slice(0, 8).map((a: any) => (
-                <p key={a.id} className="flex items-center gap-2"><span className="tabular-nums text-gray-400 w-24 shrink-0">{fmtWhen(a.assessed_at)}</span>Acuity <span className="font-bold tabular-nums">{a.score}/18</span> {a.level}{a.significant_change ? <Chip tone="bg-orange-100 text-orange-700">significant</Chip> : null}</p>
+                <p key={a.id} className="flex items-center gap-2"><span className="tabular-nums text-gray-400 w-24 shrink-0">{fmtWhen(a.assessed_at)}</span>Acuity <span className="font-bold tabular-nums">{a.score}/18</span> {a.level}{a.significant_change ? <Chip tone="bg-[var(--cmp-surface-warning)] text-orange-700">significant</Chip> : null}</p>
               ))}
               {d.workloadHistory.slice(0, 8).map((w: any) => (
                 <p key={w.id} className="flex items-center gap-2"><span className="tabular-nums text-gray-400 w-24 shrink-0">{fmtWhen(w.assessed_at)}</span>Workload <span className="font-bold tabular-nums">{Number(w.percentage).toFixed(0)}%</span> ({w.framework === "nas" ? "NAS" : "ward"})</p>
@@ -184,7 +184,7 @@ export default async function PatientWorkspacePage({ params }: { params: Promise
         <SectionCard icon="🛡️" title="Quality Events" count={c.alerts.length + c.escalations.length + c.concerns.length}>
           <div className="space-y-1.5 max-h-48 overflow-y-auto text-xs">
             {c.alerts.length + c.escalations.length + c.concerns.length === 0 && <Empty>No active alerts, escalations or concerns.</Empty>}
-            {c.alerts.map((a: any) => <p key={a.id} className="text-red-700">⚠ {titleCase(a.category)} ({a.severity}){a.note ? ` — ${a.note}` : ""}</p>)}
+            {c.alerts.map((a: any) => <p key={a.id} className="text-[var(--cmp-text-critical)]">⚠ {titleCase(a.category)} ({a.severity}){a.note ? ` — ${a.note}` : ""}</p>)}
             {c.escalations.map((e: any) => <p key={e.id} className="text-orange-700">⬆ L{e.level} {e.summary}</p>)}
             {c.concerns.map((cn: any) => <p key={cn.id} className="text-gray-700">🚩 {titleCase(cn.category)} ({titleCase(cn.priority)}) — {cn.description}</p>)}
           </div>
@@ -197,7 +197,7 @@ export default async function PatientWorkspacePage({ params }: { params: Promise
             {d.devices.active.map((dv: any) => (
               <p key={dv.id} className="flex items-center gap-2 text-gray-700">
                 <span className="flex-1 min-w-0 truncate">{titleCase(dv.device_type)}{dv.site ? ` — ${dv.site}` : ""}</span>
-                <span className={`tabular-nums ${dv.reviewDue ? "text-red-600 font-semibold" : "text-gray-400"}`}>{dv.lineDays}d{dv.reviewDue ? " ⚠ review" : ""}</span>
+                <span className={`tabular-nums ${dv.reviewDue ? "text-[var(--cmp-text-critical)] font-semibold" : "text-gray-400"}`}>{dv.lineDays}d{dv.reviewDue ? " ⚠ review" : ""}</span>
                 <RemoveDevice id={dv.id} />
               </p>
             ))}

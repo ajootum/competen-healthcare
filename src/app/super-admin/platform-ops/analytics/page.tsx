@@ -11,7 +11,7 @@ export const dynamic = "force-dynamic";
 // forecasting, cross-tenant benchmarking and model-based recommendations (§6/§7) are next-phase. Super-admin.
 /* eslint-disable @typescript-eslint/no-explicit-any */
 const card = "bg-white rounded-xl border border-gray-200";
-const healthTone = (n: number) => n >= 80 ? "text-emerald-600" : n >= 50 ? "text-amber-600" : "text-rose-600";
+const healthTone = (n: number) => n >= 80 ? "text-[var(--cmp-text-success)]" : n >= 50 ? "text-[var(--cmp-text-warning)]" : "text-[var(--cmp-text-error)]";
 function Stat({ label, value, tone, sub }: { label: string; value: any; tone?: string; sub?: string }) {
   return <div className={`${card} p-4`}><p className="text-[10px] text-gray-500 uppercase tracking-wide">{label}</p><p className={`text-2xl font-bold tabular-nums mt-0.5 ${tone ?? "text-gray-900"}`}>{value}</p>{sub && <p className="text-[10px] text-gray-400 mt-0.5">{sub}</p>}</div>;
 }
@@ -50,10 +50,10 @@ export default async function AnalyticsPage() {
     </>
   );
 
-  if (!a.provisioned) return <div className="space-y-5 max-w-6xl">{header}<div className="bg-amber-50 border border-amber-200 rounded-xl p-6"><p className="font-semibold text-amber-900">⚙️ Not provisioned</p><p className="text-sm text-amber-800 mt-1">The configuration registry (migration 092) is not set up yet — there is nothing to analyse.</p></div></div>;
+  if (!a.provisioned) return <div className="space-y-5 max-w-6xl">{header}<div className="bg-[var(--cmp-surface-warning)] border border-[var(--cmp-color-warning)] rounded-xl p-6"><p className="font-semibold text-amber-900">⚙️ Not provisioned</p><p className="text-sm text-amber-800 mt-1">The configuration registry (migration 092) is not set up yet — there is nothing to analyse.</p></div></div>;
 
-  const sevTone: Record<string, string> = { high: "border-rose-200 bg-rose-50", medium: "border-amber-200 bg-amber-50", low: "border-emerald-200 bg-emerald-50" };
-  const sevDot: Record<string, string> = { high: "bg-rose-500", medium: "bg-amber-500", low: "bg-emerald-500" };
+  const sevTone: Record<string, string> = { high: "border-[var(--cmp-color-error)] bg-[var(--cmp-surface-error)]", medium: "border-[var(--cmp-color-warning)] bg-[var(--cmp-surface-warning)]", low: "border-[var(--cmp-color-success)] bg-[var(--cmp-surface-success)]" };
+  const sevDot: Record<string, string> = { high: "bg-[var(--cmp-color-error)]", medium: "bg-[var(--cmp-color-warning)]", low: "bg-[var(--cmp-color-success)]" };
   const maxSpark = Math.max(1, ...a.activity.series);
   const momentum = a.activity.last7 - a.activity.prev7;
 
@@ -64,7 +64,7 @@ export default async function AnalyticsPage() {
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         <Stat label="Configuration Health" value={`${a.health.overall}`} tone={healthTone(a.health.overall)} sub="weighted, 0–100" />
         <Stat label="Objects" value={a.inventory.total} sub={`${a.inventory.studioAuthored} studio-authored`} />
-        <Stat label="Definition Rate" value={`${a.inventory.definitionRate}%`} tone={a.inventory.definitionRate >= 80 ? "text-emerald-600" : "text-amber-600"} sub={`${a.inventory.defined}/${a.inventory.authorable} authorable`} />
+        <Stat label="Definition Rate" value={`${a.inventory.definitionRate}%`} tone={a.inventory.definitionRate >= 80 ? "text-[var(--cmp-text-success)]" : "text-[var(--cmp-text-warning)]"} sub={`${a.inventory.defined}/${a.inventory.authorable} authorable`} />
         <Stat label="Avg Cycle Time" value={a.cycleTime.provisioned ? `${a.cycleTime.avgDays}d` : "—"} sub={a.cycleTime.provisioned ? `${a.cycleTime.settled} settled CRs` : "no governance data"} />
       </div>
 
@@ -89,12 +89,12 @@ export default async function AnalyticsPage() {
           <h2 className="font-semibold text-gray-900 text-sm mb-3">Health Distribution</h2>
           <div className="flex items-center gap-2 mb-3">
             <div className="flex-1 flex h-4 rounded overflow-hidden bg-gray-100">
-              <div className="bg-emerald-500 h-full" style={{ width: `${(a.health.dist.healthy / a.inventory.total) * 100}%` }} />
-              <div className="bg-amber-500 h-full" style={{ width: `${(a.health.dist.watch / a.inventory.total) * 100}%` }} />
-              <div className="bg-rose-500 h-full" style={{ width: `${(a.health.dist.atRisk / a.inventory.total) * 100}%` }} />
+              <div className="bg-[var(--cmp-color-success)] h-full" style={{ width: `${(a.health.dist.healthy / a.inventory.total) * 100}%` }} />
+              <div className="bg-[var(--cmp-color-warning)] h-full" style={{ width: `${(a.health.dist.watch / a.inventory.total) * 100}%` }} />
+              <div className="bg-[var(--cmp-color-error)] h-full" style={{ width: `${(a.health.dist.atRisk / a.inventory.total) * 100}%` }} />
             </div>
           </div>
-          <div className="flex gap-4 text-[11px] mb-3"><span className="text-emerald-600">● {a.health.dist.healthy} healthy</span><span className="text-amber-600">● {a.health.dist.watch} watch</span><span className="text-rose-600">● {a.health.dist.atRisk} at-risk</span></div>
+          <div className="flex gap-4 text-[11px] mb-3"><span className="text-[var(--cmp-text-success)]">● {a.health.dist.healthy} healthy</span><span className="text-[var(--cmp-text-warning)]">● {a.health.dist.watch} watch</span><span className="text-[var(--cmp-text-error)]">● {a.health.dist.atRisk} at-risk</span></div>
           {a.health.worst.length > 0 && <>
             <p className="text-[11px] font-semibold text-gray-500 mb-1.5">Lowest scoring</p>
             <div className="space-y-1">{a.health.worst.map((w: any) => (
@@ -108,7 +108,7 @@ export default async function AnalyticsPage() {
           <h2 className="font-semibold text-gray-900 text-sm mb-3">Inventory by Type</h2>
           <Bars rows={a.inventory.byType} />
           <p className="text-[11px] font-semibold text-gray-500 mt-4 mb-1.5">By status</p>
-          <Bars rows={a.inventory.byStatus} tone="bg-sky-400" />
+          <Bars rows={a.inventory.byStatus} tone="bg-[var(--cmp-color-information)]" />
         </div>
       </div>
 
@@ -130,7 +130,7 @@ export default async function AnalyticsPage() {
           <p className="text-[11px] text-gray-400 mb-3">Version churn — objects with the most snapshots.</p>
           {a.churn.length === 0 ? <p className="text-[11px] text-gray-400">No version history yet.</p> : (
             <div className="space-y-1">{a.churn.map((cn: any) => (
-              <Link key={cn.key} href="/super-admin/platform-ops/versions" className="flex items-center gap-2 text-[11px] hover:bg-gray-50 rounded px-1 py-0.5"><span className="w-8 text-right font-bold tabular-nums text-amber-600">{cn.versions}</span><span className="text-gray-700 truncate flex-1">{cn.name}</span></Link>
+              <Link key={cn.key} href="/super-admin/platform-ops/versions" className="flex items-center gap-2 text-[11px] hover:bg-gray-50 rounded px-1 py-0.5"><span className="w-8 text-right font-bold tabular-nums text-[var(--cmp-text-warning)]">{cn.versions}</span><span className="text-gray-700 truncate flex-1">{cn.name}</span></Link>
             ))}</div>
           )}
         </div>
@@ -140,7 +140,7 @@ export default async function AnalyticsPage() {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <div className={`${card} p-5`}>
           <h2 className="font-semibold text-gray-900 text-sm mb-1">Change Activity <span className="text-gray-300 font-normal">· 14 days</span></h2>
-          <p className="text-[11px] text-gray-400 mb-3">{a.activity.last7} changes in the last 7 days · <span className={momentum >= 0 ? "text-emerald-600" : "text-rose-600"}>{momentum >= 0 ? "▲" : "▼"} {Math.abs(momentum)}</span> vs prior 7</p>
+          <p className="text-[11px] text-gray-400 mb-3">{a.activity.last7} changes in the last 7 days · <span className={momentum >= 0 ? "text-[var(--cmp-text-success)]" : "text-[var(--cmp-text-error)]"}>{momentum >= 0 ? "▲" : "▼"} {Math.abs(momentum)}</span> vs prior 7</p>
           <div className="flex items-end gap-1 h-16 mb-3">{a.activity.series.map((n: number, i: number) => <div key={i} className="flex-1 bg-indigo-300 rounded-t" style={{ height: `${Math.max(4, (n / maxSpark) * 100)}%` }} title={`${n}`} />)}</div>
           {a.activity.byAction.length > 0 && <div className="flex flex-wrap gap-1.5">{a.activity.byAction.slice(0, 6).map(([act, n]: [string, number]) => <span key={act} className="text-[10px] bg-gray-50 border border-gray-100 rounded px-1.5 py-0.5 text-gray-600">{act} · {n}</span>)}</div>}
         </div>

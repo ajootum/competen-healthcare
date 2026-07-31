@@ -35,11 +35,11 @@ export default function AdminUsers({ users }: { users: UserRow[] }) {
               <tr key={u.id} className="text-[12px] border-b border-gray-50 hover:bg-gray-50">
                 <td className="px-4 py-2.5">
                   <div className="flex items-center gap-2.5">
-                    <span className="w-7 h-7 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center text-[11px] font-bold shrink-0">{(u.name[0] ?? "?").toUpperCase()}</span>
+                    <span className="w-7 h-7 rounded-full bg-[var(--cmp-surface-information)] text-blue-700 flex items-center justify-center text-[11px] font-bold shrink-0">{(u.name[0] ?? "?").toUpperCase()}</span>
                     <span className="min-w-0"><span className="block font-medium text-gray-800 truncate">{u.name}</span><span className="block text-[10px] text-gray-400 truncate">{u.email}</span></span>
                   </div>
                 </td>
-                <td className="px-2 py-2.5"><div className="flex flex-wrap gap-1">{u.roles.length ? u.roles.map(r => <span key={r} className="text-[10px] font-semibold text-blue-700 bg-blue-50 rounded px-1.5 py-0.5">{r}</span>) : <span className="text-gray-300">—</span>}</div></td>
+                <td className="px-2 py-2.5"><div className="flex flex-wrap gap-1">{u.roles.length ? u.roles.map(r => <span key={r} className="text-[10px] font-semibold text-blue-700 bg-[var(--cmp-surface-information)] rounded px-1.5 py-0.5">{r}</span>) : <span className="text-gray-300">—</span>}</div></td>
                 <td className="px-2 py-2.5 text-gray-600">{u.department}</td>
                 <td className="px-2 py-2.5 text-gray-600 truncate max-w-[140px]">{u.workspace}</td>
                 <td className="px-2 py-2.5 text-gray-400 whitespace-nowrap">{fmtDate(u.joined)}</td>

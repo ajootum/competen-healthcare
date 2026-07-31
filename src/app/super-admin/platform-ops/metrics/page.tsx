@@ -49,15 +49,15 @@ export default async function MetricsBuilder() {
     </>
   );
 
-  if (notReady) return <div className="space-y-5 max-w-6xl">{header}<div className="bg-amber-50 border border-amber-200 rounded-xl p-6"><p className="font-semibold text-amber-900">⚙️ Not provisioned</p><p className="text-sm text-amber-800 mt-1">Apply migration 092 (registry) + 094 (object definition), then author a Metric in the <Link href="/super-admin/platform-ops/studio" className="underline">Configuration Studio</Link>.</p></div></div>;
+  if (notReady) return <div className="space-y-5 max-w-6xl">{header}<div className="bg-[var(--cmp-surface-warning)] border border-[var(--cmp-color-warning)] rounded-xl p-6"><p className="font-semibold text-amber-900">⚙️ Not provisioned</p><p className="text-sm text-amber-800 mt-1">Apply migration 092 (registry) + 094 (object definition), then author a Metric in the <Link href="/super-admin/platform-ops/studio" className="underline">Configuration Studio</Link>.</p></div></div>;
 
   return (
     <div className="space-y-5 max-w-6xl">
       {header}
       <div className="grid grid-cols-3 gap-3">
         <Stat label="Metric Objects" value={list.length} sub="governed in the registry" />
-        <Stat label="With Formula" value={defined} tone="text-emerald-600" sub="definition complete" />
-        <Stat label="Awaiting Definition" value={list.length - defined} tone={list.length - defined ? "text-amber-600" : "text-emerald-600"} sub="need a formula" />
+        <Stat label="With Formula" value={defined} tone="text-[var(--cmp-text-success)]" sub="definition complete" />
+        <Stat label="Awaiting Definition" value={list.length - defined} tone={list.length - defined ? "text-[var(--cmp-text-warning)]" : "text-[var(--cmp-text-success)]"} sub="need a formula" />
       </div>
       <MetricEditor metrics={list} />
 

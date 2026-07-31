@@ -14,7 +14,7 @@ export default async function ScorecardPage() {
 
   const head = <Head code="UMW-PA-002 · Performance Analytics" title="KPI & Balanced Scorecard Centre" sub="Define, govern and monitor every strategic and operational KPI across six balanced-scorecard perspectives — with targets, RAG thresholds, benchmarks and trends." />;
   if (!d.provisioned) return <div className="max-w-[1500px] space-y-4">{head}<Tabs active="002" /><Provision module="the Scorecard Centre" /></div>;
-  if (!d.hasData) return <div className="max-w-[1500px] space-y-4">{head}<Tabs active="002" /><div className="bg-blue-50 border border-blue-200 rounded-xl p-6 text-sm text-blue-800">Seed with <code className="font-mono">node scripts/seed-performance-analytics.mjs</code>.</div></div>;
+  if (!d.hasData) return <div className="max-w-[1500px] space-y-4">{head}<Tabs active="002" /><div className="bg-[var(--cmp-surface-information)] border border-[var(--cmp-color-information)] rounded-xl p-6 text-sm text-blue-800">Seed with <code className="font-mono">node scripts/seed-performance-analytics.mjs</code>.</div></div>;
 
   const t = d.totals;
   return (
@@ -76,7 +76,7 @@ export default async function ScorecardPage() {
               {d.catalogue.map((k: any) => (
                 <div key={k.code} className="flex items-center px-2 py-1.5 rounded-lg border border-gray-100 text-[12px]">
                   <span className="w-14 text-gray-400 font-mono text-[10px]">{k.code}</span>
-                  <span className="flex-1 text-gray-800 truncate">{k.name}{k.isLive && <span className="ml-1 text-[8px] text-emerald-600 font-bold uppercase">live</span>}</span>
+                  <span className="flex-1 text-gray-800 truncate">{k.name}{k.isLive && <span className="ml-1 text-[8px] text-[var(--cmp-text-success)] font-bold uppercase">live</span>}</span>
                   <span className="w-28 flex items-center gap-1 text-gray-500 text-[11px]"><span className="w-1.5 h-1.5 rounded-full" style={{ background: k.perspectiveColor }} />{k.perspective}</span>
                   <span className="w-20 text-right font-semibold text-gray-900 tabular-nums">{fmtVal(k.value, k.unit)}</span>
                   <span className="w-16 text-right text-gray-400 tabular-nums">{fmtVal(k.target, k.unit)}</span>

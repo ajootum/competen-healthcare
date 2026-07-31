@@ -19,8 +19,8 @@ export default async function ConfigPage() {
       {head}<Tabs active="010" />
       <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-3">
         <Stat label="Config Items" value={k.total} sub={`${k.active} active`} />
-        <Stat label="Inherited" value={k.inherited} sub="from platform" tone="text-blue-600" />
-        <Stat label="Local Overrides" value={k.local} sub="tenant-specific" tone="text-amber-600" />
+        <Stat label="Inherited" value={k.inherited} sub="from platform" tone="text-[var(--cmp-text-information)]" />
+        <Stat label="Local Overrides" value={k.local} sub="tenant-specific" tone="text-[var(--cmp-text-warning)]" />
         <Stat label="Categories" value={k.categories} sub="config domains" />
         <Stat label="Override %" value={`${k.total ? Math.round((k.local / k.total) * 100) : 0}%`} sub="local vs total" />
       </div>

@@ -14,10 +14,10 @@ export const dynamic = "force-dynamic";
 
 const ACCENT: Record<number, { badge: string; action: string }> = {
   1: { badge: "bg-violet-100 text-violet-700", action: "bg-violet-600 hover:bg-violet-700" },
-  2: { badge: "bg-blue-100 text-blue-700", action: "bg-blue-600 hover:bg-blue-700" },
-  3: { badge: "bg-green-100 text-green-700", action: "bg-green-600 hover:bg-green-700" },
-  4: { badge: "bg-orange-100 text-orange-700", action: "bg-orange-600 hover:bg-orange-700" },
-  5: { badge: "bg-rose-100 text-rose-700", action: "bg-rose-600 hover:bg-rose-700" },
+  2: { badge: "bg-[var(--cmp-surface-information)] text-blue-700", action: "bg-[var(--cmp-color-information)] hover:bg-blue-700" },
+  3: { badge: "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]", action: "bg-[var(--cmp-color-success)] hover:bg-green-700" },
+  4: { badge: "bg-[var(--cmp-surface-warning)] text-orange-700", action: "bg-[var(--cmp-color-warning)] hover:bg-orange-700" },
+  5: { badge: "bg-[var(--cmp-surface-error)] text-[var(--cmp-text-error)]", action: "bg-[var(--cmp-color-error)] hover:bg-rose-700" },
   6: { badge: "bg-indigo-100 text-indigo-700", action: "bg-indigo-600 hover:bg-indigo-700" },
 };
 const TRUST = ["🤖 AI-Powered", "🕓 Version Controlled", "🔐 Role-Based Access", "⚖️ Audit & Governance", "🧩 Integrated Platform", "🛡️ Secure & Compliant"];

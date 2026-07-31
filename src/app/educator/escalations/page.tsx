@@ -56,7 +56,7 @@ export default async function EscalationsPage() {
                     <span className="text-xs font-semibold text-gray-800">{(e.profiles as unknown as { full_name: string } | null)?.full_name ?? "—"}</span>
                     <span className="text-[11px] text-gray-500 flex-1 truncate">{e.skill_name}</span>
                     {h != null && (
-                      <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded uppercase ${h > 48 ? "bg-red-100 text-red-700" : h > 24 ? "bg-amber-100 text-amber-700" : "bg-blue-100 text-blue-700"}`}>
+                      <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded uppercase ${h > 48 ? "bg-[var(--cmp-surface-critical)] text-[var(--cmp-text-critical)]" : h > 24 ? "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]" : "bg-[var(--cmp-surface-information)] text-blue-700"}`}>
                         {h}h open
                       </span>
                     )}
@@ -83,7 +83,7 @@ export default async function EscalationsPage() {
                 <div key={e.id} className="flex items-center gap-2 text-[11px] py-1">
                   <span className="text-gray-800 font-medium truncate">{(e.profiles as unknown as { full_name: string } | null)?.full_name ?? "—"}</span>
                   <span className="text-gray-400 truncate flex-1">{e.skill_name}</span>
-                  <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded uppercase ${e.status === "verified" ? "bg-green-50 text-green-600" : "bg-red-50 text-red-600"}`}>{e.status.replace("_", " ")}</span>
+                  <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded uppercase ${e.status === "verified" ? "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]" : "bg-[var(--cmp-surface-critical)] text-[var(--cmp-text-critical)]"}`}>{e.status.replace("_", " ")}</span>
                   <span className="text-gray-300 shrink-0">{e.verified_by_name ?? "—"}</span>
                 </div>
               ))}

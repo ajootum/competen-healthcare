@@ -92,11 +92,11 @@ export default async function AccountSubscriptionPage() {
 
   const USAGE: { label: string; value: string; sub: string; icon: string; tone: string }[] = [
     { label: "CPD Hours",             value: String(cpdHoursMonth), sub: "Hours",                      icon: "🕐", tone: "bg-teal-50 border-teal-100" },
-    { label: "Assessments",           value: String(assessMonth),   sub: `Completed · ${assessDone.length} all time`, icon: "📝", tone: "bg-blue-50 border-blue-100" },
-    { label: "Competencies Achieved", value: String(compMonth),     sub: `New · ${validated.length} all time`,        icon: "🎖️", tone: "bg-green-50 border-green-100" },
-    { label: "Skills Logged",         value: String(skillsMonth ?? 0), sub: "Logbook entries",         icon: "📖", tone: "bg-amber-50 border-amber-100" },
+    { label: "Assessments",           value: String(assessMonth),   sub: `Completed · ${assessDone.length} all time`, icon: "📝", tone: "bg-[var(--cmp-surface-information)] border-[var(--cmp-color-information)]" },
+    { label: "Competencies Achieved", value: String(compMonth),     sub: `New · ${validated.length} all time`,        icon: "🎖️", tone: "bg-[var(--cmp-surface-success)] border-[var(--cmp-color-success)]" },
+    { label: "Skills Logged",         value: String(skillsMonth ?? 0), sub: "Logbook entries",         icon: "📖", tone: "bg-[var(--cmp-surface-warning)] border-[var(--cmp-color-warning)]" },
     { label: "Knowledge Checks",      value: String(quizMonth ?? 0),   sub: "Questions answered",      icon: "❓", tone: "bg-violet-50 border-violet-100" },
-    { label: "Certificates Earned",   value: String(compMonth),     sub: "This month",                 icon: "🏅", tone: "bg-rose-50 border-rose-100" },
+    { label: "Certificates Earned",   value: String(compMonth),     sub: "This month",                 icon: "🏅", tone: "bg-[var(--cmp-surface-error)] border-[var(--cmp-color-error)]" },
   ];
 
   const memberSince = me?.created_at
@@ -124,7 +124,7 @@ export default async function AccountSubscriptionPage() {
                 <div className="flex-1 min-w-0">
                   <div className="flex flex-wrap items-center gap-2">
                     <h2 className="font-bold text-gray-900">Organisation Licence</h2>
-                    <span className="text-[9px] font-bold bg-green-100 text-green-700 px-2 py-0.5 rounded uppercase tracking-wider">Active</span>
+                    <span className="text-[9px] font-bold bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)] px-2 py-0.5 rounded uppercase tracking-wider">Active</span>
                   </div>
                   <p className="text-xs text-gray-400 mt-0.5">
                     Your access is provided by your organisation — no personal subscription or payment is needed.
@@ -177,7 +177,7 @@ export default async function AccountSubscriptionPage() {
                 <div className="flex-1 min-w-0">
                   <div className="flex flex-wrap items-center gap-2">
                     <h2 className="font-bold text-gray-900">Community Membership</h2>
-                    <span className="text-[9px] font-bold bg-green-100 text-green-700 px-2 py-0.5 rounded uppercase tracking-wider">Active</span>
+                    <span className="text-[9px] font-bold bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)] px-2 py-0.5 rounded uppercase tracking-wider">Active</span>
                   </div>
                   <p className="text-xs text-gray-400 mt-0.5">You&apos;re on the free Community plan.</p>
                 </div>
@@ -189,7 +189,7 @@ export default async function AccountSubscriptionPage() {
                 </div>
                 <div>
                   <p className="text-[10px] text-gray-400 mb-0.5">Status</p>
-                  <p className="text-sm font-semibold text-green-600">Active</p>
+                  <p className="text-sm font-semibold text-[var(--cmp-text-success)]">Active</p>
                 </div>
                 <div>
                   <p className="text-[10px] text-gray-400 mb-0.5">Member Since</p>
@@ -311,9 +311,9 @@ export default async function AccountSubscriptionPage() {
 
         {/* Right rail — why membership matters */}
         <div className="flex flex-col gap-4">
-          <div className="bg-amber-50 border border-amber-100 rounded-2xl p-5">
+          <div className="bg-[var(--cmp-surface-warning)] border border-[var(--cmp-color-warning)] rounded-2xl p-5">
             <div className="flex items-center gap-2 mb-3">
-              <span className="w-8 h-8 rounded-lg bg-amber-100 flex items-center justify-center">🛡️</span>
+              <span className="w-8 h-8 rounded-lg bg-[var(--cmp-surface-warning)] flex items-center justify-center">🛡️</span>
               <h2 className="text-sm font-bold text-amber-900 leading-tight">Why your membership matters</h2>
             </div>
             <div className="flex flex-col gap-3">

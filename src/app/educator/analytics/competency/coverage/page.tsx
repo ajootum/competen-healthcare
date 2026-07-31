@@ -84,7 +84,7 @@ export default async function Coverage() {
               {d.byFramework.map(f => (
                 <div key={f.name} className="flex items-center gap-2">
                   <span className="text-[10px] text-gray-500 w-36 truncate">{f.name}</span>
-                  <div className="flex-1 h-2 bg-gray-100 rounded-full overflow-hidden"><div className={`h-full rounded-full ${f.pct >= 70 ? "bg-green-500" : f.pct >= 40 ? "bg-amber-400" : "bg-purple-400"}`} style={{ width: `${f.pct}%` }} /></div>
+                  <div className="flex-1 h-2 bg-gray-100 rounded-full overflow-hidden"><div className={`h-full rounded-full ${f.pct >= 70 ? "bg-[var(--cmp-color-success)]" : f.pct >= 40 ? "bg-[var(--cmp-color-warning)]" : "bg-purple-400"}`} style={{ width: `${f.pct}%` }} /></div>
                   <span className="text-[10px] font-bold text-gray-600 w-9 text-right">{f.pct}%</span>
                 </div>
               ))}

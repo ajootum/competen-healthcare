@@ -15,7 +15,7 @@ export const dynamic = "force-dynamic";
 
 const card = "bg-white rounded-xl border border-gray-200";
 const ACU: Record<string, string> = { red: "#ef4444", orange: "#f97316", amber: "#f59e0b", green: "#22c55e" };
-const SEV: Record<string, string> = { High: "bg-rose-50 text-rose-700", Medium: "bg-amber-50 text-amber-700", Low: "bg-gray-100 text-gray-600" };
+const SEV: Record<string, string> = { High: "bg-[var(--cmp-surface-error)] text-[var(--cmp-text-error)]", Medium: "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]", Low: "bg-gray-100 text-gray-600" };
 const STEPS = ["Shift Identity", "Incoming Team", "Workforce Availability", "Patient Census", "Patient Acuity", "Operational Workload", "Competency Readiness", "Demand Calculation", "Staff Allocation", "Readiness & Activation"];
 
 function Ring({ pct, label, tone, big }: { pct: number | null; label: string; tone: string; big?: string }) {
@@ -40,11 +40,11 @@ export default async function ShiftActivationCentre() {
   const header = (
     <div className="flex items-start justify-between gap-3 flex-wrap">
       <div className="flex items-center gap-2"><span className="text-xl">📅</span><div><h1 className="text-2xl font-bold text-gray-900 tracking-tight">Shift Planning &amp; Activation Centre</h1><p className="text-sm text-gray-500">Plan, validate and activate the shift with confidence.</p></div></div>
-      <div className="flex items-center gap-2">{d.ready && <span className={`text-xs font-semibold px-2.5 py-1.5 rounded-lg ${d.phase === "activated" ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-700"}`}>{d.phase === "activated" ? "● Shift active" : "○ Planning in progress"}</span>}<Link href="/supervisor/handover" className="text-xs font-semibold px-2.5 py-1.5 rounded-lg border border-gray-200 text-gray-600">Handover View</Link></div>
+      <div className="flex items-center gap-2">{d.ready && <span className={`text-xs font-semibold px-2.5 py-1.5 rounded-lg ${d.phase === "activated" ? "bg-[var(--cmp-surface-success)] text-emerald-700" : "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]"}`}>{d.phase === "activated" ? "● Shift active" : "○ Planning in progress"}</span>}<Link href="/supervisor/handover" className="text-xs font-semibold px-2.5 py-1.5 rounded-lg border border-gray-200 text-gray-600">Handover View</Link></div>
     </div>
   );
 
-  if (!d.ready) return <div className="space-y-4">{header}<div className="bg-amber-50 border border-amber-200 rounded-xl p-6"><p className="font-semibold text-amber-900">⚙️ No operational data</p><p className="text-sm text-amber-800 mt-1">The activation centre orchestrates a running/planned shift with patients + staff.</p></div></div>;
+  if (!d.ready) return <div className="space-y-4">{header}<div className="bg-[var(--cmp-surface-warning)] border border-[var(--cmp-color-warning)] rounded-xl p-6"><p className="font-semibold text-amber-900">⚙️ No operational data</p><p className="text-sm text-amber-800 mt-1">The activation centre orchestrates a running/planned shift with patients + staff.</p></div></div>;
 
   const w = d.workforce, ce = d.census, ac = d.acuity, dm = d.demand;
   const done = [!!d.shift, !!d.publishedRoster, w.attendancePct != null && w.attendancePct >= 90, ce.totalPatients > 0, ac.avgAcuity != null, true, d.competencyReadiness.every((c: any) => c.ok), dm.minRequired != null, ce.totalPatients === 0 || (d as any).checklist?.find?.((x: any) => x.label === "All patients assigned")?.ok, d.phase === "activated"];
@@ -56,7 +56,7 @@ export default async function ShiftActivationCentre() {
       {header}
 
       {/* 10-step workflow */}
-      <div className={`${card} p-3`}><div className="flex items-center justify-between gap-1 overflow-x-auto">{STEPS.map((s, i) => (<div key={s} className="flex flex-col items-center text-center min-w-[80px] flex-1"><span className={`w-7 h-7 rounded-full text-[11px] font-bold flex items-center justify-center ${done[i] ? "bg-emerald-500 text-white" : i === done.findIndex((x: any) => !x) ? "bg-blue-600 text-white" : "bg-gray-100 text-gray-400"}`}>{done[i] ? "✓" : i + 1}</span><span className={`text-[9px] mt-1 leading-tight ${done[i] ? "text-gray-700 font-medium" : "text-gray-400"}`}>{s}</span></div>))}</div></div>
+      <div className={`${card} p-3`}><div className="flex items-center justify-between gap-1 overflow-x-auto">{STEPS.map((s, i) => (<div key={s} className="flex flex-col items-center text-center min-w-[80px] flex-1"><span className={`w-7 h-7 rounded-full text-[11px] font-bold flex items-center justify-center ${done[i] ? "bg-[var(--cmp-color-success)] text-white" : i === done.findIndex((x: any) => !x) ? "bg-[var(--cmp-color-information)] text-white" : "bg-gray-100 text-gray-400"}`}>{done[i] ? "✓" : i + 1}</span><span className={`text-[9px] mt-1 leading-tight ${done[i] ? "text-gray-700 font-medium" : "text-gray-400"}`}>{s}</span></div>))}</div></div>
 
       {/* Row 1 */}
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
@@ -69,17 +69,17 @@ export default async function ShiftActivationCentre() {
         {/* Workforce Availability */}
         <div className={`${card} p-5`}>
           <h3 className="text-sm font-bold text-gray-900 mb-3">Workforce Availability</h3>
-          <div className="grid grid-cols-4 gap-1.5 mb-3"><Mini label="Rostered" value={w.rostered} /><Mini label="Confirmed" value={w.confirmed} tone="text-emerald-600" /><Mini label="Expected" value={w.expectedLater} tone="text-amber-600" /><Mini label="Unavailable" value={w.unavailable} tone="text-rose-600" /></div>
+          <div className="grid grid-cols-4 gap-1.5 mb-3"><Mini label="Rostered" value={w.rostered} /><Mini label="Confirmed" value={w.confirmed} tone="text-[var(--cmp-text-success)]" /><Mini label="Expected" value={w.expectedLater} tone="text-[var(--cmp-text-warning)]" /><Mini label="Unavailable" value={w.unavailable} tone="text-[var(--cmp-text-error)]" /></div>
           <p className="text-[10px] font-semibold text-gray-500 uppercase mb-1">Attendance</p>
-          <div className="space-y-1 max-h-[140px] overflow-y-auto">{w.attendance.slice(0, 6).map((s: any) => (<div key={s.id} className="flex items-center justify-between text-[11px]"><span className="text-gray-700 truncate flex-1">{s.name}</span><span className="text-gray-400 mx-1 truncate max-w-[70px]">{s.role}</span><span className={`text-[9px] px-1.5 py-0.5 rounded ${s.status === "absent" ? "bg-rose-50 text-rose-700" : ["on_duty", "confirmed"].includes(s.status) ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-700"}`}>{s.statusLabel}</span><span className="ml-1"><ConfirmAttendance staffId={s.id} status={s.status} /></span></div>))}</div>
+          <div className="space-y-1 max-h-[140px] overflow-y-auto">{w.attendance.slice(0, 6).map((s: any) => (<div key={s.id} className="flex items-center justify-between text-[11px]"><span className="text-gray-700 truncate flex-1">{s.name}</span><span className="text-gray-400 mx-1 truncate max-w-[70px]">{s.role}</span><span className={`text-[9px] px-1.5 py-0.5 rounded ${s.status === "absent" ? "bg-[var(--cmp-surface-error)] text-[var(--cmp-text-error)]" : ["on_duty", "confirmed"].includes(s.status) ? "bg-[var(--cmp-surface-success)] text-emerald-700" : "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]"}`}>{s.statusLabel}</span><span className="ml-1"><ConfirmAttendance staffId={s.id} status={s.status} /></span></div>))}</div>
         </div>
 
         {/* Patient Census */}
         <div className={`${card} p-5`}>
           <h3 className="text-sm font-bold text-gray-900 mb-3">Patient Census</h3>
-          <div className="grid grid-cols-2 gap-1.5 mb-3"><Mini label="Current Patients" value={ce.totalPatients} /><Mini label="Expected Admissions" value={ce.expectedAdmissions} tone="text-amber-600" /><Mini label="Planned Discharges" value={ce.plannedDischarges} /><Mini label="Projected Peak" value={ce.projectedPeak} /></div>
+          <div className="grid grid-cols-2 gap-1.5 mb-3"><Mini label="Current Patients" value={ce.totalPatients} /><Mini label="Expected Admissions" value={ce.expectedAdmissions} tone="text-[var(--cmp-text-warning)]" /><Mini label="Planned Discharges" value={ce.plannedDischarges} /><Mini label="Projected Peak" value={ce.projectedPeak} /></div>
           <p className="text-[10px] text-gray-500">Occupied beds <b className="text-gray-800">{ce.occupiedBeds}/{ce.totalBeds}</b>{ce.occupancyPct != null ? ` · ${ce.occupancyPct}%` : ""}</p>
-          <div className="w-full h-2 rounded-full bg-gray-100 overflow-hidden mt-1"><div className="h-full bg-emerald-500" style={{ width: `${ce.occupancyPct ?? 0}%` }} /></div>
+          <div className="w-full h-2 rounded-full bg-gray-100 overflow-hidden mt-1"><div className="h-full bg-[var(--cmp-color-success)]" style={{ width: `${ce.occupancyPct ?? 0}%` }} /></div>
         </div>
 
         {/* Alerts & Gaps */}
@@ -114,7 +114,7 @@ export default async function ShiftActivationCentre() {
           <h3 className="text-sm font-bold text-gray-900 mb-3">Competency Readiness</h3>
           {d.competencyReadiness.length === 0 ? <p className="text-sm text-gray-400">No staff on shift.</p> : (
             <table className="w-full text-[11px]"><thead><tr className="text-gray-400 text-left border-b border-gray-100"><th className="py-1 font-medium">Role</th><th className="py-1 text-right font-medium">Req</th><th className="py-1 text-right font-medium">Avail</th><th className="py-1 text-right font-medium">✓</th></tr></thead>
-              <tbody>{d.competencyReadiness.map((c: any) => (<tr key={c.role} className="border-b border-gray-50"><td className="py-1 text-gray-700">{c.role}</td><td className="py-1 text-right text-gray-600">{c.required}</td><td className="py-1 text-right text-gray-600">{c.available}</td><td className="py-1 text-right">{c.ok ? <span className="text-emerald-600">✓</span> : <span className="text-rose-500">✗</span>}</td></tr>))}</tbody>
+              <tbody>{d.competencyReadiness.map((c: any) => (<tr key={c.role} className="border-b border-gray-50"><td className="py-1 text-gray-700">{c.role}</td><td className="py-1 text-right text-gray-600">{c.required}</td><td className="py-1 text-right text-gray-600">{c.available}</td><td className="py-1 text-right">{c.ok ? <span className="text-[var(--cmp-text-success)]">✓</span> : <span className="text-rose-500">✗</span>}</td></tr>))}</tbody>
             </table>
           )}
           <p className="text-[9px] text-gray-400 mt-2">Role competency currency (competency_decisions). Specialty-competency matrix next-phase.</p>
@@ -124,7 +124,7 @@ export default async function ShiftActivationCentre() {
         <div className={`${card} p-5`}>
           <h3 className="text-sm font-bold text-gray-900 mb-3">Actions</h3>
           <div className="space-y-1.5">
-            {[["Open Staff Allocation", "/supervisor/team-assignments"], ["View Competency Gaps", "/unit-manager/scheduling-engine/competency-matching"], ["Demand Calculation", "/unit-manager/scheduling-engine/demand-optimiser"], ["Escalate Issue", "/supervisor/operations?section=safety"]].map(([l, h]) => (<Link key={l} href={h} className="flex items-center justify-between rounded-lg border border-gray-100 px-3 py-2 text-xs text-gray-700 hover:border-emerald-200 hover:bg-emerald-50/30">{l}<span className="text-gray-300">›</span></Link>))}
+            {[["Open Staff Allocation", "/supervisor/team-assignments"], ["View Competency Gaps", "/unit-manager/scheduling-engine/competency-matching"], ["Demand Calculation", "/unit-manager/scheduling-engine/demand-optimiser"], ["Escalate Issue", "/supervisor/operations?section=safety"]].map(([l, h]) => (<Link key={l} href={h} className="flex items-center justify-between rounded-lg border border-gray-100 px-3 py-2 text-xs text-gray-700 hover:border-[var(--cmp-color-success)] hover:bg-[var(--cmp-surface-success)]/30">{l}<span className="text-gray-300">›</span></Link>))}
           </div>
           <div className="mt-3 pt-3 border-t border-gray-100"><ActivateButton shiftId={d.shift?.id ?? null} ready={d.mandatoryDone} phase={d.phase} /><p className="text-[9px] text-gray-400 mt-1.5 text-center">All validations must be complete to activate.</p></div>
         </div>
@@ -144,14 +144,14 @@ export default async function ShiftActivationCentre() {
           <h3 className="text-sm font-bold text-gray-900 mb-3 flex items-center gap-1.5"><span>✅</span>Shift Readiness</h3>
           <div className="flex items-center gap-4">
             <Ring pct={d.readinessPct} label={d.mandatoryDone ? "Ready" : "Not ready"} tone={d.mandatoryDone ? "#10b981" : "#f59e0b"} big={`${d.readinessPct}%`} />
-            <div className="text-[11px] space-y-0.5 flex-1">{d.checklist.map((c: any) => (<div key={c.label} className="flex items-center gap-1.5"><span className={c.ok ? "text-emerald-600" : c.mandatory ? "text-rose-500" : "text-amber-500"}>{c.ok ? "✓" : c.mandatory ? "✗" : "!"}</span><span className={c.ok ? "text-gray-600" : "text-gray-500"}>{c.label}</span></div>))}</div>
+            <div className="text-[11px] space-y-0.5 flex-1">{d.checklist.map((c: any) => (<div key={c.label} className="flex items-center gap-1.5"><span className={c.ok ? "text-[var(--cmp-text-success)]" : c.mandatory ? "text-rose-500" : "text-amber-500"}>{c.ok ? "✓" : c.mandatory ? "✗" : "!"}</span><span className={c.ok ? "text-gray-600" : "text-gray-500"}>{c.label}</span></div>))}</div>
           </div>
         </div>
 
         {/* Handover Summary */}
         <div className={`${card} p-5`}>
           <h3 className="text-sm font-bold text-gray-900 mb-3">Handover Summary <span className="text-[10px] text-gray-400 font-normal">to incoming shift</span></h3>
-          <div className="space-y-1.5 text-xs">{d.handoverSummary.map((h: any) => (<div key={h.label} className="flex items-center justify-between"><span className="text-gray-600">{h.label}</span><span className={`text-[10px] px-1.5 py-0.5 rounded ${h.value === "Completed" ? "bg-emerald-50 text-emerald-700" : h.ok ? "bg-emerald-50 text-emerald-700" : "bg-gray-100 text-gray-600"}`}>{h.value}</span></div>))}</div>
+          <div className="space-y-1.5 text-xs">{d.handoverSummary.map((h: any) => (<div key={h.label} className="flex items-center justify-between"><span className="text-gray-600">{h.label}</span><span className={`text-[10px] px-1.5 py-0.5 rounded ${h.value === "Completed" ? "bg-[var(--cmp-surface-success)] text-emerald-700" : h.ok ? "bg-[var(--cmp-surface-success)] text-emerald-700" : "bg-gray-100 text-gray-600"}`}>{h.value}</span></div>))}</div>
           <Link href="/supervisor/handover" className="text-[11px] text-emerald-700 hover:underline mt-3 inline-block">Open Handover Centre →</Link>
         </div>
       </div>

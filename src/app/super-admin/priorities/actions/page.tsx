@@ -21,10 +21,10 @@ export default async function ActionsPage() {
       <ModuleNav active="003" />
       <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-5 gap-3">
         <Stat label="Generated Actions" value={k.total} sub="from strategy" />
-        <Stat label="In Progress" value={k.inProgress} sub="executing" tone="text-blue-600" />
-        <Stat label="Completed" value={k.completed} sub="delivered" tone="text-emerald-600" />
-        <Stat label="Newly Generated" value={k.generated} sub="awaiting pickup" tone={k.generated ? "text-amber-600" : undefined} />
-        <Stat label="Completion Rate" value={`${k.completionRate}%`} sub="of generated" tone={k.completionRate >= 60 ? "text-emerald-600" : "text-amber-600"} />
+        <Stat label="In Progress" value={k.inProgress} sub="executing" tone="text-[var(--cmp-text-information)]" />
+        <Stat label="Completed" value={k.completed} sub="delivered" tone="text-[var(--cmp-text-success)]" />
+        <Stat label="Newly Generated" value={k.generated} sub="awaiting pickup" tone={k.generated ? "text-[var(--cmp-text-warning)]" : undefined} />
+        <Stat label="Completion Rate" value={`${k.completionRate}%`} sub="of generated" tone={k.completionRate >= 60 ? "text-[var(--cmp-text-success)]" : "text-[var(--cmp-text-warning)]"} />
       </div>
 
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">

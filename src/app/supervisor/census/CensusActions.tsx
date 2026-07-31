@@ -37,7 +37,7 @@ export function AssignPatient({ patientId, nurses }: { patientId: string; nurses
 
   return (
     <div className="mt-1.5 space-y-1.5">
-      {err && <p className="text-xs text-amber-700">{err}</p>}
+      {err && <p className="text-xs text-[var(--cmp-text-warning)]">{err}</p>}
       <div className="flex flex-wrap items-center gap-1.5">
         <select className={input} value={staffId} onChange={e => setStaffId(e.target.value)}>
           <option value="">Assign to nurse…</option>
@@ -47,7 +47,7 @@ export function AssignPatient({ patientId, nurses }: { patientId: string; nurses
       </div>
       {override != null && (
         <div className="flex flex-wrap items-center gap-1.5">
-          <span className="text-[10px] text-red-600 w-full">{override}</span>
+          <span className="text-[10px] text-[var(--cmp-text-critical)] w-full">{override}</span>
           <input className={`${input} flex-1 min-w-[220px]`} placeholder="Override reason (emergency staffing judgement)" value={reason} onChange={e => setReason(e.target.value)} />
           <button className={btn} disabled={busy || !reason.trim()} onClick={assign}>Offer with override</button>
         </div>
@@ -64,7 +64,7 @@ export function RouteTransfer({ transferId, nurses }: { transferId: string; nurs
 
   return (
     <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
-      {err && <span className="text-xs text-amber-700 w-full">{err}</span>}
+      {err && <span className="text-xs text-[var(--cmp-text-warning)] w-full">{err}</span>}
       <select className={input} value={staffId} onChange={e => setStaffId(e.target.value)}>
         <option value="">Route to receiving nurse…</option>
         {nurses.map(n => <option key={n.id} value={n.id}>{n.name}</option>)}

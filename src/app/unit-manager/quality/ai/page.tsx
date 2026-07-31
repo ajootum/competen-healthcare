@@ -15,8 +15,8 @@ export const dynamic = "force-dynamic";
 // engine, and a natural-language executive brief (Claude when configured, rule-based fallback). Explainable +
 // human-in-the-loop. Model governance / drift monitoring are honest next-phase. Gate hospital_admin/super_admin.
 /* eslint-disable @typescript-eslint/no-explicit-any */
-const impactPill: Record<string, string> = { High: "bg-rose-100 text-rose-700", Medium: "bg-amber-100 text-amber-700", Low: "bg-emerald-100 text-emerald-700" };
-const sevPill: Record<string, string> = { high: "bg-rose-100 text-rose-700", medium: "bg-amber-100 text-amber-700" };
+const impactPill: Record<string, string> = { High: "bg-[var(--cmp-surface-error)] text-[var(--cmp-text-error)]", Medium: "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]", Low: "bg-[var(--cmp-surface-success)] text-emerald-700" };
+const sevPill: Record<string, string> = { high: "bg-[var(--cmp-surface-error)] text-[var(--cmp-text-error)]", medium: "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]" };
 const CAUSE_COLORS = ["#ef4444", "#8b5cf6", "#fb923c", "#3b82f6", "#10b981"];
 const fmt = (v: any, unit: string) => (v == null ? "—" : unit === "percent" ? `${v}%` : unit === "rate_per_1000" ? `${v}/1k` : `${v}`);
 
@@ -63,11 +63,11 @@ export default async function AiQualityIntelligenceCentre() {
       {/* AI KPI ribbon */}
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
         {[
-          { icon: "🧠", tint: "bg-fuchsia-50", label: "AI Quality-Risk Index", value: k.aiRiskIndex ?? "—", unit: "/100", tone: (k.aiRiskIndex ?? 0) >= 60 ? "text-rose-600" : (k.aiRiskIndex ?? 0) >= 40 ? "text-amber-600" : "text-emerald-600" },
-          { icon: "🔮", tint: "bg-indigo-50", label: "Predicted Breaches", value: k.predictedBreaches, tone: k.predictedBreaches ? "text-rose-600" : "text-emerald-600", sub: "next period" },
-          { icon: "💡", tint: "bg-amber-50", label: "AI Recommendations", value: k.recommendations, sub: "prioritised" },
-          { icon: "📈", tint: "bg-sky-50", label: "Forecast Confidence", value: k.forecastConfidence != null ? `${k.forecastConfidence}%` : "—", sub: "mean model fit" },
-          { icon: "⚠️", tint: "bg-orange-50", label: "Emerging Risks", value: k.emergingRisks, tone: k.emergingRisks ? "text-orange-600" : "text-emerald-600" },
+          { icon: "🧠", tint: "bg-fuchsia-50", label: "AI Quality-Risk Index", value: k.aiRiskIndex ?? "—", unit: "/100", tone: (k.aiRiskIndex ?? 0) >= 60 ? "text-[var(--cmp-text-error)]" : (k.aiRiskIndex ?? 0) >= 40 ? "text-[var(--cmp-text-warning)]" : "text-[var(--cmp-text-success)]" },
+          { icon: "🔮", tint: "bg-indigo-50", label: "Predicted Breaches", value: k.predictedBreaches, tone: k.predictedBreaches ? "text-[var(--cmp-text-error)]" : "text-[var(--cmp-text-success)]", sub: "next period" },
+          { icon: "💡", tint: "bg-[var(--cmp-surface-warning)]", label: "AI Recommendations", value: k.recommendations, sub: "prioritised" },
+          { icon: "📈", tint: "bg-[var(--cmp-surface-information)]", label: "Forecast Confidence", value: k.forecastConfidence != null ? `${k.forecastConfidence}%` : "—", sub: "mean model fit" },
+          { icon: "⚠️", tint: "bg-[var(--cmp-surface-warning)]", label: "Emerging Risks", value: k.emergingRisks, tone: k.emergingRisks ? "text-[var(--cmp-text-warning)]" : "text-[var(--cmp-text-success)]" },
           { icon: "🔗", tint: "bg-teal-50", label: "Data Sources", value: k.dataSources, sub: "live stores analysed" },
         ].map(kp => (
           <div key={kp.label} className={`${qcard} p-3`}>
@@ -98,9 +98,9 @@ export default async function AiQualityIntelligenceCentre() {
             <tbody>{d.predictions.map((p: any, i: number) => (
               <tr key={i} className="border-b border-gray-50"><td className="py-1.5 text-gray-700 max-w-[160px] truncate" title={p.name}>{p.name}<span className="block text-[9px] text-gray-400">{p.category}</span></td>
                 <td className="py-1.5 text-right tabular-nums text-gray-600">{fmt(p.current, p.unit)}</td>
-                <td className={`py-1.5 text-right tabular-nums font-semibold ${p.breach ? "text-rose-600" : "text-gray-800"}`}>{fmt(p.forecast, p.unit)}</td>
+                <td className={`py-1.5 text-right tabular-nums font-semibold ${p.breach ? "text-[var(--cmp-text-error)]" : "text-gray-800"}`}>{fmt(p.forecast, p.unit)}</td>
                 <td className="py-1.5">{p.dir === "up" ? "↑" : p.dir === "down" ? "↓" : "→"}</td>
-                <td className="py-1.5">{p.breach ? <span className="text-[9px] px-1.5 py-0.5 rounded bg-rose-100 text-rose-700">Breach risk</span> : <span className="text-[9px] px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-700">On track</span>}</td>
+                <td className="py-1.5">{p.breach ? <span className="text-[9px] px-1.5 py-0.5 rounded bg-[var(--cmp-surface-error)] text-[var(--cmp-text-error)]">Breach risk</span> : <span className="text-[9px] px-1.5 py-0.5 rounded bg-[var(--cmp-surface-success)] text-emerald-700">On track</span>}</td>
                 <td className="py-1.5 text-right tabular-nums text-gray-500">{p.confidence}%</td>
               </tr>
             ))}</tbody></table></div> : <p className="text-sm text-gray-400 py-6 text-center">Not enough trend history to forecast yet.</p>}
@@ -110,7 +110,7 @@ export default async function AiQualityIntelligenceCentre() {
           <h3 className="font-semibold text-gray-900 text-sm mb-3">Emerging Risks</h3>
           <div className="space-y-2">{d.emerging.map((e: any, i: number) => (
             <div key={i} className="flex items-start gap-2"><span className="mt-0.5">{e.severity === "high" ? "🔴" : "🟠"}</span><div className="flex-1 min-w-0"><p className="text-[11px] font-medium text-gray-700">{e.signal}</p><p className="text-[10px] text-gray-500">{e.detail}</p></div><span className={`text-[9px] px-1.5 py-0.5 rounded shrink-0 ${sevPill[e.severity]}`}>{e.severity}</span></div>
-          ))}{!d.emerging.length && <p className="text-[11px] text-emerald-600">No emerging risk signals detected.</p>}</div>
+          ))}{!d.emerging.length && <p className="text-[11px] text-[var(--cmp-text-success)]">No emerging risk signals detected.</p>}</div>
         </div>
       </div>
 

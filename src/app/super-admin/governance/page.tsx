@@ -19,8 +19,8 @@ const fmt = (n: number) => n.toLocaleString();
 const dash = (n: number | null | undefined) => (n == null ? "—" : n.toLocaleString());
 const pct = (n: number | null | undefined) => (n == null ? "—" : `${n}%`);
 const relTime = (iso?: string | null) => { if (!iso) return ""; const s = Math.floor((Date.now() - new Date(iso).getTime()) / 1000); if (s < 60) return "just now"; if (s < 3600) return `${Math.floor(s / 60)}m ago`; if (s < 86400) return `${Math.floor(s / 3600)}h ago`; return `${Math.floor(s / 86400)}d ago`; };
-const scoreTone = (n: number | null) => (n == null ? "text-gray-300" : n >= 90 ? "text-green-600" : n >= 75 ? "text-teal-600" : n >= 50 ? "text-amber-600" : "text-rose-600");
-const CAPA_TONE: Record<string, string> = { open: "text-rose-600", in_progress: "text-amber-600", completed: "text-teal-600", verified: "text-green-600", closed: "text-green-600" };
+const scoreTone = (n: number | null) => (n == null ? "text-gray-300" : n >= 90 ? "text-[var(--cmp-text-success)]" : n >= 75 ? "text-teal-600" : n >= 50 ? "text-[var(--cmp-text-warning)]" : "text-[var(--cmp-text-error)]");
+const CAPA_TONE: Record<string, string> = { open: "text-[var(--cmp-text-error)]", in_progress: "text-[var(--cmp-text-warning)]", completed: "text-teal-600", verified: "text-[var(--cmp-text-success)]", closed: "text-[var(--cmp-text-success)]" };
 
 export default async function GovernanceDashboard() {
   const supabase = await createClient();
@@ -37,10 +37,10 @@ export default async function GovernanceDashboard() {
   const ribbon = [
     { label: "Governance Score", value: k.governanceScore == null ? "—" : `${k.governanceScore}/100`, icon: "🛡️", tone: scoreTone(k.governanceScore) },
     { label: "Compliance Rate", value: k.complianceRate == null ? "—" : `${k.complianceRate}%`, icon: "✅", tone: scoreTone(k.complianceRate == null ? null : Math.round(k.complianceRate)) },
-    { label: "Open Risks", value: dash(k.openRisks), icon: "⚠️", tone: (k.openRisks ?? 0) > 0 ? "text-amber-600" : "text-gray-900" },
+    { label: "Open Risks", value: dash(k.openRisks), icon: "⚠️", tone: (k.openRisks ?? 0) > 0 ? "text-[var(--cmp-text-warning)]" : "text-gray-900" },
     { label: "Audit Completion", value: pct(k.auditCompletion), icon: "📋", tone: "text-gray-900" },
-    { label: "Policies Due / Overdue", value: dash(k.policiesDue), icon: "📄", tone: (k.policiesDue ?? 0) > 0 ? "text-amber-600" : "text-gray-900" },
-    { label: "Regulatory Alerts", value: dash(k.regulatoryAlerts), icon: "🔔", tone: (k.regulatoryAlerts ?? 0) > 0 ? "text-rose-600" : k.regulatoryAlerts == null ? "text-gray-400" : "text-gray-900" },
+    { label: "Policies Due / Overdue", value: dash(k.policiesDue), icon: "📄", tone: (k.policiesDue ?? 0) > 0 ? "text-[var(--cmp-text-warning)]" : "text-gray-900" },
+    { label: "Regulatory Alerts", value: dash(k.regulatoryAlerts), icon: "🔔", tone: (k.regulatoryAlerts ?? 0) > 0 ? "text-[var(--cmp-text-error)]" : k.regulatoryAlerts == null ? "text-gray-400" : "text-gray-900" },
   ];
 
   const actions = [
@@ -83,7 +83,7 @@ export default async function GovernanceDashboard() {
             {g.dims.map((d: any) => (
               <div key={d.label}>
                 <div className="flex items-center justify-between text-xs mb-0.5"><span className="text-gray-600">{d.label}</span><span className={`tabular-nums ${d.value == null ? "text-gray-300" : "text-gray-700"}`}>{d.value == null ? "n/a" : `${d.value}%`}</span></div>
-                <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">{d.value != null && <div className={`h-full rounded-full ${d.value >= 80 ? "bg-green-500" : d.value >= 50 ? "bg-amber-500" : "bg-rose-500"}`} style={{ width: `${d.value}%` }} />}</div>
+                <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">{d.value != null && <div className={`h-full rounded-full ${d.value >= 80 ? "bg-[var(--cmp-color-success)]" : d.value >= 50 ? "bg-[var(--cmp-color-warning)]" : "bg-[var(--cmp-color-error)]"}`} style={{ width: `${d.value}%` }} />}</div>
               </div>
             ))}
           </div>
@@ -94,7 +94,7 @@ export default async function GovernanceDashboard() {
         <div className={`${card} p-5`}>
           <h2 className="font-semibold text-gray-900 text-[15px] mb-3">Compliance by Organisation</h2>
           <div className="grid grid-cols-2 gap-2 mb-3">
-            {[["Compliant (≥90%)", g.orgCompliance.compliant, "text-green-600"], ["Partial (70–89%)", g.orgCompliance.partial, "text-amber-600"], ["Non-compliant", g.orgCompliance.non, "text-rose-600"], ["Not assessed", g.orgCompliance.notAssessed, "text-gray-400"]].map(([l, n, tone]: any) => (
+            {[["Compliant (≥90%)", g.orgCompliance.compliant, "text-[var(--cmp-text-success)]"], ["Partial (70–89%)", g.orgCompliance.partial, "text-[var(--cmp-text-warning)]"], ["Non-compliant", g.orgCompliance.non, "text-[var(--cmp-text-error)]"], ["Not assessed", g.orgCompliance.notAssessed, "text-gray-400"]].map(([l, n, tone]: any) => (
               <div key={l} className="rounded-lg border border-gray-100 p-2.5 text-center"><p className={`text-xl font-bold tabular-nums ${tone}`}>{fmt(n)}</p><p className="text-[9px] text-gray-500 leading-tight">{l}</p></div>
             ))}
           </div>
@@ -116,7 +116,7 @@ export default async function GovernanceDashboard() {
               {g.executiveAlerts.map((a: any) => (
                 <Link key={a.label} href={a.href} className="flex items-center justify-between rounded-lg border border-gray-100 px-2.5 py-1.5 hover:border-teal-300 hover:bg-teal-50/40 transition-colors">
                   <span className="text-xs text-gray-700">{a.label}</span>
-                  <span className="text-sm font-bold text-rose-600 tabular-nums shrink-0 ml-2">{a.n}</span>
+                  <span className="text-sm font-bold text-[var(--cmp-text-error)] tabular-nums shrink-0 ml-2">{a.n}</span>
                 </Link>
               ))}
             </div>
@@ -125,7 +125,7 @@ export default async function GovernanceDashboard() {
             <div className="space-y-1 pt-2 border-t border-gray-50">
               <p className="text-[10px] font-semibold text-gray-400 uppercase">High-risk organisations</p>
               {g.highRiskOrgs.map((o: any) => (
-                <div key={o.id} className="flex items-center justify-between text-xs"><span className="text-gray-600 truncate">{o.name}</span><span className="tabular-nums text-rose-600 shrink-0 ml-2">{o.highCapa} high CAPA{o.avg != null ? ` · ${o.avg}%` : ""}</span></div>
+                <div key={o.id} className="flex items-center justify-between text-xs"><span className="text-gray-600 truncate">{o.name}</span><span className="tabular-nums text-[var(--cmp-text-error)] shrink-0 ml-2">{o.highCapa} high CAPA{o.avg != null ? ` · ${o.avg}%` : ""}</span></div>
               ))}
             </div>
           )}
@@ -154,7 +154,7 @@ export default async function GovernanceDashboard() {
             <div className="divide-y divide-gray-50">
               {g.recentFindings.map((f: any, i: number) => (
                 <div key={i} className="flex items-start gap-2 py-2">
-                  <span className={`w-1.5 h-1.5 rounded-full mt-1.5 shrink-0 ${f.is_critical ? "bg-rose-500" : "bg-amber-400"}`} />
+                  <span className={`w-1.5 h-1.5 rounded-full mt-1.5 shrink-0 ${f.is_critical ? "bg-[var(--cmp-color-error)]" : "bg-[var(--cmp-color-warning)]"}`} />
                   <div className="min-w-0 flex-1"><p className="text-xs text-gray-800 leading-tight">{f.item_text}</p><p className="text-[10px] text-gray-400">{f.is_critical ? "critical · " : ""}{relTime(f.created_at)}</p></div>
                 </div>
               ))}
@@ -188,7 +188,7 @@ export default async function GovernanceDashboard() {
             <div className="space-y-2">
               {g.frameworks.map((f: any) => (
                 <div key={f.code} className="flex items-center gap-2.5 rounded-lg border border-gray-100 p-2.5">
-                  <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded shrink-0 ${f.type === "accreditation" ? "bg-violet-50 text-violet-700" : f.type === "regulatory" ? "bg-blue-50 text-blue-700" : "bg-gray-100 text-gray-600"}`}>{f.code}</span>
+                  <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded shrink-0 ${f.type === "accreditation" ? "bg-violet-50 text-violet-700" : f.type === "regulatory" ? "bg-[var(--cmp-surface-information)] text-blue-700" : "bg-gray-100 text-gray-600"}`}>{f.code}</span>
                   <span className="text-sm text-gray-800 flex-1 truncate">{f.name}</span>
                   <span className="text-[10px] text-gray-400 tabular-nums shrink-0">{f.standards} mapped</span>
                 </div>

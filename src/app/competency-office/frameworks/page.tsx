@@ -12,8 +12,8 @@ export const dynamic = "force-dynamic";
 
 const NONE = "00000000-0000-0000-0000-000000000000";
 const statusBadge: Record<string, string> = {
-  published: "bg-green-100 text-green-700", approved: "bg-blue-100 text-blue-700",
-  in_review: "bg-amber-100 text-amber-700", draft: "bg-gray-100 text-gray-500", archived: "bg-gray-100 text-gray-400",
+  published: "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]", approved: "bg-[var(--cmp-surface-information)] text-blue-700",
+  in_review: "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]", draft: "bg-gray-100 text-gray-500", archived: "bg-gray-100 text-gray-400",
 };
 const libBadge: Record<string, string> = { core: "bg-teal-50 text-teal-700", specialty: "bg-purple-50 text-purple-700", role: "bg-indigo-50 text-indigo-700" };
 

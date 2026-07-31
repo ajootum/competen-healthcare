@@ -61,7 +61,7 @@ export default async function CompetencyAnalyticsPage() {
                   <td className="py-1.5 text-center"><PctChip v={c.pct} /></td>
                   <td className="py-1.5 text-center text-gray-600">{avgByName.get(c.name) ?? "—"}</td>
                   <td className="py-1.5 text-center text-gray-600">{c.total}</td>
-                  <td className="py-1.5 text-center">{c.expSoon ? <span className="font-bold text-amber-600">{c.expSoon}</span> : <span className="text-gray-300">0</span>}</td>
+                  <td className="py-1.5 text-center">{c.expSoon ? <span className="font-bold text-[var(--cmp-text-warning)]">{c.expSoon}</span> : <span className="text-gray-300">0</span>}</td>
                 </tr>
               ))}
             </tbody>
@@ -77,10 +77,10 @@ export default async function CompetencyAnalyticsPage() {
                 <div key={c.name}>
                   <div className="flex items-center justify-between text-[11px] mb-0.5">
                     <span className="text-gray-700">{c.name}</span>
-                    <span className="font-bold text-red-600">{c.pct}% <span className="font-normal text-gray-300">of {c.total}</span></span>
+                    <span className="font-bold text-[var(--cmp-text-critical)]">{c.pct}% <span className="font-normal text-gray-300">of {c.total}</span></span>
                   </div>
                   <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
-                    <div className="h-full bg-red-400 rounded-full" style={{ width: `${c.pct}%` }} />
+                    <div className="h-full bg-[var(--cmp-color-critical)] rounded-full" style={{ width: `${c.pct}%` }} />
                   </div>
                 </div>
               ))}

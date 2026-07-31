@@ -41,7 +41,7 @@ export default async function ConfigRulesPage({ searchParams }: { searchParams: 
           <Card title="Configuration Areas" right={<span className="text-[9px] text-slate-500">WCE-resolved</span>}>
             <div className="space-y-1.5 text-[11px]">
               {d.configAreas.map((a: any) => (
-                <div key={a.label} className="flex items-center gap-2"><span className={`w-2 h-2 rounded-full ${a.active ? "bg-emerald-400" : "bg-slate-600"}`} /><span className="text-slate-300 flex-1 truncate">{a.label}</span><span className="text-white tabular-nums">{a.overrides} override{a.overrides === 1 ? "" : "s"}</span><Pill text={a.active ? "configured" : "default"} tone={a.active ? "emerald" : "slate"} /></div>
+                <div key={a.label} className="flex items-center gap-2"><span className={`w-2 h-2 rounded-full ${a.active ? "bg-[var(--cmp-color-success)]" : "bg-slate-600"}`} /><span className="text-slate-300 flex-1 truncate">{a.label}</span><span className="text-white tabular-nums">{a.overrides} override{a.overrides === 1 ? "" : "s"}</span><Pill text={a.active ? "configured" : "default"} tone={a.active ? "emerald" : "slate"} /></div>
               ))}
             </div>
             <p className="text-[9px] text-slate-500 mt-2">Areas with 0 overrides run on platform defaults.</p>

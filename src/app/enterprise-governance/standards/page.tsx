@@ -33,21 +33,21 @@ export default async function StandardsPage() {
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         <div className={card}><div className="text-3xl font-bold tabular-nums text-gray-900">{standards.total}</div><div className="text-xs text-gray-500 mt-1">Master standards</div></div>
-        <div className={card}><div className="text-3xl font-bold tabular-nums text-green-600">{standards.published}</div><div className="text-xs text-gray-500 mt-1">Published</div></div>
-        <div className={card}><div className="text-3xl font-bold tabular-nums text-amber-600">{standards.draft}</div><div className="text-xs text-gray-500 mt-1">Draft</div></div>
+        <div className={card}><div className="text-3xl font-bold tabular-nums text-[var(--cmp-text-success)]">{standards.published}</div><div className="text-xs text-gray-500 mt-1">Published</div></div>
+        <div className={card}><div className="text-3xl font-bold tabular-nums text-[var(--cmp-text-warning)]">{standards.draft}</div><div className="text-xs text-gray-500 mt-1">Draft</div></div>
         <div className={card}><div className={`text-3xl font-bold tabular-nums ${tone(standards.compliancePct)}`}>{pctText(standards.compliancePct)}</div><div className="text-xs text-gray-500 mt-1">Published rate</div></div>
       </div>
 
       <div className={card}>
         <h3 className="font-semibold text-gray-900 mb-3">Publication status</h3>
         <div className="h-4 flex rounded-md overflow-hidden border border-gray-200 mb-2">
-          {standards.published > 0 && <div style={{ width: `${(standards.published / Math.max(standards.total, 1)) * 100}%` }} className="bg-green-500" title={`Published: ${standards.published}`} />}
-          {standards.draft > 0 && <div style={{ width: `${(standards.draft / Math.max(standards.total, 1)) * 100}%` }} className="bg-amber-500" title={`Draft: ${standards.draft}`} />}
+          {standards.published > 0 && <div style={{ width: `${(standards.published / Math.max(standards.total, 1)) * 100}%` }} className="bg-[var(--cmp-color-success)]" title={`Published: ${standards.published}`} />}
+          {standards.draft > 0 && <div style={{ width: `${(standards.draft / Math.max(standards.total, 1)) * 100}%` }} className="bg-[var(--cmp-color-warning)]" title={`Draft: ${standards.draft}`} />}
           {standards.other > 0 && <div style={{ width: `${(standards.other / Math.max(standards.total, 1)) * 100}%` }} className="bg-gray-300" title={`Other: ${standards.other}`} />}
         </div>
         <div className="flex flex-wrap gap-3 text-xs text-gray-500">
-          <span><span className="inline-block w-2.5 h-2.5 rounded-sm bg-green-500 mr-1 align-middle" />Published <b className="text-gray-800">{standards.published}</b></span>
-          <span><span className="inline-block w-2.5 h-2.5 rounded-sm bg-amber-500 mr-1 align-middle" />Draft <b className="text-gray-800">{standards.draft}</b></span>
+          <span><span className="inline-block w-2.5 h-2.5 rounded-sm bg-[var(--cmp-color-success)] mr-1 align-middle" />Published <b className="text-gray-800">{standards.published}</b></span>
+          <span><span className="inline-block w-2.5 h-2.5 rounded-sm bg-[var(--cmp-color-warning)] mr-1 align-middle" />Draft <b className="text-gray-800">{standards.draft}</b></span>
           <span><span className="inline-block w-2.5 h-2.5 rounded-sm bg-gray-300 mr-1 align-middle" />Other <b className="text-gray-800">{standards.other}</b></span>
         </div>
       </div>

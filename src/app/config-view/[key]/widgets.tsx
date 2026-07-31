@@ -7,14 +7,14 @@
 
 const VIZ_ICON: Record<string, string> = { kpi_card: "▦", table: "▤", pivot: "⊞", line: "📈", bar: "📊", pie: "◔", heatmap: "▩", treemap: "▬", scatter: "⁘", map: "🗺", gauge: "◑", timeline: "▭", calendar: "🗓", trend: "↗", custom: "✦" };
 const CHART = new Set(["line", "bar", "pie", "scatter", "heatmap", "treemap", "map", "timeline", "calendar"]);
-const RAG_TEXT: Record<string, string> = { green: "text-emerald-600", amber: "text-amber-600", red: "text-rose-600" };
+const RAG_TEXT: Record<string, string> = { green: "text-[var(--cmp-text-success)]", amber: "text-[var(--cmp-text-warning)]", red: "text-[var(--cmp-text-error)]" };
 
 // RAG band derived from the metric's real thresholds + direction (order flips with direction).
 function RagBand({ def }: { def: any }) {
   const g = def?.thresholds?.green, a = def?.thresholds?.amber;
   if (g == null && a == null) return null;
   const lower = (def?.direction ?? "lower_better") === "lower_better";
-  const segs = lower ? ["bg-emerald-400", "bg-amber-300", "bg-rose-400"] : ["bg-rose-400", "bg-amber-300", "bg-emerald-400"];
+  const segs = lower ? ["bg-[var(--cmp-color-success)]", "bg-amber-300", "bg-[var(--cmp-color-error)]"] : ["bg-[var(--cmp-color-error)]", "bg-amber-300", "bg-[var(--cmp-color-success)]"];
   const labels = lower ? [`≤${g ?? "?"}`, `≤${a ?? "?"}`, `>${a ?? "?"}`] : [`<${a ?? "?"}`, `≥${a ?? "?"}`, `≥${g ?? "?"}`];
   return (
     <div className="mt-2">

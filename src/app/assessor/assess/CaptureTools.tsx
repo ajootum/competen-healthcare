@@ -27,7 +27,7 @@ export function SignaturePad({ label, disabled, onChange }: {
       <canvas
         ref={canvasRef}
         width={320} height={96}
-        className={`w-full h-20 bg-white border border-dashed rounded-lg touch-none ${hasInk ? "border-green-300" : "border-gray-300"} ${disabled ? "opacity-50" : "cursor-crosshair"}`}
+        className={`w-full h-20 bg-white border border-dashed rounded-lg touch-none ${hasInk ? "border-[var(--cmp-color-success)]" : "border-gray-300"} ${disabled ? "opacity-50" : "cursor-crosshair"}`}
         onPointerDown={e => {
           if (disabled) return;
           drawing.current = true;
@@ -114,7 +114,7 @@ export function VoiceNoteButton({ disabled, onFile, onError }: {
   return (
     <button type="button" disabled={disabled} onClick={recording ? stop : start}
       className={`text-[11px] font-semibold px-3 py-1.5 rounded-lg border transition-colors ${
-        recording ? "text-red-600 border-red-300 bg-red-50 animate-pulse" : "text-indigo-600 border-indigo-200 hover:bg-indigo-50"} disabled:opacity-40`}>
+        recording ? "text-[var(--cmp-text-critical)] border-[var(--cmp-color-critical)] bg-[var(--cmp-surface-critical)] animate-pulse" : "text-indigo-600 border-indigo-200 hover:bg-indigo-50"} disabled:opacity-40`}>
       {recording ? `⏹ Stop (${secs}s)` : "🎙 Voice note"}
     </button>
   );

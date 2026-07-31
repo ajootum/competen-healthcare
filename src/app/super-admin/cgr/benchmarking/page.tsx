@@ -11,11 +11,11 @@ export const dynamic = "force-dynamic";
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 const BAND_META: Record<string, { label: string; cls: string }> = {
-  leading: { label: "Leading", cls: "text-emerald-700 bg-emerald-50 border-emerald-100" },
+  leading: { label: "Leading", cls: "text-emerald-700 bg-[var(--cmp-surface-success)] border-[var(--cmp-color-success)]" },
   on_par: { label: "On par", cls: "text-gray-500 bg-gray-50 border-gray-200" },
-  lagging: { label: "Lagging", cls: "text-rose-700 bg-rose-50 border-rose-100" },
+  lagging: { label: "Lagging", cls: "text-[var(--cmp-text-error)] bg-[var(--cmp-surface-error)] border-[var(--cmp-color-error)]" },
 };
-const barTone = (v: number) => (v >= 75 ? "bg-emerald-500" : v >= 45 ? "bg-amber-500" : "bg-rose-500");
+const barTone = (v: number) => (v >= 75 ? "bg-[var(--cmp-color-success)]" : v >= 45 ? "bg-[var(--cmp-color-warning)]" : "bg-[var(--cmp-color-error)]");
 const gapFmt = (g: number) => (g > 0 ? `+${g}` : `${g}`);
 
 function BenchTable({ rows, mean }: { rows: any[]; mean: number }) {
@@ -47,7 +47,7 @@ function BenchTable({ rows, mean }: { rows: any[]; mean: number }) {
                   <span className="text-[11px] font-bold text-gray-600 tabular-nums w-6">{r.maturity}</span>
                 </div>
               </td>
-              <td className="py-2 px-2 text-center"><span className={`text-[11px] font-bold tabular-nums ${r.gap > 0 ? "text-emerald-600" : r.gap < 0 ? "text-rose-600" : "text-gray-400"}`}>{gapFmt(r.gap)}</span></td>
+              <td className="py-2 px-2 text-center"><span className={`text-[11px] font-bold tabular-nums ${r.gap > 0 ? "text-[var(--cmp-text-success)]" : r.gap < 0 ? "text-[var(--cmp-text-error)]" : "text-gray-400"}`}>{gapFmt(r.gap)}</span></td>
               <td className="py-2 px-2 text-center text-[11px] text-gray-500 tabular-nums">{r.ownership}%</td>
               <td className="py-2 px-2 text-center text-[11px] text-gray-500 tabular-nums">{r.regulatory}%</td>
               <td className="py-2 px-2 text-center text-[11px] text-gray-500 tabular-nums">{r.review}%</td>
@@ -77,12 +77,12 @@ export default async function GovernanceBenchmarkingPage() {
     <div className="max-w-[1400px]">
       <div className="flex items-start justify-between gap-3 mb-5">
         <div>
-          <p className="text-[11px] font-semibold text-emerald-600 uppercase tracking-widest mb-0.5">CGR-022 · Competency Governance</p>
+          <p className="text-[11px] font-semibold text-[var(--cmp-text-success)] uppercase tracking-widest mb-0.5">CGR-022 · Competency Governance</p>
           <h1 className="text-xl font-bold text-gray-900">Benchmarking &amp; Comparative Intelligence</h1>
           <p className="text-gray-400 text-sm mt-0.5">How does governance compare across units, and what can we learn to improve? Comparative maturity, gap-to-benchmark and peer-learning exemplars — to learn, not to rank.</p>
         </div>
         <div className="flex gap-2 shrink-0">
-          <Link href="/super-admin/performance/benchmarking" className="text-xs font-semibold text-emerald-700 hover:text-emerald-800 border border-emerald-200 bg-emerald-50 rounded-lg px-3 py-2">Capability benchmarks →</Link>
+          <Link href="/super-admin/performance/benchmarking" className="text-xs font-semibold text-emerald-700 hover:text-emerald-800 border border-[var(--cmp-color-success)] bg-[var(--cmp-surface-success)] rounded-lg px-3 py-2">Capability benchmarks →</Link>
           <Link href="/super-admin/cgr" className="text-xs font-semibold text-gray-500 hover:text-emerald-700 border border-gray-200 rounded-lg px-3 py-2">← CGR</Link>
         </div>
       </div>
@@ -92,12 +92,12 @@ export default async function GovernanceBenchmarkingPage() {
       ) : (
         <div className="space-y-4">
           <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
-            <Kpi label="Enterprise maturity" value={e.maturity} sub="mean /100" tone={e.maturity >= 75 ? "text-emerald-600" : e.maturity >= 45 ? "text-amber-600" : "text-rose-600"} />
+            <Kpi label="Enterprise maturity" value={e.maturity} sub="mean /100" tone={e.maturity >= 75 ? "text-[var(--cmp-text-success)]" : e.maturity >= 45 ? "text-[var(--cmp-text-warning)]" : "text-[var(--cmp-text-error)]"} />
             <Kpi label="Domains benchmarked" value={d.domains.length} sub="clinical domains" />
-            <Kpi label="Best performer" value={d.best ? d.best.maturity : "—"} sub={d.best ? d.best.name : "—"} tone="text-emerald-600" />
-            <Kpi label="Spread" value={d.spread} sub="best − worst" tone={d.spread >= 30 ? "text-amber-600" : "text-gray-900"} />
-            <Kpi label="Leading units" value={d.leadingCount} sub="peer exemplars" tone="text-emerald-600" />
-            <Kpi label="Lagging units" value={d.laggingCount} sub="need intervention" tone={d.laggingCount ? "text-rose-600" : "text-gray-900"} />
+            <Kpi label="Best performer" value={d.best ? d.best.maturity : "—"} sub={d.best ? d.best.name : "—"} tone="text-[var(--cmp-text-success)]" />
+            <Kpi label="Spread" value={d.spread} sub="best − worst" tone={d.spread >= 30 ? "text-[var(--cmp-text-warning)]" : "text-gray-900"} />
+            <Kpi label="Leading units" value={d.leadingCount} sub="peer exemplars" tone="text-[var(--cmp-text-success)]" />
+            <Kpi label="Lagging units" value={d.laggingCount} sub="need intervention" tone={d.laggingCount ? "text-[var(--cmp-text-error)]" : "text-gray-900"} />
           </div>
 
           {/* Enterprise benchmark indicators */}
@@ -112,7 +112,7 @@ export default async function GovernanceBenchmarkingPage() {
                 { label: "Evidence completeness", v: e.evidence },
               ].map((x) => (
                 <div key={x.label} className="border border-gray-100 rounded-lg p-3 text-center">
-                  <p className={`text-xl font-bold tabular-nums ${x.v >= 75 ? "text-emerald-600" : x.v >= 45 ? "text-amber-600" : "text-rose-600"}`}>{x.v}{x.label === "Governance maturity" ? "" : "%"}</p>
+                  <p className={`text-xl font-bold tabular-nums ${x.v >= 75 ? "text-[var(--cmp-text-success)]" : x.v >= 45 ? "text-[var(--cmp-text-warning)]" : "text-[var(--cmp-text-error)]"}`}>{x.v}{x.label === "Governance maturity" ? "" : "%"}</p>
                   <p className="text-[10px] text-gray-500 leading-tight mt-0.5">{x.label}</p>
                 </div>
               ))}
@@ -131,13 +131,13 @@ export default async function GovernanceBenchmarkingPage() {
           {/* Comparative intelligence */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
             <div className="bg-white rounded-xl border border-gray-100 p-4">
-              <p className="text-xs font-bold text-emerald-600 uppercase tracking-widest mb-2">Peer-learning exemplars (§9)</p>
+              <p className="text-xs font-bold text-[var(--cmp-text-success)] uppercase tracking-widest mb-2">Peer-learning exemplars (§9)</p>
               {d.exemplars.length === 0 ? (
                 <p className="text-[12px] text-gray-400">No units are clearly leading the enterprise mean yet.</p>
               ) : (
                 <div className="space-y-1.5">
                   {d.exemplars.map((x: any) => (
-                    <div key={x.name} className="flex items-center justify-between gap-2 border border-emerald-50 bg-emerald-50/40 rounded-lg px-2.5 py-1.5">
+                    <div key={x.name} className="flex items-center justify-between gap-2 border border-emerald-50 bg-[var(--cmp-surface-success)]/40 rounded-lg px-2.5 py-1.5">
                       <span className="text-[12px] font-medium text-gray-800 truncate">{x.name}</span>
                       <span className="text-[11px] text-emerald-700 font-semibold shrink-0">{x.maturity} <span className="text-emerald-400">({gapFmt(x.gap)})</span></span>
                     </div>
@@ -147,15 +147,15 @@ export default async function GovernanceBenchmarkingPage() {
               )}
             </div>
             <div className="bg-white rounded-xl border border-gray-100 p-4">
-              <p className="text-xs font-bold text-rose-600 uppercase tracking-widest mb-2">Intervention targets</p>
+              <p className="text-xs font-bold text-[var(--cmp-text-error)] uppercase tracking-widest mb-2">Intervention targets</p>
               {d.interventions.length === 0 ? (
-                <p className="text-[12px] text-emerald-600 font-medium">No units are lagging the enterprise mean — governance is consistent.</p>
+                <p className="text-[12px] text-[var(--cmp-text-success)] font-medium">No units are lagging the enterprise mean — governance is consistent.</p>
               ) : (
                 <div className="space-y-1.5">
                   {d.interventions.map((x: any) => (
-                    <div key={x.name} className="flex items-center justify-between gap-2 border border-rose-50 bg-rose-50/40 rounded-lg px-2.5 py-1.5">
+                    <div key={x.name} className="flex items-center justify-between gap-2 border border-rose-50 bg-[var(--cmp-surface-error)]/40 rounded-lg px-2.5 py-1.5">
                       <span className="text-[12px] font-medium text-gray-800 truncate">{x.name}</span>
-                      <span className="text-[11px] text-rose-700 font-semibold shrink-0">{x.maturity} <span className="text-rose-400">({gapFmt(x.gap)})</span></span>
+                      <span className="text-[11px] text-[var(--cmp-text-error)] font-semibold shrink-0">{x.maturity} <span className="text-rose-400">({gapFmt(x.gap)})</span></span>
                     </div>
                   ))}
                   <p className="text-[10px] text-gray-400 pt-1">Below the enterprise mean — prioritise for governance improvement.</p>
@@ -172,7 +172,7 @@ export default async function GovernanceBenchmarkingPage() {
             </div>
           )}
 
-          <p className="text-[11px] text-gray-400 leading-relaxed">Every figure is real — governance maturity and its indicators are computed live from the registry, grouped by clinical domain and framework, and compared to the enterprise mean. This benchmarks <span className="font-medium">governance</span> (maturity, ownership, regulatory readiness); <span className="font-medium">capability</span> benchmarking (competency coverage + Benner maturity) lives in <Link href="/super-admin/performance/benchmarking" className="text-emerald-600 hover:underline">Competency Performance</Link>. This is internal cross-unit comparison — external, inter-organisation benchmarking (§4.1/§10) requires consent, anonymisation and governance approval. Per the CGR mandate, benchmarking exists to identify learning opportunities, not to rank, and AI never publishes rankings without governance approval.</p>
+          <p className="text-[11px] text-gray-400 leading-relaxed">Every figure is real — governance maturity and its indicators are computed live from the registry, grouped by clinical domain and framework, and compared to the enterprise mean. This benchmarks <span className="font-medium">governance</span> (maturity, ownership, regulatory readiness); <span className="font-medium">capability</span> benchmarking (competency coverage + Benner maturity) lives in <Link href="/super-admin/performance/benchmarking" className="text-[var(--cmp-text-success)] hover:underline">Competency Performance</Link>. This is internal cross-unit comparison — external, inter-organisation benchmarking (§4.1/§10) requires consent, anonymisation and governance approval. Per the CGR mandate, benchmarking exists to identify learning opportunities, not to rank, and AI never publishes rankings without governance approval.</p>
         </div>
       )}
     </div>

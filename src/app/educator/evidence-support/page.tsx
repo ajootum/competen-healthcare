@@ -54,7 +54,7 @@ export default async function EvidenceSupportPage() {
                 <div className="flex items-center gap-2 flex-wrap">
                   <Link href={`/educator/profiles?n=${e.nurse_id}`} className="text-xs font-semibold text-gray-800 hover:text-purple-700">{nameOf.get(e.nurse_id) ?? "—"}</Link>
                   <span className="text-[11px] text-gray-500 flex-1 truncate">{e.skill_name}</span>
-                  <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded uppercase ${e.status === "rejected" ? "bg-red-100 text-red-700" : "bg-amber-100 text-amber-700"}`}>{e.status.replace("_", " ")}</span>
+                  <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded uppercase ${e.status === "rejected" ? "bg-[var(--cmp-surface-critical)] text-[var(--cmp-text-critical)]" : "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]"}`}>{e.status.replace("_", " ")}</span>
                 </div>
                 {e.verifier_comment && <p className="text-[10px] text-gray-500 italic mt-0.5">“{e.verifier_comment}”</p>}
               </div>
@@ -68,7 +68,7 @@ export default async function EvidenceSupportPage() {
           {backlog.length ? backlog.map(([id, n]) => (
             <div key={id} className="flex items-center gap-2 text-[11px] py-1">
               <span className="text-gray-700 flex-1">{nameOf.get(id) ?? "—"}</span>
-              <span className="text-[10px] font-bold bg-blue-100 text-blue-700 rounded-full px-1.5 py-0.5">{n}</span>
+              <span className="text-[10px] font-bold bg-[var(--cmp-surface-information)] text-blue-700 rounded-full px-1.5 py-0.5">{n}</span>
             </div>
           )) : <p className="text-xs text-gray-400">No pending evidence.</p>}
           <Link href="/educator/evidence" className="mt-2 inline-block text-[11px] font-semibold text-purple-600 hover:underline">Open Evidence Review →</Link>

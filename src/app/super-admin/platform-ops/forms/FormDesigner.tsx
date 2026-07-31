@@ -110,7 +110,7 @@ export default function FormDesigner({ forms }: { forms: FormObj[] }) {
                       <label className="text-[10px] text-gray-500 flex items-center gap-1 shrink-0"><input type="checkbox" checked={!!f.required} onChange={e => upd(i, { required: e.target.checked })} className="rounded" />Req</label>
                       <button onClick={() => move(i, -1)} className="text-gray-400 hover:text-gray-700 text-xs px-1">↑</button>
                       <button onClick={() => move(i, 1)} className="text-gray-400 hover:text-gray-700 text-xs px-1">↓</button>
-                      <button onClick={() => remove(i)} className="text-gray-400 hover:text-rose-600 text-xs px-1">✕</button>
+                      <button onClick={() => remove(i)} className="text-gray-400 hover:text-[var(--cmp-text-error)] text-xs px-1">✕</button>
                     </div>
                     <div className="flex items-center gap-2 mt-1.5">
                       <span className="text-[9px] text-gray-400 font-mono shrink-0">{f.key}</span>
@@ -120,7 +120,7 @@ export default function FormDesigner({ forms }: { forms: FormObj[] }) {
                 ))}
               </div>
             )}
-            {msg && <p className={`text-xs mt-3 ${msg.startsWith("✓") ? "text-emerald-600" : "text-rose-600"}`}>{msg}</p>}
+            {msg && <p className={`text-xs mt-3 ${msg.startsWith("✓") ? "text-[var(--cmp-text-success)]" : "text-[var(--cmp-text-error)]"}`}>{msg}</p>}
             <div className="flex items-center justify-end mt-4"><button onClick={save} disabled={busy} className="text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg px-4 py-2 disabled:opacity-50">{busy ? "Saving…" : "Save form fields"}</button></div>
           </>
         )}

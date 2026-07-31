@@ -14,7 +14,7 @@ const card = "bg-white rounded-xl border border-gray-200";
 function Stat({ label, value, tone, sub }: { label: string; value: any; tone?: string; sub?: string }) {
   return <div className={`${card} p-4`}><p className="text-[10px] text-gray-500 uppercase tracking-wide">{label}</p><p className={`text-2xl font-bold tabular-nums mt-0.5 ${tone ?? "text-gray-900"}`}>{value}</p>{sub && <p className="text-[10px] text-gray-400 mt-0.5">{sub}</p>}</div>;
 }
-const impactTone = (n: number) => (n >= 10 ? "bg-rose-500 text-white" : n >= 3 ? "bg-amber-400 text-white" : "bg-emerald-400 text-emerald-950");
+const impactTone = (n: number) => (n >= 10 ? "bg-[var(--cmp-color-error)] text-white" : n >= 3 ? "bg-[var(--cmp-color-warning)] text-white" : "bg-[var(--cmp-color-success)] text-emerald-950");
 
 export default async function DependencyGraphPage() {
   const supabase = await createClient();
@@ -44,7 +44,7 @@ export default async function DependencyGraphPage() {
     </>
   );
 
-  if (!g.provisioned) return <div className="space-y-5 max-w-6xl">{header}<div className="bg-amber-50 border border-amber-200 rounded-xl p-6"><p className="font-semibold text-amber-900">⚙️ Registry not provisioned</p><p className="text-sm text-amber-800 mt-1">The dependency graph is built from the Configuration Registry. Apply migration 092 and run <Link href="/super-admin/platform-ops/registry" className="underline">Sync from catalogue</Link> to populate it.</p></div></div>;
+  if (!g.provisioned) return <div className="space-y-5 max-w-6xl">{header}<div className="bg-[var(--cmp-surface-warning)] border border-[var(--cmp-color-warning)] rounded-xl p-6"><p className="font-semibold text-amber-900">⚙️ Registry not provisioned</p><p className="text-sm text-amber-800 mt-1">The dependency graph is built from the Configuration Registry. Apply migration 092 and run <Link href="/super-admin/platform-ops/registry" className="underline">Sync from catalogue</Link> to populate it.</p></div></div>;
 
   const s = g.stats;
   return (
@@ -54,21 +54,21 @@ export default async function DependencyGraphPage() {
       <div className="grid grid-cols-2 lg:grid-cols-6 gap-3">
         <Stat label="Objects" value={s.nodes} sub="in the graph" />
         <Stat label="Dependency Edges" value={s.edges} sub="containment + explicit" />
-        <Stat label="Circular Dependencies" value={s.cycles} tone={s.cycles ? "text-rose-600" : "text-emerald-600"} sub={s.cycles ? "publish blocker" : "none — acyclic"} />
-        <Stat label="Broken References" value={s.broken} tone={s.broken ? "text-amber-600" : "text-emerald-600"} sub={s.broken ? "unresolved deps/parents" : "all resolved"} />
-        <Stat label="Orphaned" value={s.orphans} tone={s.orphans ? "text-sky-600" : "text-emerald-600"} sub={s.orphans ? "isolated objects" : "none isolated"} />
+        <Stat label="Circular Dependencies" value={s.cycles} tone={s.cycles ? "text-[var(--cmp-text-error)]" : "text-[var(--cmp-text-success)]"} sub={s.cycles ? "publish blocker" : "none — acyclic"} />
+        <Stat label="Broken References" value={s.broken} tone={s.broken ? "text-[var(--cmp-text-warning)]" : "text-[var(--cmp-text-success)]"} sub={s.broken ? "unresolved deps/parents" : "all resolved"} />
+        <Stat label="Orphaned" value={s.orphans} tone={s.orphans ? "text-[var(--cmp-text-information)]" : "text-[var(--cmp-text-success)]"} sub={s.orphans ? "isolated objects" : "none isolated"} />
         <Stat label="Max Blast Radius" value={s.maxImpact} sub="most-depended-on" />
       </div>
 
       {s.cycles > 0 && (
-        <div className="bg-rose-50 border border-rose-200 rounded-xl p-4">
+        <div className="bg-[var(--cmp-surface-error)] border border-[var(--cmp-color-error)] rounded-xl p-4">
           <p className="font-semibold text-rose-900 text-sm">⚠ {s.cycles} circular dependency chain{s.cycles === 1 ? "" : "s"} — resolve before publishing</p>
-          <div className="mt-2 space-y-1">{g.cycles.map((c: string[], i: number) => <p key={i} className="text-[11px] text-rose-700 font-mono">{c.join(" → ")}</p>)}</div>
+          <div className="mt-2 space-y-1">{g.cycles.map((c: string[], i: number) => <p key={i} className="text-[11px] text-[var(--cmp-text-error)] font-mono">{c.join(" → ")}</p>)}</div>
         </div>
       )}
 
       {s.broken > 0 && (
-        <div className="bg-amber-50 border border-amber-200 rounded-xl p-4">
+        <div className="bg-[var(--cmp-surface-warning)] border border-[var(--cmp-color-warning)] rounded-xl p-4">
           <p className="font-semibold text-amber-900 text-sm">{s.broken} broken reference{s.broken === 1 ? "" : "s"} — an object points to a {`{parent/dependency}`} that is not in the registry</p>
           <div className="mt-2 space-y-1">{g.broken.map((b: any, i: number) => <p key={i} className="text-[11px] text-amber-800 font-mono">{b.from} <span className="text-amber-400">─{b.kind}→</span> {b.to} <span className="text-amber-500">(missing)</span></p>)}</div>
         </div>
@@ -78,7 +78,7 @@ export default async function DependencyGraphPage() {
         <div className={`${card} p-4`}>
           <p className="font-semibold text-gray-900 text-sm mb-1">Orphaned Objects <span className="text-gray-300 font-normal">— {g.orphans.length}</span></p>
           <p className="text-[10px] text-gray-400 mb-3">Depend on nothing and nothing depends on them — wire them into a page/dashboard/menu, or retire.</p>
-          <div className="flex flex-wrap gap-1.5">{g.orphans.map((o: any) => <span key={o.key} className="text-[11px] bg-sky-50 border border-sky-100 text-sky-700 rounded px-2 py-0.5">{o.label} <span className="text-sky-400 text-[9px]">{o.type.replace(/_/g, " ")}</span></span>)}</div>
+          <div className="flex flex-wrap gap-1.5">{g.orphans.map((o: any) => <span key={o.key} className="text-[11px] bg-[var(--cmp-surface-information)] border border-[var(--cmp-color-information)] text-[var(--cmp-text-information)] rounded px-2 py-0.5">{o.label} <span className="text-sky-400 text-[9px]">{o.type.replace(/_/g, " ")}</span></span>)}</div>
         </div>
       )}
 

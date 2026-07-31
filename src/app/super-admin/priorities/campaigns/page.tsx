@@ -20,11 +20,11 @@ export default async function CampaignsPage() {
       <ModuleNav active="005" />
       <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-7 gap-3">
         <Stat label="Campaigns" value={k.total} sub="initiatives" />
-        <Stat label="Active" value={k.active} sub="in delivery" tone="text-emerald-600" />
+        <Stat label="Active" value={k.active} sub="in delivery" tone="text-[var(--cmp-text-success)]" />
         <Stat label="Planned" value={k.planned} sub="upcoming" />
         <Stat label="Completed" value={k.completed} sub="delivered" tone="text-teal-600" />
         <Stat label="Total Budget" value={money(k.budget)} sub="allocated" />
-        <Stat label="Avg Progress" value={`${k.avgProgress}%`} sub="active" tone={k.avgProgress >= 60 ? "text-emerald-600" : "text-amber-600"} />
+        <Stat label="Avg Progress" value={`${k.avgProgress}%`} sub="active" tone={k.avgProgress >= 60 ? "text-[var(--cmp-text-success)]" : "text-[var(--cmp-text-warning)]"} />
         <Stat label="Linked Actions" value={k.actions} sub="generated" />
       </div>
 

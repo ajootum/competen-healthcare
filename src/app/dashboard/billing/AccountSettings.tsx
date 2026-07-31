@@ -143,7 +143,7 @@ export default function AccountSettings({ profile }: { profile: ProfileFields })
         </div>
 
         {profileMsg && (
-          <p className={`text-xs rounded-lg px-3 py-2 mt-3 ${profileMsg.ok ? "text-green-700 bg-green-50 border border-green-100" : "text-red-600 bg-red-50 border border-red-100"}`}>
+          <p className={`text-xs rounded-lg px-3 py-2 mt-3 ${profileMsg.ok ? "text-[var(--cmp-text-success)] bg-[var(--cmp-surface-success)] border border-[var(--cmp-color-success)]" : "text-[var(--cmp-text-critical)] bg-[var(--cmp-surface-critical)] border border-[var(--cmp-color-critical)]"}`}>
             {profileMsg.text}
           </p>
         )}
@@ -181,7 +181,7 @@ export default function AccountSettings({ profile }: { profile: ProfileFields })
         </div>
 
         {pwMsg && (
-          <p className={`text-xs rounded-lg px-3 py-2 mt-3 ${pwMsg.ok ? "text-green-700 bg-green-50 border border-green-100" : "text-red-600 bg-red-50 border border-red-100"}`}>
+          <p className={`text-xs rounded-lg px-3 py-2 mt-3 ${pwMsg.ok ? "text-[var(--cmp-text-success)] bg-[var(--cmp-surface-success)] border border-[var(--cmp-color-success)]" : "text-[var(--cmp-text-critical)] bg-[var(--cmp-surface-critical)] border border-[var(--cmp-color-critical)]"}`}>
             {pwMsg.text}
           </p>
         )}

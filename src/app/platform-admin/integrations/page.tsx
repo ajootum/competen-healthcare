@@ -11,7 +11,7 @@ export const dynamic = "force-dynamic";
 
 const card = cardClass;
 const badge: Record<string, { cls: string; label: string; dot: string }> = {
-  live: { cls: "bg-green-50 border-green-200", label: "Live", dot: "bg-green-500" },
+  live: { cls: "bg-[var(--cmp-surface-success)] border-[var(--cmp-color-success)]", label: "Live", dot: "bg-[var(--cmp-color-success)]" },
   native: { cls: "bg-teal-50 border-teal-200", label: "Platform-native", dot: "bg-teal-400" },
   off: { cls: "bg-gray-50 border-gray-200", label: "Not connected", dot: "bg-gray-300" },
 };
@@ -36,7 +36,7 @@ export default async function IntegrationsPage() {
       </div>
 
       <div className="grid grid-cols-3 gap-3">
-        <div className={card}><div className="text-3xl font-bold tabular-nums text-green-600">{integrationHealth.live}</div><div className="text-xs text-gray-500 mt-1">Live</div></div>
+        <div className={card}><div className="text-3xl font-bold tabular-nums text-[var(--cmp-text-success)]">{integrationHealth.live}</div><div className="text-xs text-gray-500 mt-1">Live</div></div>
         <div className={card}><div className="text-3xl font-bold tabular-nums text-teal-600">{integrationHealth.native}</div><div className="text-xs text-gray-500 mt-1">Platform-native</div></div>
         <div className={card}><div className="text-3xl font-bold tabular-nums text-gray-400">{integrationHealth.off}</div><div className="text-xs text-gray-500 mt-1">Not connected</div></div>
       </div>
@@ -55,7 +55,7 @@ export default async function IntegrationsPage() {
           })}
         </div>
       </div>
-      <p className="text-[11px] text-gray-400">External connectors — identity providers (SSO/SAML), email/SMS gateways, EHR/EMR and LMS systems — are onboarded per deployment. Configure the AI provider under <Link href="/super-admin/studio" className="text-rose-600 hover:underline">Studio</Link>.</p>
+      <p className="text-[11px] text-gray-400">External connectors — identity providers (SSO/SAML), email/SMS gateways, EHR/EMR and LMS systems — are onboarded per deployment. Configure the AI provider under <Link href="/super-admin/studio" className="text-[var(--cmp-text-error)] hover:underline">Studio</Link>.</p>
     </div>
   );
 }

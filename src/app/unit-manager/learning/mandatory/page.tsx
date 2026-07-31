@@ -15,12 +15,12 @@ export const dynamic = "force-dynamic";
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 const card = "bg-white rounded-xl border border-gray-200";
-const pctTone = (n: number) => (n >= 90 ? "text-emerald-600" : n >= 80 ? "text-amber-600" : "text-rose-600");
-const barTone = (n: number) => (n >= 90 ? "bg-emerald-500" : n >= 80 ? "bg-amber-400" : "bg-rose-500");
-const ESC_TONE: Record<string, string> = { "Level 1": "bg-amber-50 text-amber-700", "Level 2": "bg-orange-50 text-orange-700", "Level 3": "bg-rose-50 text-rose-700" };
+const pctTone = (n: number) => (n >= 90 ? "text-[var(--cmp-text-success)]" : n >= 80 ? "text-[var(--cmp-text-warning)]" : "text-[var(--cmp-text-error)]");
+const barTone = (n: number) => (n >= 90 ? "bg-[var(--cmp-color-success)]" : n >= 80 ? "bg-[var(--cmp-color-warning)]" : "bg-[var(--cmp-color-error)]");
+const ESC_TONE: Record<string, string> = { "Level 1": "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]", "Level 2": "bg-[var(--cmp-surface-warning)] text-orange-700", "Level 3": "bg-[var(--cmp-surface-error)] text-[var(--cmp-text-error)]" };
 
 function Kpi({ icon, tint, label, value, sub, tone, href }: { icon: string; tint: string; label: string; value: any; sub?: string; tone?: string; href?: string }) {
-  const inner = <div className={`${card} p-4 ${href ? "hover:border-emerald-300 transition-colors" : ""}`}><div className="flex items-center gap-2.5 mb-2"><span className={`w-8 h-8 rounded-lg flex items-center justify-center text-sm ${tint}`}>{icon}</span><span className="text-xs font-medium text-gray-500 leading-tight">{label}</span></div><div className={`text-2xl font-bold tabular-nums ${tone ?? "text-gray-900"}`}>{value}</div>{sub && <div className="text-[11px] text-gray-400 mt-0.5">{sub}</div>}</div>;
+  const inner = <div className={`${card} p-4 ${href ? "hover:border-[var(--cmp-color-success)] transition-colors" : ""}`}><div className="flex items-center gap-2.5 mb-2"><span className={`w-8 h-8 rounded-lg flex items-center justify-center text-sm ${tint}`}>{icon}</span><span className="text-xs font-medium text-gray-500 leading-tight">{label}</span></div><div className={`text-2xl font-bold tabular-nums ${tone ?? "text-gray-900"}`}>{value}</div>{sub && <div className="text-[11px] text-gray-400 mt-0.5">{sub}</div>}</div>;
   return href ? <Link href={href}>{inner}</Link> : inner;
 }
 
@@ -52,8 +52,8 @@ export default async function MandatoryCompliance() {
       <LearningTabs />
     </>
   );
-  if (!d.provisioned) return <div className="space-y-4">{header}<div className="bg-amber-50 border border-amber-200 rounded-xl p-6"><p className="font-semibold text-amber-900">⚙️ Learning operations store not provisioned</p><p className="text-sm text-amber-800 mt-1">Apply migration 089 to enable mandatory-learning compliance tracking.</p></div></div>;
-  if (!d.hasData) return <div className="space-y-4">{header}<div className="bg-white border border-dashed border-gray-200 rounded-xl p-8 text-center"><p className="text-3xl mb-2 opacity-40">📋</p><p className="text-sm text-gray-600">No mandatory learning assigned yet.</p><p className="text-[11px] text-gray-400 mt-1">Compliance, overdue and completion track here once mandatory learning is assigned.</p><Link href="/unit-manager/learning/assign" className="mt-3 inline-block text-sm rounded-lg bg-emerald-600 text-white px-4 py-2 hover:bg-emerald-700">Assign mandatory learning →</Link></div></div>;
+  if (!d.provisioned) return <div className="space-y-4">{header}<div className="bg-[var(--cmp-surface-warning)] border border-[var(--cmp-color-warning)] rounded-xl p-6"><p className="font-semibold text-amber-900">⚙️ Learning operations store not provisioned</p><p className="text-sm text-amber-800 mt-1">Apply migration 089 to enable mandatory-learning compliance tracking.</p></div></div>;
+  if (!d.hasData) return <div className="space-y-4">{header}<div className="bg-white border border-dashed border-gray-200 rounded-xl p-8 text-center"><p className="text-3xl mb-2 opacity-40">📋</p><p className="text-sm text-gray-600">No mandatory learning assigned yet.</p><p className="text-[11px] text-gray-400 mt-1">Compliance, overdue and completion track here once mandatory learning is assigned.</p><Link href="/unit-manager/learning/assign" className="mt-3 inline-block text-sm rounded-lg bg-[var(--cmp-color-success)] text-white px-4 py-2 hover:bg-emerald-700">Assign mandatory learning →</Link></div></div>;
 
   const k = d.kpis, s = d.status;
   const statusSegs = [["#22c55e", s.compliant, "Compliant"], ["#f59e0b", s.dueSoon, "Due soon"], ["#ef4444", s.overdue, "Overdue"], ["#94a3b8", s.notStarted, "Not started"], ["#e5e7eb", s.exempt, "Exempt"]] as [string, number, string][];
@@ -66,12 +66,12 @@ export default async function MandatoryCompliance() {
 
       {/* KPI row */}
       <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-7 gap-3">
-        <Kpi icon="🛡️" tint="bg-emerald-50" label="Overall Compliance" value={`${k.overallCompliance}%`} tone={pctTone(k.overallCompliance)} sub="mandatory learning" />
+        <Kpi icon="🛡️" tint="bg-[var(--cmp-surface-success)]" label="Overall Compliance" value={`${k.overallCompliance}%`} tone={pctTone(k.overallCompliance)} sub="mandatory learning" />
         <Kpi icon="✅" tint="bg-teal-50" label="Fully Compliant" value={k.fullyCompliant} sub={`of ${k.totalLearners} learners`} />
-        <Kpi icon="🕐" tint="bg-amber-50" label="Due Soon (≤30d)" value={k.dueSoon} tone={k.dueSoon ? "text-amber-600" : "text-gray-400"} sub="approaching" />
-        <Kpi icon="⚠️" tint="bg-rose-50" label="Overdue Learners" value={k.overdueLearners} tone={k.overdueLearners ? "text-rose-600" : "text-gray-400"} sub="action required" />
-        <Kpi icon="🚩" tint="bg-orange-50" label="Critical Gaps" value={d.topGaps.length} tone={d.topGaps.length ? "text-rose-600" : "text-gray-400"} sub="requirements" />
-        <Kpi icon="📋" tint="bg-sky-50" label="Assignments Issued" value={k.assignmentsIssued} sub="active" href="/unit-manager/learning/assign" />
+        <Kpi icon="🕐" tint="bg-[var(--cmp-surface-warning)]" label="Due Soon (≤30d)" value={k.dueSoon} tone={k.dueSoon ? "text-[var(--cmp-text-warning)]" : "text-gray-400"} sub="approaching" />
+        <Kpi icon="⚠️" tint="bg-[var(--cmp-surface-error)]" label="Overdue Learners" value={k.overdueLearners} tone={k.overdueLearners ? "text-[var(--cmp-text-error)]" : "text-gray-400"} sub="action required" />
+        <Kpi icon="🚩" tint="bg-[var(--cmp-surface-warning)]" label="Critical Gaps" value={d.topGaps.length} tone={d.topGaps.length ? "text-[var(--cmp-text-error)]" : "text-gray-400"} sub="requirements" />
+        <Kpi icon="📋" tint="bg-[var(--cmp-surface-information)]" label="Assignments Issued" value={k.assignmentsIssued} sub="active" href="/unit-manager/learning/assign" />
         <Kpi icon="📈" tint="bg-violet-50" label="Completion Rate" value={`${k.completionRate}%`} tone={pctTone(k.completionRate)} sub="completed" />
       </div>
 
@@ -94,16 +94,16 @@ export default async function MandatoryCompliance() {
           <h3 className="font-semibold text-gray-900 text-sm mb-3">Top Compliance Gaps <span className="text-[10px] font-normal text-rose-500">critical</span></h3>
           {d.topGaps.length === 0 ? <p className="text-sm text-gray-400">No compliance gaps. 🎉</p> : (
             <table className="w-full text-xs"><thead><tr className="text-[10px] uppercase tracking-wide text-gray-400 text-left border-b border-gray-100"><th className="py-1.5 font-medium">Requirement</th><th className="py-1.5 font-medium text-right">Learners affected</th></tr></thead>
-              <tbody>{d.topGaps.map((g: any, i: number) => (<tr key={i} className="border-b border-gray-50"><td className="py-1.5 text-gray-700">⚠️ {g.requirement}</td><td className="py-1.5 text-right text-rose-600 font-semibold tabular-nums">{g.affected}</td></tr>))}</tbody>
+              <tbody>{d.topGaps.map((g: any, i: number) => (<tr key={i} className="border-b border-gray-50"><td className="py-1.5 text-gray-700">⚠️ {g.requirement}</td><td className="py-1.5 text-right text-[var(--cmp-text-error)] font-semibold tabular-nums">{g.affected}</td></tr>))}</tbody>
             </table>
           )}
         </div>
         <div className={`${card} p-5`}>
           <h3 className="font-semibold text-gray-900 text-sm mb-3">Escalations <span className="text-[10px] font-normal text-gray-400">by level (from overdue)</span></h3>
           <div className="grid grid-cols-3 gap-2 text-center">
-            <div className="rounded-lg bg-amber-50 py-3"><p className="text-xl font-bold text-amber-700 tabular-nums">{d.escalations.l1}</p><p className="text-[10px] text-amber-600">Level 1 · Supervisor</p></div>
-            <div className="rounded-lg bg-orange-50 py-3"><p className="text-xl font-bold text-orange-700 tabular-nums">{d.escalations.l2}</p><p className="text-[10px] text-orange-600">Level 2 · Unit Manager</p></div>
-            <div className="rounded-lg bg-rose-50 py-3"><p className="text-xl font-bold text-rose-700 tabular-nums">{d.escalations.l3}</p><p className="text-[10px] text-rose-600">Level 3 · Compliance</p></div>
+            <div className="rounded-lg bg-[var(--cmp-surface-warning)] py-3"><p className="text-xl font-bold text-[var(--cmp-text-warning)] tabular-nums">{d.escalations.l1}</p><p className="text-[10px] text-[var(--cmp-text-warning)]">Level 1 · Supervisor</p></div>
+            <div className="rounded-lg bg-[var(--cmp-surface-warning)] py-3"><p className="text-xl font-bold text-orange-700 tabular-nums">{d.escalations.l2}</p><p className="text-[10px] text-[var(--cmp-text-warning)]">Level 2 · Unit Manager</p></div>
+            <div className="rounded-lg bg-[var(--cmp-surface-error)] py-3"><p className="text-xl font-bold text-[var(--cmp-text-error)] tabular-nums">{d.escalations.l3}</p><p className="text-[10px] text-[var(--cmp-text-error)]">Level 3 · Compliance</p></div>
           </div>
           <p className="text-[10px] text-gray-400 mt-3">Derived from overdue duration. Exception/extension requests and a formal escalation store are honest next-phase.</p>
         </div>
@@ -111,10 +111,10 @@ export default async function MandatoryCompliance() {
 
       {/* Overdue learners table */}
       <div className={`${card} p-5`}>
-        <div className="flex items-center justify-between mb-3"><h3 className="font-semibold text-gray-900 text-sm">Overdue Learners</h3><Link href="/unit-manager/learning/assign" className="text-[11px] text-emerald-600 hover:underline">Manage →</Link></div>
+        <div className="flex items-center justify-between mb-3"><h3 className="font-semibold text-gray-900 text-sm">Overdue Learners</h3><Link href="/unit-manager/learning/assign" className="text-[11px] text-[var(--cmp-text-success)] hover:underline">Manage →</Link></div>
         {d.overdueLearners.length === 0 ? <p className="text-sm text-gray-400">No overdue mandatory learning. 🎉</p> : (
           <div className="overflow-x-auto"><table className="w-full text-xs"><thead><tr className="text-[10px] uppercase tracking-wide text-gray-400 text-left border-b border-gray-100"><th className="py-2 font-medium">Learner</th><th className="py-2 font-medium">Role</th><th className="py-2 font-medium">Overdue Requirement</th><th className="py-2 font-medium">Due</th><th className="py-2 font-medium text-right">Days</th><th className="py-2 font-medium text-right">Escalation</th></tr></thead>
-            <tbody>{d.overdueLearners.map((o: any, i: number) => (<tr key={i} className="border-b border-gray-50"><td className="py-2 text-gray-800">{o.name}</td><td className="py-2 text-gray-500 capitalize">{o.role}</td><td className="py-2 text-gray-600 truncate max-w-[12rem]">{o.requirement}</td><td className="py-2 text-gray-500 tabular-nums">{o.due ?? "—"}</td><td className="py-2 text-right text-rose-600 font-medium tabular-nums">{o.days}</td><td className="py-2 text-right"><span className={`text-[9px] px-1.5 py-0.5 rounded ${ESC_TONE[o.escalation]}`}>{o.escalation}</span></td></tr>))}</tbody>
+            <tbody>{d.overdueLearners.map((o: any, i: number) => (<tr key={i} className="border-b border-gray-50"><td className="py-2 text-gray-800">{o.name}</td><td className="py-2 text-gray-500 capitalize">{o.role}</td><td className="py-2 text-gray-600 truncate max-w-[12rem]">{o.requirement}</td><td className="py-2 text-gray-500 tabular-nums">{o.due ?? "—"}</td><td className="py-2 text-right text-[var(--cmp-text-error)] font-medium tabular-nums">{o.days}</td><td className="py-2 text-right"><span className={`text-[9px] px-1.5 py-0.5 rounded ${ESC_TONE[o.escalation]}`}>{o.escalation}</span></td></tr>))}</tbody>
           </table></div>
         )}
       </div>
@@ -124,7 +124,7 @@ export default async function MandatoryCompliance() {
         <div className={`${card} p-5`}>
           <h3 className="font-semibold text-gray-900 text-sm mb-3">Upcoming (≤30 days)</h3>
           {d.upcoming.length === 0 ? <p className="text-sm text-gray-400">Nothing due in 30 days.</p> : (
-            <div className="space-y-2">{d.upcoming.map((u: any, i: number) => (<div key={i} className="flex items-center justify-between gap-2 text-xs"><div className="min-w-0"><p className="text-gray-800 truncate">{u.requirement}</p><p className="text-[10px] text-gray-400 truncate">{u.name}</p></div><span className="text-amber-600 shrink-0 tabular-nums">{u.days != null ? `${u.days}d` : u.due ?? "—"}</span></div>))}</div>
+            <div className="space-y-2">{d.upcoming.map((u: any, i: number) => (<div key={i} className="flex items-center justify-between gap-2 text-xs"><div className="min-w-0"><p className="text-gray-800 truncate">{u.requirement}</p><p className="text-[10px] text-gray-400 truncate">{u.name}</p></div><span className="text-[var(--cmp-text-warning)] shrink-0 tabular-nums">{u.days != null ? `${u.days}d` : u.due ?? "—"}</span></div>))}</div>
           )}
         </div>
         <div className={`${card} p-5`}>

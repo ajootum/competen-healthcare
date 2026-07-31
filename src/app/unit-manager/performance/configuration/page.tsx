@@ -24,7 +24,7 @@ export default async function ConfigurationPage() {
   const d = await loadPaConfig(admin, hid, isSuper) as any;
   const head = <Head code="UMW-PA-009 · Performance Analytics" title="Performance Configuration & KPI Administration Centre" sub="Design, configure, govern and publish all performance analytics — KPIs, formulas, scorecards, benchmarks, dashboards and AI policies — no-code." />;
   if (!d.provisioned) return <div className="max-w-[1500px] space-y-4">{head}<Tabs active="009" /><Provision module="Performance Configuration" /></div>;
-  if (!d.hasData) return <div className="max-w-[1500px] space-y-4">{head}<Tabs active="009" /><div className="bg-blue-50 border border-blue-200 rounded-xl p-6 text-sm text-blue-800">Seed the performance stores first.</div></div>;
+  if (!d.hasData) return <div className="max-w-[1500px] space-y-4">{head}<Tabs active="009" /><div className="bg-[var(--cmp-surface-information)] border border-[var(--cmp-color-information)] rounded-xl p-6 text-sm text-blue-800">Seed the performance stores first.</div></div>;
 
   const t = d.totals;
   const health = Math.round((d.dataQuality.reduce((a: number, q: any) => a + q.pct, 0) / d.dataQuality.length));
@@ -39,7 +39,7 @@ export default async function ConfigurationPage() {
         <Kpi label="Reports" value={t.reports} sub={`${t.published} published`} />
         <Kpi label="With Owner" value={`${Math.round((t.withOwner / t.kpis) * 100)}%`} sub="KPIs" status={t.withOwner / t.kpis >= 0.9 ? "green" : "amber"} />
         <Kpi label="With Target" value={`${Math.round((t.withTarget / t.kpis) * 100)}%`} sub="KPIs" status="green" />
-        <div className="bg-white border border-gray-200 rounded-xl p-3.5"><p className="text-[11px] text-gray-500 uppercase tracking-wide">Config Health</p><p className={`text-2xl font-bold tabular-nums mt-1 ${health >= 85 ? "text-emerald-600" : "text-amber-600"}`}>{health}%</p><p className="text-[11px] text-gray-400">good</p></div>
+        <div className="bg-white border border-gray-200 rounded-xl p-3.5"><p className="text-[11px] text-gray-500 uppercase tracking-wide">Config Health</p><p className={`text-2xl font-bold tabular-nums mt-1 ${health >= 85 ? "text-[var(--cmp-text-success)]" : "text-[var(--cmp-text-warning)]"}`}>{health}%</p><p className="text-[11px] text-gray-400">good</p></div>
       </div>
 
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
@@ -51,7 +51,7 @@ export default async function ConfigurationPage() {
         </Card>
         <Card title="Data Quality & Validation">
           <div className="space-y-3">{d.dataQuality.map((q: any) => (
-            <div key={q.label}><div className="flex items-center justify-between text-[12px] mb-0.5"><span className="text-gray-600">{q.label}</span><span className="font-semibold text-gray-900">{q.pct}%</span></div><div className="h-1.5 rounded-full bg-gray-100 overflow-hidden"><div className={`h-full rounded-full ${q.pct >= 90 ? "bg-emerald-500" : q.pct >= 70 ? "bg-amber-500" : "bg-rose-500"}`} style={{ width: `${q.pct}%` }} /></div></div>
+            <div key={q.label}><div className="flex items-center justify-between text-[12px] mb-0.5"><span className="text-gray-600">{q.label}</span><span className="font-semibold text-gray-900">{q.pct}%</span></div><div className="h-1.5 rounded-full bg-gray-100 overflow-hidden"><div className={`h-full rounded-full ${q.pct >= 90 ? "bg-[var(--cmp-color-success)]" : q.pct >= 70 ? "bg-[var(--cmp-color-warning)]" : "bg-[var(--cmp-color-error)]"}`} style={{ width: `${q.pct}%` }} /></div></div>
           ))}</div>
         </Card>
       </div>

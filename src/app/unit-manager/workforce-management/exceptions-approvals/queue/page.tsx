@@ -43,7 +43,7 @@ export default async function MyApprovalQueue() {
     </>
   );
 
-  if (!d.apprProvisioned) return <div className="space-y-4">{header}<div className="bg-amber-50 border border-amber-200 rounded-xl p-6"><p className="font-semibold text-amber-900">⚙️ Approval store not provisioned</p><p className="text-sm text-amber-800 mt-1">Migration 077 (approval_requests) is required.</p></div></div>;
+  if (!d.apprProvisioned) return <div className="space-y-4">{header}<div className="bg-[var(--cmp-surface-warning)] border border-[var(--cmp-color-warning)] rounded-xl p-6"><p className="font-semibold text-amber-900">⚙️ Approval store not provisioned</p><p className="text-sm text-amber-800 mt-1">Migration 077 (approval_requests) is required.</p></div></div>;
 
   const q = d.openApprovals;
   const overdue = q.filter((a: any) => a.due_at && d.priority.some((p: any) => p.id === a.id && p.overdue)).length;
@@ -53,10 +53,10 @@ export default async function MyApprovalQueue() {
       {header}
 
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        <Kpi label="In my queue" value={q.length} tone={q.length ? "text-gray-900" : "text-emerald-600"} />
-        <Kpi label="Critical" value={critical} tone={critical ? "text-rose-600" : "text-emerald-600"} />
-        <Kpi label="Overdue" value={overdue} tone={overdue ? "text-rose-600" : "text-emerald-600"} />
-        <Kpi label="Escalated" value={q.filter((a: any) => a.status === "escalated").length} tone={q.filter((a: any) => a.status === "escalated").length ? "text-orange-600" : undefined} />
+        <Kpi label="In my queue" value={q.length} tone={q.length ? "text-gray-900" : "text-[var(--cmp-text-success)]"} />
+        <Kpi label="Critical" value={critical} tone={critical ? "text-[var(--cmp-text-error)]" : "text-[var(--cmp-text-success)]"} />
+        <Kpi label="Overdue" value={overdue} tone={overdue ? "text-[var(--cmp-text-error)]" : "text-[var(--cmp-text-success)]"} />
+        <Kpi label="Escalated" value={q.filter((a: any) => a.status === "escalated").length} tone={q.filter((a: any) => a.status === "escalated").length ? "text-[var(--cmp-text-warning)]" : undefined} />
       </div>
 
       <div className={`${card} p-5`}>

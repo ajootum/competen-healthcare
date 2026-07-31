@@ -44,18 +44,18 @@ export default async function AbsenceLeave() {
     </>
   );
 
-  if (!d.ready) return <div className="space-y-4">{header}<div className="bg-amber-50 border border-amber-200 rounded-xl p-6"><p className="font-semibold text-amber-900">⚙️ No active shift</p></div></div>;
+  if (!d.ready) return <div className="space-y-4">{header}<div className="bg-[var(--cmp-surface-warning)] border border-[var(--cmp-color-warning)] rounded-xl p-6"><p className="font-semibold text-amber-900">⚙️ No active shift</p></div></div>;
 
   return (
     <div className="space-y-4">
       {header}
 
       <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
-        <Kpi label="Absent today" value={d.total} tone={d.total ? "text-rose-600" : "text-emerald-600"} />
-        <Kpi label="Classified" value={`${d.classified}/${d.total}`} tone={d.classified < d.total ? "text-amber-600" : "text-emerald-600"} />
-        <Kpi label="Replacement needed" value={d.replacementOutstanding} tone={d.replacementOutstanding ? "text-amber-600" : undefined} />
+        <Kpi label="Absent today" value={d.total} tone={d.total ? "text-[var(--cmp-text-error)]" : "text-[var(--cmp-text-success)]"} />
+        <Kpi label="Classified" value={`${d.classified}/${d.total}`} tone={d.classified < d.total ? "text-[var(--cmp-text-warning)]" : "text-[var(--cmp-text-success)]"} />
+        <Kpi label="Replacement needed" value={d.replacementOutstanding} tone={d.replacementOutstanding ? "text-[var(--cmp-text-warning)]" : undefined} />
         <Kpi label="Replacement pool" value={d.kpis.replacements} tone="text-violet-600" />
-        <Kpi label="Coverage after" value={d.kpis.coveragePct != null ? `${d.kpis.coveragePct}%` : "—"} tone={d.kpis.coverageState === "Below minimum" ? "text-rose-600" : "text-emerald-600"} />
+        <Kpi label="Coverage after" value={d.kpis.coveragePct != null ? `${d.kpis.coveragePct}%` : "—"} tone={d.kpis.coverageState === "Below minimum" ? "text-[var(--cmp-text-error)]" : "text-[var(--cmp-text-success)]"} />
       </div>
 
       <div className={`${card} p-5`}>

@@ -19,8 +19,8 @@ export const dynamic = "force-dynamic";
 type SearchParams = Promise<{ fw?: string; dom?: string; cpu?: string }>;
 
 const PUB_CLS: Record<string, string> = {
-  published: "bg-green-100 text-green-700", draft: "bg-gray-100 text-gray-600",
-  in_review: "bg-amber-100 text-amber-700", archived: "bg-gray-100 text-gray-400", retired: "bg-gray-100 text-gray-400",
+  published: "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]", draft: "bg-gray-100 text-gray-600",
+  in_review: "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]", archived: "bg-gray-100 text-gray-400", retired: "bg-gray-100 text-gray-400",
 };
 const LIFECYCLE = ["Draft", "Review", "Committee", "Approved", "Published", "Archived"];
 const CHAIN = ["Programme", "Domain", "CPU", "Competency", "Indicators", "Evidence", "Assessment", "Simulation", "Passport"];
@@ -195,7 +195,7 @@ export default async function FrameworkBuilderPage({ searchParams }: { searchPar
                         className={`border rounded-lg px-2.5 py-1.5 text-left transition-colors ${selDomain?.id === d.id ? "border-purple-300 bg-purple-50/40" : "border-gray-100 hover:border-purple-200"}`}>
                         <div className="flex items-center gap-1.5">
                           <span className="text-[11px] font-semibold text-gray-800 flex-1">{di + 1}. {d.name}</span>
-                          <span className={`w-2 h-2 rounded-full ${st === "complete" ? "bg-green-500" : st === "gap" ? "bg-red-400" : st === "empty" ? "bg-gray-200" : "bg-amber-400"}`} />
+                          <span className={`w-2 h-2 rounded-full ${st === "complete" ? "bg-[var(--cmp-color-success)]" : st === "gap" ? "bg-[var(--cmp-color-critical)]" : st === "empty" ? "bg-gray-200" : "bg-[var(--cmp-color-warning)]"}`} />
                         </div>
                         <p className="text-[9px] text-gray-400">{dc.length} competencies</p>
                       </Link>
@@ -252,7 +252,7 @@ export default async function FrameworkBuilderPage({ searchParams }: { searchPar
                 {intel.map((x, i) => (
                   <Link key={i} href="/educator/studio/gaps" className="flex items-center gap-2 text-[11px] text-gray-700 hover:text-purple-700">
                     <span>{x.icon}</span><span className="flex-1">{x.label}</span>
-                    <span className="text-[10px] font-bold bg-amber-100 text-amber-700 rounded-full px-1.5 py-0.5">{x.n}</span>
+                    <span className="text-[10px] font-bold bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)] rounded-full px-1.5 py-0.5">{x.n}</span>
                   </Link>
                 ))}
               </div>
@@ -291,12 +291,12 @@ export default async function FrameworkBuilderPage({ searchParams }: { searchPar
       <div className="grid md:grid-cols-2 gap-4 mt-4">
         <Card title="Framework Health Score">
           <div className="flex items-center gap-4">
-            <span className={`text-3xl font-bold ${covScore >= 80 ? "text-green-600" : covScore >= 60 ? "text-amber-600" : "text-red-600"}`}>{covScore}%</span>
+            <span className={`text-3xl font-bold ${covScore >= 80 ? "text-[var(--cmp-text-success)]" : covScore >= 60 ? "text-[var(--cmp-text-warning)]" : "text-[var(--cmp-text-critical)]"}`}>{covScore}%</span>
             <div className="flex-1 space-y-1">
               {[["Learning coverage", pct(hasResource)], ["Assessment mapping", pct(hasAssessed)], ["Simulation coverage", simPct], ["Passport coverage", pct(hasPassport)], ["Checklist coverage", pct(compHasChecklist)]].map(([l, v]) => (
                 <div key={l as string} className="flex items-center gap-2 text-[10px]">
                   <span className="text-gray-500 w-28">{l}</span>
-                  <div className="flex-1 h-1.5 bg-gray-100 rounded-full overflow-hidden"><div className={`h-full rounded-full ${(v as number) >= 80 ? "bg-green-500" : "bg-amber-400"}`} style={{ width: `${v}%` }} /></div>
+                  <div className="flex-1 h-1.5 bg-gray-100 rounded-full overflow-hidden"><div className={`h-full rounded-full ${(v as number) >= 80 ? "bg-[var(--cmp-color-success)]" : "bg-[var(--cmp-color-warning)]"}`} style={{ width: `${v}%` }} /></div>
                   <span className="text-gray-700 font-bold w-8 text-right">{v as number}%</span>
                 </div>
               ))}
@@ -309,7 +309,7 @@ export default async function FrameworkBuilderPage({ searchParams }: { searchPar
           <div className="flex items-center gap-1 overflow-x-auto pb-1">
             {LIFECYCLE.map((s, i) => (
               <span key={s} className="flex items-center gap-1 shrink-0">
-                <span className={`flex items-center gap-1 text-[9px] rounded px-1.5 py-1 ${i < lcIndex ? "bg-green-50 text-green-700" : i === lcIndex ? "bg-purple-100 text-purple-700 font-bold" : "bg-gray-50 text-gray-400"}`}>
+                <span className={`flex items-center gap-1 text-[9px] rounded px-1.5 py-1 ${i < lcIndex ? "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]" : i === lcIndex ? "bg-purple-100 text-purple-700 font-bold" : "bg-gray-50 text-gray-400"}`}>
                   {i < lcIndex ? "✓" : i === lcIndex ? "●" : "○"} {s}
                 </span>
                 {i < LIFECYCLE.length - 1 && <span className="text-gray-300 text-[9px]">→</span>}

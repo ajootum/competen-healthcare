@@ -25,11 +25,11 @@ export default async function RecognitionPage() {
 
       <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
         <Kpi label="Equivalency rules" value={k.rules} />
-        <Kpi label="Full recognition" value={k.full} tone="text-emerald-600" sub="exact + equivalent" />
-        <Kpi label="Conditional" value={k.conditional} tone="text-amber-600" sub="conditional + bridging" />
-        <Kpi label="Denied" value={k.denied} tone={k.denied ? "text-rose-600" : "text-gray-900"} />
+        <Kpi label="Full recognition" value={k.full} tone="text-[var(--cmp-text-success)]" sub="exact + equivalent" />
+        <Kpi label="Conditional" value={k.conditional} tone="text-[var(--cmp-text-warning)]" sub="conditional + bridging" />
+        <Kpi label="Denied" value={k.denied} tone={k.denied ? "text-[var(--cmp-text-error)]" : "text-gray-900"} />
         <Kpi label="Local reqs covered" value={k.targetsCovered} sub="target competencies" />
-        <Kpi label="Awaiting recognition" value={k.crossOrgPending} tone={k.crossOrgPending ? "text-amber-600" : "text-gray-900"} sub="cross-org, unmapped" />
+        <Kpi label="Awaiting recognition" value={k.crossOrgPending} tone={k.crossOrgPending ? "text-[var(--cmp-text-warning)]" : "text-gray-900"} sub="cross-org, unmapped" />
       </div>
 
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">

@@ -16,8 +16,8 @@ export const dynamic = "force-dynamic";
 const card = cardClass;
 const hm = (h: number | null) => h == null ? "—" : `${Math.max(0, Math.floor(h))}h ${Math.max(0, Math.round((h % 1) * 60))}m`;
 const ROLE_FILTERS = ["charge", "nurse", "support", "float", "educator", "assessor"];
-const GROUP_TONE: Record<string, string> = { "High Risk": "text-red-600", "PEWS Review": "text-orange-600", "Isolation": "text-purple-600", "Observation": "text-amber-600", "Discharge Ready": "text-teal-600", "Theatre": "text-indigo-600", "Stable": "text-green-600" };
-const ewsColor = (n: number | null) => n == null ? "text-gray-400" : n >= 7 ? "text-red-600" : n >= 5 ? "text-orange-600" : n >= 3 ? "text-yellow-600" : "text-green-600";
+const GROUP_TONE: Record<string, string> = { "High Risk": "text-[var(--cmp-text-critical)]", "PEWS Review": "text-[var(--cmp-text-warning)]", "Isolation": "text-purple-600", "Observation": "text-[var(--cmp-text-warning)]", "Discharge Ready": "text-teal-600", "Theatre": "text-indigo-600", "Stable": "text-[var(--cmp-text-success)]" };
+const ewsColor = (n: number | null) => n == null ? "text-gray-400" : n >= 7 ? "text-[var(--cmp-text-critical)]" : n >= 5 ? "text-[var(--cmp-text-warning)]" : n >= 3 ? "text-[var(--cmp-text-warning)]" : "text-[var(--cmp-text-success)]";
 
 export default async function CurrentShiftWorkspace() {
   const supabase = await createClient();
@@ -31,7 +31,7 @@ export default async function CurrentShiftWorkspace() {
   const sc = await loadShiftCommand(admin, profile?.hospital_id ?? null, roles.includes("super_admin"));
   if (!sc.ready) return (
     <div className="space-y-4"><h1 className="text-2xl font-bold text-gray-900">Current Shift</h1>
-      <div className="bg-amber-50 border border-amber-200 rounded-xl p-6"><p className="font-semibold text-amber-900">⚙️ Coming online</p><p className="text-sm text-amber-800 mt-2">The Clinical Operations Engine tables aren&apos;t provisioned yet (migrations 038 &amp; 039).</p></div>
+      <div className="bg-[var(--cmp-surface-warning)] border border-[var(--cmp-color-warning)] rounded-xl p-6"><p className="font-semibold text-amber-900">⚙️ Coming online</p><p className="text-sm text-amber-800 mt-2">The Clinical Operations Engine tables aren&apos;t provisioned yet (migrations 038 &amp; 039).</p></div>
     </div>
   );
   const { shift, overview, staffBoard, roleMix, patientBoard, groupCounts, patientGroups, copilot } = sc;
@@ -39,13 +39,13 @@ export default async function CurrentShiftWorkspace() {
 
   const overviewCells = [
     { label: "Staff on duty", value: `${overview.present} / ${overview.rostered}`, sub: "Present" },
-    { label: "Bed occupancy", value: `${overview.occPct}%`, sub: `${overview.occupied} / ${overview.totalBeds}`, tone: overview.occPct >= 90 ? "text-red-600" : overview.occPct >= 75 ? "text-orange-600" : "text-green-600" },
-    { label: "Critical patients", value: String(overview.critical), sub: "High risk", tone: overview.critical ? "text-red-600" : undefined },
+    { label: "Bed occupancy", value: `${overview.occPct}%`, sub: `${overview.occupied} / ${overview.totalBeds}`, tone: overview.occPct >= 90 ? "text-[var(--cmp-text-critical)]" : overview.occPct >= 75 ? "text-[var(--cmp-text-warning)]" : "text-[var(--cmp-text-success)]" },
+    { label: "Critical patients", value: String(overview.critical), sub: "High risk", tone: overview.critical ? "text-[var(--cmp-text-critical)]" : undefined },
     { label: "Admissions", value: String(overview.admissionsPending), sub: "Pending" },
     { label: "Discharges", value: String(overview.discharges), sub: "Planned" },
-    { label: "Escalations", value: String(overview.escalations), sub: "Active", tone: overview.escalations ? "text-amber-600" : undefined },
-    { label: "Open incidents", value: String(overview.incidents), sub: "Safety alerts", tone: overview.incidents ? "text-orange-600" : undefined },
-    { label: "Handover", value: `${overview.handoverPct}%`, sub: titleCase(overview.handoverStatus), tone: overview.handoverPct === 100 ? "text-green-600" : "text-gray-500" },
+    { label: "Escalations", value: String(overview.escalations), sub: "Active", tone: overview.escalations ? "text-[var(--cmp-text-warning)]" : undefined },
+    { label: "Open incidents", value: String(overview.incidents), sub: "Safety alerts", tone: overview.incidents ? "text-[var(--cmp-text-warning)]" : undefined },
+    { label: "Handover", value: `${overview.handoverPct}%`, sub: titleCase(overview.handoverStatus), tone: overview.handoverPct === 100 ? "text-[var(--cmp-text-success)]" : "text-gray-500" },
   ];
 
   const actions = [
@@ -64,12 +64,12 @@ export default async function CurrentShiftWorkspace() {
       <div className="bg-white rounded-xl border border-gray-200 px-2 py-3">
         <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 divide-y sm:divide-y-0 sm:divide-x divide-gray-100">
           {[
-            { l: "Current Shift", v: shift ? `${titleCase(shift.shift_type)} Shift` : "No active shift", s: shift ? `${fmtTime(shift.starts_at)} – ${fmtTime(shift.ends_at)}` : "", tone: onDuty ? "text-green-600" : "text-gray-500" },
+            { l: "Current Shift", v: shift ? `${titleCase(shift.shift_type)} Shift` : "No active shift", s: shift ? `${fmtTime(shift.starts_at)} – ${fmtTime(shift.ends_at)}` : "", tone: onDuty ? "text-[var(--cmp-text-success)]" : "text-gray-500" },
             { l: "Unit / Ward", v: shift?.unit ?? "—" },
             { l: "Current time", v: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: false }) },
             { l: "Elapsed", v: hm(shift?.elapsedH ?? null) },
             { l: "Remaining", v: hm(shift?.remainingH ?? null) },
-            { l: "Status", v: onDuty ? "In Progress" : titleCase(shift?.status ?? "—"), tone: onDuty ? "text-green-600" : "text-gray-500" },
+            { l: "Status", v: onDuty ? "In Progress" : titleCase(shift?.status ?? "—"), tone: onDuty ? "text-[var(--cmp-text-success)]" : "text-gray-500" },
           ].map((c, i) => (
             <div key={i} className="px-3 py-1.5">
               <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider">{c.l}</p>
@@ -116,9 +116,9 @@ export default async function CurrentShiftWorkspace() {
                   <p className="text-[11px] text-gray-400 truncate">{s.patients} patient{s.patients !== 1 ? "s" : ""}{s.beds.length ? ` · ${s.beds.join(", ")}` : ""}</p>
                 </div>
                 <span className="shrink-0 flex items-center gap-1.5">
-                  {s.status === "absent" ? <span className="text-[10px] px-1.5 py-0.5 rounded bg-red-100 text-red-700">Absent</span>
-                    : s.competencyOk === false ? <span className="text-[10px] px-1.5 py-0.5 rounded bg-orange-100 text-orange-700">Competency</span>
-                    : s.competencyOk ? <span className="text-[10px] px-1.5 py-0.5 rounded bg-green-100 text-green-700">Validated</span>
+                  {s.status === "absent" ? <span className="text-[10px] px-1.5 py-0.5 rounded bg-[var(--cmp-surface-critical)] text-[var(--cmp-text-critical)]">Absent</span>
+                    : s.competencyOk === false ? <span className="text-[10px] px-1.5 py-0.5 rounded bg-[var(--cmp-surface-warning)] text-orange-700">Competency</span>
+                    : s.competencyOk ? <span className="text-[10px] px-1.5 py-0.5 rounded bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]">Validated</span>
                     : <span className="text-[10px] px-1.5 py-0.5 rounded bg-gray-100 text-gray-500">On duty</span>}
                   <Link href="/supervisor/operations?section=assignments" className="text-[11px] text-teal-700 hover:underline">Manage</Link>
                 </span>
@@ -167,9 +167,9 @@ export default async function CurrentShiftWorkspace() {
           <h3 className="font-semibold text-gray-900 flex items-center gap-2 mb-3">⚡ Real-time Actions</h3>
           <div className="grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-7 gap-2">
             {actions.map(a => (
-              <Link key={a.label} href={a.href} className={`flex flex-col items-center gap-1.5 rounded-lg border py-3 px-1 text-center transition-colors ${a.danger ? "border-red-200 hover:bg-red-50/50" : "border-gray-200 hover:border-teal-300 hover:bg-teal-50/40"}`}>
+              <Link key={a.label} href={a.href} className={`flex flex-col items-center gap-1.5 rounded-lg border py-3 px-1 text-center transition-colors ${a.danger ? "border-[var(--cmp-color-critical)] hover:bg-[var(--cmp-surface-critical)]/50" : "border-gray-200 hover:border-teal-300 hover:bg-teal-50/40"}`}>
                 <span className="text-lg">{a.icon}</span>
-                <span className={`text-[10px] leading-tight ${a.danger ? "text-red-600" : "text-gray-600"}`}>{a.label}</span>
+                <span className={`text-[10px] leading-tight ${a.danger ? "text-[var(--cmp-text-critical)]" : "text-gray-600"}`}>{a.label}</span>
               </Link>
             ))}
           </div>

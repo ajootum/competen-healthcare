@@ -127,7 +127,7 @@ export default async function AssessorAnalyticsPage() {
                 <div key={i} className="flex items-center gap-2">
                   <span className="text-[10px] text-gray-500 w-28 shrink-0">{SCORE_LABELS[i]}</span>
                   <div className="flex-1 h-2.5 bg-gray-100 rounded-full overflow-hidden">
-                    <div className={`h-full rounded-full ${i >= 3 ? "bg-teal-500" : "bg-amber-400"}`} style={{ width: `${(n / distMax) * 100}%` }} />
+                    <div className={`h-full rounded-full ${i >= 3 ? "bg-teal-500" : "bg-[var(--cmp-color-warning)]"}`} style={{ width: `${(n / distMax) * 100}%` }} />
                   </div>
                   <span className="text-[10px] font-semibold text-gray-600 w-5 text-right shrink-0">{n || ""}</span>
                 </div>

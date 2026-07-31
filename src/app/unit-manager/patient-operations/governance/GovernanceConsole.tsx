@@ -12,7 +12,7 @@ import { cardClass } from "@/components/ui/primitives";
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 const tname = (k: string) => templateByKey(k)?.name ?? k;
-const RISK_TONE: Record<string, string> = { critical: "bg-rose-50 text-rose-700", high: "bg-orange-50 text-orange-700", moderate: "bg-amber-50 text-amber-700", low: "bg-gray-100 text-gray-600" };
+const RISK_TONE: Record<string, string> = { critical: "bg-[var(--cmp-surface-error)] text-[var(--cmp-text-error)]", high: "bg-[var(--cmp-surface-warning)] text-orange-700", moderate: "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]", low: "bg-gray-100 text-gray-600" };
 
 export default function GovernanceConsole({ exceptions, amendments, returned }: { exceptions: any[]; amendments: any[]; returned: any[] }) {
   const router = useRouter();
@@ -40,7 +40,7 @@ export default function GovernanceConsole({ exceptions, amendments, returned }: 
   };
   return (
     <>
-      {msg && <div className={`fixed bottom-4 right-4 z-50 text-sm rounded-lg px-4 py-2.5 shadow-lg ${msg.kind === "ok" ? "bg-emerald-600 text-white" : "bg-rose-600 text-white"}`}>{msg.text}</div>}
+      {msg && <div className={`fixed bottom-4 right-4 z-50 text-sm rounded-lg px-4 py-2.5 shadow-lg ${msg.kind === "ok" ? "bg-[var(--cmp-color-success)] text-white" : "bg-[var(--cmp-color-error)] text-white"}`}>{msg.text}</div>}
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
         {/* Exception queue */}
         <div className={cardClass}>
@@ -54,8 +54,8 @@ export default function GovernanceConsole({ exceptions, amendments, returned }: 
                     {e.risk_level && <span className={`text-[10px] px-1.5 py-0.5 rounded shrink-0 ${RISK_TONE[e.risk_level] ?? "bg-gray-100 text-gray-600"}`}>{e.risk_level}</span>}
                   </div>
                   <div className="flex items-center gap-2 mt-2">
-                    <button disabled={busy} onClick={() => decideException(e.id, "approve")} className="text-[11px] font-medium text-white bg-emerald-600 rounded px-2 py-1 hover:bg-emerald-700 disabled:opacity-50">Approve</button>
-                    <button disabled={busy} onClick={() => decideException(e.id, "reject")} className="text-[11px] font-medium text-rose-700 hover:underline disabled:opacity-50">Reject</button>
+                    <button disabled={busy} onClick={() => decideException(e.id, "approve")} className="text-[11px] font-medium text-white bg-[var(--cmp-color-success)] rounded px-2 py-1 hover:bg-emerald-700 disabled:opacity-50">Approve</button>
+                    <button disabled={busy} onClick={() => decideException(e.id, "reject")} className="text-[11px] font-medium text-[var(--cmp-text-error)] hover:underline disabled:opacity-50">Reject</button>
                   </div>
                 </div>
               ))}
@@ -72,8 +72,8 @@ export default function GovernanceConsole({ exceptions, amendments, returned }: 
                 <div key={a.id} className="rounded-lg border border-gray-100 p-3">
                   <div className="min-w-0"><p className="text-sm font-medium text-gray-800">{tname(a.form?.template_key ?? "")} <span className="text-gray-400 font-normal">· {a.op_patients?.label ?? "—"}</span></p><p className="text-[11px] text-gray-500 mt-0.5">{a.reason}</p><p className="text-[10px] text-gray-400 mt-0.5">by {a.requester?.full_name ?? "—"}</p></div>
                   <div className="flex items-center gap-2 mt-2">
-                    <button disabled={busy} onClick={() => decideAmendment(a.id, "approve")} className="text-[11px] font-medium text-white bg-emerald-600 rounded px-2 py-1 hover:bg-emerald-700 disabled:opacity-50">Approve &amp; version</button>
-                    <button disabled={busy} onClick={() => decideAmendment(a.id, "reject")} className="text-[11px] font-medium text-rose-700 hover:underline disabled:opacity-50">Reject</button>
+                    <button disabled={busy} onClick={() => decideAmendment(a.id, "approve")} className="text-[11px] font-medium text-white bg-[var(--cmp-color-success)] rounded px-2 py-1 hover:bg-emerald-700 disabled:opacity-50">Approve &amp; version</button>
+                    <button disabled={busy} onClick={() => decideAmendment(a.id, "reject")} className="text-[11px] font-medium text-[var(--cmp-text-error)] hover:underline disabled:opacity-50">Reject</button>
                   </div>
                 </div>
               ))}
@@ -90,7 +90,7 @@ export default function GovernanceConsole({ exceptions, amendments, returned }: 
             {returned.map((r: any) => (
               <div key={r.id} className="flex items-center justify-between gap-2 py-1.5 text-xs">
                 <span className="min-w-0"><span className="text-gray-700">{r.patient}</span> <span className="text-gray-400">{tname(r.template_key)} · {r.by}</span></span>
-                <span className="text-amber-700">returned</span>
+                <span className="text-[var(--cmp-text-warning)]">returned</span>
               </div>
             ))}
           </div>

@@ -60,7 +60,7 @@ const PANEL = "absolute right-0 top-full mt-1 w-64 bg-white border border-gray-2
 function Badge({ n }: { n: number }) {
   if (!n) return null;
   return (
-    <span className="absolute -top-0.5 -right-0.5 min-w-[16px] h-4 px-1 rounded-full bg-red-500 text-white text-[10px] font-bold flex items-center justify-center tabular-nums">
+    <span className="absolute -top-0.5 -right-0.5 min-w-[16px] h-4 px-1 rounded-full bg-[var(--cmp-color-critical)] text-white text-[10px] font-bold flex items-center justify-center tabular-nums">
       {n > 99 ? "99+" : n}
       <span className="cmp-sr-only"> unread</span>
     </span>
@@ -261,7 +261,7 @@ export default function GlobalHeader({
             <div className="border-t border-gray-100 pt-1">
               <form action="/api/auth/logout" method="POST">
                 <button type="submit" role="menuitem"
-                  className="w-full flex items-center gap-2.5 px-3 py-2 text-[13px] text-left hover:bg-red-50"
+                  className="w-full flex items-center gap-2.5 px-3 py-2 text-[13px] text-left hover:bg-[var(--cmp-surface-critical)]"
                   style={{ color: "var(--cmp-text-error)" }}>
                   <span className="w-4 text-center" aria-hidden>↩</span>
                   <span>Sign Out</span>

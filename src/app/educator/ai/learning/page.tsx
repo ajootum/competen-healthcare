@@ -12,9 +12,9 @@ import CommandBar from "./CommandBar";
 
 export const dynamic = "force-dynamic";
 
-const TINT_DOT: Record<Tint, string> = { green: "bg-emerald-400", amber: "bg-amber-400", red: "bg-rose-400", muted: "bg-slate-600" };
+const TINT_DOT: Record<Tint, string> = { green: "bg-[var(--cmp-color-success)]", amber: "bg-[var(--cmp-color-warning)]", red: "bg-[var(--cmp-color-error)]", muted: "bg-slate-600" };
 const RISK_CLS: Record<string, string> = { Low: "text-emerald-400", Medium: "text-amber-400", High: "text-rose-400" };
-const SEV_CLS: Record<string, string> = { High: "bg-rose-500/20 text-rose-300 border-rose-500/30", Medium: "bg-amber-500/20 text-amber-300 border-amber-500/30", Low: "bg-sky-500/20 text-sky-300 border-sky-500/30" };
+const SEV_CLS: Record<string, string> = { High: "bg-[var(--cmp-color-error)]/20 text-rose-300 border-rose-500/30", Medium: "bg-[var(--cmp-color-warning)]/20 text-amber-300 border-amber-500/30", Low: "bg-[var(--cmp-color-information)]/20 text-sky-300 border-sky-500/30" };
 const BAND_COLOR = ["#475569", "#f59e0b", "#eab308", "#22c55e", "#14b8a6"];
 
 function NavTree({ node, depth }: { node: NavNode; depth: number }) {
@@ -100,7 +100,7 @@ export default async function LearningIntelligencePage() {
             <p className="text-slate-400 text-sm">AI-powered Progression • Engagement • Mastery • Prediction • Intervention</p>
           </div>
           <div className="ml-auto flex items-center gap-2">
-            <Link href="/educator/analytics/learning" className="text-[12px] font-semibold text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg px-3 py-2 transition-colors">⬇ Export Report</Link>
+            <Link href="/educator/analytics/learning" className="text-[12px] font-semibold text-white bg-[var(--cmp-color-success)] hover:bg-emerald-700 rounded-lg px-3 py-2 transition-colors">⬇ Export Report</Link>
             <span title="Sharing needs a share-link store — coming soon" className="text-[12px] text-slate-400 bg-white/[0.04] border border-white/10 rounded-lg px-3 py-2 select-none">↗ Share</span>
           </div>
         </div>
@@ -197,7 +197,7 @@ export default async function LearningIntelligencePage() {
                     {d.engagement.signals.map(s => (
                       <div key={s.label}>
                         <div className="flex items-center justify-between text-[10px] mb-0.5"><span className={s.muted ? "text-slate-500" : "text-slate-300"}>{s.label}</span><span className="text-slate-400">{s.value === null ? "—" : `${s.value}%`}</span></div>
-                        <div className="h-1.5 rounded-full bg-white/10 overflow-hidden"><div className="h-full rounded-full bg-emerald-500" style={{ width: `${s.value ?? 0}%` }} /></div>
+                        <div className="h-1.5 rounded-full bg-white/10 overflow-hidden"><div className="h-full rounded-full bg-[var(--cmp-color-success)]" style={{ width: `${s.value ?? 0}%` }} /></div>
                       </div>
                     ))}
                   </div>
@@ -231,7 +231,7 @@ export default async function LearningIntelligencePage() {
                   {d.barriers.rows.length === 0 ? <p className="text-[11px] text-emerald-300">No material barriers detected.</p> : d.barriers.rows.map(b => (
                     <div key={b.label}>
                       <div className="flex items-center justify-between text-[10px] mb-0.5"><span className="text-slate-300 truncate mr-2">{b.label}</span><span className="text-slate-400">{b.learners} {b.share !== null ? `(${b.share}%)` : ""}</span></div>
-                      <div className="h-1.5 rounded-full bg-white/10 overflow-hidden"><div className="h-full rounded-full bg-amber-500" style={{ width: `${(b.learners / maxBarrier) * 100}%` }} /></div>
+                      <div className="h-1.5 rounded-full bg-white/10 overflow-hidden"><div className="h-full rounded-full bg-[var(--cmp-color-warning)]" style={{ width: `${(b.learners / maxBarrier) * 100}%` }} /></div>
                     </div>
                   ))}
                 </div>
@@ -246,7 +246,7 @@ export default async function LearningIntelligencePage() {
                   <div key={i} className="rounded-xl bg-white/[0.03] border border-white/10 p-3">
                     <p className="text-[12px] font-bold text-white leading-tight">{p.title}</p>
                     <p className="text-[10px] text-slate-400 mt-1 leading-snug">{p.reason}</p>
-                    <div className="flex items-center gap-1.5 mt-2"><div className="h-1 flex-1 rounded-full bg-white/10 overflow-hidden"><div className="h-full rounded-full bg-emerald-500" style={{ width: `${p.confidence}%` }} /></div><span className="text-[9px] text-slate-400">{p.confidence}%</span></div>
+                    <div className="flex items-center gap-1.5 mt-2"><div className="h-1 flex-1 rounded-full bg-white/10 overflow-hidden"><div className="h-full rounded-full bg-[var(--cmp-color-success)]" style={{ width: `${p.confidence}%` }} /></div><span className="text-[9px] text-slate-400">{p.confidence}%</span></div>
                   </div>
                 ))}
               </div>

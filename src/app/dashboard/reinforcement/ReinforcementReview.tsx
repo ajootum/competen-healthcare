@@ -7,10 +7,10 @@ import { useState } from "react";
 
 type Card = { id: string; subject: string; prompt: string };
 const GRADES = [
-  { q: 1, label: "Again", hint: "blanked", cls: "text-rose-700 bg-rose-50 border-rose-200 hover:bg-rose-100" },
-  { q: 3, label: "Hard", hint: "a struggle", cls: "text-amber-700 bg-amber-50 border-amber-200 hover:bg-amber-100" },
+  { q: 1, label: "Again", hint: "blanked", cls: "text-[var(--cmp-text-error)] bg-[var(--cmp-surface-error)] border-[var(--cmp-color-error)] hover:bg-[var(--cmp-surface-error)]" },
+  { q: 3, label: "Hard", hint: "a struggle", cls: "text-[var(--cmp-text-warning)] bg-[var(--cmp-surface-warning)] border-[var(--cmp-color-warning)] hover:bg-[var(--cmp-surface-warning)]" },
   { q: 4, label: "Good", hint: "recalled it", cls: "text-teal-700 bg-teal-50 border-teal-200 hover:bg-teal-100" },
-  { q: 5, label: "Easy", hint: "instant", cls: "text-emerald-700 bg-emerald-50 border-emerald-200 hover:bg-emerald-100" },
+  { q: 5, label: "Easy", hint: "instant", cls: "text-emerald-700 bg-[var(--cmp-surface-success)] border-[var(--cmp-color-success)] hover:bg-[var(--cmp-surface-success)]" },
 ];
 
 export default function ReinforcementReview({ initial }: { initial: Card[] }) {

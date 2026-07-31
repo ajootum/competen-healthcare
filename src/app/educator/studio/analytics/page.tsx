@@ -78,7 +78,7 @@ export default async function ObjectAnalyticsPage() {
             <div key={c.title} className="flex items-center gap-2 text-[11px] py-1">
               <span className="text-gray-700 flex-1 truncate">{c.title}</span>
               <span className="text-gray-400">{c.completed}/{c.enrolled} done</span>
-              {!c.published && <span className="text-[8px] text-amber-600">draft</span>}
+              {!c.published && <span className="text-[8px] text-[var(--cmp-text-warning)]">draft</span>}
             </div>
           )) : <p className="text-xs text-gray-400">No courses.</p>}
         </Card>

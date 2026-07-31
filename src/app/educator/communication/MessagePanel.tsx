@@ -48,8 +48,8 @@ export default function MessagePanel({ people }: { people: { id: string; name: s
           className="text-xs font-bold text-white bg-purple-600 rounded-lg px-4 py-2 hover:bg-purple-700 disabled:opacity-50 transition-colors">
           {busy ? "Sending…" : "Send message"}
         </button>
-        {sent && <span className="text-[11px] text-green-600">✓ {sent}</span>}
-        {error && <span className="text-[11px] text-red-600">{error}</span>}
+        {sent && <span className="text-[11px] text-[var(--cmp-text-success)]">✓ {sent}</span>}
+        {error && <span className="text-[11px] text-[var(--cmp-text-critical)]">{error}</span>}
       </div>
     </div>
   );

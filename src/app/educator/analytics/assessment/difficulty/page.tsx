@@ -50,12 +50,12 @@ export default async function Difficulty() {
               <tbody>{d.byCategory.map(c => { const tot = c.easy + c.medium + c.hard; return (
                 <tr key={c.label} className="border-b border-gray-50 text-[11px]">
                   <td className="py-2 pr-3 font-semibold text-gray-800">{c.label}</td>
-                  <td className="py-2 pr-3 text-green-600">{c.easy}</td>
-                  <td className="py-2 pr-3 text-amber-600">{c.medium}</td>
-                  <td className="py-2 pr-3 text-red-600">{c.hard}</td>
+                  <td className="py-2 pr-3 text-[var(--cmp-text-success)]">{c.easy}</td>
+                  <td className="py-2 pr-3 text-[var(--cmp-text-warning)]">{c.medium}</td>
+                  <td className="py-2 pr-3 text-[var(--cmp-text-critical)]">{c.hard}</td>
                   <td className="py-2 pr-3 w-40">
                     <span className="flex h-2 rounded-full overflow-hidden bg-gray-100">
-                      {tot > 0 && <><span className="bg-green-500" style={{ width: `${(c.easy / tot) * 100}%` }} /><span className="bg-amber-400" style={{ width: `${(c.medium / tot) * 100}%` }} /><span className="bg-red-400" style={{ width: `${(c.hard / tot) * 100}%` }} /></>}
+                      {tot > 0 && <><span className="bg-[var(--cmp-color-success)]" style={{ width: `${(c.easy / tot) * 100}%` }} /><span className="bg-[var(--cmp-color-warning)]" style={{ width: `${(c.medium / tot) * 100}%` }} /><span className="bg-[var(--cmp-color-critical)]" style={{ width: `${(c.hard / tot) * 100}%` }} /></>}
                     </span>
                   </td>
                 </tr>

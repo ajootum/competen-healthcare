@@ -77,10 +77,10 @@ export default async function AssessmentInboxPage() {
 
   const KPIS = [
     { icon: "🗂️", value: String(rows.length), label: "Total Assessments", sub: "in your inbox", tint: "bg-indigo-50" },
-    { icon: "🔥", value: String(highPriority), label: "High Priority", sub: "require attention", tint: "bg-red-50" },
-    { icon: "📅", value: String(dueThisWeek), label: "Due This Week", sub: "scheduled sessions", tint: "bg-blue-50" },
-    { icon: "✅", value: String(completedMonth), label: "Completed", sub: "this month", tint: "bg-green-50" },
-    { icon: "⏱️", value: `~${estHours}h`, label: "Est. Workload", sub: "engine effort model", tint: "bg-amber-50" },
+    { icon: "🔥", value: String(highPriority), label: "High Priority", sub: "require attention", tint: "bg-[var(--cmp-surface-critical)]" },
+    { icon: "📅", value: String(dueThisWeek), label: "Due This Week", sub: "scheduled sessions", tint: "bg-[var(--cmp-surface-information)]" },
+    { icon: "✅", value: String(completedMonth), label: "Completed", sub: "this month", tint: "bg-[var(--cmp-surface-success)]" },
+    { icon: "⏱️", value: `~${estHours}h`, label: "Est. Workload", sub: "engine effort model", tint: "bg-[var(--cmp-surface-warning)]" },
   ];
 
   // Deadlines rail: sessions today / this week / next week
@@ -139,13 +139,13 @@ export default async function AssessmentInboxPage() {
 
           {/* Overdue banner */}
           {overdueSessions > 0 && (
-            <div className="bg-red-50 border border-red-100 rounded-xl px-4 py-3 flex items-center gap-3">
+            <div className="bg-[var(--cmp-surface-critical)] border border-[var(--cmp-color-critical)] rounded-xl px-4 py-3 flex items-center gap-3">
               <span className="text-lg shrink-0">🔴</span>
               <p className="text-xs font-semibold text-red-800 flex-1">
                 {overdueSessions} scheduled session{overdueSessions === 1 ? "" : "s"} past due — complete or reschedule.
               </p>
               <Link href="/assessor/calendar"
-                className="text-[11px] font-semibold bg-red-600 hover:bg-red-700 text-white px-3 py-1.5 rounded-lg transition-colors shrink-0">
+                className="text-[11px] font-semibold bg-[var(--cmp-color-critical)] hover:bg-red-700 text-white px-3 py-1.5 rounded-lg transition-colors shrink-0">
                 View Overdue →
               </Link>
             </div>
@@ -170,7 +170,7 @@ export default async function AssessmentInboxPage() {
                         <span className="text-gray-400 capitalize"> · {a.method.replace(/_/g, " ")}</span>
                       </p>
                       <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded shrink-0 ${
-                        a.status === "in_progress" ? "bg-blue-50 text-blue-600" : "bg-amber-50 text-amber-700"
+                        a.status === "in_progress" ? "bg-[var(--cmp-surface-information)] text-[var(--cmp-text-information)]" : "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]"
                       }`}>{a.status === "in_progress" ? "In progress" : "Pending"}</span>
                       <span className="text-gray-300 shrink-0">›</span>
                     </Link>
@@ -195,9 +195,9 @@ export default async function AssessmentInboxPage() {
             </div>
             <div className="flex flex-col gap-2">
               {[
-                { label: "Today", n: todayDue, cls: "bg-red-500" },
-                { label: "This Week", n: dueThisWeek, cls: "bg-amber-500" },
-                { label: "Next Week", n: nextWeekDue, cls: "bg-blue-500" },
+                { label: "Today", n: todayDue, cls: "bg-[var(--cmp-color-critical)]" },
+                { label: "This Week", n: dueThisWeek, cls: "bg-[var(--cmp-color-warning)]" },
+                { label: "Next Week", n: nextWeekDue, cls: "bg-[var(--cmp-color-information)]" },
               ].map(d => (
                 <div key={d.label} className="flex items-center gap-2.5">
                   <span className={`w-5 h-5 rounded-full ${d.cls} text-white text-[10px] font-bold flex items-center justify-center shrink-0`}>{d.n}</span>

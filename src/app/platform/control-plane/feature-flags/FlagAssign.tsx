@@ -39,7 +39,7 @@ export default function FlagAssign({ flagKey }: { flagKey: string }) {
       </select>
       <button onClick={submit} disabled={busy || (scopeType !== "global" && !scopeRef.trim())} className="text-[11px] font-medium text-white bg-violet-600 hover:bg-violet-700 disabled:opacity-50 rounded px-2 py-1">save</button>
       <button onClick={() => setOpen(false)} className="text-[11px] text-gray-400">cancel</button>
-      {msg && <span className={`text-[10px] ${msg === "saved" ? "text-green-600" : "text-red-500"}`}>{msg}</span>}
+      {msg && <span className={`text-[10px] ${msg === "saved" ? "text-[var(--cmp-text-success)]" : "text-red-500"}`}>{msg}</span>}
     </div>
   );
 }

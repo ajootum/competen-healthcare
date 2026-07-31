@@ -26,7 +26,7 @@ function Bars({ rows, max, tone }: { rows: { label: string; count: number; hi?: 
       {rows.map((r) => (
         <div key={r.label} className="flex items-center gap-2">
           <span className="text-[11px] text-gray-600 flex-1 min-w-0 truncate font-mono">{r.label}</span>
-          <div className="w-24 h-2 rounded bg-gray-50 overflow-hidden"><div className={`h-full rounded ${r.hi ? "bg-emerald-500" : tone ?? "bg-gray-300"}`} style={{ width: `${(r.count / max) * 100}%` }} /></div>
+          <div className="w-24 h-2 rounded bg-gray-50 overflow-hidden"><div className={`h-full rounded ${r.hi ? "bg-[var(--cmp-color-success)]" : tone ?? "bg-gray-300"}`} style={{ width: `${(r.count / max) * 100}%` }} /></div>
           <span className="text-[11px] font-bold text-gray-600 tabular-nums w-8 text-right">{r.count}</span>
         </div>
       ))}
@@ -53,12 +53,12 @@ export default async function GovernanceAIAgentsPage() {
     <div className="max-w-[1400px]">
       <div className="flex items-start justify-between gap-3 mb-5">
         <div>
-          <p className="text-[11px] font-semibold text-emerald-600 uppercase tracking-widest mb-0.5">CGR-023 · Competency Governance</p>
+          <p className="text-[11px] font-semibold text-[var(--cmp-text-success)] uppercase tracking-widest mb-0.5">CGR-023 · Competency Governance</p>
           <h1 className="text-xl font-bold text-gray-900">AI Agent &amp; Autonomous Assurance</h1>
           <p className="text-gray-400 text-sm mt-0.5">How AI continuously supports governance while accountable professionals keep authority — governed agents, explainable recommendations, and a strict human-in-the-loop boundary.</p>
         </div>
         <div className="flex gap-2 shrink-0">
-          <Link href="/super-admin/ai/services" className="text-xs font-semibold text-emerald-700 hover:text-emerald-800 border border-emerald-200 bg-emerald-50 rounded-lg px-3 py-2">AI services →</Link>
+          <Link href="/super-admin/ai/services" className="text-xs font-semibold text-emerald-700 hover:text-emerald-800 border border-[var(--cmp-color-success)] bg-[var(--cmp-surface-success)] rounded-lg px-3 py-2">AI services →</Link>
           <Link href="/super-admin/cgr" className="text-xs font-semibold text-gray-500 hover:text-emerald-700 border border-gray-200 rounded-lg px-3 py-2">← CGR</Link>
         </div>
       </div>
@@ -71,9 +71,9 @@ export default async function GovernanceAIAgentsPage() {
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-2.5">
           {AGENTS.map((a) => (
-            <Link key={a.name} href={a.href} className="border border-gray-100 rounded-lg p-3 hover:border-emerald-200 hover:shadow-sm transition-all group">
+            <Link key={a.name} href={a.href} className="border border-gray-100 rounded-lg p-3 hover:border-[var(--cmp-color-success)] hover:shadow-sm transition-all group">
               <div className="flex items-center justify-between mb-1">
-                <span className={`text-[9px] font-bold uppercase rounded px-1.5 py-0.5 ${a.live ? "text-emerald-700 bg-emerald-50 border border-emerald-100" : "text-gray-500 bg-gray-50 border border-gray-100"}`}>{a.live ? "Live" : "Assist"}</span>
+                <span className={`text-[9px] font-bold uppercase rounded px-1.5 py-0.5 ${a.live ? "text-emerald-700 bg-[var(--cmp-surface-success)] border border-[var(--cmp-color-success)]" : "text-gray-500 bg-gray-50 border border-gray-100"}`}>{a.live ? "Live" : "Assist"}</span>
               </div>
               <p className="text-[12px] font-bold text-gray-800 group-hover:text-emerald-700 leading-tight">{a.name}</p>
               <p className="text-[10px] text-gray-400 leading-snug mt-0.5">{a.fn}</p>
@@ -88,8 +88,8 @@ export default async function GovernanceAIAgentsPage() {
         <div className="space-y-4">
           <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
             <Kpi label="Governed requests" value={k.requests} sub="through the gateway" />
-            <Kpi label="Success rate" value={k.successRate == null ? "—" : `${k.successRate}%`} sub="status ok" tone={k.successRate == null ? "text-gray-900" : k.successRate >= 95 ? "text-emerald-600" : "text-amber-600"} />
-            <Kpi label="Governance share" value={k.governanceShare == null ? "—" : `${k.governanceShare}%`} sub="of AI activity" tone="text-emerald-600" />
+            <Kpi label="Success rate" value={k.successRate == null ? "—" : `${k.successRate}%`} sub="status ok" tone={k.successRate == null ? "text-gray-900" : k.successRate >= 95 ? "text-[var(--cmp-text-success)]" : "text-[var(--cmp-text-warning)]"} />
+            <Kpi label="Governance share" value={k.governanceShare == null ? "—" : `${k.governanceShare}%`} sub="of AI activity" tone="text-[var(--cmp-text-success)]" />
             <Kpi label="Tokens" value={k.tokens > 9999 ? `${Math.round(k.tokens / 1000)}k` : k.tokens} sub="total consumed" />
             <Kpi label="Active models" value={k.activeModels} sub="in the registry" />
             <Kpi label="Avg latency" value={k.avgLatency == null ? "—" : `${k.avgLatency}ms`} sub="per request" />
@@ -122,7 +122,7 @@ export default async function GovernanceAIAgentsPage() {
               <div className="grid grid-cols-4 gap-2">
                 {(["active", "preview", "deprecated", "retired"] as const).map((s) => (
                   <div key={s} className="border border-gray-100 rounded-lg p-2 text-center">
-                    <p className={`text-lg font-bold tabular-nums ${s === "active" ? "text-emerald-600" : s === "retired" || s === "deprecated" ? "text-gray-400" : "text-gray-900"}`}>{d.models.status[s]}</p>
+                    <p className={`text-lg font-bold tabular-nums ${s === "active" ? "text-[var(--cmp-text-success)]" : s === "retired" || s === "deprecated" ? "text-gray-400" : "text-gray-900"}`}>{d.models.status[s]}</p>
                     <p className="text-[10px] text-gray-500 capitalize">{s}</p>
                   </div>
                 ))}
@@ -133,12 +133,12 @@ export default async function GovernanceAIAgentsPage() {
               <p className="text-xs font-bold text-gray-500 uppercase tracking-widest mb-3">Human-in-the-loop boundary (§7)</p>
               <p className="text-[11px] text-gray-500 mb-2">Autonomous assurance may monitor evidence, surveil risk, prepare reports and identify trends. It does <span className="font-semibold text-gray-700">not</span> autonomously:</p>
               <div className="flex flex-wrap gap-1.5">
-                {CANNOT.map((c) => <span key={c} className="text-[10px] font-semibold text-rose-700 bg-rose-50 border border-rose-100 rounded px-1.5 py-0.5">✕ {c}</span>)}
+                {CANNOT.map((c) => <span key={c} className="text-[10px] font-semibold text-[var(--cmp-text-error)] bg-[var(--cmp-surface-error)] border border-[var(--cmp-color-error)] rounded px-1.5 py-0.5">✕ {c}</span>)}
               </div>
             </div>
           </div>
 
-          <p className="text-[11px] text-gray-400 leading-relaxed">Every figure is real — the AI activity is the governed gateway request log (all AI runs through it), and the model registry is live. The agent map is grounded in the surfaces each agent operates over: the Governance Assistant is the live <Link href="/super-admin/cgr/ai" className="text-emerald-600 hover:underline">governance copilot</Link>, Change Impact the <Link href="/super-admin/cgr/change-control" className="text-emerald-600 hover:underline">blast-radius engine</Link>, and Risk the <Link href="/super-admin/cgr/risk" className="text-emerald-600 hover:underline">escalation engine</Link>. Model management and AI operations are owned by the <Link href="/super-admin/ai/services" className="text-emerald-600 hover:underline">AI Services platform</Link>. Per the CGR mandate every recommendation is explainable (evidence, reasoning, confidence) and a human always approves.</p>
+          <p className="text-[11px] text-gray-400 leading-relaxed">Every figure is real — the AI activity is the governed gateway request log (all AI runs through it), and the model registry is live. The agent map is grounded in the surfaces each agent operates over: the Governance Assistant is the live <Link href="/super-admin/cgr/ai" className="text-[var(--cmp-text-success)] hover:underline">governance copilot</Link>, Change Impact the <Link href="/super-admin/cgr/change-control" className="text-[var(--cmp-text-success)] hover:underline">blast-radius engine</Link>, and Risk the <Link href="/super-admin/cgr/risk" className="text-[var(--cmp-text-success)] hover:underline">escalation engine</Link>. Model management and AI operations are owned by the <Link href="/super-admin/ai/services" className="text-[var(--cmp-text-success)] hover:underline">AI Services platform</Link>. Per the CGR mandate every recommendation is explainable (evidence, reasoning, confidence) and a human always approves.</p>
         </div>
       )}
     </div>

@@ -15,13 +15,13 @@ import AdministerMed from "./AdministerMed";
 export const dynamic = "force-dynamic";
 
 const STATUS_TONE: Record<string, string> = {
-  scheduled: "bg-gray-100 text-gray-500", due: "bg-blue-100 text-blue-700",
-  in_progress: "bg-indigo-100 text-indigo-700", administered: "bg-green-100 text-green-700",
-  delayed: "bg-amber-100 text-amber-700", overdue: "bg-red-100 text-red-700",
-  escalated: "bg-red-100 text-red-700", cancelled: "bg-gray-100 text-gray-400",
+  scheduled: "bg-gray-100 text-gray-500", due: "bg-[var(--cmp-surface-information)] text-blue-700",
+  in_progress: "bg-indigo-100 text-indigo-700", administered: "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]",
+  delayed: "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]", overdue: "bg-[var(--cmp-surface-critical)] text-[var(--cmp-text-critical)]",
+  escalated: "bg-[var(--cmp-surface-critical)] text-[var(--cmp-text-critical)]", cancelled: "bg-gray-100 text-gray-400",
 };
 const OUTCOME_TONE: Record<string, string> = {
-  administered: "bg-green-100 text-green-700", delayed: "bg-amber-100 text-amber-700", omitted: "bg-gray-100 text-gray-500",
+  administered: "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]", delayed: "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]", omitted: "bg-gray-100 text-gray-500",
 };
 
 export default async function MedicationsPage() {
@@ -53,17 +53,17 @@ export default async function MedicationsPage() {
       </div>
 
       {data.migrationMissing && (
-        <div className="bg-amber-50 border border-amber-200 rounded-xl p-5">
+        <div className="bg-[var(--cmp-surface-warning)] border border-[var(--cmp-color-warning)] rounded-xl p-5">
           <p className="font-semibold text-amber-900">⚙️ Store not yet enabled</p>
-          <p className="text-sm text-amber-800 mt-1">Apply migration <code className="bg-amber-100 px-1.5 py-0.5 rounded font-mono text-xs">154-medication-coordination.sql</code> to enable the medication module.</p>
+          <p className="text-sm text-amber-800 mt-1">Apply migration <code className="bg-[var(--cmp-surface-warning)] px-1.5 py-0.5 rounded font-mono text-xs">154-medication-coordination.sql</code> to enable the medication module.</p>
         </div>
       )}
 
       <div className="grid grid-cols-2 xl:grid-cols-5 gap-4">
         <StatCard icon="⏰" title="Due Now" value={data.kpis.dueNow} tone={data.kpis.dueNow > 0 ? "text-blue-700" : undefined} sub="within the due window" />
-        <StatCard icon="🔴" title="Overdue" value={data.kpis.overdue} tone={data.kpis.overdue > 0 ? "text-red-600" : undefined} sub=">30 min past due" />
-        <StatCard icon="⚠️" title="Delayed" value={data.kpis.delayed} tone={data.kpis.delayed > 0 ? "text-amber-600" : undefined} sub="awaiting administration" />
-        <StatCard icon="💊" title="High-Risk Pending" value={data.kpis.highRiskPending} tone={data.kpis.highRiskPending > 0 ? "text-orange-600" : undefined} sub="open high-risk doses" />
+        <StatCard icon="🔴" title="Overdue" value={data.kpis.overdue} tone={data.kpis.overdue > 0 ? "text-[var(--cmp-text-critical)]" : undefined} sub=">30 min past due" />
+        <StatCard icon="⚠️" title="Delayed" value={data.kpis.delayed} tone={data.kpis.delayed > 0 ? "text-[var(--cmp-text-warning)]" : undefined} sub="awaiting administration" />
+        <StatCard icon="💊" title="High-Risk Pending" value={data.kpis.highRiskPending} tone={data.kpis.highRiskPending > 0 ? "text-[var(--cmp-text-warning)]" : undefined} sub="open high-risk doses" />
         <StatCard icon="✅" title="Administered (24h)" value={data.kpis.administered24h}
           sub={t.onTimePct != null ? `${t.onTimePct}% on time · median delay ${t.medianDelay} min` : "no events yet"} />
       </div>
@@ -84,12 +84,12 @@ export default async function MedicationsPage() {
                   <Chip tone="bg-gray-100 text-gray-600">{String(r.route).toUpperCase()}</Chip>
                   <span className="text-xs text-gray-400">{r.op_patients?.label}</span>
                   <Chip tone={STATUS_TONE[r.effective_status] ?? STATUS_TONE.scheduled}>{titleCase(r.effective_status)}</Chip>
-                  {r.high_risk && <Chip tone="bg-orange-100 text-orange-700">High-risk</Chip>}
+                  {r.high_risk && <Chip tone="bg-[var(--cmp-surface-warning)] text-orange-700">High-risk</Chip>}
                   {r.requires_double_check && <Chip tone="bg-purple-100 text-purple-700">Double-check</Chip>}
                   <span className="ml-auto" />
                   <AdministerMed scheduleId={r.id} drug={r.drug_name} requiresDoubleCheck={r.requires_double_check} coStaff={coStaff} />
                 </div>
-                {r.allergy_note && <p className="text-xs text-red-600 mt-1">⚠ {r.allergy_note}</p>}
+                {r.allergy_note && <p className="text-xs text-[var(--cmp-text-critical)] mt-1">⚠ {r.allergy_note}</p>}
               </div>
             ))}
           </div>
@@ -107,7 +107,7 @@ export default async function MedicationsPage() {
                 {r.dose_display && <span className="text-gray-500 text-xs">{r.dose_display}</span>}
                 <Chip tone="bg-gray-100 text-gray-600">{String(r.route).toUpperCase()}</Chip>
                 <span className="text-xs text-gray-400 ml-auto">{r.op_patients?.label}</span>
-                {r.high_risk && <Chip tone="bg-orange-100 text-orange-700">HR</Chip>}
+                {r.high_risk && <Chip tone="bg-[var(--cmp-surface-warning)] text-orange-700">HR</Chip>}
               </div>
             ))}
           </div>
@@ -122,9 +122,9 @@ export default async function MedicationsPage() {
                   <span className="text-gray-500 tabular-nums text-xs w-12">{fmtTime(e.administered_at)}</span>
                   <span className="text-gray-800">{e.op_med_schedule?.drug_name ?? "—"}</span>
                   <Chip tone={OUTCOME_TONE[e.outcome] ?? OUTCOME_TONE.omitted}>{titleCase(e.outcome)}</Chip>
-                  {e.delay_minutes > 0 && <span className={`text-xs tabular-nums ${e.delay_minutes > 60 ? "text-red-600" : "text-amber-600"}`}>+{e.delay_minutes} min</span>}
+                  {e.delay_minutes > 0 && <span className={`text-xs tabular-nums ${e.delay_minutes > 60 ? "text-[var(--cmp-text-critical)]" : "text-[var(--cmp-text-warning)]"}`}>+{e.delay_minutes} min</span>}
                   {e.witness_name && <span className="text-[10px] text-purple-600">✓ witnessed: {e.witness_name}</span>}
-                  {e.escalation_id && <Chip tone="bg-red-100 text-red-700">Escalated</Chip>}
+                  {e.escalation_id && <Chip tone="bg-[var(--cmp-surface-critical)] text-[var(--cmp-text-critical)]">Escalated</Chip>}
                   <span className="text-xs text-gray-400 ml-auto">{e.op_patients?.label}</span>
                 </div>
                 {e.reason && <p className="text-xs text-gray-400 mt-0.5 pl-14">{e.reason}</p>}
@@ -140,8 +140,8 @@ export default async function MedicationsPage() {
           <div className="flex flex-wrap gap-x-8 gap-y-2 text-sm">
             <span>On time (≤15 min): <span className="font-bold tabular-nums">{t.onTimePct ?? "—"}%</span></span>
             <span>Median delay: <span className="font-bold tabular-nums">{t.medianDelay ?? "—"} min</span></span>
-            <span>Administered: <span className="font-bold tabular-nums text-green-700">{t.administered}</span></span>
-            <span>Delayed: <span className="font-bold tabular-nums text-amber-700">{t.delayed}</span></span>
+            <span>Administered: <span className="font-bold tabular-nums text-[var(--cmp-text-success)]">{t.administered}</span></span>
+            <span>Delayed: <span className="font-bold tabular-nums text-[var(--cmp-text-warning)]">{t.delayed}</span></span>
             <span>Omitted: <span className="font-bold tabular-nums text-gray-500">{t.omitted}</span></span>
           </div>
         </div>

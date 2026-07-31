@@ -27,7 +27,7 @@ export default async function PatientShiftManagement() {
   const po = await loadPatientOps(admin, hid, isSuper);
   if (!po.ready) return (
     <div className="space-y-4"><h1 className="text-2xl font-bold text-gray-900">Patient Shift Management</h1>
-      <div className="bg-amber-50 border border-amber-200 rounded-xl p-6"><p className="font-semibold text-amber-900">⚙️ Coming online</p><p className="text-sm text-amber-800 mt-2">The Clinical Operations Engine tables aren&apos;t provisioned yet.</p></div></div>
+      <div className="bg-[var(--cmp-surface-warning)] border border-[var(--cmp-color-warning)] rounded-xl p-6"><p className="font-semibold text-amber-900">⚙️ Coming online</p><p className="text-sm text-amber-800 mt-2">The Clinical Operations Engine tables aren&apos;t provisioned yet.</p></div></div>
   );
 
   const { data: shifts } = await scope(admin.from("op_shifts").select("id, status, shift_type, shift_date").order("shift_date", { ascending: false })).limit(20);

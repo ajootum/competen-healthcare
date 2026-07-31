@@ -33,7 +33,7 @@ export default async function CaseReaderPage({ params }: { params: Promise<{ cas
 
       <div className="bg-white rounded-xl border border-gray-100 p-6 mb-5">
         <div className="flex flex-wrap items-center gap-2 mb-2">
-          <span className="text-[10px] font-bold bg-sky-50 text-sky-700 px-2 py-0.5 rounded">🧑‍⚕️ Clinical Case Study</span>
+          <span className="text-[10px] font-bold bg-[var(--cmp-surface-information)] text-[var(--cmp-text-information)] px-2 py-0.5 rounded">🧑‍⚕️ Clinical Case Study</span>
           {c.difficulty && <span className="text-[10px] font-bold bg-violet-50 text-violet-600 px-2 py-0.5 rounded capitalize">{c.difficulty}</span>}
           {c.code && <span className="text-[10px] font-mono text-gray-400">{c.code}</span>}
         </div>
@@ -70,7 +70,7 @@ export default async function CaseReaderPage({ params }: { params: Promise<{ cas
       )}
 
       {c.discussion && (
-        <details className="bg-white rounded-xl border border-amber-100 mb-4 group">
+        <details className="bg-white rounded-xl border border-[var(--cmp-color-warning)] mb-4 group">
           <summary className="px-6 py-4 cursor-pointer text-sm font-semibold text-amber-800 select-none">
             💡 Reveal expert discussion
           </summary>
@@ -81,7 +81,7 @@ export default async function CaseReaderPage({ params }: { params: Promise<{ cas
       )}
 
       {learningPoints.length > 0 && (
-        <details className="bg-white rounded-xl border border-green-100 mb-5">
+        <details className="bg-white rounded-xl border border-[var(--cmp-color-success)] mb-5">
           <summary className="px-6 py-4 cursor-pointer text-sm font-semibold text-green-800 select-none">
             ✅ Reveal key learning points
           </summary>

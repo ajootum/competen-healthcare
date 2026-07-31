@@ -21,16 +21,16 @@ export type InboxRow = {
 
 const TYPE_CHIP: Record<string, { label: string; cls: string }> = {
   renewal:     { label: "Renewal",      cls: "bg-violet-50 text-violet-700" },
-  focused:     { label: "Gap Closure",  cls: "bg-amber-50 text-amber-700" },
-  remediation: { label: "Remediation",  cls: "bg-red-50 text-red-600" },
-  entrustment: { label: "Entrustment",  cls: "bg-blue-50 text-blue-600" },
+  focused:     { label: "Gap Closure",  cls: "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]" },
+  remediation: { label: "Remediation",  cls: "bg-[var(--cmp-surface-critical)] text-[var(--cmp-text-critical)]" },
+  entrustment: { label: "Entrustment",  cls: "bg-[var(--cmp-surface-information)] text-[var(--cmp-text-information)]" },
   full_cpu:    { label: "Full CPU",     cls: "bg-teal-50 text-teal-700" },
 };
 
 const prioBand = (p: number): "high" | "medium" | "low" => p <= 3 ? "high" : p <= 6 ? "medium" : "low";
 const PRIO_UI = {
-  high:   { label: "High",   cls: "bg-red-50 text-red-600" },
-  medium: { label: "Medium", cls: "bg-amber-50 text-amber-700" },
+  high:   { label: "High",   cls: "bg-[var(--cmp-surface-critical)] text-[var(--cmp-text-critical)]" },
+  medium: { label: "Medium", cls: "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]" },
   low:    { label: "Low",    cls: "bg-gray-100 text-gray-500" },
 };
 
@@ -41,9 +41,9 @@ const fmtDue = (iso: string) => {
   const today = new Date(); today.setHours(0, 0, 0, 0);
   const dd = new Date(d); dd.setHours(0, 0, 0, 0);
   const diff = Math.round((dd.getTime() - today.getTime()) / 86400000);
-  if (diff < 0) return { top: "Overdue", sub: d.toLocaleDateString(undefined, { day: "numeric", month: "short" }), cls: "text-red-600 font-bold" };
-  if (diff === 0) return { top: "Today", sub: d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }), cls: "text-red-600 font-bold" };
-  if (diff === 1) return { top: "Tomorrow", sub: d.toLocaleDateString(undefined, { day: "numeric", month: "short" }), cls: "text-amber-600 font-semibold" };
+  if (diff < 0) return { top: "Overdue", sub: d.toLocaleDateString(undefined, { day: "numeric", month: "short" }), cls: "text-[var(--cmp-text-critical)] font-bold" };
+  if (diff === 0) return { top: "Today", sub: d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }), cls: "text-[var(--cmp-text-critical)] font-bold" };
+  if (diff === 1) return { top: "Tomorrow", sub: d.toLocaleDateString(undefined, { day: "numeric", month: "short" }), cls: "text-[var(--cmp-text-warning)] font-semibold" };
   return { top: d.toLocaleDateString(undefined, { day: "numeric", month: "short" }), sub: `in ${diff} days`, cls: "text-gray-700" };
 };
 
@@ -175,13 +175,13 @@ export default function InboxTable({ rows }: { rows: InboxRow[] }) {
                         <span className="text-gray-300">~{r.estMinutes} min</span>
                       </div>
                       <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
-                        <div className={`h-full rounded-full ${r.readiness >= 75 ? "bg-green-500" : r.readiness >= 40 ? "bg-blue-400" : "bg-amber-400"}`}
+                        <div className={`h-full rounded-full ${r.readiness >= 75 ? "bg-[var(--cmp-color-success)]" : r.readiness >= 40 ? "bg-[var(--cmp-color-information)]" : "bg-[var(--cmp-color-warning)]"}`}
                           style={{ width: `${r.readiness}%` }} />
                       </div>
                     </td>
                     <td className="px-2 py-3">
                       <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded ${
-                        r.inProgress ? "bg-blue-50 text-blue-600" : "bg-gray-100 text-gray-500"
+                        r.inProgress ? "bg-[var(--cmp-surface-information)] text-[var(--cmp-text-information)]" : "bg-gray-100 text-gray-500"
                       }`}>
                         {r.inProgress ? "● In Progress" : "● Not Started"}
                       </span>

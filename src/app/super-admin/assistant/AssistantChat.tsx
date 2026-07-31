@@ -51,7 +51,7 @@ export default function AssistantChat() {
         ) : (
           turns.map((t, i) => (
             <div key={i} className={`flex ${t.role === "user" ? "justify-end" : "justify-start"}`}>
-              <div className={`max-w-[85%] rounded-2xl px-4 py-2.5 ${t.role === "user" ? "bg-rose-600 text-white" : "bg-gray-50 border border-gray-100 text-gray-800"}`}>
+              <div className={`max-w-[85%] rounded-2xl px-4 py-2.5 ${t.role === "user" ? "bg-[var(--cmp-color-error)] text-white" : "bg-gray-50 border border-gray-100 text-gray-800"}`}>
                 <p className="text-sm whitespace-pre-wrap">{t.text}</p>
                 {t.meta && <p className="text-[10px] text-gray-400 mt-1.5">{t.meta}</p>}
               </div>
@@ -65,7 +65,7 @@ export default function AssistantChat() {
         <input value={input} onChange={e => setInput(e.target.value)} placeholder="Ask about competencies, CPUs, policies…"
           className="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-rose-400" />
         <button type="submit" disabled={busy || !input.trim()}
-          className="px-4 py-2 bg-rose-600 text-white text-sm font-semibold rounded-lg hover:bg-rose-700 disabled:opacity-50">
+          className="px-4 py-2 bg-[var(--cmp-color-error)] text-white text-sm font-semibold rounded-lg hover:bg-rose-700 disabled:opacity-50">
           Ask
         </button>
       </form>

@@ -15,12 +15,12 @@ export const dynamic = "force-dynamic";
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 const card = "bg-white rounded-xl border border-gray-200";
-const pctTone = (n: number) => (n >= 90 ? "text-emerald-600" : n >= 75 ? "text-amber-600" : "text-rose-600");
-const SEV_TONE: Record<string, string> = { High: "bg-rose-50 text-rose-700", Medium: "bg-amber-50 text-amber-700", Low: "bg-gray-100 text-gray-600" };
-const STAT_TONE: Record<string, string> = { Current: "bg-emerald-50 text-emerald-700", Expiring: "bg-amber-50 text-amber-700", Expired: "bg-rose-50 text-rose-700", None: "bg-gray-100 text-gray-500" };
+const pctTone = (n: number) => (n >= 90 ? "text-[var(--cmp-text-success)]" : n >= 75 ? "text-[var(--cmp-text-warning)]" : "text-[var(--cmp-text-error)]");
+const SEV_TONE: Record<string, string> = { High: "bg-[var(--cmp-surface-error)] text-[var(--cmp-text-error)]", Medium: "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]", Low: "bg-gray-100 text-gray-600" };
+const STAT_TONE: Record<string, string> = { Current: "bg-[var(--cmp-surface-success)] text-emerald-700", Expiring: "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]", Expired: "bg-[var(--cmp-surface-error)] text-[var(--cmp-text-error)]", None: "bg-gray-100 text-gray-500" };
 
 function Kpi({ icon, tint, label, value, sub, tone, href }: { icon: string; tint: string; label: string; value: any; sub?: string; tone?: string; href?: string }) {
-  const inner = <div className={`${card} p-4 ${href ? "hover:border-emerald-300 transition-colors" : ""}`}><div className="flex items-center gap-2.5 mb-2"><span className={`w-8 h-8 rounded-lg flex items-center justify-center text-sm ${tint}`}>{icon}</span><span className="text-xs font-medium text-gray-500 leading-tight">{label}</span></div><div className={`text-2xl font-bold tabular-nums ${tone ?? "text-gray-900"}`}>{value}</div>{sub && <div className="text-[11px] text-gray-400 mt-0.5">{sub}</div>}</div>;
+  const inner = <div className={`${card} p-4 ${href ? "hover:border-[var(--cmp-color-success)] transition-colors" : ""}`}><div className="flex items-center gap-2.5 mb-2"><span className={`w-8 h-8 rounded-lg flex items-center justify-center text-sm ${tint}`}>{icon}</span><span className="text-xs font-medium text-gray-500 leading-tight">{label}</span></div><div className={`text-2xl font-bold tabular-nums ${tone ?? "text-gray-900"}`}>{value}</div>{sub && <div className="text-[11px] text-gray-400 mt-0.5">{sub}</div>}</div>;
   return href ? <Link href={href}>{inner}</Link> : inner;
 }
 
@@ -48,10 +48,10 @@ export default async function CareerPathways() {
       <LearningTabs />
     </>
   );
-  if (!d.ready) return <div className="space-y-4">{header}<div className="bg-amber-50 border border-amber-200 rounded-xl p-6"><p className="font-semibold text-amber-900">⚙️ No competency data yet</p><p className="text-sm text-amber-800 mt-1">Career readiness activates once competency decisions are recorded for this unit.</p></div></div>;
+  if (!d.ready) return <div className="space-y-4">{header}<div className="bg-[var(--cmp-surface-warning)] border border-[var(--cmp-color-warning)] rounded-xl p-6"><p className="font-semibold text-amber-900">⚙️ No competency data yet</p><p className="text-sm text-amber-800 mt-1">Career readiness activates once competency decisions are recorded for this unit.</p></div></div>;
 
   const k = d.kpis, b = d.bands;
-  const bandSegs = [["Fully deployable", b.fullyDeployable, "bg-emerald-500"], ["Renewal due", b.renewalDue, "bg-amber-400"], ["Awaiting renewal", b.awaitingRenewal, "bg-rose-500"], ["Awaiting validation", b.awaitingValidation, "bg-gray-300"]] as [string, number, string][];
+  const bandSegs = [["Fully deployable", b.fullyDeployable, "bg-[var(--cmp-color-success)]"], ["Renewal due", b.renewalDue, "bg-[var(--cmp-color-warning)]"], ["Awaiting renewal", b.awaitingRenewal, "bg-[var(--cmp-color-error)]"], ["Awaiting validation", b.awaitingValidation, "bg-gray-300"]] as [string, number, string][];
   const bandTotal = bandSegs.reduce((t, x) => t + x[1], 0) || 1;
 
   return (
@@ -60,11 +60,11 @@ export default async function CareerPathways() {
 
       {/* KPI row */}
       <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
-        <Kpi icon="🎯" tint="bg-emerald-50" label="Unit Readiness" value={`${k.readiness}%`} tone={pctTone(k.readiness)} sub={k.band} />
+        <Kpi icon="🎯" tint="bg-[var(--cmp-surface-success)]" label="Unit Readiness" value={`${k.readiness}%`} tone={pctTone(k.readiness)} sub={k.band} />
         <Kpi icon="🚀" tint="bg-teal-50" label="Progression-Ready" value={k.progressionReady} sub={`of ${k.total} staff`} />
-        <Kpi icon="🎓" tint="bg-sky-50" label="Requiring Development" value={k.requiringDev} tone={k.requiringDev ? "text-amber-600" : "text-gray-400"} sub="support needed" />
-        <Kpi icon="🧩" tint="bg-violet-50" label="Competency Gaps" value={k.competencyGaps} tone={k.competencyGaps ? "text-rose-600" : "text-gray-400"} sub="blocking progression" />
-        <Kpi icon="🪪" tint="bg-orange-50" label="Credential Gaps" value={k.credentialGaps} tone={k.credentialGaps ? "text-rose-600" : "text-gray-400"} sub="expired / expiring" href="/competency-office/credentialing" />
+        <Kpi icon="🎓" tint="bg-[var(--cmp-surface-information)]" label="Requiring Development" value={k.requiringDev} tone={k.requiringDev ? "text-[var(--cmp-text-warning)]" : "text-gray-400"} sub="support needed" />
+        <Kpi icon="🧩" tint="bg-violet-50" label="Competency Gaps" value={k.competencyGaps} tone={k.competencyGaps ? "text-[var(--cmp-text-error)]" : "text-gray-400"} sub="blocking progression" />
+        <Kpi icon="🪪" tint="bg-[var(--cmp-surface-warning)]" label="Credential Gaps" value={k.credentialGaps} tone={k.credentialGaps ? "text-[var(--cmp-text-error)]" : "text-gray-400"} sub="expired / expiring" href="/competency-office/credentialing" />
         <Kpi icon="👥" tint="bg-gray-50" label="Unit Staff" value={k.total} sub="in scope" />
       </div>
 
@@ -101,7 +101,7 @@ export default async function CareerPathways() {
       {/* Staff readiness register + role coverage */}
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
         <div className={`${card} p-5`}>
-          <div className="flex items-center justify-between mb-3"><h3 className="font-semibold text-gray-900 text-sm">Staff Readiness Register</h3><Link href="/unit-manager/competency" className="text-[11px] text-emerald-600 hover:underline">Competency →</Link></div>
+          <div className="flex items-center justify-between mb-3"><h3 className="font-semibold text-gray-900 text-sm">Staff Readiness Register</h3><Link href="/unit-manager/competency" className="text-[11px] text-[var(--cmp-text-success)] hover:underline">Competency →</Link></div>
           {d.register.length === 0 ? <p className="text-sm text-gray-400">No staff in scope.</p> : (
             <div className="divide-y divide-gray-50">{d.register.map((s: any, i: number) => (<div key={i} className="flex items-center justify-between gap-2 py-1.5 text-xs"><span className="text-gray-700 truncate">{s.name}</span><span className="flex items-center gap-2 shrink-0"><span className="text-gray-400 truncate max-w-[9rem]">{s.label}</span><span className={`text-[9px] px-1.5 py-0.5 rounded ${STAT_TONE[s.status] ?? "bg-gray-100 text-gray-600"}`}>{s.status}</span></span></div>))}</div>
           )}
@@ -111,7 +111,7 @@ export default async function CareerPathways() {
           <h3 className="font-semibold text-gray-900 text-sm mb-3">Succession Coverage by Role</h3>
           {d.roleCoverage.length === 0 ? <p className="text-sm text-gray-400">No role coverage data.</p> : (
             <div className="space-y-2">{d.roleCoverage.slice(0, 6).map((r: any) => { const pct = r.total ? Math.round((r.current / r.total) * 100) : 0; return (
-              <div key={r.label} className="text-xs"><div className="flex items-center justify-between mb-0.5"><span className="text-gray-700 truncate">{r.label}</span><span className={`tabular-nums font-semibold ${pctTone(pct)}`}>{r.current}/{r.total} competent</span></div><div className="w-full h-1.5 rounded-full bg-gray-100 overflow-hidden"><div className={`h-full ${pct >= 90 ? "bg-emerald-500" : pct >= 75 ? "bg-amber-400" : "bg-rose-500"}`} style={{ width: `${pct}%` }} /></div></div>
+              <div key={r.label} className="text-xs"><div className="flex items-center justify-between mb-0.5"><span className="text-gray-700 truncate">{r.label}</span><span className={`tabular-nums font-semibold ${pctTone(pct)}`}>{r.current}/{r.total} competent</span></div><div className="w-full h-1.5 rounded-full bg-gray-100 overflow-hidden"><div className={`h-full ${pct >= 90 ? "bg-[var(--cmp-color-success)]" : pct >= 75 ? "bg-[var(--cmp-color-warning)]" : "bg-[var(--cmp-color-error)]"}`} style={{ width: `${pct}%` }} /></div></div>
             ); })}</div>
           )}
           <p className="text-[10px] text-gray-400 mt-2">Single-person dependencies are succession risks — cross-train to build depth.</p>

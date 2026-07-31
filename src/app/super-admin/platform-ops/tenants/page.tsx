@@ -31,11 +31,11 @@ export default async function TenantOperations() {
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
         {[
           { label: "Total Tenants", n: summary.total, tone: "text-gray-900" },
-          { label: "Active", n: summary.active, tone: "text-green-600" },
-          { label: "Trial", n: summary.trial, tone: "text-amber-600" },
-          { label: "Suspended", n: summary.suspended, tone: summary.suspended ? "text-rose-600" : "text-gray-300" },
+          { label: "Active", n: summary.active, tone: "text-[var(--cmp-text-success)]" },
+          { label: "Trial", n: summary.trial, tone: "text-[var(--cmp-text-warning)]" },
+          { label: "Suspended", n: summary.suspended, tone: summary.suspended ? "text-[var(--cmp-text-error)]" : "text-gray-300" },
           { label: "Archived", n: summary.archived, tone: "text-gray-400" },
-          { label: "Unplanned", n: summary.unplanned, tone: summary.unplanned ? "text-orange-600" : "text-gray-300" },
+          { label: "Unplanned", n: summary.unplanned, tone: summary.unplanned ? "text-[var(--cmp-text-warning)]" : "text-gray-300" },
         ].map(k => (
           <div key={k.label} className="bg-white rounded-xl border border-gray-200 p-4">
             <p className={`text-2xl font-bold tabular-nums ${k.tone}`}>{k.n}</p>

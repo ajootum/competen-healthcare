@@ -18,10 +18,10 @@ export const dynamic = "force-dynamic";
 const card = "bg-white rounded-xl border border-gray-200";
 const relTime = (iso?: string | null) => { if (!iso) return ""; const s = Math.floor((Date.now() - new Date(iso).getTime()) / 1000); if (s < 60) return "just now"; if (s < 3600) return `${Math.floor(s / 60)}m ago`; if (s < 86400) return `${Math.floor(s / 3600)}h ago`; return `${Math.floor(s / 86400)}d ago`; };
 const tc = (s: string) => (s ?? "").replace(/_/g, " ").replace(/\b\w/g, m => m.toUpperCase());
-const scoreTone = (n: number | null) => (n == null ? "text-gray-300" : n >= 90 ? "text-green-600" : n >= 75 ? "text-amber-600" : "text-rose-600");
-const ALERT_TONE: Record<string, string> = { high: "border-rose-100 bg-rose-50/40", medium: "border-amber-100 bg-amber-50/40", low: "border-gray-100" };
-const STATUS_TONE: Record<string, string> = { open: "bg-rose-50 text-rose-700", acknowledged: "bg-blue-50 text-blue-700", resolved: "bg-green-50 text-green-700" };
-const CTX_TONE: Record<string, string> = { team: "bg-blue-50 text-blue-600", patient: "bg-violet-50 text-violet-600", task: "bg-amber-50 text-amber-600", direct: "bg-teal-50 text-teal-600", general: "bg-gray-100 text-gray-600" };
+const scoreTone = (n: number | null) => (n == null ? "text-gray-300" : n >= 90 ? "text-[var(--cmp-text-success)]" : n >= 75 ? "text-[var(--cmp-text-warning)]" : "text-[var(--cmp-text-error)]");
+const ALERT_TONE: Record<string, string> = { high: "border-[var(--cmp-color-error)] bg-[var(--cmp-surface-error)]/40", medium: "border-[var(--cmp-color-warning)] bg-[var(--cmp-surface-warning)]/40", low: "border-gray-100" };
+const STATUS_TONE: Record<string, string> = { open: "bg-[var(--cmp-surface-error)] text-[var(--cmp-text-error)]", acknowledged: "bg-[var(--cmp-surface-information)] text-blue-700", resolved: "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]" };
+const CTX_TONE: Record<string, string> = { team: "bg-[var(--cmp-surface-information)] text-[var(--cmp-text-information)]", patient: "bg-violet-50 text-violet-600", task: "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]", direct: "bg-teal-50 text-teal-600", general: "bg-gray-100 text-gray-600" };
 const CH_C = ["#14b8a6", "#3b82f6", "#8b5cf6", "#f59e0b", "#ef4444"];
 
 export default async function CommunicationCentre() {
@@ -41,11 +41,11 @@ export default async function CommunicationCentre() {
   const kpis = [
     ["Unread Messages", k.unreadMessages, "Across all channels", ""],
     ["Active Broadcasts", k.activeBroadcasts, "Require acknowledgement", ""],
-    ["Open Escalations", k.openEscalations, "Awaiting resolution", k.openEscalations ? "text-rose-600" : ""],
+    ["Open Escalations", k.openEscalations, "Awaiting resolution", k.openEscalations ? "text-[var(--cmp-text-error)]" : ""],
     ["Pending Handover Items", k.pendingHandoverItems, "From outgoing shift", ""],
-    ["Alerts Requiring Action", k.alertsRequiringAction, "High / medium priority", k.alertsRequiringAction ? "text-amber-600" : ""],
+    ["Alerts Requiring Action", k.alertsRequiringAction, "High / medium priority", k.alertsRequiringAction ? "text-[var(--cmp-text-warning)]" : ""],
   ];
-  const hubTiles = [["Critical Alerts", h.criticalAlerts, "Immediate action", "text-rose-600"], ["Escalations", h.escalations, "Open escalations", "text-orange-600"], ["Broadcasts", h.broadcasts, "Active broadcasts", "text-blue-600"], ["Handover Items", h.handoverItems, "Pending items", "text-violet-600"], ["Awaiting Ack.", h.awaitingAck, "Need acknowledgement", "text-amber-600"], ["AI Suggestions", h.aiSuggestions, "New recommendations", "text-teal-600"]];
+  const hubTiles = [["Critical Alerts", h.criticalAlerts, "Immediate action", "text-[var(--cmp-text-error)]"], ["Escalations", h.escalations, "Open escalations", "text-[var(--cmp-text-warning)]"], ["Broadcasts", h.broadcasts, "Active broadcasts", "text-[var(--cmp-text-information)]"], ["Handover Items", h.handoverItems, "Pending items", "text-violet-600"], ["Awaiting Ack.", h.awaitingAck, "Need acknowledgement", "text-[var(--cmp-text-warning)]"], ["AI Suggestions", h.aiSuggestions, "New recommendations", "text-teal-600"]];
 
   const chTotal = an.channelDist.reduce((n: number, c: any) => n + c.n, 0) || 1;
   const chDonut = (() => { let acc = 0; const st: string[] = []; an.channelDist.forEach((c: any, i: number) => { const a = (acc / chTotal) * 360, b = ((acc + c.n) / chTotal) * 360; if (c.n) st.push(`${CH_C[i % CH_C.length]} ${a}deg ${b}deg`); acc += c.n; }); return st.length ? `conic-gradient(${st.join(", ")})` : "conic-gradient(#e5e7eb 0deg 360deg)"; })();
@@ -54,7 +54,7 @@ export default async function CommunicationCentre() {
     <div data-wide className="space-y-4">
       <div className="flex items-start justify-between gap-3 flex-wrap">
         <div><h1 className="text-2xl font-bold text-gray-900 tracking-tight">Communication Centre</h1><p className="text-sm text-gray-500">Real-time communication and coordination across your shift.</p></div>
-        <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded-full bg-green-100 text-green-700 flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-green-500" />Live</span>
+        <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded-full bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)] flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-[var(--cmp-color-success)]" />Live</span>
       </div>
 
       {/* KPI strip */}
@@ -95,7 +95,7 @@ export default async function CommunicationCentre() {
             <div className="space-y-2">
               {d.priorityAlerts.map((a: any, i: number) => (
                 <div key={i} className={`rounded-lg border p-2.5 ${ALERT_TONE[a.tone] ?? "border-gray-100"}`}>
-                  <div className="flex items-center gap-2"><span className="text-xs font-medium text-gray-800 truncate flex-1 capitalize">{a.title}</span><span className={`text-[9px] font-semibold px-1.5 py-0.5 rounded ${a.tone === "high" ? "bg-rose-100 text-rose-700" : "bg-amber-100 text-amber-700"}`}>{a.action}</span></div>
+                  <div className="flex items-center gap-2"><span className="text-xs font-medium text-gray-800 truncate flex-1 capitalize">{a.title}</span><span className={`text-[9px] font-semibold px-1.5 py-0.5 rounded ${a.tone === "high" ? "bg-[var(--cmp-surface-error)] text-[var(--cmp-text-error)]" : "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]"}`}>{a.action}</span></div>
                   <p className="text-[10px] text-gray-400">{relTime(a.at)}{a.sub ? ` · ${a.sub}` : ""}</p>
                 </div>
               ))}
@@ -117,7 +117,7 @@ export default async function CommunicationCentre() {
             <div className="space-y-1.5">
               {d.escList.map((e: any, i: number) => (
                 <div key={i} className="flex items-center gap-2 rounded-lg border border-gray-100 px-2.5 py-1.5">
-                  <span className={`w-2 h-2 rounded-full shrink-0 ${e.level >= 4 ? "bg-rose-500" : "bg-amber-500"}`} />
+                  <span className={`w-2 h-2 rounded-full shrink-0 ${e.level >= 4 ? "bg-[var(--cmp-color-error)]" : "bg-[var(--cmp-color-warning)]"}`} />
                   <div className="min-w-0 flex-1"><p className="text-xs text-gray-800 truncate">{e.patient ? `${e.patient} — ` : ""}{e.summary}</p><p className="text-[10px] text-gray-400">{relTime(e.at)}{e.by ? ` · ${e.by}` : ""}</p></div>
                   <span className={`text-[9px] font-semibold px-1.5 py-0.5 rounded shrink-0 ${STATUS_TONE[e.status] ?? "bg-gray-100 text-gray-600"}`}>{tc(e.status)}</span>
                 </div>
@@ -130,7 +130,7 @@ export default async function CommunicationCentre() {
           <h2 className="text-sm font-bold text-gray-900 mb-3">Unread / Awaiting Acknowledgement</h2>
           <div className="space-y-1.5">
             {d.notifs.filter((n: any) => !n.read).length === 0 && d.broadcasts.filter((b: any) => !b.userAcked).length === 0 && <p className="text-sm text-gray-400">✅ Nothing awaiting you.</p>}
-            {d.broadcasts.filter((b: any) => !b.userAcked).slice(0, 3).map((b: any, i: number) => (<div key={`b${i}`} className="flex items-center gap-2 text-xs"><span className="w-1.5 h-1.5 rounded-full bg-amber-500 shrink-0" /><span className="text-gray-700 flex-1 truncate">{b.title}</span><span className="text-[10px] text-gray-400">{b.acked}/{b.target || "—"}</span></div>))}
+            {d.broadcasts.filter((b: any) => !b.userAcked).slice(0, 3).map((b: any, i: number) => (<div key={`b${i}`} className="flex items-center gap-2 text-xs"><span className="w-1.5 h-1.5 rounded-full bg-[var(--cmp-color-warning)] shrink-0" /><span className="text-gray-700 flex-1 truncate">{b.title}</span><span className="text-[10px] text-gray-400">{b.acked}/{b.target || "—"}</span></div>))}
             {d.notifs.filter((n: any) => !n.read).slice(0, 4).map((n: any, i: number) => (<div key={`n${i}`} className="flex items-center gap-2 text-xs"><span className="w-1.5 h-1.5 rounded-full bg-teal-500 shrink-0" /><span className="text-gray-700 flex-1 truncate">{n.title}</span><span className="text-[10px] text-gray-400">{relTime(n.created_at)}</span></div>))}
           </div>
         </div>

@@ -17,15 +17,15 @@ const BTN = "text-xs font-semibold rounded-lg py-2 px-3 disabled:opacity-50";
 export function CompleteButton({ patientId, patientLabel, done }: { patientId: string; patientLabel: string; done: boolean }) {
   const router = useRouter();
   const [busy, setBusy] = useState(false); const [err, setErr] = useState<string | null>(null);
-  if (done) return <span className={`${BTN} bg-emerald-50 text-emerald-700 cursor-default`}>✓ Completed</span>;
-  return <span><button onClick={async () => { setBusy(true); setErr(null); try { await call({ action: "complete", patient_id: patientId, patient_label: patientLabel }); router.refresh(); } catch (e: any) { setErr(e.message); } setBusy(false); }} disabled={busy} className={`${BTN} bg-emerald-600 text-white`}>{busy ? "Saving…" : "Mark as Completed"}</button>{err && <span className="text-[10px] text-rose-600 ml-2">{err}</span>}</span>;
+  if (done) return <span className={`${BTN} bg-[var(--cmp-surface-success)] text-emerald-700 cursor-default`}>✓ Completed</span>;
+  return <span><button onClick={async () => { setBusy(true); setErr(null); try { await call({ action: "complete", patient_id: patientId, patient_label: patientLabel }); router.refresh(); } catch (e: any) { setErr(e.message); } setBusy(false); }} disabled={busy} className={`${BTN} bg-[var(--cmp-color-success)] text-white`}>{busy ? "Saving…" : "Mark as Completed"}</button>{err && <span className="text-[10px] text-[var(--cmp-text-error)] ml-2">{err}</span>}</span>;
 }
 
 export function AcceptButton({ patientId, patientLabel, accepted }: { patientId: string; patientLabel: string; accepted: boolean }) {
   const router = useRouter();
   const [busy, setBusy] = useState(false); const [err, setErr] = useState<string | null>(null);
-  if (accepted) return <span className={`${BTN} bg-emerald-50 text-emerald-700 cursor-default`}>✓ Accepted</span>;
-  return <span><button onClick={async () => { setBusy(true); setErr(null); try { await call({ action: "accept", patient_id: patientId, patient_label: patientLabel }); router.refresh(); } catch (e: any) { setErr(e.message); } setBusy(false); }} disabled={busy} className={`${BTN} bg-emerald-600 text-white`}>{busy ? "Accepting…" : "Accept Responsibility"}</button>{err && <span className="text-[10px] text-rose-600 ml-2">{err}</span>}</span>;
+  if (accepted) return <span className={`${BTN} bg-[var(--cmp-surface-success)] text-emerald-700 cursor-default`}>✓ Accepted</span>;
+  return <span><button onClick={async () => { setBusy(true); setErr(null); try { await call({ action: "accept", patient_id: patientId, patient_label: patientLabel }); router.refresh(); } catch (e: any) { setErr(e.message); } setBusy(false); }} disabled={busy} className={`${BTN} bg-[var(--cmp-color-success)] text-white`}>{busy ? "Accepting…" : "Accept Responsibility"}</button>{err && <span className="text-[10px] text-[var(--cmp-text-error)] ml-2">{err}</span>}</span>;
 }
 
 export function AnswerClarification({ id }: { id: string }) {
@@ -53,8 +53,8 @@ export function SignOff({ patientIds }: { patientIds: string[] }) {
   return (
     <div className="space-y-2">
       <input value={name} onChange={e => setName(e.target.value)} placeholder="Type your name to sign" className="w-full text-sm rounded-lg border border-gray-200 px-3 py-2 focus:border-emerald-400 focus:outline-none" />
-      {err && <p className="text-[10px] text-rose-600">{err}</p>}
-      <button onClick={signoff} disabled={busy || patientIds.length === 0} className="w-full text-xs font-semibold rounded-lg py-2.5 px-4 bg-emerald-600 text-white disabled:opacity-50">{busy ? "Signing…" : `✓ Accept Handover & Sign-off (${patientIds.length})`}</button>
+      {err && <p className="text-[10px] text-[var(--cmp-text-error)]">{err}</p>}
+      <button onClick={signoff} disabled={busy || patientIds.length === 0} className="w-full text-xs font-semibold rounded-lg py-2.5 px-4 bg-[var(--cmp-color-success)] text-white disabled:opacity-50">{busy ? "Signing…" : `✓ Accept Handover & Sign-off (${patientIds.length})`}</button>
       <p className="text-[10px] text-gray-400">By signing you confirm you have reviewed the handover and accept responsibility for the patients, tasks and clinical decisions from this point forward. Sign-offs are auditable.</p>
     </div>
   );

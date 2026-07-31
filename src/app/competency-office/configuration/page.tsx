@@ -22,9 +22,9 @@ export default async function ConfigurationPage() {
       {head}
       <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
         <Kpi label="Config Items" value={cfg.length} sub="settings" />
-        <Kpi label="Active" value={cfg.filter((c: any) => c.status === "active").length} sub="live" tone="text-emerald-600" />
-        <Kpi label="Inherited" value={cfg.filter((c: any) => c.source === "inherited").length} sub="from platform" tone="text-blue-600" />
-        <Kpi label="Local Overrides" value={cfg.filter((c: any) => c.source === "local").length} sub="tenant-specific" tone="text-amber-600" />
+        <Kpi label="Active" value={cfg.filter((c: any) => c.status === "active").length} sub="live" tone="text-[var(--cmp-text-success)]" />
+        <Kpi label="Inherited" value={cfg.filter((c: any) => c.source === "inherited").length} sub="from platform" tone="text-[var(--cmp-text-information)]" />
+        <Kpi label="Local Overrides" value={cfg.filter((c: any) => c.source === "local").length} sub="tenant-specific" tone="text-[var(--cmp-text-warning)]" />
         <Kpi label="Categories" value={byCategory.length} sub="config domains" />
         <Kpi label="AI Policies" value={cfg.filter((c: any) => c.category === "ai").length} sub="governed" />
       </div>

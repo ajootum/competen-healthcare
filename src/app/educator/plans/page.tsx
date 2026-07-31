@@ -53,7 +53,7 @@ export default async function LearningPlansPage() {
                     {nameOf.get(p.nurse_id) ?? "—"}
                   </Link>
                   <span className="text-[10px] text-gray-400">{deptOf.get(p.nurse_id) ?? "General"}</span>
-                  <span className="text-[9px] font-bold px-1.5 py-0.5 rounded uppercase bg-green-100 text-green-700">active</span>
+                  <span className="text-[9px] font-bold px-1.5 py-0.5 rounded uppercase bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]">active</span>
                   <span className="flex-1" />
                   <span className="text-[10px] text-gray-400" suppressHydrationWarning>generated {new Date(p.created_at).toLocaleDateString()}</span>
                 </div>
@@ -64,7 +64,7 @@ export default async function LearningPlansPage() {
                       {it.reason && <span className="text-gray-400"> ({it.reason})</span>}
                       {it.resource_title
                         ? <span className="text-teal-700"> — 📚 {it.resource_title}</span>
-                        : <span className="text-amber-600"> — no resource linked</span>}
+                        : <span className="text-[var(--cmp-text-warning)]"> — no resource linked</span>}
                     </li>
                   ))}
                   {p.pathway_items.length > 5 && <li className="text-[10px] text-gray-400">…and {p.pathway_items.length - 5} more</li>}

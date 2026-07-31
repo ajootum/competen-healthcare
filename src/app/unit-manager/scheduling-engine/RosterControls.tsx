@@ -45,11 +45,11 @@ export default function RosterControls({ week, roster }: { week: string; roster:
 
   return (
     <div className="flex items-center gap-2">
-      {(!roster || roster.status !== "published") && <button onClick={generate} disabled={!!busy} className="text-xs font-semibold rounded-lg py-2 px-3 bg-emerald-600 text-white disabled:opacity-50">{busy === "gen" ? "Generating…" : roster ? "↻ Regenerate" : "✨ Generate Roster"}</button>}
-      {roster?.status === "draft" && <button onClick={() => publish()} disabled={!!busy} className="text-xs font-semibold rounded-lg py-2 px-3 border border-emerald-300 text-emerald-700 disabled:opacity-50">{busy === "pub" ? "Publishing…" : "Publish & Approve"}</button>}
+      {(!roster || roster.status !== "published") && <button onClick={generate} disabled={!!busy} className="text-xs font-semibold rounded-lg py-2 px-3 bg-[var(--cmp-color-success)] text-white disabled:opacity-50">{busy === "gen" ? "Generating…" : roster ? "↻ Regenerate" : "✨ Generate Roster"}</button>}
+      {roster?.status === "draft" && <button onClick={() => publish()} disabled={!!busy} className="text-xs font-semibold rounded-lg py-2 px-3 border border-[var(--cmp-color-success)] text-emerald-700 disabled:opacity-50">{busy === "pub" ? "Publishing…" : "Publish & Approve"}</button>}
       {roster?.status === "draft" && <button onClick={del} disabled={!!busy} className="text-xs font-semibold rounded-lg py-2 px-2 border border-gray-200 text-gray-500 disabled:opacity-50" title="Discard draft">✕</button>}
-      {roster?.status === "published" && <span className="text-xs font-semibold rounded-lg py-2 px-3 bg-emerald-50 text-emerald-700">✓ Published</span>}
-      {(err || msg) && <span className={`text-[10px] ${err ? "text-rose-600" : "text-emerald-600"} max-w-[220px]`}>{err ?? msg}</span>}
+      {roster?.status === "published" && <span className="text-xs font-semibold rounded-lg py-2 px-3 bg-[var(--cmp-surface-success)] text-emerald-700">✓ Published</span>}
+      {(err || msg) && <span className={`text-[10px] ${err ? "text-[var(--cmp-text-error)]" : "text-[var(--cmp-text-success)]"} max-w-[220px]`}>{err ?? msg}</span>}
     </div>
   );
 }

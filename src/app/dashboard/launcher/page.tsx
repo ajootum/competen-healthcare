@@ -41,7 +41,7 @@ export default async function LauncherPage() {
   const activeRole = (cookieStore.get("active_role")?.value ?? highestRole(userRoles)) as AppRole;
 
   // Base portals (one per AppRole) + org-role workspaces.
-  const portals = userRoles.map(r => ({ label: ROLE_CONFIG[r]?.label ?? r, icon: ROLE_CONFIG[r]?.icon ?? "🏥", href: ROLE_CONFIG[r]?.portal ?? "/dashboard", color: ROLE_CONFIG[r]?.color ?? "bg-blue-600", description: APP_DESC[r] ?? "", badge: `${r === activeRole ? "Active" : "Portal"}`, role: r }));
+  const portals = userRoles.map(r => ({ label: ROLE_CONFIG[r]?.label ?? r, icon: ROLE_CONFIG[r]?.icon ?? "🏥", href: ROLE_CONFIG[r]?.portal ?? "/dashboard", color: ROLE_CONFIG[r]?.color ?? "bg-[var(--cmp-color-information)]", description: APP_DESC[r] ?? "", badge: `${r === activeRole ? "Active" : "Portal"}`, role: r }));
   const orgLinks = await workspaceLinksForUser(admin, user.id, userRoles);
   const orgWorkspaces = orgLinks.map(w => ({ ...w, color: "bg-slate-600", description: ORG_DESC[w.label] ?? "Dedicated operational workspace.", badge: "Role", role: null }));
   const workspaces = [...portals, ...orgWorkspaces];
@@ -55,7 +55,7 @@ export default async function LauncherPage() {
     <div className="max-w-[1500px] mx-auto space-y-5">
       {/* Header */}
       <div>
-        <p className="text-[11px] font-semibold text-blue-600 uppercase tracking-wide">Personal Workspace</p>
+        <p className="text-[11px] font-semibold text-[var(--cmp-text-information)] uppercase tracking-wide">Personal Workspace</p>
         <h1 className="text-2xl font-bold text-gray-900">Workspace Launcher &amp; Switcher</h1>
         <p className="text-sm text-gray-500 mt-0.5">Access and switch between all your available workspaces. Your role determines what you can see and access.</p>
       </div>
@@ -66,19 +66,19 @@ export default async function LauncherPage() {
           <div className={cardClass}>
             <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide mb-3">Current Workspace</p>
             <div className="flex flex-wrap items-center gap-4">
-              <div className="w-12 h-12 rounded-xl bg-blue-600 flex items-center justify-center text-white text-xl shrink-0">🧑‍⚕️</div>
+              <div className="w-12 h-12 rounded-xl bg-[var(--cmp-color-information)] flex items-center justify-center text-white text-xl shrink-0">🧑‍⚕️</div>
               <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2"><h2 className="text-lg font-bold text-gray-900">Personal Workspace</h2><span className="text-[10px] font-semibold text-emerald-700 bg-emerald-50 rounded-full px-2 py-0.5">● Active</span></div>
+                <div className="flex items-center gap-2"><h2 className="text-lg font-bold text-gray-900">Personal Workspace</h2><span className="text-[10px] font-semibold text-emerald-700 bg-[var(--cmp-surface-success)] rounded-full px-2 py-0.5">● Active</span></div>
                 <p className="text-sm text-gray-500">Your home for personal productivity, learning and professional development.</p>
               </div>
               <div className="flex items-center gap-2">
-                <Link href="/dashboard" className="text-sm font-medium text-white bg-blue-600 rounded-lg px-3 py-2 hover:bg-blue-500">Open Workspace</Link>
+                <Link href="/dashboard" className="text-sm font-medium text-white bg-[var(--cmp-color-information)] rounded-lg px-3 py-2 hover:bg-[var(--cmp-color-information)]">Open Workspace</Link>
               </div>
             </div>
             <div className="grid sm:grid-cols-3 gap-3 mt-4 pt-4 border-t border-gray-100 text-[12px]">
               <div><p className="text-gray-400">Signed in as</p><p className="font-medium text-gray-800">{profile?.full_name}</p></div>
               <div><p className="text-gray-400">Active portal</p><p className="font-medium text-gray-800">{ROLE_CONFIG[activeRole]?.label ?? activeRole}</p></div>
-              <div><p className="text-gray-400">Status</p><p className="font-medium text-emerald-600">All systems operational</p></div>
+              <div><p className="text-gray-400">Status</p><p className="font-medium text-[var(--cmp-text-success)]">All systems operational</p></div>
             </div>
           </div>
 
@@ -89,11 +89,11 @@ export default async function LauncherPage() {
             {workspaces.length > 0 ? (
               <div className="grid sm:grid-cols-2 xl:grid-cols-3 gap-3">
                 {workspaces.map((w, i) => (
-                  <Link key={i} href={w.href} className="border border-gray-100 rounded-xl p-4 hover:border-blue-200 hover:shadow-sm transition-all">
+                  <Link key={i} href={w.href} className="border border-gray-100 rounded-xl p-4 hover:border-[var(--cmp-color-information)] hover:shadow-sm transition-all">
                     <div className={`w-10 h-10 rounded-lg ${w.color} flex items-center justify-center text-white text-lg mb-2.5`}>{w.icon}</div>
                     <p className="text-[14px] font-semibold text-gray-900">{w.label}</p>
                     <p className="text-[11px] text-gray-500 leading-snug mt-0.5 line-clamp-2">{w.description}</p>
-                    <span className={`inline-block mt-2 text-[10px] font-medium rounded-full px-2 py-0.5 ${w.badge === "Active" ? "bg-emerald-50 text-emerald-700" : "bg-gray-100 text-gray-500"}`}>{w.badge === "Active" ? "Active Role" : w.role ? "Portal Role" : "Role Access"}</span>
+                    <span className={`inline-block mt-2 text-[10px] font-medium rounded-full px-2 py-0.5 ${w.badge === "Active" ? "bg-[var(--cmp-surface-success)] text-emerald-700" : "bg-gray-100 text-gray-500"}`}>{w.badge === "Active" ? "Active Role" : w.role ? "Portal Role" : "Role Access"}</span>
                   </Link>
                 ))}
               </div>
@@ -107,10 +107,10 @@ export default async function LauncherPage() {
           <div className="bg-white rounded-xl border border-gray-200 p-4">
             <h3 className="text-sm font-semibold text-gray-900 mb-3">Quick Switcher</h3>
             <div className="space-y-1">
-              <div className="flex items-center gap-2.5 px-2 py-2 rounded-lg bg-blue-50">
-                <span className="w-6 h-6 rounded bg-blue-600 text-white text-[11px] flex items-center justify-center">🧑‍⚕️</span>
+              <div className="flex items-center gap-2.5 px-2 py-2 rounded-lg bg-[var(--cmp-surface-information)]">
+                <span className="w-6 h-6 rounded bg-[var(--cmp-color-information)] text-white text-[11px] flex items-center justify-center">🧑‍⚕️</span>
                 <span className="flex-1 text-[13px] font-medium text-blue-800">Personal Workspace</span>
-                <span className="text-[10px] text-emerald-600 font-semibold">Active now</span>
+                <span className="text-[10px] text-[var(--cmp-text-success)] font-semibold">Active now</span>
               </div>
               {workspaces.slice(0, 6).map((w, i) => (
                 <Link key={i} href={w.href} className="flex items-center gap-2.5 px-2 py-2 rounded-lg hover:bg-gray-50">
@@ -139,14 +139,14 @@ export default async function LauncherPage() {
             {acts.length > 0 ? (
               <div className="space-y-2.5">
                 {acts.map((a, i) => (
-                  <div key={i} className="flex gap-2.5"><span className="w-1.5 h-1.5 rounded-full bg-blue-400 mt-1.5 shrink-0" /><div className="min-w-0"><p className="text-[12px] text-gray-700 leading-snug"><span className="font-medium capitalize">{String(a.action).replace(/_/g, " ")}</span>{a.entity_name ? ` · ${a.entity_name}` : ""}</p><p className="text-[10px] text-gray-400">{fmtAgo(a.created_at)}</p></div></div>
+                  <div key={i} className="flex gap-2.5"><span className="w-1.5 h-1.5 rounded-full bg-[var(--cmp-color-information)] mt-1.5 shrink-0" /><div className="min-w-0"><p className="text-[12px] text-gray-700 leading-snug"><span className="font-medium capitalize">{String(a.action).replace(/_/g, " ")}</span>{a.entity_name ? ` · ${a.entity_name}` : ""}</p><p className="text-[10px] text-gray-400">{fmtAgo(a.created_at)}</p></div></div>
                 ))}
               </div>
             ) : <p className="text-xs text-gray-400 py-4 text-center">No recent activity recorded.</p>}
           </div>
 
           {/* Tips */}
-          <div className="bg-blue-50/60 rounded-xl border border-blue-100 p-4">
+          <div className="bg-[var(--cmp-surface-information)]/60 rounded-xl border border-[var(--cmp-color-information)] p-4">
             <h3 className="text-sm font-semibold text-gray-900 mb-2">Tips</h3>
             <ul className="text-[12px] text-gray-600 space-y-1.5 list-disc pl-4">
               <li>Your access is based on your roles and permissions.</li>

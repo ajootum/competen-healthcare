@@ -20,9 +20,9 @@ export default function CompleteAction({ actionId }: { actionId: string }) {
     else { setMsg(j?.reason ?? "Couldn't complete"); router.refresh(); }
   });
 
-  if (done) return <span className="text-[11px] font-medium text-emerald-600">Completed ✓</span>;
+  if (done) return <span className="text-[11px] font-medium text-[var(--cmp-text-success)]">Completed ✓</span>;
   return (
-    <button onClick={go} disabled={pending} title={msg ?? "Complete this action"} className="text-[11px] font-medium text-emerald-600 hover:underline disabled:opacity-50">
+    <button onClick={go} disabled={pending} title={msg ?? "Complete this action"} className="text-[11px] font-medium text-[var(--cmp-text-success)] hover:underline disabled:opacity-50">
       {pending ? "…" : "Complete"}
     </button>
   );

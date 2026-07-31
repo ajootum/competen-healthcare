@@ -69,7 +69,7 @@ export default async function ModuleWorkspacePage({ params }: { params: Promise<
           <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight text-gray-900">{m.title}</h1>
           <p className="text-gray-500 text-sm max-w-3xl">{m.purpose}</p>
         </div>
-        {!m.live && <span className="ml-auto text-[10px] font-bold uppercase tracking-wider text-amber-600 bg-amber-50 border border-amber-100 rounded-lg px-2.5 py-1 self-center whitespace-nowrap">Scaffold · store soon</span>}
+        {!m.live && <span className="ml-auto text-[10px] font-bold uppercase tracking-wider text-[var(--cmp-text-warning)] bg-[var(--cmp-surface-warning)] border border-[var(--cmp-color-warning)] rounded-lg px-2.5 py-1 self-center whitespace-nowrap">Scaffold · store soon</span>}
       </div>
 
       {/* KPI cards */}

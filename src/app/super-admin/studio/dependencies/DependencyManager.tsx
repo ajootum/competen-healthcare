@@ -74,7 +74,7 @@ export default function DependencyManager({ options, rows }: { options: { id: st
         <input value={notes} onChange={e => setNotes(e.target.value)} placeholder="Notes (optional)" className={`${sel} flex-1`} />
         <button onClick={add} disabled={busy} className="text-xs font-semibold text-white bg-teal-600 hover:bg-teal-700 disabled:opacity-50 rounded-lg px-4 py-2">{busy ? "Saving…" : "Add dependency"}</button>
       </div>
-      {err && <p className="text-[11px] text-red-600 mt-1">{err}</p>}
+      {err && <p className="text-[11px] text-[var(--cmp-text-critical)] mt-1">{err}</p>}
       <p className="text-[10px] text-gray-400 mt-1">Prerequisite and inherited links are checked for cycles — a relationship that would make progression impossible is rejected.</p>
 
       <div className="mt-5 border-t border-gray-50 pt-4">

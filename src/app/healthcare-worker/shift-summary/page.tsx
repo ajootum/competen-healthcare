@@ -58,9 +58,9 @@ export default async function ShiftSummaryPage() {
       <div className="grid sm:grid-cols-2 xl:grid-cols-4 gap-4">
         <StatCard icon="🧑‍⚕️" title="My Patients" value={data.patients.length} sub="active assignment" />
         <StatCard icon="🤝" title="SBAR Ready" value={`${data.sbarReady}/${data.patients.length}`}
-          tone={data.patients.length > 0 && data.sbarReady < data.patients.length ? "text-orange-600" : undefined}
+          tone={data.patients.length > 0 && data.sbarReady < data.patients.length ? "text-[var(--cmp-text-warning)]" : undefined}
           sub={<Link href="/healthcare-worker/handover" className="text-emerald-700 hover:underline">prepare handover →</Link>} />
-        <StatCard icon="✅" title="Open Tasks" value={data.tasksOpen} tone={data.tasksOpen > 0 ? "text-amber-600" : undefined} sub="to close or hand over" />
+        <StatCard icon="✅" title="Open Tasks" value={data.tasksOpen} tone={data.tasksOpen > 0 ? "text-[var(--cmp-text-warning)]" : undefined} sub="to close or hand over" />
         <StatCard icon="🕐" title="Window" value={fmtTime(data.since)} sub={shift ? "since shift start" : "last 12 hours"} />
       </div>
 

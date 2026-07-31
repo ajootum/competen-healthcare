@@ -26,9 +26,9 @@ export default async function CertificationsPage() {
       {head}
       <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
         <Kpi label="Total Certifications" value={certs.length} sub="tracked" />
-        <Kpi label="Active" value={certs.filter((c: any) => c.status === "active").length} sub="current" tone="text-emerald-600" />
-        <Kpi label="Expiring Soon" value={expiring.length} sub="≤ 60 days" tone={expiring.length ? "text-amber-600" : undefined} />
-        <Kpi label="Expired" value={expired.length} sub="non-compliant" tone={expired.length ? "text-rose-600" : undefined} />
+        <Kpi label="Active" value={certs.filter((c: any) => c.status === "active").length} sub="current" tone="text-[var(--cmp-text-success)]" />
+        <Kpi label="Expiring Soon" value={expiring.length} sub="≤ 60 days" tone={expiring.length ? "text-[var(--cmp-text-warning)]" : undefined} />
+        <Kpi label="Expired" value={expired.length} sub="non-compliant" tone={expired.length ? "text-[var(--cmp-text-error)]" : undefined} />
         <Kpi label="Verified" value={`${certs.length ? Math.round((verified / certs.length) * 100) : 0}%`} sub="validated" />
         <Kpi label="Types" value={byType.length} sub="credential types" />
       </div>
@@ -52,7 +52,7 @@ export default async function CertificationsPage() {
         <div className="overflow-x-auto"><div className="min-w-[720px] space-y-1">
           <div className="flex items-center text-[10px] text-gray-400 uppercase tracking-wide px-1"><span className="flex-1">Certification</span><span className="w-28">Holder</span><span className="w-24">Type</span><span className="w-28">Issuer</span><span className="w-20">Expiry</span><span className="w-16 text-center">Verified</span><span className="w-20 text-right">Status</span></div>
           {certs.slice(0, 30).map((c: any) => (
-            <div key={c.id} className="flex items-center px-1 py-1 text-[12px] border-b border-gray-50"><span className="flex-1 text-gray-800 truncate">{c.name}</span><span className="w-28 text-gray-500 truncate">{c.staff}</span><span className="w-24 text-gray-500 capitalize">{c.cert_type}</span><span className="w-28 text-gray-400 truncate text-[11px]">{c.issuer}</span><span className="w-20 text-gray-500">{fmtD(c.expiry_date)}</span><span className="w-16 text-center">{c.verified ? <span className="text-emerald-600">✓</span> : <span className="text-gray-300">—</span>}</span><span className="w-20 text-right"><Pill text={c.status} tone={STATUS_TONE[c.status]} /></span></div>
+            <div key={c.id} className="flex items-center px-1 py-1 text-[12px] border-b border-gray-50"><span className="flex-1 text-gray-800 truncate">{c.name}</span><span className="w-28 text-gray-500 truncate">{c.staff}</span><span className="w-24 text-gray-500 capitalize">{c.cert_type}</span><span className="w-28 text-gray-400 truncate text-[11px]">{c.issuer}</span><span className="w-20 text-gray-500">{fmtD(c.expiry_date)}</span><span className="w-16 text-center">{c.verified ? <span className="text-[var(--cmp-text-success)]">✓</span> : <span className="text-gray-300">—</span>}</span><span className="w-20 text-right"><Pill text={c.status} tone={STATUS_TONE[c.status]} /></span></div>
           ))}
         </div></div>
       </Card>

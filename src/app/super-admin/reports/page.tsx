@@ -4,13 +4,13 @@ import { redirect } from "next/navigation";
 
 const TYPE_COLORS: Record<string, string> = {
   competency_summary:  "bg-teal-50 text-teal-700",
-  workforce_analysis:  "bg-blue-50 text-blue-700",
+  workforce_analysis:  "bg-[var(--cmp-surface-information)] text-blue-700",
   cycle_completion:    "bg-indigo-50 text-indigo-700",
   domain_scores:       "bg-violet-50 text-violet-700",
   framework_scores:    "bg-purple-50 text-purple-700",
-  policy_compliance:   "bg-amber-50 text-amber-700",
-  assessor_activity:   "bg-orange-50 text-orange-700",
-  educator_validation: "bg-rose-50 text-rose-700",
+  policy_compliance:   "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]",
+  assessor_activity:   "bg-[var(--cmp-surface-warning)] text-orange-700",
+  educator_validation: "bg-[var(--cmp-surface-error)] text-[var(--cmp-text-error)]",
 };
 
 type Column = { key: string; label: string; type: string };

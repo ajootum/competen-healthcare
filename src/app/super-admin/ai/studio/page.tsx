@@ -17,7 +17,7 @@ export const dynamic = "force-dynamic";
 const card = "bg-white rounded-xl border border-gray-200";
 const relTime = (iso?: string | null) => { if (!iso) return "never"; const s = Math.floor((Date.now() - new Date(iso).getTime()) / 1000); if (s < 60) return "just now"; if (s < 3600) return `${Math.floor(s / 60)}m ago`; if (s < 86400) return `${Math.floor(s / 3600)}h ago`; return `${Math.floor(s / 86400)}d ago`; };
 const dash = (n: number | null | undefined) => (n == null ? "—" : n.toLocaleString());
-const JOB_TONE: Record<string, string> = { running: "bg-blue-50 text-blue-700", success: "bg-green-50 text-green-700", failed: "bg-rose-50 text-rose-700" };
+const JOB_TONE: Record<string, string> = { running: "bg-[var(--cmp-surface-information)] text-blue-700", success: "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]", failed: "bg-[var(--cmp-surface-error)] text-[var(--cmp-text-error)]" };
 
 export default async function AiStudioAutomation() {
   const supabase = await createClient();
@@ -32,14 +32,14 @@ export default async function AiStudioAutomation() {
   const k = d.kpis;
 
   const kpiCards = [
-    { label: "AI Agents", value: dash(k.agents), icon: "🤖", iconBg: "bg-rose-50" },
+    { label: "AI Agents", value: dash(k.agents), icon: "🤖", iconBg: "bg-[var(--cmp-surface-error)]" },
     { label: "Automations", value: dash(k.automations), icon: "⚙️", iconBg: "bg-violet-50" },
-    { label: "Active Automations", value: dash(k.activeAutomations), icon: "▶️", iconBg: "bg-green-50" },
-    { label: "Prompt Ops", value: dash(k.promptOps), icon: "✍️", iconBg: "bg-blue-50" },
+    { label: "Active Automations", value: dash(k.activeAutomations), icon: "▶️", iconBg: "bg-[var(--cmp-surface-success)]" },
+    { label: "Prompt Ops", value: dash(k.promptOps), icon: "✍️", iconBg: "bg-[var(--cmp-surface-information)]" },
     { label: "Connected Tools", value: dash(k.connectedTools), icon: "🧰", iconBg: "bg-teal-50" },
-    { label: "Workflows", value: dash(k.workflows), icon: "🔀", iconBg: "bg-sky-50" },
-    { label: "Failed Automations", value: dash(k.failedAutomations), icon: "⚠️", iconBg: "bg-rose-50", tone: (k.failedAutomations ?? 0) > 0 ? "text-rose-600" : undefined },
-    { label: "Pending Approvals", value: dash(k.pendingApprovals), icon: "🚦", iconBg: "bg-amber-50", tone: (k.pendingApprovals ?? 0) > 0 ? "text-amber-600" : undefined },
+    { label: "Workflows", value: dash(k.workflows), icon: "🔀", iconBg: "bg-[var(--cmp-surface-information)]" },
+    { label: "Failed Automations", value: dash(k.failedAutomations), icon: "⚠️", iconBg: "bg-[var(--cmp-surface-error)]", tone: (k.failedAutomations ?? 0) > 0 ? "text-[var(--cmp-text-error)]" : undefined },
+    { label: "Pending Approvals", value: dash(k.pendingApprovals), icon: "🚦", iconBg: "bg-[var(--cmp-surface-warning)]", tone: (k.pendingApprovals ?? 0) > 0 ? "text-[var(--cmp-text-warning)]" : undefined },
   ];
 
   return (
@@ -74,7 +74,7 @@ export default async function AiStudioAutomation() {
             return (
               <Wrap key={b.name} {...(b.soon || !b.href ? {} : { href: b.href })} className={`flex items-start gap-2.5 rounded-lg border border-gray-100 p-3 ${b.soon ? "opacity-60" : "hover:border-teal-300 hover:bg-teal-50/40 transition-colors"}`}>
                 <span className="w-8 h-8 rounded-lg bg-gray-50 flex items-center justify-center text-sm shrink-0">{b.icon}</span>
-                <div className="min-w-0"><p className="text-sm font-medium text-gray-800 leading-tight">{b.name}{b.soon && <span className="text-[9px] text-amber-600 ml-1">soon</span>}</p><p className="text-[10px] text-gray-500 leading-tight">{b.desc}</p></div>
+                <div className="min-w-0"><p className="text-sm font-medium text-gray-800 leading-tight">{b.name}{b.soon && <span className="text-[9px] text-[var(--cmp-text-warning)] ml-1">soon</span>}</p><p className="text-[10px] text-gray-500 leading-tight">{b.desc}</p></div>
               </Wrap>
             );
           })}
@@ -90,7 +90,7 @@ export default async function AiStudioAutomation() {
               <Link key={c.name} href={c.href} className="flex items-center gap-3 py-2.5 hover:bg-gray-50/60 -mx-2 px-2 rounded transition-colors">
                 <div className="min-w-0 flex-1"><p className="text-sm font-medium text-gray-800 leading-tight">{c.name}</p><p className="text-[10px] text-gray-500 leading-tight">{c.desc}</p></div>
                 <span className="text-sm font-bold text-gray-900 tabular-nums shrink-0">{dash(c.count)}</span>
-                <span className={`text-[10px] font-semibold px-2 py-0.5 rounded shrink-0 ${c.count != null ? "bg-green-50 text-green-700" : "bg-gray-100 text-gray-400"}`}>{c.count != null ? "connected" : "n/a"}</span>
+                <span className={`text-[10px] font-semibold px-2 py-0.5 rounded shrink-0 ${c.count != null ? "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]" : "bg-gray-100 text-gray-400"}`}>{c.count != null ? "connected" : "n/a"}</span>
               </Link>
             ))}
           </div>
@@ -131,7 +131,7 @@ export default async function AiStudioAutomation() {
               <div key={w.key} className="flex items-center gap-2.5 rounded-lg border border-gray-100 p-2.5">
                 <span className="text-base shrink-0">{w.icon}</span>
                 <div className="min-w-0 flex-1"><p className="text-sm font-medium text-gray-800 leading-tight truncate">{w.name}</p><p className="text-[10px] text-gray-400">{w.steps} step{w.steps === 1 ? "" : "s"}</p></div>
-                {w.pending > 0 && <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-amber-50 text-amber-700 shrink-0">{w.pending} pending</span>}
+                {w.pending > 0 && <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)] shrink-0">{w.pending} pending</span>}
               </div>
             ))}
           </div>

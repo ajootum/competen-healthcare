@@ -53,7 +53,7 @@ export default async function Blueprint() {
               {d.integrity.map(x => (
                 <div key={x.label} className="flex items-center justify-between">
                   <span className="text-[11px] text-gray-500">{x.label}</span>
-                  <span className={`text-sm font-bold ${x.n > 0 ? "text-red-600" : "text-green-600"}`}>{x.n}</span>
+                  <span className={`text-sm font-bold ${x.n > 0 ? "text-[var(--cmp-text-critical)]" : "text-[var(--cmp-text-success)]"}`}>{x.n}</span>
                 </div>
               ))}
             </div>

@@ -64,7 +64,7 @@ export default function ResponsibilitiesManager({ rows, staff, objects }: {
       {/* Assign form */}
       <div className="bg-white rounded-xl border border-teal-100 p-5">
         <p className="text-[10px] font-bold text-teal-600 uppercase tracking-widest mb-3">Assign responsibility</p>
-        {error && <div className="bg-red-50 text-red-600 text-sm rounded-lg px-3 py-2 mb-3">{error}</div>}
+        {error && <div className="bg-[var(--cmp-surface-critical)] text-[var(--cmp-text-critical)] text-sm rounded-lg px-3 py-2 mb-3">{error}</div>}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-2">
           <select className={input} value={form.user_id} onChange={e => setForm(f => ({ ...f, user_id: e.target.value }))}>
             <option value="">Person…</option>
@@ -108,12 +108,12 @@ export default function ResponsibilitiesManager({ rows, staff, objects }: {
                   </p>
                 </div>
                 {r.review_due && (
-                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded ${overdue ? "bg-red-50 text-red-600" : "bg-blue-50 text-blue-600"}`}>
+                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded ${overdue ? "bg-[var(--cmp-surface-critical)] text-[var(--cmp-text-critical)]" : "bg-[var(--cmp-surface-information)] text-[var(--cmp-text-information)]"}`}>
                     Review {overdue ? "overdue" : `due ${new Date(r.review_due).toLocaleDateString()}`}
                   </span>
                 )}
                 <button disabled={busy} onClick={() => end(r.id)}
-                  className="text-xs text-gray-400 hover:text-red-500 hover:bg-red-50 px-2 py-1 rounded transition-colors">End</button>
+                  className="text-xs text-gray-400 hover:text-red-500 hover:bg-[var(--cmp-surface-critical)] px-2 py-1 rounded transition-colors">End</button>
               </div>
             );
           })}

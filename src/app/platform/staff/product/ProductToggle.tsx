@@ -15,7 +15,7 @@ export default function ProductToggle({ code, defaultOn }: { code: string; defau
     } finally { setBusy(false); }
   };
   return (
-    <button onClick={toggle} disabled={busy} className={`text-[10px] rounded-full px-2 py-0.5 transition-colors ${on ? "bg-green-100 text-green-700 hover:bg-green-200" : "bg-gray-100 text-gray-500 hover:bg-gray-200"}`}>
+    <button onClick={toggle} disabled={busy} className={`text-[10px] rounded-full px-2 py-0.5 transition-colors ${on ? "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)] hover:bg-green-200" : "bg-gray-100 text-gray-500 hover:bg-gray-200"}`}>
       {on ? "on by default" : "off by default"}
     </button>
   );

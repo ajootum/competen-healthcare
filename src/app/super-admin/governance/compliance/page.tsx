@@ -14,8 +14,8 @@ export const dynamic = "force-dynamic";
 
 const card = "bg-white rounded-xl border border-gray-200";
 const dash = (n: number | null | undefined) => (n == null ? "—" : n.toLocaleString());
-const STATUS_BADGE: Record<string, string> = { compliant: "bg-green-50 text-green-700", at_risk: "bg-amber-50 text-amber-700", non_compliant: "bg-rose-50 text-rose-700", not_assessed: "bg-gray-100 text-gray-500", waived: "bg-violet-50 text-violet-700" };
-const RISK_BADGE: Record<string, string> = { low: "bg-gray-100 text-gray-600", medium: "bg-amber-50 text-amber-700", high: "bg-orange-50 text-orange-700", critical: "bg-rose-50 text-rose-700" };
+const STATUS_BADGE: Record<string, string> = { compliant: "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]", at_risk: "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]", non_compliant: "bg-[var(--cmp-surface-error)] text-[var(--cmp-text-error)]", not_assessed: "bg-gray-100 text-gray-500", waived: "bg-violet-50 text-violet-700" };
+const RISK_BADGE: Record<string, string> = { low: "bg-gray-100 text-gray-600", medium: "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]", high: "bg-[var(--cmp-surface-warning)] text-orange-700", critical: "bg-[var(--cmp-surface-error)] text-[var(--cmp-text-error)]" };
 
 export default async function ComplianceManagement() {
   const supabase = await createClient();
@@ -30,12 +30,12 @@ export default async function ComplianceManagement() {
   const k = d.kpis;
 
   const kpiCards = [
-    { label: "Total Obligations", value: dash(k.total), icon: "📋", iconBg: "bg-blue-50" },
-    { label: "Compliant", value: dash(k.compliant), icon: "✅", iconBg: "bg-green-50", tone: "text-green-600" },
-    { label: "At Risk", value: dash(k.atRisk), icon: "⚠️", iconBg: "bg-amber-50", tone: (k.atRisk ?? 0) > 0 ? "text-amber-600" : undefined },
-    { label: "Non-Compliant", value: dash(k.nonCompliant), icon: "🛑", iconBg: "bg-rose-50", tone: (k.nonCompliant ?? 0) > 0 ? "text-rose-600" : undefined },
+    { label: "Total Obligations", value: dash(k.total), icon: "📋", iconBg: "bg-[var(--cmp-surface-information)]" },
+    { label: "Compliant", value: dash(k.compliant), icon: "✅", iconBg: "bg-[var(--cmp-surface-success)]", tone: "text-[var(--cmp-text-success)]" },
+    { label: "At Risk", value: dash(k.atRisk), icon: "⚠️", iconBg: "bg-[var(--cmp-surface-warning)]", tone: (k.atRisk ?? 0) > 0 ? "text-[var(--cmp-text-warning)]" : undefined },
+    { label: "Non-Compliant", value: dash(k.nonCompliant), icon: "🛑", iconBg: "bg-[var(--cmp-surface-error)]", tone: (k.nonCompliant ?? 0) > 0 ? "text-[var(--cmp-text-error)]" : undefined },
     { label: "Not Assessed", value: dash(k.notAssessed), icon: "❔", iconBg: "bg-gray-50", tone: "text-gray-400" },
-    { label: "Expiring (30d)", value: dash(k.expiringSoon), icon: "🕓", iconBg: "bg-orange-50", tone: (k.expiringSoon ?? 0) > 0 ? "text-orange-600" : undefined },
+    { label: "Expiring (30d)", value: dash(k.expiringSoon), icon: "🕓", iconBg: "bg-[var(--cmp-surface-warning)]", tone: (k.expiringSoon ?? 0) > 0 ? "text-[var(--cmp-text-warning)]" : undefined },
   ];
 
   return (
@@ -49,8 +49,8 @@ export default async function ComplianceManagement() {
       </div>
 
       {!d.ready && (
-        <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-          <span className="font-semibold">Obligations register not enabled.</span> Run <code className="font-mono text-[12px] bg-amber-100 px-1 rounded">supabase/migrations/059-governance-obligations.sql</code> to activate it. The derived domain compliance below is live regardless.
+        <div className="rounded-xl border border-[var(--cmp-color-warning)] bg-[var(--cmp-surface-warning)] px-4 py-3 text-sm text-amber-800">
+          <span className="font-semibold">Obligations register not enabled.</span> Run <code className="font-mono text-[12px] bg-[var(--cmp-surface-warning)] px-1 rounded">supabase/migrations/059-governance-obligations.sql</code> to activate it. The derived domain compliance below is live regardless.
         </div>
       )}
 
@@ -108,9 +108,9 @@ export default async function ComplianceManagement() {
             <div className="space-y-2">
               {d.calendar.map((c: any, i: number) => (
                 <div key={i} className="flex items-center gap-2.5 rounded-lg border border-gray-100 p-2.5">
-                  <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded shrink-0 tabular-nums ${c.overdue ? "bg-rose-50 text-rose-700" : c.dueSoon ? "bg-amber-50 text-amber-700" : "bg-gray-50 text-gray-500"}`}>{c.date}</span>
+                  <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded shrink-0 tabular-nums ${c.overdue ? "bg-[var(--cmp-surface-error)] text-[var(--cmp-text-error)]" : c.dueSoon ? "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]" : "bg-gray-50 text-gray-500"}`}>{c.date}</span>
                   <div className="min-w-0 flex-1"><p className="text-xs text-gray-700 truncate">{c.title}</p><p className="text-[9px] text-gray-400 capitalize">{c.kind}</p></div>
-                  {c.overdue && <span className="text-[9px] font-semibold text-rose-600 shrink-0">OVERDUE</span>}
+                  {c.overdue && <span className="text-[9px] font-semibold text-[var(--cmp-text-error)] shrink-0">OVERDUE</span>}
                 </div>
               ))}
             </div>
@@ -127,7 +127,7 @@ export default async function ComplianceManagement() {
             {d.derivedDomains.map((dom: any) => (
               <div key={dom.label}>
                 <div className="flex items-center justify-between text-xs mb-0.5"><span className="text-gray-600">{dom.label}</span><span className={`tabular-nums ${dom.value == null ? "text-gray-300" : "text-gray-700"}`}>{dom.value == null ? "n/a" : `${dom.value}%`}</span></div>
-                <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">{dom.value != null && <div className={`h-full rounded-full ${dom.value >= 80 ? "bg-green-500" : dom.value >= 50 ? "bg-amber-500" : "bg-rose-500"}`} style={{ width: `${dom.value}%` }} />}</div>
+                <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">{dom.value != null && <div className={`h-full rounded-full ${dom.value >= 80 ? "bg-[var(--cmp-color-success)]" : dom.value >= 50 ? "bg-[var(--cmp-color-warning)]" : "bg-[var(--cmp-color-error)]"}`} style={{ width: `${dom.value}%` }} />}</div>
               </div>
             ))}
           </div>

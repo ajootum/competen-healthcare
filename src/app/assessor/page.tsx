@@ -200,11 +200,11 @@ export default async function AssessorDashboard() {
   const unread = (myNotifications ?? []).filter(n => !n.read).length;
 
   const PRIORITIES = [
-    { icon: "🔥", value: String((todaySessions ?? []).length), label: "Assessments", sub: "due today",            href: "/assessor/calendar",    tint: "bg-red-50" },
-    { icon: "⏳", value: String(expiringSoon),                 label: "Competencies", sub: "expiring within 7 days", href: "/assessor/remediation", tint: "bg-amber-50" },
-    { icon: "🏥", value: nextOsceLabel ?? "—",                 label: "Next OSCE",    sub: nextOsceLabel ? "scheduled session" : "none scheduled", href: "/assessor/calendar", tint: "bg-blue-50" },
+    { icon: "🔥", value: String((todaySessions ?? []).length), label: "Assessments", sub: "due today",            href: "/assessor/calendar",    tint: "bg-[var(--cmp-surface-critical)]" },
+    { icon: "⏳", value: String(expiringSoon),                 label: "Competencies", sub: "expiring within 7 days", href: "/assessor/remediation", tint: "bg-[var(--cmp-surface-warning)]" },
+    { icon: "🏥", value: nextOsceLabel ?? "—",                 label: "Next OSCE",    sub: nextOsceLabel ? "scheduled session" : "none scheduled", href: "/assessor/calendar", tint: "bg-[var(--cmp-surface-information)]" },
     { icon: "🖊️", value: String(logbookPending ?? 0),          label: "Evidence",     sub: "awaiting review",      href: "/assessor/logbook",     tint: "bg-indigo-50" },
-    { icon: "🛑", value: String(risks.length),                 label: "High Risk",    sub: "learners flagged",     href: "/assessor/remediation", tint: "bg-rose-50" },
+    { icon: "🛑", value: String(risks.length),                 label: "High Risk",    sub: "learners flagged",     href: "/assessor/remediation", tint: "bg-[var(--cmp-surface-error)]" },
   ];
 
   const INBOX = [
@@ -322,7 +322,7 @@ export default async function AssessorDashboard() {
                           ).join(" · ")}{r.flags.length > 2 ? ` · +${r.flags.length - 2}` : ""}
                         </p>
                       </div>
-                      <span className="text-[9px] font-bold bg-red-50 text-red-600 px-1.5 py-0.5 rounded shrink-0">
+                      <span className="text-[9px] font-bold bg-[var(--cmp-surface-critical)] text-[var(--cmp-text-critical)] px-1.5 py-0.5 rounded shrink-0">
                         {r.flags.length} flag{r.flags.length === 1 ? "" : "s"}
                       </span>
                     </div>
@@ -364,7 +364,7 @@ export default async function AssessorDashboard() {
                     <div key={h.label} className="flex items-center gap-2">
                       <span className="text-[10px] text-gray-500 w-32 truncate shrink-0">{h.label}</span>
                       <div className="flex-1 h-2 bg-gray-100 rounded-full overflow-hidden">
-                        <div className={`h-full rounded-full ${h.pct >= 80 ? "bg-green-500" : h.pct >= 50 ? "bg-amber-400" : "bg-red-400"}`}
+                        <div className={`h-full rounded-full ${h.pct >= 80 ? "bg-[var(--cmp-color-success)]" : h.pct >= 50 ? "bg-[var(--cmp-color-warning)]" : "bg-[var(--cmp-color-critical)]"}`}
                           style={{ width: `${h.pct}%` }} />
                       </div>
                       <span className="text-[10px] font-bold text-gray-700 w-9 text-right shrink-0">{h.pct}%</span>

@@ -7,8 +7,8 @@ import Link from "next/link";
 // real status/severity tab. Rows come from the server loader (op_incidents); tabs map to REAL states (no
 // fabricated "awaiting triage"/"escalated" states the store doesn't have). Report/act happens in the source.
 /* eslint-disable @typescript-eslint/no-explicit-any */
-const sevTone = (s: string) => (s === "critical" ? "bg-rose-100 text-rose-700" : s === "high" ? "bg-orange-100 text-orange-700" : s === "medium" ? "bg-amber-100 text-amber-700" : "bg-emerald-100 text-emerald-700");
-const statusTone = (s: string) => (s === "reported" ? "bg-sky-100 text-sky-700" : s === "investigating" ? "bg-indigo-100 text-indigo-700" : s === "awaiting_action" ? "bg-violet-100 text-violet-700" : "bg-gray-100 text-gray-600");
+const sevTone = (s: string) => (s === "critical" ? "bg-[var(--cmp-surface-error)] text-[var(--cmp-text-error)]" : s === "high" ? "bg-[var(--cmp-surface-warning)] text-orange-700" : s === "medium" ? "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]" : "bg-[var(--cmp-surface-success)] text-emerald-700");
+const statusTone = (s: string) => (s === "reported" ? "bg-[var(--cmp-surface-information)] text-[var(--cmp-text-information)]" : s === "investigating" ? "bg-indigo-100 text-indigo-700" : s === "awaiting_action" ? "bg-violet-100 text-violet-700" : "bg-gray-100 text-gray-600");
 const statusLabel: Record<string, string> = { reported: "New", investigating: "Investigating", awaiting_action: "Awaiting Action", closed: "Closed" };
 
 export default function IncidentInbox({ rows, counts }: { rows: any[]; counts: any }) {
@@ -33,7 +33,7 @@ export default function IncidentInbox({ rows, counts }: { rows: any[]; counts: a
     <div>
       <div className="flex gap-1 border-b border-gray-100 mb-2 overflow-x-auto">
         {TABS.map(t => (
-          <button key={t.key} onClick={() => setTab(t.key)} className={`shrink-0 text-xs px-3 py-1.5 border-b-2 -mb-px font-medium transition-colors ${tab === t.key ? "border-rose-600 text-rose-700" : "border-transparent text-gray-400 hover:text-gray-600"}`}>
+          <button key={t.key} onClick={() => setTab(t.key)} className={`shrink-0 text-xs px-3 py-1.5 border-b-2 -mb-px font-medium transition-colors ${tab === t.key ? "border-rose-600 text-[var(--cmp-text-error)]" : "border-transparent text-gray-400 hover:text-gray-600"}`}>
             {t.label}{t.n ? <span className="ml-1.5 text-[10px] text-gray-400">{t.n}</span> : null}
           </button>
         ))}
@@ -55,7 +55,7 @@ export default function IncidentInbox({ rows, counts }: { rows: any[]; counts: a
           </table>
         </div>
       ) : <p className="text-sm text-gray-400 py-6 text-center">No incidents in this queue.</p>}
-      <div className="flex justify-end mt-2"><Link href="/supervisor/quality-safety" className="text-[11px] font-medium text-rose-700 hover:underline">View full inbox →</Link></div>
+      <div className="flex justify-end mt-2"><Link href="/supervisor/quality-safety" className="text-[11px] font-medium text-[var(--cmp-text-error)] hover:underline">View full inbox →</Link></div>
     </div>
   );
 }

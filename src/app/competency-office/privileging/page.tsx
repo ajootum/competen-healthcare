@@ -26,10 +26,10 @@ export default async function PrivilegingPage() {
       {head}
       <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
         <Kpi label="Total Privileges" value={privs.length} sub="granted" />
-        <Kpi label="Active" value={privs.filter((p: any) => p.status === "active").length} sub="authorised" tone="text-emerald-600" />
-        <Kpi label="Under Review" value={review.length} sub="committee" tone={review.length ? "text-amber-600" : undefined} />
-        <Kpi label="Expiring" value={expiring.length} sub="≤ 90 days" tone={expiring.length ? "text-amber-600" : undefined} />
-        <Kpi label="Prereq. Lapsed" value={noPrereq.length} sub="auto-suspend" tone={noPrereq.length ? "text-rose-600" : undefined} />
+        <Kpi label="Active" value={privs.filter((p: any) => p.status === "active").length} sub="authorised" tone="text-[var(--cmp-text-success)]" />
+        <Kpi label="Under Review" value={review.length} sub="committee" tone={review.length ? "text-[var(--cmp-text-warning)]" : undefined} />
+        <Kpi label="Expiring" value={expiring.length} sub="≤ 90 days" tone={expiring.length ? "text-[var(--cmp-text-warning)]" : undefined} />
+        <Kpi label="Prereq. Lapsed" value={noPrereq.length} sub="auto-suspend" tone={noPrereq.length ? "text-[var(--cmp-text-error)]" : undefined} />
         <Kpi label="Categories" value={byCat.length} sub="privilege types" />
       </div>
 
@@ -52,7 +52,7 @@ export default async function PrivilegingPage() {
         <div className="overflow-x-auto"><div className="min-w-[680px] space-y-1">
           <div className="flex items-center text-[10px] text-gray-400 uppercase tracking-wide px-1"><span className="flex-1">Privilege</span><span className="w-28">Holder</span><span className="w-24">Category</span><span className="w-20">Granted</span><span className="w-20">Expiry</span><span className="w-16 text-center">Prereq</span><span className="w-24 text-right">Status</span></div>
           {privs.slice(0, 30).map((p: any) => (
-            <div key={p.id} className="flex items-center px-1 py-1 text-[12px] border-b border-gray-50"><span className="flex-1 text-gray-800 truncate">{p.privilege_name}</span><span className="w-28 text-gray-500 truncate">{p.staff}</span><span className="w-24 text-gray-500 capitalize">{p.category}</span><span className="w-20 text-gray-400">{fmtD(p.granted_date)}</span><span className="w-20 text-gray-500">{fmtD(p.expiry_date)}</span><span className="w-16 text-center">{p.prerequisites_met ? <span className="text-emerald-600">✓</span> : <span className="text-rose-500">✗</span>}</span><span className="w-24 text-right"><Pill text={p.status} tone={STATUS_TONE[p.status]} /></span></div>
+            <div key={p.id} className="flex items-center px-1 py-1 text-[12px] border-b border-gray-50"><span className="flex-1 text-gray-800 truncate">{p.privilege_name}</span><span className="w-28 text-gray-500 truncate">{p.staff}</span><span className="w-24 text-gray-500 capitalize">{p.category}</span><span className="w-20 text-gray-400">{fmtD(p.granted_date)}</span><span className="w-20 text-gray-500">{fmtD(p.expiry_date)}</span><span className="w-16 text-center">{p.prerequisites_met ? <span className="text-[var(--cmp-text-success)]">✓</span> : <span className="text-rose-500">✗</span>}</span><span className="w-24 text-right"><Pill text={p.status} tone={STATUS_TONE[p.status]} /></span></div>
           ))}
         </div></div>
       </Card>

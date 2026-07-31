@@ -15,9 +15,9 @@ export const dynamic = "force-dynamic";
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 const card = "bg-white rounded-xl border border-gray-200";
-const SEV: Record<string, string> = { critical: "bg-rose-50 text-rose-700", high: "bg-amber-50 text-amber-700", moderate: "bg-sky-50 text-sky-700", low: "bg-gray-100 text-gray-500" };
-const DOT: Record<string, string> = { critical: "bg-rose-500", high: "bg-amber-500", moderate: "bg-sky-500", low: "bg-gray-400" };
-const PRI: Record<string, string> = { critical: "bg-rose-50 text-rose-700", high: "bg-amber-50 text-amber-700", medium: "bg-sky-50 text-sky-700", low: "bg-gray-100 text-gray-500" };
+const SEV: Record<string, string> = { critical: "bg-[var(--cmp-surface-error)] text-[var(--cmp-text-error)]", high: "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]", moderate: "bg-[var(--cmp-surface-information)] text-[var(--cmp-text-information)]", low: "bg-gray-100 text-gray-500" };
+const DOT: Record<string, string> = { critical: "bg-[var(--cmp-color-error)]", high: "bg-[var(--cmp-color-warning)]", moderate: "bg-[var(--cmp-color-information)]", low: "bg-gray-400" };
+const PRI: Record<string, string> = { critical: "bg-[var(--cmp-surface-error)] text-[var(--cmp-text-error)]", high: "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]", medium: "bg-[var(--cmp-surface-information)] text-[var(--cmp-text-information)]", low: "bg-gray-100 text-gray-500" };
 
 export default async function ExceptionCategory({ title, subtitle, exTabs, apprCats, note }: { title: string; subtitle: string; exTabs: string[] | null; apprCats: string[] | null; note?: string }) {
   const supabase = await createClient();
@@ -47,9 +47,9 @@ export default async function ExceptionCategory({ title, subtitle, exTabs, apprC
       <WfmExcTabs />
 
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        <Kpi label="Exceptions" value={exceptions.length} tone={exceptions.length ? "text-gray-900" : "text-emerald-600"} />
-        <Kpi label="Approvals" value={approvals.length} tone={approvals.length ? "text-amber-600" : "text-emerald-600"} />
-        <Kpi label="Critical" value={critical} tone={critical ? "text-rose-600" : "text-emerald-600"} />
+        <Kpi label="Exceptions" value={exceptions.length} tone={exceptions.length ? "text-gray-900" : "text-[var(--cmp-text-success)]"} />
+        <Kpi label="Approvals" value={approvals.length} tone={approvals.length ? "text-[var(--cmp-text-warning)]" : "text-[var(--cmp-text-success)]"} />
+        <Kpi label="Critical" value={critical} tone={critical ? "text-[var(--cmp-text-error)]" : "text-[var(--cmp-text-success)]"} />
         <Kpi label="Total open" value={exceptions.length + approvals.length} />
       </div>
 

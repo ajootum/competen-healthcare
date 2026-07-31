@@ -11,10 +11,10 @@ import { cardClass } from "@/components/ui/primitives";
 // states; everything operational (acuity, flags, obs, staff, status) is live.
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
-const ACUITY_TONE: Record<string, string> = { critical: "bg-rose-50 text-rose-700", high: "bg-orange-50 text-orange-700", moderate: "bg-amber-50 text-amber-700", stable: "bg-green-50 text-green-700", low: "bg-green-50 text-green-700" };
-const FLAG_TONE: Record<string, string> = { rose: "bg-rose-50 text-rose-600 border-rose-100", amber: "bg-amber-50 text-amber-600 border-amber-100", purple: "bg-purple-50 text-purple-600 border-purple-100", gray: "bg-gray-50 text-gray-500 border-gray-100" };
-const OBS_TONE: Record<string, string> = { rose: "text-rose-600", amber: "text-amber-600", green: "text-green-600" };
-const STATUS_TONE: Record<string, string> = { admitted: "text-gray-700", discharge_pending: "text-blue-600", transfer_pending: "text-violet-600", expected: "text-amber-600", discharged: "text-gray-400" };
+const ACUITY_TONE: Record<string, string> = { critical: "bg-[var(--cmp-surface-error)] text-[var(--cmp-text-error)]", high: "bg-[var(--cmp-surface-warning)] text-orange-700", moderate: "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]", stable: "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]", low: "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]" };
+const FLAG_TONE: Record<string, string> = { rose: "bg-[var(--cmp-surface-error)] text-[var(--cmp-text-error)] border-[var(--cmp-color-error)]", amber: "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)] border-[var(--cmp-color-warning)]", purple: "bg-purple-50 text-purple-600 border-purple-100", gray: "bg-gray-50 text-gray-500 border-gray-100" };
+const OBS_TONE: Record<string, string> = { rose: "text-[var(--cmp-text-error)]", amber: "text-[var(--cmp-text-warning)]", green: "text-[var(--cmp-text-success)]" };
+const STATUS_TONE: Record<string, string> = { admitted: "text-gray-700", discharge_pending: "text-[var(--cmp-text-information)]", transfer_pending: "text-violet-600", expected: "text-[var(--cmp-text-warning)]", discharged: "text-gray-400" };
 const tc = (s: string) => (s ?? "").replace(/_/g, " ").replace(/\b\w/g, (m) => m.toUpperCase());
 const fmt = (iso?: string | null) => iso ? new Date(iso).toLocaleString([], { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", hour12: false }) : "—";
 const relTime = (iso?: string | null) => { if (!iso) return ""; const s = Math.floor((Date.now() - new Date(iso).getTime()) / 1000); if (s < 60) return "just now"; if (s < 3600) return `${Math.floor(s / 60)}m ago`; if (s < 86400) return `${Math.floor(s / 3600)}h ago`; return `${Math.floor(s / 86400)}d ago`; };
@@ -116,7 +116,7 @@ export default function PatientCensusConsole({ records, tabs }: { records: any[]
             <div className="space-y-1.5 mb-3">
               {sel.activity.length === 0 ? <p className="text-xs text-gray-400">No recent operational activity.</p> : sel.activity.map((a: any, i: number) => (
                 <div key={i} className="flex items-start gap-2 text-[11px]">
-                  <span className={`mt-1 w-1.5 h-1.5 rounded-full shrink-0 ${a.tone === "rose" ? "bg-rose-500" : a.tone === "amber" ? "bg-amber-500" : "bg-gray-300"}`} />
+                  <span className={`mt-1 w-1.5 h-1.5 rounded-full shrink-0 ${a.tone === "rose" ? "bg-[var(--cmp-color-error)]" : a.tone === "amber" ? "bg-[var(--cmp-color-warning)]" : "bg-gray-300"}`} />
                   <span className="text-gray-600 flex-1">{a.text}</span>
                   <span className="text-gray-400 shrink-0">{relTime(a.at)}</span>
                 </div>
@@ -126,7 +126,7 @@ export default function PatientCensusConsole({ records, tabs }: { records: any[]
             <div className="grid grid-cols-2 gap-2 pt-3 border-t border-gray-100">
               <Link href="/supervisor/patient-list" className="text-[11px] text-center font-medium text-teal-700 border border-teal-200 rounded-lg px-2 py-1.5 hover:bg-teal-50">Update status</Link>
               <Link href="/supervisor/patient-flow" className="text-[11px] text-center font-medium text-teal-700 border border-teal-200 rounded-lg px-2 py-1.5 hover:bg-teal-50">Transfer</Link>
-              <Link href="/supervisor/clinical-safety" className="text-[11px] text-center font-medium text-rose-700 border border-rose-200 rounded-lg px-2 py-1.5 hover:bg-rose-50">Escalate</Link>
+              <Link href="/supervisor/clinical-safety" className="text-[11px] text-center font-medium text-[var(--cmp-text-error)] border border-[var(--cmp-color-error)] rounded-lg px-2 py-1.5 hover:bg-[var(--cmp-surface-error)]">Escalate</Link>
               <Link href="/supervisor/operations?section=care" className="text-[11px] text-center font-medium text-gray-700 border border-gray-200 rounded-lg px-2 py-1.5 hover:bg-gray-50">Add task</Link>
             </div>
             <p className="text-[10px] text-gray-400 mt-2">Identity fields (MRN, age, sex, attending team) arrive via EMR integration — the operational registry holds no PHI.</p>

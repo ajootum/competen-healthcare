@@ -46,6 +46,26 @@ export const color = {
     neutral: "#475569",
   },
 
+  // TINTED SURFACES for the same meanings — the wash behind an alert, a status chip, a highlighted row.
+  //
+  // ADDED BECAUSE THE APP ALREADY HAD THEM, in Tailwind classes, ~4,800 times. The library shipped fills and
+  // text tones but no surface, so every page invented its own and the same meaning appears as both
+  // emerald-50 and green-50 depending on who wrote it. (It also meant `var(--cmp-surface-success)` written
+  // against this library resolved to nothing at all — an undefined custom property is simply dropped, so the
+  // element rendered with no background. That was a real defect, not a hypothetical one.)
+  //
+  // The values are NOT invented: each is the Tailwind tint the app already renders most often for that
+  // meaning, so adopting the token preserves what the majority of pages look like today and only converges
+  // the minority that chose a neighbouring hue for the same thing.
+  surface: {
+    success: "#ECFDF5",      // emerald-50
+    information: "#EFF6FF",  // blue-50
+    warning: "#FFFBEB",      // amber-50
+    error: "#FFF1F2",        // rose-50
+    critical: "#FEF2F2",     // red-50 — kept distinct from error so a critical wash can diverge later
+    neutral: "#F8FAFC",      // slate-50
+  },
+
   // Clinical status. Deliberately SEPARATE from `semantic` even where the hex repeats: a patient being
   // "stable" is not the same fact as an operation "succeeding", and the two scales must be free to diverge.
   // PUI-005 requires status never be conveyed by colour alone — every consumer pairs these with text or icon.
@@ -147,6 +167,7 @@ export function cssVariables(): Record<string, string> {
   out[cssVar("color.secondary.light")] = color.secondary.light;
   for (const [k, v] of Object.entries(color.semantic)) out[cssVar(`color.${k}`)] = v;
   for (const [k, v] of Object.entries(color.semanticText)) out[cssVar(`text.${k}`)] = v;
+  for (const [k, v] of Object.entries(color.surface)) out[cssVar(`surface.${k}`)] = v;
   for (const [k, v] of Object.entries(color.clinical)) out[cssVar(`clinical.${k}`)] = v;
   for (const [k, v] of Object.entries(color.neutral)) out[cssVar(`neutral.${k}`)] = v;
   for (const [k, v] of Object.entries(font.scale)) {

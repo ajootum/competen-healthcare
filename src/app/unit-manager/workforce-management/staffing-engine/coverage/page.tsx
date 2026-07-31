@@ -19,8 +19,8 @@ export const dynamic = "force-dynamic";
 const card = "bg-white rounded-xl border border-gray-200";
 // §13.1 status classification from the per-role coverage status
 const STATE = (cov: number | null): "SAFE" | "WATCH" | "CRITICAL" | "UNKNOWN" => cov == null ? "UNKNOWN" : cov >= 100 ? "SAFE" : cov >= 75 ? "WATCH" : "CRITICAL";
-const STATE_BADGE: Record<string, string> = { SAFE: "bg-emerald-50 text-emerald-700", WATCH: "bg-amber-50 text-amber-700", CRITICAL: "bg-rose-50 text-rose-700", UNKNOWN: "bg-gray-100 text-gray-500" };
-const STATE_DOT: Record<string, string> = { SAFE: "bg-emerald-500", WATCH: "bg-amber-500", CRITICAL: "bg-rose-500", UNKNOWN: "bg-gray-300" };
+const STATE_BADGE: Record<string, string> = { SAFE: "bg-[var(--cmp-surface-success)] text-emerald-700", WATCH: "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]", CRITICAL: "bg-[var(--cmp-surface-error)] text-[var(--cmp-text-error)]", UNKNOWN: "bg-gray-100 text-gray-500" };
+const STATE_DOT: Record<string, string> = { SAFE: "bg-[var(--cmp-color-success)]", WATCH: "bg-[var(--cmp-color-warning)]", CRITICAL: "bg-[var(--cmp-color-error)]", UNKNOWN: "bg-gray-300" };
 
 function Kpi({ label, value, sub, tone }: { label: string; value: any; sub?: string; tone?: string }) {
   return <div className={`${card} p-4`}><p className="text-xs text-gray-500">{label}</p><p className={`text-2xl font-bold tabular-nums mt-1 ${tone ?? "text-gray-900"}`}>{value}</p>{sub && <p className="text-[11px] text-gray-400 mt-0.5">{sub}</p>}</div>;
@@ -51,7 +51,7 @@ export default async function RealTimeCoverage() {
     </>
   );
 
-  if (!w.ready) return <div className="space-y-4">{header}<div className="bg-amber-50 border border-amber-200 rounded-xl p-6"><p className="font-semibold text-amber-900">⚙️ No active shift</p><p className="text-sm text-amber-800 mt-1">Real-time coverage activates once an operational shift with staffing is running.</p></div></div>;
+  if (!w.ready) return <div className="space-y-4">{header}<div className="bg-[var(--cmp-surface-warning)] border border-[var(--cmp-color-warning)] rounded-xl p-6"><p className="font-semibold text-amber-900">⚙️ No active shift</p><p className="text-sm text-amber-800 mt-1">Real-time coverage activates once an operational shift with staffing is running.</p></div></div>;
 
   const ov = w.overviewTotal;
   const rows = w.staffingOverview.map((r: any) => ({ ...r, state: STATE(r.coverage), gap: r.required != null ? Math.max(0, r.required - r.present) : 0 }));
@@ -70,9 +70,9 @@ export default async function RealTimeCoverage() {
         <Kpi label="Required" value={ov.required ?? "—"} sub="Approved posts" />
         <Kpi label="Planned" value={ov.planned} sub="Rostered" />
         <Kpi label="Confirmed" value={ov.confirmed} sub="Acknowledged" />
-        <Kpi label="Present" value={ov.present} sub="Attendance evidence" tone="text-emerald-600" />
-        <Kpi label="Net gap" value={netGap} sub={netGap ? "Deployable shortfall" : "Covered"} tone={netGap ? "text-rose-600" : "text-emerald-600"} />
-        <Kpi label="Coverage" value={ov.coverage != null ? `${ov.coverage}%` : "—"} sub={netGap ? `${critical.length} critical` : "Safe"} tone={ov.coverage != null && ov.coverage >= 100 ? "text-emerald-600" : ov.coverage != null && ov.coverage >= 75 ? "text-amber-600" : "text-rose-600"} />
+        <Kpi label="Present" value={ov.present} sub="Attendance evidence" tone="text-[var(--cmp-text-success)]" />
+        <Kpi label="Net gap" value={netGap} sub={netGap ? "Deployable shortfall" : "Covered"} tone={netGap ? "text-[var(--cmp-text-error)]" : "text-[var(--cmp-text-success)]"} />
+        <Kpi label="Coverage" value={ov.coverage != null ? `${ov.coverage}%` : "—"} sub={netGap ? `${critical.length} critical` : "Safe"} tone={ov.coverage != null && ov.coverage >= 100 ? "text-[var(--cmp-text-success)]" : ov.coverage != null && ov.coverage >= 75 ? "text-[var(--cmp-text-warning)]" : "text-[var(--cmp-text-error)]"} />
       </div>
 
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
@@ -81,8 +81,8 @@ export default async function RealTimeCoverage() {
           <h3 className="text-sm font-bold text-gray-900 mb-3">Role coverage <span className="text-[10px] text-gray-400 font-normal">SAFE / WATCH / CRITICAL by role</span></h3>
           <div className="overflow-x-auto"><table className="w-full text-xs">
             <thead><tr className="text-gray-400 text-left border-b border-gray-100"><th className="py-2 pr-3 font-medium">Role</th><th className="py-2 pr-3 font-medium text-right">Req</th><th className="py-2 pr-3 font-medium text-right">Planned</th><th className="py-2 pr-3 font-medium text-right">Present</th><th className="py-2 pr-3 font-medium text-right">Gap</th><th className="py-2 pr-3 font-medium text-right">Coverage</th><th className="py-2 font-medium">Status</th></tr></thead>
-            <tbody>{rows.map((r: any) => (<tr key={r.role} className="border-b border-gray-50"><td className="py-2 pr-3 text-gray-700">{r.label}</td><td className="py-2 pr-3 text-right text-gray-600">{r.required ?? "—"}</td><td className="py-2 pr-3 text-right text-gray-600">{r.planned}</td><td className="py-2 pr-3 text-right text-gray-600">{r.present}</td><td className={`py-2 pr-3 text-right ${r.gap ? "text-rose-600 font-semibold" : "text-gray-400"}`}>{r.gap}</td><td className="py-2 pr-3 text-right font-semibold">{r.coverage != null ? `${r.coverage}%` : "—"}</td><td className="py-2"><span className="inline-flex items-center gap-1.5"><span className={`w-1.5 h-1.5 rounded-full ${STATE_DOT[r.state]}`} /><span className={`text-[9px] px-1.5 py-0.5 rounded ${STATE_BADGE[r.state]}`}>{r.state}</span></span></td></tr>))}</tbody>
-            <tfoot><tr className="border-t border-gray-200 font-bold"><td className="py-2 pr-3 text-gray-800">Total</td><td className="py-2 pr-3 text-right">{ov.required ?? "—"}</td><td className="py-2 pr-3 text-right">{ov.planned}</td><td className="py-2 pr-3 text-right">{ov.present}</td><td className={`py-2 pr-3 text-right ${netGap ? "text-rose-600" : ""}`}>{netGap}</td><td className="py-2 pr-3 text-right text-emerald-600">{ov.coverage != null ? `${ov.coverage}%` : "—"}</td><td /></tr></tfoot>
+            <tbody>{rows.map((r: any) => (<tr key={r.role} className="border-b border-gray-50"><td className="py-2 pr-3 text-gray-700">{r.label}</td><td className="py-2 pr-3 text-right text-gray-600">{r.required ?? "—"}</td><td className="py-2 pr-3 text-right text-gray-600">{r.planned}</td><td className="py-2 pr-3 text-right text-gray-600">{r.present}</td><td className={`py-2 pr-3 text-right ${r.gap ? "text-[var(--cmp-text-error)] font-semibold" : "text-gray-400"}`}>{r.gap}</td><td className="py-2 pr-3 text-right font-semibold">{r.coverage != null ? `${r.coverage}%` : "—"}</td><td className="py-2"><span className="inline-flex items-center gap-1.5"><span className={`w-1.5 h-1.5 rounded-full ${STATE_DOT[r.state]}`} /><span className={`text-[9px] px-1.5 py-0.5 rounded ${STATE_BADGE[r.state]}`}>{r.state}</span></span></td></tr>))}</tbody>
+            <tfoot><tr className="border-t border-gray-200 font-bold"><td className="py-2 pr-3 text-gray-800">Total</td><td className="py-2 pr-3 text-right">{ov.required ?? "—"}</td><td className="py-2 pr-3 text-right">{ov.planned}</td><td className="py-2 pr-3 text-right">{ov.present}</td><td className={`py-2 pr-3 text-right ${netGap ? "text-[var(--cmp-text-error)]" : ""}`}>{netGap}</td><td className="py-2 pr-3 text-right text-[var(--cmp-text-success)]">{ov.coverage != null ? `${ov.coverage}%` : "—"}</td><td /></tr></tfoot>
           </table></div>
           <p className="text-[10px] text-gray-400 mt-2">Deployable ≈ present clinicians meeting checks; a 15/30/60-min coverage timeline needs per-block attendance history (honest next-phase). Gap never hidden by overstaffing in another role.</p>
         </div>
@@ -91,7 +91,7 @@ export default async function RealTimeCoverage() {
         <div className="space-y-4 xl:col-span-1">
           <div className={`${card} p-5`}>
             <h3 className="text-sm font-bold text-gray-900 mb-3">Critical gaps</h3>
-            {critical.length === 0 ? <p className="text-sm text-gray-400">No critical gaps. 🎉{watch ? ` (${watch} on watch)` : ""}</p> : <div className="space-y-2">{critical.map((r: any) => (<div key={r.role} className="flex items-center justify-between rounded-lg border border-rose-100 bg-rose-50/40 p-2.5"><div><p className="text-xs font-semibold text-gray-800">{r.label}</p><p className="text-[11px] text-gray-500">{r.gap} short · {r.coverage}% covered</p></div><Link href="/unit-manager/workforce-management/staffing-engine/availability" className="text-[10px] font-semibold rounded-lg py-1.5 px-2.5 bg-rose-600 text-white">Find cover →</Link></div>))}</div>}
+            {critical.length === 0 ? <p className="text-sm text-gray-400">No critical gaps. 🎉{watch ? ` (${watch} on watch)` : ""}</p> : <div className="space-y-2">{critical.map((r: any) => (<div key={r.role} className="flex items-center justify-between rounded-lg border border-[var(--cmp-color-error)] bg-[var(--cmp-surface-error)]/40 p-2.5"><div><p className="text-xs font-semibold text-gray-800">{r.label}</p><p className="text-[11px] text-gray-500">{r.gap} short · {r.coverage}% covered</p></div><Link href="/unit-manager/workforce-management/staffing-engine/availability" className="text-[10px] font-semibold rounded-lg py-1.5 px-2.5 bg-[var(--cmp-color-error)] text-white">Find cover →</Link></div>))}</div>}
           </div>
           <div className={`${card} p-5`}>
             <h3 className="text-sm font-bold text-gray-900 mb-2">Coverage confidence</h3>

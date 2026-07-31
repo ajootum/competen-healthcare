@@ -27,11 +27,11 @@ export default async function GapsPage() {
     <div className="max-w-[1400px] space-y-4">
       {head}
       <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
-        <Kpi label="Open Gaps" value={openAsg.length} sub="assignments open" tone={openAsg.length ? "text-amber-600" : undefined} />
-        <Kpi label="Critical / Overdue" value={overdue.length} sub="past due" tone={overdue.length ? "text-rose-600" : undefined} />
-        <Kpi label="Non-Passing Decisions" value={decGap} sub={decTotal ? `of ${decTotal}` : "assessment gaps"} tone={decGap ? "text-rose-600" : undefined} />
+        <Kpi label="Open Gaps" value={openAsg.length} sub="assignments open" tone={openAsg.length ? "text-[var(--cmp-text-warning)]" : undefined} />
+        <Kpi label="Critical / Overdue" value={overdue.length} sub="past due" tone={overdue.length ? "text-[var(--cmp-text-error)]" : undefined} />
+        <Kpi label="Non-Passing Decisions" value={decGap} sub={decTotal ? `of ${decTotal}` : "assessment gaps"} tone={decGap ? "text-[var(--cmp-text-error)]" : undefined} />
         <Kpi label="AI Gap Insights" value={gapRecs.length} sub="flagged" tone="text-teal-600" />
-        <Kpi label="Closure Rate" value={`${closureRate}%`} sub="assignments" tone={closureRate >= 70 ? "text-emerald-600" : "text-amber-600"} />
+        <Kpi label="Closure Rate" value={`${closureRate}%`} sub="assignments" tone={closureRate >= 70 ? "text-[var(--cmp-text-success)]" : "text-[var(--cmp-text-warning)]"} />
         <Kpi label="Competencies Affected" value={byComp.length} sub="with open gaps" />
       </div>
 
@@ -49,7 +49,7 @@ export default async function GapsPage() {
 
       <Card title="Gap Closure — Overdue Assignments" right={<span className="text-[11px] text-gray-400">{overdue.length} to close</span>}>
         {overdue.length ? <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-2">{overdue.slice(0, 9).map((a: any) => (
-          <div key={a.id} className="border border-rose-100 bg-rose-50/40 rounded-lg p-2.5"><p className="text-[12px] font-medium text-gray-900 truncate">{a.competency}</p><p className="text-[11px] text-gray-500">{a.target_label} · overdue</p></div>
+          <div key={a.id} className="border border-[var(--cmp-color-error)] bg-[var(--cmp-surface-error)]/40 rounded-lg p-2.5"><p className="text-[12px] font-medium text-gray-900 truncate">{a.competency}</p><p className="text-[11px] text-gray-500">{a.target_label} · overdue</p></div>
         ))}</div> : <p className="text-sm text-gray-400 py-4 text-center">No overdue gap-closure actions. ✅</p>}
       </Card>
 

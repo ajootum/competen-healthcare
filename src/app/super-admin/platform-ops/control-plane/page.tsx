@@ -57,16 +57,16 @@ export default async function ControlPlaneConsole() {
   const [cp, runtime] = await Promise.all([loadControlPlane(admin), loadRuntimeStatus(admin)]);
   const { environment: env, release, map, regions, products, productsSummary, featureFlags, identity, events, eventsReady } = cp;
 
-  const healthTone = cp.health === "Operational" ? "text-green-600" : "text-rose-600";
-  const healthBg = cp.health === "Operational" ? "bg-green-50" : "bg-rose-50";
+  const healthTone = cp.health === "Operational" ? "text-[var(--cmp-text-success)]" : "text-[var(--cmp-text-error)]";
+  const healthBg = cp.health === "Operational" ? "bg-[var(--cmp-surface-success)]" : "bg-[var(--cmp-surface-error)]";
 
   const kpis = [
     { label: "Control Plane", value: cp.health, icon: cp.health === "Operational" ? "💚" : "🛑", iconBg: healthBg, tone: healthTone, sub: env.dbOk ? "database reachable" : "database unreachable" },
     { label: "Runtime", value: env.runtime, icon: "🧭", iconBg: "bg-violet-50", sub: `app v${env.appVersion}` },
-    { label: "DB Latency", value: env.dbLatencyMs == null ? "—" : `${env.dbLatencyMs} ms`, icon: "⏱️", iconBg: "bg-sky-50", sub: "round-trip" },
+    { label: "DB Latency", value: env.dbLatencyMs == null ? "—" : `${env.dbLatencyMs} ms`, icon: "⏱️", iconBg: "bg-[var(--cmp-surface-information)]", sub: "round-trip" },
     { label: "Regions", value: cp.regionsReady ? regions.length : "—", icon: "🌍", iconBg: "bg-teal-50", sub: cp.regionsReady ? `${regions.filter((r: any) => r.is_active).length} active` : "not recorded", muted: !cp.regionsReady },
-    { label: "Feature Flags", value: featureFlags.ready ? featureFlags.total : "—", icon: "🎚️", iconBg: "bg-amber-50", sub: featureFlags.ready ? `${featureFlags.onByDefault} on by default` : "not ready", muted: !featureFlags.ready },
-    { label: "Releases", value: release.recorded ? release.count : "—", icon: "🚀", iconBg: "bg-rose-50", sub: release.recorded ? `on ${release.channel}` : "none recorded", muted: !release.recorded },
+    { label: "Feature Flags", value: featureFlags.ready ? featureFlags.total : "—", icon: "🎚️", iconBg: "bg-[var(--cmp-surface-warning)]", sub: featureFlags.ready ? `${featureFlags.onByDefault} on by default` : "not ready", muted: !featureFlags.ready },
+    { label: "Releases", value: release.recorded ? release.count : "—", icon: "🚀", iconBg: "bg-[var(--cmp-surface-error)]", sub: release.recorded ? `on ${release.channel}` : "none recorded", muted: !release.recorded },
   ];
 
   return (
@@ -102,7 +102,7 @@ export default async function ControlPlaneConsole() {
           <Row label="Runtime" value={<span className="capitalize">{env.runtime}</span>} />
           <Row label="App version" value={`v${env.appVersion}`} />
           <Row label="Region" value={env.vercelRegion} />
-          <Row label="Database" value={<span className={env.dbOk ? "text-green-600" : "text-rose-600"}>{env.dbOk ? `reachable · ${env.dbLatencyMs} ms` : "unreachable"}</span>} />
+          <Row label="Database" value={<span className={env.dbOk ? "text-[var(--cmp-text-success)]" : "text-[var(--cmp-text-error)]"}>{env.dbOk ? `reachable · ${env.dbLatencyMs} ms` : "unreachable"}</span>} />
           <Row label="Supabase host" value={<span className="font-mono text-[11px]">{env.supabaseHost}</span>} />
         </Panel>
 
@@ -139,7 +139,7 @@ export default async function ControlPlaneConsole() {
             {products.slice(0, 8).map((p: any) => (
               <div key={p.code} className="flex items-center justify-between text-xs">
                 <span className="text-gray-600 truncate">{p.name}</span>
-                <span className={`shrink-0 ${p.is_core ? "text-green-600" : "text-gray-400"}`}>{p.is_core ? "Core" : "Optional"}</span>
+                <span className={`shrink-0 ${p.is_core ? "text-[var(--cmp-text-success)]" : "text-gray-400"}`}>{p.is_core ? "Core" : "Optional"}</span>
               </div>
             ))}
           </div>
@@ -170,7 +170,7 @@ export default async function ControlPlaneConsole() {
               {regions.map((r: any) => (
                 <div key={r.code} className="flex items-center justify-between text-sm">
                   <div><span className="text-gray-800 font-medium">{r.name}</span> <span className="text-[10px] text-gray-400 font-mono">{r.code}</span><p className="text-[10px] text-gray-400">{r.hosting_provider ?? "—"}{r.residency_policy ? ` · ${r.residency_policy}` : ""}</p></div>
-                  <span className={`text-[10px] shrink-0 ${r.is_active ? "text-green-600" : "text-gray-400"}`}>{r.is_active ? "active" : "inactive"}</span>
+                  <span className={`text-[10px] shrink-0 ${r.is_active ? "text-[var(--cmp-text-success)]" : "text-gray-400"}`}>{r.is_active ? "active" : "inactive"}</span>
                 </div>
               ))}
             </div>
@@ -183,7 +183,7 @@ export default async function ControlPlaneConsole() {
             <div className="space-y-1.5 max-h-40 overflow-y-auto">
               {events.slice(0, 10).map((e: any, i: number) => (
                 <div key={i} className="flex items-center justify-between text-xs">
-                  <span className="flex items-center gap-1.5 min-w-0"><span className={`w-1.5 h-1.5 rounded-full shrink-0 ${e.severity === "critical" ? "bg-rose-500" : e.severity === "warning" ? "bg-amber-500" : "bg-gray-300"}`} /><span className="text-gray-700 truncate">{e.event_type}</span></span>
+                  <span className="flex items-center gap-1.5 min-w-0"><span className={`w-1.5 h-1.5 rounded-full shrink-0 ${e.severity === "critical" ? "bg-[var(--cmp-color-error)]" : e.severity === "warning" ? "bg-[var(--cmp-color-warning)]" : "bg-gray-300"}`} /><span className="text-gray-700 truncate">{e.event_type}</span></span>
                   <span className="text-[10px] text-gray-400 shrink-0">{relTime(e.created_at)}</span>
                 </div>
               ))}

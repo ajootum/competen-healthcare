@@ -4,8 +4,8 @@ import { useRouter } from "next/navigation";
 import { cardClass } from "@/components/ui/primitives";
 
 type Ticket = { id: string; subject: string; status: string; priority: string; tenant_name: string | null; requester_name: string | null; created_at: string | null };
-const statusCls: Record<string, string> = { open: "bg-blue-100 text-blue-700", pending: "bg-amber-100 text-amber-700", resolved: "bg-green-100 text-green-700", closed: "bg-gray-100 text-gray-500" };
-const prioCls: Record<string, string> = { urgent: "text-red-600", high: "text-amber-600", normal: "text-gray-500", low: "text-gray-400" };
+const statusCls: Record<string, string> = { open: "bg-[var(--cmp-surface-information)] text-blue-700", pending: "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]", resolved: "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]", closed: "bg-gray-100 text-gray-500" };
+const prioCls: Record<string, string> = { urgent: "text-[var(--cmp-text-critical)]", high: "text-[var(--cmp-text-warning)]", normal: "text-gray-500", low: "text-gray-400" };
 const NEXT: Record<string, string[]> = { open: ["pending", "resolved", "closed"], pending: ["resolved", "closed"], resolved: ["closed", "open"], closed: ["open"] };
 
 export default function SupportClient({ tickets, tenants }: { tickets: Ticket[]; tenants: { id: string; name: string }[] }) {

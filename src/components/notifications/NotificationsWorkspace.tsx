@@ -27,10 +27,10 @@ const PRIORITY_OF = (type: string): Priority => {
 };
 
 const PRIORITY_UI: Record<Priority, { label: string; chip: string; dot: string; border: string }> = {
-  high:      { label: "High",    chip: "bg-red-100 text-red-700",     dot: "text-red-500",    border: "border-l-red-400" },
-  important: { label: "Medium",  chip: "bg-amber-100 text-amber-700", dot: "text-amber-500",  border: "border-l-amber-400" },
-  info:      { label: "Info",    chip: "bg-blue-100 text-blue-700",   dot: "text-blue-500",   border: "border-l-blue-300" },
-  success:   { label: "Success", chip: "bg-green-100 text-green-700", dot: "text-green-500",  border: "border-l-green-400" },
+  high:      { label: "High",    chip: "bg-[var(--cmp-surface-critical)] text-[var(--cmp-text-critical)]",     dot: "text-red-500",    border: "border-l-red-400" },
+  important: { label: "Medium",  chip: "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]", dot: "text-amber-500",  border: "border-l-amber-400" },
+  info:      { label: "Info",    chip: "bg-[var(--cmp-surface-information)] text-blue-700",   dot: "text-blue-500",   border: "border-l-blue-300" },
+  success:   { label: "Success", chip: "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]", dot: "text-green-500",  border: "border-l-green-400" },
 };
 
 const TYPE_ICON: Record<string, string> = {

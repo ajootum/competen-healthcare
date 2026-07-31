@@ -32,8 +32,8 @@ export default function MissionControlHeader({ generatedAt }: { generatedAt: str
       <div className="flex flex-col items-end gap-1.5 text-xs">
         <span className="text-gray-400 tabular-nums">Last updated: {time}</span>
         <button onClick={() => setAuto(a => !a)}
-          className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 font-medium transition-colors ${auto ? "bg-green-50 text-green-700 border border-green-200" : "bg-gray-100 text-gray-500 border border-gray-200"}`}>
-          <span className={`w-1.5 h-1.5 rounded-full ${auto ? (refreshing ? "bg-green-400 animate-ping" : "bg-green-500") : "bg-gray-400"}`} />
+          className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 font-medium transition-colors ${auto ? "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)] border border-[var(--cmp-color-success)]" : "bg-gray-100 text-gray-500 border border-gray-200"}`}>
+          <span className={`w-1.5 h-1.5 rounded-full ${auto ? (refreshing ? "bg-[var(--cmp-color-success)] animate-ping" : "bg-[var(--cmp-color-success)]") : "bg-gray-400"}`} />
           Auto-refresh: {auto ? "On" : "Off"}
         </button>
       </div>

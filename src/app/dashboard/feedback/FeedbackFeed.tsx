@@ -17,7 +17,7 @@ export type FeedbackItem = {
   positive: boolean;         // score >= 3 (or unscored narrative)
 };
 
-const AVATAR_TINTS = ["bg-teal-600", "bg-indigo-600", "bg-rose-600", "bg-amber-600", "bg-violet-600", "bg-sky-600"];
+const AVATAR_TINTS = ["bg-teal-600", "bg-indigo-600", "bg-[var(--cmp-color-error)]", "bg-[var(--cmp-color-warning)]", "bg-violet-600", "bg-[var(--cmp-color-information)]"];
 const tint = (s: string) => AVATAR_TINTS[[...s].reduce((a, ch) => a + ch.charCodeAt(0), 0) % AVATAR_TINTS.length];
 const SCORE_COLORS = ["#ef4444", "#f97316", "#eab308", "#14b8a6", "#0d9488", "#3b82f6", "#8b5cf6"];
 
@@ -85,7 +85,7 @@ export default function FeedbackFeed({ items }: { items: FeedbackItem[] }) {
               <div className="flex-1 min-w-0">
                 <p className="text-xs">
                   <span className="font-semibold text-gray-800">{f.assessor ?? "Assessor"}</span>
-                  <span className={`ml-2 text-[9px] font-bold px-1.5 py-0.5 rounded ${f.positive ? "bg-green-50 text-green-700" : "bg-amber-50 text-amber-700"}`}>
+                  <span className={`ml-2 text-[9px] font-bold px-1.5 py-0.5 rounded ${f.positive ? "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]" : "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]"}`}>
                     {f.typeLabel}
                   </span>
                   {f.at && <span className="text-[10px] text-gray-400 ml-2" suppressHydrationWarning>{new Date(f.at).toLocaleDateString(undefined, { day: "2-digit", month: "short", year: "numeric" })}</span>}

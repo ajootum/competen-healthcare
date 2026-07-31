@@ -15,9 +15,9 @@ export const dynamic = "force-dynamic";
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 const card = "bg-white rounded-xl border border-gray-200";
-const scoreTone = (n: number | null) => n == null ? "text-gray-400" : n >= 85 ? "text-green-600" : n >= 70 ? "text-amber-600" : "text-rose-600";
-const RISK: Record<string, string> = { low: "bg-green-500", medium: "bg-amber-400", high: "bg-orange-500", critical: "bg-rose-600", none: "bg-gray-100" };
-const SEV: Record<string, string> = { Critical: "text-rose-600", High: "text-amber-600", Medium: "text-blue-600" };
+const scoreTone = (n: number | null) => n == null ? "text-gray-400" : n >= 85 ? "text-[var(--cmp-text-success)]" : n >= 70 ? "text-[var(--cmp-text-warning)]" : "text-[var(--cmp-text-error)]";
+const RISK: Record<string, string> = { low: "bg-[var(--cmp-color-success)]", medium: "bg-[var(--cmp-color-warning)]", high: "bg-[var(--cmp-color-warning)]", critical: "bg-[var(--cmp-color-error)]", none: "bg-gray-100" };
+const SEV: Record<string, string> = { Critical: "text-[var(--cmp-text-error)]", High: "text-[var(--cmp-text-warning)]", Medium: "text-[var(--cmp-text-information)]" };
 const TABS = ["Overview", "Shift Comparison", "Trend Analysis", "Handover Intelligence", "Escalation Intelligence", "Workforce Intelligence", "Task Intelligence", "Reports"];
 
 function Kpi({ label, value, unit, delta, goodUp = true }: { label: string; value: any; unit?: string; delta?: number | null; goodUp?: boolean }) {
@@ -26,7 +26,7 @@ function Kpi({ label, value, unit, delta, goodUp = true }: { label: string; valu
     <div className={`${card} p-3.5`}>
       <p className="text-[10px] text-gray-500 uppercase tracking-wide leading-tight">{label}</p>
       <p className="text-2xl font-bold text-gray-900 tabular-nums mt-0.5">{value}{unit && <span className="text-sm text-gray-400">{unit}</span>}</p>
-      {delta != null && delta !== 0 ? <p className={`text-[10px] mt-0.5 ${good ? "text-green-600" : "text-rose-600"}`}>{delta > 0 ? "↑" : "↓"} {Math.abs(delta)} pts vs prev period</p> : <p className="text-[10px] text-gray-400 mt-0.5">no change vs prev</p>}
+      {delta != null && delta !== 0 ? <p className={`text-[10px] mt-0.5 ${good ? "text-[var(--cmp-text-success)]" : "text-[var(--cmp-text-error)]"}`}>{delta > 0 ? "↑" : "↓"} {Math.abs(delta)} pts vs prev period</p> : <p className="text-[10px] text-gray-400 mt-0.5">no change vs prev</p>}
     </div>
   );
 }
@@ -86,7 +86,7 @@ export default async function ShiftIntelligence({ searchParams }: { searchParams
     </>
   );
 
-  if (!d.provisioned) return <div className="space-y-4">{header}<div className="bg-amber-50 border border-amber-200 rounded-xl p-6"><p className="font-semibold text-amber-900">⚙️ Shift metrics not provisioned</p><p className="text-sm text-amber-800 mt-1">The <code>shift_metrics</code> table (migration 068) isn&apos;t available yet.</p></div></div>;
+  if (!d.provisioned) return <div className="space-y-4">{header}<div className="bg-[var(--cmp-surface-warning)] border border-[var(--cmp-color-warning)] rounded-xl p-6"><p className="font-semibold text-amber-900">⚙️ Shift metrics not provisioned</p><p className="text-sm text-amber-800 mt-1">The <code>shift_metrics</code> table (migration 068) isn&apos;t available yet.</p></div></div>;
   if (d.count === 0) return <div className="space-y-4">{header}<div className={`${card} p-6`}><p className="font-semibold text-gray-900">No completed shifts captured</p><p className="text-sm text-gray-500 mt-1">Shift Intelligence populates once supervisors capture shift metrics at closure. No data is fabricated in the meantime.</p></div></div>;
 
   const k = d.kpis;
@@ -109,7 +109,7 @@ export default async function ShiftIntelligence({ searchParams }: { searchParams
         <Kpi label="Clinical Safety Score" value={k.safety.value ?? "—"} unit="/100" delta={k.safety.delta} />
         <Kpi label="Workforce Effectiveness" value={k.workforce.value ?? "—"} unit="/100" delta={k.workforce.delta} />
         <Kpi label="Task Completion" value={k.taskCompletion.value != null ? `${k.taskCompletion.value}` : "—"} unit="%" delta={k.taskCompletion.delta} />
-        <div className={`${card} p-3.5`}><p className="text-[10px] text-gray-500 uppercase tracking-wide">Escalation Burden</p><p className="text-2xl font-bold text-rose-600 tabular-nums mt-0.5">{k.escalationBurden.value}</p><p className="text-[10px] text-gray-400 mt-0.5">{k.escalationBurden.critical} critical{k.escalationBurden.medianResolution != null ? ` · median ${k.escalationBurden.medianResolution} min` : ""}</p></div>
+        <div className={`${card} p-3.5`}><p className="text-[10px] text-gray-500 uppercase tracking-wide">Escalation Burden</p><p className="text-2xl font-bold text-[var(--cmp-text-error)] tabular-nums mt-0.5">{k.escalationBurden.value}</p><p className="text-[10px] text-gray-400 mt-0.5">{k.escalationBurden.critical} critical{k.escalationBurden.medianResolution != null ? ` · median ${k.escalationBurden.medianResolution} min` : ""}</p></div>
       </div>
 
       {/* AI summary */}
@@ -177,7 +177,7 @@ export default async function ShiftIntelligence({ searchParams }: { searchParams
               </div>
             ))}
           </div>
-          <div className="flex gap-3 text-[10px] mt-2">{[["Low", "bg-green-500"], ["Medium", "bg-amber-400"], ["High", "bg-orange-500"], ["Critical", "bg-rose-600"]].map(([l, c]) => <span key={l} className="flex items-center gap-1"><span className={`w-2.5 h-2.5 rounded ${c}`} />{l}</span>)}</div>
+          <div className="flex gap-3 text-[10px] mt-2">{[["Low", "bg-[var(--cmp-color-success)]"], ["Medium", "bg-[var(--cmp-color-warning)]"], ["High", "bg-[var(--cmp-color-warning)]"], ["Critical", "bg-[var(--cmp-color-error)]"]].map(([l, c]) => <span key={l} className="flex items-center gap-1"><span className={`w-2.5 h-2.5 rounded ${c}`} />{l}</span>)}</div>
         </div>
       </div>
 
@@ -185,11 +185,11 @@ export default async function ShiftIntelligence({ searchParams }: { searchParams
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
         <div className={`${card} p-5`}>
           <h3 className="text-sm font-bold text-gray-900 mb-2">🏆 Best Performing Shift</h3>
-          {d.bestShift ? (<><div className="flex items-center gap-3 mb-2"><div className="w-14 h-14 rounded-full border-4 border-green-500 flex items-center justify-center text-lg font-bold text-green-600">{d.bestShift.performance}</div><div><p className="text-xs font-semibold text-gray-800 capitalize">{shiftLabel(d.bestShift)}</p><p className="text-[10px] text-gray-400">{d.bestShift.supervisor}</p></div></div><ul className="text-[11px] text-gray-600 space-y-0.5">{bg.good.slice(0, 4).map((g, i) => <li key={i}>✓ {g}</li>)}</ul></>) : <p className="text-sm text-gray-400">—</p>}
+          {d.bestShift ? (<><div className="flex items-center gap-3 mb-2"><div className="w-14 h-14 rounded-full border-4 border-green-500 flex items-center justify-center text-lg font-bold text-[var(--cmp-text-success)]">{d.bestShift.performance}</div><div><p className="text-xs font-semibold text-gray-800 capitalize">{shiftLabel(d.bestShift)}</p><p className="text-[10px] text-gray-400">{d.bestShift.supervisor}</p></div></div><ul className="text-[11px] text-gray-600 space-y-0.5">{bg.good.slice(0, 4).map((g, i) => <li key={i}>✓ {g}</li>)}</ul></>) : <p className="text-sm text-gray-400">—</p>}
         </div>
         <div className={`${card} p-5`}>
           <h3 className="text-sm font-bold text-gray-900 mb-2">⚠ Highest Risk Shift</h3>
-          {d.worstShift ? (<><div className="flex items-center gap-3 mb-2"><div className="w-14 h-14 rounded-full border-4 border-rose-500 flex items-center justify-center text-lg font-bold text-rose-600">{d.worstShift.performance}</div><div><p className="text-xs font-semibold text-gray-800 capitalize">{shiftLabel(d.worstShift)}</p><p className="text-[10px] text-gray-400">{d.worstShift.supervisor}</p></div></div><ul className="text-[11px] text-gray-600 space-y-0.5">{wg.bad.slice(0, 4).map((g, i) => <li key={i}>⚠ {g}</li>)}</ul></>) : <p className="text-sm text-gray-400">—</p>}
+          {d.worstShift ? (<><div className="flex items-center gap-3 mb-2"><div className="w-14 h-14 rounded-full border-4 border-rose-500 flex items-center justify-center text-lg font-bold text-[var(--cmp-text-error)]">{d.worstShift.performance}</div><div><p className="text-xs font-semibold text-gray-800 capitalize">{shiftLabel(d.worstShift)}</p><p className="text-[10px] text-gray-400">{d.worstShift.supervisor}</p></div></div><ul className="text-[11px] text-gray-600 space-y-0.5">{wg.bad.slice(0, 4).map((g, i) => <li key={i}>⚠ {g}</li>)}</ul></>) : <p className="text-sm text-gray-400">—</p>}
         </div>
         <div className={`${card} p-5`}>
           <h3 className="text-sm font-bold text-gray-900 mb-2">Top Shift Insights</h3>

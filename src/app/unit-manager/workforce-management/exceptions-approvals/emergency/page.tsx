@@ -37,7 +37,7 @@ export default async function EmergencyRetrospective() {
       </div>
       <WfmExcTabs />
 
-      <div className="bg-amber-50 border border-amber-200 rounded-xl p-5">
+      <div className="bg-[var(--cmp-surface-warning)] border border-[var(--cmp-color-warning)] rounded-xl p-5">
         <p className="font-semibold text-amber-900">⚙️ Emergency-action register — next phase</p>
         <p className="text-sm text-amber-800 mt-1">Recording an emergency workforce action at the time it&apos;s taken (§19.2) and its retrospective review (§19.3) need an emergency-workforce-action register. Shown honestly as next-phase. Emergency actions must enter retrospective review within the configured deadline (BR-EXA-009); retrospective approval never erases that the action was taken before approval. Escalations that arise today are on the <Link href="/unit-manager/workforce-management/exceptions-approvals/escalations" className="text-amber-800 underline font-medium">Escalations</Link> tab.</p>
       </div>

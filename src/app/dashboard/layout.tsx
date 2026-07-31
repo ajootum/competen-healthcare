@@ -115,7 +115,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
         <aside data-sidebar className="hidden md:flex w-56 h-screen bg-[#0f1b3d] flex-col py-5 px-3 fixed top-0 left-0 z-20">
           <SidebarToggle />
           <Link href="/dashboard" className="flex items-center gap-2 mb-5 px-2" data-sb-item>
-            <div className="w-7 h-7 rounded-lg bg-blue-500 flex items-center justify-center text-white font-bold text-sm shrink-0">C</div>
+            <div className="w-7 h-7 rounded-lg bg-[var(--cmp-color-information)] flex items-center justify-center text-white font-bold text-sm shrink-0">C</div>
             <span className="text-white font-semibold text-sm tracking-wide" data-sb-label>COMPETEN</span>
           </Link>
 
@@ -123,7 +123,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
             {NAV.map(({ label, href, icon, exact, badge }) => (
               <NavLink key={label} href={href} icon={icon} label={label} exact={exact} badge={badge || undefined}
                 className="flex items-center gap-2.5 px-3 py-2 rounded-lg text-[13px] text-blue-100/70 hover:bg-blue-900/50 hover:text-white transition-colors"
-                activeClassName="flex items-center gap-2.5 px-3 py-2 rounded-lg text-[13px] bg-blue-600 text-white font-medium" />
+                activeClassName="flex items-center gap-2.5 px-3 py-2 rounded-lg text-[13px] bg-[var(--cmp-color-information)] text-white font-medium" />
             ))}
           </nav>
 
@@ -134,7 +134,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
               <p className="text-white text-xs font-semibold mt-1">{SHIFT_TIMES[shift.type] ?? ""}</p>
               <p className="text-blue-200/60 text-[10px]">{shift.ward}</p>
               <p className="text-blue-200/60 text-[10px]">{SHIFT_LABEL[shift.type] ?? ""}</p>
-              <Link href="/healthcare-worker" className="block text-center text-[11px] font-medium text-white bg-blue-600 hover:bg-blue-500 rounded-lg py-1.5 mt-2">Open Shift Workspace</Link>
+              <Link href="/healthcare-worker" className="block text-center text-[11px] font-medium text-white bg-[var(--cmp-color-information)] hover:bg-[var(--cmp-color-information)] rounded-lg py-1.5 mt-2">Open Shift Workspace</Link>
             </> : <>
               <span className="text-[10px] font-semibold text-blue-200/70 uppercase tracking-wide">Current Shift</span>
               <p className="text-blue-200/60 text-[11px] mt-1">No active shift.</p>

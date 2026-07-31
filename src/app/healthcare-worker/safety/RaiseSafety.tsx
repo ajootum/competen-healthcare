@@ -12,8 +12,8 @@ const SAFETY_CATS = ["fall_risk", "medication", "pressure_injury", "infection", 
 const INCIDENT_TYPES = ["medication", "falls", "equipment", "pressure_injury", "infection", "behaviour", "documentation", "other"];
 const titleCase = (s: string) => s.replace(/_/g, " ").replace(/\b\w/g, ch => ch.toUpperCase());
 const input = "w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/40";
-const btn = "px-3.5 py-2 rounded-lg bg-emerald-600 text-white text-sm font-medium hover:bg-emerald-700 disabled:opacity-50";
-const tab = (on: boolean) => `px-3 py-1.5 rounded-lg text-xs font-medium ${on ? "bg-emerald-600 text-white" : "bg-white border border-gray-300 text-gray-600 hover:bg-gray-50"}`;
+const btn = "px-3.5 py-2 rounded-lg bg-[var(--cmp-color-success)] text-white text-sm font-medium hover:bg-emerald-700 disabled:opacity-50";
+const tab = (on: boolean) => `px-3 py-1.5 rounded-lg text-xs font-medium ${on ? "bg-[var(--cmp-color-success)] text-white" : "bg-white border border-gray-300 text-gray-600 hover:bg-gray-50"}`;
 
 export default function RaiseSafety({ patients }: { patients: { id: string; label: string }[] }) {
   const router = useRouter();
@@ -50,7 +50,7 @@ export default function RaiseSafety({ patients }: { patients: { id: string; labe
         <button className={tab(kind === "alert")} onClick={() => setKind(kind === "alert" ? "" : "alert")}>🛡️ Safety alert</button>
         <button className={tab(kind === "incident")} onClick={() => setKind(kind === "incident" ? "" : "incident")}>🚩 Incident report</button>
       </div>
-      {msg && <p className="text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">{msg}</p>}
+      {msg && <p className="text-sm text-[var(--cmp-text-warning)] bg-[var(--cmp-surface-warning)] border border-[var(--cmp-color-warning)] rounded-lg px-3 py-2">{msg}</p>}
       {kind !== "" && (
         <div className="space-y-2">
           <div className="grid sm:grid-cols-3 gap-2">

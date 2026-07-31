@@ -15,14 +15,14 @@ export const dynamic = "force-dynamic";
 // store): the forward Audit Calendar (audits has no scheduled_date) and the Evidence repository/completeness.
 /* eslint-disable @typescript-eslint/no-explicit-any */
 const card = "bg-white rounded-xl border border-gray-200";
-const pctTone = (p: number | null) => (p == null ? "text-gray-300" : p >= 85 ? "text-emerald-600" : p >= 70 ? "text-amber-600" : "text-rose-600");
+const pctTone = (p: number | null) => (p == null ? "text-gray-300" : p >= 85 ? "text-[var(--cmp-text-success)]" : p >= 70 ? "text-[var(--cmp-text-warning)]" : "text-[var(--cmp-text-error)]");
 const barTone = (p: number) => (p >= 85 ? "#10b981" : p >= 70 ? "#f59e0b" : "#ef4444");
-const statusTone = (s: string) => (s === "completed" ? "bg-emerald-100 text-emerald-700" : s === "in_progress" ? "bg-sky-100 text-sky-700" : "bg-amber-100 text-amber-700");
+const statusTone = (s: string) => (s === "completed" ? "bg-[var(--cmp-surface-success)] text-emerald-700" : s === "in_progress" ? "bg-[var(--cmp-surface-information)] text-[var(--cmp-text-information)]" : "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]");
 const QUICK = [
-  { label: "Create Audit", sub: "Schedule a new audit", icon: "🗓️", tint: "bg-emerald-50", href: "/quality-accreditation" },
-  { label: "Audit Library", sub: "Browse audit templates", icon: "📚", tint: "bg-sky-50", href: "/quality-accreditation" },
+  { label: "Create Audit", sub: "Schedule a new audit", icon: "🗓️", tint: "bg-[var(--cmp-surface-success)]", href: "/quality-accreditation" },
+  { label: "Audit Library", sub: "Browse audit templates", icon: "📚", tint: "bg-[var(--cmp-surface-information)]", href: "/quality-accreditation" },
   { label: "Active Audits", sub: "Manage ongoing audits", icon: "✅", tint: "bg-teal-50", href: "/quality-accreditation" },
-  { label: "Findings Register", sub: "View and manage findings", icon: "📋", tint: "bg-orange-50", href: "/quality-accreditation" },
+  { label: "Findings Register", sub: "View and manage findings", icon: "📋", tint: "bg-[var(--cmp-surface-warning)]", href: "/quality-accreditation" },
   { label: "CAPA Centre", sub: "Corrective actions", icon: "🗂️", tint: "bg-violet-50", href: "/unit-manager/capa" },
   { label: "Evidence Repository", sub: "Browse evidence", icon: "📁", tint: "bg-pink-50", href: "/quality-accreditation" },
   { label: "Reports", sub: "Generate audit reports", icon: "📊", tint: "bg-indigo-50", href: "/unit-manager/reports" },
@@ -40,7 +40,7 @@ function Delta({ v, unit = "%", prev, invert }: { v: number | null | undefined; 
   if (v == null) return <span className="text-[10px] text-gray-300">no prior period</span>;
   if (v === 0) return <span className="text-[10px] text-gray-400">no change vs {prev}</span>;
   const good = invert ? v < 0 : v > 0;
-  return <span className={`text-[10px] font-medium ${good ? "text-emerald-600" : "text-rose-600"}`}>{v > 0 ? "↑" : "↓"} {Math.abs(v)}{unit} vs {prev}</span>;
+  return <span className={`text-[10px] font-medium ${good ? "text-[var(--cmp-text-success)]" : "text-[var(--cmp-text-error)]"}`}>{v > 0 ? "↑" : "↓"} {Math.abs(v)}{unit} vs {prev}</span>;
 }
 function Kpi({ icon, tint, label, value, unit, sub, tone, spark, sparkColor, delta, prev, deltaInvert }: any) {
   return (
@@ -93,14 +93,14 @@ export default async function AuditCentre() {
   const header = (
     <>
       <div className="flex items-start justify-between gap-3 flex-wrap">
-        <div className="flex items-center gap-2"><span className="w-9 h-9 rounded-lg bg-emerald-50 flex items-center justify-center text-lg">✅</span><div><h1 className="text-2xl font-bold text-gray-900 tracking-tight">Audit &amp; Compliance Centre</h1><p className="text-sm text-gray-500">Plan, execute and monitor audits to ensure compliance and drive continuous improvement</p></div></div>
-        <div className="flex items-center gap-2"><UnitFilters departments={departments} /><Link href="/unit-manager/quality/audits" className="text-xs border border-gray-200 rounded-lg px-3 py-2 text-gray-600 hover:bg-gray-50">↻ Refresh</Link><Link href="/quality-accreditation" className="text-xs bg-emerald-600 text-white rounded-lg px-3 py-2 hover:bg-emerald-700 font-medium">+ Schedule Audit</Link></div>
+        <div className="flex items-center gap-2"><span className="w-9 h-9 rounded-lg bg-[var(--cmp-surface-success)] flex items-center justify-center text-lg">✅</span><div><h1 className="text-2xl font-bold text-gray-900 tracking-tight">Audit &amp; Compliance Centre</h1><p className="text-sm text-gray-500">Plan, execute and monitor audits to ensure compliance and drive continuous improvement</p></div></div>
+        <div className="flex items-center gap-2"><UnitFilters departments={departments} /><Link href="/unit-manager/quality/audits" className="text-xs border border-gray-200 rounded-lg px-3 py-2 text-gray-600 hover:bg-gray-50">↻ Refresh</Link><Link href="/quality-accreditation" className="text-xs bg-[var(--cmp-color-success)] text-white rounded-lg px-3 py-2 hover:bg-emerald-700 font-medium">+ Schedule Audit</Link></div>
       </div>
       <QualityTabs />
     </>
   );
 
-  if (!d.provisioned) return <div className="space-y-4">{header}<div className="bg-amber-50 border border-amber-200 rounded-xl p-6"><p className="font-semibold text-amber-900">⚙️ Audit store not provisioned</p><p className="text-sm text-amber-800 mt-1">Apply migration 034 (audits / audit_findings) to enable the audit centre.</p></div></div>;
+  if (!d.provisioned) return <div className="space-y-4">{header}<div className="bg-[var(--cmp-surface-warning)] border border-[var(--cmp-color-warning)] rounded-xl p-6"><p className="font-semibold text-amber-900">⚙️ Audit store not provisioned</p><p className="text-sm text-amber-800 mt-1">Apply migration 034 (audits / audit_findings) to enable the audit centre.</p></div></div>;
 
   const k = d.kpis, prev = d.trend.months[10] ?? "prev", h = d.highlights;
 
@@ -110,11 +110,11 @@ export default async function AuditCentre() {
 
       {/* ── KPI ribbon (8) ─────────────────────────────────────────────────── */}
       <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-8 gap-3">
-        <Kpi icon="📊" tint="bg-emerald-50" label="Overall Compliance" value={k.overallCompliance != null ? `${k.overallCompliance}%` : "—"} tone={pctTone(k.overallCompliance)} spark={k.complianceSpark} sparkColor="#10b981" delta={k.complianceDelta} prev={prev} deltaInvert={false} />
-        <Kpi icon="🗓️" tint="bg-sky-50" label="Audits Scheduled" value={k.scheduled} sub="planned / pending" />
+        <Kpi icon="📊" tint="bg-[var(--cmp-surface-success)]" label="Overall Compliance" value={k.overallCompliance != null ? `${k.overallCompliance}%` : "—"} tone={pctTone(k.overallCompliance)} spark={k.complianceSpark} sparkColor="#10b981" delta={k.complianceDelta} prev={prev} deltaInvert={false} />
+        <Kpi icon="🗓️" tint="bg-[var(--cmp-surface-information)]" label="Audits Scheduled" value={k.scheduled} sub="planned / pending" />
         <Kpi icon="✅" tint="bg-teal-50" label="Audits Completed" value={k.completed} sub={`${k.completedPct}% of total`} />
-        <Kpi icon="⏰" tint="bg-rose-50" label="Overdue Audits" value={k.overdue} tone={k.overdue ? "text-rose-600" : "text-gray-400"} sub=">30d open (proxy)" />
-        <Kpi icon="🚩" tint="bg-orange-50" label="High Risk Findings" value={k.highRiskFindings} tone={k.highRiskFindings ? "text-orange-600" : "text-gray-400"} sub={`${k.repeatFindings} repeat`} />
+        <Kpi icon="⏰" tint="bg-[var(--cmp-surface-error)]" label="Overdue Audits" value={k.overdue} tone={k.overdue ? "text-[var(--cmp-text-error)]" : "text-gray-400"} sub=">30d open (proxy)" />
+        <Kpi icon="🚩" tint="bg-[var(--cmp-surface-warning)]" label="High Risk Findings" value={k.highRiskFindings} tone={k.highRiskFindings ? "text-[var(--cmp-text-warning)]" : "text-gray-400"} sub={`${k.repeatFindings} repeat`} />
         <Kpi icon="🗂️" tint="bg-violet-50" label="CAPAs Generated" value={k.capasGenerated} sub={`${k.capasTotal} total`} />
         <Kpi icon="📁" tint="bg-pink-50" label="Evidence Complete" value="—" tone="text-gray-300" sub="repository: next-phase" />
         <Kpi icon="🏅" tint="bg-indigo-50" label="Accreditation" value={k.accreditationScore != null ? `${k.accreditationScore}%` : "—"} tone={pctTone(k.accreditationScore)} sub={k.surveyDays != null ? `survey in ${k.surveyDays}d` : "readiness"} />
@@ -126,7 +126,7 @@ export default async function AuditCentre() {
           <h3 className="font-semibold text-gray-900 text-sm mb-1">Audit Compliance Trend <span className="text-[10px] text-gray-400 font-normal">last 12 months</span></h3>
           {d.hasData ? (
             <div className="flex gap-3">
-              <div className="flex-1 min-w-0"><ComplianceTrend months={d.trend.months} compliance={d.trend.compliance} target={d.trend.target} /><div className="flex gap-3 text-[10px] text-gray-500 mt-1"><span className="flex items-center gap-1"><span className="w-3 h-0.5 bg-emerald-500" />Compliance %</span><span className="flex items-center gap-1"><span className="w-3 h-0 border-t border-dashed border-blue-500" />Target {d.trend.target}%</span></div></div>
+              <div className="flex-1 min-w-0"><ComplianceTrend months={d.trend.months} compliance={d.trend.compliance} target={d.trend.target} /><div className="flex gap-3 text-[10px] text-gray-500 mt-1"><span className="flex items-center gap-1"><span className="w-3 h-0.5 bg-[var(--cmp-color-success)]" />Compliance %</span><span className="flex items-center gap-1"><span className="w-3 h-0 border-t border-dashed border-blue-500" />Target {d.trend.target}%</span></div></div>
               <div className="w-28 shrink-0 space-y-2 text-[10px]">
                 {h.best && <Hl label="Best" name={h.best.name} v={`${h.best.compliance}%`} tone="emerald" />}
                 {h.lowest && <Hl label="Lowest" name={h.lowest.name} v={`${h.lowest.compliance}%`} tone="rose" />}
@@ -153,7 +153,7 @@ export default async function AuditCentre() {
         <div className={`${card} p-5`}>
           <h3 className="font-semibold text-gray-900 text-sm mb-3">Top Audit Areas by Compliance</h3>
           {d.areas.length ? <div className="space-y-2">{d.areas.map((a: any) => (
-            <div key={a.name} className="flex items-center gap-2 text-xs"><span className="text-gray-600 w-32 truncate" title={a.name}>{a.name}</span><div className="flex-1 h-2 rounded-full bg-gray-100 overflow-hidden"><div className="h-full rounded-full" style={{ width: `${a.compliance}%`, background: barTone(a.compliance) }} /></div><b className={`tabular-nums w-9 text-right ${pctTone(a.compliance)}`}>{a.compliance}%</b><span className={`w-9 text-right tabular-nums text-[10px] ${a.change == null ? "text-gray-300" : a.change >= 0 ? "text-emerald-600" : "text-rose-600"}`}>{a.change == null ? "—" : `${a.change >= 0 ? "↑" : "↓"}${Math.abs(a.change)}%`}</span></div>
+            <div key={a.name} className="flex items-center gap-2 text-xs"><span className="text-gray-600 w-32 truncate" title={a.name}>{a.name}</span><div className="flex-1 h-2 rounded-full bg-gray-100 overflow-hidden"><div className="h-full rounded-full" style={{ width: `${a.compliance}%`, background: barTone(a.compliance) }} /></div><b className={`tabular-nums w-9 text-right ${pctTone(a.compliance)}`}>{a.compliance}%</b><span className={`w-9 text-right tabular-nums text-[10px] ${a.change == null ? "text-gray-300" : a.change >= 0 ? "text-[var(--cmp-text-success)]" : "text-[var(--cmp-text-error)]"}`}>{a.change == null ? "—" : `${a.change >= 0 ? "↑" : "↓"}${Math.abs(a.change)}%`}</span></div>
           ))}</div> : <p className="text-sm text-gray-400 py-8 text-center">No audit areas scored.</p>}
         </div>
       </div>
@@ -192,7 +192,7 @@ export default async function AuditCentre() {
         <div className={`${card} p-5`}>
           <h3 className="font-semibold text-gray-900 text-sm mb-3">Overdue Items</h3>
           <div className="space-y-2">{d.overdueItems.map((o: any) => (
-            <div key={o.label} className="flex items-center justify-between text-xs"><span className="text-gray-600">{o.label}</span><b className={`tabular-nums ${o.n ? "text-rose-600" : "text-gray-400"}`}>{o.n}</b></div>
+            <div key={o.label} className="flex items-center justify-between text-xs"><span className="text-gray-600">{o.label}</span><b className={`tabular-nums ${o.n ? "text-[var(--cmp-text-error)]" : "text-gray-400"}`}>{o.n}</b></div>
           ))}</div>
         </div>
       </div>
@@ -202,21 +202,21 @@ export default async function AuditCentre() {
         <div className={`${card} p-5`}>
           <h3 className="font-semibold text-gray-900 text-sm mb-3">Quick Access</h3>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-2">{QUICK.map(q => (
-            <Link key={q.label} href={q.href} className="rounded-lg border border-gray-100 p-3 hover:border-emerald-200 hover:shadow-sm transition-all text-center"><span className={`w-9 h-9 rounded-lg ${q.tint} flex items-center justify-center text-base mx-auto mb-1.5`}>{q.icon}</span><p className="text-[11px] font-medium text-gray-800 leading-tight">{q.label}</p><p className="text-[9px] text-gray-400 mt-0.5 leading-tight">{q.sub}</p></Link>
+            <Link key={q.label} href={q.href} className="rounded-lg border border-gray-100 p-3 hover:border-[var(--cmp-color-success)] hover:shadow-sm transition-all text-center"><span className={`w-9 h-9 rounded-lg ${q.tint} flex items-center justify-center text-base mx-auto mb-1.5`}>{q.icon}</span><p className="text-[11px] font-medium text-gray-800 leading-tight">{q.label}</p><p className="text-[9px] text-gray-400 mt-0.5 leading-tight">{q.sub}</p></Link>
           ))}</div>
         </div>
 
         <div className={`${card} p-5`}>
           <div className="flex items-center gap-2 mb-3"><span className="w-7 h-7 rounded-lg bg-violet-50 flex items-center justify-center text-sm">🤖</span><h3 className="font-semibold text-gray-900 text-sm">AI Audit Insights</h3><span className="text-[10px] text-violet-600">rule-based</span></div>
           {d.ai.length ? <div className="space-y-2">{d.ai.map((a: any, i: number) => (
-            <div key={i} className="flex items-start gap-2 rounded-lg border border-gray-100 p-2.5"><span className={`w-1.5 h-1.5 rounded-full mt-1.5 shrink-0 ${a.tone === "rose" ? "bg-rose-500" : a.tone === "amber" ? "bg-amber-400" : a.tone === "sky" ? "bg-sky-400" : "bg-emerald-500"}`} /><div className="min-w-0 flex-1"><p className="text-xs font-medium text-gray-800 leading-snug">{a.text}</p><p className="text-[10px] text-gray-400">{a.detail}</p></div><span className="text-[10px] text-gray-400 shrink-0">conf {a.confidence}%</span></div>
+            <div key={i} className="flex items-start gap-2 rounded-lg border border-gray-100 p-2.5"><span className={`w-1.5 h-1.5 rounded-full mt-1.5 shrink-0 ${a.tone === "rose" ? "bg-[var(--cmp-color-error)]" : a.tone === "amber" ? "bg-[var(--cmp-color-warning)]" : a.tone === "sky" ? "bg-[var(--cmp-color-information)]" : "bg-[var(--cmp-color-success)]"}`} /><div className="min-w-0 flex-1"><p className="text-xs font-medium text-gray-800 leading-snug">{a.text}</p><p className="text-[10px] text-gray-400">{a.detail}</p></div><span className="text-[10px] text-gray-400 shrink-0">conf {a.confidence}%</span></div>
           ))}</div> : <p className="text-sm text-gray-400 py-6 text-center">No audit signals to action right now.</p>}
         </div>
       </div>
 
       <div className="flex items-center justify-between flex-wrap gap-2 text-[10px] text-gray-400 pb-4">
         <span>Data sources: Audit Repository · CAPA &amp; Improvement · Incident Management · Accreditation Readiness · Clinical Indicators</span>
-        <span className="flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-emerald-500" /> Audit store live · consolidation over audits / audit_findings / capa_actions (migration 034)</span>
+        <span className="flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-[var(--cmp-color-success)]" /> Audit store live · consolidation over audits / audit_findings / capa_actions (migration 034)</span>
       </div>
     </div>
   );
@@ -226,5 +226,5 @@ function Lg({ color, label, v }: { color: string; label: string; v: any }) {
   return <div className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-sm shrink-0" style={{ background: color }} /><span className="text-gray-500 flex-1">{label}</span><b className="tabular-nums text-gray-700">{v}</b></div>;
 }
 function Hl({ label, name, v, tone }: { label: string; name: string; v: string; tone: string }) {
-  return <div><p className="text-gray-400">{label}</p><div className="flex items-center justify-between gap-1"><span className="text-gray-700 truncate" title={name}>{name}</span><b className={tone === "emerald" ? "text-emerald-600" : "text-rose-600"}>{v}</b></div></div>;
+  return <div><p className="text-gray-400">{label}</p><div className="flex items-center justify-between gap-1"><span className="text-gray-700 truncate" title={name}>{name}</span><b className={tone === "emerald" ? "text-[var(--cmp-text-success)]" : "text-[var(--cmp-text-error)]"}>{v}</b></div></div>;
 }

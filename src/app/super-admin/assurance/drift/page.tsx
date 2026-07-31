@@ -9,8 +9,8 @@ import { loadCompetencyDrift } from "@/lib/assurance/competency-drift";
 export const dynamic = "force-dynamic";
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
-const driftTone = (n: number) => (n >= 40 ? "text-rose-600" : n >= 20 ? "text-amber-600" : "text-emerald-600");
-const rateTone = (n: number) => (n >= 50 ? "bg-rose-500" : n >= 25 ? "bg-amber-500" : "bg-emerald-500");
+const driftTone = (n: number) => (n >= 40 ? "text-[var(--cmp-text-error)]" : n >= 20 ? "text-[var(--cmp-text-warning)]" : "text-[var(--cmp-text-success)]");
+const rateTone = (n: number) => (n >= 50 ? "bg-[var(--cmp-color-error)]" : n >= 25 ? "bg-[var(--cmp-color-warning)]" : "bg-[var(--cmp-color-success)]");
 const fmt = (s: string | null) => (s ? String(s).replace(/_/g, " ") : "—");
 
 export default async function CompetencyDriftPage() {
@@ -38,7 +38,7 @@ export default async function CompetencyDriftPage() {
       </div>
 
       {!q.provisioned ? (
-        <div className="bg-amber-50 border border-amber-100 rounded-xl p-4"><p className="text-[13px] text-amber-900">Competency decision data isn&apos;t provisioned — drift reads <code className="text-[11px]">competency_decisions</code>.</p></div>
+        <div className="bg-[var(--cmp-surface-warning)] border border-[var(--cmp-color-warning)] rounded-xl p-4"><p className="text-[13px] text-amber-900">Competency decision data isn&apos;t provisioned — drift reads <code className="text-[11px]">competency_decisions</code>.</p></div>
       ) : q.empty ? (
         <div className="bg-white border border-gray-100 rounded-xl p-6"><p className="text-sm text-gray-400">No competency decisions recorded yet. Once assessments produce decisions over time, drift analytics populate here automatically.</p></div>
       ) : (
@@ -47,10 +47,10 @@ export default async function CompetencyDriftPage() {
             {[
               { label: "Drift index", value: q.kpis.driftIndex, tone: driftTone(q.kpis.driftIndex), sub: "0 = stable" },
               { label: "Competencies held", value: q.kpis.assessed, tone: "text-gray-900", sub: `${q.kpis.achievedPct}% current` },
-              { label: "Expired", value: q.kpis.expired, tone: "text-rose-600", sub: "lapsed" },
-              { label: "Expiring ≤30d", value: q.kpis.expiring, tone: "text-amber-600", sub: "at risk" },
-              { label: "Decayed", value: q.kpis.decayed, tone: q.kpis.decayed ? "text-rose-600" : "text-gray-900", sub: `${q.kpis.improved} improved` },
-              { label: "High-risk staff", value: q.kpis.highRiskStaff, tone: q.kpis.highRiskStaff ? "text-rose-600" : "text-gray-900", sub: "critical gaps" },
+              { label: "Expired", value: q.kpis.expired, tone: "text-[var(--cmp-text-error)]", sub: "lapsed" },
+              { label: "Expiring ≤30d", value: q.kpis.expiring, tone: "text-[var(--cmp-text-warning)]", sub: "at risk" },
+              { label: "Decayed", value: q.kpis.decayed, tone: q.kpis.decayed ? "text-[var(--cmp-text-error)]" : "text-gray-900", sub: `${q.kpis.improved} improved` },
+              { label: "High-risk staff", value: q.kpis.highRiskStaff, tone: q.kpis.highRiskStaff ? "text-[var(--cmp-text-error)]" : "text-gray-900", sub: "critical gaps" },
             ].map(k => (
               <div key={k.label} className={`${card} p-3.5`}><p className={`text-xl font-bold tabular-nums ${k.tone}`}>{k.value}</p><p className="text-[10px] text-gray-400 font-medium mt-0.5 leading-tight">{k.label}</p><p className="text-[9px] text-gray-300 leading-tight">{k.sub}</p></div>
             ))}
@@ -83,8 +83,8 @@ export default async function CompetencyDriftPage() {
               ) : (
                 <>
                   <div className="flex items-center gap-3 mb-3">
-                    <div className="flex-1 text-center"><p className="text-2xl font-bold text-emerald-600 tabular-nums">{q.kpis.improved}</p><p className="text-[10px] text-gray-400">improved ↑</p></div>
-                    <div className="flex-1 text-center"><p className="text-2xl font-bold text-rose-600 tabular-nums">{q.kpis.decayed}</p><p className="text-[10px] text-gray-400">decayed ↓</p></div>
+                    <div className="flex-1 text-center"><p className="text-2xl font-bold text-[var(--cmp-text-success)] tabular-nums">{q.kpis.improved}</p><p className="text-[10px] text-gray-400">improved ↑</p></div>
+                    <div className="flex-1 text-center"><p className="text-2xl font-bold text-[var(--cmp-text-error)] tabular-nums">{q.kpis.decayed}</p><p className="text-[10px] text-gray-400">decayed ↓</p></div>
                     <div className="flex-1 text-center"><p className="text-2xl font-bold text-gray-700 tabular-nums">{q.reassessed}</p><p className="text-[10px] text-gray-400">reassessed</p></div>
                   </div>
                   <div className="divide-y divide-gray-50 border-t border-gray-50">
@@ -92,7 +92,7 @@ export default async function CompetencyDriftPage() {
                       <div key={i} className="flex items-center gap-2 py-1.5">
                         <span className="text-[11px] text-gray-700 truncate flex-1">{d.name}</span>
                         <span className="text-[10px] text-gray-400 truncate max-w-[120px]">{d.competency}</span>
-                        <span className="text-[9px] font-semibold text-rose-600 shrink-0">{fmt(d.from)} → {fmt(d.to)}</span>
+                        <span className="text-[9px] font-semibold text-[var(--cmp-text-error)] shrink-0">{fmt(d.from)} → {fmt(d.to)}</span>
                       </div>
                     ))}
                     {q.recentDecays.length === 0 && <p className="text-[11px] text-gray-400 py-2 text-center">No decays — movement is upward. 🎉</p>}

@@ -15,11 +15,11 @@ export const dynamic = "force-dynamic";
 const card = "bg-white rounded-xl border border-gray-200";
 const NONE = "00000000-0000-0000-0000-000000000000";
 const ACT: Record<string, { label: string; tone: string }> = {
-  educator_validate: { label: "Competency validated", tone: "bg-emerald-50 text-emerald-700" },
-  validate: { label: "Competency validated", tone: "bg-emerald-50 text-emerald-700" },
-  educator_return: { label: "Competency returned", tone: "bg-amber-50 text-amber-700" },
-  conduct_assessment: { label: "Assessment conducted", tone: "bg-blue-50 text-blue-700" },
-  schedule_assessment: { label: "Assessment scheduled", tone: "bg-sky-50 text-sky-700" },
+  educator_validate: { label: "Competency validated", tone: "bg-[var(--cmp-surface-success)] text-emerald-700" },
+  validate: { label: "Competency validated", tone: "bg-[var(--cmp-surface-success)] text-emerald-700" },
+  educator_return: { label: "Competency returned", tone: "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]" },
+  conduct_assessment: { label: "Assessment conducted", tone: "bg-[var(--cmp-surface-information)] text-blue-700" },
+  schedule_assessment: { label: "Assessment scheduled", tone: "bg-[var(--cmp-surface-information)] text-[var(--cmp-text-information)]" },
   grant_assessor_authorization: { label: "Assessor authorised", tone: "bg-violet-50 text-violet-700" },
 };
 const ACT_KEYS = Object.keys(ACT);
@@ -61,11 +61,11 @@ export default async function DevHistory() {
     <div className="space-y-4">
       {header}
       {!provisioned ? (
-        <div className="bg-amber-50 border border-amber-200 rounded-xl p-6"><p className="font-semibold text-amber-900">⚙️ Audit store not provisioned</p></div>
+        <div className="bg-[var(--cmp-surface-warning)] border border-[var(--cmp-color-warning)] rounded-xl p-6"><p className="font-semibold text-amber-900">⚙️ Audit store not provisioned</p></div>
       ) : (<>
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
           <Kpi label="Events (7d)" value={recent} />
-          <Kpi label="Validations" value={validations} tone="text-emerald-600" />
+          <Kpi label="Validations" value={validations} tone="text-[var(--cmp-text-success)]" />
           <Kpi label="Total logged" value={rows.length} />
         </div>
 

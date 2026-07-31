@@ -9,7 +9,7 @@ export const qcard = "bg-white rounded-xl border border-gray-200";
 export function QHeader({ code, title, subtitle }: { code: string; title: string; subtitle: string }) {
   return (
     <div className="flex items-center gap-2">
-      <span className="w-9 h-9 rounded-lg bg-rose-50 flex items-center justify-center text-lg">🛡️</span>
+      <span className="w-9 h-9 rounded-lg bg-[var(--cmp-surface-error)] flex items-center justify-center text-lg">🛡️</span>
       <div><h1 className="text-2xl font-bold text-gray-900 tracking-tight">{title}</h1><p className="text-sm text-gray-500">{code} · {subtitle}</p></div>
     </div>
   );
@@ -63,7 +63,7 @@ export function TrendLegend({ meta, totals }: { meta: { key: string; label: stri
   return <div className="flex flex-wrap gap-x-3 gap-y-1 mt-3">{meta.map(m => <span key={m.key} className="flex items-center gap-1 text-[11px] text-gray-500"><span className="w-2 h-2 rounded-sm" style={{ background: m.color }} />{m.label}{totals ? <b className="tabular-nums text-gray-700">{totals[m.key] ?? 0}</b> : null}</span>)}</div>;
 }
 
-export const riskCellTone = (score: number) => (score >= 15 ? "bg-rose-500 text-white" : score >= 10 ? "bg-orange-400 text-white" : score >= 5 ? "bg-amber-300 text-amber-900" : "bg-emerald-400/80 text-emerald-950");
+export const riskCellTone = (score: number) => (score >= 15 ? "bg-[var(--cmp-color-error)] text-white" : score >= 10 ? "bg-[var(--cmp-color-warning)] text-white" : score >= 5 ? "bg-amber-300 text-amber-900" : "bg-[var(--cmp-color-success)]/80 text-emerald-950");
 
 // 5×5 risk heat map. `count(l, im)` returns the cell count for likelihood l (1-5) × impact im (1-5).
 export function RiskHeat({ count }: { count: (l: number, im: number) => number }) {
@@ -80,7 +80,7 @@ export function RiskHeat({ count }: { count: (l: number, im: number) => number }
   );
 }
 
-const RAG_TONE: Record<string, string> = { green: "bg-emerald-50 text-emerald-700 border-emerald-100", amber: "bg-amber-50 text-amber-700 border-amber-100", red: "bg-rose-50 text-rose-700 border-rose-100", gray: "bg-gray-50 text-gray-500 border-gray-100" };
+const RAG_TONE: Record<string, string> = { green: "bg-[var(--cmp-surface-success)] text-emerald-700 border-[var(--cmp-color-success)]", amber: "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)] border-[var(--cmp-color-warning)]", red: "bg-[var(--cmp-surface-error)] text-[var(--cmp-text-error)] border-[var(--cmp-color-error)]", gray: "bg-gray-50 text-gray-500 border-gray-100" };
 export function Rag({ tone, label }: { tone: "green" | "amber" | "red" | "gray"; label: string }) {
   return <span className={`inline-block text-[10px] font-semibold rounded-full px-2 py-0.5 border ${RAG_TONE[tone]}`}>{label}</span>;
 }
@@ -90,5 +90,5 @@ export function NextPhase({ children }: { children: any }) {
 }
 
 export function CrossLink({ href, children }: { href: string; children: any }) {
-  return <Link href={href} className="inline-block text-sm font-medium text-rose-700 hover:underline">{children} →</Link>;
+  return <Link href={href} className="inline-block text-sm font-medium text-[var(--cmp-text-error)] hover:underline">{children} →</Link>;
 }

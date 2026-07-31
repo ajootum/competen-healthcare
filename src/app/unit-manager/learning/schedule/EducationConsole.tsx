@@ -44,7 +44,7 @@ export default function EducationConsole({ staff, plans, pending }: { staff: any
 
   return (
     <>
-      {msg && <div className={`fixed bottom-4 right-4 z-50 text-sm rounded-lg px-4 py-2.5 shadow-lg ${msg.kind === "ok" ? "bg-emerald-600 text-white" : "bg-rose-600 text-white"}`}>{msg.text}</div>}
+      {msg && <div className={`fixed bottom-4 right-4 z-50 text-sm rounded-lg px-4 py-2.5 shadow-lg ${msg.kind === "ok" ? "bg-[var(--cmp-color-success)] text-white" : "bg-[var(--cmp-color-error)] text-white"}`}>{msg.text}</div>}
 
       <div className={`${card} p-5`}>
         <h3 className="font-semibold text-gray-900 text-sm mb-3">Create Education Plan</h3>
@@ -56,7 +56,7 @@ export default function EducationConsole({ staff, plans, pending }: { staff: any
           <label className="text-xs text-gray-500">Start date<input type="date" className={input} value={f.start_date} onChange={e => set("start_date", e.target.value)} /></label>
           <label className="text-xs text-gray-500">Expected completion<input type="date" className={input} value={f.expected_completion} onChange={e => set("expected_completion", e.target.value)} /></label>
         </div>
-        <div className="flex justify-end mt-3"><button onClick={createPlan} disabled={busy || !f.user_id || !f.programme_title.trim()} className="text-sm rounded-lg bg-emerald-600 text-white px-4 py-2 hover:bg-emerald-700 disabled:opacity-50">Create plan</button></div>
+        <div className="flex justify-end mt-3"><button onClick={createPlan} disabled={busy || !f.user_id || !f.programme_title.trim()} className="text-sm rounded-lg bg-[var(--cmp-color-success)] text-white px-4 py-2 hover:bg-emerald-700 disabled:opacity-50">Create plan</button></div>
       </div>
 
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
@@ -66,7 +66,7 @@ export default function EducationConsole({ staff, plans, pending }: { staff: any
             <div className="space-y-2">{plans.map((p: any) => (
               <div key={p.id} className="rounded-lg border border-gray-100 p-3">
                 <div className="flex items-center justify-between gap-2"><div className="min-w-0"><p className="text-xs font-medium text-gray-800 truncate">{p.title}</p><p className="text-[10px] text-gray-400 truncate">{p.name}{p.institution ? ` · ${p.institution}` : ""}</p></div><span className="text-xs font-semibold text-gray-700 tabular-nums shrink-0">{p.progress}%</span></div>
-                <div className="w-full h-1.5 rounded-full bg-gray-100 overflow-hidden mt-1.5"><div className="h-full bg-emerald-500" style={{ width: `${p.progress}%` }} /></div>
+                <div className="w-full h-1.5 rounded-full bg-gray-100 overflow-hidden mt-1.5"><div className="h-full bg-[var(--cmp-color-success)]" style={{ width: `${p.progress}%` }} /></div>
                 <div className="flex flex-wrap items-center gap-2 mt-2 text-[11px]">
                   <button onClick={() => addMilestone(p.id)} className="text-emerald-700 hover:underline">+ Milestone</button>
                   <button onClick={() => addLeave(p)} className="text-emerald-700 hover:underline">+ Study leave</button>
@@ -86,7 +86,7 @@ export default function EducationConsole({ staff, plans, pending }: { staff: any
                 <div className="min-w-0"><p className="text-gray-800 truncate">{a.name} <span className="text-gray-400">· {a.kind}</span></p><p className="text-[10px] text-gray-400 truncate">{a.detail}</p></div>
                 <div className="flex items-center gap-2 shrink-0">
                   <button disabled={busy} onClick={() => patch(a.id, a.type, { decision: "approve" }, "Approved")} className="text-emerald-700 font-medium hover:underline disabled:opacity-50">Approve</button>
-                  <button disabled={busy} onClick={() => patch(a.id, a.type, { decision: "reject" }, "Rejected")} className="text-rose-700 font-medium hover:underline disabled:opacity-50">Reject</button>
+                  <button disabled={busy} onClick={() => patch(a.id, a.type, { decision: "reject" }, "Rejected")} className="text-[var(--cmp-text-error)] font-medium hover:underline disabled:opacity-50">Reject</button>
                 </div>
               </div>
             ))}</div>

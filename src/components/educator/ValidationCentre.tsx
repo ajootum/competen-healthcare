@@ -166,10 +166,10 @@ export default function ValidationCentre({ queue, archive, stats }: {
 
   const SUMMARY = [
     { icon: "🕐", tint: "bg-purple-50", label: "Pending Reviews", v: String(stats.pending), sub: "awaiting your review" },
-    { icon: "🚩", tint: "bg-red-50", label: "High Priority", v: String(stats.highPriority), sub: "failed — review first" },
-    { icon: "⏰", tint: "bg-amber-50", label: "Overdue", v: String(stats.overdue), sub: "waiting >7 days" },
-    { icon: "✅", tint: "bg-green-50", label: "Validated Today", v: String(stats.validatedToday), sub: "by you" },
-    { icon: "↩️", tint: "bg-orange-50", label: "Returned for Revision", v: String(stats.returned), sub: "needs re-assessment" },
+    { icon: "🚩", tint: "bg-[var(--cmp-surface-critical)]", label: "High Priority", v: String(stats.highPriority), sub: "failed — review first" },
+    { icon: "⏰", tint: "bg-[var(--cmp-surface-warning)]", label: "Overdue", v: String(stats.overdue), sub: "waiting >7 days" },
+    { icon: "✅", tint: "bg-[var(--cmp-surface-success)]", label: "Validated Today", v: String(stats.validatedToday), sub: "by you" },
+    { icon: "↩️", tint: "bg-[var(--cmp-surface-warning)]", label: "Returned for Revision", v: String(stats.returned), sub: "needs re-assessment" },
     { icon: "⬆️", tint: "bg-gray-50", label: "Escalated", v: "—", sub: "not tracked yet" },
   ];
 
@@ -265,7 +265,7 @@ export default function ValidationCentre({ queue, archive, stats }: {
                           style={{ backgroundColor: SCORE_COLORS[i.score] ?? "#9ca3af" }}>{i.score}</span>
                       </td>
                       <td className="px-4 py-2.5">
-                        <span className={`text-[9px] font-bold px-2 py-0.5 rounded ${i.isPassing ? "bg-green-50 text-green-600" : "bg-red-50 text-red-500"}`}>
+                        <span className={`text-[9px] font-bold px-2 py-0.5 rounded ${i.isPassing ? "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]" : "bg-[var(--cmp-surface-critical)] text-red-500"}`}>
                           {i.isPassing ? "Pass" : "Fail"}
                         </span>
                       </td>
@@ -305,7 +305,7 @@ export default function ValidationCentre({ queue, archive, stats }: {
                     <p className="text-[13px] font-semibold text-gray-900 leading-snug">{i.competency}</p>
                     <p className="text-[11px] text-gray-400 mt-0.5">{i.nurse}</p>
                   </div>
-                  <span className={`text-[9px] font-bold px-2 py-0.5 rounded shrink-0 ${i.isPassing ? "bg-blue-50 text-blue-600" : "bg-red-50 text-red-600"}`}>
+                  <span className={`text-[9px] font-bold px-2 py-0.5 rounded shrink-0 ${i.isPassing ? "bg-[var(--cmp-surface-information)] text-[var(--cmp-text-information)]" : "bg-[var(--cmp-surface-critical)] text-[var(--cmp-text-critical)]"}`}>
                     {i.isPassing ? "Medium" : "High"}
                   </span>
                 </div>
@@ -371,7 +371,7 @@ export default function ValidationCentre({ queue, archive, stats }: {
                       </div>
                     ))}
                     {selected.spread !== null && (
-                      <p className={`text-[10px] ${selected.spread >= 2 ? "text-amber-600 font-semibold" : "text-gray-400"}`}>
+                      <p className={`text-[10px] ${selected.spread >= 2 ? "text-[var(--cmp-text-warning)] font-semibold" : "text-gray-400"}`}>
                         Assessor scoring spread: {selected.spread} point{selected.spread === 1 ? "" : "s"}{selected.spread >= 2 ? " — review for consistency" : ""}
                       </p>
                     )}
@@ -407,8 +407,8 @@ export default function ValidationCentre({ queue, archive, stats }: {
                 )}
 
                 {selected.returned && selected.educatorNotes && (
-                  <div className="mt-3 bg-orange-50 border border-orange-100 rounded-xl p-3">
-                    <p className="text-[9px] font-bold text-orange-600 uppercase tracking-widest mb-1">Previous return notes</p>
+                  <div className="mt-3 bg-[var(--cmp-surface-warning)] border border-[var(--cmp-color-warning)] rounded-xl p-3">
+                    <p className="text-[9px] font-bold text-[var(--cmp-text-warning)] uppercase tracking-widest mb-1">Previous return notes</p>
                     <p className="text-[11px] text-gray-700 whitespace-pre-line leading-snug">{selected.educatorNotes}</p>
                   </div>
                 )}
@@ -463,7 +463,7 @@ export default function ValidationCentre({ queue, archive, stats }: {
                       ) : aiState?.text ? (
                         <p className="text-[11px] text-violet-900/90 whitespace-pre-line leading-snug max-h-56 overflow-y-auto">{aiState.text}</p>
                       ) : aiState?.error ? (
-                        <p className="text-[11px] text-red-600">{aiState.error}</p>
+                        <p className="text-[11px] text-[var(--cmp-text-critical)]">{aiState.error}</p>
                       ) : (
                         <p className="text-[11px] text-violet-900/70">
                           Grounded review of this record — attempt history, assessor agreement and scoring spread — with an advisory suggestion.
@@ -491,17 +491,17 @@ export default function ValidationCentre({ queue, archive, stats }: {
                       <div className="flex flex-col gap-2">
                         <button onClick={() => act("validate", "approved")} disabled={busy || !allVerified}
                           title={allVerified ? "" : "Confirm all seven verification items first"}
-                          className="w-full text-xs font-bold text-white bg-green-600 hover:bg-green-700 py-2.5 rounded-lg transition-colors disabled:opacity-40 disabled:cursor-not-allowed">
+                          className="w-full text-xs font-bold text-white bg-[var(--cmp-color-success)] hover:bg-green-700 py-2.5 rounded-lg transition-colors disabled:opacity-40 disabled:cursor-not-allowed">
                           ✓ Approve Competency
                         </button>
                         <button onClick={() => act("validate", "approved with conditions")} disabled={busy || !allVerified || !conditions.trim()}
                           title={!conditions.trim() ? "State the conditions first" : !allVerified ? "Confirm all seven verification items first" : ""}
-                          className="w-full text-xs font-semibold text-blue-700 border border-blue-200 bg-blue-50 hover:bg-blue-100 py-2.5 rounded-lg transition-colors disabled:opacity-40 disabled:cursor-not-allowed">
+                          className="w-full text-xs font-semibold text-blue-700 border border-[var(--cmp-color-information)] bg-[var(--cmp-surface-information)] hover:bg-[var(--cmp-surface-information)] py-2.5 rounded-lg transition-colors disabled:opacity-40 disabled:cursor-not-allowed">
                           ☑ Approve with Conditions
                         </button>
                         <button onClick={() => act("return", "returned for revision")} disabled={busy || !improvements.trim()}
                           title={!improvements.trim() ? "Tell the learner what needs improving first" : ""}
-                          className="w-full text-xs font-semibold text-orange-700 border border-orange-200 bg-orange-50 hover:bg-orange-100 py-2.5 rounded-lg transition-colors disabled:opacity-40 disabled:cursor-not-allowed">
+                          className="w-full text-xs font-semibold text-orange-700 border border-[var(--cmp-color-warning)] bg-[var(--cmp-surface-warning)] hover:bg-[var(--cmp-surface-warning)] py-2.5 rounded-lg transition-colors disabled:opacity-40 disabled:cursor-not-allowed">
                           ↩ Return for Revision
                         </button>
                       </div>

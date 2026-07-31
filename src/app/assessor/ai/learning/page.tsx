@@ -59,7 +59,7 @@ export default async function LearningRecommendationsPage({ searchParams }: { se
                 {resourcesByGap.get(g.name)?.length ? (
                   <p className="text-[10px] text-teal-700 mt-1">📚 {resourcesByGap.get(g.name)!.join(" · ")}</p>
                 ) : (
-                  <p className="text-[10px] text-amber-600 mt-1">No learning resource linked yet — attach one in Studio so plans can reference it.</p>
+                  <p className="text-[10px] text-[var(--cmp-text-warning)] mt-1">No learning resource linked yet — attach one in Studio so plans can reference it.</p>
                 )}
               </div>
             ))}

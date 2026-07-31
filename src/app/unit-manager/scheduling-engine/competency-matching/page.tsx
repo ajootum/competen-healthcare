@@ -18,7 +18,7 @@ export const dynamic = "force-dynamic";
 const card = "bg-white rounded-xl border border-gray-200";
 const SUBTABS = ["Overview", "Competency Rules", "Role Profiles", "Skill Mix", "Matching Results", "Competency Gaps", "Recommendations", "Overrides", "Audit & History", "Settings"];
 const STATUS_COLOR: Record<string, string> = { Current: "#22c55e", Expiring: "#f59e0b", Expired: "#ef4444", None: "#9ca3af" };
-const STATUS_BADGE: Record<string, string> = { Current: "bg-emerald-50 text-emerald-700", Expiring: "bg-amber-50 text-amber-700", Expired: "bg-rose-50 text-rose-700", None: "bg-gray-100 text-gray-500" };
+const STATUS_BADGE: Record<string, string> = { Current: "bg-[var(--cmp-surface-success)] text-emerald-700", Expiring: "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]", Expired: "bg-[var(--cmp-surface-error)] text-[var(--cmp-text-error)]", None: "bg-gray-100 text-gray-500" };
 
 function Kpi({ label, value, sub, tone, icon }: { label: string; value: any; sub?: string; tone?: string; icon?: string }) {
   return <div className={`${card} p-4`}><div className="flex items-start justify-between"><p className="text-xs text-gray-500">{label}</p>{icon && <span className="text-base opacity-40">{icon}</span>}</div><p className={`text-2xl font-bold tabular-nums mt-1 ${tone ?? "text-gray-900"}`}>{value}</p>{sub && <p className="text-[11px] text-gray-400 mt-0.5">{sub}</p>}</div>;
@@ -47,12 +47,12 @@ export default async function CompetencyMatching() {
       </div>
       <SchedulingTabs />
       <div className="flex gap-1 overflow-x-auto -mt-1">
-        {SUBTABS.map((t, i) => <span key={t} className={`shrink-0 text-[11px] px-2.5 py-1.5 rounded-full font-medium ${i === 0 ? "bg-emerald-50 text-emerald-700" : "text-gray-300"}`} title={i === 0 ? "" : "Next phase"}>{t}</span>)}
+        {SUBTABS.map((t, i) => <span key={t} className={`shrink-0 text-[11px] px-2.5 py-1.5 rounded-full font-medium ${i === 0 ? "bg-[var(--cmp-surface-success)] text-emerald-700" : "text-gray-300"}`} title={i === 0 ? "" : "Next phase"}>{t}</span>)}
       </div>
     </>
   );
 
-  if (!d.ready) return <div className="space-y-4">{header}<div className="bg-amber-50 border border-amber-200 rounded-xl p-6"><p className="font-semibold text-amber-900">⚙️ No operational data</p></div></div>;
+  if (!d.ready) return <div className="space-y-4">{header}<div className="bg-[var(--cmp-surface-warning)] border border-[var(--cmp-color-warning)] rounded-xl p-6"><p className="font-semibold text-amber-900">⚙️ No operational data</p></div></div>;
 
   const k = d.kpis; const m = d.match;
   return (
@@ -60,12 +60,12 @@ export default async function CompetencyMatching() {
       {header}
 
       <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-3">
-        <Kpi label="Competency match" value={k.matchScore != null ? `${k.matchScore}%` : "—"} sub={k.matchScore != null ? "Roster assignments" : "No roster"} icon="🎯" tone={k.matchScore != null && k.matchScore >= 90 ? "text-emerald-600" : k.matchScore != null ? "text-amber-600" : undefined} />
-        <Kpi label="Staff current" value={k.currentPct != null ? `${k.currentPct}%` : "—"} sub={`${k.staffTotal} clinical staff`} icon="✅" tone={k.currentPct != null && k.currentPct >= 90 ? "text-emerald-600" : undefined} />
-        <Kpi label="Expired certs" value={k.expiredCerts} sub="Block assignment" icon="⛔" tone={k.expiredCerts ? "text-rose-600" : "text-emerald-600"} />
-        <Kpi label="Expiring ≤30d" value={k.expiringCerts} sub="Reassess soon" icon="⏰" tone={k.expiringCerts ? "text-amber-600" : undefined} />
-        <Kpi label="High-risk assignments" value={m?.unvalidatedCount ?? "—"} sub="Unvalidated" icon="🔺" tone={m?.unvalidatedCount ? "text-rose-600" : undefined} />
-        <Kpi label="No record" value={k.noneCount} sub="Passport incomplete" icon="📋" tone={k.noneCount ? "text-amber-600" : undefined} />
+        <Kpi label="Competency match" value={k.matchScore != null ? `${k.matchScore}%` : "—"} sub={k.matchScore != null ? "Roster assignments" : "No roster"} icon="🎯" tone={k.matchScore != null && k.matchScore >= 90 ? "text-[var(--cmp-text-success)]" : k.matchScore != null ? "text-[var(--cmp-text-warning)]" : undefined} />
+        <Kpi label="Staff current" value={k.currentPct != null ? `${k.currentPct}%` : "—"} sub={`${k.staffTotal} clinical staff`} icon="✅" tone={k.currentPct != null && k.currentPct >= 90 ? "text-[var(--cmp-text-success)]" : undefined} />
+        <Kpi label="Expired certs" value={k.expiredCerts} sub="Block assignment" icon="⛔" tone={k.expiredCerts ? "text-[var(--cmp-text-error)]" : "text-[var(--cmp-text-success)]"} />
+        <Kpi label="Expiring ≤30d" value={k.expiringCerts} sub="Reassess soon" icon="⏰" tone={k.expiringCerts ? "text-[var(--cmp-text-warning)]" : undefined} />
+        <Kpi label="High-risk assignments" value={m?.unvalidatedCount ?? "—"} sub="Unvalidated" icon="🔺" tone={m?.unvalidatedCount ? "text-[var(--cmp-text-error)]" : undefined} />
+        <Kpi label="No record" value={k.noneCount} sub="Passport incomplete" icon="📋" tone={k.noneCount ? "text-[var(--cmp-text-warning)]" : undefined} />
       </div>
 
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
@@ -79,7 +79,7 @@ export default async function CompetencyMatching() {
           ) : (
             <div className="overflow-x-auto"><table className="w-full text-xs">
               <thead><tr className="text-gray-400 text-left border-b border-gray-100"><th className="py-2 pr-3 font-medium">Unit</th><th className="py-2 pr-3 font-medium">Role</th><th className="py-2 pr-3 font-medium">Shift</th><th className="py-2 pr-3 font-medium">Assigned (unvalidated)</th><th className="py-2 font-medium">Recommended replacement</th></tr></thead>
-              <tbody>{m.highRisk.map((h: any, i: number) => (<tr key={i} className="border-b border-gray-50"><td className="py-2 pr-3 text-gray-700">{h.unit}</td><td className="py-2 pr-3 text-gray-600">{h.role}</td><td className="py-2 pr-3 text-gray-500">{h.date.slice(5)} {h.shift}</td><td className="py-2 pr-3 text-rose-600">{h.staff} ⚠</td><td className="py-2">{h.replacement ? <span className="text-emerald-700">→ {h.replacement}</span> : <span className="text-gray-400">No current-competency alternative</span>}</td></tr>))}</tbody>
+              <tbody>{m.highRisk.map((h: any, i: number) => (<tr key={i} className="border-b border-gray-50"><td className="py-2 pr-3 text-gray-700">{h.unit}</td><td className="py-2 pr-3 text-gray-600">{h.role}</td><td className="py-2 pr-3 text-gray-500">{h.date.slice(5)} {h.shift}</td><td className="py-2 pr-3 text-[var(--cmp-text-error)]">{h.staff} ⚠</td><td className="py-2">{h.replacement ? <span className="text-emerald-700">→ {h.replacement}</span> : <span className="text-gray-400">No current-competency alternative</span>}</td></tr>))}</tbody>
             </table><p className="text-[10px] text-gray-400 mt-2">Replacements suggest a competency-current clinician of the same role who isn&apos;t already on that shift. Applying a swap or authorising an override is done in the roster (next-phase inline).</p></div>
           )}
         </div>
@@ -100,7 +100,7 @@ export default async function CompetencyMatching() {
         {/* Role coverage */}
         <div className={`${card} p-5`}>
           <h3 className="text-sm font-bold text-gray-900 mb-3">Role coverage</h3>
-          {d.roleCoverage.length === 0 ? <p className="text-sm text-gray-400">No staff.</p> : <div className="space-y-2">{d.roleCoverage.map((r: any) => (<div key={r.role} className="text-xs"><div className="flex items-center justify-between mb-0.5"><span className="text-gray-700">{r.label}</span><span className="text-gray-500">{r.current}/{r.total} current{r.pct != null ? ` · ${r.pct}%` : ""}</span></div><div className="w-full h-1.5 rounded-full bg-gray-100 overflow-hidden"><div className={`h-full rounded-full ${(r.pct ?? 0) >= 90 ? "bg-emerald-500" : (r.pct ?? 0) >= 70 ? "bg-amber-400" : "bg-rose-400"}`} style={{ width: `${r.pct ?? 0}%` }} /></div></div>))}</div>}
+          {d.roleCoverage.length === 0 ? <p className="text-sm text-gray-400">No staff.</p> : <div className="space-y-2">{d.roleCoverage.map((r: any) => (<div key={r.role} className="text-xs"><div className="flex items-center justify-between mb-0.5"><span className="text-gray-700">{r.label}</span><span className="text-gray-500">{r.current}/{r.total} current{r.pct != null ? ` · ${r.pct}%` : ""}</span></div><div className="w-full h-1.5 rounded-full bg-gray-100 overflow-hidden"><div className={`h-full rounded-full ${(r.pct ?? 0) >= 90 ? "bg-[var(--cmp-color-success)]" : (r.pct ?? 0) >= 70 ? "bg-[var(--cmp-color-warning)]" : "bg-[var(--cmp-color-error)]"}`} style={{ width: `${r.pct ?? 0}%` }} /></div></div>))}</div>}
         </div>
 
         {/* Expiring / expired */}

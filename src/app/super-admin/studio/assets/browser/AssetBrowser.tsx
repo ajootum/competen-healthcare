@@ -12,10 +12,10 @@ type Overlays = Record<string, { linked: number; total: number }>;
 
 const STATUS_STYLE: Record<string, string> = {
   draft: "text-gray-500 bg-gray-50 border-gray-100",
-  in_review: "text-amber-600 bg-amber-50 border-amber-100",
-  approved: "text-blue-600 bg-blue-50 border-blue-100",
+  in_review: "text-[var(--cmp-text-warning)] bg-[var(--cmp-surface-warning)] border-[var(--cmp-color-warning)]",
+  approved: "text-[var(--cmp-text-information)] bg-[var(--cmp-surface-information)] border-[var(--cmp-color-information)]",
   published: "text-teal-700 bg-teal-50 border-teal-100",
-  active: "text-emerald-600 bg-emerald-50 border-emerald-100",
+  active: "text-[var(--cmp-text-success)] bg-[var(--cmp-surface-success)] border-[var(--cmp-color-success)]",
   archived: "text-gray-400 bg-gray-50 border-gray-100",
 };
 
@@ -95,7 +95,7 @@ export default function AssetBrowser({ initialRows, initialTotal, initialFacets,
           </div>
           <button onClick={refresh} disabled={busy} className="text-xs font-semibold text-white bg-teal-600 hover:bg-teal-700 disabled:opacity-50 rounded-lg px-4 py-2">{busy ? "Refreshing…" : "Refresh index"}</button>
         </div>
-        {empty && <p className="text-[11px] text-amber-700 bg-amber-50 border border-amber-100 rounded-lg px-3 py-2">The index is empty. Click <span className="font-semibold">Refresh index</span> to build cap_assets from the 12 source tables.</p>}
+        {empty && <p className="text-[11px] text-[var(--cmp-text-warning)] bg-[var(--cmp-surface-warning)] border border-[var(--cmp-color-warning)] rounded-lg px-3 py-2">The index is empty. Click <span className="font-semibold">Refresh index</span> to build cap_assets from the 12 source tables.</p>}
         <div className="flex flex-wrap gap-1.5 mt-2">
           {ASSET_ENGINES.map(e => (
             <Link key={e.href} href={e.href} className="text-[10px] font-semibold text-gray-500 bg-gray-50 hover:bg-teal-50 hover:text-teal-700 border border-gray-100 rounded px-2 py-1" title={e.desc}>{e.label} →</Link>
@@ -107,7 +107,7 @@ export default function AssetBrowser({ initialRows, initialTotal, initialFacets,
             <div className="flex flex-wrap gap-1.5">
               {Object.entries(overlays).map(([label, o]) => {
                 const pct = o.total ? Math.round((o.linked / o.total) * 100) : 0;
-                const tone = o.total === 0 ? "text-gray-300 border-gray-100" : o.linked === o.total ? "text-teal-700 bg-teal-50 border-teal-100" : "text-amber-700 bg-amber-50 border-amber-100";
+                const tone = o.total === 0 ? "text-gray-300 border-gray-100" : o.linked === o.total ? "text-teal-700 bg-teal-50 border-teal-100" : "text-[var(--cmp-text-warning)] bg-[var(--cmp-surface-warning)] border-[var(--cmp-color-warning)]";
                 return <span key={label} className={`text-[10px] font-semibold border rounded px-2 py-1 ${tone}`}>{label} {o.linked}/{o.total}{o.total ? ` · ${pct}%` : ""}</span>;
               })}
             </div>

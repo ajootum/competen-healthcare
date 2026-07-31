@@ -17,7 +17,7 @@ const card = "bg-white rounded-xl border border-gray-200";
 const fmt = (n: number) => n.toLocaleString();
 const dash = (n: number | null | undefined) => (n == null ? "—" : n.toLocaleString());
 const relTime = (iso?: string | null) => { if (!iso) return ""; const s = Math.floor((Date.now() - new Date(iso).getTime()) / 1000); if (s < 60) return "just now"; if (s < 3600) return `${Math.floor(s / 60)}m ago`; if (s < 86400) return `${Math.floor(s / 3600)}h ago`; return `${Math.floor(s / 86400)}d ago`; };
-const CAT_COLOR: Record<string, string> = { Authentication: "bg-blue-500", Authorization: "bg-violet-500", "Admin Actions": "bg-amber-500", "Data Access": "bg-rose-500", System: "bg-gray-400" };
+const CAT_COLOR: Record<string, string> = { Authentication: "bg-[var(--cmp-color-information)]", Authorization: "bg-violet-500", "Admin Actions": "bg-[var(--cmp-color-warning)]", "Data Access": "bg-[var(--cmp-color-error)]", System: "bg-gray-400" };
 
 export default async function SecurityIntelligenceAudit() {
   const supabase = await createClient();
@@ -32,11 +32,11 @@ export default async function SecurityIntelligenceAudit() {
   const k = d.kpis;
 
   const kpiCards = [
-    { label: "Total Audit Events", value: dash(k.totalEvents), icon: "🗒️", iconBg: "bg-blue-50" },
+    { label: "Total Audit Events", value: dash(k.totalEvents), icon: "🗒️", iconBg: "bg-[var(--cmp-surface-information)]" },
     { label: "Events (24h)", value: dash(k.events24h), icon: "📊", iconBg: "bg-teal-50" },
     { label: "Events (7d)", value: dash(k.events7d), icon: "📈", iconBg: "bg-violet-50" },
-    { label: "High-Risk (24h)", value: dash(k.highRisk24), icon: "⚠️", iconBg: "bg-rose-50", tone: (k.highRisk24 ?? 0) > 0 ? "text-rose-600" : undefined },
-    { label: "Landlord Events", value: dash(k.landlordEvents), icon: "🛰️", iconBg: "bg-sky-50" },
+    { label: "High-Risk (24h)", value: dash(k.highRisk24), icon: "⚠️", iconBg: "bg-[var(--cmp-surface-error)]", tone: (k.highRisk24 ?? 0) > 0 ? "text-[var(--cmp-text-error)]" : undefined },
+    { label: "Landlord Events", value: dash(k.landlordEvents), icon: "🛰️", iconBg: "bg-[var(--cmp-surface-information)]" },
     { label: "AI Requests Logged", value: dash(k.aiEvents), icon: "🤖", iconBg: "bg-indigo-50" },
   ];
 
@@ -103,7 +103,7 @@ export default async function SecurityIntelligenceAudit() {
             <div className="divide-y divide-gray-50">
               {d.highRisk.map((e: any, i: number) => (
                 <div key={i} className="flex items-start gap-2 py-1.5">
-                  <span className="w-1.5 h-1.5 rounded-full bg-rose-500 mt-1.5 shrink-0" />
+                  <span className="w-1.5 h-1.5 rounded-full bg-[var(--cmp-color-error)] mt-1.5 shrink-0" />
                   <div className="min-w-0 flex-1"><p className="text-xs text-gray-800 leading-tight capitalize truncate">{(e.action ?? "").replace(/_/g, " ")}{e.entity ? ` · ${e.entity}` : ""}</p><p className="text-[9px] text-gray-400">{e.actor ?? "system"} · {relTime(e.at)}</p></div>
                 </div>
               ))}
@@ -137,7 +137,7 @@ export default async function SecurityIntelligenceAudit() {
             {d.integrity.map((it: any) => (
               <div key={it.label} className="flex items-center justify-between gap-2">
                 <span className="text-xs text-gray-700 shrink-0">{it.label}</span>
-                <span className={`text-[10px] font-medium text-right ${it.on === true ? "text-green-600" : it.on === false ? "text-rose-500" : "text-gray-400"}`}>{it.value}</span>
+                <span className={`text-[10px] font-medium text-right ${it.on === true ? "text-[var(--cmp-text-success)]" : it.on === false ? "text-rose-500" : "text-gray-400"}`}>{it.value}</span>
               </div>
             ))}
           </div>

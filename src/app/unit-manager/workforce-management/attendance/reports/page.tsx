@@ -53,8 +53,8 @@ export default async function ReportsAnalytics() {
       {header}
 
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        <Kpi label="Present rate" value={k?.presentRate != null ? `${k.presentRate}%` : "—"} sub="Present ÷ expected" tone={k?.presentRate != null && k.presentRate >= 90 ? "text-emerald-600" : "text-amber-600"} />
-        <Kpi label="Absence rate" value={absenceRate != null ? `${absenceRate}%` : "—"} sub="Absent ÷ expected" tone={absenceRate ? "text-rose-600" : "text-emerald-600"} />
+        <Kpi label="Present rate" value={k?.presentRate != null ? `${k.presentRate}%` : "—"} sub="Present ÷ expected" tone={k?.presentRate != null && k.presentRate >= 90 ? "text-[var(--cmp-text-success)]" : "text-[var(--cmp-text-warning)]"} />
+        <Kpi label="Absence rate" value={absenceRate != null ? `${absenceRate}%` : "—"} sub="Absent ÷ expected" tone={absenceRate ? "text-[var(--cmp-text-error)]" : "text-[var(--cmp-text-success)]"} />
         <Kpi label="Coverage after" value={k?.coveragePct != null ? `${k.coveragePct}%` : "—"} sub="vs requirement" />
         <Kpi label="Data completeness" value={k ? `${Math.round(((k.present + k.absent + k.confirmed) / (k.expected || 1)) * 100)}%` : "—"} sub="Verified status ÷ expected" />
       </div>

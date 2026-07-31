@@ -11,9 +11,9 @@ import CommandBar from "./CommandBar";
 
 export const dynamic = "force-dynamic";
 
-const TINT_DOT: Record<Tint, string> = { green: "bg-emerald-400", amber: "bg-amber-400", red: "bg-rose-400", muted: "bg-slate-600" };
+const TINT_DOT: Record<Tint, string> = { green: "bg-[var(--cmp-color-success)]", amber: "bg-[var(--cmp-color-warning)]", red: "bg-[var(--cmp-color-error)]", muted: "bg-slate-600" };
 const RISK_CLS: Record<string, string> = { Low: "text-emerald-400", Medium: "text-amber-400", High: "text-rose-400" };
-const SEV_CLS: Record<string, string> = { High: "bg-rose-500/20 text-rose-300 border-rose-500/30", Medium: "bg-amber-500/20 text-amber-300 border-amber-500/30", Low: "bg-sky-500/20 text-sky-300 border-sky-500/30" };
+const SEV_CLS: Record<string, string> = { High: "bg-[var(--cmp-color-error)]/20 text-rose-300 border-rose-500/30", Medium: "bg-[var(--cmp-color-warning)]/20 text-amber-300 border-amber-500/30", Low: "bg-[var(--cmp-color-information)]/20 text-sky-300 border-sky-500/30" };
 const LVL_CLS: Record<string, string> = { High: "text-rose-300", Medium: "text-amber-300", Low: "text-emerald-300" };
 const healthColor = (v: number | null): string => (v === null ? "#64748b" : v >= 90 ? "#22c55e" : v >= 70 ? "#84cc16" : v >= 50 ? "#f59e0b" : "#ef4444");
 
@@ -59,10 +59,10 @@ function EnterpriseMap({ node }: { node: MapNode }) {
         ))}
       </div>
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-2 text-[8px] text-slate-500">
-        <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-emerald-500" />Excellent 90–100</span>
+        <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-[var(--cmp-color-success)]" />Excellent 90–100</span>
         <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full" style={{ background: "#84cc16" }} />Good 70–89</span>
-        <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-amber-500" />Needs attention 50–69</span>
-        <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-rose-500" />Critical &lt;50</span>
+        <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-[var(--cmp-color-warning)]" />Needs attention 50–69</span>
+        <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-[var(--cmp-color-error)]" />Critical &lt;50</span>
       </div>
     </div>
   );
@@ -222,7 +222,7 @@ export default async function InstitutionIntelligencePage() {
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                 {d.predictions.map((p, i) => (
                   <div key={i} className="flex items-start gap-2 rounded-lg bg-white/[0.03] border border-white/10 px-2.5 py-2">
-                    <span className={`text-[8px] font-bold uppercase px-1.5 py-0.5 rounded border shrink-0 ${p.level === "High Risk" ? "bg-rose-500/20 text-rose-300 border-rose-500/30" : "bg-amber-500/20 text-amber-300 border-amber-500/30"}`}>{p.level}</span>
+                    <span className={`text-[8px] font-bold uppercase px-1.5 py-0.5 rounded border shrink-0 ${p.level === "High Risk" ? "bg-[var(--cmp-color-error)]/20 text-rose-300 border-rose-500/30" : "bg-[var(--cmp-color-warning)]/20 text-amber-300 border-amber-500/30"}`}>{p.level}</span>
                     <span className="min-w-0"><span className="block text-[12px] text-white leading-tight">{p.title}</span><span className="block text-[9px] text-slate-500">{p.reason} · {p.confidence}%</span></span>
                   </div>
                 ))}

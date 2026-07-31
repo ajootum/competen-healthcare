@@ -61,11 +61,11 @@ export default function CommsConsole({ messagesProvisioned, broadcastsProvisione
             <label className="flex items-center gap-1 text-[11px] text-gray-600"><input type="checkbox" checked={bc.emergency} onChange={e => setBc({ ...bc, emergency: e.target.checked })} /> Emergency</label>
           </div>
           <textarea value={bc.body} onChange={e => setBc({ ...bc, body: e.target.value })} rows={2} placeholder="Broadcast body…" className="w-full text-xs border border-gray-200 rounded-lg px-2 py-1.5 resize-none" />
-          <button onClick={() => post("/api/operations/broadcasts", { ...bc, expires_hours: bc.expires_hours ? Number(bc.expires_hours) : undefined }, () => setBc({ title: "", audience: "All Staff", priority: "medium", body: "", emergency: false, expires_hours: "" }), "Broadcast sent")} disabled={!bc.title.trim() || busy} className={`text-xs font-semibold px-3 py-1.5 rounded-lg text-white disabled:opacity-50 ${bc.emergency ? "bg-rose-600 hover:bg-rose-700" : "bg-teal-600 hover:bg-teal-700"}`}>{busy ? "…" : bc.emergency ? "Send emergency broadcast" : "Send broadcast"}</button>
+          <button onClick={() => post("/api/operations/broadcasts", { ...bc, expires_hours: bc.expires_hours ? Number(bc.expires_hours) : undefined }, () => setBc({ title: "", audience: "All Staff", priority: "medium", body: "", emergency: false, expires_hours: "" }), "Broadcast sent")} disabled={!bc.title.trim() || busy} className={`text-xs font-semibold px-3 py-1.5 rounded-lg text-white disabled:opacity-50 ${bc.emergency ? "bg-[var(--cmp-color-error)] hover:bg-rose-700" : "bg-teal-600 hover:bg-teal-700"}`}>{busy ? "…" : bc.emergency ? "Send emergency broadcast" : "Send broadcast"}</button>
         </div>
       )}
-      {ok && <p className="text-[11px] text-green-600 mt-2">{ok}</p>}
-      {err && <p className="text-[11px] text-rose-600 mt-2">{err}</p>}
+      {ok && <p className="text-[11px] text-[var(--cmp-text-success)] mt-2">{ok}</p>}
+      {err && <p className="text-[11px] text-[var(--cmp-text-error)] mt-2">{err}</p>}
     </div>
   );
 }

@@ -26,18 +26,18 @@ const serviceLabel = (k: string) => MDT_SERVICES.find(s => s.key === k)?.label ?
 const typeLabel = (k: string) => MEETING_TYPES.find(t => t.key === k)?.label ?? titleCase(k);
 
 const STATUS_TONE: Record<string, string> = {
-  scheduled: "bg-sky-100 text-sky-700", in_progress: "bg-amber-100 text-amber-700",
-  completed: "bg-green-100 text-green-700", cancelled: "bg-gray-100 text-gray-500",
-  no_quorum: "bg-orange-100 text-orange-700",
+  scheduled: "bg-[var(--cmp-surface-information)] text-[var(--cmp-text-information)]", in_progress: "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]",
+  completed: "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]", cancelled: "bg-gray-100 text-gray-500",
+  no_quorum: "bg-[var(--cmp-surface-warning)] text-orange-700",
 };
 const PRI_TONE: Record<string, string> = {
-  immediate: "bg-red-100 text-red-700", urgent: "bg-orange-100 text-orange-700",
-  this_week: "bg-amber-100 text-amber-700", routine: "bg-gray-100 text-gray-600",
+  immediate: "bg-[var(--cmp-surface-critical)] text-[var(--cmp-text-critical)]", urgent: "bg-[var(--cmp-surface-warning)] text-orange-700",
+  this_week: "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]", routine: "bg-gray-100 text-gray-600",
 };
 const ATT_TONE: Record<string, string> = {
-  attended: "bg-green-100 text-green-700", delegated: "bg-teal-100 text-teal-700",
-  confirmed: "bg-sky-100 text-sky-700", invited: "bg-gray-100 text-gray-500",
-  apologies: "bg-amber-100 text-amber-700", absent: "bg-red-100 text-red-700",
+  attended: "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]", delegated: "bg-teal-100 text-teal-700",
+  confirmed: "bg-[var(--cmp-surface-information)] text-[var(--cmp-text-information)]", invited: "bg-gray-100 text-gray-500",
+  apologies: "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]", absent: "bg-[var(--cmp-surface-critical)] text-[var(--cmp-text-critical)]",
 };
 
 function Kpi({ label: l, value, tone, sub }: { label: string; value: React.ReactNode; tone?: string; sub?: React.ReactNode }) {
@@ -75,13 +75,13 @@ function MeetingCard({ m, capture }: { m: any; capture?: boolean }) {
           {m.invited === 0 ? "Attendance not recorded" : `${m.attended}/${m.invited} attended`}
         </span>
         {m.quorum.met !== null && (
-          <span className={`text-[10px] rounded px-1.5 py-0.5 border ${m.quorum.met ? "bg-green-50 border-green-100 text-green-700" : "bg-orange-50 border-orange-100 text-orange-700"}`}>
+          <span className={`text-[10px] rounded px-1.5 py-0.5 border ${m.quorum.met ? "bg-[var(--cmp-surface-success)] border-[var(--cmp-color-success)] text-[var(--cmp-text-success)]" : "bg-[var(--cmp-surface-warning)] border-[var(--cmp-color-warning)] text-orange-700"}`}>
             Quorum {m.quorum.present}/{m.quorum.required} required
           </span>
         )}
         {m.decisions.length > 0 && <span className="text-[10px] text-gray-600 bg-gray-50 border border-gray-100 rounded px-1.5 py-0.5">{m.decisions.length} decision{m.decisions.length === 1 ? "" : "s"}</span>}
-        {m.openActions > 0 && <span className="text-[10px] text-amber-700 bg-amber-50 border border-amber-100 rounded px-1.5 py-0.5">{m.openActions} open action{m.openActions === 1 ? "" : "s"}</span>}
-        {m.overdueActions > 0 && <span className="text-[10px] text-red-700 bg-red-50 border border-red-100 rounded px-1.5 py-0.5">{m.overdueActions} overdue</span>}
+        {m.openActions > 0 && <span className="text-[10px] text-[var(--cmp-text-warning)] bg-[var(--cmp-surface-warning)] border border-[var(--cmp-color-warning)] rounded px-1.5 py-0.5">{m.openActions} open action{m.openActions === 1 ? "" : "s"}</span>}
+        {m.overdueActions > 0 && <span className="text-[10px] text-[var(--cmp-text-critical)] bg-[var(--cmp-surface-critical)] border border-[var(--cmp-color-critical)] rounded px-1.5 py-0.5">{m.overdueActions} overdue</span>}
         {m.signedOff > 0 && <span className="text-[10px] text-teal-700 bg-teal-50 border border-teal-100 rounded px-1.5 py-0.5">{m.signedOff} signed off</span>}
       </div>
 
@@ -183,17 +183,17 @@ export default async function MdtPage() {
 
       <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3">
         <Kpi label="Meetings today" value={k.todayMeetings} sub={`${k.todayCompleted} completed`} />
-        <Kpi label="Awaiting review" value={k.awaitingReview} tone={k.awaitingOverdue ? "text-red-600" : undefined}
+        <Kpi label="Awaiting review" value={k.awaitingReview} tone={k.awaitingOverdue ? "text-[var(--cmp-text-critical)]" : undefined}
           sub={k.awaitingOverdue ? `${k.awaitingOverdue} past target` : "complex case register"} />
-        <Kpi label="Open actions" value={k.openActions} tone={k.overdueActions ? "text-amber-600" : undefined}
+        <Kpi label="Open actions" value={k.openActions} tone={k.overdueActions ? "text-[var(--cmp-text-warning)]" : undefined}
           sub={k.overdueActions ? `${k.overdueActions} overdue` : "none overdue"} />
         <Kpi label="Action completion" value={k.completionRate == null ? "—" : `${k.completionRate}%`}
-          tone={k.completionRate != null && k.completionRate < 70 ? "text-amber-600" : undefined}
+          tone={k.completionRate != null && k.completionRate < 70 ? "text-[var(--cmp-text-warning)]" : undefined}
           sub={k.completionRate == null ? "no actions raised" : "of actions raised"} />
         <Kpi label="Attendance" value={k.attendanceRate == null ? "—" : `${k.attendanceRate}%`}
           sub={k.attendanceRate == null ? "not recorded" : "of invitations"} />
         <Kpi label="Family meetings" value={k.familyMeetings} sub="scheduled or in progress" />
-        <Kpi label="Escalated cases" value={k.escalatedCases} tone={k.escalatedCases ? "text-orange-600" : undefined}
+        <Kpi label="Escalated cases" value={k.escalatedCases} tone={k.escalatedCases ? "text-[var(--cmp-text-warning)]" : undefined}
           sub="highly complex / immediate" />
       </div>
 
@@ -203,7 +203,7 @@ export default async function MdtPage() {
           <ul className="space-y-1.5">
             {d.signals.map((s: any, i: number) => (
               <li key={i} className="flex items-start gap-2">
-                <span className={`mt-1.5 w-1.5 h-1.5 rounded-full shrink-0 ${s.severity === "high" ? "bg-red-500" : "bg-amber-400"}`} />
+                <span className={`mt-1.5 w-1.5 h-1.5 rounded-full shrink-0 ${s.severity === "high" ? "bg-[var(--cmp-color-critical)]" : "bg-[var(--cmp-color-warning)]"}`} />
                 <span className="text-sm text-gray-700">{s.text}</span>
               </li>
             ))}
@@ -226,7 +226,7 @@ export default async function MdtPage() {
                     <p className="text-sm text-gray-900">
                       <span className="font-medium">{r.op_patients?.label ?? "Patient"}</span>
                       {r.op_patients?.op_beds?.label ? <span className="text-gray-400"> · bed {r.op_patients.op_beds.label}</span> : null}
-                      {r.complexity !== "standard" && <span className="ml-1.5 text-[10px] font-semibold bg-orange-50 text-orange-700 rounded px-1">{titleCase(r.complexity)}</span>}
+                      {r.complexity !== "standard" && <span className="ml-1.5 text-[10px] font-semibold bg-[var(--cmp-surface-warning)] text-orange-700 rounded px-1">{titleCase(r.complexity)}</span>}
                     </p>
                     <p className="text-[11px] text-gray-600">{r.reason}</p>
                     <p className="text-[10px] text-gray-400">
@@ -239,7 +239,7 @@ export default async function MdtPage() {
                     )}
                   </div>
                   <span className="flex items-center gap-1.5 shrink-0">
-                    {r.overdue && <span className="text-[10px] font-semibold bg-red-100 text-red-700 rounded px-1.5 py-0.5">Overdue</span>}
+                    {r.overdue && <span className="text-[10px] font-semibold bg-[var(--cmp-surface-critical)] text-[var(--cmp-text-critical)] rounded px-1.5 py-0.5">Overdue</span>}
                     <span className={`text-[10px] font-semibold rounded px-1.5 py-0.5 ${PRI_TONE[r.priority] ?? "bg-gray-100 text-gray-600"}`}>{titleCase(r.priority)}</span>
                   </span>
                 </div>
@@ -283,7 +283,7 @@ export default async function MdtPage() {
                       {a.outcome_note && <p className="text-[10px] text-gray-500">{a.outcome_note}</p>}
                     </div>
                     <span className="flex items-center gap-1 shrink-0">
-                      {a.overdue && <span className="text-[10px] font-semibold bg-red-100 text-red-700 rounded px-1.5 py-0.5">Overdue</span>}
+                      {a.overdue && <span className="text-[10px] font-semibold bg-[var(--cmp-surface-critical)] text-[var(--cmp-text-critical)] rounded px-1.5 py-0.5">Overdue</span>}
                       <span className="text-[10px] font-semibold bg-gray-100 text-gray-600 rounded px-1.5 py-0.5">{titleCase(a.status)}</span>
                     </span>
                   </div>
@@ -321,7 +321,7 @@ export default async function MdtPage() {
                     <span className="text-gray-500 tabular-nums">{s.attended}/{s.invited} · {s.rate}%</span>
                   </div>
                   <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
-                    <div className={`h-full rounded-full ${(s.rate ?? 0) >= 80 ? "bg-teal-500" : (s.rate ?? 0) >= 50 ? "bg-amber-400" : "bg-red-400"}`}
+                    <div className={`h-full rounded-full ${(s.rate ?? 0) >= 80 ? "bg-teal-500" : (s.rate ?? 0) >= 50 ? "bg-[var(--cmp-color-warning)]" : "bg-[var(--cmp-color-critical)]"}`}
                       style={{ width: `${s.rate ?? 0}%` }} />
                   </div>
                 </li>

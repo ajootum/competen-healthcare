@@ -32,8 +32,8 @@ export default function AiCopilotPanel({ endpoint, title, sublabel, prompts, pla
       <div className="flex items-center gap-2 mb-2">
         <span className="w-7 h-7 rounded-lg bg-violet-600 text-white flex items-center justify-center text-sm">🤖</span>
         <div className="flex-1"><p className="text-sm font-semibold text-gray-900">{title}</p><p className="text-[11px] text-gray-500">{sublabel}</p></div>
-        {configured === false && <span className="text-[10px] font-semibold text-amber-700 bg-amber-100 rounded px-1.5 py-0.5">AI not configured</span>}
-        {configured === true && <span className="text-[10px] font-semibold text-emerald-700 bg-emerald-100 rounded px-1.5 py-0.5">● Live</span>}
+        {configured === false && <span className="text-[10px] font-semibold text-[var(--cmp-text-warning)] bg-[var(--cmp-surface-warning)] rounded px-1.5 py-0.5">AI not configured</span>}
+        {configured === true && <span className="text-[10px] font-semibold text-emerald-700 bg-[var(--cmp-surface-success)] rounded px-1.5 py-0.5">● Live</span>}
       </div>
 
       <div className="flex gap-2">
@@ -45,7 +45,7 @@ export default function AiCopilotPanel({ endpoint, title, sublabel, prompts, pla
         {prompts.map(p => <button key={p} onClick={() => { setQ(p); ask(p); }} disabled={loading || configured === false} className="text-[11px] text-violet-700 bg-white border border-violet-100 rounded-full px-2.5 py-1 hover:bg-violet-50 disabled:opacity-50">{p}</button>)}
       </div>
 
-      {error && <div className="mt-3 text-[12px] text-amber-800 bg-amber-50 border border-amber-200 rounded-lg p-2.5">{error}{configured === false ? " The insights below remain available." : ""}</div>}
+      {error && <div className="mt-3 text-[12px] text-amber-800 bg-[var(--cmp-surface-warning)] border border-[var(--cmp-color-warning)] rounded-lg p-2.5">{error}{configured === false ? " The insights below remain available." : ""}</div>}
       {answer && (
         <div className="mt-3 bg-white border border-gray-200 rounded-lg p-3">
           <p className="text-[13px] text-gray-800 whitespace-pre-wrap leading-relaxed">{answer}</p>

@@ -33,7 +33,7 @@ export default async function TranslationsPage() {
       </div>
 
       {!tr.provisioned ? (
-        <div className="bg-amber-50 border border-amber-100 rounded-xl p-6 text-sm text-amber-800">Run migration 137 (<code className="text-[11px]">cap_asset_translations</code>) to enable the Translation engine.</div>
+        <div className="bg-[var(--cmp-surface-warning)] border border-[var(--cmp-color-warning)] rounded-xl p-6 text-sm text-amber-800">Run migration 137 (<code className="text-[11px]">cap_asset_translations</code>) to enable the Translation engine.</div>
       ) : (
         <>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-5">
@@ -41,7 +41,7 @@ export default async function TranslationsPage() {
               { label: "Translations", value: tr.kpis.total, tone: "text-gray-900" },
               { label: "Locales", value: tr.kpis.locales, tone: "text-gray-900" },
               { label: "Published", value: tr.kpis.published, tone: "text-teal-600" },
-              { label: "In progress", value: tr.kpis.inProgress, tone: "text-amber-600" },
+              { label: "In progress", value: tr.kpis.inProgress, tone: "text-[var(--cmp-text-warning)]" },
             ].map(k => (
               <div key={k.label} className="bg-white rounded-xl border border-gray-100 p-3.5">
                 <p className={`text-xl font-bold ${k.tone}`}>{k.value}</p>

@@ -17,7 +17,7 @@ export async function paGuard() {
   return { admin, isSuper: roles.includes("super_admin"), hid: (profile?.hospital_id ?? null) as string | null };
 }
 
-export const PILL: Record<string, string> = { slate: "bg-gray-100 text-gray-600", blue: "bg-blue-50 text-blue-700", emerald: "bg-emerald-50 text-emerald-700", amber: "bg-amber-50 text-amber-700", rose: "bg-rose-50 text-rose-700", violet: "bg-violet-50 text-violet-700", teal: "bg-teal-50 text-teal-700" };
+export const PILL: Record<string, string> = { slate: "bg-gray-100 text-gray-600", blue: "bg-[var(--cmp-surface-information)] text-blue-700", emerald: "bg-[var(--cmp-surface-success)] text-emerald-700", amber: "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]", rose: "bg-[var(--cmp-surface-error)] text-[var(--cmp-text-error)]", violet: "bg-violet-50 text-violet-700", teal: "bg-teal-50 text-teal-700" };
 
 export function Head({ code, title, sub, actions }: { code: string; title: string; sub?: string; actions?: any }) {
   return (
@@ -69,7 +69,7 @@ export function Pill({ text, tone }: { text: string; tone?: string }) {
 }
 
 export function Progress({ pct, tone }: { pct: number; tone?: string }) {
-  const color = tone ?? (pct >= 80 ? "bg-emerald-500" : pct >= 50 ? "bg-indigo-500" : pct >= 25 ? "bg-amber-500" : "bg-rose-500");
+  const color = tone ?? (pct >= 80 ? "bg-[var(--cmp-color-success)]" : pct >= 50 ? "bg-indigo-500" : pct >= 25 ? "bg-[var(--cmp-color-warning)]" : "bg-[var(--cmp-color-error)]");
   return <div className="h-1.5 rounded-full bg-gray-100 overflow-hidden"><div className={`h-full rounded-full ${color}`} style={{ width: `${Math.min(100, Math.max(0, pct))}%` }} /></div>;
 }
 
@@ -83,7 +83,7 @@ export function Spark({ series, tone = "#6366f1" }: { series?: number[]; tone?: 
 
 // KPI stat card with RAG accent, value, sub, delta and optional sparkline.
 export function Kpi({ label, value, sub, status, delta, deltaUp, series }: { label: string; value: any; sub?: string; status?: "green" | "amber" | "red"; delta?: string; deltaUp?: boolean | null; series?: number[] }) {
-  const bar = status === "green" ? "bg-emerald-500" : status === "amber" ? "bg-amber-500" : status === "red" ? "bg-rose-500" : "bg-indigo-500";
+  const bar = status === "green" ? "bg-[var(--cmp-color-success)]" : status === "amber" ? "bg-[var(--cmp-color-warning)]" : status === "red" ? "bg-[var(--cmp-color-error)]" : "bg-indigo-500";
   const sparkTone = status === "green" ? "#10b981" : status === "amber" ? "#f59e0b" : status === "red" ? "#f43f5e" : "#6366f1";
   return (
     <div className="bg-white border border-gray-200 rounded-xl p-3.5 relative overflow-hidden">
@@ -92,7 +92,7 @@ export function Kpi({ label, value, sub, status, delta, deltaUp, series }: { lab
       <p className="text-2xl font-bold tabular-nums mt-1 text-gray-900">{value}</p>
       <div className="flex items-center gap-2 mt-0.5">
         {sub && <p className="text-[11px] text-gray-400">{sub}</p>}
-        {delta && <p className={`text-[11px] font-medium ${deltaUp ? "text-emerald-600" : "text-rose-600"}`}>{deltaUp ? "▲" : "▼"} {delta}</p>}
+        {delta && <p className={`text-[11px] font-medium ${deltaUp ? "text-[var(--cmp-text-success)]" : "text-[var(--cmp-text-error)]"}`}>{deltaUp ? "▲" : "▼"} {delta}</p>}
       </div>
       {series && <Spark series={series} tone={sparkTone} />}
     </div>
@@ -159,7 +159,7 @@ export function HBar({ label, value, max, tone, right }: { label: string; value:
 }
 
 export function RagDot({ status }: { status: string }) {
-  return <span className={`inline-block w-2.5 h-2.5 rounded-full ${status === "green" ? "bg-emerald-500" : status === "amber" ? "bg-amber-500" : "bg-rose-500"}`} />;
+  return <span className={`inline-block w-2.5 h-2.5 rounded-full ${status === "green" ? "bg-[var(--cmp-color-success)]" : status === "amber" ? "bg-[var(--cmp-color-warning)]" : "bg-[var(--cmp-color-error)]"}`} />;
 }
 
 export function TrendArrow({ up }: { up: boolean | null }) {
@@ -169,7 +169,7 @@ export function TrendArrow({ up }: { up: boolean | null }) {
 
 export function Provision({ module }: { module: string }) {
   return (
-    <div className="bg-amber-50 border border-amber-200 rounded-xl p-6">
+    <div className="bg-[var(--cmp-surface-warning)] border border-[var(--cmp-color-warning)] rounded-xl p-6">
       <p className="font-semibold text-amber-900">⚙️ Performance analytics not provisioned</p>
       <p className="text-sm text-amber-800 mt-1">Apply migration <code className="font-mono">108-performance-analytics.sql</code> then seed with <code className="font-mono">node scripts/seed-performance-analytics.mjs</code> to activate {module}.</p>
     </div>

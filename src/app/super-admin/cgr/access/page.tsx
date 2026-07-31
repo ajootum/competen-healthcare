@@ -11,9 +11,9 @@ export const dynamic = "force-dynamic";
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 const INDEP_META: Record<string, { label: string; cls: string }> = {
-  independent: { label: "Independent", cls: "text-emerald-700 bg-emerald-50 border-emerald-100" },
-  supervised: { label: "Supervised", cls: "text-amber-700 bg-amber-50 border-amber-100" },
-  countersigned: { label: "Countersigned", cls: "text-blue-700 bg-blue-50 border-blue-100" },
+  independent: { label: "Independent", cls: "text-emerald-700 bg-[var(--cmp-surface-success)] border-[var(--cmp-color-success)]" },
+  supervised: { label: "Supervised", cls: "text-[var(--cmp-text-warning)] bg-[var(--cmp-surface-warning)] border-[var(--cmp-color-warning)]" },
+  countersigned: { label: "Countersigned", cls: "text-blue-700 bg-[var(--cmp-surface-information)] border-[var(--cmp-color-information)]" },
 };
 const CONTROLS = [
   { name: "Role-based access", note: "Governance roles via content responsibilities + platform roles" },
@@ -40,27 +40,27 @@ export default async function GovernanceAccessPage() {
     <div className="max-w-[1400px]">
       <div className="flex items-start justify-between gap-3 mb-5">
         <div>
-          <p className="text-[11px] font-semibold text-emerald-600 uppercase tracking-widest mb-0.5">CGR-014 · Competency Governance</p>
+          <p className="text-[11px] font-semibold text-[var(--cmp-text-success)] uppercase tracking-widest mb-0.5">CGR-014 · Competency Governance</p>
           <h1 className="text-xl font-bold text-gray-900">Security, Privacy &amp; Access Control</h1>
           <p className="text-gray-400 text-sm mt-0.5">Who can access governance information, what they can do, and how it&apos;s controlled — least privilege, separation of duties and full auditability.</p>
         </div>
         <div className="flex gap-2 shrink-0">
-          <Link href="/super-admin/system/identity" className="text-xs font-semibold text-emerald-700 hover:text-emerald-800 border border-emerald-200 bg-emerald-50 rounded-lg px-3 py-2">Identity &amp; access →</Link>
+          <Link href="/super-admin/system/identity" className="text-xs font-semibold text-emerald-700 hover:text-emerald-800 border border-[var(--cmp-color-success)] bg-[var(--cmp-surface-success)] rounded-lg px-3 py-2">Identity &amp; access →</Link>
           <Link href="/super-admin/cgr" className="text-xs font-semibold text-gray-500 hover:text-emerald-700 border border-gray-200 rounded-lg px-3 py-2">← CGR</Link>
         </div>
       </div>
 
       {!d.provisioned ? (
-        <div className="bg-white border border-gray-200 rounded-xl p-8 text-center"><p className="text-sm text-gray-400">No governance responsibilities or assessor authorisations recorded yet. Once ownership and approval roles are assigned (in <Link href="/super-admin/studio/responsibilities" className="text-emerald-600 hover:underline">Ownership</Link>), the access map and separation-of-duties checks compute here.</p></div>
+        <div className="bg-white border border-gray-200 rounded-xl p-8 text-center"><p className="text-sm text-gray-400">No governance responsibilities or assessor authorisations recorded yet. Once ownership and approval roles are assigned (in <Link href="/super-admin/studio/responsibilities" className="text-[var(--cmp-text-success)] hover:underline">Ownership</Link>), the access map and separation-of-duties checks compute here.</p></div>
       ) : (
         <div className="space-y-4">
           <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
             <Kpi label="Role holders" value={k.holders} sub="distinct users" />
             <Kpi label="Governance approvers" value={k.approvers} sub="approval authority" />
             <Kpi label="Publishers" value={k.publishers} sub="publication authority" />
-            <Kpi label="SoD conflicts" value={k.sodViolations} sub="author = approver" tone={k.sodViolations ? "text-rose-600" : "text-emerald-600"} />
+            <Kpi label="SoD conflicts" value={k.sodViolations} sub="author = approver" tone={k.sodViolations ? "text-[var(--cmp-text-error)]" : "text-[var(--cmp-text-success)]"} />
             <Kpi label="Independent assessors" value={k.independentAssessors} sub="unsupervised authority" />
-            <Kpi label="Reviews overdue" value={k.dueReview} sub="permission review" tone={k.dueReview ? "text-amber-600" : "text-gray-900"} />
+            <Kpi label="Reviews overdue" value={k.dueReview} sub="permission review" tone={k.dueReview ? "text-[var(--cmp-text-warning)]" : "text-gray-900"} />
           </div>
 
           {/* Separation of duties — flagship */}
@@ -70,7 +70,7 @@ export default async function GovernanceAccessPage() {
               <p className="text-[10px] text-gray-400">{k.sodViolations} conflict{k.sodViolations === 1 ? "" : "s"}</p>
             </div>
             {d.violations.length === 0 ? (
-              <div className="p-6 text-center"><p className="text-sm text-emerald-600 font-medium">✓ No separation-of-duties conflicts — no user both authors and approves the same competency object.</p></div>
+              <div className="p-6 text-center"><p className="text-sm text-[var(--cmp-text-success)] font-medium">✓ No separation-of-duties conflicts — no user both authors and approves the same competency object.</p></div>
             ) : (
               <div className="overflow-x-auto">
                 <table className="w-full min-w-[560px]">
@@ -86,7 +86,7 @@ export default async function GovernanceAccessPage() {
                         <td className="py-2 px-2 text-[12px] text-gray-700">{v.user}</td>
                         <td className="py-2 pr-4 pl-2">
                           <div className="flex flex-wrap gap-1">
-                            {v.roles.map((r: string) => <span key={r} className="text-[10px] font-semibold text-rose-700 bg-rose-50 border border-rose-100 rounded px-1.5 py-0.5">{r}</span>)}
+                            {v.roles.map((r: string) => <span key={r} className="text-[10px] font-semibold text-[var(--cmp-text-error)] bg-[var(--cmp-surface-error)] border border-[var(--cmp-color-error)] rounded px-1.5 py-0.5">{r}</span>)}
                           </div>
                         </td>
                       </tr>
@@ -107,8 +107,8 @@ export default async function GovernanceAccessPage() {
                 <div className="space-y-1.5">
                   {d.roles.map((r: any) => (
                     <div key={r.role} className="flex items-center gap-2">
-                      <span className="text-[11px] text-gray-600 w-36 shrink-0 truncate">{r.label}{r.isApproval && <span className="ml-1 text-[8px] font-bold text-emerald-600 uppercase">approve</span>}</span>
-                      <div className="flex-1 h-2.5 rounded bg-gray-50 overflow-hidden"><div className={`h-full rounded ${r.isApproval ? "bg-emerald-500" : r.isAuthor ? "bg-blue-400" : "bg-gray-300"}`} style={{ width: `${(r.count / roleMax) * 100}%` }} /></div>
+                      <span className="text-[11px] text-gray-600 w-36 shrink-0 truncate">{r.label}{r.isApproval && <span className="ml-1 text-[8px] font-bold text-[var(--cmp-text-success)] uppercase">approve</span>}</span>
+                      <div className="flex-1 h-2.5 rounded bg-gray-50 overflow-hidden"><div className={`h-full rounded ${r.isApproval ? "bg-[var(--cmp-color-success)]" : r.isAuthor ? "bg-[var(--cmp-color-information)]" : "bg-gray-300"}`} style={{ width: `${(r.count / roleMax) * 100}%` }} /></div>
                       <span className="text-[11px] font-bold text-gray-600 tabular-nums w-7 text-right">{r.count}</span>
                     </div>
                   ))}
@@ -133,8 +133,8 @@ export default async function GovernanceAccessPage() {
                     ))}
                   </div>
                   <div className="flex items-center justify-between text-[11px]">
-                    <span className="text-gray-500">Active <span className="font-bold text-emerald-600">{ass.byStatus.active}</span> · suspended <span className="font-bold text-amber-600">{ass.byStatus.suspended}</span> · revoked <span className="font-bold text-rose-600">{ass.byStatus.revoked}</span></span>
-                    {ass.expiring > 0 && <span className="text-rose-600 font-semibold">{ass.expiring} expiring ≤30d</span>}
+                    <span className="text-gray-500">Active <span className="font-bold text-[var(--cmp-text-success)]">{ass.byStatus.active}</span> · suspended <span className="font-bold text-[var(--cmp-text-warning)]">{ass.byStatus.suspended}</span> · revoked <span className="font-bold text-[var(--cmp-text-error)]">{ass.byStatus.revoked}</span></span>
+                    {ass.expiring > 0 && <span className="text-[var(--cmp-text-error)] font-semibold">{ass.expiring} expiring ≤30d</span>}
                   </div>
                 </>
               )}
@@ -154,7 +154,7 @@ export default async function GovernanceAccessPage() {
             </div>
           </div>
 
-          <p className="text-[11px] text-gray-400 leading-relaxed">Every figure is real — governance roles and assessor authorisations from the scoped-authority stores, and the separation-of-duties check computed by cross-referencing who authors and who approves each competency object. Identity management, authentication, encryption and RLS enforcement are owned by the <Link href="/super-admin/system" className="text-emerald-600 hover:underline">System &amp; Security platform</Link>; emergency (break-glass) access is tracked in <Link href="/super-admin/cgr/risk" className="text-emerald-600 hover:underline">Exceptions &amp; Risk</Link>. Per the CGR mandate, AI analyses approved governance data only and cannot bypass security controls or approve governance decisions.</p>
+          <p className="text-[11px] text-gray-400 leading-relaxed">Every figure is real — governance roles and assessor authorisations from the scoped-authority stores, and the separation-of-duties check computed by cross-referencing who authors and who approves each competency object. Identity management, authentication, encryption and RLS enforcement are owned by the <Link href="/super-admin/system" className="text-[var(--cmp-text-success)] hover:underline">System &amp; Security platform</Link>; emergency (break-glass) access is tracked in <Link href="/super-admin/cgr/risk" className="text-[var(--cmp-text-success)] hover:underline">Exceptions &amp; Risk</Link>. Per the CGR mandate, AI analyses approved governance data only and cannot bypass security controls or approve governance decisions.</p>
         </div>
       )}
     </div>

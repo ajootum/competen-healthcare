@@ -8,8 +8,8 @@ export const dynamic = "force-dynamic";
 // UMW-OPC-002 Live Unit Status Engine — the real-time single view of unit operational status across eight domains,
 // over the live operational stores. Dark command surface inside the light UMW shell. Gate hospital_admin/super_admin.
 /* eslint-disable @typescript-eslint/no-explicit-any */
-const BED_TONE: Record<string, string> = { high: "bg-rose-500/90 text-white", medium: "bg-amber-500/90 text-slate-900", low: "bg-emerald-500/90 text-slate-900", reserved: "bg-blue-500/80 text-white", cleaning: "bg-amber-600/70 text-white", maintenance: "bg-slate-600 text-slate-300", available: "bg-slate-700/40 text-slate-400 border border-slate-600" };
-const LEGEND = [["Occupied — high", "bg-rose-500"], ["Medium", "bg-amber-500"], ["Low / stable", "bg-emerald-500"], ["Available", "bg-slate-600"], ["Cleaning", "bg-amber-600"], ["Reserved", "bg-blue-500"], ["Maintenance", "bg-slate-500"]];
+const BED_TONE: Record<string, string> = { high: "bg-[var(--cmp-color-error)]/90 text-white", medium: "bg-[var(--cmp-color-warning)]/90 text-slate-900", low: "bg-[var(--cmp-color-success)]/90 text-slate-900", reserved: "bg-[var(--cmp-color-information)]/80 text-white", cleaning: "bg-[var(--cmp-color-warning)]/70 text-white", maintenance: "bg-slate-600 text-slate-300", available: "bg-slate-700/40 text-slate-400 border border-slate-600" };
+const LEGEND = [["Occupied — high", "bg-[var(--cmp-color-error)]"], ["Medium", "bg-[var(--cmp-color-warning)]"], ["Low / stable", "bg-[var(--cmp-color-success)]"], ["Available", "bg-slate-600"], ["Cleaning", "bg-[var(--cmp-color-warning)]"], ["Reserved", "bg-[var(--cmp-color-information)]"], ["Maintenance", "bg-slate-500"]];
 const EVENTS = [["10:45", "New Admission (expected)"], ["11:00", "Ward Round"], ["12:00", "Lunch Break Peak"], ["14:00", "Discharge Peak"], ["16:00", "Family Meetings"], ["18:30", "Evening Handover"]];
 
 export default async function LiveUnitStatusPage({ searchParams }: { searchParams: Promise<{ dept?: string }> }) {
@@ -21,7 +21,7 @@ export default async function LiveUnitStatusPage({ searchParams }: { searchParam
   ]);
 
   const strip = <TopStrip code="UMW-OPC-002 · Operational Command" title="Live Unit Status Engine" departments={departments} />;
-  if (!d.provisioned) return <div className="space-y-4">{strip}<div className="bg-amber-50 border border-amber-200 rounded-xl p-6"><p className="font-semibold text-amber-900">⚙️ Operational stores not provisioned</p><p className="text-sm text-amber-800 mt-1">Apply migrations 038/048/050/101 then seed the ward.</p></div></div>;
+  if (!d.provisioned) return <div className="space-y-4">{strip}<div className="bg-[var(--cmp-surface-warning)] border border-[var(--cmp-color-warning)] rounded-xl p-6"><p className="font-semibold text-amber-900">⚙️ Operational stores not provisioned</p><p className="text-sm text-amber-800 mt-1">Apply migrations 038/048/050/101 then seed the ward.</p></div></div>;
 
   const t = d.trends;
   return (
@@ -50,13 +50,13 @@ export default async function LiveUnitStatusPage({ searchParams }: { searchParam
 
           <Card title="Real-time Status Feed">
             {d.feed.length ? <div className="space-y-2.5">{d.feed.map((f: any, i: number) => (
-              <div key={i} className="flex items-start gap-2"><span className="w-1.5 h-1.5 rounded-full bg-blue-400 mt-1.5 shrink-0" /><div className="min-w-0"><p className="text-[11px] text-slate-200 leading-tight capitalize truncate">{f.text}</p><p className="text-[9px] text-slate-500">{fmtT(f.at)}</p></div></div>
+              <div key={i} className="flex items-start gap-2"><span className="w-1.5 h-1.5 rounded-full bg-[var(--cmp-color-information)] mt-1.5 shrink-0" /><div className="min-w-0"><p className="text-[11px] text-slate-200 leading-tight capitalize truncate">{f.text}</p><p className="text-[9px] text-slate-500">{fmtT(f.at)}</p></div></div>
             ))}</div> : <p className="text-xs text-slate-400 py-4 text-center">No movement events today.</p>}
           </Card>
 
           <Card title="Active Alerts" right={<div className="flex gap-1.5 text-[10px]"><span className="text-rose-400">{d.buckets.critical} crit</span><span className="text-amber-400">{d.buckets.medium} med</span><span className="text-slate-400">{d.buckets.low} low</span></div>}>
             {d.alerts.length ? <div className="space-y-2">{d.alerts.map((a: any, i: number) => (
-              <div key={i} className="flex items-start gap-2"><span className={`mt-1 w-2 h-2 rounded-full shrink-0 ${a.band === "high" ? "bg-rose-500" : a.band === "medium" ? "bg-amber-500" : "bg-slate-500"}`} /><div className="min-w-0 flex-1"><p className="text-[12px] text-slate-200 leading-tight">{a.title}</p><p className="text-[10px] text-slate-500">{a.sub}{a.at ? ` · ${fmtT(a.at)}` : ""}</p></div></div>
+              <div key={i} className="flex items-start gap-2"><span className={`mt-1 w-2 h-2 rounded-full shrink-0 ${a.band === "high" ? "bg-[var(--cmp-color-error)]" : a.band === "medium" ? "bg-[var(--cmp-color-warning)]" : "bg-slate-500"}`} /><div className="min-w-0 flex-1"><p className="text-[12px] text-slate-200 leading-tight">{a.title}</p><p className="text-[10px] text-slate-500">{a.sub}{a.at ? ` · ${fmtT(a.at)}` : ""}</p></div></div>
             ))}</div> : <p className="text-xs text-slate-400 py-4 text-center">No active alerts. ✅</p>}
           </Card>
         </div>

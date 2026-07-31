@@ -23,7 +23,7 @@ export default function GraphControls({
     <div>
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
         {[
-          { label: "Graph Edges", value: totalEdges.toLocaleString(), color: "text-rose-600" },
+          { label: "Graph Edges", value: totalEdges.toLocaleString(), color: "text-[var(--cmp-text-error)]" },
           { label: "Node Types", value: nodeTypes, color: "text-indigo-600" },
           { label: "Embeddings", value: embeddingTotal.toLocaleString(), color: "text-teal-600" },
           { label: "Embedded", value: `${embeddingTotal ? Math.round((embeddingDone / embeddingTotal) * 100) : 0}%`, color: "text-violet-600" },
@@ -36,7 +36,7 @@ export default function GraphControls({
       </div>
       <div className="flex items-center gap-3">
         <button onClick={rebuild} disabled={busy}
-          className="px-4 py-2 bg-rose-600 text-white text-sm font-semibold rounded-lg hover:bg-rose-700 disabled:opacity-50">
+          className="px-4 py-2 bg-[var(--cmp-color-error)] text-white text-sm font-semibold rounded-lg hover:bg-rose-700 disabled:opacity-50">
           {busy ? "Rebuilding…" : "Rebuild Graph"}
         </button>
         {msg && <span className="text-xs text-gray-500">{msg}</span>}

@@ -26,7 +26,7 @@ export default async function Reliability() {
     <div className="max-w-[1200px]">
       <AssessmentNav active="reliability" />
       <div className="mb-4"><StatTiles tiles={tiles} cols="grid-cols-2 md:grid-cols-3 xl:grid-cols-6" /></div>
-      <p className="text-[10px] text-amber-600 bg-amber-50 border border-amber-100 rounded-lg px-3 py-2 mb-5">ℹ️ Psychometric reliability (Cronbach&apos;s α, KR-20) needs many learners answering the same multi-item assessment; inter-rater agreement needs the same encounter scored by two assessors. Neither exists at the current data volume, so no coefficients are computed — they are shown honestly rather than fabricated.</p>
+      <p className="text-[10px] text-[var(--cmp-text-warning)] bg-[var(--cmp-surface-warning)] border border-[var(--cmp-color-warning)] rounded-lg px-3 py-2 mb-5">ℹ️ Psychometric reliability (Cronbach&apos;s α, KR-20) needs many learners answering the same multi-item assessment; inter-rater agreement needs the same encounter scored by two assessors. Neither exists at the current data volume, so no coefficients are computed — they are shown honestly rather than fabricated.</p>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 items-start">
         {/* Reliability indicators */}

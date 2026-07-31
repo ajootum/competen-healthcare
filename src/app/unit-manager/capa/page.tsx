@@ -18,19 +18,19 @@ export const dynamic = "force-dynamic";
 // timeline / budget / dependencies) and the Evidence → Verification → Effectiveness → Lessons Learned stages.
 /* eslint-disable @typescript-eslint/no-explicit-any */
 const card = "bg-white rounded-xl border border-gray-200";
-const PRI: Record<string, string> = { high: "bg-rose-50 text-rose-700", medium: "bg-amber-50 text-amber-700", low: "bg-green-50 text-green-700" };
-const STATUS: Record<string, string> = { open: "bg-gray-100 text-gray-600", in_progress: "bg-blue-50 text-blue-700", overdue: "bg-rose-50 text-rose-700", completed: "bg-green-50 text-green-700" };
+const PRI: Record<string, string> = { high: "bg-[var(--cmp-surface-error)] text-[var(--cmp-text-error)]", medium: "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]", low: "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]" };
+const STATUS: Record<string, string> = { open: "bg-gray-100 text-gray-600", in_progress: "bg-[var(--cmp-surface-information)] text-blue-700", overdue: "bg-[var(--cmp-surface-error)] text-[var(--cmp-text-error)]", completed: "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]" };
 const STATUS_LABEL: Record<string, string> = { open: "Open", in_progress: "In Progress", overdue: "Overdue", completed: "Completed" };
 const TYPE_COLOR = ["#8b5cf6", "#3b82f6", "#14b8a6", "#f59e0b", "#ef4444", "#6b7280"];
 const STATUS_COLOR: Record<string, string> = { open: "#94a3b8", in_progress: "#3b82f6", overdue: "#ef4444", completed: "#22c55e" };
 const relTime = (iso?: string | null) => { if (!iso) return "—"; const s = Math.floor((Date.now() - new Date(iso).getTime()) / 1000); if (s < 0) return "soon"; if (s < 3600) return `${Math.max(1, Math.floor(s / 60))}m ago`; if (s < 86400) return `${Math.floor(s / 3600)}h ago`; return `${Math.floor(s / 86400)}d ago`; };
 const QUICK = [
   { label: "Create CAPA", sub: "New corrective action", icon: "➕", tint: "bg-violet-50", href: "#create" },
-  { label: "CAPA Register", sub: "Work queue", icon: "📋", tint: "bg-sky-50", href: "#queue" },
+  { label: "CAPA Register", sub: "Work queue", icon: "📋", tint: "bg-[var(--cmp-surface-information)]", href: "#queue" },
   { label: "Improvement Projects", sub: "QI initiatives", icon: "📈", tint: "bg-teal-50", href: "#projects" },
-  { label: "PDSA Manager", sub: "Plan-Do-Study-Act", icon: "🔁", tint: "bg-emerald-50", href: "#pdsa" },
-  { label: "RCA Follow-up", sub: "Root cause actions", icon: "🧩", tint: "bg-orange-50", href: "/supervisor/quality-safety" },
-  { label: "Effectiveness Review", sub: "Verify outcomes", icon: "✅", tint: "bg-green-50", href: "#queue" },
+  { label: "PDSA Manager", sub: "Plan-Do-Study-Act", icon: "🔁", tint: "bg-[var(--cmp-surface-success)]", href: "#pdsa" },
+  { label: "RCA Follow-up", sub: "Root cause actions", icon: "🧩", tint: "bg-[var(--cmp-surface-warning)]", href: "/supervisor/quality-safety" },
+  { label: "Effectiveness Review", sub: "Verify outcomes", icon: "✅", tint: "bg-[var(--cmp-surface-success)]", href: "#queue" },
   { label: "Lessons Learned", sub: "Share learning", icon: "💡", tint: "bg-pink-50", href: "/unit-manager/quality/ai" },
   { label: "Reports & Analytics", sub: "Export & trends", icon: "📊", tint: "bg-indigo-50", href: "/unit-manager/reports" },
 ];
@@ -44,7 +44,7 @@ function Spark({ series, color }: { series: number[]; color: string }) {
 function Delta({ v, invert }: { v: number | null | undefined; invert?: boolean }) {
   if (v == null || v === 0) return null;
   const good = invert ? v < 0 : v > 0;
-  return <span className={`text-[10px] font-medium ${good ? "text-emerald-600" : "text-rose-600"}`}>{v > 0 ? "↑" : "↓"} {Math.abs(v)}% MoM</span>;
+  return <span className={`text-[10px] font-medium ${good ? "text-[var(--cmp-text-success)]" : "text-[var(--cmp-text-error)]"}`}>{v > 0 ? "↑" : "↓"} {Math.abs(v)}% MoM</span>;
 }
 function Kpi({ icon, tint, label, value, unit, sub, tone, spark, sparkColor, delta, deltaInvert }: any) {
   return (
@@ -63,7 +63,7 @@ function SegDonut({ segs, total, label }: { segs: { n: number; color: string }[]
   return <div className="relative w-24 h-24 shrink-0"><div className="w-24 h-24 rounded-full" style={{ background: grad }} /><div className="absolute inset-[22%] rounded-full bg-white flex flex-col items-center justify-center"><span className="text-lg font-bold text-gray-900">{total}</span><span className="text-[8px] text-gray-400">{label ?? "Total"}</span></div></div>;
 }
 function Bar({ label, level }: { label: string; level: string }) {
-  const tone = ["High", "At Risk"].includes(level) ? "text-rose-600" : level === "Medium" ? "text-amber-600" : "text-gray-500";
+  const tone = ["High", "At Risk"].includes(level) ? "text-[var(--cmp-text-error)]" : level === "Medium" ? "text-[var(--cmp-text-warning)]" : "text-gray-500";
   return <div className="flex items-center justify-between text-[11px]"><span className="text-gray-500">{label}</span><span className={`font-semibold ${tone}`}>{level}</span></div>;
 }
 
@@ -92,7 +92,7 @@ export default async function CapaWorkspace({ searchParams }: { searchParams: Pr
     </div>
   );
 
-  if (!d.provisioned) return <div className="space-y-4">{header}<div className="bg-amber-50 border border-amber-200 rounded-xl p-6"><p className="font-semibold text-amber-900">⚙️ Quality store not provisioned</p><p className="text-sm text-amber-800 mt-1">Run migration <code>073</code> to enable the CAPA &amp; quality-improvement store for this tenant.</p></div></div>;
+  if (!d.provisioned) return <div className="space-y-4">{header}<div className="bg-[var(--cmp-surface-warning)] border border-[var(--cmp-color-warning)] rounded-xl p-6"><p className="font-semibold text-amber-900">⚙️ Quality store not provisioned</p><p className="text-sm text-amber-800 mt-1">Run migration <code>073</code> to enable the CAPA &amp; quality-improvement store for this tenant.</p></div></div>;
 
   const k = d.kpis; const r = d.review;
   return (
@@ -102,12 +102,12 @@ export default async function CapaWorkspace({ searchParams }: { searchParams: Pr
       {/* ── KPI ribbon (8) ─────────────────────────────────────────────────── */}
       <div className="grid grid-cols-2 sm:grid-cols-4 xl:grid-cols-8 gap-2.5">
         <Kpi icon="📋" tint="bg-violet-50" label="Open CAPAs" value={k.open} spark={d.sparks.opened} sparkColor="#8b5cf6" delta={d.deltas.opened} deltaInvert />
-        <Kpi icon="⏰" tint="bg-rose-50" label="Overdue CAPAs" value={k.overdue} tone={k.overdue ? "text-rose-600" : "text-gray-400"} sub="past due" />
-        <Kpi icon="📅" tint="bg-amber-50" label="Due This Week" value={k.dueThisWeek} tone={k.dueThisWeek ? "text-amber-600" : "text-gray-400"} sub="next 7 days" />
-        <Kpi icon="🚩" tint="bg-orange-50" label="High Priority" value={k.highPriority} tone={k.highPriority ? "text-orange-600" : "text-gray-400"} sub="priority = high" />
-        <Kpi icon="🕐" tint="bg-sky-50" label="Awaiting Verification" value={k.pendingVerification} sub="timeline ≥ 80%" />
-        <Kpi icon="✅" tint="bg-green-50" label="Effectiveness Reviews" value={k.effectivenessReviews} spark={d.sparks.closed} sparkColor="#22c55e" delta={d.deltas.closed} />
-        <Kpi icon="📈" tint="bg-teal-50" label="Completion Rate" value={k.completionRate != null ? `${k.completionRate}%` : "—"} tone={k.completionRate != null && k.completionRate >= 70 ? "text-emerald-600" : "text-gray-900"} sub="closed / all" />
+        <Kpi icon="⏰" tint="bg-[var(--cmp-surface-error)]" label="Overdue CAPAs" value={k.overdue} tone={k.overdue ? "text-[var(--cmp-text-error)]" : "text-gray-400"} sub="past due" />
+        <Kpi icon="📅" tint="bg-[var(--cmp-surface-warning)]" label="Due This Week" value={k.dueThisWeek} tone={k.dueThisWeek ? "text-[var(--cmp-text-warning)]" : "text-gray-400"} sub="next 7 days" />
+        <Kpi icon="🚩" tint="bg-[var(--cmp-surface-warning)]" label="High Priority" value={k.highPriority} tone={k.highPriority ? "text-[var(--cmp-text-warning)]" : "text-gray-400"} sub="priority = high" />
+        <Kpi icon="🕐" tint="bg-[var(--cmp-surface-information)]" label="Awaiting Verification" value={k.pendingVerification} sub="timeline ≥ 80%" />
+        <Kpi icon="✅" tint="bg-[var(--cmp-surface-success)]" label="Effectiveness Reviews" value={k.effectivenessReviews} spark={d.sparks.closed} sparkColor="#22c55e" delta={d.deltas.closed} />
+        <Kpi icon="📈" tint="bg-teal-50" label="Completion Rate" value={k.completionRate != null ? `${k.completionRate}%` : "—"} tone={k.completionRate != null && k.completionRate >= 70 ? "text-[var(--cmp-text-success)]" : "text-gray-900"} sub="closed / all" />
         <Kpi icon="⏳" tint="bg-indigo-50" label="Avg Closure Time" value={k.avgClosure != null ? k.avgClosure : "—"} unit={k.avgClosure != null ? "d" : ""} spark={d.sparks.closure} sparkColor="#6366f1" />
       </div>
 
@@ -120,9 +120,9 @@ export default async function CapaWorkspace({ searchParams }: { searchParams: Pr
           </div>
           <div className="flex gap-1 mb-3 flex-wrap">
             <span className="text-[10px] px-2 py-0.5 rounded-full bg-violet-600 text-white">All ({d.counts.all})</span>
-            <span className="text-[10px] px-2 py-0.5 rounded-full bg-rose-50 text-rose-600">High Risk ({d.counts.high})</span>
-            <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-50 text-amber-600">Medium ({d.counts.medium})</span>
-            <span className="text-[10px] px-2 py-0.5 rounded-full bg-green-50 text-green-600">Low ({d.counts.low})</span>
+            <span className="text-[10px] px-2 py-0.5 rounded-full bg-[var(--cmp-surface-error)] text-[var(--cmp-text-error)]">High Risk ({d.counts.high})</span>
+            <span className="text-[10px] px-2 py-0.5 rounded-full bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]">Medium ({d.counts.medium})</span>
+            <span className="text-[10px] px-2 py-0.5 rounded-full bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]">Low ({d.counts.low})</span>
           </div>
           {d.register.length === 0 ? (
             <div className="text-center py-8"><p className="text-3xl mb-2">✅</p><p className="text-sm font-semibold text-gray-700">{d.empty ? "No CAPAs yet" : "Work queue is clear"}</p><p className="text-xs text-gray-400 mt-1">{d.empty ? "Create a CAPA, audit action or improvement project to get started." : "All corrective and preventive actions are closed."}</p></div>
@@ -138,10 +138,10 @@ export default async function CapaWorkspace({ searchParams }: { searchParams: Pr
                       <td className="py-2 pr-3 text-gray-800 font-medium max-w-[150px] truncate">{c.title}</td>
                       <td className="py-2 pr-3 text-gray-600 whitespace-nowrap">{c.source}</td>
                       <td className="py-2 pr-3 text-gray-600 truncate max-w-[90px]">{c.owner}</td>
-                      <td className={`py-2 pr-3 whitespace-nowrap ${c.overdue ? "text-rose-600 font-semibold" : "text-gray-500"}`}>{c.due_at ? c.due_at.slice(5, 10) : "—"}</td>
+                      <td className={`py-2 pr-3 whitespace-nowrap ${c.overdue ? "text-[var(--cmp-text-error)] font-semibold" : "text-gray-500"}`}>{c.due_at ? c.due_at.slice(5, 10) : "—"}</td>
                       <td className="py-2 pr-3"><span className={`px-1.5 py-0.5 rounded text-[10px] ${STATUS[c.status]}`}>{STATUS_LABEL[c.status]}</span></td>
-                      <td className="py-2 pr-3"><div className="w-16 h-1.5 rounded-full bg-gray-100 overflow-hidden"><div className={`h-full rounded-full ${c.riskBand === "High" ? "bg-rose-500" : c.progress >= 70 ? "bg-green-500" : "bg-amber-400"}`} style={{ width: `${c.progress}%` }} /></div><span className="text-[9px] text-gray-400">{c.progress}%</span></td>
-                      <td className={`py-2 pr-3 whitespace-nowrap font-semibold ${c.riskBand === "High" ? "text-rose-600" : c.riskBand === "Medium" ? "text-amber-600" : "text-gray-500"}`}>{c.risk}/25</td>
+                      <td className="py-2 pr-3"><div className="w-16 h-1.5 rounded-full bg-gray-100 overflow-hidden"><div className={`h-full rounded-full ${c.riskBand === "High" ? "bg-[var(--cmp-color-error)]" : c.progress >= 70 ? "bg-[var(--cmp-color-success)]" : "bg-[var(--cmp-color-warning)]"}`} style={{ width: `${c.progress}%` }} /></div><span className="text-[9px] text-gray-400">{c.progress}%</span></td>
+                      <td className={`py-2 pr-3 whitespace-nowrap font-semibold ${c.riskBand === "High" ? "text-[var(--cmp-text-error)]" : c.riskBand === "Medium" ? "text-[var(--cmp-text-warning)]" : "text-gray-500"}`}>{c.risk}/25</td>
                       <td className="py-2"><Link href={`/unit-manager/capa?id=${c.id}`} className="text-violet-700 hover:underline">View</Link></td>
                     </tr>
                   ))}
@@ -156,7 +156,7 @@ export default async function CapaWorkspace({ searchParams }: { searchParams: Pr
         <div className={`${card} p-5 xl:col-span-1`}>
           {!r ? <div className="text-center py-8"><p className="text-2xl mb-2">🗂️</p><p className="text-sm text-gray-400">Select a CAPA to review.</p></div> : (
             <>
-              <div className="flex items-start justify-between mb-2"><div><h3 className="text-sm font-bold text-gray-900">{r.title}</h3><p className="text-[10px] text-gray-400">{r.code} · {r.typeLabel} · Reported {relTime(r.created_at)}</p></div><span className={`px-1.5 py-0.5 rounded text-[10px] font-semibold h-fit ${r.riskBand === "High" ? "bg-rose-50 text-rose-700" : r.riskBand === "Medium" ? "bg-amber-50 text-amber-700" : "bg-green-50 text-green-700"}`}>{r.riskBand} Risk</span></div>
+              <div className="flex items-start justify-between mb-2"><div><h3 className="text-sm font-bold text-gray-900">{r.title}</h3><p className="text-[10px] text-gray-400">{r.code} · {r.typeLabel} · Reported {relTime(r.created_at)}</p></div><span className={`px-1.5 py-0.5 rounded text-[10px] font-semibold h-fit ${r.riskBand === "High" ? "bg-[var(--cmp-surface-error)] text-[var(--cmp-text-error)]" : r.riskBand === "Medium" ? "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]" : "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]"}`}>{r.riskBand} Risk</span></div>
               <div className="flex gap-3 border-b border-gray-100 mb-2 text-[10px]">{["Overview", "RCA", "Actions", "Evidence", "History"].map((t, i) => <span key={t} className={`pb-1 -mb-px border-b-2 ${i === 0 ? "border-violet-600 text-violet-700 font-semibold" : "border-transparent text-gray-300"}`}>{t}</span>)}</div>
               {r.description && <p className="text-[11px] text-gray-600 mb-3">{r.description}</p>}
               <div className="grid grid-cols-2 gap-2">
@@ -166,8 +166,8 @@ export default async function CapaWorkspace({ searchParams }: { searchParams: Pr
                 </div>
                 <div className="rounded-lg border border-gray-100 p-2.5">
                   <p className="text-[10px] font-bold text-gray-500 uppercase mb-1">Risk Assessment</p>
-                  <p className={`text-lg font-bold ${r.riskBand === "High" ? "text-rose-600" : r.riskBand === "Medium" ? "text-amber-600" : "text-gray-700"}`}>{r.risk}<span className="text-xs text-gray-400"> / 25</span></p>
-                  <div className="text-[10px] text-gray-500 space-y-0.5 mt-1"><div>Likelihood: <b>{r.likelihood}/5</b></div><div>Severity: <b>{r.severity}/5</b></div><div>Detectability: <b>{r.detectability}/5</b></div><div>Controls: <b className={r.controls === "Weak" ? "text-rose-600" : ""}>{r.controls}</b></div></div>
+                  <p className={`text-lg font-bold ${r.riskBand === "High" ? "text-[var(--cmp-text-error)]" : r.riskBand === "Medium" ? "text-[var(--cmp-text-warning)]" : "text-gray-700"}`}>{r.risk}<span className="text-xs text-gray-400"> / 25</span></p>
+                  <div className="text-[10px] text-gray-500 space-y-0.5 mt-1"><div>Likelihood: <b>{r.likelihood}/5</b></div><div>Severity: <b>{r.severity}/5</b></div><div>Detectability: <b>{r.detectability}/5</b></div><div>Controls: <b className={r.controls === "Weak" ? "text-[var(--cmp-text-error)]" : ""}>{r.controls}</b></div></div>
                 </div>
               </div>
               <div className="mt-3 rounded-lg bg-violet-50/50 border border-violet-100 p-2.5">
@@ -175,7 +175,7 @@ export default async function CapaWorkspace({ searchParams }: { searchParams: Pr
                 <p className="text-xs font-semibold text-violet-700">{r.aiRec}</p>
                 <ul className="text-[11px] text-gray-600 space-y-0.5 mt-1">{r.aiActions.map((x: string, i: number) => <li key={i}>✓ {x}</li>)}</ul>
               </div>
-              <div className="mt-3 grid grid-cols-2 gap-2 text-[10px] text-gray-400"><span>Owner: <b className="text-gray-600">{r.owner}</b></span><span>Due: <b className={r.overdue ? "text-rose-600" : "text-gray-600"}>{r.due_at ? r.due_at.slice(0, 10) : "—"}</b></span><span>Status: <b className="text-gray-600">{STATUS_LABEL[r.status]}</b></span><span>Progress: <b className="text-gray-600">{r.progress}%</b></span></div>
+              <div className="mt-3 grid grid-cols-2 gap-2 text-[10px] text-gray-400"><span>Owner: <b className="text-gray-600">{r.owner}</b></span><span>Due: <b className={r.overdue ? "text-[var(--cmp-text-error)]" : "text-gray-600"}>{r.due_at ? r.due_at.slice(0, 10) : "—"}</b></span><span>Status: <b className="text-gray-600">{STATUS_LABEL[r.status]}</b></span><span>Progress: <b className="text-gray-600">{r.progress}%</b></span></div>
               <div className="mt-3"><CapaActions id={r.id} status={r.status} /></div>
             </>
           )}
@@ -213,7 +213,7 @@ export default async function CapaWorkspace({ searchParams }: { searchParams: Pr
         <div className={`${card} p-5`} id="pdsa">
           <h3 className="text-sm font-bold text-gray-900 mb-3">PDSA Cycles</h3>
           {d.pdsa.length === 0 ? <p className="text-sm text-gray-400">No PDSA cycles. Create one with action type &ldquo;PDSA&rdquo;.</p> : (
-            <div className="space-y-2">{d.pdsa.map((p: any) => (<div key={p.id} className="text-xs"><div className="flex items-center justify-between mb-0.5"><span className="text-gray-700 truncate flex-1">{p.title}</span><span className={`text-[9px] px-1 py-0.5 rounded ${STATUS[p.status]}`}>{STATUS_LABEL[p.status]}</span></div><div className="w-full h-1.5 rounded-full bg-gray-100 overflow-hidden"><div className="h-full rounded-full bg-emerald-500" style={{ width: `${p.progress}%` }} /></div></div>))}</div>
+            <div className="space-y-2">{d.pdsa.map((p: any) => (<div key={p.id} className="text-xs"><div className="flex items-center justify-between mb-0.5"><span className="text-gray-700 truncate flex-1">{p.title}</span><span className={`text-[9px] px-1 py-0.5 rounded ${STATUS[p.status]}`}>{STATUS_LABEL[p.status]}</span></div><div className="w-full h-1.5 rounded-full bg-gray-100 overflow-hidden"><div className="h-full rounded-full bg-[var(--cmp-color-success)]" style={{ width: `${p.progress}%` }} /></div></div>))}</div>
           )}
         </div>
         <div className={`${card} p-5`} id="projects">
@@ -236,7 +236,7 @@ export default async function CapaWorkspace({ searchParams }: { searchParams: Pr
         <div className={`${card} p-5`}>
           <h3 className="text-sm font-bold text-gray-900 mb-3">Overdue CAPAs</h3>
           {d.overdueList.length === 0 ? <p className="text-sm text-gray-400">No overdue CAPAs. 🎉</p> : (
-            <div className="space-y-1.5">{d.overdueList.slice(0, 6).map((c: any) => (<Link key={c.id} href={`/unit-manager/capa?id=${c.id}`} className="flex items-center gap-2 text-xs hover:bg-gray-50/60 rounded px-1 py-0.5"><span className="text-rose-500">●</span><span className="text-gray-700 flex-1 truncate">{c.title}</span><span className="text-rose-600 whitespace-nowrap">{c.due_at ? c.due_at.slice(5, 10) : "—"}</span></Link>))}</div>
+            <div className="space-y-1.5">{d.overdueList.slice(0, 6).map((c: any) => (<Link key={c.id} href={`/unit-manager/capa?id=${c.id}`} className="flex items-center gap-2 text-xs hover:bg-gray-50/60 rounded px-1 py-0.5"><span className="text-rose-500">●</span><span className="text-gray-700 flex-1 truncate">{c.title}</span><span className="text-[var(--cmp-text-error)] whitespace-nowrap">{c.due_at ? c.due_at.slice(5, 10) : "—"}</span></Link>))}</div>
           )}
         </div>
         <div className={`${card} p-5`}>
@@ -255,7 +255,7 @@ export default async function CapaWorkspace({ searchParams }: { searchParams: Pr
 
       <div className="flex items-center justify-between flex-wrap gap-2 text-[10px] text-gray-400 pb-4">
         <span>Data sources: Incident Management · Audit &amp; Compliance · Risk Register · Patient Operations · Executive Actions</span>
-        <span className="flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-emerald-500" /> Quality-action store live · consolidation over op_quality_actions (migration 073) · <Link href="/unit-manager/action-centre" className="text-violet-700 hover:underline">Executive Actions</Link></span>
+        <span className="flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-[var(--cmp-color-success)]" /> Quality-action store live · consolidation over op_quality_actions (migration 073) · <Link href="/unit-manager/action-centre" className="text-violet-700 hover:underline">Executive Actions</Link></span>
       </div>
     </div>
   );

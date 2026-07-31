@@ -12,8 +12,8 @@ export type AppealRow = {
 };
 
 const STATUS_CLS: Record<string, string> = {
-  open: "bg-blue-100 text-blue-700", under_review: "bg-amber-100 text-amber-700",
-  upheld: "bg-gray-100 text-gray-600", overturned: "bg-green-100 text-green-700", withdrawn: "bg-gray-100 text-gray-400",
+  open: "bg-[var(--cmp-surface-information)] text-blue-700", under_review: "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]",
+  upheld: "bg-gray-100 text-gray-600", overturned: "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]", withdrawn: "bg-gray-100 text-gray-400",
 };
 
 export default function AppealsQueue({ rows }: { rows: AppealRow[] }) {
@@ -40,7 +40,7 @@ export default function AppealsQueue({ rows }: { rows: AppealRow[] }) {
 
   return (
     <div className="space-y-2">
-      {error && <p className="text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{error}</p>}
+      {error && <p className="text-xs text-[var(--cmp-text-critical)] bg-[var(--cmp-surface-critical)] border border-[var(--cmp-color-critical)] rounded-lg px-3 py-2">{error}</p>}
       {rows.map(r => (
         <div key={r.id} className="border border-gray-100 rounded-lg px-3 py-2.5">
           <div className="flex items-center gap-2 flex-wrap">
@@ -51,7 +51,7 @@ export default function AppealsQueue({ rows }: { rows: AppealRow[] }) {
             <span className="flex-1" />
             {r.status === "open" && (
               <button onClick={() => move(r.id, "under_review")} disabled={busy === r.id}
-                className="text-[10px] font-semibold text-amber-700 border border-amber-300 rounded-lg px-2.5 py-1 hover:bg-amber-50 disabled:opacity-40">Start review</button>
+                className="text-[10px] font-semibold text-[var(--cmp-text-warning)] border border-[var(--cmp-color-warning)] rounded-lg px-2.5 py-1 hover:bg-[var(--cmp-surface-warning)] disabled:opacity-40">Start review</button>
             )}
             {["open", "under_review"].includes(r.status) && (
               <button onClick={() => setNoteFor(noteFor === r.id ? null : r.id)}

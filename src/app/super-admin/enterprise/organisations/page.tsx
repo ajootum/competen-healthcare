@@ -36,11 +36,11 @@ export default async function OrganisationsModule() {
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
         {[
           { label: "Organisations", n: summary.total, tone: "text-gray-900" },
-          { label: "Active", n: summary.active, tone: "text-green-600" },
-          { label: "Onboarding", n: summary.onboarding, tone: "text-amber-600" },
-          { label: "Suspended", n: summary.suspended, tone: "text-rose-600" },
+          { label: "Active", n: summary.active, tone: "text-[var(--cmp-text-success)]" },
+          { label: "Onboarding", n: summary.onboarding, tone: "text-[var(--cmp-text-warning)]" },
+          { label: "Suspended", n: summary.suspended, tone: "text-[var(--cmp-text-error)]" },
           { label: "Countries", n: summary.countries, tone: "text-indigo-600" },
-          { label: "No admin", n: summary.noAdmin, tone: summary.noAdmin ? "text-red-600" : "text-gray-300" },
+          { label: "No admin", n: summary.noAdmin, tone: summary.noAdmin ? "text-[var(--cmp-text-critical)]" : "text-gray-300" },
         ].map(k => (
           <div key={k.label} className="bg-white rounded-xl border border-gray-200 p-4">
             <p className={`text-2xl font-bold tabular-nums ${k.tone}`}>{k.n}</p>

@@ -24,13 +24,13 @@ const INC_META = [
   { key: "nearMiss", label: "Near Miss", color: "#3b82f6" },
 ];
 const QUICK = [
-  { label: "Report New Incident", sub: "Create a new incident report", icon: "📝", tint: "bg-emerald-50", href: "/supervisor/quality-safety" },
-  { label: "Investigation Centre", sub: "Manage investigations", icon: "🔎", tint: "bg-sky-50", href: "/supervisor/quality-safety" },
-  { label: "RCA Workspace", sub: "Perform root cause analysis", icon: "🧩", tint: "bg-orange-50", href: "/supervisor/quality-safety" },
+  { label: "Report New Incident", sub: "Create a new incident report", icon: "📝", tint: "bg-[var(--cmp-surface-success)]", href: "/supervisor/quality-safety" },
+  { label: "Investigation Centre", sub: "Manage investigations", icon: "🔎", tint: "bg-[var(--cmp-surface-information)]", href: "/supervisor/quality-safety" },
+  { label: "RCA Workspace", sub: "Perform root cause analysis", icon: "🧩", tint: "bg-[var(--cmp-surface-warning)]", href: "/supervisor/quality-safety" },
   { label: "CAPA Actions", sub: "Manage corrective actions", icon: "🗂️", tint: "bg-violet-50", href: "/unit-manager/capa" },
   { label: "Incident Analytics", sub: "Trends and benchmarks", icon: "📊", tint: "bg-teal-50", href: "/unit-manager/quality/analytics" },
   { label: "Lessons Learned", sub: "Share learning & alerts", icon: "💡", tint: "bg-pink-50", href: "/unit-manager/quality/ai" },
-  { label: "Regulatory Reporting", sub: "External notifications", icon: "📤", tint: "bg-amber-50", href: "/unit-manager/quality/mortality" },
+  { label: "Regulatory Reporting", sub: "External notifications", icon: "📤", tint: "bg-[var(--cmp-surface-warning)]", href: "/unit-manager/quality/mortality" },
   { label: "Configuration", sub: "Incident settings", icon: "⚙️", tint: "bg-gray-50", href: "/unit-manager/settings" },
 ];
 
@@ -44,7 +44,7 @@ function Delta({ v, unit, prev, invert }: { v: number | null | undefined; unit: 
   if (v == null) return <span className="text-[10px] text-gray-300">no prior period</span>;
   if (v === 0) return <span className="text-[10px] text-gray-400">no change vs {prev}</span>;
   const good = invert ? v < 0 : v > 0;
-  return <span className={`text-[10px] font-medium ${good ? "text-emerald-600" : "text-rose-600"}`}>{v > 0 ? "↑" : "↓"} {Math.abs(v)}{unit} vs {prev}</span>;
+  return <span className={`text-[10px] font-medium ${good ? "text-[var(--cmp-text-success)]" : "text-[var(--cmp-text-error)]"}`}>{v > 0 ? "↑" : "↓"} {Math.abs(v)}{unit} vs {prev}</span>;
 }
 function MultiLine({ labels, series, max }: { labels: string[]; series: { color: string; data: number[] }[]; max: number }) {
   const W = 320, H = 150, pad = 8;
@@ -99,18 +99,18 @@ export default async function IncidentManagement() {
   const header = (
     <>
       <div className="flex items-start justify-between gap-3 flex-wrap">
-        <div className="flex items-center gap-2"><span className="w-9 h-9 rounded-lg bg-rose-50 flex items-center justify-center text-lg">🛡️</span><div><h1 className="text-2xl font-bold text-gray-900 tracking-tight">Incident Management Centre <span className="text-gray-300 font-medium text-lg">(UMG-QS-002)</span></h1><p className="text-sm text-gray-500">Report, investigate and manage incidents to improve patient safety and quality of care</p></div></div>
+        <div className="flex items-center gap-2"><span className="w-9 h-9 rounded-lg bg-[var(--cmp-surface-error)] flex items-center justify-center text-lg">🛡️</span><div><h1 className="text-2xl font-bold text-gray-900 tracking-tight">Incident Management Centre <span className="text-gray-300 font-medium text-lg">(UMG-QS-002)</span></h1><p className="text-sm text-gray-500">Report, investigate and manage incidents to improve patient safety and quality of care</p></div></div>
         <div className="flex items-center gap-2">
           <UnitFilters departments={departments} />
           <Link href="/unit-manager/quality/incidents" className="text-xs border border-gray-200 rounded-lg px-3 py-2 text-gray-600 hover:bg-gray-50">↻ Refresh</Link>
-          <Link href="/supervisor/quality-safety" className="text-xs bg-rose-600 text-white rounded-lg px-3 py-2 hover:bg-rose-700 font-medium">+ Report Incident</Link>
+          <Link href="/supervisor/quality-safety" className="text-xs bg-[var(--cmp-color-error)] text-white rounded-lg px-3 py-2 hover:bg-rose-700 font-medium">+ Report Incident</Link>
         </div>
       </div>
       <QualityTabs />
     </>
   );
 
-  if (!d.provisioned) return <div className="space-y-4">{header}<div className="bg-amber-50 border border-amber-200 rounded-xl p-6"><p className="font-semibold text-amber-900">⚙️ Incident register not provisioned</p><p className="text-sm text-amber-800 mt-1">Apply migration 073 (op_incidents) to enable incident management.</p></div></div>;
+  if (!d.provisioned) return <div className="space-y-4">{header}<div className="bg-[var(--cmp-surface-warning)] border border-[var(--cmp-color-warning)] rounded-xl p-6"><p className="font-semibold text-amber-900">⚙️ Incident register not provisioned</p><p className="text-sm text-amber-800 mt-1">Apply migration 073 (op_incidents) to enable incident management.</p></div></div>;
 
   const k = d.kpis, prev = d.trend.months[4] ?? "prev";
   const catSum = d.category.reduce((a: number, c: any) => a + c.n, 0);
@@ -122,11 +122,11 @@ export default async function IncidentManagement() {
 
       {/* ── KPI ribbon ─────────────────────────────────────────────────────── */}
       <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
-        <Kpi icon="🗂️" tint="bg-sky-50" label="Total Incidents" value={k.total} sub={`${k.totalAll} all-time`} spark={k.sparks.total} sparkColor="#0ea5e9" delta={k.deltas.total} prev={prev} deltaInvert />
-        <Kpi icon="❗" tint="bg-rose-50" label="Critical Incidents" value={k.criticalOpen} tone={k.criticalOpen ? "text-rose-600" : "text-gray-400"} spark={k.sparks.critical} sparkColor="#ef4444" delta={k.deltas.critical} prev={prev} deltaInvert />
-        <Kpi icon="🔎" tint="bg-orange-50" label="Open Investigations" value={k.openInvestigations} sub="in progress" />
+        <Kpi icon="🗂️" tint="bg-[var(--cmp-surface-information)]" label="Total Incidents" value={k.total} sub={`${k.totalAll} all-time`} spark={k.sparks.total} sparkColor="#0ea5e9" delta={k.deltas.total} prev={prev} deltaInvert />
+        <Kpi icon="❗" tint="bg-[var(--cmp-surface-error)]" label="Critical Incidents" value={k.criticalOpen} tone={k.criticalOpen ? "text-[var(--cmp-text-error)]" : "text-gray-400"} spark={k.sparks.critical} sparkColor="#ef4444" delta={k.deltas.critical} prev={prev} deltaInvert />
+        <Kpi icon="🔎" tint="bg-[var(--cmp-surface-warning)]" label="Open Investigations" value={k.openInvestigations} sub="in progress" />
         <Kpi icon="🧩" tint="bg-violet-50" label="Awaiting RCA" value={k.awaitingRca} tone={k.awaitingRca ? "text-violet-600" : "text-gray-400"} sub="need root-cause" />
-        <Kpi icon="⏱️" tint="bg-amber-50" label="Overdue Actions" value={k.overdueActions} tone={k.overdueActions ? "text-amber-600" : "text-gray-400"} sub="open > 30 days" />
+        <Kpi icon="⏱️" tint="bg-[var(--cmp-surface-warning)]" label="Overdue Actions" value={k.overdueActions} tone={k.overdueActions ? "text-[var(--cmp-text-warning)]" : "text-gray-400"} sub="open > 30 days" />
         <Kpi icon="🕐" tint="bg-teal-50" label="Median Investigation" value={k.medianDays != null ? k.medianDays : "—"} unit={k.medianDays != null ? "days" : ""} spark={k.sparks.median} sparkColor="#14b8a6" delta={k.deltas.median} deltaUnit="d" prev={prev} deltaInvert />
       </div>
 
@@ -175,10 +175,10 @@ export default async function IncidentManagement() {
         </div>
 
         <div className={`${card} p-5`}>
-          <div className="flex items-center justify-between mb-3"><h3 className="font-semibold text-gray-900 text-sm">Recent Critical</h3><Link href="/supervisor/quality-safety" className="text-[11px] text-rose-700 hover:underline">View all →</Link></div>
+          <div className="flex items-center justify-between mb-3"><h3 className="font-semibold text-gray-900 text-sm">Recent Critical</h3><Link href="/supervisor/quality-safety" className="text-[11px] text-[var(--cmp-text-error)] hover:underline">View all →</Link></div>
           {d.recentCritical.length ? <div className="space-y-2">{d.recentCritical.map((r: any) => (
             <div key={r.id} className="rounded-lg border border-gray-100 p-2.5">
-              <div className="flex items-center justify-between gap-2"><span className="text-[10px] text-gray-400 tabular-nums">{r.ref}</span><span className="text-[9px] font-semibold rounded px-1.5 py-0.5 bg-rose-100 text-rose-700">Critical</span></div>
+              <div className="flex items-center justify-between gap-2"><span className="text-[10px] text-gray-400 tabular-nums">{r.ref}</span><span className="text-[9px] font-semibold rounded px-1.5 py-0.5 bg-[var(--cmp-surface-error)] text-[var(--cmp-text-error)]">Critical</span></div>
               <p className="text-xs text-gray-700 mt-0.5 line-clamp-2">{r.title}</p>
               <p className="text-[10px] text-gray-400 mt-0.5">{r.at} · {r.status.replace("_", " ")}</p>
             </div>
@@ -190,7 +190,7 @@ export default async function IncidentManagement() {
       <div className={`${card} p-5`}>
         <h3 className="font-semibold text-gray-900 text-sm mb-3">Quick Access</h3>
         <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-8 gap-2">{QUICK.map(q => (
-          <Link key={q.label} href={q.href} className="rounded-lg border border-gray-100 p-3 hover:border-rose-200 hover:shadow-sm transition-all text-center">
+          <Link key={q.label} href={q.href} className="rounded-lg border border-gray-100 p-3 hover:border-[var(--cmp-color-error)] hover:shadow-sm transition-all text-center">
             <span className={`w-9 h-9 rounded-lg ${q.tint} flex items-center justify-center text-base mx-auto mb-1.5`}>{q.icon}</span>
             <p className="text-[11px] font-medium text-gray-800 leading-tight">{q.label}</p>
             <p className="text-[9px] text-gray-400 mt-0.5 leading-tight">{q.sub}</p>
@@ -200,7 +200,7 @@ export default async function IncidentManagement() {
 
       <div className="flex items-center justify-between flex-wrap gap-2 text-[10px] text-gray-400 pb-4">
         <span>Data sources: Shift Supervisor Workspace · Patient Operations · Audit &amp; Compliance · CAPA &amp; Improvement · Risk Register · Clinical Indicators</span>
-        <span className="flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-emerald-500" /> Incident register live · consolidation over op_incidents (migration 073)</span>
+        <span className="flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-[var(--cmp-color-success)]" /> Incident register live · consolidation over op_incidents (migration 073)</span>
       </div>
     </div>
   );

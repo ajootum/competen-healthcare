@@ -15,7 +15,7 @@ type Transfer = { id: string; from_name: string | null; to_name: string | null; 
 type Staff = { id: string; full_name: string };
 
 const relTime = (iso?: string | null) => { if (!iso) return ""; const s = Math.floor((Date.now() - new Date(iso).getTime()) / 1000); if (s < 60) return "just now"; if (s < 3600) return `${Math.floor(s / 60)}m ago`; if (s < 86400) return `${Math.floor(s / 3600)}h ago`; return `${Math.floor(s / 86400)}d ago`; };
-const STATUS_TONE: Record<string, string> = { initiated: "bg-amber-50 text-amber-700 border-amber-200", accepted: "bg-green-50 text-green-700 border-green-200", rejected: "bg-rose-50 text-rose-700 border-rose-200", cancelled: "bg-gray-100 text-gray-500 border-gray-200" };
+const STATUS_TONE: Record<string, string> = { initiated: "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)] border-[var(--cmp-color-warning)]", accepted: "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)] border-[var(--cmp-color-success)]", rejected: "bg-[var(--cmp-surface-error)] text-[var(--cmp-text-error)] border-[var(--cmp-color-error)]", cancelled: "bg-gray-100 text-gray-500 border-gray-200" };
 
 export default function ClosurePanel({ shiftId, provisioned, snapshots, transfers, staff, editable }: {
   shiftId: string | null; provisioned: boolean; snapshots: Snapshot[]; transfers: Transfer[]; staff: Staff[]; editable: boolean;
@@ -114,7 +114,7 @@ export default function ClosurePanel({ shiftId, provisioned, snapshots, transfer
               <p className="text-[10px] text-gray-400">{TRANSFER_REASON_LABEL[t.reason] ?? t.reason}{t.outstanding_summary ? ` · ${t.outstanding_summary}` : ""}{t.rejected_reason ? ` · ${t.rejected_reason}` : ""}</p>
               {editable && t.status === "initiated" && (
                 <div className="flex gap-2 mt-1">
-                  <button onClick={() => decide(t.id, "accept")} disabled={busy === t.id} className="text-[10px] font-semibold text-green-700 hover:underline">accept command</button>
+                  <button onClick={() => decide(t.id, "accept")} disabled={busy === t.id} className="text-[10px] font-semibold text-[var(--cmp-text-success)] hover:underline">accept command</button>
                   <button onClick={() => decide(t.id, "reject")} disabled={busy === t.id} className="text-[10px] text-gray-400 hover:underline">reject</button>
                 </div>
               )}
@@ -135,7 +135,7 @@ export default function ClosurePanel({ shiftId, provisioned, snapshots, transfer
           </div>
         )}
       </div>
-      {err && <p className="text-[11px] text-rose-600 mt-2">{err}</p>}
+      {err && <p className="text-[11px] text-[var(--cmp-text-error)] mt-2">{err}</p>}
     </div>
   );
 }

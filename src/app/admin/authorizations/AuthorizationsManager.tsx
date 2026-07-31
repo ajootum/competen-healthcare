@@ -117,7 +117,7 @@ export default function AuthorizationsManager({
                   })}
                 </div>
               ) : (
-                <p className="text-[11px] text-amber-600 italic">This worker has no competent decisions yet — competency should precede authorization.</p>
+                <p className="text-[11px] text-[var(--cmp-text-warning)] italic">This worker has no competent decisions yet — competency should precede authorization.</p>
               )}
             </div>
           )}
@@ -144,7 +144,7 @@ export default function AuthorizationsManager({
                   {AUTH_TYPE_LABELS[a.authorization_type as AuthorizationType] ?? a.authorization_type} · <span className="capitalize">{a.authorization_level}</span>
                   {a.scope && <> · {a.scope}</>}
                 </p>
-                {a.conditions && <p className="text-[11px] text-amber-600 mt-0.5">⚠ {a.conditions}</p>}
+                {a.conditions && <p className="text-[11px] text-[var(--cmp-text-warning)] mt-0.5">⚠ {a.conditions}</p>}
                 <p className="text-[10px] text-gray-400 mt-1">
                   From {new Date(a.effective_date).toLocaleDateString()}
                   {a.expiry_date && ` → ${new Date(a.expiry_date).toLocaleDateString()}`}
@@ -154,12 +154,12 @@ export default function AuthorizationsManager({
               <div className="flex items-center gap-1.5 shrink-0">
                 {a.status === "active" && (
                   <>
-                    <button onClick={() => api("PATCH", { id: a.id, status: "suspended" })} className="px-2.5 py-1 text-xs text-amber-600 border border-amber-200 rounded-lg hover:bg-amber-50">Suspend</button>
-                    <button onClick={() => api("PATCH", { id: a.id, status: "revoked" })} className="px-2.5 py-1 text-xs text-red-500 border border-red-200 rounded-lg hover:bg-red-50">Revoke</button>
+                    <button onClick={() => api("PATCH", { id: a.id, status: "suspended" })} className="px-2.5 py-1 text-xs text-[var(--cmp-text-warning)] border border-[var(--cmp-color-warning)] rounded-lg hover:bg-[var(--cmp-surface-warning)]">Suspend</button>
+                    <button onClick={() => api("PATCH", { id: a.id, status: "revoked" })} className="px-2.5 py-1 text-xs text-red-500 border border-[var(--cmp-color-critical)] rounded-lg hover:bg-[var(--cmp-surface-critical)]">Revoke</button>
                   </>
                 )}
                 {a.status === "suspended" && (
-                  <button onClick={() => api("PATCH", { id: a.id, status: "active" })} className="px-2.5 py-1 text-xs text-green-600 border border-green-200 rounded-lg hover:bg-green-50">Reactivate</button>
+                  <button onClick={() => api("PATCH", { id: a.id, status: "active" })} className="px-2.5 py-1 text-xs text-[var(--cmp-text-success)] border border-[var(--cmp-color-success)] rounded-lg hover:bg-[var(--cmp-surface-success)]">Reactivate</button>
                 )}
               </div>
             </div>

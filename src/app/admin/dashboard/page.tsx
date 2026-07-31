@@ -203,8 +203,8 @@ export default async function AdminDashboardPage() {
           <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 mb-6">
             {[
               { label: "Total Nurses",      value: totalNurses,                color: "text-teal-600",  icon: "👩‍⚕️", sub: `${wards.length} wards` },
-              { label: "Courses Completed", value: completedCourses,           color: "text-blue-600",  icon: "📚", sub: `${allEnrollments?.length ?? 0} enrolled` },
-              { label: "Competencies",      value: competentCount,             color: "text-green-600", icon: "✅", sub: `${expiredCount} expired` },
+              { label: "Courses Completed", value: completedCourses,           color: "text-[var(--cmp-text-information)]",  icon: "📚", sub: `${allEnrollments?.length ?? 0} enrolled` },
+              { label: "Competencies",      value: competentCount,             color: "text-[var(--cmp-text-success)]", icon: "✅", sub: `${expiredCount} expired` },
               { label: "Total CPD Hours",   value: totalCPDHours.toFixed(0),   color: "text-amber-500", icon: "⏱️", sub: cpdTarget !== null ? `${onTrack} at target` : "no target set" },
               { label: "At Risk",           value: atRiskNurses,               color: "text-red-500",   icon: "⚠️", sub: "flagged from live decisions" },
             ].map(({ label, value, color, icon, sub }) => (
@@ -221,11 +221,11 @@ export default async function AdminDashboardPage() {
 
           {/* Expiring certificates alert */}
           {expiring.length > 0 && (
-            <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 mb-6 flex items-start gap-3">
+            <div className="bg-[var(--cmp-surface-warning)] border border-[var(--cmp-color-warning)] rounded-xl p-4 mb-6 flex items-start gap-3">
               <span className="text-xl shrink-0">⚠️</span>
               <div className="flex-1">
                 <p className="text-sm font-semibold text-amber-800">{expiring.length} competenc{expiring.length === 1 ? "y" : "ies"} expiring in the next 60 days</p>
-                <p className="text-xs text-amber-600 mt-0.5">Review and renew before expiry to maintain compliance.</p>
+                <p className="text-xs text-[var(--cmp-text-warning)] mt-0.5">Review and renew before expiry to maintain compliance.</p>
               </div>
             </div>
           )}
@@ -240,7 +240,7 @@ export default async function AdminDashboardPage() {
                 <div className="flex flex-col gap-3">
                   {wards.map(([ward, data]) => {
                     const rate = data.compCount > 0 ? Math.round((data.competentCount / data.compCount) * 100) : 0;
-                    const barColor = rate >= 75 ? "bg-green-500" : rate >= 50 ? "bg-amber-400" : "bg-red-400";
+                    const barColor = rate >= 75 ? "bg-[var(--cmp-color-success)]" : rate >= 50 ? "bg-[var(--cmp-color-warning)]" : "bg-[var(--cmp-color-critical)]";
                     return (
                       <div key={ward}>
                         <div className="flex items-center justify-between text-xs mb-1.5">
@@ -248,7 +248,7 @@ export default async function AdminDashboardPage() {
                             <span className="text-gray-700 font-medium">{ward}</span>
                             <span className="text-gray-400">{data.nurses!.length} nurse{data.nurses!.length !== 1 ? "s" : ""}</span>
                           </div>
-                          <span className={`font-bold ${rate >= 75 ? "text-green-600" : rate >= 50 ? "text-amber-600" : "text-red-500"}`}>
+                          <span className={`font-bold ${rate >= 75 ? "text-[var(--cmp-text-success)]" : rate >= 50 ? "text-[var(--cmp-text-warning)]" : "text-red-500"}`}>
                             {rate}%
                           </span>
                         </div>
@@ -272,10 +272,10 @@ export default async function AdminDashboardPage() {
                     const count = allComps.filter(c => c.status === status).length;
                     const pct = Math.round((count / allComps.length) * 100);
                     const colors: Record<string, string> = {
-                      competent:           "bg-green-500",
-                      awaiting_validation: "bg-blue-500",
-                      expired:             "bg-red-500",
-                      not_yet:             "bg-amber-400",
+                      competent:           "bg-[var(--cmp-color-success)]",
+                      awaiting_validation: "bg-[var(--cmp-color-information)]",
+                      expired:             "bg-[var(--cmp-color-critical)]",
+                      not_yet:             "bg-[var(--cmp-color-warning)]",
                     };
                     const labels: Record<string, string> = {
                       competent: "Competent", awaiting_validation: "Awaiting Validation",
@@ -310,14 +310,14 @@ export default async function AdminDashboardPage() {
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
                 {topGaps.map(gap => (
                   <div key={gap.name} className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg border border-gray-100">
-                    <div className="w-8 h-8 rounded-lg bg-red-50 flex items-center justify-center text-sm shrink-0">⚠️</div>
+                    <div className="w-8 h-8 rounded-lg bg-[var(--cmp-surface-critical)] flex items-center justify-center text-sm shrink-0">⚠️</div>
                     <div className="flex-1 min-w-0">
                       <p className="text-xs font-semibold text-gray-800 truncate">{gap.name}</p>
                       <p className="text-[10px] text-gray-400">{gap.category}</p>
                     </div>
                     <div className="text-right shrink-0">
                       {gap.expired > 0 && <p className="text-[10px] font-bold text-red-500">{gap.expired} expired</p>}
-                      {gap.notYet > 0 && <p className="text-[10px] text-amber-600">{gap.notYet} not yet competent</p>}
+                      {gap.notYet > 0 && <p className="text-[10px] text-[var(--cmp-text-warning)]">{gap.notYet} not yet competent</p>}
                     </div>
                   </div>
                 ))}
@@ -359,10 +359,10 @@ export default async function AdminDashboardPage() {
                       const nurseExpiring  = expiring.filter(c => c.user_id === nurse.id).length;
                       const statusLabel = cpdTarget === null
                         ? (nurse.hours > 0 ? { label: `${nurse.hours.toFixed(0)}h logged`, cls: "bg-gray-100 text-gray-600" } : { label: "Nothing logged", cls: "bg-gray-100 text-gray-400" })
-                        : nurse.hours >= cpdTarget       ? { label: "On Target", cls: "bg-green-100 text-green-700" }
-                        : nurse.hours >= cpdTarget / 2   ? { label: "In Progress", cls: "bg-blue-100 text-blue-700" }
-                        : nurse.hours > 0                ? { label: "Behind", cls: "bg-amber-100 text-amber-700" }
-                        : { label: "Not Started", cls: "bg-red-100 text-red-600" };
+                        : nurse.hours >= cpdTarget       ? { label: "On Target", cls: "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]" }
+                        : nurse.hours >= cpdTarget / 2   ? { label: "In Progress", cls: "bg-[var(--cmp-surface-information)] text-blue-700" }
+                        : nurse.hours > 0                ? { label: "Behind", cls: "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]" }
+                        : { label: "Not Started", cls: "bg-[var(--cmp-surface-critical)] text-[var(--cmp-text-critical)]" };
                       return (
                         <tr key={nurse.id}>
                           <td className="py-3">
@@ -373,7 +373,7 @@ export default async function AdminDashboardPage() {
                               <div>
                                 <p className="text-gray-800 font-medium text-sm">{nurse.full_name}</p>
                                 {nurseExpiring > 0 && (
-                                  <p className="text-[10px] text-amber-600">⚠️ {nurseExpiring} cert{nurseExpiring > 1 ? "s" : ""} expiring</p>
+                                  <p className="text-[10px] text-[var(--cmp-text-warning)]">⚠️ {nurseExpiring} cert{nurseExpiring > 1 ? "s" : ""} expiring</p>
                                 )}
                               </div>
                             </div>
@@ -386,7 +386,7 @@ export default async function AdminDashboardPage() {
                             {pct !== null ? (
                               <>
                                 <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
-                                  <div className={`h-full rounded-full ${pct === 100 ? "bg-green-500" : pct >= 50 ? "bg-blue-400" : pct > 0 ? "bg-amber-400" : "bg-gray-200"}`}
+                                  <div className={`h-full rounded-full ${pct === 100 ? "bg-[var(--cmp-color-success)]" : pct >= 50 ? "bg-[var(--cmp-color-information)]" : pct > 0 ? "bg-[var(--cmp-color-warning)]" : "bg-gray-200"}`}
                                     style={{ width: `${pct}%` }} />
                                 </div>
                                 <p className="text-[10px] text-gray-400 mt-0.5">{pct}%</p>
@@ -399,7 +399,7 @@ export default async function AdminDashboardPage() {
                             <div className="flex items-center gap-2">
                               <span className={`text-[10px] font-semibold px-2 py-0.5 rounded ${statusLabel.cls}`}>{statusLabel.label}</span>
                               {nurseCompetent > 0 && (
-                                <span className="text-[10px] text-green-600">{nurseCompetent} competent</span>
+                                <span className="text-[10px] text-[var(--cmp-text-success)]">{nurseCompetent} competent</span>
                               )}
                             </div>
                           </td>
@@ -414,9 +414,9 @@ export default async function AdminDashboardPage() {
 
           {/* Expiring competencies detail */}
           {expiring.length > 0 && (
-            <div className="bg-white rounded-xl border border-amber-100 p-5 mb-6">
+            <div className="bg-white rounded-xl border border-[var(--cmp-color-warning)] p-5 mb-6">
               <h2 className="font-semibold text-gray-900 text-sm mb-4">
-                Expiring Certifications <span className="text-amber-600 font-bold">({expiring.length})</span>
+                Expiring Certifications <span className="text-[var(--cmp-text-warning)] font-bold">({expiring.length})</span>
               </h2>
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
@@ -440,7 +440,7 @@ export default async function AdminDashboardPage() {
                           <td className="py-2.5 text-gray-500 text-xs">{c.category}</td>
                           <td className="py-2.5 text-gray-500 text-xs">{c.expiry_date}</td>
                           <td className="py-2.5">
-                            <span className={`text-xs font-semibold ${daysLeft <= 14 ? "text-red-600" : "text-amber-600"}`}>
+                            <span className={`text-xs font-semibold ${daysLeft <= 14 ? "text-[var(--cmp-text-critical)]" : "text-[var(--cmp-text-warning)]"}`}>
                               {daysLeft}d
                             </span>
                           </td>
@@ -458,7 +458,7 @@ export default async function AdminDashboardPage() {
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
               {[
                 ...(["org_admin","manager"].includes(orgRole ?? "") || !orgRole ? [{ label: "Invite Worker", icon: "➕", color: "bg-teal-50 text-teal-700", href: "/admin/invite" }] : []),
-                { label: "Export CPD Report", icon: "📊", color: "bg-blue-50 text-blue-700", href: "/api/reports/admin-cpd" },
+                { label: "Export CPD Report", icon: "📊", color: "bg-[var(--cmp-surface-information)] text-blue-700", href: "/api/reports/admin-cpd" },
                 { label: "Competency Matrix", icon: "🪪", color: "bg-purple-50 text-purple-700", href: "/admin/competencies" },
                 ...(["org_admin"].includes(orgRole ?? "") || !orgRole ? [{ label: "Settings", icon: "⚙️", color: "bg-gray-50 text-gray-700", href: "/admin/settings" }] : []),
               ].map(({ label, icon, color, href }) => href.startsWith("/api/") ? (

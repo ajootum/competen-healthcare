@@ -77,7 +77,7 @@ export default async function AnalyticsPage() {
           <Table cols={["Signal", "Latest", "3-mo Δ", "Outlook"]} rows={d.forecast.map((f, i) => [
             <span key={`s${i}`} className="text-gray-700">{f.label}</span>,
             <span key={`c${i}`} className="tabular-nums text-gray-700">{f.current ?? "—"}</span>,
-            <span key={`dl${i}`} className={`tabular-nums ${f.dir === "up" ? "text-rose-600" : f.dir === "down" ? "text-emerald-600" : "text-gray-400"}`}>{f.delta == null ? "—" : signed(f.delta)}</span>,
+            <span key={`dl${i}`} className={`tabular-nums ${f.dir === "up" ? "text-[var(--cmp-text-error)]" : f.dir === "down" ? "text-[var(--cmp-text-success)]" : "text-gray-400"}`}>{f.delta == null ? "—" : signed(f.delta)}</span>,
             <Pill key={`o${i}`} text={f.outlook} tone={f.tone} />,
           ])} empty="No snapshot history yet." />
           <p className="text-[10px] text-gray-400 mt-2">Direction of each risk signal over the last ~3 months of snapshots. Rule-based projection — statistical / ML forecasting is next-phase.</p>

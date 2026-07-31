@@ -15,12 +15,12 @@ export const dynamic = "force-dynamic";
 
 const card = "bg-white rounded-xl border border-gray-200";
 const fmt = (n: number) => n.toLocaleString();
-const TONE: Record<string, string> = { red: "text-red-600", amber: "text-amber-600", orange: "text-orange-600", violet: "text-violet-600", sky: "text-sky-600", green: "text-green-600" };
-const TONE_BG: Record<string, string> = { red: "bg-red-50 border-red-100", amber: "bg-amber-50 border-amber-100", orange: "bg-orange-50 border-orange-100", violet: "bg-violet-50 border-violet-100", sky: "bg-sky-50 border-sky-100", green: "bg-green-50 border-green-100" };
+const TONE: Record<string, string> = { red: "text-[var(--cmp-text-critical)]", amber: "text-[var(--cmp-text-warning)]", orange: "text-[var(--cmp-text-warning)]", violet: "text-violet-600", sky: "text-[var(--cmp-text-information)]", green: "text-[var(--cmp-text-success)]" };
+const TONE_BG: Record<string, string> = { red: "bg-[var(--cmp-surface-critical)] border-[var(--cmp-color-critical)]", amber: "bg-[var(--cmp-surface-warning)] border-[var(--cmp-color-warning)]", orange: "bg-[var(--cmp-surface-warning)] border-[var(--cmp-color-warning)]", violet: "bg-violet-50 border-violet-100", sky: "bg-[var(--cmp-surface-information)] border-[var(--cmp-color-information)]", green: "bg-[var(--cmp-surface-success)] border-[var(--cmp-color-success)]" };
 const HEALTH: Record<string, { dot: string; txt: string; label: string }> = {
-  healthy: { dot: "bg-green-500", txt: "text-green-600", label: "Healthy" },
-  warning: { dot: "bg-amber-500", txt: "text-amber-600", label: "Warning" },
-  degraded: { dot: "bg-red-500", txt: "text-red-600", label: "Degraded" },
+  healthy: { dot: "bg-[var(--cmp-color-success)]", txt: "text-[var(--cmp-text-success)]", label: "Healthy" },
+  warning: { dot: "bg-[var(--cmp-color-warning)]", txt: "text-[var(--cmp-text-warning)]", label: "Warning" },
+  degraded: { dot: "bg-[var(--cmp-color-critical)]", txt: "text-[var(--cmp-text-critical)]", label: "Degraded" },
   not_monitored: { dot: "bg-gray-300", txt: "text-gray-400", label: "Not monitored" },
 };
 
@@ -50,9 +50,9 @@ export default async function ExecutiveCommandCentre({ searchParams }: { searchP
 
   const ec = await loadExecutiveCommand(admin, rangeDays);
   const { banner, attention, health, decisionQueue, intelligence, growth, metrics, spark } = ec;
-  const bannerTone = banner.health === "Operational" ? { txt: "text-green-400", bg: "bg-green-500/15", icon: "✓" }
-    : banner.health === "Attention" ? { txt: "text-amber-400", bg: "bg-amber-500/15", icon: "!" }
-    : { txt: "text-red-400", bg: "bg-red-500/15", icon: "!" };
+  const bannerTone = banner.health === "Operational" ? { txt: "text-green-400", bg: "bg-[var(--cmp-color-success)]/15", icon: "✓" }
+    : banner.health === "Attention" ? { txt: "text-amber-400", bg: "bg-[var(--cmp-color-warning)]/15", icon: "!" }
+    : { txt: "text-red-400", bg: "bg-[var(--cmp-color-critical)]/15", icon: "!" };
 
   const bannerTiles = [
     { icon: "🏢", n: banner.enterprises, label: "Enterprises" },
@@ -127,7 +127,7 @@ export default async function ExecutiveCommandCentre({ searchParams }: { searchP
             {health.map(h => { const hc = HEALTH[h.status] ?? HEALTH.not_monitored; return (
               <Link key={h.name} href={h.href} className="flex items-center gap-2 py-1.5 hover:bg-gray-50 -mx-2 px-2 rounded-lg group">
                 <div className="flex-1 min-w-0"><p className="text-sm font-medium text-gray-800 truncate">{h.name}</p><p className="text-[10px] text-gray-400 truncate">{h.desc}</p></div>
-                {h.alerts > 0 && <span className="text-[10px] bg-amber-100 text-amber-700 rounded px-1.5">{h.alerts}</span>}
+                {h.alerts > 0 && <span className="text-[10px] bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)] rounded px-1.5">{h.alerts}</span>}
                 <span className={`inline-flex items-center gap-1.5 text-[11px] shrink-0 ${hc.txt}`}><span className={`w-1.5 h-1.5 rounded-full ${hc.dot}`} />{hc.label}</span>
               </Link>
             ); })}

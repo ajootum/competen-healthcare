@@ -11,7 +11,7 @@ import { cardClass } from "@/components/ui/primitives";
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 const relTime = (iso?: string | null) => { if (!iso) return ""; const s = Math.floor((Date.now() - new Date(iso).getTime()) / 1000); if (s < 60) return "just now"; if (s < 3600) return `${Math.floor(s / 60)}m ago`; if (s < 86400) return `${Math.floor(s / 3600)}h ago`; return `${Math.floor(s / 86400)}d ago`; };
-const TYPE_TONE: Record<string, string> = { staffing_decision: "bg-blue-50 text-blue-700", operational_event: "bg-amber-50 text-amber-700", coaching: "bg-teal-50 text-teal-700", risk: "bg-rose-50 text-rose-700", handover: "bg-violet-50 text-violet-700", action_item: "bg-orange-50 text-orange-700", general: "bg-gray-100 text-gray-600" };
+const TYPE_TONE: Record<string, string> = { staffing_decision: "bg-[var(--cmp-surface-information)] text-blue-700", operational_event: "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]", coaching: "bg-teal-50 text-teal-700", risk: "bg-[var(--cmp-surface-error)] text-[var(--cmp-text-error)]", handover: "bg-violet-50 text-violet-700", action_item: "bg-[var(--cmp-surface-warning)] text-orange-700", general: "bg-gray-100 text-gray-600" };
 
 export default function SupervisorNotesPanel({ shiftId, data, editable }: {
   shiftId: string | null; data: any; editable: boolean;
@@ -80,18 +80,18 @@ export default function SupervisorNotesPanel({ shiftId, data, editable }: {
           <div key={n.id} className="rounded-lg border border-gray-100 px-2.5 py-1.5">
             <div className="flex items-center gap-2">
               <span className={`text-[9px] font-semibold px-1.5 py-0.5 rounded ${TYPE_TONE[n.note_type] ?? "bg-gray-100 text-gray-600"}`}>{NOTE_TYPE_LABEL[n.note_type] ?? n.note_type}</span>
-              {n.note_type === "action_item" && <span className={`text-[9px] font-semibold px-1.5 py-0.5 rounded ${n.status === "open" ? "bg-amber-50 text-amber-700" : "bg-green-50 text-green-700"}`}>{n.status}</span>}
+              {n.note_type === "action_item" && <span className={`text-[9px] font-semibold px-1.5 py-0.5 rounded ${n.status === "open" ? "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]" : "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]"}`}>{n.status}</span>}
               <span className="ml-auto text-[10px] text-gray-400 shrink-0">{relTime(n.created_at)}</span>
             </div>
             <p className="text-xs text-gray-800 mt-0.5">{n.body}</p>
             <div className="flex items-center gap-2 mt-0.5">
               <span className="text-[10px] text-gray-400">{n.author_name ?? "—"}</span>
-              {editable && n.note_type === "action_item" && n.status === "open" && <button onClick={() => close(n.id)} disabled={busy === n.id} className="text-[10px] text-green-700 hover:underline">mark done</button>}
+              {editable && n.note_type === "action_item" && n.status === "open" && <button onClick={() => close(n.id)} disabled={busy === n.id} className="text-[10px] text-[var(--cmp-text-success)] hover:underline">mark done</button>}
             </div>
           </div>
         ))}
       </div>
-      {err && <p className="text-[11px] text-rose-600 mt-2">{err}</p>}
+      {err && <p className="text-[11px] text-[var(--cmp-text-error)] mt-2">{err}</p>}
     </div>
   );
 }

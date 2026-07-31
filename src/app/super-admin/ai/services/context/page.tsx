@@ -22,8 +22,8 @@ export default async function ContextPage() {
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         <Stat label="Context Sources" value={k.total} sub={`${k.active} active`} />
         <Stat label="Context Domains" value={k.domains} sub="of 8" />
-        <Stat label="Signed Envelope" value="Yes" sub="tamper-evident" tone="text-emerald-600" />
-        <Stat label="Tenant Isolation" value="Enforced" sub="before traversal" tone="text-emerald-600" />
+        <Stat label="Signed Envelope" value="Yes" sub="tamper-evident" tone="text-[var(--cmp-text-success)]" />
+        <Stat label="Tenant Isolation" value="Enforced" sub="before traversal" tone="text-[var(--cmp-text-success)]" />
       </div>
 
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">

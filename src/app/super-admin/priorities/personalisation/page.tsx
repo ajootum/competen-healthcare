@@ -21,7 +21,7 @@ export default async function PersonalisationPage() {
         <Stat label="Effective Priorities" value={d.effectiveCount} sub="resolved" tone="text-teal-600" />
         <Stat label="Workspace Profiles" value={d.workspaces.length} sub="context views" />
         <Stat label="Context Sources" value={d.contextSources.length} sub="signals" />
-        <Stat label="Mandatory Pinned" value={d.topEffective.filter((p: any) => p.mandatory).length} sub="always top" tone="text-rose-600" />
+        <Stat label="Mandatory Pinned" value={d.topEffective.filter((p: any) => p.mandatory).length} sub="always top" tone="text-[var(--cmp-text-error)]" />
       </div>
 
       <Card title="Workspace Behaviour" right={<span className="text-[11px] text-gray-400">resolved priorities per context</span>}>

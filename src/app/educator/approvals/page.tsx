@@ -77,7 +77,7 @@ export default async function PassportApprovalsPage() {
                   <RunDecisions cycleId={r.id} disabled={r.validated === 0} />
                 </div>
                 {r.validated < r.scored && (
-                  <p className="text-[10px] text-amber-600 mt-1">
+                  <p className="text-[10px] text-[var(--cmp-text-warning)] mt-1">
                     {r.scored - r.validated} score{r.scored - r.validated === 1 ? "" : "s"} unvalidated — finish in{" "}
                     <Link href="/educator/validations" className="underline">Pending Validation</Link> first for full coverage.
                   </p>

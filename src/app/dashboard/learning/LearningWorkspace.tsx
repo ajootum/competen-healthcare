@@ -64,7 +64,7 @@ export default function LearningWorkspace({ items }: { items: PathwayItem[] }) {
           <p className={`text-sm text-gray-800 ${done ? "line-through" : ""}`}>
             {i.resource_title ?? i.competency_name}
             {i.resource_type && <span className="ml-1.5 text-[9px] font-bold bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded uppercase">{i.resource_type}</span>}
-            {isHighPriority(i) && !done && <span className="ml-1.5 text-[9px] font-bold bg-red-50 text-red-600 px-1.5 py-0.5 rounded">HIGH PRIORITY</span>}
+            {isHighPriority(i) && !done && <span className="ml-1.5 text-[9px] font-bold bg-[var(--cmp-surface-critical)] text-[var(--cmp-text-critical)] px-1.5 py-0.5 rounded">HIGH PRIORITY</span>}
           </p>
           <p className="text-[10px] text-gray-400 truncate">
             {i.competency_name && i.resource_title ? `${i.competency_name} · ` : ""}Why: {i.reason ?? "assigned to your pathway"}
@@ -79,7 +79,7 @@ export default function LearningWorkspace({ items }: { items: PathwayItem[] }) {
               <button onClick={() => setStatus(i.id, "in_progress")} disabled={busy === i.id}
                 className="text-xs font-semibold bg-teal-600 hover:bg-teal-700 text-white px-3 py-1.5 rounded-lg disabled:opacity-50">Start</button>
             )}
-            {started && <span className="text-[9px] font-bold text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded">IN PROGRESS</span>}
+            {started && <span className="text-[9px] font-bold text-[var(--cmp-text-information)] bg-[var(--cmp-surface-information)] px-1.5 py-0.5 rounded">IN PROGRESS</span>}
             <button onClick={() => setStatus(i.id, "completed")} disabled={busy === i.id}
               className="text-xs font-semibold text-teal-700 border border-teal-200 hover:bg-teal-50 px-3 py-1.5 rounded-lg disabled:opacity-50">✓ Done</button>
           </div>
@@ -92,15 +92,15 @@ export default function LearningWorkspace({ items }: { items: PathwayItem[] }) {
     <div className="flex flex-col gap-5">
       {/* Priority Learning (spec §2) */}
       {priority && (
-        <div className="bg-white rounded-xl border border-red-100 overflow-hidden">
+        <div className="bg-white rounded-xl border border-[var(--cmp-color-critical)] overflow-hidden">
           <div className="px-4 pt-3.5">
-            <span className="text-[9px] font-bold bg-red-50 text-red-600 px-2 py-0.5 rounded">⚠ HIGH PRIORITY</span>
+            <span className="text-[9px] font-bold bg-[var(--cmp-surface-critical)] text-[var(--cmp-text-critical)] px-2 py-0.5 rounded">⚠ HIGH PRIORITY</span>
             <p className="text-sm font-bold text-gray-900 mt-2">{priority.competency_name ?? priority.resource_title}</p>
             <p className="text-[11px] text-gray-500 mt-0.5">Why: {priority.reason}</p>
           </div>
           <div className="px-4 py-3 flex gap-2">
             <button onClick={() => setStatus(priority.id, "in_progress")} disabled={busy === priority.id}
-              className="flex-1 text-xs font-semibold bg-red-600 hover:bg-red-700 text-white py-2 rounded-lg disabled:opacity-50">
+              className="flex-1 text-xs font-semibold bg-[var(--cmp-color-critical)] hover:bg-red-700 text-white py-2 rounded-lg disabled:opacity-50">
               Start learning path →
             </button>
             <button onClick={() => setStatus(priority.id, "completed")} disabled={busy === priority.id}

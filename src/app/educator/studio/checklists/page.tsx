@@ -35,7 +35,7 @@ export default async function StudioChecklistsPage() {
       <Link href="/educator/studio/assessment" className="text-xs text-gray-400 hover:text-gray-600">← Assessment Design Studio</Link>
       <div className="mt-1"><EduHeader icon="📋" title="Clinical Skills Checklist Builder" sub="Author the master checklists — sections, scoring rules, critical-fail items. Every assessment method, audit and AI grounding reads these." /></div>
       {(checklists ?? []).length === 0 && (
-        <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 text-sm text-amber-800 mb-4">
+        <div className="bg-[var(--cmp-surface-warning)] border border-[var(--cmp-color-warning)] rounded-xl p-4 text-sm text-amber-800 mb-4">
           No checklists exist yet — this is the content gap that keeps audit templates, cockpit criteria and OSCE/AI grounding empty. Author the first here.
         </div>
       )}

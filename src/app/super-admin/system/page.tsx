@@ -15,9 +15,9 @@ export const dynamic = "force-dynamic";
 const card = "bg-white rounded-xl border border-gray-200";
 const dash = (n: number | null | undefined) => (n == null ? "—" : n.toLocaleString());
 const relTime = (iso?: string | null) => { if (!iso) return ""; const s = Math.floor((Date.now() - new Date(iso).getTime()) / 1000); if (s < 60) return "just now"; if (s < 3600) return `${Math.floor(s / 60)}m ago`; if (s < 86400) return `${Math.floor(s / 3600)}h ago`; return `${Math.floor(s / 86400)}d ago`; };
-const ACCENT: Record<number, string> = { 1: "bg-blue-100 text-blue-700", 2: "bg-violet-100 text-violet-700", 3: "bg-rose-100 text-rose-700", 4: "bg-teal-100 text-teal-700", 5: "bg-green-100 text-green-700", 6: "bg-indigo-100 text-indigo-700" };
-const SVC_TONE: Record<string, string> = { operational: "bg-green-50 text-green-700", slow: "bg-amber-50 text-amber-700", degraded: "bg-rose-50 text-rose-700" };
-const W_TONE: Record<string, string> = { ok: "bg-green-50 text-green-700", warn: "bg-amber-50 text-amber-700", down: "bg-rose-50 text-rose-700", na: "bg-gray-100 text-gray-400" };
+const ACCENT: Record<number, string> = { 1: "bg-[var(--cmp-surface-information)] text-blue-700", 2: "bg-violet-100 text-violet-700", 3: "bg-[var(--cmp-surface-error)] text-[var(--cmp-text-error)]", 4: "bg-teal-100 text-teal-700", 5: "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]", 6: "bg-indigo-100 text-indigo-700" };
+const SVC_TONE: Record<string, string> = { operational: "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]", slow: "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]", degraded: "bg-[var(--cmp-surface-error)] text-[var(--cmp-text-error)]" };
+const W_TONE: Record<string, string> = { ok: "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]", warn: "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]", down: "bg-[var(--cmp-surface-error)] text-[var(--cmp-text-error)]", na: "bg-gray-100 text-gray-400" };
 
 export default async function SystemSecurityPlatform() {
   const supabase = await createClient();
@@ -32,12 +32,12 @@ export default async function SystemSecurityPlatform() {
   const k = d.kpis;
 
   const ribbon = [
-    { label: "Platform Health", value: k.platformHealth == null ? "—" : `${k.platformHealth}%`, icon: "💚", tone: k.platformHealth != null && k.platformHealth >= 90 ? "text-green-600" : k.platformHealth == null ? "text-gray-400" : "text-amber-600" },
+    { label: "Platform Health", value: k.platformHealth == null ? "—" : `${k.platformHealth}%`, icon: "💚", tone: k.platformHealth != null && k.platformHealth >= 90 ? "text-[var(--cmp-text-success)]" : k.platformHealth == null ? "text-gray-400" : "text-[var(--cmp-text-warning)]" },
     { label: "Security Score", value: k.securityScore == null ? "—" : `${k.securityScore}/100`, icon: "🛡️", tone: "text-gray-400" },
     { label: "Active Users (24h)", value: dash(k.activeUsers24h), icon: "👤", tone: "text-gray-900" },
     { label: "System Uptime", value: k.uptime == null ? "—" : `${k.uptime}%`, icon: "🕓", tone: "text-gray-400" },
-    { label: "Open Incidents", value: dash(k.openIncidents), icon: "🚨", tone: (k.openIncidents ?? 0) > 0 ? "text-rose-600" : "text-gray-900" },
-    { label: "Critical Alerts", value: dash(k.criticalAlerts), icon: "⚠️", tone: (k.criticalAlerts ?? 0) > 0 ? "text-rose-600" : "text-gray-900" },
+    { label: "Open Incidents", value: dash(k.openIncidents), icon: "🚨", tone: (k.openIncidents ?? 0) > 0 ? "text-[var(--cmp-text-error)]" : "text-gray-900" },
+    { label: "Critical Alerts", value: dash(k.criticalAlerts), icon: "⚠️", tone: (k.criticalAlerts ?? 0) > 0 ? "text-[var(--cmp-text-error)]" : "text-gray-900" },
   ];
 
   return (
@@ -137,7 +137,7 @@ export default async function SystemSecurityPlatform() {
             <div className="space-y-2">
               {d.alerts.map((a: any, i: number) => (
                 <div key={i} className="flex items-start gap-2 rounded-lg border border-gray-100 p-2">
-                  <span className={`w-1.5 h-1.5 rounded-full mt-1.5 shrink-0 ${["critical", "high", "emergency"].includes(String(a.severity ?? "").toLowerCase()) ? "bg-rose-500" : "bg-amber-400"}`} />
+                  <span className={`w-1.5 h-1.5 rounded-full mt-1.5 shrink-0 ${["critical", "high", "emergency"].includes(String(a.severity ?? "").toLowerCase()) ? "bg-[var(--cmp-color-error)]" : "bg-[var(--cmp-color-warning)]"}`} />
                   <div className="min-w-0 flex-1">
                     <p className="text-xs text-gray-800 leading-tight truncate">{a.summary ?? a.note ?? a.title ?? "Alert"}</p>
                     <p className="text-[9px] text-gray-400">{a.kind ?? a.escalation_type ?? a.category ?? ""} · {relTime(a.created_at)}</p>

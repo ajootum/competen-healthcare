@@ -53,11 +53,11 @@ export default async function AssignmentRulesPage() {
 
       <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
         <Kpi label="Assignment rules" value={k.rules} />
-        <Kpi label="Active rules" value={k.active} tone="text-emerald-600" sub={`of ${k.rules}`} />
+        <Kpi label="Active rules" value={k.active} tone="text-[var(--cmp-text-success)]" sub={`of ${k.rules}`} />
         <Kpi label="Roles targeted" value={k.roles} sub="distinct populations" />
         <Kpi label="Assignments generated" value={k.generated} sub="method = rule" />
         <Kpi label="Staff covered" value={k.staffCovered} sub="across active rules" />
-        <Kpi label="Never applied" value={k.neverApplied} tone={k.neverApplied ? "text-amber-600" : "text-gray-900"} sub="0 generated" />
+        <Kpi label="Never applied" value={k.neverApplied} tone={k.neverApplied ? "text-[var(--cmp-text-warning)]" : "text-gray-900"} sub="0 generated" />
       </div>
 
       <Card title="Assignment workflow" right={<span className="text-[11px] text-gray-400 hidden md:inline">define → target → apply → prioritise → assign → notify → track</span>}>

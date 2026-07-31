@@ -13,7 +13,7 @@ const CHANGE_SOON = ["Curriculum revision", "New educator assignment", "New asse
 function chip(t: Trend, soon = false) {
   if (soon) return <span className="text-[8px] font-bold uppercase text-gray-300">soon</span>;
   if (!t) return <span className="text-[10px] text-gray-300">—</span>;
-  return <span className={`text-[11px] font-bold ${t.dir === "up" ? "text-green-600" : "text-red-500"}`}>{t.dir === "up" ? "▲" : "▼"} {t.pct}%</span>;
+  return <span className={`text-[11px] font-bold ${t.dir === "up" ? "text-[var(--cmp-text-success)]" : "text-red-500"}`}>{t.dir === "up" ? "▲" : "▼"} {t.pct}%</span>;
 }
 function project(series: (number | null)[]): number | null {
   const v = series.filter((x): x is number => x !== null);

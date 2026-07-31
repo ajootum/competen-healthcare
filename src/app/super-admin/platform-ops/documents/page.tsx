@@ -43,7 +43,7 @@ export default async function DocumentServiceConsole({ searchParams }: { searchP
     </div>
   );
 
-  if (!d.provisioned) return <div className="space-y-4">{header}<div className="bg-amber-50 border border-amber-200 rounded-xl p-6"><p className="font-semibold text-amber-900">⚙️ Document stores not provisioned</p><p className="text-sm text-amber-800 mt-1">The evidence and assessment-evidence stores aren&apos;t available for this tenant yet.</p></div></div>;
+  if (!d.provisioned) return <div className="space-y-4">{header}<div className="bg-[var(--cmp-surface-warning)] border border-[var(--cmp-color-warning)] rounded-xl p-6"><p className="font-semibold text-amber-900">⚙️ Document stores not provisioned</p><p className="text-sm text-amber-800 mt-1">The evidence and assessment-evidence stores aren&apos;t available for this tenant yet.</p></div></div>;
 
   const k = d.kpis;
   const active = source && ["Evidence", "Assessment"].includes(source) ? source : "All";
@@ -103,7 +103,7 @@ export default async function DocumentServiceConsole({ searchParams }: { searchP
                     <td className="py-2 pr-3 text-gray-600">{doc.source}</td>
                     <td className="py-2 pr-3 text-gray-600 truncate max-w-[110px]">{doc.owner}</td>
                     <td className="py-2 pr-3 text-gray-500">{humanSize(doc.sizeBytes)}</td>
-                    <td className="py-2">{doc.hasFile ? <span className="text-green-600">✓</span> : <span className="text-gray-300">—</span>}</td>
+                    <td className="py-2">{doc.hasFile ? <span className="text-[var(--cmp-text-success)]">✓</span> : <span className="text-gray-300">—</span>}</td>
                   </tr>
                 ))}
               </tbody>

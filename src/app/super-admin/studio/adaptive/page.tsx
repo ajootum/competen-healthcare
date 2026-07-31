@@ -37,7 +37,7 @@ export default async function AdaptivePage() {
       </div>
 
       {!ad.provisioned ? (
-        <div className="bg-amber-50 border border-amber-100 rounded-xl p-6 text-sm text-amber-800">Run migration 136 (<code className="text-[11px]">cst_adaptive_exams</code>) to enable the Adaptive designer.</div>
+        <div className="bg-[var(--cmp-surface-warning)] border border-[var(--cmp-color-warning)] rounded-xl p-6 text-sm text-amber-800">Run migration 136 (<code className="text-[11px]">cst_adaptive_exams</code>) to enable the Adaptive designer.</div>
       ) : (
         <>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-5">
@@ -45,7 +45,7 @@ export default async function AdaptivePage() {
               { label: "Adaptive exams", value: ad.kpis.total, tone: "text-gray-900" },
               { label: "Published", value: ad.kpis.active, tone: "text-teal-600" },
               { label: "Draft", value: ad.kpis.draft, tone: "text-gray-500" },
-              { label: "Pool warnings", value: ad.kpis.poolWarnings, tone: ad.kpis.poolWarnings > 0 ? "text-amber-600" : "text-gray-300" },
+              { label: "Pool warnings", value: ad.kpis.poolWarnings, tone: ad.kpis.poolWarnings > 0 ? "text-[var(--cmp-text-warning)]" : "text-gray-300" },
             ].map(k => (
               <div key={k.label} className="bg-white rounded-xl border border-gray-100 p-3.5">
                 <p className={`text-xl font-bold ${k.tone}`}>{k.value}</p>

@@ -8,8 +8,8 @@ import { cardClass } from "@/components/ui/primitives";
 // per-channel delivery result inline.
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
-const DOT: Record<string, string> = { sent: "bg-green-500", failed: "bg-rose-500", skipped: "bg-gray-300", queued: "bg-amber-500" };
-const TONE: Record<string, string> = { sent: "text-green-600", failed: "text-rose-600", skipped: "text-gray-400", queued: "text-amber-600" };
+const DOT: Record<string, string> = { sent: "bg-[var(--cmp-color-success)]", failed: "bg-[var(--cmp-color-error)]", skipped: "bg-gray-300", queued: "bg-[var(--cmp-color-warning)]" };
+const TONE: Record<string, string> = { sent: "text-[var(--cmp-text-success)]", failed: "text-[var(--cmp-text-error)]", skipped: "text-gray-400", queued: "text-[var(--cmp-text-warning)]" };
 
 export default function NotificationsTester() {
   const router = useRouter();
@@ -34,7 +34,7 @@ export default function NotificationsTester() {
         <h2 className="font-semibold text-gray-900 text-[15px]">Test Delivery</h2>
         <button onClick={send} disabled={busy} className="text-sm font-semibold bg-teal-600 hover:bg-teal-700 text-white rounded-lg px-3.5 py-2 disabled:opacity-60">{busy ? "Sending…" : "Send test to me"}</button>
       </div>
-      {err && <p className="text-xs text-red-600 bg-red-50 rounded-lg px-3 py-2 mb-2">{err}</p>}
+      {err && <p className="text-xs text-[var(--cmp-text-critical)] bg-[var(--cmp-surface-critical)] rounded-lg px-3 py-2 mb-2">{err}</p>}
       {result && (
         <div className="space-y-1.5">
           {result.map((d, i) => (

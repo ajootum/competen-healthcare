@@ -23,19 +23,19 @@ export function CapaActions({ id, status }: { id: string; status: string }) {
   const primary = status === "completed"
     ? <button onClick={() => setStatus("in_progress", "Reopen")} disabled={!!busy} className={`${BTN} bg-gray-700 text-white`}>Reopen</button>
     : status === "in_progress" || status === "overdue"
-      ? <button onClick={() => setStatus("completed", "Complete")} disabled={!!busy} className={`${BTN} bg-green-600 text-white`}>Mark Complete</button>
+      ? <button onClick={() => setStatus("completed", "Complete")} disabled={!!busy} className={`${BTN} bg-[var(--cmp-color-success)] text-white`}>Mark Complete</button>
       : <button onClick={() => setStatus("in_progress", "Start")} disabled={!!busy} className={`${BTN} bg-violet-600 text-white`}>Take Action</button>;
 
   return (
     <div className="space-y-2">
       <div className="flex flex-wrap gap-2">
         {primary}
-        {status !== "completed" && status !== "overdue" && <button onClick={() => setStatus("overdue", "Flag")} disabled={!!busy} className={`${BTN} border border-amber-300 text-amber-700`}>Flag Overdue</button>}
+        {status !== "completed" && status !== "overdue" && <button onClick={() => setStatus("overdue", "Flag")} disabled={!!busy} className={`${BTN} border border-[var(--cmp-color-warning)] text-[var(--cmp-text-warning)]`}>Flag Overdue</button>}
         <button disabled className={`${BTN} border border-gray-100 text-gray-300`} title="Root Cause Analysis workspace — next phase">Open RCA</button>
         <button disabled className={`${BTN} border border-gray-100 text-gray-300`} title="Escalate — next phase">Escalate</button>
         <button disabled className={`${BTN} border border-gray-100 text-gray-300`} title="Evidence store — next phase">Attach Evidence</button>
       </div>
-      {err && <p className="text-[10px] text-rose-600">{err}</p>}
+      {err && <p className="text-[10px] text-[var(--cmp-text-error)]">{err}</p>}
     </div>
   );
 }
@@ -67,7 +67,7 @@ export function NewCapaButton() {
         <select value={f.due_hours} onChange={e => setF({ ...f, due_hours: e.target.value })} className="text-xs rounded-lg border border-gray-200 px-2 py-2"><option value="24">Due 1 day</option><option value="72">Due 3 days</option><option value="168">Due 1 week</option><option value="336">Due 2 weeks</option></select>
       </div>
       <textarea value={f.description} onChange={e => setF({ ...f, description: e.target.value })} placeholder="Description (optional)" rows={2} className="w-full text-sm rounded-lg border border-gray-200 px-3 py-2" />
-      {err && <p className="text-[10px] text-rose-600">{err}</p>}
+      {err && <p className="text-[10px] text-[var(--cmp-text-error)]">{err}</p>}
       <div className="flex gap-2">
         <button onClick={submit} disabled={busy} className="text-xs font-semibold rounded-lg py-2 px-3 bg-violet-600 text-white disabled:opacity-50">{busy ? "Creating…" : "Create"}</button>
         <button onClick={() => { setOpen(false); setErr(null); }} className="text-xs font-semibold rounded-lg py-2 px-3 border border-gray-200 text-gray-600">Cancel</button>

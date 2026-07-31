@@ -39,12 +39,12 @@ export default async function OperationalDocumentation() {
       <PosTabs />
 
       {!d.provisioned ? (
-        <div className="bg-amber-50 border border-amber-200 rounded-xl p-6"><p className="font-semibold text-amber-900">⚙️ Coming online</p><p className="text-sm text-amber-800 mt-1">The documents store (migration 085) isn&apos;t provisioned yet. Once applied, you can generate, sign and version operational documents here.</p></div>
+        <div className="bg-[var(--cmp-surface-warning)] border border-[var(--cmp-color-warning)] rounded-xl p-6"><p className="font-semibold text-amber-900">⚙️ Coming online</p><p className="text-sm text-amber-800 mt-1">The documents store (migration 085) isn&apos;t provisioned yet. Once applied, you can generate, sign and version operational documents here.</p></div>
       ) : (
         <>
           <div className="grid grid-cols-3 gap-3">
             <div className="bg-white rounded-xl border border-gray-200 p-4"><p className="text-xs text-gray-500">Documents</p><p className="text-2xl font-bold tabular-nums mt-1 text-gray-900">{d.counts.total}</p></div>
-            <div className="bg-white rounded-xl border border-gray-200 p-4"><p className="text-xs text-gray-500">Signed</p><p className="text-2xl font-bold tabular-nums mt-1 text-emerald-600">{d.counts.signed}</p></div>
+            <div className="bg-white rounded-xl border border-gray-200 p-4"><p className="text-xs text-gray-500">Signed</p><p className="text-2xl font-bold tabular-nums mt-1 text-[var(--cmp-text-success)]">{d.counts.signed}</p></div>
             <div className="bg-white rounded-xl border border-gray-200 p-4"><p className="text-xs text-gray-500">Drafts</p><p className="text-2xl font-bold tabular-nums mt-1 text-gray-500">{d.counts.draft}</p></div>
           </div>
 

@@ -43,7 +43,7 @@ export default async function TodaysAttendance() {
     </>
   );
 
-  if (!d.ready) return <div className="space-y-4">{header}<div className="bg-amber-50 border border-amber-200 rounded-xl p-6"><p className="font-semibold text-amber-900">⚙️ No active shift</p><p className="text-sm text-amber-800 mt-1">The attendance register populates from the approved roster once a shift is running.</p></div></div>;
+  if (!d.ready) return <div className="space-y-4">{header}<div className="bg-[var(--cmp-surface-warning)] border border-[var(--cmp-color-warning)] rounded-xl p-6"><p className="font-semibold text-amber-900">⚙️ No active shift</p><p className="text-sm text-amber-800 mt-1">The attendance register populates from the approved roster once a shift is running.</p></div></div>;
 
   const k = d.kpis;
   return (
@@ -52,10 +52,10 @@ export default async function TodaysAttendance() {
 
       <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-3">
         <Kpi label="Expected" value={k.expected} />
-        <Kpi label="Present" value={k.present} tone="text-emerald-600" />
-        <Kpi label="Not reported" value={k.notReported} tone={k.notReported ? "text-amber-600" : undefined} />
-        <Kpi label="Absent" value={k.absent} tone={k.absent ? "text-rose-600" : "text-emerald-600"} />
-        <Kpi label="Late arrivals" value={k.late} tone={k.late ? "text-amber-600" : "text-emerald-600"} />
+        <Kpi label="Present" value={k.present} tone="text-[var(--cmp-text-success)]" />
+        <Kpi label="Not reported" value={k.notReported} tone={k.notReported ? "text-[var(--cmp-text-warning)]" : undefined} />
+        <Kpi label="Absent" value={k.absent} tone={k.absent ? "text-[var(--cmp-text-error)]" : "text-[var(--cmp-text-success)]"} />
+        <Kpi label="Late arrivals" value={k.late} tone={k.late ? "text-[var(--cmp-text-warning)]" : "text-[var(--cmp-text-success)]"} />
         <Kpi label="Completed" value={k.completed} />
       </div>
 

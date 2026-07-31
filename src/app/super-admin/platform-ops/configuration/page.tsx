@@ -47,8 +47,8 @@ export default async function WorkspaceConfiguration() {
       </div>
 
       {!provisioned && (
-        <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-          <span className="font-semibold">Not provisioned.</span> Run <code className="font-mono text-[12px] bg-amber-100 px-1 rounded">migration 076-workspace-config-engine.sql</code> to enable editing. The catalogue below is shown read-only until then.
+        <div className="rounded-xl border border-[var(--cmp-color-warning)] bg-[var(--cmp-surface-warning)] px-4 py-3 text-sm text-amber-800">
+          <span className="font-semibold">Not provisioned.</span> Run <code className="font-mono text-[12px] bg-[var(--cmp-surface-warning)] px-1 rounded">migration 076-workspace-config-engine.sql</code> to enable editing. The catalogue below is shown read-only until then.
         </div>
       )}
 
@@ -61,7 +61,7 @@ export default async function WorkspaceConfiguration() {
           <div className="space-y-1.5">
             {audit.map((a: any, i: number) => (
               <div key={i} className="flex items-center gap-2 text-xs">
-                <span className={`px-1.5 py-0.5 rounded font-semibold ${a.action === "publish" ? "bg-green-50 text-green-700" : a.action === "rollback" ? "bg-amber-50 text-amber-700" : a.action === "reset" ? "bg-gray-100 text-gray-500" : "bg-blue-50 text-blue-700"}`}>{a.action}</span>
+                <span className={`px-1.5 py-0.5 rounded font-semibold ${a.action === "publish" ? "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]" : a.action === "rollback" ? "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]" : a.action === "reset" ? "bg-gray-100 text-gray-500" : "bg-[var(--cmp-surface-information)] text-blue-700"}`}>{a.action}</span>
                 <span className="text-gray-700">{a.config_path ?? `${a.scope_type} scope`}</span>
                 <span className="text-gray-400">· {a.scope_type}{a.scope_ref && a.scope_type !== "platform" ? `:${String(a.scope_ref).slice(0, 8)}` : ""}</span>
                 <span className="ml-auto text-gray-400">{a.actor_name ?? "—"} · {relTime(a.created_at)}</span>

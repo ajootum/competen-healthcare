@@ -101,7 +101,7 @@ export default async function WellbeingPage() {
                     <td className="py-2 text-right tabular-nums text-gray-600">{f.consecutive}</td>
                     <td className="py-2 text-right tabular-nums text-gray-600">{f.nights}</td>
                     <td className="py-2 text-right tabular-nums text-gray-600">
-                      {f.hours == null ? <span className="text-gray-400">not recorded</span> : <>{f.hours}h{f.hoursPartial && <span className="text-amber-600" title="Some shifts have no start/end time recorded">*</span>}</>}
+                      {f.hours == null ? <span className="text-gray-400">not recorded</span> : <>{f.hours}h{f.hoursPartial && <span className="text-[var(--cmp-text-warning)]" title="Some shifts have no start/end time recorded">*</span>}</>}
                     </td>
                     <td className="py-2 text-right tabular-nums text-gray-600">{f.rest == null ? "—" : `${f.rest}h`}</td>
                     <td className="py-2 text-[11px] text-gray-500">{f.flags.join(" · ") || "—"}</td>

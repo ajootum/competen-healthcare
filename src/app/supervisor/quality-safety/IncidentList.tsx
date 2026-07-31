@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 // Incident list (SSW-QSE-001 §3) — advance the investigation lifecycle inline.
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
-const SEV_TONE: Record<string, string> = { critical: "bg-rose-50 text-rose-700", high: "bg-orange-50 text-orange-700", medium: "bg-amber-50 text-amber-700", low: "bg-gray-100 text-gray-600" };
+const SEV_TONE: Record<string, string> = { critical: "bg-[var(--cmp-surface-error)] text-[var(--cmp-text-error)]", high: "bg-[var(--cmp-surface-warning)] text-orange-700", medium: "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]", low: "bg-gray-100 text-gray-600" };
 const NEXT: Record<string, { status: string; label: string }> = { reported: { status: "investigating", label: "investigate" }, investigating: { status: "awaiting_action", label: "awaiting action" }, awaiting_action: { status: "closed", label: "close" } };
 const relTime = (iso?: string | null) => { if (!iso) return ""; const s = Math.floor((Date.now() - new Date(iso).getTime()) / 1000); if (s < 3600) return `${Math.floor(s / 60)}m ago`; if (s < 86400) return `${Math.floor(s / 3600)}h ago`; return `${Math.floor(s / 86400)}d ago`; };
 
@@ -31,7 +31,7 @@ export default function IncidentList({ incidents, editable }: { incidents: any[]
           <div key={i.id} className="rounded-lg border border-gray-100 px-2.5 py-1.5">
             <div className="flex items-center gap-1.5">
               <span className="text-[9px] font-semibold uppercase text-gray-400">{(i.type ?? "").replace(/_/g, " ")}</span>
-              {i.nearMiss && <span className="text-[8px] px-1 rounded bg-blue-50 text-blue-600">near miss</span>}
+              {i.nearMiss && <span className="text-[8px] px-1 rounded bg-[var(--cmp-surface-information)] text-[var(--cmp-text-information)]">near miss</span>}
               <span className={`text-[8px] font-semibold px-1 py-0.5 rounded ${SEV_TONE[i.severity] ?? "bg-gray-100"}`}>{i.severity}</span>
               <span className="ml-auto text-[10px] text-gray-400">{relTime(i.at)}</span>
             </div>
@@ -43,7 +43,7 @@ export default function IncidentList({ incidents, editable }: { incidents: any[]
           </div>
         );
       })}
-      {err && <p className="text-[11px] text-rose-600 mt-1">{err}</p>}
+      {err && <p className="text-[11px] text-[var(--cmp-text-error)] mt-1">{err}</p>}
     </div>
   );
 }

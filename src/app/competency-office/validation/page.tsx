@@ -48,7 +48,7 @@ export default async function ValidationDashboard() {
       <ValidationTabs />
     </>
   );
-  if (!d.provisioned) return <div className="space-y-4">{header}<div className="bg-amber-50 border border-amber-200 rounded-xl p-6"><p className="font-semibold text-amber-900">⚙️ Validation store not provisioned</p><p className="text-sm text-amber-800 mt-1">No competency decisions recorded for this tenant yet.</p></div></div>;
+  if (!d.provisioned) return <div className="space-y-4">{header}<div className="bg-[var(--cmp-surface-warning)] border border-[var(--cmp-color-warning)] rounded-xl p-6"><p className="font-semibold text-amber-900">⚙️ Validation store not provisioned</p><p className="text-sm text-amber-800 mt-1">No competency decisions recorded for this tenant yet.</p></div></div>;
 
   return (
     <div className="space-y-4">
@@ -56,13 +56,13 @@ export default async function ValidationDashboard() {
 
       {/* KPI widgets (§3) */}
       <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-7 gap-3">
-        <Kpi icon="📥" tint="bg-sky-50" label="Pending Validation" value={k.pending} tone={k.pending ? "text-sky-600" : "text-gray-400"} sub="awaiting review" href="/competency-office/validation/pending" />
-        <Kpi icon="⏰" tint="bg-amber-50" label="Near / Past SLA" value={k.nearSla} tone={k.nearSla ? "text-amber-600" : "text-gray-400"} sub="≥7 days waiting" href="/competency-office/validation/pending" />
-        <Kpi icon="❌" tint="bg-rose-50" label="Rejected" value={k.rejected} tone={k.rejected ? "text-rose-600" : "text-gray-400"} sub="failed validation" href="/competency-office/validation/history" />
-        <Kpi icon="✅" tint="bg-emerald-50" label="Approved Today" value={k.approvedToday} sub="validated today" href="/competency-office/validation/history" />
+        <Kpi icon="📥" tint="bg-[var(--cmp-surface-information)]" label="Pending Validation" value={k.pending} tone={k.pending ? "text-[var(--cmp-text-information)]" : "text-gray-400"} sub="awaiting review" href="/competency-office/validation/pending" />
+        <Kpi icon="⏰" tint="bg-[var(--cmp-surface-warning)]" label="Near / Past SLA" value={k.nearSla} tone={k.nearSla ? "text-[var(--cmp-text-warning)]" : "text-gray-400"} sub="≥7 days waiting" href="/competency-office/validation/pending" />
+        <Kpi icon="❌" tint="bg-[var(--cmp-surface-error)]" label="Rejected" value={k.rejected} tone={k.rejected ? "text-[var(--cmp-text-error)]" : "text-gray-400"} sub="failed validation" href="/competency-office/validation/history" />
+        <Kpi icon="✅" tint="bg-[var(--cmp-surface-success)]" label="Approved Today" value={k.approvedToday} sub="validated today" href="/competency-office/validation/history" />
         <Kpi icon="👥" tint="bg-violet-50" label="Committee Queue" value="—" tone="text-gray-300" sub="committee store next-phase" href="/competency-office/validation/committee" />
-        <Kpi icon="⚖️" tint="bg-orange-50" label="Appeals" value="—" tone="text-gray-300" sub="appeals store next-phase" href="/competency-office/validation/appeals" />
-        <Kpi icon="✨" tint="bg-teal-50" label="Evidence Confidence" value={k.avgConfidence != null ? `${k.avgConfidence}%` : "—"} tone={k.avgConfidence == null ? "text-gray-300" : k.avgConfidence >= 80 ? "text-emerald-600" : k.avgConfidence >= 60 ? "text-amber-600" : "text-rose-600"} sub={d.confidenceBands ? `${d.confidenceBands.high} high · ${d.confidenceBands.low} low` : "mean of all decisions"} href="/competency-office/validation/pending" />
+        <Kpi icon="⚖️" tint="bg-[var(--cmp-surface-warning)]" label="Appeals" value="—" tone="text-gray-300" sub="appeals store next-phase" href="/competency-office/validation/appeals" />
+        <Kpi icon="✨" tint="bg-teal-50" label="Evidence Confidence" value={k.avgConfidence != null ? `${k.avgConfidence}%` : "—"} tone={k.avgConfidence == null ? "text-gray-300" : k.avgConfidence >= 80 ? "text-[var(--cmp-text-success)]" : k.avgConfidence >= 60 ? "text-[var(--cmp-text-warning)]" : "text-[var(--cmp-text-error)]"} sub={d.confidenceBands ? `${d.confidenceBands.high} high · ${d.confidenceBands.low} low` : "mean of all decisions"} href="/competency-office/validation/pending" />
       </div>
 
       {/* Pending queue + history */}
@@ -71,7 +71,7 @@ export default async function ValidationDashboard() {
           <div className="flex items-center justify-between mb-3"><h3 className="font-semibold text-gray-900 text-sm">Pending Validation <span className="text-[10px] font-normal text-gray-400">oldest first</span></h3><Link href="/unit-manager/competency-validations" className="text-[11px] text-teal-600 hover:underline">Review →</Link></div>
           {d.pendingList.length === 0 ? <p className="text-sm text-gray-400">Validation queue clear. 🎉</p> : (
             <div className="overflow-x-auto"><table className="w-full text-xs"><thead><tr className="text-[10px] uppercase tracking-wide text-gray-400 text-left border-b border-gray-100"><th className="py-1.5 font-medium">Staff</th><th className="py-1.5 font-medium">Competency</th><th className="py-1.5 font-medium">Outcome</th><th className="py-1.5 font-medium text-right">Confidence</th><th className="py-1.5 font-medium text-right">Waiting</th></tr></thead>
-              <tbody>{d.pendingList.map((p: any) => (<tr key={p.id} className="border-b border-gray-50"><td className="py-1.5 text-gray-700">{p.name}</td><td className="py-1.5 text-gray-600 truncate max-w-[10rem]">{p.competency}</td><td className="py-1.5 text-gray-500">{p.outcome}</td><td className="py-1.5 text-right tabular-nums"><span className={p.confidence >= 80 ? "text-emerald-600" : p.confidence >= 60 ? "text-amber-600" : "text-rose-600"}>{p.confidence}%</span></td><td className={`py-1.5 text-right tabular-nums font-medium ${p.overdue ? "text-rose-600" : "text-gray-500"}`}>{p.age != null ? `${p.age}d` : "—"}</td></tr>))}</tbody>
+              <tbody>{d.pendingList.map((p: any) => (<tr key={p.id} className="border-b border-gray-50"><td className="py-1.5 text-gray-700">{p.name}</td><td className="py-1.5 text-gray-600 truncate max-w-[10rem]">{p.competency}</td><td className="py-1.5 text-gray-500">{p.outcome}</td><td className="py-1.5 text-right tabular-nums"><span className={p.confidence >= 80 ? "text-[var(--cmp-text-success)]" : p.confidence >= 60 ? "text-[var(--cmp-text-warning)]" : "text-[var(--cmp-text-error)]"}>{p.confidence}%</span></td><td className={`py-1.5 text-right tabular-nums font-medium ${p.overdue ? "text-[var(--cmp-text-error)]" : "text-gray-500"}`}>{p.age != null ? `${p.age}d` : "—"}</td></tr>))}</tbody>
             </table></div>
           )}
         </div>
@@ -79,7 +79,7 @@ export default async function ValidationDashboard() {
         <div className={`${card} p-5`}>
           <div className="flex items-center justify-between mb-3"><h3 className="font-semibold text-gray-900 text-sm">Validation History</h3><Link href="/competency-office/validation/history" className="text-[11px] text-teal-600 hover:underline">All →</Link></div>
           {d.history.length === 0 ? <p className="text-sm text-gray-400">No validation decisions yet.</p> : (
-            <div className="divide-y divide-gray-50">{d.history.map((h: any) => (<div key={h.id} className="flex items-center justify-between gap-2 py-1.5 text-xs"><div className="min-w-0"><span className="text-gray-700">{h.name}</span> <span className="text-gray-400 truncate">{h.competency}</span></div><span className={`text-[9px] px-1.5 py-0.5 rounded shrink-0 ${h.decision === "Validated" ? "bg-emerald-50 text-emerald-700" : h.decision === "Rejected" ? "bg-rose-50 text-rose-700" : "bg-gray-100 text-gray-600"}`}>{h.decision}</span></div>))}</div>
+            <div className="divide-y divide-gray-50">{d.history.map((h: any) => (<div key={h.id} className="flex items-center justify-between gap-2 py-1.5 text-xs"><div className="min-w-0"><span className="text-gray-700">{h.name}</span> <span className="text-gray-400 truncate">{h.competency}</span></div><span className={`text-[9px] px-1.5 py-0.5 rounded shrink-0 ${h.decision === "Validated" ? "bg-[var(--cmp-surface-success)] text-emerald-700" : h.decision === "Rejected" ? "bg-[var(--cmp-surface-error)] text-[var(--cmp-text-error)]" : "bg-gray-100 text-gray-600"}`}>{h.decision}</span></div>))}</div>
           )}
         </div>
       </div>
@@ -89,7 +89,7 @@ export default async function ValidationDashboard() {
         <div className={`${card} p-5 bg-gradient-to-br from-teal-50/40 to-white`}>
           <h3 className="font-semibold text-gray-900 text-sm mb-3 flex items-center gap-2">✨ AI Validation Insights <span className="text-[10px] font-normal text-gray-400">explainable</span></h3>
           {d.ai.length === 0 ? <p className="text-sm text-gray-400">No priority validation actions.</p> : (
-            <div className="space-y-2">{d.ai.slice(0, 4).map((a: any, i: number) => (<div key={i} className="rounded-lg border border-gray-100 p-2.5"><div className="flex items-start justify-between gap-2"><p className="text-xs text-gray-800 flex-1">{a.text}</p><span className={`text-[9px] px-1.5 py-0.5 rounded shrink-0 ${a.priority === "high" ? "bg-rose-50 text-rose-700" : a.priority === "medium" ? "bg-amber-50 text-amber-700" : "bg-gray-100 text-gray-500"}`}>{a.priority}</span></div><p className="text-[10px] text-gray-400 mt-1">Why: {a.why}</p></div>))}</div>
+            <div className="space-y-2">{d.ai.slice(0, 4).map((a: any, i: number) => (<div key={i} className="rounded-lg border border-gray-100 p-2.5"><div className="flex items-start justify-between gap-2"><p className="text-xs text-gray-800 flex-1">{a.text}</p><span className={`text-[9px] px-1.5 py-0.5 rounded shrink-0 ${a.priority === "high" ? "bg-[var(--cmp-surface-error)] text-[var(--cmp-text-error)]" : a.priority === "medium" ? "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]" : "bg-gray-100 text-gray-500"}`}>{a.priority}</span></div><p className="text-[10px] text-gray-400 mt-1">Why: {a.why}</p></div>))}</div>
           )}
         </div>
 

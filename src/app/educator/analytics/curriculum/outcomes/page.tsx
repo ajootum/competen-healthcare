@@ -9,7 +9,7 @@ import CurriculumNav from "../CurriculumNav";
 
 export const dynamic = "force-dynamic";
 const pct = (v: number | null) => v !== null ? `${v}%` : "—";
-const STATUS_CLS: Record<string, string> = { Achieved: "bg-green-50 text-green-600", Partial: "bg-amber-50 text-amber-600", "Not Achieved": "bg-red-50 text-red-600", "Not assessed": "bg-gray-100 text-gray-400" };
+const STATUS_CLS: Record<string, string> = { Achieved: "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]", Partial: "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]", "Not Achieved": "bg-[var(--cmp-surface-critical)] text-[var(--cmp-text-critical)]", "Not assessed": "bg-gray-100 text-gray-400" };
 
 export default async function Outcomes() {
   const { admin, hospitalId } = await requireEducatorAccess();
@@ -28,7 +28,7 @@ export default async function Outcomes() {
     <div className="max-w-[1200px]">
       <CurriculumNav active="outcomes" />
       <div className="mb-2"><StatTiles tiles={tiles} cols="grid-cols-2 md:grid-cols-3 xl:grid-cols-6" /></div>
-      <p className="text-[10px] text-amber-600 bg-amber-50 border border-amber-100 rounded-lg px-3 py-2 mb-5">ℹ️ No dedicated learning-outcomes store exists yet — competency <b>domains</b> are used as outcome proxies, with achievement computed from live scores.</p>
+      <p className="text-[10px] text-[var(--cmp-text-warning)] bg-[var(--cmp-surface-warning)] border border-[var(--cmp-color-warning)] rounded-lg px-3 py-2 mb-5">ℹ️ No dedicated learning-outcomes store exists yet — competency <b>domains</b> are used as outcome proxies, with achievement computed from live scores.</p>
 
       <div className="bg-white border border-gray-100 rounded-2xl p-5">
         <h2 className="text-sm font-bold text-gray-900 mb-3">Learning Outcomes Performance <span className="font-normal text-gray-400 text-xs">(by domain proxy)</span></h2>
@@ -40,7 +40,7 @@ export default async function Outcomes() {
                 <td className="py-2 pr-3 font-semibold text-gray-800 max-w-[260px] truncate" title={o.name}>{o.name}</td>
                 <td className="py-2 pr-3 text-gray-600">{o.competencies}</td>
                 <td className="py-2 pr-3">
-                  <span className="flex items-center gap-2"><span className="w-16 h-1.5 bg-gray-100 rounded-full overflow-hidden inline-block"><span className={`block h-full rounded-full ${(o.achievement ?? 0) >= 70 ? "bg-green-500" : (o.achievement ?? 0) >= 40 ? "bg-amber-400" : "bg-red-400"}`} style={{ width: `${o.achievement ?? 0}%` }} /></span><span className="text-gray-700 font-semibold">{pct(o.achievement)}</span></span>
+                  <span className="flex items-center gap-2"><span className="w-16 h-1.5 bg-gray-100 rounded-full overflow-hidden inline-block"><span className={`block h-full rounded-full ${(o.achievement ?? 0) >= 70 ? "bg-[var(--cmp-color-success)]" : (o.achievement ?? 0) >= 40 ? "bg-[var(--cmp-color-warning)]" : "bg-[var(--cmp-color-critical)]"}`} style={{ width: `${o.achievement ?? 0}%` }} /></span><span className="text-gray-700 font-semibold">{pct(o.achievement)}</span></span>
                 </td>
                 <td className="py-2 pr-3 text-gray-600">{pct(o.assessment)}</td>
                 <td className="py-2 pr-3"><span className={`text-[9px] font-bold px-1.5 py-0.5 rounded ${STATUS_CLS[o.status]}`}>{o.status}</span></td>

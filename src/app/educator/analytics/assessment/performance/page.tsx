@@ -42,7 +42,7 @@ export default async function Performance() {
                 <td className="py-2 pr-3 text-gray-600">{t.n}</td>
                 <td className="py-2 pr-3 text-gray-600">{t.learners || "—"}</td>
                 <td className="py-2 pr-3 text-gray-600">{pct(t.avg)}</td>
-                <td className="py-2 pr-3"><span className={`font-bold px-1.5 py-0.5 rounded text-[10px] ${(t.passRate ?? 0) >= 70 ? "bg-green-50 text-green-700" : (t.passRate ?? 0) >= 50 ? "bg-amber-50 text-amber-700" : "bg-red-50 text-red-600"}`}>{pct(t.passRate)}</span></td>
+                <td className="py-2 pr-3"><span className={`font-bold px-1.5 py-0.5 rounded text-[10px] ${(t.passRate ?? 0) >= 70 ? "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]" : (t.passRate ?? 0) >= 50 ? "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]" : "bg-[var(--cmp-surface-critical)] text-[var(--cmp-text-critical)]"}`}>{pct(t.passRate)}</span></td>
                 <td className="py-2 pr-3 text-gray-600">{pct(t.median)}</td>
                 <td className="py-2 pr-3 text-gray-600">{t.sd ?? "—"}</td>
               </tr>
@@ -55,7 +55,7 @@ export default async function Performance() {
         {/* Trend */}
         <div className="bg-white border border-gray-100 rounded-2xl p-5 lg:col-span-2">
           <h2 className="text-sm font-bold text-gray-900 mb-1">Performance Trend <span className="font-normal text-gray-400 text-xs">(6 mo)</span></h2>
-          <div className="flex items-center gap-3 mb-2 text-[9px]"><span className="flex items-center gap-1 text-gray-500"><span className="w-2 h-2 rounded-full bg-purple-500" />Avg Score</span><span className="flex items-center gap-1 text-gray-500"><span className="w-2 h-2 rounded-full bg-green-500" />Pass Rate</span></div>
+          <div className="flex items-center gap-3 mb-2 text-[9px]"><span className="flex items-center gap-1 text-gray-500"><span className="w-2 h-2 rounded-full bg-purple-500" />Avg Score</span><span className="flex items-center gap-1 text-gray-500"><span className="w-2 h-2 rounded-full bg-[var(--cmp-color-success)]" />Pass Rate</span></div>
           {d.trend.every(t => t.avg === null && t.pass === null) ? <p className="text-xs text-gray-400 py-8 text-center">No history.</p> : (
             <svg viewBox="0 0 320 100" className="w-full">
               {[0, 50, 100].map(y => <line key={y} x1="22" x2="314" y1={82 - y * 0.7} y2={82 - y * 0.7} stroke="#f3f4f6" strokeWidth="1" />)}

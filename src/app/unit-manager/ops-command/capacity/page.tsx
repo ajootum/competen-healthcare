@@ -8,8 +8,8 @@ export const dynamic = "force-dynamic";
 // UMW-OPC-003 Capacity & Bed Coordination Centre — live capacity visibility, bed optimisation and flow over op_beds
 // (+ snapshots/blockers/resources). Dark command surface. Gate hospital_admin/super_admin.
 /* eslint-disable @typescript-eslint/no-explicit-any */
-const BED_STATUS: Record<string, string> = { occupied: "bg-emerald-500/90 text-slate-900", available: "bg-blue-500/80 text-white", cleaning: "bg-amber-500/90 text-slate-900", reserved: "bg-fuchsia-500/80 text-white", out_of_service: "bg-slate-600 text-slate-300" };
-const BED_LEGEND = [["Occupied", "bg-emerald-500"], ["Available", "bg-blue-500"], ["Cleaning", "bg-amber-500"], ["Reserved", "bg-fuchsia-500"], ["Out of Service", "bg-slate-600"]];
+const BED_STATUS: Record<string, string> = { occupied: "bg-[var(--cmp-color-success)]/90 text-slate-900", available: "bg-[var(--cmp-color-information)]/80 text-white", cleaning: "bg-[var(--cmp-color-warning)]/90 text-slate-900", reserved: "bg-fuchsia-500/80 text-white", out_of_service: "bg-slate-600 text-slate-300" };
+const BED_LEGEND = [["Occupied", "bg-[var(--cmp-color-success)]"], ["Available", "bg-[var(--cmp-color-information)]"], ["Cleaning", "bg-[var(--cmp-color-warning)]"], ["Reserved", "bg-fuchsia-500"], ["Out of Service", "bg-slate-600"]];
 const ACTIONS = [["➕", "New Admission", "/unit-manager/patient-operations/census"], ["➡️", "Transfer", "/unit-manager/patient-operations/flow"], ["🧹", "Mark Cleaning", "/unit-manager/patient-operations/beds"], ["🔧", "Out of Service", "/unit-manager/patient-operations/beds"], ["🗺️", "Ward Map", "/unit-manager/patient-operations/ward-map"], ["📋", "Bed History", "/unit-manager/patient-operations/timeline"]];
 const EVENTS = [["10:30", "Discharge – expected", "+1 bed"], ["11:00", "Transfer Out (ICU)", "+1 bed"], ["12:00", "Planned Discharges (2)", "+2 beds"], ["14:00", "Expected Admissions (3)", "−3 beds"], ["16:00", "Cleaning Peak", "−3 beds"]];
 
@@ -22,7 +22,7 @@ export default async function CapacityPage({ searchParams }: { searchParams: Pro
   ]);
 
   const strip = <TopStrip code="UMW-OPC-003 · Operational Command" title="Capacity & Bed Coordination Centre" departments={departments} />;
-  if (!d.provisioned) return <div className="space-y-4">{strip}<div className="bg-amber-50 border border-amber-200 rounded-xl p-6"><p className="font-semibold text-amber-900">⚙️ Operational stores not provisioned</p><p className="text-sm text-amber-800 mt-1">Apply migrations 038/101 then seed the ward.</p></div></div>;
+  if (!d.provisioned) return <div className="space-y-4">{strip}<div className="bg-[var(--cmp-surface-warning)] border border-[var(--cmp-color-warning)] rounded-xl p-6"><p className="font-semibold text-amber-900">⚙️ Operational stores not provisioned</p><p className="text-sm text-amber-800 mt-1">Apply migrations 038/101 then seed the ward.</p></div></div>;
 
   const k = d.kpis;
   return (
@@ -95,7 +95,7 @@ export default async function CapacityPage({ searchParams }: { searchParams: Pro
 
           <Card title="Capacity Forecast" right={<span className="text-[9px] text-slate-500">daily snapshots</span>}>
             {d.forecast.length >= 2 ? <div className="space-y-2">{d.forecast.map((f: any, i: number) => (
-              <div key={i} className="flex items-center gap-2 text-[11px]"><span className="text-slate-400 w-16 shrink-0">{f.label}</span><div className="flex-1 h-1.5 rounded-full bg-slate-700 overflow-hidden"><div className="h-full rounded-full bg-blue-500" style={{ width: `${f.occupancy ?? 0}%` }} /></div><span className="text-slate-300 w-20 text-right">{f.occupancy}% · +{f.admissions ?? 0}/-{f.discharges ?? 0}</span></div>
+              <div key={i} className="flex items-center gap-2 text-[11px]"><span className="text-slate-400 w-16 shrink-0">{f.label}</span><div className="flex-1 h-1.5 rounded-full bg-slate-700 overflow-hidden"><div className="h-full rounded-full bg-[var(--cmp-color-information)]" style={{ width: `${f.occupancy ?? 0}%` }} /></div><span className="text-slate-300 w-20 text-right">{f.occupancy}% · +{f.admissions ?? 0}/-{f.discharges ?? 0}</span></div>
             ))}</div> : <p className="text-xs text-slate-400 py-6 text-center">Forecast needs daily snapshots.</p>}
           </Card>
         </div>
@@ -111,7 +111,7 @@ export default async function CapacityPage({ searchParams }: { searchParams: Pro
 
           <Card title="Capacity Alerts" className="xl:col-span-2">
             {d.alerts.length ? <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">{d.alerts.map((a: any, i: number) => (
-              <div key={i} className={`rounded-lg border p-2.5 ${a.tone === "rose" ? "bg-rose-500/10 border-rose-500/30" : a.tone === "emerald" ? "bg-emerald-500/10 border-emerald-500/30" : "bg-amber-500/10 border-amber-500/30"}`}><p className={`text-[12px] font-semibold ${a.tone === "rose" ? "text-rose-300" : a.tone === "emerald" ? "text-emerald-300" : "text-amber-300"}`}>{a.title}</p><p className="text-[10px] text-slate-400 mt-0.5">{a.sub}</p></div>
+              <div key={i} className={`rounded-lg border p-2.5 ${a.tone === "rose" ? "bg-[var(--cmp-color-error)]/10 border-rose-500/30" : a.tone === "emerald" ? "bg-[var(--cmp-color-success)]/10 border-emerald-500/30" : "bg-[var(--cmp-color-warning)]/10 border-amber-500/30"}`}><p className={`text-[12px] font-semibold ${a.tone === "rose" ? "text-rose-300" : a.tone === "emerald" ? "text-emerald-300" : "text-amber-300"}`}>{a.title}</p><p className="text-[10px] text-slate-400 mt-0.5">{a.sub}</p></div>
             ))}</div> : <p className="text-xs text-slate-400 py-6 text-center">No capacity alerts. ✅</p>}
           </Card>
         </div>

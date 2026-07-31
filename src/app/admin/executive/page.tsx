@@ -10,9 +10,9 @@ import { indicatorStatus } from "@/lib/ckcm";
 // governed data underneath it.
 
 function band(v: number) {
-  return v >= 85 ? { cls: "text-green-600", bar: "bg-green-500" }
-       : v >= 60 ? { cls: "text-amber-600", bar: "bg-amber-500" }
-       : { cls: "text-red-600", bar: "bg-red-500" };
+  return v >= 85 ? { cls: "text-[var(--cmp-text-success)]", bar: "bg-[var(--cmp-color-success)]" }
+       : v >= 60 ? { cls: "text-[var(--cmp-text-warning)]", bar: "bg-[var(--cmp-color-warning)]" }
+       : { cls: "text-[var(--cmp-text-critical)]", bar: "bg-[var(--cmp-color-critical)]" };
 }
 
 export default async function ExecutivePage() {
@@ -130,7 +130,7 @@ export default async function ExecutivePage() {
         <div>
           <h2 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3">Needs Executive Attention</h2>
           {alerts.length === 0 ? (
-            <div className="bg-white rounded-xl border border-green-100 p-6 text-sm text-green-700">
+            <div className="bg-white rounded-xl border border-[var(--cmp-color-success)] p-6 text-sm text-[var(--cmp-text-success)]">
               ✅ No high-priority alerts — all governed indicators within tolerance.
             </div>
           ) : (

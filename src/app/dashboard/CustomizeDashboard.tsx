@@ -40,9 +40,9 @@ export default function CustomizeDashboard({ controls }: { controls: any[] }) {
           <div className="absolute right-0 mt-1 z-40 w-80 bg-white rounded-xl border border-gray-200 shadow-xl p-3 max-h-[70vh] overflow-y-auto">
             <div className="flex items-center justify-between mb-2">
               <h3 className="text-[13px] font-semibold text-gray-900">Customize dashboard</h3>
-              <button onClick={() => post({ reset: true })} disabled={pending} className="text-[11px] font-medium text-blue-600 hover:underline disabled:opacity-50">Reset</button>
+              <button onClick={() => post({ reset: true })} disabled={pending} className="text-[11px] font-medium text-[var(--cmp-text-information)] hover:underline disabled:opacity-50">Reset</button>
             </div>
-            {msg && <p className="text-[11px] text-rose-600 mb-1.5">{msg}</p>}
+            {msg && <p className="text-[11px] text-[var(--cmp-text-error)] mb-1.5">{msg}</p>}
 
             {ZONES.map(([zone, zlabel]) => {
               const items = controls.filter((c: any) => c.zone === zone);
@@ -58,7 +58,7 @@ export default function CustomizeDashboard({ controls }: { controls: any[] }) {
                       </div>
                       <span className={`text-[12px] flex-1 ${c.visible ? "text-gray-700" : "text-gray-400"}`}>{c.label}</span>
                       {c.canToggle ? (
-                        <button onClick={() => post({ key: c.key, hidden: c.visible })} disabled={pending} title={c.visible ? "Hide" : "Show"} className={`w-9 h-5 rounded-full relative shrink-0 transition-colors ${c.visible ? "bg-blue-600" : "bg-gray-300"}`}>
+                        <button onClick={() => post({ key: c.key, hidden: c.visible })} disabled={pending} title={c.visible ? "Hide" : "Show"} className={`w-9 h-5 rounded-full relative shrink-0 transition-colors ${c.visible ? "bg-[var(--cmp-color-information)]" : "bg-gray-300"}`}>
                           <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-white transition-transform ${c.visible ? "translate-x-4" : "translate-x-0.5"}`} />
                         </button>
                       ) : (

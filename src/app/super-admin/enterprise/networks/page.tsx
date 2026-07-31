@@ -31,9 +31,9 @@ export default async function NetworksModule() {
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
         {[
           { label: "Networks", n: summary.total, tone: "text-gray-900" },
-          { label: "Active", n: summary.active, tone: "text-green-600" },
+          { label: "Active", n: summary.active, tone: "text-[var(--cmp-text-success)]" },
           { label: "Member orgs", n: summary.memberOrgs, tone: "text-violet-600" },
-          { label: "Unassigned orgs", n: summary.unassignedOrgs, tone: summary.unassignedOrgs ? "text-amber-600" : "text-gray-300" },
+          { label: "Unassigned orgs", n: summary.unassignedOrgs, tone: summary.unassignedOrgs ? "text-[var(--cmp-text-warning)]" : "text-gray-300" },
           { label: "Countries", n: summary.countries, tone: "text-indigo-600" },
         ].map(k => (
           <div key={k.label} className="bg-white rounded-xl border border-gray-200 p-4">

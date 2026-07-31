@@ -16,7 +16,7 @@ export const dynamic = "force-dynamic";
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 const card = "bg-white rounded-xl border border-gray-200";
-const VAR: Record<string, string> = { no_show: "bg-rose-50 text-rose-700", sickness: "bg-amber-50 text-amber-700", unapproved_replacement: "bg-rose-50 text-rose-700", late: "bg-amber-50 text-amber-700", early_departure: "bg-amber-50 text-amber-700" };
+const VAR: Record<string, string> = { no_show: "bg-[var(--cmp-surface-error)] text-[var(--cmp-text-error)]", sickness: "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]", unapproved_replacement: "bg-[var(--cmp-surface-error)] text-[var(--cmp-text-error)]", late: "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]", early_departure: "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]" };
 const fmtD = (iso?: string | null) => iso ? new Date(iso).toLocaleDateString("en-GB", { day: "numeric", month: "short" }) : "—";
 
 export default async function PlannedVsActual() {
@@ -44,7 +44,7 @@ export default async function PlannedVsActual() {
     </>
   );
 
-  if (!d.provisioned) return <div className="space-y-4">{header}<div className="bg-amber-50 border border-amber-200 rounded-xl p-6"><p className="font-semibold text-amber-900">⚙️ Roster store not provisioned</p></div></div>;
+  if (!d.provisioned) return <div className="space-y-4">{header}<div className="bg-[var(--cmp-surface-warning)] border border-[var(--cmp-color-warning)] rounded-xl p-6"><p className="font-semibold text-amber-900">⚙️ Roster store not provisioned</p></div></div>;
   if (!d.hasRoster) return <div className="space-y-4">{header}<div className="bg-white border border-gray-200 rounded-xl p-6"><p className="font-semibold text-gray-800">No roster for the current week</p><p className="text-sm text-gray-500 mt-1">Generate one in the <Link href="/unit-manager/scheduling-engine" className="text-emerald-700 hover:underline">Scheduling Engine</Link>.</p></div></div>;
 
   const confirmedPct = d.plannedPosts ? Math.round((d.confirmed / d.plannedPosts) * 100) : null;
@@ -54,9 +54,9 @@ export default async function PlannedVsActual() {
 
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         <Kpi label="Planned posts" value={d.plannedPosts} />
-        <Kpi label="Confirmed actual" value={`${d.confirmed}${confirmedPct != null ? ` · ${confirmedPct}%` : ""}`} tone="text-emerald-600" />
-        <Kpi label="Attended as planned" value={d.attended} tone="text-emerald-600" />
-        <Kpi label="Variances" value={d.variances.length} tone={d.variances.length ? "text-amber-600" : "text-emerald-600"} />
+        <Kpi label="Confirmed actual" value={`${d.confirmed}${confirmedPct != null ? ` · ${confirmedPct}%` : ""}`} tone="text-[var(--cmp-text-success)]" />
+        <Kpi label="Attended as planned" value={d.attended} tone="text-[var(--cmp-text-success)]" />
+        <Kpi label="Variances" value={d.variances.length} tone={d.variances.length ? "text-[var(--cmp-text-warning)]" : "text-[var(--cmp-text-success)]"} />
       </div>
 
       <div className={`${card} p-5`}>

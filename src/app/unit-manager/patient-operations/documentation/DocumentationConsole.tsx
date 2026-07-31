@@ -11,7 +11,7 @@ import { cardClass } from "@/components/ui/primitives";
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 const input = "w-full border border-gray-300 rounded-lg px-2.5 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/40";
-const STATUS_TONE: Record<string, string> = { draft: "bg-gray-100 text-gray-600", finalised: "bg-sky-100 text-sky-700", signed: "bg-emerald-100 text-emerald-700", superseded: "bg-gray-100 text-gray-400" };
+const STATUS_TONE: Record<string, string> = { draft: "bg-gray-100 text-gray-600", finalised: "bg-[var(--cmp-surface-information)] text-[var(--cmp-text-information)]", signed: "bg-[var(--cmp-surface-success)] text-emerald-700", superseded: "bg-gray-100 text-gray-400" };
 const fmtDateTime = (iso: string) => { const d = new Date(iso); return `${d.toLocaleDateString([], { day: "2-digit", month: "short" })} ${d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: false })}`; };
 
 export default function DocumentationConsole({ patients, documents }: { patients: { id: string; label: string }[]; documents: any[] }) {
@@ -44,7 +44,7 @@ export default function DocumentationConsole({ patients, documents }: { patients
 
   return (
     <>
-      {msg && <div className={`fixed bottom-4 right-4 z-50 text-sm rounded-lg px-4 py-2.5 shadow-lg ${msg.kind === "ok" ? "bg-emerald-600 text-white" : "bg-rose-600 text-white"}`}>{msg.text}</div>}
+      {msg && <div className={`fixed bottom-4 right-4 z-50 text-sm rounded-lg px-4 py-2.5 shadow-lg ${msg.kind === "ok" ? "bg-[var(--cmp-color-success)] text-white" : "bg-[var(--cmp-color-error)] text-white"}`}>{msg.text}</div>}
 
       {/* Generate panel */}
       <div className={cardClass}>
@@ -56,7 +56,7 @@ export default function DocumentationConsole({ patients, documents }: { patients
           <label className="text-xs text-gray-500 sm:col-span-1">Patient
             <select className={input} value={patientId} onChange={e => setPatientId(e.target.value)}><option value="">— select —</option>{patients.map(p => <option key={p.id} value={p.id}>{p.label}</option>)}</select>
           </label>
-          <div className="flex items-end"><button onClick={generate} disabled={busy || !patientId} className="w-full text-sm rounded-lg bg-emerald-600 text-white px-4 py-2 hover:bg-emerald-700 disabled:opacity-50">Generate from live data</button></div>
+          <div className="flex items-end"><button onClick={generate} disabled={busy || !patientId} className="w-full text-sm rounded-lg bg-[var(--cmp-color-success)] text-white px-4 py-2 hover:bg-emerald-700 disabled:opacity-50">Generate from live data</button></div>
         </div>
         <p className="text-[11px] text-gray-400 mt-2">{docTemplateByKey(templateKey)?.blurb} Populated from the operational record at generation time — never fabricated.</p>
       </div>
@@ -95,7 +95,7 @@ export default function DocumentationConsole({ patients, documents }: { patients
               <p className="text-[10px] text-gray-400 max-w-[50%]">{viewed.status === "signed" ? "Signed — immutable." : viewed.status === "superseded" ? "Superseded by a newer version." : "Draft — sign to finalise."}</p>
               <div className="flex items-center gap-2">
                 {viewed.status !== "superseded" && <button onClick={() => act("supersede", viewed.id)} disabled={busy} className="text-sm rounded-lg border border-gray-200 text-gray-700 px-3 py-2 hover:border-gray-300 disabled:opacity-50">Regenerate</button>}
-                {viewed.status === "draft" && <button onClick={() => act("sign", viewed.id)} disabled={busy} className="text-sm rounded-lg bg-emerald-600 text-white px-4 py-2 hover:bg-emerald-700 disabled:opacity-50">Sign{tpl?.sign ? "" : " & finalise"}</button>}
+                {viewed.status === "draft" && <button onClick={() => act("sign", viewed.id)} disabled={busy} className="text-sm rounded-lg bg-[var(--cmp-color-success)] text-white px-4 py-2 hover:bg-emerald-700 disabled:opacity-50">Sign{tpl?.sign ? "" : " & finalise"}</button>}
               </div>
             </div>
           </div>

@@ -42,11 +42,11 @@ export default async function PatientOpsConfiguration() {
       </div>
       <PosTabs />
 
-      {!d.provisioned && <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 text-sm text-amber-800"><b>Store not provisioned.</b> Migration 086 isn&apos;t applied yet — rules below show platform defaults and are read-only until it&apos;s run.</div>}
+      {!d.provisioned && <div className="bg-[var(--cmp-surface-warning)] border border-[var(--cmp-color-warning)] rounded-xl p-4 text-sm text-amber-800"><b>Store not provisioned.</b> Migration 086 isn&apos;t applied yet — rules below show platform defaults and are read-only until it&apos;s run.</div>}
 
       <div className="grid grid-cols-3 gap-3">
         <div className="bg-white rounded-xl border border-gray-200 p-4"><p className="text-xs text-gray-500">Configurable rules</p><p className="text-2xl font-bold tabular-nums mt-1 text-gray-900">{d.total}</p></div>
-        <div className="bg-white rounded-xl border border-gray-200 p-4"><p className="text-xs text-gray-500">Tenant overrides</p><p className="text-2xl font-bold tabular-nums mt-1 text-emerald-600">{d.overridden}</p></div>
+        <div className="bg-white rounded-xl border border-gray-200 p-4"><p className="text-xs text-gray-500">Tenant overrides</p><p className="text-2xl font-bold tabular-nums mt-1 text-[var(--cmp-text-success)]">{d.overridden}</p></div>
         <div className="bg-white rounded-xl border border-gray-200 p-4"><p className="text-xs text-gray-500">On defaults</p><p className="text-2xl font-bold tabular-nums mt-1 text-gray-500">{d.total - d.overridden}</p></div>
       </div>
 

@@ -60,10 +60,10 @@ export default async function MyReviewsPage() {
         <Card title="Recent Score Validations" sub="latest decisions you made">
           {(myScores ?? []).length ? (myScores ?? []).slice(0, 8).map(s => (
             <div key={s.id} className="flex items-center gap-2 text-[11px] py-1">
-              <span className={`w-5 h-5 rounded text-[10px] font-bold flex items-center justify-center shrink-0 ${s.is_passing ? "bg-green-100 text-green-700" : "bg-red-100 text-red-600"}`}>{s.score ?? "—"}</span>
+              <span className={`w-5 h-5 rounded text-[10px] font-bold flex items-center justify-center shrink-0 ${s.is_passing ? "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]" : "bg-[var(--cmp-surface-critical)] text-[var(--cmp-text-critical)]"}`}>{s.score ?? "—"}</span>
               <span className="text-gray-800 font-medium truncate">{(s.profiles as unknown as { full_name: string } | null)?.full_name ?? "—"}</span>
               <span className="text-gray-400 truncate flex-1">{(s.framework_competencies as unknown as { name: string } | null)?.name ?? "—"}</span>
-              <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded uppercase shrink-0 ${s.educator_validated ? "bg-green-50 text-green-600" : "bg-amber-50 text-amber-600"}`}>
+              <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded uppercase shrink-0 ${s.educator_validated ? "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]" : "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]"}`}>
                 {s.educator_validated ? "validated" : "returned"}
               </span>
             </div>
@@ -75,7 +75,7 @@ export default async function MyReviewsPage() {
               <span className="text-gray-800 font-medium truncate">{(e.profiles as unknown as { full_name: string } | null)?.full_name ?? "—"}</span>
               <span className="text-gray-400 truncate flex-1">{e.skill_name}</span>
               <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded uppercase shrink-0 ${
-                e.status === "verified" ? "bg-green-50 text-green-600" : e.status === "rejected" ? "bg-red-50 text-red-600" : "bg-amber-50 text-amber-600"}`}>
+                e.status === "verified" ? "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]" : e.status === "rejected" ? "bg-[var(--cmp-surface-critical)] text-[var(--cmp-text-critical)]" : "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]"}`}>
                 {e.status.replace("_", " ")}
               </span>
             </div>

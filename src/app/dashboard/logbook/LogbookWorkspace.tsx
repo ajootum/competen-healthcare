@@ -20,15 +20,15 @@ export type ScoredRow = { skill: string; competency: string; score: number; asse
 
 const SUPERVISION_UI: Record<string, { label: string; miller: string; cls: string }> = {
   observed:    { label: "Observed",    miller: "P1 · Knows",     cls: "bg-gray-100 text-gray-600" },
-  assisted:    { label: "Assisted",    miller: "P2 · Knows How", cls: "bg-blue-50 text-blue-600" },
-  supervised:  { label: "Supervised",  miller: "P2 · Knows How", cls: "bg-amber-50 text-amber-700" },
-  independent: { label: "Independent", miller: "P3 · Shows How", cls: "bg-green-50 text-green-700" },
+  assisted:    { label: "Assisted",    miller: "P2 · Knows How", cls: "bg-[var(--cmp-surface-information)] text-[var(--cmp-text-information)]" },
+  supervised:  { label: "Supervised",  miller: "P2 · Knows How", cls: "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]" },
+  independent: { label: "Independent", miller: "P3 · Shows How", cls: "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]" },
 };
 const STATUS_UI: Record<string, { label: string; cls: string }> = {
-  pending:           { label: "Awaiting verification", cls: "bg-amber-50 text-amber-700" },
-  verified:          { label: "Verified",              cls: "bg-green-50 text-green-700" },
-  rejected:          { label: "Rejected",              cls: "bg-red-50 text-red-600" },
-  changes_requested: { label: "Changes requested",     cls: "bg-orange-50 text-orange-600" },
+  pending:           { label: "Awaiting verification", cls: "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]" },
+  verified:          { label: "Verified",              cls: "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]" },
+  rejected:          { label: "Rejected",              cls: "bg-[var(--cmp-surface-critical)] text-[var(--cmp-text-critical)]" },
+  changes_requested: { label: "Changes requested",     cls: "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]" },
 };
 
 const fmt = (iso: string | null) => iso ? new Date(iso).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" }) : "—";
@@ -117,8 +117,8 @@ export default function LogbookWorkspace({ skills, entries, scored }: {
       {/* KPI cards */}
       <div className="grid grid-cols-2 xl:grid-cols-4 gap-3 mb-5">
         {[
-          { label: "Skills Logged", value: entries.length, sub: "your logbook entries", color: "text-blue-600" },
-          { label: "Independent (P3)", value: independent, sub: "performed independently", color: "text-green-600" },
+          { label: "Skills Logged", value: entries.length, sub: "your logbook entries", color: "text-[var(--cmp-text-information)]" },
+          { label: "Independent (P3)", value: independent, sub: "performed independently", color: "text-[var(--cmp-text-success)]" },
           { label: "Under Supervision", value: underSupervision, sub: "building towards independent", color: "text-orange-500" },
           { label: "Awaiting Verification", value: pending, sub: "with your supervisor", color: "text-violet-600" },
         ].map(k => (
@@ -193,12 +193,12 @@ export default function LogbookWorkspace({ skills, entries, scored }: {
           <p className="text-[10px] text-gray-400 mb-3">Scored by assessors during your competency cycles — these feed your passport directly.</p>
           {scored.map((r, i) => (
             <div key={i} className="flex items-center gap-3 py-2 border-b border-gray-50 last:border-0">
-              <span className={`w-7 h-7 rounded-full text-white text-xs font-bold flex items-center justify-center shrink-0 ${r.score >= 3 ? "bg-teal-500" : "bg-orange-400"}`}>{r.score}</span>
+              <span className={`w-7 h-7 rounded-full text-white text-xs font-bold flex items-center justify-center shrink-0 ${r.score >= 3 ? "bg-teal-500" : "bg-[var(--cmp-color-warning)]"}`}>{r.score}</span>
               <div className="flex-1 min-w-0">
                 <p className="text-sm text-gray-800 truncate">{r.skill}</p>
                 <p className="text-[10px] text-gray-400" suppressHydrationWarning>{r.competency} · {r.assessor}{r.date ? ` · ${fmt(r.date)}` : ""}</p>
               </div>
-              <span className={`text-[9px] font-bold shrink-0 ${r.score >= 3 ? "text-green-600" : "text-amber-600"}`}>
+              <span className={`text-[9px] font-bold shrink-0 ${r.score >= 3 ? "text-[var(--cmp-text-success)]" : "text-[var(--cmp-text-warning)]"}`}>
                 {r.score >= 3 ? "Independent" : "Needs practice"}
               </span>
             </div>
@@ -259,7 +259,7 @@ export default function LogbookWorkspace({ skills, entries, scored }: {
                 <textarea value={form.notes} onChange={e => setForm(p => ({ ...p, notes: e.target.value }))}
                   rows={2} placeholder="Context, patient category, reflections…" className={`${input} resize-none`} />
               </div>
-              {err && <p className="text-xs text-red-600 bg-red-50 rounded-lg px-3 py-2">{err}</p>}
+              {err && <p className="text-xs text-[var(--cmp-text-critical)] bg-[var(--cmp-surface-critical)] rounded-lg px-3 py-2">{err}</p>}
             </div>
             <div className="flex gap-2 mt-5">
               <button onClick={() => setOpen(false)}

@@ -10,8 +10,8 @@ import { cardClass } from "@/components/ui/primitives";
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 const BADGE: Record<string, string> = {
-  draft: "bg-gray-100 text-gray-600", onboarding: "bg-amber-50 text-amber-700", active: "bg-green-50 text-green-700",
-  suspended: "bg-rose-50 text-rose-700", restricted: "bg-orange-50 text-orange-700", archived: "bg-gray-100 text-gray-500", closed: "bg-gray-100 text-gray-500",
+  draft: "bg-gray-100 text-gray-600", onboarding: "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]", active: "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]",
+  suspended: "bg-[var(--cmp-surface-error)] text-[var(--cmp-text-error)]", restricted: "bg-[var(--cmp-surface-warning)] text-orange-700", archived: "bg-gray-100 text-gray-500", closed: "bg-gray-100 text-gray-500",
 };
 const TABS = ["Overview", "Structure", "Facilities", "Users", "Subscription", "Governance", "Audit"] as const;
 const card = cardClass;
@@ -38,8 +38,8 @@ export default function OrgProfileClient({ data }: { data: any }) {
   }
 
   const actions = [
-    org.status !== "active" && { label: "Activate", status: "active", cls: "border-green-200 text-green-700 hover:bg-green-50" },
-    org.status === "active" && { label: "Suspend", status: "suspended", cls: "border-rose-200 text-rose-700 hover:bg-rose-50" },
+    org.status !== "active" && { label: "Activate", status: "active", cls: "border-[var(--cmp-color-success)] text-[var(--cmp-text-success)] hover:bg-[var(--cmp-surface-success)]" },
+    org.status === "active" && { label: "Suspend", status: "suspended", cls: "border-[var(--cmp-color-error)] text-[var(--cmp-text-error)] hover:bg-[var(--cmp-surface-error)]" },
     org.status !== "archived" && { label: "Archive", status: "archived", cls: "border-gray-300 text-gray-600 hover:bg-gray-50" },
   ].filter(Boolean) as any[];
 
@@ -68,7 +68,7 @@ export default function OrgProfileClient({ data }: { data: any }) {
           ))}
         </div>
       </div>
-      {msg && <div className={`text-sm rounded-lg px-3 py-1.5 ${msg.k === "ok" ? "bg-green-50 text-green-800" : "bg-amber-50 text-amber-800"}`}>{msg.t}</div>}
+      {msg && <div className={`text-sm rounded-lg px-3 py-1.5 ${msg.k === "ok" ? "bg-[var(--cmp-surface-success)] text-green-800" : "bg-[var(--cmp-surface-warning)] text-amber-800"}`}>{msg.t}</div>}
 
       {/* KPIs */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
@@ -120,7 +120,7 @@ export default function OrgProfileClient({ data }: { data: any }) {
                 <Link key={f.id} href="/super-admin/hospitals" className="flex items-center gap-3 py-2.5 hover:bg-gray-50/60 -mx-2 px-2 rounded">
                   <span className="text-base">🏥</span>
                   <div className="flex-1 min-w-0"><p className="text-sm text-gray-800 truncate">{f.name}</p><p className="text-[10px] text-gray-400 capitalize">{(f.type ?? "").replace(/_/g, " ")} · {[f.city, f.country].filter(Boolean).join(", ")}</p></div>
-                  <span className={`text-[10px] px-2 py-0.5 rounded ${f.hasAdmin ? "bg-green-50 text-green-700" : "bg-amber-50 text-amber-700"}`}>{f.status}</span>
+                  <span className={`text-[10px] px-2 py-0.5 rounded ${f.hasAdmin ? "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]" : "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]"}`}>{f.status}</span>
                 </Link>
               ))}
             </div>
@@ -138,7 +138,7 @@ export default function OrgProfileClient({ data }: { data: any }) {
               {userCount > 100 && <p className="text-[10px] text-gray-400 pb-1">Showing first 100 of {userCount}.</p>}
               {users.slice(0, 100).map((u: any) => (
                 <div key={u.id} className="flex items-center gap-3 py-2">
-                  <span className="w-7 h-7 rounded-full bg-blue-50 flex items-center justify-center text-xs">{(u.name ?? "?")[0]}</span>
+                  <span className="w-7 h-7 rounded-full bg-[var(--cmp-surface-information)] flex items-center justify-center text-xs">{(u.name ?? "?")[0]}</span>
                   <div className="flex-1 min-w-0"><p className="text-sm text-gray-800 truncate">{u.name}</p><p className="text-[10px] text-gray-400 truncate">{u.email}</p></div>
                   <span className="text-[10px] text-gray-500 capitalize">{u.roles.map((r: string) => r.replace(/_/g, " ")).slice(0, 2).join(", ")}</span>
                 </div>

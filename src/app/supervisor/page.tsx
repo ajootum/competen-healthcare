@@ -21,7 +21,7 @@ const head = "font-semibold text-gray-900 flex items-center gap-2 text-sm";
 const tc = (s: string) => (s ?? "").replace(/_/g, " ").replace(/\b\w/g, m => m.toUpperCase());
 const fmtTime = (iso: string | null) => iso ? new Date(iso).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: false }) : "--:--";
 const relTime = (iso?: string | null) => { if (!iso) return ""; const s = Math.floor((Date.now() - new Date(iso).getTime()) / 1000); if (s < 60) return "just now"; if (s < 3600) return `${Math.floor(s / 60)}m ago`; if (s < 86400) return `${Math.floor(s / 3600)}h ago`; return `${Math.floor(s / 86400)}d ago`; };
-const covTone = (n: number | null) => (n == null ? "text-gray-300" : n >= 90 ? "text-green-600" : n >= 75 ? "text-amber-600" : "text-rose-600");
+const covTone = (n: number | null) => (n == null ? "text-gray-300" : n >= 90 ? "text-[var(--cmp-text-success)]" : n >= 75 ? "text-[var(--cmp-text-warning)]" : "text-[var(--cmp-text-error)]");
 
 export default async function Dashboard() {
   const supabase = await createClient();
@@ -39,7 +39,7 @@ export default async function Dashboard() {
     return (
       <div className="space-y-4">
         <h1 className="text-2xl font-bold text-gray-900">Dashboard</h1>
-        <div className="bg-amber-50 border border-amber-200 rounded-xl p-6"><p className="font-semibold text-amber-900">⚙️ Coming online</p><p className="text-sm text-amber-800 mt-2">The Clinical Operations Engine tables aren&apos;t provisioned yet. Once applied, your shift dashboard fills with live data.</p></div>
+        <div className="bg-[var(--cmp-surface-warning)] border border-[var(--cmp-color-warning)] rounded-xl p-6"><p className="font-semibold text-amber-900">⚙️ Coming online</p><p className="text-sm text-amber-800 mt-2">The Clinical Operations Engine tables aren&apos;t provisioned yet. Once applied, your shift dashboard fills with live data.</p></div>
       </div>
     );
   }
@@ -122,7 +122,7 @@ export default async function Dashboard() {
     e.n++; if (p.acuity_level === "critical") e.critical++; else if (p.acuity_level === "high") e.high++;
     wardMap.set(w, e);
   });
-  const wardStatus = [...wardMap.entries()].map(([ward, s]) => ({ ward, ...s, status: s.critical > 0 ? `${s.critical} Critical` : s.high > 0 ? `${s.high} High Risk` : "Stable", tone: s.critical > 0 ? "text-rose-600 bg-rose-50" : s.high > 0 ? "text-amber-600 bg-amber-50" : "text-green-600 bg-green-50" })).slice(0, 6);
+  const wardStatus = [...wardMap.entries()].map(([ward, s]) => ({ ward, ...s, status: s.critical > 0 ? `${s.critical} Critical` : s.high > 0 ? `${s.high} High Risk` : "Stable", tone: s.critical > 0 ? "text-[var(--cmp-text-error)] bg-[var(--cmp-surface-error)]" : s.high > 0 ? "text-[var(--cmp-text-warning)] bg-[var(--cmp-surface-warning)]" : "text-[var(--cmp-text-success)] bg-[var(--cmp-surface-success)]" })).slice(0, 6);
 
   // AI recommendations (rule-based)
   const copilot: { text: string; sub: string; href: string }[] = [];
@@ -146,11 +146,11 @@ export default async function Dashboard() {
 
   const kpis = [
     { label: "Total Patients", value: census, sub: "Current census", href: "/supervisor/patient-list", tone: "" },
-    { label: "Critical Patients", value: critical, sub: "View patients", href: "/supervisor/clinical-safety", tone: critical ? "text-rose-600" : "" },
+    { label: "Critical Patients", value: critical, sub: "View patients", href: "/supervisor/clinical-safety", tone: critical ? "text-[var(--cmp-text-error)]" : "" },
     { label: "Available Beds", value: `${available}/${totalBeds}`, sub: `${availPct}% available`, href: "/supervisor/bed-management", tone: "" },
     { label: "Staff on Duty", value: present.length, sub: "Break clocking not tracked", href: "/supervisor/workforce-operations", tone: "" },
-    { label: "Open Escalations", value: openEsc.length, sub: "View escalations", href: "/supervisor/operations?section=safety", tone: openEsc.length ? "text-amber-600" : "" },
-    { label: "Outstanding Tasks", value: openTasks.length, sub: `${criticalTasks} critical`, href: "/supervisor/task-center", tone: criticalTasks ? "text-rose-600" : "" },
+    { label: "Open Escalations", value: openEsc.length, sub: "View escalations", href: "/supervisor/operations?section=safety", tone: openEsc.length ? "text-[var(--cmp-text-warning)]" : "" },
+    { label: "Outstanding Tasks", value: openTasks.length, sub: `${criticalTasks} critical`, href: "/supervisor/task-center", tone: criticalTasks ? "text-[var(--cmp-text-error)]" : "" },
   ];
 
   return (
@@ -161,9 +161,9 @@ export default async function Dashboard() {
           <p className="text-sm text-gray-500">Here is your shift overview for {new Date().toLocaleDateString([], { weekday: "long", day: "numeric", month: "long", year: "numeric" })}{activeShift ? ` · ${tc(activeShift.shift_type)} shift` : ""}</p>
         </div>
         {activeShift && (
-          <div className="flex items-center gap-2 rounded-xl border border-green-200 bg-green-50 px-3 py-2">
-            <span className="w-2 h-2 rounded-full bg-green-500" />
-            <div><p className="text-xs font-bold text-green-700">Active Shift</p><p className="text-[11px] text-green-600 tabular-nums">{fmtTime(activeShift.starts_at)} – {fmtTime(activeShift.ends_at)}</p></div>
+          <div className="flex items-center gap-2 rounded-xl border border-[var(--cmp-color-success)] bg-[var(--cmp-surface-success)] px-3 py-2">
+            <span className="w-2 h-2 rounded-full bg-[var(--cmp-color-success)]" />
+            <div><p className="text-xs font-bold text-[var(--cmp-text-success)]">Active Shift</p><p className="text-[11px] text-[var(--cmp-text-success)] tabular-nums">{fmtTime(activeShift.starts_at)} – {fmtTime(activeShift.ends_at)}</p></div>
           </div>
         )}
       </div>
@@ -184,7 +184,7 @@ export default async function Dashboard() {
         <div className={card}>
           <h3 className={head}>🔀 Patient Flow Today</h3>
           <div className="mt-3 grid grid-cols-3 gap-3">
-            {[["Admitted", patients.filter((p: any) => p.operational_status === "admitted" && p.created_at && new Date(p.created_at) >= todayStart).length, "text-green-600"], ["Transfers", byStatus("transfer_pending"), "text-blue-600"], ["Discharge Pending", byStatus("discharge_pending"), "text-violet-600"]].map(([l, n, tone]: any) => (
+            {[["Admitted", patients.filter((p: any) => p.operational_status === "admitted" && p.created_at && new Date(p.created_at) >= todayStart).length, "text-[var(--cmp-text-success)]"], ["Transfers", byStatus("transfer_pending"), "text-[var(--cmp-text-information)]"], ["Discharge Pending", byStatus("discharge_pending"), "text-violet-600"]].map(([l, n, tone]: any) => (
               <div key={l} className="rounded-lg border border-gray-100 p-3 text-center"><p className={`text-2xl font-bold tabular-nums ${tone}`}>{n}</p><p className="text-[10px] text-gray-500 mt-0.5">{l}</p></div>
             ))}
           </div>
@@ -205,7 +205,7 @@ export default async function Dashboard() {
           </div>
           <div className="mt-3 pt-3 border-t border-gray-100">
             <div className="flex items-center justify-between text-xs mb-1"><span className="text-gray-600">Skill Mix Compliance</span><span className={`font-semibold ${covTone(skillMix)}`}>{skillMix == null ? "—" : `${skillMix}%`} <span className="text-gray-400 font-normal">· target ≥90%</span></span></div>
-            <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden"><div className={`h-full rounded-full ${skillMix == null ? "bg-gray-200" : skillMix >= 90 ? "bg-green-500" : skillMix >= 75 ? "bg-amber-500" : "bg-rose-500"}`} style={{ width: `${skillMix ?? 0}%` }} /></div>
+            <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden"><div className={`h-full rounded-full ${skillMix == null ? "bg-gray-200" : skillMix >= 90 ? "bg-[var(--cmp-color-success)]" : skillMix >= 75 ? "bg-[var(--cmp-color-warning)]" : "bg-[var(--cmp-color-error)]"}`} style={{ width: `${skillMix ?? 0}%` }} /></div>
           </div>
         </div>
       </div>
@@ -230,9 +230,9 @@ export default async function Dashboard() {
           <div className="mt-3 space-y-1.5">
             {[["Patients with High MEWS", highMews, "/supervisor/clinical-safety", "rose"], ["Overdue Observations", overdueObs, "/supervisor/operations?section=safety", "amber"], ["Open Incidents", alerts.length, "/supervisor/operations?section=safety", "amber"], ["Escalations Awaiting Review", openEsc.length, "/supervisor/operations?section=safety", "rose"]].map(([l, n, href, tone]: any) => (
               <Link key={l} href={href} className="flex items-center gap-2 rounded-lg border border-gray-100 hover:border-gray-200 px-2.5 py-1.5">
-                <span className={`w-2 h-2 rounded-full shrink-0 ${(n ?? 0) > 0 ? (tone === "rose" ? "bg-rose-500" : "bg-amber-500") : "bg-gray-300"}`} />
+                <span className={`w-2 h-2 rounded-full shrink-0 ${(n ?? 0) > 0 ? (tone === "rose" ? "bg-[var(--cmp-color-error)]" : "bg-[var(--cmp-color-warning)]") : "bg-gray-300"}`} />
                 <span className="text-xs text-gray-700 flex-1">{l}</span>
-                <span className={`text-sm font-bold tabular-nums ${(n ?? 0) > 0 ? (tone === "rose" ? "text-rose-600" : "text-amber-600") : "text-gray-300"}`}>{n}</span>
+                <span className={`text-sm font-bold tabular-nums ${(n ?? 0) > 0 ? (tone === "rose" ? "text-[var(--cmp-text-error)]" : "text-[var(--cmp-text-warning)]") : "text-gray-300"}`}>{n}</span>
               </Link>
             ))}
           </div>
@@ -266,7 +266,7 @@ export default async function Dashboard() {
               ))}
             </div>
           </div>
-          <div className="mt-3 pt-2 border-t border-gray-100 flex items-center justify-between text-xs"><span className="text-gray-500">Completed today</span><span className="font-semibold text-green-600">{completedToday}</span></div>
+          <div className="mt-3 pt-2 border-t border-gray-100 flex items-center justify-between text-xs"><span className="text-gray-500">Completed today</span><span className="font-semibold text-[var(--cmp-text-success)]">{completedToday}</span></div>
           <Link href="/supervisor/task-center" className="mt-2 block text-center text-xs text-teal-700 hover:underline">Go to Task Centre →</Link>
         </div>
 
@@ -275,9 +275,9 @@ export default async function Dashboard() {
           <div className="mt-3 space-y-2">
             {recentEsc.length === 0 ? <p className="text-sm text-gray-400">No recent escalations.</p> : recentEsc.map((e, i) => (
               <div key={i} className="flex items-start gap-2">
-                <span className={`mt-1 w-2 h-2 rounded-full shrink-0 ${e.level >= 4 ? "bg-rose-500" : "bg-amber-500"}`} />
+                <span className={`mt-1 w-2 h-2 rounded-full shrink-0 ${e.level >= 4 ? "bg-[var(--cmp-color-error)]" : "bg-[var(--cmp-color-warning)]"}`} />
                 <div className="min-w-0 flex-1"><p className="text-xs font-medium text-gray-800 truncate">{e.label} — {e.summary || `Escalation L${e.level}`}</p><p className="text-[10px] text-gray-400">{relTime(e.at)}</p></div>
-                <span className={`text-[9px] font-semibold px-1.5 py-0.5 rounded shrink-0 ${e.status === "acknowledged" ? "bg-blue-50 text-blue-700" : "bg-amber-50 text-amber-700"}`}>{tc(e.status)}</span>
+                <span className={`text-[9px] font-semibold px-1.5 py-0.5 rounded shrink-0 ${e.status === "acknowledged" ? "bg-[var(--cmp-surface-information)] text-blue-700" : "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]"}`}>{tc(e.status)}</span>
               </div>
             ))}
           </div>

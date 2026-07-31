@@ -118,7 +118,7 @@ export default async function MyCpusPage() {
                     </Link>
                   </div>
                   <div className="w-full h-1.5 bg-gray-100 rounded-full overflow-hidden mt-3">
-                    <div className={`h-full rounded-full ${progress >= 100 ? "bg-green-500" : progress > 0 ? "bg-teal-500" : "bg-gray-200"}`}
+                    <div className={`h-full rounded-full ${progress >= 100 ? "bg-[var(--cmp-color-success)]" : progress > 0 ? "bg-teal-500" : "bg-gray-200"}`}
                       style={{ width: `${Math.max(progress, 2)}%` }} />
                   </div>
                 </div>
@@ -147,7 +147,7 @@ export default async function MyCpusPage() {
                         <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-2">Assessment Blueprint</p>
                         <div className="flex flex-wrap gap-1.5">
                           {((bp.blueprint_methods ?? []) as { method: string; weight: number }[]).map(m => (
-                            <span key={m.method} className="text-[10px] bg-blue-50 text-blue-600 px-2 py-0.5 rounded font-medium">
+                            <span key={m.method} className="text-[10px] bg-[var(--cmp-surface-information)] text-[var(--cmp-text-information)] px-2 py-0.5 rounded font-medium">
                               {METHOD_LABELS[m.method] ?? m.method} {m.weight}%
                             </span>
                           ))}
@@ -171,7 +171,7 @@ export default async function MyCpusPage() {
                       </div>
                     )}
                     {started && nextReassessment && (
-                      <p className="text-[11px] text-amber-700 bg-amber-50 rounded-lg px-3 py-2">
+                      <p className="text-[11px] text-[var(--cmp-text-warning)] bg-[var(--cmp-surface-warning)] rounded-lg px-3 py-2">
                         ⏰ Reassessment due {new Date(nextReassessment).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" })}
                       </p>
                     )}

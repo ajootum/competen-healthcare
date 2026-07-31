@@ -25,10 +25,10 @@ export default async function StandardsPage() {
       {head}
       <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
         <Kpi label="Standards & Frameworks" value={standards.length} sub="in library" />
-        <Kpi label="Published" value={publishedStd.length} sub="authoritative" tone="text-emerald-600" />
+        <Kpi label="Published" value={publishedStd.length} sub="authoritative" tone="text-[var(--cmp-text-success)]" />
         <Kpi label="Frameworks in Cycle" value={frameworks.length} sub="applied" />
         <Kpi label="Avg Framework Score" value={avgScore != null ? `${avgScore}%` : "—"} sub="attainment" />
-        <Kpi label="In Review" value={standards.filter((s: any) => s.status === "in_review").length} sub="workflow" tone="text-amber-600" />
+        <Kpi label="In Review" value={standards.filter((s: any) => s.status === "in_review").length} sub="workflow" tone="text-[var(--cmp-text-warning)]" />
         <Kpi label="Versions" value={new Set(standards.map((s: any) => s.version)).size} sub="tracked" />
       </div>
 

@@ -5,18 +5,18 @@ import CycleManager from "./CycleManager";
 import { CompleteCycleButton, ClinicalReadinessScore } from "./CycleActions";
 
 const CYCLE_COLORS: Record<string, string> = {
-  orientation: "bg-blue-100 text-blue-700",
-  probation:   "bg-amber-100 text-amber-700",
+  orientation: "bg-[var(--cmp-surface-information)] text-blue-700",
+  probation:   "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]",
   annual:      "bg-teal-100 text-teal-700",
-  remediation: "bg-red-100 text-red-700",
+  remediation: "bg-[var(--cmp-surface-critical)] text-[var(--cmp-text-critical)]",
   specialty:   "bg-violet-100 text-violet-700",
 };
 const STATUS_COLORS: Record<string, string> = {
   pending:  "bg-gray-100 text-gray-500",
-  active:   "bg-green-100 text-green-700",
+  active:   "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]",
   complete: "bg-teal-100 text-teal-700",
-  failed:   "bg-red-100 text-red-600",
-  expired:  "bg-orange-100 text-orange-600",
+  failed:   "bg-[var(--cmp-surface-critical)] text-[var(--cmp-text-critical)]",
+  expired:  "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]",
 };
 
 export default async function CyclesPage() {
@@ -71,7 +71,7 @@ export default async function CyclesPage() {
       {/* Stats row */}
       <div className="grid grid-cols-3 gap-3 mb-6">
         {[
-          { label: "Active",   count: activeCycles, color: "text-green-600", bg: "bg-green-50" },
+          { label: "Active",   count: activeCycles, color: "text-[var(--cmp-text-success)]", bg: "bg-[var(--cmp-surface-success)]" },
           { label: "Complete", count: completedCycles, color: "text-teal-600", bg: "bg-teal-50" },
           { label: "Total",    count: (cycles ?? []).length, color: "text-gray-600", bg: "bg-gray-50" },
         ].map(s => (
@@ -118,7 +118,7 @@ export default async function CyclesPage() {
                   {fws.map(f => (
                     <span key={f.id} className={`text-[10px] px-2 py-0.5 rounded ${
                       f.status === "complete" ? "bg-teal-50 text-teal-600" :
-                      f.status === "in_progress" ? "bg-blue-50 text-blue-600" :
+                      f.status === "in_progress" ? "bg-[var(--cmp-surface-information)] text-[var(--cmp-text-information)]" :
                       "bg-gray-100 text-gray-500"
                     }`}>
                       {f.frameworks?.name ?? "—"}

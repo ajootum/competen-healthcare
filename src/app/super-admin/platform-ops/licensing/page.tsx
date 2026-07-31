@@ -33,10 +33,10 @@ export default async function LicensingCentre() {
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
         {[
           { label: "Plans", n: fmt(summary.plans), tone: "text-gray-900" },
-          { label: "Active subscriptions", n: fmt(summary.subscriptions), tone: "text-green-600" },
-          { label: "Total seats", n: fmt(summary.seats), tone: "text-blue-600" },
-          { label: "Trials", n: fmt(summary.trials), tone: summary.trials ? "text-amber-600" : "text-gray-300" },
-          { label: "Renewing ≤30d", n: fmt(summary.renewingSoon), tone: summary.renewingSoon ? "text-orange-600" : "text-gray-300" },
+          { label: "Active subscriptions", n: fmt(summary.subscriptions), tone: "text-[var(--cmp-text-success)]" },
+          { label: "Total seats", n: fmt(summary.seats), tone: "text-[var(--cmp-text-information)]" },
+          { label: "Trials", n: fmt(summary.trials), tone: summary.trials ? "text-[var(--cmp-text-warning)]" : "text-gray-300" },
+          { label: "Renewing ≤30d", n: fmt(summary.renewingSoon), tone: summary.renewingSoon ? "text-[var(--cmp-text-warning)]" : "text-gray-300" },
           { label: `MRR (${summary.currency})`, n: fmt(summary.mrr), tone: "text-violet-600", sub: summary.mrr === 0 ? "list price 0" : undefined },
         ].map(k => (
           <div key={k.label} className="bg-white rounded-xl border border-gray-200 p-4">

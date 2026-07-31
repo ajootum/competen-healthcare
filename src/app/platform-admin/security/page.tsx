@@ -32,7 +32,7 @@ export default async function SecurityPage() {
 
       <div className="grid grid-cols-3 gap-3">
         <div className={card}><div className="text-3xl font-bold tabular-nums text-gray-900">{audit.total}</div><div className="text-xs text-gray-500 mt-1">Audit events (recent)</div></div>
-        <div className={card}><div className={`text-3xl font-bold tabular-nums ${audit.securityEvents ? "text-amber-600" : "text-gray-900"}`}>{audit.securityEvents}</div><div className="text-xs text-gray-500 mt-1">Security-relevant</div></div>
+        <div className={card}><div className={`text-3xl font-bold tabular-nums ${audit.securityEvents ? "text-[var(--cmp-text-warning)]" : "text-gray-900"}`}>{audit.securityEvents}</div><div className="text-xs text-gray-500 mt-1">Security-relevant</div></div>
         <div className={card}><div className="text-3xl font-bold tabular-nums text-gray-900">{audit.distinctActions}</div><div className="text-xs text-gray-500 mt-1">Distinct action types</div></div>
       </div>
 

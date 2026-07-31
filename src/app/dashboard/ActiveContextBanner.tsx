@@ -10,11 +10,11 @@ export default function ActiveContextBanner({ roleLabel, primary }: { roleLabel:
   const pathname = usePathname();
   if (pathname !== "/dashboard" || !primary) return null; // pure personal-only users (e.g. a clinician) need no jump
   return (
-    <div className="hidden md:flex flex-wrap items-center gap-x-3 gap-y-1.5 px-4 md:px-6 py-2 bg-blue-50/70 border-b border-blue-100 text-[12px]">
+    <div className="hidden md:flex flex-wrap items-center gap-x-3 gap-y-1.5 px-4 md:px-6 py-2 bg-[var(--cmp-surface-information)]/70 border-b border-[var(--cmp-color-information)] text-[12px]">
       <span className="text-blue-900 font-medium">🧭 You&apos;re in your Personal Workspace</span>
       <span className="text-blue-700/70">Your work across every entitled workspace is aggregated here · active role: <span className="font-medium capitalize">{roleLabel}</span></span>
       <span className="flex-1" />
-      <Link href={primary.href} className="font-medium text-white bg-blue-600 hover:bg-blue-500 rounded-md px-2.5 py-1">Open {primary.label} →</Link>
+      <Link href={primary.href} className="font-medium text-white bg-[var(--cmp-color-information)] hover:bg-[var(--cmp-color-information)] rounded-md px-2.5 py-1">Open {primary.label} →</Link>
       <Link href="/dashboard/launcher" className="font-medium text-blue-700 hover:underline">All workspaces</Link>
     </div>
   );

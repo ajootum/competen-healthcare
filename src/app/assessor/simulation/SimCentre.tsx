@@ -18,8 +18,8 @@ export type SimAnalytics = { sims30: number; passRate30: number | null; avg30: n
 export type PickOption = { id: string; name: string };
 
 const DIFF_CLS: Record<string, string> = {
-  Easy: "bg-green-100 text-green-700", Medium: "bg-amber-100 text-amber-700", Hard: "bg-red-100 text-red-600",
-  beginner: "bg-green-100 text-green-700", intermediate: "bg-amber-100 text-amber-700", advanced: "bg-red-100 text-red-600",
+  Easy: "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]", Medium: "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]", Hard: "bg-[var(--cmp-surface-critical)] text-[var(--cmp-text-critical)]",
+  beginner: "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]", intermediate: "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]", advanced: "bg-[var(--cmp-surface-critical)] text-[var(--cmp-text-critical)]",
 };
 
 export default function SimCentre({ kpis, upcoming, overdue, results, briefs, cases, analytics, nurses, competencies, hasHospital }: {
@@ -120,7 +120,7 @@ export default function SimCentre({ kpis, upcoming, overdue, results, briefs, ca
       </div>
 
       {!hasHospital && (
-        <div className="bg-amber-50 border border-amber-200 rounded-xl p-5 text-sm text-amber-800 mb-5">
+        <div className="bg-[var(--cmp-surface-warning)] border border-[var(--cmp-color-warning)] rounded-xl p-5 text-sm text-amber-800 mb-5">
           Your account is not linked to a hospital — ask a hospital administrator to link you before running simulations.
         </div>
       )}
@@ -130,16 +130,16 @@ export default function SimCentre({ kpis, upcoming, overdue, results, briefs, ca
         {KPI.map(k => {
           const inner = (
             <>
-              <p className={`text-lg font-bold ${k.alert ? "text-red-600" : "text-gray-900"}`}>{k.value}</p>
+              <p className={`text-lg font-bold ${k.alert ? "text-[var(--cmp-text-critical)]" : "text-gray-900"}`}>{k.value}</p>
               <p className="text-[9px] font-bold text-gray-400 uppercase tracking-wider leading-tight">{k.label}</p>
               {k.sub && <p className="text-[8px] text-gray-400 mt-0.5">{k.sub}</p>}
               {k.href && <p className="text-[8px] text-indigo-500 mt-0.5">open →</p>}
             </>
           );
           return k.href ? (
-            <Link key={k.label} href={k.href} className={`bg-white border rounded-xl px-3 py-2.5 hover:border-indigo-300 transition-colors ${k.alert ? "border-red-200 bg-red-50/40" : "border-gray-200"}`}>{inner}</Link>
+            <Link key={k.label} href={k.href} className={`bg-white border rounded-xl px-3 py-2.5 hover:border-indigo-300 transition-colors ${k.alert ? "border-[var(--cmp-color-critical)] bg-[var(--cmp-surface-critical)]/40" : "border-gray-200"}`}>{inner}</Link>
           ) : (
-            <div key={k.label} className={`bg-white border rounded-xl px-3 py-2.5 ${k.alert ? "border-red-200 bg-red-50/40" : "border-gray-200"}`}>{inner}</div>
+            <div key={k.label} className={`bg-white border rounded-xl px-3 py-2.5 ${k.alert ? "border-[var(--cmp-color-critical)] bg-[var(--cmp-surface-critical)]/40" : "border-gray-200"}`}>{inner}</div>
           );
         })}
       </div>
@@ -153,8 +153,8 @@ export default function SimCentre({ kpis, upcoming, overdue, results, briefs, ca
         ))}
       </div>
 
-      {error && <p className="text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2 mb-4">{error}</p>}
-      {ok && <p className="text-xs text-green-700 bg-green-50 border border-green-200 rounded-lg px-3 py-2 mb-4">✓ {ok}</p>}
+      {error && <p className="text-xs text-[var(--cmp-text-critical)] bg-[var(--cmp-surface-critical)] border border-[var(--cmp-color-critical)] rounded-lg px-3 py-2 mb-4">{error}</p>}
+      {ok && <p className="text-xs text-[var(--cmp-text-success)] bg-[var(--cmp-surface-success)] border border-[var(--cmp-color-success)] rounded-lg px-3 py-2 mb-4">✓ {ok}</p>}
 
       {/* Scheduler */}
       {schedOpen && (
@@ -226,10 +226,10 @@ export default function SimCentre({ kpis, upcoming, overdue, results, briefs, ca
             <div className="space-y-1.5">
               {results.map(r => (
                 <div key={r.id} className="flex items-center gap-2 text-[11px]">
-                  <span className={`w-5 h-5 rounded text-[10px] font-bold flex items-center justify-center shrink-0 ${r.score >= 3 ? "bg-green-100 text-green-700" : "bg-red-100 text-red-600"}`}>{r.score}</span>
+                  <span className={`w-5 h-5 rounded text-[10px] font-bold flex items-center justify-center shrink-0 ${r.score >= 3 ? "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]" : "bg-[var(--cmp-surface-critical)] text-[var(--cmp-text-critical)]"}`}>{r.score}</span>
                   <span className="text-gray-800 font-medium truncate">{r.nurse}</span>
                   <span className="text-gray-400 truncate flex-1">{r.competency}</span>
-                  <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded shrink-0 ${r.validated ? "bg-green-50 text-green-600" : "bg-amber-50 text-amber-600"}`}>
+                  <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded shrink-0 ${r.validated ? "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]" : "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]"}`}>
                     {r.validated ? "validated" : "awaiting"}
                   </span>
                 </div>
@@ -253,7 +253,7 @@ export default function SimCentre({ kpis, upcoming, overdue, results, briefs, ca
               {analytics.gaps.map(g => (
                 <li key={g.name} className="flex items-center gap-2 text-[11px] text-gray-600">
                   <span className="flex-1 truncate">{g.name}</span>
-                  <span className="text-[9px] font-bold bg-red-50 text-red-600 rounded px-1.5 py-0.5">{g.fails} fail{g.fails === 1 ? "" : "s"}</span>
+                  <span className="text-[9px] font-bold bg-[var(--cmp-surface-critical)] text-[var(--cmp-text-critical)] rounded px-1.5 py-0.5">{g.fails} fail{g.fails === 1 ? "" : "s"}</span>
                 </li>
               ))}
             </ul>

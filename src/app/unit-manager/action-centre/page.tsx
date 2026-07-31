@@ -17,8 +17,8 @@ export const dynamic = "force-dynamic";
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 const card = "bg-white rounded-xl border border-gray-200";
-const PRI: Record<string, string> = { High: "bg-rose-50 text-rose-700", Medium: "bg-amber-50 text-amber-700", Low: "bg-gray-100 text-gray-500" };
-const STATE: Record<string, string> = { Open: "bg-rose-50 text-rose-700", Pending: "bg-amber-50 text-amber-700", "In Progress": "bg-blue-50 text-blue-700" };
+const PRI: Record<string, string> = { High: "bg-[var(--cmp-surface-error)] text-[var(--cmp-text-error)]", Medium: "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]", Low: "bg-gray-100 text-gray-500" };
+const STATE: Record<string, string> = { Open: "bg-[var(--cmp-surface-error)] text-[var(--cmp-text-error)]", Pending: "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]", "In Progress": "bg-[var(--cmp-surface-information)] text-blue-700" };
 const TYPE_COLOR: Record<string, string> = { Escalation: "#ef4444", Approval: "#8b5cf6", Improvement: "#14b8a6", Incident: "#f59e0b", Competency: "#3b82f6" };
 const TYPE_ICON: Record<string, string> = { Escalation: "⚠", Approval: "✅", Improvement: "📈", Incident: "🚩", Competency: "🎓" };
 const HREF: Record<string, string> = { Escalation: "/supervisor/quality-safety", Incident: "/supervisor/quality-safety", Improvement: "/supervisor/quality-safety", Competency: "/unit-manager/competency", Approval: "/supervisor/task-center" };
@@ -89,11 +89,11 @@ export default async function ExecutiveActionsCentre({ searchParams }: { searchP
       {/* KPI header */}
       <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-3">
         <Tile n={c.total} label="Total Action Items" sub="All open items" icon="📋" />
-        <Tile n={c.high} label="High Priority" sub="Require attention" tone={c.high ? "text-rose-600" : "text-gray-900"} icon="⚠" />
-        <Tile n={c.dueToday} label="Due Today" sub="Needs action" tone={c.dueToday ? "text-amber-600" : "text-gray-900"} icon="📅" />
-        <Tile n={c.overdue} label="Overdue" sub="Past due" tone={c.overdue ? "text-rose-600" : "text-gray-900"} icon="⏰" />
-        <Tile n={c.inProgress} label="In Progress" sub="Being worked on" tone="text-blue-600" icon="🔄" />
-        <Tile n={c.completed} label="Completed" sub="This period (30d)" tone="text-green-600" icon="✅" />
+        <Tile n={c.high} label="High Priority" sub="Require attention" tone={c.high ? "text-[var(--cmp-text-error)]" : "text-gray-900"} icon="⚠" />
+        <Tile n={c.dueToday} label="Due Today" sub="Needs action" tone={c.dueToday ? "text-[var(--cmp-text-warning)]" : "text-gray-900"} icon="📅" />
+        <Tile n={c.overdue} label="Overdue" sub="Past due" tone={c.overdue ? "text-[var(--cmp-text-error)]" : "text-gray-900"} icon="⏰" />
+        <Tile n={c.inProgress} label="In Progress" sub="Being worked on" tone="text-[var(--cmp-text-information)]" icon="🔄" />
+        <Tile n={c.completed} label="Completed" sub="This period (30d)" tone="text-[var(--cmp-text-success)]" icon="✅" />
       </div>
 
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
@@ -115,7 +115,7 @@ export default async function ExecutiveActionsCentre({ searchParams }: { searchP
                       <td className="py-2 pr-3 text-gray-800 font-medium max-w-[150px] truncate">{it.item}</td>
                       <td className="py-2 pr-3 text-gray-500 max-w-[160px] truncate">{it.details}</td>
                       <td className="py-2 pr-3 text-gray-600 whitespace-nowrap">{it.by}</td>
-                      <td className={`py-2 pr-3 whitespace-nowrap ${it.due && it.due < new Date().toISOString().slice(0, 10) ? "text-rose-600" : "text-gray-400"}`}>{relTime(it.at)}</td>
+                      <td className={`py-2 pr-3 whitespace-nowrap ${it.due && it.due < new Date().toISOString().slice(0, 10) ? "text-[var(--cmp-text-error)]" : "text-gray-400"}`}>{relTime(it.at)}</td>
                       <td className="py-2 pr-3"><span className={`px-1.5 py-0.5 rounded text-[10px] ${STATE[it.state] ?? "bg-gray-100 text-gray-500"}`}>{it.state}</span></td>
                       <td className="py-2"><Link href={HREF[it.type] ?? "#"} className="text-teal-700 hover:underline">Review →</Link></td>
                     </tr>
@@ -151,13 +151,13 @@ export default async function ExecutiveActionsCentre({ searchParams }: { searchP
           stats={[["Pending", mods.approvals.pending], ["Due Today", mods.approvals.dueToday], ["Overdue", mods.approvals.overdue]]}
           breakdown={mods.approvals.breakdown} href="/unit-manager/approvals" linkLabel="View approvals" />
         <ModulePanel icon="⚠" title="Escalations" color="#ef4444" provisioned={mods.escalations.provisioned}
-          stats={[["Open", mods.escalations.open], ["Critical", mods.escalations.critical, "text-rose-600"], ["Awaiting", mods.escalations.awaiting]]}
+          stats={[["Open", mods.escalations.open], ["Critical", mods.escalations.critical, "text-[var(--cmp-text-error)]"], ["Awaiting", mods.escalations.awaiting]]}
           breakdown={mods.escalations.breakdown} href="/unit-manager/escalations" linkLabel="View escalations" />
         <ModulePanel icon="📈" title="CAPA & Improvement" color="#14b8a6" provisioned={mods.capa.provisioned}
-          stats={[["Open CAPAs", mods.capa.open], ["Overdue", mods.capa.overdue, "text-rose-600"], ["On Track", mods.capa.onTrack, "text-green-600"]]}
+          stats={[["Open CAPAs", mods.capa.open], ["Overdue", mods.capa.overdue, "text-[var(--cmp-text-error)]"], ["On Track", mods.capa.onTrack, "text-[var(--cmp-text-success)]"]]}
           breakdown={mods.capa.breakdown} href="/unit-manager/capa" linkLabel="View CAPA register" />
         <ModulePanel icon="🎓" title="Competency Validations" color="#3b82f6" provisioned={mods.competency.provisioned}
-          stats={[["Pending", mods.competency.pending], ["Expired", mods.competency.expired, "text-rose-600"], ["Due ≤7d", mods.competency.dueThisWeek, "text-amber-600"]]}
+          stats={[["Pending", mods.competency.pending], ["Expired", mods.competency.expired, "text-[var(--cmp-text-error)]"], ["Due ≤7d", mods.competency.dueThisWeek, "text-[var(--cmp-text-warning)]"]]}
           breakdown={mods.competency.breakdown} href="/unit-manager/competency-validations" linkLabel="View validations" note="Sub-categories via Competency Engine (next phase)." />
         <ModulePanel icon="🕐" title="History & Audit" color="#6b7280" provisioned={mods.history.provisioned}
           stats={[["Events", mods.history.total], ["This Week", mods.history.thisWeek], ["Period", mods.history.thisPeriod]]}
@@ -181,7 +181,7 @@ export default async function ExecutiveActionsCentre({ searchParams }: { searchP
         <div className={`${card} p-5`}>
           <h3 className="text-sm font-bold text-gray-900 mb-3">Upcoming Due Dates</h3>
           {d.upcomingDue.length === 0 ? <p className="text-sm text-gray-400">No dated actions upcoming.</p> : (
-            <div className="space-y-2">{d.upcomingDue.map((u: any, i: number) => (<div key={i} className="flex items-center gap-2 text-xs"><span className="text-gray-700 flex-1 truncate">{u.item}</span><span className={`px-1.5 py-0.5 rounded text-[10px] ${u.overdue ? "bg-rose-50 text-rose-700" : u.dueToday ? "bg-amber-50 text-amber-700" : "bg-gray-100 text-gray-500"}`}>{u.overdue ? "Overdue" : u.dueToday ? "Today" : u.due?.slice(5)}</span></div>))}</div>
+            <div className="space-y-2">{d.upcomingDue.map((u: any, i: number) => (<div key={i} className="flex items-center gap-2 text-xs"><span className="text-gray-700 flex-1 truncate">{u.item}</span><span className={`px-1.5 py-0.5 rounded text-[10px] ${u.overdue ? "bg-[var(--cmp-surface-error)] text-[var(--cmp-text-error)]" : u.dueToday ? "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]" : "bg-gray-100 text-gray-500"}`}>{u.overdue ? "Overdue" : u.dueToday ? "Today" : u.due?.slice(5)}</span></div>))}</div>
           )}
         </div>
 

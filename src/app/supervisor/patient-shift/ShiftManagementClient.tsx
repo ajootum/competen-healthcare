@@ -9,10 +9,10 @@ import { cardClass } from "@/components/ui/primitives";
 // exceptions. Review / Mark updated / Complete handover post to
 // /api/operations/shift-updates, then router.refresh() re-pulls server state.
 /* eslint-disable @typescript-eslint/no-explicit-any */
-const ewsColor = (n: number | null) => n == null ? "text-gray-400" : n >= 7 ? "text-red-600" : n >= 5 ? "text-orange-600" : n >= 3 ? "text-yellow-600" : "text-green-600";
+const ewsColor = (n: number | null) => n == null ? "text-gray-400" : n >= 7 ? "text-[var(--cmp-text-critical)]" : n >= 5 ? "text-[var(--cmp-text-warning)]" : n >= 3 ? "text-[var(--cmp-text-warning)]" : "text-[var(--cmp-text-success)]";
 const card = cardClass;
 const chip = "text-[10px] px-2 py-0.5 rounded-full";
-const U_TONE: Record<string, string> = { due: "bg-gray-100 text-gray-500", updated: "bg-green-100 text-green-700", overdue: "bg-red-100 text-red-700" };
+const U_TONE: Record<string, string> = { due: "bg-gray-100 text-gray-500", updated: "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]", overdue: "bg-[var(--cmp-surface-critical)] text-[var(--cmp-text-critical)]" };
 
 async function call(path: string, body: any) {
   const r = await fetch(path, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
@@ -57,16 +57,16 @@ export default function ShiftManagementClient({ rows, configReady, shiftLabel }:
         <Link href="/supervisor/patient-list" className="text-sm text-teal-700 hover:underline">Open Patient Census →</Link>
       </div>
 
-      {!configReady && <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 text-sm text-amber-800">Apply migration <code className="bg-amber-100 px-1 rounded font-mono">051-patient-shift-updates.sql</code> to record reviews, updates and handovers. The worklist below is live now.</div>}
-      {msg && <div className={`text-sm rounded-lg px-4 py-2.5 ${msg.kind === "ok" ? "bg-green-50 text-green-800 border border-green-200" : "bg-amber-50 text-amber-800 border border-amber-200"}`}>{msg.text}</div>}
+      {!configReady && <div className="bg-[var(--cmp-surface-warning)] border border-[var(--cmp-color-warning)] rounded-xl px-4 py-3 text-sm text-amber-800">Apply migration <code className="bg-[var(--cmp-surface-warning)] px-1 rounded font-mono">051-patient-shift-updates.sql</code> to record reviews, updates and handovers. The worklist below is live now.</div>}
+      {msg && <div className={`text-sm rounded-lg px-4 py-2.5 ${msg.kind === "ok" ? "bg-[var(--cmp-surface-success)] text-green-800 border border-[var(--cmp-color-success)]" : "bg-[var(--cmp-surface-warning)] text-amber-800 border border-[var(--cmp-color-warning)]"}`}>{msg.text}</div>}
 
       {/* Summary */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
         <Stat n={rows.length} label="Patients" />
         <Stat n={reviewed} label="Reviewed" tone="text-teal-600" />
-        <Stat n={updated} label="Updated" tone="text-green-600" />
-        <Stat n={due} label="Updates due" tone={due ? "text-amber-600" : "text-gray-400"} />
-        <Stat n={overdue} label="Overdue" tone={overdue ? "text-red-600" : "text-gray-400"} />
+        <Stat n={updated} label="Updated" tone="text-[var(--cmp-text-success)]" />
+        <Stat n={due} label="Updates due" tone={due ? "text-[var(--cmp-text-warning)]" : "text-gray-400"} />
+        <Stat n={overdue} label="Overdue" tone={overdue ? "text-[var(--cmp-text-critical)]" : "text-gray-400"} />
         <Stat n={handovers} label="Handovers done" tone="text-teal-600" />
       </div>
 
@@ -85,11 +85,11 @@ export default function ShiftManagementClient({ rows, configReady, shiftLabel }:
                 {rows.map((r: any) => (
                   <tr key={r.id} className="hover:bg-gray-50/60">
                     <td className="px-5 py-2 whitespace-nowrap"><Link href={`/supervisor/patient-card/${r.id}`} className="font-medium text-teal-700 hover:underline">{r.label}</Link><span className="text-gray-400 text-xs"> {r.bed ? `· ${r.bed}` : ""}</span></td>
-                    <td className="px-2 py-2 text-gray-500 whitespace-nowrap">{r.nurse ? r.nurse.split(" ")[0] : <span className="text-red-600">Unassigned</span>}</td>
+                    <td className="px-2 py-2 text-gray-500 whitespace-nowrap">{r.nurse ? r.nurse.split(" ")[0] : <span className="text-[var(--cmp-text-critical)]">Unassigned</span>}</td>
                     <td className={`px-2 py-2 font-semibold tabular-nums ${ewsColor(r.pews)}`}>{r.pews ?? "—"}</td>
                     <td className="px-2 py-2">{r.reviewed ? <span className={`${chip} bg-teal-100 text-teal-700`}>Reviewed</span> : <span className={`${chip} bg-gray-100 text-gray-500`}>Pending</span>}</td>
                     <td className="px-2 py-2"><span className={`${chip} ${U_TONE[r.updateStatus]}`}>{r.updateStatus}</span></td>
-                    <td className="px-2 py-2">{r.handoverStatus === "completed" ? <span className={`${chip} bg-green-100 text-green-700`}>Done</span> : <span className={`${chip} bg-gray-100 text-gray-500`}>Pending</span>}</td>
+                    <td className="px-2 py-2">{r.handoverStatus === "completed" ? <span className={`${chip} bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]`}>Done</span> : <span className={`${chip} bg-gray-100 text-gray-500`}>Pending</span>}</td>
                     <td className="px-5 py-2 whitespace-nowrap text-right">
                       {configReady ? (
                         <span className="inline-flex items-center gap-1.5 text-[11px] font-medium text-teal-700">
@@ -112,10 +112,10 @@ export default function ShiftManagementClient({ rows, configReady, shiftLabel }:
           <div className="space-y-2">
             {exceptions.length === 0 && <p className="text-sm text-gray-400">No exceptions — the shift is on track.</p>}
             {exceptions.map(e => (
-              <div key={e.label} className="rounded-lg border border-amber-100 bg-amber-50/50 px-3 py-2">
+              <div key={e.label} className="rounded-lg border border-[var(--cmp-color-warning)] bg-[var(--cmp-surface-warning)]/50 px-3 py-2">
                 <div className="flex items-center justify-between">
                   <span className="text-sm font-medium text-gray-800">{e.label}</span>
-                  <span className="text-sm font-semibold text-amber-600 tabular-nums">{e.list.length}</span>
+                  <span className="text-sm font-semibold text-[var(--cmp-text-warning)] tabular-nums">{e.list.length}</span>
                 </div>
                 <p className="text-[11px] text-gray-500 truncate">{e.list.slice(0, 4).map((r: any) => r.label).join(", ")}{e.list.length > 4 ? "…" : ""}</p>
               </div>

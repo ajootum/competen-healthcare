@@ -11,7 +11,7 @@ import { useRouter } from "next/navigation";
 const OBS_TYPES = ["vital_signs", "neuro", "respiratory", "cardiovascular", "fluid_balance", "pain", "sedation", "pews", "gcs", "specialty", "post_procedure", "post_medication"];
 const titleCase = (s: string) => s.replace(/_/g, " ").replace(/\b\w/g, ch => ch.toUpperCase());
 const input = "w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/40";
-const btn = "px-3.5 py-2 rounded-lg bg-emerald-600 text-white text-sm font-medium hover:bg-emerald-700 disabled:opacity-50";
+const btn = "px-3.5 py-2 rounded-lg bg-[var(--cmp-color-success)] text-white text-sm font-medium hover:bg-emerald-700 disabled:opacity-50";
 const btnGhost = "px-2.5 py-1 rounded-lg border border-gray-300 text-xs text-gray-700 hover:bg-gray-50 disabled:opacity-50";
 
 export default function RecordObs({ patientId, patientLabel, observationId, defaultType, compact }: {
@@ -47,14 +47,14 @@ export default function RecordObs({ patientId, patientLabel, observationId, defa
   if (!open) {
     return (
       <span className="flex items-center gap-2">
-        {msg && <span className="text-[10px] text-amber-700">{msg}</span>}
+        {msg && <span className="text-[10px] text-[var(--cmp-text-warning)]">{msg}</span>}
         <button className={btnGhost} onClick={() => setOpen(true)}>{compact ? "Record" : "+ Record observation"}</button>
       </span>
     );
   }
 
   return (
-    <div className="mt-2 w-full border border-emerald-200 bg-emerald-50/30 rounded-lg p-3 space-y-2">
+    <div className="mt-2 w-full border border-[var(--cmp-color-success)] bg-[var(--cmp-surface-success)]/30 rounded-lg p-3 space-y-2">
       <div className="flex items-center justify-between">
         <span className="text-xs font-semibold text-gray-800">{observationId ? "Complete due observation" : "Record observation"} — {patientLabel}</span>
         <button className="text-xs text-gray-400 hover:text-gray-600" onClick={() => setOpen(false)}>Close</button>
@@ -75,7 +75,7 @@ export default function RecordObs({ patientId, patientLabel, observationId, defa
         <span className="flex-1" />
         <button className={btn} disabled={busy} onClick={submit}>{busy ? "Recording…" : "Record"}</button>
       </div>
-      {msg && <p className="text-xs text-amber-700">{msg}</p>}
+      {msg && <p className="text-xs text-[var(--cmp-text-warning)]">{msg}</p>}
     </div>
   );
 }

@@ -18,10 +18,10 @@ export const dynamic = "force-dynamic";
 
 const card = "bg-white rounded-xl border border-gray-200";
 const CAT: Record<string, { badge: string; dot: string }> = {
-  "Rostered (present)": { badge: "bg-emerald-50 text-emerald-700", dot: "bg-emerald-500" },
-  "Rostered (awaited)": { badge: "bg-sky-50 text-sky-700", dot: "bg-sky-500" },
+  "Rostered (present)": { badge: "bg-[var(--cmp-surface-success)] text-emerald-700", dot: "bg-[var(--cmp-color-success)]" },
+  "Rostered (awaited)": { badge: "bg-[var(--cmp-surface-information)] text-[var(--cmp-text-information)]", dot: "bg-[var(--cmp-color-information)]" },
   "Available (redeploy/overtime)": { badge: "bg-violet-50 text-violet-700", dot: "bg-violet-500" },
-  "Unavailable (absent)": { badge: "bg-rose-50 text-rose-700", dot: "bg-rose-500" },
+  "Unavailable (absent)": { badge: "bg-[var(--cmp-surface-error)] text-[var(--cmp-text-error)]", dot: "bg-[var(--cmp-color-error)]" },
 };
 
 export default async function StaffAvailability() {
@@ -49,7 +49,7 @@ export default async function StaffAvailability() {
     </>
   );
 
-  if (!d.ready) return <div className="space-y-4">{header}<div className="bg-amber-50 border border-amber-200 rounded-xl p-6"><p className="font-semibold text-amber-900">⚙️ No active shift</p></div></div>;
+  if (!d.ready) return <div className="space-y-4">{header}<div className="bg-[var(--cmp-surface-warning)] border border-[var(--cmp-color-warning)] rounded-xl p-6"><p className="font-semibold text-amber-900">⚙️ No active shift</p></div></div>;
 
   // Build availability rows: on-shift (from register) + off-shift clinical pool
   const onShift = d.register.map((r: any) => ({
@@ -68,10 +68,10 @@ export default async function StaffAvailability() {
       {header}
 
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        <Kpi label="Rostered present" value={catCount("Rostered (present)")} tone="text-emerald-600" />
-        <Kpi label="Rostered awaited" value={catCount("Rostered (awaited)")} tone="text-sky-600" />
+        <Kpi label="Rostered present" value={catCount("Rostered (present)")} tone="text-[var(--cmp-text-success)]" />
+        <Kpi label="Rostered awaited" value={catCount("Rostered (awaited)")} tone="text-[var(--cmp-text-information)]" />
         <Kpi label="Available pool" value={catCount("Available (redeploy/overtime)")} tone="text-violet-600" />
-        <Kpi label="Unavailable" value={catCount("Unavailable (absent)")} tone={catCount("Unavailable (absent)") ? "text-rose-600" : undefined} />
+        <Kpi label="Unavailable" value={catCount("Unavailable (absent)")} tone={catCount("Unavailable (absent)") ? "text-[var(--cmp-text-error)]" : undefined} />
       </div>
 
       <div className={`${card} p-5`}>

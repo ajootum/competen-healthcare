@@ -36,7 +36,7 @@ export default function DelegateForm({ people, scopeHid, isSuper }: { people: Pe
         <p className="text-[12px] font-medium text-gray-700">Delegate authority</p>
         <button onClick={() => setOpen(v => !v)} className="text-[12px] bg-teal-600 text-white rounded-lg px-3 py-1.5 hover:bg-teal-700">{open ? "Close" : "＋ New delegation"}</button>
       </div>
-      {err && <div className="mt-2 bg-rose-50 border border-rose-200 text-rose-700 rounded-lg px-3 py-2 text-[12px]">{err}</div>}
+      {err && <div className="mt-2 bg-[var(--cmp-surface-error)] border border-[var(--cmp-color-error)] text-[var(--cmp-text-error)] rounded-lg px-3 py-2 text-[12px]">{err}</div>}
       {open && (
         <div className="mt-3 grid grid-cols-1 md:grid-cols-5 gap-2 items-end">
           <div className="md:col-span-2"><label className="text-[11px] text-gray-500 mb-0.5 block">Position / authority</label><input className={`${inp} w-full`} value={position} onChange={e => setPosition(e.target.value)} placeholder="e.g. Acting Chair — Quality Office" /></div>

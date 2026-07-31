@@ -20,14 +20,14 @@ export default async function GovernancePage() {
     <div className="max-w-[1500px] space-y-4">
       {head}<Tabs active="007" />
       <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-8 gap-3">
-        <div className="bg-white border border-gray-200 rounded-xl p-3.5 flex items-center gap-2"><Ring pct={k.governanceScore} size={56} /><div><p className="text-[11px] text-gray-500 uppercase tracking-wide leading-tight">Governance</p><p className="text-[11px] text-emerald-600 font-medium">Score</p></div></div>
+        <div className="bg-white border border-gray-200 rounded-xl p-3.5 flex items-center gap-2"><Ring pct={k.governanceScore} size={56} /><div><p className="text-[11px] text-gray-500 uppercase tracking-wide leading-tight">Governance</p><p className="text-[11px] text-[var(--cmp-text-success)] font-medium">Score</p></div></div>
         <Kpi label="Active Roles" value={k.roles} sub="in unit" />
         <Kpi label="Active Delegations" value={k.activeDelegations} sub="in effect" />
-        <Kpi label="Pending Approvals" value={k.pendingApprovals} sub="in queue" tone={k.pendingApprovals ? "text-amber-600" : undefined} />
-        <Kpi label="SoD Compliance" value={`${k.sodCompliance}%`} sub="compliant" tone="text-emerald-600" />
-        <Kpi label="Emergency Access" value={k.emergencyAccess} sub="break-glass" tone={k.emergencyAccess ? "text-amber-600" : undefined} />
+        <Kpi label="Pending Approvals" value={k.pendingApprovals} sub="in queue" tone={k.pendingApprovals ? "text-[var(--cmp-text-warning)]" : undefined} />
+        <Kpi label="SoD Compliance" value={`${k.sodCompliance}%`} sub="compliant" tone="text-[var(--cmp-text-success)]" />
+        <Kpi label="Emergency Access" value={k.emergencyAccess} sub="break-glass" tone={k.emergencyAccess ? "text-[var(--cmp-text-warning)]" : undefined} />
         <Kpi label="Total Users" value={k.users} sub="in unit" />
-        <Kpi label="Governance Score" value={`${k.governanceScore}/100`} sub="composite" tone="text-emerald-600" />
+        <Kpi label="Governance Score" value={`${k.governanceScore}/100`} sub="composite" tone="text-[var(--cmp-text-success)]" />
       </div>
 
       <div className="grid grid-cols-1 xl:grid-cols-4 gap-4">
@@ -63,8 +63,8 @@ export default async function GovernancePage() {
 
         <Card title="Temporary & Emergency Access">
           <div className="grid grid-cols-2 gap-3">
-            <div className="rounded-lg bg-amber-50 border border-amber-100 p-3 text-center"><p className="text-2xl font-bold text-amber-700 tabular-nums">{d.delegations.filter((x: any) => x.status === "active" || x.status === "scheduled").length}</p><p className="text-[10px] text-gray-500 mt-0.5">Temporary Access Grants</p></div>
-            <div className="rounded-lg bg-rose-50 border border-rose-100 p-3 text-center"><p className="text-2xl font-bold text-rose-700 tabular-nums">{k.emergencyAccess}</p><p className="text-[10px] text-gray-500 mt-0.5">Emergency (break-glass)</p></div>
+            <div className="rounded-lg bg-[var(--cmp-surface-warning)] border border-[var(--cmp-color-warning)] p-3 text-center"><p className="text-2xl font-bold text-[var(--cmp-text-warning)] tabular-nums">{d.delegations.filter((x: any) => x.status === "active" || x.status === "scheduled").length}</p><p className="text-[10px] text-gray-500 mt-0.5">Temporary Access Grants</p></div>
+            <div className="rounded-lg bg-[var(--cmp-surface-error)] border border-[var(--cmp-color-error)] p-3 text-center"><p className="text-2xl font-bold text-[var(--cmp-text-error)] tabular-nums">{k.emergencyAccess}</p><p className="text-[10px] text-gray-500 mt-0.5">Emergency (break-glass)</p></div>
           </div>
           <p className="text-[10px] text-gray-400 mt-2">Emergency access reads the platform break_glass_grant store; permission inheritance follows Platform → … → Role → Delegation → Emergency Override.</p>
         </Card>

@@ -16,8 +16,8 @@ type Mod = { code: string; icon: string; label: string; desc: string; href?: str
 
 const BADGE: Record<Status, { text: string; cls: string }> = {
   real: { text: "Live", cls: "text-teal-700 bg-teal-50 border-teal-100" },
-  linked: { text: "Linked", cls: "text-blue-600 bg-blue-50 border-blue-100" },
-  partial: { text: "Partial", cls: "text-amber-600 bg-amber-50 border-amber-100" },
+  linked: { text: "Linked", cls: "text-[var(--cmp-text-information)] bg-[var(--cmp-surface-information)] border-[var(--cmp-color-information)]" },
+  partial: { text: "Partial", cls: "text-[var(--cmp-text-warning)] bg-[var(--cmp-surface-warning)] border-[var(--cmp-color-warning)]" },
   gap: { text: "Planned", cls: "text-gray-400 bg-gray-50 border-gray-100" },
 };
 
@@ -128,8 +128,8 @@ export default async function AssurancePlatformPage() {
 
       <div className="flex flex-wrap items-center gap-2 mb-5 text-[11px]">
         {nReal > 0 && <span className="font-semibold text-teal-700 bg-teal-50 border border-teal-100 rounded-lg px-2.5 py-1">{nReal} live</span>}
-        {nLinked > 0 && <span className="font-semibold text-blue-600 bg-blue-50 border border-blue-100 rounded-lg px-2.5 py-1">{nLinked} linked (existing surface)</span>}
-        {nPartial > 0 && <span className="font-semibold text-amber-600 bg-amber-50 border border-amber-100 rounded-lg px-2.5 py-1">{nPartial} partial</span>}
+        {nLinked > 0 && <span className="font-semibold text-[var(--cmp-text-information)] bg-[var(--cmp-surface-information)] border border-[var(--cmp-color-information)] rounded-lg px-2.5 py-1">{nLinked} linked (existing surface)</span>}
+        {nPartial > 0 && <span className="font-semibold text-[var(--cmp-text-warning)] bg-[var(--cmp-surface-warning)] border border-[var(--cmp-color-warning)] rounded-lg px-2.5 py-1">{nPartial} partial</span>}
         {nGap > 0 && <span className="font-semibold text-gray-400 bg-gray-50 border border-gray-100 rounded-lg px-2.5 py-1">{nGap} planned</span>}
       </div>
 

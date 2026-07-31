@@ -16,13 +16,13 @@ export const dynamic = "force-dynamic";
 const card = "bg-white rounded-xl border border-gray-200";
 const NONE = "00000000-0000-0000-0000-000000000000";
 const ACT: Record<string, { label: string; tone: string }> = {
-  create_approval_request: { label: "Approval requested", tone: "bg-blue-50 text-blue-700" },
-  decide_approval: { label: "Approval decided", tone: "bg-emerald-50 text-emerald-700" },
+  create_approval_request: { label: "Approval requested", tone: "bg-[var(--cmp-surface-information)] text-blue-700" },
+  decide_approval: { label: "Approval decided", tone: "bg-[var(--cmp-surface-success)] text-emerald-700" },
   record_replacement: { label: "Replacement", tone: "bg-violet-50 text-violet-700" },
-  record_attendance_exception: { label: "Attendance exception", tone: "bg-amber-50 text-amber-700" },
-  record_leave: { label: "Leave classified", tone: "bg-sky-50 text-sky-700" },
+  record_attendance_exception: { label: "Attendance exception", tone: "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]" },
+  record_leave: { label: "Leave classified", tone: "bg-[var(--cmp-surface-information)] text-[var(--cmp-text-information)]" },
   record_correction: { label: "Attendance correction", tone: "bg-violet-50 text-violet-700" },
-  raise_escalation: { label: "Escalation raised", tone: "bg-orange-50 text-orange-700" },
+  raise_escalation: { label: "Escalation raised", tone: "bg-[var(--cmp-surface-warning)] text-orange-700" },
 };
 const ACT_KEYS = Object.keys(ACT);
 const weekAgoISO = () => new Date(Date.now() - 7 * 864e5).toISOString();
@@ -64,11 +64,11 @@ export default async function HistoryAudit() {
     <div className="space-y-4">
       {header}
       {!provisioned ? (
-        <div className="bg-amber-50 border border-amber-200 rounded-xl p-6"><p className="font-semibold text-amber-900">⚙️ Audit store not provisioned</p></div>
+        <div className="bg-[var(--cmp-surface-warning)] border border-[var(--cmp-color-warning)] rounded-xl p-6"><p className="font-semibold text-amber-900">⚙️ Audit store not provisioned</p></div>
       ) : (<>
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
           <Kpi label="Events (7d)" value={recent} />
-          <Kpi label="Decisions logged" value={decisions} tone="text-emerald-600" />
+          <Kpi label="Decisions logged" value={decisions} tone="text-[var(--cmp-text-success)]" />
           <Kpi label="Total logged" value={rows.length} />
         </div>
 

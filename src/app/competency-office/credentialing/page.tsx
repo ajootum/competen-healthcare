@@ -16,9 +16,9 @@ export const dynamic = "force-dynamic";
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 const card = "bg-white rounded-xl border border-gray-200";
-const pctTone = (n: number) => (n >= 90 ? "text-emerald-600" : n >= 75 ? "text-amber-600" : "text-rose-600");
-const cellTone = (n: number) => (n >= 90 ? "bg-emerald-500" : n >= 80 ? "bg-amber-400" : n >= 70 ? "bg-orange-400" : "bg-rose-500");
-const STATUS_TONE: Record<string, string> = { Valid: "bg-emerald-50 text-emerald-700", Expiring: "bg-amber-50 text-amber-700", Expired: "bg-rose-50 text-rose-700", Rejected: "bg-rose-50 text-rose-700", Revoked: "bg-rose-50 text-rose-700", "Pending Verification": "bg-sky-50 text-sky-700", Submitted: "bg-sky-50 text-sky-700", Restricted: "bg-amber-50 text-amber-700", Suspended: "bg-rose-50 text-rose-700", Archived: "bg-gray-100 text-gray-500" };
+const pctTone = (n: number) => (n >= 90 ? "text-[var(--cmp-text-success)]" : n >= 75 ? "text-[var(--cmp-text-warning)]" : "text-[var(--cmp-text-error)]");
+const cellTone = (n: number) => (n >= 90 ? "bg-[var(--cmp-color-success)]" : n >= 80 ? "bg-[var(--cmp-color-warning)]" : n >= 70 ? "bg-[var(--cmp-color-warning)]" : "bg-[var(--cmp-color-error)]");
+const STATUS_TONE: Record<string, string> = { Valid: "bg-[var(--cmp-surface-success)] text-emerald-700", Expiring: "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]", Expired: "bg-[var(--cmp-surface-error)] text-[var(--cmp-text-error)]", Rejected: "bg-[var(--cmp-surface-error)] text-[var(--cmp-text-error)]", Revoked: "bg-[var(--cmp-surface-error)] text-[var(--cmp-text-error)]", "Pending Verification": "bg-[var(--cmp-surface-information)] text-[var(--cmp-text-information)]", Submitted: "bg-[var(--cmp-surface-information)] text-[var(--cmp-text-information)]", Restricted: "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]", Suspended: "bg-[var(--cmp-surface-error)] text-[var(--cmp-text-error)]", Archived: "bg-gray-100 text-gray-500" };
 const todayLabel = () => new Date().toLocaleDateString([], { day: "numeric", month: "short", year: "numeric" });
 
 function Kpi({ icon, tint, label, value, sub, tone, href }: { icon: string; tint: string; label: string; value: any; sub?: string; tone?: string; href: string }) {
@@ -52,7 +52,7 @@ export default async function CredentialDashboard() {
       <CredentialTabs />
     </>
   );
-  if (!d.provisioned) return <div className="space-y-4">{header}<div className="bg-amber-50 border border-amber-200 rounded-xl p-6"><p className="font-semibold text-amber-900">⚙️ Credential register not provisioned</p><p className="text-sm text-amber-800 mt-1">The professional_credentials store isn&apos;t available for this tenant yet.</p></div></div>;
+  if (!d.provisioned) return <div className="space-y-4">{header}<div className="bg-[var(--cmp-surface-warning)] border border-[var(--cmp-color-warning)] rounded-xl p-6"><p className="font-semibold text-amber-900">⚙️ Credential register not provisioned</p><p className="text-sm text-amber-800 mt-1">The professional_credentials store isn&apos;t available for this tenant yet.</p></div></div>;
 
   return (
     <div className="space-y-4">
@@ -60,12 +60,12 @@ export default async function CredentialDashboard() {
 
       {/* KPI cards (§5.2) */}
       <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-8 gap-3">
-        <Kpi icon="🛡️" tint="bg-emerald-50" label="Credential Compliance" value={`${k.compliance}%`} tone={pctTone(k.compliance)} sub={`${k.valid + k.expiring}/${k.total} valid`} href="/competency-office/credentialing" />
+        <Kpi icon="🛡️" tint="bg-[var(--cmp-surface-success)]" label="Credential Compliance" value={`${k.compliance}%`} tone={pctTone(k.compliance)} sub={`${k.valid + k.expiring}/${k.total} valid`} href="/competency-office/credentialing" />
         <Kpi icon="✅" tint="bg-teal-50" label="Valid Credentials" value={k.valid} sub="active & verified" href="/competency-office/credentialing/register" />
-        <Kpi icon="📅" tint="bg-amber-50" label="Expiring in 30 Days" value={k.expiring} tone={k.expiring ? "text-amber-600" : "text-gray-400"} sub="start renewal" href="/competency-office/credentialing/renewals" />
-        <Kpi icon="⛔" tint="bg-rose-50" label="Expired / Invalid" value={k.expired} tone={k.expired ? "text-rose-600" : "text-gray-400"} sub="deployment impact" href="/competency-office/credentialing/register" />
-        <Kpi icon="🔎" tint="bg-sky-50" label="Verification Pending" value={k.pending} tone={k.pending ? "text-sky-600" : "text-gray-400"} sub="awaiting check" href="/competency-office/credentialing/verification" />
-        <Kpi icon="🚫" tint="bg-orange-50" label="Restricted / Suspended" value={k.restricted} tone={k.restricted ? "text-rose-600" : "text-gray-400"} sub="deployment limited" href="/competency-office/credentialing/privileges" />
+        <Kpi icon="📅" tint="bg-[var(--cmp-surface-warning)]" label="Expiring in 30 Days" value={k.expiring} tone={k.expiring ? "text-[var(--cmp-text-warning)]" : "text-gray-400"} sub="start renewal" href="/competency-office/credentialing/renewals" />
+        <Kpi icon="⛔" tint="bg-[var(--cmp-surface-error)]" label="Expired / Invalid" value={k.expired} tone={k.expired ? "text-[var(--cmp-text-error)]" : "text-gray-400"} sub="deployment impact" href="/competency-office/credentialing/register" />
+        <Kpi icon="🔎" tint="bg-[var(--cmp-surface-information)]" label="Verification Pending" value={k.pending} tone={k.pending ? "text-[var(--cmp-text-information)]" : "text-gray-400"} sub="awaiting check" href="/competency-office/credentialing/verification" />
+        <Kpi icon="🚫" tint="bg-[var(--cmp-surface-warning)]" label="Restricted / Suspended" value={k.restricted} tone={k.restricted ? "text-[var(--cmp-text-error)]" : "text-gray-400"} sub="deployment limited" href="/competency-office/credentialing/privileges" />
         <Kpi icon="⚖️" tint="bg-violet-50" label="Privileges Due Review" value="—" tone="text-gray-300" sub="privilege store next-phase" href="/competency-office/credentialing/privileges" />
         <Kpi icon="📞" tint="bg-gray-50" label="Verification SLA" value={`${k.verifiedPct}%`} tone={pctTone(k.verifiedPct)} sub="verified (proxy)" href="/competency-office/credentialing/verification" />
       </div>
@@ -86,7 +86,7 @@ export default async function CredentialDashboard() {
           <h3 className="font-semibold text-gray-900 text-sm mb-3">Credential Risk Alerts</h3>
           {d.risks.length === 0 ? <p className="text-sm text-gray-400">No credential risks. 🎉</p> : (
             <div className="space-y-2">{d.risks.slice(0, 4).map((r: any, i: number) => (
-              <div key={i} className={`rounded-lg border p-2.5 ${r.severity === "high" ? "border-rose-100 bg-rose-50/40" : "border-amber-100 bg-amber-50/40"}`}>
+              <div key={i} className={`rounded-lg border p-2.5 ${r.severity === "high" ? "border-[var(--cmp-color-error)] bg-[var(--cmp-surface-error)]/40" : "border-[var(--cmp-color-warning)] bg-[var(--cmp-surface-warning)]/40"}`}>
                 <div className="flex items-start gap-2"><span className="text-sm">{r.severity === "high" ? "⛔" : "⚠️"}</span><div className="min-w-0"><p className="text-xs font-semibold text-gray-800">{r.label}</p><p className="text-[11px] text-gray-500">{r.detail}</p></div></div>
               </div>
             ))}</div>
@@ -97,7 +97,7 @@ export default async function CredentialDashboard() {
           <h3 className="font-semibold text-gray-900 text-sm mb-3 flex items-center gap-2">✨ AI Credential Insights <span className="text-[10px] font-normal text-gray-400">explainable</span></h3>
           {d.ai.length === 0 ? <p className="text-sm text-gray-400">No priority credential actions.</p> : (
             <div className="space-y-2">{d.ai.slice(0, 4).map((a: any, i: number) => (
-              <div key={i} className="rounded-lg border border-gray-100 p-2.5"><div className="flex items-start justify-between gap-2"><p className="text-xs text-gray-800 flex-1">{a.text}</p><span className={`text-[9px] px-1.5 py-0.5 rounded shrink-0 ${a.priority === "high" ? "bg-rose-50 text-rose-700" : a.priority === "medium" ? "bg-amber-50 text-amber-700" : "bg-gray-100 text-gray-500"}`}>{a.priority}</span></div><p className="text-[10px] text-gray-400 mt-1">Why: {a.why}</p></div>
+              <div key={i} className="rounded-lg border border-gray-100 p-2.5"><div className="flex items-start justify-between gap-2"><p className="text-xs text-gray-800 flex-1">{a.text}</p><span className={`text-[9px] px-1.5 py-0.5 rounded shrink-0 ${a.priority === "high" ? "bg-[var(--cmp-surface-error)] text-[var(--cmp-text-error)]" : a.priority === "medium" ? "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]" : "bg-gray-100 text-gray-500"}`}>{a.priority}</span></div><p className="text-[10px] text-gray-400 mt-1">Why: {a.why}</p></div>
             ))}</div>
           )}
         </div>
@@ -109,7 +109,7 @@ export default async function CredentialDashboard() {
           <div className="flex items-center justify-between mb-3"><h3 className="font-semibold text-gray-900 text-sm">Upcoming Expiries</h3><Link href="/competency-office/credentialing/renewals" className="text-[11px] text-teal-600 hover:underline">Renewal queue →</Link></div>
           {d.upcomingExpiries.length === 0 ? <p className="text-sm text-gray-400">Nothing expiring in 90 days.</p> : (
             <div className="overflow-x-auto"><table className="w-full text-xs"><thead><tr className="text-[10px] uppercase tracking-wide text-gray-400 text-left border-b border-gray-100"><th className="py-1.5 font-medium">Staff</th><th className="py-1.5 font-medium">Credential</th><th className="py-1.5 font-medium">Issuer</th><th className="py-1.5 font-medium text-right">Days</th></tr></thead>
-              <tbody>{d.upcomingExpiries.map((e: any, i: number) => (<tr key={i} className="border-b border-gray-50"><td className="py-1.5 text-gray-700">{e.name}</td><td className="py-1.5 text-gray-600 truncate max-w-[10rem]">{e.credential}</td><td className="py-1.5 text-gray-500 truncate max-w-[8rem]">{e.issuer}</td><td className={`py-1.5 text-right font-medium tabular-nums ${e.days <= 7 ? "text-rose-600" : e.days <= 30 ? "text-amber-600" : "text-gray-500"}`}>{e.days}d</td></tr>))}</tbody>
+              <tbody>{d.upcomingExpiries.map((e: any, i: number) => (<tr key={i} className="border-b border-gray-50"><td className="py-1.5 text-gray-700">{e.name}</td><td className="py-1.5 text-gray-600 truncate max-w-[10rem]">{e.credential}</td><td className="py-1.5 text-gray-500 truncate max-w-[8rem]">{e.issuer}</td><td className={`py-1.5 text-right font-medium tabular-nums ${e.days <= 7 ? "text-[var(--cmp-text-error)]" : e.days <= 30 ? "text-[var(--cmp-text-warning)]" : "text-gray-500"}`}>{e.days}d</td></tr>))}</tbody>
             </table></div>
           )}
         </div>

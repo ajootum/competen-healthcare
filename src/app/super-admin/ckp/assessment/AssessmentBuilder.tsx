@@ -87,7 +87,7 @@ export default function AssessmentBuilder({ cpus, skills, frameworks }: { cpus: 
     <div className="bg-white rounded-xl border border-gray-200">
       <div className="flex items-center gap-2 p-3 border-b border-gray-100 flex-wrap">
         <h2 className="font-semibold text-gray-900 text-[15px] mr-auto">Assessment Builder</h2>
-        {msg && <span className={`text-xs rounded-lg px-2.5 py-1 ${msg.k === "ok" ? "bg-green-50 text-green-800" : "bg-amber-50 text-amber-800"}`}>{msg.t}</span>}
+        {msg && <span className={`text-xs rounded-lg px-2.5 py-1 ${msg.k === "ok" ? "bg-[var(--cmp-surface-success)] text-green-800" : "bg-[var(--cmp-surface-warning)] text-amber-800"}`}>{msg.t}</span>}
         <div className="flex gap-1 flex-wrap">
           {TABS.map(b => (
             <button key={b.key} onClick={() => switchTab(b.key)} className={`text-xs font-medium rounded-lg px-2.5 py-1.5 border ${tab === b.key ? "bg-teal-50 border-teal-300 text-teal-700" : "border-gray-200 text-gray-500 hover:bg-gray-50"}`}>{b.icon} {b.label}</button>
@@ -112,7 +112,7 @@ export default function AssessmentBuilder({ cpus, skills, frameworks }: { cpus: 
             <div><label className={label}>Skill *</label><select value={form.skill_id ?? ""} onChange={set("skill_id")} className={input}><option value="">— Select skill —</option>{skills.map(s => <option key={s.id} value={s.id}>{s.label}</option>)}</select></div>
             <div className="sm:col-span-2"><label className={label}>Description</label><textarea value={form.description ?? ""} onChange={set("description")} rows={2} className={input} /></div>
             <div className="sm:col-span-2"><label className={label}>Assessor instructions</label><textarea value={form.assessor_instructions ?? ""} onChange={set("assessor_instructions")} rows={2} className={input} /></div>
-            {skills.length === 0 && <p className="sm:col-span-2 text-[11px] text-amber-600">No active skills yet — attach skills to competencies in the Skills studio first.</p>}
+            {skills.length === 0 && <p className="sm:col-span-2 text-[11px] text-[var(--cmp-text-warning)]">No active skills yet — attach skills to competencies in the Skills studio first.</p>}
           </div>
         )}
 

@@ -9,7 +9,7 @@ export const dynamic = "force-dynamic";
 // Enterprise Governance Dashboard (EGV-001).
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
-const alertTone: Record<string, string> = { red: "bg-red-50 border-red-200", amber: "bg-amber-50 border-amber-200", gray: "bg-gray-50 border-gray-200" };
+const alertTone: Record<string, string> = { red: "bg-[var(--cmp-surface-critical)] border-[var(--cmp-color-critical)]", amber: "bg-[var(--cmp-surface-warning)] border-[var(--cmp-color-warning)]", gray: "bg-gray-50 border-gray-200" };
 
 export default async function EnterpriseGovernanceDashboard() {
   const supabase = await createClient();
@@ -53,15 +53,15 @@ export default async function EnterpriseGovernanceDashboard() {
           </div>
           <BenchmarkTable rows={benchmark.slice(0, 8)} />
           {benchmark.length > 8 && <p className="text-[11px] text-gray-400 mt-2">Showing 8 of {benchmark.length} organisations by competency currency.</p>}
-          {truncated && <p className="text-[11px] text-amber-600 mt-1">Figures are based on the most recent records and may be capped at this platform scale.</p>}
+          {truncated && <p className="text-[11px] text-[var(--cmp-text-warning)] mt-1">Figures are based on the most recent records and may be capped at this platform scale.</p>}
         </div>
 
         {/* Standards compliance overview */}
         <div className={card}>
           <h3 className="font-semibold text-gray-900 mb-3">Enterprise standards</h3>
           <div className="grid grid-cols-3 gap-3 text-center mb-3">
-            <div><div className="text-2xl font-bold tabular-nums text-green-600">{standards.published}</div><div className="text-[11px] text-gray-500 mt-0.5">Published</div></div>
-            <div><div className="text-2xl font-bold tabular-nums text-amber-600">{standards.draft}</div><div className="text-[11px] text-gray-500 mt-0.5">Draft</div></div>
+            <div><div className="text-2xl font-bold tabular-nums text-[var(--cmp-text-success)]">{standards.published}</div><div className="text-[11px] text-gray-500 mt-0.5">Published</div></div>
+            <div><div className="text-2xl font-bold tabular-nums text-[var(--cmp-text-warning)]">{standards.draft}</div><div className="text-[11px] text-gray-500 mt-0.5">Draft</div></div>
             <div><div className="text-2xl font-bold tabular-nums text-gray-400">{standards.other}</div><div className="text-[11px] text-gray-500 mt-0.5">Other</div></div>
           </div>
           <p className="text-[11px] text-gray-400">Shared master competency standards inherited by every tenant. <Link href="/enterprise-governance/standards" className="text-teal-600 hover:underline">Govern standards →</Link></p>
@@ -70,7 +70,7 @@ export default async function EnterpriseGovernanceDashboard() {
         {/* Strategic governance alerts */}
         <div className={card}>
           <h3 className="font-semibold text-gray-900 mb-3">Strategic governance alerts</h3>
-          {alerts.length === 0 && <p className="text-sm text-green-700">✅ No governance exceptions across the enterprise.</p>}
+          {alerts.length === 0 && <p className="text-sm text-[var(--cmp-text-success)]">✅ No governance exceptions across the enterprise.</p>}
           <div className="space-y-1.5 max-h-56 overflow-y-auto">
             {alerts.slice(0, 8).map((a, i) => (
               <div key={i} className={`flex items-center gap-2 text-sm border rounded-lg px-3 py-1.5 ${alertTone[a.tone] ?? "bg-gray-50 border-gray-200"}`}>

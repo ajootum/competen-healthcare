@@ -167,8 +167,8 @@ export default async function LearningPathwayPage() {
           </div>
           <div className="grid grid-cols-3 gap-3 text-center">
             {[
-              [done, "Complete", "text-green-600"],
-              [inProgress, "In progress", "text-blue-600"],
+              [done, "Complete", "text-[var(--cmp-text-success)]"],
+              [inProgress, "In progress", "text-[var(--cmp-text-information)]"],
               [highPriority, "High priority", highPriority ? "text-red-500" : "text-gray-400"],
             ].map(([v, l, c]) => (
               <div key={l as string} className="bg-gray-50/70 rounded-lg px-4 py-2.5">
@@ -253,7 +253,7 @@ export default async function LearningPathwayPage() {
                   <p className="text-[11px] text-gray-800 truncate">{u.name}</p>
                   <p className="text-[9px] text-gray-400">{u.domain}</p>
                 </div>
-                <span className={`text-[9px] font-bold shrink-0 ${u.days <= 30 ? "text-red-500" : "text-amber-600"}`}>{u.days}d</span>
+                <span className={`text-[9px] font-bold shrink-0 ${u.days <= 30 ? "text-red-500" : "text-[var(--cmp-text-warning)]"}`}>{u.days}d</span>
               </div>
             )) : <p className="text-xs text-gray-400 text-center py-4">Nothing due within 120 days. ✅</p>}
           </div>

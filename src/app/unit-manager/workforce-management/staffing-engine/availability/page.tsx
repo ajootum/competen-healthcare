@@ -19,12 +19,12 @@ const card = "bg-white rounded-xl border border-gray-200";
 
 // Appendix C availability categories
 const CAT: Record<string, { label: string; badge: string; dot: string }> = {
-  PRESENT: { label: "Present", badge: "bg-emerald-50 text-emerald-700", dot: "bg-emerald-500" },
-  ON_BREAK: { label: "On break", badge: "bg-sky-50 text-sky-700", dot: "bg-sky-500" },
-  CONFIRMED: { label: "Confirmed", badge: "bg-blue-50 text-blue-700", dot: "bg-blue-500" },
+  PRESENT: { label: "Present", badge: "bg-[var(--cmp-surface-success)] text-emerald-700", dot: "bg-[var(--cmp-color-success)]" },
+  ON_BREAK: { label: "On break", badge: "bg-[var(--cmp-surface-information)] text-[var(--cmp-text-information)]", dot: "bg-[var(--cmp-color-information)]" },
+  CONFIRMED: { label: "Confirmed", badge: "bg-[var(--cmp-surface-information)] text-blue-700", dot: "bg-[var(--cmp-color-information)]" },
   ROSTERED: { label: "Rostered", badge: "bg-gray-100 text-gray-600", dot: "bg-gray-400" },
   OFF_DUTY: { label: "Off duty", badge: "bg-gray-100 text-gray-400", dot: "bg-gray-300" },
-  ABSENT: { label: "Absent", badge: "bg-rose-50 text-rose-700", dot: "bg-rose-500" },
+  ABSENT: { label: "Absent", badge: "bg-[var(--cmp-surface-error)] text-[var(--cmp-text-error)]", dot: "bg-[var(--cmp-color-error)]" },
 };
 const categorise = (s: any, onBreak: Set<string>): keyof typeof CAT =>
   s.status === "absent" ? "ABSENT"
@@ -63,7 +63,7 @@ export default async function StaffAvailability() {
     </>
   );
 
-  if (!w.ready) return <div className="space-y-4">{header}<div className="bg-amber-50 border border-amber-200 rounded-xl p-6"><p className="font-semibold text-amber-900">⚙️ No active shift</p><p className="text-sm text-amber-800 mt-1">Staff availability activates once an operational shift with staffing is running.</p></div></div>;
+  if (!w.ready) return <div className="space-y-4">{header}<div className="bg-[var(--cmp-surface-warning)] border border-[var(--cmp-color-warning)] rounded-xl p-6"><p className="font-semibold text-amber-900">⚙️ No active shift</p><p className="text-sm text-amber-800 mt-1">Staff availability activates once an operational shift with staffing is running.</p></div></div>;
 
   const onBreakSet = new Set<string>((w.breaks?.onBreakList ?? []).map((b: any) => b.name));
   const board = (w.assignmentBoard as any[]).map(s => ({ ...s, cat: categorise(s, onBreakSet) }));
@@ -81,12 +81,12 @@ export default async function StaffAvailability() {
 
       {/* Availability summary (Appendix C) */}
       <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-3">
-        <Kpi label="Deployable now" value={deployable.length} sub="Present & competent" tone="text-emerald-600" />
+        <Kpi label="Deployable now" value={deployable.length} sub="Present & competent" tone="text-[var(--cmp-text-success)]" />
         <Kpi label="Present" value={counts.PRESENT ?? 0} sub="On the floor" />
-        <Kpi label="On break" value={counts.ON_BREAK ?? 0} sub={w.breaks?.overdue ? `${w.breaks.overdue} overdue` : "Relief covered"} tone={w.breaks?.overdue ? "text-amber-600" : undefined} />
+        <Kpi label="On break" value={counts.ON_BREAK ?? 0} sub={w.breaks?.overdue ? `${w.breaks.overdue} overdue` : "Relief covered"} tone={w.breaks?.overdue ? "text-[var(--cmp-text-warning)]" : undefined} />
         <Kpi label="Confirmed" value={counts.CONFIRMED ?? 0} sub="Awaited on shift" />
         <Kpi label="Standby / float" value={floatAvail} sub={`${float.length} in pool`} tone="text-violet-600" />
-        <Kpi label="Absent" value={counts.ABSENT ?? 0} sub="Unavailable" tone={(counts.ABSENT ?? 0) ? "text-rose-600" : undefined} />
+        <Kpi label="Absent" value={counts.ABSENT ?? 0} sub="Unavailable" tone={(counts.ABSENT ?? 0) ? "text-[var(--cmp-text-error)]" : undefined} />
       </div>
 
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
@@ -95,7 +95,7 @@ export default async function StaffAvailability() {
           <h3 className="text-sm font-bold text-gray-900 mb-3">Availability roster <span className="text-[10px] text-gray-400 font-normal">{board.length} rostered · deployable first</span></h3>
           <div className="overflow-x-auto"><table className="w-full text-xs">
             <thead><tr className="text-gray-400 text-left border-b border-gray-100"><th className="py-2 pr-3 font-medium">Staff</th><th className="py-2 pr-3 font-medium">Role</th><th className="py-2 pr-3 font-medium">Availability</th><th className="py-2 pr-3 font-medium">Area</th><th className="py-2 pr-3 font-medium text-right">Load</th><th className="py-2 font-medium">Deployable</th></tr></thead>
-            <tbody>{sorted.map((s: any) => { const c = CAT[s.cat]; const dep = s.cat === "PRESENT" && s.competencyOk !== false; return (<tr key={s.id} className="border-b border-gray-50"><td className="py-2 pr-3 text-gray-800 font-medium">{s.name}</td><td className="py-2 pr-3 text-gray-500 capitalize">{s.role}</td><td className="py-2 pr-3"><span className="inline-flex items-center gap-1.5"><span className={`w-1.5 h-1.5 rounded-full ${c.dot}`} /><span className={`text-[9px] px-1.5 py-0.5 rounded ${c.badge}`}>{c.label}</span></span></td><td className="py-2 pr-3 text-gray-500">{s.assignment}</td><td className="py-2 pr-3 text-right text-gray-600">{s.patients || "—"}</td><td className="py-2">{dep ? <span className="text-emerald-600 font-semibold">● Yes</span> : s.competencyOk === false ? <span className="text-amber-600" title="Competency gate">◐ Supervised</span> : <span className="text-gray-300">—</span>}</td></tr>); })}</tbody>
+            <tbody>{sorted.map((s: any) => { const c = CAT[s.cat]; const dep = s.cat === "PRESENT" && s.competencyOk !== false; return (<tr key={s.id} className="border-b border-gray-50"><td className="py-2 pr-3 text-gray-800 font-medium">{s.name}</td><td className="py-2 pr-3 text-gray-500 capitalize">{s.role}</td><td className="py-2 pr-3"><span className="inline-flex items-center gap-1.5"><span className={`w-1.5 h-1.5 rounded-full ${c.dot}`} /><span className={`text-[9px] px-1.5 py-0.5 rounded ${c.badge}`}>{c.label}</span></span></td><td className="py-2 pr-3 text-gray-500">{s.assignment}</td><td className="py-2 pr-3 text-right text-gray-600">{s.patients || "—"}</td><td className="py-2">{dep ? <span className="text-[var(--cmp-text-success)] font-semibold">● Yes</span> : s.competencyOk === false ? <span className="text-[var(--cmp-text-warning)]" title="Competency gate">◐ Supervised</span> : <span className="text-gray-300">—</span>}</td></tr>); })}</tbody>
           </table></div>
           <p className="text-[10px] text-gray-400 mt-2">Deployable = present clinicians clearing competency gates. Rest/fatigue windows (11h between shifts, max consecutive) and reason-code drawers need a working-time history store → honest next-phase.</p>
         </div>
@@ -108,7 +108,7 @@ export default async function StaffAvailability() {
           </div>
           <div className={`${card} p-5`}>
             <h3 className="text-sm font-bold text-gray-900 mb-2">On break now</h3>
-            {(w.breaks?.onBreakList ?? []).length === 0 ? <p className="text-sm text-gray-400">Nobody on break.{w.breaks?.dueForBreak ? ` ${w.breaks.dueForBreak} due.` : ""}</p> : <div className="space-y-1.5">{(w.breaks.onBreakList as any[]).map((b: any) => (<div key={b.id} className="flex items-center justify-between text-xs rounded-lg border border-sky-100 bg-sky-50/40 p-2"><span className="text-gray-700 font-medium">{b.name}</span><span className="text-[10px] text-gray-500 capitalize">{b.role}</span></div>))}</div>}
+            {(w.breaks?.onBreakList ?? []).length === 0 ? <p className="text-sm text-gray-400">Nobody on break.{w.breaks?.dueForBreak ? ` ${w.breaks.dueForBreak} due.` : ""}</p> : <div className="space-y-1.5">{(w.breaks.onBreakList as any[]).map((b: any) => (<div key={b.id} className="flex items-center justify-between text-xs rounded-lg border border-[var(--cmp-color-information)] bg-[var(--cmp-surface-information)]/40 p-2"><span className="text-gray-700 font-medium">{b.name}</span><span className="text-[10px] text-gray-500 capitalize">{b.role}</span></div>))}</div>}
             <Link href="/supervisor/workforce-operations" className="mt-3 inline-block text-[11px] font-semibold text-emerald-700 hover:underline">Break board →</Link>
           </div>
         </div>

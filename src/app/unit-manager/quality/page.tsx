@@ -27,9 +27,9 @@ const INC_META = [
 ];
 const LIKELIHOOD = ["Almost certain", "Likely", "Possible", "Unlikely", "Rare"]; // rows top→bottom (5→1)
 const IMPACT = ["Insignificant", "Minor", "Moderate", "Major", "Catastrophic"]; // cols 1→5
-const riskCellTone = (score: number) => (score >= 15 ? "bg-rose-500 text-white" : score >= 10 ? "bg-orange-400 text-white" : score >= 5 ? "bg-amber-300 text-amber-900" : "bg-emerald-400/80 text-emerald-950");
-const pctTone = (p: number | null) => (p == null ? "text-gray-300" : p >= 85 ? "text-emerald-600" : p >= 70 ? "text-amber-600" : "text-rose-600");
-const prTone: Record<string, string> = { critical: "bg-rose-100 text-rose-700", high: "bg-orange-100 text-orange-700", medium: "bg-amber-100 text-amber-700", low: "bg-gray-100 text-gray-600" };
+const riskCellTone = (score: number) => (score >= 15 ? "bg-[var(--cmp-color-error)] text-white" : score >= 10 ? "bg-[var(--cmp-color-warning)] text-white" : score >= 5 ? "bg-amber-300 text-amber-900" : "bg-[var(--cmp-color-success)]/80 text-emerald-950");
+const pctTone = (p: number | null) => (p == null ? "text-gray-300" : p >= 85 ? "text-[var(--cmp-text-success)]" : p >= 70 ? "text-[var(--cmp-text-warning)]" : "text-[var(--cmp-text-error)]");
+const prTone: Record<string, string> = { critical: "bg-[var(--cmp-surface-error)] text-[var(--cmp-text-error)]", high: "bg-[var(--cmp-surface-warning)] text-orange-700", medium: "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]", low: "bg-gray-100 text-gray-600" };
 
 function Spark({ series, color }: { series: number[]; color: string }) {
   if (!series || series.length < 2) return <div className="h-6 flex items-center"><span className="text-[9px] text-gray-300">— trend builds daily —</span></div>;
@@ -41,7 +41,7 @@ function Delta({ v, invert }: { v: number | null | undefined; invert?: boolean }
   if (v == null) return null;
   if (v === 0) return <span className="text-[11px] text-gray-400">→ 0</span>;
   const good = invert ? v < 0 : v > 0;
-  return <span className={`text-[11px] font-medium ${good ? "text-emerald-600" : "text-rose-600"}`}>{v > 0 ? "↑" : "↓"} {Math.abs(v)}</span>;
+  return <span className={`text-[11px] font-medium ${good ? "text-[var(--cmp-text-success)]" : "text-[var(--cmp-text-error)]"}`}>{v > 0 ? "↑" : "↓"} {Math.abs(v)}</span>;
 }
 // Multi-series line chart (0–max scaled).
 function MultiLine({ labels, series, max }: { labels: string[]; series: { color: string; data: (number | null)[] }[]; max: number }) {
@@ -81,8 +81,8 @@ export default async function QualityCommandCentre() {
     <>
       <div className="flex items-start justify-between gap-3 flex-wrap">
         <div className="flex items-center gap-2">
-          <span className="w-9 h-9 rounded-lg bg-rose-50 flex items-center justify-center text-lg">🛡️</span>
-          <div><h1 className="text-2xl font-bold text-gray-900 tracking-tight">Quality &amp; Safety Command Centre</h1><p className="text-sm text-gray-500">{facility} · Reporting period: This month · Last refreshed {refreshedLabel} · <span className={d.ready ? "text-emerald-600" : "text-amber-600"}>Data status: {d.ready ? "Complete" : "Partial"}</span></p></div>
+          <span className="w-9 h-9 rounded-lg bg-[var(--cmp-surface-error)] flex items-center justify-center text-lg">🛡️</span>
+          <div><h1 className="text-2xl font-bold text-gray-900 tracking-tight">Quality &amp; Safety Command Centre</h1><p className="text-sm text-gray-500">{facility} · Reporting period: This month · Last refreshed {refreshedLabel} · <span className={d.ready ? "text-[var(--cmp-text-success)]" : "text-[var(--cmp-text-warning)]"}>Data status: {d.ready ? "Complete" : "Partial"}</span></p></div>
         </div>
         <div className="flex items-center gap-2">
           <UnitFilters departments={departments} />
@@ -94,7 +94,7 @@ export default async function QualityCommandCentre() {
     </>
   );
 
-  if (!d.ready) return <div className="space-y-4">{header}<div className="bg-amber-50 border border-amber-200 rounded-xl p-6"><p className="font-semibold text-amber-900">⚙️ Quality command centre warming up</p><p className="text-sm text-amber-800 mt-1">This centre consolidates incidents, audits, CAPA, the risk register, clinical indicators and accreditation. Once any source has live data, the dashboards populate automatically. Nothing here is fabricated.</p></div></div>;
+  if (!d.ready) return <div className="space-y-4">{header}<div className="bg-[var(--cmp-surface-warning)] border border-[var(--cmp-color-warning)] rounded-xl p-6"><p className="font-semibold text-amber-900">⚙️ Quality command centre warming up</p><p className="text-sm text-amber-800 mt-1">This centre consolidates incidents, audits, CAPA, the risk register, clinical indicators and accreditation. Once any source has live data, the dashboards populate automatically. Nothing here is fabricated.</p></div></div>;
 
   const h = d.health, k = d.kpis, inc = d.incidents, au = d.audits, capa = d.capa, risk = d.risks, acc = d.accreditation, tr = d.trends;
   const val = (n: any, s = "%") => (n == null ? "—" : `${n}${s}`);
@@ -113,7 +113,7 @@ export default async function QualityCommandCentre() {
             </div>
             <div className="min-w-0">
               <p className="text-xs font-medium text-gray-500">Unit Quality Health</p>
-              <p className={`text-lg font-bold ${h.score == null ? "text-gray-300" : h.score >= 80 ? "text-emerald-600" : h.score >= 70 ? "text-amber-600" : "text-rose-600"}`}>{h.band}</p>
+              <p className={`text-lg font-bold ${h.score == null ? "text-gray-300" : h.score >= 80 ? "text-[var(--cmp-text-success)]" : h.score >= 70 ? "text-[var(--cmp-text-warning)]" : "text-[var(--cmp-text-error)]"}`}>{h.band}</p>
               <div className="flex items-center gap-2 mt-1 text-[11px] text-gray-400"><span>Completeness {h.completeness}%</span>{tr?.health?.delta != null && <Delta v={tr.health.delta} />}</div>
             </div>
           </div>
@@ -124,22 +124,22 @@ export default async function QualityCommandCentre() {
             ))}</div>
           </div>
         </div>
-        {h.criticalException && <div className="mt-4 flex items-center gap-2 rounded-lg bg-rose-50 border border-rose-200 px-3 py-2"><span className="text-rose-600">⛔</span><p className="text-xs text-rose-800"><b>Critical exception:</b> {k.criticalIncidents} critical incident(s) and {k.risksExtreme} extreme risk(s) require attention regardless of the composite score.</p></div>}
+        {h.criticalException && <div className="mt-4 flex items-center gap-2 rounded-lg bg-[var(--cmp-surface-error)] border border-[var(--cmp-color-error)] px-3 py-2"><span className="text-[var(--cmp-text-error)]">⛔</span><p className="text-xs text-rose-800"><b>Critical exception:</b> {k.criticalIncidents} critical incident(s) and {k.risksExtreme} extreme risk(s) require attention regardless of the composite score.</p></div>}
       </div>
 
       {/* ── Executive KPI ribbon (§7) ───────────────────────────────────────── */}
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
-        <KpiCard icon="⭐" tint="bg-sky-50" label="Quality Score" value={val(k.qualityScore)} tone={pctTone(k.qualityScore)} delta={tr?.quality?.delta} spark={tr?.quality?.spark} sparkColor="#0ea5e9" sub="composite of approved indicators" source="PMS · quality indicators" />
-        <KpiCard icon="🛡️" tint="bg-emerald-50" label="Patient Safety Index" value={val(k.safetyIndex)} tone={pctTone(k.safetyIndex)} delta={tr?.safety?.delta} spark={tr?.safety?.spark} sparkColor="#10b981" sub={`${inc.criticalOpen} critical · ${inc.open} open events`} source="Patient Ops · Incidents · Safety" />
+        <KpiCard icon="⭐" tint="bg-[var(--cmp-surface-information)]" label="Quality Score" value={val(k.qualityScore)} tone={pctTone(k.qualityScore)} delta={tr?.quality?.delta} spark={tr?.quality?.spark} sparkColor="#0ea5e9" sub="composite of approved indicators" source="PMS · quality indicators" />
+        <KpiCard icon="🛡️" tint="bg-[var(--cmp-surface-success)]" label="Patient Safety Index" value={val(k.safetyIndex)} tone={pctTone(k.safetyIndex)} delta={tr?.safety?.delta} spark={tr?.safety?.spark} sparkColor="#10b981" sub={`${inc.criticalOpen} critical · ${inc.open} open events`} source="Patient Ops · Incidents · Safety" />
         <KpiCard icon="📋" tint="bg-indigo-50" label="Compliance Score" value={val(k.complianceScore)} tone={pctTone(k.complianceScore)} delta={tr?.compliance?.delta} spark={tr?.compliance?.spark} sparkColor="#6366f1" sub={`${au.completed} audits · ${au.findingsOpen} open findings`} source="Audit & Compliance" />
-        <KpiCard icon="🗂️" tint="bg-amber-50" label="Open CAPAs" value={capa.provisioned ? k.openCapa : "—"} suffix="" tone={k.openCapa ? "text-amber-600" : "text-gray-400"} delta={tr?.openCapa?.delta} deltaInvert spark={tr?.openCapa?.spark} sparkColor="#f59e0b" sub={`${k.capaOverdue} overdue · ${k.capaDueSoon} due ≤7d · ${k.capaHigh} high`} source="CAPA & Improvement" href="/unit-manager/capa" />
-        <KpiCard icon="❗" tint="bg-rose-50" label="Critical Incidents" value={inc.provisioned ? k.criticalIncidents : "—"} suffix="" tone={k.criticalIncidents ? "text-rose-600" : "text-gray-400"} delta={tr?.critical?.delta} deltaInvert spark={tr?.critical?.spark} sparkColor="#ef4444" sub={`${k.incidentsNew} new · ${k.incidentsAwaitingRca} awaiting RCA`} source="Incident Management" href="/unit-manager/quality/incidents" />
-        <KpiCard icon="⚠️" tint="bg-orange-50" label="High / Extreme Risks" value={risk.provisioned ? k.highRisks : "—"} suffix="" tone={k.highRisks ? "text-orange-600" : "text-gray-400"} delta={tr?.highRisks?.delta} deltaInvert spark={tr?.highRisks?.spark} sparkColor="#f97316" sub={`${k.risksExtreme} extreme · ${k.risksReviewOverdue} review due · ${k.risksIneffectiveControls} weak controls`} source="Unit Risk Register" href="/unit-manager/quality/risk" />
+        <KpiCard icon="🗂️" tint="bg-[var(--cmp-surface-warning)]" label="Open CAPAs" value={capa.provisioned ? k.openCapa : "—"} suffix="" tone={k.openCapa ? "text-[var(--cmp-text-warning)]" : "text-gray-400"} delta={tr?.openCapa?.delta} deltaInvert spark={tr?.openCapa?.spark} sparkColor="#f59e0b" sub={`${k.capaOverdue} overdue · ${k.capaDueSoon} due ≤7d · ${k.capaHigh} high`} source="CAPA & Improvement" href="/unit-manager/capa" />
+        <KpiCard icon="❗" tint="bg-[var(--cmp-surface-error)]" label="Critical Incidents" value={inc.provisioned ? k.criticalIncidents : "—"} suffix="" tone={k.criticalIncidents ? "text-[var(--cmp-text-error)]" : "text-gray-400"} delta={tr?.critical?.delta} deltaInvert spark={tr?.critical?.spark} sparkColor="#ef4444" sub={`${k.incidentsNew} new · ${k.incidentsAwaitingRca} awaiting RCA`} source="Incident Management" href="/unit-manager/quality/incidents" />
+        <KpiCard icon="⚠️" tint="bg-[var(--cmp-surface-warning)]" label="High / Extreme Risks" value={risk.provisioned ? k.highRisks : "—"} suffix="" tone={k.highRisks ? "text-[var(--cmp-text-warning)]" : "text-gray-400"} delta={tr?.highRisks?.delta} deltaInvert spark={tr?.highRisks?.spark} sparkColor="#f97316" sub={`${k.risksExtreme} extreme · ${k.risksReviewOverdue} review due · ${k.risksIneffectiveControls} weak controls`} source="Unit Risk Register" href="/unit-manager/quality/risk" />
       </div>
 
       {/* ── Priority Action Queue (§8) ──────────────────────────────────────── */}
       <div className={`${card} p-5`}>
-        <div className="flex items-center justify-between mb-3"><h3 className="font-semibold text-gray-900 text-sm">Priority Action Queue <span className="text-[10px] text-gray-400 font-normal">consolidated across Quality &amp; Safety</span></h3><div className="flex items-center gap-2 text-[10px]">{d.queueCounts.critical > 0 && <span className="font-semibold bg-rose-100 text-rose-700 rounded-full px-2 py-0.5">{d.queueCounts.critical} critical</span>}{d.queueCounts.high > 0 && <span className="font-semibold bg-orange-100 text-orange-700 rounded-full px-2 py-0.5">{d.queueCounts.high} high</span>}</div></div>
+        <div className="flex items-center justify-between mb-3"><h3 className="font-semibold text-gray-900 text-sm">Priority Action Queue <span className="text-[10px] text-gray-400 font-normal">consolidated across Quality &amp; Safety</span></h3><div className="flex items-center gap-2 text-[10px]">{d.queueCounts.critical > 0 && <span className="font-semibold bg-[var(--cmp-surface-error)] text-[var(--cmp-text-error)] rounded-full px-2 py-0.5">{d.queueCounts.critical} critical</span>}{d.queueCounts.high > 0 && <span className="font-semibold bg-[var(--cmp-surface-warning)] text-orange-700 rounded-full px-2 py-0.5">{d.queueCounts.high} high</span>}</div></div>
         {d.actionQueue.length ? (
           <div className="overflow-x-auto">
             <table className="w-full text-xs">
@@ -153,7 +153,7 @@ export default async function QualityCommandCentre() {
                   <td className="py-2 text-gray-500">{q.owner ?? "Unassigned"}</td>
                   <td className="py-2 text-right text-gray-500 tabular-nums">{q.due ?? "—"}</td>
                   <td className="py-2 text-right text-gray-400 tabular-nums">{q.age ? `${q.age}d` : "—"}</td>
-                  <td className="py-2 text-right"><Link href={q.href} className="text-[11px] font-medium text-rose-700 hover:underline">Open →</Link></td>
+                  <td className="py-2 text-right"><Link href={q.href} className="text-[11px] font-medium text-[var(--cmp-text-error)] hover:underline">Open →</Link></td>
                 </tr>
               ))}</tbody>
             </table>
@@ -189,8 +189,8 @@ export default async function QualityCommandCentre() {
         </div>
 
         <div className={`${card} p-5`}>
-          <div className="flex items-center justify-between mb-3"><h3 className="font-semibold text-gray-900 text-sm">Alerts &amp; Notifications</h3>{d.alerts.length > 0 && <span className="text-[10px] font-bold bg-rose-500 text-white rounded-full min-w-[18px] h-[18px] px-1 flex items-center justify-center">{d.alerts.length}</span>}</div>
-          {d.alerts.length ? <div className="space-y-2">{d.alerts.map((a: any, i: number) => (<div key={i} className="flex items-start gap-2"><span className={`w-1.5 h-1.5 rounded-full mt-1.5 shrink-0 ${a.level === "high" ? "bg-rose-500" : a.level === "medium" ? "bg-amber-400" : "bg-sky-400"}`} /><div className="min-w-0"><p className="text-xs font-medium text-gray-800 leading-snug">{a.title}</p><p className="text-[11px] text-gray-400">{a.detail}</p></div></div>))}</div> : <p className="text-sm text-gray-400 py-8 text-center">No active alerts. 🎉</p>}
+          <div className="flex items-center justify-between mb-3"><h3 className="font-semibold text-gray-900 text-sm">Alerts &amp; Notifications</h3>{d.alerts.length > 0 && <span className="text-[10px] font-bold bg-[var(--cmp-color-error)] text-white rounded-full min-w-[18px] h-[18px] px-1 flex items-center justify-center">{d.alerts.length}</span>}</div>
+          {d.alerts.length ? <div className="space-y-2">{d.alerts.map((a: any, i: number) => (<div key={i} className="flex items-start gap-2"><span className={`w-1.5 h-1.5 rounded-full mt-1.5 shrink-0 ${a.level === "high" ? "bg-[var(--cmp-color-error)]" : a.level === "medium" ? "bg-[var(--cmp-color-warning)]" : "bg-[var(--cmp-color-information)]"}`} /><div className="min-w-0"><p className="text-xs font-medium text-gray-800 leading-snug">{a.title}</p><p className="text-[11px] text-gray-400">{a.detail}</p></div></div>))}</div> : <p className="text-sm text-gray-400 py-8 text-center">No active alerts. 🎉</p>}
         </div>
       </div>
 
@@ -203,9 +203,9 @@ export default async function QualityCommandCentre() {
             <PipeL label="In progress" n={capa.inProgress} total={capa.total} color="#10b981" />
             <PipeL label="Overdue" n={capa.overdue} total={capa.total} color="#ef4444" />
             <PipeL label="Completed" n={capa.completed} total={capa.total} color="#94a3b8" />
-            <Link href="/unit-manager/capa" className="inline-block text-[11px] font-medium text-rose-700 hover:underline mt-1">Go to CAPA Centre →</Link>
+            <Link href="/unit-manager/capa" className="inline-block text-[11px] font-medium text-[var(--cmp-text-error)] hover:underline mt-1">Go to CAPA Centre →</Link>
             <p className="text-[10px] text-gray-400">Store lifecycle is open/in-progress/overdue/completed; the fuller triage→verification→effectiveness stages are next-phase.</p>
-          </div>) : <p className="text-sm text-gray-400 py-8 text-center">No CAPA actions yet. Raise them in the <Link href="/unit-manager/capa" className="text-rose-700 hover:underline">CAPA Centre</Link>.</p>}
+          </div>) : <p className="text-sm text-gray-400 py-8 text-center">No CAPA actions yet. Raise them in the <Link href="/unit-manager/capa" className="text-[var(--cmp-text-error)] hover:underline">CAPA Centre</Link>.</p>}
         </div>
 
         <div className={`${card} p-5`}>
@@ -232,7 +232,7 @@ export default async function QualityCommandCentre() {
       {/* ── Top risks · accreditation cards · 12-month quality trend ────────── */}
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
         <div className={`${card} p-5`}>
-          <div className="flex items-center justify-between mb-3"><h3 className="font-semibold text-gray-900 text-sm">Top Risks</h3><Link href="/unit-manager/quality/risk" className="text-[11px] text-rose-700 hover:underline">View all →</Link></div>
+          <div className="flex items-center justify-between mb-3"><h3 className="font-semibold text-gray-900 text-sm">Top Risks</h3><Link href="/unit-manager/quality/risk" className="text-[11px] text-[var(--cmp-text-error)] hover:underline">View all →</Link></div>
           {risk.provisioned && risk.top.length ? <div className="space-y-1.5">{risk.top.map((r: any) => (
             <div key={r.rank} className="flex items-center gap-2 text-xs">
               <span className="w-4 h-4 rounded-full bg-gray-900 text-white text-[9px] flex items-center justify-center shrink-0">{r.rank}</span>
@@ -251,25 +251,25 @@ export default async function QualityCommandCentre() {
             ))}</div>
             <div className="grid grid-cols-2 gap-x-4 gap-y-1 mt-3 text-[11px]">
               <div className="flex justify-between"><span className="text-gray-500">Overall</span><b className={`tabular-nums ${pctTone(acc.readiness)}`}>{acc.readiness != null ? `${acc.readiness}%` : "—"}</b></div>
-              <div className="flex justify-between"><span className="text-gray-500">Evidence gaps</span><b className={`tabular-nums ${acc.evidenceGaps ? "text-amber-600" : "text-gray-700"}`}>{acc.evidenceGaps}</b></div>
+              <div className="flex justify-between"><span className="text-gray-500">Evidence gaps</span><b className={`tabular-nums ${acc.evidenceGaps ? "text-[var(--cmp-text-warning)]" : "text-gray-700"}`}>{acc.evidenceGaps}</b></div>
               <div className="flex justify-between"><span className="text-gray-500">Std. objects</span><b className="tabular-nums text-gray-700">{acc.objects}</b></div>
               <div className="flex justify-between"><span className="text-gray-500">Days to survey</span><b className="tabular-nums text-gray-700">{acc.surveyDays != null ? `${acc.surveyDays}d` : "—"}</b></div>
             </div>
           </>) : (
             <div className="flex items-center gap-4"><div className="relative w-[88px] h-[88px] shrink-0" style={{ background: `conic-gradient(#14b8a6 ${(acc.readiness ?? 0) * 3.6}deg, #f1f5f9 0)`, borderRadius: "9999px" }}><div className="absolute inset-[9px] bg-white rounded-full flex items-center justify-center"><span className="text-lg font-bold text-gray-900">{acc.readiness != null ? `${acc.readiness}%` : "—"}</span></div></div><p className="text-xs text-gray-400">Audit-derived readiness. Record framework self-assessments for framework-by-framework cards.</p></div>
           )}
-          <Link href="/unit-manager/quality/accreditation" className="inline-block text-[11px] font-medium text-rose-700 hover:underline mt-3">Accreditation readiness →</Link>
+          <Link href="/unit-manager/quality/accreditation" className="inline-block text-[11px] font-medium text-[var(--cmp-text-error)] hover:underline mt-3">Accreditation readiness →</Link>
         </div>
 
         <div className={`${card} p-5`}>
           <h3 className="font-semibold text-gray-900 text-sm mb-1">Quality Trends <span className="text-[10px] text-gray-400 font-normal">last 12 months</span></h3>
           {tr?.trend12 && tr.trend12.length >= 2 ? (<>
             <MultiLine labels={tr.trend12.map((p: any) => p.month)} max={100} series={[{ color: "#0ea5e9", data: tr.trend12.map((p: any) => p.quality) }, { color: "#10b981", data: tr.trend12.map((p: any) => p.safety) }, { color: "#8b5cf6", data: tr.trend12.map((p: any) => p.compliance) }]} />
-            <div className="flex flex-wrap gap-x-3 gap-y-1 mt-2 text-[11px] text-gray-500"><span className="flex items-center gap-1"><span className="w-2 h-2 rounded-sm bg-sky-500" />Quality</span><span className="flex items-center gap-1"><span className="w-2 h-2 rounded-sm bg-emerald-500" />Safety</span><span className="flex items-center gap-1"><span className="w-2 h-2 rounded-sm bg-violet-500" />Compliance</span></div>
+            <div className="flex flex-wrap gap-x-3 gap-y-1 mt-2 text-[11px] text-gray-500"><span className="flex items-center gap-1"><span className="w-2 h-2 rounded-sm bg-[var(--cmp-color-information)]" />Quality</span><span className="flex items-center gap-1"><span className="w-2 h-2 rounded-sm bg-[var(--cmp-color-success)]" />Safety</span><span className="flex items-center gap-1"><span className="w-2 h-2 rounded-sm bg-violet-500" />Compliance</span></div>
           </>) : (
             <div className="py-8 text-center"><p className="text-sm text-gray-400">Trend builds as daily snapshots accrue.</p><p className="text-[11px] text-gray-400 mt-1">{tr?.points ? `${tr.points} day(s) captured` : "Snapshots start today"} — the 12-month Quality / Safety / Compliance trend appears once ≥2 months exist. Not simulated.</p></div>
           )}
-          <Link href="/unit-manager/quality/analytics" className="inline-block text-[11px] font-medium text-rose-700 hover:underline mt-2">Quality analytics →</Link>
+          <Link href="/unit-manager/quality/analytics" className="inline-block text-[11px] font-medium text-[var(--cmp-text-error)] hover:underline mt-2">Quality analytics →</Link>
         </div>
       </div>
 

@@ -49,15 +49,15 @@ export default async function ReleasesPage() {
     </>
   );
 
-  if (notReady) return <div className="space-y-5 max-w-6xl">{header}<div className="bg-amber-50 border border-amber-200 rounded-xl p-6"><p className="font-semibold text-amber-900">⚙️ Not provisioned</p><p className="text-sm text-amber-800 mt-1">Apply migration 099 (releases), then assemble a release here.</p></div></div>;
+  if (notReady) return <div className="space-y-5 max-w-6xl">{header}<div className="bg-[var(--cmp-surface-warning)] border border-[var(--cmp-color-warning)] rounded-xl p-6"><p className="font-semibold text-amber-900">⚙️ Not provisioned</p><p className="text-sm text-amber-800 mt-1">Apply migration 099 (releases), then assemble a release here.</p></div></div>;
 
   return (
     <div className="space-y-5 max-w-6xl">
       {header}
       <div className="grid grid-cols-3 gap-3">
         <Stat label="Releases" value={listR.length} sub="across all channels" />
-        <Stat label="Activated" value={activated} tone="text-emerald-600" sub="gone live" />
-        <Stat label="In Production" value={inProd} tone={inProd ? "text-emerald-600" : undefined} sub="production channel" />
+        <Stat label="Activated" value={activated} tone="text-[var(--cmp-text-success)]" sub="gone live" />
+        <Stat label="In Production" value={inProd} tone={inProd ? "text-[var(--cmp-text-success)]" : undefined} sub="production channel" />
       </div>
       <ReleaseManager releases={listR} objects={(objects ?? []) as any[]} />
       <p className="text-[11px] text-gray-400">Each stage is gated: validate reuses the schema contract + dependency gate; activation flips objects live after snapshotting them, so a release is rollback-capable. Canary/phased execution, blue-green activation and tenant-adoption monitoring (NCP-019 §9/§10) are next-phase.</p>

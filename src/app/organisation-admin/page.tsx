@@ -11,7 +11,7 @@ export const dynamic = "force-dynamic";
 
 const card = cardClass;
 const titleCase = (s: string) => s.split(/[_\s]+/).filter(Boolean).map(w => w[0].toUpperCase() + w.slice(1)).join(" ");
-const intDot: Record<string, string> = { live: "bg-green-500", native: "bg-teal-400", off: "bg-gray-300" };
+const intDot: Record<string, string> = { live: "bg-[var(--cmp-color-success)]", native: "bg-teal-400", off: "bg-gray-300" };
 
 function Kpi({ n, label, sub, href, tone }: { n: any; label: string; sub?: string; href?: string; tone?: string }) {
   const inner = (
@@ -73,7 +73,7 @@ export default async function OrgAdminDashboard() {
               </div>
             ))}
           </div>
-          {summary.usersUnattached > 0 && <p className="text-[11px] text-amber-600 mt-2">+ {summary.usersUnattached} not mapped to a listed facility</p>}
+          {summary.usersUnattached > 0 && <p className="text-[11px] text-[var(--cmp-text-warning)] mt-2">+ {summary.usersUnattached} not mapped to a listed facility</p>}
         </div>
 
         {/* Role assignment metrics */}
@@ -84,7 +84,7 @@ export default async function OrgAdminDashboard() {
           </div>
           <div className="flex gap-3 text-sm mb-3">
             <span className="text-gray-500">Assigned <b className="text-gray-800 tabular-nums">{users.assignedOrgRoles}</b></span>
-            <span className="text-gray-500">Unassigned <b className={`tabular-nums ${users.unassignedRoles ? "text-amber-600" : "text-gray-800"}`}>{users.unassignedRoles}</b></span>
+            <span className="text-gray-500">Unassigned <b className={`tabular-nums ${users.unassignedRoles ? "text-[var(--cmp-text-warning)]" : "text-gray-800"}`}>{users.unassignedRoles}</b></span>
           </div>
           <div className="space-y-1.5">
             {roleBars.slice(0, 6).map((r) => (
@@ -101,8 +101,8 @@ export default async function OrgAdminDashboard() {
         <div className={card}>
           <h3 className="font-semibold text-gray-900 mb-3">Position template status</h3>
           <div className="grid grid-cols-3 gap-3 text-center">
-            <div><div className="text-2xl font-bold tabular-nums text-green-600">{templates.active}</div><div className="text-[11px] text-gray-500 mt-0.5">Active</div></div>
-            <div><div className="text-2xl font-bold tabular-nums text-amber-600">{templates.draft}</div><div className="text-[11px] text-gray-500 mt-0.5">Draft</div></div>
+            <div><div className="text-2xl font-bold tabular-nums text-[var(--cmp-text-success)]">{templates.active}</div><div className="text-[11px] text-gray-500 mt-0.5">Active</div></div>
+            <div><div className="text-2xl font-bold tabular-nums text-[var(--cmp-text-warning)]">{templates.draft}</div><div className="text-[11px] text-gray-500 mt-0.5">Draft</div></div>
             <div><div className="text-2xl font-bold tabular-nums text-gray-400">{templates.retired}</div><div className="text-[11px] text-gray-500 mt-0.5">Retired</div></div>
           </div>
           <p className="text-[11px] text-gray-400 mt-3">Templates provision workspaces, competencies, learning &amp; assessments on assignment. <Link href="/admin/positions" className="text-teal-600 hover:underline">Manage in the Workforce Engine →</Link></p>

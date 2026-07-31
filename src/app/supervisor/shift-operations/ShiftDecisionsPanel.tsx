@@ -10,7 +10,7 @@ import { cardClass } from "@/components/ui/primitives";
 
 type Decision = { id: string; decision_type: string; decision_summary: string; decision_reason: string | null; decision_maker_name: string | null; decided_at: string; status: string };
 
-const STATUS_TONE: Record<string, string> = { active: "bg-blue-50 text-blue-700 border-blue-200", under_review: "bg-amber-50 text-amber-700 border-amber-200", closed: "bg-green-50 text-green-700 border-green-200", reversed: "bg-gray-100 text-gray-500 border-gray-200" };
+const STATUS_TONE: Record<string, string> = { active: "bg-[var(--cmp-surface-information)] text-blue-700 border-[var(--cmp-color-information)]", under_review: "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)] border-[var(--cmp-color-warning)]", closed: "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)] border-[var(--cmp-color-success)]", reversed: "bg-gray-100 text-gray-500 border-gray-200" };
 const relTime = (iso?: string | null) => { if (!iso) return ""; const s = Math.floor((Date.now() - new Date(iso).getTime()) / 1000); if (s < 60) return "just now"; if (s < 3600) return `${Math.floor(s / 60)}m ago`; if (s < 86400) return `${Math.floor(s / 3600)}h ago`; return `${Math.floor(s / 86400)}d ago`; };
 
 export default function ShiftDecisionsPanel({ shiftId, provisioned, decisions, editable }: {
@@ -100,15 +100,15 @@ export default function ShiftDecisionsPanel({ shiftId, provisioned, decisions, e
             {d.decision_reason && <p className="text-[10px] text-gray-400 truncate">{d.decision_reason}</p>}
             {editable && (d.status === "active" || d.status === "under_review") && (
               <div className="flex gap-2 mt-1">
-                {d.status === "active" && <button onClick={() => setStatus(d.id, "under_review")} disabled={busy === d.id} className="text-[10px] text-amber-600 hover:underline">review</button>}
-                <button onClick={() => setStatus(d.id, "closed")} disabled={busy === d.id} className="text-[10px] text-green-700 hover:underline">close</button>
+                {d.status === "active" && <button onClick={() => setStatus(d.id, "under_review")} disabled={busy === d.id} className="text-[10px] text-[var(--cmp-text-warning)] hover:underline">review</button>}
+                <button onClick={() => setStatus(d.id, "closed")} disabled={busy === d.id} className="text-[10px] text-[var(--cmp-text-success)] hover:underline">close</button>
                 <button onClick={() => setStatus(d.id, "reversed")} disabled={busy === d.id} className="text-[10px] text-gray-400 hover:underline">reverse</button>
               </div>
             )}
           </div>
         ))}
       </div>
-      {err && <p className="text-[11px] text-rose-600 mt-2">{err}</p>}
+      {err && <p className="text-[11px] text-[var(--cmp-text-error)] mt-2">{err}</p>}
     </div>
   );
 }

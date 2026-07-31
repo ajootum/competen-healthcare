@@ -15,9 +15,9 @@ export const dynamic = "force-dynamic";
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 const card = "bg-white rounded-xl border border-gray-200";
-const BAND_TONE: Record<string, string> = { Low: "text-emerald-600", Elevated: "text-amber-600", High: "text-rose-600" };
+const BAND_TONE: Record<string, string> = { Low: "text-[var(--cmp-text-success)]", Elevated: "text-[var(--cmp-text-warning)]", High: "text-[var(--cmp-text-error)]" };
 const BAND_RING: Record<string, string> = { Low: "#10b981", Elevated: "#f59e0b", High: "#ef4444" };
-const SEV_TONE: Record<string, string> = { critical: "bg-rose-50 text-rose-700", high: "bg-rose-50 text-rose-700", moderate: "bg-amber-50 text-amber-700", medium: "bg-amber-50 text-amber-700" };
+const SEV_TONE: Record<string, string> = { critical: "bg-[var(--cmp-surface-error)] text-[var(--cmp-text-error)]", high: "bg-[var(--cmp-surface-error)] text-[var(--cmp-text-error)]", moderate: "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]", medium: "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]" };
 
 function Kpi({ label, value, sub, tone }: { label: string; value: any; sub?: string; tone?: string }) {
   return <div className={`${card} p-4`}><p className="text-xs text-gray-500">{label}</p><p className={`text-2xl font-bold tabular-nums mt-1 ${tone ?? "text-gray-900"}`}>{value}</p>{sub && <p className="text-[11px] text-gray-400 mt-0.5">{sub}</p>}</div>;
@@ -44,7 +44,7 @@ export default async function WorkforceIntelligence() {
       <UnitFilters departments={departments} />
     </div>
   );
-  if (!d.ready) return <div className="space-y-4">{header}<div className="bg-amber-50 border border-amber-200 rounded-xl p-6"><p className="font-semibold text-amber-900">⚙️ No active shift / workforce data</p><p className="text-sm text-amber-800 mt-1">Workforce intelligence activates once an operational shift with staffing is running for this unit.</p></div></div>;
+  if (!d.ready) return <div className="space-y-4">{header}<div className="bg-[var(--cmp-surface-warning)] border border-[var(--cmp-color-warning)] rounded-xl p-6"><p className="font-semibold text-amber-900">⚙️ No active shift / workforce data</p><p className="text-sm text-amber-800 mt-1">Workforce intelligence activates once an operational shift with staffing is running for this unit.</p></div></div>;
 
   const k = d.kpis;
   return (
@@ -52,12 +52,12 @@ export default async function WorkforceIntelligence() {
       {header}
 
       <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-3">
-        <Kpi label="Intelligence score" value={k.intelligenceScore} sub="composite" tone={k.intelligenceScore >= 85 ? "text-emerald-600" : k.intelligenceScore >= 70 ? "text-amber-600" : "text-rose-600"} />
+        <Kpi label="Intelligence score" value={k.intelligenceScore} sub="composite" tone={k.intelligenceScore >= 85 ? "text-[var(--cmp-text-success)]" : k.intelligenceScore >= 70 ? "text-[var(--cmp-text-warning)]" : "text-[var(--cmp-text-error)]"} />
         <Kpi label="Workforce readiness" value={k.readiness != null ? `${k.readiness}%` : "—"} sub={k.readiness == null ? "no competency data" : "deployable"} />
-        <Kpi label="Coverage" value={`${k.coverage}%`} sub="present vs required" tone={k.coverage >= 90 ? "text-emerald-600" : k.coverage >= 75 ? "text-amber-600" : "text-rose-600"} />
+        <Kpi label="Coverage" value={`${k.coverage}%`} sub="present vs required" tone={k.coverage >= 90 ? "text-[var(--cmp-text-success)]" : k.coverage >= 75 ? "text-[var(--cmp-text-warning)]" : "text-[var(--cmp-text-error)]"} />
         <Kpi label="Skill-mix" value={k.skillMix != null ? `${k.skillMix}%` : "—"} sub={k.skillMix == null ? "no competency data" : "on-shift competency"} />
         <Kpi label="Deployable" value={k.deployable ?? "—"} sub="fully current staff" />
-        <Kpi label="Critical gaps" value={k.criticalGaps} sub="no / single cover" tone={k.criticalGaps ? "text-rose-600" : "text-gray-400"} />
+        <Kpi label="Critical gaps" value={k.criticalGaps} sub="no / single cover" tone={k.criticalGaps ? "text-[var(--cmp-text-error)]" : "text-gray-400"} />
       </div>
 
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
@@ -78,7 +78,7 @@ export default async function WorkforceIntelligence() {
         <div className={`${card} p-5`}>
           <h3 className="text-sm font-bold text-gray-900 mb-3">Predictive Alerts</h3>
           {d.alerts.length === 0 ? <p className="text-sm text-gray-400">No predicted workforce risks. 🎉</p> : (
-            <div className="space-y-2">{d.alerts.slice(0, 5).map((a: any, i: number) => (<div key={i} className="flex items-start gap-2"><span className={`w-1.5 h-1.5 rounded-full mt-1.5 shrink-0 ${a.severity === "high" ? "bg-rose-500" : "bg-amber-400"}`} /><div className="min-w-0"><p className="text-xs font-semibold text-gray-800">{a.title}</p><p className="text-[11px] text-gray-500">{a.detail}</p></div></div>))}</div>
+            <div className="space-y-2">{d.alerts.slice(0, 5).map((a: any, i: number) => (<div key={i} className="flex items-start gap-2"><span className={`w-1.5 h-1.5 rounded-full mt-1.5 shrink-0 ${a.severity === "high" ? "bg-[var(--cmp-color-error)]" : "bg-[var(--cmp-color-warning)]"}`} /><div className="min-w-0"><p className="text-xs font-semibold text-gray-800">{a.title}</p><p className="text-[11px] text-gray-500">{a.detail}</p></div></div>))}</div>
           )}
         </div>
 
@@ -95,7 +95,7 @@ export default async function WorkforceIntelligence() {
       <div className={`${card} p-5 bg-gradient-to-br from-emerald-50/40 to-white`}>
         <h3 className="text-sm font-bold text-gray-900 mb-3 flex items-center gap-2">✨ Deployment Recommendations <span className="text-[10px] font-normal text-gray-400">explainable · advisory</span></h3>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-2">{d.recs.map((rec: any, i: number) => (
-          <div key={i} className="rounded-lg border border-gray-100 bg-white p-3"><div className="flex items-start justify-between gap-2"><p className="text-xs text-gray-800 flex-1">{rec.text}</p><span className={`text-[9px] px-1.5 py-0.5 rounded shrink-0 ${rec.priority === "high" ? "bg-rose-50 text-rose-700" : rec.priority === "medium" ? "bg-amber-50 text-amber-700" : "bg-gray-100 text-gray-500"}`}>{rec.priority}</span></div><p className="text-[10px] text-gray-400 mt-1">Why: {rec.why}</p></div>
+          <div key={i} className="rounded-lg border border-gray-100 bg-white p-3"><div className="flex items-start justify-between gap-2"><p className="text-xs text-gray-800 flex-1">{rec.text}</p><span className={`text-[9px] px-1.5 py-0.5 rounded shrink-0 ${rec.priority === "high" ? "bg-[var(--cmp-surface-error)] text-[var(--cmp-text-error)]" : rec.priority === "medium" ? "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]" : "bg-gray-100 text-gray-500"}`}>{rec.priority}</span></div><p className="text-[10px] text-gray-400 mt-1">Why: {rec.why}</p></div>
         ))}</div>
       </div>
 
@@ -103,7 +103,7 @@ export default async function WorkforceIntelligence() {
       <div className={`${card} p-5`}>
         <h3 className="text-sm font-bold text-gray-900 mb-3">Per-role staffing intelligence</h3>
         <table className="w-full text-xs"><thead><tr className="text-gray-400 text-left border-b border-gray-100"><th className="py-1.5 font-medium">Role</th><th className="py-1.5 font-medium text-right">Req</th><th className="py-1.5 font-medium text-right">On</th><th className="py-1.5 font-medium text-right">Coverage</th><th className="py-1.5 font-medium text-right">Signal</th></tr></thead>
-          <tbody>{d.staffingOverview.map((r: any) => (<tr key={r.role} className="border-b border-gray-50"><td className="py-1.5 text-gray-700">{r.label}</td><td className="py-1.5 text-right text-gray-600 tabular-nums">{r.required ?? "—"}</td><td className="py-1.5 text-right text-gray-600 tabular-nums">{r.present}</td><td className="py-1.5 text-right font-semibold tabular-nums">{r.coverage != null ? `${r.coverage}%` : "—"}</td><td className="py-1.5 text-right"><span className={`text-[9px] px-1.5 py-0.5 rounded ${r.coverage != null && r.coverage >= 100 ? "bg-emerald-50 text-emerald-700" : r.coverage != null && r.coverage >= 75 ? "bg-amber-50 text-amber-700" : "bg-rose-50 text-rose-700"}`}>{r.coverage != null && r.coverage >= 100 ? "OK" : r.coverage != null && r.coverage >= 75 ? "Watch" : "Risk"}</span></td></tr>))}</tbody>
+          <tbody>{d.staffingOverview.map((r: any) => (<tr key={r.role} className="border-b border-gray-50"><td className="py-1.5 text-gray-700">{r.label}</td><td className="py-1.5 text-right text-gray-600 tabular-nums">{r.required ?? "—"}</td><td className="py-1.5 text-right text-gray-600 tabular-nums">{r.present}</td><td className="py-1.5 text-right font-semibold tabular-nums">{r.coverage != null ? `${r.coverage}%` : "—"}</td><td className="py-1.5 text-right"><span className={`text-[9px] px-1.5 py-0.5 rounded ${r.coverage != null && r.coverage >= 100 ? "bg-[var(--cmp-surface-success)] text-emerald-700" : r.coverage != null && r.coverage >= 75 ? "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]" : "bg-[var(--cmp-surface-error)] text-[var(--cmp-text-error)]"}`}>{r.coverage != null && r.coverage >= 100 ? "OK" : r.coverage != null && r.coverage >= 75 ? "Watch" : "Risk"}</span></td></tr>))}</tbody>
         </table>
         <p className="text-[10px] text-gray-400 mt-2">{d.floatAvail} float staff available for redeployment.</p>
       </div>

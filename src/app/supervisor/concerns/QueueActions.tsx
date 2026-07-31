@@ -40,7 +40,7 @@ export default function QueueActions({ id, acknowledged, routedTo }: { id: strin
 
   return (
     <div className="mt-2 space-y-2">
-      {err && <p className="text-xs text-amber-700">{err}</p>}
+      {err && <p className="text-xs text-[var(--cmp-text-warning)]">{err}</p>}
       {mode === "" && (
         <div className="flex flex-wrap gap-1.5">
           {!acknowledged && <button className={btnGhost} disabled={busy} onClick={() => act({ action: "acknowledge", id })}>Acknowledge</button>}

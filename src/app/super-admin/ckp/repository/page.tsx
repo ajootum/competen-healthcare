@@ -14,7 +14,7 @@ export const dynamic = "force-dynamic";
 const card = "bg-white rounded-xl border border-gray-200";
 const fmt = (n: number) => n.toLocaleString();
 const relTime = (iso?: string | null) => { if (!iso) return ""; const s = Math.floor((Date.now() - new Date(iso).getTime()) / 1000); if (s < 60) return "just now"; if (s < 3600) return `${Math.floor(s / 60)} min ago`; if (s < 86400) return `${Math.floor(s / 3600)} hr ago`; return `${Math.floor(s / 86400)} d ago`; };
-const STATUS_BADGE: Record<string, string> = { draft: "bg-gray-100 text-gray-600", active: "bg-green-50 text-green-700", retired: "bg-gray-100 text-gray-400" };
+const STATUS_BADGE: Record<string, string> = { draft: "bg-gray-100 text-gray-600", active: "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]", retired: "bg-gray-100 text-gray-400" };
 
 export default async function ClinicalKnowledgeRepository() {
   const supabase = await createClient();
@@ -30,12 +30,12 @@ export default async function ClinicalKnowledgeRepository() {
 
   const kpiCards = [
     { label: "Knowledge Objects", value: fmt(k.knowledgeObjects), icon: "🧠", iconBg: "bg-teal-50" },
-    { label: "CPUs", value: fmt(k.cpus), icon: "🧩", iconBg: "bg-blue-50", sub: `${k.cpusPublished} published` },
+    { label: "CPUs", value: fmt(k.cpus), icon: "🧩", iconBg: "bg-[var(--cmp-surface-information)]", sub: `${k.cpusPublished} published` },
     { label: "Evidence", value: fmt(k.evidence), icon: "🔬", iconBg: "bg-violet-50" },
-    { label: "Guidelines", value: fmt(k.guidelines), icon: "📖", iconBg: "bg-amber-50" },
-    { label: "Policies", value: fmt(k.policies), icon: "📋", iconBg: "bg-rose-50" },
-    { label: "Clinical Cases", value: fmt(k.cases), icon: "🩹", iconBg: "bg-orange-50" },
-    { label: "Taxonomy Terms", value: fmt(k.terms), icon: "🏷️", iconBg: "bg-sky-50" },
+    { label: "Guidelines", value: fmt(k.guidelines), icon: "📖", iconBg: "bg-[var(--cmp-surface-warning)]" },
+    { label: "Policies", value: fmt(k.policies), icon: "📋", iconBg: "bg-[var(--cmp-surface-error)]" },
+    { label: "Clinical Cases", value: fmt(k.cases), icon: "🩹", iconBg: "bg-[var(--cmp-surface-warning)]" },
+    { label: "Taxonomy Terms", value: fmt(k.terms), icon: "🏷️", iconBg: "bg-[var(--cmp-surface-information)]" },
     { label: "Tags", value: fmt(k.tags), icon: "🔖", iconBg: "bg-gray-50" },
   ];
 

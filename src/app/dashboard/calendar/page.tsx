@@ -18,7 +18,7 @@ function EventBlock({ e }: { e: any }) { // eslint-disable-line @typescript-esli
   return (
     <Link href={e.href} className="block rounded-md px-2.5 py-1.5 border-l-[3px]" style={{ borderColor: e.color, background: `${e.color}12` }}>
       <p className="text-[12px] font-semibold text-gray-800 leading-tight truncate">{e.title}</p>
-      <p className="text-[10px] text-gray-500">{e.allDay ? "All day" : `${fmtTime(e.start)}${e.end ? ` – ${fmtTime(e.end)}` : ""}`}{e.overdue && <span className="text-rose-600 font-semibold"> · Overdue</span>}</p>
+      <p className="text-[10px] text-gray-500">{e.allDay ? "All day" : `${fmtTime(e.start)}${e.end ? ` – ${fmtTime(e.end)}` : ""}`}{e.overdue && <span className="text-[var(--cmp-text-error)] font-semibold"> · Overdue</span>}</p>
     </Link>
   );
 }
@@ -73,21 +73,21 @@ export default async function CalendarCentrePage({ searchParams }: { searchParam
       {/* Header */}
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <p className="text-[11px] font-semibold text-blue-600 uppercase tracking-wide">Personal Workspace</p>
+          <p className="text-[11px] font-semibold text-[var(--cmp-text-information)] uppercase tracking-wide">Personal Workspace</p>
           <h1 className="text-2xl font-bold text-gray-900">Calendar &amp; Schedule</h1>
           <p className="text-sm text-gray-500 mt-0.5">Your unified calendar for shifts, tasks, learning, meetings and more.</p>
         </div>
-        <Link href="/dashboard/tasks" className="text-sm font-medium text-white bg-blue-600 rounded-lg px-3 py-2 hover:bg-blue-500">+ New Task</Link>
+        <Link href="/dashboard/tasks" className="text-sm font-medium text-white bg-[var(--cmp-color-information)] rounded-lg px-3 py-2 hover:bg-[var(--cmp-color-information)]">+ New Task</Link>
       </div>
 
       {/* Summary cards */}
       <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
-        <Summary icon="📅" label="Today" value={new Date().toLocaleDateString("en-GB", { day: "numeric", month: "short" })} sub={new Date().toLocaleDateString("en-GB", { weekday: "long" })} tint="bg-blue-50" />
+        <Summary icon="📅" label="Today" value={new Date().toLocaleDateString("en-GB", { day: "numeric", month: "short" })} sub={new Date().toLocaleDateString("en-GB", { weekday: "long" })} tint="bg-[var(--cmp-surface-information)]" />
         <Summary icon="🩺" label="My Shift" value={cs ? `${fmtTime(cs.start)}–${fmtTime(cs.end)}` : "—"} sub={cs ? cs.title.split(" · ")[1] ?? "On duty" : "No shift today"} tint="bg-indigo-50" />
-        <Summary icon="📌" label="Events Today" value={String(d.summary.eventsToday)} sub="scheduled" tint="bg-emerald-50" />
-        <Summary icon="⏰" label="Tasks Due" value={String(d.taskCounts.overdue + d.taskCounts.today)} sub={`${d.taskCounts.overdue} overdue`} tint="bg-amber-50" />
+        <Summary icon="📌" label="Events Today" value={String(d.summary.eventsToday)} sub="scheduled" tint="bg-[var(--cmp-surface-success)]" />
+        <Summary icon="⏰" label="Tasks Due" value={String(d.taskCounts.overdue + d.taskCounts.today)} sub={`${d.taskCounts.overdue} overdue`} tint="bg-[var(--cmp-surface-warning)]" />
         <Summary icon="📚" label="Learning" value={String(d.summary.learning)} sub="upcoming due" tint="bg-violet-50" />
-        <Summary icon="🎯" label="On-Call" value={d.nextOnCall ? "Scheduled" : "None"} sub={d.nextOnCall ? new Date(d.nextOnCall.start).toLocaleDateString("en-GB", { day: "numeric", month: "short" }) : "not on call"} tint="bg-rose-50" />
+        <Summary icon="🎯" label="On-Call" value={d.nextOnCall ? "Scheduled" : "None"} sub={d.nextOnCall ? new Date(d.nextOnCall.start).toLocaleDateString("en-GB", { day: "numeric", month: "short" }) : "not on call"} tint="bg-[var(--cmp-surface-error)]" />
       </div>
 
       <div className="grid lg:grid-cols-[240px_minmax(0,1fr)_280px] gap-5 items-start">
@@ -105,9 +105,9 @@ export default async function CalendarCentrePage({ searchParams }: { searchParam
                 if (!day) return <span key={i} />;
                 const ds = ymOf(day); const isToday = ds === todayYmd(); const isAnchor = ds === d.anchorYmd; const marks = d.monthMarks.get(ds) ?? 0;
                 return (
-                  <Link key={i} href={`/dashboard/calendar?view=${view}&date=${ds}`} className={`relative aspect-square flex items-center justify-center rounded-md text-[11px] ${isAnchor ? "bg-blue-600 text-white font-bold" : isToday ? "bg-blue-50 text-blue-700 font-semibold" : "text-gray-600 hover:bg-gray-100"}`}>
+                  <Link key={i} href={`/dashboard/calendar?view=${view}&date=${ds}`} className={`relative aspect-square flex items-center justify-center rounded-md text-[11px] ${isAnchor ? "bg-[var(--cmp-color-information)] text-white font-bold" : isToday ? "bg-[var(--cmp-surface-information)] text-blue-700 font-semibold" : "text-gray-600 hover:bg-gray-100"}`}>
                     {day}
-                    {marks > 0 && !isAnchor && <span className="absolute bottom-0.5 w-1 h-1 rounded-full bg-blue-500" />}
+                    {marks > 0 && !isAnchor && <span className="absolute bottom-0.5 w-1 h-1 rounded-full bg-[var(--cmp-color-information)]" />}
                   </Link>
                 );
               })}
@@ -190,18 +190,18 @@ export default async function CalendarCentrePage({ searchParams }: { searchParam
           <div className="bg-white rounded-xl border border-gray-200 p-4">
             <h3 className="text-sm font-semibold text-gray-900 mb-3">My Tasks on Calendar</h3>
             <div className="space-y-1.5 text-sm">
-              <Link href="/dashboard/tasks?tab=all" className="flex items-center justify-between hover:bg-gray-50 rounded px-1 py-0.5"><span className="text-rose-600">Overdue</span><span className="font-semibold text-gray-900">{d.taskCounts.overdue}</span></Link>
-              <Link href="/dashboard/tasks" className="flex items-center justify-between hover:bg-gray-50 rounded px-1 py-0.5"><span className="text-amber-600">Due Today</span><span className="font-semibold text-gray-900">{d.taskCounts.today}</span></Link>
-              <Link href="/dashboard/tasks" className="flex items-center justify-between hover:bg-gray-50 rounded px-1 py-0.5"><span className="text-blue-600">Due This Week</span><span className="font-semibold text-gray-900">{d.taskCounts.week}</span></Link>
+              <Link href="/dashboard/tasks?tab=all" className="flex items-center justify-between hover:bg-gray-50 rounded px-1 py-0.5"><span className="text-[var(--cmp-text-error)]">Overdue</span><span className="font-semibold text-gray-900">{d.taskCounts.overdue}</span></Link>
+              <Link href="/dashboard/tasks" className="flex items-center justify-between hover:bg-gray-50 rounded px-1 py-0.5"><span className="text-[var(--cmp-text-warning)]">Due Today</span><span className="font-semibold text-gray-900">{d.taskCounts.today}</span></Link>
+              <Link href="/dashboard/tasks" className="flex items-center justify-between hover:bg-gray-50 rounded px-1 py-0.5"><span className="text-[var(--cmp-text-information)]">Due This Week</span><span className="font-semibold text-gray-900">{d.taskCounts.week}</span></Link>
             </div>
-            <Link href="/dashboard/tasks" className="block text-center text-[12px] font-medium text-blue-600 hover:underline pt-2">Go to Task Centre →</Link>
+            <Link href="/dashboard/tasks" className="block text-center text-[12px] font-medium text-[var(--cmp-text-information)] hover:underline pt-2">Go to Task Centre →</Link>
           </div>
 
           <div className="bg-white rounded-xl border border-gray-200 p-4">
             <h3 className="text-sm font-semibold text-gray-900 mb-2">On-Call / Availability</h3>
-            <div className="flex items-center justify-between text-sm"><span className="text-gray-500">Status</span><span className={`font-medium ${d.nextOnCall ? "text-rose-600" : "text-emerald-600"}`}>{d.nextOnCall ? "On-call scheduled" : "Available"}</span></div>
+            <div className="flex items-center justify-between text-sm"><span className="text-gray-500">Status</span><span className={`font-medium ${d.nextOnCall ? "text-[var(--cmp-text-error)]" : "text-[var(--cmp-text-success)]"}`}>{d.nextOnCall ? "On-call scheduled" : "Available"}</span></div>
             {d.nextOnCall && <div className="flex items-center justify-between text-sm mt-1"><span className="text-gray-500">Next on-call</span><span className="text-gray-800">{new Date(d.nextOnCall.start).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}</span></div>}
-            <Link href="/dashboard/shift" className="block text-center text-[12px] font-medium text-blue-600 hover:underline pt-2">View shift workspace →</Link>
+            <Link href="/dashboard/shift" className="block text-center text-[12px] font-medium text-[var(--cmp-text-information)] hover:underline pt-2">View shift workspace →</Link>
           </div>
 
           <div className="bg-white rounded-xl border border-gray-200 p-4">

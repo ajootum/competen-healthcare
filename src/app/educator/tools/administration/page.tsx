@@ -100,7 +100,7 @@ export default async function AdministrationPage() {
                     {m.bullets.slice(0, 4).map(b => <li key={b} className="flex items-start gap-1.5 text-[11px] text-gray-500 leading-tight"><span className="w-1 h-1 rounded-full bg-gray-300 mt-1.5" />{b}</li>)}
                   </ul>
                   <div className="flex items-center justify-between border-t border-gray-100 pt-3">
-                    {m.live ? <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-600 bg-emerald-50 rounded px-1.5 py-0.5">live data</span> : <span className="text-[10px] font-bold uppercase tracking-wider text-amber-600 bg-amber-50 rounded px-1.5 py-0.5">scaffold</span>}
+                    {m.live ? <span className="text-[10px] font-bold uppercase tracking-wider text-[var(--cmp-text-success)] bg-[var(--cmp-surface-success)] rounded px-1.5 py-0.5">live data</span> : <span className="text-[10px] font-bold uppercase tracking-wider text-[var(--cmp-text-warning)] bg-[var(--cmp-surface-warning)] rounded px-1.5 py-0.5">scaffold</span>}
                     <Link href={`/educator/tools/administration/${m.slug}`} className="text-[12px] font-semibold text-violet-600 hover:text-violet-700">Manage →</Link>
                   </div>
                 </div>
@@ -116,7 +116,7 @@ export default async function AdministrationPage() {
                 {d.roleBars.map(b => (
                   <div key={b.label} className="flex items-center gap-3">
                     <span className="w-40 text-[12px] text-gray-600 truncate shrink-0">{b.label}</span>
-                    <div className="flex-1 bg-gray-100 rounded-full h-3 overflow-hidden"><div className="h-full bg-blue-500 rounded-full" style={{ width: `${(b.count / maxRole) * 100}%` }} /></div>
+                    <div className="flex-1 bg-gray-100 rounded-full h-3 overflow-hidden"><div className="h-full bg-[var(--cmp-color-information)] rounded-full" style={{ width: `${(b.count / maxRole) * 100}%` }} /></div>
                     <span className="w-8 text-right text-[12px] font-semibold text-gray-700">{b.count}</span>
                   </div>
                 ))}
@@ -139,7 +139,7 @@ export default async function AdministrationPage() {
 
           <div className="rounded-2xl bg-white border border-gray-200 shadow-sm p-4">
             <p className="text-[11px] font-bold uppercase tracking-widest text-gray-500 mb-3">Upcoming Deadlines</p>
-            {d.deadlines.length === 0 ? <p className="text-[12px] text-emerald-600">No credential deadlines.</p> : (
+            {d.deadlines.length === 0 ? <p className="text-[12px] text-[var(--cmp-text-success)]">No credential deadlines.</p> : (
               <div className="flex flex-col gap-2.5">
                 {d.deadlines.map((dl, i) => (
                   <div key={i} className="flex items-start gap-2.5"><span className="w-6 h-6 rounded-lg bg-gray-100 flex items-center justify-center text-[10px] shrink-0">⏰</span><div className="min-w-0 flex-1"><p className="text-[12px] text-gray-800 leading-tight truncate">{dl.title}</p><p className={`text-[10px] ${dl.tone}`}>{dl.date ? fmtDate(dl.date) + " · " : ""}{dl.sub}</p></div></div>

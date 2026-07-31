@@ -40,9 +40,9 @@ export default async function Certification() {
             <tbody>{d.checklist.map(c => (
               <tr key={c.label} className="border-b border-gray-50 text-[11px]">
                 <td className="py-2 pr-3 font-semibold text-gray-800">{c.label}</td>
-                <td className="py-2 pr-3 text-green-600 font-bold">{c.completed}</td>
-                <td className="py-2 pr-3 text-amber-600">{c.pending}</td>
-                <td className="py-2 pr-3 text-red-600">{c.missing}</td>
+                <td className="py-2 pr-3 text-[var(--cmp-text-success)] font-bold">{c.completed}</td>
+                <td className="py-2 pr-3 text-[var(--cmp-text-warning)]">{c.pending}</td>
+                <td className="py-2 pr-3 text-[var(--cmp-text-critical)]">{c.missing}</td>
               </tr>
             ))}
               <tr className="text-[11px] text-gray-300"><td className="py-2 pr-3">OSCE · Portfolio · CPD</td><td colSpan={3} className="py-2 pr-3 text-[8px] font-bold uppercase">soon — need their stores</td></tr>
@@ -69,7 +69,7 @@ export default async function Certification() {
               <tr key={c.id} className="border-b border-gray-50 text-[11px]">
                 <td className="py-2 pr-3 font-semibold text-gray-800">{c.name}</td>
                 <td className="py-2 pr-3 text-gray-600">{c.achieved} / {c.required}</td>
-                <td className="py-2 pr-3">{c.eligible ? <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-green-50 text-green-600">Eligible</span> : <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-gray-100 text-gray-500">Pending</span>}</td>
+                <td className="py-2 pr-3">{c.eligible ? <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]">Eligible</span> : <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-gray-100 text-gray-500">Pending</span>}</td>
                 <td className="py-2 pr-3">{c.certificate ? <span className="text-green-500">✓</span> : <span className="text-gray-300">—</span>}</td>
               </tr>
             ))}</tbody>

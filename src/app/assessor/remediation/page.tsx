@@ -103,7 +103,7 @@ export default async function RemediationPage() {
                     {n.items.map((i, idx) => (
                       <div key={idx} className="flex items-center gap-2">
                         <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded shrink-0 ${
-                          i.kind === "remediation" ? "bg-red-50 text-red-600" : "bg-amber-50 text-amber-700"
+                          i.kind === "remediation" ? "bg-[var(--cmp-surface-critical)] text-[var(--cmp-text-critical)]" : "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]"
                         }`}>
                           {i.kind === "remediation" ? "Remediation" : "Expired"}
                         </span>
@@ -121,7 +121,7 @@ export default async function RemediationPage() {
                     <div className="flex flex-col gap-1.5">
                       {n.plan.slice(0, 5).map((p, idx) => (
                         <div key={idx} className="flex items-start gap-2">
-                          <span className={`w-1.5 h-1.5 rounded-full mt-1.5 shrink-0 ${p.status === "completed" ? "bg-green-400" : "bg-indigo-300"}`} />
+                          <span className={`w-1.5 h-1.5 rounded-full mt-1.5 shrink-0 ${p.status === "completed" ? "bg-[var(--cmp-color-success)]" : "bg-indigo-300"}`} />
                           <div className="min-w-0">
                             <p className="text-[11px] text-gray-700 leading-snug truncate">{p.resource_title ?? p.competency_name ?? "Learning item"}</p>
                             {p.reason && <p className="text-[9px] text-gray-400 leading-snug">{p.reason}</p>}

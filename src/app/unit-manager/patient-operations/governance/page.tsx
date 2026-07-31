@@ -46,17 +46,17 @@ export default async function PatientOperationsGovernance() {
       <PosTabs />
     </>
   );
-  if (!d.ready) return <div className="space-y-4">{header}<div className="bg-amber-50 border border-amber-200 rounded-xl p-6"><p className="font-semibold text-amber-900">⚙️ Coming online</p><p className="text-sm text-amber-800 mt-1">The Clinical Operations Engine isn&apos;t provisioned for this unit yet.</p></div></div>;
+  if (!d.ready) return <div className="space-y-4">{header}<div className="bg-[var(--cmp-surface-warning)] border border-[var(--cmp-color-warning)] rounded-xl p-6"><p className="font-semibold text-amber-900">⚙️ Coming online</p><p className="text-sm text-amber-800 mt-1">The Clinical Operations Engine isn&apos;t provisioned for this unit yet.</p></div></div>;
 
   const w = d.widgets;
   const kpis = [
-    { label: "Exceptions", value: w.exceptions, href: "#exceptions", tone: w.exceptions ? "text-rose-600" : "text-gray-400" },
+    { label: "Exceptions", value: w.exceptions, href: "#exceptions", tone: w.exceptions ? "text-[var(--cmp-text-error)]" : "text-gray-400" },
     { label: "Amendment requests", value: w.amendmentRequests, href: "#exceptions", tone: w.amendmentRequests ? "text-violet-600" : "text-gray-400" },
-    { label: "Returned forms", value: w.returnedForms, href: "#exceptions", tone: w.returnedForms ? "text-amber-600" : "text-gray-400" },
+    { label: "Returned forms", value: w.returnedForms, href: "#exceptions", tone: w.returnedForms ? "text-[var(--cmp-text-warning)]" : "text-gray-400" },
     { label: "Awaiting verification", value: w.awaitingVerification, href: "#exceptions", tone: w.awaitingVerification ? "text-indigo-600" : "text-gray-400" },
-    { label: "Escalation oversight", value: w.escalationOversight, href: "/unit-manager/patient-operations/safety", tone: w.escalationOversight ? "text-rose-600" : "text-gray-400" },
-    { label: "Overdue actions", value: w.overdueActions, href: "/unit-manager/patient-operations/operations-centre", tone: w.overdueActions ? "text-rose-600" : "text-gray-400" },
-    { label: "Transfer delays", value: w.transferDelays, href: "/unit-manager/patient-operations/flow", tone: w.transferDelays ? "text-amber-600" : "text-gray-400" },
+    { label: "Escalation oversight", value: w.escalationOversight, href: "/unit-manager/patient-operations/safety", tone: w.escalationOversight ? "text-[var(--cmp-text-error)]" : "text-gray-400" },
+    { label: "Overdue actions", value: w.overdueActions, href: "/unit-manager/patient-operations/operations-centre", tone: w.overdueActions ? "text-[var(--cmp-text-error)]" : "text-gray-400" },
+    { label: "Transfer delays", value: w.transferDelays, href: "/unit-manager/patient-operations/flow", tone: w.transferDelays ? "text-[var(--cmp-text-warning)]" : "text-gray-400" },
     { label: "Discharge barriers", value: w.dischargeBarriers, href: "/unit-manager/patient-operations/flow", tone: "text-teal-600" },
   ];
 
@@ -64,12 +64,12 @@ export default async function PatientOperationsGovernance() {
     <div className="space-y-4">
       {header}
 
-      {!d.exProvisioned && <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 text-sm text-amber-800"><b>Governance stores not provisioned.</b> Migration 087 (op_exceptions / op_amendment_requests) isn&apos;t applied yet — exception &amp; amendment queues activate once it&apos;s run.</div>}
+      {!d.exProvisioned && <div className="bg-[var(--cmp-surface-warning)] border border-[var(--cmp-color-warning)] rounded-xl p-4 text-sm text-amber-800"><b>Governance stores not provisioned.</b> Migration 087 (op_exceptions / op_amendment_requests) isn&apos;t applied yet — exception &amp; amendment queues activate once it&apos;s run.</div>}
 
       {/* §10.1 governance dashboard KPI strip */}
       <div className="grid grid-cols-2 sm:grid-cols-4 xl:grid-cols-8 gap-3">
         {kpis.map(k => (
-          <Link key={k.label} href={k.href} className={`${card} p-4 hover:border-emerald-300 transition-colors`}>
+          <Link key={k.label} href={k.href} className={`${card} p-4 hover:border-[var(--cmp-color-success)] transition-colors`}>
             <p className="text-xs text-gray-500 leading-tight">{k.label}</p>
             <p className={`text-2xl font-bold tabular-nums mt-1 ${k.tone}`}>{k.value}</p>
           </Link>
@@ -87,7 +87,7 @@ export default async function PatientOperationsGovernance() {
           <h3 className="text-sm font-bold text-gray-900 mb-3">Risk concentration</h3>
           {d.riskZones.length === 0 ? <p className="text-sm text-gray-400">No high-acuity clusters.</p> : (
             <div className="space-y-2">{d.riskZones.map((z: any) => (
-              <div key={z.name} className="flex items-center justify-between text-xs"><span className="text-gray-700">{z.name}</span><span className="flex items-center gap-2"><span className="text-rose-600 font-medium">{z.highRisk} high-acuity</span><span className="text-gray-400">· {z.staff} nurse{z.staff === 1 ? "" : "s"}{z.ratio != null ? ` · ${z.ratio}:1` : ""}</span></span></div>
+              <div key={z.name} className="flex items-center justify-between text-xs"><span className="text-gray-700">{z.name}</span><span className="flex items-center gap-2"><span className="text-[var(--cmp-text-error)] font-medium">{z.highRisk} high-acuity</span><span className="text-gray-400">· {z.staff} nurse{z.staff === 1 ? "" : "s"}{z.ratio != null ? ` · ${z.ratio}:1` : ""}</span></span></div>
             ))}</div>
           )}
         </div>

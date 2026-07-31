@@ -30,11 +30,11 @@ type Stats = {
 
 // Health indicators (spec §3D)
 const STATUS_UI: Record<string, { label: string; dot: string; pill: string }> = {
-  published:  { label: "Published",  dot: "bg-green-500",  pill: "bg-green-100 text-green-700" },
-  approved:   { label: "Approved",   dot: "bg-blue-500",   pill: "bg-blue-100 text-blue-700" },
-  review:     { label: "Review",     dot: "bg-amber-400",  pill: "bg-amber-100 text-amber-700" },
+  published:  { label: "Published",  dot: "bg-[var(--cmp-color-success)]",  pill: "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]" },
+  approved:   { label: "Approved",   dot: "bg-[var(--cmp-color-information)]",   pill: "bg-[var(--cmp-surface-information)] text-blue-700" },
+  review:     { label: "Review",     dot: "bg-[var(--cmp-color-warning)]",  pill: "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]" },
   draft:      { label: "Draft",      dot: "bg-slate-400",  pill: "bg-slate-100 text-slate-600" },
-  incomplete: { label: "Incomplete", dot: "bg-orange-500", pill: "bg-orange-100 text-orange-700" },
+  incomplete: { label: "Incomplete", dot: "bg-[var(--cmp-color-warning)]", pill: "bg-[var(--cmp-surface-warning)] text-orange-700" },
 };
 // Board columns follow the authoring pipeline, least → most finished.
 const STATUS_ORDER = ["incomplete", "draft", "review", "approved", "published"];
@@ -57,7 +57,7 @@ const ROW = "grid-cols-[1fr_88px_112px_40px_36px] 2xl:grid-cols-[1fr_70px_90px_1
 const WIDE_ONLY = "hidden 2xl:block";
 
 const bar = (pct: number) =>
-  pct >= 85 ? "bg-green-500" : pct >= 60 ? "bg-teal-500" : pct >= 40 ? "bg-amber-500" : "bg-orange-500";
+  pct >= 85 ? "bg-[var(--cmp-color-success)]" : pct >= 60 ? "bg-teal-500" : pct >= 40 ? "bg-[var(--cmp-color-warning)]" : "bg-[var(--cmp-color-warning)]";
 
 const ago = (iso: string | null) => {
   if (!iso) return "—";
@@ -210,7 +210,7 @@ export default function BuilderWorkspace({
 
   const MenuItem = ({ onClick, danger, children }: { onClick: () => void; danger?: boolean; children: React.ReactNode }) => (
     <button onClick={() => { setMenuFor(null); onClick(); }}
-      className={`w-full text-left px-3 py-1.5 text-xs hover:bg-gray-50 ${danger ? "text-red-600" : "text-gray-700"}`}>
+      className={`w-full text-left px-3 py-1.5 text-xs hover:bg-gray-50 ${danger ? "text-[var(--cmp-text-critical)]" : "text-gray-700"}`}>
       {children}
     </button>
   );
@@ -232,9 +232,9 @@ export default function BuilderWorkspace({
 
   const STAT_CARDS = [
     { icon: "📖", tint: "bg-indigo-50", value: stats.domains, label: "Domains", sub: `${stats.domainsWithContent} with content · ${stats.domains - stats.domainsWithContent} empty` },
-    { icon: "🎯", tint: "bg-blue-50", value: stats.competencies, label: "Competencies", sub: `${stats.competenciesPublished} published · ${stats.competenciesDraft} draft` },
-    { icon: "✋", tint: "bg-green-50", value: stats.skills, label: "Skills", sub: `${stats.skillsReusable} reusable · ${stats.skillsCustom} custom` },
-    { icon: "🏥", tint: "bg-amber-50", value: stats.cpus, label: "CPUs", sub: `${stats.cpusLinked} linked · ${stats.cpusUnlinked} unlinked` },
+    { icon: "🎯", tint: "bg-[var(--cmp-surface-information)]", value: stats.competencies, label: "Competencies", sub: `${stats.competenciesPublished} published · ${stats.competenciesDraft} draft` },
+    { icon: "✋", tint: "bg-[var(--cmp-surface-success)]", value: stats.skills, label: "Skills", sub: `${stats.skillsReusable} reusable · ${stats.skillsCustom} custom` },
+    { icon: "🏥", tint: "bg-[var(--cmp-surface-warning)]", value: stats.cpus, label: "CPUs", sub: `${stats.cpusLinked} linked · ${stats.cpusUnlinked} unlinked` },
   ];
 
   const QUICK_LINKS = [
@@ -271,7 +271,7 @@ export default function BuilderWorkspace({
             <button onClick={exportJson} className={hdrBtn}>Export</button>
             <a href="#version-history" className={hdrBtn}>Version History</a>
             <button onClick={publish} disabled={busy}
-              className="text-xs font-semibold bg-green-600 hover:bg-green-700 text-white px-3 py-1.5 rounded-lg disabled:opacity-50">
+              className="text-xs font-semibold bg-[var(--cmp-color-success)] hover:bg-green-700 text-white px-3 py-1.5 rounded-lg disabled:opacity-50">
               Publish Framework
             </button>
           </div>
@@ -340,7 +340,7 @@ export default function BuilderWorkspace({
         </div>
 
         {err && (
-          <p className="text-xs text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2 mb-2">
+          <p className="text-xs text-[var(--cmp-text-critical)] bg-[var(--cmp-surface-critical)] border border-[var(--cmp-color-critical)] rounded-lg px-3 py-2 mb-2">
             {err} <button onClick={() => setErr(null)} className="underline ml-1">dismiss</button>
           </p>
         )}
@@ -696,9 +696,9 @@ function ContextPanel({ c, frameworkId, onClose }: { c: CompetencyNode; framewor
         <div className="grid grid-cols-2 gap-2">
           <Link href="/super-admin/studio/skills" className="text-center text-[11px] font-semibold text-teal-700 bg-teal-50 hover:bg-teal-100 py-2 rounded-lg">✋ Skills</Link>
           <Link href={`/super-admin/content/${frameworkId}/cpus`} className="text-center text-[11px] font-semibold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 py-2 rounded-lg">🏥 CPU</Link>
-          <Link href="/super-admin/studio/knowledge" className="text-center text-[11px] font-semibold text-rose-700 bg-rose-50 hover:bg-rose-100 py-2 rounded-lg">🫀 Knowledge</Link>
+          <Link href="/super-admin/studio/knowledge" className="text-center text-[11px] font-semibold text-[var(--cmp-text-error)] bg-[var(--cmp-surface-error)] hover:bg-[var(--cmp-surface-error)] py-2 rounded-lg">🫀 Knowledge</Link>
           <Link href="/super-admin/studio/questions" className="text-center text-[11px] font-semibold text-violet-700 bg-violet-50 hover:bg-violet-100 py-2 rounded-lg">❓ Questions</Link>
-          <Link href="/super-admin/studio/cases" className="text-center text-[11px] font-semibold text-blue-700 bg-blue-50 hover:bg-blue-100 py-2 rounded-lg">🧑‍⚕️ Cases</Link>
+          <Link href="/super-admin/studio/cases" className="text-center text-[11px] font-semibold text-blue-700 bg-[var(--cmp-surface-information)] hover:bg-[var(--cmp-surface-information)] py-2 rounded-lg">🧑‍⚕️ Cases</Link>
           <Link href="/super-admin/studio/responsibilities" className="text-center text-[11px] font-semibold text-gray-700 bg-gray-100 hover:bg-gray-200 py-2 rounded-lg">🧾 Owner</Link>
         </div>
       </div>

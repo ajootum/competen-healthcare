@@ -19,7 +19,7 @@ const card = "bg-white rounded-xl border border-gray-200";
 const SUBTABS = ["Overview", "Demand Drivers", "Unit Demand", "Role Requirements", "Acuity & Complexity", "Demand Trends", "Assumptions", "Simulation", "Audit & History", "Settings"];
 const ACUITY_COLOR: Record<string, string> = { Critical: "#ef4444", High: "#f97316", Moderate: "#f59e0b", Stable: "#22c55e" };
 const DRIVER_COLOR = ["#8b5cf6", "#ef4444", "#0ea5e9", "#f59e0b"];
-const heat = (v: number) => (v >= 80 ? "bg-rose-100 text-rose-800" : v >= 60 ? "bg-amber-100 text-amber-800" : v >= 40 ? "bg-lime-100 text-lime-800" : "bg-emerald-100 text-emerald-800");
+const heat = (v: number) => (v >= 80 ? "bg-[var(--cmp-surface-error)] text-rose-800" : v >= 60 ? "bg-[var(--cmp-surface-warning)] text-amber-800" : v >= 40 ? "bg-lime-100 text-lime-800" : "bg-[var(--cmp-surface-success)] text-emerald-800");
 
 function Kpi({ label, value, sub, tone, icon }: { label: string; value: any; sub?: string; tone?: string; icon?: string }) {
   return <div className={`${card} p-4`}><div className="flex items-start justify-between"><p className="text-xs text-gray-500">{label}</p>{icon && <span className="text-base opacity-40">{icon}</span>}</div><p className={`text-2xl font-bold tabular-nums mt-1 ${tone ?? "text-gray-900"}`}>{value}</p>{sub && <p className="text-[11px] text-gray-400 mt-0.5">{sub}</p>}</div>;
@@ -48,12 +48,12 @@ export default async function DemandOptimiser() {
       </div>
       <SchedulingTabs />
       <div className="flex gap-1 overflow-x-auto -mt-1">
-        {SUBTABS.map((t, i) => <span key={t} className={`shrink-0 text-[11px] px-2.5 py-1.5 rounded-full font-medium ${i === 0 ? "bg-emerald-50 text-emerald-700" : "text-gray-300"}`} title={i === 0 ? "" : "Next phase"}>{t}</span>)}
+        {SUBTABS.map((t, i) => <span key={t} className={`shrink-0 text-[11px] px-2.5 py-1.5 rounded-full font-medium ${i === 0 ? "bg-[var(--cmp-surface-success)] text-emerald-700" : "text-gray-300"}`} title={i === 0 ? "" : "Next phase"}>{t}</span>)}
       </div>
     </>
   );
 
-  if (!d.ready) return <div className="space-y-4">{header}<div className="bg-amber-50 border border-amber-200 rounded-xl p-6"><p className="font-semibold text-amber-900">⚙️ No demand data</p><p className="text-sm text-amber-800 mt-1">The Demand Optimiser needs patient census (op_patients) and establishment standards to calculate demand.</p></div></div>;
+  if (!d.ready) return <div className="space-y-4">{header}<div className="bg-[var(--cmp-surface-warning)] border border-[var(--cmp-color-warning)] rounded-xl p-6"><p className="font-semibold text-amber-900">⚙️ No demand data</p><p className="text-sm text-amber-800 mt-1">The Demand Optimiser needs patient census (op_patients) and establishment standards to calculate demand.</p></div></div>;
 
   const k = d.kpis;
   const driverTotal = d.drivers.reduce((n: number, x: any) => n + x.contribution, 0) || 1;
@@ -63,11 +63,11 @@ export default async function DemandOptimiser() {
 
       <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-3">
         <Kpi label="Total patient demand" value={k.totalPatients} sub={`${k.totalDemand} demand units`} icon="🧑" />
-        <Kpi label="Average acuity" value={k.avgAcuity != null ? k.avgAcuity : "—"} sub={k.avgAcuityLabel} icon="❤️" tone={k.avgAcuity != null && k.avgAcuity >= 3 ? "text-rose-600" : undefined} />
+        <Kpi label="Average acuity" value={k.avgAcuity != null ? k.avgAcuity : "—"} sub={k.avgAcuityLabel} icon="❤️" tone={k.avgAcuity != null && k.avgAcuity >= 3 ? "text-[var(--cmp-text-error)]" : undefined} />
         <Kpi label="Required FTE" value={k.requiredFte} sub="From demand" icon="📊" />
         <Kpi label="Available FTE" value={k.availableFte} sub="Rostered headcount" icon="👥" />
-        <Kpi label="Coverage score" value={k.coverageScore != null ? `${k.coverageScore}%` : "—"} sub={k.vacancyFte > 0 ? `${k.vacancyFte} FTE gap` : "Covered"} icon="🛡️" tone={k.coverageScore != null && k.coverageScore >= 100 ? "text-emerald-600" : "text-amber-600"} />
-        <Kpi label="High acuity" value={k.highAcuity} sub="Drives demand" icon="🔺" tone={k.highAcuity ? "text-rose-600" : undefined} />
+        <Kpi label="Coverage score" value={k.coverageScore != null ? `${k.coverageScore}%` : "—"} sub={k.vacancyFte > 0 ? `${k.vacancyFte} FTE gap` : "Covered"} icon="🛡️" tone={k.coverageScore != null && k.coverageScore >= 100 ? "text-[var(--cmp-text-success)]" : "text-[var(--cmp-text-warning)]"} />
+        <Kpi label="High acuity" value={k.highAcuity} sub="Drives demand" icon="🔺" tone={k.highAcuity ? "text-[var(--cmp-text-error)]" : undefined} />
       </div>
 
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
@@ -99,7 +99,7 @@ export default async function DemandOptimiser() {
         {/* Role requirements */}
         <div className={`${card} p-5`}>
           <h3 className="text-sm font-bold text-gray-900 mb-3">Role requirements</h3>
-          {d.roleReq.length === 0 ? <p className="text-sm text-gray-400">No role demand.</p> : <div className="space-y-2">{d.roleReq.map((r: any) => (<div key={r.label} className="text-xs"><div className="flex items-center justify-between mb-0.5"><span className="text-gray-700">{r.label}</span><span className={r.gap > 0 ? "text-rose-600" : "text-gray-500"}>{r.available}/{r.required} FTE{r.gap > 0 ? ` · −${r.gap}` : ""}</span></div><div className="w-full h-1.5 rounded-full bg-gray-100 overflow-hidden"><div className={`h-full rounded-full ${r.gap > 0 ? "bg-rose-400" : "bg-emerald-500"}`} style={{ width: `${r.required ? Math.min(100, (r.available / r.required) * 100) : 0}%` }} /></div></div>))}</div>}
+          {d.roleReq.length === 0 ? <p className="text-sm text-gray-400">No role demand.</p> : <div className="space-y-2">{d.roleReq.map((r: any) => (<div key={r.label} className="text-xs"><div className="flex items-center justify-between mb-0.5"><span className="text-gray-700">{r.label}</span><span className={r.gap > 0 ? "text-[var(--cmp-text-error)]" : "text-gray-500"}>{r.available}/{r.required} FTE{r.gap > 0 ? ` · −${r.gap}` : ""}</span></div><div className="w-full h-1.5 rounded-full bg-gray-100 overflow-hidden"><div className={`h-full rounded-full ${r.gap > 0 ? "bg-[var(--cmp-color-error)]" : "bg-[var(--cmp-color-success)]"}`} style={{ width: `${r.required ? Math.min(100, (r.available / r.required) * 100) : 0}%` }} /></div></div>))}</div>}
         </div>
 
         {/* Acuity profile */}

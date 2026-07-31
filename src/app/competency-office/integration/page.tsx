@@ -23,13 +23,13 @@ export default async function CrossWorkspaceIntegrationPage() {
     <div className="max-w-[1400px] space-y-4">
       {head}
 
-      {d.empty && <div className="bg-blue-50 border border-blue-200 rounded-xl p-3 text-[12px] text-blue-800">The event backbone (<code>domain_events</code>) is provisioned but no events have been emitted yet. Volumes, the stream, flows and delivery status populate as producers emit events; the structural map and workspace catalogue below are meaningful regardless.</div>}
+      {d.empty && <div className="bg-[var(--cmp-surface-information)] border border-[var(--cmp-color-information)] rounded-xl p-3 text-[12px] text-blue-800">The event backbone (<code>domain_events</code>) is provisioned but no events have been emitted yet. Volumes, the stream, flows and delivery status populate as producers emit events; the structural map and workspace catalogue below are meaningful regardless.</div>}
 
       <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
-        <Kpi label="Events processed" value={k.processedToday} sub="today" tone="text-emerald-600" />
-        <Kpi label="Success rate" value={k.successRate == null ? "—" : `${k.successRate}%`} sub="processed vs failed" tone={k.successRate != null && k.successRate < 90 ? "text-amber-600" : undefined} />
-        <Kpi label="Pending events" value={k.pending} sub="awaiting dispatch" tone={k.pending ? "text-amber-600" : undefined} />
-        <Kpi label="Failed" value={k.failedTotal} sub="failed + dead-letter" tone={k.failedTotal ? "text-rose-600" : undefined} />
+        <Kpi label="Events processed" value={k.processedToday} sub="today" tone="text-[var(--cmp-text-success)]" />
+        <Kpi label="Success rate" value={k.successRate == null ? "—" : `${k.successRate}%`} sub="processed vs failed" tone={k.successRate != null && k.successRate < 90 ? "text-[var(--cmp-text-warning)]" : undefined} />
+        <Kpi label="Pending events" value={k.pending} sub="awaiting dispatch" tone={k.pending ? "text-[var(--cmp-text-warning)]" : undefined} />
+        <Kpi label="Failed" value={k.failedTotal} sub="failed + dead-letter" tone={k.failedTotal ? "text-[var(--cmp-text-error)]" : undefined} />
         <Kpi label="Total events" value={k.totalWindow} sub="last 30 days" />
         <Kpi label="Active event types" value={k.activeEventTypes} sub="distinct · 30 days" />
       </div>
@@ -108,8 +108,8 @@ export default async function CrossWorkspaceIntegrationPage() {
 
         <Card title="Recent integration alerts" right={<span className="text-[11px] text-gray-400">delivery failures</span>}>
           {d.alerts.length ? <div className="space-y-2">{d.alerts.map((a: any, i: number) => (
-            <div key={i} className="flex items-start gap-2"><span className="w-2 h-2 rounded-full mt-1.5 shrink-0 bg-rose-500" /><div className="min-w-0"><p className="text-[12px] font-medium text-gray-800 leading-snug truncate font-mono">{a.type}</p><p className="text-[11px] text-gray-500">{a.subject ?? "—"} · {fmtT(a.when)} · {String(a.status).replace(/_/g, " ")}</p></div></div>
-          ))}</div> : <div className="py-6 text-center"><p className="text-sm text-emerald-600">✓ No delivery failures</p><p className="text-[10px] text-gray-400 mt-1">No events in a failed or dead-letter state in the last 30 days.</p></div>}
+            <div key={i} className="flex items-start gap-2"><span className="w-2 h-2 rounded-full mt-1.5 shrink-0 bg-[var(--cmp-color-error)]" /><div className="min-w-0"><p className="text-[12px] font-medium text-gray-800 leading-snug truncate font-mono">{a.type}</p><p className="text-[11px] text-gray-500">{a.subject ?? "—"} · {fmtT(a.when)} · {String(a.status).replace(/_/g, " ")}</p></div></div>
+          ))}</div> : <div className="py-6 text-center"><p className="text-sm text-[var(--cmp-text-success)]">✓ No delivery failures</p><p className="text-[10px] text-gray-400 mt-1">No events in a failed or dead-letter state in the last 30 days.</p></div>}
         </Card>
       </div>
 

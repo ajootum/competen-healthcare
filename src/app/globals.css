@@ -20,6 +20,12 @@
   --cmp-text-error: #B91C1C;
   --cmp-text-critical: #B91C1C;
   --cmp-text-neutral: #475569;
+  --cmp-surface-success: #ECFDF5;
+  --cmp-surface-information: #EFF6FF;
+  --cmp-surface-warning: #FFFBEB;
+  --cmp-surface-error: #FFF1F2;
+  --cmp-surface-critical: #FEF2F2;
+  --cmp-surface-neutral: #F8FAFC;
   --cmp-clinical-stable: #16A34A;
   --cmp-clinical-moderate: #F59E0B;
   --cmp-clinical-high: #EF4444;

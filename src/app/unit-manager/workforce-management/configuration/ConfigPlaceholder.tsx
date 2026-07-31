@@ -34,7 +34,7 @@ export default async function ConfigPlaceholder({ title, subtitle, banner, secti
       </div>
       <ConfigTabs />
 
-      <div className="bg-amber-50 border border-amber-200 rounded-xl p-5">
+      <div className="bg-[var(--cmp-surface-warning)] border border-[var(--cmp-color-warning)] rounded-xl p-5">
         <p className="font-semibold text-amber-900">⚙️ Next phase</p>
         <p className="text-sm text-amber-800 mt-1">{banner}</p>
       </div>

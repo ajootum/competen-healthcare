@@ -9,7 +9,7 @@ export const dynamic = "force-dynamic";
 // cmo_certifications (mig 114) + competency_decisions (mig 011/027) + cmo_renewals (mig 124). No fabricated data.
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
-const STAGE_BORDER: Record<string, string> = { blue: "border-blue-200 bg-blue-50/50", amber: "border-amber-200 bg-amber-50/50", rose: "border-rose-200 bg-rose-50/50", slate: "border-gray-200 bg-gray-50" };
+const STAGE_BORDER: Record<string, string> = { blue: "border-[var(--cmp-color-information)] bg-[var(--cmp-surface-information)]/50", amber: "border-[var(--cmp-color-warning)] bg-[var(--cmp-surface-warning)]/50", rose: "border-[var(--cmp-color-error)] bg-[var(--cmp-surface-error)]/50", slate: "border-gray-200 bg-gray-50" };
 
 export default async function RecertificationPage() {
   const { admin, isSuper, hid } = await cmoGuard();
@@ -24,12 +24,12 @@ export default async function RecertificationPage() {
       {head}
 
       <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
-        <Kpi label="Expiring ≤30 days" value={k.expiring30} tone={k.expiring30 ? "text-amber-600" : "text-gray-900"} sub="within a month" />
+        <Kpi label="Expiring ≤30 days" value={k.expiring30} tone={k.expiring30 ? "text-[var(--cmp-text-warning)]" : "text-gray-900"} sub="within a month" />
         <Kpi label="Expiring 31–90 days" value={k.expiring90} sub="on the horizon" />
-        <Kpi label="Expired" value={k.expired} tone={k.expired ? "text-rose-600" : "text-gray-900"} />
+        <Kpi label="Expired" value={k.expired} tone={k.expired ? "text-[var(--cmp-text-error)]" : "text-gray-900"} />
         <Kpi label="Renewals in progress" value={k.inProgress} tone={k.inProgress ? "text-teal-600" : "text-gray-900"} sub="in flight" />
-        <Kpi label="Renewal rate" value={k.renewalRate === null ? "—" : `${k.renewalRate}%`} tone={k.renewalRate !== null && k.renewalRate >= 80 ? "text-emerald-600" : "text-gray-900"} sub="completed / opened" />
-        <Kpi label="Overdue · no renewal" value={k.overdueNoRenewal} tone={k.overdueNoRenewal ? "text-rose-600" : "text-gray-900"} sub="expired, unactioned" />
+        <Kpi label="Renewal rate" value={k.renewalRate === null ? "—" : `${k.renewalRate}%`} tone={k.renewalRate !== null && k.renewalRate >= 80 ? "text-[var(--cmp-text-success)]" : "text-gray-900"} sub="completed / opened" />
+        <Kpi label="Overdue · no renewal" value={k.overdueNoRenewal} tone={k.overdueNoRenewal ? "text-[var(--cmp-text-error)]" : "text-gray-900"} sub="expired, unactioned" />
       </div>
 
       <Card title="Renewal lifecycle" right={<span className="text-[11px] text-gray-400">monitor → notify → assign → learn → reassess → renew</span>}>

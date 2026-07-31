@@ -12,14 +12,14 @@ export const dynamic = "force-dynamic";
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 const STATE_META: Record<GovState, { label: string; dot: string; text: string }> = {
-  governed: { label: "Governed", dot: "bg-emerald-500", text: "text-emerald-700" },
-  monitor: { label: "Monitor", dot: "bg-amber-500", text: "text-amber-700" },
-  at_risk: { label: "At risk", dot: "bg-rose-500", text: "text-rose-700" },
+  governed: { label: "Governed", dot: "bg-[var(--cmp-color-success)]", text: "text-emerald-700" },
+  monitor: { label: "Monitor", dot: "bg-[var(--cmp-color-warning)]", text: "text-[var(--cmp-text-warning)]" },
+  at_risk: { label: "At risk", dot: "bg-[var(--cmp-color-error)]", text: "text-[var(--cmp-text-error)]" },
   ungoverned: { label: "Ungoverned", dot: "bg-gray-400", text: "text-gray-500" },
 };
 const BODY_LABEL: Record<string, string> = { jci: "JCI", who: "WHO", safecare: "SafeCare", moh: "MOH", council: "Council", nmc: "NMC", other: "Other" };
-const scoreTone = (v: number) => (v >= 75 ? "text-emerald-600" : v >= 45 ? "text-amber-600" : "text-rose-600");
-const barTone = (v: number) => (v >= 75 ? "bg-emerald-500" : v >= 45 ? "bg-amber-500" : "bg-rose-500");
+const scoreTone = (v: number) => (v >= 75 ? "text-[var(--cmp-text-success)]" : v >= 45 ? "text-[var(--cmp-text-warning)]" : "text-[var(--cmp-text-error)]");
+const barTone = (v: number) => (v >= 75 ? "bg-[var(--cmp-color-success)]" : v >= 45 ? "bg-[var(--cmp-color-warning)]" : "bg-[var(--cmp-color-error)]");
 
 function gapsOf(r: GovRecord): string {
   const g: string[] = [];
@@ -67,7 +67,7 @@ export default async function GovernanceDashboardPage() {
     <div className="max-w-[1400px]">
       <div className="flex items-start justify-between gap-3 mb-5">
         <div>
-          <p className="text-[11px] font-semibold text-emerald-600 uppercase tracking-widest mb-0.5">CGR-006 · Competency Governance</p>
+          <p className="text-[11px] font-semibold text-[var(--cmp-text-success)] uppercase tracking-widest mb-0.5">CGR-006 · Competency Governance</p>
           <h1 className="text-xl font-bold text-gray-900">Governance Dashboard &amp; Intelligence</h1>
           <p className="text-gray-400 text-sm mt-0.5">Is our organisation assured that the workforce is competent, the competency systems are governed, and the risks are visible? Every metric derives from the live registry and shows its contributing factors.</p>
         </div>
@@ -100,7 +100,7 @@ export default async function GovernanceDashboardPage() {
               </div>
               <div className="flex gap-1">
                 {d.maturityModel.slice().reverse().map((m: any) => (
-                  <div key={m.num} className={`flex-1 h-1.5 rounded-full ${m.num <= d.maturity.num ? "bg-emerald-500" : "bg-gray-100"}`} title={`L${m.num} ${m.label}`} />
+                  <div key={m.num} className={`flex-1 h-1.5 rounded-full ${m.num <= d.maturity.num ? "bg-[var(--cmp-color-success)]" : "bg-gray-100"}`} title={`L${m.num} ${m.label}`} />
                 ))}
               </div>
               <p className="text-[10px] text-gray-400 mt-1.5">Reactive → Predictive · derived from the assurance score</p>
@@ -108,9 +108,9 @@ export default async function GovernanceDashboardPage() {
 
             <Card title="Risk Exposure" tag="§6.3">
               <div className="grid grid-cols-2 gap-2">
-                <div className="border border-gray-100 rounded-lg p-2"><p className={`text-xl font-bold tabular-nums ${d.kpis.highRisk ? "text-orange-600" : "text-gray-900"}`}>{d.kpis.highRisk}</p><p className="text-[10px] text-gray-500">high/critical risk</p></div>
-                <div className="border border-gray-100 rounded-lg p-2"><p className={`text-xl font-bold tabular-nums ${d.kpis.overdue ? "text-rose-600" : "text-gray-900"}`}>{d.kpis.overdue}</p><p className="text-[10px] text-gray-500">overdue reviews</p></div>
-                <div className="border border-gray-100 rounded-lg p-2"><p className={`text-xl font-bold tabular-nums ${d.states.at_risk ? "text-rose-600" : "text-gray-900"}`}>{d.states.at_risk}</p><p className="text-[10px] text-gray-500">at-risk</p></div>
+                <div className="border border-gray-100 rounded-lg p-2"><p className={`text-xl font-bold tabular-nums ${d.kpis.highRisk ? "text-[var(--cmp-text-warning)]" : "text-gray-900"}`}>{d.kpis.highRisk}</p><p className="text-[10px] text-gray-500">high/critical risk</p></div>
+                <div className="border border-gray-100 rounded-lg p-2"><p className={`text-xl font-bold tabular-nums ${d.kpis.overdue ? "text-[var(--cmp-text-error)]" : "text-gray-900"}`}>{d.kpis.overdue}</p><p className="text-[10px] text-gray-500">overdue reviews</p></div>
+                <div className="border border-gray-100 rounded-lg p-2"><p className={`text-xl font-bold tabular-nums ${d.states.at_risk ? "text-[var(--cmp-text-error)]" : "text-gray-900"}`}>{d.states.at_risk}</p><p className="text-[10px] text-gray-500">at-risk</p></div>
                 <div className="border border-gray-100 rounded-lg p-2"><p className={`text-xl font-bold tabular-nums ${d.states.ungoverned ? "text-gray-600" : "text-gray-900"}`}>{d.states.ungoverned}</p><p className="text-[10px] text-gray-500">ungoverned</p></div>
               </div>
             </Card>
@@ -124,23 +124,23 @@ export default async function GovernanceDashboardPage() {
                 <span className="text-[11px] text-gray-400">of competencies mapped to a standard</span>
               </div>
               {d.bodies.length === 0 ? (
-                <p className="text-[12px] text-gray-400">No standard mappings yet. <Link href="/super-admin/studio/standards" className="text-emerald-600 hover:underline">Map standards →</Link></p>
+                <p className="text-[12px] text-gray-400">No standard mappings yet. <Link href="/super-admin/studio/standards" className="text-[var(--cmp-text-success)] hover:underline">Map standards →</Link></p>
               ) : (
                 <div className="space-y-1.5">
                   {d.bodies.map((b: any) => (
                     <div key={b.body} className="flex items-center gap-2">
                       <span className="text-[11px] font-semibold text-gray-700 w-16 shrink-0">{BODY_LABEL[b.body] ?? b.body}</span>
                       <div className="flex-1 flex h-3 rounded overflow-hidden bg-gray-100" title={`${b.full} full · ${b.partial} partial · ${b.reference} reference`}>
-                        {b.full > 0 && <div className="bg-emerald-500" style={{ width: `${(b.full / b.mappings) * 100}%` }} />}
-                        {b.partial > 0 && <div className="bg-amber-400" style={{ width: `${(b.partial / b.mappings) * 100}%` }} />}
+                        {b.full > 0 && <div className="bg-[var(--cmp-color-success)]" style={{ width: `${(b.full / b.mappings) * 100}%` }} />}
+                        {b.partial > 0 && <div className="bg-[var(--cmp-color-warning)]" style={{ width: `${(b.partial / b.mappings) * 100}%` }} />}
                         {b.reference > 0 && <div className="bg-gray-300" style={{ width: `${(b.reference / b.mappings) * 100}%` }} />}
                       </div>
                       <span className="text-[11px] text-gray-500 tabular-nums w-20 shrink-0 text-right">{b.competencies} comp · {b.mappings}</span>
                     </div>
                   ))}
                   <div className="flex gap-3 pt-1 text-[9px] text-gray-400">
-                    <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-emerald-500" />full</span>
-                    <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-amber-400" />partial</span>
+                    <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-[var(--cmp-color-success)]" />full</span>
+                    <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-[var(--cmp-color-warning)]" />partial</span>
                     <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-gray-300" />reference</span>
                   </div>
                 </div>
@@ -150,13 +150,13 @@ export default async function GovernanceDashboardPage() {
             {/* Governance performance */}
             <Card title="Governance Performance" tag="§6.4">
               <div className="grid grid-cols-3 gap-2 mb-3">
-                <div className="border border-gray-100 rounded-lg p-2 text-center"><p className={`text-xl font-bold tabular-nums ${d.change.open ? "text-amber-600" : "text-gray-900"}`}>{d.change.open}</p><p className="text-[10px] text-gray-500">open changes</p></div>
+                <div className="border border-gray-100 rounded-lg p-2 text-center"><p className={`text-xl font-bold tabular-nums ${d.change.open ? "text-[var(--cmp-text-warning)]" : "text-gray-900"}`}>{d.change.open}</p><p className="text-[10px] text-gray-500">open changes</p></div>
                 <div className="border border-gray-100 rounded-lg p-2 text-center"><p className="text-xl font-bold tabular-nums text-gray-900">{d.changeClosed}</p><p className="text-[10px] text-gray-500">changes closed</p></div>
-                <div className="border border-gray-100 rounded-lg p-2 text-center"><p className="text-xl font-bold tabular-nums text-emerald-600">{d.committees}</p><p className="text-[10px] text-gray-500">active councils</p></div>
+                <div className="border border-gray-100 rounded-lg p-2 text-center"><p className="text-xl font-bold tabular-nums text-[var(--cmp-text-success)]">{d.committees}</p><p className="text-[10px] text-gray-500">active councils</p></div>
               </div>
               <DimBar label={`Decision validation rate (${d.decValidated}/${d.decTotal})`} pct={d.validationRate} />
               {d.change.total > 0 && (
-                <p className="text-[10px] text-gray-400 mt-2">Change requests by kind — major {d.change.major} · minor {d.change.minor} · revision {d.change.revision}. <Link href="/competency-office/lifecycle-state" className="text-emerald-600 hover:underline">Change control →</Link></p>
+                <p className="text-[10px] text-gray-400 mt-2">Change requests by kind — major {d.change.major} · minor {d.change.minor} · revision {d.change.revision}. <Link href="/competency-office/lifecycle-state" className="text-[var(--cmp-text-success)] hover:underline">Change control →</Link></p>
               )}
             </Card>
           </div>
@@ -181,7 +181,7 @@ export default async function GovernanceDashboardPage() {
                         <td className="py-2 pr-3 text-[12px] font-medium text-gray-800">{dm.domain}</td>
                         <td className="py-2 px-2 text-center text-[12px] text-gray-600 tabular-nums">{dm.total}</td>
                         <td className="py-2 px-2 text-center text-[12px] tabular-nums text-gray-600">{dm.ownerPct}%</td>
-                        <td className="py-2 px-2 text-center text-[12px] tabular-nums"><span className={dm.atRisk ? "text-rose-600 font-semibold" : "text-gray-400"}>{dm.atRisk}</span></td>
+                        <td className="py-2 px-2 text-center text-[12px] tabular-nums"><span className={dm.atRisk ? "text-[var(--cmp-text-error)] font-semibold" : "text-gray-400"}>{dm.atRisk}</span></td>
                         <td className="py-2 pl-2">
                           <div className="flex items-center gap-2">
                             <div className="flex-1 h-1.5 rounded-full bg-gray-100 overflow-hidden"><div className={`h-full ${barTone(dm.score)}`} style={{ width: `${dm.score}%` }} /></div>
@@ -213,7 +213,7 @@ export default async function GovernanceDashboardPage() {
                   </div>
                 ))}
               </div>
-              <p className="text-[10px] text-gray-400 mt-2.5"><Link href="/super-admin/cgr/ai" className="text-emerald-600 hover:underline">Ask the governance copilot to prioritise these →</Link></p>
+              <p className="text-[10px] text-gray-400 mt-2.5"><Link href="/super-admin/cgr/ai" className="text-[var(--cmp-text-success)] hover:underline">Ask the governance copilot to prioritise these →</Link></p>
             </Card>
           )}
 

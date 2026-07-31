@@ -11,14 +11,14 @@ export const dynamic = "force-dynamic";
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 const TONE: Record<string, { card: string; text: string; dot: string }> = {
-  emerald: { card: "bg-emerald-50 border-emerald-100", text: "text-emerald-700", dot: "bg-emerald-500" },
-  amber: { card: "bg-amber-50 border-amber-100", text: "text-amber-700", dot: "bg-amber-500" },
-  orange: { card: "bg-orange-50 border-orange-100", text: "text-orange-700", dot: "bg-orange-500" },
-  rose: { card: "bg-rose-50 border-rose-100", text: "text-rose-700", dot: "bg-rose-500" },
+  emerald: { card: "bg-[var(--cmp-surface-success)] border-[var(--cmp-color-success)]", text: "text-emerald-700", dot: "bg-[var(--cmp-color-success)]" },
+  amber: { card: "bg-[var(--cmp-surface-warning)] border-[var(--cmp-color-warning)]", text: "text-[var(--cmp-text-warning)]", dot: "bg-[var(--cmp-color-warning)]" },
+  orange: { card: "bg-[var(--cmp-surface-warning)] border-[var(--cmp-color-warning)]", text: "text-orange-700", dot: "bg-[var(--cmp-color-warning)]" },
+  rose: { card: "bg-[var(--cmp-surface-error)] border-[var(--cmp-color-error)]", text: "text-[var(--cmp-text-error)]", dot: "bg-[var(--cmp-color-error)]" },
 };
 const RISK_META: Record<string, string> = {
-  critical: "text-rose-700 bg-rose-50 border-rose-100",
-  high: "text-orange-700 bg-orange-50 border-orange-100",
+  critical: "text-[var(--cmp-text-error)] bg-[var(--cmp-surface-error)] border-[var(--cmp-color-error)]",
+  high: "text-orange-700 bg-[var(--cmp-surface-warning)] border-[var(--cmp-color-warning)]",
 };
 
 export default async function ExecutiveAssurancePage() {
@@ -36,12 +36,12 @@ export default async function ExecutiveAssurancePage() {
     <div className="max-w-[1400px]">
       <div className="flex items-start justify-between gap-3 mb-5">
         <div>
-          <p className="text-[11px] font-semibold text-emerald-600 uppercase tracking-widest mb-0.5">CGR-029 · Competency Governance</p>
+          <p className="text-[11px] font-semibold text-[var(--cmp-text-success)] uppercase tracking-widest mb-0.5">CGR-029 · Competency Governance</p>
           <h1 className="text-xl font-bold text-gray-900">Executive Assurance &amp; Strategic Decision Intelligence</h1>
           <p className="text-gray-400 text-sm mt-0.5">The board-level competency-governance assurance statement — can leadership be assured the workforce competency system is sound, and where should investment go?</p>
         </div>
         <div className="flex gap-2 shrink-0">
-          <Link href="/hospital-executive" className="text-xs font-semibold text-emerald-700 hover:text-emerald-800 border border-emerald-200 bg-emerald-50 rounded-lg px-3 py-2">Executive workspace →</Link>
+          <Link href="/hospital-executive" className="text-xs font-semibold text-emerald-700 hover:text-emerald-800 border border-[var(--cmp-color-success)] bg-[var(--cmp-surface-success)] rounded-lg px-3 py-2">Executive workspace →</Link>
           <Link href="/super-admin/cgr" className="text-xs font-semibold text-gray-500 hover:text-emerald-700 border border-gray-200 rounded-lg px-3 py-2">← CGR</Link>
         </div>
       </div>
@@ -66,7 +66,7 @@ export default async function ExecutiveAssurancePage() {
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-2">
               {d.evidence.map((e: any) => (
                 <div key={e.line} className="bg-white/70 border border-white rounded-lg p-2">
-                  <div className="flex items-center gap-1"><span className={e.ok ? "text-emerald-600" : "text-amber-600"}>{e.ok ? "✓" : "!"}</span><p className="text-[13px] font-bold text-gray-800 tabular-nums">{e.value}</p></div>
+                  <div className="flex items-center gap-1"><span className={e.ok ? "text-[var(--cmp-text-success)]" : "text-[var(--cmp-text-warning)]"}>{e.ok ? "✓" : "!"}</span><p className="text-[13px] font-bold text-gray-800 tabular-nums">{e.value}</p></div>
                   <p className="text-[10px] text-gray-500 leading-tight">{e.line}</p>
                 </div>
               ))}
@@ -76,11 +76,11 @@ export default async function ExecutiveAssurancePage() {
           {/* Executive KPIs */}
           <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
             <Kpi label="Under governance" value={d.capability.competencies} sub={`of ${d.capability.total} competencies`} />
-            <Kpi label="Fully governed" value={d.capability.governed} sub="meet all criteria" tone="text-emerald-600" />
-            <Kpi label="Capability at risk" value={d.capability.atRisk} sub="at-risk / ungoverned" tone={d.capability.atRisk ? "text-rose-600" : "text-gray-900"} />
+            <Kpi label="Fully governed" value={d.capability.governed} sub="meet all criteria" tone="text-[var(--cmp-text-success)]" />
+            <Kpi label="Capability at risk" value={d.capability.atRisk} sub="at-risk / ungoverned" tone={d.capability.atRisk ? "text-[var(--cmp-text-error)]" : "text-gray-900"} />
             <Kpi label="Regulatory alignment" value={`${d.regulatory.alignment}%`} sub="mapped to standards" />
-            <Kpi label="Accreditation readiness" value={d.regulatory.accReadiness == null ? "—" : `${d.regulatory.accReadiness}%`} sub={`${d.regulatory.requirements} requirements`} tone={d.regulatory.accReadiness != null && d.regulatory.accReadiness >= 80 ? "text-emerald-600" : "text-gray-900"} />
-            <Kpi label="Governance councils" value={d.effectiveness.councils} sub="active oversight" tone={d.effectiveness.councils ? "text-emerald-600" : "text-rose-600"} />
+            <Kpi label="Accreditation readiness" value={d.regulatory.accReadiness == null ? "—" : `${d.regulatory.accReadiness}%`} sub={`${d.regulatory.requirements} requirements`} tone={d.regulatory.accReadiness != null && d.regulatory.accReadiness >= 80 ? "text-[var(--cmp-text-success)]" : "text-gray-900"} />
+            <Kpi label="Governance councils" value={d.effectiveness.councils} sub="active oversight" tone={d.effectiveness.councils ? "text-[var(--cmp-text-success)]" : "text-[var(--cmp-text-error)]"} />
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
@@ -88,10 +88,10 @@ export default async function ExecutiveAssurancePage() {
             <div className="bg-white rounded-xl border border-gray-100 overflow-hidden">
               <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
                 <p className="text-sm font-bold text-gray-800">Strategic risk register <span className="text-[10px] font-normal text-gray-400">(§5.3)</span></p>
-                <Link href="/super-admin/cgr/risk" className="text-[10px] text-emerald-600 hover:underline">full register →</Link>
+                <Link href="/super-admin/cgr/risk" className="text-[10px] text-[var(--cmp-text-success)] hover:underline">full register →</Link>
               </div>
               {d.strategic.length === 0 ? (
-                <div className="p-6 text-center"><p className="text-sm text-emerald-600 font-medium">No high or critical-risk competency is currently ungoverned — no strategic escalation for the board.</p></div>
+                <div className="p-6 text-center"><p className="text-sm text-[var(--cmp-text-success)] font-medium">No high or critical-risk competency is currently ungoverned — no strategic escalation for the board.</p></div>
               ) : (
                 <div className="divide-y divide-gray-50">
                   {d.strategic.map((s: any, i: number) => (
@@ -111,10 +111,10 @@ export default async function ExecutiveAssurancePage() {
             <div className="bg-white rounded-xl border border-gray-100 overflow-hidden">
               <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
                 <p className="text-sm font-bold text-gray-800">Investment priorities <span className="text-[10px] font-normal text-gray-400">(§5.4)</span></p>
-                <Link href="/super-admin/cgr/analytics" className="text-[10px] text-emerald-600 hover:underline">improvement engine →</Link>
+                <Link href="/super-admin/cgr/analytics" className="text-[10px] text-[var(--cmp-text-success)] hover:underline">improvement engine →</Link>
               </div>
               {d.invest.length === 0 ? (
-                <div className="p-6 text-center"><p className="text-sm text-emerald-600 font-medium">No leadership investment asks outstanding — governance is fully resourced.</p></div>
+                <div className="p-6 text-center"><p className="text-sm text-[var(--cmp-text-success)] font-medium">No leadership investment asks outstanding — governance is fully resourced.</p></div>
               ) : (
                 <div className="divide-y divide-gray-50">
                   {d.invest.map((v: any, i: number) => (
@@ -144,14 +144,14 @@ export default async function ExecutiveAssurancePage() {
                 { label: "Changes delivered", v: d.effectiveness.changeDone, warn: false },
               ].map((x: any) => (
                 <div key={x.label} className="border border-gray-100 rounded-lg p-2.5 text-center">
-                  <p className={`text-lg font-bold tabular-nums ${x.warn ? "text-rose-600" : "text-gray-900"}`}>{x.v}</p>
+                  <p className={`text-lg font-bold tabular-nums ${x.warn ? "text-[var(--cmp-text-error)]" : "text-gray-900"}`}>{x.v}</p>
                   <p className="text-[10px] text-gray-500 leading-tight">{x.label}</p>
                 </div>
               ))}
             </div>
           </div>
 
-          <p className="text-[11px] text-gray-400 leading-relaxed">Every figure is real — the assurance rating is derived from the live governance registry and the evidence lines behind it are the actual governance criteria (ownership, regulatory alignment, review currency, evidence, council oversight); the strategic risk register lists real high/critical-risk competencies that are ungoverned, unowned or overdue. This is the <span className="font-medium">governance</span> assurance position for the board; broad executive intelligence — financial, operational and workforce — is owned by the <Link href="/hospital-executive" className="text-emerald-600 hover:underline">Hospital Executive workspace</Link>. Per the CGR mandate, AI may summarise insights and recommend priorities but never makes executive decisions, approves investment or replaces governance accountability.</p>
+          <p className="text-[11px] text-gray-400 leading-relaxed">Every figure is real — the assurance rating is derived from the live governance registry and the evidence lines behind it are the actual governance criteria (ownership, regulatory alignment, review currency, evidence, council oversight); the strategic risk register lists real high/critical-risk competencies that are ungoverned, unowned or overdue. This is the <span className="font-medium">governance</span> assurance position for the board; broad executive intelligence — financial, operational and workforce — is owned by the <Link href="/hospital-executive" className="text-[var(--cmp-text-success)] hover:underline">Hospital Executive workspace</Link>. Per the CGR mandate, AI may summarise insights and recommend priorities but never makes executive decisions, approves investment or replaces governance accountability.</p>
         </div>
       )}
     </div>

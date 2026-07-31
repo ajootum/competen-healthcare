@@ -24,15 +24,15 @@ export default async function QualityFeedbackPage() {
   return (
     <div className="space-y-4">
       {head}
-      {d.empty && <div className="bg-blue-50 border border-blue-200 rounded-xl p-3 text-[12px] text-blue-800">No quality events captured yet — as incidents and near-misses are reported, this loop correlates them to competency domains and the remediation addressing them.</div>}
+      {d.empty && <div className="bg-[var(--cmp-surface-information)] border border-[var(--cmp-color-information)] rounded-xl p-3 text-[12px] text-blue-800">No quality events captured yet — as incidents and near-misses are reported, this loop correlates them to competency domains and the remediation addressing them.</div>}
 
       <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
         <Kpi label="Quality events" value={k.events} sub="incidents + near-miss" />
-        <Kpi label="High / critical" value={k.highCritical} tone={k.highCritical ? "text-rose-600" : "text-gray-900"} />
+        <Kpi label="High / critical" value={k.highCritical} tone={k.highCritical ? "text-[var(--cmp-text-error)]" : "text-gray-900"} />
         <Kpi label="Near-miss" value={k.nearMiss} sub="learning signals" />
         <Kpi label="Competency domains hit" value={k.domainsImpacted} />
         <Kpi label="Remediation in flight" value={k.remediationOpen} sub="open interventions" tone="text-teal-600" />
-        <Kpi label="Unaddressed risks" value={k.unaddressed} tone={k.unaddressed ? "text-rose-600" : "text-emerald-600"} sub="high-risk, no remediation" />
+        <Kpi label="Unaddressed risks" value={k.unaddressed} tone={k.unaddressed ? "text-[var(--cmp-text-error)]" : "text-[var(--cmp-text-success)]"} sub="high-risk, no remediation" />
       </div>
 
       {/* The closed feedback loop */}
@@ -61,7 +61,7 @@ export default async function QualityFeedbackPage() {
                   <tr key={row.domain} className="text-gray-700">
                     <td className="py-2 pr-3 font-medium text-gray-800">{row.domain}</td>
                     <td className="py-2 pr-3 text-right tabular-nums">{row.events}</td>
-                    <td className="py-2 pr-3 text-right tabular-nums font-semibold text-rose-600">{row.highCritical || "—"}</td>
+                    <td className="py-2 pr-3 text-right tabular-nums font-semibold text-[var(--cmp-text-error)]">{row.highCritical || "—"}</td>
                     <td className="py-2 pr-3 text-right tabular-nums text-gray-500">{row.nearMiss || "—"}</td>
                     <td className="py-2 pr-3 text-right tabular-nums text-teal-700">{row.interventions || "—"}</td>
                     <td className="py-2"><Pill text={RISK_LABEL[row.risk]} tone={RISK_TONE[row.risk]} /></td>

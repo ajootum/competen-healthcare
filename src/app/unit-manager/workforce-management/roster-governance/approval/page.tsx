@@ -45,7 +45,7 @@ export default async function ApprovalPublication() {
     </>
   );
 
-  if (!d.provisioned) return <div className="space-y-4">{header}<div className="bg-amber-50 border border-amber-200 rounded-xl p-6"><p className="font-semibold text-amber-900">⚙️ Roster store not provisioned</p></div></div>;
+  if (!d.provisioned) return <div className="space-y-4">{header}<div className="bg-[var(--cmp-surface-warning)] border border-[var(--cmp-color-warning)] rounded-xl p-6"><p className="font-semibold text-amber-900">⚙️ Roster store not provisioned</p></div></div>;
   if (!d.hasRoster) return <div className="space-y-4">{header}<div className="bg-white border border-gray-200 rounded-xl p-6"><p className="font-semibold text-gray-800">No roster for the current week</p><p className="text-sm text-gray-500 mt-1">Generate one in the <Link href="/unit-manager/scheduling-engine" className="text-emerald-700 hover:underline">Scheduling Engine</Link>.</p></div></div>;
 
   const a = d.assurance;
@@ -67,8 +67,8 @@ export default async function ApprovalPublication() {
         {/* Publishability */}
         <div className={`${card} p-5 xl:col-span-1`}>
           <h3 className="text-sm font-bold text-gray-900 mb-2">Publish readiness</h3>
-          <div className={`rounded-lg p-3 ${a.publishable ? "bg-emerald-50 border border-emerald-100" : "bg-rose-50 border border-rose-100"}`}>
-            <p className={`text-sm font-bold ${a.publishable ? "text-emerald-700" : "text-rose-700"}`}>{a.publishable ? "✓ Publishable" : "⛔ Blocked from publication"}</p>
+          <div className={`rounded-lg p-3 ${a.publishable ? "bg-[var(--cmp-surface-success)] border border-[var(--cmp-color-success)]" : "bg-[var(--cmp-surface-error)] border border-[var(--cmp-color-error)]"}`}>
+            <p className={`text-sm font-bold ${a.publishable ? "text-emerald-700" : "text-[var(--cmp-text-error)]"}`}>{a.publishable ? "✓ Publishable" : "⛔ Blocked from publication"}</p>
             <p className="text-[11px] text-gray-600 mt-0.5">Assurance {a.score ?? "—"}/100 · {a.band}</p>
             {!a.publishable && <ul className="mt-2 space-y-0.5">{a.blockingReasons.map((r: string, i: number) => (<li key={i} className="text-[11px] text-gray-700">• {r}</li>))}</ul>}
           </div>
@@ -77,14 +77,14 @@ export default async function ApprovalPublication() {
             <p className="text-[10px] text-gray-500 uppercase">Current status</p>
             <p className="text-sm font-semibold text-gray-800 capitalize">{d.roster.status}{d.roster.publishedAt ? ` · ${fmtDate(d.roster.publishedAt)}` : ""}</p>
           </div>
-          <Link href="/unit-manager/scheduling-engine" className="mt-3 block text-center text-xs font-semibold rounded-lg py-2 bg-emerald-600 text-white hover:bg-emerald-700">Publish in Scheduling Engine ↗</Link>
+          <Link href="/unit-manager/scheduling-engine" className="mt-3 block text-center text-xs font-semibold rounded-lg py-2 bg-[var(--cmp-color-success)] text-white hover:bg-emerald-700">Publish in Scheduling Engine ↗</Link>
         </div>
 
         {/* Submission preconditions */}
         <div className={`${card} p-5 xl:col-span-2`}>
           <h3 className="text-sm font-bold text-gray-900 mb-3">Submission preconditions <span className="text-[10px] text-gray-400 font-normal">§15.3</span></h3>
-          <div className="space-y-2">{preconds.map((p, i) => (<div key={i} className="flex items-center gap-2 text-sm"><span className={p.ok ? "text-emerald-600" : "text-rose-500"}>{p.ok ? "✓" : "✗"}</span><span className={p.ok ? "text-gray-700" : "text-gray-500"}>{p.label}</span></div>))}</div>
-          <div className={`mt-3 rounded-lg p-3 text-xs ${canSubmit ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-700"}`}>{canSubmit ? "All preconditions met — the roster can be submitted for approval." : "Some preconditions are unmet — resolve before submitting for approval."}</div>
+          <div className="space-y-2">{preconds.map((p, i) => (<div key={i} className="flex items-center gap-2 text-sm"><span className={p.ok ? "text-[var(--cmp-text-success)]" : "text-rose-500"}>{p.ok ? "✓" : "✗"}</span><span className={p.ok ? "text-gray-700" : "text-gray-500"}>{p.label}</span></div>))}</div>
+          <div className={`mt-3 rounded-lg p-3 text-xs ${canSubmit ? "bg-[var(--cmp-surface-success)] text-emerald-700" : "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]"}`}>{canSubmit ? "All preconditions met — the roster can be submitted for approval." : "Some preconditions are unmet — resolve before submitting for approval."}</div>
           <div className="mt-3 rounded-lg border border-gray-100 p-3">
             <p className="text-[10px] text-gray-500 uppercase mb-1">Approval attestation (§15.5)</p>
             <p className="text-[11px] text-gray-600 italic">&ldquo;I confirm that I have reviewed this roster and that identified staffing, competency, supervisor, working-time and exception requirements have been addressed or formally accepted through the approved governance process.&rdquo;</p>
@@ -102,13 +102,13 @@ export default async function ApprovalPublication() {
         <div className={`${card} p-5`}>
           <h3 className="text-sm font-bold text-gray-900 mb-2">Publication &amp; acknowledgement</h3>
           {ap.latestPublication ? (
-            <div className="rounded-lg border border-emerald-100 bg-emerald-50/40 p-3">
+            <div className="rounded-lg border border-[var(--cmp-color-success)] bg-[var(--cmp-surface-success)]/40 p-3">
               <p className="text-sm font-bold text-emerald-700">Published v{ap.latestPublication.version}</p>
               <p className="text-[11px] text-gray-600 mt-0.5">{fmtDate(ap.latestPublication.published_at)}{ap.latestPublication.published_by_name ? ` · ${ap.latestPublication.published_by_name}` : ""}</p>
               <div className="mt-2 grid grid-cols-3 gap-2 text-center">
                 <div><p className="text-[9px] text-gray-500 uppercase">Notified</p><p className="text-sm font-bold text-gray-800">{ap.ackSummary.notified}</p></div>
-                <div><p className="text-[9px] text-gray-500 uppercase">Ack&apos;d</p><p className="text-sm font-bold text-emerald-600">{ap.ackSummary.acknowledged}</p></div>
-                <div><p className="text-[9px] text-gray-500 uppercase">Concerns</p><p className={`text-sm font-bold ${ap.ackSummary.concerns ? "text-amber-600" : "text-gray-400"}`}>{ap.ackSummary.concerns}</p></div>
+                <div><p className="text-[9px] text-gray-500 uppercase">Ack&apos;d</p><p className="text-sm font-bold text-[var(--cmp-text-success)]">{ap.ackSummary.acknowledged}</p></div>
+                <div><p className="text-[9px] text-gray-500 uppercase">Concerns</p><p className={`text-sm font-bold ${ap.ackSummary.concerns ? "text-[var(--cmp-text-warning)]" : "text-gray-400"}`}>{ap.ackSummary.concerns}</p></div>
               </div>
             </div>
           ) : <p className="text-sm text-gray-400">Not published. Record publication once all steps are approved.</p>}

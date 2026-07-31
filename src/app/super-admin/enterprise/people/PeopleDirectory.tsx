@@ -7,7 +7,7 @@ import { useRouter } from "next/navigation";
 // Positions tab is the catalogue with create.
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
-const STATUS_BADGE: Record<string, string> = { active: "bg-green-50 text-green-700", invited: "bg-blue-50 text-blue-700", suspended: "bg-rose-50 text-rose-700", deactivated: "bg-gray-100 text-gray-500", left: "bg-gray-100 text-gray-500" };
+const STATUS_BADGE: Record<string, string> = { active: "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]", invited: "bg-[var(--cmp-surface-information)] text-blue-700", suspended: "bg-[var(--cmp-surface-error)] text-[var(--cmp-text-error)]", deactivated: "bg-gray-100 text-gray-500", left: "bg-gray-100 text-gray-500" };
 const input = "w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500/40";
 
 export default function PeopleDirectory({ rows, positions }: { rows: any[]; positions: any[] }) {
@@ -50,7 +50,7 @@ export default function PeopleDirectory({ rows, positions }: { rows: any[]; posi
               {people.length === 0 && <tr><td colSpan={5} className="px-4 py-8 text-center text-gray-400">No people match.</td></tr>}
               {people.slice(0, 500).map(r => (
                 <tr key={r.id} onClick={() => router.push(`/super-admin/enterprise/people/${r.id}`)} className="border-b border-gray-50 hover:bg-gray-50/60 cursor-pointer">
-                  <td className="px-4 py-3"><div className="flex items-center gap-2"><span className="w-7 h-7 rounded-full bg-blue-50 flex items-center justify-center text-xs shrink-0">{(r.name ?? "?")[0]}</span><div className="min-w-0"><p className="font-medium text-gray-900 truncate">{r.name}</p><p className="text-[10px] text-gray-400 truncate">{r.staffNumber ? `${r.staffNumber} · ` : ""}{r.email}</p></div></div></td>
+                  <td className="px-4 py-3"><div className="flex items-center gap-2"><span className="w-7 h-7 rounded-full bg-[var(--cmp-surface-information)] flex items-center justify-center text-xs shrink-0">{(r.name ?? "?")[0]}</span><div className="min-w-0"><p className="font-medium text-gray-900 truncate">{r.name}</p><p className="text-[10px] text-gray-400 truncate">{r.staffNumber ? `${r.staffNumber} · ` : ""}{r.email}</p></div></div></td>
                   <td className="px-4 py-3 text-gray-600">{r.position ?? <span className="text-gray-300">Unassigned</span>}</td>
                   <td className="px-4 py-3 text-gray-600 capitalize">{r.primaryRole ? r.primaryRole.replace(/_/g, " ") : "—"}{r.roleCount > 1 && <span className="text-[10px] text-gray-400"> +{r.roleCount - 1}</span>}</td>
                   <td className="px-4 py-3 text-gray-500">{r.facility ?? <span className="text-gray-300">—</span>}</td>
@@ -71,7 +71,7 @@ export default function PeopleDirectory({ rows, positions }: { rows: any[]; posi
               {posFiltered.length === 0 && <tr><td colSpan={6} className="px-4 py-8 text-center text-gray-400">No positions yet.</td></tr>}
               {posFiltered.map(p => (
                 <tr key={p.id} className="border-b border-gray-50">
-                  <td className="px-4 py-3"><div className="flex items-center gap-2"><span className="w-7 h-7 rounded-lg bg-emerald-50 flex items-center justify-center text-sm shrink-0">🪪</span><div><p className="font-medium text-gray-900">{p.title}</p>{p.code && <p className="text-[10px] text-gray-400">{p.code}</p>}</div></div></td>
+                  <td className="px-4 py-3"><div className="flex items-center gap-2"><span className="w-7 h-7 rounded-lg bg-[var(--cmp-surface-success)] flex items-center justify-center text-sm shrink-0">🪪</span><div><p className="font-medium text-gray-900">{p.title}</p>{p.code && <p className="text-[10px] text-gray-400">{p.code}</p>}</div></div></td>
                   <td className="px-4 py-3 text-gray-600">{p.grade ?? "—"}</td>
                   <td className="px-4 py-3 text-gray-600">{p.profession ?? "—"}</td>
                   <td className="px-4 py-3 text-gray-500">{p.facility ?? <span className="text-gray-300">—</span>}</td>

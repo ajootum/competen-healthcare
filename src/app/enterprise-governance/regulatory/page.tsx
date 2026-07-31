@@ -38,7 +38,7 @@ export default async function RegulatoryPage() {
       <div className="grid grid-cols-3 gap-3">
         <div className={card}><div className={`text-3xl font-bold tabular-nums ${tone(kpis.avgCompliance)}`}>{pctText(kpis.avgCompliance)}</div><div className="text-xs text-gray-500 mt-1">Enterprise avg compliance</div></div>
         <div className={card}><div className="text-3xl font-bold tabular-nums text-gray-900">{benchmark.length - noAudit}</div><div className="text-xs text-gray-500 mt-1">Organisations audited</div></div>
-        <div className={card}><div className={`text-3xl font-bold tabular-nums ${noAudit ? "text-amber-600" : "text-gray-900"}`}>{noAudit}</div><div className="text-xs text-gray-500 mt-1">Awaiting first audit</div></div>
+        <div className={card}><div className={`text-3xl font-bold tabular-nums ${noAudit ? "text-[var(--cmp-text-warning)]" : "text-gray-900"}`}>{noAudit}</div><div className="text-xs text-gray-500 mt-1">Awaiting first audit</div></div>
       </div>
 
       <div className={card}>

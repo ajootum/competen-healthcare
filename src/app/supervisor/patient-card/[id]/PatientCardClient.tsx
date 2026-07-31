@@ -14,11 +14,11 @@ import { cardClass } from "@/components/ui/primitives";
 const fmt = (iso: string | null) => iso ? new Date(iso).toLocaleString([], { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", hour12: false }) : "—";
 const fmtT = (iso: string | null) => iso ? new Date(iso).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: false }) : "—";
 const tc = (s: string) => (s ?? "").replace(/_/g, " ").split(" ").filter(Boolean).map(w => w[0].toUpperCase() + w.slice(1)).join(" ");
-const ewsColor = (n: number | null) => n == null ? "text-gray-400" : n >= 7 ? "text-red-600" : n >= 5 ? "text-orange-600" : n >= 3 ? "text-yellow-600" : "text-green-600";
+const ewsColor = (n: number | null) => n == null ? "text-gray-400" : n >= 7 ? "text-[var(--cmp-text-critical)]" : n >= 5 ? "text-[var(--cmp-text-warning)]" : n >= 3 ? "text-[var(--cmp-text-warning)]" : "text-[var(--cmp-text-success)]";
 const STAGES = ["expected_admission", "awaiting_bed", "admitted", "in_care", "assessment", "treatment", "theatre", "recovery", "transfer_pending", "discharge_ready", "discharged"];
 const STATUSES = ["expected", "admitted", "transfer_pending", "discharge_pending", "discharged"];
 const SAFETY_CATS = ["deterioration", "fall_risk", "pressure_injury", "medication", "infection", "device", "environmental", "patient_id"];
-const ACUITY_TONE: Record<string, string> = { stable: "bg-green-100 text-green-700", moderate: "bg-yellow-100 text-yellow-700", high: "bg-orange-100 text-orange-700", critical: "bg-red-100 text-red-700" };
+const ACUITY_TONE: Record<string, string> = { stable: "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]", moderate: "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]", high: "bg-[var(--cmp-surface-warning)] text-orange-700", critical: "bg-[var(--cmp-surface-critical)] text-[var(--cmp-text-critical)]" };
 
 const card = cardClass;
 const input = "w-full border border-gray-300 rounded-lg px-2.5 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500/40";
@@ -67,7 +67,7 @@ export default function PatientCardClient(props: any) {
           <div>
             <div className="flex items-center gap-2 flex-wrap">
               <h1 className="text-2xl font-bold text-gray-900">{patient.label}</h1>
-              {highRisk && <span className={`${chip} bg-red-100 text-red-700`}>⚠ High risk</span>}
+              {highRisk && <span className={`${chip} bg-[var(--cmp-surface-critical)] text-[var(--cmp-text-critical)]`}>⚠ High risk</span>}
               <span className={`${chip} ${ACUITY_TONE[patient.acuity] ?? "bg-gray-100 text-gray-600"}`}>{tc(patient.acuity)}</span>
               {patient.stage && <span className={`${chip} bg-teal-100 text-teal-700`}>{tc(patient.stage)}</span>}
               {patient.isolation && patient.isolation !== "none" && <span className={`${chip} bg-purple-100 text-purple-700`}>{tc(patient.isolation)} isolation</span>}
@@ -84,7 +84,7 @@ export default function PatientCardClient(props: any) {
         </div>
       </div>
 
-      {msg && <div className={`text-sm rounded-lg px-4 py-2.5 ${msg.kind === "ok" ? "bg-green-50 text-green-800 border border-green-200" : "bg-amber-50 text-amber-800 border border-amber-200"}`}>{msg.text}</div>}
+      {msg && <div className={`text-sm rounded-lg px-4 py-2.5 ${msg.kind === "ok" ? "bg-[var(--cmp-surface-success)] text-green-800 border border-[var(--cmp-color-success)]" : "bg-[var(--cmp-surface-warning)] text-amber-800 border border-[var(--cmp-color-warning)]"}`}>{msg.text}</div>}
 
       {/* Operational actions */}
       {canEdit && (
@@ -181,7 +181,7 @@ export default function PatientCardClient(props: any) {
               {tasks.length === 0 && <p className="text-sm text-gray-400">No open tasks.</p>}
               {tasks.map((t: any) => (
                 <div key={t.id} className="flex items-center gap-2 border-b border-gray-50 py-2 text-sm">
-                  <span className={`${chip} ${t.priority === "urgent" ? "bg-red-100 text-red-700" : t.priority === "high" ? "bg-orange-100 text-orange-700" : "bg-gray-100 text-gray-500"}`}>{tc(t.priority)}</span>
+                  <span className={`${chip} ${t.priority === "urgent" ? "bg-[var(--cmp-surface-critical)] text-[var(--cmp-text-critical)]" : t.priority === "high" ? "bg-[var(--cmp-surface-warning)] text-orange-700" : "bg-gray-100 text-gray-500"}`}>{tc(t.priority)}</span>
                   <span className="flex-1 text-gray-800">{t.description}</span>
                   <span className="text-xs text-gray-400 tabular-nums">{t.due_at ? fmtT(t.due_at) : ""}</span>
                   <span className="text-[11px] text-gray-400">{tc(t.status)}</span>
@@ -209,14 +209,14 @@ export default function PatientCardClient(props: any) {
               {alerts.length === 0 && escalations.length === 0 && <p className="text-sm text-gray-400">No active alerts or escalations.</p>}
               {escalations.map((e: any) => (
                 <div key={e.id} className="flex items-center gap-2 border-b border-gray-50 py-2 text-sm">
-                  <span className={`${chip} bg-red-100 text-red-700`}>Escalation L{e.level}</span>
+                  <span className={`${chip} bg-[var(--cmp-surface-critical)] text-[var(--cmp-text-critical)]`}>Escalation L{e.level}</span>
                   <span className="flex-1 text-gray-800">{e.summary}</span>
                   <span className="text-[11px] text-gray-400">{tc(e.status)} · {fmt(e.created_at)}</span>
                 </div>
               ))}
               {alerts.map((a: any) => (
                 <div key={a.id} className="flex items-center gap-2 border-b border-gray-50 py-2 text-sm">
-                  <span className={`${chip} ${a.severity === "high" ? "bg-red-100 text-red-700" : "bg-orange-100 text-orange-700"}`}>{tc(a.category)}</span>
+                  <span className={`${chip} ${a.severity === "high" ? "bg-[var(--cmp-surface-critical)] text-[var(--cmp-text-critical)]" : "bg-[var(--cmp-surface-warning)] text-orange-700"}`}>{tc(a.category)}</span>
                   <span className="flex-1 text-gray-700">{a.note ?? tc(a.category)}</span>
                   <span className="text-[11px] text-gray-400">{a.active ? "active" : "resolved"} · {fmt(a.created_at)}</span>
                 </div>

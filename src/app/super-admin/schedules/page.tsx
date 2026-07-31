@@ -17,10 +17,10 @@ export default async function SchedulesPage() {
   const { data: frameworks } = await admin.from("frameworks").select("id, name").order("name");
 
   const CYCLE_COLORS: Record<string, string> = {
-    orientation: "bg-blue-100 text-blue-700",
-    probation: "bg-amber-100 text-amber-700",
+    orientation: "bg-[var(--cmp-surface-information)] text-blue-700",
+    probation: "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]",
     annual: "bg-teal-100 text-teal-700",
-    remediation: "bg-red-100 text-red-700",
+    remediation: "bg-[var(--cmp-surface-critical)] text-[var(--cmp-text-critical)]",
     specialty: "bg-violet-100 text-violet-700",
   };
 
@@ -55,8 +55,8 @@ export default async function SchedulesPage() {
               </div>
             </div>
             <div className="flex gap-3 mt-3 pt-3 border-t border-gray-50">
-              {s.trigger_on_fail && <span className="text-[10px] bg-red-50 text-red-500 px-2 py-0.5 rounded">Triggers on fail</span>}
-              {s.trigger_on_expiry && <span className="text-[10px] bg-amber-50 text-amber-600 px-2 py-0.5 rounded">Triggers on expiry</span>}
+              {s.trigger_on_fail && <span className="text-[10px] bg-[var(--cmp-surface-critical)] text-red-500 px-2 py-0.5 rounded">Triggers on fail</span>}
+              {s.trigger_on_expiry && <span className="text-[10px] bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)] px-2 py-0.5 rounded">Triggers on expiry</span>}
               {s.trigger_on_role_change && <span className="text-[10px] bg-indigo-50 text-indigo-600 px-2 py-0.5 rounded">Triggers on role change</span>}
               {s.auto_create_cycle && <span className="text-[10px] bg-teal-50 text-teal-600 px-2 py-0.5 rounded">Auto-creates cycle</span>}
               {!s.is_active && <span className="text-[10px] bg-gray-100 text-gray-400 px-2 py-0.5 rounded">Inactive</span>}

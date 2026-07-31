@@ -12,7 +12,7 @@ export const dynamic = "force-dynamic";
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 const card = cardClass;
-const pct = (n: number) => (n >= 85 ? "text-green-600" : n >= 60 ? "text-amber-600" : "text-red-600");
+const pct = (n: number) => (n >= 85 ? "text-[var(--cmp-text-success)]" : n >= 60 ? "text-[var(--cmp-text-warning)]" : "text-[var(--cmp-text-critical)]");
 
 function Kpi({ n, label, tone, sub, href }: { n: any; label: string; tone?: string; sub?: string; href?: string }) {
   const inner = (
@@ -71,7 +71,7 @@ export default async function HrDashboard() {
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         <Kpi n={headcount.total} label="Total workforce" sub={`${headcount.nurse} clinical`} href="/human-resources/staff" />
         <Kpi n={positions.establishment} label="Established positions" sub={`${fillRate}% filled`} href="/human-resources/planning" />
-        <Kpi n={positions.vacant} label="Vacancies" tone={positions.vacant ? "text-amber-600" : undefined} href="/human-resources/recruitment" />
+        <Kpi n={positions.vacant} label="Vacancies" tone={positions.vacant ? "text-[var(--cmp-text-warning)]" : undefined} href="/human-resources/recruitment" />
         <Kpi n={employment.newStarters} label="New starters (30d)" tone={employment.newStarters ? "text-teal-700" : undefined} href="/human-resources/staff" />
         <Kpi n={employment.orientation + employment.probation} label="In onboarding" sub={`${employment.orientation} orientation · ${employment.probation} probation`} href="/human-resources/staff" />
         <Kpi n={`${competency.coverage}%`} label="Competency currency" tone={pct(competency.coverage)} sub={`${competency.current}/${competency.total} assessed current`} href="/human-resources/staff" />
@@ -121,11 +121,11 @@ export default async function HrDashboard() {
           <div className="space-y-3">
             <div>
               <div className="flex justify-between text-sm mb-1"><span className="text-gray-600">Competency currency <span className="text-gray-400">(of assessed)</span></span><span className={`font-medium ${pct(competency.coverage)}`}>{competency.coverage}%</span></div>
-              <div className="h-2 bg-gray-100 rounded-full overflow-hidden"><div className={`h-full ${competency.coverage >= 85 ? "bg-green-500" : competency.coverage >= 60 ? "bg-amber-500" : "bg-red-500"}`} style={{ width: `${competency.coverage}%` }} /></div>
+              <div className="h-2 bg-gray-100 rounded-full overflow-hidden"><div className={`h-full ${competency.coverage >= 85 ? "bg-[var(--cmp-color-success)]" : competency.coverage >= 60 ? "bg-[var(--cmp-color-warning)]" : "bg-[var(--cmp-color-critical)]"}`} style={{ width: `${competency.coverage}%` }} /></div>
             </div>
             <div>
               <div className="flex justify-between text-sm mb-1"><span className="text-gray-600">Mandatory learning</span><span className={`font-medium ${pct(learning.compliance)}`}>{learning.compliance}%</span></div>
-              <div className="h-2 bg-gray-100 rounded-full overflow-hidden"><div className={`h-full ${learning.compliance >= 85 ? "bg-green-500" : learning.compliance >= 60 ? "bg-amber-500" : "bg-red-500"}`} style={{ width: `${learning.compliance}%` }} /></div>
+              <div className="h-2 bg-gray-100 rounded-full overflow-hidden"><div className={`h-full ${learning.compliance >= 85 ? "bg-[var(--cmp-color-success)]" : learning.compliance >= 60 ? "bg-[var(--cmp-color-warning)]" : "bg-[var(--cmp-color-critical)]"}`} style={{ width: `${learning.compliance}%` }} /></div>
             </div>
           </div>
         </div>

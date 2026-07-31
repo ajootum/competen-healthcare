@@ -79,7 +79,7 @@ export default function PanelManager({ cycles, assessors }: { cycles: Cycle[]; a
                 </div>
                 <div className="flex items-center gap-1">
                   <span className={`text-[10px] font-bold px-2 py-0.5 rounded ${
-                    cycle.panel.length >= cycle.min_assessors ? "bg-green-100 text-green-700" : "bg-amber-100 text-amber-700"
+                    cycle.panel.length >= cycle.min_assessors ? "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]" : "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]"
                   }`}>
                     {cycle.panel.length}/{cycle.min_assessors} assigned
                   </span>

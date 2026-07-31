@@ -43,8 +43,8 @@ export default async function ObservationsPage() {
 
       <div className="grid sm:grid-cols-2 xl:grid-cols-4 gap-4">
         <StatCard icon="📈" title="Due Now" value={due.length - overdueCount} sub="scheduled observations" />
-        <StatCard icon="🔴" title="Overdue" value={overdueCount} tone={overdueCount > 0 ? "text-red-600" : undefined} sub="past their due time" />
-        <StatCard icon="🚨" title="Auto-Escalated" value={escalated24h} tone={escalated24h > 0 ? "text-orange-600" : undefined} sub="from recorded observations" />
+        <StatCard icon="🔴" title="Overdue" value={overdueCount} tone={overdueCount > 0 ? "text-[var(--cmp-text-critical)]" : undefined} sub="past their due time" />
+        <StatCard icon="🚨" title="Auto-Escalated" value={escalated24h} tone={escalated24h > 0 ? "text-[var(--cmp-text-warning)]" : undefined} sub="from recorded observations" />
         <StatCard icon="🧑‍⚕️" title="Watched Patients" value={patients.length} sub="my active assignment" />
       </div>
 
@@ -56,10 +56,10 @@ export default async function ObservationsPage() {
             {due.map((o: any) => (
               <div key={o.id} className="py-2.5">
                 <div className="flex flex-wrap items-center gap-2">
-                  <span className={`text-xs tabular-nums w-14 ${o.status === "overdue" ? "text-red-600 font-semibold" : "text-gray-500"}`}>{o.status === "overdue" ? "OVERDUE" : fmtTime(o.due_at)}</span>
+                  <span className={`text-xs tabular-nums w-14 ${o.status === "overdue" ? "text-[var(--cmp-text-critical)] font-semibold" : "text-gray-500"}`}>{o.status === "overdue" ? "OVERDUE" : fmtTime(o.due_at)}</span>
                   <span className="font-medium text-gray-800">{o.op_patients?.label ?? "Patient"}</span>
                   <Chip tone="bg-gray-100 text-gray-600">{titleCase(o.observation_type)}</Chip>
-                  {o.status === "overdue" && <Chip tone="bg-red-100 text-red-700">Overdue</Chip>}
+                  {o.status === "overdue" && <Chip tone="bg-[var(--cmp-surface-critical)] text-[var(--cmp-text-critical)]">Overdue</Chip>}
                   <span className="ml-auto" />
                   <RecordObs patientId={o.patient_id} patientLabel={o.op_patients?.label ?? "patient"} observationId={o.id} defaultType={o.observation_type} compact />
                 </div>
@@ -85,7 +85,7 @@ export default async function ObservationsPage() {
                     {t.length > 1 && (
                       <span className="text-xs text-gray-400 tabular-nums">trend: {t.join(" → ")}</span>
                     )}
-                    {cur != null && cur >= 5 && <Chip tone="bg-red-100 text-red-700">At threshold</Chip>}
+                    {cur != null && cur >= 5 && <Chip tone="bg-[var(--cmp-surface-critical)] text-[var(--cmp-text-critical)]">At threshold</Chip>}
                     <span className="ml-auto" />
                     <RecordObs patientId={p.id} patientLabel={p.label} compact={false} />
                   </div>
@@ -105,8 +105,8 @@ export default async function ObservationsPage() {
                 <span className="text-gray-700">{o.op_patients?.label}</span>
                 <Chip tone="bg-gray-100 text-gray-600">{titleCase(o.observation_type)}</Chip>
                 {o.ews_score != null && <span className={`font-semibold tabular-nums ${ewsColor(o.ews_score)}`}>PEWS {o.ews_score}</span>}
-                {o.concern && <Chip tone="bg-orange-100 text-orange-700">Concern</Chip>}
-                {o.escalation_triggered && <Chip tone="bg-red-100 text-red-700">Escalated</Chip>}
+                {o.concern && <Chip tone="bg-[var(--cmp-surface-warning)] text-orange-700">Concern</Chip>}
+                {o.escalation_triggered && <Chip tone="bg-[var(--cmp-surface-critical)] text-[var(--cmp-text-critical)]">Escalated</Chip>}
                 {(o.findings as any)?.note && <span className="text-xs text-gray-400 truncate">{(o.findings as any).note}</span>}
               </div>
             ))}

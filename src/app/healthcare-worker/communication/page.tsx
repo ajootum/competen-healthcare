@@ -12,7 +12,7 @@ import AckBroadcast from "./AckBroadcast";
 
 export const dynamic = "force-dynamic";
 
-const PRIO_TONE: Record<string, string> = { low: "bg-gray-100 text-gray-500", medium: "bg-blue-100 text-blue-700", high: "bg-orange-100 text-orange-700", critical: "bg-red-100 text-red-700" };
+const PRIO_TONE: Record<string, string> = { low: "bg-gray-100 text-gray-500", medium: "bg-[var(--cmp-surface-information)] text-blue-700", high: "bg-[var(--cmp-surface-warning)] text-orange-700", critical: "bg-[var(--cmp-surface-critical)] text-[var(--cmp-text-critical)]" };
 
 export default async function CommunicationPage() {
   const supabase = await createClient();
@@ -53,7 +53,7 @@ export default async function CommunicationPage() {
             {broadcasts.map((b: any) => (
               <div key={b.id} className="py-2.5">
                 <div className="flex flex-wrap items-center gap-2">
-                  {b.emergency && <span className="text-red-600">🚨</span>}
+                  {b.emergency && <span className="text-[var(--cmp-text-critical)]">🚨</span>}
                   <span className="font-medium text-gray-800">{b.title}</span>
                   <Chip tone={PRIO_TONE[b.priority] ?? PRIO_TONE.medium}>{titleCase(b.priority)}</Chip>
                   <span className="text-xs text-gray-400 ml-auto">{b.author_name ?? ""} · {fmtWhen(b.created_at)}</span>
@@ -78,7 +78,7 @@ export default async function CommunicationPage() {
               <div key={n.id} className="py-2.5">
                 <div className="flex items-center gap-2">
                   <p className="text-sm font-medium text-gray-800 truncate">{n.title}</p>
-                  {!n.read && <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" />}
+                  {!n.read && <span className="w-1.5 h-1.5 rounded-full bg-[var(--cmp-color-success)] shrink-0" />}
                   <span className="ml-auto text-[10px] text-gray-400 shrink-0">{fmtWhen(n.created_at)}</span>
                 </div>
                 {n.body && <p className="text-xs text-gray-500 mt-0.5 line-clamp-2">{n.body}</p>}

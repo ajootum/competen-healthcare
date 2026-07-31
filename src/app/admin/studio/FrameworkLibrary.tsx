@@ -42,7 +42,7 @@ export default function FrameworkLibrary({
     <div className="bg-white rounded-xl border border-gray-100 p-5">
       <h2 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-4">Framework Library</h2>
 
-      {error && <p className="mb-3 text-xs text-red-500 bg-red-50 rounded-lg px-3 py-2">{error}</p>}
+      {error && <p className="mb-3 text-xs text-red-500 bg-[var(--cmp-surface-critical)] rounded-lg px-3 py-2">{error}</p>}
 
       {/* Adopted frameworks */}
       {adoptedFrameworks.length > 0 && (
@@ -50,13 +50,13 @@ export default function FrameworkLibrary({
           <p className="text-xs font-semibold text-gray-500 mb-2">Your Adopted Frameworks</p>
           <div className="flex flex-col gap-2">
             {adoptedFrameworks.map(f => (
-              <div key={f.id} className="flex items-center justify-between px-4 py-3 rounded-lg bg-green-50 border border-green-100">
+              <div key={f.id} className="flex items-center justify-between px-4 py-3 rounded-lg bg-[var(--cmp-surface-success)] border border-[var(--cmp-color-success)]">
                 <div className="flex items-center gap-2">
-                  <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-green-100 text-green-700">Adopted</span>
+                  <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]">Adopted</span>
                   <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded capitalize ${LIB_COLORS[f.library] ?? "text-gray-500 bg-gray-100"}`}>{f.library}</span>
                   <p className="text-sm font-medium text-gray-900">{f.name}</p>
                 </div>
-                <span className="text-[10px] text-green-600 font-medium">✓ Customisable</span>
+                <span className="text-[10px] text-[var(--cmp-text-success)] font-medium">✓ Customisable</span>
               </div>
             ))}
           </div>
@@ -76,7 +76,7 @@ export default function FrameworkLibrary({
                   <p className="text-sm font-medium text-gray-800">{f.name}</p>
                 </div>
                 {isAdopted ? (
-                  <span className="text-[10px] text-green-600 font-semibold">✓ In your library</span>
+                  <span className="text-[10px] text-[var(--cmp-text-success)] font-semibold">✓ In your library</span>
                 ) : (
                   <button
                     onClick={() => adopt(f.id)}

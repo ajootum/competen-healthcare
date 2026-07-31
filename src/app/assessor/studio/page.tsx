@@ -10,10 +10,10 @@ import { StatTiles, Card } from "../reports/ui";
 export const dynamic = "force-dynamic";
 
 const STATUS_CLS: Record<string, string> = {
-  published: "bg-green-100 text-green-700", draft: "bg-gray-100 text-gray-600",
-  in_review: "bg-amber-100 text-amber-700", running: "bg-green-100 text-green-700",
-  completed: "bg-indigo-100 text-indigo-700", cancelled: "bg-red-100 text-red-600",
-  active: "bg-green-100 text-green-700", retired: "bg-gray-100 text-gray-400",
+  published: "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]", draft: "bg-gray-100 text-gray-600",
+  in_review: "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]", running: "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]",
+  completed: "bg-indigo-100 text-indigo-700", cancelled: "bg-[var(--cmp-surface-critical)] text-[var(--cmp-text-critical)]",
+  active: "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]", retired: "bg-gray-100 text-gray-400",
 };
 
 export default async function AssessmentStudioPage() {

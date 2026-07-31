@@ -18,15 +18,15 @@ export default async function ReadinessStatesPage() {
   return (
     <div className="space-y-4">
       {head}
-      {d.empty && <div className="bg-blue-50 border border-blue-200 rounded-xl p-3 text-[12px] text-blue-800">No competency decisions recorded yet — as assessment decisions are validated, each resolves into a readiness state and this engine reports the workforce distribution.</div>}
+      {d.empty && <div className="bg-[var(--cmp-surface-information)] border border-[var(--cmp-color-information)] rounded-xl p-3 text-[12px] text-blue-800">No competency decisions recorded yet — as assessment decisions are validated, each resolves into a readiness state and this engine reports the workforce distribution.</div>}
 
       <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
         <Kpi label="Competencies assessed" value={k.assessed} sub={`${k.workers} worker${k.workers === 1 ? "" : "s"}`} />
-        <Kpi label="Ready" value={`${k.readyPct}%`} sub="of assessed" tone={k.readyPct >= 85 ? "text-emerald-600" : k.readyPct >= 60 ? "text-amber-600" : "text-rose-600"} />
-        <Kpi label="At Risk" value={k.atRisk} sub="expiring ≤ 30d" tone={k.atRisk ? "text-amber-600" : "text-gray-900"} />
-        <Kpi label="Remediation Required" value={k.remediation} sub="not yet competent" tone={k.remediation ? "text-rose-600" : "text-gray-900"} />
-        <Kpi label="Expired" value={k.expired} sub="lapsed" tone={k.expired ? "text-rose-600" : "text-gray-900"} />
-        <Kpi label="Need attention" value={k.needAttention} sub="worst state not ready" tone={k.needAttention ? "text-rose-600" : "text-emerald-600"} />
+        <Kpi label="Ready" value={`${k.readyPct}%`} sub="of assessed" tone={k.readyPct >= 85 ? "text-[var(--cmp-text-success)]" : k.readyPct >= 60 ? "text-[var(--cmp-text-warning)]" : "text-[var(--cmp-text-error)]"} />
+        <Kpi label="At Risk" value={k.atRisk} sub="expiring ≤ 30d" tone={k.atRisk ? "text-[var(--cmp-text-warning)]" : "text-gray-900"} />
+        <Kpi label="Remediation Required" value={k.remediation} sub="not yet competent" tone={k.remediation ? "text-[var(--cmp-text-error)]" : "text-gray-900"} />
+        <Kpi label="Expired" value={k.expired} sub="lapsed" tone={k.expired ? "text-[var(--cmp-text-error)]" : "text-gray-900"} />
+        <Kpi label="Need attention" value={k.needAttention} sub="worst state not ready" tone={k.needAttention ? "text-[var(--cmp-text-error)]" : "text-[var(--cmp-text-success)]"} />
       </div>
 
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">

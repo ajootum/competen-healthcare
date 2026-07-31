@@ -32,10 +32,10 @@ const PRIORITY_OF = (type: string): Priority => {
 };
 
 const PRIORITY_UI: Record<Priority, { label: string; chip: string; border: string }> = {
-  high:      { label: "High",   chip: "bg-red-100 text-red-700",     border: "border-l-red-400" },
-  important: { label: "Medium", chip: "bg-amber-100 text-amber-700", border: "border-l-amber-400" },
-  info:      { label: "Info",   chip: "bg-blue-100 text-blue-700",   border: "border-l-blue-300" },
-  success:   { label: "Done",   chip: "bg-green-100 text-green-700", border: "border-l-green-400" },
+  high:      { label: "High",   chip: "bg-[var(--cmp-surface-critical)] text-[var(--cmp-text-critical)]",     border: "border-l-red-400" },
+  important: { label: "Medium", chip: "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]", border: "border-l-amber-400" },
+  info:      { label: "Info",   chip: "bg-[var(--cmp-surface-information)] text-blue-700",   border: "border-l-blue-300" },
+  success:   { label: "Done",   chip: "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]", border: "border-l-green-400" },
 };
 
 const TYPE_ICON: Record<string, string> = {
@@ -74,10 +74,10 @@ const CATEGORY_TYPES: Record<string, string[]> = {
 };
 
 const CATEGORY_CHIP: Record<string, string> = {
-  Assessments: "bg-purple-50 text-purple-700", Learners: "bg-blue-50 text-blue-700",
-  Evidence: "bg-teal-50 text-teal-700", Quality: "bg-amber-50 text-amber-700",
+  Assessments: "bg-purple-50 text-purple-700", Learners: "bg-[var(--cmp-surface-information)] text-blue-700",
+  Evidence: "bg-teal-50 text-teal-700", Quality: "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]",
   Messages: "bg-pink-50 text-pink-700", Teaching: "bg-indigo-50 text-indigo-700",
-  Courses: "bg-orange-50 text-orange-700", AI: "bg-violet-50 text-violet-700",
+  Courses: "bg-[var(--cmp-surface-warning)] text-orange-700", AI: "bg-violet-50 text-violet-700",
   Other: "bg-gray-100 text-gray-500",
 };
 
@@ -164,9 +164,9 @@ export default function NotificationsCentre({ items, validatedToday, pendingVali
 
   const SUMMARY = [
     { icon: "📩", tint: "bg-purple-50", label: "Unread Notifications", value: unread },
-    { icon: "❗", tint: "bg-red-50", label: "High Priority", value: highPriority },
-    { icon: "⏳", tint: "bg-amber-50", label: "Awaiting Action", value: awaitingAction, sub: `${pendingValidations} in validation queue` },
-    { icon: "✅", tint: "bg-green-50", label: "Completed Today", value: validatedToday, sub: "validations signed off" },
+    { icon: "❗", tint: "bg-[var(--cmp-surface-critical)]", label: "High Priority", value: highPriority },
+    { icon: "⏳", tint: "bg-[var(--cmp-surface-warning)]", label: "Awaiting Action", value: awaitingAction, sub: `${pendingValidations} in validation queue` },
+    { icon: "✅", tint: "bg-[var(--cmp-surface-success)]", label: "Completed Today", value: validatedToday, sub: "validations signed off" },
     { icon: "✨", tint: "bg-violet-50", label: "AI Recommendations", value: aiCount, sub: aiCount === 0 ? "none yet — AI alerting pending" : undefined },
   ];
 
@@ -202,7 +202,7 @@ export default function NotificationsCentre({ items, validatedToday, pendingVali
           <span className="relative bg-white border border-gray-200 rounded-xl w-10 h-10 flex items-center justify-center">
             🔔
             {unread > 0 && (
-              <span className="absolute -top-1.5 -right-1.5 bg-red-500 text-white text-[9px] font-bold rounded-full min-w-[16px] h-4 px-1 flex items-center justify-center">
+              <span className="absolute -top-1.5 -right-1.5 bg-[var(--cmp-color-critical)] text-white text-[9px] font-bold rounded-full min-w-[16px] h-4 px-1 flex items-center justify-center">
                 {unread > 99 ? "99+" : unread}
               </span>
             )}
@@ -290,7 +290,7 @@ export default function NotificationsCentre({ items, validatedToday, pendingVali
                     </div>
                     <span className={`justify-self-start text-[9px] font-semibold px-2 py-0.5 rounded ${CATEGORY_CHIP[cat] ?? CATEGORY_CHIP.Other}`}>{cat}</span>
                     <span className="text-[10px] text-gray-400" suppressHydrationWarning>{fmtAgo(n.created_at, now)}</span>
-                    <span className={`justify-self-start text-[9px] font-bold px-2 py-0.5 rounded ${n.read ? "bg-gray-100 text-gray-400" : "bg-amber-50 text-amber-700"}`}>
+                    <span className={`justify-self-start text-[9px] font-bold px-2 py-0.5 rounded ${n.read ? "bg-gray-100 text-gray-400" : "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]"}`}>
                       {n.read ? "Read" : "Unread"}
                     </span>
                     {n.href ? (
@@ -348,7 +348,7 @@ export default function NotificationsCentre({ items, validatedToday, pendingVali
               ].map(s => (
                 <div key={s.label} className="bg-gray-50 rounded-xl p-2.5">
                   <p className="text-[9px] font-semibold text-gray-400 leading-tight">{s.label}</p>
-                  <p className={`text-lg font-extrabold leading-tight ${s.warn ? "text-red-600" : "text-gray-900"}`}>{s.v}</p>
+                  <p className={`text-lg font-extrabold leading-tight ${s.warn ? "text-[var(--cmp-text-critical)]" : "text-gray-900"}`}>{s.v}</p>
                   <p className="text-[8px] text-gray-400">{s.sub}</p>
                 </div>
               ))}
@@ -390,7 +390,7 @@ export default function NotificationsCentre({ items, validatedToday, pendingVali
               <div className="flex justify-between"><span className="text-gray-400">Category</span><span className={`text-[9px] font-semibold px-2 py-0.5 rounded ${CATEGORY_CHIP[cat] ?? CATEGORY_CHIP.Other}`}>{cat}</span></div>
               <div className="flex justify-between"><span className="text-gray-400">Received</span><span className="text-gray-700" suppressHydrationWarning>{new Date(selected.created_at).toLocaleString()}</span></div>
               <div className="flex justify-between"><span className="text-gray-400">Status</span>
-                <span className={`text-[9px] font-bold px-2 py-0.5 rounded ${selected.read ? "bg-gray-100 text-gray-400" : "bg-amber-50 text-amber-700"}`}>{selected.read ? "Read" : "Unread"}</span>
+                <span className={`text-[9px] font-bold px-2 py-0.5 rounded ${selected.read ? "bg-gray-100 text-gray-400" : "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]"}`}>{selected.read ? "Read" : "Unread"}</span>
               </div>
             </div>
             <div className="mt-4 flex flex-col gap-2">

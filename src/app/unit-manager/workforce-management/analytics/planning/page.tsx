@@ -44,7 +44,7 @@ export default async function PlanningAnalytics() {
     </>
   );
 
-  if (!d.ready) return <div className="space-y-4">{header}<div className="bg-amber-50 border border-amber-200 rounded-xl p-6"><p className="font-semibold text-amber-900">⚙️ No planning data</p></div></div>;
+  if (!d.ready) return <div className="space-y-4">{header}<div className="bg-[var(--cmp-surface-warning)] border border-[var(--cmp-color-warning)] rounded-xl p-6"><p className="font-semibold text-amber-900">⚙️ No planning data</p></div></div>;
 
   const k = d.kpis;
   return (
@@ -53,11 +53,11 @@ export default async function PlanningAnalytics() {
 
       <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-3">
         <Kpi label="Required FTE" value={k.totalRequired} sub="Establishment demand" foot="ⁱ" />
-        <Kpi label="Available FTE" value={k.totalAvailable} sub="Current capacity" tone="text-emerald-600" />
-        <Kpi label="Vacancy" value={k.vacancyFte} sub={`${k.openPositions} open posts`} tone={k.vacancyFte > 0 ? "text-rose-600" : "text-emerald-600"} foot="WF-VAC-001" />
-        <Kpi label="Coverage compliance" value={k.coverageCompliance != null ? `${k.coverageCompliance}%` : "—"} tone={k.coverageCompliance != null && k.coverageCompliance >= 90 ? "text-emerald-600" : "text-amber-600"} />
-        <Kpi label="Supervisor FTE" value={`${k.supervisorAvailable}/${k.supervisorRequired}`} sub="Available / required" tone={k.supervisorAvailable < k.supervisorRequired ? "text-amber-600" : "text-emerald-600"} />
-        <Kpi label="Predicted overtime" value={`${k.predictedOvertimeHrs}h`} sub="From vacancy gap" tone={k.predictedOvertimeHrs ? "text-amber-600" : undefined} />
+        <Kpi label="Available FTE" value={k.totalAvailable} sub="Current capacity" tone="text-[var(--cmp-text-success)]" />
+        <Kpi label="Vacancy" value={k.vacancyFte} sub={`${k.openPositions} open posts`} tone={k.vacancyFte > 0 ? "text-[var(--cmp-text-error)]" : "text-[var(--cmp-text-success)]"} foot="WF-VAC-001" />
+        <Kpi label="Coverage compliance" value={k.coverageCompliance != null ? `${k.coverageCompliance}%` : "—"} tone={k.coverageCompliance != null && k.coverageCompliance >= 90 ? "text-[var(--cmp-text-success)]" : "text-[var(--cmp-text-warning)]"} />
+        <Kpi label="Supervisor FTE" value={`${k.supervisorAvailable}/${k.supervisorRequired}`} sub="Available / required" tone={k.supervisorAvailable < k.supervisorRequired ? "text-[var(--cmp-text-warning)]" : "text-[var(--cmp-text-success)]"} />
+        <Kpi label="Predicted overtime" value={`${k.predictedOvertimeHrs}h`} sub="From vacancy gap" tone={k.predictedOvertimeHrs ? "text-[var(--cmp-text-warning)]" : undefined} />
       </div>
 
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
@@ -66,7 +66,7 @@ export default async function PlanningAnalytics() {
           {d.requiredVsAvailable.length === 0 ? <p className="text-sm text-gray-400">No role data.</p> : (
             <div className="overflow-x-auto"><table className="w-full text-xs">
               <thead><tr className="text-gray-400 text-left border-b border-gray-100"><th className="py-2 pr-3 font-medium">Role</th><th className="py-2 pr-3 font-medium text-right">Required</th><th className="py-2 pr-3 font-medium text-right">Available</th><th className="py-2 pr-3 font-medium text-right">Gap</th><th className="py-2 font-medium text-right">Coverage</th></tr></thead>
-              <tbody>{d.requiredVsAvailable.map((r: any) => (<tr key={r.role} className="border-b border-gray-50"><td className="py-2 pr-3 text-gray-700">{r.label}</td><td className="py-2 pr-3 text-right text-gray-600">{r.required}</td><td className="py-2 pr-3 text-right text-gray-700 font-semibold">{r.available}</td><td className={`py-2 pr-3 text-right ${r.gap > 0 ? "text-rose-600 font-semibold" : "text-gray-400"}`}>{r.gap > 0 ? r.gap : "—"}</td><td className="py-2 text-right">{r.coverage != null ? `${r.coverage}%` : "—"}</td></tr>))}</tbody>
+              <tbody>{d.requiredVsAvailable.map((r: any) => (<tr key={r.role} className="border-b border-gray-50"><td className="py-2 pr-3 text-gray-700">{r.label}</td><td className="py-2 pr-3 text-right text-gray-600">{r.required}</td><td className="py-2 pr-3 text-right text-gray-700 font-semibold">{r.available}</td><td className={`py-2 pr-3 text-right ${r.gap > 0 ? "text-[var(--cmp-text-error)] font-semibold" : "text-gray-400"}`}>{r.gap > 0 ? r.gap : "—"}</td><td className="py-2 text-right">{r.coverage != null ? `${r.coverage}%` : "—"}</td></tr>))}</tbody>
             </table></div>
           )}
         </div>

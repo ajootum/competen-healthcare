@@ -71,10 +71,10 @@ export default async function AssessmentCalendarPage({ searchParams }: {
   // KPI summary (unfiltered month)
   const KPIS = [
     { label: "Scheduled This Month", n: allRows.length, cls: "text-gray-900" },
-    { label: "Upcoming", n: allRows.filter(s => s.status === "scheduled" && s.scheduled_for >= nowIso).length, cls: "text-blue-600" },
-    { label: "Completed", n: allRows.filter(s => s.status === "completed").length, cls: "text-green-600" },
+    { label: "Upcoming", n: allRows.filter(s => s.status === "scheduled" && s.scheduled_for >= nowIso).length, cls: "text-[var(--cmp-text-information)]" },
+    { label: "Completed", n: allRows.filter(s => s.status === "completed").length, cls: "text-[var(--cmp-text-success)]" },
     { label: "Cancelled", n: allRows.filter(s => s.status === "cancelled").length, cls: "text-gray-400" },
-    { label: "Overdue", n: allRows.filter(s => s.status === "scheduled" && s.scheduled_for < nowIso).length, cls: "text-red-600" },
+    { label: "Overdue", n: allRows.filter(s => s.status === "scheduled" && s.scheduled_for < nowIso).length, cls: "text-[var(--cmp-text-critical)]" },
   ];
 
   // Month grid (weeks start Monday)
@@ -197,9 +197,9 @@ export default async function AssessmentCalendarPage({ searchParams }: {
                         <p className="text-[10px] text-gray-400 truncate">{[s.location, s.note].filter(Boolean).join(" · ") || "No details"}</p>
                       </div>
                       <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded shrink-0 ${
-                        s.status === "completed" ? "bg-green-50 text-green-700"
+                        s.status === "completed" ? "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]"
                         : s.status === "cancelled" ? "bg-gray-100 text-gray-400 line-through"
-                        : s.scheduled_for < nowIso ? "bg-red-50 text-red-600" : "bg-blue-50 text-blue-600"
+                        : s.scheduled_for < nowIso ? "bg-[var(--cmp-surface-critical)] text-[var(--cmp-text-critical)]" : "bg-[var(--cmp-surface-information)] text-[var(--cmp-text-information)]"
                       }`}>{s.status === "scheduled" ? (s.scheduled_for < nowIso ? "Overdue" : "Scheduled") : s.status}</span>
                       {s.status === "scheduled" && <SessionActions id={s.id} />}
                     </div>
@@ -237,7 +237,7 @@ export default async function AssessmentCalendarPage({ searchParams }: {
                               <p key={s.id} title={`${s.profiles?.full_name} · ${METHOD_LABELS[s.method] ?? s.method}`}
                                 className={`text-[8px] leading-tight truncate rounded px-1 py-0.5 ${
                                   s.status === "cancelled" ? "bg-gray-100 text-gray-400 line-through"
-                                  : s.status === "completed" ? "bg-green-50 text-green-700"
+                                  : s.status === "completed" ? "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]"
                                   : "bg-indigo-100 text-indigo-700"
                                 }`}>
                                 {new Date(s.scheduled_for).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })} {s.profiles?.full_name?.split(" ")[0]}
@@ -252,7 +252,7 @@ export default async function AssessmentCalendarPage({ searchParams }: {
                 })}
               </div>
               <div className="flex flex-wrap gap-3 mt-3 pt-3 border-t border-gray-50">
-                {[["bg-indigo-100", "Scheduled"], ["bg-green-50", "Completed"], ["bg-gray-100", "Cancelled"]].map(([cls, label]) => (
+                {[["bg-indigo-100", "Scheduled"], ["bg-[var(--cmp-surface-success)]", "Completed"], ["bg-gray-100", "Cancelled"]].map(([cls, label]) => (
                   <span key={label} className="flex items-center gap-1.5 text-[9px] text-gray-400">
                     <span className={`w-2.5 h-2.5 rounded ${cls}`} /> {label}
                   </span>
@@ -325,7 +325,7 @@ export default async function AssessmentCalendarPage({ searchParams }: {
           </div>
 
           {/* Conflicts */}
-          <div className={`rounded-2xl p-4 border ${conflicts.length ? "bg-red-50 border-red-100" : "bg-white border-gray-100"}`}>
+          <div className={`rounded-2xl p-4 border ${conflicts.length ? "bg-[var(--cmp-surface-critical)] border-[var(--cmp-color-critical)]" : "bg-white border-gray-100"}`}>
             <h2 className={`text-xs font-bold mb-2 ${conflicts.length ? "text-red-800" : "text-gray-800"}`}>
               ⚠️ Upcoming Conflicts{conflicts.length ? ` (${conflicts.length})` : ""}
             </h2>

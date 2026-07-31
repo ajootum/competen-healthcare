@@ -78,7 +78,7 @@ export default function AuditRunner({ type, subjectKind, templates, nurses, pres
 
   if (done) {
     return (
-      <div className="bg-green-50 border border-green-200 rounded-xl p-5">
+      <div className="bg-[var(--cmp-surface-success)] border border-[var(--cmp-color-success)] rounded-xl p-5">
         <p className="text-sm font-bold text-green-900 mb-1">✅ Audit recorded</p>
         <p className="text-xs text-green-800">
           Compliance: <span className="font-bold">{done.compliance != null ? `${done.compliance}%` : "—"}</span>
@@ -86,7 +86,7 @@ export default function AuditRunner({ type, subjectKind, templates, nurses, pres
           {done.capa > 0 && <> · <span className="font-bold">{done.capa} CAPA action{done.capa === 1 ? "" : "s"} auto-created</span> from failed critical criteria</>}
         </p>
         <div className="flex gap-2 mt-3">
-          <button onClick={reset} className="text-xs font-semibold text-green-800 border border-green-300 rounded-lg px-3 py-1.5 hover:bg-green-100">New audit</button>
+          <button onClick={reset} className="text-xs font-semibold text-green-800 border border-[var(--cmp-color-success)] rounded-lg px-3 py-1.5 hover:bg-[var(--cmp-surface-success)]">New audit</button>
           {done.capa > 0 && (
             <a href="/assessor/quality/capa" className="text-xs font-semibold text-white bg-indigo-600 rounded-lg px-3 py-1.5 hover:bg-indigo-700">Open CAPA tracker →</a>
           )}
@@ -130,16 +130,16 @@ export default function AuditRunner({ type, subjectKind, templates, nurses, pres
             <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Criteria — {tpl.name}</p>
             <span className="text-[10px] text-gray-400">{answered}/{tpl.items.length} answered</span>
             <span className="flex-1" />
-            <button onClick={() => setAll("met")} className="text-[10px] text-green-600 hover:underline">all met</button>
+            <button onClick={() => setAll("met")} className="text-[10px] text-[var(--cmp-text-success)] hover:underline">all met</button>
             <button onClick={() => setResponses({})} className="text-[10px] text-gray-400 hover:underline">clear</button>
             {liveCompliance != null && (
-              <span className={`text-[11px] font-bold px-2 py-0.5 rounded ${liveCompliance >= 85 ? "bg-green-100 text-green-700" : liveCompliance >= 60 ? "bg-amber-100 text-amber-700" : "bg-red-100 text-red-600"}`}>
+              <span className={`text-[11px] font-bold px-2 py-0.5 rounded ${liveCompliance >= 85 ? "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]" : liveCompliance >= 60 ? "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]" : "bg-[var(--cmp-surface-critical)] text-[var(--cmp-text-critical)]"}`}>
                 {liveCompliance}% compliant
               </span>
             )}
           </div>
           {criticalFails > 0 && (
-            <p className="text-[10px] text-red-600 bg-red-50 border border-red-200 rounded-lg px-2.5 py-1.5 mb-2">
+            <p className="text-[10px] text-[var(--cmp-text-critical)] bg-[var(--cmp-surface-critical)] border border-[var(--cmp-color-critical)] rounded-lg px-2.5 py-1.5 mb-2">
               ⚠️ {criticalFails} critical criterion{criticalFails === 1 ? "" : "s"} failed — submitting will auto-create {criticalFails} high-priority CAPA action{criticalFails === 1 ? "" : "s"}.
             </p>
           )}
@@ -149,7 +149,7 @@ export default function AuditRunner({ type, subjectKind, templates, nurses, pres
                 <div className="flex items-center gap-2 flex-wrap">
                   <span className="text-xs text-gray-700 flex-1 min-w-[180px]">
                     {i.item}
-                    {i.critical && <span className="ml-1.5 text-[8px] font-bold text-red-600 bg-red-50 border border-red-200 rounded px-1 py-0.5 uppercase">Critical</span>}
+                    {i.critical && <span className="ml-1.5 text-[8px] font-bold text-[var(--cmp-text-critical)] bg-[var(--cmp-surface-critical)] border border-[var(--cmp-color-critical)] rounded px-1 py-0.5 uppercase">Critical</span>}
                     <span className="ml-1.5 text-[9px] text-gray-300">{i.skill}</span>
                   </span>
                   <span className="flex gap-1">
@@ -158,8 +158,8 @@ export default function AuditRunner({ type, subjectKind, templates, nurses, pres
                         onClick={() => setResponses(prev => ({ ...prev, [i.id]: prev[i.id] === v ? undefined : v } as Record<string, Result>))}
                         className={`text-[9px] font-bold uppercase px-2 py-1 rounded border transition-colors ${
                           responses[i.id] === v
-                            ? v === "met" ? "bg-green-500 text-white border-green-500"
-                              : v === "not_met" ? "bg-red-500 text-white border-red-500"
+                            ? v === "met" ? "bg-[var(--cmp-color-success)] text-white border-green-500"
+                              : v === "not_met" ? "bg-[var(--cmp-color-critical)] text-white border-red-500"
                               : "bg-gray-400 text-white border-gray-400"
                             : "bg-white text-gray-400 border-gray-200 hover:border-gray-400"}`}>
                         {v === "met" ? "Met" : v === "not_met" ? "Not met" : "N/A"}
@@ -170,7 +170,7 @@ export default function AuditRunner({ type, subjectKind, templates, nurses, pres
                 {responses[i.id] === "not_met" && (
                   <input value={itemNotes[i.id] ?? ""} onChange={e => setItemNotes(prev => ({ ...prev, [i.id]: e.target.value }))}
                     placeholder="Finding note (what was observed)…"
-                    className="mt-1.5 w-full text-[11px] border border-gray-200 rounded-lg px-2.5 py-1.5 text-gray-600 focus:outline-none focus:border-red-300" />
+                    className="mt-1.5 w-full text-[11px] border border-gray-200 rounded-lg px-2.5 py-1.5 text-gray-600 focus:outline-none focus:border-[var(--cmp-color-critical)]" />
                 )}
               </li>
             ))}
@@ -183,7 +183,7 @@ export default function AuditRunner({ type, subjectKind, templates, nurses, pres
               {busy ? "Saving…" : "Submit audit"}
             </button>
           </div>
-          {error && <p className="text-xs text-red-600 mt-2">{error}</p>}
+          {error && <p className="text-xs text-[var(--cmp-text-critical)] mt-2">{error}</p>}
         </>
       ) : (
         <p className="text-xs text-gray-400">Pick a competency above — its governed checklist becomes the audit criteria.</p>

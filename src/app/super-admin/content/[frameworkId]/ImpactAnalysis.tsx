@@ -37,7 +37,7 @@ export default function ImpactAnalysis({ frameworkId }: { frameworkId: string })
   return (
     <>
       <button onClick={run}
-        className="px-3 py-1.5 text-xs font-semibold bg-white border border-amber-200 text-amber-700 rounded-lg hover:bg-amber-50 transition-colors">
+        className="px-3 py-1.5 text-xs font-semibold bg-white border border-[var(--cmp-color-warning)] text-[var(--cmp-text-warning)] rounded-lg hover:bg-[var(--cmp-surface-warning)] transition-colors">
         🔎 Impact Analysis
       </button>
 
@@ -58,7 +58,7 @@ export default function ImpactAnalysis({ frameworkId }: { frameworkId: string })
                 <p className="text-center text-sm text-gray-400 py-8">Computing dependency graph…</p>
               ) : report ? (
                 <div className="flex flex-col gap-3">
-                  <div className="bg-amber-50 border border-amber-100 rounded-xl px-4 py-3">
+                  <div className="bg-[var(--cmp-surface-warning)] border border-[var(--cmp-color-warning)] rounded-xl px-4 py-3">
                     <p className="text-sm text-amber-800">
                       <span className="font-bold">{total}</span> downstream object{total !== 1 ? "s" : ""} across{" "}
                       <span className="font-bold">{report.affected.length}</span> categor{report.affected.length !== 1 ? "ies" : "y"} would be affected.

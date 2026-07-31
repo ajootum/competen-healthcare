@@ -14,7 +14,7 @@ const tc = (s: string) => (s ?? "").replace(/_/g, " ").split(" ").filter(Boolean
 const ACTIONS: { label: string; status: string; cls: string }[] = [
   { label: "Reserve", status: "reserved", cls: "border-violet-200 text-violet-700 hover:bg-violet-50" },
   { label: "Block (maintenance)", status: "out_of_service", cls: "border-gray-300 text-gray-600 hover:bg-gray-50" },
-  { label: "Request cleaning", status: "cleaning", cls: "border-orange-200 text-orange-700 hover:bg-orange-50" },
+  { label: "Request cleaning", status: "cleaning", cls: "border-[var(--cmp-color-warning)] text-orange-700 hover:bg-[var(--cmp-surface-warning)]" },
   { label: "Release / return to service", status: "available", cls: "border-teal-200 text-teal-700 hover:bg-teal-50" },
 ];
 
@@ -44,7 +44,7 @@ export default function BedControls({ beds }: { beds: any[] }) {
           {selectable.map((b: any) => <option key={b.id} value={b.id}>{b.label} · {tc(b.status)}</option>)}
         </select>
       </div>
-      {msg && <div className={`mt-2 text-sm rounded-lg px-3 py-1.5 ${msg.kind === "ok" ? "bg-green-50 text-green-800" : "bg-amber-50 text-amber-800"}`}>{msg.text}</div>}
+      {msg && <div className={`mt-2 text-sm rounded-lg px-3 py-1.5 ${msg.kind === "ok" ? "bg-[var(--cmp-surface-success)] text-green-800" : "bg-[var(--cmp-surface-warning)] text-amber-800"}`}>{msg.text}</div>}
       <div className="mt-3 flex flex-wrap gap-2">
         {ACTIONS.map(a => (
           <button key={a.label} disabled={busy || !bed || current?.status === a.status} onClick={() => setStatus(a.status, a.label)}

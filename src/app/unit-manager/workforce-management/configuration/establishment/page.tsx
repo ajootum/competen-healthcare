@@ -49,9 +49,9 @@ export default async function EstablishmentConfig() {
     <div className="space-y-4">
       {header}
 
-      <div className="rounded-xl border border-emerald-100 bg-emerald-50/40 p-3 text-xs text-emerald-800 flex items-center justify-between flex-wrap gap-2">
+      <div className="rounded-xl border border-[var(--cmp-color-success)] bg-[var(--cmp-surface-success)]/40 p-3 text-xs text-emerald-800 flex items-center justify-between flex-wrap gap-2">
         <span>Live over wps_config v{d.profile.version} · {d.profile.published ? "published" : "defaults"}. Editing (versioned + published) happens in the Workforce Planning Studio.</span>
-        <Link href="/unit-manager/planning-studio" className="font-semibold rounded-lg px-3 py-1.5 bg-emerald-600 text-white hover:bg-emerald-700 shrink-0">Edit ↗</Link>
+        <Link href="/unit-manager/planning-studio" className="font-semibold rounded-lg px-3 py-1.5 bg-[var(--cmp-color-success)] text-white hover:bg-emerald-700 shrink-0">Edit ↗</Link>
       </div>
 
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">

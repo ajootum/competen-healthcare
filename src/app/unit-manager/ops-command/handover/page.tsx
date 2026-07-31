@@ -8,7 +8,7 @@ export const dynamic = "force-dynamic";
 // UMW-OPC-008 Shift Timeline & Handover Centre — real shift timeline, auto-generated SBAR from live state, handover
 // readiness, outstanding actions, high-risk watch list and staff overview. Dark surface. Gate admin.
 /* eslint-disable @typescript-eslint/no-explicit-any */
-const toneDot: Record<string, string> = { rose: "bg-rose-500", amber: "bg-amber-500", emerald: "bg-emerald-500", blue: "bg-blue-500" };
+const toneDot: Record<string, string> = { rose: "bg-[var(--cmp-color-error)]", amber: "bg-[var(--cmp-color-warning)]", emerald: "bg-[var(--cmp-color-success)]", blue: "bg-[var(--cmp-color-information)]" };
 const CHECKLIST = ["Patient summary reviewed", "High-risk patients discussed", "Open actions reviewed", "Escalations reviewed", "Safety & equipment issues", "Staffing & assignments", "Key messages communicated"];
 
 export default async function HandoverPage({ searchParams }: { searchParams: Promise<{ dept?: string }> }) {
@@ -20,7 +20,7 @@ export default async function HandoverPage({ searchParams }: { searchParams: Pro
   ]);
 
   const strip = <TopStrip code="UMW-OPC-008 · Operational Command" title="Shift Timeline & Handover Centre" departments={departments} />;
-  if (!d.provisioned) return <div className="space-y-4">{strip}<div className="bg-amber-50 border border-amber-200 rounded-xl p-6"><p className="font-semibold text-amber-900">⚙️ Operational stores not provisioned</p><p className="text-sm text-amber-800 mt-1">Apply migration 038 then seed shifts + patients.</p></div></div>;
+  if (!d.provisioned) return <div className="space-y-4">{strip}<div className="bg-[var(--cmp-surface-warning)] border border-[var(--cmp-color-warning)] rounded-xl p-6"><p className="font-semibold text-amber-900">⚙️ Operational stores not provisioned</p><p className="text-sm text-amber-800 mt-1">Apply migration 038 then seed shifts + patients.</p></div></div>;
 
   const k = d.kpis;
   return (
@@ -51,7 +51,7 @@ export default async function HandoverPage({ searchParams }: { searchParams: Pro
 
           <Card title="Electronic Handover (SBAR)" className="xl:col-span-2" right={<span className="text-[9px] text-slate-500">auto-generated from live state</span>}>
             <div className="space-y-2">
-              {[["S", "Situation", d.sbar.situation, "bg-blue-500"], ["B", "Background", d.sbar.background, "bg-purple-500"], ["A", "Assessment", d.sbar.assessment, "bg-amber-500"], ["R", "Recommendation", d.sbar.recommendation, "bg-emerald-500"]].map(([letter, label, text, c2]: any) => (
+              {[["S", "Situation", d.sbar.situation, "bg-[var(--cmp-color-information)]"], ["B", "Background", d.sbar.background, "bg-purple-500"], ["A", "Assessment", d.sbar.assessment, "bg-[var(--cmp-color-warning)]"], ["R", "Recommendation", d.sbar.recommendation, "bg-[var(--cmp-color-success)]"]].map(([letter, label, text, c2]: any) => (
                 <div key={letter} className="flex gap-2.5"><span className={`w-7 h-7 rounded-lg ${c2} text-white font-bold flex items-center justify-center shrink-0 text-sm`}>{letter}</span><div className="min-w-0 flex-1"><p className="text-[10px] text-slate-400 uppercase tracking-wide">{label}</p><p className="text-[12px] text-slate-200 leading-snug">{text}</p></div></div>
               ))}
             </div>
@@ -61,7 +61,7 @@ export default async function HandoverPage({ searchParams }: { searchParams: Pro
 
           <Card title="Handover Checklist" right={<span className="text-[9px] text-slate-500">template</span>}>
             <div className="space-y-1.5">{CHECKLIST.map((item, i) => (
-              <div key={item} className="flex items-center gap-2 text-[11px]"><span className={`w-3.5 h-3.5 rounded-full flex items-center justify-center text-[8px] ${i < 5 ? "bg-emerald-500 text-slate-900" : "bg-slate-700 text-slate-500"}`}>{i < 5 ? "✓" : ""}</span><span className="text-slate-300 flex-1">{item}</span></div>
+              <div key={item} className="flex items-center gap-2 text-[11px]"><span className={`w-3.5 h-3.5 rounded-full flex items-center justify-center text-[8px] ${i < 5 ? "bg-[var(--cmp-color-success)] text-slate-900" : "bg-slate-700 text-slate-500"}`}>{i < 5 ? "✓" : ""}</span><span className="text-slate-300 flex-1">{item}</span></div>
             ))}</div>
             <div className="mt-2 pt-2 border-t border-slate-700/60 flex items-center justify-between"><span className="text-[10px] text-slate-400">Readiness</span><span className={`text-sm font-bold tabular-nums ${k.readiness >= 90 ? "text-emerald-400" : "text-amber-400"}`}>{k.readiness}%</span></div>
           </Card>
@@ -77,7 +77,7 @@ export default async function HandoverPage({ searchParams }: { searchParams: Pro
 
           <Card title="High Risk Patients to Watch">
             {d.watch.length ? <div className="space-y-2">{d.watch.map((p: any, i: number) => (
-              <div key={i} className="flex items-center gap-2 rounded-lg bg-rose-500/10 border border-rose-500/25 px-2.5 py-1.5"><span className="w-6 h-6 rounded bg-rose-500/80 text-white text-[10px] font-bold flex items-center justify-center shrink-0">{String(p.label).replace(/\D/g, "").slice(-3) || "•"}</span><div className="min-w-0 flex-1"><p className="text-[11px] text-slate-200 leading-tight truncate">{p.label}</p><p className="text-[9px] text-slate-500 capitalize">{p.acuity}{p.isolation ? ` · ${p.isolation}` : ""}</p></div></div>
+              <div key={i} className="flex items-center gap-2 rounded-lg bg-[var(--cmp-color-error)]/10 border border-rose-500/25 px-2.5 py-1.5"><span className="w-6 h-6 rounded bg-[var(--cmp-color-error)]/80 text-white text-[10px] font-bold flex items-center justify-center shrink-0">{String(p.label).replace(/\D/g, "").slice(-3) || "•"}</span><div className="min-w-0 flex-1"><p className="text-[11px] text-slate-200 leading-tight truncate">{p.label}</p><p className="text-[9px] text-slate-500 capitalize">{p.acuity}{p.isolation ? ` · ${p.isolation}` : ""}</p></div></div>
             ))}</div> : <p className="text-xs text-slate-400 py-4 text-center">No high-risk patients.</p>}
           </Card>
 

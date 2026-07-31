@@ -9,9 +9,9 @@ const RISK_CONFIG = RISK_T as Record<string, { label: string; cls: string }>;
 
 const STATUS_CLS: Record<string, string> = {
   draft: "bg-gray-100 text-gray-600",
-  in_review: "bg-amber-50 text-amber-700",
-  approved: "bg-blue-50 text-blue-700",
-  published: "bg-green-50 text-green-700",
+  in_review: "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]",
+  approved: "bg-[var(--cmp-surface-information)] text-blue-700",
+  published: "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]",
   archived: "bg-gray-100 text-gray-400",
 };
 
@@ -46,7 +46,7 @@ export default function CpuLibrary({ practices, cpus }: { practices: PracticeRow
 
   return (
     <div className="flex flex-col gap-6">
-      {error && <div className="bg-red-50 text-red-600 text-sm rounded-lg px-4 py-2.5">{error}</div>}
+      {error && <div className="bg-[var(--cmp-surface-critical)] text-[var(--cmp-text-critical)] text-sm rounded-lg px-4 py-2.5">{error}</div>}
 
       {/* Clinical Practices */}
       <div>
@@ -72,7 +72,7 @@ export default function CpuLibrary({ practices, cpus }: { practices: PracticeRow
                   </div>
                   <span className="text-sm font-bold text-gray-700 text-right">{p.cpuCount}</span>
                   <span className="text-sm font-bold text-gray-700 text-right">{p.compCount}</span>
-                  <span className="text-sm font-bold text-green-600 text-right">{p.published}/{p.cpuCount}</span>
+                  <span className="text-sm font-bold text-[var(--cmp-text-success)] text-right">{p.published}/{p.cpuCount}</span>
                 </Link>
               ))}
             </div>

@@ -9,7 +9,7 @@ import OutcomesNav from "../OutcomesNav";
 
 export const dynamic = "force-dynamic";
 const pct = (v: number | null) => v !== null ? `${v}%` : "—";
-const LEVEL_CLS: Record<string, string> = { Ready: "bg-green-50 text-green-600", "Nearly Ready": "bg-blue-50 text-blue-600", "Needs Practice": "bg-amber-50 text-amber-600", "Not Ready": "bg-red-50 text-red-600" };
+const LEVEL_CLS: Record<string, string> = { Ready: "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]", "Nearly Ready": "bg-[var(--cmp-surface-information)] text-[var(--cmp-text-information)]", "Needs Practice": "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]", "Not Ready": "bg-[var(--cmp-surface-critical)] text-[var(--cmp-text-critical)]" };
 
 export default async function Clinical() {
   const { admin, hospitalId } = await requireEducatorAccess();
@@ -77,7 +77,7 @@ export default async function Clinical() {
               <tr key={r.id} className="border-b border-gray-50 text-[11px]">
                 <td className="py-2 pr-3 font-semibold text-gray-800">{r.name}</td>
                 <td className="py-2 pr-3 text-gray-500">{r.program}</td>
-                <td className="py-2 pr-3"><span className="flex items-center gap-2"><span className="w-16 h-1.5 bg-gray-100 rounded-full overflow-hidden inline-block"><span className={`block h-full rounded-full ${r.readiness >= 80 ? "bg-green-500" : r.readiness >= 60 ? "bg-blue-500" : r.readiness >= 40 ? "bg-amber-400" : "bg-red-400"}`} style={{ width: `${r.readiness}%` }} /></span><span className="text-gray-700 font-semibold">{r.readiness}%</span></span></td>
+                <td className="py-2 pr-3"><span className="flex items-center gap-2"><span className="w-16 h-1.5 bg-gray-100 rounded-full overflow-hidden inline-block"><span className={`block h-full rounded-full ${r.readiness >= 80 ? "bg-[var(--cmp-color-success)]" : r.readiness >= 60 ? "bg-[var(--cmp-color-information)]" : r.readiness >= 40 ? "bg-[var(--cmp-color-warning)]" : "bg-[var(--cmp-color-critical)]"}`} style={{ width: `${r.readiness}%` }} /></span><span className="text-gray-700 font-semibold">{r.readiness}%</span></span></td>
                 <td className="py-2 pr-3"><span className={`text-[9px] font-bold px-1.5 py-0.5 rounded ${LEVEL_CLS[r.level]}`}>{r.level}</span></td>
               </tr>
             ))}</tbody>

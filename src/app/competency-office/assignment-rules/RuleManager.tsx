@@ -8,7 +8,7 @@ import { useRouter } from "next/navigation";
 type Rule = { id: string; name: string; competency: string; targetRole: string | null; targetLabel: string; priority: string; dueDays: number; recurrence: number | null; population: number; generated: number; active: boolean };
 type Comp = { id: string; name: string };
 
-const PRIO_TONE: Record<string, string> = { high: "bg-rose-100 text-rose-700", medium: "bg-amber-100 text-amber-700", low: "bg-gray-100 text-gray-600" };
+const PRIO_TONE: Record<string, string> = { high: "bg-[var(--cmp-surface-error)] text-[var(--cmp-text-error)]", medium: "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]", low: "bg-gray-100 text-gray-600" };
 const ANY = "__any__";
 
 export default function RuleManager({ rules, competencies, roles }: { rules: Rule[]; competencies: Comp[]; roles: string[] }) {
@@ -59,8 +59,8 @@ export default function RuleManager({ rules, competencies, roles }: { rules: Rul
 
   return (
     <div className="space-y-3">
-      {err && <div className="bg-rose-50 border border-rose-200 text-rose-700 rounded-lg px-3 py-2 text-[12px]">{err}</div>}
-      {msg && <div className="bg-emerald-50 border border-emerald-200 text-emerald-700 rounded-lg px-3 py-2 text-[12px]">{msg}</div>}
+      {err && <div className="bg-[var(--cmp-surface-error)] border border-[var(--cmp-color-error)] text-[var(--cmp-text-error)] rounded-lg px-3 py-2 text-[12px]">{err}</div>}
+      {msg && <div className="bg-[var(--cmp-surface-success)] border border-[var(--cmp-color-success)] text-emerald-700 rounded-lg px-3 py-2 text-[12px]">{msg}</div>}
       <div className="flex items-center justify-between">
         <p className="text-[12px] text-gray-500">{rules.length} assignment rule{rules.length === 1 ? "" : "s"}</p>
         <button onClick={() => setOpen(v => !v)} className="text-[12px] bg-teal-600 text-white rounded-lg px-3 py-1.5 hover:bg-teal-700">{open ? "Close" : "＋ New rule"}</button>
@@ -94,7 +94,7 @@ export default function RuleManager({ rules, competencies, roles }: { rules: Rul
             <span className="text-[11px] text-gray-500 w-24 text-right"><span className="font-semibold text-gray-800 tabular-nums">{r.generated}</span> generated</span>
             <span className="text-[11px] text-gray-400 w-16 text-right">{r.recurrence ? `${r.recurrence}mo` : "one-off"}</span>
             <button disabled={busy} onClick={() => apply(r.id)} className="text-[11px] bg-teal-600 text-white rounded-lg px-2.5 py-1 hover:bg-teal-700 disabled:opacity-40">Apply</button>
-            <button disabled={busy} onClick={() => del(r.id)} className="text-rose-400 hover:text-rose-600 text-[11px] disabled:opacity-40">remove</button>
+            <button disabled={busy} onClick={() => del(r.id)} className="text-rose-400 hover:text-[var(--cmp-text-error)] text-[11px] disabled:opacity-40">remove</button>
           </div>
         ))}
       </div>

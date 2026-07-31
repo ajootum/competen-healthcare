@@ -18,14 +18,14 @@ type Action = { id: string; title: string; ownerName: string | null; dueDate: st
 type Meeting = { id: string; officeId: string; officeName: string; title: string; meetingType: string; scheduledAt: string | null; location: string | null; status: string; requiredQuorum: number; chairedByName: string | null; minutes: string | null; heldAt: string | null; attendance: Attendee[]; invited: number; present: number; quorumMet: boolean; agenda: AgendaItem[]; decisions: Decision[]; actions: Action[]; minutesSignatures: Sig[] };
 type Call = (url: string, method: string, body?: any) => Promise<any>;
 
-const M_TONE: Record<string, string> = { scheduled: "bg-blue-100 text-blue-700", in_progress: "bg-amber-100 text-amber-700", held: "bg-emerald-100 text-emerald-700", cancelled: "bg-gray-200 text-gray-600" };
+const M_TONE: Record<string, string> = { scheduled: "bg-[var(--cmp-surface-information)] text-blue-700", in_progress: "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]", held: "bg-[var(--cmp-surface-success)] text-emerald-700", cancelled: "bg-gray-200 text-gray-600" };
 const M_NEXT: Record<string, { to: string; label: string; cls: string }[]> = {
-  scheduled: [{ to: "in_progress", label: "Start", cls: "bg-blue-600" }, { to: "cancelled", label: "Cancel", cls: "bg-gray-400" }],
-  in_progress: [{ to: "held", label: "Close (held)", cls: "bg-emerald-600" }, { to: "cancelled", label: "Cancel", cls: "bg-gray-400" }],
+  scheduled: [{ to: "in_progress", label: "Start", cls: "bg-[var(--cmp-color-information)]" }, { to: "cancelled", label: "Cancel", cls: "bg-gray-400" }],
+  in_progress: [{ to: "held", label: "Close (held)", cls: "bg-[var(--cmp-color-success)]" }, { to: "cancelled", label: "Cancel", cls: "bg-gray-400" }],
   held: [], cancelled: [],
 };
-const OUT_TONE: Record<string, string> = { carried: "text-emerald-700 bg-emerald-100", rejected: "text-rose-700 bg-rose-100", deferred: "text-amber-700 bg-amber-100", tabled: "text-gray-600 bg-gray-200" };
-const ATT_TONE: Record<string, string> = { present: "bg-emerald-500", apologies: "bg-amber-500", absent: "bg-rose-500", invited: "bg-gray-300" };
+const OUT_TONE: Record<string, string> = { carried: "text-emerald-700 bg-[var(--cmp-surface-success)]", rejected: "text-[var(--cmp-text-error)] bg-[var(--cmp-surface-error)]", deferred: "text-[var(--cmp-text-warning)] bg-[var(--cmp-surface-warning)]", tabled: "text-gray-600 bg-gray-200" };
+const ATT_TONE: Record<string, string> = { present: "bg-[var(--cmp-color-success)]", apologies: "bg-[var(--cmp-color-warning)]", absent: "bg-[var(--cmp-color-error)]", invited: "bg-gray-300" };
 const fmt = (d: string | null) => (d ? new Date(d).toLocaleString("en-GB", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" }) : "—");
 const inp = "border border-gray-200 rounded-lg px-2 py-1 text-[12px]";
 
@@ -48,7 +48,7 @@ export default function MeetingsAdmin({ meetings, offices, people, scopeHid, isS
 
   return (
     <div className="space-y-4">
-      {err && <div className="bg-rose-50 border border-rose-200 text-rose-700 rounded-lg px-3 py-2 text-[12px]">{err}</div>}
+      {err && <div className="bg-[var(--cmp-surface-error)] border border-[var(--cmp-color-error)] text-[var(--cmp-text-error)] rounded-lg px-3 py-2 text-[12px]">{err}</div>}
       <div className="flex justify-between items-center">
         <p className="text-[12px] text-gray-500">{meetings.length} meeting{meetings.length === 1 ? "" : "s"}</p>
         <button onClick={() => setScheduling(v => !v)} className="text-[12px] bg-teal-600 text-white rounded-lg px-3 py-2 hover:bg-teal-700">{scheduling ? "Close" : "＋ Schedule meeting"}</button>
@@ -56,7 +56,7 @@ export default function MeetingsAdmin({ meetings, offices, people, scopeHid, isS
 
       {scheduling && <ScheduleForm offices={offices} scopeHid={scopeHid} isSuper={isSuper} busy={busy} call={call} onDone={() => { setScheduling(false); refresh(); }} />}
 
-      {offices.length === 0 && <div className="bg-blue-50 border border-blue-200 rounded-lg px-3 py-2 text-[12px] text-blue-800">No offices constituted yet — constitute an office first, then schedule its meetings.</div>}
+      {offices.length === 0 && <div className="bg-[var(--cmp-surface-information)] border border-[var(--cmp-color-information)] rounded-lg px-3 py-2 text-[12px] text-blue-800">No offices constituted yet — constitute an office first, then schedule its meetings.</div>}
 
       <div className="bg-white rounded-xl border border-gray-200 divide-y divide-gray-50">
         {meetings.length === 0 && <p className="text-sm text-gray-400 p-6 text-center">No meetings yet. Schedule one above.</p>}
@@ -67,7 +67,7 @@ export default function MeetingsAdmin({ meetings, offices, people, scopeHid, isS
                 <span className="block font-medium text-gray-800 text-[13px] truncate">{m.title}</span>
                 <span className="block text-[10px] text-gray-400 truncate">{m.officeName} · {fmt(m.scheduledAt)}</span>
               </span>
-              <span className={`text-[10px] px-1.5 py-0.5 rounded-full shrink-0 ${m.quorumMet ? "bg-emerald-100 text-emerald-700" : "bg-gray-100 text-gray-500"}`}>quorum {m.present}/{m.requiredQuorum}</span>
+              <span className={`text-[10px] px-1.5 py-0.5 rounded-full shrink-0 ${m.quorumMet ? "bg-[var(--cmp-surface-success)] text-emerald-700" : "bg-gray-100 text-gray-500"}`}>quorum {m.present}/{m.requiredQuorum}</span>
               <span className="text-[10px] text-gray-400 hidden md:inline">{m.decisions.length} decision{m.decisions.length === 1 ? "" : "s"}</span>
               <span className={`text-[10px] px-2 py-0.5 rounded-full shrink-0 ${M_TONE[m.status] ?? "bg-gray-100"}`}>{m.status.replace(/_/g, " ")}</span>
               <span className="text-gray-300 text-xs w-3">{openId === m.id ? "▲" : "▼"}</span>
@@ -132,7 +132,7 @@ function MeetingDetail({ meeting: m, people, busy, call, refresh }: { meeting: M
       <div className="grid md:grid-cols-2 gap-3">
         {/* Attendance / quorum */}
         <div className="bg-white rounded-lg border border-gray-100 p-2.5">
-          <div className="flex items-center justify-between mb-1.5"><p className="text-[11px] font-semibold text-gray-600">Attendance</p><span className={`text-[10px] px-1.5 py-0.5 rounded-full ${m.quorumMet ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"}`}>{m.present}/{m.requiredQuorum} · {m.quorumMet ? "quorum met" : "no quorum"}</span></div>
+          <div className="flex items-center justify-between mb-1.5"><p className="text-[11px] font-semibold text-gray-600">Attendance</p><span className={`text-[10px] px-1.5 py-0.5 rounded-full ${m.quorumMet ? "bg-[var(--cmp-surface-success)] text-emerald-700" : "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]"}`}>{m.present}/{m.requiredQuorum} · {m.quorumMet ? "quorum met" : "no quorum"}</span></div>
           <div className="space-y-1 max-h-44 overflow-y-auto">
             {m.attendance.length === 0 && <p className="text-[11px] text-gray-400">No invitees (office has no active appointees).</p>}
             {m.attendance.map(a => (
@@ -151,7 +151,7 @@ function MeetingDetail({ meeting: m, people, busy, call, refresh }: { meeting: M
           <div className="space-y-1 mb-2 max-h-36 overflow-y-auto">
             {m.agenda.length === 0 && <p className="text-[11px] text-gray-400">No agenda items.</p>}
             {m.agenda.map(a => (
-              <div key={a.id} className="flex items-center gap-2 text-[12px]"><span className="text-gray-300 tabular-nums w-4">{a.seq}</span><span className="flex-1 truncate text-gray-700">{a.title}</span><button disabled={busy} onClick={() => delAgenda(a.id)} className="text-rose-400 hover:text-rose-600 text-[11px] disabled:opacity-40">×</button></div>
+              <div key={a.id} className="flex items-center gap-2 text-[12px]"><span className="text-gray-300 tabular-nums w-4">{a.seq}</span><span className="flex-1 truncate text-gray-700">{a.title}</span><button disabled={busy} onClick={() => delAgenda(a.id)} className="text-rose-400 hover:text-[var(--cmp-text-error)] text-[11px] disabled:opacity-40">×</button></div>
             ))}
           </div>
           <div className="flex gap-1.5"><input className={`${inp} flex-1 min-w-0`} value={agendaTitle} onChange={e => setAgendaTitle(e.target.value)} placeholder="Add agenda item" onKeyDown={e => { if (e.key === "Enter") addAgenda(); }} /><button disabled={busy || !agendaTitle.trim()} onClick={addAgenda} className="text-[12px] bg-teal-600 text-white rounded-lg px-2 disabled:opacity-40">Add</button></div>
@@ -183,7 +183,7 @@ function MeetingDetail({ meeting: m, people, busy, call, refresh }: { meeting: M
         <div className="space-y-1 mb-2">
           {m.actions.length === 0 && <p className="text-[11px] text-gray-400">No actions.</p>}
           {m.actions.map(a => (
-            <div key={a.id} className="flex items-center gap-2 text-[12px]"><span className="flex-1 truncate text-gray-700">{a.title}</span><span className="text-[10px] text-gray-400 truncate w-28">{a.ownerName ?? "unassigned"}{a.dueDate ? ` · ${a.dueDate}` : ""}</span>{a.status === "completed" ? <span className="text-[10px] text-emerald-600">done</span> : <button disabled={busy} onClick={() => completeAction(a.id)} className="text-[10px] text-teal-600 hover:underline disabled:opacity-40">complete</button>}</div>
+            <div key={a.id} className="flex items-center gap-2 text-[12px]"><span className="flex-1 truncate text-gray-700">{a.title}</span><span className="text-[10px] text-gray-400 truncate w-28">{a.ownerName ?? "unassigned"}{a.dueDate ? ` · ${a.dueDate}` : ""}</span>{a.status === "completed" ? <span className="text-[10px] text-[var(--cmp-text-success)]">done</span> : <button disabled={busy} onClick={() => completeAction(a.id)} className="text-[10px] text-teal-600 hover:underline disabled:opacity-40">complete</button>}</div>
           ))}
         </div>
         <div className="grid grid-cols-1 md:grid-cols-4 gap-1.5">
@@ -229,7 +229,7 @@ function DecisionForm({ base, people, attendees, busy, call, refresh }: { base: 
     if (r) { setTitle(""); setVf(0); setVa(0); setVab(0); setRoll({}); setActTitle(""); setActOwner(""); setOpen(false); refresh(); }
   }
   if (!open) return <button onClick={() => setOpen(true)} className="text-[12px] text-teal-600 hover:underline">＋ Record a decision</button>;
-  const voteBtn = (aId: string, v: "for" | "against" | "abstain") => { const active = (roll[aId] ?? "abstain") === v; const on = v === "for" ? "bg-emerald-600 text-white" : v === "against" ? "bg-rose-600 text-white" : "bg-gray-500 text-white"; return <button key={v} type="button" onClick={() => setRoll(r => ({ ...r, [aId]: v }))} className={`text-[10px] w-5 py-0.5 rounded ${active ? on : "text-gray-400 hover:text-gray-700"}`}>{v[0].toUpperCase()}</button>; };
+  const voteBtn = (aId: string, v: "for" | "against" | "abstain") => { const active = (roll[aId] ?? "abstain") === v; const on = v === "for" ? "bg-[var(--cmp-color-success)] text-white" : v === "against" ? "bg-[var(--cmp-color-error)] text-white" : "bg-gray-500 text-white"; return <button key={v} type="button" onClick={() => setRoll(r => ({ ...r, [aId]: v }))} className={`text-[10px] w-5 py-0.5 rounded ${active ? on : "text-gray-400 hover:text-gray-700"}`}>{v[0].toUpperCase()}</button>; };
   return (
     <div className="border-t border-gray-100 pt-2 space-y-1.5">
       <input className={`${inp} w-full`} value={title} onChange={e => setTitle(e.target.value)} placeholder="Decision / resolution" />

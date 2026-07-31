@@ -20,9 +20,9 @@ export default function SessionActions({ id }: { id: string }) {
   return (
     <span className="flex gap-1.5 shrink-0">
       <button onClick={() => act("completed")} disabled={busy} title="Mark completed"
-        className="text-[10px] font-semibold text-green-700 border border-green-200 hover:bg-green-50 px-2 py-0.5 rounded-lg transition-colors disabled:opacity-50">✓ Done</button>
+        className="text-[10px] font-semibold text-[var(--cmp-text-success)] border border-[var(--cmp-color-success)] hover:bg-[var(--cmp-surface-success)] px-2 py-0.5 rounded-lg transition-colors disabled:opacity-50">✓ Done</button>
       <button onClick={() => act("cancelled")} disabled={busy} title="Cancel session"
-        className="text-[10px] font-semibold text-gray-400 border border-gray-200 hover:text-red-600 hover:border-red-200 px-2 py-0.5 rounded-lg transition-colors disabled:opacity-50">✕</button>
+        className="text-[10px] font-semibold text-gray-400 border border-gray-200 hover:text-[var(--cmp-text-critical)] hover:border-[var(--cmp-color-critical)] px-2 py-0.5 rounded-lg transition-colors disabled:opacity-50">✕</button>
     </span>
   );
 }

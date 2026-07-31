@@ -87,7 +87,7 @@ export default function AdaptiveExam({ exams }: { exams: Exam[] }) {
             <input value={choice} onChange={e => setChoice(e.target.value)} placeholder="Your answer" className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2.5 focus:outline-none focus:ring-1 focus:ring-violet-400" />
           )}
           <button onClick={submit} disabled={busy || !choice} className="mt-4 text-sm font-semibold text-white bg-violet-600 hover:bg-violet-700 disabled:opacity-40 rounded-lg px-5 py-2.5">{busy ? "…" : "Submit answer"}</button>
-          {err && <p className="text-[11px] text-rose-600 mt-2">{err}</p>}
+          {err && <p className="text-[11px] text-[var(--cmp-text-error)] mt-2">{err}</p>}
         </div>
       </div>
     );
@@ -95,7 +95,7 @@ export default function AdaptiveExam({ exams }: { exams: Exam[] }) {
 
   return (
     <div className="flex flex-col gap-3">
-      {err && <p className="text-[11px] text-rose-600">{err}</p>}
+      {err && <p className="text-[11px] text-[var(--cmp-text-error)]">{err}</p>}
       {exams.length === 0 ? (
         <div className="bg-white rounded-xl border border-gray-100 p-8 text-center text-sm text-gray-400">No adaptive exams available yet.</div>
       ) : exams.map(e => (

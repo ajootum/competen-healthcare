@@ -18,8 +18,8 @@ type Enrollment = {
 };
 
 const levelColors: Record<string, string> = {
-  beginner:     "bg-green-100 text-green-700",
-  intermediate: "bg-blue-100 text-blue-700",
+  beginner:     "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]",
+  intermediate: "bg-[var(--cmp-surface-information)] text-blue-700",
   advanced:     "bg-purple-100 text-purple-700",
 };
 
@@ -95,10 +95,10 @@ export default function CoursesClient({ courses, enrollments }: { courses: Cours
                   {enrollment.completed_at ? (
                     <div>
                       <div className="flex items-center gap-2 mb-2">
-                        <div className="flex-1 h-1.5 bg-gray-100 rounded-full"><div className="h-full bg-green-500 rounded-full w-full" /></div>
-                        <span className="text-[10px] bg-green-50 text-green-600 px-2 py-0.5 rounded font-medium">Done</span>
+                        <div className="flex-1 h-1.5 bg-gray-100 rounded-full"><div className="h-full bg-[var(--cmp-color-success)] rounded-full w-full" /></div>
+                        <span className="text-[10px] bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)] px-2 py-0.5 rounded font-medium">Done</span>
                       </div>
-                      <a href={`/dashboard/courses/${course.id}`} className="block w-full text-center text-xs bg-green-50 text-green-700 font-medium py-2 rounded-lg hover:bg-green-100 transition-colors">
+                      <a href={`/dashboard/courses/${course.id}`} className="block w-full text-center text-xs bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)] font-medium py-2 rounded-lg hover:bg-[var(--cmp-surface-success)] transition-colors">
                         Review course →
                       </a>
                     </div>

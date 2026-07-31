@@ -17,7 +17,7 @@ export default async function ForecastingPage({ searchParams }: { searchParams: 
   ]);
 
   const strip = <TopStrip code="UMW-OPC-009 · Operational Command" title="Operational Forecasting & Predictive Intelligence" departments={departments} />;
-  if (!d.provisioned) return <div className="space-y-4">{strip}<div className="bg-amber-50 border border-amber-200 rounded-xl p-6"><p className="font-semibold text-amber-900">⚙️ Operational stores not provisioned</p><p className="text-sm text-amber-800 mt-1">Apply migration 101 then seed op_ops_snapshots.</p></div></div>;
+  if (!d.provisioned) return <div className="space-y-4">{strip}<div className="bg-[var(--cmp-surface-warning)] border border-[var(--cmp-color-warning)] rounded-xl p-6"><p className="font-semibold text-amber-900">⚙️ Operational stores not provisioned</p><p className="text-sm text-amber-800 mt-1">Apply migration 101 then seed op_ops_snapshots.</p></div></div>;
 
   const k = d.kpis;
   const maxVol = Math.max(1, ...d.volume.flatMap((v: any) => [v.admissions, v.discharges]));
@@ -44,11 +44,11 @@ export default async function ForecastingPage({ searchParams }: { searchParams: 
           <Card title="Patient Volume Forecast" className="xl:col-span-2" right={<span className="text-[9px] text-slate-500">history + naive tail</span>}>
             <div className="flex items-end gap-1 h-32">{d.volume.map((v: any, i: number) => (
               <div key={i} className={`flex-1 flex flex-col items-center gap-0.5 ${v.forecast ? "opacity-60" : ""}`} title={`${v.label}: +${v.admissions} / -${v.discharges}`}>
-                <div className="w-full flex items-end justify-center gap-0.5" style={{ height: "104px" }}><div className="w-1.5 bg-emerald-500 rounded-t" style={{ height: `${(v.admissions / maxVol) * 100}%` }} /><div className="w-1.5 bg-blue-500 rounded-t" style={{ height: `${(v.discharges / maxVol) * 100}%` }} /></div>
+                <div className="w-full flex items-end justify-center gap-0.5" style={{ height: "104px" }}><div className="w-1.5 bg-[var(--cmp-color-success)] rounded-t" style={{ height: `${(v.admissions / maxVol) * 100}%` }} /><div className="w-1.5 bg-[var(--cmp-color-information)] rounded-t" style={{ height: `${(v.discharges / maxVol) * 100}%` }} /></div>
                 <span className="text-[6px] text-slate-500">{v.label}</span>
               </div>
             ))}</div>
-            <div className="flex gap-3 mt-1 text-[9px] text-slate-400"><span className="flex items-center gap-1"><span className="w-2 h-2 bg-emerald-500 rounded-full" />Admissions</span><span className="flex items-center gap-1"><span className="w-2 h-2 bg-blue-500 rounded-full" />Discharges</span><span className="text-slate-500">faded = forecast</span></div>
+            <div className="flex gap-3 mt-1 text-[9px] text-slate-400"><span className="flex items-center gap-1"><span className="w-2 h-2 bg-[var(--cmp-color-success)] rounded-full" />Admissions</span><span className="flex items-center gap-1"><span className="w-2 h-2 bg-[var(--cmp-color-information)] rounded-full" />Discharges</span><span className="text-slate-500">faded = forecast</span></div>
           </Card>
 
           <Card title="Staffing Forecast" right={<span className="text-[9px] text-slate-500">req vs avail</span>}>
@@ -63,7 +63,7 @@ export default async function ForecastingPage({ searchParams }: { searchParams: 
 
           <Card title="Predictive Alerts">
             <div className="space-y-2">{d.alerts.map((a: any, i: number) => (
-              <div key={i} className="flex items-start gap-2"><span className={`mt-1 w-2 h-2 rounded-full shrink-0 ${a.tone === "rose" ? "bg-rose-500" : a.tone === "amber" ? "bg-amber-500" : "bg-emerald-500"}`} /><div className="min-w-0"><p className="text-[12px] text-slate-200 leading-tight">{a.title}</p><p className="text-[10px] text-slate-500">{a.sub}</p></div></div>
+              <div key={i} className="flex items-start gap-2"><span className={`mt-1 w-2 h-2 rounded-full shrink-0 ${a.tone === "rose" ? "bg-[var(--cmp-color-error)]" : a.tone === "amber" ? "bg-[var(--cmp-color-warning)]" : "bg-[var(--cmp-color-success)]"}`} /><div className="min-w-0"><p className="text-[12px] text-slate-200 leading-tight">{a.title}</p><p className="text-[10px] text-slate-500">{a.sub}</p></div></div>
             ))}</div>
           </Card>
         </div>
@@ -76,7 +76,7 @@ export default async function ForecastingPage({ searchParams }: { searchParams: 
 
           <Card title="Patient Flow Bottlenecks" className="xl:col-span-2">
             {d.bottlenecks.length ? <div className="space-y-2 text-[11px]">{d.bottlenecks.map((b: any) => (
-              <div key={b.label} className="flex items-center gap-2"><span className="text-slate-300 flex-1 capitalize truncate">{b.label}</span><div className="flex-1 h-2 rounded-full bg-slate-700 overflow-hidden"><div className={`h-full rounded-full ${b.impact === "High" ? "bg-rose-500" : b.impact === "Medium" ? "bg-amber-500" : "bg-emerald-500"}`} style={{ width: `${Math.min(100, b.n * 12)}%` }} /></div><span className="text-white font-semibold tabular-nums w-8 text-right">{b.n}</span><Pill text={b.impact} tone={b.impact === "High" ? "rose" : b.impact === "Medium" ? "amber" : "emerald"} /></div>
+              <div key={b.label} className="flex items-center gap-2"><span className="text-slate-300 flex-1 capitalize truncate">{b.label}</span><div className="flex-1 h-2 rounded-full bg-slate-700 overflow-hidden"><div className={`h-full rounded-full ${b.impact === "High" ? "bg-[var(--cmp-color-error)]" : b.impact === "Medium" ? "bg-[var(--cmp-color-warning)]" : "bg-[var(--cmp-color-success)]"}`} style={{ width: `${Math.min(100, b.n * 12)}%` }} /></div><span className="text-white font-semibold tabular-nums w-8 text-right">{b.n}</span><Pill text={b.impact} tone={b.impact === "High" ? "rose" : b.impact === "Medium" ? "amber" : "emerald"} /></div>
             ))}</div> : <p className="text-xs text-slate-400 py-4 text-center">No active bottlenecks. ✅</p>}
           </Card>
 

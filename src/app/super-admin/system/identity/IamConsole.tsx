@@ -84,7 +84,7 @@ export default function IamConsole({ users }: { users: Picker[] }) {
         </div>
       </div>
 
-      {msg && <p className={`text-xs rounded-lg px-3 py-2 mx-5 mt-3 break-all ${msg.k === "ok" ? "bg-green-50 text-green-800" : "bg-amber-50 text-amber-800"}`}>{msg.t}</p>}
+      {msg && <p className={`text-xs rounded-lg px-3 py-2 mx-5 mt-3 break-all ${msg.k === "ok" ? "bg-[var(--cmp-surface-success)] text-green-800" : "bg-[var(--cmp-surface-warning)] text-amber-800"}`}>{msg.t}</p>}
 
       <div className="p-5">
         {tab === "create" && (

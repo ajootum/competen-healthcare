@@ -30,7 +30,7 @@ export default function CpuDetail({ cpu }: { cpu: CpuDetailData }) {
       <div className="flex items-center gap-2 mb-2 flex-wrap">
         {cpu.code && <span className="text-[10px] font-mono text-gray-400">{cpu.code}</span>}
         <span className="text-xs font-bold text-gray-800">{cpu.name}</span>
-        <span className={`text-[8px] font-bold px-1.5 py-0.5 rounded uppercase ${cpu.pubStatus === "published" ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-600"}`}>{cpu.pubStatus}</span>
+        <span className={`text-[8px] font-bold px-1.5 py-0.5 rounded uppercase ${cpu.pubStatus === "published" ? "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]" : "bg-gray-100 text-gray-600"}`}>{cpu.pubStatus}</span>
       </div>
       <div className="flex items-center gap-1 mb-3 flex-wrap border-b border-gray-100">
         {TABS.map(t => (

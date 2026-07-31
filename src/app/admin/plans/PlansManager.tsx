@@ -14,8 +14,8 @@ type Person = { id: string; full_name: string };
 type Cpu = { id: string; name: string };
 
 const STATUS_CLS: Record<string, string> = {
-  draft: "bg-gray-100 text-gray-500", active: "bg-green-100 text-green-700",
-  complete: "bg-teal-100 text-teal-700", cancelled: "bg-red-100 text-red-600",
+  draft: "bg-gray-100 text-gray-500", active: "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]",
+  complete: "bg-teal-100 text-teal-700", cancelled: "bg-[var(--cmp-surface-critical)] text-[var(--cmp-text-critical)]",
 };
 
 export default function PlansManager({ plans, workers, assessors, cpus }: { plans: Plan[]; workers: Person[]; assessors: Person[]; cpus: Cpu[] }) {
@@ -129,7 +129,7 @@ export default function PlansManager({ plans, workers, assessors, cpus }: { plan
             <div>
               <div className="flex items-center gap-2">
                 <p className="font-semibold text-gray-900 text-sm">{p.name}</p>
-                {p.is_template && <span className="text-[10px] bg-blue-50 text-blue-600 px-1.5 py-0.5 rounded">Template</span>}
+                {p.is_template && <span className="text-[10px] bg-[var(--cmp-surface-information)] text-[var(--cmp-text-information)] px-1.5 py-0.5 rounded">Template</span>}
                 <span className={`text-[10px] font-bold px-2 py-0.5 rounded capitalize ${STATUS_CLS[p.status] ?? "bg-gray-100 text-gray-500"}`}>{p.status}</span>
               </div>
               <p className="text-[11px] text-gray-500 mt-1">
@@ -143,9 +143,9 @@ export default function PlansManager({ plans, workers, assessors, cpus }: { plan
               </p>
             </div>
             <div className="flex items-center gap-1.5 shrink-0">
-              {p.status === "draft" && <button onClick={() => api("PATCH", { id: p.id, status: "active" })} className="px-2.5 py-1 text-xs text-green-600 border border-green-200 rounded-lg hover:bg-green-50">Activate</button>}
+              {p.status === "draft" && <button onClick={() => api("PATCH", { id: p.id, status: "active" })} className="px-2.5 py-1 text-xs text-[var(--cmp-text-success)] border border-[var(--cmp-color-success)] rounded-lg hover:bg-[var(--cmp-surface-success)]">Activate</button>}
               {p.status === "active" && <button onClick={() => api("PATCH", { id: p.id, status: "complete" })} className="px-2.5 py-1 text-xs text-teal-600 border border-teal-200 rounded-lg hover:bg-teal-50">Complete</button>}
-              <button onClick={() => del(p)} className="px-2.5 py-1 text-xs text-red-500 border border-red-100 rounded-lg hover:bg-red-50">Delete</button>
+              <button onClick={() => del(p)} className="px-2.5 py-1 text-xs text-red-500 border border-[var(--cmp-color-critical)] rounded-lg hover:bg-[var(--cmp-surface-critical)]">Delete</button>
             </div>
           </div>
         </div>

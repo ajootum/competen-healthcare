@@ -81,7 +81,7 @@ export default async function NursesPage() {
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
         {[
           { label: "Total Nurses",     value: nurses?.length ?? 0, color: "text-teal-600",  icon: "👩‍⚕️" },
-          { label: "On CPD Target",    value: onTrack,             color: "text-green-600", icon: "✅" },
+          { label: "On CPD Target",    value: onTrack,             color: "text-[var(--cmp-text-success)]", icon: "✅" },
           { label: "At Risk (<10h)",   value: atRisk,              color: "text-red-500",   icon: "⚠️" },
           { label: "Certs Expiring",   value: withExpiring,        color: "text-amber-500", icon: "📋" },
         ].map(s => (
@@ -124,10 +124,10 @@ export default async function NursesPage() {
               <tbody className="divide-y divide-gray-50">
                 {rows.map(nurse => {
                   const pct = Math.min(Math.round((nurse.cpdHours / CPD_TARGET) * 100), 100);
-                  const status = nurse.cpdHours >= CPD_TARGET ? { label: "On Target",    cls: "bg-green-100 text-green-700" }
-                    : nurse.cpdHours >= 15                    ? { label: "In Progress",  cls: "bg-blue-100 text-blue-700" }
-                    : nurse.cpdHours > 0                      ? { label: "Behind",       cls: "bg-amber-100 text-amber-700" }
-                    : { label: "Not Started", cls: "bg-red-100 text-red-600" };
+                  const status = nurse.cpdHours >= CPD_TARGET ? { label: "On Target",    cls: "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]" }
+                    : nurse.cpdHours >= 15                    ? { label: "In Progress",  cls: "bg-[var(--cmp-surface-information)] text-blue-700" }
+                    : nurse.cpdHours > 0                      ? { label: "Behind",       cls: "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]" }
+                    : { label: "Not Started", cls: "bg-[var(--cmp-surface-critical)] text-[var(--cmp-text-critical)]" };
                   return (
                     <tr key={nurse.id} className="hover:bg-gray-50/40">
                       <td className="px-5 py-3.5">
@@ -138,7 +138,7 @@ export default async function NursesPage() {
                           <div>
                             <p className="font-medium text-gray-900 text-sm">{nurse.full_name}</p>
                             {nurse.expiringComps > 0 && (
-                              <p className="text-[10px] text-amber-600">⚠️ {nurse.expiringComps} cert{nurse.expiringComps > 1 ? "s" : ""} expiring soon</p>
+                              <p className="text-[10px] text-[var(--cmp-text-warning)]">⚠️ {nurse.expiringComps} cert{nurse.expiringComps > 1 ? "s" : ""} expiring soon</p>
                             )}
                           </div>
                         </div>
@@ -147,7 +147,7 @@ export default async function NursesPage() {
                       <td className="px-4 py-3.5">
                         <div className="flex items-center gap-2">
                           <div className="w-20 h-1.5 bg-gray-100 rounded-full overflow-hidden">
-                            <div className={`h-full rounded-full ${pct === 100 ? "bg-green-500" : pct >= 50 ? "bg-blue-400" : "bg-amber-400"}`}
+                            <div className={`h-full rounded-full ${pct === 100 ? "bg-[var(--cmp-color-success)]" : pct >= 50 ? "bg-[var(--cmp-color-information)]" : "bg-[var(--cmp-color-warning)]"}`}
                               style={{ width: `${pct}%` }} />
                           </div>
                           <span className="text-xs text-gray-700 font-medium">{nurse.cpdHours.toFixed(0)}h</span>

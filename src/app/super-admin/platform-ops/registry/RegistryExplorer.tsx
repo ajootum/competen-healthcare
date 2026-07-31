@@ -9,9 +9,9 @@ import { cardClass } from "@/components/ui/primitives";
 // (§19.4), plus the "sync from catalogue" action. Read-only over the registry; the schema editor and
 // dependency graph are next-phase.
 /* eslint-disable @typescript-eslint/no-explicit-any */
-const TYPE_TONE: Record<string, string> = { PLATFORM: "bg-gray-800 text-white", PRODUCT_SUITE: "bg-gray-600 text-white", WORKSPACE: "bg-violet-100 text-violet-700", NAVIGATION_SECTION: "bg-sky-100 text-sky-700", MODULE: "bg-emerald-100 text-emerald-700", WIDGET: "bg-amber-100 text-amber-700" };
-const classTone = (c: string) => (c.startsWith("mandatory") ? "bg-rose-50 text-rose-700" : c === "optional" ? "bg-emerald-50 text-emerald-700" : c === "conditional" ? "bg-amber-50 text-amber-700" : "bg-gray-50 text-gray-600");
-const safetyTone = (s: string) => (s.includes("critical") ? "bg-rose-50 text-rose-700" : s.includes("relevant") ? "bg-amber-50 text-amber-700" : "bg-gray-50 text-gray-500");
+const TYPE_TONE: Record<string, string> = { PLATFORM: "bg-gray-800 text-white", PRODUCT_SUITE: "bg-gray-600 text-white", WORKSPACE: "bg-violet-100 text-violet-700", NAVIGATION_SECTION: "bg-[var(--cmp-surface-information)] text-[var(--cmp-text-information)]", MODULE: "bg-[var(--cmp-surface-success)] text-emerald-700", WIDGET: "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]" };
+const classTone = (c: string) => (c.startsWith("mandatory") ? "bg-[var(--cmp-surface-error)] text-[var(--cmp-text-error)]" : c === "optional" ? "bg-[var(--cmp-surface-success)] text-emerald-700" : c === "conditional" ? "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]" : "bg-gray-50 text-gray-600");
+const safetyTone = (s: string) => (s.includes("critical") ? "bg-[var(--cmp-surface-error)] text-[var(--cmp-text-error)]" : s.includes("relevant") ? "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]" : "bg-gray-50 text-gray-500");
 
 export default function RegistryExplorer({ objects }: { objects: any[] }) {
   const router = useRouter();

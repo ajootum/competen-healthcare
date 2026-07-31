@@ -45,7 +45,7 @@ export default async function StudioLearningPage() {
               { label: "Curricula / programmes", value: lp.kpis.curricula, tone: "text-gray-900" },
               { label: "Learning resources", value: lp.kpis.resources, tone: "text-gray-900" },
               { label: "Curriculum modules", value: lp.kpis.modules, tone: "text-gray-900" },
-              { label: "Competency coverage", value: `${lp.kpis.coverage}%`, tone: lp.kpis.coverage >= 50 ? "text-teal-600" : "text-amber-600" },
+              { label: "Competency coverage", value: `${lp.kpis.coverage}%`, tone: lp.kpis.coverage >= 50 ? "text-teal-600" : "text-[var(--cmp-text-warning)]" },
               { label: "Active pathways", value: lp.kpis.activePathways, tone: "text-gray-900" },
             ].map(k => (
               <div key={k.label} className="bg-white rounded-xl border border-gray-100 p-3.5">

@@ -21,7 +21,7 @@ export async function cmoGuard() {
   return { admin, isSuper, hid };
 }
 
-export const PILL: Record<string, string> = { slate: "bg-gray-100 text-gray-600", blue: "bg-blue-50 text-blue-700", emerald: "bg-emerald-50 text-emerald-700", amber: "bg-amber-50 text-amber-700", rose: "bg-rose-50 text-rose-700", violet: "bg-violet-50 text-violet-700", teal: "bg-teal-50 text-teal-700" };
+export const PILL: Record<string, string> = { slate: "bg-gray-100 text-gray-600", blue: "bg-[var(--cmp-surface-information)] text-blue-700", emerald: "bg-[var(--cmp-surface-success)] text-emerald-700", amber: "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]", rose: "bg-[var(--cmp-surface-error)] text-[var(--cmp-text-error)]", violet: "bg-violet-50 text-violet-700", teal: "bg-teal-50 text-teal-700" };
 
 export function Head({ code, title, sub }: { code: string; title: string; sub?: string }) {
   return <div><p className="text-[11px] font-semibold text-teal-600 uppercase tracking-wide">{code}</p><h1 className="text-xl font-bold text-gray-900">{title}</h1>{sub && <p className="text-sm text-gray-500 mt-0.5 max-w-3xl">{sub}</p>}</div>;
@@ -40,7 +40,7 @@ export function Pill({ text, tone }: { text: string; tone?: string }) {
 }
 
 export function Progress({ pct, tone }: { pct: number; tone?: string }) {
-  const color = tone ?? (pct >= 80 ? "bg-emerald-500" : pct >= 50 ? "bg-teal-500" : pct >= 25 ? "bg-amber-500" : "bg-rose-500");
+  const color = tone ?? (pct >= 80 ? "bg-[var(--cmp-color-success)]" : pct >= 50 ? "bg-teal-500" : pct >= 25 ? "bg-[var(--cmp-color-warning)]" : "bg-[var(--cmp-color-error)]");
   return <div className="h-1.5 rounded-full bg-gray-100 overflow-hidden"><div className={`h-full rounded-full ${color}`} style={{ width: `${Math.min(100, Math.max(0, pct))}%` }} /></div>;
 }
 
@@ -80,7 +80,7 @@ export function Bars({ rows, colors }: { rows: { label: string; n: number; extra
 }
 
 export function Provision({ module, part }: { module: string; part?: string }) {
-  return <div className="bg-amber-50 border border-amber-200 rounded-xl p-6"><p className="font-semibold text-amber-900">⚙️ Competency Office expansion not provisioned</p><p className="text-sm text-amber-800 mt-1">Apply migrations <code className="font-mono">114</code> + <code className="font-mono">115</code>{part ? ` (${part})` : ""}, then seed with <code className="font-mono">node scripts/seed-cmo-expansion.mjs</code> to activate {module}.</p></div>;
+  return <div className="bg-[var(--cmp-surface-warning)] border border-[var(--cmp-color-warning)] rounded-xl p-6"><p className="font-semibold text-amber-900">⚙️ Competency Office expansion not provisioned</p><p className="text-sm text-amber-800 mt-1">Apply migrations <code className="font-mono">114</code> + <code className="font-mono">115</code>{part ? ` (${part})` : ""}, then seed with <code className="font-mono">node scripts/seed-cmo-expansion.mjs</code> to activate {module}.</p></div>;
 }
 
 export function Foot({ children }: { children: any }) { return <p className="text-[11px] text-gray-400">{children}</p>; }

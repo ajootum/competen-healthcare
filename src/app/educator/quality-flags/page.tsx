@@ -94,7 +94,7 @@ export default async function QualityFlagsPage() {
   const order = { high: 0, medium: 1, low: 2 } as const;
   flags.sort((a, b) => order[a.severity] - order[b.severity]);
 
-  const SEV = { high: "bg-red-100 text-red-700", medium: "bg-amber-100 text-amber-700", low: "bg-gray-100 text-gray-600" };
+  const SEV = { high: "bg-[var(--cmp-surface-critical)] text-[var(--cmp-text-critical)]", medium: "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]", low: "bg-gray-100 text-gray-600" };
 
   return (
     <div className="max-w-4xl">

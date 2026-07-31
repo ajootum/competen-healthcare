@@ -65,8 +65,8 @@ export default async function OperatingModelPage() {
           <Kpi label="Program effectiveness" value={k.programEff != null ? `${k.programEff}%` : "—"} sub="avg completion" />
           <Kpi label="Mapping coverage" value={k.mappingCov != null ? `${k.mappingCov}%` : "—"} sub="workforce mapped" />
           <Kpi label="Active initiatives" value={k.activeInitiatives} sub="programs + campaigns" />
-          <Kpi label="At-risk programs" value={k.atRiskPrograms} sub="need attention" tone={k.atRiskPrograms ? "text-amber-600" : "text-gray-900"} />
-          <Kpi label="Critical gaps" value={k.criticalGaps} sub="capability risk" tone={k.criticalGaps ? "text-rose-600" : "text-gray-900"} />
+          <Kpi label="At-risk programs" value={k.atRiskPrograms} sub="need attention" tone={k.atRiskPrograms ? "text-[var(--cmp-text-warning)]" : "text-gray-900"} />
+          <Kpi label="Critical gaps" value={k.criticalGaps} sub="capability risk" tone={k.criticalGaps ? "text-[var(--cmp-text-error)]" : "text-gray-900"} />
         </div>
       )}
 

@@ -86,7 +86,7 @@ export default async function LearnerSupportDashboardPage() {
     { icon: "⚖️", label: "Appeals to moderate", n: (openAppeals ?? []).length, href: "/educator/moderation" },
   ].filter(p => p.n > 0);
 
-  const RISK_CLS = { high: "bg-red-100 text-red-700", medium: "bg-amber-100 text-amber-700" };
+  const RISK_CLS = { high: "bg-[var(--cmp-surface-critical)] text-[var(--cmp-text-critical)]", medium: "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]" };
 
   return (
     <div className="max-w-[1100px]">
@@ -142,7 +142,7 @@ export default async function LearnerSupportDashboardPage() {
               {PENDING.map(p => (
                 <Link key={p.label} href={p.href} className="flex items-center gap-2 text-[11px] text-gray-700 hover:text-purple-700">
                   <span>{p.icon}</span><span className="flex-1">{p.label}</span>
-                  <span className="text-[10px] font-bold bg-red-100 text-red-700 rounded-full px-1.5 py-0.5">{p.n}</span>
+                  <span className="text-[10px] font-bold bg-[var(--cmp-surface-critical)] text-[var(--cmp-text-critical)] rounded-full px-1.5 py-0.5">{p.n}</span>
                 </Link>
               ))}
             </div>

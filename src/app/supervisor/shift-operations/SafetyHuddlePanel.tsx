@@ -67,7 +67,7 @@ export default function SafetyHuddlePanel({ shiftId, provisioned, huddle, editab
           <h2 className="text-sm font-bold text-gray-900">Safety Huddle</h2>
           <p className="text-[11px] text-gray-500">Pre-shift team briefing (SSW-002 §6.7)</p>
         </div>
-        <span className={`text-[9px] font-semibold px-1.5 py-0.5 rounded-full border shrink-0 ${done ? "bg-green-50 text-green-700 border-green-200" : "bg-amber-50 text-amber-700 border-amber-200"}`}>{done ? "completed" : (huddle?.completion_status ?? "not started")}</span>
+        <span className={`text-[9px] font-semibold px-1.5 py-0.5 rounded-full border shrink-0 ${done ? "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)] border-[var(--cmp-color-success)]" : "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)] border-[var(--cmp-color-warning)]"}`}>{done ? "completed" : (huddle?.completion_status ?? "not started")}</span>
       </div>
 
       {done && !editable ? (
@@ -100,7 +100,7 @@ export default function SafetyHuddlePanel({ shiftId, provisioned, huddle, editab
           </div>
         </div>
       )}
-      {err && <p className="text-[11px] text-rose-600 mt-2">{err}</p>}
+      {err && <p className="text-[11px] text-[var(--cmp-text-error)] mt-2">{err}</p>}
     </div>
   );
 }

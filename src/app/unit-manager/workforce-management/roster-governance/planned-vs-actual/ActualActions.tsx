@@ -35,7 +35,7 @@ export default function ActualActions({ rosterId, planned }: { rosterId: string;
   if (planned.length === 0) return <p className="text-sm text-gray-400">No planned assignments to confirm.</p>;
   return (
     <div>
-      {err && <div className="mb-2 text-xs text-rose-600">{err}</div>}
+      {err && <div className="mb-2 text-xs text-[var(--cmp-text-error)]">{err}</div>}
       <div className="overflow-x-auto"><table className="w-full text-xs">
         <thead><tr className="text-gray-400 text-left border-b border-gray-100"><th className="py-2 pr-3 font-medium">Staff</th><th className="py-2 pr-3 font-medium">Unit</th><th className="py-2 pr-3 font-medium">Date</th><th className="py-2 pr-3 font-medium">Actual</th><th className="py-2 font-medium">Confirm</th></tr></thead>
         <tbody>{planned.slice(0, 40).map((p: any) => { const b = busy === p.id; return (
@@ -44,7 +44,7 @@ export default function ActualActions({ rosterId, planned }: { rosterId: string;
             <td className="py-2 pr-3 text-gray-500">{p.unit}</td>
             <td className="py-2 pr-3 text-gray-500 whitespace-nowrap">{p.date ? new Date(p.date).toLocaleDateString("en-GB", { day: "numeric", month: "short" }) : "—"} · {p.shift}</td>
             <td className="py-2 pr-3"><div className="flex gap-1"><select value={pick[p.id] ?? ""} onChange={e => setPick(x => ({ ...x, [p.id]: e.target.value }))} className="text-[10px] border border-gray-200 rounded px-1 py-0.5"><option value="">— status —</option>{STATUSES.map(s => <option key={s.v} value={s.v}>{s.l}</option>)}</select>{pick[p.id] && pick[p.id] !== "attended" && <input value={reason[p.id] ?? ""} onChange={e => setReason(x => ({ ...x, [p.id]: e.target.value }))} placeholder="reason" className="text-[10px] border border-gray-200 rounded px-1 py-0.5 w-20" />}</div></td>
-            <td className="py-2"><button disabled={b || !pick[p.id]} onClick={() => confirm(p)} className="text-[10px] px-2 py-1 rounded border border-emerald-200 text-emerald-700 hover:bg-emerald-50 disabled:opacity-40">Confirm</button></td>
+            <td className="py-2"><button disabled={b || !pick[p.id]} onClick={() => confirm(p)} className="text-[10px] px-2 py-1 rounded border border-[var(--cmp-color-success)] text-emerald-700 hover:bg-[var(--cmp-surface-success)] disabled:opacity-40">Confirm</button></td>
           </tr>); })}</tbody>
       </table></div>
     </div>

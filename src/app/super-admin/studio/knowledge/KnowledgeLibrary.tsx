@@ -12,7 +12,7 @@ type Cpu = { id: string; name: string };
 
 const STATUS_CLS: Record<string, string> = {
   draft: "bg-gray-100 text-gray-600",
-  active: "bg-green-100 text-green-700",
+  active: "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]",
   retired: "bg-gray-100 text-gray-400",
 };
 
@@ -55,7 +55,7 @@ export default function KnowledgeLibrary({ objects, cpus }: { objects: KO[]; cpu
 
   return (
     <div className="flex flex-col gap-4">
-      {error && <div className="bg-red-50 text-red-600 text-sm rounded-lg px-4 py-2.5">{error}</div>}
+      {error && <div className="bg-[var(--cmp-surface-critical)] text-[var(--cmp-text-critical)] text-sm rounded-lg px-4 py-2.5">{error}</div>}
 
       {/* Type summary */}
       <div className="flex flex-wrap gap-2">
@@ -147,7 +147,7 @@ export default function KnowledgeLibrary({ objects, cpus }: { objects: KO[]; cpu
                     <div className="flex gap-2">
                       {k.status !== "active" && (
                         <button disabled={busy} onClick={() => api("PATCH", { status: "active" }, k.id)}
-                          className="text-xs font-semibold text-green-700 bg-green-50 hover:bg-green-100 px-3 py-1.5 rounded-lg">
+                          className="text-xs font-semibold text-[var(--cmp-text-success)] bg-[var(--cmp-surface-success)] hover:bg-[var(--cmp-surface-success)] px-3 py-1.5 rounded-lg">
                           Publish
                         </button>
                       )}

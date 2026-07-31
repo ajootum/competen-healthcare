@@ -16,8 +16,8 @@ export const dynamic = "force-dynamic";
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 const card = "bg-white rounded-xl border border-gray-200";
-const WL: Record<string, string> = { Critical: "bg-rose-500", High: "bg-amber-500", Moderate: "bg-sky-500", Low: "bg-emerald-500", "—": "bg-gray-300" };
-const WL_BADGE: Record<string, string> = { Critical: "bg-rose-50 text-rose-700", High: "bg-amber-50 text-amber-700", Moderate: "bg-sky-50 text-sky-700", Low: "bg-emerald-50 text-emerald-700", "—": "bg-gray-100 text-gray-500" };
+const WL: Record<string, string> = { Critical: "bg-[var(--cmp-color-error)]", High: "bg-[var(--cmp-color-warning)]", Moderate: "bg-[var(--cmp-color-information)]", Low: "bg-[var(--cmp-color-success)]", "—": "bg-gray-300" };
+const WL_BADGE: Record<string, string> = { Critical: "bg-[var(--cmp-surface-error)] text-[var(--cmp-text-error)]", High: "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]", Moderate: "bg-[var(--cmp-surface-information)] text-[var(--cmp-text-information)]", Low: "bg-[var(--cmp-surface-success)] text-emerald-700", "—": "bg-gray-100 text-gray-500" };
 
 function Kpi({ label, value, sub, tone }: { label: string; value: any; sub?: string; tone?: string }) {
   return <div className={`${card} p-4`}><p className="text-xs text-gray-500">{label}</p><p className={`text-2xl font-bold tabular-nums mt-1 ${tone ?? "text-gray-900"}`}>{value}</p>{sub && <p className="text-[11px] text-gray-400 mt-0.5">{sub}</p>}</div>;
@@ -48,7 +48,7 @@ export default async function WorkloadOversight() {
     </>
   );
 
-  if (!d.ready) return <div className="space-y-4">{header}<div className="bg-amber-50 border border-amber-200 rounded-xl p-6"><p className="font-semibold text-amber-900">⚙️ No operational data</p><p className="text-sm text-amber-800 mt-1">Workload oversight activates once operational patients and assignments are running.</p></div></div>;
+  if (!d.ready) return <div className="space-y-4">{header}<div className="bg-[var(--cmp-surface-warning)] border border-[var(--cmp-color-warning)] rounded-xl p-6"><p className="font-semibold text-amber-900">⚙️ No operational data</p><p className="text-sm text-amber-800 mt-1">Workload oversight activates once operational patients and assignments are running.</p></div></div>;
 
   const k = d.kpis;
   return (
@@ -56,10 +56,10 @@ export default async function WorkloadOversight() {
       {header}
 
       <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-5 gap-3">
-        <Kpi label="Avg workload index" value={k.avgIndex != null ? `${k.avgIndex}%` : "—"} sub="Across units" tone={k.avgIndex != null && k.avgIndex >= 100 ? "text-rose-600" : k.avgIndex != null && k.avgIndex >= 85 ? "text-amber-600" : "text-emerald-600"} />
-        <Kpi label="Overloaded assignees" value={k.overloaded} sub="Index ≥ 100%" tone={k.overloaded ? "text-rose-600" : "text-emerald-600"} />
-        <Kpi label="Critical units" value={k.criticalUnits} sub="Index ≥ 100%" tone={k.criticalUnits ? "text-rose-600" : "text-emerald-600"} />
-        <Kpi label="Imbalance" value={k.imbalance != null ? `±${k.imbalance}` : "—"} sub="Index spread (σ)" tone={k.imbalance >= 25 ? "text-amber-600" : undefined} />
+        <Kpi label="Avg workload index" value={k.avgIndex != null ? `${k.avgIndex}%` : "—"} sub="Across units" tone={k.avgIndex != null && k.avgIndex >= 100 ? "text-[var(--cmp-text-error)]" : k.avgIndex != null && k.avgIndex >= 85 ? "text-[var(--cmp-text-warning)]" : "text-[var(--cmp-text-success)]"} />
+        <Kpi label="Overloaded assignees" value={k.overloaded} sub="Index ≥ 100%" tone={k.overloaded ? "text-[var(--cmp-text-error)]" : "text-[var(--cmp-text-success)]"} />
+        <Kpi label="Critical units" value={k.criticalUnits} sub="Index ≥ 100%" tone={k.criticalUnits ? "text-[var(--cmp-text-error)]" : "text-[var(--cmp-text-success)]"} />
+        <Kpi label="Imbalance" value={k.imbalance != null ? `±${k.imbalance}` : "—"} sub="Index spread (σ)" tone={k.imbalance >= 25 ? "text-[var(--cmp-text-warning)]" : undefined} />
         <Kpi label="Assignees" value={k.assignees} sub="With active load" />
       </div>
 
@@ -73,7 +73,7 @@ export default async function WorkloadOversight() {
         {/* Redistribution recs */}
         <div className={`${card} p-5`}>
           <h3 className="text-sm font-bold text-gray-900 mb-3">Redistribution recommendations</h3>
-          {d.recs.length === 0 ? <p className="text-sm text-gray-400">Workload is reasonably balanced — no safe redistribution recommended.</p> : <div className="space-y-2">{d.recs.map((r: any, i: number) => (<div key={i} className="rounded-lg border border-emerald-100 bg-emerald-50/30 p-3"><div className="flex items-center gap-2 text-xs font-semibold text-gray-800"><span className="px-1.5 py-0.5 rounded bg-white border border-gray-200">{r.from}</span><span className="text-gray-400">→</span><span className="px-1.5 py-0.5 rounded bg-white border border-gray-200">{r.to}</span></div><p className="text-[11px] text-gray-600 mt-1.5">{r.rationale}</p></div>))}</div>}
+          {d.recs.length === 0 ? <p className="text-sm text-gray-400">Workload is reasonably balanced — no safe redistribution recommended.</p> : <div className="space-y-2">{d.recs.map((r: any, i: number) => (<div key={i} className="rounded-lg border border-[var(--cmp-color-success)] bg-[var(--cmp-surface-success)]/30 p-3"><div className="flex items-center gap-2 text-xs font-semibold text-gray-800"><span className="px-1.5 py-0.5 rounded bg-white border border-gray-200">{r.from}</span><span className="text-gray-400">→</span><span className="px-1.5 py-0.5 rounded bg-white border border-gray-200">{r.to}</span></div><p className="text-[11px] text-gray-600 mt-1.5">{r.rationale}</p></div>))}</div>}
           <p className="text-[10px] text-gray-400 mt-3">Recommendations are advisory and require manager approval before any move. Optimiser with hard-constraint checking + before/after preview is next-phase.</p>
         </div>
       </div>
@@ -84,7 +84,7 @@ export default async function WorkloadOversight() {
         {d.assignees.length === 0 ? <p className="text-sm text-gray-400">No active assignments to a named worker yet — allocation runs during Supervisor assignment.</p> : (
           <div className="overflow-x-auto"><table className="w-full text-xs">
             <thead><tr className="text-gray-400 text-left border-b border-gray-100"><th className="py-2 pr-3 font-medium">Assignee</th><th className="py-2 pr-3 font-medium text-right">Patients</th><th className="py-2 pr-3 font-medium text-right">High acuity</th><th className="py-2 pr-3 font-medium text-right">Acuity pts</th><th className="py-2 pr-3 font-medium text-right">Demand</th><th className="py-2 pr-3 font-medium text-right">Capacity</th><th className="py-2 pr-3 font-medium text-right">Index</th><th className="py-2 font-medium">Status</th></tr></thead>
-            <tbody>{d.assignees.map((a: any, i: number) => (<tr key={i} className="border-b border-gray-50"><td className="py-2 pr-3 text-gray-800 font-medium">{a.name}</td><td className="py-2 pr-3 text-right text-gray-600">{a.patients}</td><td className={`py-2 pr-3 text-right ${a.high ? "text-rose-600 font-semibold" : "text-gray-400"}`}>{a.high || "—"}</td><td className="py-2 pr-3 text-right text-gray-600">{a.acuityPts}</td><td className="py-2 pr-3 text-right text-gray-600">{a.demand}</td><td className="py-2 pr-3 text-right text-gray-400">{a.capacity}</td><td className={`py-2 pr-3 text-right font-semibold ${a.index >= 100 ? "text-rose-600" : a.index >= 85 ? "text-amber-600" : "text-gray-700"}`}>{a.index}%</td><td className="py-2"><span className={`text-[9px] px-1.5 py-0.5 rounded ${WL_BADGE[a.status]}`}>{a.status}</span></td></tr>))}</tbody>
+            <tbody>{d.assignees.map((a: any, i: number) => (<tr key={i} className="border-b border-gray-50"><td className="py-2 pr-3 text-gray-800 font-medium">{a.name}</td><td className="py-2 pr-3 text-right text-gray-600">{a.patients}</td><td className={`py-2 pr-3 text-right ${a.high ? "text-[var(--cmp-text-error)] font-semibold" : "text-gray-400"}`}>{a.high || "—"}</td><td className="py-2 pr-3 text-right text-gray-600">{a.acuityPts}</td><td className="py-2 pr-3 text-right text-gray-600">{a.demand}</td><td className="py-2 pr-3 text-right text-gray-400">{a.capacity}</td><td className={`py-2 pr-3 text-right font-semibold ${a.index >= 100 ? "text-[var(--cmp-text-error)]" : a.index >= 85 ? "text-[var(--cmp-text-warning)]" : "text-gray-700"}`}>{a.index}%</td><td className="py-2"><span className={`text-[9px] px-1.5 py-0.5 rounded ${WL_BADGE[a.status]}`}>{a.status}</span></td></tr>))}</tbody>
           </table></div>
         )}
         <p className="text-[10px] text-gray-400 mt-2">Demand points = 1 base per patient + acuity additive (critical {d.weights.critical} · high {d.weights.high} · medium {d.weights.medium} · low {d.weights.low}) + 0.5 per open task. Capacity = {d.capPerNurse} productive points per assignee (transparent assumption; tenant-configurable is next-phase). Unit-level staff is an even-split proxy — no staff↔ward map is stored.</p>

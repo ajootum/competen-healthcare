@@ -146,7 +146,7 @@ export default async function AssessorLayout({ children }: { children: React.Rea
           <Link href="/assessor/notifications" aria-label="Notifications" className="relative w-9 h-9 rounded-lg flex items-center justify-center text-base">
             🔔
             {badgeValue.unread > 0 && (
-              <span className="absolute top-0.5 right-0.5 bg-red-500 text-white text-[9px] font-bold rounded-full min-w-[15px] h-[15px] px-0.5 flex items-center justify-center">
+              <span className="absolute top-0.5 right-0.5 bg-[var(--cmp-color-critical)] text-white text-[9px] font-bold rounded-full min-w-[15px] h-[15px] px-0.5 flex items-center justify-center">
                 {badgeValue.unread > 99 ? "99+" : badgeValue.unread}
               </span>
             )}

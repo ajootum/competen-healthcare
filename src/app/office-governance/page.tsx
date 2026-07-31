@@ -49,7 +49,7 @@ export default async function OgsCommandCentre() {
                     <td className="py-2 pr-3"><Pill text={o.level} tone={LEVEL_TONE[o.level[0].toUpperCase() + o.level.slice(1)] ?? "slate"} /></td>
                     <td className="py-2 pr-3 text-gray-500">{o.chair ?? <span className="text-rose-500">unfilled</span>}</td>
                     <td className="py-2 pr-3 tabular-nums text-gray-500">{o.members}/{o.quorum}</td>
-                    <td className="py-2 pr-3"><span className={`font-semibold tabular-nums ${o.health >= 85 ? "text-emerald-600" : o.health >= 60 ? "text-amber-600" : "text-rose-600"}`}>{o.health}%</span></td>
+                    <td className="py-2 pr-3"><span className={`font-semibold tabular-nums ${o.health >= 85 ? "text-[var(--cmp-text-success)]" : o.health >= 60 ? "text-[var(--cmp-text-warning)]" : "text-[var(--cmp-text-error)]"}`}>{o.health}%</span></td>
                     <td className="py-2"><Pill text={(o.status ?? (o.active ? "active" : "inactive")).replace(/_/g, " ")} tone={STATUS_TONE[o.status] ?? (o.active ? "emerald" : "slate")} /></td>
                   </tr>
                 ))}

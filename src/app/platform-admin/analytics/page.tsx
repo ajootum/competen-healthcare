@@ -36,7 +36,7 @@ export default async function AnalyticsPage() {
         <div className={card}><div className="text-3xl font-bold tabular-nums text-gray-900">{summary.tenants}</div><div className="text-xs text-gray-500 mt-1">Tenants</div></div>
         <div className={card}><div className="text-3xl font-bold tabular-nums text-gray-900">{summary.facilities}</div><div className="text-xs text-gray-500 mt-1">Facilities</div></div>
         <div className={card}><div className="text-3xl font-bold tabular-nums text-gray-900">{summary.users}</div><div className="text-xs text-gray-500 mt-1">Users</div></div>
-        <div className={card}><div className="text-3xl font-bold tabular-nums text-rose-700">+{growth.users30d}</div><div className="text-xs text-gray-500 mt-1">New users (30d)</div></div>
+        <div className={card}><div className="text-3xl font-bold tabular-nums text-[var(--cmp-text-error)]">+{growth.users30d}</div><div className="text-xs text-gray-500 mt-1">New users (30d)</div></div>
       </div>
 
       <div className="grid lg:grid-cols-2 gap-5">
@@ -46,7 +46,7 @@ export default async function AnalyticsPage() {
             {[["Tenants", growth.tenants30d, growth.tenants90d], ["Users", growth.users30d, growth.users90d], ["Facilities", growth.facilities30d, null]].map(([label, a, b]) => (
               <div key={label as string} className="flex items-center justify-between">
                 <span className="text-gray-600">{label as string}</span>
-                <span className="text-gray-500"><b className="text-rose-700 tabular-nums">+{a as number}</b> (30d){b != null ? <> · <b className="text-gray-700 tabular-nums">+{b as number}</b> (90d)</> : null}</span>
+                <span className="text-gray-500"><b className="text-[var(--cmp-text-error)] tabular-nums">+{a as number}</b> (30d){b != null ? <> · <b className="text-gray-700 tabular-nums">+{b as number}</b> (90d)</> : null}</span>
               </div>
             ))}
           </div>
@@ -58,7 +58,7 @@ export default async function AnalyticsPage() {
             {roleBars.map((r) => (
               <div key={r.label} className="flex items-center gap-2 text-xs">
                 <span className="w-28 shrink-0 text-gray-600 truncate">{titleCase(r.label)}</span>
-                <div className="flex-1 h-2 bg-gray-100 rounded-full overflow-hidden"><div className="h-full bg-rose-500" style={{ width: `${(r.count / maxRole) * 100}%` }} /></div>
+                <div className="flex-1 h-2 bg-gray-100 rounded-full overflow-hidden"><div className="h-full bg-[var(--cmp-color-error)]" style={{ width: `${(r.count / maxRole) * 100}%` }} /></div>
                 <span className="w-10 text-right tabular-nums text-gray-500">{r.count}</span>
               </div>
             ))}

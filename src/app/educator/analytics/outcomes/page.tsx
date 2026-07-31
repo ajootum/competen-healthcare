@@ -16,8 +16,8 @@ export default async function OutcomesLanding() {
 
   const summary = [
     { icon: "🎓", tint: "bg-purple-50 text-purple-600", label: "Learning Success", value: pct(d.cards.successIndex), sub: "success index" },
-    { icon: "🛡️", tint: "bg-blue-50 text-blue-600", label: "Competency Achievement", value: pct(d.cards.competencyAch), sub: `${d.competency.cards.achieved} achieved` },
-    { icon: "🩺", tint: "bg-orange-50 text-orange-600", label: "Clinical Readiness", value: pct(d.cards.clinicalReadiness), sub: `${d.clinical.cards.independentSkills} independent skills` },
+    { icon: "🛡️", tint: "bg-[var(--cmp-surface-information)] text-[var(--cmp-text-information)]", label: "Competency Achievement", value: pct(d.cards.competencyAch), sub: `${d.competency.cards.achieved} achieved` },
+    { icon: "🩺", tint: "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]", label: "Clinical Readiness", value: pct(d.cards.clinicalReadiness), sub: `${d.clinical.cards.independentSkills} independent skills` },
     { icon: "📜", tint: "bg-teal-50 text-teal-600", label: "Certification Readiness", value: pct(d.cards.certReadiness), sub: `${d.certification.cards.eligible} eligible` },
     { icon: "📈", tint: "bg-indigo-50 text-indigo-600", label: "CPD Compliance", value: pct(d.cards.cpdCompliance), sub: d.cpd.cards.note || "—" },
   ];

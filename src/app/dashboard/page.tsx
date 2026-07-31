@@ -58,11 +58,11 @@ export default async function PersonalWorkspacePage() {
   const ctx: WidgetCtx = { firstName: d.firstName, greeting, now: nowMs(), workspaces };
   const s = d.summary;
   const SUMMARY = [
-    { icon: "🎯", label: "My Score", value: s.myScore != null ? `${s.myScore}%` : "—", tone: s.myScore != null && s.myScore >= 85 ? "text-emerald-600" : "text-amber-600", sub: null, href: "/dashboard/passport" },
-    { icon: "📋", label: "Tasks", value: s.tasksDueToday, tone: s.tasksDueToday ? "text-rose-600" : "text-gray-900", sub: "Due Today", href: "/dashboard/tasks" },
+    { icon: "🎯", label: "My Score", value: s.myScore != null ? `${s.myScore}%` : "—", tone: s.myScore != null && s.myScore >= 85 ? "text-[var(--cmp-text-success)]" : "text-[var(--cmp-text-warning)]", sub: null, href: "/dashboard/passport" },
+    { icon: "📋", label: "Tasks", value: s.tasksDueToday, tone: s.tasksDueToday ? "text-[var(--cmp-text-error)]" : "text-gray-900", sub: "Due Today", href: "/dashboard/tasks" },
     { icon: "👥", label: "Patients", value: s.patientsAssigned, tone: "text-gray-900", sub: "Assigned", href: "/dashboard/shift" },
-    { icon: "✉️", label: "Messages", value: s.messagesUnread, tone: s.messagesUnread ? "text-rose-600" : "text-gray-900", sub: "Unread", href: "/dashboard/messages" },
-    { icon: "⚠️", label: "Alerts", value: s.alertsHighPriority, tone: s.alertsHighPriority ? "text-rose-600" : "text-gray-900", sub: "High Priority", href: "/dashboard/notifications" },
+    { icon: "✉️", label: "Messages", value: s.messagesUnread, tone: s.messagesUnread ? "text-[var(--cmp-text-error)]" : "text-gray-900", sub: "Unread", href: "/dashboard/messages" },
+    { icon: "⚠️", label: "Alerts", value: s.alertsHighPriority, tone: s.alertsHighPriority ? "text-[var(--cmp-text-error)]" : "text-gray-900", sub: "High Priority", href: "/dashboard/notifications" },
   ];
 
   const main = inZone(manifest, "main"), rail = inZone(manifest, "rail"), full = inZone(manifest, "full");

@@ -85,11 +85,11 @@ export function Stat({ label, value, sub, tone, trend, href }: {
 const TONE_BG: Record<string, string> = {
   neutral: "bg-gray-100 text-gray-600",
   primary: "bg-[color:var(--cmp-color-primary-light)] text-[color:var(--cmp-color-primary-dark)]",
-  info: "bg-sky-50 text-[color:var(--cmp-text-information)]",
-  success: "bg-green-50 text-[color:var(--cmp-text-success)]",
-  warning: "bg-amber-50 text-[color:var(--cmp-text-warning)]",
-  error: "bg-red-50 text-[color:var(--cmp-text-error)]",
-  critical: "bg-red-100 text-[color:var(--cmp-text-critical)]",
+  info: "bg-[var(--cmp-surface-information)] text-[color:var(--cmp-text-information)]",
+  success: "bg-[var(--cmp-surface-success)] text-[color:var(--cmp-text-success)]",
+  warning: "bg-[var(--cmp-surface-warning)] text-[color:var(--cmp-text-warning)]",
+  error: "bg-[var(--cmp-surface-critical)] text-[color:var(--cmp-text-error)]",
+  critical: "bg-[var(--cmp-surface-critical)] text-[color:var(--cmp-text-critical)]",
 };
 export type BadgeTone = keyof typeof TONE_BG;
 
@@ -116,11 +116,11 @@ export function Chip({ children, tone = "neutral" }: { children: React.ReactNode
 
 // ── Alert / banner (PUI-004 s7, PUI-006 s3) ─────────────────────────────────────────────────────────────
 const ALERT: Record<string, { icon: string; bg: string; border: string; text: string; role: "status" | "alert" }> = {
-  info:     { icon: "ⓘ", bg: "bg-sky-50",   border: "border-sky-100",   text: "var(--cmp-text-information)", role: "status" },
-  success:  { icon: "✓", bg: "bg-green-50", border: "border-green-100", text: "var(--cmp-text-success)",     role: "status" },
-  warning:  { icon: "⚠", bg: "bg-amber-50", border: "border-amber-100", text: "var(--cmp-text-warning)",     role: "status" },
-  error:    { icon: "✕", bg: "bg-red-50",   border: "border-red-100",   text: "var(--cmp-text-error)",       role: "alert"  },
-  critical: { icon: "▲", bg: "bg-red-50",   border: "border-red-200",   text: "var(--cmp-text-critical)",    role: "alert"  },
+  info:     { icon: "ⓘ", bg: "bg-[var(--cmp-surface-information)]",   border: "border-[var(--cmp-color-information)]",   text: "var(--cmp-text-information)", role: "status" },
+  success:  { icon: "✓", bg: "bg-[var(--cmp-surface-success)]", border: "border-[var(--cmp-color-success)]", text: "var(--cmp-text-success)",     role: "status" },
+  warning:  { icon: "⚠", bg: "bg-[var(--cmp-surface-warning)]", border: "border-[var(--cmp-color-warning)]", text: "var(--cmp-text-warning)",     role: "status" },
+  error:    { icon: "✕", bg: "bg-[var(--cmp-surface-critical)]",   border: "border-[var(--cmp-color-critical)]",   text: "var(--cmp-text-error)",       role: "alert"  },
+  critical: { icon: "▲", bg: "bg-[var(--cmp-surface-critical)]",   border: "border-[var(--cmp-color-critical)]",   text: "var(--cmp-text-critical)",    role: "alert"  },
 };
 export type AlertTone = keyof typeof ALERT;
 

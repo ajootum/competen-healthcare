@@ -19,7 +19,7 @@ export default async function SkillsPage() {
       {head}<Tabs active="004" />
       <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
         <Stat label="Total Skills" value={k.total} sub={`${k.active} active`} />
-        <Stat label="Write Skills" value={k.write} sub="mutate state" tone={k.write ? "text-amber-600" : undefined} />
+        <Stat label="Write Skills" value={k.write} sub="mutate state" tone={k.write ? "text-[var(--cmp-text-warning)]" : undefined} />
         <Stat label="Need Approval" value={k.needApproval} sub="human-in-loop" tone="text-violet-700" />
         <Stat label="External" value={k.external} sub="third-party" />
         <Stat label="Invocations" value={k.invocations.toLocaleString()} sub="all-time" />

@@ -63,12 +63,12 @@ export default function ReadinessChecklist({ shiftId, items, provisioned, mandat
           <p className="text-[11px] text-gray-500">Mandatory items gate activation (SSW-002 §10.1)</p>
         </div>
         <div className="text-right shrink-0">
-          <p className={`text-lg font-bold tabular-nums ${pct === 100 ? "text-green-600" : "text-amber-600"}`}>{mandatoryComplete}/{mandatoryTotal}</p>
+          <p className={`text-lg font-bold tabular-nums ${pct === 100 ? "text-[var(--cmp-text-success)]" : "text-[var(--cmp-text-warning)]"}`}>{mandatoryComplete}/{mandatoryTotal}</p>
           <p className="text-[10px] text-gray-400">mandatory ready</p>
         </div>
       </div>
       <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden mb-3">
-        <div className={`h-full rounded-full ${pct === 100 ? "bg-green-500" : "bg-amber-500"}`} style={{ width: `${pct}%` }} />
+        <div className={`h-full rounded-full ${pct === 100 ? "bg-[var(--cmp-color-success)]" : "bg-[var(--cmp-color-warning)]"}`} style={{ width: `${pct}%` }} />
       </div>
 
       <div className="space-y-1">
@@ -87,12 +87,12 @@ export default function ReadinessChecklist({ shiftId, items, provisioned, mandat
                 <p className={`text-xs leading-tight ${done ? "text-gray-500 line-through decoration-gray-300" : "text-gray-800"}`}>{it.label}
                   {it.mandatory && <span className="ml-1.5 text-[8px] font-bold uppercase text-rose-500/70">req</span>}
                 </p>
-                {it.status === "exception" && it.exception && <p className="text-[10px] text-amber-600 truncate">Exception: {it.exception}</p>}
+                {it.status === "exception" && it.exception && <p className="text-[10px] text-[var(--cmp-text-warning)] truncate">Exception: {it.exception}</p>}
                 {done && it.responsible && it.status !== "exception" && <p className="text-[10px] text-gray-400 truncate">{it.responsible}</p>}
               </div>
               {editable && !done && (
                 <button onClick={() => setStatus(it.code, "exception")} disabled={busy === it.code}
-                  className="text-[10px] text-amber-600 hover:underline shrink-0">exception</button>
+                  className="text-[10px] text-[var(--cmp-text-warning)] hover:underline shrink-0">exception</button>
               )}
               {editable && it.status === "exception" && (
                 <button onClick={() => setStatus(it.code, "not_applicable")} disabled={busy === it.code}
@@ -102,7 +102,7 @@ export default function ReadinessChecklist({ shiftId, items, provisioned, mandat
           );
         })}
       </div>
-      {err && <p className="text-[11px] text-rose-600 mt-2">{err}</p>}
+      {err && <p className="text-[11px] text-[var(--cmp-text-error)] mt-2">{err}</p>}
       {!editable && <p className="text-[10px] text-gray-400 mt-2">Read-only — readiness is completed before the shift is activated.</p>}
     </div>
   );

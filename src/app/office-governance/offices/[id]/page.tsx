@@ -61,7 +61,7 @@ export default async function OfficeDetailPage({ params }: { params: Promise<{ i
         <Card title="Activation readiness" right="at constitution">
           <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[12px]">
             {([["Name", checklist.has_name], ["Charter", checklist.has_charter], ["Chair", checklist.has_chair], ["Quorum", checklist.has_quorum]] as [string, boolean][]).map(([label, ok]) => (
-              <span key={label} className="inline-flex items-center gap-1"><span className={ok ? "text-emerald-600" : "text-rose-500"}>{ok ? "✓" : "✕"}</span><span className="text-gray-600">{label}</span></span>
+              <span key={label} className="inline-flex items-center gap-1"><span className={ok ? "text-[var(--cmp-text-success)]" : "text-rose-500"}>{ok ? "✓" : "✕"}</span><span className="text-gray-600">{label}</span></span>
             ))}
             <span className="ml-auto"><Pill text={checklist.ready ? (checklist.activated ? "Activated" : "Ready") : "Constituted below gate"} tone={checklist.ready ? "emerald" : "amber"} /></span>
           </div>
@@ -95,7 +95,7 @@ export default async function OfficeDetailPage({ params }: { params: Promise<{ i
         <Card title="Meetings" right={<Link href="/office-governance/meetings" className="text-teal-600 hover:underline">Meetings &amp; Votes →</Link>}>
           {meetings.length ? (
             <div className="space-y-1.5">{meetings.slice(0, 8).map((m: any) => (
-              <div key={m.id} className="flex items-center gap-2 text-[12px] border-b border-gray-50 pb-1"><span className="flex-1 min-w-0 truncate text-gray-800">{m.title}</span><span className="text-[10px] text-gray-400">{fmtDT(m.scheduledAt)}</span><span className={`text-[10px] px-1.5 py-0.5 rounded-full ${m.quorumMet ? "bg-emerald-50 text-emerald-700" : "bg-gray-100 text-gray-500"}`}>{m.present}/{m.requiredQuorum}</span><Pill text={m.status.replace(/_/g, " ")} tone={M_TONE[m.status] ?? "slate"} /></div>
+              <div key={m.id} className="flex items-center gap-2 text-[12px] border-b border-gray-50 pb-1"><span className="flex-1 min-w-0 truncate text-gray-800">{m.title}</span><span className="text-[10px] text-gray-400">{fmtDT(m.scheduledAt)}</span><span className={`text-[10px] px-1.5 py-0.5 rounded-full ${m.quorumMet ? "bg-[var(--cmp-surface-success)] text-emerald-700" : "bg-gray-100 text-gray-500"}`}>{m.present}/{m.requiredQuorum}</span><Pill text={m.status.replace(/_/g, " ")} tone={M_TONE[m.status] ?? "slate"} /></div>
             ))}</div>
           ) : <p className="text-sm text-gray-400 py-4 text-center">No meetings scheduled.</p>}
         </Card>

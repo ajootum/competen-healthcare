@@ -11,8 +11,8 @@ export const dynamic = "force-dynamic";
 /* eslint-disable @typescript-eslint/no-explicit-any */
 const card = cardClass;
 const statusCls: Record<string, string> = {
-  active: "bg-green-100 text-green-700", trial: "bg-blue-100 text-blue-700", prospect: "bg-indigo-100 text-indigo-700",
-  suspended: "bg-amber-100 text-amber-700", archived: "bg-gray-100 text-gray-500", deleted: "bg-red-100 text-red-600",
+  active: "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]", trial: "bg-[var(--cmp-surface-information)] text-blue-700", prospect: "bg-indigo-100 text-indigo-700",
+  suspended: "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]", archived: "bg-gray-100 text-gray-500", deleted: "bg-[var(--cmp-surface-critical)] text-[var(--cmp-text-critical)]",
 };
 
 export default async function TenantRegistryPage() {
@@ -33,7 +33,7 @@ export default async function TenantRegistryPage() {
       </div>
 
       {!reg.ready ? (
-        <div className="bg-amber-50 border border-amber-200 rounded-xl p-5 text-sm text-amber-700">Apply migrations <code className="font-mono text-xs">040–042</code> to activate the registry. It reads the real <code className="font-mono text-xs">tenants</code> table, not the organisations relabelling.</div>
+        <div className="bg-[var(--cmp-surface-warning)] border border-[var(--cmp-color-warning)] rounded-xl p-5 text-sm text-[var(--cmp-text-warning)]">Apply migrations <code className="font-mono text-xs">040–042</code> to activate the registry. It reads the real <code className="font-mono text-xs">tenants</code> table, not the organisations relabelling.</div>
       ) : (
         <>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">

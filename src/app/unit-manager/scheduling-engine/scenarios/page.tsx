@@ -17,8 +17,8 @@ export const dynamic = "force-dynamic";
 
 const card = "bg-white rounded-xl border border-gray-200";
 const SUBTABS = ["Scenario Library", "Comparison", "Demand Simulation", "Capacity Simulation", "Budget Impact", "Competency Coverage", "Risk Assessment", "Recommendations", "Audit & History", "Settings"];
-const RISK: Record<string, string> = { High: "bg-rose-50 text-rose-700", Medium: "bg-amber-50 text-amber-700", Low: "bg-emerald-50 text-emerald-700" };
-const delta = (n: number, invert = false) => { const good = invert ? n <= 0 : n >= 0; return <span className={n === 0 ? "text-gray-400" : good ? "text-emerald-600" : "text-rose-600"}>{n > 0 ? "+" : ""}{n}</span>; };
+const RISK: Record<string, string> = { High: "bg-[var(--cmp-surface-error)] text-[var(--cmp-text-error)]", Medium: "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]", Low: "bg-[var(--cmp-surface-success)] text-emerald-700" };
+const delta = (n: number, invert = false) => { const good = invert ? n <= 0 : n >= 0; return <span className={n === 0 ? "text-gray-400" : good ? "text-[var(--cmp-text-success)]" : "text-[var(--cmp-text-error)]"}>{n > 0 ? "+" : ""}{n}</span>; };
 const money = (n: number) => `£${n.toLocaleString()}`;
 
 export default async function ScenarioPlanner() {
@@ -44,12 +44,12 @@ export default async function ScenarioPlanner() {
       </div>
       <SchedulingTabs />
       <div className="flex gap-1 overflow-x-auto -mt-1">
-        {SUBTABS.map((t, i) => <span key={t} className={`shrink-0 text-[11px] px-2.5 py-1.5 rounded-full font-medium ${i === 1 ? "bg-emerald-50 text-emerald-700" : "text-gray-300"}`} title={i === 1 ? "" : "Next phase"}>{t}</span>)}
+        {SUBTABS.map((t, i) => <span key={t} className={`shrink-0 text-[11px] px-2.5 py-1.5 rounded-full font-medium ${i === 1 ? "bg-[var(--cmp-surface-success)] text-emerald-700" : "text-gray-300"}`} title={i === 1 ? "" : "Next phase"}>{t}</span>)}
       </div>
     </>
   );
 
-  if (!d.ready) return <div className="space-y-4">{header}<div className="bg-amber-50 border border-amber-200 rounded-xl p-6"><p className="font-semibold text-amber-900">⚙️ Insufficient planning data</p><p className="text-sm text-amber-800 mt-1">Scenario modelling needs establishment demand + a staff pool.</p></div></div>;
+  if (!d.ready) return <div className="space-y-4">{header}<div className="bg-[var(--cmp-surface-warning)] border border-[var(--cmp-color-warning)] rounded-xl p-6"><p className="font-semibold text-amber-900">⚙️ Insufficient planning data</p><p className="text-sm text-amber-800 mt-1">Scenario modelling needs establishment demand + a staff pool.</p></div></div>;
 
   const base = d.baseline;
   return (
@@ -78,7 +78,7 @@ export default async function ScenarioPlanner() {
               <td className="py-2 pr-3 text-right font-semibold">{s.quality}%</td>
               <td className="py-2 pr-3 text-right">{s.isBase ? "—" : delta(s.dQuality)}</td>
               <td className="py-2 pr-3 text-right text-gray-600">{money(s.estCost)}</td>
-              <td className="py-2 pr-3 text-right">{s.isBase ? "—" : <span className={s.dCost === 0 ? "text-gray-400" : s.dCost < 0 ? "text-emerald-600" : "text-rose-600"}>{s.dCost > 0 ? "+" : ""}{money(s.dCost)}</span>}</td>
+              <td className="py-2 pr-3 text-right">{s.isBase ? "—" : <span className={s.dCost === 0 ? "text-gray-400" : s.dCost < 0 ? "text-[var(--cmp-text-success)]" : "text-[var(--cmp-text-error)]"}>{s.dCost > 0 ? "+" : ""}{money(s.dCost)}</span>}</td>
               <td className="py-2"><span className={`text-[9px] px-1.5 py-0.5 rounded ${RISK[s.risk]}`}>{s.risk}</span></td>
             </tr>
           ))}</tbody>
@@ -90,7 +90,7 @@ export default async function ScenarioPlanner() {
         {/* Coverage bars */}
         <div className={`${card} p-5 xl:col-span-2`}>
           <h3 className="text-sm font-bold text-gray-900 mb-3">Coverage forecast by scenario</h3>
-          <div className="space-y-2">{d.scenarios.map((s: any) => (<div key={s.key} className="text-xs"><div className="flex items-center justify-between mb-0.5"><span className="text-gray-700">{s.name}</span><span className="text-gray-500">{s.coverage}%{!s.isBase ? ` (${s.dCoverage > 0 ? "+" : ""}${s.dCoverage})` : ""}</span></div><div className="w-full h-2 rounded-full bg-gray-100 overflow-hidden"><div className={`h-full rounded-full ${s.coverage >= 90 ? "bg-emerald-500" : s.coverage >= 80 ? "bg-amber-400" : "bg-rose-400"}`} style={{ width: `${s.coverage}%` }} /></div></div>))}</div>
+          <div className="space-y-2">{d.scenarios.map((s: any) => (<div key={s.key} className="text-xs"><div className="flex items-center justify-between mb-0.5"><span className="text-gray-700">{s.name}</span><span className="text-gray-500">{s.coverage}%{!s.isBase ? ` (${s.dCoverage > 0 ? "+" : ""}${s.dCoverage})` : ""}</span></div><div className="w-full h-2 rounded-full bg-gray-100 overflow-hidden"><div className={`h-full rounded-full ${s.coverage >= 90 ? "bg-[var(--cmp-color-success)]" : s.coverage >= 80 ? "bg-[var(--cmp-color-warning)]" : "bg-[var(--cmp-color-error)]"}`} style={{ width: `${s.coverage}%` }} /></div></div>))}</div>
         </div>
 
         {/* AI recommendations */}

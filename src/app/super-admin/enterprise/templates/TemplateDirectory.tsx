@@ -7,7 +7,7 @@ import { useRouter } from "next/navigation";
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 const TYPES = ["organisation", "facility", "department", "unit", "role", "workspace", "structure"];
-const STATUS_BADGE: Record<string, string> = { draft: "bg-gray-100 text-gray-600", review: "bg-amber-50 text-amber-700", approved: "bg-sky-50 text-sky-700", published: "bg-green-50 text-green-700", assigned: "bg-violet-50 text-violet-700", retired: "bg-gray-100 text-gray-400" };
+const STATUS_BADGE: Record<string, string> = { draft: "bg-gray-100 text-gray-600", review: "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]", approved: "bg-[var(--cmp-surface-information)] text-[var(--cmp-text-information)]", published: "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]", assigned: "bg-violet-50 text-violet-700", retired: "bg-gray-100 text-gray-400" };
 const TYPE_ICON: Record<string, string> = { organisation: "🏛️", facility: "🏥", department: "🗂️", unit: "🔹", role: "🪪", workspace: "🖥️", structure: "🏗️" };
 const input = "w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500/40";
 
@@ -77,7 +77,7 @@ export default function TemplateDirectory({ rows }: { rows: any[] }) {
                 <div><label className="text-xs font-semibold text-gray-600 mb-1 block">Type</label><select value={form.template_type} onChange={set("template_type")} className={input}>{TYPES.map(t => <option key={t} value={t}>{t}</option>)}</select></div>
               </div>
               <div><label className="text-xs font-semibold text-gray-600 mb-1 block">Description</label><textarea value={form.description} onChange={set("description")} rows={2} className={`${input} resize-none`} /></div>
-              {err && <p className="text-xs text-red-600 bg-red-50 rounded-lg px-3 py-2">{err}</p>}
+              {err && <p className="text-xs text-[var(--cmp-text-critical)] bg-[var(--cmp-surface-critical)] rounded-lg px-3 py-2">{err}</p>}
               <div className="flex gap-2 pt-1">
                 <button onClick={() => setOpen(false)} className="flex-1 py-2 border border-gray-200 rounded-lg text-sm text-gray-600 hover:bg-gray-50">Cancel</button>
                 <button onClick={create} disabled={saving} className="flex-1 py-2 bg-teal-600 text-white rounded-lg text-sm font-semibold hover:bg-teal-700 disabled:opacity-60">{saving ? "Creating…" : "Create draft"}</button>

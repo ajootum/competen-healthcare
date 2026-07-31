@@ -184,10 +184,10 @@ export default async function EducatorDashboard() {
 
   const STAT_CARDS = [
     { icon: "🕐", tint: "bg-purple-50 text-purple-600", label: "Pending Validations", value: String(pendingCount), sub: "View queue →", href: "/educator/validations" },
-    { icon: "✅", tint: "bg-green-50 text-green-600",   label: "Completed Validations", value: String(validatedMonth ?? 0), sub: "This month", href: "/educator/validations" },
-    { icon: "👥", tint: "bg-blue-50 text-blue-600",     label: "Active Learners", value: String(nurseIds.length), sub: "In your hospital", href: "/educator/students" },
-    { icon: "📚", tint: "bg-amber-50 text-amber-600",   label: "Courses Managed", value: String((courses ?? []).length), sub: `${publishedCourses} published`, href: "/educator/courses" },
-    { icon: "🎯", tint: "bg-rose-50 text-rose-600",     label: "Avg. Learner Score", value: avgScore !== null ? `${avgScore.toFixed(1)}/6` : "—", sub: avgScore !== null ? "This month" : "No scores this month", href: "/educator/students" },
+    { icon: "✅", tint: "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]",   label: "Completed Validations", value: String(validatedMonth ?? 0), sub: "This month", href: "/educator/validations" },
+    { icon: "👥", tint: "bg-[var(--cmp-surface-information)] text-[var(--cmp-text-information)]",     label: "Active Learners", value: String(nurseIds.length), sub: "In your hospital", href: "/educator/students" },
+    { icon: "📚", tint: "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]",   label: "Courses Managed", value: String((courses ?? []).length), sub: `${publishedCourses} published`, href: "/educator/courses" },
+    { icon: "🎯", tint: "bg-[var(--cmp-surface-error)] text-[var(--cmp-text-error)]",     label: "Avg. Learner Score", value: avgScore !== null ? `${avgScore.toFixed(1)}/6` : "—", sub: avgScore !== null ? "This month" : "No scores this month", href: "/educator/students" },
   ];
 
   const QUICK_LAUNCH = [
@@ -216,7 +216,7 @@ export default async function EducatorDashboard() {
           className="relative bg-white border border-gray-200 rounded-xl w-10 h-10 flex items-center justify-center hover:border-purple-300 transition-colors">
           🔔
           {(unreadCount ?? 0) > 0 && (
-            <span className="absolute -top-1.5 -right-1.5 bg-red-500 text-white text-[9px] font-bold rounded-full min-w-[16px] h-4 px-1 flex items-center justify-center">
+            <span className="absolute -top-1.5 -right-1.5 bg-[var(--cmp-color-critical)] text-white text-[9px] font-bold rounded-full min-w-[16px] h-4 px-1 flex items-center justify-center">
               {(unreadCount ?? 0) > 99 ? "99+" : unreadCount}
             </span>
           )}
@@ -317,7 +317,7 @@ export default async function EducatorDashboard() {
             <div className="flex flex-col gap-2.5">
               {attention.map(r => (
                 <div key={r.nurseId} className="flex items-start gap-2.5">
-                  <span className="w-7 h-7 rounded-full bg-red-50 text-red-600 flex items-center justify-center text-[10px] font-bold shrink-0">
+                  <span className="w-7 h-7 rounded-full bg-[var(--cmp-surface-critical)] text-[var(--cmp-text-critical)] flex items-center justify-center text-[10px] font-bold shrink-0">
                     {r.nurseName.split(" ").map(w => w[0]).slice(0, 2).join("")}
                   </span>
                   <div className="min-w-0 flex-1">
@@ -328,7 +328,7 @@ export default async function EducatorDashboard() {
                       ).join(" · ")}{r.flags.length > 2 ? ` · +${r.flags.length - 2}` : ""}
                     </p>
                   </div>
-                  <span className="text-[9px] font-bold bg-red-50 text-red-600 px-1.5 py-0.5 rounded shrink-0">
+                  <span className="text-[9px] font-bold bg-[var(--cmp-surface-critical)] text-[var(--cmp-text-critical)] px-1.5 py-0.5 rounded shrink-0">
                     {r.flags.length} flag{r.flags.length === 1 ? "" : "s"}
                   </span>
                 </div>
@@ -360,7 +360,7 @@ export default async function EducatorDashboard() {
                     <p className="text-[12px] font-semibold text-gray-800 truncate">{s.name}</p>
                     <div className="flex items-center gap-2">
                       <div className="flex-1 h-1.5 bg-gray-100 rounded-full overflow-hidden">
-                        <div className={`h-full rounded-full ${s.pct >= 80 ? "bg-green-500" : s.pct >= 50 ? "bg-amber-400" : "bg-red-400"}`}
+                        <div className={`h-full rounded-full ${s.pct >= 80 ? "bg-[var(--cmp-color-success)]" : s.pct >= 50 ? "bg-[var(--cmp-color-warning)]" : "bg-[var(--cmp-color-critical)]"}`}
                           style={{ width: `${s.pct}%` }} />
                       </div>
                       <span className="text-[10px] font-bold text-gray-700 w-8 text-right shrink-0">{s.pct}%</span>
@@ -384,9 +384,9 @@ export default async function EducatorDashboard() {
             <div className="grid grid-cols-[auto_1fr] gap-5 items-center">
               <div className="flex flex-col gap-1.5">
                 {[
-                  { label: "Average Score", v: avgScore !== null ? `${avgScore.toFixed(1)}/6` : "—", cls: "bg-green-50 text-green-700" },
-                  { label: "Highest Score", v: highScore !== null ? `${highScore} · ${SCORE_LABELS[highScore]}` : "—", cls: "bg-green-50 text-green-700" },
-                  { label: "Lowest Score", v: lowScore !== null ? `${lowScore} · ${SCORE_LABELS[lowScore]}` : "—", cls: "bg-red-50 text-red-600" },
+                  { label: "Average Score", v: avgScore !== null ? `${avgScore.toFixed(1)}/6` : "—", cls: "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]" },
+                  { label: "Highest Score", v: highScore !== null ? `${highScore} · ${SCORE_LABELS[highScore]}` : "—", cls: "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]" },
+                  { label: "Lowest Score", v: lowScore !== null ? `${lowScore} · ${SCORE_LABELS[lowScore]}` : "—", cls: "bg-[var(--cmp-surface-critical)] text-[var(--cmp-text-critical)]" },
                   { label: "Pass Rate", v: monthPassRate !== null ? `${monthPassRate}%` : "—", cls: "bg-gray-50 text-gray-800" },
                 ].map(row => (
                   <div key={row.label} className="flex items-center gap-3">
@@ -446,7 +446,7 @@ export default async function EducatorDashboard() {
                   <div key={f.name} className="flex items-center gap-2">
                     <span className="text-[10px] text-gray-500 w-36 truncate shrink-0">{f.name}</span>
                     <div className="flex-1 h-2 bg-gray-100 rounded-full overflow-hidden">
-                      <div className={`h-full rounded-full ${f.pct >= 80 ? "bg-green-500" : f.pct >= 40 ? "bg-amber-400" : "bg-purple-400"}`}
+                      <div className={`h-full rounded-full ${f.pct >= 80 ? "bg-[var(--cmp-color-success)]" : f.pct >= 40 ? "bg-[var(--cmp-color-warning)]" : "bg-purple-400"}`}
                         style={{ width: `${f.pct}%` }} />
                     </div>
                     <span className="text-[10px] font-bold text-gray-700 w-9 text-right shrink-0">{f.pct}%</span>
@@ -462,7 +462,7 @@ export default async function EducatorDashboard() {
             <div className="flex flex-col gap-2">
               <div className="flex items-center justify-between">
                 <p className="text-[11px] text-gray-600">⏰ Overdue validations <span className="text-gray-300">(&gt;7 days)</span></p>
-                <p className={`text-[11px] font-bold ${overdue > 0 ? "text-red-600" : "text-gray-900"}`}>{overdue}</p>
+                <p className={`text-[11px] font-bold ${overdue > 0 ? "text-[var(--cmp-text-critical)]" : "text-gray-900"}`}>{overdue}</p>
               </div>
               <div className="flex items-center justify-between">
                 <p className="text-[11px] text-gray-600">⚖️ Appeals on record</p>

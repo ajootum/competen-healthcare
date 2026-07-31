@@ -18,7 +18,7 @@ export const dynamic = "force-dynamic";
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 const card = "bg-white rounded-xl border border-gray-200";
-const AVAIL_TONE: Record<string, string> = { unavailable: "bg-rose-50 text-rose-700", temporarily_unavailable: "bg-amber-50 text-amber-700", on_call: "bg-sky-50 text-sky-700", standby: "bg-sky-50 text-sky-700" };
+const AVAIL_TONE: Record<string, string> = { unavailable: "bg-[var(--cmp-surface-error)] text-[var(--cmp-text-error)]", temporarily_unavailable: "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]", on_call: "bg-[var(--cmp-surface-information)] text-[var(--cmp-text-information)]", standby: "bg-[var(--cmp-surface-information)] text-[var(--cmp-text-information)]" };
 const fmtD = (iso?: string | null) => iso ? new Date(iso).toLocaleDateString("en-GB", { day: "numeric", month: "short" }) : "—";
 const HORIZONS = ["Next shift", "Next 24h", "Next 72h", "Next 7 days", "Next 14 days", "Current roster period", "Next roster period"];
 
@@ -47,7 +47,7 @@ export default async function FutureAvailability() {
     </>
   );
 
-  if (!d.provisioned) return <div className="space-y-4">{header}<div className="bg-amber-50 border border-amber-200 rounded-xl p-6"><p className="font-semibold text-amber-900">⚙️ Availability store not provisioned</p><p className="text-sm text-amber-800 mt-1">Migration 083 (op_staff_availability) is required.</p></div></div>;
+  if (!d.provisioned) return <div className="space-y-4">{header}<div className="bg-[var(--cmp-surface-warning)] border border-[var(--cmp-color-warning)] rounded-xl p-6"><p className="font-semibold text-amber-900">⚙️ Availability store not provisioned</p><p className="text-sm text-amber-800 mt-1">Migration 083 (op_staff_availability) is required.</p></div></div>;
 
   return (
     <div className="space-y-4">
@@ -55,8 +55,8 @@ export default async function FutureAvailability() {
 
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         <Kpi label="Active declarations" value={d.total} />
-        <Kpi label="Unavailable" value={d.unavailable} tone={d.unavailable ? "text-rose-600" : "text-emerald-600"} />
-        <Kpi label="Expiring ≤7d" value={d.expiringSoon} tone={d.expiringSoon ? "text-amber-600" : undefined} />
+        <Kpi label="Unavailable" value={d.unavailable} tone={d.unavailable ? "text-[var(--cmp-text-error)]" : "text-[var(--cmp-text-success)]"} />
+        <Kpi label="Expiring ≤7d" value={d.expiringSoon} tone={d.expiringSoon ? "text-[var(--cmp-text-warning)]" : undefined} />
         <Kpi label="Available pool" value={d.byType.filter((t: any) => !["unavailable", "temporarily_unavailable"].includes(t.type)).reduce((n: number, t: any) => n + t.count, 0)} tone="text-violet-600" />
       </div>
 
@@ -66,7 +66,7 @@ export default async function FutureAvailability() {
           {d.declarations.length === 0 ? <p className="text-sm text-gray-400">No availability declarations yet — record one on the right.</p> : (
             <div className="overflow-x-auto"><table className="w-full text-xs">
               <thead><tr className="text-gray-400 text-left border-b border-gray-100"><th className="py-2 pr-3 font-medium">Staff</th><th className="py-2 pr-3 font-medium">Availability</th><th className="py-2 pr-3 font-medium">Period</th><th className="py-2 pr-3 font-medium">Expires</th><th className="py-2 font-medium">Source</th></tr></thead>
-              <tbody>{d.declarations.map((a: any) => (<tr key={a.id} className="border-b border-gray-50"><td className="py-2 pr-3 text-gray-800 font-medium">{a.staff_name ?? "Staff"}</td><td className="py-2 pr-3"><span className={`text-[9px] px-1.5 py-0.5 rounded ${AVAIL_TONE[a.availability_type] ?? "bg-emerald-50 text-emerald-700"}`}>{AVAIL_LABEL[a.availability_type] ?? a.availability_type}</span></td><td className="py-2 pr-3 text-gray-500">{a.period_start ? `${fmtD(a.period_start)}–${fmtD(a.period_end)}` : "—"}</td><td className="py-2 pr-3 text-gray-500">{fmtD(a.expires_at)}</td><td className="py-2 text-gray-400 text-[11px]">{(a.confidence ?? "").replace(/_/g, " ")}</td></tr>))}</tbody>
+              <tbody>{d.declarations.map((a: any) => (<tr key={a.id} className="border-b border-gray-50"><td className="py-2 pr-3 text-gray-800 font-medium">{a.staff_name ?? "Staff"}</td><td className="py-2 pr-3"><span className={`text-[9px] px-1.5 py-0.5 rounded ${AVAIL_TONE[a.availability_type] ?? "bg-[var(--cmp-surface-success)] text-emerald-700"}`}>{AVAIL_LABEL[a.availability_type] ?? a.availability_type}</span></td><td className="py-2 pr-3 text-gray-500">{a.period_start ? `${fmtD(a.period_start)}–${fmtD(a.period_end)}` : "—"}</td><td className="py-2 pr-3 text-gray-500">{fmtD(a.expires_at)}</td><td className="py-2 text-gray-400 text-[11px]">{(a.confidence ?? "").replace(/_/g, " ")}</td></tr>))}</tbody>
             </table></div>
           )}
         </div>

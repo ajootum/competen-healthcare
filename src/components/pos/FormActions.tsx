@@ -24,7 +24,7 @@ export default function FormActions({ id }: { id: string }) {
     <span className="inline-flex items-center gap-2">
       <button disabled={busy} onClick={() => act("verify")} className="text-[11px] font-medium text-emerald-700 hover:underline disabled:opacity-50">Verify</button>
       <span className="text-gray-200">·</span>
-      <button disabled={busy} onClick={() => act("return")} className="text-[11px] font-medium text-amber-700 hover:underline disabled:opacity-50">Return</button>
+      <button disabled={busy} onClick={() => act("return")} className="text-[11px] font-medium text-[var(--cmp-text-warning)] hover:underline disabled:opacity-50">Return</button>
     </span>
   );
 }

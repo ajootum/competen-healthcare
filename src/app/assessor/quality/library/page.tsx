@@ -99,7 +99,7 @@ export default async function AuditLibraryPage() {
           <p className="text-[9px] font-bold text-gray-400 uppercase tracking-wider">Criteria items</p>
         </div>
         <div className="bg-white border border-gray-200 rounded-xl px-4 py-3">
-          <p className="text-xl font-bold text-red-600">{totalCritical}</p>
+          <p className="text-xl font-bold text-[var(--cmp-text-critical)]">{totalCritical}</p>
           <p className="text-[9px] font-bold text-gray-400 uppercase tracking-wider">Critical items</p>
         </div>
       </div>
@@ -114,9 +114,9 @@ export default async function AuditLibraryPage() {
                   <p className="text-[10px] text-gray-400 mt-0.5">{t.framework} · {t.domain}</p>
                   <p className="text-[10px] text-gray-500 mt-1">
                     {t.items} criteria across {t.skills} skill{t.skills === 1 ? "" : "s"}
-                    {t.critical > 0 && <span className="text-red-600"> · {t.critical} critical</span>}
+                    {t.critical > 0 && <span className="text-[var(--cmp-text-critical)]"> · {t.critical} critical</span>}
                     {t.audits > 0
-                      ? <> · audited {t.audits}× {t.lastAudit ? `(last ${t.lastAudit})` : ""}{t.avgCompliance != null ? <> · avg <span className={t.avgCompliance >= 85 ? "text-green-600 font-semibold" : "text-amber-600 font-semibold"}>{t.avgCompliance}%</span></> : null}</>
+                      ? <> · audited {t.audits}× {t.lastAudit ? `(last ${t.lastAudit})` : ""}{t.avgCompliance != null ? <> · avg <span className={t.avgCompliance >= 85 ? "text-[var(--cmp-text-success)] font-semibold" : "text-[var(--cmp-text-warning)] font-semibold"}>{t.avgCompliance}%</span></> : null}</>
                       : " · never audited"}
                   </p>
                 </div>
@@ -133,9 +133,9 @@ export default async function AuditLibraryPage() {
           ))}
         </div>
       ) : (
-        <div className="bg-amber-50 border border-amber-200 rounded-xl p-6 text-sm text-amber-800">
+        <div className="bg-[var(--cmp-surface-warning)] border border-[var(--cmp-color-warning)] rounded-xl p-6 text-sm text-amber-800">
           <p className="font-semibold mb-1">No governed checklists yet</p>
-          <p className="text-amber-700 text-xs leading-relaxed">
+          <p className="text-[var(--cmp-text-warning)] text-xs leading-relaxed">
             The library is empty because no competency has checklist items authored yet. Templates are never created here —
             author a competency&apos;s master checklist in Studio (Checklists) and it appears in this library automatically,
             usable by direct observation, OSCE, simulation and all three audit types.

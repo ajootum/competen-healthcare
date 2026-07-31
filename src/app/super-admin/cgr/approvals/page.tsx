@@ -41,27 +41,27 @@ export default async function GovernanceApprovalsPage() {
     <div className="max-w-[1400px]">
       <div className="flex items-start justify-between gap-3 mb-5">
         <div>
-          <p className="text-[11px] font-semibold text-emerald-600 uppercase tracking-widest mb-0.5">CGR-003 · Competency Governance</p>
+          <p className="text-[11px] font-semibold text-[var(--cmp-text-success)] uppercase tracking-widest mb-0.5">CGR-003 · Competency Governance</p>
           <h1 className="text-xl font-bold text-gray-900">Approval &amp; Governance Workflow</h1>
           <p className="text-gray-400 text-sm mt-0.5">Who has authority to approve, what governance steps are complete, and where approvals are stuck — the controlled pathway from draft to approved deployment.</p>
         </div>
         <div className="flex gap-2 shrink-0">
-          <Link href="/super-admin/platform-ops/approvals" className="text-xs font-semibold text-emerald-700 hover:text-emerald-800 border border-emerald-200 bg-emerald-50 rounded-lg px-3 py-2">Decide in console →</Link>
+          <Link href="/super-admin/platform-ops/approvals" className="text-xs font-semibold text-emerald-700 hover:text-emerald-800 border border-[var(--cmp-color-success)] bg-[var(--cmp-surface-success)] rounded-lg px-3 py-2">Decide in console →</Link>
           <Link href="/super-admin/cgr" className="text-xs font-semibold text-gray-500 hover:text-emerald-700 border border-gray-200 rounded-lg px-3 py-2">← CGR</Link>
         </div>
       </div>
 
       {!d.provisioned ? (
-        <div className="bg-white border border-gray-200 rounded-xl p-8 text-center"><p className="text-sm text-gray-400">The approval engine has no governance requests yet. Once frameworks/competencies are submitted for review — via <Link href="/competency-office/review-board" className="text-emerald-600 hover:underline">the review board</Link> or the platform console — the pipeline, turnaround and decision audit compute here.</p></div>
+        <div className="bg-white border border-gray-200 rounded-xl p-8 text-center"><p className="text-sm text-gray-400">The approval engine has no governance requests yet. Once frameworks/competencies are submitted for review — via <Link href="/competency-office/review-board" className="text-[var(--cmp-text-success)] hover:underline">the review board</Link> or the platform console — the pipeline, turnaround and decision audit compute here.</p></div>
       ) : (
         <div className="space-y-4">
           <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
-            <Kpi label="Pending" value={k.pending} sub="awaiting decision" tone={k.pending ? "text-amber-600" : "text-gray-900"} />
+            <Kpi label="Pending" value={k.pending} sub="awaiting decision" tone={k.pending ? "text-[var(--cmp-text-warning)]" : "text-gray-900"} />
             <Kpi label="Avg turnaround" value={k.avgTurnaround == null ? "—" : `${k.avgTurnaround}d`} sub="submit → decided" />
-            <Kpi label="Within SLA" value={k.slaPct == null ? "—" : `${k.slaPct}%`} sub={`${k.sla}-day target`} tone={k.slaPct == null ? "text-gray-900" : k.slaPct >= 80 ? "text-emerald-600" : "text-amber-600"} />
-            <Kpi label="Overdue" value={k.overdue} sub={`pending > ${k.sla}d`} tone={k.overdue ? "text-rose-600" : "text-gray-900"} />
-            <Kpi label="Approved" value={k.approved} sub="governance-scoped" tone="text-emerald-600" />
-            <Kpi label="Rejected" value={k.rejected} sub="did not meet reqs" tone={k.rejected ? "text-rose-600" : "text-gray-900"} />
+            <Kpi label="Within SLA" value={k.slaPct == null ? "—" : `${k.slaPct}%`} sub={`${k.sla}-day target`} tone={k.slaPct == null ? "text-gray-900" : k.slaPct >= 80 ? "text-[var(--cmp-text-success)]" : "text-[var(--cmp-text-warning)]"} />
+            <Kpi label="Overdue" value={k.overdue} sub={`pending > ${k.sla}d`} tone={k.overdue ? "text-[var(--cmp-text-error)]" : "text-gray-900"} />
+            <Kpi label="Approved" value={k.approved} sub="governance-scoped" tone="text-[var(--cmp-text-success)]" />
+            <Kpi label="Rejected" value={k.rejected} sub="did not meet reqs" tone={k.rejected ? "text-[var(--cmp-text-error)]" : "text-gray-900"} />
           </div>
 
           {/* Pipeline funnel */}
@@ -69,9 +69,9 @@ export default async function GovernanceApprovalsPage() {
             <p className="text-xs font-bold text-gray-500 uppercase tracking-widest mb-3">Approval pipeline</p>
             <div className="space-y-2">
               {[
-                { label: "Pending review", value: d.pipeline.pending, tone: "bg-amber-400" },
-                { label: "Approved", value: d.pipeline.approved, tone: "bg-emerald-500" },
-                { label: "Rejected", value: d.pipeline.rejected, tone: "bg-rose-500" },
+                { label: "Pending review", value: d.pipeline.pending, tone: "bg-[var(--cmp-color-warning)]" },
+                { label: "Approved", value: d.pipeline.approved, tone: "bg-[var(--cmp-color-success)]" },
+                { label: "Rejected", value: d.pipeline.rejected, tone: "bg-[var(--cmp-color-error)]" },
               ].map((s) => (
                 <div key={s.label} className="flex items-center gap-3">
                   <span className="text-[11px] text-gray-500 w-28 shrink-0">{s.label}</span>
@@ -87,7 +87,7 @@ export default async function GovernanceApprovalsPage() {
             <div className="lg:col-span-2">
               <Card title="Approval Workspace" right={<span className="text-[10px] text-gray-400">oldest first · {d.queueTotal} pending</span>}>
                 {d.queue.length === 0 ? (
-                  <div className="p-6 text-center"><p className="text-sm text-emerald-600 font-medium">No governance approvals pending — the queue is clear.</p></div>
+                  <div className="p-6 text-center"><p className="text-sm text-[var(--cmp-text-success)] font-medium">No governance approvals pending — the queue is clear.</p></div>
                 ) : (
                   <div className="overflow-x-auto">
                     <table className="w-full min-w-[620px]">
@@ -108,7 +108,7 @@ export default async function GovernanceApprovalsPage() {
                             <td className="py-2 px-2 text-[11px] text-gray-600"><span className="mr-1">{q.icon}</span>{q.workflow}</td>
                             <td className="py-2 px-2 text-[11px] text-gray-500">{q.requestedBy}</td>
                             <td className="py-2 px-2"><span className="text-[10px] text-gray-500 bg-gray-50 border border-gray-100 rounded px-1.5 py-0.5">{q.step}</span></td>
-                            <td className="py-2 pr-4 pl-2 text-right"><span className={`text-[11px] font-semibold tabular-nums ${q.ageDays > k.sla ? "text-rose-600" : "text-gray-500"}`}>{q.ageDays}d{q.ageDays > k.sla && " ⚠"}</span></td>
+                            <td className="py-2 pr-4 pl-2 text-right"><span className={`text-[11px] font-semibold tabular-nums ${q.ageDays > k.sla ? "text-[var(--cmp-text-error)]" : "text-gray-500"}`}>{q.ageDays}d{q.ageDays > k.sla && " ⚠"}</span></td>
                           </tr>
                         ))}
                       </tbody>
@@ -127,7 +127,7 @@ export default async function GovernanceApprovalsPage() {
                   {d.reviewers.map((r: any) => (
                     <div key={r.name} className="flex items-center justify-between gap-2 border border-gray-50 rounded-lg px-2.5 py-1.5">
                       <span className="text-[12px] text-gray-700 truncate">{r.name}</span>
-                      <span className="text-[10px] text-gray-400 shrink-0"><span className="text-emerald-600 font-semibold">{r.approved}</span> ✓ · <span className="text-rose-600 font-semibold">{r.rejected}</span> ✕ · {r.total}</span>
+                      <span className="text-[10px] text-gray-400 shrink-0"><span className="text-[var(--cmp-text-success)] font-semibold">{r.approved}</span> ✓ · <span className="text-[var(--cmp-text-error)] font-semibold">{r.rejected}</span> ✕ · {r.total}</span>
                     </div>
                   ))}
                 </div>
@@ -143,10 +143,10 @@ export default async function GovernanceApprovalsPage() {
               <div className="p-3 space-y-1">
                 {d.timeline.map((t: any, i: number) => (
                   <div key={i} className="flex items-start gap-2.5 px-2 py-1.5">
-                    <span className={`mt-0.5 w-2 h-2 rounded-full shrink-0 ${t.decision === "approved" ? "bg-emerald-500" : "bg-rose-500"}`} />
+                    <span className={`mt-0.5 w-2 h-2 rounded-full shrink-0 ${t.decision === "approved" ? "bg-[var(--cmp-color-success)]" : "bg-[var(--cmp-color-error)]"}`} />
                     <div className="min-w-0 flex-1">
                       <p className="text-[12px] text-gray-700 leading-tight">
-                        <span className={`font-semibold ${t.decision === "approved" ? "text-emerald-700" : "text-rose-700"}`}>{t.decision}</span>
+                        <span className={`font-semibold ${t.decision === "approved" ? "text-emerald-700" : "text-[var(--cmp-text-error)]"}`}>{t.decision}</span>
                         {" "}<span className="text-gray-500">step {t.step} ·</span> <span className="font-medium">{t.entityName}</span> <span className="text-gray-400">({t.workflow})</span>
                       </p>
                       {t.note && <p className="text-[10px] text-gray-400 leading-snug">&ldquo;{t.note}&rdquo;</p>}
@@ -166,14 +166,14 @@ export default async function GovernanceApprovalsPage() {
                 {d.byWorkflow.map((w: any) => (
                   <div key={w.key} className="flex items-center gap-2 border border-gray-100 rounded-lg px-3 py-1.5">
                     <span>{w.icon}</span>
-                    <div><p className="text-[12px] font-semibold text-gray-700 leading-none">{w.name}</p><p className="text-[10px] text-gray-400 mt-0.5">{w.steps} step{w.steps === 1 ? "" : "s"}{w.pending > 0 && <span className="text-amber-600 font-semibold"> · {w.pending} pending</span>}</p></div>
+                    <div><p className="text-[12px] font-semibold text-gray-700 leading-none">{w.name}</p><p className="text-[10px] text-gray-400 mt-0.5">{w.steps} step{w.steps === 1 ? "" : "s"}{w.pending > 0 && <span className="text-[var(--cmp-text-warning)] font-semibold"> · {w.pending} pending</span>}</p></div>
                   </div>
                 ))}
               </div>
             </div>
           )}
 
-          <p className="text-[11px] text-gray-400 leading-relaxed">Every figure is live: the pipeline and turnaround come from the approval-request store, the reviewer workload and timeline from the per-step decision audit, and content changes from change control. This is the governance <span className="font-medium">workspace</span> — deciding happens in <Link href="/super-admin/platform-ops/approvals" className="text-emerald-600 hover:underline">the approvals console</Link> and <Link href="/competency-office/review-board" className="text-emerald-600 hover:underline">the Office review board</Link>, where separation of creation and approval, appropriate authority and full audit are enforced. Per the CGR mandate, AI may recommend reviewers or summarise evidence but never approves.</p>
+          <p className="text-[11px] text-gray-400 leading-relaxed">Every figure is live: the pipeline and turnaround come from the approval-request store, the reviewer workload and timeline from the per-step decision audit, and content changes from change control. This is the governance <span className="font-medium">workspace</span> — deciding happens in <Link href="/super-admin/platform-ops/approvals" className="text-[var(--cmp-text-success)] hover:underline">the approvals console</Link> and <Link href="/competency-office/review-board" className="text-[var(--cmp-text-success)] hover:underline">the Office review board</Link>, where separation of creation and approval, appropriate authority and full audit are enforced. Per the CGR mandate, AI may recommend reviewers or summarise evidence but never approves.</p>
         </div>
       )}
     </div>

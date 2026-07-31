@@ -60,8 +60,8 @@ export default async function ExecOperationsPage() {
             </div>
           ) : <p className="text-sm text-gray-400 py-4 text-center">No live patient records — flow shown from the daily snapshot below.</p>}
           <div className="flex items-center justify-around mt-3 pt-3 border-t border-gray-100 text-center">
-            <div><p className="text-[11px] text-gray-500">Admissions (day)</p><p className="text-[18px] font-bold text-emerald-600 tabular-nums">{numv(d.flow.admissions)}</p></div>
-            <div><p className="text-[11px] text-gray-500">Discharges (day)</p><p className="text-[18px] font-bold text-blue-600 tabular-nums">{numv(d.flow.discharges)}</p></div>
+            <div><p className="text-[11px] text-gray-500">Admissions (day)</p><p className="text-[18px] font-bold text-[var(--cmp-text-success)] tabular-nums">{numv(d.flow.admissions)}</p></div>
+            <div><p className="text-[11px] text-gray-500">Discharges (day)</p><p className="text-[18px] font-bold text-[var(--cmp-text-information)] tabular-nums">{numv(d.flow.discharges)}</p></div>
             <div><p className="text-[11px] text-gray-500">Patients tracked</p><p className="text-[18px] font-bold text-gray-900 tabular-nums">{d.hasPatients ? d.flow.total : "—"}</p></div>
           </div>
         </Card>

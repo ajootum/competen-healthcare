@@ -53,12 +53,12 @@ export default async function AnalyticsReports() {
       <WfmExcTabs />
 
       <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-3">
-        <Kpi label="Rejection rate" value={rejectionRate != null ? `${rejectionRate}%` : "—"} sub="Rejected ÷ decided" tone={rejectionRate != null && rejectionRate > 25 ? "text-amber-600" : undefined} />
-        <Kpi label="Overdue rate" value={overdueRate != null ? `${overdueRate}%` : "—"} sub="Overdue ÷ open" tone={overdueRate ? "text-rose-600" : "text-emerald-600"} />
-        <Kpi label="Escalation rate" value={escalationRate != null ? `${escalationRate}%` : "—"} sub="Escalated ÷ all" tone={escalationRate ? "text-orange-600" : undefined} />
+        <Kpi label="Rejection rate" value={rejectionRate != null ? `${rejectionRate}%` : "—"} sub="Rejected ÷ decided" tone={rejectionRate != null && rejectionRate > 25 ? "text-[var(--cmp-text-warning)]" : undefined} />
+        <Kpi label="Overdue rate" value={overdueRate != null ? `${overdueRate}%` : "—"} sub="Overdue ÷ open" tone={overdueRate ? "text-[var(--cmp-text-error)]" : "text-[var(--cmp-text-success)]"} />
+        <Kpi label="Escalation rate" value={escalationRate != null ? `${escalationRate}%` : "—"} sub="Escalated ÷ all" tone={escalationRate ? "text-[var(--cmp-text-warning)]" : undefined} />
         <Kpi label="Open exceptions" value={d.kpis.exceptionCount} />
         <Kpi label="Decided" value={decided.length} sub="Approved / rejected" />
-        <Kpi label="Critical" value={d.kpis.critical} tone={d.kpis.critical ? "text-rose-600" : "text-emerald-600"} />
+        <Kpi label="Critical" value={d.kpis.critical} tone={d.kpis.critical ? "text-[var(--cmp-text-error)]" : "text-[var(--cmp-text-success)]"} />
       </div>
 
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">

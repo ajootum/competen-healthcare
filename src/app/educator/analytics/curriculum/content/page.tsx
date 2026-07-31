@@ -41,7 +41,7 @@ export default async function Content() {
             {d.byType.map(x => (
               <div key={x.label} className="flex flex-col items-center gap-1 flex-1">
                 <span className="text-[10px] font-bold text-gray-700">{x.n}</span>
-                <div className="w-full bg-rose-400 rounded-t" style={{ height: `${(x.n / typeMax) * 90}px` }} />
+                <div className="w-full bg-[var(--cmp-color-error)] rounded-t" style={{ height: `${(x.n / typeMax) * 90}px` }} />
                 <span className="text-[8px] text-gray-400 text-center leading-tight">{x.label}</span>
               </div>
             ))}
@@ -51,7 +51,7 @@ export default async function Content() {
         {/* Engagement trend */}
         <div className="bg-white border border-gray-100 rounded-2xl p-5">
           <h2 className="text-sm font-bold text-gray-900 mb-1">Enrolment &amp; Completion Trend <span className="font-normal text-gray-400 text-xs">(6 mo)</span></h2>
-          <div className="flex items-center gap-3 mb-2 text-[9px]"><span className="flex items-center gap-1 text-gray-500"><span className="w-2 h-2 rounded-full bg-purple-500" />Enrolled</span><span className="flex items-center gap-1 text-gray-500"><span className="w-2 h-2 rounded-full bg-green-500" />Completed</span></div>
+          <div className="flex items-center gap-3 mb-2 text-[9px]"><span className="flex items-center gap-1 text-gray-500"><span className="w-2 h-2 rounded-full bg-purple-500" />Enrolled</span><span className="flex items-center gap-1 text-gray-500"><span className="w-2 h-2 rounded-full bg-[var(--cmp-color-success)]" />Completed</span></div>
           {d.trend.every(t => t.enrolled + t.completed === 0) ? <p className="text-xs text-gray-400 py-6 text-center">No enrolment activity yet.</p> : (
             <svg viewBox="0 0 220 90" className="w-full">
               {[0, 0.5, 1].map(f => <line key={f} x1="14" x2="214" y1={72 - f * 60} y2={72 - f * 60} stroke="#f3f4f6" strokeWidth="1" />)}

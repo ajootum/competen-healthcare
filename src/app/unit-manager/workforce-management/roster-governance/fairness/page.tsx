@@ -17,7 +17,7 @@ export const dynamic = "force-dynamic";
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 const card = "bg-white rounded-xl border border-gray-200";
-const SEV: Record<string, string> = { High: "bg-rose-50 text-rose-700", Medium: "bg-amber-50 text-amber-700" };
+const SEV: Record<string, string> = { High: "bg-[var(--cmp-surface-error)] text-[var(--cmp-text-error)]", Medium: "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]" };
 
 function Kpi({ label, value, sub, tone }: { label: string; value: any; sub?: string; tone?: string }) {
   return <div className={`${card} p-4`}><p className="text-xs text-gray-500">{label}</p><p className={`text-2xl font-bold tabular-nums mt-1 ${tone ?? "text-gray-900"}`}>{value}</p>{sub && <p className="text-[11px] text-gray-400 mt-0.5">{sub}</p>}</div>;
@@ -50,7 +50,7 @@ export default async function FairnessFatigueCost() {
     </>
   );
 
-  if (!f.provisioned) return <div className="space-y-4">{header}<div className="bg-amber-50 border border-amber-200 rounded-xl p-6"><p className="font-semibold text-amber-900">⚙️ Roster store not provisioned</p></div></div>;
+  if (!f.provisioned) return <div className="space-y-4">{header}<div className="bg-[var(--cmp-surface-warning)] border border-[var(--cmp-color-warning)] rounded-xl p-6"><p className="font-semibold text-amber-900">⚙️ Roster store not provisioned</p></div></div>;
   if (!f.hasRoster) return <div className="space-y-4">{header}<div className="bg-white border border-gray-200 rounded-xl p-6"><p className="font-semibold text-gray-800">No roster for the current week</p><p className="text-sm text-gray-500 mt-1">Generate one in the <Link href="/unit-manager/scheduling-engine" className="text-emerald-700 hover:underline">Scheduling Engine</Link>.</p></div></div>;
 
   const k = f.kpis, ck = c?.kpis ?? {};
@@ -59,12 +59,12 @@ export default async function FairnessFatigueCost() {
       {header}
 
       <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-3">
-        <Kpi label="Fairness index" value={`${k.overall}`} sub="0–100 equity" tone={k.overall >= 85 ? "text-emerald-600" : k.overall >= 70 ? "text-amber-600" : "text-rose-600"} />
+        <Kpi label="Fairness index" value={`${k.overall}`} sub="0–100 equity" tone={k.overall >= 85 ? "text-[var(--cmp-text-success)]" : k.overall >= 70 ? "text-[var(--cmp-text-warning)]" : "text-[var(--cmp-text-error)]"} />
         <Kpi label="Night equity" value={`${k.nightEquity}`} sub="Night distribution" />
-        <Kpi label="Bias alerts" value={k.biasAlerts} sub="Allocation / fatigue" tone={k.biasAlerts ? "text-amber-600" : "text-emerald-600"} />
-        <Kpi label="Over shift limit" value={k.overLimit} sub=">4 shifts/week" tone={k.overLimit ? "text-rose-600" : "text-emerald-600"} />
+        <Kpi label="Bias alerts" value={k.biasAlerts} sub="Allocation / fatigue" tone={k.biasAlerts ? "text-[var(--cmp-text-warning)]" : "text-[var(--cmp-text-success)]"} />
+        <Kpi label="Over shift limit" value={k.overLimit} sub=">4 shifts/week" tone={k.overLimit ? "text-[var(--cmp-text-error)]" : "text-[var(--cmp-text-success)]"} />
         <Kpi label="Est. labour" value={ck.totalLabour != null ? `£${(ck.totalLabour / 1000).toFixed(1)}k` : "—"} sub={ck.variance != null ? `${ck.variance >= 0 ? "+" : ""}£${Math.round(ck.variance / 100) / 10}k vs plan` : "planning est."} />
-        <Kpi label="Overtime" value={ck.overtimeHours != null ? `${ck.overtimeHours}h` : "—"} sub={ck.agencyProjected ? `£${ck.agencyProjected.toLocaleString()} agency` : "no agency"} tone={ck.overtimeHours ? "text-amber-600" : undefined} />
+        <Kpi label="Overtime" value={ck.overtimeHours != null ? `${ck.overtimeHours}h` : "—"} sub={ck.agencyProjected ? `£${ck.agencyProjected.toLocaleString()} agency` : "no agency"} tone={ck.overtimeHours ? "text-[var(--cmp-text-warning)]" : undefined} />
       </div>
 
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
@@ -73,7 +73,7 @@ export default async function FairnessFatigueCost() {
           <h3 className="text-sm font-bold text-gray-900 mb-3">Staff distribution &amp; fatigue <span className="text-[10px] text-gray-400 font-normal">this cycle</span></h3>
           <div className="overflow-x-auto"><table className="w-full text-xs">
             <thead><tr className="text-gray-400 text-left border-b border-gray-100"><th className="py-2 pr-3 font-medium">Staff</th><th className="py-2 pr-3 font-medium">Role</th><th className="py-2 pr-3 font-medium text-right">Shifts</th><th className="py-2 pr-3 font-medium text-right">Nights</th><th className="py-2 pr-3 font-medium text-right">Weekends</th><th className="py-2 font-medium text-right">Max consec.</th></tr></thead>
-            <tbody>{f.staff.slice(0, 14).map((s: any) => (<tr key={s.id} className="border-b border-gray-50"><td className="py-2 pr-3 text-gray-800 font-medium">{s.name}</td><td className="py-2 pr-3 text-gray-500 capitalize">{s.role}</td><td className={`py-2 pr-3 text-right font-semibold ${s.total > 4 ? "text-rose-600" : "text-gray-700"}`}>{s.total}</td><td className="py-2 pr-3 text-right text-gray-600">{s.night || "—"}</td><td className="py-2 pr-3 text-right text-gray-600">{s.weekend || "—"}</td><td className={`py-2 text-right ${s.consecutive >= 5 ? "text-rose-600 font-semibold" : "text-gray-600"}`}>{s.consecutive}</td></tr>))}</tbody>
+            <tbody>{f.staff.slice(0, 14).map((s: any) => (<tr key={s.id} className="border-b border-gray-50"><td className="py-2 pr-3 text-gray-800 font-medium">{s.name}</td><td className="py-2 pr-3 text-gray-500 capitalize">{s.role}</td><td className={`py-2 pr-3 text-right font-semibold ${s.total > 4 ? "text-[var(--cmp-text-error)]" : "text-gray-700"}`}>{s.total}</td><td className="py-2 pr-3 text-right text-gray-600">{s.night || "—"}</td><td className="py-2 pr-3 text-right text-gray-600">{s.weekend || "—"}</td><td className={`py-2 text-right ${s.consecutive >= 5 ? "text-[var(--cmp-text-error)] font-semibold" : "text-gray-600"}`}>{s.consecutive}</td></tr>))}</tbody>
           </table></div>
           <p className="text-[10px] text-gray-400 mt-2">Fatigue indicators (§13.4): short rest, excessive consecutive shifts/nights, &gt;4 shifts/week. The fatigue score never makes a clinical fitness determination (§13.5).</p>
         </div>

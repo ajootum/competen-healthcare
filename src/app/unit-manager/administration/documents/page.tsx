@@ -21,12 +21,12 @@ export default async function DocumentsPage() {
     <div className="max-w-[1500px] space-y-4">
       {head}<Tabs active="003" />
       <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-7 gap-3">
-        <div className="bg-white border border-gray-200 rounded-xl p-3.5 flex items-center gap-2"><Ring pct={k.governanceScore} size={56} /><div><p className="text-[11px] text-gray-500 uppercase tracking-wide leading-tight">Governance</p><p className="text-[11px] text-emerald-600 font-medium">Score</p></div></div>
+        <div className="bg-white border border-gray-200 rounded-xl p-3.5 flex items-center gap-2"><Ring pct={k.governanceScore} size={56} /><div><p className="text-[11px] text-gray-500 uppercase tracking-wide leading-tight">Governance</p><p className="text-[11px] text-[var(--cmp-text-success)] font-medium">Score</p></div></div>
         <Kpi label="Total Documents" value={k.total} sub={`${k.published} published`} />
-        <Kpi label="Awaiting Review" value={k.awaitingReview} sub="in workflow" tone={k.awaitingReview ? "text-amber-600" : undefined} />
-        <Kpi label="Acknowledgement" value={`${k.ackRate}%`} sub="staff compliant" tone={k.ackRate >= 85 ? "text-emerald-600" : "text-amber-600"} />
-        <Kpi label="Expiring Soon" value={k.expiring} sub="within 30 days" tone={k.expiring ? "text-rose-600" : undefined} />
-        <Kpi label="Published" value={k.published} sub="live documents" tone="text-emerald-600" />
+        <Kpi label="Awaiting Review" value={k.awaitingReview} sub="in workflow" tone={k.awaitingReview ? "text-[var(--cmp-text-warning)]" : undefined} />
+        <Kpi label="Acknowledgement" value={`${k.ackRate}%`} sub="staff compliant" tone={k.ackRate >= 85 ? "text-[var(--cmp-text-success)]" : "text-[var(--cmp-text-warning)]"} />
+        <Kpi label="Expiring Soon" value={k.expiring} sub="within 30 days" tone={k.expiring ? "text-[var(--cmp-text-error)]" : undefined} />
+        <Kpi label="Published" value={k.published} sub="live documents" tone="text-[var(--cmp-text-success)]" />
         <Kpi label="Regulatory Sets" value={d.regulatory.length} sub="frameworks" />
       </div>
 
@@ -39,7 +39,7 @@ export default async function DocumentsPage() {
         </Card>
 
         <Card title="Documents by Status">
-          <div className="space-y-2 text-[12px]">{d.byStatus.map((s: any) => <div key={s.status} className="flex items-center gap-2"><Pill text={s.status} tone={STATUS_TONE[s.status]} /><div className="flex-1 h-2 rounded-full bg-gray-100 overflow-hidden"><div className="h-full rounded-full bg-blue-500" style={{ width: `${(s.n / k.total) * 100}%` }} /></div><span className="font-semibold text-gray-900 tabular-nums w-6 text-right">{s.n}</span></div>)}</div>
+          <div className="space-y-2 text-[12px]">{d.byStatus.map((s: any) => <div key={s.status} className="flex items-center gap-2"><Pill text={s.status} tone={STATUS_TONE[s.status]} /><div className="flex-1 h-2 rounded-full bg-gray-100 overflow-hidden"><div className="h-full rounded-full bg-[var(--cmp-color-information)]" style={{ width: `${(s.n / k.total) * 100}%` }} /></div><span className="font-semibold text-gray-900 tabular-nums w-6 text-right">{s.n}</span></div>)}</div>
         </Card>
 
         <Card title="Review Due" right={<span className="text-[11px] text-gray-400">next 45 days</span>}>

@@ -18,7 +18,7 @@ const fmtAgo = (iso: string | null) => {
   const hrs = Math.round(mins / 60); if (hrs < 24) return `${hrs}h`;
   return `${Math.round(hrs / 24)}d`;
 };
-const RISK_CLS: Record<string, string> = { High: "bg-red-50 text-red-600", Medium: "bg-amber-50 text-amber-600", Low: "bg-blue-50 text-blue-600", None: "bg-gray-100 text-gray-400" };
+const RISK_CLS: Record<string, string> = { High: "bg-[var(--cmp-surface-critical)] text-[var(--cmp-text-critical)]", Medium: "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]", Low: "bg-[var(--cmp-surface-information)] text-[var(--cmp-text-information)]", None: "bg-gray-100 text-gray-400" };
 
 const QUICK = [
   { icon: "💬", label: "Send Encouragement", href: "/educator/communication" },
@@ -123,7 +123,7 @@ export default async function LearnerAnalytics() {
                     <td className="py-2 pr-3"><span className={`text-[9px] font-bold px-1.5 py-0.5 rounded ${RISK_CLS[r.risk]}`}>{r.risk}</span></td>
                     <td className="py-2 pr-3">
                       <span className="flex items-center gap-1.5">
-                        <span className="w-10 h-1.5 bg-gray-100 rounded-full overflow-hidden inline-block"><span className={`block h-full rounded-full ${r.engagement >= 66 ? "bg-green-500" : r.engagement >= 33 ? "bg-amber-400" : "bg-red-400"}`} style={{ width: `${r.engagement}%` }} /></span>
+                        <span className="w-10 h-1.5 bg-gray-100 rounded-full overflow-hidden inline-block"><span className={`block h-full rounded-full ${r.engagement >= 66 ? "bg-[var(--cmp-color-success)]" : r.engagement >= 33 ? "bg-[var(--cmp-color-warning)]" : "bg-[var(--cmp-color-critical)]"}`} style={{ width: `${r.engagement}%` }} /></span>
                         <span className="text-gray-500">{r.engagement}</span>
                       </span>
                     </td>
@@ -173,8 +173,8 @@ export default async function LearnerAnalytics() {
           ) : (
             <div className="text-[11px] space-y-2">
               <p className="font-semibold text-gray-800">{d.profile.name} <span className="text-[9px] font-normal text-gray-400">(most assessed)</span></p>
-              <div><p className="text-[9px] font-bold uppercase text-gray-400">Strengths</p><p className="text-green-700">{d.profile.strengths.join(", ")}</p></div>
-              <div><p className="text-[9px] font-bold uppercase text-gray-400">Areas to improve</p><p className="text-amber-700">{d.profile.areas.join(", ")}</p></div>
+              <div><p className="text-[9px] font-bold uppercase text-gray-400">Strengths</p><p className="text-[var(--cmp-text-success)]">{d.profile.strengths.join(", ")}</p></div>
+              <div><p className="text-[9px] font-bold uppercase text-gray-400">Areas to improve</p><p className="text-[var(--cmp-text-warning)]">{d.profile.areas.join(", ")}</p></div>
               <div className="flex gap-4">
                 <span><span className="text-gray-400">Consistency:</span> {d.profile.consistency}</span>
                 <span><span className="text-gray-400">Dropout risk:</span> {d.profile.dropout}</span>

@@ -36,8 +36,8 @@ export default function ShiftLifecycle({ states, index, subState, shiftStatus, g
     finally { setBusy(false); }
   }
 
-  const subTone = subState === "Emergency Operations" ? "bg-rose-100 text-rose-700 border-rose-200"
-    : subState === "Degraded Operations" ? "bg-amber-100 text-amber-700 border-amber-200" : "";
+  const subTone = subState === "Emergency Operations" ? "bg-[var(--cmp-surface-error)] text-[var(--cmp-text-error)] border-[var(--cmp-color-error)]"
+    : subState === "Degraded Operations" ? "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)] border-[var(--cmp-color-warning)]" : "";
 
   return (
     <div className={cardClass}>
@@ -65,12 +65,12 @@ export default function ShiftLifecycle({ states, index, subState, shiftStatus, g
       {/* Command ownership (§5.2 / §8) */}
       <div className="flex items-center gap-2 mb-3 text-[11px]">
         {shiftStatus === "active" && !command.hasOwner ? (
-          <span className="font-semibold text-rose-700 bg-rose-50 border border-rose-200 rounded-full px-2 py-0.5">● No command owner — assign a supervisor</span>
+          <span className="font-semibold text-[var(--cmp-text-error)] bg-[var(--cmp-surface-error)] border border-[var(--cmp-color-error)] rounded-full px-2 py-0.5">● No command owner — assign a supervisor</span>
         ) : (
           <span className="text-gray-600 bg-gray-50 border border-gray-200 rounded-full px-2 py-0.5">👤 Command: <span className="font-semibold text-gray-800">{command.owner ?? "—"}</span>
             {command.owner && (command.confirmed
-              ? <span className="ml-1 text-green-600 font-semibold">✓ confirmed</span>
-              : <span className="ml-1 text-amber-600">pending confirmation</span>)}
+              ? <span className="ml-1 text-[var(--cmp-text-success)] font-semibold">✓ confirmed</span>
+              : <span className="ml-1 text-[var(--cmp-text-warning)]">pending confirmation</span>)}
           </span>
         )}
         <span className="text-gray-400">·</span>
@@ -107,14 +107,14 @@ export default function ShiftLifecycle({ states, index, subState, shiftStatus, g
           <div className="space-y-1">
             {gate.blockers.map((b) => (
               <div key={b.code} className="flex items-start gap-2 text-[11px]">
-                <span className={`mt-0.5 w-1.5 h-1.5 rounded-full shrink-0 ${b.hard ? "bg-rose-500" : "bg-amber-500"}`} />
+                <span className={`mt-0.5 w-1.5 h-1.5 rounded-full shrink-0 ${b.hard ? "bg-[var(--cmp-color-error)]" : "bg-[var(--cmp-color-warning)]"}`} />
                 <span className="text-gray-700"><span className="font-mono text-[10px] text-gray-400">{b.code}</span> — {b.message}</span>
               </div>
             ))}
           </div>
         </div>
       )}
-      {err && <p className="text-[11px] text-rose-600 mt-2">{err}</p>}
+      {err && <p className="text-[11px] text-[var(--cmp-text-error)] mt-2">{err}</p>}
     </div>
   );
 }

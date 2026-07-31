@@ -25,7 +25,7 @@ export default async function AdaptivePage() {
         <p className="text-gray-400 text-sm mt-0.5">Fewer questions, sharper measurement — the test adapts to your answers as you go.</p>
       </div>
       {!q.provisioned ? (
-        <div className="bg-amber-50 border border-amber-100 rounded-xl p-4"><p className="text-[13px] text-amber-900">Adaptive exams aren&apos;t provisioned yet (migrations 136 + 146).</p></div>
+        <div className="bg-[var(--cmp-surface-warning)] border border-[var(--cmp-color-warning)] rounded-xl p-4"><p className="text-[13px] text-amber-900">Adaptive exams aren&apos;t provisioned yet (migrations 136 + 146).</p></div>
       ) : (
         <AdaptiveExam exams={q.exams} />
       )}

@@ -23,16 +23,16 @@ export default function ValidationActions({ scoreId, validated }: { scoreId: str
   return (
     <div className="space-y-2">
       <div className="grid grid-cols-3 gap-2">
-        <button onClick={() => act("validate", "Approve", false)} disabled={!!busy} className={`${BTN} bg-green-600 text-white`}>Approve</button>
-        <button onClick={() => act("validate", "Approve with Conditions", true)} disabled={!!busy} className={`${BTN} border border-green-500 text-green-700`}>Conditions</button>
-        <button onClick={() => act("return", "Reject", true)} disabled={!!busy} className={`${BTN} bg-rose-600 text-white`}>Reject</button>
+        <button onClick={() => act("validate", "Approve", false)} disabled={!!busy} className={`${BTN} bg-[var(--cmp-color-success)] text-white`}>Approve</button>
+        <button onClick={() => act("validate", "Approve with Conditions", true)} disabled={!!busy} className={`${BTN} border border-green-500 text-[var(--cmp-text-success)]`}>Conditions</button>
+        <button onClick={() => act("return", "Reject", true)} disabled={!!busy} className={`${BTN} bg-[var(--cmp-color-error)] text-white`}>Reject</button>
       </div>
       <div className="grid grid-cols-3 gap-2">
         <button onClick={() => act("return", "Return for More Evidence", true)} disabled={!!busy} className={`${BTN} border border-gray-200 text-gray-600`}>Return</button>
         <button onClick={() => act("return", "Request Information", true)} disabled={!!busy} className={`${BTN} border border-gray-200 text-gray-600`}>Request Info</button>
         <button disabled className={`${BTN} border border-gray-100 text-gray-300`} title="Assign learning — next phase">Assign Learning</button>
       </div>
-      {err && <p className="text-[10px] text-rose-600">{err}</p>}
+      {err && <p className="text-[10px] text-[var(--cmp-text-error)]">{err}</p>}
     </div>
   );
 }

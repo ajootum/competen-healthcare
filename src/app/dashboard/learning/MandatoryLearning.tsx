@@ -8,7 +8,7 @@ import { useRouter } from "next/navigation";
 // so a worker finishing their training now moves the manager's compliance numbers. Writes are self-scoped
 // server-side (/api/learning/my-enrolments, user_id = caller).
 /* eslint-disable @typescript-eslint/no-explicit-any */
-const statusTone = (s: string) => (s === "completed" ? "bg-green-50 text-green-700" : s === "overdue" ? "bg-rose-50 text-rose-700" : s === "in_progress" ? "bg-blue-50 text-blue-700" : "bg-gray-100 text-gray-500");
+const statusTone = (s: string) => (s === "completed" ? "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]" : s === "overdue" ? "bg-[var(--cmp-surface-error)] text-[var(--cmp-text-error)]" : s === "in_progress" ? "bg-[var(--cmp-surface-information)] text-blue-700" : "bg-gray-100 text-gray-500");
 const statusLabel: Record<string, string> = { completed: "Completed", in_progress: "In Progress", not_started: "Not Started", overdue: "Overdue", exempt: "Exempt" };
 
 export default function MandatoryLearning({ items }: { items: any[] }) {
@@ -27,7 +27,7 @@ export default function MandatoryLearning({ items }: { items: any[] }) {
   const card = "bg-white rounded-xl border border-gray-100";
   return (
     <div className={`${card} p-5`}>
-      {msg && <div className={`fixed bottom-4 right-4 z-50 text-sm rounded-lg px-4 py-2.5 shadow-lg ${msg.kind === "ok" ? "bg-emerald-600 text-white" : "bg-rose-600 text-white"}`}>{msg.text}</div>}
+      {msg && <div className={`fixed bottom-4 right-4 z-50 text-sm rounded-lg px-4 py-2.5 shadow-lg ${msg.kind === "ok" ? "bg-[var(--cmp-color-success)] text-white" : "bg-[var(--cmp-color-error)] text-white"}`}>{msg.text}</div>}
       <div className="flex items-center justify-between mb-3">
         <h2 className="font-semibold text-gray-900 text-sm">My Assigned Training</h2>
         <span className="text-[10px] text-gray-400">{items.filter(i => i.status === "completed").length}/{items.length} complete</span>
@@ -37,10 +37,10 @@ export default function MandatoryLearning({ items }: { items: any[] }) {
       ) : (
         <div className="space-y-2">
           {items.map((e: any) => (
-            <div key={e.id} className={`rounded-lg border p-3 ${e.overdue ? "border-rose-100 bg-rose-50/30" : "border-gray-100"}`}>
+            <div key={e.id} className={`rounded-lg border p-3 ${e.overdue ? "border-[var(--cmp-color-error)] bg-[var(--cmp-surface-error)]/30" : "border-gray-100"}`}>
               <div className="flex items-start justify-between gap-2">
                 <div className="min-w-0">
-                  <p className="text-sm font-medium text-gray-800 truncate">{e.title}{e.mandatory && <span className="ml-1.5 text-[9px] font-semibold text-rose-600 uppercase">mandatory</span>}</p>
+                  <p className="text-sm font-medium text-gray-800 truncate">{e.title}{e.mandatory && <span className="ml-1.5 text-[9px] font-semibold text-[var(--cmp-text-error)] uppercase">mandatory</span>}</p>
                   <p className="text-[10px] text-gray-400">{e.courseType ? `${e.courseType} · ` : ""}{e.dueLabel ? `due ${e.dueLabel}` : "no due date"}</p>
                 </div>
                 <span className={`text-[10px] font-semibold rounded px-1.5 py-0.5 shrink-0 ${statusTone(e.overdue && e.status !== "completed" ? "overdue" : e.status)}`}>{statusLabel[e.overdue && e.status !== "completed" ? "overdue" : e.status] ?? e.status}</span>

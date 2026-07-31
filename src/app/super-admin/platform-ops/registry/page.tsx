@@ -39,7 +39,7 @@ export default async function ConfigurationRegistry() {
 
   if (!reg.provisioned) return (
     <div data-wide className="space-y-4">{header}
-      <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800"><span className="font-semibold">Not provisioned.</span> Run <code className="font-mono text-[12px] bg-amber-100 px-1 rounded">migration 092-config-registry.sql</code> to create the registry, then use “Sync from catalogue”.</div>
+      <div className="rounded-xl border border-[var(--cmp-color-warning)] bg-[var(--cmp-surface-warning)] px-4 py-3 text-sm text-amber-800"><span className="font-semibold">Not provisioned.</span> Run <code className="font-mono text-[12px] bg-[var(--cmp-surface-warning)] px-1 rounded">migration 092-config-registry.sql</code> to create the registry, then use “Sync from catalogue”.</div>
     </div>
   );
 
@@ -52,9 +52,9 @@ export default async function ConfigurationRegistry() {
       {/* Registry dashboard (§19.1) */}
       <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-6 gap-3">
         <Stat label="Total Objects" value={s.total} />
-        <Stat label="Active" value={s.active} tone="text-emerald-600" />
-        <Stat label="Draft / Review" value={s.draft} tone={s.draft ? "text-amber-600" : undefined} />
-        <Stat label="Deprecated" value={s.deprecated} tone={s.deprecated ? "text-amber-600" : "text-gray-400"} />
+        <Stat label="Active" value={s.active} tone="text-[var(--cmp-text-success)]" />
+        <Stat label="Draft / Review" value={s.draft} tone={s.draft ? "text-[var(--cmp-text-warning)]" : undefined} />
+        <Stat label="Deprecated" value={s.deprecated} tone={s.deprecated ? "text-[var(--cmp-text-warning)]" : "text-gray-400"} />
         <Stat label="Retired" value={s.retired} tone="text-gray-400" />
         <Stat label="Workspaces" value={s.workspaces} />
       </div>
@@ -119,5 +119,5 @@ export default async function ConfigurationRegistry() {
 }
 
 function Flag({ label, n }: { label: string; n: number }) {
-  return <div className="flex items-center justify-between"><span className="text-gray-600 text-xs">{label}</span><span className={`text-sm font-bold tabular-nums ${n ? "text-amber-600" : "text-emerald-600"}`}>{n}</span></div>;
+  return <div className="flex items-center justify-between"><span className="text-gray-600 text-xs">{label}</span><span className={`text-sm font-bold tabular-nums ${n ? "text-[var(--cmp-text-warning)]" : "text-[var(--cmp-text-success)]"}`}>{n}</span></div>;
 }

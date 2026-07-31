@@ -61,7 +61,7 @@ export default async function ProfessionalDevelopmentPage() {
             <span className={`w-8 h-8 rounded-lg flex items-center justify-center text-sm mb-1.5 ${k.tint}`}>{k.icon}</span>
             <p className="text-[11px] text-gray-500 font-medium leading-tight">{k.label}</p>
             <p className="text-lg font-extrabold text-gray-900 leading-tight">{k.value === null ? "—" : typeof k.value === "number" ? k.value.toLocaleString() : k.value}</p>
-            {typeof k.pct === "number" ? <div className="w-full bg-gray-100 rounded-full h-1.5 mt-1.5"><div className="h-full bg-emerald-500 rounded-full" style={{ width: `${k.pct}%` }} /></div> : null}
+            {typeof k.pct === "number" ? <div className="w-full bg-gray-100 rounded-full h-1.5 mt-1.5"><div className="h-full bg-[var(--cmp-color-success)] rounded-full" style={{ width: `${k.pct}%` }} /></div> : null}
             <p className="text-[10px] text-gray-400 leading-tight mt-0.5">{k.sub}</p>
           </div>
         ))}
@@ -80,7 +80,7 @@ export default async function ProfessionalDevelopmentPage() {
                 {d.domains.map(dm => (
                   <div key={dm.id}>
                     <div className="flex items-center justify-between text-[12px] mb-1"><span className="text-gray-700 truncate">{dm.name}</span><span className="text-gray-400">{dm.achieved}/{dm.total} · {dm.level}</span></div>
-                    <div className="w-full bg-gray-100 rounded-full h-2"><div className="h-full bg-blue-500 rounded-full" style={{ width: `${dm.total ? (dm.achieved / dm.total) * 100 : 0}%` }} /></div>
+                    <div className="w-full bg-gray-100 rounded-full h-2"><div className="h-full bg-[var(--cmp-color-information)] rounded-full" style={{ width: `${dm.total ? (dm.achieved / dm.total) * 100 : 0}%` }} /></div>
                   </div>
                 ))}
               </div>
@@ -90,7 +90,7 @@ export default async function ProfessionalDevelopmentPage() {
                 <p className="text-[11px] font-bold text-gray-600 mb-2">Top Development Priorities</p>
                 <div className="flex flex-col divide-y divide-gray-100">
                   {d.priorities.map((p, i) => (
-                    <div key={i} className="flex items-center gap-3 py-2 text-[12px]"><span className="flex-1 text-gray-700 truncate">{p.area}</span><span className="text-amber-600">{p.current}</span><span className="text-gray-400 text-[11px]">{p.gap}</span></div>
+                    <div key={i} className="flex items-center gap-3 py-2 text-[12px]"><span className="flex-1 text-gray-700 truncate">{p.area}</span><span className="text-[var(--cmp-text-warning)]">{p.current}</span><span className="text-gray-400 text-[11px]">{p.gap}</span></div>
                   ))}
                 </div>
               </div>
@@ -110,7 +110,7 @@ export default async function ProfessionalDevelopmentPage() {
                   <p className="text-[14px] font-bold text-gray-900 leading-tight">{m.title}</p>
                   <p className="text-[12px] text-gray-500 leading-snug mt-1 mb-3 flex-1">{m.blurb}</p>
                   <div className="flex items-center justify-between border-t border-gray-100 pt-3">
-                    {m.live ? <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-600 bg-emerald-50 rounded px-1.5 py-0.5">live data</span> : <span className="text-[10px] font-bold uppercase tracking-wider text-amber-600 bg-amber-50 rounded px-1.5 py-0.5">scaffold</span>}
+                    {m.live ? <span className="text-[10px] font-bold uppercase tracking-wider text-[var(--cmp-text-success)] bg-[var(--cmp-surface-success)] rounded px-1.5 py-0.5">live data</span> : <span className="text-[10px] font-bold uppercase tracking-wider text-[var(--cmp-text-warning)] bg-[var(--cmp-surface-warning)] rounded px-1.5 py-0.5">scaffold</span>}
                     <Link href={`/educator/tools/development/${m.slug}`} className="text-[12px] font-semibold text-violet-600 hover:text-violet-700">Open →</Link>
                   </div>
                 </div>
@@ -118,7 +118,7 @@ export default async function ProfessionalDevelopmentPage() {
             </div>
           </div>
 
-          <div className="rounded-2xl bg-emerald-50/60 border border-emerald-100 p-4 flex items-center gap-3">
+          <div className="rounded-2xl bg-[var(--cmp-surface-success)]/60 border border-[var(--cmp-color-success)] p-4 flex items-center gap-3">
             <span className="text-2xl">🌱</span>
             <div className="flex-1"><p className="text-[13px] font-bold text-gray-800">Your Professional Growth Journey</p><p className="text-[12px] text-gray-600">Keep building your evidence — CPD, credentials and learning all feed your development record.</p></div>
           </div>
@@ -128,7 +128,7 @@ export default async function ProfessionalDevelopmentPage() {
         <div className="flex flex-col gap-5 min-w-0">
           <div className="rounded-2xl bg-white border border-gray-200 shadow-sm p-4">
             <p className="text-[11px] font-bold uppercase tracking-widest text-gray-500 mb-3">Upcoming Deadlines</p>
-            {d.deadlines.length === 0 ? <p className="text-[12px] text-emerald-600">No upcoming deadlines.</p> : (
+            {d.deadlines.length === 0 ? <p className="text-[12px] text-[var(--cmp-text-success)]">No upcoming deadlines.</p> : (
               <div className="flex flex-col gap-2.5">
                 {d.deadlines.map((dl, i) => (
                   <div key={i} className="flex items-start gap-2.5"><span className="w-6 h-6 rounded-lg bg-gray-100 flex items-center justify-center text-[10px] shrink-0">⏰</span><div className="min-w-0 flex-1"><p className="text-[12px] text-gray-800 leading-tight truncate">{dl.title}</p><p className={`text-[10px] ${dl.tone}`}>{dl.date ? fmtDate(dl.date) + " · " : ""}{dl.sub}</p></div></div>

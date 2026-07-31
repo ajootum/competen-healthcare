@@ -21,12 +21,12 @@ export default async function GovernancePage() {
       {head}<Tabs active="008" />
       <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-7 gap-3">
         <Stat label="Policies" value={k.policies} sub={`${k.enforced} enforced`} />
-        <Stat label="Enforced" value={k.enforced} sub="hard controls" tone="text-rose-600" />
-        <Stat label="Monitored" value={k.monitored} sub="soft controls" tone="text-amber-600" />
-        <Stat label="Refusals (24h)" value={k.refusals24h} sub="safety blocks" tone={k.refusals24h ? "text-amber-600" : undefined} />
-        <Stat label="Errors (24h)" value={k.errors24h} sub="upstream" tone={k.errors24h ? "text-rose-600" : undefined} />
-        <Stat label="Safety Coverage" value={`${k.safetyCoverage}%`} sub="enforced share" tone="text-emerald-600" />
-        <Stat label="Governance Score" value={`${k.governanceScore}/100`} sub="composite" tone="text-emerald-600" />
+        <Stat label="Enforced" value={k.enforced} sub="hard controls" tone="text-[var(--cmp-text-error)]" />
+        <Stat label="Monitored" value={k.monitored} sub="soft controls" tone="text-[var(--cmp-text-warning)]" />
+        <Stat label="Refusals (24h)" value={k.refusals24h} sub="safety blocks" tone={k.refusals24h ? "text-[var(--cmp-text-warning)]" : undefined} />
+        <Stat label="Errors (24h)" value={k.errors24h} sub="upstream" tone={k.errors24h ? "text-[var(--cmp-text-error)]" : undefined} />
+        <Stat label="Safety Coverage" value={`${k.safetyCoverage}%`} sub="enforced share" tone="text-[var(--cmp-text-success)]" />
+        <Stat label="Governance Score" value={`${k.governanceScore}/100`} sub="composite" tone="text-[var(--cmp-text-success)]" />
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
@@ -41,7 +41,7 @@ export default async function GovernancePage() {
 
       <Card title="Recent Safety Events" right={<span className="text-[11px] text-gray-400">{d.telemetryReady ? "from gateway telemetry" : "telemetry pending"}</span>}>
         {d.safetyEvents.length ? <div className="space-y-1.5">{d.safetyEvents.map((e: any, i: number) => (
-          <div key={i} className="flex items-center gap-2 text-[12px]"><span className={`w-2 h-2 rounded-full shrink-0 ${e.status === "refusal" ? "bg-amber-500" : "bg-rose-500"}`} /><span className="text-gray-700 flex-1 truncate">{e.operation ?? "—"} · <span className="font-mono text-gray-400">{e.model}</span></span><Pill text={e.status} tone={e.status === "refusal" ? "amber" : "rose"} /><span className="text-gray-400 text-[11px]">{fmtT(e.at)}</span></div>
+          <div key={i} className="flex items-center gap-2 text-[12px]"><span className={`w-2 h-2 rounded-full shrink-0 ${e.status === "refusal" ? "bg-[var(--cmp-color-warning)]" : "bg-[var(--cmp-color-error)]"}`} /><span className="text-gray-700 flex-1 truncate">{e.operation ?? "—"} · <span className="font-mono text-gray-400">{e.model}</span></span><Pill text={e.status} tone={e.status === "refusal" ? "amber" : "rose"} /><span className="text-gray-400 text-[11px]">{fmtT(e.at)}</span></div>
         ))}</div> : <p className="text-sm text-gray-400 py-4 text-center">No safety events (refusals/errors) in the recent window. ✅</p>}
       </Card>
 

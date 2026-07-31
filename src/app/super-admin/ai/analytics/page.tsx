@@ -32,14 +32,14 @@ export default async function IntelligenceAnalytics() {
   const k = d.kpis;
 
   const kpiCards = [
-    { label: "Daily Active Users", value: dash(k.dau), icon: "👤", iconBg: "bg-blue-50" },
+    { label: "Daily Active Users", value: dash(k.dau), icon: "👤", iconBg: "bg-[var(--cmp-surface-information)]" },
     { label: "AI Requests (24h)", value: dash(k.requests24h), icon: "📊", iconBg: "bg-violet-50" },
     { label: "Acceptance", value: k.acceptance == null ? "—" : `${k.acceptance}%`, icon: "✅", iconBg: "bg-gray-50", tone: "text-gray-400" },
     { label: "Accuracy", value: k.accuracy == null ? "—" : `${k.accuracy}%`, icon: "🎯", iconBg: "bg-gray-50", tone: "text-gray-400" },
     { label: "Avg Latency", value: ms(k.avgLatencyMs), icon: "⚡", iconBg: "bg-teal-50" },
-    { label: "Knowledge Coverage", value: k.knowledgeCoverage == null ? "—" : `${k.knowledgeCoverage}%`, icon: "📚", iconBg: "bg-amber-50" },
-    { label: "Est. Cost (24h)", value: money(k.cost24h), icon: "💵", iconBg: "bg-green-50" },
-    { label: "Safety Escalations", value: dash(k.safetyEscalations), icon: "🛡️", iconBg: "bg-rose-50", tone: (k.safetyEscalations ?? 0) > 0 ? "text-rose-600" : undefined },
+    { label: "Knowledge Coverage", value: k.knowledgeCoverage == null ? "—" : `${k.knowledgeCoverage}%`, icon: "📚", iconBg: "bg-[var(--cmp-surface-warning)]" },
+    { label: "Est. Cost (24h)", value: money(k.cost24h), icon: "💵", iconBg: "bg-[var(--cmp-surface-success)]" },
+    { label: "Safety Escalations", value: dash(k.safetyEscalations), icon: "🛡️", iconBg: "bg-[var(--cmp-surface-error)]", tone: (k.safetyEscalations ?? 0) > 0 ? "text-[var(--cmp-text-error)]" : undefined },
   ];
 
   return (
@@ -53,7 +53,7 @@ export default async function IntelligenceAnalytics() {
       </div>
 
       {!d.ready && (
-        <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+        <div className="rounded-xl border border-[var(--cmp-color-warning)] bg-[var(--cmp-surface-warning)] px-4 py-3 text-sm text-amber-800">
           <span className="font-semibold">Usage telemetry off.</span> AI analytics activate once the runtime gateway records requests (migration 055). Knowledge coverage below is live regardless.
         </div>
       )}
@@ -185,7 +185,7 @@ export default async function IntelligenceAnalytics() {
             {d.responsible.map((r: any) => (
               <div key={r.label} className="flex items-center justify-between rounded-lg border border-gray-100 px-3 py-2">
                 <span className="text-xs text-gray-600">{r.label}</span>
-                <span className={`text-sm font-bold tabular-nums ${r.value == null ? "text-gray-300" : r.ok === false ? "text-rose-600" : "text-gray-900"}`}>{r.value == null ? "—" : r.value}</span>
+                <span className={`text-sm font-bold tabular-nums ${r.value == null ? "text-gray-300" : r.ok === false ? "text-[var(--cmp-text-error)]" : "text-gray-900"}`}>{r.value == null ? "—" : r.value}</span>
               </div>
             ))}
           </div>

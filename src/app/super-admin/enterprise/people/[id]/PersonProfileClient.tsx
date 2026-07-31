@@ -9,7 +9,7 @@ import { cardClass } from "@/components/ui/primitives";
 // with live editing of position, roles, employment and account status.
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
-const BADGE: Record<string, string> = { active: "bg-green-50 text-green-700", invited: "bg-blue-50 text-blue-700", suspended: "bg-rose-50 text-rose-700", deactivated: "bg-gray-100 text-gray-500", left: "bg-gray-100 text-gray-500" };
+const BADGE: Record<string, string> = { active: "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]", invited: "bg-[var(--cmp-surface-information)] text-blue-700", suspended: "bg-[var(--cmp-surface-error)] text-[var(--cmp-text-error)]", deactivated: "bg-gray-100 text-gray-500", left: "bg-gray-100 text-gray-500" };
 const TABS = ["Overview", "Position & Roles", "Workspace Access", "Audit"] as const;
 const card = cardClass;
 const relTime = (iso?: string | null) => { if (!iso) return ""; const s = Math.floor((Date.now() - new Date(iso).getTime()) / 1000); if (s < 3600) return `${Math.floor(s / 60)} min ago`; if (s < 86400) return `${Math.floor(s / 3600)} hr ago`; return `${Math.floor(s / 86400)} d ago`; };
@@ -49,7 +49,7 @@ export default function PersonProfileClient({ data, assignableRoles, employmentT
 
       <div className={`${card} flex flex-wrap items-start justify-between gap-3`}>
         <div className="flex items-start gap-3">
-          <span className="w-11 h-11 rounded-full bg-blue-50 flex items-center justify-center text-lg shrink-0">{(person.name ?? "?")[0]}</span>
+          <span className="w-11 h-11 rounded-full bg-[var(--cmp-surface-information)] flex items-center justify-center text-lg shrink-0">{(person.name ?? "?")[0]}</span>
           <div>
             <div className="flex items-center gap-2 flex-wrap"><h1 className="text-xl font-bold text-gray-900">{person.name}</h1>
               <span className={`text-[10px] font-medium px-2 py-0.5 rounded ${BADGE[person.status] ?? "bg-gray-100 text-gray-600"}`}>{person.status}</span></div>
@@ -58,7 +58,7 @@ export default function PersonProfileClient({ data, assignableRoles, employmentT
         </div>
         <button onClick={() => setEdit(true)} className="text-xs font-medium rounded-lg border border-gray-200 text-gray-700 hover:bg-gray-50 px-3 py-1.5">Edit</button>
       </div>
-      {msg && <div className={`text-sm rounded-lg px-3 py-1.5 ${msg.k === "ok" ? "bg-green-50 text-green-800" : "bg-amber-50 text-amber-800"}`}>{msg.t}</div>}
+      {msg && <div className={`text-sm rounded-lg px-3 py-1.5 ${msg.k === "ok" ? "bg-[var(--cmp-surface-success)] text-green-800" : "bg-[var(--cmp-surface-warning)] text-amber-800"}`}>{msg.t}</div>}
 
       <div className="flex gap-1 border-b border-gray-200 overflow-x-auto">
         {TABS.map(t => <button key={t} onClick={() => setTab(t)} className={`px-3.5 py-2 text-sm font-medium border-b-2 -mb-px whitespace-nowrap ${tab === t ? "border-teal-600 text-teal-700" : "border-transparent text-gray-500 hover:text-gray-800"}`}>{t}</button>)}

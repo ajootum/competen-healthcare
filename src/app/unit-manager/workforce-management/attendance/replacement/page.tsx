@@ -43,7 +43,7 @@ export default async function ReplacementRedeployment() {
     </>
   );
 
-  if (!d.ready) return <div className="space-y-4">{header}<div className="bg-amber-50 border border-amber-200 rounded-xl p-6"><p className="font-semibold text-amber-900">⚙️ No active shift</p></div></div>;
+  if (!d.ready) return <div className="space-y-4">{header}<div className="bg-[var(--cmp-surface-warning)] border border-[var(--cmp-color-warning)] rounded-xl p-6"><p className="font-semibold text-amber-900">⚙️ No active shift</p></div></div>;
 
   const gaps = d.gaps.length;
   return (
@@ -51,9 +51,9 @@ export default async function ReplacementRedeployment() {
       {header}
 
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        <Kpi label="Gaps to fill" value={gaps} tone={gaps ? "text-rose-600" : "text-emerald-600"} />
-        <Kpi label="Open requests" value={d.open.length} tone={d.open.length ? "text-amber-600" : undefined} />
-        <Kpi label="Filled today" value={d.filledToday} tone="text-emerald-600" />
+        <Kpi label="Gaps to fill" value={gaps} tone={gaps ? "text-[var(--cmp-text-error)]" : "text-[var(--cmp-text-success)]"} />
+        <Kpi label="Open requests" value={d.open.length} tone={d.open.length ? "text-[var(--cmp-text-warning)]" : undefined} />
+        <Kpi label="Filled today" value={d.filledToday} tone="text-[var(--cmp-text-success)]" />
         <Kpi label="Candidate pool" value={d.kpis.replacements} tone="text-violet-600" />
       </div>
 

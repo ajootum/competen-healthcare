@@ -11,10 +11,10 @@ import CommandBar from "./CommandBar";
 
 export const dynamic = "force-dynamic";
 
-const TINT_DOT: Record<Tint, string> = { green: "bg-emerald-400", amber: "bg-amber-400", red: "bg-rose-400", muted: "bg-slate-600" };
+const TINT_DOT: Record<Tint, string> = { green: "bg-[var(--cmp-color-success)]", amber: "bg-[var(--cmp-color-warning)]", red: "bg-[var(--cmp-color-error)]", muted: "bg-slate-600" };
 const RISK_CLS: Record<string, string> = { Low: "text-emerald-400", Medium: "text-amber-400", High: "text-rose-400" };
-const SEV_CLS: Record<string, string> = { Critical: "bg-rose-500/20 text-rose-300 border-rose-500/30", High: "bg-amber-500/20 text-amber-300 border-amber-500/30", Medium: "bg-yellow-500/15 text-yellow-200 border-yellow-500/25", Low: "bg-emerald-500/15 text-emerald-200 border-emerald-500/25" };
-const PRIO_CLS: Record<string, string> = { High: "bg-red-500/20 text-red-300 border-red-500/30", Medium: "bg-amber-500/20 text-amber-300 border-amber-500/30", Low: "bg-sky-500/20 text-sky-300 border-sky-500/30" };
+const SEV_CLS: Record<string, string> = { Critical: "bg-[var(--cmp-color-error)]/20 text-rose-300 border-rose-500/30", High: "bg-[var(--cmp-color-warning)]/20 text-amber-300 border-amber-500/30", Medium: "bg-[var(--cmp-color-warning)]/15 text-yellow-200 border-yellow-500/25", Low: "bg-[var(--cmp-color-success)]/15 text-emerald-200 border-emerald-500/25" };
+const PRIO_CLS: Record<string, string> = { High: "bg-[var(--cmp-color-critical)]/20 text-red-300 border-red-500/30", Medium: "bg-[var(--cmp-color-warning)]/20 text-amber-300 border-amber-500/30", Low: "bg-[var(--cmp-color-information)]/20 text-sky-300 border-sky-500/30" };
 const MAP_ICON: Record<string, string> = { domains: "🗂️", courses: "📘", cpus: "💠", competencies: "🎯", assessments: "📋", evidence: "📎", resources: "📚", outcomes: "🏅" };
 
 // Native collapsible navigator tree (no client JS). Open the top two levels.
@@ -280,7 +280,7 @@ export default async function CurriculumIntelligencePage() {
                   {d.timeline.map((t, i) => (
                     <div key={t.label} className="flex items-center flex-1">
                       <div className="flex flex-col items-center flex-1">
-                        <span className={`w-8 h-8 rounded-full flex items-center justify-center text-[11px] font-bold border-2 ${t.state === "current" ? "border-violet-400 text-violet-200 bg-violet-500/20" : t.state === "done" ? "border-emerald-400/60 text-emerald-300 bg-emerald-500/10" : "border-white/15 text-slate-400"}`}>{t.n}</span>
+                        <span className={`w-8 h-8 rounded-full flex items-center justify-center text-[11px] font-bold border-2 ${t.state === "current" ? "border-violet-400 text-violet-200 bg-violet-500/20" : t.state === "done" ? "border-emerald-400/60 text-emerald-300 bg-[var(--cmp-color-success)]/10" : "border-white/15 text-slate-400"}`}>{t.n}</span>
                         <span className="text-[9px] text-slate-400 mt-1 text-center">{t.label}</span>
                       </div>
                       {i < d.timeline.length - 1 && <span className="h-px flex-1 bg-white/10 -mt-4" />}
@@ -359,7 +359,7 @@ export default async function CurriculumIntelligencePage() {
                 {d.panel.standards.map(s => (
                   <div key={s.name}>
                     <div className="flex items-center justify-between text-[11px] mb-0.5"><span className="text-slate-300 truncate mr-2">{s.name}</span><span className="text-slate-400">{s.coverage === null ? "—" : `${s.coverage}%`}</span></div>
-                    <div className="h-1.5 rounded-full bg-white/10 overflow-hidden"><div className={`h-full rounded-full ${(s.coverage ?? 0) >= 75 ? "bg-emerald-500" : (s.coverage ?? 0) >= 50 ? "bg-amber-500" : "bg-rose-500"}`} style={{ width: `${s.coverage ?? 0}%` }} /></div>
+                    <div className="h-1.5 rounded-full bg-white/10 overflow-hidden"><div className={`h-full rounded-full ${(s.coverage ?? 0) >= 75 ? "bg-[var(--cmp-color-success)]" : (s.coverage ?? 0) >= 50 ? "bg-[var(--cmp-color-warning)]" : "bg-[var(--cmp-color-error)]"}`} style={{ width: `${s.coverage ?? 0}%` }} /></div>
                   </div>
                 ))}
               </div>

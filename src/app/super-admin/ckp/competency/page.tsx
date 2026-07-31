@@ -13,7 +13,7 @@ export const dynamic = "force-dynamic";
 
 const card = "bg-white rounded-xl border border-gray-200";
 const fmt = (n: number) => n.toLocaleString();
-const LIB_BADGE: Record<string, string> = { core: "bg-violet-50 text-violet-700", specialty: "bg-blue-50 text-blue-700", role: "bg-teal-50 text-teal-700" };
+const LIB_BADGE: Record<string, string> = { core: "bg-violet-50 text-violet-700", specialty: "bg-[var(--cmp-surface-information)] text-blue-700", role: "bg-teal-50 text-teal-700" };
 
 export default async function CompetencyFrameworkCentre() {
   const supabase = await createClient();
@@ -29,13 +29,13 @@ export default async function CompetencyFrameworkCentre() {
 
   const kpiCards = [
     { label: "Competencies", value: fmt(k.competencies), icon: "🎯", iconBg: "bg-violet-50" },
-    { label: "Frameworks", value: fmt(k.frameworks), icon: "📐", iconBg: "bg-blue-50", sub: `${k.frameworksActive} active` },
+    { label: "Frameworks", value: fmt(k.frameworks), icon: "📐", iconBg: "bg-[var(--cmp-surface-information)]", sub: `${k.frameworksActive} active` },
     { label: "Domains", value: fmt(k.domains), icon: "🗂️", iconBg: "bg-teal-50" },
-    { label: "Practices", value: fmt(k.practices), icon: "🧭", iconBg: "bg-sky-50" },
+    { label: "Practices", value: fmt(k.practices), icon: "🧭", iconBg: "bg-[var(--cmp-surface-information)]" },
     { label: "Core Frameworks", value: fmt(k.core), icon: "🏛️", iconBg: "bg-violet-50" },
-    { label: "Specialty", value: fmt(k.specialty), icon: "⭐", iconBg: "bg-blue-50" },
+    { label: "Specialty", value: fmt(k.specialty), icon: "⭐", iconBg: "bg-[var(--cmp-surface-information)]" },
     { label: "Role Frameworks", value: fmt(k.role), icon: "👤", iconBg: "bg-teal-50" },
-    { label: "Mapping Coverage", value: k.coverage == null ? "—" : `${k.coverage}%`, icon: "🔗", iconBg: "bg-amber-50", tone: k.coverage != null && k.coverage < 50 ? "text-amber-600" : "text-green-600" },
+    { label: "Mapping Coverage", value: k.coverage == null ? "—" : `${k.coverage}%`, icon: "🔗", iconBg: "bg-[var(--cmp-surface-warning)]", tone: k.coverage != null && k.coverage < 50 ? "text-[var(--cmp-text-warning)]" : "text-[var(--cmp-text-success)]" },
   ];
 
   const components = [
@@ -133,7 +133,7 @@ export default async function CompetencyFrameworkCentre() {
           <h2 className="font-semibold text-gray-900 text-[15px] mb-3">Crosswalks &amp; Mapping</h2>
           <div className="grid grid-cols-2 gap-2">
             {[["Mappings", cc.mapping.mappings], ["Crosswalks", cc.mapping.crosswalks], ["Unmapped", cc.mapping.unmapped], ["Active Cycles", cc.mapping.activeCycles]].map(([l, n]) => (
-              <div key={l as string} className="rounded-lg border border-gray-100 p-3 text-center"><p className={`text-xl font-bold tabular-nums ${l === "Unmapped" && (n as number) > 0 ? "text-orange-600" : "text-gray-900"}`}>{fmt(n as number)}</p><p className="text-[10px] text-gray-500">{l}</p></div>
+              <div key={l as string} className="rounded-lg border border-gray-100 p-3 text-center"><p className={`text-xl font-bold tabular-nums ${l === "Unmapped" && (n as number) > 0 ? "text-[var(--cmp-text-warning)]" : "text-gray-900"}`}>{fmt(n as number)}</p><p className="text-[10px] text-gray-500">{l}</p></div>
             ))}
           </div>
           <p className="text-[10px] text-gray-400 mt-3">Mappings = competencies linked to a CPU; crosswalks come from the knowledge graph.</p>

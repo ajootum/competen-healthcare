@@ -48,15 +48,15 @@ export default async function VersionsPage() {
     </>
   );
 
-  if (notReady) return <div className="space-y-5 max-w-6xl">{header}<div className="bg-amber-50 border border-amber-200 rounded-xl p-6"><p className="font-semibold text-amber-900">⚙️ Not provisioned</p><p className="text-sm text-amber-800 mt-1">Apply migration 096 (version snapshots), then snapshots will accrue on every definition save.</p></div></div>;
+  if (notReady) return <div className="space-y-5 max-w-6xl">{header}<div className="bg-[var(--cmp-surface-warning)] border border-[var(--cmp-color-warning)] rounded-xl p-6"><p className="font-semibold text-amber-900">⚙️ Not provisioned</p><p className="text-sm text-amber-800 mt-1">Apply migration 096 (version snapshots), then snapshots will accrue on every definition save.</p></div></div>;
 
   return (
     <div className="space-y-5 max-w-6xl">
       {header}
       <div className="grid grid-cols-3 gap-3">
         <Stat label="Snapshots" value={total} sub="immutable versions" />
-        <Stat label="Objects Tracked" value={tracked} tone="text-emerald-600" sub="with version history" />
-        <Stat label="Restores" value={restores} tone={restores ? "text-amber-600" : undefined} sub="point-in-time recoveries" />
+        <Stat label="Objects Tracked" value={tracked} tone="text-[var(--cmp-text-success)]" sub="with version history" />
+        <Stat label="Restores" value={restores} tone={restores ? "text-[var(--cmp-text-warning)]" : undefined} sub="point-in-time recoveries" />
       </div>
       <VersionManager objects={(objects ?? []) as any[]} />
       <p className="text-[11px] text-gray-400">Snapshots capture the full object state (definition + governance fields) with an integrity checksum; restore writes a past state back and snapshots the restore. Branching, release tagging and cryptographic signing (NCP-018 §6) are next-phase.</p>

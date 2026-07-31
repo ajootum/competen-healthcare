@@ -29,16 +29,16 @@ export type PickOption = { id: string; name: string };
 
 const STATUS_UI: Record<string, string> = {
   draft:     "bg-gray-100 text-gray-600",
-  published: "bg-blue-100 text-blue-700",
-  running:   "bg-green-100 text-green-700",
+  published: "bg-[var(--cmp-surface-information)] text-blue-700",
+  running:   "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]",
   completed: "bg-indigo-100 text-indigo-700",
-  cancelled: "bg-red-100 text-red-600",
+  cancelled: "bg-[var(--cmp-surface-critical)] text-[var(--cmp-text-critical)]",
 };
 const ACTION_LABEL: Record<string, string> = {
   create_osce: "created OSCE", update_osce: "updated OSCE", complete_osce: "completed OSCE",
   record_osce_score: "recorded a score for", ai_osce_design: "drafted a station with AI for",
 };
-const SCORE_CLS = (v: number) => v >= 3 ? "bg-green-100 text-green-700" : "bg-red-100 text-red-600";
+const SCORE_CLS = (v: number) => v >= 3 ? "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]" : "bg-[var(--cmp-surface-critical)] text-[var(--cmp-text-critical)]";
 
 type BuilderStation = { name: string; competency_id: string; assessor_id: string; duration: string; brief: string; aiText?: string; aiBusy?: boolean };
 
@@ -178,7 +178,7 @@ export default function OsceCentre({ kpis, rows, detail, nurses, assessors, comp
       </div>
 
       {!hasHospital && (
-        <div className="bg-amber-50 border border-amber-200 rounded-xl p-5 text-sm text-amber-800 mb-5">
+        <div className="bg-[var(--cmp-surface-warning)] border border-[var(--cmp-color-warning)] rounded-xl p-5 text-sm text-amber-800 mb-5">
           Your account is not linked to a hospital — ask a hospital administrator to link you before running OSCEs.
         </div>
       )}
@@ -186,8 +186,8 @@ export default function OsceCentre({ kpis, rows, detail, nurses, assessors, comp
       {/* KPI strip */}
       <div className="grid grid-cols-3 md:grid-cols-5 xl:grid-cols-9 gap-2 mb-5">
         {KPI.map(k => (
-          <div key={k.label} className={`bg-white border rounded-xl px-3 py-2.5 ${k.alert ? "border-red-200 bg-red-50/40" : "border-gray-200"}`}>
-            <p className={`text-lg font-bold ${k.alert ? "text-red-600" : "text-gray-900"}`}>{k.value}</p>
+          <div key={k.label} className={`bg-white border rounded-xl px-3 py-2.5 ${k.alert ? "border-[var(--cmp-color-critical)] bg-[var(--cmp-surface-critical)]/40" : "border-gray-200"}`}>
+            <p className={`text-lg font-bold ${k.alert ? "text-[var(--cmp-text-critical)]" : "text-gray-900"}`}>{k.value}</p>
             <p className="text-[9px] font-bold text-gray-400 uppercase tracking-wider leading-tight">{k.label}</p>
             {k.sub && <p className="text-[8px] text-gray-400 mt-0.5">{k.sub}</p>}
           </div>
@@ -207,12 +207,12 @@ export default function OsceCentre({ kpis, rows, detail, nurses, assessors, comp
         ))}
       </div>
 
-      {error && <p className="text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2 mb-4">{error}</p>}
+      {error && <p className="text-xs text-[var(--cmp-text-critical)] bg-[var(--cmp-surface-critical)] border border-[var(--cmp-color-critical)] rounded-lg px-3 py-2 mb-4">{error}</p>}
       {lifecycleActions && (
-        <div className="bg-green-50 border border-green-200 rounded-xl px-4 py-3 mb-4">
+        <div className="bg-[var(--cmp-surface-success)] border border-[var(--cmp-color-success)] rounded-xl px-4 py-3 mb-4">
           <p className="text-[10px] font-bold text-green-800 uppercase tracking-wider mb-1">Automatic workflow</p>
-          <ul className="text-xs text-green-700 space-y-0.5">{lifecycleActions.map((a, i) => <li key={i}>✅ {a}</li>)}</ul>
-          <button onClick={() => setLifecycleActions(null)} className="text-[10px] text-green-600 hover:underline mt-1">dismiss</button>
+          <ul className="text-xs text-[var(--cmp-text-success)] space-y-0.5">{lifecycleActions.map((a, i) => <li key={i}>✅ {a}</li>)}</ul>
+          <button onClick={() => setLifecycleActions(null)} className="text-[10px] text-[var(--cmp-text-success)] hover:underline mt-1">dismiss</button>
         </div>
       )}
 
@@ -316,11 +316,11 @@ export default function OsceCentre({ kpis, rows, detail, nurses, assessors, comp
             <div className="flex items-center gap-2 flex-wrap">
               {detail.status === "draft" && (
                 <button onClick={() => moveStatus(detail.id, "published")} disabled={busy}
-                  className="text-xs font-semibold text-white bg-blue-600 px-3 py-1.5 rounded-lg hover:bg-blue-700 disabled:opacity-50">Publish</button>
+                  className="text-xs font-semibold text-white bg-[var(--cmp-color-information)] px-3 py-1.5 rounded-lg hover:bg-blue-700 disabled:opacity-50">Publish</button>
               )}
               {detail.status === "published" && (
                 <button onClick={() => moveStatus(detail.id, "running")} disabled={busy}
-                  className="text-xs font-semibold text-white bg-green-600 px-3 py-1.5 rounded-lg hover:bg-green-700 disabled:opacity-50">▶ Start</button>
+                  className="text-xs font-semibold text-white bg-[var(--cmp-color-success)] px-3 py-1.5 rounded-lg hover:bg-green-700 disabled:opacity-50">▶ Start</button>
               )}
               {detail.status === "running" && (
                 <button onClick={() => moveStatus(detail.id, "completed")} disabled={busy}
@@ -328,7 +328,7 @@ export default function OsceCentre({ kpis, rows, detail, nurses, assessors, comp
               )}
               {["draft", "published", "running"].includes(detail.status) && (
                 <button onClick={() => moveStatus(detail.id, "cancelled")} disabled={busy}
-                  className="text-xs font-semibold text-red-600 border border-red-200 px-3 py-1.5 rounded-lg hover:bg-red-50 disabled:opacity-50">Cancel</button>
+                  className="text-xs font-semibold text-[var(--cmp-text-critical)] border border-[var(--cmp-color-critical)] px-3 py-1.5 rounded-lg hover:bg-[var(--cmp-surface-critical)] disabled:opacity-50">Cancel</button>
               )}
               <a href={`/api/reports/osce?exam=${detail.id}`}
                 className="text-xs font-semibold text-indigo-600 border border-indigo-200 px-3 py-1.5 rounded-lg hover:bg-indigo-50">⬇ CSV</a>
@@ -349,7 +349,7 @@ export default function OsceCentre({ kpis, rows, detail, nurses, assessors, comp
                         <span className="font-semibold text-gray-800">{s.name}</span>
                         <span className="text-gray-400">{s.duration} min</span>
                         {s.competency && <span className="text-[9px] bg-teal-50 text-teal-700 rounded px-1.5 py-0.5">🎯 {s.competency}</span>}
-                        {s.assessor ? <span className="text-[9px] text-gray-400">👤 {s.assessor}</span> : <span className="text-[9px] text-amber-600">no examiner</span>}
+                        {s.assessor ? <span className="text-[9px] text-gray-400">👤 {s.assessor}</span> : <span className="text-[9px] text-[var(--cmp-text-warning)]">no examiner</span>}
                         <span className="flex-1" />
                         <span className="text-[9px] text-gray-400">{s.recorded}/{detail.candidates.length} scored</span>
                       </summary>
@@ -383,7 +383,7 @@ export default function OsceCentre({ kpis, rows, detail, nurses, assessors, comp
                       {[0, 1, 2, 3, 4, 5, 6].map(v => (
                         <button key={v} onClick={() => recordScore(v)} disabled={scoreBusy}
                           className={`w-7 h-7 rounded text-xs font-bold border transition-colors disabled:opacity-40 ${
-                            v >= 3 ? "border-green-200 text-green-700 hover:bg-green-50" : "border-red-200 text-red-600 hover:bg-red-50"}`}>
+                            v >= 3 ? "border-[var(--cmp-color-success)] text-[var(--cmp-text-success)] hover:bg-[var(--cmp-surface-success)]" : "border-[var(--cmp-color-critical)] text-[var(--cmp-text-critical)] hover:bg-[var(--cmp-surface-critical)]"}`}>
                           {v}
                         </button>
                       ))}
@@ -424,7 +424,7 @@ export default function OsceCentre({ kpis, rows, detail, nurses, assessors, comp
                                     <button key={st} onClick={() => setAttendance(c.nurseId, c.status === st ? "registered" : st)}
                                       className={`text-[9px] px-1.5 py-0.5 rounded border ${
                                         c.status === st
-                                          ? st === "absent" ? "bg-red-500 text-white border-red-500" : "bg-green-500 text-white border-green-500"
+                                          ? st === "absent" ? "bg-[var(--cmp-color-critical)] text-white border-red-500" : "bg-[var(--cmp-color-success)] text-white border-green-500"
                                           : "text-gray-400 border-gray-200 hover:border-gray-400"}`}>
                                       {st === "checked_in" ? "in" : "absent"}
                                     </button>
@@ -461,7 +461,7 @@ export default function OsceCentre({ kpis, rows, detail, nurses, assessors, comp
               <div className="bg-gray-50 border border-gray-100 rounded-lg p-3">
                 <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-2">OSCE Readiness — {detail.readyPct}%</p>
                 <div className="h-1.5 bg-gray-200 rounded-full overflow-hidden mb-2">
-                  <div className="h-full bg-green-500 rounded-full transition-all" style={{ width: `${detail.readyPct}%` }} />
+                  <div className="h-full bg-[var(--cmp-color-success)] rounded-full transition-all" style={{ width: `${detail.readyPct}%` }} />
                 </div>
                 <ul className="space-y-1 text-[11px]">
                   {detail.readiness.map(r => (
@@ -524,10 +524,10 @@ export default function OsceCentre({ kpis, rows, detail, nurses, assessors, comp
           {rows.some(r => r.status === "running") ? (
             <div className="space-y-2">
               {rows.filter(r => r.status === "running").map(r => (
-                <button key={r.id} onClick={() => open(r.id)} className="w-full text-left border border-green-200 bg-green-50/50 rounded-lg px-3 py-2 hover:border-green-300 transition-colors">
+                <button key={r.id} onClick={() => open(r.id)} className="w-full text-left border border-[var(--cmp-color-success)] bg-[var(--cmp-surface-success)]/50 rounded-lg px-3 py-2 hover:border-[var(--cmp-color-success)] transition-colors">
                   <p className="text-xs font-semibold text-gray-800">{r.title}</p>
                   <div className="h-1.5 bg-white rounded-full overflow-hidden my-1.5">
-                    <div className="h-full bg-green-500 rounded-full" style={{ width: `${r.expected ? Math.round(r.recorded / r.expected * 100) : 0}%` }} />
+                    <div className="h-full bg-[var(--cmp-color-success)] rounded-full" style={{ width: `${r.expected ? Math.round(r.recorded / r.expected * 100) : 0}%` }} />
                   </div>
                   <p className="text-[10px] text-gray-500">{r.recorded}/{r.expected} scores in{r.expected - r.recorded > 0 ? ` · ${r.expected - r.recorded} missing` : " · complete"}</p>
                 </button>

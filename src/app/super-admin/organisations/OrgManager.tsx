@@ -118,7 +118,7 @@ export default function OrgManager({ orgs, mode: externalMode }: { orgs?: Org[];
   return (
     <>
       <button onClick={() => setOpen(true)}
-        className="px-4 py-2 bg-rose-600 text-white text-sm font-semibold rounded-lg hover:bg-rose-700">
+        className="px-4 py-2 bg-[var(--cmp-color-error)] text-white text-sm font-semibold rounded-lg hover:bg-rose-700">
         + Add
       </button>
 
@@ -133,7 +133,7 @@ export default function OrgManager({ orgs, mode: externalMode }: { orgs?: Org[];
             {(["org","facility"] as const).map(t => (
               <button key={t} onClick={() => { setTab(t); setError(""); }}
                 className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
-                  activeTab === t ? "bg-rose-100 text-rose-700" : "text-gray-500 hover:bg-gray-100"
+                  activeTab === t ? "bg-[var(--cmp-surface-error)] text-[var(--cmp-text-error)]" : "text-gray-500 hover:bg-gray-100"
                 }`}>
                 {t === "org" ? "🏛️ Organisation Group" : "🏥 Facility"}
               </button>
@@ -165,11 +165,11 @@ function Modal({ open, onClose, title, onSave, onDelete, saving, deleting, error
         </div>
         <div className="p-6 flex flex-col gap-3">
           {children}
-          {error && <p className="text-red-500 text-xs bg-red-50 rounded-lg px-3 py-2">{error}</p>}
+          {error && <p className="text-red-500 text-xs bg-[var(--cmp-surface-critical)] rounded-lg px-3 py-2">{error}</p>}
           <div className="flex gap-2 pt-1">
             {isEdit && onDelete && (
               <button onClick={onDelete} disabled={deleting}
-                className="px-4 py-2 border border-red-200 text-red-600 rounded-lg text-sm hover:bg-red-50 disabled:opacity-50 font-medium">
+                className="px-4 py-2 border border-[var(--cmp-color-critical)] text-[var(--cmp-text-critical)] rounded-lg text-sm hover:bg-[var(--cmp-surface-critical)] disabled:opacity-50 font-medium">
                 {deleting ? "Deleting…" : "Delete"}
               </button>
             )}
@@ -177,7 +177,7 @@ function Modal({ open, onClose, title, onSave, onDelete, saving, deleting, error
               Cancel
             </button>
             <button onClick={onSave} disabled={saving}
-              className="flex-1 py-2 bg-rose-600 text-white rounded-lg text-sm font-semibold hover:bg-rose-700 disabled:opacity-60">
+              className="flex-1 py-2 bg-[var(--cmp-color-error)] text-white rounded-lg text-sm font-semibold hover:bg-rose-700 disabled:opacity-60">
               {saving ? "Saving…" : isEdit ? "Save Changes" : "Create"}
             </button>
           </div>

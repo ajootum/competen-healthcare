@@ -15,8 +15,8 @@ import { AskClarification, AnswerClarification } from "./Clarify";
 export const dynamic = "force-dynamic";
 
 const ITEM_TONE: Record<string, string> = {
-  pending: "bg-gray-100 text-gray-500", in_progress: "bg-blue-100 text-blue-700",
-  reviewed: "bg-indigo-100 text-indigo-700", accepted: "bg-green-100 text-green-700", completed: "bg-emerald-100 text-emerald-700",
+  pending: "bg-gray-100 text-gray-500", in_progress: "bg-[var(--cmp-surface-information)] text-blue-700",
+  reviewed: "bg-indigo-100 text-indigo-700", accepted: "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]", completed: "bg-[var(--cmp-surface-success)] text-emerald-700",
 };
 
 export default async function HandoverPage() {
@@ -75,7 +75,7 @@ export default async function HandoverPage() {
           sub={handover ? `started ${fmtWhen(handover.created_at)}` : "saving an SBAR opens one"} />
         <StatCard icon="📝" title="SBAR Prepared" value={`${withSbar}/${patients.length}`} sub="of my patients" />
         <StatCard icon="🤝" title="Accepted" value={`${accepted}/${patients.length}`} sub="responsibility transferred" />
-        <StatCard icon="❓" title="Open Clarifications" value={pendingClar.length} tone={pendingClar.length > 0 ? "text-orange-600" : undefined} sub="on my patients" />
+        <StatCard icon="❓" title="Open Clarifications" value={pendingClar.length} tone={pendingClar.length > 0 ? "text-[var(--cmp-text-warning)]" : undefined} sub="on my patients" />
       </div>
 
       <SectionCard icon="🧑‍⚕️" title="My Patients — SBAR & Transfer" count={patients.length}>
@@ -93,7 +93,7 @@ export default async function HandoverPage() {
                     {p.op_beds?.label && <span className="text-xs text-gray-400">{p.op_beds.label}</span>}
                     <AcuityChip level={p.acuity_level} />
                     <Chip tone={ITEM_TONE[it?.item_status ?? "pending"] ?? ITEM_TONE.pending}>{titleCase(it?.item_status ?? "not started")}</Chip>
-                    {tasks > 0 && <Chip tone="bg-amber-100 text-amber-700">{tasks} outstanding task{tasks === 1 ? "" : "s"}</Chip>}
+                    {tasks > 0 && <Chip tone="bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]">{tasks} outstanding task{tasks === 1 ? "" : "s"}</Chip>}
                     {it?.jbi_score != null && <Chip tone="bg-cyan-100 text-cyan-700">JBI {it.jbi_score}%</Chip>}
                   </div>
                   {it && (it.sbar_situation || it.sbar_background || it.sbar_assessment || it.sbar_recommendation) && (
@@ -122,7 +122,7 @@ export default async function HandoverPage() {
               <div key={c.id} className="py-2.5">
                 <div className="flex flex-wrap items-center gap-2 text-sm">
                   <span className="font-medium text-gray-800">{c.op_patients?.label ?? "Patient"}</span>
-                  <Chip tone={c.status === "pending" ? "bg-orange-100 text-orange-700" : "bg-green-100 text-green-700"}>{titleCase(c.status)}</Chip>
+                  <Chip tone={c.status === "pending" ? "bg-[var(--cmp-surface-warning)] text-orange-700" : "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]"}>{titleCase(c.status)}</Chip>
                   <span className="text-xs text-gray-400 ml-auto">{fmtWhen(c.created_at)}</span>
                 </div>
                 <p className="text-sm text-gray-700 mt-0.5">Q: {c.question}</p>

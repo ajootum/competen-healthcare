@@ -49,7 +49,7 @@ export default async function FacilitiesPage() {
           </table>
         </div>
       </div>
-      {summary.usersUnattached > 0 && <p className="text-[11px] text-amber-600">{summary.usersUnattached} user{summary.usersUnattached !== 1 ? "s are" : " is"} not mapped to a listed facility (no facility set, or a facility beyond the displayed set), so the per-facility user counts sum to less than the total.</p>}
+      {summary.usersUnattached > 0 && <p className="text-[11px] text-[var(--cmp-text-warning)]">{summary.usersUnattached} user{summary.usersUnattached !== 1 ? "s are" : " is"} not mapped to a listed facility (no facility set, or a facility beyond the displayed set), so the per-facility user counts sum to less than the total.</p>}
       <p className="text-[11px] text-gray-400">Facilities and their organisation membership are provisioned in the Platform Super Admin workspace. Departments within each facility are managed under <Link href="/admin/departments" className="text-teal-600 hover:underline">Departments</Link>.</p>
     </div>
   );

@@ -132,13 +132,13 @@ export const ASSESSMENT_SECTIONS = [
 ];
 
 export const GRADE_LABELS: Record<number, { level: string; color: string }> = {
-  0: { level: "Novice",            color: "bg-red-100 text-red-700" },
-  1: { level: "Advanced Beginner", color: "bg-orange-100 text-orange-700" },
-  2: { level: "Advanced Beginner", color: "bg-amber-100 text-amber-700" },
-  3: { level: "Competent",         color: "bg-blue-100 text-blue-700" },
-  4: { level: "Competent",         color: "bg-blue-100 text-blue-700" },
+  0: { level: "Novice",            color: "bg-[var(--cmp-surface-critical)] text-[var(--cmp-text-critical)]" },
+  1: { level: "Advanced Beginner", color: "bg-[var(--cmp-surface-warning)] text-orange-700" },
+  2: { level: "Advanced Beginner", color: "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]" },
+  3: { level: "Competent",         color: "bg-[var(--cmp-surface-information)] text-blue-700" },
+  4: { level: "Competent",         color: "bg-[var(--cmp-surface-information)] text-blue-700" },
   5: { level: "Proficient",        color: "bg-teal-100 text-teal-700" },
-  6: { level: "Expert",            color: "bg-green-100 text-green-700" },
+  6: { level: "Expert",            color: "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]" },
 };
 
 // ── SHEET 2: Concurrent Audit — Yes/No/Partial ───────────────────────────────
@@ -375,11 +375,11 @@ export function avgToLevel(avg: number): string {
   return "Novice";
 }
 export const LEVEL_COLORS: Record<string, string> = {
-  "Expert":            "bg-green-100 text-green-700 border-green-200",
+  "Expert":            "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)] border-[var(--cmp-color-success)]",
   "Proficient":        "bg-teal-100 text-teal-700 border-teal-200",
-  "Competent":         "bg-blue-100 text-blue-700 border-blue-200",
-  "Advanced Beginner": "bg-amber-100 text-amber-700 border-amber-200",
-  "Novice":            "bg-red-100 text-red-700 border-red-200",
+  "Competent":         "bg-[var(--cmp-surface-information)] text-blue-700 border-[var(--cmp-color-information)]",
+  "Advanced Beginner": "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)] border-[var(--cmp-color-warning)]",
+  "Novice":            "bg-[var(--cmp-surface-critical)] text-[var(--cmp-text-critical)] border-[var(--cmp-color-critical)]",
 };
 
 // ── Controlled info fields ────────────────────────────────────────────────────
@@ -670,9 +670,9 @@ export function MatchAudit({
 
   const btnStyle = (num: number, v: MatchValue) => {
     const active = scores[num] === v;
-    if (v === "yes")     return active ? "bg-green-500 text-white" : "bg-gray-100 text-gray-500 hover:bg-green-50 hover:text-green-700";
-    if (v === "no")      return active ? "bg-red-500 text-white"   : "bg-gray-100 text-gray-500 hover:bg-red-50 hover:text-red-700";
-    return active ? "bg-amber-400 text-white" : "bg-gray-100 text-gray-500 hover:bg-amber-50 hover:text-amber-700";
+    if (v === "yes")     return active ? "bg-[var(--cmp-color-success)] text-white" : "bg-gray-100 text-gray-500 hover:bg-[var(--cmp-surface-success)] hover:text-[var(--cmp-text-success)]";
+    if (v === "no")      return active ? "bg-[var(--cmp-color-critical)] text-white"   : "bg-gray-100 text-gray-500 hover:bg-[var(--cmp-surface-critical)] hover:text-[var(--cmp-text-critical)]";
+    return active ? "bg-[var(--cmp-color-warning)] text-white" : "bg-gray-100 text-gray-500 hover:bg-[var(--cmp-surface-warning)] hover:text-[var(--cmp-text-warning)]";
   };
 
   const getSectionPct = (section: typeof sections[0]) => {
@@ -687,7 +687,7 @@ export function MatchAudit({
     <div>
       <InfoFields fields={infoFields} values={info} onChange={(k, v) => setInfo(prev => ({ ...prev, [k]: v }))} />
 
-      <div className="bg-blue-50 border border-blue-100 rounded-xl p-4 mb-5 text-sm text-blue-800">
+      <div className="bg-[var(--cmp-surface-information)] border border-[var(--cmp-color-information)] rounded-xl p-4 mb-5 text-sm text-blue-800">
         <strong>How to use:</strong> {howToUse}
       </div>
 
@@ -728,7 +728,7 @@ export function MatchAudit({
       {compliance !== null && (
         <div className="mb-5">
           <div className="h-2.5 bg-gray-100 rounded-full overflow-hidden">
-            <div className={`h-full rounded-full transition-all ${compliance >= 80 ? "bg-green-500" : compliance >= 60 ? "bg-amber-400" : "bg-red-400"}`}
+            <div className={`h-full rounded-full transition-all ${compliance >= 80 ? "bg-[var(--cmp-color-success)]" : compliance >= 60 ? "bg-[var(--cmp-color-warning)]" : "bg-[var(--cmp-color-critical)]"}`}
               style={{ width: `${compliance}%` }} />
           </div>
           <p className="text-xs text-gray-400 mt-1">
@@ -750,18 +750,18 @@ export function MatchAudit({
                 <div>
                   <p className="text-sm font-semibold text-gray-900">{section.title}</p>
                   <p className="text-xs text-gray-400 mt-0.5">
-                    {sYes > 0 && <span className="text-green-600 mr-2">✓{sYes}</span>}
+                    {sYes > 0 && <span className="text-[var(--cmp-text-success)] mr-2">✓{sYes}</span>}
                     {sNo  > 0 && <span className="text-red-500 mr-2">✗{sNo}</span>}
-                    {sPart > 0 && <span className="text-amber-600 mr-2">~{sPart}</span>}
+                    {sPart > 0 && <span className="text-[var(--cmp-text-warning)] mr-2">~{sPart}</span>}
                     {section.items.length} items
                   </p>
                 </div>
                 <div className="flex items-center gap-2">
                   {pct !== null && (
                     <span className={`text-xs font-bold px-2.5 py-1 rounded-lg border ${
-                      pct >= 80 ? "bg-green-100 text-green-700 border-green-200"
-                      : pct >= 60 ? "bg-amber-100 text-amber-700 border-amber-200"
-                      : "bg-red-100 text-red-700 border-red-200"
+                      pct >= 80 ? "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)] border-[var(--cmp-color-success)]"
+                      : pct >= 60 ? "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)] border-[var(--cmp-color-warning)]"
+                      : "bg-[var(--cmp-surface-critical)] text-[var(--cmp-text-critical)] border-[var(--cmp-color-critical)]"
                     }`}>{pct}%</span>
                   )}
                   <span className="text-gray-400 text-sm">{isOpen ? "▲" : "▼"}</span>
@@ -772,7 +772,7 @@ export function MatchAudit({
                 <div className="border-t border-gray-100 divide-y divide-gray-50">
                   {section.items.map(item => (
                     <div key={item.num} className={`px-5 py-3 flex flex-col sm:flex-row sm:items-center gap-3 ${
-                      scores[item.num] === "no" ? "bg-red-50/40" : scores[item.num] === "yes" ? "bg-green-50/30" : scores[item.num] === "partial" ? "bg-amber-50/40" : ""
+                      scores[item.num] === "no" ? "bg-[var(--cmp-surface-critical)]/40" : scores[item.num] === "yes" ? "bg-[var(--cmp-surface-success)]/30" : scores[item.num] === "partial" ? "bg-[var(--cmp-surface-warning)]/40" : ""
                     }`}>
                       <div className="flex-1">
                         <span className="text-[10px] font-bold text-gray-400 mr-2">{item.num}.</span>
@@ -792,15 +792,15 @@ export function MatchAudit({
                   {/* Section score summary row */}
                   {pct !== null && (
                     <div className={`px-5 py-3 flex items-center justify-between border-t-2 ${
-                      pct >= 80 ? "border-green-200 bg-green-50/60"
-                      : pct >= 60 ? "border-amber-200 bg-amber-50/60"
-                      : "border-red-200 bg-red-50/60"
+                      pct >= 80 ? "border-[var(--cmp-color-success)] bg-[var(--cmp-surface-success)]/60"
+                      : pct >= 60 ? "border-[var(--cmp-color-warning)] bg-[var(--cmp-surface-warning)]/60"
+                      : "border-[var(--cmp-color-critical)] bg-[var(--cmp-surface-critical)]/60"
                     }`}>
                       <span className="text-xs font-semibold text-gray-500">Section Score</span>
                       <span className={`text-sm font-bold px-3 py-1 rounded-lg border ${
-                        pct >= 80 ? "bg-green-100 text-green-700 border-green-200"
-                        : pct >= 60 ? "bg-amber-100 text-amber-700 border-amber-200"
-                        : "bg-red-100 text-red-700 border-red-200"
+                        pct >= 80 ? "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)] border-[var(--cmp-color-success)]"
+                        : pct >= 60 ? "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)] border-[var(--cmp-color-warning)]"
+                        : "bg-[var(--cmp-surface-critical)] text-[var(--cmp-text-critical)] border-[var(--cmp-color-critical)]"
                       }`}>{pct}% &nbsp;·&nbsp; ✓{sYes} ✗{sNo} ~{sPart}</span>
                     </div>
                   )}

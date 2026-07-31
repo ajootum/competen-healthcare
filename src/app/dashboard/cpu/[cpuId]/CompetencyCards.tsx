@@ -44,7 +44,7 @@ export default function CompetencyCards({ cards }: { cards: CompCard[] }) {
             <button onClick={() => toggle(c.id)}
               className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-gray-50/50 transition-colors">
               <span className={`w-6 h-6 rounded-full text-[11px] font-bold flex items-center justify-center shrink-0 ${
-                c.progressPct >= 100 ? "bg-green-500 text-white" : c.progressPct > 0 ? "bg-teal-500 text-white" : "bg-gray-100 text-gray-500"}`}>
+                c.progressPct >= 100 ? "bg-[var(--cmp-color-success)] text-white" : c.progressPct > 0 ? "bg-teal-500 text-white" : "bg-gray-100 text-gray-500"}`}>
                 {c.number}
               </span>
               <div className="flex-1 min-w-0">
@@ -58,7 +58,7 @@ export default function CompetencyCards({ cards }: { cards: CompCard[] }) {
                 : <span className="text-[10px] text-gray-300 shrink-0">Not started</span>}
               <div className="hidden sm:flex items-center gap-2 w-28 shrink-0">
                 <div className="flex-1 h-1.5 bg-gray-100 rounded-full overflow-hidden">
-                  <div className={`h-full rounded-full ${c.progressPct >= 100 ? "bg-green-500" : "bg-teal-500"}`}
+                  <div className={`h-full rounded-full ${c.progressPct >= 100 ? "bg-[var(--cmp-color-success)]" : "bg-teal-500"}`}
                     style={{ width: `${Math.max(c.progressPct, 2)}%` }} />
                 </div>
                 <span className="text-[10px] font-bold text-gray-500 w-8 text-right">{c.progressPct}%</span>
@@ -72,7 +72,7 @@ export default function CompetencyCards({ cards }: { cards: CompCard[] }) {
                 {c.score && (
                   <p className="text-[11px] text-gray-600">
                     Latest score: <b>{c.score.value}/6 — {c.score.label}</b>
-                    {c.score.validated && <span className="ml-1.5 text-[9px] font-bold bg-blue-50 text-blue-600 px-1.5 py-0.5 rounded">Validated</span>}
+                    {c.score.validated && <span className="ml-1.5 text-[9px] font-bold bg-[var(--cmp-surface-information)] text-[var(--cmp-text-information)] px-1.5 py-0.5 rounded">Validated</span>}
                   </p>
                 )}
                 {c.skills.length > 0 && (

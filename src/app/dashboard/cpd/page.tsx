@@ -68,10 +68,10 @@ export default async function CPDPage() {
 
   const KPI = [
     { label: "Hours This Year", value: totalYear, sub: `${lifetime} lifetime`, color: "text-gray-900" },
-    { label: "Verified Hours", value: verifiedHours, sub: "confirmed by your organisation", color: "text-green-600" },
-    { label: "Pending Verification", value: pendingHours, sub: "awaiting review", color: pendingHours ? "text-amber-600" : "text-gray-400" },
+    { label: "Verified Hours", value: verifiedHours, sub: "confirmed by your organisation", color: "text-[var(--cmp-text-success)]" },
+    { label: "Pending Verification", value: pendingHours, sub: "awaiting review", color: pendingHours ? "text-[var(--cmp-text-warning)]" : "text-gray-400" },
     { label: "CPD Points", value: points, sub: "from logged activities", color: "text-violet-600" },
-    { label: "Certificates", value: (cpdCerts ?? []).length + (enrollments ?? []).length, sub: "CPD certificates & courses", color: "text-blue-600" },
+    { label: "Certificates", value: (cpdCerts ?? []).length + (enrollments ?? []).length, sub: "CPD certificates & courses", color: "text-[var(--cmp-text-information)]" },
     { label: "This Month", value: thisMonth.length, sub: `activit${thisMonth.length === 1 ? "y" : "ies"} · avg ${avgPerMonth}h/mo`, color: "text-teal-700" },
   ];
 

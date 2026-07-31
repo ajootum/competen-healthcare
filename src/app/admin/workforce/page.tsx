@@ -148,10 +148,10 @@ export default async function WorkforcePage() {
       {/* Top stats */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
         {[
-          { label: "Total Nurses",      value: (nurses ?? []).length, color: "text-blue-600" },
+          { label: "Total Nurses",      value: (nurses ?? []).length, color: "text-[var(--cmp-text-information)]" },
           { label: "In Active Cycle",   value: activeCycleCount, color: "text-teal-600" },
           { label: "Competencies Assessed", value: totalAssessments, color: "text-violet-600" },
-          { label: "Pass Rate",         value: totalAssessments ? `${Math.round((totalPassing / totalAssessments) * 100)}%` : "—", color: "text-green-600" },
+          { label: "Pass Rate",         value: totalAssessments ? `${Math.round((totalPassing / totalAssessments) * 100)}%` : "—", color: "text-[var(--cmp-text-success)]" },
         ].map(({ label, value, color }) => (
           <div key={label} className="bg-white rounded-xl p-5 border border-gray-100">
             <p className="text-xs text-gray-400 font-medium uppercase tracking-wide mb-1">{label}</p>
@@ -240,11 +240,11 @@ export default async function WorkforcePage() {
                     <p className="font-medium text-sm text-gray-900">{ns.full_name}</p>
                     <div className="flex items-center gap-2 mt-0.5">
                       {ns.activeCycle ? (
-                        <span className="text-[10px] bg-green-50 text-green-600 px-1.5 py-0.5 rounded capitalize font-semibold">{ns.activeCycle}</span>
+                        <span className="text-[10px] bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)] px-1.5 py-0.5 rounded capitalize font-semibold">{ns.activeCycle}</span>
                       ) : ns.hasCycle ? (
                         <span className="text-[10px] bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded">no active cycle</span>
                       ) : (
-                        <span className="text-[10px] bg-orange-50 text-orange-500 px-1.5 py-0.5 rounded">no cycle assigned</span>
+                        <span className="text-[10px] bg-[var(--cmp-surface-warning)] text-orange-500 px-1.5 py-0.5 rounded">no cycle assigned</span>
                       )}
                     </div>
                   </div>

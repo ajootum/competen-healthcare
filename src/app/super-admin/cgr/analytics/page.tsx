@@ -11,12 +11,12 @@ export const dynamic = "force-dynamic";
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 const IMPACT_META: Record<string, { label: string; cls: string }> = {
-  high: { label: "High", cls: "text-rose-700 bg-rose-50 border-rose-100" },
-  medium: { label: "Medium", cls: "text-amber-700 bg-amber-50 border-amber-100" },
+  high: { label: "High", cls: "text-[var(--cmp-text-error)] bg-[var(--cmp-surface-error)] border-[var(--cmp-color-error)]" },
+  medium: { label: "Medium", cls: "text-[var(--cmp-text-warning)] bg-[var(--cmp-surface-warning)] border-[var(--cmp-color-warning)]" },
   low: { label: "Low", cls: "text-slate-600 bg-slate-50 border-slate-200" },
 };
 const deltaFmt = (v: number | null) => (v == null ? "—" : v > 0 ? `+${v}` : `${v}`);
-const deltaTone = (v: number | null) => (v == null ? "text-gray-900" : v > 0 ? "text-emerald-600" : v < 0 ? "text-rose-600" : "text-gray-900");
+const deltaTone = (v: number | null) => (v == null ? "text-gray-900" : v > 0 ? "text-[var(--cmp-text-success)]" : v < 0 ? "text-[var(--cmp-text-error)]" : "text-gray-900");
 
 function polyline(trend: any[], key: string): string {
   if (trend.length < 2) return "";
@@ -40,12 +40,12 @@ export default async function GovernanceAnalyticsPage() {
     <div className="max-w-[1400px]">
       <div className="flex items-start justify-between gap-3 mb-5">
         <div>
-          <p className="text-[11px] font-semibold text-emerald-600 uppercase tracking-widest mb-0.5">CGR-016 · Competency Governance</p>
+          <p className="text-[11px] font-semibold text-[var(--cmp-text-success)] uppercase tracking-widest mb-0.5">CGR-016 · Competency Governance</p>
           <h1 className="text-xl font-bold text-gray-900">Analytics, Metrics &amp; Continuous Improvement</h1>
           <p className="text-gray-400 text-sm mt-0.5">Is our governance system improving over time, and where should leaders focus? Governance trends, maturity progression and ranked improvement opportunities.</p>
         </div>
         <div className="flex gap-2 shrink-0">
-          <Link href="/super-admin/performance" className="text-xs font-semibold text-emerald-700 hover:text-emerald-800 border border-emerald-200 bg-emerald-50 rounded-lg px-3 py-2">Performance →</Link>
+          <Link href="/super-admin/performance" className="text-xs font-semibold text-emerald-700 hover:text-emerald-800 border border-[var(--cmp-color-success)] bg-[var(--cmp-surface-success)] rounded-lg px-3 py-2">Performance →</Link>
           <Link href="/super-admin/cgr" className="text-xs font-semibold text-gray-500 hover:text-emerald-700 border border-gray-200 rounded-lg px-3 py-2">← CGR</Link>
         </div>
       </div>
@@ -55,11 +55,11 @@ export default async function GovernanceAnalyticsPage() {
       ) : (
         <div className="space-y-4">
           <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
-            <Kpi label="Assurance score" value={m ? m.assurance : "—"} sub="/100 current" tone={m && m.assurance >= 75 ? "text-emerald-600" : m && m.assurance >= 45 ? "text-amber-600" : "text-gray-900"} />
-            <Kpi label="Maturity" value={d.maturity ? `L${d.maturity.num}` : "—"} sub={d.maturity ? d.maturity.label : "needs data"} tone="text-emerald-600" />
+            <Kpi label="Assurance score" value={m ? m.assurance : "—"} sub="/100 current" tone={m && m.assurance >= 75 ? "text-[var(--cmp-text-success)]" : m && m.assurance >= 45 ? "text-[var(--cmp-text-warning)]" : "text-gray-900"} />
+            <Kpi label="Maturity" value={d.maturity ? `L${d.maturity.num}` : "—"} sub={d.maturity ? d.maturity.label : "needs data"} tone="text-[var(--cmp-text-success)]" />
             <Kpi label="Compliance trend" value={deltaFmt(d.complianceDelta)} sub={hasTrend ? "over the series" : "needs snapshots"} tone={deltaTone(d.complianceDelta)} />
-            <Kpi label="At-risk" value={m ? m.atRisk : "—"} sub="current exposure" tone={m && m.atRisk ? "text-rose-600" : "text-gray-900"} />
-            <Kpi label="Improvement ops" value={d.opportunities.length} sub="opportunities" tone={d.opportunities.length ? "text-amber-600" : "text-emerald-600"} />
+            <Kpi label="At-risk" value={m ? m.atRisk : "—"} sub="current exposure" tone={m && m.atRisk ? "text-[var(--cmp-text-error)]" : "text-gray-900"} />
+            <Kpi label="Improvement ops" value={d.opportunities.length} sub="opportunities" tone={d.opportunities.length ? "text-[var(--cmp-text-warning)]" : "text-[var(--cmp-text-success)]"} />
             <Kpi label="Governance activity" value={d.activity.last30} sub={`${deltaFmt(d.activity.delta)} vs prior 30d`} tone={deltaTone(d.activity.delta)} />
           </div>
 
@@ -69,8 +69,8 @@ export default async function GovernanceAnalyticsPage() {
               <div className="flex items-center justify-between mb-3">
                 <p className="text-xs font-bold text-gray-500 uppercase tracking-widest">Governance trend</p>
                 <div className="flex gap-3 text-[10px]">
-                  <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-emerald-500" />Readiness {deltaFmt(d.readinessDelta)}</span>
-                  <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-blue-500" />Compliance {deltaFmt(d.complianceDelta)}</span>
+                  <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-[var(--cmp-color-success)]" />Readiness {deltaFmt(d.readinessDelta)}</span>
+                  <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-[var(--cmp-color-information)]" />Compliance {deltaFmt(d.complianceDelta)}</span>
                 </div>
               </div>
               {!hasTrend ? (
@@ -95,8 +95,8 @@ export default async function GovernanceAnalyticsPage() {
                   const active = d.maturity && lv.num === d.maturity.num;
                   const reached = d.maturity && lv.num <= d.maturity.num;
                   return (
-                    <div key={lv.num} className={`flex items-center gap-2 rounded-lg px-2 py-1 ${active ? "bg-emerald-50 border border-emerald-100" : ""}`}>
-                      <span className={`text-[10px] font-bold rounded w-6 text-center ${reached ? "bg-emerald-500 text-white" : "bg-gray-100 text-gray-400"}`}>L{lv.num}</span>
+                    <div key={lv.num} className={`flex items-center gap-2 rounded-lg px-2 py-1 ${active ? "bg-[var(--cmp-surface-success)] border border-[var(--cmp-color-success)]" : ""}`}>
+                      <span className={`text-[10px] font-bold rounded w-6 text-center ${reached ? "bg-[var(--cmp-color-success)] text-white" : "bg-gray-100 text-gray-400"}`}>L{lv.num}</span>
                       <span className={`text-[11px] ${active ? "font-bold text-emerald-800" : reached ? "text-gray-700" : "text-gray-400"}`}>{lv.label}</span>
                     </div>
                   );
@@ -112,7 +112,7 @@ export default async function GovernanceAnalyticsPage() {
               <p className="text-[10px] text-gray-400">from the governance registry gaps</p>
             </div>
             {d.opportunities.length === 0 ? (
-              <div className="p-6 text-center"><p className="text-sm text-emerald-600 font-medium">No open improvement opportunities — governance is fully covered.</p></div>
+              <div className="p-6 text-center"><p className="text-sm text-[var(--cmp-text-success)] font-medium">No open improvement opportunities — governance is fully covered.</p></div>
             ) : (
               <div className="divide-y divide-gray-50">
                 {d.opportunities.map((o: any, i: number) => (
@@ -149,7 +149,7 @@ export default async function GovernanceAnalyticsPage() {
                   { label: "At-risk", v: m.atRisk, warn: !!m.atRisk },
                 ].map((x: any) => (
                   <div key={x.label} className="border border-gray-100 rounded-lg p-2 text-center">
-                    <p className={`text-lg font-bold tabular-nums ${x.warn ? "text-rose-600" : "text-gray-900"}`}>{x.v}</p>
+                    <p className={`text-lg font-bold tabular-nums ${x.warn ? "text-[var(--cmp-text-error)]" : "text-gray-900"}`}>{x.v}</p>
                     <p className="text-[10px] text-gray-500">{x.label}</p>
                   </div>
                 ))}
@@ -157,7 +157,7 @@ export default async function GovernanceAnalyticsPage() {
             </div>
           )}
 
-          <p className="text-[11px] text-gray-400 leading-relaxed">Every figure is real — the trend is the enterprise-aggregated readiness snapshots over time, the metrics are computed live from the governance registry, and the improvement opportunities are the registry gaps ranked by impact and volume (§8 continuous improvement). Deep performance analytics and benchmarking are owned by <Link href="/super-admin/performance" className="text-emerald-600 hover:underline">Competency Performance</Link>; the point-in-time governance rollup by the <Link href="/super-admin/cgr/dashboard" className="text-emerald-600 hover:underline">Governance Dashboard</Link>. Per the CGR mandate, AI may identify trends and recommend priorities but never approves improvement actions or determines accountability.</p>
+          <p className="text-[11px] text-gray-400 leading-relaxed">Every figure is real — the trend is the enterprise-aggregated readiness snapshots over time, the metrics are computed live from the governance registry, and the improvement opportunities are the registry gaps ranked by impact and volume (§8 continuous improvement). Deep performance analytics and benchmarking are owned by <Link href="/super-admin/performance" className="text-[var(--cmp-text-success)] hover:underline">Competency Performance</Link>; the point-in-time governance rollup by the <Link href="/super-admin/cgr/dashboard" className="text-[var(--cmp-text-success)] hover:underline">Governance Dashboard</Link>. Per the CGR mandate, AI may identify trends and recommend priorities but never approves improvement actions or determines accountability.</p>
         </div>
       )}
     </div>

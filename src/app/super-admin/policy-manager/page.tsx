@@ -18,10 +18,10 @@ export default async function PolicyManagerPage() {
 
   const TYPE_COLORS: Record<string, string> = {
     clinical: "bg-teal-50 text-teal-700",
-    hr: "bg-blue-50 text-blue-700",
-    safety: "bg-red-50 text-red-600",
+    hr: "bg-[var(--cmp-surface-information)] text-blue-700",
+    safety: "bg-[var(--cmp-surface-critical)] text-[var(--cmp-text-critical)]",
     governance: "bg-indigo-50 text-indigo-700",
-    infection_control: "bg-orange-50 text-orange-600",
+    infection_control: "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]",
     quality: "bg-violet-50 text-violet-700",
   };
 

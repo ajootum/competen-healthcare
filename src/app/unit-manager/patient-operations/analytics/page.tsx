@@ -40,7 +40,7 @@ export default async function OperationalAnalytics() {
       <PosTabs />
     </>
   );
-  if (!p.ready) return <div className="space-y-4">{header}<div className="bg-amber-50 border border-amber-200 rounded-xl p-6"><p className="font-semibold text-amber-900">⚙️ Coming online</p><p className="text-sm text-amber-800 mt-1">The Clinical Operations Engine isn&apos;t provisioned for this unit yet.</p></div></div>;
+  if (!p.ready) return <div className="space-y-4">{header}<div className="bg-[var(--cmp-surface-warning)] border border-[var(--cmp-color-warning)] rounded-xl p-6"><p className="font-semibold text-amber-900">⚙️ Coming online</p><p className="text-sm text-amber-800 mt-1">The Clinical Operations Engine isn&apos;t provisioned for this unit yet.</p></div></div>;
 
   const { po, workload, today } = p;
   const cap = po.capacity, fm = po.flowMetrics, comp = po.compliance;
@@ -61,10 +61,10 @@ export default async function OperationalAnalytics() {
 
   // Current acuity distribution (real snapshot).
   const dist = [
-    { label: "Critical", n: po.summary.critical, tone: "bg-rose-500" },
-    { label: "High risk", n: po.summary.highRisk - po.summary.critical, tone: "bg-orange-400" },
-    { label: "Review / obs", n: po.summary.review, tone: "bg-amber-400" },
-    { label: "Stable", n: po.active.filter((x: any) => x.state === "Stable").length, tone: "bg-emerald-400" },
+    { label: "Critical", n: po.summary.critical, tone: "bg-[var(--cmp-color-error)]" },
+    { label: "High risk", n: po.summary.highRisk - po.summary.critical, tone: "bg-[var(--cmp-color-warning)]" },
+    { label: "Review / obs", n: po.summary.review, tone: "bg-[var(--cmp-color-warning)]" },
+    { label: "Stable", n: po.active.filter((x: any) => x.state === "Stable").length, tone: "bg-[var(--cmp-color-success)]" },
   ].filter(d => d.n > 0);
   const distTotal = dist.reduce((n, d) => n + d.n, 0) || 1;
 

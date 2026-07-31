@@ -8,9 +8,9 @@ import { WARD12_DOMAINS, WARD12_MODIFIERS, W_LEVELS, computeWard12 } from "@/lib
 // admission/transfer/observation modifiers, live W1-W5 + ratio preview, and a
 // professional-judgement override with mandatory reason. Server recomputes.
 
-const btn = "px-3.5 py-2 rounded-lg bg-emerald-600 text-white text-sm font-medium hover:bg-emerald-700 disabled:opacity-50";
+const btn = "px-3.5 py-2 rounded-lg bg-[var(--cmp-color-success)] text-white text-sm font-medium hover:bg-emerald-700 disabled:opacity-50";
 const input = "w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/40";
-const W_TONE: Record<string, string> = { W1: "bg-green-100 text-green-700", W2: "bg-lime-100 text-lime-700", W3: "bg-yellow-100 text-yellow-800", W4: "bg-orange-100 text-orange-700", W5: "bg-red-100 text-red-700" };
+const W_TONE: Record<string, string> = { W1: "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]", W2: "bg-lime-100 text-lime-700", W3: "bg-[var(--cmp-surface-warning)] text-yellow-800", W4: "bg-[var(--cmp-surface-warning)] text-orange-700", W5: "bg-[var(--cmp-surface-critical)] text-[var(--cmp-text-critical)]" };
 
 export default function Ward12Form({ patientId, patientLabel }: { patientId: string; patientLabel: string }) {
   const router = useRouter();
@@ -48,7 +48,7 @@ export default function Ward12Form({ patientId, patientLabel }: { patientId: str
   if (!open) return <button className="px-2.5 py-1 rounded-lg border border-gray-300 text-xs text-gray-700 hover:bg-gray-50" onClick={() => setOpen(true)}>+ Assess</button>;
 
   return (
-    <div className="mt-3 border border-emerald-200 rounded-lg p-4 space-y-3 bg-emerald-50/30 w-full">
+    <div className="mt-3 border border-[var(--cmp-color-success)] rounded-lg p-4 space-y-3 bg-[var(--cmp-surface-success)]/30 w-full">
       <div className="flex flex-wrap items-center gap-2">
         <h4 className="text-sm font-semibold text-gray-800">Ward Workload — {patientLabel}</h4>
         <span className={`text-[11px] font-bold px-2.5 py-0.5 rounded-full tabular-nums ${W_TONE[preview.level] ?? W_TONE.W1}`}>
@@ -64,7 +64,7 @@ export default function Ward12Form({ patientId, patientLabel }: { patientId: str
             <span className="flex gap-1">
               {[0, 1, 2, 3].map(v => (
                 <button key={v} onClick={() => setDomains({ ...domains, [d.key]: v })}
-                  className={`w-7 h-7 rounded-lg text-xs font-semibold tabular-nums border ${(domains[d.key] ?? 0) === v ? "bg-emerald-600 text-white border-emerald-600" : "bg-white text-gray-600 border-gray-300 hover:bg-gray-50"}`}>
+                  className={`w-7 h-7 rounded-lg text-xs font-semibold tabular-nums border ${(domains[d.key] ?? 0) === v ? "bg-[var(--cmp-color-success)] text-white border-emerald-600" : "bg-white text-gray-600 border-gray-300 hover:bg-gray-50"}`}>
                   {v}
                 </button>
               ))}
@@ -99,7 +99,7 @@ export default function Ward12Form({ patientId, patientLabel }: { patientId: str
         )}
       </div>
 
-      {err && <p className="text-xs text-amber-700">{err}</p>}
+      {err && <p className="text-xs text-[var(--cmp-text-warning)]">{err}</p>}
       <button className={btn} disabled={busy} onClick={submit}>{busy ? "Saving…" : "Save workload"}</button>
       <p className="text-[10px] text-gray-400">Bands: W1 0-7 (1:6) · W2 8-14 (1:5) · W3 15-22 (1:4) · W4 23-30 (1:3) · W5 31+ (1:2) — Competen defaults, configurable by nursing governance. Level changes trigger assignment review.</p>
     </div>

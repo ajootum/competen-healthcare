@@ -55,8 +55,8 @@ export default async function WorkforcePlanningPage() {
 
       <div className="grid grid-cols-3 gap-3">
         <div className={card}><div className="text-3xl font-bold tabular-nums text-gray-900">{totalEst}</div><div className="text-xs text-gray-500 mt-1">Established positions</div></div>
-        <div className={card}><div className="text-3xl font-bold tabular-nums text-green-600">{totalFilled}</div><div className="text-xs text-gray-500 mt-1">Filled</div></div>
-        <div className={card}><div className={`text-3xl font-bold tabular-nums ${totalEst - totalFilled ? "text-amber-600" : "text-gray-900"}`}>{totalEst - totalFilled}</div><div className="text-xs text-gray-500 mt-1">Vacant</div></div>
+        <div className={card}><div className="text-3xl font-bold tabular-nums text-[var(--cmp-text-success)]">{totalFilled}</div><div className="text-xs text-gray-500 mt-1">Filled</div></div>
+        <div className={card}><div className={`text-3xl font-bold tabular-nums ${totalEst - totalFilled ? "text-[var(--cmp-text-warning)]" : "text-gray-900"}`}>{totalEst - totalFilled}</div><div className="text-xs text-gray-500 mt-1">Vacant</div></div>
       </div>
 
       <div className={card}>
@@ -68,7 +68,7 @@ export default async function WorkforcePlanningPage() {
             return (
               <div key={dp.name}>
                 <div className="flex justify-between text-sm mb-1"><span className="text-gray-700">{dp.name}</span><span className="text-gray-500 tabular-nums">{dp.filled}/{dp.establishment} · {rate}%</span></div>
-                <div className="h-2.5 bg-gray-100 rounded-full overflow-hidden"><div className={`h-full ${rate >= 90 ? "bg-green-500" : rate >= 60 ? "bg-teal-500" : "bg-amber-500"}`} style={{ width: `${rate}%` }} /></div>
+                <div className="h-2.5 bg-gray-100 rounded-full overflow-hidden"><div className={`h-full ${rate >= 90 ? "bg-[var(--cmp-color-success)]" : rate >= 60 ? "bg-teal-500" : "bg-[var(--cmp-color-warning)]"}`} style={{ width: `${rate}%` }} /></div>
               </div>
             );
           })}

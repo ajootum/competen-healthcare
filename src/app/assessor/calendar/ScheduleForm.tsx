@@ -87,7 +87,7 @@ export default function ScheduleForm({ nurses }: { nurses: NurseOpt[] }) {
             <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">Note</label>
             <input value={form.note} onChange={e => setForm({ ...form, note: e.target.value })} placeholder="Optional context for the session" className={input} />
           </div>
-          {error && <p className="sm:col-span-3 text-xs text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2">{error}</p>}
+          {error && <p className="sm:col-span-3 text-xs text-[var(--cmp-text-critical)] bg-[var(--cmp-surface-critical)] border border-[var(--cmp-color-critical)] rounded-lg px-3 py-2">{error}</p>}
           <div className="sm:col-span-3">
             <button type="submit" disabled={busy}
               className="bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white text-sm font-semibold px-5 py-2 rounded-lg transition-colors">

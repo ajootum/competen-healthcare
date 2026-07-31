@@ -67,15 +67,15 @@ export default function PageComposer({ pages, palette }: { pages: Page[]; palett
                 {d.rows.map((row, ri) => {
                   const sum = rowSum(row); const over = sum > GRID;
                   return (
-                    <div key={ri} className={`rounded-lg border p-2 ${over ? "border-rose-200 bg-rose-50/40" : "border-gray-100 bg-gray-50/40"}`}>
+                    <div key={ri} className={`rounded-lg border p-2 ${over ? "border-[var(--cmp-color-error)] bg-[var(--cmp-surface-error)]/40" : "border-gray-100 bg-gray-50/40"}`}>
                       <div className="flex items-center gap-2 mb-1.5">
                         <span className="text-[10px] text-gray-400">Row {ri + 1}</span>
-                        <span className={`text-[10px] font-semibold ${over ? "text-rose-600" : sum === GRID ? "text-emerald-600" : "text-gray-400"}`}>{sum}/{GRID}</span>
+                        <span className={`text-[10px] font-semibold ${over ? "text-[var(--cmp-text-error)]" : sum === GRID ? "text-[var(--cmp-text-success)]" : "text-gray-400"}`}>{sum}/{GRID}</span>
                         <span className="flex-1" />
                         <button onClick={() => addCol(ri)} className="text-[10px] text-indigo-700 hover:underline">+ col</button>
                         <button onClick={() => moveRow(ri, -1)} className="text-gray-400 hover:text-gray-700 text-xs px-0.5">↑</button>
                         <button onClick={() => moveRow(ri, 1)} className="text-gray-400 hover:text-gray-700 text-xs px-0.5">↓</button>
-                        <button onClick={() => rmRow(ri)} className="text-gray-400 hover:text-rose-600 text-xs px-0.5">✕</button>
+                        <button onClick={() => rmRow(ri)} className="text-gray-400 hover:text-[var(--cmp-text-error)] text-xs px-0.5">✕</button>
                       </div>
                       <div className="flex gap-1.5">
                         {row.columns.map((col, ci) => (
@@ -88,7 +88,7 @@ export default function PageComposer({ pages, palette }: { pages: Page[]; palett
                               <select className={`${sel} w-14`} value={col.span} onChange={e => setCol(ri, ci, { span: Number(e.target.value) })}>{Array.from({ length: GRID }, (_, i) => i + 1).map(n => <option key={n} value={n}>{n}</option>)}</select>
                               <span className="text-[9px] text-gray-300">cols</span>
                               <span className="flex-1" />
-                              <button onClick={() => rmCol(ri, ci)} className="text-gray-300 hover:text-rose-600 text-[11px]">✕</button>
+                              <button onClick={() => rmCol(ri, ci)} className="text-gray-300 hover:text-[var(--cmp-text-error)] text-[11px]">✕</button>
                             </div>
                           </div>
                         ))}
@@ -99,7 +99,7 @@ export default function PageComposer({ pages, palette }: { pages: Page[]; palett
               </div>
             )}
 
-            {msg && <p className={`text-xs mt-3 ${msg.startsWith("✓") ? "text-emerald-600" : "text-rose-600"}`}>{msg}</p>}
+            {msg && <p className={`text-xs mt-3 ${msg.startsWith("✓") ? "text-[var(--cmp-text-success)]" : "text-[var(--cmp-text-error)]"}`}>{msg}</p>}
             <div className="flex items-center justify-end mt-4"><button onClick={save} disabled={busy} className="text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg px-4 py-2 disabled:opacity-50">{busy ? "Saving…" : "Save layout"}</button></div>
           </>
         )}

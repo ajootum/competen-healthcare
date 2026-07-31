@@ -6,10 +6,10 @@ type Status = "draft" | "in_review" | "approved" | "published" | "archived";
 type Action = "submit_review" | "revert" | "publish" | "archive";
 
 const ACTIONS: Partial<Record<Status, { action: Action; label: string; cls: string }[]>> = {
-  draft:     [{ action: "submit_review", label: "Submit for Review", cls: "bg-amber-500 hover:bg-amber-600 text-white" }],
+  draft:     [{ action: "submit_review", label: "Submit for Review", cls: "bg-[var(--cmp-color-warning)] hover:bg-[var(--cmp-color-warning)] text-white" }],
   in_review: [{ action: "revert",        label: "Revert to Draft",   cls: "border border-gray-200 text-gray-600 hover:bg-gray-50" }],
   approved:  [
-    { action: "publish", label: "Publish",      cls: "bg-green-600 hover:bg-green-700 text-white" },
+    { action: "publish", label: "Publish",      cls: "bg-[var(--cmp-color-success)] hover:bg-green-700 text-white" },
     { action: "revert",  label: "Revert",       cls: "border border-gray-200 text-gray-500 hover:bg-gray-50" },
   ],
   published: [{ action: "archive", label: "Archive", cls: "border border-gray-200 text-gray-500 hover:bg-gray-50" }],
@@ -18,10 +18,10 @@ const ACTIONS: Partial<Record<Status, { action: Action; label: string; cls: stri
 
 const STATUS_BADGE: Record<Status, { label: string; cls: string }> = {
   draft:     { label: "Draft",      cls: "text-gray-500 bg-gray-100" },
-  in_review: { label: "In Review",  cls: "text-amber-700 bg-amber-50 border border-amber-200" },
-  approved:  { label: "Approved",   cls: "text-blue-700 bg-blue-50 border border-blue-200" },
-  published: { label: "Published",  cls: "text-green-700 bg-green-50" },
-  archived:  { label: "Archived",   cls: "text-red-500 bg-red-50" },
+  in_review: { label: "In Review",  cls: "text-[var(--cmp-text-warning)] bg-[var(--cmp-surface-warning)] border border-[var(--cmp-color-warning)]" },
+  approved:  { label: "Approved",   cls: "text-blue-700 bg-[var(--cmp-surface-information)] border border-[var(--cmp-color-information)]" },
+  published: { label: "Published",  cls: "text-[var(--cmp-text-success)] bg-[var(--cmp-surface-success)]" },
+  archived:  { label: "Archived",   cls: "text-red-500 bg-[var(--cmp-surface-critical)]" },
 };
 
 const ACTION_RESULT: Record<Action, Status> = {

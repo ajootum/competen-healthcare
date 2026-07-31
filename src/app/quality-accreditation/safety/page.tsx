@@ -53,7 +53,7 @@ export default async function SafetyPage() {
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
         <Card title="Recent reports" className="xl:col-span-2">
           <Table cols={["Type", "Description", "Severity", "Reported by", "Status"]} rows={d.recent.map((r: any) => [
-            <span key="t" className="font-medium text-gray-800 capitalize">{r.type}{r.near && <span className="ml-1 text-[9px] text-amber-600">near-miss</span>}</span>,
+            <span key="t" className="font-medium text-gray-800 capitalize">{r.type}{r.near && <span className="ml-1 text-[9px] text-[var(--cmp-text-warning)]">near-miss</span>}</span>,
             <span key="d" className="text-gray-500 truncate block max-w-[240px]">{r.desc}</span>,
             <Pill key="s" text={r.severity} tone={SEV_TONE[r.severity] ?? "slate"} />,
             <span key="b" className="text-gray-500">{r.by ?? "—"}</span>,

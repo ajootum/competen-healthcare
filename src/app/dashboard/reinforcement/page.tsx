@@ -25,13 +25,13 @@ export default async function ReinforcementPage() {
       </div>
 
       {!r.provisioned ? (
-        <div className="bg-amber-50 border border-amber-100 rounded-xl p-4"><p className="text-[13px] text-amber-900">Reinforcement isn&apos;t provisioned yet (migration 143). Once the delivery platform generates your cards, they&apos;ll appear here.</p></div>
+        <div className="bg-[var(--cmp-surface-warning)] border border-[var(--cmp-color-warning)] rounded-xl p-4"><p className="text-[13px] text-amber-900">Reinforcement isn&apos;t provisioned yet (migration 143). Once the delivery platform generates your cards, they&apos;ll appear here.</p></div>
       ) : (
         <>
           <div className="grid grid-cols-3 gap-3 mb-5">
             <div className="bg-white rounded-xl border border-gray-100 p-3.5"><p className="text-xl font-bold text-teal-600">{r.stats.dueNow}</p><p className="text-[10px] text-gray-400 font-medium mt-0.5">Due today</p></div>
             <div className="bg-white rounded-xl border border-gray-100 p-3.5"><p className="text-xl font-bold text-gray-900">{r.stats.total}</p><p className="text-[10px] text-gray-400 font-medium mt-0.5">Total cards</p></div>
-            <div className="bg-white rounded-xl border border-gray-100 p-3.5"><p className="text-xl font-bold text-emerald-600">{r.stats.mastered}</p><p className="text-[10px] text-gray-400 font-medium mt-0.5">Mastered</p></div>
+            <div className="bg-white rounded-xl border border-gray-100 p-3.5"><p className="text-xl font-bold text-[var(--cmp-text-success)]">{r.stats.mastered}</p><p className="text-[10px] text-gray-400 font-medium mt-0.5">Mastered</p></div>
           </div>
           <ReinforcementReview initial={r.due.map(c => ({ id: c.id, subject: c.subject, prompt: c.prompt }))} />
         </>

@@ -59,7 +59,7 @@ export default async function SkillMixSupervisor() {
     </>
   );
 
-  if (!d.provisioned) return <div className="space-y-4">{header}<div className="bg-amber-50 border border-amber-200 rounded-xl p-6"><p className="font-semibold text-amber-900">⚙️ Roster store not provisioned</p></div></div>;
+  if (!d.provisioned) return <div className="space-y-4">{header}<div className="bg-[var(--cmp-surface-warning)] border border-[var(--cmp-color-warning)] rounded-xl p-6"><p className="font-semibold text-amber-900">⚙️ Roster store not provisioned</p></div></div>;
   const match = d.match;
   if (!match) return <div className="space-y-4">{header}<div className="bg-white border border-gray-200 rounded-xl p-6"><p className="font-semibold text-gray-800">No roster for the current week</p><p className="text-sm text-gray-500 mt-1">Generate one in the <Link href="/unit-manager/scheduling-engine" className="text-emerald-700 hover:underline">Scheduling Engine</Link>.</p></div></div>;
 
@@ -68,30 +68,30 @@ export default async function SkillMixSupervisor() {
       {header}
 
       <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-5 gap-3">
-        <Kpi label="Skill-mix match" value={match.matchScore != null ? `${match.matchScore}%` : "—"} sub={`${match.validated}/${match.assigned} validated`} tone={match.matchScore != null && match.matchScore >= 90 ? "text-emerald-600" : "text-amber-600"} />
-        <Kpi label="Supervisor coverage" value={supScore != null ? `${supScore}%` : "—"} sub={`${supConfirmed}/${supRequired} shifts`} tone={supUncovered ? "text-rose-600" : "text-emerald-600"} />
-        <Kpi label="Competency gaps" value={match.unvalidatedCount} sub="Unvalidated assignments" tone={match.unvalidatedCount ? "text-amber-600" : "text-emerald-600"} />
-        <Kpi label="Expired certs" value={d.kpis.expiredCerts} sub="Workforce-wide" tone={d.kpis.expiredCerts ? "text-rose-600" : "text-emerald-600"} />
-        <Kpi label="Expiring ≤30d" value={d.kpis.expiringCerts} sub="Schedule reassessment" tone={d.kpis.expiringCerts ? "text-amber-600" : undefined} />
+        <Kpi label="Skill-mix match" value={match.matchScore != null ? `${match.matchScore}%` : "—"} sub={`${match.validated}/${match.assigned} validated`} tone={match.matchScore != null && match.matchScore >= 90 ? "text-[var(--cmp-text-success)]" : "text-[var(--cmp-text-warning)]"} />
+        <Kpi label="Supervisor coverage" value={supScore != null ? `${supScore}%` : "—"} sub={`${supConfirmed}/${supRequired} shifts`} tone={supUncovered ? "text-[var(--cmp-text-error)]" : "text-[var(--cmp-text-success)]"} />
+        <Kpi label="Competency gaps" value={match.unvalidatedCount} sub="Unvalidated assignments" tone={match.unvalidatedCount ? "text-[var(--cmp-text-warning)]" : "text-[var(--cmp-text-success)]"} />
+        <Kpi label="Expired certs" value={d.kpis.expiredCerts} sub="Workforce-wide" tone={d.kpis.expiredCerts ? "text-[var(--cmp-text-error)]" : "text-[var(--cmp-text-success)]"} />
+        <Kpi label="Expiring ≤30d" value={d.kpis.expiringCerts} sub="Schedule reassessment" tone={d.kpis.expiringCerts ? "text-[var(--cmp-text-warning)]" : undefined} />
       </div>
 
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
         {/* Role competency coverage */}
         <div className={`${card} p-5`}>
           <h3 className="text-sm font-bold text-gray-900 mb-3">Competency coverage by role</h3>
-          {(d.roleCoverage ?? []).length === 0 ? <p className="text-sm text-gray-400">No role data.</p> : <div className="space-y-2">{d.roleCoverage.map((r: any) => (<div key={r.role} className="flex items-center gap-3 text-xs"><span className="text-gray-700 w-28 truncate">{r.label}</span><div className="flex-1 h-1.5 rounded-full bg-gray-100 overflow-hidden"><div className={`h-full rounded-full ${(r.pct ?? 0) >= 90 ? "bg-emerald-500" : (r.pct ?? 0) >= 75 ? "bg-amber-400" : "bg-rose-400"}`} style={{ width: `${r.pct ?? 0}%` }} /></div><span className="text-gray-600 w-14 text-right">{r.current}/{r.total}{r.pct != null ? ` · ${r.pct}%` : ""}</span></div>))}</div>}
+          {(d.roleCoverage ?? []).length === 0 ? <p className="text-sm text-gray-400">No role data.</p> : <div className="space-y-2">{d.roleCoverage.map((r: any) => (<div key={r.role} className="flex items-center gap-3 text-xs"><span className="text-gray-700 w-28 truncate">{r.label}</span><div className="flex-1 h-1.5 rounded-full bg-gray-100 overflow-hidden"><div className={`h-full rounded-full ${(r.pct ?? 0) >= 90 ? "bg-[var(--cmp-color-success)]" : (r.pct ?? 0) >= 75 ? "bg-[var(--cmp-color-warning)]" : "bg-[var(--cmp-color-error)]"}`} style={{ width: `${r.pct ?? 0}%` }} /></div><span className="text-gray-600 w-14 text-right">{r.current}/{r.total}{r.pct != null ? ` · ${r.pct}%` : ""}</span></div>))}</div>}
         </div>
 
         {/* Supervisor coverage */}
         <div className={`${card} p-5`}>
           <h3 className="text-sm font-bold text-gray-900 mb-3">Shift Supervisor coverage</h3>
           <div className="grid grid-cols-3 gap-3 mb-3">
-            <div><p className="text-[10px] text-gray-500 uppercase">Confirmed</p><p className="text-xl font-bold text-emerald-600">{supConfirmed}</p></div>
-            <div><p className="text-[10px] text-gray-500 uppercase">Uncovered</p><p className={`text-xl font-bold ${supUncovered ? "text-rose-600" : "text-gray-300"}`}>{supUncovered}</p></div>
-            <div><p className="text-[10px] text-gray-500 uppercase">No sup. post</p><p className={`text-xl font-bold ${supNoPost ? "text-amber-600" : "text-gray-300"}`}>{supNoPost}</p></div>
+            <div><p className="text-[10px] text-gray-500 uppercase">Confirmed</p><p className="text-xl font-bold text-[var(--cmp-text-success)]">{supConfirmed}</p></div>
+            <div><p className="text-[10px] text-gray-500 uppercase">Uncovered</p><p className={`text-xl font-bold ${supUncovered ? "text-[var(--cmp-text-error)]" : "text-gray-300"}`}>{supUncovered}</p></div>
+            <div><p className="text-[10px] text-gray-500 uppercase">No sup. post</p><p className={`text-xl font-bold ${supNoPost ? "text-[var(--cmp-text-warning)]" : "text-gray-300"}`}>{supNoPost}</p></div>
           </div>
           <p className="text-[11px] text-gray-500">A staff member may be rostered as Shift Supervisor only when in the authorised supervisor pool and meeting active eligibility (§12.4). Missing-supervisor shifts are a hard publish block (BR-003).</p>
-          {supNoPost > 0 && <p className="text-[10px] text-amber-600 mt-1">{supNoPost} shift(s) have no supervisor post at all — confirm whether tenant rules require one.</p>}
+          {supNoPost > 0 && <p className="text-[10px] text-[var(--cmp-text-warning)] mt-1">{supNoPost} shift(s) have no supervisor post at all — confirm whether tenant rules require one.</p>}
         </div>
       </div>
 

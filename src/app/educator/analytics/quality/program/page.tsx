@@ -48,7 +48,7 @@ export default async function Program() {
         <div className="bg-white border border-gray-100 rounded-2xl p-5">
           <h2 className="text-sm font-bold text-gray-900 mb-3">Quality Score by Domain</h2>
           <div className="flex flex-col gap-1.5">{d.byDomain.map(b => (
-            <div key={b.label} className="flex items-center gap-2 text-[10px]"><span className="text-gray-500 w-32 truncate">{b.label}</span>{b.backed && b.pct !== null ? <><div className="flex-1 h-1.5 bg-gray-100 rounded-full overflow-hidden"><div className={`h-full rounded-full ${b.pct >= 80 ? "bg-green-500" : b.pct >= 60 ? "bg-blue-500" : b.pct >= 40 ? "bg-amber-400" : "bg-red-400"}`} style={{ width: `${b.pct}%` }} /></div><span className="font-bold text-gray-700 w-8 text-right">{b.pct}%</span></> : <span className="flex-1 text-right text-[8px] font-bold uppercase text-gray-300">soon</span>}</div>
+            <div key={b.label} className="flex items-center gap-2 text-[10px]"><span className="text-gray-500 w-32 truncate">{b.label}</span>{b.backed && b.pct !== null ? <><div className="flex-1 h-1.5 bg-gray-100 rounded-full overflow-hidden"><div className={`h-full rounded-full ${b.pct >= 80 ? "bg-[var(--cmp-color-success)]" : b.pct >= 60 ? "bg-[var(--cmp-color-information)]" : b.pct >= 40 ? "bg-[var(--cmp-color-warning)]" : "bg-[var(--cmp-color-critical)]"}`} style={{ width: `${b.pct}%` }} /></div><span className="font-bold text-gray-700 w-8 text-right">{b.pct}%</span></> : <span className="flex-1 text-right text-[8px] font-bold uppercase text-gray-300">soon</span>}</div>
           ))}</div>
         </div>
       </div>

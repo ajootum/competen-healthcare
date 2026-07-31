@@ -24,12 +24,12 @@ export default async function DistributionPage() {
       <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-8 gap-3">
         <Stat label="Total Priorities" value={k.total} sub={`${k.drafts} draft`} />
         <Stat label="Published" value={k.published} sub="in cascade" tone="text-teal-600" />
-        <Stat label="Mandatory" value={k.mandatory} sub="must-acknowledge" tone={k.mandatory ? "text-rose-600" : undefined} />
+        <Stat label="Mandatory" value={k.mandatory} sub="must-acknowledge" tone={k.mandatory ? "text-[var(--cmp-text-error)]" : undefined} />
         <Stat label="Scope Levels" value={k.levels} sub="cascade depth" />
         <Stat label="Effective Set" value={k.effective} sub="resolved for context" tone="text-teal-600" />
-        <Stat label="Suppressed" value={k.suppressed} sub="by local block" tone={k.suppressed ? "text-amber-600" : undefined} />
+        <Stat label="Suppressed" value={k.suppressed} sub="by local block" tone={k.suppressed ? "text-[var(--cmp-text-warning)]" : undefined} />
         <Stat label="Avg Weight" value={k.avgWeight} sub="effective" />
-        <Stat label="Pending Approval" value={k.pending} sub="priorities" tone={k.pending ? "text-amber-600" : undefined} />
+        <Stat label="Pending Approval" value={k.pending} sub="priorities" tone={k.pending ? "text-[var(--cmp-text-warning)]" : undefined} />
       </div>
 
       {/* Cascade columns + effective set */}
@@ -93,7 +93,7 @@ export default async function DistributionPage() {
         <Card title="Urgency Distribution">
           <div className="space-y-2 text-[12px]">
             {d.byUrgency.map((u: any) => (
-              <div key={u.urgency} className="flex items-center gap-2"><Pill text={u.urgency} tone={URGENCY_TONE[u.urgency]} /><div className="flex-1 h-2 rounded-full bg-gray-100 overflow-hidden"><div className={`h-full rounded-full ${u.urgency === "critical" ? "bg-rose-500" : u.urgency === "high" ? "bg-amber-500" : u.urgency === "medium" ? "bg-blue-500" : "bg-gray-400"}`} style={{ width: `${(u.n / k.published) * 100}%` }} /></div><span className="font-semibold text-gray-900 tabular-nums w-6 text-right">{u.n}</span></div>
+              <div key={u.urgency} className="flex items-center gap-2"><Pill text={u.urgency} tone={URGENCY_TONE[u.urgency]} /><div className="flex-1 h-2 rounded-full bg-gray-100 overflow-hidden"><div className={`h-full rounded-full ${u.urgency === "critical" ? "bg-[var(--cmp-color-error)]" : u.urgency === "high" ? "bg-[var(--cmp-color-warning)]" : u.urgency === "medium" ? "bg-[var(--cmp-color-information)]" : "bg-gray-400"}`} style={{ width: `${(u.n / k.published) * 100}%` }} /></div><span className="font-semibold text-gray-900 tabular-nums w-6 text-right">{u.n}</span></div>
             ))}
           </div>
         </Card>

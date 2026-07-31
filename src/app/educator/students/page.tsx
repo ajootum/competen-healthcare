@@ -53,7 +53,7 @@ export default async function LearnerDirectoryPage({ searchParams }: { searchPar
     })
     .sort((a, b) => a.name.localeCompare(b.name));
 
-  const RISK_CLS = { high: "bg-red-100 text-red-700", medium: "bg-amber-100 text-amber-700" };
+  const RISK_CLS = { high: "bg-[var(--cmp-surface-critical)] text-[var(--cmp-text-critical)]", medium: "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]" };
 
   return (
     <div className="max-w-5xl">

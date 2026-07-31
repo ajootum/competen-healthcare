@@ -34,7 +34,7 @@ export default async function StudioStandardsPage() {
       </div>
 
       {!std.provisioned ? (
-        <div className="bg-amber-50 border border-amber-100 rounded-xl p-6 text-sm text-amber-800">Run migration 129 (<code className="text-[11px]">competency_standard_mappings</code>) to enable Standards Mapping.</div>
+        <div className="bg-[var(--cmp-surface-warning)] border border-[var(--cmp-color-warning)] rounded-xl p-6 text-sm text-amber-800">Run migration 129 (<code className="text-[11px]">competency_standard_mappings</code>) to enable Standards Mapping.</div>
       ) : (
         <>
           {/* KPIs */}
@@ -42,8 +42,8 @@ export default async function StudioStandardsPage() {
             {[
               { label: "Mappings", value: std.kpis.total, tone: "text-gray-900" },
               { label: "Competencies mapped", value: std.kpis.competenciesMapped, tone: "text-teal-600" },
-              { label: "Standards coverage", value: `${std.kpis.coveragePct}%`, tone: std.kpis.coveragePct >= 50 ? "text-teal-600" : "text-amber-600" },
-              { label: "Unmapped", value: std.kpis.unmapped, tone: std.kpis.unmapped > 0 ? "text-amber-600" : "text-gray-300" },
+              { label: "Standards coverage", value: `${std.kpis.coveragePct}%`, tone: std.kpis.coveragePct >= 50 ? "text-teal-600" : "text-[var(--cmp-text-warning)]" },
+              { label: "Unmapped", value: std.kpis.unmapped, tone: std.kpis.unmapped > 0 ? "text-[var(--cmp-text-warning)]" : "text-gray-300" },
               { label: "Total competencies", value: std.kpis.totalCompetencies, tone: "text-gray-900" },
               { label: "Standard bodies", value: std.kpis.bodies, tone: "text-gray-900" },
             ].map(k => (

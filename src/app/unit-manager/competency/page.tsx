@@ -12,9 +12,9 @@ import { cardClass } from "@/components/ui/primitives";
 export const dynamic = "force-dynamic";
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
-const SEV: Record<string, string> = { critical: "border-rose-200 bg-rose-50 text-rose-700", high: "border-amber-200 bg-amber-50 text-amber-700", moderate: "border-yellow-200 bg-yellow-50 text-yellow-700" };
-const TONE: Record<string, string> = { red: "border-rose-200 bg-rose-50", amber: "border-amber-200 bg-amber-50", gray: "border-gray-200 bg-gray-50", green: "border-emerald-200 bg-emerald-50" };
-const barCls = (n: number) => (n >= 85 ? "bg-emerald-500" : n >= 60 ? "bg-amber-500" : "bg-rose-500");
+const SEV: Record<string, string> = { critical: "border-[var(--cmp-color-error)] bg-[var(--cmp-surface-error)] text-[var(--cmp-text-error)]", high: "border-[var(--cmp-color-warning)] bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]", moderate: "border-[var(--cmp-color-warning)] bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]" };
+const TONE: Record<string, string> = { red: "border-[var(--cmp-color-error)] bg-[var(--cmp-surface-error)]", amber: "border-[var(--cmp-color-warning)] bg-[var(--cmp-surface-warning)]", gray: "border-gray-200 bg-gray-50", green: "border-[var(--cmp-color-success)] bg-[var(--cmp-surface-success)]" };
+const barCls = (n: number) => (n >= 85 ? "bg-[var(--cmp-color-success)]" : n >= 60 ? "bg-[var(--cmp-color-warning)]" : "bg-[var(--cmp-color-error)]");
 
 export default async function CompetencyCommandPage() {
   const supabase = await createClient();
@@ -34,11 +34,11 @@ export default async function CompetencyCommandPage() {
 
   const KPIS = [
     { label: "Coverage", value: c.kpis.coverage != null ? `${c.kpis.coverage}%` : "—", tone: "text-gray-900", sub: `${c.kpis.fullyDeployable}/${c.kpis.total} fully deployable` },
-    { label: "Credentials expiring", value: c.kpis.credentialsExpiring, tone: "text-amber-600", sub: "within 30 days" },
-    { label: "Credentials expired", value: c.kpis.credentialsExpired, tone: "text-rose-600", sub: "blocks deployment" },
+    { label: "Credentials expiring", value: c.kpis.credentialsExpiring, tone: "text-[var(--cmp-text-warning)]", sub: "within 30 days" },
+    { label: "Credentials expired", value: c.kpis.credentialsExpired, tone: "text-[var(--cmp-text-error)]", sub: "blocks deployment" },
     { label: "Pending validations", value: c.kpis.pendingValidations, tone: "text-gray-900", sub: `${c.kpis.validationsOverdue} overdue` },
     { label: "Delivered assignments", value: c.delivered.total, tone: "text-gray-900", sub: `${c.delivered.completionPct != null ? c.delivered.completionPct + "% complete" : "—"}` },
-    { label: "Deliveries overdue", value: c.kpis.deliveredOverdue, tone: c.kpis.deliveredOverdue ? "text-rose-600" : "text-gray-900", sub: "past due date" },
+    { label: "Deliveries overdue", value: c.kpis.deliveredOverdue, tone: c.kpis.deliveredOverdue ? "text-[var(--cmp-text-error)]" : "text-gray-900", sub: "past due date" },
   ];
 
   return (
@@ -50,7 +50,7 @@ export default async function CompetencyCommandPage() {
       <CompetencyTabs />
 
       {!c.provisioned ? (
-        <div className="bg-amber-50 border border-amber-200 rounded-xl p-6 text-sm text-amber-800">Competency data isn&apos;t available for this unit yet. Once staff have competency decisions and assignments, this command centre populates automatically.</div>
+        <div className="bg-[var(--cmp-surface-warning)] border border-[var(--cmp-color-warning)] rounded-xl p-6 text-sm text-amber-800">Competency data isn&apos;t available for this unit yet. Once staff have competency decisions and assignments, this command centre populates automatically.</div>
       ) : (
         <>
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
@@ -130,15 +130,15 @@ export default async function CompetencyCommandPage() {
                 <>
                   <div className="flex items-center gap-4 mb-3">
                     <div><div className="text-xl font-bold text-gray-900 tabular-nums">{c.delivered.total}</div><div className="text-[10px] text-gray-400">delivered</div></div>
-                    <div><div className="text-xl font-bold text-emerald-600 tabular-nums">{c.delivered.completionPct ?? 0}%</div><div className="text-[10px] text-gray-400">complete</div></div>
-                    <div><div className="text-xl font-bold text-rose-600 tabular-nums">{c.delivered.overdue}</div><div className="text-[10px] text-gray-400">overdue</div></div>
+                    <div><div className="text-xl font-bold text-[var(--cmp-text-success)] tabular-nums">{c.delivered.completionPct ?? 0}%</div><div className="text-[10px] text-gray-400">complete</div></div>
+                    <div><div className="text-xl font-bold text-[var(--cmp-text-error)] tabular-nums">{c.delivered.overdue}</div><div className="text-[10px] text-gray-400">overdue</div></div>
                   </div>
                   <div className="divide-y divide-gray-50">
                     {c.delivered.recent.map((d: any, i: number) => (
                       <div key={i} className="flex items-center gap-2 py-1.5">
                         <span className="text-xs text-gray-700 truncate flex-1">{d.competency}</span>
                         <span className="text-[10px] text-gray-400 truncate max-w-[100px]">{d.target}</span>
-                        <span className={`text-[9px] font-bold uppercase tracking-wide rounded px-1.5 py-0.5 shrink-0 ${d.overdue ? "bg-rose-50 text-rose-600" : d.status === "completed" ? "bg-emerald-50 text-emerald-600" : "bg-gray-100 text-gray-500"}`}>{d.overdue ? "overdue" : d.status}</span>
+                        <span className={`text-[9px] font-bold uppercase tracking-wide rounded px-1.5 py-0.5 shrink-0 ${d.overdue ? "bg-[var(--cmp-surface-error)] text-[var(--cmp-text-error)]" : d.status === "completed" ? "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]" : "bg-gray-100 text-gray-500"}`}>{d.overdue ? "overdue" : d.status}</span>
                       </div>
                     ))}
                   </div>
@@ -153,8 +153,8 @@ export default async function CompetencyCommandPage() {
                 <Link href="/unit-manager/competency/recertification" className="text-xs text-teal-600 hover:underline">Recert pipeline →</Link>
               </div>
               <div className="flex items-center gap-4 mb-3">
-                <div><div className="text-xl font-bold text-amber-600 tabular-nums">{c.kpis.credentialsExpiring}</div><div className="text-[10px] text-gray-400">expiring ≤30d</div></div>
-                <div><div className="text-xl font-bold text-rose-600 tabular-nums">{c.kpis.credentialsExpired}</div><div className="text-[10px] text-gray-400">expired</div></div>
+                <div><div className="text-xl font-bold text-[var(--cmp-text-warning)] tabular-nums">{c.kpis.credentialsExpiring}</div><div className="text-[10px] text-gray-400">expiring ≤30d</div></div>
+                <div><div className="text-xl font-bold text-[var(--cmp-text-error)] tabular-nums">{c.kpis.credentialsExpired}</div><div className="text-[10px] text-gray-400">expired</div></div>
                 <Link href="/unit-manager/competency-validations" className="ml-auto text-right hover:underline"><div className="text-xl font-bold text-gray-900 tabular-nums">{c.kpis.pendingValidations}</div><div className="text-[10px] text-gray-400">pending validation →</div></Link>
               </div>
               {expiring.length === 0 ? <p className="text-sm text-gray-400">No staff with expiring or expired competencies.</p> : (
@@ -163,7 +163,7 @@ export default async function CompetencyCommandPage() {
                     <div key={i} className="flex items-center gap-2 py-1.5">
                       <span className="text-xs text-gray-700 truncate flex-1">{s.name ?? "—"}</span>
                       <span className="text-[10px] text-gray-400">{s.role ?? ""}</span>
-                      <span className={`text-[9px] font-bold uppercase tracking-wide rounded px-1.5 py-0.5 shrink-0 ${s.status === "Expired" ? "bg-rose-50 text-rose-600" : "bg-amber-50 text-amber-600"}`}>{s.status}</span>
+                      <span className={`text-[9px] font-bold uppercase tracking-wide rounded px-1.5 py-0.5 shrink-0 ${s.status === "Expired" ? "bg-[var(--cmp-surface-error)] text-[var(--cmp-text-error)]" : "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]"}`}>{s.status}</span>
                     </div>
                   ))}
                 </div>

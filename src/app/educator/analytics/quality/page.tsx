@@ -17,13 +17,13 @@ export default async function QualityLanding() {
 
   const summary = [
     { icon: "🏅", tint: "bg-purple-50 text-purple-600", label: "Program Quality Index", value: pct(E.qualityIndex) },
-    { icon: "📋", tint: "bg-blue-50 text-blue-600", label: "Accreditation Readiness", value: pct(E.accreditation) },
+    { icon: "📋", tint: "bg-[var(--cmp-surface-information)] text-[var(--cmp-text-information)]", label: "Accreditation Readiness", value: pct(E.accreditation) },
     { icon: "🛡️", tint: "bg-teal-50 text-teal-600", label: "Competency Attainment", value: pct(E.competencyAch) },
-    { icon: "🎓", tint: "bg-green-50 text-green-600", label: "Learner Success", value: pct(E.learnerSuccess) },
-    { icon: "👨‍🏫", tint: "bg-orange-50 text-orange-600", label: "Faculty Effectiveness", value: "—", sub: "no survey store" },
+    { icon: "🎓", tint: "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]", label: "Learner Success", value: pct(E.learnerSuccess) },
+    { icon: "👨‍🏫", tint: "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]", label: "Faculty Effectiveness", value: "—", sub: "no survey store" },
     { icon: "✅", tint: "bg-indigo-50 text-indigo-600", label: "Compliance Rate", value: pct(E.compliance) },
-    { icon: "📈", tint: "bg-rose-50 text-rose-600", label: "Improvement Score", value: pct(E.improvement) },
-    { icon: "🏆", tint: "bg-amber-50 text-amber-600", label: "Benchmark Ranking", value: "—", sub: E.benchmark },
+    { icon: "📈", tint: "bg-[var(--cmp-surface-error)] text-[var(--cmp-text-error)]", label: "Improvement Score", value: pct(E.improvement) },
+    { icon: "🏆", tint: "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]", label: "Benchmark Ranking", value: "—", sub: E.benchmark },
   ];
   const trMax = 100;
   const metric: Record<string, string> = {
@@ -71,7 +71,7 @@ export default async function QualityLanding() {
           <div className="flex flex-col gap-1.5">{d.program.byDomain.map(b => (
             <div key={b.label} className="flex items-center gap-2 text-[10px]">
               <span className="text-gray-500 w-32 truncate">{b.label}</span>
-              {b.backed && b.pct !== null ? <><div className="flex-1 h-1.5 bg-gray-100 rounded-full overflow-hidden"><div className={`h-full rounded-full ${b.pct >= 80 ? "bg-green-500" : b.pct >= 60 ? "bg-blue-500" : b.pct >= 40 ? "bg-amber-400" : "bg-red-400"}`} style={{ width: `${b.pct}%` }} /></div><span className="font-bold text-gray-700 w-8 text-right">{b.pct}%</span></> : <span className="flex-1 text-right text-[8px] font-bold uppercase text-gray-300">soon</span>}
+              {b.backed && b.pct !== null ? <><div className="flex-1 h-1.5 bg-gray-100 rounded-full overflow-hidden"><div className={`h-full rounded-full ${b.pct >= 80 ? "bg-[var(--cmp-color-success)]" : b.pct >= 60 ? "bg-[var(--cmp-color-information)]" : b.pct >= 40 ? "bg-[var(--cmp-color-warning)]" : "bg-[var(--cmp-color-critical)]"}`} style={{ width: `${b.pct}%` }} /></div><span className="font-bold text-gray-700 w-8 text-right">{b.pct}%</span></> : <span className="flex-1 text-right text-[8px] font-bold uppercase text-gray-300">soon</span>}
             </div>
           ))}</div>
         </div>

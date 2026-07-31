@@ -53,7 +53,7 @@ export default async function ExecutiveDashboard() {
 
         <Card title="Enterprise risk" right={<Link href="/hospital-executive/risk" className="text-teal-600 hover:underline">Full register →</Link>}>
           <div className="flex items-center gap-2 mb-3">
-            <span className={`text-3xl font-bold tabular-nums ${k.highRisks ? "text-rose-600" : "text-emerald-600"}`}>{k.highRisks}</span>
+            <span className={`text-3xl font-bold tabular-nums ${k.highRisks ? "text-[var(--cmp-text-error)]" : "text-[var(--cmp-text-success)]"}`}>{k.highRisks}</span>
             <span className="text-[12px] text-gray-500">high / extreme risks open on the register</span>
           </div>
           {d.topRisks.length ? <div className="space-y-1.5">{d.topRisks.map((r: any, i: number) => (
@@ -117,10 +117,10 @@ export default async function ExecutiveDashboard() {
 
         <Card title="Executive action centre">
           <div className="space-y-2 text-[12.5px]">
-            <Link href="/hospital-executive/quality" className="flex items-center justify-between border border-gray-100 rounded-lg px-3 py-2 hover:border-teal-300"><span className="text-gray-600">Critical quality findings</span><b className={`tabular-nums ${d.action.criticalFindings ? "text-rose-600" : "text-gray-900"}`}>{d.action.criticalFindings}</b></Link>
-            <Link href="/quality-accreditation/improvements" className="flex items-center justify-between border border-gray-100 rounded-lg px-3 py-2 hover:border-teal-300"><span className="text-gray-600">Overdue corrective actions</span><b className={`tabular-nums ${d.action.overdueCapa ? "text-rose-600" : "text-gray-900"}`}>{d.action.overdueCapa}</b></Link>
-            <Link href="/hospital-executive/risk" className="flex items-center justify-between border border-gray-100 rounded-lg px-3 py-2 hover:border-teal-300"><span className="text-gray-600">High / extreme risks</span><b className={`tabular-nums ${d.action.highRisks ? "text-amber-600" : "text-gray-900"}`}>{d.action.highRisks}</b></Link>
-            <Link href="/hospital-executive/workforce" className="flex items-center justify-between border border-gray-100 rounded-lg px-3 py-2 hover:border-teal-300"><span className="text-gray-600">Vacant established roles</span><b className={`tabular-nums ${d.action.vacancies ? "text-amber-600" : "text-gray-900"}`}>{d.action.vacancies}</b></Link>
+            <Link href="/hospital-executive/quality" className="flex items-center justify-between border border-gray-100 rounded-lg px-3 py-2 hover:border-teal-300"><span className="text-gray-600">Critical quality findings</span><b className={`tabular-nums ${d.action.criticalFindings ? "text-[var(--cmp-text-error)]" : "text-gray-900"}`}>{d.action.criticalFindings}</b></Link>
+            <Link href="/quality-accreditation/improvements" className="flex items-center justify-between border border-gray-100 rounded-lg px-3 py-2 hover:border-teal-300"><span className="text-gray-600">Overdue corrective actions</span><b className={`tabular-nums ${d.action.overdueCapa ? "text-[var(--cmp-text-error)]" : "text-gray-900"}`}>{d.action.overdueCapa}</b></Link>
+            <Link href="/hospital-executive/risk" className="flex items-center justify-between border border-gray-100 rounded-lg px-3 py-2 hover:border-teal-300"><span className="text-gray-600">High / extreme risks</span><b className={`tabular-nums ${d.action.highRisks ? "text-[var(--cmp-text-warning)]" : "text-gray-900"}`}>{d.action.highRisks}</b></Link>
+            <Link href="/hospital-executive/workforce" className="flex items-center justify-between border border-gray-100 rounded-lg px-3 py-2 hover:border-teal-300"><span className="text-gray-600">Vacant established roles</span><b className={`tabular-nums ${d.action.vacancies ? "text-[var(--cmp-text-warning)]" : "text-gray-900"}`}>{d.action.vacancies}</b></Link>
           </div>
         </Card>
       </div>

@@ -23,8 +23,8 @@ export default async function SecurityPage() {
         <p className="text-sm text-gray-500 mt-1">Security signal across the platform — landlord actions, platform events and tenant access events.</p>
       </div>
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        <div className={card}><div className={`text-3xl font-bold tabular-nums ${s.critical ? "text-red-600" : "text-gray-900"}`}>{s.critical}</div><div className="text-xs text-gray-500 mt-1">Critical events</div></div>
-        <div className={card}><div className={`text-3xl font-bold tabular-nums ${s.warning ? "text-amber-600" : "text-gray-900"}`}>{s.warning}</div><div className="text-xs text-gray-500 mt-1">Warning events</div></div>
+        <div className={card}><div className={`text-3xl font-bold tabular-nums ${s.critical ? "text-[var(--cmp-text-critical)]" : "text-gray-900"}`}>{s.critical}</div><div className="text-xs text-gray-500 mt-1">Critical events</div></div>
+        <div className={card}><div className={`text-3xl font-bold tabular-nums ${s.warning ? "text-[var(--cmp-text-warning)]" : "text-gray-900"}`}>{s.warning}</div><div className="text-xs text-gray-500 mt-1">Warning events</div></div>
         <div className={card}><div className="text-3xl font-bold tabular-nums text-gray-900">{s.landlordActions.length}</div><div className="text-xs text-gray-500 mt-1">Recent landlord actions</div></div>
         <div className={card}><div className="text-3xl font-bold tabular-nums text-gray-900">{s.tenantSecEvents.length}</div><div className="text-xs text-gray-500 mt-1">Recent access events</div></div>
       </div>

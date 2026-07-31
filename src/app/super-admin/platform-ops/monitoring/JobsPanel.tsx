@@ -8,9 +8,9 @@ import { cardClass } from "@/components/ui/primitives";
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 const STATUS: Record<string, { dot: string; text: string }> = {
-  success: { dot: "bg-green-500", text: "text-green-600" },
-  failed: { dot: "bg-rose-500", text: "text-rose-600" },
-  running: { dot: "bg-amber-500 animate-pulse", text: "text-amber-600" },
+  success: { dot: "bg-[var(--cmp-color-success)]", text: "text-[var(--cmp-text-success)]" },
+  failed: { dot: "bg-[var(--cmp-color-error)]", text: "text-[var(--cmp-text-error)]" },
+  running: { dot: "bg-[var(--cmp-color-warning)] animate-pulse", text: "text-[var(--cmp-text-warning)]" },
 };
 const rel = (iso?: string | null) => { if (!iso) return "never"; const s = Math.floor((Date.now() - new Date(iso).getTime()) / 1000); if (s < 60) return "just now"; if (s < 3600) return `${Math.floor(s / 60)}m ago`; if (s < 86400) return `${Math.floor(s / 3600)}h ago`; return `${Math.floor(s / 86400)}d ago`; };
 
@@ -45,11 +45,11 @@ export default function JobsPanel({ initial }: { initial: any }) {
         <h2 className="font-semibold text-gray-900 text-[15px]">Operational Jobs &amp; Backups
           {s.ready && <span className="ml-2 text-[10px] font-medium text-gray-400">{s.runs24h} runs 24h{s.failed24h ? ` · ${s.failed24h} failed` : ""}</span>}
         </h2>
-        {msg && <span className={`text-xs rounded-lg px-2.5 py-1 ${msg.k === "ok" ? "bg-green-50 text-green-800" : "bg-amber-50 text-amber-800"}`}>{msg.t}</span>}
+        {msg && <span className={`text-xs rounded-lg px-2.5 py-1 ${msg.k === "ok" ? "bg-[var(--cmp-surface-success)] text-green-800" : "bg-[var(--cmp-surface-warning)] text-amber-800"}`}>{msg.t}</span>}
       </div>
 
       {!s.ready && (
-        <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800 mb-3">
+        <div className="rounded-lg border border-[var(--cmp-color-warning)] bg-[var(--cmp-surface-warning)] px-3 py-2 text-xs text-amber-800 mb-3">
           Run <code className="font-mono">supabase/RUN-ME-054-jobs-deployments.sql</code> to enable the job runner (registry shown below; run history &amp; triggering activate after).
         </div>
       )}

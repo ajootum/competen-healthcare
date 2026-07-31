@@ -17,10 +17,10 @@ const card = cardClass;
 const SAFETY = "/supervisor/operations?section=safety";
 
 const SEV_TONE: Record<string, string> = {
-  critical: "bg-red-100 text-red-700", emergency: "bg-red-100 text-red-700",
-  high: "bg-orange-100 text-orange-700", urgent: "bg-orange-100 text-orange-700",
-  moderate: "bg-amber-100 text-amber-700", medium: "bg-amber-100 text-amber-700",
-  low: "bg-yellow-100 text-yellow-700", routine: "bg-gray-100 text-gray-500", informational: "bg-gray-100 text-gray-500",
+  critical: "bg-[var(--cmp-surface-critical)] text-[var(--cmp-text-critical)]", emergency: "bg-[var(--cmp-surface-critical)] text-[var(--cmp-text-critical)]",
+  high: "bg-[var(--cmp-surface-warning)] text-orange-700", urgent: "bg-[var(--cmp-surface-warning)] text-orange-700",
+  moderate: "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]", medium: "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]",
+  low: "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]", routine: "bg-gray-100 text-gray-500", informational: "bg-gray-100 text-gray-500",
 };
 const sevTone = (s: string) => SEV_TONE[s] ?? "bg-gray-100 text-gray-600";
 
@@ -69,21 +69,21 @@ export default async function ClinicalSafety() {
   const po = await loadPatientOps(admin, profile?.hospital_id ?? null, roles.includes("super_admin"));
   if (!po.ready) return (
     <div className="space-y-4"><h1 className="text-2xl font-bold text-gray-900">Clinical Safety</h1>
-      <div className="bg-amber-50 border border-amber-200 rounded-xl p-6"><p className="font-semibold text-amber-900">⚙️ Coming online</p><p className="text-sm text-amber-800 mt-2">The Clinical Operations Engine tables aren&apos;t provisioned yet.</p></div></div>
+      <div className="bg-[var(--cmp-surface-warning)] border border-[var(--cmp-color-warning)] rounded-xl p-6"><p className="font-semibold text-amber-900">⚙️ Coming online</p><p className="text-sm text-amber-800 mt-2">The Clinical Operations Engine tables aren&apos;t provisioned yet.</p></div></div>
   );
 
   const { safetyBanner: sb, alertQueue, deteriorating, compliance, summary } = po;
 
   const kpis = [
-    { label: "Active alerts", n: sb.incidents, tone: sb.incidents ? "text-red-600" : "text-gray-400" },
-    { label: "PEWS escalations", n: sb.pewsAlerts, tone: sb.pewsAlerts ? "text-orange-600" : "text-gray-400" },
-    { label: "Overdue obs", n: sb.overdueObs, tone: sb.overdueObs ? "text-amber-600" : "text-gray-400" },
-    { label: "High-risk", n: summary.highRisk, tone: summary.highRisk ? "text-orange-600" : "text-gray-400" },
-    { label: "Rapid response", n: sb.rapidResponse, tone: sb.rapidResponse ? "text-red-600" : "text-gray-400" },
-    { label: "Falls", n: sb.falls, tone: sb.falls ? "text-amber-600" : "text-gray-400" },
-    { label: "Pressure injury", n: sb.pressure, tone: sb.pressure ? "text-amber-600" : "text-gray-400" },
-    { label: "Medication", n: sb.medication, tone: sb.medication ? "text-amber-600" : "text-gray-400" },
-    { label: "Isolation", n: sb.isolation, tone: sb.isolation ? "text-sky-600" : "text-gray-400" },
+    { label: "Active alerts", n: sb.incidents, tone: sb.incidents ? "text-[var(--cmp-text-critical)]" : "text-gray-400" },
+    { label: "PEWS escalations", n: sb.pewsAlerts, tone: sb.pewsAlerts ? "text-[var(--cmp-text-warning)]" : "text-gray-400" },
+    { label: "Overdue obs", n: sb.overdueObs, tone: sb.overdueObs ? "text-[var(--cmp-text-warning)]" : "text-gray-400" },
+    { label: "High-risk", n: summary.highRisk, tone: summary.highRisk ? "text-[var(--cmp-text-warning)]" : "text-gray-400" },
+    { label: "Rapid response", n: sb.rapidResponse, tone: sb.rapidResponse ? "text-[var(--cmp-text-critical)]" : "text-gray-400" },
+    { label: "Falls", n: sb.falls, tone: sb.falls ? "text-[var(--cmp-text-warning)]" : "text-gray-400" },
+    { label: "Pressure injury", n: sb.pressure, tone: sb.pressure ? "text-[var(--cmp-text-warning)]" : "text-gray-400" },
+    { label: "Medication", n: sb.medication, tone: sb.medication ? "text-[var(--cmp-text-warning)]" : "text-gray-400" },
+    { label: "Isolation", n: sb.isolation, tone: sb.isolation ? "text-[var(--cmp-text-information)]" : "text-gray-400" },
   ];
 
   const actions = ["Acknowledge", "Escalate", "Assign Reviewer", "Record Intervention", "Close Alert", "Open Incident"];
@@ -172,7 +172,7 @@ export default async function ClinicalSafety() {
                         <td className="py-2 pr-3"><Sparkline trend={p.pewsTrend} colorClass={ewsColor(p.pews)} /></td>
                         <td className="py-2 pr-3 text-gray-500 tabular-nums">{fmtTime(p.nextReview)}</td>
                         <td className="py-2 pr-3 text-right">
-                          <Link href={SAFETY} className={`text-[11px] font-medium hover:underline ${inProgress ? "text-amber-700" : "text-teal-700"}`}>
+                          <Link href={SAFETY} className={`text-[11px] font-medium hover:underline ${inProgress ? "text-[var(--cmp-text-warning)]" : "text-teal-700"}`}>
                             {inProgress ? "In Progress" : "Not escalated"} →
                           </Link>
                         </td>
@@ -205,7 +205,7 @@ export default async function ClinicalSafety() {
             </div>
             <div className="flex items-center justify-between pt-3 border-t border-gray-100">
               <span className="text-sm text-gray-600">Isolation patients</span>
-              <span className="text-lg font-bold tabular-nums text-sky-600">{compliance.isolationPatients}</span>
+              <span className="text-lg font-bold tabular-nums text-[var(--cmp-text-information)]">{compliance.isolationPatients}</span>
             </div>
           </div>
         </div>

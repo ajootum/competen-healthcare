@@ -10,8 +10,8 @@ import { COUNTRIES } from "@/lib/countries";
 const ORG_TYPES = ["government", "private", "ngo", "faith_based", "academic"];
 const STATUSES = ["draft", "onboarding", "active", "suspended", "restricted", "archived", "closed"];
 export const STATUS_BADGE: Record<string, string> = {
-  draft: "bg-gray-100 text-gray-600", onboarding: "bg-amber-50 text-amber-700", active: "bg-green-50 text-green-700",
-  suspended: "bg-rose-50 text-rose-700", restricted: "bg-orange-50 text-orange-700", archived: "bg-gray-100 text-gray-500", closed: "bg-gray-100 text-gray-500",
+  draft: "bg-gray-100 text-gray-600", onboarding: "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]", active: "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]",
+  suspended: "bg-[var(--cmp-surface-error)] text-[var(--cmp-text-error)]", restricted: "bg-[var(--cmp-surface-warning)] text-orange-700", archived: "bg-gray-100 text-gray-500", closed: "bg-gray-100 text-gray-500",
 };
 const input = "w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500/40";
 
@@ -113,7 +113,7 @@ export default function OrgDirectory({ rows, networks }: { rows: any[]; networks
                 <div><label className="text-xs font-semibold text-gray-600 mb-1 block">Status</label><select value={form.status} onChange={set("status")} className={input}>{STATUSES.slice(0, 4).map(s => <option key={s} value={s}>{s}</option>)}</select></div>
               </div>
               <div><label className="text-xs font-semibold text-gray-600 mb-1 block">Network</label><select value={form.enterprise_id} onChange={set("enterprise_id")} className={input}><option value="">— None —</option>{networks.map(n => <option key={n.id} value={n.id}>{n.name}</option>)}</select></div>
-              {err && <p className="text-xs text-red-600 bg-red-50 rounded-lg px-3 py-2">{err}</p>}
+              {err && <p className="text-xs text-[var(--cmp-text-critical)] bg-[var(--cmp-surface-critical)] rounded-lg px-3 py-2">{err}</p>}
               <div className="flex gap-2 pt-1">
                 <button onClick={() => setOpen(false)} className="flex-1 py-2 border border-gray-200 rounded-lg text-sm text-gray-600 hover:bg-gray-50">Cancel</button>
                 <button onClick={create} disabled={saving} className="flex-1 py-2 bg-teal-600 text-white rounded-lg text-sm font-semibold hover:bg-teal-700 disabled:opacity-60">{saving ? "Creating…" : "Create"}</button>

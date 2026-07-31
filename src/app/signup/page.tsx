@@ -113,7 +113,7 @@ export default function SignupPage() {
           </div>
 
           {error && (
-            <p className="text-red-500 text-xs bg-red-50 rounded-lg px-3 py-2">{error}</p>
+            <p className="text-red-500 text-xs bg-[var(--cmp-surface-critical)] rounded-lg px-3 py-2">{error}</p>
           )}
 
           <button

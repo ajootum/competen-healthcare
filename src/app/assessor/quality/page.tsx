@@ -193,8 +193,8 @@ export default async function QualityMonitorPage() {
       {/* KPI strip */}
       <div className="grid grid-cols-2 md:grid-cols-5 gap-2 mb-5">
         {KPI.map(k => (
-          <div key={k.label} className={`bg-white border rounded-xl px-4 py-3 ${k.alert ? "border-red-200 bg-red-50/40" : "border-gray-200"}`}>
-            <p className={`text-xl font-bold ${k.alert ? "text-red-600" : "text-gray-900"}`}>{k.value}</p>
+          <div key={k.label} className={`bg-white border rounded-xl px-4 py-3 ${k.alert ? "border-[var(--cmp-color-critical)] bg-[var(--cmp-surface-critical)]/40" : "border-gray-200"}`}>
+            <p className={`text-xl font-bold ${k.alert ? "text-[var(--cmp-text-critical)]" : "text-gray-900"}`}>{k.value}</p>
             <p className="text-[9px] font-bold text-gray-400 uppercase tracking-wider leading-tight">{k.label}</p>
             <p className="text-[9px] text-gray-400 mt-0.5">{k.sub}</p>
           </div>
@@ -218,7 +218,7 @@ export default async function QualityMonitorPage() {
                           <span className="font-bold text-gray-900">{d.pct}% <span className="font-normal text-gray-300">({d.n})</span></span>
                         </div>
                         <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
-                          <div className={`h-full rounded-full ${d.pct >= 80 ? "bg-green-500" : d.pct >= 60 ? "bg-amber-400" : "bg-red-400"}`} style={{ width: `${d.pct}%` }} />
+                          <div className={`h-full rounded-full ${d.pct >= 80 ? "bg-[var(--cmp-color-success)]" : d.pct >= 60 ? "bg-[var(--cmp-color-warning)]" : "bg-[var(--cmp-color-critical)]"}`} style={{ width: `${d.pct}%` }} />
                         </div>
                       </div>
                     ))}
@@ -268,10 +268,10 @@ export default async function QualityMonitorPage() {
                 <Link href="/assessor/quality/capa" className="text-[10px] text-indigo-600 font-semibold hover:underline">View all →</Link>
               </div>
               <div className="space-y-1.5 text-xs">
-                <div className="flex items-center justify-between"><span className="text-red-600">🔴 Overdue</span><span className="font-bold">{capaOverdue.length}</span></div>
-                <div className="flex items-center justify-between"><span className="text-amber-600">🟠 Due this week</span><span className="font-bold">{capaDueWeek.length}</span></div>
-                <div className="flex items-center justify-between"><span className="text-blue-600">🔵 In progress</span><span className="font-bold">{capaInProgress.length}</span></div>
-                <div className="flex items-center justify-between"><span className="text-green-600">🟢 Completed (month)</span><span className="font-bold">{capaDoneMonth.length}</span></div>
+                <div className="flex items-center justify-between"><span className="text-[var(--cmp-text-critical)]">🔴 Overdue</span><span className="font-bold">{capaOverdue.length}</span></div>
+                <div className="flex items-center justify-between"><span className="text-[var(--cmp-text-warning)]">🟠 Due this week</span><span className="font-bold">{capaDueWeek.length}</span></div>
+                <div className="flex items-center justify-between"><span className="text-[var(--cmp-text-information)]">🔵 In progress</span><span className="font-bold">{capaInProgress.length}</span></div>
+                <div className="flex items-center justify-between"><span className="text-[var(--cmp-text-success)]">🟢 Completed (month)</span><span className="font-bold">{capaDoneMonth.length}</span></div>
               </div>
             </div>
           </div>
@@ -331,7 +331,7 @@ export default async function QualityMonitorPage() {
             {alerts.length ? (
               <div className="space-y-1.5">
                 {alerts.map((a, i) => (
-                  <Link key={i} href={a.href} className={`flex items-start gap-2 text-[11px] hover:underline ${a.danger ? "text-red-600" : "text-gray-600"}`}>
+                  <Link key={i} href={a.href} className={`flex items-start gap-2 text-[11px] hover:underline ${a.danger ? "text-[var(--cmp-text-critical)]" : "text-gray-600"}`}>
                     <span>{a.icon}</span><span>{a.text}</span>
                   </Link>
                 ))}

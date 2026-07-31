@@ -59,7 +59,7 @@ export default function PackageManager({ packages, competencyOptions }: { packag
           <button onClick={create} disabled={busy} className="text-xs font-semibold text-white bg-teal-600 hover:bg-teal-700 disabled:opacity-50 rounded-lg px-4 py-2 whitespace-nowrap">{busy ? "…" : "Create"}</button>
         </div>
         <input value={desc} onChange={e => setDesc(e.target.value)} placeholder="Description (optional)" className={`${inp} w-full mt-2`} />
-        {err && <p className="text-[11px] text-red-600 mt-1">{err}</p>}
+        {err && <p className="text-[11px] text-[var(--cmp-text-critical)] mt-1">{err}</p>}
       </div>
 
       {/* Package list */}

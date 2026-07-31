@@ -37,7 +37,7 @@ export default function JobRunner({ jobs, title = "Run Automation" }: { jobs: Jo
             {runnable.map(j => <option key={j.key} value={j.key}>{j.name}</option>)}
           </select>
           <button onClick={run} disabled={busy} className="text-sm font-semibold bg-teal-600 hover:bg-teal-700 text-white rounded-lg px-4 py-2 disabled:opacity-60">{busy ? "Running…" : "Run now"}</button>
-          {result && <span className={`text-xs rounded-lg px-2.5 py-1.5 ${result.ok ? "bg-green-50 text-green-800" : "bg-amber-50 text-amber-800"}`}>{result.text}</span>}
+          {result && <span className={`text-xs rounded-lg px-2.5 py-1.5 ${result.ok ? "bg-[var(--cmp-surface-success)] text-green-800" : "bg-[var(--cmp-surface-warning)] text-amber-800"}`}>{result.text}</span>}
         </div>
       )}
       <p className="text-[11px] text-gray-400 mt-3">Runs the selected job immediately and records it to the job history. Handler-backed jobs do real, safe, idempotent work.</p>

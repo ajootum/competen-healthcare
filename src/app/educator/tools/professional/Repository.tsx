@@ -10,8 +10,8 @@ import type { Asset } from "@/lib/professional-tools";
 // note and a link to the live tool rather than any placeholder rows.
 
 const STATUS_CLS: Record<string, string> = {
-  published: "bg-emerald-100 text-emerald-700", active: "bg-emerald-100 text-emerald-700", approved: "bg-emerald-100 text-emerald-700",
-  draft: "bg-gray-100 text-gray-600", review: "bg-amber-100 text-amber-700", pending: "bg-amber-100 text-amber-700",
+  published: "bg-[var(--cmp-surface-success)] text-emerald-700", active: "bg-[var(--cmp-surface-success)] text-emerald-700", approved: "bg-[var(--cmp-surface-success)] text-emerald-700",
+  draft: "bg-gray-100 text-gray-600", review: "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]", pending: "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]",
 };
 const cls = (s: string) => STATUS_CLS[s.toLowerCase()] ?? "bg-gray-100 text-gray-600";
 

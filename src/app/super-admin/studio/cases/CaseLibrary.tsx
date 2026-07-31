@@ -11,13 +11,13 @@ type ClinicalCase = {
 };
 
 const DIFFICULTY_UI: Record<string, { label: string; cls: string }> = {
-  foundation:   { label: "Foundation",   cls: "bg-green-50 text-green-700" },
-  intermediate: { label: "Intermediate", cls: "bg-blue-50 text-blue-700" },
+  foundation:   { label: "Foundation",   cls: "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]" },
+  intermediate: { label: "Intermediate", cls: "bg-[var(--cmp-surface-information)] text-blue-700" },
   advanced:     { label: "Advanced",     cls: "bg-violet-50 text-violet-700" },
 };
 const STATUS_CLS: Record<string, string> = {
   draft: "bg-gray-100 text-gray-600",
-  active: "bg-green-100 text-green-700",
+  active: "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]",
   retired: "bg-gray-100 text-gray-400",
 };
 
@@ -56,7 +56,7 @@ export default function CaseLibrary({ cases }: { cases: ClinicalCase[] }) {
 
   return (
     <div className="flex flex-col gap-4">
-      {error && <div className="bg-red-50 text-red-600 text-sm rounded-lg px-4 py-2.5">{error}</div>}
+      {error && <div className="bg-[var(--cmp-surface-critical)] text-[var(--cmp-text-critical)] text-sm rounded-lg px-4 py-2.5">{error}</div>}
 
       <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search cases…"
         className="border border-gray-200 rounded-lg px-3.5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500/30" />
@@ -138,7 +138,7 @@ export default function CaseLibrary({ cases }: { cases: ClinicalCase[] }) {
                   <div className="flex gap-2 mt-4 pt-3 border-t border-gray-100">
                     {c.status !== "active" ? (
                       <button disabled={busy} onClick={() => patch(c.id, { status: "active" })}
-                        className="text-xs font-semibold text-green-700 bg-green-50 hover:bg-green-100 px-3 py-1.5 rounded-lg">Publish</button>
+                        className="text-xs font-semibold text-[var(--cmp-text-success)] bg-[var(--cmp-surface-success)] hover:bg-[var(--cmp-surface-success)] px-3 py-1.5 rounded-lg">Publish</button>
                     ) : (
                       <button disabled={busy} onClick={() => patch(c.id, { status: "draft" })}
                         className="text-xs font-semibold text-gray-600 bg-gray-100 hover:bg-gray-200 px-3 py-1.5 rounded-lg">Unpublish</button>

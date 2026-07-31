@@ -16,7 +16,7 @@ export const dynamic = "force-dynamic";
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 const card = "bg-white rounded-xl border border-gray-200";
-const RISK: Record<string, string> = { High: "bg-rose-50 text-rose-700", Medium: "bg-amber-50 text-amber-700", Low: "bg-emerald-50 text-emerald-700" };
+const RISK: Record<string, string> = { High: "bg-[var(--cmp-surface-error)] text-[var(--cmp-text-error)]", Medium: "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]", Low: "bg-[var(--cmp-surface-success)] text-emerald-700" };
 const fmt = (v: number, unit: string) => (unit === "£" ? `£${v.toLocaleString()}` : `${v}${unit}`);
 const num = (v: any, def = 0, max = 50) => { const n = Math.round(Number(v)); return Number.isFinite(n) && n >= 0 ? Math.min(n, max) : def; };
 
@@ -47,7 +47,7 @@ export default async function WhatIfSimulator({ searchParams }: { searchParams: 
     </>
   );
 
-  if (!d.ready) return <div className="space-y-4">{header}<div className="bg-amber-50 border border-amber-200 rounded-xl p-6"><p className="font-semibold text-amber-900">⚙️ Insufficient data</p><p className="text-sm text-amber-800 mt-1">Simulation needs establishment demand + a staff pool.</p></div></div>;
+  if (!d.ready) return <div className="space-y-4">{header}<div className="bg-[var(--cmp-surface-warning)] border border-[var(--cmp-color-warning)] rounded-xl p-6"><p className="font-semibold text-amber-900">⚙️ Insufficient data</p><p className="text-sm text-amber-800 mt-1">Simulation needs establishment demand + a staff pool.</p></div></div>;
 
   return (
     <div className="space-y-4">
@@ -69,7 +69,7 @@ export default async function WhatIfSimulator({ searchParams }: { searchParams: 
           ) : (
             <div className="overflow-x-auto"><table className="w-full text-xs">
               <thead><tr className="text-gray-400 text-left border-b border-gray-100"><th className="py-2 pr-3 font-medium">Metric</th><th className="py-2 pr-3 font-medium text-right">Before</th><th className="py-2 pr-3 font-medium text-right">After</th><th className="py-2 font-medium text-right">Change</th></tr></thead>
-              <tbody>{d.metrics.map((mt: any) => { const good = mt.invert ? mt.delta <= 0 : mt.delta >= 0; return (<tr key={mt.label} className="border-b border-gray-50"><td className="py-2 pr-3 text-gray-700">{mt.label}</td><td className="py-2 pr-3 text-right text-gray-500">{fmt(mt.before, mt.unit)}</td><td className="py-2 pr-3 text-right font-semibold text-gray-800">{fmt(mt.after, mt.unit)}</td><td className={`py-2 text-right font-semibold ${mt.delta === 0 ? "text-gray-400" : good ? "text-emerald-600" : "text-rose-600"}`}>{mt.delta > 0 ? "+" : ""}{fmt(mt.delta, mt.unit)}</td></tr>); })}</tbody>
+              <tbody>{d.metrics.map((mt: any) => { const good = mt.invert ? mt.delta <= 0 : mt.delta >= 0; return (<tr key={mt.label} className="border-b border-gray-50"><td className="py-2 pr-3 text-gray-700">{mt.label}</td><td className="py-2 pr-3 text-right text-gray-500">{fmt(mt.before, mt.unit)}</td><td className="py-2 pr-3 text-right font-semibold text-gray-800">{fmt(mt.after, mt.unit)}</td><td className={`py-2 text-right font-semibold ${mt.delta === 0 ? "text-gray-400" : good ? "text-[var(--cmp-text-success)]" : "text-[var(--cmp-text-error)]"}`}>{mt.delta > 0 ? "+" : ""}{fmt(mt.delta, mt.unit)}</td></tr>); })}</tbody>
             </table></div>
           )}
         </div>
@@ -83,7 +83,7 @@ export default async function WhatIfSimulator({ searchParams }: { searchParams: 
             <div className="flex items-center justify-between"><div><p className="text-xs font-semibold text-gray-800">Patient safety risk</p><p className="text-[11px] text-gray-500">{d.risk.uncoveredSup} shift(s) without supervisor · {d.risk.uncovered} uncovered</p></div><span className={`text-[10px] px-2 py-1 rounded ${RISK[d.risk.safetyRisk]}`}>{d.risk.safetyRisk}</span></div>
             <div className="flex items-center justify-between"><div><p className="text-xs font-semibold text-gray-800">Fatigue risk</p><p className="text-[11px] text-gray-500">{d.risk.fatigued} staff over-worked (&gt;4 shifts / ≥5 consec.)</p></div><span className={`text-[10px] px-2 py-1 rounded ${RISK[d.risk.fatigueRisk]}`}>{d.risk.fatigueRisk}</span></div>
           </div>
-          {d.changed && (d.risk.safetyRisk !== d.baseRisk.safetyRisk || d.risk.fatigueRisk !== d.baseRisk.fatigueRisk) && <p className="text-[10px] text-amber-600 mt-2">Risk profile changed from baseline (safety {d.baseRisk.safetyRisk}, fatigue {d.baseRisk.fatigueRisk}).</p>}
+          {d.changed && (d.risk.safetyRisk !== d.baseRisk.safetyRisk || d.risk.fatigueRisk !== d.baseRisk.fatigueRisk) && <p className="text-[10px] text-[var(--cmp-text-warning)] mt-2">Risk profile changed from baseline (safety {d.baseRisk.safetyRisk}, fatigue {d.baseRisk.fatigueRisk}).</p>}
         </div>
 
         {/* AI insights */}

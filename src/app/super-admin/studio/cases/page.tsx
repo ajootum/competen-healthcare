@@ -47,10 +47,10 @@ export default async function CasesPage() {
       </div>
 
       {!installed ? (
-        <div className="bg-amber-50 border border-amber-200 rounded-xl p-5 text-sm text-amber-900">
+        <div className="bg-[var(--cmp-surface-warning)] border border-[var(--cmp-color-warning)] rounded-xl p-5 text-sm text-amber-900">
           <p className="font-semibold">Migration 026 not applied yet</p>
           <p className="mt-1 text-amber-800">
-            Run <code className="bg-amber-100 px-1.5 py-0.5 rounded font-mono text-xs">supabase/migrations/026-clinical-cases.sql</code> in the Supabase SQL editor, then reload.
+            Run <code className="bg-[var(--cmp-surface-warning)] px-1.5 py-0.5 rounded font-mono text-xs">supabase/migrations/026-clinical-cases.sql</code> in the Supabase SQL editor, then reload.
           </p>
         </div>
       ) : (

@@ -19,9 +19,9 @@ export default async function AnalyticsPage() {
       {head}
       <ModuleNav active="006" />
       <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
-        <Stat label="Alignment Score" value={`${k.alignmentScore}%`} sub="strategy → execution" tone={k.alignmentScore >= 80 ? "text-emerald-600" : "text-amber-600"} />
+        <Stat label="Alignment Score" value={`${k.alignmentScore}%`} sub="strategy → execution" tone={k.alignmentScore >= 80 ? "text-[var(--cmp-text-success)]" : "text-[var(--cmp-text-warning)]"} />
         <Stat label="Objective Achievement" value={`${k.objectiveAchievement}%`} sub="avg progress" />
-        <Stat label="KPI Attainment" value={`${k.krAttainment}%`} sub="KRs on track" tone={k.krAttainment >= 70 ? "text-emerald-600" : "text-amber-600"} />
+        <Stat label="KPI Attainment" value={`${k.krAttainment}%`} sub="KRs on track" tone={k.krAttainment >= 70 ? "text-[var(--cmp-text-success)]" : "text-[var(--cmp-text-warning)]"} />
         <Stat label="Initiative Delivery" value={`${k.initiativeDelivery}%`} sub="campaigns" />
         <Stat label="Mandatory Share" value={`${k.priorityCompletion}%`} sub="of priorities" />
         <Stat label="Live Objectives" value={k.objectives} sub={`${k.priorities} priorities`} />
@@ -32,7 +32,7 @@ export default async function AnalyticsPage() {
           {d.byTheme.length ? <div className="space-y-2.5">{d.byTheme.map((t: any) => (
             <div key={t.name}>
               <div className="flex items-center justify-between text-[12px] mb-1"><span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full" style={{ background: t.color }} /><span className="text-gray-700">{t.name}</span><span className="text-gray-400 text-[10px]">({t.objectives} obj · {t.priorities} prio)</span></span><span className="font-semibold text-gray-900 tabular-nums">{t.progress}%</span></div>
-              <Progress pct={t.progress} tone={t.progress >= 70 ? "bg-emerald-500" : t.progress >= 40 ? "bg-teal-500" : "bg-amber-500"} />
+              <Progress pct={t.progress} tone={t.progress >= 70 ? "bg-[var(--cmp-color-success)]" : t.progress >= 40 ? "bg-teal-500" : "bg-[var(--cmp-color-warning)]"} />
             </div>
           ))}</div> : <p className="text-sm text-gray-400 py-4 text-center">No theme data.</p>}
         </Card>
@@ -62,7 +62,7 @@ export default async function AnalyticsPage() {
 
         <Card title="At Risk" right={<span className="text-[11px] text-gray-400">&lt;40%</span>}>
           {d.atRisk.length ? <div className="space-y-2 text-[12px]">{d.atRisk.map((o: any) => (
-            <div key={o.title} className="flex items-center gap-2 rounded-lg bg-rose-50 border border-rose-100 px-2 py-1.5"><span className="text-rose-500">⚠</span><span className="text-gray-700 flex-1 truncate">{o.title}</span><span className="font-semibold text-rose-600 tabular-nums">{o.progress}%</span></div>
+            <div key={o.title} className="flex items-center gap-2 rounded-lg bg-[var(--cmp-surface-error)] border border-[var(--cmp-color-error)] px-2 py-1.5"><span className="text-rose-500">⚠</span><span className="text-gray-700 flex-1 truncate">{o.title}</span><span className="font-semibold text-[var(--cmp-text-error)] tabular-nums">{o.progress}%</span></div>
           ))}</div> : <p className="text-sm text-gray-400 py-4 text-center">Nothing at risk. ✅</p>}
         </Card>
       </div>

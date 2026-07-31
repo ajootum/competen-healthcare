@@ -98,7 +98,7 @@ export default function QuestionBuilder({ banks, questions, cpus, attempts }: {
 
       {/* RIGHT — questions editor */}
       <div className="bg-white rounded-xl border border-gray-100 p-5 self-start">
-        {error && <div className="bg-red-50 text-red-600 text-sm rounded-lg px-3 py-2 mb-3">{error}</div>}
+        {error && <div className="bg-[var(--cmp-surface-critical)] text-[var(--cmp-text-critical)] text-sm rounded-lg px-3 py-2 mb-3">{error}</div>}
         {!selected ? (
           <p className="text-sm text-gray-400 py-8 text-center">Select or create a question bank.</p>
         ) : (
@@ -115,7 +115,7 @@ export default function QuestionBuilder({ banks, questions, cpus, attempts }: {
               </div>
               <button disabled={busy}
                 onClick={async () => { setBusy(true); await fetch(`/api/studio?kind=question_bank&id=${selected.id}`, { method: "DELETE" }); setBusy(false); setSelectedId(null); router.refresh(); }}
-                className="text-xs text-red-400 hover:bg-red-50 px-2 py-1 rounded-lg">Retire</button>
+                className="text-xs text-red-400 hover:bg-[var(--cmp-surface-critical)] px-2 py-1 rounded-lg">Retire</button>
             </div>
 
             <div className="mt-4 flex flex-col gap-2">
@@ -129,7 +129,7 @@ export default function QuestionBuilder({ banks, questions, cpus, attempts }: {
                   </div>
                   <div className="mt-1.5 flex flex-col gap-0.5">
                     {x.options.map(o => (
-                      <p key={o} className={`text-[11px] px-2 py-0.5 rounded ${o === x.correct_answer ? "bg-green-100 text-green-800 font-medium" : "text-gray-500"}`}>
+                      <p key={o} className={`text-[11px] px-2 py-0.5 rounded ${o === x.correct_answer ? "bg-[var(--cmp-surface-success)] text-green-800 font-medium" : "text-gray-500"}`}>
                         {o === x.correct_answer ? "✓ " : "○ "}{o}
                       </p>
                     ))}

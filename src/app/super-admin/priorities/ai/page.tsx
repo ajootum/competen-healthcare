@@ -23,15 +23,15 @@ export default async function AiOrchestratorPage() {
       <AiCopilotPanel endpoint="/api/priorities/copilot" title="AI Priority Orchestrator — live copilot" sublabel="Grounded in your live objectives, priorities, weights & approvals · logged to the AI gateway" placeholder="Ask about conflicts, drift, alignment or capacity…" prompts={["Strategic priority briefing", "Where are we drifting?", "Any conflicting priorities?", "What's unmeasurable?"]} />
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         <Stat label="Recommendations" value={k.recommendations} sub="actionable" tone="text-teal-600" />
-        <Stat label="Conflicts" value={k.conflicts} sub="competing priorities" tone={k.conflicts ? "text-amber-600" : undefined} />
-        <Stat label="Drift Alerts" value={k.drift} sub="objectives at risk" tone={k.drift ? "text-rose-600" : undefined} />
-        <Stat label="Hygiene / Alignment" value={k.hygiene} sub="model quality" tone={k.hygiene ? "text-blue-600" : undefined} />
+        <Stat label="Conflicts" value={k.conflicts} sub="competing priorities" tone={k.conflicts ? "text-[var(--cmp-text-warning)]" : undefined} />
+        <Stat label="Drift Alerts" value={k.drift} sub="objectives at risk" tone={k.drift ? "text-[var(--cmp-text-error)]" : undefined} />
+        <Stat label="Hygiene / Alignment" value={k.hygiene} sub="model quality" tone={k.hygiene ? "text-[var(--cmp-text-information)]" : undefined} />
       </div>
 
       <Card title="Orchestration Insights" right={<span className="text-[11px] text-gray-400">rule-based · explainable</span>}>
         {d.recs.length ? <div className="space-y-2">{d.recs.map((r: any, i: number) => (
           <div key={i} className="flex items-start gap-3 border border-gray-100 rounded-lg p-3">
-            <span className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 text-sm ${r.tone === "rose" ? "bg-rose-50" : r.tone === "amber" ? "bg-amber-50" : r.tone === "violet" ? "bg-violet-50" : "bg-blue-50"}`}>{r.kind === "Conflict" ? "⚖️" : r.kind === "Drift" ? "📉" : r.kind === "Capacity" ? "🧮" : r.kind === "Governance" ? "🔀" : "🧹"}</span>
+            <span className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 text-sm ${r.tone === "rose" ? "bg-[var(--cmp-surface-error)]" : r.tone === "amber" ? "bg-[var(--cmp-surface-warning)]" : r.tone === "violet" ? "bg-violet-50" : "bg-[var(--cmp-surface-information)]"}`}>{r.kind === "Conflict" ? "⚖️" : r.kind === "Drift" ? "📉" : r.kind === "Capacity" ? "🧮" : r.kind === "Governance" ? "🔀" : "🧹"}</span>
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-1.5 flex-wrap"><p className="text-[13px] font-medium text-gray-900">{r.title}</p><Pill text={r.kind} tone={KIND_TONE[r.kind] ?? "slate"} /></div>
               <p className="text-[11px] text-gray-600 mt-0.5">{r.detail}</p>

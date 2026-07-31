@@ -21,10 +21,10 @@ export default async function FormsPage() {
       {head}<Tabs active="005" />
       <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-5 gap-3">
         <Kpi label="Total Forms" value={k.total} sub="templates" />
-        <Kpi label="Active" value={k.active} sub="published + active" tone="text-emerald-600" />
+        <Kpi label="Active" value={k.active} sub="published + active" tone="text-[var(--cmp-text-success)]" />
         <Kpi label="Submissions" value={k.submissions.toLocaleString()} sub="captured" />
-        <Kpi label="Submission Compliance" value={`${k.compliance}%`} sub="avg" tone={k.compliance >= 90 ? "text-emerald-600" : "text-amber-600"} />
-        <Kpi label="Pending Review" value={k.pendingReview} sub="next 30 days" tone={k.pendingReview ? "text-amber-600" : undefined} />
+        <Kpi label="Submission Compliance" value={`${k.compliance}%`} sub="avg" tone={k.compliance >= 90 ? "text-[var(--cmp-text-success)]" : "text-[var(--cmp-text-warning)]"} />
+        <Kpi label="Pending Review" value={k.pendingReview} sub="next 30 days" tone={k.pendingReview ? "text-[var(--cmp-text-warning)]" : undefined} />
       </div>
 
       <div className="grid grid-cols-1 xl:grid-cols-4 gap-4">

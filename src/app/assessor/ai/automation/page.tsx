@@ -57,7 +57,7 @@ export default async function AutomationCentrePage() {
               <p className="text-[10px] text-gray-400 mt-0.5">When: {a.trigger} → {a.action}</p>
             </div>
             <span className="text-[10px] text-gray-500"><span className="font-bold text-gray-900">{a.count}</span> runs · 7d</span>
-            <span className="text-[9px] font-bold px-1.5 py-0.5 rounded uppercase bg-green-100 text-green-700">Active</span>
+            <span className="text-[9px] font-bold px-1.5 py-0.5 rounded uppercase bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]">Active</span>
             <Link href={a.href} className="text-[10px] font-semibold text-indigo-600 hover:underline">Open →</Link>
           </div>
         ))}

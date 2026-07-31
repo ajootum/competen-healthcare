@@ -161,8 +161,8 @@ export default function BuilderClient({ saved, assessors, departments, initialRu
             {saveBusy ? "Saving…" : "💾 Save to library"}
           </button>
         </div>
-        {savedMsg && <p className="text-[10px] text-green-600 mt-2">✓ {savedMsg}</p>}
-        {error && <p className="text-xs text-red-600 mt-2">{error}</p>}
+        {savedMsg && <p className="text-[10px] text-[var(--cmp-text-success)] mt-2">✓ {savedMsg}</p>}
+        {error && <p className="text-xs text-[var(--cmp-text-critical)] mt-2">{error}</p>}
       </div>
 
       {/* Preview */}

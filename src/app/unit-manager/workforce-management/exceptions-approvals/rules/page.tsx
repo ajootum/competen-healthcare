@@ -44,7 +44,7 @@ export default async function RulesDelegatedAuthority() {
       </div>
       <WfmExcTabs />
 
-      <div className="bg-amber-50 border border-amber-200 rounded-xl p-5">
+      <div className="bg-[var(--cmp-surface-warning)] border border-[var(--cmp-color-warning)] rounded-xl p-5">
         <p className="font-semibold text-amber-900">⚙️ Delegated-authority configuration — next phase</p>
         <p className="text-sm text-amber-800 mt-1">The authority matrix (who approves what, by request type / unit / cost / duration / risk) and configurable routing rules need a governance-config store. The example authority model + routing patterns are shown as reference. Today the approvals API enforces the core control: a requester can&apos;t approve their own request (BR-EXA-003), and decisions are audited.</p>
       </div>

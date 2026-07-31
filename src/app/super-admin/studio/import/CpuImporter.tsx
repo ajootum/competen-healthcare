@@ -64,7 +64,7 @@ export default function CpuImporter({ practices, domains }: { practices: Opt[]; 
 
   if (result) {
     return (
-      <div className="bg-white rounded-xl border border-green-200 p-6">
+      <div className="bg-white rounded-xl border border-[var(--cmp-color-success)] p-6">
         <p className="text-3xl mb-2">✅</p>
         <h2 className="font-bold text-gray-900">Imported “{chosen?.title}”</h2>
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 my-4">
@@ -77,8 +77,8 @@ export default function CpuImporter({ practices, domains }: { practices: Opt[]; 
             { k: "criticalRules", label: "Critical rules" },
             { k: "questions", label: "MCQs" },
           ].map(x => (
-            <div key={x.k} className="bg-green-50 rounded-lg p-3">
-              <p className="text-2xl font-bold text-green-700">{result.created[x.k] ?? 0}</p>
+            <div key={x.k} className="bg-[var(--cmp-surface-success)] rounded-lg p-3">
+              <p className="text-2xl font-bold text-[var(--cmp-text-success)]">{result.created[x.k] ?? 0}</p>
               <p className="text-[10px] text-green-800/70">{x.label}</p>
             </div>
           ))}
@@ -103,7 +103,7 @@ export default function CpuImporter({ practices, domains }: { practices: Opt[]; 
 
   return (
     <div className="flex flex-col gap-5">
-      {error && <div className="bg-red-50 text-red-600 text-sm rounded-lg px-4 py-2.5">{error}</div>}
+      {error && <div className="bg-[var(--cmp-surface-critical)] text-[var(--cmp-text-critical)] text-sm rounded-lg px-4 py-2.5">{error}</div>}
 
       {/* Step 1 — upload or paste */}
       <div className="bg-white rounded-xl border border-gray-100 p-5">
@@ -181,7 +181,7 @@ export default function CpuImporter({ practices, domains }: { practices: Opt[]; 
                 ) : <p className="text-xs text-gray-400">None found.</p>}
                 <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-3 mb-1.5">Critical-failure rules</p>
                 {chosen.redFlags.length ? (
-                  <ul className="text-xs text-red-600 space-y-0.5 max-h-28 overflow-y-auto">
+                  <ul className="text-xs text-[var(--cmp-text-critical)] space-y-0.5 max-h-28 overflow-y-auto">
                     {chosen.redFlags.map((x, i) => <li key={i}>⛔ {x}</li>)}
                   </ul>
                 ) : <p className="text-xs text-gray-400">None found.</p>}
@@ -204,8 +204,8 @@ export default function CpuImporter({ practices, domains }: { practices: Opt[]; 
                 ) : <p className="text-xs text-gray-400">None found.</p>}
               </div>
               {chosen.warnings.length > 0 && (
-                <div className="md:col-span-2 bg-amber-50 border border-amber-200 rounded-lg p-3">
-                  <p className="text-[10px] font-bold text-amber-700 uppercase tracking-widest mb-1">Review before importing</p>
+                <div className="md:col-span-2 bg-[var(--cmp-surface-warning)] border border-[var(--cmp-color-warning)] rounded-lg p-3">
+                  <p className="text-[10px] font-bold text-[var(--cmp-text-warning)] uppercase tracking-widest mb-1">Review before importing</p>
                   <ul className="text-[11px] text-amber-900 space-y-0.5">
                     {chosen.warnings.map((w, i) => <li key={i}>⚠ {w}</li>)}
                   </ul>

@@ -16,8 +16,8 @@ import Ward12Form from "./Ward12Form";
 export const dynamic = "force-dynamic";
 
 const LEVEL_TONE: Record<string, string> = {
-  W1: "bg-green-100 text-green-700", W2: "bg-lime-100 text-lime-700", W3: "bg-yellow-100 text-yellow-800", W4: "bg-orange-100 text-orange-700", W5: "bg-red-100 text-red-700",
-  I1: "bg-green-100 text-green-700", I2: "bg-lime-100 text-lime-700", I3: "bg-yellow-100 text-yellow-800", I4: "bg-orange-100 text-orange-700", I5: "bg-red-100 text-red-700",
+  W1: "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]", W2: "bg-lime-100 text-lime-700", W3: "bg-[var(--cmp-surface-warning)] text-yellow-800", W4: "bg-[var(--cmp-surface-warning)] text-orange-700", W5: "bg-[var(--cmp-surface-critical)] text-[var(--cmp-text-critical)]",
+  I1: "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]", I2: "bg-lime-100 text-lime-700", I3: "bg-[var(--cmp-surface-warning)] text-yellow-800", I4: "bg-[var(--cmp-surface-warning)] text-orange-700", I5: "bg-[var(--cmp-surface-critical)] text-[var(--cmp-text-critical)]",
 };
 
 function WorkloadChip({ w }: { w: any }) {
@@ -56,16 +56,16 @@ export default async function WorkloadPage() {
       </div>
 
       {data.migrationMissing && (
-        <div className="bg-amber-50 border border-amber-200 rounded-xl p-5">
+        <div className="bg-[var(--cmp-surface-warning)] border border-[var(--cmp-color-warning)] rounded-xl p-5">
           <p className="font-semibold text-amber-900">⚙️ Store not yet enabled</p>
-          <p className="text-sm text-amber-800 mt-1">Apply migrations <code className="bg-amber-100 px-1.5 py-0.5 rounded font-mono text-xs">153</code> + <code className="bg-amber-100 px-1.5 py-0.5 rounded font-mono text-xs">157</code> to enable assessments.</p>
+          <p className="text-sm text-amber-800 mt-1">Apply migrations <code className="bg-[var(--cmp-surface-warning)] px-1.5 py-0.5 rounded font-mono text-xs">153</code> + <code className="bg-[var(--cmp-surface-warning)] px-1.5 py-0.5 rounded font-mono text-xs">157</code> to enable assessments.</p>
         </div>
       )}
 
       <div className="grid sm:grid-cols-2 xl:grid-cols-4 gap-4">
         <StatCard icon="⚖️" title="My Cumulative Load" value={`${agg.total.toFixed(1)}%`}
-          tone={agg.overloaded ? "text-red-600" : agg.total > 80 ? "text-orange-600" : undefined}
-          sub={agg.overloaded ? <span className="text-red-600 font-medium">Over {OVERLOAD_THRESHOLD}% — rebalancing signalled</span> : "of one nurse's capacity"} />
+          tone={agg.overloaded ? "text-[var(--cmp-text-critical)]" : agg.total > 80 ? "text-[var(--cmp-text-warning)]" : undefined}
+          sub={agg.overloaded ? <span className="text-[var(--cmp-text-critical)] font-medium">Over {OVERLOAD_THRESHOLD}% — rebalancing signalled</span> : "of one nurse's capacity"} />
         <StatCard icon="🧑‍⚕️" title="Patients Assessed" value={`${assessedCount}/${data.patients.length}`} sub="latest workload on record" />
         <StatCard icon="📊" title="Highest Level" value={(() => {
           const levels = data.patients.map(p => latest(p.id)).filter(Boolean).map((w: any) => w.override_level || w.level).filter(Boolean);
@@ -77,10 +77,10 @@ export default async function WorkloadPage() {
       <div className={card}>
         <div className="flex items-center justify-between mb-2">
           <span className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider">Cumulative load vs one-nurse capacity</span>
-          <span className={`text-sm font-bold tabular-nums ${agg.overloaded ? "text-red-600" : "text-gray-900"}`}>{agg.total.toFixed(1)}% / {OVERLOAD_THRESHOLD}%</span>
+          <span className={`text-sm font-bold tabular-nums ${agg.overloaded ? "text-[var(--cmp-text-critical)]" : "text-gray-900"}`}>{agg.total.toFixed(1)}% / {OVERLOAD_THRESHOLD}%</span>
         </div>
         <div className="h-3 rounded-full bg-gray-100 overflow-hidden">
-          <div className={`h-full rounded-full ${agg.overloaded ? "bg-red-500" : agg.total > 80 ? "bg-orange-400" : "bg-emerald-500"}`} style={{ width: `${barPct}%` }} />
+          <div className={`h-full rounded-full ${agg.overloaded ? "bg-[var(--cmp-color-critical)]" : agg.total > 80 ? "bg-[var(--cmp-color-warning)]" : "bg-[var(--cmp-color-success)]"}`} style={{ width: `${barPct}%` }} />
         </div>
         <p className="text-[11px] text-gray-400 mt-2">Sum of the latest workload percentage per assigned patient (ward scores normalised against the 36-point domain maximum). Exceeding one nurse&apos;s capacity signals rebalancing.</p>
       </div>
@@ -98,7 +98,7 @@ export default async function WorkloadPage() {
                   <div className="flex flex-wrap items-center gap-2">
                     <span className="font-medium text-gray-800">{p.label}</span>
                     {p.bed && <span className="text-xs text-gray-400">{p.bed}</span>}
-                    <Chip tone={p.unit_type === "icu" ? "bg-sky-100 text-sky-700" : "bg-emerald-50 text-emerald-700"}>{p.tools.workloadLabel}</Chip>
+                    <Chip tone={p.unit_type === "icu" ? "bg-[var(--cmp-surface-information)] text-[var(--cmp-text-information)]" : "bg-[var(--cmp-surface-success)] text-emerald-700"}>{p.tools.workloadLabel}</Chip>
                     {w && <WorkloadChip w={w} />}
                     <span className="ml-auto" />
                     {p.unit_type === "icu"

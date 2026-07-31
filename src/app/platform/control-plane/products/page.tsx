@@ -25,7 +25,7 @@ export default async function ProductsPage() {
         <p className="text-sm text-gray-500 mt-1">The platform&apos;s products &amp; modules. Enablement per tenant rides feature-flag assignments.</p>
       </div>
       {!ready ? (
-        <div className="bg-amber-50 border border-amber-200 rounded-xl p-5 text-sm text-amber-700">Apply migrations <code className="font-mono text-xs">040–042</code> to load the product catalogue.</div>
+        <div className="bg-[var(--cmp-surface-warning)] border border-[var(--cmp-color-warning)] rounded-xl p-5 text-sm text-[var(--cmp-text-warning)]">Apply migrations <code className="font-mono text-xs">040–042</code> to load the product catalogue.</div>
       ) : (
         <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-3">
           {products.map(p => (
@@ -33,7 +33,7 @@ export default async function ProductsPage() {
               <div className="flex items-center gap-2 mb-1">
                 <span className="font-semibold text-gray-900 text-sm">{p.name}</span>
                 {p.is_core && <span className="text-[10px] bg-violet-100 text-violet-700 rounded-full px-2 py-0.5">core</span>}
-                <span className={`ml-auto text-[10px] rounded-full px-2 py-0.5 ${p.default_on ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-500"}`}>{p.default_on ? "on" : "off"} by default</span>
+                <span className={`ml-auto text-[10px] rounded-full px-2 py-0.5 ${p.default_on ? "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]" : "bg-gray-100 text-gray-500"}`}>{p.default_on ? "on" : "off"} by default</span>
               </div>
               <p className="text-[11px] font-mono text-gray-400">{p.code}</p>
               {p.description && <p className="text-xs text-gray-500 mt-1">{p.description}</p>}

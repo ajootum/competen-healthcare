@@ -16,7 +16,7 @@ export const dynamic = "force-dynamic";
 
 const card = "bg-white rounded-xl border border-gray-200";
 const relTime = (iso?: string | null) => { if (!iso) return ""; const s = Math.floor((Date.now() - new Date(iso).getTime()) / 1000); if (s < 60) return "just now"; if (s < 3600) return `${Math.floor(s / 60)}m ago`; if (s < 86400) return `${Math.floor(s / 3600)}h ago`; return `${Math.floor(s / 86400)}d ago`; };
-const STATUS_TONE: Record<string, string> = { green: "text-green-600", amber: "text-amber-600", gray: "text-gray-400" };
+const STATUS_TONE: Record<string, string> = { green: "text-[var(--cmp-text-success)]", amber: "text-[var(--cmp-text-warning)]", gray: "text-gray-400" };
 
 const MODULES = [
   { n: 1, icon: "⚙️", title: "Workspace Settings", desc: "Personalise your workspace experience and preferences.", items: ["Dashboard & Layout", "Display Preferences", "Operational Thresholds", "AI Preferences", "Widget Management"], action: "Configure Settings", href: "/supervisor/settings", tone: "green" },
@@ -28,7 +28,7 @@ const MODULES = [
   { n: 7, icon: "🛡️", title: "Administration", desc: "Manage users, roles, approvals and configuration governance.", items: ["Team & Role Management", "Template Management", "Digital Signatures", "Audit Logs", "Configuration History"], action: "Open Administration", href: "/admin", tone: "green" },
   { n: 8, icon: "🔗", title: "Integration & Systems", desc: "Monitor connected systems, APIs and device integrations.", items: ["EMR Integration Status", "Device Connectivity", "API & Services Health", "Data Synchronisation", "Connected Systems"], action: "View Integrations", href: "#status", tone: "blue" },
 ];
-const TONE_BG: Record<string, string> = { green: "bg-green-100 text-green-700", blue: "bg-blue-100 text-blue-700", violet: "bg-violet-100 text-violet-700", amber: "bg-amber-100 text-amber-700", teal: "bg-teal-100 text-teal-700", rose: "bg-rose-100 text-rose-700" };
+const TONE_BG: Record<string, string> = { green: "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]", blue: "bg-[var(--cmp-surface-information)] text-blue-700", violet: "bg-violet-100 text-violet-700", amber: "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]", teal: "bg-teal-100 text-teal-700", rose: "bg-[var(--cmp-surface-error)] text-[var(--cmp-text-error)]" };
 
 export default async function ConfigCentre() {
   const supabase = await createClient();
@@ -59,7 +59,7 @@ export default async function ConfigCentre() {
     <div data-wide className="space-y-4">
       <div className="flex items-start justify-between gap-3 flex-wrap">
         <div><h1 className="text-2xl font-bold text-gray-900 tracking-tight">Workspace Configuration Centre</h1><p className="text-sm text-gray-500">Configure your workspace, templates, tools, notifications and system preferences.</p></div>
-        <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded-full bg-green-100 text-green-700 flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-green-500" />Live</span>
+        <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded-full bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)] flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-[var(--cmp-color-success)]" />Live</span>
       </div>
 
       {/* Module cards */}
@@ -98,7 +98,7 @@ export default async function ConfigCentre() {
         <div className={`${card} p-5`} id="status">
           <h2 className="text-sm font-bold text-gray-900 mb-3">System &amp; Integration Status</h2>
           <div className="space-y-1.5">
-            {d.systemStatus.map((s: any) => (<div key={s.label} className="flex items-center gap-2 text-xs"><span className={`w-1.5 h-1.5 rounded-full ${s.tone === "green" ? "bg-green-500" : s.tone === "amber" ? "bg-amber-500" : "bg-gray-300"}`} /><span className="text-gray-600 flex-1">{s.label}</span><span className={`font-medium ${STATUS_TONE[s.tone] ?? "text-gray-500"}`}>{s.status}{s.tone === "green" ? " ✓" : ""}</span></div>))}
+            {d.systemStatus.map((s: any) => (<div key={s.label} className="flex items-center gap-2 text-xs"><span className={`w-1.5 h-1.5 rounded-full ${s.tone === "green" ? "bg-[var(--cmp-color-success)]" : s.tone === "amber" ? "bg-[var(--cmp-color-warning)]" : "bg-gray-300"}`} /><span className="text-gray-600 flex-1">{s.label}</span><span className={`font-medium ${STATUS_TONE[s.tone] ?? "text-gray-500"}`}>{s.status}{s.tone === "green" ? " ✓" : ""}</span></div>))}
           </div>
           <p className="text-[10px] text-gray-400 mt-2">EMR &amp; medical-device integrations are a later enterprise phase.</p>
         </div>

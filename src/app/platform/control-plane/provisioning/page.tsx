@@ -32,7 +32,7 @@ export default async function ProvisioningPage() {
       </div>
 
       {!ready ? (
-        <div className="bg-amber-50 border border-amber-200 rounded-xl p-5 text-sm text-amber-700">Apply migrations <code className="font-mono text-xs">040–042</code> to load provisioning templates and enable the engine.</div>
+        <div className="bg-[var(--cmp-surface-warning)] border border-[var(--cmp-color-warning)] rounded-xl p-5 text-sm text-[var(--cmp-text-warning)]">Apply migrations <code className="font-mono text-xs">040–042</code> to load provisioning templates and enable the engine.</div>
       ) : (
         <div className="grid lg:grid-cols-2 gap-5 items-start">
           <ProvisionForm templates={templates} />

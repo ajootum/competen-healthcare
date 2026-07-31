@@ -11,8 +11,8 @@ export type AppealableAssessment = { id: string; label: string };
 export type MyAppeal = { id: string; competency: string | null; status: string; at: string; note: string | null };
 
 const STATUS_CLS: Record<string, string> = {
-  open: "bg-blue-100 text-blue-700", under_review: "bg-amber-100 text-amber-700",
-  upheld: "bg-gray-100 text-gray-600", overturned: "bg-green-100 text-green-700", withdrawn: "bg-gray-100 text-gray-400",
+  open: "bg-[var(--cmp-surface-information)] text-blue-700", under_review: "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]",
+  upheld: "bg-gray-100 text-gray-600", overturned: "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]", withdrawn: "bg-gray-100 text-gray-400",
 };
 
 export default function AppealPanel({ assessments, appeals }: {
@@ -54,7 +54,7 @@ export default function AppealPanel({ assessments, appeals }: {
         Disagree with an assessment outcome? Raise an appeal — a senior colleague reviews it and you&apos;re notified of the decision. Overturned appeals lead to reassessment; historical scores aren&apos;t edited.
       </p>
 
-      {done && <p className="text-xs text-green-700 bg-green-50 border border-green-200 rounded-lg px-3 py-2 mb-3">✓ Appeal submitted — reviewers have been notified.</p>}
+      {done && <p className="text-xs text-[var(--cmp-text-success)] bg-[var(--cmp-surface-success)] border border-[var(--cmp-color-success)] rounded-lg px-3 py-2 mb-3">✓ Appeal submitted — reviewers have been notified.</p>}
 
       {open && (
         <div className="border border-indigo-100 rounded-lg p-3 mb-3 space-y-2">
@@ -66,7 +66,7 @@ export default function AppealPanel({ assessments, appeals }: {
           <textarea value={reason} onChange={e => setReason(e.target.value)} rows={3} maxLength={2000}
             placeholder="Why do you believe this outcome is wrong? Be specific — what was demonstrated, witnessed by whom…"
             className="w-full text-xs border border-gray-200 rounded-lg px-2.5 py-2 text-gray-600 focus:outline-none focus:border-indigo-400" />
-          {error && <p className="text-xs text-red-600">{error}</p>}
+          {error && <p className="text-xs text-[var(--cmp-text-critical)]">{error}</p>}
           <button onClick={submit} disabled={busy}
             className="text-xs font-bold text-white bg-indigo-600 rounded-lg px-4 py-2 hover:bg-indigo-700 disabled:opacity-50 transition-colors">
             {busy ? "Submitting…" : "Submit appeal"}

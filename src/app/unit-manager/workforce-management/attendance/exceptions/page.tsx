@@ -43,7 +43,7 @@ export default async function AttendanceExceptions() {
     </>
   );
 
-  if (!d.ready) return <div className="space-y-4">{header}<div className="bg-amber-50 border border-amber-200 rounded-xl p-6"><p className="font-semibold text-amber-900">⚙️ No active shift</p></div></div>;
+  if (!d.ready) return <div className="space-y-4">{header}<div className="bg-[var(--cmp-surface-warning)] border border-[var(--cmp-color-warning)] rounded-xl p-6"><p className="font-semibold text-amber-900">⚙️ No active shift</p></div></div>;
 
   const critical = d.openPersisted.filter((e: any) => e.severity === "critical").length;
   return (
@@ -51,9 +51,9 @@ export default async function AttendanceExceptions() {
       {header}
 
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        <Kpi label="Open (register)" value={d.openPersisted.length} tone={d.openPersisted.length ? "text-gray-900" : "text-emerald-600"} />
-        <Kpi label="Critical" value={critical} tone={critical ? "text-rose-600" : "text-emerald-600"} />
-        <Kpi label="Detected (unraised)" value={d.derived.length} tone={d.derived.length ? "text-amber-600" : undefined} />
+        <Kpi label="Open (register)" value={d.openPersisted.length} tone={d.openPersisted.length ? "text-gray-900" : "text-[var(--cmp-text-success)]"} />
+        <Kpi label="Critical" value={critical} tone={critical ? "text-[var(--cmp-text-error)]" : "text-[var(--cmp-text-success)]"} />
+        <Kpi label="Detected (unraised)" value={d.derived.length} tone={d.derived.length ? "text-[var(--cmp-text-warning)]" : undefined} />
         <Kpi label="Total logged" value={d.persisted.length} />
       </div>
 

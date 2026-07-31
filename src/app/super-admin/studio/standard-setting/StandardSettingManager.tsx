@@ -10,8 +10,8 @@ const METHODS = [
   { v: "hofstee", label: "Hofstee" }, { v: "bookmark", label: "Bookmark" }, { v: "custom", label: "Custom" },
 ];
 const STATUS_TONE: Record<string, string> = {
-  draft: "text-gray-500 bg-gray-50 border-gray-200", calibration: "text-blue-600 bg-blue-50 border-blue-200",
-  in_progress: "text-amber-600 bg-amber-50 border-amber-200", review: "text-violet-600 bg-violet-50 border-violet-200",
+  draft: "text-gray-500 bg-gray-50 border-gray-200", calibration: "text-[var(--cmp-text-information)] bg-[var(--cmp-surface-information)] border-[var(--cmp-color-information)]",
+  in_progress: "text-[var(--cmp-text-warning)] bg-[var(--cmp-surface-warning)] border-[var(--cmp-color-warning)]", review: "text-violet-600 bg-violet-50 border-violet-200",
   approved: "text-teal-600 bg-teal-50 border-teal-200", published: "text-teal-700 bg-teal-50 border-teal-200",
 };
 
@@ -55,7 +55,7 @@ export default function StandardSettingManager({ studies, bankOptions }: { studi
           <select value={bank} onChange={e => setBank(e.target.value)} className={`${inp} lg:w-56`}><option value="">Link bank (for impact)…</option>{bankOptions.map(o => <option key={o.id} value={o.id}>{o.label}</option>)}</select>
           <button onClick={create} disabled={busy} className="text-xs font-semibold text-white bg-teal-600 hover:bg-teal-700 disabled:opacity-50 rounded-lg px-4 py-2 whitespace-nowrap">{busy ? "…" : "Create"}</button>
         </div>
-        {err && <p className="text-[11px] text-red-600 mt-1">{err}</p>}
+        {err && <p className="text-[11px] text-[var(--cmp-text-critical)] mt-1">{err}</p>}
       </div>
 
       {studies.length === 0 ? (

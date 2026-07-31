@@ -12,14 +12,14 @@ export const dynamic = "force-dynamic";
 
 const CHANNEL_META: Record<string, string> = {
   dev: "text-gray-500 bg-gray-50 border-gray-200", qa: "text-indigo-700 bg-indigo-50 border-indigo-100",
-  uat: "text-blue-700 bg-blue-50 border-blue-100", pilot: "text-amber-700 bg-amber-50 border-amber-100",
-  production: "text-emerald-700 bg-emerald-50 border-emerald-100",
+  uat: "text-blue-700 bg-[var(--cmp-surface-information)] border-[var(--cmp-color-information)]", pilot: "text-[var(--cmp-text-warning)] bg-[var(--cmp-surface-warning)] border-[var(--cmp-color-warning)]",
+  production: "text-emerald-700 bg-[var(--cmp-surface-success)] border-[var(--cmp-color-success)]",
 };
 const STATUS_META: Record<string, string> = {
-  draft: "text-gray-500 bg-gray-50 border-gray-200", validated: "text-blue-700 bg-blue-50 border-blue-100",
-  approved: "text-blue-700 bg-blue-50 border-blue-100", scheduled: "text-amber-700 bg-amber-50 border-amber-100",
-  published: "text-emerald-700 bg-emerald-50 border-emerald-100", activated: "text-emerald-700 bg-emerald-50 border-emerald-100",
-  rolled_back: "text-rose-700 bg-rose-50 border-rose-100", failed: "text-rose-700 bg-rose-50 border-rose-100",
+  draft: "text-gray-500 bg-gray-50 border-gray-200", validated: "text-blue-700 bg-[var(--cmp-surface-information)] border-[var(--cmp-color-information)]",
+  approved: "text-blue-700 bg-[var(--cmp-surface-information)] border-[var(--cmp-color-information)]", scheduled: "text-[var(--cmp-text-warning)] bg-[var(--cmp-surface-warning)] border-[var(--cmp-color-warning)]",
+  published: "text-emerald-700 bg-[var(--cmp-surface-success)] border-[var(--cmp-color-success)]", activated: "text-emerald-700 bg-[var(--cmp-surface-success)] border-[var(--cmp-color-success)]",
+  rolled_back: "text-[var(--cmp-text-error)] bg-[var(--cmp-surface-error)] border-[var(--cmp-color-error)]", failed: "text-[var(--cmp-text-error)] bg-[var(--cmp-surface-error)] border-[var(--cmp-color-error)]",
 };
 const LIFECYCLE = ["Approved change", "Release planning", "Migration prep", "Deployment", "Verification", "Adoption", "Closure"];
 const cap = (s: string) => (s || "").replace(/_/g, " ").replace(/^\w/, (c) => c.toUpperCase());
@@ -42,27 +42,27 @@ export default async function GovernanceReleasesPage() {
     <div className="max-w-[1400px]">
       <div className="flex items-start justify-between gap-3 mb-5">
         <div>
-          <p className="text-[11px] font-semibold text-emerald-600 uppercase tracking-widest mb-0.5">CGR-018 · Competency Governance</p>
+          <p className="text-[11px] font-semibold text-[var(--cmp-text-success)] uppercase tracking-widest mb-0.5">CGR-018 · Competency Governance</p>
           <h1 className="text-xl font-bold text-gray-900">Deployment, Release &amp; Migration</h1>
           <p className="text-gray-400 text-sm mt-0.5">How approved governance changes move from validation into live operation — controlled release, traceable deployment, minimal disruption and reversible rollback.</p>
         </div>
         <div className="flex gap-2 shrink-0">
-          <Link href="/super-admin/studio/packages" className="text-xs font-semibold text-emerald-700 hover:text-emerald-800 border border-emerald-200 bg-emerald-50 rounded-lg px-3 py-2">Package manager →</Link>
+          <Link href="/super-admin/studio/packages" className="text-xs font-semibold text-emerald-700 hover:text-emerald-800 border border-[var(--cmp-color-success)] bg-[var(--cmp-surface-success)] rounded-lg px-3 py-2">Package manager →</Link>
           <Link href="/super-admin/cgr" className="text-xs font-semibold text-gray-500 hover:text-emerald-700 border border-gray-200 rounded-lg px-3 py-2">← CGR</Link>
         </div>
       </div>
 
       {!d.provisioned ? (
-        <div className="bg-white border border-gray-200 rounded-xl p-8 text-center"><p className="text-sm text-gray-400">No governance releases or migration jobs yet. Releases are built in the <Link href="/super-admin/studio/packages" className="text-emerald-600 hover:underline">Package Manager</Link>; once they exist, the deployment pipeline and rollback tracking compute here.</p></div>
+        <div className="bg-white border border-gray-200 rounded-xl p-8 text-center"><p className="text-sm text-gray-400">No governance releases or migration jobs yet. Releases are built in the <Link href="/super-admin/studio/packages" className="text-[var(--cmp-text-success)] hover:underline">Package Manager</Link>; once they exist, the deployment pipeline and rollback tracking compute here.</p></div>
       ) : (
         <div className="space-y-4">
           <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
             <Kpi label="Releases" value={k.releases} sub="governance releases" />
-            <Kpi label="Live" value={k.live} sub="activated / published" tone={k.live ? "text-emerald-600" : "text-gray-900"} />
-            <Kpi label="Release success" value={k.successRate == null ? "—" : `${k.successRate}%`} sub="of terminal releases" tone={k.successRate == null ? "text-gray-900" : k.successRate >= 90 ? "text-emerald-600" : "text-amber-600"} />
+            <Kpi label="Live" value={k.live} sub="activated / published" tone={k.live ? "text-[var(--cmp-text-success)]" : "text-gray-900"} />
+            <Kpi label="Release success" value={k.successRate == null ? "—" : `${k.successRate}%`} sub="of terminal releases" tone={k.successRate == null ? "text-gray-900" : k.successRate >= 90 ? "text-[var(--cmp-text-success)]" : "text-[var(--cmp-text-warning)]"} />
             <Kpi label="Migration jobs" value={k.jobs} sub="export / import / rollback" />
-            <Kpi label="Rollbacks" value={k.rolledBack} sub="reversed" tone={k.rolledBack ? "text-amber-600" : "text-gray-900"} />
-            <Kpi label="Failed" value={k.failed} sub="releases + jobs" tone={k.failed ? "text-rose-600" : "text-gray-900"} />
+            <Kpi label="Rollbacks" value={k.rolledBack} sub="reversed" tone={k.rolledBack ? "text-[var(--cmp-text-warning)]" : "text-gray-900"} />
+            <Kpi label="Failed" value={k.failed} sub="releases + jobs" tone={k.failed ? "text-[var(--cmp-text-error)]" : "text-gray-900"} />
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
@@ -76,7 +76,7 @@ export default async function GovernanceReleasesPage() {
                   {d.channels.map((c: any) => (
                     <div key={c.channel} className="flex items-center gap-2">
                       <span className={`text-[10px] font-bold border rounded px-1.5 py-0.5 w-20 text-center shrink-0 ${CHANNEL_META[c.channel] ?? CHANNEL_META.dev}`}>{cap(c.channel)}</span>
-                      <div className="flex-1 h-2.5 rounded bg-gray-50 overflow-hidden"><div className="h-full bg-emerald-500 rounded" style={{ width: `${(c.count / chanMax) * 100}%` }} /></div>
+                      <div className="flex-1 h-2.5 rounded bg-gray-50 overflow-hidden"><div className="h-full bg-[var(--cmp-color-success)] rounded" style={{ width: `${(c.count / chanMax) * 100}%` }} /></div>
                       <span className="text-[11px] font-bold text-gray-600 tabular-nums w-6 text-right">{c.count}</span>
                     </div>
                   ))}
@@ -94,7 +94,7 @@ export default async function GovernanceReleasesPage() {
               <div className="grid grid-cols-3 gap-2 mb-3">
                 {(["export", "import", "rollback"] as const).map((t) => (
                   <div key={t} className="border border-gray-100 rounded-lg p-2 text-center">
-                    <p className={`text-lg font-bold tabular-nums ${t === "rollback" && d.jobByType[t] ? "text-amber-600" : "text-gray-900"}`}>{d.jobByType[t]}</p>
+                    <p className={`text-lg font-bold tabular-nums ${t === "rollback" && d.jobByType[t] ? "text-[var(--cmp-text-warning)]" : "text-gray-900"}`}>{d.jobByType[t]}</p>
                     <p className="text-[10px] text-gray-500 capitalize">{t}</p>
                   </div>
                 ))}
@@ -161,7 +161,7 @@ export default async function GovernanceReleasesPage() {
             </div>
           </div>
 
-          <p className="text-[11px] text-gray-400 leading-relaxed">Every figure is real — the release pipeline, channels and rollout strategies from the configuration release store, and export/import/rollback jobs with their status from the migration store. Building releases, executing migrations and rollback live in the <Link href="/super-admin/studio/packages" className="text-emerald-600 hover:underline">Package Manager</Link>; approved changes flow in from <Link href="/super-admin/cgr/change-control" className="text-emerald-600 hover:underline">Change Control</Link> after passing <Link href="/super-admin/cgr/testing" className="text-emerald-600 hover:underline">validation</Link>. Backward compatibility (§8) preserves previous competency records, assessments and governance decisions. Per the CGR mandate, AI may predict deployment risk but never deploys independently.</p>
+          <p className="text-[11px] text-gray-400 leading-relaxed">Every figure is real — the release pipeline, channels and rollout strategies from the configuration release store, and export/import/rollback jobs with their status from the migration store. Building releases, executing migrations and rollback live in the <Link href="/super-admin/studio/packages" className="text-[var(--cmp-text-success)] hover:underline">Package Manager</Link>; approved changes flow in from <Link href="/super-admin/cgr/change-control" className="text-[var(--cmp-text-success)] hover:underline">Change Control</Link> after passing <Link href="/super-admin/cgr/testing" className="text-[var(--cmp-text-success)] hover:underline">validation</Link>. Backward compatibility (§8) preserves previous competency records, assessments and governance decisions. Per the CGR mandate, AI may predict deployment risk but never deploys independently.</p>
         </div>
       )}
     </div>

@@ -62,7 +62,7 @@ export default async function CompetencyGapsPage() {
             {learners.map(l => (
               <div key={l.id} className="flex items-center gap-2 border border-gray-100 rounded-lg px-3 py-2 flex-wrap">
                 <Link href={`/educator/profiles?n=${l.id}`} className="text-xs font-semibold text-gray-800 hover:text-purple-700">{l.name}</Link>
-                {l.critical > 0 && <span className="text-[9px] font-bold px-1.5 py-0.5 rounded uppercase bg-red-600 text-white">{l.critical} critical</span>}
+                {l.critical > 0 && <span className="text-[9px] font-bold px-1.5 py-0.5 rounded uppercase bg-[var(--cmp-color-critical)] text-white">{l.critical} critical</span>}
                 <span className="text-[10px] text-gray-500 flex-1 truncate">{l.gaps.slice(0, 3).join(", ")}{l.gaps.length > 3 ? ` +${l.gaps.length - 3}` : ""}</span>
                 <Link href={`/educator/profiles?n=${l.id}`} className="text-[10px] font-semibold text-purple-600 hover:underline">Plan →</Link>
               </div>
@@ -79,7 +79,7 @@ export default async function CompetencyGapsPage() {
               <PctChip v={g.pct} />
               {resourcesByGap.get(g.name)?.length
                 ? <span className="text-[10px] text-teal-700">📚 {resourcesByGap.get(g.name)!.slice(0, 2).join(" · ")}</span>
-                : <Link href="/educator/library" className="text-[10px] text-amber-600 hover:underline">link a resource →</Link>}
+                : <Link href="/educator/library" className="text-[10px] text-[var(--cmp-text-warning)] hover:underline">link a resource →</Link>}
             </div>
           )) : <p className="text-xs text-gray-400">No organisation-level gaps below 80%.</p>}
         </Card>

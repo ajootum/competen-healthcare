@@ -40,7 +40,7 @@ export default async function CollaborationConsole() {
 
   if (!d.provisioned) return (
     <div className="space-y-4">{header}
-      <div className="bg-amber-50 border border-amber-200 rounded-xl p-6">
+      <div className="bg-[var(--cmp-surface-warning)] border border-[var(--cmp-color-warning)] rounded-xl p-6">
         <p className="font-semibold text-amber-900">⚙️ Collaboration store not provisioned</p>
         <p className="text-sm text-amber-800 mt-1">Run migration <code>078-plat-comments.sql</code> to enable the collaboration primitive. The service, API and this console are ready — they light up once the store exists.</p>
       </div>

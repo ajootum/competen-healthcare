@@ -10,7 +10,7 @@ type ObjRow = { object_key: string; object_type: string; display_name: string };
 type Job = { id: string; job_type: string; status: string; object_count: number; summary: any; note?: string; created_by_name?: string; created_at: string };
 
 const input = "border border-gray-200 rounded px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-indigo-400 bg-white";
-const JT: Record<string, string> = { export: "bg-sky-100 text-sky-700", import: "bg-indigo-100 text-indigo-700", rollback: "bg-amber-100 text-amber-700" };
+const JT: Record<string, string> = { export: "bg-[var(--cmp-surface-information)] text-[var(--cmp-text-information)]", import: "bg-indigo-100 text-indigo-700", rollback: "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]" };
 const when = (s: string) => { try { return new Date(s).toLocaleString(); } catch { return s; } };
 
 export default function MigrationToolkit({ objects, jobs }: { objects: ObjRow[]; jobs: Job[] }) {
@@ -90,20 +90,20 @@ export default function MigrationToolkit({ objects, jobs }: { objects: ObjRow[];
             <textarea className={`${input} w-full font-mono h-72 resize-none`} value={pasteIn} onChange={e => { setPasteIn(e.target.value); setDry(null); }} spellCheck={false} placeholder='{ "format": "competen.config.bundle", "objects": [...] }' />
             <div className="flex items-center gap-2 mt-2">
               <button onClick={dryRun} disabled={busy || !pasteIn.trim()} className="text-sm font-medium text-indigo-700 border border-indigo-200 rounded-lg px-3 py-1.5 hover:bg-indigo-50 disabled:opacity-50">Dry run</button>
-              <button onClick={execute} disabled={busy || !dry?.ok} title={!dry ? "Run a dry run first" : !dry.ok ? "Resolve issues first" : "Apply the import"} className="text-sm font-medium text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg px-3 py-1.5 disabled:opacity-40">Execute import</button>
-              {lastJob && <button onClick={() => rollback(lastJob)} disabled={busy} className="text-xs font-medium text-amber-700 border border-amber-200 rounded-lg px-2.5 py-1.5 hover:bg-amber-50 ml-auto">Roll back</button>}
+              <button onClick={execute} disabled={busy || !dry?.ok} title={!dry ? "Run a dry run first" : !dry.ok ? "Resolve issues first" : "Apply the import"} className="text-sm font-medium text-white bg-[var(--cmp-color-success)] hover:bg-emerald-700 rounded-lg px-3 py-1.5 disabled:opacity-40">Execute import</button>
+              {lastJob && <button onClick={() => rollback(lastJob)} disabled={busy} className="text-xs font-medium text-[var(--cmp-text-warning)] border border-[var(--cmp-color-warning)] rounded-lg px-2.5 py-1.5 hover:bg-[var(--cmp-surface-warning)] ml-auto">Roll back</button>}
             </div>
           </div>
           <div className={`${card} p-4`}>
             <p className="text-[11px] font-semibold text-gray-500 mb-2">Dry-run report</p>
             {!dry ? <p className="text-xs text-gray-400 py-8 text-center">Paste a bundle and run a dry run to preview the import.</p> : (
               <>
-                <div className={`text-xs font-medium mb-2 ${dry.ok ? "text-emerald-600" : "text-rose-600"}`}>{dry.ok ? "✓ Safe to import" : "✕ Resolve issues before importing"}</div>
-                <div className="flex gap-3 text-[11px] mb-3"><span className="text-emerald-600">{dry.counts.new} new</span><span className="text-amber-600">{dry.counts.update} update</span><span className="text-gray-400">{dry.counts.identical} identical</span></div>
-                {dry.missingDeps?.length > 0 && <div className="mb-2 text-[11px] text-rose-600">Missing prerequisites: {dry.missingDeps.join(", ")}</div>}
+                <div className={`text-xs font-medium mb-2 ${dry.ok ? "text-[var(--cmp-text-success)]" : "text-[var(--cmp-text-error)]"}`}>{dry.ok ? "✓ Safe to import" : "✕ Resolve issues before importing"}</div>
+                <div className="flex gap-3 text-[11px] mb-3"><span className="text-[var(--cmp-text-success)]">{dry.counts.new} new</span><span className="text-[var(--cmp-text-warning)]">{dry.counts.update} update</span><span className="text-gray-400">{dry.counts.identical} identical</span></div>
+                {dry.missingDeps?.length > 0 && <div className="mb-2 text-[11px] text-[var(--cmp-text-error)]">Missing prerequisites: {dry.missingDeps.join(", ")}</div>}
                 <div className="space-y-0.5 max-h-52 overflow-y-auto">
                   {dry.report.map((r: any) => (
-                    <div key={r.key} className="flex items-center gap-2 text-[11px]"><span className={`w-14 shrink-0 ${r.op === "new" ? "text-emerald-600" : r.op === "update" ? "text-amber-600" : "text-gray-400"}`}>{r.op}</span><span className="text-gray-700 truncate flex-1">{r.name || r.key}</span>{r.issues.length > 0 && <span className="text-rose-500 text-[10px]" title={r.issues.join("; ")}>⚠ {r.issues.length}</span>}</div>
+                    <div key={r.key} className="flex items-center gap-2 text-[11px]"><span className={`w-14 shrink-0 ${r.op === "new" ? "text-[var(--cmp-text-success)]" : r.op === "update" ? "text-[var(--cmp-text-warning)]" : "text-gray-400"}`}>{r.op}</span><span className="text-gray-700 truncate flex-1">{r.name || r.key}</span>{r.issues.length > 0 && <span className="text-rose-500 text-[10px]" title={r.issues.join("; ")}>⚠ {r.issues.length}</span>}</div>
                   ))}
                 </div>
               </>
@@ -112,7 +112,7 @@ export default function MigrationToolkit({ objects, jobs }: { objects: ObjRow[];
         </div>
       )}
 
-      {msg && <p className={`text-xs ${msg.startsWith("✓") ? "text-emerald-600" : "text-rose-600"}`}>{msg}</p>}
+      {msg && <p className={`text-xs ${msg.startsWith("✓") ? "text-[var(--cmp-text-success)]" : "text-[var(--cmp-text-error)]"}`}>{msg}</p>}
 
       {jobs.length > 0 && (
         <div className={`${card} p-4`}>
@@ -125,7 +125,7 @@ export default function MigrationToolkit({ objects, jobs }: { objects: ObjRow[];
                 <span className="text-gray-400">{j.status}</span>
                 <span className="text-gray-300">{j.created_by_name ?? "—"}</span>
                 <span className="text-gray-300">{when(j.created_at)}</span>
-                {j.job_type === "import" && j.status === "applied" && <button onClick={() => rollback(j.id)} disabled={busy} className="text-[10px] font-medium text-amber-700 border border-amber-200 rounded px-1.5 py-0.5 hover:bg-amber-50">Roll back</button>}
+                {j.job_type === "import" && j.status === "applied" && <button onClick={() => rollback(j.id)} disabled={busy} className="text-[10px] font-medium text-[var(--cmp-text-warning)] border border-[var(--cmp-color-warning)] rounded px-1.5 py-0.5 hover:bg-[var(--cmp-surface-warning)]">Roll back</button>}
               </div>
             ))}
           </div>

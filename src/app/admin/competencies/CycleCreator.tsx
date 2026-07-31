@@ -160,7 +160,7 @@ export default function CycleCreator({ nurses, frameworks }: Props) {
                 ))}
               </div>
 
-              {error && <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{error}</p>}
+              {error && <p className="text-sm text-[var(--cmp-text-critical)] bg-[var(--cmp-surface-critical)] border border-[var(--cmp-color-critical)] rounded-lg px-3 py-2">{error}</p>}
             </div>
 
             <div className="p-6 border-t border-gray-100 flex items-center justify-between gap-3">

@@ -16,7 +16,7 @@ export async function aisGuard() {
   return { admin };
 }
 
-export const PILL: Record<string, string> = { slate: "bg-gray-100 text-gray-600", blue: "bg-blue-50 text-blue-700", emerald: "bg-emerald-50 text-emerald-700", amber: "bg-amber-50 text-amber-700", rose: "bg-rose-50 text-rose-700", violet: "bg-violet-50 text-violet-700", teal: "bg-teal-50 text-teal-700" };
+export const PILL: Record<string, string> = { slate: "bg-gray-100 text-gray-600", blue: "bg-[var(--cmp-surface-information)] text-blue-700", emerald: "bg-[var(--cmp-surface-success)] text-emerald-700", amber: "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]", rose: "bg-[var(--cmp-surface-error)] text-[var(--cmp-text-error)]", violet: "bg-violet-50 text-violet-700", teal: "bg-teal-50 text-teal-700" };
 
 export function Head({ code, title, sub, right }: { code: string; title: string; sub?: string; right?: any }) {
   return (
@@ -71,7 +71,7 @@ export function Bars({ rows, unit }: { rows: { label: string; n: number; extra?:
 }
 
 export function Provision() {
-  return <div className="bg-amber-50 border border-amber-200 rounded-xl p-6"><p className="font-semibold text-amber-900">⚙️ AI Services registry not provisioned</p><p className="text-sm text-amber-800 mt-1">Apply migration <code className="font-mono">111-ai-services-registry.sql</code> then seed with <code className="font-mono">node scripts/seed-ai-services.mjs</code>.</p></div>;
+  return <div className="bg-[var(--cmp-surface-warning)] border border-[var(--cmp-color-warning)] rounded-xl p-6"><p className="font-semibold text-amber-900">⚙️ AI Services registry not provisioned</p><p className="text-sm text-amber-800 mt-1">Apply migration <code className="font-mono">111-ai-services-registry.sql</code> then seed with <code className="font-mono">node scripts/seed-ai-services.mjs</code>.</p></div>;
 }
 
 export function Foot({ children }: { children: any }) { return <p className="text-[11px] text-gray-400">{children}</p>; }

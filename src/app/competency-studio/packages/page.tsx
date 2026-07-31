@@ -32,7 +32,7 @@ export default async function StudioPackagesPage() {
       </div>
 
       {!pkg.provisioned ? (
-        <div className="bg-amber-50 border border-amber-100 rounded-xl p-6 text-sm text-amber-800">Run migration 130 (<code className="text-[11px]">competency_packages</code>) to enable the Package Manager.</div>
+        <div className="bg-[var(--cmp-surface-warning)] border border-[var(--cmp-color-warning)] rounded-xl p-6 text-sm text-amber-800">Run migration 130 (<code className="text-[11px]">competency_packages</code>) to enable the Package Manager.</div>
       ) : (
         <>
           <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-5">

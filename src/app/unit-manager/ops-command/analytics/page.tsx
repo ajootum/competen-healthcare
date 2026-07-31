@@ -19,7 +19,7 @@ export default async function AnalyticsPage({ searchParams }: { searchParams: Pr
   ]);
 
   const strip = <TopStrip code="UMW-OPC-011 · Operational Command" title="Audit, Reporting & Operational Analytics" departments={departments} />;
-  if (!d.provisioned) return <div className="space-y-4">{strip}<div className="bg-amber-50 border border-amber-200 rounded-xl p-6"><p className="font-semibold text-amber-900">⚙️ Operational stores not provisioned</p><p className="text-sm text-amber-800 mt-1">Apply migration 101 then seed op_ops_snapshots.</p></div></div>;
+  if (!d.provisioned) return <div className="space-y-4">{strip}<div className="bg-[var(--cmp-surface-warning)] border border-[var(--cmp-color-warning)] rounded-xl p-6"><p className="font-semibold text-amber-900">⚙️ Operational stores not provisioned</p><p className="text-sm text-amber-800 mt-1">Apply migration 101 then seed op_ops_snapshots.</p></div></div>;
 
   const r = d.rollups;
   return (

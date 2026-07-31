@@ -95,14 +95,14 @@ export default function Home() {
           </p>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             {[
-              { tag: "LIVE", tagColor: "bg-green-100 text-green-700", title: "CPD Academy", desc: "Self-paced courses covering Pediatric Resus, Airway Management, Critical Care, Infection Prevention, and more. Earn certificates automatically.", cta: "From $2/month", ctaColor: "text-teal-600" },
-              { tag: "LIVE", tagColor: "bg-green-100 text-green-700", title: "Question Bank", desc: "Clinical MCQs across Emergency, Safety, Pharmacology, Pediatrics, and Critical Care. Evidence-based questions mapped to real nursing competencies.", cta: "Included in Pro", ctaColor: "text-gray-500" },
-              { tag: "LIVE", tagColor: "bg-green-100 text-green-700", title: "Competency Passport", desc: "Every nurse gets a digital portfolio tracking BLS, ALS, safe injectables, annual competencies, and expiry dates — all in one place.", cta: "Included in Premium", ctaColor: "text-gray-500" },
+              { tag: "LIVE", tagColor: "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]", title: "CPD Academy", desc: "Self-paced courses covering Pediatric Resus, Airway Management, Critical Care, Infection Prevention, and more. Earn certificates automatically.", cta: "From $2/month", ctaColor: "text-teal-600" },
+              { tag: "LIVE", tagColor: "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]", title: "Question Bank", desc: "Clinical MCQs across Emergency, Safety, Pharmacology, Pediatrics, and Critical Care. Evidence-based questions mapped to real nursing competencies.", cta: "Included in Pro", ctaColor: "text-gray-500" },
+              { tag: "LIVE", tagColor: "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]", title: "Competency Passport", desc: "Every nurse gets a digital portfolio tracking BLS, ALS, safe injectables, annual competencies, and expiry dates — all in one place.", cta: "Included in Premium", ctaColor: "text-gray-500" },
               { tag: "ENTERPRISE", tagColor: "bg-purple-100 text-purple-700", title: "Hospital Dashboard", desc: "Nursing directors see ward-by-ward competency heat maps, compliance reports, expiring certifications, and skill gap analysis.", cta: "$14/staff/month", ctaColor: "text-teal-600" },
-              { tag: "LIVE", tagColor: "bg-green-100 text-green-700", title: "AI Clinical Copilot", desc: "Ask clinical questions and get instant, evidence-based answers powered by Claude AI. Grounded in WHO guidelines and East African nursing protocols.", cta: "Included in Premium", ctaColor: "text-gray-500" },
+              { tag: "LIVE", tagColor: "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]", title: "AI Clinical Copilot", desc: "Ask clinical questions and get instant, evidence-based answers powered by Claude AI. Grounded in WHO guidelines and East African nursing protocols.", cta: "Included in Premium", ctaColor: "text-gray-500" },
               { tag: "Q3 2026", tagColor: "bg-cyan-100 text-cyan-700", title: "Virtual Simulation", desc: "Africa's first AI-powered nursing simulation. Branching patient scenarios with immediate feedback — no mannequin required.", cta: "Add on", ctaColor: "text-gray-500" },
               { tag: "Q4 2026", tagColor: "bg-indigo-100 text-indigo-700", title: "Digital OSCE Platform", desc: "Students record responses remotely, examiners score using structured checklists. Serve nursing schools and hospitals at scale.", cta: "Institutional", ctaColor: "text-gray-500" },
-              { tag: "LIVE", tagColor: "bg-green-100 text-green-700", title: "Knowledge Hub", desc: "Clinical library with WHO guidelines, protocols, and research summaries. Evidence-based answers to clinical questions, searchable and curated.", cta: "Included in Pro", ctaColor: "text-gray-500" },
+              { tag: "LIVE", tagColor: "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]", title: "Knowledge Hub", desc: "Clinical library with WHO guidelines, protocols, and research summaries. Evidence-based answers to clinical questions, searchable and curated.", cta: "Included in Pro", ctaColor: "text-gray-500" },
             ].map(({ tag, tagColor, title, desc, cta, ctaColor }) => (
               <div key={title} className="border border-gray-100 rounded-xl p-5 hover:shadow-md transition-shadow flex flex-col gap-3">
                 <span className={`self-start text-[10px] font-bold px-2 py-0.5 rounded ${tagColor}`}>{tag}</span>
@@ -153,11 +153,11 @@ export default function Home() {
               </thead>
               <tbody className="divide-y divide-gray-50">
                 {[
-                  { name: "BLS Certification", status: "✓", exp: "Dec 2026", level: "Competent", levelColor: "text-green-600 bg-green-50" },
-                  { name: "Pediatric Assessment", status: "✓", exp: "Mar 2027", level: "Competent", levelColor: "text-green-600 bg-green-50" },
-                  { name: "Infection Control", status: "✓", exp: "Jun 2027", level: "Advanced", levelColor: "text-blue-600 bg-blue-50" },
+                  { name: "BLS Certification", status: "✓", exp: "Dec 2026", level: "Competent", levelColor: "text-[var(--cmp-text-success)] bg-[var(--cmp-surface-success)]" },
+                  { name: "Pediatric Assessment", status: "✓", exp: "Mar 2027", level: "Competent", levelColor: "text-[var(--cmp-text-success)] bg-[var(--cmp-surface-success)]" },
+                  { name: "Infection Control", status: "✓", exp: "Jun 2027", level: "Advanced", levelColor: "text-[var(--cmp-text-information)] bg-[var(--cmp-surface-information)]" },
                   { name: "Medication Safety", status: "⏳", exp: "Pending", level: "In Progress", levelColor: "text-gray-500 bg-gray-100" },
-                  { name: "Critical Care", status: "!", exp: "—", level: "Required", levelColor: "text-red-600 bg-red-50" },
+                  { name: "Critical Care", status: "!", exp: "—", level: "Required", levelColor: "text-[var(--cmp-text-critical)] bg-[var(--cmp-surface-critical)]" },
                 ].map(({ name, status, exp, level, levelColor }) => (
                   <tr key={name}>
                     <td className="py-2.5 text-gray-700">{name}</td>
@@ -211,7 +211,7 @@ export default function Home() {
               },
             ].map(({ name, price, sub, highlight, badge, features, cta, ctaStyle, href }) => (
               <div key={name} className={`rounded-2xl p-6 flex flex-col gap-4 ${highlight ? "bg-teal-600 text-white shadow-xl scale-105" : "border border-gray-100"}`}>
-                {badge && <span className={`self-start text-[10px] font-bold px-2 py-0.5 rounded ${highlight ? "bg-white/20 text-white" : "bg-amber-100 text-amber-700"}`}>{badge}</span>}
+                {badge && <span className={`self-start text-[10px] font-bold px-2 py-0.5 rounded ${highlight ? "bg-white/20 text-white" : "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]"}`}>{badge}</span>}
                 <div>
                   <p className={`text-sm font-semibold ${highlight ? "text-teal-100" : "text-gray-500"}`}>{name}</p>
                   <p className={`text-3xl font-bold mt-1 ${highlight ? "text-white" : "text-gray-900"}`}>{price}</p>
@@ -342,7 +342,7 @@ export default function Home() {
         <h2 className="text-3xl font-bold text-white mb-3">Ready to build Africa&apos;s most<br />competent nursing workforce?</h2>
         <p className="text-teal-100 text-sm mb-8">Join nurses and hospitals already using the platform.<br />No credit card required — get started in 60 seconds.</p>
         <div className="flex flex-col sm:flex-row gap-3 justify-center">
-          <a href="/signup" className="rounded-lg bg-amber-400 px-8 py-3 text-sm font-bold text-amber-900 hover:bg-amber-300 transition-colors">
+          <a href="/signup" className="rounded-lg bg-[var(--cmp-color-warning)] px-8 py-3 text-sm font-bold text-amber-900 hover:bg-amber-300 transition-colors">
             Get Early Access — It&apos;s Free
           </a>
           <a href="mailto:gabriel@semacast.com?subject=Hospital Demo Request" className="rounded-lg border border-white/30 bg-white/10 px-8 py-3 text-sm font-semibold text-white hover:bg-white/20 transition-colors">

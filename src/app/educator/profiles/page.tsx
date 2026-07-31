@@ -87,7 +87,7 @@ export default async function LearnerProfilesPage({ searchParams }: { searchPara
                 <ul className="space-y-1">
                   {(pathway ?? []).map((p, i) => (
                     <li key={i} className="text-[11px] text-gray-700">
-                      🎓 {p.competency_name}{p.resource_title ? <span className="text-gray-400"> — {p.resource_title}</span> : <span className="text-amber-600"> — no resource linked</span>}
+                      🎓 {p.competency_name}{p.resource_title ? <span className="text-gray-400"> — {p.resource_title}</span> : <span className="text-[var(--cmp-text-warning)]"> — no resource linked</span>}
                     </li>
                   ))}
                 </ul>

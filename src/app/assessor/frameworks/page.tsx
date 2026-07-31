@@ -151,10 +151,10 @@ export default async function AssessmentFrameworksPage({ searchParams }: { searc
 
   const KPIS = [
     { icon: "🗂️", value: rows.length, label: "Active Frameworks", sub: "approved for assessment", tint: "bg-indigo-50" },
-    { icon: "👥", value: activeLearners, label: "Active Learners", sub: "with recorded decisions", tint: "bg-blue-50" },
-    { icon: "⏳", value: totalExpiring, label: "Competencies Due", sub: "expiring within 30 days", tint: "bg-amber-50" },
-    { icon: "🖊️", value: logbookPending ?? 0, label: "Evidence Awaiting", sub: "validate evidence", tint: "bg-green-50" },
-    { icon: "🔁", value: totalReassess, label: "Reassessments Due", sub: "expired competencies", tint: "bg-red-50" },
+    { icon: "👥", value: activeLearners, label: "Active Learners", sub: "with recorded decisions", tint: "bg-[var(--cmp-surface-information)]" },
+    { icon: "⏳", value: totalExpiring, label: "Competencies Due", sub: "expiring within 30 days", tint: "bg-[var(--cmp-surface-warning)]" },
+    { icon: "🖊️", value: logbookPending ?? 0, label: "Evidence Awaiting", sub: "validate evidence", tint: "bg-[var(--cmp-surface-success)]" },
+    { icon: "🔁", value: totalReassess, label: "Reassessments Due", sub: "expired competencies", tint: "bg-[var(--cmp-surface-critical)]" },
   ];
 
   const TABS = ["My Competencies", "Assessment Blueprints", "Evidence Requirements", "Decision Rules", "Performance Standards"];
@@ -241,7 +241,7 @@ export default async function AssessmentFrameworksPage({ searchParams }: { searc
                                 <span className="text-gray-300">{r.passing}/{r.decided}</span>
                               </div>
                               <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
-                                <div className={`h-full rounded-full ${r.completion >= 75 ? "bg-green-500" : r.completion >= 50 ? "bg-amber-400" : "bg-red-400"}`}
+                                <div className={`h-full rounded-full ${r.completion >= 75 ? "bg-[var(--cmp-color-success)]" : r.completion >= 50 ? "bg-[var(--cmp-color-warning)]" : "bg-[var(--cmp-color-critical)]"}`}
                                   style={{ width: `${r.completion}%` }} />
                               </div>
                             </>
@@ -281,7 +281,7 @@ export default async function AssessmentFrameworksPage({ searchParams }: { searc
                           {d.due > 0 && <span className="text-red-500 font-semibold">{d.due} due</span>}
                         </div>
                         <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
-                          <div className={`h-full rounded-full ${d.pct >= 75 ? "bg-green-500" : d.pct >= 50 ? "bg-amber-400" : "bg-red-400"}`}
+                          <div className={`h-full rounded-full ${d.pct >= 75 ? "bg-[var(--cmp-color-success)]" : d.pct >= 50 ? "bg-[var(--cmp-color-warning)]" : "bg-[var(--cmp-color-critical)]"}`}
                             style={{ width: `${d.pct}%` }} />
                         </div>
                         <p className="text-[9px] text-gray-400 mt-0.5">{d.assessed} assessed</p>
@@ -305,7 +305,7 @@ export default async function AssessmentFrameworksPage({ searchParams }: { searc
                 <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
                   <div>
                     <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">Pass Rate</p>
-                    <p className="text-2xl font-extrabold text-green-600 leading-none">{selected.completion}%</p>
+                    <p className="text-2xl font-extrabold text-[var(--cmp-text-success)] leading-none">{selected.completion}%</p>
                     <p className="text-[9px] text-gray-400 mt-1">of latest decisions</p>
                   </div>
                   <div>
@@ -321,7 +321,7 @@ export default async function AssessmentFrameworksPage({ searchParams }: { searc
                           <div key={name} className="flex items-center gap-2">
                             <span className="text-[10px] text-gray-600 truncate flex-1">{name}</span>
                             <div className="w-14 h-1.5 bg-gray-100 rounded-full overflow-hidden shrink-0">
-                              <div className="h-full bg-red-400 rounded-full" style={{ width: `${(n / gapMax) * 100}%` }} />
+                              <div className="h-full bg-[var(--cmp-color-critical)] rounded-full" style={{ width: `${(n / gapMax) * 100}%` }} />
                             </div>
                             <span className="text-[10px] font-bold text-red-500 shrink-0">{n}</span>
                           </div>
@@ -356,7 +356,7 @@ export default async function AssessmentFrameworksPage({ searchParams }: { searc
           {selected && (
             <div className="bg-white border border-gray-100 rounded-2xl p-4">
               <p className="text-sm font-bold text-gray-900 leading-snug">{selected.name}</p>
-              <p className="text-[10px] text-green-600 font-semibold mb-3">{selected.version} · Active</p>
+              <p className="text-[10px] text-[var(--cmp-text-success)] font-semibold mb-3">{selected.version} · Active</p>
               <div className="relative w-24 mx-auto mb-2">
                 <svg viewBox="0 0 100 100" className="w-full -rotate-90">
                   <circle cx="50" cy="50" r="40" fill="none" stroke="#f3f4f6" strokeWidth="12" />
@@ -409,11 +409,11 @@ export default async function AssessmentFrameworksPage({ searchParams }: { searc
               <div className="flex flex-col gap-2">
                 {recent.map((d, i) => (
                   <div key={i} className="flex items-start gap-2">
-                    <span className={`w-1.5 h-1.5 rounded-full mt-1.5 shrink-0 ${isPassing(d.outcome) ? "bg-green-400" : "bg-red-400"}`} />
+                    <span className={`w-1.5 h-1.5 rounded-full mt-1.5 shrink-0 ${isPassing(d.outcome) ? "bg-[var(--cmp-color-success)]" : "bg-[var(--cmp-color-critical)]"}`} />
                     <div className="min-w-0">
                       <p className="text-[11px] text-gray-700 leading-snug">
                         <b>{nameById.get(d.nurse_id) ?? "—"}</b> — {d.framework_competencies?.name ?? "Competency"}
-                        <span className={isPassing(d.outcome) ? "text-green-600" : "text-red-500"}> · {d.outcome.replace(/_/g, " ")}</span>
+                        <span className={isPassing(d.outcome) ? "text-[var(--cmp-text-success)]" : "text-red-500"}> · {d.outcome.replace(/_/g, " ")}</span>
                       </p>
                       <p className="text-[9px] text-gray-300" suppressHydrationWarning>
                         {new Date(d.created_at).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" })}

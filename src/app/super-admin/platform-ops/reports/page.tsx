@@ -52,7 +52,7 @@ export default async function ReportsBuilder() {
     </>
   );
 
-  if (notReady) return <div className="space-y-5 max-w-6xl">{header}<div className="bg-amber-50 border border-amber-200 rounded-xl p-6"><p className="font-semibold text-amber-900">⚙️ Not provisioned</p><p className="text-sm text-amber-800 mt-1">Apply migration 092 (registry) + 094 (object definition), then author a Dashboard or Report in the <Link href="/super-admin/platform-ops/studio" className="underline">Configuration Studio</Link>.</p></div></div>;
+  if (notReady) return <div className="space-y-5 max-w-6xl">{header}<div className="bg-[var(--cmp-surface-warning)] border border-[var(--cmp-color-warning)] rounded-xl p-6"><p className="font-semibold text-amber-900">⚙️ Not provisioned</p><p className="text-sm text-amber-800 mt-1">Apply migration 092 (registry) + 094 (object definition), then author a Dashboard or Report in the <Link href="/super-admin/platform-ops/studio" className="underline">Configuration Studio</Link>.</p></div></div>;
 
   return (
     <div className="space-y-5 max-w-6xl">
@@ -60,7 +60,7 @@ export default async function ReportsBuilder() {
       <div className="grid grid-cols-3 gap-3">
         <Stat label="Dashboards" value={dashboards.length} sub="governed in the registry" />
         <Stat label="Reports" value={reports.length} sub="governed in the registry" />
-        <Stat label="Composed" value={composed} tone="text-emerald-600" sub={`of ${list.length} with blocks`} />
+        <Stat label="Composed" value={composed} tone="text-[var(--cmp-text-success)]" sub={`of ${list.length} with blocks`} />
       </div>
       <ReportDashboardBuilder objects={list} metrics={(metrics ?? []) as any[]} />
       <p className="text-[11px] text-gray-400">Tiles/sections + bound metrics persist onto the object (bound metrics become METRIC_REF dependencies). The runtime rendering, drill-through, export service (PDF/DOCX/XLSX/CSV), scheduler and AI narrative engine (NCP-006 §4/§9) are next-phase.</p>

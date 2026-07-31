@@ -47,8 +47,8 @@ export default async function AssessmentInsightsPage() {
             <ul className="space-y-2">
               {insights.map((s, i) => (
                 <li key={i} className={`flex gap-2 text-xs rounded-lg px-2.5 py-2 border ${
-                  s.tone === "down" || s.tone === "warn" ? "bg-red-50/50 border-red-100 text-red-800" :
-                  s.tone === "up" ? "bg-green-50/50 border-green-100 text-green-800" : "bg-gray-50 border-gray-100 text-gray-700"}`}>
+                  s.tone === "down" || s.tone === "warn" ? "bg-[var(--cmp-surface-critical)]/50 border-[var(--cmp-color-critical)] text-red-800" :
+                  s.tone === "up" ? "bg-[var(--cmp-surface-success)]/50 border-[var(--cmp-color-success)] text-green-800" : "bg-gray-50 border-gray-100 text-gray-700"}`}>
                   <span>{s.icon}</span>{s.text}
                 </li>
               ))}

@@ -16,10 +16,10 @@ export const dynamic = "force-dynamic";
 const card = "bg-white rounded-xl border border-gray-200";
 const dash = (n: number | null | undefined) => (n == null ? "—" : n.toLocaleString());
 const relTime = (iso?: string | null) => { if (!iso) return ""; const s = Math.floor((Date.now() - new Date(iso).getTime()) / 1000); if (s < 60) return "just now"; if (s < 3600) return `${Math.floor(s / 60)}m ago`; if (s < 86400) return `${Math.floor(s / 3600)}h ago`; return `${Math.floor(s / 86400)}d ago`; };
-const postureTone = (n: number | null) => (n == null ? "text-gray-300" : n >= 85 ? "text-green-600" : n >= 60 ? "text-amber-600" : "text-rose-600");
-const SEV_TONE: Record<string, string> = { critical: "bg-rose-50 text-rose-700", emergency: "bg-rose-50 text-rose-700", high: "bg-orange-50 text-orange-700", medium: "bg-amber-50 text-amber-700", low: "bg-gray-100 text-gray-600" };
-const BAND_TONE: Record<string, string> = { critical: "bg-rose-50 text-rose-700", high: "bg-orange-50 text-orange-700", medium: "bg-amber-50 text-amber-700", low: "bg-green-50 text-green-700" };
-const THREAT_TONE: Record<string, string> = { Low: "bg-green-50 text-green-700", Elevated: "bg-amber-50 text-amber-700", High: "bg-rose-50 text-rose-700", Unknown: "bg-gray-100 text-gray-500" };
+const postureTone = (n: number | null) => (n == null ? "text-gray-300" : n >= 85 ? "text-[var(--cmp-text-success)]" : n >= 60 ? "text-[var(--cmp-text-warning)]" : "text-[var(--cmp-text-error)]");
+const SEV_TONE: Record<string, string> = { critical: "bg-[var(--cmp-surface-error)] text-[var(--cmp-text-error)]", emergency: "bg-[var(--cmp-surface-error)] text-[var(--cmp-text-error)]", high: "bg-[var(--cmp-surface-warning)] text-orange-700", medium: "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]", low: "bg-gray-100 text-gray-600" };
+const BAND_TONE: Record<string, string> = { critical: "bg-[var(--cmp-surface-error)] text-[var(--cmp-text-error)]", high: "bg-[var(--cmp-surface-warning)] text-orange-700", medium: "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]", low: "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]" };
+const THREAT_TONE: Record<string, string> = { Low: "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]", Elevated: "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]", High: "bg-[var(--cmp-surface-error)] text-[var(--cmp-text-error)]", Unknown: "bg-gray-100 text-gray-500" };
 
 export default async function SecurityOperationsCenter() {
   const supabase = await createClient();
@@ -35,11 +35,11 @@ export default async function SecurityOperationsCenter() {
 
   const kpiCards = [
     { label: "Security Posture", value: k.postureScore == null ? "—" : `${k.postureScore}/100`, icon: "🛡️", iconBg: "bg-violet-50", tone: postureTone(k.postureScore) },
-    { label: "Open Incidents", value: dash(k.openIncidents), icon: "🚨", iconBg: "bg-rose-50", tone: (k.openIncidents ?? 0) > 0 ? "text-rose-600" : undefined },
-    { label: "Critical Incidents", value: dash(k.criticalIncidents), icon: "🔴", iconBg: "bg-rose-50", tone: (k.criticalIncidents ?? 0) > 0 ? "text-rose-600" : undefined },
-    { label: "Security Events (24h)", value: dash(k.securityEvents24h), icon: "📊", iconBg: "bg-blue-50" },
-    { label: "Containment (24h)", value: dash(k.containment24h), icon: "⛔", iconBg: "bg-orange-50" },
-    { label: "High Vulnerabilities", value: dash(k.highVulns), icon: "🐞", iconBg: "bg-amber-50", tone: (k.highVulns ?? 0) > 0 ? "text-amber-600" : undefined },
+    { label: "Open Incidents", value: dash(k.openIncidents), icon: "🚨", iconBg: "bg-[var(--cmp-surface-error)]", tone: (k.openIncidents ?? 0) > 0 ? "text-[var(--cmp-text-error)]" : undefined },
+    { label: "Critical Incidents", value: dash(k.criticalIncidents), icon: "🔴", iconBg: "bg-[var(--cmp-surface-error)]", tone: (k.criticalIncidents ?? 0) > 0 ? "text-[var(--cmp-text-error)]" : undefined },
+    { label: "Security Events (24h)", value: dash(k.securityEvents24h), icon: "📊", iconBg: "bg-[var(--cmp-surface-information)]" },
+    { label: "Containment (24h)", value: dash(k.containment24h), icon: "⛔", iconBg: "bg-[var(--cmp-surface-warning)]" },
+    { label: "High Vulnerabilities", value: dash(k.highVulns), icon: "🐞", iconBg: "bg-[var(--cmp-surface-warning)]", tone: (k.highVulns ?? 0) > 0 ? "text-[var(--cmp-text-warning)]" : undefined },
   ];
 
   return (
@@ -101,7 +101,7 @@ export default async function SecurityOperationsCenter() {
               {d.categories.map((c: any) => (
                 <div key={c.label}>
                   <div className="flex items-center justify-between text-xs mb-0.5"><span className="text-gray-600">{c.label}</span><span className="tabular-nums text-gray-500">{c.n}</span></div>
-                  <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden"><div className="h-full bg-rose-400 rounded-full" style={{ width: `${(c.n / Math.max(1, ...d.categories.map((x: any) => x.n))) * 100}%` }} /></div>
+                  <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden"><div className="h-full bg-[var(--cmp-color-error)] rounded-full" style={{ width: `${(c.n / Math.max(1, ...d.categories.map((x: any) => x.n))) * 100}%` }} /></div>
                 </div>
               ))}
             </div>
@@ -116,7 +116,7 @@ export default async function SecurityOperationsCenter() {
           <div className="flex items-end gap-2 h-28">
             {d.trend.map((t: any) => (
               <div key={t.day} className="flex-1 flex flex-col items-center gap-1">
-                <div className="w-full bg-rose-100 rounded-t relative" style={{ height: `${(t.n / d.trendMax) * 100}%`, minHeight: t.n > 0 ? "4px" : "0" }}>
+                <div className="w-full bg-[var(--cmp-surface-error)] rounded-t relative" style={{ height: `${(t.n / d.trendMax) * 100}%`, minHeight: t.n > 0 ? "4px" : "0" }}>
                   <div className="absolute inset-x-0 -top-4 text-[9px] text-gray-500 text-center tabular-nums">{t.n || ""}</div>
                 </div>
                 <span className="text-[9px] text-gray-400">{t.day}</span>
@@ -171,7 +171,7 @@ export default async function SecurityOperationsCenter() {
           <h2 className="font-semibold text-gray-900 text-[15px] mb-3">Detection Coverage</h2>
           <div className="space-y-1.5 mb-3">
             {[["Audit-trail analytics", true], ["Incident correlation", true], ["Account containment", true], ["Posture scoring", true]].map(([l]: any) => (
-              <div key={l} className="flex items-center justify-between text-xs"><span className="text-gray-600">{l}</span><span className="text-[10px] font-semibold text-green-600">live</span></div>
+              <div key={l} className="flex items-center justify-between text-xs"><span className="text-gray-600">{l}</span><span className="text-[10px] font-semibold text-[var(--cmp-text-success)]">live</span></div>
             ))}
           </div>
           <div className="space-y-1.5 pt-2 border-t border-gray-50">

@@ -14,7 +14,7 @@ export default async function ReportingPage() {
   const d = await loadPaReporting(admin, hid, isSuper) as any;
   const head = <Head code="UMW-PA-008 · Performance Analytics" title="Executive Reporting & Performance Governance Centre" sub="Govern performance, drive accountability and deliver results — executive reporting, review workflow, action tracking and audit readiness." />;
   if (!d.provisioned) return <div className="max-w-[1500px] space-y-4">{head}<Tabs active="008" /><Provision module="Reporting & Governance" /></div>;
-  if (!d.hasData) return <div className="max-w-[1500px] space-y-4">{head}<Tabs active="008" /><div className="bg-blue-50 border border-blue-200 rounded-xl p-6 text-sm text-blue-800">Seed the performance stores first.</div></div>;
+  if (!d.hasData) return <div className="max-w-[1500px] space-y-4">{head}<Tabs active="008" /><div className="bg-[var(--cmp-surface-information)] border border-[var(--cmp-color-information)] rounded-xl p-6 text-sm text-blue-800">Seed the performance stores first.</div></div>;
 
   const r = d.ribbon;
   return (
@@ -52,7 +52,7 @@ export default async function ReportingPage() {
       <Card title="Governance Actions & Decisions" right={<span className="text-[11px] text-gray-400">{d.actions.length} actions</span>}>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-2">
           {d.actions.map((a: any) => (
-            <div key={a.name} className="flex items-center gap-2"><div className="min-w-0 flex-1"><p className="text-[12px] text-gray-800 leading-tight truncate">{a.name}</p><div className="mt-1"><Progress pct={a.progress} tone={STATUS_TONE[a.status] === "rose" ? "bg-rose-500" : undefined} /></div></div><span className="text-[11px] text-gray-400 w-12 text-right">{fmtDate(a.due)}</span><Pill text={a.status} tone={STATUS_TONE[a.status]} /></div>
+            <div key={a.name} className="flex items-center gap-2"><div className="min-w-0 flex-1"><p className="text-[12px] text-gray-800 leading-tight truncate">{a.name}</p><div className="mt-1"><Progress pct={a.progress} tone={STATUS_TONE[a.status] === "rose" ? "bg-[var(--cmp-color-error)]" : undefined} /></div></div><span className="text-[11px] text-gray-400 w-12 text-right">{fmtDate(a.due)}</span><Pill text={a.status} tone={STATUS_TONE[a.status]} /></div>
           ))}
         </div>
       </Card>

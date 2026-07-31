@@ -105,7 +105,7 @@ export default function CpuConfigPanel({ cpu, onClose }: { cpu: Cpu; onClose: ()
                 <div>
                   <div className="flex items-center justify-between mb-2">
                     <p className="text-xs font-bold text-gray-400 uppercase tracking-widest">Required Methods &amp; Weighting</p>
-                    <span className={`text-[10px] font-semibold ${totalMethodWeight === 100 ? "text-green-600" : "text-amber-600"}`}>Total: {totalMethodWeight}%</span>
+                    <span className={`text-[10px] font-semibold ${totalMethodWeight === 100 ? "text-[var(--cmp-text-success)]" : "text-[var(--cmp-text-warning)]"}`}>Total: {totalMethodWeight}%</span>
                   </div>
                   <div className="flex flex-col gap-1.5">
                     {ALL_METHODS.map(m => {
@@ -137,7 +137,7 @@ export default function CpuConfigPanel({ cpu, onClose }: { cpu: Cpu; onClose: ()
               <div>
                 <div className="flex items-center justify-between mb-3">
                   <p className="text-xs text-gray-400">Required evidence per CKCM hierarchy (strongest first)</p>
-                  <span className={`text-[10px] font-semibold ${totalEvidenceWeight === 100 ? "text-green-600" : "text-amber-600"}`}>Total: {totalEvidenceWeight}%</span>
+                  <span className={`text-[10px] font-semibold ${totalEvidenceWeight === 100 ? "text-[var(--cmp-text-success)]" : "text-[var(--cmp-text-warning)]"}`}>Total: {totalEvidenceWeight}%</span>
                 </div>
                 <div className="flex flex-col gap-1.5">
                   {EVIDENCE_TYPES.map(et => {
@@ -180,16 +180,16 @@ export default function CpuConfigPanel({ cpu, onClose }: { cpu: Cpu; onClose: ()
                 <p className="text-xs text-gray-400 mb-3">Non-negotiable safety failures that block competency regardless of overall score.</p>
                 <div className="flex flex-col gap-1.5 mb-3">
                   {critical.map(c => (
-                    <div key={c.id} className="flex items-center justify-between gap-2 rounded-lg border border-red-100 bg-red-50/40 px-3 py-2">
+                    <div key={c.id} className="flex items-center justify-between gap-2 rounded-lg border border-[var(--cmp-color-critical)] bg-[var(--cmp-surface-critical)]/40 px-3 py-2">
                       <span className="text-xs text-gray-700">{c.description}</span>
-                      <button onClick={() => del("critical", c.id)} className="text-red-400 hover:text-red-600 text-sm leading-none">×</button>
+                      <button onClick={() => del("critical", c.id)} className="text-red-400 hover:text-[var(--cmp-text-critical)] text-sm leading-none">×</button>
                     </div>
                   ))}
                   {!critical.length && <p className="text-[11px] text-gray-300 italic">None defined</p>}
                 </div>
                 <button
                   onClick={() => { const d = prompt("Critical failure (e.g. Wrong patient identification):"); if (d?.trim()) patch({ type: "critical", description: d.trim() }); }}
-                  className="px-3 py-1.5 text-xs font-semibold bg-red-50 text-red-600 border border-red-100 rounded-lg hover:bg-red-100">
+                  className="px-3 py-1.5 text-xs font-semibold bg-[var(--cmp-surface-critical)] text-[var(--cmp-text-critical)] border border-[var(--cmp-color-critical)] rounded-lg hover:bg-[var(--cmp-surface-critical)]">
                   + Add Critical Failure
                 </button>
               </div>

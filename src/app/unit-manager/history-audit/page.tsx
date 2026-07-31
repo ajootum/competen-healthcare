@@ -17,7 +17,7 @@ export const dynamic = "force-dynamic";
 
 const card = "bg-white rounded-xl border border-gray-200";
 const CAT_COLOR: Record<string, string> = { Approval: "#8b5cf6", Escalation: "#ef4444", CAPA: "#14b8a6", Competency: "#3b82f6", Access: "#0ea5e9", Change: "#f59e0b", Export: "#a855f7", Other: "#9ca3af" };
-const OUT_TONE: Record<string, string> = { Approved: "bg-green-50 text-green-700", Created: "bg-blue-50 text-blue-700", Completed: "bg-green-50 text-green-700", Updated: "bg-amber-50 text-amber-700", Returned: "bg-amber-50 text-amber-700", Rejected: "bg-rose-50 text-rose-700", Cancelled: "bg-rose-50 text-rose-700", Delegated: "bg-violet-50 text-violet-700", Success: "bg-green-50 text-green-700", Recorded: "bg-gray-100 text-gray-600" };
+const OUT_TONE: Record<string, string> = { Approved: "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]", Created: "bg-[var(--cmp-surface-information)] text-blue-700", Completed: "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]", Updated: "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]", Returned: "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]", Rejected: "bg-[var(--cmp-surface-error)] text-[var(--cmp-text-error)]", Cancelled: "bg-[var(--cmp-surface-error)] text-[var(--cmp-text-error)]", Delegated: "bg-violet-50 text-violet-700", Success: "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]", Recorded: "bg-gray-100 text-gray-600" };
 const relClock = (iso?: string | null) => { if (!iso) return "—"; const s = Math.floor((Date.now() - new Date(iso).getTime()) / 1000); if (s < 60) return "just now"; if (s < 3600) return `${Math.floor(s / 60)}m ago`; if (s < 86400) return `${Math.floor(s / 3600)}h ago`; return `${Math.floor(s / 86400)}d ago`; };
 const stamp = (iso?: string | null) => (iso ? `${iso.slice(0, 10)} ${iso.slice(11, 16)}` : "—");
 const TABS = ["Audit Dashboard", "Activity History", "Decision History", "Change Log", "Access Log", "Audit Reports", "Compliance & Retention", "Audit Trail Explorer", "Export Center", "Settings"];
@@ -62,7 +62,7 @@ export default async function HistoryAuditWorkspace({ searchParams }: { searchPa
     </>
   );
 
-  if (!d.provisioned) return <div className="space-y-4">{header}<div className="bg-amber-50 border border-amber-200 rounded-xl p-6"><p className="font-semibold text-amber-900">⚙️ Audit store not provisioned</p><p className="text-sm text-amber-800 mt-1">Run migration <code>040</code> to enable the audit_log store for this tenant.</p></div></div>;
+  if (!d.provisioned) return <div className="space-y-4">{header}<div className="bg-[var(--cmp-surface-warning)] border border-[var(--cmp-color-warning)] rounded-xl p-6"><p className="font-semibold text-amber-900">⚙️ Audit store not provisioned</p><p className="text-sm text-amber-800 mt-1">Run migration <code>040</code> to enable the audit_log store for this tenant.</p></div></div>;
 
   const k = d.kpis; const fc = d.filterCounts;
   const catChips: [string, number][] = [["All", fc.All], ["Decisions", fc.Decisions], ["Changes", fc.Changes], ["Access", fc.Access], ["Exports", fc.Exports]];
@@ -76,7 +76,7 @@ export default async function HistoryAuditWorkspace({ searchParams }: { searchPa
         <Kpi label="Changes Made" value={k.changes.toLocaleString()} sub="Updates to records" icon="✏️" />
         <Kpi label="Access Events" value={k.access.toLocaleString()} sub="System access" icon="👤" />
         <Kpi label="Data Exports" value={k.exports.toLocaleString()} sub="Reports & exports" icon="⬇️" />
-        <Kpi label="Audit Integrity" value={`${k.integrity}%`} sub="Complete metadata" tone={k.integrity >= 99 ? "text-green-600" : "text-amber-600"} icon="🛡️" />
+        <Kpi label="Audit Integrity" value={`${k.integrity}%`} sub="Complete metadata" tone={k.integrity >= 99 ? "text-[var(--cmp-text-success)]" : "text-[var(--cmp-text-warning)]"} icon="🛡️" />
       </div>
 
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
@@ -121,16 +121,16 @@ export default async function HistoryAuditWorkspace({ searchParams }: { searchPa
           <div className={`${card} p-5`}>
             <h3 className="text-sm font-bold text-gray-900 mb-1">Data Retention</h3>
             <p className="text-[10px] text-gray-400 mb-2">Append-only store — no records are deleted or altered by the application.</p>
-            <div className="space-y-1.5 text-xs">{["Audit Logs", "Decision Records", "System Logs"].map(l => <div key={l} className="flex items-center justify-between"><span className="text-gray-700 flex items-center gap-1.5"><span className="text-green-600">✓</span>{l}</span><span className="text-green-600 text-[10px]">Retained</span></div>)}</div>
-            <p className="text-[10px] text-amber-600 mt-2">Configurable retention windows &amp; scheduled archival are next-phase.</p>
+            <div className="space-y-1.5 text-xs">{["Audit Logs", "Decision Records", "System Logs"].map(l => <div key={l} className="flex items-center justify-between"><span className="text-gray-700 flex items-center gap-1.5"><span className="text-[var(--cmp-text-success)]">✓</span>{l}</span><span className="text-[var(--cmp-text-success)] text-[10px]">Retained</span></div>)}</div>
+            <p className="text-[10px] text-[var(--cmp-text-warning)] mt-2">Configurable retention windows &amp; scheduled archival are next-phase.</p>
           </div>
           <div className={`${card} p-5`}>
             <h3 className="text-sm font-bold text-gray-900 mb-3">Integrity &amp; Security</h3>
             <div className="space-y-1.5 text-xs">
-              <div className="flex items-center justify-between"><span className="text-gray-700">Audit Completeness</span><b className={d.integrity.completeness >= 99 ? "text-green-600" : "text-amber-600"}>{d.integrity.completeness}%</b></div>
-              <div className="flex items-center justify-between"><span className="text-gray-700">Tamper Protection</span><span className="text-green-600 text-[10px]">Append-only</span></div>
+              <div className="flex items-center justify-between"><span className="text-gray-700">Audit Completeness</span><b className={d.integrity.completeness >= 99 ? "text-[var(--cmp-text-success)]" : "text-[var(--cmp-text-warning)]"}>{d.integrity.completeness}%</b></div>
+              <div className="flex items-center justify-between"><span className="text-gray-700">Tamper Protection</span><span className="text-[var(--cmp-text-success)] text-[10px]">Append-only</span></div>
               <div className="flex items-center justify-between"><span className="text-gray-700">Records (30d)</span><b className="text-gray-900">{d.integrity.records.toLocaleString()}</b></div>
-              <div className="flex items-center justify-between"><span className="text-gray-700">Incomplete metadata</span><b className={d.integrity.orphans ? "text-amber-600" : "text-green-600"}>{d.integrity.orphans}</b></div>
+              <div className="flex items-center justify-between"><span className="text-gray-700">Incomplete metadata</span><b className={d.integrity.orphans ? "text-[var(--cmp-text-warning)]" : "text-[var(--cmp-text-success)]"}>{d.integrity.orphans}</b></div>
               <div className="flex items-center justify-between"><span className="text-gray-700">Last Entry</span><span className="text-gray-500 text-[10px]">{relClock(d.integrity.lastEntry)}</span></div>
               <div className="flex items-center justify-between"><span className="text-gray-400">Digital Signatures</span><span className="text-gray-300 text-[10px]">Next phase</span></div>
             </div>
@@ -164,7 +164,7 @@ export default async function HistoryAuditWorkspace({ searchParams }: { searchPa
         <div className={`${card} p-5`}>
           <h3 className="text-sm font-bold text-gray-900 mb-3">Action Type Breakdown</h3>
           {d.byOutcome.length === 0 ? <p className="text-sm text-gray-400">No actions.</p> : (
-            <div className="space-y-1.5">{d.byOutcome.map((x: any) => (<div key={x.label} className="text-xs"><div className="flex items-center justify-between mb-0.5"><span className="text-gray-700">{x.label}</span><span className="text-gray-400">{x.n} ({x.pct}%)</span></div><div className="w-full h-1.5 rounded-full bg-gray-100 overflow-hidden"><div className={`h-full rounded-full ${["Rejected", "Cancelled"].includes(x.label) ? "bg-rose-400" : ["Returned", "Updated"].includes(x.label) ? "bg-amber-400" : "bg-green-500"}`} style={{ width: `${x.pct}%` }} /></div></div>))}</div>
+            <div className="space-y-1.5">{d.byOutcome.map((x: any) => (<div key={x.label} className="text-xs"><div className="flex items-center justify-between mb-0.5"><span className="text-gray-700">{x.label}</span><span className="text-gray-400">{x.n} ({x.pct}%)</span></div><div className="w-full h-1.5 rounded-full bg-gray-100 overflow-hidden"><div className={`h-full rounded-full ${["Rejected", "Cancelled"].includes(x.label) ? "bg-[var(--cmp-color-error)]" : ["Returned", "Updated"].includes(x.label) ? "bg-[var(--cmp-color-warning)]" : "bg-[var(--cmp-color-success)]"}`} style={{ width: `${x.pct}%` }} /></div></div>))}</div>
           )}
         </div>
         <div className={`${card} p-5`}>
@@ -177,7 +177,7 @@ export default async function HistoryAuditWorkspace({ searchParams }: { searchPa
         </div>
       </div>
 
-      <div className="flex items-center gap-2 text-[11px] text-gray-500 border-t border-gray-100 pt-3"><span className="text-green-600">🔒</span>All audit records are immutable and append-only. Changes cannot be deleted or altered by the application and are tracked for full traceability.</div>
+      <div className="flex items-center gap-2 text-[11px] text-gray-500 border-t border-gray-100 pt-3"><span className="text-[var(--cmp-text-success)]">🔒</span>All audit records are immutable and append-only. Changes cannot be deleted or altered by the application and are tracked for full traceability.</div>
 
       <p className="text-[11px] text-gray-400 pb-4">The History &amp; Audit Workspace (UMW-EA-005) is the Unit Manager&apos;s governance &amp; traceability centre over the real, append-only audit_log store — every approval, escalation, CAPA, competency validation and config change written by the Executive Actions modules. KPIs, the filterable recent-activity explorer, category/outcome distribution, actions-over-time, top users, audit summary and a real integrity/completeness score are all live. IP-address &amp; unit/area capture, configurable retention policies, digital signatures, report/export generation and the deep explorer tabs are next-phase honest states — never fabricated. No department dimension (unit-wide). <Link href="/unit-manager/action-centre" className="text-violet-700 hover:underline">← Executive Actions</Link></p>
     </div>

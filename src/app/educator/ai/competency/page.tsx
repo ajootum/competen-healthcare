@@ -11,9 +11,9 @@ import CommandBar from "./CommandBar";
 
 export const dynamic = "force-dynamic";
 
-const TINT_DOT: Record<Tint, string> = { green: "bg-emerald-400", amber: "bg-amber-400", red: "bg-rose-400", muted: "bg-slate-600" };
+const TINT_DOT: Record<Tint, string> = { green: "bg-[var(--cmp-color-success)]", amber: "bg-[var(--cmp-color-warning)]", red: "bg-[var(--cmp-color-error)]", muted: "bg-slate-600" };
 const RISK_CLS: Record<string, string> = { Low: "text-emerald-400", Medium: "text-amber-400", High: "text-rose-400" };
-const SEV_CLS: Record<string, string> = { High: "bg-rose-500/20 text-rose-300 border-rose-500/30", Medium: "bg-amber-500/20 text-amber-300 border-amber-500/30", Low: "bg-sky-500/20 text-sky-300 border-sky-500/30" };
+const SEV_CLS: Record<string, string> = { High: "bg-[var(--cmp-color-error)]/20 text-rose-300 border-rose-500/30", Medium: "bg-[var(--cmp-color-warning)]/20 text-amber-300 border-amber-500/30", Low: "bg-[var(--cmp-color-information)]/20 text-sky-300 border-sky-500/30" };
 const EV_STATUS: Record<string, string> = { Complete: "text-emerald-400", Partial: "text-amber-400", Missing: "text-rose-400", "N/A": "text-slate-600" };
 
 function NavTree({ node, depth }: { node: NavNode; depth: number }) {
@@ -178,14 +178,14 @@ export default async function CompetencyIntelligencePage() {
                         ))}
                       </tbody>
                     </table>
-                    <div className="flex items-center gap-2 mt-2"><span className="text-[10px] text-slate-400">Evidence sufficiency</span><div className="h-1.5 flex-1 rounded-full bg-white/10 overflow-hidden"><div className="h-full rounded-full bg-emerald-500" style={{ width: `${d.focus.evidenceScore ?? 0}%` }} /></div><span className="text-[10px] text-slate-300">{d.focus.evidenceScore ?? "—"}%</span></div>
+                    <div className="flex items-center gap-2 mt-2"><span className="text-[10px] text-slate-400">Evidence sufficiency</span><div className="h-1.5 flex-1 rounded-full bg-white/10 overflow-hidden"><div className="h-full rounded-full bg-[var(--cmp-color-success)]" style={{ width: `${d.focus.evidenceScore ?? 0}%` }} /></div><span className="text-[10px] text-slate-300">{d.focus.evidenceScore ?? "—"}%</span></div>
                     <p className="text-[9px] text-slate-500 mt-1">{d.focus.evidenceRec}</p>
                   </Card>
 
                   <Card title="Readiness Intelligence" tag="rule-derived">
                     <div className="flex flex-col items-center">
                       <Gauge value={d.focus.readiness} label={`Confidence: ${d.focus.readinessConfidence}`} color="#10b981" />
-                      <span className={`mt-1 text-[10px] font-bold uppercase px-2 py-0.5 rounded ${d.focus.independentPractice ? "bg-emerald-500/20 text-emerald-300" : "bg-amber-500/20 text-amber-300"}`}>{d.focus.independentPractice ? "Independent practice" : "Supervised practice"}</span>
+                      <span className={`mt-1 text-[10px] font-bold uppercase px-2 py-0.5 rounded ${d.focus.independentPractice ? "bg-[var(--cmp-color-success)]/20 text-emerald-300" : "bg-[var(--cmp-color-warning)]/20 text-amber-300"}`}>{d.focus.independentPractice ? "Independent practice" : "Supervised practice"}</span>
                     </div>
                     <p className="text-[10px] text-slate-300 mt-2">{d.focus.readinessRec}</p>
                     <p className="text-[9px] text-slate-500 mt-1">Readiness = mean competency score vs the required standard. Confidence reflects evidence breadth, not a trained model.</p>
@@ -216,7 +216,7 @@ export default async function CompetencyIntelligencePage() {
                       {d.focus.timeline.map((t, i) => (
                         <div key={t.label} className="flex items-center flex-1">
                           <div className="flex flex-col items-center flex-1">
-                            <span className={`w-6 h-6 rounded-full flex items-center justify-center text-[9px] border-2 ${t.done ? "border-emerald-400/60 text-emerald-300 bg-emerald-500/10" : "border-white/15 text-slate-500"}`}>{t.done ? "✓" : "○"}</span>
+                            <span className={`w-6 h-6 rounded-full flex items-center justify-center text-[9px] border-2 ${t.done ? "border-emerald-400/60 text-emerald-300 bg-[var(--cmp-color-success)]/10" : "border-white/15 text-slate-500"}`}>{t.done ? "✓" : "○"}</span>
                             <span className="text-[7px] text-slate-400 mt-1 text-center leading-tight">{t.label}</span>
                             <span className="text-[6px] text-slate-600">{t.date ?? ""}</span>
                           </div>
@@ -305,7 +305,7 @@ export default async function CompetencyIntelligencePage() {
                 {d.panel.standards.map(s => (
                   <div key={s.name}>
                     <div className="flex items-center justify-between text-[11px] mb-0.5"><span className="text-slate-300 truncate mr-2">{s.name}</span><span className="text-slate-400">{s.coverage === null ? "—" : `${s.coverage}%`}</span></div>
-                    <div className="h-1.5 rounded-full bg-white/10 overflow-hidden"><div className={`h-full rounded-full ${(s.coverage ?? 0) >= 75 ? "bg-emerald-500" : (s.coverage ?? 0) >= 50 ? "bg-amber-500" : "bg-rose-500"}`} style={{ width: `${s.coverage ?? 0}%` }} /></div>
+                    <div className="h-1.5 rounded-full bg-white/10 overflow-hidden"><div className={`h-full rounded-full ${(s.coverage ?? 0) >= 75 ? "bg-[var(--cmp-color-success)]" : (s.coverage ?? 0) >= 50 ? "bg-[var(--cmp-color-warning)]" : "bg-[var(--cmp-color-error)]"}`} style={{ width: `${s.coverage ?? 0}%` }} /></div>
                   </div>
                 ))}
               </div>

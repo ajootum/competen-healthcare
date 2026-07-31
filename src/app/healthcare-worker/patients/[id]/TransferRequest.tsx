@@ -10,7 +10,7 @@ import { useRouter } from "next/navigation";
 const TYPES = ["internal", "icu", "hdu", "theatre", "recovery", "other_ward", "other_hospital", "diagnostic", "other"];
 const titleCase = (s: string) => s.replace(/_/g, " ").replace(/\b\w/g, ch => ch.toUpperCase());
 const input = "w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/40";
-const btn = "px-3.5 py-2 rounded-lg bg-emerald-600 text-white text-sm font-medium hover:bg-emerald-700 disabled:opacity-50";
+const btn = "px-3.5 py-2 rounded-lg bg-[var(--cmp-color-success)] text-white text-sm font-medium hover:bg-emerald-700 disabled:opacity-50";
 const btnGhost = "px-2.5 py-1 rounded-lg border border-gray-300 text-xs text-gray-700 hover:bg-gray-50";
 
 export default function TransferRequest({ patientId, coStaff }: { patientId: string; coStaff: { id: string; name: string }[] }) {
@@ -52,12 +52,12 @@ export default function TransferRequest({ patientId, coStaff }: { patientId: str
   }
 
   return (
-    <div className="mt-2 w-full border border-emerald-200 bg-emerald-50/30 rounded-lg p-3 space-y-2">
+    <div className="mt-2 w-full border border-[var(--cmp-color-success)] bg-[var(--cmp-surface-success)]/30 rounded-lg p-3 space-y-2">
       <div className="flex items-center justify-between">
         <span className="text-xs font-semibold text-gray-800">Request transfer</span>
         <button className="text-xs text-gray-400 hover:text-gray-600" onClick={() => setOpen(false)}>Close</button>
       </div>
-      {msg && <p className="text-xs text-amber-700">{msg}</p>}
+      {msg && <p className="text-xs text-[var(--cmp-text-warning)]">{msg}</p>}
       <div className="grid sm:grid-cols-3 gap-2">
         <label className="text-xs text-gray-600">Type
           <select className={input} value={type} onChange={e => setType(e.target.value)}>

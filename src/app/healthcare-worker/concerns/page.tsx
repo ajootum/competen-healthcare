@@ -15,8 +15,8 @@ import { ConcernRowActions, CompleteAction } from "./ConcernRowActions";
 export const dynamic = "force-dynamic";
 
 const STATUS_TONE: Record<string, string> = {
-  open: "bg-blue-100 text-blue-700", in_progress: "bg-amber-100 text-amber-700",
-  resolved: "bg-green-100 text-green-700", carried_forward: "bg-purple-100 text-purple-700",
+  open: "bg-[var(--cmp-surface-information)] text-blue-700", in_progress: "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]",
+  resolved: "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]", carried_forward: "bg-purple-100 text-purple-700",
 };
 
 function ConcernCard({ c, mine }: { c: any; mine: boolean }) {
@@ -28,20 +28,20 @@ function ConcernCard({ c, mine }: { c: any; mine: boolean }) {
         {c.op_patients?.op_beds?.label && <span className="text-xs text-gray-400">{c.op_patients.op_beds.label}</span>}
         <Chip tone={STATUS_TONE[c.status] ?? STATUS_TONE.open}>{titleCase(c.status)}</Chip>
         <PrioChip p={c.priority} />
-        {overdue && <Chip tone="bg-red-100 text-red-700">Overdue</Chip>}
+        {overdue && <Chip tone="bg-[var(--cmp-surface-critical)] text-[var(--cmp-text-critical)]">Overdue</Chip>}
         {c.ward_round && <Chip tone="bg-indigo-100 text-indigo-700">Ward round</Chip>}
-        {c.ss_review && <Chip tone="bg-orange-100 text-orange-700">SS review</Chip>}
+        {c.ss_review && <Chip tone="bg-[var(--cmp-surface-warning)] text-orange-700">SS review</Chip>}
         {c.routed_to && <Chip tone="bg-cyan-100 text-cyan-700">→ {titleCase(c.routed_to)}{c.acknowledged_at ? " ✓" : ""}</Chip>}
         <span className="ml-auto text-[11px] text-gray-400">{fmtWhen(c.raised_at)}</span>
       </div>
       <p className="text-sm text-gray-600 mt-1"><span className="text-gray-400">{titleCase(c.category)} —</span> {c.description}</p>
       {!mine && c.raised_by_name && <p className="text-[11px] text-gray-400 mt-0.5">Raised by {c.raised_by_name}</p>}
-      {c.status === "resolved" && c.resolution_notes && <p className="text-xs text-green-700 mt-1">Resolved: {c.resolution_notes}</p>}
+      {c.status === "resolved" && c.resolution_notes && <p className="text-xs text-[var(--cmp-text-success)] mt-1">Resolved: {c.resolution_notes}</p>}
       {(c.op_concern_actions ?? []).length > 0 && (
         <div className="mt-1.5 space-y-1">
           {(c.op_concern_actions ?? []).map((a: any) => (
             <p key={a.id} className="text-xs text-gray-500 flex items-center gap-2">
-              <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${a.status === "completed" ? "bg-green-500" : a.status === "cancelled" ? "bg-gray-300" : "bg-amber-500"}`} />
+              <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${a.status === "completed" ? "bg-[var(--cmp-color-success)]" : a.status === "cancelled" ? "bg-gray-300" : "bg-[var(--cmp-color-warning)]"}`} />
               {a.action}
               <span className="text-gray-400">· {a.owner_name ?? "unassigned"}{a.task_id ? " · task" : ""}{a.due_at ? ` · due ${fmtWhen(a.due_at)}` : ""}</span>
             </p>
@@ -83,9 +83,9 @@ export default async function NurseConcernsPage() {
       </div>
 
       {data.migrationMissing && (
-        <div className="bg-amber-50 border border-amber-200 rounded-xl p-5">
+        <div className="bg-[var(--cmp-surface-warning)] border border-[var(--cmp-color-warning)] rounded-xl p-5">
           <p className="font-semibold text-amber-900">⚙️ Store not yet enabled</p>
-          <p className="text-sm text-amber-800 mt-1">Apply migration <code className="bg-amber-100 px-1.5 py-0.5 rounded font-mono text-xs">152-nurse-concerns.sql</code> to enable the Nurse Concerns module.</p>
+          <p className="text-sm text-amber-800 mt-1">Apply migration <code className="bg-[var(--cmp-surface-warning)] px-1.5 py-0.5 rounded font-mono text-xs">152-nurse-concerns.sql</code> to enable the Nurse Concerns module.</p>
         </div>
       )}
 
@@ -94,7 +94,7 @@ export default async function NurseConcernsPage() {
           sub={`${data.raised.length - myActive.length} resolved`} />
         <StatCard icon="👥" title="On My Patients" value={active(data.onMyPatients).length} sub="raised by colleagues" />
         <StatCard icon="📋" title="Actions For Me" value={data.actionsForMe.length} sub="from ward-round review" />
-        <StatCard icon="⏰" title="Overdue" value={overdueCount} tone={overdueCount > 0 ? "text-red-600" : undefined}
+        <StatCard icon="⏰" title="Overdue" value={overdueCount} tone={overdueCount > 0 ? "text-[var(--cmp-text-critical)]" : undefined}
           sub="beyond priority response window" />
       </div>
 

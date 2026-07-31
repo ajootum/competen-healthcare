@@ -18,8 +18,8 @@ const PATHS: { key: string; label: string }[] = [
   { key: "mixed", label: "Mixed pathway" },
 ];
 
-const BAND_TONE: Record<string, string> = { rose: "bg-rose-100 text-rose-700", amber: "bg-amber-100 text-amber-700", blue: "bg-blue-100 text-blue-700", slate: "bg-gray-100 text-gray-600" };
-const STATUS_TONE: Record<string, string> = { pending: "bg-gray-100 text-gray-600", in_progress: "bg-blue-100 text-blue-700", reassessment: "bg-violet-100 text-violet-700", completed: "bg-emerald-100 text-emerald-700", lapsed: "bg-rose-100 text-rose-700" };
+const BAND_TONE: Record<string, string> = { rose: "bg-[var(--cmp-surface-error)] text-[var(--cmp-text-error)]", amber: "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]", blue: "bg-[var(--cmp-surface-information)] text-blue-700", slate: "bg-gray-100 text-gray-600" };
+const STATUS_TONE: Record<string, string> = { pending: "bg-gray-100 text-gray-600", in_progress: "bg-[var(--cmp-surface-information)] text-blue-700", reassessment: "bg-violet-100 text-violet-700", completed: "bg-[var(--cmp-surface-success)] text-emerald-700", lapsed: "bg-[var(--cmp-surface-error)] text-[var(--cmp-text-error)]" };
 const NEXT: Record<string, string | null> = { pending: "in_progress", in_progress: "reassessment", reassessment: "completed", completed: null, lapsed: null };
 const NEXT_LABEL: Record<string, string> = { in_progress: "Start work", reassessment: "To reassessment", completed: "Mark renewed" };
 
@@ -34,7 +34,7 @@ export default function RenewalManager({ worklist, renewals, worklistTotal }: { 
 
   return (
     <div className="space-y-3">
-      {err && <div className="bg-rose-50 border border-rose-200 text-rose-700 rounded-lg px-3 py-2 text-[12px]">{err}</div>}
+      {err && <div className="bg-[var(--cmp-surface-error)] border border-[var(--cmp-color-error)] text-[var(--cmp-text-error)] rounded-lg px-3 py-2 text-[12px]">{err}</div>}
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
         <div>
           <div className="flex items-center justify-between mb-2">
@@ -86,7 +86,7 @@ function WorklistRow({ item, onErr, onDone }: { item: WorklistItem; onErr: (s: s
         </div>
         <span className={`text-[10px] px-1.5 py-0.5 rounded-full whitespace-nowrap ${BAND_TONE[item.bandTone] ?? "bg-gray-100 text-gray-600"}`}>{item.daysLeft < 0 ? `${Math.abs(item.daysLeft)}d overdue` : `${item.daysLeft}d left`}</span>
         {item.hasRenewal
-          ? <span className="text-[10px] text-emerald-600 whitespace-nowrap">renewal open</span>
+          ? <span className="text-[10px] text-[var(--cmp-text-success)] whitespace-nowrap">renewal open</span>
           : <button onClick={() => setOpen(v => !v)} className="text-[11px] bg-teal-600 text-white rounded-lg px-2.5 py-1 hover:bg-teal-700 whitespace-nowrap">{open ? "Close" : "Start renewal"}</button>}
       </div>
       {open && !item.hasRenewal && (
@@ -128,7 +128,7 @@ function RenewalRow({ r, onErr, onDone }: { r: Renewal; onErr: (s: string | null
       {r.inFlight && (
         <div className="mt-2 flex items-center gap-1.5">
           {next && <button disabled={busy} onClick={() => advance(next)} className="text-[11px] bg-teal-600 text-white rounded-lg px-2.5 py-1 hover:bg-teal-700 disabled:opacity-40 whitespace-nowrap">{NEXT_LABEL[next]}</button>}
-          <button disabled={busy} onClick={() => advance("lapsed")} className="text-[11px] text-rose-500 hover:text-rose-700 border border-rose-200 rounded-lg px-2.5 py-1 disabled:opacity-40">Lapse</button>
+          <button disabled={busy} onClick={() => advance("lapsed")} className="text-[11px] text-rose-500 hover:text-[var(--cmp-text-error)] border border-[var(--cmp-color-error)] rounded-lg px-2.5 py-1 disabled:opacity-40">Lapse</button>
         </div>
       )}
     </div>

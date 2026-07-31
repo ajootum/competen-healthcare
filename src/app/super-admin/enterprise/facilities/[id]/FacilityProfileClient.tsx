@@ -8,7 +8,7 @@ import { cardClass } from "@/components/ui/primitives";
 // Facility profile (ENT-001 §3) — header, lifecycle actions and tabbed detail.
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
-const BADGE: Record<string, string> = { draft: "bg-gray-100 text-gray-600", onboarding: "bg-amber-50 text-amber-700", active: "bg-green-50 text-green-700", suspended: "bg-rose-50 text-rose-700", archived: "bg-gray-100 text-gray-500" };
+const BADGE: Record<string, string> = { draft: "bg-gray-100 text-gray-600", onboarding: "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]", active: "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]", suspended: "bg-[var(--cmp-surface-error)] text-[var(--cmp-text-error)]", archived: "bg-gray-100 text-gray-500" };
 const TABS = ["Overview", "Departments", "People", "Services", "Governance", "Audit"] as const;
 const card = cardClass;
 const relTime = (iso?: string | null) => { if (!iso) return ""; const s = Math.floor((Date.now() - new Date(iso).getTime()) / 1000); if (s < 3600) return `${Math.floor(s / 60)} min ago`; if (s < 86400) return `${Math.floor(s / 3600)} hr ago`; return `${Math.floor(s / 86400)} d ago`; };
@@ -33,8 +33,8 @@ export default function FacilityProfileClient({ data }: { data: any }) {
     if (r.ok) { toast("ok", `Facility ${status}`); router.refresh(); } else { toast("err", (await r.json().catch(() => ({}))).error ?? "Failed"); }
   }
   const actions = [
-    facility.status !== "active" && { label: "Activate", status: "active", cls: "border-green-200 text-green-700 hover:bg-green-50" },
-    facility.status === "active" && { label: "Suspend", status: "suspended", cls: "border-rose-200 text-rose-700 hover:bg-rose-50" },
+    facility.status !== "active" && { label: "Activate", status: "active", cls: "border-[var(--cmp-color-success)] text-[var(--cmp-text-success)] hover:bg-[var(--cmp-surface-success)]" },
+    facility.status === "active" && { label: "Suspend", status: "suspended", cls: "border-[var(--cmp-color-error)] text-[var(--cmp-text-error)] hover:bg-[var(--cmp-surface-error)]" },
     facility.status !== "archived" && { label: "Archive", status: "archived", cls: "border-gray-300 text-gray-600 hover:bg-gray-50" },
   ].filter(Boolean) as any[];
 
@@ -47,7 +47,7 @@ export default function FacilityProfileClient({ data }: { data: any }) {
 
       <div className={`${card} flex flex-wrap items-start justify-between gap-3`}>
         <div className="flex items-start gap-3">
-          <span className="w-11 h-11 rounded-xl bg-sky-50 flex items-center justify-center text-xl shrink-0">🏥</span>
+          <span className="w-11 h-11 rounded-xl bg-[var(--cmp-surface-information)] flex items-center justify-center text-xl shrink-0">🏥</span>
           <div>
             <div className="flex items-center gap-2 flex-wrap"><h1 className="text-xl font-bold text-gray-900">{facility.name}</h1>
               <span className={`text-[10px] font-medium px-2 py-0.5 rounded ${BADGE[facility.status] ?? "bg-gray-100 text-gray-600"}`}>{facility.status}</span></div>
@@ -59,7 +59,7 @@ export default function FacilityProfileClient({ data }: { data: any }) {
           {actions.map(a => <button key={a.status} onClick={() => setStatus(a.status)} disabled={busy} className={`text-xs font-medium rounded-lg border px-3 py-1.5 disabled:opacity-40 ${a.cls}`}>{a.label}</button>)}
         </div>
       </div>
-      {msg && <div className={`text-sm rounded-lg px-3 py-1.5 ${msg.k === "ok" ? "bg-green-50 text-green-800" : "bg-amber-50 text-amber-800"}`}>{msg.t}</div>}
+      {msg && <div className={`text-sm rounded-lg px-3 py-1.5 ${msg.k === "ok" ? "bg-[var(--cmp-surface-success)] text-green-800" : "bg-[var(--cmp-surface-warning)] text-amber-800"}`}>{msg.t}</div>}
 
       <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
         {[["Divisions", structure.divisions], ["Departments", structure.departments], ["Units", structure.units], ["Services", services.length], ["Users", userCount]].map(([l, n]) => (
@@ -94,7 +94,7 @@ export default function FacilityProfileClient({ data }: { data: any }) {
                 <div key={d.id} className="flex items-center gap-3 py-2.5">
                   <span className="text-base">🗂️</span>
                   <div className="flex-1 min-w-0"><p className="text-sm text-gray-800 truncate">{d.name}</p><p className="text-[10px] text-gray-400">{[d.code, d.type, d.head ? `Head: ${d.head}` : null].filter(Boolean).join(" · ") || "—"}</p></div>
-                  <span className={`text-[10px] px-2 py-0.5 rounded ${d.status === "archived" ? "bg-gray-100 text-gray-500" : "bg-green-50 text-green-700"}`}>{d.status}</span>
+                  <span className={`text-[10px] px-2 py-0.5 rounded ${d.status === "archived" ? "bg-gray-100 text-gray-500" : "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]"}`}>{d.status}</span>
                 </div>
               ))}
             </div>
@@ -109,7 +109,7 @@ export default function FacilityProfileClient({ data }: { data: any }) {
             <div className="divide-y divide-gray-50 max-h-96 overflow-y-auto">
               {userCount > 100 && <p className="text-[10px] text-gray-400 pb-1">Showing first 100 of {userCount}.</p>}
               {users.slice(0, 100).map((u: any) => (
-                <div key={u.id} className="flex items-center gap-3 py-2"><span className="w-7 h-7 rounded-full bg-blue-50 flex items-center justify-center text-xs">{(u.name ?? "?")[0]}</span>
+                <div key={u.id} className="flex items-center gap-3 py-2"><span className="w-7 h-7 rounded-full bg-[var(--cmp-surface-information)] flex items-center justify-center text-xs">{(u.name ?? "?")[0]}</span>
                   <div className="flex-1 min-w-0"><p className="text-sm text-gray-800 truncate">{u.name}</p><p className="text-[10px] text-gray-400 truncate">{u.email}</p></div>
                   <span className="text-[10px] text-gray-500 capitalize">{u.roles.map((r: string) => r.replace(/_/g, " ")).slice(0, 2).join(", ")}</span>
                 </div>

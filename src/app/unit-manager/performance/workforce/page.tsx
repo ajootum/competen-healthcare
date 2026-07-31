@@ -13,13 +13,13 @@ export default async function WorkforcePage() {
   const d = await loadPaWorkforce(admin, hid, isSuper) as any;
   const head = <Head code="UMW-PA-004 · Performance Analytics" title="Workforce Performance Analytics Centre" sub="Executive workforce intelligence — staffing effectiveness, productivity, attendance, competency readiness and wellbeing." />;
   if (!d.provisioned) return <div className="max-w-[1500px] space-y-4">{head}<Tabs active="004" /><Provision module="Workforce Analytics" /></div>;
-  if (!d.hasData) return <div className="max-w-[1500px] space-y-4">{head}<Tabs active="004" /><div className="bg-blue-50 border border-blue-200 rounded-xl p-6 text-sm text-blue-800">Seed the performance stores first.</div></div>;
+  if (!d.hasData) return <div className="max-w-[1500px] space-y-4">{head}<Tabs active="004" /><div className="bg-[var(--cmp-surface-information)] border border-[var(--cmp-color-information)] rounded-xl p-6 text-sm text-blue-800">Seed the performance stores first.</div></div>;
 
   return (
     <div className="max-w-[1500px] space-y-4">
       {head}<Tabs active="004" />
       <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-8 gap-3">
-        <div className="bg-white border border-gray-200 rounded-xl p-3.5 flex items-center gap-2"><Ring pct={d.score} size={60} /><div><p className="text-[11px] text-gray-500 uppercase tracking-wide leading-tight">Workforce Health</p><p className="text-[11px] text-emerald-600 font-medium">{d.score >= 85 ? "Good" : "Watch"}</p></div></div>
+        <div className="bg-white border border-gray-200 rounded-xl p-3.5 flex items-center gap-2"><Ring pct={d.score} size={60} /><div><p className="text-[11px] text-gray-500 uppercase tracking-wide leading-tight">Workforce Health</p><p className="text-[11px] text-[var(--cmp-text-success)] font-medium">{d.score >= 85 ? "Good" : "Watch"}</p></div></div>
         {d.cards.slice(0, 7).map((k: any) => <Kpi key={k.name} label={k.name} value={fmtVal(k.value, k.unit)} sub={`target ${fmtVal(k.target, k.unit)}`} status={k.status} delta={k.deltaPct != null ? `${k.deltaPct}%` : undefined} deltaUp={k.deltaUp} series={k.trend} />)}
       </div>
 

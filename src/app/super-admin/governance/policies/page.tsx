@@ -18,7 +18,7 @@ const card = "bg-white rounded-xl border border-gray-200";
 const fmt = (n: number) => n.toLocaleString();
 const dash = (n: number | null | undefined) => (n == null ? "—" : n.toLocaleString());
 const relTime = (iso?: string | null) => { if (!iso) return ""; const s = Math.floor((Date.now() - new Date(iso).getTime()) / 1000); if (s < 60) return "just now"; if (s < 3600) return `${Math.floor(s / 60)}m ago`; if (s < 86400) return `${Math.floor(s / 3600)}h ago`; return `${Math.floor(s / 86400)}d ago`; };
-const TYPE_BADGE: Record<string, string> = { clinical: "bg-teal-50 text-teal-700", hr: "bg-violet-50 text-violet-700", safety: "bg-rose-50 text-rose-700", governance: "bg-blue-50 text-blue-700", infection_control: "bg-amber-50 text-amber-700", quality: "bg-green-50 text-green-700" };
+const TYPE_BADGE: Record<string, string> = { clinical: "bg-teal-50 text-teal-700", hr: "bg-violet-50 text-violet-700", safety: "bg-[var(--cmp-surface-error)] text-[var(--cmp-text-error)]", governance: "bg-[var(--cmp-surface-information)] text-blue-700", infection_control: "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]", quality: "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]" };
 const PIPELINE = ["Draft", "Technical Review", "Governance Approval", "Published", "Acknowledgement", "Scheduled Review"];
 
 export default async function PolicyStandardsCenter() {
@@ -34,11 +34,11 @@ export default async function PolicyStandardsCenter() {
   const k = d.kpis;
 
   const kpiCards = [
-    { label: "Total Policies", value: fmt(k.total), icon: "📄", iconBg: "bg-blue-50" },
-    { label: "Active", value: fmt(k.active), icon: "✅", iconBg: "bg-green-50", tone: "text-green-600" },
+    { label: "Total Policies", value: fmt(k.total), icon: "📄", iconBg: "bg-[var(--cmp-surface-information)]" },
+    { label: "Active", value: fmt(k.active), icon: "✅", iconBg: "bg-[var(--cmp-surface-success)]", tone: "text-[var(--cmp-text-success)]" },
     { label: "Platform-wide", value: fmt(k.platformWide), icon: "🌐", iconBg: "bg-violet-50" },
-    { label: "Review Due (30d)", value: fmt(k.dueSoon), icon: "🕓", iconBg: "bg-amber-50", tone: k.dueSoon ? "text-amber-600" : undefined },
-    { label: "Overdue Review", value: fmt(k.overdue), icon: "⚠️", iconBg: "bg-rose-50", tone: k.overdue ? "text-rose-600" : undefined },
+    { label: "Review Due (30d)", value: fmt(k.dueSoon), icon: "🕓", iconBg: "bg-[var(--cmp-surface-warning)]", tone: k.dueSoon ? "text-[var(--cmp-text-warning)]" : undefined },
+    { label: "Overdue Review", value: fmt(k.overdue), icon: "⚠️", iconBg: "bg-[var(--cmp-surface-error)]", tone: k.overdue ? "text-[var(--cmp-text-error)]" : undefined },
     { label: "Retired", value: fmt(k.retired), icon: "🗄️", iconBg: "bg-gray-50", tone: "text-gray-400" },
   ];
 
@@ -88,8 +88,8 @@ export default async function PolicyStandardsCenter() {
                       <td className="px-3 py-2"><span className={`text-[10px] font-medium px-1.5 py-0.5 rounded ${TYPE_BADGE[p.type] ?? "bg-gray-100 text-gray-600"}`}>{(p.type ?? "—").replace(/_/g, " ")}</span></td>
                       <td className="px-3 py-2 text-gray-500 tabular-nums">v{p.version ?? "1.0"}</td>
                       <td className="px-3 py-2 text-gray-500">{p.scope}</td>
-                      <td className={`px-3 py-2 text-right tabular-nums text-[12px] ${p.overdue ? "text-rose-600 font-medium" : "text-gray-500"}`}>{p.reviewDate ?? "—"}</td>
-                      <td className="px-3 py-2 text-right"><span className={`text-[10px] font-semibold px-2 py-0.5 rounded ${p.active ? "bg-green-50 text-green-700" : "bg-gray-100 text-gray-400"}`}>{p.active ? "active" : "retired"}</span></td>
+                      <td className={`px-3 py-2 text-right tabular-nums text-[12px] ${p.overdue ? "text-[var(--cmp-text-error)] font-medium" : "text-gray-500"}`}>{p.reviewDate ?? "—"}</td>
+                      <td className="px-3 py-2 text-right"><span className={`text-[10px] font-semibold px-2 py-0.5 rounded ${p.active ? "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]" : "bg-gray-100 text-gray-400"}`}>{p.active ? "active" : "retired"}</span></td>
                     </tr>
                   ))}
                 </tbody>
@@ -105,9 +105,9 @@ export default async function PolicyStandardsCenter() {
             <div className="space-y-2">
               {d.calendar.map((c: any, i: number) => (
                 <div key={i} className="flex items-center gap-2.5 rounded-lg border border-gray-100 p-2.5">
-                  <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded shrink-0 tabular-nums ${c.overdue ? "bg-rose-50 text-rose-700" : c.dueSoon ? "bg-amber-50 text-amber-700" : "bg-gray-50 text-gray-500"}`}>{c.date}</span>
+                  <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded shrink-0 tabular-nums ${c.overdue ? "bg-[var(--cmp-surface-error)] text-[var(--cmp-text-error)]" : c.dueSoon ? "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]" : "bg-gray-50 text-gray-500"}`}>{c.date}</span>
                   <span className="text-xs text-gray-700 flex-1 truncate">{c.title}</span>
-                  {c.overdue && <span className="text-[9px] font-semibold text-rose-600 shrink-0">OVERDUE</span>}
+                  {c.overdue && <span className="text-[9px] font-semibold text-[var(--cmp-text-error)] shrink-0">OVERDUE</span>}
                 </div>
               ))}
             </div>
@@ -135,7 +135,7 @@ export default async function PolicyStandardsCenter() {
               {d.approvals.recent.map((r: any, i: number) => (
                 <div key={i} className="flex items-center gap-2 py-1.5">
                   <span className="text-xs text-gray-700 flex-1 truncate">{r.entity_name}</span>
-                  <span className={`text-[9px] font-semibold px-1.5 py-0.5 rounded shrink-0 ${r.status === "pending" ? "bg-amber-50 text-amber-700" : r.status === "approved" ? "bg-green-50 text-green-700" : "bg-rose-50 text-rose-700"}`}>{r.status === "pending" ? `step ${r.current_step + 1}/${r.total_steps}` : r.status}</span>
+                  <span className={`text-[9px] font-semibold px-1.5 py-0.5 rounded shrink-0 ${r.status === "pending" ? "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]" : r.status === "approved" ? "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]" : "bg-[var(--cmp-surface-error)] text-[var(--cmp-text-error)]"}`}>{r.status === "pending" ? `step ${r.current_step + 1}/${r.total_steps}` : r.status}</span>
                   <span className="text-[10px] text-gray-400 shrink-0">{relTime(r.created_at)}</span>
                 </div>
               ))}
@@ -152,7 +152,7 @@ export default async function PolicyStandardsCenter() {
               {d.byType.map((t: any) => (
                 <div key={t.type}>
                   <div className="flex items-center justify-between text-xs mb-0.5"><span className="text-gray-600 capitalize">{t.type.replace(/_/g, " ")}</span><span className="tabular-nums text-gray-500">{t.n}</span></div>
-                  <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden"><div className="h-full bg-blue-500 rounded-full" style={{ width: `${(t.n / Math.max(1, k.active)) * 100}%` }} /></div>
+                  <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden"><div className="h-full bg-[var(--cmp-color-information)] rounded-full" style={{ width: `${(t.n / Math.max(1, k.active)) * 100}%` }} /></div>
                 </div>
               ))}
             </div>
@@ -167,7 +167,7 @@ export default async function PolicyStandardsCenter() {
             <div className="space-y-2">
               {d.standards.map((f: any) => (
                 <div key={f.code} className="flex items-center gap-2.5 rounded-lg border border-gray-100 p-2.5">
-                  <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded shrink-0 ${f.type === "accreditation" ? "bg-violet-50 text-violet-700" : f.type === "regulatory" ? "bg-blue-50 text-blue-700" : "bg-gray-100 text-gray-600"}`}>{f.code}</span>
+                  <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded shrink-0 ${f.type === "accreditation" ? "bg-violet-50 text-violet-700" : f.type === "regulatory" ? "bg-[var(--cmp-surface-information)] text-blue-700" : "bg-gray-100 text-gray-600"}`}>{f.code}</span>
                   <span className="text-sm text-gray-800 flex-1 truncate">{f.name}</span>
                   <span className="text-[10px] text-gray-400 tabular-nums shrink-0">{f.mapped} refs</span>
                 </div>

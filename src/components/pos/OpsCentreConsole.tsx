@@ -73,7 +73,7 @@ export default function OpsCentreConsole({ patients, counts }: { patients: Patie
             <input className={`${input} col-span-5`} placeholder="Action" value={row.text} onChange={e => setRow(f.key, i, "text", e.target.value)} />
             <input className={`${input} col-span-3`} placeholder="Owner" value={row.owner} onChange={e => setRow(f.key, i, "owner", e.target.value)} />
             <input type="datetime-local" className={`${input} col-span-3`} value={row.due} onChange={e => setRow(f.key, i, "due", e.target.value)} />
-            <button type="button" onClick={() => rmRow(f.key, i)} className="col-span-1 text-gray-400 hover:text-rose-600 text-lg leading-none">×</button>
+            <button type="button" onClick={() => rmRow(f.key, i)} className="col-span-1 text-gray-400 hover:text-[var(--cmp-text-error)] text-lg leading-none">×</button>
           </div>
         ))}
         <button type="button" onClick={() => addRow(f.key)} className="text-[11px] font-medium text-emerald-700 hover:underline">+ Add action</button>
@@ -84,16 +84,16 @@ export default function OpsCentreConsole({ patients, counts }: { patients: Patie
 
   return (
     <>
-      {msg && <div className={`fixed bottom-4 right-4 z-50 text-sm rounded-lg px-4 py-2.5 shadow-lg ${msg.kind === "ok" ? "bg-emerald-600 text-white" : "bg-rose-600 text-white"}`}>{msg.text}</div>}
+      {msg && <div className={`fixed bottom-4 right-4 z-50 text-sm rounded-lg px-4 py-2.5 shadow-lg ${msg.kind === "ok" ? "bg-[var(--cmp-color-success)] text-white" : "bg-[var(--cmp-color-error)] text-white"}`}>{msg.text}</div>}
 
       {/* Quick actions (§3) */}
       <div className="bg-white rounded-xl border border-gray-200 p-4">
         <div className="flex items-center justify-between mb-3"><h3 className="text-sm font-bold text-gray-900">Quick actions</h3><span className="text-[11px] text-gray-400">Opens a contextual form</span></div>
         <div className="flex flex-wrap gap-2">
           {quick.map(t => t.crossLink ? (
-            <Link key={t.key} href={t.crossLink.href} className="text-sm rounded-lg border border-gray-200 text-gray-700 px-3 py-1.5 hover:border-emerald-300 hover:text-emerald-700 transition-colors">{t.icon} {t.name}</Link>
+            <Link key={t.key} href={t.crossLink.href} className="text-sm rounded-lg border border-gray-200 text-gray-700 px-3 py-1.5 hover:border-[var(--cmp-color-success)] hover:text-emerald-700 transition-colors">{t.icon} {t.name}</Link>
           ) : (
-            <button key={t.key} onClick={() => launch(t)} className="text-sm rounded-lg bg-emerald-600 text-white px-3 py-1.5 hover:bg-emerald-700 transition-colors">{t.icon} {t.name}</button>
+            <button key={t.key} onClick={() => launch(t)} className="text-sm rounded-lg bg-[var(--cmp-color-success)] text-white px-3 py-1.5 hover:bg-emerald-700 transition-colors">{t.icon} {t.name}</button>
           ))}
         </div>
       </div>
@@ -111,12 +111,12 @@ export default function OpsCentreConsole({ patients, counts }: { patients: Patie
                   const inner = (
                     <>
                       <span className="flex items-center gap-2 min-w-0"><span className="text-sm">{t.icon}</span><span className="text-sm text-gray-700 truncate">{t.name}</span>{t.verify && <span className="text-[8px] uppercase font-bold text-violet-500 bg-violet-50 rounded px-1">verify</span>}</span>
-                      <span className="flex items-center gap-2 shrink-0">{open > 0 && <span className="text-[10px] font-bold text-amber-600 bg-amber-50 rounded-full px-1.5">{open} open</span>}<span className="text-[11px] text-emerald-700">{t.crossLink ? "↗" : "Open"}</span></span>
+                      <span className="flex items-center gap-2 shrink-0">{open > 0 && <span className="text-[10px] font-bold text-[var(--cmp-text-warning)] bg-[var(--cmp-surface-warning)] rounded-full px-1.5">{open} open</span>}<span className="text-[11px] text-emerald-700">{t.crossLink ? "↗" : "Open"}</span></span>
                     </>
                   );
                   return t.crossLink
-                    ? <Link key={t.key} href={t.crossLink.href} className="flex items-center justify-between rounded-lg border border-gray-100 px-2.5 py-1.5 hover:border-emerald-200 hover:bg-emerald-50/30 transition-colors">{inner}</Link>
-                    : <button key={t.key} onClick={() => launch(t)} className="w-full flex items-center justify-between rounded-lg border border-gray-100 px-2.5 py-1.5 hover:border-emerald-200 hover:bg-emerald-50/30 transition-colors text-left">{inner}</button>;
+                    ? <Link key={t.key} href={t.crossLink.href} className="flex items-center justify-between rounded-lg border border-gray-100 px-2.5 py-1.5 hover:border-[var(--cmp-color-success)] hover:bg-[var(--cmp-surface-success)]/30 transition-colors">{inner}</Link>
+                    : <button key={t.key} onClick={() => launch(t)} className="w-full flex items-center justify-between rounded-lg border border-gray-100 px-2.5 py-1.5 hover:border-[var(--cmp-color-success)] hover:bg-[var(--cmp-surface-success)]/30 transition-colors text-left">{inner}</button>;
                 })}
               </div>
             </div>
@@ -134,7 +134,7 @@ export default function OpsCentreConsole({ patients, counts }: { patients: Patie
               <button onClick={close} className="text-gray-400 hover:text-gray-700 text-xl leading-none">×</button>
             </div>
             <div className="px-5 py-4 space-y-3">
-              {tpl.note && <p className="text-[11px] text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">{tpl.note}</p>}
+              {tpl.note && <p className="text-[11px] text-amber-800 bg-[var(--cmp-surface-warning)] border border-[var(--cmp-color-warning)] rounded-lg px-3 py-2">{tpl.note}</p>}
               <label className="block text-xs text-gray-500">Patient <span className="text-gray-300">(operational context)</span>
                 <select className={input} value={patientId} onChange={e => setPatientId(e.target.value)}><option value="">— none / unit-level —</option>{patients.map(p => <option key={p.id} value={p.id}>{p.label}</option>)}</select>
               </label>
@@ -146,7 +146,7 @@ export default function OpsCentreConsole({ patients, counts }: { patients: Patie
             </div>
             <div className="sticky bottom-0 bg-white border-t border-gray-100 px-5 py-3 flex items-center justify-between gap-2">
               <button onClick={() => post("save")} disabled={busy} className="text-sm rounded-lg border border-gray-200 text-gray-700 px-3.5 py-2 hover:border-gray-300 disabled:opacity-50">Save draft</button>
-              <button onClick={() => post("submit")} disabled={busy} className="text-sm rounded-lg bg-emerald-600 text-white px-4 py-2 hover:bg-emerald-700 disabled:opacity-50">Submit</button>
+              <button onClick={() => post("submit")} disabled={busy} className="text-sm rounded-lg bg-[var(--cmp-color-success)] text-white px-4 py-2 hover:bg-emerald-700 disabled:opacity-50">Submit</button>
             </div>
           </div>
         </div>

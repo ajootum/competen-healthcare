@@ -22,14 +22,14 @@ export default async function FeatureFlagsPage() {
         <p className="text-sm text-gray-500 mt-1">Enable or disable modules per tenant, country, plan or cohort. Precedence: tenant › cohort › plan › country › global.</p>
       </div>
       {!ready ? (
-        <div className="bg-amber-50 border border-amber-200 rounded-xl p-5 text-sm text-amber-700">Apply migrations <code className="font-mono text-xs">040–042</code> to load the flag catalogue.</div>
+        <div className="bg-[var(--cmp-surface-warning)] border border-[var(--cmp-color-warning)] rounded-xl p-5 text-sm text-[var(--cmp-text-warning)]">Apply migrations <code className="font-mono text-xs">040–042</code> to load the flag catalogue.</div>
       ) : (
         <div className={card}>
           <div className="space-y-2">
             {flags.length === 0 && <p className="text-sm text-gray-400">No flags defined.</p>}
             {flags.map((f: any) => (
               <div key={f.key} className="flex items-start gap-3 border border-gray-100 rounded-lg px-4 py-3">
-                <span className={`mt-1 w-2.5 h-2.5 rounded-full shrink-0 ${f.default_on ? "bg-green-500" : "bg-gray-300"}`} />
+                <span className={`mt-1 w-2.5 h-2.5 rounded-full shrink-0 ${f.default_on ? "bg-[var(--cmp-color-success)]" : "bg-gray-300"}`} />
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
                     <span className="font-mono text-sm font-medium text-gray-800">{f.key}</span>
@@ -40,7 +40,7 @@ export default async function FeatureFlagsPage() {
                   {f.assignments.length > 0 && (
                     <div className="flex flex-wrap gap-1.5 mt-1.5">
                       {f.assignments.map((a: any, i: number) => (
-                        <span key={i} className={`text-[10px] font-mono rounded px-1.5 py-0.5 ${a.enabled ? "bg-green-50 text-green-700" : "bg-red-50 text-red-600"}`}>
+                        <span key={i} className={`text-[10px] font-mono rounded px-1.5 py-0.5 ${a.enabled ? "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]" : "bg-[var(--cmp-surface-critical)] text-[var(--cmp-text-critical)]"}`}>
                           {a.scope_type}{a.scope_ref ? `:${a.scope_ref.slice(0, 12)}` : ""} {a.enabled ? "on" : "off"}
                         </span>
                       ))}

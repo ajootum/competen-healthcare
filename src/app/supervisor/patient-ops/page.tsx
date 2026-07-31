@@ -38,7 +38,7 @@ export default async function PatientOperationsDashboard() {
   const po = await loadPatientOps(admin, hid, isSuper);
   if (!po.ready) return (
     <div className="space-y-4"><h1 className="text-2xl font-bold text-gray-900">Patient Operations Dashboard</h1>
-      <div className="bg-amber-50 border border-amber-200 rounded-xl p-6"><p className="font-semibold text-amber-900">⚙️ Coming online</p><p className="text-sm text-amber-800 mt-2">The Clinical Operations Engine tables aren&apos;t provisioned yet.</p></div></div>
+      <div className="bg-[var(--cmp-surface-warning)] border border-[var(--cmp-color-warning)] rounded-xl p-6"><p className="font-semibold text-amber-900">⚙️ Coming online</p><p className="text-sm text-amber-800 mt-2">The Clinical Operations Engine tables aren&apos;t provisioned yet.</p></div></div>
   );
   const { summary, capacity, safetyBanner, flow, blockers, active } = po;
 
@@ -53,15 +53,15 @@ export default async function PatientOperationsDashboard() {
 
   const kpis: { label: string; n: any; sub?: string; tone: string; href: string }[] = [
     { label: "Current patients", n: summary.total, tone: "text-gray-900", href: "/supervisor/patient-list" },
-    { label: "Admissions today", n: admitToday, tone: "text-sky-600", href: "/supervisor/patient-flow" },
+    { label: "Admissions today", n: admitToday, tone: "text-[var(--cmp-text-information)]", href: "/supervisor/patient-flow" },
     { label: "Discharges today", n: dischToday, tone: "text-teal-600", href: "/supervisor/patient-flow" },
     { label: "Transfers today", n: transferToday, tone: "text-indigo-600", href: "/supervisor/patient-flow" },
-    { label: "Bed occupancy", n: `${capacity.occPct}%`, sub: `${capacity.occupied}/${capacity.total}`, tone: capacity.occPct >= 90 ? "text-red-600" : "text-gray-900", href: "/supervisor/bed-management" },
-    { label: "Available beds", n: capacity.available, tone: "text-blue-600", href: "/supervisor/bed-management" },
-    { label: "High-risk patients", n: summary.highRisk, tone: summary.highRisk ? "text-red-600" : "text-gray-400", href: "/supervisor/clinical-safety" },
-    { label: "PEWS escalations", n: safetyBanner.pewsAlerts, tone: safetyBanner.pewsAlerts ? "text-orange-600" : "text-gray-400", href: "/supervisor/clinical-safety" },
-    { label: "Overdue observations", n: safetyBanner.overdueObs, tone: safetyBanner.overdueObs ? "text-red-600" : "text-gray-400", href: "/supervisor/clinical-safety" },
-    { label: "Delayed discharges", n: summary.dischargesExpected, tone: "text-amber-600", href: "/supervisor/patient-flow" },
+    { label: "Bed occupancy", n: `${capacity.occPct}%`, sub: `${capacity.occupied}/${capacity.total}`, tone: capacity.occPct >= 90 ? "text-[var(--cmp-text-critical)]" : "text-gray-900", href: "/supervisor/bed-management" },
+    { label: "Available beds", n: capacity.available, tone: "text-[var(--cmp-text-information)]", href: "/supervisor/bed-management" },
+    { label: "High-risk patients", n: summary.highRisk, tone: summary.highRisk ? "text-[var(--cmp-text-critical)]" : "text-gray-400", href: "/supervisor/clinical-safety" },
+    { label: "PEWS escalations", n: safetyBanner.pewsAlerts, tone: safetyBanner.pewsAlerts ? "text-[var(--cmp-text-warning)]" : "text-gray-400", href: "/supervisor/clinical-safety" },
+    { label: "Overdue observations", n: safetyBanner.overdueObs, tone: safetyBanner.overdueObs ? "text-[var(--cmp-text-critical)]" : "text-gray-400", href: "/supervisor/clinical-safety" },
+    { label: "Delayed discharges", n: summary.dischargesExpected, tone: "text-[var(--cmp-text-warning)]", href: "/supervisor/patient-flow" },
   ];
 
   // Aggregate categories already summarise awaiting-bed and cleaning, so drop the
@@ -126,7 +126,7 @@ export default async function PatientOperationsDashboard() {
             {bottlenecks.map((b: any, i: number) => (
               <div key={i} className="flex items-center justify-between text-sm">
                 <span className="text-gray-600">{b.label}{b.detail ? <span className="text-gray-400"> · {b.detail}</span> : null}</span>
-                <span className="font-semibold tabular-nums text-amber-600">{b.n}</span>
+                <span className="font-semibold tabular-nums text-[var(--cmp-text-warning)]">{b.n}</span>
               </div>
             ))}
           </div>
@@ -140,7 +140,7 @@ export default async function PatientOperationsDashboard() {
             {safety.map(([l, n]) => (
               <div key={l} className="flex items-center justify-between">
                 <span className="text-gray-600">{l}</span>
-                <span className={`font-semibold tabular-nums ${n ? "text-red-600" : "text-gray-300"}`}>{n}</span>
+                <span className={`font-semibold tabular-nums ${n ? "text-[var(--cmp-text-critical)]" : "text-gray-300"}`}>{n}</span>
               </div>
             ))}
           </div>

@@ -33,7 +33,7 @@ export default async function PreferencesPage() {
     <div className="max-w-[1400px] mx-auto space-y-5">
       {/* Header */}
       <div>
-        <p className="text-[11px] font-semibold text-blue-600 uppercase tracking-wide">Personal Workspace</p>
+        <p className="text-[11px] font-semibold text-[var(--cmp-text-information)] uppercase tracking-wide">Personal Workspace</p>
         <h1 className="text-2xl font-bold text-gray-900">Preferences &amp; Personal Configuration</h1>
         <p className="text-sm text-gray-500 mt-0.5">Customise your experience, notifications, themes, language and workspace preferences.</p>
       </div>
@@ -58,14 +58,14 @@ export default async function PreferencesPage() {
               {summary.map(s => (
                 <div key={s.label} className="flex items-center justify-between"><dt className="text-gray-400">{s.label}</dt><dd className="text-gray-800 font-medium capitalize">{s.value}</dd></div>
               ))}
-              <div className="flex items-center justify-between pt-1 border-t border-gray-100"><dt className="text-gray-400">Profile</dt><dd><Link href="/dashboard/profile" className="text-blue-600 font-medium hover:underline">View →</Link></dd></div>
+              <div className="flex items-center justify-between pt-1 border-t border-gray-100"><dt className="text-gray-400">Profile</dt><dd><Link href="/dashboard/profile" className="text-[var(--cmp-text-information)] font-medium hover:underline">View →</Link></dd></div>
             </dl>
           </div>
 
-          <div className="bg-blue-50/60 rounded-xl border border-blue-100 p-4">
+          <div className="bg-[var(--cmp-surface-information)]/60 rounded-xl border border-[var(--cmp-color-information)] p-4">
             <h3 className="text-sm font-semibold text-gray-900 mb-1">Need Help?</h3>
             <p className="text-[12px] text-gray-600 mb-2">Learn more about customising your workspace.</p>
-            <a href="mailto:gabriel@semacast.com?subject=Competen preferences help" className="text-[12px] font-medium text-blue-600 hover:underline">Contact support →</a>
+            <a href="mailto:gabriel@semacast.com?subject=Competen preferences help" className="text-[12px] font-medium text-[var(--cmp-text-information)] hover:underline">Contact support →</a>
           </div>
         </div>
       </div>

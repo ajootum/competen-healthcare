@@ -16,7 +16,7 @@ export const dynamic = "force-dynamic";
 
 const card = "bg-white rounded-xl border border-gray-200";
 const fmt = (n: number) => n.toLocaleString();
-const IMPACT_TONE: Record<string, string> = { High: "text-rose-600 bg-rose-50", Medium: "text-amber-600 bg-amber-50", Low: "text-gray-500 bg-gray-100" };
+const IMPACT_TONE: Record<string, string> = { High: "text-[var(--cmp-text-error)] bg-[var(--cmp-surface-error)]", Medium: "text-[var(--cmp-text-warning)] bg-[var(--cmp-surface-warning)]", Low: "text-gray-500 bg-gray-100" };
 
 export default async function KnowledgeIntelligence() {
   const supabase = await createClient();
@@ -30,13 +30,13 @@ export default async function KnowledgeIntelligence() {
   const q = await loadKnowledgeIntelligence(admin);
   const k = q.kpis;
 
-  const healthTone = k.health == null ? "text-gray-400" : k.health >= 80 ? "text-green-600" : k.health >= 50 ? "text-amber-600" : "text-orange-600";
+  const healthTone = k.health == null ? "text-gray-400" : k.health >= 80 ? "text-[var(--cmp-text-success)]" : k.health >= 50 ? "text-[var(--cmp-text-warning)]" : "text-[var(--cmp-text-warning)]";
   const kpiCards = [
-    { label: "Knowledge Health", value: k.health == null ? "—" : `${k.health}%`, icon: "💚", iconBg: "bg-green-50", tone: healthTone },
-    { label: "Coverage Score", value: k.coverage == null ? "—" : `${k.coverage}%`, icon: "🎯", iconBg: "bg-violet-50", tone: k.coverage != null && k.coverage < 50 ? "text-amber-600" : "text-gray-900" },
-    { label: "Duplicate Items", value: fmt(k.duplicates), icon: "🧬", iconBg: "bg-rose-50", tone: k.duplicates ? "text-rose-600" : "text-gray-900" },
-    { label: "Knowledge Gaps", value: fmt(k.gaps), icon: "🕳️", iconBg: "bg-orange-50", tone: k.gaps ? "text-orange-600" : "text-gray-900" },
-    { label: "Missing Competencies", value: fmt(k.missingCompetencies), icon: "⚠️", iconBg: "bg-amber-50", tone: k.missingCompetencies ? "text-amber-600" : "text-gray-900" },
+    { label: "Knowledge Health", value: k.health == null ? "—" : `${k.health}%`, icon: "💚", iconBg: "bg-[var(--cmp-surface-success)]", tone: healthTone },
+    { label: "Coverage Score", value: k.coverage == null ? "—" : `${k.coverage}%`, icon: "🎯", iconBg: "bg-violet-50", tone: k.coverage != null && k.coverage < 50 ? "text-[var(--cmp-text-warning)]" : "text-gray-900" },
+    { label: "Duplicate Items", value: fmt(k.duplicates), icon: "🧬", iconBg: "bg-[var(--cmp-surface-error)]", tone: k.duplicates ? "text-[var(--cmp-text-error)]" : "text-gray-900" },
+    { label: "Knowledge Gaps", value: fmt(k.gaps), icon: "🕳️", iconBg: "bg-[var(--cmp-surface-warning)]", tone: k.gaps ? "text-[var(--cmp-text-warning)]" : "text-gray-900" },
+    { label: "Missing Competencies", value: fmt(k.missingCompetencies), icon: "⚠️", iconBg: "bg-[var(--cmp-surface-warning)]", tone: k.missingCompetencies ? "text-[var(--cmp-text-warning)]" : "text-gray-900" },
     { label: "AI Recommendations", value: fmt(k.recommendations), icon: "✨", iconBg: "bg-teal-50", tone: k.recommendations ? "text-teal-600" : "text-gray-900" },
   ];
 
@@ -95,7 +95,7 @@ export default async function KnowledgeIntelligence() {
             {q.dimensions.map((d: any) => (
               <div key={d.label}>
                 <div className="flex items-center justify-between text-xs mb-0.5"><span className="text-gray-600">{d.label}</span><span className={`tabular-nums ${d.value == null ? "text-gray-300" : "text-gray-700"}`}>{d.value == null ? "n/a" : `${d.value}%`}</span></div>
-                <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">{d.value != null && <div className={`h-full rounded-full ${d.value >= 70 ? "bg-green-500" : d.value >= 40 ? "bg-amber-500" : "bg-orange-500"}`} style={{ width: `${d.value}%` }} />}</div>
+                <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">{d.value != null && <div className={`h-full rounded-full ${d.value >= 70 ? "bg-[var(--cmp-color-success)]" : d.value >= 40 ? "bg-[var(--cmp-color-warning)]" : "bg-[var(--cmp-color-warning)]"}`} style={{ width: `${d.value}%` }} />}</div>
               </div>
             ))}
           </div>
@@ -126,13 +126,13 @@ export default async function KnowledgeIntelligence() {
           <h2 className="font-semibold text-gray-900 text-[15px] mb-3">Coverage Analysis</h2>
           <div className="grid grid-cols-3 gap-2 mb-3">
             {[["Mapped", q.coverage.mapped], ["Total", q.coverage.total], ["Missing", q.coverage.missing]].map(([l, n]) => (
-              <div key={l as string} className="rounded-lg border border-gray-100 py-2.5 text-center"><p className={`text-lg font-bold tabular-nums ${l === "Missing" && (n as number) > 0 ? "text-orange-600" : "text-gray-900"}`}>{fmt(n as number)}</p><p className="text-[10px] text-gray-500">{l}</p></div>
+              <div key={l as string} className="rounded-lg border border-gray-100 py-2.5 text-center"><p className={`text-lg font-bold tabular-nums ${l === "Missing" && (n as number) > 0 ? "text-[var(--cmp-text-warning)]" : "text-gray-900"}`}>{fmt(n as number)}</p><p className="text-[10px] text-gray-500">{l}</p></div>
             ))}
           </div>
           {q.coverage.lowCoverageFrameworks.length > 0 ? (
             <div className="space-y-1 pt-2 border-t border-gray-50">
               <p className="text-[10px] font-semibold text-gray-400 uppercase">Low-coverage frameworks</p>
-              {q.coverage.lowCoverageFrameworks.map((f: any) => <div key={f.name} className="flex items-center justify-between text-xs"><span className="text-gray-600 truncate">{f.name}</span><span className="text-orange-600 tabular-nums">{f.cov}%</span></div>)}
+              {q.coverage.lowCoverageFrameworks.map((f: any) => <div key={f.name} className="flex items-center justify-between text-xs"><span className="text-gray-600 truncate">{f.name}</span><span className="text-[var(--cmp-text-warning)] tabular-nums">{f.cov}%</span></div>)}
             </div>
           ) : <p className="text-[11px] text-gray-400 pt-2 border-t border-gray-50">All frameworks above 50% coverage.</p>}
         </div>
@@ -142,7 +142,7 @@ export default async function KnowledgeIntelligence() {
           <h2 className="font-semibold text-gray-900 text-[15px] mb-3">Duplicate Detection</h2>
           <div className="grid grid-cols-2 gap-2">
             {[["KO duplicates", q.duplicates.knowledgeObjects.items], ["KO groups", q.duplicates.knowledgeObjects.groups], ["Competency dupes", q.duplicates.competencies.items], ["Comp groups", q.duplicates.competencies.groups]].map(([l, n]) => (
-              <div key={l as string} className="rounded-lg border border-gray-100 p-3 text-center"><p className={`text-xl font-bold tabular-nums ${(n as number) > 0 ? "text-rose-600" : "text-gray-900"}`}>{fmt(n as number)}</p><p className="text-[10px] text-gray-500">{l}</p></div>
+              <div key={l as string} className="rounded-lg border border-gray-100 p-3 text-center"><p className={`text-xl font-bold tabular-nums ${(n as number) > 0 ? "text-[var(--cmp-text-error)]" : "text-gray-900"}`}>{fmt(n as number)}</p><p className="text-[10px] text-gray-500">{l}</p></div>
             ))}
           </div>
           <p className="text-[10px] text-gray-400 mt-3">Exact normalised-title matches. Semantic near-duplicate detection activates with the embedding index.</p>
@@ -153,7 +153,7 @@ export default async function KnowledgeIntelligence() {
           <h2 className="font-semibold text-gray-900 text-[15px] mb-3">Gap Analysis</h2>
           <div className="space-y-2">
             {[["Empty domains", q.gaps.emptyDomains], ["CPUs without blueprint", q.gaps.cpusNoBlueprint], ["Low-coverage frameworks", q.gaps.lowCoverageFrameworks], ["Outdated policies", q.gaps.outdatedPolicies]].map(([l, n]) => (
-              <div key={l as string} className="flex items-center justify-between text-sm py-1 border-b border-gray-50 last:border-0"><span className="text-gray-600">{l}</span><span className={`tabular-nums font-medium ${(n as number) > 0 ? "text-orange-600" : "text-gray-900"}`}>{fmt(n as number)}</span></div>
+              <div key={l as string} className="flex items-center justify-between text-sm py-1 border-b border-gray-50 last:border-0"><span className="text-gray-600">{l}</span><span className={`tabular-nums font-medium ${(n as number) > 0 ? "text-[var(--cmp-text-warning)]" : "text-gray-900"}`}>{fmt(n as number)}</span></div>
             ))}
           </div>
         </div>

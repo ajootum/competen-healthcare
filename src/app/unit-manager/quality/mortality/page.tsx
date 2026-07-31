@@ -21,8 +21,8 @@ const FACTOR_COLORS = ["#ef4444", "#fb923c", "#8b5cf6", "#3b82f6", "#10b981", "#
 const CAUSE_COLORS = ["#ef4444", "#8b5cf6", "#fb923c", "#3b82f6", "#10b981"];
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 const monthLabel = (p: string) => { const d = new Date(p); return isNaN(+d) ? p : MONTHS[d.getUTCMonth()]; };
-const pill: Record<string, { c: string; l: string }> = { new: { c: "bg-gray-100 text-gray-600", l: "New" }, initial_review: { c: "bg-amber-100 text-amber-700", l: "Under Review" }, rca_in_progress: { c: "bg-blue-100 text-blue-700", l: "RCA in Progress" }, peer_review: { c: "bg-violet-100 text-violet-700", l: "Peer Review" }, pending_capa: { c: "bg-orange-100 text-orange-700", l: "Pending CAPA" }, closed: { c: "bg-emerald-100 text-emerald-700", l: "Closed" } };
-const sevPill: Record<string, string> = { New: "bg-rose-100 text-rose-700", Overdue: "bg-orange-100 text-orange-700", Critical: "bg-rose-100 text-rose-700", Info: "bg-sky-100 text-sky-700", Warning: "bg-amber-100 text-amber-700" };
+const pill: Record<string, { c: string; l: string }> = { new: { c: "bg-gray-100 text-gray-600", l: "New" }, initial_review: { c: "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]", l: "Under Review" }, rca_in_progress: { c: "bg-[var(--cmp-surface-information)] text-blue-700", l: "RCA in Progress" }, peer_review: { c: "bg-violet-100 text-violet-700", l: "Peer Review" }, pending_capa: { c: "bg-[var(--cmp-surface-warning)] text-orange-700", l: "Pending CAPA" }, closed: { c: "bg-[var(--cmp-surface-success)] text-emerald-700", l: "Closed" } };
+const sevPill: Record<string, string> = { New: "bg-[var(--cmp-surface-error)] text-[var(--cmp-text-error)]", Overdue: "bg-[var(--cmp-surface-warning)] text-orange-700", Critical: "bg-[var(--cmp-surface-error)] text-[var(--cmp-text-error)]", Info: "bg-[var(--cmp-surface-information)] text-[var(--cmp-text-information)]", Warning: "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]" };
 
 function KpiCard({ icon, tint, label, value, unit, delta, deltaGood, sub, tone }: { icon: string; tint: string; label: string; value: any; unit?: string; delta?: number | null; deltaGood?: "down" | "up"; sub?: string; tone?: string }) {
   const good = delta != null && delta !== 0 ? ((delta < 0 && deltaGood === "down") || (delta > 0 && deltaGood === "up")) : null;
@@ -30,7 +30,7 @@ function KpiCard({ icon, tint, label, value, unit, delta, deltaGood, sub, tone }
     <div className={`${qcard} p-3`}>
       <div className="flex items-center gap-2 mb-1"><span className={`w-7 h-7 rounded-lg ${tint} flex items-center justify-center text-sm shrink-0`}>{icon}</span><span className="text-[10px] text-gray-500 leading-tight">{label}</span></div>
       <p className={`text-xl font-bold tabular-nums ${tone ?? "text-gray-900"}`}>{value}{unit && <span className="text-[11px] text-gray-400 font-normal ml-0.5">{unit}</span>}</p>
-      {delta != null ? <p className={`text-[10px] ${good == null ? "text-gray-400" : good ? "text-emerald-600" : "text-rose-600"}`}>{delta < 0 ? "▼" : delta > 0 ? "▲" : ""} {Math.abs(delta)} vs last month</p> : sub ? <p className="text-[10px] text-gray-400">{sub}</p> : null}
+      {delta != null ? <p className={`text-[10px] ${good == null ? "text-gray-400" : good ? "text-[var(--cmp-text-success)]" : "text-[var(--cmp-text-error)]"}`}>{delta < 0 ? "▼" : delta > 0 ? "▲" : ""} {Math.abs(delta)} vs last month</p> : sub ? <p className="text-[10px] text-gray-400">{sub}</p> : null}
     </div>
   );
 }
@@ -83,15 +83,15 @@ export default async function MortalityMorbidityCentre() {
     </>
   );
 
-  if (!d.provisioned) return <div className="space-y-4">{header}<div className="bg-amber-50 border border-amber-200 rounded-xl p-6"><p className="font-semibold text-amber-900">⚙️ M&amp;M store not provisioned</p><p className="text-sm text-amber-800 mt-1">Apply migration 100 (mm_cases / mm_contributory_factors / mm_period_stats), then seed (scripts/seed-mortality-morbidity.mjs).</p></div></div>;
+  if (!d.provisioned) return <div className="space-y-4">{header}<div className="bg-[var(--cmp-surface-warning)] border border-[var(--cmp-color-warning)] rounded-xl p-6"><p className="font-semibold text-amber-900">⚙️ M&amp;M store not provisioned</p><p className="text-sm text-amber-800 mt-1">Apply migration 100 (mm_cases / mm_contributory_factors / mm_period_stats), then seed (scripts/seed-mortality-morbidity.mjs).</p></div></div>;
   if (!d.hasData) return <div className="space-y-4">{header}<div className={`${qcard} p-8 text-center`}><p className="text-sm text-gray-500">No M&amp;M cases registered for this unit yet.</p><p className="text-xs text-gray-400 mt-1">Register cases in the M&amp;M workspace, or run scripts/seed-mortality-morbidity.mjs for the AMU demo ward.</p></div></div>;
 
   const k = d.kpis;
   const riskWord = k.aiRisk >= 0.7 ? "High Risk" : k.aiRisk >= 0.4 ? "Moderate Risk" : "Low Risk";
-  const riskTone = k.aiRisk >= 0.7 ? "text-rose-600" : k.aiRisk >= 0.4 ? "text-amber-600" : "text-emerald-600";
+  const riskTone = k.aiRisk >= 0.7 ? "text-[var(--cmp-text-error)]" : k.aiRisk >= 0.4 ? "text-[var(--cmp-text-warning)]" : "text-[var(--cmp-text-success)]";
   const bench = [{ label: "Your Unit", v: d.benchmarking.yourUnit, color: SEG.violet }, { label: "Similar Units", v: d.benchmarking.peerAvg, color: SEG.blue }, { label: "Hospital Avg", v: d.benchmarking.hospitalAvg, color: SEG.green }, { label: "National Avg", v: d.benchmarking.nationalAvg, color: SEG.orange }];
   const benchMax = Math.max(1, ...bench.map(b => b.v));
-  const aiTint: Record<string, string> = { red: "bg-rose-50 text-rose-600", amber: "bg-amber-50 text-amber-600", low: "bg-emerald-50 text-emerald-600" };
+  const aiTint: Record<string, string> = { red: "bg-[var(--cmp-surface-error)] text-[var(--cmp-text-error)]", amber: "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]", low: "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]" };
 
   return (
     <div className="space-y-4">
@@ -101,12 +101,12 @@ export default async function MortalityMorbidityCentre() {
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 xl:grid-cols-9 gap-2.5">
         <KpiCard icon="📉" tint="bg-violet-50" label="Mortality Rate" value={k.mortalityRate} unit="/1k" delta={k.mortalityDelta} deltaGood="down" />
         <KpiCard icon="💗" tint="bg-pink-50" label="Morbidity Rate" value={k.morbidityRate} unit="/1k" delta={k.morbidityDelta} deltaGood="down" />
-        <KpiCard icon="🫀" tint="bg-rose-50" label="Deaths This Month" value={k.deaths} delta={k.deathsDelta} deltaGood="down" tone="text-rose-600" />
-        <KpiCard icon="🧬" tint="bg-orange-50" label="Serious Morbidity" value={k.seriousMorbidity} delta={k.seriousDelta} deltaGood="down" tone="text-orange-600" />
-        <KpiCard icon="📋" tint="bg-amber-50" label="Pending Reviews" value={k.pendingReviews} sub={`${k.pendingMortality} mortality · ${k.pendingMorbidity} morbidity`} />
-        <KpiCard icon="🎯" tint="bg-blue-50" label="RCA Completion" value={`${k.rcaCompletion}%`} tone="text-blue-600" sub="of required" />
-        <KpiCard icon="✅" tint="bg-emerald-50" label="CAPA Completion" value={`${k.capaCompletion}%`} tone="text-emerald-600" sub="of required" />
-        <KpiCard icon="⚠️" tint="bg-rose-50" label="Preventable Deaths" value={k.preventableDeaths} tone="text-rose-600" sub={`${k.preventablePct}% of deaths`} />
+        <KpiCard icon="🫀" tint="bg-[var(--cmp-surface-error)]" label="Deaths This Month" value={k.deaths} delta={k.deathsDelta} deltaGood="down" tone="text-[var(--cmp-text-error)]" />
+        <KpiCard icon="🧬" tint="bg-[var(--cmp-surface-warning)]" label="Serious Morbidity" value={k.seriousMorbidity} delta={k.seriousDelta} deltaGood="down" tone="text-[var(--cmp-text-warning)]" />
+        <KpiCard icon="📋" tint="bg-[var(--cmp-surface-warning)]" label="Pending Reviews" value={k.pendingReviews} sub={`${k.pendingMortality} mortality · ${k.pendingMorbidity} morbidity`} />
+        <KpiCard icon="🎯" tint="bg-[var(--cmp-surface-information)]" label="RCA Completion" value={`${k.rcaCompletion}%`} tone="text-[var(--cmp-text-information)]" sub="of required" />
+        <KpiCard icon="✅" tint="bg-[var(--cmp-surface-success)]" label="CAPA Completion" value={`${k.capaCompletion}%`} tone="text-[var(--cmp-text-success)]" sub="of required" />
+        <KpiCard icon="⚠️" tint="bg-[var(--cmp-surface-error)]" label="Preventable Deaths" value={k.preventableDeaths} tone="text-[var(--cmp-text-error)]" sub={`${k.preventablePct}% of deaths`} />
         <KpiCard icon="🧠" tint="bg-fuchsia-50" label="AI Clinical Risk" value={k.aiRisk} tone={riskTone} sub={riskWord} />
       </div>
 

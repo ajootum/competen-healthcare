@@ -28,17 +28,17 @@ export type TimelineEvent = { at: string; label: string; chip: string; good: boo
 export type CpuSummary = { name: string; pct: number; total: number; due: string | null };
 
 const STATUS_CLS: Record<PassportRow["status"], string> = {
-  "Flagged": "bg-red-50 text-red-600",
+  "Flagged": "bg-[var(--cmp-surface-critical)] text-[var(--cmp-text-critical)]",
   "Reassessment Due": "bg-purple-50 text-purple-700",
-  "Awaiting Validation": "bg-amber-50 text-amber-700",
-  "Evidence Incomplete": "bg-rose-50 text-rose-600",
-  "Expiring Soon": "bg-orange-50 text-orange-600",
-  "Healthy": "bg-green-50 text-green-700",
+  "Awaiting Validation": "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]",
+  "Evidence Incomplete": "bg-[var(--cmp-surface-error)] text-[var(--cmp-text-error)]",
+  "Expiring Soon": "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]",
+  "Healthy": "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]",
   "No Passport Yet": "bg-gray-100 text-gray-500",
 };
 const PRIO_UI = {
-  high:   { label: "High",   cls: "bg-red-50 text-red-600" },
-  medium: { label: "Medium", cls: "bg-amber-50 text-amber-700" },
+  high:   { label: "High",   cls: "bg-[var(--cmp-surface-critical)] text-[var(--cmp-text-critical)]" },
+  medium: { label: "Medium", cls: "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]" },
   low:    { label: "Low",    cls: "bg-gray-100 text-gray-500" },
 };
 
@@ -87,11 +87,11 @@ export default function PassportCentre({ rows, kpis, selectedId, timeline, cpus 
 
   const KPI_TILES = [
     { icon: "📋", value: String(kpis.pending), label: "Reviews Pending", sub: "awaiting validation", tint: "bg-indigo-50" },
-    { icon: "⏳", value: String(kpis.awaitingEvidence), label: "Awaiting Evidence", sub: "unverified entries", tint: "bg-amber-50" },
-    { icon: "📅", value: String(kpis.expiring), label: "Expiring Soon", sub: "within 30 days", tint: "bg-orange-50" },
-    { icon: "✅", value: String(kpis.recentlyApproved), label: "Recently Approved", sub: "validated this week", tint: "bg-green-50" },
-    { icon: "🛑", value: String(kpis.highRisk), label: "High Risk Passports", sub: "require attention", tint: "bg-red-50" },
-    { icon: "⏱️", value: kpis.avgReviewDays !== null ? `${kpis.avgReviewDays}d` : "—", label: "Avg. Review Time", sub: "decision → validated", tint: "bg-blue-50" },
+    { icon: "⏳", value: String(kpis.awaitingEvidence), label: "Awaiting Evidence", sub: "unverified entries", tint: "bg-[var(--cmp-surface-warning)]" },
+    { icon: "📅", value: String(kpis.expiring), label: "Expiring Soon", sub: "within 30 days", tint: "bg-[var(--cmp-surface-warning)]" },
+    { icon: "✅", value: String(kpis.recentlyApproved), label: "Recently Approved", sub: "validated this week", tint: "bg-[var(--cmp-surface-success)]" },
+    { icon: "🛑", value: String(kpis.highRisk), label: "High Risk Passports", sub: "require attention", tint: "bg-[var(--cmp-surface-critical)]" },
+    { icon: "⏱️", value: kpis.avgReviewDays !== null ? `${kpis.avgReviewDays}d` : "—", label: "Avg. Review Time", sub: "decision → validated", tint: "bg-[var(--cmp-surface-information)]" },
     { icon: "🛡️", value: kpis.health !== null ? `${kpis.health}%` : "—", label: "Passport Health Score", sub: "organisation average", tint: "bg-teal-50" },
   ];
 
@@ -235,10 +235,10 @@ export default function PassportCentre({ rows, kpis, selectedId, timeline, cpus 
                   <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">Passport Health Score</p>
                   {sel.health !== null ? (
                     <>
-                      <p className={`text-3xl font-extrabold ${sel.health >= 80 ? "text-green-600" : sel.health >= 50 ? "text-amber-600" : "text-red-500"}`}>{sel.health}%</p>
+                      <p className={`text-3xl font-extrabold ${sel.health >= 80 ? "text-[var(--cmp-text-success)]" : sel.health >= 50 ? "text-[var(--cmp-text-warning)]" : "text-red-500"}`}>{sel.health}%</p>
                       <p className="text-[10px] text-gray-400">{sel.competent} of {sel.total} decided competencies validated</p>
                       <div className="h-2 bg-gray-100 rounded-full overflow-hidden mt-1.5">
-                        <div className={`h-full rounded-full ${sel.health >= 80 ? "bg-green-500" : sel.health >= 50 ? "bg-amber-400" : "bg-red-400"}`}
+                        <div className={`h-full rounded-full ${sel.health >= 80 ? "bg-[var(--cmp-color-success)]" : sel.health >= 50 ? "bg-[var(--cmp-color-warning)]" : "bg-[var(--cmp-color-critical)]"}`}
                           style={{ width: `${sel.health}%` }} />
                       </div>
                     </>
@@ -265,14 +265,14 @@ export default function PassportCentre({ rows, kpis, selectedId, timeline, cpus 
                     <div className="flex flex-col gap-2">
                       {timeline.map((t, i) => (
                         <div key={i} className="flex items-start gap-2">
-                          <span className={`w-2 h-2 rounded-full mt-1.5 shrink-0 ${t.good ? "bg-green-400" : "bg-amber-400"}`} />
+                          <span className={`w-2 h-2 rounded-full mt-1.5 shrink-0 ${t.good ? "bg-[var(--cmp-color-success)]" : "bg-[var(--cmp-color-warning)]"}`} />
                           <div className="min-w-0 flex-1">
                             <p className="text-[11px] text-gray-700 leading-snug truncate">{t.label}</p>
                             <p className="text-[9px] text-gray-300" suppressHydrationWarning>
                               {new Date(t.at).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" })}
                             </p>
                           </div>
-                          <span className={`text-[8px] font-bold px-1.5 py-0.5 rounded shrink-0 capitalize ${t.good ? "bg-green-50 text-green-700" : "bg-amber-50 text-amber-700"}`}>{t.chip}</span>
+                          <span className={`text-[8px] font-bold px-1.5 py-0.5 rounded shrink-0 capitalize ${t.good ? "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]" : "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]"}`}>{t.chip}</span>
                         </div>
                       ))}
                     </div>

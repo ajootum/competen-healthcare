@@ -52,7 +52,7 @@ export default function WorkspaceDesigner({ catalog, rows, versions, hospitals, 
           <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-all ${eff.enabled ? "left-[18px]" : "left-0.5"}`} />
         </button>
         <button onClick={() => rename(path, fallback)} disabled={busy} className="text-[11px] text-gray-400 hover:text-teal-600" title="Rename">✎</button>
-        {has && <button onClick={() => reset(path)} disabled={busy} className="text-[11px] text-gray-400 hover:text-rose-600" title="Reset to inherited">↺</button>}
+        {has && <button onClick={() => reset(path)} disabled={busy} className="text-[11px] text-gray-400 hover:text-[var(--cmp-text-error)]" title="Reset to inherited">↺</button>}
       </div>
     );
   };
@@ -77,18 +77,18 @@ export default function WorkspaceDesigner({ catalog, rows, versions, hospitals, 
           <span className="text-[10px] text-gray-400">Unit / Role / User scopes: engine-supported, surfaced here in a later phase.</span>
         </div>
         <div className="ml-auto flex items-center gap-2">
-          {unpublished > 0 && <span className="text-[11px] text-amber-600 font-medium">{unpublished} unpublished change{unpublished > 1 ? "s" : ""}</span>}
+          {unpublished > 0 && <span className="text-[11px] text-[var(--cmp-text-warning)] font-medium">{unpublished} unpublished change{unpublished > 1 ? "s" : ""}</span>}
           <button onClick={() => post({ action: "publish", label: `Publish ${new Date().toISOString().slice(0, 16).replace("T", " ")}` })} disabled={busy || !provisioned || unpublished === 0}
             className={`text-xs font-semibold px-3 py-1.5 rounded-lg ${unpublished > 0 && provisioned ? "bg-teal-600 text-white hover:bg-teal-700" : "bg-gray-100 text-gray-400"}`}>Publish</button>
         </div>
       </div>
-      {err && <div className="rounded-lg bg-rose-50 border border-rose-200 text-rose-700 text-xs px-3 py-2">{err}</div>}
+      {err && <div className="rounded-lg bg-[var(--cmp-surface-error)] border border-[var(--cmp-color-error)] text-[var(--cmp-text-error)] text-xs px-3 py-2">{err}</div>}
 
       {/* Workspace tabs */}
       <div className="flex gap-1 flex-wrap">
         {catalog.map(w => (
           <button key={w.key} onClick={() => setActiveWs(w.key)} className={`text-xs font-medium px-3 py-1.5 rounded-lg flex items-center gap-1.5 ${activeWs === w.key ? "bg-teal-600 text-white" : "bg-white border border-gray-200 text-gray-600"}`}>
-            {w.label}{w.wired ? <span className="text-[9px] px-1 rounded bg-green-400/20 text-green-100 border border-green-300/30">live</span> : <span className="text-[9px] px-1 rounded bg-gray-400/20 text-current opacity-60">stored</span>}
+            {w.label}{w.wired ? <span className="text-[9px] px-1 rounded bg-[var(--cmp-color-success)]/20 text-green-100 border border-[var(--cmp-color-success)]/30">live</span> : <span className="text-[9px] px-1 rounded bg-gray-400/20 text-current opacity-60">stored</span>}
           </button>
         ))}
       </div>
@@ -135,7 +135,7 @@ export default function WorkspaceDesigner({ catalog, rows, versions, hospitals, 
           <div className="space-y-1.5">
             {scopeVersions.map((v: any) => (
               <div key={v.id} className="flex items-center gap-2 text-xs">
-                <span className={`px-1.5 py-0.5 rounded ${v.status === "rolled_back" ? "bg-amber-50 text-amber-700" : "bg-green-50 text-green-700"}`}>{v.status}</span>
+                <span className={`px-1.5 py-0.5 rounded ${v.status === "rolled_back" ? "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]" : "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]"}`}>{v.status}</span>
                 <span className="text-gray-700">{v.label ?? "Version"}</span>
                 <span className="text-gray-400">· {v.published_by_name ?? "—"} · {new Date(v.created_at).toLocaleString()}</span>
                 <button onClick={() => post({ action: "rollback", version_id: v.id })} disabled={busy || !provisioned} className="ml-auto text-[11px] text-teal-700 hover:underline">Roll back to this →</button>

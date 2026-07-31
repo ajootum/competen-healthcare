@@ -64,7 +64,7 @@ export default function TaskConsole({ staff, openTasks, presetTask }: { staff: P
     <div className="bg-white rounded-xl border border-gray-200">
       <div className="flex items-center gap-2 p-3 border-b border-gray-100 flex-wrap">
         <h2 className="font-semibold text-gray-900 text-[15px] mr-auto">Task Console</h2>
-        {msg && <span className={`text-xs rounded-lg px-2.5 py-1 ${msg.k === "ok" ? "bg-green-50 text-green-800" : "bg-amber-50 text-amber-800"}`}>{msg.t}</span>}
+        {msg && <span className={`text-xs rounded-lg px-2.5 py-1 ${msg.k === "ok" ? "bg-[var(--cmp-surface-success)] text-green-800" : "bg-[var(--cmp-surface-warning)] text-amber-800"}`}>{msg.t}</span>}
         <div className="flex gap-1">
           {TABS.map(b => (
             <button key={b.key} onClick={() => switchTab(b.key)} className={`text-xs font-medium rounded-lg px-2.5 py-1.5 border ${tab === b.key ? "bg-teal-50 border-teal-300 text-teal-700" : "border-gray-200 text-gray-500 hover:bg-gray-50"}`}>{b.icon} {b.label}</button>
@@ -87,7 +87,7 @@ export default function TaskConsole({ staff, openTasks, presetTask }: { staff: P
           <div className="grid sm:grid-cols-2 gap-3">
             <div><label className={label}>Task *</label><select value={form.task_id ?? ""} onChange={set("task_id")} className={input}><option value="">— Select task —</option>{openTasks.map(t => <option key={t.id} value={t.id}>{t.label}</option>)}</select></div>
             <div><label className={label}>New status *</label><select value={form.status ?? ""} onChange={set("status")} className={input}><option value="">— Select status —</option>{Object.entries(STATUSES).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select></div>
-            {openTasks.length === 0 && <p className="sm:col-span-2 text-[11px] text-amber-600">No open tasks.</p>}
+            {openTasks.length === 0 && <p className="sm:col-span-2 text-[11px] text-[var(--cmp-text-warning)]">No open tasks.</p>}
             <p className="sm:col-span-2 text-[11px] text-gray-400">Only legal transitions are accepted (e.g. you can&apos;t skip straight to verified). Verifying requires a coordinator who did not perform the task.</p>
           </div>
         )}

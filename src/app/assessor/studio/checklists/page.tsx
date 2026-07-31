@@ -39,7 +39,7 @@ export default async function StudioChecklistsPage() {
         </p>
       </div>
       {skillRows.length === 0 && (
-        <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 text-sm text-amber-800 mb-4">
+        <div className="bg-[var(--cmp-surface-warning)] border border-[var(--cmp-color-warning)] rounded-xl p-4 text-sm text-amber-800 mb-4">
           No competency skills exist yet — add a skill to a competency first (the builder below includes skill creation via the library).
         </div>
       )}

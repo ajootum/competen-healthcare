@@ -5,9 +5,9 @@ import WorkflowManager from "./WorkflowManager";
 
 const TRIGGER_LABELS: Record<string, { label: string; color: string }> = {
   assessment_complete:    { label: "Assessment Complete",   color: "bg-teal-50 text-teal-700" },
-  cycle_end:              { label: "Cycle End",             color: "bg-blue-50 text-blue-700" },
-  score_below_threshold:  { label: "Score Below Threshold", color: "bg-red-50 text-red-600" },
-  expiry_approaching:     { label: "Expiry Approaching",    color: "bg-amber-50 text-amber-700" },
+  cycle_end:              { label: "Cycle End",             color: "bg-[var(--cmp-surface-information)] text-blue-700" },
+  score_below_threshold:  { label: "Score Below Threshold", color: "bg-[var(--cmp-surface-critical)] text-[var(--cmp-text-critical)]" },
+  expiry_approaching:     { label: "Expiry Approaching",    color: "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]" },
   validation_required:    { label: "Validation Required",   color: "bg-violet-50 text-violet-700" },
   policy_review_due:      { label: "Policy Review Due",     color: "bg-indigo-50 text-indigo-700" },
 };

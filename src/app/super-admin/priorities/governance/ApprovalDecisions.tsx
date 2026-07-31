@@ -28,18 +28,18 @@ export default function ApprovalDecisions({ id }: { id: string }) {
       <div className="mt-2 flex items-center gap-1.5 flex-wrap">
         <input value={reason} onChange={e => setReason(e.target.value)} placeholder="Reason (optional)" autoFocus
           className="flex-1 min-w-[120px] border border-gray-200 rounded-md px-2 py-1 text-[11px] focus:outline-none focus:ring-2 focus:ring-teal-500/30" />
-        <button onClick={() => decide(mode, reason)} disabled={!!busy} className={`${btn} ${mode === "reject" ? "text-rose-700 border-rose-200 hover:bg-rose-50" : "text-amber-700 border-amber-200 hover:bg-amber-50"}`}>{busy ? "…" : "Confirm"}</button>
+        <button onClick={() => decide(mode, reason)} disabled={!!busy} className={`${btn} ${mode === "reject" ? "text-[var(--cmp-text-error)] border-[var(--cmp-color-error)] hover:bg-[var(--cmp-surface-error)]" : "text-[var(--cmp-text-warning)] border-[var(--cmp-color-warning)] hover:bg-[var(--cmp-surface-warning)]"}`}>{busy ? "…" : "Confirm"}</button>
         <button onClick={() => { setMode(null); setReason(""); setErr(null); }} className="text-[11px] text-gray-400 hover:text-gray-600">Cancel</button>
-        {err && <span className="text-[10px] text-rose-600">{err}</span>}
+        {err && <span className="text-[10px] text-[var(--cmp-text-error)]">{err}</span>}
       </div>
     );
   }
   return (
     <div className="mt-2 flex items-center gap-1.5">
-      <button onClick={() => decide("approve")} disabled={!!busy} className={`${btn} text-emerald-700 border-emerald-200 hover:bg-emerald-50`}>{busy === "approve" ? "…" : "Approve"}</button>
-      <button onClick={() => setMode("reject")} disabled={!!busy} className={`${btn} text-rose-700 border-rose-200 hover:bg-rose-50`}>Reject</button>
-      <button onClick={() => setMode("request_changes")} disabled={!!busy} className={`${btn} text-amber-700 border-amber-200 hover:bg-amber-50`}>Request changes</button>
-      {err && <span className="text-[10px] text-rose-600">{err}</span>}
+      <button onClick={() => decide("approve")} disabled={!!busy} className={`${btn} text-emerald-700 border-[var(--cmp-color-success)] hover:bg-[var(--cmp-surface-success)]`}>{busy === "approve" ? "…" : "Approve"}</button>
+      <button onClick={() => setMode("reject")} disabled={!!busy} className={`${btn} text-[var(--cmp-text-error)] border-[var(--cmp-color-error)] hover:bg-[var(--cmp-surface-error)]`}>Reject</button>
+      <button onClick={() => setMode("request_changes")} disabled={!!busy} className={`${btn} text-[var(--cmp-text-warning)] border-[var(--cmp-color-warning)] hover:bg-[var(--cmp-surface-warning)]`}>Request changes</button>
+      {err && <span className="text-[10px] text-[var(--cmp-text-error)]">{err}</span>}
     </div>
   );
 }

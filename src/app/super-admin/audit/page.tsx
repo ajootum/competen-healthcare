@@ -14,10 +14,10 @@ type AuditEntry = {
 };
 
 const ACTION_LABELS: Record<string, { label: string; icon: string; color: string }> = {
-  submit_review:   { label: "Submitted for Review", icon: "📤", color: "text-amber-600 bg-amber-50"  },
-  approve_content: { label: "Approved",             icon: "✅", color: "text-green-700 bg-green-50"  },
-  reject_content:  { label: "Rejected",             icon: "❌", color: "text-red-600  bg-red-50"     },
-  publish:         { label: "Published",            icon: "🌐", color: "text-blue-700 bg-blue-50"    },
+  submit_review:   { label: "Submitted for Review", icon: "📤", color: "text-[var(--cmp-text-warning)] bg-[var(--cmp-surface-warning)]"  },
+  approve_content: { label: "Approved",             icon: "✅", color: "text-[var(--cmp-text-success)] bg-[var(--cmp-surface-success)]"  },
+  reject_content:  { label: "Rejected",             icon: "❌", color: "text-[var(--cmp-text-critical)]  bg-[var(--cmp-surface-critical)]"     },
+  publish:         { label: "Published",            icon: "🌐", color: "text-blue-700 bg-[var(--cmp-surface-information)]"    },
   archive:         { label: "Archived",             icon: "📦", color: "text-gray-600 bg-gray-100"   },
   revert:          { label: "Reverted to Draft",    icon: "↩️", color: "text-gray-500 bg-gray-50"    },
 };
@@ -92,13 +92,13 @@ export default async function AuditLogPage() {
                   {(e.old_value || e.new_value) && (
                     <div className="mt-1.5 flex items-center gap-2 text-[10px] text-gray-500">
                       {e.old_value && (
-                        <span className="bg-red-50 text-red-500 px-1.5 py-0.5 rounded font-mono">
+                        <span className="bg-[var(--cmp-surface-critical)] text-red-500 px-1.5 py-0.5 rounded font-mono">
                           {Object.entries(e.old_value).map(([k, v]) => `${k}: ${v}`).join(", ")}
                         </span>
                       )}
                       {e.old_value && e.new_value && <span className="text-gray-300">→</span>}
                       {e.new_value && (
-                        <span className="bg-green-50 text-green-600 px-1.5 py-0.5 rounded font-mono">
+                        <span className="bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)] px-1.5 py-0.5 rounded font-mono">
                           {Object.entries(e.new_value).map(([k, v]) => `${k}: ${v}`).join(", ")}
                         </span>
                       )}

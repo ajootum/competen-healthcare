@@ -13,7 +13,7 @@ const SECTIONS: [string, string, string, string][] = [
   ["assessment", "A", "Assessment", "What do I think the problem is?"],
   ["recommendation", "R", "Recommendation", "What needs to happen next?"],
 ];
-const CLR: Record<string, string> = { situation: "bg-emerald-500", background: "bg-violet-500", assessment: "bg-amber-500", recommendation: "bg-rose-500" };
+const CLR: Record<string, string> = { situation: "bg-[var(--cmp-color-success)]", background: "bg-violet-500", assessment: "bg-[var(--cmp-color-warning)]", recommendation: "bg-[var(--cmp-color-error)]" };
 
 export default function SbarEditor({ patientId, patientLabel, current, auto }: { patientId: string; patientLabel: string; current: Record<string, string>; auto: Record<string, string> }) {
   const router = useRouter();
@@ -38,20 +38,20 @@ export default function SbarEditor({ patientId, patientLabel, current, auto }: {
         <div key={k} className="rounded-lg border border-gray-200 p-3">
           <div className="flex items-center justify-between mb-1.5">
             <div className="flex items-center gap-2"><span className={`w-5 h-5 rounded ${CLR[k]} text-white text-[11px] font-bold flex items-center justify-center`}>{badge}</span><div><p className="text-xs font-semibold text-gray-800">{title}</p><p className="text-[10px] text-gray-400">{hint}</p></div></div>
-            <button onClick={() => setV({ ...v, [k]: auto[k] })} className="text-[10px] font-semibold text-emerald-700 border border-emerald-200 rounded px-2 py-1 hover:bg-emerald-50">✨ Auto Fill</button>
+            <button onClick={() => setV({ ...v, [k]: auto[k] })} className="text-[10px] font-semibold text-emerald-700 border border-[var(--cmp-color-success)] rounded px-2 py-1 hover:bg-[var(--cmp-surface-success)]">✨ Auto Fill</button>
           </div>
           <textarea value={v[k] ?? ""} onChange={e => setV({ ...v, [k]: e.target.value })} rows={3} className="w-full text-xs rounded-lg border border-gray-200 px-2.5 py-2 focus:border-emerald-400 focus:outline-none" />
         </div>
       ))}
       <div className="flex items-center justify-between">
-        <p className="text-[11px] text-gray-500">Quality: <b className={complete === 4 ? "text-emerald-600" : "text-amber-600"}>{complete}/4 sections</b> complete{complete === 4 ? " · SBAR-complete" : ""}.</p>
+        <p className="text-[11px] text-gray-500">Quality: <b className={complete === 4 ? "text-[var(--cmp-text-success)]" : "text-[var(--cmp-text-warning)]"}>{complete}/4 sections</b> complete{complete === 4 ? " · SBAR-complete" : ""}.</p>
         <div className="flex gap-2">
           <button onClick={() => save("draft", "draft")} disabled={!!busy} className="text-xs font-semibold rounded-lg py-2 px-3 border border-gray-200 text-gray-600 disabled:opacity-50">{busy === "draft" ? "Saving…" : "Save Draft"}</button>
-          <button onClick={() => save("shared", "share")} disabled={!!busy || complete < 4} className="text-xs font-semibold rounded-lg py-2 px-3 bg-emerald-600 text-white disabled:opacity-50" title={complete < 4 ? "Complete all four sections first" : ""}>{busy === "share" ? "Sharing…" : "Share to Incoming Shift"}</button>
+          <button onClick={() => save("shared", "share")} disabled={!!busy || complete < 4} className="text-xs font-semibold rounded-lg py-2 px-3 bg-[var(--cmp-color-success)] text-white disabled:opacity-50" title={complete < 4 ? "Complete all four sections first" : ""}>{busy === "share" ? "Sharing…" : "Share to Incoming Shift"}</button>
         </div>
       </div>
-      {err && <p className="text-[10px] text-rose-600">{err}</p>}
-      {msg && <p className="text-[10px] text-emerald-600">{msg}</p>}
+      {err && <p className="text-[10px] text-[var(--cmp-text-error)]">{err}</p>}
+      {msg && <p className="text-[10px] text-[var(--cmp-text-success)]">{msg}</p>}
     </div>
   );
 }

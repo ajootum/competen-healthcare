@@ -11,8 +11,8 @@ export const dynamic = "force-dynamic";
 
 const NONE = "00000000-0000-0000-0000-000000000000";
 const PASSING = ["competent", "competent_with_conditions", "provisionally_competent"];
-const bar = (n: number) => (n >= 85 ? "bg-green-500" : n >= 60 ? "bg-amber-500" : "bg-red-500");
-const empBadge: Record<string, string> = { orientation: "bg-blue-100 text-blue-700", probation: "bg-amber-100 text-amber-700", confirmed: "bg-green-100 text-green-700" };
+const bar = (n: number) => (n >= 85 ? "bg-[var(--cmp-color-success)]" : n >= 60 ? "bg-[var(--cmp-color-warning)]" : "bg-[var(--cmp-color-critical)]");
+const empBadge: Record<string, string> = { orientation: "bg-[var(--cmp-surface-information)] text-blue-700", probation: "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]", confirmed: "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]" };
 
 export default async function StaffRecordsPage() {
   const supabase = await createClient();

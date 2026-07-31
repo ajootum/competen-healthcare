@@ -15,7 +15,7 @@ function Toggle({ on, onChange, label, hint }: { on: boolean; onChange: (v: bool
   return (
     <div className="flex items-center justify-between py-2">
       <div><p className="text-[13px] font-medium text-gray-800">{label}</p>{hint && <p className="text-[11px] text-gray-400">{hint}</p>}</div>
-      <button type="button" onClick={() => onChange(!on)} className={`w-10 h-6 rounded-full transition-colors relative shrink-0 ${on ? "bg-blue-600" : "bg-gray-300"}`}><span className={`absolute top-0.5 w-5 h-5 rounded-full bg-white transition-transform ${on ? "translate-x-4" : "translate-x-0.5"}`} /></button>
+      <button type="button" onClick={() => onChange(!on)} className={`w-10 h-6 rounded-full transition-colors relative shrink-0 ${on ? "bg-[var(--cmp-color-information)]" : "bg-gray-300"}`}><span className={`absolute top-0.5 w-5 h-5 rounded-full bg-white transition-transform ${on ? "translate-x-4" : "translate-x-0.5"}`} /></button>
     </div>
   );
 }
@@ -63,7 +63,7 @@ export default function PreferencesForm({ initial, profile }: { initial: Prefs; 
                   <div className="flex justify-between"><dt className="text-gray-400">Role</dt><dd className="text-gray-800 capitalize">{profile.role}</dd></div>
                   <div className="flex justify-between"><dt className="text-gray-400">Specialization</dt><dd className="text-gray-800">{profile.specialization ?? "—"}</dd></div>
                 </dl>
-                <a href="/dashboard/billing" className="inline-block mt-2 text-[12px] font-medium text-blue-600 hover:underline">Edit profile →</a>
+                <a href="/dashboard/billing" className="inline-block mt-2 text-[12px] font-medium text-[var(--cmp-text-information)] hover:underline">Edit profile →</a>
               </div>
               <div>
                 <p className="text-[12px] font-semibold text-gray-500 uppercase tracking-wide mb-2">Default Landing Page</p>
@@ -124,7 +124,7 @@ export default function PreferencesForm({ initial, profile }: { initial: Prefs; 
         <span className="text-[12px] text-gray-400">{saved ? "✓ Saved to this browser" : dirty ? "Unsaved changes" : "All changes saved"}</span>
         <div className="flex items-center gap-2">
           <button onClick={reset} disabled={pending} className="text-[13px] font-medium text-gray-600 border border-gray-200 rounded-lg px-3 py-1.5 hover:bg-white disabled:opacity-50">Reset to defaults</button>
-          <button onClick={save} disabled={!dirty || pending} className="text-[13px] font-medium text-white bg-blue-600 rounded-lg px-4 py-1.5 hover:bg-blue-500 disabled:opacity-40">{pending ? "Saving…" : "Save changes"}</button>
+          <button onClick={save} disabled={!dirty || pending} className="text-[13px] font-medium text-white bg-[var(--cmp-color-information)] rounded-lg px-4 py-1.5 hover:bg-[var(--cmp-color-information)] disabled:opacity-40">{pending ? "Saving…" : "Save changes"}</button>
         </div>
       </div>
     </div>

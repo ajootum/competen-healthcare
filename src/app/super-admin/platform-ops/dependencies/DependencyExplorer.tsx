@@ -14,7 +14,7 @@ function closure(adj: Record<string, string[]>, start: string): Set<string> {
   return out;
 }
 
-const TYPE_TONE: Record<string, string> = { PLATFORM: "bg-gray-900 text-white", PRODUCT_SUITE: "bg-violet-50 text-violet-700", WORKSPACE: "bg-indigo-50 text-indigo-700", NAVIGATION_SECTION: "bg-sky-50 text-sky-700", MODULE: "bg-teal-50 text-teal-700", WIDGET: "bg-amber-50 text-amber-700" };
+const TYPE_TONE: Record<string, string> = { PLATFORM: "bg-gray-900 text-white", PRODUCT_SUITE: "bg-violet-50 text-violet-700", WORKSPACE: "bg-indigo-50 text-indigo-700", NAVIGATION_SECTION: "bg-[var(--cmp-surface-information)] text-[var(--cmp-text-information)]", MODULE: "bg-teal-50 text-teal-700", WIDGET: "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]" };
 const tone = (t: string) => TYPE_TONE[t] ?? "bg-gray-100 text-gray-600";
 
 export default function DependencyExplorer({ nodes, dependsOn, dependents }: Graph) {
@@ -64,8 +64,8 @@ export default function DependencyExplorer({ nodes, dependsOn, dependents }: Gra
               <div>
                 <p className="text-xs font-semibold text-gray-700 mb-0.5">⬇ Impact if changed <span className="text-gray-400 font-normal">— {detail.downDirect.length} direct · {detail.downAll} transitive</span></p>
                 <p className="text-[10px] text-gray-400 mb-2">What is affected if this object changes or is disabled.</p>
-                {detail.downAll > 0 && <span className={`text-[10px] font-semibold rounded px-2 py-1 mb-2 inline-block ${detail.downAll >= 10 ? "bg-rose-50 text-rose-700" : detail.downAll >= 3 ? "bg-amber-50 text-amber-700" : "bg-emerald-50 text-emerald-700"}`}>{detail.downAll} object(s) in the blast radius</span>}
-                <div className="space-y-1">{detail.downDirect.length ? detail.downDirect.slice(0, 40).map(k => <div key={k} className="text-xs text-gray-600 flex items-center gap-1.5"><span className="text-gray-300">└</span><span className="truncate">{label(k)}</span></div>) : <p className="text-[11px] text-emerald-600">Leaf object — nothing depends on it; safe to change.</p>}</div>
+                {detail.downAll > 0 && <span className={`text-[10px] font-semibold rounded px-2 py-1 mb-2 inline-block ${detail.downAll >= 10 ? "bg-[var(--cmp-surface-error)] text-[var(--cmp-text-error)]" : detail.downAll >= 3 ? "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]" : "bg-[var(--cmp-surface-success)] text-emerald-700"}`}>{detail.downAll} object(s) in the blast radius</span>}
+                <div className="space-y-1">{detail.downDirect.length ? detail.downDirect.slice(0, 40).map(k => <div key={k} className="text-xs text-gray-600 flex items-center gap-1.5"><span className="text-gray-300">└</span><span className="truncate">{label(k)}</span></div>) : <p className="text-[11px] text-[var(--cmp-text-success)]">Leaf object — nothing depends on it; safe to change.</p>}</div>
               </div>
             </div>
           </>

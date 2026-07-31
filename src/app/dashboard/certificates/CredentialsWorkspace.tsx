@@ -16,11 +16,11 @@ export type CredRow = {
 };
 
 const STATUS_CLS: Record<CredRow["status"], string> = {
-  active:   "bg-green-50 text-green-700",
-  expiring: "bg-amber-50 text-amber-700",
-  expired:  "bg-red-50 text-red-600",
+  active:   "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]",
+  expiring: "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]",
+  expired:  "bg-[var(--cmp-surface-critical)] text-[var(--cmp-text-critical)]",
   pending:  "bg-gray-100 text-gray-500",
-  suspended: "bg-red-50 text-red-600",
+  suspended: "bg-[var(--cmp-surface-critical)] text-[var(--cmp-text-critical)]",
 };
 
 const fmt = (iso: string | null) => iso ? new Date(iso).toLocaleDateString(undefined, { day: "2-digit", month: "short", year: "numeric" }) : "—";
@@ -88,7 +88,7 @@ export default function CredentialsWorkspace({ rows }: { rows: CredRow[] }) {
           {sec.kind === "badge" ? (
             <div className="flex flex-wrap gap-3 px-4 pb-4 pt-1">
               {filtered.filter(r => r.kind === "badge").map(b => (
-                <div key={b.id} className="w-36 border border-amber-100 rounded-xl p-3 text-center" title={b.subtitle ?? undefined}>
+                <div key={b.id} className="w-36 border border-[var(--cmp-color-warning)] rounded-xl p-3 text-center" title={b.subtitle ?? undefined}>
                   <p className="text-2xl">{b.icon}</p>
                   <p className="text-[11px] font-semibold text-gray-800 leading-snug mt-1">{b.title}</p>
                   <p className="text-[9px] text-gray-400 mt-0.5" suppressHydrationWarning>Awarded {fmt(b.issued)}</p>

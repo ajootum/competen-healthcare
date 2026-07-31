@@ -19,7 +19,7 @@ export default async function PatientFlowPage({ searchParams }: { searchParams: 
   ]);
 
   const strip = <TopStrip code="UMW-OPC-005 · Operational Command" title="Patient Flow Coordination Centre" departments={departments} />;
-  if (!d.provisioned) return <div className="space-y-4">{strip}<div className="bg-amber-50 border border-amber-200 rounded-xl p-6"><p className="font-semibold text-amber-900">⚙️ Operational stores not provisioned</p><p className="text-sm text-amber-800 mt-1">Apply migrations 038/048/050 then seed the ward.</p></div></div>;
+  if (!d.provisioned) return <div className="space-y-4">{strip}<div className="bg-[var(--cmp-surface-warning)] border border-[var(--cmp-color-warning)] rounded-xl p-6"><p className="font-semibold text-amber-900">⚙️ Operational stores not provisioned</p><p className="text-sm text-amber-800 mt-1">Apply migrations 038/048/050 then seed the ward.</p></div></div>;
 
   const k = d.kpis;
   const maxT = Math.max(1, ...d.timeline.map((h: any) => h.a + h.d + h.t));
@@ -56,14 +56,14 @@ export default async function PatientFlowPage({ searchParams }: { searchParams: 
             {d.timeline.length ? <div className="flex items-end gap-1 h-28">{d.timeline.map((h: any) => (
               <div key={h.h} className="flex-1 flex flex-col items-center gap-0.5" title={`${h.h}:00 — +${h.a} / -${h.d} / ↔${h.t}`}>
                 <div className="w-full flex flex-col justify-end gap-px" style={{ height: "88px" }}>
-                  <div className="w-full bg-rose-500 rounded-t" style={{ height: `${(h.a / maxT) * 100}%` }} />
-                  <div className="w-full bg-emerald-500" style={{ height: `${(h.d / maxT) * 100}%` }} />
-                  <div className="w-full bg-blue-500 rounded-b" style={{ height: `${(h.t / maxT) * 100}%` }} />
+                  <div className="w-full bg-[var(--cmp-color-error)] rounded-t" style={{ height: `${(h.a / maxT) * 100}%` }} />
+                  <div className="w-full bg-[var(--cmp-color-success)]" style={{ height: `${(h.d / maxT) * 100}%` }} />
+                  <div className="w-full bg-[var(--cmp-color-information)] rounded-b" style={{ height: `${(h.t / maxT) * 100}%` }} />
                 </div>
                 <span className="text-[7px] text-slate-500">{h.h}</span>
               </div>
             ))}</div> : <p className="text-xs text-slate-400 py-8 text-center">No movement events today.</p>}
-            <div className="flex gap-3 mt-2 text-[9px] text-slate-400"><span className="flex items-center gap-1"><span className="w-2 h-2 bg-rose-500 rounded-full" />Adm</span><span className="flex items-center gap-1"><span className="w-2 h-2 bg-emerald-500 rounded-full" />Disch</span><span className="flex items-center gap-1"><span className="w-2 h-2 bg-blue-500 rounded-full" />Transf</span></div>
+            <div className="flex gap-3 mt-2 text-[9px] text-slate-400"><span className="flex items-center gap-1"><span className="w-2 h-2 bg-[var(--cmp-color-error)] rounded-full" />Adm</span><span className="flex items-center gap-1"><span className="w-2 h-2 bg-[var(--cmp-color-success)] rounded-full" />Disch</span><span className="flex items-center gap-1"><span className="w-2 h-2 bg-[var(--cmp-color-information)] rounded-full" />Transf</span></div>
           </Card>
 
           <Card title="Blockers & Constraints">
@@ -93,7 +93,7 @@ export default async function PatientFlowPage({ searchParams }: { searchParams: 
           </Card>
 
           <Card title="Patient Flow by Pathway">
-            {d.pathways.length ? <div className="space-y-2 text-[11px]">{d.pathways.map((p: any) => <div key={p.label} className="flex items-center gap-2"><span className="text-slate-300 flex-1 truncate">{p.label}</span><div className="w-16 h-1.5 rounded-full bg-slate-700 overflow-hidden"><div className="h-full rounded-full bg-blue-500" style={{ width: `${p.pct}%` }} /></div><span className="text-white font-semibold tabular-nums w-12 text-right">{p.n} · {p.pct}%</span></div>)}</div> : <p className="text-xs text-slate-400 py-4 text-center">No movements today.</p>}
+            {d.pathways.length ? <div className="space-y-2 text-[11px]">{d.pathways.map((p: any) => <div key={p.label} className="flex items-center gap-2"><span className="text-slate-300 flex-1 truncate">{p.label}</span><div className="w-16 h-1.5 rounded-full bg-slate-700 overflow-hidden"><div className="h-full rounded-full bg-[var(--cmp-color-information)]" style={{ width: `${p.pct}%` }} /></div><span className="text-white font-semibold tabular-nums w-12 text-right">{p.n} · {p.pct}%</span></div>)}</div> : <p className="text-xs text-slate-400 py-4 text-center">No movements today.</p>}
           </Card>
 
           <Card title="Upcoming Demand" right={<span className="text-[9px] text-slate-500">template</span>}>

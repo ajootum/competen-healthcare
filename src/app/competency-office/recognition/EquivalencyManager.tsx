@@ -8,7 +8,7 @@ import { useRouter } from "next/navigation";
 type Rule = { id: string; source: string; target: string; type: string; recognition: string; bridgingNote: string | null; createdBy: string | null };
 type Comp = { id: string; name: string };
 
-const TYPE_TONE: Record<string, string> = { exact: "bg-emerald-100 text-emerald-700", equivalent: "bg-emerald-100 text-emerald-700", conditional: "bg-amber-100 text-amber-700", bridging: "bg-blue-100 text-blue-700", denied: "bg-rose-100 text-rose-700" };
+const TYPE_TONE: Record<string, string> = { exact: "bg-[var(--cmp-surface-success)] text-emerald-700", equivalent: "bg-[var(--cmp-surface-success)] text-emerald-700", conditional: "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]", bridging: "bg-[var(--cmp-surface-information)] text-blue-700", denied: "bg-[var(--cmp-surface-error)] text-[var(--cmp-text-error)]" };
 
 export default function EquivalencyManager({ rules, competencies }: { rules: Rule[]; competencies: Comp[] }) {
   const router = useRouter();
@@ -42,7 +42,7 @@ export default function EquivalencyManager({ rules, competencies }: { rules: Rul
 
   return (
     <div className="space-y-3">
-      {err && <div className="bg-rose-50 border border-rose-200 text-rose-700 rounded-lg px-3 py-2 text-[12px]">{err}</div>}
+      {err && <div className="bg-[var(--cmp-surface-error)] border border-[var(--cmp-color-error)] text-[var(--cmp-text-error)] rounded-lg px-3 py-2 text-[12px]">{err}</div>}
       <div className="flex items-center justify-between">
         <p className="text-[12px] text-gray-500">{rules.length} equivalency rule{rules.length === 1 ? "" : "s"}</p>
         <button onClick={() => setOpen(v => !v)} className="text-[12px] bg-teal-600 text-white rounded-lg px-3 py-1.5 hover:bg-teal-700">{open ? "Close" : "＋ New rule"}</button>
@@ -72,7 +72,7 @@ export default function EquivalencyManager({ rules, competencies }: { rules: Rul
             <span className="text-gray-800 font-medium flex-1 min-w-0 truncate">{r.target}</span>
             <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${TYPE_TONE[r.type] ?? "bg-gray-100 text-gray-600"}`}>{r.type}</span>
             <span className="text-[10px] text-gray-400 w-20 text-right hidden md:inline">{r.recognition}</span>
-            <button disabled={busy} onClick={() => del(r.id)} className="text-rose-400 hover:text-rose-600 text-[11px] disabled:opacity-40">remove</button>
+            <button disabled={busy} onClick={() => del(r.id)} className="text-rose-400 hover:text-[var(--cmp-text-error)] text-[11px] disabled:opacity-40">remove</button>
           </div>
         ))}
       </div>

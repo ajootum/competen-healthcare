@@ -13,7 +13,7 @@ import { cardClass } from "@/components/ui/primitives";
 type Kpis = Record<string, number | null> | null;
 type TrendRow = { shift_id: string; overall_score: number | null; computed_at: string };
 
-const scoreTone = (n: number | null) => (n == null ? "text-gray-300" : n >= 90 ? "text-green-600" : n >= 75 ? "text-amber-600" : "text-rose-600");
+const scoreTone = (n: number | null) => (n == null ? "text-gray-300" : n >= 90 ? "text-[var(--cmp-text-success)]" : n >= 75 ? "text-[var(--cmp-text-warning)]" : "text-[var(--cmp-text-error)]");
 const fmt = (v: number | null, unit: string) => (v == null ? "—" : unit === "pct" ? `${v}%` : String(v));
 
 export default function ShiftMetricsPanel({ shiftId, provisioned, live, persisted, trend, editable }: {
@@ -79,14 +79,14 @@ export default function ShiftMetricsPanel({ shiftId, provisioned, live, persiste
             <div className="flex items-end gap-1 h-16">
               {trend.map((t, i) => (
                 <div key={i} className="flex-1 flex flex-col items-center gap-0.5" title={`${t.overall_score ?? "—"}%`}>
-                  <div className={`w-full rounded-t ${(t.overall_score ?? 0) >= 90 ? "bg-green-400" : (t.overall_score ?? 0) >= 75 ? "bg-amber-400" : "bg-rose-400"}`} style={{ height: `${((t.overall_score ?? 0) / trendMax) * 100}%`, minHeight: (t.overall_score ?? 0) > 0 ? "3px" : "0" }} />
+                  <div className={`w-full rounded-t ${(t.overall_score ?? 0) >= 90 ? "bg-[var(--cmp-color-success)]" : (t.overall_score ?? 0) >= 75 ? "bg-[var(--cmp-color-warning)]" : "bg-[var(--cmp-color-error)]"}`} style={{ height: `${((t.overall_score ?? 0) / trendMax) * 100}%`, minHeight: (t.overall_score ?? 0) > 0 ? "3px" : "0" }} />
                 </div>
               ))}
             </div>
           )}
         </div>
       )}
-      {err && <p className="text-[11px] text-rose-600 mt-2">{err}</p>}
+      {err && <p className="text-[11px] text-[var(--cmp-text-error)] mt-2">{err}</p>}
     </div>
   );
 }

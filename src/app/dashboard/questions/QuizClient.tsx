@@ -12,9 +12,9 @@ type Question = {
 };
 
 const difficultyColors: Record<string, string> = {
-  easy:   "bg-green-100 text-green-700",
-  medium: "bg-amber-100 text-amber-700",
-  hard:   "bg-red-100 text-red-600",
+  easy:   "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]",
+  medium: "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]",
+  hard:   "bg-[var(--cmp-surface-critical)] text-[var(--cmp-text-critical)]",
 };
 
 export default function QuizClient({ questions }: { questions: Question[] }) {
@@ -114,7 +114,7 @@ export default function QuizClient({ questions }: { questions: Question[] }) {
     return (
       <div className="max-w-lg mx-auto text-center py-12">
         <div className={`w-24 h-24 rounded-full flex items-center justify-center text-3xl font-bold mx-auto mb-6 ${
-          pct >= 70 ? "bg-green-100 text-green-700" : "bg-red-100 text-red-600"
+          pct >= 70 ? "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]" : "bg-[var(--cmp-surface-critical)] text-[var(--cmp-text-critical)]"
         }`}>
           {pct}%
         </div>
@@ -124,7 +124,7 @@ export default function QuizClient({ questions }: { questions: Question[] }) {
         <p className="text-gray-500 mb-6">You got {score} out of {filtered.length} questions correct.</p>
         <div className="grid grid-cols-3 gap-4 mb-8">
           <div className="bg-white rounded-xl p-4 border border-gray-100">
-            <p className="text-2xl font-bold text-green-600">{score}</p>
+            <p className="text-2xl font-bold text-[var(--cmp-text-success)]">{score}</p>
             <p className="text-xs text-gray-400">Correct</p>
           </div>
           <div className="bg-white rounded-xl p-4 border border-gray-100">
@@ -175,8 +175,8 @@ export default function QuizClient({ questions }: { questions: Question[] }) {
         {q.options.map(option => {
           let cls = "bg-white border border-gray-200 text-gray-700 hover:border-teal-300";
           if (selected) {
-            if (option === q.correct_answer) cls = "bg-green-50 border-green-400 text-green-800";
-            else if (option === selected) cls = "bg-red-50 border-red-300 text-red-700";
+            if (option === q.correct_answer) cls = "bg-[var(--cmp-surface-success)] border-green-400 text-green-800";
+            else if (option === selected) cls = "bg-[var(--cmp-surface-critical)] border-[var(--cmp-color-critical)] text-[var(--cmp-text-critical)]";
             else cls = "bg-white border border-gray-100 text-gray-400";
           }
           return (
@@ -190,7 +190,7 @@ export default function QuizClient({ questions }: { questions: Question[] }) {
 
       {/* Explanation */}
       {selected && q.explanation && (
-        <div className={`rounded-xl p-4 mb-4 text-sm ${selected === q.correct_answer ? "bg-green-50 text-green-800" : "bg-amber-50 text-amber-800"}`}>
+        <div className={`rounded-xl p-4 mb-4 text-sm ${selected === q.correct_answer ? "bg-[var(--cmp-surface-success)] text-green-800" : "bg-[var(--cmp-surface-warning)] text-amber-800"}`}>
           <p className="font-semibold mb-1">{selected === q.correct_answer ? "✓ Correct!" : "✗ Incorrect"}</p>
           <p>{q.explanation}</p>
         </div>

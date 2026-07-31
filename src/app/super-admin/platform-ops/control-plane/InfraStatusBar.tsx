@@ -9,8 +9,8 @@ import { cardClass } from "@/components/ui/primitives";
 // deployment doesn't run.
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
-const DOT: Record<string, string> = { ok: "bg-green-500", warn: "bg-amber-500", down: "bg-rose-500", na: "bg-gray-300" };
-const VAL: Record<string, string> = { ok: "text-gray-900", warn: "text-amber-600", down: "text-rose-600", na: "text-gray-400" };
+const DOT: Record<string, string> = { ok: "bg-[var(--cmp-color-success)]", warn: "bg-[var(--cmp-color-warning)]", down: "bg-[var(--cmp-color-error)]", na: "bg-gray-300" };
+const VAL: Record<string, string> = { ok: "text-gray-900", warn: "text-[var(--cmp-text-warning)]", down: "text-[var(--cmp-text-error)]", na: "text-gray-400" };
 
 export default function InfraStatusBar({ initial }: { initial: any }) {
   const [data, setData] = useState<any>(initial);
@@ -44,7 +44,7 @@ export default function InfraStatusBar({ initial }: { initial: any }) {
       <div className="flex items-center justify-between mb-3">
         <h2 className="font-semibold text-gray-900 text-[15px]">Infrastructure Status Bar <span className="ml-2 text-[10px] font-medium text-gray-400">{data?.summary?.live}/{data?.summary?.total} live · POS-002</span></h2>
         <div className="flex items-center gap-2 text-xs text-gray-400">
-          <span className="inline-flex items-center gap-1"><span className={`w-1.5 h-1.5 rounded-full ${live ? "bg-green-500 animate-pulse" : "bg-amber-400"}`} />{live ? "live" : "reconnecting"}</span>
+          <span className="inline-flex items-center gap-1"><span className={`w-1.5 h-1.5 rounded-full ${live ? "bg-[var(--cmp-color-success)] animate-pulse" : "bg-[var(--cmp-color-warning)]"}`} />{live ? "live" : "reconnecting"}</span>
           {time && <span className="tabular-nums">· {time}</span>}
           <button onClick={refresh} disabled={busy} className="rounded-lg border border-gray-200 px-2 py-0.5 font-medium text-gray-600 hover:bg-gray-50 disabled:opacity-40">↻</button>
         </div>

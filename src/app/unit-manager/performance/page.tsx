@@ -16,7 +16,7 @@ export default async function PerformanceDashboardPage() {
 
   const head = <Head code="UMW-PA-001 · Performance Analytics" title="Unit Performance Dashboard" sub="Executive performance cockpit — overall unit health, balanced scorecard, KPIs vs targets, benchmarking and improvement, with operational KPIs live from real snapshots." />;
   if (!d.provisioned) return <div className="max-w-[1500px] space-y-4">{head}<Tabs active="001" /><Provision module="the Performance Dashboard" /></div>;
-  if (!d.hasData) return <div className="max-w-[1500px] space-y-4">{head}<Tabs active="001" /><div className="bg-blue-50 border border-blue-200 rounded-xl p-6 text-sm text-blue-800">Performance stores are provisioned but empty — run <code className="font-mono">node scripts/seed-performance-analytics.mjs</code>.</div></div>;
+  if (!d.hasData) return <div className="max-w-[1500px] space-y-4">{head}<Tabs active="001" /><div className="bg-[var(--cmp-surface-information)] border border-[var(--cmp-color-information)] rounded-xl p-6 text-sm text-blue-800">Performance stores are provisioned but empty — run <code className="font-mono">node scripts/seed-performance-analytics.mjs</code>.</div></div>;
 
   const r = d.ribbon;
   const maxTrend = Math.max(1, ...d.overallTrend);
@@ -30,7 +30,7 @@ export default async function PerformanceDashboardPage() {
       <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-8 gap-3">
         <div className="bg-white border border-gray-200 rounded-xl p-3.5 flex items-center gap-2">
           <Ring pct={r.overall} size={62} />
-          <div><p className="text-[11px] text-gray-500 uppercase tracking-wide leading-tight">Overall Performance</p><p className="text-[11px] text-emerald-600 font-medium mt-0.5">{r.overall >= 85 ? "Excellent" : r.overall >= 70 ? "Good" : "Needs focus"}</p></div>
+          <div><p className="text-[11px] text-gray-500 uppercase tracking-wide leading-tight">Overall Performance</p><p className="text-[11px] text-[var(--cmp-text-success)] font-medium mt-0.5">{r.overall >= 85 ? "Excellent" : r.overall >= 70 ? "Good" : "Needs focus"}</p></div>
         </div>
         <Kpi label="KPI Achievement" value={`${r.kpiAchievement}%`} sub="on target" status={r.kpiAchievement >= 80 ? "green" : "amber"} />
         <Kpi label="Strategic Goal Achv." value={`${r.strategicGoal}%`} sub="mean vs target" status={r.strategicGoal >= 90 ? "green" : "amber"} />
@@ -93,7 +93,7 @@ export default async function PerformanceDashboardPage() {
             <Donut segs={d.projectStatus.map((p: any) => ({ n: p.n, color: PROJ_TONE[p.status] }))} total={d.projects.length} centre={d.projects.length} sub="projects" size={96} />
             <div className="flex-1 space-y-1 text-[11px]">{d.projectStatus.map((p: any) => <div key={p.status} className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full" style={{ background: PROJ_TONE[p.status] }} /><span className="text-gray-600 flex-1 capitalize">{p.status.replace(/_/g, " ")}</span><span className="font-semibold text-gray-900">{p.n}</span></div>)}</div>
           </div>
-          <div className="mt-2 pt-2 border-t border-gray-100 text-[11px] text-gray-500">Benefits: <b className="text-gray-800">{money(d.totalBenefit)}</b> total · <b className="text-emerald-600">{money(d.realisedBenefit)}</b> realised</div>
+          <div className="mt-2 pt-2 border-t border-gray-100 text-[11px] text-gray-500">Benefits: <b className="text-gray-800">{money(d.totalBenefit)}</b> total · <b className="text-[var(--cmp-text-success)]">{money(d.realisedBenefit)}</b> realised</div>
         </Card>
 
         <Card title="Benchmarking" className="xl:col-span-2" right={<span className="text-[11px] text-gray-400">overall vs peers</span>}>

@@ -52,7 +52,7 @@ export default function Copilot({ configured }: { configured: boolean }) {
 
   return (
     <div className="space-y-4">
-      {!configured && <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 text-sm text-amber-800">⚠ No AI provider is configured on this environment (<span className="font-mono text-xs">ANTHROPIC_API_KEY</span> not set). The Copilot will return a configuration error until a key is present.</div>}
+      {!configured && <div className="bg-[var(--cmp-surface-warning)] border border-[var(--cmp-color-warning)] rounded-xl p-4 text-sm text-amber-800">⚠ No AI provider is configured on this environment (<span className="font-mono text-xs">ANTHROPIC_API_KEY</span> not set). The Copilot will return a configuration error until a key is present.</div>}
 
       <div className={`${card} p-5`}>
         <p className="text-[11px] font-semibold text-gray-500 mb-1.5">Describe the configuration you want</p>
@@ -66,7 +66,7 @@ export default function Copilot({ configured }: { configured: boolean }) {
         </div>
       </div>
 
-      {msg && <p className={`text-xs ${msg.startsWith("✓") ? "text-emerald-600" : "text-rose-600"}`}>{msg}</p>}
+      {msg && <p className={`text-xs ${msg.startsWith("✓") ? "text-[var(--cmp-text-success)]" : "text-[var(--cmp-text-error)]"}`}>{msg}</p>}
 
       {a && (
         <div className={`${card} p-5`}>
@@ -77,9 +77,9 @@ export default function Copilot({ configured }: { configured: boolean }) {
           </div>
           {result.rationale && <p className="text-[11px] text-gray-500 mb-3 italic">{result.rationale}</p>}
 
-          <div className={`text-xs font-medium mb-2 ${result.valid ? "text-emerald-600" : "text-rose-600"}`}>{result.valid ? "✓ Schema-valid — ready to author as a governed draft" : "✕ The proposal has schema issues"}</div>
-          {result.problems?.length > 0 && <div className="mb-2 space-y-0.5">{result.problems.map((p: string, i: number) => <p key={i} className="text-[11px] text-rose-600">• {p}</p>)}</div>}
-          {result.issues?.filter((i: any) => i.severity === "error").length > 0 && <div className="mb-2 space-y-0.5">{result.issues.filter((i: any) => i.severity === "error").map((i: any, k: number) => <p key={k} className="text-[11px] text-rose-600 font-mono">{i.path}: {i.message}</p>)}</div>}
+          <div className={`text-xs font-medium mb-2 ${result.valid ? "text-[var(--cmp-text-success)]" : "text-[var(--cmp-text-error)]"}`}>{result.valid ? "✓ Schema-valid — ready to author as a governed draft" : "✕ The proposal has schema issues"}</div>
+          {result.problems?.length > 0 && <div className="mb-2 space-y-0.5">{result.problems.map((p: string, i: number) => <p key={i} className="text-[11px] text-[var(--cmp-text-error)]">• {p}</p>)}</div>}
+          {result.issues?.filter((i: any) => i.severity === "error").length > 0 && <div className="mb-2 space-y-0.5">{result.issues.filter((i: any) => i.severity === "error").map((i: any, k: number) => <p key={k} className="text-[11px] text-[var(--cmp-text-error)] font-mono">{i.path}: {i.message}</p>)}</div>}
 
           <p className="text-[11px] font-semibold text-gray-500 mb-1">Proposed definition</p>
           <pre className="text-[11px] bg-gray-50 border border-gray-100 rounded-lg p-3 overflow-x-auto text-gray-700 max-h-72">{JSON.stringify(a.definition, null, 2)}</pre>
@@ -87,9 +87,9 @@ export default function Copilot({ configured }: { configured: boolean }) {
           <div className="flex items-center justify-between mt-4">
             <p className="text-[10px] text-gray-400">Authoring creates a governed DRAFT — it flows through governance, the dependency gate and version history before going live.</p>
             {authored ? (
-              <a href={HREF[a.object_type] ?? "/super-admin/platform-ops/registry"} className="text-sm font-medium text-emerald-700 border border-emerald-200 rounded-lg px-4 py-2 hover:bg-emerald-50">Open in designer →</a>
+              <a href={HREF[a.object_type] ?? "/super-admin/platform-ops/registry"} className="text-sm font-medium text-emerald-700 border border-[var(--cmp-color-success)] rounded-lg px-4 py-2 hover:bg-[var(--cmp-surface-success)]">Open in designer →</a>
             ) : (
-              <button onClick={author} disabled={busy || !result.valid} title={!result.valid ? "Resolve schema issues first" : "Create as a governed draft"} className="text-sm font-medium text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg px-4 py-2 disabled:opacity-40">Author as governed draft</button>
+              <button onClick={author} disabled={busy || !result.valid} title={!result.valid ? "Resolve schema issues first" : "Create as a governed draft"} className="text-sm font-medium text-white bg-[var(--cmp-color-success)] hover:bg-emerald-700 rounded-lg px-4 py-2 disabled:opacity-40">Author as governed draft</button>
             )}
           </div>
         </div>

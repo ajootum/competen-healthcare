@@ -14,7 +14,7 @@ export const dynamic = "force-dynamic";
 // hospital_admin/super_admin. AI & Config are now separate UMW-AI / UMW-CFG sections (spec: removed from OPC).
 /* eslint-disable @typescript-eslint/no-explicit-any */
 const dcard = "bg-slate-800/60 border border-slate-700/70 rounded-xl";
-const BED_TONE: Record<string, string> = { high: "bg-rose-500/90 text-white", medium: "bg-amber-500/90 text-slate-900", low: "bg-emerald-500/90 text-slate-900", discharged: "bg-slate-600 text-slate-200", maintenance: "bg-fuchsia-600/80 text-white", available: "bg-slate-700/40 text-slate-400 border border-slate-600" };
+const BED_TONE: Record<string, string> = { high: "bg-[var(--cmp-color-error)]/90 text-white", medium: "bg-[var(--cmp-color-warning)]/90 text-slate-900", low: "bg-[var(--cmp-color-success)]/90 text-slate-900", discharged: "bg-slate-600 text-slate-200", maintenance: "bg-fuchsia-600/80 text-white", available: "bg-slate-700/40 text-slate-400 border border-slate-600" };
 const ACUITY = [{ key: "high", label: "High Acuity", color: "#f43f5e" }, { key: "medium", label: "Medium Acuity", color: "#f59e0b" }, { key: "low", label: "Low Acuity", color: "#22c55e" }, { key: "stable", label: "Stable / Discharge", color: "#64748b" }];
 const SCHEDULE = [["10:30", "Ward Round", "🔵"], ["11:00", "Discharge Planning Meeting", "🟣"], ["13:00", "MDT Meeting – Complex Cases", "🟢"], ["14:30", "Safety Huddle", "🟠"], ["16:00", "Shift Handover (Day → Eve)", "🔴"]];
 const TIMELINE = [["07:00", "Shift Start"], ["07:15", "Handover In"], ["10:00", "Safety Huddle"], ["13:00", "Break Period"], ["16:00", "Evening Prep"], ["19:00", "Handover Out"]];
@@ -70,7 +70,7 @@ export default async function OperationalCommandPage({ searchParams }: { searchP
       <UnitFilters departments={departments} />
     </div>
   );
-  if (!d.provisioned) return <div className="space-y-4">{topStrip}<div className="bg-amber-50 border border-amber-200 rounded-xl p-6"><p className="font-semibold text-amber-900">⚙️ Operational stores not provisioned</p><p className="text-sm text-amber-800 mt-1">Apply the clinical-operations migrations (038/050) + 101, then seed the ward (scripts/seed-ops-performance.mjs).</p></div></div>;
+  if (!d.provisioned) return <div className="space-y-4">{topStrip}<div className="bg-[var(--cmp-surface-warning)] border border-[var(--cmp-color-warning)] rounded-xl p-6"><p className="font-semibold text-amber-900">⚙️ Operational stores not provisioned</p><p className="text-sm text-amber-800 mt-1">Apply the clinical-operations migrations (038/050) + 101, then seed the ward (scripts/seed-ops-performance.mjs).</p></div></div>;
 
   const k = d.kpis;
   const staffSegs = [...d.staffing.breakdown.map((b: any) => ({ n: b.n, color: b.color })), { n: d.staffing.vacant ?? 0, color: "#475569" }];
@@ -83,7 +83,7 @@ export default async function OperationalCommandPage({ searchParams }: { searchP
       <div className="bg-slate-900 rounded-2xl p-4 md:p-5 space-y-4 text-slate-100">
         <div className="flex items-center gap-2">
           <h2 className="text-lg font-bold text-white">Operational Command Centre</h2>
-          <span className="text-[10px] font-semibold text-emerald-300 bg-emerald-500/15 rounded px-1.5 py-0.5 flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />LIVE</span>
+          <span className="text-[10px] font-semibold text-emerald-300 bg-[var(--cmp-color-success)]/15 rounded px-1.5 py-0.5 flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-[var(--cmp-color-success)] animate-pulse" />LIVE</span>
           <span className="flex-1" />
           <span className="text-[11px] text-slate-400">{d.asOf ? `as of ${d.asOf}` : "real-time"}</span>
         </div>
@@ -173,7 +173,7 @@ export default async function OperationalCommandPage({ searchParams }: { searchP
             {d.forecast.length >= 2 ? (
               <div className="space-y-2">
                 {d.forecast.map((f: any, i: number) => (
-                  <div key={i} className="flex items-center gap-2 text-[11px]"><span className="text-slate-400 w-20 shrink-0">{f.label}</span><div className="flex-1 h-1.5 rounded-full bg-slate-700 overflow-hidden"><div className="h-full rounded-full bg-blue-500" style={{ width: `${f.occupancy ?? 0}%` }} /></div><span className="text-slate-300 w-28 text-right">{f.occupancy}% occ · +{f.admissions ?? 0} / -{f.discharges ?? 0}</span></div>
+                  <div key={i} className="flex items-center gap-2 text-[11px]"><span className="text-slate-400 w-20 shrink-0">{f.label}</span><div className="flex-1 h-1.5 rounded-full bg-slate-700 overflow-hidden"><div className="h-full rounded-full bg-[var(--cmp-color-information)]" style={{ width: `${f.occupancy ?? 0}%` }} /></div><span className="text-slate-300 w-28 text-right">{f.occupancy}% occ · +{f.admissions ?? 0} / -{f.discharges ?? 0}</span></div>
                 ))}
                 <p className="text-[9px] text-slate-500">Recent daily snapshots (occupancy · admissions / discharges).</p>
               </div>
@@ -182,14 +182,14 @@ export default async function OperationalCommandPage({ searchParams }: { searchP
 
           <div className={`${dcard} p-4`}>
             <div className="flex items-center justify-between mb-3"><h3 className="text-sm font-semibold text-white">Shift Timeline</h3><span className="text-[9px] text-slate-500">template</span></div>
-            <div className="flex items-center justify-between">{TIMELINE.map(([t, l], i) => <div key={t} className="flex flex-col items-center text-center"><span className={`w-2.5 h-2.5 rounded-full ${i <= 2 ? "bg-emerald-400" : "bg-slate-600"}`} /><span className="text-[8px] text-slate-400 mt-1">{t}</span><span className="text-[7px] text-slate-500 leading-tight w-12">{l}</span></div>)}</div>
+            <div className="flex items-center justify-between">{TIMELINE.map(([t, l], i) => <div key={t} className="flex flex-col items-center text-center"><span className={`w-2.5 h-2.5 rounded-full ${i <= 2 ? "bg-[var(--cmp-color-success)]" : "bg-slate-600"}`} /><span className="text-[8px] text-slate-400 mt-1">{t}</span><span className="text-[7px] text-slate-500 leading-tight w-12">{l}</span></div>)}</div>
             <div className="mt-3 grid grid-cols-5 gap-1.5">{QUICK.map(a => <Link key={a.label} href={a.href} className="flex flex-col items-center gap-0.5 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 p-1.5"><span className="text-sm">{a.icon}</span><span className="text-[7px] text-slate-300 text-center leading-tight">{a.label}</span></Link>)}</div>
           </div>
 
           <div className={`${dcard} p-4`}>
             <h3 className="text-sm font-semibold text-white mb-3">Recent Activity</h3>
             {d.activity.length ? <div className="space-y-2">{d.activity.map((a: any, i: number) => (
-              <div key={i} className="flex items-start gap-2"><span className="w-1.5 h-1.5 rounded-full bg-blue-400 mt-1.5 shrink-0" /><div className="min-w-0"><p className="text-[11px] text-slate-300 leading-tight capitalize truncate">{a.text}</p><p className="text-[9px] text-slate-500">{fmtT(a.at)}</p></div></div>
+              <div key={i} className="flex items-start gap-2"><span className="w-1.5 h-1.5 rounded-full bg-[var(--cmp-color-information)] mt-1.5 shrink-0" /><div className="min-w-0"><p className="text-[11px] text-slate-300 leading-tight capitalize truncate">{a.text}</p><p className="text-[9px] text-slate-500">{fmtT(a.at)}</p></div></div>
             ))}</div> : <p className="text-xs text-slate-400 py-4 text-center">No recent movement events.</p>}
           </div>
         </div>

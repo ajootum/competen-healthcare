@@ -26,7 +26,7 @@ export default async function StructurePage() {
         <Kpi label="Cost Centres" value={k.costCentres} sub="financial" />
         <Kpi label="Establishment" value={k.establishment} sub={`${d.establishment.filled} filled`} />
         <Kpi label="Operational Rules" value={d.rules.length} sub="configured" />
-        <Kpi label="Structure Health" value={`${k.structureHealth}%`} sub="good" tone="text-emerald-600" />
+        <Kpi label="Structure Health" value={`${k.structureHealth}%`} sub="good" tone="text-[var(--cmp-text-success)]" />
       </div>
 
       <div className="grid grid-cols-1 xl:grid-cols-4 gap-4">
@@ -39,7 +39,7 @@ export default async function StructurePage() {
         </Card>
 
         <Card title="Organizational Hierarchy" className="xl:col-span-2">
-          <div className="rounded-lg bg-blue-600 text-white text-center py-2 px-2 mb-2 text-[12px] font-semibold">{p?.unit_name ?? "Unit"} <span className="opacity-70">({p?.unit_code})</span></div>
+          <div className="rounded-lg bg-[var(--cmp-color-information)] text-white text-center py-2 px-2 mb-2 text-[12px] font-semibold">{p?.unit_name ?? "Unit"} <span className="opacity-70">({p?.unit_code})</span></div>
           <p className="text-[11px] text-gray-500 mb-2">Departments in this hospital ({d.departments.length}):</p>
           <div className="flex flex-wrap gap-1.5">{d.departments.map((dep: any) => <span key={dep.id} className="text-[11px] bg-gray-50 border border-gray-200 rounded px-2 py-1 text-gray-700">{dep.name}</span>)}</div>
           <div className="mt-3 pt-3 border-t border-gray-100"><p className="text-[11px] font-semibold text-gray-500 mb-1.5">Service Catalogue ({d.services.length})</p>
@@ -70,8 +70,8 @@ export default async function StructurePage() {
           <div className="flex items-center gap-3">
             <Donut segs={[{ n: d.establishment.filled, color: "#22c55e" }, { n: d.establishment.vacant, color: "#f59e0b" }]} total={d.establishment.total} centre={d.establishment.total} sub="positions" size={100} />
             <div className="flex-1 space-y-1 text-[11px]">
-              <div className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-emerald-500" /><span className="text-gray-600 flex-1">Filled</span><span className="font-semibold text-gray-900">{d.establishment.filled} ({d.establishment.pct}%)</span></div>
-              <div className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-amber-500" /><span className="text-gray-600 flex-1">Vacant</span><span className="font-semibold text-gray-900">{d.establishment.vacant}</span></div>
+              <div className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-[var(--cmp-color-success)]" /><span className="text-gray-600 flex-1">Filled</span><span className="font-semibold text-gray-900">{d.establishment.filled} ({d.establishment.pct}%)</span></div>
+              <div className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-[var(--cmp-color-warning)]" /><span className="text-gray-600 flex-1">Vacant</span><span className="font-semibold text-gray-900">{d.establishment.vacant}</span></div>
               <div className="pt-1"><Progress pct={d.establishment.pct} /></div>
             </div>
           </div>

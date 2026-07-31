@@ -70,17 +70,17 @@ export default async function PlatformOperations() {
   const [po, ops] = await Promise.all([loadPlatformOps(admin), loadPlatformOperations(admin)]);
   const { kpis, services, servicesSummary, tenantSummary, workspaceSummary, licensing, activity, activityReady, version } = po;
 
-  const healthTone = kpis.health === "Healthy" ? "text-green-600" : kpis.health === "Attention" ? "text-amber-600" : "text-red-600";
+  const healthTone = kpis.health === "Healthy" ? "text-[var(--cmp-text-success)]" : kpis.health === "Attention" ? "text-[var(--cmp-text-warning)]" : "text-[var(--cmp-text-critical)]";
   const healthIcon = kpis.health === "Healthy" ? "💚" : kpis.health === "Attention" ? "⚠️" : "🛑";
-  const healthBg = kpis.health === "Healthy" ? "bg-green-50" : kpis.health === "Attention" ? "bg-amber-50" : "bg-red-50";
+  const healthBg = kpis.health === "Healthy" ? "bg-[var(--cmp-surface-success)]" : kpis.health === "Attention" ? "bg-[var(--cmp-surface-warning)]" : "bg-[var(--cmp-surface-critical)]";
   const kpiCards = [
     { label: "Overall Health", value: kpis.health, icon: healthIcon, iconBg: healthBg, sub: "core services responding", tone: healthTone },
-    { label: "Tenants", value: fmt(kpis.tenants), icon: "🏢", iconBg: "bg-blue-50", sub: `on ${licensing.plans} plans` },
+    { label: "Tenants", value: fmt(kpis.tenants), icon: "🏢", iconBg: "bg-[var(--cmp-surface-information)]", sub: `on ${licensing.plans} plans` },
     { label: "Users", value: fmt(kpis.activeUsers), icon: "👥", iconBg: "bg-violet-50", sub: "registered across tenants" },
-    { label: "API Requests (24h)", value: "—", icon: "🧩", iconBg: "bg-sky-50", sub: "Not metered", muted: true },
+    { label: "API Requests (24h)", value: "—", icon: "🧩", iconBg: "bg-[var(--cmp-surface-information)]", sub: "Not metered", muted: true },
     { label: "AI Requests (24h)", value: "—", icon: "🧠", iconBg: "bg-purple-50", sub: "Not metered", muted: true },
     { label: "Storage Used", value: "—", icon: "🗄️", iconBg: "bg-teal-50", sub: "Not metered", muted: true },
-    { label: "Open Alerts", value: kpis.openAlerts == null ? "—" : fmt(kpis.openAlerts), icon: "🛡️", iconBg: "bg-rose-50", sub: kpis.criticalAlerts ? `${kpis.criticalAlerts} critical` : "monitored", tone: kpis.openAlerts ? "text-rose-600" : undefined },
+    { label: "Open Alerts", value: kpis.openAlerts == null ? "—" : fmt(kpis.openAlerts), icon: "🛡️", iconBg: "bg-[var(--cmp-surface-error)]", sub: kpis.criticalAlerts ? `${kpis.criticalAlerts} critical` : "monitored", tone: kpis.openAlerts ? "text-[var(--cmp-text-error)]" : undefined },
   ];
 
   const quickActions = [
@@ -150,7 +150,7 @@ export default async function PlatformOperations() {
             {services.map(s => (
               <div key={s.code} className="flex items-center justify-between text-xs">
                 <span className="text-gray-600 truncate">{s.name}</span>
-                <span className={`inline-flex items-center gap-1 shrink-0 ${s.core ? "text-green-600" : "text-gray-400"}`}><span className={`w-1.5 h-1.5 rounded-full ${s.core ? "bg-green-500" : "bg-gray-300"}`} />{s.core ? "Core" : "Optional"}</span>
+                <span className={`inline-flex items-center gap-1 shrink-0 ${s.core ? "text-[var(--cmp-text-success)]" : "text-gray-400"}`}><span className={`w-1.5 h-1.5 rounded-full ${s.core ? "bg-[var(--cmp-color-success)]" : "bg-gray-300"}`} />{s.core ? "Core" : "Optional"}</span>
               </div>
             ))}
           </div>
@@ -230,7 +230,7 @@ export default async function PlatformOperations() {
               <Wrap key={m.n} {...(m.live ? { href: m.href } : {})} className={`flex items-start gap-3 rounded-lg border border-gray-100 p-4 ${m.live ? "hover:border-teal-300 hover:bg-teal-50/30 transition-colors" : ""}`}>
                 <span className="w-9 h-9 rounded-lg bg-gray-50 border border-gray-200 flex items-center justify-center text-base shrink-0">{m.icon}</span>
                 <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2"><span className="text-[10px] font-bold text-gray-400">{m.n}</span><span className="text-sm font-semibold text-gray-900">{m.label}</span>{!m.live && <span className="text-[9px] px-1.5 py-0.5 rounded bg-amber-50 text-amber-600 font-medium">Next phase</span>}</div>
+                  <div className="flex items-center gap-2"><span className="text-[10px] font-bold text-gray-400">{m.n}</span><span className="text-sm font-semibold text-gray-900">{m.label}</span>{!m.live && <span className="text-[9px] px-1.5 py-0.5 rounded bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)] font-medium">Next phase</span>}</div>
                   <p className="text-[11px] text-gray-500 mt-0.5">{m.desc}</p>
                 </div>
               </Wrap>

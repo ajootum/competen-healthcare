@@ -6,7 +6,7 @@ import { loadProgramManagement } from "@/lib/competency/program-management";
 export const dynamic = "force-dynamic";
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
-const compTone = (n: number) => (n >= 80 ? "text-emerald-600" : n >= 50 ? "text-amber-600" : "text-rose-600");
+const compTone = (n: number) => (n >= 80 ? "text-[var(--cmp-text-success)]" : n >= 50 ? "text-[var(--cmp-text-warning)]" : "text-[var(--cmp-text-error)]");
 const HEALTH_COLOR: Record<string, string> = { Healthy: "#10b981", Monitor: "#f59e0b", "At risk": "#f43f5e" };
 
 export default async function ProgramManagementPage() {
@@ -15,7 +15,7 @@ export default async function ProgramManagementPage() {
 
   const head = <Head code="CMO-006 · Program Management" title="Competency Program Management" sub="Design, launch, monitor and improve competency programs across the organisation — deployment lifecycle and program health." />;
   if (!d.provisioned) {
-    return <div className="space-y-4">{head}<div className="bg-amber-50 border border-amber-200 rounded-xl p-6"><p className="text-sm text-amber-800">Programs aren&apos;t provisioned — apply migration <code className="font-mono">114</code> (<code className="font-mono">cmo_assignments</code>).</p></div></div>;
+    return <div className="space-y-4">{head}<div className="bg-[var(--cmp-surface-warning)] border border-[var(--cmp-color-warning)] rounded-xl p-6"><p className="text-sm text-amber-800">Programs aren&apos;t provisioned — apply migration <code className="font-mono">114</code> (<code className="font-mono">cmo_assignments</code>).</p></div></div>;
   }
   if (d.empty) {
     return <div className="space-y-4">{head}<div className="bg-white border border-gray-200 rounded-xl p-6"><p className="text-sm text-gray-400">No competency programs deployed yet. Once competencies are assigned (rules / campaigns / manual), the program portfolio populates here.</p></div></div>;
@@ -30,9 +30,9 @@ export default async function ProgramManagementPage() {
         <Kpi label="Programs" value={k.programs} sub={`${k.active} active`} tone="text-teal-600" />
         <Kpi label="Deployments" value={k.deployments} sub="assignments" />
         <Kpi label="Avg completion" value={`${k.avgCompletion}%`} sub="across programs" tone={compTone(k.avgCompletion)} />
-        <Kpi label="At-risk programs" value={k.atRisk} sub="overdue / stalled" tone={k.atRisk ? "text-rose-600" : "text-gray-900"} />
-        <Kpi label="Overdue deployments" value={k.overdue} sub="past due date" tone={k.overdue ? "text-amber-600" : "text-gray-900"} />
-        <Kpi label="Healthy" value={d.healthDist.find((h: any) => h.label === "Healthy")?.n ?? 0} sub="≥80% complete" tone="text-emerald-600" />
+        <Kpi label="At-risk programs" value={k.atRisk} sub="overdue / stalled" tone={k.atRisk ? "text-[var(--cmp-text-error)]" : "text-gray-900"} />
+        <Kpi label="Overdue deployments" value={k.overdue} sub="past due date" tone={k.overdue ? "text-[var(--cmp-text-warning)]" : "text-gray-900"} />
+        <Kpi label="Healthy" value={d.healthDist.find((h: any) => h.label === "Healthy")?.n ?? 0} sub="≥80% complete" tone="text-[var(--cmp-text-success)]" />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
@@ -70,7 +70,7 @@ export default async function ProgramManagementPage() {
             {d.atRisk.length === 0 ? <p className="text-sm text-gray-400 py-3 text-center">No programs at risk. 🎯</p> : (
               <div className="space-y-2">
                 {d.atRisk.map((p: any, i: number) => (
-                  <div key={i} className="flex items-center gap-2"><span className="w-1.5 h-1.5 rounded-full bg-rose-500 shrink-0" /><span className="text-[13px] text-gray-800 flex-1 truncate">{p.competency}</span><span className="text-[10px] text-rose-500">{p.overdue} overdue</span></div>
+                  <div key={i} className="flex items-center gap-2"><span className="w-1.5 h-1.5 rounded-full bg-[var(--cmp-color-error)] shrink-0" /><span className="text-[13px] text-gray-800 flex-1 truncate">{p.competency}</span><span className="text-[10px] text-rose-500">{p.overdue} overdue</span></div>
                 ))}
               </div>
             )}

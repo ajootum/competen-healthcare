@@ -26,7 +26,7 @@ export default async function PassportSharePage() {
     <div className="max-w-4xl space-y-4">
       <div className="flex items-center justify-between gap-3">
         <div>
-          <p className="text-[11px] font-semibold text-blue-600 uppercase tracking-wide mb-0.5">Personal Workspace</p>
+          <p className="text-[11px] font-semibold text-[var(--cmp-text-information)] uppercase tracking-wide mb-0.5">Personal Workspace</p>
           <h1 className="text-xl font-bold text-gray-900">Share &amp; Verify my Passport</h1>
           <p className="text-sm text-gray-500 mt-0.5">Give an employer or regulator a trusted, time-limited link that proves your competence — in your control.</p>
         </div>
@@ -34,7 +34,7 @@ export default async function PassportSharePage() {
       </div>
 
       {!provisioned
-        ? <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 text-sm text-amber-800">Passport sharing isn&apos;t provisioned yet — apply migration <code className="font-mono">122</code> to enable time-limited verification links.</div>
+        ? <div className="bg-[var(--cmp-surface-warning)] border border-[var(--cmp-color-warning)] rounded-xl p-4 text-sm text-amber-800">Passport sharing isn&apos;t provisioned yet — apply migration <code className="font-mono">122</code> to enable time-limited verification links.</div>
         : <ShareManager tokens={tokens} />}
 
       <p className="text-[11px] text-gray-400">COMP-023 — verification links reveal only your verified, current competencies and credentials over the public <code>/verify/&lt;token&gt;</code> page, until they expire or you revoke them; every link is logged. Cross-organisation recognition (COMP-024) builds on this shared, verifiable record.</p>

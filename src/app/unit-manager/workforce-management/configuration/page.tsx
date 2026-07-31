@@ -14,7 +14,7 @@ export const dynamic = "force-dynamic";
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 const card = "bg-white rounded-xl border border-gray-200";
-const DSTATUS: Record<string, string> = { configured: "bg-emerald-50 text-emerald-700", partial: "bg-amber-50 text-amber-700", "next-phase": "bg-gray-100 text-gray-400" };
+const DSTATUS: Record<string, string> = { configured: "bg-[var(--cmp-surface-success)] text-emerald-700", partial: "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]", "next-phase": "bg-gray-100 text-gray-400" };
 const fmtDate = (iso?: string | null) => iso ? new Date(iso).toLocaleDateString("en-GB", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }) : "—";
 
 function Kpi({ label, value, sub, tone }: { label: string; value: any; sub?: string; tone?: string }) {
@@ -46,7 +46,7 @@ export default async function ConfigurationDashboard() {
     </>
   );
 
-  if (!d.provisioned) return <div className="space-y-4">{header}<div className="bg-amber-50 border border-amber-200 rounded-xl p-6"><p className="font-semibold text-amber-900">⚙️ Config store not provisioned</p><p className="text-sm text-amber-800 mt-1">Migration 081 (wps_config) is required. Configure planning parameters in the <Link href="/unit-manager/planning-studio" className="underline">Workforce Planning Studio</Link>.</p></div></div>;
+  if (!d.provisioned) return <div className="space-y-4">{header}<div className="bg-[var(--cmp-surface-warning)] border border-[var(--cmp-color-warning)] rounded-xl p-6"><p className="font-semibold text-amber-900">⚙️ Config store not provisioned</p><p className="text-sm text-amber-800 mt-1">Migration 081 (wps_config) is required. Configure planning parameters in the <Link href="/unit-manager/planning-studio" className="underline">Workforce Planning Studio</Link>.</p></div></div>;
 
   const p = d.profile;
   return (
@@ -59,19 +59,19 @@ export default async function ConfigurationDashboard() {
           <h3 className="text-sm font-bold text-gray-900 mb-2">Configuration health <span className="text-[9px] text-gray-300">CFG-DASH-01</span></h3>
           <div className="flex items-center gap-4 mt-2">
             <div className="relative w-20 h-20 shrink-0"><div className="w-20 h-20 rounded-full" style={{ background: `conic-gradient(${d.health >= 75 ? "#10b981" : d.health >= 50 ? "#f59e0b" : "#e11d48"} ${d.health}%, #f1f5f9 0)` }} /><div className="absolute inset-[20%] rounded-full bg-white flex items-center justify-center text-lg font-bold">{d.health}%</div></div>
-            <div className="text-[11px] text-gray-500"><p><b className="text-emerald-600">{d.configured}</b> configured · <b className="text-amber-600">{d.partial}</b> partial · <b className="text-gray-400">{d.domains.length - d.configured - d.partial}</b> next-phase</p><p className="text-[10px] text-gray-400 mt-1">Completeness across configuration domains.</p></div>
+            <div className="text-[11px] text-gray-500"><p><b className="text-[var(--cmp-text-success)]">{d.configured}</b> configured · <b className="text-[var(--cmp-text-warning)]">{d.partial}</b> partial · <b className="text-gray-400">{d.domains.length - d.configured - d.partial}</b> next-phase</p><p className="text-[10px] text-gray-400 mt-1">Completeness across configuration domains.</p></div>
           </div>
         </div>
         <div className={`${card} p-5 xl:col-span-2`}>
           <h3 className="text-sm font-bold text-gray-900 mb-2">Active policy profile <span className="text-[9px] text-gray-300">CFG-DASH-02</span></h3>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
             <div><p className="text-[10px] text-gray-500 uppercase">Version</p><p className="text-lg font-bold text-gray-800">v{p.version}</p></div>
-            <div><p className="text-[10px] text-gray-500 uppercase">Status</p><p className="text-sm font-semibold">{p.published ? <span className="text-emerald-600">Published</span> : <span className="text-gray-400">Defaults</span>}</p></div>
+            <div><p className="text-[10px] text-gray-500 uppercase">Status</p><p className="text-sm font-semibold">{p.published ? <span className="text-[var(--cmp-text-success)]">Published</span> : <span className="text-gray-400">Defaults</span>}</p></div>
             <div><p className="text-[10px] text-gray-500 uppercase">Last change</p><p className="text-sm text-gray-700">{fmtDate(p.updatedAt)}</p></div>
             <div><p className="text-[10px] text-gray-500 uppercase">By</p><p className="text-sm text-gray-700 truncate">{p.updatedByName ?? "—"}</p></div>
           </div>
           <div className="mt-3 flex gap-2 flex-wrap">
-            <Link href="/unit-manager/planning-studio" className="text-[11px] font-semibold rounded-lg px-3 py-1.5 bg-emerald-600 text-white hover:bg-emerald-700">Edit in Workforce Planning Studio ↗</Link>
+            <Link href="/unit-manager/planning-studio" className="text-[11px] font-semibold rounded-lg px-3 py-1.5 bg-[var(--cmp-color-success)] text-white hover:bg-emerald-700">Edit in Workforce Planning Studio ↗</Link>
             <Link href="/unit-manager/workforce-management/configuration/audit" className="text-[11px] font-semibold rounded-lg px-3 py-1.5 border border-gray-200 text-gray-700 hover:bg-gray-50">Audit history</Link>
           </div>
         </div>
@@ -79,9 +79,9 @@ export default async function ConfigurationDashboard() {
 
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         <Kpi label="Pending approvals" value="—" sub="Needs change-set store" tone="text-gray-300" />
-        <Kpi label="Validation warnings" value="0" sub="No blocking errors" tone="text-emerald-600" />
-        <Kpi label="Consumers in sync" value={`${d.consumers.length}/${d.consumers.length}`} sub="WFM modules" tone="text-emerald-600" />
-        <Kpi label="Config drift" value="0" sub="Cache in sync" tone="text-emerald-600" />
+        <Kpi label="Validation warnings" value="0" sub="No blocking errors" tone="text-[var(--cmp-text-success)]" />
+        <Kpi label="Consumers in sync" value={`${d.consumers.length}/${d.consumers.length}`} sub="WFM modules" tone="text-[var(--cmp-text-success)]" />
+        <Kpi label="Config drift" value="0" sub="Cache in sync" tone="text-[var(--cmp-text-success)]" />
       </div>
 
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
@@ -94,7 +94,7 @@ export default async function ConfigurationDashboard() {
         {/* Consumer synchronisation */}
         <div className={`${card} p-5`}>
           <h3 className="text-sm font-bold text-gray-900 mb-3">Consumer synchronisation <span className="text-[9px] text-gray-300">CFG-DASH-07</span></h3>
-          <div className="space-y-1">{d.consumers.map((c: string) => (<div key={c} className="flex items-center justify-between text-xs rounded-lg border border-gray-100 px-2.5 py-1.5"><span className="text-gray-700">{c}</span><span className="text-[9px] text-emerald-600">✓ v{p.version}</span></div>))}</div>
+          <div className="space-y-1">{d.consumers.map((c: string) => (<div key={c} className="flex items-center justify-between text-xs rounded-lg border border-gray-100 px-2.5 py-1.5"><span className="text-gray-700">{c}</span><span className="text-[9px] text-[var(--cmp-text-success)]">✓ v{p.version}</span></div>))}</div>
           <p className="text-[10px] text-gray-400 mt-2">All WFM modules resolve the same published wps_config version (§3 single source of truth).</p>
         </div>
 

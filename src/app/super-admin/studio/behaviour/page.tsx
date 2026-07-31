@@ -33,7 +33,7 @@ export default async function BehaviourPage() {
       </div>
 
       {!bh.provisioned ? (
-        <div className="bg-amber-50 border border-amber-100 rounded-xl p-6 text-sm text-amber-800">Run migration 134 (<code className="text-[11px]">cst_behaviour_assessments</code>) to enable the Behaviour designer.</div>
+        <div className="bg-[var(--cmp-surface-warning)] border border-[var(--cmp-color-warning)] rounded-xl p-6 text-sm text-amber-800">Run migration 134 (<code className="text-[11px]">cst_behaviour_assessments</code>) to enable the Behaviour designer.</div>
       ) : (
         <>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-5">

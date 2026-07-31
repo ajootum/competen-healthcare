@@ -40,15 +40,15 @@ export default async function BedCapacity() {
       <PosTabs />
     </>
   );
-  if (!po.ready) return <div className="space-y-4">{header}<div className="bg-amber-50 border border-amber-200 rounded-xl p-6"><p className="font-semibold text-amber-900">⚙️ Coming online</p><p className="text-sm text-amber-800 mt-1">The Clinical Operations Engine isn&apos;t provisioned for this unit yet.</p></div></div>;
+  if (!po.ready) return <div className="space-y-4">{header}<div className="bg-[var(--cmp-surface-warning)] border border-[var(--cmp-color-warning)] rounded-xl p-6"><p className="font-semibold text-amber-900">⚙️ Coming online</p><p className="text-sm text-amber-800 mt-1">The Clinical Operations Engine isn&apos;t provisioned for this unit yet.</p></div></div>;
 
   const { capacity, bedBoard, cleaningBeds, zones } = po;
   const kpis = [
-    { label: "Occupancy", value: `${capacity.occPct}%`, tone: capacity.occPct >= 90 ? "text-rose-600" : capacity.occPct >= 80 ? "text-amber-600" : "text-emerald-600" },
+    { label: "Occupancy", value: `${capacity.occPct}%`, tone: capacity.occPct >= 90 ? "text-[var(--cmp-text-error)]" : capacity.occPct >= 80 ? "text-[var(--cmp-text-warning)]" : "text-[var(--cmp-text-success)]" },
     { label: "Occupied", value: capacity.occupied, tone: "text-gray-900" },
-    { label: "Available", value: capacity.available, tone: capacity.available ? "text-emerald-600" : "text-rose-600" },
+    { label: "Available", value: capacity.available, tone: capacity.available ? "text-[var(--cmp-text-success)]" : "text-[var(--cmp-text-error)]" },
     { label: "Reserved", value: capacity.reserved, tone: "text-violet-600" },
-    { label: "Cleaning", value: capacity.cleaning, tone: capacity.cleaning ? "text-orange-600" : "text-gray-400" },
+    { label: "Cleaning", value: capacity.cleaning, tone: capacity.cleaning ? "text-[var(--cmp-text-warning)]" : "text-gray-400" },
     { label: "Maintenance", value: capacity.maintenance, tone: capacity.maintenance ? "text-gray-600" : "text-gray-400" },
   ];
 
@@ -66,7 +66,7 @@ export default async function BedCapacity() {
         <div className="space-y-2">
           {zones.map((z: any) => {
             const occ = z.beds.length ? Math.round((z.beds.filter((b: any) => b.status === "occupied").length / z.beds.length) * 100) : 0;
-            return <div key={z.name} className="text-xs"><div className="flex items-center justify-between mb-0.5"><span className="text-gray-700 font-medium">{z.name}</span><span className="text-gray-500 tabular-nums">{z.beds.filter((b: any) => b.status === "occupied").length}/{z.beds.length} · {occ}%</span></div><div className="w-full h-2 rounded-full bg-gray-100 overflow-hidden"><div className={`h-full ${occ >= 90 ? "bg-rose-500" : occ >= 80 ? "bg-amber-400" : "bg-emerald-500"}`} style={{ width: `${Math.min(100, occ)}%` }} /></div></div>;
+            return <div key={z.name} className="text-xs"><div className="flex items-center justify-between mb-0.5"><span className="text-gray-700 font-medium">{z.name}</span><span className="text-gray-500 tabular-nums">{z.beds.filter((b: any) => b.status === "occupied").length}/{z.beds.length} · {occ}%</span></div><div className="w-full h-2 rounded-full bg-gray-100 overflow-hidden"><div className={`h-full ${occ >= 90 ? "bg-[var(--cmp-color-error)]" : occ >= 80 ? "bg-[var(--cmp-color-warning)]" : "bg-[var(--cmp-color-success)]"}`} style={{ width: `${Math.min(100, occ)}%` }} /></div></div>;
           })}
         </div>
       </div>
@@ -88,7 +88,7 @@ export default async function BedCapacity() {
       {/* Cleaning queue */}
       <div className={`${card} p-5`}>
         <h3 className="text-sm font-bold text-gray-900 mb-3">Cleaning queue</h3>
-        {cleaningBeds.length === 0 ? <p className="text-sm text-gray-400">No beds awaiting cleaning.</p> : <div className="flex flex-wrap gap-2">{cleaningBeds.map((b: any) => <span key={b.id} className="text-xs rounded-lg border border-orange-200 bg-orange-50/50 px-3 py-1.5 text-orange-800">{b.label} · {titleCase(b.bed_type ?? "bed")}</span>)}</div>}
+        {cleaningBeds.length === 0 ? <p className="text-sm text-gray-400">No beds awaiting cleaning.</p> : <div className="flex flex-wrap gap-2">{cleaningBeds.map((b: any) => <span key={b.id} className="text-xs rounded-lg border border-[var(--cmp-color-warning)] bg-[var(--cmp-surface-warning)]/50 px-3 py-1.5 text-orange-800">{b.label} · {titleCase(b.bed_type ?? "bed")}</span>)}</div>}
         <p className="text-[10px] text-gray-400 mt-3">Turnaround-time trend and a forward capacity forecast need historical turnaround/admission rates — honest next-phase.</p>
       </div>
 

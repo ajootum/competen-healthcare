@@ -7,8 +7,8 @@ import { cardClass } from "@/components/ui/primitives";
 // catalogued widget primitives; the detail pane shows each widget's configuration contract (§12): layout,
 // data source, filters, thresholds, display modes, actions and safety classification.
 /* eslint-disable @typescript-eslint/no-explicit-any */
-const catTone = (c: string) => (/risk|heat|matrix/i.test(c) ? "bg-rose-50 text-rose-700" : /trend|comparison|distribution/i.test(c) ? "bg-sky-50 text-sky-700" : /ai/i.test(c) ? "bg-violet-50 text-violet-700" : /alert/i.test(c) ? "bg-amber-50 text-amber-700" : "bg-emerald-50 text-emerald-700");
-const safetyTone = (s: string) => (s.includes("relevant") ? "bg-amber-50 text-amber-700" : "bg-gray-50 text-gray-500");
+const catTone = (c: string) => (/risk|heat|matrix/i.test(c) ? "bg-[var(--cmp-surface-error)] text-[var(--cmp-text-error)]" : /trend|comparison|distribution/i.test(c) ? "bg-[var(--cmp-surface-information)] text-[var(--cmp-text-information)]" : /ai/i.test(c) ? "bg-violet-50 text-violet-700" : /alert/i.test(c) ? "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]" : "bg-[var(--cmp-surface-success)] text-emerald-700");
+const safetyTone = (s: string) => (s.includes("relevant") ? "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]" : "bg-gray-50 text-gray-500");
 const safetyLabel: Record<string, string> = { non_clinical: "Non-clinical", operational: "Operational", clinical_safety_relevant: "Clinical-safety relevant" };
 
 export default function CatalogueBrowser({ widgets, categories }: { widgets: any[]; categories: string[] }) {
@@ -40,7 +40,7 @@ export default function CatalogueBrowser({ widgets, categories }: { widgets: any
               <div className="flex items-center gap-2">
                 <span className={`text-[9px] font-semibold rounded px-1.5 py-0.5 shrink-0 ${catTone(w.category)}`}>{w.category}</span>
                 <span className="text-xs font-medium text-gray-800 truncate flex-1">{w.name}</span>
-                {w.registered ? <span className="text-[9px] text-emerald-600 shrink-0" title="Registered in WCE-002">● {w.completeness}%</span> : <span className="text-[9px] text-gray-300 shrink-0" title="Not yet synced to the registry">○ unsynced</span>}
+                {w.registered ? <span className="text-[9px] text-[var(--cmp-text-success)] shrink-0" title="Registered in WCE-002">● {w.completeness}%</span> : <span className="text-[9px] text-gray-300 shrink-0" title="Not yet synced to the registry">○ unsynced</span>}
               </div>
             </button>
           ))}
@@ -50,7 +50,7 @@ export default function CatalogueBrowser({ widgets, categories }: { widgets: any
           {!sel ? <p className="text-sm text-gray-400 py-10 text-center">Select a widget to inspect its configuration contract.</p> : (
             <div className="space-y-3">
               <div>
-                <div className="flex items-center gap-2 mb-1"><span className={`text-[9px] font-semibold rounded px-1.5 py-0.5 ${catTone(sel.category)}`}>{sel.category}</span><span className={`text-[9px] font-semibold rounded px-1.5 py-0.5 ${safetyTone(sel.safety)}`}>{safetyLabel[sel.safety] ?? sel.safety}</span>{sel.thresholds && <span className="text-[9px] rounded px-1.5 py-0.5 bg-orange-50 text-orange-600">thresholds</span>}</div>
+                <div className="flex items-center gap-2 mb-1"><span className={`text-[9px] font-semibold rounded px-1.5 py-0.5 ${catTone(sel.category)}`}>{sel.category}</span><span className={`text-[9px] font-semibold rounded px-1.5 py-0.5 ${safetyTone(sel.safety)}`}>{safetyLabel[sel.safety] ?? sel.safety}</span>{sel.thresholds && <span className="text-[9px] rounded px-1.5 py-0.5 bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]">thresholds</span>}</div>
                 <h3 className="text-sm font-bold text-gray-900">{sel.name}</h3>
                 <p className="text-[10px] text-gray-400 font-mono break-all">{sel.key}</p>
                 <p className="text-xs text-gray-600 mt-1">{sel.description}</p>

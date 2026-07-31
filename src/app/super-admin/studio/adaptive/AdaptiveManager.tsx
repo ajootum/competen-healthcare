@@ -50,7 +50,7 @@ export default function AdaptiveManager({ exams, bankOptions }: { exams: any[]; 
           <input value={pass} onChange={e => setPass(e.target.value)} type="number" min="1" max="100" className={`${inp} w-20`} />
           <button onClick={create} disabled={busy} className="text-xs font-semibold text-white bg-teal-600 hover:bg-teal-700 disabled:opacity-50 rounded-lg px-4 py-2 ml-auto">{busy ? "…" : "Create"}</button>
         </div>
-        {err && <p className="text-[11px] text-red-600 mt-1">{err}</p>}
+        {err && <p className="text-[11px] text-[var(--cmp-text-critical)] mt-1">{err}</p>}
       </div>
 
       {exams.length === 0 ? (
@@ -64,7 +64,7 @@ export default function AdaptiveManager({ exams, bankOptions }: { exams: any[]; 
                 <span className={`text-[9px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded border ${STATUS_TONE[e.status] ?? STATUS_TONE.draft}`}>{e.status}</span>
                 {e.bankName ? <span className="text-[10px] text-gray-500 truncate max-w-[22%]">📚 {e.bankName} ({e.poolSize})</span> : <span className="text-[10px] text-gray-400">no pool</span>}
                 <span className="text-gray-500">{e.minItems}–{e.maxItems} items · start {e.startLabel} · pass {e.passThreshold}% · SE≤{e.seStop}</span>
-                {e.bankId && !e.poolAdequate && <span className="text-[9px] font-semibold text-amber-600 bg-amber-50 border border-amber-100 rounded px-1.5 py-0.5">pool &lt; max</span>}
+                {e.bankId && !e.poolAdequate && <span className="text-[9px] font-semibold text-[var(--cmp-text-warning)] bg-[var(--cmp-surface-warning)] border border-[var(--cmp-color-warning)] rounded px-1.5 py-0.5">pool &lt; max</span>}
                 <div className="ml-auto flex items-center gap-1.5">
                   {e.status !== "active" && <button onClick={() => setStatus(e.id, "active")} disabled={busy} className="text-[10px] font-semibold text-teal-700 hover:underline">Publish</button>}
                   {e.status === "active" ? <button onClick={() => setStatus(e.id, "archived")} disabled={busy} className="text-[10px] font-semibold text-gray-400 hover:underline">Archive</button>

@@ -34,7 +34,7 @@ export default async function DeliveryConfigPage() {
       </div>
 
       {!q.provisioned ? (
-        <div className="bg-amber-50 border border-amber-100 rounded-xl p-4"><p className="text-[13px] text-amber-900">Delivery config isn&apos;t provisioned — apply migration 148 (<code className="text-[11px]">cdp_delivery_config</code>). The engines are running on the built-in defaults until then.</p></div>
+        <div className="bg-[var(--cmp-surface-warning)] border border-[var(--cmp-color-warning)] rounded-xl p-4"><p className="text-[13px] text-amber-900">Delivery config isn&apos;t provisioned — apply migration 148 (<code className="text-[11px]">cdp_delivery_config</code>). The engines are running on the built-in defaults until then.</p></div>
       ) : (
         <>
           <div className="bg-violet-50 border border-violet-100 rounded-xl px-4 py-3 mb-5">

@@ -39,14 +39,14 @@ export async function qaGuard() {
 
 // ── Tone system — full literal Tailwind class strings (no dynamic construction) + SVG hexes.
 export const TONE: Record<string, { text: string; chip: string; dot: string; bar: string; soft: string; hex: string }> = {
-  emerald: { text: "text-emerald-600", chip: "bg-emerald-100 text-emerald-700", dot: "bg-emerald-500", bar: "bg-emerald-500", soft: "bg-emerald-50", hex: "#10b981" },
+  emerald: { text: "text-[var(--cmp-text-success)]", chip: "bg-[var(--cmp-surface-success)] text-emerald-700", dot: "bg-[var(--cmp-color-success)]", bar: "bg-[var(--cmp-color-success)]", soft: "bg-[var(--cmp-surface-success)]", hex: "#10b981" },
   teal: { text: "text-teal-600", chip: "bg-teal-100 text-teal-700", dot: "bg-teal-500", bar: "bg-teal-500", soft: "bg-teal-50", hex: "#14b8a6" },
-  blue: { text: "text-blue-600", chip: "bg-blue-100 text-blue-700", dot: "bg-blue-500", bar: "bg-blue-500", soft: "bg-blue-50", hex: "#3b82f6" },
+  blue: { text: "text-[var(--cmp-text-information)]", chip: "bg-[var(--cmp-surface-information)] text-blue-700", dot: "bg-[var(--cmp-color-information)]", bar: "bg-[var(--cmp-color-information)]", soft: "bg-[var(--cmp-surface-information)]", hex: "#3b82f6" },
   indigo: { text: "text-indigo-600", chip: "bg-indigo-100 text-indigo-700", dot: "bg-indigo-500", bar: "bg-indigo-500", soft: "bg-indigo-50", hex: "#6366f1" },
   violet: { text: "text-violet-600", chip: "bg-violet-100 text-violet-700", dot: "bg-violet-500", bar: "bg-violet-500", soft: "bg-violet-50", hex: "#8b5cf6" },
-  amber: { text: "text-amber-600", chip: "bg-amber-100 text-amber-700", dot: "bg-amber-500", bar: "bg-amber-500", soft: "bg-amber-50", hex: "#f59e0b" },
-  rose: { text: "text-rose-600", chip: "bg-rose-100 text-rose-700", dot: "bg-rose-500", bar: "bg-rose-500", soft: "bg-rose-50", hex: "#f43f5e" },
-  red: { text: "text-red-600", chip: "bg-red-100 text-red-700", dot: "bg-red-500", bar: "bg-red-500", soft: "bg-red-50", hex: "#ef4444" },
+  amber: { text: "text-[var(--cmp-text-warning)]", chip: "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]", dot: "bg-[var(--cmp-color-warning)]", bar: "bg-[var(--cmp-color-warning)]", soft: "bg-[var(--cmp-surface-warning)]", hex: "#f59e0b" },
+  rose: { text: "text-[var(--cmp-text-error)]", chip: "bg-[var(--cmp-surface-error)] text-[var(--cmp-text-error)]", dot: "bg-[var(--cmp-color-error)]", bar: "bg-[var(--cmp-color-error)]", soft: "bg-[var(--cmp-surface-error)]", hex: "#f43f5e" },
+  red: { text: "text-[var(--cmp-text-critical)]", chip: "bg-[var(--cmp-surface-critical)] text-[var(--cmp-text-critical)]", dot: "bg-[var(--cmp-color-critical)]", bar: "bg-[var(--cmp-color-critical)]", soft: "bg-[var(--cmp-surface-critical)]", hex: "#ef4444" },
   slate: { text: "text-slate-600", chip: "bg-slate-100 text-slate-700", dot: "bg-slate-400", bar: "bg-slate-400", soft: "bg-slate-50", hex: "#94a3b8" },
   gray: { text: "text-gray-500", chip: "bg-gray-100 text-gray-600", dot: "bg-gray-300", bar: "bg-gray-300", soft: "bg-gray-50", hex: "#cbd5e1" },
 };
@@ -89,7 +89,7 @@ export function Stat({ icon, tone, label, value, sub, trend }: {
 }) {
   const tt = T(tone);
   const arrow = trend ? (trend.dir === "up" ? "↑" : trend.dir === "down" ? "↓" : "→") : "";
-  const trendCls = trend ? (trend.good === false ? "text-rose-600" : trend.good === true ? "text-emerald-600" : "text-gray-400") : "";
+  const trendCls = trend ? (trend.good === false ? "text-[var(--cmp-text-error)]" : trend.good === true ? "text-[var(--cmp-text-success)]" : "text-gray-400") : "";
   return (
     <div className="bg-white border border-gray-200 rounded-xl p-4">
       <div className="flex items-center gap-2 mb-2">
@@ -268,5 +268,5 @@ export function Foot({ children }: { children: React.ReactNode }) {
 
 // ── Provision / empty banners.
 export function Provision({ module }: { module: string }) {
-  return <div className="bg-blue-50 border border-blue-200 rounded-xl p-6 text-sm text-blue-800">The data store for {module} is not provisioned yet. Once its migration is applied, this module lights up with live data. Until then the surrounding KPIs and cross-links remain available.</div>;
+  return <div className="bg-[var(--cmp-surface-information)] border border-[var(--cmp-color-information)] rounded-xl p-6 text-sm text-blue-800">The data store for {module} is not provisioned yet. Once its migration is applied, this module lights up with live data. Until then the surrounding KPIs and cross-links remain available.</div>;
 }

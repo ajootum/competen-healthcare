@@ -50,7 +50,7 @@ export default async function StudioMappingPage() {
               <div key={d.key} className={`bg-white rounded-xl border border-gray-100 p-4 ${d.pending ? "opacity-70" : ""}`}>
                 <div className="flex items-center justify-between mb-1.5">
                   <span className="text-xs font-semibold text-gray-700">{d.label}</span>
-                  {d.pending ? <span className="text-[8px] font-bold uppercase tracking-wide text-amber-600 bg-amber-50 border border-amber-100 px-1.5 py-0.5 rounded">Pending</span>
+                  {d.pending ? <span className="text-[8px] font-bold uppercase tracking-wide text-[var(--cmp-text-warning)] bg-[var(--cmp-surface-warning)] border border-[var(--cmp-color-warning)] px-1.5 py-0.5 rounded">Pending</span>
                     : <span className="text-sm font-bold" style={{ color: cellColor(d.coverage) }}>{d.coverage}%</span>}
                 </div>
                 <div className="h-2 bg-gray-100 rounded-full overflow-hidden mb-1.5"><div className="h-full rounded-full" style={{ width: `${d.coverage}%`, backgroundColor: d.color }} /></div>
@@ -105,7 +105,7 @@ export default async function StudioMappingPage() {
                     <span className="font-semibold text-gray-800 truncate max-w-[38%]">{g.name}</span>
                     {g.framework && <span className="text-[10px] text-gray-400 truncate hidden md:inline">{g.framework}</span>}
                     <span className="ml-auto flex items-center gap-1">
-                      {g.missing.map(m => <span key={m} className="text-[9px] font-semibold text-red-600 bg-red-50 border border-red-100 rounded px-1.5 py-0.5">no {m}</span>)}
+                      {g.missing.map(m => <span key={m} className="text-[9px] font-semibold text-[var(--cmp-text-critical)] bg-[var(--cmp-surface-critical)] border border-[var(--cmp-color-critical)] rounded px-1.5 py-0.5">no {m}</span>)}
                       <span className="text-[10px] font-bold text-gray-500 ml-1">{g.mapped}/5</span>
                     </span>
                   </div>

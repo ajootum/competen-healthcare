@@ -65,7 +65,7 @@ export default function CampaignManager({ campaigns, competencies, roles }: { ca
             </div>
           </div>
         )}
-        {err && <p className="text-[11px] text-rose-600 mt-2">{err}</p>}
+        {err && <p className="text-[11px] text-[var(--cmp-text-error)] mt-2">{err}</p>}
       </div>
 
       <div className="bg-white rounded-xl border border-gray-100 overflow-hidden">
@@ -78,7 +78,7 @@ export default function CampaignManager({ campaigns, competencies, roles }: { ca
               <div key={c.id} className="px-4 py-3">
                 <div className="flex items-center gap-2 mb-1">
                   <span className="text-sm font-semibold text-gray-800 truncate">{c.name}</span>
-                  {c.mandatory && <span className="text-[8px] font-bold uppercase tracking-wide text-rose-600 bg-rose-50 border border-rose-100 rounded px-1 py-0.5">Mandatory</span>}
+                  {c.mandatory && <span className="text-[8px] font-bold uppercase tracking-wide text-[var(--cmp-text-error)] bg-[var(--cmp-surface-error)] border border-[var(--cmp-color-error)] rounded px-1 py-0.5">Mandatory</span>}
                   <span className={`text-[8px] font-bold uppercase tracking-wide border rounded px-1.5 py-0.5 ${STATUS[c.status] ?? STATUS.draft}`}>{c.status}</span>
                   <span className="ml-auto flex items-center gap-2 shrink-0">
                     {c.status === "draft" && <button onClick={() => post({ action: "launch", id: c.id })} disabled={busy} className="text-[11px] font-semibold text-violet-700 hover:underline disabled:opacity-50">Launch →</button>}

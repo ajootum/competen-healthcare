@@ -27,10 +27,10 @@ export default async function ApprovalsConsole() {
   const { queue, byWorkflow, recentDecisions, summary: s } = await loadApprovalOps(admin);
 
   const kpis = [
-    { label: "Pending", value: fmt(s.pending), icon: "⏳", iconBg: "bg-amber-50", sub: `${s.approvals} engine · ${s.contentChanges} content`, tone: s.pending ? "text-amber-600" : "text-gray-900" },
+    { label: "Pending", value: fmt(s.pending), icon: "⏳", iconBg: "bg-[var(--cmp-surface-warning)]", sub: `${s.approvals} engine · ${s.contentChanges} content`, tone: s.pending ? "text-[var(--cmp-text-warning)]" : "text-gray-900" },
     { label: "Workflows", value: fmt(s.workflows), icon: "🔀", iconBg: "bg-violet-50", sub: "approval types" },
-    { label: "Approved (24h)", value: s.ready ? fmt(s.approved24h) : "—", icon: "✅", iconBg: "bg-green-50", sub: "engine decisions", muted: !s.ready },
-    { label: "Rejected (24h)", value: s.ready ? fmt(s.rejected24h) : "—", icon: "⛔", iconBg: "bg-rose-50", sub: "engine decisions", tone: s.rejected24h ? "text-rose-600" : undefined, muted: !s.ready },
+    { label: "Approved (24h)", value: s.ready ? fmt(s.approved24h) : "—", icon: "✅", iconBg: "bg-[var(--cmp-surface-success)]", sub: "engine decisions", muted: !s.ready },
+    { label: "Rejected (24h)", value: s.ready ? fmt(s.rejected24h) : "—", icon: "⛔", iconBg: "bg-[var(--cmp-surface-error)]", sub: "engine decisions", tone: s.rejected24h ? "text-[var(--cmp-text-error)]" : undefined, muted: !s.ready },
   ];
 
   return (
@@ -44,8 +44,8 @@ export default async function ApprovalsConsole() {
       </div>
 
       {!s.ready && (
-        <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-          <span className="font-semibold">Engine not enabled.</span> Run <code className="font-mono text-[12px] bg-amber-100 px-1 rounded">supabase/RUN-ME-057-approval-engine.sql</code> to submit and decide approvals. Existing content change-requests still appear in the queue below.
+        <div className="rounded-xl border border-[var(--cmp-color-warning)] bg-[var(--cmp-surface-warning)] px-4 py-3 text-sm text-amber-800">
+          <span className="font-semibold">Engine not enabled.</span> Run <code className="font-mono text-[12px] bg-[var(--cmp-surface-warning)] px-1 rounded">supabase/RUN-ME-057-approval-engine.sql</code> to submit and decide approvals. Existing content change-requests still appear in the queue below.
         </div>
       )}
 
@@ -73,7 +73,7 @@ export default async function ApprovalsConsole() {
               <div key={w.key} className="flex items-center gap-2.5 rounded-lg border border-gray-100 p-3">
                 <span className="w-8 h-8 rounded-lg bg-gray-50 flex items-center justify-center text-sm shrink-0">{w.icon}</span>
                 <div className="min-w-0 flex-1"><p className="text-sm font-medium text-gray-800 truncate">{w.name}</p><p className="text-[10px] text-gray-400">{w.steps} step{w.steps === 1 ? "" : "s"}</p></div>
-                {w.pending > 0 && <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-amber-50 text-amber-700 shrink-0">{w.pending}</span>}
+                {w.pending > 0 && <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)] shrink-0">{w.pending}</span>}
               </div>
             ))}
           </div>
@@ -86,10 +86,10 @@ export default async function ApprovalsConsole() {
             <div className="space-y-2">
               {recentDecisions.map((d: any, i: number) => (
                 <div key={i} className="flex items-center gap-2.5 text-sm">
-                  <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${d.status === "approved" ? "bg-green-500" : "bg-rose-500"}`} />
+                  <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${d.status === "approved" ? "bg-[var(--cmp-color-success)]" : "bg-[var(--cmp-color-error)]"}`} />
                   <span className="text-gray-800 truncate">{d.entityName ?? d.workflow}</span>
                   <span className="text-[10px] text-gray-400">{d.workflow}</span>
-                  <span className={`text-xs ml-auto capitalize ${d.status === "approved" ? "text-green-600" : "text-rose-600"}`}>{d.status}</span>
+                  <span className={`text-xs ml-auto capitalize ${d.status === "approved" ? "text-[var(--cmp-text-success)]" : "text-[var(--cmp-text-error)]"}`}>{d.status}</span>
                   <span className="text-[10px] text-gray-400 shrink-0">{relTime(d.at)}</span>
                 </div>
               ))}

@@ -48,15 +48,15 @@ export default async function FormsBuilder() {
     </>
   );
 
-  if (notReady) return <div className="space-y-5 max-w-6xl">{header}<div className="bg-amber-50 border border-amber-200 rounded-xl p-6"><p className="font-semibold text-amber-900">⚙️ Not provisioned</p><p className="text-sm text-amber-800 mt-1">Apply migration 092 (registry) + 094 (object definition), then author a Form in the <Link href="/super-admin/platform-ops/studio" className="underline">Configuration Studio</Link>.</p></div></div>;
+  if (notReady) return <div className="space-y-5 max-w-6xl">{header}<div className="bg-[var(--cmp-surface-warning)] border border-[var(--cmp-color-warning)] rounded-xl p-6"><p className="font-semibold text-amber-900">⚙️ Not provisioned</p><p className="text-sm text-amber-800 mt-1">Apply migration 092 (registry) + 094 (object definition), then author a Form in the <Link href="/super-admin/platform-ops/studio" className="underline">Configuration Studio</Link>.</p></div></div>;
 
   return (
     <div className="space-y-5 max-w-6xl">
       {header}
       <div className="grid grid-cols-3 gap-3">
         <Stat label="Form Objects" value={list.length} sub="governed in the registry" />
-        <Stat label="With Fields" value={withFields} tone="text-emerald-600" sub="designed" />
-        <Stat label="Awaiting Design" value={list.length - withFields} tone={list.length - withFields ? "text-amber-600" : "text-emerald-600"} sub="no fields yet" />
+        <Stat label="With Fields" value={withFields} tone="text-[var(--cmp-text-success)]" sub="designed" />
+        <Stat label="Awaiting Design" value={list.length - withFields} tone={list.length - withFields ? "text-[var(--cmp-text-warning)]" : "text-[var(--cmp-text-success)]"} sub="no fields yet" />
       </div>
       <FormDesigner forms={list} />
       <p className="text-[11px] text-gray-400">Fields persist onto the form object&apos;s definition. Conditional logic, validation rules, e-signatures, workflow binding, offline capture and the runtime form renderer (NCP-003 §6/§7/§8) are next-phase.</p>

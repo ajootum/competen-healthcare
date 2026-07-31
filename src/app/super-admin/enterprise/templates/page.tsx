@@ -31,8 +31,8 @@ export default async function TemplatesModule() {
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
         {[
           { label: "Templates", n: summary.total, tone: "text-gray-900" },
-          { label: "Published", n: summary.published, tone: "text-green-600" },
-          { label: "In progress", n: summary.draft, tone: "text-amber-600" },
+          { label: "Published", n: summary.published, tone: "text-[var(--cmp-text-success)]" },
+          { label: "In progress", n: summary.draft, tone: "text-[var(--cmp-text-warning)]" },
           { label: "Retired", n: summary.retired, tone: "text-gray-400" },
           { label: "Types", n: summary.types, tone: "text-violet-600" },
         ].map(k => (

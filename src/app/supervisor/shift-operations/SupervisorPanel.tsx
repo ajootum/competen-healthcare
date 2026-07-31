@@ -14,7 +14,7 @@ import { cardClass } from "@/components/ui/primitives";
 type Assignment = { id: string; name: string; type: string; source: string; status: string; declinedReason: string | null; assignedBy: string | null };
 type Staff = { id: string; full_name: string };
 
-const STATUS_TONE: Record<string, string> = { confirmed: "bg-green-50 text-green-700 border-green-200", pending: "bg-amber-50 text-amber-700 border-amber-200", declined: "bg-gray-100 text-gray-500 border-gray-200" };
+const STATUS_TONE: Record<string, string> = { confirmed: "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)] border-[var(--cmp-color-success)]", pending: "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)] border-[var(--cmp-color-warning)]", declined: "bg-gray-100 text-gray-500 border-gray-200" };
 
 export default function SupervisorPanel({ shiftId, provisioned, assignments, staff, editable }: {
   shiftId: string | null; provisioned: boolean; assignments: Assignment[]; staff: Staff[]; editable: boolean;
@@ -90,7 +90,7 @@ export default function SupervisorPanel({ shiftId, provisioned, assignments, sta
             <span className={`text-[9px] font-semibold px-1.5 py-0.5 rounded-full border shrink-0 ${STATUS_TONE[a.status] ?? "bg-gray-100 text-gray-500"}`}>{a.status}</span>
             {editable && a.status === "pending" && (
               <span className="flex gap-1 shrink-0">
-                <button onClick={() => decide(a.id, "confirm")} disabled={busy === a.id} className="text-[10px] font-semibold text-green-700 hover:underline">confirm</button>
+                <button onClick={() => decide(a.id, "confirm")} disabled={busy === a.id} className="text-[10px] font-semibold text-[var(--cmp-text-success)] hover:underline">confirm</button>
                 <button onClick={() => decide(a.id, "decline")} disabled={busy === a.id} className="text-[10px] text-gray-400 hover:underline">decline</button>
               </span>
             )}
@@ -118,7 +118,7 @@ export default function SupervisorPanel({ shiftId, provisioned, assignments, sta
           </div>
         </div>
       )}
-      {err && <p className="text-[11px] text-rose-600 mt-2">{err}</p>}
+      {err && <p className="text-[11px] text-[var(--cmp-text-error)] mt-2">{err}</p>}
     </div>
   );
 }

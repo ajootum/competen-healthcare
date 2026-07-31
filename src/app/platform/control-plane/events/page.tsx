@@ -9,7 +9,7 @@ export const dynamic = "force-dynamic";
 // Global Event Centre (LCP-001 §15).
 /* eslint-disable @typescript-eslint/no-explicit-any */
 const card = cardClass;
-const sevCls: Record<string, string> = { info: "bg-gray-100 text-gray-600", warning: "bg-amber-100 text-amber-700", critical: "bg-red-100 text-red-700" };
+const sevCls: Record<string, string> = { info: "bg-gray-100 text-gray-600", warning: "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]", critical: "bg-[var(--cmp-surface-critical)] text-[var(--cmp-text-critical)]" };
 
 export default async function EventCentrePage() {
   const caller = await getLandlordCaller();
@@ -24,14 +24,14 @@ export default async function EventCentrePage() {
         <p className="text-sm text-gray-500 mt-1">The platform event stream — provisioning, lifecycle, subscription and system events as they happen.</p>
       </div>
       {!ready ? (
-        <div className="bg-amber-50 border border-amber-200 rounded-xl p-5 text-sm text-amber-700">Apply migration <code className="font-mono text-xs">043</code> to activate the event stream.</div>
+        <div className="bg-[var(--cmp-surface-warning)] border border-[var(--cmp-color-warning)] rounded-xl p-5 text-sm text-[var(--cmp-text-warning)]">Apply migration <code className="font-mono text-xs">043</code> to activate the event stream.</div>
       ) : (
         <>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
             <div className={card}><div className="text-3xl font-bold tabular-nums text-gray-900">{events.length}</div><div className="text-xs text-gray-500 mt-1">Recent events</div></div>
             <div className={card}><div className="text-3xl font-bold tabular-nums text-gray-600">{bySeverity.info}</div><div className="text-xs text-gray-500 mt-1">Info</div></div>
-            <div className={card}><div className={`text-3xl font-bold tabular-nums ${bySeverity.warning ? "text-amber-600" : "text-gray-900"}`}>{bySeverity.warning}</div><div className="text-xs text-gray-500 mt-1">Warning</div></div>
-            <div className={card}><div className={`text-3xl font-bold tabular-nums ${bySeverity.critical ? "text-red-600" : "text-gray-900"}`}>{bySeverity.critical}</div><div className="text-xs text-gray-500 mt-1">Critical</div></div>
+            <div className={card}><div className={`text-3xl font-bold tabular-nums ${bySeverity.warning ? "text-[var(--cmp-text-warning)]" : "text-gray-900"}`}>{bySeverity.warning}</div><div className="text-xs text-gray-500 mt-1">Warning</div></div>
+            <div className={card}><div className={`text-3xl font-bold tabular-nums ${bySeverity.critical ? "text-[var(--cmp-text-critical)]" : "text-gray-900"}`}>{bySeverity.critical}</div><div className="text-xs text-gray-500 mt-1">Critical</div></div>
           </div>
 
           <div className="grid lg:grid-cols-3 gap-5">

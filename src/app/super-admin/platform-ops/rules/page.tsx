@@ -48,15 +48,15 @@ export default async function RulesEngine() {
     </>
   );
 
-  if (notReady) return <div className="space-y-5 max-w-6xl">{header}<div className="bg-amber-50 border border-amber-200 rounded-xl p-6"><p className="font-semibold text-amber-900">⚙️ Not provisioned</p><p className="text-sm text-amber-800 mt-1">Apply migration 092 (registry) + 094 (object definition), then author a Business Rule in the <Link href="/super-admin/platform-ops/studio" className="underline">Configuration Studio</Link>.</p></div></div>;
+  if (notReady) return <div className="space-y-5 max-w-6xl">{header}<div className="bg-[var(--cmp-surface-warning)] border border-[var(--cmp-color-warning)] rounded-xl p-6"><p className="font-semibold text-amber-900">⚙️ Not provisioned</p><p className="text-sm text-amber-800 mt-1">Apply migration 092 (registry) + 094 (object definition), then author a Business Rule in the <Link href="/super-admin/platform-ops/studio" className="underline">Configuration Studio</Link>.</p></div></div>;
 
   return (
     <div className="space-y-5 max-w-6xl">
       {header}
       <div className="grid grid-cols-3 gap-3">
         <Stat label="Rule Objects" value={list.length} sub="governed in the registry" />
-        <Stat label="With Decision Table" value={withTable} tone="text-emerald-600" sub="rows defined" />
-        <Stat label="Awaiting Table" value={list.length - withTable} tone={list.length - withTable ? "text-amber-600" : "text-emerald-600"} sub="no rows yet" />
+        <Stat label="With Decision Table" value={withTable} tone="text-[var(--cmp-text-success)]" sub="rows defined" />
+        <Stat label="Awaiting Table" value={list.length - withTable} tone={list.length - withTable ? "text-[var(--cmp-text-warning)]" : "text-[var(--cmp-text-success)]"} sub="no rows yet" />
       </div>
       <RuleEditor rules={list} />
       <p className="text-[11px] text-gray-400">The decision table persists onto the rule object. Condition cells support comparators (&ge; &le; &gt; &lt; = !=), exact match and any/*. The runtime decision service, decision trees, salience/conflict resolution and batch evaluation (NCP-007 §7) are next-phase.</p>

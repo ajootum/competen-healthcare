@@ -30,12 +30,12 @@ export default async function ReadinessPage() {
     <div className="max-w-[1400px] space-y-4">
       {head}
       <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
-        <Kpi label="Readiness Score" value={`${composite}%`} sub="composite" tone={composite >= 85 ? "text-emerald-600" : "text-amber-600"} />
+        <Kpi label="Readiness Score" value={`${composite}%`} sub="composite" tone={composite >= 85 ? "text-[var(--cmp-text-success)]" : "text-[var(--cmp-text-warning)]"} />
         <Kpi label="Compliance" value={snap.compliance_score != null ? `${Math.round(Number(snap.compliance_score))}%` : "—"} sub="snapshot" />
-        <Kpi label="At-Risk Units" value={snap.at_risk_units ?? "—"} sub="need attention" tone={snap.at_risk_units ? "text-rose-600" : undefined} />
+        <Kpi label="At-Risk Units" value={snap.at_risk_units ?? "—"} sub="need attention" tone={snap.at_risk_units ? "text-[var(--cmp-text-error)]" : undefined} />
         <Kpi label="Certifications Valid" value={`${certValid}%`} sub="active" />
         <Kpi label="Privileges Active" value={`${privActive}%`} sub="authorised" />
-        <Kpi label="Evidence Pending" value={snap.evidence_pending ?? "—"} sub="to validate" tone={snap.evidence_pending ? "text-amber-600" : undefined} />
+        <Kpi label="Evidence Pending" value={snap.evidence_pending ?? "—"} sub="to validate" tone={snap.evidence_pending ? "text-[var(--cmp-text-warning)]" : undefined} />
       </div>
 
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">

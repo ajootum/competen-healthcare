@@ -46,7 +46,7 @@ export default async function Cpus() {
                 <td className="py-2 pr-3 text-gray-600">{pct(c.achievement)}</td>
                 <td className="py-2 pr-3 text-gray-600">{c.assessments}</td>
                 <td className="py-2 pr-3">{c.evidence ? <span className="text-green-500">●</span> : <span className="text-gray-200">○</span>}</td>
-                <td className="py-2 pr-3"><span className={`font-bold px-1.5 py-0.5 rounded text-[10px] ${(c.score ?? 0) >= 70 ? "bg-green-50 text-green-700" : (c.score ?? 0) >= 50 ? "bg-amber-50 text-amber-700" : "bg-red-50 text-red-600"}`}>{pct(c.score)}</span></td>
+                <td className="py-2 pr-3"><span className={`font-bold px-1.5 py-0.5 rounded text-[10px] ${(c.score ?? 0) >= 70 ? "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]" : (c.score ?? 0) >= 50 ? "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]" : "bg-[var(--cmp-surface-critical)] text-[var(--cmp-text-critical)]"}`}>{pct(c.score)}</span></td>
               </tr>
             ))}</tbody>
           </table></div>

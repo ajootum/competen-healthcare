@@ -12,12 +12,12 @@ export const dynamic = "force-dynamic";
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 const VERDICT: Record<string, { label: string; cls: string }> = {
-  ready: { label: "READY", cls: "text-emerald-700 bg-emerald-50 border-emerald-200" },
-  conditional: { label: "CONDITIONAL", cls: "text-amber-700 bg-amber-50 border-amber-200" },
-  not_ready: { label: "NOT READY", cls: "text-rose-700 bg-rose-50 border-rose-200" },
+  ready: { label: "READY", cls: "text-emerald-700 bg-[var(--cmp-surface-success)] border-[var(--cmp-color-success)]" },
+  conditional: { label: "CONDITIONAL", cls: "text-[var(--cmp-text-warning)] bg-[var(--cmp-surface-warning)] border-[var(--cmp-color-warning)]" },
+  not_ready: { label: "NOT READY", cls: "text-[var(--cmp-text-error)] bg-[var(--cmp-surface-error)] border-[var(--cmp-color-error)]" },
 };
 const STATUS_META: Record<string, string> = {
-  draft: "text-gray-500 bg-gray-50 border-gray-200", active: "text-emerald-700 bg-emerald-50 border-emerald-100", retired: "text-gray-400 bg-gray-50 border-gray-100",
+  draft: "text-gray-500 bg-gray-50 border-gray-200", active: "text-emerald-700 bg-[var(--cmp-surface-success)] border-[var(--cmp-color-success)]", retired: "text-gray-400 bg-gray-50 border-gray-100",
 };
 const lvl = (l: string | null) => (l ? l.replace(/_/g, " ") : "any");
 
@@ -50,29 +50,29 @@ export default async function ActivationReadinessPage() {
     <div className="max-w-[1400px]">
       <div className="flex items-start justify-between gap-3 mb-5">
         <div>
-          <p className="text-[11px] font-semibold text-emerald-600 uppercase tracking-widest mb-0.5">CGR-028 · Competency Governance</p>
+          <p className="text-[11px] font-semibold text-[var(--cmp-text-success)] uppercase tracking-widest mb-0.5">CGR-028 · Competency Governance</p>
           <h1 className="text-xl font-bold text-gray-900">Service Activation Readiness</h1>
           <p className="text-gray-400 text-sm mt-0.5">Are we ready to safely deliver this service? A profile states what the service requires; the gate evaluates every department&apos;s real workforce against it.</p>
         </div>
         <div className="flex gap-2 shrink-0">
-          <Link href="/super-admin/cgr/executive" className="text-xs font-semibold text-emerald-700 hover:text-emerald-800 border border-emerald-200 bg-emerald-50 rounded-lg px-3 py-2">Org readiness →</Link>
+          <Link href="/super-admin/cgr/executive" className="text-xs font-semibold text-emerald-700 hover:text-emerald-800 border border-[var(--cmp-color-success)] bg-[var(--cmp-surface-success)] rounded-lg px-3 py-2">Org readiness →</Link>
           <Link href="/super-admin/cgr" className="text-xs font-semibold text-gray-500 hover:text-emerald-700 border border-gray-200 rounded-lg px-3 py-2">← CGR</Link>
         </div>
       </div>
 
       {!d.ready ? (
-        <div className="bg-amber-50 border border-amber-100 rounded-xl p-5">
+        <div className="bg-[var(--cmp-surface-warning)] border border-[var(--cmp-color-warning)] rounded-xl p-5">
           <p className="text-[12px] text-amber-900"><span className="font-bold">Service profiles are not enabled.</span> Apply <span className="font-mono font-semibold">migration 151 (151-service-profiles.sql)</span> to create the requirements store — without it the activation gate has nothing to evaluate against.</p>
         </div>
       ) : (
         <div className="space-y-4">
           <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
             <Kpi label="Service profiles" value={d.kpis.profiles} sub={`${d.kpis.drafts} draft`} />
-            <Kpi label="Active (gating)" value={d.kpis.active} sub="governed requirement sets" t={d.kpis.active ? "text-emerald-600" : "text-gray-900"} />
+            <Kpi label="Active (gating)" value={d.kpis.active} sub="governed requirement sets" t={d.kpis.active ? "text-[var(--cmp-text-success)]" : "text-gray-900"} />
             <Kpi label="Requirements" value={d.kpis.requirements} sub="competency rules" />
             <Kpi label="Evaluations" value={d.kpis.evaluations} sub="profile × department" />
-            <Kpi label="Ready" value={d.kpis.readyPairs} sub="all requirements met" t={d.kpis.readyPairs ? "text-emerald-600" : "text-gray-900"} />
-            <Kpi label="Blocked" value={d.kpis.blockedPairs} sub="critical unmet" t={d.kpis.blockedPairs ? "text-rose-600" : "text-gray-900"} />
+            <Kpi label="Ready" value={d.kpis.readyPairs} sub="all requirements met" t={d.kpis.readyPairs ? "text-[var(--cmp-text-success)]" : "text-gray-900"} />
+            <Kpi label="Blocked" value={d.kpis.blockedPairs} sub="critical unmet" t={d.kpis.blockedPairs ? "text-[var(--cmp-text-error)]" : "text-gray-900"} />
           </div>
 
           <ProfileBuilder competencies={competencies} />
@@ -90,7 +90,7 @@ export default async function ActivationReadinessPage() {
                     <p className="text-sm font-bold text-gray-800 truncate">{p.name}</p>
                     {p.code && <span className="text-[10px] font-mono text-gray-400">{p.code}</span>}
                     <span className={`text-[9px] font-bold uppercase border rounded px-1.5 py-0.5 ${STATUS_META[p.status] ?? STATUS_META.draft}`}>{p.status}</span>
-                    {p.shared && <span className="text-[9px] font-bold text-blue-600 bg-blue-50 border border-blue-100 rounded px-1.5 py-0.5">shared template</span>}
+                    {p.shared && <span className="text-[9px] font-bold text-[var(--cmp-text-information)] bg-[var(--cmp-surface-information)] border border-[var(--cmp-color-information)] rounded px-1.5 py-0.5">shared template</span>}
                   </div>
                   <div className="flex items-center gap-2 shrink-0">
                     <span className="text-[10px] text-gray-400">{p.requirements.length} requirements · {p.criticalCount} critical · by {p.createdBy}</span>
@@ -100,7 +100,7 @@ export default async function ActivationReadinessPage() {
 
                 <div className="px-4 py-2.5 border-b border-gray-50 flex flex-wrap gap-1.5">
                   {p.requirements.map((r: any, i: number) => (
-                    <span key={i} className={`text-[10px] border rounded px-1.5 py-0.5 ${r.critical ? "text-rose-700 bg-rose-50 border-rose-100 font-semibold" : "text-gray-600 bg-gray-50 border-gray-100"}`}>
+                    <span key={i} className={`text-[10px] border rounded px-1.5 py-0.5 ${r.critical ? "text-[var(--cmp-text-error)] bg-[var(--cmp-surface-error)] border-[var(--cmp-color-error)] font-semibold" : "text-gray-600 bg-gray-50 border-gray-100"}`}>
                       {r.name} · ≥{r.minStaff} @ {lvl(r.minLevel)}{r.critical ? " · critical" : ""}
                     </span>
                   ))}
@@ -126,17 +126,17 @@ export default async function ActivationReadinessPage() {
                           <tr key={e.department} className="border-t border-gray-50">
                             <td className="py-2 pl-4 pr-2 text-[12px] font-medium text-gray-800">{e.department}</td>
                             <td className="py-2 px-2 text-center text-[12px] text-gray-600 tabular-nums">{e.staff}</td>
-                            <td className="py-2 px-2 text-center text-[11px] tabular-nums"><span className={e.assessors ? "text-gray-600" : "text-amber-600 font-semibold"}>{e.assessors}</span></td>
+                            <td className="py-2 px-2 text-center text-[11px] tabular-nums"><span className={e.assessors ? "text-gray-600" : "text-[var(--cmp-text-warning)] font-semibold"}>{e.assessors}</span></td>
                             <td className="py-2 px-2">
                               <div className="flex items-center gap-2">
-                                <div className="flex-1 h-1.5 rounded-full bg-gray-100 overflow-hidden"><div className={`h-full ${e.verdict === "ready" ? "bg-emerald-500" : e.verdict === "conditional" ? "bg-amber-500" : "bg-rose-500"}`} style={{ width: `${e.coverage}%` }} /></div>
+                                <div className="flex-1 h-1.5 rounded-full bg-gray-100 overflow-hidden"><div className={`h-full ${e.verdict === "ready" ? "bg-[var(--cmp-color-success)]" : e.verdict === "conditional" ? "bg-[var(--cmp-color-warning)]" : "bg-[var(--cmp-color-error)]"}`} style={{ width: `${e.coverage}%` }} /></div>
                                 <span className="text-[11px] font-bold text-gray-600 tabular-nums w-10">{e.met}/{e.total}</span>
                               </div>
                             </td>
                             <td className="py-2 px-2">
                               <div className="flex flex-wrap gap-1">
                                 {e.unmet.length === 0 ? <span className="text-[10px] text-gray-300">—</span> : e.unmet.map((u: any, i: number) => (
-                                  <span key={i} className={`text-[9px] border rounded px-1 py-0.5 ${u.critical ? "text-rose-700 bg-rose-50 border-rose-100 font-semibold" : "text-amber-700 bg-amber-50 border-amber-100"}`}>{u.name} {u.have}/{u.need}</span>
+                                  <span key={i} className={`text-[9px] border rounded px-1 py-0.5 ${u.critical ? "text-[var(--cmp-text-error)] bg-[var(--cmp-surface-error)] border-[var(--cmp-color-error)] font-semibold" : "text-[var(--cmp-text-warning)] bg-[var(--cmp-surface-warning)] border-[var(--cmp-color-warning)]"}`}>{u.name} {u.have}/{u.need}</span>
                                 ))}
                               </div>
                             </td>
@@ -151,7 +151,7 @@ export default async function ActivationReadinessPage() {
             ))
           )}
 
-          <p className="text-[11px] text-gray-400 leading-relaxed">Every evaluation is real: a requirement is met only by staff in that department holding a <span className="font-medium">current</span> competent decision on that competency at the required level, and assessor capacity is the live authorisation register for that department&apos;s staff. Level convention, stated: a decision without recorded maturity counts as &ldquo;competent&rdquo; (the outcome asserts it) — requirements above competent therefore need recorded maturity. An unmet <span className="font-medium">critical</span> requirement blocks readiness regardless of coverage. Safety context lives in <Link href="/super-admin/cgr/clinical" className="text-emerald-600 hover:underline">Clinical Intelligence</Link>; org-level assurance in the <Link href="/super-admin/cgr/executive" className="text-emerald-600 hover:underline">board statement</Link>. Per the CGR mandate, this gate informs the decision — it never declares a service safe by itself, and clinical governance approval remains with accountable leaders.</p>
+          <p className="text-[11px] text-gray-400 leading-relaxed">Every evaluation is real: a requirement is met only by staff in that department holding a <span className="font-medium">current</span> competent decision on that competency at the required level, and assessor capacity is the live authorisation register for that department&apos;s staff. Level convention, stated: a decision without recorded maturity counts as &ldquo;competent&rdquo; (the outcome asserts it) — requirements above competent therefore need recorded maturity. An unmet <span className="font-medium">critical</span> requirement blocks readiness regardless of coverage. Safety context lives in <Link href="/super-admin/cgr/clinical" className="text-[var(--cmp-text-success)] hover:underline">Clinical Intelligence</Link>; org-level assurance in the <Link href="/super-admin/cgr/executive" className="text-[var(--cmp-text-success)] hover:underline">board statement</Link>. Per the CGR mandate, this gate informs the decision — it never declares a service safe by itself, and clinical governance approval remains with accountable leaders.</p>
         </div>
       )}
     </div>

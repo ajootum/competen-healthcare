@@ -57,11 +57,11 @@ export default function WardConfigClient({ canEdit, configReady, beds, departmen
       </div>
 
       {!canEdit && (
-        <div className="bg-blue-50 border border-blue-200 rounded-xl px-4 py-3 text-sm text-blue-800">
+        <div className="bg-[var(--cmp-surface-information)] border border-[var(--cmp-color-information)] rounded-xl px-4 py-3 text-sm text-blue-800">
           👀 You&apos;re viewing ward configuration in read-only mode. Changes are made by the <b>Director of Nursing</b>.
         </div>
       )}
-      {msg && <div className={`text-sm rounded-lg px-4 py-2.5 ${msg.kind === "ok" ? "bg-green-50 text-green-800 border border-green-200" : "bg-amber-50 text-amber-800 border border-amber-200"}`}>{msg.text}</div>}
+      {msg && <div className={`text-sm rounded-lg px-4 py-2.5 ${msg.kind === "ok" ? "bg-[var(--cmp-surface-success)] text-green-800 border border-[var(--cmp-color-success)]" : "bg-[var(--cmp-surface-warning)] text-amber-800 border border-[var(--cmp-color-warning)]"}`}>{msg.text}</div>}
 
       {/* ── Beds ────────────────────────────────────────────────────────── */}
       <section className={card}>
@@ -107,7 +107,7 @@ export default function WardConfigClient({ canEdit, configReady, beds, departmen
         <h2 className="font-semibold text-gray-900 flex items-center gap-2">👥 Mandatory Staffing Standards <span className="text-gray-400 font-normal text-sm">({standards.length})</span></h2>
         <p className="text-xs text-gray-500 mt-1">Required staff per role, by unit and shift type. The Command Centre compares these to who&apos;s on duty for a live mandatory-ratio compliance figure.</p>
         {!configReady ? (
-          <div className="mt-3 bg-amber-50 border border-amber-200 rounded-lg px-4 py-3 text-sm text-amber-800">Apply migration <code className="bg-amber-100 px-1.5 py-0.5 rounded font-mono text-xs">046-ward-config.sql</code> to enable staffing standards.</div>
+          <div className="mt-3 bg-[var(--cmp-surface-warning)] border border-[var(--cmp-color-warning)] rounded-lg px-4 py-3 text-sm text-amber-800">Apply migration <code className="bg-[var(--cmp-surface-warning)] px-1.5 py-0.5 rounded font-mono text-xs">046-ward-config.sql</code> to enable staffing standards.</div>
         ) : (
           <>
             <div className="mt-3 overflow-x-auto">
@@ -149,7 +149,7 @@ export default function WardConfigClient({ canEdit, configReady, beds, departmen
         <h2 className="font-semibold text-gray-900 flex items-center gap-2">🕑 Clinical Round Schedule <span className="text-gray-400 font-normal text-sm">({rounds.length})</span></h2>
         <p className="text-xs text-gray-500 mt-1">Planned rounds (ward round, medication round, observations…) by shift type. These appear on the Command Centre&apos;s Shift Timeline as scheduled milestones.</p>
         {!configReady ? (
-          <div className="mt-3 bg-amber-50 border border-amber-200 rounded-lg px-4 py-3 text-sm text-amber-800">Apply migration <code className="bg-amber-100 px-1.5 py-0.5 rounded font-mono text-xs">046-ward-config.sql</code> to enable the round schedule.</div>
+          <div className="mt-3 bg-[var(--cmp-surface-warning)] border border-[var(--cmp-color-warning)] rounded-lg px-4 py-3 text-sm text-amber-800">Apply migration <code className="bg-[var(--cmp-surface-warning)] px-1.5 py-0.5 rounded font-mono text-xs">046-ward-config.sql</code> to enable the round schedule.</div>
         ) : (
           <>
             <div className="mt-3 overflow-x-auto">

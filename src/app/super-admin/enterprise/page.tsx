@@ -22,7 +22,7 @@ const relTime = (iso?: string | null) => {
   if (s < 86400) return `${Math.floor(s / 3600)} hr ago`;
   return `${Math.floor(s / 86400)} d ago`;
 };
-const TONE: Record<string, string> = { rose: "text-rose-600", orange: "text-orange-600", amber: "text-amber-600", red: "text-red-600", violet: "text-violet-600", indigo: "text-indigo-600" };
+const TONE: Record<string, string> = { rose: "text-[var(--cmp-text-error)]", orange: "text-[var(--cmp-text-warning)]", amber: "text-[var(--cmp-text-warning)]", red: "text-[var(--cmp-text-critical)]", violet: "text-violet-600", indigo: "text-indigo-600" };
 
 function Panel({ title, href, linkLabel, children, className = "", info }: { title: string; href?: string; linkLabel?: string; children: React.ReactNode; className?: string; info?: string }) {
   return (
@@ -51,11 +51,11 @@ export default async function EnterpriseAdministration() {
   const kpiCards: { label: string; n: number | null; icon: string; iconBg: string; sub?: string; tone?: string }[] = [
     { label: "Organisations", n: kpis.organisations, icon: "🏛️", iconBg: "bg-violet-50", sub: `${countries} countr${countries === 1 ? "y" : "ies"}` },
     { label: "Networks", n: kpis.networks, icon: "🌐", iconBg: "bg-indigo-50", sub: "enterprise groups" },
-    { label: "Facilities", n: kpis.facilities, icon: "🏥", iconBg: "bg-sky-50", sub: "operational sites" },
-    { label: "Users", n: kpis.users, icon: "👥", iconBg: "bg-blue-50", sub: "across all tenants" },
+    { label: "Facilities", n: kpis.facilities, icon: "🏥", iconBg: "bg-[var(--cmp-surface-information)]", sub: "operational sites" },
+    { label: "Users", n: kpis.users, icon: "👥", iconBg: "bg-[var(--cmp-surface-information)]", sub: "across all tenants" },
     { label: "Departments", n: kpis.departments, icon: "🗂️", iconBg: "bg-teal-50", sub: `${fmt(kpis.units)} units` },
-    { label: "Positions", n: kpis.positions, icon: "🪪", iconBg: "bg-emerald-50", sub: "job posts" },
-    { label: "Pending Setups", n: kpis.pendingSetups, icon: "📋", iconBg: "bg-rose-50", sub: kpis.pendingSetups ? "requires action" : "all clear", tone: kpis.pendingSetups ? "text-rose-600" : undefined },
+    { label: "Positions", n: kpis.positions, icon: "🪪", iconBg: "bg-[var(--cmp-surface-success)]", sub: "job posts" },
+    { label: "Pending Setups", n: kpis.pendingSetups, icon: "📋", iconBg: "bg-[var(--cmp-surface-error)]", sub: kpis.pendingSetups ? "requires action" : "all clear", tone: kpis.pendingSetups ? "text-[var(--cmp-text-error)]" : undefined },
   ];
 
   const quickActions = [
@@ -87,7 +87,7 @@ export default async function EnterpriseAdministration() {
       </div>
 
       {!migrationApplied && (
-        <div className="bg-amber-50 border border-amber-200 rounded-xl px-5 py-3">
+        <div className="bg-[var(--cmp-surface-warning)] border border-[var(--cmp-color-warning)] rounded-xl px-5 py-3">
           <p className="text-sm text-amber-900"><span className="font-semibold">Migration 052 not applied yet.</span> Core counts are live; the richer structure metadata (divisions, services, teams, templates, lifecycle status) activates once <span className="font-mono text-xs">052-enterprise-administration.sql</span> is run.</p>
         </div>
       )}
@@ -200,7 +200,7 @@ export default async function EnterpriseAdministration() {
                 <div className="flex items-center gap-2">
                   <span className="text-[10px] font-bold text-gray-400">{m.n}</span>
                   <span className="text-sm font-semibold text-gray-900">{m.label}</span>
-                  {!m.live && <span className="text-[9px] px-1.5 py-0.5 rounded bg-amber-50 text-amber-600 font-medium">Next phase</span>}
+                  {!m.live && <span className="text-[9px] px-1.5 py-0.5 rounded bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)] font-medium">Next phase</span>}
                 </div>
                 <p className="text-[11px] text-gray-500 mt-0.5">{m.desc}</p>
               </div>

@@ -41,7 +41,7 @@ export default async function RulesSettings() {
       </div>
       <AttendanceTabs />
 
-      <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-5">
+      <div className="bg-[var(--cmp-surface-success)] border border-[var(--cmp-color-success)] rounded-xl p-5">
         <p className="font-semibold text-emerald-900">✓ Working-hour rules are live in the Workforce Planning Studio</p>
         <p className="text-sm text-emerald-800 mt-1">Max weekly hours, minimum rest, consecutive-shift/night limits and overtime multipliers are already tenant-configurable and versioned in <Link href="/unit-manager/planning-studio" className="text-emerald-900 underline font-medium">Workforce Planning Studio (WPS-001)</Link>, driving the scheduling &amp; governance chain.</p>
       </div>
@@ -51,7 +51,7 @@ export default async function RulesSettings() {
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">{GROUPS.map(g => (
           <div key={g.name} className="flex items-start justify-between gap-2 rounded-lg border border-gray-100 p-3">
             <div className="min-w-0"><p className="text-xs font-semibold text-gray-800">{g.name}</p><p className="text-[10px] text-gray-400 mt-0.5">{g.cfg}</p></div>
-            <span className={`shrink-0 text-[9px] px-1.5 py-0.5 rounded ${g.live ? "bg-emerald-50 text-emerald-700" : "bg-gray-100 text-gray-400"}`}>{g.live ? "Live" : "Next phase"}</span>
+            <span className={`shrink-0 text-[9px] px-1.5 py-0.5 rounded ${g.live ? "bg-[var(--cmp-surface-success)] text-emerald-700" : "bg-gray-100 text-gray-400"}`}>{g.live ? "Live" : "Next phase"}</span>
           </div>
         ))}</div>
         <p className="text-[10px] text-gray-400 mt-3">Most tenant-wide settings belong to Workforce Configuration; the Unit Manager may have limited unit-level controls (§22). Attendance/availability/replacement/data-source config needs an attendance-config store → next-phase.</p>

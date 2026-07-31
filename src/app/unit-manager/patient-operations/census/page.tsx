@@ -43,19 +43,19 @@ export default async function PatientCensus() {
       <PosTabs />
     </>
   );
-  if (!po.ready) return <div className="space-y-4">{header}<div className="bg-amber-50 border border-amber-200 rounded-xl p-6"><p className="font-semibold text-amber-900">⚙️ Coming online</p><p className="text-sm text-amber-800 mt-1">The Clinical Operations Engine isn&apos;t provisioned for this unit yet.</p></div></div>;
+  if (!po.ready) return <div className="space-y-4">{header}<div className="bg-[var(--cmp-surface-warning)] border border-[var(--cmp-color-warning)] rounded-xl p-6"><p className="font-semibold text-amber-900">⚙️ Coming online</p><p className="text-sm text-amber-800 mt-1">The Clinical Operations Engine isn&apos;t provisioned for this unit yet.</p></div></div>;
 
   const { active, summary } = po;
   const stable = active.filter((p: any) => p.state === "Stable").length;
   const kpis = [
     { label: "Total patients", n: summary.total, tone: "text-gray-900" },
-    { label: "High risk", n: summary.highRisk, tone: summary.highRisk ? "text-rose-600" : "text-gray-400" },
-    { label: "Obs / review", n: summary.review, tone: summary.review ? "text-amber-600" : "text-gray-400" },
-    { label: "Stable", n: stable, tone: "text-emerald-600" },
+    { label: "High risk", n: summary.highRisk, tone: summary.highRisk ? "text-[var(--cmp-text-error)]" : "text-gray-400" },
+    { label: "Obs / review", n: summary.review, tone: summary.review ? "text-[var(--cmp-text-warning)]" : "text-gray-400" },
+    { label: "Stable", n: stable, tone: "text-[var(--cmp-text-success)]" },
     { label: "Isolation", n: summary.isolation, tone: summary.isolation ? "text-fuchsia-600" : "text-gray-400" },
     { label: "Discharge ready", n: summary.dischargesExpected, tone: "text-teal-600" },
-    { label: "Expected", n: summary.admissionsExpected, tone: "text-sky-600" },
-    { label: "Unassigned", n: summary.unassigned, tone: summary.unassigned ? "text-rose-600" : "text-gray-400" },
+    { label: "Expected", n: summary.admissionsExpected, tone: "text-[var(--cmp-text-information)]" },
+    { label: "Unassigned", n: summary.unassigned, tone: summary.unassigned ? "text-[var(--cmp-text-error)]" : "text-gray-400" },
   ];
   const stateCounts = new Map<string, number>();
   active.forEach((p: any) => stateCounts.set(p.state, (stateCounts.get(p.state) ?? 0) + 1));
@@ -89,11 +89,11 @@ export default async function PatientCensus() {
                 <td className="px-4 py-2.5 whitespace-nowrap text-gray-500 tabular-nums">{p.age != null ? `${p.age}y` : "—"}</td>
                 <td className="px-4 py-2.5 whitespace-nowrap"><span className={`text-[10px] px-2 py-0.5 rounded-full ${STATE_TONE[p.state] ?? "bg-gray-100 text-gray-600"}`}>{p.state}</span></td>
                 <td className="px-4 py-2.5 whitespace-nowrap"><span className={`font-semibold tabular-nums ${ewsColor(p.pews)}`}>{p.pews ?? "—"}</span></td>
-                <td className="px-4 py-2.5 whitespace-nowrap">{p.nurse ? <span className="text-gray-700">{firstName(p.nurse)}</span> : <span className="text-rose-600 font-medium">Unassigned</span>}</td>
+                <td className="px-4 py-2.5 whitespace-nowrap">{p.nurse ? <span className="text-gray-700">{firstName(p.nurse)}</span> : <span className="text-[var(--cmp-text-error)] font-medium">Unassigned</span>}</td>
                 <td className="px-4 py-2.5 whitespace-nowrap text-gray-500">{p.consultant ?? "—"}</td>
                 <td className="px-4 py-2.5 whitespace-nowrap">{p.stage ? <span className="text-[10px] px-2 py-0.5 rounded-full bg-teal-50 text-teal-700">{titleCase(p.stage)}</span> : <span className="text-gray-300">—</span>}</td>
                 <td className="px-4 py-2.5 whitespace-nowrap text-gray-500 tabular-nums">{fmtTime(p.lastObs)}</td>
-                <td className={`px-4 py-2.5 whitespace-nowrap tabular-nums ${p.overdueObs ? "text-rose-600 font-medium" : "text-gray-500"}`}>{fmtTime(p.nextReview)}</td>
+                <td className={`px-4 py-2.5 whitespace-nowrap tabular-nums ${p.overdueObs ? "text-[var(--cmp-text-error)] font-medium" : "text-gray-500"}`}>{fmtTime(p.nextReview)}</td>
                 <td className="px-4 py-2.5"><div className="flex flex-wrap gap-1 max-w-[14rem]">{p.flags.length === 0 && <span className="text-[11px] text-gray-300">—</span>}{p.flags.map((f: string, i: number) => <span key={i} className="text-[10px] px-1.5 py-0.5 rounded bg-gray-100 text-gray-600 whitespace-nowrap">{f}</span>)}</div></td>
               </tr>
             ))}

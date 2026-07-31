@@ -35,7 +35,7 @@ export default async function StudioRubricsPage() {
                   <p className="text-xs font-semibold text-gray-800">{l.label}</p>
                   {l.description && <p className="text-[10px] text-gray-400">{l.description}</p>}
                 </div>
-                {l.is_passing && <span className="text-[9px] font-bold text-green-600 bg-green-50 rounded px-1.5 py-0.5 uppercase shrink-0">Passing</span>}
+                {l.is_passing && <span className="text-[9px] font-bold text-[var(--cmp-text-success)] bg-[var(--cmp-surface-success)] rounded px-1.5 py-0.5 uppercase shrink-0">Passing</span>}
               </div>
             ))}
           </div>

@@ -11,11 +11,11 @@ export const dynamic = "force-dynamic";
 
 const card = cardClass;
 const titleCase = (s: string) => s.split(/[_\s]+/).filter(Boolean).map(w => w[0].toUpperCase() + w.slice(1)).join(" ");
-const intDot: Record<string, string> = { live: "bg-green-500", native: "bg-teal-400", off: "bg-gray-300" };
+const intDot: Record<string, string> = { live: "bg-[var(--cmp-color-success)]", native: "bg-teal-400", off: "bg-gray-300" };
 
 function Kpi({ n, label, sub, href, tone }: { n: any; label: string; sub?: string; href?: string; tone?: string }) {
   const inner = (
-    <div className={`${card} ${href ? "hover:border-rose-300 transition-colors" : ""}`}>
+    <div className={`${card} ${href ? "hover:border-[var(--cmp-color-error)] transition-colors" : ""}`}>
       <div className={`text-3xl font-bold tabular-nums ${tone ?? "text-gray-900"}`}>{n}</div>
       <div className="text-xs text-gray-500 mt-1">{label}</div>
       {sub && <div className="text-[11px] text-gray-400 mt-0.5">{sub}</div>}
@@ -49,9 +49,9 @@ export default async function PlatformAdminDashboard() {
         <Kpi n={summary.tenants} label="Tenants" sub={`${summary.activeTenants} active`} href="/platform-admin/tenants" />
         <Kpi n={summary.facilities} label="Facilities" href="/platform-admin/tenants" />
         <Kpi n={summary.users} label="Users" sub={`+${summary.newUsers30d} (30d)`} href="/platform-admin/analytics" />
-        <Kpi n={summary.newTenants30d} label="New tenants (30d)" tone={summary.newTenants30d ? "text-rose-600" : undefined} href="/platform-admin/analytics" />
-        <Kpi n={audit.securityEvents} label="Security events" sub="recent window" tone={audit.securityEvents ? "text-amber-600" : undefined} href="/platform-admin/security" />
-        <Kpi n={ai.live ? "Live" : "Off"} label="AI operations" sub={`${ai.events30d} events (30d)`} tone={ai.live ? "text-green-600" : "text-gray-400"} href="/platform-admin/ai" />
+        <Kpi n={summary.newTenants30d} label="New tenants (30d)" tone={summary.newTenants30d ? "text-[var(--cmp-text-error)]" : undefined} href="/platform-admin/analytics" />
+        <Kpi n={audit.securityEvents} label="Security events" sub="recent window" tone={audit.securityEvents ? "text-[var(--cmp-text-warning)]" : undefined} href="/platform-admin/security" />
+        <Kpi n={ai.live ? "Live" : "Off"} label="AI operations" sub={`${ai.events30d} events (30d)`} tone={ai.live ? "text-[var(--cmp-text-success)]" : "text-gray-400"} href="/platform-admin/ai" />
       </div>
 
       <div className="grid lg:grid-cols-2 gap-5">
@@ -59,16 +59,16 @@ export default async function PlatformAdminDashboard() {
         <div className={card}>
           <div className="flex items-baseline justify-between mb-3">
             <h3 className="font-semibold text-gray-900">Active tenants</h3>
-            <Link href="/platform-admin/tenants" className="text-xs text-rose-600 hover:underline">All tenants →</Link>
+            <Link href="/platform-admin/tenants" className="text-xs text-[var(--cmp-text-error)] hover:underline">All tenants →</Link>
           </div>
           <div className="flex gap-4 text-sm mb-3">
-            <span className="text-gray-500">Active <b className="text-green-600 tabular-nums">{summary.activeTenants}</b></span>
-            <span className="text-gray-500">Suspended <b className={`tabular-nums ${summary.inactiveTenants ? "text-amber-600" : "text-gray-800"}`}>{summary.inactiveTenants}</b></span>
+            <span className="text-gray-500">Active <b className="text-[var(--cmp-text-success)] tabular-nums">{summary.activeTenants}</b></span>
+            <span className="text-gray-500">Suspended <b className={`tabular-nums ${summary.inactiveTenants ? "text-[var(--cmp-text-warning)]" : "text-gray-800"}`}>{summary.inactiveTenants}</b></span>
           </div>
           <div className="divide-y divide-gray-100">
             {tenants.slice(0, 6).map((t) => (
               <div key={t.id} className="flex items-center gap-2 py-2 text-sm">
-                <span className={`w-2 h-2 rounded-full ${t.active ? "bg-green-500" : "bg-amber-400"}`} />
+                <span className={`w-2 h-2 rounded-full ${t.active ? "bg-[var(--cmp-color-success)]" : "bg-[var(--cmp-color-warning)]"}`} />
                 <span className="text-gray-800 truncate flex-1">{t.name ?? "Unnamed"}</span>
                 <span className="text-xs text-gray-400 tabular-nums">{t.facilities} fac · {t.users} users</span>
               </div>
@@ -80,11 +80,11 @@ export default async function PlatformAdminDashboard() {
         <div className={card}>
           <div className="flex items-baseline justify-between mb-3">
             <h3 className="font-semibold text-gray-900">Infrastructure &amp; health</h3>
-            <Link href="/platform-admin/health" className="text-xs text-rose-600 hover:underline">System health →</Link>
+            <Link href="/platform-admin/health" className="text-xs text-[var(--cmp-text-error)] hover:underline">System health →</Link>
           </div>
           <div className="space-y-1.5 text-sm">
-            <div className="flex items-center gap-2"><span className={`w-2 h-2 rounded-full ${health.dbReachable ? "bg-green-500" : "bg-red-500"}`} /><span className="text-gray-700 flex-1">Database (Supabase Postgres)</span><span className={`text-xs ${health.dbReachable ? "text-green-600" : "text-red-600"}`}>{health.dbReachable ? "Reachable" : "Unavailable"}</span></div>
-            <div className="flex items-center gap-2"><span className={`w-2 h-2 rounded-full ${ai.live ? "bg-green-500" : "bg-gray-300"}`} /><span className="text-gray-700 flex-1">AI intelligence layer</span><span className="text-xs text-gray-500">{ai.live ? "Live" : "Off"}</span></div>
+            <div className="flex items-center gap-2"><span className={`w-2 h-2 rounded-full ${health.dbReachable ? "bg-[var(--cmp-color-success)]" : "bg-[var(--cmp-color-critical)]"}`} /><span className="text-gray-700 flex-1">Database (Supabase Postgres)</span><span className={`text-xs ${health.dbReachable ? "text-[var(--cmp-text-success)]" : "text-[var(--cmp-text-critical)]"}`}>{health.dbReachable ? "Reachable" : "Unavailable"}</span></div>
+            <div className="flex items-center gap-2"><span className={`w-2 h-2 rounded-full ${ai.live ? "bg-[var(--cmp-color-success)]" : "bg-gray-300"}`} /><span className="text-gray-700 flex-1">AI intelligence layer</span><span className="text-xs text-gray-500">{ai.live ? "Live" : "Off"}</span></div>
             <div className="flex items-center gap-2"><span className="w-2 h-2 rounded-full bg-teal-400" /><span className="text-gray-700 flex-1">Application (Vercel)</span><span className="text-xs text-gray-500">Serving</span></div>
           </div>
           <p className="text-[11px] text-gray-400 mt-3">Compute, memory, queues and container metrics are managed by the cloud provider (Vercel &amp; Supabase) and are observed in their consoles — Competen holds no in-app infrastructure telemetry, so those gauges are not shown here rather than fabricated.</p>
@@ -94,7 +94,7 @@ export default async function PlatformAdminDashboard() {
         <div className={card}>
           <div className="flex items-baseline justify-between mb-3">
             <h3 className="font-semibold text-gray-900">Integration status</h3>
-            <Link href="/platform-admin/integrations" className="text-xs text-rose-600 hover:underline">Integration centre →</Link>
+            <Link href="/platform-admin/integrations" className="text-xs text-[var(--cmp-text-error)] hover:underline">Integration centre →</Link>
           </div>
           <div className="flex gap-3 text-xs text-gray-500 mb-3"><span>🟢 {integrationHealth.live} live</span><span>🟦 {integrationHealth.native} native</span><span>⚪ {integrationHealth.off} off</span></div>
           <div className="space-y-1.5">
@@ -108,7 +108,7 @@ export default async function PlatformAdminDashboard() {
         <div className={card}>
           <div className="flex items-baseline justify-between mb-3">
             <h3 className="font-semibold text-gray-900">Security &amp; audit events</h3>
-            <Link href="/platform-admin/security" className="text-xs text-rose-600 hover:underline">Security centre →</Link>
+            <Link href="/platform-admin/security" className="text-xs text-[var(--cmp-text-error)] hover:underline">Security centre →</Link>
           </div>
           {audit.securityRecent.length === 0 && <p className="text-sm text-gray-400">No recent security-relevant events.</p>}
           <div className="space-y-1.5 max-h-52 overflow-y-auto">
@@ -125,13 +125,13 @@ export default async function PlatformAdminDashboard() {
         <div className={card}>
           <h3 className="font-semibold text-gray-900 mb-3">Platform growth</h3>
           <div className="grid grid-cols-2 gap-3 text-sm">
-            <div className="flex justify-between"><span className="text-gray-500">Tenants (30d)</span><b className="tabular-nums text-rose-700">+{growth.tenants30d}</b></div>
+            <div className="flex justify-between"><span className="text-gray-500">Tenants (30d)</span><b className="tabular-nums text-[var(--cmp-text-error)]">+{growth.tenants30d}</b></div>
             <div className="flex justify-between"><span className="text-gray-500">Tenants (90d)</span><b className="tabular-nums">+{growth.tenants90d}</b></div>
-            <div className="flex justify-between"><span className="text-gray-500">Users (30d)</span><b className="tabular-nums text-rose-700">+{growth.users30d}</b></div>
+            <div className="flex justify-between"><span className="text-gray-500">Users (30d)</span><b className="tabular-nums text-[var(--cmp-text-error)]">+{growth.users30d}</b></div>
             <div className="flex justify-between"><span className="text-gray-500">Users (90d)</span><b className="tabular-nums">+{growth.users90d}</b></div>
             <div className="flex justify-between"><span className="text-gray-500">Facilities (30d)</span><b className="tabular-nums">+{growth.facilities30d}</b></div>
           </div>
-          <Link href="/platform-admin/analytics" className="mt-3 inline-block text-xs text-rose-600 hover:underline">Platform analytics →</Link>
+          <Link href="/platform-admin/analytics" className="mt-3 inline-block text-xs text-[var(--cmp-text-error)] hover:underline">Platform analytics →</Link>
         </div>
 
         {/* Notifications */}
@@ -151,7 +151,7 @@ export default async function PlatformAdminDashboard() {
         <h3 className="font-semibold text-gray-900 mb-3">Quick actions</h3>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-sm">
           {[["🏛️ Manage organisations", "/super-admin/organisations"], ["🏥 All facilities", "/super-admin/hospitals"], ["👥 All users", "/super-admin/users"], ["🛡️ Security centre", "/platform-admin/security"], ["📈 Platform analytics", "/platform-admin/analytics"], ["🗒️ Audit log", "/super-admin/audit"], ["🎛️ Studio", "/super-admin/studio"], ["⚙️ Platform settings", "/super-admin/settings"]].map(([label, href]) => (
-            <Link key={href} href={href} className="border border-gray-200 rounded-lg px-3 py-2 text-gray-700 hover:border-rose-300 hover:text-rose-700 transition-colors">{label}</Link>
+            <Link key={href} href={href} className="border border-gray-200 rounded-lg px-3 py-2 text-gray-700 hover:border-[var(--cmp-color-error)] hover:text-[var(--cmp-text-error)] transition-colors">{label}</Link>
           ))}
         </div>
       </div>

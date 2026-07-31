@@ -24,11 +24,11 @@ const relTime = (iso?: string | null) => { if (!iso) return ""; const s = Math.f
 const titleCase = (s: string) => (s ?? "").replace(/_/g, " ").replace(/\b\w/g, m => m.toUpperCase());
 
 const STATUS_BADGE: Record<string, { label: string; cls: string; dot: string }> = {
-  live: { label: "Live", cls: "bg-green-50 text-green-700 border-green-200", dot: "bg-green-500" },
-  partial: { label: "Partial", cls: "bg-amber-50 text-amber-700 border-amber-200", dot: "bg-amber-500" },
+  live: { label: "Live", cls: "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)] border-[var(--cmp-color-success)]", dot: "bg-[var(--cmp-color-success)]" },
+  partial: { label: "Partial", cls: "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)] border-[var(--cmp-color-warning)]", dot: "bg-[var(--cmp-color-warning)]" },
   config: { label: "Awaiting", cls: "bg-gray-100 text-gray-500 border-gray-200", dot: "bg-gray-400" },
 };
-const ENGINE_TONE = ["bg-blue-100 text-blue-700", "bg-teal-100 text-teal-700", "bg-violet-100 text-violet-700", "bg-orange-100 text-orange-700", "bg-green-100 text-green-700", "bg-rose-100 text-rose-700", "bg-cyan-100 text-cyan-700", "bg-fuchsia-100 text-fuchsia-700", "bg-amber-100 text-amber-700", "bg-slate-200 text-slate-700"];
+const ENGINE_TONE = ["bg-[var(--cmp-surface-information)] text-blue-700", "bg-teal-100 text-teal-700", "bg-violet-100 text-violet-700", "bg-[var(--cmp-surface-warning)] text-orange-700", "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]", "bg-[var(--cmp-surface-error)] text-[var(--cmp-text-error)]", "bg-cyan-100 text-cyan-700", "bg-fuchsia-100 text-fuchsia-700", "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]", "bg-slate-200 text-slate-700"];
 
 export default async function ShiftOperationsEngine() {
   const supabase = await createClient();
@@ -63,7 +63,7 @@ export default async function ShiftOperationsEngine() {
         </div>
         <div className="text-right shrink-0">
           <p className="text-xs font-semibold text-gray-700">{s ? `${titleCase(s.shift_type)} · ${s.unit}` : "No active shift"}</p>
-          <p className="text-[11px] text-gray-400">{s?.supervisor ? `Supervisor: ${s.supervisor}` : "Unassigned"} · <span className="text-green-600 font-medium">{d.liveCount}/10 engines live</span></p>
+          <p className="text-[11px] text-gray-400">{s?.supervisor ? `Supervisor: ${s.supervisor}` : "Unassigned"} · <span className="text-[var(--cmp-text-success)] font-medium">{d.liveCount}/10 engines live</span></p>
         </div>
       </div>
 
@@ -100,7 +100,7 @@ export default async function ShiftOperationsEngine() {
 
       {/* At-a-glance operational band (SSW-002) */}
       <div className="grid grid-cols-4 sm:grid-cols-8 gap-3">
-        {[["Active Shifts", ct.activeShifts], ["Command Owners", ct.commandOwners], ["Critical", ct.critical, ct.critical > 0 ? "text-rose-600" : ""], ["Overdue Tasks", ct.overdueTasks, ct.overdueTasks > 0 ? "text-rose-600" : ""], ["Occupancy", ct.occPct == null ? "—" : `${ct.occPct}%`], ["On Duty", `${ct.present}/${ct.rostered}`], ["Escalations", ct.escalations, ct.escalations > 0 ? "text-amber-600" : ""], ["State", lc.current]].map(([l, v, tone]: any) => (
+        {[["Active Shifts", ct.activeShifts], ["Command Owners", ct.commandOwners], ["Critical", ct.critical, ct.critical > 0 ? "text-[var(--cmp-text-error)]" : ""], ["Overdue Tasks", ct.overdueTasks, ct.overdueTasks > 0 ? "text-[var(--cmp-text-error)]" : ""], ["Occupancy", ct.occPct == null ? "—" : `${ct.occPct}%`], ["On Duty", `${ct.present}/${ct.rostered}`], ["Escalations", ct.escalations, ct.escalations > 0 ? "text-[var(--cmp-text-warning)]" : ""], ["State", lc.current]].map(([l, v, tone]: any) => (
         <div key={l} className={`${card} p-3 text-center`}><p className={`text-lg font-bold tabular-nums truncate ${tone ?? "text-gray-900"}`}>{v}</p><p className="text-[9px] text-gray-500 uppercase tracking-wide truncate">{l}</p></div>
         ))}
       </div>
@@ -177,7 +177,7 @@ export default async function ShiftOperationsEngine() {
           <div className="space-y-1.5 mb-4">
             {d.roadmap.map((r: any) => (
               <div key={r.phase} className="flex items-center gap-2 text-xs">
-                <span className={`w-4 h-4 rounded-full flex items-center justify-center text-[9px] font-bold shrink-0 ${r.done ? "bg-green-500 text-white" : "bg-gray-200 text-gray-400"}`}>{r.done ? "✓" : r.phase}</span>
+                <span className={`w-4 h-4 rounded-full flex items-center justify-center text-[9px] font-bold shrink-0 ${r.done ? "bg-[var(--cmp-color-success)] text-white" : "bg-gray-200 text-gray-400"}`}>{r.done ? "✓" : r.phase}</span>
                 <span className={`flex-1 ${r.done ? "text-gray-700" : "text-gray-400"}`}>Phase {r.phase} · {r.label}</span>
                 {!r.done && <span className="text-[9px] text-gray-400 shrink-0">planned</span>}
               </div>

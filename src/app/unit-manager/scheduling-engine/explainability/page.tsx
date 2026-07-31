@@ -44,7 +44,7 @@ export default async function ExplainableAI({ searchParams }: { searchParams: Pr
     </>
   );
 
-  if (!d.provisioned) return <div className="space-y-4">{header}<div className="bg-amber-50 border border-amber-200 rounded-xl p-6"><p className="font-semibold text-amber-900">⚙️ Roster store not provisioned</p><p className="text-sm text-amber-800 mt-1">Run migration <code>080</code> and generate a roster — every decision then has an explanation.</p></div></div>;
+  if (!d.provisioned) return <div className="space-y-4">{header}<div className="bg-[var(--cmp-surface-warning)] border border-[var(--cmp-color-warning)] rounded-xl p-6"><p className="font-semibold text-amber-900">⚙️ Roster store not provisioned</p><p className="text-sm text-amber-800 mt-1">Run migration <code>080</code> and generate a roster — every decision then has an explanation.</p></div></div>;
   if (!d.hasRoster) return <div className="space-y-4">{header}<div className={`${card} p-8 text-center`}><p className="text-3xl mb-2">🔍</p><p className="text-sm font-semibold text-gray-700">No roster to explain for week of {d.weekStart}</p><p className="text-xs text-gray-400 mt-1">Generate a roster in the <Link href="/unit-manager/scheduling-engine" className="text-emerald-700 hover:underline">Scheduling Engine</Link> — its decisions are explained here.</p></div></div>;
 
   const e = d.explanation;
@@ -55,7 +55,7 @@ export default async function ExplainableAI({ searchParams }: { searchParams: Pr
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         <div className={`${card} p-4`}><p className="text-xs text-gray-500">Decisions explained</p><p className="text-2xl font-bold text-gray-900 mt-1">{d.kpis.assigned}</p><p className="text-[11px] text-gray-400">Assigned posts</p></div>
         <div className={`${card} p-4`}><p className="text-xs text-gray-500">Uncovered explained</p><p className="text-2xl font-bold text-gray-900 mt-1">{d.kpis.uncovered}</p><p className="text-[11px] text-gray-400">With rationale</p></div>
-        <div className={`${card} p-4`}><p className="text-xs text-gray-500">Overrides</p><p className={`text-2xl font-bold mt-1 ${d.kpis.overrides ? "text-amber-600" : "text-gray-900"}`}>{d.kpis.overrides}</p><p className="text-[11px] text-gray-400">Competency exceptions</p></div>
+        <div className={`${card} p-4`}><p className="text-xs text-gray-500">Overrides</p><p className={`text-2xl font-bold mt-1 ${d.kpis.overrides ? "text-[var(--cmp-text-warning)]" : "text-gray-900"}`}>{d.kpis.overrides}</p><p className="text-[11px] text-gray-400">Competency exceptions</p></div>
         <div className={`${card} p-4`}><p className="text-xs text-gray-500">Roster quality</p><p className="text-2xl font-bold text-gray-900 mt-1">{d.scoreExplain[3].value}</p><p className="text-[11px] text-gray-400">Composite score</p></div>
       </div>
 
@@ -64,8 +64,8 @@ export default async function ExplainableAI({ searchParams }: { searchParams: Pr
         <div className={`${card} p-5 xl:col-span-1`}>
           <h3 className="text-sm font-bold text-gray-900 mb-2">Inspect a decision</h3>
           <div className="space-y-1 max-h-[420px] overflow-y-auto">{d.sample.map((s: any) => (
-            <Link key={s.i} href={`/unit-manager/scheduling-engine/explainability?slot=${s.i}`} className={`block rounded-lg border p-2 text-xs ${d.selectedIndex === s.i ? "border-emerald-400 bg-emerald-50/40" : "border-gray-100 hover:border-emerald-200"}`}>
-              <span className={s.uncovered ? "text-rose-600" : "text-gray-700"}>{s.uncovered ? "⛔ " : "👤 "}{s.label}</span>
+            <Link key={s.i} href={`/unit-manager/scheduling-engine/explainability?slot=${s.i}`} className={`block rounded-lg border p-2 text-xs ${d.selectedIndex === s.i ? "border-emerald-400 bg-[var(--cmp-surface-success)]/40" : "border-gray-100 hover:border-[var(--cmp-color-success)]"}`}>
+              <span className={s.uncovered ? "text-[var(--cmp-text-error)]" : "text-gray-700"}>{s.uncovered ? "⛔ " : "👤 "}{s.label}</span>
             </Link>
           ))}</div>
         </div>
@@ -78,14 +78,14 @@ export default async function ExplainableAI({ searchParams }: { searchParams: Pr
                 <div className="text-center shrink-0"><div className="relative w-14 h-14"><div className="w-14 h-14 rounded-full" style={{ background: `conic-gradient(${e.confidence >= 80 ? "#10b981" : e.confidence >= 65 ? "#f59e0b" : "#ef4444"} ${e.confidence}%, #f1f5f9 0)` }} /><div className="absolute inset-[20%] rounded-full bg-white flex items-center justify-center text-[11px] font-bold text-gray-900">{e.confidence}%</div></div><p className="text-[8px] text-gray-400 mt-0.5">Confidence</p></div>
               </div>
               <p className="text-xs text-gray-700 bg-gray-50 rounded-lg p-2.5 mb-3">{e.rationale}</p>
-              {e.override && <p className="text-[11px] text-amber-700 bg-amber-50 rounded-lg p-2 mb-3">⚠ Override reason: {e.override}</p>}
+              {e.override && <p className="text-[11px] text-[var(--cmp-text-warning)] bg-[var(--cmp-surface-warning)] rounded-lg p-2 mb-3">⚠ Override reason: {e.override}</p>}
 
               <p className="text-[10px] font-semibold text-gray-500 uppercase mb-1">Contributing factors</p>
-              <div className="space-y-1 mb-3">{e.factors.map((f: any, i: number) => (<div key={i} className="flex items-center gap-2 text-xs"><span className={f.ok ? "text-emerald-600" : "text-amber-500"}>{f.ok ? "✓" : "!"}</span><span className="text-gray-500 w-32 shrink-0">{f.label}</span><span className="text-gray-700 flex-1">{f.value}</span></div>))}</div>
+              <div className="space-y-1 mb-3">{e.factors.map((f: any, i: number) => (<div key={i} className="flex items-center gap-2 text-xs"><span className={f.ok ? "text-[var(--cmp-text-success)]" : "text-amber-500"}>{f.ok ? "✓" : "!"}</span><span className="text-gray-500 w-32 shrink-0">{f.label}</span><span className="text-gray-700 flex-1">{f.value}</span></div>))}</div>
 
               {e.alternatives.length > 0 && (<>
                 <p className="text-[10px] font-semibold text-gray-500 uppercase mb-1">Alternatives considered</p>
-                <div className="space-y-1">{e.alternatives.map((a: any, i: number) => (<div key={i} className="flex items-center gap-2 text-xs"><span className="text-gray-700 w-32 shrink-0 truncate">{a.name}</span><span className={`text-[9px] px-1.5 py-0.5 rounded ${a.valid ? "bg-emerald-50 text-emerald-700" : "bg-rose-50 text-rose-700"}`}>{a.valid ? "competent" : "not validated"}</span><span className="text-gray-400">{a.shifts} shifts</span><span className="text-gray-500 flex-1 text-right">{a.why}</span></div>))}</div>
+                <div className="space-y-1">{e.alternatives.map((a: any, i: number) => (<div key={i} className="flex items-center gap-2 text-xs"><span className="text-gray-700 w-32 shrink-0 truncate">{a.name}</span><span className={`text-[9px] px-1.5 py-0.5 rounded ${a.valid ? "bg-[var(--cmp-surface-success)] text-emerald-700" : "bg-[var(--cmp-surface-error)] text-[var(--cmp-text-error)]"}`}>{a.valid ? "competent" : "not validated"}</span><span className="text-gray-400">{a.shifts} shifts</span><span className="text-gray-500 flex-1 text-right">{a.why}</span></div>))}</div>
               </>)}
             </>
           )}

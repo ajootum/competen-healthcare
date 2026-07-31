@@ -14,15 +14,15 @@ export const dynamic = "force-dynamic";
 
 const card = "bg-white rounded-xl border border-gray-200";
 const dash = (n: number | null | undefined) => (n == null ? "—" : n.toLocaleString());
-const BAND_TONE: Record<string, string> = { low: "bg-green-50 text-green-700", medium: "bg-amber-50 text-amber-700", high: "bg-orange-50 text-orange-700", critical: "bg-rose-50 text-rose-700" };
-const EFF_TONE: Record<string, string> = { effective: "bg-green-50 text-green-700", partially_effective: "bg-amber-50 text-amber-700", ineffective: "bg-rose-50 text-rose-700", not_tested: "bg-gray-100 text-gray-500" };
+const BAND_TONE: Record<string, string> = { low: "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]", medium: "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]", high: "bg-[var(--cmp-surface-warning)] text-orange-700", critical: "bg-[var(--cmp-surface-error)] text-[var(--cmp-text-error)]" };
+const EFF_TONE: Record<string, string> = { effective: "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]", partially_effective: "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]", ineffective: "bg-[var(--cmp-surface-error)] text-[var(--cmp-text-error)]", not_tested: "bg-gray-100 text-gray-500" };
 // Cell colour by inherent score band (likelihood × impact).
 const cellTone = (score: number, n: number) => {
   if (n === 0) return "bg-gray-50 text-gray-300";
-  if (score >= 16) return "bg-rose-500 text-white";
-  if (score >= 10) return "bg-orange-400 text-white";
+  if (score >= 16) return "bg-[var(--cmp-color-error)] text-white";
+  if (score >= 10) return "bg-[var(--cmp-color-warning)] text-white";
   if (score >= 5) return "bg-amber-300 text-gray-800";
-  return "bg-green-400 text-white";
+  return "bg-[var(--cmp-color-success)] text-white";
 };
 
 export default async function RiskInternalControls() {
@@ -38,12 +38,12 @@ export default async function RiskInternalControls() {
   const k = d.kpis;
 
   const kpiCards = [
-    { label: "Total Risks", value: dash(k.total), icon: "⚠️", iconBg: "bg-blue-50" },
-    { label: "Critical", value: dash(k.critical), icon: "🔴", iconBg: "bg-rose-50", tone: (k.critical ?? 0) > 0 ? "text-rose-600" : undefined },
-    { label: "High", value: dash(k.high), icon: "🟠", iconBg: "bg-orange-50", tone: (k.high ?? 0) > 0 ? "text-orange-600" : undefined },
-    { label: "Medium", value: dash(k.medium), icon: "🟡", iconBg: "bg-amber-50" },
-    { label: "Low", value: dash(k.low), icon: "🟢", iconBg: "bg-green-50" },
-    { label: "Overdue Reviews", value: dash(k.overdueReviews), icon: "🕓", iconBg: "bg-gray-50", tone: (k.overdueReviews ?? 0) > 0 ? "text-amber-600" : undefined },
+    { label: "Total Risks", value: dash(k.total), icon: "⚠️", iconBg: "bg-[var(--cmp-surface-information)]" },
+    { label: "Critical", value: dash(k.critical), icon: "🔴", iconBg: "bg-[var(--cmp-surface-error)]", tone: (k.critical ?? 0) > 0 ? "text-[var(--cmp-text-error)]" : undefined },
+    { label: "High", value: dash(k.high), icon: "🟠", iconBg: "bg-[var(--cmp-surface-warning)]", tone: (k.high ?? 0) > 0 ? "text-[var(--cmp-text-warning)]" : undefined },
+    { label: "Medium", value: dash(k.medium), icon: "🟡", iconBg: "bg-[var(--cmp-surface-warning)]" },
+    { label: "Low", value: dash(k.low), icon: "🟢", iconBg: "bg-[var(--cmp-surface-success)]" },
+    { label: "Overdue Reviews", value: dash(k.overdueReviews), icon: "🕓", iconBg: "bg-gray-50", tone: (k.overdueReviews ?? 0) > 0 ? "text-[var(--cmp-text-warning)]" : undefined },
   ];
 
   return (
@@ -57,8 +57,8 @@ export default async function RiskInternalControls() {
       </div>
 
       {!d.ready && (
-        <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-          <span className="font-semibold">Risk register not enabled.</span> Run <code className="font-mono text-[12px] bg-amber-100 px-1 rounded">supabase/migrations/060-governance-risk-controls.sql</code> to activate the register and controls library.
+        <div className="rounded-xl border border-[var(--cmp-color-warning)] bg-[var(--cmp-surface-warning)] px-4 py-3 text-sm text-amber-800">
+          <span className="font-semibold">Risk register not enabled.</span> Run <code className="font-mono text-[12px] bg-[var(--cmp-surface-warning)] px-1 rounded">supabase/migrations/060-governance-risk-controls.sql</code> to activate the register and controls library.
         </div>
       )}
 
@@ -116,10 +116,10 @@ export default async function RiskInternalControls() {
                 <div key={r.id} className="flex items-center gap-3 py-2.5">
                   <span className={`text-[11px] font-bold px-2 py-1 rounded shrink-0 tabular-nums ${BAND_TONE[r.band]}`}>{r.residual ?? r.inherent}</span>
                   <div className="min-w-0 flex-1">
-                    <p className="text-sm text-gray-800 leading-tight truncate">{r.title}{r.overdue && <span className="text-[9px] font-semibold text-rose-600 ml-1.5">REVIEW OVERDUE</span>}</p>
+                    <p className="text-sm text-gray-800 leading-tight truncate">{r.title}{r.overdue && <span className="text-[9px] font-semibold text-[var(--cmp-text-error)] ml-1.5">REVIEW OVERDUE</span>}</p>
                     <p className="text-[10px] text-gray-400 capitalize">{String(r.category).replace(/_/g, " ")} · {r.scope} · treat: {r.treatment}{r.residual != null ? ` · inherent ${r.inherent} → residual ${r.residual}` : ""}</p>
                   </div>
-                  <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded shrink-0 capitalize ${r.status === "escalated" ? "bg-rose-50 text-rose-700" : r.status === "mitigating" ? "bg-amber-50 text-amber-700" : "bg-gray-100 text-gray-600"}`}>{r.status}</span>
+                  <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded shrink-0 capitalize ${r.status === "escalated" ? "bg-[var(--cmp-surface-error)] text-[var(--cmp-text-error)]" : r.status === "mitigating" ? "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]" : "bg-gray-100 text-gray-600"}`}>{r.status}</span>
                 </div>
               ))}
             </div>

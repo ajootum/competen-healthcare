@@ -65,7 +65,7 @@ export default async function WorkforceIntelligencePage() {
               <div key={d.key} className="flex-1 flex flex-col items-center gap-1" title={`${d.n} expiring`}>
                 <span className="text-[9px] font-bold text-gray-700">{d.n}</span>
                 <div className="w-full bg-gray-100 rounded-t flex items-end" style={{ height: "76px" }}>
-                  <div className="w-full bg-amber-400 rounded-t" style={{ height: `${Math.round(d.n / demandMax * 72)}px` }} />
+                  <div className="w-full bg-[var(--cmp-color-warning)] rounded-t" style={{ height: `${Math.round(d.n / demandMax * 72)}px` }} />
                 </div>
                 <span className="text-[8px] text-gray-400">{d.label}</span>
               </div>
@@ -95,10 +95,10 @@ export default async function WorkforceIntelligencePage() {
               <div key={c.name}>
                 <div className="flex items-center justify-between text-[11px] mb-0.5">
                   <span className="text-gray-700">{c.name}</span>
-                  <span className="font-bold text-red-600">{c.pct}% <span className="font-normal text-gray-300">competent of {c.total}</span></span>
+                  <span className="font-bold text-[var(--cmp-text-critical)]">{c.pct}% <span className="font-normal text-gray-300">competent of {c.total}</span></span>
                 </div>
                 <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
-                  <div className="h-full bg-red-400 rounded-full" style={{ width: `${c.pct}%` }} />
+                  <div className="h-full bg-[var(--cmp-color-critical)] rounded-full" style={{ width: `${c.pct}%` }} />
                 </div>
               </div>
             ))}

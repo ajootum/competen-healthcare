@@ -53,7 +53,7 @@ export default function InvitePage() {
       </div>
 
       {/* How it works */}
-      <div className="bg-blue-50 border border-blue-100 rounded-xl p-5 mb-6">
+      <div className="bg-[var(--cmp-surface-information)] border border-[var(--cmp-color-information)] rounded-xl p-5 mb-6">
         <p className="text-sm font-semibold text-blue-800 mb-3">How to invite a nurse</p>
         <ol className="flex flex-col gap-2 text-sm text-blue-700">
           <li className="flex items-start gap-2"><span className="font-bold shrink-0">1.</span> Copy your Hospital ID below</li>
@@ -102,7 +102,7 @@ export default function InvitePage() {
           <p className="text-[10px] font-bold text-gray-400 tracking-widest uppercase">Ready-to-send WhatsApp Message</p>
           <button
             onClick={copyMessage}
-            className="text-xs bg-green-600 hover:bg-green-700 text-white px-3 py-1.5 rounded-lg transition-colors font-medium">
+            className="text-xs bg-[var(--cmp-color-success)] hover:bg-green-700 text-white px-3 py-1.5 rounded-lg transition-colors font-medium">
             {msgCopied ? "Copied ✓" : "📋 Copy message"}
           </button>
         </div>
@@ -112,7 +112,7 @@ export default function InvitePage() {
       </div>
 
       {/* Note */}
-      <div className="bg-amber-50 border border-amber-100 rounded-xl p-4 text-sm text-amber-800">
+      <div className="bg-[var(--cmp-surface-warning)] border border-[var(--cmp-color-warning)] rounded-xl p-4 text-sm text-amber-800">
         <strong>Note:</strong> Email invitations with direct links are coming soon. For now, WhatsApp or SMS with the Hospital ID is the fastest way to onboard nurses in East Africa.
       </div>
     </div>

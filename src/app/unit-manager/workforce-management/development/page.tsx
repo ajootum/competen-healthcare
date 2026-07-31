@@ -15,8 +15,8 @@ export const dynamic = "force-dynamic";
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 const card = "bg-white rounded-xl border border-gray-200";
-const BAND: Record<string, { tone: string; ring: string }> = { "Ready": { tone: "text-emerald-600", ring: "#10b981" }, "Mostly ready": { tone: "text-emerald-600", ring: "#34d399" }, "At risk": { tone: "text-amber-600", ring: "#f59e0b" }, "High risk": { tone: "text-orange-600", ring: "#f97316" }, "Critical": { tone: "text-rose-600", ring: "#e11d48" }, "—": { tone: "text-gray-400", ring: "#e5e7eb" } };
-const SEV: Record<string, string> = { critical: "bg-rose-50 text-rose-700", high: "bg-amber-50 text-amber-700", moderate: "bg-sky-50 text-sky-700" };
+const BAND: Record<string, { tone: string; ring: string }> = { "Ready": { tone: "text-[var(--cmp-text-success)]", ring: "#10b981" }, "Mostly ready": { tone: "text-[var(--cmp-text-success)]", ring: "#34d399" }, "At risk": { tone: "text-[var(--cmp-text-warning)]", ring: "#f59e0b" }, "High risk": { tone: "text-[var(--cmp-text-warning)]", ring: "#f97316" }, "Critical": { tone: "text-[var(--cmp-text-error)]", ring: "#e11d48" }, "—": { tone: "text-gray-400", ring: "#e5e7eb" } };
+const SEV: Record<string, string> = { critical: "bg-[var(--cmp-surface-error)] text-[var(--cmp-text-error)]", high: "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]", moderate: "bg-[var(--cmp-surface-information)] text-[var(--cmp-text-information)]" };
 
 function Kpi({ label, value, sub, tone, foot }: { label: string; value: any; sub?: string; tone?: string; foot?: string }) {
   return <div className={`${card} p-4`}><div className="flex items-start justify-between"><p className="text-xs text-gray-500">{label}</p>{foot && <span className="text-[9px] text-gray-300">{foot}</span>}</div><p className={`text-2xl font-bold tabular-nums mt-1 ${tone ?? "text-gray-900"}`}>{value}</p>{sub && <p className="text-[11px] text-gray-400 mt-0.5">{sub}</p>}</div>;
@@ -47,7 +47,7 @@ export default async function DevelopmentOverview() {
     </>
   );
 
-  if (!d.ready) return <div className="space-y-4">{header}<div className="bg-amber-50 border border-amber-200 rounded-xl p-6"><p className="font-semibold text-amber-900">⚙️ No operational data</p><p className="text-sm text-amber-800 mt-1">Readiness activates once operational staff + competency records exist.</p></div></div>;
+  if (!d.ready) return <div className="space-y-4">{header}<div className="bg-[var(--cmp-surface-warning)] border border-[var(--cmp-color-warning)] rounded-xl p-6"><p className="font-semibold text-amber-900">⚙️ No operational data</p><p className="text-sm text-amber-800 mt-1">Readiness activates once operational staff + competency records exist.</p></div></div>;
 
   const b = BAND[d.band] ?? BAND["—"];
   const k = d.kpis;
@@ -67,12 +67,12 @@ export default async function DevelopmentOverview() {
 
         {/* KPI cards */}
         <div className="xl:col-span-2 grid grid-cols-2 sm:grid-cols-3 gap-3">
-          <Kpi label="Fully deployable" value={k.fullyDeployable} sub={`${k.renewalDue} renewal due`} tone="text-emerald-600" foot="²" />
-          <Kpi label="Requiring supervision" value={k.requiringSupervision} sub="Expired / no validation" tone={k.requiringSupervision ? "text-amber-600" : "text-emerald-600"} foot="³" />
-          <Kpi label="Critical competency gaps" value={k.criticalGaps} sub={`${d.noCoverage.length} uncovered · ${d.singleDep.length} single-dep`} tone={k.criticalGaps ? "text-rose-600" : "text-emerald-600"} foot="⁴" />
+          <Kpi label="Fully deployable" value={k.fullyDeployable} sub={`${k.renewalDue} renewal due`} tone="text-[var(--cmp-text-success)]" foot="²" />
+          <Kpi label="Requiring supervision" value={k.requiringSupervision} sub="Expired / no validation" tone={k.requiringSupervision ? "text-[var(--cmp-text-warning)]" : "text-[var(--cmp-text-success)]"} foot="³" />
+          <Kpi label="Critical competency gaps" value={k.criticalGaps} sub={`${d.noCoverage.length} uncovered · ${d.singleDep.length} single-dep`} tone={k.criticalGaps ? "text-[var(--cmp-text-error)]" : "text-[var(--cmp-text-success)]"} foot="⁴" />
           <Kpi label="Mandatory learning" value="—" sub="Needs learning store" tone="text-gray-300" foot="⁵" />
-          <Kpi label="Credentials expiring" value={k.credentialsExpiring} sub={k.credentialsExpired ? `${k.credentialsExpired} expired` : "≤30 days"} tone={k.credentialsExpired ? "text-rose-600" : k.credentialsExpiring ? "text-amber-600" : "text-emerald-600"} foot="⁶" />
-          <Kpi label="No competency record" value={k.noRecord} sub="Validate — missing ≠ incompetent" tone={k.noRecord ? "text-amber-600" : undefined} foot="⁴" />
+          <Kpi label="Credentials expiring" value={k.credentialsExpiring} sub={k.credentialsExpired ? `${k.credentialsExpired} expired` : "≤30 days"} tone={k.credentialsExpired ? "text-[var(--cmp-text-error)]" : k.credentialsExpiring ? "text-[var(--cmp-text-warning)]" : "text-[var(--cmp-text-success)]"} foot="⁶" />
+          <Kpi label="No competency record" value={k.noRecord} sub="Validate — missing ≠ incompetent" tone={k.noRecord ? "text-[var(--cmp-text-warning)]" : undefined} foot="⁴" />
         </div>
       </div>
 
@@ -86,7 +86,7 @@ export default async function DevelopmentOverview() {
         {/* Competency coverage by role */}
         <div className={`${card} p-5`}>
           <h3 className="text-sm font-bold text-gray-900 mb-3">Competency coverage by role <span className="text-[9px] text-gray-300">⁴</span></h3>
-          {d.roleCoverage.length === 0 ? <p className="text-sm text-gray-400">No competency data.</p> : <div className="space-y-2">{d.roleCoverage.map((r: any) => (<div key={r.role} className="flex items-center gap-3 text-xs"><span className="text-gray-700 w-28 truncate">{r.label}</span><div className="flex-1 h-1.5 rounded-full bg-gray-100 overflow-hidden"><div className={`h-full rounded-full ${(r.pct ?? 0) >= 90 ? "bg-emerald-500" : (r.pct ?? 0) >= 60 ? "bg-amber-400" : "bg-rose-400"}`} style={{ width: `${r.pct ?? 0}%` }} /></div><span className="text-gray-600 w-16 text-right">{r.current}/{r.total}{r.pct != null ? ` · ${r.pct}%` : ""}</span></div>))}</div>}
+          {d.roleCoverage.length === 0 ? <p className="text-sm text-gray-400">No competency data.</p> : <div className="space-y-2">{d.roleCoverage.map((r: any) => (<div key={r.role} className="flex items-center gap-3 text-xs"><span className="text-gray-700 w-28 truncate">{r.label}</span><div className="flex-1 h-1.5 rounded-full bg-gray-100 overflow-hidden"><div className={`h-full rounded-full ${(r.pct ?? 0) >= 90 ? "bg-[var(--cmp-color-success)]" : (r.pct ?? 0) >= 60 ? "bg-[var(--cmp-color-warning)]" : "bg-[var(--cmp-color-error)]"}`} style={{ width: `${r.pct ?? 0}%` }} /></div><span className="text-gray-600 w-16 text-right">{r.current}/{r.total}{r.pct != null ? ` · ${r.pct}%` : ""}</span></div>))}</div>}
           <Link href="/unit-manager/workforce-management/development/coverage" className="mt-3 inline-block text-[11px] font-semibold text-emerald-700 hover:underline">Competency coverage →</Link>
         </div>
       </div>

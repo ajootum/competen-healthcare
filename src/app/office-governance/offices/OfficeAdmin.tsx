@@ -22,7 +22,7 @@ function bumpVersion(v: string | null): string {
   return "v1.1";
 }
 
-const STATUS_TONE: Record<string, string> = { active: "bg-emerald-100 text-emerald-700", approved: "bg-emerald-100 text-emerald-700", under_review: "bg-amber-100 text-amber-700", pending_approval: "bg-amber-100 text-amber-700", proposed: "bg-blue-100 text-blue-700", in_design: "bg-blue-100 text-blue-700", suspended: "bg-rose-100 text-rose-700", restructuring: "bg-amber-100 text-amber-700", closing: "bg-rose-100 text-rose-700", dissolved: "bg-gray-200 text-gray-600", archived: "bg-gray-200 text-gray-600", template: "bg-gray-100 text-gray-500" };
+const STATUS_TONE: Record<string, string> = { active: "bg-[var(--cmp-surface-success)] text-emerald-700", approved: "bg-[var(--cmp-surface-success)] text-emerald-700", under_review: "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]", pending_approval: "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]", proposed: "bg-[var(--cmp-surface-information)] text-blue-700", in_design: "bg-[var(--cmp-surface-information)] text-blue-700", suspended: "bg-[var(--cmp-surface-error)] text-[var(--cmp-text-error)]", restructuring: "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]", closing: "bg-[var(--cmp-surface-error)] text-[var(--cmp-text-error)]", dissolved: "bg-gray-200 text-gray-600", archived: "bg-gray-200 text-gray-600", template: "bg-gray-100 text-gray-500" };
 const title = (s: string) => (s ? s[0].toUpperCase() + s.slice(1) : s);
 
 export default function OfficeAdmin({ offices, people, scopeHid, isSuper }: { offices: Office[]; people: Person[]; scopeHid: string | null; isSuper: boolean }) {
@@ -43,7 +43,7 @@ export default function OfficeAdmin({ offices, people, scopeHid, isSuper }: { of
 
   return (
     <div className="space-y-4">
-      {err && <div className="bg-rose-50 border border-rose-200 text-rose-700 rounded-lg px-3 py-2 text-[12px]">{err}</div>}
+      {err && <div className="bg-[var(--cmp-surface-error)] border border-[var(--cmp-color-error)] text-[var(--cmp-text-error)] rounded-lg px-3 py-2 text-[12px]">{err}</div>}
       <div className="flex justify-between items-center">
         <p className="text-[12px] text-gray-500">{offices.length} constituted office{offices.length === 1 ? "" : "s"}{isSuper ? " · enterprise scope" : ""}</p>
         <button onClick={() => setWizardOpen(v => !v)} className="text-[12px] bg-teal-600 text-white rounded-lg px-3 py-2 hover:bg-teal-700">{wizardOpen ? "Close" : "＋ Constitute new office"}</button>
@@ -124,9 +124,9 @@ function ConstituteWizard({ people, scopeHid, isSuper, busy, call, onDone }: { p
 
       {step === 4 && <div className="space-y-1.5">
         {([["Office name set", !!f.name.trim()], ["Charter purpose defined", !!f.purpose.trim()], ["Chair appointed", !!f.chair_id], ["Quorum set", Number(f.quorum) > 0]] as [string, boolean][]).map(([label, ok]) => (
-          <div key={label} className="flex items-center gap-2 text-[12px]"><span className={ok ? "text-emerald-600" : "text-gray-300"}>{ok ? "✓" : "○"}</span><span className={ok ? "text-gray-700" : "text-gray-400"}>{label}</span></div>
+          <div key={label} className="flex items-center gap-2 text-[12px]"><span className={ok ? "text-[var(--cmp-text-success)]" : "text-gray-300"}>{ok ? "✓" : "○"}</span><span className={ok ? "text-gray-700" : "text-gray-400"}>{label}</span></div>
         ))}
-        <p className={`text-[11px] mt-1 ${ready ? "text-emerald-600" : "text-amber-600"}`}>{ready ? "Ready to constitute and activate." : "Not all activation criteria met — you can still save as a proposed office."}</p>
+        <p className={`text-[11px] mt-1 ${ready ? "text-[var(--cmp-text-success)]" : "text-[var(--cmp-text-warning)]"}`}>{ready ? "Ready to constitute and activate." : "Not all activation criteria met — you can still save as a proposed office."}</p>
       </div>}
 
       {step === 5 && <div className="text-[12px] text-gray-600 space-y-1">
@@ -168,7 +168,7 @@ function OfficeManage({ office, people, busy, call, onChange }: { office: Office
           <div className="space-y-1 mb-2">
             {office.appointments.length === 0 && <p className="text-[11px] text-gray-400">No members appointed.</p>}
             {office.appointments.map(a => (
-              <div key={a.id} className="flex items-center gap-2 text-[12px]"><span className="flex-1 truncate text-gray-700">{a.personName ?? "Member"}</span><span className="text-[10px] text-gray-400">{APPOINTMENT_ROLE_LABEL[a.role] ?? a.role}</span><button disabled={busy} onClick={() => remove(a.id)} className="text-rose-400 hover:text-rose-600 text-[11px] disabled:opacity-40">remove</button></div>
+              <div key={a.id} className="flex items-center gap-2 text-[12px]"><span className="flex-1 truncate text-gray-700">{a.personName ?? "Member"}</span><span className="text-[10px] text-gray-400">{APPOINTMENT_ROLE_LABEL[a.role] ?? a.role}</span><button disabled={busy} onClick={() => remove(a.id)} className="text-rose-400 hover:text-[var(--cmp-text-error)] text-[11px] disabled:opacity-40">remove</button></div>
             ))}
           </div>
           <div className="flex gap-1.5">
@@ -194,7 +194,7 @@ function OfficeManage({ office, people, busy, call, onChange }: { office: Office
   );
 }
 
-const CH_STATUS_TONE: Record<string, string> = { approved: "bg-emerald-100 text-emerald-700", draft: "bg-blue-100 text-blue-700", pending: "bg-amber-100 text-amber-700", superseded: "bg-gray-200 text-gray-500" };
+const CH_STATUS_TONE: Record<string, string> = { approved: "bg-[var(--cmp-surface-success)] text-emerald-700", draft: "bg-[var(--cmp-surface-information)] text-blue-700", pending: "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]", superseded: "bg-gray-200 text-gray-500" };
 
 function CharterSection({ office, busy, call, onChange }: { office: Office; busy: boolean; call: Call; onChange: () => void }) {
   const [amending, setAmending] = useState(false);

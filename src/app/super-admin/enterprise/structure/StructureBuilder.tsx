@@ -81,8 +81,8 @@ export default function StructureBuilder({ data }: { data: any }) {
           {child && <button onClick={() => { setModal({ mode: "create", entity: child.entity, parent: sel }); setErr(""); }} className="text-xs font-medium rounded-lg bg-teal-600 text-white hover:bg-teal-700 px-3 py-1.5">+ {child.label}</button>}
           <button onClick={() => { setModal({ mode: "edit", entity: e, node: sel }); setErr(""); }} className="text-xs font-medium rounded-lg border border-gray-200 text-gray-700 hover:bg-gray-50 px-3 py-1.5">Edit</button>
           {sel.status === "archived"
-            ? <button onClick={() => setArchive(e, sel, "restore")} disabled={busy} className="text-xs font-medium rounded-lg border border-green-200 text-green-700 hover:bg-green-50 px-3 py-1.5">Restore</button>
-            : <button onClick={() => setArchive(e, sel, "archive")} disabled={busy} className="text-xs font-medium rounded-lg border border-rose-200 text-rose-600 hover:bg-rose-50 px-3 py-1.5">Archive</button>}
+            ? <button onClick={() => setArchive(e, sel, "restore")} disabled={busy} className="text-xs font-medium rounded-lg border border-[var(--cmp-color-success)] text-[var(--cmp-text-success)] hover:bg-[var(--cmp-surface-success)] px-3 py-1.5">Restore</button>
+            : <button onClick={() => setArchive(e, sel, "archive")} disabled={busy} className="text-xs font-medium rounded-lg border border-[var(--cmp-color-error)] text-[var(--cmp-text-error)] hover:bg-[var(--cmp-surface-error)] px-3 py-1.5">Archive</button>}
         </div>
       </div>
     );
@@ -104,8 +104,8 @@ export default function StructureBuilder({ data }: { data: any }) {
           <button onClick={() => { setModal({ mode: "create", entity: "department", parent: { id: facility?.id, kind: "facility" } }); setErr(""); }} className="text-xs font-semibold rounded-lg bg-teal-600 text-white hover:bg-teal-700 px-3 py-1.5">+ Department</button>
         </div>
       </div>
-      {msg && <div className="text-sm rounded-lg px-3 py-1.5 bg-green-50 text-green-800">{msg}</div>}
-      {!ready && <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 text-sm text-amber-900">Structure tables (divisions/teams) aren&apos;t provisioned — apply migration 052 to enable the full builder.</div>}
+      {msg && <div className="text-sm rounded-lg px-3 py-1.5 bg-[var(--cmp-surface-success)] text-green-800">{msg}</div>}
+      {!ready && <div className="bg-[var(--cmp-surface-warning)] border border-[var(--cmp-color-warning)] rounded-xl px-4 py-3 text-sm text-amber-900">Structure tables (divisions/teams) aren&apos;t provisioned — apply migration 052 to enable the full builder.</div>}
 
       <div className="grid lg:grid-cols-3 gap-4">
         {/* Tree */}
@@ -212,7 +212,7 @@ function EntityModal({ modal, staff, busy, err, onClose, onSave }: any) {
           {fields.includes("category") && <div><label className="text-xs font-semibold text-gray-600 mb-1 block">Category</label><input value={form.category} onChange={set("category")} className={input} placeholder="emergency / inpatient / lab…" /></div>}
           {fields.includes("scope") && <div><label className="text-xs font-semibold text-gray-600 mb-1 block">Scope</label><input value={form.scope} onChange={set("scope")} className={input} /></div>}
           {fields.includes("leader") && <div><label className="text-xs font-semibold text-gray-600 mb-1 block">{LEADER_LABEL[entity]}</label><select value={form.leader} onChange={set("leader")} className={input}><option value="">— Unassigned —</option>{staff.map((s: any) => <option key={s.id} value={s.id}>{s.name}</option>)}</select></div>}
-          {err && <p className="text-xs text-red-600 bg-red-50 rounded-lg px-3 py-2">{err}</p>}
+          {err && <p className="text-xs text-[var(--cmp-text-critical)] bg-[var(--cmp-surface-critical)] rounded-lg px-3 py-2">{err}</p>}
           <div className="flex gap-2 pt-1">
             <button onClick={onClose} className="flex-1 py-2 border border-gray-200 rounded-lg text-sm text-gray-600 hover:bg-gray-50">Cancel</button>
             <button onClick={submit} disabled={busy || !form.name.trim()} className="flex-1 py-2 bg-teal-600 text-white rounded-lg text-sm font-semibold hover:bg-teal-700 disabled:opacity-60">{busy ? "Saving…" : modal.mode === "create" ? "Create" : "Save"}</button>

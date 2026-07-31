@@ -9,8 +9,8 @@ import { loadOutcomeCorrelation } from "@/lib/performance/outcome-correlation";
 export const dynamic = "force-dynamic";
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
-const CORR: Record<string, string> = { emerald: "text-emerald-600", rose: "text-rose-600", gray: "text-gray-400" };
-const CORRBG: Record<string, string> = { emerald: "border-emerald-200 bg-emerald-50", rose: "border-rose-200 bg-rose-50", gray: "border-gray-200 bg-gray-50" };
+const CORR: Record<string, string> = { emerald: "text-[var(--cmp-text-success)]", rose: "text-[var(--cmp-text-error)]", gray: "text-gray-400" };
+const CORRBG: Record<string, string> = { emerald: "border-[var(--cmp-color-success)] bg-[var(--cmp-surface-success)]", rose: "border-[var(--cmp-color-error)] bg-[var(--cmp-surface-error)]", gray: "border-gray-200 bg-gray-50" };
 
 export default async function OutcomeCorrelationPage() {
   const supabase = await createClient();
@@ -37,15 +37,15 @@ export default async function OutcomeCorrelationPage() {
           <h1 className="text-xl font-bold text-gray-900">Competency-to-Outcome Correlation</h1>
           <p className="text-gray-400 text-sm mt-0.5">Does higher competency go with better outcomes? Each department&apos;s competency coverage set against its real safety outcomes.</p>
         </div>
-        <Link href="/super-admin/performance" className="text-xs font-semibold text-gray-500 hover:text-sky-700 border border-gray-200 rounded-lg px-3 py-2 shrink-0">← Performance</Link>
+        <Link href="/super-admin/performance" className="text-xs font-semibold text-gray-500 hover:text-[var(--cmp-text-information)] border border-gray-200 rounded-lg px-3 py-2 shrink-0">← Performance</Link>
       </div>
 
       {!q.provisioned ? (
-        <div className="bg-amber-50 border border-amber-100 rounded-xl p-4"><p className="text-[13px] text-amber-900">Operational observation data isn&apos;t available — correlation reads <code className="text-[11px]">op_observations</code> (department-grain) against <code className="text-[11px]">competency_decisions</code>.</p></div>
+        <div className="bg-[var(--cmp-surface-warning)] border border-[var(--cmp-color-warning)] rounded-xl p-4"><p className="text-[13px] text-amber-900">Operational observation data isn&apos;t available — correlation reads <code className="text-[11px]">op_observations</code> (department-grain) against <code className="text-[11px]">competency_decisions</code>.</p></div>
       ) : q.empty ? (
         <div className="bg-white border border-gray-100 rounded-xl p-6"><p className="text-sm text-gray-400">No department competency + observation data to correlate yet.</p></div>
       ) : q.insufficient ? (
-        <div className="bg-amber-50 border border-amber-100 rounded-xl p-5"><p className="text-[13px] text-amber-900 font-semibold mb-1">Not enough departments to correlate yet</p><p className="text-[12px] text-amber-800">A correlation needs at least 3 departments that each have enough competency decisions and observations. Currently {q.n} qualify. As more departments accrue data, the coefficient computes automatically.</p></div>
+        <div className="bg-[var(--cmp-surface-warning)] border border-[var(--cmp-color-warning)] rounded-xl p-5"><p className="text-[13px] text-amber-900 font-semibold mb-1">Not enough departments to correlate yet</p><p className="text-[12px] text-amber-800">A correlation needs at least 3 departments that each have enough competency decisions and observations. Currently {q.n} qualify. As more departments accrue data, the coefficient computes automatically.</p></div>
       ) : (
         <>
           {/* Headline correlations */}
@@ -103,9 +103,9 @@ export default async function OutcomeCorrelationPage() {
                     {q.points.map((p: any, i: number) => (
                       <tr key={i}>
                         <td className="py-2 px-4 text-gray-800 truncate max-w-[160px]">{p.department}<span className="text-[9px] text-gray-400 ml-1">n{p.staff}</span></td>
-                        <td className="py-2 px-2 tabular-nums text-right font-medium text-sky-600">{p.competency}%</td>
+                        <td className="py-2 px-2 tabular-nums text-right font-medium text-[var(--cmp-text-information)]">{p.competency}%</td>
                         <td className="py-2 px-2 tabular-nums text-right text-gray-700">{p.compliance}%</td>
-                        <td className={`py-2 px-4 tabular-nums text-right ${p.escalationRate > 20 ? "text-rose-600" : "text-gray-500"}`}>{p.escalationRate}%</td>
+                        <td className={`py-2 px-4 tabular-nums text-right ${p.escalationRate > 20 ? "text-[var(--cmp-text-error)]" : "text-gray-500"}`}>{p.escalationRate}%</td>
                       </tr>
                     ))}
                   </tbody>

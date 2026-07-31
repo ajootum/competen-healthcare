@@ -39,7 +39,7 @@ export default function EscalationActions({ id, status, responders }: {
 
   return (
     <div className="mt-1.5">
-      {err && <p className="text-xs text-amber-700 mb-1">{err}</p>}
+      {err && <p className="text-xs text-[var(--cmp-text-warning)] mb-1">{err}</p>}
       {mode === "" && (
         <div className="flex flex-wrap gap-1.5">
           {status === "open" && <button className={btn} disabled={busy} onClick={() => act({ action: "acknowledge" })}>Acknowledge</button>}

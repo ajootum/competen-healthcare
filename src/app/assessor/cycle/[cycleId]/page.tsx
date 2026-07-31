@@ -6,11 +6,11 @@ import AssessmentForm from "./AssessmentForm";
 
 // Overall recommendation labels (assessment_sessions.recommendation check constraint).
 const REC: Record<string, { label: string; cls: string }> = {
-  competent:                  { label: "Competent",                cls: "bg-green-100 text-green-700" },
+  competent:                  { label: "Competent",                cls: "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]" },
   competent_with_supervision: { label: "Competent w/ Supervision", cls: "bg-teal-100 text-teal-700" },
-  needs_development:          { label: "Needs Development",         cls: "bg-amber-100 text-amber-700" },
-  reassessment_required:      { label: "Reassessment Required",    cls: "bg-orange-100 text-orange-700" },
-  critical_failure:           { label: "Critical Failure",         cls: "bg-red-100 text-red-700" },
+  needs_development:          { label: "Needs Development",         cls: "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]" },
+  reassessment_required:      { label: "Reassessment Required",    cls: "bg-[var(--cmp-surface-warning)] text-orange-700" },
+  critical_failure:           { label: "Critical Failure",         cls: "bg-[var(--cmp-surface-critical)] text-[var(--cmp-text-critical)]" },
 };
 
 export default async function CycleAssessPage({ params }: { params: Promise<{ cycleId: string }> }) {

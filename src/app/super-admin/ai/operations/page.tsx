@@ -17,9 +17,9 @@ const dash = (n: number | null | undefined) => (n == null ? "—" : n.toLocaleSt
 const ms = (n: number | null) => (n == null ? "—" : n >= 1000 ? `${(n / 1000).toFixed(1)} s` : `${n} ms`);
 const pct = (n: number | null) => (n == null ? "—" : `${n}%`);
 
-const SVC_TONE = (ok: boolean | null) => (ok == null ? "bg-gray-100 text-gray-400" : ok ? "bg-green-50 text-green-700" : "bg-amber-50 text-amber-700");
-const JOB_TONE: Record<string, string> = { running: "bg-blue-50 text-blue-700", success: "bg-green-50 text-green-700", failed: "bg-rose-50 text-rose-700" };
-const STATUS_TONE: Record<string, string> = { ok: "text-green-600", refusal: "text-amber-600", error: "text-rose-600", not_configured: "text-gray-400" };
+const SVC_TONE = (ok: boolean | null) => (ok == null ? "bg-gray-100 text-gray-400" : ok ? "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]" : "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]");
+const JOB_TONE: Record<string, string> = { running: "bg-[var(--cmp-surface-information)] text-blue-700", success: "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]", failed: "bg-[var(--cmp-surface-error)] text-[var(--cmp-text-error)]" };
+const STATUS_TONE: Record<string, string> = { ok: "text-[var(--cmp-text-success)]", refusal: "text-[var(--cmp-text-warning)]", error: "text-[var(--cmp-text-error)]", not_configured: "text-gray-400" };
 
 export default async function AiOperationsCentre() {
   const supabase = await createClient();
@@ -34,14 +34,14 @@ export default async function AiOperationsCentre() {
   const k = d.kpis;
 
   const kpiCards = [
-    { label: "AI Health", value: pct(k.aiHealth), icon: "🛡️", iconBg: "bg-green-50", tone: k.aiHealth != null && k.aiHealth >= 95 ? "text-green-600" : k.aiHealth == null ? "text-gray-400" : "text-amber-600" },
-    { label: "Running Agents", value: dash(k.runningAgents), icon: "🤖", iconBg: "bg-blue-50" },
+    { label: "AI Health", value: pct(k.aiHealth), icon: "🛡️", iconBg: "bg-[var(--cmp-surface-success)]", tone: k.aiHealth != null && k.aiHealth >= 95 ? "text-[var(--cmp-text-success)]" : k.aiHealth == null ? "text-gray-400" : "text-[var(--cmp-text-warning)]" },
+    { label: "Running Agents", value: dash(k.runningAgents), icon: "🤖", iconBg: "bg-[var(--cmp-surface-information)]" },
     { label: "Models Online", value: dash(k.modelsOnline), icon: "🧠", iconBg: "bg-violet-50" },
-    { label: "Queued Jobs", value: dash(k.queuedJobs), icon: "🗂️", iconBg: "bg-sky-50" },
-    { label: "Failed Jobs", value: dash(k.failedJobs), icon: "⚠️", iconBg: "bg-rose-50", tone: (k.failedJobs ?? 0) > 0 ? "text-rose-600" : undefined },
+    { label: "Queued Jobs", value: dash(k.queuedJobs), icon: "🗂️", iconBg: "bg-[var(--cmp-surface-information)]" },
+    { label: "Failed Jobs", value: dash(k.failedJobs), icon: "⚠️", iconBg: "bg-[var(--cmp-surface-error)]", tone: (k.failedJobs ?? 0) > 0 ? "text-[var(--cmp-text-error)]" : undefined },
     { label: "Inference Requests", value: dash(k.inferenceRequests), icon: "📊", iconBg: "bg-purple-50" },
     { label: "Avg Response", value: ms(k.avgResponseMs), icon: "⚡", iconBg: "bg-teal-50" },
-    { label: "Knowledge Updates", value: dash(k.knowledgeUpdates), icon: "📚", iconBg: "bg-amber-50" },
+    { label: "Knowledge Updates", value: dash(k.knowledgeUpdates), icon: "📚", iconBg: "bg-[var(--cmp-surface-warning)]" },
   ];
 
   return (
@@ -92,7 +92,7 @@ export default async function AiOperationsCentre() {
         <div className={`${card} p-5`}>
           <div className="flex items-center justify-between mb-3">
             <h2 className="font-semibold text-gray-900 text-[15px]">Model Registry</h2>
-            <span className={`text-[10px] font-medium px-2 py-0.5 rounded ${d.provider.configured ? "bg-green-50 text-green-700" : "bg-amber-50 text-amber-700"}`}>{d.provider.configured ? d.provider.provider : "no provider"}</span>
+            <span className={`text-[10px] font-medium px-2 py-0.5 rounded ${d.provider.configured ? "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]" : "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]"}`}>{d.provider.configured ? d.provider.provider : "no provider"}</span>
           </div>
           {d.models.length === 0 ? <p className="text-sm text-gray-400 py-6 text-center">No provider configured.</p> : (
             <div className="space-y-2.5">
@@ -131,7 +131,7 @@ export default async function AiOperationsCentre() {
                   <td className="px-3 py-2 text-right tabular-nums text-gray-700">{a.usageToday.toLocaleString()}</td>
                   <td className="px-3 py-2 text-right text-gray-300">—</td>
                   <td className="px-3 py-2 text-right text-gray-300">—</td>
-                  <td className="px-3 py-2 text-right"><span className={`text-[10px] font-semibold px-2 py-0.5 rounded ${a.status === "running" ? "bg-green-50 text-green-700" : "bg-gray-100 text-gray-500"}`}>{a.status}</span></td>
+                  <td className="px-3 py-2 text-right"><span className={`text-[10px] font-semibold px-2 py-0.5 rounded ${a.status === "running" ? "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]" : "bg-gray-100 text-gray-500"}`}>{a.status}</span></td>
                 </tr>
               ))}
             </tbody>
@@ -148,7 +148,7 @@ export default async function AiOperationsCentre() {
             <Link href="/super-admin/platform-ops/monitoring" className="text-xs text-teal-700 hover:underline">Monitoring →</Link>
           </div>
           <div className="grid grid-cols-4 gap-2 mb-3">
-            {[["Running", d.jobStates.running, "text-blue-600"], ["Completed 24h", d.jobStates.completed24h, "text-green-600"], ["Failed 24h", d.jobStates.failed24h, "text-rose-600"], ["Awaiting Review", d.jobStates.awaitingReview, "text-amber-600"]].map(([l, n, tone]: any) => (
+            {[["Running", d.jobStates.running, "text-[var(--cmp-text-information)]"], ["Completed 24h", d.jobStates.completed24h, "text-[var(--cmp-text-success)]"], ["Failed 24h", d.jobStates.failed24h, "text-[var(--cmp-text-error)]"], ["Awaiting Review", d.jobStates.awaitingReview, "text-[var(--cmp-text-warning)]"]].map(([l, n, tone]: any) => (
               <div key={l} className="rounded-lg border border-gray-100 p-3 text-center">
                 <p className={`text-xl font-bold tabular-nums ${n ? tone : "text-gray-900"}`}>{dash(n)}</p>
                 <p className="text-[10px] text-gray-500 mt-0.5">{l}</p>

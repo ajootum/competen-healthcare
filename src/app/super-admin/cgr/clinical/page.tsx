@@ -11,12 +11,12 @@ import { loadClinicalIntelligence } from "@/lib/cgr/clinical";
 export const dynamic = "force-dynamic";
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
-const CORR: Record<string, string> = { emerald: "text-emerald-600", rose: "text-rose-600", gray: "text-gray-400" };
+const CORR: Record<string, string> = { emerald: "text-[var(--cmp-text-success)]", rose: "text-[var(--cmp-text-error)]", gray: "text-gray-400" };
 const RISK_META: Record<string, string> = {
-  critical: "text-rose-700 bg-rose-50 border-rose-100", high: "text-orange-700 bg-orange-50 border-orange-100",
+  critical: "text-[var(--cmp-text-error)] bg-[var(--cmp-surface-error)] border-[var(--cmp-color-error)]", high: "text-orange-700 bg-[var(--cmp-surface-warning)] border-[var(--cmp-color-warning)]",
   standard: "text-gray-600 bg-gray-50 border-gray-200", low: "text-slate-500 bg-slate-50 border-slate-200",
 };
-const tone = (v: number) => (v >= 75 ? "text-emerald-600" : v >= 55 ? "text-amber-600" : "text-rose-600");
+const tone = (v: number) => (v >= 75 ? "text-[var(--cmp-text-success)]" : v >= 55 ? "text-[var(--cmp-text-warning)]" : "text-[var(--cmp-text-error)]");
 
 function Kpi({ label, value, sub, t }: { label: string; value: string | number; sub?: string; t?: string }) {
   return (
@@ -45,12 +45,12 @@ export default async function ClinicalIntelligencePage() {
     <div className="max-w-[1400px]">
       <div className="flex items-start justify-between gap-3 mb-5">
         <div>
-          <p className="text-[11px] font-semibold text-emerald-600 uppercase tracking-widest mb-0.5">CGR-026 · Competency Governance</p>
+          <p className="text-[11px] font-semibold text-[var(--cmp-text-success)] uppercase tracking-widest mb-0.5">CGR-026 · Competency Governance</p>
           <h1 className="text-xl font-bold text-gray-900">Clinical Practice Intelligence &amp; Outcome Correlation</h1>
           <p className="text-gray-400 text-sm mt-0.5">Are competency systems improving clinical practice? Two lenses: the statistical correlation, and the case-confirmed link between real safety events and specific competencies.</p>
         </div>
         <div className="flex gap-2 shrink-0">
-          <Link href="/super-admin/performance/correlation" className="text-xs font-semibold text-emerald-700 hover:text-emerald-800 border border-emerald-200 bg-emerald-50 rounded-lg px-3 py-2">Full correlation →</Link>
+          <Link href="/super-admin/performance/correlation" className="text-xs font-semibold text-emerald-700 hover:text-emerald-800 border border-[var(--cmp-color-success)] bg-[var(--cmp-surface-success)] rounded-lg px-3 py-2">Full correlation →</Link>
           <Link href="/super-admin/cgr" className="text-xs font-semibold text-gray-500 hover:text-emerald-700 border border-gray-200 rounded-lg px-3 py-2">← CGR</Link>
         </div>
       </div>
@@ -61,10 +61,10 @@ export default async function ClinicalIntelligencePage() {
         <div className="space-y-4">
           <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
             <Kpi label="Events linked" value={`${k.linkedEvents}/${k.totalIncidents}`} sub="safety events → competency" />
-            <Kpi label="Evidenced links" value={k.evidencedLinks} sub="confirmed / implemented" t={k.evidencedLinks ? "text-emerald-600" : "text-gray-900"} />
-            <Kpi label="Candidate links" value={k.proposedLinks} sub="awaiting governance review" t={k.proposedLinks ? "text-amber-600" : "text-gray-900"} />
+            <Kpi label="Evidenced links" value={k.evidencedLinks} sub="confirmed / implemented" t={k.evidencedLinks ? "text-[var(--cmp-text-success)]" : "text-gray-900"} />
+            <Kpi label="Candidate links" value={k.proposedLinks} sub="awaiting governance review" t={k.proposedLinks ? "text-[var(--cmp-text-warning)]" : "text-gray-900"} />
             <Kpi label="Implicated competencies" value={k.implicated} sub="by real events" />
-            <Kpi label="Practice risk" value={k.practiceRisk} sub="implicated + weakly governed" t={k.practiceRisk ? "text-rose-600" : "text-gray-900"} />
+            <Kpi label="Practice risk" value={k.practiceRisk} sub="implicated + weakly governed" t={k.practiceRisk ? "text-[var(--cmp-text-error)]" : "text-gray-900"} />
             <Kpi label="Units with events" value={k.variationDepts} sub={`${k.unattributed} unattributed`} />
           </div>
 
@@ -73,7 +73,7 @@ export default async function ClinicalIntelligencePage() {
             <div className="bg-white rounded-xl border border-gray-100 p-4">
               <div className="flex items-center justify-between mb-2">
                 <p className="text-xs font-bold text-gray-500 uppercase tracking-widest">Statistical lens (§5.1)</p>
-                <span className="text-[9px] font-bold text-blue-600 bg-blue-50 border border-blue-100 rounded px-1.5 py-0.5">CAPM-005</span>
+                <span className="text-[9px] font-bold text-[var(--cmp-text-information)] bg-[var(--cmp-surface-information)] border border-[var(--cmp-color-information)] rounded px-1.5 py-0.5">CAPM-005</span>
               </div>
               {!d.corr ? (
                 <p className="text-[12px] text-gray-400">Not enough department data to correlate competency with outcomes — the correlation engine will say so rather than overclaim.</p>
@@ -87,7 +87,7 @@ export default async function ClinicalIntelligencePage() {
                       </div>
                     ))}
                   </div>
-                  <p className="text-[10px] text-gray-400 mt-2">Ecological, across {d.corr.departments} departments — directional, never causal. Owned by <Link href="/super-admin/performance/correlation" className="text-emerald-600 hover:underline">Competency Performance</Link>.</p>
+                  <p className="text-[10px] text-gray-400 mt-2">Ecological, across {d.corr.departments} departments — directional, never causal. Owned by <Link href="/super-admin/performance/correlation" className="text-[var(--cmp-text-success)] hover:underline">Competency Performance</Link>.</p>
                 </>
               )}
             </div>
@@ -95,14 +95,14 @@ export default async function ClinicalIntelligencePage() {
             <div className="lg:col-span-2 bg-white rounded-xl border border-gray-100 p-4">
               <div className="flex items-center justify-between mb-2">
                 <p className="text-xs font-bold text-gray-500 uppercase tracking-widest">Case lens (§5.2) — the learning loop, live</p>
-                <span className="text-[9px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-100 rounded px-1.5 py-0.5">CONFIRMED LINKS</span>
+                <span className="text-[9px] font-bold text-emerald-700 bg-[var(--cmp-surface-success)] border border-[var(--cmp-color-success)] rounded px-1.5 py-0.5">CONFIRMED LINKS</span>
               </div>
               <div className="space-y-1.5">
                 {d.loop.map((l: any, i: number) => (
                   <div key={l.step} className="flex items-center gap-3">
                     <span className="text-[10px] font-bold text-gray-300 tabular-nums w-4">{i + 1}</span>
                     <span className="text-[11px] text-gray-600 w-44 shrink-0">{l.step}</span>
-                    <div className="flex-1 h-2.5 rounded bg-gray-50 overflow-hidden"><div className="h-full bg-emerald-500 rounded" style={{ width: `${(l.n / loopMax) * 100}%` }} /></div>
+                    <div className="flex-1 h-2.5 rounded bg-gray-50 overflow-hidden"><div className="h-full bg-[var(--cmp-color-success)] rounded" style={{ width: `${(l.n / loopMax) * 100}%` }} /></div>
                     <span className="text-[12px] font-bold text-gray-700 tabular-nums w-8 text-right">{l.n}</span>
                     <span className="text-[10px] text-gray-400 w-44 shrink-0">{l.note}</span>
                   </div>
@@ -115,10 +115,10 @@ export default async function ClinicalIntelligencePage() {
           <div className="bg-white rounded-xl border border-gray-100 overflow-hidden">
             <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
               <p className="text-sm font-bold text-gray-800">Competencies implicated by safety events <span className="text-[10px] font-normal text-gray-400">— aggregated by competency, never by person (§4.4)</span></p>
-              <p className="text-[10px] text-gray-400">evidence first · <Link href="/super-admin/cgr/learning" className="text-emerald-600 hover:underline">manage links →</Link></p>
+              <p className="text-[10px] text-gray-400">evidence first · <Link href="/super-admin/cgr/learning" className="text-[var(--cmp-text-success)] hover:underline">manage links →</Link></p>
             </div>
             {d.implicated.length === 0 ? (
-              <div className="p-6 text-center"><p className="text-sm text-gray-400">No safety events have been linked to competencies yet. Propose links in <Link href="/super-admin/cgr/learning" className="text-emerald-600 hover:underline">Organisational Learning</Link> — once governance confirms them, this becomes the case-level evidence that specific competencies need attention.</p></div>
+              <div className="p-6 text-center"><p className="text-sm text-gray-400">No safety events have been linked to competencies yet. Propose links in <Link href="/super-admin/cgr/learning" className="text-[var(--cmp-text-success)] hover:underline">Organisational Learning</Link> — once governance confirms them, this becomes the case-level evidence that specific competencies need attention.</p></div>
             ) : (
               <div className="overflow-x-auto">
                 <table className="w-full min-w-[820px]">
@@ -139,12 +139,12 @@ export default async function ClinicalIntelligencePage() {
                         <td className="py-2 pl-4 pr-2 text-[12px] font-medium text-gray-800">{x.name}</td>
                         <td className="py-2 px-2">{x.risk ? <span className={`text-[10px] font-bold border rounded px-1.5 py-0.5 capitalize ${RISK_META[x.risk] ?? RISK_META.standard}`}>{x.risk}</span> : <span className="text-[10px] text-gray-300">—</span>}</td>
                         <td className="py-2 px-2 text-center text-[12px] text-gray-700 tabular-nums">{x.events}</td>
-                        <td className="py-2 px-2 text-center text-[11px] tabular-nums"><span className={x.highCritical ? "text-rose-600 font-semibold" : "text-gray-400"}>{x.highCritical}</span></td>
+                        <td className="py-2 px-2 text-center text-[11px] tabular-nums"><span className={x.highCritical ? "text-[var(--cmp-text-error)] font-semibold" : "text-gray-400"}>{x.highCritical}</span></td>
                         <td className="py-2 px-2 text-center text-[11px] text-gray-500 tabular-nums">{x.nearMiss}</td>
-                        <td className="py-2 px-2 text-center text-[11px] tabular-nums"><span className={x.confirmed + x.implemented ? "text-emerald-600 font-semibold" : "text-gray-300"}>{x.confirmed + x.implemented}</span></td>
-                        <td className="py-2 px-2 text-center text-[11px] tabular-nums"><span className={x.proposed ? "text-amber-600" : "text-gray-300"}>{x.proposed}{x.byAi > 0 && <span className="text-[8px] font-bold text-violet-600 ml-0.5">AI</span>}</span></td>
+                        <td className="py-2 px-2 text-center text-[11px] tabular-nums"><span className={x.confirmed + x.implemented ? "text-[var(--cmp-text-success)] font-semibold" : "text-gray-300"}>{x.confirmed + x.implemented}</span></td>
+                        <td className="py-2 px-2 text-center text-[11px] tabular-nums"><span className={x.proposed ? "text-[var(--cmp-text-warning)]" : "text-gray-300"}>{x.proposed}{x.byAi > 0 && <span className="text-[8px] font-bold text-violet-600 ml-0.5">AI</span>}</span></td>
                         <td className="py-2 px-2 text-center">{x.govScore != null ? <span className={`text-[11px] font-bold tabular-nums ${tone(x.govScore)}`}>{x.govScore}</span> : <span className="text-[10px] text-gray-300">—</span>}</td>
-                        <td className="py-2 pr-4 pl-2">{x.practiceRisk ? <span className="text-[10px] font-bold text-rose-700 bg-rose-50 border border-rose-100 rounded px-1.5 py-0.5">practice risk</span> : <span className="text-[10px] text-gray-300">—</span>}</td>
+                        <td className="py-2 pr-4 pl-2">{x.practiceRisk ? <span className="text-[10px] font-bold text-[var(--cmp-text-error)] bg-[var(--cmp-surface-error)] border border-[var(--cmp-color-error)] rounded px-1.5 py-0.5">practice risk</span> : <span className="text-[10px] text-gray-300">—</span>}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -177,7 +177,7 @@ export default async function ClinicalIntelligencePage() {
                         <tr key={v.name} className="border-t border-gray-50">
                           <td className="py-2 pl-4 pr-2 text-[12px] font-medium text-gray-800">{v.name}</td>
                           <td className="py-2 px-2 text-center text-[12px] text-gray-700 tabular-nums">{v.events}</td>
-                          <td className="py-2 px-2 text-center text-[11px] tabular-nums"><span className={v.highCritical ? "text-rose-600 font-semibold" : "text-gray-400"}>{v.highCritical}</span></td>
+                          <td className="py-2 px-2 text-center text-[11px] tabular-nums"><span className={v.highCritical ? "text-[var(--cmp-text-error)] font-semibold" : "text-gray-400"}>{v.highCritical}</span></td>
                           <td className="py-2 px-2 text-center text-[11px] text-gray-500 tabular-nums">{v.nearMiss}</td>
                           <td className="py-2 pr-4 pl-2 text-center">{v.twinState != null ? <span className={`text-[12px] font-bold tabular-nums ${tone(v.twinState)}`}>{v.twinState}</span> : <span className="text-[10px] text-gray-300">no twin</span>}</td>
                         </tr>
@@ -191,7 +191,7 @@ export default async function ClinicalIntelligencePage() {
             <div className="bg-white rounded-xl border border-gray-100 p-4">
               <div className="flex items-center justify-between mb-3">
                 <p className="text-xs font-bold text-gray-500 uppercase tracking-widest">M&amp;M learning (§5.4)</p>
-                <Link href="/unit-manager/quality/mortality" className="text-[10px] text-emerald-600 hover:underline">M&amp;M centre →</Link>
+                <Link href="/unit-manager/quality/mortality" className="text-[10px] text-[var(--cmp-text-success)] hover:underline">M&amp;M centre →</Link>
               </div>
               {!d.mm.ready ? (
                 <p className="text-[12px] text-gray-400">M&amp;M register not available.</p>
@@ -200,7 +200,7 @@ export default async function ClinicalIntelligencePage() {
               ) : (
                 <div className="grid grid-cols-2 gap-2">
                   <div className="border border-gray-100 rounded-lg p-2.5"><p className="text-xl font-bold text-gray-900 tabular-nums">{d.mm.total}</p><p className="text-[10px] text-gray-500">cases ({d.mm.mortality} M · {d.mm.morbidity} B)</p></div>
-                  <div className="border border-gray-100 rounded-lg p-2.5"><p className="text-xl font-bold text-emerald-600 tabular-nums">{d.mm.closed}</p><p className="text-[10px] text-gray-500">closed through review</p></div>
+                  <div className="border border-gray-100 rounded-lg p-2.5"><p className="text-xl font-bold text-[var(--cmp-text-success)] tabular-nums">{d.mm.closed}</p><p className="text-[10px] text-gray-500">closed through review</p></div>
                 </div>
               )}
               <p className="text-[10px] text-gray-400 mt-3 leading-snug">Case reviews live in the M&amp;M centre; when a review drives a competency change, record it as a learning link so it counts toward proven closure.</p>

@@ -32,7 +32,7 @@ export default async function Assessment() {
           <h2 className="text-sm font-bold text-gray-900 mb-3">Top Assessment Types <span className="font-normal text-gray-400 text-xs">(avg score)</span></h2>
           {d.topTypes.every(t => t.pct === null) ? <p className="text-xs text-gray-400">No assessment activity yet.</p> : (
             <div className="flex flex-col gap-2">{d.topTypes.map(t => (
-              <div key={t.label} className="flex items-center gap-2 text-[11px]"><span className="text-gray-500 w-32">{t.label}</span>{t.pct !== null ? <><div className="flex-1 h-2 bg-gray-100 rounded-full overflow-hidden"><div className="h-full bg-orange-400 rounded-full" style={{ width: `${t.pct}%` }} /></div><span className="font-bold text-gray-700 w-9 text-right">{t.pct}%</span></> : <span className="flex-1 text-right text-[8px] font-bold uppercase text-gray-300">no data</span>}</div>
+              <div key={t.label} className="flex items-center gap-2 text-[11px]"><span className="text-gray-500 w-32">{t.label}</span>{t.pct !== null ? <><div className="flex-1 h-2 bg-gray-100 rounded-full overflow-hidden"><div className="h-full bg-[var(--cmp-color-warning)] rounded-full" style={{ width: `${t.pct}%` }} /></div><span className="font-bold text-gray-700 w-9 text-right">{t.pct}%</span></> : <span className="flex-1 text-right text-[8px] font-bold uppercase text-gray-300">no data</span>}</div>
             ))}</div>
           )}
           <Link href="/educator/analytics/assessment" className="inline-block mt-3 text-[11px] font-semibold text-purple-600 hover:underline">Full assessment analytics →</Link>

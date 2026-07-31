@@ -38,7 +38,7 @@ export default async function ShiftTeamAssignments({ searchParams }: { searchPar
     <>
       <div className="flex items-start justify-between gap-3 flex-wrap">
         <div className="flex items-center gap-2"><span className="text-xl">🧩</span><div><h1 className="text-2xl font-bold text-gray-900 tracking-tight">Shift Team Assignments</h1><p className="text-sm text-gray-500">Create, confirm and manage staff assignments for the current shift.</p></div></div>
-        <span className="text-xs font-semibold rounded-lg py-2 px-3 bg-emerald-600/90 text-white cursor-default" title="A formal publish/lock workflow is next-phase — assignments are already live in Current Shift">📣 Publish Assignments</span>
+        <span className="text-xs font-semibold rounded-lg py-2 px-3 bg-[var(--cmp-color-success)]/90 text-white cursor-default" title="A formal publish/lock workflow is next-phase — assignments are already live in Current Shift">📣 Publish Assignments</span>
       </div>
       <div className="flex gap-1 border-b border-gray-200 overflow-x-auto">
         {SUBTABS.map((t, i) => <span key={t} className={`shrink-0 text-xs px-3 py-2 border-b-2 -mb-px font-medium ${i === 0 ? "border-emerald-600 text-emerald-700" : "border-transparent text-gray-300"}`} title={i === 0 ? "" : "Next phase"}>{t}</span>)}
@@ -46,7 +46,7 @@ export default async function ShiftTeamAssignments({ searchParams }: { searchPar
     </>
   );
 
-  if (!d.ready) return <div className="space-y-4">{header}<div className="bg-amber-50 border border-amber-200 rounded-xl p-6"><p className="font-semibold text-amber-900">⚙️ No active shift / operational data</p><p className="text-sm text-amber-800 mt-1">Team assignment activates once an operational shift with patients is running.</p></div></div>;
+  if (!d.ready) return <div className="space-y-4">{header}<div className="bg-[var(--cmp-surface-warning)] border border-[var(--cmp-color-warning)] rounded-xl p-6"><p className="font-semibold text-amber-900">⚙️ No active shift / operational data</p><p className="text-sm text-amber-800 mt-1">Team assignment activates once an operational shift with patients is running.</p></div></div>;
 
   const k = d.kpis;
   return (
@@ -55,10 +55,10 @@ export default async function ShiftTeamAssignments({ searchParams }: { searchPar
 
       <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-3">
         <Kpi label="Staff on shift" value={`${k.staffOnShift}/${k.staffScheduled}`} sub={k.confirmedPct != null ? `${k.confirmedPct}% confirmed` : ""} icon="👥" />
-        <Kpi label="Patients to allocate" value={k.patientsToAllocate} sub="Need assignment" icon="🧑" tone={k.patientsToAllocate ? "text-rose-600" : "text-emerald-600"} />
-        <Kpi label="High acuity patients" value={k.highAcuity} sub={k.highAcuity === k.highAcuityAssigned ? "All assigned" : `${k.highAcuity - k.highAcuityAssigned} unassigned`} icon="❤️" tone={k.highAcuity && k.highAcuity !== k.highAcuityAssigned ? "text-rose-600" : undefined} />
-        <Kpi label="Assignment coverage" value={k.coverage != null ? `${k.coverage}%` : "—"} sub={k.coverage != null && k.coverage >= 90 ? "Good" : "Review"} icon="🛡️" tone={k.coverage != null && k.coverage >= 90 ? "text-emerald-600" : undefined} />
-        <Kpi label="Breaks pending" value={k.breaksPending} sub="Need cover" icon="☕" tone={k.breaksPending ? "text-amber-600" : undefined} />
+        <Kpi label="Patients to allocate" value={k.patientsToAllocate} sub="Need assignment" icon="🧑" tone={k.patientsToAllocate ? "text-[var(--cmp-text-error)]" : "text-[var(--cmp-text-success)]"} />
+        <Kpi label="High acuity patients" value={k.highAcuity} sub={k.highAcuity === k.highAcuityAssigned ? "All assigned" : `${k.highAcuity - k.highAcuityAssigned} unassigned`} icon="❤️" tone={k.highAcuity && k.highAcuity !== k.highAcuityAssigned ? "text-[var(--cmp-text-error)]" : undefined} />
+        <Kpi label="Assignment coverage" value={k.coverage != null ? `${k.coverage}%` : "—"} sub={k.coverage != null && k.coverage >= 90 ? "Good" : "Review"} icon="🛡️" tone={k.coverage != null && k.coverage >= 90 ? "text-[var(--cmp-text-success)]" : undefined} />
+        <Kpi label="Breaks pending" value={k.breaksPending} sub="Need cover" icon="☕" tone={k.breaksPending ? "text-[var(--cmp-text-warning)]" : undefined} />
         <Kpi label="Reassignments today" value={k.reassignToday} sub="Completed" icon="🔁" />
       </div>
 
@@ -68,8 +68,8 @@ export default async function ShiftTeamAssignments({ searchParams }: { searchPar
           <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
             <h3 className="text-sm font-bold text-gray-900">Live Assignment Board</h3>
             <div className="flex gap-1">
-              <Link href="/supervisor/team-assignments" className={`text-[10px] px-2 py-1 rounded-full ${!unassignedOnly ? "bg-emerald-600 text-white" : "bg-gray-100 text-gray-500"}`}>All</Link>
-              <Link href="/supervisor/team-assignments?unassigned=1" className={`text-[10px] px-2 py-1 rounded-full ${unassignedOnly ? "bg-emerald-600 text-white" : "bg-gray-100 text-gray-500"}`}>Unassigned only</Link>
+              <Link href="/supervisor/team-assignments" className={`text-[10px] px-2 py-1 rounded-full ${!unassignedOnly ? "bg-[var(--cmp-color-success)] text-white" : "bg-gray-100 text-gray-500"}`}>All</Link>
+              <Link href="/supervisor/team-assignments?unassigned=1" className={`text-[10px] px-2 py-1 rounded-full ${unassignedOnly ? "bg-[var(--cmp-color-success)] text-white" : "bg-gray-100 text-gray-500"}`}>Unassigned only</Link>
             </div>
           </div>
           <AssignmentBoard columns={d.columns} staff={d.staffPicker} shiftId={d.shiftId} showUnassignedOnly={unassignedOnly} />
@@ -79,8 +79,8 @@ export default async function ShiftTeamAssignments({ searchParams }: { searchPar
         <div className="space-y-4 xl:col-span-1">
           <div className={`${card} p-5`}>
             <h3 className="text-sm font-bold text-gray-900 mb-2">Unassigned</h3>
-            <div className="mb-2"><p className="text-[10px] font-semibold text-gray-500 uppercase mb-1">Staff ({d.unassignedStaff.length})</p>{d.unassignedStaff.length === 0 ? <p className="text-[11px] text-gray-400">All present staff assigned.</p> : <div className="space-y-1">{d.unassignedStaff.slice(0, 5).map((s: any) => (<div key={s.id} className="flex items-center justify-between text-[11px]"><span className="text-gray-700 truncate">{s.name} · {cap(s.role)}</span><span className="text-emerald-600 text-[10px]">Available</span></div>))}</div>}</div>
-            <div><p className="text-[10px] font-semibold text-gray-500 uppercase mb-1">Patients ({d.unassignedPatients.length})</p>{d.unassignedPatients.length === 0 ? <p className="text-[11px] text-gray-400">All patients assigned.</p> : <div className="space-y-1">{d.unassignedPatients.slice(0, 5).map((p: any) => (<div key={p.id} className="flex items-center justify-between text-[11px]"><span className="text-gray-700 truncate">{p.bed ? `Bed ${p.bed} · ` : ""}{p.label}</span><span className={p.acuityBadge === "High" ? "text-rose-600 text-[10px]" : "text-gray-400 text-[10px]"}>{p.acuityBadge}</span></div>))}</div>}</div>
+            <div className="mb-2"><p className="text-[10px] font-semibold text-gray-500 uppercase mb-1">Staff ({d.unassignedStaff.length})</p>{d.unassignedStaff.length === 0 ? <p className="text-[11px] text-gray-400">All present staff assigned.</p> : <div className="space-y-1">{d.unassignedStaff.slice(0, 5).map((s: any) => (<div key={s.id} className="flex items-center justify-between text-[11px]"><span className="text-gray-700 truncate">{s.name} · {cap(s.role)}</span><span className="text-[var(--cmp-text-success)] text-[10px]">Available</span></div>))}</div>}</div>
+            <div><p className="text-[10px] font-semibold text-gray-500 uppercase mb-1">Patients ({d.unassignedPatients.length})</p>{d.unassignedPatients.length === 0 ? <p className="text-[11px] text-gray-400">All patients assigned.</p> : <div className="space-y-1">{d.unassignedPatients.slice(0, 5).map((p: any) => (<div key={p.id} className="flex items-center justify-between text-[11px]"><span className="text-gray-700 truncate">{p.bed ? `Bed ${p.bed} · ` : ""}{p.label}</span><span className={p.acuityBadge === "High" ? "text-[var(--cmp-text-error)] text-[10px]" : "text-gray-400 text-[10px]"}>{p.acuityBadge}</span></div>))}</div>}</div>
           </div>
           <div className={`${card} p-5`}>
             <h3 className="text-sm font-bold text-gray-900 mb-2">Assignment tools</h3>
@@ -89,7 +89,7 @@ export default async function ShiftTeamAssignments({ searchParams }: { searchPar
           </div>
           <div className={`${card} p-5`}>
             <div className="flex items-center justify-between mb-2"><h3 className="text-sm font-bold text-gray-900">Assignment checklist</h3><span className="text-[10px] text-gray-400">{d.checklist.filter((c: any) => c.ok).length}/{d.checklist.length}</span></div>
-            <div className="space-y-1">{d.checklist.map((c: any) => (<div key={c.label} className="flex items-center gap-2 text-[11px]"><span className={c.ok ? "text-emerald-600" : "text-gray-300"}>{c.ok ? "✓" : "○"}</span><span className={c.ok ? "text-gray-700" : "text-gray-400"}>{c.label}</span></div>))}</div>
+            <div className="space-y-1">{d.checklist.map((c: any) => (<div key={c.label} className="flex items-center gap-2 text-[11px]"><span className={c.ok ? "text-[var(--cmp-text-success)]" : "text-gray-300"}>{c.ok ? "✓" : "○"}</span><span className={c.ok ? "text-gray-700" : "text-gray-400"}>{c.label}</span></div>))}</div>
           </div>
         </div>
       </div>
@@ -98,16 +98,16 @@ export default async function ShiftTeamAssignments({ searchParams }: { searchPar
         <div className={`${card} p-5`}>
           <h3 className="text-sm font-bold text-gray-900 mb-3">Staff on shift by role</h3>
           <table className="w-full text-xs"><thead><tr className="text-gray-400 text-left border-b border-gray-100"><th className="py-1.5 font-medium">Role</th><th className="py-1.5 font-medium text-right">On</th><th className="py-1.5 font-medium text-right">Req</th><th className="py-1.5 font-medium text-right">Cover</th><th className="py-1.5 font-medium text-right">Status</th></tr></thead>
-            <tbody>{d.staffByRole.map((r: any) => (<tr key={r.role} className="border-b border-gray-50"><td className="py-1.5 text-gray-700">{r.label}</td><td className="py-1.5 text-right text-gray-600">{r.on}</td><td className="py-1.5 text-right text-gray-600">{r.required}</td><td className="py-1.5 text-right font-semibold">{r.coverage != null ? `${r.coverage}%` : "—"}</td><td className="py-1.5 text-right"><span className={`text-[9px] px-1.5 py-0.5 rounded ${r.status === "Good" ? "bg-emerald-50 text-emerald-700" : r.status === "Fair" ? "bg-amber-50 text-amber-700" : "bg-rose-50 text-rose-700"}`}>{r.status}</span></td></tr>))}</tbody>
+            <tbody>{d.staffByRole.map((r: any) => (<tr key={r.role} className="border-b border-gray-50"><td className="py-1.5 text-gray-700">{r.label}</td><td className="py-1.5 text-right text-gray-600">{r.on}</td><td className="py-1.5 text-right text-gray-600">{r.required}</td><td className="py-1.5 text-right font-semibold">{r.coverage != null ? `${r.coverage}%` : "—"}</td><td className="py-1.5 text-right"><span className={`text-[9px] px-1.5 py-0.5 rounded ${r.status === "Good" ? "bg-[var(--cmp-surface-success)] text-emerald-700" : r.status === "Fair" ? "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]" : "bg-[var(--cmp-surface-error)] text-[var(--cmp-text-error)]"}`}>{r.status}</span></td></tr>))}</tbody>
           </table>
         </div>
         <div className={`${card} p-5`}>
           <h3 className="text-sm font-bold text-gray-900 mb-3">Breaks &amp; cover</h3>
-          {d.breaks.length === 0 ? <p className="text-sm text-gray-400">No breaks scheduled{" "}<Link href="/supervisor/workforce-operations#break" className="text-emerald-700 hover:underline">manage breaks →</Link></p> : <div className="space-y-1.5">{d.breaks.slice(0, 6).map((b: any, i: number) => (<div key={i} className="flex items-center justify-between text-xs"><span className="text-gray-700 truncate">{b.name}</span><span className="text-gray-500">{b.at}</span><span className={`text-[9px] px-1.5 py-0.5 rounded ${b.status === "Needs cover" ? "bg-amber-50 text-amber-700" : b.status === "On break" ? "bg-blue-50 text-blue-700" : "bg-gray-100 text-gray-500"}`}>{b.status}</span></div>))}</div>}
+          {d.breaks.length === 0 ? <p className="text-sm text-gray-400">No breaks scheduled{" "}<Link href="/supervisor/workforce-operations#break" className="text-emerald-700 hover:underline">manage breaks →</Link></p> : <div className="space-y-1.5">{d.breaks.slice(0, 6).map((b: any, i: number) => (<div key={i} className="flex items-center justify-between text-xs"><span className="text-gray-700 truncate">{b.name}</span><span className="text-gray-500">{b.at}</span><span className={`text-[9px] px-1.5 py-0.5 rounded ${b.status === "Needs cover" ? "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]" : b.status === "On break" ? "bg-[var(--cmp-surface-information)] text-blue-700" : "bg-gray-100 text-gray-500"}`}>{b.status}</span></div>))}</div>}
         </div>
         <div className={`${card} p-5`}>
           <h3 className="text-sm font-bold text-gray-900 mb-3">Recent reassignments</h3>
-          {d.reassignments.length === 0 ? <p className="text-sm text-gray-400">No assignments recorded yet.</p> : <div className="space-y-1.5">{d.reassignments.slice(0, 6).map((r: any, i: number) => (<div key={i} className="text-xs"><div className="flex items-center justify-between"><span className="text-gray-800 font-medium truncate">{r.patient}</span><span className="text-gray-400">{r.at}</span></div><p className="text-[11px] text-gray-500">By {r.by}{r.override && <span className="text-amber-600"> · override</span>}</p></div>))}</div>}
+          {d.reassignments.length === 0 ? <p className="text-sm text-gray-400">No assignments recorded yet.</p> : <div className="space-y-1.5">{d.reassignments.slice(0, 6).map((r: any, i: number) => (<div key={i} className="text-xs"><div className="flex items-center justify-between"><span className="text-gray-800 font-medium truncate">{r.patient}</span><span className="text-gray-400">{r.at}</span></div><p className="text-[11px] text-gray-500">By {r.by}{r.override && <span className="text-[var(--cmp-text-warning)]"> · override</span>}</p></div>))}</div>}
         </div>
       </div>
 

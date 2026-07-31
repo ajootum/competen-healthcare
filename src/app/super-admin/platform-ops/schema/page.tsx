@@ -49,7 +49,7 @@ export default async function SchemaPage() {
       <div className="grid grid-cols-3 gap-3">
         <Stat label="Object Types" value={OBJECT_SCHEMAS.length} sub="authorable in the Studio" />
         <Stat label="Registry Objects" value={totalTracked} sub="conform to these schemas" />
-        <Stat label="Enum Vocabularies" value={enumCount} tone="text-sky-600" sub="controlled value sets" />
+        <Stat label="Enum Vocabularies" value={enumCount} tone="text-[var(--cmp-text-information)]" sub="controlled value sets" />
       </div>
 
       <SchemaExplorer schemas={OBJECT_SCHEMAS} counts={counts} />

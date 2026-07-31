@@ -25,7 +25,7 @@ const EFFECTIVENESS = ["effective", "partially_effective", "ineffective", "not_t
 const SCALE = [1, 2, 3, 4, 5];
 
 const band = (s: number) => (s >= 16 ? "critical" : s >= 10 ? "high" : s >= 5 ? "medium" : "low");
-const BAND_TONE: Record<string, string> = { low: "bg-green-50 text-green-700", medium: "bg-amber-50 text-amber-700", high: "bg-orange-50 text-orange-700", critical: "bg-rose-50 text-rose-700" };
+const BAND_TONE: Record<string, string> = { low: "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]", medium: "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]", high: "bg-[var(--cmp-surface-warning)] text-orange-700", critical: "bg-[var(--cmp-surface-error)] text-[var(--cmp-text-error)]" };
 
 type Picker = { id: string; label: string };
 
@@ -94,7 +94,7 @@ export default function RiskCenter({ risks, controls }: { risks: Picker[]; contr
     <div className="bg-white rounded-xl border border-gray-200">
       <div className="flex items-center gap-2 p-3 border-b border-gray-100 flex-wrap">
         <h2 className="font-semibold text-gray-900 text-[15px] mr-auto">Risk Center</h2>
-        {msg && <span className={`text-xs rounded-lg px-2.5 py-1 ${msg.k === "ok" ? "bg-green-50 text-green-800" : "bg-amber-50 text-amber-800"}`}>{msg.t}</span>}
+        {msg && <span className={`text-xs rounded-lg px-2.5 py-1 ${msg.k === "ok" ? "bg-[var(--cmp-surface-success)] text-green-800" : "bg-[var(--cmp-surface-warning)] text-amber-800"}`}>{msg.t}</span>}
         <div className="flex gap-1 flex-wrap">
           {TABS.map(b => (
             <button key={b.key} onClick={() => switchTab(b.key)} className={`text-xs font-medium rounded-lg px-2.5 py-1.5 border ${tab === b.key ? "bg-teal-50 border-teal-300 text-teal-700" : "border-gray-200 text-gray-500 hover:bg-gray-50"}`}>{b.icon} {b.label}</button>
@@ -142,7 +142,7 @@ export default function RiskCenter({ risks, controls }: { risks: Picker[]; contr
             </div>
             <div><label className={label}>Review date</label><input type="date" value={form.review_date ?? ""} onChange={set("review_date")} className={input} /></div>
             <div className="sm:col-span-2"><label className={label}>Mitigation update</label><textarea value={form.mitigation ?? ""} onChange={set("mitigation")} rows={2} className={input} /></div>
-            {risks.length === 0 && <p className="sm:col-span-2 text-[11px] text-amber-600">No open risks yet — register one first.</p>}
+            {risks.length === 0 && <p className="sm:col-span-2 text-[11px] text-[var(--cmp-text-warning)]">No open risks yet — register one first.</p>}
           </div>
         )}
 
@@ -151,7 +151,7 @@ export default function RiskCenter({ risks, controls }: { risks: Picker[]; contr
             <div><label className={label}>Control *</label><select value={form.control_id ?? ""} onChange={set("control_id")} className={input}><option value="">— Select control —</option>{controls.map(ct => <option key={ct.id} value={ct.id}>{ct.label}</option>)}</select></div>
             <div><label className={label}>Effectiveness *</label><select value={form.effectiveness ?? ""} onChange={set("effectiveness")} className={input}><option value="">— Select rating —</option>{EFFECTIVENESS.map(e => <option key={e} value={e}>{e.replace(/_/g, " ")}</option>)}</select></div>
             <div><label className={label}>Test date</label><input type="date" value={form.last_tested ?? ""} onChange={set("last_tested")} className={input} /></div>
-            {controls.length === 0 && <p className="sm:col-span-2 text-[11px] text-amber-600">No controls in the library yet — add one first.</p>}
+            {controls.length === 0 && <p className="sm:col-span-2 text-[11px] text-[var(--cmp-text-warning)]">No controls in the library yet — add one first.</p>}
             <p className="sm:col-span-2 text-[11px] text-gray-400">Rating a control records the test outcome (defaults to today when no date given).</p>
           </div>
         )}

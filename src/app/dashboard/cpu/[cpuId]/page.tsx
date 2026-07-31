@@ -139,8 +139,8 @@ export default async function CpuWorkspacePage({ params }: { params: Promise<{ c
   const passing = cards.filter(c => c.progressPct === 100).length;
   const progress = total ? Math.round((passing / total) * 100) : 0;
   const started = (decisions ?? []).length > 0 || (scores ?? []).some(s => compIds.includes(s.competency_id)) || (attempts ?? []).length > 0;
-  const status = progress === 100 ? { label: "Completed", cls: "text-green-600" }
-    : started ? { label: "In Progress", cls: "text-amber-600" }
+  const status = progress === 100 ? { label: "Completed", cls: "text-[var(--cmp-text-success)]" }
+    : started ? { label: "In Progress", cls: "text-[var(--cmp-text-warning)]" }
     : { label: "Not Started", cls: "text-gray-400" };
   const expiries = [...latestDecision.values()].map(d => d.expiry).filter(Boolean) as string[];
   const nextReassessment = expiries.length ? [...expiries].sort()[0] : null;
@@ -309,7 +309,7 @@ export default async function CpuWorkspacePage({ params }: { params: Promise<{ c
                   <div key={m.method} className="flex items-center gap-3">
                     <span className="text-xs text-gray-700 w-40 truncate">{m.label} <span className="text-gray-300">{m.weight}%</span></span>
                     <div className="flex-1 h-2 bg-gray-100 rounded-full overflow-hidden">
-                      <div className={`h-full rounded-full ${m.pct >= 100 ? "bg-green-500" : "bg-teal-500"}`} style={{ width: `${Math.max(m.pct, 2)}%` }} />
+                      <div className={`h-full rounded-full ${m.pct >= 100 ? "bg-[var(--cmp-color-success)]" : "bg-teal-500"}`} style={{ width: `${Math.max(m.pct, 2)}%` }} />
                     </div>
                     <span className="text-[10px] text-gray-400 w-40 truncate">{m.detail}</span>
                     {m.href && m.action
@@ -352,7 +352,7 @@ export default async function CpuWorkspacePage({ params }: { params: Promise<{ c
               {milestones.map((m, i) => (
                 <div key={m.label} className="flex gap-2.5">
                   <div className="flex flex-col items-center">
-                    <span className={`w-4 h-4 rounded-full text-[9px] flex items-center justify-center ${m.done ? "bg-green-500 text-white" : "bg-gray-100 text-gray-400"}`}>
+                    <span className={`w-4 h-4 rounded-full text-[9px] flex items-center justify-center ${m.done ? "bg-[var(--cmp-color-success)] text-white" : "bg-gray-100 text-gray-400"}`}>
                       {m.done ? "✓" : i + 1}
                     </span>
                     {i < milestones.length - 1 && <span className="w-0.5 flex-1 bg-gray-100 my-0.5" />}

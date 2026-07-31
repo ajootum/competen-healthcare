@@ -43,14 +43,14 @@ export default async function CampaignsPage() {
       </div>
 
       {!q.provisioned ? (
-        <div className="bg-amber-50 border border-amber-100 rounded-xl p-4"><p className="text-[13px] text-amber-900">Campaigns aren&apos;t provisioned — apply migration 144 (<code className="text-[11px]">cdp_campaigns</code>).</p></div>
+        <div className="bg-[var(--cmp-surface-warning)] border border-[var(--cmp-color-warning)] rounded-xl p-4"><p className="text-[13px] text-amber-900">Campaigns aren&apos;t provisioned — apply migration 144 (<code className="text-[11px]">cdp_campaigns</code>).</p></div>
       ) : (
         <>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-5">
             {[
               { label: "Campaigns", value: q.kpis.total, tone: "text-gray-900" },
               { label: "Active", value: q.kpis.active, tone: "text-teal-600" },
-              { label: "Mandatory open", value: q.kpis.mandatory, tone: "text-rose-600" },
+              { label: "Mandatory open", value: q.kpis.mandatory, tone: "text-[var(--cmp-text-error)]" },
               { label: "Staff reach", value: q.kpis.reach, tone: "text-gray-900" },
             ].map(k => (
               <div key={k.label} className="bg-white rounded-xl border border-gray-100 p-3.5">

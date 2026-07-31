@@ -42,9 +42,9 @@ type Props = {
 const DB_METHODS = ["direct_observation", "simulation", "osce", "knowledge", "concurrent_audit", "retrospective_audit", "logbook"] as const;
 
 const RISK_UI = {
-  high:   { label: "High",   cls: "bg-red-100 text-red-700" },
-  medium: { label: "Medium", cls: "bg-amber-100 text-amber-700" },
-  low:    { label: "Low",    cls: "bg-green-100 text-green-700" },
+  high:   { label: "High",   cls: "bg-[var(--cmp-surface-critical)] text-[var(--cmp-text-critical)]" },
+  medium: { label: "Medium", cls: "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]" },
+  low:    { label: "Low",    cls: "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]" },
 };
 
 const STEPS: { key: string; label: string; auto?: boolean; hint: string }[] = [
@@ -378,7 +378,7 @@ export default function ConductCockpit({
           <span className="text-[11px] text-gray-500" suppressHydrationWarning>
             📅 {new Date().toLocaleDateString()}{session ? ` · scheduled ${new Date(session.at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}` : ""}
           </span>
-          <span className={`text-[10px] font-bold px-2 py-0.5 rounded ${result ? "bg-green-100 text-green-700" : "bg-blue-100 text-blue-700"}`}>
+          <span className={`text-[10px] font-bold px-2 py-0.5 rounded ${result ? "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]" : "bg-[var(--cmp-surface-information)] text-blue-700"}`}>
             {result ? "Submitted" : "In Progress"}
           </span>
           <span className="flex-1" />
@@ -390,7 +390,7 @@ export default function ConductCockpit({
                 className="w-8 h-8 rounded-lg border border-gray-200 text-xs hover:bg-gray-100">{paused ? "▶" : "⏸"}</button>
               <button onClick={() => { setPaused(true); document.getElementById("decision-band")?.scrollIntoView({ behavior: "smooth" }); }}
                 title="End observation and go to decision"
-                className="w-8 h-8 rounded-lg bg-red-50 border border-red-200 text-red-600 text-xs hover:bg-red-100">⏹</button>
+                className="w-8 h-8 rounded-lg bg-[var(--cmp-surface-critical)] border border-[var(--cmp-color-critical)] text-[var(--cmp-text-critical)] text-xs hover:bg-[var(--cmp-surface-critical)]">⏹</button>
             </>
           )}
         </div>
@@ -411,7 +411,7 @@ export default function ConductCockpit({
                     className={`w-full flex items-center gap-2 px-2 py-1.5 rounded-lg text-left text-[12px] transition-colors ${
                       done ? "text-gray-900" : "text-gray-500"} ${!s.auto && !result ? "hover:bg-gray-50 cursor-pointer" : "cursor-default"}`}>
                     <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[9px] font-bold shrink-0 ${
-                      done ? "bg-green-500 text-white" : locked ? "bg-gray-100 text-gray-400" : "bg-gray-100 text-gray-500 border border-gray-200"}`}>
+                      done ? "bg-[var(--cmp-color-success)] text-white" : locked ? "bg-gray-100 text-gray-400" : "bg-gray-100 text-gray-500 border border-gray-200"}`}>
                       {done ? "✓" : locked ? "🔒" : i + 1}
                     </span>
                     <span className="flex-1">{s.label}</span>
@@ -424,7 +424,7 @@ export default function ConductCockpit({
           <div className="mt-3 pt-3 border-t border-gray-100">
             <p className="text-[11px] text-gray-500 mb-1.5">{doneCount} / {STEPS.length} completed</p>
             <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
-              <div className="h-full bg-green-500 rounded-full transition-all" style={{ width: `${Math.round(doneCount / STEPS.length * 100)}%` }} />
+              <div className="h-full bg-[var(--cmp-color-success)] rounded-full transition-all" style={{ width: `${Math.round(doneCount / STEPS.length * 100)}%` }} />
             </div>
             <p className="text-[9px] text-gray-400 mt-2">Validation is completed by an educator after submission.</p>
           </div>
@@ -502,7 +502,7 @@ export default function ConductCockpit({
                               ))}
                               {sc !== undefined && !result && (
                                 <button onClick={() => setScores(prev => { const n = { ...prev }; delete n[c.id]; return n; })}
-                                  className="w-7 h-7 rounded text-xs text-gray-400 hover:text-red-500 border border-transparent hover:border-red-200" title="Clear score">×</button>
+                                  className="w-7 h-7 rounded text-xs text-gray-400 hover:text-red-500 border border-transparent hover:border-[var(--cmp-color-critical)]" title="Clear score">×</button>
                               )}
                             </span>
                           </div>
@@ -532,7 +532,7 @@ export default function ConductCockpit({
                                       <li key={it.id} className="flex items-center gap-2 flex-wrap">
                                         <span className="text-xs text-gray-700 flex-1 min-w-[160px]">
                                           {it.item}
-                                          {it.critical && <span className="ml-1.5 text-[8px] font-bold text-red-600 bg-red-50 border border-red-200 rounded px-1 py-0.5 uppercase">Critical</span>}
+                                          {it.critical && <span className="ml-1.5 text-[8px] font-bold text-[var(--cmp-text-critical)] bg-[var(--cmp-surface-critical)] border border-[var(--cmp-color-critical)] rounded px-1 py-0.5 uppercase">Critical</span>}
                                         </span>
                                         <span className="flex gap-1">
                                           {(["yes", "no", "na"] as const).map(v => (
@@ -540,8 +540,8 @@ export default function ConductCockpit({
                                               onClick={() => setChecklist(prev => ({ ...prev, [it.id]: prev[it.id] === v ? undefined : v } as Record<string, "yes" | "no" | "na">))}
                                               className={`text-[9px] font-bold uppercase px-2 py-1 rounded border transition-colors ${
                                                 checklist[it.id] === v
-                                                  ? v === "yes" ? "bg-green-500 text-white border-green-500"
-                                                    : v === "no" ? "bg-red-500 text-white border-red-500"
+                                                  ? v === "yes" ? "bg-[var(--cmp-color-success)] text-white border-green-500"
+                                                    : v === "no" ? "bg-[var(--cmp-color-critical)] text-white border-red-500"
                                                     : "bg-gray-400 text-white border-gray-400"
                                                   : "bg-white text-gray-400 border-gray-200 hover:border-gray-400"}`}>
                                               {v === "na" ? "N/A" : v}
@@ -609,7 +609,7 @@ export default function ConductCockpit({
               <div className="flex items-center justify-between"><span className="text-gray-500">Competencies scored</span><span className="font-bold text-gray-900">{scoredCount}/{totalComps}</span></div>
               <div className="flex items-center justify-between"><span className="text-gray-500">Average score</span><span className="font-bold text-gray-900">{avg != null ? avg.toFixed(1) : "—"}</span></div>
               <div className="flex items-center justify-between"><span className="text-gray-500">Critical items unconfirmed</span>
-                <span className={`font-bold ${criticalRemaining > 0 ? "text-red-600" : "text-gray-900"}`}>{criticalRemaining}</span></div>
+                <span className={`font-bold ${criticalRemaining > 0 ? "text-[var(--cmp-text-critical)]" : "text-gray-900"}`}>{criticalRemaining}</span></div>
               <div className="flex items-center justify-between"><span className="text-gray-500">Evidence files (learner + session)</span><span className="font-bold text-gray-900">{evidenceTotal + uploads.length}</span></div>
             </div>
           </div>
@@ -621,7 +621,7 @@ export default function ConductCockpit({
               {riskNotes.map((n, i) => <li key={`r${i}`} className="flex gap-1.5"><span>🚩</span>{n}</li>)}
               {focusAreas.map((n, i) => <li key={`f${i}`} className="flex gap-1.5"><span>🎯</span>Previously not passed: {n}</li>)}
               {expiringSoon.map((n, i) => <li key={`e${i}`} className="flex gap-1.5"><span>⏳</span>Renewal due soon: {n}</li>)}
-              {criticalRemaining > 0 && <li className="flex gap-1.5 text-red-600"><span>⚠️</span>{criticalRemaining} critical checklist item{criticalRemaining === 1 ? "" : "s"} not yet confirmed</li>}
+              {criticalRemaining > 0 && <li className="flex gap-1.5 text-[var(--cmp-text-critical)]"><span>⚠️</span>{criticalRemaining} critical checklist item{criticalRemaining === 1 ? "" : "s"} not yet confirmed</li>}
               {riskNotes.length + focusAreas.length + expiringSoon.length === 0 && criticalRemaining === 0 && (
                 <li className="text-gray-400">No risk signals on this learner&apos;s decision record.</li>
               )}
@@ -631,7 +631,7 @@ export default function ConductCockpit({
                 className="w-full text-[11px] font-bold text-white bg-indigo-600 rounded-lg px-3 py-2 hover:bg-indigo-700 disabled:opacity-50 transition-colors">
                 {aiBusy ? "Thinking…" : openComp ? "✨ AI suggestions for this competency" : "✨ Get AI suggestions"}
               </button>
-              {aiError && <p className="text-[10px] text-red-600 mt-1.5">{aiError}</p>}
+              {aiError && <p className="text-[10px] text-[var(--cmp-text-critical)] mt-1.5">{aiError}</p>}
               {aiText && (
                 <div className="mt-2 bg-indigo-50/60 border border-indigo-100 rounded-lg p-2.5">
                   <p className="text-[11px] text-gray-700 whitespace-pre-wrap">{aiText}</p>
@@ -688,11 +688,11 @@ export default function ConductCockpit({
               className="mt-1 w-full text-[11px] font-semibold text-indigo-600 border border-indigo-200 rounded-lg px-3 py-2 hover:bg-indigo-50 disabled:opacity-50 transition-colors">
               {msgBusy ? "Sending…" : "Send message"}
             </button>
-            {msgSent && <p className="text-[10px] text-green-600 mt-1">✓ {msgSent}</p>}
+            {msgSent && <p className="text-[10px] text-[var(--cmp-text-success)] mt-1">✓ {msgSent}</p>}
 
             <div className="mt-3 pt-3 border-t border-gray-100">
               {reqSent ? (
-                <p className="text-xs text-green-700 bg-green-50 border border-green-200 rounded-lg px-3 py-2">✓ Evidence request sent to {nurseName}.</p>
+                <p className="text-xs text-[var(--cmp-text-success)] bg-[var(--cmp-surface-success)] border border-[var(--cmp-color-success)] rounded-lg px-3 py-2">✓ Evidence request sent to {nurseName}.</p>
               ) : (
                 <div className="space-y-2">
                   <input value={reqNote} onChange={e => setReqNote(e.target.value)} placeholder="What evidence do you need? (optional)"
@@ -718,7 +718,7 @@ export default function ConductCockpit({
               {RECOMMENDATION_OPTS.map(o => (
                 <label key={o.key} className={`flex items-center gap-2 px-2.5 py-1.5 rounded-lg border cursor-pointer text-xs transition-colors ${
                   recommendation === o.key
-                    ? o.danger ? "border-red-400 bg-red-50 text-red-700 font-semibold" : "border-indigo-400 bg-indigo-50 text-indigo-800 font-semibold"
+                    ? o.danger ? "border-red-400 bg-[var(--cmp-surface-critical)] text-[var(--cmp-text-critical)] font-semibold" : "border-indigo-400 bg-indigo-50 text-indigo-800 font-semibold"
                     : "border-gray-100 text-gray-600 hover:border-gray-300"}`}>
                   <input type="radio" name="recommendation" checked={recommendation === o.key} disabled={!!result}
                     onChange={() => setRecommendation(o.key)} className="accent-indigo-600" />
@@ -786,7 +786,7 @@ export default function ConductCockpit({
               I attest that this assessment reflects my own direct professional judgement of {nurseName}&apos;s practice.
             </label>
             <p className="text-[9px] text-gray-400 mt-1.5">Recorded with your name, signature and timestamp in the session record and audit trail.</p>
-            {error && <p className="text-xs text-red-600 mt-2">{error}</p>}
+            {error && <p className="text-xs text-[var(--cmp-text-critical)] mt-2">{error}</p>}
             <div className="flex gap-2 mt-3">
               <button onClick={saveDraft} disabled={!!result}
                 className="flex-1 text-xs font-semibold text-gray-600 border border-gray-200 rounded-lg px-3 py-2.5 hover:bg-gray-50 disabled:opacity-40 transition-colors">
@@ -803,7 +803,7 @@ export default function ConductCockpit({
             <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-2.5">Automatic Actions on Submit</p>
             {result ? (
               <>
-                <ul className="space-y-1.5 text-xs text-green-700">
+                <ul className="space-y-1.5 text-xs text-[var(--cmp-text-success)]">
                   {result.actions.map((a, i) => <li key={i} className="flex gap-1.5"><span>✅</span>{a}</li>)}
                 </ul>
                 <div className="flex gap-2 mt-3">

@@ -49,7 +49,7 @@ export default async function MigrationPage() {
     </>
   );
 
-  if (notReady) return <div className="space-y-5 max-w-6xl">{header}<div className="bg-amber-50 border border-amber-200 rounded-xl p-6"><p className="font-semibold text-amber-900">⚙️ Not provisioned</p><p className="text-sm text-amber-800 mt-1">Apply migration 098 (migration jobs), then export or import bundles here.</p></div></div>;
+  if (notReady) return <div className="space-y-5 max-w-6xl">{header}<div className="bg-[var(--cmp-surface-warning)] border border-[var(--cmp-color-warning)] rounded-xl p-6"><p className="font-semibold text-amber-900">⚙️ Not provisioned</p><p className="text-sm text-amber-800 mt-1">Apply migration 098 (migration jobs), then export or import bundles here.</p></div></div>;
 
   return (
     <div className="space-y-5 max-w-6xl">
@@ -57,7 +57,7 @@ export default async function MigrationPage() {
       <div className="grid grid-cols-3 gap-3">
         <Stat label="Bundleable Objects" value={(objects ?? []).length} sub="in the registry" />
         <Stat label="Imports" value={imports} tone="text-indigo-600" sub="applied to this environment" />
-        <Stat label="Exports" value={exports} tone="text-sky-600" sub="bundles built" />
+        <Stat label="Exports" value={exports} tone="text-[var(--cmp-text-information)]" sub="bundles built" />
       </div>
       <MigrationToolkit objects={(objects ?? []) as any[]} jobs={listJ} />
       <p className="text-[11px] text-gray-400">Exports close over dependencies so bundles are self-contained; imports validate schema + prerequisites, apply in dependency order, snapshot every touched object and are fully rollback-capable. Cross-region transfer, encrypted transfer and cryptographic signing (NCP-020 §6/§12) are next-phase.</p>

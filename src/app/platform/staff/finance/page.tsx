@@ -23,14 +23,14 @@ export default async function FinancePage() {
         <p className="text-sm text-gray-500 mt-1">Subscription economics — MRR, plan mix and billing accounts across all tenants.</p>
       </div>
       {!f.ready ? (
-        <div className="bg-amber-50 border border-amber-200 rounded-xl p-5 text-sm text-amber-700">Apply migrations <code className="font-mono text-xs">040–043</code> to activate finance metrics.</div>
+        <div className="bg-[var(--cmp-surface-warning)] border border-[var(--cmp-color-warning)] rounded-xl p-5 text-sm text-[var(--cmp-text-warning)]">Apply migrations <code className="font-mono text-xs">040–043</code> to activate finance metrics.</div>
       ) : (
         <>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
             <div className={card}><div className="text-3xl font-bold tabular-nums text-gray-900">{money(f.mrr, f.currency)}</div><div className="text-xs text-gray-500 mt-1">Monthly recurring revenue</div></div>
-            <div className={card}><div className="text-3xl font-bold tabular-nums text-green-600">{f.activeSubs}</div><div className="text-xs text-gray-500 mt-1">Active subscriptions</div></div>
-            <div className={card}><div className="text-3xl font-bold tabular-nums text-blue-600">{f.trialing}</div><div className="text-xs text-gray-500 mt-1">Trials</div></div>
-            <div className={card}><div className={`text-3xl font-bold tabular-nums ${f.unsubscribed ? "text-amber-600" : "text-gray-900"}`}>{f.unsubscribed}</div><div className="text-xs text-gray-500 mt-1">Without a plan</div></div>
+            <div className={card}><div className="text-3xl font-bold tabular-nums text-[var(--cmp-text-success)]">{f.activeSubs}</div><div className="text-xs text-gray-500 mt-1">Active subscriptions</div></div>
+            <div className={card}><div className="text-3xl font-bold tabular-nums text-[var(--cmp-text-information)]">{f.trialing}</div><div className="text-xs text-gray-500 mt-1">Trials</div></div>
+            <div className={card}><div className={`text-3xl font-bold tabular-nums ${f.unsubscribed ? "text-[var(--cmp-text-warning)]" : "text-gray-900"}`}>{f.unsubscribed}</div><div className="text-xs text-gray-500 mt-1">Without a plan</div></div>
           </div>
           <div className={card}>
             <h3 className="font-semibold text-gray-900 mb-3">Plan mix</h3>

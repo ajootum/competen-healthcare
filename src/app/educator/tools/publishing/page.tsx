@@ -68,7 +68,7 @@ export default async function PublishingToolsPage() {
       </div>
 
       {d.capped && (
-        <p className="text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mb-3">
+        <p className="text-[11px] text-[var(--cmp-text-warning)] bg-[var(--cmp-surface-warning)] border border-[var(--cmp-color-warning)] rounded-lg px-3 py-2 mb-3">
           Aggregating the most recent {ROW_CAP.toLocaleString()} records per store — the status counts above are a floor, not a full total.
         </p>
       )}

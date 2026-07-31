@@ -49,13 +49,13 @@ export default function SocConsole({ users }: { users: Picker[] }) {
     <div className={cardClass}>
       <div className="flex items-center gap-2 mb-3 flex-wrap">
         <h2 className="font-semibold text-gray-900 text-[15px] mr-auto">Response &amp; Containment</h2>
-        {msg && <span className={`text-xs rounded-lg px-2.5 py-1 ${msg.k === "ok" ? "bg-green-50 text-green-800" : "bg-amber-50 text-amber-800"}`}>{msg.t}</span>}
+        {msg && <span className={`text-xs rounded-lg px-2.5 py-1 ${msg.k === "ok" ? "bg-[var(--cmp-surface-success)] text-green-800" : "bg-[var(--cmp-surface-warning)] text-amber-800"}`}>{msg.t}</span>}
       </div>
       <div className="grid sm:grid-cols-3 gap-3 items-end">
         <div><label className={label}>Affected identity</label><select value={userId} onChange={e => { setUserId(e.target.value); setConfirming(false); }} className={input}><option value="">— Select user —</option>{users.map(u => <option key={u.id} value={u.id}>{u.label}</option>)}</select></div>
         <div><label className={label}>Response action</label><select value={action} onChange={e => { setAction(e.target.value); setConfirming(false); }} className={input}><option value="">— Select response —</option>{Object.entries(RESPONSES).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select></div>
         <div>
-          <button onClick={run} disabled={busy} className={`w-full text-sm font-semibold text-white rounded-lg px-4 py-2 disabled:opacity-60 ${confirming ? "bg-rose-600 hover:bg-rose-700" : "bg-teal-600 hover:bg-teal-700"}`}>
+          <button onClick={run} disabled={busy} className={`w-full text-sm font-semibold text-white rounded-lg px-4 py-2 disabled:opacity-60 ${confirming ? "bg-[var(--cmp-color-error)] hover:bg-rose-700" : "bg-teal-600 hover:bg-teal-700"}`}>
             {busy ? "Applying…" : confirming ? "Confirm containment" : "Apply response"}
           </button>
         </div>

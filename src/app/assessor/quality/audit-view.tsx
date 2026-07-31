@@ -89,7 +89,7 @@ export default async function AuditTypeView({ type, preselect }: {
           preselect={preselect}
         />
       ) : (
-        <div className="bg-amber-50 border border-amber-200 rounded-xl p-5 text-sm text-amber-800 mb-5">
+        <div className="bg-[var(--cmp-surface-warning)] border border-[var(--cmp-color-warning)] rounded-xl p-5 text-sm text-amber-800 mb-5">
           No competency has a governed checklist yet — audit criteria come from competency checklists
           (built in Studio), so add checklist items to a competency first.
         </div>
@@ -115,7 +115,7 @@ export default async function AuditTypeView({ type, preselect }: {
                 </div>
                 <span className="text-[10px] text-gray-400">{a.items_met}✓ {a.items_not_met}✗</span>
                 {a.compliance_pct != null && (
-                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded ${Number(a.compliance_pct) >= 85 ? "bg-green-100 text-green-700" : Number(a.compliance_pct) >= 60 ? "bg-amber-100 text-amber-700" : "bg-red-100 text-red-600"}`}>
+                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded ${Number(a.compliance_pct) >= 85 ? "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]" : Number(a.compliance_pct) >= 60 ? "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]" : "bg-[var(--cmp-surface-critical)] text-[var(--cmp-text-critical)]"}`}>
                     {Number(a.compliance_pct)}%
                   </span>
                 )}

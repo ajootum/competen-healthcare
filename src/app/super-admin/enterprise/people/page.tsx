@@ -34,11 +34,11 @@ export default async function PeopleModule() {
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
         {[
           { label: "People", n: summary.total, tone: "text-gray-900" },
-          { label: "Active", n: summary.active, tone: "text-green-600" },
-          { label: "Suspended", n: summary.suspended, tone: summary.suspended ? "text-rose-600" : "text-gray-300" },
+          { label: "Active", n: summary.active, tone: "text-[var(--cmp-text-success)]" },
+          { label: "Suspended", n: summary.suspended, tone: summary.suspended ? "text-[var(--cmp-text-error)]" : "text-gray-300" },
           { label: "Leavers", n: summary.leavers, tone: summary.leavers ? "text-gray-500" : "text-gray-300" },
           { label: "Positions", n: summary.positions, tone: "text-violet-600" },
-          { label: "No position", n: summary.noPosition, tone: summary.noPosition ? "text-amber-600" : "text-gray-300" },
+          { label: "No position", n: summary.noPosition, tone: summary.noPosition ? "text-[var(--cmp-text-warning)]" : "text-gray-300" },
         ].map(k => (
           <div key={k.label} className="bg-white rounded-xl border border-gray-200 p-4">
             <p className={`text-2xl font-bold tabular-nums ${k.tone}`}>{k.n}</p>

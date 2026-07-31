@@ -7,7 +7,7 @@ import { useRouter } from "next/navigation";
 // responsibility now), decline with a mandatory reason (returns to the
 // supervisor), or accept an incoming transfer (ownership changes on accept).
 
-const btn = "px-3 py-1.5 rounded-lg bg-emerald-600 text-white text-xs font-medium hover:bg-emerald-700 disabled:opacity-50";
+const btn = "px-3 py-1.5 rounded-lg bg-[var(--cmp-color-success)] text-white text-xs font-medium hover:bg-emerald-700 disabled:opacity-50";
 const btnGhost = "px-2.5 py-1 rounded-lg border border-gray-300 text-xs text-gray-700 hover:bg-gray-50 disabled:opacity-50";
 const input = "border border-gray-300 rounded-lg px-2.5 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-emerald-500/40";
 
@@ -33,7 +33,7 @@ export function AssignmentActions({ id }: { id: string }) {
 
   return (
     <div className="mt-1.5">
-      {err && <p className="text-xs text-amber-700 mb-1">{err}</p>}
+      {err && <p className="text-xs text-[var(--cmp-text-warning)] mb-1">{err}</p>}
       {declining ? (
         <div className="flex flex-wrap items-center gap-2">
           <input className={`${input} flex-1 min-w-[220px]`} placeholder="Reason (required — returns to your supervisor)" value={reason} onChange={e => setReason(e.target.value)} />
@@ -56,7 +56,7 @@ export function TransferAccept({ id }: { id: string }) {
   const [err, setErr] = useState<string | null>(null);
   return (
     <div className="mt-1.5">
-      {err && <p className="text-xs text-amber-700 mb-1">{err}</p>}
+      {err && <p className="text-xs text-[var(--cmp-text-warning)] mb-1">{err}</p>}
       <button className={btn} disabled={busy} onClick={async () => {
         setBusy(true); setErr(null);
         const r = await post({ action: "accept_transfer", transfer_id: id });

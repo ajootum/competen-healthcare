@@ -8,8 +8,8 @@ export const dynamic = "force-dynamic";
 // Customer Success (PCS-001) — tenant health across the platform.
 /* eslint-disable @typescript-eslint/no-explicit-any */
 const card = cardClass;
-const bandCls: Record<string, string> = { healthy: "bg-green-100 text-green-700", watch: "bg-amber-100 text-amber-700", at_risk: "bg-red-100 text-red-700" };
-const bar = (n: number) => (n >= 70 ? "bg-green-500" : n >= 40 ? "bg-amber-500" : "bg-red-500");
+const bandCls: Record<string, string> = { healthy: "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]", watch: "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]", at_risk: "bg-[var(--cmp-surface-critical)] text-[var(--cmp-text-critical)]" };
+const bar = (n: number) => (n >= 70 ? "bg-[var(--cmp-color-success)]" : n >= 40 ? "bg-[var(--cmp-color-warning)]" : "bg-[var(--cmp-color-critical)]");
 
 export default async function CustomerSuccessPage() {
   const caller = await getLandlordCaller();
@@ -23,15 +23,15 @@ export default async function CustomerSuccessPage() {
         <p className="text-sm text-gray-500 mt-1">Tenant health across the platform — adoption, lifecycle and subscription, at-risk first.</p>
       </div>
       {!ready ? (
-        <div className="bg-amber-50 border border-amber-200 rounded-xl p-5 text-sm text-amber-700">Apply migrations <code className="font-mono text-xs">040–042</code> to activate tenant health.</div>
+        <div className="bg-[var(--cmp-surface-warning)] border border-[var(--cmp-color-warning)] rounded-xl p-5 text-sm text-[var(--cmp-text-warning)]">Apply migrations <code className="font-mono text-xs">040–042</code> to activate tenant health.</div>
       ) : (
         <>
           <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
             <div className={card}><div className="text-3xl font-bold tabular-nums text-gray-900">{summary.total}</div><div className="text-xs text-gray-500 mt-1">Tenants</div></div>
-            <div className={card}><div className="text-3xl font-bold tabular-nums text-green-600">{summary.healthy}</div><div className="text-xs text-gray-500 mt-1">Healthy</div></div>
-            <div className={card}><div className="text-3xl font-bold tabular-nums text-amber-600">{summary.watch}</div><div className="text-xs text-gray-500 mt-1">Watch</div></div>
-            <div className={card}><div className={`text-3xl font-bold tabular-nums ${summary.atRisk ? "text-red-600" : "text-gray-900"}`}>{summary.atRisk}</div><div className="text-xs text-gray-500 mt-1">At risk</div></div>
-            <div className={card}><div className="text-3xl font-bold tabular-nums text-blue-600">{summary.onboarding}</div><div className="text-xs text-gray-500 mt-1">Onboarding</div></div>
+            <div className={card}><div className="text-3xl font-bold tabular-nums text-[var(--cmp-text-success)]">{summary.healthy}</div><div className="text-xs text-gray-500 mt-1">Healthy</div></div>
+            <div className={card}><div className="text-3xl font-bold tabular-nums text-[var(--cmp-text-warning)]">{summary.watch}</div><div className="text-xs text-gray-500 mt-1">Watch</div></div>
+            <div className={card}><div className={`text-3xl font-bold tabular-nums ${summary.atRisk ? "text-[var(--cmp-text-critical)]" : "text-gray-900"}`}>{summary.atRisk}</div><div className="text-xs text-gray-500 mt-1">At risk</div></div>
+            <div className={card}><div className="text-3xl font-bold tabular-nums text-[var(--cmp-text-information)]">{summary.onboarding}</div><div className="text-xs text-gray-500 mt-1">Onboarding</div></div>
           </div>
           <div className={card}>
             <div className="overflow-x-auto">

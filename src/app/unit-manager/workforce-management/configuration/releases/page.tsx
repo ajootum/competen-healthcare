@@ -44,9 +44,9 @@ export default async function ReleasesConfig() {
 
       <div className={`${card} p-5`}>
         <h3 className="text-sm font-bold text-gray-900 mb-3">Active release <span className="text-[10px] text-gray-400 font-normal">CFG-REL-01 · live</span></h3>
-        <div className="rounded-lg border border-emerald-100 bg-emerald-50/40 p-3 flex items-center justify-between flex-wrap gap-3">
+        <div className="rounded-lg border border-[var(--cmp-color-success)] bg-[var(--cmp-surface-success)]/40 p-3 flex items-center justify-between flex-wrap gap-3">
           <div><p className="text-sm font-bold text-emerald-700">wps_config v{p.version}{p.published ? "" : " (defaults)"}</p><p className="text-[11px] text-gray-600 mt-0.5">Effective {fmtDate(p.updatedAt)}{p.updatedByName ? ` · ${p.updatedByName}` : ""} · consumed by all 8 WFM modules</p></div>
-          <Link href="/unit-manager/planning-studio" className="text-[11px] font-semibold rounded-lg px-3 py-1.5 bg-emerald-600 text-white hover:bg-emerald-700 shrink-0">Publish new version ↗</Link>
+          <Link href="/unit-manager/planning-studio" className="text-[11px] font-semibold rounded-lg px-3 py-1.5 bg-[var(--cmp-color-success)] text-white hover:bg-emerald-700 shrink-0">Publish new version ↗</Link>
         </div>
         <p className="text-[10px] text-gray-400 mt-2">Publishing (versioned + audited) runs through the Workforce Planning Studio → /api/config/planning. Each publish bumps the version; consumers resolve by version (§26).</p>
       </div>
@@ -54,7 +54,7 @@ export default async function ReleasesConfig() {
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
         <div className={`${card} p-5`}>
           <h3 className="text-sm font-bold text-gray-900 mb-3">Lifecycle state model <span className="text-[10px] text-gray-400 font-normal">§23</span></h3>
-          <div className="flex flex-wrap gap-1.5">{STATES.map(st => (<span key={st} className={`text-[10px] rounded-full px-2 py-0.5 ${st === "Effective" ? "bg-emerald-50 text-emerald-700 border border-emerald-200" : "border border-gray-200 text-gray-600"}`}>{st}</span>))}</div>
+          <div className="flex flex-wrap gap-1.5">{STATES.map(st => (<span key={st} className={`text-[10px] rounded-full px-2 py-0.5 ${st === "Effective" ? "bg-[var(--cmp-surface-success)] text-emerald-700 border border-[var(--cmp-color-success)]" : "border border-gray-200 text-gray-600"}`}>{st}</span>))}</div>
           <p className="text-[10px] text-gray-400 mt-2">Draft never controls operations; only approved+effective config does (§3). Full change-set lifecycle + scheduled/future-dated releases need the release store.</p>
         </div>
         <div className={`${card} p-5`}>

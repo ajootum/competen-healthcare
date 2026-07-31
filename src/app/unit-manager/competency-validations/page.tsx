@@ -17,10 +17,10 @@ export const dynamic = "force-dynamic";
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 const card = "bg-white rounded-xl border border-gray-200";
-const PRI: Record<string, string> = { High: "bg-rose-50 text-rose-700", Medium: "bg-amber-50 text-amber-700", Low: "bg-green-50 text-green-700" };
+const PRI: Record<string, string> = { High: "bg-[var(--cmp-surface-error)] text-[var(--cmp-text-error)]", Medium: "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]", Low: "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]" };
 const TYPE_COLOR = ["#8b5cf6", "#3b82f6", "#14b8a6", "#f59e0b", "#ef4444", "#6b7280"];
 const STATUS_COLOR: Record<string, string> = { Pending: "#f59e0b", Returned: "#ef4444", Validated: "#22c55e" };
-const DOT: Record<string, string> = { red: "bg-rose-500", amber: "bg-amber-500", gray: "bg-gray-300" };
+const DOT: Record<string, string> = { red: "bg-[var(--cmp-color-error)]", amber: "bg-[var(--cmp-color-warning)]", gray: "bg-gray-300" };
 const relTime = (iso?: string | null) => { if (!iso) return "—"; const s = Math.floor((Date.now() - new Date(iso).getTime()) / 1000); if (s < 3600) return `${Math.max(1, Math.floor(s / 60))}m ago`; if (s < 86400) return `${Math.floor(s / 3600)}h ago`; return `${Math.floor(s / 86400)}d ago`; };
 const TABS = ["Validation Dashboard", "Validation Queue", "Competency Evidence", "Decision Workflows", "Validation Analytics", "Validation Calendar", "Standards & Frameworks"];
 const QUICK = [["Create Validation Request", null], ["Upload Evidence", null], ["Create OSCE Schedule", null], ["Assign Validation", null], ["Validation Reports", "/unit-manager/shift-intelligence"], ["Manage Frameworks", "/unit-manager/competency"]];
@@ -64,7 +64,7 @@ export default async function CompetencyValidationsWorkspace({ searchParams }: {
     </>
   );
 
-  if (!d.provisioned) return <div className="space-y-4">{header}<div className="bg-amber-50 border border-amber-200 rounded-xl p-6"><p className="font-semibold text-amber-900">⚙️ Competency tables not provisioned</p><p className="text-sm text-amber-800 mt-1">The competency store isn&apos;t available for this tenant yet.</p></div></div>;
+  if (!d.provisioned) return <div className="space-y-4">{header}<div className="bg-[var(--cmp-surface-warning)] border border-[var(--cmp-color-warning)] rounded-xl p-6"><p className="font-semibold text-amber-900">⚙️ Competency tables not provisioned</p><p className="text-sm text-amber-800 mt-1">The competency store isn&apos;t available for this tenant yet.</p></div></div>;
 
   const k = d.kpis; const r = d.review;
   return (
@@ -73,12 +73,12 @@ export default async function CompetencyValidationsWorkspace({ searchParams }: {
 
       <div className="grid grid-cols-2 sm:grid-cols-4 xl:grid-cols-7 gap-3">
         <Kpi label="Pending Validations" value={k.pending} sub="Requires review" icon="📋" />
-        <Kpi label="Overdue" value={k.overdue} sub="Past due date" tone={k.overdue ? "text-rose-600" : undefined} icon="⏰" />
-        <Kpi label="Due Today" value={k.dueToday} sub="Needs attention" tone={k.dueToday ? "text-amber-600" : undefined} icon="📅" />
-        <Kpi label="High Priority" value={k.highPriority} sub="High-risk items" tone={k.highPriority ? "text-rose-600" : undefined} icon="🔺" />
-        <Kpi label="Validated This Week" value={k.validatedThisWeek} sub="This period" tone="text-green-600" icon="✅" />
+        <Kpi label="Overdue" value={k.overdue} sub="Past due date" tone={k.overdue ? "text-[var(--cmp-text-error)]" : undefined} icon="⏰" />
+        <Kpi label="Due Today" value={k.dueToday} sub="Needs attention" tone={k.dueToday ? "text-[var(--cmp-text-warning)]" : undefined} icon="📅" />
+        <Kpi label="High Priority" value={k.highPriority} sub="High-risk items" tone={k.highPriority ? "text-[var(--cmp-text-error)]" : undefined} icon="🔺" />
+        <Kpi label="Validated This Week" value={k.validatedThisWeek} sub="This period" tone="text-[var(--cmp-text-success)]" icon="✅" />
         <Kpi label="Decision Quality" value={k.decisionQuality != null ? `${k.decisionQuality}%` : "—"} sub="Validated / decided" icon="🏅" />
-        <Kpi label="Validation Health" value={`${k.health}%`} sub={k.health >= 80 ? "Good" : k.health >= 60 ? "Fair" : "At risk"} tone={k.health >= 80 ? "text-green-600" : k.health >= 60 ? "text-amber-600" : "text-rose-600"} />
+        <Kpi label="Validation Health" value={`${k.health}%`} sub={k.health >= 80 ? "Good" : k.health >= 60 ? "Fair" : "At risk"} tone={k.health >= 80 ? "text-[var(--cmp-text-success)]" : k.health >= 60 ? "text-[var(--cmp-text-warning)]" : "text-[var(--cmp-text-error)]"} />
       </div>
 
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
@@ -99,8 +99,8 @@ export default async function CompetencyValidationsWorkspace({ searchParams }: {
                       <td className="py-2 pr-3 text-gray-700 truncate max-w-[90px]">{s.learner}</td>
                       <td className="py-2 pr-3 text-gray-800 font-medium max-w-[140px] truncate">{s.competency}</td>
                       <td className="py-2 pr-3 text-gray-400 whitespace-nowrap">{relTime(s.created_at)}</td>
-                      <td className={`py-2 pr-3 whitespace-nowrap ${s.endDate && s.endDate < new Date().toISOString().slice(0, 10) ? "text-rose-600" : "text-gray-500"}`}>{s.endDate ? s.endDate.slice(5) : "—"}</td>
-                      <td className={`py-2 pr-3 ${s.risk === "High" ? "text-rose-600" : s.risk === "Medium" ? "text-amber-600" : "text-gray-500"}`}>{s.risk}</td>
+                      <td className={`py-2 pr-3 whitespace-nowrap ${s.endDate && s.endDate < new Date().toISOString().slice(0, 10) ? "text-[var(--cmp-text-error)]" : "text-gray-500"}`}>{s.endDate ? s.endDate.slice(5) : "—"}</td>
+                      <td className={`py-2 pr-3 ${s.risk === "High" ? "text-[var(--cmp-text-error)]" : s.risk === "Medium" ? "text-[var(--cmp-text-warning)]" : "text-gray-500"}`}>{s.risk}</td>
                       <td className="py-2 pr-3"><span className="px-1.5 py-0.5 rounded bg-gray-100 text-gray-600 text-[10px]">{s.returned ? "Returned" : "Pending"}</span></td>
                       <td className="py-2"><Link href={`/unit-manager/competency-validations?id=${s.id}`} className="text-teal-700 hover:underline">Review</Link></td>
                     </tr>
@@ -118,7 +118,7 @@ export default async function CompetencyValidationsWorkspace({ searchParams }: {
             <>
               <div className="flex items-start justify-between mb-2"><div><h3 className="text-sm font-bold text-gray-900">{r.competency}</h3><p className="text-[10px] text-gray-400">{r.learner} · {r.code} · {r.type}</p></div><span className={`px-1.5 py-0.5 rounded text-[10px] font-semibold h-fit ${PRI[r.priority]}`}>{r.priority}</span></div>
               <div className="mt-2 grid grid-cols-2 gap-2">
-                <div className="rounded-lg border border-gray-100 p-2.5"><p className="text-[10px] font-bold text-gray-500 uppercase">Overall Score</p><p className={`text-lg font-bold ${r.score != null && r.score >= 80 ? "text-green-600" : r.score != null && r.score >= 70 ? "text-amber-600" : "text-rose-600"}`}>{r.score != null ? `${r.score}%` : "—"}</p><p className="text-[10px] text-gray-400">Standard 80%</p></div>
+                <div className="rounded-lg border border-gray-100 p-2.5"><p className="text-[10px] font-bold text-gray-500 uppercase">Overall Score</p><p className={`text-lg font-bold ${r.score != null && r.score >= 80 ? "text-[var(--cmp-text-success)]" : r.score != null && r.score >= 70 ? "text-[var(--cmp-text-warning)]" : "text-[var(--cmp-text-error)]"}`}>{r.score != null ? `${r.score}%` : "—"}</p><p className="text-[10px] text-gray-400">Standard 80%</p></div>
                 <div className="rounded-lg bg-violet-50/50 border border-violet-100 p-2.5"><p className="text-[10px] font-bold text-violet-700 uppercase">AI Insight</p><p className="text-sm font-bold text-violet-700">{r.aiRec}</p><p className="text-[10px] text-gray-500">{r.aiConfidence}% confidence</p></div>
               </div>
               <div className="mt-3"><p className="text-[10px] font-semibold text-gray-500 uppercase mb-1">Rationale</p><ul className="text-[11px] text-gray-600 space-y-0.5">{r.rationale.map((x: string, i: number) => <li key={i}>✓ {x}</li>)}</ul></div>
@@ -150,7 +150,7 @@ export default async function CompetencyValidationsWorkspace({ searchParams }: {
         <div className={`${card} p-5 bg-gradient-to-br from-violet-50/40 to-white`}>
           <h3 className="text-sm font-bold text-gray-900 mb-3 flex items-center gap-1.5"><span>✨</span>AI Early Warnings</h3>
           {d.aiWarn.length === 0 ? <p className="text-sm text-gray-400">No warnings.</p> : (
-            <div className="space-y-2">{d.aiWarn.map((a: any, i: number) => (<div key={i} className="flex items-start gap-2"><span className={`mt-1 w-1.5 h-1.5 rounded-full shrink-0 ${DOT[a.tone]}`} /><p className="text-xs text-gray-700 flex-1">{a.title}</p><span className={`text-[9px] px-1 rounded ${a.sev === "High" ? "bg-rose-50 text-rose-600" : "bg-amber-50 text-amber-600"}`}>{a.sev}</span></div>))}</div>
+            <div className="space-y-2">{d.aiWarn.map((a: any, i: number) => (<div key={i} className="flex items-start gap-2"><span className={`mt-1 w-1.5 h-1.5 rounded-full shrink-0 ${DOT[a.tone]}`} /><p className="text-xs text-gray-700 flex-1">{a.title}</p><span className={`text-[9px] px-1 rounded ${a.sev === "High" ? "bg-[var(--cmp-surface-error)] text-[var(--cmp-text-error)]" : "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]"}`}>{a.sev}</span></div>))}</div>
           )}
         </div>
       </div>
@@ -160,13 +160,13 @@ export default async function CompetencyValidationsWorkspace({ searchParams }: {
         <div className={`${card} p-5`}>
           <h3 className="text-sm font-bold text-gray-900 mb-3">Recently Completed</h3>
           {d.recentlyCompleted.length === 0 ? <p className="text-sm text-gray-400">No validations completed yet.</p> : (
-            <div className="space-y-1.5">{d.recentlyCompleted.map((s: any) => (<div key={s.id} className="flex items-center gap-2 text-xs"><span className="text-green-600">✓</span><span className="text-gray-700 flex-1 truncate">{s.competency} · {s.learner}</span><span className="text-green-600">Validated</span><span className="text-gray-400">{relTime(s.validated_at)}</span></div>))}</div>
+            <div className="space-y-1.5">{d.recentlyCompleted.map((s: any) => (<div key={s.id} className="flex items-center gap-2 text-xs"><span className="text-[var(--cmp-text-success)]">✓</span><span className="text-gray-700 flex-1 truncate">{s.competency} · {s.learner}</span><span className="text-[var(--cmp-text-success)]">Validated</span><span className="text-gray-400">{relTime(s.validated_at)}</span></div>))}</div>
           )}
         </div>
         <div className={`${card} p-5`}>
           <h3 className="text-sm font-bold text-gray-900 mb-3">Standards &amp; Frameworks</h3>
           {d.frameworks.length === 0 ? <p className="text-sm text-gray-400">No frameworks configured.</p> : (
-            <div className="space-y-1">{d.frameworks.map((f: any, i: number) => <div key={i} className="flex items-center justify-between text-xs py-0.5"><span className="text-gray-700 truncate">{f.name}</span><span className="text-green-600 text-[10px]">Active</span></div>)}</div>
+            <div className="space-y-1">{d.frameworks.map((f: any, i: number) => <div key={i} className="flex items-center justify-between text-xs py-0.5"><span className="text-gray-700 truncate">{f.name}</span><span className="text-[var(--cmp-text-success)] text-[10px]">Active</span></div>)}</div>
           )}
         </div>
         <div className={`${card} p-5`}>

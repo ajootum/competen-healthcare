@@ -8,7 +8,7 @@ import { useRouter } from "next/navigation";
 
 const TYPES = ["hospital", "clinic", "university", "nursing_school", "ministry", "ngo", "health_network", "multinational_group", "individual"];
 const STATUSES = ["prospect", "trial", "active", "suspended", "archived", "deleted"];
-const STATUS_BADGE: Record<string, string> = { prospect: "bg-gray-100 text-gray-600", trial: "bg-amber-50 text-amber-700", active: "bg-green-50 text-green-700", suspended: "bg-rose-50 text-rose-700", archived: "bg-gray-100 text-gray-500", deleted: "bg-gray-100 text-gray-400" };
+const STATUS_BADGE: Record<string, string> = { prospect: "bg-gray-100 text-gray-600", trial: "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]", active: "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]", suspended: "bg-[var(--cmp-surface-error)] text-[var(--cmp-text-error)]", archived: "bg-gray-100 text-gray-500", deleted: "bg-gray-100 text-gray-400" };
 const input = "w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500/40";
 
 export default function TenantDirectory({ rows, plans }: { rows: any[]; plans: any[] }) {
@@ -56,7 +56,7 @@ export default function TenantDirectory({ rows, plans }: { rows: any[]; plans: a
             {filtered.length === 0 && <tr><td colSpan={7} className="px-4 py-8 text-center text-gray-400">No tenants match.</td></tr>}
             {filtered.map(r => (
               <tr key={r.id} onClick={() => router.push(`/super-admin/platform-ops/tenants/${r.id}`)} className="border-b border-gray-50 hover:bg-gray-50/60 cursor-pointer">
-                <td className="px-4 py-3"><div className="flex items-center gap-2"><span className="w-7 h-7 rounded-lg bg-blue-50 flex items-center justify-center text-sm shrink-0">🏢</span><div className="min-w-0"><p className="font-medium text-gray-900 truncate">{r.name}</p><p className="text-[10px] text-gray-400">{r.country}</p></div></div></td>
+                <td className="px-4 py-3"><div className="flex items-center gap-2"><span className="w-7 h-7 rounded-lg bg-[var(--cmp-surface-information)] flex items-center justify-center text-sm shrink-0">🏢</span><div className="min-w-0"><p className="font-medium text-gray-900 truncate">{r.name}</p><p className="text-[10px] text-gray-400">{r.country}</p></div></div></td>
                 <td className="px-4 py-3 text-gray-600 capitalize">{(r.type ?? "").replace(/_/g, " ")}</td>
                 <td className="px-4 py-3 text-gray-600">{r.plan ?? <span className="text-gray-300">Unplanned</span>}</td>
                 <td className="px-4 py-3"><span className={`text-[10px] font-medium px-2 py-0.5 rounded ${STATUS_BADGE[r.status] ?? "bg-gray-100 text-gray-600"}`}>{r.status}</span></td>
@@ -83,7 +83,7 @@ export default function TenantDirectory({ rows, plans }: { rows: any[]; plans: a
                 <div><label className="text-xs font-semibold text-gray-600 mb-1 block">Country</label><input value={form.primary_country} onChange={set("primary_country")} className={input} placeholder="Kenya" /></div>
                 <div><label className="text-xs font-semibold text-gray-600 mb-1 block">Plan</label><select value={form.plan_id} onChange={set("plan_id")} className={input}><option value="">— None —</option>{plans.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}</select></div>
               </div>
-              {err && <p className="text-xs text-red-600 bg-red-50 rounded-lg px-3 py-2">{err}</p>}
+              {err && <p className="text-xs text-[var(--cmp-text-critical)] bg-[var(--cmp-surface-critical)] rounded-lg px-3 py-2">{err}</p>}
               <div className="flex gap-2 pt-1">
                 <button onClick={() => setOpen(false)} className="flex-1 py-2 border border-gray-200 rounded-lg text-sm text-gray-600 hover:bg-gray-50">Cancel</button>
                 <button onClick={create} disabled={saving} className="flex-1 py-2 bg-teal-600 text-white rounded-lg text-sm font-semibold hover:bg-teal-700 disabled:opacity-60">{saving ? "Creating…" : "Create"}</button>

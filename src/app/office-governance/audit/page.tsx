@@ -28,7 +28,7 @@ export default async function OgsAuditPage() {
   return (
     <div className="space-y-4">
       {head}
-      {d.empty && <div className="bg-blue-50 border border-blue-200 rounded-xl p-3 text-[12px] text-blue-800">No audit records captured yet — records, categories and the activity feed populate as governance actions are written to <code>audit_log</code>. Compliance and frameworks below draw on <code>gov_obligations</code>.</div>}
+      {d.empty && <div className="bg-[var(--cmp-surface-information)] border border-[var(--cmp-color-information)] rounded-xl p-3 text-[12px] text-blue-800">No audit records captured yet — records, categories and the activity feed populate as governance actions are written to <code>audit_log</code>. Compliance and frameworks below draw on <code>gov_obligations</code>.</div>}
 
       <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
         <Stat icon="🗂️" tone="teal" label="Total records" value={k.totalRecords} sub="audit trail" />

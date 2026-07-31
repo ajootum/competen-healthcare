@@ -19,13 +19,13 @@ export const dynamic = "force-dynamic";
 const card = "bg-white rounded-xl border border-gray-200";
 const LIKELIHOOD = ["Almost Certain", "Likely", "Possible", "Unlikely", "Rare"];
 const CONSEQUENCE = ["Minor", "Moderate", "Major", "Severe", "Catastrophic"];
-const cellTone = (score: number) => (score >= 16 ? "bg-rose-500 text-white" : score >= 10 ? "bg-orange-400 text-white" : score >= 5 ? "bg-amber-300 text-amber-900" : "bg-emerald-400/80 text-emerald-950");
-const lvlTone = (l: string) => (l === "Extreme" ? "bg-rose-100 text-rose-700" : l === "High" ? "bg-orange-100 text-orange-700" : l === "Moderate" ? "bg-amber-100 text-amber-700" : "bg-emerald-100 text-emerald-700");
+const cellTone = (score: number) => (score >= 16 ? "bg-[var(--cmp-color-error)] text-white" : score >= 10 ? "bg-[var(--cmp-color-warning)] text-white" : score >= 5 ? "bg-amber-300 text-amber-900" : "bg-[var(--cmp-color-success)]/80 text-emerald-950");
+const lvlTone = (l: string) => (l === "Extreme" ? "bg-[var(--cmp-surface-error)] text-[var(--cmp-text-error)]" : l === "High" ? "bg-[var(--cmp-surface-warning)] text-orange-700" : l === "Moderate" ? "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]" : "bg-[var(--cmp-surface-success)] text-emerald-700");
 const QUICK = [
-  { label: "New Risk", icon: "➕", tint: "bg-rose-50" }, { label: "Risk Assessment", icon: "📋", tint: "bg-sky-50" },
+  { label: "New Risk", icon: "➕", tint: "bg-[var(--cmp-surface-error)]" }, { label: "Risk Assessment", icon: "📋", tint: "bg-[var(--cmp-surface-information)]" },
   { label: "Risk Matrix", icon: "🔲", tint: "bg-violet-50" }, { label: "Treatment Plan", icon: "🗂️", tint: "bg-teal-50" },
-  { label: "Risk Report", icon: "📊", tint: "bg-indigo-50" }, { label: "Export Register", icon: "⬇️", tint: "bg-amber-50" },
-  { label: "Controls Library", icon: "🛡️", tint: "bg-emerald-50" }, { label: "Emerging Risks", icon: "⭐", tint: "bg-orange-50" },
+  { label: "Risk Report", icon: "📊", tint: "bg-indigo-50" }, { label: "Export Register", icon: "⬇️", tint: "bg-[var(--cmp-surface-warning)]" },
+  { label: "Controls Library", icon: "🛡️", tint: "bg-[var(--cmp-surface-success)]" }, { label: "Emerging Risks", icon: "⭐", tint: "bg-[var(--cmp-surface-warning)]" },
   { label: "Risk Calendar", icon: "📅", tint: "bg-pink-50" }, { label: "Risk Settings", icon: "⚙️", tint: "bg-gray-50" },
 ];
 
@@ -70,14 +70,14 @@ export default async function RiskRegister() {
   const header = (
     <>
       <div className="flex items-start justify-between gap-3 flex-wrap">
-        <div className="flex items-center gap-2"><span className="w-9 h-9 rounded-lg bg-rose-50 flex items-center justify-center text-lg">🛡️</span><div><h1 className="text-2xl font-bold text-gray-900 tracking-tight">Enterprise Risk Register</h1><p className="text-sm text-gray-500">Identify, assess, monitor and mitigate risks to protect patients, people and operations</p></div></div>
-        <div className="flex items-center gap-2"><UnitFilters departments={departments} /><Link href="/unit-manager/quality/risk" className="text-xs border border-gray-200 rounded-lg px-3 py-2 text-gray-600 hover:bg-gray-50">↻ Refresh</Link><Link href="/super-admin/governance/risk" className="text-xs bg-rose-600 text-white rounded-lg px-3 py-2 hover:bg-rose-700 font-medium">+ New Risk</Link></div>
+        <div className="flex items-center gap-2"><span className="w-9 h-9 rounded-lg bg-[var(--cmp-surface-error)] flex items-center justify-center text-lg">🛡️</span><div><h1 className="text-2xl font-bold text-gray-900 tracking-tight">Enterprise Risk Register</h1><p className="text-sm text-gray-500">Identify, assess, monitor and mitigate risks to protect patients, people and operations</p></div></div>
+        <div className="flex items-center gap-2"><UnitFilters departments={departments} /><Link href="/unit-manager/quality/risk" className="text-xs border border-gray-200 rounded-lg px-3 py-2 text-gray-600 hover:bg-gray-50">↻ Refresh</Link><Link href="/super-admin/governance/risk" className="text-xs bg-[var(--cmp-color-error)] text-white rounded-lg px-3 py-2 hover:bg-rose-700 font-medium">+ New Risk</Link></div>
       </div>
       <QualityTabs />
     </>
   );
 
-  if (!d.provisioned) return <div className="space-y-4">{header}<div className="bg-amber-50 border border-amber-200 rounded-xl p-6"><p className="font-semibold text-amber-900">⚙️ Risk register not provisioned</p><p className="text-sm text-amber-800 mt-1">Apply migration 060 (gov_risks / gov_controls) to enable the risk register.</p></div></div>;
+  if (!d.provisioned) return <div className="space-y-4">{header}<div className="bg-[var(--cmp-surface-warning)] border border-[var(--cmp-color-warning)] rounded-xl p-6"><p className="font-semibold text-amber-900">⚙️ Risk register not provisioned</p><p className="text-sm text-amber-800 mt-1">Apply migration 060 (gov_risks / gov_controls) to enable the risk register.</p></div></div>;
 
   const k = d.kpis;
 
@@ -87,12 +87,12 @@ export default async function RiskRegister() {
 
       {/* ── KPI ribbon (7) ─────────────────────────────────────────────────── */}
       <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-7 gap-2.5">
-        <Kpi icon="📊" tint="bg-rose-50" label="Risk Exposure" value={k.exposurePct != null ? `${k.exposurePct}%` : "—"} tone={k.exposurePct != null && k.exposurePct >= 55 ? "text-rose-600" : "text-gray-900"} sub={k.exposureBand} />
-        <Kpi icon="🔴" tint="bg-orange-50" label="High & Extreme" value={k.highExtreme} tone={k.highExtreme ? "text-rose-600" : "text-gray-400"} sub={`${k.extreme} extreme`} />
-        <Kpi icon="🛠️" tint="bg-sky-50" label="Under Treatment" value={k.underTreatment} sub="mitigating" />
-        <Kpi icon="⏰" tint="bg-amber-50" label="Overdue Treatment" value={k.overdueTreatment} tone={k.overdueTreatment ? "text-amber-600" : "text-gray-400"} sub="past review / escalated" />
-        <Kpi icon="🛡️" tint="bg-emerald-50" label="Controls Effective" value={k.controlsEffectiveness != null ? `${k.controlsEffectiveness}%` : "—"} tone={k.controlsEffectiveness != null && k.controlsEffectiveness >= 75 ? "text-emerald-600" : "text-gray-900"} sub={`${k.total ? d.controlsTotal : 0} controls`} />
-        <Kpi icon="📅" tint="bg-indigo-50" label="Due for Review" value={k.dueForReview} tone={k.dueForReview ? "text-amber-600" : "text-gray-400"} sub="within 30 days" />
+        <Kpi icon="📊" tint="bg-[var(--cmp-surface-error)]" label="Risk Exposure" value={k.exposurePct != null ? `${k.exposurePct}%` : "—"} tone={k.exposurePct != null && k.exposurePct >= 55 ? "text-[var(--cmp-text-error)]" : "text-gray-900"} sub={k.exposureBand} />
+        <Kpi icon="🔴" tint="bg-[var(--cmp-surface-warning)]" label="High & Extreme" value={k.highExtreme} tone={k.highExtreme ? "text-[var(--cmp-text-error)]" : "text-gray-400"} sub={`${k.extreme} extreme`} />
+        <Kpi icon="🛠️" tint="bg-[var(--cmp-surface-information)]" label="Under Treatment" value={k.underTreatment} sub="mitigating" />
+        <Kpi icon="⏰" tint="bg-[var(--cmp-surface-warning)]" label="Overdue Treatment" value={k.overdueTreatment} tone={k.overdueTreatment ? "text-[var(--cmp-text-warning)]" : "text-gray-400"} sub="past review / escalated" />
+        <Kpi icon="🛡️" tint="bg-[var(--cmp-surface-success)]" label="Controls Effective" value={k.controlsEffectiveness != null ? `${k.controlsEffectiveness}%` : "—"} tone={k.controlsEffectiveness != null && k.controlsEffectiveness >= 75 ? "text-[var(--cmp-text-success)]" : "text-gray-900"} sub={`${k.total ? d.controlsTotal : 0} controls`} />
+        <Kpi icon="📅" tint="bg-indigo-50" label="Due for Review" value={k.dueForReview} tone={k.dueForReview ? "text-[var(--cmp-text-warning)]" : "text-gray-400"} sub="within 30 days" />
         <Kpi icon="⭐" tint="bg-violet-50" label="Emerging Risks" value={k.emerging} spark={k.totalSpark} sparkColor="#8b5cf6" />
       </div>
 
@@ -109,7 +109,7 @@ export default async function RiskRegister() {
               </div>
             </div>
           ) : <p className="text-sm text-gray-400 py-8 text-center">No open risks.</p>}
-          <div className="flex flex-wrap gap-2 mt-3 text-[10px]"><span className="flex items-center gap-1"><span className="w-2 h-2 rounded-sm bg-rose-500" />Extreme 16-25</span><span className="flex items-center gap-1"><span className="w-2 h-2 rounded-sm bg-orange-400" />High 10-15</span><span className="flex items-center gap-1"><span className="w-2 h-2 rounded-sm bg-amber-300" />Moderate 5-9</span><span className="flex items-center gap-1"><span className="w-2 h-2 rounded-sm bg-emerald-400" />Low 1-4</span></div>
+          <div className="flex flex-wrap gap-2 mt-3 text-[10px]"><span className="flex items-center gap-1"><span className="w-2 h-2 rounded-sm bg-[var(--cmp-color-error)]" />Extreme 16-25</span><span className="flex items-center gap-1"><span className="w-2 h-2 rounded-sm bg-[var(--cmp-color-warning)]" />High 10-15</span><span className="flex items-center gap-1"><span className="w-2 h-2 rounded-sm bg-amber-300" />Moderate 5-9</span><span className="flex items-center gap-1"><span className="w-2 h-2 rounded-sm bg-[var(--cmp-color-success)]" />Low 1-4</span></div>
         </div>
 
         <div className={`${card} p-5`}>
@@ -123,7 +123,7 @@ export default async function RiskRegister() {
                     <td className="py-1.5 text-gray-700 max-w-[150px] truncate" title={r.title}>{r.title}</td>
                     <td className="py-1.5 text-gray-500 capitalize">{r.category}</td>
                     <td className="py-1.5 text-center"><span className={`inline-block w-7 rounded text-[11px] font-bold tabular-nums ${cellTone(r.residual)}`}>{r.residual}</span></td>
-                    <td className={`py-1.5 text-center ${r.trend === "down" ? "text-emerald-600" : r.trend === "up" ? "text-rose-600" : "text-gray-400"}`}>{r.trend === "down" ? "↓" : r.trend === "up" ? "↑" : "→"}</td>
+                    <td className={`py-1.5 text-center ${r.trend === "down" ? "text-[var(--cmp-text-success)]" : r.trend === "up" ? "text-[var(--cmp-text-error)]" : "text-gray-400"}`}>{r.trend === "down" ? "↓" : r.trend === "up" ? "↑" : "→"}</td>
                     <td className="py-1.5"><span className={`text-[10px] font-semibold rounded px-1.5 py-0.5 ${lvlTone(r.level)}`}>{r.level}</span></td>
                   </tr>
                 ))}</tbody>
@@ -156,7 +156,7 @@ export default async function RiskRegister() {
           <h3 className="font-semibold text-gray-900 text-sm mb-3">Controls Effectiveness</h3>
           <div className="flex items-center gap-4">
             <div className="relative w-24 h-24 shrink-0" style={{ background: `conic-gradient(#10b981 ${(d.controlsEffectiveness ?? 0) * 3.6}deg, #f1f5f9 0)`, borderRadius: "9999px" }}><div className="absolute inset-[18%] bg-white rounded-full flex flex-col items-center justify-center"><span className="text-lg font-bold text-gray-900">{d.controlsEffectiveness != null ? `${d.controlsEffectiveness}%` : "—"}</span><span className="text-[8px] text-gray-400">Effective</span></div></div>
-            <div className="text-[11px] space-y-1.5 flex-1 min-w-0">{d.controlsByType.length ? d.controlsByType.map((c: any) => <div key={c.type}><div className="flex items-center justify-between"><span className="text-gray-600">{c.type}</span><b className="tabular-nums">{c.pct != null ? `${c.pct}%` : "—"}</b></div><div className="w-full h-1.5 rounded-full bg-gray-100 overflow-hidden"><div className="h-full rounded-full bg-emerald-500" style={{ width: `${c.pct ?? 0}%` }} /></div></div>) : <p className="text-gray-400">No controls recorded.</p>}</div>
+            <div className="text-[11px] space-y-1.5 flex-1 min-w-0">{d.controlsByType.length ? d.controlsByType.map((c: any) => <div key={c.type}><div className="flex items-center justify-between"><span className="text-gray-600">{c.type}</span><b className="tabular-nums">{c.pct != null ? `${c.pct}%` : "—"}</b></div><div className="w-full h-1.5 rounded-full bg-gray-100 overflow-hidden"><div className="h-full rounded-full bg-[var(--cmp-color-success)]" style={{ width: `${c.pct ?? 0}%` }} /></div></div>) : <p className="text-gray-400">No controls recorded.</p>}</div>
           </div>
           <p className="text-[9px] text-gray-400 mt-2">Administrative / physical control types are next-phase (enum has preventive / detective / corrective).</p>
         </div>
@@ -164,7 +164,7 @@ export default async function RiskRegister() {
         <div className={`${card} p-5`}>
           <h3 className="font-semibold text-gray-900 text-sm mb-3">Risks Due for Review</h3>
           {d.dueForReviewList.length ? <div className="space-y-1.5">{d.dueForReviewList.map((r: any, i: number) => (
-            <div key={i} className="flex items-center gap-2 text-xs"><div className="min-w-0 flex-1"><p className="text-gray-700 truncate">{r.title}</p><p className="text-[10px] text-gray-400">{r.reviewDue}</p></div><span className={`text-[10px] font-semibold shrink-0 ${r.daysLeft < 0 ? "text-rose-600" : r.daysLeft <= 7 ? "text-amber-600" : "text-gray-500"}`}>{r.daysLeft < 0 ? `${Math.abs(r.daysLeft)}d overdue` : `${r.daysLeft}d left`}</span></div>
+            <div key={i} className="flex items-center gap-2 text-xs"><div className="min-w-0 flex-1"><p className="text-gray-700 truncate">{r.title}</p><p className="text-[10px] text-gray-400">{r.reviewDue}</p></div><span className={`text-[10px] font-semibold shrink-0 ${r.daysLeft < 0 ? "text-[var(--cmp-text-error)]" : r.daysLeft <= 7 ? "text-[var(--cmp-text-warning)]" : "text-gray-500"}`}>{r.daysLeft < 0 ? `${Math.abs(r.daysLeft)}d overdue` : `${r.daysLeft}d left`}</span></div>
           ))}</div> : <p className="text-sm text-gray-400 py-8 text-center">No reviews scheduled.</p>}
         </div>
       </div>
@@ -189,7 +189,7 @@ export default async function RiskRegister() {
         <div className={`${card} p-5`}>
           <div className="flex items-center gap-2 mb-3"><span className="w-7 h-7 rounded-lg bg-violet-50 flex items-center justify-center text-sm">🤖</span><h3 className="font-semibold text-gray-900 text-sm">AI Risk Intelligence</h3></div>
           {d.ai.length ? <div className="space-y-2">{d.ai.map((a: any, i: number) => (
-            <div key={i} className="flex items-start gap-2 rounded-lg border border-gray-100 p-2.5"><span className={`w-1.5 h-1.5 rounded-full mt-1.5 shrink-0 ${a.tone === "rose" ? "bg-rose-500" : a.tone === "amber" ? "bg-amber-400" : a.tone === "sky" ? "bg-sky-400" : "bg-emerald-500"}`} /><div className="min-w-0 flex-1"><p className="text-xs font-medium text-gray-800 leading-snug">{a.text}</p><p className="text-[10px] text-gray-400 truncate">{a.detail}</p></div><span className="text-[10px] text-gray-400 shrink-0">conf {a.confidence}%</span></div>
+            <div key={i} className="flex items-start gap-2 rounded-lg border border-gray-100 p-2.5"><span className={`w-1.5 h-1.5 rounded-full mt-1.5 shrink-0 ${a.tone === "rose" ? "bg-[var(--cmp-color-error)]" : a.tone === "amber" ? "bg-[var(--cmp-color-warning)]" : a.tone === "sky" ? "bg-[var(--cmp-color-information)]" : "bg-[var(--cmp-color-success)]"}`} /><div className="min-w-0 flex-1"><p className="text-xs font-medium text-gray-800 leading-snug">{a.text}</p><p className="text-[10px] text-gray-400 truncate">{a.detail}</p></div><span className="text-[10px] text-gray-400 shrink-0">conf {a.confidence}%</span></div>
           ))}</div> : <p className="text-sm text-gray-400 py-6 text-center">No risk signals to action right now.</p>}
         </div>
       </div>
@@ -197,7 +197,7 @@ export default async function RiskRegister() {
       {/* ── Recent updates · quick actions ─────────────────────────────────── */}
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
         <div className={`${card} p-5 xl:col-span-2`}>
-          <div className="flex items-center justify-between mb-3"><h3 className="font-semibold text-gray-900 text-sm">Risk Register — Recent Updates</h3><Link href="/super-admin/governance/risk" className="text-[11px] text-rose-700 hover:underline">View full register →</Link></div>
+          <div className="flex items-center justify-between mb-3"><h3 className="font-semibold text-gray-900 text-sm">Risk Register — Recent Updates</h3><Link href="/super-admin/governance/risk" className="text-[11px] text-[var(--cmp-text-error)] hover:underline">View full register →</Link></div>
           {d.recentUpdates.length ? (
             <div className="overflow-x-auto">
               <table className="w-full text-xs">
@@ -221,14 +221,14 @@ export default async function RiskRegister() {
         <div className={`${card} p-5`}>
           <h3 className="font-semibold text-gray-900 text-sm mb-3">Quick Actions</h3>
           <div className="grid grid-cols-3 sm:grid-cols-5 xl:grid-cols-2 gap-2">{QUICK.map(q => (
-            <Link key={q.label} href="/super-admin/governance/risk" className="rounded-lg border border-gray-100 p-2 hover:border-rose-200 hover:bg-rose-50/40 transition-all text-center"><span className={`w-8 h-8 rounded-lg ${q.tint} flex items-center justify-center text-sm mx-auto mb-1`}>{q.icon}</span><p className="text-[9px] font-medium text-gray-700 leading-tight">{q.label}</p></Link>
+            <Link key={q.label} href="/super-admin/governance/risk" className="rounded-lg border border-gray-100 p-2 hover:border-[var(--cmp-color-error)] hover:bg-[var(--cmp-surface-error)]/40 transition-all text-center"><span className={`w-8 h-8 rounded-lg ${q.tint} flex items-center justify-center text-sm mx-auto mb-1`}>{q.icon}</span><p className="text-[9px] font-medium text-gray-700 leading-tight">{q.label}</p></Link>
           ))}</div>
         </div>
       </div>
 
       <div className="flex items-center justify-between flex-wrap gap-2 text-[10px] text-gray-400 pb-4">
         <span>Data sources: Incident Management · Audit &amp; Compliance · CAPA &amp; Improvement · Patient Safety · Clinical Indicators · HR &amp; Workforce · Finance</span>
-        <span className="flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-emerald-500" /> Risk register live · gov_risks / gov_controls (060) · score-history trends &amp; department view are next-phase</span>
+        <span className="flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-[var(--cmp-color-success)]" /> Risk register live · gov_risks / gov_controls (060) · score-history trends &amp; department view are next-phase</span>
       </div>
     </div>
   );

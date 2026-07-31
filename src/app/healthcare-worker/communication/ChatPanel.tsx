@@ -9,7 +9,7 @@ import { cardClass } from "@/components/ui/primitives";
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 const input = "w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/40";
-const btn = "px-3.5 py-2 rounded-lg bg-emerald-600 text-white text-sm font-medium hover:bg-emerald-700 disabled:opacity-50";
+const btn = "px-3.5 py-2 rounded-lg bg-[var(--cmp-color-success)] text-white text-sm font-medium hover:bg-emerald-700 disabled:opacity-50";
 const fmtWhen = (iso: string | null) => iso ? new Date(iso).toLocaleString([], { hour: "2-digit", minute: "2-digit", day: "numeric", month: "short" }) : "";
 
 export default function ChatPanel({ channels: initialChannels }: { channels: string[] }) {
@@ -52,7 +52,7 @@ export default function ChatPanel({ channels: initialChannels }: { channels: str
         <h3 className="font-semibold text-gray-900 mr-2">💬 Team Channels</h3>
         {channels.map(ch => (
           <button key={ch} onClick={() => setChannel(ch)}
-            className={`px-2.5 py-1 rounded-full text-xs ${channel === ch ? "bg-emerald-600 text-white" : "bg-gray-100 text-gray-600 hover:bg-gray-200"}`}>
+            className={`px-2.5 py-1 rounded-full text-xs ${channel === ch ? "bg-[var(--cmp-color-success)] text-white" : "bg-gray-100 text-gray-600 hover:bg-gray-200"}`}>
             {ch}
           </button>
         ))}
@@ -70,7 +70,7 @@ export default function ChatPanel({ channels: initialChannels }: { channels: str
           </div>
         ))}
       </div>
-      {err && <p className="text-xs text-amber-700 mt-2">{err}</p>}
+      {err && <p className="text-xs text-[var(--cmp-text-warning)] mt-2">{err}</p>}
       <div className="flex gap-2 mt-3">
         <input className={input} placeholder={`Message ${channel}…`} value={body} onChange={e => setBody(e.target.value)}
           onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } }} />

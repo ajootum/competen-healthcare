@@ -39,7 +39,7 @@ export function SurfaceHead({ title, meta, refresh }: { title: string; meta?: st
   return (
     <div className="flex items-center gap-2 flex-wrap">
       <h2 className="text-lg font-bold text-white">{title}</h2>
-      <span className="text-[10px] font-semibold text-emerald-300 bg-emerald-500/15 rounded px-1.5 py-0.5 flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />LIVE</span>
+      <span className="text-[10px] font-semibold text-emerald-300 bg-[var(--cmp-color-success)]/15 rounded px-1.5 py-0.5 flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-[var(--cmp-color-success)] animate-pulse" />LIVE</span>
       <span className="flex-1" />
       {refresh && <span className="text-[10px] text-slate-500">auto-refresh {refresh}</span>}
       {meta && <span className="text-[11px] text-slate-400">{meta}</span>}
@@ -78,7 +78,7 @@ export function Kpi({ label, value, sub, tone, delta, deltaUp, series, sparkColo
 
 // Traffic-light status tile (Live Unit Status domains).
 export function StatusTile({ label, status, value, sub }: { label: string; status: "GREEN" | "AMBER" | "RED"; value: any; sub?: string }) {
-  const tone = status === "GREEN" ? { t: "text-emerald-400", b: "border-emerald-500/40", d: "bg-emerald-400" } : status === "AMBER" ? { t: "text-amber-400", b: "border-amber-500/40", d: "bg-amber-400" } : { t: "text-rose-400", b: "border-rose-500/40", d: "bg-rose-400" };
+  const tone = status === "GREEN" ? { t: "text-emerald-400", b: "border-emerald-500/40", d: "bg-[var(--cmp-color-success)]" } : status === "AMBER" ? { t: "text-amber-400", b: "border-amber-500/40", d: "bg-[var(--cmp-color-warning)]" } : { t: "text-rose-400", b: "border-rose-500/40", d: "bg-[var(--cmp-color-error)]" };
   return (
     <div className={`${dcard} ${tone.b} p-3.5`}>
       <div className="flex items-center gap-1.5"><span className={`w-2 h-2 rounded-full ${tone.d}`} /><p className="text-[10px] text-slate-300 truncate">{label}</p></div>
@@ -163,7 +163,7 @@ export function HBar({ label, pct: p, right, tone }: { label: string; pct: numbe
 
 // Severity/status pill.
 export function Pill({ text, tone }: { text: string; tone: "rose" | "amber" | "emerald" | "blue" | "slate" | "fuchsia" }) {
-  const map: Record<string, string> = { rose: "bg-rose-500/15 text-rose-300", amber: "bg-amber-500/15 text-amber-300", emerald: "bg-emerald-500/15 text-emerald-300", blue: "bg-blue-500/15 text-blue-300", slate: "bg-slate-600/40 text-slate-300", fuchsia: "bg-fuchsia-500/15 text-fuchsia-300" };
+  const map: Record<string, string> = { rose: "bg-[var(--cmp-color-error)]/15 text-rose-300", amber: "bg-[var(--cmp-color-warning)]/15 text-amber-300", emerald: "bg-[var(--cmp-color-success)]/15 text-emerald-300", blue: "bg-[var(--cmp-color-information)]/15 text-blue-300", slate: "bg-slate-600/40 text-slate-300", fuchsia: "bg-fuchsia-500/15 text-fuchsia-300" };
   return <span className={`text-[9px] font-semibold uppercase tracking-wide rounded px-1.5 py-0.5 ${map[tone]}`}>{text}</span>;
 }
 

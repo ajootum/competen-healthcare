@@ -15,8 +15,8 @@ export const dynamic = "force-dynamic";
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 const card = "bg-white rounded-xl border border-gray-200";
-const SEV: Record<string, string> = { Critical: "bg-rose-50 text-rose-700", High: "bg-amber-50 text-amber-700", Medium: "bg-sky-50 text-sky-700", Low: "bg-gray-100 text-gray-500" };
-const DOT: Record<string, string> = { Critical: "bg-rose-500", High: "bg-amber-500", Medium: "bg-sky-500", Low: "bg-gray-400" };
+const SEV: Record<string, string> = { Critical: "bg-[var(--cmp-surface-error)] text-[var(--cmp-text-error)]", High: "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]", Medium: "bg-[var(--cmp-surface-information)] text-[var(--cmp-text-information)]", Low: "bg-gray-100 text-gray-500" };
+const DOT: Record<string, string> = { Critical: "bg-[var(--cmp-color-error)]", High: "bg-[var(--cmp-color-warning)]", Medium: "bg-[var(--cmp-color-information)]", Low: "bg-gray-400" };
 
 function Kpi({ label, value, sub, tone }: { label: string; value: any; sub?: string; tone?: string }) {
   return <div className={`${card} p-4`}><p className="text-xs text-gray-500">{label}</p><p className={`text-2xl font-bold tabular-nums mt-1 ${tone ?? "text-gray-900"}`}>{value}</p>{sub && <p className="text-[11px] text-gray-400 mt-0.5">{sub}</p>}</div>;
@@ -47,7 +47,7 @@ export default async function AssignmentExceptions() {
     </>
   );
 
-  if (!d.ready) return <div className="space-y-4">{header}<div className="bg-amber-50 border border-amber-200 rounded-xl p-6"><p className="font-semibold text-amber-900">⚙️ No active shift / operational data</p><p className="text-sm text-amber-800 mt-1">Exception evaluation activates once operational shifts with assignments are running.</p></div></div>;
+  if (!d.ready) return <div className="space-y-4">{header}<div className="bg-[var(--cmp-surface-warning)] border border-[var(--cmp-color-warning)] rounded-xl p-6"><p className="font-semibold text-amber-900">⚙️ No active shift / operational data</p><p className="text-sm text-amber-800 mt-1">Exception evaluation activates once operational shifts with assignments are running.</p></div></div>;
 
   const k = d.kpis;
   return (
@@ -55,9 +55,9 @@ export default async function AssignmentExceptions() {
       {header}
 
       <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-5 gap-3">
-        <Kpi label="Open exceptions" value={k.open} sub="In current scope" tone={k.open ? "text-gray-900" : "text-emerald-600"} />
-        <Kpi label="Critical" value={k.critical} sub="Hard breach" tone={k.critical ? "text-rose-600" : "text-emerald-600"} />
-        <Kpi label="High" value={k.high} sub="Priority action" tone={k.high ? "text-amber-600" : undefined} />
+        <Kpi label="Open exceptions" value={k.open} sub="In current scope" tone={k.open ? "text-gray-900" : "text-[var(--cmp-text-success)]"} />
+        <Kpi label="Critical" value={k.critical} sub="Hard breach" tone={k.critical ? "text-[var(--cmp-text-error)]" : "text-[var(--cmp-text-success)]"} />
+        <Kpi label="High" value={k.high} sub="Priority action" tone={k.high ? "text-[var(--cmp-text-warning)]" : undefined} />
         <Kpi label="Other" value={k.medium} sub="Medium / low" />
         <Kpi label="Families" value={k.families} sub="Distinct types" />
       </div>
@@ -84,7 +84,7 @@ export default async function AssignmentExceptions() {
           <div className={`${card} p-5`}>
             <h3 className="text-sm font-bold text-gray-900 mb-2">Resolve via</h3>
             <div className="space-y-1.5">
-              {[["Workload Oversight", "/unit-manager/workforce-management/team-assignments/workload"], ["Competency Matching", "/unit-manager/workforce-management/team-assignments/competency"], ["Staffing Engine", "/unit-manager/workforce-management/staffing-engine"]].map(([l, h]) => (<Link key={l} href={h} className="flex items-center justify-between rounded-lg border border-gray-100 px-3 py-2 hover:border-emerald-200 hover:bg-emerald-50/30"><span className="text-xs text-gray-700">{l}</span><span className="text-gray-300">›</span></Link>))}
+              {[["Workload Oversight", "/unit-manager/workforce-management/team-assignments/workload"], ["Competency Matching", "/unit-manager/workforce-management/team-assignments/competency"], ["Staffing Engine", "/unit-manager/workforce-management/staffing-engine"]].map(([l, h]) => (<Link key={l} href={h} className="flex items-center justify-between rounded-lg border border-gray-100 px-3 py-2 hover:border-[var(--cmp-color-success)] hover:bg-[var(--cmp-surface-success)]/30"><span className="text-xs text-gray-700">{l}</span><span className="text-gray-300">›</span></Link>))}
             </div>
           </div>
         </div>

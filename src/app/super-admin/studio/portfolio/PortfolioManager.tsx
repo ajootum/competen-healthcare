@@ -53,7 +53,7 @@ export default function PortfolioManager({ templates }: { templates: any[] }) {
           <select value={type} onChange={e => setType(e.target.value)} className={`${inp} sm:w-40`}>{TYPES.map(t => <option key={t.v} value={t.v}>{t.label}</option>)}</select>
           <button onClick={create} disabled={busy} className="text-xs font-semibold text-white bg-teal-600 hover:bg-teal-700 disabled:opacity-50 rounded-lg px-4 py-2 whitespace-nowrap">{busy ? "…" : "Create"}</button>
         </div>
-        {err && <p className="text-[11px] text-red-600 mt-1">{err}</p>}
+        {err && <p className="text-[11px] text-[var(--cmp-text-critical)] mt-1">{err}</p>}
       </div>
 
       {templates.length === 0 ? (
@@ -66,7 +66,7 @@ export default function PortfolioManager({ templates }: { templates: any[] }) {
             <span className={`text-[9px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded border ${STATUS_TONE[t.status] ?? STATUS_TONE.draft}`}>{t.status}</span>
             <div className="ml-auto flex items-center gap-2 text-xs">
               <span className="text-gray-400">{t.sections.length} section{t.sections.length === 1 ? "" : "s"} · {t.requiredArtefacts} artefacts</span>
-              <span className={t.balanced ? "text-teal-600 font-semibold" : t.weightSum > 0 ? "text-amber-600" : "text-gray-400"}>{t.weightSum}%{t.balanced ? " ✓" : ""}</span>
+              <span className={t.balanced ? "text-teal-600 font-semibold" : t.weightSum > 0 ? "text-[var(--cmp-text-warning)]" : "text-gray-400"}>{t.weightSum}%{t.balanced ? " ✓" : ""}</span>
               <button onClick={() => del(t.id)} disabled={busy} className="text-gray-300 hover:text-red-500" title="Delete">✕</button>
             </div>
           </div>
@@ -93,7 +93,7 @@ export default function PortfolioManager({ templates }: { templates: any[] }) {
                 <input value={weight} onChange={e => setWeight(e.target.value)} type="number" min="0" max="100" placeholder="Wt %" className={`${inp} sm:w-20`} />
                 <button onClick={() => addSec(t.id)} disabled={busy} className="text-xs font-semibold text-teal-700 border border-teal-200 bg-teal-50 hover:bg-teal-100 rounded-lg px-3 py-2 whitespace-nowrap">Add section</button>
               </div>
-              {t.sections.length > 0 && !t.balanced && t.weightSum !== 100 && <p className="text-[10px] text-amber-600 mt-1">Section weights sum to {t.weightSum}% — adjust to 100% before activation.</p>}
+              {t.sections.length > 0 && !t.balanced && t.weightSum !== 100 && <p className="text-[10px] text-[var(--cmp-text-warning)] mt-1">Section weights sum to {t.weightSum}% — adjust to 100% before activation.</p>}
               <div className="mt-2 flex gap-3">
                 {t.sections.length > 0 && t.status !== "active" && <button onClick={() => setStatus(t.id, "active")} disabled={busy} className="text-[11px] font-semibold text-teal-700 hover:underline">Activate →</button>}
                 {t.status === "active" && <button onClick={() => setStatus(t.id, "archived")} disabled={busy} className="text-[11px] font-semibold text-gray-400 hover:underline">Archive</button>}

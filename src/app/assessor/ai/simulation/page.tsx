@@ -49,7 +49,7 @@ export default async function SimulationIntelligencePage() {
                       <span className="font-bold text-gray-900">{pct}% <span className="font-normal text-gray-300">of {v.n}</span></span>
                     </div>
                     <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
-                      <div className={`h-full rounded-full ${pct >= 80 ? "bg-green-500" : pct >= 60 ? "bg-amber-400" : "bg-red-400"}`} style={{ width: `${pct}%` }} />
+                      <div className={`h-full rounded-full ${pct >= 80 ? "bg-[var(--cmp-color-success)]" : pct >= 60 ? "bg-[var(--cmp-color-warning)]" : "bg-[var(--cmp-color-critical)]"}`} style={{ width: `${pct}%` }} />
                     </div>
                   </div>
                 );
@@ -63,7 +63,7 @@ export default async function SimulationIntelligencePage() {
               {improvement.map(([name, v]) => (
                 <li key={name} className="flex items-center gap-2 text-[11px]">
                   <span className="text-gray-700 flex-1 truncate">{name}</span>
-                  <span className="text-[9px] font-bold bg-red-50 text-red-600 rounded px-1.5 py-0.5">{v.fails} fail{v.fails === 1 ? "" : "s"}</span>
+                  <span className="text-[9px] font-bold bg-[var(--cmp-surface-critical)] text-[var(--cmp-text-critical)] rounded px-1.5 py-0.5">{v.fails} fail{v.fails === 1 ? "" : "s"}</span>
                 </li>
               ))}
             </ul>

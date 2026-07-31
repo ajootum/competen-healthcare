@@ -145,9 +145,9 @@ export default async function MyFeedbackPage() {
 
   const KPI = [
     { label: "Overall Feedback Score", value: avgScore !== null ? `${avgScore}` : "—", suffix: avgScore !== null ? "/6" : "", sub: `based on ${scoredItems.length || "no"} scored item${scoredItems.length === 1 ? "" : "s"}`, color: "text-gray-900" },
-    { label: "Strengths Identified", value: strengths.length, suffix: "", sub: strengths.length ? `across ${strengthDomains} domain${strengthDomains === 1 ? "" : "s"}` : "appear with passing decisions", color: "text-green-600" },
-    { label: "Areas to Grow", value: growth.length, suffix: "", sub: growth.length ? `across ${growthDomains} domain${growthDomains === 1 ? "" : "s"}` : "no open development areas", color: growth.length ? "text-amber-600" : "text-gray-400" },
-    { label: "Recent Feedback", value: recent30, suffix: "", sub: "in the last 30 days", color: "text-blue-600" },
+    { label: "Strengths Identified", value: strengths.length, suffix: "", sub: strengths.length ? `across ${strengthDomains} domain${strengthDomains === 1 ? "" : "s"}` : "appear with passing decisions", color: "text-[var(--cmp-text-success)]" },
+    { label: "Areas to Grow", value: growth.length, suffix: "", sub: growth.length ? `across ${growthDomains} domain${growthDomains === 1 ? "" : "s"}` : "no open development areas", color: growth.length ? "text-[var(--cmp-text-warning)]" : "text-gray-400" },
+    { label: "Recent Feedback", value: recent30, suffix: "", sub: "in the last 30 days", color: "text-[var(--cmp-text-information)]" },
   ];
 
   return (
@@ -202,7 +202,7 @@ export default async function MyFeedbackPage() {
               <h2 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3">Recognition 🏆</h2>
               <div className="flex flex-col gap-2">
                 {(recognitions ?? []).map((r, i) => (
-                  <div key={i} className="border border-amber-100 rounded-lg px-4 py-3">
+                  <div key={i} className="border border-[var(--cmp-color-warning)] rounded-lg px-4 py-3">
                     <p className="text-sm font-medium text-gray-800">{r.title}</p>
                     {r.description && <p className="text-[11px] text-gray-500 mt-0.5">{r.description}</p>}
                     <p className="text-[10px] text-gray-400 mt-1" suppressHydrationWarning>{r.awarded_by_name} · {new Date(r.awarded_at).toLocaleDateString()}</p>
@@ -250,16 +250,16 @@ export default async function MyFeedbackPage() {
             )) : <p className="text-xs text-gray-400 text-center py-3">Strengths appear with passing decisions. 💪</p>}
           </div>
 
-          <div className="bg-amber-50/60 rounded-xl border border-amber-100 p-5">
+          <div className="bg-[var(--cmp-surface-warning)]/60 rounded-xl border border-[var(--cmp-color-warning)] p-5">
             <div className="flex items-center justify-between mb-3">
               <h2 className="font-semibold text-gray-900 text-sm">🎯 Focus Areas</h2>
               <Link href="/dashboard/learning" className="text-xs text-teal-700 hover:underline">View all</Link>
             </div>
             {focusAreas.length ? focusAreas.map(g => (
               <div key={g.name} className="flex items-center gap-2 py-1.5">
-                <span className="w-1.5 h-1.5 rounded-full bg-amber-500 shrink-0" />
+                <span className="w-1.5 h-1.5 rounded-full bg-[var(--cmp-color-warning)] shrink-0" />
                 <p className="text-[11px] text-gray-700 flex-1 truncate">{g.name}</p>
-                <span className="text-[9px] font-bold text-amber-700 shrink-0">{g.label}</span>
+                <span className="text-[9px] font-bold text-[var(--cmp-text-warning)] shrink-0">{g.label}</span>
               </div>
             )) : <p className="text-xs text-gray-500 text-center py-3">No open development areas. ✅</p>}
           </div>

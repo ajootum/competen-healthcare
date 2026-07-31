@@ -84,7 +84,7 @@ export default async function AdministrationPage() {
 
         <Card title="Automations">
           {d.automations.length ? <div className="space-y-2">{d.automations.map((a: any, i: number) => (
-            <div key={i} className="flex items-center gap-2 text-[12px]"><span className={`w-1.5 h-1.5 rounded-full shrink-0 ${a.status === "active" ? "bg-emerald-500" : "bg-amber-500"}`} /><span className="text-gray-800 truncate flex-1">{a.name}</span><span className="text-gray-400 tabular-nums">{a.runs} runs</span></div>
+            <div key={i} className="flex items-center gap-2 text-[12px]"><span className={`w-1.5 h-1.5 rounded-full shrink-0 ${a.status === "active" ? "bg-[var(--cmp-color-success)]" : "bg-[var(--cmp-color-warning)]"}`} /><span className="text-gray-800 truncate flex-1">{a.name}</span><span className="text-gray-400 tabular-nums">{a.runs} runs</span></div>
           ))}</div> : <p className="text-sm text-gray-400 py-4 text-center">No automations configured.</p>}
           <p className="text-[10px] text-gray-400 mt-3">Registry catalogue: {d.registryByClass.map((r: any) => `${r.label} ${r.value}`).join(" · ") || "—"}.</p>
         </Card>

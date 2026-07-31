@@ -15,9 +15,9 @@ export const dynamic = "force-dynamic";
 const card = "bg-white rounded-xl border border-gray-200";
 const dash = (n: number | null | undefined) => (n == null ? "—" : n.toLocaleString());
 const relTime = (iso?: string | null) => { if (!iso) return ""; const s = Math.floor((Date.now() - new Date(iso).getTime()) / 1000); if (s < 60) return "just now"; if (s < 3600) return `${Math.floor(s / 60)}m ago`; if (s < 86400) return `${Math.floor(s / 3600)}h ago`; return `${Math.floor(s / 86400)}d ago`; };
-const SVC_TONE: Record<string, string> = { operational: "bg-green-50 text-green-700", slow: "bg-amber-50 text-amber-700", degraded: "bg-rose-50 text-rose-700" };
-const W_TONE: Record<string, string> = { ok: "bg-green-50 text-green-700", warn: "bg-amber-50 text-amber-700", down: "bg-rose-50 text-rose-700", na: "bg-gray-100 text-gray-400" };
-const JOB_TONE: Record<string, string> = { running: "bg-blue-50 text-blue-700", success: "bg-green-50 text-green-700", failed: "bg-rose-50 text-rose-700" };
+const SVC_TONE: Record<string, string> = { operational: "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]", slow: "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]", degraded: "bg-[var(--cmp-surface-error)] text-[var(--cmp-text-error)]" };
+const W_TONE: Record<string, string> = { ok: "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]", warn: "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]", down: "bg-[var(--cmp-surface-error)] text-[var(--cmp-text-error)]", na: "bg-gray-100 text-gray-400" };
+const JOB_TONE: Record<string, string> = { running: "bg-[var(--cmp-surface-information)] text-blue-700", success: "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]", failed: "bg-[var(--cmp-surface-error)] text-[var(--cmp-text-error)]" };
 
 export default async function InfrastructureServices() {
   const supabase = await createClient();
@@ -32,11 +32,11 @@ export default async function InfrastructureServices() {
   const k = d.kpis;
 
   const kpiCards = [
-    { label: "Services", value: `${k.servicesOperational}/${k.services}`, icon: "🖥️", iconBg: "bg-blue-50", tone: k.servicesOperational === k.services ? "text-green-600" : "text-amber-600" },
+    { label: "Services", value: `${k.servicesOperational}/${k.services}`, icon: "🖥️", iconBg: "bg-[var(--cmp-surface-information)]", tone: k.servicesOperational === k.services ? "text-[var(--cmp-text-success)]" : "text-[var(--cmp-text-warning)]" },
     { label: "Active Regions", value: dash(k.regions), icon: "🌍", iconBg: "bg-teal-50" },
     { label: "Deployments", value: dash(k.deployments), icon: "🚀", iconBg: "bg-violet-50" },
-    { label: "Automations", value: dash(k.jobs), icon: "⚙️", iconBg: "bg-sky-50" },
-    { label: "DB Latency", value: k.dbLatencyMs != null ? `${k.dbLatencyMs}ms` : "—", icon: "⚡", iconBg: "bg-green-50", tone: k.dbLatencyMs != null && k.dbLatencyMs < 400 ? "text-green-600" : "text-amber-600" },
+    { label: "Automations", value: dash(k.jobs), icon: "⚙️", iconBg: "bg-[var(--cmp-surface-information)]" },
+    { label: "DB Latency", value: k.dbLatencyMs != null ? `${k.dbLatencyMs}ms` : "—", icon: "⚡", iconBg: "bg-[var(--cmp-surface-success)]", tone: k.dbLatencyMs != null && k.dbLatencyMs < 400 ? "text-[var(--cmp-text-success)]" : "text-[var(--cmp-text-warning)]" },
     { label: "Version", value: d.runtime.version ?? "—", icon: "🏷️", iconBg: "bg-gray-50" },
   ];
 

@@ -29,7 +29,7 @@ export default async function ShiftTimeline() {
   const sc = await loadShiftCommand(admin, profile?.hospital_id ?? null, roles.includes("super_admin"));
   if (!sc.ready) return (
     <div className="space-y-4"><h1 className="text-2xl font-bold text-gray-900">Shift Timeline</h1>
-      <div className="bg-amber-50 border border-amber-200 rounded-xl p-6"><p className="font-semibold text-amber-900">⚙️ Coming online</p><p className="text-sm text-amber-800 mt-2">The Clinical Operations Engine tables aren&apos;t provisioned yet.</p></div></div>
+      <div className="bg-[var(--cmp-surface-warning)] border border-[var(--cmp-color-warning)] rounded-xl p-6"><p className="font-semibold text-amber-900">⚙️ Coming online</p><p className="text-sm text-amber-800 mt-2">The Clinical Operations Engine tables aren&apos;t provisioned yet.</p></div></div>
   );
   const { shift, rounds, timelineEvents, copilot } = sc;
 
@@ -86,7 +86,7 @@ export default async function ShiftTimeline() {
                   <div className="flex items-center gap-2">
                     <span className="text-sm font-semibold tabular-nums text-gray-700 w-12">{e.hm}</span>
                     <span className={`text-sm ${e.kind === "round" ? "text-gray-700" : e.done ? "text-gray-800 font-medium" : "text-gray-400"}`}>{e.label}</span>
-                    {e.kind === "round" ? <span className="text-[9px] uppercase tracking-wide text-teal-500/70">round</span> : e.done && <span className="text-[9px] uppercase tracking-wide text-green-600">logged</span>}
+                    {e.kind === "round" ? <span className="text-[9px] uppercase tracking-wide text-teal-500/70">round</span> : e.done && <span className="text-[9px] uppercase tracking-wide text-[var(--cmp-text-success)]">logged</span>}
                   </div>
                 </li>
               ))}

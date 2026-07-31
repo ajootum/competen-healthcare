@@ -20,7 +20,7 @@ const monthLabel = (p: string) => { const d = new Date(p); return isNaN(+d) ? p 
 const fmt = (v: number | null, unit: string) => { if (v == null) return "—"; if (unit === "percent") return `${v}%`; if (unit === "rate_per_1000") return `${v}/1k`; if (unit === "minutes") return `${v}m`; if (unit === "days") return `${v}d`; return `${v}`; };
 const ragTone = (s: string): "green" | "amber" | "red" | "gray" => (s === "green" ? "green" : s === "amber" ? "amber" : s === "red" ? "red" : "gray");
 const ragLabel: Record<string, string> = { green: "On target", amber: "Watch", red: "Critical", gray: "No data" };
-const scoreTone = (s: number | null) => (s == null ? "text-gray-400" : s >= 85 ? "text-emerald-600" : s >= 70 ? "text-amber-600" : "text-rose-600");
+const scoreTone = (s: number | null) => (s == null ? "text-gray-400" : s >= 85 ? "text-[var(--cmp-text-success)]" : s >= 70 ? "text-[var(--cmp-text-warning)]" : "text-[var(--cmp-text-error)]");
 const scoreWord = (s: number | null) => (s == null ? "—" : s >= 85 ? "Good" : s >= 70 ? "Fair" : "Needs focus");
 const SEG = { green: "#10b981", amber: "#f59e0b", red: "#ef4444", gray: "#cbd5e1" };
 const CAT_COLORS = ["#6366f1", "#10b981", "#8b5cf6", "#f59e0b", "#0ea5e9"];
@@ -78,7 +78,7 @@ export default async function ClinicalIndicatorsCentre() {
     </>
   );
 
-  if (!d.provisioned) return <div className="space-y-4">{header}<div className="bg-amber-50 border border-amber-200 rounded-xl p-6"><p className="font-semibold text-amber-900">⚙️ Quality indicators not provisioned</p><p className="text-sm text-amber-800 mt-1">Apply migration 019 (quality_indicators / indicator_measurements), then seed indicators (scripts/seed-clinical-indicators.mjs).</p></div></div>;
+  if (!d.provisioned) return <div className="space-y-4">{header}<div className="bg-[var(--cmp-surface-warning)] border border-[var(--cmp-color-warning)] rounded-xl p-6"><p className="font-semibold text-amber-900">⚙️ Quality indicators not provisioned</p><p className="text-sm text-amber-800 mt-1">Apply migration 019 (quality_indicators / indicator_measurements), then seed indicators (scripts/seed-clinical-indicators.mjs).</p></div></div>;
   if (!d.hasData) return <div className="space-y-4">{header}<div className={`${qcard} p-8 text-center`}><p className="text-sm text-gray-500">No clinical indicators are defined for this unit yet.</p><p className="text-xs text-gray-400 mt-1">Define indicators + measurements in the quality workspace, or run scripts/seed-clinical-indicators.mjs for the AMU demo ward.</p></div></div>;
 
   const k = d.kpis;
@@ -95,7 +95,7 @@ export default async function ClinicalIndicatorsCentre() {
     ...d.indicators.filter((i: any) => i.worsening && i.status === "amber").slice(0, 2).map((i: any) => ({ text: `${i.name} is below target and declining — trend likely to worsen without intervention.`, conf: 76, tone: "amber" })),
     ...(d.kpis.overallScore != null && d.kpis.overallScore >= 80 ? [{ text: `Overall attainment (${d.kpis.overallScore}%) is healthy; ${d.kpis.onTarget} of ${d.kpis.total} indicators are on target.`, conf: 82, tone: "low" }] : []),
   ].slice(0, 4);
-  const aiTint: Record<string, string> = { red: "bg-rose-50 text-rose-600", amber: "bg-amber-50 text-amber-600", low: "bg-emerald-50 text-emerald-600" };
+  const aiTint: Record<string, string> = { red: "bg-[var(--cmp-surface-error)] text-[var(--cmp-text-error)]", amber: "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]", low: "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]" };
   const maxCat = Math.max(1, ...d.byCategory.map((c: any) => c.total));
 
   return (
@@ -104,12 +104,12 @@ export default async function ClinicalIndicatorsCentre() {
 
       {/* KPI ribbon */}
       <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-8 gap-3">
-        <Kpi icon="🛡️" tint="bg-emerald-50" label="Overall Quality Score" value={k.overallScore != null ? `${k.overallScore}%` : "—"} tone={scoreTone(k.overallScore)} sub={scoreWord(k.overallScore)} />
+        <Kpi icon="🛡️" tint="bg-[var(--cmp-surface-success)]" label="Overall Quality Score" value={k.overallScore != null ? `${k.overallScore}%` : "—"} tone={scoreTone(k.overallScore)} sub={scoreWord(k.overallScore)} />
         <Kpi icon="🎯" tint="bg-indigo-50" label="Meeting Target" value={`${k.onTarget}/${k.total}`} sub={`${meetPct}%`} />
-        <Kpi icon="⛔" tint="bg-rose-50" label="Below Target" value={k.below} tone={k.below ? "text-rose-600" : "text-gray-400"} sub={`${belowPct}%`} />
-        <Kpi icon="📉" tint="bg-amber-50" label="Trending Down" value={k.trendingDown} tone={k.trendingDown ? "text-amber-600" : "text-gray-400"} sub={`${downPct}%`} />
-        <Kpi icon="⚠️" tint="bg-orange-50" label="High-Risk Indicators" value={k.highRisk} tone={k.highRisk ? "text-rose-600" : "text-gray-400"} sub="critical attention" />
-        <Kpi icon="🚀" tint="bg-sky-50" label="Improvement Projects" value={k.improvementProjects} sub="open CAPA (proxy)" />
+        <Kpi icon="⛔" tint="bg-[var(--cmp-surface-error)]" label="Below Target" value={k.below} tone={k.below ? "text-[var(--cmp-text-error)]" : "text-gray-400"} sub={`${belowPct}%`} />
+        <Kpi icon="📉" tint="bg-[var(--cmp-surface-warning)]" label="Trending Down" value={k.trendingDown} tone={k.trendingDown ? "text-[var(--cmp-text-warning)]" : "text-gray-400"} sub={`${downPct}%`} />
+        <Kpi icon="⚠️" tint="bg-[var(--cmp-surface-warning)]" label="High-Risk Indicators" value={k.highRisk} tone={k.highRisk ? "text-[var(--cmp-text-error)]" : "text-gray-400"} sub="critical attention" />
+        <Kpi icon="🚀" tint="bg-[var(--cmp-surface-information)]" label="Improvement Projects" value={k.improvementProjects} sub="open CAPA (proxy)" />
         <Kpi icon="📊" tint="bg-violet-50" label="At/Above Target" value={`${k.benchmarkPct}%`} sub="internal benchmark" />
         <Kpi icon="🧠" tint="bg-fuchsia-50" label="AI Clinical Risk" value={k.riskScore} tone={scoreTone(k.riskScore < 0.4 ? 90 : k.riskScore < 0.7 ? 75 : 50)} sub={riskWord} />
       </div>
@@ -169,7 +169,7 @@ export default async function ClinicalIndicatorsCentre() {
           <h3 className="font-semibold text-gray-900 text-sm mb-3">High Impact Indicators</h3>
           <div className="overflow-x-auto"><table className="w-full text-xs"><thead><tr className="text-left text-gray-400 border-b border-gray-100"><th className="py-1 font-medium">Indicator</th><th className="py-1 font-medium">Impact</th><th className="py-1 font-medium text-right">Perf.</th><th className="py-1 font-medium text-right">Target</th></tr></thead>
             <tbody>{d.highImpact.map((i: any, idx: number) => (
-              <tr key={idx} className="border-b border-gray-50"><td className="py-1.5 text-gray-700 max-w-[150px] truncate" title={i.name}>{i.name}</td><td className="py-1.5"><span className={`text-[10px] px-1.5 py-0.5 rounded ${i.impact === "High" ? "bg-rose-100 text-rose-700" : "bg-amber-100 text-amber-700"}`}>{i.impact}</span></td><td className="py-1.5 text-right tabular-nums font-semibold text-gray-800">{fmt(i.value, i.unit)}</td><td className="py-1.5 text-right tabular-nums text-gray-400">{fmt(i.target, i.unit)}</td></tr>
+              <tr key={idx} className="border-b border-gray-50"><td className="py-1.5 text-gray-700 max-w-[150px] truncate" title={i.name}>{i.name}</td><td className="py-1.5"><span className={`text-[10px] px-1.5 py-0.5 rounded ${i.impact === "High" ? "bg-[var(--cmp-surface-error)] text-[var(--cmp-text-error)]" : "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]"}`}>{i.impact}</span></td><td className="py-1.5 text-right tabular-nums font-semibold text-gray-800">{fmt(i.value, i.unit)}</td><td className="py-1.5 text-right tabular-nums text-gray-400">{fmt(i.target, i.unit)}</td></tr>
             ))}{!d.highImpact.length && <tr><td colSpan={4} className="py-6 text-center text-gray-400">No high-impact breaches.</td></tr>}</tbody></table></div>
         </div>
       </div>
@@ -204,7 +204,7 @@ export default async function ClinicalIndicatorsCentre() {
         <div className={`${qcard} p-5`}>
           <h3 className="font-semibold text-gray-900 text-sm mb-3">Recent Indicator Alerts</h3>
           <div className="space-y-1.5">{d.alerts.map((a: any, i: number) => (
-            <div key={i} className="flex items-start gap-2"><span className="mt-0.5 text-xs">{a.status === "red" ? "🔴" : "🟠"}</span><div className="flex-1 min-w-0"><p className="text-[11px] text-gray-700 leading-snug">{a.message}</p></div><span className={`text-[9px] px-1.5 py-0.5 rounded shrink-0 ${a.severity === "Critical" ? "bg-rose-100 text-rose-700" : a.severity === "High" ? "bg-orange-100 text-orange-700" : "bg-amber-100 text-amber-700"}`}>{a.severity}</span></div>
+            <div key={i} className="flex items-start gap-2"><span className="mt-0.5 text-xs">{a.status === "red" ? "🔴" : "🟠"}</span><div className="flex-1 min-w-0"><p className="text-[11px] text-gray-700 leading-snug">{a.message}</p></div><span className={`text-[9px] px-1.5 py-0.5 rounded shrink-0 ${a.severity === "Critical" ? "bg-[var(--cmp-surface-error)] text-[var(--cmp-text-error)]" : a.severity === "High" ? "bg-[var(--cmp-surface-warning)] text-orange-700" : "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]"}`}>{a.severity}</span></div>
           ))}{!d.alerts.length && <p className="text-[11px] text-gray-400">No active alerts — all indicators within threshold.</p>}</div>
         </div>
       </div>

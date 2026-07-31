@@ -253,7 +253,7 @@ export default function AssessmentSession({
 
       {/* Saved-draft banner */}
       {pendingDraft && (
-        <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 mb-5 flex flex-col sm:flex-row sm:items-center gap-3">
+        <div className="bg-[var(--cmp-surface-warning)] border border-[var(--cmp-color-warning)] rounded-xl p-4 mb-5 flex flex-col sm:flex-row sm:items-center gap-3">
           <div className="flex-1">
             <p className="text-sm font-semibold text-amber-900">Saved draft found</p>
             <p className="text-xs text-amber-800/70 mt-0.5" suppressHydrationWarning>
@@ -263,11 +263,11 @@ export default function AssessmentSession({
           </div>
           <div className="flex gap-2 shrink-0">
             <button onClick={resumeDraft}
-              className="text-xs font-semibold bg-amber-600 text-white px-3 py-1.5 rounded-lg hover:bg-amber-700 transition-colors">
+              className="text-xs font-semibold bg-[var(--cmp-color-warning)] text-white px-3 py-1.5 rounded-lg hover:bg-amber-700 transition-colors">
               Resume draft
             </button>
             <button onClick={discardDraft}
-              className="text-xs text-amber-700 border border-amber-300 px-3 py-1.5 rounded-lg hover:bg-amber-100 transition-colors">
+              className="text-xs text-[var(--cmp-text-warning)] border border-[var(--cmp-color-warning)] px-3 py-1.5 rounded-lg hover:bg-[var(--cmp-surface-warning)] transition-colors">
               Discard
             </button>
           </div>
@@ -303,7 +303,7 @@ export default function AssessmentSession({
               </div>
 
               <div className="flex items-start gap-3">
-                <span className="w-9 h-9 rounded-full bg-blue-50 text-blue-700 font-bold text-[11px] flex items-center justify-center shrink-0">
+                <span className="w-9 h-9 rounded-full bg-[var(--cmp-surface-information)] text-blue-700 font-bold text-[11px] flex items-center justify-center shrink-0">
                   {initials(assessorName) || "👤"}
                 </span>
                 <div className="min-w-0">
@@ -398,7 +398,7 @@ export default function AssessmentSession({
                 return (
                   <button key={p.label} onClick={() => stepperJump(i)} className="flex items-center gap-2.5 text-left group">
                     <span className={`w-7 h-7 rounded-full text-[11px] font-bold flex items-center justify-center shrink-0 transition-colors ${
-                      st === "Complete" ? "bg-green-500 text-white"
+                      st === "Complete" ? "bg-[var(--cmp-color-success)] text-white"
                       : st === "In Progress" ? "bg-teal-600 text-white"
                       : "bg-gray-100 text-gray-400 group-hover:bg-gray-200"
                     }`}>
@@ -407,7 +407,7 @@ export default function AssessmentSession({
                     <span className="min-w-0">
                       <span className="block text-[11px] font-semibold text-gray-800 leading-tight">{p.label}</span>
                       <span className={`block text-[9px] mt-0.5 ${
-                        st === "Complete" ? "text-green-600" : st === "In Progress" ? "text-teal-600" : "text-gray-300"
+                        st === "Complete" ? "text-[var(--cmp-text-success)]" : st === "In Progress" ? "text-teal-600" : "text-gray-300"
                       }`}>{st}</span>
                     </span>
                   </button>
@@ -433,9 +433,9 @@ export default function AssessmentSession({
                           {SECTION_META[i].short}
                         </span>
                         {st.complete ? (
-                          <span className="w-4 h-4 rounded-full bg-green-500 text-white text-[8px] font-bold flex items-center justify-center shrink-0">✓</span>
+                          <span className="w-4 h-4 rounded-full bg-[var(--cmp-color-success)] text-white text-[8px] font-bold flex items-center justify-center shrink-0">✓</span>
                         ) : st.valued > 0 ? (
-                          <span className="text-[9px] font-bold text-amber-600 shrink-0">{st.valued}/{st.total}</span>
+                          <span className="text-[9px] font-bold text-[var(--cmp-text-warning)] shrink-0">{st.valued}/{st.total}</span>
                         ) : step === i ? (
                           <span className="text-teal-500 text-[10px] shrink-0">→</span>
                         ) : null}
@@ -501,7 +501,7 @@ export default function AssessmentSession({
                             </td>
                             <td className="px-5 py-3 text-center">
                               {typeof g === "number" ? (
-                                <span className="inline-flex w-5 h-5 rounded-full bg-green-100 text-green-600 text-[10px] font-bold items-center justify-center">✓</span>
+                                <span className="inline-flex w-5 h-5 rounded-full bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)] text-[10px] font-bold items-center justify-center">✓</span>
                               ) : g === "na" ? (
                                 <span className="text-[10px] font-semibold text-gray-300">N/A</span>
                               ) : (
@@ -518,7 +518,7 @@ export default function AssessmentSession({
                 <div className="px-5 py-3 border-t border-gray-100 flex items-center justify-between">
                   <span className="text-xs font-semibold text-gray-500">Section Score (Average)</span>
                   {activeStat && activeStat.avg !== null ? (
-                    <span className="text-sm font-bold bg-green-50 text-green-700 px-3 py-1 rounded-lg">
+                    <span className="text-sm font-bold bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)] px-3 py-1 rounded-lg">
                       {activeStat.avg.toFixed(1)} / 6 ({Math.round((activeStat.avg / 6) * 100)}%)
                     </span>
                   ) : (
@@ -669,7 +669,7 @@ export default function AssessmentSession({
                     <span className="flex items-center justify-between gap-2">
                       <span className="flex items-center gap-1.5 min-w-0">
                         <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${
-                          pct === null ? "bg-white/20" : pct >= 75 ? "bg-green-400" : pct >= 50 ? "bg-amber-400" : "bg-red-400"
+                          pct === null ? "bg-white/20" : pct >= 75 ? "bg-[var(--cmp-color-success)]" : pct >= 50 ? "bg-[var(--cmp-color-warning)]" : "bg-[var(--cmp-color-critical)]"
                         }`} />
                         <span className="text-[9px] text-teal-100/60 group-hover:text-teal-100 truncate transition-colors">{SECTION_META[i].short}</span>
                       </span>
@@ -677,7 +677,7 @@ export default function AssessmentSession({
                     </span>
                     <span className="block h-1 bg-white/10 rounded-full overflow-hidden mt-0.5">
                       {pct !== null && (
-                        <span className={`block h-full rounded-full ${pct >= 75 ? "bg-green-400" : pct >= 50 ? "bg-amber-400" : "bg-red-400"}`}
+                        <span className={`block h-full rounded-full ${pct >= 75 ? "bg-[var(--cmp-color-success)]" : pct >= 50 ? "bg-[var(--cmp-color-warning)]" : "bg-[var(--cmp-color-critical)]"}`}
                           style={{ width: `${pct}%` }} />
                       )}
                     </span>
@@ -723,7 +723,7 @@ export default function AssessmentSession({
               </div>
             </div>
             <button onClick={resetSession}
-              className="mt-3 w-full text-[11px] font-semibold text-gray-400 hover:text-red-600 border border-gray-200 py-1.5 rounded-lg transition-colors">
+              className="mt-3 w-full text-[11px] font-semibold text-gray-400 hover:text-[var(--cmp-text-critical)] border border-gray-200 py-1.5 rounded-lg transition-colors">
               Reset session
             </button>
             <p className="text-[9px] text-gray-300 mt-2 leading-snug">

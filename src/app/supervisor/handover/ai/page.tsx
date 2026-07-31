@@ -13,7 +13,7 @@ export const dynamic = "force-dynamic";
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 const card = "bg-white rounded-xl border border-gray-200";
-const RISK_BADGE: Record<string, string> = { "High Risk": "bg-rose-50 text-rose-700", "At Risk": "bg-amber-50 text-amber-700", "Stable": "bg-emerald-50 text-emerald-700" };
+const RISK_BADGE: Record<string, string> = { "High Risk": "bg-[var(--cmp-surface-error)] text-[var(--cmp-text-error)]", "At Risk": "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]", "Stable": "bg-[var(--cmp-surface-success)] text-emerald-700" };
 
 function Kpi({ label, value, sub, tone }: { label: string; value: any; sub?: string; tone?: string }) {
   return <div className={`${card} p-3.5`}><p className="text-[10px] text-gray-500 uppercase tracking-wide">{label}</p><p className={`text-2xl font-bold tabular-nums mt-0.5 ${tone ?? "text-gray-900"}`}>{value}</p>{sub && <p className="text-[10px] text-gray-400">{sub}</p>}</div>;
@@ -30,7 +30,7 @@ export default async function AIHandoverAssistant() {
 
   const d = await loadHandoverContext(admin, profile?.hospital_id ?? null, roles.includes("super_admin"));
   const header = (<><div className="flex items-center gap-2"><span className="text-xl">🤖</span><div><h1 className="text-2xl font-bold text-gray-900 tracking-tight">AI Handover Assistant</h1><p className="text-sm text-gray-500">Intelligent insights and recommendations to support safer, higher-quality handovers.</p></div></div><HandoverNav /></>);
-  if (!d.ready) return <div className="space-y-4">{header}<div className="bg-amber-50 border border-amber-200 rounded-xl p-6"><p className="font-semibold text-amber-900">⚙️ Operational data not provisioned</p></div></div>;
+  if (!d.ready) return <div className="space-y-4">{header}<div className="bg-[var(--cmp-surface-warning)] border border-[var(--cmp-color-warning)] rounded-xl p-6"><p className="font-semibold text-amber-900">⚙️ Operational data not provisioned</p></div></div>;
 
   const rows = d.rows;
   const highRisk = rows.filter((r: any) => r.risk === "High Risk");
@@ -53,12 +53,12 @@ export default async function AIHandoverAssistant() {
     <div className="space-y-4">
       {header}
       <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-3">
-        <Kpi label="High Risk Patients" value={highRisk.length} sub="This shift" tone={highRisk.length ? "text-rose-600" : undefined} />
-        <Kpi label="Deterioration (PEWS≥6)" value={deterioration} sub="Elevated risk" tone={deterioration ? "text-rose-600" : undefined} />
+        <Kpi label="High Risk Patients" value={highRisk.length} sub="This shift" tone={highRisk.length ? "text-[var(--cmp-text-error)]" : undefined} />
+        <Kpi label="Deterioration (PEWS≥6)" value={deterioration} sub="Elevated risk" tone={deterioration ? "text-[var(--cmp-text-error)]" : undefined} />
         <Kpi label="Handover Quality" value={quality != null ? `${quality}%` : "—"} sub={quality != null ? "From JBI audits" : "No audits yet"} />
-        <Kpi label="Missing Info" value={missing.length} sub="Detected" tone={missing.length ? "text-amber-600" : undefined} />
-        <Kpi label="Open Actions" value={overdue} sub="Overdue" tone={overdue ? "text-rose-600" : undefined} />
-        <Kpi label="AI Confidence" value={confLabel} sub={`${confidence}% data`} tone={confLabel === "High" ? "text-emerald-600" : confLabel === "Medium" ? "text-amber-600" : "text-rose-600"} />
+        <Kpi label="Missing Info" value={missing.length} sub="Detected" tone={missing.length ? "text-[var(--cmp-text-warning)]" : undefined} />
+        <Kpi label="Open Actions" value={overdue} sub="Overdue" tone={overdue ? "text-[var(--cmp-text-error)]" : undefined} />
+        <Kpi label="AI Confidence" value={confLabel} sub={`${confidence}% data`} tone={confLabel === "High" ? "text-[var(--cmp-text-success)]" : confLabel === "Medium" ? "text-[var(--cmp-text-warning)]" : "text-[var(--cmp-text-error)]"} />
       </div>
 
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
@@ -73,7 +73,7 @@ export default async function AIHandoverAssistant() {
             {[["Patients", rows.length], ["High Risk", highRisk.length], ["Escalations", d.escalations.length], ["Overdue", overdue]].map(([l, v]) => (<div key={l as string} className="rounded-lg border border-gray-100 p-2 text-center"><p className="text-[10px] text-gray-500">{l}</p><p className="text-lg font-bold text-gray-900">{v as number}</p></div>))}
           </div>
           <p className="text-[10px] font-semibold text-gray-500 uppercase mb-1">AI Recommendations</p>
-          <ol className="space-y-1">{recs.map((r, i) => <li key={i} className="text-[11px] text-gray-700 flex gap-2"><span className="text-emerald-600 font-bold">{i + 1}</span>{r}</li>)}</ol>
+          <ol className="space-y-1">{recs.map((r, i) => <li key={i} className="text-[11px] text-gray-700 flex gap-2"><span className="text-[var(--cmp-text-success)] font-bold">{i + 1}</span>{r}</li>)}</ol>
         </div>
       </div>
 

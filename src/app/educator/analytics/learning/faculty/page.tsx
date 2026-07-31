@@ -69,7 +69,7 @@ export default async function FacultyAnalytics() {
                       <td className="py-2 pr-3 font-semibold text-gray-800 whitespace-nowrap">{f.name}</td>
                       <td className="py-2 pr-3">
                         <span className="flex items-center gap-1.5">
-                          <span className="w-12 h-1.5 bg-gray-100 rounded-full overflow-hidden inline-block"><span className="block h-full rounded-full bg-orange-400" style={{ width: `${(f.assessments / maxAssess) * 100}%` }} /></span>
+                          <span className="w-12 h-1.5 bg-gray-100 rounded-full overflow-hidden inline-block"><span className="block h-full rounded-full bg-[var(--cmp-color-warning)]" style={{ width: `${(f.assessments / maxAssess) * 100}%` }} /></span>
                           <span className="text-gray-700 font-bold">{f.assessments}</span>
                         </span>
                       </td>

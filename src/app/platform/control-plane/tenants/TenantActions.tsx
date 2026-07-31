@@ -44,7 +44,7 @@ export default function TenantActions({ tenantId, status, plan, plans }: { tenan
           {transitions.map(s => <option key={s} value={s}>→ {s}</option>)}
         </select>
       )}
-      {msg && <span className={`text-[10px] ${msg === "✓" ? "text-green-600" : "text-red-500"}`}>{msg}</span>}
+      {msg && <span className={`text-[10px] ${msg === "✓" ? "text-[var(--cmp-text-success)]" : "text-red-500"}`}>{msg}</span>}
     </div>
   );
 }

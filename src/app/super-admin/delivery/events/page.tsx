@@ -11,10 +11,10 @@ import EventConsumerRunner from "./EventConsumerRunner";
 export const dynamic = "force-dynamic";
 
 const STATUS: Record<string, string> = {
-  pending: "text-amber-600 bg-amber-50 border-amber-100",
+  pending: "text-[var(--cmp-text-warning)] bg-[var(--cmp-surface-warning)] border-[var(--cmp-color-warning)]",
   processed: "text-teal-700 bg-teal-50 border-teal-100",
-  failed: "text-rose-600 bg-rose-50 border-rose-100",
-  dead_letter: "text-rose-700 bg-rose-50 border-rose-200",
+  failed: "text-[var(--cmp-text-error)] bg-[var(--cmp-surface-error)] border-[var(--cmp-color-error)]",
+  dead_letter: "text-[var(--cmp-text-error)] bg-[var(--cmp-surface-error)] border-[var(--cmp-color-error)]",
 };
 
 function ago(iso: string) {
@@ -48,15 +48,15 @@ export default async function EventsPage() {
       </div>
 
       {!q.provisioned ? (
-        <div className="bg-amber-50 border border-amber-100 rounded-xl p-4"><p className="text-[13px] text-amber-900">The event outbox isn&apos;t provisioned (migration 102 <code className="text-[11px]">domain_events</code>).</p></div>
+        <div className="bg-[var(--cmp-surface-warning)] border border-[var(--cmp-color-warning)] rounded-xl p-4"><p className="text-[13px] text-amber-900">The event outbox isn&apos;t provisioned (migration 102 <code className="text-[11px]">domain_events</code>).</p></div>
       ) : (
         <>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-5">
             {[
               { label: "Events", value: q.kpis.total, tone: "text-gray-900" },
-              { label: "Pending", value: q.kpis.pending, tone: "text-amber-600" },
+              { label: "Pending", value: q.kpis.pending, tone: "text-[var(--cmp-text-warning)]" },
               { label: "Processed", value: q.kpis.processed, tone: "text-teal-600" },
-              { label: "Dead-letter", value: q.kpis.dead, tone: "text-rose-600" },
+              { label: "Dead-letter", value: q.kpis.dead, tone: "text-[var(--cmp-text-error)]" },
             ].map(k => (
               <div key={k.label} className="bg-white rounded-xl border border-gray-100 p-3.5">
                 <p className={`text-xl font-bold ${k.tone}`}>{k.value}</p>

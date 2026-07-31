@@ -136,7 +136,7 @@ export default function BulkImport({ hospitals }: { hospitals: Hospital[] }) {
   return (
     <div className="flex flex-col gap-6">
       {/* Instructions + template */}
-      <div className="bg-blue-50 border border-blue-100 rounded-xl p-5">
+      <div className="bg-[var(--cmp-surface-information)] border border-[var(--cmp-color-information)] rounded-xl p-5">
         <p className="text-sm font-semibold text-blue-900 mb-3">How bulk import works</p>
         <ol className="flex flex-col gap-2 text-sm text-blue-800 mb-4">
           <li className="flex gap-2"><span className="font-bold shrink-0">1.</span>Download the template and fill in your data</li>
@@ -150,7 +150,7 @@ export default function BulkImport({ hospitals }: { hospitals: Hospital[] }) {
             className="flex items-center gap-2 px-4 py-2 bg-blue-700 text-white text-sm rounded-lg hover:bg-blue-800 font-medium">
             Download Template CSV
           </button>
-          <div className="text-xs text-blue-700 bg-blue-100 rounded-lg px-3 py-2 font-mono leading-relaxed">
+          <div className="text-xs text-blue-700 bg-[var(--cmp-surface-information)] rounded-lg px-3 py-2 font-mono leading-relaxed">
             <span className="font-semibold">Columns:</span> email · full_name · hospital · org_role
           </div>
         </div>
@@ -189,7 +189,7 @@ export default function BulkImport({ hospitals }: { hospitals: Hospital[] }) {
       )}
 
       {parseError && (
-        <div className="bg-red-50 border border-red-200 rounded-xl px-5 py-4 text-sm text-red-700">
+        <div className="bg-[var(--cmp-surface-critical)] border border-[var(--cmp-color-critical)] rounded-xl px-5 py-4 text-sm text-[var(--cmp-text-critical)]">
           {parseError}
         </div>
       )}
@@ -231,7 +231,7 @@ export default function BulkImport({ hospitals }: { hospitals: Hospital[] }) {
               </thead>
               <tbody className="divide-y divide-gray-50">
                 {preview.map((row, i) => (
-                  <tr key={i} className={row._valid ? "hover:bg-gray-50/30" : "bg-red-50/40"}>
+                  <tr key={i} className={row._valid ? "hover:bg-gray-50/30" : "bg-[var(--cmp-surface-critical)]/40"}>
                     <td className="px-4 py-2.5 text-gray-400">{i + 1}</td>
                     <td className="px-4 py-2.5 font-medium text-gray-800">{row.email}</td>
                     <td className="px-4 py-2.5 text-gray-600">{row.full_name ?? <span className="text-gray-300">—</span>}</td>
@@ -263,13 +263,13 @@ export default function BulkImport({ hospitals }: { hospitals: Hospital[] }) {
               <p className="text-2xl font-bold text-teal-700">{resultCounts.updated}</p>
               <p className="text-xs text-teal-600 font-medium mt-1">Updated</p>
             </div>
-            <div className="bg-amber-50 border border-amber-100 rounded-xl p-4 text-center">
-              <p className="text-2xl font-bold text-amber-700">{resultCounts.not_found}</p>
-              <p className="text-xs text-amber-600 font-medium mt-1">Not found</p>
+            <div className="bg-[var(--cmp-surface-warning)] border border-[var(--cmp-color-warning)] rounded-xl p-4 text-center">
+              <p className="text-2xl font-bold text-[var(--cmp-text-warning)]">{resultCounts.not_found}</p>
+              <p className="text-xs text-[var(--cmp-text-warning)] font-medium mt-1">Not found</p>
             </div>
-            <div className="bg-red-50 border border-red-100 rounded-xl p-4 text-center">
-              <p className="text-2xl font-bold text-red-700">{resultCounts.error}</p>
-              <p className="text-xs text-red-600 font-medium mt-1">Errors</p>
+            <div className="bg-[var(--cmp-surface-critical)] border border-[var(--cmp-color-critical)] rounded-xl p-4 text-center">
+              <p className="text-2xl font-bold text-[var(--cmp-text-critical)]">{resultCounts.error}</p>
+              <p className="text-xs text-[var(--cmp-text-critical)] font-medium mt-1">Errors</p>
             </div>
           </div>
 
@@ -291,11 +291,11 @@ export default function BulkImport({ hospitals }: { hospitals: Hospital[] }) {
               </thead>
               <tbody className="divide-y divide-gray-50">
                 {results.map((r, i) => (
-                  <tr key={i} className={r.status === "updated" ? "" : "bg-amber-50/30"}>
+                  <tr key={i} className={r.status === "updated" ? "" : "bg-[var(--cmp-surface-warning)]/30"}>
                     <td className="px-4 py-2.5 font-medium text-gray-800">{r.email}</td>
                     <td className="px-4 py-2.5">
                       {r.status === "updated" && <span className="text-teal-600 font-semibold">Updated</span>}
-                      {r.status === "not_found" && <span className="text-amber-600 font-semibold">Not found</span>}
+                      {r.status === "not_found" && <span className="text-[var(--cmp-text-warning)] font-semibold">Not found</span>}
                       {r.status === "error" && <span className="text-red-500 font-semibold">Error</span>}
                     </td>
                     <td className="px-4 py-2.5 text-gray-500">{r.message}</td>

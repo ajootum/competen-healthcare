@@ -18,8 +18,8 @@ import { card, titleCase, fmtWhen, AcuityChip, Chip, Empty, ewsColor } from "@/l
 
 export const dynamic = "force-dynamic";
 
-const W_BAR = (pct: number) => pct >= 100 ? "bg-red-500" : pct >= 70 ? "bg-orange-400" : pct >= 40 ? "bg-amber-400" : "bg-emerald-500";
-const ASG_TAG: Record<string, string> = { primary: "bg-emerald-100 text-emerald-700", supporting: "bg-violet-100 text-violet-700" };
+const W_BAR = (pct: number) => pct >= 100 ? "bg-[var(--cmp-color-critical)]" : pct >= 70 ? "bg-[var(--cmp-color-warning)]" : pct >= 40 ? "bg-[var(--cmp-color-warning)]" : "bg-[var(--cmp-color-success)]";
+const ASG_TAG: Record<string, string> = { primary: "bg-[var(--cmp-surface-success)] text-emerald-700", supporting: "bg-violet-100 text-violet-700" };
 
 function IndicatorStrip({ ctx }: { ctx: any }) {
   const recorded = (types: string[] | null) => (ctx.observations ?? []).filter((o: any) => o.recorded_at && (!types || types.includes(o.observation_type))).length;
@@ -37,7 +37,7 @@ function IndicatorStrip({ ctx }: { ctx: any }) {
         <span key={i} title={it.title} className={`relative text-base leading-none ${it.count === 0 ? "grayscale opacity-30" : ""}`}>
           {it.icon}
           {it.count > 0 && (
-            <span className={`absolute -top-1.5 -right-2 min-w-[14px] h-[14px] px-0.5 rounded-full text-[8px] font-bold text-white flex items-center justify-center ${it.alert ? "bg-red-500" : "bg-gray-400"}`}>
+            <span className={`absolute -top-1.5 -right-2 min-w-[14px] h-[14px] px-0.5 rounded-full text-[8px] font-bold text-white flex items-center justify-center ${it.alert ? "bg-[var(--cmp-color-critical)]" : "bg-gray-400"}`}>
               {it.count > 9 ? "9+" : it.count}
             </span>
           )}
@@ -50,10 +50,10 @@ function IndicatorStrip({ ctx }: { ctx: any }) {
 function PatientCard({ a, ctx }: { a: any; ctx: any }) {
   const p = a.op_patients;
   const banner = p.acuity_level === "critical" || (ctx.escalations ?? []).some((e: any) => e.level >= 4)
-    ? { cls: "bg-red-50 border-red-200 text-red-800", text: "Critical priority — active high-level clinical attention" }
+    ? { cls: "bg-[var(--cmp-surface-critical)] border-[var(--cmp-color-critical)] text-red-800", text: "Critical priority — active high-level clinical attention" }
     : p.acuity_level === "high" || (ctx.alerts ?? []).length > 0
-      ? { cls: "bg-amber-50 border-amber-200 text-amber-800", text: "Elevated priority — monitor closely" }
-      : { cls: "bg-green-50 border-green-200 text-green-800", text: "Stable — continue routine care" };
+      ? { cls: "bg-[var(--cmp-surface-warning)] border-[var(--cmp-color-warning)] text-amber-800", text: "Elevated priority — monitor closely" }
+      : { cls: "bg-[var(--cmp-surface-success)] border-[var(--cmp-color-success)] text-green-800", text: "Stable — continue routine care" };
   const wl = ctx.workloadLatest != null ? Math.round(Number(ctx.workloadLatest.percentage)) : null;
   const acuityMax = acuityMaxFor(ctx.acuityLatest?.framework ?? "ward");
 
@@ -70,7 +70,7 @@ function PatientCard({ a, ctx }: { a: any; ctx: any }) {
               </span>
             )}
             {p.isolation_status !== "none" && <Chip tone="bg-purple-100 text-purple-700">{titleCase(p.isolation_status)}</Chip>}
-            {ctx.reassess?.due && <Chip tone="bg-orange-100 text-orange-700">Reassess</Chip>}
+            {ctx.reassess?.due && <Chip tone="bg-[var(--cmp-surface-warning)] text-orange-700">Reassess</Chip>}
           </div>
           <p className="text-xs text-gray-500 mt-0.5 truncate">
             {p.age_years != null ? `${p.age_years} yrs` : "Age n/a"}{p.diagnosis ? ` · ${p.diagnosis}` : ""}{p.consultant ? ` · ${p.consultant}` : ""}{p.op_beds?.label ? ` · ${p.op_beds.label}` : ""}
@@ -173,11 +173,11 @@ export default async function MyPatientsPage({ searchParams }: { searchParams: P
   const tabHref = (f: string) => `/healthcare-worker/patients?${new URLSearchParams({ ...(activeView !== "list" ? { view: activeView } : {}), ...(f !== "all" ? { filter: f } : {}), ...(needle ? { q: needle } : {}) }).toString()}`;
   const viewHref = (v: string) => `/healthcare-worker/patients?${new URLSearchParams({ ...(v !== "list" ? { view: v } : {}), ...(activeFilter !== "all" ? { filter: activeFilter } : {}), ...(needle ? { q: needle } : {}) }).toString()}`;
   const viewToggle = (v: string, label: string) => (
-    <Link key={v} href={viewHref(v)} className={`px-3 py-1.5 rounded-lg text-xs font-medium ${activeView === v ? "bg-emerald-600 text-white" : "bg-white border border-gray-300 text-gray-600 hover:bg-gray-50"}`}>{label}</Link>
+    <Link key={v} href={viewHref(v)} className={`px-3 py-1.5 rounded-lg text-xs font-medium ${activeView === v ? "bg-[var(--cmp-color-success)] text-white" : "bg-white border border-gray-300 text-gray-600 hover:bg-gray-50"}`}>{label}</Link>
   );
   const tab = (f: string, label: string, n: number) => (
     <Link key={f} href={tabHref(f)}
-      className={`px-3 py-1.5 rounded-lg text-xs font-medium ${activeFilter === f ? "bg-emerald-600 text-white" : "bg-white border border-gray-300 text-gray-600 hover:bg-gray-50"}`}>
+      className={`px-3 py-1.5 rounded-lg text-xs font-medium ${activeFilter === f ? "bg-[var(--cmp-color-success)] text-white" : "bg-white border border-gray-300 text-gray-600 hover:bg-gray-50"}`}>
       {label} ({n})
     </Link>
   );
@@ -206,10 +206,10 @@ export default async function MyPatientsPage({ searchParams }: { searchParams: P
           </div>
           {[
             { icon: "🧑‍⚕️", label: "Patients", value: ribbon.patients, tone: "" },
-            { icon: "🌡️", label: "High Acuity", value: ribbon.highAcuity, tone: ribbon.highAcuity ? "text-red-600" : "" },
-            { icon: "💊", label: "Medications Due", value: ribbon.medsDue, tone: ribbon.medsDue ? "text-orange-600" : "" },
+            { icon: "🌡️", label: "High Acuity", value: ribbon.highAcuity, tone: ribbon.highAcuity ? "text-[var(--cmp-text-critical)]" : "" },
+            { icon: "💊", label: "Medications Due", value: ribbon.medsDue, tone: ribbon.medsDue ? "text-[var(--cmp-text-warning)]" : "" },
             { icon: "✅", label: "Tasks Outstanding", value: ribbon.tasks, tone: "" },
-            { icon: "🚨", label: "Escalations", value: ribbon.escalations, tone: ribbon.escalations ? "text-red-600" : "" },
+            { icon: "🚨", label: "Escalations", value: ribbon.escalations, tone: ribbon.escalations ? "text-[var(--cmp-text-critical)]" : "" },
             { icon: "💬", label: "New Messages", value: ribbon.unread, tone: "" },
           ].map(m => (
             <div key={m.label} className="flex items-center gap-2">
@@ -248,7 +248,7 @@ export default async function MyPatientsPage({ searchParams }: { searchParams: P
             const p = a.op_patients; const ctx = ctxOf(a);
             return (
               <Link key={p.id} href={`/healthcare-worker/patients/${p.id}`}
-                className={`rounded-xl border p-3 hover:shadow-sm transition-shadow ${p.acuity_level === "critical" ? "bg-red-50 border-red-200" : p.acuity_level === "high" ? "bg-amber-50 border-amber-200" : p.isolation_status !== "none" ? "bg-purple-50 border-purple-200" : "bg-white border-gray-200"}`}>
+                className={`rounded-xl border p-3 hover:shadow-sm transition-shadow ${p.acuity_level === "critical" ? "bg-[var(--cmp-surface-critical)] border-[var(--cmp-color-critical)]" : p.acuity_level === "high" ? "bg-[var(--cmp-surface-warning)] border-[var(--cmp-color-warning)]" : p.isolation_status !== "none" ? "bg-purple-50 border-purple-200" : "bg-white border-gray-200"}`}>
                 <p className="text-lg font-bold text-gray-900">{p.op_beds?.label ?? "No bed"}</p>
                 <p className="text-sm text-gray-700 truncate">{p.label}</p>
                 <div className="flex flex-wrap items-center gap-1 mt-1.5">
@@ -288,10 +288,10 @@ export default async function MyPatientsPage({ searchParams }: { searchParams: P
                     <td className={`py-2 px-1 font-semibold tabular-nums ${ewsColor(ctx.pews)}`}>{ctx.pews ?? "—"}</td>
                     <td className="py-2 px-1"><AcuityChip level={p.acuity_level} /></td>
                     <td className="py-2 px-1 tabular-nums text-gray-700">{wl}</td>
-                    <td className={`py-2 px-1 tabular-nums ${medsDue > 0 ? "text-orange-600 font-semibold" : "text-gray-300"}`}>{medsDue}</td>
-                    <td className={`py-2 px-1 tabular-nums ${(ctx.obsDue ?? []).length > 0 ? "text-orange-600 font-semibold" : "text-gray-300"}`}>{(ctx.obsDue ?? []).length}</td>
+                    <td className={`py-2 px-1 tabular-nums ${medsDue > 0 ? "text-[var(--cmp-text-warning)] font-semibold" : "text-gray-300"}`}>{medsDue}</td>
+                    <td className={`py-2 px-1 tabular-nums ${(ctx.obsDue ?? []).length > 0 ? "text-[var(--cmp-text-warning)] font-semibold" : "text-gray-300"}`}>{(ctx.obsDue ?? []).length}</td>
                     <td className={`py-2 px-1 tabular-nums ${(ctx.tasks ?? []).length > 0 ? "text-gray-800" : "text-gray-300"}`}>{(ctx.tasks ?? []).length}</td>
-                    <td className={`py-2 pl-1 tabular-nums ${(ctx.concerns ?? []).length > 0 ? "text-red-600 font-semibold" : "text-gray-300"}`}>{(ctx.concerns ?? []).length}</td>
+                    <td className={`py-2 pl-1 tabular-nums ${(ctx.concerns ?? []).length > 0 ? "text-[var(--cmp-text-critical)] font-semibold" : "text-gray-300"}`}>{(ctx.concerns ?? []).length}</td>
                   </tr>
                 );
               })}
@@ -319,7 +319,7 @@ export default async function MyPatientsPage({ searchParams }: { searchParams: P
                         <Chip tone={ASG_TAG[a.assignment_type] ?? ASG_TAG.supporting}>{a.assignment_type === "primary" ? "PRIMARY" : "SECONDARY"}</Chip>
                         <AcuityChip level={p.acuity_level} />
                         {ctx.pews != null && <span className={`text-xs font-semibold tabular-nums ${ewsColor(ctx.pews)}`}>PEWS {ctx.pews}</span>}
-                        {ctx.reassess?.due && <Chip tone="bg-orange-100 text-orange-700">Reassess</Chip>}
+                        {ctx.reassess?.due && <Chip tone="bg-[var(--cmp-surface-warning)] text-orange-700">Reassess</Chip>}
                         <span className="ml-auto text-[11px] text-gray-400">{(ctx.cnci?.drivers ?? []).slice(0, 2).join(" · ")}</span>
                       </div>
                     );
@@ -341,7 +341,7 @@ export default async function MyPatientsPage({ searchParams }: { searchParams: P
           <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400 pr-2">Quick Actions</span>
           {QUICK_ACTIONS.map(qa => (
             <Link key={qa.label} href={qa.href}
-              className="flex flex-col items-center gap-1 rounded-lg border border-gray-200 hover:border-emerald-300 hover:bg-emerald-50/40 py-2.5 px-3 text-center transition-colors min-w-[92px]">
+              className="flex flex-col items-center gap-1 rounded-lg border border-gray-200 hover:border-[var(--cmp-color-success)] hover:bg-[var(--cmp-surface-success)]/40 py-2.5 px-3 text-center transition-colors min-w-[92px]">
               <span className="text-lg">{qa.icon}</span>
               <span className="text-[10px] text-gray-600 leading-tight">{qa.label}</span>
             </Link>
