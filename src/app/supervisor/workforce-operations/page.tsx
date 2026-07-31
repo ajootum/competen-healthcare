@@ -206,7 +206,7 @@ export default async function WorkforceOperations() {
         </div>
       </div>
 
-      <p className="text-[11px] text-gray-400 pb-4">Workforce Operations is the supervisor&apos;s workforce command centre (SSW-WFO-001) — staffing snapshot &amp; coverage, skill-mix compliance, competency gaps, live team assignments &amp; workload, a fully operational break board (schedule/start/end, compliance) and a persisted supervisor journal, all live from op_*/competency data. Shift clocking (late arrivals, overtime), time-block coverage history, drag-and-drop allocation and absence reasons need dedicated stores and are shown as honest states or click-based equivalents rather than fabricated.</p>
+      <p className="text-[11px] text-gray-400 pb-4">Workforce Operations is the supervisor&apos;s workforce command centre (SSW-WFO-001) — staffing snapshot &amp; coverage, skill-mix compliance, competency gaps, live team assignments &amp; workload, a fully operational break board (schedule/start/end, compliance) and a persisted supervisor journal, all live from op_*/competency data. Shift clocking, late arrivals, absence reasons and fatigue exposure now have real stores and live on <Link href="/supervisor/attendance" className="text-teal-700 hover:underline">Attendance &amp; Fatigue</Link>; measured per-patient workload lives on <Link href="/supervisor/workload-intelligence" className="text-teal-700 hover:underline">Workload Intelligence</Link>. Time-block coverage history and drag-and-drop allocation remain click-based equivalents rather than fabricated.</p>
     </div>
   );
 }

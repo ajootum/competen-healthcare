@@ -104,6 +104,7 @@ export const SSW_NAV_CATALOGUE: SswNavRule[] = [
   { key: "workforce-operations.staffing", section: "Workforce Operations", label: "Staffing Allocation", href: "/supervisor/workforce-operations", icon: "\u{1F465}", order: 400 },
   { key: "workforce-operations.team-assignments", section: "Workforce Operations", label: "Team Assignments", href: "/supervisor/team-assignments", icon: "\u{1F9E9}", order: 410 },
   { key: "workforce-operations.assignment-engine", section: "Workforce Operations", label: "Assignment Engine", href: "/supervisor/assignment-engine", icon: "\u{1F9E0}", order: 420 },
+  { key: "workforce-operations.attendance", section: "Workforce Operations", label: "Attendance & Fatigue", href: "/supervisor/attendance", icon: "\u{1F551}", order: 425 },
   { key: "workforce-operations.workload-intelligence", section: "Workforce Operations", label: "Workload Intelligence", href: "/supervisor/workload-intelligence", icon: "\u{2696}️", order: 430 },
   { key: "workforce-operations.competency", section: "Workforce Operations", label: "Competency Readiness", href: "/supervisor/workforce-operations#competency", icon: "\u{1F396}️", order: 440 },
   { key: "workforce-operations.break", section: "Workforce Operations", label: "Break Management", href: "/supervisor/workforce-operations#break", icon: "\u{2615}", order: 450 },
