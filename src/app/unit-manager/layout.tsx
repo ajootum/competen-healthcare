@@ -9,198 +9,220 @@ import { loadConfigOverrides, isEnabled } from "@/lib/config/workspace-config";
 import GlobalHeader from "@/components/platform/GlobalHeader";
 import { loadHeaderContext } from "@/lib/platform/header";
 
-// Workspace Configuration Engine (WCE-001) wiring — maps nav sections/modules to
-// their config paths so a super-admin disabling one in the Designer removes it
-// from this live sidebar. Sections not listed are always shown.
-const SECTION_CFG: Record<string, string> = {
-  "Unit Command": "unit-manager.unit-command",
-  "Workforce Management": "unit-manager.workforce",
-  "Patient Operations": "unit-manager.patient-operations",
-  "Competency Management": "unit-manager.competency",
-  "Learning & Development": "unit-manager.learning",
-  "Quality & Safety": "unit-manager.quality",
-  "Operations & Capacity": "unit-manager.operations-capacity",
-  "Performance Analytics": "unit-manager.analytics",
-  "AI & Intelligence": "unit-manager.ai",
-  "Administration & Configuration": "unit-manager.admin",
+// ─────────────────────────────────────────────────────────────────────────────
+// UMW-000 NAVIGATION — restructured to the platform architecture.
+//
+// UMW-000 defines TWO things that had drifted apart in this sidebar: twelve CORE
+// FUNCTIONAL DOMAINS, and a six-entry sidebar (Dashboard / Operations / Quality /
+// People / AI Intelligence / Tools). The nav had grown to thirteen flat groups by
+// accretion, with duplicate destinations across them. It is now the spec's six
+// sections, with the twelve domains as the sub-headings inside them.
+//
+// NOTHING WAS TRIMMED. Every route reachable from this sidebar before is still
+// reachable; what changed is where it sits and that a destination now appears
+// ONCE. Dropping a link whose only entry point was the sidebar would orphan the
+// page silently — Operational Command has no in-page tab bar (unlike Workforce,
+// Quality, Patient Ops, Competency, Learning, AI, Performance and Administration),
+// so all eleven of its modules stay listed: nine on the command floor, with
+// Config & Rules and its analytics filed under the domains that own them.
+// scripts/umw-nav-harness.ts checks this against a frozen list of the old links.
+//
+// THREE SUB-HEADINGS ARE NOT AMONG THE SPEC'S TWELVE DOMAINS and each declares
+// spec:false: Dashboard (a section name, carrying domain 1's daily landings —
+// the heading is suppressed because it matches its section), Patient Operations
+// (POS-001, the operational source of truth — burying its twelve modules inside
+// Unit Operations Command would hide the busiest part of the workspace) and
+// Platform Engines (cross-domain authoring tools). Naming them honestly beats
+// forcing them into a domain they are not.
+// ─────────────────────────────────────────────────────────────────────────────
+
+type NavItem = { label: string; href?: string; icon: string; exact?: boolean; soon?: boolean; badge?: number };
+type Domain = {
+  key: string;
+  title: string;
+  cfg: string;               // WCE config path for this domain
+  legacy?: string[];         // pre-restructure paths, still honoured so an existing override cannot silently lapse
+  spec?: boolean;            // false = a sub-heading UMW-000's twelve domains do not name
+  items: NavItem[];
 };
+
+const DOMAINS: Domain[] = [
+  // ── 1. Unit Operations Command (a) daily landings ─────────────────────────
+  // Titled "Dashboard" so it matches its section and the heading is suppressed — the domain's
+  // canonical name is carried by its command floor below, which is where the spec puts the work.
+  { key: "command", title: "Dashboard", cfg: "unit-manager.operations-command", spec: false,
+    legacy: ["unit-manager.unit-command"], items: [
+    { label: "Overview Dashboard",     href: "/unit-manager",                    icon: "📊", exact: true },
+    { label: "Unit Operations Centre", href: "/unit-manager/operations-centre",  icon: "🎛️" },
+    { label: "Shift Intelligence",     href: "/unit-manager/shift-intelligence", icon: "🧭" },
+    { label: "Executive Actions",      href: "/unit-manager/action-centre",      icon: "✅" },
+  ] },
+  // ── 1. Unit Operations Command (b) real-time floor ────────────────────────
+  // UMW-OPC-001..009. No in-page tab bar exists for this section, so every module stays in
+  // the sidebar or it becomes unreachable.
+  { key: "opc", title: "Unit Operations Command", cfg: "unit-manager.operational-command",
+    legacy: ["unit-manager.operations-capacity"], items: [
+    { label: "Command Dashboard",              href: "/unit-manager/ops-performance",             icon: "🖥️" },  // OPC-001
+    { label: "Live Unit Status",               href: "/unit-manager/ops-command/live-status",     icon: "🏥" },  // OPC-002
+    { label: "Capacity & Bed Coordination",    href: "/unit-manager/ops-command/capacity",        icon: "🛏️" },  // OPC-003
+    { label: "Staffing & Assignment Oversight", href: "/unit-manager/ops-command/staffing",       icon: "🧑‍⚕️" }, // OPC-004
+    { label: "Patient Flow Coordination",      href: "/unit-manager/ops-command/patient-flow",    icon: "🔄" },  // OPC-005
+    { label: "Safety & Escalation",            href: "/unit-manager/ops-command/safety",          icon: "🚨" },  // OPC-006
+    { label: "Operational Action Manager",     href: "/unit-manager/ops-command/actions",         icon: "🗒️" },  // OPC-007
+    { label: "Shift Timeline & Handover",      href: "/unit-manager/ops-command/handover",        icon: "🕒" },  // OPC-008
+    { label: "Operational Forecasting",        href: "/unit-manager/ops-command/forecasting",     icon: "🔮" },  // OPC-009
+  ] },
+  // POS-001. Not one of the spec's twelve names, but the operational source of truth.
+  { key: "patient-ops", title: "Patient Operations", cfg: "unit-manager.patient-operations", spec: false, items: [
+    { label: "Dashboard",         href: "/unit-manager/patient-operations",              icon: "📋", exact: true },
+    { label: "Census & Registry", href: "/unit-manager/patient-operations/census",       icon: "🧑‍🤝‍🧑" },
+    { label: "Patient Flow",      href: "/unit-manager/patient-operations/flow",         icon: "🔀" },
+    { label: "Bed & Capacity",    href: "/unit-manager/patient-operations/beds",         icon: "🛏️" },
+    { label: "Ward Map",          href: "/unit-manager/patient-operations/ward-map",     icon: "🗺️" },
+    { label: "Governance",        href: "/unit-manager/patient-operations/governance",   icon: "🛡️" },
+    { label: "Clinical Alerts",   href: "/unit-manager/patient-operations/safety",       icon: "🚨" },
+    { label: "Patient Card",      href: "/unit-manager/patient-operations/patient-card", icon: "🪪" },
+    { label: "Timeline",          href: "/unit-manager/patient-operations/timeline",     icon: "🕐" },
+    { label: "Patient Analytics", href: "/unit-manager/patient-operations/analytics",    icon: "📈" },
+  ] },
+
+  // ── 4. Resources & Logistics ──────────────────────────────────────────────
+  { key: "resources", title: "Resources & Logistics", cfg: "unit-manager.resources", items: [
+    { label: "Resource Operations", href: "/unit-manager/resources",                    icon: "📦" },  // RES-001
+    { label: "Assets & Biomedical", href: "/unit-manager/administration/assets",        icon: "🖥️" },  // RES-002 / ADM-004
+  ] },
+
+  // ── 3. Clinical Quality & Safety ──────────────────────────────────────────
+  { key: "quality", title: "Clinical Quality & Safety", cfg: "unit-manager.quality", items: [
+    { label: "Executive Dashboard",      href: "/unit-manager/quality",            icon: "🛡️", exact: true },
+    { label: "Incident Management",      href: "/unit-manager/quality/incidents",  icon: "🚩" },
+    { label: "Patient Safety Centre",    href: "/unit-manager/quality/patient-safety", icon: "🚑" },
+    { label: "Clinical Indicators",      href: "/unit-manager/quality/indicators", icon: "📊" },
+    { label: "Mortality & Morbidity",    href: "/unit-manager/quality/mortality",  icon: "🩺" },
+    { label: "Quality Command Centre",   href: "/unit-manager/quality/analytics",  icon: "📉" },
+    { label: "AI Quality Intelligence",  href: "/unit-manager/quality/ai",         icon: "🤖" },
+  ] },
+  // ── 7. Improvement & Innovation ───────────────────────────────────────────
+  // One real surface today. Given its own heading because the spec names it as a
+  // domain, not padded with borrowed links to look fuller than it is.
+  { key: "improvement", title: "Improvement & Innovation", cfg: "unit-manager.improvement", items: [
+    { label: "CAPA & Improvement", href: "/unit-manager/capa", icon: "📈" },
+  ] },
+  // ── 8. Accreditation & Governance ─────────────────────────────────────────
+  { key: "accreditation", title: "Accreditation & Governance", cfg: "unit-manager.accreditation", items: [
+    { label: "Accreditation Readiness", href: "/unit-manager/quality/accreditation", icon: "🏅" },
+    { label: "Audit & Compliance",      href: "/unit-manager/quality/audits",        icon: "🔍" },
+    { label: "Risk Register",           href: "/unit-manager/quality/risk",          icon: "⚠️" },
+  ] },
+
+  // ── 2. Workforce Operations ───────────────────────────────────────────────
+  { key: "workforce", title: "Workforce Operations", cfg: "unit-manager.workforce-operations",
+    legacy: ["unit-manager.workforce"], items: [
+    { label: "Overview",                  href: "/unit-manager/workforce-management",                        icon: "👥", exact: true },
+    { label: "Unit Workforce Planning",   href: "/unit-manager/workforce-management/establishment",          icon: "📐" },
+    { label: "Staffing Engine",           href: "/unit-manager/workforce-management/staffing-engine",        icon: "🧑‍⚕️" },
+    { label: "Team Assignments",          href: "/unit-manager/workforce-management/team-assignments",       icon: "🧩" },
+    { label: "Roster Governance",         href: "/unit-manager/workforce-management/roster-governance",      icon: "🗓️" },
+    { label: "Availability & Attendance", href: "/unit-manager/workforce-management/attendance",             icon: "📋" },
+    { label: "Wellbeing & Fatigue",       href: "/unit-manager/wellbeing",                                   icon: "💚" },
+    { label: "Exceptions & Approvals",    href: "/unit-manager/workforce-management/exceptions-approvals",   icon: "⚖️" },
+    { label: "Development & Readiness",   href: "/unit-manager/workforce-management/development",            icon: "🎯" },
+    { label: "Workforce Analytics",       href: "/unit-manager/workforce-management/analytics",              icon: "📊" },
+    { label: "Workforce Configuration",   href: "/unit-manager/workforce-management/configuration",          icon: "🔧" },
+  ] },
+  // ── 5. Competency & Workforce Development ─────────────────────────────────
+  { key: "competency", title: "Competency & Workforce Development", cfg: "unit-manager.competency",
+    legacy: ["unit-manager.learning"], items: [
+    { label: "Command Centre",         href: "/unit-manager/competency",                 icon: "🎯", exact: true },
+    { label: "Coverage & Gaps",        href: "/unit-manager/competency/coverage",        icon: "📊" },
+    { label: "Expiries & Recert",      href: "/unit-manager/competency/recertification", icon: "⏳" },
+    { label: "Delivered Assignments",  href: "/unit-manager/competency/assignments",     icon: "📬" },
+    { label: "Validation Queue",       href: "/unit-manager/competency-validations",     icon: "🗂️" },
+    { label: "Assessment Status",      href: "/unit-manager/assessment",                 icon: "📝" },
+    { label: "Learning Dashboard",     href: "/unit-manager/learning",                   icon: "📚" },
+    { label: "Mandatory Learning",     href: "/unit-manager/learning/mandatory",         icon: "📌" },
+    { label: "Professional Development", href: "/unit-manager/learning/development",     icon: "🚀" },
+    { label: "Career Pathways",        href: "/unit-manager/learning/pathways",          icon: "🧗" },
+    { label: "Education Planning",     href: "/unit-manager/learning/schedule",          icon: "🗓️" },
+    { label: "Learning Analytics",     href: "/unit-manager/learning/analytics",         icon: "📊" },
+    // Org-wide competency governance lives in the Competency Office; managers are in scope there.
+    { label: "Competency Analytics",   href: "/competency-office/analytics",             icon: "📈" },
+    { label: "Credentialing",          href: "/competency-office/credentialing",         icon: "🎓" },
+    { label: "Frameworks",             href: "/competency-office/frameworks",            icon: "🧩" },
+  ] },
+  // ── 9. Communications & Collaboration ─────────────────────────────────────
+  { key: "comms", title: "Communications & Collaboration", cfg: "unit-manager.communications", items: [
+    { label: "Communications Hub", href: "/unit-manager/communications", icon: "📣" },   // TLS-004
+  ] },
+
+  // ── 10. AI Intelligence ───────────────────────────────────────────────────
+  { key: "ai", title: "AI Intelligence", cfg: "unit-manager.ai", items: [
+    { label: "AI Command Centre",         href: "/unit-manager/ai",                            icon: "✨", exact: true },
+    { label: "Executive Recommendations", href: "/unit-manager/ai/recommendations",            icon: "💡" },
+    { label: "Operational Intelligence",  href: "/unit-manager/ops-performance",               icon: "🧠" },
+    { label: "Workforce Intelligence",    href: "/unit-manager/workforce-intelligence",        icon: "👥" },
+    { label: "Patient Intelligence",      href: "/unit-manager/patient-operations/analytics",  icon: "🩺" },
+    { label: "Quality Intelligence",      href: "/unit-manager/quality/ai",                    icon: "🛡️" },
+    { label: "Predictive Analytics",      href: "/unit-manager/performance/predictive",        icon: "🔮" },
+  ] },
+
+  // ── 6. Performance Intelligence ───────────────────────────────────────────
+  { key: "performance", title: "Performance Intelligence", cfg: "unit-manager.performance",
+    legacy: ["unit-manager.analytics"], items: [
+    { label: "Unit Performance Dashboard",   href: "/unit-manager/performance",               icon: "📊", exact: true }, // PA-001
+    { label: "KPI & Scorecard Centre",       href: "/unit-manager/performance/scorecard",     icon: "🎯" },              // PA-002
+    { label: "Trends & Benchmarking",        href: "/unit-manager/performance/trends",        icon: "📈" },              // PA-003
+    { label: "Workforce Performance",        href: "/unit-manager/performance/workforce",     icon: "👥" },              // PA-004
+    { label: "Operational Performance",      href: "/unit-manager/performance/operational",   icon: "⚙️" },              // PA-005
+    { label: "Financial Analytics",          href: "/unit-manager/performance/financial",     icon: "💷" },              // PA-006
+    { label: "Predictive & AI Intelligence", href: "/unit-manager/performance/predictive",    icon: "🔮" },              // PA-007
+    { label: "Performance Configuration",    href: "/unit-manager/performance/configuration", icon: "🔧" },              // PA-009
+  ] },
+  // ── 11. Reports & Analytics ───────────────────────────────────────────────
+  { key: "reports", title: "Reports & Analytics", cfg: "unit-manager.reports", items: [
+    { label: "Executive Reporting",     href: "/unit-manager/performance/reporting",     icon: "🧾" },  // PA-008
+    { label: "Operational Reporting",   href: "/unit-manager/ops-command/analytics",     icon: "📉" },  // OPC-011
+  ] },
+
+  // ── 12. Administration & Configuration ────────────────────────────────────
+  { key: "admin", title: "Administration & Configuration", cfg: "unit-manager.admin", items: [
+    { label: "Admin Dashboard",         href: "/unit-manager/administration",                icon: "🗂️", exact: true }, // ADM-001
+    { label: "Unit Structure",          href: "/unit-manager/administration/structure",      icon: "🏛️" },              // ADM-002
+    { label: "Policies & Documents",    href: "/unit-manager/administration/documents",      icon: "📄" },              // ADM-003
+    { label: "Forms & Registers",       href: "/unit-manager/administration/forms",          icon: "📋" },              // ADM-005
+    { label: "Configuration Centre",    href: "/unit-manager/administration/configuration",  icon: "🔧" },              // ADM-006
+    { label: "Permissions & Governance", href: "/unit-manager/administration/governance",    icon: "🛡️" },              // ADM-007 / TLS-002
+    { label: "Audit & Change Management", href: "/unit-manager/administration/change",       icon: "🕓" },              // ADM-008
+    { label: "AI Administration Assistant", href: "/unit-manager/administration/ai-assistant", icon: "🤖" },            // ADM-009
+    { label: "Operations Config & Rules", href: "/unit-manager/ops-command/config-rules",    icon: "⚙️" },              // OPC-010
+    { label: "Personalisation",         href: "/unit-manager/personalisation",               icon: "🎨" },              // TLS-005
+    { label: "Workspace Settings",      href: "/unit-manager/settings",                      icon: "⚙️" },
+  ] },
+  // Cross-domain authoring engines. Not one of the spec's twelve.
+  { key: "engines", title: "Platform Engines", cfg: "unit-manager.platform-engines", spec: false, items: [
+    { label: "Workforce Planning Studio",     href: "/unit-manager/planning-studio",       icon: "🏗️" },
+    { label: "AI Scheduling Engine",          href: "/unit-manager/scheduling-engine",     icon: "🗓️" },
+    { label: "Workforce Intelligence Engine", href: "/unit-manager/workforce-intelligence", icon: "🧠" },
+  ] },
+];
+
+// UMW-000's six-entry sidebar. Each section holds the domains above; a section
+// with a single domain whose title matches its own renders without a sub-heading.
+const SIDEBAR: { title: string; domains: string[] }[] = [
+  { title: "Dashboard",       domains: ["command"] },
+  { title: "Operations",      domains: ["opc", "patient-ops", "resources"] },
+  { title: "Quality",         domains: ["quality", "improvement", "accreditation"] },
+  { title: "People",          domains: ["workforce", "competency", "comms"] },
+  { title: "AI Intelligence", domains: ["ai"] },
+  { title: "Tools",           domains: ["performance", "reports", "admin", "engines"] },
+];
+
+// Module-level config paths, unchanged from before the restructure.
 const ITEM_CFG: Record<string, string> = {
   "Unit Operations Centre": "unit-manager.unit-command.operations-centre",
   "Shift Intelligence": "unit-manager.unit-command.shift-intelligence",
   "Executive Actions": "unit-manager.unit-command.action-centre",
 };
-
-// Unit Manager Workspace (UMW-001) — operational & tactical management for a
-// clinical unit: workforce readiness, competency compliance, staffing, quality,
-// learning and assessments in one leadership workspace. Role-scoped to managers.
-
-// UMW-001 workspace structure: 10 domain groups, each with sub-modules. Only the
-// Unit Command modules (+ a few group landings that reuse an existing surface or
-// the [section] placeholder) are live; every other sub-module is marked "soon"
-// rather than shown as a dead link — honest about what is and isn't built.
-type NavItem = { label: string; href?: string; icon: string; exact?: boolean; soon?: boolean; badge?: number };
-const NAV_GROUPS: { title: string; items: NavItem[] }[] = [
-  { title: "Platform Engines", items: [
-    { label: "Workforce Planning Studio", href: "/unit-manager/planning-studio", icon: "🏗️" },
-    { label: "Unit Workforce Planning",  href: "/unit-manager/workforce-management/establishment", icon: "📐" },
-    { label: "AI Scheduling Engine",     href: "/unit-manager/scheduling-engine", icon: "🗓️" },
-    { label: "Competency Engine",        href: "/unit-manager/competency", icon: "🎯" },
-    // Workforce analytics = WFM-008 Analytics & Reports; intelligence = the rule-based Workforce
-    // Intelligence Engine (risk / gaps / deployment recommendations over the live workforce).
-    { label: "Workforce Analytics Engine",   href: "/unit-manager/workforce-management/analytics", icon: "📊" },
-    { label: "Workforce Intelligence Engine", href: "/unit-manager/workforce-intelligence", icon: "🧠" },
-  ] },
-  { title: "Unit Command", items: [
-    { label: "Overview Dashboard",      href: "/unit-manager",                       icon: "📊", exact: true },
-    { label: "Unit Operations Centre",  href: "/unit-manager/operations-centre",     icon: "🎛️" },
-    { label: "Shift Intelligence",      href: "/unit-manager/shift-intelligence",    icon: "🧭" },
-    { label: "Executive Actions",       href: "/unit-manager/action-centre",         icon: "✅" },
-  ] },
-  // Workforce Management (UMW-WFM-001..009) — section COMPLETE: all ten modules
-  // are live. Keep in sync with WfmTabs.tsx (the in-page section tab bar).
-  { title: "Workforce Management", items: [
-    { label: "Overview",                 href: "/unit-manager/workforce-management", icon: "👥", exact: true },
-    { label: "Unit Workforce Planning",  href: "/unit-manager/workforce-management/establishment", icon: "📐" },
-    { label: "Staffing Engine",          href: "/unit-manager/workforce-management/staffing-engine", icon: "🧑‍⚕️" },
-    { label: "Team Assignments",         href: "/unit-manager/workforce-management/team-assignments", icon: "🧩" },
-    { label: "Roster Governance",        href: "/unit-manager/workforce-management/roster-governance", icon: "🗓️" },
-    { label: "Availability & Attendance", href: "/unit-manager/workforce-management/attendance", icon: "📋" },
-    { label: "Wellbeing & Fatigue",      href: "/unit-manager/wellbeing", icon: "💚" },
-    { label: "Exceptions & Approvals",   href: "/unit-manager/workforce-management/exceptions-approvals", icon: "⚖️" },
-    { label: "Development & Readiness",   href: "/unit-manager/workforce-management/development", icon: "🎯" },
-    { label: "Analytics & Reports",      href: "/unit-manager/workforce-management/analytics", icon: "📊" },
-    { label: "Configuration",            href: "/unit-manager/workforce-management/configuration", icon: "🔧" },
-  ] },
-  // Patient Operations Platform (POS-001) — the operational source of truth. Primary
-  // surfaces here; the full twelve modules are the in-page tab bar (PosTabs).
-  { title: "Patient Operations", items: [
-    { label: "Dashboard",         href: "/unit-manager/patient-operations", icon: "📊", exact: true },
-    { label: "Census & Registry", href: "/unit-manager/patient-operations/census", icon: "🧑‍🤝‍🧑" },
-    { label: "Patient Flow",      href: "/unit-manager/patient-operations/flow", icon: "🔄" },
-    { label: "Bed & Capacity",    href: "/unit-manager/patient-operations/beds", icon: "🛏️" },
-    { label: "Ward Map",          href: "/unit-manager/patient-operations/ward-map", icon: "🗺️" },
-    { label: "Governance",        href: "/unit-manager/patient-operations/governance", icon: "🛡️" },
-    { label: "Clinical Safety",   href: "/unit-manager/patient-operations/safety", icon: "🚨" },
-    { label: "Patient Card",      href: "/unit-manager/patient-operations/patient-card", icon: "🪪" },
-    { label: "Timeline",          href: "/unit-manager/patient-operations/timeline", icon: "🕐" },
-    { label: "Analytics",         href: "/unit-manager/patient-operations/analytics", icon: "📈" },
-  ] },
-  // Competency Management (UMG-CM) — the unit-scoped manager lens: a Command Centre + dedicated Coverage,
-  // Expiries and Delivered-Assignments surfaces over the real competency system. Deep org-wide governance
-  // (analytics / credentialing / frameworks) still cross-links to the Competency Office (managers are in-scope).
-  { title: "Competency Management", items: [
-    { label: "Command Centre",        href: "/unit-manager/competency",   icon: "🎯", exact: true },
-    { label: "Coverage & Gaps",       href: "/unit-manager/competency/coverage", icon: "📊" },
-    { label: "Expiries & Recert",     href: "/unit-manager/competency/recertification", icon: "⏳" },
-    { label: "Delivered Assignments", href: "/unit-manager/competency/assignments", icon: "📬" },
-    { label: "Validation Queue",      href: "/unit-manager/competency-validations", icon: "🗂️" },
-    { label: "Assessment Status",     href: "/unit-manager/assessment",    icon: "📝" },
-    { label: "Competency Analytics",  href: "/competency-office/analytics", icon: "📈" },
-    { label: "Credentialing",         href: "/competency-office/credentialing", icon: "🎓" },
-    { label: "Frameworks",            href: "/competency-office/frameworks", icon: "🧩" },
-  ] },
-  { title: "Learning & Development", items: [
-    { label: "Learning Dashboard",   href: "/unit-manager/learning", icon: "📚", exact: true },
-    { label: "Mandatory Learning",   href: "/unit-manager/learning/mandatory", icon: "📌" },
-    { label: "Professional Development", href: "/unit-manager/learning/development", icon: "🚀" },
-    { label: "Career Pathways",      href: "/unit-manager/learning/pathways", icon: "🧗" },
-    { label: "Education Planning",   href: "/unit-manager/learning/schedule", icon: "🗓️" },
-    { label: "Learning Analytics",   href: "/unit-manager/learning/analytics", icon: "📊" },
-  ] },
-  // Quality & Safety (UMG-QS-001..011) — the Command Centre is the real exec dashboard (consolidation over
-  // op_incidents / op_quality_actions / audits / gov_risks / quality_indicators). Sub-modules route to their
-  // authoritative surface: CAPA → the CAPA Centre, Patient Safety → the Clinical Safety centre (both real),
-  // the rest via the section's honest cross-link pages. Full module list is the in-page tab bar (QualityTabs).
-  // Quality & Safety (UMG-QS-001..011) — the full eleven-module command centre; labels
-  // mirror the design + each module's page header. Exec Dashboard is exact-match so its
-  // sub-modules don't all highlight it. CAPA + Patient Safety route to their authoritative
-  // surfaces (/unit-manager/capa, /patient-operations/safety).
-  { title: "Quality & Safety", items: [
-    { label: "Executive Dashboard",     href: "/unit-manager/quality", icon: "🛡️", exact: true },
-    { label: "Incident Management",     href: "/unit-manager/quality/incidents", icon: "🚩" },
-    { label: "Audit & Compliance",      href: "/unit-manager/quality/audits", icon: "🔍" },
-    { label: "CAPA & Improvement",      href: "/unit-manager/capa", icon: "📈" },
-    { label: "Accreditation Readiness", href: "/unit-manager/quality/accreditation", icon: "🏅" },
-    { label: "Risk Register",           href: "/unit-manager/quality/risk", icon: "⚠️" },
-    { label: "Patient Safety Centre",   href: "/unit-manager/quality/patient-safety", icon: "🚑" },
-    { label: "Clinical Indicators",     href: "/unit-manager/quality/indicators", icon: "📊" },
-    { label: "Mortality & Morbidity",   href: "/unit-manager/quality/mortality", icon: "🩺" },
-    { label: "Executive Command Centre", href: "/unit-manager/quality/analytics", icon: "📉" },
-    { label: "AI Quality Intelligence", href: "/unit-manager/quality/ai", icon: "🤖" },
-  ] },
-  // UMW-OPC-001..011 Operational Command Centre (updated architecture: real-time command/coordination/execution;
-  // AI & Config split out to UMW-AI / UMW-CFG). Command Dashboard is the real command-centre; other modules route
-  // to their authoritative operational surface where one exists, else honest next-phase.
-  { title: "Operational Command", items: [
-    { label: "Command Dashboard",        href: "/unit-manager/ops-performance", icon: "🎛️" },        // OPC-001
-    { label: "Live Unit Status",         href: "/unit-manager/ops-command/live-status", icon: "🏥" },  // OPC-002
-    { label: "Capacity & Bed Coordination", href: "/unit-manager/ops-command/capacity", icon: "🛏️" },  // OPC-003
-    { label: "Staffing & Assignment Oversight", href: "/unit-manager/ops-command/staffing", icon: "🧑‍⚕️" }, // OPC-004
-    { label: "Patient Flow Coordination", href: "/unit-manager/ops-command/patient-flow", icon: "🔄" }, // OPC-005
-    { label: "Safety & Escalation",      href: "/unit-manager/ops-command/safety", icon: "🚨" },        // OPC-006
-    { label: "Operational Action Manager", href: "/unit-manager/ops-command/actions", icon: "✅" },     // OPC-007
-    { label: "Shift Timeline & Handover", href: "/unit-manager/ops-command/handover", icon: "🕒" },     // OPC-008
-    { label: "Operational Forecasting",  href: "/unit-manager/ops-command/forecasting", icon: "🔮" },   // OPC-009
-    { label: "Operations Config & Rules", href: "/unit-manager/ops-command/config-rules", icon: "⚙️" }, // OPC-010 (→ UMW-CFG)
-    { label: "Audit, Reporting & Analytics", href: "/unit-manager/ops-command/analytics", icon: "📉" }, // OPC-011
-  ] },
-  // UMW-PA-001..009 Performance Analytics — metadata-driven KPI + balanced-scorecard + benchmark analytics over the
-  // performance stores (migration 108); operational KPIs resolve live from op_ops_snapshots.
-  { title: "Performance Analytics", items: [
-    { label: "Unit Performance Dashboard", href: "/unit-manager/performance", icon: "📊", exact: true }, // PA-001
-    { label: "KPI & Scorecard Centre",     href: "/unit-manager/performance/scorecard", icon: "🎯" },    // PA-002
-    { label: "Trends & Benchmarking",      href: "/unit-manager/performance/trends", icon: "📈" },        // PA-003
-    { label: "Workforce Analytics",        href: "/unit-manager/performance/workforce", icon: "👥" },     // PA-004
-    { label: "Operational Analytics",      href: "/unit-manager/performance/operational", icon: "⚙️" },   // PA-005
-    { label: "Financial Analytics",        href: "/unit-manager/performance/financial", icon: "💷" },     // PA-006
-    { label: "Predictive & AI Intelligence", href: "/unit-manager/performance/predictive", icon: "🔮" }, // PA-007
-    { label: "Executive Reporting & Governance", href: "/unit-manager/performance/reporting", icon: "🧾" }, // PA-008
-    { label: "Performance Configuration",  href: "/unit-manager/performance/configuration", icon: "🔧" }, // PA-009
-  ] },
-  // AI & Intelligence (UMG-AI) — the Command Centre + Executive Recommendations are the unit-scoped cross-domain
-  // hub (consolidated signals + live copilot); the per-domain intelligence lenses route to their authoritative
-  // surfaces (ops performance, workforce intelligence engine, patient analytics, quality AI, predictive) rather
-  // than being duplicated.
-  { title: "AI & Intelligence", items: [
-    { label: "AI Command Centre",         href: "/unit-manager/ai", icon: "✨", exact: true },
-    { label: "Executive Recommendations", href: "/unit-manager/ai/recommendations", icon: "💡" },
-    { label: "Operational Intelligence",  href: "/unit-manager/ops-performance", icon: "🧠" },
-    { label: "Workforce Intelligence",    href: "/unit-manager/workforce-intelligence", icon: "👥" },
-    { label: "Patient Intelligence",      href: "/unit-manager/patient-operations/analytics", icon: "🩺" },
-    { label: "Quality Intelligence",      href: "/unit-manager/quality/ai", icon: "🛡️" },
-    { label: "Predictive Analytics",      href: "/unit-manager/performance/predictive", icon: "🔮" },
-  ] },
-  // UMW-RES-001/002 Resource Operations. Consumables, stock and readiness are migration 165; equipment and
-  // the asset register are the stores that already owned them (op_equipment / adm_assets / op_resources).
-  { title: "Resource Operations", items: [
-    { label: "Resource Operations",   href: "/unit-manager/resources", icon: "📦" },                            // RES-001
-    { label: "Assets & Biomedical",   href: "/unit-manager/administration/assets", icon: "🖥️" },               // RES-002
-  ] },
-  // UMW-TLS-001..005 Team & Leadership Support. TLS-004 is the communication hub; the others route to the
-  // authoritative surface that already owns them rather than being duplicated (team = WFM-004 assignments,
-  // development = WFM-008, permissions = ADM-007).
-  { title: "Team & Leadership", items: [
-    { label: "Communications Hub",    href: "/unit-manager/communications", icon: "📣" },                      // TLS-004
-    { label: "Team & Assignments",    href: "/unit-manager/workforce-management/team-assignments", icon: "🧩" },// TLS-001
-    { label: "Roles & Permissions",   href: "/unit-manager/administration/governance", icon: "🛡️" },           // TLS-002
-    { label: "Development & Readiness", href: "/unit-manager/workforce-management/development", icon: "🎯" },   // TLS-003
-    { label: "Personalisation",       href: "/unit-manager/personalisation", icon: "🎨" },                      // TLS-005
-  ] },
-  // UMW-ADM-001..009 Administration & Configuration — no-code unit admin over adm_* stores (migrations 109/110),
-  // reusing op_beds / departments / positions / break_glass for structure & governance.
-  { title: "Administration & Configuration", items: [
-    { label: "Admin Dashboard",       href: "/unit-manager/administration", icon: "🗂️", exact: true },        // ADM-001
-    { label: "Unit Structure",        href: "/unit-manager/administration/structure", icon: "🏛️" },           // ADM-002
-    { label: "Policies & Documents",  href: "/unit-manager/administration/documents", icon: "📄" },            // ADM-003
-    { label: "Resources & Assets",    href: "/unit-manager/administration/assets", icon: "🖥️" },              // ADM-004
-    { label: "Forms & Registers",     href: "/unit-manager/administration/forms", icon: "📋" },                // ADM-005
-    { label: "Configuration Centre",  href: "/unit-manager/administration/configuration", icon: "🔧" },        // ADM-006
-    { label: "Permissions & Governance", href: "/unit-manager/administration/governance", icon: "🛡️" },       // ADM-007
-    { label: "Audit & Change Management", href: "/unit-manager/administration/change", icon: "🕓" },           // ADM-008
-    { label: "AI Administration Assistant", href: "/unit-manager/administration/ai-assistant", icon: "🤖" },   // ADM-009
-    { label: "Workspace Settings",    href: "/unit-manager/settings", icon: "⚙️" },
-  ] },
-];
 
 const ALLOWED = ["hospital_admin", "super_admin"];
 
@@ -234,15 +256,28 @@ export default async function UnitManagerLayout({ children }: { children: React.
   ]);
   const clinicalAlerts = (safetyCnt.error ? 0 : safetyCnt.count ?? 0) + (escCnt.error ? 0 : escCnt.count ?? 0);
 
-  const visibleGroups = NAV_GROUPS
-    .filter(g => { const p = SECTION_CFG[g.title]; return !p || isEnabled(cfgRows, cfgCtx, p); })
-    .map(g => ({ ...g, items: g.items
-      .filter(it => { const p = ITEM_CFG[it.label]; return !p || isEnabled(cfgRows, cfgCtx, p); })
-      .map(it => it.label === "Clinical Alerts" && clinicalAlerts ? { ...it, badge: clinicalAlerts } : it) }));
-  // Dedupe destinations that intentionally appear in more than one nav group (e.g.
-  // "Unit Workforce Planning" sits under both Platform Engines and Workforce Management)
-  // — otherwise the flattened mobile bar renders duplicate pills with colliding React keys.
-  const mobileItems = visibleGroups.flatMap(g => g.items.filter(i => i.href))
+  // A domain is shown unless its own config path OR any legacy path it inherited from the
+  // pre-UMW-000 grouping is disabled. Honouring the legacy paths means the restructure cannot
+  // silently re-enable something a super-admin had switched off under the old names.
+  const domainOn = (d: Domain) =>
+    isEnabled(cfgRows, cfgCtx, d.cfg) && (d.legacy ?? []).every(p => isEnabled(cfgRows, cfgCtx, p));
+
+  const visibleSections = SIDEBAR.map(sec => ({
+    title: sec.title,
+    domains: sec.domains
+      .map(k => DOMAINS.find(d => d.key === k)!)
+      .filter(d => d && domainOn(d))
+      .map(d => ({ ...d, items: d.items
+        .filter(it => { const p = ITEM_CFG[it.label]; return !p || isEnabled(cfgRows, cfgCtx, p); })
+        .map(it => it.label === "Clinical Alerts" && clinicalAlerts ? { ...it, badge: clinicalAlerts } : it) }))
+      .filter(d => d.items.length > 0),
+  })).filter(sec => sec.domains.length > 0);
+
+  // Dedupe destinations that legitimately appear under more than one domain (a cross-link such as
+  // Predictive Analytics under both AI Intelligence and Performance) — otherwise the flattened
+  // mobile bar renders duplicate pills with colliding React keys.
+  const mobileItems = visibleSections
+    .flatMap(sec => sec.domains.flatMap(d => d.items.filter(i => i.href)))
     .filter((it, i, arr) => arr.findIndex(x => x.href === it.href) === i);
 
   if (!userRoles.some(r => ALLOWED.includes(r))) {
@@ -303,28 +338,40 @@ export default async function UnitManagerLayout({ children }: { children: React.
           </div>
 
           <nav className="flex flex-col gap-0.5 flex-1 overflow-y-auto">
-            {visibleGroups.map(group => {
-              const nodes = group.items.map(item => item.soon || !item.href ? (
-                <span key={group.title + item.label} data-sb-item title={`${item.label}${item.badge ? "" : " · soon"}`}
-                  className={`flex items-center gap-2.5 px-3 py-1.5 rounded-lg text-sm cursor-default select-none ${item.badge ? "text-teal-100/60" : "text-teal-100/25"}`}>
-                  <span className="w-5 text-center text-sm">{item.icon}</span>
-                  <span data-sb-label className="flex-1 truncate">{item.label}</span>
-                  {item.badge ? (
-                    <span className="text-[9px] font-bold bg-rose-500 text-white rounded-full min-w-[16px] h-4 px-1 flex items-center justify-center">{item.badge > 99 ? "99+" : item.badge}</span>
-                  ) : (
-                    <span data-sb-label className="text-[8px] font-bold uppercase tracking-wider bg-teal-950 text-teal-400/40 rounded px-1 py-0.5">soon</span>
-                  )}
-                </span>
-              ) : (
-                <NavLink key={group.title + item.label} href={item.href} icon={item.icon} label={item.label} exact={item.exact}
-                  className="flex items-center gap-2.5 px-3 py-1.5 rounded-lg text-sm text-teal-100/70 hover:bg-teal-800/50 hover:text-white transition-colors"
-                  activeClassName="flex items-center gap-2.5 px-3 py-1.5 rounded-lg text-sm bg-teal-700/60 text-white font-medium" />
-              ));
+            {visibleSections.map(section => {
+              // A section whose only domain shares its name needs no sub-heading — repeating
+              // "Dashboard / Dashboard" would be noise rather than structure.
+              const showHeadings = !(section.domains.length === 1 && section.domains[0].title === section.title);
               return (
-                <NavGroup key={group.title} title={group.title}
-                  hrefs={group.items.filter(i => i.href).map(i => i.href!.split(/[?#]/)[0])}
+                <NavGroup key={section.title} title={section.title}
+                  hrefs={section.domains.flatMap(d => d.items.filter(i => i.href).map(i => i.href!.split(/[?#]/)[0]))}
                   headerClass="text-[10px] font-bold uppercase tracking-wider text-teal-400/60">
-                  {nodes}
+                  {section.domains.map(domain => (
+                    <div key={domain.key} className="flex flex-col gap-0.5">
+                      {showHeadings && (
+                        // Hidden in the collapsed icon rail via data-sb-label, so the rail stays a pure icon strip.
+                        <p data-sb-label className="px-3 pt-2 pb-0.5 text-[9px] font-semibold uppercase tracking-wider text-teal-500/50">
+                          {domain.title}
+                        </p>
+                      )}
+                      {domain.items.map(item => item.soon || !item.href ? (
+                        <span key={domain.key + item.label} data-sb-item title={`${item.label}${item.badge ? "" : " · soon"}`}
+                          className={`flex items-center gap-2.5 px-3 py-1.5 rounded-lg text-sm cursor-default select-none ${item.badge ? "text-teal-100/60" : "text-teal-100/25"}`}>
+                          <span className="w-5 text-center text-sm">{item.icon}</span>
+                          <span data-sb-label className="flex-1 truncate">{item.label}</span>
+                          {item.badge ? (
+                            <span className="text-[9px] font-bold bg-rose-500 text-white rounded-full min-w-[16px] h-4 px-1 flex items-center justify-center">{item.badge > 99 ? "99+" : item.badge}</span>
+                          ) : (
+                            <span data-sb-label className="text-[8px] font-bold uppercase tracking-wider bg-teal-950 text-teal-400/40 rounded px-1 py-0.5">soon</span>
+                          )}
+                        </span>
+                      ) : (
+                        <NavLink key={domain.key + item.label} href={item.href} icon={item.icon} label={item.label} exact={item.exact}
+                          className="flex items-center gap-2.5 px-3 py-1.5 rounded-lg text-sm text-teal-100/70 hover:bg-teal-800/50 hover:text-white transition-colors"
+                          activeClassName="flex items-center gap-2.5 px-3 py-1.5 rounded-lg text-sm bg-teal-700/60 text-white font-medium" />
+                      ))}
+                    </div>
+                  ))}
                 </NavGroup>
               );
             })}
