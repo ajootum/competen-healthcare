@@ -8,110 +8,19 @@ import NavGroup from "@/components/NavGroup";
 import SidebarToggle from "@/components/SidebarToggle";
 import { highestRole, type AppRole } from "@/lib/roles";
 import { workspaceLinksForUser } from "@/lib/workspace-links";
+import { resolveSswNavigation } from "@/lib/ssw/navigation";
 
 // Shift Command Centre (SSW-001) — the real-time operational command surface for
-// a clinical shift, organised into the six+ operational domains a supervisor
+// a clinical shift, organised into the twelve operational domains a supervisor
 // actually works in. Role-scoped to operational coordinators (charge nurse /
-// shift supervisor = assessor tier, and admins). Items link to live surfaces;
-// capabilities without a built surface yet are shown muted ("soon") rather than
-// as dead links.
+// shift supervisor = assessor tier, and admins).
+//
+// The sidebar is no longer hard-coded here: it is RESOLVED from the workspace
+// configuration engine (src/lib/ssw/navigation.ts), so a hospital can hide,
+// rename or reorder any module through the WCE Designer without a deployment.
+// Items link to live surfaces; capabilities without a built surface yet are
+// shown muted ("soon") rather than as dead links.
 /* eslint-disable @typescript-eslint/no-explicit-any */
-type NavItem = { label: string; href?: string; icon: string; exact?: boolean; soon?: boolean; badge?: string };
-
-// Standalone landing (SSW-001-R2 Ch.4) — the executive overview.
-const DASHBOARD: NavItem = { label: "Dashboard", href: "/supervisor", icon: "🏠", exact: true };
-
-// SSW-001 Revision 2.0 navigation hierarchy (Ch.3–13). Nine operational domains
-// in clinical-workflow order — shift control → patients → workforce → tasks →
-// communication → safety → analytics → decision support → configuration. Items
-// map to live surfaces; capabilities without a built surface yet are shown muted
-// ("soon") rather than as dead links.
-const NAV_GROUPS: { group: string; items: NavItem[] }[] = [
-  { group: "Shift Command", items: [
-    { label: "Shift Dashboard",   href: "/supervisor/shift-operations",            icon: "🖥️" },
-    { label: "Shift Planning & Activation", href: "/supervisor/shift-activation",   icon: "🚀" },
-    { label: "Handover Centre",   href: "/supervisor/handover",                    icon: "🔄", badge: "handover" },
-    { label: "Escalation Centre", href: "/supervisor/escalations",                  icon: "⬆️", badge: "escalations" },
-    { label: "Shift Analytics",   href: "/supervisor/operational-intelligence",     icon: "📈" },
-  ]},
-  { group: "Patient Operations", items: [
-    { label: "Patient Operations Dashboard", href: "/supervisor/patient-ops",         icon: "📊" },
-    { label: "Patient Census",               href: "/supervisor/patient-list",        icon: "👤" },
-    { label: "Patient Flow",                 href: "/supervisor/patient-flow",        icon: "🔀" },
-    { label: "Bed & Capacity",               href: "/supervisor/bed-management",       icon: "🛏️" },
-    { label: "Resource & Capacity",          href: "/supervisor/resources",            icon: "🏗️" },
-    { label: "Ward Map",                     href: "/supervisor/ward-map",            icon: "🗺️" },
-    { label: "Nurse Concerns",               href: "/supervisor/concerns",            icon: "🚩", badge: "concerns" },
-    { label: "Census & Assignment",          href: "/supervisor/census",              icon: "🗂️", badge: "transfersPending" },
-    { label: "Patient Operations Centre",    href: "/supervisor/patient-ops-center",  icon: "🗂️" },
-    { label: "Operations Centre",            href: "/supervisor/patient-operations/operations-centre", icon: "🧾" },
-    { label: "Clinical Safety",              href: "/supervisor/clinical-safety",     icon: "🛡️" },
-    { label: "Patient Cards",                href: "/supervisor/patient-list",        icon: "🪪" },
-  ]},
-  { group: "Workforce Operations", items: [
-    { label: "Staffing Allocation",  href: "/supervisor/workforce-operations",         icon: "👥" },
-    { label: "Team Assignments",     href: "/supervisor/team-assignments",             icon: "🧩" },
-    { label: "Assignment Engine",    href: "/supervisor/assignment-engine",            icon: "🧠" },
-    { label: "Workload Intelligence", href: "/supervisor/workload-intelligence",       icon: "⚖️" },
-    { label: "Competency Readiness", href: "/supervisor/workforce-operations#competency", icon: "🎖️" },
-    { label: "Break Management",     href: "/supervisor/workforce-operations#break",   icon: "☕" },
-    { label: "Supervisor Notes",     href: "/supervisor/workforce-operations#break",   icon: "🗒️" },
-  ]},
-  { group: "Task Centre", items: [
-    { label: "Task Assignment",       href: "/supervisor/task-center",            icon: "✅" },
-    { label: "Task Board",            href: "/supervisor/task-center",            icon: "📋", badge: "openTasks" },
-    { label: "Critical Tasks",        href: "/supervisor/task-center",            icon: "🔴", badge: "criticalTasks" },
-    { label: "Workflow & Automation", href: "/supervisor/task-center#workflow", icon: "🔀" },
-    { label: "Task Analytics",        href: "/supervisor/task-center",            icon: "📊" },
-  ]},
-  { group: "Communication Centre", items: [
-    { label: "Operations Hub",            href: "/supervisor/communication",             icon: "📡" },
-    { label: "Team Communications",       href: "/supervisor/communication#console",     icon: "💬", badge: "unread" },
-    { label: "Broadcast Centre",          href: "/supervisor/communication",             icon: "📣" },
-    { label: "Escalation Communications", href: "/supervisor/communication",             icon: "⬆️", badge: "escalations" },
-    { label: "Shift Handover",            href: "/supervisor/handover",                  icon: "🔄", badge: "handover" },
-    { label: "Announcements & Alerts",    href: "/supervisor/communication",             icon: "🔔" },
-    { label: "Communication Analytics",   href: "/supervisor/communication",             icon: "📊" },
-  ]},
-  { group: "Quality, Safety & Escalation", items: [
-    { label: "Safety Command Centre",    href: "/supervisor/quality-safety",            icon: "🛡️", badge: "safety" },
-    { label: "Observation & Monitoring", href: "/supervisor/quality-safety",            icon: "📈", badge: "overdueObs" },
-    { label: "Incident & Event Mgmt",    href: "/supervisor/quality-safety",            icon: "🚩" },
-    { label: "Escalation Centre",        href: "/supervisor/escalations",               icon: "⬆️", badge: "escalations" },
-    { label: "Quality Improvement",      href: "/supervisor/quality-safety",            icon: "✅" },
-    { label: "Clinical Governance",      href: "/supervisor/quality-safety",            icon: "⚖️" },
-    { label: "Safety Analytics",         href: "/supervisor/quality-safety",            icon: "📊" },
-  ]},
-  { group: "Operational Intelligence", items: [
-    { label: "Shift Performance",         href: "/supervisor/operational-intelligence", icon: "📈" },
-    { label: "Patient Intelligence",      href: "/supervisor/operational-intelligence", icon: "🧭" },
-    { label: "Workforce Intelligence",    href: "/supervisor/operational-intelligence", icon: "👥" },
-    { label: "Safety & Quality Intelli.", href: "/supervisor/operational-intelligence", icon: "🛡️" },
-    { label: "Predictive Intelligence",   href: "/supervisor/operational-intelligence", icon: "🔮" },
-    { label: "Operational Reporting",     href: "/supervisor/operational-intelligence", icon: "📄" },
-    { label: "Executive Insights",        href: "/supervisor/operational-intelligence", icon: "📊" },
-  ]},
-  { group: "AI Operational Copilot", items: [
-    { label: "AI Command Centre",         href: "/supervisor/ai",                  icon: "✨" },
-    { label: "Workforce Intelligence",    href: "/supervisor/ai",                  icon: "👥" },
-    { label: "Patient Intelligence",      href: "/supervisor/ai",                  icon: "🧭" },
-    { label: "Safety Intelligence",       href: "/supervisor/ai",                  icon: "🛡️" },
-    { label: "Operational Intelligence",  href: "/supervisor/ai",                  icon: "📊" },
-    { label: "Predictive Intelligence",   href: "/supervisor/ai",                  icon: "🔮" },
-    { label: "AI Assistant",              href: "/supervisor/ai",                  icon: "💬" },
-    { label: "Explainable AI",            href: "/supervisor/ai",                  icon: "🧠" },
-  ]},
-  { group: "Workspace Configuration Centre", items: [
-    { label: "Workspace Settings",          href: "/supervisor/config-centre",       icon: "⚙️" },
-    { label: "Shift Templates & Playbooks", href: "/supervisor/config-centre",       icon: "📋" },
-    { label: "Professional Toolkit",        href: "/supervisor/toolkit",             icon: "🧰" },
-    { label: "Reports & Data Export",       href: "/supervisor/config-centre",       icon: "📄" },
-    { label: "Notifications & Automation",  href: "/supervisor/config-centre",       icon: "🔔" },
-    { label: "Personal Productivity",       href: "/supervisor/config-centre",       icon: "🙋" },
-    { label: "Administration",              href: "/supervisor/config-centre",       icon: "🛡️" },
-    { label: "Integration & Systems",       href: "/supervisor/config-centre",       icon: "🔗" },
-  ]},
-];
 
 const ALLOWED = ["assessor", "hospital_admin", "super_admin"];
 const linkCls = "flex items-center gap-2.5 px-3 py-1.5 rounded-lg text-[13px] text-teal-100/70 hover:bg-teal-800/50 hover:text-white transition-colors";
@@ -170,11 +79,20 @@ export default async function SupervisorLayout({ children }: { children: React.R
     concerns: bNum(concernRes),
     transfersPending: bNum(xferRes),
   };
-  const groupBadge = (items: NavItem[]) =>
+  // ── Resolve the sidebar from workspace configuration (SSW nav engine) ───────
+  // Catalogue in code, sparse overrides in the DB, resolved platform -> tenant
+  // -> hospital -> unit -> role -> user. Fails soft to catalogue defaults.
+  const { sections } = await resolveSswNavigation(admin, {
+    hospitalId: bHid, roles: userRoles, userId: user.id,
+  });
+  const landing = sections.find(s => s.section === null)?.items ?? [];
+  const groups = sections.filter(s => s.section !== null);
+
+  const groupBadge = (items: { href?: string; soon?: boolean; badge?: string }[]) =>
     [...new Set(items.filter(i => i.href && !i.soon && i.badge).map(i => i.badge!))].reduce((n, k) => n + (badges[k] ?? 0), 0);
 
   // Flat list of real (non-soon) destinations for the mobile pill bar, deduped by href.
-  const mobileItems = [...new Map([DASHBOARD, ...NAV_GROUPS.flatMap(g => g.items)].filter(i => i.href && !i.soon && !i.href.startsWith("mailto")).map(i => [i.href, i] as const)).values()];
+  const mobileItems = [...new Map(sections.flatMap(s => s.items).filter(i => i.href && !i.soon).map(i => [i.href, i] as const)).values()];
 
   return (
     <div className="min-h-screen bg-gray-50 font-[family-name:var(--font-geist-sans)]">
@@ -207,29 +125,26 @@ export default async function SupervisorLayout({ children }: { children: React.R
           </Link>
 
           <nav className="flex flex-col gap-0.5 flex-1 overflow-y-auto">
-            <NavLink href={DASHBOARD.href!} icon={DASHBOARD.icon} label={DASHBOARD.label} exact={DASHBOARD.exact}
-              className={linkCls} activeClassName={activeCls} />
+            {landing.map(({ key, label, href, icon, exact }) => (
+              <NavLink key={key} href={href!} icon={icon} label={label} exact={exact}
+                className={linkCls} activeClassName={activeCls} />
+            ))}
             <div className="my-1.5 border-t border-teal-800/30" />
-            {NAV_GROUPS.map(({ group, items }) => {
-              const nodes = items.map(({ label, href, icon, exact, soon, badge }) => soon || !href ? (
-                <span key={label} title={label} data-sb-item
+            {groups.map(({ section, items }) => {
+              const nodes = items.map(({ key, label, href, icon, exact, soon, badge }) => soon || !href ? (
+                <span key={key} title={label} data-sb-item
                   className="flex items-center gap-2.5 px-3 py-1.5 rounded-lg text-[13px] text-teal-100/25 cursor-default select-none">
                   <span className="w-5 text-center text-sm leading-none opacity-60">{icon}</span>
                   <span className="flex-1" data-sb-label>{label}</span>
                   <span className="text-[8px] font-bold uppercase tracking-wider bg-teal-950 text-teal-400/40 rounded px-1 py-0.5" data-sb-label>soon</span>
                 </span>
-              ) : href.startsWith("mailto") ? (
-                <a key={label} href={href} data-sb-item title={label} className={linkCls}>
-                  <span className="w-5 text-center text-sm leading-none">{icon}</span>
-                  <span data-sb-label>{label}</span>
-                </a>
               ) : (
-                <NavLink key={label} href={href} icon={icon} label={label} exact={exact}
+                <NavLink key={key} href={href} icon={icon} label={label} exact={exact}
                   badge={badge ? badges[badge] : undefined}
                   className={linkCls} activeClassName={activeCls} />
               ));
               return (
-                <NavGroup key={group} title={group} hrefs={items.filter(i => i.href).map(i => i.href!.split(/[?#]/)[0])}
+                <NavGroup key={section!} title={section!} hrefs={items.filter(i => i.href).map(i => i.href!.split(/[?#]/)[0])}
                   badge={groupBadge(items)}
                   headerClass="text-[9px] font-bold uppercase tracking-widest text-teal-400/50">{nodes}</NavGroup>
               );

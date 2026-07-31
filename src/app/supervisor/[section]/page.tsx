@@ -1,58 +1,35 @@
-import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
-import Link from "next/link";
 
 export const dynamic = "force-dynamic";
 
-// Placeholder for SSW-001 sections whose workflow is a later phase. Honest about
-// what's coming and where the real work already lives.
-
-const SECTIONS: Record<string, { title: string; blurb: string; ready?: { label: string; href: string } }> = {
-  handover: {
-    title: "Handover Centre",
-    blurb: "Structured SBAR shift handover — auto-built from this shift's patients, outstanding tasks and open escalations, with read-acknowledgement by the receiving clinician. Its data foundation (shifts, tasks, escalations, op_handovers table) is in place; the workflow is the next SSW build.",
-  },
-  communication: {
-    title: "Communication Centre",
-    blurb: "Secure operational messaging — individual, group and broadcast, with priority and read-acknowledgements. A later SSW phase; the notification channel it builds on is already live.",
-  },
-  ai: {
-    title: "AI & Intelligence",
-    blurb: "Operational AI copilot — safe-staffing, workload and capacity recommendations for the shift. Arrives in a later phase; the live data it will reason over (staffing, acuity, escalations) is already on your dashboard.",
-    ready: { label: "Open the Shift Dashboard", href: "/supervisor" },
-  },
-  analytics: {
-    title: "Analytics & Reports",
-    blurb: "Shift and unit operational analytics and exportable reports. A later phase; live operational metrics are already summarised on your dashboard.",
-    ready: { label: "Open the Shift Dashboard", href: "/supervisor" },
-  },
-  settings: {
-    title: "Tools & Settings",
-    blurb: "Workspace preferences, thresholds (EWS trigger values, escalation SLAs) and shift configuration. A later phase.",
-  },
+// Legacy-path resolver for the Shift Supervisor Workspace.
+//
+// This route used to render a "next phase" placeholder for handover,
+// communication, ai, analytics and settings. Four of those five were already
+// DEAD CODE — /supervisor/handover, /supervisor/communication, /supervisor/ai
+// and /supervisor/settings are real static routes, and a static route always
+// wins over a dynamic segment in Next.js, so the placeholder never rendered.
+// The fifth, /supervisor/analytics, was the only reachable one: the old sidebar
+// linked to it, and it told supervisors the analytics they were already using
+// every day was "a later phase".
+//
+// So there is nothing left to place-hold. Known legacy paths now redirect to
+// the surface that actually owns the workflow; anything else falls back to the
+// Shift Dashboard rather than showing a fabricated roadmap. Access control is
+// enforced by the supervisor layout, which wraps this route.
+const LEGACY: Record<string, string> = {
+  analytics: "/supervisor/operational-intelligence",
+  reports: "/supervisor/operational-intelligence",
+  intelligence: "/supervisor/operational-intelligence",
+  escalation: "/supervisor/escalations",
+  workload: "/supervisor/workload-intelligence",
+  capacity: "/supervisor/resources",
+  tasks: "/supervisor/task-center",
+  patients: "/supervisor/patient-list",
+  staffing: "/supervisor/workforce-operations",
 };
 
-export default async function SupervisorSectionPage({ params }: { params: Promise<{ section: string }> }) {
+export default async function SupervisorLegacySectionPage({ params }: { params: Promise<{ section: string }> }) {
   const { section } = await params;
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) redirect("/login");
-  const admin = createAdminClient();
-  const { data: profile } = await admin.from("profiles").select("role, roles").eq("id", user.id).single();
-  const roles: string[] = (profile?.roles?.length ? profile.roles : [profile?.role]).filter(Boolean) as string[];
-  if (!roles.some(r => ["assessor", "hospital_admin", "super_admin"].includes(r))) redirect("/dashboard");
-
-  const s = Object.hasOwn(SECTIONS, section) ? SECTIONS[section] : undefined;
-  if (!s) redirect("/supervisor");
-
-  return (
-    <div className="space-y-4 max-w-2xl">
-      <h1 className="text-2xl font-bold text-gray-900">{s.title}</h1>
-      <div className="bg-white border border-gray-200 rounded-xl p-6">
-        <span className="inline-block text-[10px] font-semibold uppercase tracking-wider text-teal-600 bg-teal-50 border border-teal-100 rounded-full px-2.5 py-1 mb-3">Next phase</span>
-        <p className="text-sm text-gray-600 leading-relaxed">{s.blurb}</p>
-        {s.ready && <Link href={s.ready.href} className="mt-4 inline-block text-sm font-medium text-teal-700 hover:underline">{s.ready.label} →</Link>}
-      </div>
-    </div>
-  );
+  redirect(Object.hasOwn(LEGACY, section) ? LEGACY[section] : "/supervisor");
 }

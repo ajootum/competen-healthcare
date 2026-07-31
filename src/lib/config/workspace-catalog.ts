@@ -5,6 +5,8 @@
 // `path` is the stable config key ('<workspace>.<section>[.<module>]'); overrides
 // and the runtime resolver key off it.
 
+import { SSW_SECTIONS, SSW_NAV_CATALOGUE, SSW_CONFIG_PREFIX } from "@/lib/ssw/navigation";
+
 export type CatalogModule = { key: string; label: string; path: string; route?: string; canDisable?: boolean; note?: string };
 export type CatalogSection = { key: string; label: string; path: string; canDisable?: boolean; modules: CatalogModule[] };
 export type CatalogWorkspace = { key: string; label: string; route: string; wired: boolean; sections: CatalogSection[] };
@@ -35,26 +37,22 @@ const UNIT_MANAGER: CatalogWorkspace = {
   ],
 };
 
-// Shift Supervisor — catalogued for the Designer. Runtime enforcement rolls out
-// per workspace (see `wired`); config set here is stored & versioned now and takes
-// effect once the supervisor layout consults the engine.
+// Shift Supervisor — FULLY WIRED: the supervisor layout resolves its sidebar
+// through resolveSswNavigation, so disabling/renaming/reordering a section or
+// module here changes the live nav.
+//
+// The section and module lists are DERIVED from the nav catalogue rather than
+// hand-maintained, so the Designer can never drift from what the workspace
+// actually renders — every configurable object below is a real destination.
 const SUPERVISOR: CatalogWorkspace = {
-  key: "supervisor", label: "Shift Supervisor Workspace", route: "/supervisor", wired: false,
-  sections: [
-    { key: "shift-command", label: "Shift Command", path: "supervisor.shift-command", modules: [] },
-    { key: "patient-operations", label: "Patient Operations", path: "supervisor.patient-operations", modules: [
-      m("supervisor.patient-operations", "sbar-builder", "SBAR Builder", { note: "Handover module — alternative SOAP/ISBAR can be enabled instead (WCE-001 example)." }),
-      m("supervisor.patient-operations", "patient-ops-center", "Patient Operations Centre"),
-      m("supervisor.patient-operations", "clinical-safety", "Clinical Safety"),
-    ] },
-    { key: "workforce-operations", label: "Workforce Operations", path: "supervisor.workforce-operations", modules: [] },
-    { key: "task-centre", label: "Task Centre", path: "supervisor.task-centre", modules: [] },
-    { key: "communication", label: "Communication Centre", path: "supervisor.communication", modules: [] },
-    { key: "quality-safety", label: "Quality, Safety & Escalation", path: "supervisor.quality-safety", modules: [] },
-    { key: "operational-intelligence", label: "Operational Intelligence", path: "supervisor.operational-intelligence", modules: [] },
-    { key: "ai-copilot", label: "AI Operational Copilot", path: "supervisor.ai-copilot", modules: [] },
-    { key: "config-centre", label: "Workspace Configuration Centre", path: "supervisor.config-centre", modules: [] },
-  ],
+  key: "supervisor", label: "Shift Supervisor Workspace", route: "/supervisor", wired: true,
+  sections: SSW_SECTIONS.map(s => ({
+    key: s.key, label: s.label, path: `${SSW_CONFIG_PREFIX}.${s.key}`, canDisable: true,
+    modules: SSW_NAV_CATALOGUE
+      .filter(r => r.key.startsWith(`${s.key}.`))
+      .map(r => m(`${SSW_CONFIG_PREFIX}.${s.key}`, r.key.slice(s.key.length + 1), r.label,
+        { route: r.href, ...(r.soon ? { note: "No surface yet — shown muted in the sidebar." } : {}) })),
+  })),
 };
 
 // Personal Workspace — WIRED: the Personal Dashboard consults the engine via resolveDashboardManifest, so
