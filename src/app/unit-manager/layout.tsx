@@ -2,7 +2,7 @@ import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import NavLink from "@/components/NavLink";
-import NavGroup from "@/components/NavGroup";
+import NavGroup, { NavGroupOrPlain } from "@/components/NavGroup";
 import SidebarToggle from "@/components/SidebarToggle";
 import { type AppRole } from "@/lib/roles";
 import { loadConfigOverrides, isEnabled } from "@/lib/config/workspace-config";
@@ -348,13 +348,13 @@ export default async function UnitManagerLayout({ children }: { children: React.
                   hrefs={section.domains.flatMap(d => d.items.filter(i => i.href).map(i => i.href!.split(/[?#]/)[0]))}
                   headerClass="text-[10px] font-bold uppercase tracking-wider text-teal-400/60">
                   {section.domains.map(domain => (
-                    <div key={domain.key} className="flex flex-col gap-0.5">
-                      {showHeadings && (
-                        // Hidden in the collapsed icon rail via data-sb-label, so the rail stays a pure icon strip.
-                        <p data-sb-label className="px-3 pt-2 pb-0.5 text-[9px] font-semibold uppercase tracking-wider text-teal-500/50">
-                          {domain.title}
-                        </p>
-                      )}
+                    // The domain heading is an accordion too, so both levels collapse: the section, and
+                    // each domain within it. Same NavGroup as the section above, which keeps the icon rail
+                    // correct -- the CSS force-shows every nested details' items, so a collapsed domain
+                    // still appears as icons rather than vanishing from the rail.
+                    <NavGroupOrPlain key={domain.key} heading={showHeadings ? domain.title : null}
+                      hrefs={domain.items.filter(i => i.href).map(i => i.href!.split(/[?#]/)[0])}
+                      headerClass="text-[9px] font-semibold uppercase tracking-wider text-teal-500/50">
                       {domain.items.map(item => item.soon || !item.href ? (
                         <span key={domain.key + item.label} data-sb-item title={`${item.label}${item.badge ? "" : " · soon"}`}
                           className={`flex items-center gap-2.5 px-3 py-1.5 rounded-lg text-sm cursor-default select-none ${item.badge ? "text-teal-100/60" : "text-teal-100/25"}`}>
@@ -371,7 +371,7 @@ export default async function UnitManagerLayout({ children }: { children: React.
                           className="flex items-center gap-2.5 px-3 py-1.5 rounded-lg text-sm text-teal-100/70 hover:bg-teal-800/50 hover:text-white transition-colors"
                           activeClassName="flex items-center gap-2.5 px-3 py-1.5 rounded-lg text-sm bg-teal-700/60 text-white font-medium" />
                       ))}
-                    </div>
+                    </NavGroupOrPlain>
                   ))}
                 </NavGroup>
               );

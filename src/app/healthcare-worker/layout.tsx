@@ -159,18 +159,29 @@ export default async function HealthcareWorkerLayout({ children }: { children: R
           </Link>
 
           <nav className="flex flex-col gap-0.5 flex-1 overflow-y-auto">
-            {NAV.map((s, i) => (
-              <div key={s.section ?? `s${i}`} className="flex flex-col gap-0.5">
-                {s.section && <p className="px-3 pt-2.5 pb-0.5 text-[9px] font-bold uppercase tracking-widest text-emerald-400/50" data-sb-label>{s.section}</p>}
-                {s.entries.map(e => "item" in e ? renderItem(e.item) : (
-                  <NavGroup key={e.group} title={e.group} hrefs={e.items.filter(i2 => i2.href).map(i2 => i2.href!.split(/[?#]/)[0])}
-                    badge={groupBadge(e.items)}
-                    headerClass="text-[11px] font-semibold text-emerald-100/60">
-                    {e.items.map(renderItem)}
-                  </NavGroup>
-                ))}
-              </div>
-            ))}
+            {NAV.map((s, i) => {
+              const entries = s.entries.map(e => "item" in e ? renderItem(e.item) : (
+                <NavGroup key={e.group} title={e.group} hrefs={e.items.filter(i2 => i2.href).map(i2 => i2.href!.split(/[?#]/)[0])}
+                  badge={groupBadge(e.items)}
+                  headerClass="text-[11px] font-semibold text-emerald-100/60">
+                  {e.items.map(renderItem)}
+                </NavGroup>
+              ));
+              // A titled section is now an accordion too, not just its sub-groups: SHIFT / CLINICAL /
+              // COMMUNICATION collapse the same way "Clinical Assessment" already did. Same NavGroup, so
+              // there is one collapse mechanism rather than two that can drift -- it keeps the keyboard
+              // behaviour, the auto-open-on-active-page, the saved state and the icon-rail rules for free.
+              const items = s.entries.flatMap(e => "item" in e ? [e.item] : e.items);
+              if (!s.section) return <div key={`s${i}`} className="flex flex-col gap-0.5">{entries}</div>;
+              return (
+                <NavGroup key={s.section} title={s.section}
+                  hrefs={items.filter(it => it.href).map(it => it.href!.split(/[?#]/)[0])}
+                  badge={groupBadge(items)}
+                  headerClass="text-[9px] font-bold uppercase tracking-widest text-emerald-400/50">
+                  {entries}
+                </NavGroup>
+              );
+            })}
           </nav>
 
           {/* CURRENT SHIFT widget (UI-001): counts + break status + progress */}

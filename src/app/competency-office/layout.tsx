@@ -2,6 +2,7 @@ import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import NavLink from "@/components/NavLink";
+import NavGroup from "@/components/NavGroup";
 import SidebarToggle from "@/components/SidebarToggle";
 import { type AppRole } from "@/lib/roles";
 import { holdsOfficeAppointment } from "@/lib/ogs/office";
@@ -157,16 +158,22 @@ export default async function CompetencyOfficeLayout({ children }: { children: R
           </div>
 
           <nav className="flex flex-col gap-0.5 flex-1 overflow-y-auto">
-            {NAV_SECTIONS.map(({ section, items }) => (
-              <div key={section}>
-                {section !== "Executive" && <div className="px-3 mt-3 mb-1" data-sb-label><span className="text-[10px] font-bold text-teal-400/60 uppercase tracking-widest">{section}</span></div>}
-                {items.map(({ label, href, icon, exact }) => (
-                  <NavLink key={label} href={href} icon={icon} label={label} exact={exact}
-                    className="flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm text-teal-100/70 hover:bg-teal-800/50 hover:text-white transition-colors"
-                    activeClassName="flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm bg-teal-700/60 text-white font-medium" />
-                ))}
-              </div>
-            ))}
+            {NAV_SECTIONS.map(({ section, items }) => {
+              const links = items.map(({ label, href, icon, exact }) => (
+                <NavLink key={label} href={href} icon={icon} label={label} exact={exact}
+                  className="flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm text-teal-100/70 hover:bg-teal-800/50 hover:text-white transition-colors"
+                  activeClassName="flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm bg-teal-700/60 text-white font-medium" />
+              ));
+              // "Executive" is the landing group and never had a heading, so there is nothing to collapse
+              // by -- a headerless accordion would be a control with no label.
+              if (section === "Executive") return <div key={section}>{links}</div>;
+              return (
+                <NavGroup key={section} title={section} hrefs={items.map(i => i.href.split(/[?#]/)[0])}
+                  headerClass="text-[10px] font-bold text-teal-400/60 uppercase tracking-widest">
+                  {links}
+                </NavGroup>
+              );
+            })}
 
             <div className="px-3 mt-4 mb-1.5" data-sb-label>
               <span className="text-[10px] font-bold text-teal-400/70 uppercase tracking-widest">Quick Actions</span>

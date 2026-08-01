@@ -27,17 +27,24 @@ export default function NavGroup({ title, hrefs, headerClass, badge, children }:
   const active = hrefs.some(h => pathname === h || pathname.startsWith(h + "/"));
   const ref = useRef<HTMLDetailsElement>(null);
 
+  // SCOPED PER WORKSPACE. The key used to be `nav:<title>` alone, so two workspaces with a section of the
+  // same name -- "Analytics", "Quality & Safety", "Administration" all recur -- shared one saved state, and
+  // collapsing it in one collapsed it in the other. The first path segment is the workspace, so scoping by
+  // it keeps each sidebar's memory its own.
+  const scope = pathname.split("/")[1] || "root";
+  const key = `nav:${scope}:${title}`;
+
   useEffect(() => {
     const el = ref.current;
     if (!el) return;
     let saved: string | null = null;
-    try { saved = localStorage.getItem("nav:" + title); } catch { /* ignore */ }
+    try { saved = localStorage.getItem(key); } catch { /* ignore */ }
     el.open = saved === null ? active : saved === "1";
-  }, [active, title]);
+  }, [active, key]);
 
   return (
     <details ref={ref} data-nav-group open className="group/nav flex flex-col gap-0.5"
-      onToggle={e => { try { localStorage.setItem("nav:" + title, (e.currentTarget as HTMLDetailsElement).open ? "1" : "0"); } catch { /* ignore */ } }}>
+      onToggle={e => { try { localStorage.setItem(key, (e.currentTarget as HTMLDetailsElement).open ? "1" : "0"); } catch { /* ignore */ } }}>
       <summary data-sb-item className="flex items-center gap-1 px-3 pt-3 pb-1 cursor-pointer select-none rounded hover:bg-white/5">
         <span className="text-[8px] leading-none text-slate-500 transition-transform duration-150 group-open/nav:rotate-90" aria-hidden>▶</span>
         <span className={headerClass} data-sb-label>{title}</span>
@@ -50,4 +57,20 @@ export default function NavGroup({ title, hrefs, headerClass, badge, children }:
       <div className="flex flex-col gap-0.5">{children}</div>
     </details>
   );
+}
+
+// A heading that may be absent. Some sections are the workspace's landing group and deliberately carry no
+// label; wrapping those in an accordion would produce a toggle with nothing to name it, so they stay a
+// plain container. Exists because the choice sits inside a JSX expression where an early return is not
+// available -- and because it is the same decision in several layouts, which is exactly the thing that
+// drifts when each one re-implements it.
+export function NavGroupOrPlain({ heading, hrefs, headerClass, badge, children }: {
+  heading: string | null;
+  hrefs: string[];
+  headerClass: string;
+  badge?: number;
+  children: React.ReactNode;
+}) {
+  if (!heading) return <div className="flex flex-col gap-0.5">{children}</div>;
+  return <NavGroup title={heading} hrefs={hrefs} headerClass={headerClass} badge={badge}>{children}</NavGroup>;
 }
