@@ -7,6 +7,8 @@ import { generate } from "@/lib/ai/client";
 import { aiStatus } from "@/lib/ai/config";
 import { checkAiQuota } from "@/lib/ai/quota";
 
+const NONE = "00000000-0000-0000-0000-000000000000";
+
 // GET — report AI readiness (so the UI can show config state without a call)
 export async function GET() {
   const s = aiStatus();
@@ -21,7 +23,7 @@ export async function POST(req: Request) {
 
   const admin = createAdminClient();
   // Roles-array aware (matches getCaller/page gates): multi-role callers pass.
-  const { data: profile } = await admin.from("profiles").select("role, roles, full_name").eq("id", user.id).single();
+  const { data: profile } = await admin.from("profiles").select("role, roles, full_name, hospital_id").eq("id", user.id).single();
   const callerRoles: string[] = (profile?.roles?.length ? profile.roles : [profile?.role]).filter(Boolean);
   if (!callerRoles.some(r => ["super_admin", "hospital_admin", "educator"].includes(r))) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
@@ -48,8 +50,16 @@ export async function POST(req: Request) {
     skill: "Skill", resource: "Resource", policy: "Policy",
   };
 
+  // TENANT SCOPE MATTERS MORE HERE THAN ANYWHERE. Whatever this returns is pasted into the prompt as
+  // grounding, so an unscoped search does not just show another hospital's governed content — it feeds
+  // it to the model, which then states it as fact in an answer. p_hospital is mandatory (migration 167);
+  // null is unrestricted and reserved for super_admin.
   const { data: ftsData, error: ftsError } = await admin
-    .rpc("search_ckcm", { q: question, max_results: 24 });
+    .rpc("search_ckcm", {
+      q: question,
+      max_results: 24,
+      p_hospital: callerRoles.includes("super_admin") ? null : (profile?.hospital_id ?? NONE),
+    });
   const ftsHits = (ftsData ?? null) as
     | { object_type: string; object_id: string; title: string; snippet: string; rank: number }[]
     | null;
@@ -63,20 +73,29 @@ export async function POST(req: Request) {
     const terms = question.toLowerCase().replace(/[^a-z0-9 ]/g, " ").split(/\s+/).filter(w => w.length > 3).slice(0, 6);
     const pattern = terms.length ? terms.map(t => `%${t}%`).join("|") : `%${question.slice(0, 40)}%`;
 
+    // The fallback needs the SAME tenant rule as the FTS path above — it reads the same tables through
+    // the same service-role client and feeds the same prompt, so scoping only the FTS path would just
+    // move the leak to whichever request happened to miss. framework_competencies and
+    // clinical_practice_units have no hospital_id and are shared master content, so only the other two
+    // take the filter. A second .or() ANDs with the first (verified against the live database).
+    const tenantOr = `hospital_id.eq.${profile?.hospital_id ?? NONE},hospital_id.is.null`;
+    const scoped = <T extends { or(f: string): T }>(qb: T): T =>
+      callerRoles.includes("super_admin") ? qb : qb.or(tenantOr);
+
     const [{ data: comps }, { data: frameworks }, { data: cpus }, { data: policies }] = await Promise.all([
       admin.from("framework_competencies")
         .select("id, name, description, risk_category, framework_domains(name, frameworks(name))")
         .or(terms.map(t => `name.ilike.%${t}%`).join(",") || `name.ilike.${pattern}`)
         .limit(12),
-      admin.from("frameworks").select("id, name, library, description").eq("is_active", true)
-        .or(terms.map(t => `name.ilike.%${t}%`).join(",") || `name.ilike.${pattern}`)
+      scoped(admin.from("frameworks").select("id, name, library, description").eq("is_active", true)
+        .or(terms.map(t => `name.ilike.%${t}%`).join(",") || `name.ilike.${pattern}`))
         .limit(6),
       admin.from("clinical_practice_units").select("id, name, description, risk_category, complexity")
         .eq("pub_status", "published")
         .or(terms.map(t => `name.ilike.%${t}%`).join(",") || `name.ilike.${pattern}`)
         .limit(8),
-      admin.from("policies").select("id, title, content").eq("is_active", true)
-        .or(terms.map(t => `title.ilike.%${t}%`).join(",") || `title.ilike.${pattern}`)
+      scoped(admin.from("policies").select("id, title, content").eq("is_active", true)
+        .or(terms.map(t => `title.ilike.%${t}%`).join(",") || `title.ilike.${pattern}`))
         .limit(4),
     ]);
 

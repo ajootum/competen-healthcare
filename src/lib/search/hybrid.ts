@@ -9,14 +9,23 @@ import { embed, embeddingConfigured } from "@/lib/ai/embed";
 export type SearchHit = { objectType: string; objectId: string; title: string; snippet: string; score: number; matched: string[]; similarity?: number };
 
 const RRF_K = 60;
+const NONE = "00000000-0000-0000-0000-000000000000";
 const firstLine = (s: string) => (s || "").split(/[.\n]/)[0].slice(0, 90);
 
 export async function hybridSearch(admin: any, q: string, opts: { hospitalId?: string | null; isSuper?: boolean; limit?: number }): Promise<{ hits: SearchHit[]; semantic: boolean; note?: string }> {
   const limit = opts.limit ?? 24;
   const map = new Map<string, SearchHit>();
 
+  // Both halves take the SAME tenant argument. They did not: the vector half passed p_hospital from the
+  // day it was written, the keyword half took no tenant argument at all, so one result set mixed a scoped
+  // and an unscoped source. search_ckcm now requires p_hospital (migration 167).
+  //
+  // The nil uuid, not null, for a caller with no hospital — null means UNRESTRICTED in both functions, so
+  // `hospitalId ?? null` quietly opened the query for exactly the users least entitled to it.
+  const pHospital = opts.isSuper ? null : (opts.hospitalId ?? NONE);
+
   // Keyword (always available).
-  const { data: kw } = await admin.rpc("search_ckcm", { q, max_results: limit });
+  const { data: kw } = await admin.rpc("search_ckcm", { q, max_results: limit, p_hospital: pHospital });
   ((kw ?? []) as any[]).forEach((r, i) => {
     const key = `${r.object_type}:${r.object_id}`;
     const h: SearchHit = map.get(key) ?? { objectType: r.object_type, objectId: r.object_id, title: r.title ?? "", snippet: r.snippet ?? "", score: 0, matched: [] };
@@ -32,7 +41,7 @@ export async function hybridSearch(admin: any, q: string, opts: { hospitalId?: s
   if (embeddingConfigured()) {
     const emb = await embed([q]);
     if (emb.ok && emb.vectors[0]) {
-      const { data: vec } = await admin.rpc("match_assets", { query_embedding: JSON.stringify(emb.vectors[0]), match_count: limit, p_hospital: opts.isSuper ? null : (opts.hospitalId ?? null) });
+      const { data: vec } = await admin.rpc("match_assets", { query_embedding: JSON.stringify(emb.vectors[0]), match_count: limit, p_hospital: pHospital });
       const rows = (vec ?? []) as any[];
       semantic = true;
       if (rows.length === 0) note = "No embeddings indexed yet — run a reindex to enable semantic recall.";
