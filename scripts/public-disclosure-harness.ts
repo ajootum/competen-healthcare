@@ -21,10 +21,10 @@
  * Needs the dev server on :3000.
  *   npx --yes tsx scripts/public-disclosure-harness.ts
  */
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { SOLUTIONS, PRIMARY_SOLUTIONS } from "../src/lib/marketing/solutions";
+import { PRACTICE_AREAS } from "../src/lib/marketing/practice-content";
 
 const BASE = process.env.BASE_URL ?? "http://localhost:3000";
 
@@ -43,14 +43,30 @@ const FORBIDDEN = [
   "AI platform", "Platform operations", "Configuration, integration",
 ];
 
-const PUBLIC_PAGES = ["/", ...SOLUTIONS.map(s => `/${s.slug}`), "/login", "/signup"];
+// The Practice capability pages are included: they are the most detailed public pages on the site and
+// therefore the likeliest place for a product name to leak into a sentence about what something connects to.
+const PUBLIC_PAGES = [
+  "/", ...SOLUTIONS.map(s => `/${s.slug}`),
+  ...PRACTICE_AREAS.map(a => `/practice/${a.slug}`),
+  "/login", "/signup",
+];
 
 // Strip tags AND the Next.js RSC payload. The flight data at the bottom of the document repeats every
 // string in the tree; matching against it would report a leak on a page that never displays the words --
 // a false positive that would get the harness ignored inside a week.
 function visibleText(html: string): string {
   const body = html.replace(/<script[\s\S]*?<\/script>/gi, " ").replace(/<style[\s\S]*?<\/style>/gi, " ");
-  return body.replace(/<[^>]+>/g, " ").replace(/&[a-z]+;/gi, " ").replace(/\s+/g, " ");
+  // Entities are DECODED rather than blanked: blanking splits "Workforce &amp; Capability" into two
+  // fragments, so a forbidden phrase containing an ampersand would slip past unnoticed.
+  return body
+    .replace(/<[^>]+>/g, " ")
+    .replace(/&nbsp;/gi, " ")
+    .replace(/&lt;/gi, "<").replace(/&gt;/gi, ">")
+    .replace(/&quot;/gi, '"').replace(/&#0?39;|&apos;|&#x27;/gi, "'")
+    .replace(/&#(\d+);/g, (_, d) => String.fromCodePoint(Number(d)))
+    .replace(/&amp;/gi, "&")
+    .replace(/&[a-z]+;/gi, " ")
+    .replace(/\s+/g, " ");
 }
 
 async function main() {
