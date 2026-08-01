@@ -128,6 +128,9 @@ export default async function ComplianceManagement() {
               <div key={dom.label}>
                 <div className="flex items-center justify-between text-xs mb-0.5"><span className="text-gray-600">{dom.label}</span><span className={`tabular-nums ${dom.value == null ? "text-gray-300" : "text-gray-700"}`}>{dom.value == null ? "n/a" : `${dom.value}%`}</span></div>
                 <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">{dom.value != null && <div className={`h-full rounded-full ${dom.value >= 80 ? "bg-[var(--cmp-color-success)]" : dom.value >= 50 ? "bg-[var(--cmp-color-warning)]" : "bg-[var(--cmp-color-error)]"}`} style={{ width: `${dom.value}%` }} />}</div>
+                {/* The caveat travels with the number. A learner-reported figure shown bare next to audit
+                    compliance reads as equally measured, which is the whole defect being corrected. */}
+                {dom.note && <p className="text-[10px] text-gray-400 mt-0.5 leading-tight">{dom.note}</p>}
               </div>
             ))}
           </div>
