@@ -2,6 +2,7 @@ import Link from "next/link";
 import { requireEducatorAccess } from "@/lib/educator-access";
 import { loadExecutiveIntelligence, healthColor, type TrendPoint } from "@/lib/executive-intelligence";
 import CommandBar from "./CommandBar";
+import { DarkCard as Card } from "../../../../components/ui/primitives";
 
 // Executive Intelligence Workspace (spec v1.0 + mockup) — the strategic command
 // centre at the top of AI & Intelligence. Dark command-centre theme; a wide
@@ -18,15 +19,6 @@ const SEV_CLS: Record<string, string> = { High: "bg-[var(--cmp-color-error)]/20 
 const STATUS_CLS: Record<string, string> = { "On Track": "text-emerald-400", Improving: "text-sky-400", "At Risk": "text-amber-400", Delayed: "text-rose-400" };
 const IMPACT_CLS: Record<string, string> = { High: "bg-[var(--cmp-color-error)]/20 text-rose-300", Medium: "bg-[var(--cmp-color-warning)]/20 text-amber-300", Low: "bg-[var(--cmp-color-success)]/15 text-emerald-200" };
 const REC_CLS: Record<string, string> = { yes: "text-emerald-400", maybe: "text-amber-400", no: "text-rose-400" };
-
-function Card({ title, tag, children }: { title: string; tag?: string; children: React.ReactNode }) {
-  return (
-    <div className="rounded-2xl bg-white/[0.03] border border-white/10 p-4">
-      <div className="flex items-center gap-2 mb-3"><p className="text-[11px] font-bold uppercase tracking-widest text-slate-400">{title}</p>{tag && <span className="ml-auto text-[8px] font-bold uppercase tracking-wide text-slate-500">{tag}</span>}</div>
-      {children}
-    </div>
-  );
-}
 
 function Donut({ slices, center, sub }: { slices: { label: string; pct: number; color: string }[]; center: string; sub: string }) {
   const C = 2 * Math.PI * 15.9;

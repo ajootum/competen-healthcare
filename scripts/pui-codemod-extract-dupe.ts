@@ -62,13 +62,15 @@ function importPath(from: string, kit: string): string {
 }
 
 function main() {
-  const positional = process.argv.slice(2).filter((a, i, arr) => !a.startsWith("--") && arr[i - 1] !== "--as");
+  const FLAGVALS = ["--as", "--from-hash"];
+  const positional = process.argv.slice(2).filter((a, i, arr) => !a.startsWith("--") && !FLAGVALS.includes(arr[i - 1]));
   const [name, kitArg] = positional;
   const dry = process.argv.includes("--dry");
   // --as lets the kit's export have a different name from the local one it replaces. The import is then
   // ALIASED back to the local name, so every existing <Card> in the file keeps working and the codemod
   // never has to rename JSX — renaming call sites would be an edit this guard cannot verify.
   const localName = process.argv.includes("--as") ? process.argv[process.argv.indexOf("--as") + 1] : null;
+  const fromHash = process.argv.includes("--from-hash") ? process.argv[process.argv.indexOf("--from-hash") + 1] : null;
   if (!name || !kitArg) { console.log("usage: <Name> <kit-path> [--as <LocalName>] [--dry]"); process.exit(1); }
 
   const kitFile = join(ROOT, kitArg);
@@ -90,7 +92,18 @@ function main() {
     const found = findComponent(src, localName ?? name);
     if (!found) continue;
     const rel = relative(ROOT, f).replace(/\\/g, "/");
-    if (hash(nameless(found.body, localName ?? name)) !== kitHash) { refused.push(rel); continue; }
+    const bodyHash = hash(nameless(found.body, localName ?? name));
+    // --from-hash migrates a body that is NOT textually equal to the kit's, but only one whose hash is the
+    // exact value given on the command line. It exists for the case where the kit component is a proven
+    // RENDER-equivalent superset rather than a copy — DarkCard with muted=false emits the same class set as
+    // the plain variant, and pui-migration-harness.ts asserts that. The guard is not loosened: it still
+    // refuses everything except one named, pre-verified implementation.
+    const wanted = fromHash ?? kitHash;
+    // In a dry run the refusal carries the body's hash, so a genuinely equivalent variant can be identified
+    // and passed back via --from-hash rather than the guard being weakened to let it through.
+    // A prefix is accepted so the 12-character hash the dry run prints can be pasted straight back. Twelve
+    // hex characters is 48 bits — far more than enough to name one implementation in this codebase.
+    if (!bodyHash.startsWith(wanted)) { refused.push(dry ? `${rel}  [${bodyHash.slice(0, 12)}]` : rel); continue; }
 
     // Remove the local definition, then import the identical one.
     let out = src.slice(0, found.start) + src.slice(found.end);

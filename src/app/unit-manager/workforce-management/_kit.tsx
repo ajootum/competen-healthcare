@@ -30,3 +30,11 @@ export function Kpi({ label, value, tone }: { label: string; value: any; tone?: 
 export function KpiWithSub({ label, value, sub, tone }: { label: string; value: any; sub?: string; tone?: string }) {
   return <div className={`${card} p-4`}><p className="text-xs text-gray-500">{label}</p><p className={`text-2xl font-bold tabular-nums mt-1 ${tone ?? "text-gray-900"}`}>{value}</p>{sub && <p className="text-[11px] text-gray-400 mt-0.5">{sub}</p>}</div>;
 }
+
+// And a third: the same tile again with a corner annotation. Three near-identical variants in one section
+// is the accretion this pass is unwinding, but they are kept SEPARATE for now for the same reason as above
+// — collapsing them into one component with optional props is a rewrite the hash guard cannot vouch for.
+// All three now live in one file, which is what makes that collapse a small, reviewable edit later.
+export function KpiWithFoot({ label, value, sub, tone, foot }: { label: string; value: any; sub?: string; tone?: string; foot?: string }) {
+  return <div className={`${card} p-4`}><div className="flex items-start justify-between"><p className="text-xs text-gray-500">{label}</p>{foot && <span className="text-[9px] text-gray-300">{foot}</span>}</div><p className={`text-2xl font-bold tabular-nums mt-1 ${tone ?? "text-gray-900"}`}>{value}</p>{sub && <p className="text-[11px] text-gray-400 mt-0.5">{sub}</p>}</div>;
+}

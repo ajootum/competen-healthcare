@@ -2,6 +2,7 @@ import Link from "next/link";
 import { requireEducatorAccess } from "@/lib/educator-access";
 import { loadCompetencyIntelligence, type NavNode, type Tint } from "@/lib/competency-intelligence";
 import CommandBar from "./CommandBar";
+import { DarkCard as Card } from "../../../../components/ui/primitives";
 
 // Competency Intelligence Workspace (spec v1.0 + mockup) — the flagship AI
 // competency-reasoning centre inside AI & Intelligence. Dark command-centre
@@ -75,15 +76,6 @@ function Donut({ slices, center, sub }: { slices: { label: string; n: number; co
         {slices.map((s, i) => { const prev = slices.slice(0, i).reduce((a, b) => a + b.n, 0); const dash = (s.n / totalN) * C; return <circle key={s.label} cx="18" cy="18" r="15.9" fill="none" stroke={s.color} strokeWidth="4" strokeDasharray={`${dash} ${C - dash}`} strokeDashoffset={-(prev / totalN) * C} />; })}
       </svg>
       <div className="absolute inset-0 flex flex-col items-center justify-center"><span className="text-base font-extrabold text-white">{center}</span><span className="text-[8px] text-slate-500">{sub}</span></div>
-    </div>
-  );
-}
-
-function Card({ title, tag, children }: { title: string; tag?: string; children: React.ReactNode }) {
-  return (
-    <div className="rounded-2xl bg-white/[0.03] border border-white/10 p-4">
-      <div className="flex items-center gap-2 mb-3"><p className="text-[11px] font-bold uppercase tracking-widest text-slate-400">{title}</p>{tag && <span className="ml-auto text-[8px] font-bold uppercase tracking-wide text-slate-500">{tag}</span>}</div>
-      {children}
     </div>
   );
 }

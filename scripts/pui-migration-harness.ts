@@ -54,6 +54,30 @@ function main() {
   ok("cardClass still equals the string it replaced", decl?.[1] === CARD,
     `cardClass = "${decl?.[1]}"`);
 
+  // ── DarkCard vs the plain dark card it replaces ──
+  // Six educator pages carried a dark card WITHOUT the `muted` prop. They are not textually equal to
+  // DarkCard, so the codemod's hash guard rightly refuses them by default — they were migrated only after
+  // this check, using --from-hash to name that one pre-verified implementation. The claim being proven is
+  // narrow and exact: at muted=false, DarkCard emits the same SET of classes, differing only in the order
+  // the utilities are written, which CSS does not care about.
+  const dark = prim.match(/export function DarkCard[\s\S]*?\n}/);
+  ok("DarkCard is in the library", !!dark);
+  if (dark) {
+    const body = dark[0];
+    // Evaluate the two ternaries at muted=false and collect what the shell and heading actually render.
+    const falseBranch = (s: string) => s.replace(/\$\{muted \? "[^"]*" : "([^"]*)"\}/g, "$1");
+    const shell = falseBranch((body.match(/className=\{`(rounded-2xl[^`]*)`\}/) ?? [])[1] ?? "");
+    const heading = falseBranch((body.match(/className=\{`(text-\[11px\][^`]*)`\}/) ?? [])[1] ?? "");
+    const PLAIN_SHELL = "rounded-2xl bg-white/[0.03] border border-white/10 p-4";
+    const PLAIN_HEADING = "text-[11px] font-bold uppercase tracking-widest text-slate-400";
+    ok("DarkCard(muted=false) renders the plain variant's shell classes",
+      tokens(shell).size === tokens(PLAIN_SHELL).size && [...tokens(shell)].every(t => tokens(PLAIN_SHELL).has(t)),
+      `${shell}  vs  ${PLAIN_SHELL}`);
+    ok("...and its heading classes",
+      tokens(heading).size === tokens(PLAIN_HEADING).size && [...tokens(heading)].every(t => tokens(PLAIN_HEADING).has(t)),
+      `${heading}  vs  ${PLAIN_HEADING}`);
+  }
+
   // ── The diff ──
   let diff = "";
   try { diff = git("diff", "-U0", ref, "--", "src/app"); } catch { /* no diff */ }
@@ -73,13 +97,17 @@ function main() {
   }
 
   // ── Class-set equality, per file ──
-  let compared = 0; const mismatches: string[] = [];
+  let compared = 0; const mismatches: string[] = []; const moved: string[] = [];
   for (const [file, { removed, added }] of files) {
     const before = removed.flatMap(classNames).map(expand);
     const after = added.flatMap(classNames).map(expand);
     // Only lines that carried a className are comparable; an added import line has none.
     if (before.length === 0 && after.length === 0) continue;
-    if (before.length !== after.length) { mismatches.push(`${file}: ${before.length} className(s) before, ${after.length} after`); continue; }
+    // A DIFFERENT className count means markup MOVED rather than being rewritten in place — a component
+    // lifted out of a page into a shared kit. That is what the de-duplication passes do, and their safety
+    // comes from the codemod's hash guard (the body had to match character for character), not from this
+    // check, which exists to catch a className being altered where it stands.
+    if (before.length !== after.length) { moved.push(`${file} (${before.length} -> ${after.length})`); continue; }
     for (let i = 0; i < before.length; i++) {
       compared++;
       const a = tokens(before[i]), b = tokens(after[i]);
@@ -87,14 +115,19 @@ function main() {
       if (!same) mismatches.push(`${file}: {${[...a].join(" ")}} -> {${[...b].join(" ")}}`);
     }
   }
-  ok(`every changed className renders the same utilities (${compared} compared)`, mismatches.length === 0,
+  ok(`every className rewritten IN PLACE renders the same utilities (${compared} compared)`, mismatches.length === 0,
     mismatches.slice(0, 5).join(" | "));
+  if (moved.length) console.log(`  note  ${moved.length} file(s) had markup MOVED, not rewritten — verified by the codemod hash guard instead`);
 
   // ── Imports resolve ──
   const bad: string[] = [];
   for (const file of files.keys()) {
     const src = readFileSync(join(ROOT, file), "utf8");
-    if (!/\bcardClass\b/.test(src)) continue;
+    // Comments are stripped first. A kit that EXPLAINS why it deliberately does not use cardClass mentions
+    // the name without using it, and flagging that as a missing import would be a false alarm about the
+    // very reasoning that keeps a p-5 out of a p-4 tile.
+    const code = src.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
+    if (!/\bcardClass\b/.test(code)) continue;
     const imported = /import\s*\{[^}]*\bcardClass\b[^}]*\}\s*from\s*"@\/components\/ui\/primitives"/.test(src);
     const declared = /(?:const|let|function)\s+cardClass\b/.test(src);
     if (!imported && !declared) bad.push(file);

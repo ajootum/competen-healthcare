@@ -2,6 +2,7 @@ import Link from "next/link";
 import { requireEducatorAccess } from "@/lib/educator-access";
 import { loadLearningIntelligence, type NavNode, type Tint, type RiskDot } from "@/lib/learning-intelligence";
 import CommandBar from "./CommandBar";
+import { DarkCard as Card } from "../../../../components/ui/primitives";
 
 // Learning Intelligence Workspace (spec v1.0 + mockup) — the AI-powered learner
 // progression / engagement / mastery / intervention centre inside AI &
@@ -70,15 +71,6 @@ function Gauge({ value, label, color }: { value: number | null; label: string; c
         <div className="absolute inset-0 flex flex-col items-center justify-center"><span className="text-lg font-extrabold text-white">{value ?? "—"}{value !== null && <span className="text-[10px]">%</span>}</span></div>
       </div>
       <p className="text-[10px] text-slate-400 mt-1 text-center">{label}</p>
-    </div>
-  );
-}
-
-function Card({ title, tag, children }: { title: string; tag?: string; children: React.ReactNode }) {
-  return (
-    <div className="rounded-2xl bg-white/[0.03] border border-white/10 p-4">
-      <div className="flex items-center gap-2 mb-3"><p className="text-[11px] font-bold uppercase tracking-widest text-slate-400">{title}</p>{tag && <span className="ml-auto text-[8px] font-bold uppercase tracking-wide text-slate-500">{tag}</span>}</div>
-      {children}
     </div>
   );
 }

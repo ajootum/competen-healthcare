@@ -5,6 +5,7 @@ import { loadWorkforceOps } from "@/lib/operations/workforce-ops";
 import { loadUnitDepartments } from "@/lib/operations/unit-command";
 import UnitFilters from "../../../UnitFilters";
 import AnalyticsTabs from "../AnalyticsTabs";
+import { KpiWithFoot as Kpi } from "../../_kit";
 
 export const dynamic = "force-dynamic";
 
@@ -15,10 +16,6 @@ export const dynamic = "force-dynamic";
 
 const card = "bg-white rounded-xl border border-gray-200";
 const ST: Record<string, string> = { Good: "bg-[var(--cmp-surface-success)] text-emerald-700", "At Risk": "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]", "Below Required": "bg-[var(--cmp-surface-error)] text-[var(--cmp-text-error)]", "—": "bg-gray-100 text-gray-500" };
-
-function Kpi({ label, value, sub, tone, foot }: { label: string; value: any; sub?: string; tone?: string; foot?: string }) {
-  return <div className={`${card} p-4`}><div className="flex items-start justify-between"><p className="text-xs text-gray-500">{label}</p>{foot && <span className="text-[9px] text-gray-300">{foot}</span>}</div><p className={`text-2xl font-bold tabular-nums mt-1 ${tone ?? "text-gray-900"}`}>{value}</p>{sub && <p className="text-[11px] text-gray-400 mt-0.5">{sub}</p>}</div>;
-}
 
 export default async function CoverageAnalytics() {
   const supabase = await createClient();

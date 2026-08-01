@@ -3,6 +3,7 @@ import { requireEducatorAccess } from "@/lib/educator-access";
 import { loadPredictiveIntelligence, type Forecast, type TimelineSeries, type HeatCell } from "@/lib/predictive-intelligence";
 import CommandBar from "./CommandBar";
 import WhatIf from "./WhatIf";
+import { DarkCard as Card } from "../../../../components/ui/primitives";
 
 // Predictive Intelligence Workspace (spec v1.0 + mockup) — the cross-platform
 // forecasting engine inside AI & Intelligence. Dark command-centre theme; three
@@ -16,15 +17,6 @@ const SEV_CLS: Record<string, string> = { High: "bg-[var(--cmp-color-error)]/20 
 const DIR = { up: "↑", down: "↓", flat: "→" };
 const DOMAIN_CLS: Record<string, string> = { Assessment: "text-blue-300", Competency: "text-emerald-300", Validation: "text-amber-300", Workforce: "text-rose-300", Resources: "text-cyan-300", Accreditation: "text-pink-300", Learning: "text-violet-300" };
 const HEAT = (n: number, tone: string) => (n === 0 ? "bg-white/[0.02] text-slate-600" : tone === "critical" ? "bg-[var(--cmp-color-error)]/30 text-rose-200" : tone === "high" ? "bg-[var(--cmp-color-warning)]/25 text-orange-200" : tone === "medium" ? "bg-[var(--cmp-color-warning)]/20 text-amber-200" : "bg-[var(--cmp-color-success)]/15 text-emerald-200");
-
-function Card({ title, tag, children }: { title: string; tag?: string; children: React.ReactNode }) {
-  return (
-    <div className="rounded-2xl bg-white/[0.03] border border-white/10 p-4">
-      <div className="flex items-center gap-2 mb-3"><p className="text-[11px] font-bold uppercase tracking-widest text-slate-400">{title}</p>{tag && <span className="ml-auto text-[8px] font-bold uppercase tracking-wide text-slate-500">{tag}</span>}</div>
-      {children}
-    </div>
-  );
-}
 
 function Donut({ slices, center, sub }: { slices: { label: string; n: number; color: string }[]; center: string; sub: string }) {
   const totalN = slices.reduce((s, x) => s + x.n, 0) || 1;

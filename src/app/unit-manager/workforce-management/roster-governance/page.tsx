@@ -5,6 +5,7 @@ import { loadRosterGovernance } from "@/lib/operations/roster-governance";
 import { loadUnitDepartments } from "@/lib/operations/unit-command";
 import UnitFilters from "../../UnitFilters";
 import RosterGovTabs from "./RosterGovTabs";
+import { KpiWithFoot as Kpi } from "../_kit";
 
 export const dynamic = "force-dynamic";
 
@@ -26,10 +27,6 @@ const BAND: Record<string, { tone: string; ring: string }> = {
 };
 const STATUS_BADGE: Record<string, string> = { draft: "bg-gray-100 text-gray-600", published: "bg-[var(--cmp-surface-success)] text-emerald-700", archived: "bg-gray-100 text-gray-400" };
 const fmtDate = (iso?: string | null) => iso ? new Date(iso).toLocaleDateString("en-GB", { day: "numeric", month: "short" }) : "—";
-
-function Kpi({ label, value, sub, tone, foot }: { label: string; value: any; sub?: string; tone?: string; foot?: string }) {
-  return <div className={`${card} p-4`}><div className="flex items-start justify-between"><p className="text-xs text-gray-500">{label}</p>{foot && <span className="text-[9px] text-gray-300">{foot}</span>}</div><p className={`text-2xl font-bold tabular-nums mt-1 ${tone ?? "text-gray-900"}`}>{value}</p>{sub && <p className="text-[11px] text-gray-400 mt-0.5">{sub}</p>}</div>;
-}
 
 export default async function GovernanceOverview() {
   const supabase = await createClient();

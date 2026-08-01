@@ -5,6 +5,7 @@ import { loadWorkforceReadiness } from "@/lib/operations/workforce-readiness";
 import { loadUnitDepartments } from "@/lib/operations/unit-command";
 import UnitFilters from "../../UnitFilters";
 import DevTabs from "./DevTabs";
+import { KpiWithFoot as Kpi } from "../_kit";
 
 export const dynamic = "force-dynamic";
 
@@ -17,10 +18,6 @@ export const dynamic = "force-dynamic";
 const card = "bg-white rounded-xl border border-gray-200";
 const BAND: Record<string, { tone: string; ring: string }> = { "Ready": { tone: "text-[var(--cmp-text-success)]", ring: "#10b981" }, "Mostly ready": { tone: "text-[var(--cmp-text-success)]", ring: "#34d399" }, "At risk": { tone: "text-[var(--cmp-text-warning)]", ring: "#f59e0b" }, "High risk": { tone: "text-[var(--cmp-text-warning)]", ring: "#f97316" }, "Critical": { tone: "text-[var(--cmp-text-error)]", ring: "#e11d48" }, "—": { tone: "text-gray-400", ring: "#e5e7eb" } };
 const SEV: Record<string, string> = { critical: "bg-[var(--cmp-surface-error)] text-[var(--cmp-text-error)]", high: "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]", moderate: "bg-[var(--cmp-surface-information)] text-[var(--cmp-text-information)]" };
-
-function Kpi({ label, value, sub, tone, foot }: { label: string; value: any; sub?: string; tone?: string; foot?: string }) {
-  return <div className={`${card} p-4`}><div className="flex items-start justify-between"><p className="text-xs text-gray-500">{label}</p>{foot && <span className="text-[9px] text-gray-300">{foot}</span>}</div><p className={`text-2xl font-bold tabular-nums mt-1 ${tone ?? "text-gray-900"}`}>{value}</p>{sub && <p className="text-[11px] text-gray-400 mt-0.5">{sub}</p>}</div>;
-}
 
 export default async function DevelopmentOverview() {
   const supabase = await createClient();

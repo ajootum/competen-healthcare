@@ -2,6 +2,7 @@ import Link from "next/link";
 import { requireEducatorAccess } from "@/lib/educator-access";
 import { loadAccreditationIntelligence, type Tint } from "@/lib/accreditation-intelligence";
 import CommandBar from "./CommandBar";
+import { DarkCard as Card } from "../../../../components/ui/primitives";
 
 // Accreditation Intelligence Workspace (spec v1.0 + mockup) — the continuous
 // accreditation & evidence-readiness centre inside AI & Intelligence. Dark
@@ -16,15 +17,6 @@ const TINT_DOT: Record<Tint, string> = { green: "bg-[var(--cmp-color-success)]",
 const RISK_CLS: Record<string, string> = { Low: "text-emerald-400", Medium: "text-amber-400", High: "text-rose-400" };
 const SEV_CLS: Record<string, string> = { High: "bg-[var(--cmp-color-error)]/20 text-rose-300 border-rose-500/30", Medium: "bg-[var(--cmp-color-warning)]/20 text-amber-300 border-amber-500/30", Low: "bg-[var(--cmp-color-information)]/20 text-sky-300 border-sky-500/30" };
 const healthColor = (v: number | null): string => (v === null ? "#64748b" : v >= 90 ? "#22c55e" : v >= 70 ? "#84cc16" : v >= 50 ? "#f59e0b" : "#ef4444");
-
-function Card({ title, tag, children }: { title: string; tag?: string; children: React.ReactNode }) {
-  return (
-    <div className="rounded-2xl bg-white/[0.03] border border-white/10 p-4">
-      <div className="flex items-center gap-2 mb-3"><p className="text-[11px] font-bold uppercase tracking-widest text-slate-400">{title}</p>{tag && <span className="ml-auto text-[8px] font-bold uppercase tracking-wide text-slate-500">{tag}</span>}</div>
-      {children}
-    </div>
-  );
-}
 
 function Donut({ slices, center, sub }: { slices: { label: string; n: number; color: string }[]; center: string; sub: string }) {
   const totalN = slices.reduce((s, x) => s + x.n, 0) || 1;
