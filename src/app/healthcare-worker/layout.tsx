@@ -6,8 +6,6 @@ import NavGroup from "@/components/NavGroup";
 import SidebarToggle from "@/components/SidebarToggle";
 import { type AppRole } from "@/lib/roles";
 import GlobalHeader from "@/components/platform/GlobalHeader";
-import CommandPalette from "./CommandPalette";
-import Favourites from "./Favourites";
 import { loadHeaderContext } from "@/lib/platform/header";
 import { buildShiftCard, loadShiftWidget } from "@/lib/hww/my-shift";
 import { resolveHwwNavigation, resolveUnitContext, type ResolvedItem } from "@/lib/hww/navigation";
@@ -101,16 +99,6 @@ export default async function HealthcareWorkerLayout({ children }: { children: R
 
   const allItems: NavItem[] = NAV.flatMap(s => s.entries.flatMap(e => ("item" in e ? [e.item] : e.items)));
 
-  // s19 favourites. Pins store KEYS; they are resolved here against the nav this person actually has, so a
-  // pin to a module the hospital has since disabled simply stops appearing instead of rendering a dead
-  // chip. Fail-soft: no table (migration 185 not applied) resolves to no pins, and the bar says so rather
-  // than the sidebar breaking.
-  const pinnable = allItems.filter(i => i.href && !i.soon).map(i => ({ key: i.key, label: i.label, href: i.href!, icon: i.icon }));
-  const pinRes = await admin.from("user_pinned_modules")
-    .select("module_key, sort_order").eq("user_id", user.id).eq("workspace", "healthcare-worker")
-    .order("sort_order", { ascending: true }).limit(8).then((r: any) => r, () => ({ data: null }));
-  const pinnedKeys = ((pinRes.data ?? []) as any[]).map(r => r.module_key as string);
-  const pinned = pinnedKeys.map(k => pinnable.find(p => p.key === k)).filter(Boolean) as typeof pinnable;
   const mobileItems = [...new Map(allItems.filter(i => i.href && !i.soon).map(i => [i.href!.split(/[?#]/)[0], i] as const)).values()];
 
   const renderItem = ({ key, label, href, icon, exact, soon, badge, severity }: NavItem) => soon || !href ? (
@@ -125,16 +113,6 @@ export default async function HealthcareWorkerLayout({ children }: { children: R
       badge={badge ? badges[badge] : undefined} severity={severity}
       className={linkCls} activeClassName={activeCls} />
   );
-
-  // HWW-UI-005 s17 quick actions. One tap to the four things a clinician documents most, from anywhere in
-  // the shift. Each points at the surface that already records it -- these are shortcuts, not a new
-  // write-path, so there is no second way for the same record to be created.
-  const QUICK_ACTIONS = [
-    { label: "Assessment", href: "/healthcare-worker/observations", icon: "🩺", tone: "bg-emerald-800/70" },
-    { label: "Procedure", href: "/healthcare-worker/procedures", icon: "🩹", tone: "bg-emerald-800/70" },
-    { label: "Concern", href: "/healthcare-worker/concerns", icon: "⚠️", tone: "bg-amber-900/50" },
-    { label: "Incident", href: "/healthcare-worker/safety?event=incidents", icon: "🚩", tone: "bg-red-900/50" },
-  ];
 
   return (
     <div className="min-h-screen bg-gray-50 font-[family-name:var(--font-geist-sans)]">
@@ -181,12 +159,9 @@ export default async function HealthcareWorkerLayout({ children }: { children: R
             </span>
           </Link>
 
-          {/* s18 command palette + s19 favourites, above the nav: search is how you reach something you
-              can name, favourites is how you reach something you use constantly, and the sections below
-              are for everything else. */}
-          <div className="mb-2"><CommandPalette /></div>
-          <Favourites pinned={pinned} options={pinnable} />
-
+          {/* HWW-UI-005B s4 explicitly prohibits a Command Palette, Quick Actions and Favourites. Removed
+              rather than hidden behind a flag: a prohibited control that is one boolean from returning is
+              not removed, it is dormant. */}
           <nav className="flex flex-col gap-0.5 flex-1 overflow-y-auto">
             {NAV.map((s, i) => {
               const entries = s.entries.map(e => "item" in e ? renderItem(e.item) : (
@@ -217,21 +192,8 @@ export default async function HealthcareWorkerLayout({ children }: { children: R
             })}
           </nav>
 
-          {/* s17 QUICK ACTIONS — one tap to the four things a clinician documents most, from any screen.
-              Sits directly above the shift card because that is where the eye already goes for "what is
-              happening to me right now". Hidden in the icon rail: four unlabelled icons stacked above a
-              hidden card would read as more navigation. */}
-          <div className="mx-1 mb-2 grid grid-cols-2 gap-1" data-sb-label>
-            {QUICK_ACTIONS.map(a => (
-              <Link key={a.label} href={a.href} title={`Record ${a.label.toLowerCase()}`}
-                className={`flex items-center gap-1.5 rounded-lg ${a.tone} hover:brightness-125 px-2 py-1.5 text-[10px] font-medium text-emerald-50 transition-all`}>
-                <span className="text-xs leading-none">{a.icon}</span>
-                <span className="truncate">{a.label}</span>
-              </Link>
-            ))}
-          </div>
-
-          {/* CURRENT SHIFT widget (UI-001 + HWW-UI-005 s11): counts, acuity, risk, break, progress. */}
+          {/* CURRENT SHIFT widget (UI-001): counts + break status + progress. s4 "Do NOT redesign the
+              Current Shift card" — restored to the previously approved form. */}
           {shiftCard && (
             <div className="mx-1 mb-2 rounded-xl bg-emerald-900/60 border border-emerald-800/60 p-3" data-sb-label>
               <div className="flex items-center justify-between">
@@ -244,27 +206,7 @@ export default async function HealthcareWorkerLayout({ children }: { children: R
                 <div><p className="text-white text-sm font-bold tabular-nums">{badges.myTasks}</p><p className="text-emerald-200/50 text-[8px] uppercase">Tasks</p></div>
                 <div><p className="text-white text-sm font-bold tabular-nums">{badges.medsDue}</p><p className="text-emerald-200/50 text-[8px] uppercase">Meds Due</p></div>
               </div>
-              {/* Rendered only when the caseload actually yields them -- with no patients assigned there is
-                  no acuity to report, and "Acuity: Stable" over an empty caseload is a false reassurance. */}
-              {(widget.acuity || widget.risk) && (
-                <div className="flex items-center justify-between mt-2 text-[10px]">
-                  {widget.risk && (
-                    <span className="flex items-center gap-1 text-emerald-200/70">
-                      <span className={`w-1.5 h-1.5 rounded-full ${widget.risk === "high" ? "bg-[var(--cmp-color-critical)]" : widget.risk === "medium" ? "bg-[var(--cmp-color-warning)]" : "bg-[var(--cmp-color-success)]"}`} />
-                      Risk: <span className="capitalize text-white/90">{widget.risk}</span>
-                    </span>
-                  )}
-                  {widget.acuity && (
-                    <span className="flex items-center gap-1 text-emerald-200/70">
-                      Acuity: <span className="capitalize text-white/90">{widget.acuity}</span>
-                    </span>
-                  )}
-                </div>
-              )}
-              <div className="flex items-center justify-between mt-2 text-[9px] text-emerald-200/50">
-                <span>Shift progress</span><span className="tabular-nums text-white/80">{shiftCard.pct}%</span>
-              </div>
-              <div className="h-1.5 rounded-full bg-emerald-950 overflow-hidden mt-0.5">
+              <div className="h-1.5 rounded-full bg-emerald-950 overflow-hidden mt-2">
                 <div className="h-full rounded-full bg-[var(--cmp-color-success)]" style={{ width: `${shiftCard.pct}%` }} />
               </div>
               <p className="text-emerald-200/60 text-[10px] mt-1">{shiftCard.remaining} remaining{widget.breakLabel ? ` · ☕ ${widget.breakLabel}` : ""}</p>

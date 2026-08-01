@@ -32,10 +32,12 @@ export type NavRule = {
   href?: string;
   icon: string;
   badge?: string;
-  // HWW-UI-005 s14 badge severity -> colour: critical=red (act now), warning=amber (needs attention), info=green (new).
-  // Carried on the RULE, not derived from the count, because "4 unread messages" and "4 overdue
-  // medications" are the same number and not remotely the same thing.
-  severity?: "critical" | "warning" | "info";
+  // HWW-UI-005B s3 "improve badge styling and severity visibility while maintaining existing behaviour".
+  // Severity is declared on the RULE, not derived from the count: "4 unread messages" and "4 overdue
+  // medications" are the same number and not remotely the same thing. Vocabulary matches the amendment's
+  // badge key exactly -- critical (red, immediate action), high (amber, needs attention), normal (blue,
+  // updates/unread) -- rather than a private one that would have to be translated at every read.
+  severity?: "critical" | "high" | "normal";
   exact?: boolean;
   soon?: boolean;                           // no surface yet — rendered muted
   order: number;
@@ -46,73 +48,41 @@ export type NavRule = {
 
 // The shipped catalogue. Order values leave gaps so tenant `order` overrides
 // can slot entries between defaults without renumbering.
-// HWW-UI-005 restructure. Every entry below points at a surface that EXISTS and a query that returns real
-// rows -- the spec's assessment domains (pain, neurological, respiratory, fluid balance) are the
-// observation_type values migration 039 already defines, and its quality events (near misses, equipment,
-// HAI) are op_incidents' near_miss flag and incident_type values from migration 073. Nothing here is a
-// label over an empty route.
 //
-// Keys were renamed to match the new structure. That orphans any WCE override written against the old
-// paths; there are none (workspace_config_overrides is empty), so this is the moment to do it rather than
-// carrying two vocabularies.
+// HWW-UI-005B (rollback amendment) — this list is the previously approved architecture, restored verbatim
+// from the pre-amendment commit rather than retyped, so no rename, reorder or merge could survive by
+// accident. The amendment permits exactly TWO deltas to it: Procedures is no longer `soon`, and badged
+// entries declare a severity. Nothing else here may change without a new spec.
 export const HWW_NAV_CATALOGUE: NavRule[] = [
-  // §16 Home -> Dashboard.
-  { key: "dashboard", section: null, label: "Dashboard", href: "/healthcare-worker", icon: "🏠", exact: true, order: 10 },
+  { key: "home", section: null, label: "Home", href: "/healthcare-worker", icon: "🏠", exact: true, order: 10 },
 
-  // §4 workflow order: Assignments -> My Patients -> Medications -> My Tasks -> Handover. This is the
-  // shape of a shift, not alphabetical or historical: you accept your patients before you can work them.
-  { key: "shift.assignments", section: "Shift", label: "Assignments", href: "/healthcare-worker/inbox", icon: "📥", badge: "inbox", severity: "warning", order: 100 },   // §15
-  { key: "shift.my-patients", section: "Shift", label: "My Patients", href: "/healthcare-worker/patients", icon: "🧑‍⚕️", order: 110 },
-  { key: "shift.medications", section: "Shift", label: "Medications", href: "/healthcare-worker/medications", icon: "💊", badge: "medsDue", severity: "critical", order: 120 },  // §5
-  { key: "shift.my-tasks", section: "Shift", label: "My Tasks", href: "/healthcare-worker/tasks", icon: "✅", badge: "myTasks", severity: "warning", order: 130 },
-  { key: "shift.handover", section: "Shift", label: "Handover", href: "/healthcare-worker/handover", icon: "🔁", order: 140 },   // §6 transfer-of-responsibility icon
+  { key: "shift.my-patients", section: "Shift", label: "My Patients", href: "/healthcare-worker/patients", icon: "🧑‍⚕️", order: 100 },
+  { key: "shift.my-tasks", section: "Shift", label: "My Tasks", href: "/healthcare-worker/tasks", icon: "✅", badge: "myTasks", severity: "normal", order: 110 },
+  { key: "shift.medication-schedule", section: "Shift", label: "Medication Schedule", href: "/healthcare-worker/medications", icon: "💊", badge: "medsDue", severity: "critical", order: 120 },
+  { key: "shift.assignment-inbox", section: "Shift", label: "Assignment Inbox", href: "/healthcare-worker/inbox", icon: "📥", badge: "inbox", severity: "high", order: 130 },
+  { key: "shift.handover", section: "Shift", label: "Handover", href: "/healthcare-worker/handover", icon: "🔄", order: 140 },
 
-  // §2 Patient Assessment. The four domains beyond acuity/workload are filtered views of op_observations,
-  // whose observation_type check constraint (migration 039) already names every one of them.
-  { key: "clinical.vitals", section: "Clinical", group: "Patient Assessment", label: "Vitals",
-    href: "/healthcare-worker/observations?type=vital_signs", icon: "📈", badge: "obsDue", severity: "critical", order: 200 },
-  { key: "clinical.observations", section: "Clinical", group: "Patient Assessment", label: "Clinical Assessment",
-    labelByUnit: { ward: "Clinical Assessment (PEWS)", icu: "Clinical Assessment" }, href: "/healthcare-worker/observations", icon: "🩺", order: 205 },
-  { key: "clinical.acuity", section: "Clinical", group: "Patient Assessment", label: "Acuity",
-    labelByUnit: { ward: "Acuity (PEWS)", icu: "Acuity (CIAF)" }, href: "/healthcare-worker/acuity", icon: "🌡️", order: 210 },
-  { key: "clinical.workload", section: "Clinical", group: "Patient Assessment", label: "Workload",
-    labelByUnit: { ward: "Workload", icu: "Workload (NAS)" }, href: "/healthcare-worker/workload", icon: "⚖️", order: 220 },
-  { key: "clinical.pain", section: "Clinical", group: "Patient Assessment", label: "Pain",
-    href: "/healthcare-worker/observations?type=pain", icon: "😖", order: 230 },
-  { key: "clinical.neuro", section: "Clinical", group: "Patient Assessment", label: "Neurological",
-    href: "/healthcare-worker/observations?type=neuro", icon: "🧠", order: 240 },
-  { key: "clinical.respiratory", section: "Clinical", group: "Patient Assessment", label: "Respiratory",
-    href: "/healthcare-worker/observations?type=respiratory", icon: "🫁", order: 250 },
-  { key: "clinical.fluid-balance", section: "Clinical", group: "Patient Assessment", label: "Fluid Balance",
-    href: "/healthcare-worker/observations?type=fluid_balance", icon: "💧", order: 260 },
+  { key: "clinical.observations", section: "Clinical", group: "Clinical Assessment", label: "Observations & PEWS",
+    labelByUnit: { icu: "Observations & Vitals" }, href: "/healthcare-worker/observations", icon: "📈", badge: "obsDue", severity: "critical", order: 200 },
+  { key: "clinical.acuity", section: "Clinical", group: "Clinical Assessment", label: "Acuity Assessment",
+    labelByUnit: { ward: "Ward Acuity (PEWS)", icu: "ICU Acuity (CIAF)" }, href: "/healthcare-worker/acuity", icon: "🌡️", order: 210 },
+  { key: "clinical.workload", section: "Clinical", group: "Clinical Assessment", label: "Workload Assessment",
+    labelByUnit: { ward: "Ward Workload", icu: "ICU Workload (NAS)" }, href: "/healthcare-worker/workload", icon: "⚖️", order: 220 },
+  { key: "clinical.escalations", section: "Clinical", label: "Escalations", href: "/healthcare-worker/safety", icon: "🚨", badge: "alerts", severity: "critical", order: 230 },
+  // s3: ungreyed and always selectable, in its ORIGINAL location. It keeps a destination because a
+  // selectable module that goes nowhere is the same dead end wearing a different colour.
+  { key: "clinical.procedures", section: "Clinical", label: "Procedures", href: "/healthcare-worker/procedures", icon: "🩹", order: 240 },
 
-  { key: "clinical.alerts", section: "Clinical", label: "Alerts & Escalations", href: "/healthcare-worker/safety", icon: "🚨", badge: "alerts", severity: "critical", order: 270 },  // §3
-  // §1 Procedures is ACTIVE. Never `soon` -- a greyed clinical module reads as "this hospital does not do
-  // procedures" rather than "we have not built the page", and the page itself now says which it is.
-  { key: "clinical.procedures", section: "Clinical", label: "Procedures", href: "/healthcare-worker/procedures", icon: "🩹", order: 280 },
+  { key: "communication.messages", section: "Communication", label: "Messages", href: "/healthcare-worker/communication", icon: "💬", badge: "unread", severity: "normal", order: 300 },
+  { key: "communication.announcements", section: "Communication", label: "Unit Announcements", href: "/healthcare-worker/communication#announcements", icon: "📣", order: 310 },
 
-  // §7 Messages and Unit Announcements merge into one Communication module; its tabs carry the split.
-  { key: "communication.hub", section: "Communication", label: "Communication", href: "/healthcare-worker/communication", icon: "💬", badge: "unread", severity: "info", order: 300 },
+  { key: "quality.incidents", section: "Quality Events", label: "Incidents", href: "/healthcare-worker/safety#incidents", icon: "🚩", order: 400 },
+  { key: "quality.concerns", section: "Quality Events", label: "Nurse Concerns", href: "/healthcare-worker/concerns", icon: "⚠️", badge: "concerns", severity: "high", order: 410 },
 
-  // §8 Quality Events, every one a real filter over op_incidents / op_concerns / op_safety_alerts.
-  { key: "quality.incidents", section: "Quality Events", group: "Quality Events", label: "Incidents", href: "/healthcare-worker/safety?event=incidents", icon: "🚩", order: 400 },
-  { key: "quality.near-misses", section: "Quality Events", group: "Quality Events", label: "Near Misses", href: "/healthcare-worker/safety?event=near_miss", icon: "⚡", order: 410 },
-  { key: "quality.concerns", section: "Quality Events", group: "Quality Events", label: "Nurse Concerns", href: "/healthcare-worker/concerns", icon: "⚠️", badge: "concerns", severity: "warning", order: 420 },
-  { key: "quality.patient-safety", section: "Quality Events", group: "Quality Events", label: "Patient Safety", href: "/healthcare-worker/safety?event=alerts", icon: "🛡️", order: 430 },
-  { key: "quality.equipment", section: "Quality Events", group: "Quality Events", label: "Equipment Issues", href: "/healthcare-worker/safety?event=equipment", icon: "🔌", order: 440 },
-  { key: "quality.hai", section: "Quality Events", group: "Quality Events", label: "HAI Surveillance", href: "/healthcare-worker/safety?event=infection", icon: "🦠", order: 450 },
+  { key: "intelligence.copilot", section: "Intelligence", label: "AI Copilot", href: "/healthcare-worker/copilot", icon: "✨", order: 500 },
 
-  // §9 the standalone Intelligence section is gone; the copilot is the floating action the layout already
-  // renders on every HWW screen, so a nav row for it was a second door to the same place.
-
-  // §10 Reports moves under Tools.
-  { key: "tools.settings", section: "Tools", label: "Settings", href: "/dashboard/preferences", icon: "⚙️", order: 600 },
-  { key: "tools.reports", section: "Tools", label: "Reports", href: "/healthcare-worker/shift-summary", icon: "📊", order: 610 },
-  // Points at /dashboard/help, the support surface that exists. The spec says "Support"; inventing
-  // /dashboard/support to match the word would have shipped a 404 behind a nav row.
-  { key: "tools.support", section: "Tools", label: "Support", href: "/dashboard/help", icon: "❓", order: 620 },
-  // The spec's §10 lists "About" but its own Final Navigation omits it, and no About surface exists.
-  // Left out rather than added as a dead row -- the one thing §1 is explicitly against.
+  { key: "tools.reports", section: "Tools", label: "Reports", href: "/healthcare-worker/shift-summary", icon: "📋", order: 600 },
+  { key: "tools.settings", section: "Tools", label: "Settings", href: "/dashboard/preferences", icon: "⚙️", order: 610 },
 ];
 
 // Section order + their config paths (sections are configurable objects too —
@@ -122,10 +92,11 @@ export const HWW_SECTIONS: { key: string; label: string; order: number }[] = [
   { key: "clinical", label: "Clinical", order: 200 },
   { key: "communication", label: "Communication", order: 300 },
   { key: "quality", label: "Quality Events", order: 400 },
+  { key: "intelligence", label: "Intelligence", order: 500 },
   { key: "tools", label: "Tools", order: 600 },
 ];
 
-export type ResolvedItem = { key: string; label: string; href?: string; icon: string; badge?: string; severity?: "critical" | "warning" | "info"; exact?: boolean; soon?: boolean; group?: string; order: number };
+export type ResolvedItem = { key: string; label: string; href?: string; icon: string; badge?: string; severity?: "critical" | "high" | "normal"; exact?: boolean; soon?: boolean; group?: string; order: number };
 export type ResolvedSection = { section: string | null; entries: ({ item: ResolvedItem } | { group: string; items: ResolvedItem[] })[] };
 export type NavContext = ScopeCtx & { professions?: string[]; unitType?: UnitType };
 

@@ -13,18 +13,21 @@ import { usePathname, useSearchParams } from "next/navigation";
 // pathname never contains the query. Matching is union-of-keys equality: every param either side pins must
 // agree, so the unfiltered entry is active only when no filter is applied.
 
-// Badge severity -> colour (HWW-UI-005 s14). Default stays critical: a count with no declared severity is
-// more likely to be something needing action than something merely new, and over-warning is the safer
-// error in a clinical sidebar.
+// Badge severity -> colour, matching the HWW-UI-005B badge key exactly: critical = red (immediate action),
+// high = amber (needs attention), normal = blue (updates / unread). Blue, not green, because the amendment's
+// key says blue and a green badge reads as "resolved" rather than "new".
+//
+// Default stays critical: a count with no declared severity is more likely to be something needing action
+// than something merely new, and over-warning is the safer error in a clinical sidebar.
 const BADGE_TONE: Record<string, string> = {
   critical: "bg-[var(--cmp-color-critical)] text-white",
-  warning: "bg-[var(--cmp-color-warning)] text-black",
-  info: "bg-[var(--cmp-color-success)] text-white",
+  high: "bg-[var(--cmp-color-warning)] text-black",
+  normal: "bg-[var(--cmp-color-information)] text-white",
 };
 const BADGE_MEANING: Record<string, string> = {
   critical: "requiring immediate action",
-  warning: "needing attention",
-  info: "new",
+  high: "needing attention",
+  normal: "new or unread",
 };
 
 export default function NavLink({ href, icon, label, className, activeClassName, exact, badge, severity }: {
@@ -35,7 +38,7 @@ export default function NavLink({ href, icon, label, className, activeClassName,
   activeClassName: string;  // styles when this is the current page
   exact?: boolean;          // match only the exact path (for portal roots)
   badge?: number;           // unread-count chip (hidden when 0/undefined)
-  severity?: "critical" | "warning" | "info";
+  severity?: "critical" | "high" | "normal";
 }) {
   const pathname = usePathname();
   const search = useSearchParams();

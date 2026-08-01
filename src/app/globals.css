@@ -218,7 +218,7 @@ main[data-content] { transition: margin-left .2s ease; }
   html.sb-collapsed aside[data-sidebar] details[data-nav-group]::details-content { content-visibility: visible !important; }
 }
 
-/* ── Sidebar scrollbar (HWW-UI-005 s12) ─────────────────────────────────────
+/* ── Sidebar scrollbar (HWW-UI-005B s3) ─────────────────────────────────────
    A long clinical nav scrolls, and the default chrome scrollbar is a wide grey
    slab against a dark sidebar — it reads as a border and steals horizontal room
    from labels. Thin, low-contrast, and only visible once there is overflow.
@@ -236,7 +236,7 @@ aside[data-sidebar] nav::-webkit-scrollbar-thumb {
 }
 aside[data-sidebar] nav:hover::-webkit-scrollbar-thumb { background: rgb(255 255 255 / 0.28); }
 
-/* ── Sidebar touch targets (HWW-UI-005 s20) ─────────────────────────────────
+/* ── Sidebar touch targets (HWW-UI-005B s3 accessibility) ─────────────────────────────────
    WCAG 2.5.8 / the spec's 44px. Applied as a MIN height on coarse pointers only:
    forcing 44px on a mouse-driven desktop sidebar would push a twenty-item
    clinical nav into permanent scrolling, which costs more than it gains. On
