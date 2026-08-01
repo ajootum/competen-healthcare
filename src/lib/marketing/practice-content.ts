@@ -37,8 +37,6 @@ export const PRACTICE_HERO = {
   body:
     "An intelligent practice assistant for clinicians: patients book themselves in, arrive prepared, " +
     "and never fall out of follow-up. Built for the way clinics in Africa actually work.",
-  primary: { label: "Book a Demo", href: "/signup" },
-  secondary: { label: "See how it works", href: "#journey" },
   image: "/images/practice/dashboard.webp",
   imageAlt: "The Competen Practice home dashboard, showing today's schedule, follow-ups due and booking activity",
 };
@@ -162,7 +160,9 @@ export const TENANT_MODEL = {
 export const PRACTICE_CTA = {
   title: "See it with your own clinic in mind.",
   body: "We will walk through your appointment book, your follow-up problem and your front desk, and show you what changes.",
-  action: { label: "Book a Demo", href: "/signup" },
+  // Was /signup, which creates a generic Competen account with the nurse role and no practice anywhere in
+  // it. LP-PRA-001 gives the clinic owner a journey of their own, so the CTA now goes to that journey.
+  action: { label: "Start Your Practice", href: "/practice/start" },
 };
 
 export type PracticeScreen = { src: string; alt: string; caption: string };

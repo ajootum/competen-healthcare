@@ -1,5 +1,5 @@
 import Link from "next/link";
-import SiteHeader from "@/components/marketing/SiteHeader";
+import PracticeHeader from "@/components/marketing/PracticeHeader";
 import SiteFooter from "@/components/marketing/SiteFooter";
 import PracticeNav from "@/components/marketing/PracticeNav";
 import PracticeScreens from "@/components/marketing/PracticeScreens";
@@ -18,7 +18,7 @@ export default function PracticeAreaPage({ a }: { a: PracticeArea }) {
   return (
     <div className="flex flex-col min-h-full bg-white font-[family-name:var(--font-geist-sans)]">
       <a href="#main" className="cmp-skip-link">Skip to main content</a>
-      <SiteHeader />
+      <PracticeHeader />
       <PracticeNav current={a.slug} />
 
       <main id="main">

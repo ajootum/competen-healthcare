@@ -29,6 +29,7 @@ import { join } from "node:path";
 import {
   PRACTICE_AREAS, INTEGRATIONS, PREVIEW_NOTE, MODULES_WITHOUT_SPECS, PRACTICE_HERO, TENANT_MODEL,
 } from "../src/lib/marketing/practice-content";
+import { JOURNEYS, AVAILABILITY, FAQS } from "../src/lib/marketing/practice-site";
 
 const BASE = process.env.BASE_URL ?? "http://localhost:3000";
 
@@ -186,6 +187,55 @@ async function main() {
     .filter(n => existsSync(join(process.cwd(), "public", "images", "practice", `${n}.webp`)));
   ok("5f. the enterprise architecture diagram is not published", architectureLeaks.length === 0,
     architectureLeaks.join(", "));
+
+  // ── 7. LP-PRA-001 journeys, and the honesty they carry ────────────────────────────────────────────
+  //
+  // Four journeys replaced a single "Book a Demo" that sent everyone to /signup. Two things can rot here:
+  // a journey losing its page, and a journey page quietly dropping the notice that says it is not open.
+  // The second is the dangerous one -- it turns an honest holding page into a product that appears broken.
+
+  const areaSlugs = new Set(PRACTICE_AREAS.map(a => a.slug));
+  const shadowed = JOURNEYS.filter(j => areaSlugs.has(j.href.replace("/practice/", "")));
+  ok("7. no journey route collides with a capability slug", shadowed.length === 0,
+    shadowed.map(j => j.href).join(", "));
+
+  for (const j of JOURNEYS) {
+    let html = "";
+    try {
+      const r = await fetch(BASE + j.href);
+      ok(`7a. ${j.href} returns 200`, r.ok, `status ${r.status}`);
+      html = await r.text();
+    } catch (e) {
+      ok(`7a. ${j.href} returns 200`, false, e instanceof Error ? e.message : String(e));
+      continue;
+    }
+    const text = visibleText(html);
+
+    ok(`7b. ${j.href} says it is not open yet`, text.includes(AVAILABILITY.headline));
+
+    const leaked = FORBIDDEN.filter(f => text.toLowerCase().includes(f.toLowerCase()));
+    ok(`7c. ${j.href} discloses no hidden product`, leaked.length === 0, leaked.join(", "));
+
+    const internal = INTERNAL_VOCABULARY.filter(w => text.toLowerCase().includes(w.toLowerCase()));
+    ok(`7d. ${j.href} leaks no internal platform vocabulary`, internal.length === 0, internal.join(", "));
+
+    // NO SIGN-IN FORM. The roles these pages route to do not exist, so a password field here would
+    // collect a credential and have nowhere to send the person who typed it. Asserted on the rendered
+    // HTML rather than the source, because a form could arrive through a shared component.
+    const hasPasswordField = /<input[^>]+type=["']password["']/i.test(html);
+    ok(`7e. ${j.href} has no password field`, !hasPasswordField);
+  }
+
+  // Every journey must be reachable from the landing page, or it is a page with no way in.
+  for (const j of JOURNEYS) {
+    ok(`7f. /practice links to ${j.href}`, overview.includes(`href="${j.href}"`));
+  }
+
+  // LP-PRA-001 asks for FAQs. The availability question is the one a visitor has by the time they reach
+  // the bottom and the easiest to quietly drop, so its presence is asserted rather than assumed.
+  ok("7g. /practice renders the FAQs", FAQS.every(f => overviewText.includes(f.q)));
+  ok("7h. the FAQs answer whether it can be used today",
+    FAQS.some(f => /try it today|available/i.test(f.q)));
 
   // ── 6. the images are actually served, not merely present ─────────────────────────────────────────
   const notServed: string[] = [];
