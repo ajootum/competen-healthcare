@@ -80,7 +80,11 @@ export default async function VerifyPage({ params }: { params: Promise<{ token: 
           {currencySummary.caveated > 0 && (
             <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
               <p className="text-[12px] font-semibold text-amber-900">
-                {currencySummary.caveated} of {currencySummary.total} shown here were assessed against a framework that has since changed
+                {/* NOT "has since changed" -- that is only true of the superseded and retired subsets. For an
+                    unstamped entry the framework may well be unchanged; what is missing is the record of which
+                    version it was assessed against. Claiming change would be the same over-claim, pointed the
+                    other way. */}
+                {currencySummary.caveated} of {currencySummary.total} shown here cannot be confirmed against the framework&apos;s current version
               </p>
               <p className="text-[11px] text-amber-800/90 mt-0.5 leading-relaxed">
                 {[
