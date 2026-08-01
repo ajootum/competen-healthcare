@@ -93,7 +93,7 @@ export default function LoginPage() {
                 <span className="w-11 h-11 rounded-2xl bg-[var(--cmp-color-primary)] flex items-center justify-center text-white text-xl font-bold">c</span>
                 <span className="leading-tight">
                   <span className="block text-xl font-bold tracking-tight">competen</span>
-                  <span className="block text-[11px] text-white/55">Healthcare Competency &amp;<br />Workforce Intelligence Platform</span>
+                  <span className="block text-[11px] text-white/55">Healthcare. Empowered.</span>
                 </span>
               </Link>
 
@@ -102,9 +102,12 @@ export default function LoginPage() {
                 Deploy <span className="text-[var(--cmp-color-success)]">confident</span> teams.<br />
                 Deliver <span className="text-[var(--cmp-color-success)]">safer</span> care.
               </h1>
+              {/* Outcome language, not a product list. WEB-STRAT-001 forbids naming internal products on
+                  any public page, and /login is public -- the disclosure harness caught the previous copy
+                  here, which said "competency management" verbatim. */}
               <p className="mt-4 max-w-md text-[13.5px] leading-relaxed text-white/65">
-                Competen connects competency management, assessments, workforce operations, learning,
-                quality and AI — supporting every professional from student to executive.
+                Competen helps students, professionals, practices and hospitals build capability,
+                deliver better care and improve outcomes.
               </p>
             </div>
 

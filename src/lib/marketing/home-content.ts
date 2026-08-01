@@ -30,16 +30,29 @@ export const ACCENT_DARK = "#4338CA";
 export const ACCENT_SOFT = "#EEF0FF";
 
 export const HERO = {
-  headline: "Build competent people. Deploy confident teams.",
-  headlineAccentLead: "Deliver ",
-  headlineAccent: "safer care.",
+  headline: ['Stronger healthcare', 'begins with'],
+  headlineAccent: 'empowered people.',
   body:
-    "Competen empowers healthcare organisations and professionals to develop skills, optimise workforce " +
-    "performance, and improve outcomes — at every level.",
-  primary: { label: "Book a Demo", href: "/signup" },
-  secondary: { label: "Explore Solutions", href: "#who-we-help" },
-  image: "/images/home/journey-nurse.png",
-  imageAlt: "A nurse reviewing records on a tablet on the ward",
+    'Competen helps students, professionals, practices and hospitals build capability, ' +
+    'deliver better care and improve outcomes.',
+  primary: { label: 'Explore Solutions', href: '#choose-your-path' },
+  secondary: { label: 'Book a Demo', href: '/signup' },
+  image: '/images/home/journey-nurse.png',
+  imageAlt: 'A nurse reviewing records on a tablet on the ward',
+};
+
+// WEB-STRAT-001 'Built for healthcare. Designed for Africa.' band.
+// The two counts are CLAIMS, not aggregates: no query produces them and none is labelled as measured.
+// If they are ever wrong, that is a copy edit here, not a data bug somewhere else.
+export const AFRICA_BAND = {
+  title: 'Built for healthcare. Designed for Africa.',
+  body: 'Trusted by forward-thinking organisations across the continent.',
+  stats: [
+    { value: 'One Platform', label: 'Many Possibilities' },
+    { value: '100+', label: 'Healthcare Organisations' },
+    { value: '10,000+', label: 'Healthcare Professionals' },
+    { value: 'Better care', label: 'Better outcomes. Better together.' },
+  ],
 };
 
 // The floating intelligence cards over the hero image. Illustrative of what the platform reports, and
