@@ -1,6 +1,7 @@
 import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
 
+import { currentTraceId } from "@/lib/trace";
 // Evidence engine (§E): upload files linked to logbook entries, credentials or
 // competencies. Files live in the private "evidence" bucket — every download
 // goes through a short-lived signed URL issued here, after a permission check
@@ -89,7 +90,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
-  await admin.from("audit_log").insert({
+  await admin.from("audit_log").insert({ trace_id: await currentTraceId(),
     actor_id: me.id, actor_name: me.full_name ?? null,
     action: "upload_evidence", entity_type: "evidence", entity_id: row.id, entity_name: safeName,
   });
@@ -162,7 +163,7 @@ export async function DELETE(req: Request) {
 
   await admin.storage.from("evidence").remove([row.file_path]);
   await admin.from("evidence").delete().eq("id", id);
-  await admin.from("audit_log").insert({
+  await admin.from("audit_log").insert({ trace_id: await currentTraceId(),
     actor_id: me.id, actor_name: me.full_name ?? null,
     action: "delete_evidence", entity_type: "evidence", entity_id: id, entity_name: row.file_name,
   });

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getCaller, isResponse, forbidden, assertCompetencyScope, type Caller } from "@/lib/api-auth";
 
+import { currentTraceId } from "@/lib/trace";
 // COMPETEN Studio write API — reusable skill library, skill↔competency
 // attachment, checklist and question-bank authoring ("latest competen" spec +
 // Assessment Studio spec). Authoring kinds are open to assessment-staff roles
@@ -205,7 +206,7 @@ export async function POST(req: Request) {
         }));
       }
     }
-    await auth.admin.from("audit_log").insert({
+    await auth.admin.from("audit_log").insert({ trace_id: await currentTraceId(),
       actor_id: auth.userId, actor_name: auth.fullName ?? null,
       action: "clone_cpu", entity_type: "clinical_practice_unit", entity_id: clone.id,
       new_value: { cloned_from: cpu_id, name: `${src.name} (copy)` },

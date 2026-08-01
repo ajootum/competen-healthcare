@@ -1,3 +1,4 @@
+import { currentTraceId } from "@/lib/trace";
 /* eslint-disable @typescript-eslint/no-explicit-any */
 // CDP-004 — Microlearning & Reinforcement engine. Spaced-repetition (SM-2) over cdp_reinforcement_cards (143):
 // one card per (learner, competency), generated from achieved competency_decisions. The learner self-grades
@@ -111,6 +112,6 @@ export async function generateFromDecisions(admin: Admin, hid: string | null, is
     const { data, error: insErr } = await admin.from("cdp_reinforcement_cards").insert(rows.slice(i, i + 500)).select("id");
     if (!insErr) created += (data ?? []).length;
   }
-  await admin.from("audit_log").insert({ actor_id: actor.id, actor_name: actor.name, action: "reinforcement_generate", entity_type: "cdp_reinforcement_cards", new_value: { candidates: pairList.length, created } });
+  await admin.from("audit_log").insert({ trace_id: await currentTraceId(), actor_id: actor.id, actor_name: actor.name, action: "reinforcement_generate", entity_type: "cdp_reinforcement_cards", new_value: { candidates: pairList.length, created } });
   return { ok: true as const, created, skipped: pairList.length - fresh.length };
 }

@@ -6,6 +6,7 @@ import { NextResponse } from "next/server";
 import { generate } from "@/lib/ai/client";
 import { aiStatus } from "@/lib/ai/config";
 import { checkAiQuota } from "@/lib/ai/quota";
+import { currentTraceId } from "@/lib/trace";
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 // COMP-025 Competency Workflow AI Assistant — the WORKER-FACING copilot. Unlike the admin/educator
@@ -83,6 +84,6 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: msg }, { status: result.error === "not_configured" ? 503 : 500 });
   }
 
-  await admin.from("audit_log").insert({ actor_id: user.id, actor_name: profile?.full_name ?? null, action: "worker_competency_copilot", entity_type: "ai", entity_id: null, new_value: { question: q.slice(0, 300), model: result.model } }).then((r: any) => r, () => {});
+  await admin.from("audit_log").insert({ trace_id: await currentTraceId(), actor_id: user.id, actor_name: profile?.full_name ?? null, action: "worker_competency_copilot", entity_type: "ai", entity_id: null, new_value: { question: q.slice(0, 300), model: result.model } }).then((r: any) => r, () => {});
   return NextResponse.json({ answer: result.text, model: result.model, grounded: ctx.length, usage: result.usage });
 }

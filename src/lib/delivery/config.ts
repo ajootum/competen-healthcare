@@ -1,3 +1,4 @@
+import { currentTraceId } from "@/lib/trace";
 /* eslint-disable @typescript-eslint/no-explicit-any */
 // CDP-014 — Learning Governance & Delivery Configuration. The delivery engines have always carried hard-coded
 // policy (30-day reminder horizon, always auto-remediate, always orchestrate). This makes that policy DATA the
@@ -74,6 +75,6 @@ export async function saveDeliveryConfig(admin: Admin, input: Partial<DeliveryCo
     const { error } = await admin.from("cdp_delivery_config").insert({ hospital_id: null, ...patch });
     if (error) return { ok: false as const, error: error.message };
   }
-  await admin.from("audit_log").insert({ actor_id: actor.id, actor_name: actor.name, action: "delivery_config_update", entity_type: "cdp_delivery_config", new_value: next });
+  await admin.from("audit_log").insert({ trace_id: await currentTraceId(), actor_id: actor.id, actor_name: actor.name, action: "delivery_config_update", entity_type: "cdp_delivery_config", new_value: next });
   return { ok: true as const, config: next };
 }

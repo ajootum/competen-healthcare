@@ -7,6 +7,7 @@ import { generate } from "@/lib/ai/client";
 import { aiStatus } from "@/lib/ai/config";
 import { checkAiQuota } from "@/lib/ai/quota";
 
+import { currentTraceId } from "@/lib/trace";
 // Simulation & OSCE Centre — AI scenario designer. Real Claude generation,
 // grounded in the linked competency's governed criteria/checklists when
 // provided. Drafts a runnable simulation scenario (presentation, vitals,
@@ -78,7 +79,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: result.error === "refusal" ? "The designer declined this request." : `Designer error: ${result.detail ?? "failed"}` }, { status: 500 });
   }
 
-  await admin.from("audit_log").insert({
+  await admin.from("audit_log").insert({ trace_id: await currentTraceId(),
     actor_id: user.id, actor_name: me?.full_name ?? null,
     action: "ai_simulation_design", entity_type: "ai", entity_id: null,
     new_value: { scenario: name.slice(0, 120), competency_id: competency_id ?? null, model: result.model, tokens: result.usage },

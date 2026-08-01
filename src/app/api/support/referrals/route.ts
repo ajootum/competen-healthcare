@@ -2,6 +2,7 @@ import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
 import { notify } from "@/lib/notify";
 
+import { currentTraceId } from "@/lib/trace";
 // Referrals — escalate a learner to a named colleague or an external service.
 // Sensitive by design: only the reason travels; the learner is not notified,
 // and reads are limited to referrer + referee (see migration 036 RLS).
@@ -59,7 +60,7 @@ export async function POST(req: Request) {
   }).select("id").single();
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
-  await admin.from("audit_log").insert({
+  await admin.from("audit_log").insert({ trace_id: await currentTraceId(),
     actor_id: userId, actor_name: me.full_name ?? null,
     action: "create_referral", entity_type: "referral", entity_id: row.id, entity_name: nurse.full_name,
     new_value: { urgency: urgency ?? "medium", internal: !!referred_to_id },
@@ -100,7 +101,7 @@ export async function PATCH(req: Request) {
   }).eq("id", id);
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
-  await admin.from("audit_log").insert({
+  await admin.from("audit_log").insert({ trace_id: await currentTraceId(),
     actor_id: userId, actor_name: me.full_name ?? null,
     action: "update_referral", entity_type: "referral", entity_id: id,
     new_value: { from: row.status, to: status },

@@ -2,6 +2,7 @@ import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
 import { notify } from "@/lib/notify";
 
+import { currentTraceId } from "@/lib/trace";
 // Senior-assessor assignment (Evidence Validation Centre escalation model).
 // Educators and admins grant/revoke the flag; every change is audit-logged
 // and the assessor is notified. Escalated evidence can only be decided by
@@ -62,7 +63,7 @@ export async function PATCH(req: Request) {
   const { error } = await admin.from("profiles").update({ is_senior_assessor: senior }).eq("id", user_id);
   if (error) return NextResponse.json({ error: error.message }, { status: 400 });
 
-  await admin.from("audit_log").insert({
+  await admin.from("audit_log").insert({ trace_id: await currentTraceId(),
     actor_id: me.id, actor_name: me.full_name ?? null,
     action: senior ? "grant_senior_assessor" : "revoke_senior_assessor",
     entity_type: "profile", entity_id: user_id, entity_name: target.full_name,

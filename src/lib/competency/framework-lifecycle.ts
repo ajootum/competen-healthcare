@@ -1,3 +1,4 @@
+import { currentTraceId } from "@/lib/trace";
 /* eslint-disable @typescript-eslint/no-explicit-any */
 // Governed framework lifecycle transition — the single source of truth for moving a framework through its
 // pub_status lifecycle. Sets pub_status, snapshots full content into framework_versions on publish (with a
@@ -68,7 +69,7 @@ export async function transitionFramework(
     });
   }
 
-  await admin.from("audit_log").insert({
+  await admin.from("audit_log").insert({ trace_id: await currentTraceId(),
     actor_id: actor.id, actor_name: actor.name, action,
     entity_type: "framework", entity_id: frameworkId, entity_name: framework.name,
     old_value: { pub_status: oldStatus }, new_value: { pub_status: newStatus },

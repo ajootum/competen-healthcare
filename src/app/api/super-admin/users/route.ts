@@ -2,6 +2,7 @@ import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
 import { ORG_ROLE_CONFIG, type OrgRole } from "@/lib/roles";
 
+import { currentTraceId } from "@/lib/trace";
 export async function PATCH(req: Request) {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
@@ -104,7 +105,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: `Profile creation failed (rolled back): ${perr.message}` }, { status: 500 });
   }
 
-  await admin.from("audit_log").insert({
+  await admin.from("audit_log").insert({ trace_id: await currentTraceId(),
     actor_id: actorId, actor_name: actorName,
     action: mode === "invite" ? "invite_user" : "create_user",
     entity_type: "user", entity_id: userId, entity_name: full_name,
@@ -137,7 +138,7 @@ export async function DELETE(req: Request) {
   const { error: aerr } = await admin.auth.admin.deleteUser(id);
   if (aerr) return NextResponse.json({ error: `Profile removed but auth deletion failed: ${aerr.message}` }, { status: 500 });
 
-  await admin.from("audit_log").insert({
+  await admin.from("audit_log").insert({ trace_id: await currentTraceId(),
     actor_id: actorId, actor_name: actorName, action: "delete_user",
     entity_type: "user", entity_id: id, entity_name: target.full_name,
   });

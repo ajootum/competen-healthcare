@@ -8,6 +8,7 @@ import { checkAiQuota } from "@/lib/ai/quota";
 import { loadMyShift } from "@/lib/hww/my-shift";
 import { loadMyAssessments, OVERLOAD_THRESHOLD } from "@/lib/hww/assessments";
 import { loadMyMedications } from "@/lib/hww/medications";
+import { currentTraceId } from "@/lib/trace";
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 // HWW-AI-001 — the bedside Clinical AI Copilot: shift assistant + patient/task
@@ -84,6 +85,6 @@ export async function POST(req: Request) {
   const result = await generate({ system, user: `My live operational picture:\n${ctx.join("\n")}\n\nRequest: ${q}`, tier: "reasoning", maxTokens: 900, context: { userId: user.id, tenantId: profile?.hospital_id ?? null, operation: "hww_bedside_copilot" } });
   if (!result.ok) return NextResponse.json({ error: result.error === "not_configured" ? "AI is not configured." : result.error === "refusal" ? "The copilot declined that request." : `Error: ${result.detail ?? "failed"}` }, { status: result.error === "not_configured" ? 503 : 500 });
 
-  await admin.from("audit_log").insert({ actor_id: user.id, actor_name: profile?.full_name ?? null, action: "hww_ai_query", entity_type: "ai", entity_id: null, new_value: { question: q.slice(0, 300), model: result.model, tokens: result.usage } }).then((r: any) => r, () => {});
+  await admin.from("audit_log").insert({ trace_id: await currentTraceId(), actor_id: user.id, actor_name: profile?.full_name ?? null, action: "hww_ai_query", entity_type: "ai", entity_id: null, new_value: { question: q.slice(0, 300), model: result.model, tokens: result.usage } }).then((r: any) => r, () => {});
   return NextResponse.json({ answer: result.text, model: result.model, grounded: ctx.length, usage: result.usage });
 }

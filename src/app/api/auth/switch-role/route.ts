@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { ROLE_CONFIG, type AppRole } from "@/lib/roles";
 
+import { currentTraceId } from "@/lib/trace";
 export async function POST(req: Request) {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
@@ -33,7 +34,7 @@ export async function POST(req: Request) {
 
   // Cross-workspace spec §16: every role switch lands in the audit trail.
   const { data: me } = await createAdminClient().from("profiles").select("full_name").eq("id", user.id).single();
-  await createAdminClient().from("audit_log").insert({
+  await createAdminClient().from("audit_log").insert({ trace_id: await currentTraceId(),
     actor_id: user.id, actor_name: me?.full_name ?? null,
     action: "switch_role", entity_type: "profile", entity_id: user.id,
     new_value: { from: previous, to: role },

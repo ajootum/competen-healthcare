@@ -1,6 +1,7 @@
 import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
 
+import { currentTraceId } from "@/lib/trace";
 // Account-level actions on a user (distinct from role assignment, which is the
 // PATCH on ../route.ts). Suspension uses Supabase Auth's ban mechanism so the
 // user genuinely cannot sign in — not just a status flag.
@@ -54,7 +55,7 @@ export async function POST(req: Request) {
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
-  await admin.from("audit_log").insert({
+  await admin.from("audit_log").insert({ trace_id: await currentTraceId(),
     actor_id: user.id,
     actor_name: me.full_name,
     action: action === "send_reset" ? "send_password_reset"

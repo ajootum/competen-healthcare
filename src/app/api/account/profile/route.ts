@@ -1,6 +1,7 @@
 import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
 
+import { currentTraceId } from "@/lib/trace";
 // Profile self-editing (Account Management). Only personal fields are
 // writable — role, hospital and organisation stay server-controlled.
 const EDITABLE = ["full_name", "phone", "country", "specialization"] as const;
@@ -29,7 +30,7 @@ export async function PATCH(req: Request) {
   const { error } = await admin.from("profiles").update(update).eq("id", user.id);
   if (error) return NextResponse.json({ error: error.message }, { status: 400 });
 
-  await admin.from("audit_log").insert({
+  await admin.from("audit_log").insert({ trace_id: await currentTraceId(),
     actor_id: user.id, actor_name: update.full_name ?? null,
     action: "update_profile", entity_type: "profile", entity_id: user.id,
     entity_name: Object.keys(update).join(", "),

@@ -1,6 +1,7 @@
 import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
 
+import { currentTraceId } from "@/lib/trace";
 // OSCE Centre — record a station score for a candidate (0–6 Benner scale).
 // Upserts so an examiner can correct a score before the exam is completed.
 export async function POST(req: Request) {
@@ -47,7 +48,7 @@ export async function POST(req: Request) {
     await admin.from("osce_candidates").update({ status: "checked_in" }).eq("id", candidate.id);
   }
 
-  await admin.from("audit_log").insert({
+  await admin.from("audit_log").insert({ trace_id: await currentTraceId(),
     actor_id: user.id, actor_name: me?.full_name ?? null,
     action: "record_osce_score", entity_type: "osce_exam", entity_id: exam.id, entity_name: exam.title,
     new_value: { station: station.name, score },

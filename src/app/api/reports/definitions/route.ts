@@ -2,6 +2,7 @@ import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
 import { DATASET_COLUMNS } from "@/lib/report-datasets";
 
+import { currentTraceId } from "@/lib/trace";
 // Saved report definitions (Report Builder → Report Library).
 
 async function requireStaff() {
@@ -42,7 +43,7 @@ export async function POST(req: Request) {
   }).select("id").single();
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
-  await admin.from("audit_log").insert({
+  await admin.from("audit_log").insert({ trace_id: await currentTraceId(),
     actor_id: userId, actor_name: me.full_name ?? null,
     action: "save_report", entity_type: "report_definition", entity_id: row.id, entity_name: n,
     new_value: { dataset },

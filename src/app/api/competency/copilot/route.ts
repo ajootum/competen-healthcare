@@ -7,6 +7,7 @@ import { generate } from "@/lib/ai/client";
 import { aiStatus } from "@/lib/ai/config";
 import { checkAiQuota } from "@/lib/ai/quota";
 import { fetchCmoSuite, daysLeft } from "@/lib/competency/cmo-suite";
+import { currentTraceId } from "@/lib/trace";
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 // CMO-017 AI Competency Intelligence — wired to the real AI Runtime Gateway (src/lib/ai/client.ts generate()).
@@ -72,7 +73,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: msg }, { status: result.error === "not_configured" ? 503 : 500 });
   }
 
-  await admin.from("audit_log").insert({ actor_id: user.id, actor_name: profile?.full_name ?? null, action: "cmo_ai_query", entity_type: "ai", entity_id: null, new_value: { question: q.slice(0, 300), model: result.model, tokens: result.usage } }).then((r: any) => r, () => {});
+  await admin.from("audit_log").insert({ trace_id: await currentTraceId(), actor_id: user.id, actor_name: profile?.full_name ?? null, action: "cmo_ai_query", entity_type: "ai", entity_id: null, new_value: { question: q.slice(0, 300), model: result.model, tokens: result.usage } }).then((r: any) => r, () => {});
 
   return NextResponse.json({ answer: result.text, model: result.model, grounded: ctx.length, usage: result.usage });
 }

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getCaller, isResponse, isSuper, forbidden, badRequest } from "@/lib/api-auth";
 
+import { currentTraceId } from "@/lib/trace";
 // PCS-PORT-001 admin CRUD — no-code management of the packaging hierarchy + licensing. RECONCILED (migration 106):
 // "product" IS the canonical POP-001 `plat_products` (keyed by `code`); PCS organizes it via suites and gates
 // workspaces/tenants. Super-admin only. POST create / PATCH update / DELETE remove, discriminated by `type`:
@@ -10,7 +11,7 @@ const str = (v: any, max = 160) => (typeof v === "string" ? v.trim().slice(0, ma
 const slug = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 40);
 
 async function audit(c: any, action: string, type: string, id: string | null, val: any) {
-  try { const { data: me } = await c.admin.from("profiles").select("full_name").eq("id", c.userId).maybeSingle(); await c.admin.from("audit_log").insert({ actor_id: c.userId, actor_name: me?.full_name ?? null, action, entity_type: `pcs_${type}`, entity_id: id, new_value: val }); } catch { /* fail-soft */ }
+  try { const { data: me } = await c.admin.from("profiles").select("full_name").eq("id", c.userId).maybeSingle(); await c.admin.from("audit_log").insert({ trace_id: await currentTraceId(), actor_id: c.userId, actor_name: me?.full_name ?? null, action, entity_type: `pcs_${type}`, entity_id: id, new_value: val }); } catch { /* fail-soft */ }
 }
 
 export async function POST(req: Request) {

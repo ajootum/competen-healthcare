@@ -2,6 +2,7 @@ import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { createClient as createBareClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
 
+import { currentTraceId } from "@/lib/trace";
 // Password change. Supabase's updateUser doesn't check the old password, so we
 // verify it first with a throwaway sign-in (never persisted) — wrong current
 // password is rejected instead of silently allowing a takeover from a stolen
@@ -33,7 +34,7 @@ export async function POST(req: Request) {
   const { error } = await supabase.auth.updateUser({ password: new_password });
   if (error) return NextResponse.json({ error: error.message }, { status: 400 });
 
-  await createAdminClient().from("audit_log").insert({
+  await createAdminClient().from("audit_log").insert({ trace_id: await currentTraceId(),
     actor_id: user.id, actor_name: null,
     action: "change_password", entity_type: "account", entity_id: user.id, entity_name: user.email,
   });

@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { parseCpuBundle } from "@/lib/import/cpu-parser";
 import { docxToMarkedText } from "@/lib/import/docx-text";
 
+import { currentTraceId } from "@/lib/trace";
 export const maxDuration = 60; // large documents take a moment to convert
 
 // CPU document import — parse (preview) and commit.
@@ -194,7 +195,7 @@ export async function POST(req: Request) {
     if (!error && data) created.cases = data.length;
   }
 
-  await admin.from("audit_log").insert({
+  await admin.from("audit_log").insert({ trace_id: await currentTraceId(),
     actor_id: auth.user.id, actor_name: auth.profile?.full_name ?? null,
     action: "import_cpu", entity_type: "clinical_practice_unit", entity_id: cpu.id,
     new_value: { code: parsed.code, title: parsed.title, ...created },

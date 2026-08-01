@@ -12,6 +12,7 @@
 
 import { checkDeploymentReadiness } from "@/lib/operations/deployment-readiness";
 
+import { currentTraceId } from "@/lib/trace";
 // Fallback per-patient workload when no NAS/ward assessment is recorded yet —
 // a documented operational convention keyed on the coarse acuity level.
 export const DEFAULT_WORKLOAD_BY_ACUITY: Record<string, number> = { critical: 90, high: 60, moderate: 35, stable: 20 };
@@ -374,7 +375,7 @@ export async function publishPairs(admin: any, pairs: { patient_id: string; staf
       else data = r.data;
     }
 
-    await admin.from("audit_log").insert({
+    await admin.from("audit_log").insert({ trace_id: await currentTraceId(),
       actor_id: actor.id, actor_name: actor.name ?? null, action: "assign_patient",
       entity_type: "op_patient_assignment", entity_id: data.id, entity_name: patient.label,
       hospital_id: patient.hospital_id,

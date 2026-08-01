@@ -3,6 +3,7 @@ import { getCaller, isResponse, isSupervisor, isSuper, forbidden, badRequest, su
 import { emitHandoverAccepted } from "@/lib/orchestration/producers";
 import { JBI_DOMAINS, JBI_MAX, classify } from "@/lib/operations/handover";
 
+import { currentTraceId } from "@/lib/trace";
 // Handover Centre mutation API (SSW-HC-004..011 + HWW-HND-001) over op_handovers /
 // op_handover_items / op_handover_clarifications / op_handover_audits. One action-
 // dispatched POST powers the interactive modules: create a handover, save/edit SBAR,
@@ -42,7 +43,7 @@ async function ensureItem(c: any, handoverId: string, patientId: string): Promis
 }
 
 async function audit(c: any, action: string, entityId: string | null, name?: string) {
-  await c.admin.from("audit_log").insert({ actor_id: c.userId, action, entity_type: "op_handover", entity_id: entityId, entity_name: name ?? null, hospital_id: c.hospitalId ?? null });
+  await c.admin.from("audit_log").insert({ trace_id: await currentTraceId(), actor_id: c.userId, action, entity_type: "op_handover", entity_id: entityId, entity_name: name ?? null, hospital_id: c.hospitalId ?? null });
 }
 
 export async function POST(req: Request) {

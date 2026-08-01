@@ -6,6 +6,7 @@ import {
   acceptTransfer, cancelTransfer, closeEpisode, loadUnassignedQueue,
 } from "@/lib/hww/census";
 
+import { currentTraceId } from "@/lib/trace";
 // Census / Assignment State Engine API (HWW-WARD-002/003, migration 156).
 //   GET ?inbox=1  → the caller's Assignment Inbox (self-scoped)
 //   GET ?queue=1  → the unassigned queue + pending acceptances (staff tier)
@@ -21,7 +22,7 @@ import {
 
 async function audit(c: any, action: string, entityType: string, id: string | null, hospitalId: string | null, extra?: any) {
   const { data: me } = await c.admin.from("profiles").select("full_name").eq("id", c.userId).single();
-  await c.admin.from("audit_log").insert({
+  await c.admin.from("audit_log").insert({ trace_id: await currentTraceId(),
     actor_id: c.userId, actor_name: me?.full_name ?? null, action,
     entity_type: entityType, entity_id: id, hospital_id: hospitalId, new_value: extra ?? null,
   }).then((r: any) => r, () => {});

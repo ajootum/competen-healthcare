@@ -2,6 +2,7 @@ import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
 import { notify } from "@/lib/notify";
 
+import { currentTraceId } from "@/lib/trace";
 // Assessment scheduling (Assessor Workspace redesign). Assessor roles create
 // sessions for nurses in their hospital; both sides are notified; the nurse
 // sees it via RLS. Completing/cancelling is restricted to the involved
@@ -58,7 +59,7 @@ export async function POST(req: Request) {
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
   const whenLabel = when.toLocaleString(undefined, { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
-  await admin.from("audit_log").insert({
+  await admin.from("audit_log").insert({ trace_id: await currentTraceId(),
     actor_id: me.id, actor_name: me.full_name ?? null,
     action: "schedule_assessment", entity_type: "scheduled_assessment", entity_id: row.id,
     entity_name: `${nurse.full_name} · ${whenLabel}`,
@@ -93,7 +94,7 @@ export async function PATCH(req: Request) {
   const { error } = await admin.from("scheduled_assessments").update({ status }).eq("id", id);
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
-  await admin.from("audit_log").insert({
+  await admin.from("audit_log").insert({ trace_id: await currentTraceId(),
     actor_id: me.id, actor_name: me.full_name ?? null,
     action: status === "cancelled" ? "cancel_scheduled_assessment" : "complete_scheduled_assessment",
     entity_type: "scheduled_assessment", entity_id: id,

@@ -8,6 +8,7 @@ import { aiStatus } from "@/lib/ai/config";
 import { checkAiQuota } from "@/lib/ai/quota";
 import { OUTCOME_CONFIG, type DecisionOutcome } from "@/lib/ckcm";
 
+import { currentTraceId } from "@/lib/trace";
 // AI Report Writer — generates a professional narrative report from REAL
 // figures the server computes for the chosen window/department. The model is
 // instructed to use only the provided figures. Export via print-to-PDF.
@@ -128,7 +129,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: result.error === "refusal" ? "The report writer declined this request." : `Report error: ${result.detail ?? "failed"}` }, { status: 500 });
   }
 
-  await admin.from("audit_log").insert({
+  await admin.from("audit_log").insert({ trace_id: await currentTraceId(),
     actor_id: user.id, actor_name: me?.full_name ?? null,
     action: "ai_report", entity_type: "ai", entity_id: null,
     new_value: { report_type: reportType, department, from: from.slice(0, 10), to: to.slice(0, 10), model: result.model, tokens: result.usage },

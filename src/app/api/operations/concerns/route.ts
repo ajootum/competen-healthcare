@@ -7,6 +7,7 @@ import {
   ROUTE_DESTINATIONS, ACTIVE_CONCERN_STATUSES, TASK_PRIORITY_BY_CONCERN,
 } from "@/lib/hww/concerns";
 
+import { currentTraceId } from "@/lib/trace";
 // Nurse Concerns API (HWW-ADD-001 / ADD-001B, migration 152).
 //   GET  ?mine=1 → the nurse's own lens; otherwise the supervisor queue (staff tier).
 //   POST → raise a concern (the bedside nurse's act: assigned-to-patient or staff).
@@ -20,7 +21,7 @@ const migrationGate = (e: any) =>
   /does not exist|schema cache/i.test(String(e?.message ?? "")) ? NextResponse.json({ error: "Run migration 152 to enable Nurse Concerns" }, { status: 409 }) : null;
 
 async function audit(c: any, action: string, id: string | null, hospitalId: string | null, extra?: any) {
-  await c.admin.from("audit_log").insert({
+  await c.admin.from("audit_log").insert({ trace_id: await currentTraceId(),
     actor_id: c.userId, action, entity_type: "op_concern", entity_id: id,
     hospital_id: hospitalId, new_value: extra ?? null,
   }).then((r: any) => r, () => {});

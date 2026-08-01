@@ -4,6 +4,7 @@ import { recomputeAll } from "@/lib/engines/scoring";
 import { notify } from "@/lib/notify";
 import { METHOD_LABELS } from "@/lib/ckcm";
 
+import { currentTraceId } from "@/lib/trace";
 // Conduct Assessment cockpit submit: records one assessment session in a single
 // call — per-competency scores + notes (assessments), checklist responses,
 // consensus recompute, audit trail, learner notification, and linked scheduled
@@ -162,7 +163,7 @@ export async function POST(req: Request) {
     if (recommendation) actions.push(`Overall recommendation recorded: ${RECOMMENDATIONS[recommendation]}`);
   }
 
-  await admin.from("audit_log").insert({
+  await admin.from("audit_log").insert({ trace_id: await currentTraceId(),
     actor_id: user.id, actor_name: me?.full_name ?? null,
     action: "conduct_assessment", entity_type: "cycle", entity_id: cycle_id, entity_name: nurse.full_name,
     new_value: {

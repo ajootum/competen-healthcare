@@ -2,6 +2,7 @@ import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
 import { notify } from "@/lib/notify";
 
+import { currentTraceId } from "@/lib/trace";
 // Interventions — remediation plan lifecycle: planned → in_progress → review
 // → completed (outcome required at completion). Learner notified on creation;
 // everything audit-logged.
@@ -47,7 +48,7 @@ export async function POST(req: Request) {
   }).select("id").single();
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
-  await admin.from("audit_log").insert({
+  await admin.from("audit_log").insert({ trace_id: await currentTraceId(),
     actor_id: userId, actor_name: me.full_name ?? null,
     action: "create_intervention", entity_type: "intervention", entity_id: row.id, entity_name: nurse.full_name,
     new_value: { reason: why.slice(0, 200), review_date: review_date ?? null },
@@ -90,7 +91,7 @@ export async function PATCH(req: Request) {
   }).eq("id", id);
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
-  await admin.from("audit_log").insert({
+  await admin.from("audit_log").insert({ trace_id: await currentTraceId(),
     actor_id: userId, actor_name: me.full_name ?? null,
     action: "update_intervention", entity_type: "intervention", entity_id: id,
     new_value: { from: row.status, to: status, outcome: status === "completed" ? outcome : null },

@@ -7,6 +7,7 @@
 
 import { emitPlatformEvent } from "./events";
 
+import { currentTraceId } from "@/lib/trace";
 export type WorkflowDef = { key: string; name: string; entityType: string; icon: string; steps: { label: string }[]; description: string };
 
 // Configurable approval types — the POS-001D catalogue. Multi-step where a real
@@ -37,7 +38,7 @@ export async function submitApproval(admin: any, i: { workflowKey: string; entit
   await emitPlatformEvent(admin, { event_type: "approval.submitted", severity: "info", payload: { workflow: def.key, entity: ins.data.entity_name } });
   // Audit the submission too (decide() already audits decisions), so the full
   // request lifecycle is traceable in audit_log.
-  await admin.from("audit_log").insert({ actor_id: i.requestedBy ?? null, actor_name: i.requestedByName ?? null, action: "approval_submitted", entity_type: "approval", entity_id: ins.data.id, entity_name: ins.data.entity_name });
+  await admin.from("audit_log").insert({ trace_id: await currentTraceId(), actor_id: i.requestedBy ?? null, actor_name: i.requestedByName ?? null, action: "approval_submitted", entity_type: "approval", entity_id: ins.data.id, entity_name: ins.data.entity_name });
   return { ok: true, request: ins.data };
 }
 
@@ -52,7 +53,7 @@ export async function decide(admin: any, i: { source?: "approval" | "change_requ
     if (row.status !== "open") return { ok: false, error: "Already decided" };
     const { error } = await admin.from("change_requests").update({ status: i.decision, reviewed_by: i.actorId ?? null }).eq("id", i.requestId);
     if (error) return { ok: false, error: error.message };
-    await admin.from("audit_log").insert({ actor_id: i.actorId ?? null, action: `change_request_${i.decision}`, entity_type: "change_request", entity_id: i.requestId, entity_name: row.entity_name });
+    await admin.from("audit_log").insert({ trace_id: await currentTraceId(), actor_id: i.actorId ?? null, action: `change_request_${i.decision}`, entity_type: "change_request", entity_id: i.requestId, entity_name: row.entity_name });
     return { ok: true, status: i.decision };
   }
 
@@ -68,7 +69,7 @@ export async function decide(admin: any, i: { source?: "approval" | "change_requ
   const { data } = await admin.from("plat_approval_requests").update(update).eq("id", req.id).select().single();
 
   await emitPlatformEvent(admin, { event_type: `approval.${data.status === "pending" ? "advanced" : data.status}`, severity: "info", payload: { workflow: req.workflow_key } });
-  await admin.from("audit_log").insert({ actor_id: i.actorId ?? null, action: `approval_${i.decision}`, entity_type: "approval", entity_id: req.id, entity_name: req.entity_name });
+  await admin.from("audit_log").insert({ trace_id: await currentTraceId(), actor_id: i.actorId ?? null, action: `approval_${i.decision}`, entity_type: "approval", entity_id: req.id, entity_name: req.entity_name });
   return { ok: true, status: data.status, step: `${data.current_step + 1}/${data.total_steps}` };
 }
 

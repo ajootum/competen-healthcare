@@ -2,6 +2,7 @@ import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
 import { DATASET_COLUMNS } from "@/lib/report-datasets";
 
+import { currentTraceId } from "@/lib/trace";
 // Scheduled reports. Executed by the daily platform cron (/api/cron/reports);
 // delivery is an in-app notification per recipient. Email delivery would need
 // an email service — deliberately not part of this module yet.
@@ -70,7 +71,7 @@ export async function POST(req: Request) {
   }).select("id, next_run_at").single();
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
-  await admin.from("audit_log").insert({
+  await admin.from("audit_log").insert({ trace_id: await currentTraceId(),
     actor_id: userId, actor_name: me.full_name ?? null,
     action: "schedule_report", entity_type: "report_schedule", entity_id: row.id, entity_name: n,
     new_value: { frequency, recipients: recipients.length },

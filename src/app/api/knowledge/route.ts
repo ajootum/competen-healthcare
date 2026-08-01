@@ -1,6 +1,7 @@
 import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
 
+import { currentTraceId } from "@/lib/trace";
 // Knowledge assessment submission — graded server-side against the bank's
 // pass mark. Correct answers are never sent to the client before submission.
 
@@ -34,7 +35,7 @@ export async function POST(req: Request) {
   });
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
-  await admin.from("audit_log").insert({
+  await admin.from("audit_log").insert({ trace_id: await currentTraceId(),
     actor_id: user.id, action: "knowledge_attempt", entity_type: "question_bank", entity_id: bank_id,
     new_value: { bank: bank.name, score, passed },
   });

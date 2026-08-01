@@ -2,6 +2,7 @@ import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
 import { notify, hospitalVerifierIds } from "@/lib/notify";
 
+import { currentTraceId } from "@/lib/trace";
 // Appeals against assessment outcomes. POST: the assessed learner raises an
 // appeal with a reason. PATCH: staff move it through
 // open → under_review → upheld / overturned (or withdrawn), with a resolution
@@ -41,7 +42,7 @@ export async function POST(req: Request) {
   }).select("id").single();
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
-  await admin.from("audit_log").insert({
+  await admin.from("audit_log").insert({ trace_id: await currentTraceId(),
     actor_id: user.id, actor_name: me?.full_name ?? null,
     action: "raise_appeal", entity_type: "appeal", entity_id: row.id, entity_name: compName ?? "assessment",
   });
@@ -94,7 +95,7 @@ export async function PATCH(req: Request) {
   }).eq("id", id);
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
-  await admin.from("audit_log").insert({
+  await admin.from("audit_log").insert({ trace_id: await currentTraceId(),
     actor_id: user.id, actor_name: me?.full_name ?? null,
     action: "review_appeal", entity_type: "appeal", entity_id: id, entity_name: row.competency_name ?? "assessment",
     new_value: { from: row.status, to: status },

@@ -2,6 +2,7 @@ import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
 import { rebuildKnowledgeGraph, graphStats } from "@/lib/engines/graph";
 
+import { currentTraceId } from "@/lib/trace";
 async function requireSuperAdmin() {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
@@ -16,7 +17,7 @@ export async function POST() {
   const auth = await requireSuperAdmin();
   if ("error" in auth) return NextResponse.json({ error: auth.error }, { status: auth.status });
   const result = await rebuildKnowledgeGraph(auth.admin);
-  await auth.admin.from("audit_log").insert({
+  await auth.admin.from("audit_log").insert({ trace_id: await currentTraceId(),
     actor_id: auth.user.id, actor_name: auth.profile?.full_name ?? null,
     action: "rebuild_knowledge_graph", entity_type: "graph", entity_id: null,
     new_value: { edges: result.edges },

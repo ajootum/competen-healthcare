@@ -2,6 +2,7 @@ import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
 import { emitTaskCompleted } from "@/lib/orchestration/producers";
 
+import { currentTraceId } from "@/lib/trace";
 // PW-014 §14.1 / §7.1 / PW-AC-08 — POST /me/actions/{id}/execute. Direct-completes a low-risk universal action
 // after RE-AUTHORIZING and RE-VALIDATING the source record at execution time (visibility is not authorization,
 // §10). High-risk / clinical (patient-linked) work is refused for direct execution and returned as deep-link-only
@@ -53,7 +54,7 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
   if (!updated) return NextResponse.json({ ok: false, stale: true, reason: "Task changed before completion — refresh." }, { status: 409 });
 
   const { data: me } = await admin.from("profiles").select("full_name").eq("id", user.id).maybeSingle();
-  await admin.from("audit_log").insert({ actor_id: user.id, actor_name: me?.full_name ?? null, action: "complete_action", entity_type: "op_task", entity_id: sourceId, hospital_id: updated.hospital_id ?? null, new_value: { via: "personal_workspace", status: "completed" } });
+  await admin.from("audit_log").insert({ trace_id: await currentTraceId(), actor_id: user.id, actor_name: me?.full_name ?? null, action: "complete_action", entity_type: "op_task", entity_id: sourceId, hospital_id: updated.hospital_id ?? null, new_value: { via: "personal_workspace", status: "completed" } });
   await emitTaskCompleted(admin, updated, user.id, me?.full_name ?? null);
 
   return NextResponse.json({ ok: true, action_id: raw, status: "completed" });

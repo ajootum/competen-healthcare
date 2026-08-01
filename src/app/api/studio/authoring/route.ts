@@ -2,6 +2,7 @@ import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
+import { currentTraceId } from "@/lib/trace";
 // ── Educator framework authoring ────────────────────────────────────────────
 // Widens framework / domain / competency authoring to the educator role, but
 // ONLY on frameworks that belong to the educator's own hospital. The shared
@@ -75,8 +76,8 @@ async function frameworkOfCompetency(c: Ctx, competencyId: string): Promise<Guar
   return frameworkOfDomain(c, comp.domain_id);
 }
 
-function audit(c: Ctx, action: string, entity_type: string, entity_id: string, entity_name: string, oldV: unknown, newV: unknown) {
-  return c.admin.from("audit_log").insert({
+async function audit(c: Ctx, action: string, entity_type: string, entity_id: string, entity_name: string, oldV: unknown, newV: unknown) {
+  return c.admin.from("audit_log").insert({ trace_id: await currentTraceId(),
     actor_id: c.userId, actor_name: c.name, action,
     entity_type, entity_id, entity_name, old_value: oldV, new_value: newV,
   });

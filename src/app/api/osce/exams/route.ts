@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { recomputeAll } from "@/lib/engines/scoring";
 import { notify } from "@/lib/notify";
 
+import { currentTraceId } from "@/lib/trace";
 // OSCE Management Centre — exam lifecycle. POST creates an exam with stations
 // and registered candidates; PATCH moves it through
 // draft → published → running → completed (or cancelled). Completing an exam
@@ -74,7 +75,7 @@ export async function POST(req: Request) {
     }
   }
 
-  await admin.from("audit_log").insert({
+  await admin.from("audit_log").insert({ trace_id: await currentTraceId(),
     actor_id: userId, actor_name: me.full_name ?? null,
     action: "create_osce", entity_type: "osce_exam", entity_id: exam.id, entity_name: title,
     new_value: { stations: stationRows.length, candidates: candidateIds.length, exam_date: body.exam_date ?? null },
@@ -163,7 +164,7 @@ export async function PATCH(req: Request) {
   if (uerr) return NextResponse.json({ error: uerr.message }, { status: 500 });
   actions.push(`Exam moved to ${status}`);
 
-  await admin.from("audit_log").insert({
+  await admin.from("audit_log").insert({ trace_id: await currentTraceId(),
     actor_id: userId, actor_name: me.full_name ?? null,
     action: status === "completed" ? "complete_osce" : "update_osce",
     entity_type: "osce_exam", entity_id: id, entity_name: exam.title,

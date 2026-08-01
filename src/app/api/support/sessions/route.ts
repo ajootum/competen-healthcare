@@ -2,6 +2,7 @@ import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
 import { notify } from "@/lib/notify";
 
+import { currentTraceId } from "@/lib/trace";
 // Support sessions (coaching / progress review / validation meeting).
 // POST schedules (learner notified); PATCH completes with notes or cancels.
 
@@ -47,7 +48,7 @@ export async function POST(req: Request) {
   }).select("id").single();
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
-  await admin.from("audit_log").insert({
+  await admin.from("audit_log").insert({ trace_id: await currentTraceId(),
     actor_id: userId, actor_name: me.full_name ?? null,
     action: "schedule_support_session", entity_type: "support_session", entity_id: row.id, entity_name: nurse.full_name,
     new_value: { session_type: type, scheduled_for },
@@ -83,7 +84,7 @@ export async function PATCH(req: Request) {
   }).eq("id", id);
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
-  await admin.from("audit_log").insert({
+  await admin.from("audit_log").insert({ trace_id: await currentTraceId(),
     actor_id: userId, actor_name: me.full_name ?? null,
     action: status === "completed" ? "complete_support_session" : "cancel_support_session",
     entity_type: "support_session", entity_id: id,

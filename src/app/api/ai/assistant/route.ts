@@ -7,6 +7,7 @@ import { generate } from "@/lib/ai/client";
 import { aiStatus } from "@/lib/ai/config";
 import { checkAiQuota } from "@/lib/ai/quota";
 
+import { currentTraceId } from "@/lib/trace";
 const NONE = "00000000-0000-0000-0000-000000000000";
 
 // GET — report AI readiness (so the UI can show config state without a call)
@@ -140,7 +141,7 @@ export async function POST(req: Request) {
   }
 
   // Audit every AI answer (explainability + governance)
-  await admin.from("audit_log").insert({
+  await admin.from("audit_log").insert({ trace_id: await currentTraceId(),
     actor_id: user.id, actor_name: profile?.full_name ?? null,
     action: "ai_assistant_query", entity_type: "ai", entity_id: null,
     new_value: { question: question.slice(0, 300), model: result.model, tokens: result.usage },

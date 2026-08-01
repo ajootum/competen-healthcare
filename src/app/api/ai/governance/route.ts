@@ -8,6 +8,7 @@ import { aiStatus } from "@/lib/ai/config";
 import { checkAiQuota } from "@/lib/ai/quota";
 import { frameworkImpact } from "@/lib/engines/impact";
 
+import { currentTraceId } from "@/lib/trace";
 // POST — AI Governance Assistant: plain-language impact summary of a proposed
 // framework change, for governance committees (Book IV Ch.17). Body: { frameworkId }.
 export async function POST(req: Request) {
@@ -52,7 +53,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: result.error === "refusal" ? "The assistant declined this request." : `Assistant error: ${result.detail ?? "failed"}` }, { status: 500 });
   }
 
-  await admin.from("audit_log").insert({
+  await admin.from("audit_log").insert({ trace_id: await currentTraceId(),
     actor_id: user.id, actor_name: profile?.full_name ?? null,
     action: "ai_governance_brief", entity_type: "framework", entity_id: frameworkId,
     entity_name: report.entity.name, new_value: { total_affected: total, model: result.model },

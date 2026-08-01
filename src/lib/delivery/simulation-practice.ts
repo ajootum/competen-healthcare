@@ -6,6 +6,7 @@
 
 import { emitDomainEvent, EVENT } from "@/lib/orchestration/events";
 
+import { currentTraceId } from "@/lib/trace";
 type Admin = any;
 const NONE = "00000000-0000-0000-0000-000000000000";
 const today = () => new Date().toISOString().slice(0, 10);
@@ -36,7 +37,7 @@ export async function recordPractice(admin: Admin, nurseId: string, input: { sce
       { onConflict: "nurse_id,competency_id", ignoreDuplicates: true },
     ).catch(() => {});
   }
-  await admin.from("audit_log").insert({ actor_id: nurseId, action: "sim_practice_logged", entity_type: "cdp_sim_sessions", entity_id: row.id, entity_name: scenarioName ?? "practice" });
+  await admin.from("audit_log").insert({ trace_id: await currentTraceId(), actor_id: nurseId, action: "sim_practice_logged", entity_type: "cdp_sim_sessions", entity_id: row.id, entity_name: scenarioName ?? "practice" });
   return { ok: true as const, id: row.id };
 }
 

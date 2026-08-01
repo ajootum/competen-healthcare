@@ -8,6 +8,7 @@ import { aiStatus } from "@/lib/ai/config";
 import { checkAiQuota } from "@/lib/ai/quota";
 import { loadAnalytics, passRateOf, avgScoreOf, competencyProfile, riskBuckets } from "@/lib/analytics";
 
+import { currentTraceId } from "@/lib/trace";
 // AI & Intelligence — scoped narrative insights. The server computes REAL
 // figures from live records and hands only those to Claude for a narrative +
 // recommendations; the model is told not to invent numbers. Scopes power the
@@ -87,7 +88,7 @@ export async function POST(req: Request) {
   }
 
   const { data: me } = await admin.from("profiles").select("full_name").eq("id", userId).single();
-  await admin.from("audit_log").insert({
+  await admin.from("audit_log").insert({ trace_id: await currentTraceId(),
     actor_id: userId, actor_name: me?.full_name ?? null,
     action: "ai_insights", entity_type: "ai", entity_id: null,
     new_value: { scope, model: result.model, tokens: result.usage },

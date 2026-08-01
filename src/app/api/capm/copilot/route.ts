@@ -7,6 +7,7 @@ import { aiStatus } from "@/lib/ai/config";
 import { checkAiQuota } from "@/lib/ai/quota";
 import { loadOutcomeCorrelation } from "@/lib/performance/outcome-correlation";
 import { fetchPerformance } from "@/lib/analytics/performance";
+import { currentTraceId } from "@/lib/trace";
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 // CAPM-010 — AI Performance Intelligence copilot. Wired to the real AI Runtime Gateway (generate()), grounded in
@@ -62,6 +63,6 @@ export async function POST(req: Request) {
   const result = await generate({ system, user: `Enterprise performance (live):\n${ctx.join("\n")}\n\nRequest: ${q}`, tier: "reasoning", maxTokens: 1100, context: { userId: user.id, tenantId: profile?.hospital_id ?? null, operation: "performance_intelligence_capm" } });
   if (!result.ok) return NextResponse.json({ error: result.error === "not_configured" ? "AI is not configured." : result.error === "refusal" ? "The copilot declined that request." : `Error: ${result.detail ?? "failed"}` }, { status: result.error === "not_configured" ? 503 : 500 });
 
-  await admin.from("audit_log").insert({ actor_id: user.id, actor_name: profile?.full_name ?? null, action: "capm_ai_query", entity_type: "ai", entity_id: null, new_value: { question: q.slice(0, 300), model: result.model, tokens: result.usage } }).then((r: any) => r, () => {});
+  await admin.from("audit_log").insert({ trace_id: await currentTraceId(), actor_id: user.id, actor_name: profile?.full_name ?? null, action: "capm_ai_query", entity_type: "ai", entity_id: null, new_value: { question: q.slice(0, 300), model: result.model, tokens: result.usage } }).then((r: any) => r, () => {});
   return NextResponse.json({ answer: result.text, model: result.model, grounded: ctx.length, usage: result.usage });
 }

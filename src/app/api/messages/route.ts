@@ -2,6 +2,7 @@ import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
 import { notify } from "@/lib/notify";
 
+import { currentTraceId } from "@/lib/trace";
 // One-way messaging over the notifications system (Conduct Assessment
 // "Communication" panel). Delivers a message notification to a specific user
 // in your hospital, or to all hospital educators. Full two-way threads are a
@@ -46,7 +47,7 @@ export async function POST(req: Request) {
     title: `Message from ${me?.full_name ?? "a colleague"}`,
     body,
   });
-  await admin.from("audit_log").insert({
+  await admin.from("audit_log").insert({ trace_id: await currentTraceId(),
     actor_id: user.id, actor_name: me?.full_name ?? null,
     action: "send_message", entity_type: "profile",
     entity_id: recipients.length === 1 ? recipients[0] : null,

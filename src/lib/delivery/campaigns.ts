@@ -7,6 +7,7 @@
 
 import { emitDomainEvent, EVENT } from "@/lib/orchestration/events";
 
+import { currentTraceId } from "@/lib/trace";
 type Admin = any;
 const NONE = "00000000-0000-0000-0000-000000000000";
 const ACHIEVED = ["competent", "competent_with_conditions", "provisionally_competent"];
@@ -68,7 +69,7 @@ export async function createCampaign(admin: Admin, input: { name: string; descri
     mandatory: !!input.mandatory, due_on: input.due_on ?? null, status: "draft", owner_id: actor.id, owner_name: actor.name,
   }).select("id").single();
   if (error) return { ok: false as const, error: error.message };
-  await admin.from("audit_log").insert({ actor_id: actor.id, actor_name: actor.name, action: "campaign_create", entity_type: "cdp_campaigns", entity_id: data.id, entity_name: input.name.trim() });
+  await admin.from("audit_log").insert({ trace_id: await currentTraceId(), actor_id: actor.id, actor_name: actor.name, action: "campaign_create", entity_type: "cdp_campaigns", entity_id: data.id, entity_name: input.name.trim() });
   return { ok: true as const, id: data.id };
 }
 
@@ -87,7 +88,7 @@ export async function launchCampaign(admin: Admin, id: string, actor: { id: stri
     });
   }
   await emitDomainEvent(admin, { event_type: EVENT.CAMPAIGN_LAUNCHED, subject_type: "cdp_campaign", subject_id: id, hospital_id: c.hospital_id, actor_id: actor.id, actor_name: actor.name, payload: { name: c.name, competency: c.competency_name, target: c.target_label ?? c.target_role, due: c.due_on, mandatory: !!c.mandatory } });
-  await admin.from("audit_log").insert({ actor_id: actor.id, actor_name: actor.name, action: "campaign_launch", entity_type: "cdp_campaigns", entity_id: id, entity_name: c.name });
+  await admin.from("audit_log").insert({ trace_id: await currentTraceId(), actor_id: actor.id, actor_name: actor.name, action: "campaign_launch", entity_type: "cdp_campaigns", entity_id: id, entity_name: c.name });
   return { ok: true as const };
 }
 
@@ -95,6 +96,6 @@ export async function closeCampaign(admin: Admin, id: string, actor: { id: strin
   const { data: c } = await admin.from("cdp_campaigns").select("name").eq("id", id).maybeSingle();
   if (!c) return { ok: false as const, error: "Campaign not found" };
   await admin.from("cdp_campaigns").update({ status: "closed" }).eq("id", id);
-  await admin.from("audit_log").insert({ actor_id: actor.id, actor_name: actor.name, action: "campaign_close", entity_type: "cdp_campaigns", entity_id: id, entity_name: c.name });
+  await admin.from("audit_log").insert({ trace_id: await currentTraceId(), actor_id: actor.id, actor_name: actor.name, action: "campaign_close", entity_type: "cdp_campaigns", entity_id: id, entity_name: c.name });
   return { ok: true as const };
 }

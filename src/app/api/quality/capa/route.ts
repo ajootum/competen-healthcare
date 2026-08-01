@@ -2,6 +2,7 @@ import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
 import { notify } from "@/lib/notify";
 
+import { currentTraceId } from "@/lib/trace";
 // CAPA workflow (Quality & Governance). POST creates a corrective/preventive
 // action; PATCH advances its status (open → in_progress → completed →
 // verified → closed) and records evidence notes. Assessor roles only.
@@ -53,7 +54,7 @@ export async function POST(req: Request) {
   }).select("id").single();
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
-  await admin.from("audit_log").insert({
+  await admin.from("audit_log").insert({ trace_id: await currentTraceId(),
     actor_id: userId, actor_name: me.full_name ?? null,
     action: "create_capa", entity_type: "capa", entity_id: row.id, entity_name: t,
     new_value: { priority: priority ?? "medium", due_date: due_date ?? null },
@@ -94,7 +95,7 @@ export async function PATCH(req: Request) {
   }).eq("id", id);
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
-  await admin.from("audit_log").insert({
+  await admin.from("audit_log").insert({ trace_id: await currentTraceId(),
     actor_id: userId, actor_name: me.full_name ?? null,
     action: "update_capa", entity_type: "capa", entity_id: id, entity_name: row.title,
     new_value: { from: row.status, to: status },

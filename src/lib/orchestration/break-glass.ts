@@ -3,6 +3,7 @@
 // writes audit_log + a domain event. Fail-soft to 'not_provisioned' until migration 104 is applied. Service-role
 // (admin client) only. Access is NEVER elevated silently — a grant always carries a reason, an expiry and a trail.
 import { emitDomainEvent, EVENT } from "./events";
+import { currentTraceId } from "@/lib/trace";
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 const notProvisioned = (msg: string) => /does not exist|schema cache/i.test(msg ?? "");
@@ -28,7 +29,7 @@ export async function requestBreakGlass(admin: any, userId: string, input: Break
     if (error) return { ok: false, reason: notProvisioned(error.message) ? "not_provisioned" : error.message };
 
     // Accountability: audit + domain event (both fail-soft).
-    await admin.from("audit_log").insert({ actor_id: userId, actor_name: me?.full_name ?? null, action: "break_glass_invoked", entity_type: "break_glass_grant", entity_id: data.id, hospital_id: me?.hospital_id ?? null, new_value: { reason, target_type: data.target_type, target_ref: data.target_ref, scope: data.scope, expires_at: data.expires_at } }).catch(() => {});
+    await admin.from("audit_log").insert({ trace_id: await currentTraceId(), actor_id: userId, actor_name: me?.full_name ?? null, action: "break_glass_invoked", entity_type: "break_glass_grant", entity_id: data.id, hospital_id: me?.hospital_id ?? null, new_value: { reason, target_type: data.target_type, target_ref: data.target_ref, scope: data.scope, expires_at: data.expires_at } }).catch(() => {});
     await emitDomainEvent(admin, { event_type: EVENT.BREAK_GLASS_INVOKED, subject_type: "break_glass_grant", subject_id: data.id, hospital_id: me?.hospital_id ?? null, tenant_id: me?.tenant_id ?? null, actor_id: userId, actor_name: me?.full_name ?? null, sensitivity: "restricted", payload: { target_type: data.target_type, scope: data.scope, expires_at: data.expires_at } });
     return { ok: true, grant: data };
   } catch (e: any) {

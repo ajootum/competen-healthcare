@@ -2,6 +2,7 @@ import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
 import { notify } from "@/lib/notify";
 
+import { currentTraceId } from "@/lib/trace";
 // Passport Centre "Request Evidence" action: notifies the clinician to upload
 // supporting evidence to their logbook. Assessor roles only; audit-logged.
 export async function POST(req: Request) {
@@ -24,7 +25,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "You can only request evidence from clinicians in your hospital" }, { status: 403 });
   }
 
-  await admin.from("audit_log").insert({
+  await admin.from("audit_log").insert({ trace_id: await currentTraceId(),
     actor_id: user.id, actor_name: me?.full_name ?? null,
     action: "request_passport_evidence", entity_type: "profile", entity_id: nurse_id, entity_name: nurse.full_name,
   });

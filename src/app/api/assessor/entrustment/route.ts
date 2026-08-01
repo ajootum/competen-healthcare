@@ -2,6 +2,7 @@ import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
 import { ENTRUSTMENT_LABELS } from "@/lib/ckcm";
 
+import { currentTraceId } from "@/lib/trace";
 // Records the assessor's final entrustment decision ("The Assessor Role" §16-17):
 // one meaningful judgement, backed by the evidence underneath. Creates a
 // clinical authorization at the chosen level (or a restriction record).
@@ -74,7 +75,7 @@ export async function POST(req: Request) {
   await admin.from("authorization_activities").insert({
     authorization_id: auth.id, cpu_id, label: cpu.name,
   });
-  await admin.from("audit_log").insert({
+  await admin.from("audit_log").insert({ trace_id: await currentTraceId(),
     actor_id: user.id, actor_name: profile?.full_name ?? null,
     action: "entrustment_decision", entity_type: "clinical_authorization", entity_id: auth.id,
     new_value: { nurse_id, cpu: cpu.name, entrustment_level },

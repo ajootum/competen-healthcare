@@ -1,6 +1,7 @@
 import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
 
+import { currentTraceId } from "@/lib/trace";
 // Clinical case studies — publish / retire / adjust difficulty.
 
 async function requireAuthor() {
@@ -32,7 +33,7 @@ export async function PATCH(req: Request) {
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
   if (update.status) {
-    await auth.admin.from("audit_log").insert({
+    await auth.admin.from("audit_log").insert({ trace_id: await currentTraceId(),
       actor_id: auth.user.id, actor_name: auth.profile?.full_name ?? null,
       action: `case_${update.status}`, entity_type: "clinical_case", entity_id: id,
       new_value: { status: update.status },

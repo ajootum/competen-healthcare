@@ -9,6 +9,7 @@
 import { emitDomainEvent, EVENT } from "@/lib/orchestration/events";
 import { resolveDeliveryConfig } from "@/lib/delivery/config";
 
+import { currentTraceId } from "@/lib/trace";
 type Admin = any;
 const NONE = "00000000-0000-0000-0000-000000000000";
 const scoped = (q: any, hid: string | null, isSuper: boolean) => (isSuper ? q : q.eq("hospital_id", hid ?? NONE));
@@ -85,6 +86,6 @@ export async function runOrchestration(admin: Admin, hid: string | null, isSuper
     });
     if (em.ok) events++;
   }
-  await admin.from("audit_log").insert({ actor_id: actor.id, actor_name: actor.name, action: "delivery_orchestration_run", entity_type: "cmo_assignments", new_value: { pending: pending.length, created, events } });
+  await admin.from("audit_log").insert({ trace_id: await currentTraceId(), actor_id: actor.id, actor_name: actor.name, action: "delivery_orchestration_run", entity_type: "cmo_assignments", new_value: { pending: pending.length, created, events } });
   return { ok: true as const, created, skipped: pending.length - created, events };
 }

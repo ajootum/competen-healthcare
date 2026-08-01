@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { randomBytes } from "crypto";
 
+import { currentTraceId } from "@/lib/trace";
 // COMP-023 Passport Verification & Sharing — a worker mints/revokes a consented, time-limited share link to
 // their OWN passport. Self-service (auth = the worker); the token is cryptographically random and unguessable.
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -27,7 +28,7 @@ export async function POST(req: Request) {
     token, nurse_id: user.id, hospital_id: profile?.hospital_id ?? null, scope, label, expires_at: expiresAt, consent: true, revoked: false,
   }).select("id, token, scope, expires_at").single();
   if (error) return migrationGate(error) ?? NextResponse.json({ error: error.message }, { status: 500 });
-  await admin.from("audit_log").insert({ actor_id: user.id, action: "create_passport_share", entity_type: "passport_share_token", entity_id: data.id, hospital_id: profile?.hospital_id ?? null, new_value: { scope, expires_at: expiresAt } }).then((r: any) => r, () => {});
+  await admin.from("audit_log").insert({ trace_id: await currentTraceId(), actor_id: user.id, action: "create_passport_share", entity_type: "passport_share_token", entity_id: data.id, hospital_id: profile?.hospital_id ?? null, new_value: { scope, expires_at: expiresAt } }).then((r: any) => r, () => {});
   return NextResponse.json({ id: data.id, token: data.token, path: `/verify/${data.token}`, scope: data.scope, expires_at: data.expires_at }, { status: 201 });
 }
 
@@ -42,6 +43,6 @@ export async function PATCH(req: Request) {
   const { data, error } = await admin.from("passport_share_tokens").update({ revoked: true }).eq("id", id).eq("nurse_id", user.id).select("id").maybeSingle();
   if (error) return migrationGate(error) ?? NextResponse.json({ error: error.message }, { status: 500 });
   if (!data) return NextResponse.json({ error: "Not found" }, { status: 404 });
-  await admin.from("audit_log").insert({ actor_id: user.id, action: "revoke_passport_share", entity_type: "passport_share_token", entity_id: id }).then((r: any) => r, () => {});
+  await admin.from("audit_log").insert({ trace_id: await currentTraceId(), actor_id: user.id, action: "revoke_passport_share", entity_type: "passport_share_token", entity_id: id }).then((r: any) => r, () => {});
   return NextResponse.json({ ok: true });
 }
