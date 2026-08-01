@@ -2,6 +2,7 @@ import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { loadRootCause } from "@/lib/qie/root-cause";
+import { StartInvestigation, InvestigationPanel } from "./RootCauseActions";
 import { cardClass } from "@/components/ui/primitives";
 
 // QIE-005 — Root Cause & Causal Intelligence.
@@ -99,9 +100,12 @@ export default async function RootCausePage() {
                       <p className="text-sm text-gray-800 truncate">{i.description ?? i.incident_type ?? "Incident"}</p>
                       <p className="text-[10px] text-gray-400">{i.incident_type ?? "—"} · {new Date(i.created_at).toLocaleDateString()}</p>
                     </div>
-                    {i.severity && (
-                      <span className={`shrink-0 text-[10px] px-1.5 py-0.5 rounded ${SEV[String(i.severity)] ?? "bg-gray-100 text-gray-600"}`}>{i.severity}</span>
-                    )}
+                    <span className="flex items-center gap-2 shrink-0">
+                      {i.severity && (
+                        <span className={`text-[10px] px-1.5 py-0.5 rounded ${SEV[String(i.severity)] ?? "bg-gray-100 text-gray-600"}`}>{i.severity}</span>
+                      )}
+                      <StartInvestigation incidentId={i.id} label={i.description ?? i.incident_type ?? "Incident"} />
+                    </span>
                   </div>
                 ))}
                 {v.unanalysed.length > 25 && (
@@ -163,6 +167,12 @@ export default async function RootCausePage() {
                         ))}
                       </div>
                     )}
+                    {inv.capa_action_id && (
+                      <p className="text-[10px] text-[var(--cmp-text-success)] mt-1.5">
+                        A corrective action was opened from this finding.
+                      </p>
+                    )}
+                    <InvestigationPanel id={inv.id} status={inv.status} hasRootCause={inv.factors.some(f => f.is_root_cause)} />
                   </div>
                 ))}
               </div>
