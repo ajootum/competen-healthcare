@@ -83,20 +83,12 @@ export default async function DashboardLayout({ children }: { children: React.Re
     <div className="min-h-screen bg-gray-50 font-[family-name:var(--font-geist-sans)]">
       <MobileSidebar fullName={profile?.full_name ?? "Nurse"} role={profile?.role ?? "nurse"} isAdmin={profile?.role === "hospital_admin"} unread={unreadCount ?? 0} avatarUrl={profile?.avatar_url ?? null} />
 
-      <a href="#main-content" className="cmp-skip-link">Skip to main content</a>
-      <div className="hidden md:block md:ml-56">
-        <GlobalHeader
-          workspaceTitle="Dashboard"
-          workspaceHref="/dashboard"
-          user={header.user}
-          workspaces={header.workspaces}
-          units={header.units}
-          activeUnitId={header.activeUnitId}
-          notifications={header.notifications}
-          messages={header.messages}
-        />
-      </div>
-
+      {/* ONE header, one skip link. The PUI-002 roll-out (f053146) left this layout with two GlobalHeaders
+          stacked -- identical but for the title, one "Dashboard" and one "Personal Workspace" -- plus two
+          skip links pointing at the same #main-content, which is an accessibility fault in its own right.
+          "Personal Workspace" is the surviving title: it matches the banner directly beneath it and the
+          PW-014 universal-landing model, where /dashboard IS the Personal Workspace rather than a generic
+          dashboard. */}
       <a href="#main-content" className="cmp-skip-link">Skip to main content</a>
       <div className="hidden md:block md:ml-56">
         <GlobalHeader
