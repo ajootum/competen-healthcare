@@ -99,17 +99,21 @@ export const AUDIENCES: { label: string; img: string }[] = [
   { label: "Professional Councils", img: "/images/home/serve-councils.png" },
 ];
 
-// Photography extracted from the approved COMP-HOME-001 comp. NOTE THE SIZES: the comp is 1024x1536 for
-// the WHOLE page, so the hero crop is 205x330 and each audience tile 112x66. They are correct in content
-// and colour and will read fine at tile scale, but they are comp-resolution, not asset-resolution -- the
-// hero will look soft on a large display. Replacing any file at the same path is the whole fix; no code
-// changes. Named here so the limitation travels with the asset rather than living only in a commit message.
+// Photography. TWO DIFFERENT SOURCES, and the difference matters:
+//
+//  - hero / journey-nurse / journey-team come from the dedicated 1536x1024 photography sheet, so they are
+//    786x1016 and 730x500. Those are real asset resolution: displayed around 280px and 200px wide, they
+//    are being DOWN-sampled, which is what you want -- they stay sharp on a high-density display.
+//  - the audience tiles and the closing sunset still come from the 1024x1536 PAGE COMP, where each tile is
+//    only 112x66. They are the only source for those images and are slightly upscaled in place. Replacing
+//    any file at the same path is the entire fix; no code changes.
+//
+// Recorded here rather than only in a commit message so the caveat travels with the asset.
 export const PHOTOS = {
-  hero: "/images/home/hero-clinicians.png",
-  student: "/images/home/journey-student.png",
-  nurse: "/images/home/journey-nurse.png",
-  consultant: "/images/home/journey-consultant.png",
-  sunset: "/images/home/closing-sunset.png",
+  hero: "/images/home/hero-clinicians.png",          // 786x1016 — the tablet pair, kente pillar
+  nurse: "/images/home/journey-nurse.png",           // 730x500  — ward nurse with tablet
+  team: "/images/home/journey-team.png",             // 730x500  — two colleagues, kente pillar
+  sunset: "/images/home/closing-sunset.png",         // 435x95   — from the page comp
 };
 
 export type Metric = { value: string; label: string; sub: string };

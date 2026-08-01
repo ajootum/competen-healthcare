@@ -240,8 +240,8 @@ export default function Home() {
         {/* ── PERSONAL TO PROFESSIONAL ──────────────────────────────────────── */}
         <section id="journey" className={`${container} py-16 lg:py-20`}>
           <div className="grid lg:grid-cols-12 gap-6 items-stretch">
-            <PhotoSlot src={PHOTOS.student} className="hidden lg:block lg:col-span-2 rounded-2xl min-h-[300px]"
-              alt="A student nurse on campus" />
+            <PhotoSlot src={PHOTOS.nurse} className="hidden lg:block lg:col-span-2 rounded-2xl min-h-[300px]"
+              alt="A nurse on the ward reviewing records on a tablet" />
 
             <div className="lg:col-span-4">
               <h2 className="text-2xl font-bold tracking-tight text-gray-900 text-balance">{JOURNEY.title}</h2>
@@ -283,8 +283,8 @@ export default function Home() {
               </p>
             </div>
 
-            <PhotoSlot src={PHOTOS.consultant} className="hidden lg:block lg:col-span-2 rounded-2xl min-h-[300px]"
-              alt="A consultant physician on a hospital ward" />
+            <PhotoSlot src={PHOTOS.team} className="hidden lg:block lg:col-span-2 rounded-2xl min-h-[300px]"
+              alt="Two clinical colleagues talking outside a hospital" />
           </div>
         </section>
 
