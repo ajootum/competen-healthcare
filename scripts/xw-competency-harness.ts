@@ -380,6 +380,48 @@ async function main() {
     "paging every assessor in the hospital is how a queue gets ignored");
   check(/assessment_request_\$\{b\.action\}|assessment_requested/.test(arRoute), "every transition is audited");
 
+  // ── 2e. TRACEABILITY (XWI P2-15) ─────────────────────────────────────────
+  head("2e. TRACE IDS  (can you join an act to what it caused?)");
+
+  // The column existed on domain_events since migration 102 and nothing ever wrote it -- while
+  // src/lib/cgr/integration.ts counted how many events had one and reported it as a traceability figure.
+  // A metric measuring a field with no writer reads as "no tracing" rather than "not wired".
+  const { error: aTrace } = await admin.from("audit_log").select("trace_id").limit(1);
+  const { error: eTrace } = await admin.from("domain_events").select("trace_id").limit(1);
+  check(!aTrace, "audit_log carries a trace_id", aTrace?.message);
+  check(!eTrace, "domain_events carries a trace_id", eTrace?.message);
+
+  // Same type on both sides, or the join that the whole thing exists for silently degrades.
+  const probe = `xwtrace-${Date.now()}`;
+  const wrote = await admin.from("audit_log").insert({ action: "xw_trace_probe", entity_type: "probe", trace_id: probe }).select("id").single();
+  if (wrote.error) check(false, "a trace id round-trips through audit_log", wrote.error.message);
+  else {
+    written.push({ table: "audit_log", id: wrote.data.id });
+    const { data: found } = await admin.from("audit_log").select("id").eq("trace_id", probe);
+    check((found ?? []).length === 1, "an audit row is retrievable BY its trace id");
+  }
+
+  const auth = readFileSync(join(process.cwd(), "src/lib/api-auth.ts"), "utf8");
+  check(/traceId: crypto\.randomUUID\(\)/.test(auth),
+    "one trace id is minted per request in getCaller",
+    "minted anywhere further in and it has to be threaded by hand, which means forgotten");
+
+  // The spine: an act and the event it raises must carry the SAME id, or there is nothing to join.
+  for (const [label, file] of [
+    ["deployment override", "src/app/api/operations/shift-staff/route.ts"],
+    ["patient-assignment override", "src/app/api/operations/assignments/route.ts"],
+    ["shift close-out", "src/app/api/operations/shifts/route.ts"],
+    ["assessment request", "src/app/api/competency/assessment-requests/route.ts"],
+  ] as const) {
+    const src = readFileSync(join(process.cwd(), file), "utf8");
+    check(/trace_id: c\.traceId/.test(src), `${label}: the audit row carries the request's trace id`);
+  }
+  const deploySrc = readFileSync(join(process.cwd(), "src/app/api/operations/shift-staff/route.ts"), "utf8");
+  const assignSrc = readFileSync(join(process.cwd(), "src/app/api/operations/assignments/route.ts"), "utf8");
+  check(/c\.traceId\)/.test(deploySrc) && /c\.traceId\)/.test(assignSrc),
+    "both overrides pass the SAME id to the event they raise",
+    "an audit row and its event with different ids cannot be joined, which is the whole point");
+
   // ── 3. SHIFT CLOSE-OUT (XWI P2-14) ───────────────────────────────────────
   head("3. SHIFT CLOSE-OUT  (outstanding work is not closed over silently)");
 

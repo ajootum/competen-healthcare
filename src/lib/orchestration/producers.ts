@@ -148,11 +148,13 @@ export function emitPatientAssignmentOverride(
   args: { assignmentId: string; patientId: string; staffId: string; hospitalId: string | null; currency: any },
   actorId: string | null,
   actorName?: string | null,
+  traceId?: string | null,
 ) {
   const cy = args.currency ?? {};
   return emitDomainEvent(admin, {
     event_type: EVENT.SHIFT_ASSIGNMENT_CHANGED,
     subject_type: "op_patient_assignment", subject_id: args.assignmentId,
+    trace_id: traceId ?? null,
     hospital_id: args.hospitalId ?? null,
     actor_id: actorId, actor_name: actorName ?? null,
     sensitivity: "clinical",
@@ -165,11 +167,12 @@ export function emitPatientAssignmentOverride(
   });
 }
 
-export function emitShiftAssignmentChanged(admin: any, args: { shiftId: string; staffId: string; hospitalId: string | null; readiness: any }, actorId: string | null, actorName?: string | null) {
+export function emitShiftAssignmentChanged(admin: any, args: { shiftId: string; staffId: string; hospitalId: string | null; readiness: any }, actorId: string | null, actorName?: string | null, traceId?: string | null) {
   const r = args.readiness ?? {};
   return emitDomainEvent(admin, {
     event_type: EVENT.SHIFT_ASSIGNMENT_CHANGED,
     subject_type: "op_shift_staff", subject_id: `${args.shiftId}:${args.staffId}`,
+    trace_id: traceId ?? null,
     hospital_id: args.hospitalId ?? null,
     actor_id: actorId, actor_name: actorName ?? null,
     sensitivity: "clinical",

@@ -79,7 +79,7 @@ export async function POST(req: Request) {
   }
 
   await admin.from("audit_log").insert({
-    actor_id: c.userId, action: "assessment_requested", entity_type: "assessment_requests", entity_id: data.id,
+    trace_id: c.traceId, actor_id: c.userId, action: "assessment_requested", entity_type: "assessment_requests", entity_id: data.id,
     entity_name: subject?.full_name ?? null, hospital_id: subject?.hospital_id ?? null,
     new_value: { nurse_id: b.nurse_id, competency_id: b.competency_id ?? null, urgency: data.urgency, directed: !!data.assessor_id },
   });
@@ -137,7 +137,7 @@ export async function PATCH(req: Request) {
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
   await admin.from("audit_log").insert({
-    actor_id: c.userId, action: `assessment_request_${b.action}`, entity_type: "assessment_requests",
+    trace_id: c.traceId, actor_id: c.userId, action: `assessment_request_${b.action}`, entity_type: "assessment_requests",
     entity_id: id, hospital_id: row.hospital_id, new_value: { from: row.status, to: update.status },
   });
 

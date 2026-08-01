@@ -92,7 +92,7 @@ export async function PATCH(req: Request) {
   // An acknowledged close-out is a governed act, so it leaves a record of exactly what was outstanding.
   if (outstanding && outstanding.total > 0) {
     await admin.from("audit_log").insert({
-      actor_id: c.userId, action: "shift_closed_with_outstanding_work",
+      trace_id: c.traceId, actor_id: c.userId, action: "shift_closed_with_outstanding_work",
       entity_type: "op_shifts", entity_id: id, entity_name: outstanding.summary,
       new_value: outstanding, hospital_id: row.hospital_id,
       notes: b.acknowledge_reason?.trim() || null,

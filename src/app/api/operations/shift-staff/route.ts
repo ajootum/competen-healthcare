@@ -33,13 +33,13 @@ export async function POST(req: Request) {
     { onConflict: "shift_id,staff_id" },
   ).select().single();
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  await admin.from("audit_log").insert({ actor_id: c.userId, action: readiness.blocked ? "deploy_staff_override" : "deploy_staff", entity_type: "op_shift", entity_id: b.shift_id, hospital_id: shift.hospital_id, new_value: { staff_id: b.staff_id, role: b.role, readiness_override: readiness.blocked || undefined, critical_failures: readiness.criticalFailures || undefined, expired: readiness.expiredCount || undefined } });
+  await admin.from("audit_log").insert({ trace_id: c.traceId, actor_id: c.userId, action: readiness.blocked ? "deploy_staff_override" : "deploy_staff", entity_type: "op_shift", entity_id: b.shift_id, hospital_id: shift.hospital_id, new_value: { staff_id: b.staff_id, role: b.role, readiness_override: readiness.blocked || undefined, critical_failures: readiness.criticalFailures || undefined, expired: readiness.expiredCount || undefined } });
 
   // Cross-workspace: a governed override past the COMP-027 readiness gate must reach the Competency Office's
   // remediation loop. Emit shift.assignment.changed → the delivery consumer opens remediation for the worker.
   if (readiness.blocked && b.override) {
     const me = await admin.from("profiles").select("full_name").eq("id", c.userId).maybeSingle();
-    await emitShiftAssignmentChanged(admin, { shiftId: b.shift_id, staffId: b.staff_id, hospitalId: shift.hospital_id, readiness }, c.userId, me.data?.full_name ?? null);
+    await emitShiftAssignmentChanged(admin, { shiftId: b.shift_id, staffId: b.staff_id, hospitalId: shift.hospital_id, readiness }, c.userId, me.data?.full_name ?? null, c.traceId);
   }
 
   return NextResponse.json({ ...data, readiness: (readiness.warning || readiness.blocked) ? readiness : undefined }, { status: 201 });

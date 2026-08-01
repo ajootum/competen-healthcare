@@ -70,7 +70,7 @@ export async function POST(req: Request) {
     } else data = r.data;
   }
   await admin.from("audit_log").insert({
-    actor_id: c.userId, action: "assign_patient", entity_type: "op_patient_assignment", entity_id: data.id,
+    trace_id: c.traceId, actor_id: c.userId, action: "assign_patient", entity_type: "op_patient_assignment", entity_id: data.id,
     entity_name: patient.label, hospital_id: patient.hospital_id,
     new_value: { staff_id: b.staff_id, type: assignmentType, competency_validated: competencyValidated, override: !competencyValidated, awaiting_acceptance: pendingFlow },
   });
@@ -82,7 +82,7 @@ export async function POST(req: Request) {
     await emitPatientAssignmentOverride(admin, {
       assignmentId: data.id, patientId: b.patient_id, staffId: b.staff_id,
       hospitalId: patient.hospital_id, currency,
-    }, c.userId, me.data?.full_name ?? null);
+    }, c.userId, me.data?.full_name ?? null, c.traceId);
   }
   if (pendingFlow && b.staff_id !== c.userId) {
     await notify([b.staff_id], {

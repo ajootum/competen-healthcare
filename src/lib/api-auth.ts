@@ -15,6 +15,8 @@ export type Caller = {
   roles: string[];
   hospitalId: string | null;
   organisationId: string | null;
+  /** one id per request — joins the audit row, the event it raises, and the consumer's reaction */
+  traceId: string;
 };
 
 export const isResponse = (x: unknown): x is NextResponse => x instanceof NextResponse;
@@ -47,7 +49,10 @@ export async function getCaller(): Promise<Caller | NextResponse> {
   const admin = createAdminClient();
   const { data: me } = await admin.from("profiles").select("role, roles, hospital_id, organisation_id").eq("id", user.id).single();
   const roles = ((me?.roles?.length ? me.roles : [me?.role]) as (string | null)[]).filter(Boolean) as string[];
-  return { admin, userId: user.id, role: (me?.role as string) ?? "", roles, hospitalId: (me?.hospital_id as string) ?? null, organisationId: (me?.organisation_id as string) ?? null };
+  // XWI P2-15 — one id per request, so the audit row, the domain event it raises and whatever the consumer
+  // does next can be joined. Minted here because getCaller is the single door every authenticated write
+  // goes through; anything further in would have to be threaded by hand and would be forgotten.
+  return { admin, userId: user.id, role: (me?.role as string) ?? "", roles, hospitalId: (me?.hospital_id as string) ?? null, organisationId: (me?.organisation_id as string) ?? null, traceId: crypto.randomUUID() };
 }
 
 // Require the caller to hold at least one of `roles`; null = allowed.
