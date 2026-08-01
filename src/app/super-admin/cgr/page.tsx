@@ -1,6 +1,7 @@
 import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import Link from "next/link";
+import { Layer, Mod } from "../_engines";
 
 // CGR-000 — Competency Governance & Regulation Platform. The GOVERNANCE operating system for competencies:
 // it ensures every competency is valid, owned, evidence-backed, regulatory-aligned and auditable. This hub
@@ -11,45 +12,10 @@ import Link from "next/link";
 // into one source of truth. No migration — a governance view over stores the rest of Competen already produces.
 export const dynamic = "force-dynamic";
 
-type Status = "real" | "linked" | "partial" | "gap";
-type Mod = { code: string; icon: string; label: string; desc: string; href?: string; status: Status };
 
-const BADGE: Record<Status, { text: string; cls: string }> = {
-  real: { text: "Live", cls: "text-emerald-700 bg-[var(--cmp-surface-success)] border-[var(--cmp-color-success)]" },
-  linked: { text: "Linked", cls: "text-[var(--cmp-text-information)] bg-[var(--cmp-surface-information)] border-[var(--cmp-color-information)]" },
-  partial: { text: "Partial", cls: "text-[var(--cmp-text-warning)] bg-[var(--cmp-surface-warning)] border-[var(--cmp-color-warning)]" },
-  gap: { text: "Planned", cls: "text-gray-400 bg-gray-50 border-gray-100" },
-};
 
-function EngineCard({ m }: { m: Mod }) {
-  const b = BADGE[m.status];
-  const inner = (
-    <>
-      <div className="flex items-center gap-2.5 mb-1.5">
-        <span className="text-xl shrink-0">{m.icon}</span>
-        <div className="min-w-0">
-          <p className="text-[9px] font-bold text-gray-300 tracking-widest">{m.code}</p>
-          <p className={`font-bold text-sm leading-tight ${m.status === "gap" ? "text-gray-500" : "text-gray-900 group-hover:text-emerald-700"}`}>{m.label}</p>
-        </div>
-        <span className={`ml-auto shrink-0 text-[8px] font-bold uppercase tracking-wide border px-1.5 py-0.5 rounded ${b.cls}`}>{b.text}</span>
-      </div>
-      <p className="text-[11px] text-gray-400 leading-relaxed">{m.desc}</p>
-    </>
-  );
-  const base = "bg-white rounded-xl border border-gray-100 p-4 block";
-  return m.href
-    ? <Link href={m.href} className={`${base} hover:border-[var(--cmp-color-success)] hover:shadow-sm transition-all group`}>{inner}</Link>
-    : <div className={`${base} opacity-80`}>{inner}</div>;
-}
 
-function Layer({ title, mods }: { title: string; mods: Mod[] }) {
-  return (
-    <>
-      <h2 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3">{title}</h2>
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3.5 mb-7">{mods.map(m => <EngineCard key={m.code} m={m} />)}</div>
-    </>
-  );
-}
+
 
 export default async function CgrPlatformPage() {
   const supabase = await createClient();
@@ -150,10 +116,10 @@ export default async function CgrPlatformPage() {
         {nGap > 0 && <span className="font-semibold text-gray-400 bg-gray-50 border border-gray-100 rounded-lg px-2.5 py-1">{nGap} planned</span>}
       </div>
 
-      <Layer title="Core Governance · CGR-001 … 007" mods={CORE} />
-      <Layer title="Governance Operations · CGR-008 … 015" mods={OPS} />
-      <Layer title="Analytics, Testing & Release · CGR-016 … 019" mods={DELIVERY} />
-      <Layer title="Intelligence & Ecosystem · CGR-020 … 030" mods={ECO} />
+      <Layer accent="emerald" title="Core Governance · CGR-001 … 007" mods={CORE} />
+      <Layer accent="emerald" title="Governance Operations · CGR-008 … 015" mods={OPS} />
+      <Layer accent="emerald" title="Analytics, Testing & Release · CGR-016 … 019" mods={DELIVERY} />
+      <Layer accent="emerald" title="Intelligence & Ecosystem · CGR-020 … 030" mods={ECO} />
 
       <div className="bg-[var(--cmp-surface-success)] border border-[var(--cmp-color-success)] rounded-xl p-4">
         <p className="text-[11px] text-emerald-900">

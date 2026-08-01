@@ -109,6 +109,37 @@ function main() {
       tokens(shell).has("p-3.5") && !tokens(shell).has("p-4"));
   }
 
+  // ── The super-admin engine index: one component, four accents ──
+  // Four section landings shared an identical Layer but each had its OWN EngineCard, differing only in
+  // accent colour. Making the accent a prop is the only way the duplication could be removed — but it
+  // means one component now renders four sections, so each accent must still be exactly what its page had.
+  // These values are transcribed from the pages before the refactor; if someone "tidies" the palette, this
+  // fails rather than four sections quietly changing colour.
+  const eng = readFileSync(join(ROOT, "src/app/super-admin/_engines.tsx"), "utf8");
+  const EXPECTED: Record<string, [string, string]> = {
+    indigo:      ["group-hover:text-indigo-700", "hover:border-indigo-200"],
+    emerald:     ["group-hover:text-emerald-700", "hover:border-[var(--cmp-color-success)]"],
+    violet:      ["group-hover:text-violet-700", "hover:border-violet-200"],
+    information: ["group-hover:text-[var(--cmp-text-information)]", "hover:border-[var(--cmp-color-information)]"],
+  };
+  ok("the engine index module exists", /export function EngineCard/.test(eng) && /export function Layer/.test(eng));
+  const wrongAccents = Object.entries(EXPECTED).filter(([name, [label, border]]) => {
+    const row = eng.match(new RegExp(`${name}:\\s*\\{([^}]*)\\}`));
+    return !row || !row[1].includes(label) || !row[1].includes(border);
+  }).map(([n]) => n);
+  ok("every accent renders exactly what its section rendered before", wrongAccents.length === 0, wrongAccents.join(", "));
+  // Each page must pass its own accent — a missing prop silently falls back to indigo.
+  const pages: [string, string][] = [
+    ["src/app/super-admin/assurance/page.tsx", "indigo"], ["src/app/super-admin/cgr/page.tsx", "emerald"],
+    ["src/app/super-admin/delivery/page.tsx", "violet"], ["src/app/super-admin/performance/page.tsx", "information"],
+  ];
+  const unpassed = pages.filter(([f, a]) => {
+    const src = readFileSync(join(ROOT, f), "utf8");
+    const uses = [...src.matchAll(/<Layer\b[^>]*/g)].map(m => m[0]);
+    return uses.length > 0 && !uses.every(u => u.includes(`accent="${a}"`));
+  }).map(([f]) => f);
+  ok("every section passes its own accent, none relies on the default", unpassed.length === 0, unpassed.join(", "));
+
   // ── The diff ──
   let diff = "";
   try { diff = git("diff", "-U0", ref, "--", "src/app"); } catch { /* no diff */ }

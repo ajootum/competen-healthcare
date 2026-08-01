@@ -1,6 +1,7 @@
 import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import Link from "next/link";
+import { Layer, Mod } from "../_engines";
 
 // CAPA-000 — Competency Assurance Platform. The ASSURANCE layer: continuously evaluates whether the competency
 // machinery itself (frameworks, assessments, evidence, assessors, governance) stays valid, reliable and compliant.
@@ -11,48 +12,13 @@ import Link from "next/link";
 
 export const dynamic = "force-dynamic";
 
-type Status = "real" | "linked" | "partial" | "gap";
-type Mod = { code: string; icon: string; label: string; desc: string; href?: string; status: Status };
 
-const BADGE: Record<Status, { text: string; cls: string }> = {
-  real: { text: "Live", cls: "text-teal-700 bg-teal-50 border-teal-100" },
-  linked: { text: "Linked", cls: "text-[var(--cmp-text-information)] bg-[var(--cmp-surface-information)] border-[var(--cmp-color-information)]" },
-  partial: { text: "Partial", cls: "text-[var(--cmp-text-warning)] bg-[var(--cmp-surface-warning)] border-[var(--cmp-color-warning)]" },
-  gap: { text: "Planned", cls: "text-gray-400 bg-gray-50 border-gray-100" },
-};
 
-function EngineCard({ m }: { m: Mod }) {
-  const b = BADGE[m.status];
-  const inner = (
-    <>
-      <div className="flex items-center gap-2.5 mb-1.5">
-        <span className="text-xl shrink-0">{m.icon}</span>
-        <div className="min-w-0">
-          <p className="text-[9px] font-bold text-gray-300 tracking-widest">{m.code}</p>
-          <p className={`font-bold text-sm leading-tight ${m.status === "gap" ? "text-gray-500" : "text-gray-900 group-hover:text-indigo-700"}`}>{m.label}</p>
-        </div>
-        <span className={`ml-auto shrink-0 text-[8px] font-bold uppercase tracking-wide border px-1.5 py-0.5 rounded ${b.cls}`}>{b.text}</span>
-      </div>
-      <p className="text-[11px] text-gray-400 leading-relaxed">{m.desc}</p>
-    </>
-  );
-  const base = "bg-white rounded-xl border border-gray-100 p-4 block";
-  return m.href
-    ? <Link href={m.href} className={`${base} hover:border-indigo-200 hover:shadow-sm transition-all group`}>{inner}</Link>
-    : <div className={`${base} opacity-80`}>{inner}</div>;
-}
+
 
 // Date.now() must live in a module helper, not the component body (react-hooks/purity blocks direct render calls).
 const horizonISO = (days: number) => new Date(Date.now() + days * 864e5).toISOString().slice(0, 10);
 
-function Layer({ title, mods }: { title: string; mods: Mod[] }) {
-  return (
-    <>
-      <h2 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3">{title}</h2>
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3.5 mb-7">{mods.map(m => <EngineCard key={m.code} m={m} />)}</div>
-    </>
-  );
-}
 
 export default async function AssurancePlatformPage() {
   const supabase = await createClient();
@@ -133,10 +99,10 @@ export default async function AssurancePlatformPage() {
         {nGap > 0 && <span className="font-semibold text-gray-400 bg-gray-50 border border-gray-100 rounded-lg px-2.5 py-1">{nGap} planned</span>}
       </div>
 
-      <Layer title="Rules & Audit · CAPA-001/002" mods={RULES_AUDIT} />
-      <Layer title="Assessment & Evidence Assurance · CAPA-003/004/005" mods={ASSESS_EVIDENCE} />
-      <Layer title="Drift & Compliance · CAPA-006/007" mods={DRIFT_COMPLIANCE} />
-      <Layer title="Action & Intelligence · CAPA-008/009/010" mods={ACTION_INTEL} />
+      <Layer accent="indigo" title="Rules & Audit · CAPA-001/002" mods={RULES_AUDIT} />
+      <Layer accent="indigo" title="Assessment & Evidence Assurance · CAPA-003/004/005" mods={ASSESS_EVIDENCE} />
+      <Layer accent="indigo" title="Drift & Compliance · CAPA-006/007" mods={DRIFT_COMPLIANCE} />
+      <Layer accent="indigo" title="Action & Intelligence · CAPA-008/009/010" mods={ACTION_INTEL} />
 
       <div className="bg-indigo-50 border border-indigo-100 rounded-xl p-4">
         <p className="text-[11px] text-indigo-900">
