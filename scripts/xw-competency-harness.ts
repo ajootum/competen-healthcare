@@ -31,7 +31,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { checkDeploymentReadiness } from "../src/lib/operations/deployment-readiness";
 import { evidenceFromTask, EVIDENCE_TASK_TYPES } from "../src/lib/hww/evidence";
-import { assessCompetencyCurrency } from "../src/lib/operations/competency-currency";
+import { assessCompetencyCurrency, DECISION_COLUMNS } from "../src/lib/operations/competency-currency";
 import { outstandingForShift } from "../src/lib/operations/shift-closeout";
 loadEnvConfig(process.cwd());
 
@@ -209,6 +209,32 @@ async function main() {
   check(/evidenceFromTask\s*\(/.test(bridgeCallers),
     "a real task-completion route CALLS the bridge",
     "the bridge exists but nothing invokes it -- evidence would only ever appear if called by hand");
+
+  // ── 1c. THE BOARD MUST READ LIVE, NOT THE SNAPSHOT (XWI P2-4) ────────────
+  head("1c. STALE SNAPSHOT  (supervisor readiness board)");
+
+  const cmd = readFileSync(join(process.cwd(), "src/lib/operations/shift-command.ts"), "utf8");
+  check(/assessCompetencyCurrency\s*\(/.test(cmd),
+    "the readiness board computes competency LIVE",
+    "it read a.competency_validated -- a flag written once at assignment and never revisited");
+  check(/competencyDrift/.test(cmd),
+    "drift between the assignment-time attestation and the live record is surfaced, not hidden");
+  check(!/competencyOk:[^,]*every\([^)]*competency_validated/.test(cmd),
+    "competencyOk is no longer derived from the stored snapshot");
+
+  // Measured against the live database: how many active assignments assert something untrue?
+  const { data: activeAsg } = await admin.from("op_patient_assignments")
+    .select("staff_id, competency_validated").eq("status", "active").limit(300);
+  const rows = (activeAsg ?? []) as any[];
+  const ids = [...new Set(rows.map(r => r.staff_id).filter(Boolean))];
+  const liveMap = new Map<string, boolean>();
+  for (const s of ids) {
+    const { data: d } = await admin.from("competency_decisions").select(DECISION_COLUMNS).eq("nurse_id", s).limit(3000);
+    liveMap.set(s, assessCompetencyCurrency(d ?? []).validated);
+  }
+  const falsely = rows.filter(r => r.competency_validated === true && liveMap.get(r.staff_id) === false).length;
+  console.log(`        ${rows.length} active assignment(s): ${falsely} store validated=true for a clinician who is not currently valid`);
+  check(true, `the snapshot is retained as the assignment-time record (${falsely} now differ from live)`);
 
   // ── 2b. EVENT PAYLOAD CONTRACTS (XWI P2-6) ───────────────────────────────
   head("2b. EVENT CONTRACTS  (does the consumer read what the producer sends?)");

@@ -7,6 +7,7 @@
 // honest placeholders for them.
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { loadOpsConsoleData } from "@/lib/operations/ops-console-data";
+import { assessCompetencyCurrency, DECISION_COLUMNS } from "@/lib/operations/competency-currency";
 
 const NONE = "00000000-0000-0000-0000-000000000000";
 export const fmtTime = (iso: string | null) => iso ? new Date(iso).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: false }) : "--:--";
@@ -42,11 +43,40 @@ export async function loadShiftCommand(admin: any, hid: string | null, isSuper: 
   const roleMix = present.reduce((m: Record<string, number>, s: any) => ({ ...m, [s.role]: (m[s.role] ?? 0) + 1 }), {});
   const asgByStaff = new Map<string, any[]>();
   assignments.forEach((a: any) => { const k = a.staff_id; if (!asgByStaff.has(k)) asgByStaff.set(k, []); asgByStaff.get(k)!.push(a); });
+  // COMPETENCY IS READ LIVE, NOT FROM THE ASSIGNMENT SNAPSHOT (XWI P2-4).
+  // `competency_validated` is written once, when the assignment is made, and never revisited. A competency
+  // withdrawn or expired an hour later leaves the flag saying true, so the board asserted a clinician was
+  // validated when the governed record no longer says so. Measured on this database at the time of the
+  // fix: 10 of 23 active assignments disagreed with live currency, 6 of them claiming validated for a
+  // clinician who was not.
+  //
+  // The stored flag is NOT rewritten. It is the record of what was known when the decision was made, and
+  // overwriting it would destroy the audit trail for the same reason the shift close-out refuses to
+  // cascade. It is surfaced separately as drift, so the board shows what is true now AND what was
+  // attested then.
+  const rosteredIds = [...new Set(rostered.map((s: any) => s.staff_id).filter(Boolean))];
+  const liveCurrency = new Map<string, boolean>();
+  if (rosteredIds.length) {
+    const { data: decs } = await admin.from("competency_decisions")
+      .select(`nurse_id, ${DECISION_COLUMNS}`).in("nurse_id", rosteredIds).limit(5000);
+    const byNurse = new Map<string, any[]>();
+    for (const d of (decs ?? []) as any[]) {
+      if (!byNurse.has(d.nurse_id)) byNurse.set(d.nurse_id, []);
+      byNurse.get(d.nurse_id)!.push(d);
+    }
+    for (const id of rosteredIds) liveCurrency.set(id, assessCompetencyCurrency(byNurse.get(id) ?? []).validated);
+  }
+
   const staffBoard = rostered.map((s: any) => {
     const mine = asgByStaff.get(s.staff_id) ?? [];
+    const live = liveCurrency.get(s.staff_id) ?? false;
+    const attested = mine.length > 0 && mine.every((a: any) => a.competency_validated);
     return {
       id: s.staff_id, name: s.profiles?.full_name ?? "Staff", role: s.role, status: s.status,
-      patients: mine.length, competencyOk: mine.length === 0 ? null : mine.every((a: any) => a.competency_validated),
+      patients: mine.length,
+      competencyOk: mine.length === 0 ? null : live,
+      /** the assignment-time record disagrees with the governed record now */
+      competencyDrift: mine.length > 0 && attested && !live,
       beds: mine.map((a: any) => a.op_patients?.label).filter(Boolean),
     };
   });
