@@ -6,6 +6,8 @@ import NavGroup from "@/components/NavGroup";
 import SidebarToggle from "@/components/SidebarToggle";
 import { type AppRole } from "@/lib/roles";
 import GlobalHeader from "@/components/platform/GlobalHeader";
+import CommandPalette from "./CommandPalette";
+import Favourites from "./Favourites";
 import { loadHeaderContext } from "@/lib/platform/header";
 import { buildShiftCard, loadShiftWidget } from "@/lib/hww/my-shift";
 import { resolveHwwNavigation, resolveUnitContext, type ResolvedItem } from "@/lib/hww/navigation";
@@ -98,6 +100,17 @@ export default async function HealthcareWorkerLayout({ children }: { children: R
   });
 
   const allItems: NavItem[] = NAV.flatMap(s => s.entries.flatMap(e => ("item" in e ? [e.item] : e.items)));
+
+  // s19 favourites. Pins store KEYS; they are resolved here against the nav this person actually has, so a
+  // pin to a module the hospital has since disabled simply stops appearing instead of rendering a dead
+  // chip. Fail-soft: no table (migration 185 not applied) resolves to no pins, and the bar says so rather
+  // than the sidebar breaking.
+  const pinnable = allItems.filter(i => i.href && !i.soon).map(i => ({ key: i.key, label: i.label, href: i.href!, icon: i.icon }));
+  const pinRes = await admin.from("user_pinned_modules")
+    .select("module_key, sort_order").eq("user_id", user.id).eq("workspace", "healthcare-worker")
+    .order("sort_order", { ascending: true }).limit(8).then((r: any) => r, () => ({ data: null }));
+  const pinnedKeys = ((pinRes.data ?? []) as any[]).map(r => r.module_key as string);
+  const pinned = pinnedKeys.map(k => pinnable.find(p => p.key === k)).filter(Boolean) as typeof pinnable;
   const mobileItems = [...new Map(allItems.filter(i => i.href && !i.soon).map(i => [i.href!.split(/[?#]/)[0], i] as const)).values()];
 
   const renderItem = ({ key, label, href, icon, exact, soon, badge, severity }: NavItem) => soon || !href ? (
@@ -167,6 +180,12 @@ export default async function HealthcareWorkerLayout({ children }: { children: R
               <span className="block text-emerald-300/60 text-[9px] leading-tight">Healthcare Worker Workspace</span>
             </span>
           </Link>
+
+          {/* s18 command palette + s19 favourites, above the nav: search is how you reach something you
+              can name, favourites is how you reach something you use constantly, and the sections below
+              are for everything else. */}
+          <div className="mb-2"><CommandPalette /></div>
+          <Favourites pinned={pinned} options={pinnable} />
 
           <nav className="flex flex-col gap-0.5 flex-1 overflow-y-auto">
             {NAV.map((s, i) => {

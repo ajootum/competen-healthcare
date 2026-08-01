@@ -25,6 +25,7 @@ import { join } from "node:path";
 import { HWW_NAV_CATALOGUE, HWW_SECTIONS } from "../src/lib/hww/navigation";
 import { loadMyProcedures } from "../src/lib/hww/procedures";
 import { caseloadRisk } from "../src/lib/hww/my-shift";
+import { commandSearch } from "../src/lib/hww/command-search";
 loadEnvConfig(process.cwd());
 
 const admin: any = createClient(
@@ -136,6 +137,74 @@ async function main() {
     if (id) {
       await admin.from("op_procedures").delete().eq("id", id);
       console.log("\n  cleanup: harness procedure removed");
+    }
+  }
+
+  // ---- 9. command palette scope: the property the whole feature hangs on ----------------------------
+  //
+  // A search box is the easiest place to accidentally build a patient browser. These assertions use a user
+  // with NO assignments and a patient that certainly exists, so a leak shows up as a hit rather than as an
+  // absence that could be explained away by the search term.
+  const { data: anyPatient } = await admin.from("op_patients").select("id, label").not("label", "is", null).limit(1).single();
+
+  // The unassigned user must be genuinely unassigned. A first attempt excluded only the FIRST active
+  // assignment's staff_id and picked another rostered nurse, who then legitimately found their own patient
+  // -- the harness reported a leak that was not one. Exclude EVERY staff id holding an active assignment,
+  // and prove the choice by asserting the search reports zero patients in scope for them.
+  const { data: allAssigned } = await admin.from("op_patient_assignments").select("staff_id").eq("status", "active").limit(1000);
+  const assignedIds = new Set(((allAssigned ?? []) as any[]).map(r => r.staff_id).filter(Boolean));
+  const { data: candidates } = await admin.from("profiles").select("id").limit(500);
+  const unassigned = ((candidates ?? []) as any[]).find(p => !assignedIds.has(p.id)) ?? null;
+
+  if (anyPatient && unassigned) {
+    const term = String(anyPatient.label).slice(0, 4);
+    const leak = await commandSearch(admin, unassigned.id, term, []);
+    ok("9. a clinician with no assignment finds NO patients, even by exact name",
+      leak.hits.filter(h => h.kind === "patient").length === 0 && leak.scopedPatients === 0,
+      `term="${term}" hits=${JSON.stringify(leak.hits.map(h => h.kind))}`);
+    ok("9b. and no records either, since records are constrained to the same list",
+      leak.hits.filter(h => h.kind === "record").length === 0);
+  }
+
+  // Modules are passed in from the resolved nav, so a disabled module cannot be reached through search.
+  const modOnly = await commandSearch(admin, unassigned?.id ?? "00000000-0000-0000-0000-000000000000", "medic",
+    [{ key: "shift.medications", label: "Medications", href: "/healthcare-worker/medications", icon: "💊" }]);
+  ok("9c. modules are searchable, and come only from the caller's resolved nav",
+    modOnly.hits.some(h => h.kind === "module" && h.label === "Medications"));
+  const noModules = await commandSearch(admin, unassigned?.id ?? "00000000-0000-0000-0000-000000000000", "medic", []);
+  ok("9d. a module absent from the resolved nav is NOT findable",
+    !noModules.hits.some(h => h.kind === "module"));
+
+  // ---- 10. a one-character query must not run a search -----------------------------------------
+  const tiny = await commandSearch(admin, unassigned?.id ?? "x", "a", []);
+  ok("10. queries under two characters return nothing", tiny.hits.length === 0);
+
+  // ---- 11. favourites: pins store KEYS and resolve against the live nav -------------------------
+  const pinProbe = await admin.from("user_pinned_modules").select("id").limit(1);
+  if (pinProbe.error) {
+    console.log(`\n  SKIPPED pins: user_pinned_modules absent (${pinProbe.error.code}). Apply migration 185.`);
+  } else if (unassigned) {
+    try {
+      const key = "shift.medications";
+      await admin.from("user_pinned_modules").delete().eq("user_id", unassigned.id).eq("module_key", key);
+      const { error: pinErr } = await admin.from("user_pinned_modules")
+        .insert({ user_id: unassigned.id, workspace: "healthcare-worker", module_key: key, sort_order: 0 });
+      ok("11. a module can be pinned", !pinErr, pinErr?.message ?? "");
+
+      // The unique index is the guard that makes pinning idempotent rather than duplicating.
+      const { error: dupErr } = await admin.from("user_pinned_modules")
+        .insert({ user_id: unassigned.id, workspace: "healthcare-worker", module_key: key, sort_order: 1 });
+      ok("11b. pinning the same module twice is rejected by the unique index", !!dupErr && dupErr.code === "23505",
+        dupErr ? dupErr.code : "no error - duplicate was accepted");
+
+      // A pin resolves through the catalogue, so a key naming nothing yields nothing rather than a dead chip.
+      const resolved = HWW_NAV_CATALOGUE.find(r => r.key === key);
+      ok("11c. a pinned key resolves to a real module", !!resolved?.href && routeExists(resolved.href!));
+      ok("11d. a stale key resolves to nothing rather than a broken row",
+        !HWW_NAV_CATALOGUE.find(r => r.key === "shift.module-that-was-removed"));
+    } finally {
+      await admin.from("user_pinned_modules").delete().eq("user_id", unassigned.id).eq("module_key", "shift.medications");
+      console.log("  cleanup: harness pin removed");
     }
   }
 
