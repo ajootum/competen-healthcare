@@ -31,6 +31,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { checkDeploymentReadiness } from "../src/lib/operations/deployment-readiness";
 import { evidenceFromTask, EVIDENCE_TASK_TYPES } from "../src/lib/hww/evidence";
+import { assessCompetencyCurrency } from "../src/lib/operations/competency-currency";
 loadEnvConfig(process.cwd());
 
 const admin = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!, {
@@ -117,6 +118,47 @@ async function main() {
   check(/checkDeploymentReadiness\s*\(/.test(route), "the deployment route CALLS the gate");
   check(/readiness\.blocked/.test(route) && /409/.test(route), "a blocked deployment is refused with 409, not logged and allowed");
   check(/override/i.test(route), "an override path exists, so the gate is a control rather than a dead end");
+
+  // ── 1b. A REVOCATION MUST BE VISIBLE TO THE ASSIGNMENT GATE (XWI P2-2) ───
+  head("1b. SUPERSEDED DECISIONS  (patient-assignment competency gate)");
+
+  // Pure, so the cases that matter can be stated exactly rather than arranged in the database.
+  const COMP = "11111111-1111-1111-1111-111111111111";
+  const passV1 = { id: "a", competency_id: COMP, outcome: "competent", version_num: 1, effective_date: "2025-01-01" };
+  const revokeV2 = { id: "b", competency_id: COMP, outcome: "suspended", version_num: 2, effective_date: "2025-06-01" };
+
+  const onlyPass = assessCompetencyCurrency([passV1]);
+  check(onlyPass.validated, "a current passing decision validates the clinician");
+
+  const revoked = assessCompetencyCurrency([passV1, revokeV2]);
+  check(!revoked.validated, "a LATER revocation invalidates an earlier pass -- the gate sees the withdrawal");
+  check(revoked.supersededPassing === 1, "the superseded pass is counted as superseded, not as currency");
+
+  const outOfOrder = assessCompetencyCurrency([revokeV2, passV1]);
+  check(!outOfOrder.validated, "row order does not decide the outcome -- version does");
+
+  const expiredOnly = assessCompetencyCurrency([{ id: "c", competency_id: COMP, outcome: "competent", version_num: 1, expiry_date: "2020-01-01" }]);
+  check(!expiredOnly.validated && expiredOnly.expired === 1, "an expired pass does not validate");
+
+  const critical = assessCompetencyCurrency([
+    { id: "d", competency_id: COMP, outcome: "competent", version_num: 1 },
+    { id: "e", competency_id: "22222222-2222-2222-2222-222222222222", outcome: "not_yet_competent", critical_failure: true, version_num: 1 },
+  ]);
+  check(!critical.validated, "an unresolved critical failure invalidates, as it does for deployment");
+
+  const noId = assessCompetencyCurrency([
+    { id: "f", competency_id: null, outcome: "competent", version_num: 1 },
+    { id: "g", competency_id: null, outcome: "suspended", version_num: 2 },
+  ]);
+  check(noId.currentPassing === 1, "decisions with no competency_id cannot supersede each other");
+
+  const assignRoute = readFileSync(join(process.cwd(), "src/app/api/operations/assignments/route.ts"), "utf8");
+  check(/assessCompetencyCurrency\s*\(/.test(assignRoute), "the assignment route uses the shared reduction");
+  check(!/\.in\(\s*["']outcome["']\s*,/.test(assignRoute),
+    "it no longer asks the database for passing rows only",
+    "filtering to passing outcomes in SQL is what made revocations invisible");
+  check(/requires_override|requires_override/.test(assignRoute) && /422/.test(assignRoute),
+    "an unvalidated clinician still requires an explicit override");
 
   // ── 2. OPERATIONS -> COMPETENCY ──────────────────────────────────────────
   head("2. OPERATIONS -> COMPETENCY  (HWW evidence bridge)");

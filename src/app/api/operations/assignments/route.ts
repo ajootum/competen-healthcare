@@ -7,7 +7,7 @@ import { notify } from "@/lib/notify";
 // explicit override reason is given (spec §5.7 business rules).
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
-const PASSING = ["competent", "competent_with_conditions", "provisionally_competent"];
+import { assessCompetencyCurrency, DECISION_COLUMNS } from "@/lib/operations/competency-currency";
 
 export async function POST(req: Request) {
   const c = await getCaller();
@@ -24,12 +24,18 @@ export async function POST(req: Request) {
   const staffScope = await assertProfileScope(c, b.staff_id);
   if (staffScope) return staffScope;
 
-  // Competency validation: does the clinician hold at least one current (non-expired)
-  // passing competency decision? If not, an override_reason is mandatory.
-  const today = new Date().toISOString().slice(0, 10);
+  // Competency validation: does the clinician hold at least one CURRENT passing competency decision? If
+  // not, an override_reason is mandatory.
+  //
+  // This used to ask the database only for PASSING rows, which cannot see a revocation. Decisions are
+  // versioned, so a nurse found competent in v1 and suspended in v2 still has the v1 row, and the gate
+  // validated them on it -- storing competency_validated: true for a clinician whose competency had been
+  // withdrawn, and never asking for the override. The reduction to latest-per-competency now happens in
+  // assessCompetencyCurrency, which every gate can share.
   const { data: decs } = await admin.from("competency_decisions")
-    .select("outcome, expiry_date").eq("nurse_id", b.staff_id).in("outcome", PASSING);
-  const competencyValidated = (decs ?? []).some((d: any) => !d.expiry_date || d.expiry_date >= today);
+    .select(DECISION_COLUMNS).eq("nurse_id", b.staff_id).limit(3000);
+  const currency = assessCompetencyCurrency(decs ?? []);
+  const competencyValidated = currency.validated;
   if (!competencyValidated && !b.override_reason?.trim()) {
     return NextResponse.json({ error: "Clinician has no current validated competency — provide override_reason to proceed (emergency override).", requires_override: true }, { status: 422 });
   }
