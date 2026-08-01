@@ -323,6 +323,63 @@ async function main() {
     "the guard runs BEFORE the file and row are removed",
     "a check after the delete is a comment, not a control");
 
+  // ── 2d. ASSESSMENT REQUESTS (XWI P2-5) ───────────────────────────────────
+  head("2d. ASSESSMENT REQUESTS  (supervisor -> assessor path)");
+
+  // A REAL competency id: competency_id carries a foreign key, so a synthetic uuid is rejected by the
+  // database rather than by the logic under test. (My first version used a made-up one and the harness
+  // failed on its own fixture -- which is the right outcome, and the reason the FK is worth having.)
+  const { data: comps } = await admin.from("framework_competencies").select("id").limit(1);
+  const COMP_A = ((comps ?? [])[0] as any)?.id ?? null;
+  const mk = (over: Record<string, unknown> = {}) => admin.from("assessment_requests").insert({
+    hospital_id: nurse.hospital_id, nurse_id: nurse.id, competency_id: null,
+    reason: "[xw-competency-harness] synthetic request", urgency: "routine", ...over,
+  }).select("id, status").single();
+
+  const r1 = await mk({ competency_id: null });
+  if (r1.error) check(false, "a supervisor can raise an assessment request", r1.error.message);
+  else {
+    written.push({ table: "assessment_requests", id: r1.data.id });
+    check(r1.data.status === "open", "it opens as OPEN, unclaimed and open to any assessor");
+  }
+
+  // The partial unique index: a second OPEN request for the same nurse+competency is refused, so pressing
+  // twice does not queue the same work twice for whoever picks it up.
+  const withComp = await mk({ competency_id: COMP_A });
+  if (withComp.error) check(false, "raise a request against a specific competency", withComp.error.message);
+  else {
+    written.push({ table: "assessment_requests", id: withComp.data.id });
+    const dupe = await mk({ competency_id: COMP_A });
+    check(!!dupe.error && (dupe.error as any).code === "23505",
+      "a SECOND open request for the same nurse+competency is refused",
+      dupe.error ? dupe.error.message : "the duplicate was accepted -- the same work queues twice");
+    if (!dupe.error) written.push({ table: "assessment_requests", id: (dupe.data as any).id });
+
+    // Completing it must free the slot: re-requesting after a decline or completion is the normal path,
+    // and an index that blocked it would make the feature single-use per competency forever.
+    await admin.from("assessment_requests").update({ status: "completed", completed_at: new Date().toISOString() }).eq("id", withComp.data.id);
+    const again = await mk({ competency_id: COMP_A });
+    check(!again.error, "once completed, a fresh request for the same competency is allowed", again.error?.message);
+    if (!again.error) written.push({ table: "assessment_requests", id: again.data.id });
+  }
+
+  // HONEST LIMIT, asserted so it is not mistaken for a guard: Postgres treats NULLs as distinct in a
+  // unique index, so unscoped requests (no competency named) can be raised repeatedly. That is arguably
+  // right -- "please assess this nurse" is not one piece of work -- but it is not enforced, and the
+  // difference matters to whoever reads the queue.
+  const r2 = await mk({ competency_id: null });
+  check(!r2.error, "requests with NO competency named are not deduplicated (nulls are distinct)");
+  if (!r2.error) written.push({ table: "assessment_requests", id: r2.data.id });
+
+  const arRoute = readFileSync(join(process.cwd(), "src/app/api/competency/assessment-requests/route.ts"), "utf8");
+  check(/isSupervisor\(c\)/.test(arRoute), "only a supervisor can raise a request");
+  check(/assertProfileScope\(c, b\.nurse_id\)/.test(arRoute), "the SUBJECT decides the tenant, not the caller");
+  check(/23505/.test(arRoute) && /409/.test(arRoute), "a duplicate is answered with 409, not a 500");
+  check(/if \(data\.assessor_id\)/.test(arRoute),
+    "only a DIRECTED request notifies; an open one is picked up from the queue",
+    "paging every assessor in the hospital is how a queue gets ignored");
+  check(/assessment_request_\$\{b\.action\}|assessment_requested/.test(arRoute), "every transition is audited");
+
   // ── 3. SHIFT CLOSE-OUT (XWI P2-14) ───────────────────────────────────────
   head("3. SHIFT CLOSE-OUT  (outstanding work is not closed over silently)");
 
