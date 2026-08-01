@@ -132,9 +132,20 @@ function main() {
       ...[...kitSrc.matchAll(/import\s*\{([^}]*)\}/g)].flatMap(m => m[1].split(",").map(x => x.trim().split(/\s+as\s+/).pop()!)),
       name,
     ]);
-    const jsxRefs = [...body.matchAll(/<([A-Z]\w*)/g)].map(m => m[1]);
+    // Lowercase references count too. The first version of this guard only looked at capitalised names, so
+    // `${card}` — a page-local style constant every one of these tiles composes with — sailed straight
+    // through and four kits compiled to "Cannot find name: card".
+    const params = (body.match(/^[^)]*\)/) ?? [""])[0];
+    const templateRefs = [...body.matchAll(/\$\{(\w+)\}/g)].map(m => m[1]).filter(r => !params.includes(r));
+    const jsxRefs = [...body.matchAll(/<([A-Z]\w*)/g)].map(m => m[1]).concat(templateRefs);
     const typeRefs = [...body.matchAll(/:\s*([A-Z]\w*)\b/g)].map(m => m[1]).filter(t => !["React", "Record", "Array", "Promise", "String", "Number", "Boolean"].includes(t));
-    const missing = [...new Set([...jsxRefs, ...typeRefs])].filter(r => !declared.has(r));
+    // Some dependencies are resolvable rather than fatal: a well-known module import the kit can simply
+    // add. `Link` is the only one that comes up here, and refusing a promotion because the body renders a
+    // link would be the guard being pedantic rather than protective.
+    const RESOLVABLE: Record<string, string> = { Link: 'import Link from "next/link";' };
+    const referenced = [...new Set([...jsxRefs, ...typeRefs])];
+    const addImports = referenced.filter(r => !declared.has(r) && RESOLVABLE[r] && !kitSrc.includes(RESOLVABLE[r]));
+    const missing = referenced.filter(r => !declared.has(r) && !RESOLVABLE[r]);
     if (missing.length) {
       console.log(`  REFUSED to promote ${localName ?? name}: its body references ${missing.join(", ")}, which the kit does not have.`);
       console.log(`  Lifting it would produce a kit that does not compile. Move the dependency first, or leave this group alone.`);
@@ -144,7 +155,17 @@ function main() {
     const header = existsSync(kitFile) ? "" :
       `// Shared presentation kit — extracted, not redesigned.\n/* eslint-disable @typescript-eslint/no-explicit-any */\n`;
     const lifted = `\n// Lifted verbatim from ${relative(ROOT, source).replace(/\\/g, "/")} — written out identically in several\n// pages, so this is one implementation replacing N copies, not a redesign.\n${body}\n`;
-    writeFileSync(kitFile, (existsSync(kitFile) ? readFileSync(kitFile, "utf8") : header) + lifted);
+    const imports = addImports.map(r => RESOLVABLE[r]).join("\n");
+    const base = existsSync(kitFile) ? readFileSync(kitFile, "utf8") : header;
+    // Imports go AFTER any leading eslint-disable, not above it. Prepending them pushed the file-level
+    // directive down, so it stopped covering the file and the very `any` it was there to allow started
+    // failing lint.
+    const dir = base.match(/^\/\* eslint-disable[^\n]*\*\/\n/);
+    const withImports = !imports ? base
+      : dir ? dir[0] + imports + "\n" + base.slice(dir[0].length)
+      : imports + "\n" + base;
+    writeFileSync(kitFile, withImports + lifted);
+    if (addImports.length) console.log(`  added import(s) the body needs: ${addImports.join(", ")}`);
     console.log(`  promoted ${localName ?? name} -> ${name} in ${kitArg} (from ${relative(ROOT, source).replace(/\\/g, "/")})`);
   }
 

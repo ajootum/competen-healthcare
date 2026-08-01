@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { loadHandoverContext } from "@/lib/operations/handover";
 import HandoverNav from "../HandoverNav";
+import { KpiTile as Kpi } from "../../_kit";
 
 export const dynamic = "force-dynamic";
 
@@ -14,10 +15,6 @@ export const dynamic = "force-dynamic";
 
 const card = "bg-white rounded-xl border border-gray-200";
 const CLASS_COLOR: Record<string, string> = { Excellent: "#10b981", Good: "#22c55e", Fair: "#f59e0b", "Needs Improvement": "#ef4444" };
-
-function Kpi({ label, value, sub, tone }: { label: string; value: any; sub?: string; tone?: string }) {
-  return <div className={`${card} p-3.5`}><p className="text-[10px] text-gray-500 uppercase tracking-wide">{label}</p><p className={`text-2xl font-bold tabular-nums mt-0.5 ${tone ?? "text-gray-900"}`}>{value}</p>{sub && <p className="text-[10px] text-gray-400">{sub}</p>}</div>;
-}
 
 export default async function HandoverReports() {
   const supabase = await createClient();

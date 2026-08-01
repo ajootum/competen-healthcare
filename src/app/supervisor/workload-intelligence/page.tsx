@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { loadWorkloadIntelligence } from "@/lib/operations/workload-intelligence";
 import { cardClass } from "@/components/ui/primitives";
+import { KpiTileBare as Kpi } from "../_kit";
 
 // Workforce Workload Intelligence (SSW-WFM-004) — the supervisor's view of the
 // instrument data the bedside produces. HWW records Ward PEWS / ICU CIAF acuity
@@ -26,16 +27,6 @@ const LEVEL_TONE: Record<string, string> = {
   I1: "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]", I2: "bg-lime-100 text-lime-700", I3: "bg-[var(--cmp-surface-warning)] text-yellow-800", I4: "bg-[var(--cmp-surface-warning)] text-orange-700", I5: "bg-[var(--cmp-surface-critical)] text-[var(--cmp-text-critical)]",
 };
 const bar = (pct: number) => pct >= 100 ? "bg-[var(--cmp-color-critical)]" : pct >= 70 ? "bg-[var(--cmp-color-warning)]" : pct >= 40 ? "bg-[var(--cmp-color-warning)]" : "bg-teal-500";
-
-function Kpi({ label: l, value, tone, sub }: { label: string; value: React.ReactNode; tone?: string; sub?: React.ReactNode }) {
-  return (
-    <div className={card}>
-      <p className={`text-2xl font-bold tabular-nums ${tone ?? "text-gray-900"}`}>{value}</p>
-      <p className="text-xs text-gray-500 mt-0.5">{l}</p>
-      {sub != null && <p className="text-[10px] text-gray-400 mt-0.5">{sub}</p>}
-    </div>
-  );
-}
 
 export default async function WorkloadIntelligencePage() {
   const supabase = await createClient();

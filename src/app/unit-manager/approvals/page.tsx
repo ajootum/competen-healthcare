@@ -5,6 +5,7 @@ import { loadApprovals } from "@/lib/operations/approvals";
 import { loadUnitDepartments } from "@/lib/operations/unit-command";
 import UnitFilters from "../UnitFilters";
 import ApprovalActions, { NewApprovalButton } from "./ApprovalActions";
+import { KpiTileCompact as Kpi } from "../../../components/ui/primitives";
 
 export const dynamic = "force-dynamic";
 
@@ -24,10 +25,6 @@ const DOT: Record<string, string> = { red: "bg-[var(--cmp-color-error)]", amber:
 const relTime = (iso?: string | null) => { if (!iso) return "—"; const s = Math.floor((Date.now() - new Date(iso).getTime()) / 1000); if (s < 3600) return `${Math.max(1, Math.floor(s / 60))}m ago`; if (s < 86400) return `${Math.floor(s / 3600)}h ago`; return `${Math.floor(s / 86400)}d ago`; };
 const slaPercent = (submittedAt: string, slaHours: number) => Math.min(100, Math.round(((Date.now() - new Date(submittedAt).getTime()) / ((slaHours || 24) * 3600000)) * 100));
 const TABS = ["Approval Dashboard", "Approval Queue", "Approval Categories", "Decision History", "Approval Analytics", "SLA Monitor", "Approval Calendar"];
-
-function Kpi({ label, value, sub, tone, icon }: { label: string; value: any; sub?: string; tone?: string; icon?: string }) {
-  return <div className={`${card} p-3.5`}><div className="flex items-start justify-between"><p className="text-[10px] text-gray-500 uppercase tracking-wide">{label}</p>{icon && <span className="text-sm opacity-50">{icon}</span>}</div><p className={`text-2xl font-bold tabular-nums mt-0.5 ${tone ?? "text-gray-900"}`}>{value}</p>{sub && <p className="text-[10px] text-gray-400">{sub}</p>}</div>;
-}
 
 export default async function ApprovalsWorkspace({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   const sp = await searchParams;

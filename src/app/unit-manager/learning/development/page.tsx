@@ -5,6 +5,7 @@ import { loadPdCpd } from "@/lib/operations/pd-cpd";
 import { loadUnitDepartments } from "@/lib/operations/unit-command";
 import UnitFilters from "../../UnitFilters";
 import LearningTabs from "../LearningTabs";
+import { KpiTile as Kpi } from "../../_kit";
 
 export const dynamic = "force-dynamic";
 
@@ -18,11 +19,6 @@ export const dynamic = "force-dynamic";
 const card = "bg-white rounded-xl border border-gray-200";
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 const METHOD_COLORS = ["#0ea5e9", "#10b981", "#f59e0b", "#8b5cf6", "#ec4899", "#14b8a6"];
-
-function Kpi({ icon, tint, label, value, sub, tone, href }: { icon: string; tint: string; label: string; value: any; sub?: string; tone?: string; href?: string }) {
-  const inner = <div className={`${card} p-4 ${href ? "hover:border-[var(--cmp-color-success)] transition-colors" : ""}`}><div className="flex items-center gap-2.5 mb-2"><span className={`w-8 h-8 rounded-lg flex items-center justify-center text-sm ${tint}`}>{icon}</span><span className="text-xs font-medium text-gray-500 leading-tight">{label}</span></div><div className={`text-2xl font-bold tabular-nums ${tone ?? "text-gray-900"}`}>{value}</div>{sub && <div className="text-[11px] text-gray-400 mt-0.5">{sub}</div>}</div>;
-  return href ? <Link href={href}>{inner}</Link> : inner;
-}
 
 export default async function PdCpd() {
   const supabase = await createClient();

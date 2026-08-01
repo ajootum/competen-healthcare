@@ -4,6 +4,7 @@ import Link from "next/link";
 import { loadMdt, MDT_SERVICES, MEETING_TYPES, DECISION_CATEGORIES } from "@/lib/operations/mdt";
 import { MeetingControls, AttendanceRow, ActionControls, ReferralControls, DecisionCapture } from "./MdtActions";
 import { cardClass } from "@/components/ui/primitives";
+import { KpiTileBare as Kpi } from "../_kit";
 
 // Multidisciplinary Team (MDT) Coordination (SSW-CCR-005, migration 160).
 //
@@ -39,16 +40,6 @@ const ATT_TONE: Record<string, string> = {
   confirmed: "bg-[var(--cmp-surface-information)] text-[var(--cmp-text-information)]", invited: "bg-gray-100 text-gray-500",
   apologies: "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]", absent: "bg-[var(--cmp-surface-critical)] text-[var(--cmp-text-critical)]",
 };
-
-function Kpi({ label: l, value, tone, sub }: { label: string; value: React.ReactNode; tone?: string; sub?: React.ReactNode }) {
-  return (
-    <div className={card}>
-      <p className={`text-2xl font-bold tabular-nums ${tone ?? "text-gray-900"}`}>{value}</p>
-      <p className="text-xs text-gray-500 mt-0.5">{l}</p>
-      {sub != null && <p className="text-[10px] text-gray-400 mt-0.5">{sub}</p>}
-    </div>
-  );
-}
 
 function MeetingCard({ m, capture }: { m: any; capture?: boolean }) {
   return (

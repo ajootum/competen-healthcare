@@ -2,6 +2,7 @@ import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { loadActivityAnalytics, ACT_CAT } from "@/lib/activity-analytics";
 import { cardClass } from "@/components/ui/primitives";
+import { KpiTile as Kpi } from "../_kit";
 
 // PW-013 Activity Timeline & Productivity Analytics — unified activity timeline + productivity metrics over the
 // user's real audit_log + derived record activity. Server-rendered, read-only. Reports real activity counts and
@@ -12,17 +13,6 @@ const CAT_CHIP: Record<string, string> = { "Patient Care": "bg-[var(--cmp-surfac
 const CAT_ICON: Record<string, string> = { "Patient Care": "👥", "Learning & Development": "📚", "Documentation": "📄", "Communication": "💬", "Competency": "🎯", "Administration": "⚙️" };
 const fmtTime = (t: string) => new Date(t).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
 const dayLabel = (d: string) => { const t = new Date(d + "T00:00:00"); const today = new Date().toISOString().slice(0, 10); const yest = new Date(Date.now() - 86400000).toISOString().slice(0, 10); if (d === today) return "Today"; if (d === yest) return "Yesterday"; return t.toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long" }); };
-
-function Kpi({ icon, label, value, sub, tint }: { icon: string; label: string; value: string | number; sub: string; tint: string }) {
-  return (
-    <div className="bg-white rounded-xl border border-gray-200 p-3.5">
-      <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${tint}`}>{icon}</div>
-      <p className="text-2xl font-bold text-gray-900 mt-2">{value}</p>
-      <p className="text-[11px] font-medium text-gray-700 leading-tight">{label}</p>
-      <p className="text-[10px] text-gray-400">{sub}</p>
-    </div>
-  );
-}
 
 export default async function ActivityAnalyticsPage() {
   const supabase = await createClient();

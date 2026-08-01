@@ -285,3 +285,27 @@ export function KpiTile({ label, value, sub, tone, icon }: { label: string; valu
     </div>
   );
 }
+
+// The COMPACT sibling of KpiTile — p-3.5 rather than p-4, with a smaller uppercase micro-label. Written
+// out identically in 5 pages across supervisor AND unit-manager, so like KpiTile it had no workspace kit
+// that could own it.
+//
+// Kept as a second component rather than a `compact` prop on KpiTile: the two differ in padding, label
+// size, label casing and icon size, so a single component would carry four conditionals to express what is
+// really two densities. If a density prop is wanted later, this is the pair to fold together, and having
+// both here is what makes that a small edit.
+//
+// Class string inlined for the same reason as KpiTile: the pages built it from an UNPADDED card constant
+// plus p-3.5, and cardClass ends in p-5.
+export function KpiTileCompact({ label, value, sub, tone, icon }: { label: string; value: React.ReactNode; sub?: string; tone?: string; icon?: string }) {
+  return (
+    <div className="bg-white rounded-xl border border-gray-200 p-3.5">
+      <div className="flex items-start justify-between">
+        <p className="text-[10px] text-gray-500 uppercase tracking-wide">{label}</p>
+        {icon && <span className="text-sm opacity-50">{icon}</span>}
+      </div>
+      <p className={`text-2xl font-bold tabular-nums mt-0.5 ${tone ?? "text-gray-900"}`}>{value}</p>
+      {sub && <p className="text-[10px] text-gray-400">{sub}</p>}
+    </div>
+  );
+}

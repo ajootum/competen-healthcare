@@ -5,6 +5,7 @@ import { loadMandatoryCompliance } from "@/lib/operations/mandatory-compliance";
 import { loadUnitDepartments } from "@/lib/operations/unit-command";
 import UnitFilters from "../../UnitFilters";
 import LearningTabs from "../LearningTabs";
+import { KpiTile as Kpi } from "../../_kit";
 
 export const dynamic = "force-dynamic";
 
@@ -18,11 +19,6 @@ const card = "bg-white rounded-xl border border-gray-200";
 const pctTone = (n: number) => (n >= 90 ? "text-[var(--cmp-text-success)]" : n >= 80 ? "text-[var(--cmp-text-warning)]" : "text-[var(--cmp-text-error)]");
 const barTone = (n: number) => (n >= 90 ? "bg-[var(--cmp-color-success)]" : n >= 80 ? "bg-[var(--cmp-color-warning)]" : "bg-[var(--cmp-color-error)]");
 const ESC_TONE: Record<string, string> = { "Level 1": "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]", "Level 2": "bg-[var(--cmp-surface-warning)] text-orange-700", "Level 3": "bg-[var(--cmp-surface-error)] text-[var(--cmp-text-error)]" };
-
-function Kpi({ icon, tint, label, value, sub, tone, href }: { icon: string; tint: string; label: string; value: any; sub?: string; tone?: string; href?: string }) {
-  const inner = <div className={`${card} p-4 ${href ? "hover:border-[var(--cmp-color-success)] transition-colors" : ""}`}><div className="flex items-center gap-2.5 mb-2"><span className={`w-8 h-8 rounded-lg flex items-center justify-center text-sm ${tint}`}>{icon}</span><span className="text-xs font-medium text-gray-500 leading-tight">{label}</span></div><div className={`text-2xl font-bold tabular-nums ${tone ?? "text-gray-900"}`}>{value}</div>{sub && <div className="text-[11px] text-gray-400 mt-0.5">{sub}</div>}</div>;
-  return href ? <Link href={href}>{inner}</Link> : inner;
-}
 
 function Bars({ rows }: { rows: any[] }) {
   return <div className="space-y-1.5">{rows.map((r: any) => (<div key={r.name} className="text-xs"><div className="flex items-center justify-between mb-0.5"><span className="text-gray-700 capitalize truncate">{r.name}</span><span className={`tabular-nums font-semibold ${pctTone(r.pct)}`}>{r.pct}%</span></div><div className="w-full h-1.5 rounded-full bg-gray-100 overflow-hidden"><div className={`h-full ${barTone(r.pct)}`} style={{ width: `${r.pct}%` }} /></div></div>))}</div>;

@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { loadHandoverContext } from "@/lib/operations/handover";
 import HandoverNav from "./HandoverNav";
+import { KpiTileCompact as Kpi } from "../../../components/ui/primitives";
 
 export const dynamic = "force-dynamic";
 
@@ -17,10 +18,6 @@ export const dynamic = "force-dynamic";
 const card = "bg-white rounded-xl border border-gray-200";
 const RISK_DOT: Record<string, string> = { "High Risk": "bg-[var(--cmp-color-error)]", "At Risk": "bg-[var(--cmp-color-warning)]", "Stable": "bg-[var(--cmp-color-success)]" };
 const RISK_BADGE: Record<string, string> = { "High Risk": "bg-[var(--cmp-surface-error)] text-[var(--cmp-text-error)]", "At Risk": "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]", "Stable": "bg-[var(--cmp-surface-success)] text-emerald-700" };
-
-function Kpi({ label, value, sub, tone, icon }: { label: string; value: any; sub?: string; tone?: string; icon?: string }) {
-  return <div className={`${card} p-3.5`}><div className="flex items-start justify-between"><p className="text-[10px] text-gray-500 uppercase tracking-wide">{label}</p>{icon && <span className="text-sm opacity-50">{icon}</span>}</div><p className={`text-2xl font-bold tabular-nums mt-0.5 ${tone ?? "text-gray-900"}`}>{value}</p>{sub && <p className="text-[10px] text-gray-400">{sub}</p>}</div>;
-}
 
 const WORKFLOW = [
   ["Prepare Outgoing Handover", "Review auto-compiled data, edit SBAR and patient summaries."],

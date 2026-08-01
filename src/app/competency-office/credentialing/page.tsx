@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { loadCredentialManagement } from "@/lib/credential-management";
 import CredentialTabs from "./CredentialTabs";
+import { KpiTile as Kpi } from "../_kit";
 
 export const dynamic = "force-dynamic";
 
@@ -20,16 +21,6 @@ const pctTone = (n: number) => (n >= 90 ? "text-[var(--cmp-text-success)]" : n >
 const cellTone = (n: number) => (n >= 90 ? "bg-[var(--cmp-color-success)]" : n >= 80 ? "bg-[var(--cmp-color-warning)]" : n >= 70 ? "bg-[var(--cmp-color-warning)]" : "bg-[var(--cmp-color-error)]");
 const STATUS_TONE: Record<string, string> = { Valid: "bg-[var(--cmp-surface-success)] text-emerald-700", Expiring: "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]", Expired: "bg-[var(--cmp-surface-error)] text-[var(--cmp-text-error)]", Rejected: "bg-[var(--cmp-surface-error)] text-[var(--cmp-text-error)]", Revoked: "bg-[var(--cmp-surface-error)] text-[var(--cmp-text-error)]", "Pending Verification": "bg-[var(--cmp-surface-information)] text-[var(--cmp-text-information)]", Submitted: "bg-[var(--cmp-surface-information)] text-[var(--cmp-text-information)]", Restricted: "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]", Suspended: "bg-[var(--cmp-surface-error)] text-[var(--cmp-text-error)]", Archived: "bg-gray-100 text-gray-500" };
 const todayLabel = () => new Date().toLocaleDateString([], { day: "numeric", month: "short", year: "numeric" });
-
-function Kpi({ icon, tint, label, value, sub, tone, href }: { icon: string; tint: string; label: string; value: any; sub?: string; tone?: string; href: string }) {
-  return (
-    <Link href={href} className={`${card} p-4 hover:border-teal-300 transition-colors block`}>
-      <div className="flex items-center gap-2.5 mb-2"><span className={`w-8 h-8 rounded-lg flex items-center justify-center text-sm ${tint}`}>{icon}</span><span className="text-xs font-medium text-gray-500 leading-tight">{label}</span></div>
-      <div className={`text-2xl font-bold tabular-nums ${tone ?? "text-gray-900"}`}>{value}</div>
-      {sub && <div className="text-[11px] text-gray-400 mt-0.5">{sub}</div>}
-    </Link>
-  );
-}
 
 export default async function CredentialDashboard() {
   const supabase = await createClient();

@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import LibrarySearch from "./LibrarySearch";
 import { loadDocumentLibrary, DOC_TYPE } from "@/lib/document-library";
+import { KpiTile as Kpi } from "../_kit";
 
 // PW-008 Documents & Knowledge Library — unified view over the platform's real governed content (policies,
 // knowledge objects, learning resources, quality standards, clinical cases). KPI ribbon, browse tree, document
@@ -12,17 +13,6 @@ export const dynamic = "force-dynamic";
 
 const nowMs = () => Date.now(); // module helper — Date.now() in render body trips react-hooks/purity
 const fmtDate = (d: string) => new Date(d).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
-
-function Kpi({ icon, label, value, sub, tint }: { icon: string; label: string; value: string | number; sub: string; tint: string }) {
-  return (
-    <div className="bg-white rounded-xl border border-gray-200 p-3.5">
-      <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${tint}`}>{icon}</div>
-      <p className="text-2xl font-bold text-gray-900 mt-2">{value}</p>
-      <p className="text-[11px] font-medium text-gray-700 leading-tight">{label}</p>
-      <p className="text-[10px] text-gray-400">{sub}</p>
-    </div>
-  );
-}
 
 export default async function DocumentLibraryPage({ searchParams }: { searchParams: Promise<{ type?: string }> }) {
   const { type } = await searchParams;

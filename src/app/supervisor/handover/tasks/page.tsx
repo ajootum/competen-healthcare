@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { loadHandoverContext } from "@/lib/operations/handover";
 import HandoverNav from "../HandoverNav";
+import { KpiTile as Kpi } from "../../_kit";
 
 export const dynamic = "force-dynamic";
 
@@ -16,10 +17,6 @@ const card = "bg-white rounded-xl border border-gray-200";
 const PRI: Record<string, string> = { urgent: "bg-[var(--cmp-surface-error)] text-[var(--cmp-text-error)]", high: "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]", normal: "bg-gray-100 text-gray-600", low: "bg-gray-50 text-gray-500" };
 const nowIso = () => new Date().toISOString();
 const relDue = (iso?: string | null) => { if (!iso) return "—"; const s = Math.floor((new Date(iso).getTime() - Date.now()) / 1000); const a = Math.abs(s); const t = a < 3600 ? `${Math.max(1, Math.floor(a / 60))}m` : a < 86400 ? `${Math.floor(a / 3600)}h` : `${Math.floor(a / 86400)}d`; return s < 0 ? `${t} overdue` : `in ${t}`; };
-
-function Kpi({ label, value, sub, tone }: { label: string; value: any; sub?: string; tone?: string }) {
-  return <div className={`${card} p-3.5`}><p className="text-[10px] text-gray-500 uppercase tracking-wide">{label}</p><p className={`text-2xl font-bold tabular-nums mt-0.5 ${tone ?? "text-gray-900"}`}>{value}</p>{sub && <p className="text-[10px] text-gray-400">{sub}</p>}</div>;
-}
 
 export default async function HandoverTasks() {
   const supabase = await createClient();

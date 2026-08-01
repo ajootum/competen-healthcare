@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { loadHandoverContext } from "@/lib/operations/handover";
 import HandoverNav from "../HandoverNav";
+import { KpiTile as Kpi } from "../../_kit";
 
 export const dynamic = "force-dynamic";
 
@@ -14,10 +15,6 @@ export const dynamic = "force-dynamic";
 
 const card = "bg-white rounded-xl border border-gray-200";
 const RISK_BADGE: Record<string, string> = { "High Risk": "bg-[var(--cmp-surface-error)] text-[var(--cmp-text-error)]", "At Risk": "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]", "Stable": "bg-[var(--cmp-surface-success)] text-emerald-700" };
-
-function Kpi({ label, value, sub, tone }: { label: string; value: any; sub?: string; tone?: string }) {
-  return <div className={`${card} p-3.5`}><p className="text-[10px] text-gray-500 uppercase tracking-wide">{label}</p><p className={`text-2xl font-bold tabular-nums mt-0.5 ${tone ?? "text-gray-900"}`}>{value}</p>{sub && <p className="text-[10px] text-gray-400">{sub}</p>}</div>;
-}
 
 export default async function AIHandoverAssistant() {
   const supabase = await createClient();

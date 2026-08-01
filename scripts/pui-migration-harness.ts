@@ -95,6 +95,20 @@ function main() {
       !tokens(shell).has("p-5"), "cardClass ends in p-5 and the tile adds p-4");
   }
 
+  // ── KpiTileCompact vs the 5 page-local copies it replaces ──
+  const compact = prim.match(/export function KpiTileCompact[\s\S]*?\n}/);
+  ok("KpiTileCompact is in the library", !!compact);
+  if (compact) {
+    const shell = (compact[0].match(/<div className="([^"]*)"/) ?? [])[1] ?? "";
+    const PAGE_SHELL = "bg-white rounded-xl border border-gray-200" + " p-3.5";   // `${card} p-3.5`, expanded
+    ok("KpiTileCompact renders exactly what the 5 pages rendered",
+      tokens(shell).size === tokens(PAGE_SHELL).size && [...tokens(shell)].every(t => tokens(PAGE_SHELL).has(t)),
+      `${shell}  vs  ${PAGE_SHELL}`);
+    // The two densities must stay distinguishable, or folding them later silently loses one.
+    ok("the compact tile is not the same padding as KpiTile",
+      tokens(shell).has("p-3.5") && !tokens(shell).has("p-4"));
+  }
+
   // ── The diff ──
   let diff = "";
   try { diff = git("diff", "-U0", ref, "--", "src/app"); } catch { /* no diff */ }

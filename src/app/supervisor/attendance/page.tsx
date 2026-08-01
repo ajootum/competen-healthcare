@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { loadShiftAttendance } from "@/lib/operations/shift-attendance";
 import { cardClass } from "@/components/ui/primitives";
+import { KpiTileBare as Kpi } from "../_kit";
 
 // Shift Attendance & Fatigue (SSW-WFM-001 / WFM-003) — the supervisor's lens
 // over attendance for the shift they are actually running.
@@ -42,16 +43,6 @@ const PRIORITY: Record<string, string> = {
   critical: "bg-[var(--cmp-surface-critical)] text-[var(--cmp-text-critical)]", high: "bg-[var(--cmp-surface-warning)] text-orange-700",
   normal: "bg-gray-100 text-gray-600", low: "bg-gray-100 text-gray-500",
 };
-
-function Kpi({ label: l, value, tone, sub }: { label: string; value: React.ReactNode; tone?: string; sub?: React.ReactNode }) {
-  return (
-    <div className={card}>
-      <p className={`text-2xl font-bold tabular-nums ${tone ?? "text-gray-900"}`}>{value}</p>
-      <p className="text-xs text-gray-500 mt-0.5">{l}</p>
-      {sub != null && <p className="text-[10px] text-gray-400 mt-0.5">{sub}</p>}
-    </div>
-  );
-}
 
 export default async function ShiftAttendancePage() {
   const supabase = await createClient();

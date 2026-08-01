@@ -5,6 +5,7 @@ import { loadCompetencyValidations } from "@/lib/operations/competency-validatio
 import { loadUnitDepartments } from "@/lib/operations/unit-command";
 import UnitFilters from "../UnitFilters";
 import ValidationActions from "./ValidationActions";
+import { KpiTileCompact as Kpi } from "../../../components/ui/primitives";
 
 export const dynamic = "force-dynamic";
 
@@ -25,9 +26,6 @@ const relTime = (iso?: string | null) => { if (!iso) return "—"; const s = Mat
 const TABS = ["Validation Dashboard", "Validation Queue", "Competency Evidence", "Decision Workflows", "Validation Analytics", "Validation Calendar", "Standards & Frameworks"];
 const QUICK = [["Create Validation Request", null], ["Upload Evidence", null], ["Create OSCE Schedule", null], ["Assign Validation", null], ["Validation Reports", "/unit-manager/shift-intelligence"], ["Manage Frameworks", "/unit-manager/competency"]];
 
-function Kpi({ label, value, sub, tone, icon }: { label: string; value: any; sub?: string; tone?: string; icon?: string }) {
-  return <div className={`${card} p-3.5`}><div className="flex items-start justify-between"><p className="text-[10px] text-gray-500 uppercase tracking-wide">{label}</p>{icon && <span className="text-sm opacity-50">{icon}</span>}</div><p className={`text-2xl font-bold tabular-nums mt-0.5 ${tone ?? "text-gray-900"}`}>{value}</p>{sub && <p className="text-[10px] text-gray-400">{sub}</p>}</div>;
-}
 function Donut({ segs, total }: { segs: { n: number; color: string }[]; total: number }) {
   const sum = segs.reduce((s, x) => s + x.n, 0) || 1; let acc = 0;
   const stops = segs.map(s => { const a = (acc / sum) * 100; acc += s.n; return `${s.color} ${a}% ${(acc / sum) * 100}%`; }).join(", ");

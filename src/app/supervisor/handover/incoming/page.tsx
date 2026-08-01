@@ -4,6 +4,7 @@ import Link from "next/link";
 import { loadHandoverContext } from "@/lib/operations/handover";
 import HandoverNav from "../HandoverNav";
 import { AcceptButton, AnswerClarification } from "../HandoverActions";
+import { KpiTileDense as Kpi } from "../../_kit";
 
 export const dynamic = "force-dynamic";
 
@@ -16,10 +17,6 @@ export const dynamic = "force-dynamic";
 const card = "bg-white rounded-xl border border-gray-200";
 const RISK_BADGE: Record<string, string> = { "High Risk": "bg-[var(--cmp-surface-error)] text-[var(--cmp-text-error)]", "At Risk": "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]", "Stable": "bg-[var(--cmp-surface-success)] text-emerald-700" };
 const SBAR_META: [string, string][] = [["Situation", "bg-[var(--cmp-color-success)]"], ["Background", "bg-violet-500"], ["Assessment", "bg-[var(--cmp-color-warning)]"], ["Recommendation", "bg-[var(--cmp-color-error)]"]];
-
-function Kpi({ label, value, sub, tone }: { label: string; value: any; sub?: string; tone?: string }) {
-  return <div className={`${card} p-3`}><p className="text-[10px] text-gray-500 uppercase tracking-wide">{label}</p><p className={`text-xl font-bold tabular-nums mt-0.5 ${tone ?? "text-gray-900"}`}>{value}</p>{sub && <p className="text-[10px] text-gray-400">{sub}</p>}</div>;
-}
 
 export default async function IncomingShift({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   const sp = await searchParams;

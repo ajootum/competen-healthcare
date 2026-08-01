@@ -4,6 +4,7 @@ import Link from "next/link";
 import { loadHistoryAudit } from "@/lib/operations/history-audit";
 import { loadUnitDepartments } from "@/lib/operations/unit-command";
 import UnitFilters from "../UnitFilters";
+import { KpiTileCompact as Kpi } from "../../../components/ui/primitives";
 
 export const dynamic = "force-dynamic";
 
@@ -23,9 +24,6 @@ const stamp = (iso?: string | null) => (iso ? `${iso.slice(0, 10)} ${iso.slice(1
 const TABS = ["Audit Dashboard", "Activity History", "Decision History", "Change Log", "Access Log", "Audit Reports", "Compliance & Retention", "Audit Trail Explorer", "Export Center", "Settings"];
 const QUICK: [string, string][] = [["Audit Trail Explorer", "Search across all records"], ["Decision History", "All decisions made"], ["Change Log", "Record modifications"], ["Access Log", "User access activities"], ["Export Audit Data", "Download logs & reports"], ["Generate Report", "Custom audit reports"]];
 
-function Kpi({ label, value, sub, tone, icon }: { label: string; value: any; sub?: string; tone?: string; icon?: string }) {
-  return <div className={`${card} p-3.5`}><div className="flex items-start justify-between"><p className="text-[10px] text-gray-500 uppercase tracking-wide">{label}</p>{icon && <span className="text-sm opacity-50">{icon}</span>}</div><p className={`text-2xl font-bold tabular-nums mt-0.5 ${tone ?? "text-gray-900"}`}>{value}</p>{sub && <p className="text-[10px] text-gray-400">{sub}</p>}</div>;
-}
 function Donut({ segs, total }: { segs: { n: number; color: string }[]; total: number }) {
   const sum = segs.reduce((s, x) => s + x.n, 0) || 1; let acc = 0;
   const stops = segs.map(s => { const a = (acc / sum) * 100; acc += s.n; return `${s.color} ${a}% ${(acc / sum) * 100}%`; }).join(", ");
