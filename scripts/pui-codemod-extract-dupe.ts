@@ -55,6 +55,30 @@ function findComponent(src: string, name: string): { start: number; end: number;
   return { start, end, body: src.slice(start, end) };
 }
 
+// Find a top-level declaration by name — a type alias, a const, or a function. Needed by --with, which
+// carries a component's dependencies into the kit alongside it. Without this, a component that references
+// a type or a sibling simply cannot be promoted, which is where the last six groups were stuck.
+function findDecl(src: string, name: string): string | null {
+  const fn = findComponent(src, name);
+  if (fn) return fn.body;
+  const re = new RegExp(`^(?:export\\s+)?(?:type|const|let)\\s+${name}\\b`, "m");
+  const m = src.match(re);
+  if (!m || m.index === undefined) return null;
+  // Run to the end of the statement, tracking brace/bracket depth so an object or union literal is not cut
+  // short at the first newline.
+  let i = m.index, depth = 0, inStr: string | null = null;
+  for (; i < src.length; i++) {
+    const c = src[i], prev = src[i - 1];
+    if (inStr) { if (c === inStr && prev !== "\\") inStr = null; continue; }
+    if (c === '"' || c === "'" || c === "`") { inStr = c; continue; }
+    if ("{[(".includes(c)) depth++;
+    else if ("}])".includes(c)) depth--;
+    else if (c === ";" && depth === 0) return src.slice(m.index, i + 1);
+    else if (c === "\n" && depth === 0 && i > m.index + name.length) return src.slice(m.index, i);
+  }
+  return null;
+}
+
 function importPath(from: string, kit: string): string {
   let rel = relative(dirname(from), kit).replace(/\\/g, "/").replace(/\.tsx$/, "");
   if (!rel.startsWith(".")) rel = "./" + rel;
@@ -62,7 +86,7 @@ function importPath(from: string, kit: string): string {
 }
 
 function main() {
-  const FLAGVALS = ["--as", "--from-hash"];
+  const FLAGVALS = ["--as", "--from-hash", "--with"];
   const positional = process.argv.slice(2).filter((a, i, arr) => !a.startsWith("--") && !FLAGVALS.includes(arr[i - 1]));
   const [name, kitArg] = positional;
   const dry = process.argv.includes("--dry");
@@ -144,6 +168,9 @@ function main() {
     const params = (body.match(/^[^)]*\)/) ?? [""])[0];
     const localDecls = new Set<string>([
       ...[...body.matchAll(/(?:const|let|var)\s+(\w+)/g)].map(m => m[1]),
+      // Subsequent declarators in a multi-declarator statement: `const R = …, C = …, mid = size / 2;`
+      // capturing only the first left `mid` looking like an external dependency when the body declares it.
+      ...[...body.matchAll(/,\s*(\w+)\s*=/g)].map(m => m[1]),
       ...[...body.matchAll(/(?:const|let|var)\s*\{([^}]*)\}/g)].flatMap(m => m[1].split(",").map(x => x.trim().split(":").pop()!.trim())),
       ...[...body.matchAll(/\(([^()]*)\)\s*=>/g)].flatMap(m => m[1].split(",").map(x => x.trim())),
       ...[...body.matchAll(/(\w+)\s*=>/g)].map(m => m[1]),
@@ -162,6 +189,26 @@ function main() {
     const RESOLVABLE: Record<string, string> = { Link: 'import Link from "next/link";' };
     const referenced = [...new Set([...jsxRefs, ...typeRefs])];
     const addImports = referenced.filter(r => !declared.has(r) && RESOLVABLE[r] && !kitSrc.includes(RESOLVABLE[r]));
+    // --with names the declarations to CARRY ALONGSIDE the component: the type it annotates with, the
+    // sibling it renders, the helper it calls. They are lifted verbatim from the same source file, so the
+    // kit is self-contained and the guard below then has nothing left to object to.
+    const withNames = process.argv.includes("--with")
+      ? process.argv[process.argv.indexOf("--with") + 1].split(",").map(x => x.trim()).filter(Boolean) : [];
+    const carried: string[] = [];
+    const carriedImports: string[] = [];
+    for (const dep of withNames) {
+      const srcText = readFileSync(source, "utf8");
+      const decl = findDecl(srcText, dep);
+      if (decl) { carried.push(decl.replace(/^export\s+/, "")); declared.add(dep); continue; }
+      // A dependency can be IMPORTED rather than declared — NavNode is a type from a lib module, not
+      // something the page defines. Carrying the import line is the correct lift for those; refusing them
+      // would block a promotion for a reason that has a one-line answer.
+      const imp = srcText.split("\n").find(l => /^import /.test(l) && new RegExp(`\\b${dep}\\b`).test(l));
+      if (imp) { carriedImports.push(imp); declared.add(dep); continue; }
+      console.log(`  --with ${dep}: not declared or imported in ${relative(ROOT, source).replace(/\\/g, "/")}`);
+      process.exit(1);
+    }
+
     const missing = referenced.filter(r => !declared.has(r) && !RESOLVABLE[r]);
     if (missing.length) {
       console.log(`  REFUSED to promote ${localName ?? name}: its body references ${missing.join(", ")}, which the kit does not have.`);
@@ -171,6 +218,8 @@ function main() {
 
     const header = existsSync(kitFile) ? "" :
       `// Shared presentation kit — extracted, not redesigned.\n/* eslint-disable @typescript-eslint/no-explicit-any */\n`;
+    const DEP_NOTE = "\n// Carried with it — the declarations its body depends on, lifted from the same file so the kit is\n// self-contained.\n";
+    const deps = carried.length ? DEP_NOTE + carried.join("\n") + "\n" : "";
     const lifted = `\n// Lifted verbatim from ${relative(ROOT, source).replace(/\\/g, "/")} — written out identically in several\n// pages, so this is one implementation replacing N copies, not a redesign.\n${body}\n`;
     const imports = addImports.map(r => RESOLVABLE[r]).join("\n");
     const base = existsSync(kitFile) ? readFileSync(kitFile, "utf8") : header;
@@ -181,7 +230,7 @@ function main() {
     const withImports = !imports ? base
       : dir ? dir[0] + imports + "\n" + base.slice(dir[0].length)
       : imports + "\n" + base;
-    writeFileSync(kitFile, withImports + lifted);
+    writeFileSync(kitFile, withImports + deps + lifted);
     if (addImports.length) console.log(`  added import(s) the body needs: ${addImports.join(", ")}`);
     console.log(`  promoted ${localName ?? name} -> ${name} in ${kitArg} (from ${relative(ROOT, source).replace(/\\/g, "/")})`);
   }

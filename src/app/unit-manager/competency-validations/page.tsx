@@ -6,6 +6,7 @@ import { loadUnitDepartments } from "@/lib/operations/unit-command";
 import UnitFilters from "../UnitFilters";
 import ValidationActions from "./ValidationActions";
 import { KpiTileCompact as Kpi } from "../../../components/ui/primitives";
+import { DonutRing as Donut } from "../_kit";
 
 export const dynamic = "force-dynamic";
 
@@ -26,11 +27,7 @@ const relTime = (iso?: string | null) => { if (!iso) return "—"; const s = Mat
 const TABS = ["Validation Dashboard", "Validation Queue", "Competency Evidence", "Decision Workflows", "Validation Analytics", "Validation Calendar", "Standards & Frameworks"];
 const QUICK = [["Create Validation Request", null], ["Upload Evidence", null], ["Create OSCE Schedule", null], ["Assign Validation", null], ["Validation Reports", "/unit-manager/shift-intelligence"], ["Manage Frameworks", "/unit-manager/competency"]];
 
-function Donut({ segs, total }: { segs: { n: number; color: string }[]; total: number }) {
-  const sum = segs.reduce((s, x) => s + x.n, 0) || 1; let acc = 0;
-  const stops = segs.map(s => { const a = (acc / sum) * 100; acc += s.n; return `${s.color} ${a}% ${(acc / sum) * 100}%`; }).join(", ");
-  return <div className="relative w-24 h-24 shrink-0"><div className="w-24 h-24 rounded-full" style={{ background: sum > 0 ? `conic-gradient(${stops})` : "#f1f5f9" }} /><div className="absolute inset-[22%] rounded-full bg-white flex flex-col items-center justify-center"><span className="text-lg font-bold text-gray-900">{total}</span><span className="text-[8px] text-gray-400">Total</span></div></div>;
-}
+
 
 export default async function CompetencyValidationsWorkspace({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   const sp = await searchParams;

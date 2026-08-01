@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import QuickCreate from "./QuickCreate";
 import LibrarySearch from "@/app/dashboard/library/LibrarySearch";
+import { ModuleCard } from "./_kit";
 
 // CST-000 — Competency Studio Platform. The no-code authoring platform and single source of truth
 // for the competency definitions every workspace consumes. This hub presents the 12 core studio
@@ -18,26 +19,7 @@ type Mod = { code: string; icon: string; label: string; desc: string; href?: str
 
 const PIPELINE = ["Framework", "Competency", "Evidence", "Assessment", "Learning", "Rules", "AI review", "Test", "Approve", "Publish", "Consume"];
 
-function ModuleCard({ m }: { m: Mod }) {
-  const inner = (
-    <>
-      <div className="flex items-center gap-2.5 mb-1.5">
-        <span className="text-xl shrink-0">{m.icon}</span>
-        <div className="min-w-0">
-          <p className="text-[9px] font-bold text-gray-300 tracking-widest">{m.code}</p>
-          <p className={`font-bold text-sm leading-tight ${m.planned ? "text-gray-500" : "text-gray-900 group-hover:text-teal-700"}`}>{m.label}</p>
-        </div>
-        {m.planned && <span className="ml-auto shrink-0 text-[8px] font-bold uppercase tracking-wide text-[var(--cmp-text-warning)] bg-[var(--cmp-surface-warning)] border border-[var(--cmp-color-warning)] px-1.5 py-0.5 rounded">Planned</span>}
-      </div>
-      <p className="text-[11px] text-gray-400 leading-relaxed">{m.desc}</p>
-      {m.stat && <p className="text-[10px] font-semibold text-teal-600 mt-2">{m.stat}</p>}
-    </>
-  );
-  const base = "bg-white rounded-xl border border-gray-100 p-4 block";
-  return m.href
-    ? <Link href={m.href} className={`${base} hover:border-teal-200 hover:shadow-sm transition-all group`}>{inner}</Link>
-    : <div className={`${base} opacity-80`}>{inner}</div>;
-}
+
 
 export default async function StudioPage() {
   const supabase = await createClient();

@@ -32,3 +32,4 @@ export function DonutB({ slices, center, sub }: { slices: { label: string; n: nu
     </div>
   );
 }
+

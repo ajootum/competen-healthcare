@@ -8,6 +8,8 @@ import Link from "next/link";
 import { PillTag as Pill } from "../../../components/ui/primitives";
 import { KitFoot as Foot } from "../../../components/ui/primitives";
 import { PanelCard as Card } from "../../../components/ui/primitives";
+import { DonutMid as Donut } from "../_kit";
+export { Donut };
 // Re-exported: this file is a KIT, and pages import these names from it. Lifting the
 // implementations into the library must not remove that surface.
 export { Pill, Foot, Card };
@@ -93,18 +95,6 @@ export function Kpi({ label, value, sub, status, delta, deltaUp, series }: { lab
 }
 
 // Donut (segments + centre value).
-export function Donut({ segs, total, centre, sub, size = 120 }: { segs: { n: number; color: string }[]; total: number; centre: any; sub?: string; size?: number }) {
-  const R = size * 0.38, C = 2 * Math.PI * R, t = total || 1, mid = size / 2;
-  const arr = segs.map((s, i) => ({ ...s, len: (s.n / t) * C, off: segs.slice(0, i).reduce((a, x) => a + (x.n / t) * C, 0) }));
-  return (
-    <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} className="shrink-0">
-      <circle cx={mid} cy={mid} r={R} fill="none" stroke="#f1f5f9" strokeWidth="12" />
-      {arr.map((s, i) => <circle key={i} cx={mid} cy={mid} r={R} fill="none" stroke={s.color} strokeWidth="12" strokeDasharray={`${s.len} ${C - s.len}`} strokeDashoffset={-s.off} transform={`rotate(-90 ${mid} ${mid})`} />)}
-      <text x={mid} y={mid - 1} textAnchor="middle" className="fill-gray-900 font-bold" fontSize={size * 0.2}>{centre}</text>
-      {sub && <text x={mid} y={mid + 15} textAnchor="middle" className="fill-gray-400" fontSize="9">{sub}</text>}
-    </svg>
-  );
-}
 
 // Circular percentage ring (scores).
 export function Ring({ pct, size = 76, label, sub }: { pct: number; size?: number; label?: string; sub?: string }) {

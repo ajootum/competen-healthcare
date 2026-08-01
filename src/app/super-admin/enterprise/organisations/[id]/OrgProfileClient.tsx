@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { cardClass } from "@/components/ui/primitives";
+import { Row } from "../../../_kit";
 
 // Organisation profile (ENT-001 §1) — header, lifecycle actions and tabbed
 // detail. Every figure is live; thin governance fields are marked honestly.
@@ -17,9 +18,7 @@ const TABS = ["Overview", "Structure", "Facilities", "Users", "Subscription", "G
 const card = cardClass;
 const relTime = (iso?: string | null) => { if (!iso) return ""; const s = Math.floor((Date.now() - new Date(iso).getTime()) / 1000); if (s < 3600) return `${Math.floor(s / 60)} min ago`; if (s < 86400) return `${Math.floor(s / 3600)} hr ago`; return `${Math.floor(s / 86400)} d ago`; };
 
-function Row({ label, value }: { label: string; value: React.ReactNode }) {
-  return <div className="flex justify-between gap-4 py-1.5 border-b border-gray-50 last:border-0"><span className="text-gray-500">{label}</span><span className="text-gray-800 text-right">{value ?? <span className="text-gray-300">—</span>}</span></div>;
-}
+
 
 export default function OrgProfileClient({ data }: { data: any }) {
   const router = useRouter();

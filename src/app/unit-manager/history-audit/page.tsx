@@ -5,6 +5,7 @@ import { loadHistoryAudit } from "@/lib/operations/history-audit";
 import { loadUnitDepartments } from "@/lib/operations/unit-command";
 import UnitFilters from "../UnitFilters";
 import { KpiTileCompact as Kpi } from "../../../components/ui/primitives";
+import { DonutRing as Donut } from "../_kit";
 
 export const dynamic = "force-dynamic";
 
@@ -24,11 +25,7 @@ const stamp = (iso?: string | null) => (iso ? `${iso.slice(0, 10)} ${iso.slice(1
 const TABS = ["Audit Dashboard", "Activity History", "Decision History", "Change Log", "Access Log", "Audit Reports", "Compliance & Retention", "Audit Trail Explorer", "Export Center", "Settings"];
 const QUICK: [string, string][] = [["Audit Trail Explorer", "Search across all records"], ["Decision History", "All decisions made"], ["Change Log", "Record modifications"], ["Access Log", "User access activities"], ["Export Audit Data", "Download logs & reports"], ["Generate Report", "Custom audit reports"]];
 
-function Donut({ segs, total }: { segs: { n: number; color: string }[]; total: number }) {
-  const sum = segs.reduce((s, x) => s + x.n, 0) || 1; let acc = 0;
-  const stops = segs.map(s => { const a = (acc / sum) * 100; acc += s.n; return `${s.color} ${a}% ${(acc / sum) * 100}%`; }).join(", ");
-  return <div className="relative w-24 h-24 shrink-0"><div className="w-24 h-24 rounded-full" style={{ background: sum > 0 ? `conic-gradient(${stops})` : "#f1f5f9" }} /><div className="absolute inset-[22%] rounded-full bg-white flex flex-col items-center justify-center"><span className="text-lg font-bold text-gray-900">{total}</span><span className="text-[8px] text-gray-400">Total</span></div></div>;
-}
+
 
 export default async function HistoryAuditWorkspace({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   const sp = await searchParams;
