@@ -1,4 +1,5 @@
 import { createAdminClient } from "@/lib/supabase/server";
+import { loadFrameworkCurrency, assessCurrency, summariseCurrency } from "@/lib/competency/framework-currency";
 
 export const dynamic = "force-dynamic";
 
@@ -34,10 +35,17 @@ export default async function VerifyPage({ params }: { params: Promise<{ token: 
   // ── Consented subset only ──
   const { data: profile } = await admin.from("profiles").select("full_name, role, roles, specialization, hospital_id").eq("id", share.nurse_id).maybeSingle();
   const today = new Date().toISOString().slice(0, 10);
-  const { data: decRows } = await admin.from("competency_decisions").select("competency_id, outcome, expiry_date, created_at, framework_competencies(name)").eq("nurse_id", share.nurse_id).order("created_at", { ascending: false }).limit(3000);
+  const { data: decRows } = await admin.from("competency_decisions").select("competency_id, outcome, expiry_date, created_at, framework_id, framework_version, framework_competencies(name)").eq("nurse_id", share.nurse_id).order("created_at", { ascending: false }).limit(3000);
   const latest = new Map<string, any>();
   (decRows ?? []).forEach((d: any) => { if (d.competency_id && !latest.has(d.competency_id)) latest.set(d.competency_id, d); });
   const current = [...latest.values()].filter(d => d.outcome === "competent" && (!d.expiry_date || d.expiry_date > today));
+
+  // XWI P2-10b — this page tells a THIRD PARTY that these competencies are current. Of every surface in the
+  // platform it is the one where an unqualified "current" does the most damage, because the reader has no
+  // other source. Not-expired is only half the question; the other half is whether the standard has moved.
+  const currency = await loadFrameworkCurrency(admin, current.map(d => d.framework_id));
+  const verdicts = current.map(d => assessCurrency(d, currency));
+  const currencySummary = summariseCurrency(verdicts);
   const { data: creds } = await admin.from("professional_credentials").select("title, issuing_body, credential_type, expiry_date").eq("nurse_id", share.nurse_id).eq("verified", true).eq("status", "active").order("issue_date", { ascending: false }).limit(50);
   const credentials = (creds ?? []) as any[];
 
@@ -68,6 +76,23 @@ export default async function VerifyPage({ params }: { params: Promise<{ token: 
             <div className="bg-teal-50 rounded-xl p-3"><p className="text-2xl font-bold text-teal-700 tabular-nums">{credentials.length}</p><p className="text-[11px] text-gray-500">Verified credentials</p></div>
             <div className="bg-teal-50 rounded-xl p-3"><p className="text-2xl font-bold text-teal-700 tabular-nums">{new Set(competencyNames).size}</p><p className="text-[11px] text-gray-500">Distinct areas</p></div>
           </div>
+
+          {currencySummary.caveated > 0 && (
+            <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
+              <p className="text-[12px] font-semibold text-amber-900">
+                {currencySummary.caveated} of {currencySummary.total} shown here were assessed against a framework that has since changed
+              </p>
+              <p className="text-[11px] text-amber-800/90 mt-0.5 leading-relaxed">
+                {[
+                  currencySummary.unstamped ? `${currencySummary.unstamped} predate version stamping` : null,
+                  currencySummary.superseded ? `${currencySummary.superseded} against an earlier version` : null,
+                  currencySummary.retired ? `${currencySummary.retired} against a framework since withdrawn` : null,
+                  currencySummary.unknown ? `${currencySummary.unknown} could not be resolved` : null,
+                ].filter(Boolean).join(" · ")}. Each assessment is a genuine record and remains in date. Confirm
+                with the issuing organisation if you need currency against today&apos;s standard.
+              </p>
+            </div>
+          )}
 
           {full && competencyNames.length > 0 && (
             <div>

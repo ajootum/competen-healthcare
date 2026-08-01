@@ -5,6 +5,7 @@ import { OUTCOME_CONFIG, MATURITY_LABELS, AUTH_TYPE_LABELS, AUTH_STATUS_CONFIG, 
 import { ROLE_CONFIG, type AppRole } from "@/lib/roles";
 import AiCopilotPanel from "@/components/AiCopilotPanel";
 import { loadWorkerLifecycle, STATE_LABEL, STATE_COLOR } from "@/lib/competency/lifecycle-state";
+import { loadFrameworkCurrency, assessCurrency, summariseCurrency, type CurrencyVerdict } from "@/lib/competency/framework-currency";
 
 // Competency Passport 2.0 — the clinician's living professional record
 // (Passport 2.0 Developer Specification). Identity, readiness gauge, KPI row,
@@ -80,7 +81,7 @@ export default async function PassportPage() {
       .select("competency_id, cycle_id, score, label, is_passing, assessed_at, educator_validated, framework_competencies(id, name, framework_domains(id, name, frameworks(id, name, library)))")
       .eq("nurse_id", user.id).order("assessed_at", { ascending: false }),
     admin.from("competency_decisions")
-      .select("competency_id, outcome, maturity, effective_date, expiry_date, critical_failure, evidence_summary, validation_outcome, created_at, framework_competencies(id, name, framework_domains(name, frameworks(name)))")
+      .select("competency_id, outcome, maturity, effective_date, expiry_date, critical_failure, evidence_summary, validation_outcome, created_at, framework_id, framework_version, framework_competencies(id, name, framework_domains(name, frameworks(name)))")
       .eq("nurse_id", user.id).order("created_at", { ascending: false }),
     admin.from("clinical_authorizations")
       .select("id, authorization_number, authorization_type, authorization_level, status, scope, conditions, expiry_date")
@@ -154,8 +155,13 @@ export default async function PassportPage() {
     competency_id: string; outcome: DecisionOutcome; maturity: Maturity | null;
     effective_date: string; expiry_date: string | null; critical_failure: boolean;
     validated: boolean; name: string; domain_name: string; framework_name: string;
-    evidence_summary: string | null;
+    evidence_summary: string | null; currency: CurrencyVerdict;
   };
+  // XWI P2-10b — a decision was made against a framework AS IT WAS. Load what those frameworks are NOW, so
+  // the passport can say which entries still match the current standard. It labels rather than filters:
+  // hiding an entry whose framework was withdrawn would rewrite history in the other direction, and the
+  // assessment did happen.
+  const currencyMap = await loadFrameworkCurrency(admin, (allDecisions ?? []).map(d => (d as { framework_id?: string | null }).framework_id));
   const dseen = new Set<string>();
   const decisions: DecisionEntry[] = [];
   for (const d of allDecisions ?? []) {
@@ -171,8 +177,10 @@ export default async function PassportPage() {
       name: comp.name, domain_name: comp.framework_domains?.name ?? "—",
       framework_name: comp.framework_domains?.frameworks?.name ?? "—",
       evidence_summary: (d as { evidence_summary?: string | null }).evidence_summary ?? null,
+      currency: assessCurrency(d as { framework_id?: string | null; framework_version?: string | null }, currencyMap),
     });
   }
+  const currencySummary = summariseCurrency(decisions.map(d => d.currency));
   const competentCount = decisions.filter(d => OUTCOME_CONFIG[d.outcome]?.passing && (!d.expiry_date || new Date(d.expiry_date).getTime() > nowMs())).length;
   const expiredCount = decisions.filter(d => d.expiry_date && new Date(d.expiry_date).getTime() < nowMs()).length;
   const criticalCount = decisions.filter(d => d.critical_failure).length;
@@ -608,6 +616,25 @@ export default async function PassportPage() {
           <h2 className={`${secHead} mb-3`}>
             Lifetime Competency Record ({competentCount} competent{dueSoon60 > 0 ? ` · ${dueSoon60} due soon` : ""}) — expired entries stay in your history
           </h2>
+          {/* Framework currency (XWI P2-10b). Shown only when something is actually caveated — a banner
+              that always appears stops being read, and on a passport where every entry matches the current
+              standard there is nothing to say. */}
+          {currencySummary.caveated > 0 && (
+            <div className="mb-3 rounded-lg border border-[var(--cmp-border-warning)] bg-[var(--cmp-surface-warning)] px-4 py-2.5">
+              <p className="text-[12px] font-semibold text-[var(--cmp-text-warning)]">
+                {currencySummary.caveated} of {currencySummary.total} entries cannot be shown to match the current framework
+              </p>
+              <p className="text-[11px] text-[var(--cmp-text-warning)]/85 mt-0.5 leading-relaxed">
+                {[
+                  currencySummary.unstamped ? `${currencySummary.unstamped} predate version stamping` : null,
+                  currencySummary.superseded ? `${currencySummary.superseded} were assessed against an earlier version` : null,
+                  currencySummary.retired ? `${currencySummary.retired} against a framework since withdrawn` : null,
+                  currencySummary.unknown ? `${currencySummary.unknown} could not be resolved` : null,
+                ].filter(Boolean).join(" · ")}. They remain in the record — the assessments happened. Whether the
+                difference matters is a governance judgement, not an automatic one.
+              </p>
+            </div>
+          )}
           <div className={`${card} overflow-hidden divide-y divide-gray-50`}>
             {decisions.map(d => {
               const oc = OUTCOME_CONFIG[d.outcome];
@@ -622,6 +649,14 @@ export default async function PassportPage() {
                     </p>
                     {d.evidence_summary && <p className="text-[10px] text-gray-400/90 mt-0.5 truncate" title={d.evidence_summary}>📎 {d.evidence_summary}</p>}
                   </div>
+                  <span
+                    title={d.currency.detail}
+                    className={`text-[10px] px-1.5 py-0.5 rounded font-medium hidden md:inline whitespace-nowrap ${
+                      d.currency.caveat
+                        ? "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]"
+                        : "bg-gray-50 text-gray-400"
+                    }`}
+                  >{d.currency.label}</span>
                   {d.maturity && <span className="text-[10px] text-gray-500 hidden sm:inline">{MATURITY_LABELS[d.maturity]}</span>}
                   {d.validated && <span className="text-[10px] bg-[var(--cmp-surface-information)] text-[var(--cmp-text-information)] px-1.5 py-0.5 rounded font-semibold">Validated</span>}
                   {d.critical_failure && <span className="text-[10px] bg-[var(--cmp-surface-critical)] text-[var(--cmp-text-critical)] px-1.5 py-0.5 rounded font-semibold">⚠ Critical</span>}
