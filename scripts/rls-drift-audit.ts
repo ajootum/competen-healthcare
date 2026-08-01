@@ -149,14 +149,28 @@ async function main() {
     if (intent.rls && !l.rls) off.push(`${table}  enabled in ${intent.file}, DISABLED in the database`);
     if (l.rls && l.policies.size === 0) noPolicies.push(`${table}  RLS on, zero policies`);
   }
-  for (const [table, names] of declared) {
+  // MISSING and UNDECLARED are two views of ONE phenomenon whenever they land on the same table: a policy
+  // was renamed or reworked in the database and the repo was never updated. Reporting them separately
+  // said "47 policies missing", which reads as 47 holes in coverage -- when performance_criteria declares
+  // "Authenticated read criteria" and the database has "read criteria", same intent, 2 declared and 2
+  // deployed. Pairing them per table is the difference between a real finding and an alarming number.
+  //
+  // A reworked table is NOT asserted equivalent. Bodies are not compared, so the honest claim is "the
+  // names differ and nobody has checked that the coverage still matches" -- which is exactly why it is
+  // reported instead of hidden.
+  const reworked: string[] = [];
+  for (const table of new Set([...declared.keys(), ...live.keys()])) {
     const l = live.get(table);
     if (!l) continue;                       // table itself missing is reported above
-    for (const n of names) if (!l.policies.has(n)) missing.push(`${table} :: ${n}  (${policyFile.get(`${table}|${n}`)})`);
-  }
-  for (const [table, l] of live) {
-    const names = declared.get(table);
-    for (const n of l.policies.keys()) if (!names?.has(n)) undeclared.push(`${table} :: ${n}`);
+    const names = declared.get(table) ?? new Set<string>();
+    const gone = [...names].filter(n => !l.policies.has(n));
+    const extra = [...l.policies.keys()].filter(n => !names.has(n));
+    if (gone.length && extra.length) {
+      reworked.push(`${table}  repo has ${gone.length} name(s) the database does not, database has ${extra.length} the repo does not (${names.size} declared / ${l.policies.size} deployed)`);
+      continue;
+    }
+    for (const n of gone) missing.push(`${table} :: ${n}  (${policyFile.get(`${table}|${n}`)})`);
+    for (const n of extra) undeclared.push(`${table} :: ${n}`);
   }
 
   console.log(`  repo: ${rlsIntent.size} table(s) with an RLS statement, ${[...declared.values()].reduce((s, x) => s + x.size, 0)} policy(ies) declared`);
@@ -175,9 +189,12 @@ async function main() {
     "any authenticated user reaches every row of these tables through the ordinary client");
   section("NO POLICIES — RLS on, nothing granted", noPolicies,
     "denies all non-service access: safe, but usually means a feature is broken for real users");
-  section("MISSING POLICY — declared in the repo, absent from the database", missing);
+  section("MISSING POLICY — declared in the repo, no counterpart on that table at all", missing,
+    "a declared policy that simply never landed; the table has nothing standing in for it");
   section("UNDECLARED POLICY — in the database, declared nowhere in the repo", undeclared,
     "authored in the dashboard; a rebuild from the repo would not recreate it");
+  section("REWORKED — the table has policies under different names than the repo declares", reworked,
+    "renamed or rewritten in the database and never written back; coverage is unverified, NOT wrong");
   section("TABLE NOT FOUND — the repo has RLS statements for a table that does not exist", absent);
   section("LOOSE-SCRIPT POLICY DROPS — hand-run scripts, unordered", looseDrops.map(d => `${d.table} :: ${d.policy}  ${d.file}`),
     "reported, not obeyed: these files carry no reliable order relative to the migrations");
