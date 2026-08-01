@@ -125,7 +125,9 @@ function main() {
   for (const m of migrated) console.log(`    ${m}`);
   if (refused.length) {
     console.log(`\n  ${refused.length} file(s) define ${name} DIFFERENTLY and were left alone:`);
-    for (const r of refused.slice(0, 20)) console.log(`    ${r}`);
+    // Uncapped in a dry run: the refusal list IS the working material for deciding what to promote next,
+    // and a silent "... and 57 more" would hide exactly the variants worth looking at.
+    for (const r of (dry ? refused : refused.slice(0, 20))) console.log(`    ${r}`);
   }
   console.log();
 }

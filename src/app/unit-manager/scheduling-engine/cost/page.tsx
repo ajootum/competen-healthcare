@@ -5,6 +5,7 @@ import { loadCostEngine } from "@/lib/operations/cost-engine";
 import { loadUnitDepartments } from "@/lib/operations/unit-command";
 import UnitFilters from "../../UnitFilters";
 import SchedulingTabs from "../SchedulingTabs";
+import { KpiTile as Kpi } from "../../../../components/ui/primitives";
 
 export const dynamic = "force-dynamic";
 
@@ -20,10 +21,6 @@ const card = "bg-white rounded-xl border border-gray-200";
 const SUBTABS = ["Overview", "Labour Cost", "Overtime", "Agency & Float", "Skill Mix Cost", "Budget Compliance", "Recommendations", "Variance & Forecast", "Audit & History", "Settings"];
 const ROLE_LABEL: Record<string, string> = { charge: "Charge Nurses", nurse: "Registered Nurses", support: "Support Staff", float: "Float Pool", doctor: "Doctors", therapist: "Allied Health", educator: "Educators", assessor: "Assessors" };
 const money = (n: number | null) => (n == null ? "—" : `£${n.toLocaleString()}`);
-
-function Kpi({ label, value, sub, tone, icon }: { label: string; value: any; sub?: string; tone?: string; icon?: string }) {
-  return <div className={`${card} p-4`}><div className="flex items-start justify-between"><p className="text-xs text-gray-500">{label}</p>{icon && <span className="text-base opacity-40">{icon}</span>}</div><p className={`text-2xl font-bold tabular-nums mt-1 ${tone ?? "text-gray-900"}`}>{value}</p>{sub && <p className="text-[11px] text-gray-400 mt-0.5">{sub}</p>}</div>;
-}
 
 export default async function CostEngine() {
   const supabase = await createClient();

@@ -5,6 +5,7 @@ import { loadFairnessEngine } from "@/lib/operations/fairness-engine";
 import { loadUnitDepartments } from "@/lib/operations/unit-command";
 import UnitFilters from "../../UnitFilters";
 import SchedulingTabs from "../SchedulingTabs";
+import { KpiTile as Kpi } from "../../../../components/ui/primitives";
 
 export const dynamic = "force-dynamic";
 
@@ -19,10 +20,6 @@ const card = "bg-white rounded-xl border border-gray-200";
 const SUBTABS = ["Overview", "Shift Distribution", "Weekend & Holiday", "Night Balance", "Overtime", "Workload", "Bias Alerts", "Rebalancing", "Audit & History", "Settings"];
 const SEV: Record<string, string> = { High: "bg-[var(--cmp-surface-error)] text-[var(--cmp-text-error)]", Medium: "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]" };
 const heat = (v: number, max: number) => { const p = max ? v / max : 0; return p >= 0.8 ? "bg-[var(--cmp-surface-error)] text-rose-800" : p >= 0.55 ? "bg-[var(--cmp-surface-warning)] text-amber-800" : p > 0 ? "bg-[var(--cmp-surface-success)] text-emerald-800" : "bg-gray-50 text-gray-300"; };
-
-function Kpi({ label, value, sub, tone, icon }: { label: string; value: any; sub?: string; tone?: string; icon?: string }) {
-  return <div className={`${card} p-4`}><div className="flex items-start justify-between"><p className="text-xs text-gray-500">{label}</p>{icon && <span className="text-base opacity-40">{icon}</span>}</div><p className={`text-2xl font-bold tabular-nums mt-1 ${tone ?? "text-gray-900"}`}>{value}</p>{sub && <p className="text-[11px] text-gray-400 mt-0.5">{sub}</p>}</div>;
-}
 
 export default async function FairnessEngine() {
   const supabase = await createClient();

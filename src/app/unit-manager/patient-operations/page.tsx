@@ -5,6 +5,7 @@ import { loadPatientOperations } from "@/lib/operations/patient-operations";
 import { loadUnitDepartments } from "@/lib/operations/unit-command";
 import UnitFilters from "../UnitFilters";
 import PosTabs from "./PosTabs";
+import { KpiTile as Kpi } from "../../../components/ui/primitives";
 
 export const dynamic = "force-dynamic";
 
@@ -17,10 +18,6 @@ export const dynamic = "force-dynamic";
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 const card = "bg-white rounded-xl border border-gray-200";
-
-function Kpi({ label, value, sub, tone, icon }: { label: string; value: any; sub?: string; tone?: string; icon?: string }) {
-  return <div className={`${card} p-4`}><div className="flex items-start justify-between"><p className="text-xs text-gray-500">{label}</p>{icon && <span className="text-base opacity-40">{icon}</span>}</div><p className={`text-2xl font-bold tabular-nums mt-1 ${tone ?? "text-gray-900"}`}>{value}</p>{sub && <p className="text-[11px] text-gray-400 mt-0.5">{sub}</p>}</div>;
-}
 
 const BAND_TONE: Record<string, string> = { Normal: "text-[var(--cmp-text-success)]", Elevated: "text-[var(--cmp-text-warning)]", High: "text-[var(--cmp-text-error)]" };
 const BAND_RING: Record<string, string> = { Normal: "#10b981", Elevated: "#f59e0b", High: "#ef4444" };

@@ -6,6 +6,7 @@ import { loadUnitDepartments } from "@/lib/operations/unit-command";
 import UnitFilters from "../../UnitFilters";
 import StaffingEngine from "./StaffingEngine";
 import StaffEngineTabs from "./StaffEngineTabs";
+import { KpiTile as Kpi } from "../../../../components/ui/primitives";
 
 export const dynamic = "force-dynamic";
 
@@ -22,10 +23,6 @@ const NONE = "00000000-0000-0000-0000-000000000000";
 // Coverage colour tiers (mockup legend)
 const cellColor = (p: number | null) => p == null ? "bg-gray-50 text-gray-400" : p >= 90 ? "bg-[var(--cmp-surface-success)] text-emerald-800" : p >= 70 ? "bg-lime-100 text-lime-800" : p >= 50 ? "bg-[var(--cmp-surface-warning)] text-amber-800" : "bg-[var(--cmp-surface-error)] text-rose-800";
 const hhmm = (iso?: string | null) => (iso ? new Date(iso).toISOString().slice(11, 16) : null);
-
-function Kpi({ label, value, sub, tone, icon }: { label: string; value: any; sub?: string; tone?: string; icon?: string }) {
-  return <div className={`${card} p-4`}><div className="flex items-start justify-between"><p className="text-xs text-gray-500">{label}</p>{icon && <span className="text-base opacity-40">{icon}</span>}</div><p className={`text-2xl font-bold tabular-nums mt-1 ${tone ?? "text-gray-900"}`}>{value}</p>{sub && <p className="text-[11px] text-gray-400 mt-0.5">{sub}</p>}</div>;
-}
 
 export default async function StaffingEnginePage({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   const sp = await searchParams;

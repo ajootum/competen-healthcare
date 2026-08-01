@@ -256,3 +256,32 @@ export function DarkCard({ title, tag, children, muted = false }: { title: strin
     </div>
   );
 }
+
+// ── KPI tile ─────────────────────────────────────────────────────────────────
+// NOT the same thing as KpiRibbon in charts.tsx, and the names are meant to keep them apart:
+//   KpiRibbon  a ROW of KPIs with the PUI-007 rules — a seven-tile cap, a stated overflow, tone mapping.
+//   KpiTile    ONE tile. No cap, no ribbon, no opinion about its neighbours.
+//
+// Promoted into the library on request. It had been written out identically in 13 pages across TWO
+// workspaces (unit-manager and supervisor), so no workspace kit could own it — the only shared ancestor
+// was src/app. Living here at least means one implementation instead of thirteen.
+//
+// A caveat worth stating in the file rather than only in a commit message: this is a LEGACY tile lifted
+// from pages, not a component designed against PUI-007, and it is not the ribbon. Reach for KpiRibbon on
+// new surfaces; this exists so the thirteen copies became one.
+//
+// The class string is inlined rather than built from `cardClass`, because the pages composed it from an
+// UNPADDED card constant and then added p-4. cardClass ends in p-5, so using it here would emit "p-5 p-4"
+// on all thirteen. scripts/pui-migration-harness.ts asserts the rendered string is unchanged.
+export function KpiTile({ label, value, sub, tone, icon }: { label: string; value: React.ReactNode; sub?: string; tone?: string; icon?: string }) {
+  return (
+    <div className="bg-white rounded-xl border border-gray-200 p-4">
+      <div className="flex items-start justify-between">
+        <p className="text-xs text-gray-500">{label}</p>
+        {icon && <span className="text-base opacity-40">{icon}</span>}
+      </div>
+      <p className={`text-2xl font-bold tabular-nums mt-1 ${tone ?? "text-gray-900"}`}>{value}</p>
+      {sub && <p className="text-[11px] text-gray-400 mt-0.5">{sub}</p>}
+    </div>
+  );
+}

@@ -5,6 +5,7 @@ import { loadConstraintEngine } from "@/lib/operations/constraint-engine";
 import { loadUnitDepartments } from "@/lib/operations/unit-command";
 import UnitFilters from "../../UnitFilters";
 import SchedulingTabs from "../SchedulingTabs";
+import { KpiTile as Kpi } from "../../../../components/ui/primitives";
 
 export const dynamic = "force-dynamic";
 
@@ -20,10 +21,6 @@ const SUBTABS = ["Overview", "Clinical Constraints", "Workforce Constraints", "L
 const SEV: Record<string, string> = { Critical: "bg-[var(--cmp-surface-error)] text-[var(--cmp-text-error)]", High: "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]", Medium: "bg-[var(--cmp-surface-information)] text-blue-700", Low: "bg-gray-100 text-gray-600", Pass: "bg-[var(--cmp-surface-success)] text-emerald-700" };
 const STATUS_DOT: Record<string, string> = { Pass: "bg-[var(--cmp-color-success)]", Warning: "bg-[var(--cmp-color-warning)]", Override: "bg-[var(--cmp-color-warning)]", Blocked: "bg-[var(--cmp-color-error)]" };
 const CAT_COLOR: Record<string, string> = { Clinical: "text-[var(--cmp-text-error)]", Competency: "text-violet-600", Workforce: "text-[var(--cmp-text-information)]", Fairness: "text-[var(--cmp-text-warning)]" };
-
-function Kpi({ label, value, sub, tone, icon }: { label: string; value: any; sub?: string; tone?: string; icon?: string }) {
-  return <div className={`${card} p-4`}><div className="flex items-start justify-between"><p className="text-xs text-gray-500">{label}</p>{icon && <span className="text-base opacity-40">{icon}</span>}</div><p className={`text-2xl font-bold tabular-nums mt-1 ${tone ?? "text-gray-900"}`}>{value}</p>{sub && <p className="text-[11px] text-gray-400 mt-0.5">{sub}</p>}</div>;
-}
 
 export default async function ConstraintEngine() {
   const supabase = await createClient();

@@ -78,6 +78,23 @@ function main() {
       `${heading}  vs  ${PLAIN_HEADING}`);
   }
 
+  // ── KpiTile vs the 13 page-local copies it replaces ──
+  // The pages composed their shell from an UNPADDED `card` constant plus p-4. KpiTile inlines the result,
+  // so the bodies are not textually equal and the guard refused them by default — they were migrated via
+  // --from-hash after this check. What is proven: the class SET KpiTile renders equals what
+  // `${card} p-4` expanded to, and it is NOT cardClass, which would have added a second padding.
+  const tile = prim.match(/export function KpiTile[\s\S]*?\n}/);
+  ok("KpiTile is in the library", !!tile);
+  if (tile) {
+    const shell = (tile[0].match(/<div className="([^"]*)"/) ?? [])[1] ?? "";
+    const PAGE_SHELL = "bg-white rounded-xl border border-gray-200" + " p-4";   // `${card} p-4`, expanded
+    ok("KpiTile renders exactly what the 13 pages rendered",
+      tokens(shell).size === tokens(PAGE_SHELL).size && [...tokens(shell)].every(t => tokens(PAGE_SHELL).has(t)),
+      `${shell}  vs  ${PAGE_SHELL}`);
+    ok("KpiTile does NOT use cardClass, which would double the padding",
+      !tokens(shell).has("p-5"), "cardClass ends in p-5 and the tile adds p-4");
+  }
+
   // ── The diff ──
   let diff = "";
   try { diff = git("diff", "-U0", ref, "--", "src/app"); } catch { /* no diff */ }
