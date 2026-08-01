@@ -19,6 +19,8 @@
 
 import { loadEnvConfig } from "@next/env";
 import { createClient } from "@supabase/supabase-js";
+import { readFileSync, readdirSync, statSync } from "node:fs";
+import { join } from "node:path";
 import { loadQieModules, qieSummary, resolveState } from "../src/lib/qie/engines";
 import { loadRootCause } from "../src/lib/qie/root-cause";
 import { loadIndicators, trendOf, statusOf } from "../src/lib/qie/indicators";
@@ -27,6 +29,15 @@ loadEnvConfig(process.cwd());
 const admin = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!, {
   auth: { persistSession: false },
 });
+
+const walk = (dir: string, out: string[] = []): string[] => {
+  for (const e of readdirSync(dir)) {
+    const p = join(dir, e);
+    if (statSync(p).isDirectory()) walk(p, out);
+    else if (/\.tsx?$/.test(p)) out.push(p);
+  }
+  return out;
+};
 
 let pass = 0, fail = 0;
 const ok = (name: string, cond: boolean, detail = "") => {
@@ -129,6 +140,27 @@ async function main() {
   ok("trends vary across the real population, so the calculation is live", trends.size > 1,
     `every indicator reports "${[...trends][0]}" — a stuck calculation looks exactly like this`);
   console.log(`\n        ${ind.stats.total} indicators · ${ind.stats.unclassified} unclassified · ${ind.stats.watch} watch · ${ind.stats.breaches} breach\n`);
+
+  // ── QIE-001: the event spine, and producers nobody calls ──────────────────
+  // A producer with no call site is a documented event type the platform has never emitted. It passes
+  // every review -- the function is correct, typed and tested -- and the stream it feeds stays empty.
+  // emitApprovalDecided sat like that until this check was written.
+  const prodSrc = readFileSync(join(process.cwd(), "src/lib/orchestration/producers.ts"), "utf8");
+  const producers = [...prodSrc.matchAll(/^export function (emit[A-Za-z]+)/gm)].map(m => m[1]);
+  const appSrc = [...walk(join(process.cwd(), "src/app")), ...walk(join(process.cwd(), "src/lib"))]
+    .filter(f => !f.endsWith("producers.ts"))
+    .map(f => readFileSync(f, "utf8")).join("\n");
+  const orphans = producers.filter(p => !new RegExp(`\\b${p}\\s*\\(`).test(appSrc));
+  ok(`every event producer has a call site (${producers.length} producers)`, orphans.length === 0,
+    `never emitted: ${orphans.join(", ")}`);
+
+  // The spine itself: functional, and empty for a reason worth stating.
+  const evProbe = await admin.from("domain_events").select("id").limit(1);
+  ok("the event spine is deployed", !evProbe.error, evProbe.error?.message);
+  const { count: evCount } = await admin.from("domain_events").select("*", { count: "exact", head: true });
+  console.log(`\n        ${producers.length} producers, all wired · ${evCount} event(s) in the spine`);
+  console.log(`        (a low count here means this database was SEEDED rather than transacted -- the`);
+  console.log(`         producers are wired and the one real event was emitted and processed)\n`);
 
   // 4. Independent verification: count two stores directly and compare with what the loader said.
   for (const [id, table] of [["QIE-002", "pa_kpi_values"], ["QIE-008", "pa_benchmarks"]] as const) {

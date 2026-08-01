@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getCaller, isResponse, isStaff, isSupervisor, forbidden, badRequest } from "@/lib/api-auth";
+import { emitApprovalDecided } from "@/lib/orchestration/producers";
 
 // Approvals Workspace (UMW-EA-001) API. POST creates an approval request (with a
 // rule-based AI recommendation + SLA due date); PATCH records a decision
@@ -73,7 +74,10 @@ export async function PATCH(req: Request) {
   if (!id || !action) return badRequest("id and action required");
   if (!ACTION_STATUS[action] && action !== "comment") return badRequest("unknown action");
 
-  const { data: prev } = await c.admin.from("approval_requests").select("status, title").eq("id", id).maybeSingle();
+  // `category` is selected because the decision EVENT carries it. Reading a column that was not selected
+  // yields undefined rather than an error, so the event would have shipped with a null category and
+  // nothing would have complained — the fail-soft read this codebase keeps finding.
+  const { data: prev } = await c.admin.from("approval_requests").select("status, title, category").eq("id", id).maybeSingle();
   if (!prev) return badRequest("request not found");
   const nm = await name(c.admin, c.userId);
 
@@ -92,5 +96,15 @@ export async function PATCH(req: Request) {
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
   await c.admin.from("audit_log").insert({ trace_id: c.traceId, actor_id: c.userId, actor_name: nm, action: `approval_${action}`, entity_type: "approval_request", entity_id: id, entity_name: prev.title, hospital_id: c.hospitalId ?? null, old_value: { status: prev.status }, new_value: { status, note: b.note ?? null } });
+
+  // QIE-001. emitApprovalDecided existed with ZERO call sites — a producer nobody called, so
+  // staffing.approval.decided was a documented event type this platform had never once emitted. Same
+  // class as the assessment.completed payload with no contract: every part present, nothing connected.
+  //
+  // Emitted only on a TERMINAL decision. A delegation or an escalation moves the request along; it is not
+  // the decision, and an event stream that cannot tell the two apart is worse than one that waits.
+  if (terminal) {
+    await emitApprovalDecided(c.admin, { id, hospital_id: c.hospitalId ?? null, category: prev.category ?? null }, c.userId, status);
+  }
   return NextResponse.json({ ok: true, status });
 }
