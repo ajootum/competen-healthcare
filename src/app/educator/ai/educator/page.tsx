@@ -1,8 +1,9 @@
 import Link from "next/link";
 import { requireEducatorAccess } from "@/lib/educator-access";
-import { loadEducatorIntelligence, type NavNode, type Tint, type EducatorDot } from "@/lib/educator-intelligence";
+import { loadEducatorIntelligence, type EducatorDot } from "@/lib/educator-intelligence";
 import CommandBar from "./CommandBar";
 import { DonutB as Donut } from "../_kit";
+import { NavTree, TINT_DOT } from "../_kit";
 
 // Educator Intelligence Workspace (spec v1.0 + mockup) — the AI-powered educator
 // capacity / workload / development centre inside AI & Intelligence. Dark
@@ -13,23 +14,10 @@ import { DonutB as Donut } from "../_kit";
 
 export const dynamic = "force-dynamic";
 
-const TINT_DOT: Record<Tint, string> = { green: "bg-[var(--cmp-color-success)]", amber: "bg-[var(--cmp-color-warning)]", red: "bg-[var(--cmp-color-error)]", muted: "bg-slate-600" };
 const RISK_CLS: Record<string, string> = { Low: "text-emerald-400", Medium: "text-amber-400", High: "text-rose-400" };
 const SEV_CLS: Record<string, string> = { High: "bg-[var(--cmp-color-error)]/20 text-rose-300 border-rose-500/30", Medium: "bg-[var(--cmp-color-warning)]/20 text-amber-300 border-amber-500/30", Low: "bg-[var(--cmp-color-information)]/20 text-sky-300 border-sky-500/30" };
 const BAND_COLOR: Record<string, string> = { Balanced: "#22c55e", High: "#f59e0b", Overloaded: "#f97316", Critical: "#ef4444", Underutilised: "#3b82f6" };
 
-function NavTree({ node, depth }: { node: NavNode; depth: number }) {
-  const dot = <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${TINT_DOT[node.tint]}`} />;
-  if (!node.children.length) return <div className="flex items-center gap-2 py-1 pr-2" style={{ paddingLeft: `${depth * 12 + 8}px` }}>{dot}<span className="text-[12px] text-slate-300 truncate">{node.name}</span><span className="text-[9px] text-slate-500 ml-auto whitespace-nowrap">{node.meta}</span></div>;
-  return (
-    <details open={depth < 1} className="group">
-      <summary className="flex items-center gap-2 py-1 pr-2 cursor-pointer list-none hover:bg-white/[0.03] rounded" style={{ paddingLeft: `${depth * 12 + 8}px` }}>
-        <span className="text-[9px] text-slate-500 transition-transform group-open:rotate-90">▶</span>{dot}<span className="text-[12px] font-medium text-slate-200 truncate">{node.name}</span><span className="text-[9px] text-slate-500 ml-auto whitespace-nowrap">{node.meta}</span>
-      </summary>
-      <div>{node.children.map(c => <NavTree key={c.id} node={c} depth={depth + 1} />)}</div>
-    </details>
-  );
-}
 
 function WorkloadMap({ dots }: { dots: EducatorDot[] }) {
   return (
