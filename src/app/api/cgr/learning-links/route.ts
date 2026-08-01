@@ -64,7 +64,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
-  await c.admin.from("audit_log").insert({
+  await c.admin.from("audit_log").insert({ trace_id: c.traceId,
     actor_id: c.userId, actor_name: me?.full_name ?? null, action: "learning_link_proposed",
     entity_type: "learning_link", entity_id: data.id, entity_name: data.source_ref ?? data.source_type,
     hospital_id: c.hospitalId, new_value: { source: data.source_type, target: data.target_type, link_type: data.link_type },
@@ -98,7 +98,7 @@ export async function PATCH(req: Request) {
   const { data, error } = await c.admin.from("competency_learning_links").update(patch).eq("id", id).select().single();
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
-  await c.admin.from("audit_log").insert({
+  await c.admin.from("audit_log").insert({ trace_id: c.traceId,
     actor_id: c.userId, actor_name: me?.full_name ?? null, action: `learning_link_${status}`,
     entity_type: "learning_link", entity_id: id, entity_name: existing.source_ref ?? existing.source_type,
     hospital_id: existing.hospital_id, old_value: { status: existing.status }, new_value: { status },

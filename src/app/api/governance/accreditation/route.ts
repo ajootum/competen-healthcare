@@ -43,7 +43,7 @@ export async function POST(req: Request) {
   }).select().single();
   if (error) return migrationGate(error) ?? NextResponse.json({ error: error.message }, { status: 500 });
 
-  await c.admin.from("audit_log").insert({ actor_id: c.userId, action: `standard_${data.status}`, entity_type: "accreditation", entity_id: data.id, entity_name: `${fw.code} ${data.reference_code}` });
+  await c.admin.from("audit_log").insert({ trace_id: c.traceId, actor_id: c.userId, action: `standard_${data.status}`, entity_type: "accreditation", entity_id: data.id, entity_name: `${fw.code} ${data.reference_code}` });
   return NextResponse.json(data, { status: 201 });
 }
 

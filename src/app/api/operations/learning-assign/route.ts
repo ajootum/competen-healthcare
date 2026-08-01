@@ -26,7 +26,7 @@ export async function POST(req: Request) {
       competency_id: b.competency_id || null, status: "active", active: true, created_by: c.userId,
     }).select().single();
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-    await admin.from("audit_log").insert({ actor_id: c.userId, action: "create_learning_course", entity_type: "learning_course", entity_id: data.id, hospital_id: hid, new_value: { title: b.title } });
+    await admin.from("audit_log").insert({ trace_id: c.traceId, actor_id: c.userId, action: "create_learning_course", entity_type: "learning_course", entity_id: data.id, hospital_id: hid, new_value: { title: b.title } });
     return NextResponse.json(data, { status: 201 });
   }
 
@@ -55,7 +55,7 @@ export async function POST(req: Request) {
     const rows = targets.map(s => ({ hospital_id: hid, user_id: s.id, course_id: b.course_id, assignment_id: assignment.id, status: "not_started", mandatory, due_date: b.due_date || null }));
     const { error: eErr } = await admin.from("learning_enrolments").insert(rows);
     if (eErr) return NextResponse.json({ error: eErr.message }, { status: 500 });
-    await admin.from("audit_log").insert({ actor_id: c.userId, action: "assign_learning", entity_type: "learning_assignment", entity_id: assignment.id, hospital_id: hid, new_value: { course: course.title, enrolled: rows.length, audience: b.role || "all" } });
+    await admin.from("audit_log").insert({ trace_id: c.traceId, actor_id: c.userId, action: "assign_learning", entity_type: "learning_assignment", entity_id: assignment.id, hospital_id: hid, new_value: { course: course.title, enrolled: rows.length, audience: b.role || "all" } });
     return NextResponse.json({ assignment, enrolled: rows.length }, { status: 201 });
   }
 
@@ -84,6 +84,6 @@ export async function PATCH(req: Request) {
       : { status: "not_started", progress_pct: 0, completed_at: null, updated_at: now };
   const { data, error } = await admin.from("learning_enrolments").update(patch).eq("id", id).select().single();
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  await admin.from("audit_log").insert({ actor_id: c.userId, action: "update_learning_enrolment", entity_type: "learning_enrolment", entity_id: id, hospital_id: enr.hospital_id, new_value: { status: patch.status } });
+  await admin.from("audit_log").insert({ trace_id: c.traceId, actor_id: c.userId, action: "update_learning_enrolment", entity_type: "learning_enrolment", entity_id: id, hospital_id: enr.hospital_id, new_value: { status: patch.status } });
   return NextResponse.json(data);
 }

@@ -34,7 +34,7 @@ export async function POST(req: Request) {
   }).select().single();
   if (error) return migrationGate(error) ?? NextResponse.json({ error: error.message }, { status: 500 });
 
-  await admin.from("audit_log").insert({
+  await admin.from("audit_log").insert({ trace_id: c.traceId,
     actor_id: c.userId, actor_name: me?.full_name ?? null, action: "device_recorded",
     entity_type: "op_patient_device", entity_id: data.id, entity_name: `${b.device_type} — ${p.label}`,
     hospital_id: p.hospital_id, new_value: { device_type: b.device_type, site: data.site },
@@ -60,7 +60,7 @@ export async function PATCH(req: Request) {
     .update({ removed_at: new Date().toISOString(), removed_by: c.userId }).eq("id", d.id).select().single();
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   const { data: me } = await admin.from("profiles").select("full_name").eq("id", c.userId).single();
-  await admin.from("audit_log").insert({
+  await admin.from("audit_log").insert({ trace_id: c.traceId,
     actor_id: c.userId, actor_name: me?.full_name ?? null, action: "device_removed",
     entity_type: "op_patient_device", entity_id: d.id, hospital_id: d.hospital_id,
     new_value: { device_type: d.device_type },

@@ -34,7 +34,7 @@ export async function POST(req: Request) {
   }
 
   await c.admin.from("cst_360_assessments").update({ updated_at: new Date().toISOString() }).eq("id", assessmentId);
-  await c.admin.from("audit_log").insert({ actor_id: c.userId, action: "add_360_group", entity_type: "cst_360_assessment", entity_id: assessmentId, hospital_id: a.hospital_id ?? null, new_value: { group_type: group, weight } });
+  await c.admin.from("audit_log").insert({ trace_id: c.traceId, actor_id: c.userId, action: "add_360_group", entity_type: "cst_360_assessment", entity_id: assessmentId, hospital_id: a.hospital_id ?? null, new_value: { group_type: group, weight } });
   return NextResponse.json(data, { status: 201 });
 }
 
@@ -52,6 +52,6 @@ export async function DELETE(req: Request) {
 
   const { error } = await c.admin.from("cst_360_respondent_groups").delete().eq("id", id);
   if (error) return migrationGate(error) ?? NextResponse.json({ error: error.message }, { status: 500 });
-  await c.admin.from("audit_log").insert({ actor_id: c.userId, action: "remove_360_group", entity_type: "cst_360_assessment", entity_id: g.assessment_id, hospital_id: a?.hospital_id ?? null });
+  await c.admin.from("audit_log").insert({ trace_id: c.traceId, actor_id: c.userId, action: "remove_360_group", entity_type: "cst_360_assessment", entity_id: g.assessment_id, hospital_id: a?.hospital_id ?? null });
   return NextResponse.json({ ok: true });
 }

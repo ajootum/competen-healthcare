@@ -67,7 +67,7 @@ export async function PATCH(req: Request) {
     await admin.from("position_templates").update({ status: "retired" }).eq("position_library_id", tpl.position_library_id).eq("status", "active");
     const { data, error } = await admin.from("position_templates").update({ status: "active" }).eq("id", id).select().single();
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-    await admin.from("audit_log").insert({ actor_id: c.userId, action: "publish_position_template", entity_type: "position_template", entity_id: id });
+    await admin.from("audit_log").insert({ trace_id: c.traceId, actor_id: c.userId, action: "publish_position_template", entity_type: "position_template", entity_id: id });
     return NextResponse.json(data);
   }
 

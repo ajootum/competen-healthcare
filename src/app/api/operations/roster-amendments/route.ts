@@ -29,7 +29,7 @@ export async function POST(req: Request) {
     retrospective_review_required: !!b.emergency,
   }).select().single();
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  await admin.from("audit_log").insert({ actor_id: c.userId, action: "record_roster_amendment", entity_type: "op_roster_amendment", entity_id: data.id, hospital_id: roster.hospital_id, new_value: { amendment_type: b.amendment_type } });
+  await admin.from("audit_log").insert({ trace_id: c.traceId, actor_id: c.userId, action: "record_roster_amendment", entity_type: "op_roster_amendment", entity_id: data.id, hospital_id: roster.hospital_id, new_value: { amendment_type: b.amendment_type } });
   return NextResponse.json(data, { status: 201 });
 }
 
@@ -52,6 +52,6 @@ export async function PATCH(req: Request) {
   if (["approved", "applied"].includes(status)) { patch.approved_by = c.userId; patch.approved_by_name = me?.full_name ?? null; patch.approved_at = new Date().toISOString(); }
   const { data, error } = await admin.from("op_roster_amendments").update(patch).eq("id", id).select().single();
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  await admin.from("audit_log").insert({ actor_id: c.userId, action: "record_roster_amendment", entity_type: "op_roster_amendment", entity_id: id, hospital_id: row.hospital_id, new_value: { action: b.action } });
+  await admin.from("audit_log").insert({ trace_id: c.traceId, actor_id: c.userId, action: "record_roster_amendment", entity_type: "op_roster_amendment", entity_id: id, hospital_id: row.hospital_id, new_value: { action: b.action } });
   return NextResponse.json(data);
 }

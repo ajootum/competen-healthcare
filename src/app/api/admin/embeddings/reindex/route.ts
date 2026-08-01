@@ -21,11 +21,11 @@ export async function POST(req: Request) {
   const b = await req.json().catch(() => ({}));
   if (b.action === "enqueue") {
     const r = await enqueueAssets(c.admin);
-    await c.admin.from("audit_log").insert({ actor_id: c.userId, action: "embeddings_enqueue", entity_type: "knowledge_embeddings", new_value: r });
+    await c.admin.from("audit_log").insert({ trace_id: c.traceId, actor_id: c.userId, action: "embeddings_enqueue", entity_type: "knowledge_embeddings", new_value: r });
     return NextResponse.json({ ...r, status: await indexStatus(c.admin) });
   }
   const limit = Math.min(Math.max(parseInt(b.limit, 10) || 32, 1), 128);
   const r = await reindexBatch(c.admin, limit);
-  if (r.processed > 0) await c.admin.from("audit_log").insert({ actor_id: c.userId, action: "embeddings_reindex", entity_type: "knowledge_embeddings", new_value: { processed: r.processed } });
+  if (r.processed > 0) await c.admin.from("audit_log").insert({ trace_id: c.traceId, actor_id: c.userId, action: "embeddings_reindex", entity_type: "knowledge_embeddings", new_value: { processed: r.processed } });
   return NextResponse.json({ ...r, status: await indexStatus(c.admin) });
 }

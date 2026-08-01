@@ -36,6 +36,6 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
   if (error) return migrationGate(error) ?? NextResponse.json({ error: error.message }, { status: 500 });
 
   await c.admin.from("ogs_lifecycle_transitions").insert({ office_id: id, from_state: office.status, to_state: toState, reason, actor_name: actor });
-  await c.admin.from("audit_log").insert({ actor_id: c.userId, actor_name: actor, action: `office_${toState}`, entity_type: "ogs_office", entity_id: id, hospital_id: office.hospital_id ?? null, old_value: { status: office.status }, new_value: { status: toState, reason } });
+  await c.admin.from("audit_log").insert({ trace_id: c.traceId, actor_id: c.userId, actor_name: actor, action: `office_${toState}`, entity_type: "ogs_office", entity_id: id, hospital_id: office.hospital_id ?? null, old_value: { status: office.status }, new_value: { status: toState, reason } });
   return NextResponse.json(updated);
 }

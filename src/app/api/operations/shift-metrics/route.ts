@@ -31,6 +31,6 @@ export async function POST() {
   }, { onConflict: "shift_id" }).select("id, overall_score").single();
   if (error) return migrationGate(error) ?? NextResponse.json({ error: error.message }, { status: 500 });
 
-  await c.admin.from("audit_log").insert({ actor_id: c.userId, actor_name: me?.full_name ?? null, action: "compute_shift_metrics", entity_type: "shift_metrics", entity_id: data.id, hospital_id: c.hospitalId ?? null, new_value: { overall_score: data.overall_score } });
+  await c.admin.from("audit_log").insert({ trace_id: c.traceId, actor_id: c.userId, actor_name: me?.full_name ?? null, action: "compute_shift_metrics", entity_type: "shift_metrics", entity_id: data.id, hospital_id: c.hospitalId ?? null, new_value: { overall_score: data.overall_score } });
   return NextResponse.json(data, { status: 201 });
 }

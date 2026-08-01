@@ -113,7 +113,7 @@ export async function POST(req: Request) {
     await admin.from("op_observations").update({ escalation_triggered: true, escalation_id: escalationId }).eq("id", obs.id);
   }
 
-  await admin.from("audit_log").insert({ actor_id: c.userId, action: "record_observation", entity_type: "op_observation", entity_id: obs.id, entity_name: patient.label, hospital_id: patient.hospital_id, new_value: { type: b.observation_type, ews, concern, escalated: !!escalationId } });
+  await admin.from("audit_log").insert({ trace_id: c.traceId, actor_id: c.userId, action: "record_observation", entity_type: "op_observation", entity_id: obs.id, entity_name: patient.label, hospital_id: patient.hospital_id, new_value: { type: b.observation_type, ews, concern, escalated: !!escalationId } });
   // HWW-OPS-001 catalogue event (fail-soft).
   await emitObservationCompleted(admin, { ...obs, escalation_triggered: !!escalationId }, c.userId);
   return NextResponse.json({ ...obs, escalation_triggered: !!escalationId, escalation_id: escalationId }, { status: 201 });

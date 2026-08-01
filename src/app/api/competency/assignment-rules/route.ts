@@ -38,7 +38,7 @@ export async function POST(req: Request) {
   }).select("id").single();
   if (error) return migrationGate(error) ?? NextResponse.json({ error: error.message }, { status: 500 });
 
-  await c.admin.from("audit_log").insert({ actor_id: c.userId, actor_name: me?.full_name ?? null, action: "create_assignment_rule", entity_type: "cmo_assignment_rule", entity_id: data.id, hospital_id: c.hospitalId ?? null, new_value: { name, competency: competencyName, target: clean(b.target_label) ?? clean(b.target_role) ?? "all staff", priority } });
+  await c.admin.from("audit_log").insert({ trace_id: c.traceId, actor_id: c.userId, actor_name: me?.full_name ?? null, action: "create_assignment_rule", entity_type: "cmo_assignment_rule", entity_id: data.id, hospital_id: c.hospitalId ?? null, new_value: { name, competency: competencyName, target: clean(b.target_label) ?? clean(b.target_role) ?? "all staff", priority } });
   return NextResponse.json({ id: data.id }, { status: 201 });
 }
 
@@ -53,6 +53,6 @@ export async function DELETE(req: Request) {
   if (!isSuper(c) && row.hospital_id && row.hospital_id !== c.hospitalId) return forbidden("Out of scope");
   const { error } = await c.admin.from("cmo_assignment_rules").delete().eq("id", id);
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  await c.admin.from("audit_log").insert({ actor_id: c.userId, action: "delete_assignment_rule", entity_type: "cmo_assignment_rule", entity_id: id, hospital_id: row.hospital_id ?? null });
+  await c.admin.from("audit_log").insert({ trace_id: c.traceId, actor_id: c.userId, action: "delete_assignment_rule", entity_type: "cmo_assignment_rule", entity_id: id, hospital_id: row.hospital_id ?? null });
   return NextResponse.json({ ok: true });
 }

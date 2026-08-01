@@ -40,7 +40,7 @@ export async function POST(req: Request) {
     );
   }
 
-  await admin.from("audit_log").insert({
+  await admin.from("audit_log").insert({ trace_id: c.traceId,
     actor_id: c.userId, actor_name: me?.full_name ?? null,
     action: "grant_authorization", entity_type: "authorization", entity_id: cao.id,
     new_value: { nurse_id, authorization_type, authorization_level },
@@ -66,7 +66,7 @@ export async function PATCH(req: Request) {
   const admin = c.admin;
   const { data: me } = await admin.from("profiles").select("full_name").eq("id", c.userId).single();
   await admin.from("clinical_authorizations").update({ status }).eq("id", id);
-  await admin.from("audit_log").insert({
+  await admin.from("audit_log").insert({ trace_id: c.traceId,
     actor_id: c.userId, actor_name: me?.full_name ?? null,
     action: "update_authorization", entity_type: "authorization", entity_id: id,
     new_value: { status },

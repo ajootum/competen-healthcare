@@ -41,7 +41,7 @@ export async function POST(req: Request) {
 
   const { data, error } = await admin.from("hospitals").insert(insert).select().single();
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  await admin.from("audit_log").insert({ actor_id: c.userId, action: "create_facility", entity_type: "facility", entity_id: data.id, entity_name: data.name });
+  await admin.from("audit_log").insert({ trace_id: c.traceId, actor_id: c.userId, action: "create_facility", entity_type: "facility", entity_id: data.id, entity_name: data.name });
   return NextResponse.json(data, { status: 201 });
 }
 
@@ -72,6 +72,6 @@ export async function PATCH(req: Request) {
   const { data, error } = await admin.from("hospitals").update(update).eq("id", id).select().single();
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   const act = update.status ? `facility_${update.status}` : "update_facility";
-  await admin.from("audit_log").insert({ actor_id: c.userId, action: act, entity_type: "facility", entity_id: id, entity_name: data.name });
+  await admin.from("audit_log").insert({ trace_id: c.traceId, actor_id: c.userId, action: act, entity_type: "facility", entity_id: id, entity_name: data.name });
   return NextResponse.json(data);
 }

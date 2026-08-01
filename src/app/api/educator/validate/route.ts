@@ -41,7 +41,7 @@ export async function POST(req: NextRequest) {
       .eq("id", competency_score_id);
 
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-    await c.admin.from("audit_log").insert({
+    await c.admin.from("audit_log").insert({ trace_id: c.traceId,
       actor_id: c.userId, actor_name: me?.full_name ?? null,
       action: "educator_validate", entity_type: "competency_score", entity_id: competency_score_id,
     });
@@ -68,7 +68,7 @@ export async function POST(req: NextRequest) {
       .eq("id", competency_score_id);
 
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-    await c.admin.from("audit_log").insert({
+    await c.admin.from("audit_log").insert({ trace_id: c.traceId,
       actor_id: c.userId, actor_name: me?.full_name ?? null,
       action: "educator_return", entity_type: "competency_score", entity_id: competency_score_id,
     });

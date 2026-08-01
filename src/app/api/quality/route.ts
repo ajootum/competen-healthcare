@@ -40,7 +40,7 @@ export async function POST(req: Request) {
         reference_code: s.reference_code.trim(), title: s.title?.trim() || null,
       })));
     }
-    await c.admin.from("audit_log").insert({
+    await c.admin.from("audit_log").insert({ trace_id: c.traceId,
       actor_id: c.userId, actor_name: actorName,
       action: "create_quality_object", entity_type: "quality_object", entity_id: qo.id,
       new_value: { title, standards: valid.length },
@@ -100,7 +100,7 @@ export async function POST(req: Request) {
       target_date: target_date || null, created_by: c.userId,
     }).select("id").single();
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-    await c.admin.from("audit_log").insert({
+    await c.admin.from("audit_log").insert({ trace_id: c.traceId,
       actor_id: c.userId, actor_name: actorName,
       action: "create_improvement", entity_type: "improvement_object", entity_id: data.id,
       new_value: { title, methodology },
@@ -133,7 +133,7 @@ export async function PATCH(req: Request) {
   const { error } = await c.admin.from("improvement_objects").update(update).eq("id", improvement_id);
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
-  await c.admin.from("audit_log").insert({
+  await c.admin.from("audit_log").insert({ trace_id: c.traceId,
     actor_id: c.userId, actor_name: me?.full_name ?? null,
     action: "update_improvement_status", entity_type: "improvement_object", entity_id: improvement_id,
     new_value: { status },

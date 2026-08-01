@@ -77,7 +77,7 @@ export async function POST(req: Request) {
     : await recordWorkload(admin, { ...ctx, payload: b.payload ?? b.items, overrideLevel: b.override_level, overrideReason: b.override_reason });
   if (!r.ok) return NextResponse.json({ error: r.error }, { status: r.status });
 
-  await admin.from("audit_log").insert({
+  await admin.from("audit_log").insert({ trace_id: c.traceId,
     actor_id: c.userId, actor_name: me?.full_name ?? null,
     action: kind === "acuity" ? "record_acuity_assessment" : "record_workload_assessment",
     entity_type: kind === "acuity" ? "op_acuity_assessment" : "op_workload_assessment",

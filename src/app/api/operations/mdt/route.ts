@@ -65,7 +65,7 @@ export async function POST(req: Request) {
       raised_by: c.userId, raised_by_name: b.raised_by_name ?? null,
     }).select().single();
     if (error) return missing(error) ? notProvisioned() : NextResponse.json({ error: error.message }, { status: 500 });
-    await admin.from("audit_log").insert({
+    await admin.from("audit_log").insert({ trace_id: c.traceId,
       actor_id: c.userId, action: "mdt_refer", entity_type: "op_mdt_referral", entity_id: data.id,
       hospital_id: p.hospital_id, new_value: { patient_id: p.id, priority: data.priority, complexity: data.complexity },
     });
@@ -118,7 +118,7 @@ export async function POST(req: Request) {
       await admin.from("op_mdt_referrals").update({ status: "scheduled", meeting_id: data.id })
         .eq("id", b.referral_id).eq("status", "awaiting_review");
     }
-    await admin.from("audit_log").insert({
+    await admin.from("audit_log").insert({ trace_id: c.traceId,
       actor_id: c.userId, action: "mdt_schedule", entity_type: "op_mdt_meeting", entity_id: data.id,
       hospital_id: hospitalId, new_value: { meeting_type: data.meeting_type, scheduled_at: data.scheduled_at, invited: invites.length },
     });
@@ -152,7 +152,7 @@ export async function POST(req: Request) {
       decided_by: c.userId, decided_by_name: b.decided_by_name ?? null,
     }).select().single();
     if (error) return missing(error) ? notProvisioned() : NextResponse.json({ error: error.message }, { status: 500 });
-    await admin.from("audit_log").insert({
+    await admin.from("audit_log").insert({ trace_id: c.traceId,
       actor_id: c.userId, action: "mdt_decision", entity_type: "op_mdt_decision", entity_id: data.id,
       hospital_id: m?.hospital_id ?? null, new_value: { category: data.category, meeting_id: b.meeting_id },
     });
@@ -218,7 +218,7 @@ export async function PATCH(req: Request) {
     const { data, error } = await admin.from("op_mdt_participants")
       .update({ signed_off: true, signed_off_at: now }).eq("id", b.participant_id).select().single();
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-    await admin.from("audit_log").insert({
+    await admin.from("audit_log").insert({ trace_id: c.traceId,
       actor_id: c.userId, action: "mdt_sign_off", entity_type: "op_mdt_participant", entity_id: b.participant_id,
       hospital_id: c.hospitalId ?? null, new_value: { meeting_id: p.meeting_id },
     });
@@ -242,7 +242,7 @@ export async function PATCH(req: Request) {
       await admin.from("op_mdt_referrals").update({ status: "reviewed", reviewed_at: now })
         .eq("meeting_id", b.meeting_id).in("status", ["awaiting_review", "scheduled"]);
     }
-    await admin.from("audit_log").insert({
+    await admin.from("audit_log").insert({ trace_id: c.traceId,
       actor_id: c.userId, action: "mdt_meeting_status", entity_type: "op_mdt_meeting", entity_id: b.meeting_id,
       hospital_id: data.hospital_id ?? null, new_value: { status: b.status },
     });

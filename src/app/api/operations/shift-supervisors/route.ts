@@ -55,7 +55,7 @@ export async function POST(req: Request) {
   }).select("id, assignment_type, confirmation_status").single();
   if (error) return migrationGate(error) ?? NextResponse.json({ error: error.message }, { status: 500 });
 
-  await c.admin.from("audit_log").insert({ actor_id: c.userId, actor_name: me?.full_name ?? null, action: `assign_supervisor_${type}`, entity_type: "shift_supervisor", entity_id: data.id, entity_name: assignee.full_name, hospital_id: scope.hospitalId ?? null });
+  await c.admin.from("audit_log").insert({ trace_id: c.traceId, actor_id: c.userId, actor_name: me?.full_name ?? null, action: `assign_supervisor_${type}`, entity_type: "shift_supervisor", entity_id: data.id, entity_name: assignee.full_name, hospital_id: scope.hospitalId ?? null });
   return NextResponse.json(data, { status: 201 });
 }
 
@@ -94,6 +94,6 @@ export async function PATCH(req: Request) {
     }, { onConflict: "shift_id,item_code" });
   }
 
-  await c.admin.from("audit_log").insert({ actor_id: c.userId, actor_name: me?.full_name ?? null, action: `supervisor_${data.confirmation_status}`, entity_type: "shift_supervisor", entity_id: data.id, hospital_id: row.hospital_id ?? null });
+  await c.admin.from("audit_log").insert({ trace_id: c.traceId, actor_id: c.userId, actor_name: me?.full_name ?? null, action: `supervisor_${data.confirmation_status}`, entity_type: "shift_supervisor", entity_id: data.id, hospital_id: row.hospital_id ?? null });
   return NextResponse.json(data);
 }

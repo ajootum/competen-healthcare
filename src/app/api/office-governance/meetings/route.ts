@@ -40,6 +40,6 @@ export async function POST(req: Request) {
   const invites = ((appts ?? []) as any[]).filter(a => a.person_id).map(a => ({ meeting_id: meeting.id, person_id: a.person_id, person_name: a.person_name, role: a.role, status: "invited" }));
   if (invites.length) await c.admin.from("ogs_meeting_attendance").insert(invites);
 
-  await c.admin.from("audit_log").insert({ actor_id: c.userId, actor_name: me?.full_name ?? null, action: "schedule_meeting", entity_type: "ogs_meeting", entity_id: meeting.id, hospital_id: office.hospital_id ?? null, new_value: { title, office_id: officeId, invited: invites.length } });
+  await c.admin.from("audit_log").insert({ trace_id: c.traceId, actor_id: c.userId, actor_name: me?.full_name ?? null, action: "schedule_meeting", entity_type: "ogs_meeting", entity_id: meeting.id, hospital_id: office.hospital_id ?? null, new_value: { title, office_id: officeId, invited: invites.length } });
   return NextResponse.json(meeting, { status: 201 });
 }

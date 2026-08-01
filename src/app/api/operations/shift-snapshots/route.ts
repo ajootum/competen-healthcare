@@ -50,6 +50,6 @@ export async function POST(req: Request) {
   }).select("id, kind, captured_at").single();
   if (error) return migrationGate(error) ?? NextResponse.json({ error: error.message }, { status: 500 });
 
-  await c.admin.from("audit_log").insert({ actor_id: c.userId, actor_name: me?.full_name ?? null, action: `snapshot_${kind}`, entity_type: "shift_snapshot", entity_id: data.id, hospital_id: c.hospitalId ?? null });
+  await c.admin.from("audit_log").insert({ trace_id: c.traceId, actor_id: c.userId, actor_name: me?.full_name ?? null, action: `snapshot_${kind}`, entity_type: "shift_snapshot", entity_id: data.id, hospital_id: c.hospitalId ?? null });
   return NextResponse.json(data, { status: 201 });
 }

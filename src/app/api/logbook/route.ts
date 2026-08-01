@@ -35,7 +35,7 @@ export async function POST(req: Request) {
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
   const { data: me } = await admin.from("profiles").select("full_name, hospital_id").eq("id", c.userId).single();
-  await admin.from("audit_log").insert({
+  await admin.from("audit_log").insert({ trace_id: c.traceId,
     actor_id: c.userId, actor_name: me?.full_name ?? null,
     action: "log_skill", entity_type: "skill_log_entry", entity_id: data.id, entity_name: skill_name.trim(),
   });
@@ -91,7 +91,7 @@ export async function PATCH(req: Request) {
     }).eq("id", id);
     if (escErr) return NextResponse.json({ error: escErr.message }, { status: 500 });
 
-    await admin.from("audit_log").insert({
+    await admin.from("audit_log").insert({ trace_id: c.traceId,
       actor_id: c.userId, actor_name: me?.full_name ?? null,
       action: "escalate_skill_entry", entity_type: "skill_log_entry", entity_id: id, entity_name: entry.skill_name,
     });
@@ -121,7 +121,7 @@ export async function PATCH(req: Request) {
   }).eq("id", id);
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
-  await admin.from("audit_log").insert({
+  await admin.from("audit_log").insert({ trace_id: c.traceId,
     actor_id: c.userId, actor_name: me?.full_name ?? null,
     action: status === "verified" ? "verify_skill_entry" : status === "rejected" ? "reject_skill_entry" : "request_skill_entry_changes",
     entity_type: "skill_log_entry", entity_id: id, entity_name: entry.skill_name,

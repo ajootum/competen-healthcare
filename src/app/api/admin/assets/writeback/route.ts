@@ -23,7 +23,7 @@ export async function POST(req: Request) {
   const r = await writeBackAsset(c.admin, { objectType, objectId, status, version, actor: { id: c.userId, name: me?.full_name ?? null } });
   if (!r.ok) return NextResponse.json({ error: r.error }, { status: 400 });
 
-  await c.admin.from("audit_log").insert({
+  await c.admin.from("audit_log").insert({ trace_id: c.traceId,
     actor_id: c.userId, action: "asset_writeback", entity_type: objectType, entity_id: objectId,
     new_value: { status: r.status ?? null, version: r.version ?? null },
   });

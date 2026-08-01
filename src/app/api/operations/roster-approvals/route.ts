@@ -33,7 +33,7 @@ export async function POST(req: Request) {
     const rows = CHAIN.map(s => ({ hospital_id: roster.hospital_id, roster_id: b.roster_id, ...s, status: "pending" }));
     const { error } = await admin.from("op_roster_approvals").insert(rows);
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-    await admin.from("audit_log").insert({ actor_id: c.userId, action: "submit_roster_approval", entity_type: "op_roster", entity_id: b.roster_id, hospital_id: roster.hospital_id, new_value: { stages: CHAIN.length } });
+    await admin.from("audit_log").insert({ trace_id: c.traceId, actor_id: c.userId, action: "submit_roster_approval", entity_type: "op_roster", entity_id: b.roster_id, hospital_id: roster.hospital_id, new_value: { stages: CHAIN.length } });
     return NextResponse.json({ ok: true, submitted: CHAIN.length }, { status: 201 });
   }
 
@@ -43,7 +43,7 @@ export async function POST(req: Request) {
     published_by: c.userId, published_by_name: me?.full_name ?? null, channels: b.channels || ["in_app"], target_group: b.target_group || "all", version: roster.version,
   }).select().single();
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  await admin.from("audit_log").insert({ actor_id: c.userId, action: "publish_roster_record", entity_type: "op_roster_publication", entity_id: pub.id, hospital_id: roster.hospital_id, new_value: { version: roster.version } });
+  await admin.from("audit_log").insert({ trace_id: c.traceId, actor_id: c.userId, action: "publish_roster_record", entity_type: "op_roster_publication", entity_id: pub.id, hospital_id: roster.hospital_id, new_value: { version: roster.version } });
   return NextResponse.json(pub, { status: 201 });
 }
 
@@ -65,6 +65,6 @@ export async function PATCH(req: Request) {
 
   const { data, error } = await admin.from("op_roster_approvals").update({ status, decision: b.action, comments: b.comments || null, attestation: !!b.attestation, approver_id: c.userId, approver_name: me?.full_name ?? null, acted_at: new Date().toISOString() }).eq("id", id).select().single();
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  await admin.from("audit_log").insert({ actor_id: c.userId, action: "decide_roster_approval", entity_type: "op_roster_approval", entity_id: id, hospital_id: row.hospital_id, new_value: { action: b.action } });
+  await admin.from("audit_log").insert({ trace_id: c.traceId, actor_id: c.userId, action: "decide_roster_approval", entity_type: "op_roster_approval", entity_id: id, hospital_id: row.hospital_id, new_value: { action: b.action } });
   return NextResponse.json(data);
 }

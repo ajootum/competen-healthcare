@@ -28,7 +28,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   if (error) return meetingMigrationGate(error) ?? NextResponse.json({ error: error.message }, { status: 500 });
 
   const { data: me } = await c.admin.from("profiles").select("full_name").eq("id", c.userId).single();
-  await c.admin.from("audit_log").insert({ actor_id: c.userId, actor_name: me?.full_name ?? null, action: "add_office_action", entity_type: "ogs_office_action", entity_id: data.id, hospital_id: meeting.hospital_id ?? null, new_value: { title } });
+  await c.admin.from("audit_log").insert({ trace_id: c.traceId, actor_id: c.userId, actor_name: me?.full_name ?? null, action: "add_office_action", entity_type: "ogs_office_action", entity_id: data.id, hospital_id: meeting.hospital_id ?? null, new_value: { title } });
   return NextResponse.json(data, { status: 201 });
 }
 
@@ -52,6 +52,6 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
   const { data, error } = await c.admin.from("ogs_office_actions").update(update).eq("id", actionId).select("id, status").single();
   if (error) return meetingMigrationGate(error) ?? NextResponse.json({ error: error.message }, { status: 500 });
   const { data: me } = await c.admin.from("profiles").select("full_name").eq("id", c.userId).single();
-  await c.admin.from("audit_log").insert({ actor_id: c.userId, actor_name: me?.full_name ?? null, action: `action_${b.status}`, entity_type: "ogs_office_action", entity_id: actionId, hospital_id: meeting.hospital_id ?? null });
+  await c.admin.from("audit_log").insert({ trace_id: c.traceId, actor_id: c.userId, actor_name: me?.full_name ?? null, action: `action_${b.status}`, entity_type: "ogs_office_action", entity_id: actionId, hospital_id: meeting.hospital_id ?? null });
   return NextResponse.json(data);
 }

@@ -46,7 +46,7 @@ export async function POST(req: Request) {
   }).select("id, status").single();
   if (error) return migrationGate(error) ?? NextResponse.json({ error: error.message }, { status: 500 });
 
-  await c.admin.from("audit_log").insert({ actor_id: c.userId, actor_name: me?.full_name ?? null, action: "command_transfer_initiated", entity_type: "command_transfer", entity_id: data.id, entity_name: to.full_name, hospital_id: scope.hospitalId ?? null });
+  await c.admin.from("audit_log").insert({ trace_id: c.traceId, actor_id: c.userId, actor_name: me?.full_name ?? null, action: "command_transfer_initiated", entity_type: "command_transfer", entity_id: data.id, entity_name: to.full_name, hospital_id: scope.hospitalId ?? null });
   return NextResponse.json(data, { status: 201 });
 }
 
@@ -82,6 +82,6 @@ export async function PATCH(req: Request) {
     await c.admin.from("op_shifts").update({ supervisor_id: row.to_user_id }).eq("id", row.shift_id);
   }
 
-  await c.admin.from("audit_log").insert({ actor_id: c.userId, actor_name: me?.full_name ?? null, action: `command_transfer_${data.status}`, entity_type: "command_transfer", entity_id: data.id, entity_name: row.to_name, hospital_id: row.hospital_id ?? null });
+  await c.admin.from("audit_log").insert({ trace_id: c.traceId, actor_id: c.userId, actor_name: me?.full_name ?? null, action: `command_transfer_${data.status}`, entity_type: "command_transfer", entity_id: data.id, entity_name: row.to_name, hospital_id: row.hospital_id ?? null });
   return NextResponse.json(data);
 }

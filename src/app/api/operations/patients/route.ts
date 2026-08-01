@@ -73,7 +73,7 @@ export async function POST(req: Request) {
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   // Occupy the bed if one was given.
   if (b.bed_id) await admin.from("op_beds").update({ status: "occupied" }).eq("id", b.bed_id).eq("hospital_id", hospitalId);
-  await admin.from("audit_log").insert({ actor_id: c.userId, action: "register_op_patient", entity_type: "op_patient", entity_id: data.id, hospital_id: hospitalId });
+  await admin.from("audit_log").insert({ trace_id: c.traceId, actor_id: c.userId, action: "register_op_patient", entity_type: "op_patient", entity_id: data.id, hospital_id: hospitalId });
   await admin.from("op_movement_events").insert({ hospital_id: hospitalId, patient_id: data.id, event_type: "admission", detail: b.bed_id ? "Admitted to bed" : "Admission registered", created_by: c.userId }); // fail-soft pre-migration 050
   return NextResponse.json(data, { status: 201 });
 }

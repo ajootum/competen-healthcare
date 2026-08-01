@@ -57,7 +57,7 @@ export async function POST(req: Request) {
     note: b.note?.trim() || null, active: true, owner_id: b.owner_id ?? c.userId, created_by: c.userId,
   }).select().single();
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  await admin.from("audit_log").insert({ actor_id: c.userId, action: "raise_safety_alert", entity_type: "op_safety_alert", entity_id: data.id, hospital_id: hospitalId, new_value: { category: b.category, severity: b.severity } });
+  await admin.from("audit_log").insert({ trace_id: c.traceId, actor_id: c.userId, action: "raise_safety_alert", entity_type: "op_safety_alert", entity_id: data.id, hospital_id: hospitalId, new_value: { category: b.category, severity: b.severity } });
   return NextResponse.json(data, { status: 201 });
 }
 

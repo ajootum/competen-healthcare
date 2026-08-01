@@ -25,7 +25,7 @@ export async function POST(req: Request) {
     severity: b.severity || "moderate", status: "new", operational_impact: b.operational_impact || null, rule_breached: b.rule_breached || null,
   }).select().single();
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  await admin.from("audit_log").insert({ actor_id: c.userId, action: "record_attendance_exception", entity_type: "op_attendance_exception", entity_id: data.id, hospital_id: shift.hospital_id, new_value: { category: b.category, severity: b.severity } });
+  await admin.from("audit_log").insert({ trace_id: c.traceId, actor_id: c.userId, action: "record_attendance_exception", entity_type: "op_attendance_exception", entity_id: data.id, hospital_id: shift.hospital_id, new_value: { category: b.category, severity: b.severity } });
   return NextResponse.json(data, { status: 201 });
 }
 
@@ -48,6 +48,6 @@ export async function PATCH(req: Request) {
   if (["corrected", "approved_exception", "rejected", "closed"].includes(status)) { patch.resolved_by = c.userId; patch.resolved_at = new Date().toISOString(); }
   const { data, error } = await admin.from("op_attendance_exceptions").update(patch).eq("id", id).select().single();
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  await admin.from("audit_log").insert({ actor_id: c.userId, action: "record_attendance_exception", entity_type: "op_attendance_exception", entity_id: id, hospital_id: row.hospital_id, new_value: { action: b.action } });
+  await admin.from("audit_log").insert({ trace_id: c.traceId, actor_id: c.userId, action: "record_attendance_exception", entity_type: "op_attendance_exception", entity_id: id, hospital_id: row.hospital_id, new_value: { action: b.action } });
   return NextResponse.json(data);
 }

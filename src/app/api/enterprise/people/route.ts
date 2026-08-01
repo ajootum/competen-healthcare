@@ -29,7 +29,7 @@ export async function PATCH(req: Request) {
     const roles = [...current];
     const { error } = await admin.from("profiles").update({ roles, role: roles[0] }).eq("id", id);
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-    await admin.from("audit_log").insert({ actor_id: c.userId, action: b.action, entity_type: "profile", entity_id: id, entity_name: row.full_name });
+    await admin.from("audit_log").insert({ trace_id: c.traceId, actor_id: c.userId, action: b.action, entity_type: "profile", entity_id: id, entity_name: row.full_name });
     return NextResponse.json({ ok: true, roles });
   }
 
@@ -50,6 +50,6 @@ export async function PATCH(req: Request) {
   const { data, error } = await admin.from("profiles").update(update).eq("id", id).select("id, full_name, account_status").single();
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   const act = update.account_status ? `person_${update.account_status}` : "update_person";
-  await admin.from("audit_log").insert({ actor_id: c.userId, action: act, entity_type: "profile", entity_id: id, entity_name: data.full_name });
+  await admin.from("audit_log").insert({ trace_id: c.traceId, actor_id: c.userId, action: act, entity_type: "profile", entity_id: id, entity_name: data.full_name });
   return NextResponse.json(data);
 }

@@ -17,6 +17,6 @@ export async function POST() {
   if (isResponse(c)) return c;
   if (!isSuper(c)) return forbidden("Reminders are super-admin only");
   const r = await scanReminders(c.admin);
-  await c.admin.from("audit_log").insert({ actor_id: c.userId, action: "reminder_scan", entity_type: "cdp_reminders", new_value: { sent: r.sent, by_kind: r.byKind } });
+  await c.admin.from("audit_log").insert({ trace_id: c.traceId, actor_id: c.userId, action: "reminder_scan", entity_type: "cdp_reminders", new_value: { sent: r.sent, by_kind: r.byKind } });
   return NextResponse.json({ ...r, status: await loadReminderStatus(c.admin, c.hospitalId, isSuper(c)) });
 }

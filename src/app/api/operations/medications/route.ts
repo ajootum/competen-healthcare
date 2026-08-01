@@ -69,7 +69,7 @@ export async function POST(req: Request) {
     }).select().single();
     if (error) return /does not exist|schema cache/i.test(error.message) ? NextResponse.json({ error: "Run migration 154 to enable medications" }, { status: 409 }) : NextResponse.json({ error: error.message }, { status: 500 });
 
-    await admin.from("audit_log").insert({
+    await admin.from("audit_log").insert({ trace_id: c.traceId,
       actor_id: c.userId, actor_name: me?.full_name ?? null, action: "med_schedule_created",
       entity_type: "op_med_schedule", entity_id: data.id, entity_name: `${data.drug_name} — ${p.label}`,
       hospital_id: p.hospital_id, new_value: { route: data.route, scheduled_at: data.scheduled_at, high_risk: data.high_risk },
@@ -93,7 +93,7 @@ export async function POST(req: Request) {
     });
     if (!r.ok) return NextResponse.json({ error: r.error }, { status: r.status });
 
-    await admin.from("audit_log").insert({
+    await admin.from("audit_log").insert({ trace_id: c.traceId,
       actor_id: c.userId, actor_name: me?.full_name ?? null, action: `med_${b.outcome}`,
       entity_type: "op_med_administration", entity_id: r.event.id,
       hospital_id: r.event.hospital_id,
@@ -128,7 +128,7 @@ export async function PATCH(req: Request) {
   const { data, error } = await admin.from("op_med_schedule").update({ status: b.status }).eq("id", b.id).select().single();
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   const { data: me } = await admin.from("profiles").select("full_name").eq("id", c.userId).single();
-  await admin.from("audit_log").insert({
+  await admin.from("audit_log").insert({ trace_id: c.traceId,
     actor_id: c.userId, actor_name: me?.full_name ?? null, action: `med_schedule_${b.status}`,
     entity_type: "op_med_schedule", entity_id: b.id, entity_name: sched.drug_name, hospital_id: sched.hospital_id,
   }).then((x: any) => x, () => {});

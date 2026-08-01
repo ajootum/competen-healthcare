@@ -57,7 +57,7 @@ export async function POST(req: Request) {
     due_at: b.due_at ?? null, status: "assigned",
   }).select().single();
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  await admin.from("audit_log").insert({ actor_id: c.userId, action: "create_task", entity_type: "op_task", entity_id: data.id, hospital_id: hospitalId, new_value: { assigned_to: assignedTo, priority: data.priority } });
+  await admin.from("audit_log").insert({ trace_id: c.traceId, actor_id: c.userId, action: "create_task", entity_type: "op_task", entity_id: data.id, hospital_id: hospitalId, new_value: { assigned_to: assignedTo, priority: data.priority } });
   if (assignedTo && assignedTo !== c.userId) await notify([assignedTo], { type: "op_task", title: "New task assigned", body: b.description.trim(), href: "/dashboard/shift" });
   return NextResponse.json(data, { status: 201 });
 }

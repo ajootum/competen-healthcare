@@ -25,7 +25,7 @@ export async function POST(req: Request) {
   const insert = { tenant_id: tenantId, name: clean(b.name), health_system_type: clean(b.type, 60), hq_country: clean(b.hq_country, 80), is_active: true };
   const { data, error } = await admin.from("enterprises").insert(insert).select().single();
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  await admin.from("audit_log").insert({ actor_id: c.userId, action: "create_network", entity_type: "enterprise", entity_id: data.id, entity_name: data.name });
+  await admin.from("audit_log").insert({ trace_id: c.traceId, actor_id: c.userId, action: "create_network", entity_type: "enterprise", entity_id: data.id, entity_name: data.name });
   return NextResponse.json(data, { status: 201 });
 }
 
@@ -47,7 +47,7 @@ export async function PATCH(req: Request) {
     if (!org) return NextResponse.json({ error: "Organisation not found" }, { status: 404 });
     const { error } = await admin.from("organisations").update({ enterprise_id: b.action === "add_member" ? id : null }).eq("id", b.org_id);
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-    await admin.from("audit_log").insert({ actor_id: c.userId, action: b.action, entity_type: "enterprise", entity_id: id, entity_name: row.name });
+    await admin.from("audit_log").insert({ trace_id: c.traceId, actor_id: c.userId, action: b.action, entity_type: "enterprise", entity_id: id, entity_name: row.name });
     return NextResponse.json({ ok: true });
   }
 
@@ -60,6 +60,6 @@ export async function PATCH(req: Request) {
 
   const { data, error } = await admin.from("enterprises").update(update).eq("id", id).select().single();
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  await admin.from("audit_log").insert({ actor_id: c.userId, action: "update_network", entity_type: "enterprise", entity_id: id, entity_name: data.name });
+  await admin.from("audit_log").insert({ trace_id: c.traceId, actor_id: c.userId, action: "update_network", entity_type: "enterprise", entity_id: id, entity_name: data.name });
   return NextResponse.json(data);
 }

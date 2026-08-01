@@ -44,6 +44,6 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   if (reviewDate) officeUpdate.next_review_date = reviewDate;
   await c.admin.from("ogs_offices").update(officeUpdate).eq("id", id);
 
-  await c.admin.from("audit_log").insert({ actor_id: c.userId, actor_name: actor, action: "amend_charter", entity_type: "ogs_office", entity_id: id, hospital_id: office.hospital_id ?? null, old_value: { charter_version: office.charter_version }, new_value: { charter_version: version, approval_status: approvalStatus } });
+  await c.admin.from("audit_log").insert({ trace_id: c.traceId, actor_id: c.userId, actor_name: actor, action: "amend_charter", entity_type: "ogs_office", entity_id: id, hospital_id: office.hospital_id ?? null, old_value: { charter_version: office.charter_version }, new_value: { charter_version: version, approval_status: approvalStatus } });
   return NextResponse.json(charter, { status: 201 });
 }

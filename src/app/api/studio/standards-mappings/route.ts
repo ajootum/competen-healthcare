@@ -36,7 +36,7 @@ export async function POST(req: Request) {
     return migrationGate(error) ?? NextResponse.json({ error: error.message }, { status: 500 });
   }
 
-  await c.admin.from("audit_log").insert({ actor_id: c.userId, actor_name: me?.full_name ?? null, action: "map_competency_standard", entity_type: "competency_standard_mapping", entity_id: data.id, hospital_id: c.hospitalId ?? null, new_value: { competency, standard_body: body, standard_ref: ref, coverage } });
+  await c.admin.from("audit_log").insert({ trace_id: c.traceId, actor_id: c.userId, actor_name: me?.full_name ?? null, action: "map_competency_standard", entity_type: "competency_standard_mapping", entity_id: data.id, hospital_id: c.hospitalId ?? null, new_value: { competency, standard_body: body, standard_ref: ref, coverage } });
   return NextResponse.json(data, { status: 201 });
 }
 
@@ -54,6 +54,6 @@ export async function DELETE(req: Request) {
   const { error } = await c.admin.from("competency_standard_mappings").delete().eq("id", id);
   if (error) return migrationGate(error) ?? NextResponse.json({ error: error.message }, { status: 500 });
 
-  await c.admin.from("audit_log").insert({ actor_id: c.userId, action: "unmap_competency_standard", entity_type: "competency_standard_mapping", entity_id: id, hospital_id: row.hospital_id ?? null });
+  await c.admin.from("audit_log").insert({ trace_id: c.traceId, actor_id: c.userId, action: "unmap_competency_standard", entity_type: "competency_standard_mapping", entity_id: id, hospital_id: row.hospital_id ?? null });
   return NextResponse.json({ ok: true });
 }

@@ -35,6 +35,6 @@ export async function PATCH(req: Request) {
   if (error) return isMissing(error) ? badRequest("Evidence integrity not provisioned (apply migration 149)") : NextResponse.json({ error: error.message }, { status: 500 });
 
   await c.admin.from("evidence_integrity_events").insert({ evidence_id: id, hospital_id: ev.hospital_id ?? null, event_type: a.event, actor_id: c.userId, actor_name: me.data?.full_name ?? null, note: b.note ? String(b.note).slice(0, 500) : null }).then((r: any) => r, () => {});
-  await c.admin.from("audit_log").insert({ actor_id: c.userId, actor_name: me.data?.full_name ?? null, action: `evidence_${a.event}`, entity_type: "evidence", entity_id: id, hospital_id: ev.hospital_id ?? null, new_value: { status: a.status } }).then((r: any) => r, () => {});
+  await c.admin.from("audit_log").insert({ trace_id: c.traceId, actor_id: c.userId, actor_name: me.data?.full_name ?? null, action: `evidence_${a.event}`, entity_type: "evidence", entity_id: id, hospital_id: ev.hospital_id ?? null, new_value: { status: a.status } }).then((r: any) => r, () => {});
   return NextResponse.json({ ok: true, status: a.status });
 }

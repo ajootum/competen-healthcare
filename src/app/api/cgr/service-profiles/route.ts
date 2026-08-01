@@ -35,7 +35,7 @@ export async function POST(req: Request) {
   });
   if (!r.ok) return NextResponse.json({ error: r.error }, { status: r.status });
 
-  await c.admin.from("audit_log").insert({
+  await c.admin.from("audit_log").insert({ trace_id: c.traceId,
     actor_id: c.userId, actor_name: me?.full_name ?? null, action: "service_profile_created",
     entity_type: "service_profile", entity_id: r.profile.id, entity_name: r.profile.name,
     hospital_id: c.hospitalId, new_value: { requirements: reqs.length, critical: reqs.filter((x: any) => x.is_critical).length },
@@ -64,7 +64,7 @@ export async function PATCH(req: Request) {
   if (error) return migrationGate(error) ?? NextResponse.json({ error: error.message }, { status: 500 });
 
   const { data: me } = await c.admin.from("profiles").select("full_name").eq("id", c.userId).single();
-  await c.admin.from("audit_log").insert({
+  await c.admin.from("audit_log").insert({ trace_id: c.traceId,
     actor_id: c.userId, actor_name: me?.full_name ?? null, action: `service_profile_${status}`,
     entity_type: "service_profile", entity_id: id, entity_name: existing.name,
     hospital_id: existing.hospital_id, old_value: { status: existing.status }, new_value: { status },

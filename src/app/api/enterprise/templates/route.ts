@@ -26,7 +26,7 @@ export async function POST(req: Request) {
   };
   const { data, error } = await admin.from("ent_templates").insert(insert).select().single();
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  await admin.from("audit_log").insert({ actor_id: c.userId, action: "create_template", entity_type: "template", entity_id: data.id, entity_name: data.name });
+  await admin.from("audit_log").insert({ trace_id: c.traceId, actor_id: c.userId, action: "create_template", entity_type: "template", entity_id: data.id, entity_name: data.name });
   return NextResponse.json(data, { status: 201 });
 }
 
@@ -47,7 +47,7 @@ export async function PATCH(req: Request) {
     if (!allowed) return badRequest(`cannot move from ${row.status} to ${b.to}`);
     const { error } = await admin.from("ent_templates").update({ status: b.to, updated_at: new Date().toISOString() }).eq("id", id);
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-    await admin.from("audit_log").insert({ actor_id: c.userId, action: `template_${b.to}`, entity_type: "template", entity_id: id, entity_name: row.name });
+    await admin.from("audit_log").insert({ trace_id: c.traceId, actor_id: c.userId, action: `template_${b.to}`, entity_type: "template", entity_id: id, entity_name: row.name });
     return NextResponse.json({ ok: true, status: b.to });
   }
 
@@ -72,8 +72,8 @@ export async function PATCH(req: Request) {
     // The template stays 'published' so a reusable template can be deployed to
     // more than one organisation; the deployment is recorded in the audit trail.
     await admin.from("ent_templates").update({ updated_at: new Date().toISOString() }).eq("id", id);
-    await admin.from("audit_log").insert({ actor_id: c.userId, action: "deploy_template", entity_type: "template", entity_id: id, entity_name: row.name });
-    await admin.from("audit_log").insert({ actor_id: c.userId, action: "create_organisation", entity_type: "organisation", entity_id: org.id, entity_name: org.name });
+    await admin.from("audit_log").insert({ trace_id: c.traceId, actor_id: c.userId, action: "deploy_template", entity_type: "template", entity_id: id, entity_name: row.name });
+    await admin.from("audit_log").insert({ trace_id: c.traceId, actor_id: c.userId, action: "create_organisation", entity_type: "organisation", entity_id: org.id, entity_name: org.name });
     return NextResponse.json({ ok: true, organisation_id: org.id });
   }
 
@@ -86,6 +86,6 @@ export async function PATCH(req: Request) {
   update.updated_at = new Date().toISOString();
   const { data, error } = await admin.from("ent_templates").update(update).eq("id", id).select().single();
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  await admin.from("audit_log").insert({ actor_id: c.userId, action: "update_template", entity_type: "template", entity_id: id, entity_name: data.name });
+  await admin.from("audit_log").insert({ trace_id: c.traceId, actor_id: c.userId, action: "update_template", entity_type: "template", entity_id: id, entity_name: data.name });
   return NextResponse.json(data);
 }

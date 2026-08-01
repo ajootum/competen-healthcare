@@ -33,7 +33,7 @@ export async function PATCH(req: Request) {
   const { data, error } = await admin.from("learning_enrolments").update(patch).eq("id", id).eq("user_id", userId).select("id, status, progress_pct, hospital_id, course_id, user_id").maybeSingle();
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   if (!data) return NextResponse.json({ error: "Not your enrolment" }, { status: 403 });
-  await admin.from("audit_log").insert({ actor_id: userId, action: "self_update_learning_enrolment", entity_type: "learning_enrolment", entity_id: id, hospital_id: data.hospital_id ?? null, new_value: { status: patch.status } });
+  await admin.from("audit_log").insert({ trace_id: c.traceId, actor_id: userId, action: "self_update_learning_enrolment", entity_type: "learning_enrolment", entity_id: id, hospital_id: data.hospital_id ?? null, new_value: { status: patch.status } });
   // PW-014 WS4/P2 — publish a domain event on course completion (fail-soft).
   if (data.status === "completed") await emitLearningCompleted(admin, data, userId);
   return NextResponse.json({ id: data.id, status: data.status, progress_pct: data.progress_pct });

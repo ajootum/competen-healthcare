@@ -35,7 +35,7 @@ export async function POST(req: Request) {
   if (error) return migrationGate(error) ?? NextResponse.json({ error: error.message }, { status: 500 });
 
   await c.admin.from("cst_portfolio_templates").update({ updated_at: new Date().toISOString() }).eq("id", templateId);
-  await c.admin.from("audit_log").insert({ actor_id: c.userId, action: "add_portfolio_section", entity_type: "cst_portfolio_template", entity_id: templateId, hospital_id: t.hospital_id ?? null, new_value: { name, evidence_type: evidence, weight } });
+  await c.admin.from("audit_log").insert({ trace_id: c.traceId, actor_id: c.userId, action: "add_portfolio_section", entity_type: "cst_portfolio_template", entity_id: templateId, hospital_id: t.hospital_id ?? null, new_value: { name, evidence_type: evidence, weight } });
   return NextResponse.json(data, { status: 201 });
 }
 
@@ -53,6 +53,6 @@ export async function DELETE(req: Request) {
 
   const { error } = await c.admin.from("cst_portfolio_sections").delete().eq("id", id);
   if (error) return migrationGate(error) ?? NextResponse.json({ error: error.message }, { status: 500 });
-  await c.admin.from("audit_log").insert({ actor_id: c.userId, action: "remove_portfolio_section", entity_type: "cst_portfolio_template", entity_id: sec.template_id, hospital_id: t?.hospital_id ?? null });
+  await c.admin.from("audit_log").insert({ trace_id: c.traceId, actor_id: c.userId, action: "remove_portfolio_section", entity_type: "cst_portfolio_template", entity_id: sec.template_id, hospital_id: t?.hospital_id ?? null });
   return NextResponse.json({ ok: true });
 }

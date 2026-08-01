@@ -41,7 +41,7 @@ export async function POST(req: Request) {
   if (action === "generate") {
     const r = await generateRecommendation(admin, { hospitalId: c.hospitalId, isSuperUser: isSuper(c), actorId: c.userId, actorName: me?.full_name ?? null });
     if (!r.ok) return NextResponse.json({ error: r.error }, { status: r.status });
-    await admin.from("audit_log").insert({
+    await admin.from("audit_log").insert({ trace_id: c.traceId,
       actor_id: c.userId, actor_name: me?.full_name ?? null, action: "assignment_recommendation_generated",
       entity_type: "op_assignment_recommendation", entity_id: r.runId, hospital_id: r.shift.hospital_id,
       new_value: { proposals: r.proposals.length, gaps: r.gaps.length, alerts: r.riskAlerts.length, shift_id: r.shift.id },
@@ -86,7 +86,7 @@ export async function POST(req: Request) {
       }).eq("id", b.run_id).then((x: any) => x, () => {});
     }
 
-    await admin.from("audit_log").insert({
+    await admin.from("audit_log").insert({ trace_id: c.traceId,
       actor_id: c.userId, actor_name: me?.full_name ?? null, action: "assignment_recommendation_published",
       entity_type: "op_assignment_recommendation", entity_id: b.run_id ?? null, hospital_id: c.hospitalId ?? null,
       new_value: { attempted: results.length, published: okCount, failed: results.length - okCount },
@@ -105,7 +105,7 @@ export async function POST(req: Request) {
       action_notes: String(b.notes ?? "").trim() || null,
     }).eq("id", b.run_id);
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-    await admin.from("audit_log").insert({
+    await admin.from("audit_log").insert({ trace_id: c.traceId,
       actor_id: c.userId, actor_name: me?.full_name ?? null, action: "assignment_recommendation_discarded",
       entity_type: "op_assignment_recommendation", entity_id: b.run_id, hospital_id: run.hospital_id,
     }).then((x: any) => x, () => {});

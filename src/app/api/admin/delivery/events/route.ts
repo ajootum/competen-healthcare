@@ -18,6 +18,6 @@ export async function POST() {
   if (isResponse(c)) return c;
   if (!isSuper(c)) return forbidden("Event consumer is super-admin only");
   const r = await processEvents(c.admin);
-  await c.admin.from("audit_log").insert({ actor_id: c.userId, action: "event_consumer_run", entity_type: "domain_events", new_value: { processed: r.processed, remediated: r.remediated } });
+  await c.admin.from("audit_log").insert({ trace_id: c.traceId, actor_id: c.userId, action: "event_consumer_run", entity_type: "domain_events", new_value: { processed: r.processed, remediated: r.remediated } });
   return NextResponse.json({ ...r, stream: await loadEventStream(c.admin, c.hospitalId, isSuper(c)) });
 }

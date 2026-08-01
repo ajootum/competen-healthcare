@@ -27,6 +27,6 @@ export async function POST(req: Request) {
     confirmed_by: c.userId, confirmed_by_name: me?.full_name ?? null,
   }).select().single();
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  await admin.from("audit_log").insert({ actor_id: c.userId, action: "record_roster_actual", entity_type: "op_roster_actual", entity_id: data.id, hospital_id: roster.hospital_id, new_value: { attendance_status: b.attendance_status } });
+  await admin.from("audit_log").insert({ trace_id: c.traceId, actor_id: c.userId, action: "record_roster_actual", entity_type: "op_roster_actual", entity_id: data.id, hospital_id: roster.hospital_id, new_value: { attendance_status: b.attendance_status } });
   return NextResponse.json(data, { status: 201 });
 }

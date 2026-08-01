@@ -31,7 +31,7 @@ export async function POST(req: Request) {
   }).select("id").single();
   if (error) return migrationGate(error) ?? NextResponse.json({ error: error.message }, { status: 500 });
 
-  await c.admin.from("audit_log").insert({ actor_id: c.userId, actor_name: me?.full_name ?? null, action: "create_360", entity_type: "cst_360_assessment", entity_id: data.id, hospital_id: c.hospitalId ?? null, new_value: { name } });
+  await c.admin.from("audit_log").insert({ trace_id: c.traceId, actor_id: c.userId, actor_name: me?.full_name ?? null, action: "create_360", entity_type: "cst_360_assessment", entity_id: data.id, hospital_id: c.hospitalId ?? null, new_value: { name } });
   return NextResponse.json(data, { status: 201 });
 }
 
@@ -56,7 +56,7 @@ export async function PATCH(req: Request) {
   const { error } = await c.admin.from("cst_360_assessments").update(patch).eq("id", id);
   if (error) return migrationGate(error) ?? NextResponse.json({ error: error.message }, { status: 500 });
 
-  await c.admin.from("audit_log").insert({ actor_id: c.userId, action: "update_360", entity_type: "cst_360_assessment", entity_id: id, hospital_id: row.hospital_id ?? null, new_value: patch });
+  await c.admin.from("audit_log").insert({ trace_id: c.traceId, actor_id: c.userId, action: "update_360", entity_type: "cst_360_assessment", entity_id: id, hospital_id: row.hospital_id ?? null, new_value: patch });
   return NextResponse.json({ ok: true });
 }
 
@@ -74,6 +74,6 @@ export async function DELETE(req: Request) {
   const { error } = await c.admin.from("cst_360_assessments").delete().eq("id", id);
   if (error) return migrationGate(error) ?? NextResponse.json({ error: error.message }, { status: 500 });
 
-  await c.admin.from("audit_log").insert({ actor_id: c.userId, action: "delete_360", entity_type: "cst_360_assessment", entity_id: id, hospital_id: row.hospital_id ?? null });
+  await c.admin.from("audit_log").insert({ trace_id: c.traceId, actor_id: c.userId, action: "delete_360", entity_type: "cst_360_assessment", entity_id: id, hospital_id: row.hospital_id ?? null });
   return NextResponse.json({ ok: true });
 }

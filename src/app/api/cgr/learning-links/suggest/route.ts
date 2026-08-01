@@ -26,7 +26,7 @@ export async function POST() {
   const r = await suggestLearningLinks(c.admin, { userId: c.userId, hospitalId: c.hospitalId, createdByName: me?.full_name ?? null });
   if (!r.ok) return NextResponse.json({ error: r.error }, { status: /not configured/i.test(r.error ?? "") ? 503 : 500 });
 
-  await c.admin.from("audit_log").insert({
+  await c.admin.from("audit_log").insert({ trace_id: c.traceId,
     actor_id: c.userId, actor_name: me?.full_name ?? null, action: "learning_links_ai_suggested",
     entity_type: "learning_link", entity_id: null, entity_name: `${r.proposed} proposed`,
     hospital_id: c.hospitalId,

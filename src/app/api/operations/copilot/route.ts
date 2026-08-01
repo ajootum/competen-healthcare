@@ -61,6 +61,6 @@ export async function POST(req: Request) {
   }
 
   const { data: me } = await c.admin.from("profiles").select("full_name").eq("id", c.userId).single();
-  await c.admin.from("audit_log").insert({ actor_id: c.userId, actor_name: me?.full_name ?? null, action: "ai_copilot_query", entity_type: "ai_copilot", hospital_id: c.hospitalId ?? null, new_value: { question: question.slice(0, 300), model: result.model } });
+  await c.admin.from("audit_log").insert({ trace_id: c.traceId, actor_id: c.userId, actor_name: me?.full_name ?? null, action: "ai_copilot_query", entity_type: "ai_copilot", hospital_id: c.hospitalId ?? null, new_value: { question: question.slice(0, 300), model: result.model } });
   return NextResponse.json({ answer: result.text, model: result.model });
 }

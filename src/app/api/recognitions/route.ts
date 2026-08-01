@@ -28,7 +28,7 @@ export async function POST(req: Request) {
   }).select("id").single();
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
-  await admin.from("audit_log").insert({
+  await admin.from("audit_log").insert({ trace_id: c.traceId,
     actor_id: c.userId, actor_name: me?.full_name ?? null,
     action: "award_recognition", entity_type: "recognition", entity_id: data.id,
     new_value: { nurse_id, recognition_type, title },

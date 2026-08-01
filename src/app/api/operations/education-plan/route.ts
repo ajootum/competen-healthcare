@@ -16,7 +16,7 @@ export async function POST(req: Request) {
   const b = await req.json().catch(() => ({}));
   const hid = c.hospitalId ?? b.hospital_id ?? null;
   if (!hid) return badRequest("hospital context required");
-  const audit = (action: string, entity_type: string, entity_id: string, new_value: any) => admin.from("audit_log").insert({ actor_id: c.userId, action, entity_type, entity_id, hospital_id: hid, new_value });
+  const audit = (action: string, entity_type: string, entity_id: string, new_value: any) => admin.from("audit_log").insert({ trace_id: c.traceId, actor_id: c.userId, action, entity_type, entity_id, hospital_id: hid, new_value });
 
   // These records are about a NAMED LEARNER (or a plan that belongs to one), so they take the subject's tenant.
   // Neither user_id nor plan_id was scope-checked, so an admin could file another tenant's nurse's study-leave
@@ -93,6 +93,6 @@ export async function PATCH(req: Request) {
   else if (kind === "plan") { patch = { updated_at: now }; if (b.progress_pct != null) patch.progress_pct = Math.max(0, Math.min(100, b.progress_pct)); if (b.status) patch.status = b.status; }
   const { data, error } = await admin.from(table).update(patch).eq("id", id).select().single();
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  await admin.from("audit_log").insert({ actor_id: c.userId, action: `update_education_${kind}`, entity_type: table, entity_id: id, hospital_id: row.hospital_id, new_value: patch });
+  await admin.from("audit_log").insert({ trace_id: c.traceId, actor_id: c.userId, action: `update_education_${kind}`, entity_type: table, entity_id: id, hospital_id: row.hospital_id, new_value: patch });
   return NextResponse.json(data);
 }

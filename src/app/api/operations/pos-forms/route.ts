@@ -143,7 +143,7 @@ export async function POST(req: Request) {
     try { await admin.from("op_operational_notes").insert({ hospital_id: hid, patient_id: patientId, note: String(payload.note).slice(0, 4000), created_by: c.userId }); } catch { /* note mirror best-effort */ }
   }
 
-  await admin.from("audit_log").insert({ actor_id: c.userId, action: "submit_pos_form", entity_type: "op_form_instance", entity_id: instanceId, hospital_id: hid, new_value: { template: tpl.key, state: newState } });
+  await admin.from("audit_log").insert({ trace_id: c.traceId, actor_id: c.userId, action: "submit_pos_form", entity_type: "op_form_instance", entity_id: instanceId, hospital_id: hid, new_value: { template: tpl.key, state: newState } });
   return NextResponse.json(inst, { status: 201 });
 }
 
@@ -173,21 +173,21 @@ export async function PATCH(req: Request) {
     const { data, error } = await admin.from("op_form_instances").update({ state: "verified", verified_by: c.userId, verified_at: now, updated_at: now }).eq("id", id).select().single();
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
     await evt(`${tpl?.eventType ?? "patient.form"}.verified`, inst.state, "verified", null);
-    await admin.from("audit_log").insert({ actor_id: c.userId, action: "verify_pos_form", entity_type: "op_form_instance", entity_id: id, hospital_id: inst.hospital_id, new_value: { template: inst.template_key } });
+    await admin.from("audit_log").insert({ trace_id: c.traceId, actor_id: c.userId, action: "verify_pos_form", entity_type: "op_form_instance", entity_id: id, hospital_id: inst.hospital_id, new_value: { template: inst.template_key } });
     return NextResponse.json(data);
   }
   if (act === "return") {
     const { data, error } = await admin.from("op_form_instances").update({ state: "returned", reason: b.reason, updated_at: now }).eq("id", id).select().single();
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
     await evt(`${tpl?.eventType ?? "patient.form"}.returned`, inst.state, "returned", b.reason);
-    await admin.from("audit_log").insert({ actor_id: c.userId, action: "return_pos_form", entity_type: "op_form_instance", entity_id: id, hospital_id: inst.hospital_id, new_value: { reason: b.reason } });
+    await admin.from("audit_log").insert({ trace_id: c.traceId, actor_id: c.userId, action: "return_pos_form", entity_type: "op_form_instance", entity_id: id, hospital_id: inst.hospital_id, new_value: { reason: b.reason } });
     return NextResponse.json(data);
   }
   if (act === "cancel") {
     const { data, error } = await admin.from("op_form_instances").update({ state: "cancelled", reason: b.reason, updated_at: now }).eq("id", id).select().single();
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
     await evt(`${tpl?.eventType ?? "patient.form"}.cancelled`, inst.state, "cancelled", b.reason);
-    await admin.from("audit_log").insert({ actor_id: c.userId, action: "cancel_pos_form", entity_type: "op_form_instance", entity_id: id, hospital_id: inst.hospital_id, new_value: { reason: b.reason } });
+    await admin.from("audit_log").insert({ trace_id: c.traceId, actor_id: c.userId, action: "cancel_pos_form", entity_type: "op_form_instance", entity_id: id, hospital_id: inst.hospital_id, new_value: { reason: b.reason } });
     return NextResponse.json(data);
   }
   // amend — create a NEW instance linked to the original; original marked 'amended' (BR-008).
@@ -200,6 +200,6 @@ export async function PATCH(req: Request) {
   if (aErr) return NextResponse.json({ error: aErr.message }, { status: 500 });
   await admin.from("op_form_instances").update({ state: "amended", updated_at: now }).eq("id", id);
   await evt(`${tpl?.eventType ?? "patient.form"}.amended`, inst.state, "amended", b.reason, { amendment_id: amended.id });
-  await admin.from("audit_log").insert({ actor_id: c.userId, action: "amend_pos_form", entity_type: "op_form_instance", entity_id: id, hospital_id: inst.hospital_id, new_value: { amendment_id: amended.id, reason: b.reason } });
+  await admin.from("audit_log").insert({ trace_id: c.traceId, actor_id: c.userId, action: "amend_pos_form", entity_type: "op_form_instance", entity_id: id, hospital_id: inst.hospital_id, new_value: { amendment_id: amended.id, reason: b.reason } });
   return NextResponse.json(amended, { status: 201 });
 }

@@ -30,6 +30,6 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
   if (error) return meetingMigrationGate(error) ?? NextResponse.json({ error: error.message }, { status: 500 });
 
   const { data: me } = await c.admin.from("profiles").select("full_name").eq("id", c.userId).single();
-  await c.admin.from("audit_log").insert({ actor_id: c.userId, actor_name: me?.full_name ?? null, action: update.status ? `meeting_${update.status}` : "meeting_minutes", entity_type: "ogs_meeting", entity_id: id, hospital_id: meeting.hospital_id ?? null });
+  await c.admin.from("audit_log").insert({ trace_id: c.traceId, actor_id: c.userId, actor_name: me?.full_name ?? null, action: update.status ? `meeting_${update.status}` : "meeting_minutes", entity_type: "ogs_meeting", entity_id: id, hospital_id: meeting.hospital_id ?? null });
   return NextResponse.json(data);
 }

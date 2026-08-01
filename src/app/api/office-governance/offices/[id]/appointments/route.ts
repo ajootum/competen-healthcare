@@ -51,7 +51,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   }
   if (role === "chair") await c.admin.from("ogs_offices").update({ chair_id: personId, chair_name: person?.full_name ?? null }).eq("id", id);
 
-  await c.admin.from("audit_log").insert({ actor_id: c.userId, actor_name: actor, action: `appoint_${role}`, entity_type: "ogs_office", entity_id: id, hospital_id: office.hospital_id ?? null, new_value: { person: person?.full_name ?? personId, role } });
+  await c.admin.from("audit_log").insert({ trace_id: c.traceId, actor_id: c.userId, actor_name: actor, action: `appoint_${role}`, entity_type: "ogs_office", entity_id: id, hospital_id: office.hospital_id ?? null, new_value: { person: person?.full_name ?? personId, role } });
   return NextResponse.json({ id: apptId, role }, { status: 201 });
 }
 
@@ -72,6 +72,6 @@ export async function DELETE(req: Request, { params }: { params: Promise<{ id: s
   if (appt.role === "chair" && office.chair_id === appt.person_id) await c.admin.from("ogs_offices").update({ chair_id: null, chair_name: null }).eq("id", id);
 
   const { data: me } = await c.admin.from("profiles").select("full_name").eq("id", c.userId).single();
-  await c.admin.from("audit_log").insert({ actor_id: c.userId, actor_name: me?.full_name ?? null, action: "remove_appointment", entity_type: "ogs_office", entity_id: id, hospital_id: office.hospital_id ?? null, old_value: { role: appt.role } });
+  await c.admin.from("audit_log").insert({ trace_id: c.traceId, actor_id: c.userId, actor_name: me?.full_name ?? null, action: "remove_appointment", entity_type: "ogs_office", entity_id: id, hospital_id: office.hospital_id ?? null, old_value: { role: appt.role } });
   return NextResponse.json({ ok: true });
 }

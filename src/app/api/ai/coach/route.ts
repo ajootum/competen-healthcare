@@ -100,7 +100,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: result.error === "refusal" ? "The coach declined this request." : `Coach error: ${result.detail ?? "failed"}` }, { status: 500 });
   }
 
-  await admin.from("audit_log").insert({
+  await admin.from("audit_log").insert({ trace_id: c.traceId,
     actor_id: c.userId, actor_name: me?.full_name ?? null,
     action: "ai_coach", entity_type: "worker", entity_id: targetId,
     new_value: { gaps: gaps.length, model: result.model, tokens: result.usage },

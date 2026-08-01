@@ -38,7 +38,7 @@ export async function POST(req: Request) {
   }).select("id").single();
   if (error) return migrationGate(error) ?? NextResponse.json({ error: error.message }, { status: 500 });
 
-  await c.admin.from("audit_log").insert({ actor_id: c.userId, actor_name: me?.full_name ?? null, action: "open_renewal", entity_type: "cmo_renewal", entity_id: data.id, hospital_id: c.hospitalId ?? null, new_value: { subject_type: subjectType, renewal_path: path } });
+  await c.admin.from("audit_log").insert({ trace_id: c.traceId, actor_id: c.userId, actor_name: me?.full_name ?? null, action: "open_renewal", entity_type: "cmo_renewal", entity_id: data.id, hospital_id: c.hospitalId ?? null, new_value: { subject_type: subjectType, renewal_path: path } });
   return NextResponse.json(data, { status: 201 });
 }
 
@@ -70,7 +70,7 @@ export async function PATCH(req: Request) {
   const { data, error } = await c.admin.from("cmo_renewals").update(patch).eq("id", id).select("id, status").single();
   if (error) return migrationGate(error) ?? NextResponse.json({ error: error.message }, { status: 500 });
 
-  await c.admin.from("audit_log").insert({ actor_id: c.userId, action: "update_renewal", entity_type: "cmo_renewal", entity_id: id, hospital_id: row.hospital_id ?? null, new_value: patch });
+  await c.admin.from("audit_log").insert({ trace_id: c.traceId, actor_id: c.userId, action: "update_renewal", entity_type: "cmo_renewal", entity_id: id, hospital_id: row.hospital_id ?? null, new_value: patch });
   // COMP-017 — a completed competency renewal advances the lifecycle state to Renewed (subject_id = competency_id; fail-soft).
   if (patch.status === "completed" && row.subject_type === "competency" && row.subject_id && row.nurse_id) {
     await transitionLifecycle(c.admin, { hospitalId: row.hospital_id ?? null, nurseId: row.nurse_id, competencyId: row.subject_id, toState: "renewed", reason: "Recertification renewal completed", actorId: c.userId });

@@ -20,6 +20,6 @@ export async function POST() {
   }
 
   const { data: me } = await c.admin.from("profiles").select("full_name").eq("id", c.userId).single();
-  await c.admin.from("audit_log").insert({ actor_id: c.userId, actor_name: me?.full_name ?? null, action: "run_task_automation", entity_type: "task_automation", hospital_id: c.hospitalId ?? null, new_value: { generated: r.generated } });
+  await c.admin.from("audit_log").insert({ trace_id: c.traceId, actor_id: c.userId, actor_name: me?.full_name ?? null, action: "run_task_automation", entity_type: "task_automation", hospital_id: c.hospitalId ?? null, new_value: { generated: r.generated } });
   return NextResponse.json({ ok: true, generated: r.generated, details: r.details });
 }

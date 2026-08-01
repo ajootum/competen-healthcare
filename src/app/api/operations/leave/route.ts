@@ -35,6 +35,6 @@ export async function POST(req: Request) {
   };
   const { data, error } = await admin.from("op_leave_records").insert(row).select().single();
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  await admin.from("audit_log").insert({ actor_id: c.userId, action: "record_leave", entity_type: "op_leave_record", entity_id: data.id, hospital_id: hospitalId, new_value: { staff_id: b.staff_id, absence_type: b.absence_type } });
+  await admin.from("audit_log").insert({ trace_id: c.traceId, actor_id: c.userId, action: "record_leave", entity_type: "op_leave_record", entity_id: data.id, hospital_id: hospitalId, new_value: { staff_id: b.staff_id, absence_type: b.absence_type } });
   return NextResponse.json(data, { status: 201 });
 }

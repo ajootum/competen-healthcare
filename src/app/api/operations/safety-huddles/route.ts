@@ -58,6 +58,6 @@ export async function POST(req: Request) {
     }, { onConflict: "shift_id,item_code" });
   }
 
-  await c.admin.from("audit_log").insert({ actor_id: c.userId, actor_name: me?.full_name ?? null, action: `safety_huddle_${status}`, entity_type: "safety_huddle", entity_id: data.id, hospital_id: scope.hospitalId ?? null });
+  await c.admin.from("audit_log").insert({ trace_id: c.traceId, actor_id: c.userId, actor_name: me?.full_name ?? null, action: `safety_huddle_${status}`, entity_type: "safety_huddle", entity_id: data.id, hospital_id: scope.hospitalId ?? null });
   return NextResponse.json(data, { status: 201 });
 }

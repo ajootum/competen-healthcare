@@ -37,7 +37,7 @@ export async function POST(req: Request) {
       requester_id: c.userId, requester_role: c.role ?? null, effective_from: b.effective_from || null, expiry: b.expiry || null, status: "requested",
     }).select().single();
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-    await admin.from("audit_log").insert({ actor_id: c.userId, action: "create_pos_exception", entity_type: "op_exception", entity_id: data.id, hospital_id: hid, new_value: { type: b.exception_type } });
+    await admin.from("audit_log").insert({ trace_id: c.traceId, actor_id: c.userId, action: "create_pos_exception", entity_type: "op_exception", entity_id: data.id, hospital_id: hid, new_value: { type: b.exception_type } });
     return NextResponse.json(data, { status: 201 });
   }
 
@@ -52,7 +52,7 @@ export async function POST(req: Request) {
       requested_by: c.userId, requester_role: c.role ?? null, reason: b.reason, proposed_payload: b.proposed_payload || null, status: "requested",
     }).select().single();
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-    await admin.from("audit_log").insert({ actor_id: c.userId, action: "request_pos_amendment", entity_type: "op_amendment_request", entity_id: data.id, hospital_id: inst.hospital_id, new_value: { form: b.form_instance_id } });
+    await admin.from("audit_log").insert({ trace_id: c.traceId, actor_id: c.userId, action: "request_pos_amendment", entity_type: "op_amendment_request", entity_id: data.id, hospital_id: inst.hospital_id, new_value: { form: b.form_instance_id } });
     return NextResponse.json(data, { status: 201 });
   }
 
@@ -80,7 +80,7 @@ export async function PATCH(req: Request) {
     const status = decision === "approve" ? "approved" : decision === "reject" ? "rejected" : "revoked";
     const { data, error } = await admin.from("op_exceptions").update({ status, approver_id: c.userId, decision_reason: b.decision_reason || null, decided_at: now }).eq("id", id).select().single();
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-    await admin.from("audit_log").insert({ actor_id: c.userId, action: "decide_pos_exception", entity_type: "op_exception", entity_id: id, hospital_id: ex.hospital_id, new_value: { decision } });
+    await admin.from("audit_log").insert({ trace_id: c.traceId, actor_id: c.userId, action: "decide_pos_exception", entity_type: "op_exception", entity_id: id, hospital_id: ex.hospital_id, new_value: { decision } });
     return NextResponse.json(data);
   }
 
@@ -97,7 +97,7 @@ export async function PATCH(req: Request) {
     if (decision === "reject") {
       const { data, error } = await admin.from("op_amendment_requests").update({ status: "rejected", approver_id: c.userId, decision_reason: b.decision_reason, decided_at: now }).eq("id", id).select().single();
       if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-      await admin.from("audit_log").insert({ actor_id: c.userId, action: "reject_pos_amendment", entity_type: "op_amendment_request", entity_id: id, hospital_id: ar.hospital_id, new_value: { reason: b.decision_reason } });
+      await admin.from("audit_log").insert({ trace_id: c.traceId, actor_id: c.userId, action: "reject_pos_amendment", entity_type: "op_amendment_request", entity_id: id, hospital_id: ar.hospital_id, new_value: { reason: b.decision_reason } });
       return NextResponse.json(data);
     }
 
@@ -116,7 +116,7 @@ export async function PATCH(req: Request) {
     await admin.from("op_form_events").insert({ hospital_id: orig.hospital_id, form_instance_id: orig.id, event_type: `${tpl?.eventType ?? "patient.form"}.amended`, schema_version: 1, department_id: orig.department_id, patient_id: orig.patient_id, actor_id: c.userId, actor_role: c.role ?? null, prev_state: orig.state, new_state: "amended", reason: ar.reason, correlation_id: orig.id, payload: { amendment_id: amended.id, request_id: id } });
     const { data: reqRow, error: rErr } = await admin.from("op_amendment_requests").update({ status: "approved", approver_id: c.userId, decided_at: now, amendment_instance_id: amended.id }).eq("id", id).select().single();
     if (rErr) return NextResponse.json({ error: rErr.message }, { status: 500 });
-    await admin.from("audit_log").insert({ actor_id: c.userId, action: "approve_pos_amendment", entity_type: "op_amendment_request", entity_id: id, hospital_id: ar.hospital_id, new_value: { amendment_id: amended.id } });
+    await admin.from("audit_log").insert({ trace_id: c.traceId, actor_id: c.userId, action: "approve_pos_amendment", entity_type: "op_amendment_request", entity_id: id, hospital_id: ar.hospital_id, new_value: { amendment_id: amended.id } });
     return NextResponse.json(reqRow);
   }
 

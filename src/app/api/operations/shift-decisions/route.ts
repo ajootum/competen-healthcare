@@ -42,7 +42,7 @@ export async function POST(req: Request) {
   }).select("id, decision_type, status").single();
   if (error) return migrationGate(error) ?? NextResponse.json({ error: error.message }, { status: 500 });
 
-  await c.admin.from("audit_log").insert({ actor_id: c.userId, actor_name: me?.full_name ?? null, action: `shift_decision_${type}`, entity_type: "shift_decision", entity_id: data.id, entity_name: String(b.decision_summary).trim().slice(0, 80), hospital_id: scope.hospitalId ?? null });
+  await c.admin.from("audit_log").insert({ trace_id: c.traceId, actor_id: c.userId, actor_name: me?.full_name ?? null, action: `shift_decision_${type}`, entity_type: "shift_decision", entity_id: data.id, entity_name: String(b.decision_summary).trim().slice(0, 80), hospital_id: scope.hospitalId ?? null });
   return NextResponse.json(data, { status: 201 });
 }
 
@@ -66,6 +66,6 @@ export async function PATCH(req: Request) {
   const { data, error } = await c.admin.from("shift_decisions").update(update).eq("id", id).select("id, status").single();
   if (error) return migrationGate(error) ?? NextResponse.json({ error: error.message }, { status: 500 });
 
-  await c.admin.from("audit_log").insert({ actor_id: c.userId, action: `shift_decision_${data.status}`, entity_type: "shift_decision", entity_id: data.id, entity_name: row.decision_summary?.slice(0, 80), hospital_id: row.hospital_id ?? null });
+  await c.admin.from("audit_log").insert({ trace_id: c.traceId, actor_id: c.userId, action: `shift_decision_${data.status}`, entity_type: "shift_decision", entity_id: data.id, entity_name: row.decision_summary?.slice(0, 80), hospital_id: row.hospital_id ?? null });
   return NextResponse.json(data);
 }

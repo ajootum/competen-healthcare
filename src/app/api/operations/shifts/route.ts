@@ -48,7 +48,7 @@ export async function POST(req: Request) {
     supervisor_id: b.supervisor_id ?? null, status: "planned", notes: b.notes?.trim() || null, created_by: c.userId,
   }).select().single();
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  await admin.from("audit_log").insert({ actor_id: c.userId, action: "open_shift", entity_type: "op_shift", entity_id: data.id, hospital_id: hospitalId, new_value: { shift_type: b.shift_type } });
+  await admin.from("audit_log").insert({ trace_id: c.traceId, actor_id: c.userId, action: "open_shift", entity_type: "op_shift", entity_id: data.id, hospital_id: hospitalId, new_value: { shift_type: b.shift_type } });
   return NextResponse.json(data, { status: 201 });
 }
 

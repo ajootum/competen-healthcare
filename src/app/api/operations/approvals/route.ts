@@ -58,7 +58,7 @@ export async function POST(req: Request) {
   }).select("id").maybeSingle();
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
-  await c.admin.from("audit_log").insert({ actor_id: c.userId, actor_name: nm, action: "create_approval_request", entity_type: "approval_request", entity_id: data?.id, entity_name: b.title, hospital_id: c.hospitalId ?? null, new_value: { category, priority } });
+  await c.admin.from("audit_log").insert({ trace_id: c.traceId, actor_id: c.userId, actor_name: nm, action: "create_approval_request", entity_type: "approval_request", entity_id: data?.id, entity_name: b.title, hospital_id: c.hospitalId ?? null, new_value: { category, priority } });
   return NextResponse.json({ ok: true, id: data?.id });
 }
 
@@ -78,7 +78,7 @@ export async function PATCH(req: Request) {
   const nm = await name(c.admin, c.userId);
 
   if (action === "comment") {
-    await c.admin.from("audit_log").insert({ actor_id: c.userId, actor_name: nm, action: "comment_approval", entity_type: "approval_request", entity_id: id, entity_name: prev.title, hospital_id: c.hospitalId ?? null, new_value: { note: b.note ?? null } });
+    await c.admin.from("audit_log").insert({ trace_id: c.traceId, actor_id: c.userId, actor_name: nm, action: "comment_approval", entity_type: "approval_request", entity_id: id, entity_name: prev.title, hospital_id: c.hospitalId ?? null, new_value: { note: b.note ?? null } });
     return NextResponse.json({ ok: true });
   }
 
@@ -91,6 +91,6 @@ export async function PATCH(req: Request) {
   const { error } = await c.admin.from("approval_requests").update(patch).eq("id", id);
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
-  await c.admin.from("audit_log").insert({ actor_id: c.userId, actor_name: nm, action: `approval_${action}`, entity_type: "approval_request", entity_id: id, entity_name: prev.title, hospital_id: c.hospitalId ?? null, old_value: { status: prev.status }, new_value: { status, note: b.note ?? null } });
+  await c.admin.from("audit_log").insert({ trace_id: c.traceId, actor_id: c.userId, actor_name: nm, action: `approval_${action}`, entity_type: "approval_request", entity_id: id, entity_name: prev.title, hospital_id: c.hospitalId ?? null, old_value: { status: prev.status }, new_value: { status, note: b.note ?? null } });
   return NextResponse.json({ ok: true, status });
 }

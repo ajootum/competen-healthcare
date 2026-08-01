@@ -50,6 +50,6 @@ export async function POST(req: Request) {
   const { data: updated, error: upErr } = await admin.from("op_shift_staff").update({ status: act.status }).eq("id", id).select().single();
   if (upErr) return NextResponse.json({ error: upErr.message }, { status: 500 });
 
-  await admin.from("audit_log").insert({ actor_id: c.userId, action: "record_attendance", entity_type: "op_shift_staff", entity_id: id, hospital_id: hospitalId, new_value: { action: b.action, status: act.status, minutes_late: minutesLate } });
+  await admin.from("audit_log").insert({ trace_id: c.traceId, actor_id: c.userId, action: "record_attendance", entity_type: "op_shift_staff", entity_id: id, hospital_id: hospitalId, new_value: { action: b.action, status: act.status, minutes_late: minutesLate } });
   return NextResponse.json({ event: evt, staff: updated, minutesLate }, { status: 201 });
 }

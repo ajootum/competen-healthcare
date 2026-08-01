@@ -48,7 +48,7 @@ export async function POST(req: Request) {
   const { data, error } = await c.admin.from("op_task_templates").insert(row).select("id, name").single();
   if (error) return migrationGate(error) ?? NextResponse.json({ error: error.message }, { status: 500 });
 
-  await c.admin.from("audit_log").insert({ actor_id: c.userId, actor_name: me?.full_name ?? null, action: "create_task_template", entity_type: "task_template", entity_id: data.id, entity_name: data.name, hospital_id: c.hospitalId ?? null });
+  await c.admin.from("audit_log").insert({ trace_id: c.traceId, actor_id: c.userId, actor_name: me?.full_name ?? null, action: "create_task_template", entity_type: "task_template", entity_id: data.id, entity_name: data.name, hospital_id: c.hospitalId ?? null });
   return NextResponse.json(data, { status: 201 });
 }
 
@@ -65,6 +65,6 @@ export async function DELETE(req: Request) {
   const { error } = await c.admin.from("op_task_templates").update({ active: false, updated_at: new Date().toISOString() }).eq("id", id);
   if (error) return migrationGate(error) ?? NextResponse.json({ error: error.message }, { status: 500 });
 
-  await c.admin.from("audit_log").insert({ actor_id: c.userId, action: "delete_task_template", entity_type: "task_template", entity_id: id, entity_name: row.name, hospital_id: row.hospital_id ?? null });
+  await c.admin.from("audit_log").insert({ trace_id: c.traceId, actor_id: c.userId, action: "delete_task_template", entity_type: "task_template", entity_id: id, entity_name: row.name, hospital_id: row.hospital_id ?? null });
   return NextResponse.json({ ok: true });
 }

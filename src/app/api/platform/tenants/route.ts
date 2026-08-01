@@ -33,7 +33,7 @@ export async function POST(req: Request) {
     const { data: plan } = await admin.from("plat_plans").select("id").eq("id", b.plan_id).maybeSingle();
     if (plan) await admin.from("plat_subscriptions").insert({ tenant_id: data.id, plan_id: b.plan_id, status: insert.status === "trial" ? "trialing" : "active", seats_purchased: b.seats ?? null });
   }
-  await admin.from("audit_log").insert({ actor_id: c.userId, action: "create_tenant", entity_type: "tenant", entity_id: data.id, entity_name: data.name });
+  await admin.from("audit_log").insert({ trace_id: c.traceId, actor_id: c.userId, action: "create_tenant", entity_type: "tenant", entity_id: data.id, entity_name: data.name });
   return NextResponse.json(data, { status: 201 });
 }
 
@@ -57,7 +57,7 @@ export async function PATCH(req: Request) {
     const { data: existing } = await admin.from("plat_feature_flag_assignments").select("id").eq("flag_key", b.flag_key).eq("scope_type", "tenant").eq("scope_ref", id).maybeSingle();
     if (existing) await admin.from("plat_feature_flag_assignments").update({ enabled }).eq("id", existing.id);
     else await admin.from("plat_feature_flag_assignments").insert({ flag_key: b.flag_key, scope_type: "tenant", scope_ref: id, enabled, created_by: c.userId });
-    await admin.from("audit_log").insert({ actor_id: c.userId, action: `feature_${enabled ? "enabled" : "disabled"}`, entity_type: "tenant", entity_id: id, entity_name: row.name });
+    await admin.from("audit_log").insert({ trace_id: c.traceId, actor_id: c.userId, action: `feature_${enabled ? "enabled" : "disabled"}`, entity_type: "tenant", entity_id: id, entity_name: row.name });
     return NextResponse.json({ ok: true, flag_key: b.flag_key, enabled });
   }
 
@@ -69,7 +69,7 @@ export async function PATCH(req: Request) {
     const { data: sub } = await admin.from("plat_subscriptions").select("id").eq("tenant_id", id).in("status", ["active", "trialing"]).order("started_at", { ascending: false }).limit(1).maybeSingle();
     if (sub) await admin.from("plat_subscriptions").update({ plan_id: b.plan_id, ...(b.seats !== undefined ? { seats_purchased: b.seats } : {}) }).eq("id", sub.id);
     else await admin.from("plat_subscriptions").insert({ tenant_id: id, plan_id: b.plan_id, status: "active", seats_purchased: b.seats ?? null });
-    await admin.from("audit_log").insert({ actor_id: c.userId, action: "assign_plan", entity_type: "tenant", entity_id: id, entity_name: row.name });
+    await admin.from("audit_log").insert({ trace_id: c.traceId, actor_id: c.userId, action: "assign_plan", entity_type: "tenant", entity_id: id, entity_name: row.name });
     return NextResponse.json({ ok: true });
   }
 
@@ -82,6 +82,6 @@ export async function PATCH(req: Request) {
   const { data, error } = await admin.from("tenants").update(update).eq("id", id).select().single();
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   const act = update.status ? `tenant_${update.status}` : "update_tenant";
-  await admin.from("audit_log").insert({ actor_id: c.userId, action: act, entity_type: "tenant", entity_id: id, entity_name: data.name });
+  await admin.from("audit_log").insert({ trace_id: c.traceId, actor_id: c.userId, action: act, entity_type: "tenant", entity_id: id, entity_name: data.name });
   return NextResponse.json(data);
 }

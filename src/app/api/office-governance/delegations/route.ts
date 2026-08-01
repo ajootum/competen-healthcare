@@ -42,7 +42,7 @@ export async function POST(req: Request) {
   }).select("id, position, status").single();
   if (error) return migrationGate(error) ?? NextResponse.json({ error: error.message }, { status: 500 });
 
-  await c.admin.from("audit_log").insert({ actor_id: c.userId, actor_name: me?.full_name ?? null, action: "delegate_authority", entity_type: "adm_delegation", entity_id: data.id, hospital_id: hospitalId, new_value: { position, status } });
+  await c.admin.from("audit_log").insert({ trace_id: c.traceId, actor_id: c.userId, actor_name: me?.full_name ?? null, action: "delegate_authority", entity_type: "adm_delegation", entity_id: data.id, hospital_id: hospitalId, new_value: { position, status } });
   return NextResponse.json(data, { status: 201 });
 }
 
@@ -58,6 +58,6 @@ export async function PATCH(req: Request) {
   const { data, error } = await c.admin.from("adm_delegations").update({ status: "revoked" }).eq("id", id).select("id, status").single();
   if (error) return migrationGate(error) ?? NextResponse.json({ error: error.message }, { status: 500 });
   const { data: me } = await c.admin.from("profiles").select("full_name").eq("id", c.userId).single();
-  await c.admin.from("audit_log").insert({ actor_id: c.userId, actor_name: me?.full_name ?? null, action: "revoke_delegation", entity_type: "adm_delegation", entity_id: id });
+  await c.admin.from("audit_log").insert({ trace_id: c.traceId, actor_id: c.userId, actor_name: me?.full_name ?? null, action: "revoke_delegation", entity_type: "adm_delegation", entity_id: id });
   return NextResponse.json(data);
 }

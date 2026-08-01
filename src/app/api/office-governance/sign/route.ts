@@ -57,6 +57,6 @@ export async function POST(req: Request) {
   const { data: sig, error } = await c.admin.from("ogs_signatures").insert({ entity_type: entityType, entity_id: entityId, office_id: officeId, hospital_id: hospitalId, signer_id: c.userId, signer_name: me?.full_name ?? null, signer_role: signerRole, statement: clean(b.statement) }).select("id").single();
   if (error) return migrationGate(error) ?? NextResponse.json({ error: error.message }, { status: 500 });
 
-  await c.admin.from("audit_log").insert({ actor_id: c.userId, actor_name: me?.full_name ?? null, action: `sign_${entityType}`, entity_type: `ogs_${entityType}`, entity_id: entityId, hospital_id: hospitalId, new_value: { signer_role: signerRole } });
+  await c.admin.from("audit_log").insert({ trace_id: c.traceId, actor_id: c.userId, actor_name: me?.full_name ?? null, action: `sign_${entityType}`, entity_type: `ogs_${entityType}`, entity_id: entityId, hospital_id: hospitalId, new_value: { signer_role: signerRole } });
   return NextResponse.json(sig, { status: 201 });
 }

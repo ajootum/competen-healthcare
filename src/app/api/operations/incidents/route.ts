@@ -44,7 +44,7 @@ export async function POST(req: Request) {
   }).select("id, incident_type, severity").single();
   if (error) return migrationGate(error) ?? NextResponse.json({ error: error.message }, { status: 500 });
 
-  await c.admin.from("audit_log").insert({ actor_id: c.userId, actor_name: me?.full_name ?? null, action: `report_incident_${type}`, entity_type: "op_incident", entity_id: data.id, hospital_id: c.hospitalId ?? null, new_value: { severity, near_miss: !!b.near_miss } });
+  await c.admin.from("audit_log").insert({ trace_id: c.traceId, actor_id: c.userId, actor_name: me?.full_name ?? null, action: `report_incident_${type}`, entity_type: "op_incident", entity_id: data.id, hospital_id: c.hospitalId ?? null, new_value: { severity, near_miss: !!b.near_miss } });
   return NextResponse.json(data, { status: 201 });
 }
 
@@ -66,6 +66,6 @@ export async function PATCH(req: Request) {
 
   const { data, error } = await c.admin.from("op_incidents").update(update).eq("id", id).select("id, status").single();
   if (error) return migrationGate(error) ?? NextResponse.json({ error: error.message }, { status: 500 });
-  await c.admin.from("audit_log").insert({ actor_id: c.userId, action: `incident_${data.status}`, entity_type: "op_incident", entity_id: data.id, hospital_id: row.hospital_id ?? null });
+  await c.admin.from("audit_log").insert({ trace_id: c.traceId, actor_id: c.userId, action: `incident_${data.status}`, entity_type: "op_incident", entity_id: data.id, hospital_id: row.hospital_id ?? null });
   return NextResponse.json(data);
 }

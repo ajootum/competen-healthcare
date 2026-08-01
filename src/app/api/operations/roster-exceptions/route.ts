@@ -26,7 +26,7 @@ export async function POST(req: Request) {
     unit_name: b.unit_name || null, staff_name: b.staff_name || null, proposed_resolution: b.resolution || null,
   }).select().single();
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  await admin.from("audit_log").insert({ actor_id: c.userId, action: "record_roster_exception", entity_type: "op_roster_exception", entity_id: data.id, hospital_id: roster.hospital_id, new_value: { category: b.category, severity: b.severity } });
+  await admin.from("audit_log").insert({ trace_id: c.traceId, actor_id: c.userId, action: "record_roster_exception", entity_type: "op_roster_exception", entity_id: data.id, hospital_id: roster.hospital_id, new_value: { category: b.category, severity: b.severity } });
   return NextResponse.json(data, { status: 201 });
 }
 
@@ -51,6 +51,6 @@ export async function PATCH(req: Request) {
   if (["resolved", "rejected", "accepted_with_mitigation"].includes(status)) { patch.resolved_by = c.userId; patch.resolved_at = new Date().toISOString(); }
   const { data, error } = await admin.from("op_roster_exceptions").update(patch).eq("id", id).select().single();
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  await admin.from("audit_log").insert({ actor_id: c.userId, action: "record_roster_exception", entity_type: "op_roster_exception", entity_id: id, hospital_id: row.hospital_id, new_value: { action: b.action } });
+  await admin.from("audit_log").insert({ trace_id: c.traceId, actor_id: c.userId, action: "record_roster_exception", entity_type: "op_roster_exception", entity_id: id, hospital_id: row.hospital_id, new_value: { action: b.action } });
   return NextResponse.json(data);
 }

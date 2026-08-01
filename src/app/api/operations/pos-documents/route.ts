@@ -46,7 +46,7 @@ export async function POST(req: Request) {
       content: built.content, status: "draft", version: 1, generated_by: c.userId,
     }).select().single();
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-    await admin.from("audit_log").insert({ actor_id: c.userId, action: "generate_pos_document", entity_type: "op_document", entity_id: data.id, hospital_id: pat.hospital_id, new_value: { template: tpl.key } });
+    await admin.from("audit_log").insert({ trace_id: c.traceId, actor_id: c.userId, action: "generate_pos_document", entity_type: "op_document", entity_id: data.id, hospital_id: pat.hospital_id, new_value: { template: tpl.key } });
     return NextResponse.json(data, { status: 201 });
   }
 
@@ -59,7 +59,7 @@ export async function POST(req: Request) {
     if (doc.status === "superseded") return badRequest("Superseded document cannot be signed");
     const { data, error } = await admin.from("op_documents").update({ status: "signed", signed_by: c.userId, signed_at: now, updated_at: now }).eq("id", b.id).select().single();
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-    await admin.from("audit_log").insert({ actor_id: c.userId, action: "sign_pos_document", entity_type: "op_document", entity_id: b.id, hospital_id: doc.hospital_id, new_value: { template: doc.template_key } });
+    await admin.from("audit_log").insert({ trace_id: c.traceId, actor_id: c.userId, action: "sign_pos_document", entity_type: "op_document", entity_id: b.id, hospital_id: doc.hospital_id, new_value: { template: doc.template_key } });
     return NextResponse.json(data);
   }
 
@@ -78,7 +78,7 @@ export async function POST(req: Request) {
     }).select().single();
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
     await admin.from("op_documents").update({ status: "superseded", updated_at: now }).eq("id", doc.id);
-    await admin.from("audit_log").insert({ actor_id: c.userId, action: "supersede_pos_document", entity_type: "op_document", entity_id: fresh.id, hospital_id: doc.hospital_id, new_value: { supersedes: doc.id, version: fresh.version } });
+    await admin.from("audit_log").insert({ trace_id: c.traceId, actor_id: c.userId, action: "supersede_pos_document", entity_type: "op_document", entity_id: fresh.id, hospital_id: doc.hospital_id, new_value: { supersedes: doc.id, version: fresh.version } });
     return NextResponse.json(fresh, { status: 201 });
   }
 

@@ -42,6 +42,6 @@ export async function POST(req: Request) {
   const { error: upErr } = await admin.from("op_shift_staff").update({ status: b.corrected_status }).eq("id", row.id);
   if (upErr) return NextResponse.json({ error: upErr.message }, { status: 500 });
 
-  await admin.from("audit_log").insert({ actor_id: c.userId, action: "record_correction", entity_type: "op_shift_staff", entity_id: row.id, hospital_id: hospitalId, old_value: { status: row.status }, new_value: { status: b.corrected_status, reason: b.reason } });
+  await admin.from("audit_log").insert({ trace_id: c.traceId, actor_id: c.userId, action: "record_correction", entity_type: "op_shift_staff", entity_id: row.id, hospital_id: hospitalId, old_value: { status: row.status }, new_value: { status: b.corrected_status, reason: b.reason } });
   return NextResponse.json({ correction: corr }, { status: 201 });
 }

@@ -34,7 +34,7 @@ export async function POST(req: Request) {
   }).select().single();
   if (error) return migrationGate(error) ?? NextResponse.json({ error: error.message }, { status: 500 });
 
-  await c.admin.from("audit_log").insert({ actor_id: c.userId, action: "survey_scheduled", entity_type: "survey", entity_id: data.id, entity_name: data.title });
+  await c.admin.from("audit_log").insert({ trace_id: c.traceId, actor_id: c.userId, action: "survey_scheduled", entity_type: "survey", entity_id: data.id, entity_name: data.title });
   return NextResponse.json(data, { status: 201 });
 }
 
@@ -62,7 +62,7 @@ export async function PATCH(req: Request) {
   const { data, error } = await c.admin.from("gov_surveys").update(update).eq("id", id).select("id, title, status, outcome").single();
   if (error) return migrationGate(error) ?? NextResponse.json({ error: error.message }, { status: 500 });
 
-  await c.admin.from("audit_log").insert({ actor_id: c.userId, action: `survey_${data.status}`, entity_type: "survey", entity_id: data.id, entity_name: data.title, new_value: { status: data.status, outcome: data.outcome } });
+  await c.admin.from("audit_log").insert({ trace_id: c.traceId, actor_id: c.userId, action: `survey_${data.status}`, entity_type: "survey", entity_id: data.id, entity_name: data.title, new_value: { status: data.status, outcome: data.outcome } });
   return NextResponse.json(data);
 }
 

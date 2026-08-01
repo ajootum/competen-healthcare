@@ -57,6 +57,6 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     await c.admin.from("ogs_office_actions").insert({ office_id: meeting.office_id, meeting_id: id, decision_id: decision.id, hospital_id: meeting.hospital_id ?? null, title: actionTitle, owner_id: ownerId, owner_name: ownerName, due_date: clean(b.action?.due_date), status: "open" });
   }
 
-  await c.admin.from("audit_log").insert({ actor_id: c.userId, actor_name: me?.full_name ?? null, action: "record_decision", entity_type: "ogs_decision", entity_id: decision.id, hospital_id: meeting.hospital_id ?? null, new_value: { title, outcome, votes: { for: tally.votes_for, against: tally.votes_against, abstain: tally.votes_abstain }, roll_call: roll.length } });
+  await c.admin.from("audit_log").insert({ trace_id: c.traceId, actor_id: c.userId, actor_name: me?.full_name ?? null, action: "record_decision", entity_type: "ogs_decision", entity_id: decision.id, hospital_id: meeting.hospital_id ?? null, new_value: { title, outcome, votes: { for: tally.votes_for, against: tally.votes_against, abstain: tally.votes_abstain }, roll_call: roll.length } });
   return NextResponse.json(decision, { status: 201 });
 }

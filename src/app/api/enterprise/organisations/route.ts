@@ -39,7 +39,7 @@ export async function POST(req: Request) {
 
   const { data, error } = await admin.from("organisations").insert(insert).select().single();
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  await admin.from("audit_log").insert({ actor_id: c.userId, action: "create_organisation", entity_type: "organisation", entity_id: data.id, entity_name: data.name });
+  await admin.from("audit_log").insert({ trace_id: c.traceId, actor_id: c.userId, action: "create_organisation", entity_type: "organisation", entity_id: data.id, entity_name: data.name });
   return NextResponse.json(data, { status: 201 });
 }
 
@@ -76,6 +76,6 @@ export async function PATCH(req: Request) {
   const { data, error } = await admin.from("organisations").update(update).eq("id", id).select().single();
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   const act = update.status ? `organisation_${update.status}` : "update_organisation";
-  await admin.from("audit_log").insert({ actor_id: c.userId, action: act, entity_type: "organisation", entity_id: id, entity_name: data.name });
+  await admin.from("audit_log").insert({ trace_id: c.traceId, actor_id: c.userId, action: act, entity_type: "organisation", entity_id: id, entity_name: data.name });
   return NextResponse.json(data);
 }

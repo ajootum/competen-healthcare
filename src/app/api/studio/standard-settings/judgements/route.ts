@@ -31,7 +31,7 @@ export async function POST(req: Request) {
   if (error) return migrationGate(error) ?? NextResponse.json({ error: error.message }, { status: 500 });
 
   await c.admin.from("cst_standard_settings").update({ updated_at: new Date().toISOString() }).eq("id", studyId);
-  await c.admin.from("audit_log").insert({ actor_id: c.userId, action: "add_standard_judgement", entity_type: "cst_standard_setting", entity_id: studyId, hospital_id: study.hospital_id ?? null, new_value: { judge, item, rating } });
+  await c.admin.from("audit_log").insert({ trace_id: c.traceId, actor_id: c.userId, action: "add_standard_judgement", entity_type: "cst_standard_setting", entity_id: studyId, hospital_id: study.hospital_id ?? null, new_value: { judge, item, rating } });
   return NextResponse.json(data, { status: 201 });
 }
 
@@ -49,6 +49,6 @@ export async function DELETE(req: Request) {
 
   const { error } = await c.admin.from("cst_standard_judgements").delete().eq("id", id);
   if (error) return migrationGate(error) ?? NextResponse.json({ error: error.message }, { status: 500 });
-  await c.admin.from("audit_log").insert({ actor_id: c.userId, action: "remove_standard_judgement", entity_type: "cst_standard_setting", entity_id: j.study_id, hospital_id: study?.hospital_id ?? null });
+  await c.admin.from("audit_log").insert({ trace_id: c.traceId, actor_id: c.userId, action: "remove_standard_judgement", entity_type: "cst_standard_setting", entity_id: j.study_id, hospital_id: study?.hospital_id ?? null });
   return NextResponse.json({ ok: true });
 }

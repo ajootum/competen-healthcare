@@ -32,7 +32,7 @@ export async function POST(req: Request) {
   }).select("id").single();
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
-  await admin.from("audit_log").insert({
+  await admin.from("audit_log").insert({ trace_id: c.traceId,
     actor_id: c.userId, actor_name: me?.full_name ?? null,
     action: "grant_assessor_authorization", entity_type: "assessor_authorization", entity_id: data.id,
     new_value: { user_id, cpu_id: cpu_id ?? "all", independence },
@@ -53,7 +53,7 @@ export async function DELETE(req: Request) {
   const { data: me } = await admin.from("profiles").select("full_name").eq("id", c.userId).single();
   const { error } = await admin.from("assessor_authorizations").update({ status: "revoked" }).eq("id", id);
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  await admin.from("audit_log").insert({
+  await admin.from("audit_log").insert({ trace_id: c.traceId,
     actor_id: c.userId, actor_name: me?.full_name ?? null,
     action: "revoke_assessor_authorization", entity_type: "assessor_authorization", entity_id: id,
   });

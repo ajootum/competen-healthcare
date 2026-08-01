@@ -33,7 +33,7 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
   dq = rule.hospital_id ? dq.eq("hospital_id", rule.hospital_id) : dq.is("hospital_id", null);
   const { data: existing } = await dq.limit(1).maybeSingle();
   if (existing) {
-    await c.admin.from("audit_log").insert({ actor_id: c.userId, actor_name: me?.full_name ?? null, action: "apply_assignment_rule", entity_type: "cmo_assignment_rule", entity_id: id, hospital_id: rule.hospital_id ?? null, new_value: { competency, target: targetLabel, already: true } });
+    await c.admin.from("audit_log").insert({ trace_id: c.traceId, actor_id: c.userId, actor_name: me?.full_name ?? null, action: "apply_assignment_rule", entity_type: "cmo_assignment_rule", entity_id: id, hospital_id: rule.hospital_id ?? null, new_value: { competency, target: targetLabel, already: true } });
     return NextResponse.json({ ok: true, already: true, created: false, id: existing.id });
   }
 
@@ -43,6 +43,6 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
   }).select("id").single();
   if (error) return migrationGate(error) ?? NextResponse.json({ error: error.message }, { status: 500 });
 
-  await c.admin.from("audit_log").insert({ actor_id: c.userId, actor_name: me?.full_name ?? null, action: "apply_assignment_rule", entity_type: "cmo_assignment_rule", entity_id: id, hospital_id: rule.hospital_id ?? null, new_value: { competency, target: targetLabel, assignment_id: ins.id } });
+  await c.admin.from("audit_log").insert({ trace_id: c.traceId, actor_id: c.userId, actor_name: me?.full_name ?? null, action: "apply_assignment_rule", entity_type: "cmo_assignment_rule", entity_id: id, hospital_id: rule.hospital_id ?? null, new_value: { competency, target: targetLabel, assignment_id: ins.id } });
   return NextResponse.json({ ok: true, already: false, created: true, id: ins.id });
 }

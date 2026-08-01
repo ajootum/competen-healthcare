@@ -65,7 +65,7 @@ export async function POST(req: Request) {
     response_deadline: deadline.toISOString(), status: "open",
   }).select().single();
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  await admin.from("audit_log").insert({ actor_id: c.userId, action: "raise_escalation", entity_type: "op_escalation", entity_id: data.id, hospital_id: hospitalId, new_value: { level, type: b.escalation_type } });
+  await admin.from("audit_log").insert({ trace_id: c.traceId, actor_id: c.userId, action: "raise_escalation", entity_type: "op_escalation", entity_id: data.id, hospital_id: hospitalId, new_value: { level, type: b.escalation_type } });
   await emitEscalationRaised(admin, data, c.userId);   // HWW-OPS-001 catalogue event (fail-soft)
   // AE-001 S7: an escalation is a rebalancing trigger (throttled, fail-soft).
   if (level >= 3) {
@@ -104,7 +104,7 @@ export async function PATCH(req: Request) {
     } else return badRequest("unknown action");
     const { data, error } = await admin.from("op_escalations").update(upd).eq("id", id).select().maybeSingle();
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-    await admin.from("audit_log").insert({ actor_id: c.userId, action: `escalation_${b.action}`, entity_type: "op_escalation", entity_id: id, hospital_id: row.hospital_id, new_value: upd });
+    await admin.from("audit_log").insert({ trace_id: c.traceId, actor_id: c.userId, action: `escalation_${b.action}`, entity_type: "op_escalation", entity_id: id, hospital_id: row.hospital_id, new_value: upd });
     return NextResponse.json(data ?? { ok: true });
   }
 

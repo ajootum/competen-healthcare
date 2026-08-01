@@ -47,7 +47,7 @@ export async function PATCH(req: Request) {
 
   await admin.from("frameworks").update({ pub_status: newFrameworkStatus }).eq("id", approval.framework_id);
 
-  await admin.from("audit_log").insert({
+  await admin.from("audit_log").insert({ trace_id: c.traceId,
     actor_id: c.userId,
     actor_name: fullName,
     action: decision === "approve" ? "approve_content" : "reject_content",

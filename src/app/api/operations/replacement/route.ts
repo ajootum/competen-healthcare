@@ -29,7 +29,7 @@ export async function POST(req: Request) {
     is_redeployment: !!b.is_redeployment, status: "identified", requested_by: c.userId, requested_by_name: me?.full_name ?? null,
   }).select().single();
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  await admin.from("audit_log").insert({ actor_id: c.userId, action: "record_replacement", entity_type: "op_replacement_request", entity_id: data.id, hospital_id: shift.hospital_id, new_value: { shift_id: b.shift_id, role: b.role } });
+  await admin.from("audit_log").insert({ trace_id: c.traceId, actor_id: c.userId, action: "record_replacement", entity_type: "op_replacement_request", entity_id: data.id, hospital_id: shift.hospital_id, new_value: { shift_id: b.shift_id, role: b.role } });
   return NextResponse.json(data, { status: 201 });
 }
 
@@ -53,6 +53,6 @@ export async function PATCH(req: Request) {
   if (["filled", "redeployed", "cancelled", "declined"].includes(status)) patch.resolved_at = new Date().toISOString();
   const { data, error } = await admin.from("op_replacement_requests").update(patch).eq("id", id).select().single();
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  await admin.from("audit_log").insert({ actor_id: c.userId, action: "record_replacement", entity_type: "op_replacement_request", entity_id: id, hospital_id: row.hospital_id, new_value: { action: b.action } });
+  await admin.from("audit_log").insert({ trace_id: c.traceId, actor_id: c.userId, action: "record_replacement", entity_type: "op_replacement_request", entity_id: id, hospital_id: row.hospital_id, new_value: { action: b.action } });
   return NextResponse.json(data);
 }

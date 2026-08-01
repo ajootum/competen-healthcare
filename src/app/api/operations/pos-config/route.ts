@@ -39,6 +39,6 @@ export async function POST(req: Request) {
     active: true, version, supersedes_id: current?.id ?? null, reason: b.reason || null, created_by: c.userId,
   }).select().single();
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  await admin.from("audit_log").insert({ actor_id: c.userId, action: "set_pos_config", entity_type: "op_config_rule", entity_id: data.id, hospital_id: hid, new_value: { domain: b.domain, rule_key: b.rule_key, value, version } });
+  await admin.from("audit_log").insert({ trace_id: c.traceId, actor_id: c.userId, action: "set_pos_config", entity_type: "op_config_rule", entity_id: data.id, hospital_id: hid, new_value: { domain: b.domain, rule_key: b.rule_key, value, version } });
   return NextResponse.json(data, { status: 201 });
 }

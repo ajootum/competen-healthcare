@@ -46,7 +46,7 @@ export async function POST(req: Request) {
     if (e2) return migrationGate(e2) ?? NextResponse.json({ error: e2.message }, { status: 500 });
   }
 
-  await admin.from("audit_log").insert({ actor_id: c.userId, actor_name: me?.full_name ?? null, action: "generate_roster", entity_type: "op_roster", entity_id: roster.id, entity_name: `Week ${weekStart}`, hospital_id: c.hospitalId ?? null, new_value: { coverage: plan.scores.coverage, filled: plan.slotsFilled, total: plan.slotsTotal } });
+  await admin.from("audit_log").insert({ trace_id: c.traceId, actor_id: c.userId, actor_name: me?.full_name ?? null, action: "generate_roster", entity_type: "op_roster", entity_id: roster.id, entity_name: `Week ${weekStart}`, hospital_id: c.hospitalId ?? null, new_value: { coverage: plan.scores.coverage, filled: plan.slotsFilled, total: plan.slotsTotal } });
   return NextResponse.json({ id: roster.id, week_start: weekStart, ...plan.scores, slots_total: plan.slotsTotal, slots_filled: plan.slotsFilled }, { status: 201 });
 }
 
@@ -69,12 +69,12 @@ export async function PATCH(req: Request) {
     }
     const { error } = await admin.from("op_rosters").update({ status: "published", published_by: c.userId, published_by_name: me?.full_name ?? null, published_at: new Date().toISOString(), notes: b.override_reason?.trim() || null }).eq("id", id);
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-    await admin.from("audit_log").insert({ actor_id: c.userId, actor_name: me?.full_name ?? null, action: "publish_roster", entity_type: "op_roster", entity_id: id, hospital_id: roster.hospital_id ?? null, new_value: { override: !!b.override_reason } });
+    await admin.from("audit_log").insert({ trace_id: c.traceId, actor_id: c.userId, actor_name: me?.full_name ?? null, action: "publish_roster", entity_type: "op_roster", entity_id: id, hospital_id: roster.hospital_id ?? null, new_value: { override: !!b.override_reason } });
     return NextResponse.json({ ok: true, status: "published" });
   }
   if (b.action === "archive") {
     await admin.from("op_rosters").update({ status: "archived" }).eq("id", id);
-    await admin.from("audit_log").insert({ actor_id: c.userId, action: "archive_roster", entity_type: "op_roster", entity_id: id, hospital_id: roster.hospital_id ?? null });
+    await admin.from("audit_log").insert({ trace_id: c.traceId, actor_id: c.userId, action: "archive_roster", entity_type: "op_roster", entity_id: id, hospital_id: roster.hospital_id ?? null });
     return NextResponse.json({ ok: true, status: "archived" });
   }
   return badRequest("unknown action");

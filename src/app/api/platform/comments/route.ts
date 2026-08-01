@@ -59,7 +59,7 @@ export async function POST(req: Request) {
   }).select("id, entity_type, entity_id, parent_id").single();
   if (error) return migrationGate(error) ?? NextResponse.json({ error: error.message }, { status: 500 });
 
-  await c.admin.from("audit_log").insert({ actor_id: c.userId, actor_name: me?.full_name ?? null, action: b.parent_id ? "reply_comment" : "create_comment", entity_type: "plat_comment", entity_id: data.id, entity_name: `${data.entity_type}:${String(data.entity_id).slice(0, 8)}`, hospital_id: c.hospitalId ?? null });
+  await c.admin.from("audit_log").insert({ trace_id: c.traceId, actor_id: c.userId, actor_name: me?.full_name ?? null, action: b.parent_id ? "reply_comment" : "create_comment", entity_type: "plat_comment", entity_id: data.id, entity_name: `${data.entity_type}:${String(data.entity_id).slice(0, 8)}`, hospital_id: c.hospitalId ?? null });
   return NextResponse.json(data, { status: 201 });
 }
 
@@ -76,7 +76,7 @@ export async function PATCH(req: Request) {
 
   const { data, error } = await c.admin.from("plat_comments").update({ body: String(b.body).trim(), edited_at: new Date().toISOString() }).eq("id", id).select("id").single();
   if (error) return migrationGate(error) ?? NextResponse.json({ error: error.message }, { status: 500 });
-  await c.admin.from("audit_log").insert({ actor_id: c.userId, action: "edit_comment", entity_type: "plat_comment", entity_id: id, hospital_id: row.hospital_id ?? null });
+  await c.admin.from("audit_log").insert({ trace_id: c.traceId, actor_id: c.userId, action: "edit_comment", entity_type: "plat_comment", entity_id: id, hospital_id: row.hospital_id ?? null });
   return NextResponse.json(data);
 }
 
@@ -91,6 +91,6 @@ export async function DELETE(req: Request) {
 
   const { error } = await c.admin.from("plat_comments").update({ deleted_at: new Date().toISOString() }).eq("id", id);
   if (error) return migrationGate(error) ?? NextResponse.json({ error: error.message }, { status: 500 });
-  await c.admin.from("audit_log").insert({ actor_id: c.userId, action: "delete_comment", entity_type: "plat_comment", entity_id: id, hospital_id: row.hospital_id ?? null });
+  await c.admin.from("audit_log").insert({ trace_id: c.traceId, actor_id: c.userId, action: "delete_comment", entity_type: "plat_comment", entity_id: id, hospital_id: row.hospital_id ?? null });
   return NextResponse.json({ ok: true });
 }

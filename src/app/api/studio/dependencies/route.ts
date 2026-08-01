@@ -54,7 +54,7 @@ export async function POST(req: Request) {
     return migrationGate(error) ?? NextResponse.json({ error: error.message }, { status: 500 });
   }
 
-  await c.admin.from("audit_log").insert({ actor_id: c.userId, actor_name: me?.full_name ?? null, action: "create_competency_dependency", entity_type: "competency_dependency", entity_id: data.id, hospital_id: c.hospitalId ?? null, new_value: { source, target, dependency_type: type } });
+  await c.admin.from("audit_log").insert({ trace_id: c.traceId, actor_id: c.userId, actor_name: me?.full_name ?? null, action: "create_competency_dependency", entity_type: "competency_dependency", entity_id: data.id, hospital_id: c.hospitalId ?? null, new_value: { source, target, dependency_type: type } });
   return NextResponse.json(data, { status: 201 });
 }
 
@@ -72,6 +72,6 @@ export async function DELETE(req: Request) {
   const { error } = await c.admin.from("competency_dependencies").delete().eq("id", id);
   if (error) return migrationGate(error) ?? NextResponse.json({ error: error.message }, { status: 500 });
 
-  await c.admin.from("audit_log").insert({ actor_id: c.userId, action: "delete_competency_dependency", entity_type: "competency_dependency", entity_id: id, hospital_id: row.hospital_id ?? null });
+  await c.admin.from("audit_log").insert({ trace_id: c.traceId, actor_id: c.userId, action: "delete_competency_dependency", entity_type: "competency_dependency", entity_id: id, hospital_id: row.hospital_id ?? null });
   return NextResponse.json({ ok: true });
 }

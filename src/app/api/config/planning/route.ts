@@ -63,6 +63,6 @@ export async function PUT(req: Request) {
     { onConflict: "hospital_id" },
   );
   if (error) return migrationGate(error) ?? NextResponse.json({ error: error.message }, { status: 500 });
-  await admin.from("audit_log").insert({ actor_id: c.userId, actor_name: me?.full_name ?? null, action: "publish_planning_config", entity_type: "wps_config", entity_name: `v${version}`, hospital_id: c.hospitalId ?? null, new_value: settings });
+  await admin.from("audit_log").insert({ trace_id: c.traceId, actor_id: c.userId, actor_name: me?.full_name ?? null, action: "publish_planning_config", entity_type: "wps_config", entity_name: `v${version}`, hospital_id: c.hospitalId ?? null, new_value: settings });
   return NextResponse.json({ ok: true, version });
 }

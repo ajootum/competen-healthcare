@@ -17,7 +17,7 @@ export async function POST(_req: Request, { params }: { params: Promise<{ cycleI
 
   try {
     const result = await generateDecisionsForCycle(c.admin, cycleId, c.userId, actorName);
-    await c.admin.from("audit_log").insert({
+    await c.admin.from("audit_log").insert({ trace_id: c.traceId,
       actor_id: c.userId,
       actor_name: actorName,
       action: "finalize_decisions",

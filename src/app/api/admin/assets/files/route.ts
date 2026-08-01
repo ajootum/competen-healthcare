@@ -48,7 +48,7 @@ export async function POST(req: Request) {
     if (migrationGuard(error.message)) return NextResponse.json({ error: "cap_asset_files not migrated — run migration 141", migration: true }, { status: 409 });
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
-  await c.admin.from("audit_log").insert({ actor_id: c.userId, action: "asset_file_upload", entity_type: "cap_asset_files", entity_id: row.id, entity_name: safeName });
+  await c.admin.from("audit_log").insert({ trace_id: c.traceId, actor_id: c.userId, action: "asset_file_upload", entity_type: "cap_asset_files", entity_id: row.id, entity_name: safeName });
   return NextResponse.json({ ok: true, file: row }, { status: 201 });
 }
 
@@ -87,6 +87,6 @@ export async function DELETE(req: Request) {
   if (!row) return NextResponse.json({ error: "Not found" }, { status: 404 });
   await c.admin.storage.from(ASSET_BUCKET).remove([row.storage_path]);
   await c.admin.from("cap_asset_files").delete().eq("id", id);
-  await c.admin.from("audit_log").insert({ actor_id: c.userId, action: "asset_file_delete", entity_type: "cap_asset_files", entity_id: id, entity_name: row.file_name });
+  await c.admin.from("audit_log").insert({ trace_id: c.traceId, actor_id: c.userId, action: "asset_file_delete", entity_type: "cap_asset_files", entity_id: id, entity_name: row.file_name });
   return NextResponse.json({ ok: true });
 }

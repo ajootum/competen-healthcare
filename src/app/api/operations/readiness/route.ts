@@ -66,6 +66,6 @@ export async function PATCH(req: Request) {
     .upsert(row, { onConflict: "shift_id,item_code" }).select("id, item_code, status").single();
   if (error) return migrationGate(error) ?? NextResponse.json({ error: error.message }, { status: 500 });
 
-  await c.admin.from("audit_log").insert({ actor_id: c.userId, actor_name: me?.full_name ?? null, action: `readiness_${b.status}`, entity_type: "shift_readiness", entity_id: data.id, entity_name: itemCode, hospital_id: scope.hospitalId ?? null, new_value: { status: b.status } });
+  await c.admin.from("audit_log").insert({ trace_id: c.traceId, actor_id: c.userId, actor_name: me?.full_name ?? null, action: `readiness_${b.status}`, entity_type: "shift_readiness", entity_id: data.id, entity_name: itemCode, hospital_id: scope.hospitalId ?? null, new_value: { status: b.status } });
   return NextResponse.json(data);
 }

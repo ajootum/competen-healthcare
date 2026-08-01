@@ -29,7 +29,7 @@ export async function POST() {
   if (!isSuper(c)) return forbidden("Refreshing the asset index is super-admin only");
   try {
     const r = await refreshAssets(c.admin);
-    await c.admin.from("audit_log").insert({ actor_id: c.userId, action: "cap_assets_refresh", entity_type: "cap_assets", new_value: { total: r.total, byType: r.byType, errors: r.errors } });
+    await c.admin.from("audit_log").insert({ trace_id: c.traceId, actor_id: c.userId, action: "cap_assets_refresh", entity_type: "cap_assets", new_value: { total: r.total, byType: r.byType, errors: r.errors } });
     return NextResponse.json({ ...r, status: await assetIndexStatus(c.admin) });
   } catch (e) {
     const msg = e instanceof Error ? e.message : "refresh failed";

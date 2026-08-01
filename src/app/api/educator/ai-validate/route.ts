@@ -96,7 +96,7 @@ export async function POST(req: Request) {
   }
 
   const { data: me } = await c.admin.from("profiles").select("full_name").eq("id", c.userId).single();
-  await c.admin.from("audit_log").insert({
+  await c.admin.from("audit_log").insert({ trace_id: c.traceId,
     actor_id: c.userId, actor_name: me?.full_name ?? null,
     action: "ai_validation_review", entity_type: "competency_score", entity_id: cs.id,
     new_value: { model: result.model, tokens: result.usage },

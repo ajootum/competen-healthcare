@@ -26,7 +26,7 @@ export async function PATCH(req: Request) {
   if (b.action === "reset") {
     const { error } = await admin.from("plat_workspaces").delete().eq("key", key);
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-    await admin.from("audit_log").insert({ actor_id: c.userId, action: "workspace_reset", entity_type: "workspace", entity_id: null, entity_name: entry.name });
+    await admin.from("audit_log").insert({ trace_id: c.traceId, actor_id: c.userId, action: "workspace_reset", entity_type: "workspace", entity_id: null, entity_name: entry.name });
     return NextResponse.json({ ok: true, reset: true });
   }
 
@@ -49,6 +49,6 @@ export async function PATCH(req: Request) {
     if (/relation .*plat_workspaces.* does not exist/i.test(error.message)) return NextResponse.json({ error: "Run migration 053 to enable workspace management" }, { status: 409 });
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
-  await admin.from("audit_log").insert({ actor_id: c.userId, action: b.is_enabled === false ? "workspace_disabled" : "workspace_updated", entity_type: "workspace", entity_id: null, entity_name: entry.name });
+  await admin.from("audit_log").insert({ trace_id: c.traceId, actor_id: c.userId, action: b.is_enabled === false ? "workspace_disabled" : "workspace_updated", entity_type: "workspace", entity_id: null, entity_name: entry.name });
   return NextResponse.json(data);
 }

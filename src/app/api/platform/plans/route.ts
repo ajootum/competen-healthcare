@@ -32,7 +32,7 @@ export async function POST(req: Request) {
   };
   const { data, error } = await admin.from("plat_plans").insert(insert).select().single();
   if (error) return NextResponse.json({ error: /duplicate|unique/i.test(error.message) ? "A plan with this code already exists" : error.message }, { status: 400 });
-  await admin.from("audit_log").insert({ actor_id: c.userId, action: "create_plan", entity_type: "plan", entity_id: data.id, entity_name: data.name });
+  await admin.from("audit_log").insert({ trace_id: c.traceId, actor_id: c.userId, action: "create_plan", entity_type: "plan", entity_id: data.id, entity_name: data.name });
   return NextResponse.json(data, { status: 201 });
 }
 
@@ -59,6 +59,6 @@ export async function PATCH(req: Request) {
   if (!Object.keys(update).length) return badRequest("no valid fields");
   const { data, error } = await admin.from("plat_plans").update(update).eq("id", id).select().single();
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  await admin.from("audit_log").insert({ actor_id: c.userId, action: "update_plan", entity_type: "plan", entity_id: id, entity_name: data.name });
+  await admin.from("audit_log").insert({ trace_id: c.traceId, actor_id: c.userId, action: "update_plan", entity_type: "plan", entity_id: id, entity_name: data.name });
   return NextResponse.json(data);
 }

@@ -42,7 +42,7 @@ export async function POST(req: Request) {
       conducted_by: c.userId, conducted_by_name: me?.full_name ?? null,
     }).select("id").single();
     if (perr) return NextResponse.json({ error: perr.message }, { status: 500 });
-    await admin.from("audit_log").insert({ actor_id: c.userId, actor_name: me?.full_name ?? null, action: "plan_audit", entity_type: "audit", entity_id: planned.id, entity_name: String(body.title).trim() });
+    await admin.from("audit_log").insert({ trace_id: c.traceId, actor_id: c.userId, actor_name: me?.full_name ?? null, action: "plan_audit", entity_type: "audit", entity_id: planned.id, entity_name: String(body.title).trim() });
     return NextResponse.json({ ok: true, id: planned.id }, { status: 201 });
   }
 
@@ -125,7 +125,7 @@ export async function POST(req: Request) {
     if (!cerr) capaCreated = criticalFails.length;
   }
 
-  await admin.from("audit_log").insert({
+  await admin.from("audit_log").insert({ trace_id: c.traceId,
     actor_id: c.userId, actor_name: me?.full_name ?? null,
     action: "conduct_audit", entity_type: "audit", entity_id: audit.id, entity_name: title,
     new_value: { audit_type, compliance, met, not_met: notMet, na, capa_created: capaCreated },

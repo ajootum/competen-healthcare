@@ -32,7 +32,7 @@ export async function POST(req: Request) {
   if (error) return migrationGate(error) ?? NextResponse.json({ error: error.message }, { status: 500 });
 
   await c.admin.from("competency_packages").update({ updated_at: new Date().toISOString() }).eq("id", packageId);
-  await c.admin.from("audit_log").insert({ actor_id: c.userId, action: "add_package_item", entity_type: "competency_package", entity_id: packageId, hospital_id: pkg.hospital_id ?? null, new_value: { item_type: itemType, item_label: itemLabel } });
+  await c.admin.from("audit_log").insert({ trace_id: c.traceId, actor_id: c.userId, action: "add_package_item", entity_type: "competency_package", entity_id: packageId, hospital_id: pkg.hospital_id ?? null, new_value: { item_type: itemType, item_label: itemLabel } });
   return NextResponse.json(data, { status: 201 });
 }
 
@@ -51,6 +51,6 @@ export async function DELETE(req: Request) {
   const { error } = await c.admin.from("competency_package_items").delete().eq("id", id);
   if (error) return migrationGate(error) ?? NextResponse.json({ error: error.message }, { status: 500 });
 
-  await c.admin.from("audit_log").insert({ actor_id: c.userId, action: "remove_package_item", entity_type: "competency_package", entity_id: item.package_id, hospital_id: pkg?.hospital_id ?? null });
+  await c.admin.from("audit_log").insert({ trace_id: c.traceId, actor_id: c.userId, action: "remove_package_item", entity_type: "competency_package", entity_id: item.package_id, hospital_id: pkg?.hospital_id ?? null });
   return NextResponse.json({ ok: true });
 }
