@@ -87,9 +87,30 @@ export const JOURNEY = {
   cta: { label: "Learn More", href: "/signup" },
 };
 
-export const AUDIENCES = [
-  "Hospitals", "Health Systems", "Universities", "Training Schools", "NGOs", "Governments", "Professional Councils",
+// Photo tiles, per the approved design. `img` points at /public/images/home; the tile falls back to a
+// patterned panel if the file is missing, so a deleted asset degrades instead of breaking the row.
+export const AUDIENCES: { label: string; img: string }[] = [
+  { label: "Hospitals", img: "/images/home/serve-hospitals.png" },
+  { label: "Health Systems", img: "/images/home/serve-health-systems.png" },
+  { label: "Universities", img: "/images/home/serve-universities.png" },
+  { label: "Training Schools", img: "/images/home/serve-training.png" },
+  { label: "NGOs", img: "/images/home/serve-ngos.png" },
+  { label: "Governments", img: "/images/home/serve-governments.png" },
+  { label: "Professional Councils", img: "/images/home/serve-councils.png" },
 ];
+
+// Photography extracted from the approved COMP-HOME-001 comp. NOTE THE SIZES: the comp is 1024x1536 for
+// the WHOLE page, so the hero crop is 205x330 and each audience tile 112x66. They are correct in content
+// and colour and will read fine at tile scale, but they are comp-resolution, not asset-resolution -- the
+// hero will look soft on a large display. Replacing any file at the same path is the whole fix; no code
+// changes. Named here so the limitation travels with the asset rather than living only in a commit message.
+export const PHOTOS = {
+  hero: "/images/home/hero-clinicians.png",
+  student: "/images/home/journey-student.png",
+  nurse: "/images/home/journey-nurse.png",
+  consultant: "/images/home/journey-consultant.png",
+  sunset: "/images/home/closing-sunset.png",
+};
 
 export type Metric = { value: string; label: string; sub: string };
 

@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { PatternBand, PatternField, PatternRule, PhotoSlot } from "@/components/marketing/Pattern";
 import {
-  BRAND, HERO, TRUST, CAPABILITIES, LIFECYCLE, JOURNEY, AUDIENCES, METRICS, CLOSING, NAV, FOOTER, FOOTER_LEGAL,
+  BRAND, HERO, TRUST, CAPABILITIES, LIFECYCLE, JOURNEY, AUDIENCES, METRICS, CLOSING, NAV, FOOTER, FOOTER_LEGAL, PHOTOS,
 } from "@/lib/marketing/home-content";
 
 // COMP-HOME-001 — public homepage.
@@ -158,10 +158,8 @@ export default function Home() {
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-5 gap-4 items-stretch">
-              {/* Photography slot — renders a patterned panel until a real photograph is added. */}
-              <PhotoSlot className="sm:col-span-2 rounded-2xl min-h-[220px]"
-                alt="Nurses reviewing a patient record together on a tablet"
-                caption="Photography slot — add /images/home/hero-clinicians.jpg" />
+              <PhotoSlot src={PHOTOS.hero} className="sm:col-span-2 rounded-2xl min-h-[220px]"
+                alt="Two nurses reviewing a patient record together on a tablet" />
               <div className="sm:col-span-3"><DashboardPreview /></div>
             </div>
           </div>
@@ -242,9 +240,8 @@ export default function Home() {
         {/* ── PERSONAL TO PROFESSIONAL ──────────────────────────────────────── */}
         <section id="journey" className={`${container} py-16 lg:py-20`}>
           <div className="grid lg:grid-cols-12 gap-6 items-stretch">
-            <PhotoSlot className="hidden lg:block lg:col-span-2 rounded-2xl min-h-[300px]"
-              alt="A student nurse on campus"
-              caption="Photography slot — /images/home/journey-student.jpg" />
+            <PhotoSlot src={PHOTOS.student} className="hidden lg:block lg:col-span-2 rounded-2xl min-h-[300px]"
+              alt="A student nurse on campus" />
 
             <div className="lg:col-span-4">
               <h2 className="text-2xl font-bold tracking-tight text-gray-900 text-balance">{JOURNEY.title}</h2>
@@ -261,7 +258,13 @@ export default function Home() {
               </Link>
             </div>
 
-            <div className="lg:col-span-4 grid sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2 gap-3 items-start">
+            <div className="lg:col-span-4 grid sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2 gap-3 items-start relative">
+              {/* "Seamless Connection" node from the comp — the visual claim that the two workspaces are one
+                  identity. Decorative and hidden from assistive tech; the assurance line below says it in
+                  words, which is what a screen reader actually needs. */}
+              <span aria-hidden className="hidden xl:flex absolute left-1/2 top-16 -translate-x-1/2 z-10 w-11 h-11 rounded-full bg-white ring-2 ring-[var(--cmp-color-secondary)]/25 shadow-md items-center justify-center text-[var(--cmp-color-secondary)] font-bold">
+                C
+              </span>
               {[JOURNEY.personal, JOURNEY.organisation].map(w => (
                 <div key={w.title} className="rounded-2xl border border-gray-200 bg-white p-4">
                   <p className="text-[13px] font-bold text-[var(--cmp-color-secondary)]">{w.title}</p>
@@ -280,9 +283,8 @@ export default function Home() {
               </p>
             </div>
 
-            <PhotoSlot className="hidden lg:block lg:col-span-2 rounded-2xl min-h-[300px]"
-              alt="A consultant physician on a hospital ward"
-              caption="Photography slot — /images/home/journey-consultant.jpg" />
+            <PhotoSlot src={PHOTOS.consultant} className="hidden lg:block lg:col-span-2 rounded-2xl min-h-[300px]"
+              alt="A consultant physician on a hospital ward" />
           </div>
         </section>
 
@@ -295,10 +297,14 @@ export default function Home() {
                 <h2 className="text-xl font-bold text-white text-balance">Who We Serve</h2>
                 <p className="mt-2 text-[13px] text-white/60 leading-relaxed">Trusted by healthcare organisations across Africa and beyond.</p>
               </div>
+              {/* Photo tiles, per the comp. The label sits BELOW the image rather than over it: the crops
+                  already carry a caption baked in at that position in the comp, and overlaying a second one
+                  would double it. */}
               <ul className="lg:col-span-3 grid grid-cols-2 sm:grid-cols-4 xl:grid-cols-7 gap-2">
                 {AUDIENCES.map(a => (
-                  <li key={a} className="rounded-xl bg-white/10 ring-1 ring-white/15 px-2.5 py-3 text-center text-[12px] font-medium text-white/90">
-                    {a}
+                  <li key={a.label} className="rounded-xl overflow-hidden bg-white/10 ring-1 ring-white/15">
+                    <PhotoSlot src={a.img} alt={a.label} className="h-16 w-full" />
+                    <p className="px-1.5 py-2 text-center text-[11px] font-medium text-white/90 leading-tight">{a.label}</p>
                   </li>
                 ))}
               </ul>
@@ -326,7 +332,13 @@ export default function Home() {
         </section>
 
         {/* ── CLOSING CTA ───────────────────────────────────────────────────── */}
-        <section id="closing" className="relative overflow-hidden bg-gradient-to-r from-[#0B2A3B] via-[#0E3A4A] to-[var(--cmp-color-primary-dark)]">
+        <section id="closing" className="relative overflow-hidden bg-[#0B2A3B]">
+          {/* The comp puts an African sunset across the right half, fading into the deep navy. Masked with
+              a gradient rather than reduced opacity so the copy side stays a solid, legible ground. */}
+          <div aria-hidden className="absolute inset-y-0 right-0 w-full sm:w-3/5 lg:w-1/2">
+            <PhotoSlot src={PHOTOS.sunset} alt="" className="h-full w-full opacity-70" />
+            <div className="absolute inset-0 bg-gradient-to-r from-[#0B2A3B] via-[#0B2A3B]/70 to-transparent" />
+          </div>
           <PatternBand className="absolute inset-0" tone="#FFFFFF" />
           <div className={`${container} relative py-14 lg:py-16`}>
             <h2 className="max-w-2xl text-2xl sm:text-3xl font-bold text-white leading-snug text-balance">{CLOSING.title}</h2>
