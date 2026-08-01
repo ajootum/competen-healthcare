@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getCaller, isResponse, isSupervisor, isSuper, forbidden, badRequest } from "@/lib/api-auth";
+import { outstandingForShift, CLOSING_STATUSES } from "@/lib/operations/shift-closeout";
 
 // Clinical Shifts (COE Shift domain). Operational staff open/activate/close shifts.
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -67,7 +68,35 @@ export async function PATCH(req: Request) {
   if (typeof b.notes === "string") update.notes = b.notes.trim() || null;
   if (typeof b.supervisor_id === "string") update.supervisor_id = b.supervisor_id;
   if (!Object.keys(update).length) return badRequest("no valid fields");
+
+  // XWI P2-14 close-out gate. Ending a shift used to write `status` and nothing else, leaving tasks
+  // in_progress, patients assigned to nobody on duty, and escalations open -- rows that keep feeding every
+  // count above them, indistinguishable from live work. The orphans are NOT cascaded away: cancelling
+  // tasks destroys the record of what was left undone, ending assignments drops clinical responsibility
+  // with no receiving clinician, and resolving escalations asserts something that did not happen. What is
+  // fixed is that closing over them was SILENT.
+  let outstanding: Awaited<ReturnType<typeof outstandingForShift>> | null = null;
+  if (CLOSING_STATUSES.includes(update.status)) {
+    outstanding = await outstandingForShift(admin, id);
+    if (outstanding.total > 0 && !b.acknowledge) {
+      return NextResponse.json({
+        error: `This shift still has ${outstanding.summary}. Hand them over or resolve them, or acknowledge to close over them.`,
+        outstanding, requiresAcknowledgement: true,
+      }, { status: 409 });
+    }
+  }
+
   const { data, error } = await admin.from("op_shifts").update(update).eq("id", id).select().single();
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  return NextResponse.json(data);
+
+  // An acknowledged close-out is a governed act, so it leaves a record of exactly what was outstanding.
+  if (outstanding && outstanding.total > 0) {
+    await admin.from("audit_log").insert({
+      actor_id: c.userId, action: "shift_closed_with_outstanding_work",
+      entity_type: "op_shifts", entity_id: id, entity_name: outstanding.summary,
+      new_value: outstanding, hospital_id: row.hospital_id,
+      notes: b.acknowledge_reason?.trim() || null,
+    });
+  }
+  return NextResponse.json({ ...data, outstanding });
 }

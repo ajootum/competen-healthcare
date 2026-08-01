@@ -32,6 +32,7 @@ import { join } from "node:path";
 import { checkDeploymentReadiness } from "../src/lib/operations/deployment-readiness";
 import { evidenceFromTask, EVIDENCE_TASK_TYPES } from "../src/lib/hww/evidence";
 import { assessCompetencyCurrency } from "../src/lib/operations/competency-currency";
+import { outstandingForShift } from "../src/lib/operations/shift-closeout";
 loadEnvConfig(process.cwd());
 
 const admin = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!, {
@@ -198,6 +199,51 @@ async function main() {
   check(/evidenceFromTask\s*\(/.test(bridgeCallers),
     "a real task-completion route CALLS the bridge",
     "the bridge exists but nothing invokes it -- evidence would only ever appear if called by hand");
+
+  // ── 3. SHIFT CLOSE-OUT (XWI P2-14) ───────────────────────────────────────
+  head("3. SHIFT CLOSE-OUT  (outstanding work is not closed over silently)");
+
+  const { data: shifts } = await admin.from("op_shifts").select("id, hospital_id, status").limit(1);
+  const shift = (shifts ?? [])[0] as any;
+  if (!shift) check(false, "a shift exists to test close-out against");
+  else {
+    const before = await outstandingForShift(admin, shift.id);
+    check(typeof before.total === "number", "outstanding work can be counted for a shift");
+
+    // Add one open task to that shift and prove it is seen.
+    const t = await admin.from("op_tasks").insert({
+      hospital_id: shift.hospital_id, shift_id: shift.id, task_type: "administrative",
+      description: "[xw-competency-harness] synthetic open task", status: "assigned",
+    }).select("id").single();
+    if (t.error) check(false, "insert an open task on the shift", t.error.message);
+    else {
+      written.push({ table: "op_tasks", id: t.data.id });
+      const after = await outstandingForShift(admin, shift.id);
+      check(after.tasks === before.tasks + 1, `an open task is counted (${before.tasks} -> ${after.tasks})`);
+      check(after.total === before.total + 1, "it raises the outstanding total");
+      check(/open task/.test(after.summary), `the summary NAMES what is outstanding -- "${after.summary}"`);
+
+      // Completing it must clear it: the gate has to reopen, or supervisors learn to always acknowledge.
+      await admin.from("op_tasks").update({ status: "completed" }).eq("id", t.data.id);
+      const done = await outstandingForShift(admin, shift.id);
+      check(done.tasks === before.tasks, "completing the task clears it from the outstanding count");
+    }
+  }
+
+  // A missing table must NOT read as "nothing outstanding".
+  let threw = false;
+  try { await outstandingForShift(admin, "00000000-0000-0000-0000-000000000000"); } catch { threw = true; }
+  check(!threw, "a shift with no children counts zero rather than erroring");
+
+  const shiftRoute = readFileSync(join(process.cwd(), "src/app/api/operations/shifts/route.ts"), "utf8");
+  check(/outstandingForShift\s*\(/.test(shiftRoute), "the shift route CALLS the close-out check");
+  check(/409/.test(shiftRoute) && /requiresAcknowledgement/.test(shiftRoute),
+    "closing over outstanding work is refused with 409 until acknowledged");
+  check(/shift_closed_with_outstanding_work/.test(shiftRoute),
+    "an acknowledged close-out is written to the audit trail");
+  check(!/op_tasks[\s\S]{0,200}update\([\s\S]{0,80}cancelled/.test(shiftRoute),
+    "the route does NOT silently cancel the orphaned work",
+    "auto-cascading destroys the record of what was left undone");
 
   await cleanup();
 
