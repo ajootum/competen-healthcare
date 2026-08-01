@@ -5,6 +5,12 @@
 import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import Link from "next/link";
+import { PillTag as Pill } from "../../../components/ui/primitives";
+import { KitFoot as Foot } from "../../../components/ui/primitives";
+import { PanelCard as Card } from "../../../components/ui/primitives";
+// Re-exported: this file is a KIT, and pages import these names from it. Lifting the
+// implementations into the library must not remove that surface.
+export { Pill, Foot, Card };
 
 export async function paGuard() {
   const supabase = await createClient();
@@ -53,19 +59,6 @@ export function Tabs({ active }: { active: string }) {
       ))}
     </div>
   );
-}
-
-export function Card({ title, right, children, className }: { title?: string; right?: any; children: any; className?: string }) {
-  return (
-    <div className={`bg-white border border-gray-200 rounded-xl p-4 ${className ?? ""}`}>
-      {(title || right) && <div className="flex items-center justify-between mb-3 gap-2"><h3 className="text-sm font-semibold text-gray-900">{title}</h3>{right}</div>}
-      {children}
-    </div>
-  );
-}
-
-export function Pill({ text, tone }: { text: string; tone?: string }) {
-  return <span className={`text-[10px] font-semibold uppercase tracking-wide rounded px-1.5 py-0.5 ${PILL[tone ?? "slate"]}`}>{String(text).replace(/_/g, " ")}</span>;
 }
 
 export function Progress({ pct, tone }: { pct: number; tone?: string }) {
@@ -176,6 +169,3 @@ export function Provision({ module }: { module: string }) {
   );
 }
 
-export function Foot({ children }: { children: any }) {
-  return <p className="text-[11px] text-gray-400">{children}</p>;
-}

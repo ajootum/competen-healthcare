@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { loadActivationReadiness } from "@/lib/cgr/activation";
 import { ProfileBuilder, ProfileStatus } from "./ProfileBuilder";
+import { KpiTile as Kpi } from "../_kit";
 
 // CGR-028 — Service Activation Readiness (§9, over migration 151). Service profiles state what a service
 // REQUIRES; the gate evaluates each active profile against every department's real workforce — current
@@ -20,16 +21,6 @@ const STATUS_META: Record<string, string> = {
   draft: "text-gray-500 bg-gray-50 border-gray-200", active: "text-emerald-700 bg-[var(--cmp-surface-success)] border-[var(--cmp-color-success)]", retired: "text-gray-400 bg-gray-50 border-gray-100",
 };
 const lvl = (l: string | null) => (l ? l.replace(/_/g, " ") : "any");
-
-function Kpi({ label, value, sub, t }: { label: string; value: string | number; sub?: string; t?: string }) {
-  return (
-    <div className="bg-white rounded-xl border border-gray-100 p-3.5">
-      <p className="text-[10px] text-gray-400 font-medium uppercase tracking-wide leading-tight">{label}</p>
-      <p className={`text-2xl font-bold mt-1 ${t ?? "text-gray-900"}`}>{value}</p>
-      {sub && <p className="text-[10px] text-gray-400 mt-0.5">{sub}</p>}
-    </div>
-  );
-}
 
 export default async function ActivationReadinessPage() {
   const supabase = await createClient();

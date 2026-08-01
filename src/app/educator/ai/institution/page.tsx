@@ -3,6 +3,7 @@ import { requireEducatorAccess } from "@/lib/educator-access";
 import { loadInstitutionIntelligence, type Tint, type MapNode } from "@/lib/institution-intelligence";
 import CommandBar from "./CommandBar";
 import { DarkCard as Card } from "../../../../components/ui/primitives";
+import { DonutB as Donut } from "../_kit";
 
 // Institution Intelligence Workspace (spec v1.0 + mockup) — the enterprise AI
 // operating-centre inside AI & Intelligence. Dark command-centre theme; three
@@ -17,20 +18,6 @@ const RISK_CLS: Record<string, string> = { Low: "text-emerald-400", Medium: "tex
 const SEV_CLS: Record<string, string> = { High: "bg-[var(--cmp-color-error)]/20 text-rose-300 border-rose-500/30", Medium: "bg-[var(--cmp-color-warning)]/20 text-amber-300 border-amber-500/30", Low: "bg-[var(--cmp-color-information)]/20 text-sky-300 border-sky-500/30" };
 const LVL_CLS: Record<string, string> = { High: "text-rose-300", Medium: "text-amber-300", Low: "text-emerald-300" };
 const healthColor = (v: number | null): string => (v === null ? "#64748b" : v >= 90 ? "#22c55e" : v >= 70 ? "#84cc16" : v >= 50 ? "#f59e0b" : "#ef4444");
-
-function Donut({ slices, center, sub }: { slices: { label: string; n: number; color: string }[]; center: string; sub: string }) {
-  const totalN = slices.reduce((s, x) => s + x.n, 0) || 1;
-  const C = 2 * Math.PI * 15.9;
-  return (
-    <div className="relative w-28 h-28 shrink-0">
-      <svg viewBox="0 0 36 36" className="w-full h-full -rotate-90">
-        <circle cx="18" cy="18" r="15.9" fill="none" stroke="rgba(255,255,255,0.08)" strokeWidth="4" />
-        {slices.map((s, i) => { const prev = slices.slice(0, i).reduce((a, b) => a + b.n, 0); const dash = (s.n / totalN) * C; return <circle key={s.label} cx="18" cy="18" r="15.9" fill="none" stroke={s.color} strokeWidth="4" strokeDasharray={`${dash} ${C - dash}`} strokeDashoffset={-(prev / totalN) * C} />; })}
-      </svg>
-      <div className="absolute inset-0 flex flex-col items-center justify-center"><span className="text-lg font-extrabold text-white">{center}</span><span className="text-[8px] text-slate-500">{sub}</span></div>
-    </div>
-  );
-}
 
 function EnterpriseMap({ node }: { node: MapNode }) {
   return (

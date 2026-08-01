@@ -4,6 +4,7 @@ import Link from "next/link";
 import { loadComposer } from "@/lib/config/composer";
 import { CLASS_LABEL, SAFETY_LABEL } from "@/lib/config/registry";
 import ScopePicker from "./ScopePicker";
+import { StatWide as Stat } from "../_kit";
 
 export const dynamic = "force-dynamic";
 
@@ -15,10 +16,6 @@ const card = "bg-white rounded-xl border border-gray-200";
 const relTime = (iso?: string | null) => { if (!iso) return ""; const s = Math.floor((Date.now() - new Date(iso).getTime()) / 1000); if (s < 60) return "just now"; if (s < 3600) return `${Math.floor(s / 60)}m ago`; if (s < 86400) return `${Math.floor(s / 3600)}h ago`; return `${Math.floor(s / 86400)}d ago`; };
 const classTone = (c: string) => (c === "mandatory_locked" ? "bg-gray-800 text-white" : c.startsWith("mandatory") ? "bg-[var(--cmp-surface-error)] text-[var(--cmp-text-error)]" : c === "optional" ? "bg-[var(--cmp-surface-success)] text-emerald-700" : c === "conditional" ? "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]" : "bg-gray-50 text-gray-500");
 const actionTone = (t: string) => (t === "rose" ? "bg-[var(--cmp-color-error)]" : t === "amber" ? "bg-[var(--cmp-color-warning)]" : t === "sky" ? "bg-[var(--cmp-color-information)]" : "bg-gray-300");
-
-function Stat({ label, value, tone }: { label: string; value: any; tone?: string }) {
-  return <div className={`${card} p-3.5`}><p className="text-[10px] text-gray-500 uppercase tracking-wide">{label}</p><p className={`text-2xl font-bold tabular-nums mt-0.5 ${tone ?? "text-gray-900"}`}>{value}</p></div>;
-}
 
 export default async function TenantExperienceComposer({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   const sp = await searchParams;

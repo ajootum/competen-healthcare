@@ -2,6 +2,7 @@ import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { loadCompetencyTwin } from "@/lib/cgr/twin";
+import { KpiTile as Kpi } from "../_kit";
 
 // CGR-024 — Digital Competency Twin. The §6 confidence-weighted competency state (capability + evidence
 // confidence + recency + risk) at individual, team and organisational level. Distinct from COMP-019
@@ -15,16 +16,6 @@ const RISK_META: Record<string, string> = {
   critical: "text-[var(--cmp-text-error)] bg-[var(--cmp-surface-error)] border-[var(--cmp-color-error)]", high: "text-orange-700 bg-[var(--cmp-surface-warning)] border-[var(--cmp-color-warning)]",
   standard: "text-gray-600 bg-gray-50 border-gray-200", low: "text-slate-500 bg-slate-50 border-slate-200",
 };
-
-function Kpi({ label, value, sub, t }: { label: string; value: string | number; sub?: string; t?: string }) {
-  return (
-    <div className="bg-white rounded-xl border border-gray-100 p-3.5">
-      <p className="text-[10px] text-gray-400 font-medium uppercase tracking-wide leading-tight">{label}</p>
-      <p className={`text-2xl font-bold mt-1 ${t ?? "text-gray-900"}`}>{value}</p>
-      {sub && <p className="text-[10px] text-gray-400 mt-0.5">{sub}</p>}
-    </div>
-  );
-}
 
 export default async function CompetencyTwinPage() {
   const supabase = await createClient();

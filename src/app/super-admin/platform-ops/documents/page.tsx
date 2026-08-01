@@ -2,6 +2,7 @@ import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { loadDocuments, humanSize } from "@/lib/platform/documents";
+import { KpiTile as Kpi } from "../_kit";
 
 export const dynamic = "force-dynamic";
 
@@ -14,9 +15,6 @@ const card = "bg-white rounded-xl border border-gray-200";
 const TYPE_COLOR = ["#14b8a6", "#8b5cf6", "#3b82f6", "#f59e0b", "#ef4444", "#0ea5e9", "#6b7280"];
 const stamp = (iso?: string | null) => (iso ? `${iso.slice(0, 10)} ${iso.slice(11, 16)}` : "—");
 
-function Kpi({ label, value, sub, icon }: { label: string; value: string | number; sub?: string; icon?: string }) {
-  return <div className={`${card} p-3.5`}><div className="flex items-start justify-between"><p className="text-[10px] text-gray-500 uppercase tracking-wide">{label}</p>{icon && <span className="text-sm opacity-50">{icon}</span>}</div><p className="text-2xl font-bold tabular-nums mt-0.5 text-gray-900">{value}</p>{sub && <p className="text-[10px] text-gray-400">{sub}</p>}</div>;
-}
 function Donut({ segs, total }: { segs: { n: number; color: string }[]; total: number }) {
   const sum = segs.reduce((s, x) => s + x.n, 0) || 1; let acc = 0;
   const stops = segs.map(s => { const a = (acc / sum) * 100; acc += s.n; return `${s.color} ${a}% ${(acc / sum) * 100}%`; }).join(", ");

@@ -2,6 +2,7 @@ import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { loadClinicalIntelligence } from "@/lib/cgr/clinical";
+import { KpiTile as Kpi } from "../_kit";
 
 // CGR-026 — Clinical Practice Intelligence & Outcome Correlation. Two lenses on "is competency improving
 // outcomes": the statistical correlation (CAPM-005, embedded with credit) and the case lens — competencies
@@ -17,16 +18,6 @@ const RISK_META: Record<string, string> = {
   standard: "text-gray-600 bg-gray-50 border-gray-200", low: "text-slate-500 bg-slate-50 border-slate-200",
 };
 const tone = (v: number) => (v >= 75 ? "text-[var(--cmp-text-success)]" : v >= 55 ? "text-[var(--cmp-text-warning)]" : "text-[var(--cmp-text-error)]");
-
-function Kpi({ label, value, sub, t }: { label: string; value: string | number; sub?: string; t?: string }) {
-  return (
-    <div className="bg-white rounded-xl border border-gray-100 p-3.5">
-      <p className="text-[10px] text-gray-400 font-medium uppercase tracking-wide leading-tight">{label}</p>
-      <p className={`text-2xl font-bold mt-1 ${t ?? "text-gray-900"}`}>{value}</p>
-      {sub && <p className="text-[10px] text-gray-400 mt-0.5">{sub}</p>}
-    </div>
-  );
-}
 
 export default async function ClinicalIntelligencePage() {
   const supabase = await createClient();

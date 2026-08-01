@@ -4,6 +4,7 @@ import { loadPredictiveIntelligence, type Forecast, type TimelineSeries, type He
 import CommandBar from "./CommandBar";
 import WhatIf from "./WhatIf";
 import { DarkCard as Card } from "../../../../components/ui/primitives";
+import { DonutA as Donut } from "../_kit";
 
 // Predictive Intelligence Workspace (spec v1.0 + mockup) — the cross-platform
 // forecasting engine inside AI & Intelligence. Dark command-centre theme; three
@@ -17,20 +18,6 @@ const SEV_CLS: Record<string, string> = { High: "bg-[var(--cmp-color-error)]/20 
 const DIR = { up: "↑", down: "↓", flat: "→" };
 const DOMAIN_CLS: Record<string, string> = { Assessment: "text-blue-300", Competency: "text-emerald-300", Validation: "text-amber-300", Workforce: "text-rose-300", Resources: "text-cyan-300", Accreditation: "text-pink-300", Learning: "text-violet-300" };
 const HEAT = (n: number, tone: string) => (n === 0 ? "bg-white/[0.02] text-slate-600" : tone === "critical" ? "bg-[var(--cmp-color-error)]/30 text-rose-200" : tone === "high" ? "bg-[var(--cmp-color-warning)]/25 text-orange-200" : tone === "medium" ? "bg-[var(--cmp-color-warning)]/20 text-amber-200" : "bg-[var(--cmp-color-success)]/15 text-emerald-200");
-
-function Donut({ slices, center, sub }: { slices: { label: string; n: number; color: string }[]; center: string; sub: string }) {
-  const totalN = slices.reduce((s, x) => s + x.n, 0) || 1;
-  const C = 2 * Math.PI * 15.9;
-  return (
-    <div className="relative w-24 h-24 shrink-0">
-      <svg viewBox="0 0 36 36" className="w-full h-full -rotate-90">
-        <circle cx="18" cy="18" r="15.9" fill="none" stroke="rgba(255,255,255,0.08)" strokeWidth="4" />
-        {slices.map((s, i) => { const prev = slices.slice(0, i).reduce((a, b) => a + b.n, 0); const dash = (s.n / totalN) * C; return <circle key={s.label} cx="18" cy="18" r="15.9" fill="none" stroke={s.color} strokeWidth="4" strokeDasharray={`${dash} ${C - dash}`} strokeDashoffset={-(prev / totalN) * C} />; })}
-      </svg>
-      <div className="absolute inset-0 flex flex-col items-center justify-center"><span className="text-base font-extrabold text-white">{center}</span><span className="text-[8px] text-slate-500">{sub}</span></div>
-    </div>
-  );
-}
 
 function TimelineChart({ horizons, series }: { horizons: string[]; series: TimelineSeries[] }) {
   const w = 300, h = 120, pad = 8;

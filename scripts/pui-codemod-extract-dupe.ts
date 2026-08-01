@@ -128,16 +128,33 @@ function main() {
     // already been rewritten to import from a broken kit.
     const kitSrc = existsSync(kitFile) ? readFileSync(kitFile, "utf8") : "";
     const declared = new Set([
-      ...[...kitSrc.matchAll(/(?:function|const|type|interface)\s+([A-Z]\w*)/g)].map(m => m[1]),
+      // Lowercase declarations count: the kits carry a lowercase `card` constant that the tiles compose
+      // with, and matching only capitalised names made the guard refuse a promotion the kit could already
+      // satisfy.
+      ...[...kitSrc.matchAll(/(?:function|const|type|interface)\s+(\w+)/g)].map(m => m[1]),
       ...[...kitSrc.matchAll(/import\s*\{([^}]*)\}/g)].flatMap(m => m[1].split(",").map(x => x.trim().split(/\s+as\s+/).pop()!)),
       name,
     ]);
     // Lowercase references count too. The first version of this guard only looked at capitalised names, so
     // `${card}` — a page-local style constant every one of these tiles composes with — sailed straight
     // through and four kits compiled to "Cannot find name: card".
+    // An identifier the body DECLARES ITSELF is not a dependency. Without this the guard refused every
+    // component that computes anything — a Donut whose body does `const dash = ...` was reported as
+    // depending on `dash`, which is a false alarm that would have blocked five perfectly liftable groups.
     const params = (body.match(/^[^)]*\)/) ?? [""])[0];
-    const templateRefs = [...body.matchAll(/\$\{(\w+)\}/g)].map(m => m[1]).filter(r => !params.includes(r));
-    const jsxRefs = [...body.matchAll(/<([A-Z]\w*)/g)].map(m => m[1]).concat(templateRefs);
+    const localDecls = new Set<string>([
+      ...[...body.matchAll(/(?:const|let|var)\s+(\w+)/g)].map(m => m[1]),
+      ...[...body.matchAll(/(?:const|let|var)\s*\{([^}]*)\}/g)].flatMap(m => m[1].split(",").map(x => x.trim().split(":").pop()!.trim())),
+      ...[...body.matchAll(/\(([^()]*)\)\s*=>/g)].flatMap(m => m[1].split(",").map(x => x.trim())),
+      ...[...body.matchAll(/(\w+)\s*=>/g)].map(m => m[1]),
+    ]);
+    const templateRefs = [...body.matchAll(/\$\{(\w+)\}/g)].map(m => m[1])
+      .filter(r => !params.includes(r) && !localDecls.has(r));
+    // Capitalised identifiers reached by MEMBER ACCESS count too — `PILL[tone]` is neither JSX nor a type
+    // annotation, so the first two patterns both missed it and PillTag was lifted without the tone table it
+    // composes with. A component separated from its lookup is a dangling reference, not a promotion.
+    const memberRefs = [...body.matchAll(/\b([A-Z][A-Z0-9_]{2,})\s*[[.]/g)].map(m => m[1]);
+    const jsxRefs = [...body.matchAll(/<([A-Z]\w*)/g)].map(m => m[1]).concat(templateRefs, memberRefs);
     const typeRefs = [...body.matchAll(/:\s*([A-Z]\w*)\b/g)].map(m => m[1]).filter(t => !["React", "Record", "Array", "Promise", "String", "Number", "Boolean"].includes(t));
     // Some dependencies are resolvable rather than fatal: a well-known module import the kit can simply
     // add. `Link` is the only one that comes up here, and refusing a promotion because the body renders a
@@ -198,9 +215,14 @@ function main() {
     // Remove the local definition, then import the identical one.
     let out = src.slice(0, found.start) + src.slice(found.end);
     out = out.replace(/\n{3,}/g, "\n\n");
-    const spec = localName && localName !== name
-      ? `import { ${name} as ${localName} } from "${importPath(f, kitFile)}";`
-      : `import { ${name} } from "${importPath(f, kitFile)}";`;
+    // IF THE SOURCE EXPORTED IT, THE SOURCE MUST KEEP EXPORTING IT. Several of these "pages" are themselves
+    // kits that other files import from — removing `export function Card` from _cmo-ui.tsx quietly broke
+    // twenty consumers. Re-exporting preserves that public surface while still leaving one implementation.
+    const wasExported = /^export\s/.test(found.body);
+    const local = localName && localName !== name ? `${name} as ${localName}` : name;
+    const spec = wasExported
+      ? `import { ${local} } from "${importPath(f, kitFile)}";\nexport { ${localName ?? name} };`
+      : `import { ${local} } from "${importPath(f, kitFile)}";`;
     const imports = [...out.matchAll(/^import .*?;$/gm)];
     if (!imports.length) { refused.push(rel + " (no import to anchor to)"); continue; }
     const last = imports[imports.length - 1];

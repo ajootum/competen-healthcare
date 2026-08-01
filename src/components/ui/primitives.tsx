@@ -309,3 +309,41 @@ export function KpiTileCompact({ label, value, sub, tone, icon }: { label: strin
     </div>
   );
 }
+
+// The tone table PillTag composes with, lifted alongside it — a component without its lookup is a
+// dangling reference, not a promotion.
+const PILL: Record<string, string> = { slate: "bg-gray-100 text-gray-600", blue: "bg-[var(--cmp-surface-information)] text-blue-700", emerald: "bg-[var(--cmp-surface-success)] text-emerald-700", amber: "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]", rose: "bg-[var(--cmp-surface-error)] text-[var(--cmp-text-error)]", violet: "bg-violet-50 text-violet-700", teal: "bg-teal-50 text-teal-700" };
+
+// Lifted verbatim from src/app/competency-office/_cmo-ui.tsx — written out identically in several
+// pages, so this is one implementation replacing N copies, not a redesign.
+export function PillTag({ text, tone }: { text: string; tone?: string }) {
+  return <span className={`text-[10px] font-semibold uppercase tracking-wide rounded px-1.5 py-0.5 ${PILL[tone ?? "slate"]}`}>{String(text).replace(/_/g, " ")}</span>;
+}
+
+// Lifted verbatim from src/app/competency-office/_cmo-ui.tsx — written out identically in several
+// pages, so this is one implementation replacing N copies, not a redesign.
+export function KitFoot({ children }: { children: React.ReactNode }) { return <p className="text-[11px] text-gray-400">{children}</p>; }
+
+// Lifted verbatim from src/app/super-admin/priorities/_ui.tsx — written out identically in several
+// pages, so this is one implementation replacing N copies, not a redesign.
+export function PanelCard({ title, right, children, className }: { title?: string; right?: React.ReactNode; children: React.ReactNode; className?: string }) {
+  return (
+    <div className={`bg-white border border-gray-200 rounded-xl p-4 ${className ?? ""}`}>
+      {(title || right) && <div className="flex items-center justify-between mb-3 gap-2"><h3 className="text-sm font-semibold text-gray-900">{title}</h3>{right}</div>}
+      {children}
+    </div>
+  );
+}
+
+// Lifted verbatim from src/app/competency-office/_cmo-ui.tsx — written out identically in several
+// pages, so this is one implementation replacing N copies, not a redesign.
+export function PlainCard({ title, right, children, className }: { title?: string; right?: React.ReactNode; children: React.ReactNode; className?: string }) {
+  return <div className={`bg-white border border-gray-200 rounded-xl p-4 ${className ?? ""}`}>{(title || right) && <div className="flex items-center justify-between mb-3 gap-2"><h3 className="text-sm font-semibold text-gray-900">{title}</h3>{right}</div>}{children}</div>;
+}
+
+// Lifted verbatim from src/app/competency-office/_cmo-ui.tsx — written out identically in several
+// pages, so this is one implementation replacing N copies, not a redesign.
+export function ProgressBar({ pct, tone }: { pct: number; tone?: string }) {
+  const color = tone ?? (pct >= 80 ? "bg-[var(--cmp-color-success)]" : pct >= 50 ? "bg-teal-500" : pct >= 25 ? "bg-[var(--cmp-color-warning)]" : "bg-[var(--cmp-color-error)]");
+  return <div className="h-1.5 rounded-full bg-gray-100 overflow-hidden"><div className={`h-full rounded-full ${color}`} style={{ width: `${Math.min(100, Math.max(0, pct))}%` }} /></div>;
+}

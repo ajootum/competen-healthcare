@@ -4,6 +4,13 @@
 import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { holdsOfficeAppointment } from "@/lib/ogs/office";
+import { PillTag as Pill } from "../../components/ui/primitives";
+import { KitFoot as Foot } from "../../components/ui/primitives";
+import { PlainCard as Card } from "../../components/ui/primitives";
+import { ProgressBar as Progress } from "../../components/ui/primitives";
+// Re-exported because this file is itself a KIT: twenty pages import Card/Pill/Foot/Progress from
+// here, and lifting the implementations into the library must not remove that surface.
+export { Pill, Foot, Card, Progress };
 
 export async function cmoGuard() {
   const supabase = await createClient();
@@ -27,21 +34,8 @@ export function Head({ code, title, sub }: { code: string; title: string; sub?: 
   return <div><p className="text-[11px] font-semibold text-teal-600 uppercase tracking-wide">{code}</p><h1 className="text-xl font-bold text-gray-900">{title}</h1>{sub && <p className="text-sm text-gray-500 mt-0.5 max-w-3xl">{sub}</p>}</div>;
 }
 
-export function Card({ title, right, children, className }: { title?: string; right?: any; children: any; className?: string }) {
-  return <div className={`bg-white border border-gray-200 rounded-xl p-4 ${className ?? ""}`}>{(title || right) && <div className="flex items-center justify-between mb-3 gap-2"><h3 className="text-sm font-semibold text-gray-900">{title}</h3>{right}</div>}{children}</div>;
-}
-
 export function Kpi({ label, value, sub, tone }: { label: string; value: any; sub?: string; tone?: string }) {
   return <div className="bg-white border border-gray-200 rounded-xl p-3.5"><p className="text-[11px] text-gray-500 uppercase tracking-wide truncate">{label}</p><p className={`text-2xl font-bold tabular-nums mt-1 ${tone ?? "text-gray-900"}`}>{value}</p>{sub && <p className="text-[11px] text-gray-400 mt-0.5">{sub}</p>}</div>;
-}
-
-export function Pill({ text, tone }: { text: string; tone?: string }) {
-  return <span className={`text-[10px] font-semibold uppercase tracking-wide rounded px-1.5 py-0.5 ${PILL[tone ?? "slate"]}`}>{String(text).replace(/_/g, " ")}</span>;
-}
-
-export function Progress({ pct, tone }: { pct: number; tone?: string }) {
-  const color = tone ?? (pct >= 80 ? "bg-[var(--cmp-color-success)]" : pct >= 50 ? "bg-teal-500" : pct >= 25 ? "bg-[var(--cmp-color-warning)]" : "bg-[var(--cmp-color-error)]");
-  return <div className="h-1.5 rounded-full bg-gray-100 overflow-hidden"><div className={`h-full rounded-full ${color}`} style={{ width: `${Math.min(100, Math.max(0, pct))}%` }} /></div>;
 }
 
 export function Donut({ segs, total, centre, sub, size = 110 }: { segs: { n: number; color: string }[]; total: number; centre: any; sub?: string; size?: number }) {
@@ -83,4 +77,3 @@ export function Provision({ module, part }: { module: string; part?: string }) {
   return <div className="bg-[var(--cmp-surface-warning)] border border-[var(--cmp-color-warning)] rounded-xl p-6"><p className="font-semibold text-amber-900">⚙️ Competency Office expansion not provisioned</p><p className="text-sm text-amber-800 mt-1">Apply migrations <code className="font-mono">114</code> + <code className="font-mono">115</code>{part ? ` (${part})` : ""}, then seed with <code className="font-mono">node scripts/seed-cmo-expansion.mjs</code> to activate {module}.</p></div>;
 }
 
-export function Foot({ children }: { children: any }) { return <p className="text-[11px] text-gray-400">{children}</p>; }

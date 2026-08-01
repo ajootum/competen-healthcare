@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { loadCatalogue } from "@/lib/config/catalogue";
 import CatalogueBrowser from "./CatalogueBrowser";
+import { StatWide as Stat } from "../_kit";
 
 export const dynamic = "force-dynamic";
 
@@ -12,10 +13,6 @@ export const dynamic = "force-dynamic";
 /* eslint-disable @typescript-eslint/no-explicit-any */
 const card = "bg-white rounded-xl border border-gray-200";
 const pctTone = (p: number) => (p >= 85 ? "text-[var(--cmp-text-success)]" : p >= 70 ? "text-[var(--cmp-text-warning)]" : "text-[var(--cmp-text-error)]");
-
-function Stat({ label, value, tone }: { label: string; value: any; tone?: string }) {
-  return <div className={`${card} p-3.5`}><p className="text-[10px] text-gray-500 uppercase tracking-wide">{label}</p><p className={`text-2xl font-bold tabular-nums mt-0.5 ${tone ?? "text-gray-900"}`}>{value}</p></div>;
-}
 
 export default async function ModuleWidgetCatalogue() {
   const supabase = await createClient();

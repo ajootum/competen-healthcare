@@ -4,6 +4,12 @@
 import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import Link from "next/link";
+import { PillTag as Pill } from "../../../../components/ui/primitives";
+import { KitFoot as Foot } from "../../../../components/ui/primitives";
+import { PlainCard as Card } from "../../../../components/ui/primitives";
+// Re-exported: this file is a KIT, and pages import these names from it. Lifting the
+// implementations into the library must not remove that surface.
+export { Pill, Foot, Card };
 
 export async function aisGuard() {
   const supabase = await createClient();
@@ -51,16 +57,8 @@ export function Tabs({ active }: { active: string }) {
   );
 }
 
-export function Card({ title, right, children, className }: { title?: string; right?: any; children: any; className?: string }) {
-  return <div className={`bg-white border border-gray-200 rounded-xl p-4 ${className ?? ""}`}>{(title || right) && <div className="flex items-center justify-between mb-3 gap-2"><h3 className="text-sm font-semibold text-gray-900">{title}</h3>{right}</div>}{children}</div>;
-}
-
 export function Stat({ label, value, sub, tone }: { label: string; value: any; sub?: string; tone?: string }) {
   return <div className="bg-white border border-gray-200 rounded-xl p-3.5"><p className="text-[11px] text-gray-500 uppercase tracking-wide truncate">{label}</p><p className={`text-2xl font-bold tabular-nums mt-1 ${tone ?? "text-gray-900"}`}>{value}</p>{sub && <p className="text-[11px] text-gray-400 mt-0.5">{sub}</p>}</div>;
-}
-
-export function Pill({ text, tone }: { text: string; tone?: string }) {
-  return <span className={`text-[10px] font-semibold uppercase tracking-wide rounded px-1.5 py-0.5 ${PILL[tone ?? "slate"]}`}>{String(text).replace(/_/g, " ")}</span>;
 }
 
 export function Bars({ rows, unit }: { rows: { label: string; n: number; extra?: string }[]; unit?: string }) {
@@ -74,4 +72,3 @@ export function Provision() {
   return <div className="bg-[var(--cmp-surface-warning)] border border-[var(--cmp-color-warning)] rounded-xl p-6"><p className="font-semibold text-amber-900">⚙️ AI Services registry not provisioned</p><p className="text-sm text-amber-800 mt-1">Apply migration <code className="font-mono">111-ai-services-registry.sql</code> then seed with <code className="font-mono">node scripts/seed-ai-services.mjs</code>.</p></div>;
 }
 
-export function Foot({ children }: { children: any }) { return <p className="text-[11px] text-gray-400">{children}</p>; }

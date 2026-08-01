@@ -4,6 +4,7 @@ import Link from "next/link";
 import { loadGovernance, REVIEW_LABEL } from "@/lib/config/governance";
 import { loadRegistry } from "@/lib/config/registry";
 import GovernanceConsole from "./GovernanceConsole";
+import { StatWide as Stat } from "../_kit";
 
 export const dynamic = "force-dynamic";
 
@@ -14,10 +15,6 @@ export const dynamic = "force-dynamic";
 /* eslint-disable @typescript-eslint/no-explicit-any */
 const card = "bg-white rounded-xl border border-gray-200";
 const relTime = (iso?: string | null) => { if (!iso) return ""; const s = Math.floor((Date.now() - new Date(iso).getTime()) / 1000); if (s < 60) return "just now"; if (s < 3600) return `${Math.floor(s / 60)}m ago`; if (s < 86400) return `${Math.floor(s / 3600)}h ago`; return `${Math.floor(s / 86400)}d ago`; };
-
-function Stat({ label, value, tone }: { label: string; value: any; tone?: string }) {
-  return <div className={`${card} p-3.5`}><p className="text-[10px] text-gray-500 uppercase tracking-wide">{label}</p><p className={`text-2xl font-bold tabular-nums mt-0.5 ${tone ?? "text-gray-900"}`}>{value}</p></div>;
-}
 
 export default async function ConfigurationGovernance() {
   const supabase = await createClient();

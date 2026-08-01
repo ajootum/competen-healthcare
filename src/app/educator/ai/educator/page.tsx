@@ -2,6 +2,7 @@ import Link from "next/link";
 import { requireEducatorAccess } from "@/lib/educator-access";
 import { loadEducatorIntelligence, type NavNode, type Tint, type EducatorDot } from "@/lib/educator-intelligence";
 import CommandBar from "./CommandBar";
+import { DonutB as Donut } from "../_kit";
 
 // Educator Intelligence Workspace (spec v1.0 + mockup) — the AI-powered educator
 // capacity / workload / development centre inside AI & Intelligence. Dark
@@ -27,20 +28,6 @@ function NavTree({ node, depth }: { node: NavNode; depth: number }) {
       </summary>
       <div>{node.children.map(c => <NavTree key={c.id} node={c} depth={depth + 1} />)}</div>
     </details>
-  );
-}
-
-function Donut({ slices, center, sub }: { slices: { label: string; n: number; color: string }[]; center: string; sub: string }) {
-  const totalN = slices.reduce((s, x) => s + x.n, 0) || 1;
-  const C = 2 * Math.PI * 15.9;
-  return (
-    <div className="relative w-28 h-28 shrink-0">
-      <svg viewBox="0 0 36 36" className="w-full h-full -rotate-90">
-        <circle cx="18" cy="18" r="15.9" fill="none" stroke="rgba(255,255,255,0.08)" strokeWidth="4" />
-        {slices.map((s, i) => { const prev = slices.slice(0, i).reduce((a, b) => a + b.n, 0); const dash = (s.n / totalN) * C; return <circle key={s.label} cx="18" cy="18" r="15.9" fill="none" stroke={s.color} strokeWidth="4" strokeDasharray={`${dash} ${C - dash}`} strokeDashoffset={-(prev / totalN) * C} />; })}
-      </svg>
-      <div className="absolute inset-0 flex flex-col items-center justify-center"><span className="text-lg font-extrabold text-white">{center}</span><span className="text-[8px] text-slate-500">{sub}</span></div>
-    </div>
   );
 }
 

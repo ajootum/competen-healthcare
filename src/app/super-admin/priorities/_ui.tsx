@@ -5,6 +5,13 @@
 import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import Link from "next/link";
+import { PillTag as Pill } from "../../../components/ui/primitives";
+import { KitFoot as Foot } from "../../../components/ui/primitives";
+import { PanelCard as Card } from "../../../components/ui/primitives";
+import { ProgressBar as Progress } from "../../../components/ui/primitives";
+// Re-exported: this file is a KIT, and pages import these names from it. Lifting the
+// implementations into the library must not remove that surface.
+export { Pill, Foot, Card, Progress };
 
 export async function ppeGuard() {
   const supabase = await createClient();
@@ -60,15 +67,6 @@ export function ModuleNav({ active }: { active: string }) {
   );
 }
 
-export function Card({ title, right, children, className }: { title?: string; right?: any; children: any; className?: string }) {
-  return (
-    <div className={`bg-white border border-gray-200 rounded-xl p-4 ${className ?? ""}`}>
-      {(title || right) && <div className="flex items-center justify-between mb-3 gap-2"><h3 className="text-sm font-semibold text-gray-900">{title}</h3>{right}</div>}
-      {children}
-    </div>
-  );
-}
-
 export function Stat({ label, value, sub, tone }: { label: string; value: any; sub?: string; tone?: string }) {
   return (
     <div className="bg-white border border-gray-200 rounded-xl p-3.5">
@@ -77,15 +75,6 @@ export function Stat({ label, value, sub, tone }: { label: string; value: any; s
       {sub && <p className="text-[11px] text-gray-400 mt-0.5">{sub}</p>}
     </div>
   );
-}
-
-export function Pill({ text, tone }: { text: string; tone?: string }) {
-  return <span className={`text-[10px] font-semibold uppercase tracking-wide rounded px-1.5 py-0.5 ${PILL[tone ?? "slate"]}`}>{String(text).replace(/_/g, " ")}</span>;
-}
-
-export function Progress({ pct, tone }: { pct: number; tone?: string }) {
-  const color = tone ?? (pct >= 80 ? "bg-[var(--cmp-color-success)]" : pct >= 50 ? "bg-teal-500" : pct >= 25 ? "bg-[var(--cmp-color-warning)]" : "bg-[var(--cmp-color-error)]");
-  return <div className="h-1.5 rounded-full bg-gray-100 overflow-hidden"><div className={`h-full rounded-full ${color}`} style={{ width: `${Math.min(100, Math.max(0, pct))}%` }} /></div>;
 }
 
 export function Ring({ pct, size = 64, label }: { pct: number; size?: number; label?: string }) {
@@ -112,6 +101,3 @@ export function Provision({ module }: { module: string }) {
   );
 }
 
-export function Foot({ children }: { children: any }) {
-  return <p className="text-[11px] text-gray-400">{children}</p>;
-}
