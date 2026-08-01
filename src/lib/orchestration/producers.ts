@@ -114,6 +114,37 @@ export function emitHandoverAccepted(admin: any, args: { itemId: string; patient
 // critical competency failure). This crosses the workspace boundary: the shift supervisor's action must reach
 // the Competency Office's remediation loop. Clinical sensitivity (patient-facing deployment). Consumed by the
 // delivery event consumer (src/lib/delivery/consumer.ts → handleShiftOverride).
+// The SAME governed-override class, from the other gate. Deploying a worker past the readiness gate
+// reached the Competency Office; making that worker a patient's responsible clinician with no current
+// competency did not -- it notified the nurse and stopped there. One escalated, one silent, for what is
+// arguably the more consequential of the two acts.
+//
+// It emits shift.assignment.changed deliberately, because that is the event the delivery consumer already
+// turns into remediation for the worker (it keys on the type and payload.override, not on the subject).
+// subject_type stays honest about what actually happened, so the audit trail does not claim a shift
+// deployment that never occurred.
+export function emitPatientAssignmentOverride(
+  admin: any,
+  args: { assignmentId: string; patientId: string; staffId: string; hospitalId: string | null; currency: any },
+  actorId: string | null,
+  actorName?: string | null,
+) {
+  const cy = args.currency ?? {};
+  return emitDomainEvent(admin, {
+    event_type: EVENT.SHIFT_ASSIGNMENT_CHANGED,
+    subject_type: "op_patient_assignment", subject_id: args.assignmentId,
+    hospital_id: args.hospitalId ?? null,
+    actor_id: actorId, actor_name: actorName ?? null,
+    sensitivity: "clinical",
+    payload: {
+      patient_id: args.patientId, staff_id: args.staffId, override: true, hospital_id: args.hospitalId ?? null,
+      critical_failures: cy.criticalFailures ?? 0, expired_count: cy.expired ?? 0,
+      current_passing: cy.currentPassing ?? 0, superseded_passing: cy.supersededPassing ?? 0,
+      reason: "Assigned as responsible clinician with no current validated competency (governed override).",
+    },
+  });
+}
+
 export function emitShiftAssignmentChanged(admin: any, args: { shiftId: string; staffId: string; hospitalId: string | null; readiness: any }, actorId: string | null, actorName?: string | null) {
   const r = args.readiness ?? {};
   return emitDomainEvent(admin, {

@@ -161,6 +161,16 @@ async function main() {
   check(/requires_override|requires_override/.test(assignRoute) && /422/.test(assignRoute),
     "an unvalidated clinician still requires an explicit override");
 
+  // BOTH governed overrides must reach the Competency Office, not just the louder one.
+  const deployRoute = readFileSync(join(process.cwd(), "src/app/api/operations/shift-staff/route.ts"), "utf8");
+  check(/emitShiftAssignmentChanged\s*\(/.test(deployRoute), "a deployment override reaches the Competency Office");
+  check(/emitPatientAssignmentOverride\s*\(/.test(assignRoute),
+    "a patient-assignment override reaches it too",
+    "the more consequential override was the silent one -- it notified only the nurse");
+  const consumer = readFileSync(join(process.cwd(), "src/lib/delivery/consumer.ts"), "utf8");
+  check(/payload/.test(consumer) && /override/.test(consumer) && /remediation/i.test(consumer),
+    "the consumer turns an override event into remediation for the worker");
+
   // ── 2. OPERATIONS -> COMPETENCY ──────────────────────────────────────────
   head("2. OPERATIONS -> COMPETENCY  (HWW evidence bridge)");
 

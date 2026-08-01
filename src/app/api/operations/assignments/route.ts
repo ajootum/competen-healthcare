@@ -8,6 +8,7 @@ import { notify } from "@/lib/notify";
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 import { assessCompetencyCurrency, DECISION_COLUMNS } from "@/lib/operations/competency-currency";
+import { emitPatientAssignmentOverride } from "@/lib/orchestration/producers";
 
 export async function POST(req: Request) {
   const c = await getCaller();
@@ -73,6 +74,16 @@ export async function POST(req: Request) {
     entity_name: patient.label, hospital_id: patient.hospital_id,
     new_value: { staff_id: b.staff_id, type: assignmentType, competency_validated: competencyValidated, override: !competencyValidated, awaiting_acceptance: pendingFlow },
   });
+  // Cross-workspace: a governed override of the competency gate must reach the Competency Office's
+  // remediation loop, exactly as the COMP-027 deployment override does. Until now this one notified only
+  // the nurse being assigned, so the more consequential of the two overrides was the quieter one.
+  if (!competencyValidated) {
+    const me = await admin.from("profiles").select("full_name").eq("id", c.userId).maybeSingle();
+    await emitPatientAssignmentOverride(admin, {
+      assignmentId: data.id, patientId: b.patient_id, staffId: b.staff_id,
+      hospitalId: patient.hospital_id, currency,
+    }, c.userId, me.data?.full_name ?? null);
+  }
   if (pendingFlow && b.staff_id !== c.userId) {
     await notify([b.staff_id], {
       type: "op_assignment", title: `New patient assignment — ${patient.label}`,
