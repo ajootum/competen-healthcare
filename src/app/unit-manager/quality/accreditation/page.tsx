@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { loadAccreditationReadiness } from "@/lib/operations/accreditation-readiness";
 import QualityTabs from "../QualityTabs";
+import { Spark } from "../../_kit";
 
 export const dynamic = "force-dynamic";
 
@@ -27,12 +28,6 @@ const QUICK = [
   { label: "Reports & Analytics", icon: "📊", tint: "bg-pink-50" }, { label: "AI Insights", icon: "🧠", tint: "bg-fuchsia-50" },
 ];
 
-function Spark({ series, color }: { series: number[]; color: string }) {
-  if (!series || series.length < 2 || series.every(v => v === series[0])) return <div className="h-5" />;
-  const max = Math.max(...series), min = Math.min(...series), rng = max - min || 1;
-  const pts = series.map((v, i) => `${(i / (series.length - 1)) * 100},${18 - ((v - min) / rng) * 16}`).join(" ");
-  return <svg viewBox="0 0 100 20" preserveAspectRatio="none" className="w-full h-5"><polyline points={pts} fill="none" stroke={color} strokeWidth="2" vectorEffect="non-scaling-stroke" /></svg>;
-}
 function Delta({ v, unit = "%", invert }: { v: number | null | undefined; unit?: string; invert?: boolean }) {
   if (v == null || v === 0) return <span className="text-[10px] text-gray-400">vs last period</span>;
   const good = invert ? v < 0 : v > 0;

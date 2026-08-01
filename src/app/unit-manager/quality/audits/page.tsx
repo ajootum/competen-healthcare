@@ -5,6 +5,7 @@ import { loadAuditCentre } from "@/lib/operations/audit-centre";
 import { loadUnitDepartments } from "@/lib/operations/unit-command";
 import UnitFilters from "../../UnitFilters";
 import QualityTabs from "../QualityTabs";
+import { SegDonut } from "../_kit";
 
 export const dynamic = "force-dynamic";
 
@@ -52,12 +53,7 @@ function Kpi({ icon, tint, label, value, unit, sub, tone, spark, sparkColor, del
     </div>
   );
 }
-function SegDonut({ segments, total }: { segments: { n: number; color: string }[]; total: number }) {
-  const sum = segments.reduce((a, s) => a + s.n, 0) || 1;
-  const active = segments.filter(s => s.n > 0);
-  const grad = active.length ? `conic-gradient(${active.map((s, i) => { const before = active.slice(0, i).reduce((a, x) => a + x.n, 0); return `${s.color} ${(before / sum) * 360}deg ${((before + s.n) / sum) * 360}deg`; }).join(", ")})` : "conic-gradient(#f1f5f9 0deg 360deg)";
-  return <div className="relative w-[128px] h-[128px] shrink-0" style={{ background: grad, borderRadius: "9999px" }}><div className="absolute inset-[18px] bg-white rounded-full flex flex-col items-center justify-center"><span className="text-2xl font-bold text-gray-900 tabular-nums leading-none">{total}</span><span className="text-[10px] text-gray-400">Total</span></div></div>;
-}
+
 function ComplianceTrend({ months, compliance, target }: { months: string[]; compliance: (number | null)[]; target: number }) {
   const W = 340, H = 150, pad = 10;
   const x = (i: number) => pad + (i / Math.max(1, months.length - 1)) * (W - 2 * pad);

@@ -5,6 +5,7 @@ import { loadWorkforceConfig } from "@/lib/operations/workforce-config";
 import { loadUnitDepartments } from "@/lib/operations/unit-command";
 import UnitFilters from "../../../UnitFilters";
 import ConfigTabs from "../ConfigTabs";
+import { Param } from "../_kit";
 
 export const dynamic = "force-dynamic";
 
@@ -15,10 +16,6 @@ export const dynamic = "force-dynamic";
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 const card = "bg-white rounded-xl border border-gray-200";
-
-function Param({ label, value, unit }: { label: string; value: any; unit?: string }) {
-  return <div className="flex items-center justify-between rounded-lg border border-gray-100 px-3 py-2"><span className="text-xs text-gray-600">{label}</span><span className="text-sm font-semibold text-gray-800 tabular-nums">{value}{unit ? <span className="text-[10px] text-gray-400 ml-0.5">{unit}</span> : null}</span></div>;
-}
 
 export default async function ShiftRulesConfig() {
   const supabase = await createClient();

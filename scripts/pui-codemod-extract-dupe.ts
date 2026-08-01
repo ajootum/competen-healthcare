@@ -11,7 +11,7 @@
  *   npx --yes tsx scripts/pui-codemod-extract-dupe.ts <Name> <kit-path> [--dry]
  *   e.g. ... Kpi src/app/super-admin/cgr/_kit.tsx --dry
  */
-import { readFileSync, writeFileSync, readdirSync, statSync } from "node:fs";
+import { readFileSync, writeFileSync, readdirSync, statSync, existsSync } from "node:fs";
 import { join, relative, dirname } from "node:path";
 import { createHash } from "node:crypto";
 
@@ -74,13 +74,82 @@ function main() {
   if (!name || !kitArg) { console.log("usage: <Name> <kit-path> [--as <LocalName>] [--dry]"); process.exit(1); }
 
   const kitFile = join(ROOT, kitArg);
+
+  // Declared before --promote uses it. The kit's `export function X` and a page's `function X` differ by one
+  // keyword, and the component NAME is normalised out too, so an alias-rename is not mistaken for a
+  // different implementation. Everything else must still match character for character.
+  const nameless = (b: string, n: string) => b.replace(/^export\s+/, "").replace(new RegExp(`function\\s+${n}\\b`), "function _");
+
+  // --survey answers "which implementations of this name exist, and what are their hashes" WITHOUT needing
+  // a kit to compare against. Promoting a component requires naming its hash, and the hash could previously
+  // only be learned from a dry run that itself needed the kit to already exist — a chicken-and-egg that made
+  // the first step of every extraction a guess.
+  if (process.argv.includes("--survey")) {
+    const byHash = new Map<string, string[]>();
+    for (const f of walk(join(ROOT, "src/app"))) {
+      const c = findComponent(readFileSync(f, "utf8"), localName ?? name);
+      if (!c) continue;
+      const h = hash(nameless(c.body, localName ?? name)).slice(0, 12);
+      if (!byHash.has(h)) byHash.set(h, []);
+      byHash.get(h)!.push(relative(ROOT, f).replace(/\\/g, "/"));
+    }
+    const groups = [...byHash.entries()].sort((a, b) => b[1].length - a[1].length);
+    console.log(`\n${localName ?? name}: ${groups.length} distinct implementation(s)\n`);
+    for (const [h, files] of groups) {
+      console.log(`  ${String(files.length).padStart(3)}x  ${h}   ${files[0]}`);
+      for (const f of files.slice(1, 4)) console.log(`                       ${f}`);
+      if (files.length > 4) console.log(`                       ... and ${files.length - 4} more`);
+    }
+    console.log();
+    return;
+  }
+
+  // --promote lifts the body VERBATIM out of the first file that matches --from-hash and appends it to the
+  // kit as an export, creating the kit if needed. Hand-transcribing a body into a kit is the one step in
+  // this whole exercise with no guard on it — a stray character makes the hash miss, and the codemod then
+  // silently migrates nothing. Copying it mechanically removes that class of mistake entirely.
+  if (process.argv.includes("--promote")) {
+    if (!fromHash) { console.log("--promote needs --from-hash to know which implementation to lift"); process.exit(1); }
+    const source = walk(join(ROOT, "src/app")).find(f => {
+      const c = findComponent(readFileSync(f, "utf8"), localName ?? name);
+      return c && hash(nameless(c.body, localName ?? name)).startsWith(fromHash);
+    });
+    if (!source) { console.log(`no file has a ${localName ?? name} with hash ${fromHash}`); process.exit(1); }
+    // Strip any leading `export` FIRST. A kit file's component is already exported, and matching only
+    // `^function` silently left the body under its original name — the promote then looked like it worked
+    // while the kit gained a differently-named export and the migration found nothing to do.
+    const body = findComponent(readFileSync(source, "utf8"), localName ?? name)!.body
+      .replace(/^export\s+/, "")
+      .replace(new RegExp(`^function\\s+${localName ?? name}\\b`), `export function ${name}`);
+    // A BODY CAN CARRY DEPENDENCIES, and lifting it does not lift them. Three groups in this codebase
+    // reference a type or a sibling component declared in their source file (`Mod`, `EngineCard`, `Link`),
+    // so a kit built from them compiled to "Cannot find name". Refusing here means the failure surfaces as
+    // a clear message at the moment of promotion rather than as a typecheck error after the pages have
+    // already been rewritten to import from a broken kit.
+    const kitSrc = existsSync(kitFile) ? readFileSync(kitFile, "utf8") : "";
+    const declared = new Set([
+      ...[...kitSrc.matchAll(/(?:function|const|type|interface)\s+([A-Z]\w*)/g)].map(m => m[1]),
+      ...[...kitSrc.matchAll(/import\s*\{([^}]*)\}/g)].flatMap(m => m[1].split(",").map(x => x.trim().split(/\s+as\s+/).pop()!)),
+      name,
+    ]);
+    const jsxRefs = [...body.matchAll(/<([A-Z]\w*)/g)].map(m => m[1]);
+    const typeRefs = [...body.matchAll(/:\s*([A-Z]\w*)\b/g)].map(m => m[1]).filter(t => !["React", "Record", "Array", "Promise", "String", "Number", "Boolean"].includes(t));
+    const missing = [...new Set([...jsxRefs, ...typeRefs])].filter(r => !declared.has(r));
+    if (missing.length) {
+      console.log(`  REFUSED to promote ${localName ?? name}: its body references ${missing.join(", ")}, which the kit does not have.`);
+      console.log(`  Lifting it would produce a kit that does not compile. Move the dependency first, or leave this group alone.`);
+      process.exit(1);
+    }
+
+    const header = existsSync(kitFile) ? "" :
+      `// Shared presentation kit — extracted, not redesigned.\n/* eslint-disable @typescript-eslint/no-explicit-any */\n`;
+    const lifted = `\n// Lifted verbatim from ${relative(ROOT, source).replace(/\\/g, "/")} — written out identically in several\n// pages, so this is one implementation replacing N copies, not a redesign.\n${body}\n`;
+    writeFileSync(kitFile, (existsSync(kitFile) ? readFileSync(kitFile, "utf8") : header) + lifted);
+    console.log(`  promoted ${localName ?? name} -> ${name} in ${kitArg} (from ${relative(ROOT, source).replace(/\\/g, "/")})`);
+  }
+
   const kit = findComponent(readFileSync(kitFile, "utf8"), name);
   if (!kit) { console.log(`the kit does not define ${name}`); process.exit(1); }
-  // The kit's `export function X` and a page's `function X` differ by one keyword — compare the bodies
-  // with that normalised away, so the guard tests the implementation and not the modifier.
-  // The component NAME is normalised out as well, so an alias-rename is not mistaken for a different
-  // implementation. Everything else must still match character for character.
-  const nameless = (b: string, n: string) => b.replace(/^export\s+/, "").replace(new RegExp(`function\\s+${n}\\b`), "function _");
   const kitHash = hash(nameless(kit.body, name));
 
   const targets = walk(join(ROOT, "src/app")).filter(f => f !== kitFile);
