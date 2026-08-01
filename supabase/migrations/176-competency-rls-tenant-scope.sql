@@ -33,7 +33,7 @@
 -- Plain statements, idempotent, no do-blocks.
 -- ============================================================
 
--- ── competency_assessments: scope through the cycle ──────────────────────────
+-- competency_assessments: scope through the cycle ----------------------------
 drop policy if exists "Assessors see assigned assessments" on competency_assessments;
 drop policy if exists competency_assessments_staff_read on competency_assessments;
 create policy competency_assessments_staff_read on competency_assessments
@@ -89,7 +89,7 @@ create policy competency_assessments_staff_update on competency_assessments
     )
   );
 
--- ── competency_cycles: it has hospital_id, so scope on it directly ───────────
+-- competency_cycles: it has hospital_id, so scope on it directly -------------
 drop policy if exists "Admins insert cycles" on competency_cycles;
 drop policy if exists competency_cycles_admin_insert on competency_cycles;
 create policy competency_cycles_admin_insert on competency_cycles
