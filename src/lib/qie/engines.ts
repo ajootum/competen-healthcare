@@ -53,7 +53,10 @@ const CATALOGUE: Omit<QieModule, "state" | "count" | "detail">[] = [
   // then told me the table existed, and I "corrected" the catalogue to match. Only a plain select, which
   // returns PGRST205, settles it. A check that shares the blind spot of the thing it checks will confirm
   // the bug rather than find it.
-  { id: "QIE-005", name: "Root Cause & Causal", purpose: "Explain why events happen, not just that they did.", provider: "No causal store exists — incidents are recorded, never analysed", href: null, tables: ["rca_investigations"] },
+  // Built here (migration 180) rather than composed, because this was the only module with nothing behind
+  // it. It will read "empty" until the first investigation is opened, which is the true state of a new
+  // capability and better than a surface that implies neglect.
+  { id: "QIE-005", name: "Root Cause & Causal", purpose: "Explain why events happen, not just that they did.", provider: "Built for QIE — rca_investigations + rca_factors", href: "/super-admin/quality-intelligence/root-cause", tables: ["rca_investigations"] },
   { id: "QIE-006", name: "Recommendation & Improvement", purpose: "Turn intelligence into prioritised, owned actions.", provider: "CAPA actions + improvement objects", href: "/quality-accreditation", tables: ["capa_actions", "improvement_objects"] },
   { id: "QIE-007", name: "Organisational Learning", purpose: "Close the loop back into competency and policy.", provider: "Competency learning links + knowledge objects", href: "/competency-office", tables: ["competency_learning_links", "knowledge_objects"] },
   { id: "QIE-008", name: "Benchmarking", purpose: "Compare against peers and find unwarranted variation.", provider: "pa_benchmarks", href: "/unit-manager/performance", tables: ["pa_benchmarks"] },

@@ -20,6 +20,7 @@
 import { loadEnvConfig } from "@next/env";
 import { createClient } from "@supabase/supabase-js";
 import { loadQieModules, qieSummary, resolveState } from "../src/lib/qie/engines";
+import { loadRootCause } from "../src/lib/qie/root-cause";
 loadEnvConfig(process.cwd());
 
 const admin = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!, {
@@ -77,18 +78,28 @@ async function main() {
   ok("resolveState reports EMPTY for a store that exists and is unused", realEmpty.state === "empty",
     `got "${realEmpty.state}"`);
 
-  // QIE-005 is the one genuine gap. This assertion was written the other way round first, on a check that
-  // used head+count -- the same blind spot as the loader it was checking -- and it confidently told me an
-  // absent table existed. A check that shares the flaw of the thing it checks confirms the bug.
+  // QIE-005 WAS the one genuine gap and is now built (migration 180). The assertion that found it was
+  // itself wrong first, on a check that used head+count -- the same blind spot as the loader it was
+  // checking -- and it confidently told me an absent table existed. A check that shares the flaw of the
+  // thing it checks confirms the bug rather than finding it.
   const rootCause = mods.find(m => m.id === "QIE-005")!;
   const rcaProbe = await admin.from("rca_investigations").select("id").limit(1);
-  ok("QIE-005 is a genuine GAP -- no causal store exists",
-    !!rcaProbe.error && rootCause.state === "gap",
-    rcaProbe.error ? `module says "${rootCause.state}"` : "rca_investigations now exists — update the catalogue");
+  ok("QIE-005 is deployed and no longer a gap", !rcaProbe.error && rootCause.state !== "gap",
+    rcaProbe.error ? "rca_investigations is absent — migration 180 not applied" : `module says "${rootCause.state}"`);
+  ok("the built module links to its own surface", rootCause.href === "/super-admin/quality-intelligence/root-cause");
 
-  // The finding that matters more than the state: incidents exist and none has been analysed.
-  const { count: incidents } = await admin.from("op_incidents").select("*", { count: "exact", head: true });
-  console.log(`\n        ${incidents} incident(s) recorded, 0 root-cause investigations -- there is nowhere to put one\n`);
+  // ── The engine's own read model ────────────────────────────────────────────
+  const rc = await loadRootCause(admin, null, true);
+  ok("the root-cause loader is ready", rc.ready, rc.reason);
+  ok("it counts real incidents", rc.stats.incidents > 0);
+  ok("every unanalysed incident is one with no investigation",
+    rc.unanalysed.length === rc.stats.incidents - rc.stats.investigated);
+  ok("all eight Ishikawa categories are represented in the breakdown", rc.stats.factorsByCategory.length === 8);
+  // The rate must be NULL, never 0, when there is nothing to divide by.
+  ok("the analysis rate is a real fraction, not a fabricated zero",
+    rc.stats.incidents === 0 ? rc.stats.analysisRate === null : typeof rc.stats.analysisRate === "number");
+
+  console.log(`\n        ${rc.stats.incidents} incident(s), ${rc.stats.investigated} investigated (${rc.stats.analysisRate}%), ${rc.unanalysed.length} awaiting analysis\n`);
 
   // 4. Independent verification: count two stores directly and compare with what the loader said.
   for (const [id, table] of [["QIE-002", "pa_kpi_values"], ["QIE-008", "pa_benchmarks"]] as const) {
