@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { generateAssessorQueue } from "@/lib/engines/tasks";
 import InboxTable, { type InboxRow } from "./InboxTable";
+import RequestQueue, { type RequestRow } from "./RequestQueue";
 
 // Assessment Inbox (Assessment Inbox Redesign spec): the queue engine's
 // prioritised tasks in a productivity table with KPIs, tabs and filters, plus
@@ -29,6 +30,15 @@ export default async function AssessmentInboxPage() {
   try {
     queue = await generateAssessorQueue(admin, profile.hospital_id ?? "", user.id);
   } catch { /* requirement matrix not installed yet */ }
+
+  // XWI P2-5: requests raised by shift supervisors. Directed at me, or open to any assessor here.
+  // Tenant-scoped in code because RLS on this table is service-role-only by design (migration 177).
+  const { data: requests } = await admin.from("assessment_requests")
+    .select("id, status, urgency, reason, created_at, assessor_id, claimed_by, nurse:profiles!nurse_id(full_name), requester:profiles!requested_by(full_name), competency:framework_competencies!competency_id(name)")
+    .eq("hospital_id", profile.hospital_id ?? "00000000-0000-0000-0000-000000000000")
+    .in("status", ["open", "claimed"])
+    .or(`assessor_id.is.null,assessor_id.eq.${user.id},claimed_by.eq.${user.id}`)
+    .order("urgency", { ascending: false }).order("created_at", { ascending: false }).limit(50);
 
   const [{ data: sessions }, { data: myAssessments }, { data: myPending }] = await Promise.all([
     admin.from("scheduled_assessments")
@@ -150,6 +160,20 @@ export default async function AssessmentInboxPage() {
               </Link>
             </div>
           )}
+
+          {/* Supervisor requests (XWI P2-5) — first, because these are the ones a ward is waiting on. */}
+          <div className="bg-white border border-gray-100 rounded-2xl overflow-hidden">
+            <div className="px-5 py-3 border-b border-gray-100 flex items-center justify-between gap-3">
+              <div>
+                <h2 className="text-sm font-bold text-gray-900">Requests from Shift Supervisors</h2>
+                <p className="text-[10px] text-gray-400">Raised from the ward when a clinician needs assessing for the work in front of them</p>
+              </div>
+              {(requests ?? []).length > 0 && (
+                <span className="text-[11px] text-gray-500 shrink-0">{(requests ?? []).length} open</span>
+              )}
+            </div>
+            <RequestQueue rows={(requests ?? []) as unknown as RequestRow[]} meId={user.id} />
+          </div>
 
           {/* Formally assigned records */}
           {(myPending ?? []).length > 0 && (

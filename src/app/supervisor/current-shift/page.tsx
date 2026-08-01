@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { loadShiftCommand, fmtTime, titleCase } from "@/lib/operations/shift-command";
 import { cardClass } from "@/components/ui/primitives";
+import RequestAssessment from "./RequestAssessment";
 
 export const dynamic = "force-dynamic";
 
@@ -109,7 +110,7 @@ export default async function CurrentShiftWorkspace() {
           <div className="space-y-2 max-h-[26rem] overflow-y-auto">
             {staffBoard.length === 0 && <p className="text-sm text-gray-400">No staff rostered on the active shift.</p>}
             {staffBoard.map((s: any) => (
-              <div key={s.id} className="flex items-center gap-2.5 rounded-lg border border-gray-100 px-3 py-2">
+              <div key={s.id} className="flex items-center flex-wrap gap-2.5 rounded-lg border border-gray-100 px-3 py-2">
                 <div className="w-8 h-8 rounded-full bg-teal-500 text-white flex items-center justify-center text-xs font-bold shrink-0">{s.name[0]}</div>
                 <div className="min-w-0 flex-1">
                   <p className="text-sm font-medium text-gray-800 truncate">{s.name} <span className="text-[10px] text-gray-400 uppercase">{titleCase(s.role)}</span></p>
@@ -122,6 +123,19 @@ export default async function CurrentShiftWorkspace() {
                     : <span className="text-[10px] px-1.5 py-0.5 rounded bg-gray-100 text-gray-500">On duty</span>}
                   <Link href="/supervisor/operations?section=assignments" className="text-[11px] text-teal-700 hover:underline">Manage</Link>
                 </span>
+                {/* XWI P2-5 — offered only where competency is actually in question, so the board stays a
+                    board rather than a form. `competencyDrift` means the assignment-time attestation and
+                    the governed record now disagree, which is the case a supervisor most needs to resolve. */}
+                {(s.competencyOk === false || s.competencyDrift) && (
+                  <div className="w-full">
+                    {s.competencyDrift && (
+                      <p className="text-[10px] text-[var(--cmp-text-warning)] mt-1">
+                        Validated when assigned; the competency record no longer supports it.
+                      </p>
+                    )}
+                    <RequestAssessment staffId={s.id} staffName={s.name} />
+                  </div>
+                )}
               </div>
             ))}
           </div>
