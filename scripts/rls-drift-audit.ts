@@ -185,8 +185,42 @@ async function main() {
     console.log();
   };
 
+  // ── The write surface ──────────────────────────────────────────────────────
+  // Everything above is about who can READ. A policy whose command is ALL (or INSERT/UPDATE/DELETE)
+  // grants writes to whoever it applies to, and nothing in this codebase's naming makes that visible:
+  // "Hospital staff views competency scores" is an ALL policy. `views`. Read the cmd, not the name.
+  //
+  // A policy with no explicit roles applies to PUBLIC, which includes anon -- an unauthenticated writer.
+  // APPLYING TO PUBLIC IS NOT THE SAME AS BEING OPEN, and counting it that way would produce a scary
+  // number that is mostly wrong. 94 write-capable policies apply to PUBLIC here, and nearly all are the
+  // ordinary Supabase idiom: `Users insert own profile` with check (auth.uid() = id). For an anonymous
+  // caller auth.uid() is NULL, `NULL = id` is NULL, and the row is refused. The ROLE is public; the
+  // PREDICATE is the gate.
+  //
+  // So the real question is whether the predicate governing the write can be satisfied without being
+  // anybody: no auth.uid(), no auth.role(), no current_user_* helper, just `true` or a row condition.
+  const writeCmds = new Set(["ALL", "INSERT", "UPDATE", "DELETE"]);
+  const identityRef = /auth\.uid\(\)|auth\.role\(\)|auth\.jwt\(\)|current_user_is_|current_setting\(/i;
+  const writableAnon: string[] = [], misnamed: string[] = [];
+  let publicWriteGated = 0;
+  for (const r of rows) {
+    if (!r.policy_name || !writeCmds.has(r.cmd)) continue;
+    const line = `${r.tbl} :: ${r.policy_name}  [${r.cmd}] to ${r.roles || "PUBLIC"}`;
+    if (/\b(read|view|views|select|list)\b/i.test(r.policy_name)) misnamed.push(line);
+    if (r.roles) continue;                                   // scoped to named roles, anon excluded
+    // For INSERT only with_check applies; for UPDATE/ALL both do. Any predicate at all that names the
+    // caller is enough to shut an anonymous writer out.
+    const pred = [r.qual, r.with_check].filter(Boolean).join(" and ").trim();
+    if (pred && identityRef.test(pred)) { publicWriteGated++; continue; }
+    writableAnon.push(`${line}  predicate: ${pred || "(none)"}`);
+  }
+
   section("RLS OFF — the repo enables it, the database does not", off,
     "any authenticated user reaches every row of these tables through the ordinary client");
+  section("WRITE OPEN TO ANON — applies to PUBLIC and the predicate does not name the caller", writableAnon,
+    "an anonymous request could satisfy these; ANALYSED FROM THE PREDICATE, not tested, because testing a write means writing to the database");
+  section("WRITE-CAPABLE POLICY WITH A READ-SOUNDING NAME", misnamed,
+    "the name says read, the command grants writes; nobody reviewing this file would notice");
   section("NO POLICIES — RLS on, nothing granted", noPolicies,
     "denies all non-service access: safe, but usually means a feature is broken for real users");
   section("MISSING POLICY — declared in the repo, no counterpart on that table at all", missing,
@@ -199,6 +233,8 @@ async function main() {
   section("LOOSE-SCRIPT POLICY DROPS — hand-run scripts, unordered", looseDrops.map(d => `${d.table} :: ${d.policy}  ${d.file}`),
     "reported, not obeyed: these files carry no reliable order relative to the migrations");
 
+  console.log(`  ${publicWriteGated} write-capable policy(ies) apply to PUBLIC but are gated by a predicate naming`);
+  console.log(`  the caller (auth.uid() and friends), which refuses an anonymous request. Not findings.`);
   console.log(`  Policy BODIES were not compared — Postgres normalises stored expressions, so a text diff`);
   console.log(`  would report every policy as drifted. Existence only.\n`);
   if (off.length || missing.length) process.exit(1);
