@@ -62,7 +62,11 @@ const CATALOGUE: Omit<QieModule, "state" | "count" | "detail">[] = [
   { id: "QIE-008", name: "Benchmarking", purpose: "Compare against peers and find unwarranted variation.", provider: "pa_benchmarks", href: "/unit-manager/performance", tables: ["pa_benchmarks"] },
   { id: "QIE-009", name: "Executive Intelligence", purpose: "Board-level scorecards and strategic risk.", provider: "Hospital Executive Workspace", href: "/hospital-executive", tables: ["pa_kpi_values"] },
   { id: "QIE-010", name: "AI Quality Copilot", purpose: "Conversational, explainable access to the intelligence.", provider: "AI Services (plat_ai_requests)", href: "/super-admin/ai", tables: ["plat_ai_requests"] },
-  { id: "QIE-011", name: "Rules & Configuration", purpose: "No-code indicators, thresholds and escalation rules.", provider: "Workspace Configuration Engine", href: "/super-admin/platform-ops/configuration", tables: ["workspace_config_overrides"] },
+  // Thresholds are COLUMNS on pa_kpis that already drive live dashboards, so QIE-011 exposes them for
+  // no-code editing rather than building a qie_rules table that would be a second set of thresholds for
+  // the same indicators. WCE stays separate: it resolves which modules are on for a unit, not what the
+  // amber threshold for CLABSI is. Same word, different domain.
+  { id: "QIE-011", name: "Rules & Configuration", purpose: "No-code indicators, thresholds and escalation rules.", provider: "Threshold configuration on pa_kpis (WCE governs workspace composition, separately)", href: "/super-admin/quality-intelligence/indicators", tables: ["pa_kpis"] },
   { id: "QIE-012", name: "Explainability, Audit & Governance", purpose: "Every number traceable to the act that produced it.", provider: "audit_log with request trace ids", href: "/super-admin/governance", tables: ["audit_log"] },
 ];
 

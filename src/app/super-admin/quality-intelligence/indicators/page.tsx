@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { loadIndicators } from "@/lib/qie/indicators";
 import ClassifyControl from "./ClassifyControl";
+import ThresholdEditor from "./ThresholdEditor";
 import { cardClass } from "@/components/ui/primitives";
 
 // QIE-002 (Metrics & Indicators) + QIE-003 (Leading & Lagging) — one surface, because over this platform
@@ -113,6 +114,7 @@ export default async function IndicatorsPage() {
                     <th className="py-2 pr-3 font-semibold text-right">Current</th>
                     <th className="py-2 pr-3 font-semibold">Trend</th>
                     <th className="py-2 pr-3 font-semibold">Status</th>
+                    <th className="py-2 pr-3 font-semibold">Thresholds</th>
                     <th className="py-2 font-semibold">Classification</th>
                   </tr>
                 </thead>
@@ -133,7 +135,14 @@ export default async function IndicatorsPage() {
                           <span className={`text-[10px] px-1.5 py-0.5 rounded ${STATUS[i.status].cls}`}>{STATUS[i.status].label}</span>
                         ) : <span className="text-[10px] text-gray-400">no target</span>}
                       </td>
-                      <td className="py-2">
+                      <td className="py-2 pr-3 align-top">
+                        <p className="text-[10px] text-gray-500 tabular-nums whitespace-nowrap">
+                          T {i.target ?? "—"} · A {i.threshold_amber ?? "—"} · R {i.threshold_red ?? "—"}
+                        </p>
+                        <ThresholdEditor id={i.id} name={i.name} direction={i.direction}
+                          target={i.target} amber={i.threshold_amber} red={i.threshold_red} />
+                      </td>
+                      <td className="py-2 align-top">
                         {v.classifiable
                           ? <ClassifyControl id={i.id} current={i.indicator_class} />
                           : <span className="text-[10px] text-gray-400">unavailable</span>}

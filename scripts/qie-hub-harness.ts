@@ -141,6 +141,25 @@ async function main() {
     `every indicator reports "${[...trends][0]}" — a stuck calculation looks exactly like this`);
   console.log(`\n        ${ind.stats.total} indicators · ${ind.stats.unclassified} unclassified · ${ind.stats.watch} watch · ${ind.stats.breaches} breach\n`);
 
+  // ── QIE-011: no-code configuration over the REAL thresholds ───────────────
+  // The thresholds are columns on pa_kpis that already drive live dashboards, so QIE-011 exposes them
+  // rather than building a qie_rules table -- two sets of thresholds for one indicator means two answers
+  // to "are we in breach".
+  const cfgRoute = readFileSync(join(process.cwd(), "src/app/api/qie/indicators/route.ts"), "utf8");
+  ok("thresholds are edited on pa_kpis, not a shadow registry", /from\("pa_kpis"\)\.update/.test(cfgRoute));
+  ok("threshold changes are admin-gated", /isAdmin\(c\)/.test(cfgRoute));
+  ok("threshold changes are audited with before and after",
+    /indicator_thresholds_changed/.test(cfgRoute) && /old_value/.test(cfgRoute));
+  // THE ORDER CHECK IS THE POINT. A red threshold on the wrong side of amber cannot be reached, so the
+  // indicator silently stops reporting breaches -- no error, no alert, just a metric that never fires.
+  ok("a threshold pair that can never breach is refused", /thresholdOrder/.test(cfgRoute) && /422/.test(cfgRoute),
+    "saving red below amber on a lower-is-better indicator would disable it silently");
+  ok("the order rule respects direction", /lowerBetter \? red >= amber : red <= amber/.test(cfgRoute),
+    "one rule for both directions inverts half the indicators");
+
+  const qie011 = mods.find(m => m.id === "QIE-011")!;
+  ok("QIE-011 points at the configuration surface", qie011.href === "/super-admin/quality-intelligence/indicators");
+
   // ── QIE-001: the event spine, and producers nobody calls ──────────────────
   // A producer with no call site is a documented event type the platform has never emitted. It passes
   // every review -- the function is correct, typed and tested -- and the stream it feeds stays empty.
