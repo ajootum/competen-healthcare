@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient, createAdminClient } from "@/lib/supabase/server";
+import { currentTraceId } from "@/lib/trace";
 
 // ── API authorization & tenant-scoping helpers ───────────────────────────────
 // Route handlers that use the service-role admin client BYPASS Supabase RLS, so
@@ -50,9 +51,12 @@ export async function getCaller(): Promise<Caller | NextResponse> {
   const { data: me } = await admin.from("profiles").select("role, roles, hospital_id, organisation_id").eq("id", user.id).single();
   const roles = ((me?.roles?.length ? me.roles : [me?.role]) as (string | null)[]).filter(Boolean) as string[];
   // XWI P2-15 — one id per request, so the audit row, the domain event it raises and whatever the consumer
-  // does next can be joined. Minted here because getCaller is the single door every authenticated write
-  // goes through; anything further in would have to be threaded by hand and would be forgotten.
-  return { admin, userId: user.id, role: (me?.role as string) ?? "", roles, hospitalId: (me?.hospital_id as string) ?? null, organisationId: (me?.organisation_id as string) ?? null, traceId: crypto.randomUUID() };
+  // does next can be joined.
+  //
+  // READ from the request, not minted here. getCaller used to mint its own uuid, which was wrong in two ways:
+  // a route that called getCaller twice got two "trace" ids for one request, and the ~71 routes that never
+  // call it could not obtain the same id at all. src/proxy.ts stamps it once per request instead.
+  return { admin, userId: user.id, role: (me?.role as string) ?? "", roles, hospitalId: (me?.hospital_id as string) ?? null, organisationId: (me?.organisation_id as string) ?? null, traceId: await currentTraceId() };
 }
 
 // Require the caller to hold at least one of `roles`; null = allowed.
