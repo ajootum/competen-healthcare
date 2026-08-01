@@ -47,7 +47,10 @@ export async function POST(req: NextRequest) {
     });
     // COMP-029 — publish a domain event on competency validation (fail-soft; feeds the event bus + CMO integration lens).
     const { data: cyc } = await c.admin.from("competency_cycles").select("hospital_id, nurse_id").eq("id", score.cycle_id).maybeSingle();
-    await emitAssessmentCompleted(c.admin, { id: competency_score_id, cycle_id: score.cycle_id, hospital_id: cyc?.hospital_id ?? null }, c.userId, me?.full_name ?? null);
+    await emitAssessmentCompleted(c.admin, {
+      id: competency_score_id, cycle_id: score.cycle_id, hospital_id: cyc?.hospital_id ?? null,
+      nurse_id: cyc?.nurse_id ?? null, competency_id: score.competency_id ?? null, passed: true,
+    }, c.userId, me?.full_name ?? null);
     // COMP-017 — advance the persisted competency lifecycle state on validation (fail-soft).
     if (cyc?.nurse_id && score.competency_id) await transitionLifecycle(c.admin, { hospitalId: cyc.hospital_id ?? null, nurseId: cyc.nurse_id, competencyId: score.competency_id, toState: "competent", reason: "Validated by educator", actorId: c.userId, actorName: me?.full_name ?? null });
     return NextResponse.json({ ok: true });
@@ -69,6 +72,15 @@ export async function POST(req: NextRequest) {
       actor_id: c.userId, actor_name: me?.full_name ?? null,
       action: "educator_return", entity_type: "competency_score", entity_id: competency_score_id,
     });
+    // XWI P2-6. THIS is the failure signal, and it emitted nothing. An educator returning a score means
+    // the nurse did not demonstrate the competency, which is exactly the case the remediation loop exists
+    // for -- and the only branch that emitted was the one where they PASSED. So the loop had an emitter
+    // on the wrong branch and a consumer that could not fire from either.
+    const { data: cyc } = await c.admin.from("competency_cycles").select("hospital_id, nurse_id").eq("id", score.cycle_id).maybeSingle();
+    await emitAssessmentCompleted(c.admin, {
+      id: competency_score_id, cycle_id: score.cycle_id, hospital_id: cyc?.hospital_id ?? null,
+      nurse_id: cyc?.nurse_id ?? null, competency_id: score.competency_id ?? null, passed: false,
+    }, c.userId, me?.full_name ?? null);
     return NextResponse.json({ ok: true });
   }
 

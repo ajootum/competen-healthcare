@@ -28,14 +28,34 @@ export function emitLearningCompleted(admin: any, enrolment: any, actorId: strin
   });
 }
 
-export function emitAssessmentCompleted(admin: any, score: any, actorId: string | null, actorName?: string | null) {
+// THE PAYLOAD IS A CONTRACT WITH THE CONSUMER, AND IT WAS NOT BEING HONOURED.
+// handleAssessmentCompleted in src/lib/delivery/consumer.ts opens with `if (p.passed !== false) return
+// "no_action"` and then reads p.competency_id. This emitted neither field, so `undefined !== false` was
+// true and EVERY assessment event returned no_action: the remediation loop had an emitter, a consumer, a
+// config gate and a cron, and could not fire. It also read the learner from actor_id -- the EDUCATOR who
+// validated, not the nurse -- so on the day it did fire it would have told the wrong person to revise.
+//
+// passed, nurse_id and competency_id are now explicit and required by type, so the next person to add a
+// call site cannot omit them by accident.
+export function emitAssessmentCompleted(
+  admin: any,
+  score: { id: string; cycle_id?: string | null; hospital_id?: string | null; nurse_id?: string | null; competency_id?: string | null; passed: boolean },
+  actorId: string | null,
+  actorName?: string | null,
+) {
   return emitDomainEvent(admin, {
     event_type: EVENT.ASSESSMENT_COMPLETED,
     subject_type: "competency_score", subject_id: score.id,
     hospital_id: score.hospital_id ?? null,
     actor_id: actorId, actor_name: actorName ?? null,
     sensitivity: "internal",
-    payload: { cycle_id: score.cycle_id ?? null, validated: true },
+    payload: {
+      cycle_id: score.cycle_id ?? null,
+      nurse_id: score.nurse_id ?? null,
+      competency_id: score.competency_id ?? null,
+      passed: score.passed,
+      validated: score.passed,   // retained: COMP-029's integration lens reads it
+    },
   });
 }
 

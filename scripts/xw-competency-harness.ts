@@ -210,6 +210,51 @@ async function main() {
     "a real task-completion route CALLS the bridge",
     "the bridge exists but nothing invokes it -- evidence would only ever appear if called by hand");
 
+  // ── 2b. EVENT PAYLOAD CONTRACTS (XWI P2-6) ───────────────────────────────
+  head("2b. EVENT CONTRACTS  (does the consumer read what the producer sends?)");
+
+  // A consumer reading a field its producer never sends is invisible from both sides: the emit succeeds,
+  // the event is consumed, a handler returns "no_action", and the loop looks alive. That is precisely how
+  // assessment.completed sat there with an emitter, a consumer, a config gate and a cron, and could not
+  // fire -- the handler opened with `p.passed !== false` and the payload had no `passed`.
+  const producers = readFileSync(join(process.cwd(), "src/lib/orchestration/producers.ts"), "utf8");
+  const consumerSrc = readFileSync(join(process.cwd(), "src/lib/delivery/consumer.ts"), "utf8");
+
+  const bodyOf = (src: string, name: string) => {
+    const i = src.indexOf(name);
+    return i < 0 ? "" : src.slice(i, src.indexOf("\n}", i) + 2);
+  };
+  const payloadKeys = (fnName: string) => {
+    const body = bodyOf(producers, fnName);
+    const at = body.indexOf("payload:");
+    if (at < 0) return new Set<string>();
+    return new Set([...body.slice(at).matchAll(/([a-z_][a-z0-9_]*)\s*:/gi)].map(m => m[1]).filter(k => k !== "payload"));
+  };
+  const readsOf = (handler: string) =>
+    new Set([...bodyOf(consumerSrc, handler).matchAll(/\bp\.([a-z_][a-z0-9_]*)/gi)].map(m => m[1]));
+
+  for (const [handler, producer] of [
+    ["async function handleAssessmentCompleted", "export function emitAssessmentCompleted"],
+    ["async function handleShiftOverride", "export function emitShiftAssignmentChanged"],
+  ] as const) {
+    const reads = readsOf(handler), sends = payloadKeys(producer);
+    const missing = [...reads].filter(k => !sends.has(k));
+    check(missing.length === 0,
+      `${producer.split(" ").pop()} sends every field its handler reads`,
+      `handler reads ${[...missing].join(", ")} which the payload never carries`);
+  }
+
+  // The learner must come from the payload, never from the actor -- the actor is the educator.
+  check(!/const learner = ev\.actor_id/.test(consumerSrc),
+    "the learner is taken from the payload, not from whoever performed the action");
+
+  const validateRoute = readFileSync(join(process.cwd(), "src/app/api/educator/validate/route.ts"), "utf8");
+  check((validateRoute.match(/emitAssessmentCompleted\s*\(/g) ?? []).length >= 2,
+    "BOTH outcomes emit -- a returned score is the failure the remediation loop exists for",
+    "only the passing branch emitted, so a failure could never reach remediation");
+  check(/passed:\s*false/.test(validateRoute), "the failing branch marks the event as a failure");
+  check(/passed:\s*true/.test(validateRoute), "the passing branch marks it as a pass");
+
   // ── 3. SHIFT CLOSE-OUT (XWI P2-14) ───────────────────────────────────────
   head("3. SHIFT CLOSE-OUT  (outstanding work is not closed over silently)");
 

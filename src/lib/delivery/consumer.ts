@@ -19,7 +19,11 @@ const today = () => new Date().toISOString().slice(0, 10);
 async function handleAssessmentCompleted(admin: Admin, ev: any): Promise<string> {
   const p = ev.payload ?? {};
   if (p.passed !== false) return "no_action";           // only react to failures
-  const learner = ev.actor_id;
+  // THE LEARNER IS NOT THE ACTOR. This read actor_id, which on the only path that emits this event is the
+  // EDUCATOR who returned the score -- so a failing assessment would have told the assessor to go and
+  // revise, and left the nurse with nothing. The payload now names the nurse explicitly; an event that
+  // does not carry one has no recipient rather than a plausible wrong one.
+  const learner = p.nurse_id ?? null;
   if (!learner) return "no_recipient";
   await notify([learner], { type: "remediation", title: "Reassessment recommended", body: "You didn't pass a recent assessment — a short remediation review has been queued for you.", href: "/dashboard/reinforcement" });
   if (p.competency_id) {
