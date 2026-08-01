@@ -7,11 +7,40 @@ type Admin = ReturnType<typeof createAdminClient>;
 // per-assessor `assessments` rows into competency_scores, then rolls up to
 // domain_scores and framework_scores using the Benner scale (migration 009).
 
+/**
+ * ONE SCORE PER ASSESSOR, THE LATEST (XWI P2-12).
+ *
+ * `assessments` has no uniqueness constraint on (cycle, competency, assessor) -- verified against the live
+ * database by inserting a duplicate, which was accepted. A double-submit, a retry on a slow network, or a
+ * genuine re-assessment all produce a second row for the same assessor.
+ *
+ * The engine already knew assessors must be DISTINCT: the quorum check counts
+ * `new Set(assessor_id).size`, so a duplicate cannot satisfy min_assessors on its own. It then forgot one
+ * line later and averaged every ROW -- so the duplicating assessor carried double weight in the final
+ * score, and assessor_count recorded more assessors than had actually assessed. The number a competency
+ * decision rests on was wrong, and the record of how many people stood behind it was wrong with it.
+ *
+ * No unique constraint is added, because a re-assessment after remediation is legitimate. The later score
+ * SUPERSEDES the earlier one, which is the same rule the competency-currency reduction applies to
+ * decisions.
+ */
+export function latestPerAssessor<T extends { assessor_id?: string | null; assessed_at?: string | null; created_at?: string | null; id?: string | null }>(rows: T[]): T[] {
+  const best = new Map<string, T>();
+  for (const r of rows) {
+    const key = r.assessor_id ?? `__row:${r.id ?? Math.random()}`;   // an unattributed row supersedes nothing
+    const cur = best.get(key);
+    if (!cur) { best.set(key, r); continue; }
+    const at = (x: T) => `${x.assessed_at ?? ""}|${x.created_at ?? ""}`;
+    if (at(r) > at(cur)) best.set(key, r);
+  }
+  return [...best.values()];
+}
+
 export async function recomputeAll(admin: Admin, cycleId: string, competencyId: string) {
   // 1. Get all complete assessments for this competency in this cycle
   const { data: assessments } = await admin
     .from("assessments")
-    .select("score, assessor_id")
+    .select("id, score, assessor_id, assessed_at, created_at")
     .eq("cycle_id", cycleId)
     .eq("competency_id", competencyId)
     .eq("status", "complete")
@@ -29,11 +58,14 @@ export async function recomputeAll(admin: Admin, cycleId: string, competencyId: 
 
   const minAssessors = cycle?.min_assessors ?? 1;
   const consensusRule = cycle?.consensus_rule ?? "any";
-  const uniqueAssessors = new Set(assessments.map(a => a.assessor_id)).size;
+  // One row per assessor before ANY of this is counted -- quorum, the average, and the recorded
+  // assessor_count all have to mean the same thing.
+  const perAssessor = latestPerAssessor(assessments);
+  const uniqueAssessors = perAssessor.length;
 
   if (uniqueAssessors < minAssessors) return; // quorum not reached
 
-  const scores = assessments.map(a => a.score as number);
+  const scores = perAssessor.map(a => a.score as number);
 
   let finalScore: number;
   if (consensusRule === "unanimous") {
@@ -78,7 +110,7 @@ export async function recomputeAll(admin: Admin, cycleId: string, competencyId: 
     score: finalScore,
     label: level?.label ?? null,
     is_passing: level?.is_passing ?? false,
-    assessor_count: scores.length,
+    assessor_count: uniqueAssessors,   // people, not rows
     assessed_at: new Date().toISOString(),
     educator_validated: false,
   }, { onConflict: "cycle_id,competency_id" });

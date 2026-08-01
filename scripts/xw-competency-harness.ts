@@ -33,6 +33,7 @@ import { checkDeploymentReadiness } from "../src/lib/operations/deployment-readi
 import { evidenceFromTask, EVIDENCE_TASK_TYPES } from "../src/lib/hww/evidence";
 import { assessCompetencyCurrency, DECISION_COLUMNS } from "../src/lib/operations/competency-currency";
 import { outstandingForShift } from "../src/lib/operations/shift-closeout";
+import { latestPerAssessor } from "../src/lib/engines/scoring";
 loadEnvConfig(process.cwd());
 
 const admin = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!, {
@@ -280,6 +281,30 @@ async function main() {
     "only the passing branch emitted, so a failure could never reach remediation");
   check(/passed:\s*false/.test(validateRoute), "the failing branch marks the event as a failure");
   check(/passed:\s*true/.test(validateRoute), "the passing branch marks it as a pass");
+
+  // ── 1d. ONE SCORE PER ASSESSOR (XWI P2-12) ───────────────────────────────
+  head("1d. DUPLICATE ASSESSMENTS  (scoring engine)");
+
+  // Pure, so the double-submit case is stated rather than arranged.
+  const A = "assessor-a", B = "assessor-b";
+  const first  = { id: "1", assessor_id: A, score: 2, assessed_at: "2025-01-01T09:00:00Z" };
+  const resub  = { id: "2", assessor_id: A, score: 5, assessed_at: "2025-01-01T10:00:00Z" };
+  const other  = { id: "3", assessor_id: B, score: 3, assessed_at: "2025-01-01T09:30:00Z" };
+
+  check(latestPerAssessor([first, resub]).length === 1, "a second submission by the same assessor does not add an assessor");
+  check(latestPerAssessor([first, resub])[0].score === 5, "the LATER score supersedes the earlier one");
+  check(latestPerAssessor([resub, first])[0].score === 5, "row order does not decide it -- the timestamp does");
+  check(latestPerAssessor([first, resub, other]).length === 2, "two real assessors still count as two");
+  check(latestPerAssessor([{ id: "4", assessor_id: null, score: 1 }, { id: "5", assessor_id: null, score: 4 }]).length === 2,
+    "unattributed rows supersede nothing");
+
+  const eng = readFileSync(join(process.cwd(), "src/lib/engines/scoring.ts"), "utf8");
+  check(/const scores = perAssessor\.map/.test(eng),
+    "the average is taken over assessors, not rows",
+    "a duplicate submission carried double weight in the score a decision rests on");
+  check(/assessor_count: uniqueAssessors/.test(eng),
+    "assessor_count records PEOPLE, not rows",
+    "the record claimed more assessors than had assessed");
 
   // ── 2c. EVIDENCE INTEGRITY (XWI P2-11) ───────────────────────────────────
   head("2c. EVIDENCE INTEGRITY  (verified evidence is not the owner's to delete)");
