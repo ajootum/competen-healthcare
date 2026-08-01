@@ -1,386 +1,394 @@
-export default function Home() {
+import Link from "next/link";
+import { PatternBand, PatternField, PatternRule, PhotoSlot } from "@/components/marketing/Pattern";
+import {
+  BRAND, HERO, TRUST, CAPABILITIES, LIFECYCLE, JOURNEY, AUDIENCES, METRICS, CLOSING, NAV, FOOTER, FOOTER_LEGAL,
+} from "@/lib/marketing/home-content";
+
+// COMP-HOME-001 — public homepage.
+//
+// Positions Competen as a Healthcare Workforce Intelligence Platform: white ground, brand teal and blue,
+// African geometric motifs in the separators, generous whitespace, rounded cards. Every string comes from
+// src/lib/marketing/home-content.ts so copy edits never touch this file.
+//
+// STATIC BY DESIGN. Nothing here reads the database. A marketing page that awaits Supabase is a slow one,
+// and worse, one that can fail to render because of an outage in a system its visitors have no account on.
+
+export const metadata = {
+  title: "Competen — Healthcare Competency & Workforce Platform",
+  description:
+    "Competen connects competency management, assessments, workforce operations, learning, quality and AI " +
+    "into one configurable platform for healthcare organisations.",
+};
+
+const container = "mx-auto w-full max-w-7xl px-5 sm:px-8";
+
+function Logo({ dark = false }: { dark?: boolean }) {
   return (
-    <div className="flex flex-col min-h-full font-[family-name:var(--font-geist-sans)]">
+    <Link href="/" className="flex items-center gap-2.5 shrink-0" aria-label={`${BRAND.name} home`}>
+      <span className="w-9 h-9 rounded-xl bg-gradient-to-br from-[var(--cmp-color-primary)] to-[var(--cmp-color-information)] flex items-center justify-center text-white font-bold">C</span>
+      <span className="leading-tight">
+        <span className={`block font-bold tracking-tight ${dark ? "text-white" : "text-gray-900"}`}>{BRAND.name.toLowerCase()}</span>
+        <span className={`block text-[10px] ${dark ? "text-white/50" : "text-gray-500"}`}>{BRAND.tagline}</span>
+      </span>
+    </Link>
+  );
+}
 
-      {/* ── NAVBAR ── */}
-      <header className="flex items-center justify-between px-6 py-4 bg-[#0a2e38]">
-        <div className="flex items-center gap-2">
-          <div className="w-7 h-7 rounded bg-teal-500 flex items-center justify-center text-white font-bold text-sm">C</div>
-          <span className="text-white font-semibold tracking-tight">Competen Healthcare</span>
+/* ── Hero dashboard preview ───────────────────────────────────────────────────
+   A drawn abstraction of the Executive Command Centre, not a screenshot: a screenshot of a seeded demo
+   tenant would put invented patient numbers on the public internet and would go stale the moment the
+   workspace changed. The figures are illustrative and the panel is labelled "Preview" so it says so. */
+function DashboardPreview() {
+  const kpis = [
+    { label: "Total Competent Staff", value: "1,248", delta: "+12%" },
+    { label: "Assessments Completed", value: "3,562", delta: "+18%" },
+    { label: "Workforce Coverage", value: "92%", delta: "On target" },
+    { label: "Quality Events", value: "37", delta: "-14%" },
+  ];
+  const bars: [string, number][] = [["Clinical Skills", 96], ["Patient Safety", 93], ["Emergency Care", 91], ["Infection Control", 89]];
+  return (
+    <div className="rounded-2xl bg-white shadow-2xl ring-1 ring-black/5 overflow-hidden" aria-label="Product preview of the Executive Command Centre" role="img">
+      <div className="flex items-center gap-2 px-4 py-3 border-b border-gray-100">
+        <span className="w-6 h-6 rounded-lg bg-[var(--cmp-color-primary)] text-white text-[11px] font-bold flex items-center justify-center">C</span>
+        <span className="text-[12px] font-semibold text-gray-800">Executive Command Centre</span>
+        <span className="ml-auto text-[10px] text-gray-400">Preview</span>
+      </div>
+      <div className="p-3 grid grid-cols-2 sm:grid-cols-4 gap-2">
+        {kpis.map(k => (
+          <div key={k.label} className="rounded-lg border border-gray-100 p-2.5">
+            <p className="text-[9px] text-gray-400 leading-tight">{k.label}</p>
+            <p className="text-base font-bold text-gray-900 tabular-nums leading-tight mt-0.5">{k.value}</p>
+            <p className="text-[9px] text-[var(--cmp-text-success)]">{k.delta}</p>
+          </div>
+        ))}
+      </div>
+      <div className="px-3 pb-3 grid grid-cols-1 sm:grid-cols-3 gap-2">
+        <div className="rounded-lg border border-gray-100 p-3 flex flex-col items-center justify-center">
+          <p className="text-[9px] text-gray-400 self-start">Workforce Readiness</p>
+          <div className="relative w-20 h-20 my-1">
+            <svg viewBox="0 0 36 36" className="w-full h-full -rotate-90" aria-hidden="true">
+              <circle cx="18" cy="18" r="15.9" fill="none" stroke="#E5E7EB" strokeWidth="3" />
+              <circle cx="18" cy="18" r="15.9" fill="none" stroke="var(--cmp-color-primary)" strokeWidth="3"
+                strokeDasharray="92 100" strokeLinecap="round" />
+            </svg>
+            <span className="absolute inset-0 flex flex-col items-center justify-center">
+              <span className="text-lg font-bold text-gray-900">92%</span>
+              <span className="text-[8px] text-gray-400">Ready</span>
+            </span>
+          </div>
         </div>
-        <nav className="hidden md:flex items-center gap-6 text-sm text-teal-200/80">
-          <a href="/login" className="hover:text-white transition-colors">Login</a>
-          <a href="/signup" className="rounded bg-teal-500 px-4 py-1.5 text-white font-medium hover:bg-teal-400 transition-colors">Start Free</a>
-        </nav>
-        <nav className="flex md:hidden items-center gap-3">
-          <a href="/login" className="text-teal-200/80 text-sm hover:text-white transition-colors">Login</a>
-          <a href="/signup" className="rounded bg-teal-500 px-3 py-1.5 text-white text-sm font-medium hover:bg-teal-400 transition-colors">Start Free</a>
-        </nav>
-      </header>
-
-      {/* ── HERO ── */}
-      <section className="bg-gradient-to-br from-[#0a2e38] via-[#0d3d4c] to-[#0f5060] px-6 pt-16 pb-14 text-center">
-        <span className="inline-block mb-5 rounded-full border border-teal-400/40 bg-teal-400/10 px-3 py-1 text-xs text-teal-300 tracking-wider">
-          ✦ East Africa&apos;s Clinical Competency Platform
-        </span>
-        <h1 className="text-4xl sm:text-5xl font-bold text-white leading-tight mb-1">
-          Build a Competent
-        </h1>
-        <h1 className="text-4xl sm:text-5xl font-bold italic text-amber-400 leading-tight mb-6">
-          Healthcare Workforce.
-        </h1>
-        <p className="max-w-lg mx-auto text-teal-100/80 text-base leading-relaxed mb-8">
-          Train nurses. Validate clinical skills. Issue certifications. Track workforce compliance — all in one platform built for African healthcare systems.
-        </p>
-        <div className="flex flex-col sm:flex-row gap-3 justify-center mb-12">
-          <a href="/signup" className="rounded-md bg-teal-500 px-6 py-3 text-white font-semibold hover:bg-teal-400 transition-colors text-sm">
-            Start Free Trial
-          </a>
-          <a href="mailto:gabriel@semacast.com?subject=Hospital Demo Request" className="rounded-md border border-white/20 bg-white/5 px-6 py-3 text-white font-semibold hover:bg-white/10 transition-colors text-sm">
-            Book a Hospital Demo
-          </a>
-        </div>
-        <div className="flex flex-wrap justify-center gap-10 text-center">
-          {[
-            { num: "8", label: "PLATFORM MODULES" },
-            { num: "1M+", label: "NURSES IN MARKET" },
-            { num: "6", label: "TARGET COUNTRIES" },
-            { num: "100%", label: "AFRICA-BUILT" },
-          ].map(({ num, label }) => (
-            <div key={label}>
-              <div className="text-2xl font-bold text-amber-400">{num}</div>
-              <div className="text-xs text-teal-300/70 mt-0.5 tracking-widest">{label}</div>
+        <div className="rounded-lg border border-gray-100 p-3">
+          <p className="text-[9px] text-gray-400 mb-1.5">Competency Compliance</p>
+          {bars.map(([name, pct]) => (
+            <div key={name} className="mb-1.5">
+              <div className="flex justify-between text-[9px] text-gray-500"><span>{name}</span><span className="tabular-nums">{pct}%</span></div>
+              <div className="h-1 rounded-full bg-gray-100 overflow-hidden">
+                <div className="h-full rounded-full bg-[var(--cmp-color-primary)]" style={{ width: `${pct}%` }} />
+              </div>
             </div>
           ))}
         </div>
-      </section>
-
-      {/* ── FEATURE NAV TABS ── */}
-      <div className="bg-teal-700 flex justify-center gap-0 text-sm font-medium text-white/80">
-        {["Train", "Assess", "Certify", "Track", "Improve"].map((tab) => (
-          <span key={tab} className="px-8 py-3 hover:bg-teal-600 hover:text-white transition-colors border-r border-teal-600/50 last:border-0 cursor-default">
-            {tab}
-          </span>
-        ))}
+        <div className="rounded-lg border border-gray-100 p-3">
+          <p className="text-[9px] text-gray-400 mb-1.5">Workforce Overview</p>
+          <svg viewBox="0 0 100 44" className="w-full h-16" aria-hidden="true">
+            <polyline points="0,30 17,22 33,26 50,14 67,19 83,10 100,16" fill="none" stroke="var(--cmp-color-secondary)" strokeWidth="2" />
+            <polyline points="0,36 17,33 33,34 50,28 67,30 83,24 100,27" fill="none" stroke="var(--cmp-color-primary)" strokeWidth="2" strokeDasharray="3 3" />
+          </svg>
+          <div className="flex gap-3 text-[8px] text-gray-400">
+            <span className="flex items-center gap-1"><span className="w-2 h-0.5 bg-[var(--cmp-color-secondary)] inline-block" />Required</span>
+            <span className="flex items-center gap-1"><span className="w-2 h-0.5 bg-[var(--cmp-color-primary)] inline-block" />Available</span>
+          </div>
+        </div>
       </div>
+    </div>
+  );
+}
 
-      {/* ── THE PROBLEM ── */}
-      <section className="bg-gray-50 px-6 py-16">
-        <div className="max-w-5xl mx-auto">
-          <p className="text-xs font-semibold text-teal-600 tracking-widest uppercase mb-3 text-center">THE PROBLEM</p>
-          <h2 className="text-3xl font-bold text-gray-900 text-center mb-10">East Africa has a nursing competency crisis.</h2>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
-            {[
-              { stat: "40%", desc: "of nurses in East Africa lack access to structured CPD training, leading to competency gaps that cost lives." },
-              { stat: "0", desc: "digital platforms specifically built for East African nursing competency assessment, certification, and tracking." },
-              { stat: "$1.2B", desc: "annual cost of healthcare workforce inefficiency in Sub-Saharan Africa due to untracked competency gaps." },
-            ].map(({ stat, desc }) => (
-              <div key={stat} className="bg-white rounded-xl border border-gray-100 p-6 text-center">
-                <div className="text-4xl font-bold text-teal-700 mb-3">{stat}</div>
-                <p className="text-sm text-gray-500 leading-relaxed">{desc}</p>
-              </div>
+export default function Home() {
+  return (
+    <div className="flex flex-col min-h-full bg-white font-[family-name:var(--font-geist-sans)]">
+      <a href="#main" className="cmp-skip-link">Skip to main content</a>
+
+      {/* ── HEADER ─────────────────────────────────────────────────────────── */}
+      <header className="sticky top-0 z-40 bg-white/90 backdrop-blur border-b border-gray-100">
+        <div className={`${container} flex items-center gap-6 h-16`}>
+          <Logo />
+          <nav className="hidden lg:flex items-center gap-6 ml-auto" aria-label="Primary">
+            {NAV.map(n => (
+              <a key={n.label} href={n.href} className="text-[13px] font-medium text-gray-600 hover:text-[var(--cmp-color-primary)] transition-colors">
+                {n.label}
+              </a>
             ))}
+          </nav>
+          <div className="flex items-center gap-3 ml-auto lg:ml-0">
+            <Link href="/login" className="text-[13px] font-medium text-gray-600 hover:text-gray-900 transition-colors">Login</Link>
+            <Link href={HERO.primary.href} className="rounded-lg bg-[var(--cmp-color-primary)] px-4 py-2 text-[13px] font-semibold text-white hover:bg-[var(--cmp-color-primary-dark)] transition-colors">
+              {HERO.primary.label}
+            </Link>
           </div>
         </div>
-      </section>
+      </header>
 
-      {/* ── MODULES ── */}
-      <section className="bg-white px-6 py-20">
-        <div className="max-w-5xl mx-auto">
-          <p className="text-xs font-semibold text-teal-600 tracking-widest uppercase mb-3">PLATFORM</p>
-          <h2 className="text-3xl font-bold text-gray-900 mb-1">One platform.</h2>
-          <h2 className="text-3xl font-bold text-gray-900 mb-4">Eight modules.</h2>
-          <p className="text-gray-500 text-sm max-w-md mb-12">
-            From individual CPD courses to enterprise workforce intelligence — Competen Healthcare scales with every stage of your growth.
-          </p>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            {[
-              { tag: "LIVE", tagColor: "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]", title: "CPD Academy", desc: "Self-paced courses covering Pediatric Resus, Airway Management, Critical Care, Infection Prevention, and more. Earn certificates automatically.", cta: "From $2/month", ctaColor: "text-teal-600" },
-              { tag: "LIVE", tagColor: "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]", title: "Question Bank", desc: "Clinical MCQs across Emergency, Safety, Pharmacology, Pediatrics, and Critical Care. Evidence-based questions mapped to real nursing competencies.", cta: "Included in Pro", ctaColor: "text-gray-500" },
-              { tag: "LIVE", tagColor: "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]", title: "Competency Passport", desc: "Every nurse gets a digital portfolio tracking BLS, ALS, safe injectables, annual competencies, and expiry dates — all in one place.", cta: "Included in Premium", ctaColor: "text-gray-500" },
-              { tag: "ENTERPRISE", tagColor: "bg-purple-100 text-purple-700", title: "Hospital Dashboard", desc: "Nursing directors see ward-by-ward competency heat maps, compliance reports, expiring certifications, and skill gap analysis.", cta: "$14/staff/month", ctaColor: "text-teal-600" },
-              { tag: "LIVE", tagColor: "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]", title: "AI Clinical Copilot", desc: "Ask clinical questions and get instant, evidence-based answers powered by Claude AI. Grounded in WHO guidelines and East African nursing protocols.", cta: "Included in Premium", ctaColor: "text-gray-500" },
-              { tag: "Q3 2026", tagColor: "bg-cyan-100 text-cyan-700", title: "Virtual Simulation", desc: "Africa's first AI-powered nursing simulation. Branching patient scenarios with immediate feedback — no mannequin required.", cta: "Add on", ctaColor: "text-gray-500" },
-              { tag: "Q4 2026", tagColor: "bg-indigo-100 text-indigo-700", title: "Digital OSCE Platform", desc: "Students record responses remotely, examiners score using structured checklists. Serve nursing schools and hospitals at scale.", cta: "Institutional", ctaColor: "text-gray-500" },
-              { tag: "LIVE", tagColor: "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]", title: "Knowledge Hub", desc: "Clinical library with WHO guidelines, protocols, and research summaries. Evidence-based answers to clinical questions, searchable and curated.", cta: "Included in Pro", ctaColor: "text-gray-500" },
-            ].map(({ tag, tagColor, title, desc, cta, ctaColor }) => (
-              <div key={title} className="border border-gray-100 rounded-xl p-5 hover:shadow-md transition-shadow flex flex-col gap-3">
-                <span className={`self-start text-[10px] font-bold px-2 py-0.5 rounded ${tagColor}`}>{tag}</span>
-                <h3 className="font-semibold text-gray-900 text-sm">{title}</h3>
-                <p className="text-xs text-gray-500 leading-relaxed flex-1">{desc}</p>
-                <span className={`text-xs font-medium ${ctaColor}`}>{cta}</span>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* ── SEE IT IN ACTION ── */}
-      <section className="bg-[#0f1f2e] px-6 py-20 text-center">
-        <p className="text-xs font-semibold text-teal-400 tracking-widest uppercase mb-3">INTERACTIVE DEMO</p>
-        <h2 className="text-2xl font-bold text-white mb-2">See it in action.</h2>
-        <p className="text-gray-400 text-sm mb-8">Explore what nurses and hospitals actually see on the platform.</p>
-        <div className="max-w-2xl mx-auto">
-          <div className="flex justify-center gap-2 mb-6">
-            {["Competency Passport", "AI Clinical Copilot", "Hospital Dashboard"].map((tab, i) => (
-              <button key={tab} className={`text-xs px-3 py-1.5 rounded-full border transition-colors ${i === 0 ? "bg-teal-500 border-teal-500 text-white" : "border-gray-600 text-gray-400 hover:text-white"}`}>
-                {tab}
-              </button>
-            ))}
-          </div>
-          <div className="bg-white rounded-2xl p-5 text-left shadow-2xl">
-            <div className="flex items-start justify-between mb-4">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-full bg-teal-100 flex items-center justify-center text-teal-700 font-bold text-sm">JN</div>
-                <div>
-                  <p className="font-semibold text-gray-900 text-sm">Jane Namwocha, RN</p>
-                  <p className="text-xs text-gray-400">Kenyatta National Hospital · Medical Ward</p>
-                </div>
-              </div>
-              <div className="text-right">
-                <p className="text-2xl font-bold text-gray-900">28</p>
-                <p className="text-xs text-gray-400">CPD hrs / 30h target</p>
-              </div>
-            </div>
-            <table className="w-full text-xs">
-              <thead>
-                <tr className="text-gray-400 border-b border-gray-100">
-                  <th className="text-left py-2 font-medium">COMPETENCY</th>
-                  <th className="text-left py-2 font-medium">STATUS</th>
-                  <th className="text-left py-2 font-medium">EXPIRES</th>
-                  <th className="text-left py-2 font-medium">LEVEL</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-50">
-                {[
-                  { name: "BLS Certification", status: "✓", exp: "Dec 2026", level: "Competent", levelColor: "text-[var(--cmp-text-success)] bg-[var(--cmp-surface-success)]" },
-                  { name: "Pediatric Assessment", status: "✓", exp: "Mar 2027", level: "Competent", levelColor: "text-[var(--cmp-text-success)] bg-[var(--cmp-surface-success)]" },
-                  { name: "Infection Control", status: "✓", exp: "Jun 2027", level: "Advanced", levelColor: "text-[var(--cmp-text-information)] bg-[var(--cmp-surface-information)]" },
-                  { name: "Medication Safety", status: "⏳", exp: "Pending", level: "In Progress", levelColor: "text-gray-500 bg-gray-100" },
-                  { name: "Critical Care", status: "!", exp: "—", level: "Required", levelColor: "text-[var(--cmp-text-critical)] bg-[var(--cmp-surface-critical)]" },
-                ].map(({ name, status, exp, level, levelColor }) => (
-                  <tr key={name}>
-                    <td className="py-2.5 text-gray-700">{name}</td>
-                    <td className="py-2.5 text-gray-500">{status}</td>
-                    <td className="py-2.5 text-gray-500">{exp}</td>
-                    <td className="py-2.5"><span className={`px-2 py-0.5 rounded text-[10px] font-medium ${levelColor}`}>{level}</span></td>
-                  </tr>
+      <main id="main">
+        {/* ── HERO ─────────────────────────────────────────────────────────── */}
+        <section className="relative overflow-hidden bg-gradient-to-b from-[var(--cmp-color-primary-light)] via-white to-white">
+          <PatternField className="absolute inset-0" tone="var(--cmp-color-primary)" opacity={0.10} />
+          <div className={`${container} relative grid lg:grid-cols-2 gap-10 lg:gap-12 items-center py-14 lg:py-20`}>
+            <div>
+              <span className="inline-block rounded-full bg-white/80 ring-1 ring-[var(--cmp-color-primary)]/25 px-3 py-1 text-[10px] font-bold uppercase tracking-[0.14em] text-[var(--cmp-text-success)]">
+                {BRAND.eyebrow}
+              </span>
+              <h1 className="mt-5 text-[2.1rem] sm:text-5xl font-bold tracking-tight text-gray-900 leading-[1.1] text-balance">
+                {HERO.headline.map((line, i) => (
+                  <span key={line} className={`block ${i === HERO.accentLine ? "text-[var(--cmp-color-primary)]" : ""}`}>{line}</span>
                 ))}
-              </tbody>
-            </table>
-            <div className="mt-4 pt-3 border-t border-gray-100 flex items-center justify-between">
-              <span className="text-xs text-gray-400">3 of 5 competencies complete · 1 expiring in 60 days</span>
-              <a href="/signup" className="text-xs bg-teal-600 text-white px-3 py-1.5 rounded-lg font-medium hover:bg-teal-700 transition-colors">Try it free →</a>
+              </h1>
+              <p className="mt-5 max-w-xl text-[15px] leading-relaxed text-gray-600">{HERO.body}</p>
+              <div className="mt-7 flex flex-wrap items-center gap-3">
+                <Link href={HERO.primary.href} className="rounded-lg bg-[var(--cmp-color-primary)] px-5 py-3 text-sm font-semibold text-white hover:bg-[var(--cmp-color-primary-dark)] transition-colors">
+                  {HERO.primary.label} →
+                </Link>
+                <a href={HERO.secondary.href} className="rounded-lg border border-gray-300 bg-white px-5 py-3 text-sm font-semibold text-gray-800 hover:border-[var(--cmp-color-primary)] hover:text-[var(--cmp-color-primary)] transition-colors">
+                  {HERO.secondary.label} ▸
+                </a>
+              </div>
+              <a href={HERO.tertiary.href} className="mt-3 inline-block text-[13px] font-medium text-[var(--cmp-color-secondary)] hover:underline">
+                {HERO.tertiary.label} ▸
+              </a>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-5 gap-4 items-stretch">
+              {/* Photography slot — renders a patterned panel until a real photograph is added. */}
+              <PhotoSlot className="sm:col-span-2 rounded-2xl min-h-[220px]"
+                alt="Nurses reviewing a patient record together on a tablet"
+                caption="Photography slot — add /images/home/hero-clinicians.jpg" />
+              <div className="sm:col-span-3"><DashboardPreview /></div>
             </div>
           </div>
-        </div>
-      </section>
 
-      {/* ── PRICING ── */}
-      <section className="bg-white px-6 py-20">
-        <div className="max-w-5xl mx-auto">
-          <div className="text-center mb-12">
-            <p className="text-xs font-semibold text-teal-600 tracking-widest uppercase mb-3">PRICING</p>
-            <h2 className="text-3xl font-bold text-gray-900 mb-2">Pay for what you need.</h2>
-            <p className="text-gray-500 text-sm max-w-md mx-auto">Built for East Africa — pay monthly, annually, or per course. No long-term contracts. M-Pesa friendly.</p>
-          </div>
-
-          {/* Individual plans */}
-          <p className="text-[10px] font-bold text-gray-400 tracking-widest uppercase mb-4">FOR INDIVIDUAL NURSES</p>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5 text-left mb-14">
-            {[
-              {
-                name: "Free", price: "$0", sub: "Always free", highlight: false,
-                features: ["3 CPD courses", "Basic question bank", "Progress tracking", "Certificate preview"],
-                cta: "Get Started", ctaStyle: "border border-gray-200 text-gray-700 hover:bg-gray-50", href: "/signup",
-              },
-              {
-                name: "Pro", price: "$4", sub: "/mo · or $35/yr  (save 27%)", highlight: true, badge: "MOST POPULAR",
-                features: ["All CPD courses", "Full question bank", "Competency tracking", "CPD certificates", "Knowledge Hub"],
-                cta: "Start Free Trial", ctaStyle: "", href: "/signup",
-              },
-              {
-                name: "Premium", price: "$12", sub: "/mo · or $99/yr  (save 31%)", highlight: false,
-                features: ["Everything in Pro", "AI Clinical Copilot", "Simulation previews", "Clinical portfolio", "Priority support"],
-                cta: "Start Free Trial", ctaStyle: "border border-gray-200 text-gray-700 hover:bg-gray-50", href: "/signup",
-              },
-              {
-                name: "Pay-per-course", price: "$2", sub: "per course — pay as you go", highlight: false, badge: "M-PESA FRIENDLY",
-                features: ["Buy one course at a time", "No subscription needed", "Certificate included", "Pay via M-Pesa or card"],
-                cta: "Browse Courses", ctaStyle: "border border-gray-200 text-gray-700 hover:bg-gray-50", href: "/signup",
-              },
-            ].map(({ name, price, sub, highlight, badge, features, cta, ctaStyle, href }) => (
-              <div key={name} className={`rounded-2xl p-6 flex flex-col gap-4 ${highlight ? "bg-teal-600 text-white shadow-xl scale-105" : "border border-gray-100"}`}>
-                {badge && <span className={`self-start text-[10px] font-bold px-2 py-0.5 rounded ${highlight ? "bg-white/20 text-white" : "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]"}`}>{badge}</span>}
-                <div>
-                  <p className={`text-sm font-semibold ${highlight ? "text-teal-100" : "text-gray-500"}`}>{name}</p>
-                  <p className={`text-3xl font-bold mt-1 ${highlight ? "text-white" : "text-gray-900"}`}>{price}</p>
-                  <p className={`text-[11px] mt-0.5 ${highlight ? "text-teal-200" : "text-gray-400"}`}>{sub}</p>
+          {/* Patterned trust band */}
+          <div className="relative border-y border-[var(--cmp-color-primary)]/15 bg-[var(--cmp-color-primary-light)]/60" id="trust">
+            <PatternBand className="absolute inset-0" />
+            <div className={`${container} relative grid grid-cols-2 lg:grid-cols-4 gap-6 py-5`}>
+              {TRUST.map(t => (
+                <div key={t.title}>
+                  <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-gray-800">{t.title}</p>
+                  <p className="text-[12px] text-gray-600 mt-0.5">{t.body}</p>
                 </div>
-                <ul className="flex flex-col gap-2 flex-1">
-                  {features.map((f) => (
-                    <li key={f} className={`text-xs flex gap-2 items-start ${highlight ? "text-teal-100" : "text-gray-500"}`}>
-                      <span className={`mt-0.5 shrink-0 ${highlight ? "text-teal-300" : "text-teal-500"}`}>✓</span>{f}
+              ))}
+            </div>
+          </div>
+        </section>
+
+        {/* ── PLATFORM CAPABILITIES ─────────────────────────────────────────── */}
+        <section id="platform" className={`${container} py-16 lg:py-20`}>
+          <div className="text-center max-w-2xl mx-auto">
+            <h2 className="text-2xl sm:text-3xl font-bold tracking-tight text-gray-900 text-balance">One Platform. Every Need.</h2>
+            <p className="mt-2 text-[15px] text-gray-600">Integrated solutions to build capability, optimise workforce and improve care quality.</p>
+          </div>
+          <div className="mt-9 grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+            {CAPABILITIES.map(c => (
+              <div key={c.name} className="rounded-2xl border border-gray-200 bg-white p-5 hover:shadow-lg hover:-translate-y-0.5 transition-all">
+                <span className="inline-flex w-9 h-9 rounded-xl items-center justify-center mb-3" style={{ backgroundColor: `color-mix(in srgb, ${c.accent} 14%, white)` }}>
+                  <span className="w-3.5 h-3.5 rounded-[4px]" style={{ backgroundColor: c.accent }} />
+                </span>
+                <h3 className="text-[15px] font-bold" style={{ color: c.accent }}>{c.name}</h3>
+                <ul className="mt-2.5 space-y-1.5">
+                  {c.items.map(i => (
+                    <li key={i} className="flex gap-1.5 text-[12px] text-gray-600 leading-snug">
+                      <span aria-hidden className="text-gray-300">›</span>{i}
                     </li>
                   ))}
                 </ul>
-                <a href={href} className={`text-center rounded-lg py-2.5 text-sm font-semibold transition-colors ${highlight ? "bg-white text-teal-600 hover:bg-teal-50" : ctaStyle}`}>
-                  {cta}
-                </a>
+                <a href={c.href} className="mt-3 inline-block text-[12px] font-semibold" style={{ color: c.accent }}>Explore →</a>
               </div>
             ))}
           </div>
+        </section>
 
-          {/* Hospital / Institution plans */}
-          <div className="bg-[#0a2e38] rounded-2xl p-8">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
-              <div>
-                <p className="text-[10px] font-bold text-teal-400 tracking-widest uppercase mb-1">FOR HOSPITALS &amp; INSTITUTIONS</p>
-                <h3 className="text-xl font-bold text-white">Per-seat pricing. Billed annually.</h3>
-                <p className="text-teal-300/70 text-sm mt-1">The more nurses, the less you pay per seat.</p>
-              </div>
-              <a href="mailto:gabriel@semacast.com?subject=Hospital Demo Request"
-                className="shrink-0 rounded-lg bg-teal-500 px-5 py-2.5 text-white text-sm font-semibold hover:bg-teal-400 transition-colors text-center">
-                Book a Demo
-              </a>
+        <PatternRule />
+
+        {/* ── WORKFORCE LIFECYCLE ───────────────────────────────────────────── */}
+        <section id="lifecycle" className="bg-[var(--cmp-neutral-50)]">
+          <div className={`${container} py-16 lg:py-20`}>
+            <div className="text-center max-w-2xl mx-auto">
+              <h2 className="text-2xl sm:text-3xl font-bold tracking-tight text-gray-900 text-balance">Manage the Complete Workforce Lifecycle</h2>
+              <p className="mt-2 text-[15px] text-gray-600">From recruitment to leadership development — Competen is with you every step.</p>
             </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-              {[
-                { tier: "Starter", nurses: "1–25 nurses", price: "$8", desc: "Perfect for clinics and small wards" },
-                { tier: "Growth", nurses: "26–100 nurses", price: "$6", desc: "Department-level deployment" },
-                { tier: "Scale", nurses: "101–500 nurses", price: "$4", desc: "Hospital-wide competency management" },
-                { tier: "Enterprise", nurses: "500+ nurses", price: "Custom", desc: "Multi-site, custom integrations & SLA" },
-              ].map(({ tier, nurses, price, desc }) => (
-                <div key={tier} className="bg-white/5 border border-white/10 rounded-xl p-5">
-                  <p className="text-teal-300 text-[10px] font-bold tracking-widest uppercase mb-2">{tier}</p>
-                  <p className="text-white text-2xl font-bold">{price}{price !== "Custom" && <span className="text-sm font-normal text-teal-300">/nurse/mo</span>}</p>
-                  <p className="text-teal-400/80 text-xs mt-1 mb-3">{nurses}</p>
-                  <p className="text-gray-400 text-xs leading-relaxed">{desc}</p>
+
+            {/* Numbered because the order is real: you cannot certify before you assess. */}
+            <ol className="mt-10 grid grid-cols-2 sm:grid-cols-4 xl:grid-cols-8 gap-x-3 gap-y-8">
+              {LIFECYCLE.map((s, i) => (
+                <li key={s.stage} className="relative text-center">
+                  <span className="mx-auto flex w-14 h-14 rounded-2xl bg-white ring-1 ring-gray-200 items-center justify-center text-[15px] font-bold text-[var(--cmp-color-primary)]">
+                    {String(i + 1).padStart(2, "0")}
+                  </span>
+                  <p className="mt-2.5 text-[13px] font-bold text-gray-900">{s.stage}</p>
+                  <p className="mt-0.5 text-[11px] leading-snug text-gray-500 px-1">{s.body}</p>
+                  {i < LIFECYCLE.length - 1 && (
+                    <span aria-hidden className="hidden xl:block absolute top-7 -right-2 text-gray-300">→</span>
+                  )}
+                </li>
+              ))}
+            </ol>
+
+            <div className="mt-10 rounded-2xl border border-dashed border-[var(--cmp-color-secondary)]/40 bg-[var(--cmp-color-secondary-light)]/50 px-5 py-4 text-center">
+              <p className="text-[12px] font-bold uppercase tracking-[0.12em] text-[var(--cmp-color-secondary)]">AI &amp; Analytics Layer</p>
+              <p className="mt-1 text-[13px] text-gray-600">Intelligence that connects every step of your workforce journey.</p>
+            </div>
+          </div>
+        </section>
+
+        {/* ── PERSONAL TO PROFESSIONAL ──────────────────────────────────────── */}
+        <section id="journey" className={`${container} py-16 lg:py-20`}>
+          <div className="grid lg:grid-cols-12 gap-6 items-stretch">
+            <PhotoSlot className="hidden lg:block lg:col-span-2 rounded-2xl min-h-[300px]"
+              alt="A student nurse on campus"
+              caption="Photography slot — /images/home/journey-student.jpg" />
+
+            <div className="lg:col-span-4">
+              <h2 className="text-2xl font-bold tracking-tight text-gray-900 text-balance">{JOURNEY.title}</h2>
+              <p className="mt-3 text-[14px] leading-relaxed text-gray-600">{JOURNEY.body}</p>
+              <ul className="mt-4 space-y-1.5">
+                {JOURNEY.points.map(p => (
+                  <li key={p} className="flex gap-2 text-[13px] text-gray-700">
+                    <span aria-hidden className="text-[var(--cmp-color-primary)]">✓</span>{p}
+                  </li>
+                ))}
+              </ul>
+              <Link href={JOURNEY.cta.href} className="mt-5 inline-block rounded-lg bg-[var(--cmp-color-primary)] px-4 py-2.5 text-[13px] font-semibold text-white hover:bg-[var(--cmp-color-primary-dark)] transition-colors">
+                {JOURNEY.cta.label} →
+              </Link>
+            </div>
+
+            <div className="lg:col-span-4 grid sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2 gap-3 items-start">
+              {[JOURNEY.personal, JOURNEY.organisation].map(w => (
+                <div key={w.title} className="rounded-2xl border border-gray-200 bg-white p-4">
+                  <p className="text-[13px] font-bold text-[var(--cmp-color-secondary)]">{w.title}</p>
+                  <p className="text-[11px] text-gray-500 mt-0.5">{w.body}</p>
+                  <ul className="mt-2.5 space-y-1">
+                    {w.items.map(i => (
+                      <li key={i} className="flex gap-1.5 text-[12px] text-gray-600">
+                        <span aria-hidden className="text-[var(--cmp-color-primary)]">✓</span>{i}
+                      </li>
+                    ))}
+                  </ul>
                 </div>
               ))}
+              <p className="sm:col-span-2 rounded-xl bg-[var(--cmp-neutral-50)] border border-gray-100 px-3 py-2 text-[11px] text-gray-500">
+                🔒 {JOURNEY.assurance}
+              </p>
             </div>
-            <div className="mt-6 pt-6 border-t border-white/10 grid grid-cols-2 sm:grid-cols-4 gap-4">
-              {["Workforce dashboard", "Compliance heat maps", "Expiry alerts", "Bulk nurse onboarding"].map(f => (
-                <div key={f} className="flex items-center gap-2 text-xs text-teal-300/70">
-                  <span className="text-teal-500 shrink-0">✓</span>{f}
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-      </section>
 
-      {/* ── ROADMAP ── */}
-      <section className="bg-[#0f1f2e] px-6 py-20">
-        <div className="max-w-2xl mx-auto">
-          <p className="text-xs font-semibold text-teal-400 tracking-widest uppercase mb-3 text-center">TRACTION</p>
-          <h2 className="text-3xl font-bold text-white text-center mb-12">What&apos;s built. What&apos;s next.</h2>
-          <div className="flex flex-col gap-0">
-            {[
-              { module: "LIVE", title: "CPD Academy", desc: "8 evidence-based courses with lesson content, progress tracking, and CPD point certificates", live: true },
-              { module: "LIVE", title: "Question Bank", desc: "Clinical MCQs across Emergency, Safety, Pharmacology, Pediatrics, and Critical Care", live: true },
-              { module: "LIVE", title: "Competency Passport", desc: "Digital portfolio tracking BLS, ALS, safe injectables, and annual competencies with expiry alerts", live: true },
-              { module: "LIVE", title: "AI Clinical Copilot", desc: "Powered by Claude AI — evidence-based answers to clinical questions, grounded in WHO and African guidelines", live: true },
-              { module: "Q3 2026", title: "Virtual Simulation Lab", desc: "AI-powered branching patient scenarios — Africa's first nursing simulation without a mannequin", live: false },
-              { module: "Q4 2026", title: "Digital OSCE + Hospital Dashboard", desc: "Remote OSCE assessment platform and ward-level compliance dashboard for nursing directors", live: false },
-            ].map(({ module, title, desc, live }, i, arr) => (
-              <div key={title} className="flex gap-5">
-                <div className="flex flex-col items-center">
-                  <div className={`w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-bold shrink-0 ${live ? "bg-teal-500" : "bg-teal-800 border border-teal-700"}`}>
-                    {live ? "✓" : i - 3}
-                  </div>
-                  {i < arr.length - 1 && <div className="w-0.5 flex-1 bg-teal-800 my-1" />}
-                </div>
-                <div className="pb-8">
-                  <p className={`text-[10px] font-bold tracking-widest ${live ? "text-teal-400" : "text-gray-500"}`}>{module}</p>
-                  <div className="flex items-center gap-2 mt-0.5">
-                    <p className="text-white font-semibold text-sm">{title}</p>
-                    {live && <span className="text-[9px] bg-teal-500/20 text-teal-400 border border-teal-500/30 px-1.5 py-0.5 rounded font-bold">LIVE</span>}
-                  </div>
-                  <p className="text-gray-400 text-xs mt-1">{desc}</p>
-                </div>
+            <PhotoSlot className="hidden lg:block lg:col-span-2 rounded-2xl min-h-[300px]"
+              alt="A consultant physician on a hospital ward"
+              caption="Photography slot — /images/home/journey-consultant.jpg" />
+          </div>
+        </section>
+
+        {/* ── WHO WE SERVE ──────────────────────────────────────────────────── */}
+        <section id="audiences" className={`${container} pb-16 lg:pb-20`}>
+          <div className="relative overflow-hidden rounded-3xl bg-[#0B2A3B]">
+            <PatternField className="absolute inset-0" tone="#FFFFFF" opacity={0.10} />
+            <div className="relative grid lg:grid-cols-4 gap-5 p-6 sm:p-8">
+              <div className="lg:col-span-1">
+                <h2 className="text-xl font-bold text-white text-balance">Who We Serve</h2>
+                <p className="mt-2 text-[13px] text-white/60 leading-relaxed">Trusted by healthcare organisations across Africa and beyond.</p>
               </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* ── WHY COMPETEN ── */}
-      <section className="bg-white px-6 py-20">
-        <div className="max-w-5xl mx-auto grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
-          <div>
-            <p className="text-xs font-semibold text-teal-600 tracking-widest uppercase mb-3">WHY COMPETEN HEALTHCARE</p>
-            <h2 className="text-3xl font-bold text-gray-900 mb-5">Domain expertise. Finally, software to match it.</h2>
-            <p className="text-gray-500 text-sm leading-relaxed mb-7">
-              Competen Healthcare is purpose-built for African nursing — not adapted from a generic LMS. We understand the CPD gap, the competency crisis, and the daily challenges of clinical training with limited resources. This is a clinical workforce intelligence platform built for Africa, by people who know Africa.
-            </p>
-            <div className="flex gap-3">
-              <a href="/signup" className="rounded-md bg-teal-500 px-5 py-2.5 text-white text-sm font-semibold hover:bg-teal-600 transition-colors">Start Free</a>
-              <a href="mailto:gabriel@semacast.com?subject=Hospital Demo Request" className="rounded-md border border-gray-200 px-5 py-2.5 text-gray-700 text-sm font-semibold hover:bg-gray-50 transition-colors">Book a Demo</a>
-            </div>
-          </div>
-          <div className="grid grid-cols-2 gap-5">
-            {[
-              { icon: "🏥", title: "Healthcare-Built", desc: "Not adapted from a generic LMS — designed for nursing guidelines and clinical competency frameworks from day one." },
-              { icon: "🌍", title: "Africa-Focused", desc: "Content aligned with Kenyan, Ugandan, Tanzanian, and Rwandan nursing boards, regulators, and local protocols." },
-              { icon: "🤖", title: "AI-Powered", desc: "Claude AI provides instant, evidence-based clinical guidance. No hallucinations — grounded in real guidelines." },
-              { icon: "✅", title: "Compliance-Ready", desc: "Built for in-service, pre-service, and hospital-level CPD compliance across all East African countries." },
-            ].map(({ icon, title, desc }) => (
-              <div key={title} className="p-5 rounded-xl bg-gray-50 hover:bg-gray-100 transition-colors">
-                <div className="text-2xl mb-3">{icon}</div>
-                <h3 className="font-semibold text-gray-900 text-sm mb-1">{title}</h3>
-                <p className="text-xs text-gray-500 leading-relaxed">{desc}</p>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* ── FINAL CTA ── */}
-      <section className="bg-teal-600 px-6 py-20 text-center">
-        <p className="text-xs font-semibold text-teal-200 tracking-widest uppercase mb-4">FREE TO JOIN</p>
-        <h2 className="text-3xl font-bold text-white mb-3">Ready to build Africa&apos;s most<br />competent nursing workforce?</h2>
-        <p className="text-teal-100 text-sm mb-8">Join nurses and hospitals already using the platform.<br />No credit card required — get started in 60 seconds.</p>
-        <div className="flex flex-col sm:flex-row gap-3 justify-center">
-          <a href="/signup" className="rounded-lg bg-[var(--cmp-color-warning)] px-8 py-3 text-sm font-bold text-amber-900 hover:bg-amber-300 transition-colors">
-            Get Early Access — It&apos;s Free
-          </a>
-          <a href="mailto:gabriel@semacast.com?subject=Hospital Demo Request" className="rounded-lg border border-white/30 bg-white/10 px-8 py-3 text-sm font-semibold text-white hover:bg-white/20 transition-colors">
-            Book a Hospital Demo
-          </a>
-        </div>
-      </section>
-
-      {/* ── FOOTER ── */}
-      <footer className="bg-[#0a2e38] px-6 py-12">
-        <div className="max-w-5xl mx-auto grid grid-cols-1 sm:grid-cols-4 gap-8">
-          <div>
-            <div className="flex items-center gap-2 mb-3">
-              <div className="w-6 h-6 rounded bg-teal-500 flex items-center justify-center text-white font-bold text-xs">C</div>
-              <span className="text-white font-semibold text-sm">Competen Healthcare</span>
-            </div>
-            <p className="text-gray-500 text-xs leading-relaxed">East Africa&apos;s clinical competency platform. Training nurses since 2025.</p>
-          </div>
-          {[
-            { heading: "PLATFORM", links: ["CPD Academy", "Question Bank", "Competency Passport", "Hospital Dashboard"] },
-            { heading: "COMPANY", links: ["About", "Blog", "Careers", "Contact"] },
-            { heading: "LEGAL", links: ["Privacy Policy", "Terms of Service", "Cookie Policy"] },
-          ].map(({ heading, links }) => (
-            <div key={heading}>
-              <p className="text-gray-400 text-[10px] font-bold tracking-widest mb-3">{heading}</p>
-              <ul className="flex flex-col gap-2">
-                {links.map((l) => (
-                  <li key={l}><a href="#" className="text-gray-500 text-xs hover:text-white transition-colors">{l}</a></li>
+              <ul className="lg:col-span-3 grid grid-cols-2 sm:grid-cols-4 xl:grid-cols-7 gap-2">
+                {AUDIENCES.map(a => (
+                  <li key={a} className="rounded-xl bg-white/10 ring-1 ring-white/15 px-2.5 py-3 text-center text-[12px] font-medium text-white/90">
+                    {a}
+                  </li>
                 ))}
               </ul>
             </div>
-          ))}
+          </div>
+        </section>
+
+        {/* ── IMPACT ────────────────────────────────────────────────────────── */}
+        <section id="impact" className="bg-[var(--cmp-neutral-50)]">
+          <div className={`${container} py-16 lg:py-20 grid lg:grid-cols-4 gap-6`}>
+            <div>
+              <h2 className="text-2xl font-bold tracking-tight text-gray-900 text-balance">Delivering Measurable Impact</h2>
+              <p className="mt-2 text-[14px] text-gray-600">Better workforce. Better care. Better outcomes.</p>
+            </div>
+            <div className="lg:col-span-3 grid grid-cols-2 sm:grid-cols-4 gap-3">
+              {METRICS.map(m => (
+                <div key={m.label} className="rounded-2xl border border-gray-200 bg-white p-4">
+                  <p className="text-[11px] font-semibold text-gray-500 leading-tight">{m.label}</p>
+                  <p className="mt-1.5 text-xl font-bold text-[var(--cmp-color-primary)] tabular-nums leading-none">{m.value}</p>
+                  <p className="mt-1 text-[11px] text-gray-400 leading-snug">{m.sub}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        </section>
+
+        {/* ── CLOSING CTA ───────────────────────────────────────────────────── */}
+        <section id="closing" className="relative overflow-hidden bg-gradient-to-r from-[#0B2A3B] via-[#0E3A4A] to-[var(--cmp-color-primary-dark)]">
+          <PatternBand className="absolute inset-0" tone="#FFFFFF" />
+          <div className={`${container} relative py-14 lg:py-16`}>
+            <h2 className="max-w-2xl text-2xl sm:text-3xl font-bold text-white leading-snug text-balance">{CLOSING.title}</h2>
+            <p className="mt-3 text-[14px] text-white/70">{CLOSING.body}</p>
+            <div className="mt-6 flex flex-wrap gap-3">
+              <Link href={CLOSING.primary.href} className="rounded-lg bg-[var(--cmp-color-primary)] px-5 py-3 text-sm font-semibold text-white hover:bg-emerald-600 transition-colors">
+                {CLOSING.primary.label} →
+              </Link>
+              <a href={CLOSING.secondary.href} className="rounded-lg border border-white/30 px-5 py-3 text-sm font-semibold text-white hover:bg-white/10 transition-colors">
+                {CLOSING.secondary.label} ✆
+              </a>
+            </div>
+          </div>
+        </section>
+      </main>
+
+      {/* ── FOOTER ───────────────────────────────────────────────────────────── */}
+      <footer className="bg-[#08202D] text-white/70">
+        <div className={`${container} py-12 grid gap-8 lg:grid-cols-12`}>
+          <div className="lg:col-span-3">
+            <Logo dark />
+            <form className="mt-5 max-w-xs" aria-label="Newsletter signup">
+              <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-white/80">Stay Updated</p>
+              <p className="mt-1 text-[12px] text-white/50">Subscribe for insights and updates.</p>
+              <div className="mt-2.5 flex">
+                <label htmlFor="newsletter-email" className="cmp-sr-only">Email address</label>
+                <input id="newsletter-email" type="email" placeholder="Enter your email" required
+                  className="min-w-0 flex-1 rounded-l-lg bg-white/10 ring-1 ring-white/15 px-3 py-2 text-[13px] text-white placeholder:text-white/35 focus:outline-none" />
+                <button type="submit" aria-label="Subscribe"
+                  className="rounded-r-lg bg-[var(--cmp-color-primary)] px-3 text-white text-sm font-semibold hover:bg-emerald-600 transition-colors">→</button>
+              </div>
+              {/* No mailing-list backend is wired, so the form does not pretend to have succeeded. */}
+              <p className="mt-1.5 text-[10px] text-white/30">Signup is not yet connected — email us and we will add you.</p>
+            </form>
+          </div>
+
+          <div className="lg:col-span-9 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-6">
+            {FOOTER.map(col => (
+              <div key={col.heading}>
+                <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-white/80">{col.heading}</p>
+                <ul className="mt-2.5 space-y-1.5">
+                  {col.links.map(l => (
+                    <li key={col.heading + l.label}>
+                      <a href={l.href} className="text-[12px] text-white/55 hover:text-white transition-colors">{l.label}</a>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ))}
+          </div>
         </div>
-        <div className="max-w-5xl mx-auto mt-10 pt-6 border-t border-gray-800 text-center text-gray-600 text-xs">
-          © {new Date().getFullYear()} Competen Healthcare. Built for East African nurses.
+
+        <div className="border-t border-white/10">
+          <div className={`${container} py-4 flex flex-wrap items-center gap-x-5 gap-y-2 text-[11px] text-white/40`}>
+            <span>© {new Date().getFullYear()} {BRAND.name}. All rights reserved.</span>
+            {FOOTER_LEGAL.map(l => (
+              <a key={l.label} href={l.href} className="hover:text-white/70 transition-colors">{l.label}</a>
+            ))}
+            <span className="ml-auto">Built with purpose. Secured by design. 🔒</span>
+          </div>
         </div>
       </footer>
-
     </div>
   );
 }
