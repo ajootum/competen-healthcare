@@ -140,9 +140,25 @@ export async function DELETE(req: Request) {
 
   const id = new URL(req.url).searchParams.get("id");
   if (!id) return NextResponse.json({ error: "id is required" }, { status: 400 });
-  const { data: row } = await admin.from("evidence").select("id, owner_id, file_path, file_name").eq("id", id).single();
+  const { data: row } = await admin.from("evidence").select("id, owner_id, file_path, file_name, verified, verified_by, status").eq("id", id).single();
   if (!row) return NextResponse.json({ error: "Not found" }, { status: 404 });
   if (row.owner_id !== me.id) return NextResponse.json({ error: "Only the owner can remove evidence" }, { status: 403 });
+
+  // XWI P2-11. VERIFIED EVIDENCE IS NO LONGER THE OWNER'S TO DELETE.
+  // This was a hard delete -- the row removed and the storage object with it -- with no regard for whether
+  // an assessor had already verified the file. Migration 149 added `verified`/`verified_by`/`status`
+  // precisely so evidence integrity could be reasoned about, and this path ignored all three.
+  //
+  // Once verified, the file is not a personal upload any more: it is what a competency decision rests on.
+  // Letting the subject of that decision erase it leaves the decision standing with nothing behind it, and
+  // an audit_log line naming a file that no longer exists is not the same as the evidence. Withdrawal
+  // after verification is an assessor action, not a delete button.
+  if (row.verified === true || row.status === "verified") {
+    return NextResponse.json({
+      error: "This evidence has been verified and supports a competency decision — it can no longer be removed. Ask the assessor who verified it to withdraw it if it is wrong.",
+      verified: true, verified_by: row.verified_by ?? null,
+    }, { status: 409 });
+  }
 
   await admin.storage.from("evidence").remove([row.file_path]);
   await admin.from("evidence").delete().eq("id", id);

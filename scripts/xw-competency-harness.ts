@@ -281,6 +281,23 @@ async function main() {
   check(/passed:\s*false/.test(validateRoute), "the failing branch marks the event as a failure");
   check(/passed:\s*true/.test(validateRoute), "the passing branch marks it as a pass");
 
+  // ── 2c. EVIDENCE INTEGRITY (XWI P2-11) ───────────────────────────────────
+  head("2c. EVIDENCE INTEGRITY  (verified evidence is not the owner's to delete)");
+
+  const evRoute = readFileSync(join(process.cwd(), "src/app/api/evidence/route.ts"), "utf8");
+  const del = evRoute.slice(evRoute.indexOf("export async function DELETE"));
+  check(/verified/.test(del),
+    "the delete path reads the verification state",
+    "it selected only owner_id/file_path/file_name and hard-deleted regardless");
+  check(/409/.test(del), "deleting verified evidence is refused");
+  check(/owner_id !== me\.id/.test(del), "ownership is still enforced for unverified evidence");
+  // The guard has to sit BEFORE the destructive calls, or it guards nothing.
+  const guardAt = del.search(/row\.verified === true/);
+  const removeAt = del.search(/storage\.from\("evidence"\)\.remove|from\("evidence"\)\.delete\(\)/);
+  check(guardAt > 0 && removeAt > guardAt,
+    "the guard runs BEFORE the file and row are removed",
+    "a check after the delete is a comment, not a control");
+
   // ── 3. SHIFT CLOSE-OUT (XWI P2-14) ───────────────────────────────────────
   head("3. SHIFT CLOSE-OUT  (outstanding work is not closed over silently)");
 
