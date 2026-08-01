@@ -142,16 +142,34 @@ function parseFile(src: string, file: string, seq0: number): Ev[] {
 // that was never applied is a real difference between the file and the database, and saying so is right.
 const norm = (s: string) => s.replace(/\r/g, "").replace(/\s+/g, " ").trim();
 
-function sqlFiles(): string[] {
-  const files: string[] = [];
-  if (existsSync(join(SUPA, "schema.sql"))) files.push(join(SUPA, "schema.sql"));
+/**
+ * Every .sql file in the repo, in the order it can be argued they were applied.
+ *
+ * SCANNING ONLY schema.sql AND migrations/ PRODUCED A FALSE ORPHAN. supabase/ also holds loose scripts --
+ * fix-rls-recursion.sql, fix-profile.sql, RUN-ME-*.sql -- that define functions and were run by hand.
+ * current_user_is_hospital_admin_for was reported as "declared nowhere in the repo" when it is declared
+ * in fix-rls-recursion.sql, and handle_new_user's deployed body was called undocumented when
+ * fix-profile.sql holds it verbatim. An audit that reads only the tidy half of a directory reports on the
+ * tidy half.
+ *
+ * `ordered` marks whether a file's position is trustworthy. Migrations are numbered, so their DROPs are
+ * authoritative. The loose scripts are not ordered relative to anything -- fix-super-admin-rls-recursion
+ * drops two helpers that fix-rls-recursion creates, and RLS policies in migrations 006 and 007 still call
+ * one of them -- so a drop found there says nothing about the final intent, and is reported as a note
+ * rather than turned into a verdict.
+ */
+function sqlFiles(): { path: string; ordered: boolean }[] {
+  const out: { path: string; ordered: boolean }[] = [];
+  if (existsSync(join(SUPA, "schema.sql"))) out.push({ path: join(SUPA, "schema.sql"), ordered: true });
+  out.push(...readdirSync(SUPA).filter(f => f.endsWith(".sql") && f !== "schema.sql").sort()
+    .map(f => ({ path: join(SUPA, f), ordered: false })));
   const dir = join(SUPA, "migrations");
   if (existsSync(dir)) {
-    files.push(...readdirSync(dir).filter(f => f.endsWith(".sql"))
+    out.push(...readdirSync(dir).filter(f => f.endsWith(".sql"))
       .sort((a, b) => (parseInt(a, 10) || 0) - (parseInt(b, 10) || 0) || a.localeCompare(b))
-      .map(f => join(dir, f)));
+      .map(f => ({ path: join(dir, f), ordered: true })));
   }
-  return files;
+  return out;
 }
 
 async function main() {
@@ -159,10 +177,14 @@ async function main() {
   const showName = showIdx >= 0 ? process.argv[showIdx + 1] : null;
 
   // ── Intended state, from the repo ──────────────────────────────────────────
+  const files = sqlFiles();
   const events: Ev[] = [];
+  const ordered = new Map<string, boolean>();
   let seq = 0;
-  for (const f of sqlFiles()) {
-    events.push(...parseFile(readFileSync(f, "utf8"), relative(ROOT, f).replace(/\\/g, "/"), seq));
+  for (const f of files) {
+    const rel = relative(ROOT, f.path).replace(/\\/g, "/");
+    ordered.set(rel, f.ordered);
+    events.push(...parseFile(readFileSync(f.path, "utf8"), rel, seq));
     seq += 1_000_000;
   }
   events.sort((a, b) => a.seq - b.seq);
@@ -173,15 +195,20 @@ async function main() {
   for (const e of events) {
     const key = `${e.name}/${e.arity}`;
     if (e.kind === "create") intended.set(key, e);
-    else intended.delete(key);
+    else if (ordered.get(e.file)) intended.delete(key);   // only a NUMBERED file's drop settles intent
   }
   const dropped = new Map<string, Ev>();
-  for (const e of events) if (e.kind === "drop" && !intended.has(`${e.name}/${e.arity}`)) dropped.set(`${e.name}/${e.arity}`, e);
+  for (const e of events) {
+    if (e.kind !== "drop" || !ordered.get(e.file)) continue;
+    if (!intended.has(`${e.name}/${e.arity}`)) dropped.set(`${e.name}/${e.arity}`, e);
+  }
+  const looseDrops = events.filter(e => e.kind === "drop" && !ordered.get(e.file));
 
   const unparsed = events.filter(e => e.kind === "create" && !e.parsed);
 
   console.log(`\nFunction-drift audit\n`);
-  console.log(`  ${sqlFiles().length} sql file(s) -> ${intended.size} function signature(s) intended, ${dropped.size} intentionally dropped`);
+  console.log(`  ${files.length} sql file(s) (${files.filter(f => f.ordered).length} ordered, ${files.filter(f => !f.ordered).length} loose)`);
+  console.log(`  ${intended.size} function signature(s) intended, ${dropped.size} intentionally dropped`);
 
   // ── Deployed state ─────────────────────────────────────────────────────────
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL, key = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -215,13 +242,25 @@ async function main() {
   console.log(`  ${deployed.length} function(s) deployed in the public schema\n`);
 
   if (showName) {
+    let shown = 0;
     for (const [k, e] of intended) {
       if (e.name !== showName) continue;
+      shown++;
       const d = byKey.get(k);
       console.log(`  ${k}  declared in ${e.file}\n`);
       console.log(`  --- repo ---\n${e.body ?? "(unparsed)"}\n`);
       console.log(`  --- deployed ---\n${d ? d.src : "(not deployed)"}\n`);
     }
+    // An ORPHAN has no repo side to diff against, and it is the case you most want to read: it exists
+    // only in the database, so this is the only place its body is written down.
+    if (!shown) {
+      for (const d of deployed.filter(x => x.fn_name === showName)) {
+        console.log(`  ${d.fn_name}(${d.identity_args})  ORPHAN — deployed only, declared nowhere in the repo\n`);
+        console.log(`  --- deployed (${d.lang}) ---\n${d.src}\n`);
+        shown++;
+      }
+    }
+    if (!shown) console.log(`  no function named "${showName}" in the repo or the database\n`);
     return;
   }
 
@@ -266,6 +305,12 @@ async function main() {
     "not checked either way; fix the parser rather than trusting the silence");
   section("ORPHAN — deployed but never declared in the repo", orphans,
     "informational: authored in the dashboard, or installed by an extension");
+  // Reported, not judged. These files are unordered, so a drop in one may have been undone by another
+  // being run later -- and at least one of these functions is still called by RLS policies in numbered
+  // migrations, which means dropping it would break them.
+  section("LOOSE-SCRIPT DROPS — a hand-run script drops a function that is still deployed",
+    looseDrops.filter(e => namesDeployed.has(e.name)).map(e => `${e.name}  ${e.file}`),
+    "not treated as drift: these scripts carry no reliable order relative to the migrations");
 
   const bad = missing.length + drifted.length + extra.length + stale.length;
   console.log(`  ${intended.size - bad} of ${intended.size} intended signature(s) match the database` +
