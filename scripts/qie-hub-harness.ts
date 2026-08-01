@@ -21,6 +21,7 @@ import { loadEnvConfig } from "@next/env";
 import { createClient } from "@supabase/supabase-js";
 import { loadQieModules, qieSummary, resolveState } from "../src/lib/qie/engines";
 import { loadRootCause } from "../src/lib/qie/root-cause";
+import { loadIndicators, trendOf, statusOf } from "../src/lib/qie/indicators";
 loadEnvConfig(process.cwd());
 
 const admin = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!, {
@@ -100,6 +101,34 @@ async function main() {
     rc.stats.incidents === 0 ? rc.stats.analysisRate === null : typeof rc.stats.analysisRate === "number");
 
   console.log(`\n        ${rc.stats.incidents} incident(s), ${rc.stats.investigated} investigated (${rc.stats.analysisRate}%), ${rc.unanalysed.length} awaiting analysis\n`);
+
+  // ── QIE-002/003: the registry, and the split it refuses to guess ──────────
+  const ind = await loadIndicators(admin, null, true);
+  ok("the indicator registry is ready", ind.ready, ind.reason);
+  ok("it reads every KPI Performance Analytics holds", ind.stats.total > 0);
+  ok("the leading/lagging split is recordable (migration 181)", ind.classifiable, ind.reason);
+  ok("classification totals reconcile with the population",
+    ind.stats.leading + ind.stats.lagging + ind.stats.unclassified === ind.stats.total);
+
+  // DIRECTION IS THE WHOLE CALCULATION. Getting it backwards paints every safety metric green on the day
+  // it is worst, so both senses are asserted rather than the happy one.
+  ok("lower_better: a rise is worsening",
+    trendOf({ current_value: 5, previous_value: 3, direction: "lower_better" }) === "worsening");
+  ok("higher_better: a rise is improving",
+    trendOf({ current_value: 5, previous_value: 3, direction: "higher_better" }) === "improving");
+  ok("lower_better: above the red threshold is a breach",
+    statusOf({ current_value: 9, direction: "lower_better", threshold_red: 5, threshold_amber: 3, target: 2 }) === "breach");
+  ok("higher_better: the SAME value against the same threshold is on target",
+    statusOf({ current_value: 9, direction: "higher_better", threshold_red: 5, threshold_amber: 7, target: 8 }) === "on_target",
+    "a comparison that ignores direction inverts every lower-is-better metric");
+  ok("no current value yields no status rather than a guess",
+    statusOf({ current_value: null, direction: "lower_better", threshold_red: 5, threshold_amber: 3, target: 2 }) === null);
+
+  // The trend spread must reflect the data, not a constant. All-improving would mean the calc is stuck.
+  const trends = new Set(ind.indicators.map(i => i.trend).filter(Boolean));
+  ok("trends vary across the real population, so the calculation is live", trends.size > 1,
+    `every indicator reports "${[...trends][0]}" — a stuck calculation looks exactly like this`);
+  console.log(`\n        ${ind.stats.total} indicators · ${ind.stats.unclassified} unclassified · ${ind.stats.watch} watch · ${ind.stats.breaches} breach\n`);
 
   // 4. Independent verification: count two stores directly and compare with what the loader said.
   for (const [id, table] of [["QIE-002", "pa_kpi_values"], ["QIE-008", "pa_benchmarks"]] as const) {

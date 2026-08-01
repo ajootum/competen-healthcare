@@ -41,8 +41,8 @@ export type QieModule = {
 /** The thirteen engines, mapped to what actually backs them. */
 const CATALOGUE: Omit<QieModule, "state" | "count" | "detail">[] = [
   { id: "QIE-001", name: "Event Collection", purpose: "Capture every quality-relevant event once, standardise and publish it.", provider: "domain_events + orchestration producers", href: "/super-admin/delivery", tables: ["domain_events"] },
-  { id: "QIE-002", name: "Metrics & Indicators", purpose: "One calculation engine for every quality metric.", provider: "Performance Analytics (pa_kpis / pa_kpi_values)", href: "/unit-manager/performance", tables: ["pa_kpi_values", "pa_kpis"] },
-  { id: "QIE-003", name: "Leading & Lagging Indicators", purpose: "Predictive signals and outcome measures, correlated.", provider: "Quality objects + PA perspectives", href: "/quality-accreditation", tables: ["quality_indicators", "quality_objects"] },
+  { id: "QIE-002", name: "Metrics & Indicators", purpose: "One calculation engine for every quality metric.", provider: "Performance Analytics, surfaced as the QIE registry", href: "/super-admin/quality-intelligence/indicators", tables: ["pa_kpi_values", "pa_kpis"] },
+  { id: "QIE-003", name: "Leading & Lagging Indicators", purpose: "Predictive signals and outcome measures, correlated.", provider: "pa_kpis.indicator_class (migration 181) — a governance decision, not an inference", href: "/super-admin/quality-intelligence/indicators", tables: ["pa_kpis"] },
   { id: "QIE-004", name: "Predictive Analytics", purpose: "Forecast risk early enough to intervene.", provider: "pa_predictions", href: "/unit-manager/performance", tables: ["pa_predictions"] },
   // THE ONLY REAL GAP: there is no causal store at all. 8 incidents are recorded and not one has a
   // root-cause analysis, because there is nowhere to put one.
