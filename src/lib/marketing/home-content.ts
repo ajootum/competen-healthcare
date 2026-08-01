@@ -1,188 +1,133 @@
-// COMP-HOME-001 — public homepage content.
+// WEB-HP-002 — Competen corporate homepage content.
 //
-// Every string on the homepage lives here rather than in JSX. The spec asks for sections to be
-// "CMS-configurable for content updates without code changes"; there is no CMS, and pretending otherwise
-// would be worse than saying so. This is the honest half of that requirement: copy, links and ordering are
-// data, so a content change is a one-file edit with no JSX surgery, and a CMS fetch can later replace this
-// module's exports without the page components changing at all.
+// This SUPERSEDES COMP-HOME-001's homepage. The governing change is "minimal disclosure": communicate
+// outcomes, not platform internals. So the six capability cards, the eight-stage lifecycle, the
+// personal-to-professional diagram and the eight-metric impact grid are all GONE -- the spec explicitly
+// says do not enumerate every module and do not expose workflow diagrams. What replaces them is a shorter
+// page whose job is to route a visitor to a solution page or a demo.
 //
-// LINK POLICY, learned the hard way in the HWW sidebar: a nav row to a page that does not exist looks
-// identical to a working one until someone clicks it. Only /login and /signup exist as public routes today,
-// so every other destination here is an ON-PAGE ANCHOR. `planned: true` marks the ones the spec wants as
-// dedicated pages; they are rendered as anchors until those pages exist, and the flag is what a future
-// build reads to switch them over.
+// Copy lives here rather than in JSX so a content change is a one-file edit; a CMS fetch can later replace
+// these exports without touching a component.
+//
+// LINK POLICY, unchanged and load-bearing: only /login, /signup and /forgot-password exist as public
+// routes. Everything else is an ON-PAGE ANCHOR, with `planned: true` marking what the spec wants as its own
+// page. A nav row to a 404 looks identical to a working one until someone clicks it.
 
 export type Link = { label: string; href: string; planned?: boolean };
 
 export const BRAND = {
-  name: "Competen",
-  tagline: "Healthcare Competency & Workforce Platform",
-  eyebrow: "Healthcare Workforce Intelligence Platform",
+  name: "competen",
+  tagline: "Healthcare. Empowered.",
+  eyebrow: "The Complete Healthcare Performance Platform",
 };
+
+// The approved design uses an indigo/violet accent, which is NOT --cmp-color-primary (the product's
+// teal-green). Held as one named constant rather than sprinkled as hex so the divergence is visible and
+// reversible in a single edit -- flagged for confirmation, since the spec also asks for consistency with
+// the Competen design system and those two instructions pull in different directions.
+export const ACCENT = "#4F46E5";
+export const ACCENT_DARK = "#4338CA";
+export const ACCENT_SOFT = "#EEF0FF";
 
 export const HERO = {
-  // Three lines, deliberately: the spec's headline is three sentences and reads as three promises.
-  headline: ["Build competent people.", "Deploy confident teams.", "Deliver safer care."],
-  // The middle line carries the accent; all three shouting is none of them shouting.
-  accentLine: 1,
+  headline: "Build competent people. Deploy confident teams.",
+  headlineAccentLead: "Deliver ",
+  headlineAccent: "safer care.",
   body:
-    "Competen connects competency management, assessments, workforce operations, learning, recruitment, " +
-    "quality and AI into one configurable platform — supporting every professional from student to executive.",
-  primary: { label: "Request a Demo", href: "/signup" },
-  secondary: { label: "Explore Platform", href: "#platform" },
-  tertiary: { label: "Watch 3 Minute Tour", href: "#platform", planned: true },
+    "Competen empowers healthcare organisations and professionals to develop skills, optimise workforce " +
+    "performance, and improve outcomes — at every level.",
+  primary: { label: "Book a Demo", href: "/signup" },
+  secondary: { label: "Explore Solutions", href: "#who-we-help" },
+  image: "/images/home/journey-nurse.png",
+  imageAlt: "A nurse reviewing records on a tablet on the ward",
 };
 
-// The four trust markers that sit on the patterned band under the hero.
-export const TRUST = [
-  { title: "Configurable", body: "Built for your organisation" },
-  { title: "Secure", body: "Enterprise-grade security" },
-  { title: "Scalable", body: "From team to enterprise" },
-  { title: "Trusted", body: "By hospitals and health systems across Africa" },
-];
-
-export type Capability = { name: string; accent: string; items: string[]; href: string };
-
-// Six capability cards. Order matches the spec.
-export const CAPABILITIES: Capability[] = [
-  { name: "Competency", accent: "var(--cmp-color-primary)", href: "#lifecycle",
-    items: ["Design frameworks", "Assess & validate", "Digital passports", "Career pathways"] },
-  { name: "Workforce", accent: "var(--cmp-color-secondary)", href: "#lifecycle",
-    items: ["Smart assignments", "Roster intelligence", "Patient allocation", "Workload balancing", "Shift command"] },
-  { name: "Assessment", accent: "#7C3AED", href: "#lifecycle",
-    items: ["Knowledge tests", "Skills assessments", "OSCE & simulation", "Workplace assessments", "Rubrics & checklists"] },
-  { name: "Learning", accent: "#EA580C", href: "#lifecycle",
-    items: ["CPD & courses", "Learning paths", "Microlearning", "Simulation training", "Continuing education"] },
-  { name: "Quality & Safety", accent: "var(--cmp-color-information)", href: "#lifecycle",
-    items: ["Quality events", "Audits & inspections", "Safety dashboards", "Accreditation readiness", "Compliance monitoring"] },
-  { name: "Intelligence", accent: "#0891B2", href: "#lifecycle",
-    items: ["AI Copilot", "Predictive insights", "Operational analytics", "Executive dashboards", "Real-time alerts"] },
-];
-
-export type LifecycleStage = { stage: string; body: string };
-
-export const LIFECYCLE: LifecycleStage[] = [
-  { stage: "Recruit", body: "Attract and onboard the right talent" },
-  { stage: "Learn", body: "Develop knowledge and skills" },
-  { stage: "Assess", body: "Measure competence and performance" },
-  { stage: "Certify", body: "Validate and issue digital credentials" },
-  { stage: "Deploy", body: "Assign and optimise workforce" },
-  { stage: "Support", body: "Monitor, coach and provide support" },
-  { stage: "Improve", body: "Continuous improvement" },
-  { stage: "Lead", body: "Grow leaders for the future" },
-];
-
-export const JOURNEY = {
-  title: "Personal to Professional Journey",
-  body:
-    "Start your journey early. Build your competencies, collect verified evidence and create your professional " +
-    "passport. When you join an organisation using Competen, your achievements travel with you — while " +
-    "organisational data stays secure and private.",
-  points: ["For Students & Professionals", "For Employers & Organisations", "One Identity, Many Opportunities."],
-  personal: { title: "Personal Workspace", body: "Build your professional identity",
-    items: ["Competencies", "Learning", "Assessments", "Digital Passport", "Evidence Library"] },
-  organisation: { title: "Organisation Workspace", body: "Join any organisation using Competen",
-    items: ["Role Assignment", "Workforce Deployment", "Performance & Feedback", "Learning & Development", "Quality & Safety"] },
-  assurance: "Your personal data belongs to you. Organisation data remains private and secure.",
-  cta: { label: "Learn More", href: "/signup" },
+// The floating intelligence cards over the hero image. Illustrative of what the platform reports, and
+// labelled as a preview -- they are not a live tenant's numbers and must never read as one.
+export const HERO_CARDS = {
+  readiness: { title: "Workforce Readiness", value: 92, caption: "Competency Score", delta: "8% vs last month" },
+  performance: { title: "Team Performance", caption: "Improving across all areas" },
+  learning: { title: "Learning Progress", value: 78, caption: "Modules Completed" },
 };
 
-// Photo tiles, per the approved design. `img` points at /public/images/home; the tile falls back to a
-// patterned panel if the file is missing, so a deleted asset degrades instead of breaking the row.
-export const AUDIENCES: { label: string; img: string }[] = [
-  { label: "Hospitals", img: "/images/home/serve-hospitals.png" },
-  { label: "Health Systems", img: "/images/home/serve-health-systems.png" },
-  { label: "Universities", img: "/images/home/serve-universities.png" },
-  { label: "Training Schools", img: "/images/home/serve-training.png" },
-  { label: "NGOs", img: "/images/home/serve-ngos.png" },
-  { label: "Governments", img: "/images/home/serve-governments.png" },
-  { label: "Professional Councils", img: "/images/home/serve-councils.png" },
-];
-
-// Photography. TWO DIFFERENT SOURCES, and the difference matters:
+// ─────────────────────────────────────────────────────────────────────────────
+// TRUSTED ORGANISATIONS — READ BEFORE PUBLISHING.
 //
-//  - hero / journey-nurse / journey-team come from the dedicated 1536x1024 photography sheet, so they are
-//    786x1016 and 730x500. Those are real asset resolution: displayed around 280px and 200px wide, they
-//    are being DOWN-sampled, which is what you want -- they stay sharp on a high-density display.
-//  - the audience tiles and the closing sunset still come from the 1024x1536 PAGE COMP, where each tile is
-//    only 112x66. They are the only source for those images and are slightly upscaled in place. Replacing
-//    any file at the same path is the entire fix; no code changes.
+// These are REAL, NAMED institutions. "Trusted by" is a factual claim about a third party and an implied
+// endorsement, and it uses their name commercially. Listing an organisation that has not agreed to be
+// named is a misrepresentation, and in healthcare it is the kind that gets noticed.
 //
-// Recorded here rather than only in a commit message so the caveat travels with the asset.
-export const PHOTOS = {
-  hero: "/images/home/hero-clinicians.png",          // 786x1016 — the tablet pair, kente pillar
-  nurse: "/images/home/journey-nurse.png",           // 730x500  — ward nurse with tablet
-  team: "/images/home/journey-team.png",             // 730x500  — two colleagues, kente pillar
-  sunset: "/images/home/closing-sunset.png",         // 435x95   — from the page comp
-};
+// The names below are the ones in the approved design. Each needs written permission before this page is
+// public. Removing one is deleting a line; there is no code change and the carousel handles any count,
+// including zero -- with an empty list the whole section does not render, which is the correct behaviour
+// when there is nothing that can honestly be claimed.
+export type TrustedOrg = { name: string; sub?: string };
+export const TRUSTED: TrustedOrg[] = [
+  { name: "Aga Khan", sub: "University Hospital" },
+  { name: "Kenyatta", sub: "National Hospital" },
+  { name: "MEGACARE", sub: "Hospital" },
+  { name: "Gertrude's", sub: "Children's Hospital" },
+  { name: "AIC", sub: "Africa Healthcare" },
+];
+export const TRUSTED_HEADING = "Trusted by forward-thinking healthcare organisations";
 
-export type Metric = { value: string; label: string; sub: string };
+export type Audience = { title: string; body: string; accent: string; icon: string; href: string };
 
-// IMPORTANT: these are the spec's stated outcome figures, presented as the product claim they are. They are
-// NOT computed from platform data -- no tenant has been running long enough to produce a benchmark, and a
-// marketing figure dressed as a measured one is the kind of claim a hospital will eventually ask to see the
-// working for. If they are ever replaced by real aggregates, that is a data source, not a copy change.
-export const METRICS: Metric[] = [
-  { value: "96%", label: "Improved Competency", sub: "Competency visibility" },
-  { value: "25%", label: "Workforce Efficiency", sub: "Better staffing efficiency" },
-  { value: "98%", label: "Assessment Accuracy", sub: "Accurate & standardised" },
-  { value: "35%", label: "Quality Improvement", sub: "Reduction in adverse events" },
-  { value: "90%", label: "Learning Engagement", sub: "Learner completion rate" },
-  { value: "100%", label: "Accreditation Ready", sub: "Audit readiness" },
-  { value: "Smarter", label: "AI-Driven Decisions", sub: "Faster. Safer. Better" },
-  { value: "End-to-End", label: "One Integrated Platform", sub: "From student to executive" },
+export const WHO_WE_HELP: Audience[] = [
+  { title: "Healthcare Organisations", accent: "#4F46E5", icon: "🏢", href: "#cta",
+    body: "Strengthen capabilities, manage performance, and deliver quality care." },
+  { title: "Healthcare Professionals", accent: "#0D9488", icon: "🧑‍⚕️", href: "#cta",
+    body: "Grow your skills, build your career, and make a greater impact." },
+  { title: "Educators & Training Institutions", accent: "#EA8C0B", icon: "🎓", href: "#cta",
+    body: "Design, deliver, and assess competency-based education." },
+  { title: "Government & Regulators", accent: "#2563EB", icon: "🏛️", href: "#cta",
+    body: "Set standards, ensure compliance, and improve health systems." },
 ];
 
-export const CLOSING = {
-  title: "Ready to build a more competent, efficient and safer healthcare workforce?",
-  body: "Let's build the future of healthcare — together.",
-  primary: { label: "Request a Demo", href: "/signup" },
-  secondary: { label: "Talk to Our Team", href: "mailto:gabriel@semacast.com?subject=Competen%20enquiry" },
+export const CTA_BAND = {
+  title: "Ready to transform healthcare performance?",
+  body: "Join leading organisations and professionals who are building a more competent, capable, and confident healthcare workforce.",
+  action: { label: "Book a Demo", href: "/signup" },
 };
 
-// Header navigation. Anchors today; `planned` marks what the spec wants as its own page.
-export const NAV: { label: string; href: string; planned?: boolean }[] = [
-  { label: "Platform", href: "#platform" },
-  { label: "Solutions", href: "#audiences" },
-  { label: "Products", href: "#platform", planned: true },
-  { label: "By Role", href: "#journey", planned: true },
-  { label: "Resources", href: "#impact", planned: true },
-  { label: "Company", href: "#closing", planned: true },
+export const ASSURANCES = [
+  { title: "Secure & Compliant", body: "Enterprise-grade security and data protection" },
+  { title: "Scalable & Flexible", body: "Built to grow with your organisation" },
+  { title: "Interoperable", body: "Works with your existing systems" },
+  { title: "Data-Driven Insights", body: "Make better decisions with real-time intelligence" },
+];
+
+// Header navigation. `planned` marks the dedicated pages the spec wants next -- including /practice, which
+// the Solutions strategy names explicitly and which does not exist yet.
+export const NAV: Link[] = [
+  { label: "Solutions", href: "#who-we-help", planned: true },
+  { label: "Who We Serve", href: "#who-we-help" },
+  { label: "Resources", href: "#cta", planned: true },
+  { label: "About Us", href: "#cta", planned: true },
 ];
 
 export const FOOTER: { heading: string; links: Link[] }[] = [
-  { heading: "Platform", links: [
-    { label: "Overview", href: "#platform" },
-    { label: "Architecture", href: "#lifecycle", planned: true },
-    { label: "Security", href: "#trust", planned: true },
-    { label: "AI Platform", href: "#platform", planned: true },
-    { label: "Integrations", href: "#platform", planned: true },
+  { heading: "Company", links: [
+    { label: "About Us", href: "#cta", planned: true },
+    { label: "Careers", href: "#cta", planned: true },
+    { label: "Contact", href: "mailto:gabriel@semacast.com?subject=Competen%20enquiry" },
   ] },
-  { heading: "Products", links: CAPABILITIES.map(c => ({ label: c.name, href: "#platform", planned: true })) },
-  { heading: "By Role", links: [
-    { label: "Healthcare Worker", href: "#journey", planned: true },
-    { label: "Shift Supervisor", href: "#journey", planned: true },
-    { label: "Unit Manager", href: "#journey", planned: true },
-    { label: "Educator", href: "#journey", planned: true },
-    { label: "Executive", href: "#journey", planned: true },
+  { heading: "Solutions", links: [
+    { label: "Competen Practice", href: "#who-we-help", planned: true },   // spec: gets its own /practice page
+    { label: "For Organisations", href: "#who-we-help" },
+    { label: "For Professionals", href: "#who-we-help" },
+    { label: "For Educators", href: "#who-we-help" },
   ] },
   { heading: "Resources", links: [
-    { label: "Knowledge Centre", href: "#impact", planned: true },
-    { label: "Documentation", href: "#impact", planned: true },
-    { label: "Webinars", href: "#impact", planned: true },
-    { label: "Case Studies", href: "#impact", planned: true },
-    { label: "Help Centre", href: "#impact", planned: true },
-  ] },
-  { heading: "Company", links: [
-    { label: "About Us", href: "#closing", planned: true },
-    { label: "Careers", href: "#closing", planned: true },
-    { label: "Partners", href: "#closing", planned: true },
-    { label: "Contact Us", href: "mailto:gabriel@semacast.com?subject=Competen%20enquiry" },
+    { label: "Knowledge Centre", href: "#cta", planned: true },
+    { label: "Case Studies", href: "#cta", planned: true },
+    { label: "Help Centre", href: "#cta", planned: true },
   ] },
 ];
 
+// Privacy and Terms have no pages yet. Kept in one list so that when the pages land it is a two-line edit,
+// and rendered as plain text rather than links until then -- a legal link to nowhere is worse than none.
 export const FOOTER_LEGAL: Link[] = [
-  { label: "Privacy Policy", href: "#closing", planned: true },
-  { label: "Terms of Service", href: "#closing", planned: true },
-  { label: "Security", href: "#trust", planned: true },
+  { label: "Privacy Policy", href: "#", planned: true },
+  { label: "Terms of Service", href: "#", planned: true },
 ];
