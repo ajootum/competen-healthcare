@@ -129,9 +129,32 @@ export function buildShiftCard(activeShift: any | null, now = Date.now()): Shift
 // layout stays render-pure. Break status reads the REAL op_staff_breaks rows
 // (mig 069): an in-progress break shows remaining time; otherwise the next
 // scheduled one today.
+// HWW-UI-005 s11 — the shift card also carries ACUITY and RISK.
+//
+// Both are the nurse's OWN caseload, not the ward's. A ward-level acuity mix on a personal shift card
+// would be a number about somebody else's patients sitting where the reader expects theirs.
+//   acuity = the highest acuity_level among their patients (the one that sets the pace of the shift)
+//   risk   = how much of the caseload sits at the top of that scale, which is what makes a shift unsafe:
+//            one critical patient among six is a different shift from four.
+const ACUITY_RANK: Record<string, number> = { stable: 0, moderate: 1, high: 2, critical: 3 };
+export function caseloadRisk(levels: string[]): { acuity: string | null; risk: "low" | "medium" | "high" | null } {
+  if (!levels.length) return { acuity: null, risk: null };
+  const peak = levels.reduce((a, b) => ((ACUITY_RANK[b] ?? 0) > (ACUITY_RANK[a] ?? 0) ? b : a));
+  const heavy = levels.filter(l => (ACUITY_RANK[l] ?? 0) >= 2).length;   // high or critical
+  const share = heavy / levels.length;
+  const risk = levels.some(l => l === "critical") && share >= 0.5 ? "high"
+    : heavy > 0 ? "medium"
+    : "low";
+  return { acuity: peak, risk };
+}
+
 export async function loadShiftWidget(admin: any, userId: string, patientIds: string[], shiftId: string | null, now = Date.now()) {
   const in60 = new Date(now + 60 * 60e3).toISOString();
   const soft = (p: Promise<any>) => p.then((r: any) => r, () => ({ data: [], count: 0 }));
+  const acuityRes = patientIds.length
+    ? await soft(admin.from("op_patients").select("acuity_level").in("id", patientIds))
+    : { data: [] };
+  const { acuity, risk } = caseloadRisk(((acuityRes.data ?? []) as any[]).map(p => String(p.acuity_level ?? "stable")));
   const [medsRes, breakRes] = await Promise.all([
     patientIds.length
       ? soft(admin.from("op_med_schedule").select("id", { count: "exact", head: true })
@@ -156,7 +179,7 @@ export async function loadShiftWidget(admin: any, userId: string, patientIds: st
     if (next) breakLabel = `Break at ${new Date(next.scheduled_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: false })}`;
   }
 
-  return { medsDue: (medsRes as any).count ?? 0, breakLabel };
+  return { medsDue: (medsRes as any).count ?? 0, breakLabel, acuity, risk };
 }
 
 // ── Ward context (HWW-WARD-001 Ward Dashboard) ──────────────────────────────

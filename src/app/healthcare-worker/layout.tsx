@@ -100,7 +100,7 @@ export default async function HealthcareWorkerLayout({ children }: { children: R
   const allItems: NavItem[] = NAV.flatMap(s => s.entries.flatMap(e => ("item" in e ? [e.item] : e.items)));
   const mobileItems = [...new Map(allItems.filter(i => i.href && !i.soon).map(i => [i.href!.split(/[?#]/)[0], i] as const)).values()];
 
-  const renderItem = ({ key, label, href, icon, exact, soon, badge }: NavItem) => soon || !href ? (
+  const renderItem = ({ key, label, href, icon, exact, soon, badge, severity }: NavItem) => soon || !href ? (
     <span key={key} title={`${label} — coming soon`} data-sb-item
       className="flex items-center gap-2.5 px-3 py-1.5 rounded-lg text-[13px] text-emerald-100/25 cursor-default select-none">
       <span className="w-5 text-center text-sm leading-none opacity-60">{icon}</span>
@@ -109,9 +109,19 @@ export default async function HealthcareWorkerLayout({ children }: { children: R
     </span>
   ) : (
     <NavLink key={key} href={href} icon={icon} label={label} exact={exact}
-      badge={badge ? badges[badge] : undefined}
+      badge={badge ? badges[badge] : undefined} severity={severity}
       className={linkCls} activeClassName={activeCls} />
   );
+
+  // HWW-UI-005 s17 quick actions. One tap to the four things a clinician documents most, from anywhere in
+  // the shift. Each points at the surface that already records it -- these are shortcuts, not a new
+  // write-path, so there is no second way for the same record to be created.
+  const QUICK_ACTIONS = [
+    { label: "Assessment", href: "/healthcare-worker/observations", icon: "🩺", tone: "bg-emerald-800/70" },
+    { label: "Procedure", href: "/healthcare-worker/procedures", icon: "🩹", tone: "bg-emerald-800/70" },
+    { label: "Concern", href: "/healthcare-worker/concerns", icon: "⚠️", tone: "bg-amber-900/50" },
+    { label: "Incident", href: "/healthcare-worker/safety?event=incidents", icon: "🚩", tone: "bg-red-900/50" },
+  ];
 
   return (
     <div className="min-h-screen bg-gray-50 font-[family-name:var(--font-geist-sans)]">
@@ -174,17 +184,35 @@ export default async function HealthcareWorkerLayout({ children }: { children: R
               const items = s.entries.flatMap(e => "item" in e ? [e.item] : e.items);
               if (!s.section) return <div key={`s${i}`} className="flex flex-col gap-0.5">{entries}</div>;
               return (
-                <NavGroup key={s.section} title={s.section}
-                  hrefs={items.filter(it => it.href).map(it => it.href!.split(/[?#]/)[0])}
-                  badge={groupBadge(items)}
-                  headerClass="text-[9px] font-bold uppercase tracking-widest text-emerald-400/50">
-                  {entries}
-                </NavGroup>
+                // s13 section dividers. A hairline above each titled section, never the first -- a rule at
+                // the very top of the list separates nothing.
+                <div key={s.section} className={i > 1 ? "mt-1 pt-1 border-t border-emerald-800/40" : undefined}>
+                  <NavGroup title={s.section}
+                    hrefs={items.filter(it => it.href).map(it => it.href!.split(/[?#]/)[0])}
+                    badge={groupBadge(items)}
+                    headerClass="text-[9px] font-bold uppercase tracking-widest text-emerald-400/50">
+                    {entries}
+                  </NavGroup>
+                </div>
               );
             })}
           </nav>
 
-          {/* CURRENT SHIFT widget (UI-001): counts + break status + progress */}
+          {/* s17 QUICK ACTIONS — one tap to the four things a clinician documents most, from any screen.
+              Sits directly above the shift card because that is where the eye already goes for "what is
+              happening to me right now". Hidden in the icon rail: four unlabelled icons stacked above a
+              hidden card would read as more navigation. */}
+          <div className="mx-1 mb-2 grid grid-cols-2 gap-1" data-sb-label>
+            {QUICK_ACTIONS.map(a => (
+              <Link key={a.label} href={a.href} title={`Record ${a.label.toLowerCase()}`}
+                className={`flex items-center gap-1.5 rounded-lg ${a.tone} hover:brightness-125 px-2 py-1.5 text-[10px] font-medium text-emerald-50 transition-all`}>
+                <span className="text-xs leading-none">{a.icon}</span>
+                <span className="truncate">{a.label}</span>
+              </Link>
+            ))}
+          </div>
+
+          {/* CURRENT SHIFT widget (UI-001 + HWW-UI-005 s11): counts, acuity, risk, break, progress. */}
           {shiftCard && (
             <div className="mx-1 mb-2 rounded-xl bg-emerald-900/60 border border-emerald-800/60 p-3" data-sb-label>
               <div className="flex items-center justify-between">
@@ -197,7 +225,27 @@ export default async function HealthcareWorkerLayout({ children }: { children: R
                 <div><p className="text-white text-sm font-bold tabular-nums">{badges.myTasks}</p><p className="text-emerald-200/50 text-[8px] uppercase">Tasks</p></div>
                 <div><p className="text-white text-sm font-bold tabular-nums">{badges.medsDue}</p><p className="text-emerald-200/50 text-[8px] uppercase">Meds Due</p></div>
               </div>
-              <div className="h-1.5 rounded-full bg-emerald-950 overflow-hidden mt-2">
+              {/* Rendered only when the caseload actually yields them -- with no patients assigned there is
+                  no acuity to report, and "Acuity: Stable" over an empty caseload is a false reassurance. */}
+              {(widget.acuity || widget.risk) && (
+                <div className="flex items-center justify-between mt-2 text-[10px]">
+                  {widget.risk && (
+                    <span className="flex items-center gap-1 text-emerald-200/70">
+                      <span className={`w-1.5 h-1.5 rounded-full ${widget.risk === "high" ? "bg-[var(--cmp-color-critical)]" : widget.risk === "medium" ? "bg-[var(--cmp-color-warning)]" : "bg-[var(--cmp-color-success)]"}`} />
+                      Risk: <span className="capitalize text-white/90">{widget.risk}</span>
+                    </span>
+                  )}
+                  {widget.acuity && (
+                    <span className="flex items-center gap-1 text-emerald-200/70">
+                      Acuity: <span className="capitalize text-white/90">{widget.acuity}</span>
+                    </span>
+                  )}
+                </div>
+              )}
+              <div className="flex items-center justify-between mt-2 text-[9px] text-emerald-200/50">
+                <span>Shift progress</span><span className="tabular-nums text-white/80">{shiftCard.pct}%</span>
+              </div>
+              <div className="h-1.5 rounded-full bg-emerald-950 overflow-hidden mt-0.5">
                 <div className="h-full rounded-full bg-[var(--cmp-color-success)]" style={{ width: `${shiftCard.pct}%` }} />
               </div>
               <p className="text-emerald-200/60 text-[10px] mt-1">{shiftCard.remaining} remaining{widget.breakLabel ? ` · ☕ ${widget.breakLabel}` : ""}</p>

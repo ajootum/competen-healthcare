@@ -19,18 +19,42 @@ const SEV_TONE: Record<string, string> = {
 };
 const ESC_STATUS: Record<string, string> = { open: "bg-[var(--cmp-surface-critical)] text-[var(--cmp-text-critical)]", acknowledged: "bg-[var(--cmp-surface-information)] text-blue-700" };
 
-export default async function SafetyPage() {
+// HWW-UI-005 s8 — the Quality Events entries land here with an ?event= filter. Each is a real predicate
+// over data this page already loads: near_miss is the op_incidents boolean, equipment and infection are
+// incident_type values from migration 073. Nothing is renamed into existence.
+const EVENT_VIEW: Record<string, { title: string; blurb: string; incident?: (i: any) => boolean; alertsOnly?: boolean }> = {
+  incidents: { title: "Incidents", blurb: "Incidents you have reported in the last 7 days.", incident: () => true },
+  near_miss: { title: "Near Misses", blurb: "Reported events that reached no patient — the ones that teach most cheaply.", incident: i => !!i.near_miss },
+  equipment: { title: "Equipment Issues", blurb: "Incidents logged against equipment.", incident: i => i.incident_type === "equipment" },
+  infection: { title: "HAI Surveillance", blurb: "Infection-related incidents on your patients.", incident: i => i.incident_type === "infection" },
+  alerts: { title: "Patient Safety", blurb: "Active safety alerts and open escalations on your patients.", alertsOnly: true },
+};
+
+export default async function SafetyPage({ searchParams }: { searchParams: Promise<{ event?: string }> }) {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect("/login");
   const admin = createAdminClient();
-  const data = await loadMySafety(admin, user.id);
+  const loaded = await loadMySafety(admin, user.id);
+
+  // An unrecognised ?event= falls through to the unfiltered page rather than an empty one.
+  const key = (await searchParams)?.event;
+  const view = key && EVENT_VIEW[key] ? EVENT_VIEW[key] : null;
+  const data = view?.incident
+    ? { ...loaded, incidents: (loaded.incidents ?? []).filter(view.incident) }
+    : loaded;
 
   return (
     <div className="space-y-5">
       <div>
-        <h1 className="text-2xl font-bold text-gray-900">Safety &amp; Escalation</h1>
-        <p className="text-sm text-gray-500 mt-1">Everything safety-related on your patients — and one tap to escalate, alert or report. Frontline reporting is a safety right.</p>
+        <h1 className="text-2xl font-bold text-gray-900">{view ? view.title : "Safety & Escalation"}</h1>
+        <p className="text-sm text-gray-500 mt-1">{view ? view.blurb : "Everything safety-related on your patients — and one tap to escalate, alert or report. Frontline reporting is a safety right."}</p>
+        {view && (
+          <p className="text-[12px] text-gray-500 mt-1.5">
+            Filtered view.{" "}
+            <a href="/healthcare-worker/safety" className="text-[var(--cmp-text-success)] hover:underline">Show the full safety centre</a>
+          </p>
+        )}
       </div>
 
       <div className="grid sm:grid-cols-2 xl:grid-cols-4 gap-4">

@@ -14,13 +14,30 @@ import RecordObs from "./RecordObs";
 
 export const dynamic = "force-dynamic";
 
-export default async function ObservationsPage() {
+// HWW-UI-005 s2 — Patient Assessment's domains (Vitals, Pain, Neurological, Fluid Balance) are this page
+// filtered by observation_type. Those are the values migration 039's check constraint already defines, so
+// each sidebar entry lands on real rows rather than a differently-titled copy of the same list.
+const TYPE_LABEL: Record<string, string> = {
+  vital_signs: "Vitals", pain: "Pain", neuro: "Neurological", respiratory: "Respiratory",
+  fluid_balance: "Fluid Balance", cardiovascular: "Cardiovascular", sedation: "Sedation",
+  pews: "PEWS", gcs: "GCS", specialty: "Specialty",
+};
+
+export default async function ObservationsPage({ searchParams }: { searchParams: Promise<{ type?: string }> }) {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect("/login");
   const admin = createAdminClient();
   const data = await loadMyShift(admin, user.id);
-  const { patients, observations } = data;
+  const { patients } = data;
+
+  // An unknown ?type= is ignored rather than filtered to nothing: a typo in a link should not present as
+  // "this patient has no observations".
+  const rawType = (await searchParams)?.type;
+  const type = rawType && TYPE_LABEL[rawType] ? rawType : null;
+  const observations = type
+    ? data.observations.filter((o: any) => o.observation_type === type)
+    : data.observations;
 
   const due = observations.filter((o: any) => ["due", "overdue"].includes(o.status))
     .sort((a: any, b: any) => (a.status === "overdue" ? 0 : 1) - (b.status === "overdue" ? 0 : 1) || +new Date(a.due_at ?? 0) - +new Date(b.due_at ?? 0));
@@ -37,8 +54,16 @@ export default async function ObservationsPage() {
   return (
     <div className="space-y-5">
       <div>
-        <h1 className="text-2xl font-bold text-gray-900">Observations &amp; PEWS</h1>
+        <h1 className="text-2xl font-bold text-gray-900">{type ? TYPE_LABEL[type] : "Observations & PEWS"}</h1>
         <p className="text-sm text-gray-500 mt-1">Your observation queue and deterioration picture. PEWS ≥ 5 or a concern flag escalates automatically.</p>
+        {/* The filter is stated, and reversible in one click. A filtered list that looks like the whole
+            list is how a clinician concludes there is nothing else outstanding. */}
+        {type && (
+          <p className="text-[12px] text-gray-500 mt-1.5">
+            Showing <strong>{TYPE_LABEL[type]}</strong> observations only.{" "}
+            <a href="/healthcare-worker/observations" className="text-[var(--cmp-text-success)] hover:underline">Show all observations</a>
+          </p>
+        )}
       </div>
 
       <div className="grid sm:grid-cols-2 xl:grid-cols-4 gap-4">

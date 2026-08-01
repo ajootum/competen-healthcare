@@ -218,6 +218,37 @@ main[data-content] { transition: margin-left .2s ease; }
   html.sb-collapsed aside[data-sidebar] details[data-nav-group]::details-content { content-visibility: visible !important; }
 }
 
+/* ── Sidebar scrollbar (HWW-UI-005 s12) ─────────────────────────────────────
+   A long clinical nav scrolls, and the default chrome scrollbar is a wide grey
+   slab against a dark sidebar — it reads as a border and steals horizontal room
+   from labels. Thin, low-contrast, and only visible once there is overflow.
+   Scoped to the sidebar so page scrollbars keep their platform default, which
+   is what people expect for document scrolling. */
+aside[data-sidebar] nav {
+  scrollbar-width: thin;
+  scrollbar-color: rgb(255 255 255 / 0.18) transparent;
+}
+aside[data-sidebar] nav::-webkit-scrollbar { width: 6px; }
+aside[data-sidebar] nav::-webkit-scrollbar-track { background: transparent; }
+aside[data-sidebar] nav::-webkit-scrollbar-thumb {
+  background: rgb(255 255 255 / 0.15);
+  border-radius: 999px;
+}
+aside[data-sidebar] nav:hover::-webkit-scrollbar-thumb { background: rgb(255 255 255 / 0.28); }
+
+/* ── Sidebar touch targets (HWW-UI-005 s20) ─────────────────────────────────
+   WCAG 2.5.8 / the spec's 44px. Applied as a MIN height on coarse pointers only:
+   forcing 44px on a mouse-driven desktop sidebar would push a twenty-item
+   clinical nav into permanent scrolling, which costs more than it gains. On
+   touch, the taller row is what makes the difference between tapping Medications
+   and tapping My Tasks mid-shift. */
+@media (pointer: coarse) {
+  aside[data-sidebar] [data-sb-item],
+  aside[data-sidebar] details[data-nav-group] > summary {
+    min-height: 44px;
+  }
+}
+
 /* ── Collapsible nav sections (accordion) ───────────────────────────────────
    Click a section header to expand/collapse it (NavGroup). Strip the native
    <details> disclosure triangle; the rotating chevron in the header stands in. */
