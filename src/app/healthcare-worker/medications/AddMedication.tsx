@@ -4,9 +4,15 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { MED_ROUTES } from "@/lib/hww/medications";
 
-// Add an operational schedule entry (HWW-MED-001) — name / dose DISPLAY /
-// route / due time only. Not prescribing: this records what is already
-// ordered so the shift can coordinate it.
+// Add an operational schedule entry (HWW-MED-001) — name / route / due time
+// only. Not prescribing: this records what is already ordered so the shift can
+// coordinate it.
+//
+// The dose field is gone deliberately. It was display-only, which meant a nurse
+// retyped a dose the EMR already holds and the platform then showed it back
+// without ever having checked it — a second, unverified copy of the number that
+// matters most. Coordination needs to know WHAT, WHERE and WHEN; the dose stays
+// where it is prescribed and checked.
 
 const input = "w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/40";
 const btn = "px-3.5 py-2 rounded-lg bg-[var(--cmp-color-success)] text-white text-sm font-medium hover:bg-emerald-700 disabled:opacity-50";
@@ -23,7 +29,6 @@ export default function AddMedication({ patients }: { patients: { id: string; la
   const [open, setOpen] = useState(false);
   const [patientId, setPatientId] = useState(patients[0]?.id ?? "");
   const [drug, setDrug] = useState("");
-  const [dose, setDose] = useState("");
   const [route, setRoute] = useState("oral");
   const [when, setWhen] = useState(nextHourLocal);
   const [highRisk, setHighRisk] = useState(false);
@@ -37,14 +42,14 @@ export default function AddMedication({ patients }: { patients: { id: string; la
     const r = await fetch("/api/operations/medications", {
       method: "POST", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        action: "schedule", patient_id: patientId, drug_name: drug, dose_display: dose, route,
+        action: "schedule", patient_id: patientId, drug_name: drug, route,
         scheduled_at: new Date(when).toISOString(), high_risk: highRisk, requires_double_check: doubleCheck, allergy_note: allergy,
       }),
     });
     const d = await r.json().catch(() => ({}));
     setBusy(false);
     if (!r.ok) { setErr(d.error ?? "Failed"); return; }
-    setDrug(""); setDose(""); setAllergy(""); setHighRisk(false); setDoubleCheck(false); setOpen(false);
+    setDrug(""); setAllergy(""); setHighRisk(false); setDoubleCheck(false); setOpen(false);
     router.refresh();
   }
 
@@ -72,9 +77,6 @@ export default function AddMedication({ patients }: { patients: { id: string; la
         </label>
         <label className="text-sm"><span className="text-gray-600 text-xs">Medication name</span>
           <input className={input} placeholder="e.g. Amoxicillin" value={drug} onChange={e => setDrug(e.target.value)} />
-        </label>
-        <label className="text-sm"><span className="text-gray-600 text-xs">Dose (display only)</span>
-          <input className={input} placeholder="e.g. 500 mg" value={dose} onChange={e => setDose(e.target.value)} />
         </label>
         <label className="text-sm"><span className="text-gray-600 text-xs">Route</span>
           <select className={input} value={route} onChange={e => setRoute(e.target.value)}>
