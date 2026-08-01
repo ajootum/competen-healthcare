@@ -110,6 +110,17 @@ export async function generateDecisionsForCycle(
     evByComp.set(e.competency_id, g);
   }
 
+  // ARCHIVE BEFORE REPLACE (XWI P2-10) -- read the decisions this run will overwrite, before building
+  // their replacements, so each replacement can carry the next version number.
+  const prior = await admin.from("competency_decisions").select("*").eq("cycle_id", cycleId);
+  if (prior.error) throw new Error(prior.error.message);
+  const priorRows = (prior.data ?? []) as Record<string, unknown>[];
+  const priorVersion = new Map<string, number>();
+  for (const p of priorRows) {
+    const k = String(p.competency_id);
+    priorVersion.set(k, Math.max(priorVersion.get(k) ?? 0, Number(p.version_num) || 1));
+  }
+
   const today = new Date();
   const rows = scores.map(s => {
     const score = s.score as number | null;
@@ -142,6 +153,7 @@ export async function generateDecisionsForCycle(
       competency_id: s.competency_id,
       framework_id: s.framework_id,
       framework_version: s.framework_id ? (fwVersion.get(s.framework_id) ?? null) : null,
+      version_num: (priorVersion.get(s.competency_id) ?? 0) + 1,
       outcome,
       maturity: score != null ? maturityFromScore(score) : null,
       decided_by: decidedBy,
@@ -158,7 +170,37 @@ export async function generateDecisionsForCycle(
     };
   });
 
-  // Replace any existing decisions for this cycle so re-running reflects latest scores
+  // Re-running a cycle used to DELETE its decisions outright, destroying the record that a clinician was
+  // ever found not_yet_competent, suspended or in critical failure. The docblock above has always claimed
+  // this function "supersedes ... by inserting a fresh versioned decision"; it did not, and every one of
+  // the 77 live decisions still sat at version_num 1 because the row that would have been version 1 was
+  // deleted first.
+  if (priorRows.length) {
+    // ON CONFLICT DO NOTHING on decision_id: if a previous run archived these rows but failed before the
+    // delete, retrying must be possible. Without this the engine would deadlock on its own successful
+    // first half and the cycle could never be re-run.
+    const { error: histErr } = await admin.from("competency_decision_history").upsert(priorRows.map(p => ({
+      decision_id: p.id, cycle_id: p.cycle_id, nurse_id: p.nurse_id, cpu_id: p.cpu_id,
+      competency_id: p.competency_id, framework_id: p.framework_id, framework_version: p.framework_version ?? null,
+      outcome: p.outcome, maturity: p.maturity, decided_by: p.decided_by, decided_by_name: p.decided_by_name,
+      effective_date: p.effective_date, expiry_date: p.expiry_date, evidence_summary: p.evidence_summary,
+      critical_failure: p.critical_failure, validated_by: p.validated_by, validated_at: p.validated_at,
+      validation_outcome: p.validation_outcome, version_num: p.version_num ?? 1,
+      hospital_id: p.hospital_id ?? null, organisation_id: p.organisation_id ?? null,
+      decided_at: p.created_at, superseded_by: decidedBy, supersede_reason: "Cycle decisions re-run",
+    })), { onConflict: "decision_id", ignoreDuplicates: true });
+    // DELIBERATELY NOT FAIL-SOFT. If the archive cannot be written the delete below would destroy the
+    // record with nothing kept -- silently restoring exactly the bug this replaces. A decision run that
+    // cannot preserve what it is about to overwrite must not run.
+    if (histErr) {
+      throw new Error(
+        /does not exist|schema cache/i.test(histErr.message)
+          ? "Run migration 182 (competency_decision_history) before re-running cycle decisions - the previous decisions cannot be archived and must not be discarded."
+          : `Could not archive prior decisions: ${histErr.message}`,
+      );
+    }
+  }
+
   await admin.from("competency_decisions").delete().eq("cycle_id", cycleId);
   let { error } = await admin.from("competency_decisions").insert(rows);
   if (error && /hospital_id|organisation_id/.test(error.message)) {
