@@ -5,10 +5,10 @@ import PracticeNav from "@/components/marketing/PracticeNav";
 import { PatternField } from "@/components/marketing/Pattern";
 import {
   PRACTICE_ACCENT, PRACTICE_ACCENT_DARK, PRACTICE_HERO, PRACTICE_PROMISES, NOT_AN_EMR, PATIENT_JOURNEY,
-  PRACTICE_AREAS, PRACTICE_ROLES, INTEGRATIONS, INTEGRATION_NOTE, PRACTICE_CTA, PREVIEW_NOTE,
+  PRACTICE_AREAS, PRACTICE_ROLES, TENANT_MODEL, INTEGRATIONS, INTEGRATION_NOTE, PRACTICE_CTA, PREVIEW_NOTE,
 } from "@/lib/marketing/practice-content";
 
-// Competen Practice -- the product overview page, derived from CPR-000 through CPR-020.
+// Competen Practice -- the product overview page, derived from CPR-000, CPR-000A and CPR-001..020.
 //
 // This replaces the shared SolutionPage template that /practice used to render. The other four landing
 // pages are still one page each; Practice is a product with six capability pages behind it, and a template
@@ -194,6 +194,38 @@ export default function Page() {
               Larger groups can add an organisation administrator across multiple practices.
             </p>
           </div>
+        </section>
+
+        {/* ── TENANT MODEL (CPR-000A) ──────────────────────────────────────
+            Only the part of the enterprise architecture that a buying clinic needs: isolation, one
+            identity, and services they do not have to run. The control plane, the super-administrator's
+            powers and the architecture diagram itself stay off the public site -- see TENANT_MODEL. */}
+        <section className={`${container} py-12 lg:py-16`}>
+          <div className="max-w-2xl">
+            <h2 className="text-[1.6rem] font-bold tracking-tight text-gray-900">{TENANT_MODEL.title}</h2>
+            <p className="mt-2 text-[14px] leading-relaxed text-gray-600">{TENANT_MODEL.body}</p>
+          </div>
+          <ul className="mt-8 grid gap-5 lg:grid-cols-3">
+            {TENANT_MODEL.pillars.map(p => (
+              <li key={p.title} className="flex flex-col rounded-2xl border border-gray-200 bg-white p-6">
+                <h3 className="text-[16px] font-bold text-gray-900">{p.title}</h3>
+                <p className="mt-2 flex-1 text-[13px] leading-relaxed text-gray-600">{p.body}</p>
+                <ul className="mt-4 space-y-2 border-t border-gray-100 pt-4">
+                  {p.points.map(pt => (
+                    <li key={pt} className="flex gap-2.5 text-[12.5px] leading-snug text-gray-700">
+                      <span aria-hidden className="mt-0.5 w-3.5 h-3.5 shrink-0 rounded-full flex items-center justify-center text-[8px] text-white"
+                        style={{ background: PRACTICE_ACCENT }}>✓</span>
+                      {pt}
+                    </li>
+                  ))}
+                </ul>
+              </li>
+            ))}
+          </ul>
+          <p className="mt-6 max-w-3xl text-[13px] leading-relaxed text-gray-600">
+            <span className="font-semibold text-gray-900">Who can change what.</span>{" "}
+            {TENANT_MODEL.boundary}
+          </p>
         </section>
 
         {/* ── INTEGRATIONS ─────────────────────────────────────────────────

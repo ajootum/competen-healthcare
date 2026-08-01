@@ -27,7 +27,7 @@
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 import {
-  PRACTICE_AREAS, INTEGRATIONS, PREVIEW_NOTE, MODULES_WITHOUT_SPECS, PRACTICE_HERO,
+  PRACTICE_AREAS, INTEGRATIONS, PREVIEW_NOTE, MODULES_WITHOUT_SPECS, PRACTICE_HERO, TENANT_MODEL,
 } from "../src/lib/marketing/practice-content";
 
 const BASE = process.env.BASE_URL ?? "http://localhost:3000";
@@ -48,6 +48,21 @@ const FORBIDDEN = [
   "Competency Management", "Workforce Management", "Executive Intelligence",
   "Recruitment platform", "Learning platform", "Competency Studio", "Assessment Studio",
   "AI platform", "Platform operations", "Configuration, integration",
+];
+
+// VOCABULARY FROM THE SOURCE DOCUMENTS THAT MUST NOT REACH A VISITOR.
+//
+// CPR-000A and CPR-019 Revision 2 are internal architecture papers. They describe the landlord control
+// plane, the super-administrator's power to suspend a tenant and to open an audited impersonation session,
+// and the internal architectures being bridged. Those sentences are RIGHT THERE in the material this page
+// was written from, which makes them a copy-paste away from the public site at every future edit -- and
+// "we can impersonate your users" is not a claim a clinic should first meet on a marketing page.
+//
+// This is a separate assertion from FORBIDDEN because it guards a different risk: not a product name that
+// competitors should not see, but internal machinery that a CUSTOMER should not be handed unprompted.
+const INTERNAL_VOCABULARY = [
+  "landlord", "control plane", "impersonat", "super administrator", "super admin",
+  "tenant lifecycle", "suspend", "maintenance mode", "telemetry", "LCP", "PSA",
 ];
 
 function visibleText(html: string): string {
@@ -116,6 +131,11 @@ async function main() {
 
     // HONESTY RULE 1. Every page here renders mockups; every one of them must say so.
     ok(`3c. ${path} labels its screens as previews`, text.includes(PREVIEW_NOTE));
+
+    // Case-insensitive and substring, so "Impersonation", "impersonate" and "Landlord Control Plane" all
+    // trip it. Word-boundary matching would let a plural or a participle through.
+    const internal = INTERNAL_VOCABULARY.filter(w => text.toLowerCase().includes(w.toLowerCase()));
+    ok(`3d. ${path} leaks no internal platform vocabulary`, internal.length === 0, internal.join(", "));
   }
 
   // ── 4. NAVIGATION: catalogue, nav and routes agree ────────────────────────────────────────────────
@@ -152,6 +172,20 @@ async function main() {
   });
   ok("5c. Version 1 integrations are NOT labelled as roadmap", overLabelled.length === 0,
     overLabelled.map(i => i.name).join(", "));
+
+  // ── 5d. CPR-000A: the tenant model renders, and its diagram does NOT ──────────────────────────────
+  for (const p of TENANT_MODEL.pillars) {
+    ok(`5d. /practice states "${p.title}"`, overviewText.includes(p.title));
+  }
+  ok("5e. /practice states who can change what", overviewText.includes(TENANT_MODEL.boundary.slice(0, 60)));
+
+  // The enterprise architecture diagram draws the control plane and the full product ecosystem. It must
+  // not be published, and an image cannot be caught by any text assertion above -- so its absence from the
+  // built assets is asserted directly.
+  const architectureLeaks = ["architecture", "cpr-000a", "ecosystem", "control-plane"]
+    .filter(n => existsSync(join(process.cwd(), "public", "images", "practice", `${n}.webp`)));
+  ok("5f. the enterprise architecture diagram is not published", architectureLeaks.length === 0,
+    architectureLeaks.join(", "));
 
   // ── 6. the images are actually served, not merely present ─────────────────────────────────────────
   const notServed: string[] = [];

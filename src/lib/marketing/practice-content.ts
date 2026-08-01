@@ -1,6 +1,7 @@
 // Competen Practice -- public product section (/practice and its six capability pages).
 //
-// DERIVED FROM CPR-000 through CPR-020. Those are DEVELOPER specifications: they are written in states,
+// DERIVED FROM CPR-000, CPR-000A and CPR-001 through CPR-020 (CPR-019 at Revision 2). Those are DEVELOPER
+// specifications: they are written in states,
 // business rules, permissions and acceptance criteria. None of that belongs on a marketing page, so what
 // travels across is the OUTCOME each module produces for the person paying for it. The `modules` field on
 // each area records which specs it came from -- it is never rendered, it exists so
@@ -114,6 +115,49 @@ export const INTEGRATIONS: { name: string; body: string; inV1: boolean }[] = [
 export const INTEGRATION_NOTE =
   "Version 1 covers identity, notifications and document storage. The rest is on the roadmap, and the " +
   "architecture is built for it -- REST APIs, webhooks and an FHIR-ready data layer.";
+
+/**
+ * CPR-000A Enterprise Integration Architecture, reduced to the part a clinic buying this actually needs.
+ *
+ * MOST OF CPR-000A IS NOT PUBLIC AND MUST NOT BECOME PUBLIC. It draws the platform operations control
+ * plane, enumerates the super-administrator's powers including audited support impersonation, and names
+ * the internal architectures it bridges. WEB-STRAT-001 forbids disclosing that layer, and separately, a
+ * marketing page that volunteers "we can impersonate your users" answers a question nobody asked in the
+ * worst possible venue. Its accompanying diagram is deliberately NOT published either -- an image is a
+ * disclosure even though no text harness can read one.
+ *
+ * What IS public here is what the architecture BUYS the practice: isolation from every other tenant, one
+ * identity across the workspaces a clinician belongs to, and enterprise services underneath that a
+ * four-clinician practice could never stand up alone. Those are sections 8, 10 and 9 respectively.
+ */
+export const TENANT_MODEL = {
+  title: "Your practice is your own.",
+  body:
+    "Competen Practice runs on the Competen platform, but your practice is a tenant of its own. That is " +
+    "an architectural boundary, not a setting somebody could switch off by mistake.",
+  pillars: [
+    {
+      title: "Nothing crosses to another practice",
+      body: "Your users, patients, appointments, documents and analytics are isolated. No other practice can see them, and no data is shared between tenants.",
+      points: ["Isolated users and patients", "Isolated appointments and documents", "Isolated analytics", "No cross-tenant visibility"],
+    },
+    {
+      title: "One sign-in, wherever you work",
+      body: "A clinician who works shifts at a hospital and runs a private clinic has one identity, not three. Switch between the workspaces you belong to without signing in again.",
+      points: ["Single identity and sign-on", "Switch without re-authenticating", "Each workspace enforces its own permissions", "Access follows your memberships"],
+    },
+    {
+      title: "Enterprise plumbing you do not run",
+      body: "Authentication, audit and compliance, notifications, AI services, the API gateway and monitoring sit underneath your practice and are maintained for you.",
+      points: ["Authentication and access control", "Audit and compliance records", "Notification delivery", "Monitoring and API access"],
+    },
+  ],
+  // CPR-000A section 7 and CPR-019 Rev 2's governance rules, stated plainly. It is the honest answer to
+  // "so who can actually change things", and it cuts both ways on purpose.
+  boundary:
+    "Your practice administrator manages your clinicians, calendars, rules and branding, and cannot reach " +
+    "another practice or change platform-wide policy. Every administrative action is audited.",
+};
 
 export const PRACTICE_CTA = {
   title: "See it with your own clinic in mind.",
@@ -288,29 +332,37 @@ export const PRACTICE_AREAS: PracticeArea[] = [
     ],
   },
 
-  // ── CPR-019 Practice Configuration, CPR-020 Integrations ─────────────────────────────────────────────
+  // ── CPR-019 Rev 2 Practice Configuration, CPR-020 Integrations ───────────────────────────────────────
+  // Revision 2 splits configuration in two: what the practice administrator edits, and what the platform
+  // holds read-only (tenant identity, licence, entitlements, security and backup policy, regional
+  // deployment). That split is the whole point of the revision, so it is the shape of this page rather
+  // than a line inside it -- and the read-only half is written as relief, because for a four-clinician
+  // practice with no IT department "you cannot change the security policy" is the feature.
   {
     slug: "setup",
     nav: "Setup & connections",
     eyebrow: "Setup & connections",
-    headline: ["Configure it your way.", "Connect what you already run."],
+    headline: ["You run the practice.", "We run the platform."],
     body:
-      "Locations, hours, appointment types, users, templates and branding are settings rather than support " +
-      "tickets. And where you already have systems, Practice talks to them.",
+      "Locations, hours, appointment types, users and templates are yours to change, from a settings " +
+      "screen rather than a support ticket. Security policy, backups and licensing are ours -- and where " +
+      "you already have systems, Practice talks to them.",
     accent: "#0E7490",
     icon: "\u{1F517}",
-    blurb: "Multi-location setup without a developer, role-based access, and standards-based links to the systems you run.",
+    blurb: "Everything the practice controls, everything it never has to, and standards-based links to the systems you already run.",
     modules: ["CPR-019", "CPR-020"],
     outcomes: [
-      { title: "Set up without writing code", body: "Practice profile, clinic locations, working hours, appointment types, document categories and questionnaire templates -- edited by your administrator." },
-      { title: "People and permissions", body: "Invite users, assign roles, and know that reception cannot alter clinical records. Every change to a critical setting is logged and versioned." },
-      { title: "Your brand, your languages", body: "Practice logo, colours and notification templates, in the languages your patients read." },
+      { title: "What you control", body: "Practice profile and branding, clinic locations, working days and hours, appointment types and durations, booking rules, notification preferences, questionnaire templates, document categories and assistant preferences." },
+      { title: "What you never have to", body: "Tenant identity, subscription and licence, feature entitlements, regional deployment, security and password policy, backup and retention. Held by the platform, visible to you, and not your job to maintain." },
+      { title: "Add your own team", body: "Create clinician and receptionist accounts, assign workspace membership, adjust local permissions and deactivate someone the day they leave -- without raising a ticket." },
+      { title: "Your licence in plain sight", body: "Plan, status, renewal date and exactly which features are included, on the same screen as the settings they govern. No guessing what you are paying for." },
+      { title: "Every change versioned", body: "Configuration carries version history and an audit record of who changed what and when. Critical changes ask for confirmation before they take effect." },
       { title: "Multiple sites, one practice", body: "Each location keeps its own hours, rooms and calendar while the practice keeps one patient list." },
       { title: "Standards-based exchange", body: "REST APIs, webhooks, import and export tools, and an FHIR-ready data layer for connecting to an EMR rather than replacing it." },
       { title: "Connections you can watch", body: "Health status per connection, retry queues for failures, and an audit record of every exchange with an outside system." },
     ],
     screens: [
-      { src: "/images/practice/settings.webp", alt: "Practice configuration showing profile, locations, working hours, appointment types, users, notifications, templates and security settings", caption: "Twelve areas of practice setup, with a health check on what is still incomplete." },
+      { src: "/images/practice/settings.webp", alt: "Practice configuration showing platform-managed read-only settings beside practice-managed editable settings, with subscription, feature entitlements and workspace membership", caption: "Read-only on the left, yours to edit on the right -- and the licence beside both." },
       { src: "/images/practice/integrations.webp", alt: "The integrations workspace showing connected systems, their sync status, data flow volumes and recent integration activity", caption: "Connected systems, their health, and what has actually moved in the last day." },
     ],
   },
