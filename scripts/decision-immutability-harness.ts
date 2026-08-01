@@ -107,10 +107,15 @@ async function main() {
     ok("1. re-run does not destroy the prior decisions",
       (hist ?? []).length === firstIds.size && (hist ?? []).every((h: any) => firstIds.has(h.decision_id)),
       `archived=${hist?.length} expected=${firstIds.size}`);
+    // `.every()` on an empty array is TRUE, so both of these would pass on a history that was never
+    // written -- vacuously green exactly when the thing under test is broken. Proven: with the archive
+    // disabled they reported PASS while assertion 1 reported archived=0. The length check is the assertion.
     ok("1b. archived rows keep their original outcome",
-      (hist ?? []).every((h: any) => firstOutcomes.get(h.competency_id) === h.outcome));
+      (hist ?? []).length > 0 && hist!.every((h: any) => firstOutcomes.get(h.competency_id) === h.outcome),
+      `archived=${hist?.length ?? 0}`);
     ok("1c. archived rows record when they were decided AND superseded",
-      (hist ?? []).every((h: any) => !!h.decided_at && !!h.superseded_at));
+      (hist ?? []).length > 0 && hist!.every((h: any) => !!h.decided_at && !!h.superseded_at),
+      `archived=${hist?.length ?? 0}`);
     ok("2. the replacement is version 2, not another version 1",
       (v2 ?? []).length > 0 && (v2 ?? []).every((d: any) => d.version_num === 2),
       JSON.stringify((v2 ?? []).map((d: any) => d.version_num)));
@@ -126,9 +131,12 @@ async function main() {
     catch { threw = true; }
     const after = new Set(((await admin.from("competency_decisions").select("id").eq("cycle_id", cycleId)).data ?? []).map((d: any) => d.id));
     ok("4. a failed archive throws instead of proceeding", threw);
+    // Sizes alone would not catch it: the destructive path deletes N rows and inserts N replacements, so
+    // the count is identical and only the IDENTITIES differ. Report the overlap, not the count.
+    const kept = [...before].filter(id => after.has(id)).length;
     ok("4b. a failed archive leaves the existing decisions intact",
-      before.size === after.size && [...before].every(id => after.has(id)),
-      `before=${before.size} after=${after.size}`);
+      before.size > 0 && before.size === after.size && kept === before.size,
+      `${kept}/${before.size} original rows survived (after=${after.size})`);
   } finally {
     if (cycleId) {
       await admin.from("competency_decision_history").delete().eq("cycle_id", cycleId);
