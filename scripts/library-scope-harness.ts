@@ -19,6 +19,13 @@
  *   5. The quality_object branch exists. Migration 019 added it and was never applied here, so library
  *      search silently returned no quality objects at all — a confident zero, which is the failure mode
  *      this codebase keeps hitting.
+ *   6. Unapproved content stays out. Migration 058 filters drafts and retired assets out of the results
+ *      because they feed the AI grounding context. Migration 167 rebased the body onto migration 019 —
+ *      four revisions stale — and silently reverted every one of those filters plus two whole branches.
+ *      Migration 169 restored them. That regression passed tsc, eslint, and this harness as it then
+ *      stood, which is the argument for asserting it behaviourally rather than trusting a migration
+ *      header. scripts/function-drift-audit.ts is the other half: it compares the deployed body against
+ *      the last definition in the repo, and is what found the mistake.
  *
  * VACUOUS ASSERTIONS ARE REPORTED AS VACUOUS. Three of the four tenant-owned tables are empty or entirely
  * shared today, so a cross-tenant check against them would pass without proving anything. The harness says
@@ -120,8 +127,33 @@ async function main() {
       "the tenant filter is excluding platform-shared rows, which would empty the library for everyone");
   } else skip("shared content is still returned", "no shared active framework with a searchable name");
 
+  // ── 6. Approval filters (migration 058, reverted by 167, restored by 169) ─
+  // Tenant scope is not the only thing this function has to get right. 058 exists to keep DRAFT and
+  // RETIRED assets out of the results, because they feed the AI grounding context. Migration 167 rebased
+  // the body onto the wrong parent and silently dropped every one of those filters; nothing behavioural
+  // caught it, which is why it is asserted here and not just described in a migration header.
+  const { data: draftCpu } = await admin.from("clinical_practice_units")
+    .select("id,name,pub_status").neq("pub_status", "published").limit(1);
+  const dc = (draftCpu ?? [])[0] as any;
+  if (dc && distinctiveWord(dc.name)) {
+    const w = distinctiveWord(dc.name);
+    const res = await search(w, null);
+    ok(`approval filter: a ${dc.pub_status} CPU is NOT returned ("${w}")`,
+      !((res.data ?? []) as any[]).some(h => h.object_id === dc.id),
+      "unapproved content is reaching search results and the AI grounding context");
+  } else skip("approval filter: unapproved CPU excluded", "no non-published CPU with a searchable name");
+
+  for (const [label, table, col, approved] of [
+    ["skill", "competency_skills", "is_active", true],
+    ["quality_object", "quality_objects", "status", "active"],
+    ["resource", "learning_resources", "is_active", true],
+  ] as const) {
+    const { data } = await admin.from(table).select("id").neq(col, approved as any).limit(1);
+    if (!(data ?? []).length) skip(`approval filter: unapproved ${label} excluded`, `every row is approved, so the filter cannot be exercised`);
+  }
+
   // ── 5. The branch migration 019 added and never applied ──────────────────
-  const { data: qo } = await admin.from("quality_objects").select("id,title,hospital_id").neq("status", "retired").limit(50);
+  const { data: qo } = await admin.from("quality_objects").select("id,title,hospital_id").eq("status", "active").limit(50);
   const q1 = ((qo ?? []) as any[]).find(r => distinctiveWord(r.title));
   if (q1) {
     const res = await search(distinctiveWord(q1.title), q1.hospital_id ?? null);
