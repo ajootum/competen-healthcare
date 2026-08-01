@@ -4,7 +4,7 @@ import SiteFooter from "@/components/marketing/SiteFooter";
 import { PatternField } from "@/components/marketing/Pattern";
 import {
   ACCENT, ACCENT_DARK, ACCENT_SOFT, BRAND, HERO, HERO_CARDS, AFRICA_BAND,
-  TRUSTED, TRUSTED_HEADING, CTA_BAND, ASSURANCES,
+  CTA_BAND, ASSURANCES,
 } from "@/lib/marketing/home-content";
 import { PRIMARY_SOLUTIONS } from "@/lib/marketing/solutions";
 
@@ -155,28 +155,9 @@ export default function Home() {
           </div>
         </section>
 
-        {/* ── TRUSTED ORGANISATIONS ────────────────────────────────────────
-            Renders only when there is something that can honestly be claimed. */}
-        {TRUSTED.length > 0 && (
-          <section className={`${container} pb-14`}>
-            <div className="rounded-3xl bg-[#FAF9F6] px-6 py-7">
-              <p className="text-center text-[14px] text-gray-600">{TRUSTED_HEADING}</p>
-              <ul className="mt-5 flex flex-wrap items-center justify-center gap-x-10 gap-y-5">
-                {TRUSTED.map(o => (
-                  <li key={o.name} className="flex items-center gap-2.5">
-                    <span aria-hidden className="w-8 h-8 rounded-full bg-gray-200/70 flex items-center justify-center text-[11px] font-bold text-gray-500">
-                      {o.name.slice(0, 2).toUpperCase()}
-                    </span>
-                    <span className="leading-tight">
-                      <span className="block text-[13.5px] font-semibold text-gray-700">{o.name}</span>
-                      {o.sub && <span className="block text-[11px] text-gray-400">{o.sub}</span>}
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          </section>
-        )}
+        {/* The trusted-organisations band is removed. It named real institutions under a "Trusted by"
+            claim, which is a factual statement about a third party and an implied endorsement. It is in
+            git if it returns — with permission. */}
 
         {/* ── CLOSING CTA ──────────────────────────────────────────────────── */}
         <section id="cta" className={`${container} pb-14`}>

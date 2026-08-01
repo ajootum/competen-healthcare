@@ -63,26 +63,9 @@ export const HERO_CARDS = {
   learning: { title: "Learning Progress", value: 78, caption: "Modules Completed" },
 };
 
-// ─────────────────────────────────────────────────────────────────────────────
-// TRUSTED ORGANISATIONS — READ BEFORE PUBLISHING.
-//
-// These are REAL, NAMED institutions. "Trusted by" is a factual claim about a third party and an implied
-// endorsement, and it uses their name commercially. Listing an organisation that has not agreed to be
-// named is a misrepresentation, and in healthcare it is the kind that gets noticed.
-//
-// The names below are the ones in the approved design. Each needs written permission before this page is
-// public. Removing one is deleting a line; there is no code change and the carousel handles any count,
-// including zero -- with an empty list the whole section does not render, which is the correct behaviour
-// when there is nothing that can honestly be claimed.
-export type TrustedOrg = { name: string; sub?: string };
-export const TRUSTED: TrustedOrg[] = [
-  { name: "Aga Khan", sub: "University Hospital" },
-  { name: "Kenyatta", sub: "National Hospital" },
-  { name: "MEGACARE", sub: "Hospital" },
-  { name: "Gertrude's", sub: "Children's Hospital" },
-  { name: "AIC", sub: "Africa Healthcare" },
-];
-export const TRUSTED_HEADING = "Trusted by forward-thinking healthcare organisations";
+// The named "Trusted by" band is removed at the owner's instruction. It listed real institutions under an
+// endorsement claim that had not been confirmed with any of them. If it returns it needs written
+// permission per organisation; the previous implementation is in git history.
 
 export type Audience = { title: string; body: string; accent: string; icon: string; href: string };
 
