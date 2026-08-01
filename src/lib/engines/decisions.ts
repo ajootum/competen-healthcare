@@ -59,6 +59,28 @@ export async function generateDecisionsForCycle(
     for (const c of cpus ?? []) cpuMonths.set(c.id, c.reassessment_months ?? 12);
   }
 
+  // XWI P2-10 — WHICH VERSION OF THE STANDARD WAS THIS JUDGED AGAINST?
+  // The row already records which framework a decision belongs to and not which version of it was in
+  // force. "Found competent" and "found competent against version 1.0.0" are different claims, and only
+  // the second survives the standard being revised. Read here, at decision time, because reading it later
+  // gives you today's version rather than the one that applied.
+  //
+  // The semver columns, not the numeric version_num: version_num is 0 on all 15 frameworks while the
+  // semver carries the real 1.0.0, so stamping the field that is actually maintained is the point.
+  const fwIds = [...new Set((scores ?? []).map((s: { framework_id: string | null }) => s.framework_id).filter(Boolean))] as string[];
+  const fwVersion = new Map<string, string>();
+  if (fwIds.length) {
+    const { data: fws } = await admin
+      .from("frameworks")
+      .select("id, version_major, version_minor, version_revision")
+      .in("id", fwIds)
+      .returns<{ id: string; version_major: number | null; version_minor: number | null; version_revision: number | null }[]>();
+    for (const f of fws ?? []) {
+      // Absent parts read as 0 rather than being skipped: "1.0.0" is a claim, "1..0" is a bug.
+      fwVersion.set(f.id, `${f.version_major ?? 0}.${f.version_minor ?? 0}.${f.version_revision ?? 0}`);
+    }
+  }
+
   // Any critical-failure evidence flagged on these assessments?
   const { data: critAssessments } = await admin
     .from("assessments")
@@ -119,6 +141,7 @@ export async function generateDecisionsForCycle(
       cpu_id: cpuId,
       competency_id: s.competency_id,
       framework_id: s.framework_id,
+      framework_version: s.framework_id ? (fwVersion.get(s.framework_id) ?? null) : null,
       outcome,
       maturity: score != null ? maturityFromScore(score) : null,
       decided_by: decidedBy,

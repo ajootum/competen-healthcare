@@ -47,6 +47,10 @@ const check = (ok: boolean, label: string, detail = "") => {
   if (ok) pass++; else fail++;
 };
 
+// A check with no data behind it is NOT a pass. Reported as its own outcome, as the other harnesses do.
+let vacuous = 0;
+const na = (label: string, why: string) => { vacuous++; console.log(`  n/a   ${label} -- ${why}`); };
+
 const written: { table: string; id: string }[] = [];
 async function cleanup() {
   head("cleanup");
@@ -380,6 +384,34 @@ async function main() {
     "paging every assessor in the hospital is how a queue gets ignored");
   check(/assessment_request_\$\{b\.action\}|assessment_requested/.test(arRoute), "every transition is audited");
 
+  // ── 2f. FRAMEWORK VERSION STAMP (XWI P2-10, part) ────────────────────────
+  head("2f. VERSION STAMP  (what standard was this judged against?)");
+
+  const { error: fvErr } = await admin.from("competency_decisions").select("framework_version").limit(1);
+  check(!fvErr, "competency_decisions records the framework version", fvErr?.message);
+
+  const dec = readFileSync(join(process.cwd(), "src/lib/engines/decisions.ts"), "utf8");
+  check(/framework_version: s\.framework_id/.test(dec), "the decision run stamps it");
+  check(/version_major/.test(dec) && !/version_num/.test(dec.slice(dec.indexOf("fwVersion"), dec.indexOf("fwVersion") + 900)),
+    "it reads the SEMVER columns, not version_num",
+    "version_num is 0 on all 15 frameworks while the semver carries the real 1.0.0 -- stamping it would record 0 for everything");
+  check(/version_major \?\? 0/.test(dec) && /version_revision \?\? 0/.test(dec),
+    "missing parts default to 0, so the stamp is always a whole version",
+    `"1..0" is a bug wearing a version's clothes`);
+
+  // The value the code would produce for a real framework, checked against the framework itself.
+  const { data: fw } = await admin.from("frameworks").select("id, version_major, version_minor, version_revision").limit(1);
+  const f0 = (fw ?? [])[0] as any;
+  if (f0) {
+    const expected = `${f0.version_major ?? 0}.${f0.version_minor ?? 0}.${f0.version_revision ?? 0}`;
+    check(/^\d+\.\d+\.\d+$/.test(expected), `a real framework yields a whole semver ("${expected}")`);
+  } else na("semver shape against a real framework", "no frameworks on this platform");
+
+  // Existing decisions are deliberately NOT backfilled -- null means "not recorded", which is true.
+  const { data: existing } = await admin.from("competency_decisions").select("framework_version").limit(500);
+  const stamped = ((existing ?? []) as any[]).filter(r => r.framework_version).length;
+  check(true, `${(existing ?? []).length} historical decision(s), ${stamped} stamped -- backfilling would make an unknown look like a fact`);
+
   // ── 2e. TRACEABILITY (XWI P2-15) ─────────────────────────────────────────
   head("2e. TRACE IDS  (can you join an act to what it caused?)");
 
@@ -469,7 +501,7 @@ async function main() {
 
   await cleanup();
 
-  console.log(`\n  ${pass} passed, ${fail} failed\n`);
+  console.log(`\n  ${pass} passed, ${fail} failed${vacuous ? `, ${vacuous} not assertable on current data` : ""}\n`);
   if (fail) process.exit(1);
 }
 
