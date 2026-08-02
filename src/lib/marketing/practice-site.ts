@@ -130,11 +130,23 @@ export const JOURNEYS: PracticeJourney[] = [
 export const journeyByKey = (k: string) => JOURNEYS.find(j => j.key === k)!;
 
 /** Section links in the Practice header. Separate from JOURNEYS, which are the CTAs. */
+/**
+ * CPR-LP-001 asks for: Logo, Features, How it Works, Pricing, Support, Sign In.
+ *
+ * PRICING IS ABSENT DELIBERATELY. The specification names the item but sets no prices, and the only
+ * numbers in existence are a comp's four tiers that the product cannot honour -- two plans are seeded and
+ * the trial is thirty days, not fourteen. A menu item pointing at a section that is not there is worse
+ * than neither, so both went together and both come back together when there is a price to publish.
+ *
+ * SUPPORT IS A REAL ADDRESS, not a help centre that does not exist. It is the one support channel that
+ * actually answers today.
+ */
 export const PRACTICE_NAV = [
+  { label: "Features", href: "/practice#capabilities" },
   { label: "How it works", href: "/practice#how-it-works" },
-  { label: "For clinicians", href: "/practice#capabilities" },
   { label: "For patients", href: "/practice/book" },
   { label: "Questions", href: "/practice#faqs" },
+  { label: "Support", href: contactFor("Competen Practice support") },
 ];
 
 // ── LP-PRA-001 page sections ──────────────────────────────────────────────────────────────────────────

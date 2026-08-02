@@ -3,7 +3,7 @@ import PracticeHeader from "@/components/marketing/PracticeHeader";
 import SiteFooter from "@/components/marketing/SiteFooter";
 import { PatternField } from "@/components/marketing/Pattern";
 import {
-  PRACTICE_ACCENT, PRACTICE_ACCENT_DARK, PRACTICE_HERO, PRACTICE_PROMISES, NOT_AN_EMR, PATIENT_JOURNEY,
+  PRACTICE_ACCENT, PRACTICE_ACCENT_DARK, PRACTICE_HERO, WHY_PRACTICE, YOUR_DAY, PRACTICE_AUDIENCES, CAREER_JOURNEY, BUILT_FOR_AFRICA, PRACTICE_PROMISES, NOT_AN_EMR, PATIENT_JOURNEY,
   PRACTICE_AREAS, PRACTICE_ROLES, TENANT_MODEL, INTEGRATIONS, INTEGRATION_NOTE, PRACTICE_CTA, PREVIEW_NOTE,
   PORTABILITY, AI_SAFEGUARDS, OVERVIEW_SCREEN, AREA_COUNT_WORD,
 } from "@/lib/marketing/practice-content";
@@ -66,6 +66,7 @@ export default async function Page() {
                 {PRACTICE_HERO.headline.map(l => <span key={l} className="block">{l}</span>)}
               </h1>
               <p className="mt-5 text-[16px] leading-relaxed text-gray-600">{PRACTICE_HERO.body}</p>
+              <p className="mt-4 text-[15px] font-bold text-gray-900">{PRACTICE_HERO.notEmr}</p>
 
               {/* Two primary journeys side by side -- the clinic owner and the patient are different
                   people arriving for different reasons, and a single button cannot serve both. */}
@@ -101,7 +102,103 @@ export default async function Page() {
               </div>
               <figcaption className="mt-3 text-[11.5px] text-gray-500">{PREVIEW_NOTE}</figcaption>
             </figure>
+
+            {/* CPR-LP-001's trust strip. Four claims, each true of the product as built. */}
+            <ul className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4 border-t border-gray-200 pt-6">
+              {PRACTICE_HERO.pillars.map(p => (
+                <li key={p.title}>
+                  <p className="text-[13px] font-bold text-gray-900">{p.title}</p>
+                  <p className="text-[12px] text-gray-500">{p.body}</p>
+                </li>
+              ))}
+            </ul>
           </div>
+        </section>
+
+        {/* ── WHY COMPETEN PRACTICE (CPR-LP-001) ───────────────────────────
+            Problem first. A clinician who does not recognise the problem will not read the solution. */}
+        <section className={`${container} py-12 lg:py-16`}>
+          <h2 className="text-[1.6rem] font-bold tracking-tight text-gray-900 text-center">{WHY_PRACTICE.title}</h2>
+          <ul className="mt-8 grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
+            {WHY_PRACTICE.cards.map(c => (
+              <li key={c.problem} className="rounded-2xl border border-gray-200 bg-white p-5">
+                <p className="text-[15px] font-bold text-gray-900 leading-snug text-balance">{c.problem}</p>
+                <p className="mt-2 text-[13px] leading-relaxed text-gray-600">{c.answer}</p>
+              </li>
+            ))}
+          </ul>
+        </section>
+
+        {/* ── BUILT AROUND YOUR DAY (CPR-LP-001) ───────────────────────────── */}
+        <section className="border-y border-gray-100 bg-[var(--cmp-neutral-50,#FAFAFA)]">
+          <div className={`${container} py-12 lg:py-16`}>
+            <h2 className="text-[1.6rem] font-bold tracking-tight text-gray-900">{YOUR_DAY.title}</h2>
+            <p className="mt-2 text-[15px] text-gray-600">{YOUR_DAY.body}</p>
+            <ol className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+              {YOUR_DAY.steps.map(s => (
+                <li key={s.label} className="rounded-2xl border border-gray-200 bg-white p-5">
+                  <span className="inline-block rounded-full px-2.5 py-1 text-[11px] font-bold"
+                    style={{ background: `color-mix(in srgb, ${PRACTICE_ACCENT} 12%, white)`, color: PRACTICE_ACCENT_DARK }}>
+                    {s.label}
+                  </span>
+                  <p className="mt-3 text-[15px] font-bold text-gray-900">{s.title}</p>
+                  <p className="mt-1.5 text-[13px] leading-relaxed text-gray-600">{s.body}</p>
+                </li>
+              ))}
+            </ol>
+          </div>
+        </section>
+
+        {/* ── WHO IT IS FOR (CPR-LP-001) ───────────────────────────────────── */}
+        <section className={`${container} py-12 lg:py-16`}>
+          <h2 className="text-[1.6rem] font-bold tracking-tight text-gray-900">Designed for every healthcare professional</h2>
+          <p className="mt-2 max-w-2xl text-[15px] text-gray-600">
+            The record is about the clinical work you do, not the job title you hold, so the same workspace
+            fits very different practices.
+          </p>
+          <ul className="mt-6 flex flex-wrap gap-2">
+            {PRACTICE_AUDIENCES.map(a => (
+              <li key={a} className="rounded-full border border-gray-200 bg-white px-4 py-2 text-[13px] font-medium text-gray-700">{a}</li>
+            ))}
+          </ul>
+        </section>
+
+        {/* ── THE CAREER TIMELINE (CPR-LP-001) ─────────────────────────────── */}
+        <section className="border-y border-gray-100 bg-[var(--cmp-neutral-50,#FAFAFA)]">
+          <div className={`${container} py-12 lg:py-16`}>
+            <h2 className="text-[1.6rem] font-bold tracking-tight text-gray-900">{CAREER_JOURNEY.title}</h2>
+            <p className="mt-2 max-w-2xl text-[15px] text-gray-600">{CAREER_JOURNEY.body}</p>
+            <ol className="mt-8 flex flex-wrap items-center gap-x-2 gap-y-3">
+              {CAREER_JOURNEY.stages.map((s, i) => (
+                <li key={s} className="flex items-center gap-2">
+                  <span className="rounded-xl border border-gray-200 bg-white px-3.5 py-2 text-[13px] font-medium text-gray-700">{s}</span>
+                  {i < CAREER_JOURNEY.stages.length - 1 && <span aria-hidden className="text-gray-300">→</span>}
+                </li>
+              ))}
+            </ol>
+            <p className="mt-6 text-[15px] font-semibold" style={{ color: PRACTICE_ACCENT_DARK }}>{CAREER_JOURNEY.closing}</p>
+          </div>
+        </section>
+
+        {/* ── BUILT FOR AFRICA (CPR-LP-001) ────────────────────────────────
+            The offline line is marked pending on purpose: CPR-019 is Phase 9 and unbuilt, and "works
+            offline" is the one claim on this page a clinician in a low-connectivity setting would plan
+            around. Promising it early would be the most damaging sentence here. */}
+        <section className={`${container} py-12 lg:py-16`}>
+          <h2 className="text-[1.6rem] font-bold tracking-tight text-gray-900">{BUILT_FOR_AFRICA.title}</h2>
+          <ul className="mt-8 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+            {BUILT_FOR_AFRICA.points.map(p => (
+              <li key={p.title} className={`rounded-2xl border p-5 ${"pending" in p && p.pending ? "border-dashed border-gray-300 bg-gray-50" : "border-gray-200 bg-white"}`}>
+                <p className="text-[15px] font-bold text-gray-900">
+                  {p.title}
+                  {"pending" in p && p.pending && (
+                    <span className="ml-2 rounded-full bg-gray-200 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-gray-600">Not yet</span>
+                  )}
+                </p>
+                <p className="mt-1.5 text-[13px] leading-relaxed text-gray-600">{p.body}</p>
+              </li>
+            ))}
+          </ul>
         </section>
 
         {/* ── THE FOUR JOURNEYS ────────────────────────────────────────────

@@ -29,8 +29,9 @@ import { join } from "node:path";
 import {
   PRACTICE_AREAS, INTEGRATIONS, PREVIEW_NOTE, MODULES_WITHOUT_SPECS, PRACTICE_HERO, TENANT_MODEL,
   OVERVIEW_WORKSPACES, OVERVIEW_SCREEN, AREA_COUNT_WORD,
+  WHY_PRACTICE, YOUR_DAY, PRACTICE_AUDIENCES, CAREER_JOURNEY, BUILT_FOR_AFRICA,
 } from "../src/lib/marketing/practice-content";
-import { JOURNEYS, AVAILABILITY, JOURNEY_GATES, FAQS } from "../src/lib/marketing/practice-site";
+import { JOURNEYS, AVAILABILITY, JOURNEY_GATES, FAQS, PRACTICE_NAV } from "../src/lib/marketing/practice-site";
 import { loadEnvConfig } from "@next/env";
 import { createClient } from "@supabase/supabase-js";
 
@@ -335,6 +336,49 @@ async function main() {
   // LP-PRA-001 asks for FAQs. The availability question is the one a visitor has by the time they reach
   // the bottom and the easiest to quietly drop, so its presence is asserted rather than assumed.
   ok("7g. /practice renders the FAQs", FAQS.every(f => overviewText.includes(f.q)));
+
+  // ── 8. CPR-LP-001 homepage, and the four things it deliberately does not say ──────────────────────
+  //
+  // The sections are asserted so a redesign cannot quietly drop one. The OMISSIONS are asserted because
+  // they are decisions, and a decision that lives only in a commit message is a decision that gets undone
+  // by the next person working from the comp -- which still shows prices, a trial length the product
+  // contradicts, a play button with no video, and a real hospital's name.
+
+  ok("8a. /practice asks the CPR-LP-001 question", overviewText.includes(WHY_PRACTICE.title));
+  ok("8b. /practice renders every problem/solution card",
+    WHY_PRACTICE.cards.every(c => overviewText.includes(c.problem)));
+  ok("8c. /practice renders the day", overviewText.includes(YOUR_DAY.title)
+    && YOUR_DAY.steps.every(s => overviewText.includes(s.title)));
+  ok("8d. /practice names who it is for", PRACTICE_AUDIENCES.every(a => overviewText.includes(a)));
+  ok("8e. /practice renders the career timeline",
+    overviewText.includes(CAREER_JOURNEY.title) && CAREER_JOURNEY.stages.every(s => overviewText.includes(s)));
+  ok("8f. /practice renders the delivery-setting section", overviewText.includes(BUILT_FOR_AFRICA.title));
+
+  // The EMR boundary is a CPR-LP-001 design principle, and the hero is where it has to land: a visitor who
+  // reads three screens before learning it is not an EMR has been misled for three screens.
+  ok("8g. /practice states the EMR boundary in the hero", overviewText.includes(PRACTICE_HERO.notEmr));
+
+  // NO PRICE. Decided with the user: the specification names a Pricing section but sets no numbers, and
+  // the comp's four tiers cannot be honoured -- two plans are seeded and the trial is 30 days, not 14.
+  const moneyLeaks = [/\$\s?\d/, /\bper month\b/i, /\/month\b/i, /\bfree trial\b/i, /\b14[- ]day\b/i, /\bno setup fees\b/i]
+    .filter(re => re.test(overviewText));
+  ok("8h. /practice publishes no price or trial claim", moneyLeaks.length === 0,
+    moneyLeaks.map(String).join(", "));
+  ok("8i. the nav offers no Pricing link while there is no pricing",
+    !PRACTICE_NAV.some(n => /pricing/i.test(n.label)));
+
+  // NO DEAD PLAY BUTTON. There is no video; the comp's secondary CTA was dropped rather than wired to
+  // nothing. Asserted on the rendered text so a reinstated button is caught wherever it comes from.
+  ok("8j. /practice offers no tour that does not exist", !/2[- ]minute tour|watch the tour/i.test(overviewText));
+
+  // NO NAMED INSTITUTION. The comp's illustrated day names a real hospital, which implies a relationship
+  // that does not exist -- the same class of claim as "trusted by", and the one easiest to paste back in.
+  ok("8k. /practice names no real institution as a user", !/CURE Uganda|Mulago|Nakasero|Aga Khan/i.test(overviewText));
+
+  // OFFLINE IS NOT CLAIMED AS WORKING. CPR-019 is Phase 9 and unbuilt, and this is the single claim a
+  // clinician in a low-connectivity setting would plan around.
+  const offline = BUILT_FOR_AFRICA.points.find(p => "pending" in p && p.pending);
+  ok("8l. the offline capability is marked as not yet built", !!offline && overviewText.includes("Not yet"));
   ok("7h. the FAQs answer whether it can be used today",
     FAQS.some(f => /try it today|available/i.test(f.q)));
 

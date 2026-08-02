@@ -54,10 +54,21 @@ export const PREVIEW_NOTE = "Interface previews from the Competen Practice produ
 // management -- true, but so does everyone else.
 export const PRACTICE_HERO = {
   eyebrow: "Competen Practice",
-  headline: ["Your practice.", "Wherever you practise."],
+  // CPR-LP-001's headline, verbatim, split at the line breaks the specification writes it with.
+  headline: ["Your Professional Practice.", "One Workspace.", "Every Patient.", "Every Hospital.", "Every Year of Your Career."],
   body:
-    "A portable, longitudinal record of your own clinical work -- across every hospital, clinic, outreach " +
-    "site and teleconsultation. It follows you, not your employer.",
+    "Capture your clinical experience. Organise your patients. Build lifelong professional intelligence -- " +
+    "across every hospital, clinic, outreach site and teleconsultation. It follows you, not your employer.",
+  // CPR-LP-001's design principles put "clear distinction from EMR products" first among equals, and this
+  // is the sentence that does it. Kept in the hero rather than a section further down, because a visitor
+  // who reads three screens before learning it is not an EMR has been misled for three screens.
+  notEmr: "Not an EMR. Your practice companion.",
+  pillars: [
+    { title: "Works everywhere", body: "Follow your practice anywhere" },
+    { title: "Built for you", body: "Yours, not your hospital's" },
+    { title: "Learns from your work", body: "Intelligence from your own record" },
+    { title: "Secure and private", body: "Your data, your control" },
+  ],
   image: "/images/practice/command-centre.webp",
   imageAlt: "The Competen Practice command centre showing today's appointments, the walk-in queue, active encounters, follow-ups due and practice intelligence",
 };
@@ -585,3 +596,87 @@ export const RESOLVED_SPEC_CONFLICTS = [
   "PEN numbering: CPR-ARCH-001 s13.2 vs the PEN specs -- RESOLVED, the V2 workspaces all use the PEN specs.",
   "CPR numbering: CPR-ARCH-001 s14 vs its own diagram -- RESOLVED, the V2 workspace documents supersede both.",
 ];
+
+// ══════════════════════════════════════════════════════════════════════════════════════════════════════
+// CPR-LP-001 v1 — homepage sections the earlier LP-PRA-001 page did not have.
+//
+// WHAT THE COMP ASKED FOR AND THIS DOES NOT PUBLISH, decided with the user rather than assumed:
+//   - PRICING. The comp shows four tiers at $5/$10/$20/custom and "Free 14-day trial". The product seeds
+//     TWO plans (practice_trial, practice_standard) and its trial is THIRTY days, not fourteen. Publishing
+//     four tiers would put a plan structure on a public page that signup cannot assign, and publishing a
+//     14-day trial would contradict what provisioning actually grants. Omitted until priced; the nav's
+//     Pricing link goes with it, because a menu item to a section that is not there is worse than neither.
+//   - "WATCH 2-MINUTE TOUR". There is no video. A play button that plays nothing reads as broken.
+//   - THE COMP'S ILLUSTRATED DAY names a real hospital (CURE Uganda) and shows "147 similar patients".
+//     Naming a real institution on a marketing page implies a relationship that does not exist, and a
+//     specific count invents a statistic. The workflow below describes the capability instead: the shape
+//     of the day is the point, and it survives being honest about it.
+// ══════════════════════════════════════════════════════════════════════════════════════════════════════
+
+/** CPR-LP-001 "Why Competen Practice" — problem first, then what the product does about it. */
+export const WHY_PRACTICE = {
+  title: "Why Competen Practice?",
+  cards: [
+    { problem: "You work in multiple hospitals.", answer: "It keeps one professional record across all of them." },
+    { problem: "Your experience disappears after every shift.", answer: "It builds a lifelong record of the clinical work you have actually done." },
+    { problem: "You rely on memory.", answer: "It remembers every patient you have managed, and lets you search them." },
+    { problem: "You want to improve.", answer: "It shows you patterns in your own practice, not somebody else's benchmark." },
+  ],
+};
+
+/**
+ * CPR-LP-001 "Built Around Your Day". Four moments, in the order they happen.
+ *
+ * Deliberately generic: no named hospital, no invented patient, no fabricated count. What makes this
+ * section work is the SHAPE of a clinical day, and that is not improved by pretending to be a screenshot.
+ */
+export const YOUR_DAY = {
+  title: "Built around your day",
+  body: "The same four moments, wherever you are working today.",
+  steps: [
+    { label: "Start", title: "Choose where you are working", body: "Pick today's location and session. Your diary, your queue and your defaults follow." },
+    { label: "See", title: "Open the patient", body: "Booked, walk-in or follow-up, the encounter opens the same way and takes seconds to start." },
+    { label: "Record", title: "Close the encounter", body: "Diagnosis, treatment, what happens next. Sign it and it is final." },
+    { label: "Learn", title: "Ask your own record", body: "How many patients like this one have you managed, and what happened to them." },
+  ],
+};
+
+/**
+ * CPR-LP-001 "Designed for Every Healthcare Professional".
+ *
+ * These are AUDIENCES, not implemented role types. The application knows nurse, hospital_admin and
+ * super_admin; Practice memberships know practice_owner and practitioner. Listing ten professions says
+ * who the product is FOR, which is a marketing claim about fit, not a promise that each has a bespoke
+ * workspace -- so no line here says otherwise.
+ */
+export const PRACTICE_AUDIENCES = [
+  "Doctors", "Nurses", "Clinical officers", "Midwives", "Dentists", "Pharmacists",
+  "Physiotherapists", "Psychologists", "Nutritionists", "Occupational therapists",
+];
+
+/** CPR-LP-001 "Professional Journey" — the timeline the portability promise is really about. */
+export const CAREER_JOURNEY = {
+  title: "Your practice never stops",
+  body: "One record that follows you through every step of a career, not one that ends when a contract does.",
+  stages: ["Training", "Internship", "First hospital", "Second hospital", "Private clinic", "Outreach", "Consultancy", "Retirement"],
+  closing: "One record. A lifetime of clinical work you can still account for.",
+};
+
+/**
+ * CPR-LP-001 "Built for Africa".
+ *
+ * Every line is a design constraint this product was built under, not a market claim. "Works offline" is
+ * stated as intent rather than fact and labelled by phase, because CPR-019 mobile/offline is Phase 9 and
+ * has not been built -- saying it works today would be the single most damaging false claim on the page
+ * for a clinician in a low-connectivity setting.
+ */
+export const BUILT_FOR_AFRICA = {
+  title: "Built for how care is actually delivered here",
+  points: [
+    { title: "Works in hospitals", body: "You can practise inside a facility without the facility owning your record." },
+    { title: "Works in private practice", body: "A solo clinician runs the whole thing without a receptionist." },
+    { title: "Works on a phone", body: "The screens are built for the device most clinicians actually carry." },
+    { title: "Built for low-resource settings", body: "Speed before completeness: record the minimum safely, finish the detail later." },
+    { title: "Offline working", body: "Specified in CPR-019 and not yet built. It arrives with the mobile phase; it does not work today.", pending: true },
+  ],
+};
