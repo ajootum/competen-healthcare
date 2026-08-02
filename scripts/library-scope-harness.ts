@@ -1,5 +1,9 @@
 /**
- * Clinical Library search scope harness (migration 167).
+ * Clinical Library search scope harness (migrations 167, 169 and 186).
+ *
+ * Covers BOTH halves of hybrid search -- search_ckcm (keyword) and match_assets (semantic) -- because
+ * they share one inverted convention: p_hospital = null means UNRESTRICTED. Scoping one and not the
+ * other is how a single result set came to mix a scoped and an unscoped source.
  *
  * search_ckcm() runs through the SERVICE-ROLE client, which bypasses RLS, so its tenant filter is a
  * function argument rather than a database policy. That makes it exactly the kind of control that can be
@@ -8,9 +12,10 @@
  *
  * WHAT THIS ASSERTS, AND WHY EACH ONE MATTERS:
  *
- *   1. p_hospital is MANDATORY. A 2-arg call must FAIL. If the old overload ever comes back, every caller
- *      that forgets the argument silently goes cross-tenant again; this is the only check that catches
- *      the regression at its source rather than at each call site.
+ *   1. p_hospital is MANDATORY, in BOTH functions. A call that omits it must FAIL. If a permissive
+ *      overload ever comes back, every caller that forgets the argument silently goes cross-tenant
+ *      again; this is the only check that catches the regression at its source rather than at each call
+ *      site. match_assets kept `default null` until migration 186 and was the last live instance.
  *   2. A tenant sees its own rows and shared rows, and NOT another tenant's.
  *   3. super_admin (explicit null) still sees everything — the fix must not break the landlord plane.
  *   4. A caller with NO hospital gets the nil uuid and sees shared content only, never everything. This is
@@ -67,7 +72,7 @@ const distinctiveWord = (title: string) =>
   String(title).split(/\s+/).filter(w => w.length > 3).sort((a, b) => b.length - a.length)[0];
 
 async function main() {
-  console.log("\nClinical Library search scope (migration 167)\n");
+  console.log("\nClinical Library search scope (migrations 167, 169, 186)\n");
 
   // ── 1. The argument must be mandatory ────────────────────────────────────
   const legacy = await admin.rpc("search_ckcm", { q: "nursing", max_results: 5 });
@@ -77,6 +82,23 @@ async function main() {
   const scopedCall = await search("nursing", null, 5);
   ok("3-arg search_ckcm resolves", !scopedCall.error, scopedCall.error?.message);
   if (scopedCall.error) { report(); return; }
+
+  // ── 1b. THE SAME RULE FOR match_assets (migration 186) ───────────────────
+  //
+  // The other half of hybrid search. It shares search_ckcm's inverted convention -- p_hospital = null
+  // means UNRESTRICTED -- and until 186 it kept `default null`, so it was the last place a caller could
+  // omit the tenant argument and quietly get every hospital. Semantic hits feed the AI grounding context
+  // exactly as keyword hits do, so the blast radius was the same.
+  //
+  // A dummy embedding is enough: this asserts which OVERLOAD resolves, not what comes back. Anything
+  // other than "function not found" means the permissive signature is still callable.
+  const DUMMY = JSON.stringify(new Array(1536).fill(0));
+  const looseAssets = await admin.rpc("match_assets", { query_embedding: DUMMY, match_count: 1 });
+  ok("2-arg match_assets is rejected (p_hospital is mandatory)", !!looseAssets.error,
+    looseAssets.error ? "" : "the permissive overload still exists -- a caller that omits p_hospital goes cross-tenant");
+
+  const scopedAssets = await admin.rpc("match_assets", { query_embedding: DUMMY, p_hospital: NONE, match_count: 1 });
+  ok("3-arg match_assets resolves", !scopedAssets.error, scopedAssets.error?.message);
 
   // ── 2/3/4. Tenant isolation, per table, with data behind it ──────────────
   const { data: hosp } = await admin.from("hospitals").select("id,name");
