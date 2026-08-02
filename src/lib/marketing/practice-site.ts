@@ -94,13 +94,16 @@ export const PRACTICE_NAV = [
 
 // ── LP-PRA-001 page sections ──────────────────────────────────────────────────────────────────────────
 
+// CPR-ARCH-001 v2's canonical practice journey, compressed to three moves. Version 1's version of this
+// section described setting up a clinic; v2 is about the working day of one clinician, which is both what
+// the architecture now describes and what the person reading this page actually has.
 export const HOW_IT_WORKS = {
   title: "How it works",
-  body: "Three moves. The first takes an afternoon; the other two keep happening without you.",
+  body: "Three moves. The first takes an afternoon; the other two happen every day, mostly without you.",
   steps: [
-    { title: "Set your practice up", body: "Your locations, your working hours, your appointment types and your booking rules. Then invite your clinicians and your front desk." },
-    { title: "Open your diary", body: "Patients see only the slots you have genuinely made available, and book them themselves -- at any hour, without ringing you." },
-    { title: "Stop losing people", body: "Every diagnosis and treatment carries its own review date, and recalls chase the patient so your front desk does not have to." },
+    { title: "Say where and when you work", body: "Your locations, sessions, appointment types and booking rules -- across every facility you practise in. Patients book the slots you have genuinely opened." },
+    { title: "See the patient, capture in seconds", body: "Booked, walk-in or unscheduled, the encounter opens the same way. Record the minimum safely, link the diagnosis and treatment, and finish the detail later." },
+    { title: "Let it close the loop", body: "Each encounter sets what happens next, updates the timeline, files the follow-up, and adds itself to the case memory you will search a year from now." },
   ],
 };
 
@@ -131,7 +134,15 @@ export const TRUST = {
 export const FAQS: { q: string; a: string }[] = [
   {
     q: "Is this an electronic medical record?",
-    a: "No, deliberately. It handles appointments, continuity and patient engagement. Detailed consultation notes, inpatient documentation, medication administration records and laboratory ordering are out of scope -- where you already run an EMR, Competen Practice is built to connect to it rather than replace it.",
+    a: "No, and the distinction matters. It is your professional record of your own authorised work with a patient -- not the authoritative institutional record. Inpatient charts, medication administration records, laboratory, radiology and billing systems are out of scope, and importing a hospital's data does not make that data yours. Where a hospital runs an EMR, Practice is built to connect to it rather than replace it.",
+  },
+  {
+    q: "I work at more than one hospital. Does that work?",
+    a: "That is the design. One personal record spans every facility, clinic, outreach site and teleconsultation you work in, and each encounter carries where it happened and under which local identifier. What it does not do is join those worlds up behind the scenes: organisation data stays governed by that organisation, patients are not matched across them automatically, and a report for one hospital cannot expose another's.",
+  },
+  {
+    q: "Do I need a receptionist to use it?",
+    a: "No. Working without one is a design principle rather than an afterthought -- a walk-in can be registered in under a minute and seen immediately, with the detail completed afterwards. If you do have an assistant, they can be added later with delegated permissions that stop short of your clinical records.",
   },
   {
     q: "Do my patients need an account to book?",

@@ -5,6 +5,7 @@ import { PatternField } from "@/components/marketing/Pattern";
 import {
   PRACTICE_ACCENT, PRACTICE_ACCENT_DARK, PRACTICE_HERO, PRACTICE_PROMISES, NOT_AN_EMR, PATIENT_JOURNEY,
   PRACTICE_AREAS, PRACTICE_ROLES, TENANT_MODEL, INTEGRATIONS, INTEGRATION_NOTE, PRACTICE_CTA, PREVIEW_NOTE,
+  PORTABILITY, AI_SAFEGUARDS,
 } from "@/lib/marketing/practice-content";
 import { JOURNEYS, HOW_IT_WORKS, TRUST, FAQS, contactFor } from "@/lib/marketing/practice-site";
 import { pageMetadata } from "@/lib/marketing/site";
@@ -25,7 +26,7 @@ import { pageMetadata } from "@/lib/marketing/site";
 // which is supported by anything.
 
 export const metadata = pageMetadata({
-  title: "Competen Practice — run your practice, delight your patients",
+  title: "Competen Practice — your practice, wherever you practise",
   description: PRACTICE_HERO.body,
   path: "/practice",
   image: "/images/og/practice.jpg",
@@ -255,6 +256,46 @@ export default function Page() {
             <p className="mt-5 text-[12.5px] text-gray-500">
               Larger groups can add an organisation administrator across multiple practices.
             </p>
+          </div>
+        </section>
+
+        {/* ── PORTABILITY (CPR-ARCH-001 s10) ───────────────────────────────
+            Version 2's headline claim is that the record follows the practitioner across facilities. That
+            invites exactly one wrong inference -- that data flows between those facilities -- so the
+            caveat travels with the claim rather than being left to a later conversation. */}
+        <section className={`${container} py-12 lg:py-16`}>
+          <div className="max-w-2xl">
+            <h2 className="text-[1.6rem] font-bold tracking-tight text-gray-900 text-balance">{PORTABILITY.title}</h2>
+            <p className="mt-2 text-[14px] leading-relaxed text-gray-600">{PORTABILITY.body}</p>
+          </div>
+          <ul className="mt-8 grid gap-x-8 gap-y-7 sm:grid-cols-2">
+            {PORTABILITY.points.map(p => (
+              <li key={p.title}>
+                <span aria-hidden className="block w-7 h-1 rounded-full" style={{ background: PRACTICE_ACCENT }} />
+                <h3 className="mt-3 text-[15.5px] font-bold text-gray-900">{p.title}</h3>
+                <p className="mt-1.5 text-[13.5px] leading-relaxed text-gray-600">{p.body}</p>
+              </li>
+            ))}
+          </ul>
+        </section>
+
+        {/* ── AI SAFEGUARDS (CPR-ARCH-001 s9.3) ────────────────────────────
+            Version 2 puts AI at the centre of the product. These are the terms on which a clinician is
+            being asked to trust it, and they are specific because the architecture is specific. */}
+        <section className="border-y border-gray-100 bg-[var(--cmp-neutral-50,#FAFAFA)]">
+          <div className={`${container} py-12 lg:py-16`}>
+            <div className="max-w-2xl">
+              <h2 className="text-[1.6rem] font-bold tracking-tight text-gray-900">{AI_SAFEGUARDS.title}</h2>
+              <p className="mt-2 text-[14px] leading-relaxed text-gray-600">{AI_SAFEGUARDS.body}</p>
+            </div>
+            <ul className="mt-8 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+              {AI_SAFEGUARDS.points.map(p => (
+                <li key={p.title} className="rounded-2xl border border-gray-200 bg-white p-5">
+                  <h3 className="text-[15px] font-bold text-gray-900">{p.title}</h3>
+                  <p className="mt-1.5 text-[13px] leading-relaxed text-gray-600">{p.body}</p>
+                </li>
+              ))}
+            </ul>
           </div>
         </section>
 

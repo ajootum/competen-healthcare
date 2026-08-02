@@ -40,8 +40,20 @@ const ok = (label: string, cond: boolean, detail = "") => {
   else { fails.push(label); console.log(`  FAIL  ${label}${detail ? ` -- ${detail}` : ""}`); }
 };
 
-/** The modules that have a developer specification. CPR-000 is the architecture, not a module. */
-const SPECIFIED = Array.from({ length: 20 }, (_, i) => `CPR-${String(i + 1).padStart(3, "0")}`);
+/**
+ * Every specification document that exists, and can therefore be cited by an area.
+ *
+ * CPR-001..020 are the workspace specs; PEN-001..015 are the Version 2 engine specs. CPR-000, CPR-000A and
+ * the five CPR-ARCH documents are architecture rather than modules, so they are not listed -- an area
+ * citing one of them would be claiming to cover a whole layer.
+ *
+ * The PEN ids follow the PEN SPECIFICATIONS, not CPR-ARCH-001 section 13.2, which numbers the same fifteen
+ * engines completely differently. See SPEC_CONFLICTS in practice-content.ts.
+ */
+const SPECIFIED = [
+  ...Array.from({ length: 20 }, (_, i) => `CPR-${String(i + 1).padStart(3, "0")}`),
+  ...Array.from({ length: 15 }, (_, i) => `PEN-${String(i + 1).padStart(3, "0")}`),
+];
 
 // Same list as the public-disclosure harness, deliberately duplicated: if that file is ever narrowed, this
 // one still fails, and two harnesses disagreeing is a louder signal than one silently relaxing.

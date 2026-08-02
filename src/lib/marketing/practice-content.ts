@@ -1,7 +1,17 @@
 // Competen Practice -- public product section (/practice and its six capability pages).
 //
-// DERIVED FROM CPR-000, CPR-000A and CPR-001 through CPR-020 (CPR-019 at Revision 2). Those are DEVELOPER
-// specifications: they are written in states,
+// GOVERNED BY CPR-ARCH-001 VERSION 2, which supersedes CPR-000 v1. Also derived from CPR-000A, CPR-ARCH-002
+// to 005, CPR-001..020 (CPR-019 at Revision 2) and the fifteen PEN engine specifications.
+//
+// VERSION 2 REPOSITIONED THE PRODUCT, and the copy here follows it. Version 1 sold appointment management
+// to a clinic. Version 2's own architecture statement is that Practice is "the healthcare professional's
+// portable, longitudinal and intelligent record of their own practice across every authorised place and
+// mode of work" -- practitioner-owned rather than clinic-owned, working without a receptionist, travelling
+// with the clinician between employers, and turning routine encounters into case memory. That is both a
+// truer and a far more distinctive claim, so the hero, the promises, the EMR boundary and the intelligence
+// area were all rewritten rather than patched.
+//
+// Those are DEVELOPER specifications: they are written in states,
 // business rules, permissions and acceptance criteria. None of that belongs on a marketing page, so what
 // travels across is the OUTCOME each module produces for the person paying for it. The `modules` field on
 // each area records which specs it came from -- it is never rendered, it exists so
@@ -31,45 +41,75 @@ export const PRACTICE_ACCENT_DARK = "#1D4ED8";
 /** Shown beside every screen gallery. See honesty rule 1 above -- do not remove without also shipping. */
 export const PREVIEW_NOTE = "Interface previews from the Competen Practice product design.";
 
+// CPR-ARCH-001 v2's own architecture statement, which is a far better headline than v1's had: the product
+// is the PRACTITIONER's record, not the clinic's, and it travels with them. Version 1 sold appointment
+// management -- true, but so does everyone else.
 export const PRACTICE_HERO = {
   eyebrow: "Competen Practice",
-  headline: ["Run your practice.", "Delight your patients."],
+  headline: ["Your practice.", "Wherever you practise."],
   body:
-    "An intelligent practice assistant for clinicians: patients book themselves in, arrive prepared, " +
-    "and never fall out of follow-up. Built for the way clinics in Africa actually work.",
+    "A portable, longitudinal record of your own clinical work -- across every hospital, clinic, outreach " +
+    "site and teleconsultation. It follows you, not your employer.",
   image: "/images/practice/dashboard.webp",
   imageAlt: "The Competen Practice home dashboard, showing today's schedule, follow-ups due and booking activity",
 };
 
-// CPR-000 "Product Vision", turned from statements of intent into what the practice gets.
+// CPR-ARCH-001 v2's strategic principles, turned from architecture consequences into what a clinician
+// gets. "No receptionist required" and "speed before completeness" are principles in the document, and
+// they are the two that a solo practitioner will care about first.
 export const PRACTICE_PROMISES = [
-  { title: "Fewer phone calls", body: "Patients see real availability and book themselves in, day or night." },
-  { title: "Fewer empty slots", body: "Reminders, waiting lists and recalls put cancelled time back to work." },
-  { title: "Fewer lost patients", body: "Every diagnosis and treatment carries its own follow-up date." },
-  { title: "Less admin", body: "Pre-visit questionnaires arrive completed, so the consultation starts sooner." },
+  { title: "It follows you", body: "Hospital A, Hospital B, your own clinic, an outreach round -- one personal record instead of five fragments." },
+  { title: "No receptionist needed", body: "Designed to work for one clinician alone. Register a walk-in in under a minute and start seeing them." },
+  { title: "Seconds, not forms", body: "Capture the minimum safely now and complete the detail later. Care does not wait for a long form." },
+  { title: "It remembers for you", body: "Every encounter becomes searchable case experience: what you saw, what you did, what happened next." },
 ];
+
+/**
+ * CPR-ARCH-001 section 10. The multi-site story needs its caveat attached, because "one record across
+ * every hospital you work at" invites exactly the wrong inference -- that data flows between them. The
+ * architecture is explicit that it does not: organisation-supplied data stays governed by that
+ * organisation, and cross-organisation patient matching does not happen automatically.
+ */
+export const PORTABILITY = {
+  title: "One practice. Many places. Boundaries intact.",
+  body:
+    "You work across facilities; your record of that work should not be scattered across them. Competen " +
+    "Practice gives you one personal operational view without collapsing anybody's data boundaries.",
+  points: [
+    { title: "Every encounter knows where it happened", body: "Facility, department, service, setting and the local patient identifier travel with the record." },
+    { title: "Reports per facility, without leakage", body: "Filter and format for one hospital without exposing another's patients -- including the monthly list of who you saw and should be paid for." },
+    { title: "The active boundary is always visible", body: "Switching context makes the organisation and its data boundary explicit, rather than leaving you to remember." },
+    { title: "No silent cross-matching", body: "Patients are not linked across organisations automatically. That needs approved identity rules and consent." },
+  ],
+};
 
 // CPR-000's core design principles and out-of-scope list. This band exists because "not an EMR" is the most
 // useful thing the architecture says about the product, and burying it would sell to the wrong clinics --
 // which then churn. Stating the boundary is cheaper than discovering it in month three.
 export const NOT_AN_EMR = {
-  title: "It is not an EMR. That is deliberate.",
+  title: "It is not the hospital's record. That is the point.",
+  // CPR-ARCH-001 v2 sharpens v1's flat "it is not an EMR" into something more precise and more honest,
+  // and adds two boundaries v1 never stated: importing an organisation's data does not transfer ownership
+  // of it, and having worked at several facilities does not license disclosure between them. Both are
+  // exactly the assumptions a practitioner would otherwise make, so both are said out loud.
   body:
-    "Competen Practice manages appointments, continuity and patient engagement. Where you already run an " +
-    "electronic medical record, it connects to it rather than competing with it.",
+    "Competen Practice is your professional record of your own authorised work with a patient. It is not " +
+    "the authoritative institutional record, and it does not try to be -- where a hospital runs an EMR, " +
+    "Practice connects to it rather than competing with it.",
   is: [
-    "Appointments, availability and online booking",
-    "A lightweight longitudinal patient record",
-    "Diagnoses, current treatments and follow-up",
+    "Your encounters, wherever they happened",
+    "Diagnoses, treatments, procedures and outcomes",
+    "Follow-up, recall and who is overdue",
     "Documents, referrals and correspondence",
+    "Your own case memory and activity evidence",
   ],
   isNot: [
-    "Detailed consultation notes",
-    "Inpatient nursing documentation",
-    "Medication administration records",
-    "Laboratory and radiology ordering",
-    "Hospital billing and inventory",
-    "A replacement for your existing EMR",
+    "The authoritative hospital medical record",
+    "Inpatient charts and medication administration records",
+    "Laboratory, radiology, billing or stock systems",
+    "Ownership of records imported from an organisation",
+    "A licence to disclose between the facilities you work at",
+    "Autonomous clinical decisions -- AI here is assistive and reviewable",
   ],
 };
 
@@ -157,6 +197,30 @@ export const TENANT_MODEL = {
     "another practice or change platform-wide policy. Every administrative action is audited.",
 };
 
+/**
+ * CPR-ARCH-001 section 9.3, "Intelligence safeguards".
+ *
+ * Version 2 puts AI at the centre of the product, which makes these the terms on which a clinician is
+ * being asked to trust it -- and they are unusually specific for a marketing page precisely because the
+ * architecture is unusually specific. The third one is the load-bearing commitment: a system that renders
+ * a recorded fact, a clinician's interpretation, a calculated metric and a model's inference in the same
+ * typeface has quietly made all four equally believable.
+ */
+export const AI_SAFEGUARDS = {
+  title: "What the AI may and may not do",
+  body:
+    "Practice Intelligence is built on your own cases, so the rules about how it behaves matter more than " +
+    "the fact that it exists.",
+  points: [
+    { title: "It cites its sources", body: "Any summary links back to the encounters it was drawn from, so you can check it rather than take it on faith." },
+    { title: "It never decides", body: "Suggestions require your review and cannot silently change a record. No autonomous diagnosis, no autonomous prescribing." },
+    { title: "Fact and inference look different", body: "A recorded fact, your interpretation, a calculated metric and an AI inference are labelled distinctly rather than blurred together." },
+    { title: "Your patients are not training data", body: "No model training on identifiable patient data without an approved policy and a lawful basis." },
+    { title: "Small groups stay private", body: "Population-level insight applies minimum cohort thresholds, so a pattern can never identify one person." },
+    { title: "You can correct it", body: "Misclassified cases can be fixed, and records you judge inappropriate can be excluded from analysis entirely." },
+  ],
+};
+
 export const PRACTICE_CTA = {
   title: "See it with your own clinic in mind.",
   body: "We will walk through your appointment book, your follow-up problem and your front desk, and show you what changes.",
@@ -201,7 +265,7 @@ export const PRACTICE_AREAS: PracticeArea[] = [
     accent: "#2563EB",
     icon: "\u{1F4C5}",
     blurb: "Availability you control, booking patients do themselves, and a waiting list that refills cancellations.",
-    modules: ["CPR-002", "CPR-003", "CPR-004"],
+    modules: ["CPR-002", "CPR-003", "CPR-004", "PEN-001"],
     outcomes: [
       { title: "Availability you set once", body: "Working days and hours per location, appointment types with their own durations, breaks, buffers, leave and public holidays -- all excluded automatically." },
       { title: "Booking around the clock", body: "Patients search, pick a location and appointment type, and confirm. Every slot offered is a slot that genuinely exists." },
@@ -229,7 +293,7 @@ export const PRACTICE_AREAS: PracticeArea[] = [
     accent: "#0F766E",
     icon: "\u{1F6CE}️",
     blurb: "Check-in, a live queue with real waiting times, and a front desk that can run the day on one screen.",
-    modules: ["CPR-005", "CPR-018"],
+    modules: ["CPR-005", "CPR-018", "PEN-006", "PEN-007"],
     outcomes: [
       { title: "Check in at the desk or on a phone", body: "Reception checks patients in; self check-in by kiosk or mobile is built into the same flow for when you want it." },
       { title: "A queue you can trust", body: "Expected, arrived, waiting, called, in consultation, completed. Position is assigned automatically and everyone sees the same list." },
@@ -256,7 +320,7 @@ export const PRACTICE_AREAS: PracticeArea[] = [
     accent: "#7C3AED",
     icon: "\u{1F4F1}",
     blurb: "A patient portal, pre-visit questionnaires that assign themselves, and reminders by SMS, email or in-app.",
-    modules: ["CPR-006", "CPR-007", "CPR-013"],
+    modules: ["CPR-006", "CPR-007", "CPR-013", "PEN-002", "PEN-010"],
     outcomes: [
       { title: "Patients maintain their own record", body: "Contact details, emergency contact, allergies, chronic conditions and current medication. You verify rather than retype." },
       { title: "Forms completed before the visit", body: "Questionnaires assign themselves from the appointment type, specialty or your own template, and can be made mandatory before the appointment." },
@@ -284,7 +348,7 @@ export const PRACTICE_AREAS: PracticeArea[] = [
     accent: "#DB2777",
     icon: "\u{1FAB6}",
     blurb: "Timeline, diagnoses, current treatments, documents, referrals and the recalls that bring patients back.",
-    modules: ["CPR-008", "CPR-009", "CPR-010", "CPR-011", "CPR-012", "CPR-014"],
+    modules: ["CPR-008", "CPR-009", "CPR-010", "CPR-011", "CPR-012", "CPR-014", "PEN-003", "PEN-004", "PEN-011", "PEN-012"],
     outcomes: [
       { title: "The whole journey, in order", body: "Appointments, questionnaires, diagnoses, treatment changes, referrals, documents and missed visits on a single filterable timeline." },
       { title: "A problem list that stays true", body: "Active, provisional, chronic, resolved and past history -- with optional ICD coding, severity, and the clinician responsible for each." },
@@ -306,23 +370,28 @@ export const PRACTICE_AREAS: PracticeArea[] = [
   // ── CPR-001 Dashboard, CPR-015 Analytics, CPR-016 AI Assistant, CPR-017 Search ───────────────────────
   {
     slug: "intelligence",
-    nav: "Insight & assistance",
-    eyebrow: "Insight & assistance",
-    headline: ["Know your practice.", "Get your time back."],
+    nav: "Your case memory",
+    eyebrow: "Your case memory",
+    headline: ["Everything you have seen,", "when you need it again."],
     body:
-      "A command centre for the day, the numbers behind the month, search that finds anything, and an " +
-      "assistant that does the writing you keep putting off.",
+      "Version 2's flagship: every encounter you record becomes searchable case experience. Not a " +
+      "dashboard about your practice -- a memory of it, that answers questions.",
     accent: "#C2410C",
     icon: "✨",
-    blurb: "A daily command centre, practice analytics, global search, and an AI assistant that drafts and summarises.",
-    modules: ["CPR-001", "CPR-015", "CPR-016", "CPR-017"],
+    blurb: "Similar-case retrieval, what your treatments actually achieved, who is overdue, and the evidence of what you have done.",
+    modules: ["CPR-001", "CPR-015", "CPR-016", "CPR-017", "PEN-005", "PEN-008", "PEN-013", "PEN-009", "PEN-014"],
+    // CPR-ARCH-001 section 9.2 lists the questions the intelligence layer must answer. They are written
+    // here almost as asked, because a clinician recognises their own question faster than they recognise
+    // a feature name -- and because a claim in the form of a question is one you can be held to.
     outcomes: [
-      { title: "Today, at a glance", body: "Appointments, new online bookings, follow-ups due, tasks and alerts -- with a drill-down behind every number and widgets you can reorder or hide." },
-      { title: "The numbers that move the practice", body: "Completion and no-show rates, follow-up compliance, patient growth, referral, diagnosis and treatment trends, filtered by clinician, location or period." },
-      { title: "Find anything, from anywhere", body: "One search bar across patients, appointments, diagnoses, treatments, documents, referrals and follow-ups, with saved searches and sub-second results." },
-      { title: "The patients who need you", body: "Overdue follow-ups, recent diagnoses, active treatments and unrecorded observations surfaced next to the patient rather than waiting to be asked for." },
-      { title: "An assistant for the admin", body: "Summarise a patient timeline, draft a referral letter, prepare a consultation summary, suggest an appointment slot -- in plain language." },
-      { title: "Advisory, and clearly so", body: "No autonomous diagnosis, no autonomous prescribing, clinician approval on every clinical action, and a log of every interaction." },
+      { title: "“Have I seen this before?”", body: "Similar-case retrieval across your own practice: patients with comparable characteristics, what was done, and what happened." },
+      { title: "“What actually worked?”", body: "Treatment and procedure registries with the responses and outcomes you recorded against them -- effectiveness in your hands, not in a journal." },
+      { title: "“Who is overdue?”", body: "Follow-up completion and loss-to-follow-up patterns, so the patients drifting out of your care are a list rather than a worry." },
+      { title: "“What is changing?”", body: "Which diagnoses and procedures are rising in your practice, by facility, specialty, location and period." },
+      { title: "“Who do I invoice for?”", body: "The hospital-specific list of patients you saw this month, formatted for that facility and no other." },
+      { title: "“What have I actually done?”", body: "A case log and professional experience map -- the evidence behind a portfolio, an appraisal or a training application." },
+      { title: "Today, at a glance", body: "Appointments, walk-ins, follow-ups due, tasks and alerts, with a drill-down behind every number." },
+      { title: "Findable in one search", body: "Patients, encounters, diagnoses, treatments, documents, referrals and follow-ups, from one bar, in under two seconds." },
     ],
     screens: [
       { src: "/images/practice/dashboard.webp", alt: "The practice home dashboard showing today's appointments, new bookings, follow-ups due, the calendar, today's schedule and tasks", caption: "The daily command centre -- today's work, first." },
@@ -350,7 +419,7 @@ export const PRACTICE_AREAS: PracticeArea[] = [
     accent: "#0E7490",
     icon: "\u{1F517}",
     blurb: "Everything the practice controls, everything it never has to, and standards-based links to the systems you already run.",
-    modules: ["CPR-019", "CPR-020"],
+    modules: ["CPR-019", "CPR-020", "PEN-015"],
     outcomes: [
       { title: "What you control", body: "Practice profile and branding, clinic locations, working days and hours, appointment types and durations, booking rules, notification preferences, questionnaire templates, document categories and assistant preferences." },
       { title: "What you never have to", body: "Tenant identity, subscription and licence, feature entitlements, regional deployment, security and password policy, backup and retention. Held by the platform, visible to you, and not your job to maintain." },
@@ -371,9 +440,40 @@ export const PRACTICE_AREAS: PracticeArea[] = [
 export const areaBySlug = (slug: string) => PRACTICE_AREAS.find(a => a.slug === slug);
 
 /**
- * Modules named in CPR-000's Version 1 list that have no specification document and are therefore NOT
- * represented anywhere above. Recorded rather than silently dropped, so the gap is visible the next time
- * this section is worked on. CPR-021 Patient Engagement Platform is listed in the architecture but no
- * developer specification was supplied for it.
+ * Modules named in an architecture document that have no specification of their own and are therefore NOT
+ * represented above. Recorded rather than silently dropped, so the gap stays visible.
+ *
+ *   CPR-021  Patient Engagement Platform -- named in CPR-000's Version 1 module list, never specified.
  */
 export const MODULES_WITHOUT_SPECS = ["CPR-021"];
+
+/**
+ * TWO UNRESOLVED CONTRADICTIONS IN THE VERSION 2 MATERIAL. Recorded here rather than quietly resolved,
+ * because both are the kind that produce a wrong build rather than a wrong page, and neither is mine to
+ * settle. Nothing on the public site depends on either -- the pages are written from the v2 NARRATIVE,
+ * which is consistent -- but the `modules` fields above cite IDs, so the ambiguity has to be stated.
+ *
+ * 1. THE PEN ENGINE NUMBERING DISAGREES WITH ITSELF. CPR-ARCH-001 section 13.2 lists a fifteen-engine
+ *    library whose IDs map to entirely different engines from the fifteen PEN-0xx specifications supplied
+ *    alongside it. Not a partial overlap -- EVERY id differs:
+ *
+ *      PEN-001  arch: Practice Workflow & Encounter Routing   spec: Appointment & Scheduling
+ *      PEN-005  arch: Clinical Encounter Lifecycle            spec: Practice Intelligence
+ *      PEN-013  arch: Referral, Correspondence & Shared-Care  spec: AI Clinical Decision Support
+ *      PEN-015  arch: Consent, Data Sharing & Provenance      spec: Integration & Interoperability
+ *
+ *    The architecture's list also contains a Consent, Data Sharing and Provenance Rules Engine that has no
+ *    specification at all, while the specifications contain an Integration & Interoperability Engine the
+ *    architecture treats as a platform service. IDs below follow the PEN SPECIFICATIONS, since those are
+ *    the documents that actually exist.
+ *
+ * 2. THE CPR WORKSPACE LIST DISAGREES WITH ITS OWN DIAGRAM. CPR-ARCH-001 section 14 gives CPR-008 as
+ *    Patient Timeline and CPR-009 as Diagnosis Tracker; the accompanying architecture diagram gives
+ *    CPR-008 as Diagnosis Intelligence and CPR-007 as Patient Workspace & Timeline. The two lists diverge
+ *    from CPR-004 onwards. IDs below follow the v1 titles the areas were originally derived from, which
+ *    section 14 says will be revised rather than renumbered.
+ */
+export const SPEC_CONFLICTS = [
+  "PEN engine numbering: CPR-ARCH-001 s13.2 vs the PEN-0xx specifications (all fifteen ids differ)",
+  "CPR workspace numbering: CPR-ARCH-001 s14 vs the CPR-ARCH-001 diagram (diverge from CPR-004)",
+];
