@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import EvidencePanel, { type EvidenceItem } from "@/components/EvidencePanel";
+import { Modal } from "@/components/ui/interactive";
 
 // Clinical Skills Logbook workspace (Skills Logbook Redesign spec).
 // Workers log skills in under a minute; supervisors verify; verified entries
@@ -208,11 +209,8 @@ export default function LogbookWorkspace({ skills, entries, scored }: {
 
       {/* Log a Skill modal */}
       {open && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <div className="absolute inset-0 bg-black/40" onClick={() => setOpen(false)} />
-          <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-md p-6">
-            <h2 className="font-bold text-gray-900 mb-4">Log a Skill</h2>
-            <div className="flex flex-col gap-3">
+        <Modal open title="Log a Skill" onClose={() => setOpen(false)}>
+          <div className="flex flex-col gap-3">
               <div>
                 <label className="text-xs font-semibold text-gray-500 mb-1 block">Skill *</label>
                 {!form.custom ? (
@@ -269,9 +267,8 @@ export default function LogbookWorkspace({ skills, entries, scored }: {
                 {busy ? "Saving…" : "Log Skill"}
               </button>
             </div>
-            <p className="text-[9px] text-gray-400 mt-3">Logged skills await verification by an assessor or educator. <Link href="/dashboard/passport" className="text-teal-600 hover:underline">Verified entries appear on your record.</Link></p>
-          </div>
-        </div>
+          <p className="text-[9px] text-gray-400 mt-3">Logged skills await verification by an assessor or educator. <Link href="/dashboard/passport" className="text-teal-600 hover:underline">Verified entries appear on your record.</Link></p>
+        </Modal>
       )}
     </>
   );

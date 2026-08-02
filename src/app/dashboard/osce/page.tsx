@@ -1,5 +1,6 @@
 "use client";
-import { useState } from "react";
+import { useState, useRef, useId } from "react";
+import { useModalFocus } from "@/components/ui/use-modal-focus";
 
 type ChecklistItem = { id: string; text: string };
 type Station = {
@@ -133,10 +134,19 @@ function ChecklistModal({ station, onClose }: { station: Station; onClose: () =>
   const score = Math.round((checked.size / station.checklist.length) * 100);
   const passed = score >= 70;
 
+  const panel = useRef<HTMLDivElement>(null);
+  const titleId = useId();
+  useModalFocus(true, panel, onClose);
+
   return (
+    // NOT migrated to the shared Modal, deliberately. This one has a gradient header carrying the station's
+    // difficulty, category and timing -- a bespoke design rather than the generic title bar every other
+    // dialog had, and pushing it through Modal would trade a real accessibility fix for a visual regression.
+    // It gets the same semantics in place instead: the same hook, so focus behaviour cannot drift apart.
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={onClose}>
       <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" />
-      <div className="relative bg-white rounded-2xl shadow-2xl max-w-lg w-full max-h-[85vh] flex flex-col" onClick={e => e.stopPropagation()}>
+      <div ref={panel} role="dialog" aria-modal="true" aria-labelledby={titleId} tabIndex={-1}
+        className="relative bg-white rounded-2xl shadow-2xl max-w-lg w-full max-h-[85vh] flex flex-col" onClick={e => e.stopPropagation()}>
         {/* Header */}
         <div className="bg-gradient-to-r from-[#0a2e38] to-teal-800 rounded-t-2xl p-5 text-white shrink-0">
           <div className="flex items-start justify-between gap-3">
@@ -145,7 +155,7 @@ function ChecklistModal({ station, onClose }: { station: Station; onClose: () =>
                 <span className={`text-[10px] font-bold px-2 py-0.5 rounded ${diffColors[station.difficulty]}`}>{station.difficulty}</span>
                 <span className="text-xs text-teal-300">{station.category} · ⏱ {station.duration}</span>
               </div>
-              <h2 className="font-bold text-base leading-tight">Station {station.id}: {station.title}</h2>
+              <h2 id={titleId} className="font-bold text-base leading-tight">Station {station.id}: {station.title}</h2>
               <p className="text-teal-300/70 text-xs mt-1">Tick each step as you practise the skill</p>
             </div>
             <button onClick={onClose} className="text-white/60 hover:text-white text-xl shrink-0 leading-none">✕</button>

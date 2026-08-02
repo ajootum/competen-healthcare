@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { Modal } from "@/components/ui/interactive";
 
 // In-session capture tools for the Conduct Assessment cockpit — all native
 // browser APIs, no external services: canvas signature pad, MediaRecorder
@@ -187,14 +188,15 @@ export function ScanButton({ disabled, onResult, onError }: {
         ⌗ Scan code
       </button>
       {open && (
-        <div className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-4" onClick={close}>
-          <div className="bg-white rounded-xl p-4 max-w-sm w-full" onClick={e => e.stopPropagation()}>
-            <p className="text-sm font-semibold text-gray-900 mb-2">Scan QR / barcode</p>
+        /* The bold <p> was the only thing naming this, and a paragraph is not a heading -- it becomes the
+           title. Landing focus on Cancel rather than the camera feed: the video is not focusable, so without
+           this the first stop would be the close control anyway, and naming it is clearer than relying on
+           that. */
+        <Modal open title="Scan QR / barcode" onClose={close} width="sm">
             <video ref={videoRef} className="w-full rounded-lg bg-black aspect-video" muted playsInline />
             <p className="text-[10px] text-gray-400 mt-2">Point the camera at the code — it captures automatically.</p>
             <button onClick={close} className="mt-2 w-full text-xs font-semibold text-gray-600 border border-gray-200 rounded-lg py-2 hover:bg-gray-50">Cancel</button>
-          </div>
-        </div>
+        </Modal>
       )}
     </>
   );

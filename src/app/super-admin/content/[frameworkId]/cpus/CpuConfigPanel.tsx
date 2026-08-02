@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import { METHOD_LABELS, EVIDENCE_TYPES, CONSENSUS_LABELS, type ConsensusRule } from "@/lib/ckcm";
+import { Modal } from "@/components/ui/interactive";
 
 type Cpu = { id: string; name: string; reassessment_months: number };
 type Blueprint = { id: string; min_score: number; min_assessors: number; consensus_rule: string; reassessment_months: number };
@@ -50,18 +51,12 @@ export default function CpuConfigPanel({ cpu, onClose }: { cpu: Cpu; onClose: ()
   const totalEvidenceWeight = matrix.reduce((s, m) => s + (m.weight || 0), 0);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <div className="fixed inset-0 bg-black/40" onClick={onClose} />
-      <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
-        <div className="flex items-center justify-between px-6 pt-5 pb-4 border-b border-gray-100 sticky top-0 bg-white z-10">
-          <div>
-            <h2 className="font-bold text-gray-900">Configure CPU</h2>
-            <p className="text-sm text-gray-400">{cpu.name}</p>
-          </div>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-700 text-xl">×</button>
-        </div>
+    <Modal open title="Configure CPU" onClose={onClose} width="2xl">
+      {/* Which CPU moves into the body: Modal's header takes an accessible name, and "Configure CPU" is
+          the name of the dialog while this is the name of the thing being configured. */}
+      <p className="text-sm text-gray-400 -mt-2">{cpu.name}</p>
 
-        <div className="flex gap-1 px-6 pt-4">
+      <div className="flex gap-1 pt-4">
           {([["blueprint", "Assessment Blueprint"], ["evidence", "Evidence Matrix"], ["critical", "Critical Failures"]] as const).map(([k, label]) => (
             <button key={k} onClick={() => setTab(k)}
               className={`px-3 py-1.5 text-xs font-semibold rounded-lg ${tab === k ? "bg-teal-600 text-white" : "text-gray-500 hover:bg-gray-100"}`}>
@@ -196,8 +191,7 @@ export default function CpuConfigPanel({ cpu, onClose }: { cpu: Cpu; onClose: ()
             )}
           </div>
         )}
-      </div>
-    </div>
+    </Modal>
   );
 }
 

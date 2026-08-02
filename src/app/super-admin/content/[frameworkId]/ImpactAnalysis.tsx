@@ -1,5 +1,6 @@
 "use client";
 import { useState } from "react";
+import { Modal } from "@/components/ui/interactive";
 
 type Report = {
   entity: { type: string; id: string; name: string };
@@ -42,18 +43,11 @@ export default function ImpactAnalysis({ frameworkId }: { frameworkId: string })
       </button>
 
       {open && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <div className="fixed inset-0 bg-black/40" onClick={() => setOpen(false)} />
-          <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[85vh] overflow-y-auto">
-            <div className="flex items-center justify-between px-6 pt-5 pb-4 border-b border-gray-100 sticky top-0 bg-white">
-              <div>
-                <h2 className="font-bold text-gray-900">Change Impact Analysis</h2>
-                <p className="text-sm text-gray-400">Downstream objects a change to this framework would affect</p>
-              </div>
-              <button onClick={() => setOpen(false)} className="text-gray-400 hover:text-gray-700 text-xl">×</button>
-            </div>
-
-            <div className="p-6">
+        <Modal open title="Change Impact Analysis" onClose={() => setOpen(false)} width="lg">
+          {/* The strapline moves into the body: Modal's header takes an accessible name, not a name and a
+              description, and this sentence is what tells you what the list below actually is. */}
+          <p className="text-sm text-gray-400 -mt-2 mb-4">Downstream objects a change to this framework would affect</p>
+          <div>
               {loading ? (
                 <p className="text-center text-sm text-gray-400 py-8">Computing dependency graph…</p>
               ) : report ? (
@@ -102,9 +96,8 @@ export default function ImpactAnalysis({ frameworkId }: { frameworkId: string })
               ) : (
                 <p className="text-center text-sm text-gray-400 py-8">No data.</p>
               )}
-            </div>
           </div>
-        </div>
+        </Modal>
       )}
     </>
   );

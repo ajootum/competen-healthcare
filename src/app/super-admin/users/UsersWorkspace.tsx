@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ROLE_CONFIG, ORG_ROLE_CONFIG, PLATFORM_ROLE_CONFIG, type AppRole, type OrgRole, type PlatformRole } from "@/lib/roles";
 import UserRoleEditor from "./UserRoleEditor";
+import { Modal, Drawer } from "@/components/ui/interactive";
 
 export type UserRow = {
   id: string; name: string; email: string; phone: string | null;
@@ -485,12 +486,11 @@ export default function UsersWorkspace({
 
       {/* Add User modal */}
       {addOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <div className="absolute inset-0 bg-black/40" onClick={() => setAddOpen(false)} />
-          <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-md p-6">
+        /* One dialog, two states -- the form, then the credentials it produced. The title has to follow the
+           state or the accessible name would still say "Add User" while the dialog shows a password. */
+        <Modal open title={createdCreds ? "Account created" : "Add User"} onClose={() => setAddOpen(false)}>
             {createdCreds ? (
               <>
-                <h2 className="font-bold text-gray-900 mb-1">Account created</h2>
                 <p className="text-xs text-gray-500 mb-4">Share these credentials securely — the password is shown only once.</p>
                 <div className="bg-gray-50 rounded-lg p-4 text-sm font-mono flex flex-col gap-1.5">
                   <p><span className="text-gray-400 text-xs">Email:</span> {createdCreds.email}</p>
@@ -505,7 +505,6 @@ export default function UsersWorkspace({
               </>
             ) : (
               <>
-                <h2 className="font-bold text-gray-900 mb-4">Add User</h2>
                 <div className="flex flex-col gap-3">
                   <div>
                     <label className="text-xs font-semibold text-gray-500 mb-1 block">Full name *</label>
@@ -564,30 +563,30 @@ export default function UsersWorkspace({
                 </div>
               </>
             )}
-          </div>
-        </div>
+        </Modal>
       )}
 
       {/* Quick-view drawer */}
       {drawer && editorUser && (
-        <div className="fixed inset-0 z-40">
-          <div className="absolute inset-0 bg-black/30" onClick={() => setDrawer(null)} />
-          <div className="absolute right-0 top-0 h-full w-full max-w-md bg-white shadow-2xl overflow-y-auto">
-            <div className="p-5 border-b border-gray-100 flex items-start gap-3">
+        /* A side panel, so it goes to Drawer rather than Modal -- both give it the dialog semantics and the
+           focus trap it was missing, but only one of them slides in from the right, and a centred dialog
+           here would be a visual regression dressed up as an accessibility fix. */
+        <Drawer open title={drawer.name} onClose={() => setDrawer(null)}>
+            {/* The avatar and status move into the body: Drawer's header carries the name, which is what an
+                assistive technology needs, and repeating it below would announce it twice. */}
+            <div className="-mt-1 mb-4 flex items-start gap-3">
               <div className={`w-11 h-11 rounded-full ${tint(drawer.id)} text-white flex items-center justify-center text-base font-bold shrink-0`}>
                 {drawer.name[0]?.toUpperCase() ?? "?"}
               </div>
               <div className="min-w-0 flex-1">
-                <p className="font-bold text-gray-900">{drawer.name}</p>
                 <p className="text-xs text-gray-400 truncate">{drawer.email}</p>
                 <span className={`inline-block mt-1.5 text-[9px] font-bold px-1.5 py-0.5 rounded ${STATUS_UI[drawer.status].pill}`}>
                   {STATUS_UI[drawer.status].label} · {drawer.statusDetail}
                 </span>
               </div>
-              <button onClick={() => setDrawer(null)} className="text-gray-300 hover:text-gray-500">✕</button>
             </div>
 
-            <div className="p-5 grid grid-cols-2 gap-3 text-xs border-b border-gray-50">
+            <div className="-mx-5 px-5 pb-5 grid grid-cols-2 gap-3 text-xs border-b border-gray-50">
               {[
                 ["Phone", drawer.phone ?? "—"],
                 ["Last login", relTime(drawer.lastSignIn)],
@@ -670,8 +669,7 @@ export default function UsersWorkspace({
                   </div>
                 )}
             </div>
-          </div>
-        </div>
+        </Drawer>
       )}
     </div>
   );

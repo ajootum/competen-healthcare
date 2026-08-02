@@ -1,6 +1,7 @@
 "use client";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { Modal } from "@/components/ui/interactive";
 
 const UNIT_TYPES = ["Ward","ICU","HDU","Theatre","OPD","Emergency","Maternity","Paediatric","Pharmacy","Laboratory","Radiology","Physiotherapy","Other"];
 
@@ -53,14 +54,8 @@ export default function DeptManager({ hospitalId }: { hospitalId: string }) {
       </button>
 
       {open && (
-        <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md">
-            <div className="flex items-center justify-between px-6 pt-5 pb-4 border-b border-gray-100">
-              <h2 className="font-bold text-gray-900">Add Department or Unit</h2>
-              <button onClick={() => { setOpen(false); setError(""); }} className="text-gray-400 hover:text-gray-600 text-xl">×</button>
-            </div>
-
-            <div className="flex gap-1 px-6 pt-4">
+        <Modal open title="Add Department or Unit" onClose={() => { setOpen(false); setError(""); }}>
+            <div className="flex gap-1 pt-4">
               {(["dept","unit"] as const).map(t => (
                 <button key={t} onClick={() => setTab(t)}
                   className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
@@ -134,8 +129,7 @@ export default function DeptManager({ hospitalId }: { hospitalId: string }) {
                 </button>
               </div>
             </div>
-          </div>
-        </div>
+        </Modal>
       )}
     </>
   );

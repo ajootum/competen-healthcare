@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { Modal } from "@/components/ui/interactive";
 
 type Nurse = { id: string; full_name: string; specialization: string | null };
 type Framework = { id: string; name: string; library: string };
@@ -81,14 +82,12 @@ export default function CycleCreator({ nurses, frameworks }: Props) {
       </button>
 
       {open && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto shadow-2xl">
-            <div className="p-6 border-b border-gray-100">
-              <h2 className="text-lg font-bold text-gray-900">Create Competency Cycle</h2>
-              <p className="text-sm text-gray-400 mt-0.5">Assign a nurse to a competency assessment cycle with specific frameworks.</p>
-            </div>
+        <Modal open title="Create Competency Cycle" onClose={() => setOpen(false)} width="2xl">
+            {/* The strapline moves into the body: Modal's header carries the accessible name, and this
+                sentence explains what the form does rather than naming the dialog. */}
+            <p className="text-sm text-gray-400 -mt-2 mb-4">Assign a nurse to a competency assessment cycle with specific frameworks.</p>
 
-            <div className="p-6 space-y-5">
+            <div className="space-y-5">
               {/* Nurse selector */}
               <div>
                 <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Nurse</label>
@@ -163,15 +162,14 @@ export default function CycleCreator({ nurses, frameworks }: Props) {
               {error && <p className="text-sm text-[var(--cmp-text-critical)] bg-[var(--cmp-surface-critical)] border border-[var(--cmp-color-critical)] rounded-lg px-3 py-2">{error}</p>}
             </div>
 
-            <div className="p-6 border-t border-gray-100 flex items-center justify-between gap-3">
+            <div className="-mx-6 px-6 pt-4 mt-2 border-t border-gray-100 flex items-center justify-between gap-3">
               <button onClick={() => setOpen(false)} className="text-sm text-gray-500 hover:text-gray-700 transition-colors">Cancel</button>
               <button onClick={handleCreate} disabled={saving}
                 className="bg-teal-600 text-white text-sm font-semibold px-6 py-2.5 rounded-lg hover:bg-teal-700 disabled:opacity-40 transition-colors">
                 {saving ? "Creating…" : "Create Cycle"}
               </button>
             </div>
-          </div>
-        </div>
+        </Modal>
       )}
     </>
   );

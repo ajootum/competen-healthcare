@@ -1,6 +1,7 @@
 "use client";
 import { useState } from "react";
 import { ROLE_CONFIG, ORG_ROLE_CONFIG, PLATFORM_ROLE_CONFIG, type AppRole, type OrgRole, type PlatformRole } from "@/lib/roles";
+import { Modal } from "@/components/ui/interactive";
 
 const ORG_ROLE_GROUPS: { label: string; portalRole: AppRole; roles: OrgRole[] }[] = [
   { label: "Organisation Leadership",  portalRole: "hospital_admin", roles: ["chief_officer", "org_admin", "governance_committee", "manager", "competency_coordinator"] },
@@ -118,15 +119,11 @@ export default function UserRoleEditor({
       </button>
 
       {open && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <div className="fixed inset-0 bg-black/40" onClick={() => setOpen(false)} />
-          <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
-            <div className="px-6 pt-6 pb-4 border-b border-gray-100 sticky top-0 bg-white z-10">
-              <h2 className="font-bold text-gray-900">Edit User</h2>
-              <p className="text-sm text-gray-400 mt-0.5">{user.full_name} · {user.email}</p>
-            </div>
-
-            <div className="px-6 py-5 flex flex-col gap-5">
+        <Modal open title="Edit User" onClose={() => setOpen(false)} width="lg">
+          {/* Who is being edited moves into the body: Modal's header takes a name, not a name and a
+              subtitle, and the subtitle is the more useful of the two to keep next to the fields. */}
+          <p className="text-sm text-gray-400 -mt-2 mb-4">{user.full_name} · {user.email}</p>
+          <div className="flex flex-col gap-5">
               {/* Competen super admin toggle */}
               <div className={`rounded-xl border-2 transition-all ${isSuperAdmin ? "border-violet-500 bg-violet-50" : "border-gray-100 hover:border-gray-200"}`}>
                 <div
@@ -306,18 +303,17 @@ export default function UserRoleEditor({
               {error && <p className="text-xs text-red-500 bg-[var(--cmp-surface-critical)] rounded-lg px-3 py-2">{error}</p>}
             </div>
 
-            <div className="px-6 pb-6 flex gap-3 sticky bottom-0 bg-white pt-2 border-t border-gray-50">
-              <button onClick={() => setOpen(false)}
-                className="flex-1 py-2.5 rounded-xl border border-gray-200 text-sm text-gray-600 hover:bg-gray-50 font-medium">
-                Cancel
-              </button>
-              <button onClick={save} disabled={saving}
-                className="flex-1 py-2.5 rounded-xl bg-teal-600 text-white text-sm font-semibold hover:bg-teal-700 disabled:opacity-50">
-                {saving ? "Saving…" : "Save Changes"}
-              </button>
-            </div>
+          <div className="flex gap-3 sticky bottom-0 bg-white pt-2 border-t border-gray-50">
+            <button onClick={() => setOpen(false)}
+              className="flex-1 py-2.5 rounded-xl border border-gray-200 text-sm text-gray-600 hover:bg-gray-50 font-medium">
+              Cancel
+            </button>
+            <button onClick={save} disabled={saving}
+              className="flex-1 py-2.5 rounded-xl bg-teal-600 text-white text-sm font-semibold hover:bg-teal-700 disabled:opacity-50">
+              {saving ? "Saving…" : "Save Changes"}
+            </button>
           </div>
-        </div>
+        </Modal>
       )}
     </>
   );

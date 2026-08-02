@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { TASK_TYPE_UI, ENTRUSTMENT_LABELS, RISK_CONFIG as RISK_T, METHOD_LABELS as METHOD_T } from "@/lib/ckcm";
 import type { AssessorTask } from "@/lib/engines/tasks";
+import { Modal } from "@/components/ui/interactive";
 
 const RISK_CONFIG = RISK_T as Record<string, { label: string; cls: string }>;
 const METHOD_LABELS = METHOD_T as Record<string, string>;
@@ -155,9 +156,9 @@ export default function SmartQueue({ tasks, workload }: {
 
       {/* Entrustment decision panel */}
       {entrustFor && (
-        <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4" onClick={() => setEntrustFor(null)}>
-          <div className="bg-white rounded-2xl shadow-xl max-w-md w-full p-6" onClick={e => e.stopPropagation()}>
-            <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1">Entrustment decision</p>
+        /* The eyebrow was the only thing naming this dialog, and a <p> is not a heading -- so it becomes
+           the title, which is what a screen reader now announces on open. */
+        <Modal open title="Entrustment decision" onClose={() => setEntrustFor(null)}>
             <p className="font-bold text-gray-900">{entrustFor.nurseName}</p>
             <p className="text-sm text-gray-500 mb-1">{entrustFor.cpuName}</p>
             <p className="text-[11px] text-[var(--cmp-text-success)] mb-4">✓ {entrustFor.evidence.complete}/{entrustFor.evidence.complete + entrustFor.evidence.gaps.length} competencies current — evidence supports authorization</p>
@@ -180,8 +181,7 @@ export default function SmartQueue({ tasks, workload }: {
                 {busy ? "Recording…" : "Record decision"}
               </button>
             </div>
-          </div>
-        </div>
+        </Modal>
       )}
     </div>
   );

@@ -1,6 +1,7 @@
 "use client";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { Modal } from "@/components/ui/interactive";
 
 type Approval = {
   id: string;
@@ -53,17 +54,13 @@ export default function ApprovalActions({ approval }: { approval: Approval }) {
       </div>
 
       {open && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <div className="fixed inset-0 bg-black/40" onClick={() => setOpen(false)} />
-          <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-md">
-            <div className="px-6 pt-5 pb-4 border-b border-gray-100">
-              <h2 className="font-bold text-gray-900">
-                {decision === "approve" ? "✅ Approve Content" : "❌ Reject Content"}
-              </h2>
-              <p className="text-sm text-gray-400 mt-0.5">{approval.framework_name}</p>
-            </div>
-
-            <div className="p-6 flex flex-col gap-4">
+        /* Title follows the decision, so the accessible name says which of the two this is rather than
+           announcing a generic dialog. The tick and cross are dropped from it: an emoji read aloud before
+           the word "Approve" is noise, and the word already carries the meaning. */
+        <Modal open title={decision === "approve" ? "Approve Content" : "Reject Content"}
+          onClose={() => setOpen(false)}>
+            <p className="text-sm text-gray-400 -mt-2 mb-4">{approval.framework_name}</p>
+            <div className="flex flex-col gap-4">
               <div className="bg-gray-50 rounded-xl px-4 py-3 text-xs text-gray-500">
                 Submitted by <span className="font-semibold text-gray-700">{approval.submitted_by_name ?? "Unknown"}</span> on{" "}
                 {new Date(approval.submitted_at).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })}
@@ -108,8 +105,7 @@ export default function ApprovalActions({ approval }: { approval: Approval }) {
                 </button>
               </div>
             </div>
-          </div>
-        </div>
+        </Modal>
       )}
     </>
   );

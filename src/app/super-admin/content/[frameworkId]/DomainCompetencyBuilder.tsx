@@ -1,6 +1,7 @@
 "use client";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { Modal } from "@/components/ui/interactive";
 
 type Skill = { id: string; name: string; sort_order: number; is_active: boolean };
 type Competency = {
@@ -182,16 +183,15 @@ export default function DomainCompetencyBuilder({ frameworkId, domains }: { fram
 
       {/* Modal */}
       {modal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6">
-            <h2 className="font-bold text-gray-900 mb-4">
-              {isDelete
-                ? `Delete ${modal.type.replace("delete-", "")}`
-                : isEdit
-                  ? `Edit ${modal.type.replace("edit-", "")}`
-                  : `New ${modal.type.replace("add-", "")}`}
-            </h2>
-
+        /* Three states share this dialog -- add, edit and delete -- so the title is the same expression the
+           heading was, kept whole rather than flattened. A flattened string would name it "New" while it
+           was asking you to confirm a deletion. */
+        <Modal open onClose={() => setModal(null)}
+          title={isDelete
+            ? `Delete ${modal.type.replace("delete-", "")}`
+            : isEdit
+              ? `Edit ${modal.type.replace("edit-", "")}`
+              : `New ${modal.type.replace("add-", "")}`}>
             {isDelete ? (
               <p className="text-sm text-gray-600 mb-5">
                 Are you sure you want to delete <span className="font-semibold">&quot;{"name" in modal ? modal.name : ""}&quot;</span>?
@@ -233,8 +233,7 @@ export default function DomainCompetencyBuilder({ frameworkId, domains }: { fram
                 {saving ? "…" : isDelete ? "Delete" : isEdit ? "Save changes" : "Add"}
               </button>
             </div>
-          </div>
-        </div>
+        </Modal>
       )}
     </div>
   );
