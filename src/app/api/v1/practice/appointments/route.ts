@@ -26,12 +26,13 @@ export async function POST(req: NextRequest) {
 
   let body: Record<string, unknown>;
   try { body = await req.json(); } catch { return NextResponse.json({ error: "invalid JSON" }, { status: 400 }); }
-  if (!body.patientName || !body.scheduledAt || !body.appointmentType)
-    return NextResponse.json({ error: "patientName, appointmentType and scheduledAt are required" }, { status: 400 });
+  if ((!body.patientName && !body.patientId) || !body.scheduledAt || !body.appointmentType)
+    return NextResponse.json({ error: "patientName (or patientId), appointmentType and scheduledAt are required" }, { status: 400 });
 
   const result = await bookAppointment(auth.caller.admin, {
     workspaceId: auth.ctx.workspaceId,
-    patientName: String(body.patientName),
+    patientId: body.patientId ? String(body.patientId) : null,
+    patientName: String(body.patientName ?? ""),
     patientPhone: body.patientPhone ? String(body.patientPhone) : undefined,
     appointmentType: String(body.appointmentType),
     scheduledAt: String(body.scheduledAt),

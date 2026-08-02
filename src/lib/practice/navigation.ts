@@ -26,7 +26,7 @@ export type PracticeNavItem = {
 export const PRACTICE_NAV: PracticeNavItem[] = [
   { href: "/practice/home", label: "Home", icon: "⌂", capability: "practice.home.view", group: "Practice", phase: 0, built: true },
   { href: "/practice/calendar", label: "Calendar", icon: "▤", capability: "practice.calendar.view", group: "Clinical Practice", phase: 1, built: true },
-  { href: "/practice/patients", label: "Patients", icon: "☺", capability: "patient.list", group: "Clinical Practice", phase: 2, built: false },
+  { href: "/practice/patients", label: "Patients", icon: "☺", capability: "patient.list", group: "Clinical Practice", phase: 2, built: true },
   { href: "/practice/encounters", label: "Encounters", icon: "✎", capability: "encounter.list", group: "Clinical Practice", phase: 3, built: false },
   { href: "/practice/follow-ups", label: "Follow-ups", icon: "↻", capability: "followup.view", group: "Clinical Practice", phase: 4, built: false },
   { href: "/practice/reports", label: "Reports", icon: "☷", capability: "report.view", group: "Practice Management", phase: 6, built: false },

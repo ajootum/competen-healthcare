@@ -43,6 +43,10 @@ const OVERLAP_EXEMPT = ["walk_in", "emergency"];
 
 export type BookInput = {
   workspaceId: string;
+  /** Registry link (Phase 2). When present it is VERIFIED against the workspace and the registry's
+   *  display name is written to the diary -- the appointment can never claim a name the registry
+   *  does not hold for that patient. */
+  patientId?: string | null;
   patientName: string;
   patientPhone?: string;
   appointmentType: string;
@@ -68,6 +72,18 @@ export async function bookAppointment(admin: any, input: BookInput): Promise<Eng
   if (Number.isNaN(startMs)) return { ok: false, status: 400, code: "VALIDATION_ERROR", message: "scheduledAt is not a valid timestamp" };
   const endMs = startMs + duration * 60000;
 
+  // Registry-linked booking: the patient must exist, in THIS workspace, and be active; the diary then
+  // carries the registry's name, not the caller's spelling of it.
+  let patientName = input.patientName?.trim();
+  if (input.patientId) {
+    const { data: patient } = await admin.from("practice_patient")
+      .select("id, display_name, status").eq("id", input.patientId).eq("workspace_id", input.workspaceId).maybeSingle();
+    if (!patient) return { ok: false, status: 404, code: "NOT_FOUND", message: "Not found" };
+    if (patient.status !== "active") return { ok: false, status: 422, code: "PATIENT_NOT_ACTIVE", message: "this patient record is not active (archived or merged)" };
+    patientName = patient.display_name;
+  }
+  if (!patientName) return { ok: false, status: 400, code: "VALIDATION_ERROR", message: "patientName or patientId is required" };
+
   // Double-booking check against live appointments in the surrounding window.
   if (!input.allowOverlap && !OVERLAP_EXEMPT.includes(input.appointmentType)) {
     const windowStart = new Date(startMs - 480 * 60000).toISOString();
@@ -89,7 +105,8 @@ export async function bookAppointment(admin: any, input: BookInput): Promise<Eng
 
   const { data: appt, error } = await admin.from("practice_appointment").insert({
     workspace_id: input.workspaceId, location_id: input.locationId ?? null,
-    patient_name: input.patientName.trim(), patient_phone: input.patientPhone?.trim() || null,
+    patient_id: input.patientId ?? null,
+    patient_name: patientName, patient_phone: input.patientPhone?.trim() || null,
     appointment_type: input.appointmentType, scheduled_at: new Date(startMs).toISOString(),
     duration_minutes: duration, status: initialStatus, reason: input.reason ?? null,
     created_by: input.actorId,
