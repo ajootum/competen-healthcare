@@ -52,6 +52,10 @@ const PUBLIC_PAGES = [
   ...PRACTICE_AREAS.map(a => `/practice/${a.slug}`),
   ...JOURNEYS.map(j => j.href),
   "/login", "/signup",
+  // The Practice IAM entry points (CPR-IAM-001). Public and anonymous-reachable, so they get the same
+  // forbidden-vocabulary, metadata and adoption-claim sweep as every other public page. While the launch
+  // flags are off they render the development notice; when the flags flip, this harness keeps watching.
+  "/practice/sign-in", "/practice/sign-up",
 ];
 
 // Strip tags AND the Next.js RSC payload. The flight data at the bottom of the document repeats every

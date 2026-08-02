@@ -9,6 +9,8 @@ import {
 } from "@/lib/marketing/practice-content";
 import { JOURNEYS, HOW_IT_WORKS, TRUST, FAQS, contactFor } from "@/lib/marketing/practice-site";
 import { pageMetadata } from "@/lib/marketing/site";
+import { redirect } from "next/navigation";
+import { hasPracticeMembership } from "@/lib/practice/shell";
 
 // LP-PRA-001 — the Competen Practice public landing page.
 //
@@ -35,7 +37,13 @@ export const metadata = pageMetadata({
 
 const container = "mx-auto w-full max-w-7xl px-5 sm:px-8";
 
-export default function Page() {
+export default async function Page() {
+  // CPR-IAM-001 s6 lists /practice twice on purpose: the public landing for a visitor, the application
+  // entry for a member. In this single-host deployment both live here, and the tiebreak is MEMBERSHIP,
+  // not authentication -- a signed-in hospital user with no Practice workspace still sees the public page,
+  // because for them it IS the product page (IAM s7.1 "no Practice membership" rows).
+  if (await hasPracticeMembership()) redirect("/practice/home");
+
   const primary = JOURNEYS.filter(j => j.kind === "primary");
   const secondary = JOURNEYS.filter(j => j.kind === "secondary");
 
