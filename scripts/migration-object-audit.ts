@@ -148,7 +148,28 @@ async function main() {
   }
 
   // ── Indexes: need the registry from migration 187 ─────────────────────────
-  const { data: idxRows, error: idxErr } = await admin.rpc("plat_index_registry");
+  //
+  // PAGINATED, AND ORDERED, FOR A REASON THIS TOOL LEARNED THE HARD WAY. PostgREST caps a response at
+  // 1000 rows by default. This database has more than 1000 indexes, so a single call returned exactly
+  // 1000 and everything past that read as MISSING -- a confident list that was partly fiction. Worse,
+  // plat_index_registry has no ORDER BY, so which 1000 came back could change between calls: adding nine
+  // indexes made six unrelated ones appear in the missing list, because the scan returned a different
+  // subset. An unordered, capped read is not a sample of the truth, it is a different answer each time.
+  //
+  // .range() pages through, and the explicit .order() makes the paging stable -- without it, page 2 can
+  // repeat or skip rows from page 1 for exactly the same reason.
+  const PAGE = 1000;
+  const idxAll: { index_name: string }[] = [];
+  let idxErr: { message: string } | null = null;
+  for (let from = 0; ; from += PAGE) {
+    const { data, error } = await admin.rpc("plat_index_registry")
+      .order("index_name", { ascending: true }).range(from, from + PAGE - 1);
+    if (error) { idxErr = error; break; }
+    const page = (data ?? []) as { index_name: string }[];
+    idxAll.push(...page);
+    if (page.length < PAGE) break;
+  }
+  const idxRows = idxAll;
   if (idxErr) {
     console.log(`\n  INDEXES NOT CHECKED -- plat_index_registry() unavailable (${idxErr.message}).`);
     console.log(`  Apply supabase/migrations/187-index-registry.sql, then re-run. Reported, not skipped`);
@@ -158,6 +179,15 @@ async function main() {
   }
 
   const live = new Set(((idxRows ?? []) as { index_name: string }[]).map(r => r.index_name));
+
+  // CONTROL FOR THE CAP THAT ALREADY BIT ONCE. A single unpaginated read returned exactly 1000 rows and
+  // everything beyond read as missing. If the paged total ever lands exactly on a page boundary, the most
+  // likely explanation is that paging silently stopped rather than that the database has a round number of
+  // indexes -- so say so instead of publishing the list as fact.
+  ok(`control: the index registry was read in full (${idxRows.length} rows, not a page boundary)`,
+    idxRows.length % PAGE !== 0,
+    `exactly ${idxRows.length} rows came back, which is ${idxRows.length / PAGE} full page(s) -- paging may `
+    + `have stopped early, in which case every "missing" verdict below is unreliable`);
   const looseIdx = new Set(loose.indexes.keys());
   const missingIdx = [...mig.indexes.values()].filter(d => !live.has(d.name));
 
