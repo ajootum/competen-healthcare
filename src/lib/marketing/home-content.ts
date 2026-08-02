@@ -27,10 +27,16 @@ export const BRAND = {
   eyebrow: "The Complete Healthcare Performance Platform",
 };
 
-// The approved design uses an indigo/violet accent, which is NOT --cmp-color-primary (the product's
-// teal-green). Held as one named constant rather than sprinkled as hex so the divergence is visible and
-// reversible in a single edit -- flagged for confirmation, since the spec also asks for consistency with
-// the Competen design system and those two instructions pull in different directions.
+// SETTLED 2026-08-02: the public site follows the DESIGN, not the design system.
+//
+// This indigo is not --cmp-color-primary (the product's teal-green). WEB-STRAT-001 asked for both the
+// approved comp and "consistency with the Competen design system", which pull in opposite directions; the
+// owner chose the comp. So the divergence is deliberate and is not a bug to be tidied away later.
+//
+// It stays a single named constant rather than sprinkled hex, because a decision that is reversible in one
+// edit is a decision that can be revisited cheaply. If the site is ever brought onto the product palette,
+// change these three and the whole corporate site follows. Note that the marketing accents are separate
+// again from the Practice section's own blue (PRACTICE_ACCENT), which is a third, deliberate palette.
 export const ACCENT = "#4F46E5";
 export const ACCENT_DARK = "#4338CA";
 export const ACCENT_SOFT = "#EEF0FF";

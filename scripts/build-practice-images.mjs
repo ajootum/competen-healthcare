@@ -17,6 +17,16 @@ import { readdirSync, statSync, mkdirSync } from "node:fs";
 const SRC = process.argv[2] ?? "C:/Users/elish/Downloads";
 const OUT = "public/images/practice";
 
+// THE DEMO PRACTICE IS CALLED "COMPETEN MEDICAL CENTRE" (settled 2026-08-02).
+//
+// The current mockups do NOT say that. They show "Sunrise Medical Centre" on nineteen screens and
+// "Eonrise Medical Centre" on the integrations screen -- a typo in the source artwork. Both are baked into
+// rendered PNGs, so this cannot be corrected here: it needs the screens re-exported with the agreed name.
+//
+// Until they are, NO alt text or caption may name the practice. A caption saying "Competen Medical Centre"
+// over a screenshot reading "Sunrise" tells a screen-reader user something different from what a sighted
+// user sees, which is a worse failure than saying nothing. scripts/practice-content-harness.ts asserts it.
+//
 // CPR module id -> published filename. The filename says what the screen IS, so a future image swap that
 // puts the calendar under booking.webp is visible in the diff rather than only on the rendered page.
 //

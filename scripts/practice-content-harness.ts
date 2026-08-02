@@ -125,6 +125,23 @@ async function main() {
   const emptyAlt = PRACTICE_AREAS.flatMap(a => a.screens).filter(s => s.alt.trim().length < 20);
   ok("2b. every screen has descriptive alt text", emptyAlt.length === 0, emptyAlt.map(s => s.src).join(", "));
 
+  // ALT TEXT MUST NOT NAME THE DEMO PRACTICE.
+  //
+  // The agreed name is "Competen Medical Centre", but the current mockups are rendered PNGs showing
+  // "Sunrise Medical Centre" on nineteen screens and "Eonrise Medical Centre" on the integrations screen
+  // (a typo in the source artwork). Until the screens are re-exported, naming the practice in a caption or
+  // alt attribute tells a screen-reader user something different from what a sighted user reads -- which
+  // is a worse failure than the omission it fixes.
+  //
+  // Asserted in BOTH directions on purpose: the old names must not appear because they are wrong, and the
+  // new one must not appear because the pixels do not say it yet. Whichever way somebody "tidies" this,
+  // the harness objects until the images actually match.
+  const practiceNames = ["Sunrise Medical", "Eonrise Medical", "Competen Medical"];
+  const named = PRACTICE_AREAS.flatMap(a => a.screens)
+    .filter(s => practiceNames.some(n => `${s.alt} ${s.caption}`.toLowerCase().includes(n.toLowerCase())));
+  ok("2c. no screen alt or caption names the demo practice", named.length === 0,
+    named.map(s => s.src).join(", "));
+
   // ── 3. every area page is reachable, and carries what it promises ─────────────────────────────────
   const PAGES = ["/practice", ...PRACTICE_AREAS.map(a => `/practice/${a.slug}`)];
   const overview = await fetch(`${BASE}/practice`).then(r => r.text()).catch(() => "");
