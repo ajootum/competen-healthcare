@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useCallback, createContext, useContext } from "react";
+import { useState, useRef, useCallback, useId, createContext, useContext } from "react";
 import { useModalFocus } from "@/components/ui/use-modal-focus";
 import { priority as PRIORITY, type PriorityKey } from "@/lib/design/tokens";
 
@@ -81,6 +81,60 @@ function ToastCard({ t, onDismiss }: { t: Toast; onDismiss: () => void }) {
         className="text-gray-400 hover:text-gray-600 text-sm leading-none shrink-0 w-6 h-6 flex items-center justify-center">
         {level === "critical" ? "✓" : "✕"}
       </button>
+    </div>
+  );
+}
+
+// ── Modal (PUI-004 s7) ──────────────────────────────────────────────────────────────────────────────────
+//
+// The general-purpose dialog. ConfirmDialog below is the fixed two-button case; this is everything else --
+// the "Add Facility" and "Edit Policy" forms that thirty-five surfaces had each hand-rolled.
+//
+// WHAT THOSE THIRTY-FIVE ALL MISSED. Every one was a scrim div wrapping a white panel, and not one declared
+// role="dialog". A screen-reader user heard the page behind, unchanged, with no announcement that anything
+// had opened; Tab wandered into the form underneath the overlay. It was invisible rather than misleading,
+// which is why it survived every visual review. Centralising it means the thirty-sixth is correct for free,
+// which adding the attributes in place thirty-five times would not have achieved.
+//
+// Deliberately NOT configurable: role, aria-modal, the labelled-by wiring and the focus trap. Those are the
+// whole point, and an escape hatch on any of them is how the next surface ends up undeclared again.
+// Complete class strings, not `max-w-${width}`. Tailwind scans source text for whole class names and never
+// evaluates the template, so the interpolated form emits NO width rule at all -- the panel silently goes
+// full-bleed and nothing in the build complains.
+const MODAL_WIDTH = {
+  sm: "max-w-sm", md: "max-w-md", lg: "max-w-lg", xl: "max-w-xl", "2xl": "max-w-2xl", "4xl": "max-w-4xl",
+} as const;
+
+export function Modal({ open, title, onClose, children, width = "md", initialIndex }: {
+  open: boolean; title: string; onClose: () => void; children: React.ReactNode;
+  /** Panel width. The hand-rolled originals used max-w-md through max-w-4xl; these cover all of them. */
+  width?: "sm" | "md" | "lg" | "xl" | "2xl" | "4xl";
+  /** Skip N leading focusables -- e.g. land on the first field rather than the close X. */
+  initialIndex?: number;
+}) {
+  const panel = useRef<HTMLDivElement>(null);
+  const titleId = useId();
+  useModalFocus(open, panel, onClose, initialIndex === undefined ? {} : { initialIndex });
+
+  if (!open) return null;
+  return (
+    // The backdrop closes on click, as every original did. The panel stops propagation so a click inside
+    // the form does not dismiss it -- losing a half-filled form to a stray click is the bug this prevents.
+    <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4" onClick={onClose}>
+      <div ref={panel} role="dialog" aria-modal="true" aria-labelledby={titleId} tabIndex={-1}
+        onClick={e => e.stopPropagation()}
+        className={`bg-white rounded-2xl w-full max-h-[90vh] overflow-y-auto ${MODAL_WIDTH[width]}`}
+        style={{ boxShadow: "var(--cmp-elevation-4)" }}>
+        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 sticky top-0 bg-white z-10">
+          <h2 id={titleId} className="font-bold text-gray-900">{title}</h2>
+          {/* 36px square: below the 24px minimum a close control is a miserable thing to hit with a thumb. */}
+          <button type="button" onClick={onClose} aria-label={`Close ${title}`} data-touch-target
+            className="w-9 h-9 -mr-2 rounded-lg text-gray-400 hover:bg-gray-100 hover:text-gray-600 flex items-center justify-center text-xl leading-none">
+            ×
+          </button>
+        </div>
+        <div className="p-6">{children}</div>
+      </div>
     </div>
   );
 }

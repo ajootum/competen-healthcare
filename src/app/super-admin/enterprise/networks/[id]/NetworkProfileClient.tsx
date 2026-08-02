@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { cardClass } from "@/components/ui/primitives";
+import { Modal } from "@/components/ui/interactive";
 
 // Network profile (ENT-001 §2) — header, tabs and member-organisation management.
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -128,25 +129,22 @@ export default function NetworkProfileClient({ data, available }: { data: any; a
       )}
 
       {addOpen && (
-        <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4" onClick={() => setAddOpen(false)}>
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md" onClick={e => e.stopPropagation()}>
-            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100"><h3 className="font-bold text-gray-900">Add organisation to network</h3><button onClick={() => setAddOpen(false)} className="text-gray-400 hover:text-gray-600 text-xl">×</button></div>
-            <div className="p-6 flex flex-col gap-3">
-              {available.length === 0 ? <p className="text-sm text-gray-400">All organisations are already assigned to a network.</p> : (
-                <>
-                  <select value={pick} onChange={e => setPick(e.target.value)} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm">
-                    <option value="">Select an organisation…</option>
-                    {available.map(o => <option key={o.id} value={o.id}>{o.name} · {o.country}</option>)}
-                  </select>
-                  <div className="flex gap-2 pt-1">
-                    <button onClick={() => setAddOpen(false)} className="flex-1 py-2 border border-gray-200 rounded-lg text-sm text-gray-600 hover:bg-gray-50">Cancel</button>
-                    <button onClick={() => pick && member("add_member", pick)} disabled={busy || !pick} className="flex-1 py-2 bg-teal-600 text-white rounded-lg text-sm font-semibold hover:bg-teal-700 disabled:opacity-50">Add</button>
-                  </div>
-                </>
-              )}
-            </div>
+        <Modal open title="Add organisation to network" onClose={() => setAddOpen(false)}>
+          <div className="flex flex-col gap-3">
+            {available.length === 0 ? <p className="text-sm text-gray-400">All organisations are already assigned to a network.</p> : (
+              <>
+                <select value={pick} onChange={e => setPick(e.target.value)} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm">
+                  <option value="">Select an organisation…</option>
+                  {available.map(o => <option key={o.id} value={o.id}>{o.name} · {o.country}</option>)}
+                </select>
+                <div className="flex gap-2 pt-1">
+                  <button onClick={() => setAddOpen(false)} className="flex-1 py-2 border border-gray-200 rounded-lg text-sm text-gray-600 hover:bg-gray-50">Cancel</button>
+                  <button onClick={() => pick && member("add_member", pick)} disabled={busy || !pick} className="flex-1 py-2 bg-teal-600 text-white rounded-lg text-sm font-semibold hover:bg-teal-700 disabled:opacity-50">Add</button>
+                </div>
+              </>
+            )}
           </div>
-        </div>
+        </Modal>
       )}
     </div>
   );

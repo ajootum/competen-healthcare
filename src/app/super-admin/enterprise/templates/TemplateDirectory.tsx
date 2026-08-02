@@ -2,6 +2,7 @@
 
 import { useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
+import { Modal } from "@/components/ui/interactive";
 
 // Enterprise Templates registry (ENT-001 §6) — filterable table + create.
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -67,24 +68,21 @@ export default function TemplateDirectory({ rows }: { rows: any[] }) {
       </div>
 
       {open && (
-        <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4" onClick={() => setOpen(false)}>
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md" onClick={e => e.stopPropagation()}>
-            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100"><h3 className="font-bold text-gray-900">New Template</h3><button onClick={() => setOpen(false)} className="text-gray-400 hover:text-gray-600 text-xl">×</button></div>
-            <div className="p-6 flex flex-col gap-3">
-              <div><label className="text-xs font-semibold text-gray-600 mb-1 block">Template name *</label><input value={form.name} onChange={set("name")} className={input} placeholder="e.g. Tertiary Hospital Template" /></div>
-              <div className="grid grid-cols-2 gap-3">
-                <div><label className="text-xs font-semibold text-gray-600 mb-1 block">Code</label><input value={form.code} onChange={set("code")} className={input} /></div>
-                <div><label className="text-xs font-semibold text-gray-600 mb-1 block">Type</label><select value={form.template_type} onChange={set("template_type")} className={input}>{TYPES.map(t => <option key={t} value={t}>{t}</option>)}</select></div>
-              </div>
-              <div><label className="text-xs font-semibold text-gray-600 mb-1 block">Description</label><textarea value={form.description} onChange={set("description")} rows={2} className={`${input} resize-none`} /></div>
-              {err && <p className="text-xs text-[var(--cmp-text-critical)] bg-[var(--cmp-surface-critical)] rounded-lg px-3 py-2">{err}</p>}
-              <div className="flex gap-2 pt-1">
-                <button onClick={() => setOpen(false)} className="flex-1 py-2 border border-gray-200 rounded-lg text-sm text-gray-600 hover:bg-gray-50">Cancel</button>
-                <button onClick={create} disabled={saving} className="flex-1 py-2 bg-teal-600 text-white rounded-lg text-sm font-semibold hover:bg-teal-700 disabled:opacity-60">{saving ? "Creating…" : "Create draft"}</button>
-              </div>
+        <Modal open title="New Template" onClose={() => setOpen(false)}>
+          <div className="flex flex-col gap-3">
+            <div><label className="text-xs font-semibold text-gray-600 mb-1 block">Template name *</label><input value={form.name} onChange={set("name")} className={input} placeholder="e.g. Tertiary Hospital Template" /></div>
+            <div className="grid grid-cols-2 gap-3">
+              <div><label className="text-xs font-semibold text-gray-600 mb-1 block">Code</label><input value={form.code} onChange={set("code")} className={input} /></div>
+              <div><label className="text-xs font-semibold text-gray-600 mb-1 block">Type</label><select value={form.template_type} onChange={set("template_type")} className={input}>{TYPES.map(t => <option key={t} value={t}>{t}</option>)}</select></div>
+            </div>
+            <div><label className="text-xs font-semibold text-gray-600 mb-1 block">Description</label><textarea value={form.description} onChange={set("description")} rows={2} className={`${input} resize-none`} /></div>
+            {err && <p className="text-xs text-[var(--cmp-text-critical)] bg-[var(--cmp-surface-critical)] rounded-lg px-3 py-2">{err}</p>}
+            <div className="flex gap-2 pt-1">
+              <button onClick={() => setOpen(false)} className="flex-1 py-2 border border-gray-200 rounded-lg text-sm text-gray-600 hover:bg-gray-50">Cancel</button>
+              <button onClick={create} disabled={saving} className="flex-1 py-2 bg-teal-600 text-white rounded-lg text-sm font-semibold hover:bg-teal-700 disabled:opacity-60">{saving ? "Creating…" : "Create draft"}</button>
             </div>
           </div>
-        </div>
+        </Modal>
       )}
     </div>
   );

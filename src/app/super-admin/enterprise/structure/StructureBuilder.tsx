@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { Modal } from "@/components/ui/interactive";
 
 // Structure Builder (ENT-001 §4) — interactive Facility → Division → Department →
 // Unit → Team tree with contextual create / edit / archive, plus the service
@@ -199,26 +200,23 @@ function EntityModal({ modal, staff, busy, err, onClose, onSave }: any) {
 
   const title = `${modal.mode === "create" ? "Add" : "Edit"} ${entity}`;
   return (
-    <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4" onClick={onClose}>
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
-        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100"><h3 className="font-bold text-gray-900 capitalize">{title}</h3><button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-xl">×</button></div>
-        <div className="p-6 flex flex-col gap-3">
-          <div><label className="text-xs font-semibold text-gray-600 mb-1 block">Name *</label><input value={form.name} onChange={set("name")} className={input} placeholder={`${entity} name`} /></div>
-          {fields.includes("code") && <div><label className="text-xs font-semibold text-gray-600 mb-1 block">Code</label><input value={form.code} onChange={set("code")} className={input} /></div>}
-          {fields.includes("dept_type") && <div><label className="text-xs font-semibold text-gray-600 mb-1 block">Department type</label><input value={form.dept_type} onChange={set("dept_type")} className={input} placeholder="clinical / admin" /></div>}
-          {fields.includes("cost_centre") && <div><label className="text-xs font-semibold text-gray-600 mb-1 block">Cost centre</label><input value={form.cost_centre} onChange={set("cost_centre")} className={input} /></div>}
-          {fields.includes("unit_type") && <div className="grid grid-cols-2 gap-3"><div><label className="text-xs font-semibold text-gray-600 mb-1 block">Unit type</label><input value={form.unit_type} onChange={set("unit_type")} className={input} placeholder="Ward / ICU / Theatre" /></div><div><label className="text-xs font-semibold text-gray-600 mb-1 block">Beds</label><input type="number" value={form.bed_count} onChange={set("bed_count")} className={input} /></div></div>}
-          {fields.includes("specialty") && <div className="grid grid-cols-2 gap-3"><div><label className="text-xs font-semibold text-gray-600 mb-1 block">Specialty</label><input value={form.specialty} onChange={set("specialty")} className={input} /></div><div><label className="text-xs font-semibold text-gray-600 mb-1 block">Shift model</label><input value={form.shift_model} onChange={set("shift_model")} className={input} placeholder="3-shift" /></div></div>}
-          {fields.includes("category") && <div><label className="text-xs font-semibold text-gray-600 mb-1 block">Category</label><input value={form.category} onChange={set("category")} className={input} placeholder="emergency / inpatient / lab…" /></div>}
-          {fields.includes("scope") && <div><label className="text-xs font-semibold text-gray-600 mb-1 block">Scope</label><input value={form.scope} onChange={set("scope")} className={input} /></div>}
-          {fields.includes("leader") && <div><label className="text-xs font-semibold text-gray-600 mb-1 block">{LEADER_LABEL[entity]}</label><select value={form.leader} onChange={set("leader")} className={input}><option value="">— Unassigned —</option>{staff.map((s: any) => <option key={s.id} value={s.id}>{s.name}</option>)}</select></div>}
-          {err && <p className="text-xs text-[var(--cmp-text-critical)] bg-[var(--cmp-surface-critical)] rounded-lg px-3 py-2">{err}</p>}
-          <div className="flex gap-2 pt-1">
-            <button onClick={onClose} className="flex-1 py-2 border border-gray-200 rounded-lg text-sm text-gray-600 hover:bg-gray-50">Cancel</button>
-            <button onClick={submit} disabled={busy || !form.name.trim()} className="flex-1 py-2 bg-teal-600 text-white rounded-lg text-sm font-semibold hover:bg-teal-700 disabled:opacity-60">{busy ? "Saving…" : modal.mode === "create" ? "Create" : "Save"}</button>
-          </div>
+    <Modal open title={title} onClose={onClose}>
+      <div className="flex flex-col gap-3">
+        <div><label className="text-xs font-semibold text-gray-600 mb-1 block">Name *</label><input value={form.name} onChange={set("name")} className={input} placeholder={`${entity} name`} /></div>
+        {fields.includes("code") && <div><label className="text-xs font-semibold text-gray-600 mb-1 block">Code</label><input value={form.code} onChange={set("code")} className={input} /></div>}
+        {fields.includes("dept_type") && <div><label className="text-xs font-semibold text-gray-600 mb-1 block">Department type</label><input value={form.dept_type} onChange={set("dept_type")} className={input} placeholder="clinical / admin" /></div>}
+        {fields.includes("cost_centre") && <div><label className="text-xs font-semibold text-gray-600 mb-1 block">Cost centre</label><input value={form.cost_centre} onChange={set("cost_centre")} className={input} /></div>}
+        {fields.includes("unit_type") && <div className="grid grid-cols-2 gap-3"><div><label className="text-xs font-semibold text-gray-600 mb-1 block">Unit type</label><input value={form.unit_type} onChange={set("unit_type")} className={input} placeholder="Ward / ICU / Theatre" /></div><div><label className="text-xs font-semibold text-gray-600 mb-1 block">Beds</label><input type="number" value={form.bed_count} onChange={set("bed_count")} className={input} /></div></div>}
+        {fields.includes("specialty") && <div className="grid grid-cols-2 gap-3"><div><label className="text-xs font-semibold text-gray-600 mb-1 block">Specialty</label><input value={form.specialty} onChange={set("specialty")} className={input} /></div><div><label className="text-xs font-semibold text-gray-600 mb-1 block">Shift model</label><input value={form.shift_model} onChange={set("shift_model")} className={input} placeholder="3-shift" /></div></div>}
+        {fields.includes("category") && <div><label className="text-xs font-semibold text-gray-600 mb-1 block">Category</label><input value={form.category} onChange={set("category")} className={input} placeholder="emergency / inpatient / lab…" /></div>}
+        {fields.includes("scope") && <div><label className="text-xs font-semibold text-gray-600 mb-1 block">Scope</label><input value={form.scope} onChange={set("scope")} className={input} /></div>}
+        {fields.includes("leader") && <div><label className="text-xs font-semibold text-gray-600 mb-1 block">{LEADER_LABEL[entity]}</label><select value={form.leader} onChange={set("leader")} className={input}><option value="">— Unassigned —</option>{staff.map((s: any) => <option key={s.id} value={s.id}>{s.name}</option>)}</select></div>}
+        {err && <p className="text-xs text-[var(--cmp-text-critical)] bg-[var(--cmp-surface-critical)] rounded-lg px-3 py-2">{err}</p>}
+        <div className="flex gap-2 pt-1">
+          <button onClick={onClose} className="flex-1 py-2 border border-gray-200 rounded-lg text-sm text-gray-600 hover:bg-gray-50">Cancel</button>
+          <button onClick={submit} disabled={busy || !form.name.trim()} className="flex-1 py-2 bg-teal-600 text-white rounded-lg text-sm font-semibold hover:bg-teal-700 disabled:opacity-60">{busy ? "Saving…" : modal.mode === "create" ? "Create" : "Save"}</button>
         </div>
       </div>
-    </div>
+    </Modal>
   );
 }

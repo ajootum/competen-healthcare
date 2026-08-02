@@ -2,6 +2,7 @@
 
 import { useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
+import { Modal } from "@/components/ui/interactive";
 
 // Tenant directory (POP-001 §2) — searchable/filterable table + create tenant.
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -70,27 +71,24 @@ export default function TenantDirectory({ rows, plans }: { rows: any[]; plans: a
       </div>
 
       {open && (
-        <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4" onClick={() => setOpen(false)}>
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md" onClick={e => e.stopPropagation()}>
-            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100"><h3 className="font-bold text-gray-900">Create Tenant</h3><button onClick={() => setOpen(false)} className="text-gray-400 hover:text-gray-600 text-xl">×</button></div>
-            <div className="p-6 flex flex-col gap-3">
-              <div><label className="text-xs font-semibold text-gray-600 mb-1 block">Tenant name *</label><input value={form.name} onChange={set("name")} className={input} placeholder="e.g. Hope Children's Hospital" /></div>
-              <div className="grid grid-cols-2 gap-3">
-                <div><label className="text-xs font-semibold text-gray-600 mb-1 block">Type</label><select value={form.tenant_type} onChange={set("tenant_type")} className={input}>{TYPES.map(t => <option key={t} value={t}>{t.replace(/_/g, " ")}</option>)}</select></div>
-                <div><label className="text-xs font-semibold text-gray-600 mb-1 block">Status</label><select value={form.status} onChange={set("status")} className={input}>{["prospect", "trial", "active"].map(s => <option key={s} value={s}>{s}</option>)}</select></div>
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div><label className="text-xs font-semibold text-gray-600 mb-1 block">Country</label><input value={form.primary_country} onChange={set("primary_country")} className={input} placeholder="Kenya" /></div>
-                <div><label className="text-xs font-semibold text-gray-600 mb-1 block">Plan</label><select value={form.plan_id} onChange={set("plan_id")} className={input}><option value="">— None —</option>{plans.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}</select></div>
-              </div>
-              {err && <p className="text-xs text-[var(--cmp-text-critical)] bg-[var(--cmp-surface-critical)] rounded-lg px-3 py-2">{err}</p>}
-              <div className="flex gap-2 pt-1">
-                <button onClick={() => setOpen(false)} className="flex-1 py-2 border border-gray-200 rounded-lg text-sm text-gray-600 hover:bg-gray-50">Cancel</button>
-                <button onClick={create} disabled={saving} className="flex-1 py-2 bg-teal-600 text-white rounded-lg text-sm font-semibold hover:bg-teal-700 disabled:opacity-60">{saving ? "Creating…" : "Create"}</button>
-              </div>
+        <Modal open title="Create Tenant" onClose={() => setOpen(false)}>
+          <div className="flex flex-col gap-3">
+            <div><label className="text-xs font-semibold text-gray-600 mb-1 block">Tenant name *</label><input value={form.name} onChange={set("name")} className={input} placeholder="e.g. Hope Children's Hospital" /></div>
+            <div className="grid grid-cols-2 gap-3">
+              <div><label className="text-xs font-semibold text-gray-600 mb-1 block">Type</label><select value={form.tenant_type} onChange={set("tenant_type")} className={input}>{TYPES.map(t => <option key={t} value={t}>{t.replace(/_/g, " ")}</option>)}</select></div>
+              <div><label className="text-xs font-semibold text-gray-600 mb-1 block">Status</label><select value={form.status} onChange={set("status")} className={input}>{["prospect", "trial", "active"].map(s => <option key={s} value={s}>{s}</option>)}</select></div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div><label className="text-xs font-semibold text-gray-600 mb-1 block">Country</label><input value={form.primary_country} onChange={set("primary_country")} className={input} placeholder="Kenya" /></div>
+              <div><label className="text-xs font-semibold text-gray-600 mb-1 block">Plan</label><select value={form.plan_id} onChange={set("plan_id")} className={input}><option value="">— None —</option>{plans.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}</select></div>
+            </div>
+            {err && <p className="text-xs text-[var(--cmp-text-critical)] bg-[var(--cmp-surface-critical)] rounded-lg px-3 py-2">{err}</p>}
+            <div className="flex gap-2 pt-1">
+              <button onClick={() => setOpen(false)} className="flex-1 py-2 border border-gray-200 rounded-lg text-sm text-gray-600 hover:bg-gray-50">Cancel</button>
+              <button onClick={create} disabled={saving} className="flex-1 py-2 bg-teal-600 text-white rounded-lg text-sm font-semibold hover:bg-teal-700 disabled:opacity-60">{saving ? "Creating…" : "Create"}</button>
             </div>
           </div>
-        </div>
+        </Modal>
       )}
     </div>
   );

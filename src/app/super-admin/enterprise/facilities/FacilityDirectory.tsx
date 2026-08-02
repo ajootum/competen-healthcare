@@ -3,6 +3,7 @@
 import { useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { COUNTRIES } from "@/lib/countries";
+import { Modal } from "@/components/ui/interactive";
 
 // Facilities directory (ENT-001 §3) — searchable/filterable table + create.
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -73,28 +74,25 @@ export default function FacilityDirectory({ rows, orgs }: { rows: any[]; orgs: a
       </div>
 
       {open && (
-        <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4" onClick={() => setOpen(false)}>
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md" onClick={e => e.stopPropagation()}>
-            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100"><h3 className="font-bold text-gray-900">Add Facility</h3><button onClick={() => setOpen(false)} className="text-gray-400 hover:text-gray-600 text-xl">×</button></div>
-            <div className="p-6 flex flex-col gap-3">
-              <div><label className="text-xs font-semibold text-gray-600 mb-1 block">Facility name *</label><input value={form.name} onChange={set("name")} className={input} placeholder="e.g. CURE Mbale Hospital" /></div>
-              <div className="grid grid-cols-2 gap-3">
-                <div><label className="text-xs font-semibold text-gray-600 mb-1 block">Code</label><input value={form.facility_code} onChange={set("facility_code")} className={input} placeholder="FAC-001" /></div>
-                <div><label className="text-xs font-semibold text-gray-600 mb-1 block">Type</label><select value={form.type} onChange={set("type")} className={input}>{TYPES.map(t => <option key={t} value={t}>{t.replace(/_/g, " ")}</option>)}</select></div>
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div><label className="text-xs font-semibold text-gray-600 mb-1 block">Country</label><select value={form.country} onChange={set("country")} className={input}>{COUNTRIES.map(c => <option key={c}>{c}</option>)}</select></div>
-                <div><label className="text-xs font-semibold text-gray-600 mb-1 block">City</label><input value={form.city} onChange={set("city")} className={input} placeholder="e.g. Mbale" /></div>
-              </div>
-              <div><label className="text-xs font-semibold text-gray-600 mb-1 block">Organisation</label><select value={form.organisation_id} onChange={set("organisation_id")} className={input}><option value="">— Unlinked —</option>{orgs.map(o => <option key={o.id} value={o.id}>{o.name}</option>)}</select></div>
-              {err && <p className="text-xs text-[var(--cmp-text-critical)] bg-[var(--cmp-surface-critical)] rounded-lg px-3 py-2">{err}</p>}
-              <div className="flex gap-2 pt-1">
-                <button onClick={() => setOpen(false)} className="flex-1 py-2 border border-gray-200 rounded-lg text-sm text-gray-600 hover:bg-gray-50">Cancel</button>
-                <button onClick={create} disabled={saving} className="flex-1 py-2 bg-teal-600 text-white rounded-lg text-sm font-semibold hover:bg-teal-700 disabled:opacity-60">{saving ? "Creating…" : "Create"}</button>
-              </div>
+        <Modal open title="Add Facility" onClose={() => setOpen(false)}>
+          <div className="flex flex-col gap-3">
+            <div><label className="text-xs font-semibold text-gray-600 mb-1 block">Facility name *</label><input value={form.name} onChange={set("name")} className={input} placeholder="e.g. CURE Mbale Hospital" /></div>
+            <div className="grid grid-cols-2 gap-3">
+              <div><label className="text-xs font-semibold text-gray-600 mb-1 block">Code</label><input value={form.facility_code} onChange={set("facility_code")} className={input} placeholder="FAC-001" /></div>
+              <div><label className="text-xs font-semibold text-gray-600 mb-1 block">Type</label><select value={form.type} onChange={set("type")} className={input}>{TYPES.map(t => <option key={t} value={t}>{t.replace(/_/g, " ")}</option>)}</select></div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div><label className="text-xs font-semibold text-gray-600 mb-1 block">Country</label><select value={form.country} onChange={set("country")} className={input}>{COUNTRIES.map(c => <option key={c}>{c}</option>)}</select></div>
+              <div><label className="text-xs font-semibold text-gray-600 mb-1 block">City</label><input value={form.city} onChange={set("city")} className={input} placeholder="e.g. Mbale" /></div>
+            </div>
+            <div><label className="text-xs font-semibold text-gray-600 mb-1 block">Organisation</label><select value={form.organisation_id} onChange={set("organisation_id")} className={input}><option value="">— Unlinked —</option>{orgs.map(o => <option key={o.id} value={o.id}>{o.name}</option>)}</select></div>
+            {err && <p className="text-xs text-[var(--cmp-text-critical)] bg-[var(--cmp-surface-critical)] rounded-lg px-3 py-2">{err}</p>}
+            <div className="flex gap-2 pt-1">
+              <button onClick={() => setOpen(false)} className="flex-1 py-2 border border-gray-200 rounded-lg text-sm text-gray-600 hover:bg-gray-50">Cancel</button>
+              <button onClick={create} disabled={saving} className="flex-1 py-2 bg-teal-600 text-white rounded-lg text-sm font-semibold hover:bg-teal-700 disabled:opacity-60">{saving ? "Creating…" : "Create"}</button>
             </div>
           </div>
-        </div>
+        </Modal>
       )}
     </div>
   );
