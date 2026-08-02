@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCaller, isResponse, isSuper } from "@/lib/api-auth";
 import { audit } from "@/lib/practice/provisioning";
+import { FLAG_CONSEQUENCE } from "@/lib/practice/operations";
 
 // PATCH /api/v1/practice/flags -- move Competen Practice along IAM-001 s14.1's launch ladder.
 //
@@ -20,10 +21,8 @@ const FLAGS: Record<string, string> = {
   practice_public_signup: "Self-service individual signup.",
 };
 
-const CONSEQUENCE: Record<string, string> = {
-  practice_sign_in: "The public sign-in page now renders a real password field. Retire disclosure assertion 7e in scripts/public-disclosure-harness.ts in the same change, deliberately.",
-  practice_public_signup: "Anyone authenticated can now create a Practice workspace for themselves. The public site's availability copy must stop saying the product is not open.",
-};
+// The consequence copy lives in src/lib/practice/operations.ts, imported by the operator page too, so
+// the warning at the moment of the flip and the standing warning afterwards cannot diverge.
 
 export async function PATCH(req: NextRequest) {
   const c = await getCaller();
@@ -51,7 +50,7 @@ export async function PATCH(req: NextRequest) {
 
   return NextResponse.json({
     flag, enabled: body.enabled, changed: before.enabled !== body.enabled,
-    consequence: body.enabled ? (CONSEQUENCE[flag] ?? null) : null,
+    consequence: body.enabled ? (FLAG_CONSEQUENCE[flag] ?? null) : null,
     correlationId: c.traceId,
   });
 }

@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient, createAdminClient } from "@/lib/supabase/server";
-import { loadPracticeOps, evaluateGate } from "@/lib/practice/operations";
+import { loadPracticeOps, evaluateGate, FLAG_CONSEQUENCE, FLAG_ORDER } from "@/lib/practice/operations";
 import PracticeOpsConsole from "./PracticeOpsConsole";
 
 // Practice Operations (CPR-IAM-001 s14 cutover, s14.1 launch ladder; CPR-PROV-001 s4 pilot pathway).
@@ -46,6 +46,24 @@ export default async function PracticeOperations() {
           Pilot provisioning, the launch ladder and the IAM-001 §14 cutover gate for Competen Practice.
         </p>
       </div>
+
+      {/* STANDING STATEMENT OF WHAT IS PUBLICLY LIVE. Not a toast: whoever opens this page sees it,
+          including someone who did not flip the flag and does not know it moved. */}
+      {FLAG_ORDER.filter(f => ops.flags[f] && f !== "practice_pilot_provisioning").length > 0 && (
+        <div className="rounded-xl border border-[var(--cmp-color-warning)] bg-[var(--cmp-surface-warning)] p-4">
+          <p className="text-[13px] font-bold text-[var(--cmp-text-warning)]">Live on the public site right now</p>
+          <ul className="mt-1.5 flex flex-col gap-1">
+            {FLAG_ORDER.filter(f => ops.flags[f] && f !== "practice_pilot_provisioning").map(f => (
+              <li key={f} className="text-[12px] text-gray-800">
+                <span className="font-mono font-semibold">{f}</span> — {FLAG_CONSEQUENCE[f]}
+              </li>
+            ))}
+          </ul>
+          <p className="mt-1.5 text-[11px] text-gray-600">
+            Turning the toggle below off reverses this immediately. No account is lost.
+          </p>
+        </div>
+      )}
 
       <div className="rounded-xl border border-gray-200 bg-white p-4">
         <div className="flex items-baseline justify-between gap-3 flex-wrap">

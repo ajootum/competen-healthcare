@@ -23,6 +23,28 @@ export function launchState(flags: Record<string, boolean>): { state: string; de
 
 export const FLAG_ORDER = ["practice_pilot_provisioning", "practice_sign_in", "practice_public_signup"];
 
+/**
+ * What is TRUE OF THE PUBLIC SITE while a flag is on.
+ *
+ * A STANDING STATEMENT, NOT A TOAST. These were first written as a message returned when a flag was
+ * flipped, which failed twice over: the operator console swallowed the reload to show it (so the toggle
+ * never repainted and the flag looked stuck while it was in fact on), and a message you can dismiss or
+ * refresh away is a poor carrier for "a password field is now live on your public site". Rendered from
+ * the CURRENT flag state instead, it is visible to whoever looks next, including someone who did not
+ * flip it and does not know it moved.
+ *
+ * One copy, imported by both the operator page and the flags API, so the warning shown at the moment of
+ * the flip and the warning shown afterwards cannot say different things.
+ */
+export const FLAG_CONSEQUENCE: Record<string, string> = {
+  practice_sign_in:
+    "The public sign-in page renders a real password field and accepts credentials. Anyone with a Competen account can reach their Practice.",
+  practice_public_signup:
+    "Anyone authenticated can create a Practice workspace for themselves from the public site, with no invitation and nobody watching.",
+  practice_pilot_provisioning:
+    "A platform operator can provision Practice workspaces for named users. Nothing public changes.",
+};
+
 export async function loadPracticeOps(admin: any) {
   const [flagRes, wsRes, reqRes] = await Promise.all([
     admin.from("practice_platform_flags").select("flag, enabled, note"),

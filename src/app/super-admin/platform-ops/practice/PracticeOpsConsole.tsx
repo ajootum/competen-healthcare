@@ -98,7 +98,12 @@ export default function PracticeOpsConsole({ callerId, callerName, initial }: {
     });
     const data = await res.json().catch(() => ({}));
     if (!res.ok) { setNotice({ kind: "err", text: data?.error ?? "That did not work." }); setBusy(false); return; }
-    if (data.consequence) { setNotice({ kind: "warn", text: data.consequence }); setBusy(false); return; }
+    // ALWAYS RELOAD ON SUCCESS. This previously returned early to display the consequence message, so a
+    // flag with a consequence -- which is every flag worth worrying about -- flipped in the database and
+    // left the toggle showing its old value. It read as "the switch is broken", and the honest reading of
+    // a broken switch is to press it again, which is how the launch posture moved three times unnoticed.
+    // The consequence is now a STANDING banner rendered from the flag state, so nothing is lost by
+    // repainting: see FLAG_CONSEQUENCE in src/lib/practice/operations.ts.
     reload();
   }
 
