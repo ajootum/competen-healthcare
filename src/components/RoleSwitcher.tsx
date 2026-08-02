@@ -1,7 +1,8 @@
 "use client";
-import { useState } from "react";
+import { useState, useRef, useCallback } from "react";
 import { usePathname } from "next/navigation";
 import { ROLE_CONFIG, type AppRole, type WorkspaceLink } from "@/lib/roles";
+import { useDismiss } from "@/components/ui/use-dismiss";
 
 export default function RoleSwitcher({ roles, activeRole, workspaces = [] }: {
   roles: AppRole[]; activeRole: AppRole; workspaces?: WorkspaceLink[];
@@ -17,6 +18,15 @@ export default function RoleSwitcher({ roles, activeRole, workspaces = [] }: {
   // role portal — so present it as "Personal Workspace" for every account (matches ActiveContextBanner), rather
   // than the role label (e.g. "Admin"). Role portals keep their own names since their paths aren't under /dashboard.
   const onPersonal = pathname === "/dashboard" || pathname.startsWith("/dashboard/");
+
+  // Escape closes and focus goes back to the trigger. Without it the menu opens by keyboard and cannot be
+  // left by keyboard: the scrim below only listens for a click.
+  //
+  // ABOVE the early return, not next to the markup it serves. Hooks must run in the same order on every
+  // render, and the bail-out below is conditional -- eslint caught this, not me.
+  const trigger = useRef<HTMLButtonElement>(null);
+  const closeMenu = useCallback(() => setOpen(false), []);
+  useDismiss(open, closeMenu, trigger);
 
   // Nothing to switch between → render nothing.
   if (roles.length + workspaces.length <= 1) return null;
@@ -46,7 +56,10 @@ export default function RoleSwitcher({ roles, activeRole, workspaces = [] }: {
   return (
     <div className="relative">
       <button
+        ref={trigger}
         onClick={() => setOpen(o => !o)}
+        aria-expanded={open}
+        aria-haspopup="menu"
         className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-medium bg-white/10 hover:bg-white/20 transition-colors text-white"
       >
         <span>{currentIcon}</span>

@@ -1,7 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef } from "react";
 import Link from "next/link";
+import { useDismiss } from "@/components/ui/use-dismiss";
 
 // Quick Create (Studio UX spec §8) — begin authoring from anywhere,
 // no deep menu navigation.
@@ -20,9 +21,13 @@ const TARGETS = [
 
 export default function QuickCreate() {
   const [open, setOpen] = useState(false);
+  // The scrim below closes on an outside click only; this is the keyboard half.
+  const trigger = useRef<HTMLButtonElement>(null);
+  useDismiss(open, () => setOpen(false), trigger);
+
   return (
     <div className="relative">
-      <button onClick={() => setOpen(v => !v)}
+      <button ref={trigger} onClick={() => setOpen(v => !v)} aria-expanded={open} aria-haspopup="menu"
         className="bg-teal-600 hover:bg-teal-700 text-white text-sm font-semibold px-4 py-2 rounded-lg transition-colors">
         + Create ▾
       </button>

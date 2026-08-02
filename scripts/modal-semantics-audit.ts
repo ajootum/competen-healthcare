@@ -102,10 +102,13 @@ for (const file of walk("src").filter(f => f.endsWith(".tsx"))) {
   // File-level facts. A focus trap and an Escape handler are wired once per component, not per element, so
   // they are properties of the file that owns the overlay rather than of the overlay tag itself.
   const trap = /useModalFocus\s*\(/.test(src);
-  // A file that calls useModalFocus gets Escape from the hook. Checking only for the literal string in
-  // this file reported four freshly-fixed dialogs as having no Escape -- the same mistake the a11y
-  // harness made, for the same reason: the behaviour moved and the check kept looking where it used to be.
-  const escape = /["']Escape["']/.test(src) || trap;
+  // Escape can come from three places, and this list has had to grow TWICE for the same reason: the
+  // behaviour moved into a hook and the check kept looking where it used to be. First when useModalFocus
+  // was extracted -- four freshly-fixed dialogs were reported as having no Escape. Then again when
+  // useDismiss was added for the dropdown scrims, and six fixed menus stayed red. Both times the code was
+  // right and the measurement was wrong, which is the more dangerous way round: a green audit over broken
+  // code is obvious eventually, a red one over working code just gets ignored.
+  const escape = /["']Escape["']/.test(src) || trap || /useDismiss\s*\(/.test(src);
 
   for (const m of src.matchAll(/fixed inset-0/g)) {
     // Walk back to the `<` that opens this element.

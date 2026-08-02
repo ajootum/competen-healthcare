@@ -1,6 +1,7 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, useCallback } from "react";
+import { useDismiss } from "@/components/ui/use-dismiss";
 import { useRouter } from "next/navigation";
 import { ROLE_CONFIG, ORG_ROLE_CONFIG, PLATFORM_ROLE_CONFIG, type AppRole, type OrgRole, type PlatformRole } from "@/lib/roles";
 import UserRoleEditor from "./UserRoleEditor";
@@ -88,6 +89,15 @@ export default function UsersWorkspace({
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [menuFor, setMenuFor] = useState<string | null>(null);
   const [bulkOpen, setBulkOpen] = useState(false);
+
+  // Escape closes these menus and returns focus. No trigger ref for the row menu: it is one per row, and
+  // the hook's fallback -- whatever had focus when the menu opened -- IS the row's own ... button.
+  // useCallback matters here: a fresh closure each render would re-run the effect and pull focus back
+  // mid-interaction.
+  const closeRowMenu = useCallback(() => setMenuFor(null), []);
+  const closeBulkMenu = useCallback(() => setBulkOpen(false), []);
+  useDismiss(menuFor !== null, closeRowMenu);
+  useDismiss(bulkOpen, closeBulkMenu);
   const [drawer, setDrawer] = useState<UserRow | null>(null);
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<{ kind: "ok" | "err"; text: string } | null>(null);

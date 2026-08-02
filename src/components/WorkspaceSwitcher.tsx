@@ -1,7 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { ROLE_CONFIG, type AppRole, type WorkspaceLink } from "@/lib/roles";
+import { useDismiss } from "@/components/ui/use-dismiss";
 
 // Permission-controlled workspace switcher. Renders the workspace pill; when the
 // user holds more than one portal — or has dedicated org-role workspaces to jump
@@ -28,6 +29,11 @@ export default function WorkspaceSwitcher({ roles, activeRole, workspaces = [], 
   // Something to choose between: more than one portal, or at least one workspace.
   const canSwitch = multi || workspaces.length > 0;
 
+  // One ref for three variants: exactly one of the trigger buttons below renders at a time, so whichever
+  // it is receives focus back when Escape closes the list.
+  const trigger = useRef<HTMLButtonElement>(null);
+  useDismiss(open, () => setOpen(false), trigger);
+
   async function switchTo(role: AppRole) {
     if (role === activeRole) { setOpen(false); return; }
     setSwitching(role);
@@ -51,6 +57,7 @@ export default function WorkspaceSwitcher({ roles, activeRole, workspaces = [], 
 
   const dropdown = open && canSwitch && (
     <>
+      {/* The scrim only listens for a click. useDismiss adds the keyboard half. */}
       <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
       <div className={`absolute z-50 bg-white rounded-xl shadow-xl border border-gray-100 overflow-hidden max-h-[70vh] overflow-y-auto ${
         variant === "sidebar" ? "top-full left-0 right-0 mt-1"
@@ -103,7 +110,7 @@ export default function WorkspaceSwitcher({ roles, activeRole, workspaces = [], 
     }
     return (
       <div className="relative">
-        <button onClick={() => setOpen(o => !o)}
+        <button ref={trigger} onClick={() => setOpen(o => !o)} aria-expanded={open} aria-haspopup="menu"
           className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-medium bg-white/10 hover:bg-white/20 transition-colors text-white">
           <span>{ROLE_CONFIG[activeRole].icon}</span>
           <span className="flex-1 text-left truncate">Switch Workspace</span>
@@ -117,7 +124,8 @@ export default function WorkspaceSwitcher({ roles, activeRole, workspaces = [], 
   if (variant === "mobile") {
     return (
       <span className="relative block">
-        <button onClick={() => canSwitch && setOpen(o => !o)}
+        <button ref={trigger} onClick={() => canSwitch && setOpen(o => !o)}
+          aria-expanded={canSwitch ? open : undefined} aria-haspopup={canSwitch ? "menu" : undefined}
           className={`block text-indigo-300/60 text-[10px] leading-tight text-left ${canSwitch ? "hover:text-indigo-200" : "cursor-default"}`}>
           {WORKSPACE_LABEL[activeRole]}{canSwitch && " ▾"}
         </button>
@@ -128,7 +136,8 @@ export default function WorkspaceSwitcher({ roles, activeRole, workspaces = [], 
 
   return (
     <div className="relative mx-2 mb-4">
-      <button onClick={() => canSwitch && setOpen(o => !o)}
+      <button ref={trigger} onClick={() => canSwitch && setOpen(o => !o)}
+        aria-expanded={canSwitch ? open : undefined} aria-haspopup={canSwitch ? "menu" : undefined}
         className={`w-full bg-indigo-600 rounded-lg px-3 py-2 text-left ${canSwitch ? "hover:bg-indigo-500 transition-colors" : "cursor-default"}`}>
         <p className="text-white text-[11px] font-semibold flex items-center gap-1.5">
           <span>🛡️ {WORKSPACE_LABEL[activeRole]}</span>

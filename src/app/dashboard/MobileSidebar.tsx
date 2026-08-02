@@ -1,5 +1,6 @@
 "use client";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
+import { useModalFocus } from "@/components/ui/use-modal-focus";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
@@ -38,6 +39,13 @@ type Props = {
 export default function MobileSidebar({ fullName, role, isAdmin, unread = 0, avatarUrl }: Props) {
   const [open, setOpen] = useState(false);
   const pathname = usePathname();
+
+  // Focus moves in, Tab wraps inside, Escape dismisses, focus returns to the hamburger. aria-modal="true"
+  // is a promise that the page behind is inert; without the trap it is a promise to assistive technology
+  // that a keyboard user can immediately disprove by pressing Tab.
+  const panel = useRef<HTMLElement>(null);
+  const closeDrawer = useCallback(() => setOpen(false), []);
+  useModalFocus(open, panel, closeDrawer);
 
   // Close the drawer on navigation (state adjustment during render, per React docs)
   const [prevPath, setPrevPath] = useState(pathname);
@@ -106,8 +114,14 @@ export default function MobileSidebar({ fullName, role, isAdmin, unread = 0, ava
         />
       )}
 
-      {/* Drawer */}
-      <aside className={`md:hidden fixed top-0 left-0 bottom-0 w-64 bg-[#0a2e38] z-50 flex flex-col py-6 px-4 transition-transform duration-300 ${
+      {/* Drawer.
+          A navigation drawer, not a dropdown: it covers the page behind an opaque overlay, so it is modal
+          in behaviour and gets modal semantics -- the same treatment the public site's two mobile drawers
+          already have, through the same hook. It stays MOUNTED and slides via translate-x, so the trap is
+          keyed on `open` rather than on mounting; without that it would trap focus in an off-screen panel. */}
+      <aside ref={panel} role="dialog" aria-modal="true" aria-label="Main navigation" tabIndex={-1}
+        aria-hidden={!open}
+        className={`md:hidden fixed top-0 left-0 bottom-0 w-64 bg-[#0a2e38] z-50 flex flex-col py-6 px-4 transition-transform duration-300 ${
         open ? "translate-x-0" : "-translate-x-full"
       }`}>
         <div className="flex items-center justify-between mb-6">

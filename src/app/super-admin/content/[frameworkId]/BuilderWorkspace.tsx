@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useMemo, useEffect, useRef } from "react";
+import { useState, useMemo, useEffect, useRef, useCallback } from "react";
+import { useDismiss } from "@/components/ui/use-dismiss";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import FrameworkActions from "../FrameworkActions";
@@ -83,6 +84,11 @@ export default function BuilderWorkspace({
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [menuFor, setMenuFor] = useState<string | null>(null);
+
+  // Escape closes the row menu and returns focus to the ... that opened it. No ref: the menu is one per
+  // row, and the hook's fallback -- whatever had focus when it opened -- is that button.
+  const closeRowMenu = useCallback(() => setMenuFor(null), []);
+  useDismiss(menuFor !== null, closeRowMenu);
   const [editing, setEditing] = useState<null | { kind: "domain" | "competency"; id: string; value: string }>(null);
   const [adding, setAdding] = useState<null | { type: "domain" } | { type: "competency"; domainId: string }>(null);
   const [draft, setDraft] = useState("");

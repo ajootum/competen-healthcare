@@ -1,6 +1,7 @@
 "use client";
-import { useState, useTransition } from "react";
+import { useState, useTransition, useRef } from "react";
 import { useRouter } from "next/navigation";
+import { useDismiss } from "@/components/ui/use-dismiss";
 
 // Ch.11 WS8 — the "Customize" control on the Personal Dashboard. Users show/hide OPTIONAL widgets, reorder widgets
 // within a zone (keyboard-accessible up/down — §11.5.1 forbids pointer-drag-only), and reset to the organizational
@@ -12,6 +13,9 @@ const ZONES: [string, string][] = [["main", "Main area"], ["rail", "Sidebar"], [
 export default function CustomizeDashboard({ controls }: { controls: any[] }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
+  // The scrim below closes on an outside click only; this is the keyboard half.
+  const trigger = useRef<HTMLButtonElement>(null);
+  useDismiss(open, () => setOpen(false), trigger);
   const [pending, start] = useTransition();
   const [msg, setMsg] = useState<string | null>(null);
 
@@ -33,7 +37,8 @@ export default function CustomizeDashboard({ controls }: { controls: any[] }) {
 
   return (
     <div className="relative">
-      <button onClick={() => setOpen(o => !o)} className="text-[12px] font-medium text-gray-600 border border-gray-200 rounded-lg px-3 py-2 hover:bg-gray-50">⚙ Customize</button>
+      <button ref={trigger} onClick={() => setOpen(o => !o)} aria-expanded={open} aria-haspopup="menu"
+        className="text-[12px] font-medium text-gray-600 border border-gray-200 rounded-lg px-3 py-2 hover:bg-gray-50">⚙ Customize</button>
       {open && (
         <>
           <div className="fixed inset-0 z-30" onClick={() => setOpen(false)} />
