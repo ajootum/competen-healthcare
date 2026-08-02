@@ -367,7 +367,7 @@ export const PRACTICE_AREAS: PracticeArea[] = [
 
   // ── PEN-005/008/013 | CPR-011 Intelligence, CPR-013 AI Copilot ─────────────────────────────────────
   {
-    slug: "intelligence",
+    slug: "case-memory",
     nav: "Your case memory",
     eyebrow: "Your case memory",
     headline: ["Everything you have seen,", "when you need it again."],

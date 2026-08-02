@@ -1,5 +1,39 @@
 # CPR-BUILD-000 — Setting up the Competen Practice product
 
+## V3 ADDENDUM (2026-08-02) — the developer-specification wave supersedes parts of this plan
+
+Twenty-one V3 documents arrived after this plan was written: fourteen enterprise implementation specs
+(IAM, PROV, SHELL, FLOW, DM, API, SEC, SEARCH, INTEL, GOV, OPS, DEV, ARCH-ADR, and the V3-001 migration
+guide) plus V3 replacements for the five essential workspaces (CPR-001/004/005/006/020) and minor-update
+versions of CPR-002/003. Per CPR-V3-001: V2 business specifications are FROZEN and retained; only the
+five essential workspace specs are replaced; the enterprise documents become platform standards. The
+phases below stand, with these corrections — each one a spec decision replacing a proposal of mine:
+
+1. **Route namespace: the authenticated product lives at `/practice`, not `/my-practice`** (CPR-IAM-001
+   §1/§6, CPR-SHELL-001 §4). Sign-in/sign-up/verify/onboarding sit under `/practice/*`; the authenticated
+   tree is `/practice/home|calendar|patients|encounters|follow-ups|reports|intelligence|settings|…`. In
+   this single-host deployment the `/practice` index is auth-aware: public landing signed out, redirect
+   into the shell for a signed-in member. The one collision — the marketing area slug `intelligence` —
+   was renamed to `case-memory` (its nav name was already "Your case memory"); the site is noindexed, so
+   no redirect debt.
+2. **Table names: `practice_*` per CPR-PROV-001 §5, not `prc_*`.** The collision this plan worried about
+   was with CKCM's `practices` table specifically; PROV-001's names (`practice_workspace`,
+   `practice_membership`, …) collide with nothing. Verified against the live schema before adoption.
+3. **Membership model confirmed** — CPR-PROV-001/IAM-001 specify exactly the membership-not-global-roles
+   shape this plan proposed (`practice_membership` + `practice_role_assignment` capability sets,
+   IAM-ADR-04 "roles are derived from memberships").
+4. **Phase 0 is now specified rather than designed**: IAM-001 (identity/URLs/routing) + PROV-001
+   (provisioning data + API contracts, idempotent, state machine) + SHELL-001 (guard order, context
+   contract, loading states) + CPR-020 V3 (shell) + CPR-001 V3 (command centre) + FLOW-001 (first
+   clinical workflow, feeding Phases 1–3).
+5. **Patient access confirmed separated** (IAM-ADR-07): `/patient/sign-in` is its own surface, never
+   mixed with practitioner membership — matching this plan's phase-gating of patient surfaces.
+6. **Cutover discipline** (IAM-001 §14): the public "not open yet" posture stays until IAM + PROV +
+   SHELL pass their integrated end-to-end tests together, then private pilot behind an allow-list flag
+   before any public signup. The disclosure-harness assertion that no practice page renders a password
+   field is scoped to the marketing/journey pages and retired for `/practice/sign-in` only when the form
+   is real — the assertion existed to prevent a fake form, not a real one.
+
 **Status: PLAN.** Nothing in this document is built. The public marketing section at `/practice` is complete
 and harness-verified; the product it describes does not exist. This plan is derived from CPR-ARCH-001 v2
 (especially §4 users, §5 domains, §13 platform/engine separation, §15 conceptual data model, §19 ADRs,
