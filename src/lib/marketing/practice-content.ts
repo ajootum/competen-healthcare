@@ -1,7 +1,11 @@
-// Competen Practice -- public product section (/practice and its six capability pages).
+// Competen Practice -- public product section (/practice and its seven capability pages).
 //
-// GOVERNED BY CPR-ARCH-001 VERSION 2, which supersedes CPR-000 v1. Also derived from CPR-000A, CPR-ARCH-002
-// to 005, CPR-001..020 (CPR-019 at Revision 2) and the fifteen PEN engine specifications.
+// GOVERNED BY CPR-ARCH-001 VERSION 2, which supersedes CPR-000 v1. THE SECTION IS BUILT ON THE FIFTEEN PEN
+// ENGINE SPECIFICATIONS: the CPR workspace space is being revised and its numbering already disagrees with
+// itself twice over (see SPEC_CONFLICTS), so anchoring here to CPR ids meant re-deriving this file every
+// time a workspace spec moved. The PEN library is stable, each engine is one document, and the fifteen
+// together decompose the product -- so they are what `modules` cites and what the harness proves coverage
+// of. Also informed by CPR-000A and CPR-ARCH-002 to 005.
 //
 // VERSION 2 REPOSITIONED THE PRODUCT, and the copy here follows it. Version 1 sold appointment management
 // to a clinic. Version 2's own architecture statement is that Practice is "the healthcare professional's
@@ -252,27 +256,37 @@ export type PracticeArea = {
 // 600-weight teal, orange and cyan came in at 3.74, 3.56 and 3.68 -- fine on a mockup, unreadable to
 // anyone with reduced contrast sensitivity, which in a product sold to clinicians is the wrong audience to
 // lose. They are the 700 shades here for that reason; blue, violet and pink already cleared it at 600.
+//
+// THE AREAS FOLLOW THE PEN ENGINES, not the CPR workspaces. The CPR space is being revised and its
+// numbering already disagrees with itself in two places (see SPEC_CONFLICTS), so anchoring the public
+// section to it would mean re-deriving this file every time a workspace spec moves. The fifteen PEN
+// specifications are stable, each is one document, and together they decompose the whole product -- so
+// they are what `modules` cites and what the coverage assertion proves.
+//
+// The AREA NAMES are still outcomes, not engine names. WEB-STRAT-001 forbids marketing the software's
+// internal decomposition, so "The encounter" rather than "Clinical Encounter, Rapid Capture and Workflow
+// Engines". The engines decide what belongs together; the visitor never sees them.
 export const PRACTICE_AREAS: PracticeArea[] = [
-  // ── CPR-002 Calendar & Availability, CPR-003 Online Booking, CPR-004 Appointments & Waiting List ──────
+  // ── PEN-001 Appointment & Scheduling ────────────────────────────────────────────────────────────────
   {
     slug: "scheduling",
-    nav: "Scheduling & booking",
-    eyebrow: "Scheduling & booking",
-    headline: ["Your diary fills itself.", "On your terms."],
+    nav: "Your diary",
+    eyebrow: "Your diary",
+    headline: ["Your time, opened", "on your terms."],
     body:
-      "You decide when you are available, at which location, and for how long. Patients see only what you " +
-      "have opened, and book it without anyone answering the phone.",
+      "One diary across every place you work. You decide what is available where, and patients book only " +
+      "what you have genuinely opened -- booked, walk-in, remote or emergency, all on the same calendar.",
     accent: "#2563EB",
     icon: "\u{1F4C5}",
-    blurb: "Availability you control, booking patients do themselves, and a waiting list that refills cancellations.",
-    modules: ["CPR-002", "CPR-003", "CPR-004", "PEN-001"],
+    blurb: "Availability across every location, booking patients do themselves, and a walk-in queue that keeps the day moving.",
+    modules: ["PEN-001"],
     outcomes: [
-      { title: "Availability you set once", body: "Working days and hours per location, appointment types with their own durations, breaks, buffers, leave and public holidays -- all excluded automatically." },
-      { title: "Booking around the clock", body: "Patients search, pick a location and appointment type, and confirm. Every slot offered is a slot that genuinely exists." },
-      { title: "No double booking, ever", body: "Slots are validated in real time and conflicts are caught before a save, not after two patients arrive at nine." },
-      { title: "Cancellations that refill", body: "Patients opt into a waiting list; when a slot is released it is offered automatically, with a response window before it passes to the next patient." },
-      { title: "Rules, not exceptions", body: "Booking windows, cancellation policy, protected emergency slots and reschedule limits are settings -- so the front desk stops making judgement calls." },
-      { title: "Recurring clinics and teleconsultation", body: "Repeating sessions, multiple locations and remote appointments sit on the same calendar, with timezones handled for you." },
+      { title: "Every kind of appointment", body: "New consultation, scheduled follow-up, walk-in, emergency, hospital consultation, teleconsultation, home or outreach visit -- one engine, one calendar." },
+      { title: "Schedules you own", body: "Practitioner-owned by default and delegable when you want help. Each location keeps its own hours, durations and rules." },
+      { title: "Slots that genuinely exist", body: "Availability is generated from your real working pattern, with buffers, holidays and blocked time already subtracted." },
+      { title: "The walk-in queue", body: "Unscheduled arrivals join the same day without breaking it, and are managed as a queue rather than as interruptions." },
+      { title: "Cancellations that refill", body: "Waiting-list management offers released time automatically instead of leaving an afternoon empty." },
+      { title: "Straight into the consultation", body: "An appointment transitions to a clinical encounter automatically -- no second act of starting something." },
     ],
     screens: [
       { src: "/images/practice/calendar.webp", alt: "Calendar and availability management showing day, week and month views across two branches and teleconsultation", caption: "Availability across every location, with breaks, leave and emergency slots in one view." },
@@ -281,93 +295,98 @@ export const PRACTICE_AREAS: PracticeArea[] = [
     ],
   },
 
-  // ── CPR-005 Check-in & Queue, CPR-018 Reception Workspace ────────────────────────────────────────────
+  // ── PEN-003 Clinical Encounter, PEN-006 Rapid Data Capture, PEN-007 Workflow ────────────────────────
+  // Version 2 makes the encounter the clinical centre of the product. This area replaces v1's "front desk
+  // & clinic flow", whose name had come to contradict the architecture -- "no receptionist required" is a
+  // v2 design principle, and a capability page named after the front desk sells the opposite.
   {
-    slug: "front-desk",
-    nav: "Front desk & clinic flow",
-    eyebrow: "Front desk & clinic flow",
-    headline: ["A calmer waiting room."],
+    slug: "encounter",
+    nav: "The encounter",
+    eyebrow: "The encounter",
+    headline: ["Capture in seconds.", "Complete when you can."],
     body:
-      "Reception checks patients in, the queue orders itself, and you can see who is waiting and for how " +
-      "long without walking out to look.",
+      "The consultation is the centre of the product. Record the minimum safely while the patient is in " +
+      "front of you, link what matters, and finish the detail afterwards -- without a receptionist.",
     accent: "#0F766E",
-    icon: "\u{1F6CE}️",
-    blurb: "Check-in, a live queue with real waiting times, and a front desk that can run the day on one screen.",
-    modules: ["CPR-005", "CPR-018", "PEN-006", "PEN-007"],
+    icon: "\u{1FA7A}",
+    blurb: "One encounter lifecycle for every visit type, rapid capture by keyboard, touch or voice, and workflows that route the work.",
+    modules: ["PEN-003", "PEN-006", "PEN-007"],
     outcomes: [
-      { title: "Check in at the desk or on a phone", body: "Reception checks patients in; self check-in by kiosk or mobile is built into the same flow for when you want it." },
-      { title: "A queue you can trust", body: "Expected, arrived, waiting, called, in consultation, completed. Position is assigned automatically and everyone sees the same list." },
-      { title: "Waiting time as a number", body: "Average and longest wait, live. The thing patients complain about becomes something you can actually manage." },
-      { title: "Emergencies jump the queue", body: "Priority override is a control, not a conversation. Missed patients are recalled or marked no-show." },
-      { title: "One screen for the front desk", body: "Registration, walk-ins, telephone bookings, check-in, documents, referral coordination and the day's tasks together." },
-      { title: "Boundaries that hold", body: "Reception can move a patient through the clinic and cannot touch a diagnosis or a treatment. Every administrative action is logged." },
+      { title: "One lifecycle, every visit type", body: "Initiate, verify identity, assess, diagnose, treat, plan follow-up, close. Booked or walk-in, clinic or ward, in person or remote -- the shape is the same." },
+      { title: "Type the least you can", body: "Smart shortcuts, macros, specialty templates and smart defaults populated from the patient's own history rather than from a blank form." },
+      { title: "Or say it", body: "Voice-to-structured capture transcribes and structures as you speak, for the days when typing is not an option." },
+      { title: "Validated as you go", body: "Required fields, range and logic checks, code validation and duplicate prevention catch the problem while you can still fix it." },
+      { title: "Nothing lost offline", body: "Capture continues without a connection and syncs securely when there is one -- outreach and home visits are not an exception." },
+      { title: "Work that routes itself", body: "States, rules and task assignment move each piece of work to the right person with the right deadline, and escalate when one slips." },
+      { title: "Closing does the rest", body: "Completing an encounter updates the timeline, files the follow-up, and contributes to your case memory. One action, not four." },
     ],
     screens: [
       { src: "/images/practice/queue.webp", alt: "The live clinic queue showing patients by status, time in queue, next action and the current patient in consultation", caption: "The live queue, with time-in-queue and the next action for every patient." },
-      { src: "/images/practice/reception.webp", alt: "The receptionist workspace showing today's schedule, waiting queue, quick actions, announcements and tasks", caption: "The front desk workspace: schedule, queue, quick actions and today's tasks." },
+      { src: "/images/practice/questionnaires.webp", alt: "The pre-visit questionnaire engine showing assignments by patient, completion status and reusable templates", caption: "Pre-visit answers waiting for you before the patient sits down." },
+      { src: "/images/practice/diagnosis.webp", alt: "The diagnosis tracker showing active, provisional, resolved, past history and allergy entries with ICD-10 codes", caption: "The problem list, separated into active, provisional, resolved and history." },
+      { src: "/images/practice/treatments.webp", alt: "The current treatment tracker showing active medications, therapies, laboratory tests and referrals with next review dates", caption: "Current treatments, each linked to a diagnosis and a review date." },
     ],
   },
 
-  // ── CPR-006 Patient Portal, CPR-007 Questionnaires, CPR-013 Notifications ────────────────────────────
+  // ── PEN-002 Patient Identity, PEN-010 Notification & Communication ─────────────────────────────────
   {
-    slug: "patient-experience",
-    nav: "Patients & self-service",
-    eyebrow: "Patients & self-service",
-    headline: ["Patients who arrive", "already prepared."],
+    slug: "patients",
+    nav: "Patients & contact",
+    eyebrow: "Patients & contact",
+    headline: ["The right patient.", "Reached the right way."],
     body:
-      "Your patients keep their own details up to date, complete their forms before they travel, and get " +
-      "reminded in the channel they actually read.",
+      "One identity per patient, however many places you have met them -- and communication that reaches " +
+      "them on the channel they actually read.",
     accent: "#7C3AED",
-    icon: "\u{1F4F1}",
-    blurb: "A patient portal, pre-visit questionnaires that assign themselves, and reminders by SMS, email or in-app.",
-    modules: ["CPR-006", "CPR-007", "CPR-013", "PEN-002", "PEN-010"],
+    icon: "\u{1F464}",
+    blurb: "One longitudinal identity with duplicate detection, a patient portal, and reminders by SMS, email or in-app.",
+    modules: ["PEN-002", "PEN-010"],
     outcomes: [
-      { title: "Patients maintain their own record", body: "Contact details, emergency contact, allergies, chronic conditions and current medication. You verify rather than retype." },
-      { title: "Forms completed before the visit", body: "Questionnaires assign themselves from the appointment type, specialty or your own template, and can be made mandatory before the appointment." },
-      { title: "Build a form without a developer", body: "Short text, choices, dates, numbers, pain scales, file upload and consent -- assembled by drag and drop, versioned, and reusable across the practice." },
-      { title: "Answers waiting for you", body: "You read a summary before the consultation starts. The responses join the patient's timeline rather than living in a drawer." },
-      { title: "Reminders in the right channel", body: "In-app, SMS and email, on intervals you configure, in the languages your patients speak -- with delivery status and automatic retry." },
-      { title: "Patients see what you share", body: "Diagnoses, current treatments, documents and their own healthcare timeline -- released under your sharing policy, never by default." },
+      { title: "One patient, one identity", body: "A single master identity that survives across organisations and locations, with hospital numbers, national IDs and insurance identifiers mapped to it rather than replacing it." },
+      { title: "Duplicates caught, not created", body: "Probabilistic matching flags a likely duplicate at the moment of registration, with a confidence score you can tune and a merge that is fully auditable." },
+      { title: "Found in seconds", body: "Search by name, phone, national ID, hospital number, QR or barcode -- the walk-in at the door is retrievable before they have finished explaining." },
+      { title: "Patients maintain themselves", body: "Contact details, emergency contact, allergies and current medication kept current by the person who knows them. You verify rather than retype." },
+      { title: "Reminders that arrive", body: "In-app, SMS and email on the intervals you set, with delivery status, retry on failure and a reason when something does not land." },
+      { title: "Preferences respected", body: "Channel choice, quiet hours, opt-outs and frequency limits are honoured -- with an override reserved for genuinely critical alerts." },
     ],
     screens: [
       { src: "/images/practice/portal.webp", alt: "The patient self-service portal showing profile, upcoming appointment, health summary, timeline and care team", caption: "The patient's own portal -- appointments, documents, health summary and care team." },
-      { src: "/images/practice/questionnaires.webp", alt: "The pre-visit questionnaire engine showing assignments by patient, completion status and reusable templates", caption: "Questionnaires assigned automatically, with completion visible before the clinic starts." },
       { src: "/images/practice/notifications.webp", alt: "The notification and reminder engine showing sent, delivered, pending and failed messages across SMS, email and in-app channels", caption: "Every reminder, its channel, and whether it actually arrived." },
+      { src: "/images/practice/reception.webp", alt: "The front desk workspace showing today's schedule, waiting queue, quick actions, announcements and tasks", caption: "If you do have an assistant, a workspace scoped to what they should touch." },
     ],
   },
 
-  // ── CPR-008 Timeline, 009 Diagnosis, 010 Treatment, 011 Documents, 012 Follow-up, 014 Referrals ──────
+  // ── PEN-004 Follow-up Intelligence, PEN-011 Document & Media, PEN-012 Patient Timeline ─────────────
   {
     slug: "continuity",
     nav: "Continuity of care",
     eyebrow: "Continuity of care",
     headline: ["Nothing falls", "through the gaps."],
     body:
-      "One chronological view of the patient in front of you: what they have, what they are on, what you " +
-      "sent out, and when they are due back.",
+      "One chronological view of everything you have done for this patient, everywhere -- and a follow-up " +
+      "engine that chases the ones drifting away before they are lost.",
     accent: "#DB2777",
-    icon: "\u{1FAB6}",
-    blurb: "Timeline, diagnoses, current treatments, documents, referrals and the recalls that bring patients back.",
-    modules: ["CPR-008", "CPR-009", "CPR-010", "CPR-011", "CPR-012", "CPR-014", "PEN-003", "PEN-004", "PEN-011", "PEN-012"],
+    icon: "\u{1FA79}",
+    blurb: "A cross-site timeline, documents and images with provenance, and risk-based recall that escalates when a review slips.",
+    modules: ["PEN-004", "PEN-011", "PEN-012"],
     outcomes: [
-      { title: "The whole journey, in order", body: "Appointments, questionnaires, diagnoses, treatment changes, referrals, documents and missed visits on a single filterable timeline." },
-      { title: "A problem list that stays true", body: "Active, provisional, chronic, resolved and past history -- with optional ICD coding, severity, and the clinician responsible for each." },
-      { title: "What the patient is actually on", body: "Medications, procedures, therapies, monitoring plans and home care, each linked to the diagnosis it treats and carrying its own review date." },
-      { title: "Documents where you need them", body: "Referral letters, laboratory and radiology reports, discharge summaries and consent forms -- uploaded by you or the patient, versioned, and immutable once stored." },
-      { title: "Referrals you can track", body: "Draft, sent, acknowledged, accepted, completed or declined. You know where a referral stands without telephoning the specialist's receptionist." },
-      { title: "Recalls that chase for you", body: "Routine reviews, post-procedure checks, chronic disease reviews, screening and vaccination recalls -- scheduled, escalated when overdue, and surfaced on your dashboard." },
+      { title: "The whole journey, in order", body: "Appointments, encounters, diagnoses, treatments, procedures, investigations, documents, referrals and outcomes on one filterable timeline." },
+      { title: "Grouped into episodes", body: "Related events collapse into an episode of care with its own summary, so a two-year history is readable rather than merely complete." },
+      { title: "Continuity across sites", body: "Encounters from every facility you work in appear in one view, each carrying where it happened and under whose identifier." },
+      { title: "Follow-up by risk, not by rota", body: "Reminder cadence follows the patient's risk. Overdue reviews are detected, prioritised and escalated on rules you set." },
+      { title: "Every kind of review", body: "Scheduled, walk-in, post-procedure, tele-follow-up, chronic monitoring, post-discharge and preventive recall -- each linked to the encounter that created it." },
+      { title: "Documents where the care is", body: "Letters, reports, scans, clinical photographs and voice notes attached to the encounter, versioned, indexed and searchable by their contents." },
+      { title: "Immutable once signed", body: "Signed timeline events cannot be quietly altered. Corrections are versioned and visible, which is what makes the record worth anything later." },
     ],
     screens: [
       { src: "/images/practice/timeline.webp", alt: "The patient timeline showing appointments, consultations, diagnoses, treatments, documents and referrals in chronological order", caption: "One chronological view of everything that has happened to this patient." },
-      { src: "/images/practice/diagnosis.webp", alt: "The diagnosis tracker showing active, provisional, resolved, past history and allergy entries with ICD-10 codes", caption: "The problem list, separated into active, provisional, resolved and history." },
-      { src: "/images/practice/treatments.webp", alt: "The current treatment tracker showing active medications, therapies, laboratory tests and referrals with next review dates", caption: "Current treatments, each linked to a diagnosis and a review date." },
       { src: "/images/practice/followups.webp", alt: "Follow-up and recall management showing upcoming and overdue reviews, recurring plans and assigned clinicians", caption: "Follow-ups and recalls, with the overdue ones impossible to miss." },
-      { src: "/images/practice/referrals.webp", alt: "The referral and correspondence manager showing outgoing referrals, their status and recent replies", caption: "Referrals and correspondence, tracked from draft to completed." },
       { src: "/images/practice/documents.webp", alt: "The patient document repository showing categorised documents, who uploaded each, sharing status and storage usage", caption: "Documents, categorised and clearly marked as yours or the patient's." },
+      { src: "/images/practice/referrals.webp", alt: "The referral and correspondence manager showing outgoing referrals, their status and recent replies", caption: "Referrals and correspondence, tracked from draft to completed." },
     ],
   },
 
-  // ── CPR-001 Dashboard, CPR-015 Analytics, CPR-016 AI Assistant, CPR-017 Search ───────────────────────
+  // ── PEN-005 Practice Intelligence, PEN-008 Clinical Search, PEN-013 AI Clinical Decision Support ───
   {
     slug: "intelligence",
     nav: "Your case memory",
@@ -378,35 +397,56 @@ export const PRACTICE_AREAS: PracticeArea[] = [
       "dashboard about your practice -- a memory of it, that answers questions.",
     accent: "#C2410C",
     icon: "✨",
-    blurb: "Similar-case retrieval, what your treatments actually achieved, who is overdue, and the evidence of what you have done.",
-    modules: ["CPR-001", "CPR-015", "CPR-016", "CPR-017", "PEN-005", "PEN-008", "PEN-013", "PEN-009", "PEN-014"],
+    blurb: "Similar-case retrieval, what your treatments actually achieved, and decision support that shows its working.",
+    modules: ["PEN-005", "PEN-008", "PEN-013"],
     // CPR-ARCH-001 section 9.2 lists the questions the intelligence layer must answer. They are written
     // here almost as asked, because a clinician recognises their own question faster than they recognise
     // a feature name -- and because a claim in the form of a question is one you can be held to.
     outcomes: [
-      { title: "“Have I seen this before?”", body: "Similar-case retrieval across your own practice: patients with comparable characteristics, what was done, and what happened." },
-      { title: "“What actually worked?”", body: "Treatment and procedure registries with the responses and outcomes you recorded against them -- effectiveness in your hands, not in a journal." },
-      { title: "“Who is overdue?”", body: "Follow-up completion and loss-to-follow-up patterns, so the patients drifting out of your care are a list rather than a worry." },
+      { title: "“Have I seen this before?”", body: "Similar-case retrieval across your own practice: patients with comparable characteristics, what was done, and what happened next." },
+      { title: "“What actually worked?”", body: "Treatment and procedure registries carrying the responses and outcomes you recorded -- effectiveness in your hands, not in a journal." },
       { title: "“What is changing?”", body: "Which diagnoses and procedures are rising in your practice, by facility, specialty, location and period." },
-      { title: "“Who do I invoice for?”", body: "The hospital-specific list of patients you saw this month, formatted for that facility and no other." },
-      { title: "“What have I actually done?”", body: "A case log and professional experience map -- the evidence behind a portfolio, an appraisal or a training application." },
-      { title: "Today, at a glance", body: "Appointments, walk-ins, follow-ups due, tasks and alerts, with a drill-down behind every number." },
-      { title: "Findable in one search", body: "Patients, encounters, diagnoses, treatments, documents, referrals and follow-ups, from one bar, in under two seconds." },
+      { title: "Ask it in plain English", body: "Natural-language search across patients, encounters, diagnoses, treatments, documents and follow-ups, with results in under two seconds." },
+      { title: "Decision support that shows its working", body: "Differential suggestions, guideline matches, risk and early-warning scores and medication safety checks -- each with its evidence and a confidence band attached." },
+      { title: "A knowledge base that is yours", body: "The longitudinal graph is built from your validated encounters and grows with them, rather than being rented from someone else's dataset." },
     ],
     screens: [
-      { src: "/images/practice/dashboard.webp", alt: "The practice home dashboard showing today's appointments, new bookings, follow-ups due, the calendar, today's schedule and tasks", caption: "The daily command centre -- today's work, first." },
-      { src: "/images/practice/analytics.webp", alt: "The practice analytics dashboard showing appointment volume, patient demographics, diagnosis and treatment trends and no-show rate", caption: "Operational and clinical trends, filterable by clinician, location and period." },
       { src: "/images/practice/search.webp", alt: "Search and patient intelligence showing results across every domain with a patient quick view and saved searches", caption: "One search across every record, with the patient's context alongside." },
       { src: "/images/practice/assistant.webp", alt: "The AI practice assistant showing suggested tasks, smart alerts and a natural language chat with the practice's own data", caption: "The assistant, with its limits stated on the same screen as its suggestions." },
+      { src: "/images/practice/dashboard.webp", alt: "The practice home dashboard showing today's appointments, new bookings, follow-ups due, the calendar, today's schedule and tasks", caption: "The daily command centre -- today's work, first." },
     ],
   },
 
-  // ── CPR-019 Rev 2 Practice Configuration, CPR-020 Integrations ───────────────────────────────────────
-  // Revision 2 splits configuration in two: what the practice administrator edits, and what the platform
-  // holds read-only (tenant identity, licence, entitlements, security and backup policy, regional
-  // deployment). That split is the whole point of the revision, so it is the shape of this page rather
-  // than a line inside it -- and the read-only half is written as relief, because for a four-clinician
-  // practice with no IT department "you cannot change the security policy" is the feature.
+  // ── PEN-009 Reporting & Export, PEN-014 Research & Knowledge Generation ────────────────────────────
+  // A separate area rather than a paragraph inside intelligence: the hospital payment list and the
+  // portfolio are the two outputs a practitioner can put a number on, and burying them under "analytics"
+  // is how a product loses the argument it was winning.
+  {
+    slug: "evidence",
+    nav: "Evidence & reporting",
+    eyebrow: "Evidence & reporting",
+    headline: ["Proof of what", "you actually did."],
+    body:
+      "The reports a working clinician genuinely needs: what each hospital owes you for, what you have " +
+      "treated and achieved, and the evidence behind an appraisal, a portfolio or a paper.",
+    accent: "#0E7490",
+    icon: "\u{1F4CA}",
+    blurb: "Hospital payment lists, activity and outcome reporting, professional portfolio evidence and governed research datasets.",
+    modules: ["PEN-009", "PEN-014"],
+    outcomes: [
+      { title: "The hospital payment list", body: "Who you saw at which facility this month, formatted for that facility and exposing no other's patients. Reconciliation stops being an evening's work." },
+      { title: "Activity and outcomes", body: "Clinic activity, diagnosis and treatment analytics, follow-up compliance and clinical outcomes -- built once and scheduled thereafter." },
+      { title: "Your professional portfolio", body: "A case log and experience map you can take to an appraisal, a revalidation or a training application, drawn from work you had to record anyway." },
+      { title: "Export in the format asked for", body: "PDF, Excel and CSV, delivered on a schedule or over an API, with templates version-controlled and every export audited." },
+      { title: "Registries and cohorts", body: "Build a disease registry or an outcome cohort from your own longitudinal data, with inclusion criteria you define and provenance retained." },
+      { title: "Research without exposure", body: "Automated de-identification, re-identification risk checks and consent governance before a dataset leaves -- publication support, not a spreadsheet of patients." },
+    ],
+    screens: [
+      { src: "/images/practice/analytics.webp", alt: "The practice analytics dashboard showing appointment volume, patient demographics, diagnosis and treatment trends and no-show rate", caption: "Operational and clinical trends, filterable by clinician, location and period." },
+    ],
+  },
+
+  // ── PEN-015 Integration & Interoperability ────────────────────────────────────────────────────────
   {
     slug: "setup",
     nav: "Setup & connections",
@@ -416,19 +456,18 @@ export const PRACTICE_AREAS: PracticeArea[] = [
       "Locations, hours, appointment types, users and templates are yours to change, from a settings " +
       "screen rather than a support ticket. Security policy, backups and licensing are ours -- and where " +
       "you already have systems, Practice talks to them.",
-    accent: "#0E7490",
+    accent: "#155E75",
     icon: "\u{1F517}",
     blurb: "Everything the practice controls, everything it never has to, and standards-based links to the systems you already run.",
-    modules: ["CPR-019", "CPR-020", "PEN-015"],
+    modules: ["PEN-015"],
     outcomes: [
       { title: "What you control", body: "Practice profile and branding, clinic locations, working days and hours, appointment types and durations, booking rules, notification preferences, questionnaire templates, document categories and assistant preferences." },
       { title: "What you never have to", body: "Tenant identity, subscription and licence, feature entitlements, regional deployment, security and password policy, backup and retention. Held by the platform, visible to you, and not your job to maintain." },
-      { title: "Add your own team", body: "Create clinician and receptionist accounts, assign workspace membership, adjust local permissions and deactivate someone the day they leave -- without raising a ticket." },
-      { title: "Your licence in plain sight", body: "Plan, status, renewal date and exactly which features are included, on the same screen as the settings they govern. No guessing what you are paying for." },
+      { title: "Add your own team", body: "Create clinician and assistant accounts, assign workspace membership, adjust local permissions and deactivate someone the day they leave -- without raising a ticket." },
+      { title: "Your licence in plain sight", body: "Plan, status, renewal date and exactly which features are included, on the same screen as the settings they govern." },
       { title: "Every change versioned", body: "Configuration carries version history and an audit record of who changed what and when. Critical changes ask for confirmation before they take effect." },
-      { title: "Multiple sites, one practice", body: "Each location keeps its own hours, rooms and calendar while the practice keeps one patient list." },
-      { title: "Standards-based exchange", body: "REST APIs, webhooks, import and export tools, and an FHIR-ready data layer for connecting to an EMR rather than replacing it." },
-      { title: "Connections you can watch", body: "Health status per connection, retry queues for failures, and an audit record of every exchange with an outside system." },
+      { title: "Standards-based exchange", body: "HL7 v2, FHIR R4, REST APIs, webhooks and DICOM for imaging -- built to connect to an EMR, laboratory, radiology or pharmacy system rather than replace it." },
+      { title: "Connections you can watch", body: "Health status per connection, retry and dead-letter queues for failures, and an audit record of every exchange with an outside system." },
     ],
     screens: [
       { src: "/images/practice/settings.webp", alt: "Practice configuration showing platform-managed read-only settings beside practice-managed editable settings, with subscription, feature entitlements and workspace membership", caption: "Read-only on the left, yours to edit on the right -- and the licence beside both." },

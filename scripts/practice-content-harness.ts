@@ -41,19 +41,21 @@ const ok = (label: string, cond: boolean, detail = "") => {
 };
 
 /**
- * Every specification document that exists, and can therefore be cited by an area.
+ * THE FIFTEEN PEN ENGINE SPECIFICATIONS -- the coverage spine for the whole public section.
  *
- * CPR-001..020 are the workspace specs; PEN-001..015 are the Version 2 engine specs. CPR-000, CPR-000A and
- * the five CPR-ARCH documents are architecture rather than modules, so they are not listed -- an area
- * citing one of them would be claiming to cover a whole layer.
+ * It used to be CPR-001..020. The CPR space is being revised and its numbering already disagrees with
+ * itself in two places (see SPEC_CONFLICTS in practice-content.ts), so an assertion over CPR ids was
+ * measuring a moving target: it would keep passing while pointing at workspaces that had been renamed
+ * underneath it, which is worse than not asserting at all -- a green harness over a stale claim.
  *
- * The PEN ids follow the PEN SPECIFICATIONS, not CPR-ARCH-001 section 13.2, which numbers the same fifteen
- * engines completely differently. See SPEC_CONFLICTS in practice-content.ts.
+ * The PEN library is stable, each engine is exactly one document, and together the fifteen decompose the
+ * entire product. So coverage means: every engine is represented by exactly one area, and no area cites an
+ * engine that does not exist. Dropping one when the areas are next reorganised is a test failure.
+ *
+ * The ids follow the PEN SPECIFICATIONS rather than CPR-ARCH-001 section 13.2, which numbers the same
+ * fifteen engines completely differently.
  */
-const SPECIFIED = [
-  ...Array.from({ length: 20 }, (_, i) => `CPR-${String(i + 1).padStart(3, "0")}`),
-  ...Array.from({ length: 15 }, (_, i) => `PEN-${String(i + 1).padStart(3, "0")}`),
-];
+const SPECIFIED = Array.from({ length: 15 }, (_, i) => `PEN-${String(i + 1).padStart(3, "0")}`);
 
 // Same list as the public-disclosure harness, deliberately duplicated: if that file is ever narrowed, this
 // one still fails, and two harnesses disagreeing is a louder signal than one silently relaxing.
