@@ -39,8 +39,8 @@ const QUEUE_TONE: Record<string, string> = {
 
 const input = "w-full rounded-lg border border-gray-200 px-2.5 py-2 text-[13px] outline-none focus:border-[#2563EB] focus:ring-2 focus:ring-[#2563EB]/10";
 
-export default function CalendarConsole({ date, canManage, canQueue, initial }: {
-  date: string; canManage: boolean; canQueue: boolean; initial: Day;
+export default function CalendarConsole({ date, canManage, canQueue, canStartEncounter, initial }: {
+  date: string; canManage: boolean; canQueue: boolean; canStartEncounter: boolean; initial: Day;
 }) {
   const [day, setDay] = useState<Day>(initial);
   const [busy, setBusy] = useState(false);
@@ -85,6 +85,26 @@ export default function CalendarConsole({ date, canManage, canQueue, initial }: 
     act(() => fetch(`/api/v1/practice/queue/${id}`, {
       method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action }),
     }), label);
+
+  // FLOW-001 pathway 1: booked patient arrives -> open the encounter. Resume-before-create lives in the
+  // engine, so clicking this twice lands on the same encounter rather than forking the visit.
+  async function startEncounter(appointmentId: string, patientId: string, appointmentType: string) {
+    setBusy(true); setNotice(null);
+    const res = await fetch("/api/v1/practice/encounters", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        patientId, appointmentId,
+        pathway: appointmentType === "walk_in" ? "new_walk_in" : appointmentType === "scheduled_followup" ? "scheduled_followup" : "booked",
+        encounterMode: appointmentType === "teleconsultation" ? "teleconsultation" : appointmentType === "home_visit" ? "home_visit" : "in_person",
+      }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      setNotice({ kind: "err", text: data?.error?.message ?? data?.error ?? "That did not work." });
+      setBusy(false); return;
+    }
+    window.location.assign(`/practice/encounters/${data.encounter.id}`);
+  }
 
   const fmt = (iso: string) => new Date(iso).toISOString().slice(11, 16);
 
@@ -131,6 +151,20 @@ export default function CalendarConsole({ date, canManage, canQueue, initial }: 
                     <span className="text-[11px] text-gray-400">{a.appointment_type.replace(/_/g, " ")} · {a.duration_minutes}m</span>
                     <span className={`ml-auto rounded px-1.5 py-0.5 text-[10px] font-bold ${STATUS_TONE[a.status] ?? "bg-gray-100 text-gray-500"}`}>{a.status}</span>
                   </div>
+                  {canStartEncounter && a.status === "ARRIVED" && (
+                    <div className="mt-1.5">
+                      {a.patient_id ? (
+                        <button disabled={busy} onClick={() => startEncounter(a.id, a.patient_id, a.appointment_type)}
+                          className="rounded bg-[#2563EB] px-2.5 py-1 text-[11px] font-semibold text-white hover:bg-[#1D4ED8] disabled:opacity-50">
+                          Open encounter
+                        </button>
+                      ) : (
+                        <p className="text-[10px] text-gray-400">
+                          Diary entry only — register this person in Patients to open a clinical record.
+                        </p>
+                      )}
+                    </div>
+                  )}
                   {canManage && (
                     <div className="mt-1.5 flex gap-1.5 flex-wrap">
                       {a.status === "REQUESTED" && <button disabled={busy} onClick={() => transition(a.id, "confirm", "Confirmed.")} className="rounded border border-gray-200 px-2 py-0.5 text-[11px] text-gray-600 hover:bg-gray-50">Confirm</button>}
@@ -215,7 +249,9 @@ export default function CalendarConsole({ date, canManage, canQueue, initial }: 
                 </div>
               </form>
               <p className="mt-2 text-[10px] text-gray-400">
-                Names are diary text until patient identity ships (Phase 2); a walk-in books for now and is checked in with one action.
+                A booking made here carries a name only. To open a clinical record for someone, register
+                them in Patients and book from their record — or search for them there and start the
+                encounter directly.
               </p>
             </section>
           )}

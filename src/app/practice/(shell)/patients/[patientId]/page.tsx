@@ -4,6 +4,7 @@ import { createAdminClient } from "@/lib/supabase/server";
 import { resolvePracticeShell } from "@/lib/practice/shell";
 import { hasCapability } from "@/lib/practice/access";
 import { getPatient } from "@/lib/practice/patients";
+import { patientTimeline } from "@/lib/practice/encounters";
 import PatientActions from "./PatientActions";
 
 // /practice/patients/{id} -- the Phase-2 slice of CPR-002's patient workspace: identity, identifiers,
@@ -30,6 +31,9 @@ export default async function PatientPage({ params }: { params: Promise<{ patien
 
   const { patient, identifiers, contacts, appointments } = detail;
   const practiceId = (identifiers as any[]).find(i => i.identifier_type === "practice_id")?.value ?? null;
+  const timeline = hasCapability(shell.ctx, "encounter.list")
+    ? await patientTimeline(admin, shell.ctx.workspaceId, patientId, 20)
+    : { encounters: [] as any[], diagnosesByEncounter: {} as Record<string, any[]> };
 
   if (patient.status === "merged") {
     return (
@@ -103,9 +107,11 @@ export default async function PatientPage({ params }: { params: Promise<{ patien
           birthDate={patient.birth_date}
           ageEstimateYears={patient.age_estimate_years}
           recordVersion={patient.record_version}
+          hasPriorEncounter={(timeline.encounters as any[]).length > 0}
           canEdit={hasCapability(shell.ctx, "patient.edit")}
           canMerge={hasCapability(shell.ctx, "patient.merge")}
           canBook={hasCapability(shell.ctx, "appointment.manage")}
+          canStartEncounter={hasCapability(shell.ctx, "encounter.create")}
         />
       </div>
 
@@ -127,10 +133,41 @@ export default async function PatientPage({ params }: { params: Promise<{ patien
             ))}
           </ul>
         )}
-        <p className="mt-3 text-[10px] text-gray-400">
-          Clinical timeline, problems and documents arrive with Phases 3-4 (encounters, continuity).
-        </p>
       </section>
+
+      {hasCapability(shell.ctx, "encounter.list") && (
+        <section className="mt-4 rounded-xl border border-gray-200 bg-white p-4">
+          <h2 className="text-[13px] font-bold text-gray-900">Clinical timeline</h2>
+          {(timeline.encounters as any[]).length === 0 ? (
+            <p className="mt-2 text-[12px] text-gray-400">No encounters recorded for this patient yet.</p>
+          ) : (
+            <ul className="mt-2 flex flex-col gap-2">
+              {(timeline.encounters as any[]).map(e => (
+                <li key={e.id} className="border-l-2 border-gray-100 pl-3">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <Link href={`/practice/encounters/${e.id}`} className="text-[12px] font-semibold text-[#1D4ED8] hover:underline">
+                      {String(e.started_at).slice(0, 16).replace("T", " ")}
+                    </Link>
+                    <span className="text-[11px] text-gray-400">
+                      {String(e.entry_pathway).replace(/_/g, " ")} · {String(e.encounter_mode).replace(/_/g, " ")}
+                    </span>
+                    <span className="ml-auto text-[10px] font-bold text-gray-500">{e.status}</span>
+                  </div>
+                  {e.reason_for_visit && <p className="text-[11px] text-gray-600">{e.reason_for_visit}</p>}
+                  {(timeline.diagnosesByEncounter[e.id] ?? []).map((d: any, i: number) => (
+                    <p key={i} className="text-[11px] text-gray-500">
+                      {d.is_primary ? "▪ " : "· "}{d.label} <span className="text-gray-400">({d.certainty})</span>
+                    </p>
+                  ))}
+                </li>
+              ))}
+            </ul>
+          )}
+          <p className="mt-3 text-[10px] text-gray-400">
+            The 20 most recent encounters. Documents and attachments arrive with Phase 4.
+          </p>
+        </section>
+      )}
     </div>
   );
 }

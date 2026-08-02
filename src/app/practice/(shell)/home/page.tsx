@@ -22,7 +22,7 @@ export default async function PracticeHome() {
   const admin = createAdminClient();
 
   const todayIso = new Date().toISOString().slice(0, 10);
-  const [{ count: locations }, { count: members }, { data: entitlement }, { data: events }, { data: todaysAppointments }, { count: waiting }] = await Promise.all([
+  const [{ count: locations }, { count: members }, { data: entitlement }, { data: events }, { data: todaysAppointments }, { count: waiting }, { data: openEncounters }] = await Promise.all([
     admin.from("practice_location").select("*", { count: "exact", head: true }).eq("workspace_id", ctx.workspaceId).eq("active", true),
     admin.from("practice_membership").select("*", { count: "exact", head: true }).eq("workspace_id", ctx.workspaceId).eq("status", "active"),
     admin.from("practice_entitlement").select("plan_code, status, ends_at").eq("workspace_id", ctx.workspaceId).in("status", ["active", "trial"]).limit(1).maybeSingle(),
@@ -32,7 +32,19 @@ export default async function PracticeHome() {
       .order("scheduled_at").limit(10),
     admin.from("practice_queue_entry").select("*", { count: "exact", head: true })
       .eq("workspace_id", ctx.workspaceId).in("status", ["WAITING", "READY", "IN_CONSULTATION", "PAUSED"]),
+    // Open and completed-but-unsigned encounters: the work in front of the practitioner right now.
+    // COMPLETED is included deliberately -- an unsigned record is unfinished business, not history.
+    admin.from("practice_encounter").select("id, patient_id, status, reason_for_visit, started_at")
+      .eq("workspace_id", ctx.workspaceId).in("status", ["DRAFT", "ACTIVE", "PAUSED", "COMPLETED"])
+      .order("started_at", { ascending: false }).limit(8),
   ]);
+
+  const encRows = (openEncounters ?? []) as any[];
+  const encPatientIds = [...new Set(encRows.map(e => e.patient_id))];
+  const { data: encPatients } = encPatientIds.length
+    ? await admin.from("practice_patient").select("id, display_name").in("id", encPatientIds)
+    : { data: [] };
+  const encName = new Map(((encPatients ?? []) as any[]).map(p => [p.id, p.display_name]));
 
   // Request-time is the CORRECT time here: this is a force-dynamic server component, rendered once per
   // request, and "days left on the trial" is a fact about now. The impure-render rule exists for client
@@ -51,10 +63,9 @@ export default async function PracticeHome() {
   ];
 
   // The clinical widgets still to come, named honestly by the phase that ships them (CPR-BUILD-000).
-  // Today's appointments left this list when Phase 1 shipped -- it renders below, from real rows.
+  // Entries leave this list as their phase ships: today's appointments went with Phase 1, patient
+  // actions with Phase 2, and open encounters with Phase 3 -- each now renders below from real rows.
   const upcoming = [
-    { title: "Find patient / register walk-in", phase: "Phase 2 — Patient identity" },
-    { title: "New encounter", phase: "Phase 3 — Clinical encounter" },
     { title: "Follow-ups due", phase: "Phase 4 — Continuity" },
     { title: "Practice intelligence", phase: "Phase 5 — Case memory" },
   ];
@@ -100,6 +111,34 @@ export default async function PracticeHome() {
           <p className="mt-2 text-[11px] font-semibold text-[var(--cmp-text-warning)]">
             {waiting} in the waiting queue right now.
           </p>
+        )}
+      </section>
+
+      {/* Open encounters (CPR-001 V3 "Patient Actions") -- live from practice_encounter since Phase 3 */}
+      <section className="mt-4 rounded-xl border border-gray-200 bg-white p-4">
+        <div className="flex items-baseline justify-between gap-3">
+          <h2 className="text-[13px] font-bold text-gray-900">Encounters needing you</h2>
+          <Link href="/practice/encounters" className="text-[12px] font-semibold text-[#1D4ED8] hover:underline">All encounters →</Link>
+        </div>
+        {encRows.length === 0 ? (
+          <p className="mt-2 text-[12px] text-gray-400">
+            Nothing open or awaiting signature. Start one from a patient record or a checked-in appointment.
+          </p>
+        ) : (
+          <ul className="mt-2 flex flex-col gap-1">
+            {encRows.map(e => (
+              <li key={e.id} className="flex items-center gap-2 text-[12px]">
+                <Link href={`/practice/encounters/${e.id}`} className="font-semibold text-[#1D4ED8] hover:underline">
+                  {encName.get(e.patient_id) ?? "Unknown patient"}
+                </Link>
+                {e.reason_for_visit && <span className="text-gray-500 truncate">{e.reason_for_visit}</span>}
+                <span className="ml-auto font-mono text-gray-400">{String(e.started_at).slice(0, 10)}</span>
+                <span className={`rounded px-1.5 py-0.5 text-[10px] font-bold ${e.status === "COMPLETED" ? "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]" : "bg-gray-100 text-gray-600"}`}>
+                  {e.status === "COMPLETED" ? "UNSIGNED" : e.status}
+                </span>
+              </li>
+            ))}
+          </ul>
         )}
       </section>
 

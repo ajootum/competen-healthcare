@@ -31,6 +31,7 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
       date={day}
       canManage={hasCapability(shell.ctx, "appointment.manage")}
       canQueue={hasCapability(shell.ctx, "queue.manage")}
+      canStartEncounter={hasCapability(shell.ctx, "encounter.create")}
       initial={JSON.parse(JSON.stringify(initial))}
     />
   );

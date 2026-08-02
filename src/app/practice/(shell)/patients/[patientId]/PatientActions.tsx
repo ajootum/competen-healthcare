@@ -13,8 +13,8 @@ const input = "w-full rounded-lg border border-gray-200 px-2.5 py-2 text-[13px] 
 
 export default function PatientActions(props: {
   patientId: string; displayName: string; sex: string; birthDate: string | null;
-  ageEstimateYears: number | null; recordVersion: number;
-  canEdit: boolean; canMerge: boolean; canBook: boolean;
+  ageEstimateYears: number | null; recordVersion: number; hasPriorEncounter: boolean;
+  canEdit: boolean; canMerge: boolean; canBook: boolean; canStartEncounter: boolean;
 }) {
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<{ kind: "ok" | "err"; text: string } | null>(null);
@@ -48,6 +48,25 @@ export default function PatientActions(props: {
     }),
   }), "Booked.");
 
+  // FLOW-001 pathways 2 and 4: existing patient walks in, or a follow-up is seen without a booking. The
+  // pathway is chosen from the record itself -- a patient with prior encounters is a follow-up.
+  async function startEncounter() {
+    setBusy(true); setNotice(null);
+    const res = await fetch("/api/v1/practice/encounters", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        patientId: props.patientId,
+        pathway: props.hasPriorEncounter ? "walk_in_followup" : "new_walk_in",
+      }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      setNotice({ kind: "err", text: data?.error?.message ?? data?.error ?? "That did not work." });
+      setBusy(false); return;
+    }
+    window.location.assign(`/practice/encounters/${data.encounter.id}`);
+  }
+
   async function doMerge() {
     // Resolve the duplicate by its Practice ID first -- merging by uuid paste is error-prone.
     setBusy(true); setNotice(null);
@@ -66,6 +85,19 @@ export default function PatientActions(props: {
     <section className="rounded-xl border border-gray-200 bg-white p-4">
       {notice && (
         <p className={`mb-3 rounded-lg px-3 py-2 text-[12px] ${notice.kind === "ok" ? "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]" : "bg-[var(--cmp-surface-critical)] text-[var(--cmp-text-critical)]"}`}>{notice.text}</p>
+      )}
+
+      {props.canStartEncounter && (
+        <>
+          <button type="button" disabled={busy} onClick={startEncounter}
+            className="w-full rounded-lg bg-[#2563EB] py-2 text-[13px] font-semibold text-white hover:bg-[#1D4ED8] disabled:opacity-50">
+            Start encounter
+          </button>
+          <p className="mt-1 mb-4 text-[10px] text-gray-400">
+            Opens the consultation record now. If one is already open for this patient it is resumed,
+            never duplicated.
+          </p>
+        </>
       )}
 
       {props.canBook && (

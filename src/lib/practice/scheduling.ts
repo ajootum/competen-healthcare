@@ -204,7 +204,9 @@ export async function loadDay(admin: any, workspaceId: string, dayIso: string) {
   const dayEnd = `${dayIso}T23:59:59.999Z`;
   const [{ data: appointments }, { data: queue }, { data: blocks }] = await Promise.all([
     admin.from("practice_appointment")
-      .select("id, patient_name, patient_phone, appointment_type, scheduled_at, duration_minutes, status, reason")
+      // patient_id is selected because the calendar can only offer "Start encounter" for a diary entry
+      // that is actually linked to a registered patient -- a name-only booking has no record to write to.
+      .select("id, patient_id, patient_name, patient_phone, appointment_type, scheduled_at, duration_minutes, status, reason")
       .eq("workspace_id", workspaceId).gte("scheduled_at", dayStart).lte("scheduled_at", dayEnd)
       .order("scheduled_at"),
     admin.from("practice_queue_entry")
