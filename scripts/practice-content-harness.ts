@@ -29,7 +29,7 @@ import { join } from "node:path";
 import {
   PRACTICE_AREAS, INTEGRATIONS, PREVIEW_NOTE, MODULES_WITHOUT_SPECS, PRACTICE_HERO, TENANT_MODEL,
   OVERVIEW_WORKSPACES, OVERVIEW_SCREEN, AREA_COUNT_WORD,
-  WHY_PRACTICE, YOUR_DAY, PRACTICE_AUDIENCES, CAREER_JOURNEY, BUILT_FOR_AFRICA,
+  WHY_PRACTICE, YOUR_DAY, PRACTICE_AUDIENCES, AUDIENCE_PHOTO_NOTE, CAREER_JOURNEY, BUILT_FOR_AFRICA,
 } from "../src/lib/marketing/practice-content";
 import { JOURNEYS, AVAILABILITY, JOURNEY_GATES, FAQS, PRACTICE_NAV } from "../src/lib/marketing/practice-site";
 import { loadEnvConfig } from "@next/env";
@@ -349,7 +349,16 @@ async function main() {
     WHY_PRACTICE.cards.every(c => overviewText.includes(c.problem)));
   ok("8c. /practice renders the day", overviewText.includes(YOUR_DAY.title)
     && YOUR_DAY.steps.every(s => overviewText.includes(s.title)));
-  ok("8d. /practice names who it is for", PRACTICE_AUDIENCES.every(a => overviewText.includes(a)));
+  ok("8d. /practice names who it is for", PRACTICE_AUDIENCES.every(a => overviewText.includes(a.label)));
+  // A portrait must EXIST and be SERVED for every profession named. A caption over a broken image is the
+  // most conspicuous failure a marketing page can have, and the alt text must describe the profession
+  // rather than a person -- these are stock faces, not customers.
+  for (const a of PRACTICE_AUDIENCES) {
+    const file = join(process.cwd(), "public", "images", "practice", "professions", `${a.slug}.webp`);
+    ok(`8d-asset. the ${a.label} portrait exists on disk`, existsSync(file));
+    ok(`8d-alt. the ${a.label} portrait is described in the markup`, overview.includes(a.alt));
+  }
+  ok("8d-note. /practice says the photography is stock, not customers", overviewText.includes(AUDIENCE_PHOTO_NOTE));
   ok("8e. /practice renders the career timeline",
     overviewText.includes(CAREER_JOURNEY.title) && CAREER_JOURNEY.stages.every(s => overviewText.includes(s)));
   ok("8f. /practice renders the delivery-setting section", overviewText.includes(BUILT_FOR_AFRICA.title));

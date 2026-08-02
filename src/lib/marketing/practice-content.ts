@@ -644,14 +644,32 @@ export const YOUR_DAY = {
 /**
  * CPR-LP-001 "Designed for Every Healthcare Professional".
  *
+ * THE LIST FOLLOWS THE PHOTOGRAPHS, not the other way round. The supplied contact sheet pictures a
+ * surgeon and a laboratory scientist and pictures no dentist or occupational therapist, so those are the
+ * professions named -- a caption that disagrees with the photograph above it is a small lie that a
+ * visitor spots immediately, and captions on real-looking people are the wrong place to be aspirational.
+ *
  * These are AUDIENCES, not implemented role types. The application knows nurse, hospital_admin and
- * super_admin; Practice memberships know practice_owner and practitioner. Listing ten professions says
- * who the product is FOR, which is a marketing claim about fit, not a promise that each has a bespoke
- * workspace -- so no line here says otherwise.
+ * super_admin; Practice memberships know practice_owner and practitioner. Naming ten professions says who
+ * the product is FOR, which is a claim about fit, not a promise of ten bespoke workspaces -- so no line
+ * here says otherwise.
+ *
+ * The portraits are STOCK, and the page says so beneath them. They are not customers, and a healthcare
+ * page that lets generated faces imply a client list has crossed from illustration into testimony.
  */
+export const AUDIENCE_PHOTO_NOTE = "Photography is illustrative. These are stock images, not Competen Practice users.";
+
 export const PRACTICE_AUDIENCES = [
-  "Doctors", "Nurses", "Clinical officers", "Midwives", "Dentists", "Pharmacists",
-  "Physiotherapists", "Psychologists", "Nutritionists", "Occupational therapists",
+  { slug: "doctor", label: "Doctors", alt: "A doctor in a white coat and stethoscope on a hospital ward" },
+  { slug: "nurse", label: "Nurses", alt: "A nurse in scrubs with an identity badge in a hospital corridor" },
+  { slug: "clinical-officer", label: "Clinical officers", alt: "A clinical officer in scrubs with a stethoscope beside monitoring equipment" },
+  { slug: "midwife", label: "Midwives", alt: "A midwife holding a newborn on a maternity ward" },
+  { slug: "surgeon", label: "Surgeons", alt: "A surgeon in theatre scrubs and surgical loupes under operating lights" },
+  { slug: "pharmacist", label: "Pharmacists", alt: "A pharmacist with a tablet in front of dispensary shelves" },
+  { slug: "laboratory-scientist", label: "Laboratory scientists", alt: "A laboratory scientist at a microscope wearing gloves and a lab coat" },
+  { slug: "nutritionist", label: "Nutritionists", alt: "A nutritionist at a desk of fresh fruit and vegetables" },
+  { slug: "physiotherapist", label: "Physiotherapists", alt: "A physiotherapist treating a patient's knee in a rehabilitation gym" },
+  { slug: "psychologist", label: "Psychologists and counsellors", alt: "A psychologist taking notes in a consulting room" },
 ];
 
 /** CPR-LP-001 "Professional Journey" — the timeline the portability promise is really about. */

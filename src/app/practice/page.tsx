@@ -3,7 +3,7 @@ import PracticeHeader from "@/components/marketing/PracticeHeader";
 import SiteFooter from "@/components/marketing/SiteFooter";
 import { PatternField } from "@/components/marketing/Pattern";
 import {
-  PRACTICE_ACCENT, PRACTICE_ACCENT_DARK, PRACTICE_HERO, WHY_PRACTICE, YOUR_DAY, PRACTICE_AUDIENCES, CAREER_JOURNEY, BUILT_FOR_AFRICA, PRACTICE_PROMISES, NOT_AN_EMR, PATIENT_JOURNEY,
+  PRACTICE_ACCENT, PRACTICE_ACCENT_DARK, PRACTICE_HERO, WHY_PRACTICE, YOUR_DAY, PRACTICE_AUDIENCES, AUDIENCE_PHOTO_NOTE, CAREER_JOURNEY, BUILT_FOR_AFRICA, PRACTICE_PROMISES, NOT_AN_EMR, PATIENT_JOURNEY,
   PRACTICE_AREAS, PRACTICE_ROLES, TENANT_MODEL, INTEGRATIONS, INTEGRATION_NOTE, PRACTICE_CTA, PREVIEW_NOTE,
   PORTABILITY, AI_SAFEGUARDS, OVERVIEW_SCREEN, AREA_COUNT_WORD,
 } from "@/lib/marketing/practice-content";
@@ -94,14 +94,33 @@ export default async function Page() {
               </p>
             </div>
 
-            <figure className="mt-10">
-              <div className="rounded-2xl border border-gray-200 bg-white overflow-hidden shadow-sm">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={PRACTICE_HERO.image} alt={PRACTICE_HERO.imageAlt} width={1400} height={933}
-                  fetchPriority="high" className="w-full h-auto" />
-              </div>
-              <figcaption className="mt-3 text-[11.5px] text-gray-500">{PREVIEW_NOTE}</figcaption>
-            </figure>
+            {/* CPR-LP-001 asks the hero to show "clinicians across different care settings". Four of the
+                profession portraits, offset, do that with the assets that exist -- and they sit BESIDE
+                the product screen rather than instead of it, because a page selling a workspace should
+                show the workspace. The screen keeps its mockup label; the portraits keep theirs. */}
+            <div className="mt-10 grid lg:grid-cols-5 gap-6 items-start">
+              <figure className="lg:col-span-3">
+                <div className="rounded-2xl border border-gray-200 bg-white overflow-hidden shadow-sm">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={PRACTICE_HERO.image} alt={PRACTICE_HERO.imageAlt} width={1400} height={933}
+                    fetchPriority="high" className="w-full h-auto" />
+                </div>
+                <figcaption className="mt-3 text-[11.5px] text-gray-500">{PREVIEW_NOTE}</figcaption>
+              </figure>
+              <figure className="lg:col-span-2">
+                <div className="grid grid-cols-2 gap-3">
+                  {PRACTICE_AUDIENCES.slice(0, 4).map((a, i) => (
+                    <div key={a.slug}
+                      className={`overflow-hidden rounded-2xl border border-gray-200 bg-gray-100 aspect-4/5 ${i % 2 === 1 ? "mt-6" : ""}`}>
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={`/images/practice/professions/${a.slug}.webp`} alt={a.alt}
+                        width={560} height={700} className="h-full w-full object-cover" />
+                    </div>
+                  ))}
+                </div>
+                <figcaption className="mt-3 text-[11.5px] text-gray-500">{AUDIENCE_PHOTO_NOTE}</figcaption>
+              </figure>
+            </div>
 
             {/* CPR-LP-001's trust strip. Four claims, each true of the product as built. */}
             <ul className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4 border-t border-gray-200 pt-6">
@@ -156,11 +175,22 @@ export default async function Page() {
             The record is about the clinical work you do, not the job title you hold, so the same workspace
             fits very different practices.
           </p>
-          <ul className="mt-6 flex flex-wrap gap-2">
+          <ul className="mt-8 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
             {PRACTICE_AUDIENCES.map(a => (
-              <li key={a} className="rounded-full border border-gray-200 bg-white px-4 py-2 text-[13px] font-medium text-gray-700">{a}</li>
+              <li key={a.slug} className="group">
+                <div className="relative overflow-hidden rounded-2xl border border-gray-200 bg-gray-100 aspect-4/5">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={`/images/practice/professions/${a.slug}.webp`} alt={a.alt}
+                    width={560} height={700} loading="lazy" decoding="async"
+                    className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.03]" />
+                </div>
+                <p className="mt-2 text-[13px] font-semibold text-gray-800">{a.label}</p>
+              </li>
             ))}
           </ul>
+          {/* Generated faces on a healthcare page slide from illustration into testimony unless the page
+              says which they are. It says so here, once, next to them. */}
+          <p className="mt-4 text-[11.5px] text-gray-500">{AUDIENCE_PHOTO_NOTE}</p>
         </section>
 
         {/* ── THE CAREER TIMELINE (CPR-LP-001) ─────────────────────────────── */}
