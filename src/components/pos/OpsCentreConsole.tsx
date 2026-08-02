@@ -133,7 +133,7 @@ export default function OpsCentreConsole({ patients, counts }: { patients: Patie
 
       {/* Form drawer */}
       {tpl && (
-        <div ref={panel} tabIndex={-1} className="fixed inset-0 z-40 flex justify-end outline-none" role="dialog" aria-modal="true">
+        <div ref={panel} tabIndex={-1} className="fixed inset-0 z-40 flex justify-end outline-none" role="dialog" aria-modal="true" aria-label="Operations form">
           <div className="absolute inset-0 bg-black/30" onClick={close} />
           <div className="relative w-full max-w-lg bg-white h-full shadow-xl overflow-y-auto">
             <div className="sticky top-0 bg-white border-b border-gray-100 px-5 py-3.5 flex items-center justify-between z-10">
