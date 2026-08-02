@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { NEXT_STATUS } from "@/lib/enterprise/templates";
 import { cardClass } from "@/components/ui/primitives";
+import { Modal } from "@/components/ui/interactive";
 
 // Enterprise Template profile (ENT-001 §6) — lifecycle, versioning and the
 // deployment workflow (organisation templates provision a new organisation).
@@ -100,23 +101,20 @@ export default function TemplateProfileClient({ data }: { data: any }) {
       </div>
 
       {deploy && (
-        <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4" onClick={() => setDeploy(false)}>
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md" onClick={e => e.stopPropagation()}>
-            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100"><h3 className="font-bold text-gray-900">Deploy “{template.name}”</h3><button onClick={() => setDeploy(false)} className="text-gray-400 hover:text-gray-600 text-xl">×</button></div>
-            <div className="p-6 flex flex-col gap-3">
-              <p className="text-[11px] text-gray-500">Configure the local variables for the new organisation this template provisions.</p>
-              <div><label className="text-xs font-semibold text-gray-600 mb-1 block">Organisation name *</label><input value={form.org_name} onChange={set("org_name")} className={input} placeholder="e.g. New Hope Hospital" /></div>
-              <div className="grid grid-cols-2 gap-3">
-                <div><label className="text-xs font-semibold text-gray-600 mb-1 block">Code</label><input value={form.org_code} onChange={set("org_code")} className={input} /></div>
-                <div><label className="text-xs font-semibold text-gray-600 mb-1 block">HQ Country</label><input value={form.hq_country} onChange={set("hq_country")} className={input} /></div>
-              </div>
-              <div className="flex gap-2 pt-1">
-                <button onClick={() => setDeploy(false)} className="flex-1 py-2 border border-gray-200 rounded-lg text-sm text-gray-600 hover:bg-gray-50">Cancel</button>
-                <button onClick={runDeploy} disabled={busy} className="flex-1 py-2 bg-teal-600 text-white rounded-lg text-sm font-semibold hover:bg-teal-700 disabled:opacity-60">{busy ? "Deploying…" : "Deploy"}</button>
-              </div>
+        <Modal open title={`Deploy “${template.name}”`} onClose={() => setDeploy(false)}>
+          <div className="flex flex-col gap-3">
+            <p className="text-[11px] text-gray-500">Configure the local variables for the new organisation this template provisions.</p>
+            <div><label className="text-xs font-semibold text-gray-600 mb-1 block">Organisation name *</label><input value={form.org_name} onChange={set("org_name")} className={input} placeholder="e.g. New Hope Hospital" /></div>
+            <div className="grid grid-cols-2 gap-3">
+              <div><label className="text-xs font-semibold text-gray-600 mb-1 block">Code</label><input value={form.org_code} onChange={set("org_code")} className={input} /></div>
+              <div><label className="text-xs font-semibold text-gray-600 mb-1 block">HQ Country</label><input value={form.hq_country} onChange={set("hq_country")} className={input} /></div>
+            </div>
+            <div className="flex gap-2 pt-1">
+              <button onClick={() => setDeploy(false)} className="flex-1 py-2 border border-gray-200 rounded-lg text-sm text-gray-600 hover:bg-gray-50">Cancel</button>
+              <button onClick={runDeploy} disabled={busy} className="flex-1 py-2 bg-teal-600 text-white rounded-lg text-sm font-semibold hover:bg-teal-700 disabled:opacity-60">{busy ? "Deploying…" : "Deploy"}</button>
             </div>
           </div>
-        </div>
+        </Modal>
       )}
     </div>
   );

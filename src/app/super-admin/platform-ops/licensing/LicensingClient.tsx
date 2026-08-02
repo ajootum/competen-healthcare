@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { cardClass } from "@/components/ui/primitives";
+import { Modal } from "@/components/ui/interactive";
 
 // Licensing & Subscription Centre (POP-001 §5) — plans table with create/edit,
 // subscriptions/seats, and upcoming renewals. Billing history isn't stored, so
@@ -89,33 +90,30 @@ function PlanModal({ mode, plan, currency, saving, err, onClose, onSave }: any) 
   const set = (k: string) => (e: any) => setForm((f: any) => ({ ...f, [k]: k === "api_access" || k === "is_active" ? e.target.checked : e.target.value }));
 
   return (
-    <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4" onClick={onClose}>
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
-        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100"><h3 className="font-bold text-gray-900 capitalize">{mode} plan</h3><button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-xl">×</button></div>
-        <div className="p-6 flex flex-col gap-3">
-          <div className="grid grid-cols-2 gap-3">
-            <div><label className="text-xs font-semibold text-gray-600 mb-1 block">Plan name *</label><input value={form.name} onChange={set("name")} className={input} placeholder="Professional" /></div>
-            <div><label className="text-xs font-semibold text-gray-600 mb-1 block">Code {mode === "edit" && <span className="text-gray-300">(fixed)</span>}</label><input value={form.code} onChange={set("code")} disabled={mode === "edit"} className={`${input} disabled:bg-gray-50 disabled:text-gray-400`} placeholder="professional" /></div>
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div><label className="text-xs font-semibold text-gray-600 mb-1 block">Price / month</label><input type="number" value={form.price_monthly} onChange={set("price_monthly")} className={input} /></div>
-            <div><label className="text-xs font-semibold text-gray-600 mb-1 block">Currency</label><input value={form.currency} onChange={set("currency")} maxLength={3} className={input} /></div>
-          </div>
-          <p className="text-[11px] font-semibold text-gray-500 pt-1">Entitlements <span className="font-normal text-gray-400">(blank = unlimited)</span></p>
-          <div className="grid grid-cols-2 gap-3">
-            {ENT.map(([k, l]) => <div key={k}><label className="text-xs font-semibold text-gray-600 mb-1 block">{l}</label><input type="number" value={form[k]} onChange={set(k)} className={input} placeholder="∞" /></div>)}
-          </div>
-          <div className="flex gap-4">
-            <label className="flex items-center gap-2 text-sm text-gray-600"><input type="checkbox" checked={form.api_access} onChange={set("api_access")} /> API access</label>
-            <label className="flex items-center gap-2 text-sm text-gray-600"><input type="checkbox" checked={form.is_active} onChange={set("is_active")} /> Active</label>
-          </div>
-          {err && <p className="text-xs text-[var(--cmp-text-critical)] bg-[var(--cmp-surface-critical)] rounded-lg px-3 py-2">{err}</p>}
-          <div className="flex gap-2 pt-1">
-            <button onClick={onClose} className="flex-1 py-2 border border-gray-200 rounded-lg text-sm text-gray-600 hover:bg-gray-50">Cancel</button>
-            <button onClick={() => onSave(form)} disabled={saving || !form.name.trim()} className="flex-1 py-2 bg-teal-600 text-white rounded-lg text-sm font-semibold hover:bg-teal-700 disabled:opacity-60">{saving ? "Saving…" : mode === "create" ? "Create" : "Save"}</button>
-          </div>
+    <Modal open title={`${mode} plan`} onClose={onClose}>
+      <div className="flex flex-col gap-3">
+        <div className="grid grid-cols-2 gap-3">
+          <div><label className="text-xs font-semibold text-gray-600 mb-1 block">Plan name *</label><input value={form.name} onChange={set("name")} className={input} placeholder="Professional" /></div>
+          <div><label className="text-xs font-semibold text-gray-600 mb-1 block">Code {mode === "edit" && <span className="text-gray-300">(fixed)</span>}</label><input value={form.code} onChange={set("code")} disabled={mode === "edit"} className={`${input} disabled:bg-gray-50 disabled:text-gray-400`} placeholder="professional" /></div>
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          <div><label className="text-xs font-semibold text-gray-600 mb-1 block">Price / month</label><input type="number" value={form.price_monthly} onChange={set("price_monthly")} className={input} /></div>
+          <div><label className="text-xs font-semibold text-gray-600 mb-1 block">Currency</label><input value={form.currency} onChange={set("currency")} maxLength={3} className={input} /></div>
+        </div>
+        <p className="text-[11px] font-semibold text-gray-500 pt-1">Entitlements <span className="font-normal text-gray-400">(blank = unlimited)</span></p>
+        <div className="grid grid-cols-2 gap-3">
+          {ENT.map(([k, l]) => <div key={k}><label className="text-xs font-semibold text-gray-600 mb-1 block">{l}</label><input type="number" value={form[k]} onChange={set(k)} className={input} placeholder="∞" /></div>)}
+        </div>
+        <div className="flex gap-4">
+          <label className="flex items-center gap-2 text-sm text-gray-600"><input type="checkbox" checked={form.api_access} onChange={set("api_access")} /> API access</label>
+          <label className="flex items-center gap-2 text-sm text-gray-600"><input type="checkbox" checked={form.is_active} onChange={set("is_active")} /> Active</label>
+        </div>
+        {err && <p className="text-xs text-[var(--cmp-text-critical)] bg-[var(--cmp-surface-critical)] rounded-lg px-3 py-2">{err}</p>}
+        <div className="flex gap-2 pt-1">
+          <button onClick={onClose} className="flex-1 py-2 border border-gray-200 rounded-lg text-sm text-gray-600 hover:bg-gray-50">Cancel</button>
+          <button onClick={() => onSave(form)} disabled={saving || !form.name.trim()} className="flex-1 py-2 bg-teal-600 text-white rounded-lg text-sm font-semibold hover:bg-teal-700 disabled:opacity-60">{saving ? "Saving…" : mode === "create" ? "Create" : "Save"}</button>
         </div>
       </div>
-    </div>
+    </Modal>
   );
 }

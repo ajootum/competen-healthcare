@@ -2,6 +2,7 @@
 import React, { useState } from "react";
 import { useRouter } from "next/navigation";
 import { COUNTRIES } from "@/lib/countries";
+import { Modal } from "@/components/ui/interactive";
 
 type Org = { id: string; name: string; group_name: string | null; type: string; hq_country: string; region: string | null; description: string | null; website: string | null; email: string | null; phone: string | null; is_active: boolean };
 type Facility = { id: string; name: string; type: string; country: string; city: string | null; tier: string; organisation_id: string | null };
@@ -119,109 +120,97 @@ export default function OrgList({
     <>
       {/* Edit modals */}
       {editing?.kind === "org" && orgForm && (
-        <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between px-6 pt-5 pb-4 border-b border-gray-100 sticky top-0 bg-white">
-              <h2 className="font-bold text-gray-900">Edit Organisation</h2>
-              <button onClick={() => setEditing(null)} className="text-gray-400 hover:text-gray-700 text-xl">×</button>
-            </div>
-            <div className="p-6 flex flex-col gap-3">
-              <Field label="Name *"><input value={orgForm.name} onChange={e => setOrgForm(p => p && ({...p, name: e.target.value}))} /></Field>
-              <Field label="Short Name"><input value={orgForm.group_name ?? ""} onChange={e => setOrgForm(p => p && ({...p, group_name: e.target.value}))} /></Field>
-              <Field label="Description">
-                <textarea rows={2} value={orgForm.description ?? ""} onChange={e => setOrgForm(p => p && ({...p, description: e.target.value}))}
-                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-rose-400 resize-none" />
+        <Modal open title="Edit Organisation" onClose={() => setEditing(null)}>
+          <div className="flex flex-col gap-3">
+            <Field label="Name *"><input value={orgForm.name} onChange={e => setOrgForm(p => p && ({...p, name: e.target.value}))} /></Field>
+            <Field label="Short Name"><input value={orgForm.group_name ?? ""} onChange={e => setOrgForm(p => p && ({...p, group_name: e.target.value}))} /></Field>
+            <Field label="Description">
+              <textarea rows={2} value={orgForm.description ?? ""} onChange={e => setOrgForm(p => p && ({...p, description: e.target.value}))}
+                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-rose-400 resize-none" />
+            </Field>
+            <div className="grid grid-cols-2 gap-3">
+              <Field label="Type">
+                <select value={orgForm.type} onChange={e => setOrgForm(p => p && ({...p, type: e.target.value}))}>
+                  {ORG_TYPES.map(t => <option key={t} value={t}>{t.replace("_"," ")}</option>)}
+                </select>
               </Field>
-              <div className="grid grid-cols-2 gap-3">
-                <Field label="Type">
-                  <select value={orgForm.type} onChange={e => setOrgForm(p => p && ({...p, type: e.target.value}))}>
-                    {ORG_TYPES.map(t => <option key={t} value={t}>{t.replace("_"," ")}</option>)}
-                  </select>
-                </Field>
-                <Field label="HQ Country">
-                  <select value={orgForm.hq_country} onChange={e => setOrgForm(p => p && ({...p, hq_country: e.target.value}))}>
-                    {COUNTRIES.map(c => <option key={c}>{c}</option>)}
-                  </select>
-                </Field>
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <Field label="Email"><input type="email" value={orgForm.email ?? ""} onChange={e => setOrgForm(p => p && ({...p, email: e.target.value}))} /></Field>
-                <Field label="Phone"><input value={orgForm.phone ?? ""} onChange={e => setOrgForm(p => p && ({...p, phone: e.target.value}))} /></Field>
-              </div>
-              <Field label="Website"><input value={orgForm.website ?? ""} onChange={e => setOrgForm(p => p && ({...p, website: e.target.value}))} placeholder="https://…" /></Field>
-              {error && <p className="text-red-500 text-xs bg-[var(--cmp-surface-critical)] rounded-lg px-3 py-2">{error}</p>}
-              <div className="flex gap-2 pt-1">
-                <button onClick={deleteOrg} disabled={deleting}
-                  className="px-4 py-2 border border-[var(--cmp-color-critical)] text-[var(--cmp-text-critical)] rounded-lg text-sm hover:bg-[var(--cmp-surface-critical)] disabled:opacity-50 font-medium">
-                  {deleting ? "Deleting…" : "Delete"}
-                </button>
-                <button onClick={() => setEditing(null)} className="flex-1 py-2 border border-gray-200 rounded-lg text-sm text-gray-600 hover:bg-gray-50">Cancel</button>
-                <button onClick={saveOrg} disabled={saving}
-                  className="flex-1 py-2 bg-[var(--cmp-color-error)] text-white rounded-lg text-sm font-semibold hover:bg-rose-700 disabled:opacity-60">
-                  {saving ? "Saving…" : "Save Changes"}
-                </button>
-              </div>
+              <Field label="HQ Country">
+                <select value={orgForm.hq_country} onChange={e => setOrgForm(p => p && ({...p, hq_country: e.target.value}))}>
+                  {COUNTRIES.map(c => <option key={c}>{c}</option>)}
+                </select>
+              </Field>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <Field label="Email"><input type="email" value={orgForm.email ?? ""} onChange={e => setOrgForm(p => p && ({...p, email: e.target.value}))} /></Field>
+              <Field label="Phone"><input value={orgForm.phone ?? ""} onChange={e => setOrgForm(p => p && ({...p, phone: e.target.value}))} /></Field>
+            </div>
+            <Field label="Website"><input value={orgForm.website ?? ""} onChange={e => setOrgForm(p => p && ({...p, website: e.target.value}))} placeholder="https://…" /></Field>
+            {error && <p className="text-red-500 text-xs bg-[var(--cmp-surface-critical)] rounded-lg px-3 py-2">{error}</p>}
+            <div className="flex gap-2 pt-1">
+              <button onClick={deleteOrg} disabled={deleting}
+                className="px-4 py-2 border border-[var(--cmp-color-critical)] text-[var(--cmp-text-critical)] rounded-lg text-sm hover:bg-[var(--cmp-surface-critical)] disabled:opacity-50 font-medium">
+                {deleting ? "Deleting…" : "Delete"}
+              </button>
+              <button onClick={() => setEditing(null)} className="flex-1 py-2 border border-gray-200 rounded-lg text-sm text-gray-600 hover:bg-gray-50">Cancel</button>
+              <button onClick={saveOrg} disabled={saving}
+                className="flex-1 py-2 bg-[var(--cmp-color-error)] text-white rounded-lg text-sm font-semibold hover:bg-rose-700 disabled:opacity-60">
+                {saving ? "Saving…" : "Save Changes"}
+              </button>
             </div>
           </div>
-        </div>
+        </Modal>
       )}
 
       {editing?.kind === "facility" && facForm && (
-        <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between px-6 pt-5 pb-4 border-b border-gray-100 sticky top-0 bg-white">
-              <h2 className="font-bold text-gray-900">Edit Facility</h2>
-              <button onClick={() => setEditing(null)} className="text-gray-400 hover:text-gray-700 text-xl">×</button>
-            </div>
-            <div className="p-6 flex flex-col gap-3">
-              <Field label="Facility Name *"><input value={facForm.name} onChange={e => setFacForm(p => p && ({...p, name: e.target.value}))} /></Field>
-              <div className="grid grid-cols-2 gap-3">
-                <Field label="Country *">
-                  <select value={facForm.country} onChange={e => setFacForm(p => p && ({...p, country: e.target.value}))}>
-                    {COUNTRIES.map(c => <option key={c}>{c}</option>)}
-                  </select>
-                </Field>
-                <Field label="City"><input value={facForm.city ?? ""} onChange={e => setFacForm(p => p && ({...p, city: e.target.value}))} /></Field>
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <Field label="Facility Type">
-                  <select value={facForm.type} onChange={e => setFacForm(p => p && ({...p, type: e.target.value}))}>
-                    <option value="hospital">Hospital</option>
-                    <option value="clinic">Clinic</option>
-                    <option value="health_center">Health Center</option>
-                    <option value="nursing_home">Nursing Home</option>
-                    <option value="diagnostic_center">Diagnostic Center</option>
-                  </select>
-                </Field>
-                <Field label="Plan Tier">
-                  <select value={facForm.tier} onChange={e => setFacForm(p => p && ({...p, tier: e.target.value}))}>
-                    <option value="free">Free</option>
-                    <option value="professional">Professional</option>
-                    <option value="enterprise">Enterprise</option>
-                  </select>
-                </Field>
-              </div>
-              <Field label="Organisation Group">
-                <select value={facForm.organisation_id ?? ""} onChange={e => setFacForm(p => p && ({...p, organisation_id: e.target.value || null}))}>
-                  <option value="">— None —</option>
-                  {orgs.map(o => <option key={o.id} value={o.id}>{o.name}</option>)}
+        <Modal open title="Edit Facility" onClose={() => setEditing(null)}>
+          <div className="flex flex-col gap-3">
+            <Field label="Facility Name *"><input value={facForm.name} onChange={e => setFacForm(p => p && ({...p, name: e.target.value}))} /></Field>
+            <div className="grid grid-cols-2 gap-3">
+              <Field label="Country *">
+                <select value={facForm.country} onChange={e => setFacForm(p => p && ({...p, country: e.target.value}))}>
+                  {COUNTRIES.map(c => <option key={c}>{c}</option>)}
                 </select>
               </Field>
-              {error && <p className="text-red-500 text-xs bg-[var(--cmp-surface-critical)] rounded-lg px-3 py-2">{error}</p>}
-              <div className="flex gap-2 pt-1">
-                <button onClick={deleteFacility} disabled={deleting}
-                  className="px-4 py-2 border border-[var(--cmp-color-critical)] text-[var(--cmp-text-critical)] rounded-lg text-sm hover:bg-[var(--cmp-surface-critical)] disabled:opacity-50 font-medium">
-                  {deleting ? "Deleting…" : "Delete"}
-                </button>
-                <button onClick={() => setEditing(null)} className="flex-1 py-2 border border-gray-200 rounded-lg text-sm text-gray-600 hover:bg-gray-50">Cancel</button>
-                <button onClick={saveFacility} disabled={saving}
-                  className="flex-1 py-2 bg-[var(--cmp-color-error)] text-white rounded-lg text-sm font-semibold hover:bg-rose-700 disabled:opacity-60">
-                  {saving ? "Saving…" : "Save Changes"}
-                </button>
-              </div>
+              <Field label="City"><input value={facForm.city ?? ""} onChange={e => setFacForm(p => p && ({...p, city: e.target.value}))} /></Field>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <Field label="Facility Type">
+                <select value={facForm.type} onChange={e => setFacForm(p => p && ({...p, type: e.target.value}))}>
+                  <option value="hospital">Hospital</option>
+                  <option value="clinic">Clinic</option>
+                  <option value="health_center">Health Center</option>
+                  <option value="nursing_home">Nursing Home</option>
+                  <option value="diagnostic_center">Diagnostic Center</option>
+                </select>
+              </Field>
+              <Field label="Plan Tier">
+                <select value={facForm.tier} onChange={e => setFacForm(p => p && ({...p, tier: e.target.value}))}>
+                  <option value="free">Free</option>
+                  <option value="professional">Professional</option>
+                  <option value="enterprise">Enterprise</option>
+                </select>
+              </Field>
+            </div>
+            <Field label="Organisation Group">
+              <select value={facForm.organisation_id ?? ""} onChange={e => setFacForm(p => p && ({...p, organisation_id: e.target.value || null}))}>
+                <option value="">— None —</option>
+                {orgs.map(o => <option key={o.id} value={o.id}>{o.name}</option>)}
+              </select>
+            </Field>
+            {error && <p className="text-red-500 text-xs bg-[var(--cmp-surface-critical)] rounded-lg px-3 py-2">{error}</p>}
+            <div className="flex gap-2 pt-1">
+              <button onClick={deleteFacility} disabled={deleting}
+                className="px-4 py-2 border border-[var(--cmp-color-critical)] text-[var(--cmp-text-critical)] rounded-lg text-sm hover:bg-[var(--cmp-surface-critical)] disabled:opacity-50 font-medium">
+                {deleting ? "Deleting…" : "Delete"}
+              </button>
+              <button onClick={() => setEditing(null)} className="flex-1 py-2 border border-gray-200 rounded-lg text-sm text-gray-600 hover:bg-gray-50">Cancel</button>
+              <button onClick={saveFacility} disabled={saving}
+                className="flex-1 py-2 bg-[var(--cmp-color-error)] text-white rounded-lg text-sm font-semibold hover:bg-rose-700 disabled:opacity-60">
+                {saving ? "Saving…" : "Save Changes"}
+              </button>
             </div>
           </div>
-        </div>
+        </Modal>
       )}
 
       {/* Country footprint */}

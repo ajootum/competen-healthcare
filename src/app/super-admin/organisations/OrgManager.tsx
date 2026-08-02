@@ -2,6 +2,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { COUNTRIES } from "@/lib/countries";
+import { Modal } from "@/components/ui/interactive";
 
 const ORG_TYPES = ["government","private","ngo","faith_based","academic"] as const;
 
@@ -98,7 +99,7 @@ export default function OrgManager({ orgs, mode: externalMode }: { orgs?: Org[];
 
   if (isEdit) {
     return (
-      <Modal
+      <FormModal
         open={open} onClose={() => setOpen(false)}
         title={editOrg ? "Edit Organisation" : "Edit Facility"}
         onSave={editOrg ? saveOrg : saveFacility}
@@ -111,7 +112,7 @@ export default function OrgManager({ orgs, mode: externalMode }: { orgs?: Org[];
         ) : (
           <FacilityFields form={facForm} onChange={setFacForm} orgs={availableOrgs} />
         )}
-      </Modal>
+      </FormModal>
     );
   }
 
@@ -123,7 +124,7 @@ export default function OrgManager({ orgs, mode: externalMode }: { orgs?: Org[];
       </button>
 
       {open && (
-        <Modal
+        <FormModal
           open={open} onClose={() => { setOpen(false); setError(""); }}
           title="Add New"
           onSave={activeTab === "org" ? saveOrg : saveFacility}
@@ -143,47 +144,44 @@ export default function OrgManager({ orgs, mode: externalMode }: { orgs?: Org[];
             ? <OrgFields form={orgForm} onChange={setOrgForm} />
             : <FacilityFields form={facForm} onChange={setFacForm} orgs={availableOrgs} />
           }
-        </Modal>
+        </FormModal>
       )}
     </>
   );
 }
 
-function Modal({ open, onClose, title, onSave, onDelete, saving, deleting, error, isEdit, children }: {
+// The save/delete/error footer this page uses twice. It owns the FORM contract; the dialog shell -- the
+// scrim, role="dialog", the accessible name, the focus trap -- is delegated to the design system, which is
+// the only copy of that behaviour worth having. It kept its own shell until now, which is why it was one of
+// the thirty-five overlays announcing nothing to a screen reader.
+function FormModal({ open, onClose, title, onSave, onDelete, saving, deleting, error, isEdit, children }: {
   open: boolean; onClose: () => void; title: string;
   onSave: () => void; onDelete?: () => void;
   saving: boolean; deleting?: boolean; error: string; isEdit?: boolean;
   children: React.ReactNode;
 }) {
-  if (!open) return null;
   return (
-    <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md max-h-[90vh] overflow-y-auto">
-        <div className="flex items-center justify-between px-6 pt-5 pb-4 border-b border-gray-100 sticky top-0 bg-white z-10">
-          <h2 className="font-bold text-gray-900">{title}</h2>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-xl">×</button>
-        </div>
-        <div className="p-6 flex flex-col gap-3">
-          {children}
-          {error && <p className="text-red-500 text-xs bg-[var(--cmp-surface-critical)] rounded-lg px-3 py-2">{error}</p>}
-          <div className="flex gap-2 pt-1">
-            {isEdit && onDelete && (
-              <button onClick={onDelete} disabled={deleting}
-                className="px-4 py-2 border border-[var(--cmp-color-critical)] text-[var(--cmp-text-critical)] rounded-lg text-sm hover:bg-[var(--cmp-surface-critical)] disabled:opacity-50 font-medium">
-                {deleting ? "Deleting…" : "Delete"}
-              </button>
-            )}
-            <button onClick={onClose} className="flex-1 py-2 border border-gray-200 rounded-lg text-sm text-gray-600 hover:bg-gray-50">
-              Cancel
+    <Modal open={open} title={title} onClose={onClose}>
+      <div className="flex flex-col gap-3">
+        {children}
+        {error && <p className="text-red-500 text-xs bg-[var(--cmp-surface-critical)] rounded-lg px-3 py-2">{error}</p>}
+        <div className="flex gap-2 pt-1">
+          {isEdit && onDelete && (
+            <button onClick={onDelete} disabled={deleting}
+              className="px-4 py-2 border border-[var(--cmp-color-critical)] text-[var(--cmp-text-critical)] rounded-lg text-sm hover:bg-[var(--cmp-surface-critical)] disabled:opacity-50 font-medium">
+              {deleting ? "Deleting…" : "Delete"}
             </button>
-            <button onClick={onSave} disabled={saving}
-              className="flex-1 py-2 bg-[var(--cmp-color-error)] text-white rounded-lg text-sm font-semibold hover:bg-rose-700 disabled:opacity-60">
-              {saving ? "Saving…" : isEdit ? "Save Changes" : "Create"}
-            </button>
-          </div>
+          )}
+          <button onClick={onClose} className="flex-1 py-2 border border-gray-200 rounded-lg text-sm text-gray-600 hover:bg-gray-50">
+            Cancel
+          </button>
+          <button onClick={onSave} disabled={saving}
+            className="flex-1 py-2 bg-[var(--cmp-color-error)] text-white rounded-lg text-sm font-semibold hover:bg-rose-700 disabled:opacity-60">
+            {saving ? "Saving…" : isEdit ? "Save Changes" : "Create"}
+          </button>
         </div>
       </div>
-    </div>
+    </Modal>
   );
 }
 

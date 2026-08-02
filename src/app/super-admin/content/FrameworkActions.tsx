@@ -1,6 +1,7 @@
 "use client";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { Modal } from "@/components/ui/interactive";
 
 export default function FrameworkActions({ compact = false }: { compact?: boolean }) {
   const [open, setOpen] = useState(false);
@@ -31,42 +32,39 @@ export default function FrameworkActions({ compact = false }: { compact?: boolea
       </button>
 
       {open && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6">
-            <h2 className="font-bold text-gray-900 mb-4">New Framework</h2>
-            <div className="flex flex-col gap-3">
-              <div>
-                <label className="text-xs font-semibold text-gray-500 mb-1 block">Framework Name *</label>
-                <input value={form.name} onChange={e => setForm(p => ({ ...p, name: e.target.value }))}
-                  placeholder="e.g. Core Nursing Framework"
-                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500" />
-              </div>
-              <div>
-                <label className="text-xs font-semibold text-gray-500 mb-1 block">Library</label>
-                <select value={form.library} onChange={e => setForm(p => ({ ...p, library: e.target.value }))}
-                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500">
-                  <option value="core">Core Nursing</option>
-                  <option value="specialty">Specialty</option>
-                  <option value="role">Role-Based</option>
-                </select>
-              </div>
-              <div>
-                <label className="text-xs font-semibold text-gray-500 mb-1 block">Description</label>
-                <textarea value={form.description} onChange={e => setForm(p => ({ ...p, description: e.target.value }))}
-                  rows={2} placeholder="Brief description..."
-                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 resize-none" />
-              </div>
-            </div>
-            <div className="flex gap-2 mt-5">
-              <button onClick={() => setOpen(false)}
-                className="flex-1 py-2 border border-gray-200 rounded-lg text-sm text-gray-600 hover:bg-gray-50">Cancel</button>
-              <button onClick={save} disabled={loading || !form.name.trim()}
-                className="flex-1 py-2 bg-teal-600 text-white rounded-lg text-sm font-semibold hover:bg-teal-700 disabled:opacity-50">
-                {loading ? "Saving…" : "Create Framework"}
-              </button>
-            </div>
+        <Modal open title="New Framework" onClose={() => setOpen(false)}>
+        <div className="flex flex-col gap-3">
+          <div>
+            <label className="text-xs font-semibold text-gray-500 mb-1 block">Framework Name *</label>
+            <input value={form.name} onChange={e => setForm(p => ({ ...p, name: e.target.value }))}
+              placeholder="e.g. Core Nursing Framework"
+              className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500" />
+          </div>
+          <div>
+            <label className="text-xs font-semibold text-gray-500 mb-1 block">Library</label>
+            <select value={form.library} onChange={e => setForm(p => ({ ...p, library: e.target.value }))}
+              className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500">
+              <option value="core">Core Nursing</option>
+              <option value="specialty">Specialty</option>
+              <option value="role">Role-Based</option>
+            </select>
+          </div>
+          <div>
+            <label className="text-xs font-semibold text-gray-500 mb-1 block">Description</label>
+            <textarea value={form.description} onChange={e => setForm(p => ({ ...p, description: e.target.value }))}
+              rows={2} placeholder="Brief description..."
+              className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 resize-none" />
           </div>
         </div>
+        <div className="flex gap-2 mt-5">
+          <button onClick={() => setOpen(false)}
+            className="flex-1 py-2 border border-gray-200 rounded-lg text-sm text-gray-600 hover:bg-gray-50">Cancel</button>
+          <button onClick={save} disabled={loading || !form.name.trim()}
+            className="flex-1 py-2 bg-teal-600 text-white rounded-lg text-sm font-semibold hover:bg-teal-700 disabled:opacity-50">
+            {loading ? "Saving…" : "Create Framework"}
+          </button>
+        </div>
+        </Modal>
       )}
     </>
   );
