@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { PRACTICE_TYPES, PROFESSIONS, LEGAL_VERSIONS } from "@/lib/practice/catalogs";
 
 // The operator console. Four panels: the gate ledger, the launch ladder, pilot provisioning, and the
 // record of what has been provisioned.
@@ -24,15 +25,9 @@ const FLAG_LABEL: Record<string, string> = {
   practice_public_signup: "Public signup",
 };
 
-const PRACTICE_TYPES = [
-  ["clinic", "Clinic"], ["independent", "Independent"], ["hospital_based", "Hospital-based"],
-  ["outreach", "Outreach"], ["teleconsultation", "Teleconsultation"], ["mixed", "Mixed"],
-] as const;
-
-const PROFESSIONS = [
-  ["medical_doctor", "Medical doctor"], ["dentist", "Dentist"], ["nurse", "Nurse"],
-  ["midwife", "Midwife"], ["clinical_officer", "Clinical officer"], ["allied_health", "Allied health"],
-] as const;
+// PRACTICE_TYPES, PROFESSIONS and LEGAL_VERSIONS come from src/lib/practice/catalogs so this console and
+// the public signup form offer the same world. Two copies drift the first time one gains an entry, and
+// the drift is invisible: both forms keep working, they simply disagree.
 
 const STATE_TONE: Record<string, string> = {
   pass: "text-[var(--cmp-text-success)]",
@@ -74,7 +69,7 @@ export default function PracticeOpsConsole({ callerId, callerName, initial }: {
       headers: { "Content-Type": "application/json", "Idempotency-Key": idempotencyKey },
       body: JSON.stringify({
         ...form, targetUserId: target.id,
-        termsVersion: "pilot-1", privacyNoticeVersion: "pilot-1", source: "pilot",
+        termsVersion: LEGAL_VERSIONS.terms, privacyNoticeVersion: LEGAL_VERSIONS.privacy, source: "pilot",
       }),
     });
     const data = await res.json().catch(() => ({}));

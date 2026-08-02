@@ -9,6 +9,26 @@ const PUBLIC_ROLES = ["nurse", "assessor", "educator"];
 export async function POST(request: Request) {
   const { email, password, full_name, role } = await request.json();
 
+  // A REGISTRATION ENDPOINT MUST NOT MUTATE THE CALLER'S SESSION.
+  //
+  // supabase.auth.signUp() runs on the request's cookie-bound client, and when email confirmation is off
+  // it returns a session that @supabase/ssr writes straight into those cookies -- silently replacing
+  // whoever was signed in. One session cookie exists per origin, so this is not a tab-level surprise: it
+  // logs the person out of their real account everywhere and hands them the new one. An administrator who
+  // creates an account for a colleague would find themselves signed in AS that colleague.
+  //
+  // Refused rather than worked around. Creating a user without touching the caller's cookies needs
+  // auth.admin.createUser (service role), which is the right primitive for an admin-made account and is
+  // a different feature with its own authorisation; self-registration is for people who are not signed in.
+  const supabase = await createClient();
+  const { data: { user: existingSession } } = await supabase.auth.getUser();
+  if (existingSession) {
+    return NextResponse.json({
+      error: "You are already signed in. Sign out first to create a different account.",
+      code: "ALREADY_AUTHENTICATED",
+    }, { status: 409 });
+  }
+
   if (!email || !password) {
     return NextResponse.json({ error: "Email and password are required" }, { status: 400 });
   }
@@ -17,7 +37,6 @@ export async function POST(request: Request) {
   }
   const safeRole = PUBLIC_ROLES.includes(role) ? role : "nurse";
 
-  const supabase = await createClient();
   const { data, error } = await supabase.auth.signUp({
     email,
     password,
