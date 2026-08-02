@@ -23,10 +23,14 @@
  */
 import { existsSync, statSync } from "node:fs";
 import { join } from "node:path";
+import { loadEnvConfig } from "@next/env";
+import { createClient as createSupabase } from "@supabase/supabase-js";
 import { SOLUTIONS, PRIMARY_SOLUTIONS } from "../src/lib/marketing/solutions";
 import { PRACTICE_AREAS } from "../src/lib/marketing/practice-content";
 import { JOURNEYS } from "../src/lib/marketing/practice-site";
 import { SITE_URL, abs, indexablePages } from "../src/lib/marketing/site";
+
+loadEnvConfig(process.cwd());
 
 const BASE = process.env.BASE_URL ?? "http://localhost:3000";
 
@@ -227,6 +231,49 @@ async function main() {
     urls.filter(u => !u.startsWith(SITE_URL)).slice(0, 3).join(", "));
 
   ok("5f. robots.txt points at the sitemap", /Sitemap:\s*\S*\/sitemap\.xml/i.test(robots));
+
+  // ---- 6. the credential surface matches the launch flags, exactly ----------------------------------
+  //
+  // WHY THIS EXISTS. practice_sign_in and practice_public_signup were both switched on and nothing went
+  // red for half an hour. Assertion 7e in the content harness covers the four LP-* JOURNEY pages, which
+  // carry no form in either posture, so it could not have noticed; and NOTHING covered /practice/sign-in
+  // or /practice/sign-up themselves. The public site grew a live password field and every harness stayed
+  // green. A launch posture that can move unobserved is not governed by a flag, it is merely recorded by
+  // one.
+  //
+  // Asserted as an IFF, not "no password field". The old shape would have to be retired at launch --
+  // reporting a successful cutover as a regression, which teaches people to ignore the harness. This one
+  // survives every rung of the ladder: it fails when the page and the flag DISAGREE, in either direction.
+  // A form the flag did not authorise is an exposure; a flag the form ignores is a dead switch.
+  {
+    const url = process.env.NEXT_PUBLIC_SUPABASE_URL, key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    const db = url && key ? createSupabase(url, key, { auth: { persistSession: false } }) : null;
+    const { data } = db
+      ? await db.from("practice_platform_flags").select("flag, enabled").in("flag", ["practice_sign_in", "practice_public_signup"])
+      : { data: null };
+    const rows = (data ?? []) as { flag: string; enabled: boolean }[];
+    ok("6. both credential flags were read from the database", rows.length === 2,
+      `${rows.length}/2 -- without them this check cannot run and must not pretend to`);
+
+    const CREDENTIAL_PAGES: [string, string, string][] = [
+      ["/practice/sign-in", "practice_sign_in", "Sign in"],
+      ["/practice/sign-up", "practice_public_signup", "Create your Competen Practice"],
+    ];
+    for (const [path, flag, marker] of CREDENTIAL_PAGES) {
+      const expected = !!rows.find(r => r.flag === flag)?.enabled;
+      const html = await (await fetch(BASE + path)).text();
+
+      // CONTROL. A page that 500s renders no password field, so the iff below would pass for the wrong
+      // reason in exactly the situation worth knowing about. The marker proves the page actually rendered.
+      const rendered = html.includes(marker) || html.includes("not open yet") || html.includes("Signup is not open yet");
+      ok(`6-control. ${path} actually rendered`, rendered, "no known marker found; the check below is meaningless");
+
+      const hasPassword = /<input[^>]+type=["']password["']/i.test(html);
+      ok(`6. ${path} offers a credential field only when ${flag} says so`,
+        hasPassword === expected,
+        `flag=${expected ? "ON" : "OFF"} page=${hasPassword ? "has a password field" : "has none"}`);
+    }
+  }
 
   console.log(`\n${fails.length ? "FAILED" : "PASSED"}  ${pass} assertion(s)${fails.length ? `, ${fails.length} failure(s):\n  - ${fails.join("\n  - ")}` : ""}\n`);
   process.exitCode = fails.length ? 1 : 0;
