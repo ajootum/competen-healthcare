@@ -1,4 +1,5 @@
 import type { MetadataRoute } from "next";
+import { abs } from "@/lib/marketing/site";
 
 // WEB-STRAT-001 acceptance criteria: "SEO applied only to public pages" and "Authenticated workspaces
 // excluded from search engine indexing."
@@ -38,5 +39,8 @@ export default function robots(): MetadataRoute.Robots {
         "/verify/",   // token-gated public page: reachable by link, never by search
       ],
     },
+    // Declaring the sitemap here is how a crawler finds it without being told. Its contents are derived
+    // from the route catalogues, so the two cannot disagree about which pages exist -- see src/app/sitemap.ts.
+    sitemap: abs("/sitemap.xml"),
   };
 }

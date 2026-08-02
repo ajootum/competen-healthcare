@@ -1,6 +1,7 @@
 import JourneyPage from "@/components/marketing/JourneyPage";
 import { PRACTICE_ACCENT } from "@/lib/marketing/practice-content";
 import { PATIENT_LOGIN } from "@/lib/marketing/practice-site";
+import { pageMetadata } from "@/lib/marketing/site";
 
 // LP-PAT-001 Patient Login & My Care Entry.
 //
@@ -8,10 +9,11 @@ import { PATIENT_LOGIN } from "@/lib/marketing/practice-site";
 // workspace to enter. What the page does carry is the privacy statement, because that is the part a patient
 // weighs before handing over a phone number -- and it is true today regardless of when the product opens.
 
-export const metadata = {
+export const metadata = pageMetadata({
   title: "Patient sign-in — Competen Practice",
   description: PATIENT_LOGIN.body,
-};
+  path: "/practice/patient-login",
+});
 
 const container = "mx-auto w-full max-w-7xl px-5 sm:px-8";
 

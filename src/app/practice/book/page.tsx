@@ -1,6 +1,7 @@
 import JourneyPage from "@/components/marketing/JourneyPage";
 import { PRACTICE_ACCENT } from "@/lib/marketing/practice-content";
 import { BOOKING_JOURNEY } from "@/lib/marketing/practice-site";
+import { pageMetadata } from "@/lib/marketing/site";
 
 // LP-BOOK-001 Public Clinician Directory & Booking, followed by LP-NEW-001 New Patient Registration &
 // Confirmation. Presented as one page because they are one journey: LP-NEW-001's first step, "appointment
@@ -15,10 +16,12 @@ import { BOOKING_JOURNEY } from "@/lib/marketing/practice-site";
 // What the page does instead is show a patient exactly what the journey will be, which is the honest
 // version of the same reassurance the directory was there to provide.
 
-export const metadata = {
+export const metadata = pageMetadata({
   title: "Book an appointment — Competen Practice",
   description: BOOKING_JOURNEY.body,
-};
+  path: "/practice/book",
+  image: "/images/og/practice-booking.jpg",
+});
 
 const container = "mx-auto w-full max-w-7xl px-5 sm:px-8";
 

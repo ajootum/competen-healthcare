@@ -7,6 +7,7 @@ import {
   CTA_BAND, ASSURANCES,
 } from "@/lib/marketing/home-content";
 import { PRIMARY_SOLUTIONS } from "@/lib/marketing/solutions";
+import { pageMetadata } from "@/lib/marketing/site";
 
 // WEB-STRAT-001 — public homepage.
 //
@@ -17,12 +18,14 @@ import { PRIMARY_SOLUTIONS } from "@/lib/marketing/solutions";
 // The four path cards are generated from the SAME list as the routes, the header menu and the footer, so a
 // path cannot exist without a page behind it and a page cannot exist without a way in.
 
-export const metadata = {
+export const metadata = pageMetadata({
   title: "Competen — Healthcare. Empowered.",
   description:
     "Competen helps students, professionals, practices and hospitals build capability, deliver better " +
     "care and improve outcomes.",
-};
+  path: "/",
+  imageAlt: "Healthcare professionals at work",
+});
 
 const container = "mx-auto w-full max-w-7xl px-5 sm:px-8";
 

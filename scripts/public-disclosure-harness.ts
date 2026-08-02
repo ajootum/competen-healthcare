@@ -25,6 +25,8 @@ import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { SOLUTIONS, PRIMARY_SOLUTIONS } from "../src/lib/marketing/solutions";
 import { PRACTICE_AREAS } from "../src/lib/marketing/practice-content";
+import { JOURNEYS } from "../src/lib/marketing/practice-site";
+import { SITE_URL, abs, indexablePages } from "../src/lib/marketing/site";
 
 const BASE = process.env.BASE_URL ?? "http://localhost:3000";
 
@@ -48,6 +50,7 @@ const FORBIDDEN = [
 const PUBLIC_PAGES = [
   "/", ...SOLUTIONS.map(s => `/${s.slug}`),
   ...PRACTICE_AREAS.map(a => `/practice/${a.slug}`),
+  ...JOURNEYS.map(j => j.href),
   "/login", "/signup",
 ];
 
@@ -66,6 +69,26 @@ function visibleText(html: string): string {
     .replace(/&#(\d+);/g, (_, d) => String.fromCodePoint(Number(d)))
     .replace(/&amp;/gi, "&")
     .replace(/&[a-z]+;/gi, " ")
+    .replace(/\s+/g, " ");
+}
+
+/**
+ * The text a search engine or a chat app shows for a page: its <title>, its meta description, and the
+ * Open Graph and Twitter title/description tags. All of it is attribute content, which is precisely why
+ * visibleText() above cannot see any of it.
+ */
+function metadataText(html: string): string {
+  const parts: string[] = [];
+  const title = /<title[^>]*>([\s\S]*?)<\/title>/i.exec(html);
+  if (title) parts.push(title[1]);
+  const metaRe = /<meta\s+[^>]*>/gi;
+  for (const tag of html.match(metaRe) ?? []) {
+    if (!/(name|property)=["'](description|og:title|og:description|og:site_name|og:image:alt|twitter:title|twitter:description)["']/i.test(tag)) continue;
+    const content = /content=["']([^"']*)["']/i.exec(tag);
+    if (content) parts.push(content[1]);
+  }
+  return parts.join(" | ")
+    .replace(/&amp;/gi, "&").replace(/&#(\d+);/g, (_, d) => String.fromCodePoint(Number(d)))
     .replace(/\s+/g, " ");
 }
 
@@ -91,6 +114,34 @@ async function main() {
     const text = visibleText(html);
     const leaked = FORBIDDEN.filter(f => text.toLowerCase().includes(f.toLowerCase()));
     ok(`2b. ${path} discloses no hidden product`, leaked.length === 0, leaked.join(", "));
+
+    // THE METADATA SURFACE, which this harness used to miss entirely.
+    //
+    // visibleText() strips tags, and meta content lives in an ATTRIBUTE -- so the title, the description
+    // and the social tags were never scanned. That is not a small blind spot: the meta description is the
+    // sentence a search engine prints under the result, which reaches more people than the page does. The
+    // root layout's default description named "competency management" for months and every run of this
+    // harness passed, because the one place the rule was broken was the one place nothing looked.
+    const meta = metadataText(html);
+    const metaLeaked = FORBIDDEN.filter(f => meta.toLowerCase().includes(f.toLowerCase()));
+    ok(`2d. ${path} discloses no hidden product in its metadata`, metaLeaked.length === 0, metaLeaked.join(", "));
+
+    // CANONICAL MUST BE THE PAGE'S OWN URL. A canonical set once in the root layout is inherited by every
+    // page, so each one declares itself a copy of the homepage and asks search engines not to index it --
+    // silently cancelling out the sitemap two sections below. Both states look identical on the page.
+    const canonical = /<link[^>]+rel=["']canonical["'][^>]*>/i.exec(html);
+    const href = canonical ? /href=["']([^"']+)["']/i.exec(canonical[0])?.[1] : undefined;
+    ok(`2e. ${path} canonicalises to itself`, href === abs(path) || (path === "/" && href === SITE_URL),
+      href ? `points at ${href}` : "no canonical");
+
+    // OPEN GRAPH MUST BE THE PAGE'S OWN. Next merges `openGraph` as a block: a page that sets only title
+    // and description keeps the ROOT og:title, so it reads correctly in a search result and unfurls in a
+    // chat app as the generic site card. Comparing og:title against <title> catches exactly that.
+    const ogTitle = /<meta[^>]+property=["']og:title["'][^>]*content=["']([^"']*)["']/i.exec(html)?.[1];
+    const docTitle = /<title[^>]*>([\s\S]*?)<\/title>/i.exec(html)?.[1] ?? "";
+    const stem = docTitle.replace(/\s*·\s*Competen\s*$/, "").trim();
+    ok(`2f. ${path} has its own og:title`, !!ogTitle && !!stem && ogTitle.trim() === stem,
+      `og:title "${ogTitle}" vs title "${stem}"`);
   }
   ok("2c. every public page was reachable", reachable === PUBLIC_PAGES.length, `${reachable}/${PUBLIC_PAGES.length}`);
 
@@ -109,6 +160,34 @@ async function main() {
   const unblocked = mustBlock.filter(p => !robots.includes(`Disallow: ${p}`));
   ok("4b. every authenticated workspace is disallowed", unblocked.length === 0, unblocked.join(", "));
   ok("4c. the public pages are still allowed", /Allow:\s*\/$/m.test(robots) || robots.includes("Allow: /"));
+
+  // ---- 5. the sitemap: complete, and no wider than the public surface ------------------------------
+  //
+  // A sitemap is a positive claim -- "these pages exist and I want them found". The two ways it goes wrong
+  // are opposite and both silent: a new page never gets listed, or a page that should never be indexed is
+  // handed to a crawler on a plate. Generating it from the route catalogues fixes the first; this checks
+  // the second, and checks the first held.
+  const xml = await fetch(BASE + "/sitemap.xml").then(r => r.ok ? r.text() : "").catch(() => "");
+  ok("5. sitemap.xml is served", xml.length > 0);
+
+  const urls = [...xml.matchAll(/<loc>([^<]+)<\/loc>/g)].map(m => m[1]);
+  ok("5b. the sitemap has entries", urls.length > 0, `${urls.length} url(s)`);
+
+  const missing = indexablePages().filter(p => !urls.some(u => u.endsWith(p.path) || u === abs(p.path)));
+  ok("5c. every indexable page is listed", missing.length === 0, missing.map(p => p.path).join(", "));
+
+  // /verify is unauthenticated and reachable, so it would not be caught by a "does it need login" check --
+  // but its token IS the access control, and an indexed share link puts a named clinician's competency
+  // record into search results.
+  const mustNotList = [...mustBlock, "/forgot-password", "/reset-password"];
+  const overListed = mustNotList.filter(p => urls.some(u => new URL(u).pathname.startsWith(p)));
+  ok("5d. the sitemap lists nothing that robots.txt disallows", overListed.length === 0, overListed.join(", "));
+
+  ok("5e. every sitemap URL is absolute and on one origin",
+    urls.length > 0 && urls.every(u => u.startsWith(SITE_URL + "/") || u === SITE_URL + "/"),
+    urls.filter(u => !u.startsWith(SITE_URL)).slice(0, 3).join(", "));
+
+  ok("5f. robots.txt points at the sitemap", /Sitemap:\s*\S*\/sitemap\.xml/i.test(robots));
 
   console.log(`\n${fails.length ? "FAILED" : "PASSED"}  ${pass} assertion(s)${fails.length ? `, ${fails.length} failure(s):\n  - ${fails.join("\n  - ")}` : ""}\n`);
   process.exitCode = fails.length ? 1 : 0;

@@ -7,6 +7,7 @@ import {
   PRACTICE_AREAS, PRACTICE_ROLES, TENANT_MODEL, INTEGRATIONS, INTEGRATION_NOTE, PRACTICE_CTA, PREVIEW_NOTE,
 } from "@/lib/marketing/practice-content";
 import { JOURNEYS, HOW_IT_WORKS, TRUST, FAQS, contactFor } from "@/lib/marketing/practice-site";
+import { pageMetadata } from "@/lib/marketing/site";
 
 // LP-PRA-001 — the Competen Practice public landing page.
 //
@@ -23,10 +24,13 @@ import { JOURNEYS, HOW_IT_WORKS, TRUST, FAQS, contactFor } from "@/lib/marketing
 // briefly: a worldwide trust claim, hundreds of practices, HIPAA compliance and a free trial, none of
 // which is supported by anything.
 
-export const metadata = {
+export const metadata = pageMetadata({
   title: "Competen Practice — run your practice, delight your patients",
   description: PRACTICE_HERO.body,
-};
+  path: "/practice",
+  image: "/images/og/practice.jpg",
+  imageAlt: PRACTICE_HERO.imageAlt,
+});
 
 const container = "mx-auto w-full max-w-7xl px-5 sm:px-8";
 

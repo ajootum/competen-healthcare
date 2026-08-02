@@ -2,6 +2,7 @@ import Link from "next/link";
 import JourneyPage from "@/components/marketing/JourneyPage";
 import { PRACTICE_ACCENT } from "@/lib/marketing/practice-content";
 import { START_PRACTICE } from "@/lib/marketing/practice-site";
+import { pageMetadata } from "@/lib/marketing/site";
 
 // "Start Your Practice" -- the destination for LP-PRA-001's first primary CTA.
 //
@@ -14,10 +15,12 @@ import { START_PRACTICE } from "@/lib/marketing/practice-site";
 // menu; neither exists in any specification, and inventing a commercial commitment on a public page is not
 // a copy decision to make on somebody's behalf.
 
-export const metadata = {
+export const metadata = pageMetadata({
   title: "Start your practice — Competen Practice",
   description: START_PRACTICE.body,
-};
+  path: "/practice/start",
+  image: "/images/og/practice.jpg",
+});
 
 const container = "mx-auto w-full max-w-7xl px-5 sm:px-8";
 

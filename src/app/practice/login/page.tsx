@@ -2,6 +2,7 @@ import Link from "next/link";
 import JourneyPage from "@/components/marketing/JourneyPage";
 import { PRACTICE_ACCENT } from "@/lib/marketing/practice-content";
 import { PRACTICE_LOGIN } from "@/lib/marketing/practice-site";
+import { pageMetadata } from "@/lib/marketing/site";
 
 // LP-DOC-001 Practice Login Experience.
 //
@@ -15,10 +16,11 @@ import { PRACTICE_LOGIN } from "@/lib/marketing/practice-site";
 // at the sign-in that genuinely works. That link matters -- a clinician who does hospital shifts on
 // Competen today would otherwise sit on this page assuming their account is broken.
 
-export const metadata = {
+export const metadata = pageMetadata({
   title: "Practice sign-in — Competen Practice",
   description: PRACTICE_LOGIN.body,
-};
+  path: "/practice/login",
+});
 
 const container = "mx-auto w-full max-w-7xl px-5 sm:px-8";
 

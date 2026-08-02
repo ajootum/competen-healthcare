@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import PracticeAreaPage from "@/components/marketing/PracticeAreaPage";
 import { PRACTICE_AREAS, areaBySlug } from "@/lib/marketing/practice-content";
+import { pageMetadata } from "@/lib/marketing/site";
 
 // The six Competen Practice capability pages, generated from PRACTICE_AREAS.
 //
@@ -19,10 +20,13 @@ export const dynamicParams = false;
 export async function generateMetadata({ params }: { params: Promise<{ area: string }> }) {
   const a = areaBySlug((await params).area);
   if (!a) return {};
-  return {
+  return pageMetadata({
     title: `${a.nav} — Competen Practice`,
     description: a.body,
-  };
+    path: `/practice/${a.slug}`,
+    image: "/images/og/practice.jpg",
+    imageAlt: a.screens[0].alt,
+  });
 }
 
 export default async function Page({ params }: { params: Promise<{ area: string }> }) {

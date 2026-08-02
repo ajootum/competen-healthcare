@@ -1,17 +1,23 @@
-// WEB-HP-002 — Competen corporate homepage content.
+// Competen corporate homepage content (COMP-HOME-001 → WEB-HP-002 → WEB-STRAT-001, latest wins).
 //
-// This SUPERSEDES COMP-HOME-001's homepage. The governing change is "minimal disclosure": communicate
-// outcomes, not platform internals. So the six capability cards, the eight-stage lifecycle, the
-// personal-to-professional diagram and the eight-metric impact grid are all GONE -- the spec explicitly
-// says do not enumerate every module and do not expose workflow diagrams. What replaces them is a shorter
-// page whose job is to route a visitor to a solution page or a demo.
+// The governing change across that chain is "minimal disclosure": communicate outcomes, not platform
+// internals. The capability cards, lifecycle stages, workflow diagram and impact grid are all gone -- the
+// spec says do not enumerate every module. WEB-STRAT-001 then made the page a ROUTER: its job is to get a
+// visitor into the solution page that matches who they are.
 //
 // Copy lives here rather than in JSX so a content change is a one-file edit; a CMS fetch can later replace
 // these exports without touching a component.
 //
-// LINK POLICY, unchanged and load-bearing: only /login, /signup and /forgot-password exist as public
-// routes. Everything else is an ON-PAGE ANCHOR, with `planned: true` marking what the spec wants as its own
-// page. A nav row to a 404 looks identical to a working one until someone clicks it.
+// NAV, FOOTER and WHO_WE_HELP USED TO LIVE HERE AND ARE DELETED. Nothing imported them -- the header and
+// footer build their menus from PRIMARY_SOLUTIONS and their own markup -- so they were copy that could be
+// edited all day with no effect on the site. They had also gone stale in a way that only mattered once
+// someone revived them: six of their links pointed at "#who-we-help", an anchor the homepage stopped
+// having when WEB-STRAT-001 renamed the section to "choose-your-path".
+//
+// LINK POLICY for what remains: the public routes are the homepage, the five solution pages, the Competen
+// Practice section and its four journeys, and the access pages. `planned: true` marks a link the spec
+// wants but that has no page yet -- FOOTER_LEGAL is rendered as plain text for exactly that reason. A nav
+// row to a 404 looks identical to a working one until somebody clicks it.
 
 export type Link = { label: string; href: string; planned?: boolean };
 
@@ -67,19 +73,6 @@ export const HERO_CARDS = {
 // endorsement claim that had not been confirmed with any of them. If it returns it needs written
 // permission per organisation; the previous implementation is in git history.
 
-export type Audience = { title: string; body: string; accent: string; icon: string; href: string };
-
-export const WHO_WE_HELP: Audience[] = [
-  { title: "Healthcare Organisations", accent: "#4F46E5", icon: "🏢", href: "#cta",
-    body: "Strengthen capabilities, manage performance, and deliver quality care." },
-  { title: "Healthcare Professionals", accent: "#0D9488", icon: "🧑‍⚕️", href: "#cta",
-    body: "Grow your skills, build your career, and make a greater impact." },
-  { title: "Educators & Training Institutions", accent: "#EA8C0B", icon: "🎓", href: "#cta",
-    body: "Design, deliver, and assess competency-based education." },
-  { title: "Government & Regulators", accent: "#2563EB", icon: "🏛️", href: "#cta",
-    body: "Set standards, ensure compliance, and improve health systems." },
-];
-
 export const CTA_BAND = {
   title: "Ready to transform healthcare performance?",
   body: "Join leading organisations and professionals who are building a more competent, capable, and confident healthcare workforce.",
@@ -91,34 +84,6 @@ export const ASSURANCES = [
   { title: "Scalable & Flexible", body: "Built to grow with your organisation" },
   { title: "Interoperable", body: "Works with your existing systems" },
   { title: "Data-Driven Insights", body: "Make better decisions with real-time intelligence" },
-];
-
-// Header navigation. `planned` marks the dedicated pages the spec wants next -- including /practice, which
-// the Solutions strategy names explicitly and which does not exist yet.
-export const NAV: Link[] = [
-  { label: "Solutions", href: "#who-we-help", planned: true },
-  { label: "Who We Serve", href: "#who-we-help" },
-  { label: "Resources", href: "#cta", planned: true },
-  { label: "About Us", href: "#cta", planned: true },
-];
-
-export const FOOTER: { heading: string; links: Link[] }[] = [
-  { heading: "Company", links: [
-    { label: "About Us", href: "#cta", planned: true },
-    { label: "Careers", href: "#cta", planned: true },
-    { label: "Contact", href: "mailto:gabriel@semacast.com?subject=Competen%20enquiry" },
-  ] },
-  { heading: "Solutions", links: [
-    { label: "Competen Practice", href: "#who-we-help", planned: true },   // spec: gets its own /practice page
-    { label: "For Organisations", href: "#who-we-help" },
-    { label: "For Professionals", href: "#who-we-help" },
-    { label: "For Educators", href: "#who-we-help" },
-  ] },
-  { heading: "Resources", links: [
-    { label: "Knowledge Centre", href: "#cta", planned: true },
-    { label: "Case Studies", href: "#cta", planned: true },
-    { label: "Help Centre", href: "#cta", planned: true },
-  ] },
 ];
 
 // Privacy and Terms have no pages yet. Kept in one list so that when the pages land it is a two-line edit,
