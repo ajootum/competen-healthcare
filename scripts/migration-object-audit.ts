@@ -46,6 +46,12 @@ const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
 if (!url || !key) { console.error("NEXT_PUBLIC_SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY not set"); process.exit(1); }
 const admin = createClient(url, key, { auth: { persistSession: false } });
 
+let controlFailed = false;
+const ok = (label: string, cond: boolean, detail = "") => {
+  if (cond) console.log(`  PASS  ${label}`);
+  else { controlFailed = true; console.log(`  FAIL  ${label}${detail ? ` -- ${detail}` : ""}`); }
+};
+
 const ROOT = process.cwd();
 const MIG = join(ROOT, "supabase", "migrations");
 const LOOSE = join(ROOT, "supabase");
@@ -84,7 +90,17 @@ function collect(files: string[], dir: string) {
   for (const f of files) {
     const sql = strip(readFileSync(join(dir, f), "utf8"));
     for (const m of sql.matchAll(CREATE_TABLE)) { tables.set(m[1], { name: m[1], file: f }); droppedTables.delete(m[1]); }
-    for (const m of sql.matchAll(DROP_TABLE)) { tables.delete(m[1]); droppedTables.add(m[1]); }
+    for (const m of sql.matchAll(DROP_TABLE)) {
+      tables.delete(m[1]);
+      droppedTables.add(m[1]);
+      // DROPPING A TABLE DROPS ITS INDEXES, without a `drop index` line anywhere to see. Modelling only
+      // explicit index drops made this report idx_products_suite as missing: migration 105 created
+      // `products` and its index, 106 dropped the table, and the index was still counted as intended.
+      // A remediation migration built on that verdict then failed on apply with 42P01, because it tried
+      // to index a relation that does not exist. The audit was right that the index was absent and wrong
+      // about it being wanted.
+      for (const [n, d] of indexes) if (d.table === m[1]) { indexes.delete(n); droppedIndexes.add(n); }
+    }
     for (const m of sql.matchAll(CREATE_INDEX)) { indexes.set(m[1], { name: m[1], table: m[2], file: f }); droppedIndexes.delete(m[1]); }
     for (const m of sql.matchAll(DROP_INDEX)) { indexes.delete(m[1]); droppedIndexes.add(m[1]); }
   }
@@ -102,14 +118,27 @@ async function main() {
   console.log(`  ${mig.droppedTables.size} table(s) and ${mig.droppedIndexes.size} index(es) deliberately dropped\n`);
 
   // ── Tables: probe directly, no registry needed ────────────────────────────
+  //
+  // ABSENCE IS SIGNALLED BY A NULL COUNT, NOT BY AN ERROR. A head request to a table that does not exist
+  // comes back HTTP 204 with error === null and count === null -- byte-identical, from the client's point
+  // of view, to a successful probe. The first version of this file tested `error` and therefore reported
+  // every missing table as present; it passed 369 of 369 while `products` was not in the database at all,
+  // and only a migration failing on it exposed that. A real table always returns a numeric count, even
+  // when it is empty (0), so the count is the discriminator and the error is not.
+  const tableExists = async (name: string) => {
+    const { count } = await admin.from(name).select("*", { count: "exact", head: true });
+    return typeof count === "number";
+  };
+
+  // CONTROL, for exactly the reason the last version needed one and did not have it: a detector that
+  // cannot distinguish present from absent reports a clean sweep. A name that certainly does not exist
+  // must come back missing, or nothing below this line means anything.
+  ok("control: a table that cannot exist is reported missing",
+    !(await tableExists("zz_control_table_that_does_not_exist")),
+    "the probe cannot tell present from absent, so every result below is meaningless");
+
   const missingTables: Decl[] = [];
-  for (const d of mig.tables.values()) {
-    const { error } = await admin.from(d.name).select("*", { count: "exact", head: true });
-    // PGRST205 / 42P01 = the table is not there. Anything else (permissions, etc.) is not absence.
-    if (error && /does not exist|could not find the table|PGRST205|42P01/i.test(`${error.code} ${error.message}`)) {
-      missingTables.push(d);
-    }
-  }
+  for (const d of mig.tables.values()) if (!(await tableExists(d.name))) missingTables.push(d);
 
   if (missingTables.length) {
     console.log(`  MISSING TABLES (${missingTables.length}) -- declared in a migration, not in the database`);
@@ -147,7 +176,8 @@ async function main() {
     console.log(`  but they are not reproducible from supabase/migrations alone.`);
   }
 
-  const failures = missingTables.length + missingIdx.length;
+  // A failed control is itself a failure: it means every "exists" verdict above is unreliable.
+  const failures = missingTables.length + missingIdx.length + (controlFailed ? 1 : 0);
   console.log(`\n${failures ? "FAILED" : "PASSED"}  ${mig.tables.size} table(s) + ${mig.indexes.size} index(es) checked`
     + `${failures ? `, ${failures} missing` : ""}\n`);
   process.exit(failures ? 1 : 0);

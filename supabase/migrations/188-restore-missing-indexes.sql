@@ -1,5 +1,5 @@
 -- ============================================================
--- MIGRATION 188: RESTORE 19 INDEXES THAT WERE DECLARED BUT NEVER CREATED
+-- MIGRATION 188: RESTORE 18 INDEXES THAT WERE DECLARED BUT NEVER CREATED
 --
 -- FOUND BY scripts/migration-object-audit.ts, which exists because nothing here had ever asked the
 -- database whether a declared TABLE or INDEX arrived. schema-drift compares columns the code reads,
@@ -7,7 +7,7 @@
 -- are the quietest thing to lose: results stay correct, nothing errors, a tenant-filtered query simply
 -- starts scanning the table. The only symptom is a page that gets slower as the data grows.
 --
--- All 369 declared tables exist. These 19 indexes do not. They come from five migrations, and the pattern
+-- All 369 declared tables exist. These 18 indexes do not. They come from five migrations, and the pattern
 -- says what happened in each case:
 --
 --   108  ALL NINE indexes missing. Migration 108 was already known to have been truncated on apply -- the
@@ -19,7 +19,7 @@
 --   183, 184, 185  RECENT migrations, same shape: tables created, trailing index block absent. The
 --        truncation is not a one-off from last year; it is still happening, which is the argument for
 --        this audit running rather than this migration being a tidy-up.
---   014, 105  one each, oldest and unexplained.
+--   014       one, oldest and unexplained. (105 had one too, but its table was dropped by 106 -- see below.)
 --
 -- ux_pinned_module IS NOT A PERFORMANCE INDEX. It is UNIQUE on (user_id, workspace, module_key) -- the
 -- only thing stopping the same module being pinned twice. Losing it is a correctness gap, not a slow
@@ -37,8 +37,11 @@
 -- 014-learning-pathways.sql
 create index if not exists idx_pathway_items_pathway on pathway_items(pathway_id);
 
--- 105-product-portfolio.sql
-create index if not exists idx_products_suite on products(suite_id, status);
+-- NOT RESTORED: idx_products_suite (105-product-portfolio.sql). Migration 105 created `products` and its
+-- index; migration 106 DROPPED the table, which drops its indexes with it and leaves no `drop index` line
+-- behind. The first version of this file tried to recreate that index and failed on apply with 42P01 --
+-- correct that the index was absent, wrong that it was wanted. The audit now treats a dropped table as
+-- dropping its indexes, so it no longer asks for this one.
 
 -- 108-performance-analytics.sql  (all nine -- the truncated block)
 create index if not exists idx_pa_persp_hosp on pa_perspectives(hospital_id, sort_order);
