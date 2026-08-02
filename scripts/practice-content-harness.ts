@@ -28,8 +28,13 @@ import { existsSync } from "node:fs";
 import { join } from "node:path";
 import {
   PRACTICE_AREAS, INTEGRATIONS, PREVIEW_NOTE, MODULES_WITHOUT_SPECS, PRACTICE_HERO, TENANT_MODEL,
+  OVERVIEW_WORKSPACES, OVERVIEW_SCREEN, AREA_COUNT_WORD,
 } from "../src/lib/marketing/practice-content";
 import { JOURNEYS, AVAILABILITY, FAQS } from "../src/lib/marketing/practice-site";
+
+// The words 3e recognises as a stated count. Kept here rather than exported from the content module: the
+// harness should not learn its vocabulary from the thing it is checking.
+const COUNT_WORDS = ["two", "three", "four", "five", "six", "seven", "eight", "nine", "ten", "eleven", "twelve"];
 
 const BASE = process.env.BASE_URL ?? "http://localhost:3000";
 
@@ -41,21 +46,19 @@ const ok = (label: string, cond: boolean, detail = "") => {
 };
 
 /**
- * THE FIFTEEN PEN ENGINE SPECIFICATIONS -- the coverage spine for the whole public section.
+ * TWO SPECIFICATION LAYERS, because the product has two and they cross-cut.
  *
- * It used to be CPR-001..020. The CPR space is being revised and its numbering already disagrees with
- * itself in two places (see SPEC_CONFLICTS in practice-content.ts), so an assertion over CPR ids was
- * measuring a moving target: it would keep passing while pointing at workspaces that had been renamed
- * underneath it, which is worse than not asserting at all -- a green harness over a stale claim.
+ * ENGINES  PEN-001..015, the capability layer -- one document each, stable since v2.
+ * SURFACES CPR-001..020 V2, the workspace layer. The CPR space was in flux (its numbering disagreed with
+ *          itself in two places, which is why the areas were anchored to PEN alone), and the V2 documents
+ *          settled it. Both are now cited and both are proven covered exactly once.
  *
- * The PEN library is stable, each engine is exactly one document, and together the fifteen decompose the
- * entire product. So coverage means: every engine is represented by exactly one area, and no area cites an
- * engine that does not exist. Dropping one when the areas are next reorganised is a test failure.
- *
- * The ids follow the PEN SPECIFICATIONS rather than CPR-ARCH-001 section 13.2, which numbers the same
- * fifteen engines completely differently.
+ * Coverage is asserted per layer, not merged: an area can legitimately own workspaces and no engine.
+ * "Care anywhere" is exactly that -- teleconsultation and offline working consume engines that other areas
+ * explain, so forcing it to own one would have meant taking an engine off the area that explains it.
  */
-const SPECIFIED = Array.from({ length: 15 }, (_, i) => `PEN-${String(i + 1).padStart(3, "0")}`);
+const ENGINES = Array.from({ length: 15 }, (_, i) => `PEN-${String(i + 1).padStart(3, "0")}`);
+const SURFACES = Array.from({ length: 20 }, (_, i) => `CPR-${String(i + 1).padStart(3, "0")}`);
 
 // Same list as the public-disclosure harness, deliberately duplicated: if that file is ever narrowed, this
 // one still fails, and two harnesses disagreeing is a louder signal than one silently relaxing.
@@ -97,32 +100,49 @@ function visibleText(html: string): string {
 }
 
 async function main() {
-  // ── 1. COVERAGE: the specs actually made it into the content ──────────────────────────────────────
-  const claimed = PRACTICE_AREAS.flatMap(a => a.modules);
-  const counts = new Map<string, number>();
-  for (const m of claimed) counts.set(m, (counts.get(m) ?? 0) + 1);
+  // ── 1. COVERAGE: both specification layers actually made it into the content ──────────────────────
+  const tally = (ids: string[]) => {
+    const m = new Map<string, number>();
+    for (const id of ids) m.set(id, (m.get(id) ?? 0) + 1);
+    return m;
+  };
+  const engines = tally(PRACTICE_AREAS.flatMap(a => a.engines));
+  // The overview page claims CPR-001 and CPR-020: the command centre and the navigation architecture are
+  // what /practice itself is, so counting them only across the AREAS would report them permanently missing.
+  const surfaces = tally([...PRACTICE_AREAS.flatMap(a => a.workspaces), ...OVERVIEW_WORKSPACES]);
 
-  const uncovered = SPECIFIED.filter(m => !counts.has(m));
-  ok("1. every specified module is covered by an area", uncovered.length === 0,
-    `uncovered: ${uncovered.join(", ")}`);
+  for (const [label, list, counts] of [
+    ["engine", ENGINES, engines] as const,
+    ["workspace", SURFACES, surfaces] as const,
+  ]) {
+    const uncovered = list.filter(id => !counts.has(id));
+    ok(`1. every ${label} specification is covered`, uncovered.length === 0, `uncovered: ${uncovered.join(", ")}`);
 
-  const twice = [...counts.entries()].filter(([, n]) => n > 1).map(([m]) => m);
-  ok("1b. no module is claimed by two areas", twice.length === 0, twice.join(", "));
+    const twice = [...counts.entries()].filter(([, n]) => n > 1).map(([id]) => id);
+    ok(`1b. no ${label} is claimed twice`, twice.length === 0, twice.join(", "));
 
-  const unknown = [...counts.keys()].filter(m => !SPECIFIED.includes(m));
-  ok("1c. no area claims a module that has no specification", unknown.length === 0, unknown.join(", "));
+    const unknown = [...counts.keys()].filter(id => !list.includes(id));
+    ok(`1c. no area claims a ${label} that has no specification`, unknown.length === 0, unknown.join(", "));
+  }
 
-  // The recorded gap must stay a gap. If CPR-021 is ever written into an area, this list is stale and the
-  // "no specification supplied" note beside it has become a lie.
-  const gapClaimed = MODULES_WITHOUT_SPECS.filter(m => counts.has(m));
-  ok("1d. the recorded spec gap is still a gap", gapClaimed.length === 0, gapClaimed.join(", "));
+  // Engines and workspaces must not be muddled into one another's field -- that would silently pass
+  // coverage while making the traceability meaningless.
+  const misfiled = [
+    ...PRACTICE_AREAS.flatMap(a => a.engines).filter(id => !id.startsWith("PEN-")),
+    ...PRACTICE_AREAS.flatMap(a => a.workspaces).filter(id => !id.startsWith("CPR-")),
+  ];
+  ok("1d. engines and workspaces are not filed in each other's list", misfiled.length === 0, misfiled.join(", "));
+
+  // A recorded gap must stay a gap: if one is ever written into an area, the note beside it has become a lie.
+  const gapClaimed = MODULES_WITHOUT_SPECS.filter(id => engines.has(id) || surfaces.has(id));
+  ok("1e. recorded spec gaps are still gaps", gapClaimed.length === 0, gapClaimed.join(", "));
 
   // ── 2. ASSETS: every screen exists on disk ────────────────────────────────────────────────────────
-  const allImages = [PRACTICE_HERO.image, ...PRACTICE_AREAS.flatMap(a => a.screens.map(s => s.src))];
+  const allImages = [PRACTICE_HERO.image, OVERVIEW_SCREEN.src, ...PRACTICE_AREAS.flatMap(a => a.screens.map(s => s.src))];
   const missingOnDisk = [...new Set(allImages)].filter(src => !existsSync(join(process.cwd(), "public", src)));
   ok("2. every referenced screen exists on disk", missingOnDisk.length === 0, missingOnDisk.join(", "));
 
-  const emptyAlt = PRACTICE_AREAS.flatMap(a => a.screens).filter(s => s.alt.trim().length < 20);
+  const emptyAlt = [OVERVIEW_SCREEN, ...PRACTICE_AREAS.flatMap(a => a.screens)].filter(s => s.alt.trim().length < 20);
   ok("2b. every screen has descriptive alt text", emptyAlt.length === 0, emptyAlt.map(s => s.src).join(", "));
 
   // ALT TEXT MUST NOT NAME THE DEMO PRACTICE.
@@ -137,7 +157,7 @@ async function main() {
   // new one must not appear because the pixels do not say it yet. Whichever way somebody "tidies" this,
   // the harness objects until the images actually match.
   const practiceNames = ["Sunrise Medical", "Eonrise Medical", "Competen Medical"];
-  const named = PRACTICE_AREAS.flatMap(a => a.screens)
+  const named = [OVERVIEW_SCREEN, ...PRACTICE_AREAS.flatMap(a => a.screens)]
     .filter(s => practiceNames.some(n => `${s.alt} ${s.caption}`.toLowerCase().includes(n.toLowerCase())));
   ok("2c. no screen alt or caption names the demo practice", named.length === 0,
     named.map(s => s.src).join(", "));
@@ -168,6 +188,19 @@ async function main() {
     // trip it. Word-boundary matching would let a plural or a participle through.
     const internal = INTERNAL_VOCABULARY.filter(w => text.toLowerCase().includes(w.toLowerCase()));
     ok(`3d. ${path} leaks no internal platform vocabulary`, internal.length === 0, internal.join(", "));
+
+    // 3e. PROSE THAT COUNTS A GENERATED LIST MUST AGREE WITH IT.
+    //
+    // The overview said "Six areas, one product" directly above a grid rendering all eight, because V2 grew
+    // the list and the sentence introducing it was a string literal. Nothing could catch that: the number is
+    // inside prose, so the typecheck sees a valid string and the coverage assertions see a complete list.
+    // Matching "<word> areas" wherever it appears is the general form -- it fails for any page that states
+    // the count, however that page came to state it.
+    const stated = [...text.matchAll(/\b([A-Za-z]+)\s+areas\b/gi)]
+      .map(m => m[1].toLowerCase())
+      .filter(w => COUNT_WORDS.includes(w) && w !== AREA_COUNT_WORD);
+    ok(`3e. ${path} states the area count correctly`, stated.length === 0,
+      `says "${stated.join('", "')}" areas; there are ${PRACTICE_AREAS.length} (${AREA_COUNT_WORD})`);
   }
 
   // ── 4. NAVIGATION: catalogue, nav and routes agree ────────────────────────────────────────────────

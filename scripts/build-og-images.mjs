@@ -26,11 +26,18 @@ const W = 1200, H = 630;
 // than eyeballed, so the bars read as deliberate rather than as a rendering accident.
 const CANVAS = { r: 239, g: 244, b: 254, alpha: 1 };
 
-/** [output name, source image, what it is]. Sources are existing site assets -- nothing new is invented. */
+/**
+ * [output name, source image, what it is]. Sources are existing site assets -- nothing new is invented.
+ *
+ * THESE GO STALE SILENTLY WHEN THE SCREENS ARE REBUILT. The V2 mockups renamed dashboard.webp to
+ * command-centre.webp and redrew booking.webp in place; the existsSync guard below caught the rename but
+ * could not catch the redraw, so /practice/book kept unfurling a superseded screen while every check passed.
+ * Re-run this script whenever scripts/build-practice-images.mjs is re-run.
+ */
 const CARDS = [
-  ["competen",         "public/images/home/hero-clinicians.png", "site-wide default"],
-  ["practice",         "public/images/practice/dashboard.webp",  "Competen Practice"],
-  ["practice-booking", "public/images/practice/booking.webp",    "patient booking journey"],
+  ["competen",         "public/images/home/hero-clinicians.png",     "site-wide default"],
+  ["practice",         "public/images/practice/command-centre.webp", "Competen Practice"],
+  ["practice-booking", "public/images/practice/booking.webp",        "patient booking journey"],
 ];
 
 mkdirSync(OUT, { recursive: true });

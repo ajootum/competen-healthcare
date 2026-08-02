@@ -1,13 +1,21 @@
 /**
  * Build the Competen Practice interface previews for the public site.
  *
- * Source: the CPR-0xx design mockups (1536x1024 PNG, ~1.4MB each). Twenty of those unprocessed would put
- * ~28MB of images behind /practice, which on a Ugandan mobile connection is not a marketing page, it is a
- * wall. Resized to 1400px and encoded as WebP they land around a tenth of that and still hold detail at 2x
- * on the widths they are displayed at.
+ * SOURCE: the CPR-0xx_V2 workspace mockups (1536x1024 PNG, ~1.5MB each). Twenty of those unprocessed
+ * would put ~30MB of images behind /practice, which on a Ugandan mobile connection is not a marketing
+ * page, it is a wall. Resized to 1400px and encoded as WebP they land around a twentieth of that and still
+ * hold detail at 2x on the widths they are displayed at.
  *
- * Kept as a script rather than a one-off shell command because the mockups WILL be revised, and the next
- * person needs the exact same resize and quality settings or the gallery starts looking uneven.
+ * V2 SUPERSEDES V1 ENTIRELY -- not a revision of the same screens but a different product surface. Version
+ * 1 had a patient portal, a pre-visit questionnaire engine and a reception workspace; version 2 has
+ * teleconsultation, mobile/offline, delegation and multi-practice switching, and every screen was redrawn.
+ * So this maps the V2 workspace list, and the V1 filenames are deliberately gone rather than aliased --
+ * an alias would let a page keep rendering a superseded screen while looking correct in the diff.
+ *
+ * THE DEMO PRACTICE STILL IS NOT "COMPETEN MEDICAL CENTRE" (the agreed name, settled 2026-08-02). The V2
+ * artwork says "Kampala Clinic - Main Site" throughout, which at least replaces V1's "Sunrise"/"Eonrise"
+ * inconsistency with one consistent name -- but it is not the agreed one. Until the screens are re-exported
+ * again, NO alt text or caption may name the practice; scripts/practice-content-harness.ts asserts it.
  *
  *   node scripts/build-practice-images.mjs [sourceDir]
  */
@@ -17,63 +25,36 @@ import { readdirSync, statSync, mkdirSync } from "node:fs";
 const SRC = process.argv[2] ?? "C:/Users/elish/Downloads";
 const OUT = "public/images/practice";
 
-// THE DEMO PRACTICE IS CALLED "COMPETEN MEDICAL CENTRE" (settled 2026-08-02).
-//
-// The current mockups do NOT say that. They show "Sunrise Medical Centre" on nineteen screens and
-// "Eonrise Medical Centre" on the integrations screen -- a typo in the source artwork. Both are baked into
-// rendered PNGs, so this cannot be corrected here: it needs the screens re-exported with the agreed name.
-//
-// Until they are, NO alt text or caption may name the practice. A caption saying "Competen Medical Centre"
-// over a screenshot reading "Sunrise" tells a screen-reader user something different from what a sighted
-// user sees, which is a worse failure than saying nothing. scripts/practice-content-harness.ts asserts it.
-//
-// CPR module id -> published filename. The filename says what the screen IS, so a future image swap that
-// puts the calendar under booking.webp is visible in the diff rather than only on the rendered page.
-//
-// NOT PUBLISHED, deliberately: CPR-000 (a duplicate of the CPR-001 dashboard) and CPR-000A. The latter is
-// the enterprise architecture diagram, which draws the Platform Operations / landlord control plane and
-// the whole product ecosystem. WEB-STRAT-001 forbids disclosing those publicly, and an image is a
-// disclosure even though no text harness can read one. Neither has an entry below, so both are skipped.
+// CPR-V2 workspace id -> published filename. The filename says which WORKSPACE the screen is, so an image
+// swap that puts the schedule under booking.webp shows up in the diff rather than only on the page.
 const MAP = {
-  "001": "dashboard", "002": "calendar", "003": "booking", "004": "appointments", "005": "queue",
-  "006": "portal", "007": "questionnaires", "008": "timeline", "009": "diagnosis", "010": "treatments",
-  "011": "documents", "012": "followups", "013": "notifications", "014": "referrals", "015": "analytics",
-  "016": "assistant", "017": "search", "018": "reception", "019": "settings", "020": "integrations",
+  "001": "command-centre", "002": "schedule", "003": "booking", "004": "registration",
+  "005": "patient-search", "006": "encounter", "007": "diagnosis", "008": "investigations",
+  "009": "treatment", "010": "followups", "011": "intelligence", "012": "reports",
+  "013": "ai-copilot", "014": "settings", "015": "multi-practice", "016": "delegation",
+  "017": "collaboration", "018": "teleconsultation", "019": "mobile-offline", "020": "home-navigation",
 };
 
 mkdirSync(OUT, { recursive: true });
 
-// A module can have several source files once it is revised (CPR-019 and CPR-019_Revision2 both carry id
-// 019). Pick the HIGHEST revision explicitly and say which one was used. Relying on sort order to put the
-// revision last happens to work today and would silently publish the superseded screen the first time
-// somebody names a file differently.
-const revisionOf = f => { const m = /Revision\s*(\d+)/i.exec(f); return m ? Number(m[1]) : 1; };
-
-const byId = new Map();
-for (const f of readdirSync(SRC).filter(x => /^CPR-\d{3}[_A-Z].*\.png$/.test(x))) {
-  const id = f.slice(4, 7);
-  const best = byId.get(id);
-  if (!best || revisionOf(f) > revisionOf(best)) byId.set(id, f);
+// Only _V2_ files. Matching bare CPR-0xx would silently pick up the superseded V1 artwork for any id whose
+// V2 export is missing, which is exactly the failure this naming is meant to make impossible.
+const sources = new Map();
+for (const f of readdirSync(SRC)) {
+  const m = /^CPR-(\d{3})_V2_.*\.png$/i.exec(f);
+  if (m) sources.set(m[1], f);
 }
 
 const found = new Set();
 let total = 0;
-for (const [id, f] of [...byId.entries()].sort()) {
-  const name = MAP[id];
-  if (!name) { console.log(`  skip   ${f} (not published)`); continue; }
-  const rev = revisionOf(f);
-  if (rev > 1) console.log(`  using revision ${rev} for ${id}: ${f}`);
+for (const [id, name] of Object.entries(MAP)) {
+  const file = sources.get(id);
+  if (!file) { console.error(`  MISSING CPR-${id}_V2 -> ${name}.webp not built`); process.exitCode = 1; continue; }
   const dest = `${OUT}/${name}.webp`;
-  await sharp(`${SRC}/${f}`).resize({ width: 1400, withoutEnlargement: true }).webp({ quality: 82 }).toFile(dest);
+  await sharp(`${SRC}/${file}`).resize({ width: 1400, withoutEnlargement: true }).webp({ quality: 82 }).toFile(dest);
   const kb = statSync(dest).size / 1024;
-  total += kb;
-  found.add(id);
-  console.log(`  ${id} -> ${name}.webp  ${kb.toFixed(0)}KB`);
+  total += kb; found.add(id);
+  console.log(`  ${id} -> ${name.padEnd(16)} ${kb.toFixed(0).padStart(4)}KB`);
 }
 
-const missing = Object.keys(MAP).filter(id => !found.has(id));
-if (missing.length) {
-  console.error(`\nMISSING source mockups for: ${missing.join(", ")} -- those pages will 404 their image.`);
-  process.exitCode = 1;
-}
 console.log(`\n${found.size}/${Object.keys(MAP).length} screens, ${Math.round(total)}KB total.`);

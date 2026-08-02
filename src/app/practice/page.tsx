@@ -5,7 +5,7 @@ import { PatternField } from "@/components/marketing/Pattern";
 import {
   PRACTICE_ACCENT, PRACTICE_ACCENT_DARK, PRACTICE_HERO, PRACTICE_PROMISES, NOT_AN_EMR, PATIENT_JOURNEY,
   PRACTICE_AREAS, PRACTICE_ROLES, TENANT_MODEL, INTEGRATIONS, INTEGRATION_NOTE, PRACTICE_CTA, PREVIEW_NOTE,
-  PORTABILITY, AI_SAFEGUARDS,
+  PORTABILITY, AI_SAFEGUARDS, OVERVIEW_SCREEN, AREA_COUNT_WORD,
 } from "@/lib/marketing/practice-content";
 import { JOURNEYS, HOW_IT_WORKS, TRUST, FAQS, contactFor } from "@/lib/marketing/practice-site";
 import { pageMetadata } from "@/lib/marketing/site";
@@ -213,7 +213,8 @@ export default function Page() {
         <section id="capabilities" className={`${container} py-12 lg:py-16`}>
           <h2 className="text-[1.6rem] font-bold tracking-tight text-gray-900">What is inside</h2>
           <p className="mt-2 max-w-2xl text-[14px] leading-relaxed text-gray-600">
-            Six areas, one product. Nothing below is a separate purchase.
+            <span className="capitalize">{AREA_COUNT_WORD}</span> areas, one product. Nothing below is a
+            separate purchase.
           </p>
           <ul className="mt-8 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
             {PRACTICE_AREAS.map(a => (
@@ -236,6 +237,14 @@ export default function Page() {
               </li>
             ))}
           </ul>
+          <figure className="mt-10">
+            <div className="rounded-2xl border border-gray-200 bg-white overflow-hidden">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={OVERVIEW_SCREEN.src} alt={OVERVIEW_SCREEN.alt} width={1400} height={933}
+                loading="lazy" decoding="async" className="w-full h-auto" />
+            </div>
+            <figcaption className="mt-3 text-[12.5px] text-gray-600">{OVERVIEW_SCREEN.caption}</figcaption>
+          </figure>
           <p className="mt-5 text-[11.5px] text-gray-500">{PREVIEW_NOTE}</p>
         </section>
 

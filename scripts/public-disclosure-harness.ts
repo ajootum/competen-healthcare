@@ -21,7 +21,7 @@
  * Needs the dev server on :3000.
  *   npx --yes tsx scripts/public-disclosure-harness.ts
  */
-import { existsSync } from "node:fs";
+import { existsSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { SOLUTIONS, PRIMARY_SOLUTIONS } from "../src/lib/marketing/solutions";
 import { PRACTICE_AREAS } from "../src/lib/marketing/practice-content";
@@ -156,6 +156,29 @@ async function main() {
       `og:title "${ogTitle}" vs title "${stem}"`);
   }
   ok("2c. every public page was reachable", reachable === PUBLIC_PAGES.length, `${reachable}/${PUBLIC_PAGES.length}`);
+
+  // ---- 2h. the social cards are not older than the screens they were cut from -----------------------
+  //
+  // An og:image is the one published asset no text check can read, and it goes stale in a way that leaves
+  // every other check green: the page is right, the meta tag is right, the file exists -- and the card
+  // unfurls a screenshot of a product version that no longer exists. That is what happened when the V2
+  // mockups landed: the /practice card had been cut from a V1 screen that was then deleted, and the
+  // /practice/book card from a booking screen that was redrawn in place under the same filename.
+  //
+  // Mtime comparison is the honest test. It cannot see INTO the jpg, but a card cut before its source was
+  // last written is stale by definition, which is exactly the failure mode.
+  const OG_SOURCES: [string, string][] = [
+    ["public/images/og/competen.jpg", "public/images/home/hero-clinicians.png"],
+    ["public/images/og/practice.jpg", "public/images/practice/command-centre.webp"],
+    ["public/images/og/practice-booking.jpg", "public/images/practice/booking.webp"],
+  ];
+  const staleCards = OG_SOURCES.filter(([card, src]) => {
+    const c = join(process.cwd(), card), s = join(process.cwd(), src);
+    if (!existsSync(c) || !existsSync(s)) return true;
+    return statSync(c).mtimeMs < statSync(s).mtimeMs;
+  }).map(([card]) => card.split("/").pop());
+  ok("2h. no social card is older than its source screen", staleCards.length === 0,
+    `${staleCards.join(", ")} -- re-run: node scripts/build-og-images.mjs`);
 
   // ---- 3. nav and catalogue agree ------------------------------------------------------------------
   const home = await fetch(BASE + "/").then(r => r.text()).catch(() => "");
