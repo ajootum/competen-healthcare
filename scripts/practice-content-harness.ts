@@ -30,7 +30,11 @@ import {
   PRACTICE_AREAS, INTEGRATIONS, PREVIEW_NOTE, MODULES_WITHOUT_SPECS, PRACTICE_HERO, TENANT_MODEL,
   OVERVIEW_WORKSPACES, OVERVIEW_SCREEN, AREA_COUNT_WORD,
 } from "../src/lib/marketing/practice-content";
-import { JOURNEYS, AVAILABILITY, FAQS } from "../src/lib/marketing/practice-site";
+import { JOURNEYS, AVAILABILITY, JOURNEY_GATES, FAQS } from "../src/lib/marketing/practice-site";
+import { loadEnvConfig } from "@next/env";
+import { createClient } from "@supabase/supabase-js";
+
+loadEnvConfig(process.cwd());
 
 // The words 3e recognises as a stated count. Kept here rather than exported from the content module: the
 // harness should not learn its vocabulary from the thing it is checking.
@@ -263,6 +267,21 @@ async function main() {
   ok("7. no journey route collides with a capability slug", shadowed.length === 0,
     shadowed.map(j => j.href).join(", "));
 
+  // The launch flags are read from the SAME database the pages read, so 7b compares the page against
+  // reality rather than against an assumption about which posture we are in. A missing flag row reads as
+  // closed, which is the safe direction and is asserted below rather than silently defaulted.
+  const gateOpen: Record<string, boolean> = {};
+  {
+    const url = process.env.NEXT_PUBLIC_SUPABASE_URL, key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    const db = url && key ? createClient(url, key, { auth: { persistSession: false } }) : null;
+    const wanted = [...new Set(Object.values(JOURNEY_GATES).map(g => g.flag))];
+    const { data } = db ? await db.from("practice_platform_flags").select("flag, enabled").in("flag", wanted) : { data: null };
+    const rows = (data ?? []) as { flag: string; enabled: boolean }[];
+    for (const f of wanted) gateOpen[f] = !!rows.find(r => r.flag === f)?.enabled;
+    ok("7-flags. every gated journey's flag exists in the database", rows.length === wanted.length,
+      `${rows.length}/${wanted.length} -- a gate pointing at a missing flag is permanently and silently closed`);
+  }
+
   for (const j of JOURNEYS) {
     let html = "";
     try {
@@ -275,7 +294,25 @@ async function main() {
     }
     const text = visibleText(html);
 
-    ok(`7b. ${j.href} says it is not open yet`, text.includes(AVAILABILITY.headline));
+    // 7b. EXACTLY ONE OF THE TWO PANELS, never both and never neither.
+    //
+    // The old assertion was "says it is not open yet", which would turn red the moment a launch flag
+    // flipped -- reporting a successful launch as a regression, which is the fastest way to teach
+    // somebody to ignore a harness. What must stay true is not the notice; it is that a visitor is told
+    // where they stand. So: a gated journey whose flag is ON shows the live action and links to a real
+    // route; every other journey shows the notice. "Neither" is the failure that matters, because that
+    // is the state where a person reads three screens and is never told they cannot use any of it.
+    const gate = JOURNEY_GATES[j.key];
+    const saysClosed = text.includes(AVAILABILITY.headline);
+    const saysOpen = !!gate && text.includes(gate.headline) && html.includes(`href="${gate.action.href}"`);
+    ok(`7b. ${j.href} states its availability exactly once`, saysClosed !== saysOpen,
+      saysClosed && saysOpen ? "shows BOTH panels" : "shows NEITHER panel");
+    if (gate) {
+      ok(`7b-gate. ${j.href} matches the ${gate.flag} flag`, saysOpen === gateOpen[gate.flag],
+        `flag=${gateOpen[gate.flag]} page=${saysOpen ? "open" : "closed"}`);
+    } else {
+      ok(`7b-ungated. ${j.href} shows the notice (nothing behind it is built)`, saysClosed);
+    }
 
     const leaked = FORBIDDEN.filter(f => text.toLowerCase().includes(f.toLowerCase()));
     ok(`7c. ${j.href} discloses no hidden product`, leaked.length === 0, leaked.join(", "));

@@ -22,6 +22,11 @@ export const metadata = pageMetadata({
   path: "/practice/login",
 });
 
+// PER-REQUEST, because the availability panel reads practice_sign_in. Statically rendered, the flag
+// would be baked in at build time and the launch ladder would need a deploy to move -- which is not a
+// flag, it is a constant with extra steps. The page is light and the correctness is worth the cache.
+export const dynamic = "force-dynamic";
+
 const container = "mx-auto w-full max-w-7xl px-5 sm:px-8";
 
 export default function Page() {

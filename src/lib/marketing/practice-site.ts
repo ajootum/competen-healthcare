@@ -52,6 +52,51 @@ export const AVAILABILITY = {
   action: { label: "Talk to us about your practice", href: contactFor() },
 };
 
+/**
+ * WHAT REPLACES THE NOTICE WHEN A JOURNEY ACTUALLY OPENS (CPR-IAM-001 s14, last line: "replace the
+ * 'Not open yet' panel with live sign-in and signup actions"; s14.1's launch ladder is the control).
+ *
+ * The journey page stays -- it is the explainer, and a visitor still needs to know where each role lands.
+ * What changes is the panel above the fold: the honest notice becomes the honest action, decided by a
+ * platform flag read at request time. Wiring it here rather than editing these pages at cutover is the
+ * whole point of having a ladder: flipping the flag has to be sufficient, or the flag is decoration and
+ * three buttons keep pointing at dead ends after launch.
+ *
+ * ONLY TWO JOURNEYS HAVE A GATE. `book` and `patient-login` are deliberately absent: there is no patient
+ * portal, no V2 workspace specification for one, and the patient phase is gated until the practitioner
+ * core is real. A flag for them would be a switch wired to nothing -- which is worse than no switch,
+ * because someone would eventually flip it.
+ */
+export type JourneyGate = {
+  /** practice_platform_flags row that opens this journey. */
+  flag: string;
+  label: string;
+  headline: string;
+  body: string;
+  action: { label: string; href: string };
+};
+
+export const JOURNEY_GATES: Record<string, JourneyGate> = {
+  "practice-login": {
+    flag: "practice_sign_in",
+    label: "Open",
+    headline: "Sign in to your practice.",
+    body:
+      "Sign in with your Competen account -- the same one you use anywhere else on Competen. Where you " +
+      "land depends on the role you hold in the practice, not on which link you clicked.",
+    action: { label: "Sign in", href: "/practice/sign-in" },
+  },
+  start: {
+    flag: "practice_public_signup",
+    label: "Open",
+    headline: "Set up your practice.",
+    body:
+      "Create your Competen Practice workspace now. You will be asked how and where you practise, and " +
+      "then your diary is open.",
+    action: { label: "Create your practice", href: "/practice/sign-up" },
+  },
+};
+
 // ── Navigation ────────────────────────────────────────────────────────────────────────────────────────
 // Taken from LP-PRA-001's own navigation list, NOT from the comp. The comp adds Pricing and Resources;
 // there is no published pricing and there are no resources, so both would be links to nothing.

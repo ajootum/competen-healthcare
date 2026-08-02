@@ -22,6 +22,10 @@ export const metadata = pageMetadata({
   image: "/images/og/practice.jpg",
 });
 
+// Per-request: the availability panel reads practice_public_signup. See /practice/login for why a
+// statically rendered flag is not a flag.
+export const dynamic = "force-dynamic";
+
 const container = "mx-auto w-full max-w-7xl px-5 sm:px-8";
 
 export default function Page() {
