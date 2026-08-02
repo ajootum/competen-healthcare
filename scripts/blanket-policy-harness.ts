@@ -43,24 +43,66 @@ const ok = (label: string, cond: boolean, detail = "") => {
   else { fails.push(label); console.log(`  FAIL  ${label}${detail ? ` -- ${detail}` : ""}`); }
 };
 
-// A predicate that grants every logged-in user every row. Matched on the normalised text Postgres stores,
-// which is why the cast is included -- pg_get_expr renders it as ('authenticated'::text).
-const BLANKET = /^\(?auth\.role\(\) = 'authenticated'::text\)?$/;
+// THREE SPELLINGS OF "GRANTS EVERY ROW", and the first version of this file knew only one of them.
+// Matching auth.role() alone found 38 tables and missed 19 more that say auth.uid() IS NOT NULL -- among
+// them quality_objects, which holds tenant-owned rows and is exactly what this harness claims to watch.
+// The predicates are matched on the normalised text Postgres stores, which is why the cast appears.
+//
+//   true                                  grants whoever the policy's ROLES allow -- see ANON below
+//   auth.role() = 'authenticated'::text   any logged-in user
+//   auth.uid() IS NOT NULL                any logged-in user, said differently
+const AUTHED = [
+  /^\(?auth\.role\(\) = 'authenticated'::text\)?$/,
+  /^\(?auth\.uid\(\) IS NOT NULL\)?$/,
+];
+const UNCONDITIONAL = /^\(?true\)?$/;
+
+// A policy with no role list applies to PUBLIC, which INCLUDES anon. `true` + PUBLIC is therefore readable
+// with no login at all -- strictly worse than the authenticated cases and reported separately. Migration
+// 174 narrowed courses, competencies and benner_scale for exactly this reason and dropped questions
+// outright; anything still in this category was missed by that pass.
+const isPublicRole = (roles: string | null) => !roles || /(^|,)\s*public\s*(,|$)/i.test(roles);
 
 async function main() {
   console.log("\nBlanket-policy harness -- tables any logged-in user can read in full\n");
 
   // PAGED: a single .rpc() caps at 1000 rows and truncates silently. Under the cap today, but a half-read
   // registry would hide blanket policies rather than invent them -- the direction that reads as safe.
-  type RegRow = { tbl: string; policy_name: string | null; cmd: string; qual: string | null };
+  type RegRow = { tbl: string; policy_name: string | null; cmd: string; roles: string | null; qual: string | null };
   const reg = await pagedRpc<RegRow>(admin, "plat_rls_registry", ["tbl", "policy_name"]);
   if (reg.error) { console.error(`  plat_rls_registry unavailable: ${reg.error} (migration 172 applied?)`); process.exit(1); }
   ok("the policy registry was read in full", !reg.suspicious, capWarning(reg.rows.length));
 
   const rows = reg.rows;
+  const reads = rows.filter(r => r.policy_name && (r.cmd === "SELECT" || r.cmd === "ALL"));
+  const q = (r: RegRow) => String(r.qual ?? "").trim();
+
+  // ALL is included, not just SELECT: a policy with cmd ALL grants reads too, and reading the NAME rather
+  // than the cmd is the mistake migration 175 had to undo ("Hospital staff views competency scores" was
+  // command ALL, so a nurse could rewrite her own score).
+  const anonRead = reads.filter(r => UNCONDITIONAL.test(q(r)) && isPublicRole(r.roles));
   const blanket = [...new Set(
-    rows.filter(r => r.policy_name && r.cmd === "SELECT" && BLANKET.test(String(r.qual ?? "").trim())).map(r => r.tbl),
+    reads.filter(r => AUTHED.some(re => re.test(q(r))) || (UNCONDITIONAL.test(q(r)) && !isPublicRole(r.roles)))
+      .map(r => r.tbl),
   )].sort();
+
+  // ── Anon-readable first: strictly worse, and invisible to the anon harness while the table is empty ──
+  //
+  // scripts/anon-exposure-harness.ts can only test a table that HAS rows -- it reports 204 as untestable
+  // and is explicit that those are not passes. These are the untestable ones that will become genuinely
+  // exposed the moment a row is written, so they are caught here from the POLICY instead of from the data.
+  const anonTables = [...new Set(anonRead.map(r => r.tbl))].sort();
+  if (anonTables.length) {
+    console.log(`  ${anonTables.length} table(s) with an unconditional PUBLIC read policy (anon, no login):`);
+    for (const t of anonTables) {
+      const { count } = await admin.from(t).select("*", { count: "exact", head: true });
+      const names = anonRead.filter(r => r.tbl === t).map(r => `${r.policy_name}[${r.cmd}]`).join(", ");
+      console.log(`    ${t.padEnd(26)} ${String(count ?? "?").padStart(5)} row(s)  ${names}`);
+    }
+    console.log("");
+  }
+  ok("no table is readable with no login at all", anonTables.length === 0,
+    `${anonTables.length} table(s) grant PUBLIC an unconditional read -- empty ones are not safe, only untested`);
 
   // Not a fixed list: a blanket policy added to a new table is picked up automatically, which is the point.
   ok("the registry is readable and returned policies", rows.length > 0, `${rows.length} rows`);
@@ -93,7 +135,7 @@ async function main() {
       .from(tbl).select("hospital_id", { count: "exact", head: true }).not("hospital_id", "is", null);
     if (cErr) { ok(`${tbl}: tenant-owned row count`, false, cErr.message); continue; }
 
-    ok(`${tbl}: holds no tenant-owned rows, so the blanket read gives nothing away`, (count ?? 0) === 0,
+    ok(`${tbl}: no tenant-owned rows sit behind its blanket read`, (count ?? 0) === 0,
       `${count} row(s) carry a hospital_id and are readable by EVERY authenticated user on the platform -- `
       + `scope this policy now`);
   }
@@ -105,6 +147,15 @@ async function main() {
     console.log(`\n  NOTE  hospitals has ${shadowed} scoped SELECT policy(ies) that decide nothing while the`);
     console.log(`        blanket one stands -- policies are OR'd. They are not a second line of defence.`);
   }
+
+  // SEVERITY DEPENDS ON REACHABILITY, and this harness deliberately does not soften its verdict with it.
+  // A policy only decides anything on a table the USER client touches; everything else goes through the
+  // service role, which bypasses RLS entirely. scripts/client-usage-audit.ts finds eleven such tables, and
+  // the leaks below are not among them -- so this is a wrong policy, not an open door today. It is one
+  // client-side query from becoming both, and "not currently reachable" is a property of the application
+  // code, which changes far more often than a policy does.
+  console.log(`\n  Run scripts/client-usage-audit.ts for reachability: a table reached only through the`);
+  console.log(`  service role bypasses RLS, so a bad policy there is latent rather than live.`);
 
   console.log(`\n${fails.length ? "FAILED" : "PASSED"}  ${pass} assertion(s)${fails.length ? `, ${fails.length} failure(s):\n  - ${fails.join("\n  - ")}` : ""}\n`);
   process.exit(fails.length ? 1 : 0);
