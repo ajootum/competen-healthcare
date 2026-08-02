@@ -114,7 +114,7 @@ export default function LoginPage() {
             {/* object-top keeps faces in frame when the panel is short; centring would crop to the tablet. */}
             <div className="relative flex-1 min-h-[220px]">
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src="/images/home/hero-clinicians.png" alt="Two nurses reviewing a patient record on a tablet"
+              <img src="/images/home/hero-clinicians.webp" alt="Two nurses reviewing a patient record on a tablet"
                 className="absolute inset-0 w-full h-full object-cover object-top" />
               <div className="absolute inset-x-0 top-0 h-16 bg-gradient-to-b from-[#08312B] to-transparent" />
             </div>

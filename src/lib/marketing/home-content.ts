@@ -43,7 +43,7 @@ export const HERO = {
     'deliver better care and improve outcomes.',
   primary: { label: 'Explore Solutions', href: '#choose-your-path' },
   secondary: { label: 'Book a Demo', href: '/signup' },
-  image: '/images/home/journey-nurse.png',
+  image: '/images/home/journey-nurse.webp',
   imageAlt: 'A nurse reviewing records on a tablet on the ward',
 };
 

@@ -30,10 +30,10 @@ export const metadata = pageMetadata({
 const container = "mx-auto w-full max-w-7xl px-5 sm:px-8";
 
 const PATH_BLURB: Record<string, { title: string; body: string; img: string }> = {
-  students:      { title: "Students",      body: "Build your foundation. Start your journey with confidence.", img: "/images/home/path-students.png" },
-  professionals: { title: "Professionals", body: "Grow your career. Keep learning. Stay ready.",               img: "/images/home/path-professionals.png" },
-  practice:      { title: "Practice",      body: "Run your practice. Delight your patients.",                  img: "/images/home/path-practice.png" },
-  hospitals:     { title: "Hospitals",     body: "Empower your teams. Improve care. Transform outcomes.",      img: "/images/home/path-hospitals.png" },
+  students:      { title: "Students",      body: "Build your foundation. Start your journey with confidence.", img: "/images/home/path-students.webp" },
+  professionals: { title: "Professionals", body: "Grow your career. Keep learning. Stay ready.",               img: "/images/home/path-professionals.webp" },
+  practice:      { title: "Practice",      body: "Run your practice. Delight your patients.",                  img: "/images/home/path-practice.webp" },
+  hospitals:     { title: "Hospitals",     body: "Empower your teams. Improve care. Transform outcomes.",      img: "/images/home/path-hospitals.webp" },
 };
 
 /* Floating intelligence cards over the hero. Drawn, not screenshotted: a screenshot of a seeded tenant

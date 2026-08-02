@@ -57,7 +57,7 @@ export const SOLUTIONS: Solution[] = [
       points: ["Track your learning & progress", "Build your professional portfolio", "Prepare for assessments", "Stand out to employers"],
       primary: { label: "Create Student Account", href: ACTION },
       secondary: { label: "Learn More", href: "#features" },
-      image: "/images/home/path-students.png",
+      image: "/images/home/path-students.webp",
       imageAlt: "A student nurse with a tablet",
       featuresTitle: "Everything you need to succeed",
       features: [
@@ -78,7 +78,7 @@ export const SOLUTIONS: Solution[] = [
       points: ["Maintain your competency records", "Continuing professional development", "Career opportunities", "Professional portfolio & passport"],
       primary: { label: "Create Professional Account", href: ACTION },
       secondary: { label: "Learn More", href: "#features" },
-      image: "/images/home/path-professionals.png",
+      image: "/images/home/path-professionals.webp",
       imageAlt: "A doctor outside a hospital",
       featuresTitle: "Your professional workspace",
       features: [
@@ -105,7 +105,7 @@ export const SOLUTIONS: Solution[] = [
       points: ["Workforce & capability management", "Quality, safety & accreditation", "Education & professional development", "Real-time insights and intelligence"],
       primary: { label: "Book a Demo", href: ACTION },
       secondary: { label: "Explore Solutions", href: "#features" },
-      image: "/images/home/team-hospital.png",
+      image: "/images/home/team-hospital.webp",
       imageAlt: "A hospital team outside the main entrance",
       featuresTitle: "Built for hospital excellence",
       features: [
@@ -127,7 +127,7 @@ export const SOLUTIONS: Solution[] = [
       points: ["Quality events & incident management", "Audits, checklists & assessments", "KPIs, dashboards & reports", "Accreditation readiness"],
       primary: { label: "Book a Demo", href: ACTION },
       secondary: { label: "Learn More", href: "#features" },
-      image: "/images/home/journey-nurse.png",
+      image: "/images/home/journey-nurse.webp",
       imageAlt: "A nurse recording observations on a tablet",
       featuresTitle: "Quality everywhere",
       features: [
