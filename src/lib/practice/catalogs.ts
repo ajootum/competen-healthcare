@@ -34,8 +34,48 @@ export const PROFESSIONS = [
   ["allied_health", "Other allied health"],
 ] as const;
 
+/**
+ * LOCATION types are NOT practice types, and the difference is enforced by the database.
+ * practice_location.type CHECKs ('hospital','clinic','outreach','teleconsultation','independent');
+ * practice_workspace.default_practice_type CHECKs a different set including 'hospital_based' and
+ * 'mixed'. Offering the wrong list in a picker produces a value the CHECK rejects -- and the onboarding
+ * route currently coerces an unrecognised type to 'clinic' rather than complaining, so the wrong list
+ * would silently file every hospital-based clinician under the wrong location type. Two lists, two names.
+ */
+export const LOCATION_TYPES = [
+  ["clinic", "Clinic"],
+  ["hospital", "Hospital"],
+  ["outreach", "Outreach or community"],
+  ["teleconsultation", "Teleconsultation"],
+  ["independent", "Independent rooms"],
+] as const;
+
+/** Date presentation. The label carries a rendered example, because "DD Mon YYYY" is a spec, not a date. */
+export const DATE_FORMATS = [
+  ["DD Mon YYYY", "DD Mon YYYY"],
+  ["DD/MM/YYYY", "DD/MM/YYYY"],
+  ["MM/DD/YYYY", "MM/DD/YYYY"],
+  ["YYYY-MM-DD", "YYYY-MM-DD (ISO)"],
+] as const;
+
+export const REGISTRATION_STATUSES = [
+  ["registered", "Registered"],
+  ["provisional", "Provisional"],
+  ["intern", "Intern"],
+  ["specialist", "Specialist"],
+  ["retired", "Retired or non-practising"],
+] as const;
+
+export const ENCOUNTER_TEMPLATES = [
+  ["general", "General consultation"],
+  ["followup", "Follow-up"],
+  ["procedure", "Procedure"],
+  ["teleconsultation", "Teleconsultation"],
+] as const;
+
 export const isPracticeType = (v: string) => PRACTICE_TYPES.some(([k]) => k === v);
 export const isProfession = (v: string) => PROFESSIONS.some(([k]) => k === v);
+export const isLocationType = (v: string) => LOCATION_TYPES.some(([k]) => k === v);
 
 /**
  * The legal versions a signup records as accepted (PROV-001 s11: "Accepted current legal version",
