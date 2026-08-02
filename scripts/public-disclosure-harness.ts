@@ -137,6 +137,18 @@ async function main() {
     // OPEN GRAPH MUST BE THE PAGE'S OWN. Next merges `openGraph` as a block: a page that sets only title
     // and description keeps the ROOT og:title, so it reads correctly in a search result and unfurls in a
     // chat app as the generic site card. Comparing og:title against <title> catches exactly that.
+    // NO NUMERIC ADOPTION CLAIMS. The homepage carried "100+ Healthcare Organisations" and "10,000+
+    // Healthcare Professionals" -- figures no query produced and nothing labelled as measured, on a
+    // platform that has not launched. They were removed at the owner's instruction.
+    //
+    // This is asserted rather than trusted because it is the single most tempting thing to put back. The
+    // moment there are three real customers, "10,000+ professionals" reads like rounding rather than
+    // invention, and it goes in during a copy edit that nobody reviews as a factual claim.
+    const adoption = [...text.matchAll(
+      /(\d[\d,.]*\s*(?:\+|k\b|m\b|million|thousand))\s*(?:happy\s+|active\s+|healthcare\s+|verified\s+)*(organisations?|organizations?|professionals?|practices?|clinicians?|hospitals?|patients?|users?|clinics?)/gi,
+    )].map(m => m[0].trim());
+    ok(`2g. ${path} makes no numeric adoption claim`, adoption.length === 0, adoption.join(", "));
+
     const ogTitle = /<meta[^>]+property=["']og:title["'][^>]*content=["']([^"']*)["']/i.exec(html)?.[1];
     const docTitle = /<title[^>]*>([\s\S]*?)<\/title>/i.exec(html)?.[1] ?? "";
     const stem = docTitle.replace(/\s*·\s*Competen\s*$/, "").trim();

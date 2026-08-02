@@ -48,15 +48,23 @@ export const HERO = {
 };
 
 // WEB-STRAT-001 'Built for healthcare. Designed for Africa.' band.
-// The two counts are CLAIMS, not aggregates: no query produces them and none is labelled as measured.
-// If they are ever wrong, that is a copy edit here, not a data bug somewhere else.
+//
+// THE ADOPTION CLAIMS ARE GONE, at the owner's instruction and because they were not true. "100+
+// Healthcare Organisations" and "10,000+ Healthcare Professionals" were CLAIMS, not aggregates -- no query
+// produced them and nothing labelled them as measured. The platform is a new build, so the honest count is
+// not a smaller number, it is no number.
+//
+// "Trusted by forward-thinking organisations across the continent" went with them. It is the same claim in
+// words rather than digits, and leaving it while deleting the figures would only have made the assertion
+// harder to check. What remains states what the platform is FOR, which is true on day one.
+//
+// scripts/public-disclosure-harness.ts now asserts that no public page carries a numeric adoption claim,
+// so this cannot quietly return in a copy edit once there are a few real customers to round up from.
 export const AFRICA_BAND = {
   title: 'Built for healthcare. Designed for Africa.',
-  body: 'Trusted by forward-thinking organisations across the continent.',
+  body: 'One platform for the whole health workforce -- from the classroom to the ward round.',
   stats: [
     { value: 'One Platform', label: 'Many Possibilities' },
-    { value: '100+', label: 'Healthcare Organisations' },
-    { value: '10,000+', label: 'Healthcare Professionals' },
     { value: 'Better care', label: 'Better outcomes. Better together.' },
   ],
 };

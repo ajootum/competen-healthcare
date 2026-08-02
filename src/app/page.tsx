@@ -146,7 +146,9 @@ export default function Home() {
                 <h2 className="text-[1.35rem] font-bold text-white leading-snug text-balance">{AFRICA_BAND.title}</h2>
                 <p className="mt-2 text-[12.5px] leading-relaxed text-white/55">{AFRICA_BAND.body}</p>
               </div>
-              <dl className="lg:col-span-3 grid grid-cols-2 sm:grid-cols-4 gap-5">
+              {/* Columns follow the number of statements rather than being fixed at four, so removing an
+                  entry leaves a balanced band instead of two items adrift in a four-column grid. */}
+              <dl className="lg:col-span-3 grid grid-cols-2 gap-5">
                 {AFRICA_BAND.stats.map(s => (
                   <div key={s.label}>
                     <dt className="text-[17px] font-bold text-white leading-tight">{s.value}</dt>

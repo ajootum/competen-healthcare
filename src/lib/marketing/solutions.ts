@@ -48,7 +48,10 @@ export const SOLUTIONS: Solution[] = [
   {
     slug: "students", nav: "Students", eyebrow: "Students",
     body: "Competen helps you learn, practise and prove your readiness for the real world.",
-    accent: "#0D9488", inPrimaryNav: true,
+    // teal-700, not teal-600. The 600 shade measures 3.74:1 as the 13px "Explore" link on the homepage
+    // cards -- the same failure already fixed on the Practice pages, missed here because this catalogue
+    // was not re-measured when they were.
+    accent: "#0F766E", inPrimaryNav: true,
     template: {
       headline: ["Build your future", "in healthcare."],
       points: ["Track your learning & progress", "Build your professional portfolio", "Prepare for assessments", "Stand out to employers"],
@@ -118,7 +121,7 @@ export const SOLUTIONS: Solution[] = [
     // Secondary page: reachable and indexed, deliberately NOT in the Solutions menu.
     slug: "quality", nav: "Quality", eyebrow: "Quality",
     body: "Drive continuous improvement, ensure safety and achieve accreditation with confidence.",
-    accent: "#0D9488", inPrimaryNav: false,
+    accent: "#0F766E", inPrimaryNav: false,
     template: {
       headline: ["Quality care.", "Every day."],
       points: ["Quality events & incident management", "Audits, checklists & assessments", "KPIs, dashboards & reports", "Accreditation readiness"],
