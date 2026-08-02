@@ -347,7 +347,10 @@ export const PRACTICE_AREAS: PracticeArea[] = [
       { title: "Found in seconds", body: "Search by name, phone, national ID, hospital number, QR or barcode -- the walk-in at the door is retrievable before they have finished explaining." },
       { title: "Patients maintain themselves", body: "Contact details, emergency contact, allergies and current medication kept current by the person who knows them. You verify rather than retype." },
       { title: "Reminders that arrive", body: "In-app, SMS and email on the intervals you set, with delivery status, retry on failure and a reason when something does not land." },
-      { title: "Preferences respected", body: "Channel choice, quiet hours, opt-outs and frequency limits are honoured -- with an override reserved for genuinely critical alerts." },
+      // NOT "critical alerts override preferences". PEN-010 says they "bypass non-essential batching where
+      // configured" -- which is a delivery-timing exception, not permission to message someone who opted
+      // out. The two are one word apart on a page and a long way apart in a consent conversation.
+      { title: "Preferences respected", body: "Channel choice, quiet hours, opt-outs and frequency limits are honoured. Genuinely urgent alerts skip the batching queue rather than the patient's consent." },
     ],
     screens: [
       { src: "/images/practice/portal.webp", alt: "The patient self-service portal showing profile, upcoming appointment, health summary, timeline and care team", caption: "The patient's own portal -- appointments, documents, health summary and care team." },
@@ -375,7 +378,10 @@ export const PRACTICE_AREAS: PracticeArea[] = [
       { title: "Continuity across sites", body: "Encounters from every facility you work in appear in one view, each carrying where it happened and under whose identifier." },
       { title: "Follow-up by risk, not by rota", body: "Reminder cadence follows the patient's risk. Overdue reviews are detected, prioritised and escalated on rules you set." },
       { title: "Every kind of review", body: "Scheduled, walk-in, post-procedure, tele-follow-up, chronic monitoring, post-discharge and preventive recall -- each linked to the encounter that created it." },
-      { title: "Documents where the care is", body: "Letters, reports, scans, clinical photographs and voice notes attached to the encounter, versioned, indexed and searchable by their contents." },
+      // "Indexed and searchable" rather than "searchable by their contents". PEN-011 promises AI-assisted
+      // indexing and searchable metadata; full-text extraction from inside a scanned letter appears on the
+      // diagram but not in the specification, and it is a materially bigger promise than tagging is.
+      { title: "Documents where the care is", body: "Letters, reports, scans, clinical photographs and voice notes attached to the encounter, version-controlled, tagged and indexed so they are findable later." },
       { title: "Immutable once signed", body: "Signed timeline events cannot be quietly altered. Corrections are versioned and visible, which is what makes the record worth anything later." },
     ],
     screens: [
