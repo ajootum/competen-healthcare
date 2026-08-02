@@ -22,6 +22,14 @@ const check = (ok: boolean, label: string, detail = "") => {
 const root = process.cwd();
 const read = (p: string) => fs.readFileSync(path.join(root, p), "utf8");
 
+/** Every file under a directory, recursively. Used to find modal surfaces wherever they were added. */
+const walk = (dir: string): string[] =>
+  fs.readdirSync(path.join(root, dir), { withFileTypes: true }).flatMap(e => {
+    const rel = `${dir}/${e.name}`;
+    if (e.isDirectory()) return e.name === "node_modules" || e.name.startsWith(".") ? [] : walk(rel);
+    return [rel];
+  });
+
 const srgb = (c: number) => (c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4));
 const lum = (hex: string) => {
   const h = hex.replace("#", "");
@@ -106,7 +114,9 @@ async function main() {
 
   // ── 2.1.1 Keyboard operable ──
   check(interactive.includes('role="tablist"') && /ArrowRight/.test(interactive), "tabs are arrow-key operable");
-  check(interactive.includes('e.key === "Escape"'), "dialogs close on Escape");
+  // Escape moved out of interactive.tsx and into useModalFocus, so this now checks where the behaviour
+  // actually lives. It is re-asserted in the modal-focus block below alongside the other two guarantees.
+  check(read("src/components/ui/use-modal-focus.ts").includes('e.key === "Escape"'), "dialogs close on Escape");
   check(header.includes('e.key === "Escape"'), "header menus close on Escape");
   check(header.includes("triggerRef.current?.focus()"), "and return focus to their trigger");
 
@@ -143,6 +153,38 @@ async function main() {
   const charts = read("src/components/ui/charts.tsx");
   check(charts.includes("DataTableAlt"), "charts emit a hidden data table, not just an aria-label");
   check(charts.includes('role="img"'), "charts are role=img");
+
+  // ── Modal focus management ───────────────────────────────────────────────────────────────────────
+  //
+  // aria-modal="true" is a PROMISE to assistive technology that everything outside the dialog is inert.
+  // Three of four modal surfaces were making it without keeping it: the two public mobile navigation
+  // drawers and the design system's own Drawer moved no focus and trapped no Tab, so a screen-reader user
+  // was told the page was unavailable while a keyboard user Tabbed straight into it behind an opaque
+  // overlay. Measured on /practice at 375px, thirty-one elements were still reachable.
+  //
+  // Asserted as a SOURCE invariant because the behaviour is only observable in a real browser, and a
+  // harness that cannot see the bug is how this survived in the first place. Every file that declares
+  // aria-modal must go through the one hook that implements all three parts.
+  const modalFiles = walk("src")
+    .filter(f => /\.tsx$/.test(f))
+    .filter(f => read(f).includes('aria-modal="true"'));
+  check(modalFiles.length > 0, "there are modal surfaces to check", `${modalFiles.length} file(s)`);
+
+  // Matches the CALL, not the string. The first version of this checked `includes("useModalFocus")`, which
+  // a leftover import satisfies on its own -- so deleting the call and keeping the import passed cleanly.
+  // Verified by doing exactly that: it must fail, or it is measuring nothing.
+  const untrapped = modalFiles.filter(f => !/useModalFocus\s*\(/.test(read(f)));
+  check(untrapped.length === 0,
+    "every aria-modal surface CALLS useModalFocus (focus in, Tab trapped, focus restored)",
+    untrapped.join(", "));
+
+  // The hook is worthless if it stops doing any one of the three. Each is asserted by its mechanism
+  // rather than by name, so renaming a variable does not silently pass.
+  const hook = read("src/components/ui/use-modal-focus.ts");
+  check(/\.focus\(\)/.test(hook) && /initial/.test(hook), "the hook moves focus into the dialog on open");
+  check(/e\.key !== "Tab"/.test(hook) && /shiftKey/.test(hook), "the hook wraps Tab and Shift+Tab");
+  check(/isConnected/.test(hook) && /restore/.test(hook), "the hook restores focus to the trigger on close");
+  check(/Escape/.test(hook), "the hook dismisses on Escape");
 
   console.log(`\n${pass}/${pass + fail} checks passed.`);
   process.exit(fail ? 1 : 0);

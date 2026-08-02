@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { useModalFocus } from "@/components/ui/use-modal-focus";
 import { PRACTICE_ACCENT } from "@/lib/marketing/practice-content";
 import { PRACTICE_NAV, JOURNEYS } from "@/lib/marketing/practice-site";
 
@@ -19,11 +20,12 @@ import { PRACTICE_NAV, JOURNEYS } from "@/lib/marketing/practice-site";
 export default function PracticeHeader() {
   const [open, setOpen] = useState(false);
 
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setOpen(false); };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, []);
+  // The drawer declares role="dialog" aria-modal="true", which promises assistive technology that the rest
+  // of the page is inert. useModalFocus keeps that promise: focus moves in, Tab wraps inside, and focus
+  // returns to the trigger on close. It owns Escape while the drawer is open.
+  const drawer = useRef<HTMLDivElement>(null);
+  const closeDrawer = useCallback(() => setOpen(false), []);
+  useModalFocus(open, drawer, closeDrawer);
 
   useEffect(() => {
     document.body.style.overflow = open ? "hidden" : "";
@@ -71,7 +73,7 @@ export default function PracticeHeader() {
       </div>
 
       {open && (
-        <div className="lg:hidden fixed inset-0 z-50 bg-[#0B1020] text-white flex flex-col" role="dialog" aria-modal="true" aria-label="Menu">
+        <div ref={drawer} tabIndex={-1} className="lg:hidden fixed inset-0 z-50 bg-[#0B1020] text-white flex flex-col outline-none" role="dialog" aria-modal="true" aria-label="Menu">
           <div className="flex items-center justify-between px-5 h-[70px] border-b border-white/10">
             <span className="text-lg font-bold">competen <span className="text-[11px] tracking-widest uppercase text-white/60">Practice</span></span>
             <button type="button" onClick={() => setOpen(false)} aria-label="Close menu"

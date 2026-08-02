@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { useModalFocus } from "@/components/ui/use-modal-focus";
 import { ACCENT, BRAND } from "@/lib/marketing/home-content";
 import { PRIMARY_SOLUTIONS } from "@/lib/marketing/solutions";
 
@@ -17,10 +18,17 @@ export default function SiteHeader({ dark = false }: { dark?: boolean }) {
   const [open, setOpen] = useState(false);
   const [solutionsOpen, setSolutionsOpen] = useState(false);
 
-  // Escape closes the drawer. Without it the only way out on a phone is the X, and a menu you cannot
-  // dismiss with the key everyone tries is a menu that feels stuck.
+  // The drawer declares role="dialog" aria-modal="true", which promises assistive technology that the rest
+  // of the page is inert. useModalFocus is what keeps that promise: focus moves in, Tab wraps inside, and
+  // focus returns to the trigger on close. It owns Escape too, so there is one dismissal path rather than
+  // two that can disagree.
+  const drawer = useRef<HTMLDivElement>(null);
+  const closeDrawer = useCallback(() => setOpen(false), []);
+  useModalFocus(open, drawer, closeDrawer);
+
+  // Escape still collapses the desktop Solutions menu, which is not a dialog and not covered by the hook.
   useEffect(() => {
-    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") { setOpen(false); setSolutionsOpen(false); } };
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setSolutionsOpen(false); };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, []);
@@ -88,7 +96,7 @@ export default function SiteHeader({ dark = false }: { dark?: boolean }) {
 
       {/* Mobile drawer */}
       {open && (
-        <div className="lg:hidden fixed inset-0 z-50 bg-[#0B1020] text-white flex flex-col" role="dialog" aria-modal="true" aria-label="Menu">
+        <div ref={drawer} tabIndex={-1} className="lg:hidden fixed inset-0 z-50 bg-[#0B1020] text-white flex flex-col outline-none" role="dialog" aria-modal="true" aria-label="Menu">
           <div className="flex items-center justify-between px-5 h-[70px] border-b border-white/10">
             <span className="text-lg font-bold">{BRAND.name}</span>
             <button type="button" onClick={() => setOpen(false)} aria-label="Close menu"

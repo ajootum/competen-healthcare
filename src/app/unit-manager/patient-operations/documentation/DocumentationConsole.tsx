@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useRef, useState } from "react";
+import { useModalFocus } from "@/components/ui/use-modal-focus";
 import { useRouter } from "next/navigation";
 import { DOC_TEMPLATES, docTemplateByKey } from "@/lib/operations/doc-templates";
 import { cardClass } from "@/components/ui/primitives";
@@ -21,6 +22,12 @@ export default function DocumentationConsole({ patients, documents }: { patients
   const [busy, setBusy] = useState(false);
   const [viewed, setViewed] = useState<any>(null);
   const [msg, setMsg] = useState<{ kind: "ok" | "err"; text: string } | null>(null);
+
+  // aria-modal="true" on the panel below promises assistive technology that the rest of the page is inert.
+  // Without this it was not: focus stayed behind the overlay and Tab walked straight out into the console.
+  const panel = useRef<HTMLDivElement>(null);
+  const closePanel = useCallback(() => setViewed(null), []);
+  useModalFocus(!!viewed, panel, closePanel);
   const toast = (kind: "ok" | "err", text: string) => { setMsg({ kind, text }); setTimeout(() => setMsg(null), 5000); };
 
   async function generate() {
@@ -78,7 +85,7 @@ export default function DocumentationConsole({ patients, documents }: { patients
 
       {/* Document viewer */}
       {viewed && (
-        <div className="fixed inset-0 z-40 flex justify-end" role="dialog" aria-modal="true">
+        <div ref={panel} tabIndex={-1} className="fixed inset-0 z-40 flex justify-end outline-none" role="dialog" aria-modal="true">
           <div className="absolute inset-0 bg-black/30" onClick={() => setViewed(null)} />
           <div className="relative w-full max-w-xl bg-white h-full shadow-xl overflow-y-auto">
             <div className="sticky top-0 bg-white border-b border-gray-100 px-5 py-3.5 flex items-center justify-between z-10">

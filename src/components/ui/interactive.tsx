@@ -1,17 +1,19 @@
 "use client";
 
-import { useState, useRef, useEffect, useCallback, createContext, useContext } from "react";
+import { useState, useRef, useCallback, createContext, useContext } from "react";
+import { useModalFocus } from "@/components/ui/use-modal-focus";
 import { priority as PRIORITY, type PriorityKey } from "@/lib/design/tokens";
 
 // Interactive components (PUI-004 s3/s7, PUI-005 s3/s4) — the ones that genuinely need client state.
 // Everything static lives in ./primitives.tsx so pages can stay server components.
 //
 // Accessibility is structural here, not decorative:
-//   - the dialog traps focus, restores it on close, and is labelled by its own heading
+//   - every modal surface goes through useModalFocus: focus moves in, Tab wraps inside, focus returns to
+//     the trigger on close. Without all three, aria-modal="true" is a promise to assistive technology that
+//     the page behind is inert while a keyboard user can still Tab into it
 //   - toasts announce through a polite live region; CRITICAL ones use assertive and do NOT auto-dismiss,
 //     because PUI-006 makes critical persistent until acknowledged
 //   - tabs implement the WAI-ARIA pattern including arrow-key roving focus
-//   - the drawer is a dialog too, closes on Escape, and returns focus
 
 // ── Toast (PUI-006 s3 "Toast Notification") ─────────────────────────────────────────────────────────────
 export type Toast = { id: number; message: string; level?: PriorityKey; action?: { label: string; onClick: () => void } };
@@ -91,28 +93,10 @@ export function ConfirmDialog({ open, title, body, confirmLabel = "Confirm", can
   onConfirm: () => void; onCancel: () => void;
 }) {
   const panel = useRef<HTMLDivElement>(null);
-  const restore = useRef<HTMLElement | null>(null);
 
-  useEffect(() => {
-    if (!open) return;
-    restore.current = document.activeElement as HTMLElement;
-    // Focus the CANCEL control first: for a destructive confirmation, the safe option should be the one a
-    // stray Enter hits.
-    const focusables = () => [...(panel.current?.querySelectorAll<HTMLElement>("button, [href], input, select, textarea, [tabindex]:not([tabindex='-1'])") ?? [])];
-    focusables()[0]?.focus();
-
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") { e.preventDefault(); onCancel(); return; }
-      if (e.key !== "Tab") return;
-      const f = focusables();
-      if (!f.length) return;
-      const first = f[0], last = f[f.length - 1];
-      if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
-      else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
-    };
-    document.addEventListener("keydown", onKey);
-    return () => { document.removeEventListener("keydown", onKey); restore.current?.focus(); };
-  }, [open, onCancel]);
+  // Focus lands on the CANCEL control, which is first in the DOM: for a destructive confirmation the safe
+  // option should be the one a stray Enter hits. That is why Cancel is ordered before Confirm below.
+  useModalFocus(open, panel, onCancel);
 
   if (!open) return null;
   return (
@@ -182,17 +166,12 @@ export function TabPanel({ tabKey, active, children }: { tabKey: string; active:
 export function Drawer({ open, title, onClose, children, side = "right" }: {
   open: boolean; title: string; onClose: () => void; children: React.ReactNode; side?: "right" | "left";
 }) {
-  const restore = useRef<HTMLElement | null>(null);
   const panel = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
-    if (!open) return;
-    restore.current = document.activeElement as HTMLElement;
-    panel.current?.focus();
-    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
-    document.addEventListener("keydown", onKey);
-    return () => { document.removeEventListener("keydown", onKey); restore.current?.focus(); };
-  }, [open, onClose]);
+  // This used to move focus in and restore it on close, but never trapped Tab -- so with the drawer open,
+  // Tab walked straight out into the page behind it, which aria-modal="true" has just told assistive
+  // technology is inert. useModalFocus does all three parts; ConfirmDialog above already did.
+  useModalFocus(open, panel, onClose);
 
   if (!open) return null;
   return (
