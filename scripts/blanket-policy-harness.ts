@@ -27,6 +27,7 @@
  */
 import { loadEnvConfig } from "@next/env";
 import { createClient } from "@supabase/supabase-js";
+import { pagedRpc, capWarning } from "./_registry";
 
 loadEnvConfig(process.cwd());
 
@@ -49,10 +50,14 @@ const BLANKET = /^\(?auth\.role\(\) = 'authenticated'::text\)?$/;
 async function main() {
   console.log("\nBlanket-policy harness -- tables any logged-in user can read in full\n");
 
-  const { data: reg, error } = await admin.rpc("plat_rls_registry");
-  if (error) { console.error(`  plat_rls_registry unavailable: ${error.message} (migration 172 applied?)`); process.exit(1); }
+  // PAGED: a single .rpc() caps at 1000 rows and truncates silently. Under the cap today, but a half-read
+  // registry would hide blanket policies rather than invent them -- the direction that reads as safe.
+  type RegRow = { tbl: string; policy_name: string | null; cmd: string; qual: string | null };
+  const reg = await pagedRpc<RegRow>(admin, "plat_rls_registry", ["tbl", "policy_name"]);
+  if (reg.error) { console.error(`  plat_rls_registry unavailable: ${reg.error} (migration 172 applied?)`); process.exit(1); }
+  ok("the policy registry was read in full", !reg.suspicious, capWarning(reg.rows.length));
 
-  const rows = (reg ?? []) as { tbl: string; policy_name: string | null; cmd: string; qual: string | null }[];
+  const rows = reg.rows;
   const blanket = [...new Set(
     rows.filter(r => r.policy_name && r.cmd === "SELECT" && BLANKET.test(String(r.qual ?? "").trim())).map(r => r.tbl),
   )].sort();

@@ -22,6 +22,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { loadEnvConfig } from "@next/env";
 import { createClient } from "@supabase/supabase-js";
+import { pagedRpc, capWarning } from "./_registry";
 loadEnvConfig(process.cwd());
 
 const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
@@ -37,11 +38,16 @@ async function main() {
   const verbose = process.argv.includes("--verbose");
   console.log(`\nAnon exposure harness\n`);
 
-  const reg = await admin.rpc("plat_rls_registry");
-  if (reg.error) { console.error(`  plat_rls_registry() unavailable (${reg.error.message}). Apply migration 172.\n`); process.exit(1); }
-  const tables = [...new Set(((reg.data ?? []) as any[]).map(r => r.tbl))].sort();
+  // PAGED. A single .rpc() returns at most 1000 rows and says nothing when it truncates. This registry
+  // sits at 494 and is one large migration from the cap -- at which point this harness would quietly stop
+  // probing the tables past it and still print a clean bill of health for the ones it reached. A security
+  // check that silently narrows its own scope is worse than none, so the boundary case fails loudly.
+  const reg = await pagedRpc<{ tbl: string; rls_enabled: boolean }>(admin, "plat_rls_registry", ["tbl", "policy_name"]);
+  if (reg.error) { console.error(`  plat_rls_registry() unavailable (${reg.error}). Apply migration 172.\n`); process.exit(1); }
+  if (reg.suspicious) { console.error(`  ABORTING -- ${capWarning(reg.rows.length)}\n`); process.exit(1); }
+  const tables = [...new Set(reg.rows.map(r => r.tbl))].sort();
   const rlsOn = new Map<string, boolean>();
-  for (const r of (reg.data ?? []) as any[]) rlsOn.set(r.tbl, r.rls_enabled);
+  for (const r of reg.rows) rlsOn.set(r.tbl, r.rls_enabled);
 
   console.log(`  ${tables.length} table(s) in the public schema, probed with the PUBLIC anon key\n`);
 

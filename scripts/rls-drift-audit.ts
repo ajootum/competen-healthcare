@@ -35,6 +35,7 @@ import { loadEnvConfig } from "@next/env";
 import { createClient } from "@supabase/supabase-js";
 import { readFileSync, readdirSync, existsSync } from "node:fs";
 import { join, relative } from "node:path";
+import { pagedRpc, capWarning } from "./_registry";
 loadEnvConfig(process.cwd());
 
 const ROOT = process.cwd();
@@ -109,16 +110,20 @@ async function main() {
   if (!url || !key) { console.error("Missing Supabase env."); process.exit(1); }
   const admin = createClient(url, key, { auth: { persistSession: false } });
 
-  const reg = await admin.rpc("plat_rls_registry");
+  // PAGED: a single .rpc() caps at 1000 rows and truncates silently. Under the cap today, but a
+  // half-read registry would report every policy past it as MISSING -- a whole page of invented drift.
+  type RegRow = { tbl: string; rls_enabled: boolean; policy_name: string | null; cmd: string; roles: string; qual: string; with_check: string };
+  const reg = await pagedRpc<RegRow>(admin, "plat_rls_registry", ["tbl", "policy_name"]);
   console.log(`\nRLS drift audit\n`);
   if (reg.error) {
-    console.log(`  plat_rls_registry() is not deployed (${reg.error.message}).`);
+    console.log(`  plat_rls_registry() is not deployed (${reg.error}).`);
     console.log(`  Apply supabase/migrations/172-rls-registry.sql. There is no fallback: PostgREST cannot`);
     console.log(`  report pg_policy, so without it nothing here can be checked at all.\n`);
     process.exit(1);
   }
+  if (reg.suspicious) { console.log(`  ABORTING -- ${capWarning(reg.rows.length)}\n`); process.exit(1); }
 
-  const rows = (reg.data ?? []) as { tbl: string; rls_enabled: boolean; policy_name: string | null; cmd: string; roles: string; qual: string; with_check: string }[];
+  const rows = reg.rows;
   const live = new Map<string, { rls: boolean; policies: Map<string, any> }>();
   for (const r of rows) {
     if (!live.has(r.tbl)) live.set(r.tbl, { rls: r.rls_enabled, policies: new Map() });
