@@ -56,7 +56,13 @@ export default function SignInForm() {
         className="mt-5 w-full rounded-xl bg-[#2563EB] py-2.5 text-sm font-semibold text-white hover:bg-[#1D4ED8] disabled:opacity-50">
         {busy ? "Signing in…" : "Sign in"}
       </button>
+      {/* IAM-001 s14 lists recovery among the routes that must be deployed before cutover. It is the
+          PLATFORM's recovery, not a Practice-specific one -- same identity, same reset -- which is why
+          this links out rather than duplicating a flow that would then drift from the original. */}
       <p className="mt-4 text-center text-[12px] text-gray-500">
+        <Link href="/forgot-password" className="font-semibold text-[#1D4ED8] hover:underline">Forgot your password?</Link>
+      </p>
+      <p className="mt-1.5 text-center text-[12px] text-gray-500">
         New here? <Link href="/practice/sign-up" className="font-semibold text-[#1D4ED8] hover:underline">Create your Practice</Link>
       </p>
     </form>

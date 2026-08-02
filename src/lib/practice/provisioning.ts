@@ -167,16 +167,36 @@ export async function runProvisioning(admin: any, req: {
   await markStep(admin, req.id, "create_owner_membership", "succeeded");
 
   // 3. assign_capabilities from the catalog, per membership role.
+  //
+  // CHECK-THEN-INSERT, NOT UPSERT. ux_practice_capability is a PARTIAL unique index (where effective_to
+  // is null) and PostgREST cannot target a partial index with onConflict -- it fails with "there is no
+  // unique or exclusion constraint matching the ON CONFLICT specification". This step used an upsert and
+  // discarded the error, so it wrote NOTHING and still marked itself succeeded: every workspace
+  // provisioned after migration 191 had memberships with zero capabilities, which renders an empty
+  // sidebar and 403s every API call. Migration 192's backfill hid it, because that insert..select
+  // granted capabilities to memberships that already existed at migration time.
+  //
+  // The same trap was found and fixed in the Phase-1 arrival write. Two occurrences is a pattern:
+  // an upsert whose error is unchecked cannot be distinguished from one that did nothing.
   await markStep(admin, req.id, "assign_capabilities", "running");
+  let granted = 0;
   for (const m of memberships) {
     const { data: caps } = await admin.from("practice_role_capabilities").select("capability_code").eq("role_code", m.role);
     for (const c of (caps ?? []) as { capability_code: string }[]) {
-      await admin.from("practice_role_assignment").upsert(
-        { membership_id: m.id, capability_code: c.capability_code, source: "role_default" },
-        { onConflict: "membership_id,capability_code", ignoreDuplicates: true },
-      );
+      const { data: held } = await admin.from("practice_role_assignment")
+        .select("id").eq("membership_id", m.id).eq("capability_code", c.capability_code)
+        .is("effective_to", null).maybeSingle();
+      if (held) { granted++; continue; }
+      const { error } = await admin.from("practice_role_assignment")
+        .insert({ membership_id: m.id, capability_code: c.capability_code, source: "role_default" });
+      // A duplicate here means a concurrent run won the partial index; that is success, not failure.
+      if (error && !/duplicate|unique/i.test(error.message)) return fail("assign_capabilities", "CAPABILITY_GRANT_FAILED");
+      granted++;
     }
   }
+  // Prove it happened. A membership with no capabilities is a workspace nobody can open, and the whole
+  // point of the step is that the owner can use what was just built for them.
+  if (granted === 0) return fail("assign_capabilities", "NO_CAPABILITIES_GRANTED");
   await markStep(admin, req.id, "assign_capabilities", "succeeded");
 
   // 4. create_configuration (one effective per workspace -- the unique index arbitrates races).

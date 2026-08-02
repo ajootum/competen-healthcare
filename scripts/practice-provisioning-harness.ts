@@ -66,12 +66,36 @@ async function counts(workspaceId: string) {
     const { count } = await admin.from(t).select("*", { count: "exact", head: true }).eq(col, workspaceId);
     return count ?? 0;
   };
+  // practice_role_assignment hangs off membership_id, NOT workspace_id -- which is exactly why it was
+  // absent from this helper and why the assign_capabilities step could write nothing for months without
+  // a red assertion. It is counted through its memberships now.
+  const { data: ms } = await admin.from("practice_membership").select("id, role_code").eq("workspace_id", workspaceId);
+  const membershipIds = ((ms ?? []) as { id: string }[]).map(m => m.id);
+  const { count: capCount } = membershipIds.length
+    ? await admin.from("practice_role_assignment").select("*", { count: "exact", head: true })
+      .in("membership_id", membershipIds).is("effective_to", null)
+    : { count: 0 };
+
   return {
     memberships: await get("practice_membership", "workspace_id"),
     configurations: await get("practice_configuration", "workspace_id"),
     entitlements: await get("practice_entitlement", "workspace_id"),
     onboardings: await get("practice_onboarding", "workspace_id"),
+    capabilities: capCount ?? 0,
+    membershipRoles: ((ms ?? []) as { id: string; role_code: string }[]),
   };
+}
+
+/** What the catalog says a role should hold -- the yardstick the granted set is measured against. */
+async function catalogFor(roleCode: string): Promise<string[]> {
+  const { data } = await admin.from("practice_role_capabilities").select("capability_code").eq("role_code", roleCode);
+  return ((data ?? []) as { capability_code: string }[]).map(r => r.capability_code).sort();
+}
+
+async function heldBy(membershipId: string): Promise<string[]> {
+  const { data } = await admin.from("practice_role_assignment")
+    .select("capability_code").eq("membership_id", membershipId).is("effective_to", null);
+  return ((data ?? []) as { capability_code: string }[]).map(r => r.capability_code).sort();
 }
 
 async function cleanup() {
@@ -103,6 +127,30 @@ async function main() {
   ok("exactly 1 entitlement", c1.entitlements === 1, `${c1.entitlements}`);
   ok("exactly 1 onboarding instance", c1.onboardings === 1, `${c1.onboardings}`);
 
+  // ── 1b. THE CAPABILITIES ACTUALLY LANDED ───────────────────────────────────
+  // A workspace whose memberships hold nothing renders an empty sidebar and 403s every API call, so
+  // "provisioned" without this is a lie in the shape of a success. The assign_capabilities step shipped
+  // broken for exactly this reason: it used an upsert against a PARTIAL unique index, which PostgREST
+  // refuses, and discarded the error. Nothing above could see it.
+  ok("capabilities were granted to the new memberships", c1.capabilities > 0, `${c1.capabilities}`);
+
+  for (const m of c1.membershipRoles) {
+    const expected = await catalogFor(m.role_code);
+    const held = await heldBy(m.id);
+    const missing = expected.filter(c => !held.includes(c));
+    ok(`the ${m.role_code} membership holds every capability its role defines`,
+      expected.length > 0 && missing.length === 0,
+      missing.length ? `missing: ${missing.join(", ")}` : "the catalog is empty for this role");
+  }
+
+  // The shipped phases must be reachable by the owner, not merely "some capabilities present".
+  const practitioner = c1.membershipRoles.find(m => m.role_code === "practitioner");
+  const practitionerCaps = practitioner ? await heldBy(practitioner.id) : [];
+  for (const cap of ["practice.calendar.view", "appointment.manage", "patient.list", "encounter.create", "encounter.sign"]) {
+    ok(`the owner can use phase-shipped capability ${cap}`, practitionerCaps.includes(cap),
+      `held: ${practitionerCaps.length} capability(ies)`);
+  }
+
   const { data: wsRow } = await admin.from("practice_workspace").select("status").eq("id", wsId).single();
   ok("workspace is in ONBOARDING after provisioning", wsRow?.status === "ONBOARDING", wsRow?.status);
 
@@ -115,7 +163,9 @@ async function main() {
   const c2 = await counts(wsId);
   ok("re-running provisioning duplicates nothing",
     run2.ok && c2.memberships === 2 && c2.configurations === 1 && c2.entitlements === 1 && c2.onboardings === 1,
-    JSON.stringify(c2));
+    JSON.stringify({ ...c2, membershipRoles: undefined }));
+  ok("re-running provisioning does not duplicate capabilities either",
+    c2.capabilities === c1.capabilities, `${c1.capabilities} -> ${c2.capabilities}`);
 
   // ── 3. The idempotency key is unique at the database ───────────────────────
   const dup = await admin.from("provisioning_request").insert({

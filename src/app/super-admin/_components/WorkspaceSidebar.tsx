@@ -39,6 +39,7 @@ const GENERAL_NAV = [
     { label: "Notifications", href: "/super-admin/platform-ops/notifications", icon: "📨" },
     { label: "Approvals", href: "/super-admin/platform-ops/approvals", icon: "🔀" },
     { label: "Control Plane", href: "/super-admin/platform-ops/control-plane", icon: "🧭" },
+    { label: "Competen Practice", href: "/super-admin/platform-ops/practice", icon: "🩺" },
     { label: "Platform Workspace", href: "/platform-admin", icon: "🛰️" },
   ]},
   { group: "STRATEGY & PRIORITIES", items: [

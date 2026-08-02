@@ -115,6 +115,7 @@ export default async function PlatformOperations() {
     { n: 11, label: "Module & Widget Catalogue", desc: "WCE-005 — detailed catalogue of every configurable module & widget with configuration contracts and completeness scoring", icon: "🧱", href: "/super-admin/platform-ops/catalogue", live: true },
     { n: 12, label: "No-Code Configuration Platform", desc: "NCP-000 — the metadata-driven no-code platform foundation & architecture: the umbrella that ties WCE-001..005 together, with live component + roadmap status", icon: "🧩", href: "/super-admin/platform-ops/no-code-platform", live: true },
     { n: 13, label: "Product Portfolio & Suites", desc: "PCS-PORT-001 — package products into commercial suites, map them to workspaces, and license per tenant. Licensing composes into runtime entitlement.", icon: "📦", href: "/super-admin/platform-ops/portfolio", live: true },
+    { n: 14, label: "Competen Practice Operations", desc: "IAM-001 §14 — pilot provisioning, the §14.1 launch ladder and the cutover gate for the practitioner-owned Practice product", icon: "🩺", href: "/super-admin/platform-ops/practice", live: true },
   ];
 
   return (
