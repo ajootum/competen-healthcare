@@ -1,0 +1,34 @@
+import { NextRequest, NextResponse } from "next/server";
+import { requirePracticeContext, isDenied } from "@/lib/practice/api-context";
+import { transitionQueueEntry } from "@/lib/practice/scheduling";
+
+// PATCH /api/v1/practice/queue/{entryId} { action } -- queue movement (DM-001 s7 QueueEntry states).
+// Capability queue.manage: the assistant runs the waiting room; the auditor does not.
+
+const ACTIONS: Record<string, string> = {
+  ready: "READY",
+  wait: "WAITING",
+  start: "IN_CONSULTATION",
+  pause: "PAUSED",
+  complete: "COMPLETED",
+  left: "LEFT",
+};
+
+export async function PATCH(req: NextRequest, { params }: { params: Promise<{ entryId: string }> }) {
+  const auth = await requirePracticeContext("queue.manage");
+  if (isDenied(auth)) return auth;
+  const { entryId } = await params;
+
+  let body: { action?: string };
+  try { body = await req.json(); } catch { return NextResponse.json({ error: "invalid JSON" }, { status: 400 }); }
+  const to = ACTIONS[body.action ?? ""];
+  if (!to) return NextResponse.json({ error: `action must be one of: ${Object.keys(ACTIONS).join(", ")}` }, { status: 400 });
+
+  const result = await transitionQueueEntry(auth.caller.admin, {
+    workspaceId: auth.ctx.workspaceId, entryId, to,
+    actorId: auth.caller.userId, correlationId: auth.caller.traceId,
+  });
+
+  if (!result.ok) return NextResponse.json({ error: { code: result.code, message: result.message } }, { status: result.status });
+  return NextResponse.json({ entry: result.data, correlationId: auth.caller.traceId });
+}

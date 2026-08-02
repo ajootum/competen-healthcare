@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import Link from "next/link";
 import { createAdminClient } from "@/lib/supabase/server";
 import { resolvePracticeShell } from "@/lib/practice/shell";
 
@@ -20,11 +21,17 @@ export default async function PracticeHome() {
   const { ctx } = shell;
   const admin = createAdminClient();
 
-  const [{ count: locations }, { count: members }, { data: entitlement }, { data: events }] = await Promise.all([
+  const todayIso = new Date().toISOString().slice(0, 10);
+  const [{ count: locations }, { count: members }, { data: entitlement }, { data: events }, { data: todaysAppointments }, { count: waiting }] = await Promise.all([
     admin.from("practice_location").select("*", { count: "exact", head: true }).eq("workspace_id", ctx.workspaceId).eq("active", true),
     admin.from("practice_membership").select("*", { count: "exact", head: true }).eq("workspace_id", ctx.workspaceId).eq("status", "active"),
     admin.from("practice_entitlement").select("plan_code, status, ends_at").eq("workspace_id", ctx.workspaceId).in("status", ["active", "trial"]).limit(1).maybeSingle(),
     admin.from("practice_audit_event").select("event_type, occurred_at").eq("workspace_id", ctx.workspaceId).order("occurred_at", { ascending: false }).limit(8),
+    admin.from("practice_appointment").select("id, patient_name, scheduled_at, appointment_type, status")
+      .eq("workspace_id", ctx.workspaceId).gte("scheduled_at", `${todayIso}T00:00:00.000Z`).lte("scheduled_at", `${todayIso}T23:59:59.999Z`)
+      .order("scheduled_at").limit(10),
+    admin.from("practice_queue_entry").select("*", { count: "exact", head: true })
+      .eq("workspace_id", ctx.workspaceId).in("status", ["WAITING", "READY", "IN_CONSULTATION", "PAUSED"]),
   ]);
 
   // Request-time is the CORRECT time here: this is a force-dynamic server component, rendered once per
@@ -43,9 +50,9 @@ export default async function PracticeHome() {
     { label: "Workspace", value: ctx.workspaceStatus },
   ];
 
-  // The clinical widgets, named honestly by the phase that ships them (CPR-BUILD-000).
+  // The clinical widgets still to come, named honestly by the phase that ships them (CPR-BUILD-000).
+  // Today's appointments left this list when Phase 1 shipped -- it renders below, from real rows.
   const upcoming = [
-    { title: "Today's appointments", phase: "Phase 1 — Calendar & scheduling" },
     { title: "Find patient / register walk-in", phase: "Phase 2 — Patient identity" },
     { title: "New encounter", phase: "Phase 3 — Clinical encounter" },
     { title: "Follow-ups due", phase: "Phase 4 — Continuity" },
@@ -68,6 +75,33 @@ export default async function PracticeHome() {
           </div>
         ))}
       </div>
+
+      {/* Today's activity (CPR-001 V3) -- live from practice_appointment since Phase 1 */}
+      <section className="mt-5 rounded-xl border border-gray-200 bg-white p-4">
+        <div className="flex items-baseline justify-between gap-3">
+          <h2 className="text-[13px] font-bold text-gray-900">Today&apos;s appointments</h2>
+          <Link href="/practice/calendar" className="text-[12px] font-semibold text-[#1D4ED8] hover:underline">Open calendar →</Link>
+        </div>
+        {((todaysAppointments ?? []) as any[]).length === 0 ? (
+          <p className="mt-2 text-[12px] text-gray-400">Nothing booked today. Book from the calendar.</p>
+        ) : (
+          <ul className="mt-2 flex flex-col gap-1">
+            {((todaysAppointments ?? []) as any[]).map(a => (
+              <li key={a.id} className="flex items-center gap-2 text-[12px]">
+                <span className="font-mono text-gray-500">{new Date(a.scheduled_at).toISOString().slice(11, 16)}</span>
+                <span className="font-semibold text-gray-800">{a.patient_name}</span>
+                <span className="text-gray-400">{String(a.appointment_type).replace(/_/g, " ")}</span>
+                <span className="ml-auto text-gray-500">{a.status}</span>
+              </li>
+            ))}
+          </ul>
+        )}
+        {(waiting ?? 0) > 0 && (
+          <p className="mt-2 text-[11px] font-semibold text-[var(--cmp-text-warning)]">
+            {waiting} in the waiting queue right now.
+          </p>
+        )}
+      </section>
 
       <div className="mt-5 grid lg:grid-cols-2 gap-4">
         {/* Recent activity -- the audit trail is real from the first provisioning event */}
