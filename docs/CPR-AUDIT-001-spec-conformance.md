@@ -63,7 +63,17 @@ CPR-270 Analytics & Reporting's territory.
   the heavy overlap with CPR-130's document object and CPR-320's template library; these three need one
   document model between them, not three.
 
-### CPR-360 Configuration & Personalisation — **WRONG EMPHASIS**
+### CPR-360 Configuration & Personalisation — **WRONG EMPHASIS → CORRECTED**
+
+> **Closed.** The personalisation half built on migration 205: dark theme (with a static scan that fails
+> when a colour utility has no dark mapping), accent, text/interface size, density, reduce-visual-noise,
+> dashboard widget visibility and order, notification categories wired to what CPR-340 actually raises,
+> specialty profile that reorders the template library, real keyboard shortcuts, personal-over-practice
+> overrides with `locked_preferences`, and import/export/reset. Appearance is deliberately not lockable.
+> 48 harness assertions, five proven able to fail. The workspace configuration is kept in full. The
+> comp's quiet hours, device register and auto-save interval render in place saying why they are not
+> built. See respec §19.
+
 The spec and comp are ~80% **personalisation**: dashboard customisation with drag-and-drop widget
 toggles, saved layouts, theme (light/dark/system), primary and accent colour, font size, density,
 reduce-visual-noise, notification preferences with quiet hours, keyboard shortcuts, specialty profile,

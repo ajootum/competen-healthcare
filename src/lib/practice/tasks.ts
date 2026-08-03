@@ -5,6 +5,8 @@ import {
   TASK_TRANSITIONS, CLOSED_TASK_STATUSES, LIVE_TASK_STATUSES, TASK_CATEGORIES,
   TASK_PRIORITIES, REASON_REQUIRED_FOR, NOTIFICATION_LABELS,
 } from "@/lib/practice/task-constants";
+import { enabledEventTypes } from "@/lib/practice/preference-constants";
+import { resolvePreferences } from "@/lib/practice/preferences";
 
 // CPR-340 TASKS, REMINDERS AND NOTIFICATIONS. Migration 198's header carries the three boundary
 // decisions this module exists to hold; the short forms are:
@@ -346,13 +348,23 @@ export async function getTask(admin: any, workspaceId: string, taskId: string) {
 
 // ── NOTIFICATIONS ────────────────────────────────────────────────────────────────────────────────────
 
-/** One person's unread notifications in this workspace. In-app only; nothing here was ever sent. */
+/**
+ * One person's unread notifications in this workspace. In-app only; nothing here was ever sent.
+ *
+ * CPR-360 FILTERS WHAT IS SURFACED, NOT WHAT IS WRITTEN. A category switched off hides its rows from
+ * this list; it does not stop them being recorded. Switching it back on has to bring the history with
+ * it, and a preference that silently destroyed records while it was off would make that impossible.
+ */
 export async function listNotifications(admin: any, workspaceId: string, userId: string, opts: {
   includeRead?: boolean; limit?: number;
 } = {}) {
+  const { effective } = await resolvePreferences(admin, workspaceId, userId);
+  const allowed = enabledEventTypes(effective.notificationCategories);
+
   let q = admin.from("practice_notification")
     .select("id, event_type, title, body, href, source_kind, source_id, read_at, created_at, created_by")
-    .eq("workspace_id", workspaceId).eq("user_id", userId);
+    .eq("workspace_id", workspaceId).eq("user_id", userId)
+    .in("event_type", allowed);
   if (!opts.includeRead) q = q.is("read_at", null);
 
   const { data } = await q.order("created_at", { ascending: false }).limit(opts.limit ?? 50);

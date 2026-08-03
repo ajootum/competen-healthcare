@@ -41,8 +41,15 @@ const nowIso = () => new Date().toISOString();
  * because PostgREST's or-filter with a null test is easy to write in a way that quietly matches every row,
  * and a template list that leaks across workspaces is a leak of what a practice writes about.
  */
+/**
+ * The library, optionally with the caller's specialty first.
+ *
+ * CPR-360's specialty profile HAS TO CHANGE SOMETHING or it is a form that stores words. It reorders
+ * this list and nothing else: a neurosurgeon sees neurosurgery templates at the top and still sees every
+ * other one, because filtering them away would hide the sick note behind a preference.
+ */
 export async function listTemplates(admin: any, workspaceId: string, opts: {
-  kind?: string; includeUnpublished?: boolean;
+  kind?: string; includeUnpublished?: boolean; specialty?: string | null;
 } = {}) {
   const statuses = opts.includeUnpublished ? ["draft", "published"] : ["published"];
 
@@ -58,7 +65,14 @@ export async function listTemplates(admin: any, workspaceId: string, opts: {
   ]);
 
   const rows = [...((platform.data ?? []) as any[]), ...((mine.data ?? []) as any[])];
-  return rows.map(r => ({ ...r, scope: r.workspace_id === null ? "platform" : "workspace" }));
+  const mapped = rows.map(r => ({ ...r, scope: r.workspace_id === null ? "platform" : "workspace" }));
+
+  const specialty = (opts.specialty ?? "").trim().toLowerCase();
+  if (!specialty) return mapped;
+  // Stable within each group: a specialty match keeps the alphabetical order it arrived in.
+  const mine_ = mapped.filter(r => String(r.specialty ?? "").toLowerCase() === specialty);
+  const rest = mapped.filter(r => String(r.specialty ?? "").toLowerCase() !== specialty);
+  return [...mine_, ...rest];
 }
 
 /** One template with its sections, resolved only if this workspace may see it. */

@@ -375,3 +375,117 @@ aside[data-sidebar] details[data-nav-group] > summary::-webkit-details-marker { 
   --cp-area-6: #BE185D;
   --cp-area-7: #155E75;
 }
+
+/* ══════════════════════════════════════════════════════════════════════════════════════════════════
+   CPR-360 PERSONALISATION — theme, accent, size, density, visual noise.
+
+   SCOPED TO [data-practice-*] ON THE SHELL, and to nothing else. These rules remap Tailwind colour
+   utilities inside the Practice workspace; letting them reach the rest of the platform would mean one
+   practitioner's theme repainting a hospital workspace they also belong to.
+
+   WHY UTILITY REMAPPING RATHER THAN A TOKEN MIGRATION. The Practice pages were built on literal light
+   utilities — bg-white, text-gray-900, border-gray-200 — about 650 sites across 17 pages. Re-tokenising
+   all of them is CPR-040's job and a genuine piece of work; remapping the utilities that are actually
+   used gets a real dark theme today without touching a single page file.
+
+   THE BRITTLENESS IS CHECKED, NOT LATENT. A new page reaching for an unmapped colour would render a
+   light card in a dark workspace. scripts/practice-personalisation-harness.ts scans the Practice tree
+   for colour utilities and fails when one has no dark mapping — so the failure is a red harness rather
+   than a white rectangle somebody notices in production.
+
+   THE SIDEBAR IS ALREADY DARK and its own palette (text-blue-200/50, border-white/10, bg-white/10) is
+   deliberately NOT remapped. Inverting something that was never light is how a dark theme produces a
+   white sidebar.
+   ══════════════════════════════════════════════════════════════════════════════════════════════════ */
+
+[data-practice-theme="dark"] {
+  --cp-canvas: #0B1220;
+  --cmp-surface-critical: #3A1A1F;
+  --cmp-text-critical: #FCA5A5;
+  --cmp-surface-success: #123027;
+  --cmp-text-success: #6EE7B7;
+  color-scheme: dark;
+}
+
+/* Surfaces.
+   THE SELF-MATCHING FORMS (no space) ARE NOT A DUPLICATE. The shell root carries the theme attribute AND
+   a background utility on the same element, and a descendant combinator never matches the element it is
+   written on -- so the page canvas stayed light behind dark cards until this was added. Found by looking
+   at it rather than by the mapping scan, which asked whether a rule existed and not whether it applied. */
+[data-practice-theme="dark"].bg-gray-50,
+[data-practice-theme="dark"].bg-white { background-color: #0B1220; }
+
+[data-practice-theme="dark"] .bg-white { background-color: #111A2E; }
+[data-practice-theme="dark"] .bg-gray-50 { background-color: #172033; }
+[data-practice-theme="dark"] .bg-gray-50\/60 { background-color: #151E30; }
+[data-practice-theme="dark"] .bg-gray-100 { background-color: #1D2941; }
+[data-practice-theme="dark"] .bg-gray-200 { background-color: #26334E; }
+
+/* Text. Every value checked against #111A2E at or above the 4.5:1 floor. */
+[data-practice-theme="dark"] .text-gray-900 { color: #F1F5F9; }
+[data-practice-theme="dark"] .text-gray-800 { color: #E4EAF2; }
+[data-practice-theme="dark"] .text-gray-700 { color: #D2DBE7; }
+[data-practice-theme="dark"] .text-gray-600 { color: #BFCBDA; }
+[data-practice-theme="dark"] .text-gray-500 { color: #A7B4C6; }
+[data-practice-theme="dark"] .text-gray-400 { color: #93A1B5; }
+[data-practice-theme="dark"] .text-gray-300 { color: #7E8EA4; }
+[data-practice-theme="dark"] .text-black { color: #F1F5F9; }
+[data-practice-theme="dark"] .text-black\/60 { color: #A7B4C6; }
+[data-practice-theme="dark"] .text-black\/10 { color: #33415C; }
+
+/* Borders */
+[data-practice-theme="dark"] .border-gray-100 { border-color: #1C2740; }
+[data-practice-theme="dark"] .border-gray-200 { border-color: #26334E; }
+[data-practice-theme="dark"] .border-gray-300 { border-color: #33415C; }
+/* The selected-swatch ring on the accent picker: near-black on white, near-white on dark. */
+[data-practice-theme="dark"] .border-gray-900 { border-color: #F1F5F9; }
+[data-practice-theme="dark"] .border-black\/20 { border-color: #33415C; }
+
+/* Tinted states. Kept as tints rather than flattened to grey: the whole point of an amber row is that
+   it does not look like the rows around it. */
+[data-practice-theme="dark"] .bg-amber-50 { background-color: #3A2A0E; }
+[data-practice-theme="dark"] .text-amber-900 { color: #FCD34D; }
+[data-practice-theme="dark"] .text-amber-700 { color: #FBBF24; }
+[data-practice-theme="dark"] .border-amber-300 { border-color: #78500F; }
+[data-practice-theme="dark"] .bg-red-50 { background-color: #3A1A1F; }
+[data-practice-theme="dark"] .text-red-800,
+[data-practice-theme="dark"] .text-red-700 { color: #FCA5A5; }
+[data-practice-theme="dark"] .bg-emerald-50 { background-color: #123027; }
+[data-practice-theme="dark"] .text-emerald-800,
+[data-practice-theme="dark"] .text-emerald-700 { color: #6EE7B7; }
+[data-practice-theme="dark"] .bg-blue-50 { background-color: #142744; }
+[data-practice-theme="dark"] .text-blue-700 { color: #93C5FD; }
+
+/* ── Accent (CPR-360 "Primary Colour"). A fixed set from the design system, not a colour picker:
+   an arbitrary hex would walk straight out of the contrast the PUI work proved. --cp-primary-soft and
+   -border derive from it, so a chosen accent stays internally consistent. */
+[data-practice-accent="blue"]    { --cp-primary: #2563EB; --cp-primary-deep: #1E3A8A; }
+[data-practice-accent="cyan"]    { --cp-primary: #0891B2; --cp-primary-deep: #155E75; }
+[data-practice-accent="emerald"] { --cp-primary: #059669; --cp-primary-deep: #065F46; }
+[data-practice-accent="amber"]   { --cp-primary: #B45309; --cp-primary-deep: #78350F; }
+[data-practice-accent="rose"]    { --cp-primary: #BE123C; --cp-primary-deep: #881337; }
+[data-practice-accent="slate"]   { --cp-primary: #475569; --cp-primary-deep: #1E293B; }
+
+/* ── Text and interface size.
+   NOT a font-size change, and it is labelled honestly in the UI as size rather than font size: the
+   Practice pages use arbitrary pixel type (text-[13px]), which does not respond to a root font size at
+   all. `zoom` scales the pixels AND the boxes around them, which is what somebody asking for larger
+   text actually wants. */
+[data-practice-size="small"] .practice-scale { zoom: 0.92; }
+[data-practice-size="large"] .practice-scale { zoom: 1.12; }
+
+/* ── Density. Fewer, smaller gaps; nothing removed. */
+[data-practice-density="compact"] .practice-scale .p-4 { padding: 0.7rem; }
+[data-practice-density="compact"] .practice-scale .p-3 { padding: 0.55rem; }
+[data-practice-density="compact"] .practice-scale .mt-4 { margin-top: 0.7rem; }
+[data-practice-density="compact"] .practice-scale .gap-4 { gap: 0.7rem; }
+[data-practice-density="compact"] .practice-scale .gap-3 { gap: 0.55rem; }
+[data-practice-density="compact"] .practice-scale .py-1\.5 { padding-top: 0.2rem; padding-bottom: 0.2rem; }
+
+/* ── Reduce visual noise. Shadows and tinted fills go; BORDERS AND TEXT COLOUR STAY, because the tint on
+   a warning row is information and removing it would be reducing meaning, not noise. */
+[data-practice-noise="reduced"] .practice-scale * { box-shadow: none !important; }
+[data-practice-noise="reduced"] .practice-scale .bg-gray-50,
+[data-practice-noise="reduced"] .practice-scale .bg-gray-50\/60 { background-color: transparent; }
+
+/* Respects the platform-wide reduced-motion rule already set by PUI-005 rather than restating it. */

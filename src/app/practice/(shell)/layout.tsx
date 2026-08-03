@@ -2,7 +2,11 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { resolvePracticeShell } from "@/lib/practice/shell";
 import { visibleNav } from "@/lib/practice/navigation";
+import { createAdminClient } from "@/lib/supabase/server";
+import { resolvePreferences } from "@/lib/practice/preferences";
 import PracticeSignOut from "./PracticeSignOut";
+import PracticeAppearance from "./PracticeAppearance";
+import PracticeShortcuts from "./PracticeShortcuts";
 
 // CPR-V2-020 authenticated application shell (SHELL-001 s7, CPR-V2-020 V3).
 //
@@ -32,8 +36,25 @@ export default async function PracticeShellLayout({ children }: { children: Reac
   const nav = visibleNav(ctx.capabilities);
   const groups = [...new Set(nav.map(i => i.group))];
 
+  // CPR-360: the personalisation, resolved server-side and applied as data attributes the stylesheet
+  // reads. Server-side because a theme applied by client JavaScript flashes the wrong one first, and
+  // because "personal over practice, except where the practice has locked it" is a rule the client
+  // cannot be trusted to evaluate.
+  const admin = createAdminClient();
+  const { effective } = await resolvePreferences(admin, ctx.workspaceId, ctx.userId);
+
   return (
-    <div className="cp-surface min-h-screen bg-gray-50 flex">
+    <div
+      className="cp-surface min-h-screen bg-gray-50 flex"
+      // "system" is resolved in the browser, since only the browser knows what the device prefers. It
+      // is the one appearance decision that cannot be made here.
+      data-practice-theme={effective.theme === "system" ? undefined : effective.theme}
+      data-practice-theme-preference={effective.theme}
+      data-practice-accent={effective.accent}
+      data-practice-size={effective.fontScale}
+      data-practice-density={effective.density}
+      data-practice-noise={effective.reduceVisualNoise ? "reduced" : undefined}
+    >
       {/* Sidebar (s7: primary navigation) */}
       <aside className="hidden md:flex w-60 shrink-0 flex-col bg-[var(--cp-shell)] text-white">
         <div className="flex items-center gap-2.5 px-4 h-14 border-b border-white/10">
@@ -78,8 +99,16 @@ export default async function PracticeShellLayout({ children }: { children: Reac
           </div>
         </header>
 
-        <main className="flex-1 min-w-0 p-5">{children}</main>
+        {/* `practice-scale` is what size and density are applied to -- the content, not the chrome. A
+            zoomed sidebar would push the page off the screen at the setting that exists to make things
+            easier to see. */}
+        <main className="practice-scale flex-1 min-w-0 p-5">{children}</main>
       </div>
+
+      {/* The two client behaviours that cannot be server-rendered: resolving "match my device", and
+          listening for a keypress. Both are inert when the preference is off. */}
+      <PracticeAppearance preference={effective.theme} />
+      {effective.shortcutsEnabled && <PracticeShortcuts />}
     </div>
   );
 }

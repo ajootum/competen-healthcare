@@ -119,7 +119,7 @@ Continuity & DR · 480 Enterprise Administration · 490 Roadmap & Release Govern
 | CPR-310 Team & Delegated Access | **Built.** Invitation codes (bearer, single-use, expiry derived), membership lifecycle, time-bounded delegation, DB-guarded last owner. Fixed a shipped resolver bug that made every delegation invisible and ignored `effective_from` (migration 201, `team.ts`, 52 harness assertions). |
 | CPR-370 Security, Privacy & Practitioner Control | **Built.** Read logging (the other half of the trail), de-identified access review, append-only enforcement, patient-record export (migration 202, `privacy.ts`, 36 harness assertions). |
 | CPR-330 Reports, Documents & Correspondence | **Rebuilt (§18).** Template designer with a merge body, merge-field resolver, generation, batch generation, practice letterhead, print/PDF view, schedule definitions, dashboard to the comp (migration 204, `document-generation.ts`, 52 harness assertions). The activity counting that was first built under this heading moved to `/practice/reports/analytics` as an early slice of CPR-270. |
-| CPR-360 Configuration | **Built.** Wires up a configuration table that had existed since Phase 0 and was read by nothing; correctable timezone with write-time validation; locations; the hardcoded appointment length removed (migration 203, `configuration.ts`, 35 harness assertions). |
+| CPR-360 Configuration & Personalisation | **Rebuilt (§19).** Workspace configuration as before (migration 203, 35 assertions) *plus* the personalisation half that was missing: dark theme with a checked mapping scan, accent, size, density, reduce-visual-noise, dashboard layout, notification categories, specialty profile, keyboard shortcuts, personal-over-practice overrides with locking, import/export/reset (migration 205, `preferences.ts`, 48 assertions). |
 | CPR-200–270, 400–440, 460–490 | **Not started.** |
 
 **Sixteen of thirty-seven** now have a real implementation. **Every Practice Operations module (CPR-300 to 370) is now built.** The clinical spine (CPR-130/140/150) and the
@@ -717,3 +717,91 @@ under §15's doctrine.
 
 Printing is logged as an **export**, not a view — the taxonomy has no "print", and printing is the action
 that produces a copy nobody can recall.
+
+## 19. CPR-360 as rebuilt: a preference that changes nothing is worse than a missing one
+
+`src/lib/practice/preferences.ts`, `preference-constants.ts`, `/practice/settings`, the shell's theme
+layer in `globals.css`, migration 205, and `scripts/practice-personalisation-harness.ts` — 48
+assertions, five proven able to fail.
+
+**The commit message asserting that "nothing in this product has a per-user preference worth storing"
+was written without opening a specification that is mostly per-user preferences.** The spec and comp are
+roughly four-fifths personalisation. What was built was workspace configuration, which appears in the
+comp as two fields inside one panel. The workspace configuration is kept in full — the timezone
+correction and its write-time validation are load-bearing — and moved to where the comp puts it.
+
+### Every switch has a consumer, and the harness proves it by wiring
+
+The rule this module turns on, and the same one the settings page already followed when it *listed* the
+inert columns rather than rendering them as inputs. Theme, accent, size and density reach the shell as
+data attributes; the widget list reaches the operations home; the notification categories filter what
+CPR-340 surfaces; the specialty reorders the template library; the shortcuts drive a real key handler.
+The harness asserts each by *effect* — switch a category off and the notification disappears from the
+list — so a preference wired to a column nobody reads would fail.
+
+**Three of the comp's five notification categories control nothing**, because CPR-340 raises four event
+types and they are all about tasks and documents. They render disabled, saying nothing raises them yet.
+**A clinical alert may not be switched off at all** — a preference that silences the thing saying a
+patient is deteriorating is a hazard with a toggle. The rule is written now so it is already true on the
+day something raises one.
+
+### A dark theme, without a token migration
+
+The Practice pages were built on literal light utilities — about 650 sites across 17 pages.
+Re-tokenising them is CPR-040's job. Instead the utilities that are *actually used* are remapped under
+`[data-practice-theme="dark"]`, and **the brittleness is checked rather than latent**: a static scan
+fails when a colour utility in the Practice tree has no dark mapping, so a new page reaching for an
+unmapped colour is a red harness rather than a white card in a dark workspace. Two files are exempt with
+stated reasons — the sidebar, which was never light, and the print view, which goes onto white paper.
+
+**The scan was not enough, and this is the honest part.** It passed while the page canvas stayed light
+behind dark cards: the shell root carries the theme attribute *and* its background utility on the same
+element, and a descendant selector never matches the element it is written on. The scan asked whether a
+rule existed, not whether it applied. Found by opening the page and measuring computed styles; there is
+now a self-matching rule and an assertion for it.
+
+Contrast was measured in the browser against actual backgrounds rather than asserted: 15.8:1 for
+headings down to 5.2:1 for the most muted text, all above the 4.5:1 floor.
+
+### Personal over practice, except where the practice has locked it
+
+CPR-360 §5 made storable. `locked_preferences` on the configuration records which settings a practice
+controls; NULL in a personal override means "follow the practice", so not-choosing is representable and a
+personal row can never silently freeze a copy of a practice default. **A refused key is not a failed
+save** — somebody who changes their theme and their locked consultation length in one form gets the
+theme, and is told plainly which part the practice controls.
+
+**Appearance is not lockable, and that is enforced rather than left to whoever writes the admin UI.** A
+practice may standardise its clinical defaults; it may not decide that somebody who needs larger text
+does not get it.
+
+### Smaller decisions worth keeping
+
+- **A saved layout is reconciled against the widgets that exist, on every read.** A widget added since
+  somebody saved their layout appears rather than being invisible to everyone with a saved layout —
+  which is how a new feature ships to nobody.
+- **Not every widget may be hidden.** An empty dashboard cannot be undone from the dashboard.
+- **Reordering is buttons, not drag-and-drop.** A list that can only be reordered by dragging cannot be
+  reordered with a keyboard, which would make the accessibility panel the least accessible thing on it.
+- **Shortcuts are two-key sequences with no modifiers** (`g` then `p`). The comp draws Ctrl+N and Ctrl+T,
+  which are the browser's and cannot be taken. Nothing fires while somebody is typing — the first rule of
+  a global key handler in a clinical product.
+- **Not remappable**, deliberately: a remapped shortcut is invisible to everyone else, so "press g then
+  p" stops being true across a practice.
+- **"Text and interface size", not "font size".** This product's type is in arbitrary pixels, which do not
+  respond to a root font size; the setting scales the content, and is labelled as what it does.
+- **The page has no capability guard** — it guards the *practice* half, inside. The previous guard
+  redirected everybody without `practice.settings.manage` away from their own accessibility settings.
+- **An exported preferences file carries no identifiers**, so it cannot be imported into the wrong
+  practice by accident, and import runs through the same validation as typing.
+
+### What is honestly not built
+
+- **Quiet hours.** They silence notifications *as they arrive*; nothing here pushes one — no email, no
+  SMS, no device notification, and the list is read when you open it. There is nothing to silence.
+- **The device register.** "Your active devices" needs a session register, which is CPR-370's.
+  Cross-device sync itself is not a feature but a *consequence* — the preferences are stored against the
+  person, so they are already the same everywhere, with no sync engine and nothing to conflict.
+- **Auto-save interval.** The comp sets it to two minutes. There is no autosave to set an interval for;
+  it is CPR-130's to build, and the setting arrives with it.
+- **The AI configuration assistant**, which is CPR-210's.

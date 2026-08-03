@@ -3,6 +3,7 @@ import Link from "next/link";
 import { createAdminClient } from "@/lib/supabase/server";
 import { resolvePracticeShell } from "@/lib/practice/shell";
 import { operationsHome } from "@/lib/practice/operations-home";
+import { resolvePreferences } from "@/lib/practice/preferences";
 
 // CPR-300 PRACTICE OPERATIONS HOME -- laid out to the specification's design comp.
 //
@@ -49,7 +50,21 @@ export default async function PracticeHome() {
   if (shell.state !== "READY") redirect("/practice");
   const { ctx } = shell;
 
-  const home = await operationsHome(createAdminClient(), ctx);
+  const admin = createAdminClient();
+  const [home, { effective }] = await Promise.all([
+    operationsHome(admin, ctx),
+    resolvePreferences(admin, ctx.workspaceId, ctx.userId),
+  ]);
+
+  // CPR-360 dashboard customisation, applied with `order` on the grid children rather than by
+  // restructuring the page. A hidden widget stays in the markup as display:none: every widget on this
+  // page is filled by the SAME operationsHome call, so not rendering one would save no query -- and a
+  // layout expressed as CSS is one that cannot drift out of step with what the page actually contains.
+  const widget = (key: string): React.CSSProperties | undefined => {
+    const i = effective.dashboardWidgets.findIndex(w => w.key === key);
+    if (i === -1) return undefined;
+    return effective.dashboardWidgets[i].visible ? { order: i } : { display: "none" };
+  };
 
   return (
     <div className="max-w-[1400px]">
@@ -109,7 +124,7 @@ export default async function PracticeHome() {
 
       <div className="mt-4 grid xl:grid-cols-3 gap-4">
         {/* Today's schedule (comp: left column) */}
-        <section className={card}>
+        <section className={card} style={widget("schedule")}>
           <div className="flex items-baseline justify-between gap-2">
             <h2 className="text-[13px] font-bold text-gray-900">Today&apos;s schedule</h2>
             <Link href="/practice/calendar" className="text-[11px] font-semibold text-[var(--cp-primary-deep)] hover:underline">
@@ -146,7 +161,7 @@ export default async function PracticeHome() {
         </section>
 
         {/* Practice health (comp: middle column) */}
-        <section className={card}>
+        <section className={card} style={widget("health")}>
           <h2 className="text-[13px] font-bold text-gray-900">Practice health</h2>
           <div className="mt-2 grid grid-cols-2 gap-2">
             {home.health.map(h => (
@@ -171,7 +186,7 @@ export default async function PracticeHome() {
         </section>
 
         {/* Operational alerts (comp: right column) — the ordering doctrine, inside the specified layout */}
-        <section className={card}>
+        <section className={card} style={widget("alerts")}>
           <div className="flex items-baseline justify-between gap-2">
             <h2 className="text-[13px] font-bold text-gray-900">Operational alerts</h2>
             {home.attention.length > 0 && (
@@ -235,7 +250,7 @@ export default async function PracticeHome() {
 
       <div className="mt-4 grid xl:grid-cols-3 gap-4">
         {/* Tasks (comp: bottom-left) */}
-        <section className={card}>
+        <section className={card} style={widget("tasks")}>
           <div className="flex items-baseline justify-between gap-2">
             <h2 className="text-[13px] font-bold text-gray-900">Tasks &amp; actions</h2>
             <Link href="/practice/tasks" className="text-[11px] font-semibold text-[var(--cp-primary-deep)] hover:underline">
@@ -261,7 +276,7 @@ export default async function PracticeHome() {
         </section>
 
         {/* Messages (comp: bottom-middle) */}
-        <section className={card}>
+        <section className={card} style={widget("messages")}>
           <div className="flex items-baseline justify-between gap-2">
             <h2 className="text-[13px] font-bold text-gray-900">Messages &amp; inbox</h2>
             <Link href="/practice/messages" className="text-[11px] font-semibold text-[var(--cp-primary-deep)] hover:underline">
@@ -288,7 +303,7 @@ export default async function PracticeHome() {
         </section>
 
         {/* Quick actions (comp: bottom-right, 3×3 grid) */}
-        <section className={card}>
+        <section className={card} style={widget("quick_actions")}>
           <h2 className="text-[13px] font-bold text-gray-900">Quick actions</h2>
           {home.quickActions.length === 0 ? (
             <p className="mt-2 text-[12px] text-gray-400">
@@ -313,7 +328,7 @@ export default async function PracticeHome() {
 
       {/* Practice + activity (kept from the previous build; the comp has no equivalent, and both are real) */}
       <div className="mt-4 grid lg:grid-cols-2 gap-4">
-        <section className={card}>
+        <section className={card} style={widget("practice")}>
           <h2 className="text-[13px] font-bold text-gray-900">This practice</h2>
           <dl className="mt-2 grid grid-cols-2 gap-2">
             {[
@@ -332,7 +347,7 @@ export default async function PracticeHome() {
           </dl>
         </section>
 
-        <section className={card}>
+        <section className={card} style={widget("activity")}>
           <h2 className="text-[13px] font-bold text-gray-900">Recent activity</h2>
           {home.recentActivity.length === 0 ? (
             <p className="mt-2 text-[12px] text-gray-400">No activity recorded yet.</p>
