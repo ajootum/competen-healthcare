@@ -93,9 +93,10 @@ Continuity & DR · 480 Enterprise Administration · 490 Roadmap & Release Govern
 | CPR-140 Follow-up Management | **Built.** Obligation loop with overdue *derived* rather than stored, the practice's own calendar day, DB-enforced release when a booking dies, event trail (migration 196, `follow-ups.ts`, 47 harness assertions). |
 | CPR-150 Procedure & Clinical Activity | **Built.** Catalogue with enforced laterality and consent, performed-procedure record, append-only later-learned outcomes, activity counts (migration 197, `procedures.ts`, 44 harness assertions). |
 | CPR-300 Operations Home | **Built.** `/practice/home` rebuilt as a worklist: every figure is the length of a list you can open, ordered by cost of ignoring, capability-aware with named blind spots. No migration (`operations-home.ts`, `practice-time.ts`, 37 harness assertions). |
-| CPR-200–270, 310–370, 400–440, 460–490 | **Not started.** |
+| CPR-340 Tasks, Reminders & Notifications | **Built.** Operational tasks with derived overdue and derived orphaning, reminders as a column rather than a second object, in-app notifications holding only non-derivable events. No delivery channel, deliberately (migration 198, `tasks.ts`, 44 harness assertions). |
+| CPR-200–270, 310–330, 350–370, 400–440, 460–490 | **Not started.** |
 
-**Nine of thirty-seven** now have a real implementation. The clinical spine (CPR-130/140/150) and the
+**Ten of thirty-seven** now have a real implementation. The clinical spine (CPR-130/140/150) and the
 operations home are complete rather than partial; the four marked "core built" remain subsets of what
 their v1.0 documents ask for.
 
@@ -127,7 +128,7 @@ Nothing here is a week's work. A realistic order that keeps the product usable a
    procedures (all three below). The encounter the product already had is now complete: it can be
    documented, it can commit the practice to seeing someone again, and it can record what was done.
 4. ~~**CPR-300 Operations Home**~~ **Done** (below). /practice/home is now a worklist rather than a dashboard.
-5. **CPR-340 tasks / 350 search / 320 documents** — the operational spine everything else references.
+5. **CPR-340 tasks** ~~/ 350 search / 320 documents~~ — tasks **done** (below); search and communication remain.
 6. **Practice Intelligence (200–270)** — needs clinical volume to be worth anything, so it follows.
 7. **Enterprise Services (400–490)** — infrastructure-heavy; several are platform concerns that already
    have partial answers elsewhere in Competen (monitoring, billing, tenant lifecycle).
@@ -297,7 +298,51 @@ still ranks below an unsigned encounter: size is not urgency, and the assertion 
 count sort and the engine's own build order. An assertion that cannot tell right from wrong is worse than
 no assertion, because it is counted.
 
-## 10. Standing rules that carry over
+## 10. CPR-340 as built, and the three things it refused to build
+
+Migration 198, `src/lib/practice/tasks.ts`, `/practice/tasks`, and
+`scripts/practice-tasks-harness.ts`. All three decisions are the same decision: **do not build a second
+one of something.**
+
+**A task is not a follow-up.** CPR-140's follow-up is a clinical obligation to a patient -- it lives in
+their record, and failing it is a clinical failure. A task is a piece of work assigned to a person:
+chase the lab, order dressings, fill in the form. It may reference a patient; deleting every task would
+lose no clinical fact. The cheap thing is to let tasks absorb follow-ups, since both have a due date and
+a done button -- and the result is two systems each holding half the commitments with a patient in the
+gap between them. The harness closes every task in the workspace and asserts the follow-up is still
+open, with a control proving the tasks really did close.
+
+**A reminder is not a third object.** "Remind me on the 14th to chase the lab" and "task: chase the lab,
+due the 14th" are the same sentence. A separate table would be a task table with fewer columns and its
+own board, and the two would drift. `remind_on` is a column; the reminder IS the task surfacing on that
+date. A reminder dated after the deadline is refused, because one that arrives too late is not a
+reminder.
+
+**There is no sending.** Not email, not SMS, not WhatsApp, not to patients. Every comp for a screen like
+this shows "Reminder sent to patient", and this product has no delivery channel -- the same position
+CPR-130 took when it recorded that a document was issued without pretending to have issued it. There is
+no channel column and no `sent_at`, because a nullable `sent_at` sitting unused is how a product ends up
+claiming to have messaged somebody.
+
+**Notifications hold only what cannot be derived.** CPR-300 established that derivable state is derived,
+so nothing has to run for it to be true. A notification row saying "you have an overdue follow-up" would
+be a second source of truth for something the home page already computes, and the two would disagree the
+moment one was closed without the other being cleared. This table holds only "somebody assigned you a
+task" and "somebody amended a document you wrote" -- facts not recoverable from the record afterwards.
+In a solo practice it will be permanently empty, which is correct rather than broken.
+
+**Two things are derived that a lesser version would have stored.** Overdue, as for follow-ups. And
+*orphaned* -- a task assigned to somebody whose membership was later revoked. Computed at read time, so
+the board says so the moment the access goes rather than when somebody remembers to run a sweep, and it
+ranks above everything else operational on the home page: work nobody can see is work nobody is doing.
+
+**The capability split changes here, deliberately.** Every clinical capability so far stopped at the
+practitioner. Operational work is different -- chasing a lab and ordering dressings are the assistant's
+job and the owner's business -- so all three roles get `task.view` and `task.manage`. The clinical
+boundary is untouched: a task can reference a patient, and reading that patient still needs
+`patient.view`.
+
+## 11. Standing rules that carry over
 
 - Render real data only; an honest empty state beats a plausible number.
 - Every module gets a harness, and the harness is proven able to fail before it is trusted.

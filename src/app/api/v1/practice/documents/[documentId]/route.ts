@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { requirePracticeContext, isDenied } from "@/lib/practice/api-context";
 import { getDocument, updateDocument, transitionDocument, amendDocument, recordRelease } from "@/lib/practice/documentation";
 import { DOCUMENT_ACTIONS } from "@/lib/practice/document-constants";
+import { notifyDocumentAmended } from "@/lib/practice/tasks";
 
 // GET   /api/v1/practice/documents/{id}
 // PATCH /api/v1/practice/documents/{id} -- one of four shapes:
@@ -40,6 +41,21 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ do
       actorId: auth.caller.userId, correlationId: auth.caller.traceId,
     });
     if (!result.ok) return fail(result);
+
+    // CPR-340. Tell the ORIGINAL AUTHOR that their document was superseded -- the one clinical event in
+    // this product that another person can cause and that cannot be worked out from current state
+    // later. notify() drops it silently when the amender is the author, which in a solo practice is
+    // always. Wired HERE rather than inside amendDocument so the notification layer stays a consumer of
+    // the clinical modules and never something they depend on.
+    const { data: original } = await auth.caller.admin.from("practice_clinical_document")
+      .select("created_by").eq("id", documentId).maybeSingle();
+    if (original?.created_by) {
+      await notifyDocumentAmended(auth.caller.admin, {
+        workspaceId: auth.ctx.workspaceId, documentId, successorId: result.data.id,
+        authorId: original.created_by, reason: String(body.amend.reason ?? ""),
+        actorId: auth.caller.userId,
+      });
+    }
     return NextResponse.json({ amendment: result.data, correlationId: auth.caller.traceId });
   }
 

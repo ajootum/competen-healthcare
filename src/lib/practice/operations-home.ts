@@ -1,6 +1,7 @@
 import { hasCapability, type WorkspaceContext } from "@/lib/practice/access";
 import { workspaceClock, zonedDayRange } from "@/lib/practice/practice-time";
 import { followUpBoard } from "@/lib/practice/follow-ups";
+import { taskBoard, listNotifications } from "@/lib/practice/tasks";
 
 // CPR-300 OPERATIONS HOME. The daily command centre the v1.0 set puts at the middle of the workspace,
 // and the module that supersedes CPR-V2-001's "Practice Command Centre" as the definition of /practice/home.
@@ -33,7 +34,8 @@ import { followUpBoard } from "@/lib/practice/follow-ups";
 
 export type AttentionKind =
   | "followup_overdue" | "encounter_unsigned" | "encounter_live" | "clinic_remaining"
-  | "queue_waiting" | "document_unissued" | "followup_due_soon" | "consent_not_recorded";
+  | "queue_waiting" | "document_unissued" | "followup_due_soon" | "consent_not_recorded"
+  | "notification_unread" | "task_overdue" | "task_due" | "task_orphaned";
 
 export type AttentionItem = {
   kind: AttentionKind;
@@ -61,8 +63,12 @@ const ORDER: AttentionKind[] = [
   "encounter_unsigned",
   "encounter_live",
   "queue_waiting",
+  "task_orphaned",
+  "task_overdue",
   "clinic_remaining",
+  "notification_unread",
   "followup_due_soon",
+  "task_due",
   "document_unissued",
   "consent_not_recorded",
 ];
@@ -80,6 +86,7 @@ export async function operationsHome(admin: any, ctx: WorkspaceContext) {
   // from `attention` entirely, and `blindSpots` says so by name.
   const [
     appointments, queueCount, encounters, followUps, documents, procedureConsent, practice, events,
+    tasks, notifications,
   ] = await Promise.all([
     can("practice.calendar.view")
       ? admin.from("practice_appointment")
@@ -117,6 +124,9 @@ export async function operationsHome(admin: any, ctx: WorkspaceContext) {
     ]),
     admin.from("practice_audit_event").select("event_type, occurred_at")
       .eq("workspace_id", ctx.workspaceId).order("occurred_at", { ascending: false }).limit(8),
+    can("task.view") ? taskBoard(admin, ctx.workspaceId, ctx.userId) : Promise.resolve(null),
+    // NO CAPABILITY GATE. These are the caller's own rows -- see the notifications route for why.
+    listNotifications(admin, ctx.workspaceId, ctx.userId, { limit: 20 }),
   ]);
 
   // Patient names in one query for every list that needs them, rather than one per row.
@@ -254,6 +264,59 @@ export async function operationsHome(admin: any, ctx: WorkspaceContext) {
     };
   }
 
+  // CPR-340. Tasks are the caller's OWN, not the practice's: an operations home that showed everybody's
+  // work would be a management report, and the person opening it is trying to start their own day.
+  // Orphaned tasks are the exception and rank higher than anything else operational, because work
+  // assigned to somebody who can no longer sign in is work that nobody is doing and nobody can see.
+  if (tasks) {
+    const board = tasks as any;
+    if (board.orphaned.length > 0) {
+      items.task_orphaned = {
+        kind: "task_orphaned", severity: "critical", count: board.orphaned.length,
+        title: "Tasks nobody can see",
+        detail: "Assigned to a person whose access has since been removed. Nobody is doing these and nobody has been told.",
+        href: "/practice/tasks",
+        sample: board.orphaned.slice(0, 4).map((t: any) => ({ id: t.id, label: t.title, note: t.due_on ? `due ${t.due_on}` : "no date" })),
+      };
+    }
+    if (board.mineOverdue.length > 0) {
+      items.task_overdue = {
+        kind: "task_overdue", severity: "warning", count: board.mineOverdue.length,
+        title: "Your overdue tasks",
+        detail: "Assigned to you and past their date.",
+        href: "/practice/tasks",
+        sample: board.mineOverdue.slice(0, 4).map((t: any) => ({
+          id: t.id, label: t.title, note: `${Math.abs(t.dueInDays)}d overdue`,
+        })),
+      };
+    }
+    // Only the ones whose reminder date has arrived. A task due in three weeks is not today's business,
+    // and a home page that lists it anyway teaches people to skim the page.
+    const dueNow = board.mineDue.filter((t: any) => t.reminderDue || (t.dueInDays !== null && t.dueInDays <= 7));
+    if (dueNow.length > 0) {
+      items.task_due = {
+        kind: "task_due", severity: "normal", count: dueNow.length,
+        title: "Your tasks coming up",
+        detail: "Due within a week, or their reminder date has arrived.",
+        href: "/practice/tasks",
+        sample: dueNow.slice(0, 4).map((t: any) => ({
+          id: t.id, label: t.title, note: t.due_on ? `due ${t.due_on}` : "reminder due",
+        })),
+      };
+    }
+  }
+
+  const unread = (notifications ?? []) as any[];
+  if (unread.length > 0) {
+    items.notification_unread = {
+      kind: "notification_unread", severity: "normal", count: unread.length,
+      title: "New for you",
+      detail: "Things that happened while you were away and cannot be worked out from the record. In-app only; nothing was sent anywhere.",
+      href: "/practice/tasks",
+      sample: unread.slice(0, 4).map(n => ({ id: n.id, label: n.title, note: n.label, href: n.href })),
+    };
+  }
+
   const attention = ORDER.map(k => items[k]).filter(Boolean) as AttentionItem[];
 
   // NAMED, NOT SILENT. A block the caller cannot see is reported as a blind spot rather than simply
@@ -263,6 +326,7 @@ export async function operationsHome(admin: any, ctx: WorkspaceContext) {
   if (!can("encounter.list")) blindSpots.push("encounters and procedures");
   if (!can("document.view")) blindSpots.push("documents");
   if (!can("practice.calendar.view")) blindSpots.push("the diary and waiting room");
+  if (!can("task.view")) blindSpots.push("tasks");
 
   const [{ count: locations }, { count: members }, { data: entitlement }] = practice as any;
   const trialDaysLeft = entitlement?.ends_at
