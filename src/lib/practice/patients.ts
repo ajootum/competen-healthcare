@@ -2,13 +2,13 @@ import { randomBytes } from "node:crypto";
 import { audit } from "@/lib/practice/provisioning";
 
 // PEN-002 Patient Identity Engine -- one longitudinal identity per patient, duplicates prevented at
-// registration, retrieval in seconds, merges audited. This module is the engine; CPR-004's registry and
-// CPR-005's registration are its consumers, and Phase 3's encounter launch will be the third.
+// registration, retrieval in seconds, merges audited. This module is the engine; CPR-V2-004's registry and
+// CPR-V2-005's registration are its consumers, and Phase 3's encounter launch will be the third.
 //
 // THE DUPLICATE DOCTRINE (DM-001 s6.1), split between here and migration 193:
 //   database  refuses two LIVE identifiers of the same type+value+issuer in a workspace -- the one
 //             collision that is never legitimate.
-//   engine    runs detection BEFORE save (CPR-005's workflow order): an exact identifier hit REFUSES
+//   engine    runs detection BEFORE save (CPR-V2-005's workflow order): an exact identifier hit REFUSES
 //             registration outright; demographic similarity (same normalised name + same birth date, or
 //             same name + same phone) returns CANDIDATES and refuses only until the caller confirms --
 //             probabilistic matching "may suggest but never silently merge", and equally never silently
@@ -36,7 +36,7 @@ export type RegisterInput = {
   displayName: string;
   sex?: string;
   birthDate?: string;        // YYYY-MM-DD
-  ageEstimateYears?: number; // CPR-005: estimated OR actual
+  ageEstimateYears?: number; // CPR-V2-005: estimated OR actual
   phone?: string;
   email?: string;
   identifiers?: { type: string; value: string; issuer?: string }[];
@@ -62,7 +62,7 @@ async function practiceIdsFor(admin: any, workspaceId: string, patientIds: strin
   return new Map(((data ?? []) as any[]).map(r => [r.patient_id, r.value]));
 }
 
-/** Ranked search (CPR-004): identifier exact beats phone exact beats name. Never fuzzy-merges anything. */
+/** Ranked search (CPR-V2-004): identifier exact beats phone exact beats name. Never fuzzy-merges anything. */
 export async function searchPatients(admin: any, workspaceId: string, q: string, limit = 20): Promise<{
   results: (Candidate & { sex: string; status: string })[];
 }> {
@@ -115,16 +115,16 @@ export async function searchPatients(admin: any, workspaceId: string, q: string,
   return { results };
 }
 
-/** CPR-005: search first, duplicate detection BEFORE save, identifier generation, then create. */
+/** CPR-V2-005: search first, duplicate detection BEFORE save, identifier generation, then create. */
 export async function registerPatient(admin: any, input: RegisterInput): Promise<EngineResult<{
   id: string; practiceId: string;
 }>> {
   const name = input.displayName?.trim();
   if (!name) return { ok: false, status: 400, code: "VALIDATION_ERROR", message: "displayName is required" };
   if (!input.birthDate && input.ageEstimateYears == null)
-    return { ok: false, status: 400, code: "VALIDATION_ERROR", message: "birthDate or ageEstimateYears is required (CPR-005 minimum dataset)" };
+    return { ok: false, status: 400, code: "VALIDATION_ERROR", message: "birthDate or ageEstimateYears is required (CPR-V2-005 minimum dataset)" };
   if (!input.phone && !input.email)
-    return { ok: false, status: 400, code: "VALIDATION_ERROR", message: "a primary contact (phone or email) is required (CPR-005 minimum dataset)" };
+    return { ok: false, status: 400, code: "VALIDATION_ERROR", message: "a primary contact (phone or email) is required (CPR-V2-005 minimum dataset)" };
 
   // 1. Exact identifier collision: refused outright, with the existing patient named.
   for (const ident of input.identifiers ?? []) {
@@ -269,7 +269,7 @@ export async function mergePatients(admin: any, args: {
   return { ok: true, data: { moved: { identifiers, contacts, appointments } } };
 }
 
-/** The patient with everything the registry shows (CPR-002/004): identity, identifiers, contacts, diary. */
+/** The patient with everything the registry shows (CPR-V2-002/004): identity, identifiers, contacts, diary. */
 export async function getPatient(admin: any, workspaceId: string, patientId: string) {
   const { data: patient } = await admin.from("practice_patient")
     .select("id, display_name, sex, birth_date, age_estimate_years, status, merged_into_patient_id, record_version, created_at")

@@ -1,4 +1,4 @@
-// CPR-020 navigation catalogue (CPR-020 V3 "Primary Navigation", SHELL-001 s7.1/7.2).
+// CPR-V2-020 navigation catalogue (CPR-V2-020 V3 "Primary Navigation", SHELL-001 s7.1/7.2).
 //
 // TWO FILTERS DECIDE WHAT RENDERS, and both are honest by construction:
 //   capability -- navigation is generated from the effective capability set, never hard-coded by role
@@ -9,7 +9,7 @@
 //                 field records when it becomes real, so turning one on is a one-word change reviewed
 //                 against an actual shipped route.
 //
-// The full CPR-020 V3 list is present so the shell never needs a layout rebuild as phases land
+// The full CPR-V2-020 V3 list is present so the shell never needs a layout rebuild as phases land
 // (s7.2 "support future modules without rebuilding the entire layout").
 
 export type PracticeNavItem = {

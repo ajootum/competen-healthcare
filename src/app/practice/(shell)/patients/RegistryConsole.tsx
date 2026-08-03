@@ -3,7 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 
-// CPR-004's registry console: search-first, ranked results with how-it-matched, rapid registration when
+// CPR-V2-004's registry console: search-first, ranked results with how-it-matched, rapid registration when
 // nothing matches, and the duplicate interstitial when something nearly does. The 409-with-candidates
 // from the API is rendered as the decision it is -- open the existing patient, or confirm a namesake --
 // never retried silently and never treated as a failure toast.
@@ -62,7 +62,7 @@ export default function RegistryConsole({ canCreate }: { canCreate: boolean }) {
   return (
     <div className="max-w-4xl">
       <h1 className="text-xl font-bold text-gray-900">Patients</h1>
-      <p className="mt-1 text-[13px] text-gray-500">Search first. Register only when nothing matches (CPR-005 workflow).</p>
+      <p className="mt-1 text-[13px] text-gray-500">Search first. Register only when nothing matches (CPR-V2-005 workflow).</p>
 
       <form onSubmit={search} className="mt-4 flex gap-2">
         <input value={q} onChange={e => setQ(e.target.value)} placeholder="Name, phone, or any identifier (Practice ID, national ID, MRN)" className={input} />
@@ -120,7 +120,7 @@ export default function RegistryConsole({ canCreate }: { canCreate: boolean }) {
               <input placeholder="Email (optional)" value={form.email} onChange={e => setForm(p => ({ ...p, email: e.target.value }))} className={input} />
               <input placeholder="National ID (optional)" value={form.nationalId} onChange={e => setForm(p => ({ ...p, nationalId: e.target.value }))} className={input} />
               <p className="sm:col-span-2 text-[10px] text-gray-400">
-                Minimum dataset per CPR-005: name, date of birth or estimated age, and one contact. A Practice ID is generated automatically.
+                Minimum dataset per CPR-V2-005: name, date of birth or estimated age, and one contact. A Practice ID is generated automatically.
               </p>
               <button type="submit" disabled={busy || !form.displayName.trim() || (!form.birthDate && !form.ageEstimateYears) || (!form.phone && !form.email)}
                 className="sm:col-span-2 rounded-lg bg-[var(--cp-primary)] py-2 text-[13px] font-semibold text-white hover:bg-[var(--cp-primary-deep)] disabled:opacity-50">

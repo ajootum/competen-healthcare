@@ -7,7 +7,7 @@ import { getPatient } from "@/lib/practice/patients";
 import { patientTimeline } from "@/lib/practice/encounters";
 import PatientActions from "./PatientActions";
 
-// /practice/patients/{id} -- the Phase-2 slice of CPR-002's patient workspace: identity, identifiers,
+// /practice/patients/{id} -- the Phase-2 slice of CPR-V2-002's patient workspace: identity, identifiers,
 // contacts and the diary history, plus book-for-patient. The clinical timeline, problems and documents
 // arrive with their phases and are named as such. Object-level access: a patient outside the caller's
 // workspace is notFound(), indistinguishable from a patient that never existed (SHELL-001 s6.2).

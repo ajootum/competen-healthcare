@@ -27,8 +27,36 @@ assertion into a meaningless one — it will keep printing PASS against a scheme
 (b) keep the marketing traceability on the V2 documents, which still describe the public pages, and use
 v1.0 identifiers only for application modules.
 
-(b) is cheaper and probably right — the V2 workspace docs are what the *public* pages were written from,
-and the v1.0 set is what the *product* is built from. But it must be a decision, not a drift.
+### SETTLED — (b), with (a)'s namespacing applied to make it safe
+
+**The division of labour is (b)'s.** The public pages keep tracing to the V2 workspace documents, which
+is what they were written from; application modules trace to the v1.0 set, which is what the product is
+now built from. Nothing was re-derived, and no marketing claim changed.
+
+**But (b) alone scopes the collision rather than removing it**, and "you can tell which scheme this is
+from context" is the kind of rule that survives until the first reader who lacks the context. So the old
+set is re-keyed to `CPR-V2-nnn` **everywhere in `src/` and `scripts/`** — 143 identifiers across 30 files,
+in traceability arrays and in the comments that tell a developer which document a module implements.
+
+**The rule, in one line: a bare three-digit `CPR-nnn` is always the v1.0 set; the V2 set always carries
+the `CPR-V2-` prefix.** It lives in `src/lib/practice/spec-numbering.ts`, which also holds both registers:
+the twenty-one V2 surfaces (ids only — the codebase disagrees with itself about two of the titles, and
+inventing them here would be claiming an authority this file does not have) and all thirty-seven v1.0
+specifications with their titles.
+
+Three assertions in `scripts/practice-content-harness.ts` keep it true rather than merely written down:
+no bare old-set id anywhere in the tree; every v1.0-shaped citation is one of the thirty-seven; and a
+control proving the scan reads real files and finds real citations before either can pass.
+
+Two things were learned doing it, both recorded in the code:
+
+- **The re-key corrupted the register that defines the new scheme**, because that file spelled out
+  `CPR-000/010/020` as literals and those are exactly the three colliding numbers. The v1.0 ids are now
+  computed from their number, so a future tree-wide re-key cannot reach them.
+- **The harness's `SURFACES` list was generated, not literal**, so the re-key moved every id in the tree
+  and silently left that one behind — the harness would have kept printing PASS against a scheme that no
+  longer existed anywhere else. It now reads the register. This is the exact failure this section warned
+  about, arriving through the mechanism meant to fix it.
 
 ## 2. The 37, by domain
 
@@ -87,9 +115,10 @@ Recorded here because it recurs across the set and will otherwise be reinstated 
 
 Nothing here is a week's work. A realistic order that keeps the product usable at every step:
 
-1. **Settle the numbering** (§1). One decision, then a mechanical re-key.
-2. **CPR-040 design system** — adopt indigo and the token set across the Practice app. Everything after
-   this inherits it; doing it later means re-styling every module built in the meantime.
+1. ~~**Settle the numbering** (§1). One decision, then a mechanical re-key.~~ **Done** — see §1.
+2. ~~**CPR-040 design system**~~ **Done.** Indigo and the `--cp-*` token layer are adopted across the
+   Practice app; the swatch-versus-prose disagreement is recorded in `globals.css` and asserted in
+   `scripts/cpr040-design-system-harness.ts`.
 3. **Finish the clinical spine** — CPR-130 documentation properly, then CPR-140 follow-ups (already
    queued as Phase 4) and CPR-150 procedures. These complete the encounter the product already has.
 4. **CPR-300 Operations Home** — the daily command centre the spec puts at the centre of the workspace.

@@ -13,7 +13,7 @@
  *   2. No raw six-digit hex survives in the Practice surface, with a named allow-list for the few
  *      places a literal is legitimate.
  *   3. The specification's own values are the ones in the file. The CPR-040 POSTER labels its primary
- *      #2E3AA8; the DOCUMENT's section 4 says #4F46E5, as does CPR-001 v3. Two v1.0 documents against
+ *      #2E3AA8; the DOCUMENT's section 4 says #4F46E5, as does CPR-V2-001 v3. Two v1.0 documents against
  *      one image is not close, and the prose is what a developer implements -- so the prose values are
  *      asserted, and this comment records that the disagreement was seen rather than missed.
  *

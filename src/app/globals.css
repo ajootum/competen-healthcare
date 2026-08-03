@@ -266,7 +266,7 @@ aside[data-sidebar] details[data-nav-group] > summary::-webkit-details-marker { 
 
    THE SPECIFICATION TEXT IS THE SOURCE, NOT THE POSTER. CPR-040's swatch graphic labels its primary
    #2E3AA8; its section 4 says "Primary: Indigo #4F46E5, Deep Indigo #312E81, Accent: Cyan #06B6D4",
-   which is also what CPR-001 v3 s2 says. Two v1.0 documents agreeing against one image is not a close
+   which is also what CPR-V2-001 v3 s2 says. Two v1.0 documents agreeing against one image is not a close
    call, and the prose is the thing a developer is meant to implement.
    ══════════════════════════════════════════════════════════════════════════════════════════════════ */
 :root {

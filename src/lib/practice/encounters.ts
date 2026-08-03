@@ -153,7 +153,7 @@ async function editableEncounter(admin: any, workspaceId: string, encounterId: s
   return { ok: true, data: enc };
 }
 
-/** SOAP segments: one live row per type, upserted -- autosave writes here (CPR-006 autosave + audit). */
+/** SOAP segments: one live row per type, upserted -- autosave writes here (CPR-V2-006 autosave + audit). */
 export async function saveNote(admin: any, args: {
   workspaceId: string; encounterId: string; noteType: string; body: string; actorId: string; correlationId: string;
 }): Promise<EngineResult<{ noteType: string }>> {
@@ -237,7 +237,7 @@ export async function recordTreatment(admin: any, args: {
   return { ok: true, data: { id: t.id as string } };
 }
 
-/** Everything CPR-006 renders for one encounter. */
+/** Everything CPR-V2-006 renders for one encounter. */
 export async function getEncounter(admin: any, workspaceId: string, encounterId: string) {
   const { data: encounter } = await admin.from("practice_encounter")
     .select("id, patient_id, appointment_id, previous_encounter_id, encounter_mode, entry_pathway, reason_for_visit, status, started_at, completed_at, signed_at, record_version")

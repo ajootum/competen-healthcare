@@ -13,14 +13,14 @@ import { hasPracticeMembership } from "@/lib/practice/shell";
 import { createAdminClient } from "@/lib/supabase/server";
 import { platformFlag } from "@/lib/practice/provisioning";
 
-// CPR-001 v3 — the Competen Practice homepage.
+// CPR-V2-001 v3 — the Competen Practice homepage.
 //
 // SHORT ON PURPOSE. The previous page ran twelve sections deep because it was carrying the whole product
 // story; v3 asks for a landing page, and the user asked for it short. What survived the cut is what a
 // visitor needs to decide: what it is, what it does, what it looks like, what it is not, and how to
 // start. The detail did not vanish -- the capability pages behind /practice still hold it.
 //
-// WHAT THIS PAGE REFUSES TO SAY is documented where the content lives (practice-content.ts, CPR-001 v3
+// WHAT THIS PAGE REFUSES TO SAY is documented where the content lives (practice-content.ts, CPR-V2-001 v3
 // block). Briefly: no named hospitals as customers, no invented testimonials, no app-store badges for an
 // app that does not exist, and no price. Two of those four were the user's decision; the first two were
 // not, because they are false statements about identifiable real parties.

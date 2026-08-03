@@ -4,8 +4,8 @@
 
 Twenty-one V3 documents arrived after this plan was written: fourteen enterprise implementation specs
 (IAM, PROV, SHELL, FLOW, DM, API, SEC, SEARCH, INTEL, GOV, OPS, DEV, ARCH-ADR, and the V3-001 migration
-guide) plus V3 replacements for the five essential workspaces (CPR-001/004/005/006/020) and minor-update
-versions of CPR-002/003. Per CPR-V3-001: V2 business specifications are FROZEN and retained; only the
+guide) plus V3 replacements for the five essential workspaces (CPR-V2-001/004/005/006/020) and minor-update
+versions of CPR-V2-002/003. Per CPR-V3-001: V2 business specifications are FROZEN and retained; only the
 five essential workspace specs are replaced; the enterprise documents become platform standards. The
 phases below stand, with these corrections — each one a spec decision replacing a proposal of mine:
 
@@ -24,7 +24,7 @@ phases below stand, with these corrections — each one a spec decision replacin
    IAM-ADR-04 "roles are derived from memberships").
 4. **Phase 0 is now specified rather than designed**: IAM-001 (identity/URLs/routing) + PROV-001
    (provisioning data + API contracts, idempotent, state machine) + SHELL-001 (guard order, context
-   contract, loading states) + CPR-020 V3 (shell) + CPR-001 V3 (command centre) + FLOW-001 (first
+   contract, loading states) + CPR-V2-020 V3 (shell) + CPR-V2-001 V3 (command centre) + FLOW-001 (first
    clinical workflow, feeding Phases 1–3).
 5. **Patient access confirmed separated** (IAM-ADR-07): `/patient/sign-in` is its own surface, never
    mixed with practitioner membership — matching this plan's phase-gating of patient surfaces.
@@ -38,7 +38,7 @@ phases below stand, with these corrections — each one a spec decision replacin
 and harness-verified; the product it describes does not exist. This plan is derived from CPR-ARCH-001 v2
 (especially §4 users, §5 domains, §13 platform/engine separation, §15 conceptual data model, §19 ADRs,
 §20 development sequence, §21 acceptance criteria), the 15 PEN engine specs, the 20 CPR-V2 workspace
-specs, and CPR-000A — read, not recalled.
+specs, and CPR-V2-000A — read, not recalled.
 
 ## What "set up" actually means
 
@@ -63,7 +63,7 @@ encounter is tagged with, never the owner of the practice record.
    practitioner, personal assistant/receptionist (delegated, cannot alter protected clinical content),
    practice administrator, patient, external collaborator (§4). These belong in a **`prc_members`
    practice-scoped membership table** (precedent: OGS appointments, org roles) rather than inflating
-   `AppRole` — because CPR-015 multi-practice switching means one person holds *different roles in
+   `AppRole` — because CPR-V2-015 multi-practice switching means one person holds *different roles in
    different practices*, which a global role cannot express. Patient access is identity + relationship,
    not a staff role.
 
@@ -105,7 +105,7 @@ CPR-ARCH-001 §13.1 lists the shared platform services, and this platform alread
 | Document & object storage | documents modules | compose (PEN-011) |
 | AI platform & governance | AI gateway + copilot pattern + plat_ai_requests | compose (PEN-013); ADR-09 source-linked |
 | Analytics | charts/PUI-007 | as-is |
-| Config & no-code | WCE + CPR-019 R2 split | compose (platform-managed vs practice-managed) |
+| Config & no-code | WCE + CPR-V2-019 R2 split | compose (platform-managed vs practice-managed) |
 | Design system | PUI tokens/components; Practice indigo #2563EB accent | as-is |
 
 Greenfield: the `prc_` domain model, the PEN engine logic, all 20 workspaces.
@@ -118,26 +118,26 @@ Greenfield: the `prc_` domain model, the PEN engine logic, all 20 workspaces.
   writes scope to the subject's practice; policies declared in migrations only). Workspace shell at
   `/my-practice` with GlobalHeader + kit. `/practice/start` wired to create a real practice. Harnesses
   extended to know `practice_id`.
-- **Phase 1 — Your diary.** PEN-001 scheduling engine; CPR-002 schedule/availability, CPR-003
-  appointments/booking; CPR-001 command centre skeleton over real appointments.
-- **Phase 2 — Patient identity.** PEN-002; CPR-004 rapid registration (six modes), CPR-005 search &
+- **Phase 1 — Your diary.** PEN-001 scheduling engine; CPR-V2-002 schedule/availability, CPR-V2-003
+  appointments/booking; CPR-V2-001 command centre skeleton over real appointments.
+- **Phase 2 — Patient identity.** PEN-002; CPR-V2-004 rapid registration (six modes), CPR-V2-005 search &
   clinical summary. Duplicate prevention, aliases, consent fields; **no automatic cross-organisation
   matching** (§10).
-- **Phase 3 — The encounter.** PEN-003 encounter lifecycle + PEN-006 rapid capture; CPR-006..009
+- **Phase 3 — The encounter.** PEN-003 encounter lifecycle + PEN-006 rapid capture; CPR-V2-006..009
   (encounter, diagnosis/problems, investigations, treatment/procedures/prescription-as-record). All four
   entry pathways end to end (§7: booked, new walk-in, walk-in follow-up, scheduled follow-up). ADR-07
   minimal capture with progressive completion.
-- **Phase 4 — Continuity.** PEN-004 follow-up intelligence + PEN-012 timeline; CPR-010 follow-ups.
+- **Phase 4 — Continuity.** PEN-004 follow-up intelligence + PEN-012 timeline; CPR-V2-010 follow-ups.
   `FollowUpObligation` due/overdue/missed/closed loop. **Phases 0–4 are the acceptance-criteria core.**
-- **Phase 5 — Case memory & copilot.** PEN-005/008/013; CPR-011 intelligence, CPR-013 AI copilot.
+- **Phase 5 — Case memory & copilot.** PEN-005/008/013; CPR-V2-011 intelligence, CPR-V2-013 AI copilot.
   ADR-05: every encounter contributes a `PracticeIntelligenceFact` with source, method, confidence.
-- **Phase 6 — Evidence.** PEN-009/014; CPR-012 reports/exports/portfolio; hospital payment lists with
+- **Phase 6 — Evidence.** PEN-009/014; CPR-V2-012 reports/exports/portfolio; hospital payment lists with
   facility-specific identifiers (§21).
-- **Phase 7 — Team & network.** PEN-007/010; CPR-016 delegation (protected-content boundary), CPR-017
+- **Phase 7 — Team & network.** PEN-007/010; CPR-V2-016 delegation (protected-content boundary), CPR-V2-017
   collaboration/referrals.
-- **Phase 8 — Setup & switching.** CPR-014 settings under the CPR-019 R2 platform-/practice-managed
-  split; CPR-015 multi-practice switching with context banners (§10).
-- **Phase 9 — Care anywhere.** CPR-018 teleconsultation, CPR-019 mobile/offline. Infra-heavy
+- **Phase 8 — Setup & switching.** CPR-V2-014 settings under the CPR-V2-019 R2 platform-/practice-managed
+  split; CPR-V2-015 multi-practice switching with context banners (§10).
+- **Phase 9 — Care anywhere.** CPR-V2-018 teleconsultation, CPR-V2-019 mobile/offline. Infra-heavy
   (WebRTC, sync/conflict model); honestly last, as the platform has deferred this class before (CDP-012).
 - **Patient phase (unnumbered, gated).** Booking + patient login against LP-BOOK/LP-PAT, once the
   practitioner core is real.

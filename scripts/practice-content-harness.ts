@@ -1,5 +1,5 @@
 /**
- * Competen Practice public section harness (CPR-000 .. CPR-020).
+ * Competen Practice public section harness (CPR-V2-000 .. CPR-V2-020).
  *
  * WHAT THIS IS FOR. The /practice section was derived from twenty developer specifications. "Derived from"
  * is exactly the kind of claim that is true on the day it is written and quietly false a year later: a
@@ -9,7 +9,7 @@
  *
  * FOUR THINGS ARE PROVEN:
  *
- *   COVERAGE  - every specified module (CPR-001..020) is claimed by exactly one area, and no area claims a
+ *   COVERAGE  - every specified module (CPR-V2-001..020) is claimed by exactly one area, and no area claims a
  *               module that does not exist. Dropping a spec is then a test failure, not an oversight.
  *   ASSETS    - every screen referenced by the catalogue exists on disk AND is served. A broken image on a
  *               marketing page is the most embarrassing possible failure and the easiest to not notice.
@@ -24,14 +24,15 @@
  * Needs the dev server on :3000.
  *   npx --yes tsx scripts/practice-content-harness.ts
  */
-import { existsSync } from "node:fs";
-import { join } from "node:path";
+import { existsSync, readFileSync, readdirSync } from "node:fs";
+import { join, relative } from "node:path";
 import {
   PRACTICE_AREAS, INTEGRATIONS, PREVIEW_NOTE, MODULES_WITHOUT_SPECS, PRACTICE_HERO, TENANT_MODEL,
   OVERVIEW_WORKSPACES, OVERVIEW_SCREEN, AREA_COUNT_WORD,
   NOT_AN_EMR, LP3_HERO, LP3_BENEFITS, LP3_AI, LP3_WORKSPACE,
 } from "../src/lib/marketing/practice-content";
 import { JOURNEYS, AVAILABILITY, JOURNEY_GATES, FAQS } from "../src/lib/marketing/practice-site";
+import { V2_SPECIFIED_WORKSPACES, V1_IDS, isUnknownV1Id } from "../src/lib/practice/spec-numbering";
 import { loadEnvConfig } from "@next/env";
 import { createClient } from "@supabase/supabase-js";
 
@@ -54,16 +55,21 @@ const ok = (label: string, cond: boolean, detail = "") => {
  * TWO SPECIFICATION LAYERS, because the product has two and they cross-cut.
  *
  * ENGINES  PEN-001..015, the capability layer -- one document each, stable since v2.
- * SURFACES CPR-001..020 V2, the workspace layer. The CPR space was in flux (its numbering disagreed with
+ * SURFACES CPR-V2-001..020, the workspace layer. The CPR space was in flux (its numbering disagreed with
  *          itself in two places, which is why the areas were anchored to PEN alone), and the V2 documents
  *          settled it. Both are now cited and both are proven covered exactly once.
  *
  * Coverage is asserted per layer, not merged: an area can legitimately own workspaces and no engine.
  * "Care anywhere" is exactly that -- teleconsultation and offline working consume engines that other areas
  * explain, so forcing it to own one would have meant taking an engine off the area that explains it.
+ *
+ * SURFACES comes from the numbering register rather than being generated here. It used to be generated,
+ * and a generated id is invisible to a re-key: when the V2 set was namespaced (CPR-BUILD-001 s1) every
+ * literal in the tree moved and this one silently did not, leaving the harness asserting coverage of a
+ * scheme that no longer existed anywhere else -- which is precisely the failure mode s1 warns about.
  */
 const ENGINES = Array.from({ length: 15 }, (_, i) => `PEN-${String(i + 1).padStart(3, "0")}`);
-const SURFACES = Array.from({ length: 20 }, (_, i) => `CPR-${String(i + 1).padStart(3, "0")}`);
+const SURFACES = V2_SPECIFIED_WORKSPACES;
 
 // Same list as the public-disclosure harness, deliberately duplicated: if that file is ever narrowed, this
 // one still fails, and two harnesses disagreeing is a louder signal than one silently relaxing.
@@ -75,7 +81,7 @@ const FORBIDDEN = [
 
 // VOCABULARY FROM THE SOURCE DOCUMENTS THAT MUST NOT REACH A VISITOR.
 //
-// CPR-000A and CPR-019 Revision 2 are internal architecture papers. They describe the landlord control
+// CPR-V2-000A and CPR-V2-019 Revision 2 are internal architecture papers. They describe the landlord control
 // plane, the super-administrator's power to suspend a tenant and to open an audited impersonation session,
 // and the internal architectures being bridged. Those sentences are RIGHT THERE in the material this page
 // was written from, which makes them a copy-paste away from the public site at every future edit -- and
@@ -87,6 +93,20 @@ const INTERNAL_VOCABULARY = [
   "landlord", "control plane", "impersonat", "super administrator", "super admin",
   "tenant lifecycle", "suspend", "maintenance mode", "telemetry", "LCP", "PSA",
 ];
+
+/** Every .ts/.tsx/.css file under the given roots. Used by the numbering assertions in section 1f/1g. */
+function sourceTree(roots: string[]): string[] {
+  const out: string[] = [];
+  const walk = (dir: string) => {
+    for (const entry of readdirSync(dir, { withFileTypes: true })) {
+      const full = join(dir, entry.name);
+      if (entry.isDirectory()) { if (entry.name !== "node_modules") walk(full); }
+      else if (/\.(ts|tsx|css)$/.test(entry.name)) out.push(full);
+    }
+  };
+  for (const r of roots) if (existsSync(r)) walk(r);
+  return out;
+}
 
 function visibleText(html: string): string {
   const body = html.replace(/<script[\s\S]*?<\/script>/gi, " ").replace(/<style[\s\S]*?<\/style>/gi, " ");
@@ -112,7 +132,7 @@ async function main() {
     return m;
   };
   const engines = tally(PRACTICE_AREAS.flatMap(a => a.engines));
-  // The overview page claims CPR-001 and CPR-020: the command centre and the navigation architecture are
+  // The overview page claims CPR-V2-001 and CPR-V2-020: the command centre and the navigation architecture are
   // what /practice itself is, so counting them only across the AREAS would report them permanently missing.
   const surfaces = tally([...PRACTICE_AREAS.flatMap(a => a.workspaces), ...OVERVIEW_WORKSPACES]);
 
@@ -134,13 +154,49 @@ async function main() {
   // coverage while making the traceability meaningless.
   const misfiled = [
     ...PRACTICE_AREAS.flatMap(a => a.engines).filter(id => !id.startsWith("PEN-")),
-    ...PRACTICE_AREAS.flatMap(a => a.workspaces).filter(id => !id.startsWith("CPR-")),
+    ...PRACTICE_AREAS.flatMap(a => a.workspaces).filter(id => !id.startsWith("CPR-V2-")),
   ];
   ok("1d. engines and workspaces are not filed in each other's list", misfiled.length === 0, misfiled.join(", "));
 
   // A recorded gap must stay a gap: if one is ever written into an area, the note beside it has become a lie.
   const gapClaimed = MODULES_WITHOUT_SPECS.filter(id => engines.has(id) || surfaces.has(id));
   ok("1e. recorded spec gaps are still gaps", gapClaimed.length === 0, gapClaimed.join(", "));
+
+  // ── 1f/1g. THE NUMBERING DECISION HOLDS ACROSS THE WHOLE TREE (CPR-BUILD-001 s1) ──────────────────
+  //
+  // Asserted over the SOURCE rather than over this module's own arrays, because the decision is only
+  // worth anything if it survives the next file somebody writes. Two failures are possible and they are
+  // different mistakes:
+  //
+  //   1f  a bare three-digit id in the OLD range -- somebody copied a citation from a pre-decision file
+  //       or from a V2 document, and the tree now has a string that means two things again.
+  //   1g  a v1.0-shaped id that is not one of the thirty-seven -- a typo'd or invented citation, which
+  //       reads as traceability and traces to nothing.
+  //
+  // Comments are in scope deliberately: nearly every CPR citation in this codebase lives in one, and a
+  // comment is where a developer goes to find out which document a module implements.
+  // CONTROL FIRST: a scan that reads nothing reports every rule as satisfied. Both counts are asserted
+  // non-trivial, so "no violations" cannot mean "no files" or "no citations".
+  const sourceFiles = sourceTree(["src", "scripts"]);
+  const stray: string[] = [];
+  const unknownV1: string[] = [];
+  let citations = 0;
+  for (const file of sourceFiles) {
+    // `CPR-V2-001` is not a candidate at all: the literal `CPR-` must be followed by three digits, and in
+    // the namespaced form it is followed by `V2-`. So the scan sees only bare ids, which is the point.
+    for (const m of readFileSync(file, "utf8").matchAll(/\bCPR-(\d{3})\b/g)) {
+      citations++;
+      if (Number(m[1]) <= 21) stray.push(`${relative(process.cwd(), file)}: ${m[0]}`);
+      else if (isUnknownV1Id(m[0])) unknownV1.push(`${relative(process.cwd(), file)}: ${m[0]}`);
+    }
+  }
+  ok("1f-control. the numbering scan reads real files and finds real citations",
+    sourceFiles.length > 50 && citations > 10, `${sourceFiles.length} files, ${citations} citations`);
+  ok("1f. no bare old-set CPR id survives anywhere in src/ or scripts/", stray.length === 0,
+    `${stray.length} found -- ${stray.slice(0, 4).join("; ")}`);
+  ok("1g. every v1.0-shaped CPR id cited in code is one of the 37 specifications", unknownV1.length === 0,
+    `${unknownV1.length} found -- ${unknownV1.slice(0, 4).join("; ")}`);
+  ok("1h. the v1.0 register holds all 37 specifications", V1_IDS.length === 37, String(V1_IDS.length));
 
   // ── 2. ASSETS: every screen exists on disk ────────────────────────────────────────────────────────
   const allImages = [PRACTICE_HERO.image, OVERVIEW_SCREEN.src, ...PRACTICE_AREAS.flatMap(a => a.screens.map(s => s.src))];
@@ -210,7 +266,7 @@ async function main() {
 
   // ── 4. NAVIGATION: catalogue, nav and routes agree ────────────────────────────────────────────────
   //
-  // CPR-001 v3 made the homepage SHORT: it no longer enumerates every capability area, it links to the
+  // CPR-V2-001 v3 made the homepage SHORT: it no longer enumerates every capability area, it links to the
   // catalogue. So the assertion moved with it -- the homepage must offer a way IN to the areas, and each
   // area must still resolve. Asserting a link per area against a page that deliberately stopped listing
   // them would be testing the old design, which is how a harness starts blocking the work it guards.
@@ -237,7 +293,7 @@ async function main() {
   // against the wrong items.
   // 5b/5c WERE ASSERTED HERE AND ARE NOW ASSERTED CONDITIONALLY.
   //
-  // CPR-001 v3 removed the integrations table from the homepage, so the old assertions had no subject.
+  // CPR-V2-001 v3 removed the integrations table from the homepage, so the old assertions had no subject.
   // They were briefly stubbed to `true` to get the suite green -- which is the "fails as good news"
   // pattern this file exists to prevent, and worse than deleting them, because a stub still prints PASS.
   // The honest shape is: check it WHERE IT IS SHOWN, and say plainly when it is shown nowhere.
@@ -260,7 +316,7 @@ async function main() {
       overLabelled.map(i => i.name).join(", "));
   }
 
-  // ── 5d. CPR-000A: the tenant model renders, and its diagram does NOT ──────────────────────────────
+  // ── 5d. CPR-V2-000A: the tenant model renders, and its diagram does NOT ──────────────────────────────
   // The short page keeps the OWNERSHIP BOUNDARY and drops the four pillars -- that sentence is the one a
   // clinician hesitates over, and it is asserted below at 5e. The pillars live on the capability pages.
   ok("5e. /practice states who can change what", overviewText.includes(TENANT_MODEL.boundary.slice(0, 60)));
@@ -389,7 +445,7 @@ async function main() {
   }
   ok("6. every screen is served over HTTP", notServed.length === 0, notServed.join(", "));
 
-  // ── 8. CPR-001 v3: the short homepage, and what it refuses to say ─────────────────────────────────
+  // ── 8. CPR-V2-001 v3: the short homepage, and what it refuses to say ─────────────────────────────────
   //
   // The sections are asserted so a future edit cannot quietly drop one. The REFUSALS are asserted because
   // they are decisions, and a decision that lives only in a commit message is one the next person working

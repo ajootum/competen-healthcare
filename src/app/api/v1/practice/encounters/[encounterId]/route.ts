@@ -3,7 +3,7 @@ import { requirePracticeContext, isDenied } from "@/lib/practice/api-context";
 import { getEncounter, transitionEncounter, saveNote } from "@/lib/practice/encounters";
 import { ENCOUNTER_ACTIONS } from "@/lib/practice/encounter-constants";
 
-// GET   /api/v1/practice/encounters/{id}          -- everything CPR-006 renders.
+// GET   /api/v1/practice/encounters/{id}          -- everything CPR-V2-006 renders.
 // PATCH /api/v1/practice/encounters/{id}          -- { action } state machine, or { noteType, body } autosave.
 //
 // Signing needs encounter.sign; everything else needs encounter.edit. That split is deliberate: an

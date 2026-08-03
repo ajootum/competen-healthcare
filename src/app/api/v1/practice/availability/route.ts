@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { requirePracticeContext, isDenied } from "@/lib/practice/api-context";
 import { audit } from "@/lib/practice/provisioning";
 
-// POST /api/v1/practice/availability -- block or open time (PEN-001 availability; CPR-003 "clinician
+// POST /api/v1/practice/availability -- block or open time (PEN-001 availability; CPR-V2-003 "clinician
 // availability, leave and blocked time"). Blocking is the practitioner statement "I am not seeing
 // patients then"; the booking engine treats it as information for the diary view rather than a hard
 // constraint, because walk-ins and emergencies do not respect calendars and the product must not

@@ -3,7 +3,7 @@
  * the same engine the API uses.
  *
  * WHAT IT PROVES:
- *   1. Registration enforces the CPR-005 minimum dataset, creates the patient, GENERATES an opaque
+ *   1. Registration enforces the CPR-V2-005 minimum dataset, creates the patient, GENERATES an opaque
  *      Practice ID, and stores the primary contact.
  *   2. THE DUPLICATE DOCTRINE, all three branches: an exact identifier collision is REFUSED with the
  *      existing patient named; a same-name+same-dob registration returns CANDIDATES and is refused
@@ -79,7 +79,7 @@ async function main() {
 
   // ── 1. Registration + minimum dataset + generated id ───────────────────────
   const missing = await registerPatient(admin, { workspaceId: wsA, displayName: "No Contact Person", birthDate: "1990-01-01", ...base });
-  ok("registration without a contact is refused (CPR-005 minimum dataset)", !missing.ok && missing.code === "VALIDATION_ERROR", missing.ok ? "was allowed" : missing.code);
+  ok("registration without a contact is refused (CPR-V2-005 minimum dataset)", !missing.ok && missing.code === "VALIDATION_ERROR", missing.ok ? "was allowed" : missing.code);
 
   const p1 = await registerPatient(admin, {
     workspaceId: wsA, displayName: "Amina Nakato", birthDate: "1988-04-12", sex: "female",

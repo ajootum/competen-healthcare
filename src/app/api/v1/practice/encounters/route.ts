@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { requirePracticeContext, isDenied } from "@/lib/practice/api-context";
 import { launchEncounter, LIVE_STATUSES } from "@/lib/practice/encounters";
 
-// GET  /api/v1/practice/encounters?status=live|all -- the encounter queue (CPR-006 "encounter queue/history").
+// GET  /api/v1/practice/encounters?status=live|all -- the encounter queue (CPR-V2-006 "encounter queue/history").
 // POST /api/v1/practice/encounters -- FLOW-001 launch. Returns 200 with resumed:true when a live
 //      encounter already exists for the patient, and 201 when one is created: resuming is a SUCCESS,
 //      not a conflict, because "one active encounter per visit" is the intended behaviour rather than

@@ -27,7 +27,7 @@
 // number. Every one of those is a claim about the world that is either unverified or, in the case of the
 // practice count, currently false -- and HIPAA is United States law, which is a strange thing to assert
 // for a product built for East Africa. None of them appear below. What replaces them is the trust material
-// that IS true: the tenant isolation and audit guarantees from CPR-000A.
+// that IS true: the tenant isolation and audit guarantees from CPR-V2-000A.
 // ─────────────────────────────────────────────────────────────────────────────────────────────────────
 
 import { PRACTICE_ACCENT } from "./practice-content";
@@ -165,7 +165,7 @@ export const HOW_IT_WORKS = {
 };
 
 /**
- * LP-PRA-001's trust section. Every line here is either an architectural fact from CPR-000A or a business
+ * LP-PRA-001's trust section. Every line here is either an architectural fact from CPR-V2-000A or a business
  * rule from the module specifications -- things that are true because of how the product is built, rather
  * than because of who is claimed to use it. See the header of this file for what was deliberately left out.
  */
@@ -299,7 +299,7 @@ export const BOOKING_JOURNEY = {
   ],
 };
 
-/** The "Start Your Practice" journey. Its steps are CPR-000A's tenant lifecycle, written for the person
+/** The "Start Your Practice" journey. Its steps are CPR-V2-000A's tenant lifecycle, written for the person
  *  living through it rather than for the administrator performing it. */
 export const START_PRACTICE = {
   eyebrow: "For clinicians and clinic owners",

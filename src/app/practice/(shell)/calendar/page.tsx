@@ -5,8 +5,8 @@ import { hasCapability } from "@/lib/practice/access";
 import { loadDay } from "@/lib/practice/scheduling";
 import CalendarConsole from "./CalendarConsole";
 
-// /practice/calendar (CPR-003 V3, PEN-001) -- the diary. Day view first: it is the view a practitioner
-// operates from (Today's Schedule, the queue, quick actions are all day-scoped in CPR-003's own layout
+// /practice/calendar (CPR-V2-003 V3, PEN-001) -- the diary. Day view first: it is the view a practitioner
+// operates from (Today's Schedule, the queue, quick actions are all day-scoped in CPR-V2-003's own layout
 // table). Week and month views arrive as the calendar matures; shipping them as empty grids today would
 // be furniture, not function.
 //

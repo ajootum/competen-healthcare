@@ -5,7 +5,7 @@ import { audit } from "@/lib/practice/provisioning";
 
 // GET   /api/v1/practice/patients/{id} -- the patient with identifiers, contacts and diary history.
 // PATCH /api/v1/practice/patients/{id} -- demographic edit, optimistic-concurrency guarded, audited
-//        (CPR-005 "identity changes fully audited"; DM-001 s16 update rule).
+//        (CPR-V2-005 "identity changes fully audited"; DM-001 s16 update rule).
 // Object-level denial is enumeration-safe: a patient in another workspace answers exactly like a
 // patient that does not exist (SHELL-001 s6.2).
 

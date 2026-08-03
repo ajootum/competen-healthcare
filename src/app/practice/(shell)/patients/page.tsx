@@ -3,8 +3,8 @@ import { resolvePracticeShell } from "@/lib/practice/shell";
 import { hasCapability } from "@/lib/practice/access";
 import RegistryConsole from "./RegistryConsole";
 
-// /practice/patients (CPR-004 V3) -- search-first registry. The page renders EMPTY of patients by
-// design: CPR-004's own workflow is "enter search criteria -> ranked matches -> if no match, offer
+// /practice/patients (CPR-V2-004 V3) -- search-first registry. The page renders EMPTY of patients by
+// design: CPR-V2-004's own workflow is "enter search criteria -> ranked matches -> if no match, offer
 // rapid registration". A browsable list of every patient is not a workspace surface; it is a data
 // export, and those are Phase 6's governed problem.
 

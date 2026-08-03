@@ -4,7 +4,7 @@ import { resolvePracticeShell } from "@/lib/practice/shell";
 import { visibleNav } from "@/lib/practice/navigation";
 import PracticeSignOut from "./PracticeSignOut";
 
-// CPR-020 authenticated application shell (SHELL-001 s7, CPR-020 V3).
+// CPR-V2-020 authenticated application shell (SHELL-001 s7, CPR-V2-020 V3).
 //
 // GUARDS RUN HERE, ONCE, IN SHELL-001 s6.1 ORDER, for every route in this group. A page inside (shell)
 // can assume READY: authentication, membership, workspace status, entitlement and onboarding have all

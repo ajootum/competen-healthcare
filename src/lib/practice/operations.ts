@@ -7,7 +7,7 @@
 // crosses into the super-admin surface. Nothing here can be widened by accident: the selects say so.
 //
 // There is deliberately NO "open this practice" action. Support impersonation is a control-plane feature
-// with its own audit and consent requirements (CPR-000A), and inventing a back door into a colleague's
+// with its own audit and consent requirements (CPR-V2-000A), and inventing a back door into a colleague's
 // clinical record because it would be convenient for testing is exactly the thing the ownership model
 // exists to prevent.
 

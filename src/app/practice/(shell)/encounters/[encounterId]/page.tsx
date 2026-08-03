@@ -6,11 +6,11 @@ import { hasCapability } from "@/lib/practice/access";
 import { getEncounter, patientTimeline, LOCKED_STATUSES } from "@/lib/practice/encounters";
 import EncounterConsole from "./EncounterConsole";
 
-// /practice/encounters/{id} -- CPR-006 V3, the consultation workspace: patient header, the previous
+// /practice/encounters/{id} -- CPR-V2-006 V3, the consultation workspace: patient header, the previous
 // visit in reach, the SOAP note, diagnoses, treatments, and the state machine that ends in a signature.
 //
 // The PRIOR TIMELINE is rendered on the same screen rather than behind a tab because the single most
-// common clinical question in a follow-up is "what did we do last time" -- CPR-006 V3 calls for prior
+// common clinical question in a follow-up is "what did we do last time" -- CPR-V2-006 V3 calls for prior
 // visit context in the consultation view, and a click away is a click too many mid-consultation.
 //
 // Object-level access is the workspace, as everywhere else: an encounter from another practice is

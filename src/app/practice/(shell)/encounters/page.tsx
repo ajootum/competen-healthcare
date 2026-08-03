@@ -5,7 +5,7 @@ import { resolvePracticeShell } from "@/lib/practice/shell";
 import { hasCapability } from "@/lib/practice/access";
 import { LIVE_STATUSES } from "@/lib/practice/encounters";
 
-// /practice/encounters -- CPR-006's "encounter queue / history". Two lists, deliberately separated:
+// /practice/encounters -- CPR-V2-006's "encounter queue / history". Two lists, deliberately separated:
 // what is OPEN right now and must be finished, and what has already been closed. A single mixed list
 // would let an unsigned encounter from last Tuesday disappear under today's traffic, which is exactly
 // the failure a clinical record must not have.

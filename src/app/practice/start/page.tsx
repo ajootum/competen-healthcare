@@ -8,7 +8,7 @@ import { pageMetadata } from "@/lib/marketing/site";
 //
 // There is no specification for this page; what it needed was a real place to go, since the CTA previously
 // landed on /signup, which creates a generic Competen account with the nurse role and no practice. Its six
-// steps are CPR-000A's tenant lifecycle, rewritten from the administrator's point of view to the clinic
+// steps are CPR-V2-000A's tenant lifecycle, rewritten from the administrator's point of view to the clinic
 // owner's -- "we create your practice" rather than "super administrator provisions tenant".
 //
 // No trial offer, no pricing. The comps show "free 14-day trial, no credit card required" and a Pricing

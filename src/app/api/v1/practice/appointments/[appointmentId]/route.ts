@@ -4,7 +4,7 @@ import { transitionAppointment } from "@/lib/practice/scheduling";
 
 // PATCH /api/v1/practice/appointments/{id} { action } -- the state machine's only HTTP door.
 // Actions map to DM-001 s7 states; the engine refuses illegal moves with 422 and version conflicts with
-// 409, and `arrive` also writes the arrival record and queues the patient (CPR-003 check-in workflow).
+// 409, and `arrive` also writes the arrival record and queues the patient (CPR-V2-003 check-in workflow).
 
 const ACTIONS: Record<string, string> = {
   confirm: "CONFIRMED",

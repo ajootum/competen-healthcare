@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 
-// The diary console (CPR-003 V3): today's schedule, the waiting queue, availability blocks and quick
+// The diary console (CPR-V2-003 V3): today's schedule, the waiting queue, availability blocks and quick
 // actions -- book, walk-in, check in, cancel, no-show, complete, and queue movement. Every action calls
 // the engine through the API and re-fetches the day, so what renders is always what the database holds;
 // nothing is optimistically invented client-side on a clinical diary.
@@ -194,7 +194,7 @@ export default function CalendarConsole({ date, canManage, canQueue, canStartEnc
         </section>
 
         <div className="flex flex-col gap-4">
-          {/* Waiting queue (CPR-003 "Waiting Queue") */}
+          {/* Waiting queue (CPR-V2-003 "Waiting Queue") */}
           <section className="rounded-xl border border-gray-200 bg-white p-4">
             <h2 className="text-[13px] font-bold text-gray-900">Waiting queue</h2>
             {day.queue.length === 0 ? (

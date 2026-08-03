@@ -3,7 +3,7 @@
 // GOVERNED BY CPR-ARCH-001 VERSION 2, and built on TWO specification layers now that both are stable:
 // the fifteen PEN engines (capability) and the twenty CPR-V2 workspaces (surface). The CPR space was in
 // flux and is not any more -- the V2 documents arrived, so this file cites both and the harness proves
-// each list is covered exactly once. Also informed by CPR-000A and CPR-ARCH-002 to 005.
+// each list is covered exactly once. Also informed by CPR-V2-000A and CPR-ARCH-002 to 005.
 //
 // V2 IS A BIGGER PRODUCT THAN V1, not a re-drawing of it. Teleconsultation, mobile/offline working,
 // assistant delegation and multi-practice switching were sub-features or absent in version 1 and are
@@ -32,9 +32,9 @@
 //    PREVIEW_NOTE beside them. Competen Practice is specified, not shipped; a visitor who reads these as
 //    screenshots of a live product has been misled by us, not by themselves.
 //
-// 2. The specifications distinguish Version 1 from later work -- CPR-000's integration strategy names
+// 2. The specifications distinguish Version 1 from later work -- CPR-V2-000's integration strategy names
 //    identity, notifications and document storage now and defers EMR interoperability, payments and
-//    telemedicine; CPR-002 defers Google/Outlook calendar; CPR-013 defers push and WhatsApp. So each
+//    telemedicine; CPR-V2-002 defers Google/Outlook calendar; CPR-V2-013 defers push and WhatsApp. So each
 //    integration carries `inV1`, and the ones that are not are labelled on the page. A clinic that buys
 //    because "it connects to our laboratory system" has been sold something the documents do not promise.
 //
@@ -102,7 +102,7 @@ export const PORTABILITY = {
   ],
 };
 
-// CPR-000's core design principles and out-of-scope list. This band exists because "not an EMR" is the most
+// CPR-V2-000's core design principles and out-of-scope list. This band exists because "not an EMR" is the most
 // useful thing the architecture says about the product, and burying it would sell to the wrong clinics --
 // which then churn. Stating the boundary is cheaper than discovering it in month three.
 export const NOT_AN_EMR = {
@@ -132,7 +132,7 @@ export const NOT_AN_EMR = {
   ],
 };
 
-// CPR-000's eight-step patient journey, verbatim in substance. It is the clearest thing in the whole
+// CPR-V2-000's eight-step patient journey, verbatim in substance. It is the clearest thing in the whole
 // specification set and it is what a clinician actually wants to see before booking a demo.
 export const PATIENT_JOURNEY = [
   { step: "Discover", body: "A patient finds your practice and your booking page." },
@@ -145,7 +145,7 @@ export const PATIENT_JOURNEY = [
   { step: "Return", body: "Recalls bring them back when they are due, not when they remember." },
 ];
 
-// CPR-000 "Primary User Roles". Organisation Administrator is marked optional in the specification and is
+// CPR-V2-000 "Primary User Roles". Organisation Administrator is marked optional in the specification and is
 // described that way here rather than being quietly promoted to a headline role.
 export const PRACTICE_ROLES = [
   { role: "Healthcare professionals", body: "Your day, your diary, your patients -- on one screen.", icon: "\u{1FA7A}" },
@@ -155,7 +155,7 @@ export const PRACTICE_ROLES = [
 ];
 
 /**
- * CPR-020 integration domains, split by what CPR-000's integration strategy places in Version 1. Everything
+ * CPR-V2-020 integration domains, split by what CPR-V2-000's integration strategy places in Version 1. Everything
  * else is labelled on the page. See honesty rule 2 at the top of this file.
  */
 export const INTEGRATIONS: { name: string; body: string; inV1: boolean }[] = [
@@ -174,9 +174,9 @@ export const INTEGRATION_NOTE =
   "architecture is built for it -- REST APIs, webhooks and an FHIR-ready data layer.";
 
 /**
- * CPR-000A Enterprise Integration Architecture, reduced to the part a clinic buying this actually needs.
+ * CPR-V2-000A Enterprise Integration Architecture, reduced to the part a clinic buying this actually needs.
  *
- * MOST OF CPR-000A IS NOT PUBLIC AND MUST NOT BECOME PUBLIC. It draws the platform operations control
+ * MOST OF CPR-V2-000A IS NOT PUBLIC AND MUST NOT BECOME PUBLIC. It draws the platform operations control
  * plane, enumerates the super-administrator's powers including audited support impersonation, and names
  * the internal architectures it bridges. WEB-STRAT-001 forbids disclosing that layer, and separately, a
  * marketing page that volunteers "we can impersonate your users" answers a question nobody asked in the
@@ -209,7 +209,7 @@ export const TENANT_MODEL = {
       points: ["Authentication and access control", "Audit and compliance records", "Notification delivery", "Monitoring and API access"],
     },
   ],
-  // CPR-000A section 7 and CPR-019 Rev 2's governance rules, stated plainly. It is the honest answer to
+  // CPR-V2-000A section 7 and CPR-V2-019 Rev 2's governance rules, stated plainly. It is the honest answer to
   // "so who can actually change things", and it cuts both ways on purpose.
   boundary:
     "Your practice administrator manages your clinicians, calendars, rules and branding, and cannot reach " +
@@ -280,14 +280,14 @@ export type PracticeArea = {
 // own one would have meant taking an engine off the area that actually explains it.
 //
 // The harness proves both lists are covered exactly once, so a spec cannot be dropped in a copy edit --
-// and CPR-001 and CPR-020 are claimed by the OVERVIEW page rather than an area, because the command centre
+// and CPR-V2-001 and CPR-V2-020 are claimed by the OVERVIEW page rather than an area, because the command centre
 // and the navigation architecture are what the landing page itself is.
 //
 // AREA NAMES ARE OUTCOMES, never workspace names. WEB-STRAT-001 forbids marketing the internal
 // decomposition: "The encounter", not "Rapid Registration, Patient Search and Clinical Encounter
 // Workspaces". The specs decide what belongs together; the visitor never sees them.
 export const PRACTICE_AREAS: PracticeArea[] = [
-  // ── PEN-001 | CPR-002 Schedule, CPR-003 Booking ─────────────────────────────────────────────────────
+  // ── PEN-001 | CPR-V2-002 Schedule, CPR-V2-003 Booking ─────────────────────────────────────────────────────
   {
     slug: "scheduling",
     nav: "Your diary",
@@ -300,7 +300,7 @@ export const PRACTICE_AREAS: PracticeArea[] = [
     icon: "\u{1F4C5}",
     blurb: "Availability across every location, booking patients do themselves, and a waiting list that refills cancellations.",
     engines: ["PEN-001"],
-    workspaces: ["CPR-002", "CPR-003"],
+    workspaces: ["CPR-V2-002", "CPR-V2-003"],
     outcomes: [
       { title: "Every kind of appointment", body: "New consultation, scheduled follow-up, walk-in, emergency, hospital consultation, teleconsultation, home or outreach visit -- one engine, one calendar." },
       { title: "Sessions, not just slots", body: "Clinic sessions with their own capacity, location and walk-in allowance, repeated across the weeks you actually work." },
@@ -315,7 +315,7 @@ export const PRACTICE_AREAS: PracticeArea[] = [
     ],
   },
 
-  // ── PEN-002/003/006 | CPR-004 Rapid Registration, CPR-005 Patient Search, CPR-006 Encounter ─────────
+  // ── PEN-002/003/006 | CPR-V2-004 Rapid Registration, CPR-V2-005 Patient Search, CPR-V2-006 Encounter ─────────
   {
     slug: "encounter",
     nav: "The encounter",
@@ -328,7 +328,7 @@ export const PRACTICE_AREAS: PracticeArea[] = [
     icon: "\u{1FA7A}",
     blurb: "Sub-minute registration, patient search that finds anyone, and one encounter lifecycle for every visit type.",
     engines: ["PEN-002", "PEN-003", "PEN-006"],
-    workspaces: ["CPR-004", "CPR-005", "CPR-006"],
+    workspaces: ["CPR-V2-004", "CPR-V2-005", "CPR-V2-006"],
     outcomes: [
       { title: "Registered in under a minute", body: "New, returning, walk-in, referral or emergency -- each has its own fast path, and the record is enriched progressively rather than up front." },
       { title: "Duplicates caught at the door", body: "Instant search before you create anything, with probabilistic matching, an ID or QR scan, and a confidence score you can tune." },
@@ -345,7 +345,7 @@ export const PRACTICE_AREAS: PracticeArea[] = [
     ],
   },
 
-  // ── PEN-004/011/012 | CPR-007 Diagnosis, 008 Investigations, 009 Treatment, 010 Follow-up ───────────
+  // ── PEN-004/011/012 | CPR-V2-007 Diagnosis, 008 Investigations, 009 Treatment, 010 Follow-up ───────────
   {
     slug: "continuity",
     nav: "Continuity of care",
@@ -358,7 +358,7 @@ export const PRACTICE_AREAS: PracticeArea[] = [
     icon: "\u{1FA79}",
     blurb: "Problem lists, investigations, treatment and outcomes, and risk-based recall that escalates when a review slips.",
     engines: ["PEN-004", "PEN-011", "PEN-012"],
-    workspaces: ["CPR-007", "CPR-008", "CPR-009", "CPR-010"],
+    workspaces: ["CPR-V2-007", "CPR-V2-008", "CPR-V2-009", "CPR-V2-010"],
     outcomes: [
       { title: "A problem list that stays true", body: "Active, provisional, chronic, resolved and past history -- coded, dated, and carrying the clinician responsible for each." },
       { title: "Results that come back to you", body: "Investigations tracked from request to result, with abnormal and critical flagged, trends plotted, and critical results requiring acknowledgement." },
@@ -376,7 +376,7 @@ export const PRACTICE_AREAS: PracticeArea[] = [
     ],
   },
 
-  // ── PEN-005/008/013 | CPR-011 Intelligence, CPR-013 AI Copilot ─────────────────────────────────────
+  // ── PEN-005/008/013 | CPR-V2-011 Intelligence, CPR-V2-013 AI Copilot ─────────────────────────────────────
   {
     slug: "case-memory",
     nav: "Your case memory",
@@ -389,7 +389,7 @@ export const PRACTICE_AREAS: PracticeArea[] = [
     icon: "✨",
     blurb: "Similar-case retrieval, what your treatments actually achieved, and decision support that shows its working.",
     engines: ["PEN-005", "PEN-008", "PEN-013"],
-    workspaces: ["CPR-011", "CPR-013"],
+    workspaces: ["CPR-V2-011", "CPR-V2-013"],
     // CPR-ARCH-001 section 9.2 lists the questions the intelligence layer must answer. They are written
     // almost as asked, because a clinician recognises their own question faster than a feature name -- and
     // a claim in the form of a question is one you can be held to.
@@ -408,7 +408,7 @@ export const PRACTICE_AREAS: PracticeArea[] = [
     ],
   },
 
-  // ── PEN-009/014 | CPR-012 Reports & Professional Portfolio ─────────────────────────────────────────
+  // ── PEN-009/014 | CPR-V2-012 Reports & Professional Portfolio ─────────────────────────────────────────
   {
     slug: "evidence",
     nav: "Evidence & reporting",
@@ -421,7 +421,7 @@ export const PRACTICE_AREAS: PracticeArea[] = [
     icon: "\u{1F4CA}",
     blurb: "Hospital payment lists, case logs, professional portfolio evidence and governed research datasets.",
     engines: ["PEN-009", "PEN-014"],
-    workspaces: ["CPR-012"],
+    workspaces: ["CPR-V2-012"],
     outcomes: [
       { title: "The hospital payment list", body: "Who you saw at which facility this period, formatted for that facility and exposing no other's patients. Reconciliation stops being an evening's work." },
       { title: "Your case log", body: "Every case by specialty and condition, building the record of clinical experience you are asked for and never have to hand." },
@@ -435,7 +435,7 @@ export const PRACTICE_AREAS: PracticeArea[] = [
     ],
   },
 
-  // ── CPR-018 Teleconsultation, CPR-019 Mobile & Offline ────────────────────────────────────────────
+  // ── CPR-V2-018 Teleconsultation, CPR-V2-019 Mobile & Offline ────────────────────────────────────────────
   // NEW IN V2, and the area with no engine of its own. Both workspaces consume engines that other areas
   // explain -- they are delivery MODES, not a capability layer. For a product sold where connectivity is
   // expensive and often absent, this is also the most load-bearing thing on the page.
@@ -451,7 +451,7 @@ export const PRACTICE_AREAS: PracticeArea[] = [
     icon: "\u{1F30D}",
     blurb: "Secure video consultations, and a genuinely offline mode for outreach, home visits and bad connections.",
     engines: [],
-    workspaces: ["CPR-018", "CPR-019"],
+    workspaces: ["CPR-V2-018", "CPR-V2-019"],
     outcomes: [
       { title: "A consultation, not a video call", body: "The virtual room carries the patient's timeline, shared documents and your notes, and closes into the same encounter record as an in-person visit." },
       { title: "Consent recorded before it starts", body: "Sessions are encrypted end to end, consent is captured where required, and recording is off unless you turn it on and say so." },
@@ -467,7 +467,7 @@ export const PRACTICE_AREAS: PracticeArea[] = [
     ],
   },
 
-  // ── PEN-007/010 | CPR-016 Delegation, CPR-017 Collaboration ───────────────────────────────────────
+  // ── PEN-007/010 | CPR-V2-016 Delegation, CPR-V2-017 Collaboration ───────────────────────────────────────
   {
     slug: "team",
     nav: "Your team & network",
@@ -480,7 +480,7 @@ export const PRACTICE_AREAS: PracticeArea[] = [
     icon: "\u{1F91D}",
     blurb: "Delegation with approval and audit, secure clinician messaging, referrals, handovers and multidisciplinary discussion.",
     engines: ["PEN-007", "PEN-010"],
-    workspaces: ["CPR-016", "CPR-017"],
+    workspaces: ["CPR-V2-016", "CPR-V2-017"],
     outcomes: [
       { title: "Delegate what is genuinely admin", body: "Appointments, registration, follow-up scheduling, reports, documents and communication -- you choose which categories, and the boundary is enforced rather than trusted." },
       { title: "Nothing clinical without you", body: "An assistant cannot create or alter a clinical decision unless explicitly authorised, and sensitive work waits in an approval inbox for your review." },
@@ -496,7 +496,7 @@ export const PRACTICE_AREAS: PracticeArea[] = [
     ],
   },
 
-  // ── PEN-015 | CPR-014 Settings, CPR-015 Multi-Practice ────────────────────────────────────────────
+  // ── PEN-015 | CPR-V2-014 Settings, CPR-V2-015 Multi-Practice ────────────────────────────────────────────
   {
     slug: "setup",
     nav: "Setup & connections",
@@ -509,7 +509,7 @@ export const PRACTICE_AREAS: PracticeArea[] = [
     icon: "\u{1F517}",
     blurb: "Configuration without a developer, one identity across every organisation, and standards-based links to the systems you run.",
     engines: ["PEN-015"],
-    workspaces: ["CPR-014", "CPR-015"],
+    workspaces: ["CPR-V2-014", "CPR-V2-015"],
     outcomes: [
       { title: "What you control", body: "Practice profile and branding, locations, working hours, appointment types and durations, booking rules, templates, document categories and assistant preferences." },
       { title: "What you never have to", body: "Tenant identity, subscription and licence, entitlements, regional deployment, security and password policy, backup and retention. Visible to you, not yours to maintain." },
@@ -532,16 +532,16 @@ export const areaBySlug = (slug: string) => PRACTICE_AREAS.find(a => a.slug === 
  * Modules named in an architecture document that have no specification of their own and are therefore NOT
  * represented above. Recorded rather than silently dropped, so the gap stays visible.
  *
- *   CPR-021  Patient Engagement Platform -- named in CPR-000's Version 1 module list, never specified.
+ *   CPR-V2-021  Patient Engagement Platform -- named in CPR-V2-000's Version 1 module list, never specified.
  */
 export const MODULES_WITHOUT_SPECS: string[] = [];
 
 /**
- * CPR-001 Command Centre and CPR-020 Home & Navigation are claimed by the OVERVIEW page, not by a
+ * CPR-V2-001 Command Centre and CPR-V2-020 Home & Navigation are claimed by the OVERVIEW page, not by a
  * capability area -- because "your whole practice at a glance" and "how you move between workspaces" are
  * what /practice itself is, not one section of it. Counted with the areas for coverage.
  */
-export const OVERVIEW_WORKSPACES = ["CPR-001", "CPR-020"];
+export const OVERVIEW_WORKSPACES = ["CPR-V2-001", "CPR-V2-020"];
 
 /**
  * How many capability areas there are, spelled out for prose that has to say the number.
@@ -562,7 +562,7 @@ export const OVERVIEW_SCREEN = {
 /**
  * VERSION 2 HAS NO PATIENT-FACING WORKSPACE, and that is a change rather than an omission on this page.
  *
- * Version 1 specified a Patient Self-Service Portal (CPR-006 v1) and a Patient Portal (CPR-014 v1). The
+ * Version 1 specified a Patient Self-Service Portal (CPR-V2-006 v1) and a Patient Portal (CPR-V2-014 v1). The
  * twenty V2 workspaces are all practitioner surfaces -- the portal is in neither list. CPR-ARCH-001 v2 still
  * names the Patient as a primary user who books, maintains their details and views what is shared, so the
  * intent survives at architecture level with no workspace specification behind it.
@@ -584,8 +584,8 @@ export const V2_SPEC_GAPS = [
  *    (PEN-001 Appointment & Scheduling, PEN-005 Practice Intelligence, PEN-013 AI Clinical Decision
  *    Support, PEN-015 Integration & Interoperability). Section 13.2 is the outlier and is superseded.
  *
- * 2. CPR WORKSPACE NUMBERING. Section 14 and the CPR-ARCH-001 diagram diverged from CPR-004 onwards. The
- *    V2 documents settle it by existing: CPR-001..020 are now defined surfaces, and they match neither
+ * 2. CPR WORKSPACE NUMBERING. Section 14 and the CPR-ARCH-001 diagram diverged from CPR-V2-004 onwards. The
+ *    V2 documents settle it by existing: CPR-V2-001..020 are now defined surfaces, and they match neither
  *    earlier list exactly. They are the authority.
  *
  * Kept as a record rather than deleted, because "we chose the PEN numbering" is a decision somebody will
@@ -684,7 +684,7 @@ export const CAREER_JOURNEY = {
  * CPR-LP-001 "Built for Africa".
  *
  * Every line is a design constraint this product was built under, not a market claim. "Works offline" is
- * stated as intent rather than fact and labelled by phase, because CPR-019 mobile/offline is Phase 9 and
+ * stated as intent rather than fact and labelled by phase, because CPR-V2-019 mobile/offline is Phase 9 and
  * has not been built -- saying it works today would be the single most damaging false claim on the page
  * for a clinician in a low-connectivity setting.
  */
@@ -695,12 +695,12 @@ export const BUILT_FOR_AFRICA = {
     { title: "Works in private practice", body: "A solo clinician runs the whole thing without a receptionist." },
     { title: "Works on a phone", body: "The screens are built for the device most clinicians actually carry." },
     { title: "Built for low-resource settings", body: "Speed before completeness: record the minimum safely, finish the detail later." },
-    { title: "Offline working", body: "Specified in CPR-019 and not yet built. It arrives with the mobile phase; it does not work today.", pending: true },
+    { title: "Offline working", body: "Specified in CPR-V2-019 and not yet built. It arrives with the mobile phase; it does not work today.", pending: true },
   ],
 };
 
 // ══════════════════════════════════════════════════════════════════════════════════════════════════════
-// CPR-001 v3 — the redesigned homepage. INDIGO identity, illustration instead of photography, and a
+// CPR-V2-001 v3 — the redesigned homepage. INDIGO identity, illustration instead of photography, and a
 // SHORT page: the specification's twelve sections, minus the ones that cannot be filled truthfully.
 //
 // WHAT IS NOT HERE, AND WHY. Six of the twelve could not ship as the comp draws them. Four were the
@@ -714,7 +714,7 @@ export const BUILT_FOR_AFRICA = {
 //     makes it shippable. It returns when there are real customers who have agreed to be named.
 //   TESTIMONIALS -- REFUSED, same class. Three invented clinicians with photographs, countries and
 //     five-star ratings. Quotes ship when a real person said them and consented.
-//   MOBILE + APP STORE BADGES -- omitted (user). There is no app; CPR-019 is Phase 9. Store badges
+//   MOBILE + APP STORE BADGES -- omitted (user). There is no app; CPR-V2-019 is Phase 9. Store badges
 //     would be a dead link and a false availability claim at once.
 //   PRICING -- omitted (user), for the second time. The comp now says $0/$7.99/$14.99; the previous comp
 //     said $5/$10/$20. Two different answers is itself the evidence that neither is decided.
@@ -729,7 +729,7 @@ export const BUILT_FOR_AFRICA = {
 // fourteen days, which matches nothing in the system.
 // ══════════════════════════════════════════════════════════════════════════════════════════════════════
 
-/** CPR-001 v3 s2. Indigo identity, replacing the blue Practice accent on this page. */
+/** CPR-V2-001 v3 s2. Indigo identity, replacing the blue Practice accent on this page. */
 export const PRACTICE_INDIGO = "var(--cp-primary)";
 export const PRACTICE_INDIGO_DEEP = "var(--cp-primary-deep)";
 export const PRACTICE_CYAN = "var(--cp-accent)";
@@ -753,7 +753,7 @@ export const LP3_HERO = {
   imageAlt: "Illustration of a clinician working at a laptop in a consulting room",
 };
 
-/** CPR-001 v3 s4 "Core benefits (6 cards)". Every card is something a built module already does. */
+/** CPR-V2-001 v3 s4 "Core benefits (6 cards)". Every card is something a built module already does. */
 export const LP3_BENEFITS = [
   { title: "One record, every hospital", body: "Your clinical work in one place, whether you saw the patient in a ward, a clinic or on an outreach round." },
   { title: "Encounters in seconds", body: "Booked, walk-in or follow-up, the encounter opens the same way and takes seconds to start." },
@@ -763,7 +763,7 @@ export const LP3_BENEFITS = [
   { title: "It follows you, not your employer", body: "Change jobs and the record goes with you. That is the whole point of it being personal." },
 ];
 
-/** CPR-001 v3 s4 "AI Assistant section" -- rendered, and marked as not built. */
+/** CPR-V2-001 v3 s4 "AI Assistant section" -- rendered, and marked as not built. */
 export const LP3_AI = {
   eyebrow: "In development",
   title: "A practice assistant that learns from your own record",

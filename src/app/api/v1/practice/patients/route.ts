@@ -2,8 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { requirePracticeContext, isDenied } from "@/lib/practice/api-context";
 import { searchPatients, registerPatient } from "@/lib/practice/patients";
 
-// GET  /api/v1/practice/patients?q= -- ranked registry search (CPR-004; FLOW-001 search inputs).
-// POST /api/v1/practice/patients    -- register (CPR-005: duplicate detection BEFORE save; a 409 with
+// GET  /api/v1/practice/patients?q= -- ranked registry search (CPR-V2-004; FLOW-001 search inputs).
+// POST /api/v1/practice/patients    -- register (CPR-V2-005: duplicate detection BEFORE save; a 409 with
 //       candidates is the workflow working, not an error to hide -- the UI shows the candidates and the
 //       caller either opens one or confirms a genuine namesake with confirmNew).
 

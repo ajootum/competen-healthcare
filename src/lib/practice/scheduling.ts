@@ -1,7 +1,7 @@
 import { audit } from "@/lib/practice/provisioning";
 
 // PEN-001 Appointment & Scheduling Engine -- the business rules, separated from every UI that uses them
-// (PEN-001 "separate scheduling logic from user interfaces"). CPR-003 V3 is one consumer; the command
+// (PEN-001 "separate scheduling logic from user interfaces"). CPR-V2-003 V3 is one consumer; the command
 // centre widget is another; Phase 3's encounter launch will be a third.
 //
 // DETERMINISTIC TRANSITIONS (PEN-001 acceptance: "provides deterministic scheduling decisions").
@@ -122,7 +122,7 @@ export async function bookAppointment(admin: any, input: BookInput): Promise<Eng
 
 /**
  * Move an appointment along the state machine. `arrive` also writes the arrival record and puts the
- * patient in the waiting queue -- one action at the desk, three facts in the record (CPR-003 workflow).
+ * patient in the waiting queue -- one action at the desk, three facts in the record (CPR-V2-003 workflow).
  */
 export async function transitionAppointment(admin: any, args: {
   workspaceId: string; appointmentId: string; to: string; actorId: string; correlationId: string;
@@ -198,7 +198,7 @@ export async function transitionQueueEntry(admin: any, args: {
   return { ok: true, data: { status: args.to } };
 }
 
-/** The day's diary plus the live queue -- what CPR-003's Today panel and CPR-001's widget both read. */
+/** The day's diary plus the live queue -- what CPR-V2-003's Today panel and CPR-V2-001's widget both read. */
 export async function loadDay(admin: any, workspaceId: string, dayIso: string) {
   const dayStart = `${dayIso}T00:00:00.000Z`;
   const dayEnd = `${dayIso}T23:59:59.999Z`;

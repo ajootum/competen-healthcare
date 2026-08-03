@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { ENCOUNTER_TRANSITIONS, NOTE_TYPES, LOCKED_STATUSES, actionFor, labelFor } from "@/lib/practice/encounter-constants";
 
-// CPR-006's consultation surface: the SOAP note, diagnoses, treatments, and the transition bar.
+// CPR-V2-006's consultation surface: the SOAP note, diagnoses, treatments, and the transition bar.
 //
 // THE BUTTONS ARE THE STATE TABLE. What renders is ENCOUNTER_TRANSITIONS[status] mapped through
 // actionFor -- the same table the engine checks and the database CHECK constrains. There is no second

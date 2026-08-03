@@ -3,11 +3,11 @@ import Link from "next/link";
 import { createAdminClient } from "@/lib/supabase/server";
 import { resolvePracticeShell } from "@/lib/practice/shell";
 
-// CPR-001 V3 Practice Command Centre -- the default authorised landing (SHELL-001 s8).
+// CPR-V2-001 V3 Practice Command Centre -- the default authorised landing (SHELL-001 s8).
 //
 // EVERY NUMBER ON THIS PAGE IS A REAL QUERY AGAINST THE CALLER'S OWN WORKSPACE, and the widgets whose
 // engines have not shipped SAY WHICH PHASE BRINGS THEM instead of rendering fake zeros dressed as
-// activity. CPR-001 V3 specifies Today's Activity, Patient Actions, Practice Metrics, Intelligence and
+// activity. CPR-V2-001 V3 specifies Today's Activity, Patient Actions, Practice Metrics, Intelligence and
 // Recent Activity; today the truthful subset is workspace status, entitlement, locations, team and the
 // audit trail -- which is real recent activity, because provisioning and onboarding wrote it.
 
@@ -87,7 +87,7 @@ export default async function PracticeHome() {
         ))}
       </div>
 
-      {/* Today's activity (CPR-001 V3) -- live from practice_appointment since Phase 1 */}
+      {/* Today's activity (CPR-V2-001 V3) -- live from practice_appointment since Phase 1 */}
       <section className="mt-5 rounded-xl border border-gray-200 bg-white p-4">
         <div className="flex items-baseline justify-between gap-3">
           <h2 className="text-[13px] font-bold text-gray-900">Today&apos;s appointments</h2>
@@ -114,7 +114,7 @@ export default async function PracticeHome() {
         )}
       </section>
 
-      {/* Open encounters (CPR-001 V3 "Patient Actions") -- live from practice_encounter since Phase 3 */}
+      {/* Open encounters (CPR-V2-001 V3 "Patient Actions") -- live from practice_encounter since Phase 3 */}
       <section className="mt-4 rounded-xl border border-gray-200 bg-white p-4">
         <div className="flex items-baseline justify-between gap-3">
           <h2 className="text-[13px] font-bold text-gray-900">Encounters needing you</h2>
@@ -166,7 +166,7 @@ export default async function PracticeHome() {
         <section className="rounded-xl border border-gray-200 bg-white p-4">
           <h2 className="text-[13px] font-bold text-gray-900">Arriving on this dashboard</h2>
           <p className="mt-1 text-[11px] text-gray-400">
-            These CPR-001 widgets render only when their engines ship. Nothing here fakes a zero.
+            These CPR-V2-001 widgets render only when their engines ship. Nothing here fakes a zero.
           </p>
           <ul className="mt-2 flex flex-col gap-1.5">
             {upcoming.map(u => (
