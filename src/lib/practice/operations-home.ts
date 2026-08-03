@@ -372,6 +372,130 @@ export async function operationsHome(admin: any, ctx: WorkspaceContext) {
     ? Math.max(0, Math.ceil((Date.parse(entitlement.ends_at) - now) / 86400000))
     : null;
 
+  // ── THE COMP'S KPI STRIP (CPR-300) ──────────────────────────────────────────────────────────────────
+  //
+  // Six tiles, in the comp's order. Each carries a SUB-DETAIL rather than a trend: the design shows
+  // "↑25% vs yesterday" under two of them, and nothing in this product has recorded a baseline to
+  // compare against, so those read as "18 completed · 10 remaining" instead -- the same shape of
+  // information, from data that exists.
+  //
+  // PROCEDURES PLANNED comes from practice_treatment, not practice_procedure, and that is the
+  // intention-versus-act split CPR-150 was built on: a treatment row of type `procedure` is a plan, a
+  // procedure row is a thing that happened. The tile can therefore say "4 done, 2 to go" honestly.
+  const doneAppts = apptRows.filter(a => ["ARRIVED", "COMPLETED"].includes(a.status)).length;
+  const liveTasks = tasks ? [...(tasks as any).mineOverdue, ...(tasks as any).mineDue, ...(tasks as any).mineLater] : [];
+  const tasksDueToday = liveTasks.filter((t: any) => t.due_on === today || t.overdue).length;
+
+  const [{ count: newPatients }, { data: plannedToday }, { data: doneToday }] = await Promise.all([
+    can("patient.list")
+      ? admin.from("practice_patient").select("*", { count: "exact", head: true })
+        .eq("workspace_id", ctx.workspaceId).gte("created_at", startIso).lt("created_at", endIso)
+      : Promise.resolve({ count: null }),
+    can("encounter.list")
+      ? admin.from("practice_treatment").select("id").eq("workspace_id", ctx.workspaceId)
+        .eq("treatment_type", "procedure").gte("created_at", startIso).lt("created_at", endIso)
+      : Promise.resolve({ data: null }),
+    can("encounter.list")
+      ? admin.from("practice_procedure").select("id").eq("workspace_id", ctx.workspaceId)
+        .gte("performed_at", startIso).lt("performed_at", endIso)
+      : Promise.resolve({ data: null }),
+  ]);
+
+  const planned = ((plannedToday as any)?.data ?? plannedToday ?? []) as any[];
+  const performed = ((doneToday as any)?.data ?? doneToday ?? []) as any[];
+
+  type Kpi = { key: string; label: string; value: number | null; detail: string; href: string; available: boolean };
+  const kpis: Kpi[] = [
+    {
+      key: "appointments", label: "Today's appointments", value: can("practice.calendar.view") ? apptRows.length : null,
+      detail: `${doneAppts} seen · ${remaining.length} to come`, href: "/practice/calendar",
+      available: can("practice.calendar.view"),
+    },
+    {
+      key: "new_patients", label: "New patients", value: newPatients ?? null,
+      detail: "registered today", href: "/practice/patients", available: can("patient.list"),
+    },
+    {
+      key: "procedures", label: "Procedures", value: can("encounter.list") ? planned.length : null,
+      detail: `${performed.length} performed · ${Math.max(0, planned.length - performed.length)} planned`,
+      href: "/practice/encounters", available: can("encounter.list"),
+    },
+    {
+      key: "followups", label: "Follow-ups due", value: followUps ? (followUps.overdue.length + followUps.dueSoon.length) : null,
+      detail: followUps ? `${followUps.overdue.length} overdue` : "", href: "/practice/follow-ups",
+      available: !!followUps,
+    },
+    {
+      key: "messages", label: "Unread messages", value: typeof unreadThreads === "number" ? unreadThreads : null,
+      detail: "conversations with something new", href: "/practice/messages",
+      available: typeof unreadThreads === "number",
+    },
+    {
+      key: "tasks", label: "Tasks due today", value: tasks ? tasksDueToday : null,
+      detail: tasks ? `${(tasks as any).mineOverdue.length} overdue` : "", href: "/practice/tasks",
+      available: !!tasks,
+    },
+  ];
+
+  // ── PRACTICE HEALTH (CPR-300) ───────────────────────────────────────────────────────────────────────
+  //
+  // THE TILES THIS PRODUCT CANNOT FILL RENDER IN THEIR DESIGNED POSITION AND SAY WHY. The comp asks for
+  // patient satisfaction, revenue and a collection rate; there is no survey capability and no billing
+  // module, so those would be invented figures. Omitting them silently was the earlier mistake -- a
+  // reader cannot tell an absent tile from an unbuilt one. An empty state in the right place can.
+  //
+  // The ones that CAN be filled are counts with denominators, never rates (CPR-330's rule).
+  const cancelledToday = apptRows.filter(a => a.status === "CANCELLED").length;
+  const noShowToday = apptRows.filter(a => a.status === "NO_SHOW").length;
+
+  const health = [
+    {
+      key: "cancellations", label: "Cancelled today", value: `${cancelledToday}`, of: apptRows.length,
+      available: can("practice.calendar.view"), reason: null as string | null,
+    },
+    {
+      key: "no_shows", label: "Did not attend", value: `${noShowToday}`, of: apptRows.length,
+      available: can("practice.calendar.view"), reason: null,
+    },
+    {
+      key: "overdue_followups", label: "Overdue follow-ups", value: followUps ? `${followUps.overdue.length}` : "",
+      of: followUps ? followUps.overdue.length + followUps.dueSoon.length + followUps.scheduled.length + followUps.later.length : null,
+      available: !!followUps, reason: null,
+    },
+    {
+      key: "satisfaction", label: "Patient satisfaction", value: null, of: null,
+      available: false, reason: "No survey capability is built, so there is nothing to measure this from.",
+    },
+    {
+      key: "revenue", label: "Revenue", value: null, of: null,
+      available: false, reason: "No billing module (CPR-440) is built.",
+    },
+    {
+      key: "collection", label: "Collection", value: null, of: null,
+      available: false, reason: "No billing module (CPR-440) is built.",
+    },
+  ];
+
+  // ── QUICK ACTIONS (CPR-300) ─────────────────────────────────────────────────────────────────────────
+  //
+  // Nine in the comp; eight here. The ninth is "AI Assistant", which would open a capability CPR-210 has
+  // not built -- a button that leads nowhere is the thing the navigation catalogue has refused since
+  // Phase 0, and it does not become acceptable because a comp draws it.
+  const quickActions = [
+    { key: "appointment", label: "New appointment", href: "/practice/calendar", capability: "appointment.manage" },
+    { key: "patient", label: "Add patient", href: "/practice/patients", capability: "patient.create" },
+    { key: "encounter", label: "Clinical note", href: "/practice/encounters", capability: "encounter.create" },
+    { key: "procedure", label: "New procedure", href: "/practice/encounters", capability: "procedure.record" },
+    { key: "document", label: "Letter or report", href: "/practice/documents", capability: "document.author" },
+    { key: "message", label: "Send message", href: "/practice/messages", capability: "message.use" },
+    { key: "incoming", label: "Record a document", href: "/practice/inbox", capability: "inbox.record" },
+    { key: "task", label: "Create task", href: "/practice/tasks", capability: "task.manage" },
+  ].filter(a => can(a.capability));
+
+  // The location switcher the comp puts in the header. Real since CPR-360 made locations creatable.
+  const { data: locationRows } = await admin.from("practice_location")
+    .select("id, name, active").eq("workspace_id", ctx.workspaceId).eq("active", true).order("name");
+
   return {
     today, timezone,
     attention,
@@ -379,6 +503,11 @@ export async function operationsHome(admin: any, ctx: WorkspaceContext) {
     /** Nothing owed AND nothing hidden. The two together are what makes "you are clear" honest. */
     allClear: attention.length === 0 && blindSpots.length === 0,
     appointments: apptRows,
+    kpis,
+    health,
+    quickActions,
+    locations: (locationRows ?? []) as any[],
+    unreadNotifications: unread.length,
     practice: {
       locations: locations ?? 0, members: members ?? 0,
       plan: entitlement?.plan_code ?? null, entitlementStatus: entitlement?.status ?? null,

@@ -290,6 +290,75 @@ async function main() {
     .update({ effective_to: null })
     .in("membership_id", membershipIds).eq("capability_code", "followup.view");
 
+  // ── 8. CPR-300'S SPECIFIED LAYOUT (added after CPR-AUDIT-001) ────────────
+  //
+  // The first version of this page was designed from the module's title without opening the
+  // specification or the comp beside it. These assertions hold the comp's structure in place so it
+  // cannot quietly drift back to something invented.
+  const laid = await operationsHome(admin, ctxA.ctx);
+
+  ok("the KPI strip has the comp's six tiles, in its order",
+    laid.kpis.length === 6 &&
+    laid.kpis.map(k => k.key).join(",") === "appointments,new_patients,procedures,followups,messages,tasks",
+    laid.kpis.map(k => k.key).join(","));
+  ok("every KPI a caller can see carries a value and somewhere to open",
+    laid.kpis.filter(k => k.available).every(k => typeof k.value === "number" && k.href.startsWith("/practice/")),
+    JSON.stringify(laid.kpis.map(k => ({ k: k.key, v: k.value }))));
+  ok("NO KPI CARRIES A TREND, because nothing has recorded a baseline to compare against",
+    !JSON.stringify(laid.kpis).match(/vs (yesterday|last)/i) && !/\d+%/.test(JSON.stringify(laid.kpis)),
+    JSON.stringify(laid.kpis.map(k => k.detail)));
+
+  ok("procedures are counted from the PLAN and the ACT separately (CPR-150's distinction)",
+    /performed/.test(laid.kpis.find(k => k.key === "procedures")?.detail ?? "") &&
+    /planned/.test(laid.kpis.find(k => k.key === "procedures")?.detail ?? ""),
+    laid.kpis.find(k => k.key === "procedures")?.detail);
+
+  // THE DECISION TAKEN AFTER THE AUDIT: a figure this product cannot produce renders IN ITS DESIGNED
+  // POSITION carrying the reason, rather than being dropped. A reader cannot tell an absent tile from
+  // an unbuilt one; an empty state in the right place can.
+  const unavailable = laid.health.filter(h => !h.available);
+  ok("the health tiles this product cannot fill are PRESENT and carry a reason",
+    unavailable.length === 3 && unavailable.every(h => !!h.reason && h.value === null),
+    JSON.stringify(unavailable.map(h => h.key)));
+  ok("...and they name the missing capability rather than apologising vaguely",
+    unavailable.some(h => /billing/i.test(h.reason ?? "")) && unavailable.some(h => /survey/i.test(h.reason ?? "")),
+    JSON.stringify(unavailable.map(h => h.reason)));
+  ok("the health tiles that CAN be filled carry a count and a denominator, never a rate",
+    laid.health.filter(h => h.available).every(h => h.value !== null && !String(h.value).includes("%")),
+    JSON.stringify(laid.health.filter(h => h.available).map(h => ({ k: h.key, v: h.value, of: h.of }))));
+
+  ok("quick actions are offered only where the caller holds the capability",
+    laid.quickActions.length > 0 && laid.quickActions.every(a => ctxA.ctx.capabilities.includes(a.capability)),
+    laid.quickActions.map(a => a.key).join(","));
+  ok("no quick action opens a capability that is not built (no AI assistant button)",
+    !laid.quickActions.some(a => /ai|assistant/i.test(a.label)),
+    laid.quickActions.map(a => a.label).join(","));
+
+  // Withdrawn again here rather than reusing the earlier variable: that one is the resolver's result
+  // wrapper, not a context, and by this point the capability had been restored -- so it would have
+  // asserted the blind case against a sighted caller.
+  await admin.from("practice_role_assignment")
+    .update({ effective_to: new Date().toISOString() })
+    .in("membership_id", membershipIds).eq("capability_code", "followup.view").is("effective_to", null);
+  const reBlinded = await resolveWorkspaceContext(admin, USER_A, wsA);
+  if (!reBlinded.ok) { ok("context resolves for the KPI blind check", false); return report(); }
+  ok("the capability is genuinely withdrawn for this check (not vacuous)",
+    !reBlinded.ctx.capabilities.includes("followup.view"));
+
+  const blindKpis = await operationsHome(admin, reBlinded.ctx);
+  ok("a KPI the caller cannot see is marked unavailable rather than shown as zero",
+    blindKpis.kpis.find(k => k.key === "followups")?.available === false &&
+    blindKpis.kpis.find(k => k.key === "followups")?.value === null,
+    JSON.stringify(blindKpis.kpis.find(k => k.key === "followups")));
+  ok("...while the KPIs it CAN see still carry real values (the gate is per tile)",
+    blindKpis.kpis.find(k => k.key === "appointments")?.available === true &&
+    typeof blindKpis.kpis.find(k => k.key === "appointments")?.value === "number",
+    JSON.stringify(blindKpis.kpis.find(k => k.key === "appointments")));
+
+  await admin.from("practice_role_assignment")
+    .update({ effective_to: null })
+    .in("membership_id", membershipIds).eq("capability_code", "followup.view");
+
   // ── 7. Isolation ─────────────────────────────────────────────────────────
   const bHome = await operationsHome(admin, ctxB.ctx);
   ok("B's home shows none of A's work", bHome.attention.length === 0 && bHome.allClear === true,
