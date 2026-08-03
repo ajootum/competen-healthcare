@@ -35,6 +35,10 @@ export async function POST(req: NextRequest) {
     kind: body.kind ? String(body.kind) : undefined,
     specialty: body.specialty ? String(body.specialty) : undefined,
     sections: Array.isArray(body.sections) ? (body.sections as never[]) : [],
+    // CPR-330: a document template carries a merge body instead of sections. Which one is required is
+    // decided by `kind` in the engine.
+    bodyTemplate: body.bodyTemplate !== undefined ? String(body.bodyTemplate) : undefined,
+    includeLetterhead: body.includeLetterhead !== false,
     actorId: auth.caller.userId, correlationId: auth.caller.traceId,
   });
   if (!result.ok) return NextResponse.json({ error: { code: result.code, message: result.message } }, { status: result.status });

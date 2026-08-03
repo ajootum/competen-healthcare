@@ -81,13 +81,26 @@ export type SectionInput = {
 
 export async function createTemplate(admin: any, args: {
   workspaceId: string; code: string; title: string; description?: string; kind?: string;
-  specialty?: string; sections: SectionInput[]; actorId: string; correlationId: string;
+  specialty?: string; sections: SectionInput[]; bodyTemplate?: string; includeLetterhead?: boolean;
+  actorId: string; correlationId: string;
 }): Promise<EngineResult<{ id: string }>> {
   const code = args.code.trim().toLowerCase().replace(/[^a-z0-9_]+/g, "_");
   if (!code) return { ok: false, status: 400, code: "VALIDATION_ERROR", message: "a code is required" };
   if (!args.title.trim()) return { ok: false, status: 400, code: "VALIDATION_ERROR", message: "a title is required" };
-  if (args.sections.length === 0)
+
+  // TWO SHAPES OF TEMPLATE, and which one applies is decided by `kind` (CPR-330, migration 204).
+  // An encounter note fills five SOAP boxes and needs SECTIONS. A letter is one flowing body with fields
+  // merged into it and needs a BODY. Requiring both would make every referral template carry five empty
+  // headings; requiring neither would let somebody publish a template that applies nothing.
+  const kind = args.kind ?? "encounter_note";
+  const body = (args.bodyTemplate ?? "").trim();
+  if (kind === "encounter_note" && args.sections.length === 0)
     return { ok: false, status: 400, code: "VALIDATION_ERROR", message: "a template with no sections would apply nothing" };
+  if (kind !== "encounter_note" && !body && args.sections.length === 0)
+    return {
+      ok: false, status: 400, code: "VALIDATION_ERROR",
+      message: "a document template needs a body to merge into",
+    };
 
   const bad = args.sections.find(s => s.noteType && !(NOTE_TYPES as readonly string[]).includes(s.noteType));
   if (bad) return { ok: false, status: 400, code: "VALIDATION_ERROR", message: `noteType must be one of: ${NOTE_TYPES.join(", ")}` };
@@ -100,8 +113,10 @@ export async function createTemplate(admin: any, args: {
 
   const { data: t, error } = await admin.from("practice_note_template").insert({
     workspace_id: args.workspaceId, code, title: args.title.trim(),
-    description: args.description ?? null, kind: args.kind ?? "encounter_note",
+    description: args.description ?? null, kind,
     specialty: args.specialty ?? null, status: "draft", created_by: args.actorId, updated_by: args.actorId,
+    body_template: body || null,
+    include_letterhead: args.includeLetterhead !== false,
   }).select("id").single();
   if (error) {
     if (/duplicate|unique/i.test(error.message))
@@ -109,12 +124,16 @@ export async function createTemplate(admin: any, args: {
     return { ok: false, status: 400, code: "VALIDATION_ERROR", message: error.message };
   }
 
-  const { error: sectionError } = await admin.from("practice_note_template_section").insert(
-    args.sections.map((s, i) => ({
-      template_id: t.id, note_type: s.noteType ?? "narrative", heading: s.heading.trim(),
-      prompt: s.prompt ?? null, default_body: s.defaultBody ?? "", position: i + 1, required: s.required === true,
-    })),
-  );
+  // Skipped entirely for a body-only document template -- an insert of no rows is not a thing to ask
+  // PostgREST for, and its answer would be indistinguishable from a failure.
+  const { error: sectionError } = args.sections.length === 0
+    ? { error: null }
+    : await admin.from("practice_note_template_section").insert(
+      args.sections.map((s, i) => ({
+        template_id: t.id, note_type: s.noteType ?? "narrative", heading: s.heading.trim(),
+        prompt: s.prompt ?? null, default_body: s.defaultBody ?? "", position: i + 1, required: s.required === true,
+      })),
+    );
   // A template with no sections applies nothing, so a half-created one is worse than none at all.
   if (sectionError) {
     await admin.from("practice_note_template").delete().eq("id", t.id);

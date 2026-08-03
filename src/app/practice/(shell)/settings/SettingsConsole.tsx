@@ -27,6 +27,14 @@ export default function SettingsConsole({ workspace, config, today, inertColumns
     defaultEncounterMode: config.default_encounter_mode ?? "in_person",
     defaultAppointmentMinutes: config.default_appointment_minutes ?? 20,
   });
+  // Kept apart from the settings form above so saving one does not resubmit the other -- a PATCH that
+  // carried both would make correcting an address look like a timezone change in the audit trail.
+  const [letterhead, setLetterhead] = useState({
+    letterheadName: config.letterhead_name ?? "",
+    letterheadRegistration: config.letterhead_registration ?? "",
+    letterheadAddress: config.letterhead_address ?? "",
+    letterheadContact: config.letterhead_contact ?? "",
+  });
   const [newLocation, setNewLocation] = useState({ name: "", type: "clinic" });
 
   async function send(method: string, payload: unknown) {
@@ -110,6 +118,49 @@ export default function SettingsConsole({ workspace, config, today, inertColumns
           <button type="submit" disabled={busy}
             className="self-start rounded-lg bg-[var(--cp-primary)] px-4 py-2 text-[12px] font-semibold text-white hover:bg-[var(--cp-primary-deep)] disabled:opacity-50">
             Save
+          </button>
+        </form>
+      </section>
+
+      {/* ── Letterhead (CPR-330 practice branding) ────────────────────────────────────────────────
+          EVERY FIELD OPTIONAL, and an unsupplied field prints NOTHING. This is why CPR-130 was right
+          to refuse a letterhead at the time: there was no source for these facts, and a certificate
+          reading "[PRACTICE ADDRESS]" is worse than one with no address at all. The practice supplies
+          them here, or it does not and its documents print without a header. */}
+      <section className="mt-4 rounded-xl border border-gray-200 bg-white p-4">
+        <h2 className="text-[13px] font-bold text-gray-900">Letterhead</h2>
+        <p className="mt-0.5 text-[11px] text-gray-500">
+          Printed at the top of generated letters and certificates. Nothing here is required &mdash; a
+          field left blank prints nothing rather than a placeholder, and a letterhead with only a name
+          is not printed at all.
+        </p>
+        <form className="mt-2 flex flex-col gap-3" onSubmit={e => { e.preventDefault(); send("PATCH", { settings: letterhead }); }}>
+          <div className="grid sm:grid-cols-2 gap-3">
+            <label className="flex flex-col gap-1">
+              <span className="text-[11px] font-semibold text-gray-500">Name on the letterhead</span>
+              <input value={letterhead.letterheadName} placeholder={workspace.name ?? ""}
+                onChange={e => setLetterhead(s => ({ ...s, letterheadName: e.target.value }))} className={input} />
+              <span className="text-[10px] text-gray-400">Defaults to the practice name above.</span>
+            </label>
+            <label className="flex flex-col gap-1">
+              <span className="text-[11px] font-semibold text-gray-500">Registration or licence number</span>
+              <input value={letterhead.letterheadRegistration}
+                onChange={e => setLetterhead(s => ({ ...s, letterheadRegistration: e.target.value }))} className={input} />
+            </label>
+            <label className="flex flex-col gap-1">
+              <span className="text-[11px] font-semibold text-gray-500">Address</span>
+              <input value={letterhead.letterheadAddress}
+                onChange={e => setLetterhead(s => ({ ...s, letterheadAddress: e.target.value }))} className={input} />
+            </label>
+            <label className="flex flex-col gap-1">
+              <span className="text-[11px] font-semibold text-gray-500">Telephone or email</span>
+              <input value={letterhead.letterheadContact}
+                onChange={e => setLetterhead(s => ({ ...s, letterheadContact: e.target.value }))} className={input} />
+            </label>
+          </div>
+          <button type="submit" disabled={busy}
+            className="self-start rounded-lg bg-[var(--cp-primary)] px-4 py-2 text-[12px] font-semibold text-white hover:bg-[var(--cp-primary-deep)] disabled:opacity-50">
+            Save letterhead
           </button>
         </form>
       </section>

@@ -42,7 +42,15 @@ switchers are all buildable from data that already exists.
 
 ## 3. Per-module register
 
-### CPR-330 Reports, Documents & Correspondence — **WRONG MODULE**
+### CPR-330 Reports, Documents & Correspondence — **WRONG MODULE → CORRECTED**
+
+> **Closed.** Rebuilt on migration 204: template designer with a merge body, merge-field resolver
+> (unresolved renders as a visible marker, never blank), generation, batch generation with truthful
+> counts, practice letterhead composed at print time, print/PDF view, schedule definitions that say they
+> do not fire, and the dashboard built to the comp with its two unavailable tiles rendered in place.
+> 52 harness assertions, four proven able to fail. The analytics engine was kept and re-labelled as an
+> early slice of CPR-270 at `/practice/reports/analytics`. See respec §18.
+
 The spec is **document generation**: clinical reports, referral letters, discharge summaries, medical
 certificates, template designer, dynamic field merging, PDF/Word export, batch generation, scheduled
 reports, approval workflow, digital signatures, version control, archive, practice branding.

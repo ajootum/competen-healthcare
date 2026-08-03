@@ -50,6 +50,30 @@ export const TEMPLATE_KINDS = [
   ["general", "Other document"],
 ] as const;
 
+/**
+ * CPR-330: what a template may reference. Deliberately small -- every field here is one the product
+ * actually holds, so a template cannot name something that could never be filled.
+ *
+ * HERE RATHER THAN IN THE ENGINE because the template designer is a client component and this module is
+ * the one with no server imports. The rule these fields obey (an unresolved field renders as a visible
+ * marker, never as blank) lives with the resolver in document-generation.ts.
+ */
+export const MERGE_FIELDS = [
+  ["patient.name", "The patient's name as registered"],
+  ["patient.sex", "Sex as recorded"],
+  ["patient.date_of_birth", "Date of birth, if one is recorded"],
+  ["patient.age", "Age in years"],
+  ["patient.identifier", "The practice identifier (P-XXXXXX)"],
+  ["patient.phone", "Primary phone number on the record"],
+  ["encounter.date", "Date of the linked consultation"],
+  ["encounter.reason", "Reason for the visit, as recorded"],
+  ["encounter.diagnoses", "Diagnoses recorded at that consultation, one per line"],
+  ["encounter.plan", "The plan segment of the consultation note"],
+  ["practice.name", "Practice name"],
+  ["practitioner.name", "The person generating the document"],
+  ["today", "Today's date, in the practice's timezone"],
+] as const;
+
 export const RELEASE_CHANNELS = [
   ["printed", "Printed"],
   ["handed_over", "Handed to the patient"],

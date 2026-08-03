@@ -108,6 +108,8 @@ export async function defaultAppointmentMinutes(admin: any, workspaceId: string)
 export async function updateConfiguration(admin: any, args: {
   workspaceId: string; practiceName?: string; timezone?: string;
   locale?: string; defaultEncounterMode?: string; defaultAppointmentMinutes?: number;
+  letterheadName?: string; letterheadRegistration?: string; letterheadAddress?: string;
+  letterheadContact?: string; letterheadFooter?: string;
   actorId: string; correlationId: string;
 }): Promise<EngineResult<{ changed: string[]; timezoneChangedFrom: string | null }>> {
   const current = await getConfiguration(admin, args.workspaceId);
@@ -158,6 +160,25 @@ export async function updateConfiguration(admin: any, args: {
       };
     configPatch.default_appointment_minutes = n;
     changed.push("default appointment length");
+  }
+
+  // LETTERHEAD (CPR-330 practice branding, migration 204). Every field optional and every field
+  // blankable: a practice that clears its registration number gets a letterhead without one, not a
+  // letterhead with the old one. An empty string therefore means null, deliberately.
+  for (const [arg, column, label] of [
+    ["letterheadName", "letterhead_name", "letterhead name"],
+    ["letterheadRegistration", "letterhead_registration", "letterhead registration"],
+    ["letterheadAddress", "letterhead_address", "letterhead address"],
+    ["letterheadContact", "letterhead_contact", "letterhead contact"],
+    ["letterheadFooter", "letterhead_footer", "letterhead footer"],
+  ] as const) {
+    const raw = (args as Record<string, unknown>)[arg];
+    if (raw === undefined) continue;
+    const next = String(raw).trim() || null;
+    if (next !== ((current.config as Record<string, unknown>)[column] ?? null)) {
+      configPatch[column] = next;
+      changed.push(label);
+    }
   }
 
   if (changed.length === 0)

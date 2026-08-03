@@ -1,6 +1,12 @@
 /**
- * Practice reports harness -- CPR-330, exercised against the live database through the same engine the
- * page uses. NO MIGRATION: every number is derived from tables that already exist, which is the point.
+ * Practice ACTIVITY harness -- an early slice of CPR-270 Analytics & Reporting, exercised against the
+ * live database through the same engine the page uses. NO MIGRATION: every number is derived from
+ * tables that already exist, which is the point.
+ *
+ * RE-LABELLED AFTER CPR-AUDIT-001. This was written under the CPR-330 heading, but counting what a
+ * practice did is CPR-270's subject; CPR-330 is document generation and now lives in
+ * practice-generation-harness.ts. The engine and these assertions were kept unchanged -- they are real
+ * and CPR-270 will want them. The page moved to /practice/reports/analytics.
  *
  * WHAT IT PROVES:
  *   1. THIS PRODUCT COMPUTES NO RATES. Asserted structurally over the whole serialised report: no field

@@ -41,6 +41,13 @@ export async function PATCH(req: NextRequest) {
     locale: s.locale !== undefined ? String(s.locale) : undefined,
     defaultEncounterMode: s.defaultEncounterMode !== undefined ? String(s.defaultEncounterMode) : undefined,
     defaultAppointmentMinutes: typeof s.defaultAppointmentMinutes === "number" ? s.defaultAppointmentMinutes : undefined,
+    // CPR-330 practice branding. String(...) rather than a truthiness check, so "" reaches the engine
+    // and clears the field -- a practice must be able to remove a registration number it mistyped.
+    letterheadName: s.letterheadName !== undefined ? String(s.letterheadName) : undefined,
+    letterheadRegistration: s.letterheadRegistration !== undefined ? String(s.letterheadRegistration) : undefined,
+    letterheadAddress: s.letterheadAddress !== undefined ? String(s.letterheadAddress) : undefined,
+    letterheadContact: s.letterheadContact !== undefined ? String(s.letterheadContact) : undefined,
+    letterheadFooter: s.letterheadFooter !== undefined ? String(s.letterheadFooter) : undefined,
     actorId: auth.caller.userId, correlationId: auth.caller.traceId,
   });
   if (!result.ok) return NextResponse.json({ error: { code: result.code, message: result.message } }, { status: result.status });
