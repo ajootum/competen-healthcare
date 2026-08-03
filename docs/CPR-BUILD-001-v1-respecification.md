@@ -95,9 +95,10 @@ Continuity & DR · 480 Enterprise Administration · 490 Roadmap & Release Govern
 | CPR-300 Operations Home | **Built.** `/practice/home` rebuilt as a worklist: every figure is the length of a list you can open, ordered by cost of ignoring, capability-aware with named blind spots. No migration (`operations-home.ts`, `practice-time.ts`, 37 harness assertions). |
 | CPR-340 Tasks, Reminders & Notifications | **Built.** Operational tasks with derived overdue and derived orphaning, reminders as a column rather than a second object, in-app notifications holding only non-derivable events. No delivery channel, deliberately (migration 198, `tasks.ts`, 44 harness assertions). |
 | CPR-350 Search & Global Retrieval | **Built.** One box over ten domains; generated tsvector columns so the index cannot drift from the text; capability filter runs BEFORE the query; skipped domains named; no hidden counts (migration 199, `search.ts`, 43 harness assertions). |
-| CPR-200–270, 310–330, 360–370, 400–440, 460–490 | **Not started.** |
+| CPR-320 Communication & Document Management | **Built.** Internal threads with per-reader derived unread, a register of contact WITH patients (recorded never sent), and an incoming-document register whose review is a named clinical stamp (migration 200, `communication.ts`, 44 harness assertions). |
+| CPR-200–270, 310, 330, 360–370, 400–440, 460–490 | **Not started.** |
 
-**Eleven of thirty-seven** now have a real implementation. The clinical spine (CPR-130/140/150) and the
+**Twelve of thirty-seven** now have a real implementation. The clinical spine (CPR-130/140/150) and the
 operations home are complete rather than partial; the four marked "core built" remain subsets of what
 their v1.0 documents ask for.
 
@@ -129,7 +130,7 @@ Nothing here is a week's work. A realistic order that keeps the product usable a
    procedures (all three below). The encounter the product already had is now complete: it can be
    documented, it can commit the practice to seeing someone again, and it can record what was done.
 4. ~~**CPR-300 Operations Home**~~ **Done** (below). /practice/home is now a worklist rather than a dashboard.
-5. **CPR-340 tasks / 350 search** ~~/ 320 documents~~ — tasks and search **done** (below); CPR-320 communication remains.
+5. ~~**CPR-340 tasks / 350 search / 320 documents**~~ **Done** — the operational spine is complete (all three below).
 6. **Practice Intelligence (200–270)** — needs clinical volume to be worth anything, so it follows.
 7. **Enterprise Services (400–490)** — infrastructure-heavy; several are platform concerns that already
    have partial answers elsewhere in Competen (monitoring, billing, tenant lifecycle).
@@ -386,7 +387,46 @@ each one a real read in a real log. One search per intention, submit-triggered. 
 highlighted, because highlighting clinical prose by string replacement is how markup ends up rendered
 inside a note.
 
-## 12. Standing rules that carry over
+## 12. CPR-320 as built: what arrives, and what was said
+
+Migration 200, `src/lib/practice/communication.ts`, `/practice/messages`, `/practice/inbox`, a contact
+log on the patient record, and `scripts/practice-communication-harness.ts`.
+
+**CPR-130 owns what LEAVES; this owns what ARRIVES.** An incoming lab result is not the practice's
+authored artefact -- no signature, no supersession chain. Merging the two registers would hang
+issued-document machinery on rows it cannot apply to.
+
+**Communication with a patient is RECORDED, not PERFORMED.** CPR-340's no-sending rule stands: no email,
+no SMS, no patient messaging. What a practice does have is a phone on the desk, and "three calls, no
+answer" currently lives in nobody's record. The contact log is that register -- the same posture as
+CPR-130's release register. The harness asserts it structurally: no `sent_at`, no delivery state
+anywhere on the row, so nothing can ever claim to have messaged somebody.
+
+**No file storage, named rather than faked.** The register records THAT a document arrived and WHERE IT
+IS HELD ("paper file", "lab portal"). Upload is an infrastructure and retention decision -- scanning,
+size limits, storage RLS, how long a clinical scan is kept -- and half-doing it produces a shadow record
+system.
+
+**The unreviewed result is the missed-result harm**, so REVIEWED is a clinical stamp with a name and a
+time on it, `inbox.review` is practitioner-only, and RECEIVED cannot jump to ACTIONED -- the register
+exists to answer "who looked at this". "Received and nobody has looked" is derived onto the operations
+home and ranked directly after overdue follow-ups: both are harms to somebody outside the room, and the
+result is the one the practice may not know it owes.
+
+**Two bugs this turned up, both caught by the harness.**
+
+*A table-name collision.* The first draft called the contact register `practice_patient_contact` --
+which migration 193 already owns for a patient's phone numbers. `create table if not exists` skipped
+silently and the index failed against the wrong table. **`if not exists` makes a collision quieter, not
+safer.** Renamed to `practice_contact_log`, and the same collision then appeared as a shadowed variable
+on the patient page.
+
+*A clock race in the read cursor.* `markThreadRead` wrote `new Date()` while `last_message_at` came from
+the database clock; with the database a second ahead, every author saw their own thread flagged unread
+at them. The cursor now takes the thread's own `last_message_at`, so both sides of the comparison come
+from one clock -- removing the race rather than shrinking it.
+
+## 13. Standing rules that carry over
 
 - Render real data only; an honest empty state beats a plausible number.
 - Every module gets a harness, and the harness is proven able to fail before it is trusted.

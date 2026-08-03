@@ -36,7 +36,8 @@ import { searchPatients } from "@/lib/practice/patients";
 
 export type SearchDomain =
   | "patients" | "encounters" | "notes" | "diagnoses" | "problems"
-  | "treatments" | "procedures" | "documents" | "followUps" | "tasks";
+  | "treatments" | "procedures" | "documents" | "followUps" | "tasks"
+  | "threads" | "contacts" | "incoming";
 
 export type SearchHit = {
   id: string;
@@ -111,6 +112,11 @@ export async function searchPractice(admin: any, ctx: WorkspaceContext, rawQuery
     documents: can("document.view"),
     followUps: can("followup.view"),
     tasks: can("task.view"),
+    threads: can("message.use"),
+    // The contact log is a patient-facing record, so it rides on the patient gate; the incoming
+    // register rides on the capability that lets somebody work it.
+    contacts: can("patient.list"),
+    incoming: can("inbox.record"),
   };
 
   const ws = ctx.workspaceId;
@@ -124,7 +130,7 @@ export async function searchPractice(admin: any, ctx: WorkspaceContext, rawQuery
   const run = <T,>(domain: SearchDomain, fn: () => Promise<T>): Promise<T | null> =>
     allowed[domain] && wanted(domain) ? fn() : Promise.resolve(null);
 
-  const [patients, encounters, notes, diagnoses, problems, treatments, procedures, documents, followUps, tasks] =
+  const [patients, encounters, notes, diagnoses, problems, treatments, procedures, documents, followUps, tasks, threads, contacts, incoming] =
     await Promise.all([
       run("patients", () => searchPatients(admin, ws, trimmed, TRUNCATE_AT + 1)),
       run("encounters", () => text("practice_encounter", "id, patient_id, reason_for_visit, status, started_at", "started_at")),
@@ -136,6 +142,18 @@ export async function searchPractice(admin: any, ctx: WorkspaceContext, rawQuery
       run("documents", () => text("practice_clinical_document", "id, patient_id, title, doc_type, status, created_at", "created_at")),
       run("followUps", () => text("practice_follow_up", "id, patient_id, reason, status, due_on, created_at", "created_at")),
       run("tasks", () => text("practice_task", "id, title, detail, status, due_on, patient_id, created_at", "created_at")),
+      // Threads are one group fed by two queries: the key word is sometimes only in the subject line
+      // and sometimes only in a message body, and a search that reads just one of them misses half the
+      // conversations it should find.
+      run("threads", async () => {
+        const [bySubject, byBody] = await Promise.all([
+          text("practice_thread", "id, subject, patient_id, last_message_at", "last_message_at"),
+          text("practice_thread_message", "id, thread_id, body, created_at", "created_at"),
+        ]);
+        return { subjects: (bySubject as any).data ?? [], messages: (byBody as any).data ?? [] };
+      }),
+      run("contacts", () => text("practice_contact_log", "id, patient_id, channel, direction, outcome, summary, occurred_at", "occurred_at")),
+      run("incoming", () => text("practice_incoming_document", "id, patient_id, doc_type, source, title, status, received_on, created_at", "created_at")),
     ]);
 
   // Three shapes arrive here: a PostgREST response ({data}), the patient engine's own ({results}), and
@@ -161,6 +179,7 @@ export async function searchPractice(admin: any, ctx: WorkspaceContext, rawQuery
     ...rowsOf(problems).map(r => r.patient_id), ...rowsOf(treatments).map(r => r.patient_id),
     ...rowsOf(procedures).map(r => r.patient_id), ...rowsOf(documents).map(r => r.patient_id),
     ...rowsOf(followUps).map(r => r.patient_id), ...rowsOf(tasks).map(r => r.patient_id),
+    ...rowsOf(contacts).map(r => r.patient_id), ...rowsOf(incoming).map(r => r.patient_id),
   ].filter(Boolean);
   const { data: names } = referenced.length
     ? await admin.from("practice_patient").select("id, display_name").eq("workspace_id", ws).in("id", [...new Set(referenced)])
@@ -253,6 +272,51 @@ export async function searchPractice(admin: any, ctx: WorkspaceContext, rawQuery
       href: "/practice/tasks", when: t.created_at, patientId: t.patient_id,
     }));
 
+  // Threads: merge the subject hits and the message hits into ONE row per conversation. Two entries for
+  // the same thread -- one saying the subject matched, one saying a message did -- reads as two
+  // conversations, and the person searching wants the conversation, not the mechanics of the match.
+  if (threads !== null) {
+    const t = threads as any;
+    const messageThreadIds = [...new Set((t.messages as any[]).map(m => m.thread_id))];
+    const missing = messageThreadIds.filter(id => !(t.subjects as any[]).some(s => s.id === id));
+    const { data: extraThreads } = missing.length
+      ? await admin.from("practice_thread").select("id, subject, patient_id, last_message_at").eq("workspace_id", ws).in("id", missing)
+      : { data: [] };
+    const allThreads = new Map<string, any>(
+      [...(t.subjects as any[]), ...((extraThreads ?? []) as any[])].map(row => [row.id, row]),
+    );
+    const bodyByThread = new Map<string, string>();
+    for (const m of t.messages as any[]) if (!bodyByThread.has(m.thread_id)) bodyByThread.set(m.thread_id, m.body);
+
+    const rows = [...allThreads.values()]
+      .sort((x, y) => String(y.last_message_at).localeCompare(String(x.last_message_at)));
+    if (rows.length > 0) {
+      groups.push({
+        domain: "threads", title: "Messages", note: "Conversations inside this practice. Nothing here was sent outside it.",
+        hits: rows.slice(0, TRUNCATE_AT).map(row => ({
+          id: row.id, label: row.subject,
+          detail: bodyByThread.has(row.id) ? excerpt(bodyByThread.get(row.id)!) : "subject matched",
+          href: `/practice/messages/${row.id}`, when: row.last_message_at, patientId: row.patient_id ?? null,
+        })),
+        truncated: rows.length > TRUNCATE_AT,
+      });
+    }
+  }
+
+  push("contacts", "Patient contacts", "Calls and conversations that happened in the world, recorded here.",
+    contacts, (c: any) => ({
+      id: c.id, label: nameOf(c.patient_id) ?? "Unknown patient",
+      detail: `${c.channel.replace(/_/g, " ")} · ${c.outcome.replace(/_/g, " ")} · ${excerpt(c.summary, 100)}`,
+      href: `/practice/patients/${c.patient_id}`, when: c.occurred_at, patientId: c.patient_id,
+    }));
+
+  push("incoming", "Received documents", "What arrived at the practice, and whether anybody has looked.",
+    incoming, (d: any) => ({
+      id: d.id, label: d.title,
+      detail: [nameOf(d.patient_id), d.source, d.status.toLowerCase()].filter(Boolean).join(" · "),
+      href: "/practice/inbox", when: d.created_at, patientId: d.patient_id,
+    }));
+
   // RULE 3: name what was skipped, so an empty page can say why it is empty.
   const LABELS: Record<string, string> = {
     patients: "patients", encounters: "consultations and everything in them",
@@ -264,6 +328,9 @@ export async function searchPractice(admin: any, ctx: WorkspaceContext, rawQuery
   if (!allowed.documents) notSearched.push(LABELS.documents);
   if (!allowed.followUps) notSearched.push(LABELS.followUps);
   if (!allowed.tasks) notSearched.push(LABELS.tasks);
+  if (!allowed.threads) notSearched.push("messages");
+  if (!allowed.contacts) notSearched.push("the patient contact log");
+  if (!allowed.incoming) notSearched.push("received documents");
 
   return {
     query: trimmed,

@@ -2,6 +2,7 @@ import { hasCapability, type WorkspaceContext } from "@/lib/practice/access";
 import { workspaceClock, zonedDayRange } from "@/lib/practice/practice-time";
 import { followUpBoard } from "@/lib/practice/follow-ups";
 import { taskBoard, listNotifications } from "@/lib/practice/tasks";
+import { unreviewedIncoming, unreadThreadCount } from "@/lib/practice/communication";
 
 // CPR-300 OPERATIONS HOME. The daily command centre the v1.0 set puts at the middle of the workspace,
 // and the module that supersedes CPR-V2-001's "Practice Command Centre" as the definition of /practice/home.
@@ -35,7 +36,8 @@ import { taskBoard, listNotifications } from "@/lib/practice/tasks";
 export type AttentionKind =
   | "followup_overdue" | "encounter_unsigned" | "encounter_live" | "clinic_remaining"
   | "queue_waiting" | "document_unissued" | "followup_due_soon" | "consent_not_recorded"
-  | "notification_unread" | "task_overdue" | "task_due" | "task_orphaned";
+  | "notification_unread" | "task_overdue" | "task_due" | "task_orphaned"
+  | "incoming_unreviewed" | "message_unread";
 
 export type AttentionItem = {
   kind: AttentionKind;
@@ -60,6 +62,9 @@ export type AttentionItem = {
  */
 const ORDER: AttentionKind[] = [
   "followup_overdue",
+  // The unreviewed lab result sits with the overdue follow-up, above everything else: both are harms
+  // to somebody outside the room, and the result is the one the practice may not even know it owes.
+  "incoming_unreviewed",
   "encounter_unsigned",
   "encounter_live",
   "queue_waiting",
@@ -67,6 +72,7 @@ const ORDER: AttentionKind[] = [
   "task_overdue",
   "clinic_remaining",
   "notification_unread",
+  "message_unread",
   "followup_due_soon",
   "task_due",
   "document_unissued",
@@ -86,7 +92,7 @@ export async function operationsHome(admin: any, ctx: WorkspaceContext) {
   // from `attention` entirely, and `blindSpots` says so by name.
   const [
     appointments, queueCount, encounters, followUps, documents, procedureConsent, practice, events,
-    tasks, notifications,
+    tasks, notifications, incoming, unreadThreads,
   ] = await Promise.all([
     can("practice.calendar.view")
       ? admin.from("practice_appointment")
@@ -127,6 +133,8 @@ export async function operationsHome(admin: any, ctx: WorkspaceContext) {
     can("task.view") ? taskBoard(admin, ctx.workspaceId, ctx.userId) : Promise.resolve(null),
     // NO CAPABILITY GATE. These are the caller's own rows -- see the notifications route for why.
     listNotifications(admin, ctx.workspaceId, ctx.userId, { limit: 20 }),
+    can("inbox.record") ? unreviewedIncoming(admin, ctx.workspaceId) : Promise.resolve(null),
+    can("message.use") ? unreadThreadCount(admin, ctx.workspaceId, ctx.userId) : Promise.resolve(null),
   ]);
 
   // Patient names in one query for every list that needs them, rather than one per row.
@@ -306,6 +314,35 @@ export async function operationsHome(admin: any, ctx: WorkspaceContext) {
     }
   }
 
+  // CPR-320. The unreviewed incoming result is the missed-result harm, and it escalates on urgency:
+  // an assistant marked something urgent at the desk, and nobody with the clinical capability has
+  // looked at it yet.
+  if (incoming !== null && (incoming as any).rows.length > 0) {
+    const inc = incoming as any;
+    items.incoming_unreviewed = {
+      kind: "incoming_unreviewed", severity: inc.anyUrgent ? "critical" : "warning", count: inc.rows.length,
+      title: "Received documents awaiting review",
+      detail: inc.anyUrgent
+        ? "Results and letters nobody has reviewed — at least one was flagged urgent at the desk."
+        : "Results and letters that arrived and have not been reviewed. A result nobody looks at is the classic harm by omission.",
+      href: "/practice/inbox",
+      sample: inc.rows.slice(0, 5).map((d: any) => ({
+        id: d.id, label: d.title,
+        note: [d.patient_name, d.source, d.priority === "urgent" ? "URGENT" : null].filter(Boolean).join(" · "),
+      })),
+    };
+  }
+
+  if (typeof unreadThreads === "number" && unreadThreads > 0) {
+    items.message_unread = {
+      kind: "message_unread", severity: "normal", count: unreadThreads,
+      title: "Conversations with something new",
+      detail: "Threads where a colleague said something you have not seen. In-practice only.",
+      href: "/practice/messages",
+      sample: [{ id: "threads", label: "Open messages", href: "/practice/messages" }],
+    };
+  }
+
   const unread = (notifications ?? []) as any[];
   if (unread.length > 0) {
     items.notification_unread = {
@@ -327,6 +364,8 @@ export async function operationsHome(admin: any, ctx: WorkspaceContext) {
   if (!can("document.view")) blindSpots.push("documents");
   if (!can("practice.calendar.view")) blindSpots.push("the diary and waiting room");
   if (!can("task.view")) blindSpots.push("tasks");
+  if (!can("inbox.record")) blindSpots.push("the incoming-document register");
+  if (!can("message.use")) blindSpots.push("messages");
 
   const [{ count: locations }, { count: members }, { data: entitlement }] = practice as any;
   const trialDaysLeft = entitlement?.ends_at

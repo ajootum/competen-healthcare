@@ -6,7 +6,9 @@ import { hasCapability } from "@/lib/practice/access";
 import { getPatient } from "@/lib/practice/patients";
 import { patientTimeline } from "@/lib/practice/encounters";
 import { listFollowUps } from "@/lib/practice/follow-ups";
+import { listContacts } from "@/lib/practice/communication";
 import PatientActions from "./PatientActions";
+import ContactLog from "./ContactLog";
 
 // /practice/patients/{id} -- the Phase-2 slice of CPR-V2-002's patient workspace: identity, identifiers,
 // contacts and the diary history, plus book-for-patient. The clinical timeline, problems and documents
@@ -40,6 +42,10 @@ export default async function PatientPage({ params }: { params: Promise<{ patien
   const followUps = hasCapability(shell.ctx, "followup.view")
     ? await listFollowUps(admin, shell.ctx.workspaceId, { patientId, status: ["OPEN", "SCHEDULED"] })
     : [];
+  // CPR-320. The register of contact WITH this person -- calls made, messages left. Recorded, never
+  // sent. Named contactLog, not contacts: `contacts` on this page is already the patient's phone
+  // numbers from migration 193 -- the same collision that renamed the table itself.
+  const contactLog = await listContacts(admin, shell.ctx.workspaceId, { patientId, limit: 15 });
 
   if (patient.status === "merged") {
     return (
@@ -142,6 +148,13 @@ export default async function PatientPage({ params }: { params: Promise<{ patien
           </ul>
         </section>
       )}
+
+      <ContactLog
+        patientId={patientId}
+        contacts={contactLog}
+        followUps={followUps as never[]}
+        canRecord={hasCapability(shell.ctx, "comm.record")}
+      />
 
       <section className="mt-4 rounded-xl border border-gray-200 bg-white p-4">
         <h2 className="text-[13px] font-bold text-gray-900">Appointment history</h2>
