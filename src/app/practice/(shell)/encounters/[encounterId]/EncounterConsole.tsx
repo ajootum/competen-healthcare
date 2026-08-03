@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import { ENCOUNTER_TRANSITIONS, NOTE_TYPES, LOCKED_STATUSES, actionFor, labelFor } from "@/lib/practice/encounter-constants";
 import { DOC_TYPES } from "@/lib/practice/document-constants";
@@ -10,6 +10,7 @@ import {
   OUTCOME_TYPES, OUTCOME_SEVERITIES, SEVERITY_REQUIRED_FOR,
 } from "@/lib/practice/procedure-constants";
 import Dictation from "@/components/practice/Dictation";
+import DocumentationTools from "./DocumentationTools";
 
 // CPR-V2-006's consultation surface: the SOAP note, diagnoses, treatments, and the transition bar.
 //
@@ -17,10 +18,18 @@ import Dictation from "@/components/practice/Dictation";
 // actionFor -- the same table the engine checks and the database CHECK constrains. There is no second
 // list of "which buttons to show", so there is nothing to drift.
 //
-// SAVING IS EXPLICIT PER SEGMENT, not a timer. An autosave that fires mid-sentence on a clinical note
-// writes half-thoughts into the record and makes "what did I actually save" unanswerable; a Save on each
-// SOAP box, with the saved state shown, keeps the practitioner in charge of what becomes the record.
-// The engine refuses every write after signature, so a stale open tab cannot resurrect an edit.
+// SAVING TO THE RECORD IS EXPLICIT PER SEGMENT. An autosave that wrote to the record mid-sentence would
+// put half-thoughts into a clinical note and make "what did I actually save" unanswerable; a Save on each
+// SOAP box, with the saved state shown, keeps the practitioner in charge of what becomes the record. The
+// engine refuses every write after signature, so a stale open tab cannot resurrect an edit.
+//
+// AND SINCE MIGRATION 207 THERE IS ALSO AN AUTOSAVE, which is not a reversal of that. This comment used
+// to argue against autosave outright, and it was written without reading CPR-130 s3 -- which lists
+// autosave first among its functional requirements, and which CPR-360's comp independently corroborates
+// at two minutes. The argument above was answering a different question: it is about what reaches THE
+// RECORD, and the autosave does not reach the record. It writes a DRAFT, private to its author,
+// overwritten in place, deleted the moment its text is saved properly, and labelled on screen as "not in
+// the record yet". Twenty autosaves write no version history at all. See documentation-tools.ts.
 //
 // CPR-130 ADDED THREE THINGS HERE, and one rule about all of them:
 //
@@ -57,6 +66,7 @@ export default function EncounterConsole(props: {
   procedures: any[]; procedureTypes: any[];
   canEdit: boolean; canSign: boolean; canDiagnose: boolean; canTreat: boolean;
   canDocument: boolean; canFollowUp: boolean; canProcedure: boolean;
+  phrases: any[]; attachments: any[]; drafts: any[];
 }) {
   const locked = LOCKED_STATUSES.includes(props.status) || props.status === "CANCELLED";
   const editable = props.canEdit && !locked;
@@ -87,6 +97,64 @@ export default function EncounterConsole(props: {
   });
   const [outcomeFor, setOutcomeFor] = useState<string | null>(null);
   const [outcome, setOutcome] = useState({ outcomeType: "healing", severity: "mild", detail: "" });
+
+  // ── CPR-130 AUTOSAVE ──────────────────────────────────────────────────────────────────────────────
+  //
+  // Every two minutes, to a DRAFT -- never to the record. The distinction is the whole reason autosave
+  // is buildable at all (see documentation-tools.ts): a version answers "what did the record say at
+  // 10:55", a draft answers "what was in the box when the browser closed". Twenty autosaves write no
+  // version history.
+  //
+  // The interval is the one CPR-360's comp specifies. It is a constant here rather than a setting,
+  // because a per-user autosave interval is a preference with nothing to gain from being adjustable.
+  const [draftAt, setDraftAt] = useState<Record<string, string>>({});
+  // Only drafts that actually DIFFER from what is saved are worth offering back; one that matches the
+  // record is not a recovery, it is a prompt to re-do work already done.
+  const [recoverable, setRecoverable] = useState<any[]>(() => props.drafts.filter(d => d.differsFromSaved));
+  // The refs exist so the interval below reads the CURRENT text rather than the text as it was when the
+  // timer was created -- and they are written in an effect, not during render, because a ref mutated
+  // during render is read by a concurrent re-render that never committed.
+  const bodiesRef = useRef(bodies);
+  const savedRef = useRef(saved);
+  useEffect(() => { bodiesRef.current = bodies; savedRef.current = saved; }, [bodies, saved]);
+
+  useEffect(() => {
+    if (!editable) return;
+    const timer = setInterval(() => {
+      for (const t of NOTE_TYPES) {
+        // Only what has been touched and not yet saved. Autosaving an untouched segment would write a
+        // draft of the text already in the record and then offer it back as a recovery.
+        if (savedRef.current[t] !== false) continue;
+        const body = bodiesRef.current[t] ?? "";
+        fetch(`/api/v1/practice/encounters/${props.encounterId}/drafts`, {
+          method: "PUT", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ noteType: t, body }),
+        }).then(r => {
+          if (r.ok) setDraftAt(d => ({ ...d, [t]: new Date().toLocaleTimeString() }));
+        }).catch(() => {});
+      }
+    }, 120_000);
+    return () => clearInterval(timer);
+  }, [editable, props.encounterId]);
+
+  async function expandInto(noteType: string) {
+    const res = await fetch("/api/v1/practice/smart-phrases?expand=1", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ text: bodies[noteType] ?? "" }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) { setNotice({ kind: "err", text: "That did not work." }); return; }
+    if (!data.expanded?.length) { setNotice({ kind: "ok", text: "No shortcuts found in that segment." }); return; }
+    setBodies(b => ({ ...b, [noteType]: data.text }));
+    setSaved(s => ({ ...s, [noteType]: false }));
+    setNotice({ kind: "ok", text: `Expanded ${data.expanded.join(", ")}. Not saved yet.` });
+  }
+
+  const insertIntoSegment = (noteType: string, text: string) => {
+    setBodies(b => ({ ...b, [noteType]: `${b[noteType]}${b[noteType] && !b[noteType].endsWith("\n") ? "\n" : ""}${text}` }));
+    setSaved(s => ({ ...s, [noteType]: false }));
+    setNotice({ kind: "ok", text: "Added to the note. Not saved yet." });
+  };
 
   async function call(fn: () => Promise<Response>, okText: string, reload: boolean) {
     setBusy(true); setNotice(null);
@@ -193,6 +261,51 @@ export default function EncounterConsole(props: {
         <p className={`rounded-lg px-3 py-2 text-[12px] ${notice.kind === "ok" ? "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]" : "bg-[var(--cmp-surface-critical)] text-[var(--cmp-text-critical)]"}`}>{notice.text}</p>
       )}
 
+      {/* ── CPR-130 draft recovery ────────────────────────────────────────────────────────────────
+          The reason autosave exists. Text this practitioner had in a box when they last left, which
+          never reached the record.
+
+          IT IS OFFERED, NOT APPLIED. Restoring puts it back in the box and leaves it unsaved, so what
+          becomes the record is still a decision somebody makes. Silently restoring would resurrect a
+          half-written differential from a fortnight ago into a consultation about something else. */}
+      {editable && recoverable.length > 0 && (
+        <section className="rounded-xl border border-[var(--cmp-color-warning)] bg-[var(--cmp-surface-warning)] p-3">
+          <p className="text-[12px] font-bold text-[var(--cmp-text-warning)]">
+            You have unsaved text from an earlier session.
+          </p>
+          <ul className="mt-1.5 flex flex-col gap-1.5">
+            {recoverable.map((d: any) => (
+              <li key={d.noteType} className="text-[11px] text-gray-700">
+                <span className="font-semibold">{NOTE_LABEL[d.noteType]?.split(" — ")[0] ?? d.noteType}</span>
+                <span className="text-gray-500"> · kept {String(d.updatedAt).slice(0, 16).replace("T", " ")}</span>
+                {d.savedMovedOn && (
+                  <span className="ml-1 font-semibold text-[var(--cmp-text-critical)]">
+                    the note has changed since &mdash; restoring would overwrite that
+                  </span>
+                )}
+                <p className="mt-0.5 whitespace-pre-wrap rounded bg-white/60 px-2 py-1 text-[11px] text-gray-600">{d.body}</p>
+                <span className="mt-1 flex gap-2">
+                  <button type="button" onClick={() => {
+                    setBodies(b => ({ ...b, [d.noteType]: d.body }));
+                    setSaved(s => ({ ...s, [d.noteType]: false }));
+                    setRecoverable(r => r.filter((x: any) => x.noteType !== d.noteType));
+                    setNotice({ kind: "ok", text: "Put back in the box. It is not saved until you save it." });
+                  }} className="rounded border border-gray-300 px-2 py-0.5 text-[11px] font-semibold text-gray-700 hover:bg-white">
+                    Put it back
+                  </button>
+                  <button type="button" onClick={() => {
+                    fetch(`/api/v1/practice/encounters/${props.encounterId}/drafts?noteType=${d.noteType}`, { method: "DELETE" });
+                    setRecoverable(r => r.filter((x: any) => x.noteType !== d.noteType));
+                  }} className="text-[11px] text-gray-500 hover:underline">
+                    Discard it
+                  </button>
+                </span>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+
       {/* Transition bar */}
       <section className="rounded-xl border border-gray-200 bg-white p-4">
         <h2 className="text-[13px] font-bold text-gray-900">Encounter</h2>
@@ -279,8 +392,22 @@ export default function EncounterConsole(props: {
                         className="rounded border border-gray-200 px-2 py-0.5 text-[11px] font-semibold text-gray-600 hover:bg-gray-50 disabled:opacity-50">
                         Save
                       </button>
+                      {/* CPR-130 smart text. Expansion is a BUTTON, never something that happens as you
+                          type: text in a clinical note must not change under somebody's hands. */}
+                      {props.phrases.length > 0 && (
+                        <button type="button" disabled={busy} onClick={() => expandInto(t)}
+                          className="rounded border border-gray-200 px-2 py-0.5 text-[11px] font-semibold text-gray-600 hover:bg-gray-50 disabled:opacity-50">
+                          Expand
+                        </button>
+                      )}
                       {saved[t] && <span className="text-[10px] text-[var(--cmp-text-success)]">saved</span>}
                       {dictated[t] && <span className="text-[10px] text-gray-400">will be recorded as dictated</span>}
+                      {/* THE AUTOSAVE INDICATOR SAYS "DRAFT", not "saved". A practitioner who read this as
+                          a save would leave a consultation believing the record held something it does
+                          not. */}
+                      {draftAt[t] && !saved[t] && (
+                        <span className="text-[10px] text-gray-400">draft kept {draftAt[t]} &mdash; not in the record yet</span>
+                      )}
                     </>
                   )}
                   {versions.length > 0 && (
@@ -307,6 +434,15 @@ export default function EncounterConsole(props: {
           })}
         </div>
       </section>
+
+      <DocumentationTools
+        encounterId={props.encounterId}
+        editable={editable}
+        segments={NOTE_TYPES}
+        phrases={props.phrases}
+        attachments={props.attachments}
+        onInsert={insertIntoSegment}
+      />
 
       {/* Diagnoses */}
       <section className="rounded-xl border border-gray-200 bg-white p-4">

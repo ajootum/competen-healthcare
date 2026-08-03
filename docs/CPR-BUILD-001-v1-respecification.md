@@ -108,7 +108,7 @@ Continuity & DR · 480 Enterprise Administration · 490 Roadmap & Release Govern
 | CPR-100 Patient Management | **Core built.** Registry, identity, duplicate doctrine, merge (migration 193, `patients.ts`, 20 harness assertions). Far short of the spec's 360° profile. |
 | CPR-110 Scheduling | **Core built.** Diary, availability, queue, arrival (migration 192, `scheduling.ts`, 19 assertions). No multi-location or AI scheduling. |
 | CPR-120 Encounter Management | **Core built.** Eight-state lifecycle, SOAP, diagnosis/problem split, DB-enforced signed immutability (migration 194, 41 assertions). No 8-step guided lifecycle UI. |
-| CPR-130 Clinical Documentation | **Built.** Template library (platform + workspace), append-only note versioning, sign-and-lock document object with a supersession chain, release register, browser dictation (migration 195, `documentation.ts`, 64 harness assertions). |
+| CPR-130 Clinical Documentation | **Extended (§21).** Template library, append-only note versioning, sign-and-lock document object with a supersession chain, release register, browser dictation (migration 195, 64 assertions) — *plus* the requirements that had been designed against: autosave to drafts that write no version history, smart text, clinical calculators that carry their inputs into the note, and attachments in private storage (migration 207, `documentation-tools.ts`, 51 assertions). Clinical forms and offline drafts remain. |
 | CPR-450 Deployment & Tenant Lifecycle | **Partial.** Provisioning saga, entitlements, launch flags, operator console (migration 191). |
 | CPR-140 Follow-up Management | **Rebuilt (§20).** Obligation loop as before — overdue *derived* rather than stored, the practice's own calendar day, DB-enforced release when a booking dies, event trail (migration 196, 47 assertions) — *plus* the structure the spec describes: follow-up plans and templates, the patient-centric view with its tabs, adherence as a count, the fixed outcome taxonomy, and a derived recall queue in place of a reminder engine this product has no channel for (migration 206, `follow-up-plans.ts`, 44 assertions). |
 | CPR-150 Procedure & Clinical Activity | **Built.** Catalogue with enforced laterality and consent, performed-procedure record, append-only later-learned outcomes, activity counts (migration 197, `procedures.ts`, 44 harness assertions). |
@@ -883,3 +883,93 @@ never sent.
 - The steps are inserted directly rather than through `createFollowUp`, which would re-read the patient,
   re-validate the encounter and re-resolve the clock once per step. The checks are not skipped — they
   are done once, for the plan.
+
+## 21. CPR-130 as extended: a draft is not a version
+
+`src/lib/practice/documentation-tools.ts`, `clinical-calculators.ts`, the documentation-tools panel and
+autosave on the consultation console, migration 207, and
+`scripts/practice-documentation-tools-harness.ts` — 51 assertions, five proven able to fail.
+
+**Autosave was explicitly designed against by somebody who had not read the requirement.** CPR-130 §3
+lists it first among the functional requirements, and CPR-360's comp independently sets the interval at
+two minutes. The comment in `EncounterConsole.tsx` arguing against it has been corrected in place rather
+than deleted, because the argument it made was *right about a different question*.
+
+### The resolution: two objects, two questions
+
+- a **version** answers *"what did the record say at 10:55, and who wrote it"* — deliberate, immutable,
+  append-only, part of the clinical record;
+- a **draft** answers *"what was in the box when the browser closed"* — overwritten in place, private to
+  its author, and not part of the record until somebody saves it.
+
+So autosave writes to `practice_note_draft`, one row per author per segment. **Twenty autosaves write no
+version history at all**, and the harness asserts exactly that — paired with the control that the
+deliberate save writes precisely one. The version history stays as clean as it was, and an hour of work
+survives a closed laptop.
+
+Three consequences worth stating:
+
+- **The draft is deleted the moment its text reaches a version**, enforced inside `saveNoteSegment`
+  rather than left to whoever remembers to tidy up.
+- **A draft is private to its author** — there is no parameter that would return somebody else's. Two
+  clinicians typing into the same consultation do not overwrite each other, which is precisely the
+  accident autosave would otherwise introduce at the moment somebody stepped away from a shared screen.
+- **Recovery is offered, not applied**, and the on-screen label says *"draft kept 10:55 — not in the
+  record yet"*. A practitioner who read an autosave indicator as a save would leave a consultation
+  believing the record held something it does not.
+
+### Clinical calculators: every result carries its inputs
+
+Not a convenience — the safety property. *"eGFR 36"* in a record is unverifiable: a reader cannot tell
+whether the creatinine was mg/dL or µmol/L, or whether the age was right. *"eGFR 36 mL/min/1.73m² (CKD-EPI
+2021; creatinine 1.60 mg/dL, age 62, female)"* can be checked by anybody, six months later, including the
+person who wrote it. Insertion is never the bare number.
+
+- **No dosing calculators**, and that is a decision. An error there is directly a harm, and getting it
+  right needs a drug database, a route, a renal adjustment and an indication — none of which exists here.
+- **No interpretation.** BMI is a number; whether 31 means anything for this patient is a judgement about
+  someone the product has not met, and a category printed beside it would read as advice.
+- **Units are never guessed.** mg/dL and µmol/L differ by 88.4×, and inferring from magnitude would be
+  wrong exactly at the boundary where it matters.
+- Bounds are **plausibility**, not clinical: they catch a decimal point in the wrong place and nothing
+  else. A bound that refused an unusual but real patient would be the calculator overruling the clinician.
+
+**The harness caught a real failure of its own here, and it is recorded rather than quietly fixed:** the
+first draft asserted two eGFR values that had never been computed, and they were wrong — the code was
+right and the expectations were invented. The assertions are now anchored to published CKD-EPI 2021
+reference points, which check the *equation* rather than re-running the implementation against itself.
+
+**A second harness defect surfaced the same way:** `noteHistory` returns its `byType` map directly, and
+the harness read `.byType` off it, got `undefined`, and counted zero versions — so *"twenty autosaves
+write no version history"* was passing for the wrong reason and would have kept passing if autosave had
+written a hundred. The control (exactly one version after a deliberate save) is what caught it.
+
+### Smart text
+
+A shortcut and the text it expands to, personal or practice-wide. **Expansion is a button, never
+something that happens as you type**, and **a shortcut inside a word is left exactly as typed** — a rule
+that rewrote arbitrary substrings of a clinical note would be the most alarming feature in this product.
+**A personal shortcut shadows a shared one** of the same name: somebody who has written their own version
+of the practice's normal-examination paragraph means to use theirs.
+
+No merge fields, deliberately, though CPR-330 has a resolver — smart text expands into a box somebody is
+looking at, so an unresolvable marker in mid-sentence would be worse there than in a generated letter.
+
+### Attachments
+
+The row is the record; the bytes live in a **private** bucket reached only through 60-second signed URLs.
+A public URL on a clinical image is a permanent, unauthenticated link to a patient's body. Images and
+PDFs only — the platform's asset repository allows archives, and a clinical attachment allowing a `.zip`
+would be a place to put things nobody can read from the record they are filed against.
+
+**Removal is a state, not a delete**: the bytes go, the row stays with who removed it and why. An
+attachment filed against the wrong patient is exactly the case this exists for, and a record that simply
+forgot it had held somebody else's photograph could not answer the question afterwards. No new capability
+was minted — attaching to a consultation *is* writing to the clinical record.
+
+### Still not built
+
+**Clinical forms and checklists** (CPR-130 §2) and **offline draft support** (§3). The first is a form
+builder with typed fields and structured answers — a module in itself, not a corner of this one. The
+second is a service worker and a local store, which is CPR-410's subject. Both are named here rather than
+left to be discovered missing.

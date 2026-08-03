@@ -129,7 +129,15 @@ practice_assistant / billing_reporting / read_only_auditor).
 - **Decide:** whether to adopt the spec's role taxonomy or map it onto 191's. Adding roles is a
   migration; mapping is a naming layer.
 
-### CPR-130 Clinical Documentation — partial
+### CPR-130 Clinical Documentation — partial → LARGELY CORRECTED
+
+> **Mostly closed.** Migration 207 adds autosave (as DRAFTS, which write no version history -- the
+> objection that refused it was right about a different question), smart text, clinical calculators that
+> carry their inputs into every inserted sentence, and attachments in a private bucket with 60-second
+> signed URLs. Print/export arrived with CPR-330. 51 harness assertions, five proven able to fail --
+> and the harness caught two defects of its own, both recorded rather than quietly fixed. **Still open:**
+> clinical forms and checklists (a form builder, a module in itself) and offline drafts (CPR-410's
+> subject). See respec s21.
 - **Have:** SOAP + templates, versioning/history, sign-and-lock, dictation, template library.
 - **Missing:** **autosave** (explicitly designed against — the comp shows "Auto-saved 10:55 AM"),
   attachments and media, clinical forms/checklists, smart text and auto-complete, clinical calculators,

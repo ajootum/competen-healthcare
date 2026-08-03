@@ -5,6 +5,7 @@ import { resolvePracticeShell } from "@/lib/practice/shell";
 import { hasCapability } from "@/lib/practice/access";
 import { getEncounter, patientTimeline, LOCKED_STATUSES } from "@/lib/practice/encounters";
 import { listTemplates, noteHistory, listDocuments } from "@/lib/practice/documentation";
+import { listPhrases, listAttachments, myDrafts } from "@/lib/practice/documentation-tools";
 import { listFollowUps, listIntervals } from "@/lib/practice/follow-ups";
 import { listProcedures, listProcedureTypes } from "@/lib/practice/procedures";
 import { logAccess } from "@/lib/practice/privacy";
@@ -54,7 +55,7 @@ export default async function EncounterPage({ params }: { params: Promise<{ enco
   // CPR-150 loads the PATIENT's procedures, not this encounter's, for the same reason CPR-140 loads
   // their live obligations: the outcome of something done last month is learned today, and a panel
   // showing only today's procedures would have nothing to attach it to.
-  const [templates, noteVersions, documents, followUps, intervals, procedures, procedureTypes] = await Promise.all([
+  const [templates, noteVersions, documents, followUps, intervals, procedures, procedureTypes, phrases, attachments, draftState] = await Promise.all([
     listTemplates(admin, shell.ctx.workspaceId, { kind: "encounter_note" }),
     noteHistory(admin, shell.ctx.workspaceId, encounter.id),
     listDocuments(admin, shell.ctx.workspaceId, { encounterId: encounter.id }),
@@ -62,6 +63,11 @@ export default async function EncounterPage({ params }: { params: Promise<{ enco
     listIntervals(admin),
     listProcedures(admin, shell.ctx.workspaceId, { patientId: encounter.patient_id, limit: 20 }),
     listProcedureTypes(admin, shell.ctx.workspaceId),
+    // CPR-130 (migration 207). The drafts are the CALLER's own -- myDrafts takes the actor and has no
+    // parameter that would return anybody else's unsaved text.
+    listPhrases(admin, shell.ctx.workspaceId, shell.ctx.userId),
+    listAttachments(admin, shell.ctx.workspaceId, { encounterId: encounter.id }),
+    myDrafts(admin, shell.ctx.workspaceId, encounter.id, shell.ctx.userId),
   ]);
 
   return (
@@ -123,6 +129,9 @@ export default async function EncounterPage({ params }: { params: Promise<{ enco
             canDiagnose={hasCapability(shell.ctx, "diagnosis.record")}
             canTreat={hasCapability(shell.ctx, "treatment.record")}
             canDocument={hasCapability(shell.ctx, "document.author")}
+            phrases={phrases}
+            attachments={attachments}
+            drafts={draftState.drafts}
           />
         </div>
 

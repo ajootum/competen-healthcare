@@ -237,6 +237,13 @@ export async function saveNoteSegment(admin: any, args: {
   if (versionError)
     return { ok: false, status: 500, code: "VERSION_NOT_RECORDED", message: `the text was saved but its version was not recorded: ${versionError.message}` };
 
+  // THE DRAFT IS DELETED THE MOMENT ITS TEXT REACHES A VERSION (CPR-130, migration 207). Here rather
+  // than in the route, because "a draft exists only until it is saved" is the invariant that keeps a
+  // draft from ever being mistaken for the record -- and an invariant enforced by whoever remembers to
+  // call the tidy-up is not one.
+  await admin.from("practice_note_draft").delete()
+    .eq("encounter_id", args.encounterId).eq("note_type", args.noteType).eq("author_id", args.actorId);
+
   return { ok: true, data: { noteType: args.noteType, version, changed: true } };
 }
 
