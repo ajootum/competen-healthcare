@@ -90,10 +90,25 @@ export async function resolveWorkspaceContext(admin: any, userId: string, worksp
   const entitled = ((ents ?? []) as any[]).some(e => e.starts_at <= nowIso && (!e.ends_at || e.ends_at >= nowIso));
   if (!entitled) return { ok: false, reason: "NOT_ENTITLED" };
 
-  const { data: caps } = await admin.from("practice_role_assignment")
-    .select("capability_code, membership_id")
-    .in("membership_id", mine.map(m => m.membershipId))
-    .is("effective_to", null);
+  // CAPABILITY GRANTS ARE TIME-BOUNDED, AND THIS IS WHERE THAT IS ENFORCED (CPR-310).
+  //
+  // This used to read `.is("effective_to", null)`, which had two consequences nobody had noticed since
+  // Phase 0: a grant with an END DATE was invisible even while live -- so every delegation migration
+  // 191's schema was designed for would have granted nothing -- and `effective_from` was ignored
+  // entirely, so a grant dated to begin next Monday was live the moment it was written. The second is
+  // the security-relevant one.
+  //
+  // FILTERED IN TYPESCRIPT, NOT IN THE QUERY. The correct predicate needs an OR across a null test
+  // (`effective_to is null or effective_to > now`), and PostgREST's or-filter with a null test is
+  // exactly the shape this codebase has twice written in a way that quietly matched every row. The set
+  // is one user's grants across their own memberships -- small, and worth being unambiguous about.
+  const { data: grants } = await admin.from("practice_role_assignment")
+    .select("capability_code, membership_id, effective_from, effective_to")
+    .in("membership_id", mine.map(m => m.membershipId));
+
+  const caps = ((grants ?? []) as any[]).filter(g =>
+    (!g.effective_from || g.effective_from <= nowIso) &&
+    (g.effective_to === null || g.effective_to > nowIso));
 
   const { data: ob } = await admin.from("practice_onboarding")
     .select("state, current_step").eq("workspace_id", workspaceId).eq("user_id", userId)

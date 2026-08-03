@@ -96,9 +96,10 @@ Continuity & DR · 480 Enterprise Administration · 490 Roadmap & Release Govern
 | CPR-340 Tasks, Reminders & Notifications | **Built.** Operational tasks with derived overdue and derived orphaning, reminders as a column rather than a second object, in-app notifications holding only non-derivable events. No delivery channel, deliberately (migration 198, `tasks.ts`, 44 harness assertions). |
 | CPR-350 Search & Global Retrieval | **Built.** One box over ten domains; generated tsvector columns so the index cannot drift from the text; capability filter runs BEFORE the query; skipped domains named; no hidden counts (migration 199, `search.ts`, 43 harness assertions). |
 | CPR-320 Communication & Document Management | **Built.** Internal threads with per-reader derived unread, a register of contact WITH patients (recorded never sent), and an incoming-document register whose review is a named clinical stamp (migration 200, `communication.ts`, 44 harness assertions). |
-| CPR-200–270, 310, 330, 360–370, 400–440, 460–490 | **Not started.** |
+| CPR-310 Team & Delegated Access | **Built.** Invitation codes (bearer, single-use, expiry derived), membership lifecycle, time-bounded delegation, DB-guarded last owner. Fixed a shipped resolver bug that made every delegation invisible and ignored `effective_from` (migration 201, `team.ts`, 52 harness assertions). |
+| CPR-200–270, 330, 360–370, 400–440, 460–490 | **Not started.** |
 
-**Twelve of thirty-seven** now have a real implementation. The clinical spine (CPR-130/140/150) and the
+**Thirteen of thirty-seven** now have a real implementation. The clinical spine (CPR-130/140/150) and the
 operations home are complete rather than partial; the four marked "core built" remain subsets of what
 their v1.0 documents ask for.
 
@@ -426,7 +427,44 @@ the database clock; with the database a second ahead, every author saw their own
 at them. The cursor now takes the thread's own `last_message_at`, so both sides of the comparison come
 from one clock -- removing the race rather than shrinking it.
 
-## 13. Standing rules that carry over
+## 13. CPR-310 as built, and the bug it found in Phase 0
+
+Migration 201, `src/lib/practice/team.ts`, `/practice/people`, `/practice/join`, and
+`scripts/practice-team-harness.ts`. The module that makes everything since CPR-340 reachable by more
+than one person — assistant capabilities, task hand-over and messaging all existed with no way to add
+the colleague.
+
+**Delegation needed no new table, and that is the finding.** `practice_role_assignment` has carried
+`source`, `effective_from` and `effective_to` since migration 191. What it did not have was a resolver
+that honoured them: `access.ts` read `.is("effective_to", null)`, so **a grant with an end date was
+invisible even while live** — every delegation the schema was designed for would have granted nothing —
+and **`effective_from` was ignored entirely**, making a grant dated to begin next Monday live the moment
+it was written. The second is the security-relevant one. Fixed in the resolver and asserted from all
+three directions, with a control proving open-ended role grants still resolve throughout.
+
+**You cannot delegate a capability you do not hold.** Migration 191 gives the owner administration and
+no clinical access; the owner also runs the team. Without this rule those combine into one-click
+self-escalation. Building a real subject for the test was itself instructive: provisioning gives the
+founding practitioner BOTH memberships, so in a solo practice the owner legitimately holds clinical
+access and lending it is not escalation at all. The harness revokes the owner's practitioner membership
+first, producing the shape the rule actually guards.
+
+**An invitation code is a bearer credential**, because this product has no delivery of any kind and
+inventing it for invitations alone would make every other honest statement about sending false. Shown
+once, never listed back, single-use, revocable, and every bad code gets the *same* refusal so guessing
+learns nothing. Expiry is derived, so an old code stops working with nothing having run.
+
+**A workspace may never lose its last owner** — refused by the engine with a sentence, and by a trigger
+for anything that bypasses it, including demotion rather than revocation.
+
+**Two more bugs this turned up.** Suspending a membership closed only *open-ended* grants, so a lent
+capability with a future end date survived suspension and was live again on reinstatement — the exact
+thing the code claimed to prevent. And shipping the page at the `team` slug silently shadowed the
+**public** marketing page of the same name: a static route beats `[area]` and nothing errors. The
+content harness caught it; the authenticated route is now `/practice/people`, and navigation.ts lists
+every public slug that must not be shadowed.
+
+## 14. Standing rules that carry over
 
 - Render real data only; an honest empty state beats a plausible number.
 - Every module gets a harness, and the harness is proven able to fail before it is trusted.

@@ -23,6 +23,16 @@ export type PracticeNavItem = {
   built: boolean;
 };
 
+// ⚠️ THE PUBLIC MARKETING SECTION SHARES THIS URL SPACE. `/practice/[area]` renders the public
+// capability-area pages, and a static route in this group SHADOWS it -- silently, because a static
+// segment beats a dynamic one and nothing errors. CPR-310 shipped at `/practice/team` and made the
+// public "team" area page unreachable; scripts/practice-content-harness.ts caught it, which is what
+// that harness is for.
+//
+// Taken by the public section and NOT available here: scheduling · encounter · continuity ·
+// case-memory · evidence · anywhere · team · setup, plus the profession slugs (doctor, nurse,
+// clinical-officer, midwife, surgeon, pharmacist, laboratory-scientist, nutritionist, physiotherapist,
+// psychologist). Check `slug:` in src/lib/marketing/practice-content.ts before adding a route here.
 export const PRACTICE_NAV: PracticeNavItem[] = [
   { href: "/practice/home", label: "Home", icon: "⌂", capability: "practice.home.view", group: "Practice", phase: 0, built: true },
   { href: "/practice/search", label: "Search", icon: "⌕", capability: "search.use", group: "Practice", phase: 5, built: true },
@@ -36,6 +46,7 @@ export const PRACTICE_NAV: PracticeNavItem[] = [
   { href: "/practice/messages", label: "Messages", icon: "✉", capability: "message.use", group: "Practice Management", phase: 5, built: true },
   { href: "/practice/reports", label: "Reports", icon: "☷", capability: "report.view", group: "Practice Management", phase: 6, built: false },
   { href: "/practice/intelligence", label: "Practice Intelligence", icon: "☀", capability: "report.view", group: "Intelligence", phase: 5, built: false },
+  { href: "/practice/people", label: "Team", icon: "⚇", capability: "practice.members.manage", group: "Tools and Settings", phase: 5, built: true },
   { href: "/practice/settings", label: "Practice Settings", icon: "⚙", capability: "practice.settings.manage", group: "Tools and Settings", phase: 8, built: false },
 ];
 
