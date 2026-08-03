@@ -1,4 +1,5 @@
 import { audit } from "@/lib/practice/provisioning";
+import { defaultAppointmentMinutes } from "@/lib/practice/configuration";
 
 // PEN-001 Appointment & Scheduling Engine -- the business rules, separated from every UI that uses them
 // (PEN-001 "separate scheduling logic from user interfaces"). CPR-V2-003 V3 is one consumer; the command
@@ -67,7 +68,11 @@ export type EngineResult<T = Record<string, unknown>> =
 const LIVE_STATUSES = ["REQUESTED", "CONFIRMED", "ARRIVED"];
 
 export async function bookAppointment(admin: any, input: BookInput): Promise<EngineResult<{ id: string; status: string }>> {
-  const duration = input.durationMinutes ?? 20;
+  // CPR-360. The fallback used to be a hardcoded 20 here and in the overlap check below, so a practice
+  // whose consultations run half an hour had been fighting that number since Phase 1. It now comes from
+  // the workspace's own configuration -- and the literal survives only as the value for a workspace
+  // whose configuration row is somehow missing, which is a state getConfiguration() repairs on sight.
+  const duration = input.durationMinutes ?? await defaultAppointmentMinutes(admin, input.workspaceId);
   const startMs = Date.parse(input.scheduledAt);
   if (Number.isNaN(startMs)) return { ok: false, status: 400, code: "VALIDATION_ERROR", message: "scheduledAt is not a valid timestamp" };
   const endMs = startMs + duration * 60000;

@@ -48,7 +48,7 @@ export const PRACTICE_NAV: PracticeNavItem[] = [
   { href: "/practice/intelligence", label: "Practice Intelligence", icon: "☀", capability: "report.view", group: "Intelligence", phase: 5, built: false },
   { href: "/practice/privacy", label: "Privacy and access", icon: "⚿", capability: "access.review", group: "Tools and Settings", phase: 5, built: true },
   { href: "/practice/people", label: "Team", icon: "⚇", capability: "practice.members.manage", group: "Tools and Settings", phase: 5, built: true },
-  { href: "/practice/settings", label: "Practice Settings", icon: "⚙", capability: "practice.settings.manage", group: "Tools and Settings", phase: 8, built: false },
+  { href: "/practice/settings", label: "Practice Settings", icon: "⚙", capability: "practice.settings.manage", group: "Tools and Settings", phase: 8, built: true },
 ];
 
 export function visibleNav(capabilities: string[]): PracticeNavItem[] {

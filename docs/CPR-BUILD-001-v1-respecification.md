@@ -99,9 +99,10 @@ Continuity & DR · 480 Enterprise Administration · 490 Roadmap & Release Govern
 | CPR-310 Team & Delegated Access | **Built.** Invitation codes (bearer, single-use, expiry derived), membership lifecycle, time-bounded delegation, DB-guarded last owner. Fixed a shipped resolver bug that made every delegation invisible and ignored `effective_from` (migration 201, `team.ts`, 52 harness assertions). |
 | CPR-370 Security, Privacy & Practitioner Control | **Built.** Read logging (the other half of the trail), de-identified access review, append-only enforcement, patient-record export (migration 202, `privacy.ts`, 36 harness assertions). |
 | CPR-330 Reports | **Built.** Counts and denominators only — no rates, no benchmarks, no targets; aged backlog; CSV that states it is not anonymised. No migration (`reports.ts`, 30 harness assertions). |
-| CPR-200–270, 360, 400–440, 460–490 | **Not started.** |
+| CPR-360 Configuration | **Built.** Wires up a configuration table that had existed since Phase 0 and was read by nothing; correctable timezone with write-time validation; locations; the hardcoded appointment length removed (migration 203, `configuration.ts`, 35 harness assertions). |
+| CPR-200–270, 400–440, 460–490 | **Not started.** |
 
-**Fifteen of thirty-seven** now have a real implementation. The clinical spine (CPR-130/140/150) and the
+**Sixteen of thirty-seven** now have a real implementation. **Every Practice Operations module (CPR-300 to 370) is now built.** The clinical spine (CPR-130/140/150) and the
 operations home are complete rather than partial; the four marked "core built" remain subsets of what
 their v1.0 documents ask for.
 
@@ -547,7 +548,51 @@ running a report is a read of the whole practice, so it is logged.
 practice identifies somebody to anyone who knows the practice, and a CSV travels further than the page
 it came from, so the sentence travels with it.
 
-## 16. Standing rules that carry over
+## 16. CPR-360 as built: wiring up a table nobody read
+
+Migration 203, `src/lib/practice/configuration.ts`, `/practice/settings`, and
+`scripts/practice-configuration-harness.ts`.
+
+**`practice_configuration` has existed since migration 191 and nothing has ever read it.** Provisioning
+writes one row carrying the locale and never looks at it again; `date_format`, `default_encounter_mode`,
+`identifier_policy` and `feature_flags` have sat at their defaults since Phase 0, honoured by nothing.
+That is the same shape as the bug CPR-310 found in `practice_role_assignment`: a table designed
+correctly and then not wired up, which is worse than an absent feature because it reads as a working one.
+So the migration adds almost nothing — CPR-360 is mostly the work of making what exists real.
+
+**Changing the timezone retroactively changes what "today" meant.** Every derived figure in this product
+reads the practice clock *at read time* — CPR-140's overdue, CPR-300's day window, CPR-330's reporting
+periods. Correcting the zone therefore changes what all of them would have said about dates already
+recorded. That is still the right thing to allow, because a practice provisioned into the wrong zone has
+had a wrong clock since day one with no way to fix it. But it must be loud: the confirmation names the
+consequence, and the audit payload carries *both* values, because "the clock is Africa/Kampala" does not
+explain why last month's report moved.
+
+**And it must be validated at the point of write, because the read path cannot.** `practiceToday()`
+falls back to UTC on an unknown zone rather than throwing — deliberately, so a bad value never takes a
+page down. That fallback is silent by design, which makes write-time validation the *only* place a typo
+is catchable at all: "Africa/Kampla" would otherwise move a whole practice to UTC and say nothing. The
+harness demonstrates the silence before asserting the refusal.
+
+**The hardcoded 20 is gone.** The default appointment length was a literal in two places in
+`scheduling.ts`, so a practice whose consultations run half an hour had been fighting that number since
+Phase 1. Proven by changing the setting and booking again.
+
+**Locations exist in the product for the first time.** The table and `practice.locations.manage` have
+both been there since 191 with no way to create one — the operations home has been counting a number
+nobody could change. They are closed rather than deleted, because appointments point at them. The *last*
+active location can be closed, unlike the last owner: a practice with no location is odd but workable,
+whereas one with no owner cannot be administered at all.
+
+**Two things deliberately not built.** No new trail table — configuration changes go to
+`practice_audit_event`, which already carries actor, payload and correlation id; every module since
+CPR-140 has added a trail and the reflex to add a fifth is the one this codebase keeps warning itself
+about. And no personalisation, despite the module's title: nothing here has a per-user preference worth
+storing, and inventing a preferences table so the module matches its own heading would be building a
+feature to fill a word. The inert columns are *listed* on the settings page rather than rendered as
+inputs, because a setting you can change that changes nothing is worse than one that is missing.
+
+## 17. Standing rules that carry over
 
 - Render real data only; an honest empty state beats a plausible number.
 - Every module gets a harness, and the harness is proven able to fail before it is trusted.
