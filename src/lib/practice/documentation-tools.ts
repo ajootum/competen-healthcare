@@ -289,7 +289,7 @@ export async function listAttachments(admin: any, workspaceId: string, filter: {
   encounterId?: string; patientId?: string; includeRemoved?: boolean;
 }) {
   let q = admin.from("practice_attachment")
-    .select("id, patient_id, encounter_id, storage_path, file_name, mime_type, byte_size, kind, caption, removed_at, removed_reason, created_at, created_by")
+    .select("id, patient_id, encounter_id, procedure_id, storage_path, file_name, mime_type, byte_size, kind, caption, removed_at, removed_reason, created_at, created_by")
     .eq("workspace_id", workspaceId);
   if (filter.encounterId) q = q.eq("encounter_id", filter.encounterId);
   if (filter.patientId) q = q.eq("patient_id", filter.patientId);

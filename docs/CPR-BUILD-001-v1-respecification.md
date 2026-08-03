@@ -111,7 +111,7 @@ Continuity & DR · 480 Enterprise Administration · 490 Roadmap & Release Govern
 | CPR-130 Clinical Documentation | **Extended (§21).** Template library, append-only note versioning, sign-and-lock document object with a supersession chain, release register, browser dictation (migration 195, 64 assertions) — *plus* the requirements that had been designed against: autosave to drafts that write no version history, smart text, clinical calculators that carry their inputs into the note, and attachments in private storage (migration 207, `documentation-tools.ts`, 51 assertions). Clinical forms and offline drafts remain. |
 | CPR-450 Deployment & Tenant Lifecycle | **Partial.** Provisioning saga, entitlements, launch flags, operator console (migration 191). |
 | CPR-140 Follow-up Management | **Rebuilt (§20).** Obligation loop as before — overdue *derived* rather than stored, the practice's own calendar day, DB-enforced release when a booking dies, event trail (migration 196, 47 assertions) — *plus* the structure the spec describes: follow-up plans and templates, the patient-centric view with its tabs, adherence as a count, the fixed outcome taxonomy, and a derived recall queue in place of a reminder engine this product has no channel for (migration 206, `follow-up-plans.ts`, 44 assertions). |
-| CPR-150 Procedure & Clinical Activity | **Built.** Catalogue with enforced laterality and consent, performed-procedure record, append-only later-learned outcomes, activity counts (migration 197, `procedures.ts`, 44 harness assertions). |
+| CPR-150 Procedure & Clinical Activity | **Completed (s23).** Procedure recording, custom catalogue, consent, outcomes, complications and laterality enforcement as before (migration 197, 44 assertions) -- plus the half the title names: clinical activity logging, procedure teams, instruments with implant traceability, procedure templates, attachments and a portfolio of counts (migration 209, `clinical-activity.ts`, 38 assertions). |
 | CPR-300 Operations Home | **Built.** `/practice/home` rebuilt as a worklist: every figure is the length of a list you can open, ordered by cost of ignoring, capability-aware with named blind spots. No migration (`operations-home.ts`, `practice-time.ts`, 37 harness assertions). |
 | CPR-340 Tasks, Reminders & Notifications | **Built.** Operational tasks with derived overdue and derived orphaning, reminders as a column rather than a second object, in-app notifications holding only non-derivable events. No delivery channel, deliberately (migration 198, `tasks.ts`, 44 harness assertions). |
 | CPR-350 Search & Global Retrieval | **Built.** One box over ten domains; generated tsvector columns so the index cannot drift from the text; capability filter runs BEFORE the query; skipped domains named; no hidden counts (migration 199, `search.ts`, 43 harness assertions). |
@@ -1047,3 +1047,71 @@ work has to know what to change.
 Communication 90%, Approval Time 89%); "Time Saved 18.5 hrs"; "Accuracy Rate 93%". None has a formula and
 none could — "accuracy" of a delegated action is not a quantity this product observes. The queue counts
 are the real measure and are what the tiles carry. The AI Team Assistant is CPR-210's.
+
+## 23. CPR-150 as completed: the module is called "Procedure AND Clinical Activity Management"
+
+`src/lib/practice/clinical-activity.ts`, `/practice/activity`, migration 209, and
+`scripts/practice-activity-harness.ts` — 38 assertions, four proven able to fail.
+
+**Only the procedure half was built.** CPR-150 §2 lists "clinical activity logging" beside procedure
+recording, and the comp gives it its own tab and its own panel: *"Log all clinical activities (not just
+procedures) — ward rounds, consultations, training, etc."* That half was missing entirely, along with
+procedure templates, team members, instruments, attachments and portfolio evidence. Everything that
+existed — recording, the custom catalogue, consent, outcomes, complications, and the laterality
+enforcement that is not even in the specification — stays.
+
+### A clinical activity is not a procedure, and it is not a task
+
+A procedure is done **to** a patient and lives in their record. An activity is something a clinician
+**did** — a ward round, a teaching session, a mortality meeting — and most name no patient at all.
+Recording a lecture as a procedure would put it in somebody's clinical record; recording it as a task
+would say it was work *assigned* rather than work *done*. So `practice_clinical_activity` has **no
+`patient_id`**, deliberately, and it gets its own page rather than being wedged into a consultation it
+has nothing to do with.
+
+**It belongs to whoever did it, not whoever typed it.** `performed_by` is separate from `created_by`, so
+a consultant recording that a registrar led a ward round credits the registrar — otherwise the portfolio
+built on top is wrong about who did the work.
+
+**CPD minutes are separate from duration, and cannot exceed it.** A four-hour meeting is not four hours
+of CPD, and a portfolio claiming six hours from a two-hour meeting discredits every entry beside it.
+
+### Two rules that exist because of what goes wrong years later
+
+- **An implant without its batch or serial number is refused.** It is the one field that has to be there
+  when a batch is withdrawn, and the one nobody thinks to fill in at the time. **A template can never
+  seed one**, because a template cannot know a batch number — which would otherwise smuggle an
+  unidentifiable implant past the rule that refuses it.
+- **Instruments are a child table, not a `jsonb` list**, because *"which procedures used the C-arm"* is a
+  real question — for maintenance, for costing, and for the recall that follows a fault.
+
+### Smaller decisions
+
+- **A team entry must identify somebody**, but an agency scrub nurse with no account can still be named.
+  A team list that only held account-holders would be quietly incomplete in exactly the theatres that
+  matter — and a row that says somebody else was there without saying who is worse than an incomplete
+  list, because it looks complete.
+- **A seeded role names a place in the team, not a person.** It is a reminder to fill in who, not a claim
+  that they were there.
+- **A template seeds the team and the kit, never the findings** — writing what was found before anybody
+  performed the operation is the mistake CPR-130's template library already refuses about starting text.
+- **A portfolio is the person's own.** Nobody else may add to it or take from it; its whole worth is that
+  it says what *they* did.
+- `/practice/activity`, not `/practice/activities` or `/practice/procedures` — the public marketing
+  section shares this URL space and a static route shadows it silently. `practice-content-harness.ts` is
+  what catches a mistake there; it caught CPR-310 shipping at `/practice/team`.
+
+### Refused
+
+"Complication Rate 2.1%" and "Success Rate 97.9%" are rates. Over the forty-eight procedures the comp
+imagines, 2.1% is arguably meaningful; over the three a new practice will have, "33%" is a sentence that
+sounds like a measurement and is not one. The counts and their denominators render instead — "1 of 2".
+
+"Portfolio Impact 31.1%" and the competency links beside it are absent, and **the payload says so**
+(`competencyLinked: false`) rather than the UI merely omitting them. This product's practice tenancy does
+not write into the platform's competency records — that is a cross-tenancy decision with its own
+specification. AI-assisted documentation is CPR-210's.
+
+### Still not built
+
+Batch recording, barcode/QR readiness and offline drafts (CPR-410's subject).

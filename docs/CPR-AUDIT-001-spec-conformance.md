@@ -153,7 +153,15 @@ practice_assistant / billing_reporting / read_only_auditor).
 - **Note:** the explicit-save decision was reasoned but was made against a requirement nobody had read.
   Worth re-deciding on the merits now that the requirement is visible.
 
-### CPR-150 Procedure & Clinical Activity — partial
+### CPR-150 Procedure & Clinical Activity — partial → COMPLETED
+
+> **Closed.** Migration 209 adds the "Activity" half the title names -- clinical activity logging with
+> no patient_id, credited to whoever did it -- plus procedure teams (an agency nurse can be named),
+> instruments as a child table with implant batch numbers REQUIRED, procedure templates that seed team
+> and kit but never findings or implants, attachments reaching procedures, and a portfolio of counts and
+> denominators. 38 harness assertions, four proven able to fail. Refused: complication/success RATES, and
+> the competency link -- `competencyLinked: false` is in the payload. Batch recording, barcode readiness
+> and offline drafts remain. See respec s23.
 - **Have:** procedure recording, custom catalogue, consent tracking, outcomes, complications, laterality
   enforcement (not in the spec, and worth keeping).
 - **Missing:** procedure templates, **clinical activity logging** (ward rounds, teaching, meetings — the

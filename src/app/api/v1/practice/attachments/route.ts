@@ -44,9 +44,15 @@ export async function GET(req: NextRequest) {
     includeRemoved: url.searchParams.get("includeRemoved") === "1",
   });
   // The storage path never leaves the server: it is an internal address, and a client that had it would
-  // be one refactor away from constructing its own links.
+  // be one refactor away from constructing its own links. Listed explicitly rather than deleted from the
+  // row, so a column added later is not published by accident.
   return NextResponse.json({
-    attachments: attachments.map(({ storage_path: _p, ...rest }) => rest),
+    attachments: attachments.map(a => ({
+      id: a.id, patient_id: a.patient_id, encounter_id: a.encounter_id, procedure_id: a.procedure_id,
+      file_name: a.file_name, mime_type: a.mime_type, byte_size: a.byte_size,
+      kind: a.kind, caption: a.caption, removed_at: a.removed_at, removed_reason: a.removed_reason,
+      created_at: a.created_at, created_by: a.created_by,
+    })),
     correlationId: auth.caller.traceId,
   });
 }
