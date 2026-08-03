@@ -91,7 +91,8 @@ Continuity & DR · 480 Enterprise Administration · 490 Roadmap & Release Govern
 | CPR-130 Clinical Documentation | **Built.** Template library (platform + workspace), append-only note versioning, sign-and-lock document object with a supersession chain, release register, browser dictation (migration 195, `documentation.ts`, 55 harness assertions). |
 | CPR-450 Deployment & Tenant Lifecycle | **Partial.** Provisioning saga, entitlements, launch flags, operator console (migration 191). |
 | CPR-140 Follow-up Management | **Built.** Obligation loop with overdue *derived* rather than stored, the practice's own calendar day, DB-enforced release when a booking dies, event trail (migration 196, `follow-ups.ts`, 47 harness assertions). |
-| CPR-150, 200–270, 300–370, 400–440, 460–490 | **Not started.** |
+| CPR-150 Procedure & Clinical Activity | **Built.** Catalogue with enforced laterality and consent, performed-procedure record, append-only later-learned outcomes, activity counts (migration 197, `procedures.ts`, 44 harness assertions). |
+| CPR-200–270, 300–370, 400–440, 460–490 | **Not started.** |
 
 Roughly **four of thirty-seven** have a real implementation behind them, and each of those four is a
 subset of what its v1.0 document now asks for.
@@ -120,8 +121,9 @@ Nothing here is a week's work. A realistic order that keeps the product usable a
 2. ~~**CPR-040 design system**~~ **Done.** Indigo and the `--cp-*` token layer are adopted across the
    Practice app; the swatch-versus-prose disagreement is recorded in `globals.css` and asserted in
    `scripts/cpr040-design-system-harness.ts`.
-3. **Finish the clinical spine** — ~~CPR-130 documentation properly~~ **done**, ~~CPR-140 follow-ups~~
-   **done** (both below), then CPR-150 procedures. These complete the encounter the product already has.
+3. ~~**Finish the clinical spine**~~ **Done** — CPR-130 documentation, CPR-140 follow-ups and CPR-150
+   procedures (all three below). The encounter the product already had is now complete: it can be
+   documented, it can commit the practice to seeing someone again, and it can record what was done.
 4. **CPR-300 Operations Home** — the daily command centre the spec puts at the centre of the workspace.
 5. **CPR-340 tasks / 350 search / 320 documents** — the operational spine everything else references.
 6. **Practice Intelligence (200–270)** — needs clinical volume to be worth anything, so it follows.
@@ -216,7 +218,47 @@ board and chase people all day, which is the actual labour of follow-up, and the
 obligation and deciding one has been met or missed are clinical judgements. An assistant can therefore
 work the board without altering a single obligation.
 
-## 8. Standing rules that carry over
+## 8. CPR-150 as built, and why it is not the treatment table
+
+Migration 197, `src/lib/practice/procedures.ts`, `scripts/practice-procedures-harness.ts`, and a
+procedures panel in the consultation.
+
+**Intention and act are different facts.** Migration 194 said of `practice_treatment`: *"a record of what
+the practitioner DECIDED, not what a ward gave"*. `practice_procedure` holds what was actually done to a
+person — the needle went in, the lesion came off, and there is now a wound that can become infected. A
+treatment row saying "excision, planned" is not evidence anything happened; a procedure row is. They
+link, and a plan never carried out simply leaves no procedure row. The harness asserts that planning one
+creates no procedure record. This is written into the migration header because two tables that both
+mention procedures look like duplication to anyone who did not read 194, and the cheap fix — merging them
+— destroys the distinction.
+
+**Two refusals are clinical safety rules, not validation.** *Laterality*: a catalogue entry marked `sided`
+cannot be recorded without a side. Not a warning, not a default — a refusal, and `not_applicable` is
+refused too, because it is exactly what somebody picks to get past a required field on a busy day.
+Wrong-site is the canonical never-event. *Consent*: defaults to `not_recorded` and never to `obtained`,
+because a column defaulting to true manufactures a legal claim about a conversation nobody can evidence.
+Where the catalogue requires consent, `not_recorded` is refused — but `refused` passes, because a patient
+declining is a real event the record should be able to state. Both refusals are paired with a procedure
+needing neither flag, so a green "refused" cannot be `recordProcedure` being broken.
+
+**An outcome is learned later, and that is why it is its own table.** The encounter that performed the
+procedure is signed the same day; three weeks on the wound is infected. That fact can go into the signed
+encounter (breaking the immutability guarantee 194 s6 exists to hold), nowhere (what most systems do), or
+into an append-only row pointing at the encounter that *noticed* it. It is the third. The harness records
+a complication weeks after the fact and asserts the signed encounter is still signed and unchanged.
+
+**The label is written down, not joined.** Renaming or retiring a catalogue entry must not rewrite what a
+past procedure says it was — a procedure performed in March would otherwise start describing itself in
+the words of a September edit. Asserted, with a control proving the catalogue itself *does* show the new
+name, so the check is not just reading a stale row.
+
+**Activity counts, and stops there.** `procedureActivity` reports complications as a count and a
+denominator, never as a rate: "2.4% complication rate" over forty-one procedures is a number that sounds
+like a statistic and is not one. There are no targets, benchmarks or trends, because those need a
+comparison this product has not been given. It does surface how many procedures have no consent recorded,
+which is a fact about the record rather than a claim about the practice.
+
+## 9. Standing rules that carry over
 
 - Render real data only; an honest empty state beats a plausible number.
 - Every module gets a harness, and the harness is proven able to fail before it is trusted.

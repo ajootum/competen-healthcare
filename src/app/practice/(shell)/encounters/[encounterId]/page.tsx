@@ -6,6 +6,7 @@ import { hasCapability } from "@/lib/practice/access";
 import { getEncounter, patientTimeline, LOCKED_STATUSES } from "@/lib/practice/encounters";
 import { listTemplates, noteHistory, listDocuments } from "@/lib/practice/documentation";
 import { listFollowUps, listIntervals } from "@/lib/practice/follow-ups";
+import { listProcedures, listProcedureTypes } from "@/lib/practice/procedures";
 import EncounterConsole from "./EncounterConsole";
 
 // /practice/encounters/{id} -- CPR-V2-006 V3, the consultation workspace: patient header, the previous
@@ -42,12 +43,17 @@ export default async function EncounterPage({ params }: { params: Promise<{ enco
   // CPR-140. The patient's LIVE obligations, not this encounter's -- a follow-up raised at the last
   // visit is exactly what this consultation is supposed to settle, and it would be invisible if the
   // panel only showed what today raised.
-  const [templates, noteVersions, documents, followUps, intervals] = await Promise.all([
+  // CPR-150 loads the PATIENT's procedures, not this encounter's, for the same reason CPR-140 loads
+  // their live obligations: the outcome of something done last month is learned today, and a panel
+  // showing only today's procedures would have nothing to attach it to.
+  const [templates, noteVersions, documents, followUps, intervals, procedures, procedureTypes] = await Promise.all([
     listTemplates(admin, shell.ctx.workspaceId, { kind: "encounter_note" }),
     noteHistory(admin, shell.ctx.workspaceId, encounter.id),
     listDocuments(admin, shell.ctx.workspaceId, { encounterId: encounter.id }),
     listFollowUps(admin, shell.ctx.workspaceId, { patientId: encounter.patient_id, status: ["OPEN", "SCHEDULED"] }),
     listIntervals(admin),
+    listProcedures(admin, shell.ctx.workspaceId, { patientId: encounter.patient_id, limit: 20 }),
+    listProcedureTypes(admin, shell.ctx.workspaceId),
   ]);
 
   return (
@@ -100,7 +106,10 @@ export default async function EncounterPage({ params }: { params: Promise<{ enco
             documents={documents}
             followUps={followUps}
             intervals={intervals}
+            procedures={procedures}
+            procedureTypes={procedureTypes}
             canFollowUp={hasCapability(shell.ctx, "followup.manage")}
+            canProcedure={hasCapability(shell.ctx, "procedure.record")}
             canEdit={hasCapability(shell.ctx, "encounter.edit")}
             canSign={hasCapability(shell.ctx, "encounter.sign")}
             canDiagnose={hasCapability(shell.ctx, "diagnosis.record")}
