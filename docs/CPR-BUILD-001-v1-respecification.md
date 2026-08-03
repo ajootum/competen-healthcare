@@ -84,18 +84,20 @@ Continuity & DR · 480 Enterprise Administration · 490 Roadmap & Release Govern
 
 | v1.0 spec | Status today |
 |---|---|
-| CPR-040 Design System | **Partial.** Indigo palette adopted on the public homepage (CPR-001 v3). The app still uses the blue Practice accent and the platform PUI tokens. |
+| CPR-040 Design System | **Built.** Indigo and the `--cp-*` token layer adopted across the Practice app; 83 hex literals tokenised. The spec prose won over its own swatch graphic, recorded in `globals.css` (`cpr040-design-system-harness.ts`, 9 assertions). |
 | CPR-100 Patient Management | **Core built.** Registry, identity, duplicate doctrine, merge (migration 193, `patients.ts`, 20 harness assertions). Far short of the spec's 360° profile. |
 | CPR-110 Scheduling | **Core built.** Diary, availability, queue, arrival (migration 192, `scheduling.ts`, 19 assertions). No multi-location or AI scheduling. |
 | CPR-120 Encounter Management | **Core built.** Eight-state lifecycle, SOAP, diagnosis/problem split, DB-enforced signed immutability (migration 194, 41 assertions). No 8-step guided lifecycle UI. |
-| CPR-130 Clinical Documentation | **Built.** Template library (platform + workspace), append-only note versioning, sign-and-lock document object with a supersession chain, release register, browser dictation (migration 195, `documentation.ts`, 55 harness assertions). |
+| CPR-130 Clinical Documentation | **Built.** Template library (platform + workspace), append-only note versioning, sign-and-lock document object with a supersession chain, release register, browser dictation (migration 195, `documentation.ts`, 64 harness assertions). |
 | CPR-450 Deployment & Tenant Lifecycle | **Partial.** Provisioning saga, entitlements, launch flags, operator console (migration 191). |
 | CPR-140 Follow-up Management | **Built.** Obligation loop with overdue *derived* rather than stored, the practice's own calendar day, DB-enforced release when a booking dies, event trail (migration 196, `follow-ups.ts`, 47 harness assertions). |
 | CPR-150 Procedure & Clinical Activity | **Built.** Catalogue with enforced laterality and consent, performed-procedure record, append-only later-learned outcomes, activity counts (migration 197, `procedures.ts`, 44 harness assertions). |
-| CPR-200–270, 300–370, 400–440, 460–490 | **Not started.** |
+| CPR-300 Operations Home | **Built.** `/practice/home` rebuilt as a worklist: every figure is the length of a list you can open, ordered by cost of ignoring, capability-aware with named blind spots. No migration (`operations-home.ts`, `practice-time.ts`, 37 harness assertions). |
+| CPR-200–270, 310–370, 400–440, 460–490 | **Not started.** |
 
-Roughly **four of thirty-seven** have a real implementation behind them, and each of those four is a
-subset of what its v1.0 document now asks for.
+**Nine of thirty-seven** now have a real implementation. The clinical spine (CPR-130/140/150) and the
+operations home are complete rather than partial; the four marked "core built" remain subsets of what
+their v1.0 documents ask for.
 
 ## 4. What the comps ask for that cannot be built as drawn
 
@@ -124,7 +126,7 @@ Nothing here is a week's work. A realistic order that keeps the product usable a
 3. ~~**Finish the clinical spine**~~ **Done** — CPR-130 documentation, CPR-140 follow-ups and CPR-150
    procedures (all three below). The encounter the product already had is now complete: it can be
    documented, it can commit the practice to seeing someone again, and it can record what was done.
-4. **CPR-300 Operations Home** — the daily command centre the spec puts at the centre of the workspace.
+4. ~~**CPR-300 Operations Home**~~ **Done** (below). /practice/home is now a worklist rather than a dashboard.
 5. **CPR-340 tasks / 350 search / 320 documents** — the operational spine everything else references.
 6. **Practice Intelligence (200–270)** — needs clinical volume to be worth anything, so it follows.
 7. **Enterprise Services (400–490)** — infrastructure-heavy; several are platform concerns that already
@@ -258,7 +260,44 @@ like a statistic and is not one. There are no targets, benchmarks or trends, bec
 comparison this product has not been given. It does surface how many procedures have no consent recorded,
 which is a fact about the record rather than a claim about the practice.
 
-## 9. Standing rules that carry over
+## 9. CPR-300 as built, and the bug it turned up
+
+`src/lib/practice/operations-home.ts`, `src/lib/practice/practice-time.ts`, a rebuilt `/practice/home`, and
+`scripts/practice-operations-harness.ts`. **No migration** -- everything it shows already existed, which
+is the point: an operations home that needed its own tables would be one that was inventing something.
+
+**Every figure on this page is the length of a list you can open.** Every comp for a screen like this is
+a wall of large numbers, and s4 records that all of them are invented. Replacing them with REAL large
+numbers would not fix it: a big true figure is still not something a practitioner can act on at 8am. So
+the rule is stricter than "render real data only" -- a count with nothing behind it is a dashboard, a
+count you can click into is a worklist, and if a number cannot be given a link it does not belong here.
+The engine enforces it structurally: attention items carry a count, a link and real sample rows, and the
+page has no other source of numbers.
+
+**Ordered by what it costs to ignore**, stated once as data so the page cannot re-sort itself on
+aesthetics. An overdue follow-up outranks an unsigned encounter outranks a draft letter -- the follow-up
+is the only item whose cost falls on somebody outside the room.
+
+**A zero is earned; a blind spot is named.** If the caller lacks `followup.view`, the follow-up tile is
+ABSENT, not zero, and "follow-ups" appears in `blindSpots` so the page can say why it looks quiet.
+"Nothing is owed" and "you cannot see what is owed" are different sentences, and a home page that
+conflates them tells a locum their day is clear when it is not.
+
+**The bug this turned up.** The old home computed "today" as `new Date().toISOString().slice(0, 10)` and
+queried a UTC day window. For a Kampala practice that is right for twenty-one hours a day and wrong for
+three -- and the three are the early morning, which is exactly when somebody opens the app to see what
+the day holds. A 01:00 EAT appointment is 22:00Z the previous day and vanished from "today". Fixed in
+`practice-time.ts`, which is now the single clock CPR-140 and CPR-300 share, with the offset read at
+midday so a DST transition cannot sample the wrong side of itself.
+
+**And a bug in the harness, worth recording.** The first version of the ordering assertions passed while
+the engine was deliberately broken to sort by count -- every tile had a count of one, so the sort was
+indistinguishable from the correct order. Fixed by making due-soon the LARGEST group and asserting it
+still ranks below an unsigned encounter: size is not urgency, and the assertion now fails under both a
+count sort and the engine's own build order. An assertion that cannot tell right from wrong is worse than
+no assertion, because it is counted.
+
+## 10. Standing rules that carry over
 
 - Render real data only; an honest empty state beats a plausible number.
 - Every module gets a harness, and the harness is proven able to fail before it is trusted.

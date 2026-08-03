@@ -1,6 +1,7 @@
 import { audit } from "@/lib/practice/provisioning";
 import type { EngineResult } from "@/lib/practice/encounters";
 import { FOLLOW_UP_TRANSITIONS, CLOSED_FOLLOW_UP_STATUSES, FOLLOW_UP_KINDS, FOLLOW_UP_PRIORITIES } from "@/lib/practice/follow-up-constants";
+import { dueDateFrom, workspaceClock } from "@/lib/practice/practice-time";
 
 // CPR-140 FOLLOW-UP MANAGEMENT / PEN-004. The obligation loop: due -> overdue -> scheduled -> closed.
 //
@@ -24,28 +25,12 @@ import { FOLLOW_UP_TRANSITIONS, CLOSED_FOLLOW_UP_STATUSES, FOLLOW_UP_KINDS, FOLL
 
 const nowIso = () => new Date().toISOString();
 
-/**
- * Today's date in the workspace's own timezone, as YYYY-MM-DD.
- *
- * en-CA is not a preference about Canada; it is the locale whose short date format IS ISO, which makes
- * this a formatting call rather than a hand-rolled offset calculation that would be wrong twice a year.
- */
-export function practiceToday(timezone: string | null | undefined, at: Date = new Date()): string {
-  try {
-    return new Intl.DateTimeFormat("en-CA", {
-      timeZone: timezone || "UTC", year: "numeric", month: "2-digit", day: "2-digit",
-    }).format(at);
-  } catch {
-    // An unknown timezone must not take the board down. UTC is wrong by hours; a thrown error is wrong
-    // by the whole page.
-    return new Intl.DateTimeFormat("en-CA", { timeZone: "UTC", year: "numeric", month: "2-digit", day: "2-digit" }).format(at);
-  }
-}
+// The clock lives in practice-time.ts, which the operations home shares. Re-exported here because this
+// module's callers and its harness reach for it by this name -- and because two copies of a timezone
+// calculation is how one of them quietly stops matching the other.
+export { practiceToday, dueDateFrom } from "@/lib/practice/practice-time";
 
-async function workspaceToday(admin: any, workspaceId: string): Promise<string> {
-  const { data } = await admin.from("practice_workspace").select("timezone").eq("id", workspaceId).maybeSingle();
-  return practiceToday(data?.timezone);
-}
+const workspaceToday = async (admin: any, workspaceId: string) => (await workspaceClock(admin, workspaceId)).today;
 
 const daysBetween = (fromIso: string, toIso: string) =>
   Math.round((Date.parse(`${toIso}T00:00:00Z`) - Date.parse(`${fromIso}T00:00:00Z`)) / 86400000);
@@ -82,13 +67,6 @@ export async function listIntervals(admin: any) {
   const { data } = await admin.from("practice_follow_up_interval")
     .select("code, label, days").order("position");
   return (data ?? []) as { code: string; label: string; days: number }[];
-}
-
-/** today + n days, in the practice's calendar. Exported so a caller can show the date before committing. */
-export function dueDateFrom(today: string, days: number): string {
-  const d = new Date(`${today}T00:00:00Z`);
-  d.setUTCDate(d.getUTCDate() + days);
-  return d.toISOString().slice(0, 10);
 }
 
 export async function createFollowUp(admin: any, args: {
