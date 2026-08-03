@@ -5,6 +5,7 @@ import { resolvePracticeShell } from "@/lib/practice/shell";
 import { hasCapability } from "@/lib/practice/access";
 import { getPatient } from "@/lib/practice/patients";
 import { patientTimeline } from "@/lib/practice/encounters";
+import { listFollowUps } from "@/lib/practice/follow-ups";
 import PatientActions from "./PatientActions";
 
 // /practice/patients/{id} -- the Phase-2 slice of CPR-V2-002's patient workspace: identity, identifiers,
@@ -34,6 +35,11 @@ export default async function PatientPage({ params }: { params: Promise<{ patien
   const timeline = hasCapability(shell.ctx, "encounter.list")
     ? await patientTimeline(admin, shell.ctx.workspaceId, patientId, 20)
     : { encounters: [] as any[], diagnosesByEncounter: {} as Record<string, any[]> };
+  // CPR-140. Read-only here: the actions live where the clinical context is, in the consultation and on
+  // the board. What this record owes is a fact about the patient and belongs on their page.
+  const followUps = hasCapability(shell.ctx, "followup.view")
+    ? await listFollowUps(admin, shell.ctx.workspaceId, { patientId, status: ["OPEN", "SCHEDULED"] })
+    : [];
 
   if (patient.status === "merged") {
     return (
@@ -114,6 +120,28 @@ export default async function PatientPage({ params }: { params: Promise<{ patien
           canStartEncounter={hasCapability(shell.ctx, "encounter.create")}
         />
       </div>
+
+      {followUps.length > 0 && (
+        <section className="mt-4 rounded-xl border border-gray-200 bg-white p-4">
+          <div className="flex items-center gap-2">
+            <h2 className="text-[13px] font-bold text-gray-900">Outstanding follow-ups</h2>
+            <Link href="/practice/follow-ups" className="ml-auto text-[11px] font-semibold text-[var(--cp-primary-deep)] hover:underline">
+              The board →
+            </Link>
+          </div>
+          <ul className="mt-2 flex flex-col gap-1">
+            {followUps.map((f: any) => (
+              <li key={f.id} className={`text-[12px] ${f.overdue ? "border-l-2 border-[var(--cmp-color-critical)] pl-2" : ""}`}>
+                <span className="text-gray-800">{f.reason}</span>
+                <span className={`ml-2 text-[11px] ${f.overdue ? "font-bold text-[var(--cmp-text-critical)]" : "text-gray-500"}`}>
+                  {f.overdue ? `${Math.abs(f.dueInDays)} days overdue`
+                    : f.status === "SCHEDULED" ? `booked ${f.bookedFor ?? ""}` : `due ${f.due_on}`}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
 
       <section className="mt-4 rounded-xl border border-gray-200 bg-white p-4">
         <h2 className="text-[13px] font-bold text-gray-900">Appointment history</h2>

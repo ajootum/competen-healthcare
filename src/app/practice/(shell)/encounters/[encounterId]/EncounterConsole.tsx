@@ -4,6 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { ENCOUNTER_TRANSITIONS, NOTE_TYPES, LOCKED_STATUSES, actionFor, labelFor } from "@/lib/practice/encounter-constants";
 import { DOC_TYPES } from "@/lib/practice/document-constants";
+import { FOLLOW_UP_KINDS, FOLLOW_UP_PRIORITIES } from "@/lib/practice/follow-up-constants";
 import Dictation from "@/components/practice/Dictation";
 
 // CPR-V2-006's consultation surface: the SOAP note, diagnoses, treatments, and the transition bar.
@@ -48,7 +49,9 @@ export default function EncounterConsole(props: {
   encounterId: string; patientId: string; status: string; reasonForVisit: string | null;
   notes: any[]; diagnoses: any[]; treatments: any[];
   templates: any[]; history: Record<string, any[]>; documents: any[];
-  canEdit: boolean; canSign: boolean; canDiagnose: boolean; canTreat: boolean; canDocument: boolean;
+  followUps: any[]; intervals: { code: string; label: string; days: number }[];
+  canEdit: boolean; canSign: boolean; canDiagnose: boolean; canTreat: boolean;
+  canDocument: boolean; canFollowUp: boolean;
 }) {
   const locked = LOCKED_STATUSES.includes(props.status) || props.status === "CANCELLED";
   const editable = props.canEdit && !locked;
@@ -69,6 +72,9 @@ export default function EncounterConsole(props: {
   const [dx, setDx] = useState({ label: "", certainty: "provisional", isPrimary: false, problemLabel: "" });
   const [tx, setTx] = useState({ treatmentType: "medication", label: "", dose: "", route: "", frequency: "", duration: "" });
   const [doc, setDoc] = useState({ title: "", docType: "consultation_summary", addressedTo: "", composeFrom: true });
+  const [fu, setFu] = useState({ reason: "", kind: "review", intervalCode: "2w", priority: "routine" });
+  const [closingFu, setClosingFu] = useState<string | null>(null);
+  const [fuOutcome, setFuOutcome] = useState("");
 
   async function call(fn: () => Promise<Response>, okText: string, reload: boolean) {
     setBusy(true); setNotice(null);
@@ -109,6 +115,22 @@ export default function EncounterConsole(props: {
       addressedTo: doc.addressedTo || undefined, composeFrom: doc.composeFrom,
     }),
   }), "Document created.", true);
+
+  const raiseFollowUp = () => call(() => fetch("/api/v1/practice/follow-ups", {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      patientId: props.patientId, originEncounterId: props.encounterId,
+      reason: fu.reason, kind: fu.kind, intervalCode: fu.intervalCode, priority: fu.priority,
+    }),
+  }), "Follow-up raised.", true);
+
+  // CLOSING FROM HERE NAMES THIS ENCOUNTER as what settled it, which is the whole point of doing it in
+  // the consultation rather than on the board: the record then says WHERE the obligation was met, not
+  // just that somebody ticked it.
+  const closeFollowUp = (id: string) => call(() => fetch(`/api/v1/practice/follow-ups/${id}`, {
+    method: "PATCH", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ action: "complete", closingEncounterId: props.encounterId, outcome: fuOutcome }),
+  }), "Follow-up closed.", true);
 
   const transition = (action: string, label: string) => {
     if (action === "sign" && !confirm("Signing locks this encounter. Only a governed amendment can change it afterwards. Sign now?")) return;
@@ -339,6 +361,70 @@ export default function EncounterConsole(props: {
             <p className="col-span-2 text-[10px] text-gray-400">
               A medication here records what was prescribed, not what was administered. Competen Practice
               does not hold an inpatient administration chart.
+            </p>
+          </form>
+        )}
+      </section>
+
+      {/* Follow-ups (CPR-140). The patient's LIVE obligations, not this encounter's -- one raised at the
+          last visit is exactly what today is meant to settle, and showing only today's would hide it. */}
+      <section className="rounded-xl border border-gray-200 bg-white p-4">
+        <h2 className="text-[13px] font-bold text-gray-900">Follow-up</h2>
+        {props.followUps.length === 0 ? (
+          <p className="mt-2 text-[12px] text-gray-400">Nothing is owed to this patient.</p>
+        ) : (
+          <ul className="mt-2 flex flex-col gap-1.5">
+            {props.followUps.map(f => (
+              <li key={f.id} className={`text-[12px] ${f.overdue ? "border-l-2 border-[var(--cmp-color-critical)] pl-2" : ""}`}>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="text-gray-800">{f.reason}</span>
+                  <span className={`text-[11px] ${f.overdue ? "font-bold text-[var(--cmp-text-critical)]" : "text-gray-500"}`}>
+                    {f.overdue ? `${Math.abs(f.dueInDays)} days overdue` : `due ${f.due_on}`}
+                  </span>
+                  {props.canFollowUp && (
+                    <button type="button" disabled={busy}
+                      onClick={() => { setFuOutcome(""); setClosingFu(closingFu === f.id ? null : f.id); }}
+                      className="ml-auto rounded border border-gray-200 px-2 py-0.5 text-[11px] font-semibold text-gray-600 hover:bg-gray-50 disabled:opacity-50">
+                      Settle in this consultation
+                    </button>
+                  )}
+                </div>
+                {closingFu === f.id && (
+                  <form className="mt-1.5 flex flex-col gap-1.5 rounded-lg bg-gray-50 p-2"
+                    onSubmit={e => { e.preventDefault(); closeFollowUp(f.id); }}>
+                    <input autoFocus placeholder="What happened? (optional — this encounter is recorded as the closer)"
+                      value={fuOutcome} onChange={e => setFuOutcome(e.target.value)} className={input} />
+                    <button type="submit" disabled={busy}
+                      className="self-start rounded-lg bg-[var(--cp-primary)] px-2.5 py-1 text-[11px] font-semibold text-white hover:bg-[var(--cp-primary-deep)] disabled:opacity-50">
+                      Close as done
+                    </button>
+                  </form>
+                )}
+              </li>
+            ))}
+          </ul>
+        )}
+
+        {props.canFollowUp && (
+          <form className="mt-3 grid grid-cols-2 gap-2" onSubmit={e => { e.preventDefault(); raiseFollowUp(); }}>
+            <input required placeholder="What needs to happen, and why" value={fu.reason}
+              onChange={e => setFu(p => ({ ...p, reason: e.target.value }))} className={`${input} col-span-2`} />
+            <select aria-label="Kind of follow-up" value={fu.kind} onChange={e => setFu(p => ({ ...p, kind: e.target.value }))} className={input}>
+              {FOLLOW_UP_KINDS.map(([k, l]) => <option key={k} value={k}>{l}</option>)}
+            </select>
+            <select aria-label="When" value={fu.intervalCode} onChange={e => setFu(p => ({ ...p, intervalCode: e.target.value }))} className={input}>
+              {props.intervals.map(i => <option key={i.code} value={i.code}>{i.label}</option>)}
+            </select>
+            <select aria-label="Priority" value={fu.priority} onChange={e => setFu(p => ({ ...p, priority: e.target.value }))} className={input}>
+              {FOLLOW_UP_PRIORITIES.map(p => <option key={p} value={p}>{p}</option>)}
+            </select>
+            <button type="submit" disabled={busy || !fu.reason.trim()}
+              className="rounded-lg border border-gray-200 py-2 text-[12px] font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-50">
+              Raise a follow-up
+            </button>
+            <p className="col-span-2 text-[10px] text-gray-400">
+              The intervals are arithmetic on today&apos;s date, not clinical guidance. Once raised, this
+              appears on the follow-up board and becomes overdue on its own if nothing is booked.
             </p>
           </form>
         )}

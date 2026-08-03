@@ -1,0 +1,375 @@
+/**
+ * Practice follow-up harness -- CPR-140 / PEN-004, exercised against the live database through the same
+ * engine the API uses.
+ *
+ * WHAT IT PROVES:
+ *   1. AN OBLIGATION IS RAISED FROM A CONSULTATION and traces back to it. Intervals come from the
+ *      catalogue and an unknown one is refused rather than silently defaulted; an obligation cannot be
+ *      filed against another patient's encounter.
+ *   2. OVERDUE IS DERIVED, NEVER STORED -- the decision migration 196's header turns on. A follow-up
+ *      dated in the past reads overdue with NOTHING having run: no cron, no job, no login. The control
+ *      is a future-dated one in the same list that does not.
+ *   3. "TODAY" IS THE PRACTICE'S TODAY. practiceToday() is asserted against a fixed instant in three
+ *      timezones, including one where UTC and the practice are on different DATES -- which is when a
+ *      board silently says "nothing is late" while things are late.
+ *   4. THE STATE MACHINE. Legal moves move, illegal ones are refused with the reason, and every move
+ *      lands in the obligation's own event trail. MISSED is reversible; COMPLETED is not.
+ *   5. CLOSING REQUIRES SAYING WHAT HAPPENED -- an encounter or words for COMPLETED, words for MISSED.
+ *      Paired with the same call succeeding once something is supplied.
+ *   6. A DEAD BOOKING RELEASES ITS OBLIGATION, AND THE DATABASE DOES IT (migration 196 s5). Cancelling
+ *      or no-showing the appointment puts the follow-up back on the board with the appointment id
+ *      cleared -- asserted through a RAW update that bypasses the engine entirely, because that is the
+ *      guarantee the trigger exists for.
+ *   7. Workspace isolation non-vacuously; anon reads 0 rows from all three tables.
+ *
+ * CONTROLS: every refusal is paired with the same operation succeeding somewhere it should.
+ *
+ *   npx --yes tsx scripts/practice-followups-harness.ts
+ */
+import { loadEnvConfig } from "@next/env";
+import { createClient } from "@supabase/supabase-js";
+import { runProvisioning, type IndividualRequest } from "../src/lib/practice/provisioning";
+import { registerPatient } from "../src/lib/practice/patients";
+import { bookAppointment, transitionAppointment } from "../src/lib/practice/scheduling";
+import { launchEncounter, transitionEncounter } from "../src/lib/practice/encounters";
+import {
+  createFollowUp, scheduleFollowUp, closeFollowUp, listFollowUps, followUpBoard,
+  getFollowUp, listIntervals, practiceToday, dueDateFrom,
+} from "../src/lib/practice/follow-ups";
+
+loadEnvConfig(process.cwd());
+
+const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+if (!url || !key || !anonKey) { console.error("Supabase env not set"); process.exit(1); }
+const admin = createClient(url, key, { auth: { persistSession: false } });
+const anon = createClient(url, anonKey, { auth: { persistSession: false } });
+
+const USER_A = "00000000-0000-4000-8000-0000000e0f51";
+const USER_B = "00000000-0000-4000-8000-0000000e0f52";
+
+let pass = 0;
+const fails: string[] = [];
+const ok = (label: string, cond: boolean, detail = "") => {
+  if (cond) { pass++; console.log(`  PASS  ${label}`); }
+  else { fails.push(label); console.log(`  FAIL  ${label}${detail ? ` -- ${detail}` : ""}`); }
+};
+
+const payload = (name: string): IndividualRequest => ({
+  displayName: name, countryCode: "UG", timezone: "Africa/Kampala", professionCode: "medical_doctor",
+  defaultPracticeType: "clinic", locale: "en-UG", termsVersion: "t1", privacyNoticeVersion: "p1", source: "pilot",
+});
+
+async function provision(user: string, name: string, suffix: string): Promise<string> {
+  const { data: req } = await admin.from("provisioning_request").insert({
+    idempotency_key: `harness-fu-${suffix}`, request_type: "pilot",
+    actor_user_id: user, target_user_id: user, payload_hash: "harness", correlation_id: "harness-fu",
+  }).select("id").single();
+  const run = await runProvisioning(admin, { id: req!.id, target_user_id: user, correlation_id: "harness-fu", workspace_id: null }, payload(name));
+  if (!run.ok || !run.workspaceId) throw new Error(`provisioning failed: ${run.errorCode}`);
+  return run.workspaceId;
+}
+
+async function cleanup() {
+  for (const u of [USER_A, USER_B]) {
+    const { data: ws } = await admin.from("practice_workspace").select("id").eq("owner_person_id", u);
+    for (const w of (ws ?? []) as { id: string }[]) await admin.from("practice_workspace").delete().eq("id", w.id);
+    await admin.from("provisioning_request").delete().eq("target_user_id", u);
+    await admin.from("practice_audit_event").delete().eq("actor_id", u);
+  }
+}
+
+const base = { actorId: USER_A, correlationId: "harness-fu" };
+
+/* eslint-disable @typescript-eslint/no-explicit-any */
+
+async function main() {
+  console.log("\nPractice follow-up harness (CPR-140, PEN-004, migration 196)\n");
+  await cleanup();
+
+  // ── 0. Is migration 196 deployed? ─────────────────────────────────────────
+  const reg = await admin.rpc("plat_function_registry");
+  const fns = (reg.data ?? []) as { fn_name: string }[];
+  ok("the function registry probe returns rows (the trigger checks are not vacuous)", fns.length > 0,
+    reg.error?.message ?? `${fns.length} functions`);
+  ok("practice_follow_up_release_on_dead_appointment() is deployed (migration 196 s5)",
+    fns.some(f => f.fn_name === "practice_follow_up_release_on_dead_appointment"),
+    "NOT FOUND -- a cancelled booking will leave its follow-up reading SCHEDULED");
+  ok("practice_follow_up_event_immutable() is deployed (migration 196 s5)",
+    fns.some(f => f.fn_name === "practice_follow_up_event_immutable"),
+    "NOT FOUND -- the obligation trail is rewritable");
+
+  // ── 1. THE PRACTICE'S TODAY, not the server's ────────────────────────────
+  // Asserted against a FIXED instant so this cannot pass by accident on some days and fail on others.
+  // 2026-03-14T22:30:00Z is 2026-03-15 in Kampala (+03) and still the 14th in London and New York.
+  const instant = new Date("2026-03-14T22:30:00.000Z");
+  ok("practiceToday resolves the workspace's calendar day, not UTC's",
+    practiceToday("Africa/Kampala", instant) === "2026-03-15" &&
+    practiceToday("UTC", instant) === "2026-03-14",
+    `${practiceToday("Africa/Kampala", instant)} vs ${practiceToday("UTC", instant)}`);
+  ok("a timezone BEHIND UTC is handled too (the bug is not one-directional)",
+    practiceToday("America/New_York", instant) === "2026-03-14", practiceToday("America/New_York", instant));
+  ok("an unknown timezone falls back rather than throwing (a wrong hour beats a dead board)",
+    practiceToday("Mars/Olympus_Mons", instant) === "2026-03-14", practiceToday("Mars/Olympus_Mons", instant));
+  ok("dueDateFrom crosses a month boundary correctly", dueDateFrom("2026-01-25", 14) === "2026-02-08", dueDateFrom("2026-01-25", 14));
+
+  const wsA = await provision(USER_A, "HARNESS Follow-up A (synthetic)", "a");
+  const wsB = await provision(USER_B, "HARNESS Follow-up B (synthetic)", "b");
+  const today = practiceToday("Africa/Kampala");
+
+  const intervals = await listIntervals(admin);
+  ok("the interval catalogue is seeded (migration 196 s3)", intervals.length >= 8, `${intervals.length}`);
+
+  // ── 2. Raising an obligation ──────────────────────────────────────────────
+  const pa = await registerPatient(admin, {
+    workspaceId: wsA, displayName: "Nakato Betty", birthDate: "1992-07-30", sex: "female",
+    phone: "0772 555 330", ...base,
+  });
+  if (!pa.ok) { ok("patient registration for the harness succeeded", false, pa.message); return report(); }
+  const patientA = pa.data.id;
+
+  const pOther = await registerPatient(admin, {
+    workspaceId: wsA, displayName: "Ssekandi Paul", birthDate: "1965-02-11", sex: "male", phone: "0772 555 331", ...base,
+  });
+
+  const enc = await launchEncounter(admin, {
+    workspaceId: wsA, patientId: patientA, pathway: "new_walk_in", reasonForVisit: "leg ulcer", ...base,
+  });
+  if (!enc.ok) { ok("encounter launch for the harness succeeded", false, enc.message); return report(); }
+  const encId = enc.data.id;
+  await transitionEncounter(admin, { workspaceId: wsA, encounterId: encId, to: "ACTIVE", ...base });
+
+  const noReason = await createFollowUp(admin, {
+    workspaceId: wsA, patientId: patientA, reason: "  ", intervalCode: "2w", ...base,
+  });
+  ok("a follow-up with no reason is refused", !noReason.ok && noReason.code === "VALIDATION_ERROR",
+    noReason.ok ? "was allowed" : noReason.code);
+
+  const badInterval = await createFollowUp(admin, {
+    workspaceId: wsA, patientId: patientA, reason: "review the ulcer", intervalCode: "9w", ...base,
+  });
+  ok("an interval the practice does not have is REFUSED, not silently defaulted",
+    !badInterval.ok && badInterval.code === "UNKNOWN_INTERVAL", badInterval.ok ? "was allowed" : badInterval.code);
+
+  const wrongPatient = pOther.ok ? await createFollowUp(admin, {
+    workspaceId: wsA, patientId: pOther.data.id, originEncounterId: encId, reason: "x", intervalCode: "2w", ...base,
+  }) : null;
+  ok("a follow-up may not be filed against another patient's encounter",
+    !!wrongPatient && !wrongPatient.ok && wrongPatient.code === "ENCOUNTER_PATIENT_MISMATCH",
+    wrongPatient?.ok ? "was allowed" : wrongPatient?.code ?? "no second patient");
+
+  const future = await createFollowUp(admin, {
+    workspaceId: wsA, patientId: patientA, originEncounterId: encId, kind: "review",
+    reason: "review the ulcer and re-dress", intervalCode: "2w", ...base,
+  });
+  ok("a follow-up is raised from the consultation (control for the refusals above)", future.ok, future.ok ? "" : future.message);
+  if (!future.ok) return report();
+  ok("the interval is applied as arithmetic on the practice's today",
+    future.data.dueOn === dueDateFrom(today, 14), `${future.data.dueOn} vs ${dueDateFrom(today, 14)}`);
+
+  // ── 3. OVERDUE IS DERIVED. Nothing runs; nothing is set. ──────────────────
+  const past = await createFollowUp(admin, {
+    workspaceId: wsA, patientId: patientA, originEncounterId: encId, kind: "investigation_result",
+    reason: "chase the wound swab result", dueOn: dueDateFrom(today, -9), priority: "urgent", ...base,
+  });
+  ok("a back-dated follow-up is accepted (it is a commitment that was already due)", past.ok, past.ok ? "" : past.message);
+  if (!past.ok) return report();
+
+  const { data: storedStatuses } = await admin.from("practice_follow_up")
+    .select("status").eq("workspace_id", wsA);
+  ok("NO ROW STORES AN OVERDUE STATUS (the column cannot hold one)",
+    ((storedStatuses ?? []) as any[]).every(r => r.status === "OPEN"),
+    JSON.stringify((storedStatuses ?? []).map((r: any) => r.status)));
+
+  const listed = await listFollowUps(admin, wsA, { status: ["OPEN", "SCHEDULED"] });
+  const overdueOne = listed.find(f => f.id === past.data.id);
+  const futureOne = listed.find(f => f.id === future.data.id);
+  ok("THE PAST-DUE ONE READS OVERDUE WITH NOTHING HAVING RUN (no cron, no job, no login)",
+    overdueOne?.overdue === true && overdueOne?.dueInDays === -9,
+    `overdue=${overdueOne?.overdue} dueInDays=${overdueOne?.dueInDays}`);
+  // CONTROL: in the SAME list, from the SAME query, a future one is not overdue -- so "overdue" is a
+  // computation over the date and not a flag the read path sets on everything.
+  ok("the future one in the same list is NOT overdue (the derivation discriminates)",
+    futureOne?.overdue === false && futureOne?.dueInDays === 14,
+    `overdue=${futureOne?.overdue} dueInDays=${futureOne?.dueInDays}`);
+
+  const board = await followUpBoard(admin, wsA);
+  ok("the board puts the overdue one in Overdue and the other in Due soon or Later",
+    board.overdue.length === 1 && board.overdue[0].id === past.data.id &&
+    [...board.dueSoon, ...board.later].some(f => f.id === future.data.id),
+    `overdue=${board.overdue.length} soon=${board.dueSoon.length} later=${board.later.length}`);
+
+  // ── 4. Booking, and what happens when the booking dies ───────────────────
+  const appt = await bookAppointment(admin, {
+    workspaceId: wsA, patientId: patientA, patientName: "Nakato Betty",
+    appointmentType: "scheduled_followup", scheduledAt: `${dueDateFrom(today, 3)}T09:00:00.000Z`, ...base,
+  });
+  ok("an appointment for the follow-up books", appt.ok, appt.ok ? "" : appt.message);
+  if (!appt.ok) return report();
+
+  const wrongPatientAppt = pOther.ok ? await bookAppointment(admin, {
+    workspaceId: wsA, patientId: pOther.data.id, patientName: "Ssekandi Paul",
+    appointmentType: "scheduled_followup", scheduledAt: `${dueDateFrom(today, 4)}T11:00:00.000Z`, ...base,
+  }) : null;
+  const mismatchLink = wrongPatientAppt?.ok ? await scheduleFollowUp(admin, {
+    workspaceId: wsA, followUpId: past.data.id, appointmentId: wrongPatientAppt.data.id, ...base,
+  }) : null;
+  ok("a follow-up cannot be linked to another patient's appointment",
+    !!mismatchLink && !mismatchLink.ok && mismatchLink.code === "APPOINTMENT_PATIENT_MISMATCH",
+    mismatchLink?.ok ? "was allowed" : mismatchLink?.code ?? "setup failed");
+
+  const linked = await scheduleFollowUp(admin, {
+    workspaceId: wsA, followUpId: past.data.id, appointmentId: appt.data.id, ...base,
+  });
+  ok("linking a live booking moves the follow-up to SCHEDULED (control)", linked.ok, linked.ok ? "" : linked.message);
+
+  const doubleLink = await scheduleFollowUp(admin, {
+    workspaceId: wsA, followUpId: future.data.id, appointmentId: appt.data.id, ...base,
+  });
+  ok("two obligations cannot be booked against one appointment",
+    !doubleLink.ok && doubleLink.code === "APPOINTMENT_ALREADY_LINKED", doubleLink.ok ? "was allowed" : doubleLink.code);
+
+  const scheduledBoard = await followUpBoard(admin, wsA);
+  ok("a booked obligation leaves Overdue and appears under Booked",
+    scheduledBoard.overdue.length === 0 && scheduledBoard.scheduled.some(f => f.id === past.data.id),
+    `overdue=${scheduledBoard.overdue.length} booked=${scheduledBoard.scheduled.length}`);
+  ok("a booking made AFTER the due date is flagged late, not treated as on time",
+    scheduledBoard.scheduled.find(f => f.id === past.data.id)?.late === true,
+    JSON.stringify(scheduledBoard.scheduled.map(f => ({ late: f.late, booked: f.bookedFor, due: f.due_on }))));
+
+  // THE GUARANTEE MIGRATION 196 s5 PROMISES: a raw update, straight at the table, no engine involved.
+  const rawCancel = await admin.from("practice_appointment")
+    .update({ status: "CANCELLED", updated_by: USER_A }).eq("id", appt.data.id);
+  ok("cancelling the appointment raw is accepted by the database", !rawCancel.error, rawCancel.error?.message ?? "");
+
+  const { data: released } = await admin.from("practice_follow_up")
+    .select("status, appointment_id").eq("id", past.data.id).single();
+  ok("THE DATABASE RELEASES THE FOLLOW-UP when its booking dies (migration 196 s5 trigger)",
+    released?.status === "OPEN", `status=${released?.status}`);
+  ok("the dead appointment id is CLEARED (the board never offers a cancelled booking)",
+    released?.appointment_id === null, String(released?.appointment_id));
+
+  const afterRelease = await followUpBoard(admin, wsA);
+  ok("the released obligation is back in Overdue where somebody will see it",
+    afterRelease.overdue.some(f => f.id === past.data.id), `${afterRelease.overdue.length} overdue`);
+
+  const releaseTrail = await getFollowUp(admin, wsA, past.data.id);
+  ok("the release is in the obligation's own trail, attributable rather than appearing from nowhere",
+    (releaseTrail?.events ?? []).some((e: any) => e.to_status === "OPEN" && /cancelled/i.test(e.note ?? "")),
+    JSON.stringify((releaseTrail?.events ?? []).map((e: any) => e.note)));
+
+  // A NO_SHOW must release too -- it is the case where the follow-up most needs to come back.
+  const appt2 = await bookAppointment(admin, {
+    workspaceId: wsA, patientId: patientA, patientName: "Nakato Betty",
+    appointmentType: "scheduled_followup", scheduledAt: `${dueDateFrom(today, 5)}T10:00:00.000Z`, ...base,
+  });
+  if (appt2.ok) {
+    await scheduleFollowUp(admin, { workspaceId: wsA, followUpId: past.data.id, appointmentId: appt2.data.id, ...base });
+    await transitionAppointment(admin, { workspaceId: wsA, appointmentId: appt2.data.id, to: "CONFIRMED", ...base });
+    await transitionAppointment(admin, { workspaceId: wsA, appointmentId: appt2.data.id, to: "NO_SHOW", ...base });
+    const { data: afterNoShow } = await admin.from("practice_follow_up").select("status").eq("id", past.data.id).single();
+    ok("a NO-SHOW releases the obligation too (not being seen is not being settled)",
+      afterNoShow?.status === "OPEN", `status=${afterNoShow?.status}`);
+  } else {
+    ok("a NO-SHOW releases the obligation too (not being seen is not being settled)", false, appt2.message);
+  }
+
+  // ── 5. Closing requires saying what happened ─────────────────────────────
+  const emptyComplete = await closeFollowUp(admin, { workspaceId: wsA, followUpId: past.data.id, to: "COMPLETED", ...base });
+  ok("closing as done with no encounter and no words is refused",
+    !emptyComplete.ok && emptyComplete.code === "OUTCOME_REQUIRED", emptyComplete.ok ? "was allowed" : emptyComplete.code);
+
+  const emptyMissed = await closeFollowUp(admin, { workspaceId: wsA, followUpId: past.data.id, to: "MISSED", ...base });
+  ok("marking missed with no reason is refused (giving up on someone needs a sentence)",
+    !emptyMissed.ok && emptyMissed.code === "OUTCOME_REQUIRED", emptyMissed.ok ? "was allowed" : emptyMissed.code);
+
+  // Launched as its own statement rather than inline: if it failed inline the closingEncounterId would
+  // be undefined and the call would be refused for the WRONG reason, which is a green tick that proves
+  // nothing.
+  const otherEnc = pOther.ok
+    ? await launchEncounter(admin, { workspaceId: wsA, patientId: pOther.data.id, pathway: "new_walk_in", ...base })
+    : null;
+  const wrongCloser = otherEnc?.ok ? await closeFollowUp(admin, {
+    workspaceId: wsA, followUpId: past.data.id, to: "COMPLETED",
+    closingEncounterId: otherEnc.data.id, ...base,
+  }) : null;
+  ok("another patient's encounter cannot be named as what closed this",
+    !!wrongCloser && !wrongCloser.ok && wrongCloser.code === "ENCOUNTER_PATIENT_MISMATCH",
+    wrongCloser?.ok ? "was allowed" : wrongCloser?.code ?? `setup failed: ${otherEnc?.ok === false ? otherEnc.message : "no second patient"}`);
+
+  const missed = await closeFollowUp(admin, {
+    workspaceId: wsA, followUpId: past.data.id, to: "MISSED",
+    outcome: "three calls, no answer; family says she has travelled", ...base,
+  });
+  ok("marking missed WITH a reason works (control for both refusals above)", missed.ok, missed.ok ? "" : missed.message);
+
+  const { data: missedRow } = await admin.from("practice_follow_up")
+    .select("status, closed_at, closed_by, outcome").eq("id", past.data.id).single();
+  ok("closing stamps who and when, and keeps the words",
+    missedRow?.status === "MISSED" && !!missedRow?.closed_at && missedRow?.closed_by === USER_A && /travelled/.test(missedRow?.outcome ?? ""),
+    JSON.stringify(missedRow));
+
+  const reopened = await closeFollowUp(admin, { workspaceId: wsA, followUpId: past.data.id, to: "OPEN", ...base });
+  ok("MISSED IS REVERSIBLE (a patient who turns up in June is live again)", reopened.ok, reopened.ok ? "" : reopened.message);
+
+  const completed = await closeFollowUp(admin, {
+    workspaceId: wsA, followUpId: past.data.id, to: "COMPLETED",
+    closingEncounterId: encId, outcome: "swab negative, wound healing", ...base,
+  });
+  ok("naming the encounter that settled it satisfies the requirement", completed.ok, completed.ok ? "" : completed.message);
+
+  const afterComplete = await closeFollowUp(admin, { workspaceId: wsA, followUpId: past.data.id, to: "OPEN", ...base });
+  ok("COMPLETED is a dead end (unlike MISSED) -- reopening it is refused",
+    !afterComplete.ok && afterComplete.code === "ILLEGAL_TRANSITION", afterComplete.ok ? "was allowed" : afterComplete.code);
+
+  const detail = await getFollowUp(admin, wsA, past.data.id);
+  const trail = (detail?.events ?? []) as any[];
+  ok("every move is in the obligation's trail, in order",
+    trail.length >= 7 && trail[0].to_status === "OPEN" && trail[trail.length - 1].to_status === "COMPLETED",
+    JSON.stringify(trail.map(e => e.to_status)));
+  ok("the closing encounter is recorded on the obligation",
+    detail?.followUp.closing_encounter_id === encId, String(detail?.followUp.closing_encounter_id));
+
+  const rewriteEvent = await admin.from("practice_follow_up_event")
+    .update({ note: "a different history" }).eq("follow_up_id", past.data.id);
+  ok("the DATABASE refuses to rewrite a follow-up event (migration 196 s5 trigger)",
+    !!rewriteEvent.error, rewriteEvent.error?.message ?? "the update succeeded");
+
+  // ── 6. Isolation + anon ───────────────────────────────────────────────────
+  const bReads = await getFollowUp(admin, wsB, future.data.id);
+  ok("getFollowUp is workspace-scoped (B cannot read A's obligation)", bReads === null);
+  const bCloses = await closeFollowUp(admin, { workspaceId: wsB, followUpId: future.data.id, to: "CANCELLED", ...base });
+  ok("B cannot close A's obligation", !bCloses.ok && bCloses.code === "NOT_FOUND", bCloses.ok ? "was allowed" : bCloses.code);
+
+  const aBoard = await followUpBoard(admin, wsA);
+  const bBoard = await followUpBoard(admin, wsB);
+  ok("A's board is non-empty (the isolation test is not vacuous)",
+    aBoard.overdue.length + aBoard.dueSoon.length + aBoard.scheduled.length + aBoard.later.length + aBoard.recentlyClosed.length > 0,
+    `${aBoard.recentlyClosed.length} closed`);
+  ok("B's board holds none of A's obligations",
+    bBoard.overdue.length + bBoard.dueSoon.length + bBoard.scheduled.length + bBoard.later.length + bBoard.recentlyClosed.length === 0);
+
+  const TABLES = ["practice_follow_up", "practice_follow_up_event", "practice_follow_up_interval"];
+  let svcRows = 0, leaked = 0;
+  for (const t of TABLES) {
+    const { count: svc } = await admin.from(t).select("*", { count: "exact", head: true });
+    if ((svc ?? 0) > 0) svcRows++;
+    const { count: a } = await anon.from(t).select("*", { count: "exact", head: true });
+    if ((a ?? 0) > 0) leaked++;
+  }
+  ok("the service role sees rows in every follow-up table (the denial test is not vacuous)",
+    svcRows === TABLES.length, `${svcRows}/${TABLES.length}`);
+  ok("anon reads 0 rows from every follow-up table", leaked === 0, `${leaked} table(s) leaked`);
+
+  return report();
+}
+
+function report() {
+  console.log(`\n${fails.length === 0 ? "PASSED" : "FAILED"}  ${pass} passed, ${fails.length} failed`);
+  if (fails.length) { for (const f of fails) console.log(`  - ${f}`); process.exitCode = 1; }
+}
+
+main()
+  .then(cleanup)
+  .catch(async e => { console.error(e); await cleanup(); process.exitCode = 1; });

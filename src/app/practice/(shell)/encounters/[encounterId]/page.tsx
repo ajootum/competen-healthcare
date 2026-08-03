@@ -5,6 +5,7 @@ import { resolvePracticeShell } from "@/lib/practice/shell";
 import { hasCapability } from "@/lib/practice/access";
 import { getEncounter, patientTimeline, LOCKED_STATUSES } from "@/lib/practice/encounters";
 import { listTemplates, noteHistory, listDocuments } from "@/lib/practice/documentation";
+import { listFollowUps, listIntervals } from "@/lib/practice/follow-ups";
 import EncounterConsole from "./EncounterConsole";
 
 // /practice/encounters/{id} -- CPR-V2-006 V3, the consultation workspace: patient header, the previous
@@ -38,10 +39,15 @@ export default async function EncounterPage({ params }: { params: Promise<{ enco
 
   // CPR-130. Only encounter-note templates are offered here: applying a referral-letter template to a
   // SOAP segment is refused by the engine, so offering it would be drawing a button that 422s.
-  const [templates, noteVersions, documents] = await Promise.all([
+  // CPR-140. The patient's LIVE obligations, not this encounter's -- a follow-up raised at the last
+  // visit is exactly what this consultation is supposed to settle, and it would be invisible if the
+  // panel only showed what today raised.
+  const [templates, noteVersions, documents, followUps, intervals] = await Promise.all([
     listTemplates(admin, shell.ctx.workspaceId, { kind: "encounter_note" }),
     noteHistory(admin, shell.ctx.workspaceId, encounter.id),
     listDocuments(admin, shell.ctx.workspaceId, { encounterId: encounter.id }),
+    listFollowUps(admin, shell.ctx.workspaceId, { patientId: encounter.patient_id, status: ["OPEN", "SCHEDULED"] }),
+    listIntervals(admin),
   ]);
 
   return (
@@ -92,6 +98,9 @@ export default async function EncounterPage({ params }: { params: Promise<{ enco
             templates={templates}
             history={noteVersions}
             documents={documents}
+            followUps={followUps}
+            intervals={intervals}
+            canFollowUp={hasCapability(shell.ctx, "followup.manage")}
             canEdit={hasCapability(shell.ctx, "encounter.edit")}
             canSign={hasCapability(shell.ctx, "encounter.sign")}
             canDiagnose={hasCapability(shell.ctx, "diagnosis.record")}

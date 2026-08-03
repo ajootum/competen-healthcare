@@ -90,7 +90,8 @@ Continuity & DR · 480 Enterprise Administration · 490 Roadmap & Release Govern
 | CPR-120 Encounter Management | **Core built.** Eight-state lifecycle, SOAP, diagnosis/problem split, DB-enforced signed immutability (migration 194, 41 assertions). No 8-step guided lifecycle UI. |
 | CPR-130 Clinical Documentation | **Built.** Template library (platform + workspace), append-only note versioning, sign-and-lock document object with a supersession chain, release register, browser dictation (migration 195, `documentation.ts`, 55 harness assertions). |
 | CPR-450 Deployment & Tenant Lifecycle | **Partial.** Provisioning saga, entitlements, launch flags, operator console (migration 191). |
-| CPR-140, 150, 200–270, 300–370, 400–440, 460–490 | **Not started.** |
+| CPR-140 Follow-up Management | **Built.** Obligation loop with overdue *derived* rather than stored, the practice's own calendar day, DB-enforced release when a booking dies, event trail (migration 196, `follow-ups.ts`, 47 harness assertions). |
+| CPR-150, 200–270, 300–370, 400–440, 460–490 | **Not started.** |
 
 Roughly **four of thirty-seven** have a real implementation behind them, and each of those four is a
 subset of what its v1.0 document now asks for.
@@ -119,9 +120,8 @@ Nothing here is a week's work. A realistic order that keeps the product usable a
 2. ~~**CPR-040 design system**~~ **Done.** Indigo and the `--cp-*` token layer are adopted across the
    Practice app; the swatch-versus-prose disagreement is recorded in `globals.css` and asserted in
    `scripts/cpr040-design-system-harness.ts`.
-3. **Finish the clinical spine** — ~~CPR-130 documentation properly~~ **done** (below), then CPR-140
-   follow-ups (already queued as Phase 4) and CPR-150 procedures. These complete the encounter the
-   product already has.
+3. **Finish the clinical spine** — ~~CPR-130 documentation properly~~ **done**, ~~CPR-140 follow-ups~~
+   **done** (both below), then CPR-150 procedures. These complete the encounter the product already has.
 4. **CPR-300 Operations Home** — the daily command centre the spec puts at the centre of the workspace.
 5. **CPR-340 tasks / 350 search / 320 documents** — the operational spine everything else references.
 6. **Practice Intelligence (200–270)** — needs clinical volume to be worth anything, so it follows.
@@ -171,7 +171,52 @@ not send anything. `practice_owner` gets `template.manage` and nothing else — 
 `patient.list` and `encounter.list` from the owner role because owning a practice is a business role, and
 a business role does not read clinical documents.
 
-## 7. Standing rules that carry over
+## 7. CPR-140 as built, and the decision the whole module turns on
+
+Migration 196, `src/lib/practice/follow-ups.ts`, `scripts/practice-followups-harness.ts`, and
+`/practice/follow-ups`. CPR-BUILD-000 called Phases 0–4 "the smallest honest *product exists* milestone:
+one practitioner can run a diary, register patients, record encounters and **close follow-ups**". This is
+the fourth.
+
+**Overdue is not a status.** The obvious design gives `status` an `OVERDUE` value and runs something
+nightly to set it. That design fails backwards: if the job does not run — no cron, a suspended tenant, a
+practice that does not open the app for a week — then nothing is overdue. The screen whose entire purpose
+is to say *"these people are waiting on you"* goes quietest precisely when the practice has been least
+attentive. So `status` holds only what a human decided, and overdue is derived from the due date at read
+time. It cannot be stale and needs nothing to run. The harness asserts that no row can even hold an
+overdue status, and pairs the derivation with a control — a future-dated obligation in the same query
+that does not read as overdue, so "overdue" is provably a computation and not a flag set on everything.
+
+**Missed is still a status, and it is a different thing.** Overdue is a fact about the calendar. Missed is
+a judgement — "we tried, they did not come, we are no longer chasing this" — and a judgement belongs to
+the person who made it, with their name and the time on it. It is also reversible, because a patient given
+up on in March who walks in in June has not made the March judgement wrong; the obligation is simply live
+again, and a record that could not say so would force a duplicate and lose the history.
+
+**"Today" is the practice's today.** An obligation due on the 14th is overdue in Kampala at 00:00 EAT, not
+at 03:00 EAT when UTC catches up. Three hours is a whole working morning of a board saying nothing is
+late while things are late. Asserted against a fixed instant in three timezones, including one where UTC
+and the practice are on different dates, and in both directions from UTC.
+
+**A dead booking releases its obligation, and the database does it.** Cancelling or no-showing an
+appointment puts the follow-up back on the board with the appointment id cleared. In a trigger rather than
+the scheduling engine, because `SCHEDULED` pointing at a cancelled booking is the most dangerous state
+this table can hold — *it looks handled* — and the rule must hold for every path that cancels an
+appointment, including ones written later and including a console session. The harness proves it through
+a raw update that bypasses the engine entirely.
+
+**Closing requires saying what happened.** Completing needs a closing encounter or an outcome; marking
+missed needs an outcome. A close with nothing attached records that somebody clicked, not that anybody was
+seen. Closing from inside a consultation names that encounter as what settled it, which is why the action
+exists in both places.
+
+**The capability split is deliberate.** `practice_assistant` gets `followup.view`: they can work the
+board and chase people all day, which is the actual labour of follow-up, and they already hold
+`appointment.manage` to book the visit. `practitioner` gets `followup.manage`, because raising a clinical
+obligation and deciding one has been met or missed are clinical judgements. An assistant can therefore
+work the board without altering a single obligation.
+
+## 8. Standing rules that carry over
 
 - Render real data only; an honest empty state beats a plausible number.
 - Every module gets a harness, and the harness is proven able to fail before it is trusted.
