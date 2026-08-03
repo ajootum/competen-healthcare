@@ -62,7 +62,7 @@ export default function Page() {
       </section>
 
       {/* ── REGISTERING AND CONFIRMING (LP-NEW-001) ──────────────────────── */}
-      <section className="border-y border-gray-100 bg-[var(--cmp-neutral-50,#FAFAFA)]">
+      <section className="border-y border-gray-100 bg-[var(--cmp-neutral-50,var(--cp-slate-100))]">
         <div className={`${container} py-12 lg:py-14`}>
           <h2 className="text-[1.5rem] font-bold tracking-tight text-gray-900">Your first appointment</h2>
           <p className="mt-2 max-w-2xl text-[14px] leading-relaxed text-gray-600">

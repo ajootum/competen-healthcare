@@ -7,7 +7,7 @@ import { PRIMARY_SOLUTIONS } from "@/lib/marketing/solutions";
 
 export default function SiteFooter() {
   return (
-    <footer className="bg-[#0B1020] text-white/70">
+    <footer className="bg-[var(--cp-slate-900)] text-white/70">
       <div className="mx-auto w-full max-w-7xl px-5 sm:px-8 py-12 grid gap-8 lg:grid-cols-12">
         <div className="lg:col-span-4">
           <Link href="/" className="flex items-center gap-2.5" aria-label="Competen home">

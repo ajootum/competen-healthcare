@@ -22,7 +22,7 @@ export default function WorkspaceChooser({ workspaces }: {
     <div className="flex flex-col gap-2">
       {workspaces.map(w => (
         <button key={w.id} type="button" onClick={() => activate(w.id)} disabled={busy !== null}
-          className="rounded-xl border border-gray-200 bg-white p-4 text-left hover:border-[#2563EB] hover:shadow-sm transition disabled:opacity-60">
+          className="rounded-xl border border-gray-200 bg-white p-4 text-left hover:border-[var(--cp-primary)] hover:shadow-sm transition disabled:opacity-60">
           <p className="text-[14px] font-bold text-gray-900">{w.name}</p>
           <p className="text-[11px] text-gray-400 mt-0.5">Practice workspace · {w.status}</p>
         </button>

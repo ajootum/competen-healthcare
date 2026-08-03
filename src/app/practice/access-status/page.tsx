@@ -36,7 +36,7 @@ export default async function Page() {
         <h1 className="text-lg font-bold text-gray-900">{reason.title}</h1>
         <p className="mt-3 text-sm leading-relaxed text-gray-600">{reason.body}</p>
         <p className="mt-4 text-[13px] text-gray-500">
-          <Link href="/practice" className="font-semibold text-[#1D4ED8] hover:underline">Back to Competen Practice</Link>
+          <Link href="/practice" className="font-semibold text-[var(--cp-primary-deep)] hover:underline">Back to Competen Practice</Link>
         </p>
       </div>
     </main>

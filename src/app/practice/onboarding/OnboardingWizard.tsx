@@ -36,7 +36,7 @@ function timezoneOptions(): string[] {
     "Africa/Addis_Ababa", "Africa/Lagos", "Africa/Johannesburg", "Europe/London", "UTC"];
 }
 
-const input = "mt-1 w-full rounded-xl border border-gray-200 px-3 py-2.5 text-sm outline-none focus:border-[#2563EB] focus:ring-4 focus:ring-[#2563EB]/10";
+const input = "mt-1 w-full rounded-xl border border-gray-200 px-3 py-2.5 text-sm outline-none focus:border-[var(--cp-primary)] focus:ring-4 focus:ring-[var(--cp-primary)]/10";
 const label = "text-xs font-semibold text-gray-600";
 
 export default function OnboardingWizard({ workspaceId }: { workspaceId: string }) {
@@ -164,7 +164,7 @@ export default function OnboardingWizard({ workspaceId }: { workspaceId: string 
           <li key={s.step_code}
             className={`rounded-full px-2.5 py-1 text-[11px] font-medium ${
               ob.completedSteps.includes(s.step_code) ? "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]"
-              : s.step_code === current ? "bg-[#2563EB] text-white" : "bg-gray-100 text-gray-400"}`}>
+              : s.step_code === current ? "bg-[var(--cp-primary)] text-white" : "bg-gray-100 text-gray-400"}`}>
             {s.title}
           </li>
         ))}
@@ -208,7 +208,7 @@ export default function OnboardingWizard({ workspaceId }: { workspaceId: string 
 
           {error && <p className="mt-3 text-xs text-[var(--cmp-text-critical)] bg-[var(--cmp-surface-critical)] rounded-lg px-3 py-2">{error}</p>}
           <button type="submit" disabled={busy || !canSubmit}
-            className="mt-5 rounded-xl bg-[#2563EB] px-5 py-2.5 text-sm font-semibold text-white hover:bg-[#1D4ED8] disabled:opacity-50">
+            className="mt-5 rounded-xl bg-[var(--cp-primary)] px-5 py-2.5 text-sm font-semibold text-white hover:bg-[var(--cp-primary-deep)] disabled:opacity-50">
             {busy ? "Saving…" : step.step_code === "review_activate" ? "Activate my Practice" : "Save and continue"}
           </button>
         </form>

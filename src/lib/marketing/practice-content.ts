@@ -42,9 +42,9 @@
 // for a practice, but it must never name the platform's other products. See the FORBIDDEN list in
 // scripts/public-disclosure-harness.ts, which asserts it against the rendered HTML of every page below.
 
-export const PRACTICE_ACCENT = "#2563EB";
+export const PRACTICE_ACCENT = "var(--cp-primary)";
 /** For accent-coloured text sitting on a tint OF that accent, where the base shade measures 4.37:1. */
-export const PRACTICE_ACCENT_DARK = "#1D4ED8";
+export const PRACTICE_ACCENT_DARK = "var(--cp-primary-deep)";
 
 /** Shown beside every screen gallery. See honesty rule 1 above -- do not remove without also shipping. */
 export const PREVIEW_NOTE = "Interface previews from the Competen Practice product design.";
@@ -296,7 +296,7 @@ export const PRACTICE_AREAS: PracticeArea[] = [
     body:
       "One diary across every place you work. You decide what is available where, and patients book only " +
       "what you have genuinely opened -- booked, walk-in, remote or emergency, all on the same calendar.",
-    accent: "#2563EB",
+    accent: "var(--cp-primary)",
     icon: "\u{1F4C5}",
     blurb: "Availability across every location, booking patients do themselves, and a waiting list that refills cancellations.",
     engines: ["PEN-001"],
@@ -324,7 +324,7 @@ export const PRACTICE_AREAS: PracticeArea[] = [
     body:
       "The consultation is the centre of the product. Find or register the patient in under a minute, " +
       "record the minimum safely while they are in front of you, and finish the detail afterwards.",
-    accent: "#0F766E",
+    accent: "var(--cp-area-1)",
     icon: "\u{1FA7A}",
     blurb: "Sub-minute registration, patient search that finds anyone, and one encounter lifecycle for every visit type.",
     engines: ["PEN-002", "PEN-003", "PEN-006"],
@@ -354,7 +354,7 @@ export const PRACTICE_AREAS: PracticeArea[] = [
     body:
       "The longitudinal problem list, what you did about it, what came back, and who is due to return -- " +
       "one chronological record of everything you have done for this patient, everywhere.",
-    accent: "#DB2777",
+    accent: "var(--cp-area-2)",
     icon: "\u{1FA79}",
     blurb: "Problem lists, investigations, treatment and outcomes, and risk-based recall that escalates when a review slips.",
     engines: ["PEN-004", "PEN-011", "PEN-012"],
@@ -385,7 +385,7 @@ export const PRACTICE_AREAS: PracticeArea[] = [
     body:
       "Every encounter you record becomes searchable case experience. Not a dashboard about your practice " +
       "-- a memory of it, that answers questions.",
-    accent: "#C2410C",
+    accent: "var(--cp-area-3)",
     icon: "✨",
     blurb: "Similar-case retrieval, what your treatments actually achieved, and decision support that shows its working.",
     engines: ["PEN-005", "PEN-008", "PEN-013"],
@@ -417,7 +417,7 @@ export const PRACTICE_AREAS: PracticeArea[] = [
     body:
       "The reports a working clinician genuinely needs: what each hospital owes you for, what you have " +
       "treated and achieved, and the evidence behind an appraisal, a portfolio or a paper.",
-    accent: "#0E7490",
+    accent: "var(--cp-area-4)",
     icon: "\u{1F4CA}",
     blurb: "Hospital payment lists, case logs, professional portfolio evidence and governed research datasets.",
     engines: ["PEN-009", "PEN-014"],
@@ -447,7 +447,7 @@ export const PRACTICE_AREAS: PracticeArea[] = [
     body:
       "See patients by video when they cannot travel, and keep working when the connection cannot. Both " +
       "produce the same record as a consultation in your own room.",
-    accent: "#6D28D9",
+    accent: "var(--cp-area-5)",
     icon: "\u{1F30D}",
     blurb: "Secure video consultations, and a genuinely offline mode for outreach, home visits and bad connections.",
     engines: [],
@@ -476,7 +476,7 @@ export const PRACTICE_AREAS: PracticeArea[] = [
     body:
       "It works for one clinician alone -- and when you do have help, an assistant can carry the " +
       "administration without ever touching a clinical decision. Plus secure ways to reach colleagues.",
-    accent: "#BE185D",
+    accent: "var(--cp-area-6)",
     icon: "\u{1F91D}",
     blurb: "Delegation with approval and audit, secure clinician messaging, referrals, handovers and multidisciplinary discussion.",
     engines: ["PEN-007", "PEN-010"],
@@ -505,7 +505,7 @@ export const PRACTICE_AREAS: PracticeArea[] = [
     body:
       "Locations, hours, appointment types, users and templates are yours to change from a settings screen " +
       "rather than a support ticket -- across every organisation you work in. Security and licensing are ours.",
-    accent: "#155E75",
+    accent: "var(--cp-area-7)",
     icon: "\u{1F517}",
     blurb: "Configuration without a developer, one identity across every organisation, and standards-based links to the systems you run.",
     engines: ["PEN-015"],
@@ -730,10 +730,10 @@ export const BUILT_FOR_AFRICA = {
 // ══════════════════════════════════════════════════════════════════════════════════════════════════════
 
 /** CPR-001 v3 s2. Indigo identity, replacing the blue Practice accent on this page. */
-export const PRACTICE_INDIGO = "#4F46E5";
-export const PRACTICE_INDIGO_DEEP = "#312E81";
-export const PRACTICE_CYAN = "#06B6D4";
-export const PRACTICE_CANVAS = "#F8FAFF";
+export const PRACTICE_INDIGO = "var(--cp-primary)";
+export const PRACTICE_INDIGO_DEEP = "var(--cp-primary-deep)";
+export const PRACTICE_CYAN = "var(--cp-accent)";
+export const PRACTICE_CANVAS = "var(--cp-canvas)";
 
 export const LP3_HERO = {
   eyebrow: "For healthcare professionals",

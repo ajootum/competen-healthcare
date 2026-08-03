@@ -46,7 +46,7 @@ export default async function PatientPage({ params }: { params: Promise<{ patien
           </p>
           {patient.merged_into_patient_id && (
             <Link href={`/practice/patients/${patient.merged_into_patient_id}`}
-              className="mt-2 inline-block text-[12px] font-semibold text-[#1D4ED8] hover:underline">
+              className="mt-2 inline-block text-[12px] font-semibold text-[var(--cp-primary-deep)] hover:underline">
               Open the surviving record →
             </Link>
           )}
@@ -67,7 +67,7 @@ export default async function PatientPage({ params }: { params: Promise<{ patien
             {" · "}{patient.status}
           </p>
         </div>
-        <Link href="/practice/patients" className="text-[12px] font-semibold text-[#1D4ED8] hover:underline">← Registry</Link>
+        <Link href="/practice/patients" className="text-[12px] font-semibold text-[var(--cp-primary-deep)] hover:underline">← Registry</Link>
       </div>
 
       <div className="mt-4 grid lg:grid-cols-2 gap-4">
@@ -145,7 +145,7 @@ export default async function PatientPage({ params }: { params: Promise<{ patien
               {(timeline.encounters as any[]).map(e => (
                 <li key={e.id} className="border-l-2 border-gray-100 pl-3">
                   <div className="flex items-center gap-2 flex-wrap">
-                    <Link href={`/practice/encounters/${e.id}`} className="text-[12px] font-semibold text-[#1D4ED8] hover:underline">
+                    <Link href={`/practice/encounters/${e.id}`} className="text-[12px] font-semibold text-[var(--cp-primary-deep)] hover:underline">
                       {String(e.started_at).slice(0, 16).replace("T", " ")}
                     </Link>
                     <span className="text-[11px] text-gray-400">

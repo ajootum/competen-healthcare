@@ -37,7 +37,7 @@ const QUEUE_TONE: Record<string, string> = {
   PAUSED: "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]",
 };
 
-const input = "w-full rounded-lg border border-gray-200 px-2.5 py-2 text-[13px] outline-none focus:border-[#2563EB] focus:ring-2 focus:ring-[#2563EB]/10";
+const input = "w-full rounded-lg border border-gray-200 px-2.5 py-2 text-[13px] outline-none focus:border-[var(--cp-primary)] focus:ring-2 focus:ring-[var(--cp-primary)]/10";
 
 export default function CalendarConsole({ date, canManage, canQueue, canStartEncounter, initial }: {
   date: string; canManage: boolean; canQueue: boolean; canStartEncounter: boolean; initial: Day;
@@ -121,7 +121,7 @@ export default function CalendarConsole({ date, canManage, canQueue, canStartEnc
             const iso = d.toISOString().slice(0, 10);
             return (
               <a key={off} href={`/practice/calendar?date=${iso}`}
-                className={`rounded-lg px-3 py-1.5 text-[12px] font-medium ${off === 0 ? "bg-[#2563EB] text-white" : "border border-gray-200 text-gray-600 hover:bg-gray-50"}`}>
+                className={`rounded-lg px-3 py-1.5 text-[12px] font-medium ${off === 0 ? "bg-[var(--cp-primary)] text-white" : "border border-gray-200 text-gray-600 hover:bg-gray-50"}`}>
                 {off === -1 ? "‹ Prev" : off === 0 ? date : "Next ›"}
               </a>
             );
@@ -155,7 +155,7 @@ export default function CalendarConsole({ date, canManage, canQueue, canStartEnc
                     <div className="mt-1.5">
                       {a.patient_id ? (
                         <button disabled={busy} onClick={() => startEncounter(a.id, a.patient_id, a.appointment_type)}
-                          className="rounded bg-[#2563EB] px-2.5 py-1 text-[11px] font-semibold text-white hover:bg-[#1D4ED8] disabled:opacity-50">
+                          className="rounded bg-[var(--cp-primary)] px-2.5 py-1 text-[11px] font-semibold text-white hover:bg-[var(--cp-primary-deep)] disabled:opacity-50">
                           Open encounter
                         </button>
                       ) : (
@@ -239,7 +239,7 @@ export default function CalendarConsole({ date, canManage, canQueue, canStartEnc
                 <input placeholder="Reason (optional)" value={form.reason} onChange={e => setForm(p => ({ ...p, reason: e.target.value }))} className={input} />
                 <div className="flex gap-2">
                   <button type="submit" disabled={busy || !form.patientName.trim()}
-                    className="flex-1 rounded-lg bg-[#2563EB] py-2 text-[12px] font-semibold text-white hover:bg-[#1D4ED8] disabled:opacity-50">
+                    className="flex-1 rounded-lg bg-[var(--cp-primary)] py-2 text-[12px] font-semibold text-white hover:bg-[var(--cp-primary-deep)] disabled:opacity-50">
                     Book appointment
                   </button>
                   <button type="button" disabled={busy || !form.patientName.trim()} onClick={() => book(true)}

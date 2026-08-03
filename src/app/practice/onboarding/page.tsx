@@ -24,7 +24,7 @@ export default async function Page() {
     <main className="min-h-screen bg-gray-50 flex items-start justify-center p-6">
       <div className="w-full max-w-xl">
         <div className="flex items-center gap-2.5 mb-6 mt-6">
-          <span className="w-9 h-9 rounded-full bg-[#2563EB] flex items-center justify-center text-white font-bold">C</span>
+          <span className="w-9 h-9 rounded-full bg-[var(--cp-primary)] flex items-center justify-center text-white font-bold">C</span>
           <div>
             <p className="text-[15px] font-bold text-gray-900">Set up {ctx.workspaceName}</p>
             <p className="text-[12px] text-gray-500">Short enough to finish in one sitting (IAM-001 rule, and ours).</p>

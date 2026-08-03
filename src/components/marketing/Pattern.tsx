@@ -28,7 +28,7 @@ export function PatternBand({ className = "", tone = "var(--cmp-color-primary)" 
 }
 
 /** Large, very low-contrast field motif for section backgrounds. */
-export function PatternField({ className = "", tone = "#FFFFFF", opacity = 0.06 }: { className?: string; tone?: string; opacity?: number }) {
+export function PatternField({ className = "", tone = "var(--cp-white)", opacity = 0.06 }: { className?: string; tone?: string; opacity?: number }) {
   return (
     <svg className={className} aria-hidden="true" role="presentation" width="100%" height="100%" preserveAspectRatio="none">
       <defs>
@@ -80,7 +80,7 @@ export function PhotoSlot({
   }
   return (
     <div className={`relative overflow-hidden bg-gradient-to-br from-[var(--cmp-color-primary)] to-[#064E3B] ${className}`} role="img" aria-label={alt}>
-      <PatternField className="absolute inset-0" tone="#FFFFFF" opacity={0.18} />
+      <PatternField className="absolute inset-0" tone="var(--cp-white)" opacity={0.18} />
       {caption && (
         <span className="absolute inset-x-0 bottom-0 p-3 text-[11px] leading-snug text-white/70">{caption}</span>
       )}

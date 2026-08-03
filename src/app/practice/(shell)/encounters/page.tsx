@@ -69,7 +69,7 @@ export default async function EncountersPage() {
           <h1 className="text-xl font-bold text-gray-900">Encounters</h1>
           <p className="text-[13px] text-gray-500">Open consultations, then everything closed. Newest first.</p>
         </div>
-        <Link href="/practice/patients" className="text-[12px] font-semibold text-[#1D4ED8] hover:underline">
+        <Link href="/practice/patients" className="text-[12px] font-semibold text-[var(--cp-primary-deep)] hover:underline">
           Start one from a patient →
         </Link>
       </div>

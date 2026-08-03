@@ -18,7 +18,7 @@ import { PRACTICE_TYPES, PROFESSIONS } from "@/lib/practice/catalogs";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
-const input = "w-full rounded-xl border border-gray-200 px-3 py-2.5 text-sm outline-none focus:border-[#2563EB] focus:ring-4 focus:ring-[#2563EB]/10";
+const input = "w-full rounded-xl border border-gray-200 px-3 py-2.5 text-sm outline-none focus:border-[var(--cp-primary)] focus:ring-4 focus:ring-[var(--cp-primary)]/10";
 const label = "text-xs font-semibold text-gray-600";
 
 export default function SignUpForm() {
@@ -101,7 +101,7 @@ export default function SignUpForm() {
             <span className="mt-1 block text-[11px] text-gray-400">At least 8 characters.</span>
           </label>
           <button type="button" disabled={!stepOneReady} onClick={() => { setNotice(null); setStep(2); }}
-            className="mt-2 w-full rounded-xl bg-[#2563EB] py-2.5 text-sm font-semibold text-white hover:bg-[#1D4ED8] disabled:opacity-50">
+            className="mt-2 w-full rounded-xl bg-[var(--cp-primary)] py-2.5 text-sm font-semibold text-white hover:bg-[var(--cp-primary-deep)] disabled:opacity-50">
             Continue
           </button>
         </div>
@@ -154,7 +154,7 @@ export default function SignUpForm() {
               Back
             </button>
             <button type="submit" disabled={busy || !stepTwoReady}
-              className="flex-1 rounded-xl bg-[#2563EB] py-2.5 text-sm font-semibold text-white hover:bg-[#1D4ED8] disabled:opacity-50">
+              className="flex-1 rounded-xl bg-[var(--cp-primary)] py-2.5 text-sm font-semibold text-white hover:bg-[var(--cp-primary-deep)] disabled:opacity-50">
               {busy ? "Setting up your practice…" : "Create my practice"}
             </button>
           </div>
@@ -163,7 +163,7 @@ export default function SignUpForm() {
 
       <p className="mt-5 text-center text-[12px] text-gray-500">
         Already have a Competen account?{" "}
-        <Link href="/practice/sign-in" className="font-semibold text-[#1D4ED8] hover:underline">Sign in</Link>
+        <Link href="/practice/sign-in" className="font-semibold text-[var(--cp-primary-deep)] hover:underline">Sign in</Link>
       </p>
     </form>
   );

@@ -91,7 +91,7 @@ export default async function PracticeHome() {
       <section className="mt-5 rounded-xl border border-gray-200 bg-white p-4">
         <div className="flex items-baseline justify-between gap-3">
           <h2 className="text-[13px] font-bold text-gray-900">Today&apos;s appointments</h2>
-          <Link href="/practice/calendar" className="text-[12px] font-semibold text-[#1D4ED8] hover:underline">Open calendar →</Link>
+          <Link href="/practice/calendar" className="text-[12px] font-semibold text-[var(--cp-primary-deep)] hover:underline">Open calendar →</Link>
         </div>
         {((todaysAppointments ?? []) as any[]).length === 0 ? (
           <p className="mt-2 text-[12px] text-gray-400">Nothing booked today. Book from the calendar.</p>
@@ -118,7 +118,7 @@ export default async function PracticeHome() {
       <section className="mt-4 rounded-xl border border-gray-200 bg-white p-4">
         <div className="flex items-baseline justify-between gap-3">
           <h2 className="text-[13px] font-bold text-gray-900">Encounters needing you</h2>
-          <Link href="/practice/encounters" className="text-[12px] font-semibold text-[#1D4ED8] hover:underline">All encounters →</Link>
+          <Link href="/practice/encounters" className="text-[12px] font-semibold text-[var(--cp-primary-deep)] hover:underline">All encounters →</Link>
         </div>
         {encRows.length === 0 ? (
           <p className="mt-2 text-[12px] text-gray-400">
@@ -128,7 +128,7 @@ export default async function PracticeHome() {
           <ul className="mt-2 flex flex-col gap-1">
             {encRows.map(e => (
               <li key={e.id} className="flex items-center gap-2 text-[12px]">
-                <Link href={`/practice/encounters/${e.id}`} className="font-semibold text-[#1D4ED8] hover:underline">
+                <Link href={`/practice/encounters/${e.id}`} className="font-semibold text-[var(--cp-primary-deep)] hover:underline">
                   {encName.get(e.patient_id) ?? "Unknown patient"}
                 </Link>
                 {e.reason_for_visit && <span className="text-gray-500 truncate">{e.reason_for_visit}</span>}

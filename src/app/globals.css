@@ -254,3 +254,124 @@ aside[data-sidebar] nav:hover::-webkit-scrollbar-thumb { background: rgb(255 255
    <details> disclosure triangle; the rotating chevron in the header stands in. */
 aside[data-sidebar] details[data-nav-group] > summary { list-style: none; }
 aside[data-sidebar] details[data-nav-group] > summary::-webkit-details-marker { display: none; }
+
+/* ══════════════════════════════════════════════════════════════════════════════════════════════════
+   CPR-040 — Competen Practice Design System v1.0
+   ══════════════════════════════════════════════════════════════════════════════════════════════════
+   The Practice product's own token layer, namespaced --cp-* so it sits ALONGSIDE the platform's
+   --cmp-* tokens rather than fighting them. CPR-040 s2 asks for a "distinct Competen Practice
+   identity" that keeps a "shared design language with the Competen platform"; two namespaces is how
+   both are true at once, and it means a Practice page can use a platform component without either
+   set having to win.
+
+   THE SPECIFICATION TEXT IS THE SOURCE, NOT THE POSTER. CPR-040's swatch graphic labels its primary
+   #2E3AA8; its section 4 says "Primary: Indigo #4F46E5, Deep Indigo #312E81, Accent: Cyan #06B6D4",
+   which is also what CPR-001 v3 s2 says. Two v1.0 documents agreeing against one image is not a close
+   call, and the prose is the thing a developer is meant to implement.
+   ══════════════════════════════════════════════════════════════════════════════════════════════════ */
+:root {
+  /* ── Colour (CPR-040 s4) ─────────────────────────────────────────────────────────────────────── */
+  --cp-primary: #4F46E5;
+  --cp-primary-deep: #312E81;
+  --cp-accent: #06B6D4;
+  --cp-canvas: #F8FAFF;
+
+  /* Semantic. Named by MEANING, not hue: a future palette change must not require renaming the thing
+     that says "this went wrong". */
+  --cp-success: #16A34A;
+  --cp-warning: #F59E0B;
+  --cp-error: #DC2626;
+  --cp-info: #0EA5E9;
+
+  /* Neutral slate ramp (CPR-040 s4 "Neutral Slate palette"). */
+  --cp-slate-900: #0F172A;
+  --cp-slate-700: #334155;
+  --cp-slate-500: #64748B;
+  --cp-slate-300: #CBD5E1;
+  --cp-slate-100: #F1F5F9;
+  --cp-white: #FFFFFF;
+
+  /* Tints derived from the primary rather than hand-picked, so they cannot drift away from it. */
+  --cp-primary-soft: color-mix(in srgb, var(--cp-primary) 12%, white);
+  --cp-primary-border: color-mix(in srgb, var(--cp-primary) 28%, white);
+
+  /* ── Typography (CPR-040 s5) ─────────────────────────────────────────────────────────────────── */
+  --cp-font-base: var(--font-geist-sans), "Inter", system-ui, sans-serif;
+  --cp-text-display-1: 2rem;      /* 32/40 bold  */
+  --cp-text-display-2: 1.5rem;    /* 24/32 bold  */
+  --cp-text-heading-1: 1.25rem;   /* 20/28 semi  */
+  --cp-text-heading-2: 1rem;      /* 16/24 semi  */
+  --cp-text-heading-3: 0.875rem;  /* 14/20 med   */
+  --cp-text-body-lg: 1rem;        /* 16/24       */
+  --cp-text-body: 0.875rem;       /* 14/20       */
+  --cp-text-small: 0.75rem;       /* 12/16       */
+  --cp-text-caption: 0.6875rem;   /* 11/16       */
+
+  /* ── Spacing, 8-point grid (CPR-040 s3) ──────────────────────────────────────────────────────── */
+  --cp-space-1: 4px;
+  --cp-space-2: 8px;
+  --cp-space-3: 12px;
+  --cp-space-4: 16px;
+  --cp-space-6: 24px;
+  --cp-space-8: 32px;
+  --cp-space-12: 48px;
+  --cp-space-16: 64px;
+  --cp-space-24: 96px;
+  --cp-space-32: 128px;
+
+  /* ── Radius (CPR-040 s3) ─────────────────────────────────────────────────────────────────────── */
+  --cp-radius-none: 0px;
+  --cp-radius-xs: 4px;
+  --cp-radius-sm: 8px;
+  --cp-radius-md: 12px;
+  --cp-radius-lg: 16px;
+  --cp-radius-xl: 32px;
+  --cp-radius-full: 9999px;
+
+  /* ── Elevation (CPR-040 s3) ──────────────────────────────────────────────────────────────────── */
+  --cp-shadow-none: none;
+  --cp-shadow-xs: 0 1px 2px rgba(16, 24, 40, 0.05);
+  --cp-shadow-sm: 0 2px 4px rgba(16, 24, 40, 0.06);
+  --cp-shadow-md: 0 4px 12px rgba(16, 24, 40, 0.08);
+  --cp-shadow-lg: 0 8px 24px rgba(16, 24, 40, 0.10);
+  --cp-shadow-xl: 0 16px 40px rgba(16, 24, 40, 0.12);
+
+  /* ── Motion (CPR-040 s3) ─────────────────────────────────────────────────────────────────────── */
+  --cp-motion-fast: 120ms;
+  --cp-motion-base: 200ms;
+  --cp-motion-slow: 320ms;
+  --cp-easing: cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* CPR-040 s9 asks for WCAG AA and visible focus states. One rule, on the Practice surface, so no
+   individual component can forget it. */
+.cp-surface :focus-visible {
+  outline: 2px solid var(--cp-primary);
+  outline-offset: 2px;
+  border-radius: var(--cp-radius-xs);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --cp-motion-fast: 0ms;
+    --cp-motion-base: 0ms;
+    --cp-motion-slow: 0ms;
+  }
+}
+
+/* ── Practice extension: categorical + shell (not in CPR-040, declared here so it is still a system)
+   CPR-040 s4 names a brand palette; it does not name a CATEGORICAL ramp, and the eight capability
+   areas need eight distinguishable accents that are not the brand primary. They were eight literals
+   scattered through the content module. Naming them here does not make them specified -- it makes them
+   reviewable, and it means the next area added has somewhere to take its colour from instead of
+   inventing one. Raise with design when CPR-040 is next revised. */
+:root {
+  --cp-shell: #0B1E4B;
+  --cp-area-1: #0F766E;
+  --cp-area-2: #DB2777;
+  --cp-area-3: #C2410C;
+  --cp-area-4: #0E7490;
+  --cp-area-5: #6D28D9;
+  --cp-area-6: #BE185D;
+  --cp-area-7: #155E75;
+}

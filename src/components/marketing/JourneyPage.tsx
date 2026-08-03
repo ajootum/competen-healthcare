@@ -129,7 +129,7 @@ export default async function JourneyPage({
         {/* ── CLOSING ──────────────────────────────────────────────────────── */}
         <section className={`${container} pb-16`}>
           <div className="relative overflow-hidden rounded-3xl bg-[#141B4D] px-6 py-8 sm:px-10 flex flex-col lg:flex-row lg:items-center gap-6">
-            <PatternField className="absolute inset-0" tone="#FFFFFF" opacity={0.10} />
+            <PatternField className="absolute inset-0" tone="var(--cp-white)" opacity={0.10} />
             <div className="relative flex-1">
               <h2 className="text-[1.5rem] font-bold text-white leading-snug text-balance">Want to be among the first?</h2>
               <p className="mt-2 max-w-xl text-[14px] leading-relaxed text-white/65">

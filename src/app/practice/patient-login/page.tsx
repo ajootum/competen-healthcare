@@ -41,7 +41,7 @@ export default function Page() {
       </section>
 
       {/* ── PRIVACY ──────────────────────────────────────────────────────── */}
-      <section className="border-y border-gray-100 bg-[var(--cmp-neutral-50,#FAFAFA)]">
+      <section className="border-y border-gray-100 bg-[var(--cmp-neutral-50,var(--cp-slate-100))]">
         <div className={`${container} py-12 lg:py-14 grid lg:grid-cols-2 gap-10`}>
           <div>
             <h2 className="text-[1.5rem] font-bold tracking-tight text-gray-900">Your information, and who sees it</h2>

@@ -43,27 +43,27 @@ export default function SignInForm() {
         <label className="block">
           <span className="text-xs font-semibold text-gray-600">Email</span>
           <input type="email" required autoComplete="email" value={email} onChange={e => setEmail(e.target.value)}
-            className="mt-1 w-full rounded-xl border border-gray-200 px-3 py-2.5 text-sm outline-none focus:border-[#2563EB] focus:ring-4 focus:ring-[#2563EB]/10" />
+            className="mt-1 w-full rounded-xl border border-gray-200 px-3 py-2.5 text-sm outline-none focus:border-[var(--cp-primary)] focus:ring-4 focus:ring-[var(--cp-primary)]/10" />
         </label>
         <label className="block">
           <span className="text-xs font-semibold text-gray-600">Password</span>
           <input type="password" required autoComplete="current-password" value={password} onChange={e => setPassword(e.target.value)}
-            className="mt-1 w-full rounded-xl border border-gray-200 px-3 py-2.5 text-sm outline-none focus:border-[#2563EB] focus:ring-4 focus:ring-[#2563EB]/10" />
+            className="mt-1 w-full rounded-xl border border-gray-200 px-3 py-2.5 text-sm outline-none focus:border-[var(--cp-primary)] focus:ring-4 focus:ring-[var(--cp-primary)]/10" />
         </label>
       </div>
       {error && <p className="mt-3 text-xs text-[var(--cmp-text-critical)] bg-[var(--cmp-surface-critical)] rounded-lg px-3 py-2">{error}</p>}
       <button type="submit" disabled={busy}
-        className="mt-5 w-full rounded-xl bg-[#2563EB] py-2.5 text-sm font-semibold text-white hover:bg-[#1D4ED8] disabled:opacity-50">
+        className="mt-5 w-full rounded-xl bg-[var(--cp-primary)] py-2.5 text-sm font-semibold text-white hover:bg-[var(--cp-primary-deep)] disabled:opacity-50">
         {busy ? "Signing in…" : "Sign in"}
       </button>
       {/* IAM-001 s14 lists recovery among the routes that must be deployed before cutover. It is the
           PLATFORM's recovery, not a Practice-specific one -- same identity, same reset -- which is why
           this links out rather than duplicating a flow that would then drift from the original. */}
       <p className="mt-4 text-center text-[12px] text-gray-500">
-        <Link href="/forgot-password" className="font-semibold text-[#1D4ED8] hover:underline">Forgot your password?</Link>
+        <Link href="/forgot-password" className="font-semibold text-[var(--cp-primary-deep)] hover:underline">Forgot your password?</Link>
       </p>
       <p className="mt-1.5 text-center text-[12px] text-gray-500">
-        New here? <Link href="/practice/sign-up" className="font-semibold text-[#1D4ED8] hover:underline">Create your Practice</Link>
+        New here? <Link href="/practice/sign-up" className="font-semibold text-[var(--cp-primary-deep)] hover:underline">Create your Practice</Link>
       </p>
     </form>
   );

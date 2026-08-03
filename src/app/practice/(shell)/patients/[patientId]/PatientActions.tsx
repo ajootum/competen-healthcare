@@ -9,7 +9,7 @@ import { useState } from "react";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
-const input = "w-full rounded-lg border border-gray-200 px-2.5 py-2 text-[13px] outline-none focus:border-[#2563EB] focus:ring-2 focus:ring-[#2563EB]/10";
+const input = "w-full rounded-lg border border-gray-200 px-2.5 py-2 text-[13px] outline-none focus:border-[var(--cp-primary)] focus:ring-2 focus:ring-[var(--cp-primary)]/10";
 
 export default function PatientActions(props: {
   patientId: string; displayName: string; sex: string; birthDate: string | null;
@@ -90,7 +90,7 @@ export default function PatientActions(props: {
       {props.canStartEncounter && (
         <>
           <button type="button" disabled={busy} onClick={startEncounter}
-            className="w-full rounded-lg bg-[#2563EB] py-2 text-[13px] font-semibold text-white hover:bg-[#1D4ED8] disabled:opacity-50">
+            className="w-full rounded-lg bg-[var(--cp-primary)] py-2 text-[13px] font-semibold text-white hover:bg-[var(--cp-primary-deep)] disabled:opacity-50">
             Start encounter
           </button>
           <p className="mt-1 mb-4 text-[10px] text-gray-400">
@@ -110,7 +110,7 @@ export default function PatientActions(props: {
               {[["scheduled_followup", "Scheduled follow-up"], ["new_consultation", "New consultation"], ["teleconsultation", "Teleconsultation"], ["home_visit", "Home visit"]].map(([k, l]) => <option key={k} value={k}>{l}</option>)}
             </select>
             <button type="submit" disabled={busy}
-              className="col-span-2 rounded-lg bg-[#2563EB] py-2 text-[12px] font-semibold text-white hover:bg-[#1D4ED8] disabled:opacity-50">
+              className="col-span-2 rounded-lg bg-[var(--cp-primary)] py-2 text-[12px] font-semibold text-white hover:bg-[var(--cp-primary-deep)] disabled:opacity-50">
               Book appointment
             </button>
           </form>

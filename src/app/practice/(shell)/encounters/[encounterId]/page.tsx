@@ -52,8 +52,8 @@ export default async function EncounterPage({ params }: { params: Promise<{ enco
           </p>
         </div>
         <div className="flex gap-3">
-          <Link href={`/practice/patients/${encounter.patient_id}`} className="text-[12px] font-semibold text-[#1D4ED8] hover:underline">Patient record</Link>
-          <Link href="/practice/encounters" className="text-[12px] font-semibold text-[#1D4ED8] hover:underline">← Encounters</Link>
+          <Link href={`/practice/patients/${encounter.patient_id}`} className="text-[12px] font-semibold text-[var(--cp-primary-deep)] hover:underline">Patient record</Link>
+          <Link href="/practice/encounters" className="text-[12px] font-semibold text-[var(--cp-primary-deep)] hover:underline">← Encounters</Link>
         </div>
       </div>
 

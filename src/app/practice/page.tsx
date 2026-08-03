@@ -57,7 +57,7 @@ export default async function Page() {
       : { label: "Talk to us about your practice", href: contactFor("Competen Practice enquiry") };
 
   return (
-    <div className="flex flex-col min-h-full font-[family-name:var(--font-geist-sans)]" style={{ background: PRACTICE_CANVAS }}>
+    <div className="cp-surface flex flex-col min-h-full font-[family-name:var(--font-geist-sans)]" style={{ background: PRACTICE_CANVAS }}>
       <a href="#main" className="cmp-skip-link">Skip to main content</a>
 
       {/* ── ANNOUNCEMENT BAR ─────────────────────────────────────────────
@@ -104,7 +104,7 @@ export default async function Page() {
                 </Link>
                 <a href={LP3_HERO.secondary.href}
                   className="rounded-xl border-2 bg-white px-6 py-3.5 text-[15px] font-semibold transition-opacity hover:opacity-90"
-                  style={{ borderColor: `${PRACTICE_INDIGO}33`, color: PRACTICE_INDIGO }}>
+                  style={{ borderColor: "var(--cp-primary-border)", color: PRACTICE_INDIGO }}>
                   {LP3_HERO.secondary.label}
                 </a>
               </div>
@@ -199,7 +199,7 @@ export default async function Page() {
             over, and they are the reason this product exists. They stay however short the page gets. */}
         <section className={`${container} py-14 lg:py-16`}>
           <div className="grid lg:grid-cols-2 gap-6">
-            <div className="rounded-2xl border p-6" style={{ borderColor: `${PRACTICE_INDIGO}33`, background: "white" }}>
+            <div className="rounded-2xl border p-6" style={{ borderColor: "var(--cp-primary-border)", background: "white" }}>
               <h2 className="text-[1.15rem] font-bold text-gray-900 text-balance">{NOT_AN_EMR.title}</h2>
               <p className="mt-2.5 text-[14px] leading-relaxed text-gray-600">{NOT_AN_EMR.body}</p>
             </div>

@@ -67,7 +67,7 @@ export default function PracticeAreaPage({ a }: { a: PracticeArea }) {
         </section>
 
         {/* ── SCREENS ──────────────────────────────────────────────────────── */}
-        <section id="screens" className="border-y border-gray-100 bg-[var(--cmp-neutral-50,#FAFAFA)]">
+        <section id="screens" className="border-y border-gray-100 bg-[var(--cmp-neutral-50,var(--cp-slate-100))]">
           <div className={`${container} py-12 lg:py-16`}>
             <h2 className="text-[1.5rem] font-bold tracking-tight text-gray-900">What it looks like</h2>
             <div className="mt-7">

@@ -33,11 +33,11 @@ export default async function PracticeShellLayout({ children }: { children: Reac
   const groups = [...new Set(nav.map(i => i.group))];
 
   return (
-    <div className="min-h-screen bg-gray-50 flex">
+    <div className="cp-surface min-h-screen bg-gray-50 flex">
       {/* Sidebar (s7: primary navigation) */}
-      <aside className="hidden md:flex w-60 shrink-0 flex-col bg-[#0B1E4B] text-white">
+      <aside className="hidden md:flex w-60 shrink-0 flex-col bg-[var(--cp-shell)] text-white">
         <div className="flex items-center gap-2.5 px-4 h-14 border-b border-white/10">
-          <span className="w-8 h-8 rounded-full bg-[#2563EB] flex items-center justify-center text-white text-sm font-bold">C</span>
+          <span className="w-8 h-8 rounded-full bg-[var(--cp-primary)] flex items-center justify-center text-white text-sm font-bold">C</span>
           <span className="font-bold text-[15px]">competen<span className="text-blue-300">Practice</span></span>
         </div>
         <nav className="flex-1 overflow-y-auto px-3 py-4" aria-label="Practice navigation">

@@ -40,7 +40,7 @@ export default function PracticeHeader() {
       <div className="mx-auto w-full max-w-7xl px-5 sm:px-8 flex items-center gap-6 h-[70px]">
         <Link href="/practice" className="flex items-center gap-2.5 shrink-0" aria-label="Competen Practice home">
           <span aria-hidden className="w-9 h-9 rounded-full flex items-center justify-center text-white text-lg font-bold"
-            style={{ background: `linear-gradient(135deg, ${PRACTICE_ACCENT}, #4F46E5)` }}>C</span>
+            style={{ background: `linear-gradient(135deg, ${PRACTICE_ACCENT}, var(--cp-primary))` }}>C</span>
           <span className="leading-tight">
             <span className="block text-lg font-bold tracking-tight text-gray-900">competen</span>
             <span className="block text-[10px] font-semibold tracking-[0.18em] uppercase" style={{ color: PRACTICE_ACCENT }}>Practice</span>
@@ -73,7 +73,7 @@ export default function PracticeHeader() {
       </div>
 
       {open && (
-        <div ref={drawer} tabIndex={-1} className="lg:hidden fixed inset-0 z-50 bg-[#0B1020] text-white flex flex-col outline-none" role="dialog" aria-modal="true" aria-label="Menu">
+        <div ref={drawer} tabIndex={-1} className="lg:hidden fixed inset-0 z-50 bg-[var(--cp-slate-900)] text-white flex flex-col outline-none" role="dialog" aria-modal="true" aria-label="Menu">
           <div className="flex items-center justify-between px-5 h-[70px] border-b border-white/10">
             <span className="text-lg font-bold">competen <span className="text-[11px] tracking-widest uppercase text-white/60">Practice</span></span>
             <button type="button" onClick={() => setOpen(false)} aria-label="Close menu"

@@ -35,8 +35,8 @@ export default async function Page() {
     <main className="min-h-screen bg-gray-50 flex items-center justify-center p-6">
       <div className="w-full max-w-md">
         <div className="flex items-center gap-2.5 mb-8 justify-center">
-          <span className="w-9 h-9 rounded-full bg-[#2563EB] flex items-center justify-center text-white font-bold">C</span>
-          <span className="text-lg font-bold text-gray-900">competen<span className="text-[#2563EB]">Practice</span></span>
+          <span className="w-9 h-9 rounded-full bg-[var(--cp-primary)] flex items-center justify-center text-white font-bold">C</span>
+          <span className="text-lg font-bold text-gray-900">competen<span className="text-[var(--cp-primary)]">Practice</span></span>
         </div>
 
         {enabled ? (
@@ -51,7 +51,7 @@ export default async function Page() {
             </p>
             <p className="mt-4 text-[13px] text-gray-500">
               Read about the product at{" "}
-              <Link href="/practice" className="font-semibold text-[#1D4ED8] hover:underline">Competen Practice</Link>.
+              <Link href="/practice" className="font-semibold text-[var(--cp-primary-deep)] hover:underline">Competen Practice</Link>.
             </p>
           </div>
         )}

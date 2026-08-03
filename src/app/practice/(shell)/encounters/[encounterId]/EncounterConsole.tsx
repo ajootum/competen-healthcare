@@ -16,7 +16,7 @@ import { ENCOUNTER_TRANSITIONS, NOTE_TYPES, LOCKED_STATUSES, actionFor, labelFor
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
-const input = "w-full rounded-lg border border-gray-200 px-2.5 py-2 text-[13px] outline-none focus:border-[#2563EB] focus:ring-2 focus:ring-[#2563EB]/10";
+const input = "w-full rounded-lg border border-gray-200 px-2.5 py-2 text-[13px] outline-none focus:border-[var(--cp-primary)] focus:ring-2 focus:ring-[var(--cp-primary)]/10";
 
 const NOTE_LABEL: Record<string, string> = {
   subjective: "Subjective — what the patient reports",
@@ -121,7 +121,7 @@ export default function EncounterConsole(props: {
               return (
                 <button key={to} type="button" disabled={busy} onClick={() => transition(action, `${labelFor(props.status, to)} done.`)}
                   className={`rounded-lg px-3 py-1.5 text-[12px] font-semibold disabled:opacity-50 ${
-                    needsSign ? "bg-[#2563EB] text-white hover:bg-[#1D4ED8]"
+                    needsSign ? "bg-[var(--cp-primary)] text-white hover:bg-[var(--cp-primary-deep)]"
                       : danger ? "border border-[var(--cmp-color-critical)] text-[var(--cmp-text-critical)] hover:bg-[var(--cmp-surface-critical)]"
                         : "border border-gray-200 text-gray-700 hover:bg-gray-50"}`}>
                   {labelFor(props.status, to)}

@@ -259,7 +259,22 @@ async function main() {
       ["/practice/sign-in", "practice_sign_in", "Sign in"],
       ["/practice/sign-up", "practice_public_signup", "Create your Competen Practice"],
     ];
+    // SAME PROBE AS THE CONTENT HARNESS, and it has to be here too. A dev server started without
+    // NODE_EXTRA_CA_CERTS cannot reach Supabase behind TLS interception, so every flag reads false
+    // in-process and every gated page renders closed. Without this, assertion 6 reports a page bug that
+    // does not exist -- and two harnesses disagreeing about the same fact is worse than either being
+    // wrong alone, because it makes both untrustworthy.
+    const homeHtml = await (await fetch(`${BASE}/practice`)).text();
+    const signInOn = !!rows.find(r => r.flag === "practice_sign_in")?.enabled;
+    const serverSeesFlags = !signInOn || !/Talk to us about your practice/.test(homeHtml);
+    if (!serverSeesFlags) {
+      console.log("  NOTE  6. the SERVER cannot read practice_platform_flags in this environment;");
+      console.log("        the credential-surface checks below are skipped. Start the dev server from a");
+      console.log("        shell that sets NODE_EXTRA_CA_CERTS and re-run.");
+    }
+
     for (const [path, flag, marker] of CREDENTIAL_PAGES) {
+      if (!serverSeesFlags) { console.log(`  SKIP  6. ${path} -- server cannot read flags`); continue; }
       const expected = !!rows.find(r => r.flag === flag)?.enabled;
       const html = await (await fetch(BASE + path)).text();
 

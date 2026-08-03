@@ -10,7 +10,7 @@ import Link from "next/link";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
-const input = "w-full rounded-lg border border-gray-200 px-2.5 py-2 text-[13px] outline-none focus:border-[#2563EB] focus:ring-2 focus:ring-[#2563EB]/10";
+const input = "w-full rounded-lg border border-gray-200 px-2.5 py-2 text-[13px] outline-none focus:border-[var(--cp-primary)] focus:ring-2 focus:ring-[var(--cp-primary)]/10";
 
 const MATCH_LABEL: Record<string, string> = {
   name: "exact name", "name-partial": "name contains", phone: "phone", email: "email",
@@ -67,7 +67,7 @@ export default function RegistryConsole({ canCreate }: { canCreate: boolean }) {
       <form onSubmit={search} className="mt-4 flex gap-2">
         <input value={q} onChange={e => setQ(e.target.value)} placeholder="Name, phone, or any identifier (Practice ID, national ID, MRN)" className={input} />
         <button type="submit" disabled={busy || !q.trim()}
-          className="rounded-lg bg-[#2563EB] px-4 py-2 text-[13px] font-semibold text-white hover:bg-[#1D4ED8] disabled:opacity-50 shrink-0">
+          className="rounded-lg bg-[var(--cp-primary)] px-4 py-2 text-[13px] font-semibold text-white hover:bg-[var(--cp-primary-deep)] disabled:opacity-50 shrink-0">
           Search
         </button>
       </form>
@@ -88,7 +88,7 @@ export default function RegistryConsole({ canCreate }: { canCreate: boolean }) {
               {results.map(r => (
                 <li key={r.id}>
                   <Link href={`/practice/patients/${r.id}`}
-                    className="flex items-center gap-2 rounded-lg border border-gray-100 px-3 py-2 hover:border-[#2563EB] transition">
+                    className="flex items-center gap-2 rounded-lg border border-gray-100 px-3 py-2 hover:border-[var(--cp-primary)] transition">
                     <span className="text-[13px] font-semibold text-gray-900">{r.displayName}</span>
                     {r.practiceId && <span className="font-mono text-[11px] text-gray-500">{r.practiceId}</span>}
                     {r.birthDate && <span className="text-[11px] text-gray-400">b. {r.birthDate}</span>}
@@ -123,7 +123,7 @@ export default function RegistryConsole({ canCreate }: { canCreate: boolean }) {
                 Minimum dataset per CPR-005: name, date of birth or estimated age, and one contact. A Practice ID is generated automatically.
               </p>
               <button type="submit" disabled={busy || !form.displayName.trim() || (!form.birthDate && !form.ageEstimateYears) || (!form.phone && !form.email)}
-                className="sm:col-span-2 rounded-lg bg-[#2563EB] py-2 text-[13px] font-semibold text-white hover:bg-[#1D4ED8] disabled:opacity-50">
+                className="sm:col-span-2 rounded-lg bg-[var(--cp-primary)] py-2 text-[13px] font-semibold text-white hover:bg-[var(--cp-primary-deep)] disabled:opacity-50">
                 {busy ? "Checking for duplicates…" : "Register"}
               </button>
             </form>

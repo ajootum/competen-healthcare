@@ -56,7 +56,7 @@ export default function Page() {
       </section>
 
       {/* ── SECURITY ─────────────────────────────────────────────────────── */}
-      <section className="border-y border-gray-100 bg-[var(--cmp-neutral-50,#FAFAFA)]">
+      <section className="border-y border-gray-100 bg-[var(--cmp-neutral-50,var(--cp-slate-100))]">
         <div className={`${container} py-12 lg:py-14 grid lg:grid-cols-2 gap-10`}>
           <div>
             <h2 className="text-[1.5rem] font-bold tracking-tight text-gray-900">How access is protected</h2>
@@ -98,7 +98,7 @@ export default function Page() {
           </p>
           <Link href="/login"
             className="mt-5 inline-block rounded-xl border-2 px-5 py-3 text-[14px] font-semibold transition-colors hover:bg-gray-50"
-            style={{ borderColor: `${PRACTICE_ACCENT}44`, color: PRACTICE_ACCENT }}>
+            style={{ borderColor: "var(--cp-primary-border)", color: PRACTICE_ACCENT }}>
             Go to Competen sign-in →
           </Link>
         </div>

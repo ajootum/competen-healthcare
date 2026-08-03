@@ -42,7 +42,7 @@ export default function SiteHeader({ dark = false }: { dark?: boolean }) {
   const link = dark ? "text-white/80 hover:text-white" : "text-gray-700 hover:text-gray-900";
 
   return (
-    <header className={`sticky top-0 z-40 border-b ${dark ? "bg-[#0B1020]/95 border-white/10" : "bg-white/90 border-gray-100"} backdrop-blur`}>
+    <header className={`sticky top-0 z-40 border-b ${dark ? "bg-[var(--cp-slate-900)]/95 border-white/10" : "bg-white/90 border-gray-100"} backdrop-blur`}>
       <div className="mx-auto w-full max-w-7xl px-5 sm:px-8 flex items-center gap-8 h-[70px]">
         <Link href="/" className="flex items-center gap-2.5 shrink-0" aria-label="Competen home">
           <span className="w-9 h-9 rounded-full flex items-center justify-center text-white text-lg font-bold"
@@ -96,7 +96,7 @@ export default function SiteHeader({ dark = false }: { dark?: boolean }) {
 
       {/* Mobile drawer */}
       {open && (
-        <div ref={drawer} tabIndex={-1} className="lg:hidden fixed inset-0 z-50 bg-[#0B1020] text-white flex flex-col outline-none" role="dialog" aria-modal="true" aria-label="Menu">
+        <div ref={drawer} tabIndex={-1} className="lg:hidden fixed inset-0 z-50 bg-[var(--cp-slate-900)] text-white flex flex-col outline-none" role="dialog" aria-modal="true" aria-label="Menu">
           <div className="flex items-center justify-between px-5 h-[70px] border-b border-white/10">
             <span className="text-lg font-bold">{BRAND.name}</span>
             <button type="button" onClick={() => setOpen(false)} aria-label="Close menu"
