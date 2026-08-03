@@ -94,9 +94,10 @@ Continuity & DR · 480 Enterprise Administration · 490 Roadmap & Release Govern
 | CPR-150 Procedure & Clinical Activity | **Built.** Catalogue with enforced laterality and consent, performed-procedure record, append-only later-learned outcomes, activity counts (migration 197, `procedures.ts`, 44 harness assertions). |
 | CPR-300 Operations Home | **Built.** `/practice/home` rebuilt as a worklist: every figure is the length of a list you can open, ordered by cost of ignoring, capability-aware with named blind spots. No migration (`operations-home.ts`, `practice-time.ts`, 37 harness assertions). |
 | CPR-340 Tasks, Reminders & Notifications | **Built.** Operational tasks with derived overdue and derived orphaning, reminders as a column rather than a second object, in-app notifications holding only non-derivable events. No delivery channel, deliberately (migration 198, `tasks.ts`, 44 harness assertions). |
-| CPR-200–270, 310–330, 350–370, 400–440, 460–490 | **Not started.** |
+| CPR-350 Search & Global Retrieval | **Built.** One box over ten domains; generated tsvector columns so the index cannot drift from the text; capability filter runs BEFORE the query; skipped domains named; no hidden counts (migration 199, `search.ts`, 43 harness assertions). |
+| CPR-200–270, 310–330, 360–370, 400–440, 460–490 | **Not started.** |
 
-**Ten of thirty-seven** now have a real implementation. The clinical spine (CPR-130/140/150) and the
+**Eleven of thirty-seven** now have a real implementation. The clinical spine (CPR-130/140/150) and the
 operations home are complete rather than partial; the four marked "core built" remain subsets of what
 their v1.0 documents ask for.
 
@@ -128,7 +129,7 @@ Nothing here is a week's work. A realistic order that keeps the product usable a
    procedures (all three below). The encounter the product already had is now complete: it can be
    documented, it can commit the practice to seeing someone again, and it can record what was done.
 4. ~~**CPR-300 Operations Home**~~ **Done** (below). /practice/home is now a worklist rather than a dashboard.
-5. **CPR-340 tasks** ~~/ 350 search / 320 documents~~ — tasks **done** (below); search and communication remain.
+5. **CPR-340 tasks / 350 search** ~~/ 320 documents~~ — tasks and search **done** (below); CPR-320 communication remains.
 6. **Practice Intelligence (200–270)** — needs clinical volume to be worth anything, so it follows.
 7. **Enterprise Services (400–490)** — infrastructure-heavy; several are platform concerns that already
    have partial answers elsewhere in Competen (monitoring, billing, tenant lifecycle).
@@ -342,7 +343,50 @@ job and the owner's business -- so all three roles get `task.view` and `task.man
 boundary is untouched: a task can reference a patient, and reading that patient still needs
 `patient.view`.
 
-## 11. Standing rules that carry over
+## 11. CPR-350 as built: search is the easiest place to accidentally grant access
+
+Migration 199, `src/lib/practice/search.ts`, `/practice/search`, and
+`scripts/practice-search-harness.ts`. The migration is index-only -- generated tsvector columns and one
+new capability; no plpgsql, so it survives any splitter.
+
+**The capability filter runs BEFORE the query, not after it.** A domain the caller cannot see is never
+queried -- not queried-then-filtered, not hidden behind a "3 more results" affordance. Filtering after
+the fact is how a count leaks the existence of records somebody may not know about, and for a clinical
+record that is the whole game: "2 results hidden" against a name is a disclosure on its own. `total`
+counts only what was returned, and the harness asserts no withheld count exists anywhere in the result.
+The deliberate break for this one -- moving the filter after the query, the classic search leak -- turned
+five assertions red, one per capability.
+
+**`search.use` is its own capability.** The results are things the caller could already open, but the
+ABILITY is different: a role that can open a record it is handed a link to should not necessarily be able
+to go fishing across every note in the practice for a name. `read_only_auditor` and `billing_reporting`
+do not get it.
+
+**Generated columns, not triggers**, extending migration 193's doctrine to clinical text: a search
+vector maintained by a trigger somebody forgets on one code path produces a record that is silently
+unfindable -- worse than one that cannot be searched at all, because it looks searched.
+
+**No cross-domain relevance score.** Ranking a patient against a task against a SOAP segment needs
+weights, and any weights chosen would be somebody's guess presented as an ordering. Results are grouped
+by what they are; patients keep the identity ranking from 193 (identifier beats phone beats name), and
+everything else is recency. Patients are searched through `patients.ts`, not re-indexed here -- two
+answers to "find this person" is one too many.
+
+**The input is sanitised to an allowlist** -- everything that is not a letter, digit or space is
+discarded before `to_tsquery` sees it, terms are prefix-matched, capped at eight. Proven by disabling
+the sanitiser: operators pass straight through and two assertions go red.
+
+**Named limitation:** the index uses the English configuration, so notes in Luganda or Swahili match
+exactly but not on variants. A multilingual configuration is a specification decision, not a string
+swap; recorded rather than quietly accepted.
+
+**Server-rendered from the query string.** Clinical search results are not held in client state --
+keystroke-search fires a query for every prefix of what somebody types ("hiv" on the way to "hives"),
+each one a real read in a real log. One search per intention, submit-triggered. Matches are not
+highlighted, because highlighting clinical prose by string replacement is how markup ends up rendered
+inside a note.
+
+## 12. Standing rules that carry over
 
 - Render real data only; an honest empty state beats a plausible number.
 - Every module gets a harness, and the harness is proven able to fail before it is trusted.
