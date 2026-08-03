@@ -44,7 +44,7 @@ export const PRACTICE_NAV: PracticeNavItem[] = [
   { href: "/practice/tasks", label: "Tasks", icon: "☑", capability: "task.view", group: "Practice Management", phase: 4, built: true },
   { href: "/practice/inbox", label: "Inbox", icon: "▼", capability: "inbox.record", group: "Practice Management", phase: 5, built: true },
   { href: "/practice/messages", label: "Messages", icon: "✉", capability: "message.use", group: "Practice Management", phase: 5, built: true },
-  { href: "/practice/reports", label: "Reports", icon: "☷", capability: "report.view", group: "Practice Management", phase: 6, built: false },
+  { href: "/practice/reports", label: "Reports", icon: "☷", capability: "report.view", group: "Practice Management", phase: 6, built: true },
   { href: "/practice/intelligence", label: "Practice Intelligence", icon: "☀", capability: "report.view", group: "Intelligence", phase: 5, built: false },
   { href: "/practice/privacy", label: "Privacy and access", icon: "⚿", capability: "access.review", group: "Tools and Settings", phase: 5, built: true },
   { href: "/practice/people", label: "Team", icon: "⚇", capability: "practice.members.manage", group: "Tools and Settings", phase: 5, built: true },

@@ -98,9 +98,10 @@ Continuity & DR · 480 Enterprise Administration · 490 Roadmap & Release Govern
 | CPR-320 Communication & Document Management | **Built.** Internal threads with per-reader derived unread, a register of contact WITH patients (recorded never sent), and an incoming-document register whose review is a named clinical stamp (migration 200, `communication.ts`, 44 harness assertions). |
 | CPR-310 Team & Delegated Access | **Built.** Invitation codes (bearer, single-use, expiry derived), membership lifecycle, time-bounded delegation, DB-guarded last owner. Fixed a shipped resolver bug that made every delegation invisible and ignored `effective_from` (migration 201, `team.ts`, 52 harness assertions). |
 | CPR-370 Security, Privacy & Practitioner Control | **Built.** Read logging (the other half of the trail), de-identified access review, append-only enforcement, patient-record export (migration 202, `privacy.ts`, 36 harness assertions). |
-| CPR-200–270, 330, 360, 400–440, 460–490 | **Not started.** |
+| CPR-330 Reports | **Built.** Counts and denominators only — no rates, no benchmarks, no targets; aged backlog; CSV that states it is not anonymised. No migration (`reports.ts`, 30 harness assertions). |
+| CPR-200–270, 360, 400–440, 460–490 | **Not started.** |
 
-**Fourteen of thirty-seven** now have a real implementation. The clinical spine (CPR-130/140/150) and the
+**Fifteen of thirty-seven** now have a real implementation. The clinical spine (CPR-130/140/150) and the
 operations home are complete rather than partial; the four marked "core built" remain subsets of what
 their v1.0 documents ask for.
 
@@ -507,7 +508,46 @@ clinical access log is a legal question with a different answer in every jurisdi
 years" in a migration would be a compliance claim nobody authorised. The privacy page states that gap
 alongside the guarantees, each of which is a property of the code rather than a promise about intent.
 
-## 15. Standing rules that carry over
+## 15. CPR-330 as built: this product computes no rates
+
+`src/lib/practice/reports.ts`, `/practice/reports`, a CSV export, and
+`scripts/practice-reports-harness.ts`. **No migration** — every number is derived from tables that
+already exist, which is the point: a reporting layer with its own tables is one keeping a second copy of
+the truth.
+
+**A report is the last place the comps' invented dashboards could still get in.** §4 lists what they
+wanted — 2,348 encounters, 86.4 hours saved, 99.95% uptime. Replacing those with *real* percentages
+would not fix them, because a percentage is where a small number goes to hide: "67% attendance" over
+three appointments is a sentence that sounds like a measurement and is not one.
+
+**So every figure is a count and its denominator**, in that form: "4 did not attend, of 37 booked". The
+reader divides if they want to. CPR-150 took this position for complication counts; CPR-330 takes it for
+everything, and the harness asserts it structurally over the whole serialised report — no field named
+like a rate, no percentage-shaped value anywhere. Breaking it by adding a `dnaRate` turned both
+assertions red.
+
+**No benchmarks, no targets, no trends against expectation.** "Better than last month" needs a claim
+about what last month should have been; "top quartile" needs practices this product has never seen. Both
+are available to invent and neither is available to know. The caveats render *on the page*, because
+somebody reading a number is deciding something with it.
+
+**Diagnosis labels are counted as typed.** Nothing here forces a terminology, so "Malaria" and "malaria"
+are two rows and the report says how many carry a code. Tidying them together would be inventing a
+coding nobody performed.
+
+**The backlog is aged, not merely counted** — an encounter unsigned for an hour and one unsigned for
+three weeks are different problems, and one number treats them as the same. Asserted by back-dating a
+real row and watching it change bucket.
+
+**De-identification carries over from CPR-370.** A caller with `report.view` and no `patient.view` —
+exactly what migration 191 gives the owner — gets the counts and no names anywhere in the response. And
+running a report is a read of the whole practice, so it is logged.
+
+**The CSV says it is not anonymised.** Aggregate is not the same as safe: a count of one in a small
+practice identifies somebody to anyone who knows the practice, and a CSV travels further than the page
+it came from, so the sentence travels with it.
+
+## 16. Standing rules that carry over
 
 - Render real data only; an honest empty state beats a plausible number.
 - Every module gets a harness, and the harness is proven able to fail before it is trusted.
