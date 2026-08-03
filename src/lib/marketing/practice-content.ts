@@ -698,3 +698,94 @@ export const BUILT_FOR_AFRICA = {
     { title: "Offline working", body: "Specified in CPR-019 and not yet built. It arrives with the mobile phase; it does not work today.", pending: true },
   ],
 };
+
+// ══════════════════════════════════════════════════════════════════════════════════════════════════════
+// CPR-001 v3 — the redesigned homepage. INDIGO identity, illustration instead of photography, and a
+// SHORT page: the specification's twelve sections, minus the ones that cannot be filled truthfully.
+//
+// WHAT IS NOT HERE, AND WHY. Six of the twelve could not ship as the comp draws them. Four were the
+// user's call; two were not, and are recorded here because a future edit working from the comp alone
+// would reinstate them without knowing.
+//
+//   TRUSTED ORGANISATIONS -- REFUSED. The comp names six real, identifiable hospitals (Chris Hani
+//     Baragwanath, Kenyatta National, University College Hospital Ibadan, Muhimbili National, Groote
+//     Schuur, Aga Khan University) under "trusted by healthcare professionals across Africa". None is a
+//     customer. That is a false statement about named third parties, not a design choice, and no framing
+//     makes it shippable. It returns when there are real customers who have agreed to be named.
+//   TESTIMONIALS -- REFUSED, same class. Three invented clinicians with photographs, countries and
+//     five-star ratings. Quotes ship when a real person said them and consented.
+//   MOBILE + APP STORE BADGES -- omitted (user). There is no app; CPR-019 is Phase 9. Store badges
+//     would be a dead link and a false availability claim at once.
+//   PRICING -- omitted (user), for the second time. The comp now says $0/$7.99/$14.99; the previous comp
+//     said $5/$10/$20. Two different answers is itself the evidence that neither is decided.
+//
+// AND WHAT IS HERE BUT LABELLED: the AI assistant section renders marked as in development (user's
+// call), because no such module exists -- the built Practice modules are Home, Calendar, Patients and
+// Encounters. The announcement bar does NOT say it is "now live".
+//
+// THE FREE TRIAL IS REAL AND IS THIRTY DAYS. Provisioning grants a practice_trial entitlement with
+// ends_at set from practice_plans.trial_days = 30, and nothing anywhere collects a card. So "start a
+// 30-day free trial, no card required" is a claim this product actually honours -- unlike the comp's
+// fourteen days, which matches nothing in the system.
+// ══════════════════════════════════════════════════════════════════════════════════════════════════════
+
+/** CPR-001 v3 s2. Indigo identity, replacing the blue Practice accent on this page. */
+export const PRACTICE_INDIGO = "#4F46E5";
+export const PRACTICE_INDIGO_DEEP = "#312E81";
+export const PRACTICE_CYAN = "#06B6D4";
+export const PRACTICE_CANVAS = "#F8FAFF";
+
+export const LP3_HERO = {
+  eyebrow: "For healthcare professionals",
+  headline: ["Build Your Clinical", "Practice Intelligence."],
+  body: "One secure workspace that follows you throughout your professional career.",
+  points: [
+    "Keep one clinical record across every hospital you work in",
+    "Open an encounter in seconds, booked or walk-in",
+    "Sign it and it is final, with the history kept",
+    "Search what you have managed before",
+  ],
+  cta: { label: "Start free trial", href: "/practice/sign-up" },
+  secondary: { label: "See the screens", href: "#workspace" },
+  // Thirty days, because that is what practice_plans.trial_days actually says.
+  trialNote: "30-day free trial. No card required.",
+  image: "/images/practice/hero-illustration.webp",
+  imageAlt: "Illustration of a clinician working at a laptop in a consulting room",
+};
+
+/** CPR-001 v3 s4 "Core benefits (6 cards)". Every card is something a built module already does. */
+export const LP3_BENEFITS = [
+  { title: "One record, every hospital", body: "Your clinical work in one place, whether you saw the patient in a ward, a clinic or on an outreach round." },
+  { title: "Encounters in seconds", body: "Booked, walk-in or follow-up, the encounter opens the same way and takes seconds to start." },
+  { title: "Signed means final", body: "Signing locks the record. Only a governed amendment can change it, and the database enforces that, not just the app." },
+  { title: "Patients you can find again", body: "Search by name, phone or identifier, with duplicates caught before they are created." },
+  { title: "A diary that is yours", body: "Your locations, sessions and booking rules, across every facility you practise in." },
+  { title: "It follows you, not your employer", body: "Change jobs and the record goes with you. That is the whole point of it being personal." },
+];
+
+/** CPR-001 v3 s4 "AI Assistant section" -- rendered, and marked as not built. */
+export const LP3_AI = {
+  eyebrow: "In development",
+  title: "A practice assistant that learns from your own record",
+  body:
+    "Specified, not yet built. It is named here because it is where the product is going, and marked so " +
+    "nobody plans around it: the modules you can use today are your home, your diary, your patients and " +
+    "your encounters.",
+  points: [
+    { title: "Insights from your own work", body: "Patterns in what you have managed, not somebody else's benchmark." },
+    { title: "Document assistance", body: "Summarise and extract from what is already in your record." },
+    { title: "Clinical questions", body: "Answers grounded in approved sources, with the source shown." },
+  ],
+};
+
+export const LP3_WORKSPACE = {
+  eyebrow: "Your practice, visualised",
+  title: "A workspace that understands your day",
+  body: "Today's clinic, who is waiting, what is unsigned and what is due back. The command centre is the first screen after you sign in.",
+  points: ["Today's appointments and the walk-in queue", "Encounters open and awaiting signature", "The patients you registered", "Your workspace status and plan"],
+};
+
+export const LP3_CTA = {
+  title: "Ready to build your clinical practice intelligence?",
+  body: "Create your practice and open your diary. Setup takes one sitting.",
+};

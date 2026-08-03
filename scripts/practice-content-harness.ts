@@ -29,9 +29,9 @@ import { join } from "node:path";
 import {
   PRACTICE_AREAS, INTEGRATIONS, PREVIEW_NOTE, MODULES_WITHOUT_SPECS, PRACTICE_HERO, TENANT_MODEL,
   OVERVIEW_WORKSPACES, OVERVIEW_SCREEN, AREA_COUNT_WORD,
-  WHY_PRACTICE, YOUR_DAY, PRACTICE_AUDIENCES, AUDIENCE_PHOTO_NOTE, CAREER_JOURNEY, BUILT_FOR_AFRICA,
+  NOT_AN_EMR, LP3_HERO, LP3_BENEFITS, LP3_AI, LP3_WORKSPACE,
 } from "../src/lib/marketing/practice-content";
-import { JOURNEYS, AVAILABILITY, JOURNEY_GATES, FAQS, PRACTICE_NAV } from "../src/lib/marketing/practice-site";
+import { JOURNEYS, AVAILABILITY, JOURNEY_GATES, FAQS } from "../src/lib/marketing/practice-site";
 import { loadEnvConfig } from "@next/env";
 import { createClient } from "@supabase/supabase-js";
 
@@ -209,8 +209,16 @@ async function main() {
   }
 
   // ── 4. NAVIGATION: catalogue, nav and routes agree ────────────────────────────────────────────────
+  //
+  // CPR-001 v3 made the homepage SHORT: it no longer enumerates every capability area, it links to the
+  // catalogue. So the assertion moved with it -- the homepage must offer a way IN to the areas, and each
+  // area must still resolve. Asserting a link per area against a page that deliberately stopped listing
+  // them would be testing the old design, which is how a harness starts blocking the work it guards.
+  ok("4. /practice links into the capability catalogue",
+    PRACTICE_AREAS.some(a => overview.includes(`/practice/${a.slug}"`)));
   for (const a of PRACTICE_AREAS) {
-    ok(`4. /practice links to ${a.slug}`, overview.includes(`/practice/${a.slug}"`));
+    const s = await fetch(`${BASE}/practice/${a.slug}`).then(r => r.status).catch(() => 0);
+    ok(`4a. /practice/${a.slug} resolves`, s === 200, `status ${s}`);
   }
   ok("4b. the dynamic route file exists",
     existsSync(join(process.cwd(), "src", "app", "practice", "[area]", "page.tsx")));
@@ -227,26 +235,34 @@ async function main() {
   // Each roadmap integration must be followed by its label before the next integration's name starts --
   // asserting only that the word "Roadmap" appears somewhere would pass even if the chips were rendered
   // against the wrong items.
-  const mislabelled = roadmap.filter(i => {
-    const at = overviewText.indexOf(i.name);
-    if (at === -1) return true;
-    return !overviewText.slice(at, at + i.name.length + 60).includes("Roadmap");
-  });
-  ok("5b. every roadmap integration is labelled on the page", mislabelled.length === 0,
-    mislabelled.map(i => i.name).join(", "));
+  // 5b/5c WERE ASSERTED HERE AND ARE NOW ASSERTED CONDITIONALLY.
+  //
+  // CPR-001 v3 removed the integrations table from the homepage, so the old assertions had no subject.
+  // They were briefly stubbed to `true` to get the suite green -- which is the "fails as good news"
+  // pattern this file exists to prevent, and worse than deleting them, because a stub still prints PASS.
+  // The honest shape is: check it WHERE IT IS SHOWN, and say plainly when it is shown nowhere.
+  const shown = roadmap.filter(i => overviewText.includes(i.name));
+  if (shown.length === 0) {
+    console.log("  NOTE  5b/5c. the homepage no longer lists integrations, so roadmap labelling is not testable here");
+  } else {
+    const mislabelled = shown.filter(i => {
+      const at = overviewText.indexOf(i.name);
+      return !overviewText.slice(at, at + i.name.length + 60).includes("Roadmap");
+    });
+    ok("5b. every roadmap integration shown is labelled", mislabelled.length === 0,
+      mislabelled.map(i => i.name).join(", "));
 
-  const v1 = INTEGRATIONS.filter(i => i.inV1);
-  const overLabelled = v1.filter(i => {
-    const at = overviewText.indexOf(i.name);
-    return at !== -1 && overviewText.slice(at, at + i.name.length + 60).includes("Roadmap");
-  });
-  ok("5c. Version 1 integrations are NOT labelled as roadmap", overLabelled.length === 0,
-    overLabelled.map(i => i.name).join(", "));
+    const overLabelled = INTEGRATIONS.filter(i => i.inV1).filter(i => {
+      const at = overviewText.indexOf(i.name);
+      return at !== -1 && overviewText.slice(at, at + i.name.length + 60).includes("Roadmap");
+    });
+    ok("5c. Version 1 integrations are NOT labelled as roadmap", overLabelled.length === 0,
+      overLabelled.map(i => i.name).join(", "));
+  }
 
   // ── 5d. CPR-000A: the tenant model renders, and its diagram does NOT ──────────────────────────────
-  for (const p of TENANT_MODEL.pillars) {
-    ok(`5d. /practice states "${p.title}"`, overviewText.includes(p.title));
-  }
+  // The short page keeps the OWNERSHIP BOUNDARY and drops the four pillars -- that sentence is the one a
+  // clinician hesitates over, and it is asserted below at 5e. The pillars live on the capability pages.
   ok("5e. /practice states who can change what", overviewText.includes(TENANT_MODEL.boundary.slice(0, 60)));
 
   // The enterprise architecture diagram draws the control plane and the full product ecosystem. It must
@@ -337,57 +353,6 @@ async function main() {
   // the bottom and the easiest to quietly drop, so its presence is asserted rather than assumed.
   ok("7g. /practice renders the FAQs", FAQS.every(f => overviewText.includes(f.q)));
 
-  // ── 8. CPR-LP-001 homepage, and the four things it deliberately does not say ──────────────────────
-  //
-  // The sections are asserted so a redesign cannot quietly drop one. The OMISSIONS are asserted because
-  // they are decisions, and a decision that lives only in a commit message is a decision that gets undone
-  // by the next person working from the comp -- which still shows prices, a trial length the product
-  // contradicts, a play button with no video, and a real hospital's name.
-
-  ok("8a. /practice asks the CPR-LP-001 question", overviewText.includes(WHY_PRACTICE.title));
-  ok("8b. /practice renders every problem/solution card",
-    WHY_PRACTICE.cards.every(c => overviewText.includes(c.problem)));
-  ok("8c. /practice renders the day", overviewText.includes(YOUR_DAY.title)
-    && YOUR_DAY.steps.every(s => overviewText.includes(s.title)));
-  ok("8d. /practice names who it is for", PRACTICE_AUDIENCES.every(a => overviewText.includes(a.label)));
-  // A portrait must EXIST and be SERVED for every profession named. A caption over a broken image is the
-  // most conspicuous failure a marketing page can have, and the alt text must describe the profession
-  // rather than a person -- these are stock faces, not customers.
-  for (const a of PRACTICE_AUDIENCES) {
-    const file = join(process.cwd(), "public", "images", "practice", "professions", `${a.slug}.webp`);
-    ok(`8d-asset. the ${a.label} portrait exists on disk`, existsSync(file));
-    ok(`8d-alt. the ${a.label} portrait is described in the markup`, overview.includes(a.alt));
-  }
-  ok("8d-note. /practice says the photography is stock, not customers", overviewText.includes(AUDIENCE_PHOTO_NOTE));
-  ok("8e. /practice renders the career timeline",
-    overviewText.includes(CAREER_JOURNEY.title) && CAREER_JOURNEY.stages.every(s => overviewText.includes(s)));
-  ok("8f. /practice renders the delivery-setting section", overviewText.includes(BUILT_FOR_AFRICA.title));
-
-  // The EMR boundary is a CPR-LP-001 design principle, and the hero is where it has to land: a visitor who
-  // reads three screens before learning it is not an EMR has been misled for three screens.
-  ok("8g. /practice states the EMR boundary in the hero", overviewText.includes(PRACTICE_HERO.notEmr));
-
-  // NO PRICE. Decided with the user: the specification names a Pricing section but sets no numbers, and
-  // the comp's four tiers cannot be honoured -- two plans are seeded and the trial is 30 days, not 14.
-  const moneyLeaks = [/\$\s?\d/, /\bper month\b/i, /\/month\b/i, /\bfree trial\b/i, /\b14[- ]day\b/i, /\bno setup fees\b/i]
-    .filter(re => re.test(overviewText));
-  ok("8h. /practice publishes no price or trial claim", moneyLeaks.length === 0,
-    moneyLeaks.map(String).join(", "));
-  ok("8i. the nav offers no Pricing link while there is no pricing",
-    !PRACTICE_NAV.some(n => /pricing/i.test(n.label)));
-
-  // NO DEAD PLAY BUTTON. There is no video; the comp's secondary CTA was dropped rather than wired to
-  // nothing. Asserted on the rendered text so a reinstated button is caught wherever it comes from.
-  ok("8j. /practice offers no tour that does not exist", !/2[- ]minute tour|watch the tour/i.test(overviewText));
-
-  // NO NAMED INSTITUTION. The comp's illustrated day names a real hospital, which implies a relationship
-  // that does not exist -- the same class of claim as "trusted by", and the one easiest to paste back in.
-  ok("8k. /practice names no real institution as a user", !/CURE Uganda|Mulago|Nakasero|Aga Khan/i.test(overviewText));
-
-  // OFFLINE IS NOT CLAIMED AS WORKING. CPR-019 is Phase 9 and unbuilt, and this is the single claim a
-  // clinician in a low-connectivity setting would plan around.
-  const offline = BUILT_FOR_AFRICA.points.find(p => "pending" in p && p.pending);
-  ok("8l. the offline capability is marked as not yet built", !!offline && overviewText.includes("Not yet"));
   ok("7h. the FAQs answer whether it can be used today",
     FAQS.some(f => /try it today|available/i.test(f.q)));
 
@@ -398,6 +363,44 @@ async function main() {
     if (!r?.ok) notServed.push(`${src} (${r?.status ?? "no response"})`);
   }
   ok("6. every screen is served over HTTP", notServed.length === 0, notServed.join(", "));
+
+  // ── 8. CPR-001 v3: the short homepage, and what it refuses to say ─────────────────────────────────
+  //
+  // The sections are asserted so a future edit cannot quietly drop one. The REFUSALS are asserted because
+  // they are decisions, and a decision that lives only in a commit message is one the next person working
+  // from the comp will undo. This comp is the most dangerous the project has had: it bands six real,
+  // identifiable hospitals under "trusted by" and invents three clinicians with photographs and ratings.
+
+  ok("8a. /practice carries the v3 headline", LP3_HERO.headline.every(l => overviewText.includes(l)));
+  ok("8b. /practice renders all six benefits", LP3_BENEFITS.every(b => overviewText.includes(b.title)));
+  ok("8c. /practice renders the workspace section", overviewText.includes(LP3_WORKSPACE.title));
+  ok("8d. /practice keeps the EMR boundary", overviewText.includes(NOT_AN_EMR.title));
+  ok("8e. the hero illustration is on disk",
+    existsSync(join(process.cwd(), "public", "images", "practice", "hero-illustration.webp")));
+
+  // The AI section renders at the user's decision and is MARKED at mine: no AI module exists, and the
+  // built Practice modules are Home, Calendar, Patients and Encounters.
+  ok("8f. the AI section renders", overviewText.includes(LP3_AI.title));
+  ok("8g. the AI section is marked as in development", overviewText.includes(LP3_AI.eyebrow));
+  ok("8h. nothing claims the AI assistant is live", !/now live/i.test(overviewText));
+
+  // NO NAMED INSTITUTION AS A CUSTOMER, and no crowd claim.
+  const HOSPITALS = ["Chris Hani", "Baragwanath", "Kenyatta", "Ibadan", "Muhimbili", "Groote Schuur", "Aga Khan"];
+  const namedHospitals = HOSPITALS.filter(h => overviewText.includes(h));
+  ok("8i. /practice names no hospital as a customer", namedHospitals.length === 0, namedHospitals.join(", "));
+  ok("8j. /practice makes no trusted-by or crowd claim",
+    !/trusted by|loved by|join thousands|hundreds of practices/i.test(overviewText));
+
+  // NO TESTIMONIALS until a real person said it and agreed to be quoted.
+  ok("8k. /practice carries no testimonial", !/Dr\. Sarah|Dr\. James|Dr\. Amina/i.test(overviewText));
+
+  // NO PRICE and NO APP-STORE BADGE -- both the user's call, both otherwise reinstated from the comp.
+  ok("8l. /practice publishes no price", !/\$\s?\d|\/month/i.test(overviewText));
+  ok("8m. /practice offers no app-store badge", !/App Store|Google Play/i.test(overviewText));
+
+  // WHEREVER A TRIAL IS MENTIONED IT IS THIRTY DAYS, because practice_plans.trial_days says 30. The comp
+  // says fourteen, which matches nothing in the system.
+  ok("8n. no fourteen-day trial is claimed", !/14[- ]day/i.test(overviewText));
 
   console.log(`\n${fails.length ? "FAILED" : "PASSED"}  ${pass} assertion(s)${fails.length ? `, ${fails.length} failure(s):\n  - ${fails.join("\n  - ")}` : ""}\n`);
   process.exitCode = fails.length ? 1 : 0;
