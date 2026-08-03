@@ -7,6 +7,7 @@ import { getPatient } from "@/lib/practice/patients";
 import { patientTimeline } from "@/lib/practice/encounters";
 import { listFollowUps } from "@/lib/practice/follow-ups";
 import { patientFollowUps } from "@/lib/practice/follow-up-plans";
+import { patientCorrespondence } from "@/lib/practice/document-library";
 import FollowUpPanel from "./FollowUpPanel";
 import { listContacts } from "@/lib/practice/communication";
 import { logAccess, patientAccessHistory } from "@/lib/practice/privacy";
@@ -60,6 +61,11 @@ export default async function PatientPage({ params, searchParams }: {
   // sent. Named contactLog, not contacts: `contacts` on this page is already the patient's phone
   // numbers from migration 193 -- the same collision that renamed the table itself.
   const contactLog = await listContacts(admin, shell.ctx.workspaceId, { patientId, limit: 15 });
+  // CPR-320. Composed from documents issued, copies released, documents received and calls recorded --
+  // no table of its own, because those four already hold every fact it shows.
+  const correspondence = hasCapability(shell.ctx, "document.view")
+    ? await patientCorrespondence(admin, shell.ctx.workspaceId, patientId)
+    : null;
 
   // CPR-370. THE READ THAT MATTERS MOST, logged after notFound() so a probe for another practice's id
   // leaves no trail suggesting it was seen. The history is fetched for the panel below; it deliberately
@@ -155,6 +161,44 @@ export default async function PatientPage({ params, searchParams }: {
 
       {followUpView && followUpView.all.length > 0 && (
         <FollowUpPanel view={followUpView} patientId={patientId} tab={followUpTab ?? "upcoming"} />
+      )}
+
+      {correspondence && correspondence.entries.length > 0 && (
+        <section className="mt-4 rounded-xl border border-gray-200 bg-white p-4">
+          <div className="flex items-baseline gap-2 flex-wrap">
+            <h2 className="text-[13px] font-bold text-gray-900">Correspondence</h2>
+            <span className="text-[11px] text-gray-500">
+              {correspondence.issued} issued · {correspondence.received} received ·{" "}
+              {correspondence.copiesReleased} {correspondence.copiesReleased === 1 ? "copy" : "copies"} released ·{" "}
+              {correspondence.contacts} recorded
+            </span>
+          </div>
+          {/* CPR-320. ONE TIMELINE, composed from what already exists -- documents issued, copies
+              released, documents received, calls recorded. A correspondence table would be a fourth
+              copy of facts three tables already hold, and it would drift the first time somebody wrote
+              to one and not the other. */}
+          <ul className="mt-2 flex flex-col">
+            {correspondence.entries.slice(0, 12).map((e: any) => (
+              <li key={`-`} className="flex items-baseline gap-2 border-b border-gray-100 py-1.5 last:border-0">
+                <span className="min-w-0">
+                  <Link href={e.href} className="block truncate text-[12px] font-semibold text-gray-800 hover:underline">
+                    {e.title}
+                  </Link>
+                  <span className="block text-[10px] text-gray-500">{e.detail}</span>
+                </span>
+                <span className="ml-auto shrink-0 text-right">
+                  <span className="block text-[10px] text-gray-500">{String(e.at).slice(0, 10)}</span>
+                  <span className="block text-[10px] text-gray-400">{e.status}</span>
+                </span>
+              </li>
+            ))}
+          </ul>
+          {/* The sentence this panel must not lose. */}
+          <p className="mt-2 text-[10px] text-gray-500">
+            Nothing here was sent by this product &mdash; there is no email, SMS or patient-messaging
+            channel. A released copy is somebody recording that they printed or handed something over.
+          </p>
+        </section>
       )}
 
       <ContactLog

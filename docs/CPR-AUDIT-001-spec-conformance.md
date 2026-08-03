@@ -168,7 +168,16 @@ practice_assistant / billing_reporting / read_only_auditor).
   "Activity" half of the module's title), team members on a procedure, instruments and consumables,
   attachments, portfolio/CPD evidence generation, batch recording.
 
-### CPR-320 Communication & Document Management — partial
+### CPR-320 Communication & Document Management — partial → COMPLETED
+
+> **Closed, and mostly by checking.** Six of the nine gaps listed below had since been built by later
+> modules -- templates and PDF by CPR-330, files and signatures and versioning by CPR-130, the approvals
+> queue by CPR-310 -- so building them again would have been the mistake. Migration 210 adds what was
+> genuinely missing: a shared document library with folders and a recycle bin for documents that belong
+> to the PRACTICE rather than a patient. A clinical document can never enter that bin, and the refusal
+> says which it is. The patient correspondence register is COMPOSED from documents issued, copies
+> released, documents received and calls recorded -- no fourth table. 38 harness assertions, four proven
+> able to fail. Refused: the storage quota bar (there is no quota, `quotaBytes: null`). See respec s24.
 - **Have:** internal threads with derived unread, contact log, incoming-document register.
 - **Missing:** patient correspondence, templates library, shared document library, folder organisation,
   document storage and files, signatures and approvals queue, recycle bin, bulk actions, PDF generation.

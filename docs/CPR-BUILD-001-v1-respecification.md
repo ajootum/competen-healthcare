@@ -115,7 +115,7 @@ Continuity & DR · 480 Enterprise Administration · 490 Roadmap & Release Govern
 | CPR-300 Operations Home | **Built.** `/practice/home` rebuilt as a worklist: every figure is the length of a list you can open, ordered by cost of ignoring, capability-aware with named blind spots. No migration (`operations-home.ts`, `practice-time.ts`, 37 harness assertions). |
 | CPR-340 Tasks, Reminders & Notifications | **Built.** Operational tasks with derived overdue and derived orphaning, reminders as a column rather than a second object, in-app notifications holding only non-derivable events. No delivery channel, deliberately (migration 198, `tasks.ts`, 44 harness assertions). |
 | CPR-350 Search & Global Retrieval | **Built.** One box over ten domains; generated tsvector columns so the index cannot drift from the text; capability filter runs BEFORE the query; skipped domains named; no hidden counts (migration 199, `search.ts`, 43 harness assertions). |
-| CPR-320 Communication & Document Management | **Built.** Internal threads with per-reader derived unread, a register of contact WITH patients (recorded never sent), and an incoming-document register whose review is a named clinical stamp (migration 200, `communication.ts`, 44 harness assertions). |
+| CPR-320 Communication & Document Management | **Completed (s24).** Internal threads, contact log and the incoming register as before (migration 200, 44 assertions) -- plus the shared document library with folders and a recycle bin, and the per-patient correspondence register composed from four existing stores (migration 210, `document-library.ts`, 38 assertions). Six of the gaps the audit listed had already been filled by CPR-130, CPR-310 and CPR-330. |
 | CPR-310 Team & Delegated Access | **Rebuilt (s22).** Invitations, memberships, capability-level delegation and the audit trail as before (migration 201, 52 assertions) -- plus the model the spec describes: delegation by AREA materialising ordinary grants, role templates, an approval queue that is explicitly not a gate, and derived work queues (migration 208, `delegation.ts`, 48 assertions). |
 | CPR-370 Security, Privacy & Practitioner Control | **Built.** Read logging (the other half of the trail), de-identified access review, append-only enforcement, patient-record export (migration 202, `privacy.ts`, 36 harness assertions). |
 | CPR-330 Reports, Documents & Correspondence | **Rebuilt (§18).** Template designer with a merge body, merge-field resolver, generation, batch generation, practice letterhead, print/PDF view, schedule definitions, dashboard to the comp (migration 204, `document-generation.ts`, 52 harness assertions). The activity counting that was first built under this heading moved to `/practice/reports/analytics` as an early slice of CPR-270. |
@@ -1115,3 +1115,69 @@ specification. AI-assisted documentation is CPR-210's.
 ### Still not built
 
 Batch recording, barcode/QR readiness and offline drafts (CPR-410's subject).
+
+## 24. CPR-320 as completed: most of it had already been built elsewhere
+
+`src/lib/practice/document-library.ts`, `/practice/documents/library`, the correspondence panel on the
+patient record, migration 210, and `scripts/practice-library-harness.ts` — 38 assertions, four proven
+able to fail.
+
+**The honest first move was to check what still needed building.** CPR-AUDIT-001 listed nine gaps here,
+and six had since been filled by later modules:
+
+| Listed as missing | Where it actually got built |
+|---|---|
+| Templates library | CPR-330 — `practice_note_template` with merge bodies |
+| PDF generation | CPR-330 — the print view |
+| Document storage and files | CPR-130 — `practice_attachment`, private bucket, signed URLs |
+| Electronic signatures | CPR-130 — sign-and-lock with a supersession chain |
+| Signatures/approvals queue | CPR-310 — `practice_approval_request` |
+| Version control | CPR-130 — append-only versions, document supersession |
+
+Building those again would have been the mistake, not the fix. **What was genuinely missing** is a place
+to put a document that belongs to the *practice* rather than to a patient — a clinic protocol, a blank
+consent form, a referral pathway. There was nowhere for those, and a practice with nowhere to put its
+protocol keeps it in somebody's email.
+
+### The rule it turns on
+
+**A clinical document never enters the recycle bin.** CPR-130's clinical document is marked
+ENTERED_IN_ERROR and kept forever, because a clinical record is not deletable — and a "restore" on one
+would imply it had been *gone*, which is a claim about the record that is not true. The recycle bin is
+for the library, where deleting really is deleting.
+
+The refusal **says which it is**, rather than returning a bare not-found that would send somebody hunting
+for a bug that isn't there. Two different objects, two different rules, and the engine will not confuse
+them.
+
+Three consequences:
+
+- **Purging goes through the bin.** A one-click permanent delete is how a practice loses its only copy of
+  a consent form at half past six on a Friday.
+- **A purged document cannot be restored** — a row pointing at bytes that are gone is a document that
+  will not open, which is worse than refusing. **The row survives the purge**, so the trail is not erased
+  with the bytes.
+- **Deleting a folder does not delete its documents.** Tidying is not deleting; they fall back to
+  unfiled, and the response says how many did.
+
+### The correspondence register is composed, not stored
+
+Everything it shows already exists: documents issued and copies released (CPR-130), documents received
+(CPR-320's incoming register), calls recorded (the contact log). A `correspondence` table would be a
+fourth copy of facts three tables already hold, and it would drift the first time somebody wrote to one
+and not the other. So it is one timeline built at read time — and `sentByThisProduct: false` travels in
+the payload, because this product still has no email, SMS or patient-messaging channel and a client must
+not be able to render the register as a delivery history.
+
+### Refused
+
+**"Storage Used 2.4 GB of 10 GB (24%)" is a quota, and there is no quota.** The bytes are real and are
+shown; the denominator and the bar are not, and `quotaBytes: null` says so in the payload. A progress bar
+against a limit nobody set is a warning that will never fire and a reassurance that means nothing. The
+comp's "↑20% vs last 30 days" trends are percentages, refused as everywhere else. The AI Document
+Assistant is CPR-210's.
+
+### Still not built
+
+Rich-text editing beyond the plain bodies CPR-130 and CPR-330 use, and controlled *external* sharing —
+which needs a channel to share over, and there still isn't one.

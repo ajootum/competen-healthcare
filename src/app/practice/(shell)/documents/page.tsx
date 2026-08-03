@@ -67,11 +67,17 @@ export default async function DocumentsPage() {
             separately from it &mdash; signing here means issuing.
           </p>
         </div>
-        {hasCapability(shell.ctx, "template.manage") && (
-          <Link href="/practice/documents/templates" className="text-[12px] font-semibold text-[var(--cp-primary-deep)] hover:underline">
-            Template library →
+        <span className="flex items-center gap-3">
+          {/* CPR-320: the practice's own documents, which belong to nobody in particular. */}
+          <Link href="/practice/documents/library" className="text-[12px] font-semibold text-[var(--cp-primary-deep)] hover:underline">
+            Document library →
           </Link>
-        )}
+          {hasCapability(shell.ctx, "template.manage") && (
+            <Link href="/practice/documents/templates" className="text-[12px] font-semibold text-[var(--cp-primary-deep)] hover:underline">
+              Template library →
+            </Link>
+          )}
+        </span>
       </div>
 
       {documents.length === 0 && (
