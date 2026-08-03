@@ -288,6 +288,7 @@ async function main() {
   // reality rather than against an assumption about which posture we are in. A missing flag row reads as
   // closed, which is the safe direction and is asserted below rather than silently defaulted.
   const gateOpen: Record<string, boolean> = {};
+  let serverSeesFlags = true;
   {
     const url = process.env.NEXT_PUBLIC_SUPABASE_URL, key = process.env.SUPABASE_SERVICE_ROLE_KEY;
     const db = url && key ? createClient(url, key, { auth: { persistSession: false } }) : null;
@@ -295,6 +296,27 @@ async function main() {
     const { data } = db ? await db.from("practice_platform_flags").select("flag, enabled").in("flag", wanted) : { data: null };
     const rows = (data ?? []) as { flag: string; enabled: boolean }[];
     for (const f of wanted) gateOpen[f] = !!rows.find(r => r.flag === f)?.enabled;
+    // CAN THE SERVER READ FLAGS AT ALL? A discriminator, not a nicety.
+    //
+    // This harness reads practice_platform_flags with its own service-role client. The SERVER reads them
+    // with its own, and if the server's Supabase calls are failing -- a dev server started without
+    // NODE_EXTRA_CA_CERTS behind TLS interception is the case that actually happened -- every flag reads
+    // false in-process and every gated page renders closed. The gate assertions then report a page bug
+    // that does not exist, and the next person spends an hour in JourneyPage. That is the same confident
+    // wrong measurement this file exists to prevent, aimed at itself.
+    //
+    // The homepage CTA is the probe: it is flag-driven, public, and needs no session. With sign-in ON a
+    // working server offers "Sign in"; a server that cannot read flags falls through to "Talk to us".
+    const home = await fetch(`${BASE}/practice`).then(r => r.text()).catch(() => "");
+    const signInFlag = !!rows.find(r => r.flag === "practice_sign_in")?.enabled;
+    serverSeesFlags = !signInFlag || !/Talk to us about your practice/.test(visibleText(home));
+    if (!serverSeesFlags) {
+      console.log("  NOTE  7b-gate. the SERVER cannot read practice_platform_flags -- every flag reads false");
+      console.log("        in-process, so the gated pages below are not testable in this environment.");
+      console.log("        Usual cause: the dev server was started without NODE_EXTRA_CA_CERTS, so its");
+      console.log("        Supabase calls fail behind TLS interception. Restart it from a shell that sets it.");
+    }
+
     ok("7-flags. every gated journey's flag exists in the database", rows.length === wanted.length,
       `${rows.length}/${wanted.length} -- a gate pointing at a missing flag is permanently and silently closed`);
   }
@@ -324,9 +346,12 @@ async function main() {
     const saysOpen = !!gate && text.includes(gate.headline) && html.includes(`href="${gate.action.href}"`);
     ok(`7b. ${j.href} states its availability exactly once`, saysClosed !== saysOpen,
       saysClosed && saysOpen ? "shows BOTH panels" : "shows NEITHER panel");
-    if (gate) {
+    if (gate && serverSeesFlags) {
       ok(`7b-gate. ${j.href} matches the ${gate.flag} flag`, saysOpen === gateOpen[gate.flag],
         `flag=${gateOpen[gate.flag]} page=${saysOpen ? "open" : "closed"}`);
+    } else if (gate) {
+      // Not skipped silently: the NOTE above says why, and the count below says how many were lost.
+      console.log(`  SKIP  7b-gate. ${j.href} -- the server cannot read flags in this environment`);
     } else {
       ok(`7b-ungated. ${j.href} shows the notice (nothing behind it is built)`, saysClosed);
     }
