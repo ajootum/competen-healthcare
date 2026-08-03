@@ -7,6 +7,7 @@ import { getEncounter, patientTimeline, LOCKED_STATUSES } from "@/lib/practice/e
 import { listTemplates, noteHistory, listDocuments } from "@/lib/practice/documentation";
 import { listFollowUps, listIntervals } from "@/lib/practice/follow-ups";
 import { listProcedures, listProcedureTypes } from "@/lib/practice/procedures";
+import { logAccess } from "@/lib/practice/privacy";
 import EncounterConsole from "./EncounterConsole";
 
 // /practice/encounters/{id} -- CPR-V2-006 V3, the consultation workspace: patient header, the previous
@@ -37,6 +38,13 @@ export default async function EncounterPage({ params }: { params: Promise<{ enco
   const timeline = await patientTimeline(admin, shell.ctx.workspaceId, encounter.patient_id, 6);
   const priors = (timeline.encounters as any[]).filter(e => e.id !== encounter.id);
   const locked = LOCKED_STATUSES.includes(encounter.status);
+
+  // CPR-370. Logged AFTER notFound(), so only a read that actually happened is recorded -- a probe
+  // for an id in another practice must not leave a trail suggesting it was seen.
+  await logAccess(admin, {
+    workspaceId: shell.ctx.workspaceId, actorId: shell.ctx.userId, subjectKind: "encounter",
+    subjectId: encounter.id, patientId: encounter.patient_id, route: "/practice/encounters/[id]",
+  });
 
   // CPR-130. Only encounter-note templates are offered here: applying a referral-letter template to a
   // SOAP segment is refused by the engine, so offering it would be drawing a button that 422s.

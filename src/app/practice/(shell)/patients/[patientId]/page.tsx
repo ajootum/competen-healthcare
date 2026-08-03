@@ -7,6 +7,7 @@ import { getPatient } from "@/lib/practice/patients";
 import { patientTimeline } from "@/lib/practice/encounters";
 import { listFollowUps } from "@/lib/practice/follow-ups";
 import { listContacts } from "@/lib/practice/communication";
+import { logAccess, patientAccessHistory } from "@/lib/practice/privacy";
 import PatientActions from "./PatientActions";
 import ContactLog from "./ContactLog";
 
@@ -46,6 +47,18 @@ export default async function PatientPage({ params }: { params: Promise<{ patien
   // sent. Named contactLog, not contacts: `contacts` on this page is already the patient's phone
   // numbers from migration 193 -- the same collision that renamed the table itself.
   const contactLog = await listContacts(admin, shell.ctx.workspaceId, { patientId, limit: 15 });
+
+  // CPR-370. THE READ THAT MATTERS MOST, logged after notFound() so a probe for another practice's id
+  // leaves no trail suggesting it was seen. The history is fetched for the panel below; it deliberately
+  // includes this very visit once the page is next opened, because a log that hides the reader looking
+  // at the log is not a log.
+  await logAccess(admin, {
+    workspaceId: shell.ctx.workspaceId, actorId: shell.ctx.userId, subjectKind: "patient",
+    subjectId: patientId, patientId, route: "/practice/patients/[id]",
+  });
+  const accessHistory = hasCapability(shell.ctx, "access.review")
+    ? await patientAccessHistory(admin, shell.ctx.workspaceId, patientId, 12)
+    : null;
 
   if (patient.status === "merged") {
     return (
@@ -155,6 +168,35 @@ export default async function PatientPage({ params }: { params: Promise<{ patien
         followUps={followUps as never[]}
         canRecord={hasCapability(shell.ctx, "comm.record")}
       />
+
+      {/* CPR-370. Who has opened this record. The question a patient is most entitled to ask, and the
+          one this product could not answer before the access log existed. */}
+      {accessHistory && accessHistory.entries.length > 0 && (
+        <section className="mt-4 rounded-xl border border-gray-200 bg-white p-4">
+          <div className="flex items-center gap-2 flex-wrap">
+            <h2 className="text-[13px] font-bold text-gray-900">Who has opened this record</h2>
+            <span className="rounded bg-gray-100 px-1.5 py-0.5 text-[10px] font-bold text-gray-600">
+              {accessHistory.distinctActors} {accessHistory.distinctActors === 1 ? "person" : "people"}
+            </span>
+            <Link href={`/practice/privacy?patientId=${patientId}`} className="ml-auto text-[11px] font-semibold text-[var(--cp-primary-deep)] hover:underline">
+              Full access log →
+            </Link>
+          </div>
+          <ul className="mt-2 flex flex-col gap-1">
+            {accessHistory.entries.map((e: any) => (
+              <li key={e.id} className="flex items-baseline gap-2 text-[11px]">
+                <span className="font-mono text-gray-400">{String(e.occurred_at).slice(0, 16).replace("T", " ")}</span>
+                <span className="font-semibold text-gray-700">{e.actor_name ?? "Unnamed member"}</span>
+                <span className="text-gray-500">{e.action === "export" ? "exported" : "opened"} the {e.subject_kind.replace(/_/g, " ")}</span>
+              </li>
+            ))}
+          </ul>
+          <p className="mt-2 text-[10px] text-gray-400">
+            Every read through this application, including your own just now. The log is append-only &mdash;
+            the database refuses to change or remove an entry.
+          </p>
+        </section>
+      )}
 
       <section className="mt-4 rounded-xl border border-gray-200 bg-white p-4">
         <h2 className="text-[13px] font-bold text-gray-900">Appointment history</h2>

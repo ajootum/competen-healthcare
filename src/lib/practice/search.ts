@@ -1,5 +1,6 @@
 import { hasCapability, type WorkspaceContext } from "@/lib/practice/access";
 import { searchPatients } from "@/lib/practice/patients";
+import { logAccess } from "@/lib/practice/privacy";
 
 // CPR-350 SEARCH AND GLOBAL RETRIEVAL.
 //
@@ -316,6 +317,14 @@ export async function searchPractice(admin: any, ctx: WorkspaceContext, rawQuery
       detail: [nameOf(d.patient_id), d.source, d.status.toLowerCase()].filter(Boolean).join(" · "),
       href: "/practice/inbox", when: d.created_at, patientId: d.patient_id,
     }));
+
+  // CPR-370. A SEARCH IS A READ ACROSS THE WHOLE PRACTICE, and the term itself is the interesting part:
+  // "who searched for this surname" is exactly the question an access review needs to answer. Logged
+  // once per search that actually ran, never for an empty query.
+  await logAccess(admin, {
+    workspaceId: ws, actorId: ctx.userId, subjectKind: "search", action: "search",
+    route: "/practice/search", detail: trimmed,
+  });
 
   // RULE 3: name what was skipped, so an empty page can say why it is empty.
   const LABELS: Record<string, string> = {

@@ -5,6 +5,7 @@ import { resolvePracticeShell } from "@/lib/practice/shell";
 import { hasCapability } from "@/lib/practice/access";
 import { getDocument } from "@/lib/practice/documentation";
 import { LOCKED_DOCUMENT_STATUSES, DOC_TYPES } from "@/lib/practice/document-constants";
+import { logAccess } from "@/lib/practice/privacy";
 import DocumentConsole from "./DocumentConsole";
 
 // /practice/documents/{id} -- CPR-130's document workspace.
@@ -35,6 +36,13 @@ export default async function DocumentPage({ params }: { params: Promise<{ docum
 
   const { document: doc, patient, releases, successor, predecessor } = detail as any;
   const locked = LOCKED_DOCUMENT_STATUSES.includes(doc.status);
+
+  // CPR-370. A document carries the same clinical content as the consultation behind it, so opening
+  // one is as much a read of the patient as opening their record.
+  await logAccess(admin, {
+    workspaceId: shell.ctx.workspaceId, actorId: shell.ctx.userId, subjectKind: "document",
+    subjectId: doc.id, patientId: doc.patient_id, route: "/practice/documents/[id]",
+  });
 
   return (
     <div className="max-w-5xl">

@@ -97,9 +97,10 @@ Continuity & DR · 480 Enterprise Administration · 490 Roadmap & Release Govern
 | CPR-350 Search & Global Retrieval | **Built.** One box over ten domains; generated tsvector columns so the index cannot drift from the text; capability filter runs BEFORE the query; skipped domains named; no hidden counts (migration 199, `search.ts`, 43 harness assertions). |
 | CPR-320 Communication & Document Management | **Built.** Internal threads with per-reader derived unread, a register of contact WITH patients (recorded never sent), and an incoming-document register whose review is a named clinical stamp (migration 200, `communication.ts`, 44 harness assertions). |
 | CPR-310 Team & Delegated Access | **Built.** Invitation codes (bearer, single-use, expiry derived), membership lifecycle, time-bounded delegation, DB-guarded last owner. Fixed a shipped resolver bug that made every delegation invisible and ignored `effective_from` (migration 201, `team.ts`, 52 harness assertions). |
-| CPR-200–270, 330, 360–370, 400–440, 460–490 | **Not started.** |
+| CPR-370 Security, Privacy & Practitioner Control | **Built.** Read logging (the other half of the trail), de-identified access review, append-only enforcement, patient-record export (migration 202, `privacy.ts`, 36 harness assertions). |
+| CPR-200–270, 330, 360, 400–440, 460–490 | **Not started.** |
 
-**Thirteen of thirty-seven** now have a real implementation. The clinical spine (CPR-130/140/150) and the
+**Fourteen of thirty-seven** now have a real implementation. The clinical spine (CPR-130/140/150) and the
 operations home are complete rather than partial; the four marked "core built" remain subsets of what
 their v1.0 documents ask for.
 
@@ -464,7 +465,49 @@ thing the code claimed to prevent. And shipping the page at the `team` slug sile
 content harness caught it; the authenticated route is now `/practice/people`, and navigation.ts lists
 every public slug that must not be shadowed.
 
-## 14. Standing rules that carry over
+## 14. CPR-370 as built: the other half of the trail
+
+Migration 202, `src/lib/practice/privacy.ts`, `/practice/privacy`, an access panel on the patient
+record, a patient-record export, and `scripts/practice-privacy-harness.ts`.
+
+**This product recorded everything that was written and nothing about who read, and that is backwards.**
+`practice_audit_event` has captured every write since Phase 0. Nothing ever recorded a read — but for a
+clinical record the harm is almost always a read: the staff member who opens a neighbour's file, an
+ex-partner's, somebody in the news. "Who has opened this person's record" is the question a patient is
+most entitled to ask, and this product could not answer it.
+
+**What is logged, and what deliberately is not.** Opening a patient, a consultation or a document;
+running a search; exporting. *Not* every page view — the home page and the diary are the practitioner's
+own working surface, and logging them buries the reads that matter under the reads that do not.
+Self-access is still logged: excluding it would make the log unable to answer the question at all.
+
+**The reviewer of a privacy control must not be its easiest bypass.** An access log is a list of who your
+patients are — every row names somebody who attends. So reviewing shows *names* only to a caller who
+already holds `patient.view`; everybody else sees stable references and can still audit who looked and
+how often. The harness asserts this over the *whole serialised response*, not one field, because a name
+leaking through any other key is just as much a disclosure. Reviewing is itself logged.
+
+**Logging never blocks a clinician, and the gap is never silent.** If the log write fails the page still
+renders — a doctor staring at an error while a patient waits is the worse harm — but the failure lands in
+the audit trail, so a hole in the trail is visible rather than assumed. Both halves are asserted.
+
+**The log is append-only in the database**: update *and* delete both refused, because a log somebody can
+prune reads as innocence.
+
+**The bug that caused, and how it surfaced.** A `BEFORE DELETE` trigger fires on cascade deletes too.
+The first version of the file carried a comment claiming the workspace cascade would still work — it did
+not, and **a practice could not be deleted at all**. It surfaced the indirect way these things do:
+harness cleanup silently stopped working and the next run found duplicate patients from the previous one.
+The trigger now allows the delete when the parent workspace is already gone (a practice leaving entirely)
+and refuses it while the workspace exists (somebody pruning). Asserted directly on a throwaway workspace
+so it cannot regress into somebody else's confusing failure.
+
+**Retention is named, not guessed.** Nothing deletes from the access log, because how long to keep a
+clinical access log is a legal question with a different answer in every jurisdiction — inventing "two
+years" in a migration would be a compliance claim nobody authorised. The privacy page states that gap
+alongside the guarantees, each of which is a property of the code rather than a promise about intent.
+
+## 15. Standing rules that carry over
 
 - Render real data only; an honest empty state beats a plausible number.
 - Every module gets a harness, and the harness is proven able to fail before it is trusted.
