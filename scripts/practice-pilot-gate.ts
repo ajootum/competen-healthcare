@@ -25,7 +25,8 @@ import { createClient } from "@supabase/supabase-js";
 import { runProvisioning, platformFlag, type IndividualRequest } from "../src/lib/practice/provisioning";
 import { registerPatient } from "../src/lib/practice/patients";
 import { bookAppointment, transitionAppointment } from "../src/lib/practice/scheduling";
-import { launchEncounter, transitionEncounter, saveNote, recordDiagnosis, recordTreatment } from "../src/lib/practice/encounters";
+import { launchEncounter, transitionEncounter, recordDiagnosis, recordTreatment } from "../src/lib/practice/encounters";
+import { saveNoteSegment as saveNote } from "../src/lib/practice/documentation";
 import { launchState } from "../src/lib/practice/operations";
 
 loadEnvConfig(process.cwd());

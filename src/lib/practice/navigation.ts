@@ -28,6 +28,7 @@ export const PRACTICE_NAV: PracticeNavItem[] = [
   { href: "/practice/calendar", label: "Calendar", icon: "▤", capability: "practice.calendar.view", group: "Clinical Practice", phase: 1, built: true },
   { href: "/practice/patients", label: "Patients", icon: "☺", capability: "patient.list", group: "Clinical Practice", phase: 2, built: true },
   { href: "/practice/encounters", label: "Encounters", icon: "✎", capability: "encounter.list", group: "Clinical Practice", phase: 3, built: true },
+  { href: "/practice/documents", label: "Documents", icon: "▦", capability: "document.view", group: "Clinical Practice", phase: 4, built: true },
   { href: "/practice/follow-ups", label: "Follow-ups", icon: "↻", capability: "followup.view", group: "Clinical Practice", phase: 4, built: false },
   { href: "/practice/reports", label: "Reports", icon: "☷", capability: "report.view", group: "Practice Management", phase: 6, built: false },
   { href: "/practice/intelligence", label: "Practice Intelligence", icon: "☀", capability: "report.view", group: "Intelligence", phase: 5, built: false },

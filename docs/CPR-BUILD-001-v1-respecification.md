@@ -88,7 +88,7 @@ Continuity & DR · 480 Enterprise Administration · 490 Roadmap & Release Govern
 | CPR-100 Patient Management | **Core built.** Registry, identity, duplicate doctrine, merge (migration 193, `patients.ts`, 20 harness assertions). Far short of the spec's 360° profile. |
 | CPR-110 Scheduling | **Core built.** Diary, availability, queue, arrival (migration 192, `scheduling.ts`, 19 assertions). No multi-location or AI scheduling. |
 | CPR-120 Encounter Management | **Core built.** Eight-state lifecycle, SOAP, diagnosis/problem split, DB-enforced signed immutability (migration 194, 41 assertions). No 8-step guided lifecycle UI. |
-| CPR-130 Clinical Documentation | **Partial.** SOAP segments exist inside the encounter. No template library, versioning, dictation or sign-and-lock document object. |
+| CPR-130 Clinical Documentation | **Built.** Template library (platform + workspace), append-only note versioning, sign-and-lock document object with a supersession chain, release register, browser dictation (migration 195, `documentation.ts`, 55 harness assertions). |
 | CPR-450 Deployment & Tenant Lifecycle | **Partial.** Provisioning saga, entitlements, launch flags, operator console (migration 191). |
 | CPR-140, 150, 200–270, 300–370, 400–440, 460–490 | **Not started.** |
 
@@ -119,15 +119,59 @@ Nothing here is a week's work. A realistic order that keeps the product usable a
 2. ~~**CPR-040 design system**~~ **Done.** Indigo and the `--cp-*` token layer are adopted across the
    Practice app; the swatch-versus-prose disagreement is recorded in `globals.css` and asserted in
    `scripts/cpr040-design-system-harness.ts`.
-3. **Finish the clinical spine** — CPR-130 documentation properly, then CPR-140 follow-ups (already
-   queued as Phase 4) and CPR-150 procedures. These complete the encounter the product already has.
+3. **Finish the clinical spine** — ~~CPR-130 documentation properly~~ **done** (below), then CPR-140
+   follow-ups (already queued as Phase 4) and CPR-150 procedures. These complete the encounter the
+   product already has.
 4. **CPR-300 Operations Home** — the daily command centre the spec puts at the centre of the workspace.
 5. **CPR-340 tasks / 350 search / 320 documents** — the operational spine everything else references.
 6. **Practice Intelligence (200–270)** — needs clinical volume to be worth anything, so it follows.
 7. **Enterprise Services (400–490)** — infrastructure-heavy; several are platform concerns that already
    have partial answers elsewhere in Competen (monitoring, billing, tenant lifecycle).
 
-## 6. Standing rules that carry over
+## 6. CPR-130 as built, and the decisions inside it
+
+Migration 195, `src/lib/practice/documentation.ts`, `scripts/practice-documentation-harness.ts`, and a
+`/practice/documents` section in the shell.
+
+**A document is not the encounter, and that is why it needs its own signature.** DM-001 s2 says the
+encounter "is never replaced by a note document", so a clinical document here is a *derived, issuable*
+artefact — a referral letter, a sick note, a summary. The thing that leaves the practice. An encounter
+signature says "this is what I recorded"; a document signature says "this is what I issued, to someone,
+who now holds a copy I cannot retrieve". The second is the stronger claim, and it is why amendment
+produces a new linked version rather than an edit: the recipient's copy of version 1 still exists in the
+world, so version 1 must still exist in the record for the amendment to be an amendment *of* anything.
+
+**Three versioning models, deliberately different**, because the three objects fail differently. Note
+segments get append-only snapshots — "what did the note say when I signed it" was unanswerable before
+this, because migration 194 upserted the segment in place. Documents get a supersession chain. Templates
+get a plain integer, because a template is configuration and nobody needs the third draft of a heading
+list.
+
+**Applying a template can never destroy clinical text.** Fill-empty is the default and the only mode the
+UI offers; `replace` exists, has to be asked for by name, and still versions the old text first. The
+harness asserts the non-destructive case *together with its control* — the same call that leaves a
+written segment alone must be shown filling an empty one, or "it did not overwrite" is just "it did
+nothing".
+
+**Dictation is the browser's, and its disclosure is the honest part.** There is no transcription service
+in this product, no audio is uploaded by us, and no audio is stored. But in Chrome — and most browsers
+implementing the API — recognition is *not* on-device: the audio goes to the browser vendor's service.
+Dictating a consultation therefore sends a recording of a clinician describing a patient to a third party
+with no relationship to the practice. That is a fact about the browser we cannot change; what we can do
+is refuse to let a practitioner find out afterwards. First use in a session shows it plainly and requires
+an acknowledgement, and the acknowledgement is not remembered, because a permission remembered forever
+stops being a decision. Each version records whether its text was typed or dictated — speech-assembled
+text has a different error profile, and a reader of a clinical record is entitled to know which they are
+looking at.
+
+**What is deliberately absent.** No letterhead: a header carrying a practice's name, registration number
+and address is data this product has not been given, and inventing one would put unverified details on a
+clinical certificate. No delivery: the release register records that a copy left the practice, it does
+not send anything. `practice_owner` gets `template.manage` and nothing else — migration 191 withholds
+`patient.list` and `encounter.list` from the owner role because owning a practice is a business role, and
+a business role does not read clinical documents.
+
+## 7. Standing rules that carry over
 
 - Render real data only; an honest empty state beats a plausible number.
 - Every module gets a harness, and the harness is proven able to fail before it is trusted.

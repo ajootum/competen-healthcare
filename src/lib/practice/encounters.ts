@@ -1,5 +1,5 @@
 import { audit } from "@/lib/practice/provisioning";
-import { ENCOUNTER_TRANSITIONS, LOCKED_STATUSES, LIVE_STATUSES, NOTE_TYPES } from "@/lib/practice/encounter-constants";
+import { ENCOUNTER_TRANSITIONS, LOCKED_STATUSES, LIVE_STATUSES } from "@/lib/practice/encounter-constants";
 
 // PEN-003 Clinical Encounter Engine + CPR-FLOW-001 encounter launch.
 //
@@ -142,7 +142,7 @@ export async function transitionEncounter(admin: any, args: {
 /** Guard shared by every clinical write: the encounter must exist here and not be locked. */
 type Editable = EngineResult<{ id: string; status: string; patient_id: string }>;
 
-async function editableEncounter(admin: any, workspaceId: string, encounterId: string): Promise<Editable> {
+export async function editableEncounter(admin: any, workspaceId: string, encounterId: string): Promise<Editable> {
   const { data: enc } = await admin.from("practice_encounter")
     .select("id, status, patient_id").eq("id", encounterId).eq("workspace_id", workspaceId).maybeSingle();
   if (!enc) return { ok: false, status: 404, code: "NOT_FOUND", message: "Not found" };
@@ -153,22 +153,13 @@ async function editableEncounter(admin: any, workspaceId: string, encounterId: s
   return { ok: true, data: enc };
 }
 
-/** SOAP segments: one live row per type, upserted -- autosave writes here (CPR-V2-006 autosave + audit). */
-export async function saveNote(admin: any, args: {
-  workspaceId: string; encounterId: string; noteType: string; body: string; actorId: string; correlationId: string;
-}): Promise<EngineResult<{ noteType: string }>> {
-  if (!(NOTE_TYPES as readonly string[]).includes(args.noteType))
-    return { ok: false, status: 400, code: "VALIDATION_ERROR", message: `noteType must be one of: ${NOTE_TYPES.join(", ")}` };
-  const guard = await editableEncounter(admin, args.workspaceId, args.encounterId);
-  if (!guard.ok) return guard;
-
-  const { error } = await admin.from("practice_encounter_note").upsert({
-    workspace_id: args.workspaceId, encounter_id: args.encounterId, note_type: args.noteType,
-    body: args.body, authored_by: args.actorId, updated_at: new Date().toISOString(),
-  }, { onConflict: "encounter_id,note_type" });
-  if (error) return { ok: false, status: 400, code: "VALIDATION_ERROR", message: error.message };
-  return { ok: true, data: { noteType: args.noteType } };
-}
+// SAVING A SOAP SEGMENT MOVED TO documentation.ts (CPR-130). It lived here through Phase 3, when a save
+// was a single upsert; it is now a versioned write that appends to the note's history, and versioning is
+// CPR-130's concern rather than the encounter's. Recorded here rather than left as a hole, because
+// `saveNote` is the name somebody will come to this file looking for.
+//
+// The dependency runs one way only -- documentation.ts imports editableEncounter from here, and nothing
+// here imports from there.
 
 /**
  * Record a diagnosis. When `problemLabel` is given, the longitudinal Problem is found-or-created for
@@ -246,7 +237,7 @@ export async function getEncounter(admin: any, workspaceId: string, encounterId:
 
   const [{ data: patient }, { data: notes }, { data: diagnoses }, { data: treatments }, { data: history }] = await Promise.all([
     admin.from("practice_patient").select("id, display_name, sex, birth_date, age_estimate_years, status").eq("id", encounter.patient_id).single(),
-    admin.from("practice_encounter_note").select("note_type, body, updated_at").eq("encounter_id", encounterId),
+    admin.from("practice_encounter_note").select("id, note_type, body, updated_at, version, last_source, template_id").eq("encounter_id", encounterId),
     admin.from("practice_diagnosis").select("id, label, code, certainty, is_primary, problem_id").eq("encounter_id", encounterId).order("created_at"),
     admin.from("practice_treatment").select("id, treatment_type, label, dose, route, frequency, duration, status").eq("encounter_id", encounterId).order("created_at"),
     admin.from("practice_encounter_status_history").select("from_status, to_status, occurred_at").eq("encounter_id", encounterId).order("occurred_at"),

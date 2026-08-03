@@ -30,9 +30,13 @@ import { runProvisioning, type IndividualRequest } from "../src/lib/practice/pro
 import { registerPatient } from "../src/lib/practice/patients";
 import { bookAppointment } from "../src/lib/practice/scheduling";
 import {
-  launchEncounter, transitionEncounter, saveNote, recordDiagnosis, recordTreatment,
+  launchEncounter, transitionEncounter, recordDiagnosis, recordTreatment,
   getEncounter, patientTimeline,
 } from "../src/lib/practice/encounters";
+// Saving a SOAP segment moved to the documentation engine when CPR-130 made it a versioned write. This
+// harness's assertions about segments are unchanged and still belong here: they are about the ENCOUNTER's
+// behaviour (one live row per type, refused after signature), not about the history behind it.
+import { saveNoteSegment as saveNote } from "../src/lib/practice/documentation";
 
 loadEnvConfig(process.cwd());
 

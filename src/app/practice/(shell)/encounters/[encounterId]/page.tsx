@@ -4,6 +4,7 @@ import { createAdminClient } from "@/lib/supabase/server";
 import { resolvePracticeShell } from "@/lib/practice/shell";
 import { hasCapability } from "@/lib/practice/access";
 import { getEncounter, patientTimeline, LOCKED_STATUSES } from "@/lib/practice/encounters";
+import { listTemplates, noteHistory, listDocuments } from "@/lib/practice/documentation";
 import EncounterConsole from "./EncounterConsole";
 
 // /practice/encounters/{id} -- CPR-V2-006 V3, the consultation workspace: patient header, the previous
@@ -34,6 +35,14 @@ export default async function EncounterPage({ params }: { params: Promise<{ enco
   const timeline = await patientTimeline(admin, shell.ctx.workspaceId, encounter.patient_id, 6);
   const priors = (timeline.encounters as any[]).filter(e => e.id !== encounter.id);
   const locked = LOCKED_STATUSES.includes(encounter.status);
+
+  // CPR-130. Only encounter-note templates are offered here: applying a referral-letter template to a
+  // SOAP segment is refused by the engine, so offering it would be drawing a button that 422s.
+  const [templates, noteVersions, documents] = await Promise.all([
+    listTemplates(admin, shell.ctx.workspaceId, { kind: "encounter_note" }),
+    noteHistory(admin, shell.ctx.workspaceId, encounter.id),
+    listDocuments(admin, shell.ctx.workspaceId, { encounterId: encounter.id }),
+  ]);
 
   return (
     <div className="max-w-6xl">
@@ -79,10 +88,15 @@ export default async function EncounterPage({ params }: { params: Promise<{ enco
             notes={notes}
             diagnoses={diagnoses}
             treatments={treatments}
+            patientId={encounter.patient_id}
+            templates={templates}
+            history={noteVersions}
+            documents={documents}
             canEdit={hasCapability(shell.ctx, "encounter.edit")}
             canSign={hasCapability(shell.ctx, "encounter.sign")}
             canDiagnose={hasCapability(shell.ctx, "diagnosis.record")}
             canTreat={hasCapability(shell.ctx, "treatment.record")}
+            canDocument={hasCapability(shell.ctx, "document.author")}
           />
         </div>
 
