@@ -47,7 +47,9 @@ export const PRACTICE_NAV: PracticeNavItem[] = [
   { href: "/practice/reports", label: "Reports", icon: "☷", capability: "report.view", group: "Practice Management", phase: 6, built: true },
   { href: "/practice/intelligence", label: "Practice Intelligence", icon: "☀", capability: "report.view", group: "Intelligence", phase: 5, built: false },
   { href: "/practice/privacy", label: "Privacy and access", icon: "⚿", capability: "access.review", group: "Tools and Settings", phase: 5, built: true },
-  { href: "/practice/people", label: "Team", icon: "⚇", capability: "practice.members.manage", group: "Tools and Settings", phase: 5, built: true },
+  // CPR-310: NO CAPABILITY. The page carries the approval queue, which belongs to practitioners rather
+  // than administrators; the management half is gated inside it.
+  { href: "/practice/people", label: "Team", icon: "⚇", capability: null, group: "Tools and Settings", phase: 5, built: true },
   // CPR-360: NO CAPABILITY. The page carries both halves -- personal settings, which everybody has, and
   // practice configuration, which the page itself gates. Requiring practice.settings.manage in the nav
   // would hide somebody's own text size behind an administrative permission.

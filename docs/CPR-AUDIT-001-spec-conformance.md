@@ -113,7 +113,15 @@ What was built is a **workspace-wide board of single obligations** with free-tex
   WhatsApp channels. This product has no delivery channel and CPR-320/340 were built on that basis. That
   is a genuine product decision, not a rule to apply silently.
 
-### CPR-310 Team & Delegated Access — **DIFFERENT DELEGATION MODEL**
+### CPR-310 Team & Delegated Access — **DIFFERENT DELEGATION MODEL → CORRECTED**
+
+> **Closed.** Migration 208 adds delegation by AREA (six of them, materialising ordinary capability
+> grants so the resolver stays the single source of truth), practice-defined role templates, an approval
+> queue that is explicitly NOT a gate (`blocksWork: false`), and derived work queues. Nothing clinical is
+> delegable, checked twice. The page lost its `practice.members.manage` guard, which had put the approval
+> queue out of reach of the practitioners it exists for. 48 harness assertions, four proven able to fail
+> -- and the harness caught two real bugs: a partial area being granted under the area's name, and the
+> approval queue sorting urgent requests to the bottom. See respec s22.
 The spec delegates by **area** (Scheduling & Appointments, Patient Registration, Documentation &
 Letters, Communications, Billing & Payments, Reports & Data Entry), with **approval workflows**, **shared
 work queues**, and a named role set: Personal Assistant, Secretary, Practice Manager, Medical

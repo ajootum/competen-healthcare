@@ -116,7 +116,7 @@ Continuity & DR · 480 Enterprise Administration · 490 Roadmap & Release Govern
 | CPR-340 Tasks, Reminders & Notifications | **Built.** Operational tasks with derived overdue and derived orphaning, reminders as a column rather than a second object, in-app notifications holding only non-derivable events. No delivery channel, deliberately (migration 198, `tasks.ts`, 44 harness assertions). |
 | CPR-350 Search & Global Retrieval | **Built.** One box over ten domains; generated tsvector columns so the index cannot drift from the text; capability filter runs BEFORE the query; skipped domains named; no hidden counts (migration 199, `search.ts`, 43 harness assertions). |
 | CPR-320 Communication & Document Management | **Built.** Internal threads with per-reader derived unread, a register of contact WITH patients (recorded never sent), and an incoming-document register whose review is a named clinical stamp (migration 200, `communication.ts`, 44 harness assertions). |
-| CPR-310 Team & Delegated Access | **Built.** Invitation codes (bearer, single-use, expiry derived), membership lifecycle, time-bounded delegation, DB-guarded last owner. Fixed a shipped resolver bug that made every delegation invisible and ignored `effective_from` (migration 201, `team.ts`, 52 harness assertions). |
+| CPR-310 Team & Delegated Access | **Rebuilt (s22).** Invitations, memberships, capability-level delegation and the audit trail as before (migration 201, 52 assertions) -- plus the model the spec describes: delegation by AREA materialising ordinary grants, role templates, an approval queue that is explicitly not a gate, and derived work queues (migration 208, `delegation.ts`, 48 assertions). |
 | CPR-370 Security, Privacy & Practitioner Control | **Built.** Read logging (the other half of the trail), de-identified access review, append-only enforcement, patient-record export (migration 202, `privacy.ts`, 36 harness assertions). |
 | CPR-330 Reports, Documents & Correspondence | **Rebuilt (§18).** Template designer with a merge body, merge-field resolver, generation, batch generation, practice letterhead, print/PDF view, schedule definitions, dashboard to the comp (migration 204, `document-generation.ts`, 52 harness assertions). The activity counting that was first built under this heading moved to `/practice/reports/analytics` as an early slice of CPR-270. |
 | CPR-360 Configuration & Personalisation | **Rebuilt (§19).** Workspace configuration as before (migration 203, 35 assertions) *plus* the personalisation half that was missing: dark theme with a checked mapping scan, accent, size, density, reduce-visual-noise, dashboard layout, notification categories, specialty profile, keyboard shortcuts, personal-over-practice overrides with locking, import/export/reset (migration 205, `preferences.ts`, 48 assertions). |
@@ -973,3 +973,77 @@ was minted — attaching to a consultation *is* writing to the clinical record.
 builder with typed fields and structured answers — a module in itself, not a corner of this one. The
 second is a service worker and a local store, which is CPR-410's subject. Both are named here rather than
 left to be discovered missing.
+
+## 22. CPR-310 as rebuilt: an area delegation is a grouping of ordinary grants
+
+`src/lib/practice/delegation.ts`, `delegation-constants.ts`, the delegation console on
+`/practice/people`, migration 208, and `scripts/practice-delegation-harness.ts` — 48 assertions, four
+proven able to fail.
+
+**The specification delegates by area; what was built delegates one capability at a time.** The comp
+shows a personal assistant with "24 Areas" and a summary listing Scheduling & Appointments, Patient
+Registration, Documentation & Letters, Communications, Billing & Payments, Reports & Data Entry. That is
+what a practitioner actually decides: *"Mary handles my diary"*, not *"Mary holds appointment.manage,
+practice.calendar.view and queue.manage until the 30th"*. The capability-level grant is correct and stays
+— an area is the vocabulary above it.
+
+### The rule it turns on
+
+**An area delegation materialises ordinary capability grants.** `resolveWorkspaceContext` still reads
+`practice_role_assignment` and nothing else; a `practice_delegation` row is the *grouping* that says why
+those grants exist and lets them be withdrawn together. The harness proves it by reading the
+capabilities back through the resolver, which knows nothing about areas. Same shape CPR-140's plans take
+over follow-ups, for the same reason: two places a permission can live is two answers to "may this person
+do that" and no tiebreak.
+
+**Withdrawing ends exactly the grants it created**, by `delegation_id`. Ending them by capability would
+revoke a colleague's *role default* because somebody else's temporary cover was withdrawn — and the
+person who lost access would have no way to discover why.
+
+**Nothing clinical is delegable, checked twice.** No area names a signing or clinical-authorship
+capability, and `NEVER_DELEGABLE` states the same rule independently and refuses at grant time. A rule
+stated once in a list is a convention; stated twice, with the second check refusing, it is a rule. The
+harness breaks the first statement and watches the second catch it.
+
+### Two bugs the harness found, both mine
+
+- **A partial area was being granted.** The first draft gave whatever subset the delegator happened to
+  hold. That is *worse* than refusing: "Documentation and letters" would have appeared against somebody's
+  name on the team page while they held only `patient.list` and could not author a document. An area is
+  now all of it or none, and the refusal names exactly what is missing.
+- **The approval queue put urgent requests last.** `"routine"` sorts before `"urgent"` alphabetically, so
+  the obvious `.order("urgency")` buried every urgent request at the bottom. It is now descending, and
+  the harness fixture creates the urgent request *first* so a newest-first ordering cannot pass by
+  coincidence — which an earlier version of that assertion did.
+
+### An approval is a queue, not a gate
+
+CPR-310 §5 already holds without any of this: only a practitioner can sign, and the signing engines
+enforce it. An approval request records that a practitioner wanted to see something a delegate did, and
+whether they have. **Unapproved work is not blocked** — the delegate could do it because they held the
+capability. The API returns `blocksWork: false` as a field, and the harness shows a delegate authoring a
+document that stays a DRAFT while its approval is pending. Anything implying otherwise would be worse
+than not having approvals at all.
+
+**Nobody approves their own work**, and a rejection without words is refused — the person who did the
+work has to know what to change.
+
+### Smaller decisions
+
+- **Areas are fixed in code, not a table**, because an area *is* a mapping to capabilities and a
+  practice-defined one would be an area whose capabilities nobody had defined. What a practice may define
+  is a **role template** — a named bundle of areas — which is a table. The comp's PA / Secretary /
+  Practice Manager / Receptionist are not this product's four roles, and hard-coding five more would be
+  guessing at what any given practice means by "secretary".
+- **Work queues are derived**, never stored: every one is a count of rows that already exist, so a
+  practice that has not opened the app still sees the true backlog. Every queue leads somewhere.
+- **The page lost its capability guard.** It used to redirect anybody without `practice.members.manage`,
+  which put the approval queue out of reach of exactly the practitioners it exists for.
+- Applying a role template **reports what it could not grant** rather than completing silently.
+
+### Refused, and rendered as empty states in place
+
+"Delegation Health 92% — Excellent" and its four sub-scores (Timely Completion 95%, Accuracy 93%,
+Communication 90%, Approval Time 89%); "Time Saved 18.5 hrs"; "Accuracy Rate 93%". None has a formula and
+none could — "accuracy" of a delegated action is not a quantity this product observes. The queue counts
+are the real measure and are what the tiles carry. The AI Team Assistant is CPR-210's.
