@@ -89,7 +89,16 @@ That appears in the comp only as two fields inside "Workflow Preferences".
 - **Note:** the comp's "Auto-save Interval: 2 minutes" corroborates CPR-130's autosave requirement,
   which was explicitly designed against (see below).
 
-### CPR-140 Follow-up Management — **STRUCTURALLY DIFFERENT**
+### CPR-140 Follow-up Management — **STRUCTURALLY DIFFERENT → CORRECTED**
+
+> **Closed.** Migration 206 adds follow-up plans and templates, the patient-centric view with the comp's
+> tabs, adherence as a count and its denominator, and the fixed outcome taxonomy alongside the required
+> words. A plan is a *grouping* — every step stays an ordinary follow-up on the ordinary board.
+> **The open product question was settled the honest way:** the spec's reminder engine (SMS/Email/App/
+> Voice/WhatsApp) is not built because this product has no delivery channel; what replaces it is a
+> recall queue derived at read time and grouped by the person to contact, which needs nothing to run.
+> 44 harness assertions, five proven able to fail. See respec §20.
+
 The spec is **patient-centric** with **follow-up plans** — a sequence (initial → 2 weeks → 1 month →
 3 months), an adherence figure, a recall queue, long-term monitoring, and a fixed outcome taxonomy
 (improved / no change / worsened / referred / other).

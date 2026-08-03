@@ -1,6 +1,6 @@
 import { audit } from "@/lib/practice/provisioning";
 import type { EngineResult } from "@/lib/practice/encounters";
-import { FOLLOW_UP_TRANSITIONS, CLOSED_FOLLOW_UP_STATUSES, FOLLOW_UP_KINDS, FOLLOW_UP_PRIORITIES } from "@/lib/practice/follow-up-constants";
+import { FOLLOW_UP_TRANSITIONS, CLOSED_FOLLOW_UP_STATUSES, FOLLOW_UP_KINDS, FOLLOW_UP_PRIORITIES, FOLLOW_UP_OUTCOMES } from "@/lib/practice/follow-up-constants";
 import { dueDateFrom, workspaceClock } from "@/lib/practice/practice-time";
 
 // CPR-140 FOLLOW-UP MANAGEMENT / PEN-004. The obligation loop: due -> overdue -> scheduled -> closed.
@@ -182,11 +182,11 @@ export async function scheduleFollowUp(admin: any, args: {
  * with nothing attached records a click, not a consultation.
  */
 export async function closeFollowUp(admin: any, args: {
-  workspaceId: string; followUpId: string; to: string; outcome?: string;
+  workspaceId: string; followUpId: string; to: string; outcome?: string; outcomeCode?: string | null;
   closingEncounterId?: string | null; actorId: string; correlationId: string;
 }): Promise<EngineResult<{ status: string }>> {
   const { data: f } = await admin.from("practice_follow_up")
-    .select("id, status, patient_id, record_version").eq("id", args.followUpId).eq("workspace_id", args.workspaceId).maybeSingle();
+    .select("id, status, patient_id, plan_id, record_version").eq("id", args.followUpId).eq("workspace_id", args.workspaceId).maybeSingle();
   if (!f) return { ok: false, status: 404, code: "NOT_FOUND", message: "Not found" };
   if (!(FOLLOW_UP_TRANSITIONS[f.status] ?? []).includes(args.to))
     return { ok: false, status: 422, code: "ILLEGAL_TRANSITION", message: `${f.status} cannot become ${args.to}` };
@@ -208,10 +208,27 @@ export async function closeFollowUp(admin: any, args: {
   if (args.to === "MISSED" && !outcome)
     return { ok: false, status: 400, code: "OUTCOME_REQUIRED", message: "say why this is being marked missed" };
 
+  // CPR-140's outcome taxonomy (migration 206). THE CODE NEVER REPLACES THE WORDS -- it sits beside them
+  // so the practice can count how its reviews turn out, while the record keeps the sentence somebody
+  // wrote. Optional, because a follow-up cancelled for administrative reasons has no clinical outcome
+  // and forcing one would put a judgement in the record that nobody made.
+  const outcomeCode = args.outcomeCode?.trim() || null;
+  if (outcomeCode && !FOLLOW_UP_OUTCOMES.some(([c]) => c === outcomeCode))
+    return {
+      ok: false, status: 400, code: "VALIDATION_ERROR",
+      message: `an outcome must be one of: ${FOLLOW_UP_OUTCOMES.map(([c]) => c).join(", ")}`,
+    };
+  if (outcomeCode && args.to !== "COMPLETED")
+    return {
+      ok: false, status: 422, code: "OUTCOME_CODE_NOT_APPLICABLE",
+      message: "an outcome describes how a review turned out; only a completed follow-up has one",
+    };
+
   const closing = CLOSED_FOLLOW_UP_STATUSES.includes(args.to);
   const patch: Record<string, unknown> = {
     status: args.to, record_version: f.record_version + 1, updated_at: nowIso(), updated_by: args.actorId,
     outcome: outcome || null,
+    outcome_code: outcomeCode,
     closing_encounter_id: closingEncounterId,
     closed_at: closing ? nowIso() : null,
     closed_by: closing ? args.actorId : null,
@@ -227,10 +244,20 @@ export async function closeFollowUp(admin: any, args: {
   if (!updated) return { ok: false, status: 409, code: "VERSION_CONFLICT", message: "the follow-up changed underneath you; reload and retry" };
 
   await recordEvent(admin, args.workspaceId, f.id, f.status, args.to, args.actorId, outcome || undefined);
+
+  // A PLAN COMPLETES ITSELF WHEN ITS LAST STEP CLOSES, reconciled here rather than swept for -- a nightly
+  // job would be the stored-overdue mistake again, needing something to run in a practice where nothing
+  // does. Imported lazily because follow-up-plans.ts imports deriveFollowUp from this module, and a
+  // static pair of imports between the two would be a cycle.
+  if (f.plan_id && closing) {
+    const { reconcilePlan } = await import("@/lib/practice/follow-up-plans");
+    await reconcilePlan(admin, args.workspaceId, f.plan_id);
+  }
+
   await audit(admin, {
     workspaceId: args.workspaceId, actorId: args.actorId,
     eventType: `practice.followup_${args.to.toLowerCase()}`,
-    payload: { followUpId: f.id, closingEncounterId }, correlationId: args.correlationId,
+    payload: { followUpId: f.id, closingEncounterId, outcomeCode }, correlationId: args.correlationId,
   });
   return { ok: true, data: { status: args.to } };
 }
@@ -240,7 +267,7 @@ type ListFilter = { patientId?: string; status?: string[]; limit?: number };
 /** Follow-ups with their derived state, their patient's name, and any booking behind them. */
 export async function listFollowUps(admin: any, workspaceId: string, filter: ListFilter = {}) {
   let q = admin.from("practice_follow_up")
-    .select("id, patient_id, origin_encounter_id, problem_id, diagnosis_id, kind, reason, due_on, priority, status, appointment_id, closing_encounter_id, outcome, closed_at, created_at, record_version")
+    .select("id, patient_id, origin_encounter_id, problem_id, diagnosis_id, plan_id, step_number, kind, reason, due_on, priority, status, appointment_id, closing_encounter_id, outcome, outcome_code, closed_at, created_at, record_version")
     .eq("workspace_id", workspaceId);
   if (filter.patientId) q = q.eq("patient_id", filter.patientId);
   if (filter.status?.length) q = q.in("status", filter.status);

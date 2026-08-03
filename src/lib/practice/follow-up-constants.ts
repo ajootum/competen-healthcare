@@ -34,6 +34,25 @@ export const FOLLOW_UP_KINDS = [
 
 export const FOLLOW_UP_PRIORITIES = ["routine", "soon", "urgent"] as const;
 
+/**
+ * CPR-140's outcome taxonomy (migration 206). Fixed, because the point of it is COUNTING -- "how did the
+ * last thirty post-op reviews turn out" is not answerable over free text.
+ *
+ * THE WORDS ARE STILL REQUIRED ALONGSIDE. A code that replaced the sentence would turn "much better,
+ * discharged to the GP with a note about the rash" into "improved", and the rash would leave the record.
+ *
+ * The second element is whether the code counts as a GOOD outcome. Deliberately absent for `referred`
+ * and `other`: a referral is neither, and calling it one would be this product making a clinical
+ * judgement it has no basis for.
+ */
+export const FOLLOW_UP_OUTCOMES = [
+  ["improved", "Improved", true],
+  ["no_change", "No change", false],
+  ["worsened", "Worsened", false],
+  ["referred", "Referred on", null],
+  ["other", "Other", null],
+] as const;
+
 /** The API's action vocabulary, one name per target status. */
 export const FOLLOW_UP_ACTIONS: Record<string, string> = {
   complete: "COMPLETED", missed: "MISSED", cancel: "CANCELLED", reopen: "OPEN",

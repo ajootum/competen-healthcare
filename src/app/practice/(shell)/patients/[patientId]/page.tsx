@@ -6,6 +6,8 @@ import { hasCapability } from "@/lib/practice/access";
 import { getPatient } from "@/lib/practice/patients";
 import { patientTimeline } from "@/lib/practice/encounters";
 import { listFollowUps } from "@/lib/practice/follow-ups";
+import { patientFollowUps } from "@/lib/practice/follow-up-plans";
+import FollowUpPanel from "./FollowUpPanel";
 import { listContacts } from "@/lib/practice/communication";
 import { logAccess, patientAccessHistory } from "@/lib/practice/privacy";
 import PatientActions from "./PatientActions";
@@ -23,12 +25,16 @@ import ContactLog from "./ContactLog";
 
 export const dynamic = "force-dynamic";
 
-export default async function PatientPage({ params }: { params: Promise<{ patientId: string }> }) {
+export default async function PatientPage({ params, searchParams }: {
+  params: Promise<{ patientId: string }>;
+  searchParams: Promise<{ followUp?: string }>;
+}) {
   const shell = await resolvePracticeShell();
   if (shell.state !== "READY") redirect("/practice");
   if (!hasCapability(shell.ctx, "patient.view")) redirect("/practice/home");
 
   const { patientId } = await params;
+  const { followUp: followUpTab } = await searchParams;
   const admin = createAdminClient();
   const detail = await getPatient(admin, shell.ctx.workspaceId, patientId);
   if (!detail) notFound();
@@ -40,9 +46,16 @@ export default async function PatientPage({ params }: { params: Promise<{ patien
     : { encounters: [] as any[], diagnosesByEncounter: {} as Record<string, any[]> };
   // CPR-140. Read-only here: the actions live where the clinical context is, in the consultation and on
   // the board. What this record owes is a fact about the patient and belongs on their page.
-  const followUps = hasCapability(shell.ctx, "followup.view")
+  //
+  // THE FULL PATIENT-CENTRIC VIEW arrived with migration 206 -- plans, adherence and the comp's tabs.
+  // listFollowUps is still called because the contact log takes the open ones to file a call against.
+  const canSeeFollowUps = hasCapability(shell.ctx, "followup.view");
+  const followUps = canSeeFollowUps
     ? await listFollowUps(admin, shell.ctx.workspaceId, { patientId, status: ["OPEN", "SCHEDULED"] })
     : [];
+  const followUpView = canSeeFollowUps
+    ? await patientFollowUps(admin, shell.ctx.workspaceId, patientId)
+    : null;
   // CPR-320. The register of contact WITH this person -- calls made, messages left. Recorded, never
   // sent. Named contactLog, not contacts: `contacts` on this page is already the patient's phone
   // numbers from migration 193 -- the same collision that renamed the table itself.
@@ -140,26 +153,8 @@ export default async function PatientPage({ params }: { params: Promise<{ patien
         />
       </div>
 
-      {followUps.length > 0 && (
-        <section className="mt-4 rounded-xl border border-gray-200 bg-white p-4">
-          <div className="flex items-center gap-2">
-            <h2 className="text-[13px] font-bold text-gray-900">Outstanding follow-ups</h2>
-            <Link href="/practice/follow-ups" className="ml-auto text-[11px] font-semibold text-[var(--cp-primary-deep)] hover:underline">
-              The board →
-            </Link>
-          </div>
-          <ul className="mt-2 flex flex-col gap-1">
-            {followUps.map((f: any) => (
-              <li key={f.id} className={`text-[12px] ${f.overdue ? "border-l-2 border-[var(--cmp-color-critical)] pl-2" : ""}`}>
-                <span className="text-gray-800">{f.reason}</span>
-                <span className={`ml-2 text-[11px] ${f.overdue ? "font-bold text-[var(--cmp-text-critical)]" : "text-gray-500"}`}>
-                  {f.overdue ? `${Math.abs(f.dueInDays)} days overdue`
-                    : f.status === "SCHEDULED" ? `booked ${f.bookedFor ?? ""}` : `due ${f.due_on}`}
-                </span>
-              </li>
-            ))}
-          </ul>
-        </section>
+      {followUpView && followUpView.all.length > 0 && (
+        <FollowUpPanel view={followUpView} patientId={patientId} tab={followUpTab ?? "upcoming"} />
       )}
 
       <ContactLog

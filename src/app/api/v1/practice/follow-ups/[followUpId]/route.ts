@@ -23,7 +23,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ fo
   if (isDenied(auth)) return auth;
   const { followUpId } = await params;
 
-  let body: { appointmentId?: string; action?: string; outcome?: string; closingEncounterId?: string };
+  let body: { appointmentId?: string; action?: string; outcome?: string; outcomeCode?: string; closingEncounterId?: string };
   try { body = await req.json(); } catch { return NextResponse.json({ error: "invalid JSON" }, { status: 400 }); }
 
   const fail = (r: { code: string; message: string; status: number }) =>
@@ -43,7 +43,8 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ fo
 
   const result = await closeFollowUp(auth.caller.admin, {
     workspaceId: auth.ctx.workspaceId, followUpId, to,
-    outcome: body.outcome, closingEncounterId: body.closingEncounterId ?? null,
+    outcome: body.outcome, outcomeCode: body.outcomeCode ?? null,
+    closingEncounterId: body.closingEncounterId ?? null,
     actorId: auth.caller.userId, correlationId: auth.caller.traceId,
   });
   if (!result.ok) return fail(result);

@@ -110,7 +110,7 @@ Continuity & DR · 480 Enterprise Administration · 490 Roadmap & Release Govern
 | CPR-120 Encounter Management | **Core built.** Eight-state lifecycle, SOAP, diagnosis/problem split, DB-enforced signed immutability (migration 194, 41 assertions). No 8-step guided lifecycle UI. |
 | CPR-130 Clinical Documentation | **Built.** Template library (platform + workspace), append-only note versioning, sign-and-lock document object with a supersession chain, release register, browser dictation (migration 195, `documentation.ts`, 64 harness assertions). |
 | CPR-450 Deployment & Tenant Lifecycle | **Partial.** Provisioning saga, entitlements, launch flags, operator console (migration 191). |
-| CPR-140 Follow-up Management | **Built.** Obligation loop with overdue *derived* rather than stored, the practice's own calendar day, DB-enforced release when a booking dies, event trail (migration 196, `follow-ups.ts`, 47 harness assertions). |
+| CPR-140 Follow-up Management | **Rebuilt (§20).** Obligation loop as before — overdue *derived* rather than stored, the practice's own calendar day, DB-enforced release when a booking dies, event trail (migration 196, 47 assertions) — *plus* the structure the spec describes: follow-up plans and templates, the patient-centric view with its tabs, adherence as a count, the fixed outcome taxonomy, and a derived recall queue in place of a reminder engine this product has no channel for (migration 206, `follow-up-plans.ts`, 44 assertions). |
 | CPR-150 Procedure & Clinical Activity | **Built.** Catalogue with enforced laterality and consent, performed-procedure record, append-only later-learned outcomes, activity counts (migration 197, `procedures.ts`, 44 harness assertions). |
 | CPR-300 Operations Home | **Built.** `/practice/home` rebuilt as a worklist: every figure is the length of a list you can open, ordered by cost of ignoring, capability-aware with named blind spots. No migration (`operations-home.ts`, `practice-time.ts`, 37 harness assertions). |
 | CPR-340 Tasks, Reminders & Notifications | **Built.** Operational tasks with derived overdue and derived orphaning, reminders as a column rather than a second object, in-app notifications holding only non-derivable events. No delivery channel, deliberately (migration 198, `tasks.ts`, 44 harness assertions). |
@@ -805,3 +805,81 @@ does not get it.
 - **Auto-save interval.** The comp sets it to two minutes. There is no autosave to set an interval for;
   it is CPR-130's to build, and the setting arrives with it.
 - **The AI configuration assistant**, which is CPR-210's.
+
+## 20. CPR-140 as rebuilt: a plan is a grouping, not a new kind of obligation
+
+`src/lib/practice/follow-up-plans.ts`, the patient panel on `/practice/patients/[id]`, the recall queue
+on `/practice/follow-ups`, migration 206, and `scripts/practice-followup-plans-harness.ts` — 44
+assertions, five proven able to fail.
+
+**The specification is patient-centric and sequential; what was built was a workspace-wide board of
+single obligations with free-text outcomes.** Everything on that board stays — derived-overdue, the
+practice clock, the DB-enforced release on a dead booking, and closing requiring words are all sound and
+none is contradicted by the spec. What was missing was the structure around them.
+
+### The rule this module turns on
+
+**A plan is a grouping, not a new kind of obligation.** Each step is an ordinary `practice_follow_up`
+with everything that already implies: its own due date, its own booking, its own event trail, its own
+release when a booking dies, and closing still requires saying what happened. A plan that owned its steps
+would be a second place a clinical commitment can live, and the first question at any handover would be
+which one is real. The harness proves it by reading the steps back through the **original** engine, which
+knows nothing about plans.
+
+Three consequences worth stating:
+
+- **Offsets run from the plan's start, never from the previous step.** "Three months after the operation"
+  is what a surgeon means. Chaining offsets makes every later date drift when one earlier step moves, so
+  a patient who came back a fortnight late for their two-week review would silently have their
+  three-month review pushed to three and a half.
+- **Deleting a plan leaves its follow-ups standing** (`on delete set null`). Somebody tidying up a
+  mis-created plan must not silently discharge four clinical commitments.
+- **Discontinuing one cancels its open steps with the reason written onto each**, and leaves closed ones
+  exactly as they were — what already happened is not rewritten by a later decision. A plan whose steps
+  stayed OPEN would leave the board showing obligations nobody intends to keep, which is precisely how a
+  follow-up board stops being trusted.
+
+**A plan completes itself when its last step closes**, reconciled at the moment it becomes true rather
+than in a nightly sweep — the stored-overdue mistake again, needing something to run in a practice where
+nothing does.
+
+### The outcome taxonomy, and what it does not replace
+
+Fixed at improved / no change / worsened / referred / other, because the point of a taxonomy is
+**counting**: "how did the last thirty post-op reviews turn out" is not answerable over free text. **The
+words are still required alongside.** A code that replaced the sentence would turn *"much better,
+discharged to the GP with a note about the rash"* into "improved", and the rash would leave the record. A
+code on a non-completed follow-up is refused — a missed review has no clinical outcome. Existing closed
+follow-ups keep a null code rather than being backfilled with a judgement nobody made.
+
+**Adherence is a count and its denominator** — "6 of 7 completed", which is what the comp itself prints
+beside its 86% ring. The denominator counts only follow-ups that have *concluded*, so nobody looks
+non-adherent for an appointment that has not happened yet.
+
+### The reminder engine, and what replaces it
+
+The specification asks for reminders over SMS, email, app, voice and WhatsApp. **This product has no
+delivery channel of any kind** — the position CPR-320 and CPR-340 were both built on. Nothing is sent and
+nothing pretends to be; the recall API returns `remindersSent: false` as a field.
+
+What replaces it is honest and, for a practitioner, most of the value: **the recall queue, derived at
+read time**, grouped by the person to contact rather than the row to tick — three overdue follow-ups on
+one patient is one phone call. Urgent first, then longest overdue. Archived patients drop out, because a
+recall list is a list of calls to make. It needs nothing to run, so a practice that has not opened the
+app for a fortnight sees the whole backlog the moment it does, rather than a log of messages that were
+never sent.
+
+### Smaller decisions
+
+- **Templates are workspace-scoped only**, with no platform defaults: a review schedule is a clinical
+  judgement about a procedure and a population, and shipping a default one would be this product making
+  that judgement for practices it has never seen.
+- **A retired template cannot start a new plan** — retiring one is how a practice says "we do not do it
+  that way any more" — but retiring it does not touch the plans already made from it.
+- **Two steps on the same day are refused.** Far more often a mistyped offset than an intention, and a
+  plan that books a patient twice on one date is one somebody has to unpick by hand.
+- **The patient panel's tabs are links, not JavaScript** — state in the URL, so a tab can be bookmarked
+  or sent to a colleague, and one read backs all six so no two tabs can disagree.
+- The steps are inserted directly rather than through `createFollowUp`, which would re-read the patient,
+  re-validate the encounter and re-resolve the clock once per step. The checks are not skipped — they
+  are done once, for the plan.
