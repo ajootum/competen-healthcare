@@ -3,6 +3,7 @@
 import { useState } from "react";
 import SearchSection from "./SearchSection";
 import RegistrationForm from "./RegistrationForm";
+import { steps } from "@/lib/practice/registration-workspace";
 
 // CPR-REG-002 v4 -- the registration workspace's main column.
 //
@@ -82,6 +83,23 @@ export default function RegistryConsole({ canCreate, workspace }: {
 
           {showRegister && (
             <>
+              {/* ── The stepper (comp: 1..5 + Complete) ───────────────────────────────────────
+                  A MAP, NOT A GATE -- see the header. It shows what this registration still needs and
+                  which parts are done; nothing here hides a card or blocks a save. In quick mode the
+                  hospital-identifiers step is absent rather than greyed, because in quick mode it is
+                  genuinely not part of the job. */}
+              <ol className="mt-3 flex items-center gap-1 flex-wrap text-[11px]">
+                {steps(mode).map((s, i) => (
+                  <li key={s.key} className="flex items-center gap-1">
+                    <span className="flex h-5 w-5 items-center justify-center rounded-full border border-gray-200 bg-white text-[10px] font-bold text-gray-500">
+                      {i + 1}
+                    </span>
+                    <span className="text-gray-600">{s.label}</span>
+                    {i < steps(mode).length - 1 && <span className="mx-1 text-gray-300">›</span>}
+                  </li>
+                ))}
+              </ol>
+
               {/* ── Mode (comp: two cards) ────────────────────────────────────────────────── */}
               <div className="mt-3 grid sm:grid-cols-2 gap-2">
                 {[

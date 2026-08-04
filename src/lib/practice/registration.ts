@@ -150,12 +150,41 @@ export async function register(admin: any, ctx: WorkspaceContext, input: Registr
       message: `${expectation.reason} Add a parent, guardian or carer with legal authority before registering.`,
     };
 
+  // ── A CHILD'S CONTACT IS THEIR GUARDIAN'S. ────────────────────────────────────────────────────────
+  //
+  // The minimum dataset requires a phone or an email, and a six-month-old has neither. Demanding one
+  // anyway is how a registration form becomes unusable for exactly the patients whose records matter
+  // most -- and what actually happens at the desk is that somebody types the mother's number into the
+  // baby's phone field, which is true but records it in the wrong place and loses who it belongs to.
+  //
+  // So the guardian's contact SATISFIES the requirement and is recorded against the guardian, where it
+  // belongs. The patient's own contact fields stay empty, because they are.
+  const guardianContact = (input.relationships ?? [])
+    .find(r => (r.isLegalGuardian || r.isPrimary) && (r.phone?.trim() || r.email?.trim()))
+    ?? (input.relationships ?? []).find(r => r.phone?.trim() || r.email?.trim());
+
+  const contactPhone = input.phone?.trim() || undefined;
+  const contactEmail = input.email?.trim() || undefined;
+  const satisfiedByGuardian = !contactPhone && !contactEmail && !!guardianContact;
+
+  if (!contactPhone && !contactEmail && !guardianContact)
+    return {
+      ok: false, status: 400, code: "CONTACT_REQUIRED",
+      message: expectation.required === "guardian"
+        ? "record a contact for the guardian -- a child's contact is theirs"
+        : "a phone number or an email address is required",
+    };
+
   // ── 1. The patient ────────────────────────────────────────────────────────────────────────────────
   const created = await registerPatient(admin, {
     workspaceId: ctx.workspaceId, displayName,
     givenName: input.givenName, middleName: input.middleName, familyName: input.familyName,
     sex: input.sex, birthDate: input.birthDate, ageEstimateYears: input.ageEstimateYears,
-    phone: input.phone, email: input.email,
+    // PASSED ONLY TO CLEAR THE MINIMUM-DATASET CHECK when the patient has none of their own. The
+    // contact row it creates is removed immediately below, so the number lives on the guardian and
+    // nowhere else -- a child's phone field must not quietly hold their mother's number.
+    phone: contactPhone ?? (satisfiedByGuardian ? guardianContact!.phone?.trim() : undefined),
+    email: contactEmail ?? (satisfiedByGuardian ? guardianContact!.email?.trim() : undefined),
     identifiers: input.nationalId ? [{ type: "national_id", value: input.nationalId }] : undefined,
     confirmNew: input.confirmNew,
     actorId: ctx.userId, correlationId: input.correlationId,
@@ -163,6 +192,14 @@ export async function register(admin: any, ctx: WorkspaceContext, input: Registr
   if (!created.ok) return created;
 
   const incomplete: { step: string; reason: string }[] = [];
+
+  // THE BORROWED CONTACT IS REMOVED FROM THE PATIENT once the record exists. It was only ever there to
+  // satisfy the minimum-dataset check, and leaving it would put a guardian's number in a child's own
+  // contact list, where a later reader has no way to tell whose it is.
+  if (satisfiedByGuardian) {
+    await admin.from("practice_patient_contact")
+      .delete().eq("patient_id", created.data.id).eq("workspace_id", ctx.workspaceId);
+  }
 
   // ── 2. The relationships ──────────────────────────────────────────────────────────────────────────
   let attached = 0;

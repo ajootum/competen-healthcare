@@ -33,12 +33,21 @@ export default async function PatientsPage() {
   const workspace = await registrationWorkspace(createAdminClient(), shell.ctx);
 
   return (
-    <div className="grid xl:grid-cols-[minmax(0,1fr)_320px] gap-4 items-start">
+    // CONTAINED, NOT FULL-BLEED. On a wide monitor an unconstrained grid stretched every field to
+    // about 1,500px -- a first-name box the width of a desk, and the context panel pushed off the edge
+    // of the screen entirely. The comp is plainly a contained layout; this is its measurements.
+    //
+    // The rail STICKS, because it is the operational picture: who is waiting is worth seeing while you
+    // are half-way down a registration form, which is the only reason to put it beside rather than
+    // above.
+    <div className="mx-auto grid w-full max-w-[1400px] xl:grid-cols-[minmax(0,1fr)_340px] gap-4 items-start">
       <RegistryConsole
         canCreate={hasCapability(shell.ctx, "patient.create")}
         workspace={workspace}
       />
-      <ContextPanel w={workspace} />
+      <div className="xl:sticky xl:top-4">
+        <ContextPanel w={workspace} />
+      </div>
     </div>
   );
 }

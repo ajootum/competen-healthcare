@@ -191,6 +191,52 @@ async function main() {
     patientRow?.middle_name === "Grace" && patientRow?.family_name === "Nakato",
     JSON.stringify(patientRow));
 
+  // ── A BABY HAS NO PHONE. The case that made this form unusable in practice ─
+  //
+  // A six-month-old registered with a mother's phone in the GUARDIAN block and nothing in their own
+  // contact fields. Both save buttons sat disabled with nothing on screen saying why: the minimum
+  // dataset demanded a phone or an email for the PATIENT, and a baby has neither.
+  const infantNoOwnPhone = await register(admin, a.ctx, {
+    givenName: "Elisha", familyName: "Nakato", birthDate: born(0, -180), sex: "male",
+    relationships: [{
+      relationshipType: "mother", fullName: "Elisha FW", phone: "0701388660",
+      email: "parent@example.com", isLegalGuardian: true, mayReceiveInformation: true, isPrimary: true,
+    }],
+    correlationId: "harness-reg",
+  });
+  ok("A BABY WITH NO PHONE OF THEIR OWN REGISTERS -- the guardian's contact satisfies the minimum",
+    infantNoOwnPhone.ok, infantNoOwnPhone.ok ? "" : `${infantNoOwnPhone.code}: ${infantNoOwnPhone.message}`);
+
+  if (infantNoOwnPhone.ok) {
+    const { data: babyContacts } = await admin.from("practice_patient_contact")
+      .select("value, contact_type").eq("patient_id", infantNoOwnPhone.data.patientId);
+    ok("AND THE NUMBER IS NOT COPIED ONTO THE BABY -- a later reader could not tell whose it was",
+      ((babyContacts ?? []) as any[]).length === 0,
+      JSON.stringify(babyContacts));
+    const babyDetail = await patientRelationships(admin, a.ctx, infantNoOwnPhone.data.patientId);
+    ok("it lives on the guardian, where it belongs",
+      babyDetail!.relationships.some(r => r.phone === "0701388660"),
+      JSON.stringify(babyDetail!.relationships.map(r => r.phone)));
+  }
+
+  // AND NOBODY AT ALL IS STILL REFUSED -- the rule was relaxed for children, not removed.
+  const noContactAnywhere = await register(admin, a.ctx, {
+    givenName: "Nobody", familyName: "Reachable", birthDate: born(0, -180),
+    relationships: [{
+      relationshipType: "mother", fullName: "Silent Guardian", isLegalGuardian: true,
+    }],
+    correlationId: "harness-reg",
+  });
+  ok("CONTROL: a child with a guardian who has NO contact is still refused",
+    !noContactAnywhere.ok && noContactAnywhere.code === "CONTACT_REQUIRED",
+    noContactAnywhere.ok ? "it registered" : noContactAnywhere.code);
+  const adultNoContact = await register(admin, a.ctx, {
+    givenName: "Adult", familyName: "Unreachable", birthDate: born(40), correlationId: "harness-reg",
+  });
+  ok("CONTROL: and an adult with no contact is still refused",
+    !adultNoContact.ok && adultNoContact.code === "CONTACT_REQUIRED",
+    adultNoContact.ok ? "it registered" : adultNoContact.code);
+
   // ── 1e. A mononym registers ────────────────────────────────────────────────
   const mononym = await register(admin, a.ctx, {
     givenName: "Nakato", birthDate: born(30), phone: "+256772000002", correlationId: "harness-reg",

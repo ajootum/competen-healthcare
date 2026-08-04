@@ -98,8 +98,21 @@ export default function RegistrationForm({ form, majorityAge, today, mode = "ful
   const name = [p.givenName, p.middleName, p.familyName].map(s => s.trim()).filter(Boolean).join(" ");
   const customFields = (form.fields ?? []).filter((f: any) => !f.is_core && f.visible);
 
-  const canSubmit = !!name && (!!p.birthDate || !!p.ageEstimateYears) && (!!p.phone || !!p.email) &&
-    (!isMinor || hasGuardian) && !busy;
+  // A CHILD'S CONTACT IS THEIR GUARDIAN'S. A six-month-old has no phone, and demanding one makes this
+  // form unusable for exactly the patients whose records matter most.
+  const guardianContact = relations.some(r => r.fullName.trim() && (r.phone.trim() || r.email.trim()));
+  const hasContact = !!p.phone.trim() || !!p.email.trim() || guardianContact;
+
+  // WHAT IS MISSING, NAMED. A greyed-out primary action with nothing saying why is the failure this
+  // screen actually had: everything looked filled in, and the button simply would not press.
+  const missing = [
+    !name && "a name",
+    !p.birthDate && !p.ageEstimateYears && "a date of birth or an estimated age",
+    !hasContact && (isMinor ? "a contact for the guardian" : "a phone number or an email"),
+    isMinor && !hasGuardian && "a guardian with legal authority",
+  ].filter(Boolean) as string[];
+
+  const canSubmit = missing.length === 0 && !busy;
 
   function setRelation(i: number, patch: Partial<Relation>) {
     setRelations(rs => rs.map((r, j) => j === i ? { ...r, ...patch } : r));
@@ -154,6 +167,9 @@ export default function RegistrationForm({ form, majorityAge, today, mode = "ful
 
   return (
     <form className="mt-3 flex flex-col gap-4" onSubmit={e => { e.preventDefault(); submit(false); }}>
+      {/* ── Identity (comp: a titled card) ─────────────────────────────── */}
+      <h3 className="text-[12px] font-bold text-gray-900">Identity</h3>
+
       {/* ── Name: one row, three parts ────────────────────────────────────────────────────────── */}
       <div>
         <div className="grid sm:grid-cols-3 gap-2">
@@ -205,6 +221,8 @@ export default function RegistrationForm({ form, majorityAge, today, mode = "ful
         </p>
       )}
 
+      <h3 className="mt-1 text-[12px] font-bold text-gray-900">Contact details</h3>
+
       {/* ── Contact ───────────────────────────────────────────────────────────────────────────── */}
       <div className="grid sm:grid-cols-3 gap-2">
         <label className={label}>Phone
@@ -217,7 +235,11 @@ export default function RegistrationForm({ form, majorityAge, today, mode = "ful
           <input value={p.nationalId} onChange={e => setP(v => ({ ...v, nationalId: e.target.value }))} className={`mt-1 ${input}`} />
         </label>
       </div>
-      <p className="-mt-3 text-[10px] text-gray-400">A phone or an email is required — one contact, either kind.</p>
+      <p className="-mt-3 text-[10px] text-gray-400">
+        {isMinor
+          ? "A child has no phone of their own. Record the guardian's contact below — that satisfies this."
+          : "A phone or an email is required — one contact, either kind."}
+      </p>
 
       {/* ── Guardians and next of kin (s6) ─────────────────────────────────────────────────────── */}
       <section className={`rounded-lg border p-3 ${isMinor && !hasGuardian ? "border-[var(--cmp-color-warning)] bg-[var(--cmp-surface-warning)]" : "border-gray-200 bg-gray-50/60"}`}>
@@ -441,9 +463,9 @@ export default function RegistrationForm({ form, majorityAge, today, mode = "ful
           {draftId ? "Update draft" : "Save draft"}
         </button>
 
-        {isMinor && !hasGuardian && (
+        {missing.length > 0 && (
           <span className="text-[11px] font-semibold text-[var(--cmp-text-warning)]">
-            A guardian with legal authority is needed before this can be saved.
+            Still needs {missing.join(", ")}.
           </span>
         )}
       </div>
