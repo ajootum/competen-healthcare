@@ -198,7 +198,15 @@ practice_assistant / billing_reporting / read_only_auditor).
 - **Missing:** **recurring tasks**, **escalation rules** (overdue high-priority escalates), task
   templates, today's agenda, calendar view, bulk actions, notification preferences.
 
-### CPR-350 Search & Global Retrieval — partial
+### CPR-350 Search & Global Retrieval — partial to COMPLETED
+
+> **Closed.** Migration 212 adds saved searches, private search history, advanced date filters, the
+> per-module count strip and quick searches. THE RULE, which is a security rule first: a saved search is
+> a QUERY, not a snapshot -- nothing stored holds a result, a count or an identifier, and running one
+> applies the CALLER's gate, which is what makes sharing safe. No count is shown beside a saved search
+> anywhere. History is private to the searcher; the audit trail records the name, never the query.
+> 30 harness assertions, four proven able to fail. Semantic AI search stays refused -- CPR-210.
+> See respec s26.
 - **Have:** cross-domain search, capability-scoped, per-domain grouping, prefix matching.
 - **Missing:** saved searches, recent searches, quick-search chips, advanced filters (module/date/type/
   assigned-to/include-inactive), the per-module result-count strip, keyboard shortcuts, search history.

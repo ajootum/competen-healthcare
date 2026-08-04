@@ -3,8 +3,10 @@ import { redirect } from "next/navigation";
 import { createAdminClient } from "@/lib/supabase/server";
 import { resolvePracticeShell } from "@/lib/practice/shell";
 import { hasCapability } from "@/lib/practice/access";
-import { searchPractice, recentlyTouched } from "@/lib/practice/search";
+import { recentlyTouched } from "@/lib/practice/search";
+import { runSearch, listSavedSearches, recentSearches, quickSearches } from "@/lib/practice/saved-search";
 import SearchBox from "./SearchBox";
+import SearchSidebar from "./SearchSidebar";
 
 // /practice/search -- CPR-350.
 //
@@ -22,20 +24,28 @@ import SearchBox from "./SearchBox";
 export const dynamic = "force-dynamic";
 
 export default async function SearchPage({ searchParams }: {
-  searchParams: Promise<{ q?: string }>;
+  searchParams: Promise<{ q?: string; from?: string; to?: string }>;
 }) {
   const shell = await resolvePracticeShell();
   if (shell.state !== "READY") redirect("/practice");
   if (!hasCapability(shell.ctx, "search.use")) redirect("/practice/home");
 
-  const { q } = await searchParams;
+  const { q, from: fromDay, to: toDay } = await searchParams;
   const admin = createAdminClient();
   const query = (q ?? "").trim();
 
-  const [result, recent] = await Promise.all([
-    searchPractice(admin, shell.ctx, query),
+  const from = (fromDay ?? "").trim() || null;
+  const to = (toDay ?? "").trim() || null;
+
+  // CPR-350 (migration 212). runSearch wraps searchPractice with the date filter, the per-domain count
+  // strip and the caller's own history -- the gate itself is unchanged and still lives in the engine.
+  const [result, recent, saved, history] = await Promise.all([
+    runSearch(admin, shell.ctx, query, { fromDay: from, toDay: to }),
     query ? Promise.resolve(null) : recentlyTouched(admin, shell.ctx),
+    listSavedSearches(admin, shell.ctx),
+    recentSearches(admin, shell.ctx, 6),
   ]);
+  const quick = quickSearches(shell.ctx);
 
   return (
     <div className="max-w-4xl">
@@ -46,6 +56,17 @@ export default async function SearchPage({ searchParams }: {
       </p>
 
       <SearchBox initial={query} />
+
+      <SearchSidebar
+        quick={quick}
+        saved={saved}
+        history={history}
+        query={query}
+        fromDay={from}
+        toDay={to}
+        counts={result.ran ? result.counts : []}
+        dateFiltered={result.dateFiltered}
+      />
 
       {result.notSearched.length > 0 && (
         <p className="mt-3 rounded-lg bg-gray-50 px-3 py-2 text-[11px] text-gray-600">

@@ -114,7 +114,7 @@ Continuity & DR · 480 Enterprise Administration · 490 Roadmap & Release Govern
 | CPR-150 Procedure & Clinical Activity | **Completed (s23).** Procedure recording, custom catalogue, consent, outcomes, complications and laterality enforcement as before (migration 197, 44 assertions) -- plus the half the title names: clinical activity logging, procedure teams, instruments with implant traceability, procedure templates, attachments and a portfolio of counts (migration 209, `clinical-activity.ts`, 38 assertions). |
 | CPR-300 Operations Home | **Built.** `/practice/home` rebuilt as a worklist: every figure is the length of a list you can open, ordered by cost of ignoring, capability-aware with named blind spots. No migration (`operations-home.ts`, `practice-time.ts`, 37 harness assertions). |
 | CPR-340 Tasks, Reminders & Notifications | **Completed (s25).** Tasks, assignment, priorities, reminder dates, in-app notifications and derived orphaning as before (migration 198, 44 assertions) -- plus recurrence, task templates, escalation rules derived at read time, bulk close and the daily agenda (migration 211, `task-orchestration.ts`, 36 assertions). Notification preferences came with CPR-360. |
-| CPR-350 Search & Global Retrieval | **Built.** One box over ten domains; generated tsvector columns so the index cannot drift from the text; capability filter runs BEFORE the query; skipped domains named; no hidden counts (migration 199, `search.ts`, 43 harness assertions). |
+| CPR-350 Search & Global Retrieval | **Completed (s26).** Cross-domain, capability-scoped search as before (migration 199, 43 assertions) -- plus saved searches that store the QUERY and never the answers, private search history, date filters, the per-reader count strip and quick searches (migration 212, `saved-search.ts`, 30 assertions). Semantic AI search stays refused: CPR-210. |
 | CPR-320 Communication & Document Management | **Completed (s24).** Internal threads, contact log and the incoming register as before (migration 200, 44 assertions) -- plus the shared document library with folders and a recycle bin, and the per-patient correspondence register composed from four existing stores (migration 210, `document-library.ts`, 38 assertions). Six of the gaps the audit listed had already been filled by CPR-130, CPR-310 and CPR-330. |
 | CPR-310 Team & Delegated Access | **Rebuilt (s22).** Invitations, memberships, capability-level delegation and the audit trail as before (migration 201, 52 assertions) -- plus the model the spec describes: delegation by AREA materialising ordinary grants, role templates, an approval queue that is explicitly not a gate, and derived work queues (migration 208, `delegation.ts`, 48 assertions). |
 | CPR-370 Security, Privacy & Practitioner Control | **Built.** Read logging (the other half of the trail), de-identified access review, append-only enforcement, patient-record export (migration 202, `privacy.ts`, 36 harness assertions). |
@@ -1239,3 +1239,60 @@ percentages divide by a total that is itself a choice about what to include; the
 
 `listTasks` did not select the recurrence columns, so the board could not have shown that a task repeats.
 Caught by the assertion that the next occurrence carries the recurrence forward.
+
+## 26. CPR-350 as completed: a saved search is a query, not a snapshot
+
+`src/lib/practice/saved-search.ts`, the filters and sidebar on `/practice/search`, migration 212, and
+`scripts/practice-saved-search-harness.ts` — 30 assertions, four proven able to fail.
+
+**The last of the eleven audited modules.** What was missing: saved searches, recent searches,
+quick-search chips, advanced filters and the per-module result-count strip.
+
+### The rule it turns on, which is a security rule first
+
+**A saved search is a query, not a snapshot of results.** The comp prints counts beside saved searches —
+"High risk follow-ups 12". A *stored* 12 would have been computed for whoever saved the search, and every
+later reader would see a count of records they may have no right to open. On a **shared** saved search it
+would be a side channel: *"there are 15 pending referrals"* is information about the practice that a
+delegate with no referral access has just been told.
+
+So nothing stored holds a result, a count, or an identifier of anything found — asserted structurally
+over the row itself. Running a saved search goes through `searchPractice` **with the caller's
+capabilities**, the same gate every other search passes, evaluated fresh every time.
+
+**That is what makes sharing safe**, and it is the harness's load-bearing assertion: a colleague without
+`patient.list` opens the owner's shared saved search and gets no patients, while the owner does — and the
+count strip differs between them, because it is computed for the reader.
+
+**No count is shown beside a saved search anywhere in the UI**, and the API says why in the payload
+rather than leaving it to be noticed.
+
+### Search history is private
+
+CPR-370's access log already answers *"who read this patient"*. This is a different object with a
+different purpose — a convenience for the person typing. A colleague being able to read it would turn a
+search box into a surveillance tool, and the queries people type are often a patient's name. There is no
+parameter that would return somebody else's, history is de-duplicated by query, and the stored count is
+labelled as **what was seen then**, never re-shown as a current one.
+
+**The audit trail records the saved search's name, never its query** — for the same reason, since the
+workspace trail is readable by anybody holding `access.review`.
+
+### Smaller decisions
+
+- **A filter this build does not understand is dropped, not obeyed.** A saved search written by a later
+  version could otherwise narrow a search in a way the reader cannot see, and a search that silently
+  hides results is worse than one returning too many.
+- **Quick searches are links to the surfaces that already answer them**, not text queries.
+  "Follow-ups overdue" is not a phrase to match against a record — it is a question the follow-up board
+  answers exactly, with the overdue derivation and ordering it already has. Capability-filtered, so a
+  chip never leads somewhere the reader is redirected away from.
+- **The date filter is applied to the hits**, not pushed into every domain query: the domains carry
+  different date columns and some carry none, and a filter silently ignored by half of them would be
+  worse than one applied consistently after the fact.
+- **A shared search is still somebody's** — readable, not editable, not deletable.
+
+### Refused
+
+Semantic AI search, natural-language queries and intent detection are CPR-210's, which is not built. The
+comp's "AI Search Assistant" panel is not rendered as a working control.
