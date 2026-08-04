@@ -2028,3 +2028,102 @@ thing.
 The setup hub itself takes **no capability**: it is a map, and each card is gated by the permission that
 card needs. Hiding the map behind the permission to edit would leave a locum unable to find out why
 booking behaves as it does.
+
+---
+
+## 36. CPR-SET-002 as built: a template that may never cancel a patient's appointment
+
+**Migration 230.** `src/lib/practice/availability-config.ts`, `/practice/setup/availability`, booking-rule
+enforcement inside `checkPlacement()`. Harness `scripts/practice-availability-config-harness.ts` —
+40/40, 18 breaks.
+
+### Three of the specification's eight entities already existed
+
+| entity | where it already was |
+|---|---|
+| Practice Location | migration 191, plus `facility_id` and `travel_buffer_minutes` in 228 |
+| Appointment Type | migration 192, as a CHECK constraint — seven of them |
+| Generated Slot | migration 192 `practice_availability_slot`, plus `slot_kind` in 227 |
+| Audit Log | migration 191 `practice_audit_event` |
+
+So 230 adds the five that are new: Clinic, Availability Template, Availability Exception, Booking Rule,
+and the back-link from a generated slot to the template that made it.
+
+### The one decision the whole module turns on
+
+**A template may never cancel a patient's appointment.**
+
+"Recurring schedules generate slots automatically" means a template *writes* slots, and therefore that
+regenerating can *delete* them. A regeneration that removed a slot somebody was booked into would
+cancel a patient without anybody deciding to. Two guards:
+
+1. Regeneration only ever removes slots **it generated** (`generated_from_template_id is not null`). A
+   slot made by hand in the calendar is not the template's to delete.
+2. It never removes a slot with a live appointment — matched **both** by `slot_id` **and by time
+   overlap**, because every booking this product has ever made carries no `slot_id` at all.
+
+`3c` proves it and `3e` is its control: an *unbooked* generated slot **is** removed, so `3c` is not
+merely "removal never happens". `removeSession` returns `slotsKept` alongside `slotsRemoved`, and the
+console leads with the kept figure — "session removed" alone would tell a practitioner their Tuesday is
+clear while three patients are still booked into it.
+
+### Clinic is not a second location
+
+A clinic is a **named service inside** a location — "Neurology Clinic" at Mulago. Modelling it as a
+location would invent an impossible-hop refusal between two rooms on one corridor, because migration
+228's travel rule is about reaching the *building*.
+
+### Booking rules refuse, or they are not worth storing
+
+Every column on `practice_booking_rule` is read by `checkPlacement()` — the gate booking **and**
+rescheduling already pass through, so one enforcement point covers both. This project has twice shipped
+a table nobody read (`practice_configuration` inert from 191 to CPR-360; `effective_from` ignored until
+CPR-310), and a booking rule that does not refuse is worse than an absent one, because the practice
+believes it is holding.
+
+Two carve-outs that are the module's judgement rather than the specification's:
+
+- **A walk-in is exempt from notice and from the horizon** — it arrives without any, by definition — but
+  **not from the walk-in daily limit**, which is the one rule written *for* walk-ins. Enforcement
+  therefore runs **before** the overlap exemption, not after.
+- **`cancellation_notice_minutes` and `emergency_reserve_minutes` are reported, never used to refuse.** A
+  practice that cannot cancel a booking because of a policy setting is a practice with a wrong diary.
+
+`resolveBookingRule` returns **which** row won (`location+type` > `location` > `type` > `practice`), and
+the refusal names it — "the booking rule for this location and type" and "your practice's booking rule"
+send somebody to different screens.
+
+### "Immediately" is enforced by doing it before returning
+
+The acceptance criterion is *"booking engine updates immediately after changes"*. Every write on the API
+route regenerates its own 90-day window **before** responding. A background job would be a promise; a
+"regenerate" button would put the work on the practitioner and leave the diary wrong until they pressed
+it. Generation is idempotent, so doing it on every write costs a re-read rather than a duplicate.
+
+### Two columns that are stored and read by nothing, and say so
+
+- **`visibility`** (public / link-only / internal) — the specification asks for it; there is no
+  patient-facing booking page for it to govern.
+- **`appointment_minutes` on a template** — **found by lint, not by design.** A generated slot is a whole
+  session; how long one appointment inside it runs is still the practice default or whatever the person
+  booking types. The dead `defaultAppointmentMinutes` call that exposed it is gone.
+
+Both are **listed** on the screen rather than offered as inputs — CPR-360's rule for inert columns, and
+the exact failure the header of `availability-config.ts` warns about. Finding the second one by lint
+rather than by reading my own rule is worth recording.
+
+### Breaks that caught nothing, and were my breaks being wrong
+
+Three of eighteen, each re-targeted rather than waved through:
+
+- **BREAK-3** removed the guard inside `reapGeneratedSlots`, which is belt-and-braces —
+  `generateSlots` already narrows to its own output before calling it. The load-bearing guard is the
+  stale-slot query that decides what gets passed in.
+- **BREAK-6** broke the *creation* side of the leave rule, but `5c` is about leave **removing** an
+  already-generated day, which happens on the reap side. Generation being idempotent meant the creation
+  path was never reached.
+- (setup harness) **BREAK-15** renamed a catalogue key rather than removing the entry, so the
+  seventeen-module length assertion never moved.
+
+The general shape, third time this session: **a break that catches nothing is a claim about the break
+first, and only then about the assertion.** Chase it down before rewriting the test.

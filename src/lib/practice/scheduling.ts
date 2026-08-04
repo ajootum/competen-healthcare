@@ -1,6 +1,7 @@
 import { audit } from "@/lib/practice/provisioning";
 import { defaultAppointmentMinutes } from "@/lib/practice/configuration";
-import { practiceToday } from "@/lib/practice/practice-time";
+import { practiceToday, zonedDayRange } from "@/lib/practice/practice-time";
+import { resolveBookingRule } from "@/lib/practice/availability-config";
 
 // PEN-001 Appointment & Scheduling Engine -- the business rules, separated from every UI that uses them
 // (PEN-001 "separate scheduling logic from user interfaces"). CPR-V2-003 V3 is one consumer; the command
@@ -100,6 +101,53 @@ export async function checkPlacement(admin: any, args: {
     if (!loc) return { ok: false, status: 404, code: "NOT_FOUND", message: "Not found" };
     if (!loc.active) return { ok: false, status: 422, code: "LOCATION_CLOSED", message: `${loc.name} is closed` };
     here = loc;
+  }
+
+  // ── CPR-SET-002 BOOKING RULES ────────────────────────────────────────────────────────────────────
+  //
+  // Applied BEFORE the overlap exemption, deliberately. A walk-in is exempt from double-booking because
+  // a queue exists precisely so unscheduled arrivals need no free grid slot -- that says nothing about
+  // whether a practice caps walk-ins per day, which is the one rule written FOR walk-ins.
+  //
+  // Lead time and the booking horizon are skipped for walk-ins and emergencies: a walk-in by definition
+  // arrives without notice, and requiring an emergency to be booked a day ahead is a contradiction.
+  const rule = await resolveBookingRule(admin, args.workspaceId, args.locationId ?? null, args.appointmentType);
+  const wherePhrase = rule.source === "default" || rule.source === "practice"
+    ? "your practice's booking rule" : `the booking rule for this ${rule.source.replace("+", " and ")}`;
+
+  if (!OVERLAP_EXEMPT.includes(args.appointmentType)) {
+    if (rule.leadTimeMinutes > 0 && args.startMs < Date.now() + rule.leadTimeMinutes * 60000)
+      return {
+        ok: false, status: 409, code: "LEAD_TIME",
+        message: `${wherePhrase} needs ${rule.leadTimeMinutes} minutes' notice, and that time is sooner than that`,
+      };
+    if (rule.bookingHorizonDays !== null && args.startMs > Date.now() + rule.bookingHorizonDays * 86400000)
+      return {
+        ok: false, status: 409, code: "BEYOND_HORIZON",
+        message: `${wherePhrase} opens the diary ${rule.bookingHorizonDays} days ahead, and that date is further out`,
+      };
+  }
+
+  // THE ONE RULE THAT IS ABOUT WALK-INS, so it runs for them. Null means no limit; ZERO MEANS ZERO,
+  // which is why the column is nullable rather than defaulting to nought.
+  if (args.appointmentType === "walk_in" && rule.walkInDailyLimit !== null) {
+    const { data: ws } = await admin.from("practice_workspace")
+      .select("timezone").eq("id", args.workspaceId).maybeSingle();
+    const { startIso, endIso } = zonedDayRange(practiceToday(ws?.timezone ?? "UTC", new Date(args.startMs)), ws?.timezone ?? "UTC");
+    let q = admin.from("practice_appointment").select("*", { count: "exact", head: true })
+      .eq("workspace_id", args.workspaceId).eq("appointment_type", "walk_in")
+      .in("status", LIVE_STATUSES).gte("scheduled_at", startIso).lt("scheduled_at", endIso);
+    if (args.locationId) q = q.eq("location_id", args.locationId);
+    const { count, error: countError } = await q;
+    // A COUNT THAT FAILED IS NOT A COUNT OF NOUGHT. Refusing to guess here rather than waving the
+    // booking through on a read error -- the limit exists because somebody meant it.
+    if (countError)
+      return { ok: false, status: 500, code: "READ_FAILED", message: `could not count today's walk-ins: ${countError.message}` };
+    if ((count ?? 0) >= rule.walkInDailyLimit)
+      return {
+        ok: false, status: 409, code: "WALK_IN_LIMIT",
+        message: `${wherePhrase} allows ${rule.walkInDailyLimit} walk-ins a day here, and there ${(count ?? 0) === 1 ? "is" : "are"} already ${count ?? 0}`,
+      };
   }
 
   if (args.allowOverlap || OVERLAP_EXEMPT.includes(args.appointmentType))

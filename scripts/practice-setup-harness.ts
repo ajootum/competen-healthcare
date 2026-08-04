@@ -1,5 +1,5 @@
 /**
- * CPR-SET-000 v4.1 Practice Setup harness. No migration.
+ * CPR-SETUP-001 v1 Practice Setup harness (seventeen modules). No migration.
  *
  * WHAT IT PROVES:
  *   1. THE CHECKLIST IS READ FROM THE DATABASE. Every line moves when the thing it describes changes,
@@ -7,9 +7,9 @@
  *      completion figure does direct harm -- somebody reads "almost ready" and opens their doors.
  *   2. THE PROGRESS FIGURE IS A COUNT AND ITS DENOMINATOR, never a percentage, and it equals the number
  *      of ticked lines.
- *   3. WHAT IS NOT BUILT IS NOT COUNTABLE. The four unbuilt areas are shown, are not clickable, and are
+ *   3. WHAT IS NOT BUILT IS NOT COUNTABLE. The five unbuilt areas are shown, are not clickable, and are
  *      excluded from the denominator -- a checklist that counts work nobody can do never reaches the end.
- *   4. NOTHING CLAIMS TO BE COMPLETE THAT IS NOT. A card is "ready" only when its own configuration
+ *   4. NOTHING CLAIMS TO BE COMPLETE THAT IS NOT. A card is CONFIGURED only when its own configuration
  *      exists, and flipping that configuration flips the card.
  *   5. NO CARD LEADS TO A ROUTE THAT DOES NOT EXIST -- every href on the page resolves to a real page
  *      file in this repo.
@@ -83,7 +83,7 @@ function routeExists(href: string): boolean {
 }
 
 async function main() {
-  console.log("\n=== PRACTICE SETUP (CPR-SET-000 v4.1) ===\n");
+  console.log("\n=== PRACTICE SETUP (CPR-SETUP-001 v1, seventeen modules) ===\n");
   await cleanup();
 
   const wsA = await provision(OWNER, "Dr Setup A", "a");
@@ -108,19 +108,32 @@ async function main() {
 
   // ---- 3. What is not built is not countable -----------------------------------------------------------
   const notBuilt = first.modules.filter(m => m.state === "not_built");
-  ok("3a the four unbuilt areas are shown", notBuilt.length === 4, JSON.stringify(notBuilt.map(m => m.key)));
+  // NAMED, NOT COUNTED. A magic number drifts every time one of them gets built -- 3a already had to
+  // move from four to five to four again. The keys say which, and a build that closes one fails here
+  // loudly enough to be updated deliberately.
+  const UNBUILT = ["self_booking", "workflows", "integrations", "billing"];
+  ok("3a exactly the unbuilt areas are shown as not built",
+    notBuilt.length === UNBUILT.length && UNBUILT.every(k => notBuilt.some(m => m.key === k)),
+    JSON.stringify(notBuilt.map(m => m.key)));
   ok("3b none of them is clickable", notBuilt.every(m => m.href === null));
   ok("3c each says why", notBuilt.every(m => !!m.unavailableReason && m.unavailableReason.length > 20));
   ok("3d none of them appears on the checklist",
     notBuilt.every(m => !first.checklist.some(i => i.key === m.key)),
     JSON.stringify(first.checklist.map(i => i.key)));
-  ok("3e and the page states how many were left out", first.notBuiltCount === 4);
+  ok("3e and the page states how many were left out", first.notBuiltCount === UNBUILT.length);
 
   // ---- 2. The figure is a count that matches the ticks -------------------------------------------------
   ok("2a done equals the number of ticked lines",
     first.progress.done === first.checklist.filter(i => i.done).length,
     `${first.progress.done} vs ${first.checklist.filter(i => i.done).length}`);
   ok("2b the denominator is the checklist length", first.progress.of === first.checklist.length);
+  ok("2d the legend counts sum to the total, which the comp's own panel does not",
+    first.legend.reduce((n, l) => n + l.count, 0) === first.progress.total,
+    JSON.stringify(first.legend) + ` total=${first.progress.total}`);
+  ok("2e the denominator EXCLUDES what cannot be built",
+    first.progress.of === first.progress.total - first.notBuiltCount,
+    `${first.progress.of} vs ${first.progress.total}-${first.notBuiltCount}`);
+  ok("2f seventeen modules", first.modules.length === 17, String(first.modules.length));
   ok("2c no percentage anywhere in the payload",
     !/percent|"\d+%"/i.test(JSON.stringify({ ...first, modules: [], checklist: first.checklist })),
     "found a percentage");
@@ -141,7 +154,7 @@ async function main() {
     .eq("workspace_id", wsA).eq("is_effective", true);
   const withHead = await practiceSetup(admin, ctxA.ctx);
   ok("4a adding a letterhead ticks its line", line(withHead, "letterhead")?.done === true);
-  ok("4b and the card becomes ready", mod(withHead, "letterhead")?.state === "ready");
+  ok("4b and the card becomes ready", mod(withHead, "letterhead")?.state === "configured");
   ok("4c and the count goes up by exactly one", withHead.progress.done === beforeDone + 1,
     `${withHead.progress.done} vs ${beforeDone}`);
   ok("4d and the detail names what was found",
@@ -165,9 +178,23 @@ async function main() {
     slot_kind: "clinic",
   });
   if (slotErr) throw new Error(`slot fixture failed: ${slotErr.message}`);
+  // A LOOSE SLOT IS NOT A REGULAR WEEK, and since CPR-SET-002 the card says so. One-off slots in the
+  // calendar are availability of a sort; the thing that keeps generating them is a template.
   const withSlot = await practiceSetup(admin, ctxA.ctx);
-  ok("4g setting availability ticks its line", line(withSlot, "availability")?.done === true);
-  ok("4h and the availability card becomes ready", mod(withSlot, "availability")?.state === "ready");
+  ok("4g one-off slots alone do NOT tick the availability line",
+    line(withSlot, "availability")?.done === false, JSON.stringify(line(withSlot, "availability")));
+  ok("4g-detail and the card says what is missing",
+    /no regular week/.test(line(withSlot, "availability")?.detail ?? ""),
+    line(withSlot, "availability")?.detail ?? "null");
+
+  const { error: tmplErr } = await admin.from("practice_availability_template").insert({
+    workspace_id: wsA, weekday: 2, starts_minute: 9 * 60, ends_minute: 13 * 60, slot_kind: "clinic",
+  });
+  if (tmplErr) throw new Error(`template fixture failed: ${tmplErr.message}`);
+  const withWeek = await practiceSetup(admin, ctxA.ctx);
+  ok("4g-week a regular week DOES tick it", line(withWeek, "availability")?.done === true,
+    JSON.stringify(line(withWeek, "availability")));
+  ok("4h and the availability card becomes ready", mod(withWeek, "availability")?.state === "configured");
 
   // ---- 6. The notification line does not overstate itself ------------------------------------------------
   ok("6a with no channel the line is not ticked", line(withSlot, "notifications")?.done === false);
@@ -184,13 +211,47 @@ async function main() {
   const readOnly = { ...ctxA.ctx, capabilities: ctxA.ctx.capabilities.filter(c => c !== "practice.settings.manage") };
   const ro = await practiceSetup(admin, readOnly);
   ok("7a a caller who cannot edit sees the profile card as hidden",
-    mod(ro, "profile")?.state === "hidden" && mod(ro, "profile")?.href === null,
+    mod(ro, "profile")?.state === "no_access" && mod(ro, "profile")?.href === null,
     JSON.stringify(mod(ro, "profile")));
   ok("7b but the CHECKLIST still tells them the state of their practice",
     ro.progress.done === withCh.progress.done && ro.checklist.length === withCh.checklist.length,
     `${ro.progress.done} vs ${withCh.progress.done}`);
   ok("7c CONTROL: with the permission it is openable, so 7a is not vacuous",
     mod(withCh, "profile")?.href === "/practice/settings");
+
+  // 2d asserted the legend sums to the total, but for a FULL-CAPABILITY owner the no_access count is
+  // nought and is filtered out -- so a break that deleted that legend row changed nothing and the
+  // assertion sat green. The read-only caller is the only fixture where every category is non-empty,
+  // which is the only fixture where "the legend sums" is a claim with teeth.
+  const roNoAccess = ro.legend.find(l => l.key === "no_access")?.count ?? 0;
+  ok("2g the read-only caller genuinely has cards they cannot open", roNoAccess > 0, String(roNoAccess));
+  ok("2h and the legend STILL sums to the total for them",
+    ro.legend.reduce((n, l) => n + l.count, 0) === ro.progress.total,
+    JSON.stringify(ro.legend) + ` total=${ro.progress.total}`);
+
+  // ---- 9. The specification's status column disagrees with the code, and the code wins ---------------------
+  //
+  // CPR-SETUP-001 marks thirteen modules "Build" or "New". Several are already implemented here.
+  // Copying the document's column would tell a practitioner their registration form builder, hospital
+  // numbering and team management do not exist -- and they would stop using three things that work.
+  ok("9a the disagreement is surfaced rather than silently resolved",
+    withCh.specDisagreements.length > 0, JSON.stringify(withCh.specDisagreements));
+  const disagreeKeys = withCh.modules.filter(m => m.specSaysUnbuilt && m.state !== "not_built").map(m => m.key);
+  ok("9b it names registration, identifiers and team, which the document lists as unbuilt",
+    ["registration", "identifiers", "team"].every(k => disagreeKeys.includes(k)),
+    JSON.stringify(disagreeKeys));
+  ok("9c and those cards are genuinely openable, so the disagreement is real",
+    ["registration", "identifiers", "team"].every(k => !!mod(withCh, k)?.href),
+    JSON.stringify(["registration", "identifiers", "team"].map(k => mod(withCh, k)?.href)));
+  // Booking Rules used to be the control here and stopped being one the moment CPR-SET-002 built it --
+  // it now correctly APPEARS in the disagreements. Self-Booking is the control: the document lists it
+  // as unbuilt and it genuinely is.
+  ok("9d CONTROL: a module the document lists as unbuilt AND that really is unbuilt does not appear",
+    !withCh.specDisagreements.some(d => d.title === "Self-Booking"),
+    JSON.stringify(withCh.specDisagreements.map(d => d.title)));
+  ok("9e and Booking Rules HAS moved into the disagreements now that it is built",
+    withCh.specDisagreements.some(d => d.title === "Booking Rules"),
+    JSON.stringify(withCh.specDisagreements.map(d => d.title)));
 
   // ---- 8. Cross-workspace isolation, non-vacuously ---------------------------------------------------------
   const b = await practiceSetup(admin, ctxB.ctx);

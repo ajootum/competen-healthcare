@@ -134,14 +134,19 @@ export const PRACTICE_NAV: PracticeNavItem[] = [
   // CPR-240. NO CAPABILITY: a portfolio is an account of your own work, and nobody grants you permission
   // to keep one. Every query inside is scoped to the caller, so there is nothing to gate.
   { href: "/practice/portfolio", label: "Portfolio", icon: "❑", capability: null, group: "Intelligence", phase: 5, built: true },
-  { href: "/practice/privacy", label: "Privacy and access", icon: "⚿", capability: "access.review", group: "Administration", phase: 5, built: true },
+  // CPR-SETUP-001's sidebar puts the access log under PERSONAL SETTINGS as "Activity Log". It is both:
+  // the page carries a practice-wide review (gated on access.review) AND the trail of what you yourself
+  // opened. It sits in the personal layer because that half is the one everybody has.
+  { href: "/practice/privacy", label: "Activity Log", icon: "⚿", capability: "access.review", group: "Personal", phase: 5, built: true },
   // CPR-370: NO CAPABILITY. Everybody may see the devices signed in as THEM and lock one out; the
   // practice-wide view and the policy are gated inside the page. Hiding somebody's own device list
   // behind an audit permission would put it out of reach of the person who lost the laptop.
-  { href: "/practice/privacy/security", label: "Security", icon: "⛨", capability: null, group: "Administration", phase: 5, built: true },
+  { href: "/practice/privacy/security", label: "Security", icon: "⛨", capability: null, group: "Personal", phase: 5, built: true },
   // CPR-310: NO CAPABILITY. The page carries the approval queue, which belongs to practitioners rather
   // than administrators; the management half is gated inside it.
-  { href: "/practice/people", label: "Team", icon: "⚇", capability: null, group: "Administration", phase: 5, built: true },
+  // CPR-SETUP-001 makes this setup module 12, so it moves into the setup layer -- which empties the
+  // Administration group entirely, and an empty group renders nothing rather than a bare heading.
+  { href: "/practice/people", label: "Team & Permissions", icon: "⚇", capability: null, group: "Setup", phase: 5, built: true },
   // CPR-360: NO CAPABILITY. The page carries both halves -- personal settings, which everybody has, and
   // practice configuration, which the page itself gates. Requiring practice.settings.manage in the nav
   // would hide somebody's own text size behind an administrative permission.
