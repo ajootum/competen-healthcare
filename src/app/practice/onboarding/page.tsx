@@ -15,6 +15,9 @@ export default async function Page() {
   if (shell.state === "WORKSPACE_REQUIRED") redirect("/practice");
   if (shell.state === "CHOOSER_REQUIRED") redirect("/practice/select-workspace");
   if (shell.state === "ACCESS_RESTRICTED") redirect("/practice/access-status");
+  // CPR-370: a revoked device and an unmet MFA policy are refusals like any other, and are refused on
+  // EVERY practice surface rather than only in the shell layout.
+  if (shell.state === "SESSION_REVOKED" || shell.state === "MFA_REQUIRED") redirect("/practice/access-status");
   if (shell.state === "READY") redirect("/practice/home");
 
   // ONBOARDING_REQUIRED is the one state that stays.

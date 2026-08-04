@@ -48,6 +48,10 @@ export const PRACTICE_NAV: PracticeNavItem[] = [
   { href: "/practice/reports", label: "Reports", icon: "☷", capability: "report.view", group: "Practice Management", phase: 6, built: true },
   { href: "/practice/intelligence", label: "Practice Intelligence", icon: "☀", capability: "report.view", group: "Intelligence", phase: 5, built: false },
   { href: "/practice/privacy", label: "Privacy and access", icon: "⚿", capability: "access.review", group: "Tools and Settings", phase: 5, built: true },
+  // CPR-370: NO CAPABILITY. Everybody may see the devices signed in as THEM and lock one out; the
+  // practice-wide view and the policy are gated inside the page. Hiding somebody's own device list
+  // behind an audit permission would put it out of reach of the person who lost the laptop.
+  { href: "/practice/privacy/security", label: "Security", icon: "⛨", capability: null, group: "Tools and Settings", phase: 5, built: true },
   // CPR-310: NO CAPABILITY. The page carries the approval queue, which belongs to practitioners rather
   // than administrators; the management half is gated inside it.
   { href: "/practice/people", label: "Team", icon: "⚇", capability: null, group: "Tools and Settings", phase: 5, built: true },

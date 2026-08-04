@@ -117,7 +117,7 @@ Continuity & DR · 480 Enterprise Administration · 490 Roadmap & Release Govern
 | CPR-350 Search & Global Retrieval | **Completed (s26).** Cross-domain, capability-scoped search as before (migration 199, 43 assertions) -- plus saved searches that store the QUERY and never the answers, private search history, date filters, the per-reader count strip and quick searches (migration 212, `saved-search.ts`, 30 assertions). Semantic AI search stays refused: CPR-210. |
 | CPR-320 Communication & Document Management | **Completed (s24).** Internal threads, contact log and the incoming register as before (migration 200, 44 assertions) -- plus the shared document library with folders and a recycle bin, and the per-patient correspondence register composed from four existing stores (migration 210, `document-library.ts`, 38 assertions). Six of the gaps the audit listed had already been filled by CPR-130, CPR-310 and CPR-330. |
 | CPR-310 Team & Delegated Access | **Rebuilt (s22).** Invitations, memberships, capability-level delegation and the audit trail as before (migration 201, 52 assertions) -- plus the model the spec describes: delegation by AREA materialising ordinary grants, role templates, an approval queue that is explicitly not a gate, and derived work queues (migration 208, `delegation.ts`, 48 assertions). |
-| CPR-370 Security, Privacy & Practitioner Control | **Built.** Read logging (the other half of the trail), de-identified access review, append-only enforcement, patient-record export (migration 202, `privacy.ts`, 36 harness assertions). |
+| CPR-370 Security, Privacy & Practitioner Control | **Completed (s27).** The access log as before (migration 202, 36 assertions) -- plus the five capabilities never started: a device register whose revocation the shell ENFORCES, an idle limit, MFA as a practice policy checked at the shell, standing patient consent with derived expiry where withdrawal never deletes, and break-glass that is self-granted, reason-required, time-boxed and impossible to take quietly (migration 213, `security.ts`, 53 assertions). |
 | CPR-330 Reports, Documents & Correspondence | **Rebuilt (§18).** Template designer with a merge body, merge-field resolver, generation, batch generation, practice letterhead, print/PDF view, schedule definitions, dashboard to the comp (migration 204, `document-generation.ts`, 52 harness assertions). The activity counting that was first built under this heading moved to `/practice/reports/analytics` as an early slice of CPR-270. |
 | CPR-360 Configuration & Personalisation | **Rebuilt (§19).** Workspace configuration as before (migration 203, 35 assertions) *plus* the personalisation half that was missing: dark theme with a checked mapping scan, accent, size, density, reduce-visual-noise, dashboard layout, notification categories, specialty profile, keyboard shortcuts, personal-over-practice overrides with locking, import/export/reset (migration 205, `preferences.ts`, 48 assertions). |
 | CPR-200–270, 400–440, 460–490 | **Not started.** |
@@ -1296,3 +1296,86 @@ workspace trail is readable by anybody holding `access.review`.
 
 Semantic AI search, natural-language queries and intent detection are CPR-210's, which is not built. The
 comp's "AI Search Assistant" panel is not rendered as a working control.
+
+## 27. CPR-370 as completed: nothing here may overstate what it does
+
+`src/lib/practice/security.ts`, two new shell guards, `/practice/privacy/security`, migration 213, and
+`scripts/practice-security-harness.ts` — 53 assertions, four proven able to fail.
+
+**The last of the eleven, and the only one that was not a correction.** CPR-370's access log was built
+with migration 202; these five capabilities — MFA policy, session management, device management, consent
+management and break-glass — had never been started.
+
+Every one of them is a security feature, so the rule for the whole module is that **nothing may overstate
+what it does**. A control that claims more than it enforces is worse than an absent one, because
+somebody stops worrying on the strength of it.
+
+### "Sign out this device" is the one control here that could lie
+
+Revoking a session row **does not** end the platform auth token — nothing in this product can. What it
+does is real and enforced: `resolvePracticeShell` checks the register on **every request**, so a revoked
+device is refused by the practice on its very next page load. The harness proves it by revoking and then
+calling the same function the shell calls.
+
+The distinction is in the column comment, the engine, the API payload
+(`revocationEndsPlatformSession: false`), and beside the button on the page. A revocation that were
+cosmetic is the single most dangerous thing this module could have shipped: somebody would press it after
+losing a laptop and stop worrying.
+
+`touchSession` never throws and returns *allowed* on any internal error, deliberately — a bookkeeping
+failure must not lock a clinician out of a clinical record.
+
+**A device is a cookie, and it says so.** Not a fingerprint: fingerprinting identifies a person across
+contexts they did not consent to, while a cookie identifies a browser that chose to sign in here.
+Clearing it honestly produces a new device.
+
+### Break-glass is self-granted, and that is the point
+
+CPR-310 forbids granting yourself a capability. **This is the one place in the product where the opposite
+is right**, because the situation it exists for — the unconscious patient whose clinician is off duty —
+is precisely the one where nobody is available to approve it.
+
+What makes it safe is not approval but the other three properties, and it is worthless without all four:
+
+- **A reason**, at least ten characters, enforced in the database too. *"emergency"* is not a reason; a
+  reason is a sentence somebody can be asked about afterwards.
+- **An expiry.** The grants carry it, so nothing has to run to end them — the resolver simply stops
+  returning them.
+- **Loud, three ways**: an audit event, an access-log entry, and a standing item that **never ages out**.
+  A control that quietly stops showing things is not one.
+- **Read capabilities only.** An emergency is a reason to *see* a record, not to sign one — a clinician
+  who needs to write can start their own encounter, which is an ordinary act with their own name on it.
+
+**Nobody reviews their own emergency access**, and **ending is not reviewing**: an ended episode is still
+awaiting review, because the control is that a second person looked.
+
+### Consent, and what it is not
+
+Standing patient consent — to hold a record, to share with a named party, to be contacted, to be
+photographed. **This is not CPR-150's procedure consent**, which records one operation at one moment;
+merging them would make *"did they consent"* a question with two answers.
+
+**Withdrawal is never a delete.** A withdrawn consent is the most important row in the table — it is the
+one saying a practice may no longer do something it previously could, and erasing it would erase the
+instruction along with the permission. Expiry is **derived**: no column, no job.
+
+### MFA is a policy here and enforcement elsewhere
+
+This product does not issue tokens, so it cannot enrol anybody in a second factor. What it can do — and
+does — is **refuse to open the practice** when the policy demands one and the session does not carry it.
+Off by default, because a migration must never lock a practice out of itself, and it routes to enrolment
+rather than a dead end.
+
+### Refused
+
+**"Security Score 94% — Excellent, ↑12% vs last 30 days"** has no formula and could not have one:
+security is not a quantity, and a score that moves without anybody being able to say why invites people
+to chase it. **"MFA Coverage 100%"**, **"Audit Readiness 92%"** — percentages. **"HIPAA Compliant",
+"GDPR Compliant", "Local Data Protection Act Compliant"** — certifications about an organisation, not
+properties of code; the same position CPR-370 took the first time. **"Encryption AES-256"** and **"Data
+Residency Kenya (EU)"** describe a deployment this application does not inspect.
+
+In their place the page carries two panels: the **guarantees**, each a property of the code and each
+asserted by a test made to fail on purpose, and — the one the comp has no room for — **what this page
+cannot tell you**. A practitioner deciding whether to trust a system with patient records is better
+served by an honest list of unknowns than by four green ticks.

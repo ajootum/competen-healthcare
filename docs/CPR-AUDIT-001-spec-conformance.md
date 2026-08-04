@@ -212,7 +212,16 @@ practice_assistant / billing_reporting / read_only_auditor).
   assigned-to/include-inactive), the per-module result-count strip, keyboard shortcuts, search history.
 - **Refused:** semantic AI search — needs CPR-210.
 
-### CPR-370 Security, Privacy & Practitioner Control — one of eight capabilities
+### CPR-370 Security, Privacy & Practitioner Control — one of eight to COMPLETED
+
+> **Closed, and the register with it.** Migration 213 adds the five that had never been started: a device
+> register whose revocation resolvePracticeShell ENFORCES on every request (and which says, in the
+> payload, that it does not end the platform session), an idle limit, MFA as a practice policy checked at
+> the shell, standing patient consent where withdrawal never deletes and expiry is derived, and
+> break-glass -- self-granted by design, reason-required, time-boxed, read-only, and impossible to take
+> quietly. 53 harness assertions, four proven able to fail. Refused: the security score, the coverage and
+> readiness percentages, the compliance badges, and the encryption and residency claims. In their place
+> the page carries what it CANNOT know from here. See respec s27.
 - **Have:** audit logging (the access log), RBAC (pre-existing), export.
 - **Missing:** **MFA**, **session management**, **device management**, **consent management**,
   **break-glass access** (emergency access, logged and reviewed — a real clinical concept), password
@@ -246,15 +255,16 @@ Where a comp asks for something that cannot be built honestly, the rule stays wh
 
 ## 5. Where this register stands
 
-**Ten of the eleven modules are closed.** CPR-300, 310, 320, 330, 340, 350, 360, 130, 140 and 150 were
-each re-read against their specification and comp, corrected, harnessed, and recorded in
-`CPR-BUILD-001-v1-respecification.md` §§10, 18–26. Migrations 204–212.
+**All eleven are closed.** CPR-130, 140, 150, 300, 310, 320, 330, 340, 350, 360 and 370 were each
+re-read against their specification and comp, corrected or completed, harnessed, and recorded in
+`CPR-BUILD-001-v1-respecification.md` §§10, 18–27. Migrations 204–213.
 
-**CPR-370 Security, Privacy & Practitioner Control is the one that remains**, and it is the largest of
-them: MFA, session management, device management, consent management and break-glass emergency access.
-It is not a correction to something built wrong — those five capabilities have never been started, and
-break-glass in particular is a real clinical concept (emergency access to a record you would not normally
-open, logged loudly and reviewed afterwards) rather than a checkbox.
+**CPR-370 was the only one that was not a correction** — its access log existed, but MFA, session
+management, device management, consent management and break-glass had never been started. It is also the
+module where the honesty rule mattered most, because a security control that claims more than it
+enforces is worse than an absent one: somebody stops worrying on the strength of it. Two limits are
+therefore stated in the payload rather than on the page — `revocationEndsPlatformSession: false` and
+`mfaEnrolmentIsPlatformLevel: true` — so no client can render them as more than they are.
 
 ### What the corrections had in common
 
