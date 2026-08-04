@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
+import { SECTION_BADGE, BUTTON } from "@/lib/practice/palette";
 
 // CPR-PRM-001 s4/s5/s6 -- the registration form.
 //
@@ -168,7 +169,7 @@ export default function RegistrationForm({ form, majorityAge, today, mode = "ful
   return (
     <form className="mt-3 flex flex-col gap-4" onSubmit={e => { e.preventDefault(); submit(false); }}>
       {/* ── Identity (comp: a titled card) ─────────────────────────────── */}
-      <h3 className="text-[13px] font-bold text-gray-900">Identity</h3>
+      <h3 className="flex items-center gap-2 text-[13px] font-bold text-gray-900"><span aria-hidden className={`flex h-6 w-6 items-center justify-center rounded-md text-[12px] ${SECTION_BADGE.identity.badge}`}>{SECTION_BADGE.identity.icon}</span>Identity</h3>
 
       {/* ── Name: one row, three parts ────────────────────────────────────────────────────────── */}
       <div>
@@ -221,7 +222,7 @@ export default function RegistrationForm({ form, majorityAge, today, mode = "ful
         </p>
       )}
 
-      <h3 className="mt-1 text-[13px] font-bold text-gray-900">Contact details</h3>
+      <h3 className="mt-1 flex items-center gap-2 text-[13px] font-bold text-gray-900"><span aria-hidden className={`flex h-6 w-6 items-center justify-center rounded-md text-[12px] ${SECTION_BADGE.contact.badge}`}>{SECTION_BADGE.contact.icon}</span>Contact details</h3>
 
       {/* ── Contact ───────────────────────────────────────────────────────────────────────────── */}
       <div className="grid sm:grid-cols-3 gap-2">
@@ -334,7 +335,7 @@ export default function RegistrationForm({ form, majorityAge, today, mode = "ful
       {/* ── Hospital identifiers (s22) -- full registration only ───────────────────────────────── */}
       {mode === "full" && (
         <section className="rounded-lg border border-gray-200 bg-gray-50/60 p-3">
-          <h3 className="text-[13px] font-bold text-gray-900">Hospital numbers</h3>
+          <h3 className="flex items-center gap-2 text-[13px] font-bold text-gray-900"><span aria-hidden className={`flex h-6 w-6 items-center justify-center rounded-md text-[12px] ${SECTION_BADGE.identifiers.badge}`}>{SECTION_BADGE.identifiers.icon}</span>Hospital numbers</h3>
           <p className="mt-0.5 text-[12px] text-gray-500">
             A patient carries a different number at every hospital. Add them once the record exists
             &mdash; each one has to name the facility that issued it, or it cannot be checked against
@@ -349,7 +350,7 @@ export default function RegistrationForm({ form, majorityAge, today, mode = "ful
 
       {/* ── The photograph the comp asks for, in its designed position ──────────────────────────── */}
       <section className="rounded-lg border border-dashed border-gray-200 bg-gray-50/60 p-4">
-        <h3 className="text-[13px] font-bold text-gray-900">Patient photograph</h3>
+        <h3 className="flex items-center gap-2 text-[13px] font-bold text-gray-900"><span aria-hidden className={`flex h-6 w-6 items-center justify-center rounded-md text-[12px] ${SECTION_BADGE.photo.badge}`}>{SECTION_BADGE.photo.icon}</span>Patient photograph</h3>
         <p className="mt-0.5 text-[12px] text-gray-600">
           The design offers Take Photo and Upload Photo. There is no file storage in this product, and a
           photograph of a patient is the most identifying file a practice could hold &mdash; so it is
@@ -438,13 +439,17 @@ export default function RegistrationForm({ form, majorityAge, today, mode = "ful
           Cancel · Save Draft · Register & Queue · Register Only. The first three are new here; the
           order is the comp's, and the primary action is the one a walk-in desk presses most. */}
       <div className="flex items-center gap-2 flex-wrap border-t border-gray-100 pt-3">
+        {/* TWO PRIMARY ACTIONS, TWO COLOURS, because they are not the same act: one puts a person into
+            today's clinic, the other files a record. The comp gives them indigo and violet; rendering
+            both in one hue at a walk-in desk makes the more consequential of the two a coin toss, and
+            rendering the second as a quiet outline (which it was) reads as "cancel". */}
         <button type="button" disabled={busy || !canSubmit}
           onClick={() => submit(false, "queue")}
-          className="rounded-lg bg-[var(--cp-primary)] px-4 py-2 text-[14px] font-semibold text-white hover:bg-[var(--cp-primary-deep)] disabled:opacity-40">
+          className={`rounded-lg px-4 py-2 text-[14px] font-semibold ${BUTTON.primary}`}>
           {busy ? "Checking for duplicates…" : "Register and add to the queue"}
         </button>
         <button type="submit" disabled={!canSubmit}
-          className="rounded-lg border border-gray-200 px-4 py-2 text-[14px] font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-40">
+          className={`rounded-lg px-4 py-2 text-[14px] font-semibold ${BUTTON.secondaryAction}`}>
           {p.appointmentAt ? "Register and book" : "Register only"}
         </button>
 

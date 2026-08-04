@@ -2,6 +2,7 @@
 
 import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { tintedCard } from "@/lib/practice/palette";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -257,14 +258,18 @@ export default function Timeline({ timeline, canManage, onChanged }: {
                       return (
                         <div key={b.id}
                           onPointerDown={e => beginDrag(e, b, laneIndex, "move")}
-                          className={`absolute inset-x-0.5 overflow-hidden rounded-md bg-white px-1.5 py-1 shadow-sm
+                          // THE CARD IS TINTED IN ITS TYPE'S OWN COLOUR, which is what the comp does and
+                          // what this screen previously spent on a 2px dot. A day then reads as a
+                          // pattern before any text is read: amber blocks are hospital work, cyan is
+                          // telemedicine, red is an emergency slot.
+                          className={`absolute inset-x-0.5 overflow-hidden rounded-md border px-1.5 py-1 shadow-sm
                             ${STATUS_STYLE[b.status] ?? "border-l-4"}
                             ${dragging ? "z-20 opacity-90 shadow-lg ring-2 ring-[var(--cp-primary)]" : "z-10"}
                             ${busyId === b.id ? "opacity-50" : ""}
                             ${canManage && b.movable ? "cursor-grab active:cursor-grabbing" : "cursor-default"}`}
                           style={{
                             top: top(minute), height: Math.max(18, duration * PX_PER_MINUTE - 2),
-                            borderLeftColor: b.colour,
+                            ...tintedCard(b.colour),
                           }}
                           title={b.movable
                             ? `${b.patientName} — ${hhmm(minute)}, ${duration} min`

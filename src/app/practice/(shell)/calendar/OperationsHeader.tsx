@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { APPOINTMENT_KINDS } from "@/lib/practice/calendar";
 
 // CPR-CAL-001 s12 -- the summary cards, the load, the follow-up overview and the briefing.
 //
@@ -28,14 +29,22 @@ export default function OperationsHeader({ c }: { c: any }) {
           {c.isToday ? "Today's clinic" : "That day's clinic"}
         </h2>
         <p className="mt-0.5 text-[12px] text-gray-500">{c.day}</p>
+        {/* EACH FIGURE IN ITS OWN TYPE'S COLOUR, taken from APPOINTMENT_KINDS rather than chosen here --
+            so the "3 New" in this row is the same indigo as every new-patient block on the timeline
+            below it, and a hue can never mean one thing in the header and another in the grid. */}
         <div className="mt-3 grid grid-cols-5 gap-1">
           {[
-            ["Booked", s.booked], ["Follow-up", s.followUps], ["New", s.newPatients],
-            ["Telemed", s.telemedicine], ["Urgent", s.emergency],
-          ].map(([k, v]) => (
+            ["Booked", s.booked, "var(--cp-slate-700)"],
+            ["Follow-up", s.followUps, APPOINTMENT_KINDS.scheduled_followup.colour],
+            ["New", s.newPatients, APPOINTMENT_KINDS.new_consultation.colour],
+            ["Telemed", s.telemedicine, APPOINTMENT_KINDS.teleconsultation.colour],
+            ["Urgent", s.emergency, APPOINTMENT_KINDS.emergency.colour],
+          ].map(([k, v, colour]) => (
             <div key={String(k)}>
-              <p className="text-[22px] font-bold leading-tight text-gray-900">{v as number}</p>
-              <p className="text-[10px] leading-tight text-gray-500">{k}</p>
+              <p className="text-[22px] font-bold leading-tight" style={{ color: colour as string }}>
+                {v as number}
+              </p>
+              <p className="text-[10px] leading-tight text-gray-500">{k as string}</p>
             </div>
           ))}
         </div>
@@ -51,9 +60,9 @@ export default function OperationsHeader({ c }: { c: any }) {
             <p className="mt-1.5 text-[12px] font-semibold text-gray-700">{c.load.remaining} still free</p>
             {/* A BAR IS A COUNT DRAWN TO SCALE, which is not a rate -- CPR-200's Trend made the same
                 distinction. The figures above carry the fact; this only carries the shape. */}
-            <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-gray-100" role="img"
+            <div className="mt-2 h-2 w-full overflow-hidden rounded-full bg-[var(--cp-primary)]/10" role="img"
               aria-label={`${c.load.scheduled} booked of ${c.load.available} available`}>
-              <div className="h-full rounded-full bg-[var(--cp-primary)]"
+              <div className="h-full rounded-full bg-gradient-to-r from-[var(--cp-primary)] to-[var(--cp-accent)]"
                 style={{ width: `${Math.min(100, (c.load.scheduledMinutes / c.load.availableMinutes) * 100)}%` }} />
             </div>
           </>
@@ -84,10 +93,18 @@ export default function OperationsHeader({ c }: { c: any }) {
             ["Booked in", c.followUps.booked, "var(--cp-success)"],
             ["Still to book", c.followUps.needBooking, "var(--cp-warning)"],
           ].map(([k, v, colour]) => (
+            // THE FIGURE CARRIES THE COLOUR, NOT ONLY THE DOT. A 1.5px dot beside a black number is a
+            // legend; the comp colours the number itself, so "3 overdue" is red at a glance. Overdue and
+            // still-to-book take their hue ONLY when non-zero -- a red nought teaches people to stop
+            // seeing red, which is the one colour on this screen that has to keep working.
             <li key={String(k)} className="flex items-baseline gap-2 border-b border-gray-100 py-1 last:border-0">
-              <span className="h-1.5 w-1.5 rounded-full" style={{ background: colour as string }} />
+              <span className="h-2 w-2 rounded-full"
+                style={{ background: (v as number) > 0 ? colour as string : "var(--cp-slate-300)" }} />
               <span className="text-[13px] text-gray-700">{k as string}</span>
-              <span className="ml-auto text-[13px] font-bold text-gray-900">{v as number}</span>
+              <span className="ml-auto text-[15px] font-bold"
+                style={{ color: (v as number) > 0 ? colour as string : "var(--cp-slate-300)" }}>
+                {v as number}
+              </span>
             </li>
           ))}
         </ul>

@@ -37,13 +37,25 @@ export const DENSITIES = [
  * saved layout keeps a row for something that no longer renders; a widget added and not listed here
  * cannot be turned off. The harness asserts the page and this list agree.
  */
+// CPR-001 v4 asks for the command centre's widgets to be configurable, so every widget the page
+// renders is listed here -- a key the page uses and this list does not carry is a widget nobody can
+// turn off, which is exactly the "a preference that changes nothing" failure in reverse.
+//
+// The third element is "required": a widget that cannot be hidden. Only the alerts panel is, because
+// hiding the list of what is owed is the one setting that could cause harm.
 export const DASHBOARD_WIDGETS = [
-  ["schedule", "Today's schedule", false],
-  ["health", "Practice health", false],
+  ["schedule", "Today's timeline", false],
+  ["locations", "My locations this week", false],
+  ["queue", "Waiting queue", false],
+  ["followups", "Follow-up intelligence", false],
   ["alerts", "Operational alerts", true],
-  ["tasks", "Tasks and actions", false],
-  ["messages", "Messages and inbox", false],
-  ["quick_actions", "Quick actions", false],
+  ["tasks", "Tasks for today", false],
+  ["messages", "Messages", false],
+  ["recent_patients", "Recent patients", false],
+  ["insights", "Patient insights", false],
+  ["documents", "Recent documents", false],
+  ["health", "Practice performance", false],
+  ["quick_actions", "Quick access", false],
   ["practice", "This practice", false],
   ["activity", "Recent activity", false],
 ] as const;

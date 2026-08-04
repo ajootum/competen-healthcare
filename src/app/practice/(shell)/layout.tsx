@@ -1,9 +1,10 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { resolvePracticeShell } from "@/lib/practice/shell";
-import { visibleNav } from "@/lib/practice/navigation";
+import { visibleNav, NAV_GROUP_ORDER } from "@/lib/practice/navigation";
 import { createAdminClient } from "@/lib/supabase/server";
 import { resolvePreferences } from "@/lib/practice/preferences";
+import SidebarNav from "./SidebarNav";
 import PracticeSignOut from "./PracticeSignOut";
 import PracticeAppearance from "./PracticeAppearance";
 import PracticeShortcuts from "./PracticeShortcuts";
@@ -37,7 +38,9 @@ export default async function PracticeShellLayout({ children }: { children: Reac
 
   const { ctx } = shell;
   const nav = visibleNav(ctx.capabilities);
-  const groups = [...new Set(nav.map(i => i.group))];
+  // Headings follow the DECLARED order, not the order items happen to appear in. Deriving it from the
+  // item list means moving one route silently moves a whole section heading with it.
+  const groups = NAV_GROUP_ORDER.filter(g => nav.some(i => i.group === g));
 
   // CPR-360: the personalisation, resolved server-side and applied as data attributes the stylesheet
   // reads. Server-side because a theme applied by client JavaScript flashes the wrong one first, and
@@ -45,6 +48,35 @@ export default async function PracticeShellLayout({ children }: { children: Reac
   // cannot be trusted to evaluate.
   const admin = createAdminClient();
   const { effective } = await resolvePreferences(admin, ctx.workspaceId, ctx.userId);
+
+  // ── THE COMP'S SIDEBAR BADGES ──────────────────────────────────────────────────────────────────
+  //
+  // Real counts, or no badge. The comp shows "Tasks 6" and "Messages 4"; a badge is a promise that
+  // something is waiting, and a decorative one is the fastest way to teach people to ignore all of them.
+  // Both are head+count reads, and BOTH ERRORS ARE CHECKED -- a failed count returning null must render
+  // no badge rather than a zero, because "nothing waiting" and "could not tell" are different answers.
+  const [taskCount, messageCount] = await Promise.all([
+    ctx.capabilities.includes("task.view")
+      ? admin.from("practice_task").select("*", { count: "exact", head: true })
+        .eq("workspace_id", ctx.workspaceId).eq("assigned_to", ctx.userId)
+        .in("status", ["OPEN", "IN_PROGRESS", "BLOCKED"])
+        .then(r => (r.error ? null : r.count))
+      : Promise.resolve(null),
+    ctx.capabilities.includes("inbox.record")
+      ? admin.from("practice_incoming_document").select("*", { count: "exact", head: true })
+        .eq("workspace_id", ctx.workspaceId).eq("status", "RECEIVED")
+        .then(r => (r.error ? null : r.count))
+      : Promise.resolve(null),
+  ]);
+
+  const BADGES: Record<string, number | null> = {
+    "/practice/tasks": taskCount,
+    "/practice/inbox": messageCount,
+  };
+  const navItems = nav.map(i => ({
+    href: i.href, label: i.label, icon: i.icon, group: i.group,
+    badge: BADGES[i.href] ?? null,
+  }));
 
   return (
     <div
@@ -64,22 +96,23 @@ export default async function PracticeShellLayout({ children }: { children: Reac
           <span className="w-8 h-8 rounded-full bg-[var(--cp-primary)] flex items-center justify-center text-white text-sm font-bold">C</span>
           <span className="font-bold text-[15px]">competen<span className="text-blue-300">Practice</span></span>
         </div>
-        <nav className="flex-1 overflow-y-auto px-3 py-4" aria-label="Practice navigation">
-          {groups.map(g => (
-            <div key={g} className="mb-4">
-              <p className="px-2 pb-1 text-[10px] font-bold uppercase tracking-widest text-blue-200/50">{g}</p>
-              {nav.filter(i => i.group === g).map(i => (
-                <Link key={i.href} href={i.href}
-                  className="flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-[13px] text-blue-100/80 hover:bg-white/10 hover:text-white transition-colors">
-                  <span aria-hidden className="w-4 text-center">{i.icon}</span>{i.label}
-                </Link>
-              ))}
-            </div>
-          ))}
-        </nav>
-        <p className="px-4 py-3 text-[10px] text-blue-200/40 border-t border-white/10">
-          Phase 0 shell -- modules appear here as they ship.
-        </p>
+        {/* Who is signed in. The comp puts a name and a role here; this build has neither reliably --
+            names live in `profiles` and a practice-only user may have no row (CPR-340). So it shows the
+            PRACTICE, which is always known, rather than inventing a person. */}
+        <div className="border-b border-white/10 px-4 py-3">
+          <p className="truncate text-[13px] font-semibold text-white">{ctx.workspaceName}</p>
+          <p className="text-[10px] text-blue-200/60">
+            {ctx.workspaceType === "individual_practice" ? "Individual practice" : "Managed practice"}
+            {" · "}{ctx.entitlementStatus === "trial" ? "Trial" : "Licensed"}
+          </p>
+        </div>
+
+        <SidebarNav groups={groups} items={navItems} />
+
+        <Link href="/practice/settings"
+          className="flex items-center gap-2.5 border-t border-white/10 px-4 py-3 text-[12px] text-blue-100/70 hover:bg-white/8 hover:text-white">
+          <span aria-hidden className="text-blue-200/60">⇄</span> Switch workspace
+        </Link>
       </aside>
 
       <div className="flex-1 flex flex-col min-w-0">

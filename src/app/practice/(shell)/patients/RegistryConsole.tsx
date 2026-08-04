@@ -4,6 +4,7 @@ import { useState } from "react";
 import SearchSection from "./SearchSection";
 import RegistrationForm from "./RegistrationForm";
 import { steps } from "@/lib/practice/registration-workspace";
+import { STEP_STATE } from "@/lib/practice/palette";
 
 // CPR-REG-002 v4 -- the registration workspace's main column.
 //
@@ -66,7 +67,12 @@ export default function RegistryConsole({ canCreate, workspace }: {
               </span>
               <span className="min-w-0">
                 <span className="block text-[12px] font-semibold text-gray-500">{label as string}</span>
-                <span className="block text-[26px] font-bold leading-tight text-gray-900">{value as number}</span>
+                {/* THE FIGURE TAKES THE TILE'S COLOUR. A tinted badge beside a black number leaves the
+                    colour as decoration on the icon; the comp puts it on the number, which is the thing
+                    being read. */}
+                <span className="block text-[26px] font-bold leading-tight" style={{ color: colour as string }}>
+                  {value as number}
+                </span>
               </span>
             </div>
             <p className="mt-1.5 text-[11px] text-gray-500">{note as string}</p>
@@ -103,14 +109,20 @@ export default function RegistryConsole({ canCreate, workspace }: {
                   which parts are done; nothing here hides a card or blocks a save. In quick mode the
                   hospital-identifiers step is absent rather than greyed, because in quick mode it is
                   genuinely not part of the job. */}
+              {/* EVERY CIRCLE CARRIES THE SAME STATE, AND THAT IS THE HONEST ONE. The comp fills steps
+                  1 and 2 and outlines 3-5, which is a claim about progress through a wizard. This is not
+                  a wizard -- nothing is gated and every card is on screen at once -- so filling two and
+                  outlining three would tell somebody they had completed a stage they had not started.
+                  They are coloured because the comp's colour is right; they are uniform because the
+                  progress it encodes is not true here. */}
               <ol className="mt-3 flex items-center gap-1 flex-wrap text-[12px]">
                 {steps(mode).map((s, i) => (
                   <li key={s.key} className="flex items-center gap-1">
-                    <span className="flex h-5 w-5 items-center justify-center rounded-full border border-gray-200 bg-white text-[11px] font-bold text-gray-500">
+                    <span className={`flex h-6 w-6 items-center justify-center rounded-full text-[11px] font-bold ${STEP_STATE.done}`}>
                       {i + 1}
                     </span>
-                    <span className="text-gray-600">{s.label}</span>
-                    {i < steps(mode).length - 1 && <span className="mx-1 text-gray-300">›</span>}
+                    <span className="font-semibold text-[var(--cp-primary-deep)]">{s.label}</span>
+                    {i < steps(mode).length - 1 && <span className="mx-1 text-[var(--cp-primary)]/30">›</span>}
                   </li>
                 ))}
               </ol>

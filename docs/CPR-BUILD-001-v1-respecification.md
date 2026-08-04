@@ -1873,3 +1873,84 @@ paired with a control proving the same move succeeds for its owner (`11e`).
 
 **The general lesson:** a passing refusal assertion says a refusal happened, not *which rule* caused it.
 Where two rules can produce the same code, only a case that disables one of them tests the other.
+
+---
+
+## 34. CPR-001 v4 Practice Command Centre: fourteen widgets, four refusals, one renamed sidebar
+
+**Migration 229** (clinic hours). `src/lib/practice/command-centre.ts`, `/practice/home` rebuilt,
+`navigation.ts` regrouped. Harness `scripts/practice-command-centre-harness.ts` — 40/40, 13 breaks.
+
+### The one thing the comp needs that nothing could derive
+
+Everything on the hero briefing comes out of the diary — patients today, follow-ups, results waiting,
+the finish time — except the clinic window. **"The clinic runs 08:00 to 17:00" is a fact about how a
+practice works, and no appointment implies it**: a day with one 14:00 booking does not mean the clinic
+opens at two. Hardcoding it would have been silently wrong for every practice running an evening
+surgery — their bar would show them finishing late every single day of their lives. So migration 229
+stores it, as **local wall-clock minutes rather than a timestamp**: "opens at 08:00" is true on every
+date, an instant is true once.
+
+`clinic_days` came with it, for the same reason the weekly panel exists: drawing five rows for a
+practice that also works Saturdays hides a working day.
+
+### The estimated finish is not a prediction
+
+The comp shows "Estimated finish: 04:45 PM". What this build shows is **when the last booking ends** —
+arithmetic on the diary, labelled as such. A product that said "you will finish at 16:45" would be
+modelling overruns it has never measured. When that end is past closing, it says so.
+
+### Four refusals, listed on the page
+
+| the comp shows | this build |
+|---|---|
+| **AI Briefing (BETA)**, four lines | The same panel, named **Today's brief**, badged *Derived*. Three of the comp's four lines are arithmetic this product already does — "2 follow-ups are overdue" needs a subtraction, not a model. The fourth, *"Michael Chen likely needs longer consultation"*, is a **clinical prediction about a named patient** with nothing in the record to ground it. CPR-210 drew this line already: may reorganise, may not originate. A prediction attached to a real person's name on the first screen of the morning is the strongest possible version of originating one. |
+| **18 min avg consult · 12 min avg wait · 8 min clinic delay**, no n | The same four figures, **genuinely measured** from `practice_arrival.arrived_at`, `practice_encounter.started_at` and `completed_at` — data that has existed since Phase 1/3 and that nothing had ever read. Each carries `overCount`. "18 min" over three consultations is not a measurement. |
+| **"Date updates in real time"** | The page states when it was read. Nothing pushes to it. |
+| **42 Epilepsy · 18 Hydrocephalus · 14 Spina Bifida · 6 Brain Tumours** | Cohorts counted **as typed** (CPR-330), and **by patient, not by diagnosis row** — somebody seen four times for one condition is one person, and counting rows would inflate every cohort by how often people came back. Those five labels are the designer's specialty, not a taxonomy; bucketing into them would invent a coding nobody performed. |
+
+### Two states the weekly panel must not collapse
+
+A day with bookings but no place recorded is **not** the same as a day with nothing booked. Collapsing
+the first into a blank is how a practitioner ends up at the wrong hospital. Three states are rendered
+distinctly, and the harness asserts all three.
+
+A first version ranked locations including a **null bucket**, so a day with two unplaced bookings and
+one at Mulago reported *no place* — the empty bucket outvoted the only place actually named. Only real
+locations are candidates now. The harness caught this on its first run.
+
+### The sidebar, regrouped
+
+The comp organises by **what a person is doing**, not by which subsystem owns the route: PRACTICE ·
+PATIENTS · CLINICAL · COMMUNICATION · INTELLIGENCE · ADMINISTRATION. The old grouping put Patients,
+Encounters, Documents and Follow-ups together as "Clinical Practice" — how the codebase is arranged,
+not how a clinic morning is.
+
+`Home` → **Practice Command Centre**. `Clinical activity` → **Procedures**. `Practice Intelligence` →
+**Analytics**. `Clinical assistant` → **AI Assistant**. `Inbox` → **Results & incoming**.
+
+**Four comp items are deliberately not there:**
+- **Billing** — no module exists (CPR-440 unbuilt).
+- **Investigations** — no table exists. Results arrive through CPR-320's inbox; naming that route after
+  one of its contents would promise an investigations module.
+- **Appointments** as a second entry — it is the same route as Calendar, and two entries pointing at one
+  page teaches people that one of them is a mistake.
+- **Patient Insights** as its own route — it is the reports page. A second route rendering the same
+  figures under a nicer name is two answers to one question.
+
+Group headings now follow a **declared order** (`NAV_GROUP_ORDER`) rather than the order items happen
+to appear in, so moving one route cannot silently move a section heading.
+
+### An assertion that could not tell a claim from its denial
+
+`9a` asserted that nothing in the payload claims to be AI-generated — and failed on its first run
+against this build's own refusal text, *"An AI-written briefing"*. The check now runs over everything
+**except** the refusal list, paired with a control proving the regex still fires against that list. An
+assertion that cannot distinguish a claim from its disclaimer is not testing the thing it names.
+
+### Every widget the page renders is configurable
+
+The spec asks for configurable widgets. `10a` reads the page source, extracts every `widget("key")` and
+asserts each has an entry in `DASHBOARD_WIDGETS` — **a widget key the catalogue does not carry is one
+nobody can turn off**, which is the "preference that changes nothing" failure in reverse. Paired with a
+control proving the page really does use widget keys, so the check cannot pass by finding none.
