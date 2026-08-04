@@ -220,7 +220,14 @@ practice_assistant / billing_reporting / read_only_auditor).
 - **Kept correctly:** retention named as an unanswered legal question rather than invented; compliance
   badges refused.
 
-### CPR-300 Practice Operations Workspace — layout replaced
+### CPR-300 Practice Operations Workspace — layout replaced to CORRECTED
+
+> **Closed first, before this register was written up.** /practice/home was rebuilt to the comp: the
+> six-tile KPI strip, today's schedule, operational alerts, tasks, messages, quick actions, the location
+> switcher and the notification count. The ordering doctrine and the derived counts live INSIDE that
+> layout, as this entry said they could. Revenue, patient satisfaction and collection render in their
+> designed positions carrying the reason they are empty. Configurable widgets arrived with CPR-360.
+> See respec s10.
 - **Have:** an ordered attention list, real counts, capability-aware blind spots.
 - **Missing:** KPI strip (appointments / new patients / procedures / follow-ups / messages / tasks),
   Today's Schedule timeline with clinic sessions, Operational Alerts panel, Tasks and Messages panels,
@@ -236,3 +243,37 @@ title will be plausible, coherent, well-tested and wrong.
 
 Where a comp asks for something that cannot be built honestly, the rule stays what §4 says — refuse the
 *claim*, keep the *layout*, and render an explicit empty state in the position the comp specifies.
+
+## 5. Where this register stands
+
+**Ten of the eleven modules are closed.** CPR-300, 310, 320, 330, 340, 350, 360, 130, 140 and 150 were
+each re-read against their specification and comp, corrected, harnessed, and recorded in
+`CPR-BUILD-001-v1-respecification.md` §§10, 18–26. Migrations 204–212.
+
+**CPR-370 Security, Privacy & Practitioner Control is the one that remains**, and it is the largest of
+them: MFA, session management, device management, consent management and break-glass emergency access.
+It is not a correction to something built wrong — those five capabilities have never been started, and
+break-glass in particular is a real clinical concept (emergency access to a record you would not normally
+open, logged loudly and reviewed afterwards) rather than a checkbox.
+
+### What the corrections had in common
+
+Three patterns recurred often enough to be worth stating:
+
+1. **Check what has already been built before building it.** CPR-320 listed nine gaps and six had been
+   filled by later modules; CPR-340's notification preferences arrived with CPR-360. Building them twice
+   would have been the mistake, not the fix.
+2. **The refusals were usually right; the omissions were not.** Rates, composite scores, invented
+   baselines and unbuilt AI panels all stayed refused — but refusing four tiles never justified replacing
+   a whole layout. Unavailable figures now render in their designed position with an explicit reason.
+3. **A rule stated in the payload beats a rule stated on the page.** `blocksWork: false`,
+   `sentByThisProduct: false`, `quotaBytes: null`, `competencyLinked: false`, `fires: false` — each stops
+   a client rendering something as more than it is, which a comment in the UI cannot.
+
+### What the harnesses caught
+
+Worth recording, because it is the argument for writing them this way: the harnesses found **a partial
+delegation being granted under an area's name**, **an approval queue sorting urgent requests to the
+bottom**, **`listTasks` not carrying recurrence**, **two fabricated eGFR reference values**, **an
+assertion passing against `undefined`**, and **a dark-theme rule that existed but did not apply**. Four
+of those were in shipped-looking code; two were in the harnesses themselves.
