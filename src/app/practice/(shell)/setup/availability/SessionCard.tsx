@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -36,8 +36,37 @@ export default function SessionCard({ session, locations, kindHue }: {
 }) {
   const router = useRouter();
   const [mode, setMode] = useState<Mode>(null);
+  const [menuOpen, setMenuOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<{ kind: "ok" | "err"; text: string } | null>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  // ── WHY THIS IS NOT A <details> ────────────────────────────────────────────────────────────────
+  //
+  // It was, and it was wrong twice over. A native <details> only closes when its own summary is clicked
+  // again -- so clicking anywhere else left it open, and opening a second card's menu left BOTH on
+  // screen at once. Worse, the open menu is absolutely positioned over the card, so choosing Delete
+  // rendered the confirmation UNDERNEATH it: the button was there, and unreachable. "Unable to delete"
+  // was a z-index, not a refusal.
+  //
+  // A controlled menu that closes on outside click, on Escape, and on choosing anything fixes all three.
+  useEffect(() => {
+    if (!menuOpen) return;
+    const closeOnOutside = (e: PointerEvent) => {
+      if (!menuRef.current?.contains(e.target as Node)) setMenuOpen(false);
+    };
+    const closeOnEscape = (e: KeyboardEvent) => { if (e.key === "Escape") setMenuOpen(false); };
+    // `capture` so a click on ANOTHER card's trigger closes this one before that one opens.
+    document.addEventListener("pointerdown", closeOnOutside, true);
+    document.addEventListener("keydown", closeOnEscape);
+    return () => {
+      document.removeEventListener("pointerdown", closeOnOutside, true);
+      document.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [menuOpen]);
+
+  /** Every menu item does this: pick the mode AND put the menu away, so nothing is left covering it. */
+  const choose = (next: Mode) => { setMode(next); setMenuOpen(false); };
 
   const [draft, setDraft] = useState({
     weekday: String(session.weekday),
@@ -83,31 +112,39 @@ export default function SessionCard({ session, locations, kindHue }: {
           <p className="truncate text-[9px] text-gray-500">{locName(session.location_id)}</p>
           {suspended && <p className="text-[9px] font-semibold text-amber-700">Suspended</p>}
         </div>
-        <details className="relative shrink-0">
-          <summary className="cursor-pointer list-none px-1 text-[12px] leading-none text-gray-400 hover:text-gray-700"
-            aria-label="Session actions">⋮</summary>
-          <div className="absolute right-0 z-20 mt-1 w-36 rounded-lg border border-gray-200 bg-white py-1 shadow-lg">
-            <button type="button" onClick={() => setMode("edit")}
-              className="block w-full px-2.5 py-1.5 text-left text-[11px] text-gray-700 hover:bg-gray-50">
-              Edit or move
-            </button>
-            <button type="button" onClick={() => setMode("duplicate")}
-              className="block w-full px-2.5 py-1.5 text-left text-[11px] text-gray-700 hover:bg-gray-50">
-              Duplicate
-            </button>
-            <button type="button" disabled={busy}
-              onClick={() => send(
-                { action: "edit_session", templateId: session.id, status: suspended ? "active" : "suspended" },
-                () => (suspended ? "Session resumed." : "Session suspended — it stops generating and keeps its place."))}
-              className="block w-full px-2.5 py-1.5 text-left text-[11px] text-gray-700 hover:bg-gray-50">
-              {suspended ? "Resume" : "Suspend"}
-            </button>
-            <button type="button" onClick={() => setMode("confirm-delete")}
-              className="block w-full px-2.5 py-1.5 text-left text-[11px] text-rose-700 hover:bg-rose-50">
-              Delete
-            </button>
-          </div>
-        </details>
+        <div className="relative shrink-0" ref={menuRef}>
+          <button type="button" onClick={() => setMenuOpen(o => !o)}
+            aria-haspopup="menu" aria-expanded={menuOpen}
+            className="px-1 text-[12px] leading-none text-gray-400 hover:text-gray-700"
+            aria-label="Session actions">⋮</button>
+          {menuOpen && (
+            <div role="menu"
+              className="absolute right-0 z-30 mt-1 w-36 rounded-lg border border-gray-200 bg-white py-1 shadow-lg">
+              <button type="button" role="menuitem" onClick={() => choose("edit")}
+                className="block w-full px-2.5 py-1.5 text-left text-[11px] text-gray-700 hover:bg-gray-50">
+                Edit or move
+              </button>
+              <button type="button" role="menuitem" onClick={() => choose("duplicate")}
+                className="block w-full px-2.5 py-1.5 text-left text-[11px] text-gray-700 hover:bg-gray-50">
+                Duplicate
+              </button>
+              <button type="button" role="menuitem" disabled={busy}
+                onClick={() => {
+                  setMenuOpen(false);
+                  void send(
+                    { action: "edit_session", templateId: session.id, status: suspended ? "active" : "suspended" },
+                    () => (suspended ? "Session resumed." : "Session suspended — it stops generating and keeps its place."));
+                }}
+                className="block w-full px-2.5 py-1.5 text-left text-[11px] text-gray-700 hover:bg-gray-50">
+                {suspended ? "Resume" : "Suspend"}
+              </button>
+              <button type="button" role="menuitem" onClick={() => choose("confirm-delete")}
+                className="block w-full px-2.5 py-1.5 text-left text-[11px] text-rose-700 hover:bg-rose-50">
+                Delete
+              </button>
+            </div>
+          )}
+        </div>
       </div>
 
       {notice && (
