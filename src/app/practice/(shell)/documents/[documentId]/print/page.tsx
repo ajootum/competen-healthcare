@@ -5,6 +5,7 @@ import { hasCapability } from "@/lib/practice/access";
 import { getDocument } from "@/lib/practice/documentation";
 import { letterhead } from "@/lib/practice/document-generation";
 import { logAccess } from "@/lib/practice/privacy";
+import { formatDateTime } from "@/lib/datetime";
 
 // /practice/documents/[id]/print -- CPR-330 export.
 //
@@ -97,7 +98,7 @@ export default async function PrintDocumentPage({ params }: { params: Promise<{ 
         <footer className="mt-10 border-t border-black/20 pt-3 text-[11px]">
           {signed ? (
             <>
-              <p>Signed {doc.signed_at ? new Date(doc.signed_at).toLocaleString() : ""}.</p>
+              <p>Signed {doc.signed_at ? formatDateTime(doc.signed_at) : ""}.</p>
               <p className="text-black/60">
                 {/* NO IMAGE OF A SIGNATURE. This product signs by recording who signed and when; drawing
                     a facsimile would assert something the record does not hold. */}

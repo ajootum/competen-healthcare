@@ -4,6 +4,7 @@ import Link from "next/link";
 import { loadShiftAttendance } from "@/lib/operations/shift-attendance";
 import { cardClass } from "@/components/ui/primitives";
 import { KpiTileBare as Kpi } from "../_kit";
+import { formatDateTime } from "@/lib/datetime";
 
 // Shift Attendance & Fatigue (SSW-WFM-001 / WFM-003) — the supervisor's lens
 // over attendance for the shift they are actually running.
@@ -206,7 +207,7 @@ export default async function ShiftAttendancePage() {
                       <p className="text-sm text-gray-900">{titleCase(e.category)}{e.staff_name ? ` · ${e.staff_name}` : ""}</p>
                       {e.rule_breached && <p className="text-[11px] text-gray-500">{e.rule_breached}</p>}
                       {e.operational_impact && <p className="text-[11px] text-gray-500">{e.operational_impact}</p>}
-                      <p className="text-[10px] text-gray-400">{titleCase(e.status)} · detected {new Date(e.detected_at).toLocaleString()}</p>
+                      <p className="text-[10px] text-gray-400">{titleCase(e.status)} · detected {formatDateTime(e.detected_at)}</p>
                     </div>
                   </div>
                 </li>
@@ -236,7 +237,7 @@ export default async function ShiftAttendancePage() {
                     <p className="text-[10px] text-gray-400">
                       {titleCase(r.status)}
                       {r.selected_staff_name ? ` · offered to ${r.selected_staff_name}` : ""}
-                      {r.offer_expires_at ? ` · offer expires ${new Date(r.offer_expires_at).toLocaleString()}` : ""}
+                      {r.offer_expires_at ? ` · offer expires ${formatDateTime(r.offer_expires_at)}` : ""}
                     </p>
                   </div>
                 </li>

@@ -4,6 +4,7 @@ import Link from "next/link";
 import { loadUnitIntelligence } from "@/lib/operations/ai-intelligence";
 import AiTabs from "../AiTabs";
 import { cardClass } from "@/components/ui/primitives";
+import { formatDateTime } from "@/lib/datetime";
 
 // AI & Intelligence → Executive Recommendations (UMG-AI). The full prioritised cross-domain recommendation
 // queue — the same consolidated signals as the command centre, grouped by domain, each routing to its
@@ -72,7 +73,7 @@ export default async function RecommendationsPage() {
             </div>
           </div>
 
-          <p className="text-[11px] text-gray-400">Explainable, decision-support recommendations over real unit data — acting on any item routes to its authoritative, audited surface. Generated {new Date(d.generatedAt).toLocaleString()}.</p>
+          <p className="text-[11px] text-gray-400">Explainable, decision-support recommendations over real unit data — acting on any item routes to its authoritative, audited surface. Generated {formatDateTime(d.generatedAt)}.</p>
         </>
       )}
     </div>

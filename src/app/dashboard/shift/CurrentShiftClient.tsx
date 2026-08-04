@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import { cardClass } from "@/components/ui/primitives";
+import { formatDateTime } from "@/lib/datetime";
 
 // Current Shift (HWW-012) — the healthcare worker's personal operational
 // dashboard. Everything shown is real op_* data; fields the operational schema
@@ -442,7 +443,7 @@ export default function CurrentShiftClient({ ready }: { ready: boolean }) {
                   <span className="text-gray-700">{titleCase(o.observation_type)}</span>
                   {o.ews_score != null && <span className={`font-medium ${ewsColor(o.ews_score)}`}>PEWS {o.ews_score}</span>}
                   {o.escalation_triggered && <span className="text-[10px] px-1.5 py-0.5 rounded bg-[var(--cmp-surface-critical)] text-[var(--cmp-text-critical)]">escalated</span>}
-                  <span className="ml-auto text-xs text-gray-400">{o.status === "due" ? "due" : o.recorded_at ? new Date(o.recorded_at).toLocaleString() : ""}</span>
+                  <span className="ml-auto text-xs text-gray-400">{o.status === "due" ? "due" : o.recorded_at ? formatDateTime(o.recorded_at) : ""}</span>
                 </div>
               ))}
             </div>

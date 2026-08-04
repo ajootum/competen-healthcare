@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { formatDateTime } from "@/lib/datetime";
 
 // Educator Notifications Centre (COMPETEN Educator Notifications Developer
 // Specification v2.0 + approved mockup). Summary cards, category tabs, list
@@ -388,7 +389,7 @@ export default function NotificationsCentre({ items, validatedToday, pendingVali
                 </div>
               )}
               <div className="flex justify-between"><span className="text-gray-400">Category</span><span className={`text-[9px] font-semibold px-2 py-0.5 rounded ${CATEGORY_CHIP[cat] ?? CATEGORY_CHIP.Other}`}>{cat}</span></div>
-              <div className="flex justify-between"><span className="text-gray-400">Received</span><span className="text-gray-700" suppressHydrationWarning>{new Date(selected.created_at).toLocaleString()}</span></div>
+              <div className="flex justify-between"><span className="text-gray-400">Received</span><span className="text-gray-700" suppressHydrationWarning>{formatDateTime(selected.created_at)}</span></div>
               <div className="flex justify-between"><span className="text-gray-400">Status</span>
                 <span className={`text-[9px] font-bold px-2 py-0.5 rounded ${selected.read ? "bg-gray-100 text-gray-400" : "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]"}`}>{selected.read ? "Read" : "Unread"}</span>
               </div>

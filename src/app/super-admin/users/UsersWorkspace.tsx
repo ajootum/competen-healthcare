@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { ROLE_CONFIG, ORG_ROLE_CONFIG, PLATFORM_ROLE_CONFIG, type AppRole, type OrgRole, type PlatformRole } from "@/lib/roles";
 import UserRoleEditor from "./UserRoleEditor";
 import { Modal, Drawer } from "@/components/ui/interactive";
+import { formatDateTime } from "@/lib/datetime";
 
 export type UserRow = {
   id: string; name: string; email: string; phone: string | null;
@@ -673,7 +674,7 @@ export default function UsersWorkspace({
                           <span className="font-medium">{e.action.replace(/_/g, " ")}</span>
                           {e.entityName ? <> — {e.entityName}</> : null}
                         </p>
-                        <p className="text-[9px] text-gray-400" suppressHydrationWarning>{new Date(e.at).toLocaleString()}{e.entityType ? ` · ${e.entityType}` : ""}</p>
+                        <p className="text-[9px] text-gray-400" suppressHydrationWarning>{formatDateTime(e.at)}{e.entityType ? ` · ${e.entityType}` : ""}</p>
                       </div>
                     ))}
                   </div>

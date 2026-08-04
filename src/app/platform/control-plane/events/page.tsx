@@ -3,6 +3,7 @@ import Link from "next/link";
 import { getLandlordCaller } from "@/lib/platform/landlord";
 import { loadEventCentre } from "@/lib/platform/events";
 import { cardClass } from "@/components/ui/primitives";
+import { formatDateTime } from "@/lib/datetime";
 
 export const dynamic = "force-dynamic";
 
@@ -56,7 +57,7 @@ export default async function EventCentrePage() {
                   <div key={i} className="py-2 text-sm flex items-center gap-2">
                     <span className={`text-[10px] uppercase tracking-wide rounded px-1.5 py-0.5 ${sevCls[e.severity] ?? sevCls.info}`}>{e.severity}</span>
                     <span className="font-mono text-gray-800">{e.event_type}</span>
-                    <span className="ml-auto text-xs text-gray-400 shrink-0">{e.created_at ? new Date(e.created_at).toLocaleString() : ""}</span>
+                    <span className="ml-auto text-xs text-gray-400 shrink-0">{e.created_at ? formatDateTime(e.created_at) : ""}</span>
                   </div>
                 ))}
               </div>

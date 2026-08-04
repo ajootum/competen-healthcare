@@ -5,6 +5,7 @@ import { loadUnitIntelligence } from "@/lib/operations/ai-intelligence";
 import AiCopilotPanel from "@/components/AiCopilotPanel";
 import AiTabs from "./AiTabs";
 import { cardClass } from "@/components/ui/primitives";
+import { formatDateTime } from "@/lib/datetime";
 
 // AI & Intelligence (UMG-AI) command centre — the unit's cross-domain intelligence hub. Consolidates the
 // rule-based AI signals every domain loader already computes into one prioritised view, adds a LIVE copilot
@@ -103,7 +104,7 @@ export default async function UnitAiPage() {
             </div>
           </div>
 
-          <p className="text-[11px] text-gray-400">Recommendations are explainable, decision-support signals over real unit data — the copilot advises, it does not execute changes. Acting on any item routes to its authoritative, audited surface. Generated {new Date(d.generatedAt).toLocaleString()}.</p>
+          <p className="text-[11px] text-gray-400">Recommendations are explainable, decision-support signals over real unit data — the copilot advises, it does not execute changes. Acting on any item routes to its authoritative, audited surface. Generated {formatDateTime(d.generatedAt)}.</p>
         </>
       )}
     </div>

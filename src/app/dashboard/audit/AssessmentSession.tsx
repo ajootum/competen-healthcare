@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useSyncExternalStore } from "react";
 import Link from "next/link";
+import { formatDateTime, formatTime } from "@/lib/datetime";
 import {
   ASSESSMENT_SECTIONS, GRADE_LABELS, avgToLevel, LEVEL_COLORS,
   CommentsSection, generateAssessmentReport,
@@ -159,7 +160,7 @@ export default function AssessmentSession({
       grades, nurseId, nurseName, unit, patient, reason,
       assessorComments, nurseComments, step, startedAt, savedAt: Date.now(),
     } satisfies SessionDraft));
-    setDraftNote(`Draft saved ${new Date().toLocaleTimeString()}`);
+    setDraftNote(`Draft saved ${formatTime(new Date())}`);
     setDraftHandled(true);
   };
 
@@ -175,7 +176,7 @@ export default function AssessmentSession({
     if (typeof pendingDraft.nurseComments === "string") setNurseComments(pendingDraft.nurseComments);
     if (typeof pendingDraft.step === "number") setStep(Math.min(pendingDraft.step, REVIEW_STEP));
     if (typeof pendingDraft.startedAt === "number") setStartedAt(pendingDraft.startedAt);
-    setDraftNote(pendingDraft.savedAt ? `Draft resumed — saved ${new Date(pendingDraft.savedAt).toLocaleString()}` : "Draft resumed");
+    setDraftNote(pendingDraft.savedAt ? `Draft resumed — saved ${formatDateTime(pendingDraft.savedAt)}` : "Draft resumed");
     setDraftHandled(true);
   };
 
@@ -257,7 +258,7 @@ export default function AssessmentSession({
           <div className="flex-1">
             <p className="text-sm font-semibold text-amber-900">Saved draft found</p>
             <p className="text-xs text-amber-800/70 mt-0.5" suppressHydrationWarning>
-              {pendingDraft.savedAt ? `Saved ${new Date(pendingDraft.savedAt).toLocaleString()} · ` : ""}
+              {pendingDraft.savedAt ? `Saved ${formatDateTime(pendingDraft.savedAt)} · ` : ""}
               {Object.keys(pendingDraft.grades ?? {}).length} of {totalItems} items scored
             </p>
           </div>

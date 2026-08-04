@@ -2,6 +2,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { formatDateTime } from "@/lib/datetime";
 
 // Configuration Migration Toolkit (NCP-020) — export a dependency-closed config bundle, or import one with a
 // dry-run and dependency-ordered, checkpointed apply (rollback-capable). Export pulls in every dependency so the
@@ -11,7 +12,7 @@ type Job = { id: string; job_type: string; status: string; object_count: number;
 
 const input = "border border-gray-200 rounded px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-indigo-400 bg-white";
 const JT: Record<string, string> = { export: "bg-[var(--cmp-surface-information)] text-[var(--cmp-text-information)]", import: "bg-indigo-100 text-indigo-700", rollback: "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]" };
-const when = (s: string) => { try { return new Date(s).toLocaleString(); } catch { return s; } };
+const when = (s: string) => { try { return formatDateTime(s); } catch { return s; } };
 
 export default function MigrationToolkit({ objects, jobs }: { objects: ObjRow[]; jobs: Job[] }) {
   const router = useRouter();

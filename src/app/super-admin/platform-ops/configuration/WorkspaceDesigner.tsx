@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { resolveSettings, overrideAt, type OverrideRow, type ScopeCtx } from "@/lib/config/workspace-config";
 import type { CatalogWorkspace } from "@/lib/config/workspace-catalog";
+import { formatDateTime } from "@/lib/datetime";
 
 // Workspace Configuration Engine (WCE-001) Designer — edit draft config per scope,
 // publish (draft→published) and roll back. Runtime enforcement is live for wired
@@ -137,7 +138,7 @@ export default function WorkspaceDesigner({ catalog, rows, versions, hospitals, 
               <div key={v.id} className="flex items-center gap-2 text-xs">
                 <span className={`px-1.5 py-0.5 rounded ${v.status === "rolled_back" ? "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]" : "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]"}`}>{v.status}</span>
                 <span className="text-gray-700">{v.label ?? "Version"}</span>
-                <span className="text-gray-400">· {v.published_by_name ?? "—"} · {new Date(v.created_at).toLocaleString()}</span>
+                <span className="text-gray-400">· {v.published_by_name ?? "—"} · {formatDateTime(v.created_at)}</span>
                 <button onClick={() => post({ action: "rollback", version_id: v.id })} disabled={busy || !provisioned} className="ml-auto text-[11px] text-teal-700 hover:underline">Roll back to this →</button>
               </div>
             ))}

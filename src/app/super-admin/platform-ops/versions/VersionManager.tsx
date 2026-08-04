@@ -1,5 +1,6 @@
 "use client";
 import { useState } from "react";
+import { formatDateTime } from "@/lib/datetime";
 
 // Configuration Versioning & Audit (NCP-018) — version timeline + diff + one-click restore over the registry.
 // Pick an object → see its immutable snapshot history → compare any two versions field-by-field → restore a past
@@ -12,7 +13,7 @@ type Diff = { path: string; kind: "added" | "removed" | "changed"; before?: unkn
 const input = "border border-gray-200 rounded px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-indigo-400 bg-white";
 const AB: Record<string, string> = { defined: "bg-indigo-100 text-indigo-700", captured: "bg-gray-100 text-gray-600", published: "bg-[var(--cmp-surface-success)] text-emerald-700", restored: "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]" };
 const short = (v: unknown) => { const s = typeof v === "string" ? v : JSON.stringify(v); return s == null ? "∅" : s.length > 60 ? s.slice(0, 60) + "…" : s; };
-const when = (s: string) => { try { return new Date(s).toLocaleString(); } catch { return s; } };
+const when = (s: string) => { try { return formatDateTime(s); } catch { return s; } };
 
 export default function VersionManager({ objects }: { objects: ObjRow[] }) {
   const [q, setQ] = useState("");

@@ -2,6 +2,7 @@ import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { loadOrgAdminDashboard } from "@/lib/org-admin-data";
 import { cardClass } from "@/components/ui/primitives";
+import { formatDateTime } from "@/lib/datetime";
 
 export const dynamic = "force-dynamic";
 
@@ -60,7 +61,7 @@ export default async function AuditLogsPage() {
                 <div className="flex items-center gap-2">
                   <span className="font-medium text-gray-800 truncate">{a.actor_name ?? "Someone"}</span>
                   <span className="text-gray-500">{a.action ? titleCase(a.action) : "updated"}</span>
-                  <span className="ml-auto text-xs text-gray-400 shrink-0">{a.created_at ? new Date(a.created_at).toLocaleString() : ""}</span>
+                  <span className="ml-auto text-xs text-gray-400 shrink-0">{a.created_at ? formatDateTime(a.created_at) : ""}</span>
                 </div>
                 {(a.entity_name || a.entity_type) && <p className="text-xs text-gray-400 mt-0.5">{a.entity_type ? titleCase(a.entity_type) : ""}{a.entity_name ? ` · ${a.entity_name}` : ""}</p>}
               </div>

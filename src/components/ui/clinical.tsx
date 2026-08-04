@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { classifyPews, levelFromBands, W_LEVELS, I_LEVELS, A_LEVELS } from "@/lib/hww/instruments";
 import { Badge, Progress, cardClass, type BadgeTone } from "./primitives";
+import { formatDateTime } from "@/lib/datetime";
 
 // Clinical components (PUI-004 s8) — patient cards, acuity indicators, PEWS/NAS score widgets, task cards,
 // quality event cards, shift summary widgets.
@@ -64,7 +65,7 @@ export function PewsWidget({ score, category3 = false, assessedAt }: {
       <p className="text-[11px] text-gray-600 mt-2">{band.action}</p>
       <p className="text-[10px] text-gray-400 mt-1">
         Reassess within {band.reassessMinutes} min
-        {assessedAt ? ` · last assessed ${new Date(assessedAt).toLocaleString()}` : ""}
+        {assessedAt ? ` · last assessed ${formatDateTime(assessedAt)}` : ""}
       </p>
     </div>
   );
@@ -176,7 +177,7 @@ export function TaskCard({ description, priority, status, dueAt, owner, patientL
       <p className="text-[10px] text-gray-400 mt-1">
         {patientLabel ? `${patientLabel} · ` : ""}
         {owner ?? "Unassigned"}
-        {dueAt ? ` · due ${new Date(dueAt).toLocaleString()}` : " · no due date"}
+        {dueAt ? ` · due ${formatDateTime(dueAt)}` : " · no due date"}
         {status ? ` · ${status.replace(/_/g, " ")}` : ""}
       </p>
     </div>
@@ -201,7 +202,7 @@ export function QualityEventCard({ title, severity, status, at, detail, href }: 
       {detail && <p className="text-[11px] text-gray-600 mt-0.5">{detail}</p>}
       <p className="text-[10px] text-gray-400 mt-1">
         {status ? status.replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase()) : ""}
-        {at ? ` · ${new Date(at).toLocaleString()}` : ""}
+        {at ? ` · ${formatDateTime(at)}` : ""}
       </p>
     </>
   );

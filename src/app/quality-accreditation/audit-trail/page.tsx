@@ -1,5 +1,6 @@
 import { qaGuard, Head, Tabs, Stat, Card, Donut, Legend, Trend, Bars, Table, Foot } from "../_ui";
 import { loadAuditTrail } from "@/lib/qaw/audit-trail";
+import { formatDateTime } from "@/lib/datetime";
 
 export const dynamic = "force-dynamic";
 
@@ -44,7 +45,7 @@ export default async function AuditTrailPage() {
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
         <Card title="Recent audit events" className="xl:col-span-2">
           <Table cols={["Time", "User", "Action", "Module", "Record"]} rows={d.recent.map((e: any) => [
-            <span key="t" className="text-gray-400 tabular-nums whitespace-nowrap">{e.when ? new Date(e.when).toLocaleString() : "—"}</span>,
+            <span key="t" className="text-gray-400 tabular-nums whitespace-nowrap">{e.when ? formatDateTime(e.when) : "—"}</span>,
             <span key="u" className="text-gray-700">{e.actor ?? "system"}</span>,
             <span key="a" className="text-gray-600">{(e.action ?? "").replace(/_/g, " ")}</span>,
             <span key="m" className="text-gray-500 capitalize">{e.module}</span>,

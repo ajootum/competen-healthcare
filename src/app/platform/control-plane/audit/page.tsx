@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { getLandlordCaller } from "@/lib/platform/landlord";
 import { cardClass } from "@/components/ui/primitives";
+import { formatDateTime } from "@/lib/datetime";
 
 export const dynamic = "force-dynamic";
 
@@ -37,7 +38,7 @@ export default async function AuditCentrePage() {
                   <span className="text-[10px] uppercase tracking-wide bg-violet-50 text-violet-700 rounded px-1.5 py-0.5">{e.actor_plane}</span>
                   <span className="font-medium text-gray-800">{e.actor_name ?? "Operator"}</span>
                   <span className="text-gray-500">{e.action ? titleCase(e.action) : "action"}</span>
-                  <span className="ml-auto text-xs text-gray-400 shrink-0">{e.created_at ? new Date(e.created_at).toLocaleString() : ""}</span>
+                  <span className="ml-auto text-xs text-gray-400 shrink-0">{e.created_at ? formatDateTime(e.created_at) : ""}</span>
                 </div>
                 {(e.entity_name || e.reason) && <p className="text-xs text-gray-400 mt-0.5">{e.entity_type ? titleCase(e.entity_type) : ""}{e.entity_name ? ` · ${e.entity_name}` : ""}{e.reason ? ` — ${e.reason}` : ""}</p>}
               </div>

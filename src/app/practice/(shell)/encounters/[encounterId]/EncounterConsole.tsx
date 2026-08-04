@@ -11,6 +11,7 @@ import {
 } from "@/lib/practice/procedure-constants";
 import Dictation from "@/components/practice/Dictation";
 import DocumentationTools from "./DocumentationTools";
+import { formatTime } from "@/lib/datetime";
 
 // CPR-V2-006's consultation surface: the SOAP note, diagnoses, treatments, and the transition bar.
 //
@@ -130,7 +131,7 @@ export default function EncounterConsole(props: {
           method: "PUT", headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ noteType: t, body }),
         }).then(r => {
-          if (r.ok) setDraftAt(d => ({ ...d, [t]: new Date().toLocaleTimeString() }));
+          if (r.ok) setDraftAt(d => ({ ...d, [t]: formatTime(new Date()) }));
         }).catch(() => {});
       }
     }, 120_000);

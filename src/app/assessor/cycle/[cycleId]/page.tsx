@@ -3,6 +3,7 @@ import { createAdminClient } from "@/lib/supabase/server";
 import { redirect, notFound } from "next/navigation";
 import Link from "next/link";
 import AssessmentForm from "./AssessmentForm";
+import { formatDateTime } from "@/lib/datetime";
 
 // Overall recommendation labels (assessment_sessions.recommendation check constraint).
 const REC: Record<string, { label: string; cls: string }> = {
@@ -120,7 +121,7 @@ export default async function CycleAssessPage({ params }: { params: Promise<{ cy
                     <div className="min-w-0">
                       <p className="text-sm font-medium text-gray-800">{assessor} · <span className="capitalize">{(s.method ?? "").replace(/_/g, " ")}</span></p>
                       <p className="text-[11px] text-gray-400">
-                        {new Date(s.created_at).toLocaleString()} · {s.scored_count ?? 0} scored{mins ? ` · ${mins} min` : ""}{s.location ? ` · ${s.location}` : ""}
+                        {formatDateTime(s.created_at)} · {s.scored_count ?? 0} scored{mins ? ` · ${mins} min` : ""}{s.location ? ` · ${s.location}` : ""}
                       </p>
                     </div>
                     {rec && <span className={`text-[10px] font-bold px-2 py-0.5 rounded shrink-0 ${rec.cls}`}>{rec.label}</span>}

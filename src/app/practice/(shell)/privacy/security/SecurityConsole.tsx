@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { formatDateTime } from "@/lib/datetime";
 
 // CPR-370's security surface: devices, emergency access, consent counts and the policy.
 //
@@ -159,7 +160,7 @@ export default function SecurityConsole({ posture, sessions, glass, canManage, c
                         </span>
                       )}
                       <span className="ml-auto text-[10px] text-gray-500">
-                        {new Date(e.started_at).toLocaleString()}
+                        {formatDateTime(e.started_at)}
                       </span>
                     </div>
                     <p className="mt-0.5 text-[11px] text-gray-600">{e.reason}</p>

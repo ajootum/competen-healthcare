@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { OUTCOME_CONFIG, type DecisionOutcome } from "@/lib/ckcm";
 import ConductCockpit, { type CockpitFramework, type CockpitLevel } from "./ConductCockpit";
+import { formatDateTime } from "@/lib/datetime";
 
 // Conduct Assessment workspace (assessor cockpit). One live session per
 // clinician + cycle: guided workflow, criterion checklists (real
@@ -75,7 +76,7 @@ export default async function AssessorAssessPage({ searchParams }: { searchParam
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-medium text-gray-900">{nurseName}</p>
                     <p className="text-xs text-gray-400 capitalize" suppressHydrationWarning>
-                      {new Date(s.scheduled_for).toLocaleString()} · {s.method.replace(/_/g, " ")}{s.location ? ` · ${s.location}` : ""}
+                      {formatDateTime(s.scheduled_for)} · {s.method.replace(/_/g, " ")}{s.location ? ` · ${s.location}` : ""}
                     </p>
                   </div>
                   <Link href={`/assessor/assess?nurse=${s.nurse_id}&s=${s.id}`}
