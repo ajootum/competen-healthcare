@@ -4,6 +4,8 @@ import {
   getConfiguration, updateConfiguration, configurationHistory,
   listLocations, createLocation, updateLocation,
 } from "@/lib/practice/configuration";
+import { linkLocationToFacility, setTravelBuffer } from "@/lib/practice/hospital-booking";
+import { listFacilities } from "@/lib/practice/facilities";
 
 // GET   /api/v1/practice/configuration -- settings, locations and the trail behind them.
 // PATCH /api/v1/practice/configuration -- { settings: {...} }
@@ -17,13 +19,15 @@ export async function GET() {
   const auth = await requirePracticeContext("practice.settings.manage");
   if (isDenied(auth)) return auth;
 
-  const [configuration, locations, history] = await Promise.all([
+  const [configuration, locations, history, facilities] = await Promise.all([
     getConfiguration(auth.caller.admin, auth.ctx.workspaceId),
     listLocations(auth.caller.admin, auth.ctx.workspaceId),
     configurationHistory(auth.caller.admin, auth.ctx.workspaceId),
+    // The institutions a location can BE, so the settings screen can offer the link.
+    listFacilities(auth.caller.admin, auth.ctx),
   ]);
   if (!configuration) return NextResponse.json({ error: "Not found" }, { status: 404 });
-  return NextResponse.json({ ...configuration, locations, history, correlationId: auth.caller.traceId });
+  return NextResponse.json({ ...configuration, locations, history, facilities, correlationId: auth.caller.traceId });
 }
 
 export async function PATCH(req: NextRequest) {
@@ -78,6 +82,28 @@ export async function PUT(req: NextRequest) {
   let body: Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
   try { body = await req.json(); } catch { return NextResponse.json({ error: "invalid JSON" }, { status: 400 }); }
   if (!body.locationId) return NextResponse.json({ error: "locationId is required" }, { status: 400 });
+
+  // MULTI-HOSPITAL. Two edits that are about the same row but not about its name or type: which
+  // institution this place IS, and how long it takes to get here. Handled before the general update so
+  // an unrelated NO_CHANGE cannot swallow them.
+  if (body.facilityId !== undefined) {
+    const linked = await linkLocationToFacility(auth.caller.admin, auth.ctx, {
+      locationId: String(body.locationId),
+      facilityId: body.facilityId ? String(body.facilityId) : null,
+      actorId: auth.caller.userId, correlationId: auth.caller.traceId,
+    });
+    if (!linked.ok) return NextResponse.json({ error: { code: linked.code, message: linked.message } }, { status: linked.status });
+    return NextResponse.json({ location: linked.data, correlationId: auth.caller.traceId });
+  }
+
+  if (body.travelBufferMinutes !== undefined) {
+    const buffered = await setTravelBuffer(auth.caller.admin, auth.ctx, {
+      locationId: String(body.locationId), minutes: Number(body.travelBufferMinutes),
+      actorId: auth.caller.userId, correlationId: auth.caller.traceId,
+    });
+    if (!buffered.ok) return NextResponse.json({ error: { code: buffered.code, message: buffered.message } }, { status: buffered.status });
+    return NextResponse.json({ location: buffered.data, correlationId: auth.caller.traceId });
+  }
 
   const result = await updateLocation(auth.caller.admin, {
     workspaceId: auth.ctx.workspaceId, locationId: String(body.locationId),

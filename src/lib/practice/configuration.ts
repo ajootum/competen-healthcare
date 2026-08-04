@@ -237,7 +237,8 @@ export async function configurationHistory(admin: any, workspaceId: string, limi
 
 export async function listLocations(admin: any, workspaceId: string) {
   const { data } = await admin.from("practice_location")
-    .select("id, name, type, country, active, created_at").eq("workspace_id", workspaceId).order("created_at");
+    .select("id, name, type, country, active, created_at, facility_id, travel_buffer_minutes")
+    .eq("workspace_id", workspaceId).order("created_at");
   return (data ?? []) as any[];
 }
 

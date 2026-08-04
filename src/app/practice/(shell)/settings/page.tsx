@@ -4,6 +4,7 @@ import { createAdminClient } from "@/lib/supabase/server";
 import { resolvePracticeShell } from "@/lib/practice/shell";
 import { hasCapability } from "@/lib/practice/access";
 import { getConfiguration, listLocations, configurationHistory } from "@/lib/practice/configuration";
+import { listFacilities } from "@/lib/practice/facilities";
 import { resolvePreferences, configurationChecklist } from "@/lib/practice/preferences";
 import SettingsConsole from "./SettingsConsole";
 import PersonalisationConsole from "./PersonalisationConsole";
@@ -36,12 +37,14 @@ export default async function SettingsPage() {
   const canManagePractice = hasCapability(ctx, "practice.settings.manage");
   const admin = createAdminClient();
 
-  const [resolved, checklist, configuration, locations, history] = await Promise.all([
+  const [resolved, checklist, configuration, locations, history, facilities] = await Promise.all([
     resolvePreferences(admin, ctx.workspaceId, ctx.userId),
     configurationChecklist(admin, ctx.workspaceId, ctx.userId),
     canManagePractice ? getConfiguration(admin, ctx.workspaceId) : Promise.resolve(null),
     canManagePractice ? listLocations(admin, ctx.workspaceId) : Promise.resolve([]),
     canManagePractice ? configurationHistory(admin, ctx.workspaceId) : Promise.resolve([]),
+    // Which institution a location IS -- migration 228. Needed to offer the link at all.
+    canManagePractice ? listFacilities(admin, ctx) : Promise.resolve([]),
   ]);
 
   return (
@@ -110,6 +113,7 @@ export default async function SettingsPage() {
             inertColumns={configuration.inertColumns}
             locations={locations}
             history={history}
+            facilities={facilities}
             canManageLocations={hasCapability(ctx, "practice.locations.manage")}
           />
         </>

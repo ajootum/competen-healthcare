@@ -15,9 +15,11 @@ import { ENCOUNTER_MODES, LOCATION_TYPES, APPOINTMENT_MINUTES_BOUNDS } from "@/l
 
 const input = "w-full rounded-lg border border-gray-200 px-2.5 py-2 text-[13px] outline-none focus:border-[var(--cp-primary)] focus:ring-2 focus:ring-[var(--cp-primary)]/10";
 
-export default function SettingsConsole({ workspace, config, today, inertColumns, locations, history, canManageLocations }: {
+export default function SettingsConsole({ workspace, config, today, inertColumns, locations, history, canManageLocations, facilities = [] }: {
   workspace: any; config: any; today: string; inertColumns: string[];
   locations: any[]; history: any[]; canManageLocations: boolean;
+  /** The institutions a location can BE. Empty until the practice records one. */
+  facilities?: any[];
 }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -173,18 +175,51 @@ export default function SettingsConsole({ workspace, config, today, inertColumns
         ) : (
           <ul className="mt-2 flex flex-col gap-1">
             {locations.map(l => (
-              <li key={l.id} className="flex items-center gap-2 text-[12px]">
-                <span className={l.active ? "font-semibold text-gray-800" : "text-gray-400 line-through"}>{l.name}</span>
-                <span className="rounded bg-gray-100 px-1.5 py-0.5 text-[10px] font-semibold text-gray-500">
-                  {String(l.type).replace(/_/g, " ")}
-                </span>
-                {!l.active && <span className="text-[10px] text-gray-400">closed</span>}
-                {canManageLocations && (
-                  <button type="button" disabled={busy}
-                    onClick={() => send("PUT", { locationId: l.id, active: !l.active })}
-                    className="ml-auto rounded border border-gray-200 px-2 py-0.5 text-[11px] font-semibold text-gray-600 hover:bg-gray-50 disabled:opacity-50">
-                    {l.active ? "Close" : "Reopen"}
-                  </button>
+              <li key={l.id} className="rounded-lg border border-gray-100 px-2.5 py-2 text-[12px]">
+                <div className="flex items-center gap-2">
+                  <span className={l.active ? "font-semibold text-gray-800" : "text-gray-400 line-through"}>{l.name}</span>
+                  <span className="rounded bg-gray-100 px-1.5 py-0.5 text-[10px] font-semibold text-gray-500">
+                    {String(l.type).replace(/_/g, " ")}
+                  </span>
+                  {!l.active && <span className="text-[10px] text-gray-400">closed</span>}
+                  {canManageLocations && (
+                    <button type="button" disabled={busy}
+                      onClick={() => send("PUT", { locationId: l.id, active: !l.active })}
+                      className="ml-auto rounded border border-gray-200 px-2 py-0.5 text-[11px] font-semibold text-gray-600 hover:bg-gray-50 disabled:opacity-50">
+                      {l.active ? "Close" : "Reopen"}
+                    </button>
+                  )}
+                </div>
+
+                {/* ── MULTI-HOSPITAL: which institution this place IS, and how long it takes to reach ──
+                    The facility link is what lets a booking screen show this patient's number AT THIS
+                    HOSPITAL rather than whichever MRN happens to sit first on their record. */}
+                {canManageLocations && l.active && (
+                  <div className="mt-1.5 flex flex-wrap items-center gap-2 border-t border-gray-100 pt-1.5">
+                    <label className="text-[11px] text-gray-500" htmlFor={`fac-${l.id}`}>Is</label>
+                    <select id={`fac-${l.id}`} disabled={busy} value={l.facility_id ?? ""}
+                      onChange={e => send("PUT", { locationId: l.id, facilityId: e.target.value || null })}
+                      className="rounded border border-gray-200 px-1.5 py-1 text-[11px] text-gray-700">
+                      <option value="">no facility</option>
+                      {facilities.map((f: any) => <option key={f.id} value={f.id}>{f.name}</option>)}
+                    </select>
+
+                    <label className="ml-2 text-[11px] text-gray-500" htmlFor={`trv-${l.id}`}>Travel here</label>
+                    <input id={`trv-${l.id}`} type="number" min={0} max={480} step={5} disabled={busy}
+                      defaultValue={l.travel_buffer_minutes ?? 30}
+                      onBlur={e => {
+                        const v = Number(e.target.value);
+                        if (v !== (l.travel_buffer_minutes ?? 30)) send("PUT", { locationId: l.id, travelBufferMinutes: v });
+                      }}
+                      className="w-16 rounded border border-gray-200 px-1.5 py-1 text-[11px] text-gray-700" />
+                    <span className="text-[11px] text-gray-400">min</span>
+
+                    {l.type === "hospital" && !l.facility_id && (
+                      <span className="text-[10px] text-amber-700">
+                        a patient&apos;s number here cannot be shown until this is linked
+                      </span>
+                    )}
+                  </div>
                 )}
               </li>
             ))}

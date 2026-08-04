@@ -89,20 +89,72 @@ export async function bookAppointment(admin: any, input: BookInput): Promise<Eng
   }
   if (!patientName) return { ok: false, status: 400, code: "VALIDATION_ERROR", message: "patientName or patientId is required" };
 
+  // THE LOCATION IS VALIDATED, WHICH IT NEVER WAS. location_id has been written straight through since
+  // migration 192, so a booking could name ANOTHER PRACTICE'S location -- a cross-tenant reference that
+  // nothing would ever have noticed, because no screen joined to it until the calendar did.
+  let bookedLocation: { id: string; name: string; travel_buffer_minutes: number } | null = null;
+  if (input.locationId) {
+    const { data: loc } = await admin.from("practice_location")
+      .select("id, name, active, travel_buffer_minutes")
+      .eq("id", input.locationId).eq("workspace_id", input.workspaceId).maybeSingle();
+    if (!loc) return { ok: false, status: 404, code: "NOT_FOUND", message: "Not found" };
+    if (!loc.active) return { ok: false, status: 422, code: "LOCATION_CLOSED", message: `${loc.name} is closed` };
+    bookedLocation = loc;
+  }
+
   // Double-booking check against live appointments in the surrounding window.
   if (!input.allowOverlap && !OVERLAP_EXEMPT.includes(input.appointmentType)) {
     const windowStart = new Date(startMs - 480 * 60000).toISOString();
-    const windowEnd = new Date(endMs).toISOString();
+    const windowEnd = new Date(endMs + 480 * 60000).toISOString();
     const { data: nearby } = await admin.from("practice_appointment")
-      .select("id, scheduled_at, duration_minutes")
+      .select("id, scheduled_at, duration_minutes, location_id")
       .eq("workspace_id", input.workspaceId).in("status", LIVE_STATUSES)
       .gte("scheduled_at", windowStart).lt("scheduled_at", windowEnd);
-    const clash = ((nearby ?? []) as any[]).some(a => {
+    const rows = (nearby ?? []) as any[];
+
+    const clash = rows.some(a => {
       const aStart = Date.parse(a.scheduled_at);
       const aEnd = aStart + (a.duration_minutes ?? 20) * 60000;
       return aStart < endMs && aEnd > startMs;
     });
     if (clash) return { ok: false, status: 409, code: "DOUBLE_BOOKED", message: "this time overlaps a live appointment; pass allowOverlap to double-book deliberately" };
+
+    // ── THE CONFLICT THAT ONLY EXISTS ONCE THERE IS MORE THAN ONE HOSPITAL ────────────────────────
+    //
+    // 09:00 at Hospital A and 09:30 at Hospital B do not overlap, so the check above passes them
+    // happily -- and nobody can be in two hospitals half an hour apart. Whoever accepts both will be
+    // late for one, and the patient at the second waits without being told why.
+    if (input.locationId && bookedLocation) {
+      const elsewhere = rows.filter(a => a.location_id && a.location_id !== input.locationId);
+      if (elsewhere.length > 0) {
+        const otherIds = [...new Set(elsewhere.map(a => a.location_id))];
+        const { data: others } = await admin.from("practice_location")
+          .select("id, name, travel_buffer_minutes").in("id", otherIds);
+        const otherById = new Map(((others ?? []) as any[]).map(o => [o.id, o]));
+
+        for (const a of elsewhere) {
+          const aStart = Date.parse(a.scheduled_at);
+          const aEnd = aStart + (a.duration_minutes ?? 20) * 60000;
+          const other = otherById.get(a.location_id);
+          // The buffer belongs to whichever place is being travelled TO.
+          const gapBefore = (startMs - aEnd) / 60000;   // the other one first, then this
+          const gapAfter = (aStart - endMs) / 60000;    // this one first, then the other
+          const needBefore = bookedLocation.travel_buffer_minutes;
+          const needAfter = other?.travel_buffer_minutes ?? 30;
+
+          if (gapBefore >= 0 && gapBefore < needBefore)
+            return {
+              ok: false, status: 409, code: "TRAVEL_CONFLICT",
+              message: `there is only ${Math.round(gapBefore)} minutes between ${other?.name ?? "another location"} and ${bookedLocation.name}, which needs ${needBefore}`,
+            };
+          if (gapAfter >= 0 && gapAfter < needAfter)
+            return {
+              ok: false, status: 409, code: "TRAVEL_CONFLICT",
+              message: `this would leave only ${Math.round(gapAfter)} minutes to reach ${other?.name ?? "another location"}, which needs ${needAfter}`,
+            };
+        }
+      }
+    }
   }
 
   // Walk-ins arrive by definition: they enter as CONFIRMED and are checked in immediately by the caller.

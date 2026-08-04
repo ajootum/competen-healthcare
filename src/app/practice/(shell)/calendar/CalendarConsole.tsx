@@ -39,13 +39,15 @@ const QUEUE_TONE: Record<string, string> = {
 
 const input = "w-full rounded-lg border border-gray-200 px-2.5 py-2 text-[13px] outline-none focus:border-[var(--cp-primary)] focus:ring-2 focus:ring-[var(--cp-primary)]/10";
 
-export default function CalendarConsole({ date, canManage, canQueue, canStartEncounter, initial }: {
+export default function CalendarConsole({ date, canManage, canQueue, canStartEncounter, initial, locations = [] }: {
   date: string; canManage: boolean; canQueue: boolean; canStartEncounter: boolean; initial: Day;
+  /** Where this practice works. Empty when none has been set up, and the picker then hides itself. */
+  locations?: { id: string; name: string; type: string; facility: { name: string } | null }[];
 }) {
   const [day, setDay] = useState<Day>(initial);
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<{ kind: "ok" | "err"; text: string } | null>(null);
-  const [form, setForm] = useState({ patientName: "", patientPhone: "", appointmentType: "new_consultation", time: "09:00", durationMinutes: "20", reason: "" });
+  const [form, setForm] = useState({ patientName: "", patientPhone: "", appointmentType: "new_consultation", time: "09:00", durationMinutes: "20", reason: "", locationId: "" });
 
   async function refresh() {
     const r = await fetch(`/api/v1/practice/appointments?date=${date}`);
@@ -73,6 +75,7 @@ export default function CalendarConsole({ date, canManage, canQueue, canStartEnc
       scheduledAt: walkIn ? new Date().toISOString() : `${date}T${form.time}:00.000Z`,
       durationMinutes: Number(form.durationMinutes) || 20,
       reason: form.reason || undefined,
+      locationId: form.locationId || undefined,
     }),
   }), walkIn ? "Walk-in registered." : "Appointment booked.");
 
@@ -236,6 +239,22 @@ export default function CalendarConsole({ date, canManage, canQueue, canStartEnc
                 <select value={form.appointmentType} onChange={e => setForm(p => ({ ...p, appointmentType: e.target.value }))} className={input}>
                   {TYPES.filter(([k]) => k !== "walk_in").map(([k, l]) => <option key={k} value={k}>{l}</option>)}
                 </select>
+
+                {/* WHERE. A practitioner who works at two hospitals has to say which one, and the engine
+                    refuses a booking that leaves no time to get between them. Hidden entirely when the
+                    practice has one place, because then the question does not arise. */}
+                {locations.length > 1 && (
+                  <select value={form.locationId} onChange={e => setForm(p => ({ ...p, locationId: e.target.value }))}
+                    className={input} title="Where this appointment happens">
+                    <option value="">Where — not specified</option>
+                    {locations.map(l => (
+                      <option key={l.id} value={l.id}>
+                        {l.name}{l.type === "hospital" && !l.facility ? " (no facility linked)" : ""}
+                      </option>
+                    ))}
+                  </select>
+                )}
+
                 <input placeholder="Reason (optional)" value={form.reason} onChange={e => setForm(p => ({ ...p, reason: e.target.value }))} className={input} />
                 <div className="flex gap-2">
                   <button type="submit" disabled={busy || !form.patientName.trim()}
