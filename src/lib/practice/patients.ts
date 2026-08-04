@@ -31,9 +31,29 @@ export function generatePracticeId(): string {
   return out;
 }
 
+/**
+ * Compose a display name from parts.
+ *
+ * MONONYMS SURVIVE. "Nakato" alone is a whole name, not a missing surname -- so this returns whatever
+ * parts were given, joined, and never demands three. A form that requires first/middle/last cannot
+ * register a real person, and the failure lands on whoever is at the desk, who then types something
+ * untrue into a box to get past it.
+ */
+export function composeDisplayName(parts: {
+  givenName?: string; middleName?: string; familyName?: string;
+}): string {
+  return [parts.givenName, parts.middleName, parts.familyName]
+    .map(p => (p ?? "").trim()).filter(Boolean).join(" ");
+}
+
 export type RegisterInput = {
   workspaceId: string;
+  /** The whole name. Required -- composed from the parts below when they are supplied instead. */
   displayName: string;
+  // CPR-PRM-001 s4: "Identity (First, Middle, Last Name)". All optional; see composeDisplayName.
+  givenName?: string;
+  middleName?: string;
+  familyName?: string;
   sex?: string;
   birthDate?: string;        // YYYY-MM-DD
   ageEstimateYears?: number; // CPR-V2-005: estimated OR actual
@@ -119,8 +139,10 @@ export async function searchPatients(admin: any, workspaceId: string, q: string,
 export async function registerPatient(admin: any, input: RegisterInput): Promise<EngineResult<{
   id: string; practiceId: string;
 }>> {
-  const name = input.displayName?.trim();
-  if (!name) return { ok: false, status: 400, code: "VALIDATION_ERROR", message: "displayName is required" };
+  // THE PARTS COMPOSE THE WHOLE when a caller sends them, and the whole still wins when it is sent on
+  // its own -- so an existing caller keeps working and a one-name patient stays registrable.
+  const name = (input.displayName?.trim() || composeDisplayName(input)).trim();
+  if (!name) return { ok: false, status: 400, code: "VALIDATION_ERROR", message: "a name is required" };
   if (!input.birthDate && input.ageEstimateYears == null)
     return { ok: false, status: 400, code: "VALIDATION_ERROR", message: "birthDate or ageEstimateYears is required (CPR-V2-005 minimum dataset)" };
   if (!input.phone && !input.email)
@@ -178,6 +200,9 @@ export async function registerPatient(admin: any, input: RegisterInput): Promise
     workspace_id: input.workspaceId, display_name: name,
     sex: ["female", "male", "other", "unknown"].includes(input.sex ?? "") ? input.sex : "unspecified",
     birth_date: input.birthDate ?? null, age_estimate_years: input.ageEstimateYears ?? null,
+    given_name: input.givenName?.trim() || null,
+    middle_name: input.middleName?.trim() || null,
+    family_name: input.familyName?.trim() || null,
     created_by: input.actorId,
   }).select("id").single();
   if (pErr) return { ok: false, status: 400, code: "VALIDATION_ERROR", message: pErr.message };

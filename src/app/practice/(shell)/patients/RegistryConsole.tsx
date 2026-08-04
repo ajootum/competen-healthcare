@@ -1,7 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
+import RegistrationForm from "./RegistrationForm";
 
 // CPR-V2-004's registry console: search-first, ranked results with how-it-matched, rapid registration when
 // nothing matches, and the duplicate interstitial when something nearly does. The 409-with-candidates
@@ -20,10 +21,21 @@ export default function RegistryConsole({ canCreate }: { canCreate: boolean }) {
   const [q, setQ] = useState("");
   const [results, setResults] = useState<any[] | null>(null);
   const [busy, setBusy] = useState(false);
-  const [candidates, setCandidates] = useState<any[] | null>(null);
+  // The duplicate interstitial moved into RegistrationForm with the form it belongs to.
   const [notice, setNotice] = useState<{ kind: "ok" | "err"; text: string } | null>(null);
-  const [form, setForm] = useState({ displayName: "", sex: "unspecified", birthDate: "", ageEstimateYears: "", phone: "", email: "", nationalId: "" });
   const [showRegister, setShowRegister] = useState(false);
+
+  // THE PRACTICE'S OWN FORM, fetched rather than assumed. A practice that published a registration
+  // template gets its fields, its order and its extra questions; one that has not gets the built-in
+  // form -- and "no template" is a legitimate answer, not an error.
+  const [formConfig, setFormConfig] = useState<any | null>(null);
+  useEffect(() => {
+    if (!canCreate) return;
+    fetch("/api/v1/practice/registration")
+      .then(r => r.ok ? r.json() : null)
+      .then(setFormConfig)
+      .catch(() => setFormConfig(null));
+  }, [canCreate]);
 
   async function search(e?: React.FormEvent) {
     e?.preventDefault();
@@ -32,31 +44,6 @@ export default function RegistryConsole({ canCreate }: { canCreate: boolean }) {
     const r = await fetch(`/api/v1/practice/patients?q=${encodeURIComponent(q.trim())}`);
     setResults(r.ok ? (await r.json()).results : []);
     setBusy(false);
-  }
-
-  async function register(confirmNew: boolean) {
-    setBusy(true); setNotice(null); setCandidates(null);
-    const res = await fetch("/api/v1/practice/patients", {
-      method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        displayName: form.displayName,
-        sex: form.sex,
-        birthDate: form.birthDate || undefined,
-        ageEstimateYears: form.ageEstimateYears ? Number(form.ageEstimateYears) : undefined,
-        phone: form.phone || undefined,
-        email: form.email || undefined,
-        identifiers: form.nationalId ? [{ type: "national_id", value: form.nationalId }] : undefined,
-        confirmNew,
-      }),
-    });
-    const data = await res.json().catch(() => ({}));
-    if (res.status === 409 && Array.isArray(data.candidates) && data.candidates.length) {
-      setCandidates(data.candidates.map((c: any) => ({ ...c, hardBlock: data?.error?.code === "DUPLICATE_IDENTIFIER" })));
-      setBusy(false);
-      return;
-    }
-    if (!res.ok) { setNotice({ kind: "err", text: data?.error?.message ?? "Registration failed." }); setBusy(false); return; }
-    window.location.assign(`/practice/patients/${data.patient.id}`);
   }
 
   return (
@@ -109,47 +96,23 @@ export default function RegistryConsole({ canCreate }: { canCreate: boolean }) {
             {showRegister ? "▾" : "▸"} Register a patient
           </button>
           {showRegister && (
-            <form className="mt-3 grid sm:grid-cols-2 gap-2" onSubmit={e => { e.preventDefault(); register(false); }}>
-              <input required placeholder="Full name *" value={form.displayName} onChange={e => setForm(p => ({ ...p, displayName: e.target.value }))} className={`${input} sm:col-span-2`} />
-              <select value={form.sex} onChange={e => setForm(p => ({ ...p, sex: e.target.value }))} className={input}>
-                {["unspecified", "female", "male", "other", "unknown"].map(s => <option key={s} value={s}>{s}</option>)}
-              </select>
-              <input type="date" value={form.birthDate} onChange={e => setForm(p => ({ ...p, birthDate: e.target.value }))} className={input} title="Date of birth" />
-              <input type="number" min={0} max={130} placeholder="…or estimated age" value={form.ageEstimateYears} onChange={e => setForm(p => ({ ...p, ageEstimateYears: e.target.value }))} className={input} />
-              <input placeholder="Phone (primary contact) *" value={form.phone} onChange={e => setForm(p => ({ ...p, phone: e.target.value }))} className={input} />
-              <input placeholder="Email (optional)" value={form.email} onChange={e => setForm(p => ({ ...p, email: e.target.value }))} className={input} />
-              <input placeholder="National ID (optional)" value={form.nationalId} onChange={e => setForm(p => ({ ...p, nationalId: e.target.value }))} className={input} />
-              <p className="sm:col-span-2 text-[10px] text-gray-400">
-                Minimum dataset per CPR-V2-005: name, date of birth or estimated age, and one contact. A Practice ID is generated automatically.
-              </p>
-              <button type="submit" disabled={busy || !form.displayName.trim() || (!form.birthDate && !form.ageEstimateYears) || (!form.phone && !form.email)}
-                className="sm:col-span-2 rounded-lg bg-[var(--cp-primary)] py-2 text-[13px] font-semibold text-white hover:bg-[var(--cp-primary-deep)] disabled:opacity-50">
-                {busy ? "Checking for duplicates…" : "Register"}
-              </button>
-            </form>
-          )}
-
-          {candidates && (
-            <div className="mt-3 rounded-lg border border-[var(--cmp-color-warning)] bg-[var(--cmp-surface-warning)] p-3">
-              <p className="text-[12px] font-bold text-[var(--cmp-text-warning)]">
-                {candidates[0]?.hardBlock ? "That identifier already belongs to:" : "A very similar patient already exists:"}
-              </p>
-              <ul className="mt-1.5 flex flex-col gap-1">
-                {candidates.map(c => (
-                  <li key={c.id}>
-                    <Link href={`/practice/patients/${c.id}`} className="text-[12px] font-semibold text-gray-800 hover:underline">
-                      {c.displayName}{c.practiceId ? ` · ${c.practiceId}` : ""}{c.birthDate ? ` · b. ${c.birthDate}` : ""} ({c.matchedBy})
-                    </Link>
-                  </li>
-                ))}
-              </ul>
-              {!candidates[0]?.hardBlock && (
-                <button type="button" disabled={busy} onClick={() => register(true)}
-                  className="mt-2 rounded-lg border border-[var(--cmp-color-warning)] px-3 py-1.5 text-[11px] font-semibold text-[var(--cmp-text-warning)] hover:bg-white/40">
-                  This is a different person — register anyway
-                </button>
-              )}
-            </div>
+            formConfig
+              ? <RegistrationForm
+                  form={{ template: formConfig.template, fields: formConfig.fields ?? [] }}
+                  majorityAge={formConfig.majorityAge ?? 18}
+                  today={formConfig.today}
+                  onRegistered={(r) => {
+                    // THE INCOMPLETE STEPS ARE SHOWN, NOT SWALLOWED. A desk that believes it booked an
+                    // appointment it did not book is the worst outcome of the three.
+                    if (r.incomplete?.length) {
+                      setNotice({ kind: "err", text: `Registered, but: ${r.incomplete.map((i: any) => i.reason).join("; ")}` });
+                      setTimeout(() => window.location.assign(`/practice/patients/${r.patientId}`), 2500);
+                      return;
+                    }
+                    window.location.assign(`/practice/patients/${r.patientId}`);
+                  }}
+                />
+              : <p className="mt-3 text-[12px] text-gray-400">Loading this practice&rsquo;s form…</p>
           )}
         </section>
       )}
