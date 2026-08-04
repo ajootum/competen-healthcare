@@ -59,6 +59,9 @@ export const PRACTICE_NAV: PracticeNavItem[] = [
   // What a reflection touches is gated where it is touched -- promoting a learning point goes through
   // CPR-220 and needs encounter.edit.
   { href: "/practice/reflection", label: "Reflection", icon: "◍", capability: null, group: "Intelligence", phase: 5, built: true },
+  // CPR-240. NO CAPABILITY: a portfolio is an account of your own work, and nobody grants you permission
+  // to keep one. Every query inside is scoped to the caller, so there is nothing to gate.
+  { href: "/practice/portfolio", label: "Portfolio", icon: "❑", capability: null, group: "Intelligence", phase: 5, built: true },
   { href: "/practice/privacy", label: "Privacy and access", icon: "⚿", capability: "access.review", group: "Tools and Settings", phase: 5, built: true },
   // CPR-370: NO CAPABILITY. Everybody may see the devices signed in as THEM and lock one out; the
   // practice-wide view and the policy are gated inside the page. Hiding somebody's own device list

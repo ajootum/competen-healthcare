@@ -1621,3 +1621,87 @@ consultation, "What did *you* do well?" invites an account of oneself. Reflectio
 the second. And the audit trail records the **fact, never the text** — the workspace trail is readable by
 anybody holding `access.review`, and a reflection is the one record here written on the assumption
 nobody else reads it.
+
+---
+
+## 31. CPR-240 as built: the coverage window is the load-bearing part
+
+**Migration 217** · `src/lib/practice/portfolio.ts` · `/practice/portfolio` ·
+`scripts/practice-portfolio-harness.ts` (58 assertions, six deliberate breaks proven)
+
+### Why this module is held to a stricter standard than the rest
+
+A portfolio goes to an appraiser, a regulator or a credentialing committee, **under the practitioner's
+name**. An invented figure here does not merely mislead a user — it travels, and the clinician is the
+one who signed it.
+
+The comp promises *"Your complete professional story, automatically built from your practice"* and
+prints **"Total Experience 8.6 yrs — Since 2016"** and **"Patients Managed 2,348 — All time"**. This
+product holds only what was recorded *in it*. "All time" means "since you started using this software",
+and a portfolio claiming 8.6 years from a workspace created three months ago is a fabrication with a
+clinician's signature underneath.
+
+So the **coverage window is computed from the record** — the earliest thing this product holds for that
+person, so it cannot be set to a flattering date — and it is the first thing on the page and the
+**first field of the export**, in the same sentence, so the two cannot drift apart. A caveat at the
+bottom of a document is a caveat that gets cropped.
+
+`practising_since` is kept on the profile precisely so the portfolio can say *"you have practised since
+2016; this covers from 2026-08-04"* instead of quietly passing one off as the other.
+
+### Nothing is "verified" — provenance instead
+
+The comp says so twice: "Verified and trustworthy — Source-linked and auditable", and "Comprehensive &
+Verified". Nothing in this product verifies anything; a registration number is a string somebody typed.
+Every item carries its **provenance** instead:
+
+- `source_linked` — it arose from clinical work recorded here at the time it happened
+- `self_declared` — a practitioner typed it in, and nothing checked it against a registry, a journal or
+  an employer
+
+That is true, and more use to an appraiser than a tick. `practice_portfolio_entry` deliberately has **no
+`evidence_source` column**: every row in it is self-declared by construction, and a column that is always
+the same value invites somebody to set it to the other one.
+
+### Most of the module already existed
+
+Procedure Log is `practice_procedure` (CPR-150, already carrying `cpd_minutes` and `portfolio`).
+Teaching Activity is `practice_clinical_activity`, which already has `teaching` and `training` kinds.
+Evidence Items are the encounters, procedures, activities, reflections and learning points already
+recorded. **Attachment cannot be honoured** — there is no file storage (CPR-320 declined it and named
+why), so the comp's "286 documents, 34 certificates, 62 photos" become a certificate recorded by its
+number and expiry while the document itself stays where it already is.
+
+Migration 217 adds the practitioner, and the things clinical work never produces: a publication, an
+award, a fellowship, a certificate with an expiry.
+
+**Expiry is derived, never stored** — CPR-140's rule, and an appraisal portfolio is exactly where a stale
+flag does damage. Asserted with a control: a live certificate is not flagged, one inside ninety days is
+flagged as expiring rather than expired.
+
+### Refused
+
+**"Portfolio Score 842/1000 — Excellent"**, the donut of its parts and the line chart of it rising: one
+invented number drawn three ways, and a weak portfolio with many entries would outscore a strong one
+with few. **"CPD Target (2025) 62%"** — nobody set a target here and the requirement depends on the
+regulator. **"Share with Colleagues / for Credentialing / for Opportunities"** — this product sends
+nothing; you export and send it yourself, which also means you see exactly what you sent. **The AI
+Portfolio Assistant** (Portfolio Strength Analysis, Achievement Recommendations, Career Path Insights) —
+originating claims about a person, which is CPR-210's line.
+
+**Reflections are counted, never quoted.** Their text does not reach the portfolio or the export — a
+reflection is private and an export is not.
+
+### A shipped bug this uncovered
+
+`setPortfolio` (CPR-150) selected `duration_minutes` from `practice_procedure`, a column that table has
+never had — only `practice_clinical_activity` does. PostgREST errored, the error was **discarded**, the
+row came back null, and it returned **"Not found" for a procedure that plainly existed**. Claiming CPD
+against a procedure had never once worked, and reported that the procedure did not exist.
+
+It survived because the activity harness only ever called `setPortfolio` with `subject: "activity"` —
+one branch of a two-branch discriminated parameter. Three assertions were added there, and the read now
+distinguishes an error from an absence.
+
+> **A discriminated parameter needs an assertion per branch. One branch green is not coverage, it is
+> half of it.**

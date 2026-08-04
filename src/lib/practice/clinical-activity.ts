@@ -437,8 +437,17 @@ export async function setPortfolio(admin: any, args: {
   portfolio: boolean; cpdMinutes?: number | null; actorId: string; correlationId: string;
 }): Promise<EngineResult<{ portfolio: boolean }>> {
   const table = args.subject === "procedure" ? "practice_procedure" : "practice_clinical_activity";
-  const { data: row } = await admin.from(table)
-    .select("id, performed_by, duration_minutes").eq("id", args.id).eq("workspace_id", args.workspaceId).maybeSingle();
+  // ONLY AN ACTIVITY HAS A DURATION. practice_procedure has never had a duration_minutes column -- the
+  // catalogue carries typical_duration_minutes, the performed procedure carries nothing. Selecting it
+  // anyway made PostgREST error, and because the error was DISCARDED the row came back null and this
+  // returned "Not found" for a procedure that plainly existed: claiming CPD against a procedure had
+  // never once worked, and said the procedure did not exist.
+  const columns = args.subject === "activity" ? "id, performed_by, duration_minutes" : "id, performed_by";
+  const { data: row, error: readError } = await admin.from(table)
+    .select(columns).eq("id", args.id).eq("workspace_id", args.workspaceId).maybeSingle();
+  // THE ERROR IS NOT THE SAME THING AS ABSENCE, and conflating them is what hid this for four modules.
+  if (readError)
+    return { ok: false, status: 500, code: "READ_FAILED", message: `could not read the ${args.subject}: ${readError.message}` };
   if (!row) return { ok: false, status: 404, code: "NOT_FOUND", message: "Not found" };
 
   // A PORTFOLIO IS THE PERSON'S OWN. Somebody else claiming an entry into it -- or out of it -- is the
@@ -449,7 +458,8 @@ export async function setPortfolio(admin: any, args: {
   if (args.cpdMinutes != null) {
     if (!Number.isInteger(args.cpdMinutes) || args.cpdMinutes < 0 || args.cpdMinutes > 1440)
       return { ok: false, status: 400, code: "VALIDATION_ERROR", message: "CPD time must be a whole number of minutes, up to 1440" };
-    if (row.duration_minutes != null && args.cpdMinutes > row.duration_minutes)
+    // Only an activity has a duration to exceed; a procedure's CPD claim is bounded by the 1440 above.
+    if (args.subject === "activity" && row.duration_minutes != null && args.cpdMinutes > row.duration_minutes)
       return { ok: false, status: 422, code: "CPD_EXCEEDS_DURATION", message: "the CPD time claimed is longer than the activity itself" };
   }
 

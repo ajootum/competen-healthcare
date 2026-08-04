@@ -295,6 +295,34 @@ async function main() {
   ok("and cannot claim more CPD than the activity lasted",
     !overclaim.ok && overclaim.code === "CPD_EXCEEDS_DURATION", overclaim.ok ? "changed" : overclaim.code);
 
+  // ── THE OTHER BRANCH OF subject, which nothing here had ever exercised ────
+  //
+  // setPortfolio takes subject: "procedure" | "activity", and every assertion above passes "activity".
+  // The procedure branch selected a duration_minutes column that practice_procedure has never had, so
+  // PostgREST errored, the discarded error left the row null, and it returned "Not found" for a
+  // procedure that plainly existed. CLAIMING CPD AGAINST A PROCEDURE HAD NEVER ONCE WORKED, and said
+  // the procedure did not exist. Found while building CPR-240.
+  //
+  // GENERAL RULE: a discriminated parameter needs an assertion per branch. One branch green is not
+  // coverage, it is half of it.
+  const procedurePortfolio = await setPortfolio(admin, {
+    workspaceId: wsA, subject: "procedure", id: proc.data.id, portfolio: true, cpdMinutes: 45,
+    actorId: OWNER, correlationId: "h",
+  });
+  ok("CPD CAN BE CLAIMED AGAINST A PROCEDURE -- the other branch of `subject`",
+    procedurePortfolio.ok, procedurePortfolio.ok ? "" : `${procedurePortfolio.code}: ${procedurePortfolio.message}`);
+  const { data: claimedProc } = await admin.from("practice_procedure")
+    .select("portfolio, cpd_minutes").eq("id", proc.data.id).maybeSingle();
+  ok("and it actually lands on the row, rather than reporting a success it did not perform",
+    claimedProc?.portfolio === true && claimedProc?.cpd_minutes === 45,
+    JSON.stringify(claimedProc));
+  const procNotMine = await setPortfolio(admin, {
+    workspaceId: wsA, subject: "procedure", id: proc.data.id, portfolio: false,
+    actorId: REGISTRAR, correlationId: "h",
+  });
+  ok("and a procedure's portfolio entry is still its performer's own",
+    !procNotMine.ok && procNotMine.code === "NOT_YOURS", procNotMine.ok ? "changed" : procNotMine.code);
+
   // ── 10. Isolation ────────────────────────────────────────────────────────
   const crossItem = await addItem(admin, {
     workspaceId: wsB, procedureId: proc.data.id, label: "Probe", actorId: OTHER, correlationId: "h",
