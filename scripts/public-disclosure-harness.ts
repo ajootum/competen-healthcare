@@ -259,18 +259,23 @@ async function main() {
       ["/practice/sign-in", "practice_sign_in", "Sign in"],
       ["/practice/sign-up", "practice_public_signup", "Create your Competen Practice"],
     ];
-    // SAME PROBE AS THE CONTENT HARNESS, and it has to be here too. A dev server started without
-    // NODE_EXTRA_CA_CERTS cannot reach Supabase behind TLS interception, so every flag reads false
-    // in-process and every gated page renders closed. Without this, assertion 6 reports a page bug that
-    // does not exist -- and two harnesses disagreeing about the same fact is worse than either being
+    // SAME PROBE AS THE CONTENT HARNESS, and it has to be here too: when the server disagrees with the
+    // database about the flags, every gated page renders closed, and assertion 6 would report a page bug
+    // that does not exist. Two harnesses disagreeing about the same fact is worse than either being
     // wrong alone, because it makes both untrustworthy.
+    //
+    // ⚠️ THIS NOTE USED TO NAME ONE CAUSE -- a dev server without NODE_EXTRA_CA_CERTS behind TLS
+    // interception -- and when it fired again the real cause was different: /practice had lost its
+    // `export const dynamic`, so its flag-driven CTA was baked into a static build. Both harnesses now
+    // list what to check instead of asserting which it is.
     const homeHtml = await (await fetch(`${BASE}/practice`)).text();
     const signInOn = !!rows.find(r => r.flag === "practice_sign_in")?.enabled;
     const serverSeesFlags = !signInOn || !/Talk to us about your practice/.test(homeHtml);
     if (!serverSeesFlags) {
-      console.log("  NOTE  6. the SERVER cannot read practice_platform_flags in this environment;");
-      console.log("        the credential-surface checks below are skipped. Start the dev server from a");
-      console.log("        shell that sets NODE_EXTRA_CA_CERTS and re-run.");
+      console.log("  NOTE  6. the SERVER disagrees with the database about the launch flags; the");
+      console.log("        credential-surface checks below are skipped. First thing to try: start the dev");
+      console.log("        server yourself with `npm run dev` -- one spawned by editor preview tooling has");
+      console.log("        been seen to fail every Supabase call where a terminal-started one succeeds.");
     }
 
     for (const [path, flag, marker] of CREDENTIAL_PAGES) {

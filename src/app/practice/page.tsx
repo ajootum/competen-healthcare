@@ -35,6 +35,18 @@ export const metadata = pageMetadata({
 
 const container = "mx-auto w-full max-w-7xl px-5 sm:px-8";
 
+// ⚠️ FORCE-DYNAMIC, AND THE CTA BELOW IS WHY. This page reads two launch flags, and a statically
+// rendered flag is baked at build time -- which is to say, not a flag. The journey pages
+// (/practice/login, /practice/start) were given this treatment when their gates were built; THIS PAGE
+// WAS MISSED, and the result was live: practice_sign_in was ON in the database while the homepage kept
+// offering "Talk to us about your practice", because the closed branch had been frozen into the build.
+//
+// It was found through the content harness, which uses this CTA as its probe for "can the server read
+// flags" -- so a caching bug here presented as a TLS bug and sent the next reader (me) to the wrong
+// cause entirely. Nothing else on the page needs request-time data; this line exists solely so the
+// launch ladder is real.
+export const dynamic = "force-dynamic";
+
 export default async function Page() {
   // IAM-001 s6 lists /practice twice on purpose: the public landing for a visitor, the application entry
   // for a member. The tiebreak is MEMBERSHIP, not authentication.

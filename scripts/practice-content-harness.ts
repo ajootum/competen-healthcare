@@ -352,25 +352,41 @@ async function main() {
     const { data } = db ? await db.from("practice_platform_flags").select("flag, enabled").in("flag", wanted) : { data: null };
     const rows = (data ?? []) as { flag: string; enabled: boolean }[];
     for (const f of wanted) gateOpen[f] = !!rows.find(r => r.flag === f)?.enabled;
-    // CAN THE SERVER READ FLAGS AT ALL? A discriminator, not a nicety.
+    // DOES THE SERVER AGREE WITH THE DATABASE ABOUT THE FLAGS? A discriminator, not a nicety.
     //
     // This harness reads practice_platform_flags with its own service-role client. The SERVER reads them
-    // with its own, and if the server's Supabase calls are failing -- a dev server started without
-    // NODE_EXTRA_CA_CERTS behind TLS interception is the case that actually happened -- every flag reads
-    // false in-process and every gated page renders closed. The gate assertions then report a page bug
-    // that does not exist, and the next person spends an hour in JourneyPage. That is the same confident
-    // wrong measurement this file exists to prevent, aimed at itself.
+    // with its own, and when the two disagree every gated page renders closed while the database says
+    // open. The gate assertions would then report a page bug that does not exist, and the next person
+    // spends an hour in JourneyPage -- the same confident wrong measurement this file exists to prevent,
+    // aimed at itself.
     //
     // The homepage CTA is the probe: it is flag-driven, public, and needs no session. With sign-in ON a
-    // working server offers "Sign in"; a server that cannot read flags falls through to "Talk to us".
+    // working server offers "Sign in"; a disagreeing one falls through to "Talk to us".
+    //
+    // ⚠️ THE NOTE BELOW USED TO NAME ONE CAUSE WITH CONFIDENCE, AND IT SENT THE NEXT READER WRONG.
+    //
+    // It blamed a dev server started without NODE_EXTRA_CA_CERTS behind TLS interception. Chasing that
+    // produced two further wrong answers before the truth: the cert variable turned out not to be the
+    // discriminator at all. What actually decides it is HOW THE DEV SERVER WAS SPAWNED -- a server
+    // started from a terminal (`npm run dev`) reads the flags; one spawned by the editor's preview
+    // tooling gets "TypeError: fetch failed" on every Supabase call, in the same repository, from the
+    // same build.
+    //
+    // So this note now lists what to check rather than asserting which it is. If the flag-dependent
+    // assertions are skipping, the first thing to try is starting the dev server yourself.
     const home = await fetch(`${BASE}/practice`).then(r => r.text()).catch(() => "");
     const signInFlag = !!rows.find(r => r.flag === "practice_sign_in")?.enabled;
     serverSeesFlags = !signInFlag || !/Talk to us about your practice/.test(visibleText(home));
     if (!serverSeesFlags) {
-      console.log("  NOTE  7b-gate. the SERVER cannot read practice_platform_flags -- every flag reads false");
-      console.log("        in-process, so the gated pages below are not testable in this environment.");
-      console.log("        Usual cause: the dev server was started without NODE_EXTRA_CA_CERTS, so its");
-      console.log("        Supabase calls fail behind TLS interception. Restart it from a shell that sets it.");
+      console.log("  NOTE  7b-gate. the SERVER disagrees with the database about the launch flags, so the");
+      console.log("        gated pages below are not testable here. What to check, in order:");
+      console.log("        1. START THE DEV SERVER YOURSELF -- `npm run dev` in a terminal. A server");
+      console.log("           spawned by editor preview tooling has been seen to fail every Supabase call");
+      console.log("           while an identical terminal-started one succeeds. This is the usual answer.");
+      console.log("        2. Does the server log `could not read launch flag`? Then its fetch is failing;");
+      console.log("           NODE_EXTRA_CA_CERTS matters if HTTPS is intercepted on this machine.");
+      console.log("        3. Is /practice still force-dynamic? A statically rendered flag is baked.");
+      console.log("        4. Stale build? Remove .next and restart.");
     }
 
     ok("7-flags. every gated journey's flag exists in the database", rows.length === wanted.length,

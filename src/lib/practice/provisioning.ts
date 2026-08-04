@@ -87,8 +87,26 @@ export async function audit(admin: any, event: {
   });
 }
 
+/**
+ * Is a launch flag on?
+ *
+ * FAILS CLOSED, BUT NEVER SILENTLY. The first version destructured only `data`, so a read that FAILED
+ * was indistinguishable from a flag that was OFF -- and it resolved that ambiguity, without saying so,
+ * in the direction of off. Closed is the right default for a launch ladder; being quiet about it is not,
+ * because the whole product then presents its pre-launch face and every page looks like it is working.
+ *
+ * The same bug class as the partial-index upsert this codebase has hit twice: an error discarded at the
+ * call site becomes a wrong answer somewhere far away.
+ */
 export async function platformFlag(admin: any, flag: string): Promise<boolean> {
-  const { data } = await admin.from("practice_platform_flags").select("enabled").eq("flag", flag).maybeSingle();
+  const { data, error } = await admin.from("practice_platform_flags")
+    .select("enabled").eq("flag", flag).maybeSingle();
+  if (error) {
+    // Loud, and on the server where somebody is looking at a terminal. Not thrown: a flag read failing
+    // must not take a public marketing page down with it.
+    console.error(`[practice] could not read launch flag "${flag}" -- treating it as OFF: ${error.message}`);
+    return false;
+  }
   return !!data?.enabled;
 }
 
