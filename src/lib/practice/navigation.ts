@@ -47,6 +47,10 @@ export const PRACTICE_NAV: PracticeNavItem[] = [
   { href: "/practice/messages", label: "Messages", icon: "✉", capability: "message.use", group: "Practice Management", phase: 5, built: true },
   { href: "/practice/reports", label: "Reports", icon: "☷", capability: "report.view", group: "Practice Management", phase: 6, built: true },
   { href: "/practice/intelligence", label: "Practice Intelligence", icon: "☀", capability: "report.view", group: "Intelligence", phase: 5, built: true },
+  // CPR-220. NOT /practice/case-memory -- that slug is the public marketing page for this capability, and
+  // a static route there would shadow it silently. encounter.list, not patient.view: learning from a case
+  // does not require knowing whose it was, and the engine de-identifies for callers without it.
+  { href: "/practice/cases", label: "Case Memory", icon: "❧", capability: "encounter.list", group: "Intelligence", phase: 5, built: true },
   { href: "/practice/privacy", label: "Privacy and access", icon: "⚿", capability: "access.review", group: "Tools and Settings", phase: 5, built: true },
   // CPR-370: NO CAPABILITY. Everybody may see the devices signed in as THEM and lock one out; the
   // practice-wide view and the policy are gated inside the page. Hiding somebody's own device list

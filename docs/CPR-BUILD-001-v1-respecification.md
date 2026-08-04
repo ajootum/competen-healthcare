@@ -1379,3 +1379,83 @@ In their place the page carries two panels: the **guarantees**, each a property 
 asserted by a test made to fail on purpose, and — the one the comp has no room for — **what this page
 cannot tell you**. A practitioner deciding whether to trust a system with patient records is better
 served by an honest list of unknowns than by four green ticks.
+
+---
+
+## 28. CPR-220 as built: similarity is a list of shared facts, never a score
+
+**Migration 214** · `src/lib/practice/case-memory.ts` · `/practice/cases` ·
+`scripts/practice-case-memory-harness.ts` (50 assertions, six deliberate breaks proven)
+
+### The one decision that shaped the module
+
+The comp puts a **relevance and a similarity percentage** beside every retrieved case — 95%, 92%, 89%,
+85%, 82% — each with a progress bar. Under the no-rates doctrine a percentage is refused anyway. This
+one is refused for a stronger reason.
+
+A clinician reading "92% similar" beside another patient's treatment and outcome may reasonably let it
+inform what they do next. No formula could earn that number, and a badly-calibrated one would be
+indistinguishable on the page from a well-calibrated one. It is the only figure in the whole
+specification set whose invention could reach a patient.
+
+So retrieval matches on **facts that were actually recorded** — the same diagnosis label, the same
+procedure, an age within five years, the same sex — and returns **which ones matched**:
+
+> Matches on: *Same diagnosis: Lumbar disc herniation* · *Same procedure: Microdiscectomy* · *Age within
+> five years: 40s*
+
+A clinician can weigh that. Ordering is by **how many facts matched**, then recency — a count, not a
+score. The payload carries `similarityScored: false` as a field, so a client cannot render a number it
+was never given, and the harness asserts structurally that no score-shaped field or percentage-shaped
+value exists anywhere in the serialised result.
+
+**Age and sex count only alongside a clinical match.** Another forty-year-old woman is a coincidence,
+not a similar case; the harness asserts that a same-age same-sex patient with a different condition is
+absent from the results.
+
+### No case table
+
+A "case" is an encounter that already exists, with its diagnoses, procedures and outcomes already
+hanging off it. The spec's data model lists Case, Diagnosis, Treatment, Outcome, Complication and a
+Similarity Index — five of those six already exist, and copying them into case-memory tables would be a
+second record of the same consultation that disagrees with the first the day somebody amends one. The
+migration adds only what genuinely did not exist: **learning points** and **collections**.
+
+A learning point **belongs to the person who learned it**. Two clinicians can take different lessons
+from one consultation and both are real, so there is no unique constraint on the encounter and no
+shared note that one could overwrite. It must be at least twenty characters — enforced in the engine
+*and* in the database, so a writer that bypasses the engine cannot file "good case" into a lifelong
+memory either.
+
+A **bookmark is not a second mechanism**: marking a case to return to is membership of a personal
+collection, so there is one way to group cases rather than two that drift apart.
+
+### De-identification is the default
+
+A similar-case list is a list of other people's patients. Case Memory takes `encounter.list` and
+deliberately **not** `patient.view`: learning from a case does not require knowing whose it was. Without
+`patient.view` a caller sees the age band, the sex, the condition, what was done and how it turned out —
+and no names. The **outcome detail goes with the names**, because it is free text about a complication
+and routinely names the patient, the ward and a colleague. Retrieval is logged; a retrieval that read
+nobody's record logs nothing, and the harness asserts the exact count rather than a floor.
+
+### Refused
+
+**Every relevance and similarity percentage** (above). **The four "Case Memory Insights" figures** —
+most common condition 28%, best outcome rate 92%, most frequent complication 3.2%, average follow-up
+compliance 84% — rates, and the conditions and complications underneath them are real and do render.
+**"Similar Cases Found: 386"** as a standing tile: similarity is relative to a case you are looking at,
+so there is no number until you name one; the tile keeps its position and says so. **Semantic search,
+pattern recognition, outcome prediction and literature suggestions** need the AI clinical assistant
+(CPR-210), which is not built. **The HIPAA badge** — a claim about an audit nobody has performed.
+
+**Four of the five search tabs are the same question.** Condition, Procedure and Patient Profile are all
+"find cases sharing this fact", and the engine matches on every one of them at once — splitting them
+into tabs would make a reader choose one fact when they can have all four. The popular-search chips are
+gone: a popular search across a private practice is a count of one person's own habits.
+
+### Route note
+
+The private page is at **`/practice/cases`, not `/practice/case-memory`** — that slug belongs to the
+public marketing page for this capability, and a static route would shadow it silently. The content
+harness guards the collision and still reports 121.
