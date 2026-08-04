@@ -1705,3 +1705,171 @@ distinguishes an error from an absence.
 
 > **A discriminated parameter needs an assertion per branch. One branch green is not coverage, it is
 > half of it.**
+
+---
+
+## 32. Multi-hospital booking as built: the pieces existed, the join did not
+
+**Migration 228.** `src/lib/practice/hospital-booking.ts`, `checkPlacement` in `scheduling.ts`.
+Harness `scripts/practice-hospital-booking-harness.ts` — 30/30, 9 breaks.
+
+### Two place-like things that were the same building
+
+The product already had both halves and no way to relate them:
+
+| | what it is | since |
+|---|---|---|
+| `practice_location` | somewhere the **practitioner** works. `type` already included `'hospital'` | 191 |
+| `practice_facility` | an institution whose **numbering a patient carries** — the hospital that issued their MRN | 222 |
+
+Mulago is both. Left unlinked, a practice ends up with two rows for one hospital, and the question that
+matters at the moment of booking has no answer:
+
+> I am putting this patient into Mulago on Thursday. **What is their Mulago number?**
+
+The clerk then reads out whichever MRN sits first on the record, with no way to tell which hospital
+issued it, and hands the patient a number the receiving hospital does not recognise.
+`practice_location.facility_id` is the whole fix; `bookingLocations()` is the read that uses it.
+
+Nullable, deliberately — a practitioner's own consulting room issues no numbers and is not a facility.
+A **hospital** with no facility linked is a gap and says so on screen; a **clinic room** with none is not.
+
+### A defect found on the way in
+
+`practice_appointment.location_id` has been written **straight through, unvalidated, since migration 192**.
+A booking could name another practice's location and nothing would ever have noticed, because no screen
+joined to it until the calendar did. `checkPlacement` now refuses a cross-tenant location (404) and a
+closed one (422).
+
+### The conflict rule that only exists once there is more than one hospital
+
+09:00 at Hospital A and 09:30 at Hospital B **do not overlap**, so the double-booking check passed them
+happily — and nobody is in two hospitals half an hour apart. Whoever accepts both is late for one, and
+the patient at the second waits without being told why.
+
+`travel_buffer_minutes` sits on the **destination**: one number per place rather than a full matrix
+between every pair. A matrix is the correct model and needs distances this product does not have;
+*"it takes about forty minutes to get to Mulago from anywhere else I work"* is a thing a practitioner
+knows and can type, and it catches the error that matters. The refusal names both the minutes available
+and the site that needs more.
+
+`locationDay()` reports impossible hops that already exist in the diary rather than only preventing new
+ones — a booking made before two sites were linked, or one forced through deliberately, still exists,
+and the practitioner needs to see it before the road rather than on it.
+
+### Refused, and said so on the screen
+
+- **Bed, theatre or room availability.** Booking a patient into Mulago books *the practitioner's time*
+  at Mulago. This product holds no feed from any hospital's own system, so a green "available" against
+  a hospital would be invented.
+- **Admission.** Scheduling somebody to be seen at a hospital is not admitting them.
+- **Measured travel time.** The buffer is a number somebody typed, not a distance.
+- **The hospital being told.** Nothing is sent to the receiving hospital.
+
+### A second thing that had no way in
+
+`addFacility` has existed since migration 222 **with no caller anywhere in the product**. The institution
+list a location could be linked to was therefore always empty, which would have made this entire feature
+unreachable from the screen — the dropdown built for it would have had nothing in it. Closed with a
+`POST { facility }` branch on the configuration route and an **Institutions** panel in
+`/practice/settings`. Same class of gap the codebase already recorded for `practice_location`
+("has existed since migration 191 with no way in the product to create one"): an engine function with no
+door is indistinguishable from a missing feature.
+
+### A failability proof that initially proved nothing
+
+BREAK-5 removed `.in("facility_id", facilityIds)` from the identifier query and **nothing failed**. That
+filter only *narrows* the query — the grouping below still files each identifier under its own facility,
+so Mulago's bucket was still only Mulago's numbers. The real guard was the lookup, not the filter. The
+break was re-targeted at `idsByFacility.get(r.facility_id)` and then failed as it should. A break that
+catches nothing is a statement about the *assertion*, not only about the break — worth chasing down
+rather than dropping.
+
+---
+
+## 33. Drag-and-drop and the timeline: rescheduling did not exist
+
+`rescheduleAppointment` + `checkPlacement` in `scheduling.ts`, `src/lib/practice/timeline.ts`,
+`calendar/Timeline.tsx`. Harnesses `practice-reschedule-harness.ts` (27/27, 12 breaks) and
+`practice-timeline-harness.ts` (18/18, 7 breaks). **No migration** — `record_version` was already there.
+
+### The footer had been claiming a feature that was absent
+
+`CalendarFooter` says *"Every change audited. Who moved what, and when."* The state machine could only
+change an appointment's **status**. Nothing in this product had ever moved one in time. The claim was
+audited-if-it-happened over a build where it could not happen.
+
+### One placement check, shared
+
+Drag-and-drop is a second way to put an appointment somewhere. The moment it owns a copy of the rules
+they drift: someone fixes the travel check in booking and a drag quietly bypasses it. **A calendar where
+dragging may do what typing may not is worse than one with no dragging**, because the practitioner
+believes both were checked. `checkPlacement()` was extracted from `bookAppointment` and is called by
+both; the booking harness re-ran 30/30 afterwards to prove the extraction changed no behaviour.
+
+`excludeAppointmentId` keeps an appointment from colliding with **itself** — without it every small drag
+refuses, naming the very appointment in the practitioner's hand.
+
+### What a drag is refused
+
+| refusal | why |
+|---|---|
+| `NOT_RESCHEDULABLE` | completed / cancelled / no-show is **history**, not a thing with a future time |
+| `PATIENT_PRESENT` | an arrived patient is standing there; sending them away is a *cancellation* |
+| `IN_THE_PAST` | you cannot schedule somebody to have already been seen |
+| `STALE` | the calendar was loaded hours ago and the front desk has moved on |
+| `NO_CHANGE` | a drag that lands where it started writes nothing and audits nothing |
+| `DOUBLE_BOOKED` / `TRAVEL_CONFLICT` | the same rules booking obeys |
+
+`IN_THE_PAST` is judged at **day granularity on the practice's calendar**, not against a clock. "Before
+today" is a judgement a practitioner shares; "three minutes ago" would refuse a perfectly ordinary drag
+into the current hour.
+
+`STALE` is enforced twice — a pre-check on `expectedVersion`, and `record_version` in the `WHERE` of the
+update so two simultaneous drags cannot both win. The second is the one that survives a race.
+
+The audit records **both ends** and whether the move was forced. "It moved" is useless; "from 09:00 at
+Mulago to 14:00 at Nsambya, forced" is the record.
+
+### The timeline computes no clock arithmetic in the browser
+
+`new Date(iso).getHours()` in a browser reads **the laptop's** timezone. A receptionist working from a
+different country would silently see a different day, and nobody would notice until an appointment was
+in the wrong place. So the server sends **minutes from the start of the practice's day** and the browser
+only multiplies by pixels; a drop is turned back into an instant by `dayStartIso + minutes`, the exact
+inverse, which the harness proves round-trips.
+
+A day containing a daylight-saving transition is 23 or 25 hours long, so minutes-from-midnight and
+wall-clock time stop agreeing partway through. `dstWarning` states it on the screen rather than drawing
+it wrong quietly.
+
+### The block snaps back
+
+When the engine refuses, the block returns to where it was and **the reason goes on the screen**. A
+calendar that leaves a block where it was dropped after a refusal is lying about the diary, and the
+practitioner walks away believing a patient was moved. Where an override exists — double-booking, travel
+— it is **offered explicitly** ("Move it anyway") rather than hidden: sometimes that is exactly what was
+intended, and a drag that mysteriously fails teaches people to distrust the whole screen.
+
+### A harness bug worth recording
+
+`auditFor()` ordered by `created_at`. `practice_audit_event` has **`occurred_at`**. The error was
+discarded, so `data` came back null and three assertions reported *"the move is not audited"* — a
+missing feature that was in fact a malformed query. This is the project's recorded trap (never discard a
+query's error) reappearing in test code, where it is arguably worse: it accuses working code.
+
+### Two guards, one assertion — a true test that proved less than it looked like
+
+BREAK-9 deleted `.eq("workspace_id", …)` from the appointment read and **nothing failed**. The
+cross-tenant assertion still passed, because the appointment under test had a location and
+`checkPlacement` refused the cross-tenant *location* with the same `NOT_FOUND`. Two independent guards
+produced one indistinguishable refusal, so the assertion could not say which was standing.
+
+That matters more here than in most places: the `UPDATE` is keyed on `id` and `record_version` **alone**
+— no workspace filter — so the read's tenancy scoping is the only thing between one practice and
+another practice's diary. Fixed by adding a case with **no location**, which removes the second guard
+and leaves the read alone to refuse (`11c`), asserting the row was not moved behind the refusal (`11d`),
+paired with a control proving the same move succeeds for its owner (`11e`).
+
+**The general lesson:** a passing refusal assertion says a refusal happened, not *which rule* caused it.
+Where two rules can produce the same code, only a case that disables one of them tests the other.

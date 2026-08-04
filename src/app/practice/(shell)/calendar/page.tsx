@@ -6,12 +6,14 @@ import { hasCapability } from "@/lib/practice/access";
 import { loadDay } from "@/lib/practice/scheduling";
 import { calendarDay, SLOT_KINDS } from "@/lib/practice/calendar";
 import { bookingLocations, locationDay } from "@/lib/practice/hospital-booking";
+import { timelineDay } from "@/lib/practice/timeline";
 import { zonedDayRange } from "@/lib/practice/practice-time";
 import CalendarConsole from "./CalendarConsole";
 import OperationsHeader from "./OperationsHeader";
 import AvailabilityRibbon from "./AvailabilityRibbon";
 import CalendarFooter from "./CalendarFooter";
 import WhereYouAre from "./WhereYouAre";
+import Timeline from "./Timeline";
 
 // /practice/calendar -- CPR-CAL-001 v4, the Practice Operations Calendar.
 //
@@ -41,11 +43,14 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
   // The console still takes its own slice, so the interactive half keeps working exactly as it did.
   const initial = await loadDay(admin, shell.ctx.workspaceId, c.day);
 
-  // MULTI-HOSPITAL. Both go through the practice's own clock, like everything else on this screen.
+  // MULTI-HOSPITAL AND THE TIMELINE. All three go through the practice's own clock, like everything
+  // else on this screen -- timelineDay in particular positions every block in practice-local minutes so
+  // the browser never does clock arithmetic of its own.
   const dayRange = zonedDayRange(c.day, c.timezone);
-  const [locations, route] = await Promise.all([
+  const [locations, route, timeline] = await Promise.all([
     bookingLocations(admin, shell.ctx),
     locationDay(admin, shell.ctx, dayRange.startIso, dayRange.endIso),
+    timelineDay(admin, shell.ctx, c.day, c.timezone),
   ]);
 
   const shift = (days: number) => {
@@ -83,6 +88,11 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
         <OperationsHeader c={c} />
         <AvailabilityRibbon c={{ ...c, kinds: SLOT_KINDS }} />
         <WhereYouAre route={JSON.parse(JSON.stringify(route))} timezone={c.timezone} />
+
+        <Timeline
+          timeline={JSON.parse(JSON.stringify(timeline))}
+          canManage={hasCapability(shell.ctx, "appointment.manage")}
+        />
 
         <CalendarConsole
           date={c.day}

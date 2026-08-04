@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { ENCOUNTER_MODES, LOCATION_TYPES, APPOINTMENT_MINUTES_BOUNDS } from "@/lib/practice/configuration";
+import { FACILITY_TYPES } from "@/lib/practice/facilities";
 
 // The settings form, the locations list, and the trail behind both.
 //
@@ -38,6 +39,7 @@ export default function SettingsConsole({ workspace, config, today, inertColumns
     letterheadContact: config.letterhead_contact ?? "",
   });
   const [newLocation, setNewLocation] = useState({ name: "", type: "clinic" });
+  const [newFacility, setNewFacility] = useState({ name: "", facilityType: "hospital" });
 
   async function send(method: string, payload: unknown) {
     setBusy(true); setError(null);
@@ -247,6 +249,63 @@ export default function SettingsConsole({ workspace, config, today, inertColumns
           Locations are never deleted, because appointments and encounters point at them.
         </p>
       </section>
+
+      {/* ── Institutions ───────────────────────────────────────────────────────────────────────────
+          A location is somewhere YOU work. A facility is an institution whose NUMBERING a patient
+          carries. For a hospital they are the same building, which is why one can be linked to the
+          other above — and why a hospital needs to exist here before that link can be made. */}
+      {canManageLocations && (
+        <section className="mt-4 rounded-xl border border-gray-200 bg-white p-4">
+          <h2 className="text-[13px] font-bold text-gray-900">Institutions</h2>
+          <p className="mt-0.5 text-[11px] text-gray-500">
+            Hospitals and laboratories whose own patient numbers you record. Link one to a location above
+            and a booking there will show that patient&apos;s number at that hospital.
+          </p>
+
+          {facilities.length === 0 ? (
+            <p className="mt-2 text-[12px] text-gray-400">None yet.</p>
+          ) : (
+            <ul className="mt-2 flex flex-wrap gap-1.5">
+              {facilities.map((f: any) => {
+                const linkedTo = locations.find(l => l.facility_id === f.id);
+                return (
+                  <li key={f.id} className="rounded-lg border border-gray-100 px-2.5 py-1.5">
+                    <p className="text-[12px] font-semibold text-gray-800">{f.name}</p>
+                    <p className="text-[10px] text-gray-500">
+                      {String(f.facility_type).replace(/_/g, " ")}
+                      {linkedTo ? ` · you work here as “${linkedTo.name}”` : " · not one of your locations"}
+                    </p>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+
+          <form className="mt-3 flex flex-wrap gap-2" onSubmit={e => {
+            e.preventDefault();
+            send("POST", { facility: newFacility });
+          }}>
+            <input required placeholder="Name, e.g. Mulago Hospital" value={newFacility.name}
+              onChange={e => setNewFacility(f => ({ ...f, name: e.target.value }))}
+              className={`${input} min-w-[180px] flex-1`} />
+            <select value={newFacility.facilityType} onChange={e => setNewFacility(f => ({ ...f, facilityType: e.target.value }))}
+              className={`${input} w-44`} aria-label="Institution type">
+              {FACILITY_TYPES.map(([k, l]) => <option key={k} value={k}>{l}</option>)}
+            </select>
+            <button type="submit" disabled={busy || newFacility.name.trim().length < 2}
+              className="rounded-lg border border-gray-200 px-3 py-2 text-[12px] font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-50">
+              Add
+            </button>
+          </form>
+
+          <p className="mt-2 text-[10px] text-gray-400">
+            Names are matched loosely, so “Mulago Hospital” and “mulago  hospital” cannot both exist and
+            split one hospital&apos;s numbering in two. This is your own list — there is no national
+            facility register in this product, and inventing one would be a claim about somebody
+            else&apos;s numbering.
+          </p>
+        </section>
+      )}
 
       {/* What exists in the schema and is not wired to anything */}
       <section className="mt-4 rounded-xl border border-gray-200 bg-white p-4">

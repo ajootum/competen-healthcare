@@ -5,7 +5,7 @@ import {
   listLocations, createLocation, updateLocation,
 } from "@/lib/practice/configuration";
 import { linkLocationToFacility, setTravelBuffer } from "@/lib/practice/hospital-booking";
-import { listFacilities } from "@/lib/practice/facilities";
+import { listFacilities, addFacility } from "@/lib/practice/facilities";
 
 // GET   /api/v1/practice/configuration -- settings, locations and the trail behind them.
 // PATCH /api/v1/practice/configuration -- { settings: {...} }
@@ -64,6 +64,22 @@ export async function POST(req: NextRequest) {
 
   let body: Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
   try { body = await req.json(); } catch { return NextResponse.json({ error: "invalid JSON" }, { status: 400 }); }
+  // A FACILITY HAD NO WAY TO BE CREATED FROM INSIDE THE PRODUCT. addFacility has existed since
+  // migration 222 with no caller, so the institutions a location can be linked to were an empty list --
+  // which would have made the whole multi-hospital identifier feature unreachable from the screen.
+  if (body.facility) {
+    const f = body.facility;
+    const created = await addFacility(auth.caller.admin, auth.ctx, {
+      name: String(f.name ?? ""),
+      facilityType: f.facilityType ? String(f.facilityType) : undefined,
+      country: f.country ? String(f.country) : undefined,
+      code: f.code ? String(f.code) : undefined,
+      correlationId: auth.caller.traceId,
+    });
+    if (!created.ok) return NextResponse.json({ error: { code: created.code, message: created.message } }, { status: created.status });
+    return NextResponse.json({ facility: created.data, correlationId: auth.caller.traceId }, { status: 201 });
+  }
+
   const l = body.location ?? {};
 
   const result = await createLocation(auth.caller.admin, {

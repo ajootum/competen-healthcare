@@ -1,5 +1,6 @@
 import { audit } from "@/lib/practice/provisioning";
 import { defaultAppointmentMinutes } from "@/lib/practice/configuration";
+import { practiceToday } from "@/lib/practice/practice-time";
 
 // PEN-001 Appointment & Scheduling Engine -- the business rules, separated from every UI that uses them
 // (PEN-001 "separate scheduling logic from user interfaces"). CPR-V2-003 V3 is one consumer; the command
@@ -67,6 +68,99 @@ export type EngineResult<T = Record<string, unknown>> =
 /** Live = holds or will hold the diary slot. Terminal states never block a booking. */
 const LIVE_STATUSES = ["REQUESTED", "CONFIRMED", "ARRIVED"];
 
+/**
+ * CAN AN APPOINTMENT SIT HERE, AT THIS TIME, IN THIS PLACE?
+ *
+ * ────────────────────────────────────────────────────────────────────────────────────────────────────
+ * SHARED BY BOOKING AND RESCHEDULING, DELIBERATELY.
+ *
+ * Drag-and-drop is a second way to put an appointment somewhere, and the moment it has its own copy of
+ * these rules the two start to drift: someone fixes the travel check in one and a drag quietly bypasses
+ * everything a booking refuses. A calendar where dragging is permitted to do what typing is not is
+ * worse than one with no dragging at all, because the practitioner believes both were checked.
+ * ────────────────────────────────────────────────────────────────────────────────────────────────────
+ *
+ * `excludeAppointmentId` keeps an appointment from colliding with ITSELF when it is being moved a few
+ * minutes -- without it every drag onto an overlapping time would refuse, naming the very appointment
+ * in the practitioner's hand.
+ */
+export async function checkPlacement(admin: any, args: {
+  workspaceId: string; startMs: number; endMs: number;
+  locationId: string | null; appointmentType: string; allowOverlap: boolean;
+  excludeAppointmentId?: string;
+}): Promise<EngineResult<{ locationName: string | null }>> {
+  // THE LOCATION IS VALIDATED, WHICH IT NEVER WAS. location_id has been written straight through since
+  // migration 192, so a booking could name ANOTHER PRACTICE'S location -- a cross-tenant reference that
+  // nothing would ever have noticed, because no screen joined to it until the calendar did.
+  let here: { id: string; name: string; travel_buffer_minutes: number } | null = null;
+  if (args.locationId) {
+    const { data: loc } = await admin.from("practice_location")
+      .select("id, name, active, travel_buffer_minutes")
+      .eq("id", args.locationId).eq("workspace_id", args.workspaceId).maybeSingle();
+    if (!loc) return { ok: false, status: 404, code: "NOT_FOUND", message: "Not found" };
+    if (!loc.active) return { ok: false, status: 422, code: "LOCATION_CLOSED", message: `${loc.name} is closed` };
+    here = loc;
+  }
+
+  if (args.allowOverlap || OVERLAP_EXEMPT.includes(args.appointmentType))
+    return { ok: true, data: { locationName: here?.name ?? null } };
+
+  // Double-booking check against live appointments in the surrounding window.
+  const windowStart = new Date(args.startMs - 480 * 60000).toISOString();
+  const windowEnd = new Date(args.endMs + 480 * 60000).toISOString();
+  const { data: nearby } = await admin.from("practice_appointment")
+    .select("id, scheduled_at, duration_minutes, location_id")
+    .eq("workspace_id", args.workspaceId).in("status", LIVE_STATUSES)
+    .gte("scheduled_at", windowStart).lt("scheduled_at", windowEnd);
+  const rows = ((nearby ?? []) as any[]).filter(a => a.id !== args.excludeAppointmentId);
+
+  const clash = rows.some(a => {
+    const aStart = Date.parse(a.scheduled_at);
+    const aEnd = aStart + (a.duration_minutes ?? 20) * 60000;
+    return aStart < args.endMs && aEnd > args.startMs;
+  });
+  if (clash) return { ok: false, status: 409, code: "DOUBLE_BOOKED", message: "this time overlaps a live appointment; pass allowOverlap to double-book deliberately" };
+
+  // ── THE CONFLICT THAT ONLY EXISTS ONCE THERE IS MORE THAN ONE HOSPITAL ──────────────────────────
+  //
+  // 09:00 at Hospital A and 09:30 at Hospital B do not overlap, so the check above passes them happily
+  // -- and nobody can be in two hospitals half an hour apart. Whoever accepts both will be late for
+  // one, and the patient at the second waits without being told why.
+  if (args.locationId && here) {
+    const elsewhere = rows.filter(a => a.location_id && a.location_id !== args.locationId);
+    if (elsewhere.length > 0) {
+      const otherIds = [...new Set(elsewhere.map(a => a.location_id))];
+      const { data: others } = await admin.from("practice_location")
+        .select("id, name, travel_buffer_minutes").in("id", otherIds);
+      const otherById = new Map(((others ?? []) as any[]).map(o => [o.id, o]));
+
+      for (const a of elsewhere) {
+        const aStart = Date.parse(a.scheduled_at);
+        const aEnd = aStart + (a.duration_minutes ?? 20) * 60000;
+        const other = otherById.get(a.location_id);
+        // The buffer belongs to whichever place is being travelled TO.
+        const gapBefore = (args.startMs - aEnd) / 60000;   // the other one first, then this
+        const gapAfter = (aStart - args.endMs) / 60000;    // this one first, then the other
+        const needBefore = here.travel_buffer_minutes;
+        const needAfter = other?.travel_buffer_minutes ?? 30;
+
+        if (gapBefore >= 0 && gapBefore < needBefore)
+          return {
+            ok: false, status: 409, code: "TRAVEL_CONFLICT",
+            message: `there is only ${Math.round(gapBefore)} minutes between ${other?.name ?? "another location"} and ${here.name}, which needs ${needBefore}`,
+          };
+        if (gapAfter >= 0 && gapAfter < needAfter)
+          return {
+            ok: false, status: 409, code: "TRAVEL_CONFLICT",
+            message: `this would leave only ${Math.round(gapAfter)} minutes to reach ${other?.name ?? "another location"}, which needs ${needAfter}`,
+          };
+      }
+    }
+  }
+
+  return { ok: true, data: { locationName: here?.name ?? null } };
+}
+
 export async function bookAppointment(admin: any, input: BookInput): Promise<EngineResult<{ id: string; status: string }>> {
   // CPR-360. The fallback used to be a hardcoded 20 here and in the overlap check below, so a practice
   // whose consultations run half an hour had been fighting that number since Phase 1. It now comes from
@@ -89,73 +183,12 @@ export async function bookAppointment(admin: any, input: BookInput): Promise<Eng
   }
   if (!patientName) return { ok: false, status: 400, code: "VALIDATION_ERROR", message: "patientName or patientId is required" };
 
-  // THE LOCATION IS VALIDATED, WHICH IT NEVER WAS. location_id has been written straight through since
-  // migration 192, so a booking could name ANOTHER PRACTICE'S location -- a cross-tenant reference that
-  // nothing would ever have noticed, because no screen joined to it until the calendar did.
-  let bookedLocation: { id: string; name: string; travel_buffer_minutes: number } | null = null;
-  if (input.locationId) {
-    const { data: loc } = await admin.from("practice_location")
-      .select("id, name, active, travel_buffer_minutes")
-      .eq("id", input.locationId).eq("workspace_id", input.workspaceId).maybeSingle();
-    if (!loc) return { ok: false, status: 404, code: "NOT_FOUND", message: "Not found" };
-    if (!loc.active) return { ok: false, status: 422, code: "LOCATION_CLOSED", message: `${loc.name} is closed` };
-    bookedLocation = loc;
-  }
-
-  // Double-booking check against live appointments in the surrounding window.
-  if (!input.allowOverlap && !OVERLAP_EXEMPT.includes(input.appointmentType)) {
-    const windowStart = new Date(startMs - 480 * 60000).toISOString();
-    const windowEnd = new Date(endMs + 480 * 60000).toISOString();
-    const { data: nearby } = await admin.from("practice_appointment")
-      .select("id, scheduled_at, duration_minutes, location_id")
-      .eq("workspace_id", input.workspaceId).in("status", LIVE_STATUSES)
-      .gte("scheduled_at", windowStart).lt("scheduled_at", windowEnd);
-    const rows = (nearby ?? []) as any[];
-
-    const clash = rows.some(a => {
-      const aStart = Date.parse(a.scheduled_at);
-      const aEnd = aStart + (a.duration_minutes ?? 20) * 60000;
-      return aStart < endMs && aEnd > startMs;
-    });
-    if (clash) return { ok: false, status: 409, code: "DOUBLE_BOOKED", message: "this time overlaps a live appointment; pass allowOverlap to double-book deliberately" };
-
-    // ── THE CONFLICT THAT ONLY EXISTS ONCE THERE IS MORE THAN ONE HOSPITAL ────────────────────────
-    //
-    // 09:00 at Hospital A and 09:30 at Hospital B do not overlap, so the check above passes them
-    // happily -- and nobody can be in two hospitals half an hour apart. Whoever accepts both will be
-    // late for one, and the patient at the second waits without being told why.
-    if (input.locationId && bookedLocation) {
-      const elsewhere = rows.filter(a => a.location_id && a.location_id !== input.locationId);
-      if (elsewhere.length > 0) {
-        const otherIds = [...new Set(elsewhere.map(a => a.location_id))];
-        const { data: others } = await admin.from("practice_location")
-          .select("id, name, travel_buffer_minutes").in("id", otherIds);
-        const otherById = new Map(((others ?? []) as any[]).map(o => [o.id, o]));
-
-        for (const a of elsewhere) {
-          const aStart = Date.parse(a.scheduled_at);
-          const aEnd = aStart + (a.duration_minutes ?? 20) * 60000;
-          const other = otherById.get(a.location_id);
-          // The buffer belongs to whichever place is being travelled TO.
-          const gapBefore = (startMs - aEnd) / 60000;   // the other one first, then this
-          const gapAfter = (aStart - endMs) / 60000;    // this one first, then the other
-          const needBefore = bookedLocation.travel_buffer_minutes;
-          const needAfter = other?.travel_buffer_minutes ?? 30;
-
-          if (gapBefore >= 0 && gapBefore < needBefore)
-            return {
-              ok: false, status: 409, code: "TRAVEL_CONFLICT",
-              message: `there is only ${Math.round(gapBefore)} minutes between ${other?.name ?? "another location"} and ${bookedLocation.name}, which needs ${needBefore}`,
-            };
-          if (gapAfter >= 0 && gapAfter < needAfter)
-            return {
-              ok: false, status: 409, code: "TRAVEL_CONFLICT",
-              message: `this would leave only ${Math.round(gapAfter)} minutes to reach ${other?.name ?? "another location"}, which needs ${needAfter}`,
-            };
-        }
-      }
-    }
-  }
+  const placed = await checkPlacement(admin, {
+    workspaceId: input.workspaceId, startMs, endMs,
+    locationId: input.locationId ?? null, appointmentType: input.appointmentType,
+    allowOverlap: input.allowOverlap === true,
+  });
+  if (!placed.ok) return placed;
 
   // Walk-ins arrive by definition: they enter as CONFIRMED and are checked in immediately by the caller.
   const initialStatus = input.appointmentType === "walk_in" ? "CONFIRMED" : "REQUESTED";
@@ -175,6 +208,144 @@ export async function bookAppointment(admin: any, input: BookInput): Promise<Eng
     payload: { appointmentId: appt.id, type: input.appointmentType }, correlationId: input.correlationId,
   });
   return { ok: true, data: { id: appt.id as string, status: appt.status as string } };
+}
+
+/**
+ * MOVE AN APPOINTMENT: a different time, a different length, a different hospital, or all three.
+ *
+ * ────────────────────────────────────────────────────────────────────────────────────────────────────
+ * THIS DID NOT EXIST. The state machine could only change an appointment's STATUS -- nothing in the
+ * product had ever moved one in time. The calendar footer has been claiming "Every change audited. Who
+ * moved what, and when" over a build where moving was impossible.
+ *
+ * Written for drag-and-drop, and therefore written defensively: a drag is a fast, imprecise gesture
+ * that a practitioner makes with one hand while talking to somebody, and it must not be able to do
+ * anything typing could not.
+ * ────────────────────────────────────────────────────────────────────────────────────────────────────
+ *
+ * `expectedVersion` is optimistic concurrency and matters more here than anywhere else in this product:
+ * a calendar is left open on a screen for hours, so the appointment in the practitioner's hand may have
+ * been cancelled, moved or completed by the front desk since the page loaded. Dragging a stale copy
+ * would silently resurrect the old time.
+ */
+export async function rescheduleAppointment(admin: any, args: {
+  workspaceId: string; appointmentId: string;
+  scheduledAt?: string; durationMinutes?: number; locationId?: string | null;
+  allowOverlap?: boolean; expectedVersion?: number;
+  actorId: string; correlationId: string;
+}): Promise<EngineResult<{
+  id: string; scheduledAt: string; durationMinutes: number; locationId: string | null;
+  from: { scheduledAt: string; durationMinutes: number; locationId: string | null };
+  recordVersion: number;
+}>> {
+  const { data: appt, error: readError } = await admin.from("practice_appointment")
+    .select("id, scheduled_at, duration_minutes, location_id, status, appointment_type, record_version, workspace_id")
+    .eq("id", args.appointmentId).eq("workspace_id", args.workspaceId).maybeSingle();
+  if (readError)
+    return { ok: false, status: 500, code: "READ_FAILED", message: `could not read the appointment: ${readError.message}` };
+  if (!appt) return { ok: false, status: 404, code: "NOT_FOUND", message: "Not found" };
+
+  if (args.expectedVersion !== undefined && args.expectedVersion !== appt.record_version)
+    return {
+      ok: false, status: 409, code: "STALE",
+      message: "this appointment changed since the calendar was loaded; reload before moving it",
+    };
+
+  // A TERMINAL APPOINTMENT IS HISTORY, not a thing with a future time. Rescheduling one would rewrite
+  // what happened rather than plan what will.
+  if (["COMPLETED", "CANCELLED", "NO_SHOW"].includes(appt.status))
+    return {
+      ok: false, status: 422, code: "NOT_RESCHEDULABLE",
+      message: `this appointment is ${appt.status.toLowerCase()} and cannot be moved; book a new one instead`,
+    };
+  // ARRIVED means the patient is standing there. Moving their appointment is not what is happening --
+  // either they are being seen, or they are being sent away, and the second is a cancellation.
+  if (appt.status === "ARRIVED")
+    return {
+      ok: false, status: 422, code: "PATIENT_PRESENT",
+      message: "this patient has already arrived; cancel and rebook if they are being sent away",
+    };
+
+  const duration = args.durationMinutes ?? appt.duration_minutes;
+  if (!Number.isInteger(duration) || duration < 5 || duration > 480)
+    return { ok: false, status: 400, code: "VALIDATION_ERROR", message: "an appointment runs between 5 and 480 minutes" };
+
+  const startMs = args.scheduledAt ? Date.parse(args.scheduledAt) : Date.parse(appt.scheduled_at);
+  if (Number.isNaN(startMs))
+    return { ok: false, status: 400, code: "VALIDATION_ERROR", message: "scheduledAt is not a valid timestamp" };
+  const endMs = startMs + duration * 60000;
+
+  const locationId = args.locationId !== undefined ? args.locationId : appt.location_id;
+
+  // NOTHING CHANGED is refused rather than written, so a drag that lands back where it started does not
+  // leave an audit entry saying an appointment moved when it did not.
+  const same = startMs === Date.parse(appt.scheduled_at)
+    && duration === appt.duration_minutes
+    && (locationId ?? null) === (appt.location_id ?? null);
+  if (same) return { ok: false, status: 422, code: "NO_CHANGE", message: "nothing was different" };
+
+  // ── A DAY THAT HAS ALREADY BEEN ────────────────────────────────────────────────────────────────
+  //
+  // You cannot schedule somebody to have already been seen. Compared at DAY granularity in the
+  // practice's own timezone, not against a clock: "before today" is a judgement a practitioner shares,
+  // whereas "three minutes ago" would refuse a perfectly ordinary drag into the current hour.
+  const { data: ws } = await admin.from("practice_workspace")
+    .select("timezone").eq("id", args.workspaceId).maybeSingle();
+  const tz = ws?.timezone ?? "UTC";
+  const targetDay = practiceToday(tz, new Date(startMs));
+  const today = practiceToday(tz);
+  if (targetDay < today)
+    return {
+      ok: false, status: 422, code: "IN_THE_PAST",
+      message: `${targetDay} has already been; an appointment cannot be moved into a day that is over`,
+    };
+
+  const placed = await checkPlacement(admin, {
+    workspaceId: args.workspaceId, startMs, endMs, locationId: locationId ?? null,
+    appointmentType: appt.appointment_type, allowOverlap: args.allowOverlap === true,
+    excludeAppointmentId: appt.id,   // an appointment must not collide with itself
+  });
+  if (!placed.ok) return placed;
+
+  // The version is part of the WHERE, so two people dragging the same appointment at the same moment
+  // cannot both win -- the second update matches no row and is reported as stale rather than silently
+  // overwriting the first.
+  const { data: updated, error } = await admin.from("practice_appointment")
+    .update({
+      scheduled_at: new Date(startMs).toISOString(), duration_minutes: duration,
+      location_id: locationId ?? null,
+      record_version: appt.record_version + 1, updated_at: new Date().toISOString(), updated_by: args.actorId,
+    })
+    .eq("id", appt.id).eq("record_version", appt.record_version)
+    .select("id, scheduled_at, duration_minutes, location_id, record_version").maybeSingle();
+  if (error) return { ok: false, status: 422, code: "REFUSED_BY_DATABASE", message: error.message };
+  if (!updated)
+    return {
+      ok: false, status: 409, code: "STALE",
+      message: "this appointment was changed by someone else while it was being moved; reload and try again",
+    };
+
+  await audit(admin, {
+    workspaceId: args.workspaceId, actorId: args.actorId, eventType: "practice.appointment_rescheduled",
+    payload: {
+      appointmentId: appt.id,
+      from: { scheduledAt: appt.scheduled_at, durationMinutes: appt.duration_minutes, locationId: appt.location_id },
+      to: { scheduledAt: updated.scheduled_at, durationMinutes: updated.duration_minutes, locationId: updated.location_id },
+      // A deliberate double-book is the fact most worth being able to find afterwards.
+      forced: args.allowOverlap === true,
+    },
+    correlationId: args.correlationId,
+  });
+
+  return {
+    ok: true,
+    data: {
+      id: updated.id, scheduledAt: updated.scheduled_at, durationMinutes: updated.duration_minutes,
+      locationId: updated.location_id,
+      from: { scheduledAt: appt.scheduled_at, durationMinutes: appt.duration_minutes, locationId: appt.location_id },
+      recordVersion: updated.record_version,
+    },
+  };
 }
 
 /**
