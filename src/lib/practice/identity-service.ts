@@ -1,0 +1,543 @@
+import QRCode from "qrcode";
+import { audit } from "@/lib/practice/provisioning";
+import type { EngineResult } from "@/lib/practice/encounters";
+
+// PIS-000 v1.0 (Frozen) -- PRACTITIONER IDENTITY SERVICE.
+//
+// ────────────────────────────────────────────────────────────────────────────────────────────────────
+// AN IDENTITY IS NOT SCOPED TO A PRACTICE. s1 "independent of employers", s15 "remains valid when
+// changing workplaces". Every function here is keyed on the USER, and the workspace a booking lands in
+// is a nullable pointer that can be moved or cleared without touching the number, the handle or the URL.
+//
+// PRIVACY BY DEFAULT (s1). Discovery starts 'hidden'; s7's public mode is something a practitioner
+// chooses, once, knowingly. This publishes a real person's name, qualifications and place of work.
+// ────────────────────────────────────────────────────────────────────────────────────────────────────
+//
+// WHAT IS NOT BUILT, AND WHY -- see NOT_BUILT below rather than a comment nobody reads.
+
+/* eslint-disable @typescript-eslint/no-explicit-any */
+
+const nowIso = () => new Date().toISOString();
+
+/** s7. Public is the only mode that reaches search; the rest differ in how a link behaves. */
+export const DISCOVERY_MODES = [
+  { key: "hidden", label: "Hidden", detail: "Nobody can reach your page, by search or by link. This is where every identity starts." },
+  { key: "link_only", label: "Anyone with the link", detail: "Your page works for anybody who has the URL or scans your code, and never appears in search." },
+  { key: "existing_patients", label: "Existing patients only", detail: "The page resolves, and says so, but booking is for people already registered with your practice." },
+  { key: "referral_only", label: "By referral", detail: "The page resolves and states that new bookings come by referral." },
+  { key: "public", label: "Listed publicly", detail: "Your name, qualifications and locations appear in public search results. This publishes you." },
+] as const;
+
+/** s10. Ordered, because the lifecycle is a progression and the UI derives its next step from this. */
+export const IDENTITY_STATES = [
+  "created", "email_verified", "licence_verified", "active",
+  "temporarily_hidden", "suspended", "archived", "deleted",
+] as const;
+
+/** Which states may reach the public, whatever the discovery mode says. */
+const RESOLVABLE_STATES = new Set(["active", "licence_verified"]);
+
+export const NOT_BUILT = [
+  {
+    key: "otp_booking",
+    spec: "PIS-000 s11",
+    label: "OTP verification before booking confirmation",
+    detail: "Sending a one-time code to a patient needs an SMS or email channel. This product has none, by a decision taken in CPR-320 and CPR-340 and enforced by their harnesses -- there is no channel column and no sent_at anywhere. A code that cannot reach the patient is not a verification, so it is absent rather than stubbed. Everything else in s11 -- resolving a handle, a number, a QR code or a URL to a practitioner -- is built.",
+  },
+  {
+    key: "licence_verification",
+    spec: "PIS-000 s10, s14",
+    label: "Automated licence verification",
+    detail: "s14 lists integration with professional councils as future work. The licence_verified state exists and is recorded with who checked and when, which is a provenance record rather than a verification. Nothing here contacts a council.",
+  },
+  {
+    key: "qr_pdf",
+    spec: "PIS-000 s12",
+    label: "QR codes as PDF",
+    detail: "SVG and PNG are generated here, in process, with no external service. PDF would need a second library; the printable card page prints to PDF from the browser instead.",
+  },
+  {
+    key: "short_url",
+    spec: "PIS-000 s12",
+    label: "A separate short URL",
+    detail: "A short URL needs a domain and a redirect service that this deployment does not have. The canonical URL is already short -- a handle plus a host -- so a second one would be an alias to maintain rather than a feature.",
+  },
+  {
+    key: "telemedicine",
+    spec: "PIS-000 s5",
+    label: "Telemedicine",
+    detail: "Named in s5 as a future capability. Nothing is built and nothing pretends to be.",
+  },
+] as const;
+
+// ── URLS ─────────────────────────────────────────────────────────────────────────────────────────────
+
+/**
+ * The canonical host.
+ *
+ * s8 names https://practice.competenhealthcare.com. NOT HARDCODED: a booking URL printed onto a poster
+ * has to resolve, and hardcoding a host this deployment may not serve would put a dead address on a
+ * physical card. Read from the environment, with the spec's value as the default.
+ */
+export function identityHost(): string {
+  return (process.env.NEXT_PUBLIC_PRACTICE_IDENTITY_HOST ?? "https://practice.competenhealthcare.com")
+    .replace(/\/+$/, "");
+}
+
+export const bookingUrl = (handle: string) => `${identityHost()}/@${handle}`;
+
+// ── HANDLES ──────────────────────────────────────────────────────────────────────────────────────────
+
+const HANDLE_RE = /^[a-z][a-z0-9]{2,29}$/;
+
+/** s3: lowercase letters and digits only, no spaces or punctuation. */
+export function normaliseHandle(raw: string): string {
+  return raw.trim().replace(/^@+/, "").toLowerCase().replace(/[^a-z0-9]/g, "");
+}
+
+/**
+ * s3's algorithm, exactly: first initial + surname, then first name + surname, then numeric suffixes.
+ *
+ * RETURNS THE WHOLE LADDER, not the first free rung. The caller checks availability in order, which
+ * keeps the generation rule (this function, pure and testable) apart from the uniqueness rule (the
+ * database, which is the only thing that can settle a race).
+ */
+export function handleCandidates(displayName: string, limit = 12): string[] {
+  // Titles are not names. "Dr Elisha Okaisu" must not yield @dokaisu.
+  const words = displayName.trim().split(/\s+/)
+    .map(w => w.replace(/[^A-Za-z'-]/g, ""))
+    .filter(w => w.length > 0 && !/^(dr|prof|professor|mr|mrs|ms|miss|sr|sister|nurse|mx)\.?$/i.test(w));
+  if (words.length === 0) return [];
+
+  const first = words[0].toLowerCase().replace(/[^a-z]/g, "");
+  const surname = words[words.length - 1].toLowerCase().replace(/[^a-z]/g, "");
+  if (!surname) return [];
+
+  const out: string[] = [];
+  const push = (h: string) => {
+    if (HANDLE_RE.test(h) && !out.includes(h)) out.push(h);
+  };
+
+  // s3 order: first initial + surname, then first name + surname.
+  if (first) push(first[0] + surname);
+  if (first && first !== surname) push(first + surname);
+  push(surname);
+
+  // Then numeric suffixes on the preferred stem until unique.
+  const stem = (first ? first[0] + surname : surname).slice(0, 26);
+  for (let n = 1; out.length < limit; n++) {
+    push(`${stem}${n}`);
+    if (n > 200) break;
+  }
+  return out.slice(0, limit);
+}
+
+/**
+ * Is this handle available?
+ *
+ * THREE WAYS TO BE UNAVAILABLE, and they are deliberately not distinguished to the caller beyond a
+ * reason code: taken by a live identity, reserved (s4), or RETIRED BY SOMEBODY ELSE. The third is the
+ * one that is easy to miss -- a released handle stays claimed, because posters and QR codes printed
+ * with it are still in circulation and reassigning it would send a stranger's patients to somebody new.
+ */
+export async function handleAvailable(admin: any, handle: string, forIdentityId?: string): Promise<{
+  available: boolean; reason?: "invalid" | "reserved" | "taken" | "retired";
+}> {
+  const h = normaliseHandle(handle);
+  if (!HANDLE_RE.test(h)) return { available: false, reason: "invalid" };
+
+  const { data: reserved } = await admin.from("practice_reserved_handle")
+    .select("handle").eq("handle", h).maybeSingle();
+  if (reserved) return { available: false, reason: "reserved" };
+
+  const { data: taken } = await admin.from("practice_practitioner_identity")
+    .select("id").eq("handle", h).maybeSingle();
+  if (taken && taken.id !== forIdentityId) return { available: false, reason: "taken" };
+
+  const { data: retired } = await admin.from("practice_handle_history")
+    .select("identity_id").eq("handle", h).maybeSingle();
+  if (retired && retired.identity_id !== forIdentityId) return { available: false, reason: "retired" };
+
+  return { available: true };
+}
+
+/** The first candidate that is actually free. */
+export async function suggestHandle(admin: any, displayName: string): Promise<string | null> {
+  for (const candidate of handleCandidates(displayName, 24)) {
+    const { available } = await handleAvailable(admin, candidate);
+    if (available) return candidate;
+  }
+  return null;
+}
+
+// ── THE IDENTITY ─────────────────────────────────────────────────────────────────────────────────────
+
+export async function getIdentity(admin: any, userId: string) {
+  const { data } = await admin.from("practice_practitioner_identity")
+    .select("*").eq("user_id", userId).maybeSingle();
+  return data ?? null;
+}
+
+/**
+ * Issue an identity. Idempotent per person.
+ *
+ * s15: "Every practitioner receives a permanent Practitioner Number, public handle, booking URL and QR
+ * code automatically." Automatic, but NOT public: the number and handle are issued, and discovery stays
+ * hidden until the practitioner opts in.
+ */
+export async function issueIdentity(admin: any, args: {
+  userId: string; displayName: string; workspaceId?: string | null; correlationId: string;
+}): Promise<EngineResult<{ id: string; practitionerNumber: string; handle: string | null; created: boolean }>> {
+  const existing = await getIdentity(admin, args.userId);
+  if (existing) {
+    return {
+      ok: true,
+      data: {
+        id: existing.id, practitionerNumber: existing.practitioner_number,
+        handle: existing.handle, created: false,
+      },
+    };
+  }
+  if (args.displayName.trim().length < 2)
+    return { ok: false, status: 400, code: "VALIDATION_ERROR", message: "a display name is required" };
+
+  const suggested = await suggestHandle(admin, args.displayName);
+
+  // A SEQUENCE, AND NOTHING ELSE. s2 says permanent and never reused, and max()+1 is wrong about the
+  // second half: delete CPR-000005 and the next practitioner issued is handed 000005 again, so a number
+  // that meant one clinician on a printed card now means another.
+  //
+  // A MISSING ALLOCATOR FAILS LOUDLY. Falling back to a count here would silently downgrade a guarantee
+  // the whole identity rests on, and nothing downstream could tell the difference until two people
+  // shared a number.
+  for (let attempt = 0; attempt < 10; attempt++) {
+    const { data: allocated, error: allocError } = await admin.rpc("practice_next_practitioner_number");
+    if (allocError || !allocated)
+      return {
+        ok: false, status: 503, code: "ALLOCATOR_UNAVAILABLE",
+        message: `the practitioner number allocator is not available -- migration 219 may not have been applied: ${allocError?.message ?? "no value returned"}`,
+      };
+
+    const { data, error } = await admin.from("practice_practitioner_identity").insert({
+      user_id: args.userId, practitioner_number: String(allocated),
+      handle: suggested, display_name: args.displayName.trim(),
+      primary_workspace_id: args.workspaceId ?? null,
+      status: "created", discovery: "hidden",
+    }).select("id, practitioner_number, handle").single();
+
+    if (!error) {
+      await audit(admin, {
+        workspaceId: args.workspaceId ?? null, actorId: args.userId, eventType: "practice.identity_issued",
+        payload: { identityId: data.id, practitionerNumber: data.practitioner_number, handle: data.handle },
+        correlationId: args.correlationId,
+      });
+      return {
+        ok: true,
+        data: { id: data.id, practitionerNumber: data.practitioner_number, handle: data.handle, created: true },
+      };
+    }
+    // A collision on the NUMBER is a race the sequence should have prevented, so take the next one. A
+    // collision on user_id means somebody else issued this person's identity while we were working --
+    // return theirs rather than a second.
+    if (/user_id/.test(error.message)) {
+      const theirs = await getIdentity(admin, args.userId);
+      if (theirs) return {
+        ok: true,
+        data: { id: theirs.id, practitionerNumber: theirs.practitioner_number, handle: theirs.handle, created: false },
+      };
+    }
+    if (!/duplicate|unique/i.test(error.message))
+      return { ok: false, status: 400, code: "VALIDATION_ERROR", message: error.message };
+  }
+  return { ok: false, status: 409, code: "NUMBER_UNAVAILABLE", message: "could not allocate a practitioner number" };
+}
+
+/**
+ * Change a handle.
+ *
+ * s3: availability checks, and automatic legacy redirects. THE OLD HANDLE IS RETIRED, NOT FREED -- it
+ * goes to practice_handle_history so that the printed cards and posters carrying it keep working, and so
+ * nobody else can claim it.
+ */
+export async function changeHandle(admin: any, args: {
+  userId: string; handle: string; correlationId: string;
+}): Promise<EngineResult<{ handle: string; previous: string | null }>> {
+  const identity = await getIdentity(admin, args.userId);
+  if (!identity) return { ok: false, status: 404, code: "NO_IDENTITY", message: "no identity has been issued" };
+
+  const h = normaliseHandle(args.handle);
+  const check = await handleAvailable(admin, h, identity.id);
+  if (!check.available) {
+    const message = {
+      invalid: "a handle is 3 to 30 characters, starts with a letter, and uses only lowercase letters and numbers",
+      reserved: "that handle is reserved",
+      taken: "that handle is in use",
+      retired: "that handle used to belong to somebody else, and stays with them so their printed codes keep working",
+    }[check.reason ?? "invalid"];
+    return { ok: false, status: 409, code: `HANDLE_${(check.reason ?? "invalid").toUpperCase()}`, message };
+  }
+  if (identity.handle === h) return { ok: true, data: { handle: h, previous: null } };
+
+  const previous: string | null = identity.handle ?? null;
+  if (previous) {
+    const { error: historyError } = await admin.from("practice_handle_history")
+      .insert({ handle: previous, identity_id: identity.id });
+    // THE HISTORY WRITE COMES FIRST AND ITS FAILURE STOPS THE CHANGE. Freeing the old handle without
+    // recording it would break every poster carrying it and leave it claimable by somebody else.
+    if (historyError && !/duplicate|unique/i.test(historyError.message))
+      return { ok: false, status: 500, code: "HISTORY_FAILED", message: `the old handle could not be retired, so nothing was changed: ${historyError.message}` };
+  }
+
+  const { data: updated, error } = await admin.from("practice_practitioner_identity")
+    .update({ handle: h, updated_at: nowIso() }).eq("id", identity.id).select("id");
+  if (error) return { ok: false, status: 400, code: "VALIDATION_ERROR", message: error.message };
+  if (!updated || updated.length === 0)
+    return { ok: false, status: 404, code: "NOT_FOUND", message: "Not found" };
+
+  await audit(admin, {
+    workspaceId: identity.primary_workspace_id, actorId: args.userId, eventType: "practice.handle_changed",
+    payload: { identityId: identity.id, from: previous, to: h }, correlationId: args.correlationId,
+  });
+  return { ok: true, data: { handle: h, previous } };
+}
+
+/** The public profile fields (s6) and the discovery mode (s7). All practitioner-controlled. */
+export async function updateIdentity(admin: any, args: {
+  userId: string; displayName?: string; qualifications?: string; specialties?: string;
+  biography?: string; languages?: string; consultationTypes?: string;
+  discovery?: string; primaryWorkspaceId?: string | null; correlationId: string;
+}): Promise<EngineResult<{ id: string; discovery: string }>> {
+  const identity = await getIdentity(admin, args.userId);
+  if (!identity) return { ok: false, status: 404, code: "NO_IDENTITY", message: "no identity has been issued" };
+
+  if (args.discovery && !DISCOVERY_MODES.some(m => m.key === args.discovery))
+    return { ok: false, status: 400, code: "VALIDATION_ERROR", message: `discovery must be one of: ${DISCOVERY_MODES.map(m => m.key).join(", ")}` };
+
+  // GOING PUBLIC NEEDS A NAME AND A HANDLE. A public listing with neither is a page that cannot be found
+  // and cannot be identified, and it would still have published the row.
+  if (args.discovery === "public" && !identity.handle)
+    return { ok: false, status: 409, code: "NO_HANDLE", message: "choose a handle before listing publicly -- a public page needs an address" };
+
+  const patch: Record<string, unknown> = { updated_at: nowIso() };
+  const map: Record<string, string> = {
+    displayName: "display_name", qualifications: "qualifications", specialties: "specialties",
+    biography: "biography", languages: "languages", consultationTypes: "consultation_types",
+    discovery: "discovery",
+  };
+  for (const [k, column] of Object.entries(map)) {
+    const v = (args as any)[k];
+    if (v !== undefined) patch[column] = typeof v === "string" ? (v.trim() || null) : v;
+  }
+  if (args.primaryWorkspaceId !== undefined) patch.primary_workspace_id = args.primaryWorkspaceId;
+  if (patch.display_name === null)
+    return { ok: false, status: 400, code: "VALIDATION_ERROR", message: "a display name is required" };
+
+  const { data: updated, error } = await admin.from("practice_practitioner_identity")
+    .update(patch).eq("id", identity.id).select("id, discovery");
+  if (error) return { ok: false, status: 400, code: "VALIDATION_ERROR", message: error.message };
+  if (!updated || updated.length === 0)
+    return { ok: false, status: 404, code: "NOT_FOUND", message: "Not found" };
+
+  if (args.discovery && args.discovery !== identity.discovery) {
+    await audit(admin, {
+      workspaceId: identity.primary_workspace_id, actorId: args.userId,
+      eventType: "practice.discovery_changed",
+      // BOTH VALUES, so "why did my page become findable" has an answer.
+      payload: { identityId: identity.id, from: identity.discovery, to: args.discovery },
+      correlationId: args.correlationId,
+    });
+  }
+  return { ok: true, data: { id: identity.id, discovery: updated[0].discovery } };
+}
+
+/** s10's lifecycle. Forward-only, except that a temporary hide can be undone. */
+const TRANSITIONS: Record<string, string[]> = {
+  created: ["email_verified", "suspended", "archived"],
+  email_verified: ["licence_verified", "active", "suspended", "archived"],
+  licence_verified: ["active", "suspended", "archived"],
+  active: ["temporarily_hidden", "suspended", "archived"],
+  temporarily_hidden: ["active", "suspended", "archived"],
+  suspended: ["active", "archived"],
+  archived: ["deleted"],
+  deleted: [],
+};
+
+export async function transitionIdentity(admin: any, args: {
+  userId: string; to: string; actorId: string; licenceReference?: string; correlationId: string;
+}): Promise<EngineResult<{ status: string }>> {
+  const identity = await getIdentity(admin, args.userId);
+  if (!identity) return { ok: false, status: 404, code: "NO_IDENTITY", message: "no identity has been issued" };
+
+  const allowed = TRANSITIONS[identity.status] ?? [];
+  if (!allowed.includes(args.to))
+    return {
+      ok: false, status: 409, code: "ILLEGAL_TRANSITION",
+      message: `an identity that is ${identity.status} cannot become ${args.to}${allowed.length ? ` -- only ${allowed.join(", ")}` : ""}`,
+    };
+
+  const patch: Record<string, unknown> = { status: args.to, updated_at: nowIso() };
+  if (args.to === "licence_verified") {
+    // WHO CHECKED, AND WHEN. Nothing here contacts a council; what makes this state true is a person
+    // recording that they looked, and their id stays against it. See NOT_BUILT.
+    patch.licence_verified_at = nowIso();
+    patch.licence_verified_by = args.actorId;
+    patch.licence_reference = args.licenceReference?.trim() || null;
+  }
+
+  const { data: updated, error } = await admin.from("practice_practitioner_identity")
+    .update(patch).eq("id", identity.id).select("id, status");
+  if (error) return { ok: false, status: 400, code: "VALIDATION_ERROR", message: error.message };
+  if (!updated || updated.length === 0)
+    return { ok: false, status: 404, code: "NOT_FOUND", message: "Not found" };
+
+  await audit(admin, {
+    workspaceId: identity.primary_workspace_id, actorId: args.actorId,
+    eventType: "practice.identity_transitioned",
+    payload: { identityId: identity.id, from: identity.status, to: args.to },
+    correlationId: args.correlationId,
+  });
+  return { ok: true, data: { status: args.to } };
+}
+
+// ── RESOLUTION AND SEARCH ────────────────────────────────────────────────────────────────────────────
+
+/** Only the fields s6 lists. Never the internal id, the user id or the workspace -- s13. */
+function publicView(row: any) {
+  return {
+    practitionerNumber: row.practitioner_number,
+    handle: row.handle,
+    displayName: row.display_name,
+    qualifications: row.qualifications,
+    specialties: row.specialties,
+    biography: row.biography,
+    languages: row.languages,
+    consultationTypes: row.consultation_types,
+    discovery: row.discovery,
+    bookingUrl: row.handle ? bookingUrl(row.handle) : null,
+    // WHETHER BOOKING IS OPEN, and why not when it is not. s7's modes differ in exactly this.
+    bookingOpen: row.discovery === "public" || row.discovery === "link_only",
+    bookingNote:
+      row.discovery === "existing_patients" ? "Bookings here are for people already registered with this practice."
+      : row.discovery === "referral_only" ? "New bookings come by referral."
+      : null,
+  };
+}
+
+/**
+ * Resolve a handle for the public page (s8, s11).
+ *
+ * A HIDDEN IDENTITY IS A 404, NOT A REFUSAL. "This practitioner exists but will not see you" is a
+ * disclosure about a named person; nothing distinguishes it from a handle that was never issued.
+ * Returns the REDIRECT when the handle is a retired one, which is what s8's automatic redirect is.
+ */
+export async function resolveHandle(admin: any, rawHandle: string): Promise<
+  | { kind: "found"; profile: ReturnType<typeof publicView> }
+  | { kind: "redirect"; to: string }
+  | { kind: "none" }
+> {
+  const h = normaliseHandle(rawHandle);
+  if (!HANDLE_RE.test(h)) return { kind: "none" };
+
+  const { data: row } = await admin.from("practice_practitioner_identity")
+    .select("*").eq("handle", h).maybeSingle();
+
+  if (row) {
+    if (row.discovery === "hidden") return { kind: "none" };
+    if (!RESOLVABLE_STATES.has(row.status)) return { kind: "none" };
+    return { kind: "found", profile: publicView(row) };
+  }
+
+  // s8: legacy URLs redirect automatically.
+  const { data: retired } = await admin.from("practice_handle_history")
+    .select("identity_id").eq("handle", h).maybeSingle();
+  if (retired) {
+    const { data: current } = await admin.from("practice_practitioner_identity")
+      .select("handle, discovery, status").eq("id", retired.identity_id).maybeSingle();
+    if (current?.handle && current.discovery !== "hidden" && RESOLVABLE_STATES.has(current.status))
+      return { kind: "redirect", to: `/@${current.handle}` };
+  }
+  return { kind: "none" };
+}
+
+/**
+ * s9's search resolution, in its exact priority order:
+ *   Exact Handle -> Practitioner Number -> Exact Display Name -> Surname -> Specialty -> Fuzzy Match
+ *
+ * s7: ONLY PUBLIC IDENTITIES ARE SEARCHABLE. That filter is applied in every query below rather than to
+ * the merged result -- filtering afterwards is the classic search leak, where a total discloses that a
+ * hidden practitioner exists. Same position CPR-350 took.
+ */
+export async function searchPractitioners(admin: any, rawQuery: string, limit = 20) {
+  const q = rawQuery.trim();
+  if (q.length < 2) return { tier: null, results: [] as ReturnType<typeof publicView>[] };
+
+  const listed = (builder: any) => builder.eq("discovery", "public").in("status", [...RESOLVABLE_STATES]);
+  const base = () => listed(admin.from("practice_practitioner_identity").select("*"));
+  const seen = new Set<string>();
+  const out: any[] = [];
+  const take = (rows: any[] | null) => {
+    for (const r of rows ?? []) {
+      if (seen.has(r.id)) continue;
+      seen.add(r.id); out.push(r);
+    }
+  };
+
+  const handle = normaliseHandle(q);
+  const tiers: { tier: string; run: () => Promise<any> }[] = [
+    { tier: "handle", run: () => base().eq("handle", handle).limit(limit) },
+    { tier: "number", run: () => base().eq("practitioner_number", q.toUpperCase()).limit(limit) },
+    { tier: "display_name", run: () => base().ilike("display_name", q).limit(limit) },
+    { tier: "surname", run: () => base().ilike("display_name", `% ${q}`).limit(limit) },
+    { tier: "specialty", run: () => base().ilike("specialties", `%${q}%`).limit(limit) },
+    { tier: "fuzzy", run: () => base().ilike("display_name", `%${q}%`).limit(limit) },
+  ];
+
+  let matchedTier: string | null = null;
+  for (const t of tiers) {
+    const { data } = await t.run();
+    if ((data ?? []).length > 0) {
+      // THE TIER THAT FIRST MATCHED IS REPORTED, so a caller can tell an exact hit from a fuzzy one --
+      // which is the whole point of a priority order.
+      if (!matchedTier) matchedTier = t.tier;
+      take(data);
+      if (matchedTier === "handle" || matchedTier === "number") break;
+    }
+  }
+  return { tier: matchedTier, results: out.slice(0, limit).map(publicView) };
+}
+
+// ── THE SHARING TOOLKIT (s12) ────────────────────────────────────────────────────────────────────────
+
+/**
+ * QR codes, generated in process.
+ *
+ * NO EXTERNAL SERVICE. A QR code is a deterministic encoding of a string; fetching one from an image API
+ * would send every practitioner's booking URL to a third party and make a printed card depend on
+ * somebody else's uptime.
+ */
+export async function bookingQr(handle: string, format: "svg" | "png" = "svg"): Promise<string> {
+  const url = bookingUrl(handle);
+  return format === "svg"
+    ? QRCode.toString(url, { type: "svg", margin: 1, width: 320, errorCorrectionLevel: "M" })
+    : QRCode.toDataURL(url, { margin: 1, width: 320, errorCorrectionLevel: "M" });
+}
+
+/**
+ * s12's message templates.
+ *
+ * TEMPLATES, NOT MESSAGES. This product sends nothing -- CPR-320 and CPR-340 settled that and their
+ * harnesses enforce it structurally. What it can honestly do is write the text for a practitioner to
+ * paste into WhatsApp themselves, which is what a "sharing toolkit" is when there is no channel.
+ */
+export function shareTemplates(displayName: string, handle: string) {
+  const url = bookingUrl(handle);
+  return {
+    sentByThisProduct: false,
+    templates: [
+      { key: "whatsapp", label: "WhatsApp", body: `Hello, this is ${displayName}. You can book an appointment with me here: ${url}` },
+      { key: "sms", label: "SMS", body: `${displayName} -- book an appointment: ${url}` },
+      { key: "email", label: "Email", subject: `Booking with ${displayName}`, body: `Hello,\n\nYou can book an appointment with me using the link below.\n\n${url}\n\n${displayName}` },
+      { key: "card", label: "Printed card", body: `${displayName}\n@${handle}\n${url}` },
+    ],
+  };
+}
