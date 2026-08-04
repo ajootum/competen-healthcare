@@ -51,6 +51,10 @@ export const PRACTICE_NAV: PracticeNavItem[] = [
   // a static route there would shadow it silently. encounter.list, not patient.view: learning from a case
   // does not require knowing whose it was, and the engine de-identifies for callers without it.
   { href: "/practice/cases", label: "Case Memory", icon: "❧", capability: "encounter.list", group: "Intelligence", phase: 5, built: true },
+  // CPR-210. encounter.list, because it reads consultations and writes nothing clinical. Switching it
+  // ON is a different act and takes practice.settings.manage, gated inside the page -- putting the nav
+  // entry behind that permission would hide the disclosure from the people it is about.
+  { href: "/practice/assistant", label: "Clinical assistant", icon: "✧", capability: "encounter.list", group: "Intelligence", phase: 5, built: true },
   { href: "/practice/privacy", label: "Privacy and access", icon: "⚿", capability: "access.review", group: "Tools and Settings", phase: 5, built: true },
   // CPR-370: NO CAPABILITY. Everybody may see the devices signed in as THEM and lock one out; the
   // practice-wide view and the policy are gated inside the page. Hiding somebody's own device list

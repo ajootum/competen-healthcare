@@ -1459,3 +1459,84 @@ gone: a popular search across a private practice is a count of one person's own 
 The private page is at **`/practice/cases`, not `/practice/case-memory`** — that slug belongs to the
 public marketing page for this capability, and a static route would shadow it silently. The content
 harness guards the collision and still reports 121.
+
+---
+
+## 29. CPR-210 as built: it reorganises the record, it does not originate clinical facts
+
+**Migration 215** · `src/lib/practice/ai-assistant.ts` · `/practice/assistant` ·
+`scripts/practice-assistant-harness.ts` (51 assertions, six deliberate breaks proven, live model call)
+
+### The line everything follows from
+
+> **The assistant may reorganise what is already in the record. It may not originate a clinical fact.**
+
+Summarising a consultation the practitioner wrote, drafting a referral from it, putting the recorded
+plan into plain language, expanding shorthand — all rearrange text a clinician already committed to.
+Suggesting a diagnosis, a drug, a dose, a guideline or an interaction *originates* a clinical fact, and
+this product has nothing to ground one in.
+
+Six tasks survive on the first side of that line. There is **no ungrounded mode**: every task, including
+the free-text one, requires a consultation. An assistant with no record in front of it can only answer
+from the model's own memory, which is the one thing this module refuses to do.
+
+### The two figures that had to go
+
+**"Confidence: High — 92%"**, drawn with a green bar. A model's report of its own certainty is not a
+measurement; it is another generated sentence. It is also the most dangerous element in the comp,
+because a green bar beside a drug dose invites a clinician to trust it. No confidence column exists in
+the migration, so a later page cannot render one from a field that happened to be there.
+
+**Citations to NICE NG59, ClinicalKey and the WHO primary care guidelines.** This product holds none of
+them, so such a citation would be the model recalling a title — and a fabricated citation is *worse*
+than none, because it looks checkable and is not. It is precisely the hallucination the specification's
+own §7 asks to mitigate. Sources here are internal only: rows in this practice, stored as ids and
+rendered as links the reader can open. That list is also the honest version of §7's "explainability" —
+not a rationale the model writes about itself, but the actual input.
+
+### Consent, because this is a disclosure
+
+Using the assistant sends record content — patient details, clinical notes — to a third-party model
+provider. That is a disclosure of patient data outside the system. So it is **off by default**, turning
+it on requires `practice.settings.manage` **and** acknowledging the current disclosure *by version*, and
+the agreement is dated and attributed. If the disclosure text changes, the old acknowledgement stops
+counting and the practice is refused until it agrees again. Each call is written to the access log as an
+**export**, distinctly from an ordinary view, so an access review can find every occasion record content
+left the system.
+
+### Nothing reaches the clinical record
+
+A response lands in `practice_ai_message` and nowhere else. There is no foreign key from a note,
+diagnosis or document back to it and no code path that writes one. §5's rule — "AI never finalises
+clinical documentation autonomously" — holds because there is no mechanism. The harness counts notes,
+diagnoses, treatments and drafts before and after a real answer and asserts they are identical, with a
+second assertion proving the footprint was counting non-zero rows so "unchanged" means something.
+
+### What a harness here cannot do, stated rather than implied
+
+**No test can prove a language model obeyed its instructions.** The harness proves the gate in front of
+it, the grounding fed to it, and that nothing it says can reach a patient record. It cannot prove an
+answer was correct. That limit is on the page too, in its own panel — a practitioner needs to know it,
+and it is the honest replacement for a confidence bar.
+
+### Refused besides
+
+**"Competen Clinical LLM v2.1"** — there is no bespoke clinical model; the real model id the provider
+returned is recorded per message and shown. **Drug and interaction checking** — needs a maintained drug
+database that does not exist. **Differential diagnosis** and **guideline recommendations** — originate
+facts. **"Continuously learning from your practice"** — nothing here trains on practice records, and
+that claim is the one most likely to be believed wrongly. **The HIPAA badge.** **The prompt chips** —
+"What are the red flags for low back pain?" asks the model to originate a clinical fact, and "Show
+similar cases with disc herniation" is Case Memory (CPR-220), which answers it from the practice's own
+records and can show *why* each case matched. **The microphone** — there is no speech capability, and an
+icon that does nothing is a promise the page cannot keep.
+
+### A shared bug found while building this
+
+`resolveWorkspaceContext` compared `effective_from` and `starts_at` — both defaulting to the **database**
+clock — against `new Date()` on the **application** clock. Where the database runs ahead (~800ms on the
+machine this was found on) a capability granted to a colleague was invisible until the app clock caught
+up, and a freshly provisioned practice could read as `NOT_ENTITLED` on its owner's first page load. Both
+now compare on the database's clock, using two unambiguous queries rather than an or-filter across a
+null test. Guarded by three assertions in the CPR-210 harness: a grant made now is live immediately, a
+grant dated an hour ahead is not, and the same grant backdated is.
