@@ -113,7 +113,7 @@ Continuity & DR · 480 Enterprise Administration · 490 Roadmap & Release Govern
 | CPR-140 Follow-up Management | **Rebuilt (§20).** Obligation loop as before — overdue *derived* rather than stored, the practice's own calendar day, DB-enforced release when a booking dies, event trail (migration 196, 47 assertions) — *plus* the structure the spec describes: follow-up plans and templates, the patient-centric view with its tabs, adherence as a count, the fixed outcome taxonomy, and a derived recall queue in place of a reminder engine this product has no channel for (migration 206, `follow-up-plans.ts`, 44 assertions). |
 | CPR-150 Procedure & Clinical Activity | **Completed (s23).** Procedure recording, custom catalogue, consent, outcomes, complications and laterality enforcement as before (migration 197, 44 assertions) -- plus the half the title names: clinical activity logging, procedure teams, instruments with implant traceability, procedure templates, attachments and a portfolio of counts (migration 209, `clinical-activity.ts`, 38 assertions). |
 | CPR-300 Operations Home | **Built.** `/practice/home` rebuilt as a worklist: every figure is the length of a list you can open, ordered by cost of ignoring, capability-aware with named blind spots. No migration (`operations-home.ts`, `practice-time.ts`, 37 harness assertions). |
-| CPR-340 Tasks, Reminders & Notifications | **Built.** Operational tasks with derived overdue and derived orphaning, reminders as a column rather than a second object, in-app notifications holding only non-derivable events. No delivery channel, deliberately (migration 198, `tasks.ts`, 44 harness assertions). |
+| CPR-340 Tasks, Reminders & Notifications | **Completed (s25).** Tasks, assignment, priorities, reminder dates, in-app notifications and derived orphaning as before (migration 198, 44 assertions) -- plus recurrence, task templates, escalation rules derived at read time, bulk close and the daily agenda (migration 211, `task-orchestration.ts`, 36 assertions). Notification preferences came with CPR-360. |
 | CPR-350 Search & Global Retrieval | **Built.** One box over ten domains; generated tsvector columns so the index cannot drift from the text; capability filter runs BEFORE the query; skipped domains named; no hidden counts (migration 199, `search.ts`, 43 harness assertions). |
 | CPR-320 Communication & Document Management | **Completed (s24).** Internal threads, contact log and the incoming register as before (migration 200, 44 assertions) -- plus the shared document library with folders and a recycle bin, and the per-patient correspondence register composed from four existing stores (migration 210, `document-library.ts`, 38 assertions). Six of the gaps the audit listed had already been filled by CPR-130, CPR-310 and CPR-330. |
 | CPR-310 Team & Delegated Access | **Rebuilt (s22).** Invitations, memberships, capability-level delegation and the audit trail as before (migration 201, 52 assertions) -- plus the model the spec describes: delegation by AREA materialising ordinary grants, role templates, an approval queue that is explicitly not a gate, and derived work queues (migration 208, `delegation.ts`, 48 assertions). |
@@ -1181,3 +1181,61 @@ Assistant is CPR-210's.
 
 Rich-text editing beyond the plain bodies CPR-130 and CPR-330 use, and controlled *external* sharing —
 which needs a channel to share over, and there still isn't one.
+
+## 25. CPR-340 as completed: escalation is derived, not fired
+
+`src/lib/practice/task-orchestration.ts`, the agenda and escalation panels on `/practice/tasks`,
+migration 211, and `scripts/practice-task-orchestration-harness.ts` — 36 assertions, four proven able to
+fail.
+
+**One of the five gaps had already closed elsewhere:** notification preferences arrived with CPR-360
+(migration 205), wired into `listNotifications` including the rule that a clinical alert may not be
+silenced. What remained was recurring tasks, task templates, escalation rules and the daily agenda.
+
+### Escalation is derived, not fired
+
+The specification says overdue high-priority tasks **trigger** escalation. A trigger needs something to
+run, and this product's whole position on overdue — argued at length in migration 196 — is that the thing
+which needs to run is exactly what a neglected practice does not do. So a **rule** records what counts as
+escalated, and the board computes which tasks have breached it **at read time**.
+
+The information is identical and available the moment somebody looks, with nothing to fail silently
+overnight. **There is no `escalated` column and no job** — the harness asserts the absence of the column,
+and asserts that changing the rule changes the answer on the next read with nothing re-run. What is lost
+is the push, and this product has no push.
+
+### A recurring task does not pre-generate
+
+The next occurrence is created when the current one **closes** — the same pattern CPR-140's plans use. A
+board holding fifty-two weekly copies of "check the fridge temperature" is a board nobody reads, and
+fifty-one of them are commitments nobody has made yet.
+
+- **Counted from the due date, not from today.** A weekly check done three days late is still due on the
+  same weekday next week; counting from completion would let a series drift a day at a time until the
+  Monday chore happens on a Thursday.
+- **A cancelled task does not breed.** Cancelling is how somebody says this should not have been here;
+  producing the next one would be arguing with them.
+- **A task with no due date cannot recur** — there is nothing to count from.
+
+### Smaller decisions
+
+- **A template makes several tasks, not one.** "New patient onboarding" is four things; a template
+  producing a single task called "onboarding" would be a checklist collapsed into a word. Offsets run
+  **from the start**, never chained — CPR-140's rule again.
+- **Bulk only closes.** Anything that needs a reason — blocking, which requires words — is refused in
+  bulk and done one at a time. A bulk path with its own rules is a second door into the same room. Both
+  numbers are reported: "8 completed" out of 10 selected is a claim somebody relies on unchecked.
+- **The agenda is composed, not stored.** Appointments, tasks due, reminders and follow-ups read for one
+  day, in the practice's timezone. An agenda table would be a fifth copy that goes stale the moment an
+  appointment moves. A task *reminded* today but due later is counted as a reminder, not as due.
+
+### Refused
+
+"Focus Score (AI) 87% — Excellent" has no formula and no AI behind it. The task donut's "6 (27%)"
+percentages divide by a total that is itself a choice about what to include; the counts render instead.
+"↑18% vs yesterday" needs a baseline nothing recorded. The AI Prioritised Worklist is CPR-210's.
+
+### A gap the harness found
+
+`listTasks` did not select the recurrence columns, so the board could not have shown that a task repeats.
+Caught by the assertion that the next occurrence carries the recurrence forward.

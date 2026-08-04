@@ -184,7 +184,15 @@ practice_assistant / billing_reporting / read_only_auditor).
 - **Note:** the incoming-document register is not in the spec at all. It is defensible and useful, but it
   was invented — it should be recorded as an addition rather than assumed to be required.
 
-### CPR-340 Tasks, Reminders & Notifications — partial
+### CPR-340 Tasks, Reminders & Notifications — partial to COMPLETED
+
+> **Closed.** Notification preferences had already arrived with CPR-360. Migration 211 adds the rest:
+> recurring tasks that do NOT pre-generate (the next is made when the current closes, counted from the
+> DUE date so a late completion does not drag the series), task templates that make several tasks with
+> offsets from the start, escalation rules whose breaches are DERIVED at read time (no `escalated`
+> column, no job), bulk close that refuses anything needing a reason, and a composed daily agenda.
+> 36 harness assertions, four proven able to fail. Refused: "Focus Score 87%" and the donut percentages.
+> See respec s25.
 - **Have:** tasks, assignment and hand-over, priorities, due dates, reminder dates, in-app notifications,
   derived orphaning.
 - **Missing:** **recurring tasks**, **escalation rules** (overdue high-priority escalates), task

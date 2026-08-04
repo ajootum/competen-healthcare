@@ -170,7 +170,7 @@ export async function createTask(admin: any, args: {
 export async function transitionTask(admin: any, args: {
   workspaceId: string; taskId: string; to: string; reason?: string; outcome?: string;
   actorId: string; correlationId: string;
-}): Promise<EngineResult<{ status: string }>> {
+}): Promise<EngineResult<{ status: string; recurred?: { id: string; dueOn: string } | null }>> {
   const { data: task } = await admin.from("practice_task")
     .select("id, status, title, assigned_to, created_by, record_version")
     .eq("id", args.taskId).eq("workspace_id", args.workspaceId).maybeSingle();
@@ -209,11 +209,24 @@ export async function transitionTask(admin: any, args: {
     });
   }
 
+  // CPR-340 recurrence (migration 211). THE NEXT OCCURRENCE IS MADE WHEN THIS ONE CLOSES, at the moment
+  // the fact becomes true -- not pre-generated and not swept for. A board holding fifty-two weekly
+  // copies of the same chore is a board nobody reads. Imported lazily because task-orchestration.ts
+  // imports createTask and deriveTask from here, and a static pair would be a cycle.
+  let recurred: { id: string; dueOn: string } | null = null;
+  if (args.to === "DONE") {
+    const { nextOccurrence } = await import("@/lib/practice/task-orchestration");
+    recurred = await nextOccurrence(admin, {
+      workspaceId: args.workspaceId, taskId: task.id,
+      actorId: args.actorId, correlationId: args.correlationId,
+    });
+  }
+
   await audit(admin, {
     workspaceId: args.workspaceId, actorId: args.actorId, eventType: `practice.task_${args.to.toLowerCase()}`,
-    payload: { taskId: task.id }, correlationId: args.correlationId,
+    payload: { taskId: task.id, ...(recurred ? { recurredTo: recurred.id } : {}) }, correlationId: args.correlationId,
   });
-  return { ok: true, data: { status: args.to } };
+  return { ok: true, data: { status: args.to, recurred } };
 }
 
 /** Hand a task to somebody else. A status-preserving move, so the trail records the assignees. */
@@ -275,7 +288,7 @@ export async function listTasks(admin: any, workspaceId: string, filter: {
   assignedTo?: string; status?: string[]; patientId?: string; limit?: number;
 } = {}) {
   let q = admin.from("practice_task")
-    .select("id, title, detail, assigned_to, patient_id, encounter_id, document_id, follow_up_id, category, priority, due_on, remind_on, status, blocked_reason, outcome, closed_at, created_at, created_by, record_version")
+    .select("id, title, detail, assigned_to, patient_id, encounter_id, document_id, follow_up_id, category, priority, due_on, remind_on, status, blocked_reason, outcome, closed_at, created_at, created_by, record_version, recurrence, recurrence_until, recurred_from_task_id")
     .eq("workspace_id", workspaceId);
   if (filter.assignedTo) q = q.eq("assigned_to", filter.assignedTo);
   if (filter.status?.length) q = q.in("status", filter.status);
