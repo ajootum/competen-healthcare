@@ -354,6 +354,10 @@ export default function PersonalisationConsole({ preferences, locked, practice }
           </div>
 
           <div className="mt-3 flex flex-wrap items-center gap-2">
+            {/* A PLAIN ANCHOR, DELIBERATELY. This is a download from an API route, not a navigation to
+                a page -- next/link would prefetch it and route it client-side, which is exactly what a
+                file download must not do. The rule cannot tell the two apart. */}
+            {/* eslint-disable-next-line @next/next/no-html-link-for-pages */}
             <a href="/api/v1/practice/preferences?export=1"
               className="rounded-lg border border-gray-200 px-3 py-1.5 text-[12px] font-semibold text-gray-700 hover:bg-gray-50">
               Export my settings

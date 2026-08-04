@@ -53,6 +53,14 @@ export default async function SettingsPage() {
             Tailor Competen Practice to your specialty, workflow and preferences.
           </p>
         </div>
+        {canManagePractice && (
+          // CPR-PRM-001 s9. Its own page rather than a panel here: authoring a form is a sitting's
+          // work, and it has a draft/publish lifecycle that does not belong inside a settings list.
+          <Link href="/practice/settings/registration-form"
+            className="shrink-0 rounded-lg border border-gray-200 px-3 py-1.5 text-[12px] font-semibold text-gray-700 hover:bg-gray-50">
+            Registration form →
+          </Link>
+        )}
       </div>
 
       {/* ── The comp's Configuration Health ring, as a count and its denominator ──────────────────

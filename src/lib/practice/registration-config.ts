@@ -339,6 +339,121 @@ export async function publishTemplate(admin: any, ctx: WorkspaceContext, args: {
   return { ok: true, data: { status: "published", version: updated[0].version } };
 }
 
+/**
+ * Copy a template into a new draft.
+ *
+ * WITHOUT THIS, PUBLISHING IS A ONE-WAY DOOR. A published template cannot be edited in place -- somebody
+ * is filling it in right now -- so the only way to change a live form is to copy it, edit the copy, and
+ * publish that. An editor with no copy button strands every practice on its first version.
+ */
+export async function duplicateTemplate(admin: any, ctx: WorkspaceContext, args: {
+  templateId: string; name?: string; correlationId: string;
+}): Promise<EngineResult<{ id: string }>> {
+  if (!ctx.capabilities.includes("practice.settings.manage"))
+    return { ok: false, status: 403, code: "FORBIDDEN", message: "practice.settings.manage is required" };
+
+  const { data: source } = await admin.from("practice_registration_template")
+    .select("*").eq("id", args.templateId).eq("workspace_id", ctx.workspaceId).maybeSingle();
+  if (!source) return { ok: false, status: 404, code: "NOT_FOUND", message: "Not found" };
+
+  const { data: created, error } = await admin.from("practice_registration_template").insert({
+    workspace_id: ctx.workspaceId,
+    name: args.name?.trim() || `${source.name} (copy)`,
+    specialty: source.specialty, country: source.country, practice_type: source.practice_type,
+    // A COPY IS ALWAYS A DRAFT, and never the default -- publishing it is a separate, deliberate act.
+    status: "draft", is_default: false,
+    version: source.version + 1,
+    created_by: ctx.userId, updated_by: ctx.userId,
+  }).select("id").single();
+  if (error) return { ok: false, status: 400, code: "VALIDATION_ERROR", message: error.message };
+
+  const { data: fields } = await admin.from("practice_registration_field")
+    .select("*").eq("template_id", source.id);
+  const rows = ((fields ?? []) as any[]).map(f => ({
+    workspace_id: ctx.workspaceId, template_id: created.id, field_key: f.field_key,
+    is_core: f.is_core, label: f.label, help: f.help, field_type: f.field_type,
+    required: f.required, visible: f.visible, display_order: f.display_order,
+    options: f.options, condition: f.condition,
+  }));
+  if (rows.length) {
+    const { error: copyError } = await admin.from("practice_registration_field").insert(rows);
+    // A COPY MISSING ITS FIELDS IS WORSE THAN NO COPY -- it looks like an empty form somebody made on
+    // purpose. Removed rather than left behind.
+    if (copyError) {
+      await admin.from("practice_registration_template").delete().eq("id", created.id);
+      return { ok: false, status: 500, code: "COPY_FAILED", message: `the fields could not be copied, so nothing was created: ${copyError.message}` };
+    }
+  }
+
+  await audit(admin, {
+    workspaceId: ctx.workspaceId, actorId: ctx.userId, eventType: "practice.reg_template_copied",
+    payload: { from: source.id, to: created.id }, correlationId: args.correlationId,
+  });
+  return { ok: true, data: { id: created.id as string } };
+}
+
+/** Remove a field. Core fields are hidden rather than deleted, so the floor cannot be dodged. */
+export async function removeField(admin: any, ctx: WorkspaceContext, args: {
+  templateId: string; fieldKey: string; correlationId: string;
+}): Promise<EngineResult<{ removed: true }>> {
+  if (!ctx.capabilities.includes("practice.settings.manage"))
+    return { ok: false, status: 403, code: "FORBIDDEN", message: "practice.settings.manage is required" };
+
+  const { data: template } = await admin.from("practice_registration_template")
+    .select("id, status").eq("id", args.templateId).eq("workspace_id", ctx.workspaceId).maybeSingle();
+  if (!template) return { ok: false, status: 404, code: "NOT_FOUND", message: "Not found" };
+  if (template.status === "published")
+    return { ok: false, status: 409, code: "PUBLISHED", message: "this template is live -- copy it to a draft before changing it" };
+
+  // DELETING A PROTECTED CORE FIELD WOULD DODGE THE FLOOR, which only checks the fields that are
+  // present. Refused by name so it reads as a rule rather than a glitch.
+  if (coreField(args.fieldKey)?.protected)
+    return {
+      ok: false, status: 422, code: "PROTECTED_FIELD",
+      message: `${coreField(args.fieldKey)!.label} cannot be removed -- a patient record cannot be created without it`,
+    };
+
+  // ANYTHING THAT DEPENDED ON IT WOULD BECOME UNREACHABLE, so the dependants are cleared rather than
+  // left pointing at a field that is gone -- which publish would then refuse with a confusing message.
+  await admin.from("practice_registration_field")
+    .update({ condition: null })
+    .eq("template_id", args.templateId).contains("condition", { when: args.fieldKey });
+
+  await admin.from("practice_registration_field")
+    .delete().eq("template_id", args.templateId).eq("field_key", args.fieldKey);
+  return { ok: true, data: { removed: true } };
+}
+
+/** Take a published template out of service. */
+export async function retireTemplate(admin: any, ctx: WorkspaceContext, args: {
+  templateId: string; correlationId: string;
+}): Promise<EngineResult<{ status: string }>> {
+  if (!ctx.capabilities.includes("practice.settings.manage"))
+    return { ok: false, status: 403, code: "FORBIDDEN", message: "practice.settings.manage is required" };
+
+  const { data: updated, error } = await admin.from("practice_registration_template")
+    .update({ status: "retired", is_default: false, updated_at: nowIso(), updated_by: ctx.userId })
+    .eq("id", args.templateId).eq("workspace_id", ctx.workspaceId).select("id");
+  if (error) return { ok: false, status: 400, code: "VALIDATION_ERROR", message: error.message };
+  if (!updated || updated.length === 0)
+    return { ok: false, status: 404, code: "NOT_FOUND", message: "Not found" };
+
+  await audit(admin, {
+    workspaceId: ctx.workspaceId, actorId: ctx.userId, eventType: "practice.reg_template_retired",
+    payload: { templateId: args.templateId }, correlationId: args.correlationId,
+  });
+  return { ok: true, data: { status: "retired" } };
+}
+
+/** One template with its fields, for the editor. */
+export async function getTemplate(admin: any, ctx: WorkspaceContext, templateId: string) {
+  const { data: template } = await admin.from("practice_registration_template")
+    .select("*").eq("id", templateId).eq("workspace_id", ctx.workspaceId).maybeSingle();
+  if (!template) return null;
+  const check = await validateTemplate(admin, ctx, templateId);
+  return { template, fields: check.fields, problems: check.problems, publishable: check.publishable };
+}
+
 // ── USING A TEMPLATE ─────────────────────────────────────────────────────────────────────────────────
 
 /**

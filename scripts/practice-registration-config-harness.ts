@@ -31,6 +31,7 @@ import { resolveWorkspaceContext, type WorkspaceContext } from "../src/lib/pract
 import {
   createTemplate, upsertField, validateTemplate, publishTemplate, resolveTemplate,
   listTemplates, validateSubmission, conditionMet, CORE_FIELDS,
+  duplicateTemplate, removeField, retireTemplate, getTemplate,
 } from "../src/lib/practice/registration-config";
 
 loadEnvConfig(process.cwd());
@@ -287,6 +288,66 @@ async function main() {
   });
   ok("11b. AND THE DATABASE REFUSES A SECOND, for a writer that bypasses the engine",
     rawDefault !== null, rawDefault?.message ?? "the insert succeeded");
+
+  // ── The editor's own operations ────────────────────────────────────────────
+  //
+  // WITHOUT COPY-TO-DRAFT, PUBLISHING IS A ONE-WAY DOOR. A published template cannot be edited in
+  // place, so a practice with no copy button is stranded on its first version forever.
+  const copy = await duplicateTemplate(admin, a.ctx, {
+    templateId: t1.data.id, name: "General registration v2", correlationId: "harness-rc",
+  });
+  ok("A PUBLISHED TEMPLATE CAN BE COPIED TO A DRAFT -- otherwise publishing is a one-way door",
+    copy.ok, copy.ok ? "" : copy.message);
+  if (copy.ok) {
+    const copied = await getTemplate(admin, a.ctx, copy.data.id);
+    const original = await getTemplate(admin, a.ctx, t1.data.id);
+    ok("and the copy carries every field of the original",
+      copied!.fields.length === original!.fields.length && copied!.fields.length > 0,
+      `${copied?.fields.length} vs ${original?.fields.length}`);
+    ok("as a DRAFT, and never as the default -- publishing it is a separate act",
+      copied!.template.status === "draft" && copied!.template.is_default === false,
+      JSON.stringify({ s: copied?.template.status, d: copied?.template.is_default }));
+    ok("and the original is untouched and still live",
+      original!.template.status === "published", original?.template.status);
+    ok("the copy is editable where the original was not",
+      (await upsertField(admin, a.ctx, {
+        templateId: copy.data.id, fieldKey: "referral_source", required: true, correlationId: "harness-rc",
+      })).ok);
+
+    // Removing a field, and what it does to anything that depended on it.
+    await upsertField(admin, a.ctx, {
+      templateId: copy.data.id, fieldKey: "dependent_one", label: "Dependent", fieldType: "text",
+      condition: { when: "has_insurance", equals: true }, correlationId: "harness-rc",
+    });
+    const removeProtected = await removeField(admin, a.ctx, {
+      templateId: copy.data.id, fieldKey: "display_name", correlationId: "harness-rc",
+    });
+    ok("A PROTECTED FIELD CANNOT BE REMOVED -- deleting it would dodge the floor, which only checks what is present",
+      !removeProtected.ok && removeProtected.code === "PROTECTED_FIELD",
+      removeProtected.ok ? "it was removed" : removeProtected.code);
+
+    const removed = await removeField(admin, a.ctx, {
+      templateId: copy.data.id, fieldKey: "has_insurance", correlationId: "harness-rc",
+    });
+    ok("CONTROL: a custom field can be removed", removed.ok, removed.ok ? "" : removed.message);
+    const afterRemoval = await getTemplate(admin, a.ctx, copy.data.id);
+    const orphan = afterRemoval!.fields.find((f: any) => f.field_key === "dependent_one");
+    ok("AND WHATEVER DEPENDED ON IT IS FREED, not left pointing at a field that is gone",
+      orphan && orphan.condition === null, JSON.stringify(orphan?.condition));
+    ok("so the template is still publishable rather than broken by the removal",
+      !afterRemoval!.problems.some((p: any) => /not on this form/i.test(p.problem)),
+      JSON.stringify(afterRemoval!.problems.map((p: any) => p.problem)));
+  }
+
+  const retired = await retireTemplate(admin, a.ctx, { templateId: t1.data.id, correlationId: "harness-rc" });
+  ok("A PUBLISHED TEMPLATE CAN BE TAKEN OUT OF SERVICE", retired.ok, retired.ok ? "" : retired.message);
+  const afterRetire = await getTemplate(admin, a.ctx, t1.data.id);
+  ok("and a retired template is no longer the default",
+    afterRetire!.template.status === "retired" && afterRetire!.template.is_default === false,
+    JSON.stringify({ s: afterRetire?.template.status, d: afterRetire?.template.is_default }));
+  // Republish it so the resolution assertions below still have something to find.
+  await admin.from("practice_registration_template")
+    .update({ status: "published" }).eq("id", t1.data.id);
 
   // ── 10. Most specific wins ─────────────────────────────────────────────────
   const forPaeds = await resolveTemplate(admin, a.ctx, { specialty: "paediatrics" });
