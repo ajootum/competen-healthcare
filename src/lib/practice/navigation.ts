@@ -55,6 +55,10 @@ export const PRACTICE_NAV: PracticeNavItem[] = [
   // ON is a different act and takes practice.settings.manage, gated inside the page -- putting the nav
   // entry behind that permission would hide the disclosure from the people it is about.
   { href: "/practice/assistant", label: "Clinical assistant", icon: "✧", capability: "encounter.list", group: "Intelligence", phase: 5, built: true },
+  // CPR-230. NO CAPABILITY: reflecting on your own practice is not a permission somebody grants you.
+  // What a reflection touches is gated where it is touched -- promoting a learning point goes through
+  // CPR-220 and needs encounter.edit.
+  { href: "/practice/reflection", label: "Reflection", icon: "◍", capability: null, group: "Intelligence", phase: 5, built: true },
   { href: "/practice/privacy", label: "Privacy and access", icon: "⚿", capability: "access.review", group: "Tools and Settings", phase: 5, built: true },
   // CPR-370: NO CAPABILITY. Everybody may see the devices signed in as THEM and lock one out; the
   // practice-wide view and the policy are gated inside the page. Hiding somebody's own device list

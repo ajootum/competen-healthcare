@@ -109,6 +109,9 @@ async function notify(admin: any, args: {
 export async function createTask(admin: any, args: {
   workspaceId: string; title: string; detail?: string; assignedTo: string;
   patientId?: string | null; encounterId?: string | null; documentId?: string | null; followUpId?: string | null;
+  // CPR-230: the reflection this action was committed to in. A reference, like the others -- it does not
+  // make the task part of the reflection, and unsharing a reflection does not retract the work.
+  reflectionId?: string | null;
   category?: string; priority?: string; dueOn?: string | null; remindOn?: string | null;
   actorId: string; correlationId: string;
 }): Promise<EngineResult<{ id: string }>> {
@@ -134,6 +137,7 @@ export async function createTask(admin: any, args: {
   for (const [table, id] of [
     ["practice_patient", args.patientId], ["practice_encounter", args.encounterId],
     ["practice_clinical_document", args.documentId], ["practice_follow_up", args.followUpId],
+    ["practice_reflection", args.reflectionId],
   ] as const) {
     if (!id) continue;
     const { data } = await admin.from(table).select("id").eq("id", id).eq("workspace_id", args.workspaceId).maybeSingle();
@@ -148,6 +152,7 @@ export async function createTask(admin: any, args: {
     assigned_to: args.assignedTo,
     patient_id: args.patientId ?? null, encounter_id: args.encounterId ?? null,
     document_id: args.documentId ?? null, follow_up_id: args.followUpId ?? null,
+    reflection_id: args.reflectionId ?? null,
     category, priority, due_on: args.dueOn ?? null, remind_on: args.remindOn ?? null,
     status: "OPEN", created_by: args.actorId, updated_by: args.actorId,
   }).select("id").single();

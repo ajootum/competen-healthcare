@@ -1540,3 +1540,84 @@ up, and a freshly provisioned practice could read as `NOT_ENTITLED` on its owner
 now compare on the database's clock, using two unambiguous queries rather than an or-filter across a
 null test. Guarded by three assertions in the CPR-210 harness: a grant made now is live immediately, a
 grant dated an hour ahead is not, and the same grant backdated is.
+
+---
+
+## 30. CPR-230 as built: three of its six data-model objects already existed
+
+**Migration 216** · `src/lib/practice/reflection.ts` · `/practice/reflection` ·
+`scripts/practice-reflection-harness.ts` (55 assertions, six deliberate breaks proven)
+
+### One new table, not six
+
+The specification's data model lists Reflection, Learning Point, Improvement Action, Competency Link,
+Portfolio Evidence and Reflection Category. Checking before building — the CPR-320 lesson — three were
+already there:
+
+| Object | Where it already lives |
+|---|---|
+| Learning Point | `practice_case_learning` (CPR-220, migration 214) — authored, kinded, listed |
+| Improvement Action | `practice_task` (CPR-340, migration 198) — owner, due date, status, board |
+| Competency / Portfolio link | CPR-250 and CPR-240, **both unbuilt** — named as gaps, not modelled empty |
+
+An improvement action being a task is the important one. CPR-340 refused to make a reminder a third
+object; a second table with a due date would be a second place work goes to be forgotten. So committing
+to an action creates an ordinary task, assigned to its author, in a new `improvement` category so it
+stays visible as what it is. `promoteLearning` writes CPR-220's row, not a copy of one.
+
+Migration 216 therefore adds the reflection, its version history, and two foreign keys onto tables that
+already work.
+
+### The streak is refused for its own reason, not as a number
+
+The comp shows **"Reflection Streak: 12 days — Keep it going!"** with a flame. Under the no-rates
+doctrine most of the strip goes anyway (↑21%, ↑18%, ↑13%, 65% completion rate, Growth Score 82/100 ↑8
+pts). The streak is different, and worse:
+
+> A streak rewards the **act** of reflecting rather than the substance of it. What it reliably produces
+> is entries written to keep a number alive — and reflective practice produced to satisfy a counter is
+> worth less than none, because it also makes the honest entries harder to find. It additionally
+> punishes annual leave, illness and a fortnight of nights.
+
+There is no column, so no future page can grow one. Also refused: the four **"Reflection Impact"** bars
+— Better Decisions 82%, Improved Outcomes 78%, Enhanced Knowledge 89%, Greater Confidence 76% — which
+claim that reflecting measurably improved this clinician's decisions and their patients' outcomes.
+Nothing measures that from a text box.
+
+An **empty reflection is refused by the engine and by a database constraint**, because a row that says
+nothing would still count towards "28 this period" — the streak's failure arriving through the back door.
+
+### Private, and honest about what private means
+
+Private by default: "what could I have done better" is not written honestly into a box a practice
+partner reads by default. A colleague cannot list, open, revise, lock or share somebody else's — and
+opening one returns **nothing rather than a refusal**, because "you may not read it" confirms it exists.
+Un-sharing reports `alreadySeenByOthers`, since taking it back does not unring the bell. Edit history
+stays with the author: a shared reflection shows what it says, not what it said.
+
+The comp's footer says **"Personal & Private — Your reflections are secure."** The page adds the part
+that matters: *private is not privileged.* A written reflection is a record, and records can be
+requested in professional or legal proceedings. A practitioner who wrote something because a page said
+"secure" would have been misled by this product.
+
+### Two comp entry points cannot be honoured
+
+**"Voice Reflection — speak your reflection and we'll transcribe"** implies a transcription service.
+There is none; CPR-130's dictation is the browser's own recogniser, and in Chrome the audio goes to the
+browser vendor — a disclosure worth making deliberately against a clinical note, and not one to make
+silently against a private reflection. **"Upload Reflection"** needs file storage, which CPR-320
+declined and named. Both are stated on the form rather than left as buttons that do nothing.
+
+**The "AI Reflection Assistant" needs no AI.** The four prompts it offers to generate — what went well,
+what could I have done differently, what did I learn, what will I do next time — are the same four
+questions every time. Generating them would spend a disclosure of patient data to produce a constant, so
+they are constants. Anything that genuinely needs reading the record is CPR-210, which is linked to and
+says what it sends where.
+
+### Also worth recording
+
+The four prompts are phrased in the **first person**: "What went well?" invites an account of the
+consultation, "What did *you* do well?" invites an account of oneself. Reflection that is useful later is
+the second. And the audit trail records the **fact, never the text** — the workspace trail is readable by
+anybody holding `access.review`, and a reflection is the one record here written on the assumption
+nobody else reads it.

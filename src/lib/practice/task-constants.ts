@@ -31,6 +31,10 @@ export const TASK_CATEGORIES = [
   ["billing", "Billing"],
   ["referral", "Referral"],
   ["equipment", "Equipment"],
+  // CPR-230. An improvement action committed to in a reflection is a task like any other -- it has an
+  // owner, a date and a board. Giving it its own category keeps it visible as what it is; filing it as
+  // "other" would bury it on a board that groups by category.
+  ["improvement", "Improvement action"],
   ["other", "Other"],
 ] as const;
 
