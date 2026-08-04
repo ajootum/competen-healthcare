@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { resolvePracticeShell } from "@/lib/practice/shell";
-import { visibleNav, NAV_GROUP_ORDER } from "@/lib/practice/navigation";
+import { visibleNav, NAV_GROUP_ORDER, NAV_LAYER_ORDER, GROUP_LAYER } from "@/lib/practice/navigation";
 import { createAdminClient } from "@/lib/supabase/server";
 import { resolvePreferences } from "@/lib/practice/preferences";
 import SidebarNav from "./SidebarNav";
@@ -39,8 +39,14 @@ export default async function PracticeShellLayout({ children }: { children: Reac
   const { ctx } = shell;
   const nav = visibleNav(ctx.capabilities);
   // Headings follow the DECLARED order, not the order items happen to appear in. Deriving it from the
-  // item list means moving one route silently moves a whole section heading with it.
-  const groups = NAV_GROUP_ORDER.filter(g => nav.some(i => i.group === g));
+  // item list means moving one route silently moves a whole section heading with it. CPR-SET-000 Part I
+  // adds the layer above the group; an empty layer renders nothing at all rather than a bare heading.
+  const layers = NAV_LAYER_ORDER
+    .map(layer => ({
+      layer,
+      groups: NAV_GROUP_ORDER.filter(g => GROUP_LAYER[g] === layer && nav.some(i => i.group === g)),
+    }))
+    .filter(l => l.groups.length > 0);
 
   // CPR-360: the personalisation, resolved server-side and applied as data attributes the stylesheet
   // reads. Server-side because a theme applied by client JavaScript flashes the wrong one first, and
@@ -107,7 +113,7 @@ export default async function PracticeShellLayout({ children }: { children: Reac
           </p>
         </div>
 
-        <SidebarNav groups={groups} items={navItems} />
+        <SidebarNav layers={layers} items={navItems} />
 
         <Link href="/practice/settings"
           className="flex items-center gap-2.5 border-t border-white/10 px-4 py-3 text-[12px] text-blue-100/70 hover:bg-white/8 hover:text-white">

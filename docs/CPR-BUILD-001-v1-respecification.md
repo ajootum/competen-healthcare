@@ -1954,3 +1954,77 @@ The spec asks for configurable widgets. `10a` reads the page source, extracts ev
 asserts each has an entry in `DASHBOARD_WIDGETS` — **a widget key the catalogue does not carry is one
 nobody can turn off**, which is the "preference that changes nothing" failure in reverse. Paired with a
 control proving the page really does use widget keys, so the check cannot pass by finding none.
+
+---
+
+## 35. CPR-SET-000 v4.1 Practice Setup: fourteen cards, and the four that lead nowhere
+
+`src/lib/practice/setup.ts`, `/practice/setup`, the three-layer sidebar. Harness
+`scripts/practice-setup-harness.ts` — 33/33, 11 breaks. **No migration** — every state this screen
+reports was already recorded somewhere; the module is the reading of it.
+
+### The progress ring is the whole problem with this screen
+
+The comp reads **"85% — Your practice is almost ready!"** over ten checklist rows. A setup dashboard is
+the one screen where a wrong completion figure does *direct* harm: somebody reads 85%, concludes they
+are nearly finished, and opens their doors with no booking rules and no way for patients to reach them.
+
+So every line is read from the database, and the figure is **"9 of 11"** with the arc drawn from those
+two numbers. CPR-330's no-rates rule, and the same move `OperationsHeader` made when it replaced the
+comp's 82% utilisation donut with "7h 23m of 10h 00m". A break that adds `percentComplete` to the
+payload turns assertion `2c` red.
+
+### Four of the fourteen have no implementation
+
+Booking Rules, Self-Booking, Workflow Templates and Integrations. They are **shown**, in the comp's
+position and colour, marked *Not built*, **not clickable**, and **excluded from the denominator**.
+
+Three separate failures are being avoided at once:
+
+| if they were… | the failure |
+|---|---|
+| clickable | a blank page — what s7.2 has forbidden since Phase 0, and worst on the screen whose job is to say what is left |
+| silently dropped | a practice believes it finished configuring something the product cannot do at all |
+| counted in the denominator | the checklist can never reach the end, so it stops being read |
+
+Each carries a real reason rather than "coming soon" — self-booking is *"a decision about who may reach
+your diary without speaking to you, not a screen to fill in"*; workflow templates would be *"a change to
+the clinical record's shape"*.
+
+**Appointment Types is a fifth case and is handled differently.** The seven types are a CHECK constraint
+in migration 192, so "define your appointment types" is not a task a practice can complete *or* fail —
+it would sit permanently unfinished. It is absent from the checklist, and its card says what is actually
+true: *"7 built in · default length is yours"*.
+
+### Every card's destination is asserted to exist
+
+`5a` reads each module's `href` and checks a `page.tsx` exists for it in the repo, with a control
+proving the check can say no. A setup hub that links somewhere blank is the specific failure this whole
+screen is meant to prevent, and it is the failure most likely to arrive later — a route gets renamed and
+nothing notices.
+
+### The notification line is the one most likely to mislead
+
+A channel being **on** is not reminders being **sent** — nothing schedules one. The line therefore ticks
+when a channel is enabled, and its detail reads *"a channel is on; nothing sends by itself"*. A practice
+that ticked this box and stopped ringing people would be worse off than before the feature existed.
+Asserted by `6c`; a break that changes the wording to "reminders are being sent" turns it red.
+
+### Permission changes what is offered, not what is reported
+
+A caller without `practice.settings.manage` sees the profile card as **hidden and unopenable** — but the
+**checklist is unchanged**. Somebody who cannot edit the practice can still find out what state it is
+in, which is what a locum needs when booking behaves unexpectedly. Both halves asserted (`7a`, `7b`),
+because gating the map along with the controls is the easy mistake.
+
+### Part I's three layers
+
+Operational Workspaces / Practice Setup / Personal Settings, declared in `GROUP_LAYER` and
+`NAV_LAYER_ORDER` so a group cannot drift between layers unnoticed. The v4 command-centre groups become
+subsections of the operational layer rather than being replaced. A layer holding a single group
+suppresses the group heading — "PRACTICE SETUP / Setup / Practice Setup" is three ways of saying one
+thing.
+
+The setup hub itself takes **no capability**: it is a map, and each card is gated by the permission that
+card needs. Hiding the map behind the permission to edit would leave a locum unable to find out why
+booking behaves as it does.

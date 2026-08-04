@@ -27,8 +27,36 @@
 // has no table -- results arrive through CPR-320's inbox and there is nothing else to open. A sidebar
 // entry leading to a blank page is the exact thing s7.2 forbids, and a comp drawing it does not change
 // that. The inbox carries the same work under a name that is true.
+// ── CPR-SET-000 v4.1 PART I: THREE LAYERS ────────────────────────────────────────────────────────────
+//
+// "Three-layer architecture: Operational Workspaces, Practice Setup, Personal Settings." The
+// distinction is real and worth the restructure: running the practice, configuring the practice, and
+// your own preferences are three different jobs, and CPR-360 already found that mixing the last two
+// puts somebody's text size behind an administrative permission.
+//
+// The v4 command-centre groups become SUBSECTIONS of the operational layer rather than being replaced,
+// because a flat list of twenty-one items under one heading is what the comp's grouping fixed.
+export type PracticeNavLayer = "Operational workspaces" | "Practice setup" | "Personal settings";
+
 export type PracticeNavGroup =
-  | "Practice" | "Patients" | "Clinical" | "Communication" | "Intelligence" | "Administration";
+  | "Practice" | "Patients" | "Clinical" | "Communication" | "Intelligence" | "Administration"
+  | "Setup" | "Personal";
+
+/** Which layer each group belongs to. Declared, so a group cannot drift between layers unnoticed. */
+export const GROUP_LAYER: Record<PracticeNavGroup, PracticeNavLayer> = {
+  Practice: "Operational workspaces",
+  Patients: "Operational workspaces",
+  Clinical: "Operational workspaces",
+  Communication: "Operational workspaces",
+  Intelligence: "Operational workspaces",
+  Administration: "Operational workspaces",
+  Setup: "Practice setup",
+  Personal: "Personal settings",
+};
+
+export const NAV_LAYER_ORDER: PracticeNavLayer[] = [
+  "Operational workspaces", "Practice setup", "Personal settings",
+];
 
 export type PracticeNavItem = {
   href: string;
@@ -44,6 +72,7 @@ export type PracticeNavItem = {
 /** Sidebar order. Declared, not inferred from item order, so a reordered item cannot move a heading. */
 export const NAV_GROUP_ORDER: PracticeNavGroup[] = [
   "Practice", "Patients", "Clinical", "Communication", "Intelligence", "Administration",
+  "Setup", "Personal",
 ];
 
 // ⚠️ THE PUBLIC MARKETING SECTION SHARES THIS URL SPACE. `/practice/[area]` renders the public
@@ -116,7 +145,19 @@ export const PRACTICE_NAV: PracticeNavItem[] = [
   // CPR-360: NO CAPABILITY. The page carries both halves -- personal settings, which everybody has, and
   // practice configuration, which the page itself gates. Requiring practice.settings.manage in the nav
   // would hide somebody's own text size behind an administrative permission.
-  { href: "/practice/settings", label: "Settings", icon: "⚙", capability: null, group: "Administration", phase: 8, built: true },
+
+  // ── PRACTICE SETUP (CPR-SET-000 Part I, layer 2) ───────────────────────────────────────────────
+  // NO CAPABILITY on the hub. It is a map of what is configured and what is left, and the individual
+  // cards are gated by the permission each one needs -- so somebody without practice.settings.manage
+  // still sees what state their practice is in without being able to change it. Hiding the map behind
+  // the permission to edit would leave a locum unable to find out why booking behaves as it does.
+  { href: "/practice/setup", label: "Practice Setup", icon: "⚙", capability: null, group: "Setup", phase: 8, built: true },
+
+  // ── PERSONAL SETTINGS (layer 3) ────────────────────────────────────────────────────────────────
+  // CPR-360's page carries both halves and gates the practice-wide one inside itself. It sits in the
+  // personal layer because that is the half EVERYBODY has; the practice half is reached from the setup
+  // hub above, which is what that hub is for.
+  { href: "/practice/settings", label: "Personal Settings", icon: "☰", capability: null, group: "Personal", phase: 8, built: true },
 ];
 
 export function visibleNav(capabilities: string[]): PracticeNavItem[] {

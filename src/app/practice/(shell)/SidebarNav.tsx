@@ -23,7 +23,11 @@ export type NavRenderItem = {
   badge?: number | null;
 };
 
-export default function SidebarNav({ groups, items }: { groups: string[]; items: NavRenderItem[] }) {
+export default function SidebarNav({ layers, items }: {
+  /** CPR-SET-000 Part I: the three layers, each with the groups that sit inside it. */
+  layers: { layer: string; groups: string[] }[];
+  items: NavRenderItem[];
+}) {
   const pathname = usePathname() ?? "";
 
   // The single best match, computed once: the longest href that the current path sits under.
@@ -33,9 +37,19 @@ export default function SidebarNav({ groups, items }: { groups: string[]; items:
 
   return (
     <nav className="flex-1 overflow-y-auto px-3 py-3" aria-label="Practice navigation">
-      {groups.map(g => (
+      {layers.map(({ layer, groups }, li) => (
+        <div key={layer} className={li > 0 ? "mt-2 border-t border-white/10 pt-3" : ""}>
+          {/* THE LAYER HEADING, and the group headings beneath it. A layer holding one group would
+              render two near-identical labels in a row, so the group heading is suppressed there --
+              "PRACTICE SETUP / Setup / Practice Setup" is three ways of saying one thing. */}
+          <p className="px-2 pb-2 text-[10px] font-bold uppercase tracking-[0.14em] text-[var(--cp-accent)]/70">
+            {layer}
+          </p>
+          {groups.map(g => (
         <div key={g} className="mb-4">
-          <p className="px-2 pb-1.5 text-[10px] font-bold uppercase tracking-[0.12em] text-blue-200/45">{g}</p>
+          {groups.length > 1 && (
+            <p className="px-2 pb-1.5 text-[10px] font-bold uppercase tracking-[0.12em] text-blue-200/45">{g}</p>
+          )}
           {items.filter(i => i.group === g).map(i => {
             const active = i.href === activeHref;
             return (
@@ -60,6 +74,8 @@ export default function SidebarNav({ groups, items }: { groups: string[]; items:
               </Link>
             );
           })}
+        </div>
+          ))}
         </div>
       ))}
     </nav>
