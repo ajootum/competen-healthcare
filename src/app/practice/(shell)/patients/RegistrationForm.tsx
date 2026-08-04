@@ -18,8 +18,8 @@ import Link from "next/link";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
-const input = "w-full rounded-lg border border-gray-200 px-2.5 py-2 text-[13px] outline-none focus:border-[var(--cp-primary)] focus:ring-2 focus:ring-[var(--cp-primary)]/10";
-const label = "block text-[11px] font-semibold text-gray-600";
+const input = "w-full rounded-lg border border-gray-200 px-2.5 py-2 text-[14px] outline-none focus:border-[var(--cp-primary)] focus:ring-2 focus:ring-[var(--cp-primary)]/10";
+const label = "block text-[12px] font-semibold text-gray-600";
 
 export const RELATIONSHIP_OPTIONS = [
   ["guardian", "Guardian"], ["mother", "Mother"], ["father", "Father"], ["grandparent", "Grandparent"],
@@ -168,7 +168,7 @@ export default function RegistrationForm({ form, majorityAge, today, mode = "ful
   return (
     <form className="mt-3 flex flex-col gap-4" onSubmit={e => { e.preventDefault(); submit(false); }}>
       {/* ── Identity (comp: a titled card) ─────────────────────────────── */}
-      <h3 className="text-[12px] font-bold text-gray-900">Identity</h3>
+      <h3 className="text-[13px] font-bold text-gray-900">Identity</h3>
 
       {/* ── Name: one row, three parts ────────────────────────────────────────────────────────── */}
       <div>
@@ -185,7 +185,7 @@ export default function RegistrationForm({ form, majorityAge, today, mode = "ful
         </div>
         {/* MONONYMS ARE REAL. Any one of the three is enough, and the form says so rather than starring
             all three and forcing somebody to invent a surname. */}
-        <p className="mt-1 text-[10px] text-gray-400">
+        <p className="mt-1 text-[11px] text-gray-400">
           {name ? <>Will be recorded as <span className="font-semibold text-gray-600">{name}</span>.</>
             : "Any one of these is enough — a patient known by a single name is registered under it."}
         </p>
@@ -209,19 +209,19 @@ export default function RegistrationForm({ form, majorityAge, today, mode = "ful
         </label>
       </div>
       {age && (
-        <p className="-mt-2 text-[12px] text-gray-700">
+        <p className="-mt-2 text-[13px] text-gray-700">
           Age: <span className="font-semibold">{age.label}</span>
-          {age.years < majorityAge && <span className="ml-2 rounded bg-[var(--cmp-surface-warning)] px-1.5 py-0.5 text-[10px] font-semibold text-[var(--cmp-text-warning)]">under {majorityAge} — a guardian is required</span>}
+          {age.years < majorityAge && <span className="ml-2 rounded bg-[var(--cmp-surface-warning)] px-1.5 py-0.5 text-[11px] font-semibold text-[var(--cmp-text-warning)]">under {majorityAge} — a guardian is required</span>}
         </p>
       )}
       {boundary && (
-        <p className="-mt-2 text-[12px] text-[var(--cmp-text-warning)]">
+        <p className="-mt-2 text-[13px] text-[var(--cmp-text-warning)]">
           An estimate this close to {majorityAge} cannot settle whether a guardian is needed. Record a
           date of birth, or add a guardian to be safe.
         </p>
       )}
 
-      <h3 className="mt-1 text-[12px] font-bold text-gray-900">Contact details</h3>
+      <h3 className="mt-1 text-[13px] font-bold text-gray-900">Contact details</h3>
 
       {/* ── Contact ───────────────────────────────────────────────────────────────────────────── */}
       <div className="grid sm:grid-cols-3 gap-2">
@@ -235,7 +235,7 @@ export default function RegistrationForm({ form, majorityAge, today, mode = "ful
           <input value={p.nationalId} onChange={e => setP(v => ({ ...v, nationalId: e.target.value }))} className={`mt-1 ${input}`} />
         </label>
       </div>
-      <p className="-mt-3 text-[10px] text-gray-400">
+      <p className="-mt-3 text-[11px] text-gray-400">
         {isMinor
           ? "A child has no phone of their own. Record the guardian's contact below — that satisfies this."
           : "A phone or an email is required — one contact, either kind."}
@@ -244,24 +244,24 @@ export default function RegistrationForm({ form, majorityAge, today, mode = "ful
       {/* ── Guardians and next of kin (s6) ─────────────────────────────────────────────────────── */}
       <section className={`rounded-lg border p-3 ${isMinor && !hasGuardian ? "border-[var(--cmp-color-warning)] bg-[var(--cmp-surface-warning)]" : "border-gray-200 bg-gray-50/60"}`}>
         <div className="flex items-baseline justify-between gap-2 flex-wrap">
-          <h3 className="text-[12px] font-bold text-gray-900">
+          <h3 className="text-[13px] font-bold text-gray-900">
             {isMinor ? "Guardian" : "Next of kin and contacts"}
             {isMinor && <span className="ml-1 font-normal text-[var(--cmp-text-warning)]">required</span>}
           </h3>
           <div className="flex gap-2">
             <button type="button" onClick={() => setRelations(r => [...r, emptyRelation(true)])}
-              className="rounded-lg border border-gray-200 bg-white px-2.5 py-1 text-[11px] font-semibold text-gray-700 hover:bg-gray-50">
+              className="rounded-lg border border-gray-200 bg-white px-2.5 py-1 text-[12px] font-semibold text-gray-700 hover:bg-gray-50">
               + Guardian
             </button>
             <button type="button" onClick={() => setRelations(r => [...r, emptyRelation(false)])}
-              className="rounded-lg border border-gray-200 bg-white px-2.5 py-1 text-[11px] font-semibold text-gray-700 hover:bg-gray-50">
+              className="rounded-lg border border-gray-200 bg-white px-2.5 py-1 text-[12px] font-semibold text-gray-700 hover:bg-gray-50">
               + Other contact
             </button>
           </div>
         </div>
 
         {relations.length === 0 ? (
-          <p className="mt-2 text-[11px] text-gray-500">
+          <p className="mt-2 text-[12px] text-gray-500">
             {isMinor
               ? `This patient is under ${majorityAge}. Add the parent, guardian or carer who has legal authority.`
               : "Add a next of kin, an emergency contact, an interpreter — as many as apply."}
@@ -296,7 +296,7 @@ export default function RegistrationForm({ form, majorityAge, today, mode = "ful
                     <input value={r.email} onChange={e => setRelation(i, { email: e.target.value })} className={`mt-1 ${input}`} />
                   </label>
                 </div>
-                <div className="mt-2 flex items-center gap-3 flex-wrap text-[11px] text-gray-700">
+                <div className="mt-2 flex items-center gap-3 flex-wrap text-[12px] text-gray-700">
                   <label className={`flex items-center gap-1.5 ${GUARDIAN_TYPES.has(r.relationshipType) ? "" : "opacity-40"}`}>
                     <input type="checkbox" checked={r.isLegalGuardian}
                       disabled={!GUARDIAN_TYPES.has(r.relationshipType)}
@@ -314,14 +314,14 @@ export default function RegistrationForm({ form, majorityAge, today, mode = "ful
                     Ring first
                   </label>
                   <button type="button" onClick={() => setRelations(rs => rs.filter((_, j) => j !== i))}
-                    className="ml-auto text-[11px] font-semibold text-gray-400 hover:text-[var(--cmp-text-danger)]">
+                    className="ml-auto text-[12px] font-semibold text-gray-400 hover:text-[var(--cmp-text-danger)]">
                     Remove
                   </button>
                 </div>
                 {/* THE TWO AUTHORITIES ARE DIFFERENT QUESTIONS, and conflating them is how an emergency
                     contact ends up consenting to surgery. */}
                 {!GUARDIAN_TYPES.has(r.relationshipType) && r.relationshipType !== "emergency_contact" && (
-                  <p className="mt-1 text-[10px] text-gray-400">
+                  <p className="mt-1 text-[11px] text-gray-400">
                     A {RELATIONSHIP_OPTIONS.find(([k]) => k === r.relationshipType)?.[1].toLowerCase()} cannot hold legal authority for a patient.
                   </p>
                 )}
@@ -334,13 +334,13 @@ export default function RegistrationForm({ form, majorityAge, today, mode = "ful
       {/* ── Hospital identifiers (s22) -- full registration only ───────────────────────────────── */}
       {mode === "full" && (
         <section className="rounded-lg border border-gray-200 bg-gray-50/60 p-3">
-          <h3 className="text-[12px] font-bold text-gray-900">Hospital numbers</h3>
-          <p className="mt-0.5 text-[11px] text-gray-500">
+          <h3 className="text-[13px] font-bold text-gray-900">Hospital numbers</h3>
+          <p className="mt-0.5 text-[12px] text-gray-500">
             A patient carries a different number at every hospital. Add them once the record exists
             &mdash; each one has to name the facility that issued it, or it cannot be checked against
             anything.
           </p>
-          <p className="mt-1.5 text-[10px] text-gray-400">
+          <p className="mt-1.5 text-[11px] text-gray-400">
             The national ID above is not facility-issued and is recorded here. Hospital MRNs, clinic and
             outpatient numbers are added from the patient&rsquo;s own page, where the facility list lives.
           </p>
@@ -348,9 +348,9 @@ export default function RegistrationForm({ form, majorityAge, today, mode = "ful
       )}
 
       {/* ── The photograph the comp asks for, in its designed position ──────────────────────────── */}
-      <section className="rounded-lg border border-dashed border-gray-200 bg-gray-50/60 p-3">
-        <h3 className="text-[12px] font-bold text-gray-900">Patient photograph</h3>
-        <p className="mt-0.5 text-[11px] text-gray-600">
+      <section className="rounded-lg border border-dashed border-gray-200 bg-gray-50/60 p-4">
+        <h3 className="text-[13px] font-bold text-gray-900">Patient photograph</h3>
+        <p className="mt-0.5 text-[12px] text-gray-600">
           The design offers Take Photo and Upload Photo. There is no file storage in this product, and a
           photograph of a patient is the most identifying file a practice could hold &mdash; so it is
           absent rather than behind a button that fails at the last step.
@@ -368,7 +368,7 @@ export default function RegistrationForm({ form, majorityAge, today, mode = "ful
           <input type="datetime-local" value={p.appointmentAt}
             onChange={e => setP(v => ({ ...v, appointmentAt: e.target.value }))} className={`mt-1 ${input}`} />
         </label>
-        <p className="self-end text-[10px] text-gray-400">
+        <p className="self-end text-[11px] text-gray-400">
           Optional. Leaving it blank registers the patient without booking anything.
         </p>
       </div>
@@ -376,7 +376,7 @@ export default function RegistrationForm({ form, majorityAge, today, mode = "ful
       {/* ── Whatever this practice added to its own form (s9) ──────────────────────────────────── */}
       {customFields.length > 0 && (
         <section className="rounded-lg border border-gray-200 bg-gray-50/60 p-3">
-          <h3 className="text-[12px] font-bold text-gray-900">
+          <h3 className="text-[13px] font-bold text-gray-900">
             {form.template?.name ?? "This practice's own fields"}
           </h3>
           <div className="mt-2 grid sm:grid-cols-2 gap-2">
@@ -391,7 +391,7 @@ export default function RegistrationForm({ form, majorityAge, today, mode = "ful
                     {(f.options ?? []).map((o: any) => <option key={o.value} value={o.value}>{o.label}</option>)}
                   </select>
                 ) : f.field_type === "boolean" ? (
-                  <span className="mt-1 flex items-center gap-1.5 text-[12px] text-gray-700">
+                  <span className="mt-1 flex items-center gap-1.5 text-[13px] text-gray-700">
                     <input type="checkbox" checked={custom[f.field_key] === true}
                       onChange={e => setCustom(c => ({ ...c, [f.field_key]: e.target.checked }))} />
                     Yes
@@ -402,24 +402,24 @@ export default function RegistrationForm({ form, majorityAge, today, mode = "ful
                     onChange={e => setCustom(c => ({ ...c, [f.field_key]: e.target.value }))}
                     className={`mt-1 ${input}`} />
                 )}
-                {f.help && <span className="mt-0.5 block font-normal text-[10px] text-gray-400">{f.help}</span>}
+                {f.help && <span className="mt-0.5 block font-normal text-[11px] text-gray-400">{f.help}</span>}
               </label>
             ))}
           </div>
         </section>
       )}
 
-      {error && <p className="rounded-lg bg-[var(--cmp-surface-critical)] px-3 py-2 text-[12px] text-[var(--cmp-text-critical)]">{error}</p>}
+      {error && <p className="rounded-lg bg-[var(--cmp-surface-critical)] px-3 py-2 text-[13px] text-[var(--cmp-text-critical)]">{error}</p>}
 
       {candidates && (
         <div className="rounded-lg border border-[var(--cmp-color-warning)] bg-[var(--cmp-surface-warning)] p-3">
-          <p className="text-[12px] font-bold text-[var(--cmp-text-warning)]">
+          <p className="text-[13px] font-bold text-[var(--cmp-text-warning)]">
             {candidates[0]?.hardBlock ? "That identifier already belongs to:" : "A very similar patient already exists:"}
           </p>
           <ul className="mt-1.5 flex flex-col gap-1">
             {candidates.map((c: any) => (
               <li key={c.id}>
-                <Link href={`/practice/patients/${c.id}`} className="text-[12px] font-semibold text-gray-800 hover:underline">
+                <Link href={`/practice/patients/${c.id}`} className="text-[13px] font-semibold text-gray-800 hover:underline">
                   {c.displayName}{c.practiceId ? ` · ${c.practiceId}` : ""}{c.birthDate ? ` · b. ${c.birthDate}` : ""} ({c.matchedBy})
                 </Link>
               </li>
@@ -427,7 +427,7 @@ export default function RegistrationForm({ form, majorityAge, today, mode = "ful
           </ul>
           {!candidates[0]?.hardBlock && (
             <button type="button" disabled={busy} onClick={() => submit(true)}
-              className="mt-2 rounded-lg border border-[var(--cmp-color-warning)] px-3 py-1.5 text-[11px] font-semibold text-[var(--cmp-text-warning)] hover:bg-white/40">
+              className="mt-2 rounded-lg border border-[var(--cmp-color-warning)] px-3 py-1.5 text-[12px] font-semibold text-[var(--cmp-text-warning)] hover:bg-white/40">
               This is a different person — register anyway
             </button>
           )}
@@ -440,11 +440,11 @@ export default function RegistrationForm({ form, majorityAge, today, mode = "ful
       <div className="flex items-center gap-2 flex-wrap border-t border-gray-100 pt-3">
         <button type="button" disabled={busy || !canSubmit}
           onClick={() => submit(false, "queue")}
-          className="rounded-lg bg-[var(--cp-primary)] px-4 py-2 text-[13px] font-semibold text-white hover:bg-[var(--cp-primary-deep)] disabled:opacity-40">
+          className="rounded-lg bg-[var(--cp-primary)] px-4 py-2 text-[14px] font-semibold text-white hover:bg-[var(--cp-primary-deep)] disabled:opacity-40">
           {busy ? "Checking for duplicates…" : "Register and add to the queue"}
         </button>
         <button type="submit" disabled={!canSubmit}
-          className="rounded-lg border border-gray-200 px-4 py-2 text-[13px] font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-40">
+          className="rounded-lg border border-gray-200 px-4 py-2 text-[14px] font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-40">
           {p.appointmentAt ? "Register and book" : "Register only"}
         </button>
 
@@ -459,19 +459,19 @@ export default function RegistrationForm({ form, majorityAge, today, mode = "ful
             setDraftId(d.id);
             onNotice?.({ kind: "ok", text: "Draft saved. It holds this person's details, so finish or discard it." });
           }}
-          className="rounded-lg border border-gray-200 px-3 py-2 text-[12px] font-semibold text-gray-600 hover:bg-gray-50 disabled:opacity-40">
+          className="rounded-lg border border-gray-200 px-3 py-2 text-[13px] font-semibold text-gray-600 hover:bg-gray-50 disabled:opacity-40">
           {draftId ? "Update draft" : "Save draft"}
         </button>
 
         {missing.length > 0 && (
-          <span className="text-[11px] font-semibold text-[var(--cmp-text-warning)]">
+          <span className="text-[12px] font-semibold text-[var(--cmp-text-warning)]">
             Still needs {missing.join(", ")}.
           </span>
         )}
       </div>
       {/* A DRAFT HOLDS SOMEBODY'S DETAILS OUTSIDE THE PATIENT RECORD -- outside the access log, outside
           the merge machinery, outside every retention rule. Said here, where it is created. */}
-      <p className="-mt-2 text-[10px] text-gray-400">
+      <p className="-mt-2 text-[11px] text-gray-400">
         A draft keeps what you have typed on your own desk. It is this person&rsquo;s details held
         outside the patient record, so finish it or discard it &mdash; nothing deletes drafts on a timer.
       </p>

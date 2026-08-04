@@ -33,14 +33,19 @@ export default async function PatientsPage() {
   const workspace = await registrationWorkspace(createAdminClient(), shell.ctx);
 
   return (
-    // CONTAINED, NOT FULL-BLEED. On a wide monitor an unconstrained grid stretched every field to
-    // about 1,500px -- a first-name box the width of a desk, and the context panel pushed off the edge
-    // of the screen entirely. The comp is plainly a contained layout; this is its measurements.
-    //
-    // The rail STICKS, because it is the operational picture: who is waiting is worth seeing while you
-    // are half-way down a registration form, which is the only reason to put it beside rather than
-    // above.
-    <div className="mx-auto grid w-full max-w-[1400px] xl:grid-cols-[minmax(0,1fr)_340px] gap-4 items-start">
+    // THE CANVAS IS WHAT MAKES A WHITE CARD READ AS A CARD. Against a white page the borders were doing
+    // all the work alone, which is why the comp's layered look did not survive the build. --cp-canvas is
+    // the off-white the design system already defines for exactly this; the negative margin cancels the
+    // shell's own padding so the tint reaches the edges, and the p-5 puts it back inside.
+    <div className="-m-5 min-h-full bg-[var(--cp-canvas)] p-5">
+      {/* CONTAINED, NOT FULL-BLEED. On a wide monitor an unconstrained grid stretched every field to
+          about 1,500px -- a first-name box the width of a desk -- and pushed the context panel off the
+          edge of the screen. The comp is plainly a contained layout; these are its measurements.
+
+          The rail STICKS, because it is the operational picture: who is waiting is worth seeing while
+          you are half-way down a registration form, which is the only reason to put it beside the form
+          rather than above it. */}
+      <div className="mx-auto grid w-full max-w-[1400px] xl:grid-cols-[minmax(0,1fr)_340px] gap-4 items-start">
       <RegistryConsole
         canCreate={hasCapability(shell.ctx, "patient.create")}
         workspace={workspace}
@@ -48,6 +53,7 @@ export default async function PatientsPage() {
       <div className="xl:sticky xl:top-4">
         <ContextPanel w={workspace} />
       </div>
+    </div>
     </div>
   );
 }

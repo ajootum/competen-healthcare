@@ -67,11 +67,11 @@ export default function SearchSection({ canCreate, onRegisterClick }: {
     (lens === "identifier" && String(r.matchedBy).startsWith("identifier")));
 
   return (
-    <section className="rounded-xl border border-gray-200 bg-white p-4">
+    <section className="rounded-xl border border-gray-200 bg-white p-5">
       <div className="flex items-baseline gap-2">
-        <span className="flex h-5 w-5 items-center justify-center rounded-full bg-[var(--cp-primary)] text-[11px] font-bold text-white">1</span>
-        <h2 className="text-[13px] font-bold text-gray-900">Search first</h2>
-        <span className="text-[11px] text-gray-500">Register only when nobody matches.</span>
+        <span className="flex h-5 w-5 items-center justify-center rounded-full bg-[var(--cp-primary)] text-[12px] font-bold text-white">1</span>
+        <h2 className="text-[14px] font-bold text-gray-900">Search first</h2>
+        <span className="text-[12px] text-gray-500">Register only when nobody matches.</span>
       </div>
 
       <div className="mt-3 flex gap-2">
@@ -79,10 +79,10 @@ export default function SearchSection({ canCreate, onRegisterClick }: {
           value={q}
           onChange={e => onType(e.target.value)}
           placeholder="Name, phone, Practice ID, hospital number, national ID, passport or email"
-          className="w-full rounded-lg border border-gray-200 px-3 py-2 text-[13px] outline-none focus:border-[var(--cp-primary)] focus:ring-2 focus:ring-[var(--cp-primary)]/10"
+          className="w-full rounded-lg border border-gray-200 px-3 py-2 text-[14px] outline-none focus:border-[var(--cp-primary)] focus:ring-2 focus:ring-[var(--cp-primary)]/10"
         />
         <button type="button" onClick={() => void run(q)} disabled={busy || q.trim().length < 2}
-          className="shrink-0 rounded-lg bg-[var(--cp-primary)] px-4 py-2 text-[13px] font-semibold text-white disabled:opacity-40">
+          className="shrink-0 rounded-lg bg-[var(--cp-primary)] px-4 py-2 text-[14px] font-semibold text-white disabled:opacity-40">
           {busy ? "Searching…" : "Search"}
         </button>
       </div>
@@ -90,20 +90,20 @@ export default function SearchSection({ canCreate, onRegisterClick }: {
       <div className="mt-2 flex items-center gap-1.5 flex-wrap">
         {LENSES.map(l => (
           <button key={l.key} type="button" onClick={() => setLens(l.key)}
-            className={`rounded-lg border px-2.5 py-1 text-[11px] font-semibold ${
+            className={`rounded-lg border px-2.5 py-1 text-[12px] font-semibold ${
               lens === l.key ? "border-[var(--cp-primary)] bg-[var(--cp-primary)]/5 text-[var(--cp-primary-deep)]"
                 : "border-gray-200 text-gray-600 hover:bg-gray-50"}`}>
             {l.label}
           </button>
         ))}
-        <span className="ml-1 text-[10px] text-gray-400">
+        <span className="ml-1 text-[11px] text-gray-400">
           Every search looks everywhere &mdash; these only narrow what is shown.
         </span>
       </div>
 
       {results !== null && (
         <div className="mt-3">
-          <p className="text-[11px] font-semibold text-gray-600">
+          <p className="text-[12px] font-semibold text-gray-600">
             {shown.length === 0
               ? results.length === 0 ? "Nobody matches." : `Nothing matched that way — ${results.length} match other ways.`
               : `${shown.length} possible match${shown.length === 1 ? "" : "es"}`}
@@ -114,10 +114,10 @@ export default function SearchSection({ canCreate, onRegisterClick }: {
                 <li key={r.id}>
                   <Link href={`/practice/patients/${r.id}`}
                     className="flex items-center gap-2 rounded-lg border border-gray-100 px-3 py-2 hover:border-[var(--cp-primary)] transition">
-                    <span className="text-[13px] font-semibold text-gray-900">{r.displayName}</span>
-                    {r.practiceId && <span className="font-mono text-[11px] text-gray-500">{r.practiceId}</span>}
-                    {r.birthDate && <span className="text-[11px] text-gray-400">b. {r.birthDate}</span>}
-                    <span className="ml-auto rounded bg-gray-100 px-1.5 py-0.5 text-[10px] font-semibold text-gray-500">
+                    <span className="text-[14px] font-semibold text-gray-900">{r.displayName}</span>
+                    {r.practiceId && <span className="font-mono text-[12px] text-gray-500">{r.practiceId}</span>}
+                    {r.birthDate && <span className="text-[12px] text-gray-400">b. {r.birthDate}</span>}
+                    <span className="ml-auto rounded bg-gray-100 px-1.5 py-0.5 text-[11px] font-semibold text-gray-500">
                       {MATCH_LABEL[r.matchedBy] ?? r.matchedBy}
                     </span>
                   </Link>
@@ -127,7 +127,7 @@ export default function SearchSection({ canCreate, onRegisterClick }: {
           )}
           {results.length === 0 && canCreate && (
             <button type="button" onClick={onRegisterClick}
-              className="mt-2 rounded-lg bg-[var(--cp-primary)] px-3 py-1.5 text-[12px] font-semibold text-white">
+              className="mt-2 rounded-lg bg-[var(--cp-primary)] px-3 py-1.5 text-[13px] font-semibold text-white">
               Register {q.trim() ? `“${q.trim()}”` : "a new patient"}
             </button>
           )}
@@ -135,7 +135,7 @@ export default function SearchSection({ canCreate, onRegisterClick }: {
       )}
 
       {/* THE COMP'S "SCAN ID" BUTTON, in its designed position and honest about itself. */}
-      <p className="mt-3 border-t border-gray-100 pt-2 text-[10px] text-gray-400">
+      <p className="mt-3 border-t border-gray-100 pt-2 text-[11px] text-gray-400">
         The design puts a &ldquo;Scan ID&rdquo; button here. Reading a national ID or a passport needs a
         camera and a document parser, neither of which exists yet &mdash; and every number a scan would
         produce is already searchable by typing it.
