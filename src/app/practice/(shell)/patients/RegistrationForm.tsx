@@ -64,11 +64,14 @@ function ageFrom(birthDate: string, today: string) {
   return { years, months, days, label };
 }
 
-export default function RegistrationForm({ form, majorityAge, today, onRegistered }: {
+export default function RegistrationForm({ form, majorityAge, today, mode = "full", onRegistered, onNotice }: {
   form: { template: any; fields: any[] };
   majorityAge: number;
   today: string;
+  /** CPR-REG-002: quick hides the hospital identifiers card -- "minimum information, complete later". */
+  mode?: "quick" | "full";
   onRegistered: (r: any) => void;
+  onNotice?: (n: { kind: "ok" | "err"; text: string }) => void;
 }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -81,6 +84,9 @@ export default function RegistrationForm({ form, majorityAge, today, onRegistere
   });
   const [relations, setRelations] = useState<Relation[]>([]);
   const [custom, setCustom] = useState<Record<string, unknown>>({});
+  // Set once a draft has been saved, so pressing Save again updates it rather than leaving a trail of
+  // half-finished copies of the same person on somebody's desk.
+  const [draftId, setDraftId] = useState<string | null>(null);
 
   const age = useMemo(() => p.birthDate ? ageFrom(p.birthDate, today) : null, [p.birthDate, today]);
   const isMinor = age ? age.years < majorityAge
@@ -99,7 +105,7 @@ export default function RegistrationForm({ form, majorityAge, today, onRegistere
     setRelations(rs => rs.map((r, j) => j === i ? { ...r, ...patch } : r));
   }
 
-  async function submit(confirmNew: boolean) {
+  async function submit(confirmNew: boolean, action: "register" | "queue" = "register") {
     setBusy(true); setError(null); setCandidates(null);
     const res = await fetch("/api/v1/practice/registration", {
       method: "POST", headers: { "content-type": "application/json" },
@@ -129,6 +135,20 @@ export default function RegistrationForm({ form, majorityAge, today, onRegistere
       return;
     }
     if (!res.ok) { setError(data?.error?.message ?? "Registration failed."); return; }
+
+    // REGISTER AND QUEUE IS TWO ACTS, AND THE SECOND IS REPORTED SEPARATELY. If queueing fails the
+    // patient still exists -- and telling somebody they are in the queue when they are not is how a
+    // person sits in a waiting room nobody is watching.
+    if (action === "queue" && data.patientId) {
+      const q = await fetch("/api/v1/practice/registration-workspace", {
+        method: "POST", headers: { "content-type": "application/json" },
+        body: JSON.stringify({ queuePatientId: data.patientId }),
+      });
+      if (!q.ok) {
+        const qd = await q.json().catch(() => ({}));
+        onNotice?.({ kind: "err", text: `Registered, but not added to the queue: ${qd?.error?.message ?? "unknown reason"}` });
+      }
+    }
     onRegistered(data);
   }
 
@@ -289,6 +309,32 @@ export default function RegistrationForm({ form, majorityAge, today, onRegistere
         )}
       </section>
 
+      {/* ── Hospital identifiers (s22) -- full registration only ───────────────────────────────── */}
+      {mode === "full" && (
+        <section className="rounded-lg border border-gray-200 bg-gray-50/60 p-3">
+          <h3 className="text-[12px] font-bold text-gray-900">Hospital numbers</h3>
+          <p className="mt-0.5 text-[11px] text-gray-500">
+            A patient carries a different number at every hospital. Add them once the record exists
+            &mdash; each one has to name the facility that issued it, or it cannot be checked against
+            anything.
+          </p>
+          <p className="mt-1.5 text-[10px] text-gray-400">
+            The national ID above is not facility-issued and is recorded here. Hospital MRNs, clinic and
+            outpatient numbers are added from the patient&rsquo;s own page, where the facility list lives.
+          </p>
+        </section>
+      )}
+
+      {/* ── The photograph the comp asks for, in its designed position ──────────────────────────── */}
+      <section className="rounded-lg border border-dashed border-gray-200 bg-gray-50/60 p-3">
+        <h3 className="text-[12px] font-bold text-gray-900">Patient photograph</h3>
+        <p className="mt-0.5 text-[11px] text-gray-600">
+          The design offers Take Photo and Upload Photo. There is no file storage in this product, and a
+          photograph of a patient is the most identifying file a practice could hold &mdash; so it is
+          absent rather than behind a button that fails at the last step.
+        </p>
+      </section>
+
       {/* ── The visit ─────────────────────────────────────────────────────────────────────────── */}
       <div className="grid sm:grid-cols-2 gap-2">
         <label className={`${label} sm:col-span-2`}>Reason for visit
@@ -366,17 +412,47 @@ export default function RegistrationForm({ form, majorityAge, today, onRegistere
         </div>
       )}
 
-      <div className="flex items-center gap-3 flex-wrap">
-        <button type="submit" disabled={!canSubmit}
+      {/* ── The comp's four actions ─────────────────────────────────────────────────────────────
+          Cancel · Save Draft · Register & Queue · Register Only. The first three are new here; the
+          order is the comp's, and the primary action is the one a walk-in desk presses most. */}
+      <div className="flex items-center gap-2 flex-wrap border-t border-gray-100 pt-3">
+        <button type="button" disabled={busy || !canSubmit}
+          onClick={() => submit(false, "queue")}
           className="rounded-lg bg-[var(--cp-primary)] px-4 py-2 text-[13px] font-semibold text-white hover:bg-[var(--cp-primary-deep)] disabled:opacity-40">
-          {busy ? "Checking for duplicates…" : p.appointmentAt ? "Register and book" : "Register"}
+          {busy ? "Checking for duplicates…" : "Register and add to the queue"}
         </button>
+        <button type="submit" disabled={!canSubmit}
+          className="rounded-lg border border-gray-200 px-4 py-2 text-[13px] font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-40">
+          {p.appointmentAt ? "Register and book" : "Register only"}
+        </button>
+
+        <button type="button" disabled={busy || !name.trim()}
+          onClick={async () => {
+            const r = await fetch("/api/v1/practice/registration-workspace", {
+              method: "POST", headers: { "content-type": "application/json" },
+              body: JSON.stringify({ draftId, payload: { ...p, relations }, label: name }),
+            });
+            const d = await r.json().catch(() => ({}));
+            if (!r.ok) { setError(d?.error?.message ?? "The draft could not be saved."); return; }
+            setDraftId(d.id);
+            onNotice?.({ kind: "ok", text: "Draft saved. It holds this person's details, so finish or discard it." });
+          }}
+          className="rounded-lg border border-gray-200 px-3 py-2 text-[12px] font-semibold text-gray-600 hover:bg-gray-50 disabled:opacity-40">
+          {draftId ? "Update draft" : "Save draft"}
+        </button>
+
         {isMinor && !hasGuardian && (
           <span className="text-[11px] font-semibold text-[var(--cmp-text-warning)]">
             A guardian with legal authority is needed before this can be saved.
           </span>
         )}
       </div>
+      {/* A DRAFT HOLDS SOMEBODY'S DETAILS OUTSIDE THE PATIENT RECORD -- outside the access log, outside
+          the merge machinery, outside every retention rule. Said here, where it is created. */}
+      <p className="-mt-2 text-[10px] text-gray-400">
+        A draft keeps what you have typed on your own desk. It is this person&rsquo;s details held
+        outside the patient record, so finish it or discard it &mdash; nothing deletes drafts on a timer.
+      </p>
     </form>
   );
 }

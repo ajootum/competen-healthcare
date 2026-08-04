@@ -1,118 +1,119 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import Link from "next/link";
+import { useState } from "react";
+import SearchSection from "./SearchSection";
 import RegistrationForm from "./RegistrationForm";
 
-// CPR-V2-004's registry console: search-first, ranked results with how-it-matched, rapid registration when
-// nothing matches, and the duplicate interstitial when something nearly does. The 409-with-candidates
-// from the API is rendered as the decision it is -- open the existing patient, or confirm a namesake --
-// never retried silently and never treated as a failure toast.
+// CPR-REG-002 v4 -- the registration workspace's main column.
+//
+// ────────────────────────────────────────────────────────────────────────────────────────────────────
+// THE STEPPER IS A MAP, NOT A GATE.
+//
+// The comp draws five numbered steps. Making them a wizard -- one card at a time, Next between each --
+// would fight the acceptance criterion directly above it: "Quick Registration completed in under 30
+// seconds". Five Next clicks is not thirty seconds. So the steps are shown as a map of what this
+// registration still needs, every card is on the page at once, and the numbers tell you where you are
+// rather than deciding what you may see.
+//
+// QUICK VS FULL IS ABOUT HOW MUCH IS ASKED, not about how many screens. Quick hides the hospital
+// identifiers card, which is the comp's own promise: "minimum information, save time, complete later".
+// ────────────────────────────────────────────────────────────────────────────────────────────────────
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
-const input = "w-full rounded-lg border border-gray-200 px-2.5 py-2 text-[13px] outline-none focus:border-[var(--cp-primary)] focus:ring-2 focus:ring-[var(--cp-primary)]/10";
-
-const MATCH_LABEL: Record<string, string> = {
-  name: "exact name", "name-partial": "name contains", phone: "phone", email: "email",
-};
-
-export default function RegistryConsole({ canCreate }: { canCreate: boolean }) {
-  const [q, setQ] = useState("");
-  const [results, setResults] = useState<any[] | null>(null);
-  const [busy, setBusy] = useState(false);
-  // The duplicate interstitial moved into RegistrationForm with the form it belongs to.
-  const [notice, setNotice] = useState<{ kind: "ok" | "err"; text: string } | null>(null);
+export default function RegistryConsole({ canCreate, workspace }: {
+  canCreate: boolean;
+  workspace: any;
+}) {
   const [showRegister, setShowRegister] = useState(false);
+  const [mode, setMode] = useState<"quick" | "full">("quick");
+  const [notice, setNotice] = useState<{ kind: "ok" | "err"; text: string } | null>(null);
 
-  // THE PRACTICE'S OWN FORM, fetched rather than assumed. A practice that published a registration
-  // template gets its fields, its order and its extra questions; one that has not gets the built-in
-  // form -- and "no template" is a legitimate answer, not an error.
-  const [formConfig, setFormConfig] = useState<any | null>(null);
-  useEffect(() => {
-    if (!canCreate) return;
-    fetch("/api/v1/practice/registration")
-      .then(r => r.ok ? r.json() : null)
-      .then(setFormConfig)
-      .catch(() => setFormConfig(null));
-  }, [canCreate]);
-
-  async function search(e?: React.FormEvent) {
-    e?.preventDefault();
-    if (!q.trim()) return;
-    setBusy(true); setNotice(null);
-    const r = await fetch(`/api/v1/practice/patients?q=${encodeURIComponent(q.trim())}`);
-    setResults(r.ok ? (await r.json()).results : []);
-    setBusy(false);
-  }
+  const counts = workspace.counts;
 
   return (
-    <div className="max-w-4xl">
-      <h1 className="text-xl font-bold text-gray-900">Patients</h1>
-      <p className="mt-1 text-[13px] text-gray-500">Search first. Register only when nothing matches (CPR-V2-005 workflow).</p>
+    <div className="flex flex-col gap-4">
+      <div>
+        <h1 className="text-xl font-bold text-gray-900">Patient registration</h1>
+        <p className="mt-0.5 text-[13px] text-gray-500">
+          Search first. Register only when nobody matches.
+        </p>
+      </div>
 
-      <form onSubmit={search} className="mt-4 flex gap-2">
-        <input value={q} onChange={e => setQ(e.target.value)} placeholder="Name, phone, or any identifier (Practice ID, national ID, MRN)" className={input} />
-        <button type="submit" disabled={busy || !q.trim()}
-          className="rounded-lg bg-[var(--cp-primary)] px-4 py-2 text-[13px] font-semibold text-white hover:bg-[var(--cp-primary-deep)] disabled:opacity-50 shrink-0">
-          Search
-        </button>
-      </form>
+      <SearchSection canCreate={canCreate} onRegisterClick={() => setShowRegister(true)} />
+
+      {/* ── The four counts (comp: four tiles) ─────────────────────────────────────────────────── */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        {[
+          ["Walk-ins today", counts.walkInsToday, "arrived without an appointment"],
+          ["Registered today", counts.registeredToday, "new records"],
+          ["Follow-ups due", counts.followUpsDueToday, "today or overdue"],
+          ["Patients", counts.totalPatients, "on this practice's register"],
+        ].map(([label, value, note]) => (
+          <div key={String(label)} className="rounded-xl border border-gray-200 bg-white p-3">
+            <p className="text-[11px] font-semibold text-gray-500">{label}</p>
+            <p className="mt-0.5 text-2xl font-bold text-gray-900">{value as number}</p>
+            <p className="text-[10px] text-gray-500">{note}</p>
+          </div>
+        ))}
+      </div>
 
       {notice && (
-        <p className={`mt-3 rounded-lg px-3 py-2 text-[12px] ${notice.kind === "ok" ? "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]" : "bg-[var(--cmp-surface-critical)] text-[var(--cmp-text-critical)]"}`}>{notice.text}</p>
+        <p className={`rounded-lg px-3 py-2 text-[12px] ${notice.kind === "ok"
+          ? "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]"
+          : "bg-[var(--cmp-surface-critical)] text-[var(--cmp-text-critical)]"}`}>
+          {notice.text}
+        </p>
       )}
 
-      {results !== null && (
-        <section className="mt-4 rounded-xl border border-gray-200 bg-white p-4">
-          <h2 className="text-[13px] font-bold text-gray-900">{results.length} match{results.length === 1 ? "" : "es"}</h2>
-          {results.length === 0 ? (
-            <p className="mt-2 text-[12px] text-gray-400">
-              Nobody matches.{canCreate ? " Register them below." : ""}
-            </p>
-          ) : (
-            <ul className="mt-2 flex flex-col gap-1.5">
-              {results.map(r => (
-                <li key={r.id}>
-                  <Link href={`/practice/patients/${r.id}`}
-                    className="flex items-center gap-2 rounded-lg border border-gray-100 px-3 py-2 hover:border-[var(--cp-primary)] transition">
-                    <span className="text-[13px] font-semibold text-gray-900">{r.displayName}</span>
-                    {r.practiceId && <span className="font-mono text-[11px] text-gray-500">{r.practiceId}</span>}
-                    {r.birthDate && <span className="text-[11px] text-gray-400">b. {r.birthDate}</span>}
-                    <span className="ml-auto rounded bg-gray-100 px-1.5 py-0.5 text-[10px] font-semibold text-gray-500">
-                      {MATCH_LABEL[r.matchedBy] ?? r.matchedBy}
-                    </span>
-                  </Link>
-                </li>
-              ))}
-            </ul>
-          )}
-        </section>
-      )}
-
+      {/* ── Registration ───────────────────────────────────────────────────────────────────────── */}
       {canCreate && (
-        <section className="mt-4 rounded-xl border border-gray-200 bg-white p-4">
-          <button type="button" onClick={() => setShowRegister(v => !v)} className="text-[13px] font-bold text-gray-900 w-full text-left">
-            {showRegister ? "▾" : "▸"} Register a patient
-          </button>
+        <section className="rounded-xl border border-gray-200 bg-white p-4">
+          <div className="flex items-baseline justify-between gap-2 flex-wrap">
+            <div className="flex items-baseline gap-2">
+              <span className="flex h-5 w-5 items-center justify-center rounded-full bg-[var(--cp-primary)] text-[11px] font-bold text-white">2</span>
+              <h2 className="text-[13px] font-bold text-gray-900">Register a patient</h2>
+            </div>
+            <button type="button" onClick={() => setShowRegister(v => !v)}
+              className="text-[12px] font-semibold text-[var(--cp-primary-deep)] hover:underline">
+              {showRegister ? "Close" : "Open"}
+            </button>
+          </div>
+
           {showRegister && (
-            formConfig
-              ? <RegistrationForm
-                  form={{ template: formConfig.template, fields: formConfig.fields ?? [] }}
-                  majorityAge={formConfig.majorityAge ?? 18}
-                  today={formConfig.today}
-                  onRegistered={(r) => {
-                    // THE INCOMPLETE STEPS ARE SHOWN, NOT SWALLOWED. A desk that believes it booked an
-                    // appointment it did not book is the worst outcome of the three.
-                    if (r.incomplete?.length) {
-                      setNotice({ kind: "err", text: `Registered, but: ${r.incomplete.map((i: any) => i.reason).join("; ")}` });
-                      setTimeout(() => window.location.assign(`/practice/patients/${r.patientId}`), 2500);
-                      return;
-                    }
-                    window.location.assign(`/practice/patients/${r.patientId}`);
-                  }}
-                />
-              : <p className="mt-3 text-[12px] text-gray-400">Loading this practice&rsquo;s form…</p>
+            <>
+              {/* ── Mode (comp: two cards) ────────────────────────────────────────────────── */}
+              <div className="mt-3 grid sm:grid-cols-2 gap-2">
+                {[
+                  ["quick", "Quick registration", "The minimum a record needs. Hospital numbers and the rest can follow."],
+                  ["full", "Full registration", "Everything, including hospital identifiers, in one sitting."],
+                ].map(([k, title, blurb]) => (
+                  <button key={k} type="button" onClick={() => setMode(k as "quick" | "full")}
+                    className={`rounded-lg border p-3 text-left ${mode === k
+                      ? "border-[var(--cp-primary)] bg-[var(--cp-primary)]/5"
+                      : "border-gray-200 hover:bg-gray-50"}`}>
+                    <p className={`text-[12px] font-bold ${mode === k ? "text-[var(--cp-primary-deep)]" : "text-gray-900"}`}>{title}</p>
+                    <p className="mt-0.5 text-[10px] text-gray-500">{blurb}</p>
+                  </button>
+                ))}
+              </div>
+
+              <RegistrationForm
+                form={{ template: workspace.template, fields: workspace.fields ?? [] }}
+                majorityAge={workspace.majorityAge ?? 18}
+                today={workspace.today}
+                mode={mode}
+                onNotice={setNotice}
+                onRegistered={(r) => {
+                  if (r.incomplete?.length) {
+                    setNotice({ kind: "err", text: `Registered, but: ${r.incomplete.map((i: any) => i.reason).join("; ")}` });
+                    setTimeout(() => window.location.assign(`/practice/patients/${r.patientId}`), 2500);
+                    return;
+                  }
+                  window.location.assign(`/practice/patients/${r.patientId}`);
+                }}
+              />
+            </>
           )}
         </section>
       )}

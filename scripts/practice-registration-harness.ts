@@ -27,6 +27,9 @@ import { register, registrationForm, ageForForm } from "../src/lib/practice/regi
 import { composeDisplayName } from "../src/lib/practice/patients";
 import { patientRelationships } from "../src/lib/practice/relationships";
 import { createTemplate, upsertField, publishTemplate } from "../src/lib/practice/registration-config";
+import {
+  registrationWorkspace, queueWalkIn, saveDraft, listDrafts, discardDraft,
+} from "../src/lib/practice/registration-workspace";
 
 loadEnvConfig(process.cwd());
 
@@ -36,6 +39,7 @@ if (!url || !key) { console.error("Supabase env not set"); process.exit(1); }
 const admin = createClient(url, key, { auth: { persistSession: false } });
 
 const OWNER = "00000000-0000-4000-8000-0000000ea001";
+const COLLEAGUE = "00000000-0000-4000-8000-0000000ea002";
 
 let pass = 0;
 const fails: string[] = [];
@@ -68,6 +72,9 @@ async function cleanup() {
     await admin.from("practice_facility").delete().eq("workspace_id", w.id);
     await admin.from("practice_workspace").delete().eq("id", w.id);
   }
+  // Drafts and queue entries carry `on delete cascade` to the workspace, so the loop above takes them
+  // with it. No second pass -- one that ran after the delete would be reading an empty list and looking
+  // like it did something.
   await admin.from("provisioning_request").delete().eq("target_user_id", OWNER);
   await admin.from("practice_audit_event").delete().eq("actor_id", OWNER);
 }
@@ -258,6 +265,107 @@ async function main() {
       formWithTemplate.fields.some((f: any) => f.field_key === "insurer_name"),
       formWithTemplate.template?.name);
   } else ok("a template is created", false, t.message);
+
+  // ── The workspace: the panel, the queue and drafts (CPR-REG-002) ───────────
+  const w = await registrationWorkspace(admin, a.ctx);
+  ok("THE OPERATIONAL PANEL COUNTS WHAT EXISTS",
+    w.counts.totalPatients >= 4 && typeof w.counts.registeredToday === "number",
+    JSON.stringify(w.counts));
+  ok("AND COMPUTES NO UTILISATION -- capacity is recorded nowhere, so the figure would be real over invented",
+    (w.clinic as any).utilisationComputed === false &&
+    !/"utilisation"\s*:\s*\d/.test(JSON.stringify(w)),
+    JSON.stringify(w.clinic));
+  const serialisedPanel = JSON.stringify(w);
+  ok("and the panel carries no percentage-shaped value at all",
+    !/:\s*"?\d{1,3}(\.\d+)?\s*%/.test(serialisedPanel));
+  ok("the refusals are stated, each with a reason -- photo, scan, utilisation, encryption, AI",
+    w.refused.length === 5 &&
+    w.refused.every(r => r.detail.length > 60) &&
+    ["utilisation", "photo", "scan_id", "encryption_claim", "ai_suggestions"]
+      .every(k => w.refused.some(r => r.key === k)),
+    w.refused.map(r => r.key).join(","));
+  ok("and the observations panel is arithmetic, not a model",
+    w.observations.length === 3 && w.observations.every(o => typeof o.text === "string"),
+    JSON.stringify(w.observations.map(o => o.text)));
+
+  // Register and queue.
+  const queued = await queueWalkIn(admin, a.ctx, {
+    patientId: booked.ok ? booked.data.patientId : "", correlationId: "harness-reg",
+  });
+  ok("A WALK-IN CAN BE PUT IN TODAY'S QUEUE", queued.ok, queued.ok ? "" : queued.message);
+  const { data: queueRow } = await admin.from("practice_queue_entry")
+    .select("patient_id, patient_name, status").eq("id", queued.ok ? queued.data.id : "").maybeSingle();
+  ok("AND THE ENTRY NAMES THE PATIENT, so the waiting list can be opened rather than just read",
+    queueRow?.patient_id === (booked.ok ? booked.data.patientId : null) &&
+    queueRow?.status === "WAITING",
+    JSON.stringify(queueRow));
+  ok("and it carries the REGISTRY's name, never a caller's spelling",
+    queueRow?.patient_name === "Daniel Opio", queueRow?.patient_name);
+  const twiceQueued = await queueWalkIn(admin, a.ctx, {
+    patientId: booked.ok ? booked.data.patientId : "", correlationId: "harness-reg",
+  });
+  ok("QUEUEING SOMEBODY TWICE IS NOT AN ERROR, and does not make the waiting list lie about the room",
+    twiceQueued.ok && (twiceQueued as any).data.alreadyWaiting === true,
+    JSON.stringify(twiceQueued));
+  const { count: queueCount } = await admin.from("practice_queue_entry")
+    .select("*", { count: "exact", head: true })
+    .eq("workspace_id", wsA).eq("patient_id", booked.ok ? booked.data.patientId : "");
+  ok("so there is one entry, not two", queueCount === 1, String(queueCount));
+
+  const panelAfterQueue = await registrationWorkspace(admin, a.ctx);
+  ok("and the waiting list on the panel shows them, with a link to their record",
+    panelAfterQueue.queue.length === 1 && !!panelAfterQueue.queue[0].href,
+    JSON.stringify(panelAfterQueue.queue));
+
+  // Drafts.
+  const draft = await saveDraft(admin, a.ctx, {
+    payload: { givenName: "Half", familyName: "Finished", phone: "+256772000099" },
+    correlationId: "harness-reg",
+  });
+  ok("A HALF-FILLED REGISTRATION CAN BE KEPT AS A DRAFT", draft.ok, draft.ok ? "" : draft.message);
+  const drafts = await listDrafts(admin, a.ctx);
+  ok("and it is labelled from what was typed, so it is recognisable without opening it",
+    drafts.length === 1 && drafts[0].label === "Half Finished", JSON.stringify(drafts[0]?.label));
+  ok("and its age is reported -- an old draft is somebody's details nobody is minding",
+    typeof drafts[0].daysOld === "number", String(drafts[0]?.daysOld));
+  const updated = await saveDraft(admin, a.ctx, {
+    id: draft.ok ? draft.data.id : "", payload: { givenName: "Half", familyName: "Finished", phone: "+256772000099", email: "x@y.z" },
+    correlationId: "harness-reg",
+  });
+  ok("saving again UPDATES it rather than leaving a trail of copies of the same person",
+    updated.ok && (await listDrafts(admin, a.ctx)).length === 1);
+  // A DRAFT IS ITS AUTHOR'S. It holds identifiable details about somebody who is not yet a patient,
+  // collected in a conversation only the person who started it was part of.
+  const { data: colleagueMembership } = await admin.from("practice_membership").insert({
+    workspace_id: wsA, user_id: COLLEAGUE, role_code: "practice_assistant", status: "active",
+  }).select("id").single();
+  if (colleagueMembership) {
+    await admin.from("practice_role_assignment").insert(
+      ["patient.create", "patient.list"].map(c => ({
+        membership_id: colleagueMembership.id, capability_code: c, source: "explicit_grant", created_by: OWNER,
+      })),
+    );
+    const colleague = await resolveWorkspaceContext(admin, COLLEAGUE, wsA);
+    if (colleague.ok) {
+      const theirList = await listDrafts(admin, colleague.ctx);
+      ok("A COLLEAGUE CANNOT SEE SOMEBODY ELSE'S DRAFT", theirList.length === 0, String(theirList.length));
+      const theirUpdate = await saveDraft(admin, colleague.ctx, {
+        id: draft.ok ? draft.data.id : "", payload: { givenName: "Hijacked" }, correlationId: "harness-reg",
+      });
+      ok("nor overwrite one", !theirUpdate.ok && theirUpdate.code === "NOT_FOUND",
+        theirUpdate.ok ? "it was overwritten" : theirUpdate.code);
+      const theirDiscard = await discardDraft(admin, colleague.ctx, { id: draft.ok ? draft.data.id : "" });
+      ok("nor discard one", !theirDiscard.ok && theirDiscard.code === "NOT_FOUND");
+      // CONTROL: the draft is still there and still says what its author typed.
+      const stillMine = await listDrafts(admin, a.ctx);
+      ok("CONTROL: and it is untouched, still holding what its author typed",
+        stillMine.length === 1 && (stillMine[0].payload as any).givenName === "Half",
+        JSON.stringify((stillMine[0]?.payload as any)?.givenName));
+    }
+  }
+
+  const discarded = await discardDraft(admin, a.ctx, { id: draft.ok ? draft.data.id : "" });
+  ok("and its author can discard it", discarded.ok && (await listDrafts(admin, a.ctx)).length === 0);
 
   // ── 11. Duplicate detection still runs ─────────────────────────────────────
   const twin = await register(admin, a.ctx, {
