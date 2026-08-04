@@ -105,9 +105,12 @@ export async function availabilityConfig(admin: any, ctx: WorkspaceContext) {
     admin.from("practice_clinic")
       .select("id, location_id, name, consultation_mode, active")
       .eq("workspace_id", ctx.workspaceId).order("name"),
+    // ACTIVE AND SUSPENDED, NOT JUST ACTIVE. A suspended session must stay on the screen or there is no
+    // way to resume it -- which would make "suspend" a slower spelling of "delete". Closed ones are
+    // gone. The GENERATOR filters to active on its own; this read is what a person looks at.
     admin.from("practice_availability_template")
-      .select("id, location_id, clinic_id, weekday, starts_minute, ends_minute, slot_kind, appointment_minutes, note, active")
-      .eq("workspace_id", ctx.workspaceId).eq("active", true)
+      .select("id, location_id, clinic_id, weekday, starts_minute, ends_minute, slot_kind, appointment_minutes, appointment_type, capacity, note, active, status")
+      .eq("workspace_id", ctx.workspaceId).in("status", ["active", "suspended"])
       .order("weekday").order("starts_minute"),
     admin.from("practice_availability_exception")
       .select("id, location_id, clinic_id, kind, from_date, to_date, starts_minute, ends_minute, slot_kind, appointment_minutes, reason")
@@ -185,6 +188,87 @@ export async function addClinic(admin: any, ctx: WorkspaceContext, args: {
 
 // ── THE REGULAR WEEK ─────────────────────────────────────────────────────────────────────────────────
 
+/**
+ * CAN A SESSION SIT ON THIS WEEKDAY, AT THIS TIME, AT THIS PLACE?
+ *
+ * ────────────────────────────────────────────────────────────────────────────────────────────────────
+ * ⚠ THIS FIXES A BUG CPR-SET-002 SHIPPED. Its overlap check only refused sessions at the SAME location,
+ * with the reasoning that "different locations may legitimately overlap, and the travel rule in 228
+ * catches the bookings that follow". That reasoning was wrong, and a real practice found it: a Tuesday
+ * with 09:00-13:00 at Aga Khan AND 09:00-13:00 at TMR International, both accepted.
+ *
+ * The travel rule catches BOOKINGS. It cannot catch AVAILABILITY, because nothing books availability --
+ * so the generator dutifully produced both sets of slots, the preview offered eight hours on a
+ * four-hour Tuesday, and the first two patients to take them would send the practitioner to two
+ * hospitals at once. CPR-SETUP-003 states the rule plainly: "No overlapping sessions can be saved" and
+ * "Validate travel time between different hospitals".
+ *
+ * So the same two tests bookings get, applied to sessions:
+ *   OVERLAP  -- nobody is in two places at one time, whether or not they are the same place.
+ *   TRAVEL   -- two sessions at different places need the destination's travel buffer between them.
+ * ────────────────────────────────────────────────────────────────────────────────────────────────────
+ *
+ * `excludeId` keeps a session from conflicting with ITSELF while being edited or moved -- the same
+ * problem, and the same fix, as `excludeAppointmentId` in checkPlacement().
+ */
+export async function sessionConflict(admin: any, ctx: WorkspaceContext, args: {
+  weekday: number; startsMinute: number; endsMinute: number; locationId: string | null;
+  excludeId?: string;
+}): Promise<{ ok: false; status: number; code: string; message: string } | null> {
+  const { data: existing, error } = await admin.from("practice_availability_template")
+    .select("id, starts_minute, ends_minute, location_id")
+    .eq("workspace_id", ctx.workspaceId).eq("weekday", args.weekday).eq("status", "active");
+  if (error)
+    return { ok: false, status: 500, code: "READ_FAILED", message: `could not read the week: ${error.message}` };
+
+  const others = ((existing ?? []) as any[]).filter(t => t.id !== args.excludeId);
+  if (others.length === 0) return null;
+
+  const locationIds = [...new Set(
+    [args.locationId, ...others.map(t => t.location_id)].filter(Boolean),
+  )] as string[];
+  const { data: locs } = locationIds.length
+    ? await admin.from("practice_location").select("id, name, travel_buffer_minutes")
+      .eq("workspace_id", ctx.workspaceId).in("id", locationIds)
+    : { data: [] };
+  const locById = new Map(((locs ?? []) as any[]).map(l => [l.id, l]));
+  const nameOf = (id: string | null) => (id ? locById.get(id)?.name ?? "another place" : "no particular place");
+  const here = args.locationId ? locById.get(args.locationId) : null;
+
+  for (const t of others) {
+    const overlaps = t.starts_minute < args.endsMinute && t.ends_minute > args.startsMinute;
+    const samePlace = (t.location_id ?? null) === (args.locationId ?? null);
+
+    if (overlaps)
+      return {
+        ok: false, status: 409, code: "SESSION_OVERLAP",
+        message: samePlace
+          ? `that overlaps ${hhmm(t.starts_minute)}–${hhmm(t.ends_minute)} already on this day at ${nameOf(t.location_id)}`
+          : `you cannot be at ${nameOf(args.locationId)} and ${nameOf(t.location_id)} at the same time — ${hhmm(t.starts_minute)}–${hhmm(t.ends_minute)} is already on this day`,
+      };
+
+    // TRAVEL, for sessions at different places that do not overlap. Same rule migration 228 applies to
+    // bookings, and the buffer belongs to whichever place is being travelled TO.
+    if (samePlace) continue;
+    const gapBefore = args.startsMinute - t.ends_minute;   // the other one first, then this
+    const gapAfter = t.starts_minute - args.endsMinute;    // this one first, then the other
+    const needBefore = here?.travel_buffer_minutes ?? 0;
+    const needAfter = locById.get(t.location_id)?.travel_buffer_minutes ?? 0;
+
+    if (gapBefore >= 0 && gapBefore < needBefore)
+      return {
+        ok: false, status: 409, code: "SESSION_TRAVEL_CONFLICT",
+        message: `only ${gapBefore} minutes between ${nameOf(t.location_id)} and ${nameOf(args.locationId)}, which needs ${needBefore}`,
+      };
+    if (gapAfter >= 0 && gapAfter < needAfter)
+      return {
+        ok: false, status: 409, code: "SESSION_TRAVEL_CONFLICT",
+        message: `that would leave only ${gapAfter} minutes to reach ${nameOf(t.location_id)}, which needs ${needAfter}`,
+      };
+  }
+  return null;
+}
+
 export async function addSession(admin: any, ctx: WorkspaceContext, args: {
   locationId?: string | null; clinicId?: string | null;
   weekday: number; startsMinute: number; endsMinute: number;
@@ -209,17 +293,11 @@ export async function addSession(admin: any, ctx: WorkspaceContext, args: {
     if (!cl) return { ok: false, status: 404, code: "NOT_FOUND", message: "Not found" };
   }
 
-  // TWO SESSIONS THAT OVERLAP AT ONE PLACE WOULD GENERATE OVERLAPPING SLOTS, and the calendar would
-  // then show the same hour as free twice. Refused for the same location; different locations may
-  // legitimately overlap in the template, and the travel rule in 228 catches the bookings that follow.
-  const { data: existing } = await admin.from("practice_availability_template")
-    .select("id, starts_minute, ends_minute, location_id")
-    .eq("workspace_id", ctx.workspaceId).eq("weekday", args.weekday).eq("active", true);
-  const clash = ((existing ?? []) as any[]).some(t =>
-    (t.location_id ?? null) === (args.locationId ?? null)
-    && t.starts_minute < args.endsMinute && t.ends_minute > args.startsMinute);
-  if (clash)
-    return { ok: false, status: 409, code: "SESSION_OVERLAP", message: "that overlaps a session already on this day at this place" };
+  const conflict = await sessionConflict(admin, ctx, {
+    weekday: args.weekday, startsMinute: args.startsMinute, endsMinute: args.endsMinute,
+    locationId: args.locationId ?? null,
+  });
+  if (conflict) return conflict;
 
   const { data, error } = await admin.from("practice_availability_template").insert({
     workspace_id: ctx.workspaceId,
@@ -247,6 +325,166 @@ export async function addSession(admin: any, ctx: WorkspaceContext, args: {
  * uses: only its own output, only where nothing is booked. A session removed on Monday must not silently
  * cancel Thursday's patient.
  */
+/**
+ * CPR-SETUP-003: edit, duplicate, move and suspend.
+ *
+ * ────────────────────────────────────────────────────────────────────────────────────────────────────
+ * ALL FOUR GO THROUGH ONE FUNCTION, because they are one operation with different arguments: a move is
+ * an edit of the weekday, a duplicate is an edit applied to a copy, a suspend is an edit of the status.
+ * Four separate implementations would be four places for the conflict check to be forgotten -- and the
+ * conflict check is the entire reason this module needed a second pass.
+ * ────────────────────────────────────────────────────────────────────────────────────────────────────
+ *
+ * "Saving updates all future generated availability while preserving historical records" (s"Edit
+ * Behaviour"): future slots this session generated are reaped under the usual two guards, so a slot
+ * somebody is booked into survives the edit and is reported back rather than silently kept.
+ */
+export async function editSession(admin: any, ctx: WorkspaceContext, args: {
+  templateId: string;
+  weekday?: number; startsMinute?: number; endsMinute?: number;
+  locationId?: string | null; clinicId?: string | null;
+  slotKind?: string; appointmentType?: string | null; capacity?: number | null;
+  status?: "active" | "suspended" | "closed";
+  note?: string | null;
+  actorId: string; correlationId: string;
+}): Promise<EngineResult<{ id: string; slotsRemoved: number; slotsKept: number; changed: string[] }>> {
+  if (!ctx.capabilities.includes("appointment.manage"))
+    return { ok: false, status: 403, code: "FORBIDDEN", message: "appointment.manage is required" };
+
+  const { data: t, error: readError } = await admin.from("practice_availability_template")
+    .select("id, weekday, starts_minute, ends_minute, location_id, clinic_id, slot_kind, appointment_type, capacity, status, note")
+    .eq("id", args.templateId).eq("workspace_id", ctx.workspaceId).maybeSingle();
+  if (readError)
+    return { ok: false, status: 500, code: "READ_FAILED", message: `could not read the session: ${readError.message}` };
+  if (!t) return { ok: false, status: 404, code: "NOT_FOUND", message: "Not found" };
+  if (t.status === "closed")
+    return { ok: false, status: 422, code: "SESSION_CLOSED", message: "this session is closed; add a new one instead" };
+
+  const next = {
+    weekday: args.weekday ?? t.weekday,
+    starts_minute: args.startsMinute ?? t.starts_minute,
+    ends_minute: args.endsMinute ?? t.ends_minute,
+    location_id: args.locationId !== undefined ? args.locationId : t.location_id,
+    clinic_id: args.clinicId !== undefined ? args.clinicId : t.clinic_id,
+    slot_kind: args.slotKind ?? t.slot_kind,
+    appointment_type: args.appointmentType !== undefined ? args.appointmentType : t.appointment_type,
+    capacity: args.capacity !== undefined ? args.capacity : t.capacity,
+    status: args.status ?? t.status,
+    note: args.note !== undefined ? args.note : t.note,
+  };
+
+  if (next.ends_minute <= next.starts_minute)
+    return { ok: false, status: 400, code: "VALIDATION_ERROR", message: "a session must end after it starts" };
+  if (!Number.isInteger(next.weekday) || next.weekday < 1 || next.weekday > 7)
+    return { ok: false, status: 400, code: "VALIDATION_ERROR", message: "weekday must be 1 (Monday) to 7 (Sunday)" };
+
+  if (next.location_id && next.location_id !== t.location_id) {
+    const { data: loc } = await admin.from("practice_location")
+      .select("id").eq("id", next.location_id).eq("workspace_id", ctx.workspaceId).maybeSingle();
+    if (!loc) return { ok: false, status: 404, code: "NOT_FOUND", message: "Not found" };
+  }
+
+  // THE CONFLICT CHECK RUNS ON EVERY PATH, excluding this session so it cannot clash with itself. A
+  // suspend or a close is exempt: taking time OUT of the week can never create an overlap.
+  if (next.status === "active") {
+    const conflict = await sessionConflict(admin, ctx, {
+      weekday: next.weekday, startsMinute: next.starts_minute, endsMinute: next.ends_minute,
+      locationId: next.location_id ?? null, excludeId: t.id,
+    });
+    if (conflict) return conflict;
+  }
+
+  const changed = Object.entries(next)
+    .filter(([k, v]) => (t as Record<string, unknown>)[k] !== v)
+    .map(([k]) => k);
+  if (changed.length === 0)
+    return { ok: false, status: 422, code: "NO_CHANGE", message: "nothing was different" };
+
+  const { error } = await admin.from("practice_availability_template")
+    .update({ ...next, active: next.status === "active", updated_at: nowIso() })
+    .eq("id", t.id);
+  if (error) return { ok: false, status: 422, code: "REFUSED_BY_DATABASE", message: error.message };
+
+  // Future slots this session made no longer match what it says. Reaped under the usual two guards --
+  // a booked one survives and is counted, never silently removed.
+  const reaped = await reapGeneratedSlots(admin, ctx, { templateId: t.id, fromIso: nowIso() });
+
+  await audit(admin, {
+    workspaceId: ctx.workspaceId, actorId: args.actorId, eventType: "practice.availability_session_edited",
+    payload: {
+      templateId: t.id, changed,
+      from: { weekday: t.weekday, starts: hhmm(t.starts_minute), ends: hhmm(t.ends_minute), locationId: t.location_id, status: t.status },
+      to: { weekday: next.weekday, starts: hhmm(next.starts_minute), ends: hhmm(next.ends_minute), locationId: next.location_id, status: next.status },
+      ...reaped,
+    },
+    correlationId: args.correlationId,
+  });
+  return { ok: true, data: { id: t.id as string, changed, ...reaped } };
+}
+
+/**
+ * Copy a session onto one or more weekdays, optionally changing where and when.
+ *
+ * EACH DAY IS DECIDED SEPARATELY. "Duplicate to Monday, Wednesday and Friday" where Wednesday already
+ * has a clashing session must copy to two days and say why the third did not -- refusing all three
+ * because one clashed would make the practitioner work out which, and copying all three would create
+ * the very double-booking this pass exists to remove.
+ */
+export async function duplicateSession(admin: any, ctx: WorkspaceContext, args: {
+  templateId: string; toWeekdays: number[];
+  locationId?: string | null; startsMinute?: number; endsMinute?: number;
+  actorId: string; correlationId: string;
+}): Promise<EngineResult<{
+  created: { weekday: number; id: string }[];
+  refused: { weekday: number; reason: string }[];
+}>> {
+  if (!ctx.capabilities.includes("appointment.manage"))
+    return { ok: false, status: 403, code: "FORBIDDEN", message: "appointment.manage is required" };
+  if (!Array.isArray(args.toWeekdays) || args.toWeekdays.length === 0)
+    return { ok: false, status: 400, code: "VALIDATION_ERROR", message: "choose at least one day to copy to" };
+
+  const { data: t } = await admin.from("practice_availability_template")
+    .select("id, weekday, starts_minute, ends_minute, location_id, clinic_id, slot_kind, appointment_type, appointment_minutes, capacity, note")
+    .eq("id", args.templateId).eq("workspace_id", ctx.workspaceId).maybeSingle();
+  if (!t) return { ok: false, status: 404, code: "NOT_FOUND", message: "Not found" };
+
+  const startsMinute = args.startsMinute ?? t.starts_minute;
+  const endsMinute = args.endsMinute ?? t.ends_minute;
+  const locationId = args.locationId !== undefined ? args.locationId : t.location_id;
+  if (endsMinute <= startsMinute)
+    return { ok: false, status: 400, code: "VALIDATION_ERROR", message: "a session must end after it starts" };
+
+  const created: { weekday: number; id: string }[] = [];
+  const refused: { weekday: number; reason: string }[] = [];
+
+  for (const weekday of [...new Set(args.toWeekdays)]) {
+    if (!Number.isInteger(weekday) || weekday < 1 || weekday > 7) {
+      refused.push({ weekday, reason: "not a day of the week" });
+      continue;
+    }
+    const conflict = await sessionConflict(admin, ctx, { weekday, startsMinute, endsMinute, locationId });
+    if (conflict) { refused.push({ weekday, reason: conflict.message }); continue; }
+
+    const { data, error } = await admin.from("practice_availability_template").insert({
+      workspace_id: ctx.workspaceId,
+      location_id: locationId, clinic_id: t.clinic_id,
+      weekday, starts_minute: startsMinute, ends_minute: endsMinute,
+      slot_kind: t.slot_kind, appointment_type: t.appointment_type,
+      appointment_minutes: t.appointment_minutes, capacity: t.capacity,
+      note: t.note, duplicated_from_id: t.id, created_by: args.actorId,
+    }).select("id").maybeSingle();
+    if (error || !data) { refused.push({ weekday, reason: error?.message ?? "could not be created" }); continue; }
+    created.push({ weekday, id: data.id as string });
+  }
+
+  await audit(admin, {
+    workspaceId: ctx.workspaceId, actorId: args.actorId, eventType: "practice.availability_session_duplicated",
+    payload: { templateId: t.id, created: created.map(c => c.weekday), refused },
+    correlationId: args.correlationId,
+  });
+  return { ok: true, data: { created, refused } };
+}
+
 export async function removeSession(admin: any, ctx: WorkspaceContext, args: {
   templateId: string; actorId: string; correlationId: string;
 }): Promise<EngineResult<{ slotsRemoved: number; slotsKept: number }>> {
@@ -254,11 +492,14 @@ export async function removeSession(admin: any, ctx: WorkspaceContext, args: {
     return { ok: false, status: 403, code: "FORBIDDEN", message: "appointment.manage is required" };
 
   const { data: t } = await admin.from("practice_availability_template")
-    .select("id, active").eq("id", args.templateId).eq("workspace_id", ctx.workspaceId).maybeSingle();
+    .select("id, active, status").eq("id", args.templateId).eq("workspace_id", ctx.workspaceId).maybeSingle();
   if (!t) return { ok: false, status: 404, code: "NOT_FOUND", message: "Not found" };
 
+  // CLOSED, not deleted -- and `active` is kept in step with `status` because CPR-SET-002's generator
+  // and the setup hub's count both still read the boolean. Two columns for one fact is a migration's
+  // debt; letting them disagree would be a bug.
   await admin.from("practice_availability_template")
-    .update({ active: false, updated_at: nowIso() }).eq("id", t.id);
+    .update({ active: false, status: "closed", updated_at: nowIso() }).eq("id", t.id);
 
   const cleaned = await reapGeneratedSlots(admin, ctx, { templateId: t.id, fromIso: nowIso() });
 
@@ -530,9 +771,11 @@ export async function generateSlots(admin: any, ctx: WorkspaceContext, args: {
   const dates = allDates.slice(0, GENERATION_CAP_DAYS);
 
   const [{ data: templates }, { data: exceptions }] = await Promise.all([
+    // ACTIVE ONLY. A suspended session is still on the screen and still generates nothing -- that is the
+    // whole difference between suspending and closing.
     admin.from("practice_availability_template")
       .select("id, location_id, clinic_id, weekday, starts_minute, ends_minute, slot_kind, appointment_minutes")
-      .eq("workspace_id", ctx.workspaceId).eq("active", true),
+      .eq("workspace_id", ctx.workspaceId).eq("status", "active"),
     admin.from("practice_availability_exception")
       .select("id, location_id, kind, from_date, to_date, starts_minute, ends_minute, slot_kind, appointment_minutes")
       .eq("workspace_id", ctx.workspaceId)

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { requirePracticeContext, isDenied } from "@/lib/practice/api-context";
 import {
   addClinic, addSession, removeSession, addException, setBookingRule, generateSlots,
+  editSession, duplicateSession,
 } from "@/lib/practice/availability-config";
 
 // CPR-SET-002 v4 — the write door for locations, clinics, availability and booking rules.
@@ -65,6 +66,41 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ session: r.data, generation: gen.ok ? gen.data : null, correlationId }, { status: 201 });
     }
 
+    // CPR-SETUP-003: edit, move, suspend and reopen are ONE action with different arguments, exactly as
+    // the engine models them -- four route branches would be four places to forget the conflict check.
+    case "edit_session": {
+      const r = await editSession(admin, ctx, {
+        templateId: String(body.templateId ?? ""),
+        weekday: body.weekday != null ? Number(body.weekday) : undefined,
+        startsMinute: body.startsMinute != null ? Number(body.startsMinute) : undefined,
+        endsMinute: body.endsMinute != null ? Number(body.endsMinute) : undefined,
+        locationId: body.locationId !== undefined ? (body.locationId ? String(body.locationId) : null) : undefined,
+        slotKind: body.slotKind ? String(body.slotKind) : undefined,
+        capacity: body.capacity !== undefined && body.capacity !== "" ? Number(body.capacity) : undefined,
+        status: body.status ? String(body.status) as "active" | "suspended" | "closed" : undefined,
+        actorId, correlationId,
+      });
+      if (!r.ok) return NextResponse.json({ error: { code: r.code, message: r.message } }, { status: r.status });
+      const gen = await regenerate();
+      return NextResponse.json({ session: r.data, generation: gen.ok ? gen.data : null, correlationId });
+    }
+
+    case "duplicate_session": {
+      const r = await duplicateSession(admin, ctx, {
+        templateId: String(body.templateId ?? ""),
+        toWeekdays: Array.isArray(body.toWeekdays) ? body.toWeekdays.map(Number) : [],
+        locationId: body.locationId !== undefined ? (body.locationId ? String(body.locationId) : null) : undefined,
+        startsMinute: body.startsMinute != null ? Number(body.startsMinute) : undefined,
+        endsMinute: body.endsMinute != null ? Number(body.endsMinute) : undefined,
+        actorId, correlationId,
+      });
+      if (!r.ok) return NextResponse.json({ error: { code: r.code, message: r.message } }, { status: r.status });
+      const gen = await regenerate();
+      // PARTIAL SUCCESS IS A REAL OUTCOME HERE and is returned as one: copying to three days where one
+      // clashes must report two created and one refused, not a single yes or no.
+      return NextResponse.json({ duplicate: r.data, generation: gen.ok ? gen.data : null, correlationId }, { status: 201 });
+    }
+
     case "remove_session": {
       const r = await removeSession(admin, ctx, { templateId: String(body.templateId ?? ""), actorId, correlationId });
       if (!r.ok) return NextResponse.json({ error: { code: r.code, message: r.message } }, { status: r.status });
@@ -115,7 +151,7 @@ export async function POST(req: NextRequest) {
 
     default:
       return NextResponse.json({
-        error: "action must be one of: add_clinic, add_session, remove_session, add_exception, set_booking_rule, generate",
+        error: "action must be one of: add_clinic, add_session, edit_session, duplicate_session, remove_session, add_exception, set_booking_rule, generate",
       }, { status: 400 });
   }
 }

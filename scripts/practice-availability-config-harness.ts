@@ -30,7 +30,7 @@ import { runProvisioning, type IndividualRequest } from "../src/lib/practice/pro
 import { resolveWorkspaceContext } from "../src/lib/practice/access";
 import { bookAppointment } from "../src/lib/practice/scheduling";
 import {
-  addClinic, addSession, removeSession, addException, setBookingRule,
+  addClinic, addSession, removeSession, addException, setBookingRule, editSession, duplicateSession,
   resolveBookingRule, generateSlots, bookingPreview, availabilityConfig,
 } from "../src/lib/practice/availability-config";
 
@@ -255,6 +255,112 @@ async function main() {
   const { count: sunAfterRegen } = await admin.from("practice_availability_slot")
     .select("*", { count: "exact", head: true }).eq("workspace_id", wsA).eq("generated_for_date", SUN);
   ok("5g ⚠ the one-off session SURVIVES the next regeneration", sunAfterRegen === 1, String(sunAfterRegen));
+
+  // ---- 11. ⚠ THE BUG A REAL PRACTICE FOUND (CPR-SETUP-003) ----------------------------------------
+  //
+  // CPR-SET-002 refused overlapping sessions only at the SAME location, reasoning that the travel rule
+  // would catch the bookings. It does not: nothing books availability, so both sets of slots were
+  // generated and the preview offered eight hours on a four-hour Tuesday. A live workspace ended up
+  // with 09:00-13:00 at two different hospitals on one day.
+  const other = await admin.from("practice_location")
+    .insert({ workspace_id: wsA, name: "TMR International Hospital", type: "hospital", active: true, travel_buffer_minutes: 30 })
+    .select("id").single();
+  const otherId = other.data!.id as string;
+
+  // A FRESH PAIR ON A FREE WEEKDAY. Section 3 closes the Tuesday session, so relying on it here made
+  // 11a pass vacuously against an empty day -- the harness was testing nothing.
+  const satBase = await addSession(admin, ctxA.ctx, {
+    locationId: locId, weekday: 6, startsMinute: 9 * 60, endsMinute: 13 * 60,
+    actorId: OWNER, correlationId: "av-11base",
+  });
+  ok("11-setup a Saturday session exists to conflict with", satBase.ok, JSON.stringify(satBase));
+
+  const sameTimeElsewhere = await addSession(admin, ctxA.ctx, {
+    locationId: otherId, weekday: 6, startsMinute: 9 * 60, endsMinute: 13 * 60,
+    actorId: OWNER, correlationId: "av-11",
+  });
+  ok("11a ⚠ the same hours at ANOTHER hospital on the same day is refused",
+    !sameTimeElsewhere.ok && sameTimeElsewhere.code === "SESSION_OVERLAP", JSON.stringify(sameTimeElsewhere));
+  ok("11b and the refusal names both places",
+    !sameTimeElsewhere.ok && /TMR/.test(sameTimeElsewhere.message) && /Mulago/.test(sameTimeElsewhere.message),
+    (sameTimeElsewhere as { message?: string }).message ?? "");
+
+  // Non-overlapping but inside the travel buffer: Mulago ends 13:00, TMR needs 30 minutes.
+  const tooTight = await addSession(admin, ctxA.ctx, {
+    locationId: otherId, weekday: 6, startsMinute: 13 * 60 + 10, endsMinute: 15 * 60,
+    actorId: OWNER, correlationId: "av-11c",
+  });
+  ok("11c a session too soon after one at another hospital is refused",
+    !tooTight.ok && tooTight.code === "SESSION_TRAVEL_CONFLICT", JSON.stringify(tooTight));
+
+  const farEnoughSession = await addSession(admin, ctxA.ctx, {
+    locationId: otherId, weekday: 6, startsMinute: 14 * 60, endsMinute: 16 * 60,
+    actorId: OWNER, correlationId: "av-11d",
+  });
+  ok("11d CONTROL: with enough travel time it IS allowed", farEnoughSession.ok, JSON.stringify(farEnoughSession));
+
+  // ---- 12. Edit, move, suspend, duplicate (CPR-SETUP-003) -----------------------------------------
+  const moved = await editSession(admin, ctxA.ctx, {
+    templateId: farEnoughSession.ok ? farEnoughSession.data.id : "", weekday: 5,
+    actorId: OWNER, correlationId: "av-12",
+  });
+  ok("12a a session can be moved to another day", moved.ok && moved.data.changed.includes("weekday"),
+    JSON.stringify(moved));
+
+  const noChange = await editSession(admin, ctxA.ctx, {
+    templateId: farEnoughSession.ok ? farEnoughSession.data.id : "", weekday: 5,
+    actorId: OWNER, correlationId: "av-12b",
+  });
+  ok("12b editing nothing is refused rather than audited as a change",
+    !noChange.ok && noChange.code === "NO_CHANGE", JSON.stringify(noChange));
+
+  // Moving it back onto Tuesday at a time that clashes must be refused -- the check runs on edit too.
+  const moveIntoClash = await editSession(admin, ctxA.ctx, {
+    templateId: farEnoughSession.ok ? farEnoughSession.data.id : "",
+    weekday: 6, startsMinute: 9 * 60, endsMinute: 11 * 60,
+    actorId: OWNER, correlationId: "av-12c",
+  });
+  ok("12c ⚠ an EDIT that creates a clash is refused, not just an add",
+    !moveIntoClash.ok && moveIntoClash.code === "SESSION_OVERLAP", JSON.stringify(moveIntoClash));
+
+  const suspended = await editSession(admin, ctxA.ctx, {
+    templateId: farEnoughSession.ok ? farEnoughSession.data.id : "", status: "suspended",
+    actorId: OWNER, correlationId: "av-12d",
+  });
+  ok("12d a session can be suspended", suspended.ok && suspended.data.changed.includes("status"),
+    JSON.stringify(suspended));
+
+  // A SUSPENDED SESSION STAYS ON THE SCREEN AND GENERATES NOTHING. Both halves matter: dropping it
+  // from the read would make "suspend" a slower spelling of "delete"; still generating from it would
+  // make the button do nothing at all.
+  const suspendedId = farEnoughSession.ok ? farEnoughSession.data.id : "";
+  const afterSuspend = await availabilityConfig(admin, ctxA.ctx);
+  const onScreen = afterSuspend.templates.find(t => t.id === suspendedId);
+  ok("12e a suspended session stays on the screen so it can be resumed",
+    !!onScreen && onScreen.status === "suspended", JSON.stringify(onScreen));
+
+  const { count: before5 } = await admin.from("practice_availability_slot")
+    .select("*", { count: "exact", head: true }).eq("workspace_id", wsA)
+    .eq("generated_from_template_id", suspendedId);
+  await generateSlots(admin, ctxA.ctx, { fromDate: MON, toDate: SUN, actorId: OWNER, correlationId: "av-12e" });
+  const { count: after5 } = await admin.from("practice_availability_slot")
+    .select("*", { count: "exact", head: true }).eq("workspace_id", wsA)
+    .eq("generated_from_template_id", suspendedId);
+  ok("12e-gen and it generates nothing while suspended", after5 === before5,
+    `${before5} -> ${after5}`);
+
+  // Duplicate: one day free, one already taken.
+  const dup = await duplicateSession(admin, ctxA.ctx, {
+    templateId: satBase.ok ? satBase.data.id : "", toWeekdays: [1, 6],
+    actorId: OWNER, correlationId: "av-12f",
+  });
+  ok("12f duplicating copies to the free day", dup.ok && dup.data.created.some(c => c.weekday === 1),
+    JSON.stringify(dup));
+  ok("12g ⚠ and REFUSES the day that clashes rather than refusing the whole operation",
+    dup.ok && dup.data.refused.some(r => r.weekday === 6), JSON.stringify(dup));
+  ok("12h the refusal for that day says why",
+    dup.ok && /overlap|cannot be at/i.test(dup.data.refused.find(r => r.weekday === 6)?.reason ?? ""),
+    JSON.stringify(dup.ok ? dup.data.refused : null));
   ok("5f adding time without saying when is refused",
     await addException(admin, ctxA.ctx, {
       kind: "extra_session", fromDate: SUN, toDate: SUN, actorId: OWNER, correlationId: "av-5g",

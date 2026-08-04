@@ -5,6 +5,7 @@ import { resolvePracticeShell } from "@/lib/practice/shell";
 import { hasCapability } from "@/lib/practice/access";
 import { availabilityConfig, bookingPreview, WEEKDAYS, hhmm } from "@/lib/practice/availability-config";
 import AvailabilityConsole from "./AvailabilityConsole";
+import SessionCard from "./SessionCard";
 
 // CPR-SET-002 v4 — Locations, Clinics & Availability Configuration.
 //
@@ -51,7 +52,6 @@ export default async function AvailabilityConfigPage({ searchParams }: {
   const preview = await bookingPreview(admin, ctx, { fromDate: previewFrom, toDate: previewTo });
 
   const locName = new Map(cfg.locations.map((l: any) => [l.id, l.name]));
-  const clinicName = new Map(cfg.clinics.map((c: any) => [c.id, c.name]));
 
   return (
     <div className="-m-5 min-h-full bg-[var(--cp-canvas)] p-5">
@@ -140,15 +140,9 @@ export default async function AvailabilityConfigPage({ searchParams }: {
                   ) : (
                     <ul className="mt-1 space-y-1">
                       {sessions.map((t: any) => (
-                        <li key={t.id} className="rounded border-l-2 bg-white px-1.5 py-1"
-                          style={{ borderLeftColor: KIND_HUE[t.slot_kind] ?? "var(--cp-slate-300)" }}>
-                          <p className="text-[10px] font-semibold text-gray-800">
-                            {hhmm(t.starts_minute)}–{hhmm(t.ends_minute)}
-                          </p>
-                          <p className="truncate text-[9px] text-gray-500">
-                            {t.clinic_id ? clinicName.get(t.clinic_id) : t.location_id ? locName.get(t.location_id) : "anywhere"}
-                          </p>
-                        </li>
+                        <SessionCard key={t.id} session={t}
+                          locations={cfg.locations.filter((l: any) => l.active)}
+                          kindHue={KIND_HUE[t.slot_kind] ?? "var(--cp-slate-300)"} />
                       ))}
                     </ul>
                   )}
