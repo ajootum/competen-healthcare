@@ -121,7 +121,7 @@ export default async function CaseMemoryPage({ searchParams }: {
                       <li key={c.encounterId} className="border-b border-gray-100 py-2 last:border-0">
                         <div className="flex items-baseline gap-2">
                           <Link href={c.href} className="text-[12px] font-semibold text-gray-900 hover:underline">
-                            {c.patientName ?? [c.ageBand, c.sex !== "unspecified" ? c.sex : null].filter(Boolean).join(", ") || "A case"}
+                            {c.patientName ?? ([c.ageBand, c.sex !== "unspecified" ? c.sex : null].filter(Boolean).join(", ") || "A case")}
                           </Link>
                           <span className="ml-auto shrink-0 text-[11px] text-gray-500">
                             {String(c.when).slice(0, 10)}
