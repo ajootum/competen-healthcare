@@ -45,6 +45,12 @@ export default async function PracticeOperations() {
         <p className="text-sm text-gray-500">
           Pilot provisioning, the launch ladder and the IAM-001 §14 cutover gate for Competen Practice.
         </p>
+        {/* PIS-000: the shape of the practitioner number lives on its own page, because it is a
+            settlement rather than a setting -- see the note at the top of that file. */}
+        <Link href="/super-admin/platform-ops/practice/identifiers"
+          className="mt-2 inline-block text-xs font-semibold text-teal-700 hover:underline">
+          Practitioner number format →
+        </Link>
       </div>
 
       {/* STANDING STATEMENT OF WHAT IS PUBLICLY LIVE. Not a toast: whoever opens this page sees it,

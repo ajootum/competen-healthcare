@@ -1,6 +1,9 @@
 import QRCode from "qrcode";
 import { audit } from "@/lib/practice/provisioning";
 import type { EngineResult } from "@/lib/practice/encounters";
+import {
+  getFormat, formatPractitionerNumber, parsePractitionerNumber, lockFormat,
+} from "@/lib/practice/identifier-format";
 
 // PIS-000 v1.0 (Frozen) -- PRACTITIONER IDENTITY SERVICE.
 //
@@ -210,22 +213,43 @@ export async function issueIdentity(admin: any, args: {
   // A MISSING ALLOCATOR FAILS LOUDLY. Falling back to a count here would silently downgrade a guarantee
   // the whole identity rests on, and nothing downstream could tell the difference until two people
   // shared a number.
+  // THE SHAPE COMES FROM THE FORMAT TABLE, NEVER FROM A LITERAL HERE. One place knows it, so agreeing a
+  // new format reaches every future issuance, every validator and every parser at once.
+  const format = await getFormat(admin);
+
   for (let attempt = 0; attempt < 10; attempt++) {
-    const { data: allocated, error: allocError } = await admin.rpc("practice_next_practitioner_number");
-    if (allocError || !allocated)
+    const { data: allocated, error: allocError } = await admin.rpc("practice_next_practitioner_sequence");
+    if (allocError || allocated == null)
       return {
         ok: false, status: 503, code: "ALLOCATOR_UNAVAILABLE",
-        message: `the practitioner number allocator is not available -- migration 219 may not have been applied: ${allocError?.message ?? "no value returned"}`,
+        message: `the practitioner number allocator is not available -- migration 220 may not have been applied: ${allocError?.message ?? "no value returned"}`,
       };
 
+    let practitionerNumber: string;
+    try {
+      practitionerNumber = formatPractitionerNumber(allocated as number, format);
+    } catch (e) {
+      // The sequence has outgrown the format. Refused here, loudly, rather than by writing a number that
+      // does not match the shape everything else validates against.
+      return {
+        ok: false, status: 409, code: "FORMAT_TOO_NARROW",
+        message: e instanceof Error ? e.message : String(e),
+      };
+    }
+
     const { data, error } = await admin.from("practice_practitioner_identity").insert({
-      user_id: args.userId, practitioner_number: String(allocated),
+      user_id: args.userId, practitioner_number: practitionerNumber,
       handle: suggested, display_name: args.displayName.trim(),
       primary_workspace_id: args.workspaceId ?? null,
       status: "created", discovery: "hidden",
+      // WHICH SHAPE THIS ONE FOLLOWS, recorded rather than inferred from its appearance later.
+      number_format_version: format.version,
     }).select("id, practitioner_number, handle").single();
 
     if (!error) {
+      // A NUMBER HAS NOW BEEN ISSUED, so the format is locked: changing it from here on needs an
+      // acknowledgement that existing numbers will not change.
+      await lockFormat(admin);
       await audit(admin, {
         workspaceId: args.workspaceId ?? null, actorId: args.userId, eventType: "practice.identity_issued",
         payload: { identityId: data.id, practitionerNumber: data.practitioner_number, handle: data.handle },
@@ -483,9 +507,20 @@ export async function searchPractitioners(admin: any, rawQuery: string, limit = 
   };
 
   const handle = normaliseHandle(q);
+  // THE NUMBER IS PARSED, NOT COMPARED AS TYPED. A patient reading one off a card types spaces, lower
+  // case or no separators, and none of that changes who they meant -- but a transposed pair does, and
+  // the check digit refuses it here rather than letting it resolve to a different real clinician.
+  const format = await getFormat(admin);
+  const parsedNumber = parsePractitionerNumber(q, format);
+
   const tiers: { tier: string; run: () => Promise<any> }[] = [
     { tier: "handle", run: () => base().eq("handle", handle).limit(limit) },
-    { tier: "number", run: () => base().eq("practitioner_number", q.toUpperCase()).limit(limit) },
+    {
+      tier: "number",
+      run: () => parsedNumber.ok
+        ? base().eq("practitioner_number", parsedNumber.normalised).limit(limit)
+        : Promise.resolve({ data: [] }),
+    },
     { tier: "display_name", run: () => base().ilike("display_name", q).limit(limit) },
     { tier: "surname", run: () => base().ilike("display_name", `% ${q}`).limit(limit) },
     { tier: "specialty", run: () => base().ilike("specialties", `%${q}%`).limit(limit) },
