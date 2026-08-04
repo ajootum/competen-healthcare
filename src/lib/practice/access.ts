@@ -84,11 +84,21 @@ export async function resolveWorkspaceContext(admin: any, userId: string, worksp
   if (!["ACTIVE", "ONBOARDING", "PROVISIONING"].includes(wsStatus)) return { ok: false, reason: "WORKSPACE_INACTIVE" };
 
   // Entitlement: an effective active/trial entitlement whose window covers now (PROV-001 s5 access rule).
-  const nowIso = new Date().toISOString();
-  const { data: ents } = await admin.from("practice_entitlement")
-    .select("status, starts_at, ends_at").eq("workspace_id", workspaceId).in("status", ["active", "trial"]);
-  const entitled = ((ents ?? []) as any[]).some(e => e.starts_at <= nowIso && (!e.ends_at || e.ends_at >= nowIso));
-  if (!entitled) return { ok: false, reason: "NOT_ENTITLED" };
+  //
+  // ON THE DATABASE'S CLOCK, for the reason set out against the capability query below. starts_at
+  // defaults to the database's now() and provisioning never overrides it, so comparing it against this
+  // process's clock made a BRAND NEW PRACTICE read as NOT_ENTITLED for as long as the database ran
+  // ahead -- locking somebody out of the workspace they had just created, on their first page load.
+  const [{ data: openEnts }, { data: endingEnts }] = await Promise.all([
+    admin.from("practice_entitlement").select("status")
+      .eq("workspace_id", workspaceId).in("status", ["active", "trial"])
+      .lte("starts_at", "now").is("ends_at", null),
+    admin.from("practice_entitlement").select("status")
+      .eq("workspace_id", workspaceId).in("status", ["active", "trial"])
+      .lte("starts_at", "now").gte("ends_at", "now"),
+  ]);
+  const ents = [...((openEnts ?? []) as any[]), ...((endingEnts ?? []) as any[])];
+  if (ents.length === 0) return { ok: false, reason: "NOT_ENTITLED" };
 
   // CAPABILITY GRANTS ARE TIME-BOUNDED, AND THIS IS WHERE THAT IS ENFORCED (CPR-310).
   //
@@ -98,17 +108,27 @@ export async function resolveWorkspaceContext(admin: any, userId: string, worksp
   // entirely, so a grant dated to begin next Monday was live the moment it was written. The second is
   // the security-relevant one.
   //
-  // FILTERED IN TYPESCRIPT, NOT IN THE QUERY. The correct predicate needs an OR across a null test
-  // (`effective_to is null or effective_to > now`), and PostgREST's or-filter with a null test is
-  // exactly the shape this codebase has twice written in a way that quietly matched every row. The set
-  // is one user's grants across their own memberships -- small, and worth being unambiguous about.
-  const { data: grants } = await admin.from("practice_role_assignment")
-    .select("capability_code, membership_id, effective_from, effective_to")
-    .in("membership_id", mine.map(m => m.membershipId));
-
-  const caps = ((grants ?? []) as any[]).filter(g =>
-    (!g.effective_from || g.effective_from <= nowIso) &&
-    (g.effective_to === null || g.effective_to > nowIso));
+  // COMPARED ON THE DATABASE'S CLOCK, NOT THIS PROCESS'S.
+  //
+  // This filtering used to run in TypeScript against `new Date()`. `effective_from` defaults to the
+  // DATABASE's now(), so on any deployment where the database clock leads the application clock -- ~800ms
+  // on the machine this was found on -- a grant made a moment ago read as "starts in the future" and was
+  // INVISIBLE. Grant a colleague a capability, watch them reload, watch it not be there. It is the trap
+  // this codebase already had written down: never compare an app-clock timestamp against a DB-clock one.
+  //
+  // TWO QUERIES RATHER THAN AN OR ACROSS A NULL TEST. The predicate wanted is
+  // `effective_from <= now and (effective_to is null or effective_to > now)`, and PostgREST's or-filter
+  // with a null test is the exact shape this codebase has twice written in a way that quietly matched
+  // every row. Two unambiguous queries beat one clever one. The string 'now' is a Postgres timestamp
+  // literal, so both comparisons are evaluated server-side on the database's own clock.
+  const membershipIds = mine.map(m => m.membershipId);
+  const [{ data: openGrants }, { data: endingGrants }] = await Promise.all([
+    admin.from("practice_role_assignment").select("capability_code")
+      .in("membership_id", membershipIds).lte("effective_from", "now").is("effective_to", null),
+    admin.from("practice_role_assignment").select("capability_code")
+      .in("membership_id", membershipIds).lte("effective_from", "now").gt("effective_to", "now"),
+  ]);
+  const caps = [...((openGrants ?? []) as any[]), ...((endingGrants ?? []) as any[])];
 
   const { data: ob } = await admin.from("practice_onboarding")
     .select("state, current_step").eq("workspace_id", workspaceId).eq("user_id", userId)
