@@ -43,11 +43,19 @@ import { formatMinuteOfDay } from "@/lib/datetime";
 // which is right until somebody travels; the same trap timeline.ts documents for the calendar.
 //
 // ⚠ ARRIVALS AND ENCOUNTERS ARE WORKSPACE-WIDE, ACTIVITIES ARE THE PRACTITIONER'S. practice_encounter and
-// practice_queue_entry carry no practitioner column (migrations 192/194), and practice_encounter's
-// activity_id -- which would give the link -- is written by nothing yet, so filtering on it would report
-// every session as empty (session.ts records the same finding). So in a single-practitioner workspace
-// this is exactly their day, and in a shared one it is the practice's day. That is stated here rather
-// than fixed with a guess, and it becomes an equality the day encounters start carrying their activity.
+// practice_queue_entry carry no practitioner column (migrations 192/194). So in a single-practitioner
+// workspace this is exactly their day, and in a shared one it is the practice's day -- stated here
+// rather than fixed with a guess.
+//
+// ⚠ THE REASON GIVEN FOR THAT IS NO LONGER TRUE, AND THE COMMENT OUTLIVED IT. It said
+// practice_encounter.activity_id "is written by nothing yet, so filtering on it would report every
+// session as empty". It has been written since CPR-V3-001 closed the inheritance gap
+// (encounters.ts launchEncounter), and the clinic-day harness asserts it at 3g.
+//
+// The behaviour has NOT been changed to match, deliberately: scoping encounters to the running activity
+// would narrow this card for everyone, and rows created before that write exists carry a null activity
+// and would silently vanish from their own day. That is a migration-and-backfill decision, not a comment
+// fix. Recorded here so the next person weighs it rather than discovering the comment was stale.
 
 export type TimelineEventKind =
   | "activity_started"

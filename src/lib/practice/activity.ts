@@ -2,6 +2,7 @@ import type { WorkspaceContext } from "@/lib/practice/access";
 import { practiceToday, zonedDayRange } from "@/lib/practice/practice-time";
 import { emitEvents, type EventEnvelope, type EventSource } from "@/lib/practice/events";
 import { audit } from "@/lib/practice/provisioning";
+import { practiceMetrics, metricScope, type PracticeMetrics } from "@/lib/practice/metrics";
 
 /* eslint-disable @typescript-eslint/no-explicit-any -- the Supabase admin client is untyped; every
    engine in src/lib/practice does the same. */
@@ -48,6 +49,13 @@ export const ACTIVITY_REFUSES = [
   "Start or end an activity that has already ended. Finishing twice would move the end time.",
   "End an activity that never started.",
   "Plan an activity that ends before it begins.",
+  "Pause an activity that is not running -- CPR-V5-004's lifecycle has no rung between planned and " +
+    "paused, and a pause with no session to interrupt is a hole in a clock that is not ticking.",
+  "Pause an activity that is already paused. The second pause would overlap the first and the same " +
+    "minutes would be subtracted twice, so the session would report more paused time than elapsed.",
+  "Resume an activity that is not paused. There is nothing to close, and closing nothing silently is " +
+    "how a screen comes to show a Resume button that does not do anything.",
+  "Pause or resume an activity that has ended. A finished session's clock does not move any more.",
 ];
 
 export type ActivityState = "planned" | "running" | "done";
@@ -417,6 +425,10 @@ export async function startActivity(
       .update({ ended_at: at.toISOString(), updated_at: at.toISOString() }).eq("id", running.id)
       .select(OWN_COLUMNS).maybeSingle();
     if (endErr) return { ok: false, status: 500, code: "SWITCH_FAILED", message: endErr.message };
+    // The same tidy-up endActivity does, for the same reason: switching away from a paused clinic is how
+    // a practitioner abandons it, and an interval left open on a closed session would keep accruing
+    // paused minutes against a clock that stopped.
+    eventWarnings.push(...await closeOpenPause(admin, running.id, at, ctx.userId));
     if (closed)
       eventWarnings.push(...await emitEvents(admin, lifecycleEvents("completed", ctx, closed, at, source,
         { reason: "switched", switchedToActivityId: id })));
@@ -474,9 +486,17 @@ export async function endActivity(
     .update({ ended_at: at.toISOString(), updated_at: at.toISOString() }).eq("id", id);
   if (endErr) return { ok: false, status: 500, code: "END_FAILED", message: endErr.message };
 
+  // CLOSING A PAUSED SESSION IS NOT A REFUSAL -- a clinic abandoned during the interruption that caused
+  // the pause is an ordinary way for a day to end. The open interval is closed at the same instant the
+  // session closed, AFTER the end has committed rather than before: if this write fails the ledger is
+  // left with an open pause on a finished session, which `pauseLedger` clips to `ended_at` anyway, and
+  // that is a far better failure than a pause closed on a session that then did not end and so silently
+  // came back to life.
+  const eventWarnings = [...await closeOpenPause(admin, id, at, ctx.userId)];
+
   // s7: Practice Performance recalculates on completion and Today at a Glance re-scopes from session to
   // day. Both find out from here.
-  const eventWarnings = await emitEvents(admin, lifecycleEvents("completed", ctx, row, at, source));
+  eventWarnings.push(...await emitEvents(admin, lifecycleEvents("completed", ctx, row, at, source)));
 
   await audit(admin, {
     workspaceId: ctx.workspaceId, actorId: ctx.userId, eventType: "practice.activity_ended",
@@ -484,4 +504,407 @@ export async function endActivity(
     correlationId: opts.correlationId, source,
   });
   return { ok: true, value: { id, eventWarnings } };
+}
+
+// ── PAUSE AND RESUME (CPR-V5-004 "Session Lifecycle") ────────────────────────────────────────────────
+//
+// CPR-V5-004 gives the session six rungs -- Start, Run, Pause, Resume, Close, Generate Summary -- and
+// this file had two of them. What follows is the middle four.
+//
+// A PAUSE IS AN INTERVAL, NOT A STATUS, for exactly the reason migration 232 refused a status column on
+// the activity itself. A stored 'PAUSED' would say that a session is stopped and not since when, so the
+// minutes lost to it could never be recovered from it, and a clinic paused over lunch and forgotten
+// would still read PAUSED the next morning with nothing to tell you how much of the night to discount.
+// The two ends of the interval keep the state derived -- a session is paused exactly when it has a pause
+// row with no resumed_at -- and put the arithmetic in the same rows as the state.
+//
+// ⚠ AND THE ARITHMETIC IS THE POINT. `sessionMetrics` computes progress and time-remaining from the
+// clock, so before this existed a session paused for forty minutes burned forty minutes of both. That is
+// CPR-CORE-001 s6.2's rule -- "interruption time must not be counted as active consultation time" -- one
+// level up: it must not be counted as elapsed SESSION time either. session.ts subtracts what this ledger
+// reports, which is why `pauseLedger` is exported rather than kept private: two engines computing paused
+// minutes their own way is precisely the drift s16 forbids.
+
+const CLOSED_PAUSE_WARNING = "session.pause";
+
+/**
+ * Close whatever pause is open on an activity, at the instant the session stopped moving.
+ *
+ * Returns WARNINGS rather than a failure, and rides back in the caller's `eventWarnings`. The write it
+ * follows has already committed, so this is in the same position as an outbox emit and takes the same
+ * decision for the same reason (see the argument at the head of events.ts): the session really did end,
+ * and reporting that as a 500 would have the practitioner press Close again and be told the activity is
+ * already over. The error is REPORTED rather than swallowed -- an unclosed pause is recoverable, and
+ * `pauseLedger` clips an open interval to the session's end so the minutes stay right either way, but a
+ * ledger that has been quietly failing to close is worth knowing about.
+ */
+async function closeOpenPause(admin: any, activityId: string, at: Date, actorId: string): Promise<string[]> {
+  const { error } = await admin.from("practice_activity_pause")
+    .update({ resumed_at: at.toISOString(), resumed_by: actorId })
+    .eq("activity_id", activityId).is("resumed_at", null);
+  // No row to close is the ordinary case -- most sessions are never paused -- so an empty update is not
+  // reported. Only a failed one is.
+  return error ? [`${CLOSED_PAUSE_WARNING}: CLOSE_FAILED ${error.message}`] : [];
+}
+
+/** One stopped stretch of a session. `minutes` is this interval's contribution, already clipped. */
+export type PauseInterval = {
+  id: string;
+  pausedAtIso: string;
+  /** Null while the pause is open, which is the only way this ledger says "stopped right now". */
+  resumedAtIso: string | null;
+  reason: string | null;
+  minutes: number;
+};
+
+export type PauseLedger = {
+  intervals: PauseInterval[];
+  /**
+   * Total stopped minutes so far.
+   *
+   * ⚠ NULL WHEN THE LEDGER COULD NOT BE READ, and never 0. Zero is a claim that the session ran without
+   * interruption, and the caller subtracts it from the clock -- so a failed read reported as 0 would
+   * silently hand back the un-corrected progress bar this whole feature exists to correct, and nothing
+   * downstream could tell that from a session nobody paused.
+   */
+  pausedMinutes: number | null;
+  /** A pause is open right now. False when the ledger is unreadable, which `pausedMinutes` says. */
+  isPaused: boolean;
+  pausedSince: string | null;
+  unavailable: boolean;
+  /** The database's own words when the read failed. Null when it succeeded. Never discarded. */
+  detail: string | null;
+};
+
+const unreadableLedger = (detail: string): PauseLedger =>
+  ({ intervals: [], pausedMinutes: null, isPaused: false, pausedSince: null, unavailable: true, detail });
+
+/**
+ * Every pause on one session, and the minutes they cost it.
+ *
+ * THE ONE DEFINITION OF PAUSED TIME. session.ts, the summary below and any later reader all come here,
+ * because "how long was this clinic stopped" answered twice is "how long was this clinic stopped"
+ * answered differently -- and only under the conditions that make it matter.
+ *
+ * @param endedAt clips every interval, open or closed, to the instant the session ended. An open pause
+ *        on a finished session is possible (see closeOpenPause) and without the clip it would keep
+ *        accruing minutes forever against a clock that stopped hours ago.
+ */
+export async function pauseLedger(
+  admin: any, workspaceId: string, activityId: string,
+  opts: { at?: Date; endedAt?: string | null } = {},
+): Promise<PauseLedger> {
+  const { data, error } = await admin.from("practice_activity_pause")
+    .select("id, paused_at, resumed_at, reason")
+    .eq("workspace_id", workspaceId).eq("activity_id", activityId)
+    .order("paused_at", { ascending: true });
+  // Before migration 235 is applied this is a missing-table error, which is exactly the case that must
+  // not read as "never paused". See the argument on pausedMinutes above.
+  if (error) return unreadableLedger(error.message);
+
+  const nowMs = (opts.at ?? new Date()).getTime();
+  // The clock stops at the end of the session, or at now for one still running.
+  const ceilingMs = opts.endedAt ? Math.min(Date.parse(opts.endedAt), nowMs) : nowMs;
+
+  let totalMs = 0;
+  let pausedSince: string | null = null;
+  const intervals: PauseInterval[] = ((data ?? []) as any[]).map(r => {
+    const startMs = Date.parse(r.paused_at);
+    // An open interval runs to the ceiling. A closed one is clipped to it as well: resumed_at should
+    // never be later, but a row written by a clock-skewed caller must not be able to subtract more time
+    // than the session has been running.
+    const endMs = Math.min(r.resumed_at ? Date.parse(r.resumed_at) : ceilingMs, ceilingMs);
+    const ms = Math.max(0, endMs - startMs);
+    totalMs += ms;
+    if (!r.resumed_at) pausedSince = r.paused_at;
+    return {
+      id: r.id, pausedAtIso: r.paused_at, resumedAtIso: r.resumed_at ?? null,
+      reason: r.reason ?? null, minutes: Math.round(ms / 60000),
+    };
+  });
+
+  return {
+    intervals,
+    // Summed in milliseconds and rounded ONCE. Rounding each interval and adding the results loses up to
+    // half a minute per pause, and a morning of short interruptions is where that stops being noise.
+    pausedMinutes: Math.round(totalMs / 60000),
+    isPaused: pausedSince !== null,
+    pausedSince,
+    unavailable: false,
+    detail: null,
+  };
+}
+
+/**
+ * The lifecycle events for a pause or a resume. Migration 233's catalogue, src/lib/practice/events.ts.
+ *
+ * ONE EVENT, NOT TWO, and this is the one place the pair in `lifecycleEvents` is deliberately broken.
+ * s9's catalogue has `activity.paused` but no `activity.resumed`, so emitting the activity half of a
+ * pause would announce a stop that no event in the vocabulary can ever announce the end of -- a
+ * projection built on it would show every paused session as permanently stopped, and would be right to.
+ * The session half is a matched pair (`session.paused` / `session.resumed`) and is what CPR-V5-004's
+ * lifecycle names, so that is what is emitted.
+ */
+function pauseEvents(
+  kind: "paused" | "resumed", ctx: WorkspaceContext, row: any, at: Date, source: EventSource,
+  extra: Record<string, unknown> = {},
+): EventEnvelope[] {
+  return [{
+    eventType: kind === "paused" ? "session.paused" : "session.resumed",
+    practiceId: ctx.workspaceId,
+    practitionerId: row.practitioner_id,
+    actorId: ctx.userId,
+    source,
+    occurredAt: at,
+    locationId: row.location_id ?? null,
+    activityInstanceId: row.id,
+    sessionId: row.id,
+    payload: { activityType: row.activity_type, title: row.title, facilityId: row.facility_id ?? null, ...extra },
+  }];
+}
+
+/**
+ * Stop the session's clock. CPR-V5-004's "Pause".
+ *
+ * The session stays the CURRENT ACTIVITY while it is paused -- `runningActivityId` still returns it,
+ * encounters still inherit it, and migration 232's one-running index still holds it. That is deliberate:
+ * a practitioner stepping out of a clinic has not stopped being in that clinic, and clearing the context
+ * would leave the next thing they record with no session to belong to. What a pause stops is the
+ * ARITHMETIC, not the context.
+ */
+export async function pauseActivity(
+  admin: any, ctx: WorkspaceContext, id: string,
+  opts: { at?: Date; reason?: string; source?: EventSource; correlationId?: string } = {},
+): Promise<Result<{ id: string; eventWarnings: string[] }>> {
+  if (!ctx.capabilities.includes(CAN_PLAN))
+    return { ok: false, status: 403, code: "FORBIDDEN", message: `${CAN_PLAN} is required` };
+
+  const at = opts.at ?? new Date();
+  const source: EventSource = opts.source ?? "web";
+  const { row, error } = await loadOwn(admin, ctx, id);
+  if (error) return { ok: false, status: 500, code: "READ_FAILED", message: error.message };
+  if (!row) return { ok: false, status: 404, code: "NOT_FOUND", message: "Not found" };
+  // Each refusal is its own code, because each is a different sentence on the screen: "that clinic is
+  // over", "that clinic has not started" and "that clinic is already paused" send a practitioner to
+  // three different next actions, and one shared 409 would send them nowhere.
+  if (row.ended_at) return { ok: false, status: 422, code: "ALREADY_ENDED", message: "that activity is over" };
+  if (!row.started_at)
+    return { ok: false, status: 422, code: "NOT_STARTED", message: "that activity has not started, so there is nothing to pause" };
+
+  // The reason is trimmed to null rather than stored as an empty string: "" and NULL would both mean
+  // "no reason given" and the summary would have to know about both.
+  const reason = opts.reason?.trim() || null;
+  if (reason && reason.length > 200)
+    return { ok: false, status: 400, code: "VALIDATION_ERROR", message: "a pause reason is at most 200 characters" };
+
+  // Checked before the write so the ordinary double-click is refused with a sentence, and only a genuine
+  // race reaches the partial unique index. The same two-guard arrangement migration 234's harness makes
+  // load-bearing: without the pre-check the index catches it anyway and nothing observable changes, so
+  // the two must word themselves differently.
+  const open = await pauseLedger(admin, ctx.workspaceId, id, { at });
+  if (open.unavailable)
+    return { ok: false, status: 500, code: "READ_FAILED", message: `the pause ledger could not be read: ${open.detail}` };
+  if (open.isPaused)
+    return { ok: false, status: 409, code: "ALREADY_PAUSED", message: "that activity is already paused" };
+
+  const { error: pauseErr } = await admin.from("practice_activity_pause").insert({
+    workspace_id: ctx.workspaceId, activity_id: id,
+    paused_at: at.toISOString(), reason, paused_by: ctx.userId,
+  });
+  // A unique violation means another tab won the race between the read above and this write. The partial
+  // index did its job and the caller is told, rather than left with two overlapping intervals whose
+  // minutes are subtracted twice.
+  if (pauseErr) {
+    const raced = pauseErr.code === "23505";
+    return {
+      ok: false, status: raced ? 409 : 500, code: raced ? "ALREADY_PAUSED" : "PAUSE_FAILED",
+      message: pauseErr.message,
+    };
+  }
+
+  const eventWarnings = await emitEvents(admin, pauseEvents("paused", ctx, row, at, source, { reason }));
+
+  await audit(admin, {
+    workspaceId: ctx.workspaceId, actorId: ctx.userId, eventType: "practice.activity_paused",
+    payload: { activityId: id, activityType: row.activity_type, reason },
+    correlationId: opts.correlationId, source,
+  });
+  return { ok: true, value: { id, eventWarnings } };
+}
+
+/** Start the session's clock again. CPR-V5-004's "Resume". */
+export async function resumeActivity(
+  admin: any, ctx: WorkspaceContext, id: string,
+  opts: { at?: Date; source?: EventSource; correlationId?: string } = {},
+): Promise<Result<{ id: string; eventWarnings: string[] }>> {
+  if (!ctx.capabilities.includes(CAN_PLAN))
+    return { ok: false, status: 403, code: "FORBIDDEN", message: `${CAN_PLAN} is required` };
+
+  const at = opts.at ?? new Date();
+  const source: EventSource = opts.source ?? "web";
+  const { row, error } = await loadOwn(admin, ctx, id);
+  if (error) return { ok: false, status: 500, code: "READ_FAILED", message: error.message };
+  if (!row) return { ok: false, status: 404, code: "NOT_FOUND", message: "Not found" };
+  if (row.ended_at) return { ok: false, status: 422, code: "ALREADY_ENDED", message: "that activity is over" };
+  if (!row.started_at)
+    return { ok: false, status: 422, code: "NOT_STARTED", message: "that activity has not started" };
+
+  const open = await pauseLedger(admin, ctx.workspaceId, id, { at });
+  if (open.unavailable)
+    return { ok: false, status: 500, code: "READ_FAILED", message: `the pause ledger could not be read: ${open.detail}` };
+  if (!open.isPaused)
+    return { ok: false, status: 409, code: "NOT_PAUSED", message: "that activity is not paused" };
+
+  // ⚠ THE UPDATE RETURNS THE ROW IT CHANGED AND THE COUNT IS CHECKED. Filtered on `resumed_at is null`
+  // rather than on the interval's id so that a tab that lost the race writes nothing instead of
+  // reopening a pause somebody else already closed -- but a filtered update that matches nothing is a
+  // SUCCESS in PostgREST, so without reading what came back this would report a resume that did not
+  // happen and the session would stay stopped with a Resume button that appeared to work.
+  const { data: closed, error: resumeErr } = await admin.from("practice_activity_pause")
+    .update({ resumed_at: at.toISOString(), resumed_by: ctx.userId })
+    .eq("activity_id", id).is("resumed_at", null)
+    .select("id, paused_at, reason");
+  if (resumeErr) return { ok: false, status: 500, code: "RESUME_FAILED", message: resumeErr.message };
+  if (!closed || closed.length === 0)
+    return { ok: false, status: 409, code: "NOT_PAUSED", message: "that activity is not paused" };
+
+  const interval = (closed as any[])[0];
+  const pausedMinutes = Math.max(0, Math.round((at.getTime() - Date.parse(interval.paused_at)) / 60000));
+
+  const eventWarnings = await emitEvents(admin, pauseEvents("resumed", ctx, row, at, source,
+    { pausedMinutes, pausedAt: interval.paused_at, reason: interval.reason ?? null }));
+
+  await audit(admin, {
+    workspaceId: ctx.workspaceId, actorId: ctx.userId, eventType: "practice.activity_resumed",
+    payload: { activityId: id, activityType: row.activity_type, pausedMinutes, pausedAt: interval.paused_at },
+    correlationId: opts.correlationId, source,
+  });
+  return { ok: true, value: { id, eventWarnings } };
+}
+
+// ── GENERATE SUMMARY (CPR-V5-004 "Session Summary") ──────────────────────────────────────────────────
+
+export type SessionSummary = {
+  activityId: string;
+  activityType: ActivityType;
+  label: string;
+  title: string;
+  planDate: string;
+  state: ActivityState;
+  startedAtIso: string;
+  /** Null while the session is still running -- a summary of a live clinic is a legitimate thing to ask for. */
+  endedAtIso: string | null;
+  plannedStartMinute: number;
+  plannedEndMinute: number;
+  plannedMinutes: number;
+  /** Wall clock from start to end, or to now. Includes the pauses. */
+  elapsedMinutes: number;
+  /** Minutes the session was stopped. Null when the pause ledger could not be read -- never 0 for unknown. */
+  pausedMinutes: number | null;
+  /** elapsedMinutes minus pausedMinutes: the time the session was actually running. Null when unknowable. */
+  activeMinutes: number | null;
+  pauses: PauseInterval[];
+  /** Null rather than 0 when the ledger is unreadable, for the same reason as pausedMinutes. */
+  pauseCount: number | null;
+  pauseLedgerUnavailable: boolean;
+  /** Minutes past the planned end, measured against the pause-adjusted end. Null when it finished inside its window. */
+  overrunMinutes: number | null;
+  /**
+   * s8's twelve figures for this session's scope.
+   *
+   * ⚠ COMPUTED BY metrics.ts, NOT HERE. s16: "no widget independently calculates a conflicting version of
+   * a shared metric". A summary that counted its own patients would be a second answer to Patients Seen
+   * living one screen away from the first, and each Metric already carries its own status and reason, so
+   * an unreadable figure arrives as "unreadable" rather than as a confident zero on a document somebody
+   * files.
+   */
+  metrics: PracticeMetrics;
+  generatedAtIso: string;
+};
+
+/**
+ * CPR-V5-004's "Generate Summary" rung: what this session was, how long it actually ran, what stopped it
+ * and what came out of it.
+ *
+ * A READ, SO IT GATES ON THE READ CAPABILITY. Someone allowed to see the dashboard is allowed to see
+ * what the session it is showing amounted to -- requiring `appointment.manage` here would hide the
+ * summary from a role that can see every figure it is assembled from.
+ */
+export async function sessionSummary(
+  admin: any, ctx: WorkspaceContext, activityId: string, opts: { at?: Date } = {},
+): Promise<Result<SessionSummary>> {
+  if (!ctx.capabilities.includes(CAN_VIEW))
+    return { ok: false, status: 403, code: "FORBIDDEN", message: `${CAN_VIEW} is required` };
+
+  const at = opts.at ?? new Date();
+
+  const { data: row, error } = await admin.from("practice_activity")
+    .select("id, activity_type, title, plan_date, planned_start_minute, planned_end_minute, " +
+      "started_at, ended_at")
+    .eq("id", activityId).eq("workspace_id", ctx.workspaceId).eq("practitioner_id", ctx.userId)
+    .maybeSingle();
+  if (error) return { ok: false, status: 500, code: "READ_FAILED", message: error.message };
+  if (!row) return { ok: false, status: 404, code: "NOT_FOUND", message: "Not found" };
+  if (!row.started_at)
+    return { ok: false, status: 422, code: "NOT_STARTED", message: "that session never started, so there is nothing to summarise" };
+
+  // The same check todaysPlan and startActivity make, and skipped it would put the session's window on
+  // the wrong instants and scope every metric below to somebody else's afternoon.
+  const { data: ws, error: wsError } = await admin.from("practice_workspace")
+    .select("timezone").eq("id", ctx.workspaceId).maybeSingle();
+  if (wsError) return { ok: false, status: 500, code: "READ_FAILED", message: wsError.message };
+  const timezone = ws?.timezone || "UTC";
+
+  const { startIso } = zonedDayRange(row.plan_date, timezone);
+  const dayStartMs = Date.parse(startIso);
+  const windowStartMs = dayStartMs + row.planned_start_minute * 60000;
+  const windowEndMs = dayStartMs + row.planned_end_minute * 60000;
+
+  const startedMs = Date.parse(row.started_at);
+  const finishedMs = row.ended_at ? Date.parse(row.ended_at) : at.getTime();
+  const elapsedMinutes = Math.max(0, Math.round((finishedMs - startedMs) / 60000));
+
+  const ledger = await pauseLedger(admin, ctx.workspaceId, activityId, { at, endedAt: row.ended_at });
+  const pausedMinutes = ledger.pausedMinutes;
+  const activeMinutes = pausedMinutes === null ? null : Math.max(0, elapsedMinutes - pausedMinutes);
+
+  // Overrun is measured against the PAUSE-ADJUSTED end, matching sessionMetrics: a clinic that stopped
+  // for forty minutes and finished forty minutes late did not overrun, and telling a practitioner it did
+  // would be the same arithmetic error this migration exists to remove, printed on a document.
+  const adjustedEndMs = windowEndMs + (pausedMinutes ?? 0) * 60000;
+  const over = Math.floor((finishedMs - adjustedEndMs) / 60000);
+
+  const metrics = await practiceMetrics(admin, ctx, metricScope({
+    date: row.plan_date, timezone, activityId,
+    // The PLANNED window, which is what dashboard.ts scopes the live session by. Widening it to the
+    // pause-adjusted end here would make the summary count encounters the dashboard did not, and the two
+    // would disagree about the same clinic on the same afternoon.
+    window: { fromIso: new Date(windowStartMs).toISOString(), toIso: new Date(windowEndMs).toISOString() },
+  }), at);
+
+  return {
+    ok: true,
+    value: {
+      activityId: row.id,
+      activityType: row.activity_type,
+      label: ACTIVITY_LABEL[row.activity_type as ActivityType] ?? row.activity_type,
+      title: row.title,
+      planDate: row.plan_date,
+      state: activityState(row.started_at, row.ended_at),
+      startedAtIso: row.started_at,
+      endedAtIso: row.ended_at ?? null,
+      plannedStartMinute: row.planned_start_minute,
+      plannedEndMinute: row.planned_end_minute,
+      plannedMinutes: row.planned_end_minute - row.planned_start_minute,
+      elapsedMinutes,
+      pausedMinutes,
+      activeMinutes,
+      pauses: ledger.intervals,
+      pauseCount: ledger.unavailable ? null : ledger.intervals.length,
+      pauseLedgerUnavailable: ledger.unavailable,
+      overrunMinutes: over > 0 ? over : null,
+      metrics,
+      generatedAtIso: at.toISOString(),
+    },
+  };
 }

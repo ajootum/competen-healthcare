@@ -1,6 +1,6 @@
 import type { WorkspaceContext } from "@/lib/practice/access";
 import { zonedDayRange } from "@/lib/practice/practice-time";
-import type { TodaysPlan, PlannedActivity } from "@/lib/practice/activity";
+import { pauseLedger, type TodaysPlan, type PlannedActivity } from "@/lib/practice/activity";
 
 /* eslint-disable @typescript-eslint/no-explicit-any -- the Supabase admin client is untyped; every
    engine in src/lib/practice does the same. */
@@ -34,18 +34,59 @@ import type { TodaysPlan, PlannedActivity } from "@/lib/practice/activity";
 // writes it yet, so filtering on it would report every session as empty. The window is the honest
 // approximation available today; when encounters start carrying their activity this becomes an equality
 // and the numbers get sharper rather than different.
+//
+// ── PAUSED TIME COMES OUT OF THE ARITHMETIC (CPR-V5-004, migration 235) ─────────────────────────────
+//
+// CPR-CORE-001 s6.2 says interruption time must not be counted as active consultation time for another
+// patient. The same sentence one rung up is that interruption time must not be counted as elapsed
+// SESSION time -- and until migration 235 there was nothing to subtract, so a clinic paused for lunch
+// kept burning through the progress bar and the time-remaining figure while nobody was in the room. The
+// practitioner then read a number wrong by exactly the length of the break, in the direction that makes
+// them cut consultations short.
+//
+// Two of the three clock figures change, and both in the same direction:
+//
+//   minutesElapsed    (now - startedAt) MINUS the paused minutes. Time the session actually ran.
+//   progressPercent   the same numerator over the planned duration.
+//   minutesRemaining  measured against the planned end PUSHED OUT by the paused minutes. A clinic
+//                     stopped for forty minutes finishes forty minutes later -- the work did not go
+//                     away while nobody was doing it.
+//
+// The visible consequence, and the thing worth checking by hand: WHILE A SESSION IS PAUSED, NEITHER
+// FIGURE MOVES. The paused total grows at exactly the rate the wall clock does, so it cancels.
+//
+// ⚠ windowStartIso AND windowEndIso ARE NOT ADJUSTED. They are the PLAN, and dashboard.ts scopes every
+// s8 metric by them -- widening the window for a pause would silently change which appointments and
+// encounters belong to the session, so a break would alter the patient counts as well as the clock. The
+// adjustment belongs to the countdown, not to the definition of what is in the session.
 
 export type SessionMetrics = {
   activity: PlannedActivity;
   startedAtIso: string;
-  /** 0-100, clamped. Past the planned end it stays at 100 and `overrunMinutes` carries the rest. */
+  /** 0-100, clamped, net of pauses. Past the planned end it stays at 100 and `overrunMinutes` carries the rest. */
   progressPercent: number;
+  /** Minutes the session has actually been RUNNING: wall clock since it started, less the pauses. */
   minutesElapsed: number;
-  /** Null once the planned end has passed -- "remaining" is not a negative number, it is over. */
+  /** Null once the pause-adjusted end has passed -- "remaining" is not a negative number, it is over. */
   minutesRemaining: number | null;
   patientsRemaining: number | null;
   windowStartIso: string;
   windowEndIso: string;
+  /**
+   * Total minutes this session has been paused so far.
+   *
+   * ⚠ NULL WHEN THE PAUSE LEDGER COULD NOT BE READ, and never 0. Zero is a claim that the clinic ran
+   * without interruption -- and it is the value the two figures above are computed against, so reporting
+   * an unreadable ledger as 0 would hand back exactly the un-corrected progress bar this feature exists
+   * to remove, with nothing anywhere saying so. When this is null, `progressPercent` and
+   * `minutesRemaining` are the raw clock and may overstate progress: a screen should say it cannot tell
+   * rather than draw a bar it has no basis for.
+   */
+  pausedMinutes: number | null;
+  /** A pause is open right now. False when the ledger is unreadable, which `pausedMinutes` says. */
+  isPaused: boolean;
+  /** When the open pause began. Null when the session is running or the ledger is unreadable. */
+  pausedSince: string | null;
 };
 
 const clamp = (n: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, n));
@@ -110,8 +151,19 @@ export async function sessionMetrics(
   // Elapsed is measured from when the session ACTUALLY started, not from its planned start. A clinic
   // that opened twenty minutes late is not twenty minutes through it.
   const startedMs = Date.parse(activity.startedAt);
-  const minutesElapsed = Math.max(0, Math.round((nowMs - startedMs) / 60000));
-  const minutesRemaining = nowMs >= windowEndMs ? null : Math.round((windowEndMs - nowMs) / 60000);
+
+  // Migration 235's ledger, read through the engine that owns it rather than queried here. Two modules
+  // summing pause intervals their own way is the drift s16 forbids, and it would drift only between a
+  // session's summary and the bar the practitioner is watching -- one screen apart.
+  const pauses = await pauseLedger(admin, ctx.workspaceId, activity.id, { at });
+  const pausedMs = (pauses.pausedMinutes ?? 0) * 60000;
+
+  const runningMs = Math.max(0, nowMs - startedMs - pausedMs);
+  const minutesElapsed = Math.round(runningMs / 60000);
+  // The finish line moves out by whatever the session was stopped for. While a pause is open both this
+  // and `minutesElapsed` stand still, because the paused total grows at the wall clock's own rate.
+  const adjustedEndMs = windowEndMs + pausedMs;
+  const minutesRemaining = nowMs >= adjustedEndMs ? null : Math.round((adjustedEndMs - nowMs) / 60000);
 
   // Still to see: appointments in this session's window that are neither finished nor called off.
   const appt = await admin.from("practice_appointment")
@@ -127,15 +179,19 @@ export async function sessionMetrics(
     startedAtIso: activity.startedAt,
     // Measured from when the session ACTUALLY started, matching `minutesElapsed` above. Computed from the
     // PLANNED start it contradicted its own comment: a clinic that opened twenty minutes late showed
-    // twenty minutes of progress before anybody had been seen.
+    // twenty minutes of progress before anybody had been seen. Net of pauses for the same reason: an
+    // hour of which forty minutes were a break is twenty minutes of clinic.
     progressPercent: plannedMinutes > 0
-      ? clamp(Math.round(((nowMs - startedMs) / (plannedMinutes * 60000)) * 100), 0, 100)
+      ? clamp(Math.round((runningMs / (plannedMinutes * 60000)) * 100), 0, 100)
       : 0,
     minutesElapsed,
     minutesRemaining,
     patientsRemaining,
     windowStartIso: new Date(windowStartMs).toISOString(),
     windowEndIso: new Date(windowEndMs).toISOString(),
+    pausedMinutes: pauses.pausedMinutes,
+    isPaused: pauses.isPaused,
+    pausedSince: pauses.pausedSince,
   };
 }
 
