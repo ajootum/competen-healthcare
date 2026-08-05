@@ -2,7 +2,9 @@ import Link from "next/link";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { resolvePracticeShell } from "@/lib/practice/shell";
-import { primaryNav, childrenOf } from "@/lib/practice/navigation";
+import { primaryNav, childrenOf, SIDEBAR_SECTIONS } from "@/lib/practice/navigation";
+import { todaysPlan } from "@/lib/practice/activity";
+import CurrentActivityHeader from "./CurrentActivityHeader";
 import { createAdminClient } from "@/lib/supabase/server";
 import { resolvePreferences } from "@/lib/practice/preferences";
 import SidebarNav from "./SidebarNav";
@@ -48,15 +50,15 @@ export default async function PracticeShellLayout({ children }: { children: Reac
   if (shell.state === "SESSION_REVOKED" || shell.state === "MFA_REQUIRED") redirect("/practice/access-status");
 
   const { ctx } = shell;
-  // CPR-V3-002's nine sections, each carrying the modules filed under it. Both lists are capability
-  // filtered by the same function, so a module cannot appear under a section its holder cannot open.
-  const sections = primaryNav(ctx.capabilities);
 
   // CPR-360: the personalisation, resolved server-side and applied as data attributes the stylesheet
   // reads. Server-side because a theme applied by client JavaScript flashes the wrong one first, and
   // because "personal over practice, except where the practice has locked it" is a rule the client
   // cannot be trusted to evaluate.
   const admin = createAdminClient();
+  // V5-002's context header. Read here rather than passed down from the page, because the header lives
+  // in the LAYOUT and must be right on every route in the group -- not only on the command centre.
+  const plan = await todaysPlan(admin, ctx);
   const { effective } = await resolvePreferences(admin, ctx.workspaceId, ctx.userId);
 
   // ── THE COMP'S SIDEBAR BADGES ──────────────────────────────────────────────────────────────────
@@ -83,13 +85,25 @@ export default async function PracticeShellLayout({ children }: { children: Reac
     "/practice/tasks": taskCount,
     "/practice/inbox": messageCount,
   };
+  // V5-002 draws an "AI" chip beside Practice Assistant. A LABEL, not a count -- it says what the
+  // workspace is, so it renders whether or not anything is waiting there.
+  const TAGS: Record<string, string> = { "/practice/assistant": "AI" };
   const render = (i: { href: string; label: string; icon: string }) => ({
-    href: i.href, label: i.label, icon: i.icon, badge: BADGES[i.href] ?? null,
+    href: i.href, label: i.label, icon: i.icon,
+    badge: BADGES[i.href] ?? null, tag: TAGS[i.href] ?? null,
   });
-  const navItems = sections.map(s => ({
-    ...render(s),
-    children: childrenOf(s.href, ctx.capabilities).map(render),
-  }));
+  const visible = primaryNav(ctx.capabilities);
+  // Sections come from SIDEBAR_SECTIONS, and a section whose items are all capability-hidden renders
+  // nothing rather than a bare heading over empty space.
+  const navSections = SIDEBAR_SECTIONS
+    .map(sec => ({
+      label: sec.label,
+      items: visible.filter(i => sec.hrefs.includes(i.href)).map(i => ({
+        ...render(i),
+        children: childrenOf(i.href, ctx.capabilities).map(render),
+      })),
+    }))
+    .filter(sec => sec.items.length > 0);
 
   return (
     <div
@@ -109,26 +123,24 @@ export default async function PracticeShellLayout({ children }: { children: Reac
           <span className="w-8 h-8 rounded-full bg-[var(--cp-primary)] flex items-center justify-center text-white text-sm font-bold">C</span>
           <span className="font-bold text-[15px]">competen<span className="text-blue-300">Practice</span></span>
         </div>
-        {/* Who is signed in. The comp puts a name and a role here; this build has neither reliably --
-            names live in `profiles` and a practice-only user may have no row (CPR-340). So it shows the
-            PRACTICE, which is always known, rather than inventing a person. */}
-        <div className="border-b border-white/10 px-4 py-3">
-          <p className="truncate text-[13px] font-semibold text-white">{ctx.workspaceName}</p>
-          <p className="text-[10px] text-blue-200/60">
+        <CurrentActivityHeader plan={plan} />
+
+        <SidebarNav sections={navSections} />
+
+        {/* V5-002's footer card. It shows the PRACTICE rather than a person: names live in `profiles`
+            and a practice-only user may have no row (CPR-340), so greeting somebody by their
+            business's name would be worse than not naming them at all. */}
+        <div className="mt-auto border-t border-white/10 px-4 py-3">
+          <p className="truncate text-[12.5px] font-semibold text-white">{ctx.workspaceName}</p>
+          <p className="text-[10px] text-blue-200/50">
             {ctx.workspaceType === "individual_practice" ? "Individual practice" : "Managed practice"}
             {" · "}{ctx.entitlementStatus === "trial" ? "Trial" : "Licensed"}
           </p>
+          <Link href="/practice/select-workspace"
+            className="mt-2 flex items-center gap-2 border-t border-white/10 pt-2 text-[11.5px] text-blue-300 hover:text-blue-200">
+            <span aria-hidden>⇄</span> Switch practice
+          </Link>
         </div>
-
-        <SidebarNav items={navItems} />
-
-        {/* The workspace CHOOSER, not settings. This said "Switch workspace" and opened Personal Settings,
-            which is a different job entirely -- and the chooser has existed at /practice/select-workspace
-            the whole time. */}
-        <Link href="/practice/select-workspace"
-          className="flex items-center gap-2.5 border-t border-white/10 px-4 py-3 text-[12px] text-blue-100/70 hover:bg-white/8 hover:text-white">
-          <span aria-hidden className="text-blue-200/60">⇄</span> Switch workspace
-        </Link>
       </aside>
 
       <div className="flex-1 flex flex-col min-w-0">

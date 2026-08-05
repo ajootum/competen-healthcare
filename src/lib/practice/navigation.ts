@@ -102,24 +102,31 @@ export const NAV_GROUP_ORDER: PracticeNavGroup[] = [
 // clinical-officer, midwife, surgeon, pharmacist, laboratory-scientist, nutritionist, physiotherapist,
 // psychologist). Check `slug:` in src/lib/marketing/practice-content.ts before adding a route here.
 export const PRACTICE_NAV: PracticeNavItem[] = [
-  // ══ CPR-V5-001 s8 NAVIGATION: THE EIGHT ══════════════════════════════════════════════════════════
+  // ══ CPR-V5-002 FINAL SIDEBAR NAVIGATION -- DESIGN FREEZE ═════════════════════════════════════════
   //
-  // Practice Command Centre · Calendar · Patients · Encounters · Documents · Follow-ups · AI Assistant ·
-  // Practice Setup. Rendered in PRIMARY_ORDER, not in the order they sit below.
+  // Practice Command Centre · Current Session · Calendar · Patients · Encounters · Documents ·
+  // Follow-ups · Practice Assistant · Practice Setup. Rendered in PRIMARY_ORDER and grouped by
+  // SIDEBAR_SECTIONS, not in the order they happen to sit below.
   //
-  // ⚠ THIS SUPERSEDES CPR-V3-002's NINE, which this file carried for exactly one commit. V5-001 is the
-  // later document and is specifically about this workspace: it promotes Calendar and Encounters to
-  // sections ("Encounters becomes the central workspace"), drops Today's Work as a section of its own,
-  // and does not have Patient Journey or Insights at all. Those last two were declared `built: false`
-  // and never shipped, so they are removed rather than left as sections the specification no longer has.
+  // ⚠ THIS IS THE THIRD NAVIGATION IN THIS FILE AND THE LAST. V3-002 named nine, V5-001 named eight,
+  // and V5-002 is the DESIGN FREEZE: "no further structural navigation changes should be made unless
+  // validated by practitioner usability testing". Each supersession is recorded rather than tidied
+  // away, because the shape of the churn is the argument for the freeze.
   //
-  // Everything not in the eight declares a `parent` and is reached from the section that owns it. The
-  // harness fails on any built module without one -- see orphanedNav.
+  // WHAT V5-002 CHANGED: Today's Work is renamed Current Session and PROMOTED to a section of its own
+  // (V5-001 had folded it into the command centre); AI Assistant becomes Practice Assistant; and
+  // Tasks, Analytics and Patient Insights are REMOVED FROM PRIMARY -- "supporting information should
+  // not become top-level navigation".
+  //
+  // REMOVED IS NOT DELETED. The spec is explicit that the three "remain available contextually", so
+  // each declares the section that owns it and appears under it: Tasks under Current Session,
+  // Analytics and Patient Insights under the Command Centre they are surfaced from. orphanedNav()
+  // fails the harness on any built module that loses its way in.
   { href: "/practice/home", label: "Practice Command Centre", icon: "⌂", capability: "practice.home.view", group: "Practice", phase: 0, built: true, primary: true },
   // Today's Work is now a VIEW INSIDE the command centre rather than a section beside it: V5-001 puts
   // the current activity, the queue and the day's work on the command centre itself, so a second screen
   // showing the same six panels would be two answers to one question.
-  { href: "/practice/today", label: "Today's Work", icon: "◔", capability: "practice.home.view", group: "Practice", phase: 0, built: true, parent: "/practice/home" },
+  { href: "/practice/today", label: "Current Session", icon: "◷", capability: "practice.home.view", group: "Practice", phase: 0, built: true, primary: true },
   { href: "/practice/patients", label: "Patients", icon: "☺", capability: "patient.list", group: "Patients", phase: 2, built: true, primary: true },
   // CPR-V3-002 "Patient Journey": longitudinal timeline, diagnoses, treatments, documents, hospital
   // history, follow-up history, AI summary. The pieces exist across several screens; the single
@@ -128,7 +135,7 @@ export const PRACTICE_NAV: PracticeNavItem[] = [
   { href: "/practice/documents", label: "Documents", icon: "▦", capability: "document.view", group: "Clinical", phase: 4, built: true, primary: true },
   // CPR-V3-002 "Insights". Analytics and Patient Insights both exist and both sit under Practice Home
   // until this section is built -- filing them under a section that does not exist would orphan them.
-  { href: "/practice/assistant", label: "AI Assistant", icon: "✧", capability: "encounter.list", group: "Intelligence", phase: 5, built: true, primary: true },
+  { href: "/practice/assistant", label: "Practice Assistant", icon: "✧", capability: "encounter.list", group: "Intelligence", phase: 5, built: true, primary: true },
   { href: "/practice/setup", label: "Practice Setup", icon: "⚙", capability: null, group: "Setup", phase: 8, built: true, primary: true },
 
   // ══ EVERYTHING ELSE, FILED UNDER THE SECTION THAT OWNS IT ════════════════════════════════════════
@@ -138,7 +145,7 @@ export const PRACTICE_NAV: PracticeNavItem[] = [
 
   // -- Today's Work: the day, and what is booked into it --------------------------------------------
   { href: "/practice/calendar", label: "Calendar", icon: "▤", capability: "practice.calendar.view", group: "Practice", phase: 1, built: true, primary: true },
-  { href: "/practice/tasks", label: "Tasks", icon: "☑", capability: "task.view", group: "Practice", phase: 4, built: true, parent: "/practice/home" },
+  { href: "/practice/tasks", label: "Tasks", icon: "☑", capability: "task.view", group: "Practice", phase: 4, built: true, parent: "/practice/today" },
 
   // -- Patients: the people, and the record made about them -----------------------------------------
   { href: "/practice/encounters", label: "Encounters", icon: "✎", capability: "encounter.list", group: "Clinical", phase: 3, built: true, primary: true },
@@ -188,8 +195,22 @@ export function visibleNav(capabilities: string[]): PracticeNavItem[] {
  * three ways a practitioner gets to one.
  */
 export const PRIMARY_ORDER: string[] = [
-  "/practice/home", "/practice/calendar", "/practice/patients", "/practice/encounters",
-  "/practice/documents", "/practice/follow-ups", "/practice/assistant", "/practice/setup",
+  "/practice/home", "/practice/today", "/practice/calendar", "/practice/patients",
+  "/practice/encounters", "/practice/documents", "/practice/follow-ups", "/practice/assistant",
+  "/practice/setup",
+];
+
+/**
+ * CPR-V5-002's two sidebar sections, and which of the nine sit in each.
+ *
+ * DECLARED, not inferred from a `group` field that means something else. The comp draws NAVIGATION
+ * over the eight operational workspaces and ADMINISTRATION over Practice Setup alone -- a heading is
+ * part of the frozen design, so it is written down rather than derived from a property that was added
+ * for a different purpose and could drift away from it.
+ */
+export const SIDEBAR_SECTIONS: { label: string; hrefs: string[] }[] = [
+  { label: "Navigation", hrefs: PRIMARY_ORDER.filter(h => h !== "/practice/setup") },
+  { label: "Administration", hrefs: ["/practice/setup"] },
 ];
 
 /** The sidebar: CPR-V5-001 s8's eight, in its order, filtered the same two ways everything else is. */

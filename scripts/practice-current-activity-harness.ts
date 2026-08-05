@@ -490,16 +490,17 @@ async function main() {
     orphans.map(o => `${o.label} (${o.href}) has no parent section`).join("; "));
 
   const sections = PRACTICE_NAV.filter(i => i.primary);
-  ok("9b. the sidebar declares CPR-V5-001 s8's eight sections", sections.length === 8,
+  ok("9b. the sidebar declares CPR-V5-002's nine sections", sections.length === 9,
     `${sections.length}: ${sections.map(i => i.label).join(", ")}`);
 
   // 9b-order. THE ORDER IS PART OF THE SPECIFICATION, not an accident of where entries sit in the array.
   // s8 lists them, and "Encounters becomes the central workspace" is a claim about position as much as
   // about function -- it is fourth, right after the three ways a practitioner reaches one.
-  const V5_ORDER = ["/practice/home", "/practice/calendar", "/practice/patients", "/practice/encounters",
-    "/practice/documents", "/practice/follow-ups", "/practice/assistant", "/practice/setup"];
+  const V5_ORDER = ["/practice/home", "/practice/today", "/practice/calendar", "/practice/patients",
+    "/practice/encounters", "/practice/documents", "/practice/follow-ups", "/practice/assistant",
+    "/practice/setup"];
   const rendered = primaryNav([...new Set(PRACTICE_NAV.map(i => i.capability).filter(Boolean))] as string[]);
-  ok("9b-order. and renders them in the order s8 lists",
+  ok("9b-order. and renders them in the order V5-002 lists",
     rendered.map(i => i.href).join() === V5_ORDER.join(), rendered.map(i => i.href).join(" "));
 
   // A section that is not built must not render, and must not be used as a parent -- a module filed under
@@ -515,13 +516,31 @@ async function main() {
   const allCaps = [...new Set(PRACTICE_NAV.map(i => i.capability).filter(Boolean))] as string[];
   const shown = primaryNav(allCaps);
   ok("9d-control. an owner sees the built sections, not an empty sidebar",
-    shown.length === sections.filter(i => i.built).length && shown.length === 8, `${shown.length} shown`);
-  ok("9e-control. and the modules filed under them are reachable",
-    shown.reduce((n, s) => n + childrenOf(s.href, allCaps).length, 0) >= 15,
-    `${shown.reduce((n, s) => n + childrenOf(s.href, allCaps).length, 0)} children`);
+    shown.length === sections.filter(i => i.built).length && shown.length === 9, `${shown.length} shown`);
+  // EVERY built non-primary module appears exactly once, under its parent. Asserted as an EQUALITY
+  // against the catalogue rather than a threshold: ">= 15" went stale the moment V5-002 promoted
+  // Current Session out of the children, and a stale threshold fails for the right reason once and
+  // then gets nudged instead of read.
+  const childCount = shown.reduce((n, s) => n + childrenOf(s.href, allCaps).length, 0);
+  const expectedChildren = PRACTICE_NAV.filter(i => i.built && !i.primary).length;
+  ok("9e-control. every built non-primary module appears under a section, exactly once",
+    childCount === expectedChildren, `${childCount} rendered vs ${expectedChildren} in the catalogue`);
 
   // Every href a section or module points at must be a real page, or the sidebar is back to promising
   // routes that do not exist. Checked on the FILE SYSTEM, since a 307 to sign-in cannot tell them apart.
+  // 9g. V5-002 removes three from PRIMARY and says in the same breath they "remain available
+  // contextually". Both halves are asserted, because doing only the first is how a module gets
+  // orphaned and doing only the second is how the freeze quietly gains a tenth section.
+  const REMOVED = ["/practice/tasks", "/practice/intelligence", "/practice/reports"];
+  ok("9g. Tasks, Analytics and Patient Insights are not primary navigation",
+    REMOVED.every(h => !PRACTICE_NAV.find(i => i.href === h)?.primary),
+    REMOVED.filter(h => PRACTICE_NAV.find(i => i.href === h)?.primary).join(", "));
+  ok("9g-b. and each is still reachable from the section that owns it",
+    REMOVED.every(h => {
+      const parent = PRACTICE_NAV.find(i => i.href === h)?.parent;
+      return !!parent && !!PRACTICE_NAV.find(i => i.href === parent && i.primary && i.built);
+    }), REMOVED.map(h => `${h} -> ${PRACTICE_NAV.find(i => i.href === h)?.parent ?? "NOTHING"}`).join("; "));
+
   const missing = PRACTICE_NAV.filter(i => i.built).filter(i => {
     const seg = i.href.replace(/^\/practice\//, "");
     return !existsSync(join(process.cwd(), "src", "app", "practice", "(shell)", seg, "page.tsx"));

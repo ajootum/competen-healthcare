@@ -7,7 +7,7 @@ import { todaysWork } from "@/lib/practice/todays-work";
 import { formatMinuteOfDay, formatDate } from "@/lib/datetime";
 import CurrentActivityPanel from "./CurrentActivityPanel";
 
-// /practice/today -- CPR-V3-002 "Today's Work".
+// /practice/today -- CPR-V5-002 "Current Session" (renamed from Today's Work by the design freeze).
 //
 // THE SCREEN V3 PUTS AT THE CENTRE, and the acceptance criterion it is measured by: "Open Today's Work in
 // under two clicks." It is one click from anywhere in the product, because it is in the sidebar.
@@ -42,7 +42,7 @@ export default async function TodaysWorkPage() {
     <div className="max-w-6xl">
       <div className="flex flex-wrap items-baseline justify-between gap-2">
         <div>
-          <h1 className="text-xl font-bold text-gray-900">Today&rsquo;s Work</h1>
+          <h1 className="text-xl font-bold text-gray-900">Current Session</h1>
           <p className="mt-0.5 text-[13px] text-gray-500">
             {formatDate(plan.date)} · everything below is your own day, in your practice&rsquo;s time zone.
           </p>
