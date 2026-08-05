@@ -15,11 +15,11 @@
 -- Writing one and calling it the other would mean either an audit log that gets pruned once a widget has
 -- consumed it, or a dashboard feed whose event names nobody can rely on. Both are kept, and section 13's
 -- "all state-changing actions require actor, timestamp, source and audit entry" is satisfied by the
--- audit table; this table exists for delivery, not for proof.
+-- audit table. This table exists for delivery, not for proof.
 --
 -- THE OUTBOX IS NOT THE SOURCE OF TRUTH AND MUST NEVER BE TREATED AS ONE. practice_activity's
 -- started_at/ended_at remain the record of what happened. A lost event costs freshness (the s12 polling
--- fallback still repaints the card within a minute); a lost state change costs a clinic. That asymmetry
+-- fallback still repaints the card within a minute), and a lost state change costs a clinic. That asymmetry
 -- is why src/lib/practice/events.ts never lets a failed emit fail the write it describes, and why the
 -- log stays reconcilable against state rather than replacing it.
 --
@@ -34,16 +34,16 @@ create table if not exists practice_domain_event (
   id uuid primary key default gen_random_uuid(),
 
   -- s9.1's practice_id. Named workspace_id because practice_workspace is the row it points at and every
-  -- other practice table spells the tenancy column that way; renaming it here would put this table
+  -- other practice table spells the tenancy column that way, and renaming it here would put this table
   -- outside the tenancy-drift checks that sweep for exactly this column.
   --
   -- CASCADE, deliberately. A deleted practice must not leave a trail of events describing its patients'
-  -- movements; the compliance record of the deletion itself lives in practice_audit_event.
+  -- movements. The compliance record of the deletion itself lives in practice_audit_event.
   workspace_id uuid not null references practice_workspace(id) on delete cascade,
 
   -- s9's catalogue, complete and closed. A CHECK rather than a comment because a consumer that switches
   -- exhaustively on the type is only safe if the database refuses a type nobody wrote a branch for.
-  -- The mirror of this list is PRACTICE_EVENT_TYPES in src/lib/practice/events.ts; the harness asserts
+  -- The mirror of this list is PRACTICE_EVENT_TYPES in src/lib/practice/events.ts, and the harness asserts
   -- every entry there is accepted here, because a name that exists in TypeScript and not in this
   -- constraint does not fail loudly -- it fails on every emit, forever, in a swallowed error.
   event_type text not null check (event_type in (
@@ -63,19 +63,19 @@ create table if not exists practice_domain_event (
     'alert.created', 'alert.resolved',
     'metric.snapshot_created')),
 
-  -- s9.1's version. The envelope's shape is a contract with consumers that will outlive this migration;
+  -- s9.1's version. The envelope's shape is a contract with consumers that will outlive this migration --
   -- a payload that changes meaning without changing this number is a silent break in every projection.
   version integer not null default 1 check (version >= 1),
 
   -- WHEN IT HAPPENED and WHEN IT WAS WRITTEN, kept apart. They differ whenever an emit is retried or an
   -- integration replays a backlog, and a stream cursor that orders by occurred_at would then skip events
-  -- it had already passed. occurred_at is what a timeline draws; recorded_at is what a reader paginates.
+  -- it had already passed. occurred_at is what a timeline draws, and recorded_at is what a reader paginates.
   occurred_at timestamptz not null default now(),
   recorded_at timestamptz not null default now(),
 
   -- ---- WHO ---------------------------------------------------------------------------------------
   --
-  -- TWO PEOPLE, NEVER COLLAPSED INTO ONE. practitioner_id is whose work the event is about; actor_id is
+  -- TWO PEOPLE, NEVER COLLAPSED INTO ONE. practitioner_id is whose work the event is about. actor_id is
   -- who caused it. They are the same person today because nothing in V3 is delegated yet, and they stop
   -- being the same the first time a receptionist checks a patient in -- at which point an events table
   -- that had only kept one of them cannot say which one it kept. s13 requires the actor specifically.
@@ -116,7 +116,7 @@ create table if not exists practice_domain_event (
   patient_id uuid,
   encounter_id uuid,
 
-  -- s9.1's payload. Everything type-specific goes here; nothing a consumer filters on does.
+  -- s9.1's payload. Everything type-specific goes here, and nothing a consumer filters on does.
   payload jsonb not null default '{}'::jsonb,
 
   -- ---- DELIVERY ----------------------------------------------------------------------------------
@@ -156,7 +156,7 @@ create index if not exists idx_practice_domain_event_unpublished
 -- ---- 3. RLS: deny-by-default -----------------------------------------------------------------------
 --
 -- No policies. This table is written by engines and read by the dashboard assembler, both through the
--- service role; a browser has no business reading another practitioner's event stream directly, and an
+-- service role. A browser has no business reading another practitioner's event stream directly, and an
 -- events table is precisely where a too-generous policy leaks the shape of a whole clinic's day.
 
 alter table practice_domain_event enable row level security;
