@@ -4,7 +4,9 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import Link from "next/link";
 import type { TodaysPlan } from "@/lib/practice/activity";
-import { ACTIVITY_LABEL, ACTIVITY_TYPES, type ActivityType } from "@/lib/practice/activity";
+// From the CONSTANTS module, never from the engine: activity.ts reaches metrics.ts -> access.ts ->
+// next/headers, and importing it here put server-only code in the browser bundle and failed the build.
+import { ACTIVITY_LABEL, ACTIVITY_TYPES, type ActivityType } from "@/lib/practice/activity-constants";
 import type { SessionWithFigures } from "@/lib/practice/session";
 import { formatMinuteOfDay } from "@/lib/datetime";
 

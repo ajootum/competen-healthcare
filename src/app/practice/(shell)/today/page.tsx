@@ -3,162 +3,301 @@ import Link from "next/link";
 import { createAdminClient } from "@/lib/supabase/server";
 import { resolvePracticeShell } from "@/lib/practice/shell";
 import { hasCapability } from "@/lib/practice/access";
-import { todaysWork } from "@/lib/practice/todays-work";
+import { dashboardReadModel } from "@/lib/practice/dashboard";
 import { formatMinuteOfDay, formatDate } from "@/lib/datetime";
-import CurrentActivityPanel from "./CurrentActivityPanel";
+import SessionControls from "./SessionControls";
+import SessionTiles from "./SessionTiles";
+import SessionSummaryCard from "./SessionSummaryCard";
+import WaitingQueueCard from "./WaitingQueueCard";
+import SessionPerformance from "./SessionPerformance";
+import LiveRefresh from "../LiveRefresh";
 
-// /practice/today -- CPR-V5-002 "Current Session" (renamed from Today's Work by the design freeze).
+// /practice/today -- CPR-V5-004 "Current Session", the practitioner's live operational cockpit.
 //
-// THE SCREEN V3 PUTS AT THE CENTRE, and the acceptance criterion it is measured by: "Open Today's Work in
-// under two clicks." It is one click from anywhere in the product, because it is in the sidebar.
+// ────────────────────────────────────────────────────────────────────────────────────────────────────
+// IT ASSEMBLES NOTHING. Every figure arrives from `dashboardReadModel` -- the same payload
+// /api/v1/practice/dashboard serves and the same one the command centre renders -- so the two screens
+// cannot disagree about how many people are waiting. CORE-001 s16: "no widget independently calculates a
+// conflicting version of a shared metric." This page's whole job is choosing which of those figures the
+// session cockpit shows, and in what order.
 //
-// WHAT IS REAL HERE AND WHAT IS NOT, said plainly rather than drawn convincingly:
-//   Current Activity   real -- migration 232, and the only new store V3 needed
-//   Today's Timeline   real -- the same table, the rest of the day's plan
-//   Walk-in Queue      real -- practice_queue_entry, since CPR-110
-//   Next Patient       real -- the head of that same queue, not a second opinion about who is next
-//   Overdue Follow-ups real -- practice_follow_up, overdue derived against the practice's clock
-//   Pending Results    real -- practice_incoming_document awaiting review
-//   Tasks              real -- practice_task assigned to the person reading
+// ⚠ EVERY NUMBER IS A PAIR OR A NULL, NEVER A PERCENTAGE. The comp prints "On-time Rate 62%",
+// "Utilisation 78%" and four "Goal:" lines. The cards below cannot render any of them: their props take
+// `value` and `of` separately, `unit` admits only "count" | "minutes", and no `goal` prop exists. 62% of
+// eight patients is not a rate, it is five people -- and a goal nothing stores is an invented standard
+// presented as the practice's own.
 //
-// The comp also shows a per-activity progress ring ("16 of 30 patients seen"). It is NOT drawn: nothing
-// yet links an encounter to the activity it happened in for historical rows, so the denominator would be
-// invented. Migration 232 adds practice_encounter.activity_id, so the ring becomes truthful as soon as
-// encounters start being recorded against an activity -- which is the honest order to do it in.
+// ⚠ TWO FIGURES FROM THE COMP ARE ABSENT ON PURPOSE. Utilisation has no denominator anywhere -- nothing
+// links an activity to a slot capacity -- and on-time has no metric and no stored lateness tolerance.
+// Inventing the tolerance would be authoring the very standard the figure claims to measure against.
+// ────────────────────────────────────────────────────────────────────────────────────────────────────
 
 export const dynamic = "force-dynamic";
 
-export default async function TodaysWorkPage() {
+/** hh:mm in the practice's own zone. The session clock is the practitioner's, never the server's. */
+const clock = (iso: string, timeZone: string) =>
+  new Date(iso).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", timeZone });
+
+export default async function CurrentSessionPage() {
   const shell = await resolvePracticeShell();
   if (shell.state !== "READY") redirect("/practice");
   if (!hasCapability(shell.ctx, "practice.home.view")) redirect("/practice/home");
 
   const admin = createAdminClient();
-  const work = await todaysWork(admin, shell.ctx);
-  const { plan } = work;
-  const canPlan = hasCapability(shell.ctx, "appointment.manage");
+  const dash = await dashboardReadModel(admin, shell.ctx);
+  const { plan, session, queue, timeline, brief, metrics } = dash;
+  const canControl = hasCapability(shell.ctx, "appointment.manage");
+
+  // The lifecycle state, derived from the two timestamps and the pause ledger -- never stored.
+  const state: "NOT_STARTED" | "RUNNING" | "PAUSED" =
+    !session ? "NOT_STARTED" : session.isPaused ? "PAUSED" : "RUNNING";
+
+  const m = metrics?.metrics;
+  /** A metric becomes a tile. `of` stays null unless the pair is genuinely known. */
+  const tile = (key: keyof NonNullable<typeof m>, label: string, href: string | null) => {
+    const x = m?.[key];
+    return {
+      key: String(key), label, href,
+      value: x?.value ?? null,
+      of: null as number | null,
+      unit: (x?.unit ?? "count") as "count" | "minutes",
+      reason: x?.reason ?? (m ? null : "Today's figures could not be read."),
+      observations: x?.observations ?? null,
+      basis: x?.formula ?? null,
+    };
+  };
 
   return (
     <div className="max-w-6xl">
-      <div className="flex flex-wrap items-baseline justify-between gap-2">
-        <div>
+      {/* ── ZONE 1: THE SESSION HEADER AND ITS CONTROLS ────────────────────────────────────────── */}
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0">
           <h1 className="text-xl font-bold text-gray-900">Current Session</h1>
           <p className="mt-0.5 text-[13px] text-gray-500">
-            {formatDate(plan.date)} · everything below is your own day, in your practice&rsquo;s time zone.
+            {formatDate(plan.date)} · {dash.scope.kind === "session"
+              ? "figures below count this session, not the whole day"
+              : "nothing is running, so figures below count the whole day"}
           </p>
         </div>
-        <Link href="/practice/calendar" className="text-[12.5px] font-semibold text-[var(--cp-primary)] hover:underline">
-          Full schedule →
-        </Link>
+        <LiveRefresh />
       </div>
 
       {plan.unavailable && (
-        <p className="mt-4 rounded-xl border border-[var(--cmp-border-warning)] bg-[var(--cmp-surface-warning)] px-4 py-3 text-[13px] text-[var(--cmp-text-warning)]">
+        <p className="mt-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-[13px] text-amber-800">
           Today&rsquo;s plan could not be read just now. Nothing below is a claim that your day is empty —
           it is a claim that this page could not find out.
         </p>
       )}
 
-      {/* ── CURRENT ACTIVITY + THE DAY'S TIMELINE ──────────────────────────────────────────────── */}
-      <div className="mt-5 grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)]">
-        <CurrentActivityPanel plan={plan} canPlan={canPlan} />
-
-        <section className="rounded-2xl border border-gray-200 bg-white p-4" aria-labelledby="timeline-h">
-          <h2 id="timeline-h" className="text-[13px] font-bold text-gray-900">Today&rsquo;s Timeline</h2>
-          {plan.activities.length === 0 ? (
-            <p className="mt-3 text-[13px] text-gray-500">
-              {plan.unavailable
-                ? "Could not be read."
-                : "Nothing is planned for today yet. A day with no plan is not a day with no work — add what you are doing so encounters can inherit it."}
+      <div className="mt-4">
+        {session ? (
+          <SessionControls
+            activityId={session.activity.id}
+            header={{
+              title: session.activity.title,
+              activityLabel: session.activity.label,
+              facilityName: session.activity.facilityName,
+              room: session.activity.room,
+              state,
+              startedAtLabel: clock(session.startedAtIso, dash.timezone),
+              plannedWindowLabel:
+                `${formatMinuteOfDay(session.activity.plannedStartMinute)} – ${formatMinuteOfDay(session.activity.plannedEndMinute)}`,
+              elapsedMinutes: session.minutesElapsed,
+              // ⚠ THE ELAPSED FIGURE IS ONLY TRUSTWORTHY IF THE PAUSE LEDGER WAS READ. When it was not,
+              // `pausedMinutes` is null and this clock has NOT had interruptions taken out of it -- so
+              // the header says so rather than showing a number it cannot stand behind.
+              elapsedReason: session.pausedMinutes === null
+                ? "The pause ledger could not be read, so this is the raw clock and may overstate the session."
+                : null,
+              pausedMinutes: session.pausedMinutes,
+              pausedReason: session.pausedMinutes === null ? "Could not be read." : null,
+              pauseCount: null,
+              overrunMinutes: session.activity.overrunMinutes,
+              canControl,
+            }}
+          />
+        ) : (
+          <section className="rounded-2xl border border-gray-200 bg-white p-4">
+            <h2 className="text-[13px] font-bold text-gray-900">No session is running</h2>
+            <p className="mt-1 text-[12.5px] leading-relaxed text-gray-600">
+              {plan.activities.length === 0
+                ? "Nothing is planned for today. Start an activity on the command centre and this page becomes the cockpit for it."
+                : "Start one of today's planned activities from the command centre, and everything below scopes to it."}
             </p>
-          ) : (
-            <ol className="mt-3 space-y-1.5">
-              {plan.activities.map(a => (
-                <li key={a.id} className="flex items-center gap-3 rounded-lg px-2 py-1.5 hover:bg-black/[0.02]">
-                  <span className="w-11 shrink-0 text-[12px] font-semibold tabular-nums text-gray-500">
-                    {formatMinuteOfDay(a.plannedStartMinute)}
-                  </span>
-                  <span aria-hidden className={`h-2 w-2 shrink-0 rounded-full ${
-                    a.state === "running" ? "bg-[var(--cmp-text-success)]"
-                      : a.state === "done" ? "bg-gray-300" : "bg-[var(--cp-primary)]/40"}`} />
-                  <span className="min-w-0 flex-1">
-                    <span className={`block truncate text-[13px] ${a.state === "running" ? "font-bold text-[var(--cp-primary-deep)]" : "font-medium text-gray-800"}`}>
-                      {a.title}
-                    </span>
-                    <span className="block truncate text-[11px] text-gray-500">
-                      {[a.label, a.facilityName, a.room].filter(Boolean).join(" · ")}
-                    </span>
-                  </span>
-                  <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10.5px] font-bold ${
-                    a.state === "running" ? "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]"
-                      : a.state === "done" ? "bg-gray-100 text-gray-500"
-                        : "bg-[var(--cp-primary-soft)] text-[var(--cp-primary-deep)]"}`}>
-                    {a.state === "running" ? "In progress" : a.state === "done" ? "Done" : "Upcoming"}
-                  </span>
-                </li>
-              ))}
-            </ol>
-          )}
-        </section>
+            <Link href="/practice/home"
+              className="mt-3 inline-block rounded-lg bg-[var(--cp-primary)] px-3.5 py-2 text-[12.5px] font-semibold text-white hover:opacity-90">
+              Go to the command centre →
+            </Link>
+          </section>
+        )}
       </div>
 
-      {/* ── NEXT PATIENT ───────────────────────────────────────────────────────────────────────── */}
-      <section className="mt-4 rounded-2xl border border-gray-200 bg-white p-4" aria-labelledby="next-h">
-        <h2 id="next-h" className="text-[13px] font-bold text-gray-900">Next Patient</h2>
-        {work.nextPatientUnavailable ? (
-          <p className="mt-2 text-[13px] text-gray-500">The queue could not be read just now.</p>
-        ) : work.nextPatient ? (
-          <div className="mt-2 flex flex-wrap items-center gap-3">
-            <span className="text-[15px] font-bold text-gray-900">{work.nextPatient.name}</span>
-            <span className="rounded-full bg-[var(--cp-primary-soft)] px-2 py-0.5 text-[11px] font-bold text-[var(--cp-primary-deep)]">
-              {work.nextPatient.status === "READY" ? "Ready" : "Waiting"}
+      {/* ── THE SIX TILES ─────────────────────────────────────────────────────────────────────── */}
+      <div className="mt-4">
+        <SessionTiles
+          scopeLabel={dash.scope.kind === "session" ? "This session" : "Today"}
+          unavailableReason={dash.feeders.glance === "unavailable"
+            ? "Today's figures could not be read just now, so no number is shown rather than a nought." : null}
+          tiles={[
+            tile("booked", "Booked", "/practice/calendar"),
+            // Seen is a PAIR -- four of twelve, never "33%". The denominator is what makes it mean anything.
+            { ...tile("completed", "Seen", "/practice/encounters"), of: m?.booked.value ?? null },
+            tile("waiting", "Waiting", "/practice/calendar"),
+            tile("walk_in", "Walk-ins", "/practice/calendar"),
+            tile("emergency", "Emergency", "/practice/calendar"),
+            {
+              key: "time_remaining", label: "Time remaining", href: null,
+              value: session?.minutesRemaining ?? null, of: null, unit: "minutes" as const,
+              reason: !session ? "No session is running."
+                : session.minutesRemaining === null ? "Past its planned end." : null,
+              observations: null,
+              basis: "The planned end, pushed out by any time the session was paused.",
+            },
+          ]}
+        />
+      </div>
+
+      {/* ── RUN YOUR CLINIC: the queue, and the session's own summary ─────────────────────────── */}
+      <div className="mt-4 grid gap-4 lg:grid-cols-2">
+        <WaitingQueueCard
+          href="/practice/calendar"
+          busyId={null}
+          error={null}
+          unavailableReason={queue.unavailable ? "The queue could not be read just now." : null}
+          people={queue.groups.flatMap(g => g.entries.map(e => ({
+            id: e.id,
+            name: e.name,
+            group: g.key as "booked" | "walk_ins" | "emergency",
+            status: e.status,
+            waitingMinutes: e.waitingMinutes,
+            waitingReason: null,
+            timeLabel: e.timeLabel,
+            href: null,
+          })))}
+        />
+
+        <SessionSummaryCard
+          unavailableReason={metrics ? null : "The session's figures could not be read just now."}
+          // The brief's own sentences, unchanged. This page writes none of its own, which is how s7's
+          // "no unsupported prediction" is kept: there is nothing here capable of predicting.
+          notes={brief.items.slice(0, 4).map(i => ({
+            key: i.key, sentence: i.sentence, severity: i.severity, href: i.href,
+            count: i.count,
+            sourceLabel: i.sourceRefs.length > 0
+              ? `${i.sourceRefs.length} record${i.sourceRefs.length === 1 ? "" : "s"}` : null,
+          }))}
+          notesMethod={brief.method}
+          notesUnavailableReason={brief.unavailable
+            ? "The brief could not be read, so this is not a claim that nothing is waiting." : null}
+          figures={[
+            {
+              key: "patients_seen", label: "Patients seen", href: "/practice/encounters",
+              value: m?.patients_seen.value ?? null, of: m?.booked.value ?? null,
+              unit: "count" as const, reason: m?.patients_seen.reason ?? null,
+              observations: m?.patients_seen.observations ?? null,
+              excluded: m?.patients_seen.excluded ?? null,
+            },
+            {
+              key: "average_consult_time", label: "Average consult time", href: null,
+              value: m?.average_consult_time.value ?? null, of: null, unit: "minutes" as const,
+              reason: m?.average_consult_time.reason ?? null,
+              observations: m?.average_consult_time.observations ?? null,
+              excluded: m?.average_consult_time.excluded ?? null,
+            },
+            {
+              key: "paused", label: "Time paused", href: null,
+              value: session?.pausedMinutes ?? null, of: null, unit: "minutes" as const,
+              reason: !session ? "No session is running."
+                : session.pausedMinutes === null ? "The pause ledger could not be read." : null,
+              observations: null, excluded: null,
+            },
+          ]}
+        />
+      </div>
+
+      {/* ── TODAY'S TIMELINE ──────────────────────────────────────────────────────────────────── */}
+      <section className="mt-4 rounded-2xl border border-gray-200 bg-white p-4" aria-labelledby="tl-h">
+        <div className="mb-2 flex items-center gap-2">
+          <h2 id="tl-h" className="text-[13px] font-bold text-gray-900">Today&rsquo;s timeline</h2>
+          {/* PARTIAL IS ITS OWN STATE. One source failing while others succeed is a real but incomplete
+              day, and a card that said nothing would claim a quiet morning it never checked. */}
+          {timeline.partial && !timeline.unavailable && (
+            <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-amber-700">
+              Incomplete
             </span>
-            <Link href="/practice/calendar"
-              className="ml-auto rounded-lg bg-[var(--cp-primary)] px-3.5 py-2 text-[12.5px] font-semibold text-white hover:opacity-90">
-              Open the queue →
-            </Link>
-          </div>
+          )}
+        </div>
+        {timeline.unavailable ? (
+          <p className="text-[12px] text-gray-500">The day could not be read just now.</p>
+        ) : timeline.events.length === 0 ? (
+          <p className="text-[12px] text-gray-500">Nothing has happened yet today.</p>
         ) : (
-          <p className="mt-2 text-[13px] text-gray-500">Nobody is waiting.</p>
+          <ol className="space-y-0.5">
+            {timeline.events.map(e => (
+              <li key={e.id} className="flex items-center gap-2.5">
+                <span className="w-10 shrink-0 text-[11px] tabular-nums text-gray-500">{e.timeLabel}</span>
+                <span aria-hidden className={`h-1.5 w-1.5 shrink-0 rounded-full ${
+                  e.interruption ? "bg-red-500" : "bg-emerald-500"}`} />
+                <span className={`min-w-0 flex-1 truncate text-[12px] ${
+                  e.interruption ? "font-semibold text-red-700" : "text-gray-800"}`}>
+                  {e.label}{e.detail ? ` · ${e.detail}` : ""}
+                </span>
+              </li>
+            ))}
+          </ol>
         )}
       </section>
 
-      {/* ── THE FOUR WORK PANELS ───────────────────────────────────────────────────────────────── */}
-      <div className="mt-4 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        {work.panels.map(p => (
-          <section key={p.key} className="rounded-2xl border border-gray-200 bg-white p-4" aria-labelledby={`p-${p.key}`}>
-            <div className="flex items-baseline justify-between gap-2">
-              <h2 id={`p-${p.key}`} className="text-[12.5px] font-bold text-gray-900">{p.label}</h2>
-              {/* The count is the length of the list you can open -- so it IS the link. */}
-              <Link href={p.href} className="text-[11.5px] font-semibold text-[var(--cp-primary)] hover:underline">
-                {p.count === null ? "—" : p.count} →
-              </Link>
-            </div>
-            {p.items.length > 0 ? (
-              <ul className="mt-2.5 space-y-1.5">
-                {p.items.map(i => (
-                  <li key={i.id} className="flex items-start gap-2">
-                    <span aria-hidden className={`mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full ${i.urgent ? "bg-[var(--cmp-text-danger)]" : "bg-gray-300"}`} />
-                    <span className="min-w-0 flex-1">
-                      <span className="block truncate text-[12.5px] font-medium text-gray-800">{i.title}</span>
-                      {(i.detail || i.marker) && (
-                        <span className="block truncate text-[11px] text-gray-500">
-                          {[i.detail, i.marker].filter(Boolean).join(" · ")}
-                        </span>
-                      )}
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            ) : (
-              <p className="mt-2.5 text-[12px] text-gray-500">{p.note}</p>
-            )}
-            {p.count !== null && p.count > p.items.length && (
-              <p className="mt-2 text-[11px] text-gray-400">Showing {p.items.length} of {p.count}.</p>
-            )}
-          </section>
-        ))}
+      {/* ── SESSION PERFORMANCE ───────────────────────────────────────────────────────────────── */}
+      <div className="mt-4">
+        <SessionPerformance
+          unavailableReason={metrics ? null : "These figures could not be read just now."}
+          note={
+            "Counts and durations from your own records. No rate, no target and no comparison: nothing "
+            + "here stores a goal, and a figure measured against an invented one would be a judgement "
+            + "nobody made."
+          }
+          figures={[
+            {
+              key: "patients_seen", label: "Patients seen", value: m?.patients_seen.value ?? null,
+              of: m?.booked.value ?? null, unit: "count" as const,
+              reason: m?.patients_seen.reason ?? null,
+              observations: m?.patients_seen.observations ?? null,
+              excluded: m?.patients_seen.excluded ?? null,
+              basis: m?.patients_seen.formula ?? null,
+            },
+            {
+              key: "average_consult_time", label: "Average consult time",
+              value: m?.average_consult_time.value ?? null, of: null, unit: "minutes" as const,
+              reason: m?.average_consult_time.reason ?? null,
+              observations: m?.average_consult_time.observations ?? null,
+              excluded: m?.average_consult_time.excluded ?? null,
+              basis: m?.average_consult_time.formula ?? null,
+            },
+            {
+              key: "average_wait_time", label: "Average waiting time",
+              value: m?.average_wait_time.value ?? null, of: null, unit: "minutes" as const,
+              reason: m?.average_wait_time.reason ?? null,
+              observations: m?.average_wait_time.observations ?? null,
+              excluded: m?.average_wait_time.excluded ?? null,
+              basis: m?.average_wait_time.formula ?? null,
+            },
+            {
+              key: "clinic_delay", label: "Clinic delay",
+              value: m?.clinic_delay.value ?? null, of: null, unit: "minutes" as const,
+              reason: m?.clinic_delay.reason ?? null,
+              observations: m?.clinic_delay.observations ?? null,
+              excluded: m?.clinic_delay.excluded ?? null,
+              basis: m?.clinic_delay.formula ?? null,
+            },
+          ]}
+        />
       </div>
+
+      <p className="mt-4 text-[10.5px] text-gray-400">
+        As of {clock(dash.asOf, dash.timezone)} · {dash.timezone}. Every figure above is the same one the
+        command centre shows, read once and shared, so the two screens cannot disagree.
+      </p>
     </div>
   );
 }

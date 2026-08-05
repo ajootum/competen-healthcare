@@ -1,4 +1,5 @@
 import type { WorkspaceContext } from "@/lib/practice/access";
+import { ACTIVITY_TYPES, ACTIVITY_LABEL, type ActivityType } from "@/lib/practice/activity-constants";
 import { practiceToday, zonedDayRange } from "@/lib/practice/practice-time";
 import { emitEvents, type EventEnvelope, type EventSource } from "@/lib/practice/events";
 import { audit } from "@/lib/practice/provisioning";
@@ -21,22 +22,11 @@ import { practiceMetrics, metricScope, type PracticeMetrics } from "@/lib/practi
 // not an error, so it is reported (`overrunMinutes`) and never corrected. The plan is what was intended;
 // started_at and ended_at are what happened; the engine does not make the second agree with the first.
 
-export const ACTIVITY_TYPES = [
-  "outpatient_clinic", "ward_round", "theatre", "emergency_consult",
-  "virtual_clinic", "telephone_review", "administration", "teaching",
-] as const;
-export type ActivityType = (typeof ACTIVITY_TYPES)[number];
-
-export const ACTIVITY_LABEL: Record<ActivityType, string> = {
-  outpatient_clinic: "Outpatient Clinic",
-  ward_round: "Ward Round",
-  theatre: "Theatre",
-  emergency_consult: "Emergency Consult",
-  virtual_clinic: "Virtual Clinic",
-  telephone_review: "Telephone Review",
-  administration: "Administration",
-  teaching: "Teaching",
-};
+// The eight types and their labels now live in activity-constants.ts, so a client component can read
+// them without dragging this file's server imports into the browser bundle. Re-exported here because
+// every server caller already imports them from this module, and two import paths for one constant is
+// how a rename ends up half-applied.
+export { ACTIVITY_TYPES, ACTIVITY_LABEL, type ActivityType } from "@/lib/practice/activity-constants";
 
 /**
  * WHAT THIS ENGINE WILL NOT DO, stated where the code is rather than in a document nobody opens.
