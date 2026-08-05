@@ -16,8 +16,8 @@ import { FACILITY_TYPES } from "@/lib/practice/facilities";
 
 const input = "w-full rounded-lg border border-gray-200 px-2.5 py-2 text-[13px] outline-none focus:border-[var(--cp-primary)] focus:ring-2 focus:ring-[var(--cp-primary)]/10";
 
-export default function SettingsConsole({ workspace, config, today, inertColumns, locations, history, canManageLocations, facilities = [] }: {
-  workspace: any; config: any; today: string; inertColumns: string[];
+export default function SettingsConsole({ workspace, config, today, locations, history, canManageLocations, facilities = [] }: {
+  workspace: any; config: any; today: string;
   locations: any[]; history: any[]; canManageLocations: boolean;
   /** The institutions a location can BE. Empty until the practice records one. */
   facilities?: any[];
@@ -306,26 +306,6 @@ export default function SettingsConsole({ workspace, config, today, inertColumns
           </p>
         </section>
       )}
-
-      {/* What exists in the schema and is not wired to anything */}
-      <section className="mt-4 rounded-xl border border-gray-200 bg-white p-4">
-        <h2 className="text-[13px] font-bold text-gray-900">Not yet wired</h2>
-        <p className="mt-0.5 text-[11px] text-gray-500">
-          These columns exist in the configuration table and nothing in the product reads them. They are
-          listed rather than shown as fields, because a setting you can change and that changes nothing
-          is worse than one that is missing.
-        </p>
-        <ul className="mt-2 flex flex-col gap-0.5">
-          {inertColumns.map(c => (
-            <li key={c} className="font-mono text-[11px] text-gray-500">{c}</li>
-          ))}
-        </ul>
-        <p className="mt-2 text-[11px] text-gray-500">
-          There is also no personalisation here &mdash; no themes, densities or default landing pages.
-          Nothing in this product has a per-user preference worth storing yet, and inventing one to fill
-          a heading would be building a feature nobody asked for.
-        </p>
-      </section>
 
       {/* The trail */}
       {history.length > 0 && (

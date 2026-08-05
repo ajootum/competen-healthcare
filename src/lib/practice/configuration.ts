@@ -92,9 +92,6 @@ export async function getConfiguration(admin: any, workspaceId: string) {
     workspace,
     config: effective,
     today: practiceToday(workspace.timezone),
-    // Named on the page: the columns migration 191 created and nothing has ever honoured. Listing them
-    // is more honest than rendering inputs that write to a value no code reads.
-    inertColumns: ["identifier_policy", "feature_flags", "date_format"],
   };
 }
 

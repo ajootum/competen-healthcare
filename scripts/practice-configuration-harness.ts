@@ -26,6 +26,7 @@
  *
  *   npx --yes tsx scripts/practice-configuration-harness.ts
  */
+import { readFileSync } from "node:fs";
 import { loadEnvConfig } from "@next/env";
 import { createClient } from "@supabase/supabase-js";
 import { runProvisioning, type IndividualRequest } from "../src/lib/practice/provisioning";
@@ -96,9 +97,35 @@ async function main() {
     JSON.stringify({ locale: initial?.config.locale, tz: initial?.workspace.timezone }));
   ok("migration 203's default appointment length is present",
     initial?.config.default_appointment_minutes === 20, `${initial?.config.default_appointment_minutes}`);
-  ok("the inert columns are NAMED rather than silently rendered as settings",
-    (initial?.inertColumns ?? []).includes("feature_flags") && (initial?.inertColumns ?? []).includes("identifier_policy"),
-    (initial?.inertColumns ?? []).join(","));
+  // ── CPR-SET-004 REVERSES WHAT THIS ASSERTION USED TO SAY ────────────────────────────────────────
+  //
+  // "Hide all developer placeholders such as 'Not yet wired', feature flags and identifiers" /
+  // "No developer/debug information visible in production."
+  //
+  // CPR-360 listed the inert columns BY NAME, and that was the honest choice while the alternative was
+  // rendering inputs that wrote to values nothing read. But `identifier_policy` in a monospace list is a
+  // COLUMN NAME on a practitioner's settings page, and it is not something they can act on. The rule
+  // that actually mattered survives -- never render an input bound to a value nothing reads -- and it is
+  // now enforced by those inputs not existing rather than by a list explaining them.
+  // COMMENTS ARE STRIPPED FIRST. The requirement is about what a practitioner SEES, and the page's own
+  // header explains which column names were removed and why -- so a naive grep fails on the very
+  // sentence documenting the fix. This is the third time this session an assertion could not tell a
+  // thing from its description; the answer each time is to narrow what is searched, not to soften the
+  // rule.
+  const stripComments = (src: string) =>
+    src.replace(/\/\*[\s\S]*?\*\//g, "").split("\n").filter(l => !l.trim().startsWith("//")).join("\n");
+  const settingsSource = [
+    "src/app/practice/(shell)/settings/page.tsx",
+    "src/app/practice/(shell)/settings/SettingsConsole.tsx",
+  ].map(f => stripComments(readFileSync(f, "utf8"))).join("\n");
+  const leaked = ["identifier_policy", "feature_flags", "Not yet wired"]
+    .filter(name => settingsSource.includes(name));
+  ok("no column name or developer placeholder reaches the settings page",
+    leaked.length === 0, leaked.join(", "));
+  ok("CONTROL: that check can fire, so it is not vacuous",
+    ["identifier_policy"].filter(n => "x identifier_policy y".includes(n)).length === 1);
+  ok("and the engine no longer hands column names to any caller",
+    !("inertColumns" in (initial ?? {})), JSON.stringify(Object.keys(initial ?? {})));
 
   // A workspace whose configuration row is missing must be repaired on sight, not left with defaults
   // coming from nowhere.
