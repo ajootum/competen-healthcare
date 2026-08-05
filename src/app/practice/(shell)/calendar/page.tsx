@@ -1,13 +1,15 @@
-import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createAdminClient } from "@/lib/supabase/server";
 import { resolvePracticeShell } from "@/lib/practice/shell";
 import { hasCapability } from "@/lib/practice/access";
+import { plannerWeek } from "@/lib/practice/planner";
+import { listFollowUps } from "@/lib/practice/follow-ups";
 import { loadDay } from "@/lib/practice/scheduling";
 import { calendarDay, SLOT_KINDS } from "@/lib/practice/calendar";
 import { bookingLocations, locationDay } from "@/lib/practice/hospital-booking";
 import { timelineDay } from "@/lib/practice/timeline";
 import { zonedDayRange } from "@/lib/practice/practice-time";
+import PlannerWorkspace from "./PlannerWorkspace";
 import CalendarConsole from "./CalendarConsole";
 import OperationsHeader from "./OperationsHeader";
 import AvailabilityRibbon from "./AvailabilityRibbon";
@@ -15,18 +17,29 @@ import CalendarFooter from "./CalendarFooter";
 import WhereYouAre from "./WhereYouAre";
 import Timeline from "./Timeline";
 
-// /practice/calendar -- CPR-CAL-001 v4, the Practice Operations Calendar.
+// /practice/calendar -- CPR-V5-005, THE PRACTICE PLANNER.
 //
 // ────────────────────────────────────────────────────────────────────────────────────────────────────
-// A REAL DEFECT FIXED ON THE WAY IN: THE DAY WAS UTC'S, NOT THE PRACTICE'S.
+// WHAT CHANGED, AND WHAT DELIBERATELY DID NOT.
 //
-// loadDay() has sliced the diary with `${dayIso}T00:00:00.000Z` since Phase 1. CPR-300 found exactly
-// this on the operations home and fixed it there -- in Kampala a 01:00 appointment is 22:00Z the day
-// before, so it vanished from its own day and turned up on the previous one. Every panel added here
-// goes through calendarDay(), which uses zonedDayRange and is therefore on the practice's own clock.
+// s1: "Replace the traditional appointment calendar with a Practice Planner. Activities -- not
+// appointments -- are the primary planning object." So the seven-day planner is now the top of this
+// route and the first thing on it.
 //
-// THE EXISTING CONSOLE IS KEPT. It already books, checks in, transitions and starts encounters, and all
-// of that works; the comp's operational furniture is composed AROUND it rather than in place of it.
+// ⚠ THE APPOINTMENT BOOK IS KEPT, MOUNTED BELOW THE PLANNER, AND NOTHING IT DOES WAS DROPPED. The
+// console beneath books appointments, checks patients in, moves them through the queue and STARTS
+// ENCOUNTERS; the timeline drags an appointment to a new time or a different hospital; the ribbon shows
+// the day's slots and the footer its totals. All of that is real, is used, and has no equivalent in the
+// planner -- an activity is a BLOCK OF THE PRACTITIONER'S TIME, and a patient's 08:20 appointment is a
+// different object with a different lifecycle. "Appointments are no longer the primary planning object"
+// is a statement about hierarchy, not a licence to delete the half of this screen that sees patients.
+//
+// BOTH HALVES READ THE SAME ?date=. The planner selects its day through the URL rather than through
+// client state precisely so that the book below always shows the day the planner is showing. Two ideas
+// of "the day I am looking at" on one screen is how somebody edits Thursday while reading Wednesday.
+//
+// THE WEEK ANCHOR IS THE SAME PARAMETER: plannerWeek() takes any date inside the week it should return,
+// so choosing a day in another week moves the week with no second parameter to keep in step.
 // ────────────────────────────────────────────────────────────────────────────────────────────────────
 
 export const dynamic = "force-dynamic";
@@ -34,18 +47,27 @@ export const dynamic = "force-dynamic";
 export default async function CalendarPage({ searchParams }: { searchParams: Promise<{ date?: string }> }) {
   const shell = await resolvePracticeShell();
   if (shell.state !== "READY") redirect("/practice");
+  // ⚠ REAL CAPABILITY CODES ONLY -- these two are seeded by migrations 191 and 192. A code invented here
+  // would compile perfectly and lock every user out of this route, including the practice owner.
   if (!hasCapability(shell.ctx, "practice.calendar.view")) redirect("/practice/home");
 
   const { date } = await searchParams;
   const admin = createAdminClient();
+  const canManage = hasCapability(shell.ctx, "appointment.manage");
 
-  const c = await calendarDay(admin, shell.ctx, date);
-  // The console still takes its own slice, so the interactive half keeps working exactly as it did.
+  // THE SEVEN-DAY WEEK. A failed read comes back as seven days each flagged unavailable, with the
+  // database's own words in `detail` -- never as a confident empty week. The screen renders that state
+  // rather than smoothing it over.
+  const week = await plannerWeek(admin, shell.ctx, { date });
+  const selectedDate =
+    date && week.days.some(d => d.date === date) ? date
+      : week.days.some(d => d.date === week.todayDate) ? week.todayDate
+        : week.days[0].date;
+
+  // The appointment book's own day. calendarDay() is on the practice's clock, like everything here.
+  const c = await calendarDay(admin, shell.ctx, selectedDate);
   const initial = await loadDay(admin, shell.ctx.workspaceId, c.day);
 
-  // MULTI-HOSPITAL AND THE TIMELINE. All three go through the practice's own clock, like everything
-  // else on this screen -- timelineDay in particular positions every block in practice-local minutes so
-  // the browser never does clock arithmetic of its own.
   const dayRange = zonedDayRange(c.day, c.timezone);
   const [locations, route, timeline] = await Promise.all([
     bookingLocations(admin, shell.ctx),
@@ -53,37 +75,45 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
     timelineDay(admin, shell.ctx, c.day, c.timezone),
   ]);
 
-  const shift = (days: number) => {
-    const d = new Date(`${c.day}T12:00:00Z`);
-    d.setUTCDate(d.getUTCDate() + days);
-    return d.toISOString().slice(0, 10);
-  };
+  // s3's Upcoming Follow-ups. Gated on the capability that actually guards them, and ABSENT rather than
+  // empty when the caller does not hold it -- "no follow-ups" and "you cannot see follow-ups" are
+  // different sentences.
+  //
+  // ⚠ listFollowUps() returns [] both when there is nothing and when its read fails; it does not report
+  // the error and it is not this screen's file to change. The panel therefore claims only what that
+  // engine can support, and says "nothing open or scheduled" rather than a count of anything.
+  const canSeeFollowUps = hasCapability(shell.ctx, "followup.view");
+  const followUpRows = canSeeFollowUps
+    ? await listFollowUps(admin, shell.ctx.workspaceId, { status: ["OPEN", "SCHEDULED"], limit: 50 })
+    : [];
+  const followUps = followUpRows.slice(0, 6).map(f => ({
+    id: String(f.id),
+    patientName: (f.patient_name as string | null) ?? null,
+    dueOn: String(f.due_on),
+    kind: (f.kind as string | null) ?? null,
+    overdue: Boolean(f.overdue),
+  }));
 
   return (
     <div className="-m-5 min-h-full bg-[var(--cp-canvas)] p-5">
-      <div className="mx-auto flex w-full max-w-[1600px] flex-col gap-4">
-        {/* ── Date navigation (comp: ‹ Today Tuesday, 21 May) ────────────────────────────────── */}
-        <div className="flex items-center gap-2 flex-wrap">
-          <div>
-            <h1 className="text-xl font-bold text-gray-900">Calendar</h1>
-            <p className="text-[13px] text-gray-500">Practice operations</p>
-          </div>
-          <div className="ml-auto flex items-center gap-1.5">
-            <Link href={`/practice/calendar?date=${shift(-1)}`}
-              className="rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-[13px] font-semibold text-gray-700 hover:bg-gray-50"
-              aria-label="Previous day">‹</Link>
-            <Link href="/practice/calendar"
-              className={`rounded-lg border px-3 py-1.5 text-[13px] font-semibold ${c.isToday
-                ? "border-[var(--cp-primary)] bg-[var(--cp-primary)]/5 text-[var(--cp-primary-deep)]"
-                : "border-gray-200 bg-white text-gray-700 hover:bg-gray-50"}`}>
-              Today
-            </Link>
-            <Link href={`/practice/calendar?date=${shift(1)}`}
-              className="rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-[13px] font-semibold text-gray-700 hover:bg-gray-50"
-              aria-label="Next day">›</Link>
-            <span className="ml-2 text-[14px] font-semibold text-gray-900">{c.day}</span>
-          </div>
-        </div>
+      <div className="mx-auto flex w-full max-w-[1600px] flex-col gap-5">
+        <PlannerWorkspace
+          week={week}
+          selectedDate={selectedDate}
+          canManage={canManage}
+          locations={locations.map(l => ({ id: l.id, name: l.name, facility: l.facility?.name ?? null }))}
+          followUps={followUps}
+          followUpsUnavailable={canSeeFollowUps ? null : "You do not hold followup.view, so this panel is not showing you anything."}
+        />
+
+        {/* ── THE APPOINTMENT BOOK. Still here, still doing everything it did. ─────────────────── */}
+        <section className="rounded-2xl border border-gray-200 bg-white p-4">
+          <h2 className="text-[15px] font-bold text-gray-900">Appointment book</h2>
+          <p className="text-[12px] text-gray-500">
+            {c.day} — the patients booked into this day, their arrival and the encounters started from it.
+            Activities are what you plan; appointments are who is coming.
+          </p>
+        </section>
 
         <OperationsHeader c={c} />
         <AvailabilityRibbon c={{ ...c, kinds: SLOT_KINDS }} />
@@ -91,12 +121,12 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
 
         <Timeline
           timeline={JSON.parse(JSON.stringify(timeline))}
-          canManage={hasCapability(shell.ctx, "appointment.manage")}
+          canManage={canManage}
         />
 
         <CalendarConsole
           date={c.day}
-          canManage={hasCapability(shell.ctx, "appointment.manage")}
+          canManage={canManage}
           canQueue={hasCapability(shell.ctx, "queue.manage")}
           canStartEncounter={hasCapability(shell.ctx, "encounter.create")}
           initial={JSON.parse(JSON.stringify(initial))}
