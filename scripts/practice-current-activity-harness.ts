@@ -15,6 +15,7 @@ import {
   todaysPlan, planActivity, startActivity, endActivity, activityState, ACTIVITY_TYPES,
 } from "../src/lib/practice/activity";
 import { todaysWork } from "../src/lib/practice/todays-work";
+import { sessionMetrics, todayAtAGlance, activeFollowUps, waitingQueue, operationalAlerts } from "../src/lib/practice/session";
 import { runProvisioning, type IndividualRequest } from "../src/lib/practice/provisioning";
 import { PRACTICE_NAV, primaryNav, childrenOf, orphanedNav } from "../src/lib/practice/navigation";
 import type { WorkspaceContext } from "../src/lib/practice/access";
@@ -270,7 +271,80 @@ async function main() {
   ok("8-control. a readable practice reports counts and is not marked unavailable",
     goodWork.panels.every(p => !p.unavailable && p.count !== null) && !goodWork.plan.unavailable);
 
-  // ── 9. CPR-V3-002 navigation: nine sections, and NOTHING unreachable ─────────────────────────────
+  // ── 10. CPR-V5-001 SESSION ENGINE: the window is the session, and estimates are earned ───────────
+  //
+  // "The dashboard should no longer revolve around appointments. It should revolve around the
+  // practitioner's current operational context." That is a claim about SCOPE, so it is tested by
+  // scope: the same eight tiles must count a different window depending on whether a session is running.
+  const noSession = await todaysPlan(admin, ctxA);
+  ok("10a. no session running means no session metrics",
+    (await sessionMetrics(admin, ctxA, noSession)) === null);
+
+  const sessionAct = await plan(ctxA, "Metrics clinic", 9 * 60, 17 * 60);
+  if (sessionAct.ok) {
+    await startActivity(admin, ctxA, sessionAct.value.id);
+    const withSession = await todaysPlan(admin, ctxA);
+    const m = await sessionMetrics(admin, ctxA, withSession);
+    ok("10b. a running session produces metrics", m !== null);
+    if (m) {
+      ok("10c. the window is the SESSION's, not the day's",
+        m.windowStartIso < m.windowEndIso
+        && Date.parse(m.windowEndIso) - Date.parse(m.windowStartIso) === 8 * 3600 * 1000,
+        `${m.windowStartIso} -> ${m.windowEndIso}`);
+      ok("10d. progress is a clamped percentage, never negative or past 100",
+        m.progressPercent >= 0 && m.progressPercent <= 100, String(m.progressPercent));
+
+      // ⚠ THE ASSERTION THAT KEEPS THE COMP HONEST. The mockup prints "18 min" average and "12 min"
+      // behind. With no completed encounter both are UNKNOWABLE, and a default would make the one
+      // figure somebody reschedules an afternoon over into a guess. Null, not a number.
+      ok("10e. with nothing seen, the average is NULL rather than a default",
+        m.averageMinutesPerPatient === null, String(m.averageMinutesPerPatient));
+      ok("10f. and with no average there is no 'running behind' projection",
+        m.runningBehindMinutes === null, String(m.runningBehindMinutes));
+      ok("10g. patients seen is 0 -- a counted nought, not an unknown",
+        m.patientsSeen === 0, String(m.patientsSeen));
+
+      // The glance counts the session window when one runs, and the day when none does. Both must be
+      // readable, and the scope must be REPORTED so the screen can label which one it drew.
+      const sessionGlance = await todayAtAGlance(admin, ctxA, {
+        fromIso: m.windowStartIso, toIso: m.windowEndIso, today, scope: "session",
+      });
+      ok("10h. the glance reports the scope it counted over", sessionGlance.scope === "session");
+      ok("10i. and returns CPR-V5-001 s3's eight tiles", sessionGlance.tiles.length === 8,
+        sessionGlance.tiles.map(t => t.key).join(","));
+      ok("10j. every tile opens the list behind its number",
+        sessionGlance.tiles.every(t => t.href.startsWith("/practice/")));
+
+      const lenses = await activeFollowUps(admin, ctxA, today);
+      ok("10k. follow-ups return s6's five lenses", lenses.length === 5,
+        lenses.map(l => l.key).join(","));
+      // "Waiting Results" must be a real kind rather than a label over nothing.
+      ok("10l. 'Waiting Results' is a real follow-up kind, not an invented bucket",
+        lenses.some(l => l.key === "waiting_results" && l.count !== null));
+
+      const q = await waitingQueue(admin, ctxA);
+      ok("10m. the queue splits into booked, walk-ins and emergency",
+        q.groups.map(g => g.key).join() === "booked,walk_ins,emergency", q.groups.map(g => g.key).join());
+
+      const al = await operationalAlerts(admin, ctxA, today);
+      ok("10n. a quiet practice raises no alerts rather than four reassurances",
+        !al.unavailable && al.alerts.length === 0, JSON.stringify(al.alerts));
+
+      await endActivity(admin, ctxA, sessionAct.value.id);
+    }
+  }
+
+  // A failed read must leave the session figures unknown rather than reporting an idle clinic.
+  const brokenGlance = await todayAtAGlance(admin, ctxFor("not-a-uuid", userA, ALL), {
+    fromIso: "2026-01-01T00:00:00Z", toIso: "2026-01-02T00:00:00Z", today, scope: "day",
+  });
+  ok("10o. an unreadable glance reports no counts, never eight noughts",
+    brokenGlance.unavailable && brokenGlance.tiles.every(t => t.count === null));
+  ok("10o-control. a readable glance reports counts",
+    (await todayAtAGlance(admin, ctxA, { fromIso: "2026-01-01T00:00:00Z", toIso: "2030-01-01T00:00:00Z", today, scope: "day" }))
+      .tiles.every(t => t.count !== null));
+
+  // ── 9. CPR-V5-001 s8 navigation: eight sections, and NOTHING unreachable ─────────────────────────
   //
   // ⚠ THE WHOLE RISK OF ADOPTING V3's NINE. This build has twenty-five routes; the volume names nine.
   // Rendering only the nine leaves sixteen working screens with no way in -- which is precisely the
@@ -280,9 +354,18 @@ async function main() {
   ok("9a. no built module is unreachable from the sidebar", orphans.length === 0,
     orphans.map(o => `${o.label} (${o.href}) has no parent section`).join("; "));
 
-  const nine = PRACTICE_NAV.filter(i => i.primary);
-  ok("9b. the sidebar declares CPR-V3-002's nine sections", nine.length === 9,
-    `${nine.length}: ${nine.map(i => i.label).join(", ")}`);
+  const sections = PRACTICE_NAV.filter(i => i.primary);
+  ok("9b. the sidebar declares CPR-V5-001 s8's eight sections", sections.length === 8,
+    `${sections.length}: ${sections.map(i => i.label).join(", ")}`);
+
+  // 9b-order. THE ORDER IS PART OF THE SPECIFICATION, not an accident of where entries sit in the array.
+  // s8 lists them, and "Encounters becomes the central workspace" is a claim about position as much as
+  // about function -- it is fourth, right after the three ways a practitioner reaches one.
+  const V5_ORDER = ["/practice/home", "/practice/calendar", "/practice/patients", "/practice/encounters",
+    "/practice/documents", "/practice/follow-ups", "/practice/assistant", "/practice/setup"];
+  const rendered = primaryNav([...new Set(PRACTICE_NAV.map(i => i.capability).filter(Boolean))] as string[]);
+  ok("9b-order. and renders them in the order s8 lists",
+    rendered.map(i => i.href).join() === V5_ORDER.join(), rendered.map(i => i.href).join(" "));
 
   // A section that is not built must not render, and must not be used as a parent -- a module filed under
   // an unbuilt section is an orphan with extra steps.
@@ -297,7 +380,7 @@ async function main() {
   const allCaps = [...new Set(PRACTICE_NAV.map(i => i.capability).filter(Boolean))] as string[];
   const shown = primaryNav(allCaps);
   ok("9d-control. an owner sees the built sections, not an empty sidebar",
-    shown.length === nine.filter(i => i.built).length && shown.length >= 7, `${shown.length} shown`);
+    shown.length === sections.filter(i => i.built).length && shown.length === 8, `${shown.length} shown`);
   ok("9e-control. and the modules filed under them are reachable",
     shown.reduce((n, s) => n + childrenOf(s.href, allCaps).length, 0) >= 15,
     `${shown.reduce((n, s) => n + childrenOf(s.href, allCaps).length, 0)} children`);

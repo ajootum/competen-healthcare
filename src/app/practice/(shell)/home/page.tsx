@@ -5,8 +5,16 @@ import { resolvePracticeShell } from "@/lib/practice/shell";
 import { operationsHome } from "@/lib/practice/operations-home";
 import { commandCentre } from "@/lib/practice/command-centre";
 import { resolvePreferences } from "@/lib/practice/preferences";
+import { hasCapability } from "@/lib/practice/access";
+import { todaysPlan } from "@/lib/practice/activity";
 import {
-  HERO_SWATCH, HERO_ICON, PANEL, FOLLOWUP_SWATCH, COHORT_RING,
+  sessionMetrics, todayAtAGlance, waitingQueue, activeFollowUps, operationalAlerts, draftEncounters,
+} from "@/lib/practice/session";
+import { formatMinuteOfDay } from "@/lib/datetime";
+import { zonedDayRange } from "@/lib/practice/practice-time";
+import StartYourDay from "./StartYourDay";
+import {
+  PANEL, FOLLOWUP_SWATCH, COHORT_RING,
   QUEUE_SWATCH, QUICK_SWATCH, QUICK_ICON, PERFORMANCE_SWATCH, SEVERITY,
 } from "@/lib/practice/palette";
 
@@ -61,22 +69,41 @@ const dayName = (iso: string) =>
 const dayNumber = (iso: string) =>
   new Date(`${iso}T12:00:00Z`).toLocaleDateString("en-GB", { day: "numeric", month: "short", timeZone: "UTC" });
 
-function greeting(hour: number) {
-  if (hour < 12) return "Good morning";
-  if (hour < 18) return "Good afternoon";
-  return "Good evening";
-}
-
 export default async function PracticeCommandCentre() {
   const shell = await resolvePracticeShell();
   if (shell.state !== "READY") redirect("/practice");
   const { ctx } = shell;
 
   const admin = createAdminClient();
-  const [home, cc, { effective }] = await Promise.all([
+  const at = new Date();
+  const [home, cc, { effective }, plan] = await Promise.all([
     operationsHome(admin, ctx),
     commandCentre(admin, ctx),
     resolvePreferences(admin, ctx.workspaceId, ctx.userId),
+    todaysPlan(admin, ctx, { at }),
+  ]);
+
+  // ── CPR-V5-001: THE SESSION DECIDES WHAT THIS PAGE COUNTS ──────────────────────────────────────
+  //
+  // s9: "the entire dashboard must automatically change based on confirmed current activity and
+  // location". That is implemented HERE and nowhere else -- one window, computed once, passed to every
+  // widget that takes one. A card deciding its own scope is a card that will eventually disagree with
+  // the one beside it, and two counters over different windows is worse than one counter.
+  const metrics = await sessionMetrics(admin, ctx, plan, at);
+  const canPlan = hasCapability(ctx, "practice.calendar.manage");
+  // The practice's midnight-to-midnight, not the server's. `zonedDayRange` is the same function every
+  // other day-scoped read in this codebase uses, so "today" cannot mean two different spans on one page.
+  const day = zonedDayRange(cc.today, cc.timezone);
+  const window = metrics
+    ? { fromIso: metrics.windowStartIso, toIso: metrics.windowEndIso, scope: "session" as const }
+    : { fromIso: day.startIso, toIso: day.endIso, scope: "day" as const };
+
+  const [glance, queue, followUpLenses, alerts, drafts] = await Promise.all([
+    todayAtAGlance(admin, ctx, { ...window, today: cc.today }),
+    waitingQueue(admin, ctx, at),
+    activeFollowUps(admin, ctx, cc.today),
+    operationalAlerts(admin, ctx, cc.today),
+    draftEncounters(admin, ctx),
   ]);
 
   // CPR-360 dashboard customisation, applied with `order` on the grid children rather than by
@@ -90,17 +117,6 @@ export default async function PracticeCommandCentre() {
   };
 
   const readAt = new Date(cc.readAtIso);
-  const hourInPractice = Number(
-    readAt.toLocaleString("en-GB", { hour: "2-digit", hour12: false, timeZone: cc.timezone }),
-  );
-  const firstName = cc.greetingName;
-
-  const clinicLine = cc.clinic.state === "before"
-    ? "Your clinic has not opened yet."
-    : cc.clinic.state === "finished"
-      ? "Your clinic has closed for the day."
-      : cc.heroStats[0].value === 0 ? "Nothing is booked today."
-        : `You have ${cc.heroStats[0].value} in the diary today.`;
 
   return (
     <div className="-m-5 min-h-full bg-[var(--cp-canvas)] p-5">
@@ -120,74 +136,61 @@ export default async function PracticeCommandCentre() {
 
         {/* ── Hero briefing ─────────────────────────────────────────────────────────────────────── */}
         <section className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_320px]">
-          <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_300px]">
-            {/* The comp's hero is a tinted panel, not a white card -- it is the one block on the page
-                that is a greeting rather than a worklist. */}
-            <div className="rounded-xl border border-[var(--cp-primary)]/15 bg-gradient-to-br from-[var(--cp-primary)]/[0.06] to-white p-4">
-              <h2 className="text-[19px] font-bold text-gray-900">
-                {greeting(hourInPractice)}{firstName ? `, ${firstName}` : ""}
-              </h2>
-              <p className="mt-0.5 text-[13px] text-gray-500">{clinicLine}</p>
+          {/* THE COMP'S TOP ROW: Zone 1 · Today at a Glance · Today's Brief. */}
+          <div className="grid gap-4 lg:grid-cols-3">
 
-              {/* Six stats. Each carries its own tinted icon so the row can be scanned rather than
-                  read -- see palette.ts for why only "Overdue Reviews" has a hue that means something. */}
-              <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
-                {cc.heroStats.map(s => {
-                  const sw = HERO_SWATCH[s.key] ?? HERO_SWATCH.new_patients;
-                  return (
-                    <div key={s.key}>
-                      {s.available ? (
-                        <Link href={s.href} className="group block">
-                          <span aria-hidden className={`mb-1.5 flex h-7 w-7 items-center justify-center rounded-lg text-[13px] ${sw.badge}`}>
-                            {HERO_ICON[s.key] ?? "•"}
-                          </span>
-                          <p className={`text-[24px] font-bold leading-none ${sw.figure}`}>{s.value}</p>
-                          <p className="mt-1 text-[11px] leading-tight text-gray-500 group-hover:text-gray-800">{s.label}</p>
-                        </Link>
-                      ) : (
-                        <>
-                          <span aria-hidden className="mb-1.5 flex h-7 w-7 items-center justify-center rounded-lg bg-gray-100 text-[13px] text-gray-300">
-                            {HERO_ICON[s.key] ?? "•"}
-                          </span>
-                          <p className="text-[24px] font-bold leading-none text-gray-300">—</p>
-                          <p className="mt-1 text-[11px] leading-tight text-gray-400">{s.label}</p>
-                          <p className="text-[9px] leading-tight text-gray-400">not visible to you</p>
-                        </>
-                      )}
-                    </div>
-                  );
-                })}
+            {/* ⚠ CPR-V5-001 s2 REPLACES THE GREETING WITH THE CURRENT ACTIVITY. The card that stood here
+                said "Good morning, Elisha" and then six counters -- pleasant, and it answered no question
+                a practitioner has at 08:00. What replaces it is the one control that changes what every
+                other card on this page MEANS, because each of them scopes to the running session. */}
+            <StartYourDay plan={plan} metrics={metrics} canPlan={canPlan} />
+
+            {/* ── TODAY AT A GLANCE (s3) ──────────────────────────────────────────────────────── */}
+            <div className={card}>
+              <div className="mb-3 flex items-center gap-2">
+                <h2 className={panelTitle}>Today at a glance</h2>
+                {/* THE WINDOW IS ON THE CARD, not assumed. The same eight tiles mean "this clinic"
+                    during a session and "today" outside one, and an unlabelled figure is the wrong
+                    answer half the time. */}
+                <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-slate-500">
+                  {glance.scope === "session" ? "This session" : "Today"}
+                </span>
               </div>
-
-              {/* Clinic window. The bar is the day elapsed, not work completed -- a very different
-                  claim, and one nothing here measures. */}
-              <div className="mt-4 border-t border-[var(--cp-primary)]/10 pt-3">
-                <div className="flex flex-wrap items-baseline gap-2 text-[12px]">
-                  <span className="font-semibold text-gray-800">
-                    Clinic: {cc.clinic.opensLabel} – {cc.clinic.closesLabel}
-                  </span>
-                  <span className={`rounded px-1.5 py-0.5 text-[10px] font-semibold ${
-                    cc.clinic.state === "in_progress" ? "bg-emerald-100 text-emerald-800"
-                      : cc.clinic.state === "before" ? "bg-cyan-100 text-cyan-800"
-                        : "bg-slate-100 text-slate-600"}`}>
-                    {cc.clinic.state === "in_progress" ? "In progress"
-                      : cc.clinic.state === "before" ? "Not open yet" : "Closed"}
-                  </span>
-                  {cc.clinic.estimatedFinishLabel && (
-                    <span className={`ml-auto ${cc.clinic.runningLate ? "font-semibold text-amber-700" : "text-gray-600"}`}>
-                      Last booking ends: {cc.clinic.estimatedFinishLabel}
-                      {cc.clinic.runningLate ? " — after closing" : ""}
+              <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                {glance.tiles.map(t => (
+                  <Link key={t.key} href={t.href}
+                    className="rounded-lg border border-gray-200 px-2.5 py-2 transition-colors hover:border-[var(--cp-primary-border)] hover:bg-[var(--cp-primary-soft)]">
+                    {/* A NULL COUNT RENDERS AN EM DASH. "Could not read" and "none" are different
+                        answers and a zero is the more dangerous of the two to guess. */}
+                    <span className="block text-[19px] font-bold leading-none tabular-nums text-gray-900">
+                      {t.count === null ? "—" : t.count}
                     </span>
-                  )}
-                </div>
-                <div className="mt-2 h-2 w-full overflow-hidden rounded-full bg-[var(--cp-primary)]/10">
-                  <div className="h-full rounded-full bg-gradient-to-r from-[var(--cp-primary)] to-[var(--cp-accent)]"
-                    style={{ width: `${cc.clinic.progressPercent ?? 0}%` }} />
-                </div>
-                <p className="mt-1 text-[10px] text-gray-400">
-                  The bar shows how much of the clinic day has passed, not how much work is done.
-                </p>
+                    <span className="mt-1 block truncate text-[10.5px] text-gray-500">{t.label}</span>
+                  </Link>
+                ))}
               </div>
+
+              {/* SESSION PROGRESS (s3). Only when a session is running: outside one there is no session
+                  to be a proportion of, and the old bar measured the clinic DAY elapsed, which is a
+                  different claim that nothing on this page needs. */}
+              {metrics && (
+                <div className="mt-3 border-t border-gray-100 pt-3">
+                  <div className="flex items-baseline justify-between gap-2">
+                    <span className="text-[11px] font-semibold text-gray-700">Session progress</span>
+                    <span className="text-[11px] tabular-nums text-gray-500">
+                      {formatMinuteOfDay(metrics.activity.plannedStartMinute)} – {formatMinuteOfDay(metrics.activity.plannedEndMinute)}
+                    </span>
+                  </div>
+                  <div className="mt-2 h-2 w-full overflow-hidden rounded-full bg-[var(--cp-primary)]/10">
+                    <div className="h-full rounded-full bg-gradient-to-r from-[var(--cp-primary)] to-[var(--cp-accent)]"
+                      style={{ width: `${metrics.progressPercent}%` }} />
+                  </div>
+                  <p className="mt-1 text-[10px] text-gray-400">
+                    {metrics.progressPercent}% of the allotted time has passed. This measures the clock,
+                    not how much work is done.
+                  </p>
+                </div>
+              )}
             </div>
 
             {/* Today's brief — the comp's "AI Briefing", named for what it is. */}
@@ -264,6 +267,194 @@ export default async function PracticeCommandCentre() {
                 </li>
               ))}
             </ul>
+          </div>
+        </section>
+
+        {/* ══ CPR-V5-001 ZONES 2, 3 AND 5: RUN YOUR CLINIC · CURRENT ENCOUNTER · SESSION STATUS ══ */}
+        <section className="grid gap-4 xl:grid-cols-3">
+
+          {/* ── ZONE 2: THE QUEUE, SPLIT THREE WAYS (s4) ───────────────────────────────────────── */}
+          <div className={card}>
+            <div className="mb-3 flex items-center gap-2">
+              <span aria-hidden className="flex h-5 w-5 items-center justify-center rounded-full bg-[var(--cp-primary)] text-[10px] font-bold text-white">2</span>
+              <h2 className={panelTitle}>Run your clinic</h2>
+              {queue.total !== null && (
+                <span className="rounded-full bg-gray-100 px-1.5 py-0.5 text-[10px] font-bold text-gray-600">{queue.total}</span>
+              )}
+              <Link href="/practice/calendar" className={panelLink}>View all →</Link>
+            </div>
+
+            {queue.unavailable ? (
+              <p className="text-[12px] text-gray-500">The queue could not be read just now.</p>
+            ) : queue.total === 0 ? (
+              <p className="text-[12px] text-gray-500">Nobody is waiting.</p>
+            ) : (
+              <div className="space-y-3">
+                {/* A GROUP WITH NOBODY IN IT DOES NOT RENDER. The comp shows three headings because its
+                    fixture has all three; an empty "EMERGENCY (0)" every morning trains people to stop
+                    reading the word emergency. */}
+                {queue.groups.filter(g => g.entries.length > 0).map(g => (
+                  <div key={g.key}>
+                    <p className="mb-1 text-[10px] font-bold uppercase tracking-[0.1em] text-gray-500">
+                      {g.label} ({g.entries.length})
+                    </p>
+                    <ul className="space-y-0.5">
+                      {g.entries.map(e => (
+                        <li key={e.id} className="flex items-center gap-2 rounded-md px-1.5 py-1 hover:bg-gray-50">
+                          <span aria-hidden className={`h-1.5 w-1.5 shrink-0 rounded-full ${
+                            g.key === "emergency" ? "bg-[var(--cmp-text-danger)]"
+                              : g.key === "walk_ins" ? "bg-[var(--cmp-text-warning)]" : "bg-[var(--cp-primary)]"}`} />
+                          <span className="min-w-0 flex-1 truncate text-[12.5px] text-gray-800">{e.name}</span>
+                          {/* Waiting time is the number that decides who is seen next, so it is the one
+                              shown -- not the time they arrived, which the reader would have to subtract. */}
+                          <span className="shrink-0 text-[11px] tabular-nums text-gray-500">{e.waitingMinutes} min</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* ── ZONE 3: CURRENT ENCOUNTER (s4) ─────────────────────────────────────────────────── */}
+          {/* ⚠ THE POINT OF V5: "Encounter is the primary object in the system" (s10). These four are
+              the four ways a patient reaches a practitioner -- booked, walked in, an emergency, or
+              someone you go looking for -- and all four start the SAME encounter, which is what s9 means
+              by "inpatient and outpatient workflows use the same encounter engine". */}
+          <div className={card}>
+            <div className="mb-3 flex items-center gap-2">
+              <span aria-hidden className="flex h-5 w-5 items-center justify-center rounded-full bg-[var(--cp-primary)] text-[10px] font-bold text-white">3</span>
+              <h2 className={panelTitle}>Current encounter</h2>
+              <Link href="/practice/encounters" className={panelLink}>All encounters →</Link>
+            </div>
+
+            <div className="grid grid-cols-2 gap-2">
+              {[
+                { href: "/practice/calendar", label: "Booked Patient", icon: "☺" },
+                { href: "/practice/patients?walk_in=1", label: "Walk-in Patient", icon: "⚇" },
+                { href: "/practice/patients?emergency=1", label: "Emergency Patient", icon: "✚" },
+                { href: "/practice/search", label: "Search Patient", icon: "⌕" },
+              ].map(a => (
+                <Link key={a.href} href={a.href}
+                  className="flex flex-col items-center gap-1 rounded-lg border border-gray-200 px-2 py-2.5 text-center transition-colors hover:border-[var(--cp-primary-border)] hover:bg-[var(--cp-primary-soft)]">
+                  <span aria-hidden className="text-[15px] text-[var(--cp-primary)]">{a.icon}</span>
+                  <span className="text-[11px] font-semibold leading-tight text-gray-700">{a.label}</span>
+                </Link>
+              ))}
+            </div>
+
+            {/* DRAFT ENCOUNTERS -- s4 "support draft encounters and continuation". This is what makes
+                s10's "supports interruptions without breaking workflow" true rather than aspirational:
+                an emergency mid-consultation leaves a draft, and the draft is on the front page. */}
+            {drafts === null ? (
+              <p className="mt-3 border-t border-gray-100 pt-2.5 text-[11.5px] text-gray-500">
+                Draft encounters could not be read just now.
+              </p>
+            ) : drafts.length > 0 && (
+              <div className="mt-3 border-t border-gray-100 pt-2.5">
+                <p className="mb-1.5 text-[10px] font-bold uppercase tracking-[0.1em] text-gray-500">
+                  Unfinished ({drafts.length})
+                </p>
+                <ul className="space-y-0.5">
+                  {drafts.map(d => (
+                    <li key={d.id}>
+                      <Link href={`/practice/encounters/${d.id}`}
+                        className="flex items-center gap-2 rounded-md px-1.5 py-1 hover:bg-gray-50">
+                        <span className="min-w-0 flex-1 truncate text-[12px] text-gray-800">{d.patientName}</span>
+                        <span className="shrink-0 text-[11px] font-semibold text-[var(--cp-primary)]">Continue →</span>
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
+            {/* ACTIVE FOLLOW-UPS, FIVE LENSES (s6). ⚠ THESE OVERLAP AND ARE NEVER SUMMED -- a scheduled
+                investigation result due today is in three of them. Five questions about one list. */}
+            <div className="mt-3 border-t border-gray-100 pt-2.5">
+              <p className="mb-1.5 text-[10px] font-bold uppercase tracking-[0.1em] text-gray-500">Active follow-ups</p>
+              <div className="grid grid-cols-5 gap-1">
+                {followUpLenses.map(l => (
+                  <Link key={l.key} href={l.href}
+                    className="rounded-lg border border-gray-200 px-1 py-1.5 text-center transition-colors hover:border-[var(--cp-primary-border)] hover:bg-[var(--cp-primary-soft)]">
+                    <span className={`block text-[15px] font-bold leading-none tabular-nums ${
+                      l.key === "overdue" && (l.count ?? 0) > 0 ? "text-[var(--cmp-text-danger)]" : "text-gray-900"}`}>
+                      {l.count === null ? "—" : l.count}
+                    </span>
+                    <span className="mt-0.5 block text-[9px] leading-tight text-gray-500">{l.label}</span>
+                  </Link>
+                ))}
+              </div>
+              <p className="mt-1.5 text-[9.5px] leading-relaxed text-gray-400">
+                These five overlap and do not add up — one follow-up can be counted in three of them.
+              </p>
+            </div>
+          </div>
+
+          {/* ── ZONE 5: SESSION STATUS + OPERATIONAL ALERTS (s5) ───────────────────────────────── */}
+          <div className="flex flex-col gap-4">
+            {metrics && (
+              <div className={card}>
+                <div className="mb-3 flex items-center gap-2">
+                  <span aria-hidden className="flex h-5 w-5 items-center justify-center rounded-full bg-[var(--cp-primary)] text-[10px] font-bold text-white">5</span>
+                  <h2 className={panelTitle}>Session status</h2>
+                </div>
+                <dl className="grid grid-cols-2 gap-x-3 gap-y-2">
+                  {[
+                    ["Session", metrics.activity.label],
+                    ["Location", [metrics.activity.facilityName, metrics.activity.room].filter(Boolean).join(" – ") || "Not recorded"],
+                    ["Started", new Date(metrics.startedAtIso).toISOString().slice(11, 16)],
+                    ["Time remaining", metrics.minutesRemaining === null ? "Past its planned end"
+                      : `${Math.floor(metrics.minutesRemaining / 60)}h ${metrics.minutesRemaining % 60}m`],
+                    ["Patients seen", metrics.patientsSeen === null ? "—" : String(metrics.patientsSeen)],
+                    ["Patients remaining", metrics.patientsRemaining === null ? "—" : String(metrics.patientsRemaining)],
+                  ].map(([k, v]) => (
+                    <div key={k}>
+                      <dt className="text-[10px] uppercase tracking-wide text-gray-400">{k}</dt>
+                      <dd className="truncate text-[12.5px] font-semibold text-gray-900">{v}</dd>
+                    </div>
+                  ))}
+                </dl>
+                {/* RUNNING BEHIND IS ABSENT WHEN IT CANNOT BE MEASURED, not shown as zero. It is
+                    projected from the average time actually taken so far times the patients actually
+                    left -- with no completed encounter there is no average, and a projection built on a
+                    default would be the one figure here somebody might change their afternoon over. */}
+                {metrics.runningBehindMinutes !== null && (
+                  <p className="mt-3 rounded-lg bg-[var(--cmp-surface-warning)] px-2.5 py-2 text-[11.5px] font-semibold text-[var(--cmp-text-warning)]">
+                    Running {metrics.runningBehindMinutes} min behind — projected from {metrics.averageMinutesPerPatient} min
+                    a patient across {metrics.patientsSeen} seen so far.
+                  </p>
+                )}
+              </div>
+            )}
+
+            <div className={card}>
+              <div className="mb-3 flex items-center gap-2">
+                <span aria-hidden className="flex h-5 w-5 items-center justify-center rounded-full bg-[var(--cp-primary)] text-[10px] font-bold text-white">4</span>
+                <h2 className={panelTitle}>Operational alerts</h2>
+              </div>
+              {alerts.unavailable ? (
+                <p className="text-[12px] text-gray-500">Alerts could not be read just now.</p>
+              ) : alerts.alerts.length === 0 ? (
+                <p className="text-[12px] text-gray-500">Nothing is waiting on you.</p>
+              ) : (
+                <ul className="space-y-1.5">
+                  {alerts.alerts.map(a => (
+                    <li key={a.key}>
+                      <Link href={a.href} className="flex items-start gap-2 text-[12px] leading-snug text-gray-700 hover:text-[var(--cp-primary)]">
+                        <span aria-hidden className={`mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full ${
+                          a.tone === "danger" ? "bg-[var(--cmp-text-danger)]"
+                            : a.tone === "warning" ? "bg-[var(--cmp-text-warning)]" : "bg-[var(--cp-primary)]"}`} />
+                        <span>{a.text}</span>
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              )}
+              {/* A COUNT OF NOUGHT DOES NOT RENDER AN ALERT AT ALL. Four standing reassurances would
+                  make this card wallpaper, and the one real alert would be missed inside it. */}
+            </div>
           </div>
         </section>
 
