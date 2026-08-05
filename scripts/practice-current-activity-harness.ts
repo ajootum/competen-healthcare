@@ -156,7 +156,38 @@ async function main() {
   });
   ok("1d. REFUSES an activity type that is not one of CPR-V3-001's eight",
     !badType.ok && badType.code === "VALIDATION_ERROR", JSON.stringify(badType));
-  ok("1d-control. every type CPR-V3-001 names is accepted", ACTIVITY_TYPES.length === 8);
+  // ⚠ THIS CONTROL USED TO BE `ACTIVITY_TYPES.length === 8` AND PROVED NOTHING ABOUT THE DATABASE.
+  // Counting a list in TypeScript cannot tell you the CHECK constraint agrees with it, which is the only
+  // thing that matters: the vocabulary lives in two places (activity-constants.ts and migration 237's
+  // constraint) and the compiler cannot see one of them. It also went stale the moment CPR-V5-005 added
+  // five types -- a threshold assertion that has to be edited whenever the truth changes is a reminder,
+  // not a test. So it now PLANS ONE OF EVERY TYPE and requires all of them to be accepted.
+  //
+  // This is also what verifies migration 237 landed as intended. 237 widens the constraint by dropping
+  // `practice_activity_activity_type_check` -- the name Postgres generates for 232's INLINE column check
+  // -- and adding a named one. If that guess about the generated name were wrong, the drop would be a
+  // silent no-op, the OLD eight-type constraint would still stand alongside the new thirteen-type one,
+  // and every type added by 237 would be rejected while the migration reported success.
+  // ⚠ ON ITS OWN DAY, NOT TODAY. Thirteen blocks are a lot of fixture, and the first version of this put
+  // them on `today` -- where they immediately broke assertion 3e, which asks which activity is NEXT and
+  // got one of these instead of the one it planted. A control that proves its own point by changing the
+  // state every other assertion reads is not a control. This date is far enough out that nothing else
+  // in the file looks at it.
+  const typeProbeDate = new Date(`${today}T12:00:00Z`);
+  typeProbeDate.setUTCDate(typeProbeDate.getUTCDate() + 120);
+  const probeDay = typeProbeDate.toISOString().slice(0, 10);
+
+  const typeResults = [];
+  for (const [i, t] of ACTIVITY_TYPES.entries()) {
+    typeResults.push([t, await planActivity(admin, ctxA, {
+      activityType: t, title: `Type check ${t}`, planDate: probeDay,
+      plannedStartMinute: i * 60, plannedEndMinute: i * 60 + 30,
+    })] as const);
+  }
+  const rejected = typeResults.filter(([, r]) => !r.ok);
+  ok(`1d-control. ⚠ the DATABASE accepts every one of the ${ACTIVITY_TYPES.length} types, not just the list`,
+    rejected.length === 0,
+    rejected.map(([t, r]) => `${t}: ${JSON.stringify(r)}`).join(" | "));
 
   const noCap = await plan(ctxFor(wsA, userA, ["practice.home.view"]), "No capability", 60, 120);
   ok("1e. REFUSES planning without appointment.manage",

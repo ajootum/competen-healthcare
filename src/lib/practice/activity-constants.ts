@@ -14,9 +14,17 @@
 // stating plainly: A CONSTANT A SCREEN NEEDS DOES NOT BELONG IN A FILE THAT TOUCHES THE DATABASE.
 // activity.ts re-exports both so server callers are unaffected and nothing has two definitions.
 
+// ⚠ THIS LIST AND MIGRATION 237'S CHECK CONSTRAINT ARE ONE VOCABULARY IN TWO PLACES. A type here that
+// the constraint rejects is a button that throws on click. A type there that is missing here draws as a
+// raw database string. Neither can be caught by the compiler, so they are changed together or not at all.
 export const ACTIVITY_TYPES = [
+  // CPR-V3-001 s4's original eight (migration 232).
   "outpatient_clinic", "ward_round", "theatre", "emergency_consult",
   "virtual_clinic", "telephone_review", "administration", "teaching",
+  // CPR-V5-005 s2 and s9 add five (migration 237). `leave` is the one that carries weight: a day with
+  // no rows cannot say whether nothing is planned yet or the practitioner is deliberately not working,
+  // and only a positive record tells those apart.
+  "meeting", "research", "leave", "travel", "custom",
 ] as const;
 
 export type ActivityType = (typeof ACTIVITY_TYPES)[number];
@@ -30,4 +38,14 @@ export const ACTIVITY_LABEL: Record<ActivityType, string> = {
   telephone_review: "Telephone Review",
   administration: "Administration",
   teaching: "Teaching",
+  meeting: "Meeting",
+  research: "Research",
+  leave: "Leave",
+  // NOT "Travel time". A travel activity is a journey somebody planned; the only other travel figure in
+  // this product is practice_location.travel_buffer_minutes, an allowance a practitioner typed. Neither
+  // is a measured distance and neither is labelled as though it were.
+  travel: "Travel",
+  // The label is the whole answer for this one -- practice_activity.title is what identifies it, and
+  // migration 237 refuses the placeholder titles a form would default to.
+  custom: "Custom Activity",
 };
