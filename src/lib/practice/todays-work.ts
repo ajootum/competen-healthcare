@@ -20,6 +20,24 @@ import { todaysPlan, type TodaysPlan } from "@/lib/practice/activity";
 // A FAILED READ IS NOT A ZERO. Each panel carries `unavailable`, set when its query errored, so a screen
 // can say "could not read this" rather than draw a reassuring nought. A zero has to be earned.
 
+// ---- THE CAPABILITY CODES, NAMED ONCE --------------------------------------------------------------
+//
+// ⚠ A CAPABILITY CODE IS A STRING COMPARED AGAINST THE DATABASE, so an invented one costs nothing at
+// compile time and silently switches the feature off at runtime. `appointment.view` was invented, gated
+// the Walk-in Queue, and reported a confident nought to every practitioner for as long as it existed --
+// a denied read and an empty clinic look identical from the outside.
+//
+// Hoisted out of the gates and exported so the harness can assert every one of them actually EXISTS in
+// practice_role_capabilities. Asserted against THESE constants rather than a list re-typed in the test,
+// because a re-typed list drifts and then only ever agrees with itself.
+const CAN_QUEUE = ["queue.manage", "practice.calendar.view"];
+const CAN_FOLLOWUPS = "followup.view";
+const CAN_INBOX = "inbox.record";
+const CAN_TASKS = "task.view";
+
+/** Every capability code this engine gates on. Exported for the harness's existence check. */
+export const TODAYS_WORK_CAPABILITIES = [...CAN_QUEUE, CAN_FOLLOWUPS, CAN_INBOX, CAN_TASKS];
+
 export type WorkItem = {
   id: string;
   title: string;
@@ -94,14 +112,14 @@ export async function todaysWork(admin: any, ctx: WorkspaceContext, opts: { at?:
     // ⚠ `appointment.view` DOES NOT EXIST as a capability, so this always took the false branch and the
     // Walk-in Queue and Next Patient reported a confident nought forever. The gate below is the one
     // command-centre.ts and operations-home.ts already use for the same table.
-    can("queue.manage") || can("practice.calendar.view")
+    CAN_QUEUE.some(can)
       ? admin.from("practice_queue_entry")
         .select("id, patient_name, status, entered_at", { count: "exact" })
         .eq("workspace_id", ctx.workspaceId).in("status", ["WAITING", "READY"])
         .order("entered_at", { ascending: true }).limit(LIMIT)
       : Promise.resolve({ data: null, count: null, error: null, denied: true }),
 
-    can("followup.view")
+    can(CAN_FOLLOWUPS)
       ? admin.from("practice_follow_up")
         .select("id, reason, kind, due_on, priority", { count: "exact" })
         .eq("workspace_id", ctx.workspaceId).in("status", ["OPEN", "SCHEDULED"])
@@ -109,14 +127,14 @@ export async function todaysWork(admin: any, ctx: WorkspaceContext, opts: { at?:
         .order("due_on", { ascending: true }).limit(LIMIT)
       : Promise.resolve({ data: null, count: null, error: null, denied: true }),
 
-    can("inbox.record")
+    can(CAN_INBOX)
       ? admin.from("practice_incoming_document")
         .select("id, title, doc_type, received_on, priority", { count: "exact" })
         .eq("workspace_id", ctx.workspaceId).eq("status", "RECEIVED")
         .order("received_on", { ascending: true }).limit(LIMIT)
       : Promise.resolve({ data: null, count: null, error: null, denied: true }),
 
-    can("task.view")
+    can(CAN_TASKS)
       ? admin.from("practice_task")
         .select("id, title, detail, due_on, priority", { count: "exact" })
         .eq("workspace_id", ctx.workspaceId).eq("assigned_to", ctx.userId)

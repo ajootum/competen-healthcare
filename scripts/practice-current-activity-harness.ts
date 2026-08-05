@@ -8,15 +8,23 @@
  *     operation SUCCEEDS where it should -- a refusal assertion with no control passes just as well
  *     against a function that refuses everything
  *   - a failed read surfaces as `unavailable`, never as an empty day or a zero
+ *   - every capability code the feature gates on EXISTS in practice_role_capabilities -- an invented one
+ *     never fails, it just returns false forever, and a denied read looks exactly like an empty clinic
+ *   - CPR-V5-001 s9: an encounter INHERITS the running activity, proven on the stored row -- and an
+ *     encounter opened with nothing running still succeeds, carrying null, because working outside a
+ *     planned session is normal and a lookup that failed is not the same thing as one
  */
 import { createClient } from "@supabase/supabase-js";
 import { loadEnvConfig } from "@next/env";
 import {
   todaysPlan, planActivity, startActivity, endActivity, activityState, ACTIVITY_TYPES,
+  ACTIVITY_CAPABILITIES,
 } from "../src/lib/practice/activity";
-import { todaysWork } from "../src/lib/practice/todays-work";
+import { todaysWork, TODAYS_WORK_CAPABILITIES } from "../src/lib/practice/todays-work";
 import { sessionMetrics, todayAtAGlance, activeFollowUps, waitingQueue, operationalAlerts } from "../src/lib/practice/session";
 import { runProvisioning, type IndividualRequest } from "../src/lib/practice/provisioning";
+import { registerPatient } from "../src/lib/practice/patients";
+import { launchEncounter } from "../src/lib/practice/encounters";
 import { PRACTICE_NAV, primaryNav, childrenOf, orphanedNav } from "../src/lib/practice/navigation";
 import type { WorkspaceContext } from "../src/lib/practice/access";
 import { existsSync } from "node:fs";
@@ -40,8 +48,12 @@ const ctxFor = (workspaceId: string, userId: string, caps: string[]): WorkspaceC
   onboardingComplete: true, onboardingStep: null,
 });
 
-const ALL = ["practice.home.view", "practice.calendar.manage", "task.view", "followup.view",
-  "appointment.view", "inbox.record"];
+// ⚠ THIS LIST FABRICATED THE FICTION IT WAS MEANT TO CATCH. It used to name `practice.calendar.manage`
+// and `appointment.view`, neither of which is in practice_role_capabilities -- so the harness handed the
+// engine capabilities no real user can ever hold, and stayed green against a shape production cannot
+// produce. Assertion 0b now checks every one of these against the table itself.
+const ALL = ["practice.home.view", "appointment.manage", "task.view", "followup.view",
+  "queue.manage", "inbox.record"];
 
 async function main() {
   console.log("\n=== CURRENT ACTIVITY / TODAY'S WORK (CPR-V3-001, migration 232) ===\n");
@@ -51,6 +63,29 @@ async function main() {
   ok("0. control -- practice_activity exists and is queryable", !probe.error,
     probe.error?.message ?? "");
   if (probe.error) { report(); return; }
+
+  // ── 0b. EVERY CAPABILITY CODE THIS FEATURE GATES ON MUST EXIST ──────────────────────────────────
+  //
+  // ⚠ THE BUG CLASS THIS CLOSES. A capability code is a string compared against a table. Misspell one,
+  // or invent a plausible one, and the check does not fail -- it returns false forever. `CAN_PLAN` was
+  // `practice.calendar.manage` and `appointment.view` gated the Walk-in Queue; both were fictions, so
+  // planning returned 403 for the practice owner and the queue reported a settled nought. Nothing went
+  // red, because "denied" and "there is nothing" render the same.
+  //
+  // Read from the ENGINE's own constants, never from a list re-typed here: a copy can hold the same
+  // fiction as the code it is checking and agree with it indefinitely.
+  const capRows = await admin.from("practice_role_capabilities").select("capability_code");
+  const granted = new Set(((capRows.data ?? []) as { capability_code: string }[]).map(r => r.capability_code));
+  // The control comes FIRST. Against an unreadable or empty table the set is empty, every membership
+  // test below is vacuous, and the assertion passes by knowing nothing.
+  ok("0b-control. the capability catalogue is readable and non-empty",
+    !capRows.error && granted.size > 0, capRows.error?.message ?? `${granted.size} codes`);
+
+  const usedCaps = [...new Set([...ACTIVITY_CAPABILITIES, ...TODAYS_WORK_CAPABILITIES, ...ALL])];
+  const invented = usedCaps.filter(c => !granted.has(c));
+  ok("0b. every capability this feature gates on exists in practice_role_capabilities",
+    granted.size > 0 && invented.length === 0,
+    invented.length ? `invented: ${invented.join(", ")}` : `${usedCaps.length} checked`);
 
   // ── Fixture: two workspaces, so tenancy can be proven rather than assumed ───────────────────────
   //
@@ -118,7 +153,7 @@ async function main() {
   ok("1d-control. every type CPR-V3-001 names is accepted", ACTIVITY_TYPES.length === 8);
 
   const noCap = await plan(ctxFor(wsA, userA, ["practice.home.view"]), "No capability", 60, 120);
-  ok("1e. REFUSES planning without practice.calendar.manage",
+  ok("1e. REFUSES planning without appointment.manage",
     !noCap.ok && noCap.code === "FORBIDDEN", JSON.stringify(noCap));
 
   // ── 2. State is derived, never stored ───────────────────────────────────────────────────────────
@@ -343,6 +378,95 @@ async function main() {
   ok("10o-control. a readable glance reports counts",
     (await todayAtAGlance(admin, ctxA, { fromIso: "2026-01-01T00:00:00Z", toIso: "2030-01-01T00:00:00Z", today, scope: "day" }))
       .tiles.every(t => t.count !== null));
+
+  // ── 11. CPR-V5-001 s9 / CPR-V3-001 s6: the encounter INHERITS the context ────────────────────────
+  //
+  // The claim is that a practitioner who has said what they are doing is never asked again -- so it is
+  // proven on the stored row, through the same engine the API calls, and not on a screen's props.
+  //
+  // Both halves matter and neither is the other's control. An encounter made inside a session must carry
+  // THAT session; an encounter made outside every session must carry null AND SUCCEED, because refusing
+  // to open a consultation because nobody had planned it would be a worse product than no inheritance
+  // at all. A build that always wrote null would pass the second on its own.
+  const encPatient = await registerPatient(admin, {
+    workspaceId: wsA, displayName: "Inherit Test One", birthDate: "1980-03-04", sex: "male",
+    phone: "0772 555 901", actorId: userA, correlationId: "harness-act",
+  });
+  const noCtxPatient = await registerPatient(admin, {
+    workspaceId: wsA, displayName: "Inherit Test Two", birthDate: "1991-07-19", sex: "female",
+    phone: "0772 555 902", actorId: userA, correlationId: "harness-act",
+  });
+  const failPatient = await registerPatient(admin, {
+    workspaceId: wsA, displayName: "Inherit Test Three", birthDate: "1975-01-30", sex: "male",
+    phone: "0772 555 903", actorId: userA, correlationId: "harness-act",
+  });
+  const setupFails = [encPatient, noCtxPatient, failPatient].filter(p => !p.ok);
+  ok("11-setup. three patients register for the inheritance assertions", setupFails.length === 0,
+    setupFails.map(p => (p.ok ? "" : p.message)).join("; "));
+
+  /** The stored value, read back raw -- and a failed read is reported, never shrugged off as "null". */
+  const storedActivityId = async (encounterId: string) => {
+    const { data, error } = await admin.from("practice_encounter")
+      .select("activity_id").eq("id", encounterId).maybeSingle();
+    if (error) return { id: null, readFailed: true, detail: error.message };
+    return { id: (data?.activity_id ?? null) as string | null, readFailed: false, detail: "" };
+  };
+
+  if (encPatient.ok && noCtxPatient.ok && failPatient.ok) {
+    // (a) inside a session.
+    const ctxAct = await plan(ctxA, "Inheritance clinic", 10 * 60, 12 * 60);
+    ok("11-setup-b. the session activity is planned", ctxAct.ok, ctxAct.ok ? "" : ctxAct.message);
+    if (ctxAct.ok) {
+      const startedCtx = await startActivity(admin, ctxA, ctxAct.value.id);
+      ok("11a-control. the session is actually running before the encounter is opened",
+        startedCtx.ok && (await todaysPlan(admin, ctxA)).current?.id === ctxAct.value.id,
+        JSON.stringify(startedCtx));
+
+      const inSession = await launchEncounter(admin, {
+        workspaceId: wsA, patientId: encPatient.data.id, pathway: "new_walk_in",
+        actorId: userA, correlationId: "harness-act",
+      });
+      ok("11a-control2. an encounter opens inside a session", inSession.ok,
+        inSession.ok ? "" : inSession.message);
+      if (inSession.ok) {
+        const stored = await storedActivityId(inSession.data.id);
+        ok("11a. an encounter opened during a session carries THAT activity",
+          !stored.readFailed && stored.id === ctxAct.value.id,
+          stored.readFailed ? stored.detail : `stored ${stored.id}, expected ${ctxAct.value.id}`);
+      }
+
+      // ⚠ THE READ THAT FAILED IS NOT "NO SESSION". A practitioner id PostgREST cannot parse makes the
+      // context lookup error for real (invalid uuid syntax), and the launch must refuse rather than file
+      // a clinical record as context-less -- the two are indistinguishable once the row is written.
+      const brokenCtx = await launchEncounter(admin, {
+        workspaceId: wsA, patientId: failPatient.data.id, pathway: "new_walk_in",
+        actorId: "not-a-uuid", correlationId: "harness-act",
+      });
+      ok("11b. a context lookup that FAILED refuses the launch instead of writing null",
+        !brokenCtx.ok && brokenCtx.code === "CONTEXT_READ_FAILED", JSON.stringify(brokenCtx));
+
+      const endedCtx = await endActivity(admin, ctxA, ctxAct.value.id);
+      ok("11c-control. the session ends", endedCtx.ok, endedCtx.ok ? "" : endedCtx.message);
+    }
+
+    // (c) outside every session. Null here is the RIGHT answer, and the launch must still succeed.
+    const idle = await todaysPlan(admin, ctxA);
+    ok("11c-control2. nothing is running before the second encounter", idle.current === null,
+      JSON.stringify(idle.current));
+
+    const outOfSession = await launchEncounter(admin, {
+      workspaceId: wsA, patientId: noCtxPatient.data.id, pathway: "new_walk_in",
+      actorId: userA, correlationId: "harness-act",
+    });
+    ok("11c. an encounter opened with no session running is NOT refused", outOfSession.ok,
+      outOfSession.ok ? "" : outOfSession.message);
+    if (outOfSession.ok) {
+      const stored = await storedActivityId(outOfSession.data.id);
+      ok("11d. and it carries a null activity rather than a borrowed one",
+        !stored.readFailed && stored.id === null,
+        stored.readFailed ? stored.detail : `stored ${stored.id}`);
+    }
+  }
 
   // ── 9. CPR-V5-001 s8 navigation: eight sections, and NOTHING unreachable ─────────────────────────
   //

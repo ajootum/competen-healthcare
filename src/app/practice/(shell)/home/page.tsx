@@ -6,13 +6,8 @@ import { operationsHome } from "@/lib/practice/operations-home";
 import { commandCentre } from "@/lib/practice/command-centre";
 import { resolvePreferences } from "@/lib/practice/preferences";
 import { hasCapability } from "@/lib/practice/access";
-import { todaysPlan } from "@/lib/practice/activity";
-import {
-  sessionMetrics, todayAtAGlance, waitingQueue, activeFollowUps, operationalAlerts, draftEncounters,
-} from "@/lib/practice/session";
 import { formatMinuteOfDay } from "@/lib/datetime";
-import { zonedDayRange } from "@/lib/practice/practice-time";
-import { sessionTimeline } from "@/lib/practice/session-timeline";
+import { dashboardReadModel } from "@/lib/practice/dashboard";
 import StartYourDay from "./StartYourDay";
 import {
   PANEL, GLANCE_SWATCH, LENS_SWATCH, FOLLOWUP_SWATCH, COHORT_RING,
@@ -77,37 +72,24 @@ export default async function PracticeCommandCentre() {
 
   const admin = createAdminClient();
   const at = new Date();
-  const [home, cc, { effective }, plan] = await Promise.all([
+  const [home, cc, { effective }] = await Promise.all([
     operationsHome(admin, ctx),
     commandCentre(admin, ctx),
     resolvePreferences(admin, ctx.workspaceId, ctx.userId),
-    todaysPlan(admin, ctx, { at }),
   ]);
 
-  // ── CPR-V5-001: THE SESSION DECIDES WHAT THIS PAGE COUNTS ──────────────────────────────────────
+  // ── CPR-CORE-001 CORE-08: ONE ASSEMBLED READ MODEL, NOT SEVEN CALLS ───────────────────────────
   //
-  // s9: "the entire dashboard must automatically change based on confirmed current activity and
-  // location". That is implemented HERE and nowhere else -- one window, computed once, passed to every
-  // widget that takes one. A card deciding its own scope is a card that will eventually disagree with
-  // the one beside it, and two counters over different windows is worse than one counter.
-  const metrics = await sessionMetrics(admin, ctx, plan, at);
+  // The core rule on the spec's cover page: "dashboard widgets consume shared engines; widgets do not
+  // own business logic". This page used to call seven engines and decide its own scope inline. The
+  // answers were right and the ARRANGEMENT was wrong: the day a second surface needed the same figures
+  // it would have assembled them slightly differently, which is what s16 forbids.
+  //
+  // The scope decision -- session-scoped after session start, day-scoped before it (s7) -- now lives in
+  // the assembler, and /api/v1/practice/dashboard serves the identical payload to any other consumer.
+  const dash = await dashboardReadModel(admin, ctx, { at });
+  const { plan, session: metrics, glance, queue, followUps: followUpLenses, alerts, drafts, timeline } = dash;
   const canPlan = hasCapability(ctx, "appointment.manage");
-  // The practice's midnight-to-midnight, not the server's. `zonedDayRange` is the same function every
-  // other day-scoped read in this codebase uses, so "today" cannot mean two different spans on one page.
-  const day = zonedDayRange(cc.today, cc.timezone);
-  const window = metrics
-    ? { fromIso: metrics.windowStartIso, toIso: metrics.windowEndIso, scope: "session" as const }
-    : { fromIso: day.startIso, toIso: day.endIso, scope: "day" as const };
-
-  const [glance, queue, followUpLenses, alerts, drafts, timeline] = await Promise.all([
-    todayAtAGlance(admin, ctx, { ...window, today: cc.today }),
-    waitingQueue(admin, ctx, at),
-    activeFollowUps(admin, ctx, cc.today),
-    operationalAlerts(admin, ctx, cc.today),
-    draftEncounters(admin, ctx),
-    // CPR-V5-001 s4. The plan's date and timezone are passed in so this does not re-read the workspace.
-    sessionTimeline(admin, ctx, { date: plan.date, timezone: plan.timezone, at }),
-  ]);
 
   // CPR-360 dashboard customisation, applied with `order` on the grid children rather than by
   // restructuring the page. A hidden widget stays in the markup as display:none: every widget is filled
@@ -119,7 +101,16 @@ export default async function PracticeCommandCentre() {
     return effective.dashboardWidgets[i].visible ? { order: i } : { display: "none" };
   };
 
-  const readAt = new Date(cc.readAtIso);
+  // Named in the practitioner's words, not the feeder's key -- "glance" means nothing to the person
+  // reading, and an error message that needs the source to decode it is not a message.
+  const FEEDER_LABEL: Record<string, string> = {
+    plan: "today's plan", glance: "today's figures", queue: "the waiting queue",
+    timeline: "the session timeline", followUps: "follow-ups", alerts: "operational alerts",
+    drafts: "unfinished encounters",
+  };
+  const failedFeeders = Object.entries(dash.feeders)
+    .filter(([, state]) => state === "unavailable")
+    .map(([key]) => FEEDER_LABEL[key] ?? key);
 
   return (
     <div className="-m-5 min-h-full bg-[var(--cp-canvas)] p-5">
@@ -129,13 +120,43 @@ export default async function PracticeCommandCentre() {
         <div className="flex flex-wrap items-baseline gap-3">
           <div>
             <h1 className="text-xl font-bold text-gray-900">Practice Command Centre</h1>
-            <p className="text-[13px] text-gray-500">Your operational overview and daily command centre.</p>
+            <p className="text-[13px] text-gray-500">
+              {/* s7: counts are session-scoped after session start, day-scoped before it. Said on the
+                  page, because the same eight numbers mean different things either side of that line. */}
+              {dash.scope.kind === "session"
+                ? "Scoped to your running session — figures below count this clinic, not the whole day."
+                : "Scoped to today — figures below count the whole day until you start a session."}
+            </p>
           </div>
+          {/* CORE-13 / s12: "every dashboard response must include an as_of timestamp and timezone", and
+              s16: the page "does not imply live data when only snapshot data is available". So this reads
+              "As of", not "Live" -- the page is a server render, and until the s10 event stream exists
+              nothing on it updates by itself. Saying otherwise would be the one claim here nobody could
+              check by looking. */}
           <p className="ml-auto text-[11px] text-gray-500">
-            Read at {readAt.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", timeZone: cc.timezone })}
-            {" · "}{cc.timezone}
+            As of {new Date(dash.asOf).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", timeZone: dash.timezone })}
+            {" · "}{dash.timezone}
           </p>
         </div>
+
+        {/* ── s14 PARTIAL FAILURE ───────────────────────────────────────────────────────────────── */}
+        {/* "Render available cards and show retry on the failed card", and s16: "a failure in one feeder
+            does not make the entire dashboard unusable". So this NAMES what could not be read instead of
+            blanking the page -- and the cards themselves each say so too. A silent partial load is the
+            worst of the three outcomes: it looks like a working dashboard reporting a quiet morning. */}
+        {failedFeeders.length > 0 && !dash.unavailable && (
+          <p className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-2.5 text-[12.5px] text-amber-800">
+            <span className="font-semibold">Some of this page could not be read just now</span>
+            {" — "}{failedFeeders.join(", ")}. Everything else below is current; those cards show no figure
+            rather than a nought.
+          </p>
+        )}
+        {dash.unavailable && (
+          <p className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-2.5 text-[12.5px] text-rose-800">
+            <span className="font-semibold">None of this page could be read just now.</span> Nothing below
+            is a claim about your practice — it is a claim that the read failed.
+          </p>
+        )}
 
         {/* ── Hero briefing ─────────────────────────────────────────────────────────────────────── */}
         <section className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_320px]">

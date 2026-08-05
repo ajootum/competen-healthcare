@@ -1,4 +1,5 @@
 import { audit } from "@/lib/practice/provisioning";
+import { runningActivityId } from "@/lib/practice/activity";
 import { ENCOUNTER_TRANSITIONS, LOCKED_STATUSES, LIVE_STATUSES } from "@/lib/practice/encounter-constants";
 
 // PEN-003 Clinical Encounter Engine + CPR-FLOW-001 encounter launch.
@@ -57,6 +58,11 @@ export async function launchEncounter(admin: any, input: LaunchInput): Promise<E
     return { ok: false, status: 422, code: "PATIENT_NOT_ACTIVE", message: "this patient record is not active (archived or merged)" };
 
   // Resume before create.
+  //
+  // A RESUMED ENCOUNTER KEEPS THE CONTEXT IT WAS OPENED IN. Returning early is what makes that true: the
+  // activity is inherited at creation and never restamped, so a consultation begun in the morning clinic
+  // and finished after the ward round still records the clinic. It is a note about where the work
+  // started, not a field that tracks where the practitioner currently is.
   const { data: live } = await admin.from("practice_encounter")
     .select("id, status").eq("patient_id", input.patientId).in("status", LIVE_STATUSES).maybeSingle();
   if (live) return { ok: true, data: { id: live.id, status: live.status, resumed: true } };
@@ -82,10 +88,26 @@ export async function launchEncounter(admin: any, input: LaunchInput): Promise<E
     previousEncounterId = prev?.id ?? null;
   }
 
+  // CPR-V3-001 s6 / CPR-V5-001 s9: the encounter inherits the activity it is being made inside, and
+  // through it the location, facility and practitioner that activity already carries. Inherited rather
+  // than asked for -- a practitioner who has told the system they are in the 09:00 clinic should not be
+  // asked again, once per patient, for the rest of the morning.
+  //
+  // ⚠ THE SUBJECT IS THE PRACTITIONER THE ENCOUNTER IS FOR, and in V3 that is the actor: LaunchInput
+  // carries no separate practitioner, and nothing in the product yet opens somebody else's consultation.
+  // The day a receptionist or a scribe can, this line is the one that has to change with it -- taking
+  // the actor's activity then would file the consultant's clinical work against the front desk's day.
+  //
+  // NULL IS A CORRECT ANSWER. An encounter outside any session is ordinary. A read that FAILED is not,
+  // and is refused below instead of being written as null, because afterwards the two are indeterminable.
+  const activity = await runningActivityId(admin, input.workspaceId, input.actorId);
+  if (activity.error)
+    return { ok: false, status: 500, code: "CONTEXT_READ_FAILED", message: activity.error.message };
+
   const { data: enc, error } = await admin.from("practice_encounter").insert({
     workspace_id: input.workspaceId, patient_id: input.patientId, appointment_id: appointmentId,
     previous_encounter_id: previousEncounterId, entry_pathway: input.pathway,
-    encounter_mode: input.encounterMode ?? "in_person",
+    encounter_mode: input.encounterMode ?? "in_person", activity_id: activity.id,
     reason_for_visit: input.reasonForVisit ?? null, status: "DRAFT", created_by: input.actorId,
   }).select("id, status").single();
   if (error) {

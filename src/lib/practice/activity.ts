@@ -1,5 +1,6 @@
 import type { WorkspaceContext } from "@/lib/practice/access";
 import { practiceToday, zonedDayRange } from "@/lib/practice/practice-time";
+import { emitEvents, type EventEnvelope, type EventSource } from "@/lib/practice/events";
 
 /* eslint-disable @typescript-eslint/no-explicit-any -- the Supabase admin client is untyped; every
    engine in src/lib/practice does the same. */
@@ -83,6 +84,13 @@ type Result<T> =
 // `appointment.manage` (migration 192), held by practitioner and practice_assistant.
 const CAN_PLAN = "appointment.manage";
 const CAN_VIEW = "practice.home.view";
+
+/**
+ * The codes this engine gates on, exported so a harness can prove each one EXISTS in
+ * practice_role_capabilities. Checked against these constants rather than against a list re-typed in the
+ * test: a re-typed list can invent the same fiction the engine did and agree with it forever.
+ */
+export const ACTIVITY_CAPABILITIES = [CAN_PLAN, CAN_VIEW];
 
 /** planned / running / done, from the two timestamps and nothing else. */
 export function activityState(startedAt: string | null, endedAt: string | null): ActivityState {
@@ -257,12 +265,56 @@ export async function planActivity(
   return { ok: true, value: { id: data.id } };
 }
 
+// The columns an event envelope needs on top of the ones the lifecycle checks need. Selected in the same
+// round trip rather than fetched again at emit time: a second read could see a row another tab had
+// already changed, and the event would then describe a state that never existed.
+const OWN_COLUMNS =
+  "id, plan_date, started_at, ended_at, practitioner_id, location_id, facility_id, activity_type, title";
+
 async function loadOwn(admin: any, ctx: WorkspaceContext, id: string) {
   const { data, error } = await admin.from("practice_activity")
-    .select("id, plan_date, started_at, ended_at")
+    .select(OWN_COLUMNS)
     .eq("id", id).eq("workspace_id", ctx.workspaceId).eq("practitioner_id", ctx.userId)
     .maybeSingle();
   return { row: error ? null : data, error };
+}
+
+/**
+ * CPR-CORE-001 s9's envelopes for one activity transition. Migration 233, src/lib/practice/events.ts.
+ *
+ * TWO EVENTS PER TRANSITION, NOT ONE. s6.1 says "starting a session creates a session_started event",
+ * and s7's feeder matrix has different cards listening for the activity events and the session events --
+ * Start Your Day watches `session.started`, Today's Timeline watches the activity. In this build they
+ * are the same transition, because V3 collapsed Session into the running activity and there is no
+ * practice_session table (migration 233 says why session_id is kept as its own column anyway). Emitting
+ * only one of the pair would leave whichever card listened for the other permanently stale, and would be
+ * invisible until somebody asked why the dashboard never moved.
+ *
+ * THE ACTOR IS THE CALLER; THE PRACTITIONER IS THE ROW'S. They are the same person in V3 -- loadOwn only
+ * returns activities belonging to ctx.userId -- but taking the practitioner from the row rather than
+ * from the context is what makes the first delegated write correct instead of quietly self-attributed.
+ */
+function lifecycleEvents(
+  kind: "started" | "completed", ctx: WorkspaceContext, row: any, at: Date, source: EventSource,
+  extra: Record<string, unknown> = {},
+): EventEnvelope[] {
+  const common = {
+    practiceId: ctx.workspaceId,
+    practitionerId: row.practitioner_id,
+    actorId: ctx.userId,
+    source,
+    occurredAt: at,
+    locationId: row.location_id ?? null,
+    activityInstanceId: row.id,
+    // The session IS the activity in this build. Same id, two columns, on purpose.
+    sessionId: row.id,
+    payload: {
+      activityType: row.activity_type, title: row.title, facilityId: row.facility_id ?? null, ...extra,
+    },
+  };
+  return kind === "started"
+    ? [{ ...common, eventType: "activity.started" }, { ...common, eventType: "session.started" }]
+    : [{ ...common, eventType: "activity.completed" }, { ...common, eventType: "session.closed" }];
 }
 
 /**
@@ -274,12 +326,16 @@ async function loadOwn(admin: any, ctx: WorkspaceContext, id: string) {
  * between two tabs rather than the mechanism.
  */
 export async function startActivity(
-  admin: any, ctx: WorkspaceContext, id: string, opts: { at?: Date } = {},
-): Promise<Result<{ id: string; endedPrevious: string | null }>> {
+  admin: any, ctx: WorkspaceContext, id: string, opts: { at?: Date; source?: EventSource } = {},
+): Promise<Result<{ id: string; endedPrevious: string | null; eventWarnings: string[] }>> {
   if (!ctx.capabilities.includes(CAN_PLAN))
     return { ok: false, status: 403, code: "FORBIDDEN", message: `${CAN_PLAN} is required` };
 
   const at = opts.at ?? new Date();
+  // s9.1's source. Migration 233 refuses to default this column, because the DATABASE cannot know which
+  // surface a write came through. The engine can: its only production caller is the web route. A cron,
+  // an integration or a harness must say so, and each of them does.
+  const source: EventSource = opts.source ?? "web";
   const { row, error } = await loadOwn(admin, ctx, id);
   if (error) return { ok: false, status: 500, code: "READ_FAILED", message: error.message };
   if (!row) return { ok: false, status: 404, code: "NOT_FOUND", message: "Not found" };
@@ -307,10 +363,28 @@ export async function startActivity(
   const running = await runningActivityId(admin, ctx.workspaceId, ctx.userId);
   if (running.error) return { ok: false, status: 500, code: "READ_FAILED", message: running.error.message };
 
+  // ---- THE OUTBOX, EMITTED AFTER EACH WRITE THAT ACTUALLY COMMITTED --------------------------------
+  //
+  // Not at the end of the function. A switch is TWO state changes and they can part company: if the
+  // close succeeds and the start then loses the race to another tab, the previous activity really did
+  // end, and an outbox that only emitted on the happy path would leave every projection holding a
+  // session that never closed. Each event is written directly after the write it describes.
+  const eventWarnings: string[] = [];
+
   if (running.id) {
-    const { error: endErr } = await admin.from("practice_activity")
-      .update({ ended_at: at.toISOString(), updated_at: at.toISOString() }).eq("id", running.id);
+    // The closed row comes back from the write itself. Re-reading it afterwards would be a second read
+    // of a row another tab may already have moved, and the event would then describe a state that was
+    // never true.
+    const { data: closed, error: endErr } = await admin.from("practice_activity")
+      .update({ ended_at: at.toISOString(), updated_at: at.toISOString() }).eq("id", running.id)
+      .select(OWN_COLUMNS).maybeSingle();
     if (endErr) return { ok: false, status: 500, code: "SWITCH_FAILED", message: endErr.message };
+    if (closed)
+      eventWarnings.push(...await emitEvents(admin, lifecycleEvents("completed", ctx, closed, at, source,
+        { reason: "switched", switchedToActivityId: id })));
+    // A write that succeeded and returned nothing is not a non-event. Reported, because the alternative
+    // is an activity that ends with no trace of its ending and no trace of the trace being missing.
+    else eventWarnings.push("activity.completed: NO_ROW the switch returned no row to describe");
   }
 
   const { error: startErr } = await admin.from("practice_activity")
@@ -323,17 +397,27 @@ export async function startActivity(
     return { ok: false, status, code, message: startErr.message };
   }
 
-  return { ok: true, value: { id, endedPrevious: running.id } };
+  // `row` is the state as it was read, plus the transition that has now committed -- the started_at the
+  // envelope describes is the one just written.
+  eventWarnings.push(...await emitEvents(admin,
+    lifecycleEvents("started", ctx, row, at, source, { endedPreviousActivityId: running.id })));
+
+  // THE WARNINGS RIDE ALONG WITH A SUCCESS. The activity started; an outbox failure does not unstart it
+  // and must not be reported as though it had (see the argument at the head of events.ts). Callers that
+  // ignore this array get correct behaviour and a stale card; callers that surface it can tell a broken
+  // outbox from a quiet practice, which is the whole reason the error is not swallowed.
+  return { ok: true, value: { id, endedPrevious: running.id, eventWarnings } };
 }
 
 /** End the activity. The plan is not rewritten to match: overrunning is recorded, not corrected. */
 export async function endActivity(
-  admin: any, ctx: WorkspaceContext, id: string, opts: { at?: Date } = {},
-): Promise<Result<{ id: string }>> {
+  admin: any, ctx: WorkspaceContext, id: string, opts: { at?: Date; source?: EventSource } = {},
+): Promise<Result<{ id: string; eventWarnings: string[] }>> {
   if (!ctx.capabilities.includes(CAN_PLAN))
     return { ok: false, status: 403, code: "FORBIDDEN", message: `${CAN_PLAN} is required` };
 
   const at = opts.at ?? new Date();
+  const source: EventSource = opts.source ?? "web";
   const { row, error } = await loadOwn(admin, ctx, id);
   if (error) return { ok: false, status: 500, code: "READ_FAILED", message: error.message };
   if (!row) return { ok: false, status: 404, code: "NOT_FOUND", message: "Not found" };
@@ -343,5 +427,9 @@ export async function endActivity(
   const { error: endErr } = await admin.from("practice_activity")
     .update({ ended_at: at.toISOString(), updated_at: at.toISOString() }).eq("id", id);
   if (endErr) return { ok: false, status: 500, code: "END_FAILED", message: endErr.message };
-  return { ok: true, value: { id } };
+
+  // s7: Practice Performance recalculates on completion and Today at a Glance re-scopes from session to
+  // day. Both find out from here.
+  const eventWarnings = await emitEvents(admin, lifecycleEvents("completed", ctx, row, at, source));
+  return { ok: true, value: { id, eventWarnings } };
 }
