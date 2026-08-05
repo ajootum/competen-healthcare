@@ -1,6 +1,6 @@
 import type { CSSProperties } from "react";
 
-// CPR-001 v4 -- the command centre's colour, extracted so it is one decision rather than fifty.
+// CPR-001_v4 -- the command centre's colour, extracted so it is one decision rather than fifty.
 //
 // ────────────────────────────────────────────────────────────────────────────────────────────────────
 // COLOUR IS DOING SEMANTIC WORK IN THE COMP, AND THE FIRST BUILD LEFT IT ON THE TABLE.
@@ -139,7 +139,7 @@ export const SEVERITY: Record<string, { text: string; dot: string; border: strin
 //
 // Both comps use the SAME system as the command centre, so it is the same file rather than three
 // near-identical ones that drift. The specification asks for exactly this ("Consistent visual language
-// with Calendar and Patient Registration" -- CPR-001 v4 Design Goals).
+// with Calendar and Patient Registration" -- CPR-001_v4 Design Goals).
 //
 // THE APPOINTMENT TYPE COLOURS ALREADY EXISTED and were barely used. APPOINTMENT_KINDS has carried a
 // hue per type since CPR-CAL-001 -- indigo for a new patient, sky for a follow-up, amber for a hospital

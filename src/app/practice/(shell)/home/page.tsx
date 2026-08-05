@@ -10,7 +10,7 @@ import {
   QUEUE_SWATCH, QUICK_SWATCH, QUICK_ICON, PERFORMANCE_SWATCH, SEVERITY,
 } from "@/lib/practice/palette";
 
-// CPR-001 v4 PRACTICE COMMAND CENTRE.
+// CPR-001_v4 PRACTICE COMMAND CENTRE.
 //
 // ────────────────────────────────────────────────────────────────────────────────────────────────────
 // LAID OUT TO THE v4 COMP: hero briefing with six stats and a clinic bar · the week's locations ·

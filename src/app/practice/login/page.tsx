@@ -3,6 +3,8 @@ import JourneyPage from "@/components/marketing/JourneyPage";
 import { PRACTICE_ACCENT } from "@/lib/marketing/practice-content";
 import { PRACTICE_LOGIN } from "@/lib/marketing/practice-site";
 import { pageMetadata } from "@/lib/marketing/site";
+import { createAdminClient } from "@/lib/supabase/server";
+import { platformFlag } from "@/lib/practice/provisioning";
 
 // LP-DOC-001 Practice Login Experience.
 //
@@ -29,7 +31,8 @@ export const dynamic = "force-dynamic";
 
 const container = "mx-auto w-full max-w-7xl px-5 sm:px-8";
 
-export default function Page() {
+export default async function Page() {
+  const signInOpen = await platformFlag(createAdminClient(), "practice_sign_in");
   return (
     <JourneyPage
       journeyKey="practice-login"
@@ -89,17 +92,27 @@ export default function Page() {
       </section>
 
       {/* ── THE SIGN-IN THAT DOES WORK ───────────────────────────────────── */}
+      {/* ⚠️ THIS PANEL OUTLIVED ITS TRUTH ONCE ALREADY. It used to say "Competen Practice is separate and
+          is not open yet" and send people to /login -- the HOSPITAL sign-in -- and it kept saying it after
+          practice_sign_in was flipped on, because it was written as prose rather than read from the flag.
+          A visitor was told their practice account did not exist yet and was then walked to the wrong door.
+          The availability panel above is gated; this one was not, and only the gated one was under test.
+          It is now the same flag, so the two cannot disagree again. */}
       <section className={`${container} py-12`}>
         <div className="rounded-2xl border border-gray-200 bg-white p-6 sm:p-8 max-w-3xl">
           <h2 className="text-[1.15rem] font-bold text-gray-900">Already use Competen for something else?</h2>
           <p className="mt-2 text-[14px] leading-relaxed text-gray-600">
-            If you work on a Competen workspace today, your existing account still signs in as it always
-            has. Competen Practice is separate and is not open yet -- the account you have is not broken.
+            {signInOpen
+              ? "One account. If you already work on a Competen workspace, the same sign-in takes you to " +
+                "your practice -- there is nothing separate to create, and nothing extra to remember."
+              : "If you work on a Competen workspace today, your existing account still signs in as it " +
+                "always has. Competen Practice is separate and is not open yet -- the account you have " +
+                "is not broken."}
           </p>
-          <Link href="/login"
+          <Link href={signInOpen ? "/practice/sign-in" : "/login"}
             className="mt-5 inline-block rounded-xl border-2 px-5 py-3 text-[14px] font-semibold transition-colors hover:bg-gray-50"
             style={{ borderColor: "var(--cp-primary-border)", color: PRACTICE_ACCENT }}>
-            Go to Competen sign-in →
+            {signInOpen ? "Sign in to your practice →" : "Go to Competen sign-in →"}
           </Link>
         </div>
       </section>

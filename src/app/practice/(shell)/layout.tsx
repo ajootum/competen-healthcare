@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { resolvePracticeShell } from "@/lib/practice/shell";
 import { visibleNav, NAV_GROUP_ORDER, NAV_LAYER_ORDER, GROUP_LAYER } from "@/lib/practice/navigation";
@@ -27,7 +28,17 @@ import PracticeShortcuts from "./PracticeShortcuts";
 export default async function PracticeShellLayout({ children }: { children: React.ReactNode }) {
   const shell = await resolvePracticeShell();
 
-  if (shell.state === "AUTH_REQUIRED") redirect("/practice/sign-in?return_to=/practice/home");
+  // SIGN IN, THEN LAND WHERE YOU WERE GOING. This used to be a hardcoded `/practice/home`, so an expired
+  // session turned every link in the product into a link to the home page: click Practice Setup, sign in,
+  // arrive at the command centre, and conclude that Practice Setup is broken.
+  //
+  // Read from the proxy's header because a layout cannot know its own pathname (see proxy.ts). Anything
+  // that is not a plain relative /practice path is discarded rather than trusted -- an open redirect is a
+  // real attack and `//evil.example` is a valid pathname. /practice/sign-in validates it again on arrival.
+  const asked = (await headers()).get("x-pathname") ?? "";
+  const returnTo = /^\/practice\/[A-Za-z0-9\-/]*$/.test(asked) ? asked : "/practice/home";
+
+  if (shell.state === "AUTH_REQUIRED") redirect(`/practice/sign-in?return_to=${encodeURIComponent(returnTo)}`);
   if (shell.state === "WORKSPACE_REQUIRED") redirect("/practice");
   if (shell.state === "CHOOSER_REQUIRED") redirect("/practice/select-workspace");
   if (shell.state === "ONBOARDING_REQUIRED") redirect("/practice/onboarding");
@@ -115,7 +126,10 @@ export default async function PracticeShellLayout({ children }: { children: Reac
 
         <SidebarNav layers={layers} items={navItems} />
 
-        <Link href="/practice/settings"
+        {/* The workspace CHOOSER, not settings. This said "Switch workspace" and opened Personal Settings,
+            which is a different job entirely -- and the chooser has existed at /practice/select-workspace
+            the whole time. */}
+        <Link href="/practice/select-workspace"
           className="flex items-center gap-2.5 border-t border-white/10 px-4 py-3 text-[12px] text-blue-100/70 hover:bg-white/8 hover:text-white">
           <span aria-hidden className="text-blue-200/60">⇄</span> Switch workspace
         </Link>

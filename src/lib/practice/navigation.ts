@@ -12,7 +12,7 @@
 // The full CPR-V2-020 V3 list is present so the shell never needs a layout rebuild as phases land
 // (s7.2 "support future modules without rebuilding the entire layout").
 
-// ── CPR-001 v4 REGROUPING ────────────────────────────────────────────────────────────────────────────
+// ── CPR-001_v4 REGROUPING ────────────────────────────────────────────────────────────────────────────
 //
 // The comp's sidebar is organised by WHAT A PERSON IS DOING, not by which subsystem owns the route:
 // PRACTICE (running today) · PATIENTS (people) · CLINICAL (the record) · COMMUNICATION (in and out) ·
@@ -75,14 +75,16 @@ export const NAV_GROUP_ORDER: PracticeNavGroup[] = [
   "Setup", "Personal",
 ];
 
-// ⚠️ THE PUBLIC MARKETING SECTION SHARES THIS URL SPACE. `/practice/[area]` renders the public
-// capability-area pages, and a static route in this group SHADOWS it -- silently, because a static
-// segment beats a dynamic one and nothing errors. CPR-310 shipped at `/practice/team` and made the
-// public "team" area page unreachable; scripts/practice-content-harness.ts caught it, which is what
-// that harness is for.
+// ⚠️ THE PUBLIC MARKETING SECTION SHARES THIS URL SPACE, AND IT SHADOWS THIS ONE IN PRODUCTION ONLY.
+// `/practice/[area]` renders the public capability-area pages with `generateStaticParams`, so every slug
+// is PRERENDERED TO A STATIC FILE AT BUILD TIME. Dev matches the static `(shell)` segment first and looks
+// perfect; production serves the prerendered marketing page instead, 200, no error, no warning. CPR-310
+// hit this at `/practice/team`, and CPR-SETUP-001 hit it again at `/practice/setup` -- where the sidebar
+// promised Practice Setup and the deployed site answered with a marketing page. The public slug is now
+// `connections`, and scripts/practice-content-harness.ts assertion 7a fails the build on any new overlap.
 //
 // Taken by the public section and NOT available here: scheduling · encounter · continuity ·
-// case-memory · evidence · anywhere · team · setup, plus the profession slugs (doctor, nurse,
+// case-memory · evidence · anywhere · team · connections, plus the profession slugs (doctor, nurse,
 // clinical-officer, midwife, surgeon, pharmacist, laboratory-scientist, nutritionist, physiotherapist,
 // psychologist). Check `slug:` in src/lib/marketing/practice-content.ts before adding a route here.
 export const PRACTICE_NAV: PracticeNavItem[] = [

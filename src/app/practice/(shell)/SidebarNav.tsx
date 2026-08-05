@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
-// CPR-001 v4 sidebar. A client component for ONE reason: the active item.
+// CPR-001_v4 sidebar. A client component for ONE reason: the active item.
 //
 // ────────────────────────────────────────────────────────────────────────────────────────────────────
 // THE COMP HIGHLIGHTS WHERE YOU ARE, AND THE OLD SIDEBAR DID NOT.

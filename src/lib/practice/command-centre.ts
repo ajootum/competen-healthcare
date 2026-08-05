@@ -5,7 +5,7 @@ import { APPOINTMENT_KINDS } from "@/lib/practice/calendar";
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 // ────────────────────────────────────────────────────────────────────────────────────────────────────
-// CPR-001 v4 PRACTICE COMMAND CENTRE -- the widgets the v4 comp adds over CPR-300's operations home.
+// CPR-001_v4 PRACTICE COMMAND CENTRE -- the widgets the v4 comp adds over CPR-300's operations home.
 //
 // operationsHome() still supplies the attention list and the practice facts; this file supplies what
 // v4 asks for on top: the hero briefing, the week's locations, the live queue, follow-up intelligence,

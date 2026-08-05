@@ -1,5 +1,6 @@
 import Link from "next/link";
 import PracticeHeader from "@/components/marketing/PracticeHeader";
+import { resolvedJourneys } from "@/lib/marketing/journey-gates";
 import SiteFooter from "@/components/marketing/SiteFooter";
 import PracticeNav from "@/components/marketing/PracticeNav";
 import PracticeScreens from "@/components/marketing/PracticeScreens";
@@ -12,13 +13,15 @@ import { PRACTICE_AREAS, PRACTICE_CTA, type PracticeArea } from "@/lib/marketing
 
 const container = "mx-auto w-full max-w-7xl px-5 sm:px-8";
 
-export default function PracticeAreaPage({ a }: { a: PracticeArea }) {
+export default async function PracticeAreaPage({ a }: { a: PracticeArea }) {
+  // Async only so the header's journey buttons can be resolved against the launch flags on the server.
+  const journeys = await resolvedJourneys();
   const others = PRACTICE_AREAS.filter(x => x.slug !== a.slug);
 
   return (
     <div className="flex flex-col min-h-full bg-white font-[family-name:var(--font-geist-sans)]">
       <a href="#main" className="cmp-skip-link">Skip to main content</a>
-      <PracticeHeader />
+      <PracticeHeader journeys={journeys} />
       <PracticeNav current={a.slug} />
 
       <main id="main">

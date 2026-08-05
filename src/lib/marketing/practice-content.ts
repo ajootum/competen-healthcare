@@ -498,7 +498,10 @@ export const PRACTICE_AREAS: PracticeArea[] = [
 
   // ── PEN-015 | CPR-V2-014 Settings, CPR-V2-015 Multi-Practice ────────────────────────────────────────────
   {
-    slug: "setup",
+    // "connections", not "setup": the authenticated app owns /practice/setup, and a marketing slug that
+    // matches a (shell) route gets PRERENDERED OVER IT at build time -- 200 marketing page in production,
+    // correct app page in dev, nothing anywhere saying so. Assertion 7a below is what keeps this true.
+    slug: "connections",
     nav: "Setup & connections",
     eyebrow: "Setup & connections",
     headline: ["You run the practice.", "We run the platform."],

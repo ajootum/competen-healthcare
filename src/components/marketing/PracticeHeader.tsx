@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useModalFocus } from "@/components/ui/use-modal-focus";
 import { PRACTICE_ACCENT } from "@/lib/marketing/practice-content";
-import { PRACTICE_NAV, JOURNEYS } from "@/lib/marketing/practice-site";
+import { PRACTICE_NAV, JOURNEYS, type PracticeJourney } from "@/lib/marketing/practice-site";
 
 // LP-PRA-001 header. Competen Practice gets its OWN header across /practice/*, because the specification
 // makes it a product with four journeys of its own rather than one entry in a Solutions menu -- and the
@@ -17,7 +17,11 @@ import { PRACTICE_NAV, JOURNEYS } from "@/lib/marketing/practice-site";
 // Navigation and journeys both come from practice-site.ts, which is also what the landing page's journey
 // cards are built from. A journey therefore cannot appear in one place and not the other.
 
-export default function PracticeHeader() {
+// `journeys` arrives already resolved against the launch flags (resolvedJourneys), so an open journey's
+// button goes straight to its real destination instead of via the explainer. It defaults to the unresolved
+// catalogue so a caller that cannot read flags -- or has no reason to -- still renders a working header
+// rather than none: every unresolved href is the explainer, which is where the buttons pointed before.
+export default function PracticeHeader({ journeys = JOURNEYS }: { journeys?: PracticeJourney[] } = {}) {
   const [open, setOpen] = useState(false);
 
   // The drawer declares role="dialog" aria-modal="true", which promises assistive technology that the rest
@@ -32,8 +36,8 @@ export default function PracticeHeader() {
     return () => { document.body.style.overflow = ""; };
   }, [open]);
 
-  const primary = JOURNEYS.filter(j => j.kind === "primary");
-  const secondary = JOURNEYS.filter(j => j.kind === "secondary");
+  const primary = journeys.filter(j => j.kind === "primary");
+  const secondary = journeys.filter(j => j.kind === "secondary");
 
   return (
     <header className="sticky top-0 z-40 border-b border-gray-100 bg-white/95 backdrop-blur">
@@ -87,7 +91,7 @@ export default function PracticeHeader() {
                 className="block py-3 text-[15px] font-semibold border-b border-white/10">{n.label}</Link>
             ))}
             <p className="mt-5 text-[11px] font-bold uppercase tracking-[0.12em] text-white/40">Where are you going?</p>
-            {JOURNEYS.map(j => (
+            {journeys.map(j => (
               <Link key={j.key} href={j.href} onClick={() => setOpen(false)}
                 className="mt-2 block rounded-xl bg-white/5 px-4 py-3">
                 <span className="block text-[14px] font-semibold">{j.label}</span>

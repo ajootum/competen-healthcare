@@ -340,6 +340,20 @@ async function main() {
   ok("7. no journey route collides with a capability slug", shadowed.length === 0,
     shadowed.map(j => j.href).join(", "));
 
+  // 7a. THE SAME COLLISION, ON THE SIDE THAT ACTUALLY BIT US. Assertion 7 checks the four JOURNEYS; the
+  // authenticated app is the other half of this URL space and was never checked. /practice/setup was a
+  // capability slug AND a (shell) route for the whole of CPR-SETUP-001: `generateStaticParams` prerendered
+  // the marketing page to /practice/setup at build time, so production served a 200 marketing page where
+  // the sidebar promised Practice Setup -- while dev matched the static segment and looked perfect. A
+  // build-time shadow that only exists in production is exactly the kind nobody finds by clicking around.
+  //
+  // Directory names, not the nav catalogue: an unlisted or capability-hidden route still owns its URL.
+  const shellRoutes = readdirSync(join(process.cwd(), "src", "app", "practice", "(shell)"), { withFileTypes: true })
+    .filter(d => d.isDirectory()).map(d => d.name);
+  const collidingRoutes = shellRoutes.filter(r => areaSlugs.has(r));
+  ok("7a. no authenticated route collides with a capability slug", collidingRoutes.length === 0,
+    collidingRoutes.map(r => `/practice/${r} is both a (shell) route and a PRACTICE_AREAS slug`).join("; "));
+
   // The launch flags are read from the SAME database the pages read, so 7b compares the page against
   // reality rather than against an assumption about which posture we are in. A missing flag row reads as
   // closed, which is the safe direction and is asserted below rather than silently defaulted.
@@ -442,8 +456,27 @@ async function main() {
   }
 
   // Every journey must be reachable from the landing page, or it is a page with no way in.
+  //
+  // AT ITS EFFECTIVE DESTINATION, not always the explainer. An open journey's buttons point at the thing
+  // that is now open -- "Practice Login" goes to the sign-in form rather than to a page describing one --
+  // so pinning this to j.href would fail a launch and report it as a broken link. What the rule protects
+  // is that clicking the journey gets you somewhere real, and that survives the resolution.
+  //
+  // Resolved from gateOpen, which is read from the same flags table the pages read, so this cannot pass by
+  // agreeing with an assumption. The explainer pages stay linked from each other's "other journeys" list.
   for (const j of JOURNEYS) {
-    ok(`7f. /practice links to ${j.href}`, overview.includes(`href="${j.href}"`));
+    const gate = JOURNEY_GATES[j.key];
+    const effective = gate && serverSeesFlags && gateOpen[gate.flag] ? gate.action.href : j.href;
+    ok(`7f. /practice links to ${effective}`, overview.includes(`href="${effective}"`));
+
+    // 7f-b. AND THAT DESTINATION IS A REAL PAGE. On its own, 7f only proves the landing page and the
+    // catalogue agree -- point a gate at /practice/nowhere and the header dutifully renders a link to
+    // /practice/nowhere, so the two agree perfectly about a 404. Consistency is not reachability. This
+    // fetches what the button actually points at, which is the claim the rule was always making.
+    if (effective.startsWith("/")) {
+      const status = await fetch(BASE + effective, { redirect: "manual" }).then(r => r.status).catch(() => 0);
+      ok(`7f-b. ${effective} is a real page`, status > 0 && status < 400, `status ${status}`);
+    }
   }
 
   // LP-PRA-001 asks for FAQs. The availability question is the one a visitor has by the time they reach

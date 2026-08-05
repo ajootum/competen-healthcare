@@ -14,8 +14,19 @@ export function generateStaticParams() {
   return PRACTICE_AREAS.map(a => ({ area: a.slug }));
 }
 
-// Anything not in the catalogue is a 404, not a blank page rendered from undefined.
+// Anything not in the catalogue is a 404, not a blank page rendered from undefined. The body's own
+// `notFound()` is the load-bearing guard; this makes it a build-time fact as well as a runtime one.
 export const dynamicParams = false;
+
+// PER-REQUEST, for the same reason /practice and /practice/login are: the header's journey buttons are
+// resolved against the launch flags, and a flag baked in at build time is a constant with extra steps --
+// flipping the ladder would need a deploy, and until then a button would point at the wrong door.
+//
+// It also removes the build-time PRERENDER that made these pages dangerous to the app: every slug used to
+// be written to a static file, so a slug matching an authenticated route (`/practice/setup`) was served
+// as marketing in production while dev served the real page. The slug is renamed and assertion 7a guards
+// it, but a route that no longer prerenders cannot shadow anything in the first place.
+export const dynamic = "force-dynamic";
 
 export async function generateMetadata({ params }: { params: Promise<{ area: string }> }) {
   const a = areaBySlug((await params).area);

@@ -1,5 +1,5 @@
 /**
- * CPR-001 v4 Practice Command Centre harness. Migration 229.
+ * CPR-001_v4 Practice Command Centre harness. Migration 229.
  *
  * WHAT IT PROVES:
  *   1. THE CLINIC WINDOW IS CONFIGURED, NOT ASSUMED. A practice that opens at 14:00 is not "running
@@ -93,7 +93,7 @@ const kampala = (day: string, hh: number, mm = 0) => {
 };
 
 async function main() {
-  console.log("\n=== PRACTICE COMMAND CENTRE (CPR-001 v4, migration 229) ===\n");
+  console.log("\n=== PRACTICE COMMAND CENTRE (CPR-001_v4, migration 229) ===\n");
   await cleanup();
 
   const wsA = await provision(OWNER, "Dr Command A", "a");

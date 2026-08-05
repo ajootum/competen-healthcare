@@ -1,5 +1,6 @@
 import Link from "next/link";
 import PracticeHeader from "@/components/marketing/PracticeHeader";
+import { resolvedJourneys } from "@/lib/marketing/journey-gates";
 import SiteFooter from "@/components/marketing/SiteFooter";
 import { PatternField } from "@/components/marketing/Pattern";
 import { createAdminClient } from "@/lib/supabase/server";
@@ -44,11 +45,14 @@ export default async function JourneyPage({
   // A journey with no gate can never open here, so it never reads the database.
   const gate = JOURNEY_GATES[journeyKey] ?? null;
   const open = gate ? await platformFlag(createAdminClient(), gate.flag) : false;
+  // The panel below and the header above must agree about what is open, or a page can say "sign in here"
+  // while the button beside it still routes back to this same page.
+  const journeys = await resolvedJourneys();
 
   return (
     <div className="flex flex-col min-h-full bg-white font-[family-name:var(--font-geist-sans)]">
       <a href="#main" className="cmp-skip-link">Skip to main content</a>
-      <PracticeHeader />
+      <PracticeHeader journeys={journeys} />
 
       <main id="main">
         {/* ── HERO + AVAILABILITY ──────────────────────────────────────────── */}

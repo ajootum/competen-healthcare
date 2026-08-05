@@ -16,10 +16,19 @@ export async function proxy(request: NextRequest) {
   // The headers are re-derived from `request` INSIDE setAll rather than snapshotted up front, because
   // Supabase's cookie refresh writes to request.cookies and a stale snapshot would drop the refreshed
   // session -- silently logging people out, which is a very expensive way to get a trace id.
+  // `x-pathname` rides along for the same reason: something server-side needs to know which URL was asked
+  // for, and only this file sees it before routing. The practice shell layout uses it to send an expired
+  // session back to the page it was actually trying to open instead of dropping everyone on the home page.
+  //
+  // A LAYOUT MUST NOT RENDER THIS INTO UI. Next's layout docs are explicit that layouts do not re-render on
+  // navigation, so a pathname read here goes stale the moment a client-side navigation happens. It is safe
+  // for the redirect guard ONLY because that guard runs during a server render, where the header and the
+  // request are the same request by construction.
   const traceId = crypto.randomUUID();
   const withTrace = (req: NextRequest) => {
     const h = new Headers(req.headers);
     h.set("x-trace-id", traceId);
+    h.set("x-pathname", req.nextUrl.pathname);
     return h;
   };
 

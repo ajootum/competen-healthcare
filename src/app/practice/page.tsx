@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import PracticeHeader from "@/components/marketing/PracticeHeader";
+import { resolvedJourneys } from "@/lib/marketing/journey-gates";
 import SiteFooter from "@/components/marketing/SiteFooter";
 import {
   PRACTICE_INDIGO, PRACTICE_INDIGO_DEEP, PRACTICE_CANVAS,
@@ -58,9 +59,12 @@ export default async function Page() {
   // create a practice, else sign in, else talk to us. The trial line only appears when a trial can
   // genuinely be started.
   const admin = createAdminClient();
-  const [signupOpen, signInOpen] = await Promise.all([
+  const [signupOpen, signInOpen, journeys] = await Promise.all([
     platformFlag(admin, "practice_public_signup"),
     platformFlag(admin, "practice_sign_in"),
+    // The header's buttons follow the same ladder as the hero's CTA below. Resolving them here rather
+    // than inside the header keeps the flag read on the server and out of a client component.
+    resolvedJourneys(),
   ]);
   const cta = signupOpen
     ? { label: LP3_HERO.cta.label, href: "/practice/sign-up" }
@@ -80,7 +84,7 @@ export default async function Page() {
         <Link href={cta.href} className="underline underline-offset-2 hover:opacity-90">{cta.label} →</Link>
       </p>
 
-      <PracticeHeader />
+      <PracticeHeader journeys={journeys} />
 
       <main id="main">
         {/* ── HERO ─────────────────────────────────────────────────────── */}
