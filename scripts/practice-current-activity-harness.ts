@@ -577,10 +577,32 @@ async function main() {
       return !!parent && !!PRACTICE_NAV.find(i => i.href === parent && i.primary && i.built);
     }), REMOVED.map(h => `${h} -> ${PRACTICE_NAV.find(i => i.href === h)?.parent ?? "NOTHING"}`).join("; "));
 
+  // ⚠ A NAV ENTRY MAY NOW BE A VIEW OF A PAGE RATHER THAN A PAGE (CPR-V5-006). The spec asks for the
+  // operational worklists to be "clickable and open filtered patient lists", and a filtered list of the
+  // people already on a screen is a view of that screen, not a second screen about the same people.
+  // Those entries carry a query string, so the existence check has to look at the PATH.
+  //
+  // Stripping the query is the easy half and on its own it would be a HOLE: `?list=waiting` on any path
+  // at all would then pass as long as some page existed there, and a view could quietly point at a page
+  // that has nothing to do with its parent. 9f-b closes that below.
+  const pagePath = (href: string) => href.split("?")[0];
   const missing = PRACTICE_NAV.filter(i => i.built).filter(i => {
-    const seg = i.href.replace(/^\/practice\//, "");
+    const seg = pagePath(i.href).replace(/^\/practice\//, "");
     return !existsSync(join(process.cwd(), "src", "app", "practice", "(shell)", seg, "page.tsx"));
   });
+
+  // Every view must be a view OF ITS OWN PARENT. Without this a "Waiting List" filed under Patients
+  // could link into Documents and the sidebar would still look right.
+  const strayViews = PRACTICE_NAV.filter(i => i.href.includes("?"))
+    .filter(i => !i.parent || pagePath(i.href) !== i.parent);
+  ok("9f-b. ⚠ every worklist VIEW points at the page of the section it is filed under",
+    strayViews.length === 0, strayViews.map(v => `${v.href} filed under ${v.parent ?? "NOTHING"}`).join(", "));
+
+  // CONTROL. 9f-b passes trivially if no view exists at all -- and it did, until this spec. Assert the
+  // views are really there, so the check above is guarding something.
+  ok("9f-b-control. and there ARE views to check",
+    PRACTICE_NAV.filter(i => i.href.includes("?")).length >= 2,
+    `${PRACTICE_NAV.filter(i => i.href.includes("?")).length}`);
   // 9h. The sections themselves. V5-003 draws three groups, and the separation carries meaning:
   // everything in Workspace can change a record and Practice Intelligence cannot.
   ok("9h. the sidebar has the three declared sections, in order",

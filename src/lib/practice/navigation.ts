@@ -165,6 +165,23 @@ export const PRACTICE_NAV: PracticeNavItem[] = [
   { href: "/practice/activity", label: "Procedures", icon: "◷", capability: "procedure.record", group: "Clinical", phase: 4, built: true, parent: "/practice/encounters" },
   { href: "/practice/search", label: "Search", icon: "⌕", capability: "search.use", group: "Practice", phase: 5, built: true, parent: "/practice/patients" },
 
+  // CPR-V5-006's Patients children. These two are WORKLIST VIEWS, not routes -- the spec asks for the
+  // operational lists to be "clickable and open filtered patient lists", and a filtered list of the
+  // people already on a page is a view of that page, not a second page about the same people.
+  //
+  // ⚠ THE COMP ALSO NESTS "Follow-up Board" HERE AND IT IS DELIBERATELY NOT ADDED. /practice/follow-ups
+  // is already primary, and one module in two sidebar positions makes the sidebar overstate how many
+  // things exist -- somebody who visits both finds the same board and has to work out they are the same.
+  // The due-follow-ups WORKLIST still appears on the Patients page, where it is a filter over patients
+  // rather than a second door to the obligations board.
+  { href: "/practice/patients?list=waiting", label: "Waiting List", icon: "◔", capability: "patient.list", group: "Patients", phase: 6, built: true, parent: "/practice/patients" },
+  // ⚠ `patient.create`, NOT `patient.register`. I wrote the second one first because it is what the
+  // workflow is called, and it is seeded nowhere -- it would have been the SIXTH invented capability
+  // code in this codebase, hiding this entry from every user including the practice owner while
+  // compiling perfectly. The seeded set is patient.create / edit / list / merge / view. Read, not
+  // remembered.
+  { href: "/practice/patients?list=new", label: "New Registration", icon: "✚", capability: "patient.create", group: "Patients", phase: 6, built: true, parent: "/practice/patients" },
+
   // -- Documents: everything that arrives, and everything sent --------------------------------------
   { href: "/practice/messages", label: "Messages", icon: "✉", capability: "message.use", group: "Communication", phase: 5, built: true, parent: "/practice/documents" },
   // The comp calls this "Investigations". It is CPR-320's incoming register and holds every arriving
