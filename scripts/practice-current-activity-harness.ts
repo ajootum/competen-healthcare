@@ -16,7 +16,10 @@ import {
 } from "../src/lib/practice/activity";
 import { todaysWork } from "../src/lib/practice/todays-work";
 import { runProvisioning, type IndividualRequest } from "../src/lib/practice/provisioning";
+import { PRACTICE_NAV, primaryNav, childrenOf, orphanedNav } from "../src/lib/practice/navigation";
 import type { WorkspaceContext } from "../src/lib/practice/access";
+import { existsSync } from "node:fs";
+import { join } from "node:path";
 
 loadEnvConfig(process.cwd());
 
@@ -266,6 +269,47 @@ async function main() {
   const goodWork = await todaysWork(admin, ctxA);
   ok("8-control. a readable practice reports counts and is not marked unavailable",
     goodWork.panels.every(p => !p.unavailable && p.count !== null) && !goodWork.plan.unavailable);
+
+  // ── 9. CPR-V3-002 navigation: nine sections, and NOTHING unreachable ─────────────────────────────
+  //
+  // ⚠ THE WHOLE RISK OF ADOPTING V3's NINE. This build has twenty-five routes; the volume names nine.
+  // Rendering only the nine leaves sixteen working screens with no way in -- which is precisely the
+  // defect that made /practice/setup and the settings cards dead ends, found by a person and not by a
+  // test. This asserts it cannot happen again, on the SAME functions the sidebar calls.
+  const orphans = orphanedNav();
+  ok("9a. no built module is unreachable from the sidebar", orphans.length === 0,
+    orphans.map(o => `${o.label} (${o.href}) has no parent section`).join("; "));
+
+  const nine = PRACTICE_NAV.filter(i => i.primary);
+  ok("9b. the sidebar declares CPR-V3-002's nine sections", nine.length === 9,
+    `${nine.length}: ${nine.map(i => i.label).join(", ")}`);
+
+  // A section that is not built must not render, and must not be used as a parent -- a module filed under
+  // an unbuilt section is an orphan with extra steps.
+  const parents = new Set(PRACTICE_NAV.filter(i => i.parent).map(i => i.parent!));
+  const unbuiltParents = [...parents].filter(p =>
+    !PRACTICE_NAV.some(i => i.href === p && i.primary && i.built));
+  ok("9c. every parent section is itself primary AND built", unbuiltParents.length === 0,
+    unbuiltParents.join(", "));
+
+  // Non-vacuity: an owner with everything must actually SEE nine sections and their modules, or 9a-9c
+  // would pass just as well against a navigation that rendered nothing at all.
+  const allCaps = [...new Set(PRACTICE_NAV.map(i => i.capability).filter(Boolean))] as string[];
+  const shown = primaryNav(allCaps);
+  ok("9d-control. an owner sees the built sections, not an empty sidebar",
+    shown.length === nine.filter(i => i.built).length && shown.length >= 7, `${shown.length} shown`);
+  ok("9e-control. and the modules filed under them are reachable",
+    shown.reduce((n, s) => n + childrenOf(s.href, allCaps).length, 0) >= 15,
+    `${shown.reduce((n, s) => n + childrenOf(s.href, allCaps).length, 0)} children`);
+
+  // Every href a section or module points at must be a real page, or the sidebar is back to promising
+  // routes that do not exist. Checked on the FILE SYSTEM, since a 307 to sign-in cannot tell them apart.
+  const missing = PRACTICE_NAV.filter(i => i.built).filter(i => {
+    const seg = i.href.replace(/^\/practice\//, "");
+    return !existsSync(join(process.cwd(), "src", "app", "practice", "(shell)", seg, "page.tsx"));
+  });
+  ok("9f. every built nav entry points at a page that exists", missing.length === 0,
+    missing.map(m => m.href).join(", "));
 
   await cleanup(userA, userB);
   report();

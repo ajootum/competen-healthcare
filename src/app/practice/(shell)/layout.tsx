@@ -2,7 +2,7 @@ import Link from "next/link";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { resolvePracticeShell } from "@/lib/practice/shell";
-import { visibleNav, NAV_GROUP_ORDER, NAV_LAYER_ORDER, GROUP_LAYER } from "@/lib/practice/navigation";
+import { primaryNav, childrenOf } from "@/lib/practice/navigation";
 import { createAdminClient } from "@/lib/supabase/server";
 import { resolvePreferences } from "@/lib/practice/preferences";
 import SidebarNav from "./SidebarNav";
@@ -48,16 +48,9 @@ export default async function PracticeShellLayout({ children }: { children: Reac
   if (shell.state === "SESSION_REVOKED" || shell.state === "MFA_REQUIRED") redirect("/practice/access-status");
 
   const { ctx } = shell;
-  const nav = visibleNav(ctx.capabilities);
-  // Headings follow the DECLARED order, not the order items happen to appear in. Deriving it from the
-  // item list means moving one route silently moves a whole section heading with it. CPR-SET-000 Part I
-  // adds the layer above the group; an empty layer renders nothing at all rather than a bare heading.
-  const layers = NAV_LAYER_ORDER
-    .map(layer => ({
-      layer,
-      groups: NAV_GROUP_ORDER.filter(g => GROUP_LAYER[g] === layer && nav.some(i => i.group === g)),
-    }))
-    .filter(l => l.groups.length > 0);
+  // CPR-V3-002's nine sections, each carrying the modules filed under it. Both lists are capability
+  // filtered by the same function, so a module cannot appear under a section its holder cannot open.
+  const sections = primaryNav(ctx.capabilities);
 
   // CPR-360: the personalisation, resolved server-side and applied as data attributes the stylesheet
   // reads. Server-side because a theme applied by client JavaScript flashes the wrong one first, and
@@ -90,9 +83,12 @@ export default async function PracticeShellLayout({ children }: { children: Reac
     "/practice/tasks": taskCount,
     "/practice/inbox": messageCount,
   };
-  const navItems = nav.map(i => ({
-    href: i.href, label: i.label, icon: i.icon, group: i.group,
-    badge: BADGES[i.href] ?? null,
+  const render = (i: { href: string; label: string; icon: string }) => ({
+    href: i.href, label: i.label, icon: i.icon, badge: BADGES[i.href] ?? null,
+  });
+  const navItems = sections.map(s => ({
+    ...render(s),
+    children: childrenOf(s.href, ctx.capabilities).map(render),
   }));
 
   return (
@@ -124,7 +120,7 @@ export default async function PracticeShellLayout({ children }: { children: Reac
           </p>
         </div>
 
-        <SidebarNav layers={layers} items={navItems} />
+        <SidebarNav items={navItems} />
 
         {/* The workspace CHOOSER, not settings. This said "Switch workspace" and opened Personal Settings,
             which is a different job entirely -- and the chooser has existed at /practice/select-workspace

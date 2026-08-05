@@ -67,6 +67,20 @@ export type PracticeNavItem = {
   /** Ships in this build phase; `built` flips when the route actually exists. */
   phase: number;
   built: boolean;
+  /**
+   * CPR-V3-002's nine. These are the sidebar; everything else is reached through the one that owns it.
+   */
+  primary?: boolean;
+  /**
+   * The href of the primary section this module belongs to. Required for everything that is not primary.
+   *
+   * ⚠ THIS IS WHAT STOPS THE SIDEBAR ORPHANING WORKING MODULES. V3 names nine sections; this build has
+   * twenty-five routes, and simply rendering the nine would leave sixteen shipped screens with no way in
+   * -- the exact failure that made /practice/setup and the settings cards unreachable earlier. A parent
+   * must itself be primary AND built, so a module cannot be filed under a section that does not exist
+   * yet. `primaryNav`/`childrenOf` are the only two readers, and the nav harness asserts the invariant.
+   */
+  parent?: string;
 };
 
 /** Sidebar order. Declared, not inferred from item order, so a reordered item cannot move a heading. */
@@ -88,93 +102,103 @@ export const NAV_GROUP_ORDER: PracticeNavGroup[] = [
 // clinical-officer, midwife, surgeon, pharmacist, laboratory-scientist, nutritionist, physiotherapist,
 // psychologist). Check `slug:` in src/lib/marketing/practice-content.ts before adding a route here.
 export const PRACTICE_NAV: PracticeNavItem[] = [
-  // ── PRACTICE: running today ────────────────────────────────────────────────────────────────────
-  // "Practice Command Centre", not "Home". The comp renames it and the name is the better one: this is
-  // where a clinic morning is started, and "Home" says nothing about that.
-  { href: "/practice/home", label: "Practice Home", icon: "⌂", capability: "practice.home.view", group: "Practice", phase: 0, built: true },
-  // CPR-V3-002's second item, and the one its acceptance criteria are measured against: "Open Today's Work
-  // in under two clicks." It is second in the sidebar, so it is one.
+  // ══ CPR-V3-002 WORKSPACE ARCHITECTURE: THE NINE ══════════════════════════════════════════════════
   //
-  // IT DOES NOT REPLACE THE CALENDAR. The calendar is the diary -- what is booked, when, and where. This is
-  // the day you are actually in: what is running, who is waiting, what is overdue. V3 separates them on
-  // purpose ("appointments are inputs, not the centre of the system"), and collapsing them back together
-  // would lose exactly the distinction the volume is about.
-  { href: "/practice/today", label: "Today's Work", icon: "◔", capability: "practice.home.view", group: "Practice", phase: 0, built: true },
-  { href: "/practice/calendar", label: "Calendar", icon: "▤", capability: "practice.calendar.view", group: "Practice", phase: 1, built: true },
-  // The comp lists Calendar and Appointments separately. They are one route -- CPR-CAL-001 built a day
-  // view WITH the booking console on it -- and two entries pointing at the same page teaches people that
-  // one of them is a mistake. Appointments is where the diary is: it is called Calendar.
-  { href: "/practice/tasks", label: "Tasks", icon: "☑", capability: "task.view", group: "Practice", phase: 4, built: true },
-  { href: "/practice/search", label: "Search", icon: "⌕", capability: "search.use", group: "Practice", phase: 5, built: true },
+  // The volume names nine sections and all six comps draw exactly those nine, flat, with no group
+  // headings. That is the sidebar.
+  //
+  // TWO OF THE NINE ARE NOT BUILT, and are declared here `built: false` so they render NOTHING rather
+  // than a grey promise (s7.2, and the rule this file has always applied). Declaring them keeps the
+  // architecture visible and makes shipping one a one-word change; it does not put a dead link in a
+  // sidebar, which is what the previous session was spent undoing.
+  { href: "/practice/home", label: "Practice Home", icon: "⌂", capability: "practice.home.view", group: "Practice", phase: 0, built: true, primary: true },
+  // The acceptance criterion CPR-V3-002 is measured by -- "open Today's Work in under two clicks" -- is
+  // one click because this is second in the sidebar. It does NOT replace the Calendar: the calendar is
+  // what is booked, this is the day you are actually in, and V3 separates them on purpose.
+  { href: "/practice/today", label: "Today's Work", icon: "◔", capability: "practice.home.view", group: "Practice", phase: 0, built: true, primary: true },
+  { href: "/practice/patients", label: "Patients", icon: "☺", capability: "patient.list", group: "Patients", phase: 2, built: true, primary: true },
+  // CPR-V3-002 "Patient Journey": longitudinal timeline, diagnoses, treatments, documents, hospital
+  // history, follow-up history, AI summary. The pieces exist across several screens; the single
+  // longitudinal view V3 asks for does not. NOT SHIPPED, so it renders nothing.
+  { href: "/practice/journey", label: "Patient Journey", icon: "⤳", capability: "patient.view", group: "Patients", phase: 9, built: false, primary: true },
+  { href: "/practice/follow-ups", label: "Follow-ups", icon: "↻", capability: "followup.view", group: "Patients", phase: 4, built: true, primary: true },
+  { href: "/practice/documents", label: "Documents", icon: "▦", capability: "document.view", group: "Clinical", phase: 4, built: true, primary: true },
+  // CPR-V3-002 "Insights". Analytics and Patient Insights both exist and both sit under Practice Home
+  // until this section is built -- filing them under a section that does not exist would orphan them.
+  { href: "/practice/insights", label: "Insights", icon: "☀", capability: "report.view", group: "Intelligence", phase: 9, built: false, primary: true },
+  { href: "/practice/assistant", label: "AI Assistant", icon: "✧", capability: "encounter.list", group: "Intelligence", phase: 5, built: true, primary: true },
+  { href: "/practice/setup", label: "Practice Setup", icon: "⚙", capability: null, group: "Setup", phase: 8, built: true, primary: true },
 
-  // ── PATIENTS: people ───────────────────────────────────────────────────────────────────────────
-  { href: "/practice/patients", label: "Patients", icon: "☺", capability: "patient.list", group: "Patients", phase: 2, built: true },
-  { href: "/practice/follow-ups", label: "Follow-ups", icon: "↻", capability: "followup.view", group: "Patients", phase: 4, built: true },
-  // The comp's "Patient Insights" — cohort counts by recorded diagnosis. It is a report, and it is the
-  // reports page; a second route rendering the same figures under a nicer name is two answers to one
-  // question. The command centre's Patient Insights widget links here.
-  { href: "/practice/reports", label: "Patient Insights", icon: "☷", capability: "report.view", group: "Patients", phase: 6, built: true },
+  // ══ EVERYTHING ELSE, FILED UNDER THE SECTION THAT OWNS IT ════════════════════════════════════════
+  //
+  // Sixteen shipped screens. None is in V3's nine and every one of them works, so each declares its
+  // parent and is reached from there. A module with no parent is an orphan and the nav harness fails.
 
-  // ── CLINICAL: the record ───────────────────────────────────────────────────────────────────────
-  { href: "/practice/encounters", label: "Encounters", icon: "✎", capability: "encounter.list", group: "Clinical", phase: 3, built: true },
-  { href: "/practice/activity", label: "Procedures", icon: "◷", capability: "procedure.record", group: "Clinical", phase: 4, built: true },
-  { href: "/practice/documents", label: "Documents", icon: "▦", capability: "document.view", group: "Clinical", phase: 4, built: true },
+  // -- Today's Work: the day, and what is booked into it --------------------------------------------
+  { href: "/practice/calendar", label: "Calendar", icon: "▤", capability: "practice.calendar.view", group: "Practice", phase: 1, built: true, parent: "/practice/today" },
+  { href: "/practice/tasks", label: "Tasks", icon: "☑", capability: "task.view", group: "Practice", phase: 4, built: true, parent: "/practice/today" },
 
-  // ── COMMUNICATION: in and out ──────────────────────────────────────────────────────────────────
-  { href: "/practice/messages", label: "Messages", icon: "✉", capability: "message.use", group: "Communication", phase: 5, built: true },
-  // The comp calls this "Investigations". It is CPR-320's incoming register and it holds every arriving
+  // -- Patients: the people, and the record made about them -----------------------------------------
+  { href: "/practice/encounters", label: "Encounters", icon: "✎", capability: "encounter.list", group: "Clinical", phase: 3, built: true, parent: "/practice/patients" },
+  { href: "/practice/activity", label: "Procedures", icon: "◷", capability: "procedure.record", group: "Clinical", phase: 4, built: true, parent: "/practice/patients" },
+  { href: "/practice/search", label: "Search", icon: "⌕", capability: "search.use", group: "Practice", phase: 5, built: true, parent: "/practice/patients" },
+
+  // -- Documents: everything that arrives, and everything sent --------------------------------------
+  { href: "/practice/messages", label: "Messages", icon: "✉", capability: "message.use", group: "Communication", phase: 5, built: true, parent: "/practice/documents" },
+  // The comp calls this "Investigations". It is CPR-320's incoming register and holds every arriving
   // document -- lab results among them, but also referrals and discharge summaries. Naming it after one
   // of its contents would promise an investigations module that does not exist.
-  { href: "/practice/inbox", label: "Results & incoming", icon: "▼", capability: "inbox.record", group: "Communication", phase: 5, built: true },
+  { href: "/practice/inbox", label: "Results & incoming", icon: "▼", capability: "inbox.record", group: "Communication", phase: 5, built: true, parent: "/practice/documents" },
 
-  // ── INTELLIGENCE ───────────────────────────────────────────────────────────────────────────────
-  { href: "/practice/intelligence", label: "Analytics", icon: "☀", capability: "report.view", group: "Intelligence", phase: 5, built: true },
-  // CPR-220. NOT /practice/case-memory -- that slug is the public marketing page for this capability, and
-  // a static route there would shadow it silently. encounter.list, not patient.view: learning from a case
-  // does not require knowing whose it was, and the engine de-identifies for callers without it.
-  { href: "/practice/cases", label: "Case Memory", icon: "❧", capability: "encounter.list", group: "Intelligence", phase: 5, built: true },
-  // CPR-210. encounter.list, because it reads consultations and writes nothing clinical. Switching it
-  // ON is a different act and takes practice.settings.manage, gated inside the page -- putting the nav
-  // entry behind that permission would hide the disclosure from the people it is about.
-  { href: "/practice/assistant", label: "AI Assistant", icon: "✧", capability: "encounter.list", group: "Intelligence", phase: 5, built: true },
-  // CPR-230. NO CAPABILITY: reflecting on your own practice is not a permission somebody grants you.
-  // What a reflection touches is gated where it is touched -- promoting a learning point goes through
-  // CPR-220 and needs encounter.edit.
-  { href: "/practice/reflection", label: "Reflection", icon: "◍", capability: null, group: "Intelligence", phase: 5, built: true },
-  // CPR-240. NO CAPABILITY: a portfolio is an account of your own work, and nobody grants you permission
-  // to keep one. Every query inside is scoped to the caller, so there is nothing to gate.
-  { href: "/practice/portfolio", label: "Portfolio", icon: "❑", capability: null, group: "Intelligence", phase: 5, built: true },
-  // CPR-SETUP-001's sidebar puts the access log under PERSONAL SETTINGS as "Activity Log". It is both:
-  // the page carries a practice-wide review (gated on access.review) AND the trail of what you yourself
-  // opened. It sits in the personal layer because that half is the one everybody has.
-  { href: "/practice/privacy", label: "Activity Log", icon: "⚿", capability: "access.review", group: "Personal", phase: 5, built: true },
+  // -- Practice Home: the figures, until Insights ships ---------------------------------------------
+  { href: "/practice/intelligence", label: "Analytics", icon: "☀", capability: "report.view", group: "Intelligence", phase: 5, built: true, parent: "/practice/home" },
+  { href: "/practice/reports", label: "Patient Insights", icon: "☷", capability: "report.view", group: "Patients", phase: 6, built: true, parent: "/practice/home" },
+
+  // -- AI Assistant: thinking about the work --------------------------------------------------------
+  // CPR-220. NOT /practice/case-memory -- that slug is the public marketing page for this capability.
+  // encounter.list, not patient.view: learning from a case does not require knowing whose it was.
+  { href: "/practice/cases", label: "Case Memory", icon: "❧", capability: "encounter.list", group: "Intelligence", phase: 5, built: true, parent: "/practice/assistant" },
+  // CPR-230/240. NO CAPABILITY on either: reflecting on your own practice, and keeping an account of
+  // your own work, are not permissions somebody grants you. Every query inside is scoped to the caller.
+  { href: "/practice/reflection", label: "Reflection", icon: "◍", capability: null, group: "Intelligence", phase: 5, built: true, parent: "/practice/assistant" },
+  { href: "/practice/portfolio", label: "Portfolio", icon: "❑", capability: null, group: "Intelligence", phase: 5, built: true, parent: "/practice/assistant" },
+
+  // -- Practice Setup: configuring the practice, and your own preferences ---------------------------
+  { href: "/practice/people", label: "Team & Permissions", icon: "⚇", capability: null, group: "Setup", phase: 5, built: true, parent: "/practice/setup" },
+  { href: "/practice/settings", label: "Personal Settings", icon: "☰", capability: null, group: "Personal", phase: 8, built: true, parent: "/practice/setup" },
+  { href: "/practice/privacy", label: "Activity Log", icon: "⚿", capability: "access.review", group: "Personal", phase: 5, built: true, parent: "/practice/setup" },
   // CPR-370: NO CAPABILITY. Everybody may see the devices signed in as THEM and lock one out; the
   // practice-wide view and the policy are gated inside the page. Hiding somebody's own device list
   // behind an audit permission would put it out of reach of the person who lost the laptop.
-  { href: "/practice/privacy/security", label: "Security", icon: "⛨", capability: null, group: "Personal", phase: 5, built: true },
-  // CPR-310: NO CAPABILITY. The page carries the approval queue, which belongs to practitioners rather
-  // than administrators; the management half is gated inside it.
-  // CPR-SETUP-001 makes this setup module 12, so it moves into the setup layer -- which empties the
-  // Administration group entirely, and an empty group renders nothing rather than a bare heading.
-  { href: "/practice/people", label: "Team & Permissions", icon: "⚇", capability: null, group: "Setup", phase: 5, built: true },
-  // CPR-360: NO CAPABILITY. The page carries both halves -- personal settings, which everybody has, and
-  // practice configuration, which the page itself gates. Requiring practice.settings.manage in the nav
-  // would hide somebody's own text size behind an administrative permission.
-
-  // ── PRACTICE SETUP (CPR-SET-000 Part I, layer 2) ───────────────────────────────────────────────
-  // NO CAPABILITY on the hub. It is a map of what is configured and what is left, and the individual
-  // cards are gated by the permission each one needs -- so somebody without practice.settings.manage
-  // still sees what state their practice is in without being able to change it. Hiding the map behind
-  // the permission to edit would leave a locum unable to find out why booking behaves as it does.
-  { href: "/practice/setup", label: "Practice Setup", icon: "⚙", capability: null, group: "Setup", phase: 8, built: true },
-
-  // ── PERSONAL SETTINGS (layer 3) ────────────────────────────────────────────────────────────────
-  // CPR-360's page carries both halves and gates the practice-wide one inside itself. It sits in the
-  // personal layer because that is the half EVERYBODY has; the practice half is reached from the setup
-  // hub above, which is what that hub is for.
-  { href: "/practice/settings", label: "Personal Settings", icon: "☰", capability: null, group: "Personal", phase: 8, built: true },
+  { href: "/practice/privacy/security", label: "Security", icon: "⛨", capability: null, group: "Personal", phase: 5, built: true, parent: "/practice/setup" },
 ];
 
 export function visibleNav(capabilities: string[]): PracticeNavItem[] {
   return PRACTICE_NAV.filter(i => i.built && (i.capability === null || capabilities.includes(i.capability)));
+}
+
+/** CPR-V3-002's nine, filtered the same two ways everything else is. This is the sidebar. */
+export function primaryNav(capabilities: string[]): PracticeNavItem[] {
+  return visibleNav(capabilities).filter(i => i.primary);
+}
+
+/**
+ * The modules filed under a primary section, in declaration order.
+ *
+ * Rendered beneath their section in the sidebar rather than only inside the page, because "reachable from
+ * the screen that owns it" is only true if you already found that screen -- and a module you cannot see
+ * from the navigation is a module you have to remember exists.
+ */
+export function childrenOf(parentHref: string, capabilities: string[]): PracticeNavItem[] {
+  return visibleNav(capabilities).filter(i => i.parent === parentHref);
+}
+
+/**
+ * Every built module that nothing can reach: not primary, and with no parent that is itself a built
+ * primary. Exported so the harness asserts on the SAME function the sidebar uses -- a check that
+ * reimplements the rule can agree with itself while disagreeing with the product.
+ */
+export function orphanedNav(): PracticeNavItem[] {
+  const builtPrimary = new Set(PRACTICE_NAV.filter(i => i.primary && i.built).map(i => i.href));
+  return PRACTICE_NAV.filter(i => i.built && !i.primary && !(i.parent && builtPrimary.has(i.parent)));
 }
