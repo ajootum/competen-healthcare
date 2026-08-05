@@ -805,8 +805,15 @@ export async function averageConsultMinutes(admin: any, ctx: WorkspaceContext, s
   for (const e of read.rows) {
     const start = at(e.started_at);
     const end = at(e.completed_at);
-    const log = logByEncounter.get(e.id);
-    if (start === null || end === null || end < start || !log) { excluded++; continue; }
+    // ⚠ NO TRANSITION LOG MEANS NEVER PAUSED, NOT UNMEASURABLE. This read `!log` and excluded every
+    // encounter without a history row -- which is the ordinary case for a consultation that ran straight
+    // through, and for every encounter recorded before the log existed. The denominator shrank silently
+    // and the average drifted towards whichever consultations happened to have been interrupted.
+    //
+    // s8 says "exclude invalid/missing TIMESTAMPS". A missing pause record is not a missing timestamp; it
+    // is evidence of no pause. Absence of evidence about an interruption is not absence of a duration.
+    const log = logByEncounter.get(e.id) ?? [];
+    if (start === null || end === null || end < start) { excluded++; continue; }
 
     // Paused intervals: entering PAUSED opens one, the next transition of any kind closes it. Clipped to
     // the consultation's own window so a log entry outside it cannot produce a negative consult time.

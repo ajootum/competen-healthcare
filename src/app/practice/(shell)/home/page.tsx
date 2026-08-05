@@ -108,6 +108,14 @@ export default async function PracticeCommandCentre() {
     timeline: "the session timeline", followUps: "follow-ups", alerts: "operational alerts",
     drafts: "unfinished encounters",
   };
+  // CPR-CORE-001 s7 "Practice Performance": patients seen, avg consult time, avg wait time, clinic
+  // delay. Read from the SAME metrics engine the glance tiles use -- command-centre.ts held a third,
+  // more wrong implementation of all four and it is deleted.
+  const PERFORMANCE_KEYS = ["patients_seen", "average_consult_time", "average_wait_time", "clinic_delay"] as const;
+  const performance = dash.metrics
+    ? PERFORMANCE_KEYS.map(k => dash.metrics!.metrics[k])
+    : [];
+
   const failedFeeders = Object.entries(dash.feeders)
     .filter(([, state]) => state === "unavailable")
     .map(([key]) => FEEDER_LABEL[key] ?? key);
@@ -809,19 +817,27 @@ export default async function PracticeCommandCentre() {
         <section className={card} style={widget("health")}>
           <PanelHead k="performance" title="Practice performance (today)" href="/practice/reports" hrefLabel="View report" />
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-            {cc.performance.map(p => (
-              <div key={p.key} className="rounded-lg bg-[var(--cp-canvas)] px-3 py-2.5">
+            {performance.length === 0 ? (
+              <p className="col-span-full text-[12px] text-gray-500">
+                Today&rsquo;s figures could not be read just now.
+              </p>
+            ) : performance.map(p => (
+              <div key={p.key} className="rounded-lg bg-[var(--cp-canvas)] px-3 py-2.5"
+                title={p.value === null ? (p.reason ?? "") : `${p.formula} Source: ${p.sources.join(", ")}.`}>
                 {p.value !== null ? (
                   <>
                     <p className={`text-[22px] font-bold leading-none ${PERFORMANCE_SWATCH[p.key] ?? "text-gray-900"}`}>
-                      {p.value}{p.unit ? <span className="ml-0.5 text-[12px] font-semibold opacity-70">{p.unit}</span> : null}
+                      {p.value}{p.unit === "minutes" ? <span className="ml-0.5 text-[12px] font-semibold opacity-70">min</span> : null}
                     </p>
                     <p className="mt-1 text-[11px] leading-tight text-gray-600">{p.label}</p>
                     {/* NO AVERAGE WITHOUT ITS DENOMINATOR. "18 min" over three consultations is not a
-                        measurement, and the comp shows four such figures with no n at all. */}
-                    {p.overCount !== null && (
+                        measurement, and the comp shows four such figures with no n at all. Anything
+                        DROPPED by a documented exclusion is disclosed too -- a mean over eight of
+                        twenty is a different claim from a mean over eight. */}
+                    {p.observations !== null && (
                       <p className="text-[9px] leading-tight text-gray-400">
-                        over {p.overCount} {p.overCount === 1 ? "measurement" : "measurements"}
+                        over {p.observations} {p.observations === 1 ? "measurement" : "measurements"}
+                        {p.excluded > 0 ? `, ${p.excluded} excluded` : ""}
                       </p>
                     )}
                   </>
@@ -829,6 +845,8 @@ export default async function PracticeCommandCentre() {
                   <>
                     <p className="text-[22px] font-bold leading-none text-gray-300">—</p>
                     <p className="mt-1 text-[11px] leading-tight text-gray-500">{p.label}</p>
+                    {/* Three different reasons behind one em dash: could not read, not permitted, or
+                        not yet knowable. The card says which. */}
                     <p className="text-[9px] leading-tight text-gray-400">{p.reason}</p>
                   </>
                 )}

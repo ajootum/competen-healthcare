@@ -157,41 +157,22 @@ export async function commandCentre(admin: any, ctx: WorkspaceContext) {
 
   // ── HERO STATS ─────────────────────────────────────────────────────────────────────────────────
   //
-  // Six, in the comp's order. Each is a COUNT OF A LIST THAT CAN BE OPENED -- CPR-300's rule, and the
-  // reason none of them is a percentage. `available: false` means the caller cannot see that domain;
-  // the tile renders in position saying so rather than showing a zero it did not earn.
-  const [
-    { count: newPatients }, followUpRows, { count: incoming },
-  ] = await Promise.all([
-    can("patient.list")
-      ? admin.from("practice_patient").select("*", { count: "exact", head: true })
-        .eq("workspace_id", ctx.workspaceId).gte("created_at", startIso).lt("created_at", endIso)
-      : Promise.resolve({ count: null }),
-    can("followup.view")
-      ? admin.from("practice_follow_up").select("id, due_on, status, patient_id")
-        .eq("workspace_id", ctx.workspaceId).in("status", ["OPEN", "SCHEDULED", "COMPLETED"]).limit(2000)
-      : Promise.resolve({ data: null }),
-    can("inbox.record")
-      ? admin.from("practice_incoming_document").select("*", { count: "exact", head: true })
-        .eq("workspace_id", ctx.workspaceId).eq("status", "RECEIVED")
-      : Promise.resolve({ count: null }),
-  ]);
+  // Follow-up intelligence still needs its rows. The `newPatients` and `incoming` counts beside it fed
+  // heroStats ONLY, so they are gone with it: a query nobody reads is latency and a row cap spent on
+  // nothing, and leaving it is how somebody later argues a figure should be computed here because
+  // "we already fetch that".
+  const followUpRows = can("followup.view")
+    ? await admin.from("practice_follow_up").select("id, due_on, status, patient_id")
+      .eq("workspace_id", ctx.workspaceId).in("status", ["OPEN", "SCHEDULED", "COMPLETED"]).limit(2000)
+    : { data: null };
 
   const follows = ((followUpRows as any)?.data ?? null) as any[] | null;
   const openFollows = follows?.filter(f => f.status === "OPEN") ?? null;
   const overdueFollows = openFollows?.filter(f => f.due_on < today) ?? null;
-  const walkInsWaiting = queue
-    ? ((queue as any[]).filter(q => q.status === "WAITING" && !q.appointment_id)).length
-    : null;
 
-  const heroStats = [
-    { key: "patients_today", label: "Patients Today", value: can("practice.calendar.view") ? live.length : null, href: "/practice/calendar", available: can("practice.calendar.view") },
-    { key: "new_patients", label: "New Patients", value: newPatients ?? null, href: "/practice/patients", available: can("patient.list") },
-    { key: "followups", label: "Follow-ups", value: openFollows ? openFollows.length : null, href: "/practice/follow-ups", available: !!openFollows },
-    { key: "results", label: "Results Available", value: incoming ?? null, href: "/practice/inbox", available: can("inbox.record") },
-    { key: "overdue_reviews", label: "Overdue Reviews", value: overdueFollows ? overdueFollows.length : null, href: "/practice/follow-ups", available: !!overdueFollows, tone: (overdueFollows?.length ?? 0) > 0 ? "warning" : "normal" },
-    { key: "walk_ins", label: "Walk-in Waiting", value: walkInsWaiting, href: "/practice/calendar", available: walkInsWaiting !== null },
-  ];
+  // heroStats lived here and fed the greeting card that CPR-V5-001 s2 replaced with Current Activity.
+  // Dead since that commit, and a FOURTH set of definitions for figures s8 owns -- removed rather than
+  // left for somebody to wire back up.
 
   const clinic = clinicWindow(config, appts, dayStartMs, readAt.getTime());
 
@@ -276,79 +257,32 @@ export async function commandCentre(admin: any, ctx: WorkspaceContext) {
     { key: "due_week", label: "Due This Week", value: (openFollows ?? []).filter(f => f.due_on >= today && f.due_on <= weekAhead).length, tone: "normal" },
   ] : null;
 
-  // ── PRACTICE PERFORMANCE ───────────────────────────────────────────────────────────────────────
+  // ── PRACTICE PERFORMANCE: MOVED TO metrics.ts ──────────────────────────────────────────────────
   //
-  // Every one of these is a REAL MEASUREMENT and every one carries its n. The data has been there since
-  // Phase 1/3 and nothing had ever read it: practice_arrival.arrived_at is when somebody walked in,
-  // practice_encounter.started_at is when they were seen, completed_at is when they left.
-  const [{ data: todayEncounters }, { data: todayArrivals }] = await Promise.all([
-    can("encounter.list")
-      ? admin.from("practice_encounter")
-        .select("id, appointment_id, started_at, completed_at, status")
-        .eq("workspace_id", ctx.workspaceId).gte("started_at", startIso).lt("started_at", endIso)
-      : Promise.resolve({ data: null }),
-    can("practice.calendar.view")
-      ? admin.from("practice_arrival")
-        .select("appointment_id, arrived_at, status")
-        .eq("workspace_id", ctx.workspaceId).eq("status", "ARRIVED")
-        .gte("arrived_at", startIso).lt("arrived_at", endIso)
-      : Promise.resolve({ data: null }),
-  ]);
-
-  const encs = ((todayEncounters ?? []) as any[]);
-  const arrivals = ((todayArrivals ?? []) as any[]);
-  const arrivalByAppt = new Map(arrivals.map(a => [a.appointment_id, a]));
-  const apptById = new Map(appts.map(a => [a.id, a]));
-
-  const mean = (xs: number[]) => xs.length ? Math.round(xs.reduce((n, x) => n + x, 0) / xs.length) : null;
-
-  const consultMinutes = encs
-    .filter(e => e.completed_at)
-    .map(e => (Date.parse(e.completed_at) - Date.parse(e.started_at)) / 60000)
-    .filter(m => m >= 0);
-
-  const waitMinutes = encs
-    .map(e => {
-      const arr = e.appointment_id ? arrivalByAppt.get(e.appointment_id) : null;
-      return arr ? (Date.parse(e.started_at) - Date.parse(arr.arrived_at)) / 60000 : null;
-    })
-    .filter((m): m is number => m !== null && m >= 0);
-
-  // Delay = seen how long after the time they were promised. Negative (seen early) counts as zero delay
-  // rather than offsetting somebody else's wait, which would let an early start hide a late afternoon.
-  const delayMinutes = encs
-    .map(e => {
-      const appt = e.appointment_id ? apptById.get(e.appointment_id) : null;
-      return appt ? Math.max(0, (Date.parse(e.started_at) - Date.parse(appt.scheduled_at)) / 60000) : null;
-    })
-    .filter((m): m is number => m !== null);
-
-  const performance = [
-    {
-      key: "patients_seen", label: "Patients Seen", value: can("encounter.list") ? encs.length : null,
-      unit: null as string | null, overCount: null as number | null,
-      available: can("encounter.list"),
-      reason: can("encounter.list") ? null : "You do not have access to consultations.",
-    },
-    {
-      key: "avg_consult", label: "Avg Consult Time", value: mean(consultMinutes), unit: "min",
-      overCount: consultMinutes.length, available: can("encounter.list"),
-      reason: !can("encounter.list") ? "You do not have access to consultations."
-        : consultMinutes.length === 0 ? "No consultation has been closed yet today." : null,
-    },
-    {
-      key: "avg_wait", label: "Avg Wait Time", value: mean(waitMinutes), unit: "min",
-      overCount: waitMinutes.length, available: can("encounter.list") && can("practice.calendar.view"),
-      reason: !(can("encounter.list") && can("practice.calendar.view")) ? "This needs both the diary and consultations."
-        : waitMinutes.length === 0 ? "Nobody has been checked in and then seen yet today." : null,
-    },
-    {
-      key: "clinic_delay", label: "Clinic Delay", value: mean(delayMinutes), unit: "min",
-      overCount: delayMinutes.length, available: can("encounter.list") && can("practice.calendar.view"),
-      reason: !(can("encounter.list") && can("practice.calendar.view")) ? "This needs both the diary and consultations."
-        : delayMinutes.length === 0 ? "No booked appointment has been started yet today." : null,
-    },
-  ];
+  // ⚠ THIS WAS THE THIRD IMPLEMENTATION OF FOUR OF s8's METRICS, and the most wrong of the three.
+  // CPR-CORE-001 s16: "no widget independently calculates a conflicting version of a shared metric."
+  //
+  //   patients_seen  was `encs.length` -- every encounter STARTED today with no status filter, so
+  //                  DRAFT, CANCELLED and ENTERED_IN_ERROR were all counted as a patient seen. s8
+  //                  defines it as DISTINCT patients with a COMPLETED encounter.
+  //   avg_consult    excluded no paused duration and filtered no status, so a consultation interrupted
+  //                  by an emergency read as a 90-minute consultation -- which also breaks s6.2's
+  //                  "interruption time must not be counted as active consultation time for another
+  //                  patient" -- and a reopened encounter's stale completed_at was counted too.
+  //   avg_wait       read practice_arrival with status='ARRIVED' and silently dropped VERIFIED
+  //                  arrivals, and measured no wait at all for a walk-in, who has no appointment to
+  //                  join on. The people who wait longest were the people it could not see.
+  //   clinic_delay   was a MEAN with negatives clamped to zero, so a clinic could never read as early
+  //                  and every figure was biased upward; it included walk-in appointments whose delay
+  //                  is ~0 by construction; and it had NO MINIMUM-OBSERVATION GATE, so one late start
+  //                  rendered a number -- exactly what s8's "no comparison shown until enough valid
+  //                  observations exist" forbids.
+  //
+  // All four reads were also unbounded, so each was silently capped at PostgREST's 1000 rows.
+  //
+  // The card now renders from the dashboard read model's `metrics`, which is metrics.ts. Deleted
+  // rather than corrected, for the reason s16 gives: two correct implementations drift into two
+  // answers just as surely as a wrong one, only later and more quietly.
 
   // ── PATIENT INSIGHTS ───────────────────────────────────────────────────────────────────────────
   //
@@ -438,7 +372,6 @@ export async function commandCentre(admin: any, ctx: WorkspaceContext) {
     /** First name only, for the greeting. Null when this user has no profile row. */
     greetingName: (profile?.full_name ?? "").trim().split(/\s+/)[0] || null,
     clinic,
-    heroStats,
     timeline,
     queue: queue ? (queue as any[]).map(q => ({
       id: q.id, patientId: q.patient_id, patientName: q.patient_name, status: q.status,
@@ -447,7 +380,6 @@ export async function commandCentre(admin: any, ctx: WorkspaceContext) {
     })) : null,
     weekLocations,
     followUpIntelligence,
-    performance,
     patientInsights,
     recentPatients,
     recentDocuments: ((recentDocuments ?? []) as any[]),

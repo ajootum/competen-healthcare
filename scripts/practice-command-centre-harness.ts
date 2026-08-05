@@ -33,6 +33,7 @@ import { resolveWorkspaceContext } from "../src/lib/practice/access";
 import { registerPatient } from "../src/lib/practice/patients";
 import { bookAppointment } from "../src/lib/practice/scheduling";
 import { commandCentre } from "../src/lib/practice/command-centre";
+import { practiceMetrics, metricScope, MIN_OBSERVATIONS_FOR_DELAY } from "../src/lib/practice/metrics";
 import { DASHBOARD_WIDGETS } from "../src/lib/practice/preference-constants";
 
 loadEnvConfig(process.cwd());
@@ -169,23 +170,26 @@ async function main() {
     overrun.clinic.runningLate === true && overrun.clinic.estimatedFinishLabel === "17:30",
     `${overrun.clinic.estimatedFinishLabel} late=${overrun.clinic.runningLate}`);
 
-  // ---- 3. Hero stats: real counts, and unavailable is not zero ---------------------------------------
+  // ---- 3. What heroStats protected, now owned by metrics.ts ----------------------------------------
+  //
+  // heroStats was deleted with the greeting card CPR-V5-001 s2 replaced. Its assertions are kept, not
+  // dropped: the rule they enforced -- A FIGURE THE CALLER MAY NOT SEE IS NOT A ZERO -- is exactly what
+  // s8 makes explicit, and it now has a status word for it instead of a boolean.
   const cc = await commandCentre(admin, ctxA.ctx);
-  const stat = (k: string) => cc.heroStats.find(s => s.key === k);
-  ok("3a patients today counts the live diary", stat("patients_today")?.value === 2,
-    JSON.stringify(stat("patients_today")));
-  ok("3b new patients counts today's registrations", stat("new_patients")?.value === 1,
-    JSON.stringify(stat("new_patients")));
-  ok("3c every stat carries a link to the list behind it",
-    cc.heroStats.every(s => typeof s.href === "string" && s.href.length > 0));
+  const scope = metricScope({ date: DAY, timezone: TZ });
+  const seen = await practiceMetrics(admin, ctxA.ctx, scope);
+  ok("3a booked counts the live diary", seen.metrics.booked.value === 2,
+    JSON.stringify([seen.metrics.booked.value, seen.metrics.booked.status]));
+  ok("3c every metric names the formula and the columns behind it",
+    Object.values(seen.metrics).every(m => m.formula.length > 0 && m.sources.length > 0),
+    JSON.stringify(Object.values(seen.metrics).filter(m => !m.formula).map(m => m.key)));
 
-  // A caller with no diary access must see "not visible", never 0.
+  // A caller with no diary access must be told so, never handed a nought.
   const blindCtx = { ...ctxA.ctx, capabilities: ctxA.ctx.capabilities.filter(c => c !== "practice.calendar.view") };
-  const blind = await commandCentre(admin, blindCtx);
-  const blindStat = blind.heroStats.find(s => s.key === "patients_today");
-  ok("3d a stat the caller cannot see is unavailable, NOT zero",
-    blindStat?.available === false && blindStat?.value === null, JSON.stringify(blindStat));
-
+  const blind = await practiceMetrics(admin, blindCtx, scope);
+  ok("3d a metric the caller cannot see is not_permitted, NOT zero",
+    blind.metrics.booked.status === "not_permitted" && blind.metrics.booked.value === null,
+    JSON.stringify([blind.metrics.booked.status, blind.metrics.booked.value]));
   // ---- 4. The week's locations distinguish three states ----------------------------------------------
   const { data: loc } = await admin.from("practice_location")
     .insert({ workspace_id: wsA, name: "Mulago Hospital", type: "hospital", active: true }).select("id").single();
@@ -209,10 +213,13 @@ async function main() {
     String(week.weekLocations.length));
 
   // ---- 5 + 6. Performance: real arithmetic, always with its denominator -------------------------------
-  const empty = cc.performance.find(p => p.key === "avg_consult");
+  //
+  // ⚠ THESE MOVED FROM command-centre.ts, WHICH HELD A THIRD IMPLEMENTATION OF ALL FOUR. Same fixture,
+  // same hand-checkable arithmetic, asserted against metrics.ts -- and one expectation CHANGES, which
+  // is the point: see 6c.
+  const emptyM = (await practiceMetrics(admin, ctxA.ctx, scope)).metrics.average_consult_time;
   ok("5a with no closed consultation the average is null, not zero",
-    empty?.value === null && !!empty?.reason, JSON.stringify(empty));
-
+    emptyM.value === null && emptyM.status === "unknowable" && !!emptyM.reason, JSON.stringify(emptyM));
   // A real check-in at 09:00, seen 09:20, finished 09:50, for a 09:00 booking.
   const apptId = early.ok ? early.data.id : null;
   await admin.from("practice_arrival").insert({
@@ -225,18 +232,44 @@ async function main() {
   });
   if (encError) throw new Error(`encounter fixture failed: ${encError.message}`);
 
-  const measured = await commandCentre(admin, ctxA.ctx);
-  const perf = (k: string) => measured.performance.find(p => p.key === k);
-  ok("6a avg consult time is end minus start", perf("avg_consult")?.value === 30, JSON.stringify(perf("avg_consult")));
-  ok("6b avg wait time is start minus arrival", perf("avg_wait")?.value === 20, JSON.stringify(perf("avg_wait")));
-  ok("6c clinic delay is start minus the time promised", perf("clinic_delay")?.value === 20, JSON.stringify(perf("clinic_delay")));
-  ok("6d patients seen counts consultations", perf("patients_seen")?.value === 1, JSON.stringify(perf("patients_seen")));
-  ok("5b EVERY average carries the number of measurements behind it",
-    measured.performance.filter(p => p.unit === "min").every(p => typeof p.overCount === "number"),
-    JSON.stringify(measured.performance.map(p => [p.key, p.overCount])));
-  ok("5c no performance figure is a percentage",
-    !JSON.stringify(measured.performance).match(/percent|rate|%/i), JSON.stringify(measured.performance));
+  const measured = await practiceMetrics(admin, ctxA.ctx, scope);
+  const perf = (k: keyof typeof measured.metrics) => measured.metrics[k];
+  ok("6a avg consult time is end minus start", perf("average_consult_time").value === 30,
+    JSON.stringify(perf("average_consult_time")));
+  ok("6b avg wait time is start minus arrival", perf("average_wait_time").value === 20,
+    JSON.stringify(perf("average_wait_time")));
 
+  // ⚠ THE EXPECTATION THAT CHANGED, AND THE WHOLE REASON THIS MOVED. command-centre.ts rendered a
+  // clinic delay of 20 minutes from ONE observation. s8: "no comparison shown until enough valid
+  // observations exist". One late start is one person's morning, not a statistic, and it is the figure
+  // a practitioner would rearrange an afternoon over.
+  ok(`6c one observation renders NO clinic delay (the gate is ${MIN_OBSERVATIONS_FOR_DELAY})`,
+    perf("clinic_delay").value === null && perf("clinic_delay").status === "unknowable",
+    JSON.stringify(perf("clinic_delay")));
+  ok("6c-control. and it says how many observations it had, rather than going quiet",
+    perf("clinic_delay").observations === 1 && !!perf("clinic_delay").reason,
+    JSON.stringify([perf("clinic_delay").observations, perf("clinic_delay").reason]));
+
+  // A SECOND completed encounter for the SAME patient. One person seen twice is one patient seen.
+  // Without this the assertion below passes against "count the encounters" just as happily.
+  await admin.from("practice_encounter").insert({
+    workspace_id: wsA, patient_id: pat.data.id, entry_pathway: "new_walk_in", encounter_mode: "in_person",
+    status: "COMPLETED", started_at: kampala(DAY, 11, 0), completed_at: kampala(DAY, 11, 30),
+    created_by: OWNER,
+  });
+  const twice = await practiceMetrics(admin, ctxA.ctx, scope);
+  ok("6d patients seen counts DISTINCT patients, not encounters",
+    twice.metrics.patients_seen.value === 1 && twice.metrics.completed.value === 2,
+    JSON.stringify([twice.metrics.patients_seen.value, twice.metrics.completed.value]));
+  ok("6d-control. and it discloses the duplicates it collapsed",
+    twice.metrics.patients_seen.observations === 2 && twice.metrics.patients_seen.excluded === 1,
+    JSON.stringify([twice.metrics.patients_seen.observations, twice.metrics.patients_seen.excluded]));
+  ok("5b EVERY average carries the number of measurements behind it",
+    Object.values(measured.metrics).filter(m => m.unit === "minutes")
+      .every(m => m.observations !== null || m.status === "not_permitted"),
+    JSON.stringify(Object.values(measured.metrics).filter(m => m.unit === "minutes").map(m => [m.key, m.observations])));
+  ok("5c no performance figure is a percentage",
+    !JSON.stringify(measured.metrics).match(/percent|rate|%/i));
   // ---- 7. Cohorts counted as typed, and by patient -----------------------------------------------------
   const { data: enc2 } = await admin.from("practice_encounter").insert({
     workspace_id: wsA, patient_id: pat.data.id, entry_pathway: "new_walk_in", encounter_mode: "in_person",
@@ -319,7 +352,7 @@ async function main() {
   // ---- 11. Cross-workspace isolation, non-vacuously -------------------------------------------------------
   const bCentre = await commandCentre(admin, ctxB.ctx);
   ok("11a practice B sees none of practice A's day",
-    bCentre.timeline.length === 0 && bCentre.heroStats.find(s => s.key === "patients_today")?.value === 0,
+    bCentre.timeline.length === 0 && bCentre.weekLocations.every(d => d.appointmentCount === 0),
     JSON.stringify(bCentre.timeline.map(t => t.patientName)));
   ok("11b nor its cohorts", (bCentre.patientInsights?.cohorts.length ?? 0) === 0);
   ok("11c nor its locations",
