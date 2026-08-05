@@ -74,17 +74,41 @@ export function validateIndividual(p: Partial<IndividualRequest>): string | null
   return null;
 }
 
+/**
+ * One row in the workspace's audit trail -- CPR-CORE-001 s13's "all state-changing actions require actor,
+ * timestamp, source and audit entry", and s16's "all state changes are auditable".
+ *
+ * ⚠ THE INSERT'S ERROR IS NOT DISCARDED, and this is the table where discarding it costs most: a trail
+ * with a hole in it is indistinguishable from a trail of a quiet afternoon, so nobody ever finds out.
+ * It is not THROWN either -- an audit write that failed must not unwind a consultation that succeeded --
+ * so the failure goes to the server log where somebody is watching, and comes back as `false`. A caller
+ * that wants to claim "recorded" can check instead of assuming; the hundred that ignore it behave exactly
+ * as they did.
+ *
+ * `source` is s13's fourth element. The column defaults to 'api' because that is what nearly every write
+ * is, and it is OMITTED rather than sent as null when the caller does not know -- an explicit null would
+ * be refused by a NOT NULL column that would otherwise have supplied its own default. A cron, an
+ * integration or a harness says which surface it is, because the database cannot know.
+ */
 export async function audit(admin: any, event: {
   workspaceId?: string | null; actorId?: string | null; eventType: string;
-  payload?: Record<string, unknown>; correlationId?: string;
-}) {
-  await admin.from("practice_audit_event").insert({
+  payload?: Record<string, unknown>; correlationId?: string; source?: string;
+}): Promise<boolean> {
+  const row: Record<string, unknown> = {
     workspace_id: event.workspaceId ?? null,
     actor_id: event.actorId ?? null,
     event_type: event.eventType,
     payload: event.payload ?? {},
     correlation_id: event.correlationId ?? null,
-  });
+  };
+  if (event.source) row.source = event.source;
+
+  const { error } = await admin.from("practice_audit_event").insert(row);
+  if (error) {
+    console.error(`[practice] audit "${event.eventType}" was NOT recorded: ${error.message}`);
+    return false;
+  }
+  return true;
 }
 
 /**

@@ -1,6 +1,7 @@
 import type { WorkspaceContext } from "@/lib/practice/access";
 import { practiceToday, zonedDayRange } from "@/lib/practice/practice-time";
 import { emitEvents, type EventEnvelope, type EventSource } from "@/lib/practice/events";
+import { audit } from "@/lib/practice/provisioning";
 
 /* eslint-disable @typescript-eslint/no-explicit-any -- the Supabase admin client is untyped; every
    engine in src/lib/practice does the same. */
@@ -229,9 +230,36 @@ export type PlanInput = {
   room?: string | null;
 };
 
+// ── THE AUDIT TRAIL, WHICH IS NOT THE EVENT LOG ──────────────────────────────────────────────────────
+//
+// ⚠ THIS ENGINE WROTE STATE AND LEFT NO AUDIT ENTRY. Every other write-path in Competen Practice has
+// called audit() since Phase 0; this one shipped with domain events instead and nobody noticed, because a
+// projection updating correctly looks exactly like a compliance question being answered. It is not the
+// same artefact and the two tables say so in their own headers:
+//
+//   practice_domain_event (233)  what happened, for things that need to REACT to it. Deletable: a
+//                                projection that loses its events rebuilds from the record.
+//   practice_audit_event  (191)  who did what, and can we prove it. Append-only, and the thing that
+//                                answers "who started that clinic" a year later.
+//
+// So starting the morning clinic announced itself to seven dashboard cards and left no trace of WHO
+// started it -- CPR-CORE-001 s13's "actor, timestamp, source and audit entry" failing on the one engine
+// that owns the practitioner's context.
+//
+// ONE AUDIT ROW PER CALL, EVEN WHEN A CALL MOVES TWO ACTIVITIES. Switching activity ends the running one
+// and starts the next; that is one thing a practitioner did, and it is recorded as one entry naming the
+// activity it closed. The event log splits it into two envelopes because two different cards listen for
+// them -- a reader of the trail is a person, not a projection.
+//
+// THE SOURCE IS THE CALLER'S, NOT A DEFAULT. Migration 191 defaults the column to 'api', which is true of
+// the web route and false of a cron or an integration, and the database cannot tell which one it is
+// talking to. Every caller here already declares an EventSource for the envelope; the audit row gets the
+// same one rather than a second, quieter answer to the same question.
+
 /** Add an activity to a day's plan. */
 export async function planActivity(
   admin: any, ctx: WorkspaceContext, input: PlanInput,
+  opts: { source?: EventSource; correlationId?: string } = {},
 ): Promise<Result<{ id: string }>> {
   if (!ctx.capabilities.includes(CAN_PLAN))
     return { ok: false, status: 403, code: "FORBIDDEN", message: `${CAN_PLAN} is required` };
@@ -262,6 +290,15 @@ export async function planActivity(
 
   if (error) return { ok: false, status: 500, code: "INSERT_FAILED", message: error.message };
   if (!data) return { ok: false, status: 500, code: "INSERT_FAILED", message: "the activity was not planned" };
+
+  await audit(admin, {
+    workspaceId: ctx.workspaceId, actorId: ctx.userId, eventType: "practice.activity_planned",
+    payload: {
+      activityId: data.id, activityType: input.activityType, planDate: input.planDate,
+      plannedStartMinute: input.plannedStartMinute, plannedEndMinute: input.plannedEndMinute,
+    },
+    correlationId: opts.correlationId, source: opts.source ?? "web",
+  });
   return { ok: true, value: { id: data.id } };
 }
 
@@ -326,7 +363,8 @@ function lifecycleEvents(
  * between two tabs rather than the mechanism.
  */
 export async function startActivity(
-  admin: any, ctx: WorkspaceContext, id: string, opts: { at?: Date; source?: EventSource } = {},
+  admin: any, ctx: WorkspaceContext, id: string,
+  opts: { at?: Date; source?: EventSource; correlationId?: string } = {},
 ): Promise<Result<{ id: string; endedPrevious: string | null; eventWarnings: string[] }>> {
   if (!ctx.capabilities.includes(CAN_PLAN))
     return { ok: false, status: 403, code: "FORBIDDEN", message: `${CAN_PLAN} is required` };
@@ -402,6 +440,13 @@ export async function startActivity(
   eventWarnings.push(...await emitEvents(admin,
     lifecycleEvents("started", ctx, row, at, source, { endedPreviousActivityId: running.id })));
 
+  // The switch is one entry, naming what it closed. See the block above planActivity.
+  await audit(admin, {
+    workspaceId: ctx.workspaceId, actorId: ctx.userId, eventType: "practice.activity_started",
+    payload: { activityId: id, activityType: row.activity_type, endedPreviousActivityId: running.id },
+    correlationId: opts.correlationId, source,
+  });
+
   // THE WARNINGS RIDE ALONG WITH A SUCCESS. The activity started; an outbox failure does not unstart it
   // and must not be reported as though it had (see the argument at the head of events.ts). Callers that
   // ignore this array get correct behaviour and a stale card; callers that surface it can tell a broken
@@ -411,7 +456,8 @@ export async function startActivity(
 
 /** End the activity. The plan is not rewritten to match: overrunning is recorded, not corrected. */
 export async function endActivity(
-  admin: any, ctx: WorkspaceContext, id: string, opts: { at?: Date; source?: EventSource } = {},
+  admin: any, ctx: WorkspaceContext, id: string,
+  opts: { at?: Date; source?: EventSource; correlationId?: string } = {},
 ): Promise<Result<{ id: string; eventWarnings: string[] }>> {
   if (!ctx.capabilities.includes(CAN_PLAN))
     return { ok: false, status: 403, code: "FORBIDDEN", message: `${CAN_PLAN} is required` };
@@ -431,5 +477,11 @@ export async function endActivity(
   // s7: Practice Performance recalculates on completion and Today at a Glance re-scopes from session to
   // day. Both find out from here.
   const eventWarnings = await emitEvents(admin, lifecycleEvents("completed", ctx, row, at, source));
+
+  await audit(admin, {
+    workspaceId: ctx.workspaceId, actorId: ctx.userId, eventType: "practice.activity_ended",
+    payload: { activityId: id, activityType: row.activity_type, startedAt: row.started_at },
+    correlationId: opts.correlationId, source,
+  });
   return { ok: true, value: { id, eventWarnings } };
 }

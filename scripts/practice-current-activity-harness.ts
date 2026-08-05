@@ -490,7 +490,7 @@ async function main() {
     orphans.map(o => `${o.label} (${o.href}) has no parent section`).join("; "));
 
   const sections = PRACTICE_NAV.filter(i => i.primary);
-  ok("9b. the sidebar declares CPR-V5-003's ten sections", sections.length === 10,
+  ok("9b. the sidebar declares eleven sections", sections.length === 11,
     `${sections.length}: ${sections.map(i => i.label).join(", ")}`);
 
   // 9b-order. THE ORDER IS PART OF THE SPECIFICATION, not an accident of where entries sit in the array.
@@ -498,7 +498,7 @@ async function main() {
   // about function -- it is fourth, right after the three ways a practitioner reaches one.
   const V5_ORDER = ["/practice/home", "/practice/today", "/practice/calendar", "/practice/patients",
     "/practice/encounters", "/practice/documents", "/practice/follow-ups", "/practice/assistant",
-    "/practice/intelligence", "/practice/setup"];
+    "/practice/intelligence", "/practice/setup", "/practice/documentation"];
   const rendered = primaryNav([...new Set(PRACTICE_NAV.map(i => i.capability).filter(Boolean))] as string[]);
   ok("9b-order. and renders them in the order the specifications list",
     rendered.map(i => i.href).join() === V5_ORDER.join(), rendered.map(i => i.href).join(" "));
@@ -516,7 +516,7 @@ async function main() {
   const allCaps = [...new Set(PRACTICE_NAV.map(i => i.capability).filter(Boolean))] as string[];
   const shown = primaryNav(allCaps);
   ok("9d-control. an owner sees the built sections, not an empty sidebar",
-    shown.length === sections.filter(i => i.built).length && shown.length === 10, `${shown.length} shown`);
+    shown.length === sections.filter(i => i.built).length && shown.length === 11, `${shown.length} shown`);
   // EVERY built non-primary module appears exactly once, under its parent. Asserted as an EQUALITY
   // against the catalogue rather than a threshold: ">= 15" went stale the moment V5-002 promoted
   // Current Session out of the children, and a stale threshold fails for the right reason once and
@@ -553,7 +553,7 @@ async function main() {
   // 9h. The sections themselves. V5-003 draws three groups, and the separation carries meaning:
   // everything in Workspace can change a record and Practice Intelligence cannot.
   ok("9h. the sidebar has the three declared sections, in order",
-    SIDEBAR_SECTIONS.map(x => x.label).join() === "Workspace,Insights,Administration",
+    SIDEBAR_SECTIONS.map(x => x.label).join() === "Workspace,Insights,Administration,Documentation",
     SIDEBAR_SECTIONS.map(x => x.label).join());
   ok("9h-b. and every primary section belongs to exactly one of them",
     PRACTICE_NAV.filter(i => i.primary).every(i =>

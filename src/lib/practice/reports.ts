@@ -1,6 +1,7 @@
 import { hasCapability, type WorkspaceContext } from "@/lib/practice/access";
 import { workspaceClock, zonedDayRange } from "@/lib/practice/practice-time";
 import { logAccess } from "@/lib/practice/privacy";
+import { audit } from "@/lib/practice/provisioning";
 
 // CPR-330 REPORTS.
 //
@@ -240,6 +241,7 @@ export async function practiceReport(admin: any, ctx: WorkspaceContext, opts: {
  */
 export function activityCsv(report: Awaited<ReturnType<typeof practiceReport>>): string {
   const escape = (v: string) => `"${String(v).replace(/"/g, '""')}"`;
+  // (kept pure: it formats, it does not read and it does not log -- see exportActivityCsv below)
   const lines = [
     `# Competen Practice activity report`,
     `# Period,${report.period.fromDay} to ${report.period.toDay}`,
@@ -253,4 +255,51 @@ export function activityCsv(report: Awaited<ReturnType<typeof practiceReport>>):
     ...report.diagnoses.rows.map(r => [escape(r.label), r.total, r.patients, r.confirmed].join(",")),
   ];
   return lines.join("\n");
+}
+
+/**
+ * The activity report as a downloaded file, LOGGED AS THE EXPORT IT IS.
+ *
+ * ────────────────────────────────────────────────────────────────────────────────────────────────────
+ * ⚠ practiceReport LOGS A READ, NOT AN EXPORT, and the CSV route called it and then streamed a file. So
+ * the page and the download left the SAME entry in the access log -- subject "search", action "search" --
+ * and CPR-CORE-001 s13's "export and print actions must be logged" held for a patient record (privacy.ts)
+ * and for a printed document (the print view) and quietly did not hold for the one artefact in this
+ * product that carries the whole practice out in a form that travels by email.
+ *
+ * A reviewer asking "what has left here" could see somebody had opened the reports page. They could not
+ * see that a file had been taken, and the two are not the same event: a page closes, a CSV does not.
+ * ────────────────────────────────────────────────────────────────────────────────────────────────────
+ *
+ * TWO ENTRIES, DELIBERATELY. The access log is the privacy record -- who took what out, readable in the
+ * access review beside every other read -- and the audit trail is the operational one. exportPatientRecord
+ * writes both for exactly this reason, and this matches it rather than inventing a second convention for
+ * the same act.
+ *
+ * THE READ IS STILL LOGGED TOO, by practiceReport, and the duplication is correct: assembling the report
+ * is a read of the whole practice whether or not anybody then downloads it.
+ */
+export async function exportActivityCsv(admin: any, ctx: WorkspaceContext, opts: {
+  fromDay?: string; toDay?: string; days?: number; correlationId?: string;
+} = {}): Promise<{ csv: string; report: Awaited<ReturnType<typeof practiceReport>> }> {
+  const report = await practiceReport(admin, ctx, opts);
+
+  await logAccess(admin, {
+    workspaceId: ctx.workspaceId, actorId: ctx.userId, subjectKind: "export", action: "export",
+    route: "/api/v1/practice/reports/export",
+    detail: `activity report CSV, ${report.period.label}`,
+    correlationId: opts.correlationId,
+  });
+  await audit(admin, {
+    workspaceId: ctx.workspaceId, actorId: ctx.userId, eventType: "practice.report_exported",
+    payload: {
+      fromDay: report.period.fromDay, toDay: report.period.toDay,
+      // WHETHER THE FILE CARRIED NAMES. The report de-identifies for a caller without patient.view, and
+      // an export entry that did not say which of the two left is one nobody can act on.
+      identified: report.identified,
+    },
+    correlationId: opts.correlationId,
+  });
+
+  return { csv: activityCsv(report), report };
 }

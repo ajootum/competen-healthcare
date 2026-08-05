@@ -1,8 +1,13 @@
 import { hasCapability, type WorkspaceContext } from "@/lib/practice/access";
-import { workspaceClock, zonedDayRange } from "@/lib/practice/practice-time";
+import { practiceToday, workspaceClock, zonedDayRange } from "@/lib/practice/practice-time";
 import { resolvePeriod, diagnosisReport, type Period } from "@/lib/practice/reports";
 import { logAccess } from "@/lib/practice/privacy";
 import { FOLLOW_UP_OUTCOMES } from "@/lib/practice/follow-up-constants";
+import {
+  practiceMetrics, metricScope,
+  bookedAppointments, completedEncounters, patientsSeen, cancelledAppointments, noShows, followUpsDue,
+  type Metric, type MetricKey, type MetricScope, type PracticeMetrics,
+} from "@/lib/practice/metrics";
 
 // CPR-200 PRACTICE INTELLIGENCE.
 //
@@ -365,3 +370,1652 @@ export async function myGrowth(admin: any, ctx: WorkspaceContext, period: Period
 }
 
 export { zonedDayRange };
+
+// ════════════════════════════════════════════════════════════════════════════════════════════════════
+// CPR-V5-003 -- THE PRACTICE INTELLIGENCE WORKSPACE
+// ════════════════════════════════════════════════════════════════════════════════════════════════════
+//
+// ────────────────────────────────────────────────────────────────────────────────────────────────────
+// THIS SECTION COMPUTES NO METRIC OF ITS OWN, AND THAT IS THE WHOLE DESIGN.
+//
+// CPR-V5-003 acceptance: "Metrics derived from operational engines. No duplicated business logic."
+// CPR-CORE-003 acceptance: "No duplicate analytics engine."
+// CPR-CORE-001 s16: "No widget independently calculates a conflicting version of a shared metric."
+//
+// src/lib/practice/metrics.ts already owns CORE-001 section 8's twelve definitions, each with its
+// formula and its table.column sources travelling beside the number. Every figure this workspace shows
+// that section 8 names is READ FROM THERE -- including the previous period's, which is obtained by
+// calling the SAME owning function over a different scope rather than by writing a second query that
+// would drift from the first the day somebody changed an exclusion.
+//
+// What is left is legitimately new: a shape over time, a breakdown by location, a distribution across a
+// column section 8 never mentions. Those are computed here. A figure section 8 already owns is not.
+//
+// THE TEST APPLIED TO EVERY NUMBER BELOW: could metrics.ts answer this? If yes, it did.
+// ────────────────────────────────────────────────────────────────────────────────────────────────────
+//
+// READ ONLY. CPR-V5-003: "No direct data entry." Nothing in this section inserts, updates or deletes --
+// including the access log. CORE-001 s13 requires a read of the whole practice to be logged, and that
+// remains true; the logging belongs to the ROUTE that serves this payload (as practiceIntelligence above
+// does it), not to an engine that promises to write nothing.
+//
+// ⚠ EVERY TABLE, COLUMN AND CAPABILITY BELOW WAS READ OUT OF supabase/migrations, not remembered. A wrong
+// column name does not fail typecheck: PostgREST errors at runtime and the honest failure path turns that
+// into "could not be read". The migration each source came from is named above its module.
+
+// ── THE FOUR DOCTRINES, RESTATED BECAUSE THIS SECTION OBEYS ALL OF THEM ───────────────────────────────
+//
+//  1. A FAILED READ IS NEVER A ZERO. Every `.error` is checked. A module that could not read reports the
+//     database's own message and a null, never a plausible nought.
+//
+//  2. A TRUNCATED PAGE IS NEVER A DISTRIBUTION. PostgREST caps an unbounded select at 1000 rows. Every
+//     row-scan carries an EXPLICIT limit so a full page is DETECTABLE, and a detectable overflow is
+//     reported as not-knowable rather than charted as if it were the whole period.
+//
+//  3. COUNTS AND DENOMINATORS, NOT RATES. A percentage is where a small number hides: "follow-up
+//     completion 75%" is the same sentence whether it is 3 of 4 or 750 of 1000, and only one of those is
+//     worth changing a clinic over. Where a proportion is genuinely the answer it is returned as its
+//     NUMERATOR AND DENOMINATOR so a screen can render "72 of 96". No field below holds a percentage.
+//
+//  4. NO COMPARISON WITHOUT A REAL PRIOR PERIOD. s8 on Clinic Delay: "No comparison shown until enough
+//     valid observations exist." Applied here to every period-over-period figure -- see intelRange.
+//
+// ⚠ THE PLUMBING BELOW (intelRows/intelCount/intelIn) RESTATES metrics.ts's THREE READ RULES BECAUSE
+// metrics.ts KEEPS ITS OWN readRows/countRows/readIn PRIVATE. That is duplicated PLUMBING, not duplicated
+// BUSINESS LOGIC -- no metric definition, exclusion or formula is repeated -- but the better fix is to
+// export those three helpers from metrics.ts and delete these. That is an edit to an existing file and
+// is reported rather than made.
+
+/** Far above a real reporting period and deliberately below nothing: reaching it is reported, never charted. */
+const INTEL_ROW_CAP = 2000;
+/** Keeps an `.in()` filter's URL short enough to survive proxies. A 500-uuid IN list fails like an empty result. */
+const INTEL_IN_CHUNK = 100;
+
+/**
+ * Both windows together must carry this many records before a difference between them is reported.
+ *
+ * Doctrine 4, given a number. Below ten records across two periods the difference between them is one
+ * cancelled afternoon, and a workspace whose whole purpose is longitudinal review must not teach a
+ * practitioner to read noise as a trend. Ten rather than section 8's five for Clinic Delay because a
+ * comparison spends its observations twice -- once on each side.
+ */
+export const MIN_OBSERVATIONS_FOR_COMPARISON = 10;
+
+/**
+ * Valid observations required before a median duration is reported. The same reasoning, and the same
+ * number, as metrics.ts's MIN_OBSERVATIONS_FOR_DELAY -- restated rather than imported because it governs
+ * a different quantity (time-to-sign) and coupling the two would make one change move the other silently.
+ */
+export const MIN_OBSERVATIONS_FOR_MEDIAN = 5;
+
+// ── CAPABILITIES ─────────────────────────────────────────────────────────────────────────────────────
+//
+// ⚠ STRINGS COMPARED AGAINST practice_role_capabilities. Inventing a plausible one costs nothing at
+// compile time and silently disables the module at runtime; it has shipped in this codebase twice. Each
+// code below was read out of the migration that inserts it, not remembered:
+//
+//   report.view            191 -- practice_owner, practitioner, billing_reporting, read_only_auditor
+//   patient.list           191 -- practitioner, practice_assistant
+//   patient.view           191 (practitioner), 193 (practice_assistant)
+//   encounter.list         191 (practitioner), 194 (practice_assistant)
+//   followup.view          191 (practitioner), 196 (practice_assistant)
+//   practice.calendar.view 191 -- practitioner, practice_assistant
+//   document.view          195 -- practitioner
+//   inbox.review           200 -- practitioner ONLY
+//   procedure.record       197 -- practitioner
+//   procedure.manage       197 -- practitioner, practice_owner
+//
+// ⚠ THE OWNER HOLDS report.view AND ALMOST NOTHING ELSE. Migration 191 gives practice_owner report.view
+// but withholds patient.view, encounter.list and followup.view -- so the workspace's own proprietor sees
+// the shell of this page and "you may not see this" inside most of it. That is the intended behaviour and
+// not a bug to route around: the difference between "no procedures were performed" and "you may not see
+// which procedures were performed" is the difference this whole engine exists to preserve.
+const CAP_REPORT = "report.view";
+const CAP_PATIENT_LIST = "patient.list";
+const CAP_PATIENT_VIEW = "patient.view";
+const CAP_ENCOUNTER_LIST = "encounter.list";
+const CAP_FOLLOWUP_VIEW = "followup.view";
+const CAP_CALENDAR_VIEW = "practice.calendar.view";
+const CAP_DOCUMENT_VIEW = "document.view";
+const CAP_INBOX_REVIEW = "inbox.review";
+const CAP_PROCEDURE_RECORD = "procedure.record";
+const CAP_PROCEDURE_MANAGE = "procedure.manage";
+
+/** Exported so a harness can prove each one EXISTS in practice_role_capabilities rather than re-typing it. */
+export const INTELLIGENCE_CAPABILITIES = [
+  CAP_REPORT, CAP_PATIENT_LIST, CAP_PATIENT_VIEW, CAP_ENCOUNTER_LIST, CAP_FOLLOWUP_VIEW,
+  CAP_CALENDAR_VIEW, CAP_DOCUMENT_VIEW, CAP_INBOX_REVIEW, CAP_PROCEDURE_RECORD, CAP_PROCEDURE_MANAGE,
+];
+
+// ── RESULT SHAPES ────────────────────────────────────────────────────────────────────────────────────
+
+export type IntelStatus =
+  /** The figure stands. */
+  | "ok"
+  /** Read fine; there is no honest figure. No denominator, no prior period, too few observations. */
+  | "unknowable"
+  /** A read failed or came back truncated. NOT a zero. */
+  | "unreadable"
+  /** The caller may not see the domain this comes from. NOT a zero either. */
+  | "not_permitted";
+
+/** One slice of a distribution. `total` is a count; there is deliberately no share, fraction or percent. */
+export type IntelSlice = { key: string; label: string; total: number };
+
+/**
+ * A distribution over a column, with what it was computed from and what it could not classify.
+ *
+ * `unrecorded` is disclosed rather than folded into "other": a column nobody fills in makes every slice
+ * above it look more complete than it is, and that is exactly the thing a reader must be able to see.
+ */
+export type IntelDistribution = {
+  key: string;
+  label: string;
+  status: IntelStatus;
+  reason: string | null;
+  slices: IntelSlice[];
+  /** Rows the distribution was computed over. Null when nothing was read. */
+  of: number | null;
+  unrecorded: number;
+  formula: string;
+  sources: string[];
+};
+
+/**
+ * A proportion, as a numerator and a denominator and NOTHING ELSE.
+ *
+ * Doctrine 3. There is no `rate`, no `percent` and no `share` field, on purpose: a client that wanted one
+ * would have to compute it, at which point the decision to show "75%" instead of "72 of 96" is a visible
+ * choice somebody made rather than a default this engine handed over.
+ */
+export type IntelProportion = {
+  key: string;
+  label: string;
+  numerator: number | null;
+  denominator: number | null;
+  status: IntelStatus;
+  reason: string | null;
+  /** What the figure does NOT account for -- censoring, late arrivals, records not yet due. */
+  caveat: string | null;
+  formula: string;
+  sources: string[];
+};
+
+/**
+ * A period-over-period comparison, refused unless it is real.
+ *
+ * The comp draws "128 Encounters, up 18% vs previous 30 days". Two things are wrong with that tile and
+ * both are fixed here:
+ *
+ *   THE PERCENTAGE IS GONE. `change` is a signed COUNT -- "128, and 109 in the 30 days before" -- because
+ *   a percentage of a small base is a number that moves violently for reasons nobody acted on.
+ *
+ *   THE COMPARISON ITSELF IS EARNED, NOT ASSUMED. A practice three weeks old has no "previous 30 days";
+ *   showing it as a fall from zero would tell a new practitioner their clinic was collapsing on the day
+ *   they opened it. `prior` is null with a reason whenever the window did not exist, could not be read,
+ *   or holds too few records for the difference to mean anything.
+ */
+export type IntelComparison = {
+  key: string;
+  label: string;
+  current: number | null;
+  prior: number | null;
+  /** current - prior, in the metric's own unit. Never a percentage. Null whenever `prior` is null. */
+  change: number | null;
+  status: IntelStatus;
+  reason: string | null;
+  priorFromDay: string | null;
+  priorToDay: string | null;
+  formula: string;
+  sources: string[];
+};
+
+/**
+ * One module of the workspace.
+ *
+ * `available: false` with a reason is a FIRST-CLASS OUTCOME, not an error path. CORE-001 s14 on empty
+ * states: "Do not show misleading zero comparisons." A module whose store does not exist returns nothing
+ * and says which store, so a reader can tell an absent number from an unbuilt one -- the same rule the
+ * NOT_AVAILABLE list above follows.
+ */
+export type IntelModule<T> = {
+  key: string;
+  label: string;
+  available: boolean;
+  /** Names the missing store, column or capability. Null when the module is available. */
+  unavailableReason: string | null;
+  data: T | null;
+  /** table.column identifiers everything in `data` was read from. */
+  sources: string[];
+  /**
+   * Reads that failed, overflowed, or whose reliability is limited -- so a screen can retry the part that
+   * broke (s14 partial failure) or disclose the limit. A non-empty list is NOT the same as an unavailable
+   * module: most of `data` may still stand.
+   */
+  problems: string[];
+};
+
+const intelModule = <T>(
+  key: string, label: string, data: T, sources: string[], problems: string[] = [],
+): IntelModule<T> => ({ key, label, available: true, unavailableReason: null, data, sources, problems });
+
+const intelUnavailable = <T>(
+  key: string, label: string, reason: string, sources: string[] = [],
+): IntelModule<T> => ({ key, label, available: false, unavailableReason: reason, data: null, sources, problems: [] });
+
+// ── PLUMBING ─────────────────────────────────────────────────────────────────────────────────────────
+
+type IntelRead = { rows: any[]; error: string | null; overflowed: boolean };
+
+/** A bounded row read. Reaching the bound is an OVERFLOW: reported, never charted as the whole period. */
+async function intelRows(query: any, cap = INTEL_ROW_CAP): Promise<IntelRead> {
+  const { data, error } = await query.limit(cap);
+  if (error) return { rows: [], error: error.message ?? "read failed", overflowed: false };
+  const rows = (data ?? []) as any[];
+  return { rows, error: null, overflowed: rows.length >= cap };
+}
+
+/** A head+count read. The count is computed server-side and is not subject to the 1000-row page cap. */
+async function intelCount(query: any): Promise<{ count: number | null; error: string | null }> {
+  const { count, error } = await query;
+  if (error) return { count: null, error: error.message ?? "read failed" };
+  // ⚠ A null count with no error is NOT a zero. PostgREST returns null when the count was not computed --
+  // a missing table among them -- and calling that nought is the precise bug this engine refuses.
+  return { count: count ?? null, error: null };
+}
+
+/** `.in()` in survivable batches. One failed batch fails the whole read: a partial join is a wrong answer. */
+async function intelIn(
+  admin: any, table: string, select: string, workspaceId: string, column: string, values: string[],
+): Promise<IntelRead> {
+  const out: any[] = [];
+  for (let i = 0; i < values.length; i += INTEL_IN_CHUNK) {
+    const { data, error } = await admin.from(table).select(select)
+      .eq("workspace_id", workspaceId).in(column, values.slice(i, i + INTEL_IN_CHUNK)).limit(INTEL_ROW_CAP);
+    if (error) return { rows: [], error: error.message ?? "read failed", overflowed: false };
+    const rows = (data ?? []) as any[];
+    if (rows.length >= INTEL_ROW_CAP) return { rows: [], error: null, overflowed: true };
+    out.push(...rows);
+  }
+  return { rows: out, error: null, overflowed: false };
+}
+
+const overflowNote = (what: string) =>
+  `more than ${INTEL_ROW_CAP} ${what} in this period, so what came back is a page rather than the period`;
+
+const parseAt = (iso: unknown): number | null => {
+  if (typeof iso !== "string" || !iso) return null;
+  const t = Date.parse(iso);
+  return Number.isFinite(t) ? t : null;
+};
+
+/** Median, stated rather than assumed -- the same requirement s8 places on Clinic Delay's aggregation. */
+const intelMedian = (xs: number[]) => {
+  const s = [...xs].sort((a, b) => a - b);
+  const mid = Math.floor(s.length / 2);
+  return Math.round(s.length % 2 ? s[mid] : (s[mid - 1] + s[mid]) / 2);
+};
+
+/** Shift a YYYY-MM-DD day by n days. Pure calendar arithmetic on the UTC axis, so no offset is involved. */
+function shiftDay(day: string, n: number): string {
+  const d = new Date(`${day}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + n);
+  return d.toISOString().slice(0, 10);
+}
+
+/** Whole days from `from` to `to` inclusive. Both are calendar days, so this cannot be off by a DST hour. */
+const daysBetween = (from: string, to: string) =>
+  Math.round((Date.parse(`${to}T00:00:00Z`) - Date.parse(`${from}T00:00:00Z`)) / 86400000) + 1;
+
+/**
+ * Tally rows by a column into a fixed vocabulary.
+ *
+ * THE VOCABULARY IS THE MIGRATION'S CHECK CONSTRAINT, AND EVERY MEMBER IS EMITTED EVEN AT ZERO. A
+ * distribution that drops its empty slices reads as if those categories did not exist -- "no
+ * teleconsultations" and "teleconsultation is not a thing here" are different facts. A value the
+ * constraint does not list lands in `unrecorded` rather than inventing a slice, so a later migration
+ * adding a state is VISIBLE as unclassified instead of silently uncounted.
+ */
+function tally(
+  rows: any[], pick: (r: any) => unknown, vocabulary: [string, string][],
+): { slices: IntelSlice[]; unrecorded: number } {
+  const counts = new Map<string, number>(vocabulary.map(([k]) => [k, 0]));
+  let unrecorded = 0;
+  for (const r of rows) {
+    const raw = pick(r);
+    const key = typeof raw === "string" && raw ? raw : null;
+    if (key !== null && counts.has(key)) counts.set(key, (counts.get(key) ?? 0) + 1);
+    else unrecorded++;
+  }
+  return {
+    slices: vocabulary.map(([key, label]) => ({ key, label, total: counts.get(key) ?? 0 })),
+    unrecorded,
+  };
+}
+
+const distribution = (
+  key: string, label: string, read: IntelRead, pick: (r: any) => unknown,
+  vocabulary: [string, string][], formula: string, sources: string[], what: string,
+): IntelDistribution => {
+  const base = { key, label, formula, sources };
+  if (read.error) return { ...base, status: "unreadable", reason: `could not be read: ${read.error}`, slices: [], of: null, unrecorded: 0 };
+  if (read.overflowed) return { ...base, status: "unreadable", reason: overflowNote(what), slices: [], of: null, unrecorded: 0 };
+  const { slices, unrecorded } = tally(read.rows, pick, vocabulary);
+  return { ...base, status: "ok", reason: null, slices, of: read.rows.length, unrecorded };
+};
+
+const notPermittedDistribution = (
+  key: string, label: string, capability: string, formula: string, sources: string[],
+): IntelDistribution => ({
+  key, label, status: "not_permitted", reason: `${capability} is required to see this`,
+  slices: [], of: null, unrecorded: 0, formula, sources,
+});
+
+// ── THE RANGE, AND THE PRIOR PERIOD IT MAY OR MAY NOT HAVE ───────────────────────────────────────────
+
+export type IntelRange = {
+  /** The reporting window. reports.ts owns this shape and its practice-calendar arithmetic. */
+  period: Period;
+  timezone: string;
+  days: number;
+  /** The immediately preceding window of equal length. Always constructible; not always honest. */
+  prior: Period;
+  /** False when a comparison against `prior` would be a lie. Every comparison checks this first. */
+  priorUsable: boolean;
+  /** Why not. Null when `priorUsable` is true. */
+  priorReason: string | null;
+};
+
+/**
+ * Build the range every module is computed over, and decide whether it has a usable prior period.
+ *
+ * ⚠ THE PRIOR WINDOW IS SHIFTED ON THE DAY AXIS, NOT BY SUBTRACTING A MILLISECOND SPAN. Subtracting the
+ * current window's length in milliseconds -- the obvious implementation, and the one encounterTrend above
+ * uses -- lands an hour out whenever a DST boundary falls between the two windows, which quietly moves
+ * one evening clinic from one period into the other. Shifting whole calendar days and then asking
+ * zonedDayRange for the instants is correct across any offset change.
+ *
+ * ⚠ AND THE PRIOR WINDOW MUST HAVE EXISTED. practice_workspace.created_at (migration 191) is the date
+ * this practice began keeping records. If the prior window starts before it, the practice was not
+ * recording for all of it, and any comparison would read a shorter history as a fall in activity -- the
+ * single most misleading thing this workspace could show a practitioner in their first month.
+ */
+export async function intelRange(admin: any, workspaceId: string, opts: {
+  fromDay?: string; toDay?: string; days?: number;
+} = {}): Promise<IntelRange> {
+  const [period, { timezone }] = await Promise.all([
+    resolvePeriod(admin, workspaceId, opts),
+    workspaceClock(admin, workspaceId),
+  ]);
+
+  const days = Math.max(1, daysBetween(period.fromDay, period.toDay));
+  const priorToDay = shiftDay(period.fromDay, -1);
+  const priorFromDay = shiftDay(priorToDay, -(days - 1));
+  const prior: Period = {
+    fromDay: priorFromDay,
+    toDay: priorToDay,
+    fromIso: zonedDayRange(priorFromDay, timezone).startIso,
+    toIso: zonedDayRange(priorToDay, timezone).endIso,
+    label: `${priorFromDay} to ${priorToDay}`,
+  };
+
+  const { data, error } = await admin.from("practice_workspace")
+    .select("created_at").eq("id", workspaceId).maybeSingle();
+
+  // A failed read is never a permission to compare. Unknown start date means no comparison.
+  if (error) {
+    return { period, timezone, days, prior, priorUsable: false,
+      priorReason: `the practice's start date could not be read (${error.message ?? "read failed"}), so the previous period cannot be shown to be real` };
+  }
+  const began = parseAt((data as any)?.created_at);
+  if (began === null) {
+    return { period, timezone, days, prior, priorUsable: false,
+      priorReason: "this practice has no recorded start date, so there is no way to tell whether the previous period existed" };
+  }
+  if (began > Date.parse(prior.fromIso)) {
+    return { period, timezone, days, prior, priorUsable: false,
+      priorReason: `this practice began keeping records on ${new Date(began).toISOString().slice(0, 10)}, part-way through ${prior.label}, so a comparison would read a shorter history as a fall` };
+  }
+  return { period, timezone, days, prior, priorUsable: true, priorReason: null };
+}
+
+/**
+ * Widen a MetricScope to cover a whole reporting period.
+ *
+ * metricScope() is built for CORE-001 s7's day-or-session question and hard-codes its date range to one
+ * calendar day, because that is the only range Today at a Glance ever asks about. This workspace asks
+ * about thirty days, so the scope's instants and its DATE range are both widened -- the date range
+ * matters because practice_follow_up.due_on is a DATE column and comparing it against one day would make
+ * "follow-ups due this month" mean "follow-ups due on the last day of it".
+ *
+ * `kind` stays "day". MetricScopeKind has exactly two members, day and session, and a thirty-day period
+ * is emphatically not session-scoped; adding a "period" member means editing metrics.ts, which is
+ * reported rather than done. Every Metric returned through here therefore carries scopeKind "day", and
+ * the range it actually covers is this workspace's `range.period`, which travels in the payload.
+ */
+function rangeScope(period: Period, timezone: string): MetricScope {
+  const base = metricScope({ date: period.toDay, timezone });
+  return {
+    ...base,
+    fromIso: period.fromIso, toIso: period.toIso,
+    fromDate: period.fromDay, toDate: period.toDay,
+  };
+}
+
+/**
+ * The section 8 metrics that may be compared period-over-period, each with ITS OWN OWNING FUNCTION.
+ *
+ * The prior figure is produced by calling the same function metrics.ts uses for the current one, over the
+ * prior scope. That is the entire mechanism, and it is what makes "no duplicated business logic" true
+ * rather than aspirational: every exclusion, every allow-list and every null-instead-of-default rule
+ * applies identically to both sides of the comparison because it is literally the same code.
+ *
+ * ONLY COUNTS. The three duration metrics are deliberately absent: the difference between two means over
+ * two periods with different case mixes is not a trend in punctuality, it is a trend in who turned up,
+ * and this workspace has no way to tell those apart.
+ */
+const COMPARABLE_METRICS: { key: MetricKey; owner: (admin: any, ctx: WorkspaceContext, scope: MetricScope) => Promise<Metric> }[] = [
+  { key: "booked", owner: bookedAppointments },
+  { key: "completed", owner: completedEncounters },
+  { key: "patients_seen", owner: patientsSeen },
+  { key: "cancelled", owner: cancelledAppointments },
+  { key: "no_show", owner: noShows },
+  { key: "follow_ups_due", owner: followUpsDue },
+];
+
+/** Turn a current and a prior Metric into a comparison, refusing wherever the comparison is not earned. */
+function compareMetric(current: Metric, prior: Metric | null, range: IntelRange): IntelComparison {
+  const base = {
+    key: current.key, label: current.label,
+    formula: `${current.formula} -- compared against the same calculation over ${range.prior.label} as a signed count, never as a percentage`,
+    sources: current.sources,
+    priorFromDay: range.prior.fromDay, priorToDay: range.prior.toDay,
+  };
+  const noPrior = (status: IntelStatus, reason: string): IntelComparison => ({
+    ...base, current: current.value, prior: null, change: null, status, reason,
+  });
+
+  // The current figure fails first: there is nothing to compare a null against.
+  if (current.status !== "ok" || current.value === null)
+    return { ...base, current: null, prior: null, change: null, status: current.status, reason: current.reason };
+
+  if (!range.priorUsable) return noPrior("unknowable", range.priorReason ?? "the previous period cannot be shown to be real");
+  if (!prior) return noPrior("unreadable", "the previous period was not computed");
+  if (prior.status === "unreadable") return noPrior("unreadable", `the previous period could not be read: ${prior.reason ?? "read failed"}`);
+  if (prior.status === "not_permitted") return noPrior("not_permitted", prior.reason ?? "not permitted");
+  if (prior.status !== "ok" || prior.value === null) return noPrior("unknowable", prior.reason ?? "the previous period holds no comparable figure");
+
+  const observations = current.value + prior.value;
+  if (observations < MIN_OBSERVATIONS_FOR_COMPARISON)
+    return noPrior("unknowable",
+      `${observations} record${observations === 1 ? "" : "s"} across the two periods; ${MIN_OBSERVATIONS_FOR_COMPARISON} are needed before a difference means anything`);
+
+  return { ...base, current: current.value, prior: prior.value, change: current.value - prior.value, status: "ok", reason: null };
+}
+
+// ════════════════════════════════════════════════════════════════════════════════════════════════════
+// THE TEN MODULES OF CPR-V5-003
+// ════════════════════════════════════════════════════════════════════════════════════════════════════
+
+// ── 1. OVERVIEW ──────────────────────────────────────────────────────────────────────────────────────
+
+export type OverviewData = {
+  /** All twelve of section 8, verbatim from metrics.ts. Not one of them is recomputed here. */
+  metrics: PracticeMetrics;
+  /** The subset that may honestly be compared with the period before, each earned or refused. */
+  comparisons: IntelComparison[];
+};
+
+/**
+ * OVERVIEW -- the workspace's headline figures, every one of them borrowed.
+ *
+ * SOURCE: src/lib/practice/metrics.ts, in full. This function issues no query of its own except the ones
+ * metrics.ts issues on its behalf for the prior period.
+ *
+ * ⚠ THE COMP'S TILE READS "128 Encounters, up 18% vs previous 30 days" AND NEITHER HALF OF THAT SURVIVES
+ * INTACT. The count does: it is metrics.completed, computed by the function that owns the definition. The
+ * "up 18%" does not -- see IntelComparison for both reasons. What a screen can draw from this is
+ * "128 completed, 109 in the 30 days before", or, where the comparison was refused, the count alone with
+ * the reason underneath it. Never a 0%, never a default, never an arrow pointing at nothing.
+ */
+export async function overviewIntelligence(
+  admin: any, ctx: WorkspaceContext, range: IntelRange,
+): Promise<IntelModule<OverviewData>> {
+  const scope = rangeScope(range.period, range.timezone);
+
+  const [metrics, priorMetrics] = await Promise.all([
+    practiceMetrics(admin, ctx, scope),
+    // Only the comparable six, and only when the prior window is real. Six reads nobody will look at is a
+    // waste of a clinic's connectivity, and CORE-001 s18 lists performance on typical connectivity as
+    // part of done.
+    range.priorUsable
+      ? Promise.all(COMPARABLE_METRICS.map(m => m.owner(admin, ctx, rangeScope(range.prior, range.timezone))))
+      : Promise.resolve(null),
+  ]);
+
+  const comparisons = COMPARABLE_METRICS.map((m, i) =>
+    compareMetric(metrics.metrics[m.key], priorMetrics ? priorMetrics[i] : null, range));
+
+  const problems = Object.values(metrics.metrics)
+    .filter(m => m.status === "unreadable")
+    .map(m => `${m.label}: ${m.reason ?? "could not be read"}`);
+
+  return intelModule("overview", "Overview", { metrics, comparisons },
+    // The sources of the twelve travel on each Metric; naming the engine is what matters at module level.
+    ["src/lib/practice/metrics.ts (CORE-001 s8, all twelve definitions)"], problems);
+}
+
+// ── 2. CLINICAL ACTIVITY ─────────────────────────────────────────────────────────────────────────────
+
+export type ClinicalActivityData = {
+  /** The encounter curve, from this file's existing owner. Counts per day in the practice's calendar. */
+  trend: Awaited<ReturnType<typeof encounterTrend>>;
+  /** Period totals, from metrics.ts. These and the curve answer different questions -- see below. */
+  completed: Metric;
+  patientsSeen: Metric;
+  byMode: IntelDistribution;
+  byPathway: IntelDistribution;
+  byActivityType: IntelDistribution;
+};
+
+/** practice_encounter.encounter_mode -- migration 194's CHECK, in full. */
+const ENCOUNTER_MODES: [string, string][] = [
+  ["in_person", "In person"], ["teleconsultation", "Teleconsultation"], ["outreach", "Outreach"],
+  ["home_visit", "Home visit"], ["hospital", "Hospital"],
+];
+
+/** practice_encounter.entry_pathway -- migration 194's CHECK, in full. */
+const ENTRY_PATHWAYS: [string, string][] = [
+  ["booked", "Booked"], ["new_walk_in", "New walk-in"], ["walk_in_followup", "Walk-in follow-up"],
+  ["scheduled_followup", "Scheduled follow-up"],
+];
+
+/** practice_activity.activity_type -- migration 232's CHECK, in full (CPR-V3-001 s4's list). */
+const ACTIVITY_TYPES: [string, string][] = [
+  ["outpatient_clinic", "Outpatient clinic"], ["ward_round", "Ward round"], ["theatre", "Theatre"],
+  ["emergency_consult", "Emergency consult"], ["virtual_clinic", "Virtual clinic"],
+  ["telephone_review", "Telephone review"], ["administration", "Administration"], ["teaching", "Teaching"],
+];
+
+/**
+ * CLINICAL ACTIVITY -- the shape of the practitioner's work over the period.
+ *
+ * TOTALS COME FROM metrics.ts. THE SHAPE IS NEW WORK. Section 8 defines Completed and Patients Seen and
+ * this module shows exactly those numbers; what it adds is a distribution across three columns section 8
+ * never mentions -- encounter_mode, entry_pathway and the activity the consultation ran inside.
+ *
+ * THE CURVE COMES FROM encounterTrend, WHICH IS ALREADY IN THIS FILE. Writing a second daily bucket here
+ * is precisely the "conflicting version of a shared metric" s16 forbids, and the fact that the existing
+ * one buckets started_at while a new one might bucket completed_at is not a defence -- it is the bug. Its
+ * one defect (it does not surface read errors, so a dead table draws a flat line rather than a failure)
+ * is REPORTED rather than forked around, because forking is how a codebase ends up with two of everything.
+ *
+ * TABLES/COLUMNS: practice_encounter.workspace_id, .started_at, .status, .encounter_mode, .entry_pathway,
+ * .activity_id (migration 194; activity_id from 232); embedded practice_activity.activity_type (232).
+ *
+ * ⚠ CANCELLED AND ENTERED_IN_ERROR ARE EXCLUDED FROM THE BREAKDOWNS. A voided record is not a
+ * teleconsultation that happened. DRAFT is kept: a launched consultation is work in progress, and this is
+ * a picture of activity rather than of completions -- which the totals beside it already are.
+ */
+export async function clinicalActivityIntelligence(
+  admin: any, ctx: WorkspaceContext, range: IntelRange, metrics: PracticeMetrics,
+): Promise<IntelModule<ClinicalActivityData>> {
+  const sources = [
+    "practice_encounter.started_at", "practice_encounter.status", "practice_encounter.encounter_mode",
+    "practice_encounter.entry_pathway", "practice_encounter.activity_id", "practice_activity.activity_type",
+  ];
+  const permitted = hasCapability(ctx, CAP_ENCOUNTER_LIST);
+
+  const [trend, read] = await Promise.all([
+    encounterTrend(admin, ctx, range.period),
+    permitted
+      ? intelRows(admin.from("practice_encounter")
+        .select("id, encounter_mode, entry_pathway, practice_activity:activity_id(activity_type)")
+        .eq("workspace_id", ctx.workspaceId)
+        .not("status", "in", "(CANCELLED,ENTERED_IN_ERROR)")
+        .gte("started_at", range.period.fromIso).lt("started_at", range.period.toIso))
+      : Promise.resolve({ rows: [], error: null, overflowed: false } as IntelRead),
+  ]);
+
+  const build = (key: string, label: string, pick: (r: any) => unknown, vocab: [string, string][], formula: string, src: string[]) =>
+    permitted
+      ? distribution(key, label, read, pick, vocab, formula, src, "encounters")
+      : notPermittedDistribution(key, label, CAP_ENCOUNTER_LIST, formula, src);
+
+  const data: ClinicalActivityData = {
+    trend,
+    completed: metrics.metrics.completed,
+    patientsSeen: metrics.metrics.patients_seen,
+    byMode: build("by_mode", "How the patient was seen", r => r.encounter_mode, ENCOUNTER_MODES,
+      "count of encounters started in the period by practice_encounter.encounter_mode, cancelled and voided records excluded",
+      ["practice_encounter.encounter_mode", "practice_encounter.started_at"]),
+    byPathway: build("by_pathway", "How the patient arrived", r => r.entry_pathway, ENTRY_PATHWAYS,
+      "count of encounters started in the period by practice_encounter.entry_pathway, cancelled and voided records excluded",
+      ["practice_encounter.entry_pathway", "practice_encounter.started_at"]),
+    // Encounters launched outside any activity land in `unrecorded` -- see the module comment on why that
+    // is disclosed rather than filed under "other".
+    byActivityType: build("by_activity_type", "What the practitioner was doing",
+      r => r.practice_activity?.activity_type, ACTIVITY_TYPES,
+      "count of encounters started in the period by the activity_type of the practice_activity they ran inside; encounters launched outside any activity are reported as unrecorded",
+      ["practice_encounter.activity_id", "practice_activity.activity_type"]),
+  };
+
+  const problems: string[] = [];
+  if (read.error) problems.push(`encounter breakdowns: ${read.error}`);
+  if (read.overflowed) problems.push(`encounter breakdowns: ${overflowNote("encounters")}`);
+  // Named honestly: the curve's reader cannot report a failure, so a flat line is not proof of a quiet week.
+  problems.push("the daily curve comes from encounterTrend, which does not surface read errors -- an empty curve is not proof of an empty period");
+
+  return intelModule("clinical_activity", "Clinical Activity", data, sources, problems);
+}
+
+// ── 3. PATIENT INTELLIGENCE ──────────────────────────────────────────────────────────────────────────
+
+export type PatientIntelligenceData = {
+  /** Distinct patients with a completed encounter in the period -- metrics.ts owns this. */
+  patientsSeen: Metric;
+  /** Patients whose record was created in the period. New work: section 8 has no registration metric. */
+  registered: { value: number | null; status: IntelStatus; reason: string | null; formula: string; sources: string[] };
+  /** Of the patients seen, how many the practice had never seen before. */
+  newToPractice: IntelProportion;
+  bySex: IntelDistribution;
+  byAgeBand: IntelDistribution;
+  /** Diagnosis labels, from reports.ts -- counted AS TYPED, because tidying them invents a coding. */
+  diagnoses: Awaited<ReturnType<typeof diagnosisReport>>;
+  /** False when the caller lacks patient.view: counts without names (migration 191 gives the owner exactly this). */
+  identified: boolean;
+};
+
+/** practice_patient.sex -- migration 193's CHECK, in full. */
+const PATIENT_SEXES: [string, string][] = [
+  ["female", "Female"], ["male", "Male"], ["other", "Other"], ["unknown", "Unknown"],
+  ["unspecified", "Unspecified"],
+];
+
+/**
+ * Age bands, chosen once and named, because a band boundary is an editorial decision and not a fact.
+ * These are the bands a general practice actually triages by; they are not a WHO or a census standard and
+ * nothing here claims they are.
+ */
+const AGE_BANDS: [string, string][] = [
+  ["0_4", "Under 5"], ["5_14", "5 to 14"], ["15_24", "15 to 24"], ["25_44", "25 to 44"],
+  ["45_64", "45 to 64"], ["65_plus", "65 and over"],
+];
+
+const ageBandOf = (years: number | null): string | null => {
+  if (years === null || !Number.isFinite(years) || years < 0) return null;
+  if (years < 5) return "0_4";
+  if (years < 15) return "5_14";
+  if (years < 25) return "15_24";
+  if (years < 45) return "25_44";
+  if (years < 65) return "45_64";
+  return "65_plus";
+};
+
+/**
+ * PATIENT INTELLIGENCE -- who this practice serves.
+ *
+ * TABLES/COLUMNS: practice_patient.workspace_id, .created_at, .status, .sex, .birth_date,
+ * .age_estimate_years (migration 193); practice_encounter.patient_id, .status, .started_at (194);
+ * practice_diagnosis via reports.ts diagnosisReport (194).
+ *
+ * PATIENTS SEEN IS metrics.ts's. Everything else here is new: section 8 counts patients, it does not
+ * describe them.
+ *
+ * ⚠ AGE IS AS AT THE END OF THE PERIOD, NOT AS AT TODAY. A report on last March that ages everybody to
+ * this morning moves a handful of children out of the band they were treated in. birth_date is preferred;
+ * age_estimate_years (migration 193 exists precisely because many patients here do not know their date of
+ * birth) is used where there is no birth date and taken as at recording, which is the best the record
+ * holds. Patients with neither land in `unrecorded` and are never guessed at.
+ *
+ * ⚠ MERGED PATIENTS ARE EXCLUDED FROM REGISTRATIONS. status 'merged' means the record turned out to be a
+ * duplicate of another; counting it as a new patient inflates growth by exactly the practice's data-entry
+ * error rate, which is the one number a growth figure must not secretly contain.
+ */
+export async function patientIntelligence(
+  admin: any, ctx: WorkspaceContext, range: IntelRange, metrics: PracticeMetrics,
+): Promise<IntelModule<PatientIntelligenceData>> {
+  const sources = [
+    "practice_patient.created_at", "practice_patient.status", "practice_patient.sex",
+    "practice_patient.birth_date", "practice_patient.age_estimate_years",
+    "practice_encounter.patient_id", "practice_encounter.started_at", "practice_diagnosis.label",
+  ];
+  const registeredFormula = "count of practice_patient rows created within the period whose status is not 'merged'";
+  const registeredSources = ["practice_patient.created_at", "practice_patient.status"];
+
+  if (!hasCapability(ctx, CAP_PATIENT_LIST))
+    return intelUnavailable("patient_intelligence", "Patient Intelligence",
+      `${CAP_PATIENT_LIST} is required to see anything about this practice's patients`, sources);
+
+  const problems: string[] = [];
+  const [registration, seenRead, diagnoses] = await Promise.all([
+    intelCount(admin.from("practice_patient").select("id", { count: "exact", head: true })
+      .eq("workspace_id", ctx.workspaceId).neq("status", "merged")
+      .gte("created_at", range.period.fromIso).lt("created_at", range.period.toIso)),
+    hasCapability(ctx, CAP_ENCOUNTER_LIST)
+      ? intelRows(admin.from("practice_encounter").select("patient_id")
+        .eq("workspace_id", ctx.workspaceId)
+        .in("status", ["COMPLETED", "SIGNED", "AMENDED"])
+        .gte("completed_at", range.period.fromIso).lt("completed_at", range.period.toIso))
+      : Promise.resolve({ rows: [], error: null, overflowed: false } as IntelRead),
+    diagnosisReport(admin, ctx, range.period, 10),
+  ]);
+
+  const registered = registration.error
+    ? { value: null, status: "unreadable" as IntelStatus, reason: `could not be read: ${registration.error}`, formula: registeredFormula, sources: registeredSources }
+    : registration.count === null
+      ? { value: null, status: "unreadable" as IntelStatus, reason: "the patient register returned no count", formula: registeredFormula, sources: registeredSources }
+      : { value: registration.count, status: "ok" as IntelStatus, reason: null, formula: registeredFormula, sources: registeredSources };
+  if (registered.status === "unreadable") problems.push(`registrations: ${registered.reason}`);
+
+  const newFormula = "of the distinct patients with a completed encounter in the period, those with no encounter of any status before the period began";
+  const newSources = ["practice_encounter.patient_id", "practice_encounter.started_at"];
+  const demographyFormula = (column: string) =>
+    `distribution of the distinct patients seen in the period by practice_patient.${column}; patients with nothing recorded are reported as unrecorded rather than assigned a value`;
+
+  const noSeen = (status: IntelStatus, reason: string): PatientIntelligenceData => ({
+    patientsSeen: metrics.metrics.patients_seen,
+    registered,
+    newToPractice: { key: "new_to_practice", label: "Patients new to the practice", numerator: null, denominator: null, status, reason, caveat: null, formula: newFormula, sources: newSources },
+    bySex: { key: "by_sex", label: "Patients seen by sex", status, reason, slices: [], of: null, unrecorded: 0, formula: demographyFormula("sex"), sources: ["practice_patient.sex"] },
+    byAgeBand: { key: "by_age_band", label: "Patients seen by age", status, reason, slices: [], of: null, unrecorded: 0, formula: demographyFormula("birth_date / age_estimate_years"), sources: ["practice_patient.birth_date", "practice_patient.age_estimate_years"] },
+    diagnoses,
+    identified: hasCapability(ctx, CAP_PATIENT_VIEW),
+  });
+
+  if (!hasCapability(ctx, CAP_ENCOUNTER_LIST))
+    return intelModule("patient_intelligence", "Patient Intelligence",
+      noSeen("not_permitted", `${CAP_ENCOUNTER_LIST} is required to see who was seen`), sources, problems);
+  if (seenRead.error) {
+    problems.push(`patients seen: ${seenRead.error}`);
+    return intelModule("patient_intelligence", "Patient Intelligence",
+      noSeen("unreadable", `could not be read: ${seenRead.error}`), sources, problems);
+  }
+  if (seenRead.overflowed) {
+    problems.push(`patients seen: ${overflowNote("completed encounters")}`);
+    return intelModule("patient_intelligence", "Patient Intelligence",
+      noSeen("unreadable", overflowNote("completed encounters")), sources, problems);
+  }
+
+  const seenIds = [...new Set(seenRead.rows.map(r => r.patient_id).filter(Boolean))] as string[];
+  if (seenIds.length === 0)
+    return intelModule("patient_intelligence", "Patient Intelligence",
+      noSeen("unknowable", "no consultation was completed in this period, so there is nobody to describe"), sources, problems);
+
+  const [priorRead, patientRead] = await Promise.all([
+    // "Never seen before" = no encounter of ANY status before the period began. Any status, deliberately:
+    // a cancelled first visit still means the practice had met them.
+    intelIn(admin, "practice_encounter", "patient_id, started_at", ctx.workspaceId, "patient_id", seenIds),
+    intelIn(admin, "practice_patient", "id, sex, birth_date, age_estimate_years", ctx.workspaceId, "id", seenIds),
+  ]);
+
+  const periodStart = Date.parse(range.period.fromIso);
+  let newToPractice: IntelProportion;
+  if (priorRead.error || priorRead.overflowed) {
+    const reason = priorRead.error ? `could not be read: ${priorRead.error}` : overflowNote("encounter records for these patients");
+    problems.push(`new to practice: ${reason}`);
+    newToPractice = { key: "new_to_practice", label: "Patients new to the practice", numerator: null, denominator: seenIds.length, status: "unreadable", reason, caveat: null, formula: newFormula, sources: newSources };
+  } else {
+    const seenBefore = new Set<string>();
+    for (const r of priorRead.rows) {
+      const started = parseAt(r.started_at);
+      if (r.patient_id && started !== null && started < periodStart) seenBefore.add(r.patient_id);
+    }
+    newToPractice = {
+      key: "new_to_practice", label: "Patients new to the practice",
+      numerator: seenIds.filter(id => !seenBefore.has(id)).length,
+      denominator: seenIds.length,
+      status: "ok", reason: null,
+      caveat: "New means new to THIS practice's records. A patient the practitioner has known for years at another organisation is new here on the day their record is created.",
+      formula: newFormula, sources: newSources,
+    };
+  }
+
+  const endOfPeriod = new Date(range.period.toIso);
+  const yearsOld = (row: any): number | null => {
+    if (typeof row.birth_date === "string" && row.birth_date) {
+      const born = Date.parse(`${row.birth_date}T00:00:00Z`);
+      if (Number.isFinite(born)) return Math.floor((endOfPeriod.getTime() - born) / 31557600000);
+    }
+    return typeof row.age_estimate_years === "number" ? row.age_estimate_years : null;
+  };
+
+  const bySex = distribution("by_sex", "Patients seen by sex", patientRead, r => r.sex, PATIENT_SEXES,
+    demographyFormula("sex"), ["practice_patient.sex"], "patient records");
+  const byAgeBand = distribution("by_age_band", "Patients seen by age", patientRead, r => ageBandOf(yearsOld(r)), AGE_BANDS,
+    demographyFormula("birth_date / age_estimate_years"), ["practice_patient.birth_date", "practice_patient.age_estimate_years"], "patient records");
+  if (patientRead.error) problems.push(`patient demography: ${patientRead.error}`);
+
+  return intelModule("patient_intelligence", "Patient Intelligence", {
+    patientsSeen: metrics.metrics.patients_seen,
+    registered, newToPractice, bySex, byAgeBand, diagnoses,
+    identified: hasCapability(ctx, CAP_PATIENT_VIEW),
+  }, sources, problems);
+}
+
+// ── 4. ORDERS INTELLIGENCE ───────────────────────────────────────────────────────────────────────────
+
+/**
+ * ORDERS INTELLIGENCE -- NOT BUILT, BECAUSE THERE IS NOTHING TO BUILD IT OVER.
+ *
+ * CPR-V5-003 lists an Orders Intelligence module and CPR-CORE-003 lists an "Orders & Procedures Engine"
+ * among the CP domain engines. THE PROCEDURES HALF EXISTS (migration 197). THE ORDERS HALF DOES NOT.
+ *
+ * WHAT WAS LOOKED FOR AND WHAT WAS FOUND, so the next person does not repeat the search:
+ *
+ *   - No practice_order, practice_order_item, practice_investigation, practice_lab_request,
+ *     practice_referral or practice_prescription table exists in any migration.
+ *   - No orders engine exists in src/lib/practice and no /practice/orders route exists.
+ *   - No orders capability exists in practice_role_capabilities.
+ *
+ * THE NEAREST STORE IS practice_treatment (migration 194), AND IT IS NOT AN ORDERS ENGINE. It records
+ * what the practitioner DECIDED inside a consultation -- treatment_type is one of medication, procedure,
+ * investigation, advice, referral, monitoring -- and that is a clinical intention, not a request that was
+ * dispatched anywhere. Three specific things make it unusable as an orders read model:
+ *
+ *   1. ITS LIFECYCLE IS NEVER WRITTEN. status is planned/in_progress/completed/cancelled, and nothing in
+ *      this product updates it after insert. Every row is 'planned' forever. A "completion rate" over it
+ *      would read 0 of everything for reasons that have nothing to do with any patient.
+ *   2. IT HAS NO RECIPIENT AND NO DISPATCH. There is no lab, no destination, no sent_at. "Turnaround" has
+ *      no first timestamp to start from.
+ *   3. RESULTS DO NOT LINK BACK. practice_incoming_document (migration 200) registers lab_result and
+ *      imaging_report arrivals, but carries no treatment_id, order_id or request reference at all -- so
+ *      no arrival can be matched to the request that caused it, and the one question an orders dashboard
+ *      exists to answer ("what have I asked for that has not come back") cannot be asked of this schema.
+ *
+ * SO THIS RETURNS NOTHING. Counting investigation-typed treatment rows and labelling the tile "Orders"
+ * would be the exact failure this codebase cares most about: a chart that is populated, plausible, and
+ * answering a different question from the one on its heading.
+ *
+ * WHAT WOULD MAKE IT REAL: an order store with a recipient and a dispatch timestamp, a status written by
+ * something, and a result linkage on practice_incoming_document. That is a migration and an engine, which
+ * is CPR-V5-003 scope for somebody, and it is not scope this read-only workspace can invent.
+ */
+export function ordersIntelligence(): IntelModule<never> {
+  return intelUnavailable("orders_intelligence", "Orders Intelligence",
+    "There is no orders store in this product. No practice_order table exists in any migration, no orders engine exists in src/lib/practice, and no orders capability exists in practice_role_capabilities. practice_treatment (migration 194) is the nearest table and records clinical INTENT rather than orders: its status column is never written after insert, it has no recipient or dispatch timestamp, and practice_incoming_document (migration 200) carries no reference back to the request that produced a result. Nothing here can be counted without answering a different question from the one on the heading.",
+    ["(none -- no store exists)"]);
+}
+
+// ── 5. PROCEDURE INTELLIGENCE ────────────────────────────────────────────────────────────────────────
+
+export type ProcedureIntelligenceData = {
+  /** Performed / complication / outcomes-recorded counts, from this file's existing owner. */
+  outcomes: Awaited<ReturnType<typeof outcomePicture>>["procedures"];
+  /** Top procedure labels, from this file's existing caseMix. Counted as typed. */
+  topLabels: { label: string; total: number }[];
+  procedureTotal: number;
+  byCategory: IntelDistribution;
+  byConsent: IntelDistribution;
+  byLaterality: IntelDistribution;
+  abandoned: IntelProportion;
+  complications: IntelProportion;
+};
+
+/** practice_procedure_type.category -- migration 197's CHECK, in full. */
+const PROCEDURE_CATEGORIES: [string, string][] = [
+  ["minor_surgery", "Minor surgery"], ["injection", "Injection"], ["wound_care", "Wound care"],
+  ["diagnostic", "Diagnostic"], ["obstetric", "Obstetric"], ["dental", "Dental"],
+  ["dressing", "Dressing"], ["physical", "Physical"], ["other", "Other"],
+];
+
+/** practice_procedure.consent_status -- migration 197's CHECK, in full. */
+const CONSENT_STATUSES: [string, string][] = [
+  ["obtained", "Obtained"], ["not_required", "Not required"], ["refused", "Refused"],
+  ["not_recorded", "Not recorded"],
+];
+
+/** practice_procedure.laterality -- migration 197's CHECK, in full. */
+const LATERALITIES: [string, string][] = [
+  ["left", "Left"], ["right", "Right"], ["bilateral", "Bilateral"], ["not_applicable", "Not applicable"],
+];
+
+/**
+ * PROCEDURE INTELLIGENCE -- what this practice does with its hands.
+ *
+ * TABLES/COLUMNS: practice_procedure.workspace_id, .performed_at, .status, .consent_status, .laterality,
+ * .procedure_type_id (migration 197); embedded practice_procedure_type.category (197);
+ * practice_procedure_outcome.outcome_type via outcomePicture (197).
+ *
+ * THE COUNTS COME FROM outcomePicture AND caseMix, BOTH ALREADY IN THIS FILE. What is added is three
+ * distributions and two proportions those functions do not compute.
+ *
+ * ⚠ THE COMPLICATION FIGURE IS A CENSORED NUMERATOR AND IT SAYS SO. A complication is discovered later --
+ * that is why practice_procedure_outcome is a separate append-only table with its own observed_on. A
+ * procedure performed on the last day of the period has had one day to declare a complication and one
+ * performed on the first has had thirty, so the most recent procedures systematically look safest. The
+ * comp draws this as "Complication Rate 2.1%", which hides the censoring completely. Here it is
+ * "4 of 213" with the caveat attached, and the count of procedures with no outcome recorded at all is
+ * beside it so a reader can see how much of the denominator has simply not reported yet.
+ *
+ * ⚠ CATEGORY IS THE CATALOGUE'S, AND A FREE-TYPED PROCEDURE HAS NONE. procedure_type_id is nullable
+ * because migration 197 deliberately allows a procedure the catalogue does not hold. Those land in
+ * `unrecorded`, never in "other" -- "other" is a category somebody chose and unclassified is not.
+ */
+export async function procedureIntelligence(
+  admin: any, ctx: WorkspaceContext, range: IntelRange,
+  outcomes: Awaited<ReturnType<typeof outcomePicture>>,
+  mix: Awaited<ReturnType<typeof caseMix>>,
+): Promise<IntelModule<ProcedureIntelligenceData>> {
+  const sources = [
+    "practice_procedure.performed_at", "practice_procedure.status", "practice_procedure.consent_status",
+    "practice_procedure.laterality", "practice_procedure.procedure_type_id",
+    "practice_procedure_type.category", "practice_procedure_outcome.outcome_type",
+  ];
+
+  // Either procedure capability admits a reader: migration 197 gives `procedure.record` to the
+  // practitioner and `procedure.manage` to the practitioner and the owner, and both are people entitled
+  // to know what the practice performed. Neither was invented -- both are in 197's insert.
+  if (!hasCapability(ctx, CAP_PROCEDURE_RECORD) && !hasCapability(ctx, CAP_PROCEDURE_MANAGE))
+    return intelUnavailable("procedure_intelligence", "Procedure Intelligence",
+      `${CAP_PROCEDURE_RECORD} or ${CAP_PROCEDURE_MANAGE} is required to see what this practice performed`, sources);
+
+  const read = await intelRows(admin.from("practice_procedure")
+    .select("id, status, consent_status, laterality, practice_procedure_type:procedure_type_id(category)")
+    .eq("workspace_id", ctx.workspaceId)
+    .gte("performed_at", range.period.fromIso).lt("performed_at", range.period.toIso));
+
+  const problems: string[] = [];
+  if (read.error) problems.push(`procedure breakdowns: ${read.error}`);
+  if (read.overflowed) problems.push(`procedure breakdowns: ${overflowNote("procedures")}`);
+
+  const performed = outcomes.procedures.performed;
+  const abandonedCount = read.error || read.overflowed ? null : read.rows.filter(p => p.status === "ABANDONED").length;
+  const attempted = read.error || read.overflowed ? null : read.rows.length;
+
+  const data: ProcedureIntelligenceData = {
+    outcomes: outcomes.procedures,
+    topLabels: mix.procedures,
+    procedureTotal: mix.procedureTotal,
+    byCategory: distribution("by_category", "Procedures by category", read,
+      r => r.practice_procedure_type?.category, PROCEDURE_CATEGORIES,
+      "count of practice_procedure rows performed in the period by the category of their catalogue entry; procedures typed freehand carry no catalogue entry and are reported as unrecorded",
+      ["practice_procedure.procedure_type_id", "practice_procedure_type.category"], "procedures"),
+    byConsent: distribution("by_consent", "Consent recorded", read, r => r.consent_status, CONSENT_STATUSES,
+      "count of practice_procedure rows performed in the period by practice_procedure.consent_status; 'not recorded' is not the same as 'not obtained' and is shown as its own slice",
+      ["practice_procedure.consent_status"], "procedures"),
+    byLaterality: distribution("by_laterality", "Side", read, r => r.laterality, LATERALITIES,
+      "count of practice_procedure rows performed in the period by practice_procedure.laterality",
+      ["practice_procedure.laterality"], "procedures"),
+    abandoned: {
+      key: "abandoned", label: "Procedures started and stopped",
+      numerator: abandonedCount, denominator: attempted,
+      status: abandonedCount === null ? "unreadable" : "ok",
+      reason: abandonedCount === null ? (read.error ? `could not be read: ${read.error}` : overflowNote("procedures")) : null,
+      caveat: "Abandoned means something was begun and stopped, which is a thing that happened to the patient. It is not a failure count and migration 197 does not record why.",
+      formula: "practice_procedure rows in the period with status ABANDONED, over all procedure rows in the period",
+      sources: ["practice_procedure.status", "practice_procedure.performed_at"],
+    },
+    complications: {
+      key: "complications", label: "Procedures with a complication recorded",
+      numerator: outcomes.procedures.withComplication,
+      denominator: performed,
+      status: performed === 0 ? "unknowable" : "ok",
+      reason: performed === 0 ? "no procedure was performed in this period, so there is nothing to report a complication against" : null,
+      caveat: `A complication is discovered later, so the most recent procedures have had the least time to declare one and always look safest. ${performed - outcomes.procedures.outcomesRecorded} of ${performed} procedures in this period have no outcome recorded at all.`,
+      formula: "distinct practice_procedure ids with a practice_procedure_outcome row of outcome_type 'complication', over procedures performed in the period with status PERFORMED",
+      sources: ["practice_procedure_outcome.outcome_type", "practice_procedure.status"],
+    },
+  };
+
+  return intelModule("procedure_intelligence", "Procedure Intelligence", data, sources, problems);
+}
+
+// ── 6. FOLLOW-UP INTELLIGENCE ────────────────────────────────────────────────────────────────────────
+
+export type FollowUpIntelligenceData = {
+  /** Open follow-ups due inside the period -- metrics.ts owns this definition. */
+  due: Metric;
+  /** How the period's concluded follow-ups turned out -- this file's existing owner. */
+  concluded: Awaited<ReturnType<typeof outcomePicture>>["followUps"];
+  /** Still owed and already past their date, as at today. Section 8 deliberately excludes these from Due. */
+  overdue: { value: number | null; status: IntelStatus; reason: string | null; formula: string; sources: string[] };
+  /** The comp's "completion rate", done as a cohort with its censoring disclosed. */
+  completion: IntelProportion;
+  byKind: IntelDistribution;
+  byPriority: IntelDistribution;
+};
+
+/** practice_follow_up.kind -- migration 196's CHECK, in full. */
+const FOLLOW_UP_KINDS: [string, string][] = [
+  ["review", "Review"], ["investigation_result", "Investigation result"],
+  ["treatment_response", "Treatment response"], ["referral_outcome", "Referral outcome"],
+  ["monitoring", "Monitoring"], ["immunisation", "Immunisation"], ["other", "Other"],
+];
+
+/** practice_follow_up.priority -- migration 196's CHECK, in full. */
+const FOLLOW_UP_PRIORITIES: [string, string][] = [
+  ["routine", "Routine"], ["soon", "Soon"], ["urgent", "Urgent"],
+];
+
+/**
+ * FOLLOW-UP INTELLIGENCE -- what this practice promised and what became of it.
+ *
+ * TABLES/COLUMNS: practice_follow_up.workspace_id, .status, .due_on, .created_at, .kind, .priority
+ * (migration 196).
+ *
+ * ⚠ THE COMP'S "FOLLOW-UP COMPLETION RATE 75%" IS THE MOST MISLEADING FIGURE IN THE DESIGN, AND THIS IS
+ * WHAT REPLACES IT.
+ *
+ * Three separate problems, all fixed:
+ *
+ *   THE PERCENTAGE HIDES THE COUNT. "75%" is 3 of 4 and 750 of 1000 and a practitioner would act on one
+ *   of those. Returned here as a numerator and a denominator; there is no rate field.
+ *
+ *   THE DENOMINATOR WAS NEVER DEFINED. Completed over what -- everything due in the window? Everything
+ *   raised in it? Those are different numbers and the comp does not say. THIS USES THE COHORT RAISED IN
+ *   THE PERIOD, because that is the set the practitioner actually created and the only one whose fate is
+ *   attributable to the period. Completions of older follow-ups belong to the periods that raised them.
+ *
+ *   THE COHORT IS CENSORED AND THE TILE PRETENDS OTHERWISE. A follow-up raised on the last day of the
+ *   period with a six-week interval is not late, not missed and not completed -- it is NOT YET DUE, and
+ *   counting it in the denominator makes every recent period look worse than every old one, purely as an
+ *   artefact of when the report was run. `notYetDue` is returned beside the proportion so a screen can
+ *   show "72 of 96 completed, 31 of those 96 are not yet due" instead of a number that quietly falls
+ *   every time somebody makes a promise.
+ *
+ * OVERDUE IS AS AT TODAY, NOT AS AT THE PERIOD. "How many promises are broken right now" is a live state
+ * exactly as Waiting is (see metrics.ts on why Waiting is not windowed), and reporting last March's
+ * overdue backlog on a page somebody opened this morning would answer a question nobody asked.
+ */
+export async function followUpIntelligence(
+  admin: any, ctx: WorkspaceContext, range: IntelRange, metrics: PracticeMetrics,
+  outcomes: Awaited<ReturnType<typeof outcomePicture>>,
+): Promise<IntelModule<FollowUpIntelligenceData>> {
+  const sources = [
+    "practice_follow_up.status", "practice_follow_up.due_on", "practice_follow_up.created_at",
+    "practice_follow_up.kind", "practice_follow_up.priority",
+  ];
+  if (!hasCapability(ctx, CAP_FOLLOWUP_VIEW))
+    return intelUnavailable("followup_intelligence", "Follow-up Intelligence",
+      `${CAP_FOLLOWUP_VIEW} is required to see this practice's follow-ups`, sources);
+
+  const overdueFormula = "count of practice_follow_up rows still OPEN or SCHEDULED whose due_on is before the practice's today; OVERDUE is not a stored status (migration 196 has none on purpose) so it is derived from the clock at read time";
+  const completionFormula = "of practice_follow_up rows CREATED within the period, those whose status is now COMPLETED; the cohort is what the period raised, not what fell due in it";
+
+  const today = practiceToday(range.timezone);
+  const [overdueRead, cohort] = await Promise.all([
+    intelCount(admin.from("practice_follow_up").select("id", { count: "exact", head: true })
+      .eq("workspace_id", ctx.workspaceId).in("status", ["OPEN", "SCHEDULED"]).lt("due_on", today)),
+    intelRows(admin.from("practice_follow_up").select("id, status, due_on, kind, priority")
+      .eq("workspace_id", ctx.workspaceId)
+      .gte("created_at", range.period.fromIso).lt("created_at", range.period.toIso)),
+  ]);
+
+  const problems: string[] = [];
+  const overdue = overdueRead.error
+    ? { value: null, status: "unreadable" as IntelStatus, reason: `could not be read: ${overdueRead.error}`, formula: overdueFormula, sources: ["practice_follow_up.status", "practice_follow_up.due_on"] }
+    : overdueRead.count === null
+      ? { value: null, status: "unreadable" as IntelStatus, reason: "the follow-up board returned no count", formula: overdueFormula, sources: ["practice_follow_up.status", "practice_follow_up.due_on"] }
+      : { value: overdueRead.count, status: "ok" as IntelStatus, reason: null, formula: overdueFormula, sources: ["practice_follow_up.status", "practice_follow_up.due_on"] };
+  if (overdue.status === "unreadable") problems.push(`overdue backlog: ${overdue.reason}`);
+  if (cohort.error) problems.push(`follow-up cohort: ${cohort.error}`);
+  if (cohort.overflowed) problems.push(`follow-up cohort: ${overflowNote("follow-ups raised")}`);
+
+  const cohortUnreadable = cohort.error ? `could not be read: ${cohort.error}` : cohort.overflowed ? overflowNote("follow-ups raised") : null;
+  const notYetDue = cohortUnreadable ? 0
+    : cohort.rows.filter(f => ["OPEN", "SCHEDULED"].includes(f.status) && typeof f.due_on === "string" && f.due_on > today).length;
+
+  const completion: IntelProportion = {
+    key: "completion", label: "Follow-ups raised in this period that are now completed",
+    numerator: cohortUnreadable ? null : cohort.rows.filter(f => f.status === "COMPLETED").length,
+    denominator: cohortUnreadable ? null : cohort.rows.length,
+    status: cohortUnreadable ? "unreadable" : cohort.rows.length === 0 ? "unknowable" : "ok",
+    reason: cohortUnreadable ?? (cohort.rows.length === 0 ? "no follow-up was raised in this period, so there is nothing whose completion could be counted" : null),
+    caveat: cohortUnreadable ? null
+      : `${notYetDue} of these ${cohort.rows.length} are not yet due, so they can be neither completed nor missed. A denominator that includes them understates completion for recent periods and always will.`,
+    formula: completionFormula,
+    sources: ["practice_follow_up.created_at", "practice_follow_up.status", "practice_follow_up.due_on"],
+  };
+
+  return intelModule("followup_intelligence", "Follow-up Intelligence", {
+    due: metrics.metrics.follow_ups_due,
+    concluded: outcomes.followUps,
+    overdue, completion,
+    byKind: distribution("by_kind", "What the follow-up is for", cohort, r => r.kind, FOLLOW_UP_KINDS,
+      "count of practice_follow_up rows raised in the period by practice_follow_up.kind",
+      ["practice_follow_up.kind", "practice_follow_up.created_at"], "follow-ups raised"),
+    byPriority: distribution("by_priority", "How urgent", cohort, r => r.priority, FOLLOW_UP_PRIORITIES,
+      "count of practice_follow_up rows raised in the period by practice_follow_up.priority",
+      ["practice_follow_up.priority", "practice_follow_up.created_at"], "follow-ups raised"),
+  }, sources, problems);
+}
+
+// ── 7. DOCUMENT INTELLIGENCE ─────────────────────────────────────────────────────────────────────────
+
+export type DocumentIntelligenceData = {
+  byStatus: IntelDistribution;
+  byType: IntelDistribution;
+  /** Written but never signed. The count somebody can act on, in place of a "documentation quality" score. */
+  unsigned: IntelProportion;
+  /** Median days from creation to signature, stated as a median, null below the observation floor. */
+  daysToSign: { value: number | null; unit: "days"; observations: number; status: IntelStatus; reason: string | null; formula: string; sources: string[] };
+  /** What arrived from outside and whether anybody has looked at it. Null when inbox.review is not held. */
+  incoming: IntelDistribution;
+};
+
+/** practice_clinical_document.status -- migration 195's CHECK, in full. */
+const DOCUMENT_STATUSES: [string, string][] = [
+  ["DRAFT", "Draft"], ["FINAL", "Final"], ["SIGNED", "Signed"], ["AMENDED", "Amended"],
+  ["ENTERED_IN_ERROR", "Entered in error"],
+];
+
+/** practice_clinical_document.doc_type -- migration 195's CHECK, in full. */
+const DOCUMENT_TYPES: [string, string][] = [
+  ["consultation_summary", "Consultation summary"], ["referral_letter", "Referral letter"],
+  ["sick_note", "Sick note"], ["procedure_note", "Procedure note"],
+  ["discharge_summary", "Discharge summary"], ["general", "General"],
+];
+
+/** practice_incoming_document.status -- migration 200's CHECK, in full. */
+const INCOMING_STATUSES: [string, string][] = [
+  ["RECEIVED", "Received, not yet reviewed"], ["REVIEWED", "Reviewed"], ["ACTIONED", "Actioned"],
+];
+
+/**
+ * DOCUMENT INTELLIGENCE -- what this practice wrote, and what it has not finished writing.
+ *
+ * TABLES/COLUMNS: practice_clinical_document.workspace_id, .created_at, .status, .doc_type, .signed_at
+ * (migration 195); practice_incoming_document.workspace_id, .received_on, .status (migration 200).
+ *
+ * NOTHING ELSE OWNS THESE FIGURES. Section 8 has no document metric, and completeness() above counts
+ * unsigned ENCOUNTERS, which is a different record from an unsigned letter. This module is new work.
+ *
+ * ⚠ THE COMP ASKS FOR "COMPLETED NOTES 96.3%" AND A "DATA QUALITY" SCORE. Neither is here, for the reason
+ * the completeness() comment above gives: a composite score with no published formula is an opinion with
+ * arithmetic attached, and "96% complete" tells a practitioner nothing to do on a Tuesday morning. What
+ * replaces it is a count with a denominator and a median somebody can act on.
+ *
+ * ⚠ TIME TO SIGN IS MEASURED FROM CREATION, WHICH IS WHAT THE RECORD HOLDS AND NOT QUITE WHAT ANYBODY
+ * MEANS. A document created as a draft on Monday and signed on Friday reads as four days even if it was
+ * written on Thursday, because migration 195 has no authored_at. Stated here rather than quietly
+ * presented as writing speed. The median is used rather than the mean, and named, for exactly the reason
+ * metrics.ts gives against Clinic Delay: one letter forgotten for a month is an outlier that drags a mean
+ * into describing a practice that does not exist.
+ */
+export async function documentIntelligence(
+  admin: any, ctx: WorkspaceContext, range: IntelRange,
+): Promise<IntelModule<DocumentIntelligenceData>> {
+  const sources = [
+    "practice_clinical_document.created_at", "practice_clinical_document.status",
+    "practice_clinical_document.doc_type", "practice_clinical_document.signed_at",
+    "practice_incoming_document.received_on", "practice_incoming_document.status",
+  ];
+  const incomingFormula = "count of practice_incoming_document rows received within the period by practice_incoming_document.status";
+  const incomingSources = ["practice_incoming_document.received_on", "practice_incoming_document.status"];
+
+  if (!hasCapability(ctx, CAP_DOCUMENT_VIEW))
+    return intelUnavailable("document_intelligence", "Document Intelligence",
+      `${CAP_DOCUMENT_VIEW} is required to see this practice's documents`, sources);
+
+  const [read, incomingRead] = await Promise.all([
+    intelRows(admin.from("practice_clinical_document").select("id, status, doc_type, created_at, signed_at")
+      .eq("workspace_id", ctx.workspaceId)
+      .gte("created_at", range.period.fromIso).lt("created_at", range.period.toIso)),
+    // Gated separately: migration 200 gives inbox.review to the PRACTITIONER ONLY, because deciding a lab
+    // result needs nothing is a clinical judgement. An assistant sees the rest of this module and not this.
+    hasCapability(ctx, CAP_INBOX_REVIEW)
+      ? intelRows(admin.from("practice_incoming_document").select("id, status")
+        .eq("workspace_id", ctx.workspaceId)
+        .gte("received_on", range.period.fromDay).lte("received_on", range.period.toDay))
+      : Promise.resolve(null),
+  ]);
+
+  const problems: string[] = [];
+  if (read.error) problems.push(`documents: ${read.error}`);
+  if (read.overflowed) problems.push(`documents: ${overflowNote("documents")}`);
+  if (incomingRead?.error) problems.push(`incoming documents: ${incomingRead.error}`);
+
+  const unreadable = read.error ? `could not be read: ${read.error}` : read.overflowed ? overflowNote("documents") : null;
+  // ENTERED_IN_ERROR is a voided record, not an unsigned one; it belongs in neither half of the proportion.
+  const live = unreadable ? [] : read.rows.filter(d => d.status !== "ENTERED_IN_ERROR");
+  const signedStates = ["SIGNED", "AMENDED"];
+
+  const signDelays: number[] = [];
+  for (const d of live) {
+    if (!signedStates.includes(d.status)) continue;
+    const created = parseAt(d.created_at);
+    const signed = parseAt(d.signed_at);
+    // Missing or backwards timestamps are excluded, never clamped: a zero-day signature that did not
+    // happen would drag the median toward a promptness nobody achieved.
+    if (created === null || signed === null || signed < created) continue;
+    signDelays.push((signed - created) / 86400000);
+  }
+
+  const daysToSignFormula = `median of (practice_clinical_document.signed_at - .created_at) in days over documents created in the period and since signed; null below ${MIN_OBSERVATIONS_FOR_MEDIAN} valid observations. Measured from CREATION, which is what the record holds -- migration 195 has no authored_at, so a draft left open inflates this without anybody having been slow`;
+  const daysToSignSources = ["practice_clinical_document.created_at", "practice_clinical_document.signed_at", "practice_clinical_document.status"];
+
+  return intelModule("document_intelligence", "Document Intelligence", {
+    byStatus: distribution("by_status", "Documents by status", read, r => r.status, DOCUMENT_STATUSES,
+      "count of practice_clinical_document rows created within the period by status",
+      ["practice_clinical_document.created_at", "practice_clinical_document.status"], "documents"),
+    byType: distribution("by_type", "Documents by kind", read, r => r.doc_type, DOCUMENT_TYPES,
+      "count of practice_clinical_document rows created within the period by doc_type",
+      ["practice_clinical_document.created_at", "practice_clinical_document.doc_type"], "documents"),
+    unsigned: {
+      key: "unsigned", label: "Documents written but not signed",
+      numerator: unreadable ? null : live.filter(d => !signedStates.includes(d.status)).length,
+      denominator: unreadable ? null : live.length,
+      status: unreadable ? "unreadable" : live.length === 0 ? "unknowable" : "ok",
+      reason: unreadable ?? (live.length === 0 ? "no document was written in this period" : null),
+      caveat: "A document created near the end of the period may simply not have been signed yet. Records voided as entered-in-error are excluded from both halves.",
+      formula: "practice_clinical_document rows created in the period whose status is DRAFT or FINAL, over all rows created in the period except ENTERED_IN_ERROR",
+      sources: ["practice_clinical_document.status", "practice_clinical_document.created_at"],
+    },
+    daysToSign: unreadable
+      ? { value: null, unit: "days", observations: 0, status: "unreadable", reason: unreadable, formula: daysToSignFormula, sources: daysToSignSources }
+      : signDelays.length < MIN_OBSERVATIONS_FOR_MEDIAN
+        ? { value: null, unit: "days", observations: signDelays.length, status: "unknowable",
+            reason: `${signDelays.length} document${signDelays.length === 1 ? " was" : "s were"} created and signed in this period; ${MIN_OBSERVATIONS_FOR_MEDIAN} are needed before a median means anything`,
+            formula: daysToSignFormula, sources: daysToSignSources }
+        : { value: intelMedian(signDelays), unit: "days", observations: signDelays.length, status: "ok", reason: null, formula: daysToSignFormula, sources: daysToSignSources },
+    incoming: incomingRead === null
+      ? notPermittedDistribution("incoming", "Documents received from outside", CAP_INBOX_REVIEW, incomingFormula, incomingSources)
+      : distribution("incoming", "Documents received from outside", incomingRead, r => r.status, INCOMING_STATUSES,
+        incomingFormula, incomingSources, "incoming documents"),
+  }, sources, problems);
+}
+
+// ── 8. LOCATION INTELLIGENCE ─────────────────────────────────────────────────────────────────────────
+
+export type LocationIntelligenceData = {
+  /** Appointments per location, from this file's existing owner. False `comparable` for a single site. */
+  appointments: Awaited<ReturnType<typeof byLocation>>;
+  /** Encounters per location, attributed through the activity they ran inside -- see the warning below. */
+  encounters: {
+    status: IntelStatus;
+    reason: string | null;
+    rows: { locationId: string; name: string; total: number }[];
+    /** Encounters that carry no location at all. Disclosed, never redistributed across the sites. */
+    unattributed: number;
+    of: number | null;
+    formula: string;
+    sources: string[];
+  };
+};
+
+/**
+ * LOCATION INTELLIGENCE -- where the work happened.
+ *
+ * TABLES/COLUMNS: practice_location.id, .name, .active (migration 191); practice_appointment.location_id
+ * via byLocation (192); practice_encounter.activity_id (232) and embedded practice_activity.location_id
+ * (232).
+ *
+ * ⚠ practice_encounter.location_id EXISTS AND IS ALWAYS NULL. THIS IS THE FINDING THAT SHAPES THE MODULE.
+ *
+ * Migration 194 gives practice_encounter a location_id column and NOTHING IN THIS PRODUCT EVER WRITES IT
+ * -- launchEncounter (encounters.ts) does not set it and no other engine touches it. A location breakdown
+ * built on that column would return zero for every site while consultations were plainly happening, and
+ * it would look exactly like a quiet month. So it is not used, and this says so out loud rather than
+ * leaving the next person to rediscover it.
+ *
+ * The route that DOES carry a location is practice_encounter.activity_id -> practice_activity.location_id,
+ * which activity.ts writes when a session is started. That is what is used here.
+ *
+ * ⚠ WHICH MEANS SOME ENCOUNTERS CANNOT BE PLACED, AND THEY ARE COUNTED SEPARATELY RATHER THAN DROPPED. An
+ * encounter launched outside any activity has no location; so does one inside a telephone_review or an
+ * administration block, which migration 232 explicitly allows to have neither a facility nor a location.
+ * Dropping those silently would make the per-site totals add up to less than the practice's own encounter
+ * count and nobody could see why; redistributing them would be a fabrication. They are returned as
+ * `unattributed`.
+ */
+export async function locationIntelligence(
+  admin: any, ctx: WorkspaceContext, range: IntelRange,
+): Promise<IntelModule<LocationIntelligenceData>> {
+  const sources = [
+    "practice_location.name", "practice_appointment.location_id",
+    "practice_encounter.activity_id", "practice_activity.location_id",
+  ];
+  const formula = "count of encounters started in the period grouped by the location of the practice_activity they ran inside; practice_encounter.location_id is deliberately NOT used because nothing in this product writes it";
+  const encounterSources = ["practice_encounter.activity_id", "practice_activity.location_id", "practice_location.name"];
+
+  if (!hasCapability(ctx, CAP_CALENDAR_VIEW))
+    return intelUnavailable("location_intelligence", "Location Intelligence",
+      `${CAP_CALENDAR_VIEW} is required to see where this practice works`, sources);
+
+  const problems: string[] = [];
+  const [appointments, locationRead, encounterRead] = await Promise.all([
+    byLocation(admin, ctx, range.period),
+    intelRows(admin.from("practice_location").select("id, name").eq("workspace_id", ctx.workspaceId)),
+    hasCapability(ctx, CAP_ENCOUNTER_LIST)
+      ? intelRows(admin.from("practice_encounter")
+        .select("id, practice_activity:activity_id(location_id)")
+        .eq("workspace_id", ctx.workspaceId)
+        .not("status", "in", "(CANCELLED,ENTERED_IN_ERROR)")
+        .gte("started_at", range.period.fromIso).lt("started_at", range.period.toIso))
+      : Promise.resolve(null),
+  ]);
+
+  let encounters: LocationIntelligenceData["encounters"];
+  if (encounterRead === null) {
+    encounters = { status: "not_permitted", reason: `${CAP_ENCOUNTER_LIST} is required to see where consultations happened`, rows: [], unattributed: 0, of: null, formula, sources: encounterSources };
+  } else if (encounterRead.error || encounterRead.overflowed || locationRead.error) {
+    const reason = encounterRead.error ? `could not be read: ${encounterRead.error}`
+      : encounterRead.overflowed ? overflowNote("encounters")
+        : `the location list could not be read: ${locationRead.error}`;
+    problems.push(`encounters by location: ${reason}`);
+    encounters = { status: "unreadable", reason, rows: [], unattributed: 0, of: null, formula, sources: encounterSources };
+  } else {
+    const names = new Map<string, string>(locationRead.rows.map(l => [l.id as string, l.name as string]));
+    const counts = new Map<string, number>();
+    let unattributed = 0;
+    for (const e of encounterRead.rows) {
+      const locationId = e.practice_activity?.location_id;
+      if (typeof locationId === "string" && locationId) counts.set(locationId, (counts.get(locationId) ?? 0) + 1);
+      else unattributed++;
+    }
+    encounters = {
+      status: "ok", reason: null,
+      rows: [...counts.entries()]
+        // A location id with no name is a row that was deleted from under the encounter. Named as such
+        // rather than dropped -- the consultations happened somewhere.
+        .map(([locationId, total]) => ({ locationId, name: names.get(locationId) ?? "Location no longer in the register", total }))
+        .sort((a, b) => b.total - a.total),
+      unattributed, of: encounterRead.rows.length, formula, sources: encounterSources,
+    };
+  }
+
+  return intelModule("location_intelligence", "Location Intelligence", { appointments, encounters }, sources, problems);
+}
+
+// ── 9. PRACTICE GROWTH ───────────────────────────────────────────────────────────────────────────────
+
+export type PracticeGrowthData = {
+  /** Period-over-period counts, each earned or refused. Never a percentage, never an arrow by default. */
+  comparisons: IntelComparison[];
+  /** Every patient this practice has ever registered, as at now. Not windowed: it is a running total. */
+  cumulativePatients: { value: number | null; status: IntelStatus; reason: string | null; formula: string; sources: string[] };
+  /** How long this practice has been keeping records, which is what licenses any comparison at all. */
+  recordingSince: string | null;
+  priorPeriod: { fromDay: string; toDay: string; usable: boolean; reason: string | null };
+};
+
+/**
+ * PRACTICE GROWTH -- is this practice growing, and by how many.
+ *
+ * TABLES/COLUMNS: practice_patient.created_at, .status (migration 193); practice_workspace.created_at
+ * (191); plus the six comparable section 8 metrics, computed by metrics.ts over both windows.
+ *
+ * ⚠ THIS IS THE MODULE THE COMP'S "↑18% vs previous 30 days" BELONGS TO, AND IT IS WHERE THE REFUSAL
+ * MATTERS MOST. A growth page is read by somebody deciding whether to hire, to open a second site, or to
+ * keep going. Every comparison here is gated twice -- the prior window must have existed for the whole of
+ * its length (practice_workspace.created_at), and the two windows together must carry
+ * MIN_OBSERVATIONS_FOR_COMPARISON records -- and when either gate closes the figure is null with the
+ * reason attached, never a 0% and never an arrow pointing at nothing.
+ *
+ * The comparisons are the SAME OBJECTS the Overview module carries, computed once by the assembler and
+ * passed to both, so the two pages cannot disagree about the same difference.
+ */
+export async function practiceGrowth(
+  admin: any, ctx: WorkspaceContext, range: IntelRange, comparisons: IntelComparison[],
+): Promise<IntelModule<PracticeGrowthData>> {
+  const sources = ["practice_patient.created_at", "practice_patient.status", "practice_workspace.created_at"];
+  const cumulativeFormula = "count of all practice_patient rows whose status is not 'merged', with no date filter -- a running total, not a period count";
+  const cumulativeSources = ["practice_patient.status"];
+
+  const problems: string[] = [];
+  const [total, workspace] = await Promise.all([
+    hasCapability(ctx, CAP_PATIENT_LIST)
+      ? intelCount(admin.from("practice_patient").select("id", { count: "exact", head: true })
+        .eq("workspace_id", ctx.workspaceId).neq("status", "merged"))
+      : Promise.resolve(null),
+    admin.from("practice_workspace").select("created_at").eq("id", ctx.workspaceId).maybeSingle(),
+  ]);
+
+  const cumulativePatients = total === null
+    ? { value: null, status: "not_permitted" as IntelStatus, reason: `${CAP_PATIENT_LIST} is required to see how many patients this practice has`, formula: cumulativeFormula, sources: cumulativeSources }
+    : total.error
+      ? { value: null, status: "unreadable" as IntelStatus, reason: `could not be read: ${total.error}`, formula: cumulativeFormula, sources: cumulativeSources }
+      : total.count === null
+        ? { value: null, status: "unreadable" as IntelStatus, reason: "the patient register returned no count", formula: cumulativeFormula, sources: cumulativeSources }
+        : { value: total.count, status: "ok" as IntelStatus, reason: null, formula: cumulativeFormula, sources: cumulativeSources };
+  if (cumulativePatients.status === "unreadable") problems.push(`cumulative patients: ${cumulativePatients.reason}`);
+
+  const createdAt = (workspace as any)?.data?.created_at;
+  if ((workspace as any)?.error) problems.push(`recording since: ${(workspace as any).error.message ?? "read failed"}`);
+
+  return intelModule("practice_growth", "Practice Growth", {
+    comparisons,
+    cumulativePatients,
+    recordingSince: typeof createdAt === "string" ? createdAt.slice(0, 10) : null,
+    priorPeriod: {
+      fromDay: range.prior.fromDay, toDay: range.prior.toDay,
+      usable: range.priorUsable, reason: range.priorReason,
+    },
+  }, sources, problems);
+}
+
+// ── 10. AI PRACTICE INTELLIGENCE ─────────────────────────────────────────────────────────────────────
+
+export type GroundedFigure = {
+  key: string;
+  label: string;
+  value: number | null;
+  unit: string;
+  /** The calculation, in words. An assistant that cannot state this may not state the number. */
+  formula: string;
+  /** table.column identifiers. CORE-001 s16's "traceable basis", carried rather than promised. */
+  sources: string[];
+  periodFromDay: string;
+  periodToDay: string;
+};
+
+export type RefusedClaim = {
+  claim: string;
+  why: string;
+  /** What would have to exist in this product before the claim could be made at all. */
+  wouldRequire: string;
+};
+
+export type AiPracticeIntelligenceData = {
+  /** The complete set of figures an assistant may cite about this practice, and nothing else. */
+  authorisedFigures: GroundedFigure[];
+  /** Claims the design asks for that cannot be grounded. Named so they are refused rather than forgotten. */
+  refusedClaims: RefusedClaim[];
+  /** Always true. This module produces no sentence, no prediction and no comparison of its own. */
+  groundingOnly: true;
+  asOfIso: string;
+};
+
+/**
+ * AI PRACTICE INTELLIGENCE -- THE GROUNDING CONTRACT, NOT THE INSIGHTS.
+ *
+ * ────────────────────────────────────────────────────────────────────────────────────────────────────
+ * ⚠ THE COMP'S AI CARD READS: "your headache/migraine follow-up completion rate is 14% lower than
+ * average. Consider earlier review scheduling." THAT SENTENCE IS NOT IMPLEMENTABLE AND IT IS IMPORTANT TO
+ * SAY EXACTLY WHY, BECAUSE IT LOOKS SO REASONABLE.
+ *
+ * "Lower than average" requires an average of OTHER PRACTICES. This product holds one practice's records
+ * per workspace, has no cross-tenant read path, no consented data-sharing agreement, no case-mix
+ * adjustment and no approved statistical method. Manufacturing a baseline from the practice's own other
+ * diagnoses would be a different claim wearing the same words -- and a practitioner reading "14% lower
+ * than average" will reasonably assume it means other doctors.
+ *
+ * CORE-001 s3: "No fabricated intelligence: No comparison, prediction or clinical cohort is shown unless
+ * supported by recorded data and an approved method." s16: "No AI statement appears without authorised
+ * source data and a traceable basis."
+ *
+ * So this module generates NO SENTENCES. It returns the exact set of figures an assistant is authorised
+ * to cite about this practice, each carrying its own formula and its own table.column sources, plus the
+ * claims that were REFUSED and what each would require. An assistant grounded on this can say "your
+ * follow-up completion for this period was 72 of 96, and 31 of those are not yet due"; it cannot say
+ * "lower than average", because no figure it has been handed is an average of anything.
+ *
+ * It also calls no model and writes no row: the AI orchestration layer is CPR-210's, and CORE-001 s4 is
+ * explicit that the assistant "does not become a source of truth".
+ * ────────────────────────────────────────────────────────────────────────────────────────────────────
+ */
+export function aiPracticeIntelligence(
+  range: IntelRange, metrics: PracticeMetrics, comparisons: IntelComparison[], atTime: Date = new Date(),
+): IntelModule<AiPracticeIntelligenceData> {
+  const period = { periodFromDay: range.period.fromDay, periodToDay: range.period.toDay };
+
+  const authorisedFigures: GroundedFigure[] = [
+    // Only metrics that STAND. A null is not a fact about a practice and must never be handed to a
+    // generator, which will reach for a plausible number the moment it is given a labelled blank.
+    ...Object.values(metrics.metrics)
+      .filter(m => m.status === "ok" && m.value !== null)
+      .map(m => ({ key: m.key, label: m.label, value: m.value, unit: m.unit, formula: m.formula, sources: m.sources, ...period })),
+    // And only comparisons that were EARNED. A refused comparison is deliberately absent rather than
+    // present-and-null, for the same reason.
+    ...comparisons
+      .filter(c => c.status === "ok" && c.change !== null)
+      .map(c => ({
+        key: `${c.key}_change`, label: `${c.label}: change against ${range.prior.label}`,
+        value: c.change, unit: "count", formula: c.formula, sources: c.sources, ...period,
+      })),
+  ];
+
+  const refusedClaims: RefusedClaim[] = [
+    {
+      claim: "Your follow-up completion for a given condition is lower than average.",
+      why: "There is no average. This product holds one practice per workspace, has no cross-tenant read path and no consented data-sharing arrangement, so there is no population to be below.",
+      wouldRequire: "A consented multi-practice dataset, an approved case-mix adjustment, and a documented statistical method -- none of which exists in this product or is specified anywhere in CPR-V5-003.",
+    },
+    {
+      claim: "Any comparison against similar practices, peers, national figures or benchmarks.",
+      why: "Identical to the above and named separately because the comp uses all four words. Comparing needs practices this product has never seen.",
+      wouldRequire: "The same consented dataset, plus a defensible definition of 'similar' that a practitioner could challenge.",
+    },
+    {
+      claim: "A percentage change against the previous period where the previous period was not real.",
+      why: "A practice younger than the window it is being compared against has no previous period, and rendering the shortfall as a fall in activity is the most misleading thing this workspace could show. See IntelComparison.",
+      wouldRequire: "Nothing further -- it is computed and returned whenever it IS real, and refused with a reason whenever it is not.",
+    },
+    {
+      claim: "A prediction of future volume, risk, no-show likelihood or deterioration.",
+      why: "No model is trained, validated or approved in this product, and an unvalidated clinical prediction shown next to real counts inherits their credibility.",
+      wouldRequire: "A specified model, a validation set, a recorded approval and a disclosure that it is a prediction. CPR-V5-003 specifies none of these.",
+    },
+    {
+      claim: "A clinical recommendation, such as scheduling reviews earlier for a named condition.",
+      why: "CORE-001 s4: the assistant 'does not become a source of truth'. A recommendation derived from a count is guidance this product has no authority to issue.",
+      wouldRequire: "An approved clinical rule base with provenance, which is CPR-210's territory and is not built.",
+    },
+  ];
+
+  return intelModule("ai_practice_intelligence", "AI Practice Intelligence", {
+    authorisedFigures, refusedClaims, groundingOnly: true as const, asOfIso: atTime.toISOString(),
+  }, ["src/lib/practice/metrics.ts (every figure carries its own sources)"], []);
+}
+
+// ── THE ASSEMBLER ────────────────────────────────────────────────────────────────────────────────────
+
+export type PracticeIntelligenceWorkspace = {
+  /** s12: "Every dashboard response must include an as_of timestamp and timezone." */
+  asOfIso: string;
+  timezone: string;
+  range: IntelRange;
+  /** False when the caller may not see reports at all. Every module then carries the same reason. */
+  permitted: boolean;
+  /** True when the caller holds patient.view. Counts without names is a real state, not a degraded one. */
+  identified: boolean;
+  modules: {
+    overview: IntelModule<OverviewData>;
+    clinicalActivity: IntelModule<ClinicalActivityData>;
+    patients: IntelModule<PatientIntelligenceData>;
+    orders: IntelModule<never>;
+    procedures: IntelModule<ProcedureIntelligenceData>;
+    followUps: IntelModule<FollowUpIntelligenceData>;
+    documents: IntelModule<DocumentIntelligenceData>;
+    locations: IntelModule<LocationIntelligenceData>;
+    growth: IntelModule<PracticeGrowthData>;
+    ai: IntelModule<AiPracticeIntelligenceData>;
+  };
+  /** The doctrine, in the payload, so no client can render any of this as a rate. */
+  ratesComputed: false;
+  /** True only when NOTHING could be read. One dead table must not blank the workspace (s14). */
+  unavailable: boolean;
+};
+
+/**
+ * The whole workspace, for one range.
+ *
+ * CPR-V5-003 UX: "Dashboard with drill-down views. Global filters. Exports. No direct data entry." This
+ * is the read model behind all four; it writes nothing, and the caller owns the access log (see the
+ * section header on why the logging is not in here).
+ *
+ * THE SHARED READS HAPPEN ONCE AND ARE PASSED DOWN. practiceMetrics, caseMix and outcomePicture are each
+ * called exactly once and their results handed to every module that needs them, so no two modules can
+ * disagree about the same figure and a clinic's connectivity is not spent reading the same table five
+ * times. That is s16 enforced by construction rather than by convention.
+ *
+ * EACH MODULE FAILS ALONE -- s14 partial failure: "Render available cards and show retry on the failed
+ * card." A module that could not read returns its reason; the other nine stand.
+ */
+export async function practiceIntelligenceWorkspace(
+  admin: any, ctx: WorkspaceContext, opts: { fromDay?: string; toDay?: string; days?: number } = {},
+  atTime: Date = new Date(),
+): Promise<PracticeIntelligenceWorkspace> {
+  const range = await intelRange(admin, ctx.workspaceId, opts);
+  const permitted = hasCapability(ctx, CAP_REPORT);
+
+  // report.view is the gate on the whole workspace -- navigation.ts gates the route on it and migration
+  // 191 grants it to every role that has any business reading a report. Refused here as a stated reason
+  // on every module rather than as an empty page, so the shell can explain itself (s14 permission denied:
+  // "Hide or disable the action with an explanatory message").
+  if (!permitted) {
+    const reason = `${CAP_REPORT} is required to see practice intelligence`;
+    return {
+      asOfIso: atTime.toISOString(), timezone: range.timezone, range, permitted: false, identified: false,
+      modules: {
+        overview: intelUnavailable("overview", "Overview", reason),
+        clinicalActivity: intelUnavailable("clinical_activity", "Clinical Activity", reason),
+        patients: intelUnavailable("patient_intelligence", "Patient Intelligence", reason),
+        orders: ordersIntelligence(),
+        procedures: intelUnavailable("procedure_intelligence", "Procedure Intelligence", reason),
+        followUps: intelUnavailable("followup_intelligence", "Follow-up Intelligence", reason),
+        documents: intelUnavailable("document_intelligence", "Document Intelligence", reason),
+        locations: intelUnavailable("location_intelligence", "Location Intelligence", reason),
+        growth: intelUnavailable("practice_growth", "Practice Growth", reason),
+        ai: intelUnavailable("ai_practice_intelligence", "AI Practice Intelligence", reason),
+      },
+      ratesComputed: false, unavailable: true,
+    };
+  }
+
+  // The shared reads, once. Overview owns practiceMetrics; caseMix and outcomePicture are this file's
+  // existing owners of the diagnosis, procedure-label and outcome counts.
+  const [overview, mix, outcomes] = await Promise.all([
+    overviewIntelligence(admin, ctx, range),
+    caseMix(admin, ctx, range.period),
+    outcomePicture(admin, ctx, range.period),
+  ]);
+
+  const metrics = overview.data!.metrics;
+  const comparisons = overview.data!.comparisons;
+
+  const [clinicalActivity, patients, procedures, followUps, documents, locations, growth] = await Promise.all([
+    clinicalActivityIntelligence(admin, ctx, range, metrics),
+    patientIntelligence(admin, ctx, range, metrics),
+    procedureIntelligence(admin, ctx, range, outcomes, mix),
+    followUpIntelligence(admin, ctx, range, metrics, outcomes),
+    documentIntelligence(admin, ctx, range),
+    locationIntelligence(admin, ctx, range),
+    practiceGrowth(admin, ctx, range, comparisons),
+  ]);
+
+  const modules = {
+    overview, clinicalActivity, patients,
+    orders: ordersIntelligence(),
+    procedures, followUps, documents, locations, growth,
+    ai: aiPracticeIntelligence(range, metrics, comparisons, atTime),
+  };
+
+  return {
+    asOfIso: atTime.toISOString(),
+    timezone: range.timezone,
+    range,
+    permitted: true,
+    identified: hasCapability(ctx, CAP_PATIENT_VIEW),
+    modules,
+    ratesComputed: false,
+    // Orders is unavailable by design and the AI module is always computable, so neither counts toward a
+    // total failure. Only a workspace where every module that HAS a store produced nothing at all is
+    // unavailable -- a module that is honestly empty because nothing happened is a working page, not a
+    // broken one, and a module carrying a disclosure in `problems` still produced its data.
+    unavailable: metrics.unavailable
+      && [clinicalActivity, patients, procedures, followUps, documents, locations, growth]
+        .every(m => m.data === null),
+  };
+}

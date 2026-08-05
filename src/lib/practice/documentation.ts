@@ -244,6 +244,23 @@ export async function saveNoteSegment(admin: any, args: {
   await admin.from("practice_note_draft").delete()
     .eq("encounter_id", args.encounterId).eq("note_type", args.noteType).eq("author_id", args.actorId);
 
+  // CPR-CORE-001 s13: a state-changing action leaves an audit entry. The version row above is not it, and
+  // the difference is not pedantry -- a version is CLINICAL history, read by whoever opens the note and
+  // scoped to one encounter, so answering "who wrote in this practice's records on Tuesday" from it means
+  // opening every record to find out. The workspace trail answers that without opening any.
+  //
+  // ⚠ THE BODY IS NOT IN THE PAYLOAD. Anybody holding access.review can read this trail; a note's text is
+  // the clinical content the trail exists to account for, not something to copy into it. The version
+  // number is what points at the text for a reader who is entitled to it.
+  //
+  // A NO-OP SAVE RETURNED EARLIER and writes nothing here either: an entry saying somebody changed a note
+  // they did not change is a false entry, and the trail is worth exactly what its worst row is worth.
+  await audit(admin, {
+    workspaceId: args.workspaceId, actorId: args.actorId, eventType: "practice.note_saved",
+    payload: { encounterId: args.encounterId, noteType: args.noteType, version, source },
+    correlationId: args.correlationId,
+  });
+
   return { ok: true, data: { noteType: args.noteType, version, changed: true } };
 }
 
@@ -442,6 +459,20 @@ export async function updateDocument(admin: any, args: {
   if (error) return { ok: false, status: 422, code: "REFUSED_BY_DATABASE", message: error.message };
   if (!updated) return { ok: false, status: 409, code: "VERSION_CONFLICT", message: "the document changed underneath you; reload and retry" };
 
+  // s13 again. Creating, signing, issuing and amending a document each left an entry; EDITING one did
+  // not, so the trail read as though a letter sprang into existence and was signed unchanged. WHICH
+  // FIELDS MOVED, NOT WHAT THEY BECAME -- the body of a referral is clinical content and the trail is
+  // readable by anybody holding access.review; the record version is the pointer for a reader entitled
+  // to the text itself.
+  await audit(admin, {
+    workspaceId: args.workspaceId, actorId: args.actorId, eventType: "practice.document_updated",
+    payload: {
+      documentId: doc.id, recordVersion: doc.record_version + 1,
+      fields: ["title", "body", "addressedTo", "docType"].filter(
+        f => (args as Record<string, unknown>)[f] !== undefined),
+    },
+    correlationId: args.correlationId,
+  });
   return { ok: true, data: { recordVersion: doc.record_version + 1 } };
 }
 

@@ -15,10 +15,19 @@ import { logAccess } from "@/lib/practice/privacy";
 // writing to the clinical record; minting attachment.upload would let a practice grant the ability to
 // add clinical content to somebody it had not trusted with clinical content.
 //
+// ⚠ AND LISTING TAKES encounter.list, FOR THE SAME REASON AND A SHARPER ONE. This route shipped naming
+// `encounter.view`, which is not a capability and never has been -- migration 194 seeds encounter.create,
+// encounter.edit, encounter.list and encounter.sign, and nothing anywhere grants encounter.view. So
+// hasCapability returned false for EVERY caller including the practice owner, and every GET here answered
+// 403: no attachment could be listed and no signed link could be obtained, by anybody. The third time
+// this codebase has invented a plausible capability code and silently disabled a feature with it
+// (`practice.calendar.manage`, `appointment.view`), which is why the audit harness now checks every code
+// this product names against practice_role_capabilities rather than against a list somebody re-typed.
+//
 // OPENING ONE IS A READ OF A PATIENT RECORD and is logged (CPR-370), like any other.
 
 export async function GET(req: NextRequest) {
-  const auth = await requirePracticeContext("encounter.view");
+  const auth = await requirePracticeContext("encounter.list");
   if (isDenied(auth)) return auth;
 
   const url = new URL(req.url);

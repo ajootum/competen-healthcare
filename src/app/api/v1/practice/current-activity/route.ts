@@ -36,9 +36,11 @@ export async function POST(req: NextRequest) {
         activityType: body.activityType, title: body.title, planDate: body.planDate,
         plannedStartMinute: Number(body.plannedStartMinute), plannedEndMinute: Number(body.plannedEndMinute),
         facilityId: body.facilityId ?? null, locationId: body.locationId ?? null, room: body.room ?? null,
-      })
-      : body.action === "start" ? await startActivity(admin, auth.ctx, String(body.id ?? ""))
-        : body.action === "end" ? await endActivity(admin, auth.ctx, String(body.id ?? ""))
+        // The trail's correlation id is the request's own trace id, so an audit entry and the response the
+        // practitioner saw can be put beside each other afterwards.
+      }, { correlationId: auth.caller.traceId })
+      : body.action === "start" ? await startActivity(admin, auth.ctx, String(body.id ?? ""), { correlationId: auth.caller.traceId })
+        : body.action === "end" ? await endActivity(admin, auth.ctx, String(body.id ?? ""), { correlationId: auth.caller.traceId })
           : { ok: false as const, status: 400, code: "UNKNOWN_ACTION", message: `no such action: ${body.action}` };
 
   if (!result.ok)

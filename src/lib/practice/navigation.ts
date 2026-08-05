@@ -136,6 +136,9 @@ export const PRACTICE_NAV: PracticeNavItem[] = [
   // CPR-V3-002 "Insights". Analytics and Patient Insights both exist and both sit under Practice Home
   // until this section is built -- filing them under a section that does not exist would orphan them.
   { href: "/practice/assistant", label: "Practice Assistant", icon: "✧", capability: "encounter.list", group: "Intelligence", phase: 5, built: true, primary: true },
+  // The user-facing handbook. NO CAPABILITY: what the product will and will not do is not a permission,
+  // and the one person who most needs it is a locum on their first morning holding the fewest of them.
+  { href: "/practice/documentation", label: "Documentation", icon: "?", capability: null, group: "Setup", phase: 9, built: true, primary: true },
   { href: "/practice/setup", label: "Practice Setup", icon: "⚙", capability: null, group: "Setup", phase: 8, built: true, primary: true },
 
   // ══ EVERYTHING ELSE, FILED UNDER THE SECTION THAT OWNS IT ════════════════════════════════════════
@@ -217,6 +220,7 @@ export const PRIMARY_ORDER: string[] = [
   // is the only workspace that cannot change a record.
   "/practice/intelligence",
   "/practice/setup",
+  "/practice/documentation",
 ];
 
 /**
@@ -227,13 +231,23 @@ export const PRIMARY_ORDER: string[] = [
  * part of the frozen design, so it is written down rather than derived from a property that was added
  * for a different purpose and could drift away from it.
  */
+/** The sections below Workspace claim these. Declared once so Workspace can be "everything else". */
+const CLAIMED_BY_LATER_SECTIONS = ["/practice/intelligence", "/practice/setup", "/practice/documentation"];
+
 export const SIDEBAR_SECTIONS: { label: string; hrefs: string[] }[] = [
   // CPR-V5-003's comp draws three groups, not two: the operational workspace, then INSIGHTS holding
   // Practice Intelligence alone, then ADMINISTRATION. The separation is the point -- everything above the
   // line changes records and Practice Intelligence only reads them ("no direct data entry", V5-003 UX).
-  { label: "Workspace", hrefs: PRIMARY_ORDER.filter(h => h !== "/practice/setup" && h !== "/practice/intelligence") },
+  // ⚠ WORKSPACE IS "EVERYTHING NOT CLAIMED BELOW", not a hand-maintained exclusion list. Written as
+  // `filter(h => h !== setup && h !== intelligence)` it silently duplicated Documentation into two
+  // sections the moment one was added -- every new section would have needed a matching exclusion here,
+  // and the day somebody forgot, an item would appear twice and look deliberate.
+  { label: "Workspace", hrefs: PRIMARY_ORDER.filter(h => !CLAIMED_BY_LATER_SECTIONS.includes(h)) },
   { label: "Insights", hrefs: ["/practice/intelligence"] },
   { label: "Administration", hrefs: ["/practice/setup"] },
+  // Its own group rather than a child of Administration: somebody looking up what the product refuses
+  // to do is not configuring anything, and burying help inside settings is how it stops being found.
+  { label: "Documentation", hrefs: ["/practice/documentation"] },
 ];
 
 /** The sidebar: CPR-V5-001 s8's eight, in its order, filtered the same two ways everything else is. */
