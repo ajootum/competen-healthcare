@@ -25,7 +25,7 @@ import { sessionMetrics, activeFollowUps, waitingQueue, operationalAlerts } from
 import { runProvisioning, type IndividualRequest } from "../src/lib/practice/provisioning";
 import { registerPatient } from "../src/lib/practice/patients";
 import { launchEncounter } from "../src/lib/practice/encounters";
-import { PRACTICE_NAV, primaryNav, childrenOf, orphanedNav } from "../src/lib/practice/navigation";
+import { PRACTICE_NAV, primaryNav, childrenOf, orphanedNav, SIDEBAR_SECTIONS } from "../src/lib/practice/navigation";
 import { dashboardReadModel } from "../src/lib/practice/dashboard";
 import { GLANCE_SWATCH } from "../src/lib/practice/palette";
 import type { WorkspaceContext } from "../src/lib/practice/access";
@@ -490,7 +490,7 @@ async function main() {
     orphans.map(o => `${o.label} (${o.href}) has no parent section`).join("; "));
 
   const sections = PRACTICE_NAV.filter(i => i.primary);
-  ok("9b. the sidebar declares CPR-V5-002's nine sections", sections.length === 9,
+  ok("9b. the sidebar declares CPR-V5-003's ten sections", sections.length === 10,
     `${sections.length}: ${sections.map(i => i.label).join(", ")}`);
 
   // 9b-order. THE ORDER IS PART OF THE SPECIFICATION, not an accident of where entries sit in the array.
@@ -498,9 +498,9 @@ async function main() {
   // about function -- it is fourth, right after the three ways a practitioner reaches one.
   const V5_ORDER = ["/practice/home", "/practice/today", "/practice/calendar", "/practice/patients",
     "/practice/encounters", "/practice/documents", "/practice/follow-ups", "/practice/assistant",
-    "/practice/setup"];
+    "/practice/intelligence", "/practice/setup"];
   const rendered = primaryNav([...new Set(PRACTICE_NAV.map(i => i.capability).filter(Boolean))] as string[]);
-  ok("9b-order. and renders them in the order V5-002 lists",
+  ok("9b-order. and renders them in the order the specifications list",
     rendered.map(i => i.href).join() === V5_ORDER.join(), rendered.map(i => i.href).join(" "));
 
   // A section that is not built must not render, and must not be used as a parent -- a module filed under
@@ -516,7 +516,7 @@ async function main() {
   const allCaps = [...new Set(PRACTICE_NAV.map(i => i.capability).filter(Boolean))] as string[];
   const shown = primaryNav(allCaps);
   ok("9d-control. an owner sees the built sections, not an empty sidebar",
-    shown.length === sections.filter(i => i.built).length && shown.length === 9, `${shown.length} shown`);
+    shown.length === sections.filter(i => i.built).length && shown.length === 10, `${shown.length} shown`);
   // EVERY built non-primary module appears exactly once, under its parent. Asserted as an EQUALITY
   // against the catalogue rather than a threshold: ">= 15" went stale the moment V5-002 promoted
   // Current Session out of the children, and a stale threshold fails for the right reason once and
@@ -531,8 +531,13 @@ async function main() {
   // 9g. V5-002 removes three from PRIMARY and says in the same breath they "remain available
   // contextually". Both halves are asserted, because doing only the first is how a module gets
   // orphaned and doing only the second is how the freeze quietly gains a tenth section.
-  const REMOVED = ["/practice/tasks", "/practice/intelligence", "/practice/reports"];
-  ok("9g. Tasks, Analytics and Patient Insights are not primary navigation",
+  // ⚠ CPR-V5-003 MOVED ONE OF THESE. V5-002 removed Tasks, Analytics and Patient Insights from primary;
+  // V5-003 then made Analytics into the Practice Intelligence SECTION, with Patient Insights inside it.
+  // The assertion follows the later specification rather than continuing to guard a rule that product
+  // change control has since amended -- a test that outlives its own decision is how a freeze becomes
+  // a thing people work around.
+  const REMOVED = ["/practice/tasks", "/practice/reports"];
+  ok("9g. Tasks and Patient Intelligence are not primary navigation",
     REMOVED.every(h => !PRACTICE_NAV.find(i => i.href === h)?.primary),
     REMOVED.filter(h => PRACTICE_NAV.find(i => i.href === h)?.primary).join(", "));
   ok("9g-b. and each is still reachable from the section that owns it",
@@ -545,6 +550,18 @@ async function main() {
     const seg = i.href.replace(/^\/practice\//, "");
     return !existsSync(join(process.cwd(), "src", "app", "practice", "(shell)", seg, "page.tsx"));
   });
+  // 9h. The sections themselves. V5-003 draws three groups, and the separation carries meaning:
+  // everything in Workspace can change a record and Practice Intelligence cannot.
+  ok("9h. the sidebar has the three declared sections, in order",
+    SIDEBAR_SECTIONS.map(x => x.label).join() === "Workspace,Insights,Administration",
+    SIDEBAR_SECTIONS.map(x => x.label).join());
+  ok("9h-b. and every primary section belongs to exactly one of them",
+    PRACTICE_NAV.filter(i => i.primary).every(i =>
+      SIDEBAR_SECTIONS.filter(x => x.hrefs.includes(i.href)).length === 1),
+    PRACTICE_NAV.filter(i => i.primary)
+      .filter(i => SIDEBAR_SECTIONS.filter(x => x.hrefs.includes(i.href)).length !== 1)
+      .map(i => i.href).join(", "));
+
   ok("9f. every built nav entry points at a page that exists", missing.length === 0,
     missing.map(m => m.href).join(", "));
 

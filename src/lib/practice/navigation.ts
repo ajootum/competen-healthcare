@@ -160,8 +160,24 @@ export const PRACTICE_NAV: PracticeNavItem[] = [
   { href: "/practice/inbox", label: "Results & incoming", icon: "▼", capability: "inbox.record", group: "Communication", phase: 5, built: true, parent: "/practice/documents" },
 
   // -- Practice Home: the figures, until Insights ships ---------------------------------------------
-  { href: "/practice/intelligence", label: "Analytics", icon: "☀", capability: "report.view", group: "Intelligence", phase: 5, built: true, parent: "/practice/home" },
-  { href: "/practice/reports", label: "Patient Insights", icon: "☷", capability: "report.view", group: "Patients", phase: 6, built: true, parent: "/practice/home" },
+  // ── CPR-V5-003: ANALYTICS AND PATIENT INSIGHTS BECOME ONE SECTION ───────────────────────────────
+  //
+  // They sat under the Command Centre as two separate children, which was two answers to one question:
+  // "Analytics" counted activity and "Patient Insights" counted cohorts, from the same encounters, on
+  // two screens neither of which was the whole picture. CPR-V5-003 makes Practice Intelligence a
+  // workspace of its own with both inside it.
+  //
+  // ⚠ THIS AMENDS THE CPR-V5-002 FREEZE, WHICH IS ALLOWED ONLY THIS WAY. s17 of CPR-CORE-001: no card or
+  // section changes "unless approved through product change control". CPR-V5-003 IS that approval, and it
+  // is recorded here rather than assumed -- the freeze is worth nothing if it can be amended by whoever
+  // is editing the file.
+  //
+  // The two routes are KEPT and re-parented, not deleted: both are built, both work, and a section that
+  // absorbs two screens still has to be able to open them. They become children of Practice Intelligence.
+  { href: "/practice/intelligence", label: "Practice Intelligence", icon: "◫", capability: "report.view", group: "Intelligence", phase: 5, built: true, primary: true },
+  // "Patient Insights" is CPR-V5-003's "Patient Intelligence" module. Kept at its own route until the
+  // workspace's tabs exist, so the cohort counts stay reachable rather than disappearing into a promise.
+  { href: "/practice/reports", label: "Patient Intelligence", icon: "☷", capability: "report.view", group: "Patients", phase: 6, built: true, parent: "/practice/intelligence" },
 
   // -- AI Assistant: thinking about the work --------------------------------------------------------
   // CPR-220. NOT /practice/case-memory -- that slug is the public marketing page for this capability.
@@ -197,6 +213,9 @@ export function visibleNav(capabilities: string[]): PracticeNavItem[] {
 export const PRIMARY_ORDER: string[] = [
   "/practice/home", "/practice/today", "/practice/calendar", "/practice/patients",
   "/practice/encounters", "/practice/documents", "/practice/follow-ups", "/practice/assistant",
+  // CPR-V5-003. Its own section, below the operational workspace and above administration, because it
+  // is the only workspace that cannot change a record.
+  "/practice/intelligence",
   "/practice/setup",
 ];
 
@@ -209,7 +228,11 @@ export const PRIMARY_ORDER: string[] = [
  * for a different purpose and could drift away from it.
  */
 export const SIDEBAR_SECTIONS: { label: string; hrefs: string[] }[] = [
-  { label: "Navigation", hrefs: PRIMARY_ORDER.filter(h => h !== "/practice/setup") },
+  // CPR-V5-003's comp draws three groups, not two: the operational workspace, then INSIGHTS holding
+  // Practice Intelligence alone, then ADMINISTRATION. The separation is the point -- everything above the
+  // line changes records and Practice Intelligence only reads them ("no direct data entry", V5-003 UX).
+  { label: "Workspace", hrefs: PRIMARY_ORDER.filter(h => h !== "/practice/setup" && h !== "/practice/intelligence") },
+  { label: "Insights", hrefs: ["/practice/intelligence"] },
   { label: "Administration", hrefs: ["/practice/setup"] },
 ];
 
