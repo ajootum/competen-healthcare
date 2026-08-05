@@ -31,8 +31,13 @@ const toMinutes = (v: string) => {
 
 type Mode = null | "edit" | "duplicate" | "confirm-delete";
 
-export default function SessionCard({ session, locations, kindHue }: {
-  session: any; locations: any[]; kindHue: string;
+/** The glyph on a session card, by what kind of place it is. */
+const PLACE_GLYPH: Record<string, string> = {
+  hospital: "⌂", clinic: "✚", outreach: "◈", teleconsultation: "▭", independent: "▣",
+};
+
+export default function SessionCard({ session, locations, clinics = [], kindHue }: {
+  session: any; locations: any[]; clinics?: any[]; kindHue: string;
 }) {
   const router = useRouter();
   const [mode, setMode] = useState<Mode>(null);
@@ -98,18 +103,36 @@ export default function SessionCard({ session, locations, kindHue }: {
   }
 
   const locName = (id: string | null) =>
-    id ? locations.find(l => l.id === id)?.name ?? "another place" : "anywhere";
+    id ? locations.find(l => l.id === id)?.name ?? "another place" : "Anywhere";
+  const locType = (id: string | null) =>
+    (id ? locations.find(l => l.id === id)?.type : null) ?? "clinic";
+  const clinicName = (id: string | null) =>
+    (id ? clinics.find(c => c.id === id)?.name : null) ?? null;
 
   return (
     <li className={`rounded-lg border bg-white px-2 py-1.5 ${suspended ? "border-dashed border-gray-300 opacity-70" : "border-gray-200"}`}
       style={{ borderLeft: `3px solid ${suspended ? "var(--cp-slate-300)" : kindHue}` }}>
 
+      {/* THE PLACE LEADS, NOT THE TIME. A practitioner scanning a week is answering "where am I on
+          Thursday" far more often than "what time" -- and the comp draws it that way: a tinted glyph in
+          the location's own colour, the place, then the hours, then the clinic inside it. */}
       <div className="flex items-start gap-1">
         <div className="min-w-0 flex-1">
-          <p className="text-[11px] font-semibold text-gray-800">
-            {hhmmOf(session.starts_minute)}–{hhmmOf(session.ends_minute)}
+          <span aria-hidden
+            className="mb-1 flex h-6 w-6 items-center justify-center rounded-md text-[12px]"
+            style={{
+              background: suspended ? "var(--cp-slate-100)" : `color-mix(in srgb, ${kindHue} 14%, white)`,
+              color: suspended ? "var(--cp-slate-400)" : kindHue,
+            }}>
+            {PLACE_GLYPH[locType(session.location_id)] ?? "◎"}
+          </span>
+          <p className="text-[10px] font-bold leading-tight text-gray-900">{locName(session.location_id)}</p>
+          <p className="mt-0.5 text-[10px] font-semibold text-gray-700">
+            {hhmmOf(session.starts_minute)} – {hhmmOf(session.ends_minute)}
           </p>
-          <p className="truncate text-[9px] text-gray-500">{locName(session.location_id)}</p>
+          {clinicName(session.clinic_id) && (
+            <p className="truncate text-[9px] text-gray-500">{clinicName(session.clinic_id)}</p>
+          )}
           {suspended && <p className="text-[9px] font-semibold text-amber-700">Suspended</p>}
         </div>
         <div className="relative shrink-0" ref={menuRef}>

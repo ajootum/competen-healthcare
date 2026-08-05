@@ -16,16 +16,6 @@ import { useRouter } from "next/navigation";
 // are the sentence that leads.
 // ────────────────────────────────────────────────────────────────────────────────────────────────────
 
-const WEEKDAYS = [
-  [1, "Monday"], [2, "Tuesday"], [3, "Wednesday"], [4, "Thursday"],
-  [5, "Friday"], [6, "Saturday"], [7, "Sunday"],
-] as const;
-
-const SLOT_KINDS = [
-  ["clinic", "Clinic"], ["telemedicine", "Telemedicine"], ["emergency_reserve", "Emergency reserve"],
-  ["admin", "Admin"], ["blocked", "Blocked"],
-] as const;
-
 const EXCEPTION_KINDS = [
   ["leave", "Leave or holiday", "takes the day"],
   ["closure", "Temporary closure", "takes the day"],
@@ -48,17 +38,17 @@ const toMinutes = (hhmm: string) => {
   return (h || 0) * 60 + (m || 0);
 };
 
-export default function AvailabilityConsole({ locations, clinics, rules, inert, today, canSetRules }: {
-  locations: any[]; clinics: any[]; rules: any[]; inert: any[]; today: string; canSetRules: boolean;
+export default function AvailabilityConsole({ locations, rules, inert, today, canSetRules, show = "all" }: {
+  locations: any[]; rules: any[]; inert: any[]; today: string; canSetRules: boolean;
+  /** CPR-SCH-002 separates booking rules from schedule editing, so each collapsed card asks for its half. */
+  show?: "all" | "changes" | "booking";
 }) {
+  const showChanges = show === "all" || show === "changes";
+  const showBooking = show === "all" || show === "booking";
   const router = useRouter();
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<{ kind: "ok" | "err"; text: string } | null>(null);
 
-  const [session, setSession] = useState({
-    weekday: "2", from: "09:00", to: "13:00",
-    locationId: locations[0]?.id ?? "", clinicId: "", slotKind: "clinic",
-  });
   const [exception, setException] = useState({
     kind: "leave", fromDate: today, toDate: today, from: "09:00", to: "13:00",
     locationId: "", reason: "",
@@ -99,58 +89,8 @@ export default function AvailabilityConsole({ locations, clinics, rules, inert, 
         </p>
       )}
 
-      <div className="grid gap-4 lg:grid-cols-2">
-        {/* ── Add to the regular week ─────────────────────────────────────────────────────────── */}
-        <section className={card}>
-          <div className="mb-3 flex items-center gap-2">
-            <span aria-hidden className="flex h-6 w-6 items-center justify-center rounded-md bg-violet-100 text-[12px] text-violet-700">＋</span>
-            <h2 className="text-[13px] font-bold text-gray-900">Add a session to the regular week</h2>
-          </div>
-          <form className="flex flex-wrap items-end gap-2" onSubmit={e => {
-            e.preventDefault();
-            send({
-              action: "add_session", weekday: Number(session.weekday),
-              startsMinute: toMinutes(session.from), endsMinute: toMinutes(session.to),
-              locationId: session.locationId || null, clinicId: session.clinicId || null,
-              slotKind: session.slotKind,
-            }, d => `Session added.${generationLine(d.generation)}`);
-          }}>
-            <select value={session.weekday} onChange={e => setSession(s => ({ ...s, weekday: e.target.value }))}
-              className={`${input} w-32`} aria-label="Day of the week">
-              {WEEKDAYS.map(([n, l]) => <option key={n} value={n}>{l}</option>)}
-            </select>
-            <input type="time" value={session.from} onChange={e => setSession(s => ({ ...s, from: e.target.value }))}
-              className={`${input} w-28`} aria-label="Session start" required />
-            <input type="time" value={session.to} onChange={e => setSession(s => ({ ...s, to: e.target.value }))}
-              className={`${input} w-28`} aria-label="Session end" required />
-            <select value={session.locationId} onChange={e => setSession(s => ({ ...s, locationId: e.target.value, clinicId: "" }))}
-              className={`${input} min-w-[140px] flex-1`} aria-label="Location">
-              <option value="">Anywhere</option>
-              {locations.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
-            </select>
-            {clinics.filter(c => c.location_id === session.locationId).length > 0 && (
-              <select value={session.clinicId} onChange={e => setSession(s => ({ ...s, clinicId: e.target.value }))}
-                className={`${input} w-40`} aria-label="Clinic">
-                <option value="">No clinic</option>
-                {clinics.filter(c => c.location_id === session.locationId)
-                  .map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-              </select>
-            )}
-            <select value={session.slotKind} onChange={e => setSession(s => ({ ...s, slotKind: e.target.value }))}
-              className={`${input} w-40`} aria-label="Kind of session">
-              {SLOT_KINDS.map(([k, l]) => <option key={k} value={k}>{l}</option>)}
-            </select>
-            <button type="submit" disabled={busy}
-              className="rounded-lg bg-[var(--cp-primary)] px-3 py-2 text-[12px] font-semibold text-white hover:bg-[var(--cp-primary-deep)] disabled:opacity-50">
-              Add
-            </button>
-          </form>
-          <p className="mt-2 text-[10px] text-gray-400">
-            Adding a session regenerates the next 90 days straight away, so the calendar is right before
-            this message disappears.
-          </p>
-        </section>
-
+      {showChanges && (
+      <div className="grid gap-4">
         {/* ── Dates that differ ───────────────────────────────────────────────────────────────── */}
         <section className={card}>
           <div className="mb-3 flex items-center gap-2">
@@ -207,8 +147,10 @@ export default function AvailabilityConsole({ locations, clinics, rules, inert, 
           </p>
         </section>
       </div>
+      )}
 
-      <div className="grid gap-4 lg:grid-cols-[320px_minmax(0,1fr)]">
+      {showChanges && (
+      <div className="grid gap-4">
         {/* ── Clinics ─────────────────────────────────────────────────────────────────────────── */}
         <section className={card}>
           <div className="mb-3 flex items-center gap-2">
@@ -236,7 +178,11 @@ export default function AvailabilityConsole({ locations, clinics, rules, inert, 
             expected between two clinics in one hospital.
           </p>
         </section>
+      </div>
+      )}
 
+      {showBooking && (
+      <div className="grid gap-4">
         {/* ── Booking rules ───────────────────────────────────────────────────────────────────── */}
         <section className={card}>
           <div className="mb-3 flex items-center gap-2">
@@ -328,6 +274,7 @@ export default function AvailabilityConsole({ locations, clinics, rules, inert, 
           )}
         </section>
       </div>
+      )}
     </div>
   );
 }

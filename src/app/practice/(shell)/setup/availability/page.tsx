@@ -6,6 +6,7 @@ import { hasCapability } from "@/lib/practice/access";
 import { availabilityConfig, bookingPreview } from "@/lib/practice/availability-config";
 import { formatDayTime, formatTime, formatMinuteOfDay } from "@/lib/datetime";
 import AvailabilityConsole from "./AvailabilityConsole";
+import ExpandableCard from "./ExpandableCard";
 import WeekBoard from "./WeekBoard";
 import StepNav, { type Step } from "./StepNav";
 import PatientPreview, { type PreviewDay } from "./PatientPreview";
@@ -219,53 +220,74 @@ export default async function AvailabilityConfigPage({ searchParams }: {
               />
             </div>
 
-            {/* 3. Schedule changes, listed */}
-            {cfg.exceptions.length > 0 && (
-              <section className={card} id="step-3">
-                <div className="mb-3 flex items-center gap-2">
-                  <span aria-hidden className="flex h-6 w-6 items-center justify-center rounded-md bg-amber-100 text-[12px] text-amber-700">⚑</span>
-                  <h2 className="text-[13px] font-bold text-gray-900">Schedule changes</h2>
-                  <span className="text-[11px] text-gray-500">{cfg.exceptions.length} upcoming</span>
-                </div>
-                <ul className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-                  {cfg.exceptions.map((e: any) => (
-                    <li key={e.id} className="rounded-lg border border-l-[3px] border-gray-200 px-3 py-2"
-                      style={{ borderLeftColor: EXC_HUE[e.kind] ?? "var(--cp-slate-300)" }}>
-                      <p className="text-[12px] font-semibold capitalize text-gray-800">
-                        {String(e.kind).replace(/_/g, " ")}
-                      </p>
-                      <p className="text-[11px] text-gray-600">
-                        {e.from_date === e.to_date ? e.from_date : `${e.from_date} → ${e.to_date}`}
-                        {e.starts_minute != null
-                          ? ` · ${formatMinuteOfDay(e.starts_minute)}–${formatMinuteOfDay(e.ends_minute)}`
-                          : " · the whole day"}
-                      </p>
-                      <p className="text-[10px] text-gray-500">
-                        {e.location_id ? locName.get(e.location_id) : "everywhere"}
-                        {e.reason ? ` · ${e.reason}` : ""}
-                      </p>
-                    </li>
-                  ))}
-                </ul>
-              </section>
-            )}
+            {/* ── 3, 4 and 5 are COLLAPSED CARDS ────────────────────────────────────────────────
+                "One clear task per section" only works if the other sections are out of the way. The
+                first build stacked all five open and the weekly board — the primary interaction — ended
+                up competing with three forms nobody had asked for yet. Each header carries what is
+                already configured, so a collapsed card still answers its own question. */}
+            <div id="step-3">
+              <ExpandableCard
+                icon="⚑" iconClass="bg-amber-100 text-amber-700"
+                title="Schedule changes" blurb="Holidays, leave, conferences and extra clinics."
+                summary={cfg.exceptions.length > 0 ? `${cfg.exceptions.length} upcoming` : null}
+                actionLabel="Add change"
+                defaultOpen={activeStep === 3}>
+                {cfg.exceptions.length > 0 && (
+                  <ul className="mb-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                    {cfg.exceptions.map((e: any) => (
+                      <li key={e.id} className="rounded-lg border border-l-[3px] border-gray-200 px-3 py-2"
+                        style={{ borderLeftColor: EXC_HUE[e.kind] ?? "var(--cp-slate-300)" }}>
+                        <p className="text-[12px] font-semibold capitalize text-gray-800">
+                          {String(e.kind).replace(/_/g, " ")}
+                        </p>
+                        <p className="text-[11px] text-gray-600">
+                          {e.from_date === e.to_date ? e.from_date : `${e.from_date} → ${e.to_date}`}
+                          {e.starts_minute != null
+                            ? ` · ${formatMinuteOfDay(e.starts_minute)}–${formatMinuteOfDay(e.ends_minute)}`
+                            : " · the whole day"}
+                        </p>
+                        <p className="text-[10px] text-gray-500">
+                          {e.location_id ? locName.get(e.location_id) : "everywhere"}
+                          {e.reason ? ` · ${e.reason}` : ""}
+                        </p>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+                <AvailabilityConsole
+                  locations={JSON.parse(JSON.stringify(activeLocations))}
+                  rules={JSON.parse(JSON.stringify(cfg.rules))}
+                  inert={JSON.parse(JSON.stringify(cfg.inert))}
+                  today={cfg.today}
+                  canSetRules={hasCapability(ctx, "practice.settings.manage")}
+                  show="changes"
+                />
+              </ExpandableCard>
+            </div>
 
-            {/* 3 + 4: the write forms — exceptions, clinics and booking rules */}
             <div id="step-4">
-              <AvailabilityConsole
-                locations={JSON.parse(JSON.stringify(activeLocations))}
-                clinics={JSON.parse(JSON.stringify(cfg.clinics.filter((c: any) => c.active)))}
-                rules={JSON.parse(JSON.stringify(cfg.rules))}
-                inert={JSON.parse(JSON.stringify(cfg.inert))}
-                today={cfg.today}
-                canSetRules={hasCapability(ctx, "practice.settings.manage")}
-              />
+              <ExpandableCard
+                icon="⚌" iconClass="bg-[var(--cp-info)]/15 text-[var(--cp-info)]"
+                title="Patient booking" blurb="Set how patients can book with you."
+                summary={cfg.rules.length > 0
+                  ? `${cfg.rules.length} rule${cfg.rules.length === 1 ? "" : "s"}` : null}
+                actionLabel="Edit rules"
+                defaultOpen={activeStep === 4}>
+                <AvailabilityConsole
+                  locations={JSON.parse(JSON.stringify(activeLocations))}
+                  rules={JSON.parse(JSON.stringify(cfg.rules))}
+                  inert={JSON.parse(JSON.stringify(cfg.inert))}
+                  today={cfg.today}
+                  canSetRules={hasCapability(ctx, "practice.settings.manage")}
+                  show="booking"
+                />
+              </ExpandableCard>
             </div>
 
             {/* 5. Preview */}
             <section className={card} id="step-5">
               <div className="mb-3 flex flex-wrap items-center gap-2">
-                <span aria-hidden className="flex h-6 w-6 items-center justify-center rounded-md bg-[var(--cp-primary)]/12 text-[12px] text-[var(--cp-primary-deep)]">◉</span>
+                <span aria-hidden className="flex h-6 w-6 items-center justify-center rounded-md bg-cyan-100 text-[12px] text-cyan-700">◉</span>
                 <h2 className="text-[13px] font-bold text-gray-900">What would be offered</h2>
                 <span className="text-[11px] text-gray-500">next fortnight</span>
               </div>

@@ -128,15 +128,16 @@ export default function WeekBoard({ sessions, locations, clinics }: {
 
               {dayOff ? (
                 <button type="button" onClick={() => { setAddingTo(n); setNotice(null); }}
-                  className="flex h-[130px] w-full flex-col items-center justify-center gap-1 rounded-lg text-gray-400 hover:bg-white hover:text-[var(--cp-primary)]">
-                  <span aria-hidden className="text-[18px]">＋</span>
-                  <span className="text-[10px]">Day off</span>
+                  className="group flex h-[130px] w-full flex-col items-center justify-center gap-1 rounded-lg text-gray-400 hover:bg-white hover:text-[var(--cp-primary)]">
+                  <span aria-hidden className="text-[20px] opacity-60">☕</span>
+                  <span className="text-[10px] font-semibold">Day off</span>
+                  <span className="text-[9px] opacity-0 transition-opacity group-hover:opacity-100">+ add a session</span>
                 </button>
               ) : (
                 <ul className="space-y-1.5">
                   {onThisDay.map((s: any) => (
                     <SessionCard key={s.id} session={s}
-                      locations={locations} kindHue={hueFor(s.location_id)} />
+                      locations={locations} clinics={clinics} kindHue={hueFor(s.location_id)} />
                   ))}
                   {/* Multiple sessions per day, which the specification asks for explicitly. */}
                   <li>
@@ -199,10 +200,16 @@ export default function WeekBoard({ sessions, locations, clinics }: {
         </form>
       )}
 
-      <p className="mt-2.5 text-[10px] leading-relaxed text-gray-400">
-        This is your regular week — a day and a time, not fifty-two copies, so changing Tuesday changes
-        every Tuesday. Holidays, leave and one-off clinics go in the next step. Changes save as you make
-        them and the bookable slots are rebuilt straight away.
+      <div className="mt-3 flex items-start gap-2.5 rounded-xl border border-amber-200/70 bg-amber-50/60 px-3 py-2.5">
+        <span aria-hidden className="text-[14px] leading-none text-amber-500">◒</span>
+        <p className="text-[11px] leading-relaxed text-amber-900/90">
+          This is your regular week. Holidays, leave and one-off clinics go in the next step.
+        </p>
+      </div>
+
+      <p className="mt-2 text-[10px] leading-relaxed text-gray-400">
+        A session is a day and a time, not fifty-two copies — so changing Tuesday changes every Tuesday.
+        Changes save as you make them, and the bookable slots are rebuilt straight away.
       </p>
 
       {clinics.length > 0 && (

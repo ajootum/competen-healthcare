@@ -15,6 +15,15 @@ import Link from "next/link";
 // ever would nag about nothing.
 // ────────────────────────────────────────────────────────────────────────────────────────────────────
 
+/** The comp's five hues, by step number. Positional, and it ranks nothing. */
+const STEP_HUE: Record<number, string> = {
+  1: "bg-emerald-100 text-emerald-700",
+  2: "bg-[var(--cp-primary)] text-white",
+  3: "bg-amber-100 text-amber-700",
+  4: "bg-[var(--cp-info)]/15 text-[var(--cp-info)]",
+  5: "bg-cyan-100 text-cyan-700",
+};
+
 export type Step = {
   n: number;
   title: string;
@@ -37,11 +46,14 @@ export default function StepNav({ steps, activeStep }: { steps: Step[]; activeSt
                 aria-current={active ? "step" : undefined}
                 className={`flex items-start gap-2.5 rounded-lg px-2.5 py-2.5 transition ${
                   active ? "bg-[var(--cp-primary)]/[0.07] ring-1 ring-inset ring-[var(--cp-primary)]/20" : "hover:bg-gray-50"}`}>
+                {/* A COLOUR PER STEP, as the comp draws it -- so the five read as five places rather
+                    than one list. The hue is positional and carries no ranking; the only state it
+                    encodes is done (green tick) versus not. */}
                 <span aria-hidden
-                  className={`mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[11px] font-bold ${
+                  className={`mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-[11px] font-bold ${
                     s.done === true ? "bg-emerald-100 text-emerald-700"
-                      : active ? "bg-[var(--cp-primary)] text-white"
-                        : "bg-slate-100 text-slate-500"}`}>
+                      : active ? `${STEP_HUE[s.n] ?? "bg-slate-100 text-slate-500"} ring-2 ring-offset-1 ring-[var(--cp-primary)]/30`
+                        : STEP_HUE[s.n] ?? "bg-slate-100 text-slate-500"}`}>
                   {s.done === true ? "✓" : s.n}
                 </span>
                 <span className="min-w-0">
