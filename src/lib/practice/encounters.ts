@@ -1,6 +1,7 @@
 import { audit } from "@/lib/practice/provisioning";
 import { runningActivityId } from "@/lib/practice/activity";
 import { ENCOUNTER_TRANSITIONS, LOCKED_STATUSES, LIVE_STATUSES } from "@/lib/practice/encounter-constants";
+import { emitEvents, type EventEnvelope, type EventSource, type PracticeEventType } from "@/lib/practice/events";
 
 // PEN-003 Clinical Encounter Engine + CPR-FLOW-001 encounter launch.
 //
@@ -130,27 +131,59 @@ export async function launchEncounter(admin: any, input: LaunchInput): Promise<E
 
 export async function transitionEncounter(admin: any, args: {
   workspaceId: string; encounterId: string; to: string; actorId: string; correlationId: string;
-}): Promise<EngineResult<{ status: string }>> {
-  const { data: enc } = await admin.from("practice_encounter")
-    .select("id, status, record_version").eq("id", args.encounterId).eq("workspace_id", args.workspaceId).maybeSingle();
+  /** Whose work this is. Defaults to the actor, which is right until delegation exists. */
+  practitionerId?: string;
+  source?: EventSource;
+  /** Set when a PAUSE is caused by another encounter displacing this one (CORE-06). */
+  interruptedById?: string | null;
+}): Promise<EngineResult<{ status: string; eventWarnings: string[] }>> {
+  // ⚠ THE ERROR IS CHECKED. Discarded, a failed read became `!enc` and this returned 404 NOT_FOUND --
+  // telling a practitioner their consultation does not exist because a query timed out is the most
+  // alarming way to report a transient failure, and the one they cannot act on.
+  const { data: enc, error: readErr } = await admin.from("practice_encounter")
+    .select("id, status, record_version, patient_id, activity_id, created_by")
+    .eq("id", args.encounterId).eq("workspace_id", args.workspaceId).maybeSingle();
+  if (readErr) return { ok: false, status: 500, code: "READ_FAILED", message: readErr.message };
   if (!enc) return { ok: false, status: 404, code: "NOT_FOUND", message: "Not found" };
   if (!(ENCOUNTER_TRANSITIONS[enc.status] ?? []).includes(args.to))
     return { ok: false, status: 422, code: "ILLEGAL_TRANSITION", message: `${enc.status} cannot become ${args.to}` };
 
+  const practitionerId = args.practitionerId ?? enc.created_by ?? args.actorId;
+
+  // ⚠ ONE ACTIVE ENCOUNTER AT A TIME (s7). Refused HERE with a message a screen can act on, and refused
+  // AGAIN by migration 234's partial unique index -- which is what actually holds when two tabs race.
+  // The engine check exists so the ordinary case is a sentence rather than a constraint violation.
+  if (args.to === "ACTIVE") {
+    const running = await activeEncounterId(admin, args.workspaceId, practitionerId, enc.id);
+    if (running.error) return { ok: false, status: 500, code: "READ_FAILED", message: running.error };
+    if (running.id)
+      return { ok: false, status: 409, code: "ANOTHER_ACTIVE",
+        message: "another consultation is already open. Pause it, or start this one as an interruption." };
+  }
+
+  const now = new Date();
   const patch: Record<string, unknown> = {
     status: args.to, record_version: enc.record_version + 1,
-    updated_at: new Date().toISOString(), updated_by: args.actorId,
+    updated_at: now.toISOString(), updated_by: args.actorId,
   };
-  if (args.to === "COMPLETED") patch.completed_at = new Date().toISOString();
+  if (args.to === "COMPLETED") patch.completed_at = now.toISOString();
   if (args.to === "SIGNED" && enc.status === "COMPLETED") {
-    patch.signed_at = new Date().toISOString();
+    patch.signed_at = now.toISOString();
     patch.signed_by = args.actorId;
   }
+  // Why it was paused, and cleared on the way back so a resumed consultation does not keep claiming it
+  // is still interrupted.
+  if (args.to === "PAUSED") patch.interrupted_by_id = args.interruptedById ?? null;
+  if (args.to === "ACTIVE" && enc.status === "PAUSED") patch.interrupted_by_id = null;
 
   const { data: updated, error } = await admin.from("practice_encounter")
     .update(patch).eq("id", enc.id).eq("record_version", enc.record_version).select("id").maybeSingle();
-  if (error) return { ok: false, status: 422, code: "REFUSED_BY_DATABASE", message: error.message };
-  if (!updated) return { ok: false, status: 409, code: "VERSION_CONFLICT", message: "the encounter changed underneath you; reload and retry" };
+  // 23505 is migration 234's index: another tab won the race between the check above and this write.
+  if (error)
+    return error.code === "23505"
+      ? { ok: false, status: 409, code: "ANOTHER_ACTIVE", message: "another consultation was opened while this one was starting" }
+      : { ok: false, status: 422, code: "REFUSED_BY_DATABASE", message: error.message };
+  if (!updated) return { ok: false, status: 409, code: "VERSION_CONFLICT", message: "the encounter changed underneath you. Reload and retry" };
 
   await recordTransition(admin, args.workspaceId, enc.id, enc.status, args.to, args.actorId);
   await audit(admin, {
@@ -158,7 +191,130 @@ export async function transitionEncounter(admin: any, args: {
     eventType: `practice.encounter_${args.to.toLowerCase()}`, payload: { encounterId: enc.id },
     correlationId: args.correlationId,
   });
-  return { ok: true, data: { status: args.to } };
+
+  // ── s9's domain event, AFTER the write has committed ─────────────────────────────────────────
+  //
+  // Reopening is its own event: COMPLETED -> ACTIVE is not a start, and a projection that treated it as
+  // one would count the patient twice.
+  const eventType = enc.status === "COMPLETED" && args.to === "ACTIVE"
+    ? "encounter.reopened" as const
+    : ENCOUNTER_EVENT[args.to];
+  const eventWarnings = eventType
+    ? await emitEvents(admin, [{
+      eventType, practiceId: args.workspaceId, practitionerId, actorId: args.actorId,
+      source: args.source ?? "web", occurredAt: now,
+      patientId: enc.patient_id ?? null, encounterId: enc.id,
+      activityInstanceId: enc.activity_id ?? null, sessionId: enc.activity_id ?? null,
+      payload: { from: enc.status, to: args.to,
+        ...(args.to === "PAUSED" && args.interruptedById ? { interruptedBy: args.interruptedById } : {}) },
+    } satisfies EventEnvelope])
+    : [];
+
+  return { ok: true, data: { status: args.to, eventWarnings } };
+}
+
+// ── CPR-CORE-001 CORE-05 / CORE-06: INTERRUPTION-SAFE ENCOUNTERS ─────────────────────────────────────
+//
+// The state machine above was already right. What was missing was the CONSTRAINT and the PATH:
+//
+//   s7   "single active foreground encounter. drafts remain accessible."
+//   s6.2 "the original session remains resumable and its queue is preserved", and "interruption time
+//        must not be counted as active consultation time for another patient."
+//   s16  "an emergency interruption does not lose the current clinic queue or active draft."
+//
+// ⚠ THE LAST CLAUSE OF s6.2 IS A METRIC REQUIREMENT WEARING A WORKFLOW'S CLOTHES. metrics.ts already
+// subtracts paused duration from the consult-time average, reading PAUSED out of the transition log --
+// so until something actually PAUSED an encounter, that subtraction was always zero and the average was
+// correct with nothing to correct for. This is what gives it something to subtract.
+
+/** s9's encounter events, keyed by the status being moved to. Reopening is its own word. */
+const ENCOUNTER_EVENT: Record<string, PracticeEventType | undefined> = {
+  ACTIVE: "encounter.started",
+  PAUSED: "encounter.paused",
+  COMPLETED: "encounter.completed",
+};
+
+/**
+ * Is anybody else already in the room?
+ *
+ * Returns the id or null, and the error SEPARATELY -- "nothing is active" and "the lookup failed" must
+ * never collapse into the same answer, because the first permits a start and the second cannot.
+ */
+export async function activeEncounterId(
+  admin: any, workspaceId: string, practitionerId: string, exceptId?: string,
+): Promise<{ id: string | null; error: string | null }> {
+  let q = admin.from("practice_encounter").select("id")
+    .eq("workspace_id", workspaceId).eq("created_by", practitionerId).eq("status", "ACTIVE");
+  if (exceptId) q = q.neq("id", exceptId);
+  const { data, error } = await q.maybeSingle();
+  if (error) return { id: null, error: error.message };
+  return { id: (data as { id: string } | null)?.id ?? null, error: null };
+}
+
+/**
+ * Pause the consultation in progress and open the one that interrupted it.
+ *
+ * ⚠ THE ORDER IS THE WHOLE DESIGN. The running encounter is paused FIRST and the interrupting one is
+ * started SECOND, because the database allows exactly one ACTIVE encounter per practitioner (migration
+ * 234) and doing it the other way round would be refused by the index -- which is the correct failure,
+ * but it would leave the emergency unopened rather than the clinic paused.
+ *
+ * ⚠ IF THE SECOND STEP FAILS, THE FIRST IS ROLLED BACK. There is no transaction to join here -- every
+ * write is its own PostgREST round trip -- so an interruption that pauses a consultation and then fails
+ * to open the emergency would leave a practitioner with nothing active and a patient in front of them.
+ * Resuming is the safe direction, and the failure is reported rather than swallowed.
+ *
+ * The QUEUE IS UNTOUCHED, which is s16's acceptance criterion. Nothing here reads or writes
+ * practice_queue_entry: the people waiting are still waiting, in the same order, and the paused
+ * encounter still holds its own draft.
+ */
+export async function interruptWith(admin: any, args: {
+  workspaceId: string;
+  /** The encounter to open. It must already exist and be DRAFT or PAUSED. */
+  encounterId: string;
+  actorId: string;
+  practitionerId: string;
+  correlationId: string;
+  source?: EventSource;
+}): Promise<EngineResult<{ started: string; paused: string | null; eventWarnings: string[] }>> {
+  const running = await activeEncounterId(admin, args.workspaceId, args.practitionerId, args.encounterId);
+  if (running.error) return { ok: false, status: 500, code: "READ_FAILED", message: running.error };
+
+  const eventWarnings: string[] = [];
+
+  if (running.id) {
+    const paused = await transitionEncounter(admin, {
+      workspaceId: args.workspaceId, encounterId: running.id, to: "PAUSED",
+      actorId: args.actorId, correlationId: args.correlationId, source: args.source,
+      interruptedById: args.encounterId, practitionerId: args.practitionerId,
+    });
+    if (!paused.ok) return paused as EngineResult<never>;
+    eventWarnings.push(...(paused.data.eventWarnings ?? []));
+  }
+
+  const started = await transitionEncounter(admin, {
+    workspaceId: args.workspaceId, encounterId: args.encounterId, to: "ACTIVE",
+    actorId: args.actorId, correlationId: args.correlationId, source: args.source,
+    practitionerId: args.practitionerId,
+  });
+
+  if (!started.ok) {
+    // Put the clinic back. A practitioner left with nothing active is worse than an emergency that
+    // refused to open, because the second says so and the first does not.
+    if (running.id) {
+      const restored = await transitionEncounter(admin, {
+        workspaceId: args.workspaceId, encounterId: running.id, to: "ACTIVE",
+        actorId: args.actorId, correlationId: args.correlationId, source: args.source,
+        practitionerId: args.practitionerId,
+      });
+      if (!restored.ok) return { ok: false, status: 500, code: "INTERRUPT_FAILED_UNRESUMED",
+        message: `the interruption was refused (${started.message}) and the consultation it paused could not be resumed (${restored.message})` };
+    }
+    return started as EngineResult<never>;
+  }
+  eventWarnings.push(...(started.data.eventWarnings ?? []));
+
+  return { ok: true, data: { started: args.encounterId, paused: running.id, eventWarnings } };
 }
 
 /** Guard shared by every clinical write: the encounter must exist here and not be locked. */
