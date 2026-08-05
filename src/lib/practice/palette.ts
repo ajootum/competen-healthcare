@@ -112,7 +112,9 @@ export const GLANCE_SWATCH: Record<string, { badge: string; figure: string; box:
   booked: { badge: "bg-[var(--cp-primary)]/12 text-[var(--cp-primary-deep)]", figure: "text-[var(--cp-primary-deep)]", box: "border-[var(--cp-primary)]/25 bg-[var(--cp-primary)]/5", icon: "▤" },
   waiting: { badge: "bg-amber-100 text-amber-700", figure: "text-amber-700", box: "border-amber-200 bg-amber-50/60", icon: "⏱" },
   completed: { badge: "bg-emerald-100 text-emerald-700", figure: "text-emerald-700", box: "border-emerald-200 bg-emerald-50/60", icon: "✓" },
-  walk_ins: { badge: "bg-violet-100 text-violet-700", figure: "text-violet-700", box: "border-violet-200 bg-violet-50/60", icon: "⚇" },
+  // `walk_in`, matching metrics.ts's MetricKey. The swatch is looked up BY that key, so a mismatch here
+  // silently falls back to the booked swatch and the tile quietly wears the wrong colour.
+  walk_in: { badge: "bg-violet-100 text-violet-700", figure: "text-violet-700", box: "border-violet-200 bg-violet-50/60", icon: "⚇" },
   cancelled: { badge: "bg-rose-100 text-rose-700", figure: "text-rose-700", box: "border-rose-200 bg-rose-50/60", icon: "✕" },
   emergency: { badge: "bg-red-100 text-red-700", figure: "text-red-700", box: "border-red-200 bg-red-50/60", icon: "✚" },
   follow_ups_due: { badge: "bg-sky-100 text-sky-700", figure: "text-sky-700", box: "border-sky-200 bg-sky-50/60", icon: "↻" },

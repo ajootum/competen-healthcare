@@ -5,7 +5,7 @@ import { useState } from "react";
 import Link from "next/link";
 import type { TodaysPlan } from "@/lib/practice/activity";
 import { ACTIVITY_LABEL, ACTIVITY_TYPES, type ActivityType } from "@/lib/practice/activity";
-import type { SessionMetrics } from "@/lib/practice/session";
+import type { SessionWithFigures } from "@/lib/practice/session";
 import { formatMinuteOfDay } from "@/lib/datetime";
 
 // CPR-V5-001 Zone 1: START YOUR DAY / CURRENT ACTIVITY.
@@ -27,7 +27,7 @@ import { formatMinuteOfDay } from "@/lib/datetime";
 
 export default function StartYourDay({ plan, metrics, canPlan }: {
   plan: TodaysPlan;
-  metrics: SessionMetrics | null;
+  metrics: SessionWithFigures | null;
   canPlan: boolean;
 }) {
   const router = useRouter();

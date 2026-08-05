@@ -43,16 +43,50 @@ export type SessionMetrics = {
   minutesElapsed: number;
   /** Null once the planned end has passed -- "remaining" is not a negative number, it is over. */
   minutesRemaining: number | null;
-  patientsSeen: number | null;
   patientsRemaining: number | null;
-  averageMinutesPerPatient: number | null;
-  /** Minutes past the planned end the session is projected to finish. Null when unknowable. */
-  runningBehindMinutes: number | null;
   windowStartIso: string;
   windowEndIso: string;
 };
 
 const clamp = (n: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, n));
+
+/**
+ * A session plus the two patient figures s8 defines and metrics.ts owns.
+ *
+ * ⚠ THIS TYPE EXISTS SO THE SESSION ENGINE CANNOT COUNT PATIENTS. sessionMetrics used to read encounters
+ * and compute patientsSeen and an average itself -- a second, subtly different answer to two of s8's
+ * twelve metrics, living one card away from the first. s16 forbids exactly that. The session engine now
+ * owns the CLOCK (window, progress, elapsed, remaining) and is HANDED the patient figures.
+ */
+export type SessionWithFigures = SessionMetrics & {
+  patientsSeen: number | null;
+  averageMinutesPerPatient: number | null;
+  /** Minutes past the planned end the session is projected to finish. Null when unknowable. */
+  runningBehindMinutes: number | null;
+};
+
+/**
+ * The projection, from figures measured elsewhere.
+ *
+ * ⚠ NULL UNTIL EARNED, and this is the assertion that keeps the comp honest. The mockup prints
+ * "Running behind 12 min" and "18 min" average; both are unknowable until an encounter has finished.
+ * With no average there is no projection -- and this is the one figure on the page somebody would
+ * rearrange an afternoon over, so a default would be a guess wearing a number's clothes.
+ */
+export function withPatientFigures(
+  session: SessionMetrics,
+  patientsSeen: number | null,
+  averageMinutesPerPatient: number | null,
+  at: Date = new Date(),
+): SessionWithFigures {
+  let runningBehindMinutes: number | null = null;
+  if (averageMinutesPerPatient !== null && session.patientsRemaining !== null) {
+    const projectedFinishMs = at.getTime() + session.patientsRemaining * averageMinutesPerPatient * 60000;
+    const behind = Math.round((projectedFinishMs - Date.parse(session.windowEndIso)) / 60000);
+    if (behind > 0) runningBehindMinutes = behind;
+  }
+  return { ...session, patientsSeen, averageMinutesPerPatient, runningBehindMinutes };
+}
 
 /**
  * Zone 1 and Zone 5 of the comp: what this session is, and how it is going.
@@ -79,40 +113,6 @@ export async function sessionMetrics(
   const minutesElapsed = Math.max(0, Math.round((nowMs - startedMs) / 60000));
   const minutesRemaining = nowMs >= windowEndMs ? null : Math.round((windowEndMs - nowMs) / 60000);
 
-  // Encounters inside the window. `.select` with an explicit error check, because a failed read here must
-  // leave the figures NULL rather than reporting a session in which nobody has been seen.
-  //
-  // ⚠ BOUNDED, AND THE BOUND IS LOAD-BEARING. PostgREST caps an unbounded select at 1000 rows, so an
-  // average computed over one would silently understate on a wide window -- and that average feeds
-  // `runningBehindMinutes`, the one figure here somebody might rearrange an afternoon over. With an
-  // explicit limit a full page is DETECTABLE, and a detectable overflow is reported as "not knowable"
-  // rather than quietly averaged over whichever thousand came back first.
-  //
-  // `.lt` on the upper bound, not `.lte`: zonedDayRange's half-open convention, and it has to match the
-  // appointment read below or an encounter starting exactly at the planned end is counted by one and
-  // excluded by the other.
-  const ENC_CAP = 2000;
-  const enc = await admin.from("practice_encounter")
-    .select("id, status, started_at, completed_at")
-    .eq("workspace_id", ctx.workspaceId)
-    .gte("started_at", new Date(windowStartMs).toISOString())
-    .lt("started_at", new Date(windowEndMs).toISOString())
-    .limit(ENC_CAP);
-
-  let patientsSeen: number | null = null;
-  let averageMinutesPerPatient: number | null = null;
-  const overflowed = !enc.error && (enc.data ?? []).length >= ENC_CAP;
-  if (!enc.error && !overflowed) {
-    const done = ((enc.data ?? []) as any[])
-      .filter(e => e.completed_at && ["COMPLETED", "SIGNED", "AMENDED"].includes(e.status));
-    patientsSeen = done.length;
-    if (done.length > 0) {
-      const total = done.reduce((n, e) =>
-        n + Math.max(0, (Date.parse(e.completed_at) - Date.parse(e.started_at)) / 60000), 0);
-      averageMinutesPerPatient = Math.round(total / done.length);
-    }
-  }
-
   // Still to see: appointments in this session's window that are neither finished nor called off.
   const appt = await admin.from("practice_appointment")
     .select("id", { count: "exact", head: true })
@@ -121,14 +121,6 @@ export async function sessionMetrics(
     .lt("scheduled_at", new Date(windowEndMs).toISOString())
     .not("status", "in", "(COMPLETED,CANCELLED,NO_SHOW)");
   const patientsRemaining = appt.error ? null : (appt.count ?? 0);
-
-  // Projected finish, and only when both inputs were measured rather than assumed.
-  let runningBehindMinutes: number | null = null;
-  if (averageMinutesPerPatient !== null && patientsRemaining !== null) {
-    const projectedFinishMs = nowMs + patientsRemaining * averageMinutesPerPatient * 60000;
-    const behind = Math.round((projectedFinishMs - windowEndMs) / 60000);
-    if (behind > 0) runningBehindMinutes = behind;
-  }
 
   return {
     activity,
@@ -141,63 +133,24 @@ export async function sessionMetrics(
       : 0,
     minutesElapsed,
     minutesRemaining,
-    patientsSeen,
     patientsRemaining,
-    averageMinutesPerPatient,
-    runningBehindMinutes,
     windowStartIso: new Date(windowStartMs).toISOString(),
     windowEndIso: new Date(windowEndMs).toISOString(),
   };
 }
 
-// ── TODAY AT A GLANCE (s3) ──────────────────────────────────────────────────────────────────────────
+// ── TODAY AT A GLANCE: MOVED, NOT DELETED ───────────────────────────────────────────────────────────
 //
-// The comp's eight counters. Each is a COUNT OF ROWS matching a status or a type -- there is no derived
-// or blended figure among them, so every tile is the length of a list somebody can open and check.
+// `todayAtAGlance` used to live here and counted the eight tiles itself. Its definitions disagreed with
+// CPR-CORE-001 s8 in five places -- Waiting read from appointment status rather than the queue, so a
+// walk-in was invisible and a patient already in the room was still counted as waiting; Completed
+// counted a clerical desk action rather than a clinical one; Follow-ups Due folded the entire overdue
+// backlog into "due".
 //
-// SCOPED TO THE SESSION WHEN ONE IS RUNNING, to the day otherwise. That is the whole point of s9: the
-// same eight tiles mean "my clinic" during a clinic and "my day" outside one.
-
-export type GlanceTile = { key: string; label: string; count: number | null; href: string; tone: string };
-
-export async function todayAtAGlance(
-  admin: any, ctx: WorkspaceContext,
-  opts: { fromIso: string; toIso: string; today: string; scope: "session" | "day" },
-): Promise<{ tiles: GlanceTile[]; scope: "session" | "day"; unavailable: boolean }> {
-  const base = () => admin.from("practice_appointment")
-    .select("id", { count: "exact", head: true })
-    .eq("workspace_id", ctx.workspaceId)
-    .gte("scheduled_at", opts.fromIso).lt("scheduled_at", opts.toIso);
-
-  const [booked, waiting, completed, walkIns, emergency, cancelled, noShow, followUps] = await Promise.all([
-    base().in("status", ["REQUESTED", "CONFIRMED"]),
-    base().eq("status", "ARRIVED"),
-    base().eq("status", "COMPLETED"),
-    base().eq("appointment_type", "walk_in"),
-    base().eq("appointment_type", "emergency"),
-    base().eq("status", "CANCELLED"),
-    base().eq("status", "NO_SHOW"),
-    admin.from("practice_follow_up").select("id", { count: "exact", head: true })
-      .eq("workspace_id", ctx.workspaceId).in("status", ["OPEN", "SCHEDULED"]).lte("due_on", opts.today),
-  ]);
-
-  const n = (r: any) => (r.error ? null : (r.count ?? 0));
-  const tiles: GlanceTile[] = [
-    { key: "booked", label: "Booked", count: n(booked), href: "/practice/calendar", tone: "primary" },
-    { key: "waiting", label: "Waiting", count: n(waiting), href: "/practice/calendar", tone: "info" },
-    { key: "completed", label: "Completed", count: n(completed), href: "/practice/encounters", tone: "success" },
-    { key: "walk_ins", label: "Walk-ins", count: n(walkIns), href: "/practice/calendar", tone: "warning" },
-    { key: "cancelled", label: "Cancelled", count: n(cancelled), href: "/practice/calendar", tone: "danger" },
-    { key: "emergency", label: "Emergency", count: n(emergency), href: "/practice/calendar", tone: "danger" },
-    { key: "follow_ups_due", label: "Follow-ups Due", count: n(followUps), href: "/practice/follow-ups", tone: "info" },
-    { key: "no_show", label: "No Show", count: n(noShow), href: "/practice/calendar", tone: "neutral" },
-  ];
-  // The scope is the CALLER's, because only it knows whether a session is running. Returned here so the
-  // screen labels the tiles with the window they were actually counted over -- "3 waiting" means very
-  // different things across a clinic and across a day, and an unlabelled figure is the wrong one half
-  // the time.
-  return { tiles, scope: opts.scope, unavailable: tiles.every(t => t.count === null) };
-}
+// The tiles are now a VIEW of src/lib/practice/metrics.ts, assembled in dashboard.ts. This function was
+// removed rather than corrected: s16's rule is not "compute it correctly twice", it is "no widget
+// independently calculates a conflicting version of a shared metric". Two correct implementations drift
+// into two answers just as surely as a wrong one -- only later, and more quietly.
 
 // ── THE WAITING QUEUE, SPLIT THREE WAYS (s4) ────────────────────────────────────────────────────────
 //

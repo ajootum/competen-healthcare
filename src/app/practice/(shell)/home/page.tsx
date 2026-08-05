@@ -186,8 +186,13 @@ export default async function PracticeCommandCentre() {
                   // MEANS something -- see GLANCE_SWATCH. Drawn grey, all eight read at identical weight
                   // and the emergency tile disappears into the no-show tile beside it.
                   const s = GLANCE_SWATCH[t.key] ?? GLANCE_SWATCH.booked;
+                  // s16 requires every metric to be "traceable to source records and a documented
+                  // formula". It travels WITH the number, so the tile can say where it came from
+                  // without anyone opening a spec -- and say why there is no number when there is not.
+                  const why = t.count === null ? (t.reason ?? "No figure available.") : null;
                   return (
                     <Link key={t.key} href={t.href}
+                      title={why ?? `${t.formula} Source: ${t.sources.join(", ")}.`}
                       className={`rounded-lg border px-2.5 py-2 transition-shadow hover:shadow-sm ${s.box}`}>
                       <span className="flex items-center justify-between gap-1">
                         {/* A NULL COUNT RENDERS AN EM DASH. "Could not read" and "none" are different
@@ -200,6 +205,9 @@ export default async function PracticeCommandCentre() {
                         </span>
                       </span>
                       <span className="mt-1 block truncate text-[10.5px] text-gray-600">{t.label}</span>
+                      {why && (
+                        <span className="mt-0.5 block truncate text-[9.5px] leading-tight text-gray-500">{why}</span>
+                      )}
                     </Link>
                   );
                 })}

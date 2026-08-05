@@ -21,11 +21,13 @@ import {
   ACTIVITY_CAPABILITIES,
 } from "../src/lib/practice/activity";
 import { todaysWork, TODAYS_WORK_CAPABILITIES } from "../src/lib/practice/todays-work";
-import { sessionMetrics, todayAtAGlance, activeFollowUps, waitingQueue, operationalAlerts } from "../src/lib/practice/session";
+import { sessionMetrics, activeFollowUps, waitingQueue, operationalAlerts } from "../src/lib/practice/session";
 import { runProvisioning, type IndividualRequest } from "../src/lib/practice/provisioning";
 import { registerPatient } from "../src/lib/practice/patients";
 import { launchEncounter } from "../src/lib/practice/encounters";
 import { PRACTICE_NAV, primaryNav, childrenOf, orphanedNav } from "../src/lib/practice/navigation";
+import { dashboardReadModel } from "../src/lib/practice/dashboard";
+import { GLANCE_SWATCH } from "../src/lib/practice/palette";
 import type { WorkspaceContext } from "../src/lib/practice/access";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
@@ -53,7 +55,11 @@ const ctxFor = (workspaceId: string, userId: string, caps: string[]): WorkspaceC
 // engine capabilities no real user can ever hold, and stayed green against a shape production cannot
 // produce. Assertion 0b now checks every one of these against the table itself.
 const ALL = ["practice.home.view", "appointment.manage", "task.view", "followup.view",
-  "queue.manage", "inbox.record"];
+  "queue.manage", "inbox.record",
+  // ⚠ WITHOUT THESE TWO the metric engine refuses most tiles as not_permitted, and every assertion
+  // about an UNREADABLE glance was quietly testing a permission refusal instead of a failed read.
+  // Two different answers, one em dash, and the fixture could not tell them apart.
+  "practice.calendar.view", "encounter.list"];
 
 async function main() {
   console.log("\n=== CURRENT ACTIVITY / TODAY'S WORK (CPR-V3-001, migration 232) ===\n");
@@ -332,24 +338,32 @@ async function main() {
       // ⚠ THE ASSERTION THAT KEEPS THE COMP HONEST. The mockup prints "18 min" average and "12 min"
       // behind. With no completed encounter both are UNKNOWABLE, and a default would make the one
       // figure somebody reschedules an afternoon over into a guess. Null, not a number.
-      ok("10e. with nothing seen, the average is NULL rather than a default",
-        m.averageMinutesPerPatient === null, String(m.averageMinutesPerPatient));
-      ok("10f. and with no average there is no 'running behind' projection",
-        m.runningBehindMinutes === null, String(m.runningBehindMinutes));
-      ok("10g. patients seen is 0 -- a counted nought, not an unknown",
-        m.patientsSeen === 0, String(m.patientsSeen));
+      // 10e-10g moved to metrics.ts with the figures themselves -- sessionMetrics no longer counts
+      // patients, so asserting it here would be asserting against a function that cannot fail.
 
-      // The glance counts the session window when one runs, and the day when none does. Both must be
-      // readable, and the scope must be REPORTED so the screen can label which one it drew.
-      const sessionGlance = await todayAtAGlance(admin, ctxA, {
-        fromIso: m.windowStartIso, toIso: m.windowEndIso, today, scope: "session",
-      });
-      ok("10h. the glance reports the scope it counted over", sessionGlance.scope === "session");
-      ok("10i. and returns CPR-V5-001 s3's eight tiles", sessionGlance.tiles.length === 8,
-        sessionGlance.tiles.map(t => t.key).join(","));
+      // ⚠ THE GLANCE MOVED. `todayAtAGlance` counted these eight itself and disagreed with s8 in five
+      // places; it is deleted, and the tiles are now a view of metrics.ts assembled in dashboard.ts.
+      // Asserted through the ASSEMBLER, because that is what the page renders.
+      const dash = await dashboardReadModel(admin, ctxA);
+      ok("10h. the glance reports the scope it counted over", dash.glance.scope === "session",
+        dash.glance.scope);
+      ok("10i. and returns s7's eight tiles", dash.glance.tiles.length === 8,
+        dash.glance.tiles.map(t => t.key).join(","));
       ok("10j. every tile opens the list behind its number",
-        sessionGlance.tiles.every(t => t.href.startsWith("/practice/")));
-
+        dash.glance.tiles.every(t => t.href.startsWith("/practice/")));
+      // s16: every metric traceable to a formula and its sources. Carried ON the tile, so the claim is
+      // checkable at the point of use rather than in a document.
+      ok("10i-b. and each carries its formula and the columns it came from",
+        dash.glance.tiles.every(t => t.formula.length > 0 && t.sources.length > 0),
+        JSON.stringify(dash.glance.tiles.map(t => [t.key, t.sources.length])));
+      // ⚠ THE SWATCH IS LOOKED UP BY METRIC KEY. A key with no swatch falls back silently and the tile
+      // wears another metric's colour -- which is exactly what happened when `walk_in` was renamed on
+      // the wrong map. A missing colour is invisible in a diff and obvious only to whoever is scanning
+      // the row at 08:00.
+      ok("10i-c. every tile key has its own swatch, none falling back to another metric's colour",
+        dash.glance.tiles.every(t => Object.prototype.hasOwnProperty.call(GLANCE_SWATCH, t.key)),
+        dash.glance.tiles.filter(t => !Object.prototype.hasOwnProperty.call(GLANCE_SWATCH, t.key))
+          .map(t => t.key).join(","));
       const lenses = await activeFollowUps(admin, ctxA, today);
       ok("10k. follow-ups return s6's five lenses", lenses.length === 5,
         lenses.map(l => l.key).join(","));
@@ -369,16 +383,13 @@ async function main() {
     }
   }
 
-  // A failed read must leave the session figures unknown rather than reporting an idle clinic.
-  const brokenGlance = await todayAtAGlance(admin, ctxFor("not-a-uuid", userA, ALL), {
-    fromIso: "2026-01-01T00:00:00Z", toIso: "2026-01-02T00:00:00Z", today, scope: "day",
-  });
+  // A failed read must leave the figures unknown rather than reporting an idle clinic.
+  const brokenDash = await dashboardReadModel(admin, ctxFor("not-a-uuid", userA, ALL));
   ok("10o. an unreadable glance reports no counts, never eight noughts",
-    brokenGlance.unavailable && brokenGlance.tiles.every(t => t.count === null));
-  ok("10o-control. a readable glance reports counts",
-    (await todayAtAGlance(admin, ctxA, { fromIso: "2026-01-01T00:00:00Z", toIso: "2030-01-01T00:00:00Z", today, scope: "day" }))
-      .tiles.every(t => t.count !== null));
-
+    brokenDash.glance.unavailable && brokenDash.glance.tiles.every(t => t.count === null),
+    JSON.stringify(brokenDash.glance.tiles.map(t => t.count)));
+  ok("10o-control. a readable practice reports counts",
+    (await dashboardReadModel(admin, ctxA)).glance.tiles.some(t => t.count !== null));
   // ── 11. CPR-V5-001 s9 / CPR-V3-001 s6: the encounter INHERITS the context ────────────────────────
   //
   // The claim is that a practitioner who has said what they are doing is never asked again -- so it is

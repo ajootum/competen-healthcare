@@ -2,10 +2,58 @@ import type { WorkspaceContext } from "@/lib/practice/access";
 import { zonedDayRange } from "@/lib/practice/practice-time";
 import { todaysPlan, type TodaysPlan } from "@/lib/practice/activity";
 import {
-  sessionMetrics, todayAtAGlance, waitingQueue, activeFollowUps, operationalAlerts, draftEncounters,
-  type SessionMetrics, type GlanceTile, type FollowUpLens, type Alert, type QueueGroup,
+  sessionMetrics, withPatientFigures, waitingQueue, activeFollowUps, operationalAlerts, draftEncounters,
+  type SessionWithFigures, type FollowUpLens, type Alert, type QueueGroup,
 } from "@/lib/practice/session";
 import { sessionTimeline, type SessionTimeline } from "@/lib/practice/session-timeline";
+import {
+  practiceMetrics, metricScope, type Metric, type MetricKey, type PracticeMetrics,
+} from "@/lib/practice/metrics";
+
+// ── THE GLANCE IS A VIEW OF THE METRICS, NOT A SECOND CALCULATION (CORE-10) ─────────────────────────
+//
+// s7's "Today at a Glance" names eight figures and s8 defines each of them precisely. Until now the tiles
+// were counted by `todayAtAGlance` in session.ts, whose definitions disagreed with s8 in five places --
+// Waiting read from appointment status rather than the queue (so walk-ins were invisible and patients
+// already in the room were counted as waiting), Completed counted a clerical desk action rather than a
+// clinical one, Follow-ups Due folded the whole overdue backlog into "due".
+//
+// That function is now GONE rather than corrected, because s16's rule is not "compute it correctly twice"
+// -- it is "no widget independently calculates a conflicting version of a shared metric". Two correct
+// implementations drift into two answers just as surely as a wrong one, only later and more quietly.
+//
+// This table is the ONLY thing the tiles add: which metric, in what order, and where its list lives. No
+// arithmetic, no query -- everything numeric arrives from metrics.ts already computed, already carrying
+// its own formula and sources.
+const GLANCE_TILES: { key: MetricKey; href: string }[] = [
+  { key: "booked", href: "/practice/calendar" },
+  { key: "waiting", href: "/practice/calendar" },
+  { key: "completed", href: "/practice/encounters" },
+  { key: "walk_in", href: "/practice/calendar" },
+  { key: "cancelled", href: "/practice/calendar" },
+  { key: "emergency", href: "/practice/calendar" },
+  { key: "follow_ups_due", href: "/practice/follow-ups" },
+  { key: "no_show", href: "/practice/calendar" },
+];
+
+/**
+ * A tile is a metric plus the place its list lives.
+ *
+ * `formula` and `sources` ride along because s16 requires every metric to be "traceable to source records
+ * and a documented formula" -- a property of the NUMBER, not of a document somebody may never open, so it
+ * travels with the number and can be rendered beside it.
+ */
+export type GlanceTile = {
+  key: MetricKey;
+  label: string;
+  count: number | null;
+  href: string;
+  status: Metric["status"];
+  /** Why there is no number, in plain language. Null when the value stands. */
+  reason: string | null;
+  formula: string;
+  sources: string[];
+};
 
 /* eslint-disable @typescript-eslint/no-explicit-any -- the Supabase admin client is untyped; every
    engine in src/lib/practice does the same. */
@@ -58,8 +106,10 @@ export type DashboardReadModel = {
     toIso: string;
   };
   plan: TodaysPlan;
-  session: SessionMetrics | null;
+  session: SessionWithFigures | null;
   glance: { tiles: GlanceTile[]; scope: "session" | "day"; unavailable: boolean };
+  /** All twelve of s8's metrics for this scope. The glance shows eight of them. */
+  metrics: PracticeMetrics | null;
   queue: { groups: QueueGroup[]; total: number | null; unavailable: boolean };
   timeline: SessionTimeline;
   followUps: FollowUpLens[];
@@ -115,9 +165,17 @@ export async function dashboardReadModel(
         fromIso: day.startIso, toIso: day.endIso };
 
   // ── 3. THE FEEDERS, IN PARALLEL, EACH ISOLATED.
-  const [glance, queue, timeline, followUps, alerts, drafts] = await Promise.all([
-    feed({ tiles: [], scope: scope.kind, unavailable: true },
-      () => todayAtAGlance(admin, ctx, { fromIso: scope.fromIso, toIso: scope.toIso, today: plan.date, scope: scope.kind })),
+  // s8's twelve metrics for this scope, computed once. The glance tiles are a view of eight of them and
+  // Practice Performance is a view of three more -- one calculation, several readers, which is the whole
+  // of s16's rule.
+  const mScope = metricScope({
+    date: plan.date, timezone: plan.timezone, activityId: scope.sessionId,
+    window: session ? { fromIso: scope.fromIso, toIso: scope.toIso } : null,
+  });
+
+  const [metrics, queue, timeline, followUps, alerts, drafts] = await Promise.all([
+    feed(null as PracticeMetrics | null,
+      () => practiceMetrics(admin, ctx, mScope, at)),
     feed({ groups: [], total: null, unavailable: true },
       () => waitingQueue(admin, ctx, at)),
     feed({ date: plan.date, timezone: plan.timezone, dayStartIso: day.startIso,
@@ -134,9 +192,33 @@ export async function dashboardReadModel(
   // A feeder is unavailable if it threw OR if it reported its own failure. Both are the same thing to a
   // card that has to decide between "nothing here" and "could not tell", and keeping them separate would
   // make every consumer check two flags and eventually check only one.
+  // The tiles, assembled by lookup. A metric that is missing from the map is a programming error rather
+  // than a runtime state, so it is not silently skipped -- it would leave a hole in a frozen layout.
+  const glanceTiles: GlanceTile[] = metrics.value
+    ? GLANCE_TILES.map(({ key, href }) => {
+        const m = metrics.value!.metrics[key];
+        return { key, href, label: m.label, count: m.value, status: m.status,
+          reason: m.reason, formula: m.formula, sources: m.sources };
+      })
+    : [];
+
+  // ⚠ THE SESSION'S PATIENT FIGURES COME FROM metrics.ts, NOT FROM THE SESSION ENGINE. Both used to
+  // count them, one card apart, which is the drift s16 names. The engine owns the clock; s8 owns the
+  // patients. `withPatientFigures` does the projection, so the arithmetic still lives in an engine.
+  const m = metrics.value?.metrics;
+  const sessionWithFigures = session
+    ? withPatientFigures(session, m?.patients_seen.value ?? null, m?.average_consult_time.value ?? null, at)
+    : null;
+
   const feeders: Record<string, FeederState> = {
     plan: plan.unavailable ? "unavailable" : "ok",
-    glance: glance.state === "ok" && !glance.value.unavailable ? "ok" : "unavailable",
+    // ⚠ THE GLANCE IS EIGHT OF THE TWELVE, so its availability is about THOSE EIGHT. Derived from
+    // PracticeMetrics.unavailable it asked "did all twelve fail", and one metric outside the glance
+    // being merely `unknowable` (clinic delay, below its minimum observations) was enough to report a
+    // glance of eight em dashes as healthy. A card must not be judged by figures it does not show.
+    glance: metrics.state === "ok" && glanceTiles.length > 0
+      && !glanceTiles.every(t => t.status === "unreadable" || t.status === "not_permitted")
+      ? "ok" : "unavailable",
     queue: queue.state === "ok" && !queue.value.unavailable ? "ok" : "unavailable",
     timeline: timeline.state === "ok" && !timeline.value.unavailable ? "ok" : "unavailable",
     // A follow-up lens reports failure as a null count rather than a flag, so "every lens is null" is
@@ -153,8 +235,9 @@ export async function dashboardReadModel(
     timezone: plan.timezone,
     scope,
     plan,
-    session,
-    glance: glance.value,
+    session: sessionWithFigures,
+    glance: { tiles: glanceTiles, scope: scope.kind, unavailable: feeders.glance === "unavailable" },
+    metrics: metrics.value,
     queue: queue.value,
     timeline: timeline.value,
     followUps: followUps.value,
