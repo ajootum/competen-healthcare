@@ -177,6 +177,9 @@ export async function sessionTimeline(
         .eq("workspace_id", ctx.workspaceId)
         .eq("practitioner_id", ctx.userId)
         .eq("plan_date", date)
+        // Cancelled blocks are not on the timeline, for the reason todaysPlan gives at length: a timeline
+        // is a record of a day as it happened, and a clinic that was called off did not happen.
+        .is("cancelled_at", null)
         .order("planned_start_minute", { ascending: true })
       : null,
     canQueue

@@ -45,26 +45,43 @@ export const PLANNER_ACTIONS = [
 export type PlannerActionKey = (typeof PLANNER_ACTIONS)[number]["key"];
 
 /**
- * s9's Quick Actions, mapped onto the activity types that actually exist.
+ * s9's Quick Actions, all eight, in s9's own order.
  *
- * ⚠ TWO OF s9's EIGHT ARE MISSING ON PURPOSE. "Add Travel" and "Add Custom Activity" have no type in
- * migration 232's CHECK constraint, which lists eight and neither of them is there. Offering either
- * button would produce a write the database refuses, at the moment a practitioner pressed it. They are
- * listed in PLANNER_REFUSES instead of rendered as a control that does not work.
+ * ⚠ THIS LIST SHIPPED TWO SHORT AND WAS WRONG FOR A DAY. "Add Travel" and "Add Custom Activity" were
+ * withheld here, and the withholding was correct at the time: migration 232's CHECK constraint listed
+ * eight types and neither `travel` nor `custom` was among them, so either button would have produced a
+ * write the database refused at the moment a practitioner pressed it. MIGRATION 237 then added five
+ * types -- meeting, research, leave, travel, custom -- and the refusal became a lie that no test could
+ * see, because a list that is too SHORT still satisfies "every key is a real type".
  *
- * "Add Clinic" is the outpatient clinic, "Add Ward Round" the ward round, and so on -- the label is s9's
- * and the type is 232's, so a screen can show the specification's vocabulary over the schema's.
+ * The lesson is worth the paragraph: a constant that mirrors a database constraint has to be re-read
+ * when the constraint moves, and "every entry is valid" is only half the assertion. The other half is
+ * that the specification's list is complete, which is what the harness now checks.
+ *
+ * The label is s9's and the key is the schema's, so a screen shows the specification's vocabulary over
+ * the database's names. teaching, telephone_review, emergency_consult, research and leave have no quick
+ * action because s9 gives them none -- they are reached through Add Activity, which offers every type.
  */
 export const PLANNER_QUICK_ACTIONS: { key: ActivityType; label: string }[] = [
   { key: "outpatient_clinic", label: "Add Clinic" },
   { key: "ward_round", label: "Add Ward Round" },
   { key: "theatre", label: "Add Theatre" },
   { key: "virtual_clinic", label: "Add Telemedicine" },
-  { key: "telephone_review", label: "Add Telephone Review" },
+  { key: "meeting", label: "Add Meeting" },
   { key: "administration", label: "Add Administration" },
-  { key: "teaching", label: "Add Teaching" },
-  { key: "emergency_consult", label: "Add Emergency Consult" },
+  { key: "travel", label: "Add Travel" },
+  { key: "custom", label: "Add Custom Activity" },
 ];
+
+/**
+ * s9's eight labels, so a harness can prove the quick-action list is COMPLETE and not merely valid.
+ * Kept beside the list rather than re-typed in a test: a re-typed expectation can shrink along with the
+ * thing it is checking and agree with it forever.
+ */
+export const QUICK_ACTION_LABELS_S9 = [
+  "Add Clinic", "Add Ward Round", "Add Theatre", "Add Telemedicine",
+  "Add Meeting", "Add Administration", "Add Travel", "Add Custom Activity",
+] as const;
 
 /** The four states a planner block can be drawn in. "cancelled" is the one migration 236 adds. */
 export const PLANNER_STATE_LABEL: Record<string, string> = {

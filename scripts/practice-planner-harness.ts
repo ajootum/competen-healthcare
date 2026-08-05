@@ -30,6 +30,7 @@ import {
   cancelActivity, changeActivityLocation, addActivityNotes,
   PLANNER_CAPABILITIES, PLANNER_ACTIONS, PLANNER_QUICK_ACTIONS,
 } from "../src/lib/practice/planner";
+import { QUICK_ACTION_LABELS_S9 } from "../src/lib/practice/planner-constants";
 import { ACTIVITY_TYPES } from "../src/lib/practice/activity-constants";
 import { planActivity, startActivity, endActivity, todaysPlan } from "../src/lib/practice/activity";
 import { addSession } from "../src/lib/practice/availability-config";
@@ -166,10 +167,23 @@ async function main() {
       .map(a => a.key).join(", "));
   // s9's quick actions name activity types, and migration 232's CHECK is closed. "Add Travel" and "Add
   // Custom Activity" are absent from PLANNER_QUICK_ACTIONS on purpose -- neither has a type.
-  ok("2d. every quick action names a type migration 232 actually accepts",
+  ok("2d. every quick action names a type the activity CHECK constraint actually accepts",
     PLANNER_QUICK_ACTIONS.every(q => (ACTIVITY_TYPES as readonly string[]).includes(q.key)),
     PLANNER_QUICK_ACTIONS.filter(q => !(ACTIVITY_TYPES as readonly string[]).includes(q.key))
       .map(q => q.key).join(", "));
+  // ⚠ AND THAT THE LIST IS COMPLETE, which is the half that was missing. This module shipped with six of
+  // s9's eight quick actions, withholding Add Travel and Add Custom Activity because migration 232 had
+  // no type for either -- correct then, and silently wrong the moment migration 237 added five types.
+  // "Every entry is valid" passes just as well on a list that is too short.
+  ok("2d-b. ⚠ and s9's EIGHT quick actions are all offered -- a list that is too short still 'validates'",
+    QUICK_ACTION_LABELS_S9.every(l => PLANNER_QUICK_ACTIONS.some(q => q.label === l))
+    && PLANNER_QUICK_ACTIONS.length === QUICK_ACTION_LABELS_S9.length,
+    `missing: ${QUICK_ACTION_LABELS_S9.filter(l => !PLANNER_QUICK_ACTIONS.some(q => q.label === l)).join(", ") || "none"}`);
+  // The types the constraint accepts but s9 gives no button to are reached through Add Activity. Named
+  // so that a screen offering only the quick actions is an obvious omission rather than a silent one.
+  ok("2d-c. control -- the type catalogue is WIDER than the quick actions, and both are readable",
+    ACTIVITY_TYPES.length > PLANNER_QUICK_ACTIONS.length,
+    `${ACTIVITY_TYPES.length} types, ${PLANNER_QUICK_ACTIONS.length} quick actions`);
 
   // The capability guard fires BEFORE any read, so these run with or without the DDL.
   const noCap = ctxFor(wsA, USER_A, ["practice.home.view"]);
@@ -232,8 +246,10 @@ async function main() {
   ok("3a. an EMPTY week still has seven days -- s2, and a day with nothing on it is a row",
     emptyWeek.days.length === 7, `${emptyWeek.days.length}`);
   ok("3b. Monday to Sunday, consecutive, starting on the week's Monday",
+    // Optional-chained on purpose: a week that came back SHORT must be reported as a failed assertion,
+    // not as a thrown TypeError that stops the rest of the harness from running.
     emptyWeek.weekStartDate === W && emptyWeek.days.every((day, i) => day.date === d(i))
-    && emptyWeek.days[0].weekday === 1 && emptyWeek.days[6].weekday === 7,
+    && emptyWeek.days[0]?.weekday === 1 && emptyWeek.days[6]?.weekday === 7,
     `${emptyWeek.weekStartDate} vs ${W}`);
   ok("3c. it is READABLE, and says so -- an empty week is not an unavailable one",
     !emptyWeek.unavailable && emptyWeek.detail === null && emptyWeek.workload !== null,

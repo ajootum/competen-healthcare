@@ -596,6 +596,71 @@ async function main() {
   ok("9f. every built nav entry points at a page that exists", missing.length === 0,
     missing.map(m => m.href).join(", "));
 
+  // ── 12. A CANCELLED ACTIVITY IS NOT WORK (migration 236) ────────────────────────────────────────
+  //
+  // ⚠ THIS SECTION EXISTS BECAUSE MIGRATION 236 CREATED A STATE NOTHING IN THIS FILE KNEW ABOUT. Adding
+  // cancellation to the schema silently changed what every existing read meant: `state` here is derived
+  // from started_at/ended_at alone, so a cancelled row read as "planned" and was indistinguishable from a
+  // live one. Today's Plan offered it as `next`, and startActivity would have STARTED it -- filing every
+  // consultation in it against a clinic the practitioner had already called off, since an encounter
+  // inherits the running activity as its context (CPR-V3-001 s6).
+  //
+  // The general rule, which is the reason this is written out: A MIGRATION THAT ADDS A STATE MUST BE
+  // FOLLOWED BY ASKING WHICH EXISTING QUERIES JUST BECAME WRONG. Nothing failed when 236 was applied.
+  // Every harness stayed green. The new column simply was not in any WHERE clause, and a column nobody
+  // filters on is a column every old query silently ignores.
+  // ⚠ AT MINUTE 1, EARLIER THAN EVERY OTHER PLANNED ACTIVITY ON THIS DAY, AND THAT IS THE WHOLE POINT OF
+  // 12c. The first version put it at 1200, behind two spares -- so `next` was never going to be this
+  // block whether the filter worked or not, and 12c SAT GREEN THROUGH THE DELIBERATE BREAK. An assertion
+  // about ordering has to be arranged so the wrong answer is the one it would give. Same class as the
+  // recorded CPR-300 lesson (every tile count 1 could not distinguish correct order from sorted-by-count)
+  // and the CPR-350 one (a control with an escape hatch). It keeps recurring because a vacuous assertion
+  // looks exactly like a passing one.
+  const cancelDay = await planActivity(admin, ctxA, {
+    activityType: "outpatient_clinic", title: "Clinic that gets called off", planDate: today,
+    plannedStartMinute: 1, plannedEndMinute: 30,
+  });
+  ok("12a-setup. an activity to cancel", cancelDay.ok, JSON.stringify(cancelDay));
+  const cancelledId = cancelDay.ok ? cancelDay.value.id : "";
+
+  // Cancelled through the DATABASE, not the planner engine, on purpose: this section is testing what
+  // activity.ts does with a cancelled row, and routing through planner.ts would make it a test of two
+  // engines agreeing -- which is exactly the assumption that let the gap open.
+  const { error: cancelErr } = await admin.from("practice_activity")
+    .update({ cancelled_at: new Date().toISOString(), cancelled_by: userA, cancellation_reason: "Theatre list pulled" })
+    .eq("id", cancelledId);
+  ok("12a. the row really is cancelled", !cancelErr, cancelErr?.message ?? "");
+
+  const planAfter = await todaysPlan(admin, ctxA, {});
+  ok("12b. a cancelled activity is NOT in today's plan",
+    !planAfter.activities.some(a => a.id === cancelledId),
+    planAfter.activities.map(a => `${a.title}:${a.state}`).join(", "));
+  ok("12c. ⚠ and is never offered as `next` -- the defect that would have sent someone to a cancelled clinic",
+    planAfter.next?.id !== cancelledId, JSON.stringify(planAfter.next));
+
+  const startCancelled = await startActivity(admin, ctxA, cancelledId, {});
+  ok("12d. ⚠ REFUSES to start it, so a stale tab cannot do what the list no longer offers",
+    !startCancelled.ok && startCancelled.code === "CANCELLED", JSON.stringify(startCancelled));
+  ok("12e. and says WHY rather than claiming it does not exist",
+    !startCancelled.ok && /cancelled/i.test(startCancelled.message), JSON.stringify(startCancelled));
+
+  // CONTROL. Without this, 12b/12c/12d pass just as well if todaysPlan returned nothing at all and
+  // startActivity refused everything -- which is precisely what a too-broad filter would look like.
+  const live = await planActivity(admin, ctxA, {
+    activityType: "ward_round", title: "Round that stands", planDate: today,
+    plannedStartMinute: 1300, plannedEndMinute: 1360,
+  });
+  const planWithLive = await todaysPlan(admin, ctxA, {});
+  ok("12f-control. an UNcancelled activity on the same day is still planned, still listed and startable",
+    live.ok && planWithLive.activities.some(a => a.id === (live.ok ? live.value.id : "")),
+    `${JSON.stringify(live)} | ${planWithLive.activities.map(a => a.title).join(", ")}`);
+
+  const { data: timelineRows } = await admin.from("practice_activity")
+    .select("id").eq("plan_date", today).eq("workspace_id", ctxA.workspaceId).is("cancelled_at", null);
+  ok("12g-control. and the cancelled row is still IN THE TABLE -- voided, never deleted (CORE-001 s13)",
+    !(timelineRows ?? []).some((r: { id: string }) => r.id === cancelledId)
+    && (await admin.from("practice_activity").select("id").eq("id", cancelledId).maybeSingle()).data !== null);
+
   await cleanup(userA, userB);
   report();
 }

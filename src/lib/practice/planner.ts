@@ -66,9 +66,10 @@ export const PLANNER_REFUSES = [
     "12:20 slot'. s7 itself marks AI planning recommendations as a future capability. Conflict " +
     "detection and travel-time validation are here because they are RULES: they answer whether the " +
     "buffer the practitioner typed fits between two blocks, which is arithmetic, not advice.",
-  "Offer s9's 'Add Travel' or 'Add Custom Activity' quick actions. Migration 232's CHECK constraint " +
-    "lists eight activity types and neither is among them, so either button would produce a write the " +
-    "database refuses at the moment it was pressed.",
+  "Treat a `leave` or `travel` block as time off the workload. Migration 237 made both real activity " +
+    "types, and this engine counts every planned block in `plannedMinutes` -- including them. That is " +
+    "arithmetic, not a policy: whether a week of leave is a light week or no week at all is the " +
+    "practice's judgement, so `byType` reports the split and nothing here decides it.",
   "Write the weekly template. Dragging Tuesday's clinic moves TUESDAY. 'Permanently Update Template' " +
     "(s6) is editSession() in availability-config.ts and is a separate, deliberate act -- a planner that " +
     "rewrote the regular week from one afternoon would change every future Tuesday silently.",
@@ -189,7 +190,13 @@ export type DayTravel = {
 export type DayWorkload = {
   activityCount: number;
   cancelledCount: number;
-  /** Sum of every block's window. Exceeds `committedMinutes` exactly when blocks overlap. */
+  /**
+   * Sum of every block's window. Exceeds `committedMinutes` exactly when blocks overlap.
+   *
+   * ⚠ THIS COUNTS `leave` AND `travel` TOO (migration 237's types). Deducting them here would be this
+   * engine deciding that a week off is not a week, which is the practice's call and not arithmetic --
+   * so the total is total, and `byType` is where a screen separates them.
+   */
   plannedMinutes: number;
   /** The union of the windows: the time of day actually spoken for, counted once. */
   committedMinutes: number;

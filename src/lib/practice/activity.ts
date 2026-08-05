@@ -172,6 +172,12 @@ export async function todaysPlan(
     .eq("workspace_id", ctx.workspaceId)
     .eq("practitioner_id", ctx.userId)
     .eq("plan_date", date)
+    // ⚠ CANCELLED BLOCKS ARE NOT PART OF TODAY'S PLAN (migration 236). Without this a clinic the
+    // practitioner called off still counted as `next`, and the context header offered it as what to do
+    // next -- state here is derived from started_at/ended_at only, so a cancelled row reads as "planned"
+    // and is indistinguishable from a live one. They ARE still drawn, struck through, on the planner:
+    // that is the screen whose subject is the plan. This one's subject is the work.
+    .is("cancelled_at", null)
     .order("planned_start_minute", { ascending: true });
 
   if (error) return { ...empty, unavailable: true };
@@ -303,8 +309,13 @@ export async function planActivity(
 // The columns an event envelope needs on top of the ones the lifecycle checks need. Selected in the same
 // round trip rather than fetched again at emit time: a second read could see a row another tab had
 // already changed, and the event would then describe a state that never existed.
+// `cancelled_at` is here (migration 236) so the lifecycle can REFUSE a cancelled block by name. Filtering
+// it out of the load instead would refuse it too, with "Not found" -- and a practitioner who cancelled
+// Thursday and then pressed Start on a stale tab is owed the sentence that says what happened, not one
+// that says the clinic never existed.
 const OWN_COLUMNS =
-  "id, plan_date, started_at, ended_at, practitioner_id, location_id, facility_id, activity_type, title";
+  "id, plan_date, started_at, ended_at, cancelled_at, practitioner_id, location_id, facility_id, " +
+  "activity_type, title";
 
 async function loadOwn(admin: any, ctx: WorkspaceContext, id: string) {
   const { data, error } = await admin.from("practice_activity")
@@ -377,6 +388,23 @@ export async function startActivity(
   if (!row) return { ok: false, status: 404, code: "NOT_FOUND", message: "Not found" };
   if (row.ended_at) return { ok: false, status: 422, code: "ALREADY_ENDED", message: "that activity is over" };
   if (row.started_at) return { ok: false, status: 409, code: "ALREADY_RUNNING", message: "that activity is already running" };
+  // ⚠ MIGRATION 236 MADE A CANCELLED ACTIVITY POSSIBLE AND NOTHING HERE KNEW.
+  //
+  // THE DATABASE ALREADY REFUSED IT, which I got wrong in the first version of this comment and the
+  // deliberate break corrected: practice_activity_cancel_before_start is `cancelled_at is null or
+  // started_at is null`, and that reads in BOTH directions -- it stops a started activity being
+  // cancelled AND a cancelled one being started. Removing this line does not let the write through.
+  //
+  // SO THIS LINE IS NOT THE GUARD. IT IS THE SENTENCE. Without it a practitioner pressing Start on a
+  // stale tab gets a 500 reading `new row for relation "practice_activity" violates check constraint
+  // "practice_activity_cancel_before_start"` -- true, useless, and indistinguishable from the product
+  // being broken. With it they get 422 "that activity was cancelled", which is the actual answer.
+  //
+  // That is worth stating as a pattern: a database constraint makes a thing IMPOSSIBLE, and an engine
+  // check makes it EXPLICABLE. Neither substitutes for the other, and the reason to keep both is not
+  // belt-and-braces -- it is that a constraint violation is a fact about a schema and a refusal is a
+  // fact about the practitioner's day.
+  if (row.cancelled_at) return { ok: false, status: 422, code: "CANCELLED", message: "that activity was cancelled" };
 
   // Same check, and here the cost of skipping it is a wrong REFUSAL rather than a wrong reading: silently
   // falling back to UTC makes a Kampala practice unable to start a clinic between 21:00 and midnight
