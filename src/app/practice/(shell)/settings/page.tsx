@@ -83,7 +83,7 @@ export default async function SettingsPage({ searchParams }: {
       key: "appearance", title: "Appearance",
       blurb: "Theme, colours, text size and display preferences.",
       icon: "◑", tone: "bg-violet-100 text-violet-700",
-      href: "/practice/settings#personal",
+      href: "/practice/settings#appearance",
       chips: [
         { label: THEME_LABEL[p.theme] ?? p.theme },
         { label: p.accent, className: "rounded border border-gray-200 px-1.5 py-0.5 text-[10px] font-semibold capitalize text-gray-600" },
@@ -95,7 +95,7 @@ export default async function SettingsPage({ searchParams }: {
       key: "dashboard", title: "Dashboard",
       blurb: "Choose which widgets appear on your command centre and in what order.",
       icon: "▦", tone: "bg-[var(--cp-primary)]/12 text-[var(--cp-primary-deep)]",
-      href: "/practice/settings#personal",
+      href: "/practice/settings#dashboard",
       chips: [{ label: `${visibleWidgets} of ${p.dashboardWidgets.length} shown` }],
       // The comp draws drag-and-drop. Ordering here is up/down, which does the same job; saying so is
       // more use than a card that implies a gesture the page does not support.
@@ -105,7 +105,7 @@ export default async function SettingsPage({ searchParams }: {
       key: "notifications", title: "Notifications",
       blurb: "Choose what you want to be notified about.",
       icon: "◔", tone: "bg-amber-100 text-amber-700",
-      href: "/practice/settings#personal",
+      href: "/practice/settings#notifications",
       chips: [{ label: `${notificationsOn} categories on` }],
       unavailable: null,
     },
@@ -113,7 +113,7 @@ export default async function SettingsPage({ searchParams }: {
       key: "accessibility", title: "Accessibility",
       blurb: "Larger text and reduced visual noise.",
       icon: "◉", tone: "bg-emerald-100 text-emerald-700",
-      href: "/practice/settings#personal",
+      href: "/practice/settings#appearance",
       chips: [
         { label: SCALE_LABEL[p.fontScale] ?? p.fontScale },
         ...(p.reduceVisualNoise ? [{ label: "Reduced noise" }] : []),
@@ -133,7 +133,7 @@ export default async function SettingsPage({ searchParams }: {
       key: "shortcuts", title: "Keyboard Shortcuts",
       blurb: "View and use keyboard shortcuts.",
       icon: "⌨", tone: "bg-[var(--cp-info)]/15 text-[var(--cp-info)]",
-      href: "/practice/settings#personal",
+      href: "/practice/settings#shortcuts",
       chips: p.shortcutsEnabled
         ? [{ label: "g h" }, { label: "g p" }, { label: "/" }, { label: "+7 more" }]
         : [{ label: "Off" }],
@@ -143,7 +143,7 @@ export default async function SettingsPage({ searchParams }: {
       key: "language", title: "Language & Region",
       blurb: "Date, time and number formats.",
       icon: "⌘", tone: "bg-rose-100 text-rose-700",
-      href: "/practice/settings?tab=practice",
+      href: "/practice/settings?tab=practice#practice-profile",
       chips: [
         { label: "English" },
         { label: "24-hour", className: "rounded bg-emerald-100 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-800" },

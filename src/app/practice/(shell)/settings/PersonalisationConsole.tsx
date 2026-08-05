@@ -80,7 +80,7 @@ export default function PersonalisationConsole({ preferences, locked, practice }
 
       <div className="mt-4 grid lg:grid-cols-2 gap-4 items-start">
         {/* ── Appearance ───────────────────────────────────────────────────────────────────────── */}
-        <section className={card}>
+        <section id="appearance" className={card}>
           <h2 className="text-[13px] font-bold text-gray-900">Appearance</h2>
 
           <p className="mt-2 text-[11px] font-semibold text-gray-500">Theme</p>
@@ -144,7 +144,7 @@ export default function PersonalisationConsole({ preferences, locked, practice }
         </section>
 
         {/* ── Dashboard customisation ──────────────────────────────────────────────────────────── */}
-        <section className={card}>
+        <section id="dashboard" className={card}>
           <div className="flex items-baseline justify-between">
             <h2 className="text-[13px] font-bold text-gray-900">Dashboard</h2>
             <span className="text-[11px] text-gray-500">{visibleCount} of {widgets.length} showing</span>
@@ -193,7 +193,7 @@ export default function PersonalisationConsole({ preferences, locked, practice }
         </section>
 
         {/* ── Notifications ────────────────────────────────────────────────────────────────────── */}
-        <section className={card}>
+        <section id="notifications" className={card}>
           <h2 className="text-[13px] font-bold text-gray-900">Notifications</h2>
           <ul className="mt-2 flex flex-col">
             {NOTIFICATION_CATEGORIES.map(([key, label, optional, events]) => {
@@ -311,7 +311,7 @@ export default function PersonalisationConsole({ preferences, locked, practice }
         </section>
 
         {/* ── Shortcuts ────────────────────────────────────────────────────────────────────────── */}
-        <section className={card}>
+        <section id="shortcuts" className={card}>
           <div className="flex items-baseline justify-between">
             <h2 className="text-[13px] font-bold text-gray-900">Keyboard shortcuts</h2>
             <label className="flex items-center gap-2 text-[11px] text-gray-600">
@@ -337,7 +337,7 @@ export default function PersonalisationConsole({ preferences, locked, practice }
         </section>
 
         {/* ── Sync, devices, backup ────────────────────────────────────────────────────────────── */}
-        <section className={card}>
+        <section id="sync" className={card}>
           <h2 className="text-[13px] font-bold text-gray-900">Sync, devices and backup</h2>
           <p className="mt-1 text-[11px] text-gray-600">
             {/* Cross-device sync is a consequence here, not a feature, and saying so is more useful than

@@ -21,7 +21,7 @@
  *
  *   npx --yes tsx scripts/practice-setup-harness.ts
  */
-import { existsSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { loadEnvConfig } from "@next/env";
 import { createClient } from "@supabase/supabase-js";
 import { runProvisioning, type IndividualRequest } from "../src/lib/practice/provisioning";
@@ -75,11 +75,31 @@ async function cleanup() {
   }
 }
 
-/** A page.tsx must exist for a route, or the card is a promise the app cannot keep. */
+/**
+ * A card's link must land somewhere real — the PAGE and, when it names one, the SECTION.
+ *
+ * ────────────────────────────────────────────────────────────────────────────────────────────────────
+ * THE FIRST VERSION CHECKED ONLY THE PAGE, AND A PRACTICE FOUND WHAT THAT MISSED.
+ *
+ * Seven setup cards pointed at a bare `/practice/settings`. Every one passed: the page exists. But from
+ * the settings page itself that link goes to the page you are already on — and lands on the other tab,
+ * so it reads as a button that does nothing. "They seem to be leading to nowhere" was exactly right.
+ *
+ * So an href is now checked in three parts: the route file exists, the query does not smuggle itself
+ * into the path, and any `#section` corresponds to a real `id=` in that route's own components. A link
+ * to a section that does not exist scrolls nowhere, which is the same failure wearing an anchor.
+ * ────────────────────────────────────────────────────────────────────────────────────────────────────
+ */
 function routeExists(href: string): boolean {
-  const clean = href.split("#")[0].replace(/^\/practice\/?/, "");
-  if (clean === "") return existsSync("src/app/practice/page.tsx");
-  return existsSync(`src/app/practice/(shell)/${clean}/page.tsx`);
+  const [pathAndQuery, hash] = href.split("#");
+  const clean = pathAndQuery.split("?")[0].replace(/^\/practice\/?/, "").replace(/\/$/, "");
+  const dir = clean === "" ? "src/app/practice" : `src/app/practice/(shell)/${clean}`;
+  if (!existsSync(`${dir}/page.tsx`)) return false;
+  if (!hash) return true;
+
+  // The anchor may live in the page or in any component beside it.
+  const files = readdirSync(dir).filter(f => f.endsWith(".tsx"));
+  return files.some(f => readFileSync(`${dir}/${f}`, "utf8").includes(`id="${hash}"`));
 }
 
 async function main() {
@@ -111,7 +131,11 @@ async function main() {
   // NAMED, NOT COUNTED. A magic number drifts every time one of them gets built -- 3a already had to
   // move from four to five to four again. The keys say which, and a build that closes one fails here
   // loudly enough to be updated deliberately.
-  const UNBUILT = ["self_booking", "workflows", "integrations", "billing"];
+  // `notifications` joined this list when a real practice's setup hub was reviewed: the delivery
+  // channel exists in the engine (migration 224) and NOTHING RENDERS IT, so the card said "needs
+  // attention" about something nobody could act on and its link went to the settings root. An
+  // unactionable nag is worse than an honest absence.
+  const UNBUILT = ["self_booking", "notifications", "workflows", "integrations", "billing"];
   ok("3a exactly the unbuilt areas are shown as not built",
     notBuilt.length === UNBUILT.length && UNBUILT.every(k => notBuilt.some(m => m.key === k)),
     JSON.stringify(notBuilt.map(m => m.key)));
@@ -196,16 +220,31 @@ async function main() {
     JSON.stringify(line(withWeek, "availability")));
   ok("4h and the availability card becomes ready", mod(withWeek, "availability")?.state === "configured");
 
-  // ---- 6. The notification line does not overstate itself ------------------------------------------------
-  ok("6a with no channel the line is not ticked", line(withSlot, "notifications")?.done === false);
+  // ---- 6. Patient notifications claim nothing they cannot do ---------------------------------------------
+  //
+  // ⚠ THIS ASSERTION MOVED. It used to check a CHECKLIST LINE that ticked when a delivery channel was
+  // enabled. Reviewing a real practice's hub showed the line was unactionable: the channel table and
+  // engine exist since migration 224, and NOTHING RENDERS THEM, so "needs attention · no channel on"
+  // asked somebody to go and do a thing with no screen behind it -- and its link went to the settings
+  // root, which is the "leads nowhere" a practitioner reported. An unactionable nag is worse than an
+  // honest absence, so the module is not built and the claim lives in its reason instead.
   const { error: chErr } = await admin.from("practice_message_channel")
     .insert({ workspace_id: wsA, kind: "sms", enabled: true });
   if (chErr) throw new Error(`channel fixture failed: ${chErr.message}`);
   const withCh = await practiceSetup(admin, ctxA.ctx);
-  ok("6b turning a channel on ticks it", line(withCh, "notifications")?.done === true);
-  ok("6c but the detail says nothing sends by itself",
-    /nothing sends by itself/.test(line(withCh, "notifications")?.detail ?? ""),
-    line(withCh, "notifications")?.detail ?? "null");
+
+  ok("6a notifications is not built, so it cannot be opened",
+    mod(withCh, "notifications")?.state === "not_built" && mod(withCh, "notifications")?.href === null,
+    JSON.stringify(mod(withCh, "notifications")));
+  ok("6b ENABLING A CHANNEL IN THE DATABASE DOES NOT MAKE IT LOOK CONFIGURED",
+    mod(withCh, "notifications")?.state === "not_built",
+    "a row is not a screen");
+  ok("6c and the reason still says nothing sends by itself",
+    /not scheduled or sent|nothing/i.test(mod(withCh, "notifications")?.unavailableReason ?? ""),
+    mod(withCh, "notifications")?.unavailableReason ?? "null");
+  ok("6d it is off the checklist entirely, so it cannot nag",
+    !withCh.checklist.some(i => i.key === "notifications"),
+    JSON.stringify(withCh.checklist.map(i => i.key)));
 
   // ---- 7. Permission changes what is offered, not what is true --------------------------------------------
   const readOnly = { ...ctxA.ctx, capabilities: ctxA.ctx.capabilities.filter(c => c !== "practice.settings.manage") };
@@ -217,7 +256,17 @@ async function main() {
     ro.progress.done === withCh.progress.done && ro.checklist.length === withCh.checklist.length,
     `${ro.progress.done} vs ${withCh.progress.done}`);
   ok("7c CONTROL: with the permission it is openable, so 7a is not vacuous",
-    mod(withCh, "profile")?.href === "/practice/settings");
+    mod(withCh, "profile")?.href === "/practice/settings?tab=practice#practice-profile",
+    mod(withCh, "profile")?.href ?? "null");
+  // AND IT NAMES A SECTION, not just a page. Seven cards used to point at the settings root, which from
+  // the settings page itself is a link to where you already are.
+  // Only links that land on the settings page ITSELF need a section. A sub-route like
+  // /practice/settings/registration-form is its own page and correctly has no anchor.
+  const ontoSettingsPage = withCh.modules
+    .filter(m => m.href === "/practice/settings" || m.href?.startsWith("/practice/settings?"));
+  ok("7d every card landing on the settings page names its section",
+    ontoSettingsPage.length > 0 && ontoSettingsPage.every(m => m.href!.includes("#")),
+    JSON.stringify(ontoSettingsPage.map(m => m.href)));
 
   // 2d asserted the legend sums to the total, but for a FULL-CAPABILITY owner the no_access count is
   // nought and is filtered out -- so a break that deleted that legend row changed nothing and the

@@ -74,12 +74,12 @@ const CATALOGUE: Entry[] = [
   {
     n: 1, key: "profile", title: "Practice Profile",
     description: "Update your practice details, contact information and consultation preferences.",
-    icon: "▣", hue: "var(--cp-success)", href: "/practice/settings", capability: "practice.settings.manage",
+    icon: "▣", hue: "var(--cp-success)", href: "/practice/settings?tab=practice#practice-profile", capability: "practice.settings.manage",
   },
   {
     n: 2, key: "locations", title: "Locations & Clinics",
     description: "Add hospitals, clinics and consulting rooms where you see patients.",
-    icon: "◎", hue: "var(--cp-primary)", href: "/practice/settings", capability: "practice.locations.manage",
+    icon: "◎", hue: "var(--cp-primary)", href: "/practice/settings?tab=practice#locations", capability: "practice.locations.manage",
   },
   {
     n: 3, key: "availability", title: "Availability & Scheduling",
@@ -90,7 +90,7 @@ const CATALOGUE: Entry[] = [
   {
     n: 4, key: "appointment_types", title: "Appointment Types",
     description: "Define appointment types and default durations for your practice.",
-    icon: "◷", hue: "var(--cp-warning)", href: "/practice/settings", capability: "practice.settings.manage",
+    icon: "◷", hue: "var(--cp-warning)", href: "/practice/settings?tab=practice#practice-profile", capability: "practice.settings.manage",
   },
   {
     n: 5, key: "booking_rules", title: "Booking Rules",
@@ -113,19 +113,19 @@ const CATALOGUE: Entry[] = [
   {
     n: 8, key: "notifications", title: "Patient Notifications",
     description: "Manage reminders, updates and other messages by SMS, email or WhatsApp.",
-    icon: "◐", hue: "#7C3AED", href: "/practice/settings", capability: "practice.settings.manage",
-    specUnbuilt: true,
+    icon: "◐", hue: "#7C3AED", href: null, capability: null, specUnbuilt: true,
+    notBuilt: "The delivery channel exists in the engine, and there is no screen to configure it — so nothing here can be turned on yet. Reminders are not scheduled or sent by anything either.",
   },
   {
     n: 9, key: "letterhead", title: "Letterhead & Branding",
     description: "Upload your letterhead, logo, colours and other branding assets.",
-    icon: "⛨", hue: "var(--cp-warning)", href: "/practice/settings", capability: "practice.settings.manage",
+    icon: "⛨", hue: "var(--cp-warning)", href: "/practice/settings?tab=practice#letterhead", capability: "practice.settings.manage",
     specUnbuilt: true,
   },
   {
     n: 10, key: "identifiers", title: "Hospital Identifiers",
     description: "Configure hospital numbers and identifier rules for each location.",
-    icon: "▥", hue: "var(--cp-primary)", href: "/practice/settings",
+    icon: "▥", hue: "var(--cp-primary)", href: "/practice/settings?tab=practice#institutions",
     capability: "practice.locations.manage", specUnbuilt: true,
   },
   {
@@ -319,7 +319,7 @@ export async function practiceSetup(admin: any, ctx: WorkspaceContext) {
     })),
     quickActions: [
       { key: "availability", label: "Configure availability", href: "/practice/calendar", capability: "practice.calendar.view" },
-      { key: "location", label: "Add a new clinic", href: "/practice/settings", capability: "practice.locations.manage" },
+      { key: "location", label: "Add a new clinic", href: "/practice/settings?tab=practice#locations", capability: "practice.locations.manage" },
       { key: "team", label: "Invite team member", href: "/practice/people", capability: null },
       { key: "form", label: "Edit the registration form", href: "/practice/settings/registration-form", capability: "practice.settings.manage" },
     ].filter(a => can(a.capability)),

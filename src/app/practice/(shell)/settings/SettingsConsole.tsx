@@ -60,7 +60,7 @@ export default function SettingsConsole({ workspace, config, today, locations, h
     <>
       {error && <p className="mt-3 rounded-lg bg-[var(--cmp-surface-critical)] px-3 py-2 text-[12px] text-[var(--cmp-text-critical)]">{error}</p>}
 
-      <section className="mt-4 rounded-xl border border-gray-200 bg-white p-4">
+      <section id="practice-profile" className="mt-4 rounded-xl border border-gray-200 bg-white p-4">
         <h2 className="text-[13px] font-bold text-gray-900">The practice</h2>
         <form className="mt-2 flex flex-col gap-3" onSubmit={e => {
           e.preventDefault();
@@ -131,7 +131,7 @@ export default function SettingsConsole({ workspace, config, today, locations, h
           to refuse a letterhead at the time: there was no source for these facts, and a certificate
           reading "[PRACTICE ADDRESS]" is worse than one with no address at all. The practice supplies
           them here, or it does not and its documents print without a header. */}
-      <section className="mt-4 rounded-xl border border-gray-200 bg-white p-4">
+      <section id="letterhead" className="mt-4 rounded-xl border border-gray-200 bg-white p-4">
         <h2 className="text-[13px] font-bold text-gray-900">Letterhead</h2>
         <p className="mt-0.5 text-[11px] text-gray-500">
           Printed at the top of generated letters and certificates. Nothing here is required &mdash; a
@@ -170,7 +170,7 @@ export default function SettingsConsole({ workspace, config, today, locations, h
       </section>
 
       {/* Locations */}
-      <section className="mt-4 rounded-xl border border-gray-200 bg-white p-4">
+      <section id="locations" className="mt-4 rounded-xl border border-gray-200 bg-white p-4">
         <h2 className="text-[13px] font-bold text-gray-900">Locations</h2>
         {locations.length === 0 ? (
           <p className="mt-2 text-[12px] text-gray-400">None yet.</p>
@@ -255,7 +255,7 @@ export default function SettingsConsole({ workspace, config, today, locations, h
           carries. For a hospital they are the same building, which is why one can be linked to the
           other above — and why a hospital needs to exist here before that link can be made. */}
       {canManageLocations && (
-        <section className="mt-4 rounded-xl border border-gray-200 bg-white p-4">
+        <section id="institutions" className="mt-4 rounded-xl border border-gray-200 bg-white p-4">
           <h2 className="text-[13px] font-bold text-gray-900">Institutions</h2>
           <p className="mt-0.5 text-[11px] text-gray-500">
             Hospitals and laboratories whose own patient numbers you record. Link one to a location above
