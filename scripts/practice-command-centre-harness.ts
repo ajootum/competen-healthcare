@@ -35,6 +35,7 @@ import { bookAppointment } from "../src/lib/practice/scheduling";
 import { commandCentre } from "../src/lib/practice/command-centre";
 import { practiceMetrics, metricScope, MIN_OBSERVATIONS_FOR_DELAY } from "../src/lib/practice/metrics";
 import { DASHBOARD_WIDGETS } from "../src/lib/practice/preference-constants";
+import { PERFORMANCE_SWATCH } from "../src/lib/practice/palette";
 
 loadEnvConfig(process.cwd());
 
@@ -281,6 +282,16 @@ async function main() {
   ok("5c no performance figure is a percentage or a rate",
     offending.length === 0 && !readable.includes("%"), `${offending.join(",")} in ${readable}`);
   ok("5c-control. the labels really were read", readable.includes("Patients Seen"), readable);
+
+  // ⚠ 5d. EVERY PERFORMANCE FIGURE HAS ITS OWN COLOUR, keyed by the SAME MetricKey the page passes.
+  // PERFORMANCE_SWATCH read `avg_consult`/`avg_wait` while the page had switched to the metric engine's
+  // `average_consult_time`/`average_wait_time`, so two of the four fell back to grey -- invisible in a
+  // diff, obvious only to whoever is scanning the row. GLANCE_SWATCH shipped the identical mismatch
+  // (`walk_ins` against `walk_in`) a few hours earlier, which is why this now has an assertion too.
+  const PERF_KEYS = ["patients_seen", "average_consult_time", "average_wait_time", "clinic_delay"];
+  const unswatched = PERF_KEYS.filter(k => !Object.prototype.hasOwnProperty.call(PERFORMANCE_SWATCH, k));
+  ok("5d. every performance figure has a swatch under its own metric key",
+    unswatched.length === 0, unswatched.join(", "));
   // ---- 7. Cohorts counted as typed, and by patient -----------------------------------------------------
   const { data: enc2 } = await admin.from("practice_encounter").insert({
     workspace_id: wsA, patient_id: pat.data.id, entry_pathway: "new_walk_in", encounter_mode: "in_person",

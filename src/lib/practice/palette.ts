@@ -158,10 +158,17 @@ export const QUICK_ICON: Record<string, string> = {
 };
 
 /** Performance figures. Cyan for time, indigo for a count -- the comp's own split. */
+// ⚠ KEYED BY metrics.ts's MetricKey, and it was not. These read `avg_consult` / `avg_wait` while the
+// command centre stopped passing command-centre.ts's own keys and started passing the metric engine's
+// (`average_consult_time` / `average_wait_time`) -- so two of the four figures silently fell back to
+// plain grey. A missing swatch is invisible in a diff and obvious only to whoever is scanning the row.
+//
+// This is the SECOND time this exact mismatch has shipped: GLANCE_SWATCH had `walk_ins` against the
+// metric key `walk_in`. There is now an assertion for both.
 export const PERFORMANCE_SWATCH: Record<string, string> = {
   patients_seen: "text-[var(--cp-primary-deep)]",
-  avg_consult: "text-emerald-700",
-  avg_wait: "text-cyan-700",
+  average_consult_time: "text-emerald-700",
+  average_wait_time: "text-cyan-700",
   clinic_delay: "text-amber-700",
 };
 
