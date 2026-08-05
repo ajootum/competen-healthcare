@@ -373,7 +373,7 @@ export async function bookedAppointments(admin: any, ctx: WorkspaceContext, scop
 export async function waitingPatients(admin: any, ctx: WorkspaceContext, scope: MetricScope): Promise<Metric> {
   const b: Build = {
     key: "waiting", unit: "count", scope,
-    formula: `count of practice_queue_entry rows entered within the scope window with status ${WAITING_STATUSES.join("/")}, less any whose appointment or patient already has an ${ENGAGED_STATUSES.join("/")} encounter`,
+    formula: `count of practice_queue_entry rows entered TODAY with status ${WAITING_STATUSES.join("/")}, less any whose appointment or patient already has an ${ENGAGED_STATUSES.join("/")} encounter. Deliberately NOT narrowed to the session window -- waiting is a live state, not a period count`,
     sources: [
       "practice_queue_entry.status", "practice_queue_entry.entered_at",
       "practice_queue_entry.appointment_id", "practice_queue_entry.patient_id",
@@ -383,19 +383,32 @@ export async function waitingPatients(admin: any, ctx: WorkspaceContext, scope: 
   if (!hasCapability(ctx, CAP_DIARY)) return notPermitted(b, CAP_DIARY);
   if (!hasCapability(ctx, CAP_ENCOUNTERS)) return notPermitted(b, CAP_ENCOUNTERS);
 
+  // ⚠ THE DAY, NOT THE SESSION WINDOW, AND THIS IS THE ONE METRIC WHERE THAT IS RIGHT.
+  //
+  // s8 defines Booked as appointments "assigned to the current day/session" and Completed as encounters
+  // "completed within the selected period" -- both are PERIOD COUNTS. Waiting it defines as "queue
+  // entries with status arrived or waiting and no active/completed encounter", with no window at all,
+  // because waiting is a LIVE STATE. The people in the corridor are the people in the corridor.
+  //
+  // Narrowed to the session window it hid them twice over: a patient who arrived before the clinic
+  // opened, and -- far more common -- everybody still waiting after the planned end of a clinic that
+  // ran late. A tile reading 0 while four people sit outside is the worst kind of wrong, because it is
+  // wrong precisely when the clinic is under most pressure. The end-to-end test found it at 16:59
+  // against an 08:00-13:00 session.
+  const day = zonedDayRange(scope.date, scope.timezone);
   const [queue, encounters] = await Promise.all([
     readRows(admin.from("practice_queue_entry")
       .select("id, status, entered_at, appointment_id, patient_id")
       .eq("workspace_id", ctx.workspaceId)
       .in("status", WAITING_STATUSES)
-      .gte("entered_at", scope.fromIso).lt("entered_at", scope.toIso)),
+      .gte("entered_at", day.startIso).lt("entered_at", day.endIso)),
     readRows(admin.from("practice_encounter")
       .select("id, status, started_at, patient_id, appointment_id")
       .eq("workspace_id", ctx.workspaceId)
       .in("status", ENGAGED_STATUSES)
-      // Always time-windowed, even under session scope: the question is whether THIS arrival has been
-      // seen, and an encounter opened outside the session still means the person is not in the corridor.
-      .gte("started_at", scope.fromIso).lt("started_at", scope.toIso)),
+      // The same day, for the same reason: the question is whether THIS arrival has been seen, and an
+      // encounter opened outside the session still means the person is not in the corridor.
+      .gte("started_at", day.startIso).lt("started_at", day.endIso)),
   ]);
 
   if (queue.error) return unreadable(b, queue.error);

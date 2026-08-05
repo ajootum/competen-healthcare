@@ -175,7 +175,6 @@ async function main() {
   // heroStats was deleted with the greeting card CPR-V5-001 s2 replaced. Its assertions are kept, not
   // dropped: the rule they enforced -- A FIGURE THE CALLER MAY NOT SEE IS NOT A ZERO -- is exactly what
   // s8 makes explicit, and it now has a status word for it instead of a boolean.
-  const cc = await commandCentre(admin, ctxA.ctx);
   const scope = metricScope({ date: DAY, timezone: TZ });
   const seen = await practiceMetrics(admin, ctxA.ctx, scope);
   ok("3a booked counts the live diary", seen.metrics.booked.value === 2,
@@ -268,8 +267,20 @@ async function main() {
     Object.values(measured.metrics).filter(m => m.unit === "minutes")
       .every(m => m.observations !== null || m.status === "not_permitted"),
     JSON.stringify(Object.values(measured.metrics).filter(m => m.unit === "minutes").map(m => [m.key, m.observations])));
-  ok("5c no performance figure is a percentage",
-    !JSON.stringify(measured.metrics).match(/percent|rate|%/i));
+  // ⚠ THE FIRST FIX WROTE A LITERAL BACKSPACE. a backslash-b escape went through a shell heredoc and a JS string and
+  // arrived in the file as byte 0x08, so the regex matched a control character and never the word --
+  // which is why a metric relabelled "Attendance rate" sailed past it. An assertion that cannot fail is
+  // worse than no assertion, and this one looked correct in the diff.
+  //
+  // It also checks the LABELS AND UNITS a practitioner reads, not the whole object: matching the prose
+  // caught "rate" inside "deliberately" in a formula's own wording, which teaches people to reword
+  // comments rather than keep the rule. CPR-300: every figure here is a count or a duration.
+  const RATE_WORDS = new Set(["percent", "percentage", "rate", "rates", "ratio", "proportion"]);
+  const readable = Object.values(measured.metrics).map(m => `${m.label} ${m.unit}`).join(" | ");
+  const offending = readable.toLowerCase().split(/[^a-z]+/).filter(w => RATE_WORDS.has(w));
+  ok("5c no performance figure is a percentage or a rate",
+    offending.length === 0 && !readable.includes("%"), `${offending.join(",")} in ${readable}`);
+  ok("5c-control. the labels really were read", readable.includes("Patients Seen"), readable);
   // ---- 7. Cohorts counted as typed, and by patient -----------------------------------------------------
   const { data: enc2 } = await admin.from("practice_encounter").insert({
     workspace_id: wsA, patient_id: pat.data.id, entry_pathway: "new_walk_in", encounter_mode: "in_person",

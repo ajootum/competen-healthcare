@@ -21,6 +21,7 @@ import { formatMinuteOfDay } from "@/lib/datetime";
 //   activity_ended      practice_activity.ended_at        "Morning Clinic ended"
 //   arrival             practice_queue_entry.entered_at   "Walk-in - Mary Achieng"
 //   encounter_started   practice_encounter.started_at     "John Smith"
+//   encounter_completed practice_encounter.completed_at   "John Smith - seen"
 //
 // ⚠ THE PLANNED-BUT-NOT-STARTED ENTRIES ARE SEPARATED, NOT MIXED IN. The comp's later rows ("Ward
 // Review", "MDT Meeting") are usually still ahead of the clock, and a plan is not an event: an activity
@@ -53,7 +54,8 @@ export type TimelineEventKind =
   | "activity_ended"
   | "activity_planned"
   | "arrival"
-  | "encounter_started";
+  | "encounter_started"
+  | "encounter_completed";
 
 export type TimelineEvent = {
   /** Stable and source-prefixed, so two sources cannot collide on a row id. */
@@ -121,8 +123,9 @@ const RANK: Record<TimelineEventKind, number> = {
   activity_started: 0,
   arrival: 1,
   encounter_started: 2,
-  activity_ended: 3,
-  activity_planned: 4,
+  encounter_completed: 3,
+  activity_ended: 4,
+  activity_planned: 5,
 };
 
 /** An appointment typed `emergency` is an interruption; no appointment at all means somebody walked in. */
@@ -180,7 +183,7 @@ export async function sessionTimeline(
       // CANCELLED and ENTERED_IN_ERROR are excluded: a record withdrawn as an error is not a thing that
       // happened, and leaving it on the timeline would be the one lie this card cannot afford.
       ? admin.from("practice_encounter")
-        .select("id, status, started_at, entry_pathway, " +
+        .select("id, status, started_at, completed_at, entry_pathway, " +
           "practice_patient:patient_id(display_name), practice_appointment:appointment_id(appointment_type)")
         .eq("workspace_id", ctx.workspaceId)
         .gte("started_at", startIso).lt("started_at", endIso)
@@ -274,6 +277,23 @@ export async function sessionTimeline(
         interruption: emergency || walkIn,
         occurred: true, href: `/practice/encounters/${e.id}`,
       }, Date.parse(e.started_at));
+
+      // ⚠ ADDED BY THE END-TO-END TEST (CORE-15). s16.5: "completing an encounter updates counts,
+      // queue status, recent patients, TIMELINE and performance". The timeline recorded only starts, so
+      // a morning of finished consultations looked like a morning of consultations still in progress --
+      // and the one row a practitioner scans for at 13:00 is the one saying the clinic is done.
+      //
+      // It was left out deliberately at first, to avoid three rows per patient. That was the right
+      // instinct and the wrong call: the arrival and the start are the pair that duplicate each other,
+      // and the COMPLETION is the only one of the three that says the work is over.
+      if (e.completed_at) {
+        push(events, {
+          id: `encounter-done:${e.id}`, kind: "encounter_completed",
+          label: e.practice_patient?.display_name ?? "Unnamed patient",
+          detail: "Seen", interruption: false,
+          occurred: true, href: `/practice/encounters/${e.id}`,
+        }, Date.parse(e.completed_at));
+      }
     }
   }
 
