@@ -2,7 +2,6 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { createAdminClient } from "@/lib/supabase/server";
 import { resolvePracticeShell } from "@/lib/practice/shell";
-import { operationsHome } from "@/lib/practice/operations-home";
 import { commandCentre } from "@/lib/practice/command-centre";
 import { resolvePreferences } from "@/lib/practice/preferences";
 import { hasCapability } from "@/lib/practice/access";
@@ -73,8 +72,7 @@ export default async function PracticeCommandCentre() {
 
   const admin = createAdminClient();
   const at = new Date();
-  const [home, cc, { effective }] = await Promise.all([
-    operationsHome(admin, ctx),
+  const [cc, { effective }] = await Promise.all([
     commandCentre(admin, ctx),
     resolvePreferences(admin, ctx.workspaceId, ctx.userId),
   ]);
@@ -91,6 +89,10 @@ export default async function PracticeCommandCentre() {
   const dash = await dashboardReadModel(admin, ctx, { at });
   const { plan, session: metrics, glance, queue, followUps: followUpLenses, alerts, drafts, timeline } = dash;
   const canPlan = hasCapability(ctx, "appointment.manage");
+  // The rows the brief was derived from, which the alerts, tasks and messages cards render too. Read
+  // ONCE by the assembler: this page used to call operationsHome itself as well, so one screen made the
+  // same expensive read twice and had two chances to disagree about what was waiting.
+  const home = dash.operations ?? { attention: [], blindSpots: [], allClear: false };
 
   // CPR-360 dashboard customisation, applied with `order` on the grid children rather than by
   // restructuring the page. A hidden widget stays in the markup as display:none: every widget is filled
@@ -256,29 +258,53 @@ export default async function PracticeCommandCentre() {
                 </span>
                 <h2 className={panelTitle}>Today&apos;s brief</h2>
                 <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-slate-500">
-                  Derived
+                  {/* FROM THE PAYLOAD, not typed here. s3 requires a derived brief to disclose that it
+                      IS derived, when it was calculated and what from -- and a badge hardcoded in one
+                      component's JSX is a promise only that component keeps. */}
+                  {dash.brief.status}
                 </span>
               </div>
-              {home.attention.length === 0 ? (
+              {dash.brief.items.length === 0 ? (
                 <p className="text-[12px] text-gray-500">
-                  {home.allClear ? "Nothing is waiting on you." : "Nothing to raise from what you can see."}
+                  {dash.brief.unavailable
+                    ? "Nothing here could be read, so this is not a claim that nothing is waiting."
+                    : "Nothing is waiting on you."}
                 </p>
               ) : (
                 <ul className="space-y-2">
-                  {home.attention.slice(0, 4).map((a: any) => (
-                    <li key={a.kind}>
-                      <Link href={a.href} className="flex items-start gap-2 text-[12px] leading-snug text-gray-700 hover:text-[var(--cp-primary)]">
-                        <span aria-hidden className={`mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full ${SEVERITY[a.severity]?.dot ?? "bg-slate-400"}`} />
-                        <span>{a.title}</span>
+                  {dash.brief.items.slice(0, 4).map(i => (
+                    <li key={i.key}>
+                      {/* s7: "actionable sentences with SOURCE LINKS". The tooltip carries the rows the
+                          sentence was counted from, as stable identifiers -- never names, which s13
+                          forbids returning on their own. */}
+                      <Link href={i.href}
+                        title={`Counted from ${i.count} record${i.count === 1 ? "" : "s"}${i.refsArePartial ? `, ${i.sourceRefs.length} shown` : ""}: ${i.sourceRefs.map(r => `${r.table}/${r.id.slice(0, 8)}`).join(", ")}`}
+                        className="flex items-start gap-2 text-[12px] leading-snug text-gray-700 hover:text-[var(--cp-primary)]">
+                        <span aria-hidden className={`mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full ${SEVERITY[i.severity]?.dot ?? "bg-slate-400"}`} />
+                        <span>{i.sentence}</span>
                       </Link>
                     </li>
                   ))}
                 </ul>
               )}
+
+              {/* Blind spots NAMED. An empty brief a caller cannot see past is not a calm morning. */}
+              {dash.brief.blindSpots.length > 0 && (
+                <p className="mt-2 text-[10.5px] leading-snug text-amber-700">
+                  Not included, because you do not have access: {dash.brief.blindSpots.join(", ")}.
+                </p>
+              )}
               {/* THE ONE SENTENCE THAT KEEPS THE PANEL HONEST. The comp badges this "AI · BETA". */}
+              {/* THE SENTENCE THAT KEEPS THE PANEL HONEST is now the payload's own `method` plus the time
+                  it was calculated and the number of rows behind it -- s3's three disclosures, carried in
+                  the data rather than retyped here where they could drift from what was actually done.
+                  The comp badges this card "AI · BETA". It is neither. */}
               <p className="mt-3 border-t border-gray-100 pt-2 text-[10px] leading-relaxed text-gray-400">
-                Worked out from your diary, follow-ups and inbox — not written by a model, and it makes no
-                prediction about how long anyone will take.
+                {dash.brief.method}{" "}Calculated at{" "}
+                {new Date(dash.brief.calculatedAt).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", timeZone: dash.timezone })}
+                {dash.brief.sourceRefs.length > 0
+                  ? ` from ${dash.brief.sourceRefs.length} record${dash.brief.sourceRefs.length === 1 ? "" : "s"}.`
+                  : "."}
               </p>
             </div>
           </div>

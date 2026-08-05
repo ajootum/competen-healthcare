@@ -6,6 +6,8 @@ import {
   type SessionWithFigures, type FollowUpLens, type Alert, type QueueGroup,
 } from "@/lib/practice/session";
 import { sessionTimeline, type SessionTimeline } from "@/lib/practice/session-timeline";
+import { operationsHome } from "@/lib/practice/operations-home";
+import { practiceBrief, type PracticeBrief } from "@/lib/practice/brief";
 import {
   practiceMetrics, metricScope, type Metric, type MetricKey, type PracticeMetrics,
 } from "@/lib/practice/metrics";
@@ -108,6 +110,20 @@ export type DashboardReadModel = {
   plan: TodaysPlan;
   session: SessionWithFigures | null;
   glance: { tiles: GlanceTile[]; scope: "session" | "day"; unavailable: boolean };
+  /**
+   * s11's `brief`, CORE-12. Carried in the PAYLOAD rather than badged in one component's JSX, so any
+   * surface rendering these sentences also carries the label, the calculation time and the rows they
+   * were counted from.
+   */
+  brief: PracticeBrief;
+  /**
+   * The rows the brief was derived FROM, which the alerts, tasks and messages cards also render.
+   *
+   * Exposed rather than re-read: the page used to call `operationsHome` itself, so one screen made the
+   * same expensive read twice and had two chances to disagree with itself about what was waiting. One
+   * call, one answer, several cards.
+   */
+  operations: Awaited<ReturnType<typeof operationsHome>> | null;
   /** All twelve of s8's metrics for this scope. The glance shows eight of them. */
   metrics: PracticeMetrics | null;
   queue: { groups: QueueGroup[]; total: number | null; unavailable: boolean };
@@ -173,7 +189,7 @@ export async function dashboardReadModel(
     window: session ? { fromIso: scope.fromIso, toIso: scope.toIso } : null,
   });
 
-  const [metrics, queue, timeline, followUps, alerts, drafts] = await Promise.all([
+  const [metrics, queue, timeline, followUps, alerts, drafts, home] = await Promise.all([
     feed(null as PracticeMetrics | null,
       () => practiceMetrics(admin, ctx, mScope, at)),
     feed({ groups: [], total: null, unavailable: true },
@@ -187,6 +203,11 @@ export async function dashboardReadModel(
       () => operationalAlerts(admin, ctx, plan.date)),
     feed(null as Awaited<ReturnType<typeof draftEncounters>>,
       () => draftEncounters(admin, ctx)),
+    // The brief's own feeder. ONE call, and the brief is derived from ITS rows rather than re-reading --
+    // a briefing service with its own queries would be a second answer to the same question, and it
+    // would drift only under load, which is the worst time to find out.
+    feed(null as Awaited<ReturnType<typeof operationsHome>> | null,
+      () => operationsHome(admin, ctx)),
   ]);
 
   // A feeder is unavailable if it threw OR if it reported its own failure. Both are the same thing to a
@@ -228,6 +249,12 @@ export async function dashboardReadModel(
       && followUps.value.some(l => l.count !== null) ? "ok" : "unavailable",
     alerts: alerts.state === "ok" && !alerts.value.unavailable ? "ok" : "unavailable",
     drafts: drafts.state === "ok" && drafts.value !== null ? "ok" : "unavailable",
+    // ⚠ RETURNING A VALUE IS NOT THE SAME AS HAVING READ ANYTHING. operationsHome does not throw when its
+    // queries fail -- it now reports them in `unreadable` instead -- so a feeder judged only on "did it
+    // return" called itself healthy while every read behind it had failed. The same trap the glance fell
+    // into, one feeder later.
+    brief: home.state === "ok" && home.value !== null
+      && (home.value.unreadable?.length ?? 0) === 0 ? "ok" : "unavailable",
   };
 
   return {
@@ -243,6 +270,12 @@ export async function dashboardReadModel(
     followUps: followUps.value,
     alerts: alerts.value,
     drafts: drafts.value,
+    operations: home.value,
+    brief: practiceBrief(home.value
+      ? { attention: home.value.attention, blindSpots: home.value.blindSpots, allClear: home.value.allClear, unreadable: home.value.unreadable }
+      // A feeder that threw has no attention list. An EMPTY brief with every domain named as a blind
+      // spot is the honest shape: it says nothing was read, not that nothing is waiting.
+      : { attention: [], blindSpots: [], unreadable: ["everything -- the brief could not be read"] }, at),
     feeders,
     // ⚠ ONLY when every feeder failed. s16: "a failure in one feeder does not make the entire dashboard
     // unusable" -- so this must never be true because one card could not be read, or the page would blank

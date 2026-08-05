@@ -496,12 +496,32 @@ export async function operationsHome(admin: any, ctx: WorkspaceContext) {
   const { data: locationRows } = await admin.from("practice_location")
     .select("id, name, active").eq("workspace_id", ctx.workspaceId).eq("active", true).order("name");
 
+  // ⚠ THIS FILE DID NOT CONTAIN THE WORD "error" ANYWHERE. Every one of the reads above destructured
+  // `{ data }` and dropped the rest, so a failed query became an empty list, an empty list became no
+  // attention items, and the brief said "Nothing is waiting on you." A database hiccup rendered as calm.
+  //
+  // Named rather than counted: a screen can say WHICH part it could not read, which is the difference
+  // between a warning somebody can act on and a shrug.
+  const READS: [string, unknown][] = [
+    ["the diary", appointments], ["the waiting room", queueCount], ["encounters", encounters],
+    ["follow-ups", followUps], ["documents", documents], ["procedure consent", procedureConsent],
+    ["the practice record", events], ["tasks", tasks], ["notifications", notifications],
+    ["the incoming register", incoming], ["messages", unreadThreads],
+  ];
+  const unreadable = READS.filter(([, r]) => (r as { error?: unknown } | null)?.error).map(([n]) => n);
+
   return {
     today, timezone,
     attention,
     blindSpots,
+    /**
+     * The reads that FAILED, by name. Distinct from `blindSpots`, which are the domains the caller is not
+     * permitted to see -- "you may not look" and "I could not look" are different sentences and only one
+     * of them is about permissions.
+     */
+    unreadable,
     /** Nothing owed AND nothing hidden. The two together are what makes "you are clear" honest. */
-    allClear: attention.length === 0 && blindSpots.length === 0,
+    allClear: attention.length === 0 && blindSpots.length === 0 && unreadable.length === 0,
     appointments: apptRows,
     kpis,
     health,
