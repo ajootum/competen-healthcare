@@ -264,17 +264,43 @@ export async function closeFollowUp(admin: any, args: {
 
 type ListFilter = { patientId?: string; status?: string[]; limit?: number };
 
+/** A follow-up as the board and the panels see it: derived state, plus the two names a screen needs. */
+export type ListedFollowUp = ReturnType<typeof deriveFollowUp> & {
+  patient_name: string | null;
+  appointment_status: string | null;
+};
+
+/**
+ * ⚠ `unavailable` IS THE POINT OF THIS TYPE, AND IT IS NOT OPTIONAL.
+ *
+ * An empty follow-up list is the single most misreadable value in this product: it renders as "nobody is
+ * waiting on you", which is the answer a practitioner most wants and least wants to be wrong about.
+ * `items: []` with `unavailable: true` is a different fact from `items: []` with `unavailable: false`,
+ * and a screen that cannot tell them apart will state the reassuring one.
+ */
+export type FollowUpList = { items: ListedFollowUp[]; unavailable: boolean; detail: string | null };
+
 /** Follow-ups with their derived state, their patient's name, and any booking behind them. */
-export async function listFollowUps(admin: any, workspaceId: string, filter: ListFilter = {}) {
+export async function listFollowUps(admin: any, workspaceId: string, filter: ListFilter = {}): Promise<FollowUpList> {
   let q = admin.from("practice_follow_up")
     .select("id, patient_id, origin_encounter_id, problem_id, diagnosis_id, plan_id, step_number, kind, reason, due_on, priority, status, appointment_id, closing_encounter_id, outcome, outcome_code, closed_at, created_at, record_version")
     .eq("workspace_id", workspaceId);
   if (filter.patientId) q = q.eq("patient_id", filter.patientId);
   if (filter.status?.length) q = q.in("status", filter.status);
 
-  const { data } = await q.order("due_on").limit(filter.limit ?? 200);
+  // ⚠ THE ERROR USED TO BE DISCARDED HERE, AND THAT MADE THIS THE WORST PLACE IN THE PRODUCT TO HAVE
+  // THE BUG. `const { data } = await q` returns undefined on failure, `data ?? []` turns it into an empty
+  // list, and an empty follow-up list reads as "nobody is waiting on you" -- so the board that exists to
+  // say who has been forgotten went QUIET exactly when it could not see. Three different answers were
+  // collapsed into one: nothing owed, could not read, not permitted.
+  //
+  // The return is a RESULT rather than an array so no caller can go on ignoring it. An optional flag
+  // beside an array that still works is the same bug with a comment on it -- every existing caller would
+  // have kept reading `.length` and kept being wrong. The type change is the fix.
+  const { data, error } = await q.order("due_on").limit(filter.limit ?? 200);
+  if (error) return { items: [], unavailable: true, detail: error.message };
   const rows = (data ?? []) as any[];
-  if (rows.length === 0) return [];
+  if (rows.length === 0) return { items: [], unavailable: false, detail: null };
 
   const today = await workspaceToday(admin, workspaceId);
   const apptIds = [...new Set(rows.map(r => r.appointment_id).filter(Boolean))];
@@ -287,11 +313,15 @@ export async function listFollowUps(admin: any, workspaceId: string, filter: Lis
   const nameById = new Map(((patients ?? []) as any[]).map(p => [p.id, p.display_name]));
   const apptById = new Map((((appts as any).data ?? []) as any[]).map(a => [a.id, a]));
 
-  return rows.map(r => ({
-    ...deriveFollowUp(r, today, apptById.get(r.appointment_id)?.scheduled_at),
-    patient_name: nameById.get(r.patient_id) ?? null,
-    appointment_status: apptById.get(r.appointment_id)?.status ?? null,
-  }));
+  return {
+    items: rows.map(r => ({
+      ...deriveFollowUp(r, today, apptById.get(r.appointment_id)?.scheduled_at),
+      patient_name: nameById.get(r.patient_id) ?? null,
+      appointment_status: apptById.get(r.appointment_id)?.status ?? null,
+    })),
+    unavailable: false,
+    detail: null,
+  };
 }
 
 /**
@@ -304,13 +334,23 @@ export async function followUpBoard(admin: any, workspaceId: string, horizonDays
   const open = await listFollowUps(admin, workspaceId, { status: ["OPEN", "SCHEDULED"] });
   const closed = await listFollowUps(admin, workspaceId, { status: ["COMPLETED", "MISSED", "CANCELLED"], limit: 25 });
 
+  // ⚠ THE BOARD CARRIES THE UNAVAILABILITY UP, IT DOES NOT ABSORB IT. Four empty groups look exactly
+  // like a practice that owes nothing, and this is the screen where that misreading costs the most. Only
+  // the OPEN read matters for the headline claim: recently-closed failing leaves the board still able to
+  // say truthfully what is outstanding, so its failure is reported separately rather than blanking a
+  // board that is otherwise correct.
   return {
-    overdue: open.filter(f => f.overdue),
-    dueSoon: open.filter(f => !f.overdue && f.status === "OPEN" && f.dueInDays <= horizonDays),
-    scheduled: open.filter(f => f.status === "SCHEDULED"),
-    later: open.filter(f => !f.overdue && f.status === "OPEN" && f.dueInDays > horizonDays),
-    recentlyClosed: closed.sort((a, b) => String(b.closed_at ?? "").localeCompare(String(a.closed_at ?? ""))).slice(0, 10),
+    overdue: open.items.filter(f => f.overdue),
+    dueSoon: open.items.filter(f => !f.overdue && f.status === "OPEN" && f.dueInDays <= horizonDays),
+    scheduled: open.items.filter(f => f.status === "SCHEDULED"),
+    later: open.items.filter(f => !f.overdue && f.status === "OPEN" && f.dueInDays > horizonDays),
+    recentlyClosed: closed.items
+      .sort((a, b) => String(b.closed_at ?? "").localeCompare(String(a.closed_at ?? "")))
+      .slice(0, 10),
     horizonDays,
+    unavailable: open.unavailable,
+    detail: open.detail,
+    closedUnavailable: closed.unavailable,
   };
 }
 

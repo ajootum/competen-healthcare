@@ -52,7 +52,7 @@ export default async function PatientPage({ params, searchParams }: {
   // listFollowUps is still called because the contact log takes the open ones to file a call against.
   const canSeeFollowUps = hasCapability(shell.ctx, "followup.view");
   const followUps = canSeeFollowUps
-    ? await listFollowUps(admin, shell.ctx.workspaceId, { patientId, status: ["OPEN", "SCHEDULED"] })
+    ? (await listFollowUps(admin, shell.ctx.workspaceId, { patientId, status: ["OPEN", "SCHEDULED"] })).items
     : [];
   const followUpView = canSeeFollowUps
     ? await patientFollowUps(admin, shell.ctx.workspaceId, patientId)

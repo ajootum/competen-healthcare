@@ -291,7 +291,7 @@ async function main() {
   ok("stopping a plan cancels its OPEN steps", stopped.ok && stopped.data.cancelled === 1,
     stopped.ok ? JSON.stringify(stopped.data) : stopped.message);
 
-  const stoppedRows = await listFollowUps(admin, wsA, { patientId: p2.data.id });
+  const stoppedRows = (await listFollowUps(admin, wsA, { patientId: p2.data.id })).items;
   const cancelled = stoppedRows.find((r: any) => r.status === "CANCELLED");
   ok("THE REASON IS WRITTEN ONTO EACH CANCELLED STEP, not left on the plan alone",
     /moved to another practice/.test(String(cancelled?.outcome)), String(cancelled?.outcome));

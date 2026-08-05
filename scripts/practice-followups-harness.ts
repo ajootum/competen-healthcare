@@ -182,7 +182,7 @@ async function main() {
     ((storedStatuses ?? []) as any[]).every(r => r.status === "OPEN"),
     JSON.stringify((storedStatuses ?? []).map((r: any) => r.status)));
 
-  const listed = await listFollowUps(admin, wsA, { status: ["OPEN", "SCHEDULED"] });
+  const listed = (await listFollowUps(admin, wsA, { status: ["OPEN", "SCHEDULED"] })).items;
   const overdueOne = listed.find(f => f.id === past.data.id);
   const futureOne = listed.find(f => f.id === future.data.id);
   ok("THE PAST-DUE ONE READS OVERDUE WITH NOTHING HAVING RUN (no cron, no job, no login)",
@@ -361,6 +361,40 @@ async function main() {
   ok("the service role sees rows in every follow-up table (the denial test is not vacuous)",
     svcRows === TABLES.length, `${svcRows}/${TABLES.length}`);
   ok("anon reads 0 rows from every follow-up table", leaked === 0, `${leaked} table(s) leaked`);
+
+  // ── A FAILED READ IS NOT AN EMPTY BOARD ──────────────────────────────────────────────────────────
+  //
+  // ⚠ THIS IS THE ONE PLACE IN THE PRODUCT WHERE THE SILENT-ZERO BUG COSTS THE MOST, AND IT SHIPPED.
+  // listFollowUps did `const { data } = await q` and then `data ?? []`, so a failed query produced an
+  // empty list -- and an empty follow-up list renders as "nobody is waiting on you". The board that
+  // exists to say who has been forgotten went quiet exactly when it could not see. It was found from
+  // the outside, while wiring a panel that wanted to trust it.
+  //
+  // The failure is injected through a STUB CLIENT rather than by breaking the table, because the point
+  // is what this function does with an error and not whether an error can be produced. The stub answers
+  // the same chain the engine calls and returns PostgREST's own failure shape.
+  const failingAdmin = {
+    from: () => {
+      const chain: Record<string, unknown> = {};
+      for (const m of ["select", "eq", "in", "order"]) chain[m] = () => chain;
+      chain.limit = async () => ({ data: null, error: { message: "simulated read failure" } });
+      return chain;
+    },
+  };
+  const failedRead = await listFollowUps(failingAdmin as never, wsA, {});
+  ok("a follow-up read that FAILED says so, and carries the database's own words",
+    failedRead.unavailable === true && /simulated read failure/.test(failedRead.detail ?? ""),
+    JSON.stringify(failedRead));
+  ok("⚠ and it is not reported as an empty board -- the two are different answers",
+    failedRead.items.length === 0 && failedRead.unavailable,
+    JSON.stringify({ n: failedRead.items.length, unavailable: failedRead.unavailable }));
+
+  // CONTROL. Without this the pair above passes just as well if listFollowUps reported EVERY read as
+  // unavailable -- which is what a fix applied one line too early would do.
+  const realRead = await listFollowUps(admin, wsA, {});
+  ok("control. the same call through the real client is AVAILABLE, and returns rows",
+    realRead.unavailable === false && realRead.detail === null && realRead.items.length > 0,
+    JSON.stringify({ n: realRead.items.length, unavailable: realRead.unavailable, detail: realRead.detail }));
 
   return report();
 }

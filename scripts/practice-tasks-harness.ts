@@ -189,7 +189,7 @@ async function main() {
   for (const t of await listTasks(admin, wsA, { status: ["OPEN", "IN_PROGRESS", "BLOCKED"] })) {
     await transitionTask(admin, { workspaceId: wsA, taskId: t.id, to: "DONE", ...base });
   }
-  const followUpsAfter = await listFollowUps(admin, wsA, { status: ["OPEN", "SCHEDULED"] });
+  const followUpsAfter = (await listFollowUps(admin, wsA, { status: ["OPEN", "SCHEDULED"] })).items;
   ok("CLOSING EVERY TASK LEAVES THE FOLLOW-UP OPEN (a task cannot settle a clinical commitment)",
     followUpsAfter.some((f: any) => f.id === fu.data.id && f.overdue === true),
     JSON.stringify(followUpsAfter.map((f: any) => ({ id: f.id.slice(-4), s: f.status }))));

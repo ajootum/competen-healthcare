@@ -22,11 +22,20 @@ export async function GET(req: NextRequest) {
   }
 
   const status = url.searchParams.get("status");
-  const followUps = await listFollowUps(auth.caller.admin, auth.ctx.workspaceId, {
+  const result = await listFollowUps(auth.caller.admin, auth.ctx.workspaceId, {
     patientId: url.searchParams.get("patientId") ?? undefined,
     status: status ? status.split(",") : undefined,
   });
-  return NextResponse.json({ followUps, correlationId: auth.caller.traceId });
+  // `unavailable` is a FIELD ON THE PAYLOAD, not a comment on this route. A client receiving
+  // `followUps: []` has no way to tell an empty board from a failed read, and the one it will show the
+  // practitioner is the reassuring one. Spelled out rather than returning the result object whole, so
+  // the shape of this response is a decision somebody made and not a refactor leaking through.
+  return NextResponse.json({
+    followUps: result.items,
+    unavailable: result.unavailable,
+    unavailableDetail: result.detail,
+    correlationId: auth.caller.traceId,
+  });
 }
 
 export async function POST(req: NextRequest) {

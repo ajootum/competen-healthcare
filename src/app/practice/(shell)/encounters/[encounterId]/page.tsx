@@ -59,7 +59,8 @@ export default async function EncounterPage({ params }: { params: Promise<{ enco
     listTemplates(admin, shell.ctx.workspaceId, { kind: "encounter_note" }),
     noteHistory(admin, shell.ctx.workspaceId, encounter.id),
     listDocuments(admin, shell.ctx.workspaceId, { encounterId: encounter.id }),
-    listFollowUps(admin, shell.ctx.workspaceId, { patientId: encounter.patient_id, status: ["OPEN", "SCHEDULED"] }),
+    listFollowUps(admin, shell.ctx.workspaceId, { patientId: encounter.patient_id, status: ["OPEN", "SCHEDULED"] })
+      .then(r => r.items),
     listIntervals(admin),
     listProcedures(admin, shell.ctx.workspaceId, { patientId: encounter.patient_id, limit: 20 }),
     listProcedureTypes(admin, shell.ctx.workspaceId),

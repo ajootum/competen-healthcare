@@ -79,14 +79,22 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
   // empty when the caller does not hold it -- "no follow-ups" and "you cannot see follow-ups" are
   // different sentences.
   //
-  // ⚠ listFollowUps() returns [] both when there is nothing and when its read fails; it does not report
-  // the error and it is not this screen's file to change. The panel therefore claims only what that
-  // engine can support, and says "nothing open or scheduled" rather than a count of anything.
+  // listFollowUps now REPORTS a failed read instead of returning an empty list for it, so this panel can
+  // finally tell "nothing open or scheduled" apart from "could not find out" -- the distinction the
+  // comment here used to describe as a limitation it had to live with.
   const canSeeFollowUps = hasCapability(shell.ctx, "followup.view");
-  const followUpRows = canSeeFollowUps
+  const followUpResult = canSeeFollowUps
     ? await listFollowUps(admin, shell.ctx.workspaceId, { status: ["OPEN", "SCHEDULED"], limit: 50 })
-    : [];
-  const followUps = followUpRows.slice(0, 6).map(f => ({
+    : { items: [], unavailable: false, detail: null };
+  // THREE ANSWERS, NOT TWO. "You are not permitted to see this", "it could not be read" and "there is
+  // nothing" are different things, and the panel below renders the third only when the first two are
+  // ruled out. This is the whole reason listFollowUps changed shape.
+  const followUpsUnavailable = !canSeeFollowUps
+    ? "You do not hold followup.view, so this panel is not showing you anything."
+    : followUpResult.unavailable
+      ? `Your follow-ups could not be read just now. ${followUpResult.detail ?? ""}`.trim()
+      : null;
+  const followUps = followUpResult.items.slice(0, 6).map(f => ({
     id: String(f.id),
     patientName: (f.patient_name as string | null) ?? null,
     dueOn: String(f.due_on),
@@ -103,7 +111,7 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
           canManage={canManage}
           locations={locations.map(l => ({ id: l.id, name: l.name, facility: l.facility?.name ?? null }))}
           followUps={followUps}
-          followUpsUnavailable={canSeeFollowUps ? null : "You do not hold followup.view, so this panel is not showing you anything."}
+          followUpsUnavailable={followUpsUnavailable}
         />
 
         {/* ── THE APPOINTMENT BOOK. Still here, still doing everything it did. ─────────────────── */}
