@@ -9,6 +9,7 @@ import { hasCapability } from "@/lib/practice/access";
 import { formatMinuteOfDay } from "@/lib/datetime";
 import { dashboardReadModel } from "@/lib/practice/dashboard";
 import StartYourDay from "./StartYourDay";
+import LiveRefresh from "../LiveRefresh";
 import {
   PANEL, GLANCE_SWATCH, LENS_SWATCH, FOLLOWUP_SWATCH, COHORT_RING,
   QUEUE_SWATCH, QUICK_SWATCH, QUICK_ICON, PERFORMANCE_SWATCH, SEVERITY,
@@ -141,10 +142,13 @@ export default async function PracticeCommandCentre() {
               "As of", not "Live" -- the page is a server render, and until the s10 event stream exists
               nothing on it updates by itself. Saying otherwise would be the one claim here nobody could
               check by looking. */}
-          <p className="ml-auto text-[11px] text-gray-500">
+          <span className="ml-auto flex items-center gap-2">
+            <LiveRefresh />
+          <p className="text-[11px] text-gray-500">
             As of {new Date(dash.asOf).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", timeZone: dash.timezone })}
             {" · "}{dash.timezone}
           </p>
+          </span>
         </div>
 
         {/* ── s14 PARTIAL FAILURE ───────────────────────────────────────────────────────────────── */}
