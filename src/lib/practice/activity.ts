@@ -72,7 +72,16 @@ type Result<T> =
   | { ok: true; value: T }
   | { ok: false; status: number; code: string; message: string };
 
-const CAN_PLAN = "practice.calendar.manage";
+// ⚠ THESE MUST BE CAPABILITY CODES THAT ACTUALLY EXIST. This file shipped with
+// `practice.calendar.manage`, which is not in practice_role_capabilities and never has been -- so
+// hasCapability returned false for EVERY user including the practice owner, every write below returned
+// 403, and the dashboard hid the Start button rather than showing an error. "Start the day in one click"
+// was unreachable and it looked like nothing happened.
+//
+// A capability code is a STRING COMPARED AGAINST THE DATABASE. Inventing a plausible one costs nothing at
+// compile time and silently disables the feature at runtime. The real diary-write capability is
+// `appointment.manage` (migration 192), held by practitioner and practice_assistant.
+const CAN_PLAN = "appointment.manage";
 const CAN_VIEW = "practice.home.view";
 
 /** planned / running / done, from the two timestamps and nothing else. */
@@ -133,11 +142,16 @@ export type TodaysPlan = {
 export async function todaysPlan(
   admin: any, ctx: WorkspaceContext, opts: { date?: string; at?: Date } = {},
 ): Promise<TodaysPlan> {
-  const { data: ws } = await admin.from("practice_workspace")
+  // ⚠ THE ERROR IS CHECKED, and this is not pedantry. Discarded, a failed read silently became "UTC",
+  // `date` was then computed for the wrong calendar day, `.eq("plan_date", date)` matched nothing, and
+  // this returned an EMPTY PLAN WITH unavailable:false -- a confident claim that the day is empty, from
+  // a query that never succeeded. The whole point of the flag is defeated by defaulting the input to it.
+  const { data: ws, error: wsError } = await admin.from("practice_workspace")
     .select("timezone").eq("id", ctx.workspaceId).maybeSingle();
   const timezone = ws?.timezone || "UTC";
   const at = opts.at ?? new Date();
   const date = opts.date ?? practiceToday(timezone, at);
+  if (wsError) return { date, timezone, activities: [], current: null, next: null, unavailable: true };
   const { startIso } = zonedDayRange(date, timezone);
   const dayStartMs = Date.parse(startIso);
 
@@ -168,6 +182,32 @@ export async function todaysPlan(
     next: activities.find((a: PlannedActivity) => a.state === "planned") ?? null,
     unavailable: false,
   };
+}
+
+/**
+ * The activity a practitioner is in RIGHT NOW -- the context CPR-V3-001 s6 says every encounter inherits.
+ *
+ * NULL AND FAILURE ARE RETURNED SEPARATELY, and that is the whole point of this shape. "Nothing is
+ * running" is a true and ordinary answer: consultations happen on call, between clinics, at two in the
+ * morning against no plan at all. "I could not find out" is not an answer, and collapsing the second into
+ * the first would file a clinical record as context-less on the strength of a query that simply failed --
+ * a thing nothing downstream can ever detect, because a genuinely context-less encounter looks identical.
+ *
+ * NO CAPABILITY CHECK, unlike todaysPlan. This is not a screen: it answers a question about a caller the
+ * surrounding engine has already authorised, and gating it on practice.home.view would strip the context
+ * off an encounter over a permission that has nothing to do with encounters.
+ */
+export async function runningActivityId(
+  admin: any, workspaceId: string, practitionerId: string,
+): Promise<{ id: string | null; error: { message: string } | null }> {
+  const { data, error } = await admin.from("practice_activity")
+    .select("id")
+    .eq("workspace_id", workspaceId)
+    .eq("practitioner_id", practitionerId)
+    .not("started_at", "is", null).is("ended_at", null)
+    .maybeSingle();
+  if (error) return { id: null, error };
+  return { id: data?.id ?? null, error: null };
 }
 
 export type PlanInput = {
@@ -246,8 +286,12 @@ export async function startActivity(
   if (row.ended_at) return { ok: false, status: 422, code: "ALREADY_ENDED", message: "that activity is over" };
   if (row.started_at) return { ok: false, status: 409, code: "ALREADY_RUNNING", message: "that activity is already running" };
 
-  const { data: ws } = await admin.from("practice_workspace")
+  // Same check, and here the cost of skipping it is a wrong REFUSAL rather than a wrong reading: silently
+  // falling back to UTC makes a Kampala practice unable to start a clinic between 21:00 and midnight
+  // local, and able to start yesterday's before 03:00.
+  const { data: ws, error: wsError } = await admin.from("practice_workspace")
     .select("timezone").eq("id", ctx.workspaceId).maybeSingle();
+  if (wsError) return { ok: false, status: 500, code: "READ_FAILED", message: wsError.message };
   // Compared against the PRACTICE's today, never the server's date. A practitioner in Kampala starting a
   // clinic at 01:00 UTC is starting today's clinic, and a server in another zone must not call it
   // tomorrow's. (The app clock and the database clock are never compared -- both sides here are the app's.)
@@ -256,12 +300,14 @@ export async function startActivity(
 
   // Whatever is running now stops now. This is the "Change" button in the comp: switching activity is
   // the normal way to move through a day, not an exception.
-  const { data: running, error: runErr } = await admin.from("practice_activity")
-    .select("id").eq("workspace_id", ctx.workspaceId).eq("practitioner_id", ctx.userId)
-    .not("started_at", "is", null).is("ended_at", null).maybeSingle();
-  if (runErr) return { ok: false, status: 500, code: "READ_FAILED", message: runErr.message };
+  //
+  // Through runningActivityId rather than its own query, so that "what am I in" has ONE definition. When
+  // an encounter and a switch disagree about what was running, the encounter's context is wrong and
+  // nobody finds out.
+  const running = await runningActivityId(admin, ctx.workspaceId, ctx.userId);
+  if (running.error) return { ok: false, status: 500, code: "READ_FAILED", message: running.error.message };
 
-  if (running?.id) {
+  if (running.id) {
     const { error: endErr } = await admin.from("practice_activity")
       .update({ ended_at: at.toISOString(), updated_at: at.toISOString() }).eq("id", running.id);
     if (endErr) return { ok: false, status: 500, code: "SWITCH_FAILED", message: endErr.message };
@@ -277,7 +323,7 @@ export async function startActivity(
     return { ok: false, status, code, message: startErr.message };
   }
 
-  return { ok: true, value: { id, endedPrevious: running?.id ?? null } };
+  return { ok: true, value: { id, endedPrevious: running.id } };
 }
 
 /** End the activity. The plan is not rewritten to match: overrunning is recorded, not corrected. */

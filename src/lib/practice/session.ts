@@ -81,15 +81,28 @@ export async function sessionMetrics(
 
   // Encounters inside the window. `.select` with an explicit error check, because a failed read here must
   // leave the figures NULL rather than reporting a session in which nobody has been seen.
+  //
+  // ⚠ BOUNDED, AND THE BOUND IS LOAD-BEARING. PostgREST caps an unbounded select at 1000 rows, so an
+  // average computed over one would silently understate on a wide window -- and that average feeds
+  // `runningBehindMinutes`, the one figure here somebody might rearrange an afternoon over. With an
+  // explicit limit a full page is DETECTABLE, and a detectable overflow is reported as "not knowable"
+  // rather than quietly averaged over whichever thousand came back first.
+  //
+  // `.lt` on the upper bound, not `.lte`: zonedDayRange's half-open convention, and it has to match the
+  // appointment read below or an encounter starting exactly at the planned end is counted by one and
+  // excluded by the other.
+  const ENC_CAP = 2000;
   const enc = await admin.from("practice_encounter")
     .select("id, status, started_at, completed_at")
     .eq("workspace_id", ctx.workspaceId)
     .gte("started_at", new Date(windowStartMs).toISOString())
-    .lte("started_at", new Date(windowEndMs).toISOString());
+    .lt("started_at", new Date(windowEndMs).toISOString())
+    .limit(ENC_CAP);
 
   let patientsSeen: number | null = null;
   let averageMinutesPerPatient: number | null = null;
-  if (!enc.error) {
+  const overflowed = !enc.error && (enc.data ?? []).length >= ENC_CAP;
+  if (!enc.error && !overflowed) {
     const done = ((enc.data ?? []) as any[])
       .filter(e => e.completed_at && ["COMPLETED", "SIGNED", "AMENDED"].includes(e.status));
     patientsSeen = done.length;
@@ -120,8 +133,11 @@ export async function sessionMetrics(
   return {
     activity,
     startedAtIso: activity.startedAt,
+    // Measured from when the session ACTUALLY started, matching `minutesElapsed` above. Computed from the
+    // PLANNED start it contradicted its own comment: a clinic that opened twenty minutes late showed
+    // twenty minutes of progress before anybody had been seen.
     progressPercent: plannedMinutes > 0
-      ? clamp(Math.round(((nowMs - windowStartMs) / (plannedMinutes * 60000)) * 100), 0, 100)
+      ? clamp(Math.round(((nowMs - startedMs) / (plannedMinutes * 60000)) * 100), 0, 100)
       : 0,
     minutesElapsed,
     minutesRemaining,

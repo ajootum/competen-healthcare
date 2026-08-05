@@ -36,7 +36,7 @@ export default async function TodaysWorkPage() {
   const admin = createAdminClient();
   const work = await todaysWork(admin, shell.ctx);
   const { plan } = work;
-  const canPlan = hasCapability(shell.ctx, "practice.calendar.manage");
+  const canPlan = hasCapability(shell.ctx, "appointment.manage");
 
   return (
     <div className="max-w-6xl">

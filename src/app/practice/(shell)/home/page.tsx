@@ -12,6 +12,7 @@ import {
 } from "@/lib/practice/session";
 import { formatMinuteOfDay } from "@/lib/datetime";
 import { zonedDayRange } from "@/lib/practice/practice-time";
+import { sessionTimeline } from "@/lib/practice/session-timeline";
 import StartYourDay from "./StartYourDay";
 import {
   PANEL, GLANCE_SWATCH, LENS_SWATCH, FOLLOWUP_SWATCH, COHORT_RING,
@@ -90,7 +91,7 @@ export default async function PracticeCommandCentre() {
   // widget that takes one. A card deciding its own scope is a card that will eventually disagree with
   // the one beside it, and two counters over different windows is worse than one counter.
   const metrics = await sessionMetrics(admin, ctx, plan, at);
-  const canPlan = hasCapability(ctx, "practice.calendar.manage");
+  const canPlan = hasCapability(ctx, "appointment.manage");
   // The practice's midnight-to-midnight, not the server's. `zonedDayRange` is the same function every
   // other day-scoped read in this codebase uses, so "today" cannot mean two different spans on one page.
   const day = zonedDayRange(cc.today, cc.timezone);
@@ -98,12 +99,14 @@ export default async function PracticeCommandCentre() {
     ? { fromIso: metrics.windowStartIso, toIso: metrics.windowEndIso, scope: "session" as const }
     : { fromIso: day.startIso, toIso: day.endIso, scope: "day" as const };
 
-  const [glance, queue, followUpLenses, alerts, drafts] = await Promise.all([
+  const [glance, queue, followUpLenses, alerts, drafts, timeline] = await Promise.all([
     todayAtAGlance(admin, ctx, { ...window, today: cc.today }),
     waitingQueue(admin, ctx, at),
     activeFollowUps(admin, ctx, cc.today),
     operationalAlerts(admin, ctx, cc.today),
     draftEncounters(admin, ctx),
+    // CPR-V5-001 s4. The plan's date and timezone are passed in so this does not re-read the workspace.
+    sessionTimeline(admin, ctx, { date: plan.date, timezone: plan.timezone, at }),
   ]);
 
   // CPR-360 dashboard customisation, applied with `order` on the grid children rather than by
@@ -326,6 +329,43 @@ export default async function PracticeCommandCentre() {
                 ))}
               </div>
             )}
+
+            {/* ── SESSION TIMELINE (s4: "chronological operational events") ────────────────────── */}
+            {/* WHAT HAPPENED, NOT WHAT IS PLANNED. The engine returns the two separately, and only
+                `events` is drawn here: an activity that never ran would otherwise sit in the timeline
+                all afternoon looking as though it had. */}
+            <div className="mt-3 border-t border-gray-100 pt-3">
+              <div className="mb-1.5 flex items-center gap-2">
+                <p className="text-[10px] font-bold uppercase tracking-[0.1em] text-gray-500">Session timeline</p>
+                {/* PARTIAL IS ITS OWN STATE. One source failing while others succeed produces a real but
+                    incomplete day, and a card that said nothing would be claiming a quiet morning it
+                    never actually checked. */}
+                {timeline.partial && !timeline.unavailable && (
+                  <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-amber-700">
+                    Incomplete
+                  </span>
+                )}
+              </div>
+              {timeline.unavailable ? (
+                <p className="text-[12px] text-gray-500">The day could not be read just now.</p>
+              ) : timeline.events.length === 0 ? (
+                <p className="text-[12px] text-gray-500">Nothing has happened yet today.</p>
+              ) : (
+                <ol className="space-y-0.5">
+                  {timeline.events.map(e => (
+                    <li key={e.id} className="flex items-center gap-2">
+                      <span className="w-9 shrink-0 text-[11px] tabular-nums text-gray-500">{e.timeLabel}</span>
+                      <span aria-hidden className={`h-1.5 w-1.5 shrink-0 rounded-full ${
+                        e.interruption ? "bg-red-500" : "bg-emerald-500"}`} />
+                      <span className={`min-w-0 flex-1 truncate text-[12px] ${
+                        e.interruption ? "font-semibold text-red-700" : "text-gray-800"}`}>
+                        {e.label}
+                      </span>
+                    </li>
+                  ))}
+                </ol>
+              )}
+            </div>
           </div>
 
           {/* ── ZONE 3: CURRENT ENCOUNTER (s4) ─────────────────────────────────────────────────── */}

@@ -54,13 +54,20 @@ const LIMIT = 5;
 /** One place to decide "we could not read this", so no caller can mistake an error for an empty list. */
 function panel(
   key: string, label: string, href: string,
-  res: { data: any[] | null; count: number | null; error: any },
+  res: { data: any[] | null; count: number | null; error: any; denied?: boolean },
   map: (row: any) => WorkItem,
   emptyNote: string,
 ): WorkPanel {
   if (res.error) {
     return { key, label, count: null, items: [], href, unavailable: true,
       note: "This could not be read just now, so no figure is shown rather than a nought." };
+  }
+  // ⚠ NOT ALLOWED TO SEE IT IS NOT THE SAME AS THERE BEING NONE. This branch used to return a hard 0 with
+  // "Nothing is overdue." beside it -- a reassurance manufactured for somebody who was never permitted to
+  // look. An unearned zero is the same defect as a swallowed error wearing better clothes.
+  if (res.denied) {
+    return { key, label, count: null, items: [], href, unavailable: true,
+      note: "You do not have access to this list, so no figure is shown." };
   }
   const items = (res.data ?? []).map(map);
   return {
@@ -84,12 +91,15 @@ export async function todaysWork(admin: any, ctx: WorkspaceContext, opts: { at?:
   // shows the first few. Taking `items.length` as the count would silently cap every panel at five and
   // report a thirty-patient queue as five.
   const [queue, followUps, results, tasks] = await Promise.all([
-    can("appointment.view")
+    // ⚠ `appointment.view` DOES NOT EXIST as a capability, so this always took the false branch and the
+    // Walk-in Queue and Next Patient reported a confident nought forever. The gate below is the one
+    // command-centre.ts and operations-home.ts already use for the same table.
+    can("queue.manage") || can("practice.calendar.view")
       ? admin.from("practice_queue_entry")
         .select("id, patient_name, status, entered_at", { count: "exact" })
         .eq("workspace_id", ctx.workspaceId).in("status", ["WAITING", "READY"])
         .order("entered_at", { ascending: true }).limit(LIMIT)
-      : Promise.resolve({ data: [], count: 0, error: null }),
+      : Promise.resolve({ data: null, count: null, error: null, denied: true }),
 
     can("followup.view")
       ? admin.from("practice_follow_up")
@@ -97,14 +107,14 @@ export async function todaysWork(admin: any, ctx: WorkspaceContext, opts: { at?:
         .eq("workspace_id", ctx.workspaceId).in("status", ["OPEN", "SCHEDULED"])
         .lt("due_on", today)
         .order("due_on", { ascending: true }).limit(LIMIT)
-      : Promise.resolve({ data: [], count: 0, error: null }),
+      : Promise.resolve({ data: null, count: null, error: null, denied: true }),
 
     can("inbox.record")
       ? admin.from("practice_incoming_document")
         .select("id, title, doc_type, received_on, priority", { count: "exact" })
         .eq("workspace_id", ctx.workspaceId).eq("status", "RECEIVED")
         .order("received_on", { ascending: true }).limit(LIMIT)
-      : Promise.resolve({ data: [], count: 0, error: null }),
+      : Promise.resolve({ data: null, count: null, error: null, denied: true }),
 
     can("task.view")
       ? admin.from("practice_task")
@@ -112,7 +122,7 @@ export async function todaysWork(admin: any, ctx: WorkspaceContext, opts: { at?:
         .eq("workspace_id", ctx.workspaceId).eq("assigned_to", ctx.userId)
         .in("status", ["OPEN", "IN_PROGRESS", "BLOCKED"])
         .order("due_on", { ascending: true, nullsFirst: false }).limit(LIMIT)
-      : Promise.resolve({ data: [], count: 0, error: null }),
+      : Promise.resolve({ data: null, count: null, error: null, denied: true }),
   ]);
 
   const panels: WorkPanel[] = [
@@ -150,12 +160,14 @@ export async function todaysWork(admin: any, ctx: WorkspaceContext, opts: { at?:
   // NEXT PATIENT is the head of the same queue, not a second query with its own idea of the order --
   // two answers to "who is next" is the fastest way to lose trust in both.
   const head = (queue.data ?? [])[0];
+  const queueUnreadable = !!queue.error || !!(queue as any).denied;
   return {
     plan,
     panels,
-    nextPatient: queue.error || !head
+    nextPatient: queueUnreadable || !head
       ? null
       : { name: head.patient_name, status: head.status, waitingSinceIso: head.entered_at },
-    nextPatientUnavailable: !!queue.error,
+    // "Nobody is waiting" and "I was not allowed to look" must not render the same way here either.
+    nextPatientUnavailable: queueUnreadable,
   };
 }
