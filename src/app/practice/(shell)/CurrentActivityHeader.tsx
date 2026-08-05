@@ -59,9 +59,12 @@ export default function CurrentActivityHeader({ plan }: { plan: TodaysPlan }) {
           {a.overrunMinutes !== null && (
             <p className="mt-1 text-[10.5px] text-amber-300">Running {a.overrunMinutes} min past its planned end.</p>
           )}
-          <Link href="/practice/calendar"
+          {/* CPR-V5-005's comp changes this from "View full schedule" to the session itself, and the
+              change is right: from a panel telling you WHAT you are in, the useful destination is the
+              cockpit for it, not the diary of everything else. The planner is one click further on. */}
+          <Link href="/practice/today"
             className="mt-2.5 block border-t border-white/10 pt-2 text-[11.5px] font-semibold text-blue-300 hover:text-blue-200">
-            View full schedule →
+            Go to Current Session →
           </Link>
         </div>
       ) : (

@@ -147,7 +147,17 @@ export const PRACTICE_NAV: PracticeNavItem[] = [
   // parent and is reached from there. A module with no parent is an orphan and the nav harness fails.
 
   // -- Today's Work: the day, and what is booked into it --------------------------------------------
-  { href: "/practice/calendar", label: "Calendar", icon: "▤", capability: "practice.calendar.view", group: "Practice", phase: 1, built: true, primary: true },
+  // ── CPR-V5-005: CALENDAR BECOMES PRACTICE PLANNER ───────────────────────────────────────────────
+  //
+  // "Replace the traditional appointment calendar with a Practice Planner. ACTIVITIES -- not
+  // appointments -- are the primary planning object" (s1). The rename is the smallest part of that and
+  // the part a practitioner sees: a calendar is a list of when other people will arrive, and a planner
+  // is where somebody decides what their week is. The route stays /practice/calendar -- the same choice
+  // made when Today's Work became Current Session, and for the same reason: a URL rename is churn
+  // through bookmarks and links to buy a tidiness nobody is asking for.
+  //
+  // ⚠ THIS AMENDS THE CPR-V5-002 FREEZE, and CPR-V5-005 is the product change control s17 requires.
+  { href: "/practice/calendar", label: "Practice Planner", icon: "▦", capability: "practice.calendar.view", group: "Practice", phase: 1, built: true, primary: true },
   { href: "/practice/tasks", label: "Tasks", icon: "☑", capability: "task.view", group: "Practice", phase: 4, built: true, parent: "/practice/today" },
 
   // -- Patients: the people, and the record made about them -----------------------------------------
