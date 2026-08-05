@@ -14,7 +14,7 @@ import { formatMinuteOfDay } from "@/lib/datetime";
 import { zonedDayRange } from "@/lib/practice/practice-time";
 import StartYourDay from "./StartYourDay";
 import {
-  PANEL, FOLLOWUP_SWATCH, COHORT_RING,
+  PANEL, GLANCE_SWATCH, LENS_SWATCH, FOLLOWUP_SWATCH, COHORT_RING,
   QUEUE_SWATCH, QUICK_SWATCH, QUICK_ICON, PERFORMANCE_SWATCH, SEVERITY,
 } from "@/lib/practice/palette";
 
@@ -157,17 +157,28 @@ export default async function PracticeCommandCentre() {
                 </span>
               </div>
               <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-                {glance.tiles.map(t => (
-                  <Link key={t.key} href={t.href}
-                    className="rounded-lg border border-gray-200 px-2.5 py-2 transition-colors hover:border-[var(--cp-primary-border)] hover:bg-[var(--cp-primary-soft)]">
-                    {/* A NULL COUNT RENDERS AN EM DASH. "Could not read" and "none" are different
-                        answers and a zero is the more dangerous of the two to guess. */}
-                    <span className="block text-[19px] font-bold leading-none tabular-nums text-gray-900">
-                      {t.count === null ? "—" : t.count}
-                    </span>
-                    <span className="mt-1 block truncate text-[10.5px] text-gray-500">{t.label}</span>
-                  </Link>
-                ))}
+                {glance.tiles.map(t => {
+                  // The comp gives every tile a tinted icon badge and a coloured figure, and the colour
+                  // MEANS something -- see GLANCE_SWATCH. Drawn grey, all eight read at identical weight
+                  // and the emergency tile disappears into the no-show tile beside it.
+                  const s = GLANCE_SWATCH[t.key] ?? GLANCE_SWATCH.booked;
+                  return (
+                    <Link key={t.key} href={t.href}
+                      className={`rounded-lg border px-2.5 py-2 transition-shadow hover:shadow-sm ${s.box}`}>
+                      <span className="flex items-center justify-between gap-1">
+                        {/* A NULL COUNT RENDERS AN EM DASH. "Could not read" and "none" are different
+                            answers and a zero is the more dangerous of the two to guess. */}
+                        <span className={`text-[19px] font-bold leading-none tabular-nums ${s.figure}`}>
+                          {t.count === null ? "—" : t.count}
+                        </span>
+                        <span aria-hidden className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-md text-[10px] ${s.badge}`}>
+                          {s.icon}
+                        </span>
+                      </span>
+                      <span className="mt-1 block truncate text-[10.5px] text-gray-600">{t.label}</span>
+                    </Link>
+                  );
+                })}
               </div>
 
               {/* SESSION PROGRESS (s3). Only when a session is running: outside one there is no session
@@ -330,15 +341,22 @@ export default async function PracticeCommandCentre() {
             </div>
 
             <div className="grid grid-cols-2 gap-2">
+              {/* Each of the four carries the hue of the ROUTE the patient took to get here, matching the
+                  comp: booked is the ordinary indigo, a walk-in is the amber this codebase already uses
+                  for "waiting" (QUEUE_SWATCH), and an emergency is red wherever it appears. The colour is
+                  the fastest part of the button to read, so it should carry the urgency rather than
+                  decorate it. */}
               {[
-                { href: "/practice/calendar", label: "Booked Patient", icon: "☺" },
-                { href: "/practice/patients?walk_in=1", label: "Walk-in Patient", icon: "⚇" },
-                { href: "/practice/patients?emergency=1", label: "Emergency Patient", icon: "✚" },
-                { href: "/practice/search", label: "Search Patient", icon: "⌕" },
+                { href: "/practice/calendar", label: "Booked Patient", icon: "☺", tone: "border-[var(--cp-primary)]/25 bg-[var(--cp-primary)]/5 hover:bg-[var(--cp-primary)]/10", icon_tone: "bg-[var(--cp-primary)]/12 text-[var(--cp-primary-deep)]" },
+                { href: "/practice/patients?walk_in=1", label: "Walk-in Patient", icon: "⏱", tone: "border-amber-200 bg-amber-50/60 hover:bg-amber-50", icon_tone: "bg-amber-100 text-amber-700" },
+                { href: "/practice/patients?emergency=1", label: "Emergency Patient", icon: "✚", tone: "border-red-200 bg-red-50/60 hover:bg-red-50", icon_tone: "bg-red-100 text-red-700" },
+                { href: "/practice/search", label: "Search Patient", icon: "⌕", tone: "border-violet-200 bg-violet-50/60 hover:bg-violet-50", icon_tone: "bg-violet-100 text-violet-700" },
               ].map(a => (
                 <Link key={a.href} href={a.href}
-                  className="flex flex-col items-center gap-1 rounded-lg border border-gray-200 px-2 py-2.5 text-center transition-colors hover:border-[var(--cp-primary-border)] hover:bg-[var(--cp-primary-soft)]">
-                  <span aria-hidden className="text-[15px] text-[var(--cp-primary)]">{a.icon}</span>
+                  className={`flex flex-col items-center gap-1.5 rounded-lg border px-2 py-2.5 text-center transition-shadow hover:shadow-sm ${a.tone}`}>
+                  <span aria-hidden className={`flex h-6 w-6 items-center justify-center rounded-md text-[12px] ${a.icon_tone}`}>
+                    {a.icon}
+                  </span>
                   <span className="text-[11px] font-semibold leading-tight text-gray-700">{a.label}</span>
                 </Link>
               ))}
@@ -375,16 +393,18 @@ export default async function PracticeCommandCentre() {
             <div className="mt-3 border-t border-gray-100 pt-2.5">
               <p className="mb-1.5 text-[10px] font-bold uppercase tracking-[0.1em] text-gray-500">Active follow-ups</p>
               <div className="grid grid-cols-5 gap-1">
-                {followUpLenses.map(l => (
-                  <Link key={l.key} href={l.href}
-                    className="rounded-lg border border-gray-200 px-1 py-1.5 text-center transition-colors hover:border-[var(--cp-primary-border)] hover:bg-[var(--cp-primary-soft)]">
-                    <span className={`block text-[15px] font-bold leading-none tabular-nums ${
-                      l.key === "overdue" && (l.count ?? 0) > 0 ? "text-[var(--cmp-text-danger)]" : "text-gray-900"}`}>
-                      {l.count === null ? "—" : l.count}
-                    </span>
-                    <span className="mt-0.5 block text-[9px] leading-tight text-gray-500">{l.label}</span>
-                  </Link>
-                ))}
+                {followUpLenses.map(l => {
+                  const s = LENS_SWATCH[l.key] ?? LENS_SWATCH.due_today;
+                  return (
+                    <Link key={l.key} href={l.href}
+                      className={`rounded-lg border px-1 py-1.5 text-center transition-shadow hover:shadow-sm ${s.box}`}>
+                      <span className={`block text-[15px] font-bold leading-none tabular-nums ${s.figure}`}>
+                        {l.count === null ? "—" : l.count}
+                      </span>
+                      <span className="mt-0.5 block text-[9px] leading-tight text-gray-600">{l.label}</span>
+                    </Link>
+                  );
+                })}
               </div>
               <p className="mt-1.5 text-[9.5px] leading-relaxed text-gray-400">
                 These five overlap and do not add up — one follow-up can be counted in three of them.

@@ -94,6 +94,42 @@ export const COHORT_RING = [
   "bg-cyan-100 text-cyan-700",
 ];
 
+/**
+ * CPR-V5-001 s3's eight "Today at a glance" tiles, and s6's five follow-up lenses.
+ *
+ * ⚠ COLOUR HERE IS SEMANTIC, NOT ROTATION. Unlike QUICK_SWATCH below -- which cycles hues purely so a row
+ * of eight tiles does not read as one grey block -- every colour in these two maps means the thing it is
+ * attached to. Cancelled and Emergency are red because they are the two tiles you must not scan past;
+ * Completed is green because it is the only one that is good news; No Show is slate because a nought
+ * there is unremarkable and colouring it would compete with the two that matter.
+ *
+ * The first build of this dashboard drew all eight in plain grey with a number in them. Every tile read
+ * at identical weight, which is the failure the v4 comp was already redesigned to fix once -- a screen
+ * meant to be scanned in ten seconds at the start of a clinic became something you read word by word.
+ * The tone was even being COMPUTED in session.ts and thrown away by the page.
+ */
+export const GLANCE_SWATCH: Record<string, { badge: string; figure: string; box: string; icon: string }> = {
+  booked: { badge: "bg-[var(--cp-primary)]/12 text-[var(--cp-primary-deep)]", figure: "text-[var(--cp-primary-deep)]", box: "border-[var(--cp-primary)]/25 bg-[var(--cp-primary)]/5", icon: "▤" },
+  waiting: { badge: "bg-amber-100 text-amber-700", figure: "text-amber-700", box: "border-amber-200 bg-amber-50/60", icon: "⏱" },
+  completed: { badge: "bg-emerald-100 text-emerald-700", figure: "text-emerald-700", box: "border-emerald-200 bg-emerald-50/60", icon: "✓" },
+  walk_ins: { badge: "bg-violet-100 text-violet-700", figure: "text-violet-700", box: "border-violet-200 bg-violet-50/60", icon: "⚇" },
+  cancelled: { badge: "bg-rose-100 text-rose-700", figure: "text-rose-700", box: "border-rose-200 bg-rose-50/60", icon: "✕" },
+  emergency: { badge: "bg-red-100 text-red-700", figure: "text-red-700", box: "border-red-200 bg-red-50/60", icon: "✚" },
+  follow_ups_due: { badge: "bg-sky-100 text-sky-700", figure: "text-sky-700", box: "border-sky-200 bg-sky-50/60", icon: "↻" },
+  // Slate on purpose. A no-show count is usually nought, and a nought that shouts is a nought people
+  // learn to ignore -- taking the two red tiles beside it down with it.
+  no_show: { badge: "bg-slate-100 text-slate-500", figure: "text-slate-600", box: "border-slate-200 bg-slate-50/60", icon: "○" },
+};
+
+/** s6's five lenses. Overdue is the only red one, because it is the only one that is a failure. */
+export const LENS_SWATCH: Record<string, { figure: string; box: string }> = {
+  due_today: { figure: "text-[var(--cp-primary-deep)]", box: "border-[var(--cp-primary)]/25 bg-[var(--cp-primary)]/5" },
+  overdue: { figure: "text-rose-700", box: "border-rose-300 bg-rose-50" },
+  waiting_results: { figure: "text-amber-700", box: "border-amber-200 bg-amber-50/60" },
+  booked: { figure: "text-sky-700", box: "border-sky-200 bg-sky-50/60" },
+  completed: { figure: "text-emerald-700", box: "border-emerald-200 bg-emerald-50/60" },
+};
+
 /** Queue states. Amber is CPR-300's "warning" hue, reused rather than re-chosen. */
 export const QUEUE_SWATCH: Record<string, { dot: string; chip: string }> = {
   WAITING: { dot: "bg-amber-500", chip: "bg-amber-100 text-amber-800" },
