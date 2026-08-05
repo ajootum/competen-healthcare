@@ -91,7 +91,15 @@ export const PRACTICE_NAV: PracticeNavItem[] = [
   // ── PRACTICE: running today ────────────────────────────────────────────────────────────────────
   // "Practice Command Centre", not "Home". The comp renames it and the name is the better one: this is
   // where a clinic morning is started, and "Home" says nothing about that.
-  { href: "/practice/home", label: "Practice Command Centre", icon: "⌂", capability: "practice.home.view", group: "Practice", phase: 0, built: true },
+  { href: "/practice/home", label: "Practice Home", icon: "⌂", capability: "practice.home.view", group: "Practice", phase: 0, built: true },
+  // CPR-V3-002's second item, and the one its acceptance criteria are measured against: "Open Today's Work
+  // in under two clicks." It is second in the sidebar, so it is one.
+  //
+  // IT DOES NOT REPLACE THE CALENDAR. The calendar is the diary -- what is booked, when, and where. This is
+  // the day you are actually in: what is running, who is waiting, what is overdue. V3 separates them on
+  // purpose ("appointments are inputs, not the centre of the system"), and collapsing them back together
+  // would lose exactly the distinction the volume is about.
+  { href: "/practice/today", label: "Today's Work", icon: "◔", capability: "practice.home.view", group: "Practice", phase: 0, built: true },
   { href: "/practice/calendar", label: "Calendar", icon: "▤", capability: "practice.calendar.view", group: "Practice", phase: 1, built: true },
   // The comp lists Calendar and Appointments separately. They are one route -- CPR-CAL-001 built a day
   // view WITH the booking console on it -- and two entries pointing at the same page teaches people that
