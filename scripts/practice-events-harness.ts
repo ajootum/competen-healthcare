@@ -101,13 +101,19 @@ async function main() {
   const ctxA = ctxFor(wsA, userA);
   const ctxB = ctxFor(wsB, userB);
 
-  // Provisioning creates the practice's first location, which is what makes the envelope's location_id
-  // assertion mean something instead of comparing null with null.
-  const { data: locs, error: locErr } = await admin.from("practice_location")
-    .select("id").eq("workspace_id", wsA).limit(1);
+  // ⚠ THIS CONTROL WAS DOING ITS JOB WHEN IT FAILED. It assumed provisioning creates the practice's first
+  // location. It does not -- so `locationId` was null, and every assertion downstream that checks the
+  // envelope carries the activity's location was comparing null with null and passing on nothing.
+  //
+  // The location is now CREATED here rather than hoped for. A control that depends on a side effect of
+  // some other subsystem is a control that goes quiet the day that subsystem changes, which is the one
+  // thing a control must never do.
+  const { data: made, error: locErr } = await admin.from("practice_location")
+    .insert({ workspace_id: wsA, name: "Harness Consulting Room", type: "clinic" })
+    .select("id").single();
   ok("0a-control. the practice has a location for the envelope to carry",
-    !locErr && (locs ?? []).length > 0, locErr?.message ?? "no location provisioned");
-  const locationId = ((locs ?? [])[0] as { id: string } | undefined)?.id ?? null;
+    !locErr && !!made?.id, locErr?.message ?? "no location created");
+  const locationId = (made?.id as string | undefined) ?? null;
 
   const today = (await todaysPlan(admin, ctxA)).date;
   const plan = (c: WorkspaceContext, title: string, s: number, e: number, loc: string | null = null) =>
