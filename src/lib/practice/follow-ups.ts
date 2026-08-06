@@ -1,6 +1,11 @@
 import { audit } from "@/lib/practice/provisioning";
+import { emitEvents } from "@/lib/practice/events";
 import type { EngineResult } from "@/lib/practice/encounters";
-import { FOLLOW_UP_TRANSITIONS, CLOSED_FOLLOW_UP_STATUSES, FOLLOW_UP_KINDS, FOLLOW_UP_PRIORITIES, FOLLOW_UP_OUTCOMES } from "@/lib/practice/follow-up-constants";
+import {
+  FOLLOW_UP_TRANSITIONS, CLOSED_FOLLOW_UP_STATUSES, FOLLOW_UP_KINDS, FOLLOW_UP_PRIORITIES,
+  FOLLOW_UP_OUTCOMES, FOLLOW_UP_SOURCES, FOLLOW_UP_ORIGIN_WORKSPACES, FOLLOW_UP_VIEWS,
+  DUE_WEEK_DAYS, type FollowUpDueState, type FollowUpView,
+} from "@/lib/practice/follow-up-constants";
 import { dueDateFrom, workspaceClock } from "@/lib/practice/practice-time";
 
 // CPR-140 FOLLOW-UP MANAGEMENT / PEN-004. The obligation loop: due -> overdue -> scheduled -> closed.
@@ -43,22 +48,58 @@ const daysBetween = (fromIso: string, toIso: string) =>
  */
 export function deriveFollowUp(row: any, today: string, appointmentAt?: string | null) {
   const closed = CLOSED_FOLLOW_UP_STATUSES.includes(row.status);
-  const dueInDays = daysBetween(today, row.due_on);
+  // ── CPR-FUP-002 s4: A DEFERRAL MOVES THE DATE THAT MATTERS, IT DOES NOT SUSPEND IT ─────────────────
+  //
+  // migration 239 requires deferred_until whenever the status is DEFERRED, precisely so that a deferred
+  // obligation still has a day on which it comes back. Deriving against due_on instead would leave a
+  // deferred follow-up permanently reading "3 weeks overdue" -- and deriving against nothing at all would
+  // leave it permanently silent, which is the failure the required-date constraint exists to prevent.
+  //
+  // effectiveDueOn IS due_on for every status except DEFERRED, so nothing that existed before this line
+  // changes behaviour.
+  const effectiveDueOn: string =
+    row.status === "DEFERRED" && row.deferred_until ? String(row.deferred_until) : row.due_on;
+  const dueInDays = daysBetween(today, effectiveDueOn);
   const bookedFor = appointmentAt ? String(appointmentAt).slice(0, 10) : null;
+  const overdue =
+    !closed && (row.status === "OPEN" || row.status === "DEFERRED") && dueInDays < 0;
+
+  // ⚠ DERIVED. This is what the five summary cards and the Status column are built from, and it exists
+  // as a value rather than as five separate comparisons scattered across components so that one screen
+  // cannot decide "due today" means something a second screen disagrees with.
+  const dueState: FollowUpDueState =
+    closed ? "closed"
+      : row.status === "DRAFT" ? "draft"
+        : overdue ? "overdue"
+          : dueInDays === 0 ? "due_today"
+            : dueInDays < DUE_WEEK_DAYS ? "due_this_week"
+              : "upcoming";
+
   return {
     ...row,
     dueInDays,
-    overdue: !closed && row.status === "OPEN" && dueInDays < 0,
+    effectiveDueOn,
+    dueState,
+    overdue,
     late: !closed && row.status === "SCHEDULED" && bookedFor !== null && bookedFor > row.due_on,
     bookedFor,
     closed,
   };
 }
 
-async function recordEvent(admin: any, workspaceId: string, followUpId: string, from: string | null, to: string, actorId: string, note?: string) {
+async function recordEvent(
+  admin: any, workspaceId: string, followUpId: string, from: string | null, to: string,
+  actorId: string, note?: string,
+  // ⚠ CPR-FUP-002 s7/s9: THE DATE IT MOVED FROM IS A COLUMN, NOT PROSE. Migration 239 added
+  // from_due_on/to_due_on because a reschedule written as a sentence cannot answer "how many times has
+  // this been pushed, and by how long" -- which is the question a repeatedly-deferred obligation
+  // eventually raises, and the only one that distinguishes a rescheduled review from an abandoned one.
+  dates?: { from: string | null; to: string | null },
+) {
   await admin.from("practice_follow_up_event").insert({
     workspace_id: workspaceId, follow_up_id: followUpId, from_status: from, to_status: to,
     note: note ?? null, actor_id: actorId,
+    from_due_on: dates?.from ?? null, to_due_on: dates?.to ?? null,
   });
 }
 
@@ -73,8 +114,17 @@ export async function createFollowUp(admin: any, args: {
   workspaceId: string; patientId: string; originEncounterId?: string | null;
   problemId?: string | null; diagnosisId?: string | null;
   kind?: string; reason: string; dueOn?: string; intervalCode?: string; priority?: string;
+  // ── CPR-FUP-002 s5: EVERY FOLLOW-UP STORES WHERE IT CAME FROM ────────────────────────────────────
+  // Until migration 239 the only trace was origin_encounter_id being null or not, which cannot tell a
+  // manual commitment from one a document raised, and cannot record a source that has no row to point
+  // at. Defaulted rather than required so no existing caller changes meaning: an obligation with an
+  // encounter behind it IS an encounter one, and one without is manual.
+  source?: string;
+  originWorkspace?: string | null;
+  /** DRAFT for one being composed. Anything else is refused -- see below. */
+  status?: string;
   actorId: string; correlationId: string;
-}): Promise<EngineResult<{ id: string; dueOn: string }>> {
+}): Promise<EngineResult<{ id: string; dueOn: string; status: string; source: string }>> {
   if (!args.reason.trim())
     return { ok: false, status: 400, code: "VALIDATION_ERROR", message: "a follow-up must say what it is for" };
 
@@ -113,20 +163,84 @@ export async function createFollowUp(admin: any, args: {
   const kind = FOLLOW_UP_KINDS.some(([k]) => k === args.kind) ? args.kind! : "review";
   const priority = (FOLLOW_UP_PRIORITIES as readonly string[]).includes(args.priority ?? "") ? args.priority! : "routine";
 
+  // A NAMED SOURCE IS VALIDATED, AN ABSENT ONE IS INFERRED. Inferring it from the encounter link is the
+  // only inference that cannot be wrong: there either is a consultation behind this or there is not.
+  const source = args.source ?? (originEncounterId ? "encounter" : "manual");
+  if (!FOLLOW_UP_SOURCES.some(([c]) => c === source))
+    return {
+      ok: false, status: 400, code: "UNKNOWN_SOURCE",
+      message: `a source must be one of: ${FOLLOW_UP_SOURCES.map(([c]) => c).join(", ")}`,
+    };
+  // ⚠ REFUSED RATHER THAN CORRECTED. Accepting source:"investigation" with no investigation behind it
+  // would make the column unusable for the one question it exists to answer -- and silently rewriting it
+  // to "manual" would be this engine deciding a caller meant something it did not say.
+  if (source === "encounter" && !originEncounterId)
+    return {
+      ok: false, status: 422, code: "SOURCE_WITHOUT_ORIGIN",
+      message: "a follow-up whose source is an encounter must name the encounter",
+    };
+
+  const originWorkspace = args.originWorkspace ?? null;
+  if (originWorkspace && !(FOLLOW_UP_ORIGIN_WORKSPACES as readonly string[]).includes(originWorkspace))
+    return {
+      ok: false, status: 400, code: "UNKNOWN_ORIGIN_WORKSPACE",
+      message: `an originating workspace must be one of: ${FOLLOW_UP_ORIGIN_WORKSPACES.join(", ")}`,
+    };
+
+  // Only DRAFT may be asked for. Every other opening status is either what this already does (OPEN) or a
+  // claim about something that has not happened yet -- a follow-up cannot be born COMPLETED.
+  const status = args.status === "DRAFT" ? "DRAFT" : "OPEN";
+  if (args.status && args.status !== "DRAFT" && args.status !== "OPEN")
+    return {
+      ok: false, status: 422, code: "ILLEGAL_OPENING_STATUS",
+      message: "a follow-up opens as OPEN, or as DRAFT while it is being composed",
+    };
+
   const { data: f, error } = await admin.from("practice_follow_up").insert({
     workspace_id: args.workspaceId, patient_id: args.patientId, origin_encounter_id: originEncounterId,
     problem_id: args.problemId ?? null, diagnosis_id: args.diagnosisId ?? null,
-    kind, reason: args.reason.trim(), due_on: dueOn, priority, status: "OPEN",
+    kind, reason: args.reason.trim(), due_on: dueOn, priority, status,
+    source, origin_workspace: originWorkspace,
     created_by: args.actorId, updated_by: args.actorId,
-  }).select("id, due_on").single();
+  }).select("id, due_on, status, source").single();
   if (error) return { ok: false, status: 400, code: "VALIDATION_ERROR", message: error.message };
 
-  await recordEvent(admin, args.workspaceId, f.id, null, "OPEN", args.actorId, args.reason.trim());
+  await recordEvent(admin, args.workspaceId, f.id, null, status, args.actorId, args.reason.trim(),
+    { from: null, to: dueOn });
   await audit(admin, {
     workspaceId: args.workspaceId, actorId: args.actorId, eventType: "practice.followup_raised",
-    payload: { followUpId: f.id, patientId: args.patientId, dueOn, kind }, correlationId: args.correlationId,
+    payload: { followUpId: f.id, patientId: args.patientId, dueOn, kind, source, status },
+    correlationId: args.correlationId,
   });
-  return { ok: true, data: { id: f.id as string, dueOn: f.due_on as string } };
+
+  // ── CPR-FUP-002 s10, AND THE HALF OF IT THAT CANNOT BE BUILT ────────────────────────────────────────
+  //
+  // s10 asks for five platform events: Created, Due, Overdue, Completed, Cancelled. The outbox
+  // (practice_domain_event, migration 233) has a CLOSED event_type check holding four follow-up names:
+  // followup.created, followup.booked, followup.due, followup.completed.
+  //
+  //   followup.created    emitted here.
+  //   followup.completed  emitted from closeFollowUp.
+  //   followup.due        ⚠ NOT EMITTED, AND NOT BECAUSE IT IS MISSING -- it is in the catalogue. It is
+  //                       not emitted because DUE IS DERIVED. Emitting it would require something to run
+  //                       each morning to notice, and that is the stored-DUE mistake wearing an event's
+  //                       clothes: the practice that opened the app least would get the fewest events.
+  //   followup.overdue    ABSENT from the catalogue. Not invented here -- widening a closed CHECK is a
+  //   followup.cancelled  migration, and this build does not write one. Reported instead.
+  //
+  // A failed emit never fails the write it describes (events.ts's own rule): a lost event costs
+  // freshness, a lost obligation costs a patient.
+  await emitEvents(admin, [{
+    eventType: "followup.created", practiceId: args.workspaceId,
+    practitionerId: args.actorId, actorId: args.actorId, source: "web",
+    patientId: args.patientId, encounterId: originEncounterId,
+    payload: { followUpId: f.id, dueOn, kind, followUpSource: source, status },
+  }]);
+
+  return {
+    ok: true,
+    data: { id: f.id as string, dueOn: f.due_on as string, status: f.status as string, source: f.source as string },
+  };
 }
 
 /**
@@ -186,7 +300,7 @@ export async function closeFollowUp(admin: any, args: {
   closingEncounterId?: string | null; actorId: string; correlationId: string;
 }): Promise<EngineResult<{ status: string }>> {
   const { data: f } = await admin.from("practice_follow_up")
-    .select("id, status, patient_id, plan_id, record_version").eq("id", args.followUpId).eq("workspace_id", args.workspaceId).maybeSingle();
+    .select("id, status, patient_id, plan_id, due_on, record_version").eq("id", args.followUpId).eq("workspace_id", args.workspaceId).maybeSingle();
   if (!f) return { ok: false, status: 404, code: "NOT_FOUND", message: "Not found" };
   if (!(FOLLOW_UP_TRANSITIONS[f.status] ?? []).includes(args.to))
     return { ok: false, status: 422, code: "ILLEGAL_TRANSITION", message: `${f.status} cannot become ${args.to}` };
@@ -233,6 +347,11 @@ export async function closeFollowUp(admin: any, args: {
     closed_at: closing ? nowIso() : null,
     closed_by: closing ? args.actorId : null,
   };
+  // A DEFERRAL IS NOT A CLOSE AND IS NOT REACHED THROUGH HERE (see deferFollowUp): it needs a date, and
+  // a status change that silently left deferred_until behind would be refused by the database anyway.
+  // Leaving the old date on a follow-up that is no longer DEFERRED would be worse than refusing it, so
+  // moving OFF deferred clears it.
+  if (args.to !== "DEFERRED") patch.deferred_until = null;
   // Reopening lets go of the dead booking; otherwise the board offers an appointment nobody will attend.
   // It also clears the outcome, because `outcome` describes HOW THIS WAS CLOSED and it is no longer
   // closed. The words are not lost -- the event trail keeps them against the move that wrote them, which
@@ -259,7 +378,169 @@ export async function closeFollowUp(admin: any, args: {
     eventType: `practice.followup_${args.to.toLowerCase()}`,
     payload: { followUpId: f.id, closingEncounterId, outcomeCode }, correlationId: args.correlationId,
   });
+
+  // s10's `followup.completed`. Only COMPLETED has a name in the outbox's closed catalogue -- MISSED and
+  // CANCELLED do not, and are recorded in the audit log above rather than announced under a borrowed name.
+  if (args.to === "COMPLETED") {
+    await emitEvents(admin, [{
+      eventType: "followup.completed", practiceId: args.workspaceId,
+      practitionerId: args.actorId, actorId: args.actorId, source: "web",
+      patientId: f.patient_id, encounterId: closingEncounterId,
+      payload: { followUpId: f.id, outcomeCode, closedBy: closingEncounterId ? "encounter" : "manual" },
+    }]);
+  }
   return { ok: true, data: { status: args.to } };
+}
+
+// ════════════════════════════════════════════════════════════════════════════════════════════════════
+// CPR-FUP-002 s7: RESCHEDULING, AND WHY THE OLD DATE HAS TO SURVIVE IT
+//
+// "Changing the due date preserves audit history. The original due date remains available in the audit
+// log." Written as an UPDATE to due_on and nothing else, that requirement is silently unmet: the column
+// holds one date, the previous one is gone, and the record cannot answer how long somebody has actually
+// been waiting. Migration 239's from_due_on/to_due_on on the event row is where the old date lives, and
+// this is the only function that writes them for a move.
+// ════════════════════════════════════════════════════════════════════════════════════════════════════
+
+export async function rescheduleFollowUp(admin: any, args: {
+  workspaceId: string; followUpId: string; dueOn: string; reason?: string;
+  actorId: string; correlationId: string;
+}): Promise<EngineResult<{ dueOn: string; previousDueOn: string }>> {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(args.dueOn))
+    return { ok: false, status: 400, code: "VALIDATION_ERROR", message: "dueOn must be a date (YYYY-MM-DD)" };
+
+  const { data: f } = await admin.from("practice_follow_up")
+    .select("id, status, due_on, record_version").eq("id", args.followUpId).eq("workspace_id", args.workspaceId).maybeSingle();
+  if (!f) return { ok: false, status: 404, code: "NOT_FOUND", message: "Not found" };
+  if (CLOSED_FOLLOW_UP_STATUSES.includes(f.status))
+    return {
+      ok: false, status: 422, code: "ALREADY_CLOSED",
+      message: `this follow-up is ${f.status.toLowerCase()}; reopen it before moving its date`,
+    };
+  if (f.due_on === args.dueOn)
+    return { ok: false, status: 422, code: "NO_CHANGE", message: "that is the date it is already due" };
+
+  const { data: updated } = await admin.from("practice_follow_up")
+    .update({
+      due_on: args.dueOn, record_version: f.record_version + 1,
+      updated_at: nowIso(), updated_by: args.actorId,
+    })
+    .eq("id", f.id).eq("record_version", f.record_version).select("id").maybeSingle();
+  if (!updated) return { ok: false, status: 409, code: "VERSION_CONFLICT", message: "the follow-up changed underneath you; reload and retry" };
+
+  // from_status === to_status on purpose: nothing about the obligation's state changed, only its date.
+  // An event that claimed a transition would put a status change in the trail that never happened.
+  await recordEvent(admin, args.workspaceId, f.id, f.status, f.status, args.actorId,
+    args.reason?.trim() || undefined, { from: f.due_on, to: args.dueOn });
+  await audit(admin, {
+    workspaceId: args.workspaceId, actorId: args.actorId, eventType: "practice.followup_rescheduled",
+    payload: { followUpId: f.id, from: f.due_on, to: args.dueOn }, correlationId: args.correlationId,
+  });
+  return { ok: true, data: { dueOn: args.dueOn, previousDueOn: f.due_on as string } };
+}
+
+/**
+ * CPR-FUP-002 s4's Deferred, with the date it is deferred TO.
+ *
+ * THE DATE IS REQUIRED HERE AS WELL AS IN THE DATABASE. migration 239's check would refuse it anyway;
+ * refusing it here means the caller gets a sentence rather than a constraint violation, and the refusal
+ * is the same one either way.
+ */
+export async function deferFollowUp(admin: any, args: {
+  workspaceId: string; followUpId: string; until: string; reason?: string;
+  actorId: string; correlationId: string;
+}): Promise<EngineResult<{ status: string; until: string }>> {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(args.until ?? ""))
+    return {
+      ok: false, status: 400, code: "DEFERRAL_NEEDS_DATE",
+      message: "say when this comes back -- a deferral with no date is an obligation nobody is reminded of again",
+    };
+
+  const { data: f } = await admin.from("practice_follow_up")
+    .select("id, status, due_on, patient_id, record_version").eq("id", args.followUpId).eq("workspace_id", args.workspaceId).maybeSingle();
+  if (!f) return { ok: false, status: 404, code: "NOT_FOUND", message: "Not found" };
+  if (!(FOLLOW_UP_TRANSITIONS[f.status] ?? []).includes("DEFERRED"))
+    return { ok: false, status: 422, code: "ILLEGAL_TRANSITION", message: `${f.status} cannot become DEFERRED` };
+
+  const { data: updated, error } = await admin.from("practice_follow_up")
+    .update({
+      status: "DEFERRED", deferred_until: args.until,
+      record_version: f.record_version + 1, updated_at: nowIso(), updated_by: args.actorId,
+    })
+    .eq("id", f.id).eq("record_version", f.record_version).select("id").maybeSingle();
+  if (error) return { ok: false, status: 422, code: "REFUSED_BY_DATABASE", message: error.message };
+  if (!updated) return { ok: false, status: 409, code: "VERSION_CONFLICT", message: "the follow-up changed underneath you; reload and retry" };
+
+  // The dates go in the event too: a deferral IS a reschedule with a status attached, and "how many
+  // times has this been pushed" must be answerable over both without knowing which word was used.
+  await recordEvent(admin, args.workspaceId, f.id, f.status, "DEFERRED", args.actorId,
+    args.reason?.trim() || undefined, { from: f.due_on, to: args.until });
+  await audit(admin, {
+    workspaceId: args.workspaceId, actorId: args.actorId, eventType: "practice.followup_deferred",
+    payload: { followUpId: f.id, until: args.until }, correlationId: args.correlationId,
+  });
+  return { ok: true, data: { status: "DEFERRED", until: args.until } };
+}
+
+// ════════════════════════════════════════════════════════════════════════════════════════════════════
+// CPR-FUP-001 s10 AND CPR-FUP-002 s6 AND s12: "COMPLETING THE LINKED ENCOUNTER COMPLETES THE FOLLOW-UP"
+//
+// ⚠ THIS IS AN ACCEPTANCE CRITERION IN BOTH DOCUMENTS AND IT DID NOT HAPPEN. A practitioner booked the
+// review, saw the patient, closed the consultation -- and the obligation stayed open on the board,
+// waiting to be ticked a second time by hand. The board then said somebody was owed a review they had
+// already had, which is worse than saying nothing: it is a false positive in the one list whose value is
+// that everything on it is real.
+//
+// WHICH ENCOUNTER IS "THE LINKED ONE". Not origin_encounter_id -- that is the consultation that RAISED
+// the obligation, and closing it must not settle it (that would complete every follow-up the moment it
+// was created). The link is the BOOKING: the follow-up was scheduled against an appointment, the
+// encounter was launched from that same appointment, so that encounter is the review this obligation
+// was asking for.
+//
+// THE CONTROL IS PART OF THE DESIGN, not just the harness: a follow-up for the SAME PATIENT that is not
+// linked to that appointment is untouched. Completing every open obligation a patient has because one
+// of them was met is the same false-positive problem pointing the other way.
+// ════════════════════════════════════════════════════════════════════════════════════════════════════
+
+/** The statuses that mean a consultation is finished. AMENDED counts: it is a signed record, corrected. */
+const SETTLING_ENCOUNTER_STATUSES = ["COMPLETED", "SIGNED", "AMENDED"];
+
+export async function settleFollowUpsForEncounter(admin: any, args: {
+  workspaceId: string; encounterId: string; actorId: string; correlationId: string;
+}): Promise<EngineResult<{ completed: string[]; skipped: string[] }>> {
+  const { data: enc, error: encErr } = await admin.from("practice_encounter")
+    .select("id, status, patient_id, appointment_id")
+    .eq("id", args.encounterId).eq("workspace_id", args.workspaceId).maybeSingle();
+  // ⚠ A FAILED READ IS NOT "NOTHING TO SETTLE". Reported, so a caller can say the encounter closed but
+  // the obligation may not have -- rather than silently leaving one open and claiming success.
+  if (encErr) return { ok: false, status: 500, code: "READ_FAILED", message: encErr.message };
+  if (!enc) return { ok: false, status: 404, code: "NOT_FOUND", message: "Not found" };
+  if (!SETTLING_ENCOUNTER_STATUSES.includes(enc.status))
+    return { ok: true, data: { completed: [], skipped: [] } };
+  // No booking behind it means nothing was ever linked to it. A walk-in settles nothing automatically,
+  // and inferring "the patient was seen, so close everything" is exactly the leap that must not be made.
+  if (!enc.appointment_id) return { ok: true, data: { completed: [], skipped: [] } };
+
+  const { data: rows, error } = await admin.from("practice_follow_up")
+    .select("id, status, patient_id")
+    .eq("workspace_id", args.workspaceId)
+    .eq("appointment_id", enc.appointment_id);
+  if (error) return { ok: false, status: 500, code: "READ_FAILED", message: error.message };
+
+  const completed: string[] = [];
+  const skipped: string[] = [];
+  for (const f of (rows ?? []) as any[]) {
+    if (CLOSED_FOLLOW_UP_STATUSES.includes(f.status)) { skipped.push(f.id); continue; }
+    // Routed through closeFollowUp rather than an UPDATE, so the state machine, the event trail, the
+    // audit entry, the domain event and the plan reconciliation all happen exactly as they do when a
+    // human clicks. A second write path for the same act is how two of them stop agreeing.
+    const done = await closeFollowUp(admin, {
+      workspaceId: args.workspaceId, followUpId: f.id, to: "COMPLETED",
+      closingEncounterId: enc.id, actorId: args.actorId, correlationId: args.correlationId,
+    });
+    if (done.ok) completed.push(f.id); else skipped.push(f.id);
+  }
+  return { ok: true, data: { completed, skipped } };
 }
 
 type ListFilter = { patientId?: string; status?: string[]; limit?: number };
@@ -283,7 +564,10 @@ export type FollowUpList = { items: ListedFollowUp[]; unavailable: boolean; deta
 /** Follow-ups with their derived state, their patient's name, and any booking behind them. */
 export async function listFollowUps(admin: any, workspaceId: string, filter: ListFilter = {}): Promise<FollowUpList> {
   let q = admin.from("practice_follow_up")
-    .select("id, patient_id, origin_encounter_id, problem_id, diagnosis_id, plan_id, step_number, kind, reason, due_on, priority, status, appointment_id, closing_encounter_id, outcome, outcome_code, closed_at, created_at, record_version")
+    // migration 239's three columns are read here and nowhere else: `source` and `origin_workspace` are
+    // CPR-FUP-001 s4's Source column, and `deferred_until` is what deriveFollowUp measures a deferred
+    // obligation against. A screen cannot show a Source column over a query that does not select it.
+    .select("id, patient_id, origin_encounter_id, problem_id, diagnosis_id, plan_id, step_number, kind, reason, due_on, priority, status, source, origin_workspace, deferred_until, appointment_id, closing_encounter_id, outcome, outcome_code, closed_at, created_at, record_version")
     .eq("workspace_id", workspaceId);
   if (filter.patientId) q = q.eq("patient_id", filter.patientId);
   if (filter.status?.length) q = q.in("status", filter.status);
@@ -331,8 +615,14 @@ export async function listFollowUps(admin: any, workspaceId: string, filter: Lis
  * bury the people who have been waiting longest under the people who have been waiting least.
  */
 export async function followUpBoard(admin: any, workspaceId: string, horizonDays = 14) {
-  const open = await listFollowUps(admin, workspaceId, { status: ["OPEN", "SCHEDULED"] });
+  // ⚠ DEFERRED IS READ HERE OR IT DISAPPEARS. This board feeds the command centre as well as its own
+  // page; a status added to the table and not added to this query would leave every deferred obligation
+  // invisible on both, which is the same silence the whole module exists to prevent. DRAFT is
+  // deliberately NOT read: nothing is owed yet, and a draft on the board would be a commitment nobody
+  // has made.
+  const open = await listFollowUps(admin, workspaceId, { status: ["OPEN", "SCHEDULED", "DEFERRED"] });
   const closed = await listFollowUps(admin, workspaceId, { status: ["COMPLETED", "MISSED", "CANCELLED"], limit: 25 });
+  const unbooked = (f: ListedFollowUp) => f.status === "OPEN" || f.status === "DEFERRED";
 
   // ⚠ THE BOARD CARRIES THE UNAVAILABILITY UP, IT DOES NOT ABSORB IT. Four empty groups look exactly
   // like a practice that owes nothing, and this is the screen where that misreading costs the most. Only
@@ -341,9 +631,9 @@ export async function followUpBoard(admin: any, workspaceId: string, horizonDays
   // board that is otherwise correct.
   return {
     overdue: open.items.filter(f => f.overdue),
-    dueSoon: open.items.filter(f => !f.overdue && f.status === "OPEN" && f.dueInDays <= horizonDays),
+    dueSoon: open.items.filter(f => !f.overdue && unbooked(f) && f.dueInDays <= horizonDays),
     scheduled: open.items.filter(f => f.status === "SCHEDULED"),
-    later: open.items.filter(f => !f.overdue && f.status === "OPEN" && f.dueInDays > horizonDays),
+    later: open.items.filter(f => !f.overdue && unbooked(f) && f.dueInDays > horizonDays),
     recentlyClosed: closed.items
       .sort((a, b) => String(b.closed_at ?? "").localeCompare(String(a.closed_at ?? "")))
       .slice(0, 10),
@@ -354,6 +644,117 @@ export async function followUpBoard(admin: any, workspaceId: string, horizonDays
   };
 }
 
+// ════════════════════════════════════════════════════════════════════════════════════════════════════
+// CPR-FUP-001 s4: THE WORKSPACE -- FIVE SUMMARY CARDS OVER ONE WORK QUEUE
+//
+// ⚠ EVERY FIGURE HERE IS THE LENGTH OF A LIST YOU CAN OPEN, AND IT IS THE SAME LIST. The card carries
+// the IDS it counted, not a number: the queue for a view is produced by the SAME predicate from
+// FOLLOW_UP_VIEWS, over the SAME rows, in the same pass. There is no arithmetic anywhere in this
+// function that a list does not also perform.
+//
+// This is not defensive tidiness. A card on the Patients register counted rows while the list it opened
+// deduplicated patients, so the tile said 14 and the list showed 9, and neither piece of code looked
+// wrong on its own. The only fix that holds is the one where there is nothing to keep in step.
+//
+// ⚠ AND EVERY CARD CARRIES `unavailable` UP. Five zeroes are indistinguishable from a practice that owes
+// nothing, and this is the screen where that misreading costs the most.
+// ════════════════════════════════════════════════════════════════════════════════════════════════════
+
+export type FollowUpCard = {
+  key: string;
+  label: string;
+  blurb: string;
+  /** null when the read failed -- never 0. */
+  count: number | null;
+  /** The rows this figure counted. The queue for this view is these, in this order. */
+  ids: string[];
+};
+
+export type FollowUpWorkspace = {
+  cards: FollowUpCard[];
+  /** The queue for the requested view -- filtered by the SAME predicate the matching card counted with. */
+  rows: ListedFollowUp[];
+  /**
+   * Every row the header's filters left, before any view narrowed them.
+   *
+   * ⚠ THIS IS WHAT LETS THE SCREEN SWITCH TABS WITHOUT A ROUND TRIP AND WITHOUT A SECOND OPINION. The
+   * client applies FOLLOW_UP_VIEWS' own predicates to these rows, which are the same predicates that
+   * produced the card figures above -- so a tab cannot show a different list from the card that counts
+   * it, because there is only one rule and one set of rows. Re-fetching per tab would reintroduce
+   * exactly the gap this file's header is about.
+   */
+  allRows: ListedFollowUp[];
+  view: FollowUpView;
+  /** Every view, so the tabs can be drawn with their own figures rather than a second query each. */
+  tabs: { key: string; label: string; blurb: string; count: number | null }[];
+  today: string;
+  timezone: string;
+  /** How many obligations were read in total, before any view narrowed them. */
+  readCount: number;
+  /** True when the read limit was reached, so every figure below is a floor rather than a total. */
+  truncated: boolean;
+  unavailable: boolean;
+  detail: string | null;
+};
+
+/** The read ceiling. Named so `truncated` can be honest about which number it is. */
+const WORKSPACE_READ_LIMIT = 500;
+
+export async function followUpWorkspace(admin: any, workspaceId: string, options: {
+  view?: string | null; patientId?: string | null; search?: string | null;
+  priority?: string | null; source?: string | null;
+} = {}): Promise<FollowUpWorkspace> {
+  const { timezone, today } = await workspaceClock(admin, workspaceId);
+  const view = FOLLOW_UP_VIEWS.find(v => v.key === options.view) ?? FOLLOW_UP_VIEWS[0];
+
+  // ONE READ. Not one per card: five queries would be five chances for four to succeed and one to fail,
+  // and a row that moved between them would be counted twice or not at all.
+  const all = await listFollowUps(admin, workspaceId, {
+    patientId: options.patientId ?? undefined, limit: WORKSPACE_READ_LIMIT,
+  });
+
+  const ctx = { today };
+  const blank = (v: FollowUpView): FollowUpCard =>
+    ({ key: v.key, label: v.label, blurb: v.blurb, count: null, ids: [] });
+
+  if (all.unavailable) {
+    return {
+      cards: FOLLOW_UP_VIEWS.filter(v => v.card).map(blank),
+      rows: [], allRows: [], view,
+      tabs: FOLLOW_UP_VIEWS.map(v => ({ key: v.key, label: v.label, blurb: v.blurb, count: null })),
+      today, timezone, readCount: 0, truncated: false,
+      unavailable: true, detail: all.detail,
+    };
+  }
+
+  // The header's search and the two dropdowns. Applied BEFORE the predicates, so a card counts what the
+  // filters left -- the alternative is a card claiming 12 over a queue showing 3 with no explanation.
+  const needle = (options.search ?? "").trim().toLowerCase();
+  const filtered = all.items.filter(f => {
+    if (options.priority && f.priority !== options.priority) return false;
+    if (options.source && f.source !== options.source) return false;
+    if (!needle) return true;
+    return `${f.patient_name ?? ""} ${f.reason ?? ""} ${f.kind ?? ""}`.toLowerCase().includes(needle);
+  });
+
+  const idsFor = (v: FollowUpView) => filtered.filter(f => v.match(f, ctx)).map(f => f.id as string);
+
+  return {
+    cards: FOLLOW_UP_VIEWS.filter(v => v.card).map(v => {
+      const ids = idsFor(v);
+      return { key: v.key, label: v.label, blurb: v.blurb, count: ids.length, ids };
+    }),
+    rows: filtered.filter(f => view.match(f, ctx)),
+    allRows: filtered,
+    view,
+    tabs: FOLLOW_UP_VIEWS.map(v => ({ key: v.key, label: v.label, blurb: v.blurb, count: idsFor(v).length })),
+    today, timezone,
+    readCount: all.items.length,
+    truncated: all.items.length >= WORKSPACE_READ_LIMIT,
+    unavailable: false, detail: null,
+  };
+}
+
 /** One obligation with its own history, for the panel beside it. */
 export async function getFollowUp(admin: any, workspaceId: string, followUpId: string) {
   const { data: f } = await admin.from("practice_follow_up")
@@ -361,7 +762,9 @@ export async function getFollowUp(admin: any, workspaceId: string, followUpId: s
   if (!f) return null;
 
   const [{ data: events }, { data: patient }, { data: appt }] = await Promise.all([
-    admin.from("practice_follow_up_event").select("from_status, to_status, note, occurred_at").eq("follow_up_id", followUpId).order("occurred_at"),
+    // from_due_on/to_due_on are selected because CPR-FUP-002 s7's promise -- "the original due date
+    // remains available in the audit log" -- is only kept if something reads them back out.
+    admin.from("practice_follow_up_event").select("from_status, to_status, note, occurred_at, from_due_on, to_due_on").eq("follow_up_id", followUpId).order("occurred_at"),
     admin.from("practice_patient").select("id, display_name").eq("id", f.patient_id).maybeSingle(),
     f.appointment_id
       ? admin.from("practice_appointment").select("id, scheduled_at, status").eq("id", f.appointment_id).maybeSingle()

@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requirePracticeContext, isDenied } from "@/lib/practice/api-context";
-import { listFollowUps, createFollowUp, followUpBoard, listIntervals } from "@/lib/practice/follow-ups";
+import { listFollowUps, createFollowUp, followUpBoard, followUpWorkspace, listIntervals } from "@/lib/practice/follow-ups";
 
 // GET  /api/v1/practice/follow-ups?patientId=&status=&board=1 -- CPR-140's obligations.
+// GET  /api/v1/practice/follow-ups?workspace=1&view=&search=  -- CPR-FUP-001's cards + work queue.
 // POST /api/v1/practice/follow-ups                            -- raise one.
 //
 // VIEW AND MANAGE ARE SEPARATE CAPABILITIES, and migration 196 s4 explains why at length: an assistant
@@ -19,6 +20,20 @@ export async function GET(req: NextRequest) {
       listIntervals(auth.caller.admin),
     ]);
     return NextResponse.json({ board, intervals, correlationId: auth.caller.traceId });
+  }
+
+  // CPR-FUP-001 s4. The cards and the queue come back TOGETHER, from one read, because they are the
+  // same list looked at two ways -- see followUpWorkspace. Two endpoints would be two reads and two
+  // chances for a card to disagree with the list it opens.
+  if (url.searchParams.get("workspace") === "1") {
+    const workspace = await followUpWorkspace(auth.caller.admin, auth.ctx.workspaceId, {
+      view: url.searchParams.get("view"),
+      patientId: url.searchParams.get("patientId"),
+      search: url.searchParams.get("search"),
+      priority: url.searchParams.get("priority"),
+      source: url.searchParams.get("source"),
+    });
+    return NextResponse.json({ workspace, correlationId: auth.caller.traceId });
   }
 
   const status = url.searchParams.get("status");
@@ -57,6 +72,11 @@ export async function POST(req: NextRequest) {
     dueOn: body.dueOn ? String(body.dueOn) : undefined,
     intervalCode: body.intervalCode ? String(body.intervalCode) : undefined,
     priority: body.priority ? String(body.priority) : undefined,
+    // CPR-FUP-002 s5. `source` is passed through and VALIDATED by the engine rather than trusted:
+    // a caller claiming "investigation" with no investigation behind it is refused there.
+    source: body.source ? String(body.source) : undefined,
+    originWorkspace: body.originWorkspace ? String(body.originWorkspace) : undefined,
+    status: body.status ? String(body.status) : undefined,
     actorId: auth.caller.userId, correlationId: auth.caller.traceId,
   });
   if (!result.ok) return NextResponse.json({ error: { code: result.code, message: result.message } }, { status: result.status });
