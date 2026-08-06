@@ -1,5 +1,6 @@
 import type { WorkspaceContext } from "@/lib/practice/access";
 import { practiceToday, zonedDayRange } from "@/lib/practice/practice-time";
+import { activeFollowUps } from "@/lib/practice/session";
 import { APPOINTMENT_KINDS } from "@/lib/practice/calendar";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -157,18 +158,21 @@ export async function commandCentre(admin: any, ctx: WorkspaceContext) {
 
   // ── HERO STATS ─────────────────────────────────────────────────────────────────────────────────
   //
-  // Follow-up intelligence still needs its rows. The `newPatients` and `incoming` counts beside it fed
-  // heroStats ONLY, so they are gone with it: a query nobody reads is latency and a row cap spent on
-  // nothing, and leaving it is how somebody later argues a figure should be computed here because
-  // "we already fetch that".
-  const followUpRows = can("followup.view")
-    ? await admin.from("practice_follow_up").select("id, due_on, status, patient_id")
-      .eq("workspace_id", ctx.workspaceId).in("status", ["OPEN", "SCHEDULED", "COMPLETED"]).limit(2000)
-    : { data: null };
-
-  const follows = ((followUpRows as any)?.data ?? null) as any[] | null;
-  const openFollows = follows?.filter(f => f.status === "OPEN") ?? null;
-  const overdueFollows = openFollows?.filter(f => f.due_on < today) ?? null;
+  // ⚠ THE FOLLOW-UP ROW FETCH IS GONE, AND WITH IT A SECOND SET OF DEFINITIONS.
+  //
+  // s16.11 says one owner per metric. The cost here was not hypothetical drift -- the two had ALREADY
+  // drifted, and nothing failed, because each was self-consistent against itself:
+  //
+  //   "Overdue"       session.ts counts OPEN or SCHEDULED past its date; this counted OPEN only. A
+  //                   booked-but-late follow-up was overdue on /practice/today and not on /practice/home.
+  //   "Booked Today"  was not today's. It counted every SCHEDULED follow-up ever recorded. The label was
+  //                   false, and session.ts's name for the identical query is the honest one: "Booked".
+  //   The arithmetic  ran over a .limit(2000) row fetch counted in JavaScript, so a practice past two
+  //                   thousand follow-ups was quietly handed wrong numbers, with nothing saying so.
+  //
+  // activeFollowUps owns all seven counts now, computed by the DATABASE with `count: exact` and no cap.
+  // The only thing decided here is presentation.
+  const lenses = can("followup.view") ? await activeFollowUps(admin, ctx, today) : null;
 
   // heroStats lived here and fed the greeting card that CPR-V5-001 s2 replaced with Current Activity.
   // Dead since that commit, and a FOURTH set of definitions for figures s8 owns -- removed rather than
@@ -245,17 +249,18 @@ export async function commandCentre(admin: any, ctx: WorkspaceContext) {
   });
 
   // ── FOLLOW-UP INTELLIGENCE (the comp's five tiles) ─────────────────────────────────────────────
-  const inSevenDays = new Date(`${today}T12:00:00Z`);
-  inSevenDays.setUTCDate(inSevenDays.getUTCDate() + 7);
-  const weekAhead = inSevenDays.toISOString().slice(0, 10);
-
-  const followUpIntelligence = follows ? [
-    { key: "booked_today", label: "Booked Today", value: follows.filter(f => f.status === "SCHEDULED").length, tone: "normal" },
-    { key: "need_booking", label: "Need Booking", value: (openFollows ?? []).filter(f => f.due_on >= today).length, tone: "normal" },
-    { key: "overdue", label: "Overdue", value: (overdueFollows ?? []).length, tone: "critical" },
-    { key: "completed", label: "Completed", value: follows.filter(f => f.status === "COMPLETED").length, tone: "normal" },
-    { key: "due_week", label: "Due This Week", value: (openFollows ?? []).filter(f => f.due_on >= today && f.due_on <= weekAhead).length, tone: "normal" },
-  ] : null;
+  //
+  // Mapped from activeFollowUps, which owns the counts. The five keys the comp draws, in its order.
+  const TILE_TONE: Record<string, string> = { overdue: "critical" };
+  const TILES = ["booked", "need_booking", "overdue", "completed", "due_week"];
+  const followUpIntelligence = lenses
+    ? TILES.map(k => lenses.find(l => l.key === k))
+      // ⚠ A LENS WHOSE OWN COUNT COULD NOT BE READ IS DROPPED, NOT DRAWN AS 0. activeFollowUps returns
+      // null for a count whose query failed, and "Overdue 0" on the strength of a failed query is the
+      // reassuring answer given for the wrong reason -- the same silent zero fixed in listFollowUps.
+      .filter((l): l is NonNullable<typeof l> => !!l && l.count !== null)
+      .map(l => ({ key: l.key, label: l.label, value: l.count as number, tone: TILE_TONE[l.key] ?? "normal" }))
+    : null;
 
   // ── PRACTICE PERFORMANCE: MOVED TO metrics.ts ──────────────────────────────────────────────────
   //

@@ -1,5 +1,5 @@
 import type { WorkspaceContext } from "@/lib/practice/access";
-import { zonedDayRange } from "@/lib/practice/practice-time";
+import { zonedDayRange, dueDateFrom } from "@/lib/practice/practice-time";
 import { pauseLedger, type TodaysPlan, type PlannedActivity } from "@/lib/practice/activity";
 
 /* eslint-disable @typescript-eslint/no-explicit-any -- the Supabase admin client is untyped; every
@@ -261,13 +261,33 @@ export async function activeFollowUps(
   const base = () => admin.from("practice_follow_up")
     .select("id", { count: "exact", head: true }).eq("workspace_id", ctx.workspaceId);
 
-  const [dueToday, overdue, waitingResults, booked, completed] = await Promise.all([
+  // ⚠ THIS IS NOW THE ONLY PLACE FOLLOW-UP COUNTS ARE COMPUTED, and it had to become so because the
+  // second implementation DISAGREED with this one. command-centre.ts computed its own set and the two
+  // gave different answers for the same word on two screens a click apart:
+  //
+  //   "Overdue"      here: OPEN or SCHEDULED past its date.  There: OPEN only. A booked-but-late
+  //                  follow-up was overdue on one page and not on the other.
+  //   "Booked Today" there, and it was not today's -- it counted every SCHEDULED follow-up ever. The
+  //                  label was simply false, and this file's own name for the same query is "Booked".
+  //   The counts     there came from a .limit(2000) row fetch counted in JavaScript, so a practice with
+  //                  more than two thousand follow-ups was quietly given wrong numbers. These are
+  //                  `count: exact, head: true` -- the database counts, and no cap applies.
+  //
+  // ONE OWNER PER METRIC (CPR-CORE-001 s16.11). Two implementations do not merely risk drift; these had
+  // already drifted, and nothing failed, because each was correct against itself.
+  const weekAhead = dueDateFrom(today, 7);
+
+  const [dueToday, overdue, waitingResults, booked, completed, needBooking, dueWeek] = await Promise.all([
     base().in("status", ["OPEN", "SCHEDULED"]).eq("due_on", today),
     base().in("status", ["OPEN", "SCHEDULED"]).lt("due_on", today),
     // "Waiting Results" is a real kind, not a status invented for this card.
     base().in("status", ["OPEN", "SCHEDULED"]).eq("kind", "investigation_result"),
     base().eq("status", "SCHEDULED"),
     base().eq("status", "COMPLETED"),
+    // OPEN and not yet past due: an obligation nobody has booked a slot for. SCHEDULED is excluded
+    // because that is precisely the one that HAS been booked.
+    base().eq("status", "OPEN").gte("due_on", today),
+    base().eq("status", "OPEN").gte("due_on", today).lte("due_on", weekAhead),
   ]);
 
   const n = (r: any) => (r.error ? null : (r.count ?? 0));
@@ -277,6 +297,8 @@ export async function activeFollowUps(
     { key: "waiting_results", label: "Waiting Results", count: n(waitingResults), href: "/practice/follow-ups" },
     { key: "booked", label: "Booked", count: n(booked), href: "/practice/follow-ups" },
     { key: "completed", label: "Completed", count: n(completed), href: "/practice/follow-ups" },
+    { key: "need_booking", label: "Need Booking", count: n(needBooking), href: "/practice/follow-ups" },
+    { key: "due_week", label: "Due This Week", count: n(dueWeek), href: "/practice/follow-ups" },
   ];
 }
 

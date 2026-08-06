@@ -26,6 +26,7 @@
  *   npx --yes tsx scripts/practice-command-centre-harness.ts
  */
 import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { loadEnvConfig } from "@next/env";
 import { createClient } from "@supabase/supabase-js";
 import { runProvisioning, type IndividualRequest } from "../src/lib/practice/provisioning";
@@ -33,6 +34,9 @@ import { resolveWorkspaceContext } from "../src/lib/practice/access";
 import { registerPatient } from "../src/lib/practice/patients";
 import { bookAppointment } from "../src/lib/practice/scheduling";
 import { commandCentre } from "../src/lib/practice/command-centre";
+import { activeFollowUps } from "../src/lib/practice/session";
+import { createFollowUp } from "../src/lib/practice/follow-ups";
+import { practiceToday } from "../src/lib/practice/practice-time";
 import { practiceMetrics, metricScope, MIN_OBSERVATIONS_FOR_DELAY } from "../src/lib/practice/metrics";
 import { DASHBOARD_WIDGETS } from "../src/lib/practice/preference-constants";
 import { PERFORMANCE_SWATCH } from "../src/lib/practice/palette";
@@ -382,6 +386,64 @@ async function main() {
     JSON.stringify(bCentre.weekLocations.map(d => d.locationName)));
   ok("11d CONTROL: practice A does see its own, so 11a is not vacuous", cohorts.timeline.length === 3,
     String(cohorts.timeline.length));
+
+  // ── 12. ONE OWNER PER METRIC, AND THE TWO OWNERS HAD DISAGREED ─────────────────────────────────
+  //
+  // ⚠ THIS FILE COMPUTED ITS OWN FOLLOW-UP COUNTS AND THEY DID NOT MATCH session.ts's. Nothing failed,
+  // because each was self-consistent -- which is exactly why s16.11's one-owner rule is a rule and not a
+  // preference. Two implementations do not risk drift; these had already drifted:
+  //
+  //   "Overdue"       session.ts counts OPEN or SCHEDULED past its date; this counted OPEN only, so a
+  //                   booked-but-late follow-up was overdue on one screen and not on the other.
+  //   "Booked Today"  counted every SCHEDULED follow-up ever recorded. The label was false.
+  //   The counts      came from a .limit(2000) fetch counted in JavaScript -- silently wrong past 2,000.
+  //
+  // The assertion is EQUALITY AGAINST THE OWNER, not a re-typed expected number. A hardcoded figure here
+  // would pass while both sides were wrong together, which is the failure it exists to prevent.
+  // ⚠ THE FIXTURE HAD NO FOLLOW-UPS, SO 12a's EQUALITY WAS 0 === 0 FIVE TIMES. The control caught it,
+  // which is the only reason this block exists: an equality between two implementations that both
+  // return nothing proves they are both silent, not that they agree. Two rows, deliberately in
+  // different states, so the counts they land in are different from each other.
+  const { data: anyPatient } = await admin.from("practice_patient")
+    .select("id").eq("workspace_id", wsA).limit(1).maybeSingle();
+  if (!anyPatient) throw new Error("fixture has no patient to hang a follow-up on");
+  const yesterday = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
+  for (const [dueOn, reason] of [[yesterday, "overdue one"], [practiceToday(TZ), "due today"]]) {
+    const made = await createFollowUp(admin, {
+      workspaceId: wsA, patientId: anyPatient.id, reason, dueOn,
+      actorId: OWNER, correlationId: "harness-cc",
+    });
+    if (!made.ok) throw new Error(`follow-up fixture failed: ${made.message}`);
+  }
+
+  // Read AFTER the fixture exists. The first version compared against `cohorts`, a commandCentre result
+  // captured earlier in this file -- so the tiles were a stale zero and the equality failed against a
+  // live owner. An assertion about two implementations agreeing has to read both at the same moment.
+  const owner = await activeFollowUps(admin, ctxA.ctx, practiceToday(TZ));
+  const fresh = await commandCentre(admin, ctxA.ctx);
+  const tiles = fresh.followUpIntelligence ?? [];
+  const ownerBy = new Map(owner.map(l => [l.key, l.count]));
+  const mismatched = tiles.filter(t => ownerBy.get(t.key) !== t.value);
+  ok("12a. ⚠ every follow-up tile equals the count activeFollowUps computed -- one owner, one answer",
+    tiles.length > 0 && mismatched.length === 0,
+    JSON.stringify({ tiles, owner: [...ownerBy] }));
+  ok("12b. and the false label is gone -- nothing claims 'Booked Today' over an all-time count",
+    !tiles.some(t => t.key === "booked_today" || /today/i.test(t.label)),
+    JSON.stringify(tiles.map(t => t.label)));
+
+  // CONTROL. 12a passes trivially against an empty tile list, and the fixture must actually contain
+  // follow-ups for the equality to mean anything.
+  ok("12c-control. the tiles are non-empty and at least one count is non-zero",
+    tiles.length >= 4 && tiles.some(t => t.value > 0),
+    JSON.stringify(tiles));
+
+  // ⚠ AND THE SECOND IMPLEMENTATION IS GONE, not merely bypassed. A source check, because an unused
+  // duplicate is the thing somebody wires back up in six months -- the reason this file already deleted
+  // heroStats rather than leaving it.
+  const ccSrc = readFileSync(join(process.cwd(), "src", "lib", "practice", "command-centre.ts"), "utf8")
+    .replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/[^\n]*/g, "");
+  ok("12d. command-centre.ts no longer fetches follow-up rows to count them itself",
+    !/from\("practice_follow_up"\)/.test(ccSrc), "it still reads practice_follow_up directly");
 
   await cleanup();
 
