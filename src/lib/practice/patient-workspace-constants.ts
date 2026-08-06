@@ -7,7 +7,10 @@
 
 /** The six operational worklists CPR-V5-006 names, in the order they cost most to ignore. */
 export const WORKLIST_KEYS = [
-  "waiting", "dueFollowUps", "pendingResults", "walkIns", "recentPatients", "newRegistrations",
+  // CPR-PAT-002 s3 splits these across two rows: Today's Care (what is happening now) and Continuing
+  // Care (what is owed). The order here is still "cost of ignoring", which is what the tiles sort by.
+  "waiting", "inConsultation", "walkIns", "followUpsToday", "urgentReviews",
+  "dueFollowUps", "pendingResults", "recentPatients", "newRegistrations",
 ] as const;
 export type WorklistKey = (typeof WORKLIST_KEYS)[number];
 
@@ -46,9 +49,30 @@ export const WORKLIST_META: Record<WorklistKey, { title: string; note: string; h
     // What a ROW is here. The card counts patients; this names what sits behind that figure.
     rowNoun: "queue entries",
   },
+  inConsultation: {
+    title: "In consultation",
+    note: "With a clinician right now. These people are also counted in Waiting, which answers who is in the building.",
+    href: "/practice/patients?list=inConsultation",
+    capability: "practice.calendar.view",
+    rowNoun: "queue entries",
+  },
+  followUpsToday: {
+    title: "Follow-ups today",
+    note: "Open obligations due today, on this practice's calendar. Yesterday's and earlier are counted as overdue, not here.",
+    href: "/practice/patients?list=followUpsToday",
+    capability: "followup.view",
+    rowNoun: "obligations",
+  },
+  urgentReviews: {
+    title: "Urgent reviews",
+    note: "Obligations marked urgent or soon whose date has arrived. Priority is what the practitioner set, never inferred.",
+    href: "/practice/patients?list=urgentReviews",
+    capability: "followup.view",
+    rowNoun: "obligations",
+  },
   dueFollowUps: {
-    title: "Due follow-ups",
-    note: "Open obligations whose due date has arrived or passed, measured against this practice's today.",
+    title: "Overdue follow-ups",
+    note: "Open obligations whose due date has PASSED. Today's are on the Follow-ups today card, so this figure is the backlog and nothing else.",
     href: "/practice/follow-ups",
     capability: "followup.view",
     // What a ROW is here. The card counts patients; this names what sits behind that figure.

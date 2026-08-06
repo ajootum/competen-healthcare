@@ -443,16 +443,23 @@ export async function worklists(
   // Names come from patient.view, separately from the right to see the list at all. Rule 5.
   const mayName = can("patient.view");
 
-  const [waiting, dueFollowUps, pendingResults, walkInQueue, walkInAppts, recent, registered] = await Promise.all([
+  const [waiting, dueFollowUps, pendingResults, walkInQueue, walkInAppts, recent, registered,
+    inConsultation, followUpsToday, urgentReviews] = await Promise.all([
     probe(can(WORKLIST_META.waiting.capability), limit, () => admin.from("practice_queue_entry")
       .select("id, patient_id, patient_name, status, entered_at")
       .eq("workspace_id", ws).in("status", ["WAITING", "READY", "IN_CONSULTATION", "PAUSED"])
       .order("entered_at").limit(limit + 1)),
-    // DUE IS DERIVED, NOT STORED -- and it is compared against the PRACTICE's today. `due_on <= today`
-    // is the whole of "overdue or due now"; migration 196 refuses to keep a status column for it.
+    // DUE IS DERIVED, NOT STORED -- and it is compared against the PRACTICE's today. Migration 196
+    // refuses to keep a status column for it.
+    //
+    // ⚠ THIS IS NOW `< today`, STRICTLY OVERDUE, AND THE CHANGE IS THE POINT. It was `<= today`, so the
+    // list contained today's obligations as well and the card had to be retitled "due & overdue" to
+    // avoid overstating the backlog. CPR-PAT-002 asks for a separate Follow-ups Today card, and with
+    // both present each predicate can be honest: today's are `= today` below, these are the late ones,
+    // and neither double-counts the other.
     probe(can(WORKLIST_META.dueFollowUps.capability), limit, () => admin.from("practice_follow_up")
       .select("id, patient_id, reason, kind, due_on, priority, status")
-      .eq("workspace_id", ws).eq("status", "OPEN").lte("due_on", today)
+      .eq("workspace_id", ws).eq("status", "OPEN").lt("due_on", today)
       .order("due_on").limit(limit + 1)),
     // WHAT CAME BACK, NOT WHAT WAS ASKED FOR. See REFUSES.orders_placed.
     probe(can(WORKLIST_META.pendingResults.capability), limit, () => admin.from("practice_incoming_document")
@@ -485,6 +492,33 @@ export async function worklists(
       .select("id, display_name, status, created_at")
       .eq("workspace_id", ws).gte("created_at", startIso).lt("created_at", endIso)
       .order("created_at", { ascending: false }).limit(limit + 1)),
+
+    // ── CPR-PAT-002's three Today's Care cards that had no engine and rendered an em dash ──────────
+    //
+    // IN CONSULTATION IS ITS OWN STATE, NOT A SLICE OF WAITING. `waiting` folds four queue states into
+    // one figure deliberately -- it answers "who is in the building" -- and CPR-PAT-002 asks separately
+    // for the people actually with a clinician. The two therefore OVERLAP BY DESIGN, and that is said on
+    // the cards rather than fixed by narrowing `waiting`, which would break the question it exists for.
+    probe(can(WORKLIST_META.inConsultation.capability), limit, () => admin.from("practice_queue_entry")
+      .select("id, patient_id, patient_name, status, entered_at")
+      .eq("workspace_id", ws).eq("status", "IN_CONSULTATION")
+      .order("entered_at").limit(limit + 1)),
+
+    // DUE TODAY, EXACTLY. Adding this is what let the list above go back to meaning OVERDUE.
+    probe(can(WORKLIST_META.followUpsToday.capability), limit, () => admin.from("practice_follow_up")
+      .select("id, patient_id, reason, kind, due_on, priority, status")
+      .eq("workspace_id", ws).eq("status", "OPEN").eq("due_on", today)
+      .order("priority").limit(limit + 1)),
+
+    // URGENT REVIEWS. Migration 196 stores priority as (routine, soon, urgent), and THIS VERY READ
+    // ALREADY SELECTED IT AND THREW IT AWAY -- the card was reported as unsupported while the column
+    // was arriving in the payload. `soon` is included with `urgent`: the card answers which reviews
+    // cannot wait, and a practitioner who marked something "soon" and finds it filed with the routine
+    // work has been ignored by the product they told.
+    probe(can(WORKLIST_META.urgentReviews.capability), limit, () => admin.from("practice_follow_up")
+      .select("id, patient_id, reason, kind, due_on, priority, status")
+      .eq("workspace_id", ws).in("status", ["OPEN", "SCHEDULED"]).in("priority", ["soon", "urgent"])
+      .lte("due_on", today).order("due_on").limit(limit + 1)),
   ]);
 
   // Names for the rows that only carry a patient id, in one query rather than one per row.
@@ -601,6 +635,29 @@ export async function worklists(
       note: r.status === "active" ? "Registered today" : `Registered today (${r.status})`,
       when: r.created_at,
     })),
+    build("inConsultation", inConsultation, r => ({
+      id: r.id, patientId: r.patient_id ?? null, fallbackName: r.patient_name,
+      note: "With a clinician now",
+      when: r.entered_at,
+    })),
+    build("followUpsToday", followUpsToday, r => ({
+      id: r.id, patientId: r.patient_id ?? null,
+      // No "due today" prefix: every row in this list is due today, and repeating it on each one costs
+      // the space the reason needs.
+      note: r.priority === "routine" ? r.reason : `${r.reason} (${r.priority})`,
+      when: r.due_on,
+    })),
+    build("urgentReviews", urgentReviews, r => {
+      const late = daysLate(r.due_on);
+      return {
+        id: r.id, patientId: r.patient_id ?? null,
+        // The PRIORITY is what the practitioner set. It is never inferred from how late something is --
+        // a routine review three weeks late is still routine, and quietly promoting it would put this
+        // product's guess where a clinician's judgement belongs.
+        note: `${r.priority}${late > 0 ? `, ${late}d overdue` : ", due today"} - ${r.reason}`,
+        when: r.due_on,
+      };
+    }),
   ];
 
   // The order is WORKLIST_KEYS, stated once as data, so the page cannot quietly re-sort itself into

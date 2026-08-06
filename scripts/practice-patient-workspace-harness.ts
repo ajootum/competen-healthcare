@@ -935,7 +935,10 @@ async function main() {
     JSON.stringify(rateShapedKeys(["completionRate", "utilisation_percent", "targetDays", "duration", "durationMinutes"])));
 
   ok("39. THE WORKSPACE ASSEMBLES ITS TWO HALVES in one call, with the capabilities it used",
-    whole.worklists.worklists.length === 6 && whole.cohort.rows.length === 5 &&
+    // Held against WORKLIST_KEYS rather than a literal. This read `=== 6` and went stale the moment
+    // CPR-PAT-002 added three cards -- a number typed here is a record of what the engine did on the day
+    // somebody wrote it, not of what it promises.
+    whole.worklists.worklists.length === WORKLIST_KEYS.length && whole.cohort.rows.length === 5 &&
     whole.capabilities.mayList === true && whole.capabilities.mayView === true &&
     whole.today === lists.today,
     JSON.stringify(whole.capabilities));
@@ -1021,8 +1024,11 @@ async function main() {
     worklistKeys.join() === worklistSwatchKeys.join(),
     `worklists: ${worklistKeys.join()} | swatches: ${worklistSwatchKeys.join()}`);
 
+  // The purpose of this control is that 42a and 42b are not comparing two empty lists. It said
+  // `worklistKeys.length === 6`, which is not that purpose -- it is a second, weaker copy of the count
+  // assertion above, and it broke when the count legitimately changed while proving nothing either way.
   ok("42-control. both vocabularies are non-empty, so the equalities are not comparing nothing",
-    statusKeys.length >= 5 && worklistKeys.length === 6,
+    statusKeys.length >= 5 && worklistKeys.length >= 6,
     `${statusKeys.length} statuses, ${worklistKeys.length} worklists`);
 
   // ⚠ AND THE SCREEN MUST ACTUALLY USE THEM. Half-fixing this was the original mistake: the design

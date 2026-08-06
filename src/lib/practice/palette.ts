@@ -152,6 +152,12 @@ export const WORKLIST_SWATCH: Record<string, { badge: string; figure: string; bo
   pendingResults: { badge: "bg-sky-100 text-sky-700", figure: "text-sky-700", box: "border-sky-200 bg-sky-50/60", icon: "⚗" },
   walkIns: { badge: "bg-violet-100 text-violet-700", figure: "text-violet-700", box: "border-violet-200 bg-violet-50/60", icon: "⚇" },
   recentPatients: { badge: "bg-slate-100 text-slate-500", figure: "text-slate-600", box: "border-slate-200 bg-slate-50/60", icon: "◔" },
+  // CPR-PAT-002's three additions. Indigo for in-consultation matches QUEUE_SWATCH.IN_CONSULTATION so
+  // one state is one colour wherever it is drawn. Cyan for today's follow-ups sits deliberately between
+  // the amber of waiting and the rose of overdue: due today is neither.
+  inConsultation: { badge: "bg-indigo-100 text-indigo-700", figure: "text-indigo-700", box: "border-indigo-200 bg-indigo-50/60", icon: "◉" },
+  followUpsToday: { badge: "bg-cyan-100 text-cyan-700", figure: "text-cyan-700", box: "border-cyan-200 bg-cyan-50/60", icon: "◷" },
+  urgentReviews: { badge: "bg-rose-100 text-rose-700", figure: "text-rose-700", box: "border-rose-300 bg-rose-50", icon: "!" },
   newRegistrations: { badge: "bg-emerald-100 text-emerald-700", figure: "text-emerald-700", box: "border-emerald-200 bg-emerald-50/60", icon: "＋" },
 };
 
