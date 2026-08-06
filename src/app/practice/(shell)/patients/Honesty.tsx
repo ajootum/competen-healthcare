@@ -1,0 +1,130 @@
+"use client";
+
+import type { Unavailable } from "./types";
+
+// CPR-V5-006 -- the three states, in one place.
+//
+// ────────────────────────────────────────────────────────────────────────────────────────────────────
+// A FAILED READ IS NEVER A ZERO, AND THAT IS A RENDERING RULE BEFORE IT IS AN ENGINE ONE.
+//
+// The engine already distinguishes them: `reason` is "capability" when the caller may not see the list,
+// "read_failed" when the database refused, and null when the read worked. A screen that renders all
+// three as an empty section throws that distinction away at the last step -- and "nothing is waiting"
+// is the most dangerous sentence a clinical workspace can say when the truth is "I could not find out".
+//
+// So every count and every list on this screen goes through these two components, and there is no way to
+// render one without answering which of the three states it is in.
+// ────────────────────────────────────────────────────────────────────────────────────────────────────
+
+export const CARD = "rounded-xl border border-gray-200 bg-white";
+
+/** A date or timestamp, shown as it is stored. No locale formatting -- a reformatted date is a claim. */
+export const day = (v: string | null | undefined) => (v ? String(v).slice(0, 10) : null);
+export const clock = (v: string | null | undefined) =>
+  v && String(v).length >= 16 ? String(v).slice(11, 16) : null;
+
+export function whenLabel(v: string | null | undefined, today: string): string {
+  if (!v) return "";
+  const d = day(v);
+  if (d === today) {
+    const t = clock(v);
+    return t ? `today ${t}` : "today";
+  }
+  return d ?? "";
+}
+
+/**
+ * The one place "there is nothing here" is allowed to be said -- and only when that is what happened.
+ *
+ * `nothing` is the caller's own words for the empty case, because "no results" and "nobody is waiting"
+ * carry different weight and a generic phrase would flatten both.
+ */
+export function Absence({ reason, error, nothing, className = "" }: {
+  reason: Unavailable;
+  error: string | null;
+  nothing: string;
+  className?: string;
+}) {
+  if (reason === "capability") {
+    return (
+      <p className={`text-[12px] text-gray-500 ${className}`}>
+        <span className="font-semibold text-gray-600">Not shown to you.</span>{" "}
+        Your role does not carry the capability this list needs, so it was not read at all.
+      </p>
+    );
+  }
+  if (reason === "read_failed") {
+    return (
+      <p className={`text-[12px] text-[var(--cmp-text-warning)] ${className}`}>
+        <span className="font-semibold">Could not be read.</span>{" "}
+        This is not an empty list &mdash; the read did not return.
+        {error && <span className="mt-0.5 block font-mono text-[11px] opacity-80">{error}</span>}
+      </p>
+    );
+  }
+  return <p className={`text-[12px] text-gray-400 ${className}`}>{nothing}</p>;
+}
+
+/**
+ * A figure that cannot lie about itself.
+ *
+ * An unavailable read renders an em dash, never 0. A truncated one renders "at least n", because
+ * `count: 50, truncated: true` means fifty were fetched and there may be more.
+ */
+export function Count({ count, atLeast, reason, className = "" }: {
+  count: number | null;
+  atLeast?: boolean;
+  reason: Unavailable;
+  className?: string;
+}) {
+  if (count === null) {
+    return (
+      <span className={className} title={reason === "capability" ? "Not shown to you" : "Could not be read"}>
+        &mdash;
+      </span>
+    );
+  }
+  return (
+    <span className={className}>
+      {atLeast && <span className="mr-0.5 text-[0.6em] font-semibold align-middle">at least</span>}
+      {count}
+    </span>
+  );
+}
+
+/** A boundary sentence that has to travel with the figure it qualifies. */
+export function Boundary({ children }: { children: React.ReactNode }) {
+  return (
+    <p className="mt-1.5 border-t border-gray-100 pt-1.5 text-[11px] leading-relaxed text-gray-500">
+      {children}
+    </p>
+  );
+}
+
+/** The refusals, collapsed. Visible labels, reasoning one click away -- never a silent omission. */
+export function Refusals({ refuses, title, blurb }: {
+  refuses: readonly { key: string; label: string; detail: string }[];
+  title: string;
+  blurb: string;
+}) {
+  if (refuses.length === 0) return null;
+  return (
+    <section className={`${CARD} border-dashed bg-gray-50/60 p-4`}>
+      <h2 className="text-[13px] font-bold text-gray-900">{title}</h2>
+      <p className="mt-0.5 text-[11px] text-gray-500">{blurb}</p>
+      <ul className="mt-2 flex flex-col gap-1">
+        {refuses.map(r => (
+          <li key={r.key}>
+            <details className="group">
+              <summary className="cursor-pointer list-none text-[12px] font-semibold text-gray-700 hover:text-gray-900">
+                <span className="mr-1 inline-block text-gray-400 transition-transform group-open:rotate-90">&rsaquo;</span>
+                {r.label}
+              </summary>
+              <p className="mt-0.5 pl-3 text-[11px] leading-relaxed text-gray-500">{r.detail}</p>
+            </details>
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}

@@ -1,9 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useRef, useState } from "react";
+import { IDENTIFIER_LABELS } from "@/lib/practice/patient-workspace-constants";
+import type { SearchMatchView, SearchView } from "./types";
 
-// CPR-REG-002 s20/s21 -- search first, and show possible duplicates as you type.
+// CPR-REG-002 s20/s21 -- search before you register, inside the registration drawer.
 //
 // ────────────────────────────────────────────────────────────────────────────────────────────────────
 // THE CHIPS NARROW THE ANSWER, THEY DO NOT NARROW THE SEARCH.
@@ -14,57 +16,79 @@ import { useState } from "react";
 // "nobody matches" about a patient who is right there. So every search covers everything the engine
 // indexes, and a chip HIGHLIGHTS the results that matched that way -- turning the filter into a lens.
 //
-// SEARCH IS EXPLICIT, NOT PER-KEYSTROKE. s21 asks for duplicates "in real time"; every prefix of a
+// SEARCH IS ON PAUSE, NOT PER KEYSTROKE. s21 asks for duplicates "in real time"; every prefix of a
 // surname typed into a live search is a separate read of clinical records into a real access log
-// (CPR-370). Debounced-on-pause rather than on every character, and the page says search happens when
-// you stop typing.
+// (CPR-370). Debounced on pause rather than on every character, and the box says so.
+//
+// ⚠ IT NOW CALLS universalSearch, NOT searchPatients. The old endpoint (GET /api/v1/practice/patients?q=)
+// discards every query error, so a database that refused the identifier read answered "nobody matches"
+// for a national ID sitting in the table -- and this box's whole purpose is to stop a duplicate being
+// created on the strength of that answer. The new one reports which probes failed, and this component
+// refuses to say "nobody matches" when any of them did.
 // ────────────────────────────────────────────────────────────────────────────────────────────────────
-
-/* eslint-disable @typescript-eslint/no-explicit-any */
-
-const MATCH_LABEL: Record<string, string> = {
-  name: "exact name", "name-partial": "name contains", phone: "phone", email: "email",
-};
 
 const LENSES = [
   { key: "all", label: "Everything" },
   { key: "name", label: "Name" },
+  { key: "identifier", label: "Any number" },
   { key: "phone", label: "Phone" },
   { key: "email", label: "Email" },
-  { key: "identifier", label: "Any number" },
+  { key: "guardian", label: "Parent or guardian" },
 ];
 
-export default function SearchSection({ canCreate, onRegisterClick }: {
-  canCreate: boolean;
-  onRegisterClick: () => void;
-}) {
+function matchLabel(m: SearchMatchView): string {
+  const [kind, detail] = m.matchedBy.split(":");
+  if (kind === "identifier") return IDENTIFIER_LABELS[detail] ?? detail ?? "identifier";
+  if (kind === "guardian_phone") return `${m.matchedGuardian?.relationshipLabel ?? "guardian"}'s phone`;
+  if (kind === "guardian_email") return `${m.matchedGuardian?.relationshipLabel ?? "guardian"}'s email`;
+  if (kind === "name_partial") return "name contains";
+  return kind;
+}
+
+function inLens(m: SearchMatchView, lens: string): boolean {
+  if (lens === "all") return true;
+  if (lens === "guardian") return m.matchedVia === "guardian";
+  if (lens === "identifier") return m.matchedBy.startsWith("identifier");
+  if (lens === "name") return m.matchedBy.startsWith("name");
+  return m.matchedBy === lens;
+}
+
+export default function SearchSection({ canCreate }: { canCreate: boolean }) {
   const [q, setQ] = useState("");
   const [lens, setLens] = useState("all");
-  const [results, setResults] = useState<any[] | null>(null);
+  const [view, setView] = useState<SearchView | null>(null);
   const [busy, setBusy] = useState(false);
-  const [timer, setTimer] = useState<ReturnType<typeof setTimeout> | null>(null);
+  const [failed, setFailed] = useState<string | null>(null);
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const seq = useRef(0);
 
   async function run(term: string) {
-    if (term.trim().length < 2) { setResults(null); return; }
-    setBusy(true);
-    const r = await fetch(`/api/v1/practice/patients?q=${encodeURIComponent(term.trim())}`);
-    setResults(r.ok ? (await r.json()).results : []);
-    setBusy(false);
+    if (term.trim().length < 2) { setView(null); setFailed(null); return; }
+    const mine = ++seq.current;
+    setBusy(true); setFailed(null);
+    try {
+      const r = await fetch(`/api/v1/practice/patients/search?q=${encodeURIComponent(term.trim())}`);
+      if (mine !== seq.current) return;
+      if (!r.ok) { setView(null); setFailed(`The duplicate check did not run (HTTP ${r.status}).`); return; }
+      setView(await r.json() as SearchView);
+    } catch (e) {
+      if (mine !== seq.current) return;
+      setView(null);
+      setFailed(`The duplicate check did not reach the server: ${e instanceof Error ? e.message : String(e)}`);
+    } finally {
+      if (mine === seq.current) setBusy(false);
+    }
   }
 
   function onType(v: string) {
     setQ(v);
-    if (timer) clearTimeout(timer);
-    // ON PAUSE, NOT ON KEYSTROKE. See the header: each read is logged against a named patient.
-    setTimer(setTimeout(() => void run(v), 450));
+    if (timer.current) clearTimeout(timer.current);
+    timer.current = setTimeout(() => void run(v), 450);
   }
 
-  const shown = (results ?? []).filter(r =>
-    lens === "all" ||
-    (lens === "name" && String(r.matchedBy).startsWith("name")) ||
-    (lens === "phone" && r.matchedBy === "phone") ||
-    (lens === "email" && r.matchedBy === "email") ||
-    (lens === "identifier" && String(r.matchedBy).startsWith("identifier")));
+  const results = view?.results ?? [];
+  const shown = results.filter(m => inLens(m, lens));
+  const incomplete = view?.ran === true && view.complete === false;
 
   return (
     <section className="rounded-xl border border-gray-200 bg-white p-5">
@@ -78,6 +102,7 @@ export default function SearchSection({ canCreate, onRegisterClick }: {
         <input
           value={q}
           onChange={e => onType(e.target.value)}
+          autoComplete="off"
           placeholder="Name, phone, Practice ID, hospital number, national ID, passport or email"
           className="w-full rounded-lg border border-gray-200 px-3 py-2 text-[14px] outline-none focus:border-[var(--cp-primary)] focus:ring-2 focus:ring-[var(--cp-primary)]/10"
         />
@@ -87,12 +112,12 @@ export default function SearchSection({ canCreate, onRegisterClick }: {
         </button>
       </div>
 
-      <div className="mt-2 flex items-center gap-1.5 flex-wrap">
+      <div className="mt-2 flex flex-wrap items-center gap-1.5">
         {LENSES.map(l => (
-          <button key={l.key} type="button" onClick={() => setLens(l.key)}
-            className={`rounded-lg border px-2.5 py-1 text-[12px] font-semibold ${
-              lens === l.key ? "border-[var(--cp-primary)] bg-[var(--cp-primary)]/5 text-[var(--cp-primary-deep)]"
-                : "border-gray-200 text-gray-600 hover:bg-gray-50"}`}>
+          <button key={l.key} type="button" onClick={() => setLens(l.key)} aria-pressed={lens === l.key}
+            className={`rounded-lg border px-2.5 py-1 text-[12px] font-semibold ${lens === l.key
+              ? "border-[var(--cp-primary)] bg-[var(--cp-primary)]/5 text-[var(--cp-primary-deep)]"
+              : "border-gray-200 text-gray-600 hover:bg-gray-50"}`}>
             {l.label}
           </button>
         ))}
@@ -101,44 +126,73 @@ export default function SearchSection({ canCreate, onRegisterClick }: {
         </span>
       </div>
 
-      {results !== null && (
+      {failed && (
+        <p className="mt-3 rounded-lg bg-[var(--cmp-surface-critical)] px-3 py-2 text-[12px] text-[var(--cmp-text-critical)]">
+          {failed} Do not register a new record on the strength of an answer nobody got.
+        </p>
+      )}
+
+      {view?.unavailable && view.reason === "capability" && (
+        <p className="mt-3 rounded-lg bg-gray-50 px-3 py-2 text-[12px] text-gray-600">
+          Checking for an existing record needs patient.view as well as patient.list, and your role does
+          not carry it. The server still checks for duplicates when you submit.
+        </p>
+      )}
+
+      {incomplete && (
+        <p className="mt-3 rounded-lg bg-[var(--cmp-surface-warning)] px-3 py-2 text-[12px] text-[var(--cmp-text-warning)]">
+          <span className="font-semibold">Part of this check did not answer.</span> Whatever it shows,
+          it is not evidence that this person is absent from the register.
+        </p>
+      )}
+
+      {view?.ran && !view.unavailable && (
         <div className="mt-3">
           <p className="text-[12px] font-semibold text-gray-600">
             {shown.length === 0
-              ? results.length === 0 ? "Nobody matches." : `Nothing matched that way — ${results.length} match other ways.`
+              ? results.length === 0
+                ? (view.complete ? "Nobody matches." : "Nothing matched in what could be searched.")
+                : `Nothing matched that way — ${results.length} matched another way.`
               : `${shown.length} possible match${shown.length === 1 ? "" : "es"}`}
           </p>
           {shown.length > 0 && (
             <ul className="mt-1.5 flex flex-col gap-1.5">
-              {shown.map(r => (
-                <li key={r.id}>
-                  <Link href={`/practice/patients/${r.id}`}
-                    className="flex items-center gap-2 rounded-lg border border-gray-100 px-3 py-2 hover:border-[var(--cp-primary)] transition">
-                    <span className="text-[14px] font-semibold text-gray-900">{r.displayName}</span>
-                    {r.practiceId && <span className="font-mono text-[12px] text-gray-500">{r.practiceId}</span>}
-                    {r.birthDate && <span className="text-[12px] text-gray-400">b. {r.birthDate}</span>}
+              {shown.map(m => (
+                <li key={m.patientId}>
+                  <Link href={`/practice/patients/${m.patientId}`}
+                    className="flex flex-wrap items-baseline gap-2 rounded-lg border border-gray-100 px-3 py-2 transition hover:border-[var(--cp-primary)]">
+                    <span className="text-[14px] font-semibold text-gray-900">{m.displayName}</span>
+                    {m.practiceId && <span className="font-mono text-[12px] text-gray-500">{m.practiceId}</span>}
+                    {m.hospitalNumbers.map(h => (
+                      <span key={h.id} className="rounded bg-emerald-50 px-1.5 py-0.5 font-mono text-[11px] text-emerald-800">{h.value}</span>
+                    ))}
+                    {m.birthDate && <span className="text-[12px] text-gray-400">b. {m.birthDate}</span>}
                     <span className="ml-auto rounded bg-gray-100 px-1.5 py-0.5 text-[11px] font-semibold text-gray-500">
-                      {MATCH_LABEL[r.matchedBy] ?? r.matchedBy}
+                      {matchLabel(m)}
                     </span>
+                    {m.matchedVia === "guardian" && m.matchedGuardian && (
+                      <span className="w-full text-[11px] text-gray-500">
+                        Found through {m.matchedGuardian.name} ({m.matchedGuardian.relationshipLabel}).
+                      </span>
+                    )}
                   </Link>
                 </li>
               ))}
             </ul>
           )}
-          {results.length === 0 && canCreate && (
-            <button type="button" onClick={onRegisterClick}
-              className="mt-2 rounded-lg bg-[var(--cp-primary)] px-3 py-1.5 text-[13px] font-semibold text-white">
-              Register {q.trim() ? `“${q.trim()}”` : "a new patient"}
-            </button>
+          {results.length === 0 && view.complete && canCreate && (
+            <p className="mt-2 text-[12px] text-gray-500">
+              Nobody on the register matches &mdash; the form below is the right next step.
+            </p>
           )}
         </div>
       )}
 
       {/* THE COMP'S "SCAN ID" BUTTON, in its designed position and honest about itself. */}
       <p className="mt-3 border-t border-gray-100 pt-2 text-[11px] text-gray-400">
-        The design puts a &ldquo;Scan ID&rdquo; button here. Reading a national ID or a passport needs a
-        camera and a document parser, neither of which exists yet &mdash; and every number a scan would
-        produce is already searchable by typing it.
+        The design puts a &ldquo;Scan ID&rdquo; button here, and CPR-V5-006 marks barcode and QR scanning
+        as future. Reading a national ID or a passport needs a camera and a document parser, neither of
+        which exists yet &mdash; and every number a scan would produce is already searchable by typing it.
       </p>
     </section>
   );

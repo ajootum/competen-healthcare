@@ -65,12 +65,18 @@ function ageFrom(birthDate: string, today: string) {
   return { years, months, days, label };
 }
 
-export default function RegistrationForm({ form, majorityAge, today, mode = "full", onRegistered, onNotice, onBirthDateChange }: {
+export default function RegistrationForm({ form, majorityAge, today, mode = "full", canStartEncounter = false, onRegistered, onNotice, onBirthDateChange }: {
   form: { template: any; fields: any[] };
   majorityAge: number;
   today: string;
   /** CPR-REG-002: quick hides the hospital identifiers card -- "minimum information, complete later". */
   mode?: "quick" | "full";
+  /**
+   * encounter.create. Without it the "start the consultation" action is not rendered at all, because
+   * launchEncounter would refuse it -- and a receptionist who registers all day is exactly the role that
+   * has patient.create and does not have this one.
+   */
+  canStartEncounter?: boolean;
   onRegistered: (r: any) => void;
   onNotice?: (n: { kind: "ok" | "err"; text: string }) => void;
   /**
@@ -133,7 +139,10 @@ export default function RegistrationForm({ form, majorityAge, today, mode = "ful
     setRelations(rs => rs.map((r, j) => j === i ? { ...r, ...patch } : r));
   }
 
-  async function submit(confirmNew: boolean, action: "register" | "queue" = "register") {
+  // A BOOKING FOR ANOTHER DAY IS NOT THE START OF A CONSULTATION. See the action row below.
+  const bookedForLater = !!p.appointmentAt && p.appointmentAt.slice(0, 10) > today;
+
+  async function submit(confirmNew: boolean, action: "register" | "queue" | "encounter" = "register") {
     setBusy(true); setError(null); setCandidates(null);
     const res = await fetch("/api/v1/practice/registration", {
       method: "POST", headers: { "content-type": "application/json" },
@@ -177,6 +186,51 @@ export default function RegistrationForm({ form, majorityAge, today, mode = "ful
         onNotice?.({ kind: "err", text: `Registered, but not added to the queue: ${qd?.error?.message ?? "unknown reason"}` });
       }
     }
+
+    // ── "Encounter launches immediately after registration" -- as an ACT, not as a side effect ───────
+    //
+    // CPR-V5-006's acceptance criterion asks for this, and the obvious reading of it -- launch an
+    // encounter unconditionally at the end of every registration -- is wrong, for three reasons that all
+    // point the same way:
+    //
+    //   1. AN ENCOUNTER IS A CLINICAL RECORD. Registering somebody at a desk for an appointment next
+    //      month is not the start of a consultation, and an encounter opened by accident is a record
+    //      that has to be explained, cancelled or signed by somebody who was never in the room. This
+    //      product makes a signed encounter immutable in the database; the cost of an accidental one is
+    //      not symmetrical with the cost of an extra click.
+    //   2. IT WOULD FAIL FOR THE PERSON WHO REGISTERS MOST PATIENTS. launchEncounter requires
+    //      encounter.create. A receptionist has patient.create and not that, so an unconditional launch
+    //      would either error on every registration they perform or be swallowed silently.
+    //   3. THE FORM ALREADY COLLECTS THE VISIT CONTEXT. An appointment dated for another day is a
+    //      statement that this visit is not now, and the button says so rather than deciding quietly.
+    //
+    // So it is one explicit press that does both -- registration never delays care, which is what the
+    // criterion is protecting, and nothing opens a consultation nobody asked for. If the launch fails
+    // the registration still stands and is reported separately: telling somebody a consultation is open
+    // when it is not is how a patient waits for a clinician who is not expecting them.
+    if (action === "encounter" && data.patientId) {
+      const enc = await fetch("/api/v1/practice/encounters", {
+        method: "POST", headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          patientId: data.patientId,
+          // A patient registered a moment ago has no prior encounter here, by definition.
+          pathway: "new_walk_in",
+          reasonForVisit: p.reasonForVisit || undefined,
+        }),
+      });
+      const ed = await enc.json().catch(() => ({}));
+      if (!enc.ok || !ed?.encounter?.id) {
+        onNotice?.({
+          kind: "err",
+          text: `Registered, but the consultation did not open: ${ed?.error?.message ?? `HTTP ${enc.status}`}. The patient record was created.`,
+        });
+        onRegistered(data);
+        return;
+      }
+      window.location.assign(`/practice/encounters/${ed.encounter.id}`);
+      return;
+    }
+
     onRegistered(data);
   }
 
@@ -467,6 +521,17 @@ export default function RegistrationForm({ form, majorityAge, today, mode = "ful
           {p.appointmentAt ? "Register and book" : "Register only"}
         </button>
 
+        {/* THE THIRD ACT, AND IT IS EXPLICIT ON PURPOSE -- see the reasoning in submit(). It is offered
+            only to somebody who may open an encounter, and refused while the form is booking the visit
+            for a later day, because that visit is not this one. */}
+        {canStartEncounter && (
+          <button type="button" disabled={busy || !canSubmit || bookedForLater}
+            onClick={() => submit(false, "encounter")}
+            className={`rounded-lg px-4 py-2 text-[14px] font-semibold ${BUTTON.quiet}`}>
+            Register and start the consultation
+          </button>
+        )}
+
         <button type="button" disabled={busy || !name.trim()}
           onClick={async () => {
             const r = await fetch("/api/v1/practice/registration-workspace", {
@@ -485,6 +550,11 @@ export default function RegistrationForm({ form, majorityAge, today, mode = "ful
         {missing.length > 0 && (
           <span className="text-[12px] font-semibold text-[var(--cmp-text-warning)]">
             Still needs {missing.join(", ")}.
+          </span>
+        )}
+        {canStartEncounter && bookedForLater && missing.length === 0 && (
+          <span className="text-[12px] text-gray-500">
+            The appointment above is for another day, so this is not the start of a consultation.
           </span>
         )}
       </div>

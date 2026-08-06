@@ -3,57 +3,159 @@ import { createAdminClient } from "@/lib/supabase/server";
 import { resolvePracticeShell } from "@/lib/practice/shell";
 import { hasCapability } from "@/lib/practice/access";
 import { registrationWorkspace } from "@/lib/practice/registration-workspace";
+import {
+  patientsWorkspace, worklists, myPatients, patientSummary, familyRelationships, universalSearch,
+} from "@/lib/practice/patient-workspace";
+import { WORKLIST_KEYS, DEFAULT_PAGE_SIZE } from "@/lib/practice/patient-workspace-constants";
+import PatientsScreen from "./PatientsScreen";
 import RegistryConsole from "./RegistryConsole";
 import ContextPanel from "./ContextPanel";
+import type {
+  CohortView, FamilyView, ScreenCapabilities, SearchView, SummaryView, WorklistsView,
+} from "./types";
 
-// /practice/patients -- CPR-REG-002 v4, the Patient Registration workspace.
+// /practice/patients -- CPR-V5-006, the Patients workspace.
 //
 // ────────────────────────────────────────────────────────────────────────────────────────────────────
-// ALMOST ALL OF THIS IS COMPOSED FROM WHAT ALREADY EXISTS. Search and duplicate detection (mig 193),
-// multiple hospital identifiers (222), guardians and next of kin (221), configurable fields (223), name
-// parts and register-and-book (225), the diary and the waiting queue (192). Migration 226 added only
-// the two things the screen leads with that had nowhere to go: a queue entry that can name its patient,
-// and a draft.
+// "Patients workspace manages identity, search and continuity of care. Not an EMR and not only a
+// registration page." This screen used to be the second of those: a registration form with a search box
+// above it. What it is now is the specification's own information architecture -- universal search, the
+// six operational worklists, the cohort, a summary panel, and registration in a drawer behind one click.
 //
-// STILL SEARCH-FIRST, AND STILL NO BROWSABLE LIST. That is s5's own principle -- "search before
-// registration to minimise duplicate patients" -- and a list of everybody is a data export, which is a
-// governed problem rather than a workspace surface.
+// EVERY FIGURE ON IT COMES FROM patient-workspace.ts, WHICH IS READ-ONLY. Nothing on this page writes.
+// The three writes it offers -- register, start a consultation, queue a walk-in -- go to APIs that
+// already existed, because a second implementation of any of them would give the product two answers to
+// the same question.
 //
-// THE OPERATIONAL PANEL LOADS ON THE SERVER, so the queue and today's clinic are in the first paint
-// rather than arriving after a spinner at a desk with somebody standing in front of it.
+// THE ENGINE'S TYPES ARE CHECKED AGAINST THE SCREEN'S HERE, ON PURPOSE. types.ts mirrors the payload
+// shapes so that "use client" files never import patient-workspace.ts (it reaches next/headers through
+// access.ts, which breaks the build in a way tsc and eslint do not report). The mirror is not trusted:
+// the assignments below are where the engine's own return types meet it, so a change in the engine
+// stops this file compiling rather than silently rendering a field that no longer exists.
 // ────────────────────────────────────────────────────────────────────────────────────────────────────
 
 export const dynamic = "force-dynamic";
 
-export default async function PatientsPage() {
+const one = (v: string | string[] | undefined): string =>
+  (Array.isArray(v) ? v[0] : v ?? "").trim();
+
+export default async function PatientsPage({ searchParams }: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
   const shell = await resolvePracticeShell();
   if (shell.state !== "READY") redirect("/practice");
   if (!hasCapability(shell.ctx, "patient.list")) redirect("/practice/home");
 
-  const workspace = await registrationWorkspace(createAdminClient(), shell.ctx);
+  const sp = await searchParams;
+
+  // ── THE URL CONTRACT ──────────────────────────────────────────────────────────────────────────────
+  // The sidebar already ships /practice/patients?list=waiting and ?list=new. `worklist` is accepted as
+  // an alias because WORKLIST_META's own hrefs use it. Anything else falls back to the whole register
+  // and is reported to the reader rather than silently ignored.
+  const rawList = one(sp.list) || one(sp.worklist);
+  const isKey = (WORKLIST_KEYS as readonly string[]).includes(rawList);
+  const selectedList = isKey ? rawList : null;
+  const unknownList = rawList && !isKey && rawList !== "new" ? rawList : null;
+  const registerOpen = rawList === "new" || one(sp.register) === "1";
+
+  const query = one(sp.q);
+  const selectedPatientId = one(sp.patient) || null;
+  const parsedPage = Number.parseInt(one(sp.page), 10);
+  const page = Number.isFinite(parsedPage) && parsedPage > 0 ? parsedPage : 0;
+  const scope: "practice" | "mine" = one(sp.scope) === "mine" ? "mine" : "practice";
+  const sort: "registered" | "name" = one(sp.sort) === "name" ? "name" : "registered";
+
+  const admin = createAdminClient();
+  const ctx = shell.ctx;
+  const canCreate = hasCapability(ctx, "patient.create");
+
+  const capabilities: ScreenCapabilities = {
+    mayList: true,
+    mayView: hasCapability(ctx, "patient.view"),
+    mayCreate: canCreate,
+    maySearch: hasCapability(ctx, "patient.list") && hasCapability(ctx, "patient.view"),
+    // encounter.create, verified against migration 191's seeded capability list. There is no
+    // "patient.register" capability -- registration is patient.create.
+    mayStartEncounter: hasCapability(ctx, "encounter.create"),
+  };
+
+  const [base, regWorkspace, summaryResult, familyResult, searchResult] = await Promise.all([
+    (async () => {
+      // The unfiltered landing surface is one call, which parallelises the worklists and the cohort.
+      if (!selectedList) {
+        const w = await patientsWorkspace(admin, ctx, { page, pageSize: DEFAULT_PAGE_SIZE, scope, sort });
+        return { lists: w.worklists, cohort: w.cohort as CohortView | null };
+      }
+      // A FILTERED VIEW HAS TO KNOW WHO IS ON THE LIST BEFORE IT CAN ASK FOR THEM, so these are ordered
+      // rather than parallel. A worklist that could not be read yields NO cohort at all -- filtering by
+      // an empty id set would render the whole practice as "nobody is waiting".
+      const lists = await worklists(admin, ctx);
+      const wl = lists.worklists.find(w => w.key === selectedList);
+      if (!wl || wl.unavailable) return { lists, cohort: null as CohortView | null };
+      const cohort = await myPatients(admin, ctx, {
+        page, pageSize: DEFAULT_PAGE_SIZE, scope, sort, patientIds: wl.patientIds,
+        // A FILTERED LIST MUST NOT BE SHORTER THAN THE TILE THAT OPENED IT. myPatients defaults to
+        // active records; somebody archived who is nonetheless sitting in the waiting room would drop
+        // out silently and make the count above disagree with the table below. Archived people are
+        // people -- they are shown here, with their record status on the row.
+        includeInactive: true,
+      });
+      return { lists, cohort: cohort as CohortView | null };
+    })(),
+    canCreate ? registrationWorkspace(admin, ctx) : Promise.resolve(null),
+    selectedPatientId ? patientSummary(admin, ctx, selectedPatientId) : Promise.resolve(null),
+    selectedPatientId ? familyRelationships(admin, ctx, selectedPatientId) : Promise.resolve(null),
+    // A LINKED ?q= IS ANSWERED ON THE SERVER, so a search sent to a colleague opens with its results on
+    // it. Typing is answered by /api/v1/practice/patients/search; both call the same engine.
+    query ? universalSearch(admin, ctx, query, { limit: 20 }) : Promise.resolve(null),
+  ]);
+
+  // ── The mirror check (see the header) ─────────────────────────────────────────────────────────────
+  const lists: WorklistsView = base.lists;
+  const cohort: CohortView | null = base.cohort;
+  const summary: SummaryView | null = summaryResult?.ok ? summaryResult.data : null;
+  const summaryError = summaryResult && !summaryResult.ok
+    ? { status: summaryResult.status, code: summaryResult.code, message: summaryResult.message }
+    : null;
+  const family: FamilyView | null = familyResult?.ok ? familyResult.data : null;
+  const initialSearch: SearchView | null = searchResult ?? null;
 
   return (
-    // THE CANVAS IS WHAT MAKES A WHITE CARD READ AS A CARD. Against a white page the borders were doing
-    // all the work alone, which is why the comp's layered look did not survive the build. --cp-canvas is
-    // the off-white the design system already defines for exactly this; the negative margin cancels the
-    // shell's own padding so the tint reaches the edges, and the p-5 puts it back inside.
+    // THE CANVAS IS WHAT MAKES A WHITE CARD READ AS A CARD. Against a white page the borders do all the
+    // work alone. The negative margin cancels the shell's own padding so the tint reaches the edges.
     <div className="-m-5 min-h-full bg-[var(--cp-canvas)] p-5">
-      {/* CONTAINED, NOT FULL-BLEED. On a wide monitor an unconstrained grid stretched every field to
-          about 1,500px -- a first-name box the width of a desk -- and pushed the context panel off the
-          edge of the screen. The comp is plainly a contained layout; these are its measurements.
-
-          The rail STICKS, because it is the operational picture: who is waiting is worth seeing while
-          you are half-way down a registration form, which is the only reason to put it beside the form
-          rather than above it. */}
-      <div className="mx-auto grid w-full max-w-[1400px] xl:grid-cols-[minmax(0,1fr)_340px] gap-4 items-start">
-      <RegistryConsole
-        canCreate={hasCapability(shell.ctx, "patient.create")}
-        workspace={workspace}
-      />
-      <div className="xl:sticky xl:top-4">
-        <ContextPanel w={workspace} />
+      <div className="mx-auto w-full max-w-[1500px]">
+        <PatientsScreen
+          capabilities={capabilities}
+          lists={lists}
+          cohort={cohort}
+          selectedList={selectedList}
+          unknownList={unknownList}
+          query={query}
+          initialSearch={initialSearch}
+          patientId={selectedPatientId}
+          summary={summary}
+          summaryError={summaryError}
+          family={family}
+          registerOpen={registerOpen}
+          page={page}
+          scope={scope}
+          sort={sort}
+          registration={regWorkspace ? (
+            <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1fr)_320px]">
+              <RegistryConsole
+                canCreate={canCreate}
+                canStartEncounter={capabilities.mayStartEncounter}
+                workspace={regWorkspace}
+              />
+              {/* The operational context the registration desk works against -- today's clinic, who is
+                  waiting, who was registered, and what this screen refuses. It stays with the form
+                  rather than with the workspace, because that is the job it belongs to. */}
+              <ContextPanel w={regWorkspace} />
+            </div>
+          ) : null}
+        />
       </div>
-    </div>
     </div>
   );
 }
