@@ -20,6 +20,8 @@
  *   npx --yes tsx scripts/practice-registration-harness.ts
  */
 import { loadEnvConfig } from "@next/env";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { createClient } from "@supabase/supabase-js";
 import { runProvisioning, type IndividualRequest } from "../src/lib/practice/provisioning";
 import { resolveWorkspaceContext } from "../src/lib/practice/access";
@@ -28,7 +30,7 @@ import { composeDisplayName } from "../src/lib/practice/patients";
 import { patientRelationships } from "../src/lib/practice/relationships";
 import { createTemplate, upsertField, publishTemplate } from "../src/lib/practice/registration-config";
 import {
-  registrationWorkspace, queueWalkIn, saveDraft, listDrafts, discardDraft,
+  registrationWorkspace, queueWalkIn, saveDraft, listDrafts, discardDraft, steps,
 } from "../src/lib/practice/registration-workspace";
 
 loadEnvConfig(process.cwd());
@@ -427,6 +429,58 @@ async function main() {
   });
   ok("11b. CONTROL: and confirming a namesake still registers them", confirmed.ok,
     confirmed.ok ? "" : confirmed.message);
+
+  // ── THE ADAPTIVE WORKFLOW, AND THE CALL SITE THAT NEVER FIRED IT ────────────────────────────────
+  //
+  // ⚠ CPR-V5-006 s7 asks for adult/paediatric registration to adapt with no separate forms. It ALREADY
+  // DID, in steps() -- and the screen had been calling it as steps(mode), with no birth date and no
+  // today, since it was written. `minor` was therefore permanently null, and every registration from a
+  // newborn to a pensioner showed the same hedged "Guardian or next of kin".
+  //
+  // That is the worst shape a defect can take here: the engine was right, its own tests would have
+  // passed, and the feature simply never reached a user. The same class as the addFacility and
+  // practice_configuration findings -- an engine with no door is indistinguishable from a missing
+  // feature. NOTHING ASSERTED steps() AT ALL BEFORE THIS.
+  const asToday = "2026-08-06";
+  const childSteps = steps("full", "2018-04-01", asToday);
+  const adultSteps = steps("full", "1979-04-01", asToday);
+  const unknownSteps = steps("full", null, asToday);
+  const contacts = (ss: ReturnType<typeof steps>) => ss.find(s => s.key === "contacts");
+
+  ok("adaptive-1. a CHILD's contacts step asks for a Guardian, and requires one",
+    contacts(childSteps)?.label === "Guardian" && contacts(childSteps)?.required === true,
+    JSON.stringify(contacts(childSteps)));
+  ok("adaptive-2. an ADULT's asks for Next of kin, and does not require it",
+    contacts(adultSteps)?.label === "Next of kin" && !contacts(adultSteps)?.required,
+    JSON.stringify(contacts(adultSteps)));
+  ok("adaptive-3. an UNKNOWN age hedges rather than guessing -- a wrong guardian claim is worse than none",
+    contacts(unknownSteps)?.label === "Guardian or next of kin" && !contacts(unknownSteps)?.required,
+    JSON.stringify(contacts(unknownSteps)));
+  // CONTROL. Without it, 1-3 pass just as well if steps() returned a fixed list per age and nothing
+  // else worked -- and they would pass if the labels differed for a reason having nothing to do with age.
+  ok("adaptive-control. the three lists are otherwise IDENTICAL, so it is the AGE that changed the step",
+    childSteps.map(s => s.key).join() === adultSteps.map(s => s.key).join()
+    && childSteps.map(s => s.key).join() === unknownSteps.map(s => s.key).join()
+    && contacts(childSteps)?.label !== contacts(adultSteps)?.label,
+    childSteps.map(s => s.key).join());
+
+  // ⚠ AND THE CALL SITE, because every assertion above passed while the screen was broken. A React prop
+  // cannot be reached from here, but the thing that was wrong CAN be: steps() was called with one
+  // argument. This is a source check, and it is the only assertion in this file that could have caught
+  // the actual defect.
+  //
+  // ⚠ IT SCANS CODE, NOT PROSE ABOUT CODE. The first version matched `steps()` inside the comment that
+  // EXPLAINS this defect, and reported the screen as broken while it was correct. A source assertion
+  // that reads comments will be wrong every time somebody documents the thing it guards -- which is
+  // exactly when documentation is most likely to appear.
+  const consoleSrc = readFileSync(
+    join(process.cwd(), "src", "app", "practice", "(shell)", "patients", "RegistryConsole.tsx"), "utf8")
+    .replace(/\/\*[\s\S]*?\*\//g, "")
+    .replace(/\/\/[^\n]*/g, "");
+  const stepCalls = [...consoleSrc.matchAll(/steps\(([^)]*)\)/g)].map(m => m[1]);
+  ok("adaptive-4. ⚠ the screen calls steps() WITH the birth date and the day, not steps(mode) alone",
+    stepCalls.length > 0 && stepCalls.every(a => a.split(",").length === 3),
+    JSON.stringify(stepCalls));
 
   await cleanup();
   return report();

@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { SECTION_BADGE, BUTTON } from "@/lib/practice/palette";
 
@@ -65,7 +65,7 @@ function ageFrom(birthDate: string, today: string) {
   return { years, months, days, label };
 }
 
-export default function RegistrationForm({ form, majorityAge, today, mode = "full", onRegistered, onNotice }: {
+export default function RegistrationForm({ form, majorityAge, today, mode = "full", onRegistered, onNotice, onBirthDateChange }: {
   form: { template: any; fields: any[] };
   majorityAge: number;
   today: string;
@@ -73,6 +73,15 @@ export default function RegistrationForm({ form, majorityAge, today, mode = "ful
   mode?: "quick" | "full";
   onRegistered: (r: any) => void;
   onNotice?: (n: { kind: "ok" | "err"; text: string }) => void;
+  /**
+   * ⚠ THE ADAPTIVE WORKFLOW LIVES OR DIES ON THIS CALLBACK (CPR-V5-006 s7).
+   *
+   * steps() decides "Guardian" against "Next of kin" from the birth date, and the step list is drawn by
+   * the PARENT while the birth date is typed HERE. Without a way up, the parent called steps(mode) with
+   * no date, `minor` was always null, and the list read "Guardian or next of kin" for a newborn and a
+   * pensioner alike -- the adaptive registration existed in the engine and never once fired on screen.
+   */
+  onBirthDateChange?: (birthDate: string) => void;
 }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -88,6 +97,11 @@ export default function RegistrationForm({ form, majorityAge, today, mode = "ful
   // Set once a draft has been saved, so pressing Save again updates it rather than leaving a trail of
   // half-finished copies of the same person on somebody's desk.
   const [draftId, setDraftId] = useState<string | null>(null);
+
+  // Told to the parent so the step list beside this form can adapt as the date is typed. An effect
+  // rather than a call inside the change handler, because the birth date is set from more than one place
+  // (typing it, and restoring a draft) and only one of those would have remembered to fire it.
+  useEffect(() => { onBirthDateChange?.(p.birthDate); }, [p.birthDate, onBirthDateChange]);
 
   const age = useMemo(() => p.birthDate ? ageFrom(p.birthDate, today) : null, [p.birthDate, today]);
   const isMinor = age ? age.years < majorityAge

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useState } from "react";
 import SearchSection from "./SearchSection";
 import RegistrationForm from "./RegistrationForm";
 import { steps } from "@/lib/practice/registration-workspace";
@@ -29,6 +29,15 @@ export default function RegistryConsole({ canCreate, workspace }: {
 }) {
   const [showRegister, setShowRegister] = useState(false);
   const [mode, setMode] = useState<"quick" | "full">("quick");
+  // ⚠ THE BIRTH DATE IS HELD HERE BECAUSE THE STEP LIST IS DRAWN HERE. steps() takes it and decides
+  // whether the contacts step reads "Guardian" or "Next of kin" -- a distinction that matters, because a
+  // guardian holds legal authority and a next of kin is somebody to ring. It was being called with no
+  // date at all, so `minor` was permanently null and every registration, newborn to pensioner, showed
+  // the same hedged "Guardian or next of kin". The adaptive workflow was real in the engine and had
+  // never once fired on screen.
+  const [birthDate, setBirthDate] = useState("");
+  // Stable, so the effect that reports the date upward does not re-run on every render of this console.
+  const onBirthDateChange = useCallback((d: string) => setBirthDate(d), []);
   const [notice, setNotice] = useState<{ kind: "ok" | "err"; text: string } | null>(null);
 
   const counts = workspace.counts;
@@ -116,13 +125,13 @@ export default function RegistryConsole({ canCreate, workspace }: {
                   They are coloured because the comp's colour is right; they are uniform because the
                   progress it encodes is not true here. */}
               <ol className="mt-3 flex items-center gap-1 flex-wrap text-[12px]">
-                {steps(mode).map((s, i) => (
+                {steps(mode, birthDate, workspace.today).map((s, i) => (
                   <li key={s.key} className="flex items-center gap-1">
                     <span className={`flex h-6 w-6 items-center justify-center rounded-full text-[11px] font-bold ${STEP_STATE.done}`}>
                       {i + 1}
                     </span>
                     <span className="font-semibold text-[var(--cp-primary-deep)]">{s.label}</span>
-                    {i < steps(mode).length - 1 && <span className="mx-1 text-[var(--cp-primary)]/30">›</span>}
+                    {i < steps(mode, birthDate, workspace.today).length - 1 && <span className="mx-1 text-[var(--cp-primary)]/30">›</span>}
                   </li>
                 ))}
               </ol>
@@ -149,6 +158,7 @@ export default function RegistryConsole({ canCreate, workspace }: {
                 today={workspace.today}
                 mode={mode}
                 onNotice={setNotice}
+                onBirthDateChange={onBirthDateChange}
                 onRegistered={(r) => {
                   if (r.incomplete?.length) {
                     setNotice({ kind: "err", text: `Registered, but: ${r.incomplete.map((i: any) => i.reason).join("; ")}` });
