@@ -29,7 +29,7 @@ import { PRACTICE_NAV, primaryNav, childrenOf, orphanedNav, SIDEBAR_SECTIONS } f
 import { dashboardReadModel } from "../src/lib/practice/dashboard";
 import { GLANCE_SWATCH } from "../src/lib/practice/palette";
 import type { WorkspaceContext } from "../src/lib/practice/access";
-import { existsSync } from "node:fs";
+import { existsSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 
 loadEnvConfig(process.cwd());
@@ -640,6 +640,35 @@ async function main() {
 
   ok("9f. every built nav entry points at a page that exists", missing.length === 0,
     missing.map(m => m.href).join(", "));
+
+  // ── 9i. AND THE OTHER DIRECTION, WHICH NOTHING CHECKED ──────────────────────────────────────────
+  //
+  // ⚠ 9f PROVES EVERY NAV ENTRY HAS A PAGE. Nothing proved every PAGE HAS A WAY IN. A route built with
+  // no catalogue entry at all is invisible to orphanedNav() -- it is not an orphan, it is not in the
+  // family -- so 9a passes while a whole workspace sits unreachable. /practice/pathways shipped in
+  // exactly that state and was caught by hand, not by this file.
+  //
+  // The allowlist is the point: a route may legitimately have no sidebar entry, but the REASON has to be
+  // written down, and adding a route to this list is a deliberate act rather than an omission.
+  const NO_NAV_ENTRY_BY_DESIGN: Record<string, string> = {
+    // CPR-PI-001 s4 lists NINE primary items and forbids expandable submenus. Care Pathways is reached
+    // from the Follow-ups workspace and from Practice Intelligence's pathway panel, both of which link
+    // to it directly -- see FollowUpsWorkspace.tsx and intelligence/Areas.tsx.
+    pathways: "CPR-PI-001 s4: nine primary items, no submenus. Linked from Follow-ups and Intelligence.",
+  };
+  const shellDirs = readdirSync(join(process.cwd(), "src", "app", "practice", "(shell)"), { withFileTypes: true })
+    .filter(d => d.isDirectory() && !d.name.startsWith("[") && !d.name.startsWith("_"))
+    .map(d => d.name)
+    .filter(name => existsSync(join(process.cwd(), "src", "app", "practice", "(shell)", name, "page.tsx")));
+  const unlisted = shellDirs.filter(name =>
+    !PRACTICE_NAV.some(i => i.href === `/practice/${name}` || i.href.startsWith(`/practice/${name}?`))
+    && !(name in NO_NAV_ENTRY_BY_DESIGN));
+  ok("9i. ⚠ every built page has a nav entry, or a written reason for not having one",
+    unlisted.length === 0, unlisted.map(n => `/practice/${n}`).join(", "));
+
+  // CONTROL. 9i passes trivially if the directory scan found nothing.
+  ok("9i-control. the route scan actually read the shell tree",
+    shellDirs.length >= 15, `${shellDirs.length} built pages found`);
 
   // ── 12. A CANCELLED ACTIVITY IS NOT WORK (migration 236) ────────────────────────────────────────
   //
