@@ -14,13 +14,17 @@ import type {
   CohortView, FamilyView, ScreenCapabilities, SearchView, SummaryView, WorklistsView,
 } from "./types";
 
-// /practice/patients -- CPR-V5-006, the Patients workspace.
+// /practice/patients -- CPR-PAT-002, the Patients workspace dashboard (CPR-V5-006's engine, unchanged).
 //
 // ────────────────────────────────────────────────────────────────────────────────────────────────────
-// "Patients workspace manages identity, search and continuity of care. Not an EMR and not only a
-// registration page." This screen used to be the second of those: a registration form with a search box
-// above it. What it is now is the specification's own information architecture -- universal search, the
-// six operational worklists, the cohort, a summary panel, and registration in a drawer behind one click.
+// "Redesign the Patients workspace around LONGITUDINAL CARE rather than patient registration." s3's
+// order is the page's order: universal search with New Patient and Quick Walk-in at the top, then the
+// five Today's Care cards, then the four Continuing Care cards, then the longitudinal register --
+// with registration in a drawer behind one click, because s9 asks it to occupy minimal space.
+//
+// THE NINE CARDS ARE NOT THE ENGINE'S SIX WORKLISTS. Six map onto one exactly; three -- In Consultation,
+// Follow-ups Today, Urgent Reviews -- have no query behind them, keep their place in the row and print
+// the read the engine would have to make. Nothing on this screen counts anything itself.
 //
 // EVERY FIGURE ON IT COMES FROM patient-workspace.ts, WHICH IS READ-ONLY. Nothing on this page writes.
 // The three writes it offers -- register, start a consultation, queue a walk-in -- go to APIs that
@@ -57,6 +61,9 @@ export default async function PatientsPage({ searchParams }: {
   const selectedList = isKey ? rawList : null;
   const unknownList = rawList && !isKey && rawList !== "new" ? rawList : null;
   const registerOpen = rawList === "new" || one(sp.register) === "1";
+  // Which act the drawer was opened for. It changes the drawer's own words, never the form's behaviour
+  // -- see RegistrationDrawer. Anything other than "walkin" is treated as no intent at all.
+  const registerIntent = one(sp.intent) === "walkin" ? "walkin" : null;
 
   const query = one(sp.q);
   const selectedPatientId = one(sp.patient) || null;
@@ -138,6 +145,7 @@ export default async function PatientsPage({ searchParams }: {
           summaryError={summaryError}
           family={family}
           registerOpen={registerOpen}
+          registerIntent={registerIntent}
           page={page}
           scope={scope}
           sort={sort}

@@ -1,84 +1,101 @@
 "use client";
 
-import { PLACE_BOUNDARY } from "@/lib/practice/patient-workspace-constants";
+import Link from "next/link";
+import { PLACE_BOUNDARY, MEDICATION_NOT_CURRENT_REASON } from "@/lib/practice/patient-workspace-constants";
 import { Absence, CARD, day } from "./Honesty";
+import { UNSUPPLIED_COLUMN } from "./refusals";
 import type { CohortRowView, CohortView, WorklistView } from "./types";
+import { COHORT_RING, JOURNEY_ICON, PATIENT_STATUS_SWATCH } from "@/lib/practice/palette";
 
-// CPR-V5-006 s3 -- My Patients: the largest section and the primary working area.
+// CPR-PAT-002 s4 -- the Longitudinal Patient Register.
 //
 // ────────────────────────────────────────────────────────────────────────────────────────────────────
-// THE SEVEN COLUMNS ARE THE SPECIFICATION'S, AND FOUR OF THEM ARE DERIVED AT READ TIME.
+// SEVEN COLUMNS ARE ASKED FOR. FOUR ARE REAL, THREE ARE NOT, AND THE THREE SAY WHY IN THE HEADER.
 //
-// Name, Practice ID, Hospital Numbers, Last Seen, Next Follow-up, Current Status, Location. Last seen
-// comes from the encounter table, the follow-up from the obligation table, the status from four sources
-// at once and the location from the encounter's place. None of them is stored on the patient row, which
-// is why each one can be UNKNOWN separately from being EMPTY -- and why this table has three renderings
-// for every cell rather than two.
+// Patient, Last Seen, Next Review and Status come out of myPatients(), which derives all but the first
+// at read time and reports separately whether each derivation could be made. Active Problems, Current
+// Treatments and the Journey Snapshot figures are not in the payload at all -- the engine's enrichment
+// covers identifiers, encounters, follow-ups and the queue, and nothing else. Each of those three
+// columns keeps its place and prints the batched read the engine would need, because a column silently
+// dropped from a register reads as "these patients have no problems recorded".
 //
-// "LAST SEEN" IS NOT A SORT OPTION, AND THE CONTROL SAYS SO RATHER THAN VANISHING. It is computed after
-// the page is fetched, so ordering on it would order twenty-five rows correctly and hand you a page two
-// that overlapped page one. The engine reports it as an unavailable option with its reason attached; a
-// disabled option with the reason beside it is more useful than a control that silently is not there.
+// ⚠ THE JOURNEY SNAPSHOT HAS NO TRAJECTORY CHIP, AND THAT IS THE MOST DELIBERATE DECISION ON THIS
+// SCREEN. The comp puts a green "Stable" or an amber "Monitor" beside a named child. Nothing in this
+// database records a clinical trajectory -- no status, no severity, no scored observation over time --
+// so every way of producing that chip is an invention, displayed as a clinical fact, next to a person's
+// name, attributed to nobody. Encounters and procedures are countable and are what the column will hold
+// once the engine returns them; the chip is refused outright and the cell says so.
 //
-// SELECTING A ROW OPENS THE SUMMARY PANEL, IT DOES NOT LEAVE THE WORKSPACE. The row is a button that
-// puts ?patient=<id> in the URL; the panel beside the table answers it. The full record is still one
-// click further on, for the things a panel cannot do.
+// "CURRENT TREATMENTS" IS HEADED "TREATMENTS DECIDED". practice_treatment is a MedicationPlan and its
+// `duration` is free text, so a course decided in March cannot be known to have ended. The heading is
+// the one place that distinction can be made where it is read.
+//
+// SELECTING A ROW OPENS THE SUMMARY PANEL; the name is also a link to the full longitudinal record, which
+// is CPR-PAT-002 s10's "one-click patient timeline".
 // ────────────────────────────────────────────────────────────────────────────────────────────────────
 
-const th = "px-3 py-2 text-left text-[11px] font-semibold uppercase tracking-wide text-gray-500";
-const td = "px-3 py-2 align-top text-[13px] text-gray-800";
+const th = "px-3 py-2.5 text-left text-[10.5px] font-bold uppercase tracking-[0.06em] text-gray-500";
+const td = "px-3 py-3 align-top text-[13px] text-gray-800";
 
-const STATUS_TINT: Record<string, string> = {
-  in_consultation: "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]",
-  waiting: "bg-amber-50 text-amber-800",
-  encounter_open: "bg-cyan-50 text-cyan-800",
-  seen: "bg-gray-100 text-gray-600",
-  registered_not_seen: "bg-violet-50 text-violet-800",
-  archived: "bg-gray-100 text-gray-500",
-  merged: "bg-rose-50 text-rose-800",
-};
+/** Initials, because there are no photographs and there is no photo storage to put one in. */
+function initials(name: string | null): string {
+  if (!name) return "··";
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return "··";
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+}
 
 function LastSeen({ row }: { row: CohortRowView }) {
   // THREE STATES, AND THE MIDDLE ONE IS THE POINT. The enrichment read is capped; if it hit the cap and
   // this patient had no row in it, nobody knows whether they have been seen.
   if (!row.lastSeenKnown) return <span className="text-[var(--cmp-text-warning)]">not known</span>;
   if (!row.lastSeen) return <span className="text-gray-400">never seen here</span>;
-  return <span>{day(row.lastSeen)}</span>;
+  const p = row.location;
+  const place = [p.locationName, p.facilityName].filter(Boolean).join(" · ");
+  return (
+    <span>
+      <span className="font-medium">{day(row.lastSeen)}</span>
+      {/* THE PLACE, NEVER A CARE SETTING -- see PLACE_BOUNDARY under the table. */}
+      <span className="mt-0.5 block text-[11px] text-gray-500">
+        {place || (p.source === null ? "no encounter recorded here" : "place not named on the encounter")}
+      </span>
+    </span>
+  );
 }
 
-function NextFollowUp({ row }: { row: CohortRowView }) {
+function NextReview({ row }: { row: CohortRowView }) {
   if (!row.nextFollowUpKnown) return <span className="text-[var(--cmp-text-warning)]">not known</span>;
   if (!row.nextFollowUp) return <span className="text-gray-400">none open</span>;
   return (
     <span>
-      {row.nextFollowUp.dueOn}
+      <span className="font-medium">{row.nextFollowUp.dueOn}</span>
       {row.nextFollowUp.overdue && (
-        <span className="ml-1 rounded bg-[var(--cmp-surface-critical)] px-1 py-0.5 text-[10px] font-semibold text-[var(--cmp-text-critical)]">
+        <span className="ml-1.5 rounded-md bg-rose-100 px-1.5 py-0.5 text-[10px] font-bold text-rose-700">
           overdue
         </span>
       )}
-      <span className="block text-[11px] text-gray-500">{row.nextFollowUp.reason}</span>
+      <span className="mt-0.5 block text-[11px] text-gray-500">{row.nextFollowUp.reason}</span>
     </span>
   );
 }
 
-function Where({ row }: { row: CohortRowView }) {
-  const p = row.location;
-  if (p.source === null) return <span className="text-gray-400">no encounter recorded here</span>;
-  const parts = [p.locationName, p.facilityName].filter(Boolean) as string[];
-  return (
-    <span>
-      {parts.length > 0 ? parts.join(" · ") : <span className="text-gray-400">place not named on the encounter</span>}
-      {p.activityTitle && <span className="block text-[11px] text-gray-500">{p.activityTitle}</span>}
-    </span>
-  );
+/**
+ * A cell for a column CPR-PAT-002 asks for and myPatients() does not return.
+ *
+ * NOT AN EMPTY CELL AND NOT A ZERO. Both would be read as a fact about this patient. The dash is
+ * uniform down the column so it reads as a property of the column rather than of any one row, and the
+ * reason is printed once in the header where it belongs.
+ */
+function NotReturned() {
+  return <span className="text-[13px] text-slate-300" title="Not returned by the engine for a page of patients">&mdash;</span>;
 }
 
 export default function CohortTable({
   cohort, worklist, selectedPatientId, onSelect, onScope, onSort, onPage, pending,
 }: {
   cohort: CohortView | null;
-  /** Set when a worklist tile is filtering this table -- it carries WHY each row is on the list. */
+  /** Set when a card is filtering this register -- it carries WHY each row is on the list. */
   worklist: WorklistView | null;
   selectedPatientId: string | null;
   onSelect: (patientId: string) => void;
@@ -87,13 +104,13 @@ export default function CohortTable({
   onPage: (page: number) => void;
   pending: boolean;
 }) {
-  const heading = worklist ? worklist.title : "My patients";
+  const heading = worklist ? worklist.title : "Longitudinal patient register";
   const reasonOnList = new Map<string, { note: string; when: string | null }>();
   for (const r of worklist?.rows ?? []) {
     if (r.patientId && !reasonOnList.has(r.patientId)) reasonOnList.set(r.patientId, { note: r.note, when: r.when });
   }
   const namelessRows = (worklist?.rows ?? []).filter(r => !r.patientId).length;
-  // A FILTERED TABLE SHORTER THAN THE TILE THAT OPENED IT HAS TO SAY WHY. The gap is records that could
+  // A FILTERED TABLE SHORTER THAN THE CARD THAT OPENED IT HAS TO SAY WHY. The gap is records that could
   // not be returned -- merged into another record, most often -- and an unexplained gap between a count
   // and a list is exactly the thing that makes people stop trusting both.
   const unreachable = worklist && cohort && cohort.total !== null
@@ -102,16 +119,19 @@ export default function CohortTable({
 
   return (
     <section className={`${CARD} overflow-hidden ${pending ? "opacity-60" : ""}`}>
-      <div className="flex flex-wrap items-baseline justify-between gap-2 border-b border-gray-100 p-4">
-        <div>
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-gray-100 px-4 py-3">
+        <div className="flex flex-wrap items-center gap-2">
           <h2 className="text-[14px] font-bold text-gray-900">{heading}</h2>
-          <p className="mt-0.5 text-[12px] text-gray-500">
-            {worklist
-              ? worklist.note
-              : cohort?.scope === "mine"
-                ? "Patients you have consulted, most recently registered first."
-                : "Everybody on this practice's register."}
-          </p>
+          {cohort && !cohort.unavailable && (
+            <span className="rounded-full bg-[var(--cp-primary)]/10 px-2 py-0.5 text-[11.5px] font-bold text-[var(--cp-primary-deep)]">
+              {cohort.total === null ? "count unavailable" : cohort.total}
+            </span>
+          )}
+          {worklist && (
+            <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-semibold text-amber-800">
+              filtered
+            </span>
+          )}
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
@@ -148,6 +168,14 @@ export default function CohortTable({
           </label>
         </div>
       </div>
+
+      <p className="border-b border-gray-100 px-4 py-2 text-[12px] text-gray-500">
+        {worklist
+          ? worklist.note
+          : cohort?.scope === "mine"
+            ? "Patients you have opened an encounter for, most recently registered first."
+            : "Everybody on this practice's register, with the continuity of care recorded against them."}
+      </p>
 
       {/* "Only mine" means the patients this practitioner has CONSULTED -- the one practitioner-to-patient
           link this schema holds. Said here, because a scope whose meaning is guessed is a scope that is
@@ -186,75 +214,101 @@ export default function CohortTable({
         </div>
       ) : (
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[900px] border-collapse">
+          <table className="w-full min-w-[1080px] border-collapse">
             <thead className="bg-gray-50/80">
               <tr>
-                <th className={th}>Name</th>
-                <th className={th}>Practice ID</th>
-                <th className={th}>Hospital numbers</th>
+                <th className={th}>Patient</th>
+                <th className={th}>Active problems</th>
+                <th className={th}>
+                  Treatments decided
+                  {/* ⚠ NOT "CURRENT". The distinction cannot be made anywhere else and this is where the
+                      column is read. */}
+                  <span className="mt-0.5 block text-[9.5px] font-medium normal-case tracking-normal text-gray-400">
+                    not &ldquo;current&rdquo;
+                  </span>
+                </th>
                 <th className={th}>Last seen</th>
-                <th className={th}>Next follow-up</th>
-                <th className={th}>Current status</th>
-                <th className={th}>Location</th>
+                <th className={th}>Next review</th>
+                <th className={th}>Journey snapshot</th>
+                <th className={th}>Status</th>
                 {worklist && <th className={th}>On this list because</th>}
               </tr>
             </thead>
             <tbody>
-              {cohort.rows.map(r => {
+              {cohort.rows.map((r, i) => {
                 const why = reasonOnList.get(r.patientId);
                 const active = selectedPatientId === r.patientId;
                 return (
                   <tr
                     key={r.patientId}
-                    className={`border-t border-gray-100 ${active ? "bg-[var(--cp-primary)]/5" : "hover:bg-gray-50/70"}`}
+                    className={`border-t border-gray-100 ${active ? "bg-[var(--cp-primary)]/[0.05]" : "hover:bg-gray-50/70"}`}
                   >
                     <td className={td}>
-                      <button
-                        type="button"
-                        onClick={() => onSelect(r.patientId)}
-                        aria-current={active}
-                        className="text-left text-[13px] font-semibold text-gray-900 hover:text-[var(--cp-primary-deep)] hover:underline"
-                      >
-                        {r.name ?? <span className="font-normal italic text-gray-400">name withheld</span>}
-                      </button>
-                      {r.deIdentified && (
-                        <span className="block text-[11px] text-gray-400">
-                          You may see that this record exists, not who it is.
+                      <span className="flex items-start gap-2.5">
+                        {/* NO PHOTOGRAPH. There is no file storage and no photo column; the comp's
+                            avatars are initials here, derived from the name that is stored. */}
+                        <span
+                          aria-hidden
+                          className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-[12px] font-bold ${COHORT_RING[i % COHORT_RING.length]}`}
+                        >
+                          {initials(r.name)}
                         </span>
-                      )}
-                      {r.recordStatus !== "active" && (
-                        <span className="mt-0.5 inline-block rounded bg-gray-100 px-1.5 py-0.5 text-[10px] font-semibold text-gray-600">
-                          {r.recordStatus}
-                        </span>
-                      )}
-                    </td>
-                    <td className={`${td} font-mono text-[12px]`}>
-                      {r.practiceId ?? <span className="font-sans text-gray-400">none issued</span>}
-                    </td>
-                    <td className={td}>
-                      {/* TOGETHER WITH THE PRACTICE ID, NOT HIDDEN IN DEMOGRAPHICS -- the acceptance
-                          criterion, rendered as a column of its own. */}
-                      {r.hospitalNumbers.length === 0
-                        ? <span className="text-gray-400">none recorded</span>
-                        : (
-                          <ul className="flex flex-col gap-0.5">
+                        <span className="min-w-0">
+                          <button
+                            type="button"
+                            onClick={() => onSelect(r.patientId)}
+                            aria-current={active}
+                            className="text-left text-[13.5px] font-semibold text-gray-900 hover:text-[var(--cp-primary-deep)] hover:underline"
+                          >
+                            {r.name ?? <span className="font-normal italic text-gray-400">name withheld</span>}
+                          </button>
+                          {r.deIdentified && (
+                            <span className="block text-[11px] text-gray-400">
+                              You may see that this record exists, not who it is.
+                            </span>
+                          )}
+                          <span className="mt-1 flex flex-wrap items-center gap-1">
+                            {r.practiceId
+                              ? <span className="rounded-md bg-[var(--cp-primary)]/10 px-1.5 py-0.5 font-mono text-[10.5px] font-semibold text-[var(--cp-primary-deep)]">{r.practiceId}</span>
+                              : <span className="text-[10.5px] text-gray-400">no Practice ID issued</span>}
+                            {/* HOSPITAL NUMBERS BESIDE THE NAME, not hidden in demographics. */}
                             {r.hospitalNumbers.map(h => (
-                              <li key={h.id} className="font-mono text-[12px]">
-                                {h.value}
-                                {h.facilityName && <span className="font-sans text-[11px] text-gray-500"> · {h.facilityName}</span>}
-                              </li>
+                              <span key={h.id} className="rounded-md bg-emerald-50 px-1.5 py-0.5 font-mono text-[10.5px] text-emerald-800">
+                                {h.value}{h.facilityName ? ` · ${h.facilityName}` : ""}
+                              </span>
                             ))}
-                          </ul>
-                        )}
+                            {r.recordStatus !== "active" && (
+                              <span className="rounded-md bg-slate-100 px-1.5 py-0.5 text-[10px] font-semibold text-slate-600">
+                                {r.recordStatus}
+                              </span>
+                            )}
+                          </span>
+                          <Link
+                            href={`/practice/patients/${r.patientId}`}
+                            className="mt-1 inline-block text-[11px] font-semibold text-[var(--cp-primary-deep)] hover:underline"
+                          >
+                            Open timeline &rarr;
+                          </Link>
+                        </span>
+                      </span>
                     </td>
+                    <td className={td}><NotReturned /></td>
+                    <td className={td}><NotReturned /></td>
                     <td className={td}><LastSeen row={r} /></td>
-                    <td className={td}><NextFollowUp row={r} /></td>
+                    <td className={td}><NextReview row={r} /></td>
                     <td className={td}>
-                      <span className={`rounded px-1.5 py-0.5 text-[11px] font-semibold ${STATUS_TINT[r.currentStatus.code] ?? "bg-gray-100 text-gray-600"}`}>
+                      <span className="flex flex-col gap-0.5 text-[11.5px] text-slate-400">
+                        <span><span aria-hidden className="mr-1">{JOURNEY_ICON.encounters}</span>encounters &mdash;</span>
+                        <span><span aria-hidden className="mr-1">{JOURNEY_ICON.procedures}</span>procedures &mdash;</span>
+                        {/* ⚠ WHERE THE COMP'S TRAJECTORY CHIP WOULD BE. */}
+                        <span className="text-[10.5px] italic text-slate-400">no trajectory recorded</span>
+                      </span>
+                    </td>
+                    <td className={td}>
+                      <span className={`inline-block rounded-md px-2 py-0.5 text-[11px] font-semibold ${PATIENT_STATUS_SWATCH[r.currentStatus.code] ?? "bg-slate-100 text-slate-600 ring-1 ring-slate-200"}`}>
                         {r.currentStatus.label}
                       </span>
                     </td>
-                    <td className={td}><Where row={r} /></td>
                     {worklist && (
                       <td className={td}>
                         {why
@@ -323,9 +377,37 @@ export default function CohortTable({
         )}
       </div>
 
-      <p className="border-t border-gray-100 bg-gray-50/60 px-4 py-2 text-[11px] leading-relaxed text-gray-500">
-        <span className="font-semibold text-gray-600">Location is a place, not a care setting.</span> {PLACE_BOUNDARY}
-      </p>
+      {/* ── What the three empty columns need, and why the fourth cell has no chip ─────────────────── */}
+      <div className="border-t border-gray-100 bg-gray-50/60 px-4 py-2.5">
+        <details className="group">
+          <summary className="cursor-pointer list-none text-[11.5px] font-semibold text-gray-600 hover:text-gray-900">
+            <span className="mr-1 inline-block text-gray-400 transition-transform group-open:rotate-90">&rsaquo;</span>
+            Three of these columns are empty on purpose, and the Journey Snapshot has no trajectory chip
+          </summary>
+          <ul className="mt-1.5 flex flex-col gap-1.5 pl-3 text-[11px] leading-relaxed text-gray-500">
+            <li>
+              <span className="font-semibold text-gray-600">Active problems.</span> {UNSUPPLIED_COLUMN.activeProblems}
+            </li>
+            <li>
+              <span className="font-semibold text-gray-600">Treatments decided.</span> {UNSUPPLIED_COLUMN.treatmentsDecided}{" "}
+              And it will never be headed &ldquo;current&rdquo;: {MEDICATION_NOT_CURRENT_REASON}
+            </li>
+            <li>
+              <span className="font-semibold text-gray-600">Journey snapshot.</span> {UNSUPPLIED_COLUMN.journeySnapshot}
+            </li>
+            <li>
+              <span className="font-semibold text-gray-600">No trajectory chip.</span> The design shows
+              &ldquo;Stable&rdquo;, &ldquo;Improving&rdquo; and &ldquo;Monitor&rdquo; beside each patient&rsquo;s name.
+              Nothing in this record holds a clinical trajectory &mdash; no status, no severity, no scored
+              observation over time &mdash; so the chip would be an assessment of that patient made by nobody
+              and displayed as fact. It is refused, not approximated.
+            </li>
+          </ul>
+        </details>
+        <p className="mt-2 border-t border-gray-200/70 pt-2 text-[11px] leading-relaxed text-gray-500">
+          <span className="font-semibold text-gray-600">Last seen shows a place, not a care setting.</span> {PLACE_BOUNDARY}
+        </p>
+      </div>
     </section>
   );
 }

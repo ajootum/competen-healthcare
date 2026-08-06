@@ -30,6 +30,9 @@
  *
  *   npx --yes tsx scripts/practice-patient-workspace-harness.ts
  */
+import { PATIENT_STATUS_SWATCH, WORKLIST_SWATCH } from "../src/lib/practice/palette";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { loadEnvConfig } from "@next/env";
 import { createClient } from "@supabase/supabase-js";
 import { runProvisioning, type IndividualRequest } from "../src/lib/practice/provisioning";
@@ -46,7 +49,7 @@ import {
   familyRelationships, patientsWorkspace,
 } from "../src/lib/practice/patient-workspace";
 import {
-  WORKLIST_KEYS, REFUSES, DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE,
+  WORKLIST_KEYS, REFUSES, DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE, COHORT_STATUS_LABELS,
 } from "../src/lib/practice/patient-workspace-constants";
 
 loadEnvConfig(process.cwd());
@@ -927,6 +930,46 @@ async function main() {
     .select("id", { count: "exact", head: true }).eq("workspace_id", wsA).eq("actor_id", OWNER);
   ok("41. READS ARE LOGGED -- opening a patient and running a search both leave a trail",
     (accessRows ?? 0) > 0, String(accessRows));
+
+  // ── 42. THE SWATCHES ARE KEYED ON THE ENGINE'S OWN VOCABULARY ───────────────────────────────────
+  //
+  // ⚠ THIRD TIME THIS CLASS. PERFORMANCE_SWATCH was keyed `avg_consult` against the page's
+  // `average_consult_time`; GLANCE_SWATCH `walk_ins` against `walk_in`. Both compiled perfectly and both
+  // rendered real figures in dead grey, with nothing anywhere saying a lookup had missed. Writing this
+  // screen's status swatch I reached first for the COMP'S labels -- "Follow-up Due", "Active", "New
+  // Patient" -- and not one of them is a status this engine emits.
+  //
+  // Asserted as an EQUALITY in both directions, not a subset: a swatch key with no status is a colour
+  // nobody will ever see, and a status with no swatch is a chip that silently goes grey.
+  const statusKeys = Object.keys(COHORT_STATUS_LABELS).sort();
+  const swatchKeys = Object.keys(PATIENT_STATUS_SWATCH).sort();
+  ok("42a. every cohort status has a colour, and every colour has a status",
+    statusKeys.join() === swatchKeys.join(),
+    `statuses: ${statusKeys.join()} | swatches: ${swatchKeys.join()}`);
+
+  const worklistKeys = [...WORKLIST_KEYS].sort();
+  const worklistSwatchKeys = Object.keys(WORKLIST_SWATCH).sort();
+  ok("42b. and every worklist tile has one -- a missing key is a grey tile among five coloured ones",
+    worklistKeys.join() === worklistSwatchKeys.join(),
+    `worklists: ${worklistKeys.join()} | swatches: ${worklistSwatchKeys.join()}`);
+
+  ok("42-control. both vocabularies are non-empty, so the equalities are not comparing nothing",
+    statusKeys.length >= 5 && worklistKeys.length === 6,
+    `${statusKeys.length} statuses, ${worklistKeys.length} worklists`);
+
+  // ⚠ AND THE SCREEN MUST ACTUALLY USE THEM. Half-fixing this was the original mistake: the design
+  // system existed from day one and the page drew six grey boxes anyway. Source-checked, because a
+  // Tailwind class cannot be reached from here -- the same reason adaptive-4 and timeline-3 exist.
+  const dir = (f: string) => join(process.cwd(), "src", "app", "practice", "(shell)", "patients", f);
+  const tiles = readFileSync(dir("WorklistTiles.tsx"), "utf8");
+  const table = readFileSync(dir("CohortTable.tsx"), "utf8");
+  ok("42c. the worklist tiles and the cohort table read their colours FROM palette.ts",
+    /WORKLIST_SWATCH/.test(tiles) && /from "@\/lib\/practice\/palette"/.test(tiles)
+    && /PATIENT_STATUS_SWATCH/.test(table) && /from "@\/lib\/practice\/palette"/.test(table),
+    `tiles=${/WORKLIST_SWATCH/.test(tiles)} table=${/PATIENT_STATUS_SWATCH/.test(table)}`);
+  ok("42d. and neither keeps a private colour map of its own",
+    !/const [A-Z_]*TINT[A-Z_]*: Record/.test(tiles) && !/const [A-Z_]*TINT[A-Z_]*: Record/.test(table),
+    "a local colour map is how two screens start disagreeing about what amber means");
 
   await cleanup();
   return report();

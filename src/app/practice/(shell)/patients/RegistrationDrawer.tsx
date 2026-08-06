@@ -24,8 +24,18 @@ import { useModalFocus } from "@/components/ui/use-modal-focus";
 // the page behind is unavailable while a keyboard user Tabs straight into it.
 // ────────────────────────────────────────────────────────────────────────────────────────────────────
 
-export default function RegistrationDrawer({ open, onClose, children }: {
+export default function RegistrationDrawer({ open, intent, onClose, children }: {
   open: boolean;
+  /**
+   * "walkin" when Quick Walk-in opened it. IT CHANGES WHAT THE DRAWER SAYS, NOT WHAT THE FORM DOES.
+   *
+   * CPR-PAT-002 s3 puts Quick Walk-in beside New Patient at the top of the screen, and the honest way to
+   * offer it is this one: the form's own primary button already IS the walk-in act ("Register and add to
+   * the queue"). A second registration path that skipped a field, or a pre-set toggle the user did not
+   * choose, would be two implementations of one write -- and the one that skipped something would be the
+   * one used at a busy desk.
+   */
+  intent: string | null;
   onClose: () => void;
   children: React.ReactNode;
 }) {
@@ -33,6 +43,8 @@ export default function RegistrationDrawer({ open, onClose, children }: {
   useModalFocus(open, panel, onClose);
 
   if (!open) return null;
+
+  const walkIn = intent === "walkin";
 
   return (
     <div className="fixed inset-0 z-50 flex justify-end bg-black/40">
@@ -48,14 +60,18 @@ export default function RegistrationDrawer({ open, onClose, children }: {
         tabIndex={-1}
         role="dialog"
         aria-modal="true"
-        aria-label="Register a patient"
+        aria-label={walkIn ? "Walk-in registration" : "Register a patient"}
         className="h-full w-full max-w-[980px] overflow-y-auto bg-[var(--cp-canvas)] shadow-2xl outline-none"
       >
         <div className="sticky top-0 z-10 flex items-baseline justify-between gap-3 border-b border-gray-200 bg-white px-5 py-3">
           <div>
-            <h2 className="text-[16px] font-bold text-gray-900">New patient</h2>
+            <h2 className="text-[16px] font-bold text-gray-900">
+              {walkIn ? "Walk-in registration" : "New patient"}
+            </h2>
             <p className="text-[12px] text-gray-500">
-              Search first &mdash; register only when nobody on the register matches.
+              {walkIn
+                ? <>Same form. Finish with <span className="font-semibold text-violet-700">Register and add to the queue</span> &mdash; that is what puts the patient in today&rsquo;s clinic.</>
+                : <>Search first &mdash; register only when nobody on the register matches.</>}
             </p>
           </div>
           <button

@@ -1,5 +1,6 @@
 "use client";
 
+import { KEY_INFO_SWATCH } from "@/lib/practice/palette";
 import { Count, CARD, day } from "./Honesty";
 import type { BannerView } from "./types";
 
@@ -84,8 +85,8 @@ export default function ContextBanner({ banner, onClose }: {
       )}
 
       <div className="mt-3 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <div>
-          <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-500">Last seen here</p>
+        <div className={`rounded-lg border p-2.5 ${KEY_INFO_SWATCH.last_seen.box}`}>
+          <p className={`text-[11px] font-semibold uppercase tracking-wide ${KEY_INFO_SWATCH.last_seen.label}`}>Last seen here</p>
           <p className="text-[13px] text-gray-800">
             {!banner.lastSeenKnown
               ? <span className="text-[var(--cmp-text-warning)]">not known — the encounter record could not be read</span>
@@ -93,8 +94,8 @@ export default function ContextBanner({ banner, onClose }: {
           </p>
         </div>
 
-        <div>
-          <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-500">Next follow-up</p>
+        <div className={`rounded-lg border p-2.5 ${KEY_INFO_SWATCH.next_follow_up.box}`}>
+          <p className={`text-[11px] font-semibold uppercase tracking-wide ${KEY_INFO_SWATCH.next_follow_up.label}`}>Next follow-up</p>
           <p className="text-[13px] text-gray-800">
             {!banner.activeFollowUpKnown
               ? <span className="text-[var(--cmp-text-warning)]">not known</span>
@@ -110,8 +111,8 @@ export default function ContextBanner({ banner, onClose }: {
           </p>
         </div>
 
-        <div className="sm:col-span-2">
-          <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-500">
+        <div className={`sm:col-span-2 rounded-lg border p-2.5 ${KEY_INFO_SWATCH.neutral.box}`}>
+          <p className={`text-[11px] font-semibold uppercase tracking-wide ${KEY_INFO_SWATCH.neutral.label}`}>
             Where this practice last had them
           </p>
           <p className="text-[13px] text-gray-800">
@@ -134,10 +135,10 @@ export default function ContextBanner({ banner, onClose }: {
         {banner.outstanding.map(o => (
           <span
             key={o.key}
-            className="rounded-lg border border-gray-200 px-2.5 py-1.5"
+            className={`rounded-lg border px-2.5 py-1.5 ${(o.count ?? 0) > 0 ? KEY_INFO_SWATCH.pending_results.box : "border-gray-200"}`}
             title={o.reason === "capability" ? "Not shown to you" : o.reason === "read_failed" ? (o.error ?? "Could not be read") : undefined}
           >
-            <Count count={o.count} reason={o.reason} className="text-[16px] font-bold text-gray-900" />
+            <Count count={o.count} reason={o.reason} className={`text-[16px] font-bold ${(o.count ?? 0) > 0 ? KEY_INFO_SWATCH.pending_results.figure : "text-gray-900"}`} />
             <span className="ml-1.5 text-[12px] text-gray-600">{o.label}</span>
           </span>
         ))}
