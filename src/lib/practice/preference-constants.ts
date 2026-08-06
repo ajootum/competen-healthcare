@@ -56,8 +56,19 @@ export const DASHBOARD_WIDGETS = [
   ["documents", "Recent documents", false],
   ["health", "Practice performance", false],
   ["quick_actions", "Quick access", false],
-  ["practice", "This practice", false],
-  ["activity", "Recent activity", false],
+  // ⚠ "This practice" AND "Recent activity" ARE REMOVED, and removing them is the fix rather than
+  // tagging them on the page.
+  //
+  // Neither panel exists on /practice/home any more -- they went when CPR-V5-001 replaced the greeting
+  // dashboard with Current Activity, and this register was not updated. So they were two switches in
+  // Settings that a practitioner could turn on and off, and which changed nothing at all whichever way
+  // they were left. CPR-360 already settled this class: "a setting that changes nothing is worse than a
+  // missing one", which is why that module lists inert configuration rather than rendering it as inputs.
+  //
+  // The alternative -- adding `widget("practice")` and `widget("activity")` to the page -- would mean
+  // inventing two panels to justify two switches. A saved preference naming a key that no longer exists
+  // is simply ignored by widget(), which returns undefined for an unknown key, so nothing breaks for
+  // somebody who had toggled one.
 ] as const;
 
 /**

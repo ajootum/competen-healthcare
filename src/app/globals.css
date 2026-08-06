@@ -456,6 +456,43 @@ aside[data-sidebar] details[data-nav-group] > summary::-webkit-details-marker { 
 [data-practice-theme="dark"] .bg-blue-50 { background-color: #142744; }
 [data-practice-theme="dark"] .text-blue-700 { color: #93C5FD; }
 
+/* ── The tints the Patients, Planner and Encounters work added, and their opacity variants ───────────
+ *
+ * ⚠ A LIGHT UTILITY WITH NO DARK MAPPING IS NOT A MISSING STYLE -- IT IS A WHITE BOX. Tailwind's
+ * bg-amber-100 stays #FEF3C7 in dark mode because nothing overrides it, so a tinted card built for a
+ * white page becomes a glaring panel on a near-black one, with dark text on it that was chosen against
+ * a light background. The personalisation harness scans the whole Practice tree for exactly this and
+ * had been failing since the swatches went in.
+ *
+ * ⚠ AND THE OPACITY VARIANTS NEED THEIR OWN RULES. `.bg-emerald-50` and `.bg-emerald-50\/60` are
+ * different classes to the stylesheet -- mapping the base does nothing for the slash form, which is why
+ * the list below looks repetitive. The harness asserts against the class as written, which is the only
+ * thing that is true of the rendered page.
+ *
+ * The 100-weights are DEEPER than the 50s, not lighter: on a dark surface a tint reads as "more ink",
+ * so the stronger light tint has to become the stronger dark one or the two swap places.
+ */
+[data-practice-theme="dark"] .bg-amber-50\/50 { background-color: #2E220C; }
+[data-practice-theme="dark"] .bg-amber-50\/60 { background-color: #33260D; }
+[data-practice-theme="dark"] .bg-amber-50\/70 { background-color: #362810; }
+[data-practice-theme="dark"] .bg-amber-100 { background-color: #4A360F; }
+[data-practice-theme="dark"] .bg-emerald-50\/40 { background-color: #0E2620; }
+[data-practice-theme="dark"] .bg-emerald-50\/60 { background-color: #102B23; }
+[data-practice-theme="dark"] .bg-emerald-50\/70 { background-color: #112E25; }
+[data-practice-theme="dark"] .bg-emerald-100 { background-color: #163C31; }
+[data-practice-theme="dark"] .bg-red-50\/60 { background-color: #2E1519; }
+[data-practice-theme="dark"] .bg-red-100 { background-color: #4A2027; }
+[data-practice-theme="dark"] .text-blue-100 { color: #DBEAFE; }
+
+/* Neutrals. These are surfaces and hairlines rather than tints, so they land on the same near-black
+   scale the shell already uses rather than getting a hue of their own. */
+[data-practice-theme="dark"] .bg-gray-50\/70,
+[data-practice-theme="dark"] .bg-gray-50\/80 { background-color: #111A2B; }
+[data-practice-theme="dark"] .bg-gray-200\/70 { background-color: #1C2942; }
+[data-practice-theme="dark"] .bg-gray-300 { background-color: #24334F; }
+[data-practice-theme="dark"] .border-gray-50 { border-color: #1C2942; }
+[data-practice-theme="dark"] .border-gray-200\/70 { border-color: #26354F; }
+
 /* ── Accent (CPR-360 "Primary Colour"). A fixed set from the design system, not a colour picker:
    an arbitrary hex would walk straight out of the contrast the PUI work proved. --cp-primary-soft and
    -border derive from it, so a chosen accent stays internally consistent. */
