@@ -43,21 +43,23 @@ import {
 // reading zero bookings because the query failed would delete a session somebody is booked into. Where
 // the answer matters for a refusal, an unreadable answer REFUSES.
 //
-// ---- TWO COLUMNS FOR ONE FACT, TWICE, AND NEITHER IS THIS MODULE'S DOING ------------------------------
+// ---- THE DUPLICATE COLUMNS ARE GONE (migration 241) --------------------------------------------------
 //
-// ⚠ DEFECT, RECORDED RATHER THAN PAPERED OVER. Migration 231 gave practice_availability_template a
-// `capacity` integer and a single `appointment_type` text. Migration 240 gives it `capacity_manual` and
-// a join table for appointment types. Both pairs now describe one fact in two places, and the older half
-// is still written by the existing session card at /practice/setup/availability.
+// This module used to hold a careful workaround: migration 240 added `capacity_manual` and a join table
+// for appointment types when migration 231 had ALREADY added `capacity` and `appointment_type` to the
+// same table. Reads took the stricter capacity and the union of type stores; writes kept both in step.
 //
-// Handled the way removeSession() already handles `active` vs `status` -- KEPT IN STEP ON WRITE, and
-// resolved in the safe direction on read:
-//   capacity          the manual cap is the STRICTER of the two stored values, so neither column can
-//                     silently loosen a limit the other imposed. Writes set both.
-//   appointment_type  the offered set is the join table UNION the legacy single value. Writes set the
-//                     legacy column when exactly one type is offered and null otherwise, because one
-//                     column cannot express several -- which is the whole reason 240 added the table.
-// The real fix is a migration that drops one of each pair, which is not this task's to write.
+// That was correct and it was not enough. Handling a duplicate safely still requires every future reader
+// to LEARN the arrangement, and the two nulls meant OPPOSITE things -- 231's meant "unlimited", 240's
+// meant "derive it from the session length". A reader could not tell which question a null answered.
+//
+// Migration 241 drops `capacity_manual` and the legacy `appointment_type` column, after copying the
+// column's values into the join table. What survives:
+//   capacity          one column. NULL MEANS DERIVE from the session length and the appointment length,
+//                     superseding 231's "null means unlimited" -- strictly safer, since a four-hour
+//                     clinic becomes twelve slots rather than infinite.
+//   appointment types the join table alone, because s4.3 needs zero, one AND several, and a single
+//                     column can express only the middle one.
 // ────────────────────────────────────────────────────────────────────────────────────────────────────
 
 export type EngineResult<T> =
@@ -273,7 +275,7 @@ export async function practiceSessions(admin: any, ctx: WorkspaceContext) {
       .eq("workspace_id", ctx.workspaceId).order("name"),
     // ACTIVE AND SUSPENDED. A suspended session must stay visible or "suspend" is a slower "delete".
     admin.from("practice_availability_template")
-      .select("id, location_id, clinic_id, weekday, starts_minute, ends_minute, slot_kind, appointment_minutes, appointment_type, capacity, capacity_manual, note, status, session_name, activity_type, booking_mode, walk_ins_allowed, walk_in_limit, effective_from, effective_to, session_note")
+      .select("id, location_id, clinic_id, weekday, starts_minute, ends_minute, slot_kind, appointment_minutes, capacity, note, status, session_name, activity_type, booking_mode, walk_ins_allowed, walk_in_limit, effective_from, effective_to, session_note")
       .eq("workspace_id", ctx.workspaceId).in("status", ["active", "suspended"])
       .order("weekday").order("starts_minute"),
     admin.from("practice_session_appointment_type").select("template_id, appointment_type")
@@ -314,14 +316,17 @@ export async function practiceSessions(admin: any, ctx: WorkspaceContext) {
   }
 
   const sessions: Reading<SessionView[]> = reading(templates, rows => rows.map(t => {
-    // THE UNION, per the two-columns-for-one-fact note at the top of this file.
-    const joined = linksByTemplate.get(t.id as string) ?? [];
-    const legacy = t.appointment_type ? [t.appointment_type as string] : [];
-    const appointmentTypes = [...new Set([...joined, ...legacy])].sort();
-
-    // THE STRICTER OF THE TWO STORED MANUAL FIGURES, so neither column can loosen the other.
-    const manualCandidates = [t.capacity_manual, t.capacity].filter((v: any) => v != null) as number[];
-    const manual = manualCandidates.length ? Math.min(...manualCandidates) : null;
+    // ⚠ THE UNION AND THE STRICTER-OF-TWO ARE GONE, AND THAT IS THE POINT OF MIGRATION 241.
+    //
+    // This file used to read the join table UNION a legacy single column, and the smaller of two
+    // capacity columns, because migration 240 duplicated what 231 already had. Handling a duplicate
+    // safely is not the same as not having one: every reader had to know the arrangement, and the two
+    // nulls meant OPPOSITE things (231 unlimited, 240 derive-it). 241 drops one of each pair.
+    //
+    // Written this way BEFORE 241 is applied, on purpose: not selecting a column works against both
+    // schemas, so the code is safe whether or not the migration has been run yet.
+    const appointmentTypes = [...new Set(linksByTemplate.get(t.id as string) ?? [])].sort();
+    const manual = (t.capacity ?? null) as number | null;
 
     const capacity = computeCapacity({
       startsMinute: t.starts_minute, endsMinute: t.ends_minute,
@@ -472,7 +477,7 @@ export async function saveSession(admin: any, ctx: WorkspaceContext, args: {
   let existing: any = null;
   if (!creating) {
     const { data, error } = await admin.from("practice_availability_template")
-      .select("id, weekday, starts_minute, ends_minute, location_id, clinic_id, slot_kind, appointment_minutes, appointment_type, capacity, capacity_manual, status, session_name, activity_type, booking_mode, walk_ins_allowed, walk_in_limit, effective_from, effective_to, session_note")
+      .select("id, weekday, starts_minute, ends_minute, location_id, clinic_id, slot_kind, appointment_minutes, capacity, status, session_name, activity_type, booking_mode, walk_ins_allowed, walk_in_limit, effective_from, effective_to, session_note")
       .eq("id", args.templateId).eq("workspace_id", ctx.workspaceId).maybeSingle();
     // AN UNREADABLE ROW IS NOT AN ABSENT ROW. Reporting 404 here would tell somebody their session had
     // been deleted by a query that merely failed.
@@ -495,7 +500,7 @@ export async function saveSession(admin: any, ctx: WorkspaceContext, args: {
   const sessionName = pick(args.sessionName, existing?.session_name ?? null, null);
   const activityType = pick(args.activityType, existing?.activity_type ?? null, null);
   const bookingMode = pick(args.bookingMode, existing?.booking_mode ?? "none", "none");
-  const capacityManual = pick(args.capacityManual, existing?.capacity_manual ?? existing?.capacity ?? null, null);
+  const capacityManual = pick(args.capacityManual, existing?.capacity ?? null, null);
   const appointmentMinutes = pick(args.appointmentMinutes, existing?.appointment_minutes ?? null, null);
   const walkInsAllowed = pick(args.walkInsAllowed, existing?.walk_ins_allowed === true, false);
   const walkInLimit = pick(args.walkInLimit, existing?.walk_in_limit ?? null, null);
@@ -590,9 +595,9 @@ export async function saveSession(admin: any, ctx: WorkspaceContext, args: {
     session_name: sessionName ? sessionName.trim() : null,
     activity_type: activityType,
     booking_mode: bookingMode,
-    capacity_manual: capacityManual,
-    // KEPT IN STEP with migration 231's older column, per this file's header. Letting the two disagree
-    // would make the stricter-of-both read below silently apply a limit nobody set.
+    // ONE COLUMN NOW (migration 241). Null means DERIVE from the session length and the appointment
+    // length -- 231's "null means unlimited" is superseded, which is strictly safer: a four-hour clinic
+    // becomes twelve slots rather than infinite.
     capacity: capacityManual,
     walk_ins_allowed: walkInsAllowed,
     walk_in_limit: walkInLimit,
@@ -685,7 +690,9 @@ export async function setAppointmentTypes(admin: any, ctx: WorkspaceContext, arg
   // Migration 231's single column, kept in step. One column cannot hold several, so it holds the answer
   // only when there IS one -- which is exactly the case a legacy row expresses.
   const { error: legacyErr } = await admin.from("practice_availability_template")
-    .update({ appointment_type: wanted.length === 1 ? wanted[0] : null, updated_at: nowIso() })
+    // The legacy single column is gone (migration 241). Only updated_at moves here now -- the join
+    // table above is the whole record of which types a session offers.
+    .update({ updated_at: nowIso() })
     .eq("id", args.templateId).eq("workspace_id", ctx.workspaceId);
   if (legacyErr) return { ok: false, status: 422, code: "REFUSED_BY_DATABASE", message: legacyErr.message };
 

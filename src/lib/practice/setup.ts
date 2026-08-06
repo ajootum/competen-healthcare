@@ -303,7 +303,9 @@ export async function practiceSetup(admin: any, ctx: WorkspaceContext) {
     // The rows rather than a count, because s7.4's capacity check needs the times and s4.3's
     // bookability check needs the mode.
     admin.from("practice_availability_template")
-      .select("id, starts_minute, ends_minute, appointment_minutes, capacity, capacity_manual, booking_mode, activity_type, session_name, appointment_type")
+      // capacity_manual and appointment_type were dropped by migration 241 -- one capacity column, and
+      // the join table owns the offered types.
+      .select("id, starts_minute, ends_minute, appointment_minutes, capacity, booking_mode, activity_type, session_name")
       .eq("workspace_id", ctx.workspaceId).eq("status", "active"),
     admin.from("practice_session_appointment_type").select("template_id, appointment_type")
       .eq("workspace_id", ctx.workspaceId),
@@ -474,7 +476,7 @@ export async function practiceSetup(admin: any, ctx: WorkspaceContext) {
   const sessionsWithoutCapacity = sessionRows === null ? null : sessionRows.filter(s => {
     const minutes = (s.appointment_minutes as number | null) ?? defaultMinutes;
     const derivable = minutes != null && minutes > 0 && (s.ends_minute - s.starts_minute) > 0;
-    const manual = s.capacity_manual ?? s.capacity ?? null;
+    const manual = s.capacity ?? null;
     return !derivable && manual == null;
   }).length;
 

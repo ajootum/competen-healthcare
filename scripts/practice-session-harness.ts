@@ -124,7 +124,10 @@ async function main() {
 
   // ---- 0. MIGRATION GATE ------------------------------------------------------------------------
   const probe = await admin.from("practice_availability_template")
-    .select("session_name, activity_type, booking_mode, capacity_manual, walk_ins_allowed, walk_in_limit, effective_from, effective_to, session_note")
+    // ⚠ NOT capacity_manual: migration 241 dropped it, so this gate started reporting "run 240"
+    // against a database where 240 had run. A migration gate must probe a column the migration adds AND
+    // KEEPS -- probing one a later migration might reasonably remove turns the gate into a false alarm.
+    .select("session_name, activity_type, booking_mode, walk_ins_allowed, walk_in_limit, effective_from, effective_to, session_note")
     .limit(1);
   const probeJoin = await admin.from("practice_session_appointment_type").select("id").limit(1);
   if (probe.error || probeJoin.error) {
@@ -236,10 +239,13 @@ async function main() {
       t.appointmentTypes.length === 2
       && t.appointmentTypes.includes("new_consultation") && t.appointmentTypes.includes("scheduled_followup"),
       JSON.stringify(t.appointmentTypes));
-    const { data: legacy } = await admin.from("practice_availability_template")
-      .select("appointment_type").eq("id", tuesdayId).maybeSingle();
-    ok("9b migration 231's single column holds NULL when several are offered, because one column cannot hold two",
-      legacy?.appointment_type === null, String(legacy?.appointment_type));
+    // ⚠ 9b USED TO ASSERT THE LEGACY COLUMN WAS KEPT IN STEP. Migration 241 dropped it, so the
+    // guarantee changed from "two stores agree" to "there is one store" -- and the assertion has to
+    // change with it rather than be deleted, or nothing would notice the column coming back.
+    const { error: goneErr } = await admin.from("practice_availability_template")
+      .select("appointment_type").limit(1);
+    ok("9b the legacy single column is GONE, so the join table is the only store (migration 241)",
+      !!goneErr, "the dropped column still answers");
   }
 
   await setAppointmentTypes(admin, A, { templateId: tuesdayId, types: ["teleconsultation"] });
@@ -248,10 +254,13 @@ async function main() {
     ok("9c one type reads back as that one type",
       byId(list, tuesdayId)!.appointmentTypes.join() === "teleconsultation",
       byId(list, tuesdayId)!.appointmentTypes.join());
-    const { data: legacy } = await admin.from("practice_availability_template")
-      .select("appointment_type").eq("id", tuesdayId).maybeSingle();
-    ok("9d and the legacy column is kept in step rather than left to disagree",
-      legacy?.appointment_type === "teleconsultation", String(legacy?.appointment_type));
+    // CONTROL for 9b: the join table really does hold the single type, so "the column is gone" is not
+    // passing because the whole feature stopped working.
+    const { data: joined } = await admin.from("practice_session_appointment_type")
+      .select("appointment_type").eq("template_id", tuesdayId);
+    ok("9d CONTROL: the join table holds it, so 9b is not green because nothing is stored anywhere",
+      (joined ?? []).map((r: { appointment_type: string }) => r.appointment_type).join() === "teleconsultation",
+      JSON.stringify(joined));
   }
 
   // ══ 3 + 4. THE PHASE GATE, AND THE ORDER OF THE TWO REFUSALS ══════════════════════════════════

@@ -109,7 +109,7 @@ export async function availabilityConfig(admin: any, ctx: WorkspaceContext) {
     // way to resume it -- which would make "suspend" a slower spelling of "delete". Closed ones are
     // gone. The GENERATOR filters to active on its own; this read is what a person looks at.
     admin.from("practice_availability_template")
-      .select("id, location_id, clinic_id, weekday, starts_minute, ends_minute, slot_kind, appointment_minutes, appointment_type, capacity, note, active, status")
+      .select("id, location_id, clinic_id, weekday, starts_minute, ends_minute, slot_kind, appointment_minutes, capacity, note, active, status")
       .eq("workspace_id", ctx.workspaceId).in("status", ["active", "suspended"])
       .order("weekday").order("starts_minute"),
     admin.from("practice_availability_exception")
@@ -352,7 +352,9 @@ export async function editSession(admin: any, ctx: WorkspaceContext, args: {
     return { ok: false, status: 403, code: "FORBIDDEN", message: "appointment.manage is required" };
 
   const { data: t, error: readError } = await admin.from("practice_availability_template")
-    .select("id, weekday, starts_minute, ends_minute, location_id, clinic_id, slot_kind, appointment_type, capacity, status, note")
+    // appointment_type is NOT selected: migration 241 dropped it from this table and the join table
+    // practice_session_appointment_type owns the offered set, because s4.3 needs zero, one AND several.
+    .select("id, weekday, starts_minute, ends_minute, location_id, clinic_id, slot_kind, capacity, status, note")
     .eq("id", args.templateId).eq("workspace_id", ctx.workspaceId).maybeSingle();
   if (readError)
     return { ok: false, status: 500, code: "READ_FAILED", message: `could not read the session: ${readError.message}` };
@@ -367,7 +369,6 @@ export async function editSession(admin: any, ctx: WorkspaceContext, args: {
     location_id: args.locationId !== undefined ? args.locationId : t.location_id,
     clinic_id: args.clinicId !== undefined ? args.clinicId : t.clinic_id,
     slot_kind: args.slotKind ?? t.slot_kind,
-    appointment_type: args.appointmentType !== undefined ? args.appointmentType : t.appointment_type,
     capacity: args.capacity !== undefined ? args.capacity : t.capacity,
     status: args.status ?? t.status,
     note: args.note !== undefined ? args.note : t.note,
@@ -444,7 +445,7 @@ export async function duplicateSession(admin: any, ctx: WorkspaceContext, args: 
     return { ok: false, status: 400, code: "VALIDATION_ERROR", message: "choose at least one day to copy to" };
 
   const { data: t } = await admin.from("practice_availability_template")
-    .select("id, weekday, starts_minute, ends_minute, location_id, clinic_id, slot_kind, appointment_type, appointment_minutes, capacity, note")
+    .select("id, weekday, starts_minute, ends_minute, location_id, clinic_id, slot_kind, appointment_minutes, capacity, note")
     .eq("id", args.templateId).eq("workspace_id", ctx.workspaceId).maybeSingle();
   if (!t) return { ok: false, status: 404, code: "NOT_FOUND", message: "Not found" };
 
@@ -469,7 +470,7 @@ export async function duplicateSession(admin: any, ctx: WorkspaceContext, args: 
       workspace_id: ctx.workspaceId,
       location_id: locationId, clinic_id: t.clinic_id,
       weekday, starts_minute: startsMinute, ends_minute: endsMinute,
-      slot_kind: t.slot_kind, appointment_type: t.appointment_type,
+      slot_kind: t.slot_kind,
       appointment_minutes: t.appointment_minutes, capacity: t.capacity,
       note: t.note, duplicated_from_id: t.id, created_by: args.actorId,
     }).select("id").maybeSingle();
