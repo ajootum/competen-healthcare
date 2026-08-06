@@ -26,7 +26,7 @@ import { createClient } from "@supabase/supabase-js";
 import { runProvisioning, type IndividualRequest } from "../src/lib/practice/provisioning";
 import { resolveWorkspaceContext } from "../src/lib/practice/access";
 import { register, registrationForm, ageForForm } from "../src/lib/practice/registration";
-import { composeDisplayName } from "../src/lib/practice/patients";
+import { composeDisplayName, registerPatient } from "../src/lib/practice/patients";
 import { patientRelationships } from "../src/lib/practice/relationships";
 import { createTemplate, upsertField, publishTemplate } from "../src/lib/practice/registration-config";
 import {
@@ -481,6 +481,83 @@ async function main() {
   ok("adaptive-4. ⚠ the screen calls steps() WITH the birth date and the day, not steps(mode) alone",
     stepCalls.length > 0 && stepCalls.every(a => a.split(",").length === 3),
     JSON.stringify(stepCalls));
+
+  // ── A DUPLICATE CHECK THAT COULD NOT RUN IS NOT A DUPLICATE CHECK THAT PASSED ───────────────────
+  //
+  // ⚠ registerPatient discarded the error on its identifier-collision read. A failed query left `clash`
+  // undefined, the loop fell through, and a SECOND record carrying somebody's hospital number was
+  // created -- a split history in the place a clinician least expects one.
+  //
+  // The database is only a PARTIAL backstop, which is why this cannot be left to it:
+  // ux_practice_identifier_live (migration 193) keys on type + value + ISSUER, while the engine check
+  // deliberately ignores the issuer. The same number against two different issuers is caught here and
+  // nowhere else.
+  //
+  // Injected through a stub, because a healthy database never takes this path -- which is precisely why
+  // it survived. Every read the function reaches before the collision check must answer normally, so the
+  // stub fails ONLY the identifier table.
+  const failIdentifierReads = {
+    from: (table: string) => {
+      if (table !== "practice_patient_identifier") return admin.from(table);
+      const chain: Record<string, unknown> = {};
+      for (const m of ["select", "eq", "in", "is", "limit", "order"]) chain[m] = () => chain;
+      chain.maybeSingle = async () => ({ data: null, error: { message: "simulated collision-check failure" } });
+      chain.single = async () => ({ data: null, error: { message: "simulated collision-check failure" } });
+      // ⚠ THE STUB ANSWERS insert TOO, AND IT MUST. Without it the deliberate break did not FAIL dup-1
+      // and dup-2 -- it threw "admin.from(...).insert is not a function" out of registerPatient and
+      // killed the run, so no assertion reported and nothing said which guard had gone. A break that
+      // crashes the harness proves less than one that reds a named assertion: you cannot tell the defect
+      // you were testing for from an unrelated accident. Same lesson the planner harness learned when a
+      // short week threw a TypeError instead of failing 3b.
+      chain.insert = () => ({
+        select: () => ({ single: async () => ({ data: null, error: { message: "simulated insert failure" } }) }),
+        then: (resolve: (v: unknown) => unknown) => resolve({ data: null, error: { message: "simulated insert failure" } }),
+      });
+      return chain;
+    },
+  };
+  const beforeCount = await admin.from("practice_patient")
+    .select("*", { count: "exact", head: true }).eq("workspace_id", wsA);
+  const blind = await registerPatient(failIdentifierReads as never, {
+    workspaceId: wsA, displayName: "Blind Duplicate", birthDate: born(30), phone: "+256772009911",
+    identifiers: [{ type: "national_id", value: "CM-DUPLICATE-TEST" }],
+    actorId: OWNER, correlationId: "harness-reg",
+  });
+  ok("dup-1. ⚠ a collision check that FAILED refuses the registration rather than proceeding blind",
+    !blind.ok && blind.code === "DUPLICATE_CHECK_FAILED", JSON.stringify(blind));
+  const afterCount = await admin.from("practice_patient")
+    .select("*", { count: "exact", head: true }).eq("workspace_id", wsA);
+  ok("dup-2. ⚠ AND NO PATIENT WAS CREATED -- the refusal is the point, not the message",
+    (afterCount.count ?? -1) === (beforeCount.count ?? -2),
+    `${beforeCount.count} -> ${afterCount.count}`);
+
+  // CONTROL. Without it, dup-1 and dup-2 pass just as well if registerPatient refused EVERY
+  // registration -- which is what this fix looks like when it is one line too broad.
+  const stillWorks = await registerPatient(admin, {
+    workspaceId: wsA, displayName: "Control Registers Fine", birthDate: born(31), phone: "+256772009912",
+    identifiers: [{ type: "national_id", value: "CM-CONTROL-OK" }],
+    actorId: OWNER, correlationId: "harness-reg",
+  });
+  ok("dup-control. the same call against the real client registers, and reports nothing incomplete",
+    stillWorks.ok && stillWorks.data.incomplete.length === 0, JSON.stringify(stillWorks));
+
+  // ── AND THE OTHER HALF: A WRITE THAT FAILED IS REPORTED, NOT SWALLOWED ──────────────────────────
+  //
+  // The identifier inserts discarded their errors too, and that is where the data actually went. When
+  // the collision check could not run and the DATABASE caught the duplicate instead, the rejection was
+  // thrown away: ok returned, patient created, hospital number silently absent -- and that number is
+  // exactly what somebody later searches by.
+  //
+  // Registered here through the REAL client with a value that genuinely collides, so the unique index
+  // does the rejecting rather than a stub pretending to.
+  const collide = await registerPatient(admin, {
+    workspaceId: wsA, displayName: "Second Person Same Number", birthDate: born(32), phone: "+256772009913",
+    identifiers: [{ type: "national_id", value: "CM-CONTROL-OK" }],
+    confirmNew: true, actorId: OWNER, correlationId: "harness-reg",
+  });
+  ok("dup-3. a genuine identifier collision is REFUSED by the engine, naming the existing patient",
+    !collide.ok && collide.code === "DUPLICATE_IDENTIFIER" && (collide.candidates?.length ?? 0) === 1,
+    JSON.stringify(collide));
 
   await cleanup();
   return report();

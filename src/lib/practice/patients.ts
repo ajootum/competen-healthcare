@@ -138,6 +138,9 @@ export async function searchPatients(admin: any, workspaceId: string, q: string,
 /** CPR-V2-005: search first, duplicate detection BEFORE save, identifier generation, then create. */
 export async function registerPatient(admin: any, input: RegisterInput): Promise<EngineResult<{
   id: string; practiceId: string;
+  /** Writes that did not happen. Empty on a clean registration -- never absent, so a caller cannot
+   * forget to look. See the note above the identifier and contact inserts. */
+  incomplete: { step: string; reason: string }[];
 }>> {
   // THE PARTS COMPOSE THE WHOLE when a caller sends them, and the whole still wins when it is sent on
   // its own -- so an existing caller keeps working and a one-name patient stays registrable.
@@ -149,18 +152,41 @@ export async function registerPatient(admin: any, input: RegisterInput): Promise
     return { ok: false, status: 400, code: "VALIDATION_ERROR", message: "a primary contact (phone or email) is required (CPR-V2-005 minimum dataset)" };
 
   // 1. Exact identifier collision: refused outright, with the existing patient named.
+  //
+  // ⚠ A COLLISION CHECK THAT COULD NOT RUN IS NOT A COLLISION CHECK THAT PASSED. This read used to
+  // discard its error, so a failed query left `clash` undefined, the loop fell through, and the patient
+  // was created -- a SECOND record carrying somebody's hospital number, which is the single worst thing
+  // this function can do. A split record loses half a history in the place a clinician least expects it.
+  //
+  // THE DATABASE IS ONLY A PARTIAL BACKSTOP, so this cannot be left to it. ux_practice_identifier_live
+  // (migration 193) is unique on (workspace_id, identifier_type, value_normalised, coalesce(issuer, '')),
+  // and the check here deliberately IGNORES the issuer -- so it is stricter than the index. The same
+  // number recorded against two different issuers is caught HERE and nowhere else.
   for (const ident of input.identifiers ?? []) {
-    const { data: clash } = await admin.from("practice_patient_identifier")
+    const { data: clash, error: clashErr } = await admin.from("practice_patient_identifier")
       .select("patient_id").eq("workspace_id", input.workspaceId)
       .eq("identifier_type", ident.type).eq("value_normalised", normValue(ident.value)).is("valid_to", null)
       .maybeSingle();
+    // Refused rather than risked. CPR-V5-006 says "registration never delays care", and this is the one
+    // place that yields to something heavier: a retry costs seconds, and an unnoticed duplicate record
+    // costs a merge, plus every consultation filed on the wrong half until somebody notices.
+    if (clashErr) return {
+      ok: false, status: 500, code: "DUPLICATE_CHECK_FAILED",
+      message: `could not check whether that ${ident.type} is already registered, so this was not saved: ${clashErr.message}`,
+    };
     if (clash) {
-      const { data: p } = await admin.from("practice_patient").select("id, display_name, birth_date").eq("id", clash.patient_id).single();
-      const pids = await practiceIdsFor(admin, input.workspaceId, [p.id]);
+      // The clash is already established. If the patient behind it cannot be read we still refuse -- we
+      // simply cannot say WHO. Previously this called .single() and used `p.id` unchecked, so a failed
+      // read threw a TypeError out of a function whose callers expect a result object.
+      const { data: p } = await admin.from("practice_patient")
+        .select("id, display_name, birth_date").eq("id", clash.patient_id).maybeSingle();
+      const pids = p ? await practiceIdsFor(admin, input.workspaceId, [p.id]) : new Map<string, string>();
       return {
         ok: false, status: 409, code: "DUPLICATE_IDENTIFIER",
         message: `that ${ident.type} already belongs to a registered patient`,
-        candidates: [{ id: p.id, displayName: p.display_name, birthDate: p.birth_date, matchedBy: `identifier:${ident.type}`, practiceId: pids.get(p.id) ?? null }],
+        candidates: p
+          ? [{ id: p.id, displayName: p.display_name, birthDate: p.birth_date, matchedBy: `identifier:${ident.type}`, practiceId: pids.get(p.id) ?? null }]
+          : [],
       };
     }
   }
@@ -168,16 +194,27 @@ export async function registerPatient(admin: any, input: RegisterInput): Promise
   // 2. Demographic similarity: candidates, refused until confirmed (never silently blocked either).
   if (!input.confirmNew) {
     const candidates: Candidate[] = [];
-    const { data: sameName } = await admin.from("practice_patient")
+    // Same reasoning as the identifier check above: a search for existing people that FAILED found no
+    // people, and "found nobody" is what lets this function proceed. Both reads refuse rather than
+    // report an empty result.
+    const { data: sameName, error: nameErr } = await admin.from("practice_patient")
       .select("id, display_name, birth_date").eq("workspace_id", input.workspaceId)
       .eq("name_normalised", norm(name)).neq("status", "merged").limit(5);
+    if (nameErr) return {
+      ok: false, status: 500, code: "DUPLICATE_CHECK_FAILED",
+      message: `could not check for an existing patient of that name, so this was not saved: ${nameErr.message}`,
+    };
     for (const p of (sameName ?? []) as any[]) {
       const dobMatch = input.birthDate && p.birth_date === input.birthDate;
       let phoneMatch = false;
       if (input.phone) {
-        const { data: c } = await admin.from("practice_patient_contact")
+        const { data: c, error: cErr } = await admin.from("practice_patient_contact")
           .select("id").eq("patient_id", p.id).eq("contact_type", "phone")
           .eq("value_normalised", normValue(input.phone)).limit(1).maybeSingle();
+        if (cErr) return {
+          ok: false, status: 500, code: "DUPLICATE_CHECK_FAILED",
+          message: `could not check an existing patient's phone number, so this was not saved: ${cErr.message}`,
+        };
         phoneMatch = !!c;
       }
       if (dobMatch || phoneMatch) {
@@ -221,30 +258,58 @@ export async function registerPatient(admin: any, input: RegisterInput): Promise
   }
   if (!practiceId) return { ok: false, status: 502, code: "IDENTIFIER_GENERATION_FAILED", message: "could not generate a unique practice id" };
 
+  // ⚠ THESE FOUR WRITES DISCARDED THEIR ERRORS, AND THAT IS WHERE THE DATA WENT.
+  //
+  // It is the other half of the duplicate bug and the more damaging half. When the collision check above
+  // could not run and the DATABASE caught the duplicate instead, ux_practice_identifier_live rejected
+  // this insert -- and the rejection was thrown away. The function returned ok, the desk saw a
+  // registered patient, and the hospital number they had just typed was simply not there. Nothing on
+  // any screen said so, and the number is exactly what somebody later searches by.
+  //
+  // The same applies to the phone and the email: a contact that silently failed to save is a patient
+  // nobody can ring back.
+  //
+  // THE PATIENT IS NOT ROLLED BACK. "Registration never delays care" (CPR-V5-006) decides this one --
+  // the record exists and the consultation can start. What changes is that the desk is TOLD, through
+  // the `incomplete` vocabulary registration.ts already uses and the form already renders, so a missing
+  // hospital number is a line on the screen rather than a discovery six weeks later.
+  const incomplete: { step: string; reason: string }[] = [];
+
   for (const ident of input.identifiers ?? []) {
-    await admin.from("practice_patient_identifier").insert({
+    const { error } = await admin.from("practice_patient_identifier").insert({
       workspace_id: input.workspaceId, patient_id: patient.id,
       identifier_type: ident.type, value: ident.value, issuer: ident.issuer ?? null, created_by: input.actorId,
     });
+    if (error) incomplete.push({
+      step: "identifier",
+      reason: /duplicate|unique/i.test(error.message)
+        // Reached only when the check above passed and this still collided -- another desk registering
+        // the same number in the seconds between. Named plainly, because "it did not save" invites a
+        // retype and this will not save on a retype either.
+        ? `the ${ident.type} "${ident.value}" already belongs to another patient and was not saved`
+        : `the ${ident.type} "${ident.value}" was not saved: ${error.message}`,
+    });
   }
   if (input.phone) {
-    await admin.from("practice_patient_contact").insert({
+    const { error } = await admin.from("practice_patient_contact").insert({
       workspace_id: input.workspaceId, patient_id: patient.id, contact_type: "phone",
       value: input.phone, preferred: true, created_by: input.actorId,
     });
+    if (error) incomplete.push({ step: "phone", reason: `the phone number was not saved: ${error.message}` });
   }
   if (input.email) {
-    await admin.from("practice_patient_contact").insert({
+    const { error } = await admin.from("practice_patient_contact").insert({
       workspace_id: input.workspaceId, patient_id: patient.id, contact_type: "email",
       value: input.email, preferred: !input.phone, created_by: input.actorId,
     });
+    if (error) incomplete.push({ step: "email", reason: `the email address was not saved: ${error.message}` });
   }
 
   await audit(admin, {
     workspaceId: input.workspaceId, actorId: input.actorId, eventType: "practice.patient_registered",
     payload: { patientId: patient.id, practiceId }, correlationId: input.correlationId,
   });
-  return { ok: true, data: { id: patient.id as string, practiceId } };
+  return { ok: true, data: { id: patient.id as string, practiceId, incomplete } };
 }
 
 /**

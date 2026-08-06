@@ -191,7 +191,11 @@ export async function register(admin: any, ctx: WorkspaceContext, input: Registr
   });
   if (!created.ok) return created;
 
-  const incomplete: { step: string; reason: string }[] = [];
+  // ⚠ SEEDED FROM THE ENGINE'S OWN LIST, NOT STARTED EMPTY. registerPatient now reports identifier and
+  // contact writes that failed -- it used to discard those errors, so a hospital number rejected by the
+  // unique index vanished with the desk being told the registration succeeded. Starting this array empty
+  // would reintroduce exactly that: the engine would know and this layer would not pass it on.
+  const incomplete: { step: string; reason: string }[] = [...created.data.incomplete];
 
   // THE BORROWED CONTACT IS REMOVED FROM THE PATIENT once the record exists. It was only ever there to
   // satisfy the minimum-dataset check, and leaving it would put a guardian's number in a child's own
