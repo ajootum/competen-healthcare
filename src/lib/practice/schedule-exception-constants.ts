@@ -46,7 +46,11 @@ export const EXCEPTION_KINDS = [
     specRow: "Emergency interruption",
     blurb: "Urgent theatre, an emergency consult or an unexpected absence. Availability stops now.",
     // ⚠ true BECAUSE THE DATABASE INSISTS, not because s5.2 does. See the note under EXCEPTION_KINDS.
-    needsWindow: true, needsReplacementLocation: false, needsReplacementActivity: false,
+    // ⚠ FALSE AGAIN AS OF MIGRATION 243. This was true only because 230's window_check still listed
+    // the two kinds that existed when it was written, so the database refused a whole-day version of
+    // this. 243 widened that check, and "I am away and the whole day is gone" is expressible again --
+    // which is the ordinary case, not the edge one. A window remains OPTIONAL and valid.
+    needsWindow: false, needsReplacementLocation: false, needsReplacementActivity: false,
   },
   {
     code: "extra_session", label: "One-off session", effect: "adds", impacts: false,
@@ -64,13 +68,21 @@ export const EXCEPTION_KINDS = [
     code: "location_change", label: "Location change", effect: "reshapes", impacts: true,
     specRow: "Location change",
     blurb: "The session still runs, somewhere else. Everyone booked is expecting the old address.",
-    needsWindow: true, needsReplacementLocation: true, needsReplacementActivity: false,
+    // ⚠ FALSE AGAIN AS OF MIGRATION 243. This was true only because 230's window_check still listed
+    // the two kinds that existed when it was written, so the database refused a whole-day version of
+    // this. 243 widened that check, and "I am away and the whole day is gone" is expressible again --
+    // which is the ordinary case, not the edge one. A window remains OPTIONAL and valid.
+    needsWindow: false, needsReplacementLocation: true, needsReplacementActivity: false,
   },
   {
     code: "activity_substitution", label: "Activity substitution", effect: "reshapes", impacts: true,
     specRow: "Activity substitution",
     blurb: "The clinic becomes theatre, a ward round or something else. Nobody can be booked into it.",
-    needsWindow: true, needsReplacementLocation: false, needsReplacementActivity: true,
+    // ⚠ FALSE AGAIN AS OF MIGRATION 243. This was true only because 230's window_check still listed
+    // the two kinds that existed when it was written, so the database refused a whole-day version of
+    // this. 243 widened that check, and "I am away and the whole day is gone" is expressible again --
+    // which is the ordinary case, not the edge one. A window remains OPTIONAL and valid.
+    needsWindow: false, needsReplacementLocation: false, needsReplacementActivity: true,
   },
 ] as const;
 
