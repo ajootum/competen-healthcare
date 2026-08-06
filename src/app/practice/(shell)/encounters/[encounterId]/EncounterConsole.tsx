@@ -1295,18 +1295,19 @@ export default function EncounterConsole(props: {
               );
             })}
           </div>
-          {/* ⚠ "PRINT SUMMARY" IS NOT A BUTTON HERE, AND THE REASON IS SAID RATHER THAN HIDDEN.
-              CPR-ENC-002 s2 lists it in the right panel and the comp draws it. What this product can
-              actually print is a DOCUMENT -- a consultation summary composed from this encounter, which
-              has a version, a signature and a release register behind it. A one-click "print the
-              encounter" would produce an unversioned sheet of paper that looks like a clinical document
-              and is not one, and nothing would record that it left the building. So the route is the
-              two-step one, and the sentence below says so. */}
+          {/* ⚠ "PRINT SUMMARY" IS A BUTTON AND IT DOES NOT PRINT. It opens Attachments, because what this
+              product can print is a DOCUMENT -- a consultation summary with a version, a signature and a
+              release register behind it. A one-click window.print() would produce an unversioned sheet
+              that looks like a clinical document, is not one, and leaves nothing recording that it left
+              the building. The button was previously omitted altogether and the reason lived only in the
+              grey text below; the affordance now exists where the comp draws it, and the sentence still
+              says what the click actually does. */}
           <p className="mt-2 text-[10px] text-gray-400">
-            To print: create a consultation summary in <button type="button" onClick={() => setTab("attachments")}
+            <strong className="font-semibold text-gray-500">Print summary</strong> opens{" "}
+            <button type="button" onClick={() => setTab("attachments")}
               className="font-semibold text-[var(--cp-primary-deep)] hover:underline">Attachments</button>,
-            then print it from the document. What gets printed is a versioned document with a release
-            register &mdash; not a screenshot of this page.
+            where a consultation summary is created and printed from the document itself. What gets
+            printed is versioned and has a release register &mdash; not a screenshot of this page.
           </p>
         </section>
       </aside>

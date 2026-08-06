@@ -41,7 +41,9 @@ import {
   recordInvestigation, reviewInvestigation, recordReferral, updateReferralStatus,
   ENCOUNTER_WORKSPACE_CAPABILITIES,
 } from "../src/lib/practice/encounter-workspace";
-import { encounterWarnings, ENCOUNTER_OUTCOME_CODES } from "../src/lib/practice/encounter-workspace-constants";
+import {
+  encounterWarnings, ENCOUNTER_OUTCOME_CODES, QUICK_ACTIONS,
+} from "../src/lib/practice/encounter-workspace-constants";
 
 loadEnvConfig(process.cwd());
 
@@ -467,6 +469,41 @@ async function main() {
   ok("rls-1. the service role sees rows in every new table (the denial test is not vacuous)",
     svcRows === TABLES.length, `${svcRows}/${TABLES.length}`);
   ok("rls-2. anon reads 0 rows from every new table", leaked === 0, `${leaked} table(s) leaked`);
+
+  // ── 12. THE COMP'S FOUR AFFORDANCES ───────────────────────────────────────
+  //
+  // ⚠ SOURCE-CHECKED, because a Tailwind class and a <Link> cannot be reached from here -- the same
+  // reason src-1 above is a source check. These four are what CPR-ENC-001's comp draws and the first
+  // build of this workspace left out; each is asserted by the thing that makes it WORK, not by its
+  // label, so renaming a button does not break the test and deleting its destination does.
+  const encDir = join(process.cwd(), "src", "app", "practice", "(shell)", "encounters");
+  const listSrc = readFileSync(join(encDir, "page.tsx"), "utf8");
+  const menuSrc = readFileSync(join(encDir, "RowMenu.tsx"), "utf8");
+
+  ok("ui-1. a session card filters the lists to its own encounters, by activity id",
+    /\?session=\$\{s\.id\}/.test(listSrc) && /e\.activityId === sessionFilter/.test(listSrc),
+    "the card's link and the filter must agree on the same id, or the button narrows to nothing");
+  ok("ui-2. 'View all' re-reads with a bigger bound rather than revealing hidden rows",
+    /closedLimit: CLOSED_ALL_LIMIT/.test(listSrc) && /closed=all/.test(listSrc),
+    "a client-side reveal would still be capped at twelve however it was labelled");
+  ok("ui-2b. ⚠ and the cap is PRINTED when it is reached -- a silent truncation reads as 'that is all'",
+    /closedCapped/.test(listSrc) && /Stopped at \{CLOSED_ALL_LIMIT\}/.test(listSrc),
+    "this is the assertion that stops 'View all' becoming a lie");
+  ok("ui-3. the row menu exists, is keyboard-dismissable, and offers only real destinations",
+    /<RowMenu/.test(listSrc) && /useDismiss/.test(menuSrc)
+    && /\/practice\/patients\/\$\{patientId\}/.test(menuSrc) && /role="menu"/.test(menuSrc),
+    "a scrim that closes on click alone traps a keyboard user in the menu");
+  // ⚠ BOTH OF THESE MATCH A CALL SITE, NOT A WORD. The first versions searched for "cancel|delete" and
+  // "window.print" and failed on the COMMENTS explaining why neither is there -- an assertion that a file
+  // does not MENTION something punishes the file for documenting itself, and the fix is to look for the
+  // shape the real thing would have: a handler, a request, a method.
+  ok("ui-3b. ⚠ the row menu is navigation only -- it issues no request, so it can destroy nothing",
+    !/fetch\(/.test(menuSrc) && !/method:/.test(menuSrc) && !/onSubmit/.test(menuSrc),
+    "a one-click cancel on a list row is a consultation cancelled by a trackpad; cancelling belongs on the state table with its confirmation");
+  ok("ui-4. 'Print summary' exists and routes to Attachments rather than printing the page",
+    QUICK_ACTIONS.some(a => a.key === "print_summary" && a.tab === "attachments")
+    && !/=>\s*window\.print\(/.test(readFileSync(join(encDir, "[encounterId]", "EncounterConsole.tsx"), "utf8")),
+    "a window.print() handler here would produce an unversioned sheet that looks like a clinical document");
 
   await cleanup();
   const { count: left } = await admin.from("practice_encounter").select("*", { count: "exact", head: true }).in("workspace_id", [wsA, wsB]);

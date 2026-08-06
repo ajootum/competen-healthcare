@@ -91,12 +91,26 @@ export const QUICK_ACTIONS: { key: string; label: string; tab: string | null; hr
   { key: "generate_letter", label: "Generate letter", tab: "attachments", capability: "document.author" },
   { key: "schedule_follow_up", label: "Schedule follow-up", tab: "follow-up", capability: "followup.manage" },
   { key: "add_task", label: "Add task", tab: null, href: "/practice/tasks", capability: "task.manage" },
+  // ⚠ THIS ONE JUMPS TO ATTACHMENTS AND DOES NOT PRINT, WHICH IS THE WHOLE POINT OF IT.
+  //
+  // The comp draws "Print summary" and CPR-ENC-002 s2 lists it, and the button was left off entirely for
+  // a good reason that was nonetheless only ever visible as a paragraph of small grey text: what this
+  // product can print is a DOCUMENT -- a consultation summary with a version, a signature and a release
+  // register behind it -- and a one-click window.print() would produce an unversioned sheet that looks
+  // like a clinical document, is not one, and leaves no record of having left the building.
+  //
+  // So the affordance exists where the comp puts it and lands on the first step of the real route. The
+  // label stays the comp's word because that IS what the practitioner is setting out to do; the caption
+  // beneath the row says what the click does. Naming it "Create summary document" would have been the
+  // other honest choice and a worse one -- it hides the button from somebody scanning for "print".
+  { key: "print_summary", label: "Print summary", tab: "attachments", capability: "document.author" },
 ];
 
 /** The comp's small glyphs for the eight. */
 export const QUICK_ACTION_ICON: Record<string, string> = {
   add_procedure: "✚", add_diagnosis: "◈", update_treatment: "℞", request_investigation: "⚗",
   create_referral: "⇥", generate_letter: "✉", schedule_follow_up: "↻", add_task: "☑",
+  print_summary: "⎙",
 };
 
 // ── CPR-ENC-002 s7's VALIDATION: WARNINGS, NOT REFUSALS ─────────────────────────────────────────────

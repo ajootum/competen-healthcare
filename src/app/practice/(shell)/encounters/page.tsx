@@ -8,6 +8,7 @@ import {
   SESSION_FIGURES, DASHBOARD_PANELS, ENCOUNTER_STATUS_CHIP, ENCOUNTER_STATUS_LABEL,
 } from "@/lib/practice/encounter-workspace-constants";
 import { formatMinuteOfDay, formatTime, formatDate } from "@/lib/datetime";
+import RowMenu from "./RowMenu";
 
 // /practice/encounters -- CPR-ENC-001 s9's four panels: Today's Sessions, Open Encounters, Recently
 // Closed, and the attention counts the comp draws as an assistant.
@@ -32,6 +33,16 @@ import { formatMinuteOfDay, formatTime, formatDate } from "@/lib/datetime";
 export const dynamic = "force-dynamic";
 
 const CARD = "rounded-xl border border-gray-200 bg-white";
+
+/**
+ * How many signed records "View all" reaches for, against the twelve the panel shows by default.
+ *
+ * ⚠ IT IS A CAP, NOT "ALL", AND THE PANEL SAYS SO WHEN IT IS REACHED. A link labelled "View all" over a
+ * silently truncated list is the worst of both: the practitioner believes they have seen everything.
+ * A practice with more than this many signed encounters needs the patient record or the register, not a
+ * longer scroll on a dashboard panel.
+ */
+const CLOSED_ALL_LIMIT = 100;
 
 function PanelHeading({ panel, title, subtitle, action }: {
   panel: string; title: string; subtitle?: string; action?: React.ReactNode;
@@ -79,7 +90,7 @@ function patientLabel(e: DashboardEncounter) {
   return e.patientName ?? "Unnamed record";
 }
 
-function SessionCard({ s }: { s: DashboardSession }) {
+function SessionCard({ s, active }: { s: DashboardSession; active: boolean }) {
   const stateChip = s.state === "running"
     ? "bg-violet-100 text-violet-700 ring-1 ring-violet-200"
     : s.state === "done"
@@ -122,23 +133,68 @@ function SessionCard({ s }: { s: DashboardSession }) {
         Counted from the encounters filed against this session, not from the diary &mdash; nobody is
         claimed to have arrived who has not.
       </p>
+
+      {/* ⚠ ONE ACTION, AND IT IS NAMED FOR WHAT IT DOES. The comp gives each card a different verb --
+          "View patients", "Start round", "Open queue" -- chosen by the kind of session. Two of those
+          three describe STARTING something, and nothing here starts a session: an encounter is opened
+          from a patient or a checked-in appointment, and a button that only navigated while saying
+          "Start round" would be the screen making a claim the click does not honour. So all three become
+          the one they all actually were, and it filters the lists below to this session's own records. */}
+      <Link href={active ? "/practice/encounters" : `/practice/encounters?session=${s.id}`}
+        aria-pressed={active}
+        className={`mt-2.5 block rounded-lg border px-2 py-1.5 text-center text-[11px] font-semibold ${
+          active
+            ? "border-[var(--cp-primary)]/40 bg-[var(--cp-primary)]/10 text-[var(--cp-primary-deep)]"
+            : "border-gray-200 text-gray-700 hover:bg-gray-50"}`}>
+        {active ? "Showing this session — clear" : "View patients"}
+      </Link>
     </li>
   );
 }
 
-export default async function EncountersPage() {
+export default async function EncountersPage({ searchParams }: {
+  searchParams: Promise<{ session?: string; closed?: string }>;
+}) {
   const shell = await resolvePracticeShell();
   if (shell.state !== "READY") redirect("/practice");
   if (!hasCapability(shell.ctx, "encounter.list")) redirect("/practice/home");
+
+  // ⚠ BOTH OF THESE NARROW OR WIDEN WHAT IS ON SCREEN, so both are in the URL rather than in component
+  // state: a practitioner who has filtered to one session and then follows a link into an encounter must
+  // come back to the same list, and a filtered view somebody is reading over a colleague's shoulder has
+  // to be a link they can be sent.
+  const { session: sessionParam, closed: closedParam } = await searchParams;
+  const sessionFilter = sessionParam || null;
+  const showAllClosed = closedParam === "all";
 
   const admin = createAdminClient();
   // THE CLOCK IS THE ENGINE'S, not this component's. Calling Date.now() during a render is an impure
   // call the React compiler rejects outright, and the elapsed time of a consultation is data the loader
   // owns -- so encountersDashboard measures it once and hands each row its own `elapsedMinutes`.
-  const dash = await encountersDashboard(admin, shell.ctx);
+  const dash = await encountersDashboard(admin, shell.ctx, showAllClosed ? { closedLimit: CLOSED_ALL_LIMIT } : {});
 
-  const live = dash.open.items.filter(e => e.status !== "COMPLETED");
-  const completedUnsigned = dash.open.items.filter(e => e.status === "COMPLETED");
+  // ⚠ THE FILTER IS APPLIED HERE AND NOT IN THE ENGINE, and that has a consequence worth naming rather
+  // than hiding: the loader reads a bounded window, so filtering it to one session shows that session's
+  // records WITHIN THAT WINDOW, not every record it ever had. The panels below say so when a filter is
+  // on. Pushing the filter into the query would fix the bound and cost a second read path for the same
+  // figures -- the thing the card/list agreement on this page exists to prevent.
+  const inFilter = (e: DashboardEncounter) => !sessionFilter || e.activityId === sessionFilter;
+  const live = dash.open.items.filter(e => e.status !== "COMPLETED" && inFilter(e));
+  const completedUnsigned = dash.open.items.filter(e => e.status === "COMPLETED" && inFilter(e));
+  const closedItems = dash.closed.items.filter(inFilter);
+
+  // The session's own words if it is one of today's; otherwise whatever an encounter calls it. Never an
+  // id: "Showing 8f3c-…" tells a practitioner nothing about what they are looking at.
+  const filterName = sessionFilter
+    ? dash.sessions.items.find(s => s.id === sessionFilter)?.title
+      ?? dash.open.items.concat(dash.closed.items).find(e => e.activityId === sessionFilter)?.sessionTitle
+      ?? null
+    : null;
+  const closedCapped = showAllClosed && dash.closed.items.length >= CLOSED_ALL_LIMIT;
+
+  // Read once here rather than per row: the row menu offers the patient record, and a link that 403s on
+  // arrival is worse than a line that says it cannot be followed.
+  const canSeePatient = hasCapability(shell.ctx, "patient.list");
 
   const row = (e: DashboardEncounter) => {
     const mins = e.elapsedMinutes;
@@ -169,6 +225,8 @@ export default async function EncountersPage() {
             className="rounded-lg border border-gray-200 px-2 py-1 text-[11px] font-semibold text-gray-700 hover:bg-white">
             Continue
           </Link>
+          <RowMenu encounterId={e.id} patientId={e.patientId} activityId={e.activityId}
+            sessionTitle={e.sessionTitle} canSeePatient={canSeePatient} />
         </div>
       </li>
     );
@@ -187,6 +245,21 @@ export default async function EncountersPage() {
         </Link>
       </div>
 
+      {/* ⚠ A FILTERED LIST SAYS SO, LOUDLY AND WITH A WAY OUT. A narrowed board that looks like the whole
+          board is how somebody goes home believing nothing is open. */}
+      {sessionFilter && (
+        <div className="mt-4 flex flex-wrap items-center gap-2 rounded-lg border border-[var(--cp-primary)]/25 bg-[var(--cp-primary)]/5 px-3 py-2">
+          <span className="text-[12px] text-gray-800">
+            Showing only <strong>{filterName ?? "one session"}</strong>. Everything below is this
+            session&rsquo;s records &mdash; it is not the whole day.
+          </span>
+          <Link href="/practice/encounters"
+            className="ml-auto rounded-lg border border-gray-200 bg-white px-2 py-1 text-[11px] font-semibold text-gray-700 hover:bg-gray-50">
+            Clear filter
+          </Link>
+        </div>
+      )}
+
       {/* ── Today's sessions ───────────────────────────────────────────────────────────────────── */}
       <section className="mt-5">
         <PanelHeading panel="sessions" title="Today's sessions"
@@ -196,7 +269,9 @@ export default async function EncountersPage() {
           <PanelState permitted={dash.sessions.permitted} unavailable={dash.sessions.unavailable}
             what="today's sessions" empty="Nothing is planned for today. Encounters can still be opened without a session." />
         ) : (
-          <ul className="mt-3 grid gap-3 md:grid-cols-3">{dash.sessions.items.map(s => <SessionCard key={s.id} s={s} />)}</ul>
+          <ul className="mt-3 grid gap-3 md:grid-cols-3">
+            {dash.sessions.items.map(s => <SessionCard key={s.id} s={s} active={s.id === sessionFilter} />)}
+          </ul>
         )}
       </section>
 
@@ -206,7 +281,12 @@ export default async function EncountersPage() {
           subtitle="Started and not finished. These are the records that still need you." />
         {live.length === 0 ? (
           <PanelState permitted={dash.open.permitted} unavailable={dash.open.unavailable}
-            what="open encounters" empty="Nothing is open. Start one from a patient record or from a checked-in appointment." />
+            what="open encounters"
+            empty={sessionFilter
+              // ⚠ TWO DIFFERENT SENTENCES. "This session has nothing open" and "nothing is open" are not
+              // the same fact, and only the second one means the practitioner is finished.
+              ? "Nothing is open for this session. Other sessions may still have open records — clear the filter to see them."
+              : "Nothing is open. Start one from a patient record or from a checked-in appointment."} />
         ) : (
           <ul className="mt-3 flex flex-col gap-1.5">{live.map(row)}</ul>
         )}
@@ -227,13 +307,33 @@ export default async function EncountersPage() {
       <div className="mt-5 grid gap-5 lg:grid-cols-3">
         {/* ── Recently closed ──────────────────────────────────────────────────────────────────── */}
         <section className={`lg:col-span-2 ${CARD} p-4`}>
-          <PanelHeading panel="closed" title="Recently closed" subtitle="Signed and amended records, newest first." />
-          {dash.closed.items.length === 0 ? (
+          <PanelHeading panel="closed"
+            title={showAllClosed ? "Closed encounters" : "Recently closed"}
+            subtitle="Signed and amended records, newest first."
+            action={
+              // ⚠ THE LINK CHANGES WHAT IS READ, not just what is shown. "View all" re-runs the loader
+              // with a bigger bound rather than revealing rows that were already fetched and hidden --
+              // a client-side reveal would have quietly capped at twelve however it was labelled.
+              dash.closed.permitted && !dash.closed.unavailable ? (
+                <Link href={showAllClosed
+                  ? `/practice/encounters${sessionFilter ? `?session=${sessionFilter}` : ""}`
+                  : `/practice/encounters?closed=all${sessionFilter ? `&session=${sessionFilter}` : ""}`}
+                  className="text-[11px] font-semibold text-[var(--cp-primary-deep)] hover:underline">
+                  {showAllClosed ? "Show recent only" : "View all"}
+                </Link>
+              ) : undefined
+            } />
+          {closedItems.length === 0 ? (
             <PanelState permitted={dash.closed.permitted} unavailable={dash.closed.unavailable}
-              what="closed encounters" empty="Nothing has been signed yet." />
+              what="closed encounters"
+              empty={sessionFilter
+                ? showAllClosed
+                  ? "Nothing signed for this session."
+                  : "Nothing signed for this session in the recent window. Try View all."
+                : "Nothing has been signed yet."} />
           ) : (
             <ul className="mt-3 grid gap-2 sm:grid-cols-2">
-              {dash.closed.items.map(e => (
+              {closedItems.map(e => (
                 <li key={e.id}>
                   <Link href={`/practice/encounters/${e.id}`}
                     className="block rounded-lg border border-gray-100 p-2.5 hover:bg-gray-50">
@@ -256,6 +356,21 @@ export default async function EncountersPage() {
                 </li>
               ))}
             </ul>
+          )}
+
+          {/* ⚠ THE BOUND IS PRINTED WHENEVER IT COULD BE HIDING SOMETHING. "View all" that silently stops
+              at a hundred is worse than no link at all: the practitioner believes they have seen the lot. */}
+          {closedCapped && (
+            <p className="mt-2.5 text-[10px] text-gray-500">
+              Stopped at {CLOSED_ALL_LIMIT} records. There may be older signed encounters that are not
+              here &mdash; a patient&rsquo;s full history is on their record, not on this panel.
+            </p>
+          )}
+          {!showAllClosed && sessionFilter && closedItems.length > 0 && (
+            <p className="mt-2.5 text-[10px] text-gray-500">
+              Filtered from the most recent signed records only. One from this session outside that window
+              is not here &mdash; use <strong>View all</strong>.
+            </p>
           )}
         </section>
 
