@@ -59,12 +59,45 @@ export const ASSISTANT_TASKS = [
   },
   {
     key: "ask", label: "Ask about this record",
-    needs: "encounter" as const,
+    // ⚠ "any" MEANS ANY OF THE FIVE CONTEXTS OF CPR-PI-001 s8, NOT "no context". See CONTEXT_KINDS and
+    // the refusal in runAssistant: there is still no ungrounded mode.
+    needs: "any" as const,
     blurb: "A question about what is in front of you -- not a question about medicine.",
   },
 ] as const;
 
 export type TaskKey = (typeof ASSISTANT_TASKS)[number]["key"];
+
+// ── CPR-PI-001 s8 / CPR-PI-003 s3: THE FIVE CONTEXTS ─────────────────────────────────────────────────
+//
+// ────────────────────────────────────────────────────────────────────────────────────────────────────
+// ⚠ THESE ARE GROUNDING CONTEXTS, NOT NEW TASKS, AND THAT IS A CONSTRAINT RATHER THAN A PREFERENCE.
+//
+// migration 215 puts a CHECK on practice_ai_session.task listing exactly the six keys above. A seventh
+// key would compile perfectly, typecheck perfectly, and fail at INSERT the first time a practitioner
+// used it -- the class of bug this codebase has already shipped six times with invented capability
+// codes. Widening that CHECK is a migration, and migrations are not this agent's to write.
+//
+// It is also the right shape independently of the constraint. s8 describes five things the assistant may
+// be POINTED AT -- a patient, a consultation, a document, an obligation, the practice's own aggregates
+// -- and one question asked against each. "Explain why this follow-up is due" and "how many patients did
+// I see last month" are the same task, `ask`, over two different records.
+// ────────────────────────────────────────────────────────────────────────────────────────────────────
+
+export const CONTEXT_KINDS = [
+  { key: "encounter", label: "This consultation",
+    blurb: "Summarise recorded decisions and draft structured outputs from them.", param: "encounterId" },
+  { key: "patient", label: "This patient",
+    blurb: "Summarise the longitudinal record and highlight open obligations.", param: "patientId" },
+  { key: "document", label: "This document",
+    blurb: "Summarise what the document says and identify metadata it is missing.", param: "documentId" },
+  { key: "follow_up", label: "This follow-up",
+    blurb: "Explain why the obligation is due, from its own history.", param: "followUpId" },
+  { key: "practice", label: "My practice",
+    blurb: "Aggregate questions about your own authorised records. Counts only, each with its formula.", param: "practice" },
+] as const;
+
+export type ContextKind = (typeof CONTEXT_KINDS)[number]["key"];
 
 /**
  * What the design asks for and this will not do, each with the reason.
@@ -198,8 +231,24 @@ export async function setAssistantEnabled(admin: any, ctx: WorkspaceContext, arg
  * model writes about itself, which is just more generated text. What actually explains an answer is the
  * input: every source below is a row in this practice that the reader can open.
  */
+/**
+ * ⚠ EXPORTED SO THE GROUNDING REFUSAL CAN BE PROVEN WITHOUT A MODEL PROVIDER.
+ *
+ * runAssistant checks consent, then the disclosure version, then whether a provider is configured, and
+ * only THEN whether there is anything to ground in. On a machine with no provider configured, every
+ * call returns AI_NOT_CONFIGURED first -- so a harness asserting "it refuses without a record" would
+ * pass for entirely the wrong reason and would keep passing after the refusal was deleted.
+ *
+ * This is the one line of the safety contract that can be tested exactly: no context in, null out.
+ */
+export const assistantGrounding = (admin: any, ctx: WorkspaceContext, args: {
+  task: TaskKey; encounterId?: string | null; patientId?: string | null;
+  documentId?: string | null; followUpId?: string | null; practice?: boolean;
+}) => buildContext(admin, ctx, args);
+
 async function buildContext(admin: any, ctx: WorkspaceContext, args: {
   task: TaskKey; encounterId?: string | null; patientId?: string | null;
+  documentId?: string | null; followUpId?: string | null; practice?: boolean;
 }): Promise<{ text: string; grounding: GroundingSource[]; patientId: string | null } | null> {
   const lines: string[] = [];
   const grounding: GroundingSource[] = [];
@@ -277,6 +326,127 @@ async function buildContext(admin: any, ctx: WorkspaceContext, args: {
     return { text: lines.join("\n"), grounding, patientId: patient.id };
   }
 
+  // ── DOCUMENT CONTEXT (s8: "summarise uploaded evidence and identify missing metadata") ─────────────
+  //
+  // ⚠ THE DOCUMENT'S OWN BODY, AND THE GAPS IN ITS METADATA STATED AS GAPS. "Identify missing metadata"
+  // is the one instruction on this page a model must NOT be asked to do freehand: asked to find what is
+  // missing, a generator will confidently report a missing addressee on a document that has one. So the
+  // gaps are COMPUTED here, from null columns, and handed to the model as facts rather than as a task.
+  if (args.documentId) {
+    if (!ctx.capabilities.includes("document.view")) return null;
+    const { data: doc } = await admin.from("practice_clinical_document")
+      .select("id, patient_id, encounter_id, doc_type, title, body, addressed_to, status, signed_at, created_at")
+      .eq("id", args.documentId).eq("workspace_id", ctx.workspaceId).maybeSingle();
+    if (!doc) return null;
+
+    lines.push(`DOCUMENT: ${doc.title} (${doc.doc_type}), status ${doc.status}, created ${String(doc.created_at).slice(0, 10)}.`);
+    if (doc.addressed_to) lines.push(`Addressed to: ${doc.addressed_to}`);
+    lines.push(`CONTENT:\n${doc.body || "(the document has no body text)"}`);
+
+    // Computed, not asked for. Each line is a null column, named.
+    const gaps: string[] = [];
+    if (!doc.addressed_to) gaps.push("no addressee recorded");
+    if (!doc.encounter_id) gaps.push("not linked to any consultation");
+    if (!doc.signed_at) gaps.push("not signed");
+    if (!doc.body || String(doc.body).trim().length === 0) gaps.push("no body text");
+    lines.push(gaps.length > 0
+      ? `METADATA GAPS (computed from the record, not inferred): ${gaps.join("; ")}.`
+      : "METADATA GAPS (computed from the record): none -- addressee, consultation link, signature and body are all present.");
+
+    grounding.push({
+      kind: "document", id: doc.id, label: doc.title, href: `/practice/documents/${doc.id}`,
+    });
+    if (doc.patient_id) {
+      const { data: p } = await admin.from("practice_patient")
+        .select("id, display_name").eq("id", doc.patient_id).eq("workspace_id", ctx.workspaceId).maybeSingle();
+      if (p) grounding.push({ kind: "patient", id: p.id, label: p.display_name, href: `/practice/patients/${p.id}` });
+    }
+    return { text: lines.join("\n\n"), grounding, patientId: doc.patient_id ?? null };
+  }
+
+  // ── FOLLOW-UP CONTEXT (s8: "explain why an obligation is due and open the correct workflow") ────────
+  //
+  // ⚠ THE HISTORY IS THE ANSWER. "Why is this due" is answered by the events that moved it -- raised at
+  // this consultation, deferred once, rescheduled from that date to this one -- and every one of those is
+  // a row. Asked without them a model will compose a clinical rationale, which is exactly the class of
+  // sentence this module exists to refuse.
+  if (args.followUpId) {
+    if (!ctx.capabilities.includes("followup.view")) return null;
+    const { getFollowUp } = await import("@/lib/practice/follow-ups");
+    const f = await getFollowUp(admin, ctx.workspaceId, args.followUpId);
+    if (!f) return null;
+
+    const fu = f.followUp as any;
+    lines.push(`FOLLOW-UP: ${fu.reason}. Kind ${fu.kind}, priority ${fu.priority}, status ${fu.status}, due ${fu.due_on}.`);
+    if (f.patient) {
+      lines.push(`PATIENT: ${f.patient.display_name}.`);
+      grounding.push({ kind: "patient", id: f.patient.id, label: f.patient.display_name, href: `/practice/patients/${f.patient.id}` });
+    }
+    if (fu.origin_encounter_id)
+      grounding.push({
+        kind: "encounter", id: fu.origin_encounter_id, label: "The consultation that raised it",
+        href: `/practice/encounters/${fu.origin_encounter_id}`,
+      });
+    if (f.appointment)
+      lines.push(`BOOKED: appointment on ${String(f.appointment.scheduled_at).slice(0, 10)}, status ${f.appointment.status}.`);
+
+    const events = (f.events ?? []) as any[];
+    if (events.length === 0) lines.push("HISTORY: nothing beyond its creation has been recorded against it.");
+    for (const e of events) {
+      const moved = e.from_due_on && e.to_due_on && e.from_due_on !== e.to_due_on
+        ? `, due date moved from ${e.from_due_on} to ${e.to_due_on}` : "";
+      lines.push(`HISTORY ${String(e.occurred_at).slice(0, 10)}: ${e.from_status ?? "created"} to ${e.to_status}${moved}${e.note ? ` -- ${e.note}` : ""}`);
+    }
+    grounding.push({
+      kind: "follow_up", id: fu.id, label: `Follow-up due ${fu.due_on}`,
+      href: `/practice/follow-ups/${fu.id}`,
+    });
+    return { text: lines.join("\n"), grounding, patientId: fu.patient_id ?? null };
+  }
+
+  // ── PRACTICE CONTEXT (s8: "answer aggregate questions about the practitioner's authorised records") ─
+  //
+  // ────────────────────────────────────────────────────────────────────────────────────────────────────
+  // ⚠ THE MODEL IS HANDED FIGURES, NOT TABLES, AND EVERY FIGURE ARRIVES WITH ITS OWN FORMULA.
+  //
+  // This is the one context where a generator would otherwise be free to do arithmetic, and a generator
+  // doing arithmetic over a list of rows is a generator inventing a number that looks computed. So the
+  // counting happens in intelligence.ts, each figure travels with the calculation that produced it and
+  // the table.columns it came from, and the system prompt below forbids deriving anything further --
+  // including the one derivation that looks harmless and is not: turning two counts into a percentage.
+  //
+  // ⚠ AN EMPTY SET OF FIGURES IS A REFUSAL, NOT AN EMPTY CONTEXT. A practice with nothing computable
+  // returns null here and runAssistant answers NOTHING_TO_GROUND_IN, because a model given a heading and
+  // no numbers writes the numbers.
+  // ────────────────────────────────────────────────────────────────────────────────────────────────────
+  if (args.practice) {
+    if (!ctx.capabilities.includes("report.view")) return null;
+    const { intelligenceSuite, suiteGroundingFigures } = await import("@/lib/practice/intelligence");
+    const suite = await intelligenceSuite(admin, ctx, { days: 30 });
+    const figures = suiteGroundingFigures(suite);
+    if (figures.length === 0) return null;
+
+    lines.push(`PRACTICE FIGURES for ${suite.range.period.label} (${suite.timezone}). Every one is a COUNT. There are no rates here and none may be derived.`);
+    for (const f of figures)
+      lines.push(`${f.label}: ${f.value} (${f.unit}). Counted as: ${f.formula}. From: ${f.sources.join(", ")}. Period ${f.periodFromDay} to ${f.periodToDay}.`);
+
+    const refused = suite.workspace.modules.ai.data?.refusedClaims ?? [];
+    if (refused.length > 0) {
+      lines.push("CLAIMS THAT CANNOT BE MADE ABOUT THIS PRACTICE, and why:");
+      for (const r of refused) lines.push(`- ${r.claim} ${r.why}`);
+    }
+    // s5/s15: every recommendation links back to the underlying records. A figure's link is the area of
+    // the workspace that computed it.
+    grounding.push({
+      kind: "practice", id: suite.range.period.label, label: `Practice figures, ${suite.range.period.label}`,
+      href: "/practice/intelligence",
+    });
+    for (const t of suite.priority.tiles)
+      if (t.status === "ok") grounding.push({ kind: "figure", id: t.key, label: t.label, href: t.href });
+
+    return { text: lines.join("\n"), grounding, patientId: null };
+  }
+
   return null;
 }
 
@@ -304,6 +474,12 @@ export function systemPrompt(task: TaskKey): string {
     "",
     "If the record does not contain what is being asked for, say exactly that in one sentence. An honest gap is useful; a plausible filler is dangerous.",
     "Write in British English, plainly, and no longer than the content justifies.",
+    "",
+    // ⚠ CPR-PI-002's DOCTRINE, STATED TO THE MODEL AS WELL AS ENFORCED IN THE ENGINE. Where the RECORD
+    // below is a set of practice figures, the temptation is arithmetic: two counts become a percentage,
+    // two periods become a trend, one practice becomes "above average". A count is a fact somebody can
+    // check; a percentage derived from it in a sentence is a new claim with no formula behind it.
+    "If the RECORD below contains counts, you may quote them and nothing else. Do NOT turn two counts into a percentage, a rate, a proportion, a ratio or a score. Do NOT compare this practice with any other practice, any average or any benchmark -- you have not been given one. Do NOT predict.",
   ];
   const perTask: Record<TaskKey, string> = {
     summarise_encounter: "Summarise this consultation for the clinician who wrote it. Lead with what was found and what was decided.",
@@ -311,7 +487,10 @@ export function systemPrompt(task: TaskKey): string {
     draft_referral: "Draft a referral letter from this consultation for the clinician to correct and sign. Leave a clearly marked blank wherever the record does not give you something a letter needs -- do not invent a recipient, a hospital or a reason.",
     patient_instructions: "Rewrite the recorded plan so the patient can read it. Keep to what was actually decided, at about a reading age of twelve, and add no advice of your own.",
     tidy_note: "Expand the clinician's shorthand into full sentences. Change no clinical meaning, add nothing, and drop nothing.",
-    ask: "Answer the clinician's question about the record below, using only what it contains.",
+    // The one task that serves all five of CPR-PI-001 s8's contexts. What "the record below" IS varies
+    // -- a consultation, a patient, a document, an obligation, or this practice's own counts -- and the
+    // instruction does not, because the rule is the same in every one of them.
+    ask: "Answer the clinician's question about the record below, using only what it contains. Where the record is a document, you may summarise it and repeat the metadata gaps that have been computed for you -- do not look for gaps yourself. Where it is a follow-up, explain why it is due from its recorded history and not from clinical reasoning. Where it is a set of practice figures, quote them and their date range, and derive nothing.",
   };
   return `${shared.join("\n")}\n\nTASK: ${perTask[task]}`;
 }
@@ -320,6 +499,9 @@ export function systemPrompt(task: TaskKey): string {
 
 export async function runAssistant(admin: any, ctx: WorkspaceContext, args: {
   task: TaskKey; question?: string; encounterId?: string | null; patientId?: string | null;
+  // CPR-PI-001 s8's remaining three contexts. Grounding, not tasks -- see CONTEXT_KINDS for why the
+  // task list cannot grow without a migration, and why it should not.
+  documentId?: string | null; followUpId?: string | null; practice?: boolean;
   sessionId?: string | null; correlationId: string;
 }): Promise<EngineResult<{
   sessionId: string; messageId: string; answer: string; grounding: GroundingSource[];
@@ -378,11 +560,20 @@ export async function runAssistant(admin: any, ctx: WorkspaceContext, args: {
   // READING A PATIENT'S RECORD IN ORDER TO SEND IT SOMEWHERE IS A DISCLOSURE, and is logged as one --
   // distinctly from an ordinary view, so an access review can find every occasion record content left
   // this system.
+  // ⚠ THE SUBJECT KIND IS THE THING ACTUALLY DISCLOSED, not always an encounter. migration 202's CHECK
+  // lists seven values and every one below was read out of it: an access review looking for "when did a
+  // document leave this system" cannot find it under `encounter`, and a practice-aggregate question
+  // discloses no single patient at all, so it is logged as `search` rather than borrowing a patient's row.
+  const subjectKind = args.encounterId ? "encounter"
+    : args.documentId ? "document"
+    : args.practice ? "search"
+    : "patient";
   await logAccess(admin, {
-    workspaceId: ctx.workspaceId, actorId: ctx.userId, subjectKind: "encounter",
-    subjectId: args.encounterId ?? null, patientId: context.patientId,
+    workspaceId: ctx.workspaceId, actorId: ctx.userId, subjectKind,
+    subjectId: args.encounterId ?? args.documentId ?? context.patientId ?? null,
+    patientId: context.patientId,
     action: "export", route: "/practice/assistant",
-    detail: `AI assistant (${task.key}): record content sent to ${settings.provider ?? "provider"}`,
+    detail: `AI assistant (${task.key}): ${args.practice ? "practice-level counts" : "record content"} sent to ${settings.provider ?? "provider"}`,
     correlationId: args.correlationId,
   });
 

@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { requirePracticeContext, isDenied } from "@/lib/practice/api-context";
 import {
   runAssistant, assistantSettings, setAssistantEnabled, listSessions, sessionMessages,
-  rateMessage, assistantUsage, ASSISTANT_TASKS, REFUSED, type TaskKey,
+  rateMessage, assistantUsage, ASSISTANT_TASKS, CONTEXT_KINDS, REFUSED, type TaskKey,
 } from "@/lib/practice/ai-assistant";
 
 // GET   /api/v1/practice/assistant                    -- settings, tasks, refusals, usage
@@ -38,7 +38,7 @@ export async function GET(req: NextRequest) {
     assistantUsage(auth.caller.admin, auth.ctx),
   ]);
   return NextResponse.json({
-    settings, usage, tasks: ASSISTANT_TASKS, refused: REFUSED,
+    settings, usage, tasks: ASSISTANT_TASKS, contexts: CONTEXT_KINDS, refused: REFUSED,
     correlationId: auth.caller.traceId,
   });
 }
@@ -55,6 +55,11 @@ export async function POST(req: NextRequest) {
     question: body.question ? String(body.question) : undefined,
     encounterId: body.encounterId ? String(body.encounterId) : null,
     patientId: body.patientId ? String(body.patientId) : null,
+    // CPR-PI-001 s8's other three contexts. Passed through only -- the engine decides whether each one
+    // is permitted and whether it grounds anything, and refuses with a reason where it does not.
+    documentId: body.documentId ? String(body.documentId) : null,
+    followUpId: body.followUpId ? String(body.followUpId) : null,
+    practice: body.practice === true,
     sessionId: body.sessionId ? String(body.sessionId) : null,
     correlationId: auth.caller.traceId,
   });

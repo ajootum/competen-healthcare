@@ -8,6 +8,12 @@ import {
   bookedAppointments, completedEncounters, patientsSeen, cancelledAppointments, noShows, followUpsDue,
   type Metric, type MetricKey, type MetricScope, type PracticeMetrics,
 } from "@/lib/practice/metrics";
+// CPR-PI-001/002/003. A leaf module with no imports of its own, so nothing it carries can drag a
+// server-only dependency into a client component -- see the header of intelligence-constants.ts.
+import {
+  INACTIVE_AFTER_DAYS, LOST_TO_FOLLOW_UP_AFTER_DAYS, REFUSED_PATIENT_STATES,
+  type RefusedState,
+} from "@/lib/practice/intelligence-constants";
 
 // CPR-200 PRACTICE INTELLIGENCE.
 //
@@ -2018,4 +2024,1144 @@ export async function practiceIntelligenceWorkspace(
       && [clinicalActivity, patients, procedures, followUps, documents, locations, growth]
         .every(m => m.data === null),
   };
+}
+
+// ════════════════════════════════════════════════════════════════════════════════════════════════════
+// CPR-PI-001 / CPR-PI-002 / CPR-PI-003 -- THE CONSOLIDATED PRACTICE INTELLIGENCE SUITE
+// ════════════════════════════════════════════════════════════════════════════════════════════════════
+//
+// ────────────────────────────────────────────────────────────────────────────────────────────────────
+// EVERYTHING BELOW COMPOSES. NOT ONE FIGURE IS RECOMPUTED FROM A TABLE ANOTHER ENGINE ALREADY OWNS.
+//
+// CPR-PI-001 s2 asks the suite to answer three questions -- what needs my attention now, what do my
+// records tell me, what should I do next -- and CPR-PI-002 s1 asks for "a single analytical engine".
+// The single engine already exists: metrics.ts owns the twelve definitions, reports.ts owns the period
+// and the diagnosis counts, operations-home.ts owns the attention list, brief.ts owns the derived brief,
+// follow-ups.ts owns the obligation taxonomy, pathways.ts owns enrolment and stage progression, and the
+// CPR-V5-003 section above owns the distributions and the comparisons.
+//
+// So this section adds exactly four things that genuinely did not exist, and assembles the rest:
+//
+//   1. PATIENT ATTENTION -- s5's "patients overdue, inactive, lost to follow-up", as date rules, WITH
+//      s5's "improving, deteriorating, high complexity" refused in the position they would occupy.
+//   2. COHORTS -- s5's "define and analyse patient groups", over attributes the record actually holds.
+//   3. PATHWAY STATUS as an intelligence lens -- milestones whose date has passed, drawn from the
+//      pathways engine rather than from a second read of its tables.
+//   4. THE PRIORITY STRIP AND THE SUITE ASSEMBLER -- s7's overview, and s6's nine areas as one payload.
+//
+// ⚠ THE COMPS ARE FULL OF RATES AND NONE OF THEM SURVIVE. "82% Follow-up Compliance", "78% of VP shunt
+// patients had no complications", donut slices labelled "6 (33%)" and "22 (25%)", and "up 12% vs last
+// week" on every tile. Counts and denominators as SEPARATE values -- see findRates in
+// intelligence-constants.ts, which the harness runs over this entire payload.
+//
+// ⚠ THE COMPS ALSO SHOW A SIDEBAR SUBMENU AND s4 FORBIDS ONE. The nine areas are tabs. Nothing in this
+// file registers a navigation entry.
+// ────────────────────────────────────────────────────────────────────────────────────────────────────
+
+/** The pathway capability, from migration 239 (`('practitioner', 'pathway.view')`). Read, not remembered. */
+const CAP_PATHWAY_VIEW = "pathway.view";
+
+/**
+ * How far a figure can be traced. Attached to EVERY group and slice below.
+ *
+ * s15's fifth acceptance criterion: "All metrics identify their date range and source definition." That
+ * is also the fix for a comp full of unexplained numbers -- "18 Follow-ups Due" over what window, from
+ * which table, counting obligations or counting people? Every answer below travels with its figure.
+ */
+export type Provenance = {
+  /** The calculation, in words a practitioner could check with a calendar. */
+  formula: string;
+  /** table.column identifiers. */
+  sources: string[];
+  /** The window, as calendar days in the practice's own timezone. Null when the figure is "as of now". */
+  fromDay: string | null;
+  toDay: string | null;
+  /** The instant the figure was computed, for a figure that has no window. */
+  asOf: string;
+  /** Where the number came from, so a screen cannot label arithmetic as AI. */
+  provenance: "computed" | "derived" | "ai";
+};
+
+/**
+ * A figure that is the length of a list somebody can open.
+ *
+ * s15: "Users can drill from an insight to its source patient, encounter, follow-up, document or
+ * pathway." That is not a property of a screen, it is a property of a payload: a count with no ids
+ * behind it CANNOT be made drillable by any amount of UI work, so the ids travel with the count.
+ */
+export type OpenableCount = {
+  key: string;
+  label: string;
+  /** What this counts, in one sentence, including the threshold where a threshold was chosen. */
+  definition: string;
+  count: number | null;
+  status: IntelStatus;
+  reason: string | null;
+  /** Real rows, so the figure is a worklist. Empty when the caller may not see names. */
+  sample: { id: string; label: string; note: string | null; href: string | null }[];
+  /** True when `count` exceeds the rows listed, so nobody reads the sample as the whole. */
+  sampleIsPartial: boolean;
+  /** Where the whole list lives. */
+  href: string;
+} & Provenance;
+
+const openable = (
+  key: string, label: string, definition: string, href: string, prov: Provenance,
+): OpenableCount => ({
+  key, label, definition, count: null, status: "unknowable", reason: null,
+  sample: [], sampleIsPartial: false, href, ...prov,
+});
+
+/** How many rows travel with a count. Enough to make it a worklist, few enough to stay a payload. */
+const SAMPLE_SIZE = 6;
+
+// ── 1. PATIENT ATTENTION: THE DATE RULES, AND THE THREE JUDGEMENTS THAT ARE REFUSED ──────────────────
+
+export type PatientAttentionData = {
+  /** The three s5 states that are arithmetic on dates. Each drillable. */
+  groups: OpenableCount[];
+  /**
+   * The three s5 states that are clinical judgements nothing in this product recorded.
+   *
+   * PRESENT IN THE PAYLOAD, not omitted, so a screen renders them IN THE POSITION THEY WOULD OCCUPY
+   * with the reason. An omitted card teaches nothing; a card saying "this cannot be computed, and here
+   * is what it would take" is the difference between a gap and a lie.
+   */
+  refused: RefusedState[];
+  /** The practice's own today, which every rule below is measured against. */
+  today: string;
+  /** False when the caller lacks patient.view: counts stand, names do not travel. */
+  identified: boolean;
+};
+
+/**
+ * PATIENT INTELLIGENCE -- s5's list, split down the line between a date and a judgement.
+ *
+ * ────────────────────────────────────────────────────────────────────────────────────────────────────
+ * ⚠ s5 ASKS FOR SEVEN STATES AND ONLY FOUR OF THEM ARE KNOWABLE. Overdue, inactive, lost to follow-up
+ * and "requiring attention" are arithmetic on dates. Improving, deteriorating and high complexity are
+ * judgements with NO STORE -- see REFUSED_PATIENT_STATES for each one and what would make it real.
+ *
+ * The proxies are available and every one of them is worse than nothing. Fewer visits lately is exactly
+ * what a patient who deteriorated and went elsewhere looks like. A follow-up closed with outcome_code
+ * `improved` describes one obligation on one day, not a person over time. Counting problems calls
+ * somebody with four minor entries more complex than somebody with one serious one. Each would render
+ * as a confident chip beside real counts and inherit their credibility.
+ * ────────────────────────────────────────────────────────────────────────────────────────────────────
+ *
+ * ⚠ THE THRESHOLDS ARE EDITORIAL AND THEY TRAVEL IN THE PAYLOAD. "Inactive" is not a property of a
+ * patient, it is a property of a number somebody picked; 180 days is a choice, and a count shown without
+ * it invites being read as clinical.
+ *
+ * TABLES/COLUMNS: practice_patient.id/.display_name/.status/.created_at (193);
+ * practice_encounter.patient_id/.started_at/.status (194); practice_follow_up.patient_id/.due_on/.status
+ * (196). Capabilities: patient.list to count, patient.view to name, followup.view for the obligations.
+ */
+export async function patientAttentionIntelligence(
+  admin: any, ctx: WorkspaceContext, range: IntelRange, atTime: Date = new Date(),
+): Promise<IntelModule<PatientAttentionData>> {
+  const today = practiceToday(range.timezone, atTime);
+  const asOf = atTime.toISOString();
+  const identified = hasCapability(ctx, CAP_PATIENT_VIEW);
+  const canList = hasCapability(ctx, CAP_PATIENT_LIST);
+  const canFollowUps = hasCapability(ctx, CAP_FOLLOWUP_VIEW);
+  const canEncounters = hasCapability(ctx, CAP_ENCOUNTER_LIST);
+
+  const sources = [
+    "practice_patient.id", "practice_patient.status", "practice_patient.created_at",
+    "practice_encounter.patient_id", "practice_encounter.started_at",
+    "practice_follow_up.patient_id", "practice_follow_up.due_on", "practice_follow_up.status",
+  ];
+
+  const prov = (formula: string, src: string[]): Provenance => ({
+    formula, sources: src, fromDay: null, toDay: null, asOf, provenance: "computed",
+  });
+
+  const overdueProv = prov(
+    `count of DISTINCT patients holding at least one follow-up whose status is OPEN or SCHEDULED and whose due_on is earlier than ${today} in this practice's calendar; a patient owed three late reviews is counted once`,
+    ["practice_follow_up.due_on", "practice_follow_up.status", "practice_follow_up.patient_id"],
+  );
+  const inactiveProv = prov(
+    `count of patients whose status is active and whose most recent encounter started more than ${INACTIVE_AFTER_DAYS} days before ${today}, together with those who have no encounter at all and were registered more than ${INACTIVE_AFTER_DAYS} days ago; ${INACTIVE_AFTER_DAYS} days is a choice made here, not a clinical standard`,
+    ["practice_patient.status", "practice_patient.created_at", "practice_encounter.started_at"],
+  );
+  const lostProv = prov(
+    `count of patients holding an OPEN or SCHEDULED follow-up whose due_on passed more than ${LOST_TO_FOLLOW_UP_AFTER_DAYS} days before ${today} AND who have had no encounter since that due date; ${LOST_TO_FOLLOW_UP_AFTER_DAYS} days is a choice made here, not a clinical standard`,
+    ["practice_follow_up.due_on", "practice_follow_up.status", "practice_encounter.started_at"],
+  );
+
+  const groups: OpenableCount[] = [
+    openable("overdue", "Overdue for a follow-up",
+      `An obligation this practice recorded has passed its date. As of ${today}.`,
+      "/practice/follow-ups?view=overdue", overdueProv),
+    openable("inactive", "Inactive",
+      `No encounter in the last ${INACTIVE_AFTER_DAYS} days. The threshold is this product's choice and is stated so it can be argued with.`,
+      "/practice/patients", inactiveProv),
+    openable("lost_to_follow_up", "Lost to follow-up",
+      `An obligation went more than ${LOST_TO_FOLLOW_UP_AFTER_DAYS} days past its date and the person has not been back since.`,
+      "/practice/follow-ups?view=overdue", lostProv),
+  ];
+
+  const data: PatientAttentionData = {
+    groups, refused: REFUSED_PATIENT_STATES, today, identified,
+  };
+
+  // ── PERMISSION IS AN ANSWER, NOT AN EMPTY LIST ─────────────────────────────────────────────────────
+  if (!canList) {
+    for (const g of groups) { g.status = "not_permitted"; g.reason = `${CAP_PATIENT_LIST} is required to count patients`; }
+    return intelModule("patient_attention", "Patient Attention", data, sources,
+      [`${CAP_PATIENT_LIST} withheld, so no patient state could be counted`]);
+  }
+
+  const problems: string[] = [];
+
+  // Patients first: everything else is joined onto them, and an unreadable patient list makes every
+  // group below wrong rather than empty.
+  const patientRead = await intelRows(admin.from("practice_patient")
+    .select("id, display_name, created_at")
+    .eq("workspace_id", ctx.workspaceId).eq("status", "active"));
+
+  if (patientRead.error || patientRead.overflowed) {
+    const reason = patientRead.error
+      ? `the patient list could not be read: ${patientRead.error}`
+      : overflowNote("patients");
+    for (const g of groups) { g.status = "unreadable"; g.reason = reason; }
+    return intelModule("patient_attention", "Patient Attention", data, sources, [reason]);
+  }
+
+  const patients = patientRead.rows;
+  const nameById = new Map<string, string>(patients.map(p => [p.id as string, String(p.display_name ?? "")]));
+  const registeredById = new Map<string, string>(patients.map(p => [p.id as string, String(p.created_at ?? "")]));
+
+  const dayDiff = (from: string, to: string) =>
+    Math.round((Date.parse(`${to}T00:00:00Z`) - Date.parse(`${from}T00:00:00Z`)) / 86400000);
+
+  // A sample row, de-identified when the caller may not see names. Ids are stable identifiers and are
+  // carried either way (brief.ts's rule: enough to find the row, not enough to be a disclosure).
+  const row = (patientId: string, note: string | null) => ({
+    id: patientId,
+    label: identified ? (nameById.get(patientId) || "Unnamed record") : `Patient ${patientId.slice(0, 8)}`,
+    note,
+    href: identified ? `/practice/patients/${patientId}` : null,
+  });
+
+  const settle = (
+    g: OpenableCount, ids: string[], noteFor: (id: string) => string | null,
+  ) => {
+    g.status = "ok";
+    g.reason = null;
+    g.count = ids.length;
+    g.sample = ids.slice(0, SAMPLE_SIZE).map(id => row(id, noteFor(id)));
+    g.sampleIsPartial = ids.length > g.sample.length;
+    if (!identified) g.reason = "counted, and not named: you hold reporting access but not clinical access";
+  };
+
+  // ── LAST ENCOUNTER PER PATIENT ─────────────────────────────────────────────────────────────────────
+  //
+  // ⚠ NOT FILTERED TO THE REPORTING PERIOD. "Inactive" asks when somebody was LAST seen, which is a
+  // question about the whole record; scoping it to the selected 30 days would call every patient in the
+  // practice inactive whenever a practitioner picked a short window.
+  const lastSeen = new Map<string, string>();
+  let encountersReadable = canEncounters;
+  if (canEncounters) {
+    const encRead = await intelRows(admin.from("practice_encounter")
+      .select("patient_id, started_at")
+      .eq("workspace_id", ctx.workspaceId)
+      .not("status", "in", "(CANCELLED,ENTERED_IN_ERROR)")
+      .order("started_at", { ascending: false }), INTEL_ROW_CAP);
+    if (encRead.error || encRead.overflowed) {
+      encountersReadable = false;
+      problems.push(encRead.error
+        ? `encounter history: ${encRead.error}`
+        : `encounter history: ${overflowNote("encounters")}`);
+    } else {
+      // Ordered newest first, so the FIRST time a patient appears is their most recent encounter.
+      for (const e of encRead.rows) {
+        const pid = e.patient_id as string;
+        if (!pid || lastSeen.has(pid)) continue;
+        const at = typeof e.started_at === "string" ? e.started_at.slice(0, 10) : null;
+        if (at) lastSeen.set(pid, at);
+      }
+    }
+  }
+
+  // ── OPEN OBLIGATIONS ───────────────────────────────────────────────────────────────────────────────
+  let followUpsReadable = canFollowUps;
+  const openFollowUps: { patient_id: string; due_on: string }[] = [];
+  if (canFollowUps) {
+    const fuRead = await intelRows(admin.from("practice_follow_up")
+      .select("patient_id, due_on, status")
+      .eq("workspace_id", ctx.workspaceId).in("status", ["OPEN", "SCHEDULED"])
+      .lt("due_on", today));
+    if (fuRead.error || fuRead.overflowed) {
+      followUpsReadable = false;
+      problems.push(fuRead.error
+        ? `open follow-ups: ${fuRead.error}`
+        : `open follow-ups: ${overflowNote("follow-ups")}`);
+    } else {
+      for (const f of fuRead.rows) {
+        if (typeof f.patient_id === "string" && typeof f.due_on === "string")
+          openFollowUps.push({ patient_id: f.patient_id, due_on: f.due_on });
+      }
+    }
+  }
+
+  // ── OVERDUE ────────────────────────────────────────────────────────────────────────────────────────
+  const overdue = groups[0];
+  if (!canFollowUps) {
+    overdue.status = "not_permitted";
+    overdue.reason = `${CAP_FOLLOWUP_VIEW} is required to see obligations`;
+  } else if (!followUpsReadable) {
+    overdue.status = "unreadable";
+    overdue.reason = "the open follow-ups could not be read, so this is deliberately blank rather than nought";
+  } else {
+    // Oldest obligation per patient: it is the one that explains the flag.
+    const oldest = new Map<string, string>();
+    for (const f of openFollowUps) {
+      const prev = oldest.get(f.patient_id);
+      if (!prev || f.due_on < prev) oldest.set(f.patient_id, f.due_on);
+    }
+    const ids = [...oldest.keys()].sort((a, b) => (oldest.get(a)! < oldest.get(b)! ? -1 : 1));
+    settle(overdue, ids, id => {
+      const due = oldest.get(id)!;
+      const n = dayDiff(due, today);
+      return `${n} day${n === 1 ? "" : "s"} past its date (due ${due})`;
+    });
+  }
+
+  // ── INACTIVE ───────────────────────────────────────────────────────────────────────────────────────
+  const inactive = groups[1];
+  if (!canEncounters) {
+    inactive.status = "not_permitted";
+    inactive.reason = `${CAP_ENCOUNTER_LIST} is required to know when somebody was last seen`;
+  } else if (!encountersReadable) {
+    inactive.status = "unreadable";
+    inactive.reason = "the encounter history could not be read, so 'not seen recently' cannot be distinguished from 'not readable'";
+  } else {
+    const flagged: { id: string; note: string }[] = [];
+    for (const p of patients) {
+      const id = p.id as string;
+      const seen = lastSeen.get(id);
+      if (seen) {
+        if (dayDiff(seen, today) > INACTIVE_AFTER_DAYS)
+          flagged.push({ id, note: `last seen ${seen}` });
+      } else {
+        // NEVER SEEN IS NOT THE SAME FACT AND IT IS LABELLED DIFFERENTLY. A record registered last week
+        // with no encounter is a booking, not a lapse -- so the same threshold is applied to the
+        // registration date rather than counting every new record as inactive on day one.
+        const registered = (registeredById.get(id) ?? "").slice(0, 10);
+        if (registered && dayDiff(registered, today) > INACTIVE_AFTER_DAYS)
+          flagged.push({ id, note: `registered ${registered}, never seen` });
+      }
+    }
+    const noteById = new Map(flagged.map(f => [f.id, f.note]));
+    settle(inactive, flagged.map(f => f.id), id => noteById.get(id) ?? null);
+  }
+
+  // ── LOST TO FOLLOW-UP ──────────────────────────────────────────────────────────────────────────────
+  //
+  // ⚠ NEEDS BOTH READS AND REFUSES WITHOUT EITHER. "An obligation went past its date AND they have not
+  // been back" is a conjunction: with the encounter side missing, every overdue patient would be
+  // reported as lost, which is the most alarming possible way to render a failed query.
+  const lost = groups[2];
+  if (!canFollowUps || !canEncounters) {
+    lost.status = "not_permitted";
+    lost.reason = `${CAP_FOLLOWUP_VIEW} and ${CAP_ENCOUNTER_LIST} are both required: this asks whether somebody came back after an obligation lapsed`;
+  } else if (!followUpsReadable || !encountersReadable) {
+    lost.status = "unreadable";
+    lost.reason = "one of the two reads this depends on failed; reporting the other half alone would call every overdue patient lost";
+  } else {
+    const candidates = new Map<string, string>();
+    for (const f of openFollowUps) {
+      if (dayDiff(f.due_on, today) <= LOST_TO_FOLLOW_UP_AFTER_DAYS) continue;
+      const seen = lastSeen.get(f.patient_id);
+      // Back since the obligation fell due? Then they are not lost, whatever the follow-up still says.
+      if (seen && seen >= f.due_on) continue;
+      const prev = candidates.get(f.patient_id);
+      if (!prev || f.due_on < prev) candidates.set(f.patient_id, f.due_on);
+    }
+    const ids = [...candidates.keys()].sort((a, b) => (candidates.get(a)! < candidates.get(b)! ? -1 : 1));
+    settle(lost, ids, id => `due ${candidates.get(id)!}, not seen since`);
+  }
+
+  return intelModule("patient_attention", "Patient Attention", data, sources, problems);
+}
+
+// ── 2. COHORTS ───────────────────────────────────────────────────────────────────────────────────────
+
+/**
+ * The attributes a cohort may be defined by.
+ *
+ * ⚠ EVERY ONE IS A COLUMN THAT EXISTS. s5 says "diagnosis, treatment, procedure, location, pathway, age,
+ * outcome or other authorised attributes", and the trailing "other" is where an intelligence workspace
+ * usually acquires an attribute nobody records. Each dimension below names the column it reads.
+ */
+export const COHORT_DIMENSIONS = [
+  { key: "diagnosis", label: "Diagnosis", column: "practice_diagnosis.label",
+    note: "Counted AS TYPED. Nothing here forces a terminology, so two spellings are two cohorts -- which is visible, whereas silently merging them would not be." },
+  { key: "procedure", label: "Procedure", column: "practice_procedure.label",
+    note: "The label recorded on the procedure, as typed." },
+  { key: "treatment", label: "Treatment", column: "practice_treatment.label",
+    note: "What was prescribed or planned, as typed. A plan, not proof it was taken." },
+  { key: "sex", label: "Sex", column: "practice_patient.sex",
+    note: "Migration 193's five values, including the two that mean 'not answered'." },
+  { key: "age_band", label: "Age band", column: "practice_patient.birth_date",
+    note: "Bands chosen by this product and named on the page. They are not a WHO or census standard." },
+  { key: "location", label: "Location", column: "practice_appointment.location_id",
+    note: "Where the patient was booked in the period. A patient seen at two sites appears in both." },
+  { key: "pathway", label: "Care pathway", column: "practice_patient_pathway.template_id",
+    note: "Which plan the patient is enrolled on. Enrolment, not completion." },
+] as const;
+
+export type CohortDimension = (typeof COHORT_DIMENSIONS)[number]["key"];
+
+export const isCohortDimension = (x: unknown): x is CohortDimension =>
+  typeof x === "string" && COHORT_DIMENSIONS.some(d => d.key === x);
+
+export type CohortSlice = {
+  key: string;
+  label: string;
+  /** DISTINCT PATIENTS, never rows. A cohort is a group of people. */
+  patients: number;
+  /** The rows that put them there -- three diagnoses for one person is three rows and one patient. */
+  records: number;
+  /** Real patient ids, so the cohort opens. Empty when the caller may not see patients. */
+  sample: { id: string; label: string; href: string | null }[];
+  sampleIsPartial: boolean;
+};
+
+export type CohortData = {
+  dimension: CohortDimension;
+  dimensionLabel: string;
+  /** The caveat that belongs to this dimension specifically. */
+  note: string;
+  slices: CohortSlice[];
+  status: IntelStatus;
+  reason: string | null;
+  /** Distinct patients across every slice. NOT the sum of the slices -- people appear in more than one. */
+  patientsInAnySlice: number | null;
+  /** Rows whose attribute was blank. Disclosed, never folded into a slice. */
+  unclassified: number;
+  identified: boolean;
+  /** Every other dimension, so a screen can offer them without hard-coding the list. */
+  available: { key: string; label: string; note: string }[];
+} & Provenance;
+
+/** Age bands. The same bands the CPR-V5-003 module above uses, so one product has one banding. */
+const COHORT_AGE_BANDS: [string, string, (age: number) => boolean][] = [
+  ["under_1", "Under 1", a => a < 1],
+  ["1_4", "1 to 4", a => a >= 1 && a < 5],
+  ["5_14", "5 to 14", a => a >= 5 && a < 15],
+  ["15_44", "15 to 44", a => a >= 15 && a < 45],
+  ["45_64", "45 to 64", a => a >= 45 && a < 65],
+  ["65_plus", "65 and over", a => a >= 65],
+];
+
+/**
+ * COHORT INTELLIGENCE -- s5's "define and analyse patient groups".
+ *
+ * ⚠ A COHORT IS A COUNT OF PEOPLE AND A LIST OF THEM, NOT A SHARE OF A DONUT. The comps draw this as a
+ * ring with slices labelled "48 (55%)" and "22 (25%)". Both halves of that label are shown here and the
+ * percentage is not: the slice carries its patient count, its record count and its openable ids, and the
+ * denominator sits beside it as its own number.
+ *
+ * ⚠ DISTINCT PATIENTS, AND THE SLICES DO NOT SUM. One person with hydrocephalus and epilepsy is in two
+ * diagnosis slices and is one patient. `patientsInAnySlice` is therefore computed as a set union rather
+ * than by adding the slices up, and a screen that adds them will disagree with it -- which is why the
+ * union travels rather than being left to the client.
+ */
+export async function cohortIntelligence(
+  admin: any, ctx: WorkspaceContext, range: IntelRange, dimension: CohortDimension,
+  atTime: Date = new Date(),
+): Promise<IntelModule<CohortData>> {
+  const dim = COHORT_DIMENSIONS.find(d => d.key === dimension) ?? COHORT_DIMENSIONS[0];
+  const identified = hasCapability(ctx, CAP_PATIENT_VIEW);
+  const available = COHORT_DIMENSIONS.map(d => ({ key: d.key, label: d.label, note: d.note }));
+
+  const base: CohortData = {
+    dimension: dim.key, dimensionLabel: dim.label, note: dim.note,
+    slices: [], status: "unknowable", reason: null, patientsInAnySlice: null, unclassified: 0,
+    identified, available,
+    formula: "", sources: [dim.column],
+    fromDay: range.period.fromDay, toDay: range.period.toDay,
+    asOf: atTime.toISOString(), provenance: "computed",
+  };
+
+  const refuse = (reason: string) => intelModule<CohortData>("cohorts", "Cohorts",
+    { ...base, status: "not_permitted", reason }, [dim.column], []);
+
+  if (!hasCapability(ctx, CAP_PATIENT_LIST))
+    return refuse(`${CAP_PATIENT_LIST} is required to group patients`);
+
+  // Every dimension resolves to the same intermediate shape: (patientId, sliceKey, sliceLabel).
+  const pairs: { patientId: string; key: string; label: string }[] = [];
+  let unclassified = 0;
+  let read: IntelRead = { rows: [], error: null, overflowed: false };
+  let formula = "";
+  const sources: string[] = [dim.column];
+
+  const inPeriod = (q: any, column: string) =>
+    q.gte(column, range.period.fromIso).lt(column, range.period.toIso);
+
+  if (dim.key === "diagnosis") {
+    if (!hasCapability(ctx, CAP_ENCOUNTER_LIST))
+      return refuse(`${CAP_ENCOUNTER_LIST} is required to read diagnoses`);
+    sources.push("practice_diagnosis.created_at", "practice_diagnosis.patient_id");
+    formula = `distinct patients holding a diagnosis recorded between ${range.period.fromDay} and ${range.period.toDay}, grouped by practice_diagnosis.label exactly as it was typed`;
+    read = await intelRows(inPeriod(admin.from("practice_diagnosis")
+      .select("label, patient_id").eq("workspace_id", ctx.workspaceId), "created_at"));
+    for (const r of read.rows) {
+      const label = typeof r.label === "string" ? r.label.trim() : "";
+      if (!label || typeof r.patient_id !== "string") { unclassified++; continue; }
+      pairs.push({ patientId: r.patient_id, key: label.toLowerCase(), label });
+    }
+  } else if (dim.key === "procedure" || dim.key === "treatment") {
+    if (!hasCapability(ctx, CAP_ENCOUNTER_LIST))
+      return refuse(`${CAP_ENCOUNTER_LIST} is required to read these`);
+    const table = dim.key === "procedure" ? "practice_procedure" : "practice_treatment";
+    const column = dim.key === "procedure" ? "performed_at" : "created_at";
+    sources.push(`${table}.${column}`, `${table}.patient_id`);
+    formula = `distinct patients with a ${dim.key} recorded between ${range.period.fromDay} and ${range.period.toDay}, grouped by ${table}.label exactly as it was typed`;
+    read = await intelRows(inPeriod(admin.from(table)
+      .select("label, patient_id").eq("workspace_id", ctx.workspaceId), column));
+    for (const r of read.rows) {
+      const label = typeof r.label === "string" ? r.label.trim() : "";
+      if (!label || typeof r.patient_id !== "string") { unclassified++; continue; }
+      pairs.push({ patientId: r.patient_id, key: label.toLowerCase(), label });
+    }
+  } else if (dim.key === "sex" || dim.key === "age_band") {
+    sources.push("practice_patient.status");
+    // ⚠ EVERY ACTIVE PATIENT, NOT ONLY THOSE SEEN IN THE PERIOD. Sex and age are properties of a person
+    // rather than of an episode, and scoping them to a 7-day window would describe the week's clinic
+    // list while wearing the label "this practice's patients".
+    const bandedAt = practiceToday(range.timezone, atTime);
+    formula = dim.key === "sex"
+      ? "every active patient on this practice's register, grouped by practice_patient.sex (migration 193's five values). Not scoped to the reporting period: sex is a property of a person, not of a visit"
+      : `every active patient on this practice's register, banded by age at ${bandedAt} from practice_patient.birth_date. Records with no date of birth are reported as unclassified rather than guessed at from an age estimate`;
+    read = await intelRows(admin.from("practice_patient")
+      .select("id, sex, birth_date").eq("workspace_id", ctx.workspaceId).eq("status", "active"));
+    const now = Date.parse(`${bandedAt}T00:00:00Z`);
+    for (const r of read.rows) {
+      if (typeof r.id !== "string") { unclassified++; continue; }
+      if (dim.key === "sex") {
+        const sex = typeof r.sex === "string" && r.sex ? r.sex : "";
+        if (!sex) { unclassified++; continue; }
+        const label = PATIENT_SEXES.find(([k]) => k === sex)?.[1] ?? sex;
+        pairs.push({ patientId: r.id, key: sex, label });
+      } else {
+        if (typeof r.birth_date !== "string" || !r.birth_date) { unclassified++; continue; }
+        const age = Math.floor((now - Date.parse(`${r.birth_date}T00:00:00Z`)) / (365.25 * 86400000));
+        const band = COHORT_AGE_BANDS.find(([, , test]) => test(age));
+        if (!band) { unclassified++; continue; }
+        pairs.push({ patientId: r.id, key: band[0], label: band[1] });
+      }
+    }
+  } else if (dim.key === "location") {
+    if (!hasCapability(ctx, CAP_CALENDAR_VIEW))
+      return refuse(`${CAP_CALENDAR_VIEW} is required to read the diary`);
+    sources.push("practice_appointment.scheduled_at", "practice_appointment.patient_id", "practice_location.name");
+    formula = `distinct patients with an appointment scheduled between ${range.period.fromDay} and ${range.period.toDay}, grouped by practice_appointment.location_id; somebody seen at two sites is in both groups`;
+    const [locRead, apptRead] = await Promise.all([
+      intelRows(admin.from("practice_location").select("id, name").eq("workspace_id", ctx.workspaceId)),
+      intelRows(inPeriod(admin.from("practice_appointment")
+        .select("location_id, patient_id").eq("workspace_id", ctx.workspaceId), "scheduled_at")),
+    ]);
+    read = locRead.error || locRead.overflowed ? locRead : apptRead;
+    const locName = new Map<string, string>(locRead.rows.map(l => [l.id as string, String(l.name ?? "")]));
+    for (const r of apptRead.rows) {
+      if (typeof r.patient_id !== "string" || typeof r.location_id !== "string") { unclassified++; continue; }
+      pairs.push({ patientId: r.patient_id, key: r.location_id, label: locName.get(r.location_id) ?? "Unnamed location" });
+    }
+  } else {
+    if (!hasCapability(ctx, CAP_PATHWAY_VIEW))
+      return refuse(`${CAP_PATHWAY_VIEW} is required to read pathway enrolment`);
+    sources.push("practice_patient_pathway.template_id", "practice_pathway_template.name");
+    formula = "distinct patients with an ACTIVE pathway enrolment right now, grouped by the template they are on. Enrolment, not completion, and not scoped to the reporting period -- a plan running today started before it";
+    const [enrolRead, tplRead] = await Promise.all([
+      intelRows(admin.from("practice_patient_pathway")
+        .select("patient_id, template_id, status").eq("workspace_id", ctx.workspaceId).eq("status", "active")),
+      intelRows(admin.from("practice_pathway_template").select("id, name").eq("workspace_id", ctx.workspaceId)),
+    ]);
+    read = enrolRead.error || enrolRead.overflowed ? enrolRead : tplRead;
+    const tplName = new Map<string, string>(tplRead.rows.map(t => [t.id as string, String(t.name ?? "")]));
+    for (const r of enrolRead.rows) {
+      if (typeof r.patient_id !== "string" || typeof r.template_id !== "string") { unclassified++; continue; }
+      pairs.push({ patientId: r.patient_id, key: r.template_id, label: tplName.get(r.template_id) ?? "Unnamed pathway" });
+    }
+  }
+
+  if (read.error || read.overflowed) {
+    const reason = read.error ? `could not be read: ${read.error}` : overflowNote("records");
+    return intelModule("cohorts", "Cohorts",
+      { ...base, formula, sources, status: "unreadable" as IntelStatus, reason }, sources, [reason]);
+  }
+
+  // Names, only where the caller may see them.
+  const patientIds = [...new Set(pairs.map(p => p.patientId))];
+  const nameById = new Map<string, string>();
+  if (identified && patientIds.length > 0) {
+    const nameRead = await intelIn(admin, "practice_patient", "id, display_name", ctx.workspaceId, "id", patientIds);
+    for (const p of nameRead.rows) nameById.set(p.id as string, String(p.display_name ?? ""));
+  }
+
+  const byKey = new Map<string, { label: string; patients: Set<string>; records: number }>();
+  for (const p of pairs) {
+    if (!byKey.has(p.key)) byKey.set(p.key, { label: p.label, patients: new Set(), records: 0 });
+    const s = byKey.get(p.key)!;
+    s.patients.add(p.patientId);
+    s.records++;
+  }
+
+  const slices: CohortSlice[] = [...byKey.entries()]
+    .map(([key, s]) => {
+      const ids = [...s.patients];
+      return {
+        key, label: s.label, patients: ids.length, records: s.records,
+        sample: identified
+          ? ids.slice(0, SAMPLE_SIZE).map(id => ({
+            id, label: nameById.get(id) || "Unnamed record", href: `/practice/patients/${id}`,
+          }))
+          : [],
+        sampleIsPartial: identified ? ids.length > SAMPLE_SIZE : ids.length > 0,
+      };
+    })
+    .sort((a, b) => b.patients - a.patients || a.label.localeCompare(b.label))
+    .slice(0, 25);
+
+  return intelModule("cohorts", "Cohorts", {
+    ...base, formula, sources, slices, status: "ok" as IntelStatus, reason: null,
+    patientsInAnySlice: patientIds.length, unclassified,
+  }, sources, []);
+}
+
+// ── 3. PATHWAY STATUS AS AN INTELLIGENCE LENS ────────────────────────────────────────────────────────
+
+export type PathwayIntelligenceData = {
+  /** The pathways engine's own cards, unchanged. Not recounted here. */
+  cards: { key: string; label: string; blurb: string; count: number | null; ids: string[] }[];
+  /** Milestones whose date has passed, and the ones coming up. Both openable. */
+  milestonesPassed: OpenableCount;
+  milestonesUpcoming: OpenableCount;
+  status: IntelStatus;
+  reason: string | null;
+};
+
+/** A stage due within this many days counts as upcoming. Stated, because it is a choice. */
+export const UPCOMING_MILESTONE_DAYS = 14;
+
+/**
+ * CARE PATHWAY INTELLIGENCE -- s5's "enrolment, stage progression, delays, missed milestones".
+ *
+ * ⚠ IT CALLS THE PATHWAYS ENGINE. It does not read practice_patient_pathway itself. A second reader of
+ * those tables would compute "overdue" from its own arithmetic and disagree with the Pathways workspace
+ * the first time somebody changed how a stage's due date is derived -- and the two screens would each
+ * look internally consistent while contradicting each other.
+ *
+ * ⚠ THE COMPS DRAW AN "AT RISK" RING SEGMENT AND THERE IS NO SUCH STATE. pathways.ts refuses it by name:
+ * a stage is before its date or past it, and "at risk" would need a prediction about whether it is going
+ * to be met. That refusal is inherited here rather than worked around.
+ */
+export async function pathwayIntelligence(
+  admin: any, ctx: WorkspaceContext, atTime: Date = new Date(),
+): Promise<IntelModule<PathwayIntelligenceData>> {
+  const sources = [
+    "practice_patient_pathway.status", "practice_patient_pathway_stage.due_on",
+    "src/lib/practice/pathways.ts (pathwayWorkspace owns every figure below)",
+  ];
+  const asOf = atTime.toISOString();
+
+  const prov = (formula: string): Provenance => ({
+    formula, sources, fromDay: null, toDay: null, asOf, provenance: "derived",
+  });
+
+  const passed = openable("milestones_passed", "Milestones past their date",
+    "The live stage of an active pathway whose due date has gone by. Derived from the date against this practice's today -- never stored.",
+    "/practice/pathways", prov("count of ACTIVE enrolments whose live stage's due_on is earlier than this practice's today, as pathwayWorkspace derives it"));
+
+  const upcoming = openable("milestones_upcoming", "Milestones coming up",
+    `The live stage of an active pathway due within ${UPCOMING_MILESTONE_DAYS} days. ${UPCOMING_MILESTONE_DAYS} days is a choice made here.`,
+    "/practice/pathways", prov(`count of ACTIVE enrolments whose live stage's due_on falls between today and ${UPCOMING_MILESTONE_DAYS} days ahead`));
+
+  const both = (status: IntelStatus, reason: string) => {
+    passed.status = status; passed.reason = reason;
+    upcoming.status = status; upcoming.reason = reason;
+  };
+
+  if (!hasCapability(ctx, CAP_PATHWAY_VIEW)) {
+    const reason = `${CAP_PATHWAY_VIEW} is required to see care pathways`;
+    both("not_permitted", reason);
+    return intelModule("pathways", "Care Pathways", {
+      cards: [], milestonesPassed: passed, milestonesUpcoming: upcoming,
+      status: "not_permitted" as IntelStatus, reason,
+    }, sources, []);
+  }
+
+  // ⚠ IMPORTED, NOT REIMPLEMENTED. pathways.ts is owned elsewhere; this reads its exports and edits
+  // nothing. A dynamic import keeps the dependency one-way, and the try/catch means the engine being
+  // absent or renamed is a STATED OUTCOME rather than a crash that blanks the whole suite.
+  let workspace: Awaited<ReturnType<typeof import("@/lib/practice/pathways").pathwayWorkspace>>;
+  try {
+    const { pathwayWorkspace } = await import("@/lib/practice/pathways");
+    workspace = await pathwayWorkspace(admin, ctx.workspaceId, { activeOnly: false });
+  } catch (e) {
+    const reason = `the pathways engine could not be loaded: ${e instanceof Error ? e.message : String(e)}`;
+    both("unreadable", reason);
+    return intelModule("pathways", "Care Pathways", {
+      cards: [], milestonesPassed: passed, milestonesUpcoming: upcoming,
+      status: "unreadable" as IntelStatus, reason,
+    }, sources, [reason]);
+  }
+
+  if (workspace.unavailable) {
+    const reason = `the pathways engine could not read its own tables: ${workspace.detail ?? "read failed"}`;
+    both("unreadable", reason);
+    return intelModule("pathways", "Care Pathways", {
+      cards: workspace.cards, milestonesPassed: passed, milestonesUpcoming: upcoming,
+      status: "unreadable" as IntelStatus, reason,
+    }, sources, [reason]);
+  }
+
+  const identified = hasCapability(ctx, CAP_PATIENT_VIEW);
+  const active = workspace.pathways.filter(p => p.status === "active");
+  const stageNote = (p: (typeof active)[number]) =>
+    `${p.template_name} -- ${p.stageName ? `${p.stageName} due ${p.stageDueOn ?? "?"}` : `due ${p.stageDueOn ?? "?"}`}`;
+
+  const fill = (g: OpenableCount, rows: typeof active) => {
+    g.status = "ok";
+    g.reason = identified ? null : "counted, and not named: you hold reporting access but not clinical access";
+    g.count = rows.length;
+    g.sample = rows.slice(0, SAMPLE_SIZE).map(p => ({
+      id: p.id,
+      label: identified ? (p.patient_name ?? "Unnamed record") : `Pathway ${p.id.slice(0, 8)}`,
+      note: stageNote(p),
+      // ⚠ NO PER-ENROLMENT ROUTE EXISTS -- the pathways workspace is a single page, so
+      // /practice/pathways/<id> would 404. The drill target is the PATIENT, which s15 lists first
+      // among them. Read out of the route tree rather than assumed from the id being present.
+      href: identified ? `/practice/patients/${p.patient_id}` : null,
+    }));
+    g.sampleIsPartial = rows.length > g.sample.length;
+  };
+
+  fill(passed, active.filter(p => p.progress === "overdue"));
+  fill(upcoming, active.filter(p =>
+    p.progress !== "overdue" && p.stageDueInDays !== null &&
+    p.stageDueInDays >= 0 && p.stageDueInDays <= UPCOMING_MILESTONE_DAYS));
+
+  return intelModule("pathways", "Care Pathways", {
+    cards: workspace.cards, milestonesPassed: passed, milestonesUpcoming: upcoming,
+    status: "ok" as IntelStatus, reason: null,
+  }, sources, workspace.templatesUnavailable ? [`pathway templates: ${workspace.templatesDetail ?? "read failed"}`] : []);
+}
+
+// ── 4. RECENT REPORTS ────────────────────────────────────────────────────────────────────────────────
+
+export type RecentReportsData = {
+  /** Reports this practice has DEFINED. Not runs -- see `limitation`. */
+  defined: { id: string; name: string; kind: string; cadence: string; active: boolean; lastRunAt: string | null }[];
+  status: IntelStatus;
+  reason: string | null;
+  /**
+   * ⚠ WHY "RECENT REPORTS" IS A LIST OF DEFINITIONS AND NOT A LIST OF RUNS.
+   *
+   * The comp's panel implies a history of generated documents. practice_scheduled_report records an
+   * INTENTION ("monthly activity summary, first of the month") and a last_run_at that is only ever set
+   * by somebody pressing Run now -- migration 204 says so in its own comment, because scheduling needs a
+   * scheduler and this product's cron surface belongs to the platform rather than to a tenant. Rendering
+   * intentions as a run history would be the most quietly wrong panel on the page.
+   */
+  limitation: string;
+} & Provenance;
+
+export async function recentReports(
+  admin: any, ctx: WorkspaceContext, atTime: Date = new Date(),
+): Promise<IntelModule<RecentReportsData>> {
+  const sources = ["practice_scheduled_report.name", "practice_scheduled_report.last_run_at"];
+  const base: RecentReportsData = {
+    defined: [], status: "unknowable" as IntelStatus, reason: null,
+    limitation: "These are report DEFINITIONS, not generated documents. Nothing here runs on a schedule: last run is set only when somebody presses Run now (migration 204).",
+    formula: "every practice_scheduled_report row for this practice, most recently run first",
+    sources, fromDay: null, toDay: null, asOf: atTime.toISOString(), provenance: "computed",
+  };
+
+  if (!hasCapability(ctx, CAP_REPORT))
+    return intelModule("recent_reports", "Reports",
+      { ...base, status: "not_permitted" as IntelStatus, reason: `${CAP_REPORT} is required` }, sources, []);
+
+  const read = await intelRows(admin.from("practice_scheduled_report")
+    .select("id, name, report_kind, cadence, active, last_run_at")
+    .eq("workspace_id", ctx.workspaceId)
+    .order("last_run_at", { ascending: false, nullsFirst: false }), 50);
+
+  if (read.error)
+    return intelModule("recent_reports", "Reports",
+      { ...base, status: "unreadable" as IntelStatus, reason: `could not be read: ${read.error}` },
+      sources, [read.error]);
+
+  return intelModule("recent_reports", "Reports", {
+    ...base, status: "ok" as IntelStatus, reason: null,
+    defined: read.rows.map(r => ({
+      id: r.id as string, name: String(r.name ?? ""), kind: String(r.report_kind ?? ""),
+      cadence: String(r.cadence ?? ""), active: r.active === true,
+      lastRunAt: typeof r.last_run_at === "string" ? r.last_run_at : null,
+    })),
+  }, sources, []);
+}
+
+// ── 5. THE PRIORITY STRIP ────────────────────────────────────────────────────────────────────────────
+
+export type PriorityTile = OpenableCount & {
+  severity: "critical" | "warning" | "normal";
+};
+
+export type PriorityStripData = {
+  tiles: PriorityTile[];
+  /** Domains the caller may not see. An empty strip that cannot say why is indistinguishable from calm. */
+  blindSpots: string[];
+  /** Reads that FAILED. "You may not look" and "I could not look" are different sentences. */
+  unreadable: string[];
+  /** Nothing owed AND nothing hidden AND nothing broken. All three, or it is not "you are clear". */
+  allClear: boolean;
+};
+
+/** s7.2's five, in s7.2's order. The keys the colour is looked up by -- see PRIORITY_SWATCH. */
+const PRIORITY_SHAPE: { key: string; label: string; definition: string; href: string }[] = [
+  { key: "overdue_followups", label: "Overdue follow-ups",
+    definition: "Obligations this practice recorded whose date has passed.",
+    href: "/practice/follow-ups" },
+  { key: "awaiting_review", label: "Awaiting review",
+    definition: "Results and letters that arrived and nobody has reviewed, plus documents not yet issued.",
+    href: "/practice/inbox" },
+  { key: "open_encounters", label: "Consultations to finish",
+    definition: "Consultations still open or recorded but not signed. Not yet a record.",
+    href: "/practice/encounters" },
+  { key: "patients_attention", label: "Patients needing attention",
+    definition: "Distinct people the date rules have flagged. See the Patients tab for which rule and why.",
+    href: "/practice/intelligence?tab=patients" },
+  { key: "pathway_milestones", label: "Pathway milestones",
+    definition: "Stages of an active plan that are due soon or have gone past their date.",
+    href: "/practice/pathways" },
+];
+
+/** The exact keys a screen looks a colour up by. Exported so the harness can prove the two maps agree --
+ *  a mismatch here compiles perfectly and renders a real figure in dead grey, which has shipped twice. */
+export const PRIORITY_KEYS = PRIORITY_SHAPE.map(p => p.key);
+
+type HomeAttentionShape = {
+  attention: {
+    kind: string; count: number; title: string; detail: string; href: string;
+    severity: "critical" | "warning" | "normal";
+    sample: { id: string; label: string; note?: string; href?: string }[];
+  }[];
+  blindSpots: string[];
+  unreadable: string[];
+};
+
+/**
+ * s7.2's PRIORITY STRIP.
+ *
+ * ⚠ COMPOSED FROM operations-home.ts's ATTENTION LIST, NOT RECOUNTED. The command centre already counts
+ * overdue follow-ups, unreviewed incoming documents and unsigned consultations, with each tile carrying
+ * a sample of real rows. Counting them again here would produce a second answer to "how many follow-ups
+ * are overdue" that agrees with the first only until somebody changes an exclusion.
+ *
+ * ⚠ AN ABSENT ITEM IS A ZERO ONLY WHEN ITS DOMAIN WAS BOTH PERMITTED AND READABLE. operationsHome omits
+ * an attention item whose count is zero, which is right for a worklist and wrong for a fixed strip: the
+ * strip draws five tiles whatever happened, so the tile checks the blind-spot list and the unreadable
+ * list FIRST and only then treats an absence as nothing waiting.
+ */
+export function priorityStrip(
+  home: HomeAttentionShape,
+  patientAttention: IntelModule<PatientAttentionData>,
+  pathways: IntelModule<PathwayIntelligenceData>,
+  atTime: Date = new Date(),
+): PriorityStripData {
+  const asOf = atTime.toISOString();
+  const byKind = new Map(home.attention.map(a => [a.kind, a]));
+
+  const prov = (formula: string, sources: string[]): Provenance => ({
+    formula, sources, fromDay: null, toDay: null, asOf, provenance: "derived",
+  });
+
+  const fromAttention = (
+    shape: (typeof PRIORITY_SHAPE)[number], kinds: string[], blindSpotNames: string[],
+    unreadableNames: string[], formula: string, sources: string[],
+  ): PriorityTile => {
+    const rows = kinds.map(k => byKind.get(k)).filter(Boolean) as HomeAttentionShape["attention"];
+    const tile: PriorityTile = {
+      ...openable(shape.key, shape.label, shape.definition, shape.href, prov(formula, sources)),
+      severity: "normal",
+    };
+    // PERMISSION FIRST: a domain the caller cannot see must never read as nothing waiting.
+    const hidden = blindSpotNames.filter(b => home.blindSpots.includes(b));
+    if (hidden.length === blindSpotNames.length && blindSpotNames.length > 0) {
+      tile.status = "not_permitted";
+      tile.reason = `you may not see ${hidden.join(" or ")}`;
+      return tile;
+    }
+    // THEN FAILURE: a query that broke must never read as nothing waiting either.
+    const broken = unreadableNames.filter(u => home.unreadable.includes(u));
+    if (broken.length > 0) {
+      tile.status = "unreadable";
+      tile.reason = `could not be read: ${broken.join(", ")}`;
+      return tile;
+    }
+    tile.status = "ok";
+    tile.count = rows.reduce((n, r) => n + r.count, 0);
+    tile.severity = rows.some(r => r.severity === "critical") ? "critical"
+      : rows.some(r => r.severity === "warning") ? "warning" : "normal";
+    // Partly hidden is still a real count of what IS visible, and it says so rather than pretending.
+    if (hidden.length > 0) tile.reason = `not counting ${hidden.join(" or ")}, which you may not see`;
+    tile.sample = rows.flatMap(r => r.sample.map(s => ({
+      id: s.id, label: s.label, note: s.note ?? null, href: s.href ?? r.href,
+    }))).slice(0, SAMPLE_SIZE);
+    tile.sampleIsPartial = (tile.count ?? 0) > tile.sample.length;
+    return tile;
+  };
+
+  // ⚠ THE BLIND-SPOT AND UNREADABLE NAMES ARE operations-home.ts's OWN STRINGS, not paraphrases. It
+  // pushes "follow-ups", "encounters and procedures", "documents" and "the incoming-document register"
+  // by hand, and a near-miss here would silently stop the permission check ever firing.
+  const patientsTile = (): PriorityTile => {
+    // ⚠ DISTINCT PEOPLE, NOT THE SUM OF THE THREE GROUPS. One patient can be overdue AND inactive AND
+    // lost; adding the groups up would count them three times and produce a headline larger than the
+    // register itself.
+    const shape = PRIORITY_SHAPE[3];
+    const tile: PriorityTile = {
+      ...openable(shape.key, shape.label, shape.definition, shape.href,
+        prov("distinct patients appearing in any of the three date-derived attention groups, as a set union rather than a sum -- one person can be in all three",
+          ["src/lib/practice/intelligence.ts (patientAttentionIntelligence)"])),
+      severity: "warning",
+    };
+    const data = patientAttention.data;
+    if (!data) {
+      tile.status = "unreadable";
+      tile.reason = patientAttention.unavailableReason ?? "patient attention was not computed";
+      return tile;
+    }
+    const groups = data.groups;
+    if (groups.every(g => g.status === "not_permitted")) {
+      tile.status = "not_permitted";
+      tile.reason = groups[0]?.reason ?? "not permitted";
+      return tile;
+    }
+    const brokenGroup = groups.find(g => g.status === "unreadable");
+    if (brokenGroup) {
+      tile.status = "unreadable";
+      tile.reason = brokenGroup.reason;
+      return tile;
+    }
+    const union = new Set<string>();
+    for (const g of groups) for (const s of g.sample) union.add(s.id);
+    // The union of the SAMPLES understates the whole whenever any group was sampled, so a partial
+    // strip reports the largest single group -- a floor with a stated reason, never a sum.
+    const anyPartial = groups.some(g => g.sampleIsPartial);
+    tile.status = "ok";
+    tile.count = anyPartial ? Math.max(...groups.map(g => g.count ?? 0)) : union.size;
+    if (anyPartial)
+      tile.reason = "at least this many: the groups overlap and more rows exist than were listed, so the largest single group is shown rather than a sum that would double-count";
+    tile.sample = groups
+      .flatMap(g => g.sample.map(s => ({ ...s, note: `${g.label}${s.note ? ` -- ${s.note}` : ""}` })))
+      .slice(0, SAMPLE_SIZE);
+    tile.sampleIsPartial = (tile.count ?? 0) > tile.sample.length;
+    return tile;
+  };
+
+  const pathwayTile = (): PriorityTile => {
+    const shape = PRIORITY_SHAPE[4];
+    const tile: PriorityTile = {
+      ...openable(shape.key, shape.label, shape.definition, shape.href,
+        prov(`milestones past their date plus milestones due within ${UPCOMING_MILESTONE_DAYS} days, from pathwayWorkspace`,
+          ["src/lib/practice/pathways.ts"])),
+      severity: "normal",
+    };
+    const data = pathways.data;
+    if (!data || data.status === "not_permitted") {
+      tile.status = "not_permitted";
+      tile.reason = data?.reason ?? pathways.unavailableReason ?? `${CAP_PATHWAY_VIEW} is required`;
+      return tile;
+    }
+    if (data.status === "unreadable") {
+      tile.status = "unreadable";
+      tile.reason = data.reason;
+      return tile;
+    }
+    const past = data.milestonesPassed.count ?? 0;
+    const soon = data.milestonesUpcoming.count ?? 0;
+    tile.status = "ok";
+    tile.count = past + soon;
+    tile.severity = past > 0 ? "warning" : "normal";
+    tile.sample = [...data.milestonesPassed.sample, ...data.milestonesUpcoming.sample].slice(0, SAMPLE_SIZE);
+    tile.sampleIsPartial = (tile.count ?? 0) > tile.sample.length;
+    return tile;
+  };
+
+  const tiles: PriorityTile[] = [
+    fromAttention(PRIORITY_SHAPE[0], ["followup_overdue"], ["follow-ups"], ["follow-ups"],
+      "the count operations-home.ts computes for overdue obligations, unchanged",
+      ["practice_follow_up.due_on", "src/lib/practice/operations-home.ts"]),
+    fromAttention(PRIORITY_SHAPE[1], ["incoming_unreviewed", "document_unissued"],
+      ["documents", "the incoming-document register"], ["documents", "incoming"],
+      "unreviewed incoming documents plus clinical documents not yet issued, as operations-home.ts counts them",
+      ["practice_incoming_document.id", "practice_clinical_document.status", "src/lib/practice/operations-home.ts"]),
+    fromAttention(PRIORITY_SHAPE[2], ["encounter_unsigned", "encounter_live"],
+      ["encounters and procedures"], ["encounters"],
+      "consultations left open plus consultations completed but not signed, as operations-home.ts counts them",
+      ["practice_encounter.status", "src/lib/practice/operations-home.ts"]),
+    patientsTile(),
+    pathwayTile(),
+  ];
+
+  return {
+    tiles,
+    blindSpots: home.blindSpots,
+    unreadable: home.unreadable,
+    // ⚠ ALL CLEAR MEANS ALL THREE: nothing owed, nothing hidden, nothing broken. A tile that is
+    // not_permitted or unreadable is not a quiet clinic and must never contribute to a green page.
+    allClear: tiles.every(t => t.status === "ok" && (t.count ?? 0) === 0)
+      && home.blindSpots.length === 0 && home.unreadable.length === 0,
+  };
+}
+
+// ── 6. THE SUITE ─────────────────────────────────────────────────────────────────────────────────────
+
+export type IntelligenceSuite = {
+  asOfIso: string;
+  timezone: string;
+  range: IntelRange;
+  permitted: boolean;
+  identified: boolean;
+  /** s7.2. Five tiles, always five, each one openable. */
+  priority: PriorityStripData;
+  /** s7.3's panels and s6's areas -- CPR-V5-003's ten modules, assembled once. */
+  workspace: PracticeIntelligenceWorkspace;
+  brief: {
+    status: "derived";
+    calculatedAt: string;
+    items: { key: string; severity: string; sentence: string; href: string; count: number }[];
+    method: string;
+    blindSpots: string[];
+    unavailable: boolean;
+  };
+  patients: IntelModule<PatientAttentionData>;
+  pathways: IntelModule<PathwayIntelligenceData>;
+  cohorts: IntelModule<CohortData>;
+  reports: IntelModule<RecentReportsData>;
+  /** The doctrine, in the payload. No client can render any of this as a rate. */
+  ratesComputed: false;
+  /** True only when NOTHING could be read. One dead feeder must not blank the suite (s12). */
+  unavailable: boolean;
+};
+
+/**
+ * THE WHOLE SUITE, FOR ONE RANGE -- s6's nine areas and s7's overview, in one payload.
+ *
+ * ⚠ IT IS ONE READ OF THE WHOLE PRACTICE AND IT IS LOGGED AS ONE. CPR-370 and CORE-001 s13: reading
+ * everything about everybody is the read most worth having a record of.
+ *
+ * ⚠ EVERY FEEDER FAILS ALONE. s12: "Unavailable AI must not block dashboards", and the same holds for
+ * every other source -- a module that could not read returns its reason and the others stand. There is
+ * no path here where one failed query produces an empty page.
+ *
+ * ⚠ THE ASSISTANT IS NOT CALLED FROM HERE. s12 again: an AI provider that is down, slow or switched off
+ * must not delay a dashboard made entirely of arithmetic. The Assistant area asks for itself.
+ */
+export async function intelligenceSuite(
+  admin: any, ctx: WorkspaceContext,
+  opts: { fromDay?: string; toDay?: string; days?: number; cohortBy?: CohortDimension } = {},
+  atTime: Date = new Date(),
+): Promise<IntelligenceSuite> {
+  const permitted = hasCapability(ctx, CAP_REPORT);
+  const range = await intelRange(admin, ctx.workspaceId, opts);
+
+  const { operationsHome } = await import("@/lib/practice/operations-home");
+  const { practiceBrief } = await import("@/lib/practice/brief");
+
+  // practiceIntelligenceWorkspace already refuses politely when report.view is absent, and each of the
+  // other four states its own permission answer. Nothing here short-circuits on a missing capability:
+  // a page that renders nothing cannot explain why it rendered nothing.
+  const [workspace, patients, pathways, reports, cohorts, home] = await Promise.all([
+    practiceIntelligenceWorkspace(admin, ctx, opts, atTime),
+    patientAttentionIntelligence(admin, ctx, range, atTime),
+    pathwayIntelligence(admin, ctx, atTime),
+    recentReports(admin, ctx, atTime),
+    cohortIntelligence(admin, ctx, range, opts.cohortBy ?? "diagnosis", atTime),
+    operationsHome(admin, ctx),
+  ]);
+
+  const brief = practiceBrief(
+    { attention: home.attention, blindSpots: home.blindSpots, allClear: home.allClear, unreadable: home.unreadable },
+    atTime,
+  );
+
+  const priority = priorityStrip(
+    { attention: home.attention, blindSpots: home.blindSpots, unreadable: home.unreadable },
+    patients, pathways, atTime,
+  );
+
+  await logAccess(admin, {
+    workspaceId: ctx.workspaceId, actorId: ctx.userId, subjectKind: "search",
+    action: "view", detail: `Practice Intelligence suite ${range.period.label}`,
+    route: "/practice/intelligence",
+  });
+
+  return {
+    asOfIso: atTime.toISOString(),
+    timezone: range.timezone,
+    range,
+    permitted,
+    identified: hasCapability(ctx, CAP_PATIENT_VIEW),
+    priority,
+    workspace,
+    brief: {
+      status: brief.status, calculatedAt: brief.calculatedAt, method: brief.method,
+      blindSpots: brief.blindSpots, unavailable: brief.unavailable,
+      // The sentences and where they go. `sourceRefs` are deliberately not copied here: they are on the
+      // brief itself, and duplicating a trace gives it two homes and one maintainer.
+      items: brief.items.map(i => ({
+        key: i.key, severity: i.severity, sentence: i.sentence, href: i.href, count: i.count,
+      })),
+    },
+    patients, pathways, cohorts, reports,
+    ratesComputed: false,
+    unavailable: workspace.unavailable && patients.data === null && pathways.data === null,
+  };
+}
+
+/**
+ * THE FIGURES AN ASSISTANT MAY CITE ABOUT THIS PRACTICE, FLATTENED FROM THE SUITE.
+ *
+ * ⚠ CPR-PI-003 s5: "Recommendations should include the supporting evidence... and links back to the
+ * underlying records." That is only possible if the assistant is handed figures that ALREADY carry their
+ * formula, their sources and their period -- which is what aiPracticeIntelligence does for the twelve
+ * metrics, and what this adds for the four modules built above.
+ *
+ * ⚠ ONLY FIGURES THAT STAND. A null is not a fact about a practice, and handing a generator a labelled
+ * blank is how "0 patients are overdue" gets written about a practice whose follow-up table timed out.
+ * Every `status !== "ok"` figure is ABSENT rather than present-and-null.
+ */
+export function suiteGroundingFigures(suite: IntelligenceSuite): GroundedFigure[] {
+  const out: GroundedFigure[] = [];
+  const push = (key: string, label: string, value: number | null, status: IntelStatus, formula: string, sources: string[], fromDay: string | null, toDay: string | null) => {
+    if (status !== "ok" || value === null) return;
+    out.push({
+      key, label, value, unit: "count", formula, sources,
+      periodFromDay: fromDay ?? suite.range.period.fromDay,
+      periodToDay: toDay ?? suite.range.period.toDay,
+    });
+  };
+
+  const ai = suite.workspace.modules.ai.data;
+  if (ai) out.push(...ai.authorisedFigures);
+
+  for (const g of suite.patients.data?.groups ?? [])
+    push(`patients_${g.key}`, `Patients: ${g.label}`, g.count, g.status, g.formula, g.sources, g.fromDay, g.toDay);
+
+  const pw = suite.pathways.data;
+  if (pw) for (const m of [pw.milestonesPassed, pw.milestonesUpcoming])
+    push(m.key, m.label, m.count, m.status, m.formula, m.sources, m.fromDay, m.toDay);
+
+  for (const t of suite.priority.tiles)
+    push(`priority_${t.key}`, t.label, t.count, t.status, t.formula, t.sources, t.fromDay, t.toDay);
+
+  return out;
 }

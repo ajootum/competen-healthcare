@@ -5,7 +5,7 @@ import { resolvePracticeShell } from "@/lib/practice/shell";
 import { hasCapability } from "@/lib/practice/access";
 import {
   assistantSettings, assistantUsage, listSessions, sessionMessages,
-  ASSISTANT_TASKS, REFUSED, AI_NOTICE,
+  ASSISTANT_TASKS, CONTEXT_KINDS, REFUSED, AI_NOTICE,
 } from "@/lib/practice/ai-assistant";
 import AssistantConsole from "./AssistantConsole";
 
@@ -56,6 +56,16 @@ export default async function AssistantPage({ searchParams }: {
         <p className="mt-0.5 text-[13px] text-gray-500">
           It works from the record you have open. It does not know medicine you have not written down.
         </p>
+        {/* CPR-PI-001 s3: the assistant is no longer a workspace of its own. This route stays alive
+            because contextual links from a consultation land on it with an id attached; the area with
+            the practice-level context in it lives inside Practice Intelligence. */}
+        <p className="mt-1.5 text-[11px] text-gray-500">
+          Part of{" "}
+          <Link href="/practice/intelligence?tab=assistant" className="font-semibold text-[var(--cp-primary-deep)] hover:underline">
+            Practice Intelligence
+          </Link>
+          . This route stays for links that arrive with a record already chosen.
+        </p>
       </div>
 
       <div className="mt-4 grid lg:grid-cols-3 gap-4 items-start">
@@ -96,6 +106,9 @@ export default async function AssistantPage({ searchParams }: {
               encounterId={encounterId ?? ""}
               sessionId={sessionId ?? ""}
               tasks={ASSISTANT_TASKS.map(t => ({ key: t.key, label: t.label, blurb: t.blurb, needs: t.needs }))}
+              // CPR-PI-001 s8's five contexts. The same console the Practice Intelligence suite renders,
+              // so the consent gate, the disclosure log and the grounding contract have one implementation.
+              contexts={CONTEXT_KINDS.map(c => ({ key: c.key, label: c.label, blurb: c.blurb, param: c.param }))}
             />
           )}
 
