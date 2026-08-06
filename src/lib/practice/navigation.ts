@@ -135,7 +135,12 @@ export const PRACTICE_NAV: PracticeNavItem[] = [
   { href: "/practice/documents", label: "Documents", icon: "▦", capability: "document.view", group: "Clinical", phase: 4, built: true, primary: true },
   // CPR-V3-002 "Insights". Analytics and Patient Insights both exist and both sit under Practice Home
   // until this section is built -- filing them under a section that does not exist would orphan them.
-  { href: "/practice/assistant", label: "Practice Assistant", icon: "✧", capability: "encounter.list", group: "Intelligence", phase: 5, built: true, primary: true },
+  // ⚠ NO LONGER PRIMARY (CPR-PI-001 s3, s4, and s15's first acceptance criterion: "the separate
+  // Practice Assistant sidebar item is removed"). The suite's argument is that an assistant which lives
+  // in its own workspace is one you have to REMEMBER TO VISIT, and the useful moment for it is always
+  // inside some other screen. So it becomes an area within Practice Intelligence plus contextual
+  // actions elsewhere -- and its route survives, because "removed from the sidebar" is not "deleted".
+  { href: "/practice/assistant", label: "Practice Assistant", icon: "✧", capability: "encounter.list", group: "Intelligence", phase: 5, built: true, parent: "/practice/intelligence" },
   // The user-facing handbook. NO CAPABILITY: what the product will and will not do is not a permission,
   // and the one person who most needs it is a locum on their first morning holding the fewest of them.
   { href: "/practice/documentation", label: "Documentation", icon: "?", capability: null, group: "Setup", phase: 9, built: true, parent: "/practice/setup" },
@@ -207,11 +212,11 @@ export const PRACTICE_NAV: PracticeNavItem[] = [
   // -- AI Assistant: thinking about the work --------------------------------------------------------
   // CPR-220. NOT /practice/case-memory -- that slug is the public marketing page for this capability.
   // encounter.list, not patient.view: learning from a case does not require knowing whose it was.
-  { href: "/practice/cases", label: "Case Memory", icon: "❧", capability: "encounter.list", group: "Intelligence", phase: 5, built: true, parent: "/practice/assistant" },
+  { href: "/practice/cases", label: "Case Memory", icon: "❧", capability: "encounter.list", group: "Intelligence", phase: 5, built: true, parent: "/practice/intelligence" },
   // CPR-230/240. NO CAPABILITY on either: reflecting on your own practice, and keeping an account of
   // your own work, are not permissions somebody grants you. Every query inside is scoped to the caller.
-  { href: "/practice/reflection", label: "Reflection", icon: "◍", capability: null, group: "Intelligence", phase: 5, built: true, parent: "/practice/assistant" },
-  { href: "/practice/portfolio", label: "Portfolio", icon: "❑", capability: null, group: "Intelligence", phase: 5, built: true, parent: "/practice/assistant" },
+  { href: "/practice/reflection", label: "Reflection", icon: "◍", capability: null, group: "Intelligence", phase: 5, built: true, parent: "/practice/intelligence" },
+  { href: "/practice/portfolio", label: "Portfolio", icon: "❑", capability: null, group: "Intelligence", phase: 5, built: true, parent: "/practice/intelligence" },
 
   // -- Practice Setup: configuring the practice, and your own preferences ---------------------------
   { href: "/practice/people", label: "Team & Permissions", icon: "⚇", capability: null, group: "Setup", phase: 5, built: true, parent: "/practice/setup" },
@@ -245,7 +250,7 @@ export function visibleNav(capabilities: string[]): PracticeNavItem[] {
 // sentence somebody has to write.
 export const PRIMARY_ORDER: string[] = [
   "/practice/home", "/practice/today", "/practice/calendar", "/practice/patients",
-  "/practice/encounters", "/practice/documents", "/practice/follow-ups", "/practice/assistant",
+  "/practice/encounters", "/practice/documents", "/practice/follow-ups",
   "/practice/intelligence",
   "/practice/setup",
 ];

@@ -532,7 +532,9 @@ async function main() {
 
   const sections = PRACTICE_NAV.filter(i => i.primary);
   // CPR-PAT-002 s2: ten. The submenu went with it -- see the note in navigation.ts.
-  ok("9b. the sidebar declares CPR-PAT-002 s2 ten sections", sections.length === 10,
+  // CPR-PI-001 s4: NINE. The Assistant left the sidebar and became an area inside Practice
+  // Intelligence -- s15's first acceptance criterion is that the separate item is removed.
+  ok("9b. the sidebar declares CPR-PI-001 s4's nine sections", sections.length === 9,
     `${sections.length}: ${sections.map(i => i.label).join(", ")}`);
 
   // 9b-order. THE ORDER IS PART OF THE SPECIFICATION, not an accident of where entries sit in the array.
@@ -542,7 +544,7 @@ async function main() {
   // not an assertion, it is a transcript. This is CPR-PAT-002 s2s recommended sidebar as the document
   // states it, so the next change has to come with a document too.
   const V5_ORDER = ["/practice/home", "/practice/today", "/practice/calendar", "/practice/patients",
-    "/practice/encounters", "/practice/documents", "/practice/follow-ups", "/practice/assistant",
+    "/practice/encounters", "/practice/documents", "/practice/follow-ups",
     "/practice/intelligence", "/practice/setup"];
   const rendered = primaryNav([...new Set(PRACTICE_NAV.map(i => i.capability).filter(Boolean))] as string[]);
   ok("9b-order. and renders them in the order the specifications list",
@@ -561,7 +563,7 @@ async function main() {
   const allCaps = [...new Set(PRACTICE_NAV.map(i => i.capability).filter(Boolean))] as string[];
   const shown = primaryNav(allCaps);
   ok("9d-control. an owner sees the built sections, not an empty sidebar",
-    shown.length === sections.filter(i => i.built).length && shown.length === 10, `${shown.length} shown`);
+    shown.length === sections.filter(i => i.built).length && shown.length === 9, `${shown.length} shown`);
   // EVERY built non-primary module appears exactly once, under its parent. Asserted as an EQUALITY
   // against the catalogue rather than a threshold: ">= 15" went stale the moment V5-002 promoted
   // Current Session out of the children, and a stale threshold fails for the right reason once and
