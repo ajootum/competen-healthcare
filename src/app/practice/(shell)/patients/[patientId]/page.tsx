@@ -42,9 +42,15 @@ export default async function PatientPage({ params, searchParams }: {
 
   const { patient, identifiers, contacts, appointments } = detail;
   const practiceId = (identifiers as any[]).find(i => i.identifier_type === "practice_id")?.value ?? null;
+  // THREE STATES, NOT TWO. Not permitted to see encounters, could not read them, and there are none --
+  // and only the last of those means the patient has no history here. `unavailable: false` on the
+  // capability branch is correct and deliberate: nothing failed, the caller simply may not look.
   const timeline = hasCapability(shell.ctx, "encounter.list")
     ? await patientTimeline(admin, shell.ctx.workspaceId, patientId, 20)
-    : { encounters: [] as any[], diagnosesByEncounter: {} as Record<string, any[]> };
+    : {
+      encounters: [] as any[], diagnosesByEncounter: {} as Record<string, any[]>,
+      unavailable: false, diagnosesUnavailable: false, detail: null as string | null,
+    };
   // CPR-140. Read-only here: the actions live where the clinical context is, in the consultation and on
   // the board. What this record owes is a fact about the patient and belongs on their page.
   //
@@ -151,7 +157,9 @@ export default async function PatientPage({ params, searchParams }: {
           birthDate={patient.birth_date}
           ageEstimateYears={patient.age_estimate_years}
           recordVersion={patient.record_version}
-          hasPriorEncounter={(timeline.encounters as any[]).length > 0}
+          // null when the history could not be READ -- PatientActions refuses to pick a visit type on a
+          // guess, because entry_pathway is written onto the encounter and stays there.
+          hasPriorEncounter={timeline.unavailable ? null : (timeline.encounters as any[]).length > 0}
           canEdit={hasCapability(shell.ctx, "patient.edit")}
           canMerge={hasCapability(shell.ctx, "patient.merge")}
           canBook={hasCapability(shell.ctx, "appointment.manage")}
@@ -260,7 +268,16 @@ export default async function PatientPage({ params, searchParams }: {
       {hasCapability(shell.ctx, "encounter.list") && (
         <section className="mt-4 rounded-xl border border-gray-200 bg-white p-4">
           <h2 className="text-[13px] font-bold text-gray-900">Clinical timeline</h2>
-          {(timeline.encounters as any[]).length === 0 ? (
+          {/* ⚠ "NO ENCOUNTERS RECORDED" IS A CLINICAL CLAIM, and until this it was also what a failed
+              read looked like. A clinician reading an empty timeline concludes the patient has no
+              history here; there is nothing on the screen to suggest otherwise, and the decisions that
+              follow are different ones. The two are now different sentences. */}
+          {timeline.unavailable ? (
+            <p className="mt-2 rounded-lg bg-[var(--cmp-surface-critical)] px-3 py-2 text-[12px] text-[var(--cmp-text-critical)]">
+              This patient&rsquo;s clinical history could not be read. This is <strong>not</strong> the same
+              as having none &mdash; do not treat this patient as new.
+            </p>
+          ) : (timeline.encounters as any[]).length === 0 ? (
             <p className="mt-2 text-[12px] text-gray-400">No encounters recorded for this patient yet.</p>
           ) : (
             <ul className="mt-2 flex flex-col gap-2">

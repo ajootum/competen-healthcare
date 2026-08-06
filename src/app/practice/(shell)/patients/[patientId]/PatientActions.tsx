@@ -13,7 +13,9 @@ const input = "w-full rounded-lg border border-gray-200 px-2.5 py-2 text-[13px] 
 
 export default function PatientActions(props: {
   patientId: string; displayName: string; sex: string; birthDate: string | null;
-  ageEstimateYears: number | null; recordVersion: number; hasPriorEncounter: boolean;
+  ageEstimateYears: number | null; recordVersion: number;
+  /** null = the timeline could not be read, so the visit type is UNKNOWN and must not be guessed. */
+  hasPriorEncounter: boolean | null;
   canEdit: boolean; canMerge: boolean; canBook: boolean; canStartEncounter: boolean;
 }) {
   const [busy, setBusy] = useState(false);
@@ -50,7 +52,17 @@ export default function PatientActions(props: {
 
   // FLOW-001 pathways 2 and 4: existing patient walks in, or a follow-up is seen without a booking. The
   // pathway is chosen from the record itself -- a patient with prior encounters is a follow-up.
+  //
+  // ⚠ AND IT IS REFUSED WHEN THE RECORD COULD NOT BE READ. `hasPriorEncounter` comes from the clinical
+  // timeline, which used to return an empty list for a FAILED read -- so an unreadable history filed a
+  // returning patient as `new_walk_in`. Not a display slip: entry_pathway is WRITTEN onto the encounter
+  // and stays there, and "first visit" is a clinical claim about somebody with a history. `null` is the
+  // third state, and the action does not proceed on a guess.
   async function startEncounter() {
+    if (props.hasPriorEncounter === null) {
+      setNotice({ kind: "err", text: "This patient's history could not be read, so the visit type cannot be determined. Reload before starting the consultation." });
+      return;
+    }
     setBusy(true); setNotice(null);
     const res = await fetch("/api/v1/practice/encounters", {
       method: "POST", headers: { "Content-Type": "application/json" },

@@ -139,7 +139,14 @@ export default async function EncounterPage({ params }: { params: Promise<{ enco
         <div className="flex flex-col gap-4">
           <section className="rounded-xl border border-gray-200 bg-white p-4">
             <h2 className="text-[13px] font-bold text-gray-900">Previous visits</h2>
-            {priors.length === 0 ? (
+            {/* ⚠ "THIS IS THE FIRST RECORDED ENCOUNTER" IS THE STRONGEST CLAIM ON THIS PAGE, and it is
+                read DURING a consultation, by somebody deciding how much history to take. A failed
+                timeline read used to produce exactly that sentence. */}
+            {timeline.unavailable ? (
+              <p className="mt-2 rounded-lg bg-[var(--cmp-surface-critical)] px-3 py-2 text-[12px] text-[var(--cmp-text-critical)]">
+                Previous visits could not be read. Do <strong>not</strong> take this as a first visit.
+              </p>
+            ) : priors.length === 0 ? (
               <p className="mt-2 text-[12px] text-gray-400">This is the first recorded encounter for this patient.</p>
             ) : (
               <ul className="mt-2 flex flex-col gap-2">

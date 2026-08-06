@@ -248,14 +248,31 @@ async function buildContext(admin: any, ctx: WorkspaceContext, args: {
     grounding.push({ kind: "patient", id: patient.id, label: patient.display_name, href: `/practice/patients/${patient.id}` });
 
     const timeline = await patientTimeline(admin, ctx.workspaceId, patient.id, 30);
+    // ⚠ AN UNREADABLE TIMELINE REFUSES THE TASK. IT DOES NOT PRODUCE A THINNER ANSWER.
+    //
+    // This is the worst place in the product for the silent zero, and it was here. The line below used
+    // to say "No previous consultations recorded here" whenever the list came back empty -- and a failed
+    // read came back empty. That sentence is not shown to a clinician; it is fed to the MODEL as
+    // grounding, and the model then writes a summary resting on it. A false absence becomes a fluent
+    // paragraph asserting the patient has no history.
+    //
+    // CPR-210's line is that the assistant may REORGANISE what is in the record and may not ORIGINATE a
+    // clinical fact. Telling it a patient has no history when nobody could read the history is
+    // originating one, in the most confident form available.
+    if (timeline.unavailable) return null;
+
     for (const e of timeline.encounters as any[]) {
       const dx = (timeline.diagnosesByEncounter[e.id] ?? []).map((d: any) => d.label).join(", ");
-      lines.push(`${String(e.started_at).slice(0, 10)} -- ${e.reason_for_visit ?? "no reason recorded"}${dx ? ` -- ${dx}` : ""} (${e.status})`);
+      // Diagnoses failing is survivable where the encounters failing is not, but it must not read as
+      // "no diagnosis was made" -- so the uncertainty is stated per line rather than left blank.
+      const dxText = dx ? ` -- ${dx}` : timeline.diagnosesUnavailable ? " -- diagnoses could not be read" : "";
+      lines.push(`${String(e.started_at).slice(0, 10)} -- ${e.reason_for_visit ?? "no reason recorded"}${dxText} (${e.status})`);
       grounding.push({
         kind: "encounter", id: e.id, label: `Consultation ${String(e.started_at).slice(0, 10)}`,
         href: `/practice/encounters/${e.id}`,
       });
     }
+    // Reachable now only when the read SUCCEEDED and found nothing, which is a true and useful fact.
     if (timeline.encounters.length === 0) lines.push("No previous consultations recorded here.");
     return { text: lines.join("\n"), grounding, patientId: patient.id };
   }

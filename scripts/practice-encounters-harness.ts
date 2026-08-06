@@ -25,6 +25,8 @@
  *   npx --yes tsx scripts/practice-encounters-harness.ts
  */
 import { loadEnvConfig } from "@next/env";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { createClient } from "@supabase/supabase-js";
 import { runProvisioning, type IndividualRequest } from "../src/lib/practice/provisioning";
 import { registerPatient } from "../src/lib/practice/patients";
@@ -272,6 +274,70 @@ async function main() {
       timeline.encounters.length === 2 && timeline.encounters[0].id === second.data.id, `${timeline.encounters.length}`);
     ok("the timeline carries each encounter's diagnoses",
       (timeline.diagnosesByEncounter[encId] ?? []).length === 1, JSON.stringify(Object.keys(timeline.diagnosesByEncounter)));
+
+    // ── AN EMPTY CLINICAL TIMELINE IS THE MOST DANGEROUS EMPTY LIST IN THIS PRODUCT ────────────────
+    //
+    // ⚠ BOTH READS DISCARDED THEIR ERRORS. A failed query returned `encounters: []`, and an empty
+    // timeline does not read as "something went wrong" -- it reads as A PATIENT WITH NO HISTORY. Three
+    // places said so in words: the patient record ("No encounters recorded for this patient yet"), the
+    // consultation screen ("This is the first recorded encounter for this patient", read DURING a
+    // consultation by somebody deciding how much history to take), and worst of all the AI assistant,
+    // which fed "No previous consultations recorded here" TO THE MODEL as grounding and let it write a
+    // fluent summary resting on a false absence.
+    //
+    // ⚠ AND THE COMPILER COULD NOT HELP: patientTimeline already returned an OBJECT, so adding
+    // `unavailable` broke nothing and tsc stayed at zero. Third time in three commits. All six callers
+    // were found by hand.
+    const failingTimeline = {
+      from: (table: string) => {
+        if (table !== "practice_encounter") return admin.from(table);
+        const chain: Record<string, unknown> = {};
+        for (const m of ["select", "eq", "in", "order"]) chain[m] = () => chain;
+        chain.limit = async () => ({ data: null, error: { message: "simulated timeline failure" } });
+        return chain;
+      },
+    };
+    const blindTimeline = await patientTimeline(failingTimeline as never, wsA, patientA, 10);
+    ok("timeline-1. ⚠ a timeline whose encounter read FAILED says so, and does not report an empty history",
+      blindTimeline.unavailable === true && blindTimeline.encounters.length === 0
+      && /simulated timeline failure/.test(blindTimeline.detail ?? ""),
+      JSON.stringify(blindTimeline));
+
+    // The DIAGNOSIS read is reported separately, because a timeline with its consultations and no
+    // diagnoses is still worth showing -- and is a different claim from one with nothing on it.
+    const failingDiagnoses = {
+      from: (table: string) => {
+        if (table !== "practice_diagnosis") return admin.from(table);
+        const chain: Record<string, unknown> = {};
+        for (const m of ["select", "eq", "order"]) chain[m] = () => chain;
+        chain.in = async () => ({ data: null, error: { message: "simulated diagnosis failure" } });
+        return chain;
+      },
+    };
+    const partialTimeline = await patientTimeline(failingDiagnoses as never, wsA, patientA, 10);
+    ok("timeline-2. ⚠ a failed DIAGNOSIS read is reported separately -- the consultations are still real",
+      partialTimeline.unavailable === false && partialTimeline.diagnosesUnavailable === true
+      && partialTimeline.encounters.length === 2,
+      JSON.stringify({ u: partialTimeline.unavailable, d: partialTimeline.diagnosesUnavailable, n: partialTimeline.encounters.length }));
+
+    // CONTROL. Without it both pass just as well if every timeline reported itself unavailable.
+    ok("timeline-control. the same read through the real client is available, with its diagnoses",
+      timeline.unavailable === false && timeline.diagnosesUnavailable === false && timeline.detail === null,
+      JSON.stringify({ u: timeline.unavailable, d: timeline.diagnosesUnavailable, detail: timeline.detail }));
+
+    // ⚠ AND THE SENTENCES THEMSELVES. The engine flag is only half the fix: the three claims above are
+    // written in JSX, and a page that ignores `unavailable` still prints them. Source-checked, because
+    // a React branch cannot be reached from here -- the same reason adaptive-4 exists.
+    const claims: [string, string, RegExp][] = [
+      ["patient record", "src/app/practice/(shell)/patients/[patientId]/page.tsx", /No encounters recorded/],
+      ["consultation", "src/app/practice/(shell)/encounters/[encounterId]/page.tsx", /first recorded encounter/],
+    ];
+    for (const [where, file, claim] of claims) {
+      const src = readFileSync(join(process.cwd(), file), "utf8");
+      const guarded = /timeline\.unavailable\s*\?/.test(src) && claim.test(src);
+      ok(`timeline-3-${where}. the "no history" sentence sits behind a timeline.unavailable check`,
+        guarded, `guard=${/timeline\.unavailable\s*\?/.test(src)} claim=${claim.test(src)}`);
+    }
   }
 
   // ── 7. Detail view + history ─────────────────────────────────────────────

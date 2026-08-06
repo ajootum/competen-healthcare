@@ -427,20 +427,59 @@ export async function getEncounter(admin: any, workspaceId: string, encounterId:
   };
 }
 
-/** The patient's clinical timeline: past encounters with their headline diagnoses (PEN-012 seed). */
-export async function patientTimeline(admin: any, workspaceId: string, patientId: string, limit = 20) {
-  const { data: encounters } = await admin.from("practice_encounter")
+/**
+ * The patient's clinical timeline: past encounters with their headline diagnoses (PEN-012 seed).
+ *
+ * ⚠ BOTH READS DISCARDED THEIR ERRORS, AND AN EMPTY CLINICAL TIMELINE IS THE MOST DANGEROUS EMPTY LIST
+ * IN THIS PRODUCT. It does not read as "something went wrong". It reads as A PATIENT WITH NO HISTORY --
+ * nobody seen here before, nothing diagnosed, nothing to take into account. A clinician looking at that
+ * screen has no way to tell it from the truth, and the decisions that follow are different ones.
+ *
+ * The diagnosis read matters separately from the encounter read, so they are reported separately: a
+ * timeline with its consultations and no diagnoses is still worth showing, and it is a different claim
+ * from a timeline with nothing on it.
+ *
+ * ⚠ ADDING THESE FIELDS BREAKS NOTHING AT COMPILE TIME. This function already returned an object, so
+ * every existing caller keeps destructuring `.encounters` and keeps being wrong. That trap was walked
+ * into once already, with searchPatients, one commit ago -- so all six callers were found by hand and
+ * each one had to say what it does with a failure. There is no version of this where the type does the
+ * work for you.
+ */
+export async function patientTimeline(admin: any, workspaceId: string, patientId: string, limit = 20): Promise<{
+  encounters: any[];
+  diagnosesByEncounter: Record<string, any[]>;
+  /** The encounter read failed. `encounters: []` is NOT an answer -- do not render "no history". */
+  unavailable: boolean;
+  /** The diagnosis read failed. The encounters below are real; their diagnoses are unknown, not absent. */
+  diagnosesUnavailable: boolean;
+  detail: string | null;
+}> {
+  const { data: encounters, error: encErr } = await admin.from("practice_encounter")
     .select("id, started_at, status, entry_pathway, reason_for_visit, encounter_mode")
     .eq("workspace_id", workspaceId).eq("patient_id", patientId)
     .order("started_at", { ascending: false }).limit(limit);
-  const ids = ((encounters ?? []) as any[]).map(e => e.id);
-  if (ids.length === 0) return { encounters: [], diagnosesByEncounter: {} as Record<string, any[]> };
+  if (encErr) return {
+    encounters: [], diagnosesByEncounter: {},
+    unavailable: true, diagnosesUnavailable: true, detail: encErr.message,
+  };
 
-  const { data: diags } = await admin.from("practice_diagnosis")
+  const ids = ((encounters ?? []) as any[]).map(e => e.id);
+  if (ids.length === 0) return {
+    encounters: [], diagnosesByEncounter: {},
+    unavailable: false, diagnosesUnavailable: false, detail: null,
+  };
+
+  const { data: diags, error: diagErr } = await admin.from("practice_diagnosis")
     .select("encounter_id, label, certainty, is_primary").in("encounter_id", ids);
   const diagnosesByEncounter: Record<string, any[]> = {};
   for (const d of (diags ?? []) as any[]) {
     (diagnosesByEncounter[d.encounter_id] ??= []).push(d);
   }
-  return { encounters: encounters ?? [], diagnosesByEncounter };
+  return {
+    encounters: encounters ?? [],
+    diagnosesByEncounter,
+    unavailable: false,
+    diagnosesUnavailable: !!diagErr,
+    detail: diagErr?.message ?? null,
+  };
 }
