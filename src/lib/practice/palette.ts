@@ -195,9 +195,15 @@ export const WORKLIST_SWATCH: Record<string, { badge: string; figure: string; bo
  * overdue backlog are the same KIND of fact at two timescales, and giving the second one its own hue
  * would say they were different kinds.
  */
-export const CARE_CARD_SWATCH: Record<string, {
+/**
+ * What a summary card needs to be drawn: a tinted box with a left accent bar, a tinted icon badge, THE
+ * FIGURE IN THE CARD'S HUE, and a caption under it. Named because three screens now draw this same card.
+ */
+export type CardSwatch = {
   badge: string; figure: string; box: string; accent: string; icon: string; caption: string;
-}> = {
+};
+
+export const CARE_CARD_SWATCH: Record<string, CardSwatch> = {
   waiting: {
     badge: "bg-amber-100 text-amber-700", figure: "text-amber-700",
     box: "border-amber-200/80 bg-amber-50/70", accent: "bg-amber-400",
@@ -258,6 +264,120 @@ export const CARE_CARD_UNSUPPLIED = {
   box: "border-dashed border-slate-300 bg-white", accent: "bg-slate-200",
   caption: "text-slate-400",
 } as const;
+
+/**
+ * A card whose KEY is not in its map -- which is a different failure from a card whose FIGURE could not
+ * be read, and must not be drawn as one.
+ *
+ * It cannot happen: both card maps below are asserted key-for-key against the engine that emits them.
+ * It exists so that if it ever does, the card goes grey instead of the page going blank on `s.box` of
+ * undefined -- a bug you can see beats a bug that white-screens, and beats a card silently wearing some
+ * other card's colour most of all.
+ */
+export const CARD_SWATCH_UNKEYED: CardSwatch = {
+  badge: "bg-slate-100 text-slate-500", figure: "text-slate-600",
+  box: "border-slate-200 bg-slate-50/80", accent: "bg-slate-300",
+  icon: "•", caption: "text-slate-500",
+};
+
+/**
+ * CPR-FUP-001 s4's FIVE FOLLOW-UP CARDS.
+ *
+ * ⚠ KEYED ON THE ENGINE'S OWN CARD KEYS -- the `card: true` entries of FOLLOW_UP_VIEWS, which is what
+ * followUpWorkspace() emits. Nothing else. The harness asserts the two key sets are IDENTICAL in both
+ * directions, because this file's header records the same mismatch shipping twice (PERFORMANCE_SWATCH
+ * keyed `avg_consult` against `average_consult_time`, GLANCE_SWATCH `walk_ins` against `walk_in`) and
+ * both times the symptom was a real figure quietly rendered in dead grey, invisible in a diff.
+ *
+ * THESE FIVE LIVED IN THE PAGE, INDIRECTING INTO CARE_CARD_SWATCH BY A BORROWED KEY -- "Completed" read
+ * `newRegistrations` because that entry happens to be emerald. It rendered correctly and it was still
+ * the wrong shape: colour was being decided in a component by a key that names something else, so the
+ * only thing keeping the two in step was a comment. They are decided here now.
+ *
+ * THE HUES, AND WHY EACH ONE:
+ *   overdue    rose    -- the only FAILURE state on the row, and the only one whose cost falls on
+ *                         somebody outside the room. Drawn heaviest for that reason and no other: a
+ *                         solid tint and a 500 accent where the rest take a wash and a 400.
+ *   due_today  cyan    -- due, and not yet late. Deliberately NOT rose (that is failure) and NOT amber
+ *                         (that is waiting) -- today's review is neither of those things yet.
+ *   due_week   amber   -- the horizon. This product's "coming, not here yet" hue everywhere else.
+ *   awaiting   violet  -- unarranged work, which is what makes a week overrun. The walk-in hue, for the
+ *                         same reason it is the walk-in hue: nobody has planned this yet.
+ *   completed  emerald -- the only unambiguously good figure on the row.
+ */
+export const FOLLOWUP_CARD_SWATCH: Record<string, CardSwatch> = {
+  overdue: {
+    badge: "bg-rose-100 text-rose-700", figure: "text-rose-700",
+    box: "border-rose-300 bg-rose-50", accent: "bg-rose-500",
+    icon: "!", caption: "text-rose-800/60",
+  },
+  due_today: {
+    badge: "bg-cyan-100 text-cyan-700", figure: "text-cyan-700",
+    box: "border-cyan-200/80 bg-cyan-50/70", accent: "bg-cyan-400",
+    icon: "◷", caption: "text-cyan-800/60",
+  },
+  due_week: {
+    badge: "bg-amber-100 text-amber-700", figure: "text-amber-700",
+    box: "border-amber-200/80 bg-amber-50/70", accent: "bg-amber-400",
+    icon: "▦", caption: "text-amber-800/60",
+  },
+  awaiting: {
+    badge: "bg-violet-100 text-violet-700", figure: "text-violet-700",
+    box: "border-violet-200/80 bg-violet-50/70", accent: "bg-violet-400",
+    icon: "⌕", caption: "text-violet-800/60",
+  },
+  completed: {
+    badge: "bg-emerald-100 text-emerald-700", figure: "text-emerald-700",
+    box: "border-emerald-200/80 bg-emerald-50/70", accent: "bg-emerald-400",
+    icon: "✓", caption: "text-emerald-800/60",
+  },
+};
+
+/**
+ * CPR-FUP-003 s12's FIVE PATHWAY CARDS.
+ *
+ * ⚠ KEYED ON PATHWAY_CARD_SHAPE'S OWN KEYS, and asserted equal to them by the pathways harness for the
+ * same reason as above. Like the follow-up five, these were a borrowed-key indirection in the page:
+ * "Completed" read `resultsToReview` because that entry happens to be sky.
+ *
+ * THE HUES:
+ *   active     indigo  -- the practice's primary. The plans that are running, which is what this screen
+ *                         is for. QUEUE_SWATCH.IN_CONSULTATION and CARE_CARD_SWATCH.inConsultation are
+ *                         the same token, so the practice's live-work hue is one colour everywhere.
+ *   patients   violet  -- people. This product's violet, on every screen that counts them.
+ *   on_track   emerald -- the only unambiguously good figure on the row.
+ *   overdue    rose    -- the only FAILURE state, and the only one whose cost falls outside the room.
+ *   completed  sky     -- finished, and neither good news nor bad. DELIBERATELY NOT EMERALD: on_track
+ *                         owns green on this row, and two greens would rank nothing while looking like
+ *                         they ranked something.
+ */
+export const PATHWAY_CARD_SWATCH: Record<string, CardSwatch> = {
+  active: {
+    badge: "bg-[var(--cp-primary)]/12 text-[var(--cp-primary-deep)]", figure: "text-[var(--cp-primary-deep)]",
+    box: "border-[var(--cp-primary)]/25 bg-[var(--cp-primary)]/[0.06]", accent: "bg-[var(--cp-primary)]",
+    icon: "⁂", caption: "text-[var(--cp-primary-deep)]/60",
+  },
+  patients: {
+    badge: "bg-violet-100 text-violet-700", figure: "text-violet-700",
+    box: "border-violet-200/80 bg-violet-50/70", accent: "bg-violet-400",
+    icon: "☺", caption: "text-violet-800/60",
+  },
+  on_track: {
+    badge: "bg-emerald-100 text-emerald-700", figure: "text-emerald-700",
+    box: "border-emerald-200/80 bg-emerald-50/70", accent: "bg-emerald-400",
+    icon: "✓", caption: "text-emerald-800/60",
+  },
+  overdue: {
+    badge: "bg-rose-100 text-rose-700", figure: "text-rose-700",
+    box: "border-rose-300 bg-rose-50", accent: "bg-rose-500",
+    icon: "!", caption: "text-rose-800/60",
+  },
+  completed: {
+    badge: "bg-sky-100 text-sky-700", figure: "text-sky-700",
+    box: "border-sky-200/80 bg-sky-50/70", accent: "bg-sky-400",
+    icon: "▦", caption: "text-sky-800/60",
+  },
+};
 
 /** The register's Journey Snapshot glyphs -- encounters and procedures, the two figures that are real. */
 export const JOURNEY_ICON = { encounters: "▤", procedures: "✚" } as const;
@@ -467,4 +587,124 @@ export const BUTTON = {
   secondaryAction: "bg-violet-600 text-white hover:bg-violet-700 disabled:opacity-50",
   quiet: "border border-gray-200 bg-white text-gray-700 hover:bg-gray-50 disabled:opacity-50",
   danger: "border border-rose-300 bg-white text-rose-700 hover:bg-rose-50 disabled:opacity-50",
+} as const;
+
+/* ══ CPR-PI-001: the Practice Intelligence suite's swatches ══════════════════════════════════════
+ *
+ * ⚠ THESE LIVED IN intelligence-constants.ts BECAUSE THIS FILE WAS BEING WRITTEN BY SOMEBODY ELSE
+ * AT THE TIME, not because a suite deserves its own colour system. Leaving them there is how two
+ * screens come to disagree about what amber means -- the specific failure this file exists to
+ * prevent, and the one a local TINT map in WorklistTiles.tsx had already caused once.
+ *
+ * Every hue below is one this file already uses for the same meaning: rose for the only item whose
+ * cost falls on somebody outside the room, amber for waiting, sky for arrived-and-unread, violet
+ * for unplanned work, emerald for settled.
+ */
+// PRIORITY_SWATCH / PI_PANEL when that file is free; this file is not a second palette and must not
+// become one.
+
+export type IntelSwatch = {
+  /** Tinted card background and border. */
+  box: string;
+  /** Tinted square behind the glyph. */
+  badge: string;
+  /** THE FIGURE, in the card's own hue. The line that keeps being dropped. */
+  figure: string;
+  /** A 2px rule down the card's leading edge. */
+  accent: string;
+  /** The caption under the figure, at the card's hue and reduced. */
+  caption: string;
+  icon: string;
+};
+
+/**
+ * §7.2's PRIORITY STRIP -- five tiles, and the colour is semantic in four of them.
+ *
+ *   overdue_followups  rose  -- the only item whose cost falls on somebody outside the room.
+ *   awaiting_review    sky   -- arrived and unreviewed. The missed-result harm. Not late, but silent.
+ *   open_encounters    amber -- unfinished work with your name on it. Waiting, not failing.
+ *   patients_attention violet-- people the dates have flagged. Unplanned work.
+ *   pathway_milestones cyan  -- a date on a plan. Due, and not yet a failure.
+ */
+export const PRIORITY_SWATCH: Record<string, IntelSwatch> = {
+  overdue_followups: {
+    box: "border-rose-300 bg-rose-50", badge: "bg-rose-100 text-rose-700", figure: "text-rose-700",
+    accent: "bg-rose-500", caption: "text-rose-800/70", icon: "↺",
+  },
+  awaiting_review: {
+    box: "border-sky-200/80 bg-sky-50/70", badge: "bg-sky-100 text-sky-700", figure: "text-sky-700",
+    accent: "bg-sky-400", caption: "text-sky-800/70", icon: "▤",
+  },
+  open_encounters: {
+    box: "border-amber-200/80 bg-amber-50/70", badge: "bg-amber-100 text-amber-700", figure: "text-amber-700",
+    accent: "bg-amber-400", caption: "text-amber-800/70", icon: "✎",
+  },
+  patients_attention: {
+    box: "border-violet-200/80 bg-violet-50/70", badge: "bg-violet-100 text-violet-700", figure: "text-violet-700",
+    accent: "bg-violet-400", caption: "text-violet-800/70", icon: "⚇",
+  },
+  pathway_milestones: {
+    box: "border-cyan-200/80 bg-cyan-50/70", badge: "bg-cyan-100 text-cyan-700", figure: "text-cyan-700",
+    accent: "bg-cyan-400", caption: "text-cyan-800/70", icon: "◷",
+  },
+};
+
+/**
+ * A tile whose figure the engine could not supply.
+ *
+ * IT KEEPS ITS PLACE AND LOSES ITS COLOUR -- the same rule the patients dashboard already applies. A
+ * tinted card with an em dash reads as a number you cannot quite make out; a grey dashed one reads as a
+ * question nobody could answer, which is what it is. Removing the tile entirely would make the strip
+ * look complete when it is not.
+ */
+export const PRIORITY_UNSUPPLIED: IntelSwatch = {
+  box: "border-dashed border-slate-300 bg-white", badge: "bg-slate-100 text-slate-400",
+  figure: "text-slate-300", accent: "bg-slate-200", caption: "text-slate-400", icon: "?",
+};
+
+/** §7.3's seven dashboard panels, one hue each, matching the tab that opens the same material. */
+export const PI_PANEL: Record<string, { icon: string; badge: string; rule: string }> = {
+  todays_brief: { icon: "✧", badge: "bg-[var(--cp-primary)]/12 text-[var(--cp-primary-deep)]", rule: "bg-[var(--cp-primary)]/25" },
+  practice_activity: { icon: "▥", badge: "bg-violet-100 text-violet-700", rule: "bg-violet-200" },
+  clinical_trends: { icon: "◈", badge: "bg-emerald-100 text-emerald-700", rule: "bg-emerald-200" },
+  patient_attention: { icon: "⚇", badge: "bg-rose-100 text-rose-700", rule: "bg-rose-200" },
+  pathway_status: { icon: "◷", badge: "bg-cyan-100 text-cyan-700", rule: "bg-cyan-200" },
+  ai_insight: { icon: "✦", badge: "bg-sky-100 text-sky-700", rule: "bg-sky-200" },
+  recent_reports: { icon: "▦", badge: "bg-amber-100 text-amber-700", rule: "bg-amber-200" },
+  cohorts: { icon: "◎", badge: "bg-violet-100 text-violet-700", rule: "bg-violet-200" },
+  performance: { icon: "❑", badge: "bg-amber-100 text-amber-700", rule: "bg-amber-200" },
+  refused: { icon: "⊘", badge: "bg-slate-100 text-slate-500", rule: "bg-slate-200" },
+};
+
+/** Tab chips. `primary` is the workspace's own indigo; `assistant` is deliberately the AI hue, sky. */
+export const TAB_SWATCH: Record<string, { on: string; off: string }> = {
+  primary: { on: "bg-[var(--cp-primary)] text-white", off: "text-[var(--cp-primary-deep)] hover:bg-[var(--cp-primary)]/8" },
+  indigo: { on: "bg-indigo-600 text-white", off: "text-indigo-700 hover:bg-indigo-50" },
+  rose: { on: "bg-rose-600 text-white", off: "text-rose-700 hover:bg-rose-50" },
+  violet: { on: "bg-violet-600 text-white", off: "text-violet-700 hover:bg-violet-50" },
+  emerald: { on: "bg-emerald-600 text-white", off: "text-emerald-700 hover:bg-emerald-50" },
+  cyan: { on: "bg-cyan-600 text-white", off: "text-cyan-700 hover:bg-cyan-50" },
+  amber: { on: "bg-amber-600 text-white", off: "text-amber-700 hover:bg-amber-50" },
+  sky: { on: "bg-sky-600 text-white", off: "text-sky-700 hover:bg-sky-50" },
+  assistant: { on: "bg-sky-600 text-white", off: "text-sky-700 hover:bg-sky-50" },
+};
+
+/**
+ * Where a line came from, said in a badge rather than implied.
+ *
+ * ⚠ COMPUTED IS NOT AI, AND THE DISTINCTION IS THE WHOLE POINT OF THE BADGE. §11 requires AI-generated
+ * content to be "clearly labelled". The failure mode that requirement invites is labelling ARITHMETIC as
+ * AI because it sits in a panel headed "AI Insight" -- which trains a practitioner to discount a count
+ * they could have done themselves, and, worse, to extend the same trust to a sentence a model wrote.
+ * command-centre.ts already set this precedent with `aiGenerated: false`.
+ */
+export const PROVENANCE_BADGE = {
+  computed: { label: "COMPUTED", chip: "bg-slate-100 text-slate-600 ring-1 ring-slate-200",
+    title: "Arithmetic over this practice's own rows. No model was involved." },
+  derived: { label: "DERIVED", chip: "bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200",
+    title: "Rules over rows that exist right now, with the source records named." },
+  ai: { label: "AI", chip: "bg-sky-50 text-sky-700 ring-1 ring-sky-200",
+    title: "Written by a model from the records listed beneath it. Read it as a draft, not as a finding." },
+  refused: { label: "NOT COMPUTED", chip: "bg-slate-100 text-slate-500 ring-1 ring-slate-200",
+    title: "The design asks for this figure and nothing in this practice's records could ground it." },
 } as const;

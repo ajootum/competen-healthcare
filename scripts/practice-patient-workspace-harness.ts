@@ -78,11 +78,23 @@ const payload = (name: string): IndividualRequest => ({
 });
 
 async function provision(user: string, name: string, suffix: string): Promise<string> {
-  const { data: req } = await admin.from("provisioning_request").insert({
-    idempotency_key: `harness-pw-${suffix}`, request_type: "pilot",
+  // ⚠ THE ERROR WAS DISCARDED HERE AND THE KEY WAS STATIC, WHICH IS TWO HALVES OF ONE FAILURE.
+  //
+  // `harness-pw-a` collides with any row left behind by a run that did not reach its cleanup -- which is
+  // what happens when a harness is interrupted, and this one was. The insert then failed, `data` came
+  // back undefined, and `req!.id` threw `Cannot read properties of null (reading 'id')` from a line
+  // that has nothing to do with the actual problem. Ten minutes of looking in the wrong place.
+  //
+  // Date.now() in the key matches what the current-activity harness already does, and capturing the
+  // error means the next collision says so in one line instead of pointing at a null dereference. The
+  // discarded-error rule applies to test code as much as to engines -- arguably more, because a harness
+  // that misreports its own failure sends you hunting through the code it was supposed to be checking.
+  const { data: req, error } = await admin.from("provisioning_request").insert({
+    idempotency_key: `harness-pw-${suffix}-${Date.now()}`, request_type: "pilot",
     actor_user_id: user, target_user_id: user, payload_hash: "harness", correlation_id: CID,
   }).select("id").single();
-  const run = await runProvisioning(admin, { id: req!.id, target_user_id: user, correlation_id: CID, workspace_id: null }, payload(name));
+  if (error || !req) throw new Error(`provisioning request refused: ${error?.message ?? "no row returned"}`);
+  const run = await runProvisioning(admin, { id: req.id, target_user_id: user, correlation_id: CID, workspace_id: null }, payload(name));
   if (!run.ok || !run.workspaceId) throw new Error(`provisioning failed: ${run.errorCode}`);
   return run.workspaceId;
 }

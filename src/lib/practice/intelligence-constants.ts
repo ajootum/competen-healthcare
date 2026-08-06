@@ -97,122 +97,17 @@ export const RANGE_MEMORY_KEY = "cp.intelligence.range";
 // icon badge, AND THE FIGURE ITSELF. A tinted badge beside a black number leaves the colour on the
 // decoration; the number is the thing being read, so the number takes the card's hue.
 //
-// This is a legibility decision. The priority strip is read in the first seconds of a clinic to answer
-// "what needs me first". Five identical grey rectangles containing five numbers have to be READ, one at
-// a time; five coloured ones are FOUND.
+// ── The suite's swatches now live in palette.ts ─────────────────────────────────────────────────
 //
-// ⚠ THESE LIVE HERE RATHER THAN IN palette.ts BECAUSE palette.ts IS CONTENDED BY ANOTHER AGENT RIGHT
-// NOW. Every hue below is one palette.ts already uses for the same meaning -- rose for a failure whose
-// cost falls outside the room, amber for waiting, sky for arrived-and-unreviewed, emerald for the only
-// good news, slate for context that must never pull the eye. THEY SHOULD BE MOVED INTO palette.ts as
-// PRIORITY_SWATCH / PI_PANEL when that file is free; this file is not a second palette and must not
-// become one.
-
-export type IntelSwatch = {
-  /** Tinted card background and border. */
-  box: string;
-  /** Tinted square behind the glyph. */
-  badge: string;
-  /** THE FIGURE, in the card's own hue. The line that keeps being dropped. */
-  figure: string;
-  /** A 2px rule down the card's leading edge. */
-  accent: string;
-  /** The caption under the figure, at the card's hue and reduced. */
-  caption: string;
-  icon: string;
-};
-
-/**
- * §7.2's PRIORITY STRIP -- five tiles, and the colour is semantic in four of them.
- *
- *   overdue_followups  rose  -- the only item whose cost falls on somebody outside the room.
- *   awaiting_review    sky   -- arrived and unreviewed. The missed-result harm. Not late, but silent.
- *   open_encounters    amber -- unfinished work with your name on it. Waiting, not failing.
- *   patients_attention violet-- people the dates have flagged. Unplanned work.
- *   pathway_milestones cyan  -- a date on a plan. Due, and not yet a failure.
- */
-export const PRIORITY_SWATCH: Record<string, IntelSwatch> = {
-  overdue_followups: {
-    box: "border-rose-300 bg-rose-50", badge: "bg-rose-100 text-rose-700", figure: "text-rose-700",
-    accent: "bg-rose-500", caption: "text-rose-800/70", icon: "↺",
-  },
-  awaiting_review: {
-    box: "border-sky-200/80 bg-sky-50/70", badge: "bg-sky-100 text-sky-700", figure: "text-sky-700",
-    accent: "bg-sky-400", caption: "text-sky-800/70", icon: "▤",
-  },
-  open_encounters: {
-    box: "border-amber-200/80 bg-amber-50/70", badge: "bg-amber-100 text-amber-700", figure: "text-amber-700",
-    accent: "bg-amber-400", caption: "text-amber-800/70", icon: "✎",
-  },
-  patients_attention: {
-    box: "border-violet-200/80 bg-violet-50/70", badge: "bg-violet-100 text-violet-700", figure: "text-violet-700",
-    accent: "bg-violet-400", caption: "text-violet-800/70", icon: "⚇",
-  },
-  pathway_milestones: {
-    box: "border-cyan-200/80 bg-cyan-50/70", badge: "bg-cyan-100 text-cyan-700", figure: "text-cyan-700",
-    accent: "bg-cyan-400", caption: "text-cyan-800/70", icon: "◷",
-  },
-};
-
-/**
- * A tile whose figure the engine could not supply.
- *
- * IT KEEPS ITS PLACE AND LOSES ITS COLOUR -- the same rule the patients dashboard already applies. A
- * tinted card with an em dash reads as a number you cannot quite make out; a grey dashed one reads as a
- * question nobody could answer, which is what it is. Removing the tile entirely would make the strip
- * look complete when it is not.
- */
-export const PRIORITY_UNSUPPLIED: IntelSwatch = {
-  box: "border-dashed border-slate-300 bg-white", badge: "bg-slate-100 text-slate-400",
-  figure: "text-slate-300", accent: "bg-slate-200", caption: "text-slate-400", icon: "?",
-};
-
-/** §7.3's seven dashboard panels, one hue each, matching the tab that opens the same material. */
-export const PI_PANEL: Record<string, { icon: string; badge: string; rule: string }> = {
-  todays_brief: { icon: "✧", badge: "bg-[var(--cp-primary)]/12 text-[var(--cp-primary-deep)]", rule: "bg-[var(--cp-primary)]/25" },
-  practice_activity: { icon: "▥", badge: "bg-violet-100 text-violet-700", rule: "bg-violet-200" },
-  clinical_trends: { icon: "◈", badge: "bg-emerald-100 text-emerald-700", rule: "bg-emerald-200" },
-  patient_attention: { icon: "⚇", badge: "bg-rose-100 text-rose-700", rule: "bg-rose-200" },
-  pathway_status: { icon: "◷", badge: "bg-cyan-100 text-cyan-700", rule: "bg-cyan-200" },
-  ai_insight: { icon: "✦", badge: "bg-sky-100 text-sky-700", rule: "bg-sky-200" },
-  recent_reports: { icon: "▦", badge: "bg-amber-100 text-amber-700", rule: "bg-amber-200" },
-  cohorts: { icon: "◎", badge: "bg-violet-100 text-violet-700", rule: "bg-violet-200" },
-  performance: { icon: "❑", badge: "bg-amber-100 text-amber-700", rule: "bg-amber-200" },
-  refused: { icon: "⊘", badge: "bg-slate-100 text-slate-500", rule: "bg-slate-200" },
-};
-
-/** Tab chips. `primary` is the workspace's own indigo; `assistant` is deliberately the AI hue, sky. */
-export const TAB_SWATCH: Record<string, { on: string; off: string }> = {
-  primary: { on: "bg-[var(--cp-primary)] text-white", off: "text-[var(--cp-primary-deep)] hover:bg-[var(--cp-primary)]/8" },
-  indigo: { on: "bg-indigo-600 text-white", off: "text-indigo-700 hover:bg-indigo-50" },
-  rose: { on: "bg-rose-600 text-white", off: "text-rose-700 hover:bg-rose-50" },
-  violet: { on: "bg-violet-600 text-white", off: "text-violet-700 hover:bg-violet-50" },
-  emerald: { on: "bg-emerald-600 text-white", off: "text-emerald-700 hover:bg-emerald-50" },
-  cyan: { on: "bg-cyan-600 text-white", off: "text-cyan-700 hover:bg-cyan-50" },
-  amber: { on: "bg-amber-600 text-white", off: "text-amber-700 hover:bg-amber-50" },
-  sky: { on: "bg-sky-600 text-white", off: "text-sky-700 hover:bg-sky-50" },
-  assistant: { on: "bg-sky-600 text-white", off: "text-sky-700 hover:bg-sky-50" },
-};
-
-/**
- * Where a line came from, said in a badge rather than implied.
- *
- * ⚠ COMPUTED IS NOT AI, AND THE DISTINCTION IS THE WHOLE POINT OF THE BADGE. §11 requires AI-generated
- * content to be "clearly labelled". The failure mode that requirement invites is labelling ARITHMETIC as
- * AI because it sits in a panel headed "AI Insight" -- which trains a practitioner to discount a count
- * they could have done themselves, and, worse, to extend the same trust to a sentence a model wrote.
- * command-centre.ts already set this precedent with `aiGenerated: false`.
- */
-export const PROVENANCE_BADGE = {
-  computed: { label: "COMPUTED", chip: "bg-slate-100 text-slate-600 ring-1 ring-slate-200",
-    title: "Arithmetic over this practice's own rows. No model was involved." },
-  derived: { label: "DERIVED", chip: "bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200",
-    title: "Rules over rows that exist right now, with the source records named." },
-  ai: { label: "AI", chip: "bg-sky-50 text-sky-700 ring-1 ring-sky-200",
-    title: "Written by a model from the records listed beneath it. Read it as a draft, not as a finding." },
-  refused: { label: "NOT COMPUTED", chip: "bg-slate-100 text-slate-500 ring-1 ring-slate-200",
-    title: "The design asks for this figure and nothing in this practice's records could ground it." },
-} as const;
+// They were defined here while palette.ts was being written by another session, with a note saying
+// they should move. They have. RE-EXPORTED rather than re-declared, so this file's consumers keep
+// their import and there is exactly ONE definition of what rose means in this product -- two would
+// agree on the day they were written and drift on some later one, which is the whole reason a design
+// system is a file rather than a convention.
+export type { IntelSwatch } from "@/lib/practice/palette";
+export {
+  PRIORITY_SWATCH, PRIORITY_UNSUPPLIED, PI_PANEL, TAB_SWATCH, PROVENANCE_BADGE,
+} from "@/lib/practice/palette";
 
 // ── THE RATE DETECTOR ────────────────────────────────────────────────────────────────────────────────
 //
