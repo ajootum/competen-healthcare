@@ -346,8 +346,21 @@ async function main() {
     workspaceId: wsA, patientId: fresh.data.id, reason: "Annual review",
     dueOn: new Date(Date.parse(`${today}T00:00:00Z`) + 60 * 86400000).toISOString().slice(0, 10), ...base,
   });
+  // ⚠ A SECOND OVERDUE OBLIGATION FOR THE SAME PATIENT, AND IT IS THE WHOLE POINT OF 43a.
+  //
+  // Without it every worklist row is a distinct person, so a ROW count and a PATIENT count agree by
+  // accident -- and the deliberate break that put `count` back to the row count SAT GREEN. An assertion
+  // whose right and wrong answers coincide in the fixture proves nothing, which is the third time that
+  // trap has been sprung in this codebase (CPR-300's equal tile counts, CPR-350's escape-hatch control).
+  // One patient owing two things is also the ordinary case, not a contrived one.
+  const secondOverdueFu = await createFollowUp(admin, {
+    workspaceId: wsA, patientId: adult.data.id, reason: "Repeat bloods before the next visit",
+    dueOn: new Date(Date.parse(`${today}T00:00:00Z`) - 3 * 86400000).toISOString().slice(0, 10), ...base,
+  });
   ok("one overdue and one future follow-up exist", overdueFu.ok && futureFu.ok,
     [overdueFu, futureFu].map(r => (r.ok ? "ok" : r.message)).join(" | "));
+  ok("and one patient owes TWO of them, so rows and people cannot agree by accident",
+    secondOverdueFu.ok, secondOverdueFu.ok ? "" : secondOverdueFu.message);
 
   // Incoming: one unreviewed, one already reviewed. The reviewed one makes "pending" non-vacuous.
   const arrived = await recordIncoming(admin, {
@@ -493,9 +506,15 @@ async function main() {
     JSON.stringify(lists.worklists.map(w => w.key)));
 
   const w = (k: string) => lists.worklists.find(x => x.key === k)!;
+  // ⚠ THE CONTRACT CHANGED HERE, AND THIS ASSERTION IS THE ONE THAT NOTICED. It read
+  // `count === rows.length`, which was true only while `count` was the ROW count -- and that was the
+  // bug: clicking a tile filters to deduplicated patients, so a tile saying 2 opened a list of 1.
+  // `count` is now the people and `rowCount` the rows, so the figure on the card is the length of the
+  // list the card opens.
   ok("7. EVERY FIGURE IS THE LENGTH OF A LIST YOU CAN OPEN",
-    lists.worklists.every(x => x.unavailable || (x.count === x.rows.length && Array.isArray(x.patientIds))),
-    JSON.stringify(lists.worklists.map(x => `${x.key}:${x.count}/${x.rows.length}`)));
+    lists.worklists.every(x => x.unavailable
+      || (x.count === x.patientIds.length && x.rowCount === x.rows.length)),
+    JSON.stringify(lists.worklists.map(x => `${x.key}: count ${x.count} vs ids ${x.patientIds.length}, rowCount ${x.rowCount} vs rows ${x.rows.length}`)));
 
   ok("7b. WAITING holds the two people in the room, by name",
     w("waiting").count === 2 &&
@@ -747,8 +766,11 @@ async function main() {
       .every(p => "unavailable" in p && "reason" in p && "error" in p && "limit" in p),
     "");
   ok("28b. and the real ones are populated",
+    // activeFollowUps is >= 1: the fixture deliberately gives this patient TWO overdue obligations so
+    // that 43a can tell a row count from a people count. Pinning it to 1 would make this assertion a
+    // record of the fixture rather than of the engine.
     s.diagnoses.count === 1 && s.problems.count === 1 && s.recentEncounters.count === 1 &&
-    s.activeFollowUps.count === 1,
+    (s.activeFollowUps.count ?? 0) >= 1,
     JSON.stringify([s.diagnoses.count, s.problems.count, s.recentEncounters.count, s.activeFollowUps.count]));
 
   const banner = s.banner;
@@ -797,7 +819,7 @@ async function main() {
     brokenSummary.data.banner.outstanding.find(o => o.key === "medicationsDecided")!.count === null,
     JSON.stringify(brokenSummary.ok ? brokenSummary.data.medicationsDecided : brokenSummary));
   ok("30b. CONTROL: the diagnoses and follow-ups on the same summary are still real",
-    brokenSummary.ok && brokenSummary.data.diagnoses.count === 1 && brokenSummary.data.activeFollowUps.count === 1,
+    brokenSummary.ok && brokenSummary.data.diagnoses.count === 1 && (brokenSummary.data.activeFollowUps.count ?? 0) >= 1,
     "");
   const brokenRelationships = failingOn(["practice_patient_relationship"]);
   const noRelSummary = await patientSummary(brokenRelationships, a, child.data.id);
@@ -930,6 +952,52 @@ async function main() {
     .select("id", { count: "exact", head: true }).eq("workspace_id", wsA).eq("actor_id", OWNER);
   ok("41. READS ARE LOGGED -- opening a patient and running a search both leave a trail",
     (accessRows ?? 0) > 0, String(accessRows));
+
+  // ── 43. THE FIGURE ON A TILE IS THE LENGTH OF THE LIST IT OPENS ─────────────────────────────────
+  //
+  // ⚠ IT WAS NOT. `count` was the ROW count while clicking the tile filters the register to
+  // `patientIds`, which is deduplicated -- so one patient with two overdue obligations made the card say
+  // 2 and the table show 1. The disagreement reads as a bug in the TABLE, which is the half a
+  // practitioner would otherwise trust, and it is this module's own stated doctrine that every figure is
+  // the length of a list you can open.
+  //
+  // BOTH ARE CARRIED NOW, because a row IS the unit of work for some of these: "results to review"
+  // counts DOCUMENTS, and seven documents are seven things to read even if they belong to five people.
+  // Two values as two fields; never one number standing for both.
+  const wl = await worklists(admin, a);
+  const mismatched = wl.worklists
+    .filter(w => !w.unavailable)
+    .filter(w => w.count !== w.patientIds.length);
+  ok("43a. ⚠ every tile's count equals the number of patients its filter opens",
+    mismatched.length === 0,
+    mismatched.map(w => `${w.key}: count=${w.count} ids=${w.patientIds.length}`).join(" | "));
+
+  ok("43b. and the row count is carried separately, with the noun it counts",
+    wl.worklists.every(w => (w.rowCount === null || typeof w.rowCount === "number") && !!w.rowNoun),
+    JSON.stringify(wl.worklists.map(w => ({ k: w.key, n: w.rowCount, noun: w.rowNoun }))));
+
+  // ⚠ THE CONTROL THAT MAKES 43a MEAN ANYTHING, and its first version did not.
+  //
+  // "At least one worklist is non-empty" was not enough: with every row a distinct person, a row count
+  // and a patient count agree, and the deliberate break putting `count` back to `p.count` SAT GREEN.
+  // The control now requires the fixture to contain a worklist where they genuinely DIFFER -- one
+  // patient owing two obligations -- so 43a is testing the distinction it was written for.
+  const differing = wl.worklists.filter(w => !w.unavailable && (w.rowCount ?? 0) > w.patientIds.length);
+  ok("43a-control. ⚠ some worklist really has more ROWS than PATIENTS, so 43a is not comparing equals",
+    differing.length > 0,
+    JSON.stringify(wl.worklists.map(w => `${w.key}: ${w.rowCount} rows / ${w.patientIds.length} people`)));
+
+  // ⚠ AND "RECENTLY SEEN" NOW HAS A WINDOW. It read every encounter ever, ordered by date and capped by
+  // the row limit -- so the figure was neither a period nor a total, and in any practice past the cap it
+  // meant "the most recent 50", which the card labelled as a period. Asserted through the SOURCE,
+  // because proving a 30-day boundary against live data needs a fixture older than 30 days that the
+  // harness would have to fabricate by writing a past timestamp -- which tests the fixture, not the query.
+  const engineSrc = readFileSync(join(process.cwd(), "src", "lib", "practice", "patient-workspace.ts"), "utf8")
+    .replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/[^\n]*/g, "");
+  const recentBlock = engineSrc.slice(engineSrc.indexOf("recentPatients.capability"));
+  ok("43c. the recent-patients read is bounded by RECENT_WINDOW_DAYS, not just ordered and capped",
+    /RECENT_WINDOW_DAYS/.test(recentBlock.slice(0, 500)) && /gte\("started_at"/.test(recentBlock.slice(0, 500)),
+    recentBlock.slice(0, 300));
 
   // ── 42. THE SWATCHES ARE KEYED ON THE ENGINE'S OWN VOCABULARY ───────────────────────────────────
   //

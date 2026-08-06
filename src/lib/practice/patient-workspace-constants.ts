@@ -28,42 +28,63 @@ export type WorklistKey = (typeof WORKLIST_KEYS)[number];
 //
 // The constant below is now the only place the string is built. A harness assertion holds it against
 // navigation.ts, so the two cannot drift apart again in silence.
-export const WORKLIST_META: Record<WorklistKey, { title: string; note: string; href: string; capability: string }> = {
+/**
+ * How many days back "recently seen" reaches.
+ *
+ * ⚠ IT USED TO REACH FOREVER. The encounter read had no window, so the figure was "patients among the
+ * most recent N encounters ever" -- neither a period nor a total, and meaningless in any practice past
+ * the read limit. Thirty days is the comp's own label ("In last 30 days") and is now the query as well.
+ */
+export const RECENT_WINDOW_DAYS = 30;
+
+export const WORKLIST_META: Record<WorklistKey, { title: string; note: string; href: string; capability: string; rowNoun: string }> = {
   waiting: {
     title: "Waiting patients",
     note: "In the building now: queued at the desk, ready, in consultation or paused.",
     href: "/practice/patients?list=waiting",
     capability: "practice.calendar.view",
+    // What a ROW is here. The card counts patients; this names what sits behind that figure.
+    rowNoun: "queue entries",
   },
   dueFollowUps: {
     title: "Due follow-ups",
     note: "Open obligations whose due date has arrived or passed, measured against this practice's today.",
     href: "/practice/follow-ups",
     capability: "followup.view",
+    // What a ROW is here. The card counts patients; this names what sits behind that figure.
+    rowNoun: "obligations",
   },
   pendingResults: {
     title: "Pending results",
     note: "Results and letters that ARRIVED and nobody has reviewed. Not investigations somebody ordered -- this product has no order register.",
     href: "/practice/communication?tab=incoming",
     capability: "inbox.record",
+    // What a ROW is here. The card counts patients; this names what sits behind that figure.
+    rowNoun: "documents",
   },
   walkIns: {
     title: "Walk-ins today",
     note: "People seen today without a booking: queued at the desk with no appointment behind them, or booked in as a walk-in.",
     href: "/practice/patients?list=walkIns",
     capability: "practice.calendar.view",
+    // What a ROW is here. The card counts patients; this names what sits behind that figure.
+    rowNoun: "arrivals",
   },
   recentPatients: {
     title: "Recent patients",
     note: "Whose consultation was most recently started, newest first.",
     href: "/practice/patients?list=recentPatients",
     capability: "encounter.list",
+    // What a ROW is here. The card counts patients; this names what sits behind that figure.
+    rowNoun: "consultations",
   },
   newRegistrations: {
     title: "Registered today",
     note: "Patient records created today, in this practice's calendar.",
     href: "/practice/patients?list=newRegistrations",
     capability: "patient.list",
+    // What a ROW is here. The card counts patients; this names what sits behind that figure.
+    rowNoun: "records",
   },
 };
 

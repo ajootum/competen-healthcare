@@ -1,10 +1,10 @@
 import { hasCapability, type WorkspaceContext } from "@/lib/practice/access";
 import type { EngineResult } from "@/lib/practice/encounters";
-import { practiceToday, workspaceClock, zonedDayRange } from "@/lib/practice/practice-time";
+import { practiceToday, workspaceClock, zonedDayRange, dueDateFrom } from "@/lib/practice/practice-time";
 import { ageFrom, relationshipExpectation, RELATIONSHIP_TYPES } from "@/lib/practice/relationships";
 import { logAccess } from "@/lib/practice/privacy";
 import {
-  WORKLIST_KEYS, WORKLIST_META, HOSPITAL_IDENTIFIER_TYPES, MATCH_RANK,
+  WORKLIST_KEYS, RECENT_WINDOW_DAYS, WORKLIST_META, HOSPITAL_IDENTIFIER_TYPES, MATCH_RANK,
   COHORT_STATUS_LABELS, DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE, WORKLIST_ROW_LIMIT, ENRICHMENT_ROW_CAP,
   REFUSES, PENDING_RESULTS_BOUNDARY, MEDICATION_BOUNDARY, MEDICATION_NOT_CURRENT_REASON, PLACE_BOUNDARY,
   type WorklistKey, type CohortStatus,
@@ -402,8 +402,15 @@ export type Worklist = {
   title: string;
   note: string;
   href: string;
-  /** null when unavailable. Rule 1: this is never 0 because a read failed. */
+  /**
+   * DISTINCT PATIENTS -- the length of the list this tile opens. null when unavailable (Rule 1: never 0
+   * because a read failed).
+   */
   count: number | null;
+  /** Rows behind it: obligations, documents, queue entries. Equals `count` when a row is a person. */
+  rowCount: number | null;
+  /** What `rowCount` counts, so a screen can say "7 documents across 5 patients" rather than guess. */
+  rowNoun: string;
   atLeast: boolean;
   rows: WorklistRow[];
   unavailable: boolean;
@@ -464,9 +471,16 @@ export async function worklists(
       .eq("workspace_id", ws).eq("appointment_type", "walk_in")
       .gte("scheduled_at", startIso).lt("scheduled_at", endIso)
       .order("scheduled_at").limit(limit + 1)),
+    // ⚠ THIS READ HAD NO TIME WINDOW AT ALL. It was "the most recent N encounters, EVER" -- so in any
+    // practice past the read limit the figure was neither a period nor a total, and the card's own note
+    // ("whose consultation was most recently started") was true of the rows and false of the number.
+    // The window is the practice's own 30 days, on the practice's clock like every other date here.
     probe(can(WORKLIST_META.recentPatients.capability), limit, () => admin.from("practice_encounter")
       .select("id, patient_id, status, reason_for_visit, started_at")
-      .eq("workspace_id", ws).order("started_at", { ascending: false }).limit(limit + 1)),
+      .eq("workspace_id", ws)
+      .gte("started_at", zonedDayRange(dueDateFrom(today, -RECENT_WINDOW_DAYS), timezone).startIso)
+      .lt("started_at", endIso)
+      .order("started_at", { ascending: false }).limit(limit + 1)),
     probe(can(WORKLIST_META.newRegistrations.capability), limit, () => admin.from("practice_patient")
       .select("id, display_name, status, created_at")
       .eq("workspace_id", ws).gte("created_at", startIso).lt("created_at", endIso)
@@ -500,11 +514,29 @@ export async function worklists(
       const { fallbackName, ...rest } = base;
       return { ...rest, ...named(base.patientId, fallbackName) };
     });
+    const patientIds = [...new Set(rows.map(r => r.patientId).filter(Boolean))] as string[];
+    // ⚠ THE FIGURE ON THE CARD IS THE LENGTH OF THE LIST THE CARD OPENS. It was not.
+    //
+    // `count` was p.count -- the ROW count -- while clicking the tile filters the register to
+    // `patientIds`, which is deduplicated. One patient with two overdue obligations made the card say 2
+    // and the table show 1, and the disagreement reads as a bug in the TABLE, which is the half a
+    // practitioner would otherwise trust. Every figure being the length of a list you can open is this
+    // module's own doctrine, and this was the one place it was not honoured.
+    //
+    // BOTH ARE CARRIED, because the row IS the unit of work for some of these: "results to review" is a
+    // count of DOCUMENTS and a practitioner has seven things to read even if they belong to five people.
+    // Two values as two fields, never one number standing for both -- the same rule as counts and
+    // denominators. A screen shows `count`, and shows `rowCount` beside it only when they differ.
     return {
       key, title: meta.title, note: meta.note, href: meta.href,
-      count: p.count, atLeast: p.truncated, rows,
+      count: p.unavailable ? null : patientIds.length,
+      /** Rows behind the figure: obligations, documents, queue entries. Equals `count` when a row is a person. */
+      rowCount: p.count,
+      /** The noun `rowCount` counts, so a screen can say "7 documents across 5 patients" without guessing. */
+      rowNoun: meta.rowNoun,
+      atLeast: p.truncated, rows,
       unavailable: p.unavailable, reason: p.reason, error: p.error, limit: p.limit, truncated: p.truncated,
-      patientIds: [...new Set(rows.map(r => r.patientId).filter(Boolean))] as string[],
+      patientIds,
     };
   };
 
