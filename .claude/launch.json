@@ -2,9 +2,10 @@
   "version": "0.0.1",
   "configurations": [
     {
+      "// --require": "scripts/dev-ca-preload.cjs sets NODE_EXTRA_CA_CERTS so the dev server's SERVER-SIDE fetches can verify Avast's intercepting certificate. Without it every page still renders and every Supabase read behind it fails, which shows up as the practice launch flags reading OFF. See that file's header: an `env` block here is NOT honoured, and --use-system-ca does not reach the child process that does the fetching. ⚠ THE --require PATH MUST BE ABSOLUTE: Next propagates the flag to worker processes that run from a different cwd, and a relative one MODULE_NOT_FOUNDs there -- surfacing as a Turbopack panic rather than a missing file. ⚠ THE PARENT WORKSPACE'S .claude/launch.json HAS A CONFIG OF THE SAME NAME and that is usually the one that resolves; both carry this flag so it does not matter which.",
       "name": "competen-dev",
-      "runtimeExecutable": "npm",
-      "runtimeArgs": ["run", "dev"],
+      "runtimeExecutable": "C:\\Program Files\\nodejs\\node.exe",
+      "runtimeArgs": ["--require", "C:\\Users\\elish\\Documents\\Competen\\competen-healthcare\\scripts\\dev-ca-preload.cjs", "node_modules/next/dist/bin/next", "dev"],
       "port": 3000
     }
   ]
