@@ -21,6 +21,8 @@
  *   npx --yes tsx scripts/practice-patients-harness.ts
  */
 import { loadEnvConfig } from "@next/env";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { createClient } from "@supabase/supabase-js";
 import { runProvisioning, type IndividualRequest } from "../src/lib/practice/provisioning";
 import { registerPatient, searchPatients, mergePatients } from "../src/lib/practice/patients";
@@ -167,6 +169,54 @@ async function main() {
   }
   ok("the service role sees identity rows (denial test is not vacuous)", svcRows);
   ok("anon reads 0 rows from every identity table", leaked === 0, `${leaked} table(s) leaked`);
+
+  // ── A SEARCH THAT COULD NOT LOOK IS NOT A SEARCH THAT FOUND NOBODY ──────────────────────────────
+  //
+  // ⚠ ALL FIVE PROBES IN searchPatients DISCARDED THEIR ERRORS. A refused identifier read returned "no
+  // patient found" for an ID sitting in the table -- and the next thing that happens at a desk is the
+  // patient being registered again. That is not a cosmetic failure, it is a SPLIT CLINICAL RECORD, and
+  // search is where preventing it is supposed to begin.
+  //
+  // ⚠ ADDING THE FIELD WAS NOT ENOUGH, AND THIS IS THE PART WORTH REMEMBERING. searchPatients already
+  // returned an OBJECT, so widening it to {results, complete, detail} broke NOTHING at compile time --
+  // tsc stayed at zero errors and every caller kept reading `.results` exactly as before. The
+  // listFollowUps fix worked because array -> object forced the compiler to find all 28 call sites; here
+  // the same trick was unavailable and every consumer had to be found by hand. A FLAG ADDED TO AN
+  // EXISTING OBJECT IS A FLAG NOBODY IS MADE TO READ.
+  const failingIdentifierProbe = {
+    from: (table: string) => {
+      if (table !== "practice_patient_identifier") return admin.from(table);
+      const chain: Record<string, unknown> = {};
+      for (const m of ["select", "eq", "is", "in", "order"]) chain[m] = () => chain;
+      chain.limit = async () => ({ data: null, error: { message: "simulated identifier probe failure" } });
+      return chain;
+    },
+  };
+  const blindSearch = await searchPatients(failingIdentifierProbe as never, wsA, "Amina Nakato");
+  ok("search-1. ⚠ a search whose identifier probe FAILED reports itself incomplete",
+    blindSearch.complete === false && /simulated identifier probe failure/.test(blindSearch.detail ?? ""),
+    JSON.stringify(blindSearch));
+  ok("search-2. ⚠ and it is incomplete EVEN WHEN IT RETURNED HITS -- results on screen read as success",
+    blindSearch.results.length > 0 && blindSearch.complete === false,
+    `${blindSearch.results.length} hits, complete=${blindSearch.complete}`);
+
+  // CONTROL. Without it, search-1 and search-2 pass just as well if searchPatients reported EVERY
+  // search incomplete, which is what this fix looks like when the flag is set unconditionally.
+  const goodSearch = await searchPatients(admin, wsA, "Amina Nakato");
+  ok("search-control. the same query through the real client is COMPLETE, with no detail",
+    goodSearch.complete === true && goodSearch.detail === null && goodSearch.results.length > 0,
+    JSON.stringify({ n: goodSearch.results.length, complete: goodSearch.complete, detail: goodSearch.detail }));
+
+  // The tenant filter that was missing on the hydrate read. Not a leak before -- the ids came from
+  // workspace-scoped probes -- but it was the only read in the function keyed on ids alone, and "safe
+  // because of where the ids came from" is a property of the caller, not of the query.
+  const srcPatients = readFileSync(join(process.cwd(), "src", "lib", "practice", "patients.ts"), "utf8")
+    .replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/[^\n]*/g, "");
+  const hydrateReads = [...srcPatients.matchAll(/from\("practice_patient"\)\s*\n?\s*\.select\([^)]*\)([\s\S]{0,200}?);/g)]
+    .map(m => m[1]);
+  ok("search-3. every practice_patient read in patients.ts carries its own workspace filter",
+    hydrateReads.length > 0 && hydrateReads.every(r => /workspace_id/.test(r) || /\.eq\("id"/.test(r)),
+    JSON.stringify(hydrateReads.filter(r => !/workspace_id/.test(r) && !/\.eq\("id"/.test(r))));
 
   await cleanup();
   const { count: left } = await admin.from("practice_patient").select("*", { count: "exact", head: true }).in("workspace_id", [wsA, wsB]);

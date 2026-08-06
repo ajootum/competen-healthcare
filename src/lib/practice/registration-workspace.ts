@@ -66,9 +66,16 @@ export async function registrationWorkspace(admin: any, ctx: WorkspaceContext) {
   const today = practiceToday(timezone);
   const { startIso, endIso } = zonedDayRange(today, timezone);
 
+  // ⚠ EVERY READ BELOW USED TO DISCARD ITS ERROR, so a failed query rendered as an empty list and a
+  // confident 0. The errors are captured and reported through `unavailable` -- a caller cannot tell
+  // "nobody is waiting" from "the queue could not be read" without it, and the first is the answer a
+  // screen will show.
   const [
-    { data: appointments }, { data: queue }, { data: recent },
-    { count: totalPatients }, { data: followUps }, template,
+    { data: appointments, error: apptErr }, { data: queue, error: queueErr },
+    { data: recent, error: recentErr },
+    { count: totalPatients, error: totalErr },
+    { count: registeredTodayCount, error: regTodayErr },
+    { data: followUps, error: followErr }, template,
   ] = await Promise.all([
     admin.from("practice_appointment")
       .select("id, patient_id, patient_name, scheduled_at, status, appointment_type, reason")
@@ -84,6 +91,14 @@ export async function registrationWorkspace(admin: any, ctx: WorkspaceContext) {
       .order("created_at", { ascending: false }).limit(6),
     admin.from("practice_patient").select("*", { count: "exact", head: true })
       .eq("workspace_id", ctx.workspaceId).neq("status", "merged"),
+    // ⚠ "REGISTERED TODAY" HAS ITS OWN COUNT NOW, AND THAT IS THE WHOLE FIX. It used to be computed by
+    // filtering `recent` -- which is `.limit(6)` -- so a practice that registered ten patients in a
+    // morning was told six. Not a missing number: a WRONG one, quietly, in the direction that flatters
+    // a slow morning and understates a busy one. `count: exact, head: true` is what the total directly
+    // above already does; the two now differ only in their filter.
+    admin.from("practice_patient").select("*", { count: "exact", head: true })
+      .eq("workspace_id", ctx.workspaceId).neq("status", "merged")
+      .gte("created_at", startIso).lt("created_at", endIso),
     admin.from("practice_follow_up")
       .select("id, patient_id, due_on, status")
       .eq("workspace_id", ctx.workspaceId).eq("status", "OPEN").lte("due_on", today).limit(200),
@@ -95,7 +110,9 @@ export async function registrationWorkspace(admin: any, ctx: WorkspaceContext) {
   const recentRows = (recent ?? []) as any[];
   const overdue = (followUps ?? []) as any[];
 
-  const registeredToday = recentRows.filter(r => r.created_at >= startIso && r.created_at < endIso).length;
+  // Null rather than 0 when the count could not be read -- "nobody registered today" is a claim, and it
+  // is the one a quiet-looking desk would be reassured by.
+  const registeredToday = regTodayErr ? null : (registeredTodayCount ?? 0);
   const walkInsToday = appts.filter(a => a.appointment_type === "walk_in" || a.appointment_type === "emergency").length;
   const remaining = appts.filter(a => !["COMPLETED", "CANCELLED", "NO_SHOW"].includes(a.status)).length;
 
@@ -111,11 +128,26 @@ export async function registrationWorkspace(admin: any, ctx: WorkspaceContext) {
       utilisationComputed: false,
       next: appts.find(a => !["COMPLETED", "CANCELLED", "NO_SHOW"].includes(a.status)) ?? null,
     },
+    // ⚠ EVERY COUNT HERE IS `number | null`, AND NULL MEANS THE READ FAILED. It used to be `number`
+    // throughout, which forced a failed query to be reported as 0 -- there was no other value to give.
+    // A screen must render these as three states (a number / "could not be read" / absent), never as a
+    // zero it was handed because something went wrong upstream.
     counts: {
-      walkInsToday,
+      walkInsToday: apptErr ? null : walkInsToday,
       registeredToday,
-      followUpsDueToday: overdue.length,
-      totalPatients: totalPatients ?? 0,
+      followUpsDueToday: followErr ? null : overdue.length,
+      totalPatients: totalErr ? null : (totalPatients ?? 0),
+    },
+    /** Which reads failed, so a caller can say WHICH figure it cannot show rather than blanking them all. */
+    unavailable: {
+      appointments: !!apptErr,
+      queue: !!queueErr,
+      recent: !!recentErr,
+      totalPatients: !!totalErr,
+      registeredToday: !!regTodayErr,
+      followUps: !!followErr,
+      detail: [apptErr, queueErr, recentErr, totalErr, regTodayErr, followErr]
+        .filter(Boolean).map(e => (e as { message: string }).message).join("; ") || null,
     },
     queue: queueRows.map(q => ({
       id: q.id, patientId: q.patient_id, name: q.patient_name, status: q.status,
@@ -213,12 +245,29 @@ export async function saveDraft(admin: any, ctx: WorkspaceContext, args: {
   return { ok: true, data: { id: data.id as string } };
 }
 
-/** The caller's own drafts, with their age, because an old one is somebody's details nobody is minding. */
+/**
+ * The caller's own drafts, with their age, because an old one is somebody's details nobody is minding.
+ *
+ * ⚠ THROWS ON A FAILED READ RATHER THAN RETURNING AN EMPTY LIST, and that choice is deliberate.
+ *
+ * The error used to be discarded, so a failed query looked like "you have no drafts" -- and the harm is
+ * specific: a draft holds a half-registered person's details, and somebody told they have none stops
+ * looking for the one they left. This is the same silent zero fixed in listFollowUps and
+ * registerPatient.
+ *
+ * The two engines answer it differently ON PURPOSE. listFollowUps returns a result object because its
+ * board must still RENDER while saying it cannot see. This has four callers -- one API route and three
+ * harness assertions -- and every one of them treats the return as a plain array whose LENGTH is the
+ * answer. A result object here would be shape churn across all four to express a state the API can just
+ * as well surface as a 500. Where a caller must degrade, return the failure; where it should stop,
+ * throw.
+ */
 export async function listDrafts(admin: any, ctx: WorkspaceContext) {
-  const { data } = await admin.from("practice_registration_draft")
+  const { data, error } = await admin.from("practice_registration_draft")
     .select("id, label, payload, created_at, updated_at")
     .eq("workspace_id", ctx.workspaceId).eq("user_id", ctx.userId)
     .order("updated_at", { ascending: false }).limit(20);
+  if (error) throw new Error(`drafts could not be read: ${error.message}`);
 
   const { timezone } = await workspaceClock(admin, ctx.workspaceId);
   const today = practiceToday(timezone);

@@ -85,42 +85,73 @@ async function practiceIdsFor(admin: any, workspaceId: string, patientIds: strin
 /** Ranked search (CPR-V2-004): identifier exact beats phone exact beats name. Never fuzzy-merges anything. */
 export async function searchPatients(admin: any, workspaceId: string, q: string, limit = 20): Promise<{
   results: (Candidate & { sex: string; status: string })[];
+  /**
+   * ⚠ FALSE WHEN A PROBE FAILED, AND THIS IS THE POINT OF THE TYPE.
+   *
+   * All five reads discarded their errors, so a refused identifier query returned "no patient found"
+   * for an ID sitting in the table. The desk then registers somebody who is already registered -- and
+   * that is not a cosmetic failure, it is a SPLIT CLINICAL RECORD, the same harm registerPatient's
+   * duplicate check exists to prevent. Search is where the prevention is supposed to start.
+   *
+   * `complete: false` means the empty result is not an answer. A caller must not say "nobody matches".
+   */
+  complete: boolean;
+  /** The database's own words for whichever probes failed. Null when everything ran. */
+  detail: string | null;
 }> {
   const query = q.trim();
-  if (!query) return { results: [] };
+  if (!query) return { results: [], complete: true, detail: null };
   const hits = new Map<string, { score: number; matchedBy: string }>();
+  const failures: string[] = [];
 
   const add = (id: string, score: number, matchedBy: string) => {
     const cur = hits.get(id);
     if (!cur || cur.score < score) hits.set(id, { score, matchedBy });
   };
 
+  // Each probe records its own failure by name. Which one broke matters: an identifier probe failing is
+  // how a duplicate gets made, and a name probe failing merely makes the search feel poor.
+  const probe = (name: string, error: { message: string } | null) => {
+    if (error) failures.push(`${name}: ${error.message}`);
+  };
+
   // Identifier exact (any type -- practice id, national id, MRN, QR...).
-  const { data: idHits } = await admin.from("practice_patient_identifier")
+  const { data: idHits, error: idErr } = await admin.from("practice_patient_identifier")
     .select("patient_id, identifier_type").eq("workspace_id", workspaceId)
     .eq("value_normalised", normValue(query)).is("valid_to", null).limit(limit);
+  probe("identifier", idErr);
   for (const h of (idHits ?? []) as any[]) add(h.patient_id, 100, `identifier:${h.identifier_type}`);
 
   // Phone/email exact through contacts.
   if (normValue(query).length >= 5) {
-    const { data: cHits } = await admin.from("practice_patient_contact")
+    const { data: cHits, error: cErr } = await admin.from("practice_patient_contact")
       .select("patient_id, contact_type").eq("workspace_id", workspaceId)
       .eq("value_normalised", normValue(query)).limit(limit);
+    probe("contact", cErr);
     for (const h of (cHits ?? []) as any[]) add(h.patient_id, 90, h.contact_type);
   }
 
   // Name: exact-normalised, then contains.
-  const { data: exact } = await admin.from("practice_patient")
+  const { data: exact, error: exactErr } = await admin.from("practice_patient")
     .select("id").eq("workspace_id", workspaceId).eq("name_normalised", norm(query)).limit(limit);
+  probe("name", exactErr);
   for (const h of (exact ?? []) as any[]) add(h.id, 80, "name");
-  const { data: partial } = await admin.from("practice_patient")
+  const { data: partial, error: partialErr } = await admin.from("practice_patient")
     .select("id").eq("workspace_id", workspaceId).ilike("name_normalised", `%${norm(query)}%`).limit(limit);
+  probe("name-partial", partialErr);
   for (const h of (partial ?? []) as any[]) add(h.id, 40, "name-partial");
 
+  const detail = failures.length ? failures.join("; ") : null;
   const ids = [...hits.keys()];
-  if (ids.length === 0) return { results: [] };
-  const { data: rows } = await admin.from("practice_patient")
-    .select("id, display_name, birth_date, sex, status").in("id", ids).neq("status", "merged");
+  if (ids.length === 0) return { results: [], complete: failures.length === 0, detail };
+  // ⚠ THE TENANT FILTER WAS MISSING HERE and on this read alone. Not a leak today -- every id came from
+  // a workspace-scoped probe above -- but it was the one read in this function keyed on ids alone, and
+  // "safe because of where the ids came from" is a property of the CALLER, not of this query. A future
+  // probe that forgets its own filter would turn this into a cross-tenant read with nothing to catch it.
+  const { data: rows, error: rowsErr } = await admin.from("practice_patient")
+    .select("id, display_name, birth_date, sex, status")
+    .eq("workspace_id", workspaceId).in("id", ids).neq("status", "merged");
+  probe("hydrate", rowsErr);
   const pids = await practiceIdsFor(admin, workspaceId, ids);
 
   const results = ((rows ?? []) as any[])
@@ -132,7 +163,10 @@ export async function searchPatients(admin: any, workspaceId: string, q: string,
     .sort((a, b) => b._score - a._score)
     .slice(0, limit)
     .map(r => { const { _score: _drop, ...rest } = r; void _drop; return rest; });
-  return { results };
+  // `complete` is recomputed from the same failures list, not assumed true because rows came back: a
+  // partial answer with two hits in it is still a partial answer, and it is the dangerous kind, because
+  // results on screen read as "the search worked".
+  return { results, complete: failures.length === 0, detail };
 }
 
 /** CPR-V2-005: search first, duplicate detection BEFORE save, identifier generation, then create. */

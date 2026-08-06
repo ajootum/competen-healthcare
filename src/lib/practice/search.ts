@@ -95,7 +95,7 @@ export async function searchPractice(admin: any, ctx: WorkspaceContext, rawQuery
   const query = toTsQuery(rawQuery);
   const trimmed = rawQuery.trim();
   if (!query) {
-    return { query: trimmed, groups: [] as SearchGroup[], notSearched: [] as string[], total: 0, ran: false };
+    return { query: trimmed, groups: [] as SearchGroup[], notSearched: [] as string[], incomplete: [] as string[], total: 0, ran: false };
   }
 
   const can = (c: string) => hasCapability(ctx, c);
@@ -341,10 +341,26 @@ export async function searchPractice(admin: any, ctx: WorkspaceContext, rawQuery
   if (!allowed.contacts) notSearched.push("the patient contact log");
   if (!allowed.incoming) notSearched.push("received documents");
 
+  // ⚠ SEARCHED BUT NOT FULLY -- A THIRD STATE, AND NOT THE SAME AS `notSearched`.
+  //
+  // notSearched means "you do not hold the capability", which is a permission answer. This means the
+  // query RAN and part of it was refused by the database -- so the patient group may be short, or empty,
+  // for a reason that has nothing to do with the person being absent. Folding it into notSearched would
+  // tell somebody they lack a permission they hold; leaving it out entirely lets a partial answer read
+  // as a complete one, which on this screen ends with a duplicate patient being registered.
+  //
+  // searchPatients returned an OBJECT before this field existed, so adding `complete` to it flagged
+  // nothing at compile time -- every consumer had to be found by hand, this one included.
+  const incomplete: string[] = [];
+  if (patients && (patients as { complete?: boolean }).complete === false) {
+    incomplete.push(`${LABELS.patients} (${(patients as { detail?: string | null }).detail ?? "some checks could not run"})`);
+  }
+
   return {
     query: trimmed,
     groups,
     notSearched,
+    incomplete,
     total: groups.reduce((n, g) => n + g.hits.length, 0),
     ran: true,
   };

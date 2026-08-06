@@ -12,8 +12,18 @@ export async function GET(req: NextRequest) {
   if (isDenied(auth)) return auth;
 
   const q = req.nextUrl.searchParams.get("q") ?? "";
-  const { results } = await searchPatients(auth.caller.admin, auth.ctx.workspaceId, q);
-  return NextResponse.json({ results, correlationId: auth.caller.traceId });
+  const { results, complete, detail } = await searchPatients(auth.caller.admin, auth.ctx.workspaceId, q);
+  // ⚠ `complete` IS ON THE PAYLOAD, and it has to be. A client receiving `results: []` cannot tell an
+  // empty register from a search whose identifier probe was refused -- and it will show the first, which
+  // is the answer that ends with somebody registering a patient who is already registered. Adding the
+  // field to searchPatients was not enough on its own: it returned an object already, so the compiler
+  // did NOT flag a single caller when the field appeared. Every consumer had to be found by hand.
+  return NextResponse.json({
+    results,
+    complete,
+    incompleteDetail: detail,
+    correlationId: auth.caller.traceId,
+  });
 }
 
 export async function POST(req: NextRequest) {

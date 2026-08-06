@@ -482,6 +482,39 @@ async function main() {
     stepCalls.length > 0 && stepCalls.every(a => a.split(",").length === 3),
     JSON.stringify(stepCalls));
 
+  // ── "REGISTERED TODAY" WAS CAPPED AT SIX ────────────────────────────────────────────────────────
+  //
+  // ⚠ NOT A MISSING NUMBER -- A WRONG ONE. It was computed by filtering the `recent` query, which is
+  // .limit(6), so a practice that registered ten patients in a morning was told six. Quietly, in the
+  // direction that flatters a slow morning and understates a busy one, on a tile nobody could open to
+  // check. It now has its own `count: exact, head: true`, like the total beside it.
+  //
+  // SEVEN, DELIBERATELY: one past the cap. Six would have passed against the old code.
+  const capBase = await registrationWorkspace(admin, a.ctx);
+  const startedWith = capBase.counts.registeredToday ?? 0;
+  for (let i = 0; i < 7; i++) {
+    // registerPatient rather than register(): by this point the harness has published a template with a
+    // REQUIRED custom field, and this block is testing a COUNT OF PATIENT ROWS, not the template rule.
+    const made = await registerPatient(admin, {
+      workspaceId: wsA, displayName: `Cap Test${i}`, birthDate: born(30),
+      phone: `+25677100${String(i).padStart(4, "0")}`,
+      confirmNew: true, actorId: OWNER, correlationId: "harness-reg",
+    });
+    if (!made.ok) throw new Error(`cap fixture ${i} failed: ${made.message}`);
+  }
+  const capped = await registrationWorkspace(admin, a.ctx);
+  ok("cap-1. ⚠ 'registered today' counts past the six-row limit it used to be filtered from",
+    capped.counts.registeredToday === startedWith + 7,
+    `expected ${startedWith + 7}, got ${capped.counts.registeredToday}`);
+  ok("cap-1-control. and it is a real count, not simply the total patient count",
+    capped.counts.registeredToday !== capped.counts.totalPatients
+    || capped.counts.totalPatients === startedWith + 7,
+    JSON.stringify(capped.counts));
+  ok("cap-2. every count is number-or-null, so a failed read has somewhere to go other than 0",
+    Object.values(capped.counts).every(v => v === null || typeof v === "number")
+    && capped.unavailable.detail === null,
+    JSON.stringify({ counts: capped.counts, unavailable: capped.unavailable }));
+
   // ── A DUPLICATE CHECK THAT COULD NOT RUN IS NOT A DUPLICATE CHECK THAT PASSED ───────────────────
   //
   // ⚠ registerPatient discarded the error on its identifier-collision read. A failed query left `clash`

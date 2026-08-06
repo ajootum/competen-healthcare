@@ -18,11 +18,21 @@ export type WorklistKey = (typeof WORKLIST_KEYS)[number];
  * narrower here than the phrase usually does, and the tile has to say so where it is read rather than
  * in a document nobody opens -- see PENDING_RESULTS_BOUNDARY and the REFUSES entry beside it.
  */
+// ⚠ THE PARAMETER IS `list`, AND IT USED TO BE `worklist` HERE AND `list` IN THE SIDEBAR.
+//
+// Two names for one thing, in two files, neither wrong on its own. Nothing broke only because the page
+// happened to accept both -- so the disagreement was invisible and would have stayed that way until
+// somebody wrote a third reader and picked one. `list` wins because it is the one already SHIPPED in
+// navigation.ts and asserted by the nav harness (9f-b), and a URL in a user's sidebar is the hardest of
+// the two to change.
+//
+// The constant below is now the only place the string is built. A harness assertion holds it against
+// navigation.ts, so the two cannot drift apart again in silence.
 export const WORKLIST_META: Record<WorklistKey, { title: string; note: string; href: string; capability: string }> = {
   waiting: {
     title: "Waiting patients",
     note: "In the building now: queued at the desk, ready, in consultation or paused.",
-    href: "/practice/patients?worklist=waiting",
+    href: "/practice/patients?list=waiting",
     capability: "practice.calendar.view",
   },
   dueFollowUps: {
@@ -40,19 +50,19 @@ export const WORKLIST_META: Record<WorklistKey, { title: string; note: string; h
   walkIns: {
     title: "Walk-ins today",
     note: "People seen today without a booking: queued at the desk with no appointment behind them, or booked in as a walk-in.",
-    href: "/practice/patients?worklist=walkIns",
+    href: "/practice/patients?list=walkIns",
     capability: "practice.calendar.view",
   },
   recentPatients: {
     title: "Recent patients",
     note: "Whose consultation was most recently started, newest first.",
-    href: "/practice/patients?worklist=recentPatients",
+    href: "/practice/patients?list=recentPatients",
     capability: "encounter.list",
   },
   newRegistrations: {
     title: "Registered today",
     note: "Patient records created today, in this practice's calendar.",
-    href: "/practice/patients?worklist=newRegistrations",
+    href: "/practice/patients?list=newRegistrations",
     capability: "patient.list",
   },
 };

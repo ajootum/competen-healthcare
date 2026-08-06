@@ -75,6 +75,17 @@ export default async function SearchPage({ searchParams }: {
         </p>
       )}
 
+      {/* SEARCHED, BUT PART OF IT COULD NOT RUN. Deliberately louder than the note above it: that one
+          says you lack a permission, which is a stable fact about you. This one says the answer on the
+          screen may be missing somebody who IS in the register -- and the next thing a person does after
+          a search that finds nobody is register them again. */}
+      {result.incomplete.length > 0 && (
+        <p className="mt-3 rounded-lg bg-[var(--cmp-surface-warning)] px-3 py-2 text-[11px] text-[var(--cmp-text-warning)]">
+          Part of this search could not run: {result.incomplete.join(", ")}. Someone already registered
+          may be missing from these results, so do not register a new record on the strength of them.
+        </p>
+      )}
+
       {result.ran && result.total === 0 && (
         <section className="mt-4 rounded-xl border border-gray-200 bg-white p-6">
           <p className="text-[13px] font-semibold text-gray-700">Nothing matched &ldquo;{result.query}&rdquo;.</p>
