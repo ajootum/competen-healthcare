@@ -21,6 +21,9 @@
  *   5. SOURCES are validated, not decorative (s3, s5), and an unsourced claim is refused.
  *   6. THE PLATFORM EVENTS THAT EXIST ARE EMITTED AND THE ONES THAT DO NOT EXIST ARE NOT INVENTED (s10).
  *   7. A failed read is never an empty board, with a control.
+ *   8. THE CARD COLOURS ARE KEYED ON THE ENGINE'S OWN CARD KEYS, asserted as an equality in both
+ *      directions against what followUpWorkspace() actually emitted. A swatch map that has drifted
+ *      compiles perfectly and renders a real figure in dead grey; it has shipped twice in palette.ts.
  *
  *   npx --yes tsx scripts/practice-continuity-harness.ts
  */
@@ -40,6 +43,9 @@ import {
   COMPLETED_WINDOW_DAYS, followUpView,
 } from "../src/lib/practice/follow-up-constants";
 import { PRACTICE_EVENT_TYPES } from "../src/lib/practice/events";
+import { FOLLOWUP_CARD_SWATCH } from "../src/lib/practice/palette";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 
 loadEnvConfig(process.cwd());
 
@@ -452,6 +458,44 @@ async function main() {
 
   ok("the live statuses are the three that are still owed, and DRAFT is not one of them",
     LIVE_FOLLOW_UP_STATUSES.join(",") === "OPEN,SCHEDULED,DEFERRED", LIVE_FOLLOW_UP_STATUSES.join(","));
+
+  // ══ 9. THE CARD SWATCHES ARE KEYED ON THE ENGINE'S OWN CARD KEYS ═════════════════════════════════
+  //
+  // ⚠ A MISSING KEY IS INVISIBLE IN A DIFF AND INVISIBLE IN A TYPE-CHECK. `Record<string, ...>` accepts
+  // any key and returns any key, so a swatch map that has drifted from the engine compiles perfectly and
+  // renders a real figure in dead grey. That has shipped twice in palette.ts already -- PERFORMANCE_SWATCH
+  // keyed `avg_consult` against the metric engine's `average_consult_time`, GLANCE_SWATCH `walk_ins`
+  // against `walk_in` -- and both times the only thing that would have caught it was somebody scanning
+  // the row and noticing one tile was the wrong colour.
+  //
+  // ASSERTED AS AN EQUALITY IN BOTH DIRECTIONS, not a subset: a swatch key with no card is a colour
+  // nobody will ever see, and a card with no swatch is the grey tile. Compared against what the ENGINE
+  // actually emitted on the live board above -- not only against FOLLOW_UP_VIEWS -- so a change to what
+  // followUpWorkspace() puts in `cards` is caught even if the constants file still agrees with itself.
+  const swatchKeys = Object.keys(FOLLOWUP_CARD_SWATCH).sort();
+  const emittedCardKeys = realBoard.cards.map(c => c.key).sort();
+  ok("9a. every card the engine emits has a swatch, and every swatch has a card",
+    swatchKeys.join() === emittedCardKeys.join(),
+    `swatches: ${swatchKeys.join()} | emitted: ${emittedCardKeys.join()}`);
+  const viewCardKeys = FOLLOW_UP_VIEWS.filter(v => v.card).map(v => v.key).sort();
+  ok("9b. and the same set again from FOLLOW_UP_VIEWS, which is where a sixth card would be added",
+    swatchKeys.join() === viewCardKeys.join(),
+    `swatches: ${swatchKeys.join()} | card views: ${viewCardKeys.join()}`);
+  ok("9-control. the set is non-empty, so 9a and 9b are not comparing two empty lists",
+    swatchKeys.length === 5, `${swatchKeys.length}`);
+
+  // ⚠ AND THE PAGE MUST ACTUALLY READ THEM. Source-checked, because a Tailwind class cannot be reached
+  // from here. The map this replaced lived in the component and pointed each card at ANOTHER card's
+  // entry by hue, so the page could go on drawing the right colours while palette.ts and the engine
+  // drifted apart underneath it -- which is the arrangement 9a exists to make impossible.
+  const workspaceSrc = readFileSync(
+    join(process.cwd(), "src", "app", "practice", "(shell)", "follow-ups", "FollowUpsWorkspace.tsx"), "utf8");
+  ok("9c. the follow-ups workspace reads FOLLOWUP_CARD_SWATCH from palette.ts",
+    /FOLLOWUP_CARD_SWATCH/.test(workspaceSrc) && /from "@\/lib\/practice\/palette"/.test(workspaceSrc),
+    "the cards are drawn from the shared map or they are not shared");
+  ok("9d. and keeps no private colour map of its own",
+    !/const CARD_SWATCH\b/.test(workspaceSrc),
+    "a local colour map is how the page and palette.ts start disagreeing about what emerald means");
 
   await cleanup();
   return report();

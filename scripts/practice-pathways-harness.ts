@@ -26,6 +26,9 @@
  *   7. A FAILED READ IS NEVER AN EMPTY LIST, with a control through the real client.
  *   8. Workspace isolation non-vacuously; anon reads 0 rows from all five tables while the service role
  *      reads rows from all five.
+ *   9. THE CARD COLOURS ARE KEYED ON THE ENGINE'S OWN CARD KEYS, as an equality in both directions
+ *      against PATHWAY_CARD_SHAPE and against what pathwayWorkspace() emitted. A drifted swatch map
+ *      compiles perfectly and renders a real figure in dead grey; it has shipped twice in palette.ts.
  *
  *   npx --yes tsx scripts/practice-pathways-harness.ts
  */
@@ -38,9 +41,12 @@ import { closeFollowUp, listFollowUps, practiceToday, dueDateFrom } from "../src
 import {
   createPathwayTemplate, publishPathwayVersion, setTemplateActive, listPathwayTemplates,
   assignPathway, completeStage, skipStage, repeatStage, delayStage, cancelStage, stopPathway,
-  listPatientPathways, getPatientPathway, pathwayWorkspace, raiseStageFollowUp,
+  listPatientPathways, getPatientPathway, pathwayWorkspace, raiseStageFollowUp, PATHWAY_CARD_SHAPE,
   type TemplateStage,
 } from "../src/lib/practice/pathways";
+import { PATHWAY_CARD_SWATCH } from "../src/lib/practice/palette";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import {
   PATHWAY_PROGRESS_STATES, PATHWAY_DEVIATIONS, pathwayProgress, addDays,
 } from "../src/lib/practice/pathways-constants";
@@ -594,6 +600,42 @@ async function main() {
   } else {
     ok("a stage cannot be closed by another patient's consultation", false, encB.message);
   }
+
+  // ══ 15. THE CARD SWATCHES ARE KEYED ON THE ENGINE'S OWN CARD KEYS ════════════════════════════════
+  //
+  // ⚠ A MISSING KEY IS INVISIBLE IN A DIFF AND INVISIBLE IN A TYPE-CHECK. `Record<string, ...>` takes any
+  // key and returns any key, so a swatch map that has drifted from PATHWAY_CARD_SHAPE compiles perfectly
+  // and draws a real figure in dead grey. palette.ts's own header records this shipping twice already
+  // (PERFORMANCE_SWATCH keyed `avg_consult` against `average_consult_time`, GLANCE_SWATCH `walk_ins`
+  // against `walk_in`); nothing anywhere said a lookup had missed.
+  //
+  // AN EQUALITY IN BOTH DIRECTIONS, not a subset: a swatch key with no card is a colour nobody sees, and
+  // a card with no swatch is the grey one. Checked against the keys the ENGINE emitted on the live board
+  // above as well as against the declared shape, so a sixth card added to only one of them is caught.
+  const swatchKeys = Object.keys(PATHWAY_CARD_SWATCH).sort();
+  const shapeKeys = PATHWAY_CARD_SHAPE.map(c => c.key).sort();
+  const emittedCardKeys = board.cards.map(c => c.key).sort();
+  ok("15a. every card in PATHWAY_CARD_SHAPE has a swatch, and every swatch has a card",
+    swatchKeys.join() === shapeKeys.join(),
+    `swatches: ${swatchKeys.join()} | shape: ${shapeKeys.join()}`);
+  ok("15b. and the same set again from what pathwayWorkspace() actually emitted",
+    swatchKeys.join() === emittedCardKeys.join(),
+    `swatches: ${swatchKeys.join()} | emitted: ${emittedCardKeys.join()}`);
+  ok("15-control. the set is non-empty, so 15a and 15b are not comparing two empty lists",
+    swatchKeys.length === 5, `${swatchKeys.length}`);
+
+  // ⚠ AND THE PAGE MUST ACTUALLY READ THEM. Source-checked, because a Tailwind class cannot be reached
+  // from here. What this replaced was a map inside the component pointing each card at ANOTHER card's
+  // entry by hue -- so the page kept drawing the right colours while palette.ts and the engine were free
+  // to drift apart underneath it, which is exactly what 15a exists to make impossible.
+  const workspaceSrc = readFileSync(
+    join(process.cwd(), "src", "app", "practice", "(shell)", "pathways", "PathwaysWorkspace.tsx"), "utf8");
+  ok("15c. the pathways workspace reads PATHWAY_CARD_SWATCH from palette.ts",
+    /PATHWAY_CARD_SWATCH/.test(workspaceSrc) && /from "@\/lib\/practice\/palette"/.test(workspaceSrc),
+    "the cards are drawn from the shared map or they are not shared");
+  ok("15d. and keeps no private colour map of its own",
+    !/const CARD_SWATCH\b/.test(workspaceSrc),
+    "a local colour map is how the page and palette.ts start disagreeing about what sky means");
 
   await cleanup();
   return report();

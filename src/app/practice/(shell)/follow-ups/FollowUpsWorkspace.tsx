@@ -7,7 +7,7 @@ import {
   LIVE_FOLLOW_UP_STATUSES, DUE_WEEK_DAYS,
 } from "@/lib/practice/follow-up-constants";
 import type { FollowUpWorkspace as WorkspaceView } from "@/lib/practice/follow-ups";
-import { CARE_CARD_SWATCH, CARE_CARD_UNSUPPLIED, BUTTON } from "@/lib/practice/palette";
+import { FOLLOWUP_CARD_SWATCH, CARD_SWATCH_UNKEYED, CARE_CARD_UNSUPPLIED, BUTTON } from "@/lib/practice/palette";
 import AddFollowUp from "./AddFollowUp";
 import RowActions from "./RowActions";
 
@@ -29,35 +29,15 @@ import RowActions from "./RowActions";
 // with five numbers in them have to be READ one at a time; five coloured ones are FOUND. That has been
 // written on three screens in this codebase already, each time after "the colors are flat".
 //
-// The swatches are BORROWED from CARE_CARD_SWATCH by hue rather than invented here: palette.ts is the
-// one place colour is decided, and it has no follow-up-card map yet. The mapping is spelled out below so
-// it is a decision somebody made rather than a coincidence.
+// THE SWATCHES ARE NOT DECIDED HERE. FOLLOWUP_CARD_SWATCH lives in palette.ts, keyed on these five card
+// keys directly, with the reason for each hue written beside it. This page used to hold a private map
+// pointing each card at some OTHER card's entry -- "Completed" borrowed `newRegistrations` because that
+// entry happens to be emerald -- which rendered correctly while leaving the colour decision in a
+// component, tied to a key that names something else. The harness now asserts palette.ts's key set is
+// exactly the set followUpWorkspace() emits, in both directions.
 // ────────────────────────────────────────────────────────────────────────────────────────────────────
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
-
-/**
- * Card key -> palette key, with the reason for each hue.
- *
- *   overdue    rose    the only FAILURE state here, and the only one whose cost falls on somebody
- *                      outside the room. It is drawn heaviest for that reason and no other.
- *   due_today  cyan    due and not yet late. Deliberately not rose (that is failure) and not amber
- *                      (that is waiting) -- today's review is neither of those things yet.
- *   due_week   amber   the horizon. This product's "coming, not here yet" hue everywhere else.
- *   awaiting   violet  unarranged work, which is what makes a week overrun. Same hue as walk-ins.
- *   completed  emerald the only unambiguously good figure on the row.
- */
-const CARD_SWATCH: Record<string, string> = {
-  overdue: "overdueFollowUps",
-  due_today: "followUpsToday",
-  due_week: "waiting",
-  awaiting: "walkIns",
-  completed: "newRegistrations",
-};
-
-const CARD_ICON: Record<string, string> = {
-  overdue: "!", due_today: "◷", due_week: "▦", awaiting: "⌕", completed: "✓",
-};
 
 const KIND_LABEL = Object.fromEntries(FOLLOW_UP_KINDS) as Record<string, string>;
 const SOURCE_LABEL = Object.fromEntries(FOLLOW_UP_SOURCES.map(([c, l]) => [c, l])) as Record<string, string>;
@@ -195,7 +175,7 @@ export default function FollowUpsWorkspace({
       {/* ── s4's FIVE SUMMARY CARDS ──────────────────────────────────────────────────────────────── */}
       <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
         {workspace.cards.map(c => {
-          const s = CARE_CARD_SWATCH[CARD_SWATCH[c.key]] ?? CARE_CARD_SWATCH.recentlySeen;
+          const s = FOLLOWUP_CARD_SWATCH[c.key] ?? CARD_SWATCH_UNKEYED;
           const dead = c.count === null;
           const selected = view === c.key;
           return (
@@ -212,7 +192,7 @@ export default function FollowUpsWorkspace({
               <span aria-hidden className={`absolute inset-y-0 left-0 w-1 ${dead ? CARE_CARD_UNSUPPLIED.accent : s.accent}`} />
               <span className="flex items-start gap-3 pl-1">
                 <span aria-hidden className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-[17px] ${dead ? CARE_CARD_UNSUPPLIED.badge : s.badge}`}>
-                  {CARD_ICON[c.key] ?? "•"}
+                  {s.icon}
                 </span>
                 <span className="min-w-0 flex-1">
                   <span className="block truncate text-[12.5px] font-semibold text-gray-700">{c.label}</span>

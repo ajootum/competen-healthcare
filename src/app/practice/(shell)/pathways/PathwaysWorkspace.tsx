@@ -4,7 +4,7 @@ import { useMemo, useState } from "react";
 import Link from "next/link";
 import type { PathwayWorkspace as WorkspaceView, PatientPathwayView } from "@/lib/practice/pathways";
 import { AT_RISK_REFUSAL, PATHWAY_TRIGGERS } from "@/lib/practice/pathways-constants";
-import { CARE_CARD_SWATCH, CARE_CARD_UNSUPPLIED, BUTTON } from "@/lib/practice/palette";
+import { PATHWAY_CARD_SWATCH, CARD_SWATCH_UNKEYED, CARE_CARD_UNSUPPLIED, BUTTON } from "@/lib/practice/palette";
 import StageTrack from "./StageTrack";
 import PatientPathwayPanel, { ProgressChip } from "./PatientPathwayPanel";
 import AssignPathway from "./AssignPathway";
@@ -29,27 +29,13 @@ import TemplateDesigner from "./TemplateDesigner";
 // ⚠ EVERY FIGURE IS THE LENGTH OF A LIST. Each card carries the ids it counted and clicking it filters
 // the table to exactly those rows -- the same array, not a second query.
 //
-// ⚠ COLOUR: tinted card, tinted icon badge, and THE FIGURE IN THE CARD'S HUE. The swatches are borrowed
-// from CARE_CARD_SWATCH by hue because palette.ts is where colour is decided and it has no pathway map
-// yet; the mapping is written down below so it is a decision rather than a coincidence.
+// ⚠ COLOUR: tinted card, tinted icon badge, and THE FIGURE IN THE CARD'S HUE. It is decided in
+// palette.ts, not here: PATHWAY_CARD_SWATCH is keyed on PATHWAY_CARD_SHAPE's own five keys, with the
+// reason for each hue written beside it. This page used to hold a private map pointing each card at some
+// OTHER card's entry -- "Completed" borrowed `resultsToReview` because that entry happens to be sky --
+// which drew the right colour while leaving the decision in a component under a key naming something
+// else. The harness now asserts the two key sets are identical in both directions.
 // ────────────────────────────────────────────────────────────────────────────────────────────────────
-
-/**
- *   active     indigo  the practice's primary. The plans that are running.
- *   patients   violet  people, which is this product's violet everywhere else.
- *   on_track   emerald the only unambiguously good figure on the row.
- *   overdue    rose    the only FAILURE state, and the only one whose cost falls outside the room.
- *   completed  sky     finished, and neither good news nor bad. Deliberately not emerald: "on track"
- *                      already owns green here, and two greens on one row would rank nothing.
- */
-const CARD_SWATCH: Record<string, string> = {
-  active: "inConsultation", patients: "walkIns", on_track: "newRegistrations",
-  overdue: "overdueFollowUps", completed: "resultsToReview",
-};
-
-const CARD_ICON: Record<string, string> = {
-  active: "⁂", patients: "☺", on_track: "✓", overdue: "!", completed: "▦",
-};
 
 const TRIGGER_LABEL = Object.fromEntries(PATHWAY_TRIGGERS.map(([c, l]) => [c, l])) as Record<string, string>;
 
@@ -124,7 +110,7 @@ export default function PathwaysWorkspace({
       {/* ── THE FIVE CARDS ───────────────────────────────────────────────────────────────────────── */}
       <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
         {workspace.cards.map(c => {
-          const s = CARE_CARD_SWATCH[CARD_SWATCH[c.key]] ?? CARE_CARD_SWATCH.recentlySeen;
+          const s = PATHWAY_CARD_SWATCH[c.key] ?? CARD_SWATCH_UNKEYED;
           const dead = c.count === null;
           const on = cardFilter === c.key;
           return (
@@ -138,7 +124,7 @@ export default function PathwaysWorkspace({
               <span aria-hidden className={`absolute inset-y-0 left-0 w-1 ${dead ? CARE_CARD_UNSUPPLIED.accent : s.accent}`} />
               <span className="flex items-start gap-3 pl-1">
                 <span aria-hidden className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-[17px] ${dead ? CARE_CARD_UNSUPPLIED.badge : s.badge}`}>
-                  {CARD_ICON[c.key] ?? "•"}
+                  {s.icon}
                 </span>
                 <span className="min-w-0 flex-1">
                   <span className="block truncate text-[12.5px] font-semibold text-gray-700">{c.label}</span>
