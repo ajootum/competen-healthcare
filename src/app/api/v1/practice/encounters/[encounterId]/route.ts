@@ -53,5 +53,37 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ en
     actorId: auth.caller.userId, correlationId: auth.caller.traceId,
   });
   if (!result.ok) return NextResponse.json({ error: { code: result.code, message: result.message } }, { status: result.status });
-  return NextResponse.json({ encounter: result.data, correlationId: auth.caller.traceId });
+
+  // ── CPR-FUP-001 s10 / CPR-FUP-002 s6: CLOSING THE LINKED CONSULTATION CLOSES THE OBLIGATION ──────
+  //
+  // ⚠ THIS IS AN ACCEPTANCE CRITERION IN BOTH SPECIFICATIONS AND IT WAS NOT HAPPENING. A practitioner
+  // booked the review, saw the patient, closed the consultation -- and the follow-up stayed open,
+  // waiting to be ticked a second time by hand. The board then claimed somebody was owed a review they
+  // had already had, which is worse than saying nothing: it is a false positive in the one list whose
+  // whole value is that everything on it is real.
+  //
+  // WIRED HERE RATHER THAN INSIDE transitionEncounter because this route is the ONLY caller that closes
+  // an encounter -- the three inside encounters.ts are the interruption path (PAUSE/ACTIVE) and never
+  // reach COMPLETED. Putting it in the engine would also mean the follow-up module and the encounter
+  // module importing each other.
+  //
+  // ⚠ IT NEVER FAILS THE TRANSITION IT FOLLOWS. The consultation has already been closed and committed;
+  // refusing the response because a follow-up could not be settled would tell the practitioner their
+  // consultation did not close when it did. What did not settle comes back in `settledFollowUps` so a
+  // screen can say so, rather than being swallowed.
+  let settledFollowUps: { completed: string[]; skipped: string[] } | null = null;
+  let settleError: string | null = null;
+  if (to === "COMPLETED" || to === "SIGNED") {
+    const { settleFollowUpsForEncounter } = await import("@/lib/practice/follow-ups");
+    const settled = await settleFollowUpsForEncounter(auth.caller.admin, {
+      workspaceId: auth.ctx.workspaceId, encounterId,
+      actorId: auth.caller.userId, correlationId: auth.caller.traceId,
+    });
+    if (settled.ok) settledFollowUps = settled.data;
+    else settleError = settled.message;
+  }
+
+  return NextResponse.json({
+    encounter: result.data, settledFollowUps, settleError, correlationId: auth.caller.traceId,
+  });
 }

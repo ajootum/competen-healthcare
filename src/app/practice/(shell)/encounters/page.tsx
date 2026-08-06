@@ -3,27 +3,128 @@ import { redirect } from "next/navigation";
 import { createAdminClient } from "@/lib/supabase/server";
 import { resolvePracticeShell } from "@/lib/practice/shell";
 import { hasCapability } from "@/lib/practice/access";
-import { LIVE_STATUSES } from "@/lib/practice/encounters";
+import { encountersDashboard, type DashboardEncounter, type DashboardSession } from "@/lib/practice/encounter-workspace";
+import {
+  SESSION_FIGURES, DASHBOARD_PANELS, ENCOUNTER_STATUS_CHIP, ENCOUNTER_STATUS_LABEL,
+} from "@/lib/practice/encounter-workspace-constants";
+import { formatMinuteOfDay, formatTime, formatDate } from "@/lib/datetime";
 
-// /practice/encounters -- CPR-V2-006's "encounter queue / history". Two lists, deliberately separated:
-// what is OPEN right now and must be finished, and what has already been closed. A single mixed list
-// would let an unsigned encounter from last Tuesday disappear under today's traffic, which is exactly
-// the failure a clinical record must not have.
-
-/* eslint-disable @typescript-eslint/no-explicit-any */
+// /practice/encounters -- CPR-ENC-001 s9's four panels: Today's Sessions, Open Encounters, Recently
+// Closed, and the attention counts the comp draws as an assistant.
+//
+// ────────────────────────────────────────────────────────────────────────────────────────────────────
+// EVERY PANEL DRAWS THREE STATES, AND THE THIRD ONE IS THE POINT.
+//
+//   not permitted    "You cannot see X here."           -- nothing was read
+//   could not read   "X could not be read."             -- a query failed; this is NOT an empty list
+//   empty            "There is no X."                   -- read succeeded, there is genuinely none
+//
+// An empty Open Encounters panel means the day is finished. A failed one means there may be an unsigned
+// consultation from this morning that this screen cannot see. Drawing them the same way is how a
+// practitioner goes home with a record still open.
+//
+// COLOUR IS DOING SEMANTIC WORK, AND THE FIGURE TAKES THE CARD'S COLOUR. The four session figures are
+// read at a glance at the start of a clinic; four grey rectangles containing four numbers have to be
+// READ, one at a time. The swatches come from palette.ts through encounter-workspace-constants so the
+// hue of "walk-in" is the same here as it is on the command centre.
+// ────────────────────────────────────────────────────────────────────────────────────────────────────
 
 export const dynamic = "force-dynamic";
 
-const TONE: Record<string, string> = {
-  DRAFT: "bg-gray-100 text-gray-600",
-  ACTIVE: "bg-[var(--cmp-surface-information)] text-[var(--cmp-text-information)]",
-  PAUSED: "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]",
-  COMPLETED: "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]",
-  SIGNED: "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]",
-  AMENDED: "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]",
-  CANCELLED: "bg-gray-100 text-gray-400",
-  ENTERED_IN_ERROR: "bg-[var(--cmp-surface-critical)] text-[var(--cmp-text-critical)]",
-};
+const CARD = "rounded-xl border border-gray-200 bg-white";
+
+function PanelHeading({ panel, title, subtitle, action }: {
+  panel: string; title: string; subtitle?: string; action?: React.ReactNode;
+}) {
+  const badge = DASHBOARD_PANELS[panel];
+  return (
+    <div className="flex items-start gap-2.5">
+      <span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-[13px] ${badge.badge}`}>
+        {badge.icon}
+      </span>
+      <div className="min-w-0">
+        <h2 className="text-[14px] font-bold text-gray-900">{title}</h2>
+        {subtitle && <p className="text-[11px] text-gray-500">{subtitle}</p>}
+      </div>
+      {action && <div className="ml-auto">{action}</div>}
+    </div>
+  );
+}
+
+/** The one place any of the three states is rendered, so no panel can invent a fourth. */
+function PanelState({ permitted, unavailable, empty, what }: {
+  permitted: boolean; unavailable: boolean; empty: string; what: string;
+}) {
+  if (!permitted) {
+    return (
+      <p className="mt-3 rounded-lg bg-gray-50 px-3 py-2 text-[12px] text-gray-500">
+        You do not hold the permission to see {what} in this workspace. Nothing was read.
+      </p>
+    );
+  }
+  if (unavailable) {
+    return (
+      <p className="mt-3 rounded-lg border border-rose-300 bg-rose-50 px-3 py-2 text-[12px] text-rose-800">
+        <strong>{what} could not be read.</strong> This is not an empty list &mdash; do not take it as one.
+      </p>
+    );
+  }
+  return <p className="mt-3 text-[12px] text-gray-400">{empty}</p>;
+}
+
+function patientLabel(e: DashboardEncounter) {
+  // ⚠ "Unknown patient" IS A CLAIM ABOUT THE RECORD. When the name read failed, the name is unknown to
+  // this screen, not missing from the record, and the two sentences are different.
+  if (e.patientNameUnavailable) return "Name could not be read";
+  return e.patientName ?? "Unnamed record";
+}
+
+function SessionCard({ s }: { s: DashboardSession }) {
+  const stateChip = s.state === "running"
+    ? "bg-violet-100 text-violet-700 ring-1 ring-violet-200"
+    : s.state === "done"
+      ? "bg-slate-100 text-slate-500 ring-1 ring-slate-200"
+      : "bg-sky-100 text-sky-700 ring-1 ring-sky-200";
+  const stateWord = s.state === "running" ? "In progress" : s.state === "done" ? "Finished" : "Upcoming";
+
+  return (
+    <li className={`${CARD} p-3.5`}>
+      <div className="flex items-start gap-2">
+        <div className="min-w-0">
+          <p className="truncate text-[13px] font-bold text-gray-900">{s.title}</p>
+          <p className="text-[11px] text-gray-500">
+            {formatMinuteOfDay(s.plannedStartMinute)}&ndash;{formatMinuteOfDay(s.plannedEndMinute)}
+            {" · "}{s.activityType}
+            {s.facility ? ` · ${s.facility}` : ""}
+            {s.room ? ` · ${s.room}` : ""}
+          </p>
+        </div>
+        <span className={`ml-auto shrink-0 rounded px-1.5 py-0.5 text-[10px] font-bold ${stateChip}`}>{stateWord}</span>
+      </div>
+
+      <div className="mt-3 grid grid-cols-4 gap-1.5">
+        {SESSION_FIGURES.map(f => {
+          const v = s.figures[f.key];
+          return (
+            <div key={f.key} className={`rounded-lg border px-2 py-1.5 text-center ${v === null ? "border-dashed border-slate-300 bg-white" : f.swatch.box}`}>
+              {/* ⚠ A FIGURE THAT COULD NOT BE COUNTED IS AN EM DASH, NEVER A NOUGHT. A nought is a claim
+                  that there were none of them. */}
+              <p className={`text-[17px] font-bold leading-none ${v === null ? "text-slate-300" : f.swatch.figure}`}>
+                {v === null ? "—" : String(v).padStart(2, "0")}
+              </p>
+              <p className="mt-1 text-[9px] font-semibold uppercase tracking-wide text-gray-500">{f.label}</p>
+            </div>
+          );
+        })}
+      </div>
+
+      <p className="mt-2 text-[10px] text-gray-400">
+        Counted from the encounters filed against this session, not from the diary &mdash; nobody is
+        claimed to have arrived who has not.
+      </p>
+    </li>
+  );
+}
 
 export default async function EncountersPage() {
   const shell = await resolvePracticeShell();
@@ -31,82 +132,169 @@ export default async function EncountersPage() {
   if (!hasCapability(shell.ctx, "encounter.list")) redirect("/practice/home");
 
   const admin = createAdminClient();
-  const { data: rows } = await admin.from("practice_encounter")
-    .select("id, patient_id, status, entry_pathway, encounter_mode, reason_for_visit, started_at, signed_at")
-    .eq("workspace_id", shell.ctx.workspaceId)
-    .order("started_at", { ascending: false }).limit(60);
+  // THE CLOCK IS THE ENGINE'S, not this component's. Calling Date.now() during a render is an impure
+  // call the React compiler rejects outright, and the elapsed time of a consultation is data the loader
+  // owns -- so encountersDashboard measures it once and hands each row its own `elapsedMinutes`.
+  const dash = await encountersDashboard(admin, shell.ctx);
 
-  const encounters = (rows ?? []) as any[];
-  const ids = [...new Set(encounters.map(e => e.patient_id))];
-  const { data: patients } = ids.length
-    ? await admin.from("practice_patient").select("id, display_name").in("id", ids)
-    : { data: [] };
-  const nameById = new Map(((patients ?? []) as any[]).map(p => [p.id, p.display_name]));
+  const live = dash.open.items.filter(e => e.status !== "COMPLETED");
+  const completedUnsigned = dash.open.items.filter(e => e.status === "COMPLETED");
 
-  const live = encounters.filter(e => LIVE_STATUSES.includes(e.status));
-  const awaitingSignature = encounters.filter(e => e.status === "COMPLETED");
-  const closed = encounters.filter(e => !LIVE_STATUSES.includes(e.status) && e.status !== "COMPLETED");
-
-  const row = (e: any) => (
-    <li key={e.id}>
-      <Link href={`/practice/encounters/${e.id}`}
-        className="flex items-center gap-2 flex-wrap rounded-lg border border-gray-100 px-3 py-2 hover:bg-gray-50">
-        <span className="text-[13px] font-semibold text-gray-900">{nameById.get(e.patient_id) ?? "Unknown patient"}</span>
-        <span className="text-[11px] text-gray-400">
-          {String(e.entry_pathway).replace(/_/g, " ")} · {String(e.encounter_mode).replace(/_/g, " ")}
-          {e.reason_for_visit ? ` · ${e.reason_for_visit}` : ""}
-        </span>
-        <span className="ml-auto font-mono text-[11px] text-gray-400">{String(e.started_at).slice(0, 16).replace("T", " ")}</span>
-        <span className={`rounded px-1.5 py-0.5 text-[10px] font-bold ${TONE[e.status] ?? "bg-gray-100 text-gray-500"}`}>{e.status}</span>
-      </Link>
-    </li>
-  );
+  const row = (e: DashboardEncounter) => {
+    const mins = e.elapsedMinutes;
+    return (
+      <li key={e.id} className="grid grid-cols-12 items-center gap-2 rounded-lg border border-gray-100 px-3 py-2 hover:bg-gray-50">
+        <div className="col-span-12 min-w-0 sm:col-span-3">
+          <Link href={`/practice/encounters/${e.id}`} className="text-[13px] font-semibold text-gray-900 hover:underline">
+            {patientLabel(e)}
+          </Link>
+          {e.reasonForVisit && <p className="truncate text-[11px] text-gray-500">{e.reasonForVisit}</p>}
+        </div>
+        <p className="col-span-4 text-[11px] capitalize text-gray-600 sm:col-span-2">
+          {String(e.entryPathway).replace(/_/g, " ")}
+        </p>
+        <p className="col-span-8 truncate text-[11px] text-gray-500 sm:col-span-3">
+          {e.sessionTitle ?? <span className="text-gray-400">No session recorded</span>}
+          <span className="text-gray-400"> · {String(e.encounterMode).replace(/_/g, " ")}</span>
+        </p>
+        <p className="col-span-4 font-mono text-[11px] text-gray-500 sm:col-span-1">{formatTime(e.startedAt)}</p>
+        <p className="col-span-4 font-mono text-[11px] text-gray-400 sm:col-span-1">
+          {mins === null ? "—" : `${mins}m`}
+        </p>
+        <div className="col-span-4 flex items-center justify-end gap-2 sm:col-span-2">
+          <span className={`rounded px-1.5 py-0.5 text-[10px] font-bold ${ENCOUNTER_STATUS_CHIP[e.status] ?? "bg-gray-100 text-gray-500"}`}>
+            {ENCOUNTER_STATUS_LABEL[e.status] ?? e.status}
+          </span>
+          <Link href={`/practice/encounters/${e.id}`}
+            className="rounded-lg border border-gray-200 px-2 py-1 text-[11px] font-semibold text-gray-700 hover:bg-white">
+            Continue
+          </Link>
+        </div>
+      </li>
+    );
+  };
 
   return (
-    <div className="max-w-5xl">
-      <div className="flex items-baseline justify-between gap-3 flex-wrap">
+    <div className="max-w-6xl">
+      <div className="flex items-start justify-between gap-3 flex-wrap">
         <div>
           <h1 className="text-xl font-bold text-gray-900">Encounters</h1>
-          <p className="text-[13px] text-gray-500">Open consultations, then everything closed. Newest first.</p>
+          <p className="text-[13px] text-gray-500">Your patient encounters today and recently.</p>
         </div>
-        <Link href="/practice/patients" className="text-[12px] font-semibold text-[var(--cp-primary-deep)] hover:underline">
-          Start one from a patient →
+        <Link href="/practice/patients"
+          className="rounded-lg bg-[var(--cp-primary)] px-3 py-2 text-[12px] font-semibold text-white hover:bg-[var(--cp-primary-deep)]">
+          + Start encounter
         </Link>
       </div>
 
-      <section className="mt-4 rounded-xl border border-gray-200 bg-white p-4">
-        <h2 className="text-[13px] font-bold text-gray-900">Open now</h2>
+      {/* ── Today's sessions ───────────────────────────────────────────────────────────────────── */}
+      <section className="mt-5">
+        <PanelHeading panel="sessions" title="Today's sessions"
+          subtitle={`${formatDate(`${dash.today}T00:00:00Z`, "UTC")} · ${dash.timezone}`}
+          action={<Link href="/practice/calendar" className="text-[11px] font-semibold text-[var(--cp-primary-deep)] hover:underline">View calendar</Link>} />
+        {dash.sessions.items.length === 0 ? (
+          <PanelState permitted={dash.sessions.permitted} unavailable={dash.sessions.unavailable}
+            what="today's sessions" empty="Nothing is planned for today. Encounters can still be opened without a session." />
+        ) : (
+          <ul className="mt-3 grid gap-3 md:grid-cols-3">{dash.sessions.items.map(s => <SessionCard key={s.id} s={s} />)}</ul>
+        )}
+      </section>
+
+      {/* ── Open encounters ────────────────────────────────────────────────────────────────────── */}
+      <section className={`mt-5 ${CARD} p-4`}>
+        <PanelHeading panel="open" title={`Open encounters${dash.open.unavailable || !dash.open.permitted ? "" : ` (${live.length})`}`}
+          subtitle="Started and not finished. These are the records that still need you." />
         {live.length === 0 ? (
-          <p className="mt-2 text-[12px] text-gray-400">
-            Nothing open. Start an encounter from a patient record or from a checked-in appointment.
-          </p>
+          <PanelState permitted={dash.open.permitted} unavailable={dash.open.unavailable}
+            what="open encounters" empty="Nothing is open. Start one from a patient record or from a checked-in appointment." />
         ) : (
-          <ul className="mt-2 flex flex-col gap-1.5">{live.map(row)}</ul>
+          <ul className="mt-3 flex flex-col gap-1.5">{live.map(row)}</ul>
+        )}
+
+        {completedUnsigned.length > 0 && (
+          <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 p-3">
+            <p className="text-[12px] font-bold text-amber-800">
+              {completedUnsigned.length} completed, not signed
+            </p>
+            <p className="mt-0.5 text-[11px] text-gray-700">
+              The consultation is finished but the record is not final. Until it is signed it can still be edited.
+            </p>
+            <ul className="mt-2 flex flex-col gap-1.5">{completedUnsigned.map(row)}</ul>
+          </div>
         )}
       </section>
 
-      {awaitingSignature.length > 0 && (
-        <section className="mt-4 rounded-xl border border-[var(--cmp-color-warning)] bg-white p-4">
-          <h2 className="text-[13px] font-bold text-gray-900">Completed, not signed</h2>
-          <p className="mt-0.5 text-[11px] text-gray-500">
-            The consultation is finished but the record is not final. Until it is signed it can still be edited.
-          </p>
-          <ul className="mt-2 flex flex-col gap-1.5">{awaitingSignature.map(row)}</ul>
+      <div className="mt-5 grid gap-5 lg:grid-cols-3">
+        {/* ── Recently closed ──────────────────────────────────────────────────────────────────── */}
+        <section className={`lg:col-span-2 ${CARD} p-4`}>
+          <PanelHeading panel="closed" title="Recently closed" subtitle="Signed and amended records, newest first." />
+          {dash.closed.items.length === 0 ? (
+            <PanelState permitted={dash.closed.permitted} unavailable={dash.closed.unavailable}
+              what="closed encounters" empty="Nothing has been signed yet." />
+          ) : (
+            <ul className="mt-3 grid gap-2 sm:grid-cols-2">
+              {dash.closed.items.map(e => (
+                <li key={e.id}>
+                  <Link href={`/practice/encounters/${e.id}`}
+                    className="block rounded-lg border border-gray-100 p-2.5 hover:bg-gray-50">
+                    <p className="truncate text-[12px] font-semibold text-gray-900">{patientLabel(e)}</p>
+                    <p className="truncate text-[11px] text-gray-500">
+                      {e.reasonForVisit ?? String(e.entryPathway).replace(/_/g, " ")}
+                    </p>
+                    <div className="mt-1.5 flex items-center gap-2">
+                      <span className={`rounded px-1.5 py-0.5 text-[10px] font-bold ${ENCOUNTER_STATUS_CHIP[e.status] ?? "bg-gray-100 text-gray-500"}`}>
+                        {ENCOUNTER_STATUS_LABEL[e.status] ?? e.status}
+                      </span>
+                      {/* ⚠ THE OUTCOME IS SHOWN ONLY WHEN ONE WAS RECORDED. A missing outcome is not
+                          "stable" and must never be drawn as one. */}
+                      {e.outcome && <span className="text-[10px] capitalize text-gray-500">outcome: {e.outcome}</span>}
+                      <span className="ml-auto font-mono text-[10px] text-gray-400">
+                        {e.signedAt ? formatDate(e.signedAt) : formatDate(e.startedAt)}
+                      </span>
+                    </div>
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          )}
         </section>
-      )}
 
-      <section className="mt-4 rounded-xl border border-gray-200 bg-white p-4">
-        <h2 className="text-[13px] font-bold text-gray-900">Closed</h2>
-        {closed.length === 0 ? (
-          <p className="mt-2 text-[12px] text-gray-400">No closed encounters yet.</p>
-        ) : (
-          <ul className="mt-2 flex flex-col gap-1.5">{closed.map(row)}</ul>
-        )}
-        <p className="mt-3 text-[10px] text-gray-400">
-          Showing the {encounters.length} most recent encounters in this workspace. Search and filtering
-          across the full history ship with Phase 5 (Practice Intelligence).
-        </p>
-      </section>
+        {/* ── What needs attention ─────────────────────────────────────────────────────────────── */}
+        <section className={`${CARD} p-4`}>
+          <PanelHeading panel="attention" title="What needs attention" />
+          {/* ⚠ THE COMP CALLS THIS PANEL "AI Practice Assistant". THESE ARE NOT AI, AND THE HEADING SAYS
+              SO. Every figure below is a count of rows that exist. Nothing is inferred, predicted or
+              ranked. Dressing four SQL counts as an intelligence is how a practitioner comes to trust an
+              inference that was never made -- so the assistant is a link at the bottom, where it belongs. */}
+          <ul className="mt-3 flex flex-col gap-1.5">
+            {dash.attention.map(a => (
+              <li key={a.key}>
+                {!a.permitted ? (
+                  <p className="rounded-lg bg-gray-50 px-2.5 py-2 text-[11px] text-gray-500">
+                    {a.label} &mdash; not visible to you
+                  </p>
+                ) : (
+                  <Link href={a.href}
+                    className="flex items-center gap-2 rounded-lg border border-gray-100 px-2.5 py-2 hover:bg-gray-50">
+                    <span className={`text-[15px] font-bold ${a.count === null ? "text-slate-300" : a.count > 0 ? "text-rose-700" : "text-gray-400"}`}>
+                      {a.count === null ? "—" : a.count}
+                    </span>
+                    <span className="text-[11px] text-gray-700">{a.label}</span>
+                  </Link>
+                )}
+              </li>
+            ))}
+          </ul>
+          <p className="mt-2 text-[10px] text-gray-400">
+            Counts of records, not predictions. An em dash means the count could not be read &mdash; it does
+            not mean nought.
+          </p>
+          <Link href="/practice/assistant"
+            className="mt-2 inline-block text-[11px] font-semibold text-[var(--cp-primary-deep)] hover:underline">
+            Ask the practice assistant →
+          </Link>
+        </section>
+      </div>
     </div>
   );
 }

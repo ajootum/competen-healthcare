@@ -406,10 +406,65 @@ export async function recordTreatment(admin: any, args: {
   return { ok: true, data: { id: t.id as string } };
 }
 
+// ── CPR-ENC-001 s3 / CPR-ENC-002 s4: THE ENCOUNTER'S OUTCOME (migration 238) ─────────────────────────
+//
+// Procedures have an outcome and follow-ups have one; the encounter did not, and CPR-ENC-001 s3 lists it
+// among the things an encounter captures. It lives on practice_encounter rather than in a table of its
+// own because there is exactly one per encounter.
+//
+// ⚠ NULLABLE, AND NOT DEFAULTED. A draft encounter has no outcome yet, and an encounter closed without
+// one happens -- CPR-ENC-002 s7 asks for a WARNING on a missing outcome, not a refusal. A default of
+// 'stable' would manufacture a clinical claim for every unfinished record in the table.
+//
+// ⚠ THE DATABASE REFUSES THIS AFTER SIGNATURE INDEPENDENTLY OF THE GUARD BELOW. Migration 194's trigger
+// rejects any update to a SIGNED row that does not move it to AMENDED or ENTERED_IN_ERROR, and an
+// outcome write does neither -- so bypassing editableEncounter reaches a raised exception rather than a
+// rewritten record. Both halves are asserted, because an engine check alone is a promise and a trigger
+// is a guarantee.
+
+/** migration 238's six-value CHECK, restated so the engine refuses before the database has to. */
+const OUTCOMES = ["improved", "stable", "worsened", "resolved", "recurring", "other"];
+
+export async function setEncounterOutcome(admin: any, args: {
+  workspaceId: string; encounterId: string; outcome: string | null; outcomeNote?: string | null;
+  actorId: string; correlationId: string;
+}): Promise<EngineResult<{ outcome: string | null }>> {
+  const guard = await editableEncounter(admin, args.workspaceId, args.encounterId);
+  if (!guard.ok) return guard;
+
+  const outcome = args.outcome === null || args.outcome === "" ? null : args.outcome;
+  if (outcome !== null && !OUTCOMES.includes(outcome))
+    return { ok: false, status: 400, code: "VALIDATION_ERROR", message: `unknown outcome ${outcome}` };
+
+  // `other` that says nothing is the get-past-the-field answer -- the same refusal CPR-150 makes of
+  // `not_applicable` for laterality. If none of the five named answers fitted, the reason IS the field.
+  const note = (args.outcomeNote ?? "").trim();
+  if (outcome === "other" && !note)
+    return { ok: false, status: 400, code: "OUTCOME_NOTE_REQUIRED", message: "an outcome of \"other\" needs a sentence saying what it was" };
+
+  const { data, error } = await admin.from("practice_encounter")
+    .update({
+      outcome,
+      // Cleared when the outcome is not `other`, so a note left behind by a changed mind cannot go on
+      // describing an outcome that is no longer recorded.
+      outcome_note: outcome === "other" ? note : null,
+      updated_at: new Date().toISOString(), updated_by: args.actorId,
+    })
+    .eq("id", args.encounterId).eq("workspace_id", args.workspaceId).select("outcome").maybeSingle();
+  if (error) return { ok: false, status: 422, code: "REFUSED_BY_DATABASE", message: error.message };
+  if (!data) return { ok: false, status: 404, code: "NOT_FOUND", message: "Not found" };
+
+  await audit(admin, {
+    workspaceId: args.workspaceId, actorId: args.actorId, eventType: "practice.encounter_outcome_recorded",
+    payload: { encounterId: args.encounterId, outcome }, correlationId: args.correlationId,
+  });
+  return { ok: true, data: { outcome: data.outcome ?? null } };
+}
+
 /** Everything CPR-V2-006 renders for one encounter. */
 export async function getEncounter(admin: any, workspaceId: string, encounterId: string) {
   const { data: encounter } = await admin.from("practice_encounter")
-    .select("id, patient_id, appointment_id, previous_encounter_id, encounter_mode, entry_pathway, reason_for_visit, status, started_at, completed_at, signed_at, record_version")
+    .select("id, patient_id, appointment_id, previous_encounter_id, encounter_mode, entry_pathway, reason_for_visit, status, started_at, completed_at, signed_at, record_version, activity_id, outcome, outcome_note")
     .eq("id", encounterId).eq("workspace_id", workspaceId).maybeSingle();
   if (!encounter) return null;
 
