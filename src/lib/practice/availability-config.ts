@@ -1,6 +1,11 @@
 import type { WorkspaceContext } from "@/lib/practice/access";
 import { audit } from "@/lib/practice/provisioning";
 import { practiceToday, zonedDayRange } from "@/lib/practice/practice-time";
+import { ACTIVITY_LABEL, type ActivityType } from "@/lib/practice/activity-constants";
+import {
+  REMOVES_TIME, RESHAPES_TIME, ADDS_TIME,
+} from "@/lib/practice/schedule-exception-constants";
+import { commitScheduleChange } from "@/lib/practice/schedule-exceptions";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -53,15 +58,22 @@ export const WEEKDAYS = [
   [5, "Friday"], [6, "Saturday"], [7, "Sunday"],
 ] as const;
 
-export const EXCEPTION_KINDS = [
-  ["leave", "Leave or holiday", "removes"],
-  ["closure", "Temporary closure", "removes"],
-  ["extra_session", "One-off session", "adds"],
-  ["extended_hours", "Extended hours", "adds"],
-] as const;
+/**
+ * ⚠ THE FOUR KINDS BECAME SEVEN IN MIGRATION 242, AND THE LIST MOVED.
+ *
+ * CPR-V5-007 s5.2 names six categories of change and this file had four of them. The vocabulary now
+ * lives in schedule-exception-constants.ts -- a file that touches no database -- because Layer 2's
+ * screen needs it, and a constant a screen needs does not belong in a module that imports the workspace
+ * context. Re-exported so no existing caller has to learn where it went.
+ */
+export { EXCEPTION_KINDS } from "@/lib/practice/schedule-exception-constants";
 
-/** Kinds that TAKE time away. The generator must be able to tell these from the ones that add it. */
-const REMOVES = ["leave", "closure"];
+/**
+ * Kinds that TAKE time away. The generator must be able to tell these from the ones that add it, and
+ * from the two that do NEITHER: a location change and an activity substitution both leave the session
+ * running, and are applied below as a change of shape rather than a removal.
+ */
+const REMOVES = REMOVES_TIME;
 
 export const hhmm = (m: number) =>
   `${String(Math.floor(m / 60)).padStart(2, "0")}:${String(Math.floor(m) % 60).padStart(2, "0")}`;
@@ -513,47 +525,47 @@ export async function removeSession(admin: any, ctx: WorkspaceContext, args: {
 
 // ── EXCEPTIONS ───────────────────────────────────────────────────────────────────────────────────────
 
+/**
+ * ────────────────────────────────────────────────────────────────────────────────────────────────────
+ * ⚠ THIS IS NOW A DELEGATE. schedule-exceptions.ts's commitScheduleChange() is the ONLY thing that
+ * writes practice_availability_exception, and this function forwards to it.
+ *
+ * CPR-V5-007 AC-04: "Before committing a change, the system identifies affected bookings and REQUIRES a
+ * resolution strategy." A preview that can be skipped fails it -- so a second writer that skipped it
+ * would fail it too, and the second writer is always the one somebody's integration calls. The old body
+ * of this function was that second writer, which is why it is gone rather than kept beside the new one.
+ *
+ * WHAT CHANGED FOR AN EXISTING CALLER: nothing, until a patient is actually booked into the time being
+ * changed. With nobody affected the commit records itself as s5.3's "no patient impact" and succeeds
+ * exactly as before. With somebody affected it now REFUSES until `resolution` says what happens to them.
+ * ────────────────────────────────────────────────────────────────────────────────────────────────────
+ */
 export async function addException(admin: any, ctx: WorkspaceContext, args: {
   kind: string; fromDate: string; toDate: string;
   locationId?: string | null; clinicId?: string | null;
   startsMinute?: number | null; endsMinute?: number | null;
   slotKind?: string; appointmentMinutes?: number | null; reason?: string;
+  replacementLocationId?: string | null; replacementActivityType?: string | null;
+  /** s5.3's resolution strategy. Required whenever the calculated impact is above nought. */
+  resolution?: string | null; note?: string | null;
   actorId: string; correlationId: string;
-}): Promise<EngineResult<{ id: string; days: number }>> {
-  if (!ctx.capabilities.includes("appointment.manage"))
-    return { ok: false, status: 403, code: "FORBIDDEN", message: "appointment.manage is required" };
-  if (!EXCEPTION_KINDS.some(([k]) => k === args.kind))
-    return { ok: false, status: 400, code: "VALIDATION_ERROR", message: `kind must be one of: ${EXCEPTION_KINDS.map(([k]) => k).join(", ")}` };
-  if (args.toDate < args.fromDate)
-    return { ok: false, status: 400, code: "VALIDATION_ERROR", message: "the last date cannot be before the first" };
-
-  // ADDING TIME REQUIRES SAYING WHEN; REMOVING IT DOES NOT. Leave takes the day.
-  const adds = !REMOVES.includes(args.kind);
-  if (adds && (args.startsMinute == null || args.endsMinute == null))
-    return { ok: false, status: 400, code: "VALIDATION_ERROR", message: "a one-off or extended session needs a start and an end" };
-  if (adds && (args.endsMinute as number) <= (args.startsMinute as number))
-    return { ok: false, status: 400, code: "VALIDATION_ERROR", message: "a session must end after it starts" };
-
-  const { data, error } = await admin.from("practice_availability_exception").insert({
-    workspace_id: ctx.workspaceId,
-    location_id: args.locationId ?? null, clinic_id: args.clinicId ?? null,
-    kind: args.kind, from_date: args.fromDate, to_date: args.toDate,
-    starts_minute: adds ? args.startsMinute : null,
-    ends_minute: adds ? args.endsMinute : null,
-    slot_kind: args.slotKind ?? (args.kind === "leave" ? "leave" : "clinic"),
-    appointment_minutes: args.appointmentMinutes ?? null,
-    reason: args.reason ?? null, created_by: args.actorId,
-  }).select("id").maybeSingle();
-  if (error) return { ok: false, status: 422, code: "REFUSED_BY_DATABASE", message: error.message };
-  if (!data) return { ok: false, status: 500, code: "INSERT_FAILED", message: "the exception was not created" };
-
-  const days = datesBetween(args.fromDate, args.toDate).length;
-  await audit(admin, {
-    workspaceId: ctx.workspaceId, actorId: args.actorId, eventType: "practice.availability_exception_added",
-    payload: { exceptionId: data.id, kind: args.kind, fromDate: args.fromDate, toDate: args.toDate, days },
-    correlationId: args.correlationId,
+}): Promise<EngineResult<{ id: string; days: number; affected: number; resolution: string }>> {
+  const r = await commitScheduleChange(admin, ctx, {
+    kind: args.kind, fromDate: args.fromDate, toDate: args.toDate,
+    locationId: args.locationId ?? null, clinicId: args.clinicId ?? null,
+    startsMinute: args.startsMinute ?? null, endsMinute: args.endsMinute ?? null,
+    slotKind: args.slotKind, appointmentMinutes: args.appointmentMinutes ?? null,
+    reason: args.reason ?? null,
+    replacementLocationId: args.replacementLocationId ?? null,
+    replacementActivityType: args.replacementActivityType ?? null,
+    resolution: args.resolution ?? null, note: args.note ?? null,
+    actorId: args.actorId, correlationId: args.correlationId,
   });
-  return { ok: true, data: { id: data.id as string, days } };
+  if (!r.ok) return r;
+  return {
+    ok: true,
+    data: { id: r.data.exceptionId, days: r.data.days, affected: r.data.affected, resolution: r.data.resolution },
+  };
 }
 
 // ── BOOKING RULES ────────────────────────────────────────────────────────────────────────────────────
@@ -741,6 +753,11 @@ export type GenerationReport = {
   slotsRemoved: number;
   /** Slots a template would have removed but did not, because somebody is booked into them. */
   slotsKept: number;
+  /**
+   * s5.2: slots that already existed and were MOVED or BLOCKED by a location change or an activity
+   * substitution. Separate from created and removed because it is neither -- the time is still there.
+   */
+  slotsReshaped: number;
   daysSkippedForLeave: number;
   /** Named, not silent: generation stops at this many days and says it did. */
   cappedAt: number | null;
@@ -778,7 +795,11 @@ export async function generateSlots(admin: any, ctx: WorkspaceContext, args: {
       .select("id, location_id, clinic_id, weekday, starts_minute, ends_minute, slot_kind, appointment_minutes")
       .eq("workspace_id", ctx.workspaceId).eq("status", "active"),
     admin.from("practice_availability_exception")
-      .select("id, location_id, kind, from_date, to_date, starts_minute, ends_minute, slot_kind, appointment_minutes")
+      // ⚠ THE TWO REPLACEMENT COLUMNS ARE SELECTED BECAUSE THEY ARE READ, thirty lines below. Migration
+      // 242 added them for s5.2's location change and activity substitution, and a column added for a
+      // feature and then never read is this project's own recurring failure -- practice_configuration
+      // sat inert from migration 191 until CPR-360.
+      .select("id, location_id, kind, from_date, to_date, starts_minute, ends_minute, slot_kind, appointment_minutes, replacement_location_id, replacement_activity_type")
       .eq("workspace_id", ctx.workspaceId)
       .lte("from_date", dates[dates.length - 1] ?? args.fromDate)
       .gte("to_date", dates[0] ?? args.fromDate),
@@ -804,10 +825,21 @@ export async function generateSlots(admin: any, ctx: WorkspaceContext, args: {
   // is identified by the template; an exception's output has no id to point at, so it is identified by
   // the window it occupies -- which is exactly what a duplicate of it would also occupy.
   const already = new Set<string>();
+  /**
+   * The template-generated rows, by their key, so the reshaping pass can see what SHAPE each one
+   * currently has. A Set can only answer "is there one"; s5.2's location change and activity
+   * substitution need "is the one that is there still right", which is a different question.
+   */
+  const existingByKey = new Map<string, { id: string; location_id: string | null; slot_kind: string }>();
   for (const s of ((existingSlots ?? []) as any[])) {
-    if (s.generated_from_template_id)
+    if (s.generated_from_template_id) {
       already.add(`${s.generated_from_template_id}|${s.generated_for_date}`);
-    else
+      existingByKey.set(`${s.generated_from_template_id}|${s.generated_for_date}`, {
+        id: s.id as string,
+        location_id: (s.location_id as string | null) ?? null,
+        slot_kind: (s.slot_kind as string) ?? "clinic",
+      });
+    } else
       // NORMALISED TO EPOCH MILLISECONDS ON BOTH SIDES. Postgres returns "…T07:00:00+00:00" and the
       // generator computes "…T07:00:00.000Z" -- the same instant, different text, so comparing the
       // strings matched nothing and the de-duplication silently did not happen.
@@ -815,7 +847,42 @@ export async function generateSlots(admin: any, ctx: WorkspaceContext, args: {
   }
 
   const toInsert: any[] = [];
+  /** Slots that already existed but whose place or kind a s5.2 reshaping change has moved under them. */
+  const toReshape: { id: string; location_id: string | null; slot_kind: string; note: string | null }[] = [];
   let daysSkippedForLeave = 0;
+
+  /**
+   * s5.2's TWO RESHAPING KINDS, applied to one session on one date.
+   *
+   * ⚠ A RESHAPE IS NOT A REMOVAL AND IT IS NOT AN ADDITION. The practitioner is still working; the
+   * session is somewhere else, or it is something else. Modelling either as a closure would delete the
+   * time from the diary and leave the planner claiming a free afternoon during an emergency theatre
+   * list. Modelling them as nothing at all would leave the two columns migration 242 added unread.
+   *
+   *   location_change        the slot MOVES. Every booking in it stays where it was, which is precisely
+   *                          the disruption s5.3's action queue exists to put in front of a human.
+   *   activity_substitution  the slot becomes `blocked`, so bookingPreview stops offering it -- its
+   *                          filter is `clinic | telemedicine | emergency_reserve`. The time stays in the
+   *                          diary because the practitioner is still occupied by it.
+   */
+  const reshapeFor = (t: any, onThisDate: any[]) => {
+    let locationId: string | null = t.location_id ?? null;
+    let slotKind: string = t.slot_kind;
+    let note: string | null = null;
+    for (const e of onThisDate) {
+      if (!RESHAPES_TIME.includes(e.kind)) continue;
+      if (e.location_id !== null && e.location_id !== (t.location_id ?? null)) continue;
+      if (e.kind === "location_change" && e.replacement_location_id) {
+        locationId = e.replacement_location_id as string;
+        note = "Moved for the day";
+      }
+      if (e.kind === "activity_substitution" && e.replacement_activity_type) {
+        slotKind = "blocked";
+        note = `Replaced by ${ACTIVITY_LABEL[e.replacement_activity_type as ActivityType] ?? e.replacement_activity_type}`;
+      }
+    }
+    return { locationId, slotKind, note };
+  };
 
   for (const date of dates) {
     const weekday = isoWeekday(date);
@@ -825,19 +892,30 @@ export async function generateSlots(admin: any, ctx: WorkspaceContext, args: {
     const onThisDate = excs.filter(e => e.from_date <= date && e.to_date >= date);
     const removals = onThisDate.filter(e => REMOVES.includes(e.kind));
 
-    // ── LEAVE AND CLOSURE TAKE THE DAY, at the place they name; a practice-wide leave takes all of it.
+    // ── LEAVE, CLOSURE AND AN EMERGENCY INTERRUPTION TAKE THE DAY, at the place they name; a
+    //    practice-wide one takes all of it.
     for (const t of tmpls) {
       if (t.weekday !== weekday) continue;
       const removed = removals.some(e => e.location_id === null || e.location_id === t.location_id);
       if (removed) { daysSkippedForLeave++; continue; }
+      const shape = reshapeFor(t, onThisDate);
       const key = `${t.id}|${date}`;
-      if (already.has(key)) continue;
+      if (already.has(key)) {
+        // ⚠ ALREADY THERE IS NOT THE SAME AS ALREADY RIGHT. The idempotency key is the template and the
+        // date, which is what stops a duplicate -- and it cannot see that a location change has since
+        // moved the session, because neither the place nor the kind is in the key. Without this the
+        // slot would sit at yesterday's address for ever, and the booking engine would keep offering it.
+        const have = existingByKey.get(key);
+        if (have && (have.location_id !== shape.locationId || have.slot_kind !== shape.slotKind))
+          toReshape.push({ id: have.id, location_id: shape.locationId, slot_kind: shape.slotKind, note: shape.note });
+        continue;
+      }
       toInsert.push({
-        workspace_id: ctx.workspaceId, location_id: t.location_id, clinic_id: t.clinic_id,
+        workspace_id: ctx.workspaceId, location_id: shape.locationId, clinic_id: t.clinic_id,
         starts_at: at(t.starts_minute), ends_at: at(t.ends_minute),
-        slot_kind: t.slot_kind, status: "OPEN",
+        slot_kind: shape.slotKind, status: "OPEN",
         generated_from_template_id: t.id, generated_for_date: date,
-        note: null,
+        note: shape.note,
       });
       already.add(key);
     }
@@ -846,7 +924,12 @@ export async function generateSlots(admin: any, ctx: WorkspaceContext, args: {
     // null template id -- which means regeneration will not remove it either. That is correct: a
     // practitioner who typed "I am also working this Saturday" did not ask for it to be reconsidered.
     for (const e of onThisDate) {
-      if (REMOVES.includes(e.kind)) continue;
+      // ⚠ `!REMOVES` IS NOT THE SAME AS `ADDS`, AND IT USED TO BE. With four kinds the two were the same
+      // set; migration 242's location change and activity substitution are neither, and the old test let
+      // them through here -- so a location change generated a SECOND slot beside the one it had just
+      // moved, and the day held two clinics at two addresses. Found by an assertion that counted the
+      // day's slots after the move rather than only checking the moved one.
+      if (!ADDS_TIME.includes(e.kind)) continue;
       // KEYED ON THE WINDOW, not on the exception id -- because the slot this creates carries no
       // reference back to the exception, so the window is the only thing a later run can recognise it
       // by. `exception:<id>|<date>` was the first version and matched nothing on re-read, which is how
@@ -871,6 +954,22 @@ export async function generateSlots(admin: any, ctx: WorkspaceContext, args: {
       .insert(toInsert).select("id");
     if (error) return { ok: false, status: 422, code: "REFUSED_BY_DATABASE", message: error.message };
     slotsCreated = (inserted ?? []).length;
+  }
+
+  // ── s5.2's RESHAPES, APPLIED IN PLACE.
+  //
+  // ⚠ UPDATED, NOT DELETED AND RE-CREATED, and the slot id is why. An appointment made before the change
+  // carries this slot's id; deleting the row and inserting a replacement would orphan that reference and
+  // the booking would stop being findable through its slot. The appointment's OWN location is left alone
+  // on purpose -- the patient was told the old address, and telling them otherwise is a decision for
+  // s5.3's action queue, not a side effect of regenerating a diary.
+  let slotsReshaped = 0;
+  for (const r of toReshape) {
+    const { error } = await admin.from("practice_availability_slot")
+      .update({ location_id: r.location_id, slot_kind: r.slot_kind, note: r.note })
+      .eq("id", r.id).eq("workspace_id", ctx.workspaceId);
+    if (error) return { ok: false, status: 422, code: "REFUSED_BY_DATABASE", message: error.message };
+    slotsReshaped++;
   }
 
   // Slots this generator made for days that are now on leave, or for sessions no longer in the week.
@@ -904,7 +1003,7 @@ export async function generateSlots(admin: any, ctx: WorkspaceContext, args: {
   const report: GenerationReport = {
     fromDate: args.fromDate, toDate: args.toDate,
     daysConsidered: dates.length,
-    slotsCreated, slotsRemoved, slotsKept, daysSkippedForLeave,
+    slotsCreated, slotsRemoved, slotsKept, slotsReshaped, daysSkippedForLeave,
     cappedAt: capped ? GENERATION_CAP_DAYS : null,
   };
 

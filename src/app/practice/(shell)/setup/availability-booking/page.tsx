@@ -5,12 +5,15 @@ import { resolvePracticeShell } from "@/lib/practice/shell";
 import { hasCapability } from "@/lib/practice/access";
 import { practiceSessions, readingValue, type SessionView, type LocationView } from "@/lib/practice/practice-sessions";
 import { bookingPreview } from "@/lib/practice/availability-config";
-import { formatDayTime, formatMinuteOfDay } from "@/lib/datetime";
+import { scheduleChanges, impactReadingValue, type ScheduleChangeView, type QueuedAction } from "@/lib/practice/schedule-exceptions";
+import { formatDayTime } from "@/lib/datetime";
 import {
   LAYER_SWATCH, LAYER1_STAT_SWATCH, appointmentTypeLabel,
 } from "@/lib/practice/practice-session-constants";
+import { LAYER2_STAT_SWATCH } from "@/lib/practice/schedule-exception-constants";
 import LayerNav, { type Layer } from "./LayerNav";
 import SessionWorkspace from "./SessionWorkspace";
+import ExceptionWorkspace from "./ExceptionWorkspace";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -88,7 +91,10 @@ export default async function AvailabilityBookingPage({ searchParams }: {
     redirect("/practice/setup");
 
   const admin = createAdminClient();
-  const s = await practiceSessions(admin, ctx);
+  // Layer 2's read runs whether or not Layer 2 is the open layer, because s3.2's navigator card carries
+  // its completion summary -- "3 upcoming changes · 1 patient action required" -- and a card that said
+  // nothing until you clicked it would be a card you had to click to find out you needed to.
+  const [s, x] = await Promise.all([practiceSessions(admin, ctx), scheduleChanges(admin, ctx)]);
 
   const { layer } = await searchParams;
   const active = Number(layer) >= 1 && Number(layer) <= 3 ? Number(layer) : 1;
@@ -96,8 +102,17 @@ export default async function AvailabilityBookingPage({ searchParams }: {
   const sessions = readingValue(s.sessions, [] as SessionView[]);
   const locations = readingValue(s.locations, [] as LocationView[]);
   const clinics = readingValue(s.clinics, [] as any[]);
-  const exceptions = readingValue(s.upcomingExceptions, [] as any[]);
   const rules = readingValue(s.bookingRules, [] as any[]);
+
+  // ── LAYER 2 (CPR-V5-007 Phase 2). Every figure here comes from the one read above, and each carries
+  //    whether it could be read at all -- a nought and an outage are drawn differently on this layer,
+  //    because on this layer a wrong nought is a patient nobody rings.
+  const changes = impactReadingValue(x.changes, [] as ScheduleChangeView[]);
+  const queue = impactReadingValue(x.queue, [] as QueuedAction[]);
+  const changesUnreadable = x.changes.state === "unreadable" ? x.changes.reason : null;
+  const queueUnreadable = x.queue.state === "unreadable" ? x.queue.reason : null;
+  /** ⚠ UNREVIEWED IS NOT NOUGHT-AFFECTED. Its own figure, in slate, and it says so in words. */
+  const unreviewed = x.unreviewed;
 
   const liveSessions = sessions.filter(x => x.status === "active" && x.effectiveState === "current");
   const activeLocations = locations.filter(l => l.active);
@@ -157,17 +172,35 @@ export default async function AvailabilityBookingPage({ searchParams }: {
     {
       n: 2, key: "changes", title: "Changes & Exceptions",
       blurb: "Adjust specific dates without changing your regular practice pattern.",
-      summary: s.upcomingExceptions.state !== "ok" ? "could not be read"
-        : `${exceptions.length} upcoming change${exceptions.length === 1 ? "" : "s"}`,
+      // s3.2's own example summary is "3 upcoming changes · 1 patient action required", and both halves
+      // are now real figures rather than a count of rows beside a promise.
+      summary: changesUnreadable ? "could not be read"
+        : `${changes.length} upcoming change${changes.length === 1 ? "" : "s"}`
+          + (queueUnreadable ? " · queue unreadable"
+            : queue.length > 0 ? ` · ${queue.length} patient action${queue.length === 1 ? "" : "s"} required` : ""),
       children: [
         {
           key: "upcoming", label: "Upcoming changes",
-          state: s.upcomingExceptions.state !== "ok" ? "unreadable" : null,
-          detail: s.upcomingExceptions.state !== "ok" ? null : `${exceptions.length}`,
+          state: changesUnreadable ? "unreadable" : null,
+          detail: changesUnreadable ? null : `${changes.length}`,
         },
-        { key: "leave", label: "Leave and closures", state: null, detail: `${exceptions.filter(e => ["leave", "closure"].includes(e.kind)).length}` },
-        { key: "extra", label: "Extra sessions", state: null, detail: `${exceptions.filter(e => ["extra_session", "extended_hours"].includes(e.kind)).length}` },
-        { key: "affected", label: "Affected appointments", state: "unreadable", detail: "Phase 2" },
+        {
+          key: "leave", label: "Leave and closures", state: changesUnreadable ? "unreadable" : null,
+          detail: changesUnreadable ? null
+            : `${changes.filter(c => ["leave", "closure", "emergency_interruption"].includes(c.kind)).length}`,
+        },
+        {
+          key: "extra", label: "Extra sessions", state: changesUnreadable ? "unreadable" : null,
+          detail: changesUnreadable ? null
+            : `${changes.filter(c => ["extra_session", "extended_hours"].includes(c.kind)).length}`,
+        },
+        {
+          // ⚠ `false` WHEN SOMEBODY IS WAITING, not `true` when nobody is. A green tick beside "affected
+          // appointments" would be the navigator answering a question nobody asked.
+          key: "affected", label: "Affected appointments",
+          state: queueUnreadable ? "unreadable" : queue.length === 0,
+          detail: queueUnreadable ? null : `${queue.length} to decide`,
+        },
       ],
     },
     {
@@ -225,17 +258,20 @@ export default async function AvailabilityBookingPage({ searchParams }: {
 
         {/* ── THE PHASE BANNER. Stated once, at the top, in the practitioner's words. ───────────── */}
         <section className="flex flex-wrap items-start gap-3 rounded-xl border border-[var(--cp-primary)]/20 bg-[var(--cp-primary)]/[0.05] p-3.5">
-          <span aria-hidden className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[var(--cp-primary)]/12 text-[15px] text-[var(--cp-primary-deep)]">①</span>
+          <span aria-hidden className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[var(--cp-primary)]/12 text-[15px] text-[var(--cp-primary-deep)]">②</span>
           <div className="min-w-0 flex-1">
             <p className="text-[12.5px] font-bold text-gray-900">
-              This workspace is at Phase 1 of six: your regular practice.
+              This workspace is at Phase 2 of six: your regular practice, and changes to it.
             </p>
             <p className="text-[11px] leading-relaxed text-gray-600">
               Layer 1 is complete — locations, named recurring sessions, activity types, appointment
-              types, capacity and walk-ins. Layer 2 shows the schedule changes you already have; the
-              workflow that resolves the bookings a change strands is Phase 2. Layer 3 shows the booking
-              rules you already have; the rule card builder is Phase 3, and the patient-facing booking
-              page — handle, link, OTP, publish — is Phase 4. Nothing below is a control that does nothing.
+              types, capacity and walk-ins. Layer 2 is complete for the thing that matters most about a
+              schedule change: before one is made, this screen works out who is booked into the time you
+              are changing, shows you their appointments, and will not write the change until you have
+              said what happens to them. Three of s5.3&apos;s six resolutions are real; the other two and
+              a half are named below rather than mimed. Layer 3 shows the booking rules you already have;
+              the rule card builder is Phase 3, and the patient-facing booking page — handle, link, OTP,
+              publish — is Phase 4. Nothing below is a control that does nothing.
             </p>
           </div>
         </section>
@@ -382,67 +418,62 @@ export default async function AvailabilityBookingPage({ searchParams }: {
             {/* ══ LAYER 2 ═══════════════════════════════════════════════════════════════════════ */}
             {active === 2 && (
               <>
-                <section className={card}>
-                  <div className="mb-3 flex flex-wrap items-center gap-2">
-                    <span aria-hidden className="flex h-7 w-7 items-center justify-center rounded-lg bg-amber-100 text-[14px] text-amber-700">⚑</span>
-                    <div className="min-w-0">
-                      <h3 className="text-[14px] font-bold text-gray-900">Upcoming changes</h3>
-                      <p className="text-[11px] text-gray-500">
-                        Dates that are not like your regular week. These are real and already work.
-                      </p>
-                    </div>
-                    <Link href="/practice/setup/availability?step=3"
-                      className="ml-auto rounded-lg bg-[var(--cp-primary)] px-3.5 py-2 text-[12px] font-semibold text-white hover:bg-[var(--cp-primary-deep)]">
-                      Add a change
-                    </Link>
-                  </div>
-                  {s.upcomingExceptions.state !== "ok" ? (
-                    <Unreadable what="Your schedule changes could not be read." />
-                  ) : exceptions.length === 0 ? (
-                    <p className="text-[12px] text-gray-400">
-                      Nothing upcoming. Leave, closures and one-off clinics all go here, and none of them
-                      is required.
-                    </p>
-                  ) : (
-                    <ul className="space-y-2">
-                      {exceptions.map(e => (
-                        <li key={e.id} className="flex flex-wrap items-center gap-3 rounded-lg border border-gray-200 px-3 py-2.5">
-                          <div className="w-[52px] shrink-0 text-center">
-                            <p className="text-[15px] font-bold leading-none text-amber-700">{e.from_date.slice(8, 10)}</p>
-                            <p className="text-[9px] font-bold uppercase tracking-wide text-gray-500">
-                              {new Date(`${e.from_date}T12:00:00Z`).toLocaleString("en-GB", { month: "short", timeZone: "UTC" })}
-                            </p>
-                          </div>
-                          <div className="min-w-0 flex-1">
-                            <p className="text-[12.5px] font-bold capitalize text-gray-900">
-                              {String(e.kind).replace(/_/g, " ")}
-                              {e.reason ? ` — ${e.reason}` : ""}
-                            </p>
-                            <p className="text-[11px] text-gray-600">
-                              {e.from_date === e.to_date ? e.from_date : `${e.from_date} → ${e.to_date}`}
-                              {e.starts_minute != null
-                                ? ` · ${formatMinuteOfDay(e.starts_minute)}–${formatMinuteOfDay(e.ends_minute)}`
-                                : " · the whole day"}
-                              {" · "}
-                              {e.location_id ? locations.find(l => l.id === e.location_id)?.name ?? "a location" : "everywhere"}
-                            </p>
-                          </div>
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                </section>
+                {/* The four figures. Tinted badge, AND THE FIGURE IN THE TILE'S HUE.
+                    ⚠ THE LAST ONE IS NOT A GOOD-NEWS TILE. "Impact not reviewed" counts changes where
+                    nobody has been asked who was booked in, and it is slate rather than green because it
+                    is an open question rather than an answer. */}
+                <div className="grid gap-2.5 sm:grid-cols-2 lg:grid-cols-4">
+                  {[
+                    {
+                      key: "changes", n: changesUnreadable ? null : changes.length,
+                      label: "Changes in the next 6 months",
+                    },
+                    {
+                      key: "affected", n: queueUnreadable ? null : queue.length,
+                      label: "Patients waiting on a decision",
+                    },
+                    {
+                      key: "pending",
+                      n: changesUnreadable ? null : changes.filter(c => c.impactState === "pending").length,
+                      label: "Changes with somebody still unresolved",
+                    },
+                    {
+                      key: "unreviewed", n: unreviewed,
+                      label: unreviewed === null ? "Impact review — could not be read"
+                        : "Changes whose impact was never checked",
+                    },
+                  ].map(t => {
+                    const st = LAYER2_STAT_SWATCH[t.key];
+                    return (
+                      <div key={t.key} className={card}>
+                        <span aria-hidden className={`flex h-8 w-8 items-center justify-center rounded-lg text-[15px] ${st.badge}`}>
+                          {st.icon}
+                        </span>
+                        <p className={`mt-2 text-[24px] font-bold leading-none ${t.n === null ? "text-slate-300" : st.figure}`}>
+                          {t.n === null ? "—" : t.n}
+                        </p>
+                        <p className="mt-1 text-[11px] leading-snug text-gray-500">{t.label}</p>
+                      </div>
+                    );
+                  })}
+                </div>
 
-                {/* s5.3. The comp shows "3 affected appointments" against each change. */}
-                <NotBuilt
-                  title="Affected appointments"
-                  phase="Phase 2"
-                  what={"s5.3 asks for the confirmed, requested, wait-listed and follow-up-linked bookings a change would strand to be counted BEFORE the change is committed, and for a resolution strategy — keep pending, offer next available, bulk reschedule, move to waiting list, cancel and notify — to be chosen for them. None of that exists. Adding a change today applies it and does not tell you who it moved, which is why the count is absent rather than shown as nought."} />
+                <ExceptionWorkspace
+                  changes={JSON.parse(JSON.stringify(changes))}
+                  queue={JSON.parse(JSON.stringify(queue))}
+                  locations={JSON.parse(JSON.stringify(locations))}
+                  today={x.today}
+                  timezone={x.timezone}
+                  mayEdit={x.mayEdit}
+                  namesVisible={x.namesVisible}
+                  changesUnreadable={changesUnreadable}
+                  queueUnreadable={queueUnreadable}
+                />
 
                 <NotBuilt
-                  title="The six exception types"
-                  phase="Phase 2"
-                  what={"s5.2 names six kinds: unavailable, time change, location change, extra session, activity substitution and emergency interruption. Four exist today — leave, closure, one-off session and extended hours — and the Add a change form above offers those four. Location change, activity substitution and emergency interruption have no representation in the schema."} />
+                  title="Offering the next available appointment, and a waiting list"
+                  phase="Phase 3 and Phase 5"
+                  what={"s5.3 lists six resolutions and three of them are real here — keep pending, cancel the appointment, and record that the patient was moved to another one. “Offer next available” needs s7's rule engine to generate and hold alternatives and something to send them with, and “move to waiting list” needs a waiting list: practice_appointment has six statuses and none of them is wait-listed, and there is no priority to preserve. Both are refused by the engine with the reason rather than stored as a word that would make a patient look handled."} />
               </>
             )}
 
@@ -639,37 +670,72 @@ export default async function AvailabilityBookingPage({ searchParams }: {
               <>
                 <section className={card}>
                   <h3 className="mb-2 text-[13px] font-bold text-gray-900">Changes ahead</h3>
-                  {s.upcomingExceptions.state !== "ok" ? (
+                  {changesUnreadable ? (
                     <p className="text-[11px] text-slate-500">Could not be read.</p>
                   ) : (
                     <ul className="space-y-1.5 text-[11.5px]">
                       <li className="flex items-baseline gap-2">
-                        <span className="text-gray-600">Leave and closures</span>
+                        <span className="text-gray-600">Time taken away</span>
                         <span className="ml-auto font-bold text-amber-700">
-                          {exceptions.filter(e => ["leave", "closure"].includes(e.kind)).length}
+                          {changes.filter(c => c.effect === "removes").length}
                         </span>
                       </li>
                       <li className="flex items-baseline gap-2">
-                        <span className="text-gray-600">Extra and extended sessions</span>
+                        <span className="text-gray-600">Time added</span>
                         <span className="ml-auto font-bold text-emerald-700">
-                          {exceptions.filter(e => ["extra_session", "extended_hours"].includes(e.kind)).length}
+                          {changes.filter(c => c.effect === "adds").length}
+                        </span>
+                      </li>
+                      <li className="flex items-baseline gap-2">
+                        <span className="text-gray-600">Moved or substituted</span>
+                        <span className="ml-auto font-bold text-cyan-700">
+                          {changes.filter(c => c.effect === "reshapes").length}
                         </span>
                       </li>
                       <li className="flex items-baseline gap-2">
                         <span className="text-gray-600">Days affected</span>
                         <span className="ml-auto font-bold text-violet-700">
-                          {new Set(exceptions.flatMap(e => [e.from_date, e.to_date])).size}
+                          {changes.reduce((n, c) => n + c.days, 0)}
                         </span>
                       </li>
                     </ul>
                   )}
                 </section>
-                <section className="rounded-xl border border-dashed border-slate-300 bg-slate-50/70 p-4">
-                  <h3 className="text-[13px] font-bold text-slate-600">Patients affected</h3>
-                  <p className="mt-1 text-[11px] leading-relaxed text-slate-500">
-                    Not computed. Working out who a change strands, and offering a way to resolve it, is
-                    Phase 2 — and a nought here would read as &ldquo;nobody is affected&rdquo;.
-                  </p>
+
+                {/* ⚠ THE PANEL THAT USED TO SAY "not computed". It is computed now, and the three
+                    answers it can give are kept apart: a number, an outage, and a question nobody has
+                    asked yet. A nought under "patients affected" is only ever printed when somebody
+                    has actually looked. */}
+                <section className={queueUnreadable
+                  ? "rounded-xl border border-dashed border-slate-300 bg-slate-50/70 p-4"
+                  : queue.length > 0
+                    ? "rounded-xl border border-rose-200 bg-rose-50/60 p-4"
+                    : card}>
+                  <h3 className="text-[13px] font-bold text-gray-900">Patients affected</h3>
+                  {queueUnreadable ? (
+                    <p className="mt-1 text-[11px] leading-relaxed text-slate-500">
+                      Could not be read. {queueUnreadable} That is not a nought.
+                    </p>
+                  ) : (
+                    <>
+                      <p className={`mt-1 text-[24px] font-bold leading-none ${queue.length > 0 ? "text-rose-700" : "text-emerald-700"}`}>
+                        {queue.length}
+                      </p>
+                      <p className="mt-1 text-[11px] leading-relaxed text-gray-600">
+                        {queue.length > 0
+                          ? "waiting on a decision. Each one is a named booking a schedule change got in the way of, and none of them leaves this list on its own."
+                          : "nobody is waiting on a decision right now."}
+                      </p>
+                    </>
+                  )}
+                  {unreviewed !== null && unreviewed > 0 && (
+                    <p className="mt-2.5 border-t border-black/5 pt-2 text-[10.5px] leading-relaxed text-slate-600">
+                      <span className="font-bold">{unreviewed}</span> change
+                      {unreviewed === 1 ? " was" : "s were"} recorded without anybody checking who was
+                      booked into {unreviewed === 1 ? "it" : "them"}. That is not the same as nobody being
+                      booked in, and this screen will not draw it as though it were.
+                    </p>
+                  )}
                 </section>
               </>
             )}
