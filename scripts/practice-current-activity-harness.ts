@@ -396,7 +396,17 @@ async function main() {
         dash.glance.tiles.filter(t => !Object.prototype.hasOwnProperty.call(GLANCE_SWATCH, t.key))
           .map(t => t.key).join(","));
       const lenses = await activeFollowUps(admin, ctxA, today);
-      ok("10k. follow-ups return s6's five lenses", lenses.length === 5,
+      // ⚠ SEVEN NOW, AND THE LIST IS NAMED RATHER THAN COUNTED. s6 draws five; the command centre needs
+      // two more (need_booking, due_week) and used to compute its own -- which is how the two screens
+      // came to disagree about what "overdue" meant. Folding them in here made this the one owner.
+      //
+      // A COUNT ASSERTION WOULD HAVE PASSED THROUGH THAT CHANGE if the numbers had happened to match,
+      // and it went stale silently when they did not: I added the two lenses and ran the command-centre
+      // and dashboard harnesses, not this one. Naming the keys makes the next change name itself too.
+      const LENS_KEYS = ["due_today", "overdue", "waiting_results", "booked", "completed",
+        "need_booking", "due_week"];
+      ok("10k. follow-ups return s6's five lenses plus the command centres two",
+        lenses.map(l => l.key).sort().join() === [...LENS_KEYS].sort().join(),
         lenses.map(l => l.key).join(","));
       // "Waiting Results" must be a real kind rather than a label over nothing.
       ok("10l. 'Waiting Results' is a real follow-up kind, not an invented bucket",
@@ -521,15 +531,19 @@ async function main() {
     orphans.map(o => `${o.label} (${o.href}) has no parent section`).join("; "));
 
   const sections = PRACTICE_NAV.filter(i => i.primary);
-  ok("9b. the sidebar declares eleven sections", sections.length === 11,
+  // CPR-PAT-002 s2: ten. The submenu went with it -- see the note in navigation.ts.
+  ok("9b. the sidebar declares CPR-PAT-002 s2 ten sections", sections.length === 10,
     `${sections.length}: ${sections.map(i => i.label).join(", ")}`);
 
   // 9b-order. THE ORDER IS PART OF THE SPECIFICATION, not an accident of where entries sit in the array.
   // s8 lists them, and "Encounters becomes the central workspace" is a claim about position as much as
   // about function -- it is fourth, right after the three ways a practitioner reaches one.
+  // ⚠ WRITTEN OUT IN FULL ON PURPOSE. A list assertion updated to match whatever the code now does is
+  // not an assertion, it is a transcript. This is CPR-PAT-002 s2s recommended sidebar as the document
+  // states it, so the next change has to come with a document too.
   const V5_ORDER = ["/practice/home", "/practice/today", "/practice/calendar", "/practice/patients",
     "/practice/encounters", "/practice/documents", "/practice/follow-ups", "/practice/assistant",
-    "/practice/intelligence", "/practice/setup", "/practice/documentation"];
+    "/practice/intelligence", "/practice/setup"];
   const rendered = primaryNav([...new Set(PRACTICE_NAV.map(i => i.capability).filter(Boolean))] as string[]);
   ok("9b-order. and renders them in the order the specifications list",
     rendered.map(i => i.href).join() === V5_ORDER.join(), rendered.map(i => i.href).join(" "));
@@ -547,7 +561,7 @@ async function main() {
   const allCaps = [...new Set(PRACTICE_NAV.map(i => i.capability).filter(Boolean))] as string[];
   const shown = primaryNav(allCaps);
   ok("9d-control. an owner sees the built sections, not an empty sidebar",
-    shown.length === sections.filter(i => i.built).length && shown.length === 11, `${shown.length} shown`);
+    shown.length === sections.filter(i => i.built).length && shown.length === 10, `${shown.length} shown`);
   // EVERY built non-primary module appears exactly once, under its parent. Asserted as an EQUALITY
   // against the catalogue rather than a threshold: ">= 15" went stale the moment V5-002 promoted
   // Current Session out of the children, and a stale threshold fails for the right reason once and
@@ -600,14 +614,21 @@ async function main() {
 
   // CONTROL. 9f-b passes trivially if no view exists at all -- and it did, until this spec. Assert the
   // views are really there, so the check above is guarding something.
-  ok("9f-b-control. and there ARE views to check",
-    PRACTICE_NAV.filter(i => i.href.includes("?")).length >= 2,
-    `${PRACTICE_NAV.filter(i => i.href.includes("?")).length}`);
+  // ⚠ INVERTED BY CPR-PAT-002 s2, NOT DELETED. This used to assert views EXIST, because two did. The
+  // specification withdrew the Patients submenu, so the honest assertion is now the opposite one: the
+  // submenu is gone. 9f-b above still holds the RULE for any view that returns -- a rule with nothing
+  // to check is worth keeping when the thing it guards is a mistake somebody will make again.
+  ok("9f-b-control. the Patients submenu is gone (s2), so there are no worklist views left",
+    PRACTICE_NAV.filter(i => i.href.includes("?")).length === 0,
+    PRACTICE_NAV.filter(i => i.href.includes("?")).map(i => i.href).join(", "));
   // 9h. The sections themselves. V5-003 draws three groups, and the separation carries meaning:
   // everything in Workspace can change a record and Practice Intelligence cannot.
-  ok("9h. the sidebar has the three declared sections, in order",
-    SIDEBAR_SECTIONS.map(x => x.label).join() === "Workspace,Insights,Administration,Documentation",
-    SIDEBAR_SECTIONS.map(x => x.label).join());
+  // ⚠ CPR-PAT-002 s2 COLLAPSED THE GROUPS: the comp draws one flat list with no headings. The meaning
+  // the headings carried (everything above Insights can change a record; Practice Intelligence cannot)
+  // is now unlabelled and survives only in the ORDER, which 9b-order pins.
+  ok("9h. the sidebar is one flat section (s2 simplify the global navigation)",
+    SIDEBAR_SECTIONS.length === 1 && SIDEBAR_SECTIONS[0].label === "",
+    SIDEBAR_SECTIONS.map(x => JSON.stringify(x.label)).join());
   ok("9h-b. and every primary section belongs to exactly one of them",
     PRACTICE_NAV.filter(i => i.primary).every(i =>
       SIDEBAR_SECTIONS.filter(x => x.hrefs.includes(i.href)).length === 1),

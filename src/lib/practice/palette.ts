@@ -123,6 +123,204 @@ export const GLANCE_SWATCH: Record<string, { badge: string; figure: string; box:
   no_show: { badge: "bg-slate-100 text-slate-500", figure: "text-slate-600", box: "border-slate-200 bg-slate-50/60", icon: "○" },
 };
 
+/**
+ * CPR-V5-006's six worklist tiles.
+ *
+ * ⚠ THE THIRD TIME THIS EXACT NOTE HAS BEEN WRITTEN IN THIS FILE, and the third screen it has been
+ * written about. The Patients page shipped with SIX GREY TILES and not one of its components imported
+ * this module. The user's words, again: "The colors are flat."
+ *
+ * It is worth being precise about why this keeps happening and why it matters. Grey feels like the
+ * conservative choice -- it commits to nothing and cannot clash. But these six tiles are read in the
+ * first seconds of a clinic, at a glance, to answer "what needs me first". Six identical grey
+ * rectangles containing six numbers have to be READ, one at a time, left to right; six coloured ones
+ * are FOUND. THIS IS A LEGIBILITY DECISION, NOT A DECORATIVE ONE, and monochrome is not the safe
+ * default -- it is the option that quietly costs the practitioner the thing the screen was for.
+ *
+ * The hues carry meaning where meaning exists and are only scannability where it does not:
+ *   waiting          amber -- people in the building, now. The one with a clock on it.
+ *   dueFollowUps     rose  -- the only FAILURE state here. Somebody is owed something and it is late.
+ *   pendingResults   sky   -- arrived and unreviewed. Not late yet, but it is the missed-result harm.
+ *   walkIns          violet-- unplanned work, which is what makes a day overrun.
+ *   recentPatients   slate -- context, not a demand. Deliberately quiet: it is the tile that should
+ *                            NEVER pull the eye away from the five above it.
+ *   newRegistrations emerald -- growth, and the only unambiguously good number on the row.
+ */
+export const WORKLIST_SWATCH: Record<string, { badge: string; figure: string; box: string; icon: string }> = {
+  waiting: { badge: "bg-amber-100 text-amber-700", figure: "text-amber-700", box: "border-amber-200 bg-amber-50/60", icon: "⏱" },
+  dueFollowUps: { badge: "bg-rose-100 text-rose-700", figure: "text-rose-700", box: "border-rose-300 bg-rose-50", icon: "↻" },
+  pendingResults: { badge: "bg-sky-100 text-sky-700", figure: "text-sky-700", box: "border-sky-200 bg-sky-50/60", icon: "⚗" },
+  walkIns: { badge: "bg-violet-100 text-violet-700", figure: "text-violet-700", box: "border-violet-200 bg-violet-50/60", icon: "⚇" },
+  recentPatients: { badge: "bg-slate-100 text-slate-500", figure: "text-slate-600", box: "border-slate-200 bg-slate-50/60", icon: "◔" },
+  newRegistrations: { badge: "bg-emerald-100 text-emerald-700", figure: "text-emerald-700", box: "border-emerald-200 bg-emerald-50/60", icon: "＋" },
+};
+
+/**
+ * CPR-PAT-002 s3's NINE dashboard cards -- five under "Today's Care", four under "Continuing Care".
+ *
+ * ⚠ THE FOURTH TIME THIS NOTE HAS BEEN WRITTEN IN THIS FILE. The Patients dashboard was rebuilt again and
+ * came back grey again. The rule, one more time, because it is the specific thing that keeps being lost:
+ * THE FIGURE TAKES THE CARD'S COLOUR. A tinted badge beside a black number leaves the colour on the
+ * decoration; the number is what is being read. A card gets three things -- a tinted box, a tinted icon
+ * badge, AND a figure in the same hue.
+ *
+ * THE SPEC'S NINE CARDS ARE NOT WORKLIST_SWATCH'S SIX, which is why this map exists rather than being
+ * bent out of that one. Four of the nine have no engine worklist behind them at all; they still need a
+ * hue, because a card whose figure could not be computed still has to sit in the row without looking
+ * broken. Cards fall back to WORKLIST_SWATCH by their engine key where one exists, so the two maps
+ * cannot disagree about what a worklist's colour is.
+ *
+ * THE HUES, AND WHY EACH ONE:
+ *   waiting          amber   -- people in the building now. This product's waiting hue everywhere else.
+ *   walkIns          violet  -- unplanned work, which is what makes a day overrun. GLANCE_SWATCH agrees.
+ *   inConsultation   indigo  -- the practice's primary. QUEUE_SWATCH already draws IN_CONSULTATION in it,
+ *                               so the card and the chip on the row below it are the same colour.
+ *   followUpsToday   cyan    -- due today and not yet late. Deliberately NOT sky (that is the results
+ *                               hue) and NOT rose (that is the failure hue) -- today's follow-up is
+ *                               neither of those things yet.
+ *   urgentReviews    rose    -- priority set by a clinician, on an open obligation. A failure state.
+ *   overdueFollowUps rose    -- the other failure state, and the only one whose cost falls on somebody
+ *                               outside the room. Drawn heavier than the rest: a solid tint, not a wash.
+ *   resultsToReview  sky     -- arrived and unreviewed. Not late, but it is the missed-result harm.
+ *   recentlySeen     slate   -- context, not a demand. The one card that must never pull the eye.
+ *   newRegistrations emerald -- growth, and the only unambiguously good figure on either row.
+ *
+ * ROSE TWICE IS DELIBERATE and the two are in different rows: today's urgent reviews and the standing
+ * overdue backlog are the same KIND of fact at two timescales, and giving the second one its own hue
+ * would say they were different kinds.
+ */
+export const CARE_CARD_SWATCH: Record<string, {
+  badge: string; figure: string; box: string; accent: string; icon: string; caption: string;
+}> = {
+  waiting: {
+    badge: "bg-amber-100 text-amber-700", figure: "text-amber-700",
+    box: "border-amber-200/80 bg-amber-50/70", accent: "bg-amber-400",
+    icon: "⏱", caption: "text-amber-800/60",
+  },
+  walkIns: {
+    badge: "bg-violet-100 text-violet-700", figure: "text-violet-700",
+    box: "border-violet-200/80 bg-violet-50/70", accent: "bg-violet-400",
+    icon: "⚇", caption: "text-violet-800/60",
+  },
+  inConsultation: {
+    badge: "bg-[var(--cp-primary)]/12 text-[var(--cp-primary-deep)]", figure: "text-[var(--cp-primary-deep)]",
+    box: "border-[var(--cp-primary)]/25 bg-[var(--cp-primary)]/[0.06]", accent: "bg-[var(--cp-primary)]",
+    icon: "◉", caption: "text-[var(--cp-primary-deep)]/60",
+  },
+  followUpsToday: {
+    badge: "bg-cyan-100 text-cyan-700", figure: "text-cyan-700",
+    box: "border-cyan-200/80 bg-cyan-50/70", accent: "bg-cyan-400",
+    icon: "↻", caption: "text-cyan-800/60",
+  },
+  urgentReviews: {
+    badge: "bg-rose-100 text-rose-700", figure: "text-rose-700",
+    box: "border-rose-200/90 bg-rose-50/80", accent: "bg-rose-400",
+    icon: "⚠", caption: "text-rose-800/60",
+  },
+  overdueFollowUps: {
+    badge: "bg-rose-100 text-rose-700", figure: "text-rose-700",
+    box: "border-rose-300 bg-rose-50", accent: "bg-rose-500",
+    icon: "↺", caption: "text-rose-800/60",
+  },
+  resultsToReview: {
+    badge: "bg-sky-100 text-sky-700", figure: "text-sky-700",
+    box: "border-sky-200/80 bg-sky-50/70", accent: "bg-sky-400",
+    icon: "▤", caption: "text-sky-800/60",
+  },
+  recentlySeen: {
+    badge: "bg-slate-100 text-slate-500", figure: "text-slate-600",
+    box: "border-slate-200 bg-slate-50/80", accent: "bg-slate-300",
+    icon: "◔", caption: "text-slate-500",
+  },
+  newRegistrations: {
+    badge: "bg-emerald-100 text-emerald-700", figure: "text-emerald-700",
+    box: "border-emerald-200/80 bg-emerald-50/70", accent: "bg-emerald-400",
+    icon: "＋", caption: "text-emerald-800/60",
+  },
+};
+
+/**
+ * A card whose figure the engine cannot supply.
+ *
+ * IT KEEPS ITS PLACE AND LOSES ITS COLOUR, which is the same rule WorklistTiles already applied to an
+ * unreadable tile: a tinted card with an em dash in it looks like a number you cannot quite read, rather
+ * than a question nobody could answer. The card still occupies its slot -- removing it would make the row
+ * look complete when it is not.
+ */
+export const CARE_CARD_UNSUPPLIED = {
+  badge: "bg-slate-100 text-slate-400", figure: "text-slate-300",
+  box: "border-dashed border-slate-300 bg-white", accent: "bg-slate-200",
+  caption: "text-slate-400",
+} as const;
+
+/** The register's Journey Snapshot glyphs -- encounters and procedures, the two figures that are real. */
+export const JOURNEY_ICON = { encounters: "▤", procedures: "✚" } as const;
+
+/**
+ * The eight quick actions of CPR-PAT-002 s7.
+ *
+ * Cycled hues rather than semantic ones: none of the eight ranks above another, and eight identical grey
+ * buttons is the failure this file exists to stop. The disabled treatment is separate and is grey on
+ * purpose -- an action you cannot take must not look like one you can.
+ */
+export const ACTION_SWATCH: Record<string, { badge: string; icon: string }> = {
+  new_patient: { badge: "bg-[var(--cp-primary)]/12 text-[var(--cp-primary-deep)]", icon: "☺" },
+  walk_in: { badge: "bg-violet-100 text-violet-700", icon: "⚇" },
+  open_encounter: { badge: "bg-emerald-100 text-emerald-700", icon: "✎" },
+  upload_document: { badge: "bg-sky-100 text-sky-700", icon: "▤" },
+  schedule_follow_up: { badge: "bg-cyan-100 text-cyan-700", icon: "↻" },
+  print_summary: { badge: "bg-amber-100 text-amber-700", icon: "⎙" },
+  merge_duplicate: { badge: "bg-rose-100 text-rose-700", icon: "⇄" },
+  import_patients: { badge: "bg-slate-100 text-slate-500", icon: "⇪" },
+};
+
+export const ACTION_DISABLED = "bg-slate-100 text-slate-400";
+
+/**
+ * The status chip in the My Patients table, and in the summary panel's header.
+ *
+ * ⚠ RED IS SPENT ONLY ON `overdue`. The comp colours five states and it is tempting to make each one
+ * loud; the discipline recorded on the command centre applies here too -- a red that appears on an
+ * ordinary row teaches people to stop seeing red, and takes the one row that matters down with it.
+ * "Active" and "New patient" are ordinary facts about a person and are drawn as such.
+ */
+// ⚠ KEYED ON COHORT_STATUS_LABELS' OWN CODES, NOT ON THE COMP'S LABELS. My first version of this used
+// the words the design shows -- "Follow-up Due", "Active", "New Patient" -- and NONE of them is a status
+// this engine emits. Every chip would have fallen through to the grey default while compiling perfectly:
+// the exact key-mismatch that has already shipped twice here (PERFORMANCE_SWATCH keyed avg_consult
+// against average_consult_time, GLANCE_SWATCH walk_ins against walk_in), both times rendering real
+// figures in dead grey with nothing to show anything was wrong. The harness now asserts the two maps
+// have identical keys.
+export const PATIENT_STATUS_SWATCH: Record<string, string> = {
+  // Somebody is in the room with a clinician right now. The loudest state, and the shortest-lived.
+  in_consultation: "bg-violet-100 text-violet-700 ring-1 ring-violet-200",
+  // In the building, not yet seen. Amber is this product's waiting hue everywhere else.
+  waiting: "bg-amber-100 text-amber-700 ring-1 ring-amber-200",
+  // A consultation record left open. Not an emergency, but it is unfinished work with a name on it.
+  encounter_open: "bg-sky-100 text-sky-700 ring-1 ring-sky-200",
+  seen: "bg-emerald-100 text-emerald-700 ring-1 ring-emerald-200",
+  registered_not_seen: "bg-slate-100 text-slate-600 ring-1 ring-slate-200",
+  // Archived and merged are not states to draw the eye; they explain why a record looks unusual.
+  archived: "bg-slate-100 text-slate-500 ring-1 ring-slate-200",
+  merged: "bg-slate-100 text-slate-500 ring-1 ring-slate-200",
+};
+
+/**
+ * The summary panel's Key Information cards -- the comp's four tinted boxes.
+ *
+ * Each is a different KIND of fact, which is the whole reason they are coloured differently: when they
+ * were four grey boxes the practitioner had to read all four to find the one that was a problem.
+ */
+export const KEY_INFO_SWATCH: Record<string, { box: string; label: string; figure: string }> = {
+  last_seen: { box: "border-emerald-200 bg-emerald-50/60", label: "text-emerald-700/70", figure: "text-emerald-800" },
+  next_follow_up: { box: "border-emerald-200 bg-emerald-50/60", label: "text-emerald-700/70", figure: "text-emerald-800" },
+  pending_results: { box: "border-sky-200 bg-sky-50/60", label: "text-sky-700/70", figure: "text-sky-800" },
+  active_problems: { box: "border-rose-200 bg-rose-50/60", label: "text-rose-700/70", figure: "text-rose-800" },
+  // The fallback, and it must stay grey: an unknown card type wearing a borrowed hue would be a claim
+  // about a fact nobody classified.
+  neutral: { box: "border-slate-200 bg-slate-50/60", label: "text-slate-500", figure: "text-slate-700" },
+};
+
 /** s6's five lenses. Overdue is the only red one, because it is the only one that is a failure. */
 export const LENS_SWATCH: Record<string, { figure: string; box: string }> = {
   due_today: { figure: "text-[var(--cp-primary-deep)]", box: "border-[var(--cp-primary)]/25 bg-[var(--cp-primary)]/5" },

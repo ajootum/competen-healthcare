@@ -138,7 +138,7 @@ export const PRACTICE_NAV: PracticeNavItem[] = [
   { href: "/practice/assistant", label: "Practice Assistant", icon: "✧", capability: "encounter.list", group: "Intelligence", phase: 5, built: true, primary: true },
   // The user-facing handbook. NO CAPABILITY: what the product will and will not do is not a permission,
   // and the one person who most needs it is a locum on their first morning holding the fewest of them.
-  { href: "/practice/documentation", label: "Documentation", icon: "?", capability: null, group: "Setup", phase: 9, built: true, primary: true },
+  { href: "/practice/documentation", label: "Documentation", icon: "?", capability: null, group: "Setup", phase: 9, built: true, parent: "/practice/setup" },
   { href: "/practice/setup", label: "Practice Setup", icon: "⚙", capability: null, group: "Setup", phase: 8, built: true, primary: true },
 
   // ══ EVERYTHING ELSE, FILED UNDER THE SECTION THAT OWNS IT ════════════════════════════════════════
@@ -165,22 +165,17 @@ export const PRACTICE_NAV: PracticeNavItem[] = [
   { href: "/practice/activity", label: "Procedures", icon: "◷", capability: "procedure.record", group: "Clinical", phase: 4, built: true, parent: "/practice/encounters" },
   { href: "/practice/search", label: "Search", icon: "⌕", capability: "search.use", group: "Practice", phase: 5, built: true, parent: "/practice/patients" },
 
-  // CPR-V5-006's Patients children. These two are WORKLIST VIEWS, not routes -- the spec asks for the
-  // operational lists to be "clickable and open filtered patient lists", and a filtered list of the
-  // people already on a page is a view of that page, not a second page about the same people.
+  // ⚠ THE PATIENTS SUBMENU IS GONE (CPR-PAT-002 s2, verbatim: "Replace the expandable Patients submenu
+  // (Search, Waiting List, New Registration) with a single Patients item. All registration, search and
+  // waiting workflows live inside the Patients workspace.").
   //
-  // ⚠ THE COMP ALSO NESTS "Follow-up Board" HERE AND IT IS DELIBERATELY NOT ADDED. /practice/follow-ups
-  // is already primary, and one module in two sidebar positions makes the sidebar overstate how many
-  // things exist -- somebody who visits both finds the same board and has to work out they are the same.
-  // The due-follow-ups WORKLIST still appears on the Patients page, where it is a filter over patients
-  // rather than a second door to the obligations board.
-  { href: "/practice/patients?list=waiting", label: "Waiting List", icon: "◔", capability: "patient.list", group: "Patients", phase: 6, built: true, parent: "/practice/patients" },
-  // ⚠ `patient.create`, NOT `patient.register`. I wrote the second one first because it is what the
-  // workflow is called, and it is seeded nowhere -- it would have been the SIXTH invented capability
-  // code in this codebase, hiding this entry from every user including the practice owner while
-  // compiling perfectly. The seeded set is patient.create / edit / list / merge / view. Read, not
-  // remembered.
-  { href: "/practice/patients?list=new", label: "New Registration", icon: "✚", capability: "patient.create", group: "Patients", phase: 6, built: true, parent: "/practice/patients" },
+  // The two worklist VIEWS added three commits ago -- ?list=waiting and ?list=new -- are withdrawn with
+  // it. They were the right shape for the sidebar they were added to; this specification moves that work
+  // onto the page itself, where the Today.s Care and Continuing Care cards do the same job with the
+  // count visible. The URL contract still works, so any bookmark somebody made keeps resolving.
+  //
+  // 9f-b and its control asserted these existed. They now assert nothing exists that breaks the rule,
+  // which is the honest form of the same guard.
 
   // -- Documents: everything that arrives, and everything sent --------------------------------------
   { href: "/practice/messages", label: "Messages", icon: "✉", capability: "message.use", group: "Communication", phase: 5, built: true, parent: "/practice/documents" },
@@ -240,14 +235,19 @@ export function visibleNav(capabilities: string[]): PracticeNavItem[] {
  * "Encounters becomes the central workspace" (s8), which is why it sits fourth, immediately after the
  * three ways a practitioner gets to one.
  */
+// CPR-PAT-002 s2's recommended sidebar, in its order. Ten items, flat.
+//
+// ⚠ DOCUMENTATION IS NOT IN THE SPECIFICATION'S LIST AND IS KEPT ANYWAY, as a child of Practice Setup
+// rather than a primary item. The user asked for it explicitly ("yes" to a user-facing documentation
+// section) two specifications ago; a later document that simply does not mention it is not the same as
+// a decision to remove it, and silently deleting something somebody asked for is the one edit that
+// should never be inferred. It stays reachable and out of the ten. If it should go entirely, that is a
+// sentence somebody has to write.
 export const PRIMARY_ORDER: string[] = [
   "/practice/home", "/practice/today", "/practice/calendar", "/practice/patients",
   "/practice/encounters", "/practice/documents", "/practice/follow-ups", "/practice/assistant",
-  // CPR-V5-003. Its own section, below the operational workspace and above administration, because it
-  // is the only workspace that cannot change a record.
   "/practice/intelligence",
   "/practice/setup",
-  "/practice/documentation",
 ];
 
 /**
@@ -259,22 +259,23 @@ export const PRIMARY_ORDER: string[] = [
  * for a different purpose and could drift away from it.
  */
 /** The sections below Workspace claim these. Declared once so Workspace can be "everything else". */
-const CLAIMED_BY_LATER_SECTIONS = ["/practice/intelligence", "/practice/setup", "/practice/documentation"];
+// CPR-PAT-002 collapsed the sections, so nothing is "claimed by a later section" any more. The constant
+// is removed rather than left as an empty array that a future reader would try to fill.
 
+// ⚠ CPR-PAT-002 s2 COLLAPSES THE GROUPS. The comp draws ten items in one flat list with no headings at
+// all, and the specification's "simplify the global navigation" is the objective it opens with.
+//
+// The groups were carrying real meaning -- Insights existed to say "everything above this line can
+// change a record and Practice Intelligence cannot" -- and that meaning is now unlabelled. Recorded
+// rather than quietly dropped, because it is the kind of thing that gets re-derived by somebody in six
+// months who cannot see why the order is what it is: the ordering below still puts the read-only
+// workspace after the ones that write, it simply no longer says so in a heading.
+//
+// ONE SECTION, and the array is kept rather than removed. Every reader (`SIDEBAR_SECTIONS`, the nav
+// harness, the shell) is written against it, and collapsing to a bare list would mean editing all three
+// to express something the shape already expresses.
 export const SIDEBAR_SECTIONS: { label: string; hrefs: string[] }[] = [
-  // CPR-V5-003's comp draws three groups, not two: the operational workspace, then INSIGHTS holding
-  // Practice Intelligence alone, then ADMINISTRATION. The separation is the point -- everything above the
-  // line changes records and Practice Intelligence only reads them ("no direct data entry", V5-003 UX).
-  // ⚠ WORKSPACE IS "EVERYTHING NOT CLAIMED BELOW", not a hand-maintained exclusion list. Written as
-  // `filter(h => h !== setup && h !== intelligence)` it silently duplicated Documentation into two
-  // sections the moment one was added -- every new section would have needed a matching exclusion here,
-  // and the day somebody forgot, an item would appear twice and look deliberate.
-  { label: "Workspace", hrefs: PRIMARY_ORDER.filter(h => !CLAIMED_BY_LATER_SECTIONS.includes(h)) },
-  { label: "Insights", hrefs: ["/practice/intelligence"] },
-  { label: "Administration", hrefs: ["/practice/setup"] },
-  // Its own group rather than a child of Administration: somebody looking up what the product refuses
-  // to do is not configuring anything, and burying help inside settings is how it stops being found.
-  { label: "Documentation", hrefs: ["/practice/documentation"] },
+  { label: "", hrefs: PRIMARY_ORDER },
 ];
 
 /** The sidebar: CPR-V5-001 s8's eight, in its order, filtered the same two ways everything else is. */
