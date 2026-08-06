@@ -403,6 +403,36 @@ async function main() {
   ok("an unknown view falls back to the first rather than showing nothing",
     followUpView("not-a-view").key === "all" && followUpView("overdue").key === "overdue");
 
+  // ── THE PAYLOAD HAS TO SURVIVE THE SERVER/CLIENT BOUNDARY ────────────────────────────────────────
+  //
+  // ⚠ THIS SHIPPED, AND IT KILLED THE PAGE. `view` was returned as the whole FollowUpView, which carries
+  // its `match` predicate. page.tsx hands this payload straight to a "use client" component, React
+  // cannot serialise a function across that boundary, and every signed-in practitioner got "Functions
+  // cannot be passed directly to Client Components" instead of their follow-up board.
+  //
+  // NOTHING CAUGHT IT, and the reasons are worth naming because they are general:
+  //   * `tsc` is happy -- FollowUpView is a perfectly good type, and the boundary is a runtime rule.
+  //   * the API route was FINE -- JSON.stringify drops functions silently, so the endpoint looked
+  //     healthy while the screen was dead, which is the worst possible split.
+  //   * no test rendered the page, and nothing read the field, so its shape was never exercised.
+  // A walk of the payload is the one check that would have. It is asserted on BOTH shapes -- the live
+  // board and the unavailable one -- because they are built by different code paths.
+  const functionPaths = (v: unknown, path = "$"): string[] => {
+    if (typeof v === "function") return [path];
+    if (Array.isArray(v)) return v.flatMap((x, i) => functionPaths(x, `${path}[${i}]`));
+    if (v && typeof v === "object") return Object.entries(v).flatMap(([k, x]) => functionPaths(x, `${path}.${k}`));
+    return [];
+  };
+  const liveFns = functionPaths(board);
+  ok("⚠ the workspace payload carries NO FUNCTION anywhere -- it is handed to a client component",
+    liveFns.length === 0, liveFns.join(", "));
+  ok("control. the walker really does find one, so the assertion above is not vacuous",
+    functionPaths({ a: [{ b: () => 1 }] }).join() === "$.a[0].b",
+    functionPaths({ a: [{ b: () => 1 }] }).join());
+  ok("and `view` is the RESOLVED KEY, so the fallback is the engine's and not a second copy in the page",
+    board.view === "all" && (await followUpWorkspace(admin, ws, { view: "not-a-view" })).view === "all",
+    String(board.view));
+
   const filtered = await followUpWorkspace(admin, ws, { view: "all", search: "next-month" });
   ok("the header search narrows the CARDS as well as the queue, so a card cannot overstate a filtered board",
     filtered.rows.length === 1 && filtered.cards.every(c => (c.count ?? 0) <= 1),
@@ -451,6 +481,12 @@ async function main() {
   ok("⚠ and every card reads NULL, never 0 -- five zeroes look exactly like a practice that owes nothing",
     failedBoard.cards.length === 5 && failedBoard.cards.every(c => c.count === null),
     JSON.stringify(failedBoard.cards.map(c => c.count)));
+  // ⚠ THE FAILED PAYLOAD IS BUILT BY A DIFFERENT RETURN STATEMENT from the live one, so it gets its own
+  // check. A boundary bug that only appears when the database is down is one nobody meets until the
+  // worst possible moment -- and it would replace an honest "could not be read" with a blank screen.
+  const failedFns = functionPaths(failedBoard);
+  ok("⚠ and the UNAVAILABLE payload carries no function either -- it crosses the same boundary",
+    failedFns.length === 0, failedFns.join(", "));
   const realBoard = await followUpWorkspace(admin, ws, { view: "all" });
   ok("control. the same call through the real client is AVAILABLE and its cards carry figures",
     realBoard.unavailable === false && realBoard.cards.every(c => typeof c.count === "number"),

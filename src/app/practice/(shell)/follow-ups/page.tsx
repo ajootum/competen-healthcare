@@ -47,10 +47,14 @@ export default async function FollowUpsPage({ searchParams }: {
 
   return (
     <div className="max-w-[1400px]">
+      {/* ⚠ initialView IS THE ENGINE'S RESOLVED KEY, NOT THE RAW QUERY STRING. `?view=nonsense` made the
+          engine fall back to "all" and show that list while this prop still said "nonsense" -- so the
+          rows were the All tab's and no tab was lit. The fallback is one rule and it lives in the
+          engine; the client had been quietly keeping a second copy of it. */}
       <FollowUpsWorkspace
         workspace={workspace}
         canManage={hasCapability(shell.ctx, "followup.manage")}
-        initialView={sp.view ?? "all"}
+        initialView={workspace.view}
         initialSearch={sp.q ?? ""}
         initialPriority={sp.priority ?? ""}
         initialSource={sp.source ?? ""}

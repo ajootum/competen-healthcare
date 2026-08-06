@@ -684,7 +684,23 @@ export type FollowUpWorkspace = {
    * exactly the gap this file's header is about.
    */
   allRows: ListedFollowUp[];
-  view: FollowUpView;
+  /**
+   * The view that was actually APPLIED -- its key, after the fallback an unknown one falls through.
+   *
+   * ⚠ IT IS THE KEY AND NOT THE FollowUpView, AND THAT IS NOT A TIDY-UP. It was the whole object, and
+   * the object carries `match` -- a function. This payload is handed straight to a "use client"
+   * component, React cannot serialise a function across that boundary, and the page threw on render for
+   * every signed-in practitioner: "Functions cannot be passed directly to Client Components". The API
+   * route survived the same payload only because JSON.stringify drops functions in silence, so the
+   * endpoint looked healthy while the screen was dead.
+   *
+   * THE FIELD ALSO HAD NO READER, which is how it survived. A returned value nobody consumes is not
+   * free: nothing exercises its shape, so it is the field most likely to be wrong, and here it was the
+   * only thing on the payload that could not cross the boundary it was built to cross. It is kept
+   * rather than deleted because the page now uses it -- the fallback belongs to the engine, and the
+   * client had been quietly repeating it.
+   */
+  view: string;
   /** Every view, so the tabs can be drawn with their own figures rather than a second query each. */
   tabs: { key: string; label: string; blurb: string; count: number | null }[];
   today: string;
@@ -720,7 +736,7 @@ export async function followUpWorkspace(admin: any, workspaceId: string, options
   if (all.unavailable) {
     return {
       cards: FOLLOW_UP_VIEWS.filter(v => v.card).map(blank),
-      rows: [], allRows: [], view,
+      rows: [], allRows: [], view: view.key,
       tabs: FOLLOW_UP_VIEWS.map(v => ({ key: v.key, label: v.label, blurb: v.blurb, count: null })),
       today, timezone, readCount: 0, truncated: false,
       unavailable: true, detail: all.detail,
@@ -746,7 +762,9 @@ export async function followUpWorkspace(admin: any, workspaceId: string, options
     }),
     rows: filtered.filter(f => view.match(f, ctx)),
     allRows: filtered,
-    view,
+    // ⚠ THE KEY, NOT THE OBJECT -- `view` holds `match`, and a function cannot cross into a client
+    // component. `view.match` above is used HERE, on the server, which is where it belongs.
+    view: view.key,
     tabs: FOLLOW_UP_VIEWS.map(v => ({ key: v.key, label: v.label, blurb: v.blurb, count: idsFor(v).length })),
     today, timezone,
     readCount: all.items.length,
