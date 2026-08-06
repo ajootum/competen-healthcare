@@ -87,22 +87,20 @@ export const EXCEPTION_KINDS = [
 ] as const;
 
 // ────────────────────────────────────────────────────────────────────────────────────────────────────
-// ⚠ WHY THE THREE NEW KINDS ALL CARRY `needsWindow: true`, AND IT IS NOT A DESIGN DECISION.
+// ⚠ THE WORKAROUND THIS BLOCK DESCRIBED IS GONE (migration 243).
 //
-// supabase/migrations/230-practice-availability-configuration.sql:137-142 constrains the table:
+// It said the three new kinds carried `needsWindow: true` only because migration 230's
+// practice_availability_exception_window_check still named the two kinds that existed when it was
+// written -- so migration 242 widened `kind` to seven values and left three of them unable to take a
+// whole day. It called that a workaround and named the one-line fix.
 //
-//     check ((kind in ('leave', 'closure'))
-//            or (starts_minute is not null and ends_minute is not null and ends_minute > starts_minute))
+// 243 is that fix, and the three are back to `needsWindow: false` where s5.2 always had them. A window
+// is still OPTIONAL and valid for all three: a two-hour interruption on a Tuesday afternoon is as real
+// as losing the day. `extra_session` and `extended_hours` keep `true`, because they ADD time and 230's
+// rule holds for them unchanged -- you cannot add availability without saying when.
 //
-// Migration 242 widened `kind` from four values to seven and did NOT widen that constraint, so a
-// location change, an activity substitution or an emergency interruption with no window is rejected by
-// the database with a constraint name rather than a sentence. Requiring a window in the engine means
-// the practitioner is asked for a start and an end instead of being shown
-// "practice_availability_exception_window_check".
-//
-// It is a workaround and not a fix. The fix is one line in a migration -- adding the three kinds to
-// that check's first clause -- and migrations are not this build's to write. Until then, "I am away
-// from two o'clock" is expressible and "I am away, and the whole day is gone" is not, for these three.
+// KEPT RATHER THAN DELETED because the sequence is the point: a constraint widened in one place and not
+// the other, and the gap was invisible until somebody tried to say "I am away all day".
 // ────────────────────────────────────────────────────────────────────────────────────────────────────
 
 export type ExceptionKind = (typeof EXCEPTION_KINDS)[number]["code"];
