@@ -7,17 +7,17 @@
 // this week. Everything a client component needs is HERE, and nothing here imports anything but types.
 //
 // ────────────────────────────────────────────────────────────────────────────────────────────────────
-// PHASES 1 AND 2 (s20). Phase 1: overview dashboard, patient documents, my documents, uploads with
+// PHASES 1 TO 4 (s20). Phase 1: overview dashboard, patient documents, my documents, uploads with
 // source attribution and patient linkage, cross-practice search and filters, the status model, basic
 // audit. Phase 2: the structured editor, PDF render, signature, issue and the Shared & Issued register.
+// Phase 3: review queues, document tasks, saved views, bulk operations, AI-assisted drafting and the
+// permission picture. Phase 4: what of "integrations" can honestly be built, which is the export half
+// and nothing else -- see PHASE 4 below.
 //
 // WHAT IS DELIBERATELY ABSENT, AND WHY IT IS ABSENT RATHER THAN GREYED OUT. s18 forbids "not built"
 // messages in production UI; this codebase forbids controls that do nothing. Both rules are satisfied by
 // the same move: the control IS NOT DRAWN. A disabled button with an apology under it is the thing s18 is
-// actually complaining about, and a live button that does nothing is worse. So:
-//
-//   review queues, document tasks, AI drafting, saved views      s20 Phase 3 -- no control drawn
-//   patient upload channels, secure links                        s20 Phase 4 -- no control drawn
+// actually complaining about, and a live button that does nothing is worse.
 //
 // AND ONE PHASE 2 SURFACE IS STILL NOT DRAWN, for the same reason: DELIVERY STATUS. s3 asks Shared &
 // Issued for "issued, printed, downloaded, emailed or link-shared documents with delivery status", s4
@@ -28,10 +28,38 @@
 // one line what a release is and is not; see SHARE_DELIVERY_NOTE below.
 //
 // The comp draws four quick actions (Create document, Upload document, Generate with AI, Scan document)
-// and five metric cards, one of which is "Expiring soon". Generate with AI is Phase 3. Scan document is
-// Phase 4. "Expiring soon -- within 30 days" needs a retention or expiry model, and there is no such
-// column on any table in this schema, so there is no figure to put in the card and the card is not drawn.
-// ────────────────────────────────────────────────────────────────────────────────────────────────────
+// and five metric cards, one of which is "Expiring soon". "Generate with AI" is Phase 3 and IS now
+// drawn -- on a draft document, where there is a consultation to ground it in, and nowhere else. "Scan
+// document" is Phase 4 and is NOT drawn: scanning needs a device channel this product does not have.
+// "Expiring soon -- within 30 days" needs a retention or expiry model, and there is no such column on
+// any table in this schema, so there is no figure to put in the card and the card is not drawn.
+//
+// ════════════════════════════════════════════════════════════════════════════════════════════════════
+// PHASE 4 (s20 "Integrations: patient upload channels, secure links, external services and extended
+// import/export"), AND WHY ALMOST NONE OF IT IS HERE.
+//
+//   PATIENT UPLOAD CHANNELS.  There is no way for a patient to authenticate to this product, and no
+//                             storage path a patient could write to. A channel with no identity behind
+//                             it does not attribute an upload to a patient -- it attributes it to
+//                             whoever had the link. `uploaded_by_patient` is STILL absent from
+//                             DOC_ORIGIN for exactly that reason, unchanged from Phase 1.
+//   SECURE LINKS.             A secure link is a URL plus expiry plus revocation plus A WAY TO SEND IT
+//                             plus somebody at the other end whose identity was checked. This
+//                             deployment has no delivery channel configured at all, and no patient
+//                             authentication. Minting a token nobody can receive, for a recipient
+//                             nobody can verify, would produce a control that appears to share a
+//                             clinical document and does not.
+//   EXTERNAL SERVICES.        No laboratory, radiology or HIE integration exists to connect to.
+//
+//   EXTENDED IMPORT/EXPORT.   THIS IS THE ONE HALF THAT IS REAL, and it is built: a metadata export of
+//                             exactly the rows the caller can already read, over the same filter the
+//                             register applies, gated on the seeded data.export capability and logged
+//                             as a disclosure. Import already exists as the incoming register and the
+//                             attachment upload, both built long before this specification.
+//
+// None of the three absent surfaces is drawn as a disabled control or explained in the interface. They
+// are simply not there, which is what s18 and this codebase's rule against dead controls both ask for.
+// ════════════════════════════════════════════════════════════════════════════════════════════════════
 
 /* ── SOURCE ATTRIBUTION (s5.3, s17, s18) ─────────────────────────────────────────────────────────────
  *
@@ -220,6 +248,17 @@ export const DOC_TABS: DocTab[] = [
   {
     key: "shared", href: "/practice/documents/shared", label: "Shared & Issued",
     blurb: "Copies recorded as having left this practice, and who is holding one.", capability: "document.view",
+  },
+  // ⚠ A SEVENTH AREA, WHICH s3 DOES NOT NAME, AND THE REASON IT IS A TAB RATHER THAN A CARD ON THE
+  // OVERVIEW. s3's six areas are places documents LIVE. This one is a place WORK lives: s10's saved
+  // views, s14's "document assigned for review" and "draft awaiting signature", and s15's DocumentTask.
+  // Phase 1 already put three attention queues on the Overview, and they are previews -- eight rows and
+  // a link. The moment a queue can be ASSIGNED to somebody it stops being a preview, because "what is
+  // mine" and "what is the practice's" are two lists and neither fits under a card.
+  {
+    key: "review", href: "/practice/documents/review", label: "Review & tasks",
+    blurb: "What needs looking at, what is assigned to you, and the saved views for both.",
+    capability: "document.view",
   },
   {
     key: "library", href: "/practice/documents/library", label: "Library",
@@ -499,6 +538,14 @@ export const DOC_AUDIT_EVENTS: Record<string, { verb: string; origin: DocOrigin 
   "practice.incoming_patient_unlinked": { verb: "removed the patient link from", origin: "received_externally" },
   "practice.attachment_added": { verb: "uploaded", origin: "uploaded_by_staff" },
   "practice.attachment_removed": { verb: "removed", origin: "uploaded_by_staff" },
+  // PHASE 3. Three acts that were not previously possible, so no event could describe them.
+  "practice.document_review_assigned": { verb: "asked somebody to review", origin: "created_in_cp" },
+  "practice.incoming_bulk_classified": { verb: "classified in bulk", origin: "received_externally" },
+  // ⚠ THE ONE THAT MATTERS MOST IN TWO YEARS. A document whose trail carries BOTH this event and
+  // practice.document_attested was signed by a person over text a machine first wrote, and the pair is
+  // the only place that stays answerable after the body has been edited past recognition.
+  "practice.document_ai_drafted": { verb: "had a machine draft written into", origin: "created_in_cp" },
+  "practice.documents_exported": { verb: "exported metadata covering", origin: "created_in_cp" },
 };
 
 /* ── s17's FIRST RULE, IN THE MODULE THE UI CAN IMPORT ───────────────────────────────────────────────
@@ -738,4 +785,394 @@ export const EMPTY_STATE_ACTIONS: { href: string; label: string; blurb: string; 
     blurb: "The structures a letter, certificate or summary starts from.",
     capability: "template.manage",
   },
+];
+
+/* ══ PHASE 3 (s20) ═══════════════════════════════════════════════════════════════════════════════════
+ *
+ * "Review queues, document tasks, AI-assisted drafting, saved views, advanced permissions."
+ *
+ * Everything below is Phase 3's vocabulary, and it is HERE rather than in an engine for the reason this
+ * file exists at all: the review console, the bulk panel and the AI panel are client components.
+ */
+
+/* ── s10's SAVED VIEWS ───────────────────────────────────────────────────────────────────────────────
+ *
+ * s10, verbatim: "Saved views such as Awaiting my review, Unsigned drafts, Patient uploads today and
+ * Failed shares."
+ *
+ * ⚠ TWO OF THOSE FOUR EXAMPLES CANNOT EXIST IN THIS PRODUCT, AND THEY ARE ABSENT RATHER THAN EMPTY.
+ *
+ *   Patient uploads today   needs a patient upload channel. s20 puts that in Phase 4 and Phase 4 cannot
+ *                           build it: there is no patient authentication anywhere in this product, so
+ *                           there is no such thing as a row a patient uploaded. A view that would always
+ *                           read zero is not a saved view, it is a promise.
+ *   Failed shares           needs a delivery result. Nothing here sends anything -- see
+ *                           SHARE_DELIVERY_NOTE. The same reason Phase 2 refused the Failed chip.
+ *
+ * A view whose count would be structurally zero is worse than no view: a practitioner who sees "Patient
+ * uploads today: 0" concludes no patient sent anything today, which is a claim about the world rather
+ * than about this database. So the list below is the views this product can actually answer.
+ *
+ * ⚠ THESE ARE NAMED STANDARD VIEWS, NOT VIEWS A USER SAVED. There is no store for a user-authored saved
+ * view in this schema -- see the note at the head of documents-workspace-review.ts for what one would
+ * have to be. Every view here is a filter this file declares, and its COUNT is produced by running that
+ * exact filter through applyFilter() over the exact rows the register fetched. Card and list therefore
+ * cannot drift, which is the Phase 1 discipline applied one layer up.
+ *
+ * `sources` NAMES WHICH REGISTER READS THE COUNT DEPENDS ON. When one of them failed, the view's count
+ * is `unreadable` and says which, rather than becoming a zero. "Nothing is awaiting review" and "we
+ * could not look" are different sentences.
+ */
+export type DocSavedView = {
+  key: string;
+  label: string;
+  blurb: string;
+  /** The filter, applied by the same function the register applies. Null for views not over the register. */
+  filter: DocFilter | null;
+  /** The list this figure opens. Always exactly these rows. */
+  href: string;
+  /** Which register sources the count depends on, so a failed read makes it unreadable and not zero. */
+  sources: string[];
+  /** Mirrors DOC_CARD_SWATCH's hues: sky for arrivals, amber for waiting, rose for the failure state. */
+  tone: "sky" | "amber" | "rose" | "violet";
+};
+
+export const DOC_SAVED_VIEWS: DocSavedView[] = [
+  {
+    key: "assigned_to_me",
+    label: "Assigned to me",
+    blurb: "Open tasks about a document, with your name on them. The only queue in this workspace anybody actually owns.",
+    // NOT OVER THE REGISTER. Its rows are practice_task, so the engine counts them separately and its
+    // source is named accordingly.
+    filter: null,
+    href: "/practice/documents/review",
+    sources: ["document tasks"],
+    tone: "violet",
+  },
+  {
+    key: "awaiting_review",
+    label: "Arrived, nobody has looked",
+    blurb: "Incoming documents still at RECEIVED. Nobody is assigned -- this is the practice's pile, not any one person's.",
+    filter: { status: ["awaiting_review"] },
+    href: "/practice/documents/patient?status=awaiting_review",
+    sources: ["incoming register"],
+    tone: "sky",
+  },
+  {
+    key: "unsigned_drafts",
+    label: "Unsigned drafts",
+    blurb: "Written and not signed, so not issued to anybody. s10 names this view by name.",
+    filter: { status: ["draft", "approved"] },
+    href: "/practice/documents/patient?status=draft,approved",
+    sources: ["authored documents"],
+    tone: "amber",
+  },
+  {
+    key: "signed_not_issued",
+    label: "Signed, nothing issued",
+    blurb: "Signed with no release recorded. Either nobody has been given a copy, or somebody was and it was never written down.",
+    filter: { status: ["signed"] },
+    href: "/practice/documents/shared",
+    // ⚠ THE RELEASE REGISTER IS A SOURCE OF THIS FIGURE. `signed` MEANS "SIGNED WITH ZERO RELEASES", so
+    // a failed release read would silently promote every issued document in the practice into this view.
+    sources: ["authored documents", "release register"],
+    tone: "amber",
+  },
+  {
+    key: "unlinked",
+    label: "No patient link",
+    blurb: "Arrived without a patient. Until one is chosen it is invisible in the record of the person it is about.",
+    filter: { link: "unlinked" },
+    href: "/practice/documents/patient?link=unlinked",
+    sources: ["incoming register"],
+    tone: "rose",
+  },
+];
+
+/**
+ * ⚠ THESE SWATCHES BELONG IN palette.ts AND ARE HERE ONLY BECAUSE THAT FILE IS HELD BY ANOTHER AGENT
+ * THIS SESSION -- the same note the Phase 1 and Phase 2 swatches above each carry. Every hue is one
+ * palette.ts already uses for the same meaning, and the tinting GOES GREY AT ZERO for the reason the
+ * Phase 2 outdated-copies card does: a coloured badge reading 0 trains a reader to ignore the colour.
+ */
+export const DOC_VIEW_TONE: Record<DocSavedView["tone"], { box: string; figure: string; label: string }> = {
+  sky: { box: "border-sky-200/80 bg-sky-50/70", figure: "text-sky-700", label: "text-sky-900" },
+  amber: { box: "border-amber-200/80 bg-amber-50/70", figure: "text-amber-700", label: "text-amber-900" },
+  rose: { box: "border-rose-300 bg-rose-50", figure: "text-rose-700", label: "text-rose-900" },
+  violet: { box: "border-violet-200/80 bg-violet-50/70", figure: "text-violet-700", label: "text-violet-900" },
+};
+
+export const DOC_VIEW_TONE_QUIET = { box: "border-gray-200 bg-white", figure: "text-gray-400", label: "text-gray-700" };
+
+/** A view whose figure could not be read. Keeps its place, loses its colour, prints an em dash. */
+export const DOC_VIEW_TONE_UNREADABLE = {
+  box: "border-dashed border-slate-300 bg-white", figure: "text-slate-300", label: "text-slate-500",
+};
+
+/* ── s15's DocumentTask, AND WHAT IT ALREADY IS ──────────────────────────────────────────────────────
+ *
+ * s15 names a DocumentTask entity with document_id, task_type, assignee_id, due_at and status.
+ *
+ * ⚠ IT EXISTS. Migration 198 built practice_task with a `document_id` column referencing
+ * practice_clinical_document, an assignee that must be an ACTIVE member, due_on, remind_on, a five-value
+ * status machine and an immutable practice_task_event trail. Every field s15 asks for is there and four
+ * more besides. NO MIGRATION IS WRITTEN FOR PHASE 3 and none is needed for tasks about a document this
+ * practice AUTHORED.
+ *
+ * ⚠ WHAT IS NOT THERE, STATED PLAINLY BECAUSE IT IS THE ONE REAL HOLE IN PHASE 3: practice_task HAS NO
+ * incoming_document_id. A task can point at an authored clinical document, a patient, an encounter, a
+ * follow-up or a reflection -- and NOT at an arriving document. Which means the queue that most needs an
+ * owner, "this lab result arrived and nobody has looked at it", is the one queue that cannot be assigned
+ * to anybody. It is not faked here. The arrivals queue is rendered as the practice's, it says so in
+ * those words, and no assign control is drawn over it. See documents-workspace-review.ts for the exact
+ * column that would close it.
+ */
+export const DOC_REVIEW_CATEGORY = "clinical_admin";
+
+/**
+ * ⚠ ASSIGNING A REVIEW DOES NOT MOVE THE DOCUMENT'S STATUS, AND THAT IS A DECISION RATHER THAN AN
+ * OMISSION.
+ *
+ * s7 lists "In review" as a status between Draft and Approved. Migration 195 stores five values --
+ * DRAFT, FINAL, SIGNED, AMENDED, ENTERED_IN_ERROR -- and IN_REVIEW is not one of them. Two ways to
+ * honour s7 were available:
+ *
+ *   WRITE A MIGRATION adding IN_REVIEW to the CHECK and to the transition table. Not this agent's to
+ *   write, and it would change the meaning of the status column on every document already stored.
+ *
+ *   BORROW AN EXISTING VALUE, most temptingly FINAL. That would be the wrong answer even if it were
+ *   allowed: FINAL means "the content is accepted", it is the ONLY status signBlockers() will sign from,
+ *   and marking a document FINAL because somebody was asked to look at it would make "ready to sign" and
+ *   "not yet checked" the same word.
+ *
+ * So a review is a TASK -- a real row, in a real store, with a real assignee and a real trail -- and the
+ * document's own status column does not move at all. The sentence below is rendered beside the assign
+ * control so nobody expects a chip to change.
+ */
+export const DOC_REVIEW_STATUS_NOTE =
+  "Asking somebody to review this creates a task assigned to them. The document's own status does not "
+  + "change: it stays a draft until whoever is writing it marks it ready, and marking it ready is what "
+  + "makes it signable.";
+
+/* ── s10's BULK OPERATIONS ───────────────────────────────────────────────────────────────────────────
+ *
+ * s10: "Bulk operations limited to safe actions such as classify, archive, assign reviewer and export
+ * metadata."
+ *
+ * TWO OF THE FOUR ARE BUILT IN BULK AND TWO ARE NOT, and neither absence is drawn:
+ *
+ *   classify         BUILT. Over practice_incoming_document, through the same classifyIncoming() the
+ *                    single-row panel uses, one row at a time so a failure is per row and never a
+ *                    silent partial.
+ *   export metadata  BUILT. See DOC_EXPORT_COLUMNS.
+ *   archive          NOT BUILT, and there is nothing to build it over. A clinical document is never
+ *                    archived -- migration 210's header is explicit that it is marked entered in error
+ *                    and kept forever -- and practice_incoming_document has no archive column at all. A
+ *                    bulk Archive button would have to write a state that does not exist.
+ *   assign reviewer  BUILT FOR AUTHORED DOCUMENTS, ONE AT A TIME, for the reason in the DocumentTask
+ *                    note above: an arrival cannot be the subject of a task. Offered in bulk over a
+ *                    mixed selection it would silently skip every arrival in it, which is the worst
+ *                    possible behaviour for a control whose whole promise is "these are now somebody's".
+ *
+ * ⚠ THE CAP IS A SAFETY RULE, NOT A PERFORMANCE ONE. A bulk classify sets the patient on every row it
+ * touches. Fifty is a plausible morning's post; nine hundred is somebody who selected everything, and
+ * filing nine hundred results against one patient is the most damaging single action this workspace can
+ * perform. The engine REFUSES above the cap rather than truncating, because a truncated bulk that
+ * reports success is indistinguishable from one that worked.
+ */
+export const DOC_BULK_LIMIT = 50;
+
+/* ── s5.3's METADATA, AS THE EXPORT'S COLUMNS ────────────────────────────────────────────────────────
+ *
+ * ⚠ METADATA ONLY, AND THE OMISSIONS ARE THE POINT. There is no `body` column here and there is no
+ * `summary` column either. The body of a referral letter is clinical content; so is the one-line summary
+ * of an arriving result, which in practice reads "Hb 6.2, for review". An export is a file that leaves
+ * the machine it was made on. Every column below is a fact ABOUT a document rather than the content of
+ * one, and the patient's name is here because s5.3 lists the patient link as required metadata and an
+ * export of document metadata with no way to tell whose document it is answers nothing.
+ *
+ * The order follows s5.3's own list.
+ */
+export const DOC_EXPORT_COLUMNS: [string, string][] = [
+  ["title", "Document title"],
+  ["docType", "Document type"],
+  ["origin", "Source label"],
+  ["source", "Source or organisation"],
+  ["status", "Status"],
+  ["stored", "Stored status value"],
+  ["date", "Document date"],
+  ["patientLinked", "Linked to a patient"],
+  ["patientName", "Patient"],
+  ["version", "Version"],
+  ["reference", "Reference"],
+];
+
+/**
+ * ⚠ ONE CSV WRITER, AND IT QUOTES EVERY FIELD.
+ *
+ * A conditional quote ("only if it contains a comma") is the shape that has to be right in four places,
+ * and a patient recorded as "O'Brien, Ann" or a source recorded as "Mulago Hospital, Kampala" is the
+ * ordinary case rather than the edge one. Quoting unconditionally costs two bytes a field and removes
+ * the decision.
+ *
+ * ⚠ AND IT PREFIXES A LEADING =, +, - OR @ WITH AN APOSTROPHE. A spreadsheet opens a cell beginning with
+ * one of those as a FORMULA. A document titled "-2 week review" becomes an arithmetic error in the mild
+ * case, and a title somebody chose becomes an executed expression in the malicious one. The apostrophe
+ * is the documented, lossless way to say "this is text".
+ */
+export function csvCell(value: string | number | null | undefined): string {
+  const raw = value === null || value === undefined ? "" : String(value);
+  const guarded = /^[=+\-@\t\r]/.test(raw) ? `'${raw}` : raw;
+  return `"${guarded.replace(/"/g, '""')}"`;
+}
+
+export function csvRow(cells: (string | number | null | undefined)[]): string {
+  return cells.map(csvCell).join(",");
+}
+
+/**
+ * A filter back into a querystring.
+ *
+ * ⚠ THE EXPORT LINK IS BUILT FROM THE FILTER THAT WAS APPLIED, NOT FROM THE URL THAT WAS TYPED. The page
+ * ran parseDocFilter(searchParams) and the register applied THAT; serialising the raw querystring
+ * instead would carry through anything parseDocFilter dropped -- `?status=banana`, a stray `page=2`, a
+ * hand-edited `authorId` -- and the file would then be produced under a filter the screen never used.
+ * Round-tripping through this function and back through parseDocFilter is the only arrangement in which
+ * the export and the list it came from cannot be answering different questions.
+ *
+ * ⚠ authorId IS NOT SERIALISED, DELIBERATELY. parseDocFilter does not read it and the export route will
+ * not either; My Documents scopes to the caller from the server-resolved context, and the export link
+ * says so with `mine=1` rather than by putting somebody's user id in a URL.
+ */
+export function docFilterToQuery(filter: DocFilter): string {
+  const q = new URLSearchParams();
+  if (filter.q) q.set("q", filter.q);
+  if (filter.type) q.set("type", filter.type);
+  if (filter.status?.length) q.set("status", filter.status.join(","));
+  if (filter.origin?.length) q.set("origin", filter.origin.join(","));
+  if (filter.from) q.set("from", filter.from);
+  if (filter.to) q.set("to", filter.to);
+  if (filter.patientId) q.set("patientId", filter.patientId);
+  if (filter.link) q.set("link", filter.link);
+  if (filter.window) q.set("window", filter.window);
+  return q.toString();
+}
+
+/** The export URL for exactly the list a page is showing. `mine` is a flag, never a user id. */
+export function documentExportHref(filter: DocFilter, mine = false): string {
+  const q = docFilterToQuery(filter);
+  const parts = [q, mine ? "mine=1" : ""].filter(Boolean);
+  return `/api/v1/practice/documents/export${parts.length ? `?${parts.join("&")}` : ""}`;
+}
+
+/* ── s12: AI-ASSISTED DOCUMENT CREATION ──────────────────────────────────────────────────────────────
+ *
+ * ⚠ WHAT PHASE 3 ADDS IS NOT AN ASSISTANT. CPR-210 built one, and it already does four of s12's six
+ * capabilities -- draft a referral from a consultation, summarise a history, rewrite the plan in plain
+ * language, tidy a note -- behind a consent gate, a disclosure, a grounding refusal with no ungrounded
+ * mode, an access-log entry recording that record content left this system, and a system prompt that
+ * forbids originating a clinical fact. Rebuilding any of that would be building a second, weaker one.
+ *
+ * s12's FIFTH capability, "identify missing required template fields", IS ALREADY BUILT AND IS NOT AI:
+ * unresolvedMarkers() and signBlockers() above compute it from the text, deterministically, and the
+ * engine refuses the signature on it. Asking a model to find missing fields would be a slower, less
+ * reliable version of a regular expression, and it would sometimes be wrong about a field that is there.
+ *
+ * ⚠ WHAT WAS GENUINELY MISSING IS s12's LAST RULE: "Label AI-generated content until the practitioner
+ * reviews it." The assistant's answer landed in practice_ai_message and the practitioner copied it into
+ * a document by hand -- and the moment it was pasted, NOTHING ANYWHERE recorded that the words were
+ * machine-written. A letter drafted by a model and one written by a clinician were the same bytes in the
+ * same column with the same history. Phase 3 closes exactly that: the assistant's text can be written
+ * into a DRAFT document through one engine that records the act, and the document then carries a visible
+ * attribution derived from the trail. See documents-workspace-ai.ts.
+ *
+ * ⚠ AND THE BOUNDARY, WHICH IS THE WHOLE OF THE SAFETY POSITION: A MACHINE MAY AUTHOR. IT MAY NOT SIGN.
+ * The drafting engine requires document.author and refuses anything but a DRAFT. It cannot reach FINAL,
+ * it cannot reach SIGNED, and it cannot issue. The person who signs states DOC_ATTESTATION's sentence --
+ * "I have read this document in full" -- with the attribution banner in front of them.
+ */
+export type AiDraftState = "none" | "machine_unedited" | "machine_edited";
+
+export const AI_DRAFT_LABEL: Record<AiDraftState, { label: string; blurb: string; chip: string } | null> = {
+  // Nothing to say. A document nobody asked a machine to draft carries no banner at all -- the absence
+  // of a claim is the correct rendering of the absence of an event.
+  none: null,
+  machine_unedited: {
+    label: "Machine-written draft",
+    blurb: "Every word below was produced by the assistant from the consultation, and has not been changed since. "
+      + "Read it against the record before you mark it ready. Nothing here has yet been checked by a person.",
+    chip: "bg-amber-100 text-amber-800 ring-1 ring-amber-300",
+  },
+  machine_edited: {
+    label: "Started as a machine-written draft",
+    blurb: "The assistant wrote a draft here and somebody has edited it since. How much of the machine's wording "
+      + "remains is not tracked -- the signature is what says a person stands behind the whole of it.",
+    chip: "bg-slate-100 text-slate-700 ring-1 ring-slate-300",
+  },
+};
+
+/**
+ * The tasks the drafting bridge will run, and they are a SUBSET of CPR-210's six.
+ *
+ * ⚠ THE KEYS ARE NOT NEW. Migration 215 puts a CHECK on practice_ai_session.task listing exactly six
+ * values, so a seventh key here would compile, typecheck and fail at INSERT the first time somebody used
+ * it -- the invented-code class this codebase has shipped six times. Every key below is one of the six.
+ *
+ * `summarise_history` and `ask` are absent deliberately. A history summary is grounded on a PATIENT
+ * rather than a consultation and would produce a document with no encounter behind it; `ask` is a
+ * question, and its answer is a reply to a person rather than the text of a letter.
+ */
+export const AI_DRAFT_TASKS: { key: string; label: string; blurb: string; produces: string }[] = [
+  {
+    key: "draft_referral", label: "Draft a referral letter",
+    blurb: "A first draft from this consultation, with a clearly marked blank wherever the record does not give it something a letter needs.",
+    produces: "A letter for you to correct and sign.",
+  },
+  {
+    key: "summarise_encounter", label: "Summarise this consultation",
+    blurb: "Turns the notes already written into a short summary. It adds nothing that is not in them.",
+    produces: "A consultation summary.",
+  },
+  {
+    key: "patient_instructions", label: "Put the plan in plain language",
+    blurb: "Rewrites the recorded plan so the patient can read it. It adds no advice of its own.",
+    produces: "An instruction sheet for the patient.",
+  },
+  {
+    key: "tidy_note", label: "Expand my shorthand",
+    blurb: "Turns the shorthand already in the record into sentences. It changes no clinical meaning.",
+    produces: "The same content, in full sentences.",
+  },
+];
+
+export const AI_DRAFT_MODES: { key: string; label: string; blurb: string }[] = [
+  { key: "replace", label: "Replace what is there", blurb: "The draft becomes the whole body. Anything currently written is lost." },
+  { key: "append", label: "Add below what is there", blurb: "The draft goes under the existing text, which is left alone." },
+];
+
+/* ── s13: WHO MAY DO WHAT ────────────────────────────────────────────────────────────────────────────
+ *
+ * s13 names five roles: practice owner, practitioner, practice assistant, reviewer and read-only user.
+ *
+ * ⚠ THE CAPABILITY CODES BELOW WERE PROBED AGAINST THE LIVE SEED, NOT WRITTEN FROM THE SPECIFICATION.
+ * Six invented capability codes have shipped in this codebase; every one below is present in
+ * practice_role_capabilities today. What the matrix RENDERS is not this list either -- it is the
+ * capabilities the members of this practice actually hold right now, read live, because a seeded role
+ * default and a live grant are different facts and CPR-310's delegation can move the second without
+ * touching the first.
+ *
+ * ⚠ s13's "Reviewer" IS NOT A ROLE IN THIS PRODUCT and no row is invented for it. The seeded roles are
+ * practitioner, practice_assistant, practice_owner, billing_reporting and read_only_auditor. Seeding a
+ * sixth is a migration. What Phase 3 gives instead is the thing a reviewer role would be FOR: a document
+ * task assigned to a named person, which any member holding task.manage can create.
+ */
+export const DOC_PERMISSION_ROWS: { capability: string; label: string; blurb: string }[] = [
+  { capability: "document.view", label: "See documents", blurb: "Open this workspace and read what is in it." },
+  { capability: "document.author", label: "Write and issue", blurb: "Create, edit, and record that a copy was given to somebody." },
+  { capability: "document.sign", label: "Sign", blurb: "Attest to a document under their own name. The one capability delegation refuses to grant." },
+  { capability: "inbox.record", label: "File what arrives", blurb: "Record an arrival, link it to a patient and classify it." },
+  { capability: "inbox.review", label: "Stamp an arrival reviewed", blurb: "Say that somebody clinically looked at a result." },
+  { capability: "task.manage", label: "Assign a review", blurb: "Create a task about a document and put somebody's name on it." },
+  { capability: "template.manage", label: "Manage templates", blurb: "Create and retire the structures documents start from." },
+  { capability: "data.export", label: "Export metadata", blurb: "Take a file of document metadata off this system." },
 ];

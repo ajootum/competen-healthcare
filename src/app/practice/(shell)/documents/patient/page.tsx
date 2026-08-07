@@ -4,7 +4,7 @@ import { createAdminClient } from "@/lib/supabase/server";
 import { resolvePracticeShell } from "@/lib/practice/shell";
 import { hasCapability } from "@/lib/practice/access";
 import { documentRegister } from "@/lib/practice/documents-workspace";
-import { parseDocFilter } from "@/lib/practice/documents-workspace-constants";
+import { parseDocFilter, documentExportHref } from "@/lib/practice/documents-workspace-constants";
 import WorkspaceHeader from "../_workspace/WorkspaceHeader";
 import RegisterTable from "../_workspace/RegisterTable";
 
@@ -67,6 +67,22 @@ export default async function PatientDocumentsPage({ searchParams }: {
           </>
         }
       />
+
+      {/* s10 "export metadata", and the honest half of s20's Phase 4.
+          ⚠ THE LINK CARRIES THE FILTER THAT WAS APPLIED, not the URL that was typed, so the file holds
+          exactly the rows above it. ⚠ AND IT IS ONLY DRAWN FOR SOMEBODY WHO HOLDS data.export -- the
+          capability to take data off this system, which the practice assistant does not have. */}
+      {hasCapability(shell.ctx, "data.export") && (
+        <p className="text-[11px] text-gray-500">
+          <a href={documentExportHref(filter)} className="font-semibold text-[var(--cp-primary-deep)] hover:underline">
+            Export this list as a spreadsheet
+          </a>{" "}
+          &mdash; the metadata of exactly the {register.rows.length} row
+          {register.rows.length === 1 ? "" : "s"} shown, and none of their content. Titles, types,
+          sources, statuses, dates and patients; no letter body and no result summary. Taking it is
+          recorded in this practice&rsquo;s access log.
+        </p>
+      )}
     </div>
   );
 }

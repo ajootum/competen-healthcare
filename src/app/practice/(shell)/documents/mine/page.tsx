@@ -4,7 +4,7 @@ import { createAdminClient } from "@/lib/supabase/server";
 import { resolvePracticeShell } from "@/lib/practice/shell";
 import { hasCapability } from "@/lib/practice/access";
 import { documentRegister } from "@/lib/practice/documents-workspace";
-import { parseDocFilter } from "@/lib/practice/documents-workspace-constants";
+import { parseDocFilter, documentExportHref } from "@/lib/practice/documents-workspace-constants";
 import WorkspaceHeader from "../_workspace/WorkspaceHeader";
 import RegisterTable from "../_workspace/RegisterTable";
 
@@ -67,6 +67,20 @@ export default async function MyDocumentsPage({ searchParams }: {
           </>
         }
       />
+
+      {/* ⚠ `mine=1`, NOT `authorId=<my id>`. The route resolves the caller from its own context exactly as
+          this page does, for the reason in this file's header: an author read from a URL is one edited
+          link away from being somebody else's documents under a heading that says yours. */}
+      {hasCapability(shell.ctx, "data.export") && (
+        <p className="text-[11px] text-gray-500">
+          <a href={documentExportHref(filter, true)} className="font-semibold text-[var(--cp-primary-deep)] hover:underline">
+            Export this list as a spreadsheet
+          </a>{" "}
+          &mdash; the metadata of the {register.rows.length} document
+          {register.rows.length === 1 ? "" : "s"} you wrote, and none of their content. Taking it is
+          recorded in this practice&rsquo;s access log.
+        </p>
+      )}
     </div>
   );
 }

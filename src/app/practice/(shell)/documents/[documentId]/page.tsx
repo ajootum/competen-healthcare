@@ -5,9 +5,12 @@ import { resolvePracticeShell } from "@/lib/practice/shell";
 import { hasCapability } from "@/lib/practice/access";
 import { getDocument } from "@/lib/practice/documentation";
 import { editorSupport } from "@/lib/practice/documents-workspace-issue";
+import { aiAttribution, draftAvailability } from "@/lib/practice/documents-workspace-ai";
+import { AI_DRAFT_LABEL } from "@/lib/practice/documents-workspace-constants";
 import { LOCKED_DOCUMENT_STATUSES, DOC_TYPES } from "@/lib/practice/document-constants";
 import { logAccess } from "@/lib/practice/privacy";
 import DocumentConsole from "./DocumentConsole";
+import AiDraftPanel from "./AiDraftPanel";
 
 // /practice/documents/{id} -- CPR-130's document workspace.
 //
@@ -47,6 +50,18 @@ export default async function DocumentPage({ params }: { params: Promise<{ docum
   // not -- DocumentConsole imports only from document-constants.ts and documents-workspace-constants.ts,
   // neither of which imports anything server-side. That boundary killed the Follow-ups board this week.
   const support = await editorSupport(admin, shell.ctx, doc);
+
+  // CPR-DOC-002 s12, PHASE 3. Whether a machine wrote this text, and whether the panel that asks one to
+  // may be drawn at all.
+  //
+  // ⚠ THE ATTRIBUTION IS A `Reading`, AND ITS THIRD STATE IS RENDERED. "No machine wrote this" and "we
+  // could not find out whether a machine wrote this" are opposite advice to somebody about to put their
+  // name on it. A trail that could not be read must never draw as the absence of an event.
+  const [attribution, drafting] = await Promise.all([
+    aiAttribution(admin, shell.ctx.workspaceId, doc.id, doc.body ?? ""),
+    draftAvailability(admin, shell.ctx, { status: doc.status, encounter_id: doc.encounter_id ?? null }),
+  ]);
+  const attributionLabel = attribution.state === "ok" ? AI_DRAFT_LABEL[attribution.value.state] : null;
 
   // CPR-370. A document carries the same clinical content as the consultation behind it, so opening
   // one is as much a read of the patient as opening their record.
@@ -124,6 +139,51 @@ export default async function DocumentPage({ params }: { params: Promise<{ docum
         </p>
       )}
 
+      {/* s12: "Label AI-generated content until the practitioner reviews it."
+          ⚠ ABOVE THE EDITOR AND ABOVE THE SIGN PANEL, because it is a fact about the text a person is
+          being asked to attest to. A document nobody asked a machine to draft carries NOTHING here --
+          the absence of a claim is the correct rendering of the absence of an event, and a banner
+          reading "no AI was used" on every hand-written letter would be noise that trains people to
+          stop reading the one that matters. */}
+      {attributionLabel && attribution.state === "ok" && (
+        <div className="mt-3 rounded-xl border border-gray-200 bg-white px-3 py-2">
+          <p className="flex flex-wrap items-center gap-2">
+            <span className={`rounded px-1.5 py-0.5 text-[10px] font-bold ${attributionLabel.chip}`}>
+              {attributionLabel.label}
+            </span>
+            {attribution.value.taskLabel && (
+              <span className="text-[11px] text-gray-500">{attribution.value.taskLabel}</span>
+            )}
+            {attribution.value.model && (
+              <span className="text-[11px] text-gray-400">{attribution.value.model}</span>
+            )}
+            {attribution.value.at && (
+              <span className="text-[11px] text-gray-400">
+                {String(attribution.value.at).slice(0, 16).replace("T", " ")}
+              </span>
+            )}
+          </p>
+          <p className="mt-1 text-[11.5px] leading-relaxed text-gray-600">{attributionLabel.blurb}</p>
+          {/* ⚠ THE DRAFT LANDED AND THE RECORD OF IT DID NOT. Said, never swallowed. */}
+          {!attribution.value.attributionComplete && (
+            <p className="mt-1 text-[11.5px] font-semibold text-rose-700">
+              The record of what the machine produced is incomplete, so whether this text has been edited
+              since cannot be established from the trail.
+            </p>
+          )}
+        </div>
+      )}
+      {attribution.state !== "ok" && (
+        <div className="mt-3 rounded-xl border border-amber-300 bg-amber-50 px-3 py-2">
+          <p className="text-[12px] font-bold text-amber-900">
+            Whether a machine drafted this could not be checked.
+          </p>
+          <p className="mt-0.5 text-[11px] text-amber-800">
+            {attribution.detail} This is not the same as no machine having drafted it.
+          </p>
+        </div>
+      )}
+
       <div className="mt-4 grid lg:grid-cols-3 gap-4">
         <div className="lg:col-span-2">
           <DocumentConsole
@@ -146,6 +206,15 @@ export default async function DocumentPage({ params }: { params: Promise<{ docum
         </div>
 
         <div className="flex flex-col gap-4">
+          <AiDraftPanel
+            documentId={doc.id}
+            hasBody={!!String(doc.body ?? "").trim()}
+            provider={drafting.provider}
+            model={drafting.model}
+            blocker={drafting.blocker}
+            available={drafting.available}
+          />
+
           <section className="rounded-xl border border-gray-200 bg-white p-4">
             <h2 className="text-[13px] font-bold text-gray-900">Who holds a copy</h2>
             {releases.length === 0 ? (
