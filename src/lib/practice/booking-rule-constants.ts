@@ -32,6 +32,7 @@ export const BOOKING_CHANNELS = [
     permission: "May override with reason.",
     door: true, phase: null as string | null,
     capability: "appointment.manage",
+    blockedBecause: null as string | null,
   },
   {
     code: "staff", label: "Practice staff booking",
@@ -39,6 +40,7 @@ export const BOOKING_CHANNELS = [
     permission: "Role-based override.",
     door: true, phase: null,
     capability: "appointment.manage",
+    blockedBecause: null,
   },
   {
     code: "follow_up", label: "Internal follow-up scheduling",
@@ -46,6 +48,7 @@ export const BOOKING_CHANNELS = [
     permission: "Eligibility inherited from the plan.",
     door: true, phase: null,
     capability: "appointment.manage",
+    blockedBecause: null,
   },
   {
     code: "patient_self", label: "Patient self-booking",
@@ -54,6 +57,13 @@ export const BOOKING_CHANNELS = [
     // s8's handle, link, OTP and publish state do not exist. There is no way for a patient to arrive.
     door: false, phase: "Phase 4",
     capability: "appointment.manage",
+    // ⚠ NAMED, BECAUSE "PHASE 4" IS A SCHEDULE AND THIS IS A REASON. Phase 4 built the OTP machinery and
+    // stopped at the wall in front of it: a patient booking is protected by a one-time code, this
+    // deployment has nothing that can send one, and a code that cannot be sent is not a code. Somebody
+    // reading "Phase 4 owns it" would reasonably wait for Phase 4; somebody reading this knows what
+    // would have to change first. See patient-access.ts.
+    blockedBecause:
+      "It is protected by a one-time code, and there is no SMS gateway or mail provider configured to send one -- so no patient could complete it even if the page existed.",
   },
   {
     code: "referral", label: "Linked facility or referral",
@@ -61,6 +71,8 @@ export const BOOKING_CHANNELS = [
     permission: "Usually pending approval.",
     door: false, phase: "Phase 4",
     capability: "appointment.manage",
+    blockedBecause:
+      "It shares patient booking's intake and its one-time code, and there is nothing configured to send one.",
   },
   {
     code: "walk_in", label: "Walk-in registration",
@@ -69,6 +81,9 @@ export const BOOKING_CHANNELS = [
     // s7.7's session and day limits, cutoff, queue and emergency override are Phase 5.
     door: false, phase: "Phase 5",
     capability: "appointment.manage",
+    // Deliberately null: a walk-in is a person standing in the room, so delivery has nothing to do with
+    // why it is shut. Attaching the same sentence to every closed channel would make it decoration.
+    blockedBecause: null,
   },
 ] as const;
 

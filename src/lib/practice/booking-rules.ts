@@ -1109,7 +1109,7 @@ export async function bookUnderRules(
   if (!BOOKING_CHANNELS_WITH_A_DOOR.includes(channel.code))
     return {
       ok: false, status: 422, code: "CHANNEL_NOT_BUILT",
-      message: `${channel.label.toLowerCase()} is not built. ${channel.phase} owns it, and a rule may already be written for it — but there is no way for such a booking to arrive, so making one here would invent it.`,
+      message: `${channel.label.toLowerCase()} is not built. ${channel.phase} owns it, and a rule may already be written for it — but there is no way for such a booking to arrive, so making one here would invent it.${channel.blockedBecause ? ` ${channel.blockedBecause}` : ""}`,
     };
 
   if (!ctx.capabilities.includes(channel.capability))
