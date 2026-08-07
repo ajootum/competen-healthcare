@@ -1,10 +1,15 @@
-import { platformFlag } from "@/lib/practice/provisioning";
+import { platformFlag, audit } from "@/lib/practice/provisioning";
 import { messagingStatus } from "@/lib/practice/messaging";
-import { BOOKING_MODES_LIVE } from "@/lib/practice/practice-session-constants";
+import { BOOKING_MODES_LIVE, SESSION_APPOINTMENT_TYPES } from "@/lib/practice/practice-session-constants";
 import {
   PATIENT_ACCESS_STORES, PATIENT_BOOKING_FLAG, PATIENT_ACCESS_BUILD_BLOCKERS,
-  PATIENT_ACCESS_BLOCKING_CODES, patientAccessBlocker,
+  PATIENT_ACCESS_BLOCKING_CODES, patientAccessBlocker, PATIENT_ACCESS_MODES,
 } from "@/lib/practice/patient-access-constants";
+import {
+  publishCheck, publishStateLabel, PUBLISH_CHECKS,
+  PUBLISH_CHECKS_NOT_CHECKABLE, PUBLISH_CHECKS_DATABASE_OWNED, PUBLISH_MODES_ADMITTING,
+  PUBLISH_STATE_CODES, PUBLISH_STATES_LIVE, PUBLISHABLE_CONSTRAINT,
+} from "@/lib/practice/publish-constants";
 import type { WorkspaceContext } from "@/lib/practice/access";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -50,6 +55,11 @@ import type { WorkspaceContext } from "@/lib/practice/access";
 export type Reading<T> =
   | { state: "ok"; value: T }
   | { state: "unreadable"; reason: string };
+
+/** The refusal shape every engine in this area returns. Same as booking-rules.ts's, deliberately. */
+export type EngineResult<T> =
+  | { ok: true; data: T }
+  | { ok: false; status: number; code: string; message: string };
 
 // ── DELIVERY: CAN A CODE REACH A PATIENT AT ALL? ─────────────────────────────────────────────────────
 
@@ -374,4 +384,616 @@ export async function patientBookingSurface(admin: any): Promise<PatientBookingS
     buildBlockers: gate.buildBlockers,
     checkedAt: gate.checkedAt,
   };
+}
+
+// ════════════════════════════════════════════════════════════════════════════════════════════════════
+// CPR-V5-007 PHASE 6 -- PUBLISH READINESS (s10.2), AND THE PROFILE IT PUBLISHES
+//
+// ⚠ THIS IS A CHECKLIST, SO A CHECK NOBODY CAN PERFORM SAYS "NOT CHECKED". Never a green tick, never a
+// silent pass. publish-constants.ts carries the reasoning; the consequence in code is that every row has
+// THREE states and the two rows s10.2 asks for that no column can answer are always `not_checked` with
+// what it would take to answer them.
+//
+// ⚠ AND THE DATABASE OWNS THREE OF THEM. `practice_booking_access_publishable` refuses a published row
+// without a handle, without the one-time code, or in a mode that admits nobody. This engine REPORTS the
+// row so a practitioner sees the gap before trying, and when they try it reports the DATABASE'S refusal
+// with the constraint named. It does not re-implement the rule: a rule written twice is a rule that will
+// one day be written differently in the two places, and the copy that matters is the one nothing can
+// bypass.
+// ════════════════════════════════════════════════════════════════════════════════════════════════════
+
+/** The booking-access profile as this build reads it. Every field is JSON-safe. */
+export type BookingAccessProfile = {
+  id: string;
+  handle: string | null;
+  mode: string;
+  publishState: string;
+  otpRequired: boolean;
+  otpChannel: string;
+  guestBookingAllowed: boolean;
+  existingPatientMatching: boolean;
+  visibleLocationIds: string[];
+  visibleAppointmentTypes: string[];
+  brandDisplayName: string | null;
+  instructions: string | null;
+  privacyNotice: string | null;
+  consentText: string | null;
+  consentRequired: boolean;
+  publishedAt: string | null;
+  pausedAt: string | null;
+};
+
+const profileFrom = (row: any): BookingAccessProfile => ({
+  id: row.id as string,
+  handle: (row.handle as string | null) ?? null,
+  mode: (row.mode as string) ?? "internal_only",
+  publishState: (row.publish_state as string) ?? "draft",
+  otpRequired: !!row.otp_required,
+  otpChannel: (row.otp_channel as string) ?? "any",
+  guestBookingAllowed: !!row.guest_booking_allowed,
+  existingPatientMatching: !!row.existing_patient_matching,
+  visibleLocationIds: ((row.visible_location_ids ?? []) as string[]).map(String),
+  visibleAppointmentTypes: ((row.visible_appointment_types ?? []) as string[]).map(String),
+  brandDisplayName: (row.brand_display_name as string | null) ?? null,
+  instructions: (row.instructions as string | null) ?? null,
+  privacyNotice: (row.privacy_notice as string | null) ?? null,
+  consentText: (row.consent_text as string | null) ?? null,
+  consentRequired: !!row.consent_required,
+  publishedAt: (row.published_at as string | null) ?? null,
+  pausedAt: (row.paused_at as string | null) ?? null,
+});
+
+const PROFILE_COLUMNS =
+  "id, handle, mode, publish_state, otp_required, otp_channel, guest_booking_allowed, "
+  + "existing_patient_matching, visible_location_ids, visible_appointment_types, brand_display_name, "
+  + "instructions, privacy_notice, consent_text, consent_required, published_at, paused_at";
+
+/**
+ * The practice's booking-access profile, or the honest absence of one.
+ *
+ * ⚠ THREE ANSWERS, NOT TWO. `ok` with a null value is "this practice has not configured a booking page",
+ * which is a real state every practice starts in; `unreadable` is "nobody knows". A screen that drew the
+ * second as the first would tell a practice its page was unconfigured when the truth is that the query
+ * failed -- and the fix it would then offer is to configure a page that may already exist.
+ */
+export async function bookingAccessProfile(
+  admin: any, workspaceId: string,
+): Promise<Reading<BookingAccessProfile | null>> {
+  const { data, error } = await admin.from("practice_booking_access")
+    .select(PROFILE_COLUMNS).eq("workspace_id", workspaceId).maybeSingle();
+  if (error) return { state: "unreadable", reason: `your booking page could not be read: ${error.message}` };
+  return { state: "ok", value: data ? profileFrom(data) : null };
+}
+
+// ── ONE ROW OF THE CHECKLIST ─────────────────────────────────────────────────────────────────────────
+
+export type PublishCheckState = "pass" | "fail" | "not_checked";
+
+export type PublishCheckResult = {
+  code: string;
+  requirement: string;
+  severity: "blocker" | "warning" | "advisory";
+  authority: "engine" | "database" | "build" | "absent";
+  /** ⚠ THREE STATES. `not_checked` is never drawn as a pass and never omitted. */
+  state: PublishCheckState;
+  detail: string;
+  /** The specific reason this row is failing or unanswerable, where there is one. */
+  because: string | null;
+  /**
+   * The figures behind the row, each the length of a list. Null where nothing was counted -- which is
+   * every `not_checked` row, and is what stops a nought being printed next to a question nobody asked.
+   */
+  found: number | null;
+  of: number | null;
+  /** The ids the figure counted, so the row is checkable rather than assertable. Capped for the payload. */
+  ids: string[];
+  wouldNeed: string | null;
+};
+
+export type PublishReadiness = {
+  checks: PublishCheckResult[];
+  /**
+   * ⚠ FOUR VERDICTS, AND `cannot_say` IS A REAL ONE.
+   *
+   *   not_ready    at least one blocker failed.
+   *   cannot_say   nothing failed, and at least one BLOCKER could not be checked. Never "ready".
+   *   ready_with_warnings  every blocker passed; a warning or advisory did not.
+   *   ready        every blocker passed and nothing else is outstanding.
+   *
+   * A build in which two of s10.2's rows can never be checked can never honestly report `ready` for a
+   * page those rows are about -- but neither of them is a blocker, so they land in the warning tally
+   * rather than making the verdict permanently `cannot_say`. The distinction is the point: a check that
+   * cannot be performed still has a severity, and the severity decides how loudly it counts.
+   */
+  verdict: "ready" | "ready_with_warnings" | "not_ready" | "cannot_say";
+  /** The rows behind the verdict, as codes, so a screen never re-derives the arithmetic. */
+  blockersFailing: string[];
+  blockersNotChecked: string[];
+  warningsFailing: string[];
+  notChecked: string[];
+  profile: BookingAccessProfile | null;
+  profileUnreadable: string | null;
+  publishStateLabel: string;
+  checkedAt: string;
+};
+
+/** How many ids are worth carrying to a screen. Enough to name, few enough not to be a second query. */
+const EVIDENCE_LIMIT = 25;
+
+const checkRow = (
+  code: string,
+  state: PublishCheckState,
+  extra: { because?: string | null; found?: number | null; of?: number | null; ids?: string[] } = {},
+): PublishCheckResult => {
+  const d = publishCheck(code)!;
+  return {
+    code: d.code, requirement: d.requirement, severity: d.severity, authority: d.authority,
+    state, detail: d.detail,
+    because: extra.because ?? null,
+    found: extra.found ?? null, of: extra.of ?? null,
+    ids: (extra.ids ?? []).slice(0, EVIDENCE_LIMIT),
+    wouldNeed: d.wouldNeed,
+  };
+};
+
+/**
+ * s10.2's publish validation, run against this practice.
+ *
+ * ⚠ A FAILED READ IS `not_checked`, NEVER A PASS AND NEVER A FAIL. A pass would publish a page over a
+ * question nobody answered; a fail would send a practitioner to fix something that may be perfectly
+ * fine. Both are wrong, and the third state is what stops having to choose between them.
+ */
+export async function publishReadiness(
+  admin: any, ctx: WorkspaceContext,
+): Promise<PublishReadiness> {
+  const checks: PublishCheckResult[] = [];
+
+  const profileReading = await bookingAccessProfile(admin, ctx.workspaceId);
+  const profile = profileReading.state === "ok" ? profileReading.value : null;
+  const profileUnreadable = profileReading.state === "unreadable" ? profileReading.reason : null;
+
+  // ── 1. LOCATIONS ────────────────────────────────────────────────────────────────────────────────
+  const locs = await admin.from("practice_location")
+    .select("id, name, active").eq("workspace_id", ctx.workspaceId);
+  if (locs.error || locs.data == null) {
+    checks.push(checkRow("LOCATION_ACTIVE", "not_checked", { because: `your locations could not be read: ${locs.error?.message ?? "neither rows nor an error"}` }));
+  } else {
+    const active = (locs.data as any[]).filter(l => l.active);
+    checks.push(checkRow("LOCATION_ACTIVE", active.length > 0 ? "pass" : "fail", {
+      found: active.length, of: (locs.data as any[]).length, ids: active.map(l => l.id as string),
+    }));
+  }
+
+  // ── 2 & 3. SESSIONS AND THE TYPES THEY OFFER ────────────────────────────────────────────────────
+  const sess = await admin.from("practice_availability_template")
+    .select("id, session_name, booking_mode").eq("workspace_id", ctx.workspaceId).eq("status", "active");
+  let bookableIds: string[] = [];
+  if (sess.error || sess.data == null) {
+    const because = `your sessions could not be read: ${sess.error?.message ?? "neither rows nor an error"}`;
+    checks.push(checkRow("SESSION_BOOKABLE", "not_checked", { because }));
+    checks.push(checkRow("APPOINTMENT_TYPE_LINKED", "not_checked", { because }));
+  } else {
+    // ⚠ "PATIENT-BOOKABLE" IS THE COMPLEMENT OF THE MODES PHASE 1 CAN HONOUR, exactly as the gate
+    // derives it. Written the other way round, a fifth mode added later would silently stop counting.
+    const bookable = (sess.data as any[]).filter(s => !BOOKING_MODES_LIVE.includes(s.booking_mode));
+    bookableIds = bookable.map(s => s.id as string);
+    checks.push(checkRow("SESSION_BOOKABLE", bookable.length > 0 ? "pass" : "fail", {
+      found: bookable.length, of: (sess.data as any[]).length, ids: bookableIds,
+    }));
+
+    if (bookable.length === 0) {
+      // Nothing is bookable, so there is no session whose types could be checked. Reported as a
+      // consequence rather than as a second failure a practitioner would go chasing separately.
+      checks.push(checkRow("APPOINTMENT_TYPE_LINKED", "not_checked", {
+        because: "no session is open to patients yet, so there is no session whose appointment types could be checked.",
+      }));
+    } else {
+      const links = await admin.from("practice_session_appointment_type")
+        .select("template_id, appointment_type").eq("workspace_id", ctx.workspaceId)
+        .in("template_id", bookableIds);
+      if (links.error || links.data == null) {
+        checks.push(checkRow("APPOINTMENT_TYPE_LINKED", "not_checked", { because: `the appointment types your sessions offer could not be read: ${links.error?.message ?? "neither rows nor an error"}` }));
+      } else {
+        const covered = new Set((links.data as any[]).map(l => l.template_id as string));
+        const withTypes = bookableIds.filter(id => covered.has(id));
+        checks.push(checkRow("APPOINTMENT_TYPE_LINKED", withTypes.length > 0 ? "pass" : "fail", {
+          found: withTypes.length, of: bookableIds.length, ids: withTypes,
+          because: withTypes.length === 0
+            ? "every session you have opened to patients offers zero appointment types, and s4.3 says zero means not patient-bookable."
+            : null,
+        }));
+      }
+    }
+  }
+
+  // ── 4 & 8. RULE COVER AND RULE CONFLICTS ────────────────────────────────────────────────────────
+  //
+  // ⚠ THE SAME COMPUTATION LAYER 3 ALREADY DRAWS, not a second opinion. Imported dynamically so the
+  // patient-facing page -- which imports this module for the gate -- does not pull the whole rules
+  // engine into its own graph. follow-ups.ts takes the same measure for the same kind of reason.
+  const { bookingRulesWorkspace } = await import("@/lib/practice/booking-rules");
+  const rw = await bookingRulesWorkspace(admin, ctx);
+  if (rw.uncovered.state !== "ok") {
+    checks.push(checkRow("SESSION_RULE_COVER", "not_checked", { because: rw.uncovered.reason }));
+  } else {
+    const uncovered = rw.uncovered.value;
+    checks.push(checkRow("SESSION_RULE_COVER", uncovered.length === 0 ? "pass" : "fail", {
+      found: uncovered.length, of: bookableIds.length || null,
+      ids: uncovered.map(u => u.id),
+      because: uncovered.length > 0
+        ? `${uncovered.map(u => u.name).join(", ")} ${uncovered.length === 1 ? "is" : "are"} covered by no rule in force.`
+        : null,
+    }));
+  }
+  if (rw.conflicts.state !== "ok") {
+    checks.push(checkRow("RULE_CONFLICTS_RESOLVED", "not_checked", { because: rw.conflicts.reason }));
+  } else {
+    const c = rw.conflicts.value;
+    checks.push(checkRow("RULE_CONFLICTS_RESOLVED", c.length === 0 ? "pass" : "fail", {
+      found: c.length, of: null, ids: c.map(x => x.a.id),
+      because: c.length > 0
+        ? c.map(x => `"${x.a.name ?? "unnamed"}" and "${x.b.name ?? "unnamed"}" tie`).join("; ")
+        : null,
+    }));
+  }
+
+  // ── 5. AN ACCESS MODE HAS BEEN CHOSEN ───────────────────────────────────────────────────────────
+  if (profileUnreadable) {
+    checks.push(checkRow("ACCESS_MODE_SELECTED", "not_checked", { because: profileUnreadable }));
+  } else {
+    checks.push(checkRow("ACCESS_MODE_SELECTED", profile ? "pass" : "fail", {
+      because: profile ? null : "this practice has no booking-access profile, so no mode has been chosen. That is not the same as having chosen internal-only.",
+    }));
+  }
+
+  // ── 6. THE REGISTRATION FORM CAN ACTUALLY BE FILLED IN ──────────────────────────────────────────
+  const tpl = await admin.from("practice_registration_template")
+    .select("id, name, status, is_default").eq("workspace_id", ctx.workspaceId).eq("status", "published");
+  if (tpl.error || tpl.data == null) {
+    checks.push(checkRow("REGISTRATION_FIELDS_VALID", "not_checked", { because: `your registration templates could not be read: ${tpl.error?.message ?? "neither rows nor an error"}` }));
+  } else if ((tpl.data as any[]).length === 0) {
+    checks.push(checkRow("REGISTRATION_FIELDS_VALID", "fail", {
+      found: 0, of: 0,
+      because: "no registration template is published, so a patient booking would have no form to complete.",
+    }));
+  } else {
+    const templateIds = (tpl.data as any[]).map(t => t.id as string);
+    const fields = await admin.from("practice_registration_field")
+      .select("id, template_id, field_key, label, field_type, required, visible, options")
+      .eq("workspace_id", ctx.workspaceId).in("template_id", templateIds);
+    if (fields.error || fields.data == null) {
+      checks.push(checkRow("REGISTRATION_FIELDS_VALID", "not_checked", { because: `your registration fields could not be read: ${fields.error?.message ?? "neither rows nor an error"}` }));
+    } else {
+      const rows = fields.data as any[];
+      // ⚠ TWO WAYS A REQUIRED FIELD IS UNANSWERABLE, and both are real forms somebody could build.
+      const broken = rows.filter(f => f.required && (
+        !f.visible
+        || (["select", "multi_select"].includes(f.field_type) && ((f.options ?? []) as any[]).length === 0)
+      ));
+      checks.push(checkRow("REGISTRATION_FIELDS_VALID", broken.length === 0 ? "pass" : "fail", {
+        found: rows.length - broken.length, of: rows.length, ids: broken.map(f => f.id as string),
+        because: broken.length > 0
+          ? `${broken.map(f => f.label ?? f.field_key).join(", ")} ${broken.length === 1 ? "is" : "are"} required and cannot be answered -- hidden, or a choice with no options.`
+          : null,
+      }));
+    }
+  }
+
+  // ── 7. RESERVED CAPACITY WITHIN TOTAL (s7.4) ────────────────────────────────────────────────────
+  const caps = await admin.from("practice_booking_rule")
+    .select("id, name, status, capacity_total, capacity_new, capacity_follow_up, capacity_urgent_reserve")
+    .eq("workspace_id", ctx.workspaceId).eq("status", "active");
+  if (caps.error || caps.data == null) {
+    checks.push(checkRow("RESERVED_WITHIN_CAPACITY", "not_checked", { because: `your booking rules could not be read: ${caps.error?.message ?? "neither rows nor an error"}` }));
+  } else {
+    const rules = caps.data as any[];
+    // The same sum setBookingRuleCard validates on write. Recomputed rather than trusted, because a row
+    // can be written straight into the table without passing through that path.
+    const over = rules.filter(r => r.capacity_total != null
+      && ((r.capacity_new ?? 0) + (r.capacity_follow_up ?? 0) + (r.capacity_urgent_reserve ?? 0)) > r.capacity_total);
+    checks.push(checkRow("RESERVED_WITHIN_CAPACITY", over.length === 0 ? "pass" : "fail", {
+      found: rules.length - over.length, of: rules.length, ids: over.map(r => r.id as string),
+      because: over.length > 0
+        ? `${over.map(r => `"${r.name ?? "unnamed"}"`).join(", ")} reserve${over.length === 1 ? "s" : ""} more places than the rule's own total.`
+        : null,
+    }));
+  }
+
+  // ── 9. A CHANNEL THAT COULD CARRY A CODE ────────────────────────────────────────────────────────
+  const delivery = await deliveryReadiness(admin, ctx.workspaceId);
+  if (delivery.state !== "ok") {
+    checks.push(checkRow("NOTIFICATION_CHANNEL", "not_checked", { because: delivery.reason }));
+  } else {
+    const usable = delivery.value.channels.filter(c => c.usable);
+    checks.push(checkRow("NOTIFICATION_CHANNEL", delivery.value.deliverable ? "pass" : "fail", {
+      found: usable.length, of: delivery.value.channels.length,
+      because: delivery.value.reasons[0] ?? null,
+    }));
+  }
+
+  // ── 10 & 11. THE TWO s10.2 ROWS NOTHING IN THIS SCHEMA CAN ANSWER ───────────────────────────────
+  //
+  // ⚠ ALWAYS `not_checked`, NEVER OMITTED AND NEVER A TICK. A checklist that quietly dropped the rows it
+  // could not perform would report a shorter, cleaner, wronger list -- and the practitioner would have
+  // no way of knowing which questions had gone unasked.
+  for (const code of PUBLISH_CHECKS_NOT_CHECKABLE)
+    checks.push(checkRow(code, "not_checked", { because: publishCheck(code)!.detail }));
+
+  // ── 12-14. THE THREE THE DATABASE OWNS ──────────────────────────────────────────────────────────
+  if (profileUnreadable || !profile) {
+    const because = profileUnreadable
+      ?? "there is no booking-access profile yet, so there is no row for the database to judge.";
+    for (const code of PUBLISH_CHECKS_DATABASE_OWNED)
+      checks.push(checkRow(code, "not_checked", { because }));
+  } else {
+    checks.push(checkRow("HANDLE_CLAIMED", profile.handle ? "pass" : "fail", {
+      because: profile.handle ? null : "no handle has been claimed, so there is no address a patient could be given.",
+    }));
+    checks.push(checkRow("OTP_REQUIRED", profile.otpRequired ? "pass" : "fail", {
+      because: profile.otpRequired ? null : "the one-time code is switched off on this profile.",
+    }));
+    checks.push(checkRow("MODE_ADMITS_PATIENTS", PUBLISH_MODES_ADMITTING.includes(profile.mode) ? "pass" : "fail", {
+      because: PUBLISH_MODES_ADMITTING.includes(profile.mode)
+        ? null : `the mode is ${profile.mode.replace(/_/g, " ")}, which admits no patient.`,
+    }));
+  }
+
+  // ── 15. THE BUILD ───────────────────────────────────────────────────────────────────────────────
+  //
+  // Unconditional and always failing, exactly as the gate's INTAKE_NOT_BUILT is, and for the same
+  // reason: it is true regardless of what any read said, and it is a fact about the code.
+  checks.push(checkRow("INTAKE_BUILT", "fail", {
+    because: "the patient-facing intake and confirmation are not built, so a published page would have nothing behind its first screen.",
+  }));
+
+  // ⚠ THE CONSTANTS DECLARE THE ORDER, AND THE ENGINE OBEYS IT. This function builds the rows in the
+  // order the READS are cheapest to batch -- rule cover and rule conflicts come out of one call, so they
+  // are pushed together -- and PUBLISH_CHECKS declares the order somebody can ACT on them. Those are
+  // different orders for good reasons, and letting the assembly order leak out made the screen's list
+  // disagree with the list the constants document. Sorted once, here, so there is one answer.
+  const declaredOrder = new Map(PUBLISH_CHECKS.map((c, i) => [c.code, i]));
+  checks.sort((a, b) => (declaredOrder.get(a.code) ?? 0) - (declaredOrder.get(b.code) ?? 0));
+
+  const blockersFailing = checks.filter(c => c.severity === "blocker" && c.state === "fail").map(c => c.code);
+  const blockersNotChecked = checks.filter(c => c.severity === "blocker" && c.state === "not_checked").map(c => c.code);
+  const warningsFailing = checks.filter(c => c.severity !== "blocker" && c.state === "fail").map(c => c.code);
+  const notChecked = checks.filter(c => c.state === "not_checked").map(c => c.code);
+
+  const verdict: PublishReadiness["verdict"] =
+    blockersFailing.length > 0 ? "not_ready"
+      : blockersNotChecked.length > 0 ? "cannot_say"
+        : warningsFailing.length > 0 || notChecked.length > 0 ? "ready_with_warnings"
+          : "ready";
+
+  return {
+    checks, verdict, blockersFailing, blockersNotChecked, warningsFailing, notChecked,
+    profile, profileUnreadable,
+    publishStateLabel: publishStateLabel(profile?.publishState ?? null),
+    checkedAt: new Date().toISOString(),
+  };
+}
+
+// ── WRITING THE PROFILE ──────────────────────────────────────────────────────────────────────────────
+
+export type BookingAccessSave = {
+  mode?: string;
+  otpRequired?: boolean;
+  otpChannel?: string;
+  guestBookingAllowed?: boolean;
+  existingPatientMatching?: boolean;
+  visibleLocationIds?: string[];
+  visibleAppointmentTypes?: string[];
+  brandDisplayName?: string | null;
+  instructions?: string | null;
+  privacyNotice?: string | null;
+  consentText?: string | null;
+  consentRequired?: boolean;
+};
+
+/**
+ * Create or amend the booking-access profile.
+ *
+ * ⚠ EVERY LOCATION ID IS VERIFIED AGAINST THIS WORKSPACE BEFORE IT IS WRITTEN. migration 254 says why in
+ * its own words: Postgres will not point an array at a table, so `visible_location_ids` is a uuid[] with
+ * NO foreign key, and nothing in the database stops another practice's location id being written into
+ * it. That is the same cross-tenant hole checkPlacement's comment describes for
+ * practice_appointment.location_id, and here the array is what a PATIENT-FACING page would render.
+ *
+ * ⚠ IT NEVER TOUCHES publish_state OR handle. Publishing is a separate, deliberate act (setPublishState)
+ * and the handle is claimed in Practice Setup, atomically at the index. Letting a settings save move
+ * either of them would make configuring a page an act of publishing one, which is the exact collapse
+ * migration 254 kept `mode` and `publish_state` apart to avoid.
+ */
+export async function saveBookingAccess(admin: any, ctx: WorkspaceContext, args: BookingAccessSave & {
+  actorId: string; correlationId: string;
+}): Promise<EngineResult<{ id: string; created: boolean }>> {
+  if (!ctx.capabilities.includes("practice.settings.manage"))
+    return { ok: false, status: 403, code: "FORBIDDEN", message: "practice.settings.manage is required" };
+
+  if (args.mode !== undefined && !PATIENT_ACCESS_MODES.some(m => m.code === args.mode))
+    return {
+      ok: false, status: 400, code: "UNKNOWN_MODE",
+      message: `a mode must be one of: ${PATIENT_ACCESS_MODES.map(m => m.code).join(", ")}`,
+    };
+  if (args.otpChannel !== undefined && !["sms", "email", "any"].includes(args.otpChannel))
+    return { ok: false, status: 400, code: "UNKNOWN_CHANNEL", message: "a code channel must be sms, email or any" };
+
+  // ⚠ THE CROSS-TENANT CHECK. Read the ids that ARE this practice's, and refuse on the difference --
+  // rather than asking "does this id exist", which a foreign one also answers yes to.
+  if (args.visibleLocationIds !== undefined) {
+    const wanted = [...new Set(args.visibleLocationIds.map(String))];
+    if (wanted.length > 0) {
+      const { data: mine, error } = await admin.from("practice_location")
+        .select("id").eq("workspace_id", ctx.workspaceId).in("id", wanted);
+      // A failed read REFUSES. Writing the array on a query that failed is how a foreign id gets in.
+      if (error || mine == null)
+        return { ok: false, status: 503, code: "READ_FAILED", message: `your locations could not be checked, so nothing was written: ${error?.message ?? "neither rows nor an error"}` };
+      const ours = new Set((mine as any[]).map(l => l.id as string));
+      const foreign = wanted.filter(id => !ours.has(id));
+      if (foreign.length > 0)
+        return {
+          ok: false, status: 422, code: "LOCATION_NOT_YOURS",
+          message: `${foreign.length} of those location${foreign.length === 1 ? "" : "s"} ${foreign.length === 1 ? "does" : "do"} not belong to this practice, so nothing was written`,
+        };
+    }
+  }
+
+  // The appointment types are also checked here, even though migration 254 constrains them. A refusal
+  // with a sentence beats a constraint violation, and the answer is the same either way.
+  if (args.visibleAppointmentTypes !== undefined) {
+    const known = SESSION_APPOINTMENT_TYPES.map(([code]) => code as string);
+    const unknown = [...new Set(args.visibleAppointmentTypes.map(String))].filter(t => !known.includes(t));
+    if (unknown.length > 0)
+      return {
+        ok: false, status: 422, code: "UNKNOWN_APPOINTMENT_TYPE",
+        message: `no appointment may be made with: ${unknown.join(", ")}`,
+      };
+  }
+
+  const existing = await bookingAccessProfile(admin, ctx.workspaceId);
+  if (existing.state !== "ok")
+    return { ok: false, status: 503, code: "READ_FAILED", message: existing.reason };
+
+  const text = (v: string | null | undefined) =>
+    v === undefined ? undefined : (v === null ? null : (v.trim() || null));
+
+  const patch: Record<string, unknown> = { updated_at: new Date().toISOString(), updated_by: args.actorId };
+  if (args.mode !== undefined) patch.mode = args.mode;
+  if (args.otpRequired !== undefined) patch.otp_required = args.otpRequired;
+  if (args.otpChannel !== undefined) patch.otp_channel = args.otpChannel;
+  if (args.guestBookingAllowed !== undefined) patch.guest_booking_allowed = args.guestBookingAllowed;
+  if (args.existingPatientMatching !== undefined) patch.existing_patient_matching = args.existingPatientMatching;
+  if (args.visibleLocationIds !== undefined) patch.visible_location_ids = [...new Set(args.visibleLocationIds.map(String))];
+  if (args.visibleAppointmentTypes !== undefined) patch.visible_appointment_types = [...new Set(args.visibleAppointmentTypes.map(String))];
+  if (args.brandDisplayName !== undefined) patch.brand_display_name = text(args.brandDisplayName);
+  if (args.instructions !== undefined) patch.instructions = text(args.instructions);
+  if (args.privacyNotice !== undefined) patch.privacy_notice = text(args.privacyNotice);
+  if (args.consentText !== undefined) patch.consent_text = text(args.consentText);
+  if (args.consentRequired !== undefined) patch.consent_required = args.consentRequired;
+
+  if (existing.value) {
+    const { data, error } = await admin.from("practice_booking_access")
+      .update(patch).eq("id", existing.value.id).select("id").maybeSingle();
+    if (error) return { ok: false, status: 422, code: "REFUSED_BY_DATABASE", message: error.message };
+    // ⚠ AN UPDATE THAT MATCHED NOTHING IS NOT A SUCCESS. This codebase has shipped two silent write
+    // failures by treating one as one.
+    if (!data) return { ok: false, status: 409, code: "NOT_WRITTEN", message: "the profile changed underneath you; reload and retry" };
+    return { ok: true, data: { id: data.id as string, created: false } };
+  }
+
+  const { data, error } = await admin.from("practice_booking_access")
+    .insert({ workspace_id: ctx.workspaceId, created_by: args.actorId, ...patch })
+    .select("id").maybeSingle();
+  if (error) {
+    if (error.code === "23505")
+      return { ok: false, status: 409, code: "ALREADY_EXISTS", message: "this practice already has a booking page; reload and retry" };
+    return { ok: false, status: 422, code: "REFUSED_BY_DATABASE", message: error.message };
+  }
+  if (!data) return { ok: false, status: 500, code: "NOT_WRITTEN", message: "the booking page was not created and the database reported no error" };
+  return { ok: true, data: { id: data.id as string, created: true } };
+}
+
+/**
+ * Move the booking page's publish state.
+ *
+ * ⚠ THE ENGINE CHECKS WHAT ONLY AN ENGINE CAN SEE, AND THE DATABASE CHECKS THE ROW.
+ *
+ * s10.2's blockers are mostly facts about OTHER tables -- locations, sessions, rules, registration
+ * fields -- and no constraint on practice_booking_access can see them, so this refuses on those before
+ * writing. The three that are facts about the row itself belong to
+ * `practice_booking_access_publishable`, and they are NOT repeated here: the write is attempted and the
+ * database's refusal is reported with the constraint named. Repeating them would give this product two
+ * copies of one rule, and only one of them is the one nothing can bypass.
+ */
+export async function setPublishState(admin: any, ctx: WorkspaceContext, args: {
+  to: string; acceptWarnings?: boolean; actorId: string; correlationId: string;
+}): Promise<EngineResult<{ publishState: string; acceptedWarnings: string[] }>> {
+  if (!ctx.capabilities.includes("practice.settings.manage"))
+    return { ok: false, status: 403, code: "FORBIDDEN", message: "practice.settings.manage is required" };
+
+  if (!PUBLISH_STATE_CODES.includes(args.to))
+    return {
+      ok: false, status: 400, code: "UNKNOWN_PUBLISH_STATE",
+      message: `a publish state must be one of: ${PUBLISH_STATE_CODES.join(", ")}`,
+    };
+
+  const existing = await bookingAccessProfile(admin, ctx.workspaceId);
+  if (existing.state !== "ok")
+    return { ok: false, status: 503, code: "READ_FAILED", message: existing.reason };
+  if (!existing.value)
+    return {
+      ok: false, status: 409, code: "NO_PROFILE",
+      message: "there is no booking page to publish. Configure the access mode first.",
+    };
+
+  const goingLive = PUBLISH_STATES_LIVE.includes(args.to);
+  let acceptedWarnings: string[] = [];
+
+  if (goingLive) {
+    const readiness = await publishReadiness(admin, ctx);
+
+    // ⚠ THE ENGINE'S OWN BLOCKERS, NAMED. Including the ones it could not CHECK: publishing over a
+    // question nobody answered is the failure this whole checklist exists to prevent.
+    const engineOwned = (codes: string[]) =>
+      codes.filter(c => publishCheck(c)?.authority !== "database");
+    const failing = engineOwned(readiness.blockersFailing);
+    const unchecked = engineOwned(readiness.blockersNotChecked);
+    if (failing.length > 0 || unchecked.length > 0)
+      return {
+        ok: false, status: 409, code: "NOT_READY",
+        message: [
+          failing.length > 0 ? `not ready: ${failing.join(", ")}` : null,
+          unchecked.length > 0 ? `could not be checked, so publishing is refused rather than guessed at: ${unchecked.join(", ")}` : null,
+        ].filter(Boolean).join("; "),
+      };
+
+    // s8.1's "Published with warnings" is a real state, and it is the ONLY way a warning is passed:
+    // somebody says so. A screen that quietly picked it would publish over a warning nobody read.
+    const outstanding = [...readiness.warningsFailing, ...readiness.notChecked]
+      .filter(c => publishCheck(c)?.severity !== "blocker");
+    if (outstanding.length > 0) {
+      if (args.to === "published" && !args.acceptWarnings)
+        return {
+          ok: false, status: 409, code: "WARNINGS_OUTSTANDING",
+          message: `${outstanding.length} check${outstanding.length === 1 ? "" : "s"} did not pass and ${outstanding.length === 1 ? "was" : "were"} not accepted: ${outstanding.join(", ")}`,
+        };
+      acceptedWarnings = outstanding;
+    }
+  }
+
+  const patch: Record<string, unknown> = {
+    publish_state: goingLive && acceptedWarnings.length > 0 ? "published_with_warnings" : args.to,
+    updated_at: new Date().toISOString(), updated_by: args.actorId,
+  };
+  if (goingLive) { patch.published_at = new Date().toISOString(); patch.published_by = args.actorId; }
+  if (args.to === "paused") patch.paused_at = new Date().toISOString();
+
+  const { data, error } = await admin.from("practice_booking_access")
+    .update(patch).eq("id", existing.value.id).select("publish_state").maybeSingle();
+
+  if (error) {
+    // ⚠ THE DATABASE'S REFUSAL, REPORTED AS THE DATABASE'S. 23514 is a check violation; when it names
+    // practice_booking_access_publishable it is one of the three row-level rules, and the message says
+    // which three they are rather than pretending this code worked them out.
+    if (error.code === "23514" && String(error.message ?? "").includes(PUBLISHABLE_CONSTRAINT))
+      return {
+        ok: false, status: 409, code: "REFUSED_BY_CONSTRAINT",
+        message: `the database refused this (${PUBLISHABLE_CONSTRAINT}): a published booking page needs a claimed handle, the one-time code switched on, and a mode that admits patients. Nothing was written.`,
+      };
+    if (error.code === "23503")
+      return {
+        ok: false, status: 409, code: "HANDLE_NOT_ISSUED",
+        message: "the database refused this: the handle on this profile is not one any identity holds. Nothing was written.",
+      };
+    return { ok: false, status: 422, code: "REFUSED_BY_DATABASE", message: error.message };
+  }
+  if (!data) return { ok: false, status: 409, code: "NOT_WRITTEN", message: "the profile changed underneath you; reload and retry" };
+
+  await audit(admin, {
+    workspaceId: ctx.workspaceId, actorId: args.actorId, eventType: "practice.booking_page_state_changed",
+    payload: { from: existing.value.publishState, to: data.publish_state, acceptedWarnings },
+    correlationId: args.correlationId,
+  });
+
+  return { ok: true, data: { publishState: data.publish_state as string, acceptedWarnings } };
 }

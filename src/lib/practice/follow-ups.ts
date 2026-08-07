@@ -7,6 +7,9 @@ import {
   DUE_WEEK_DAYS, type FollowUpDueState, type FollowUpView,
 } from "@/lib/practice/follow-up-constants";
 import { dueDateFrom, workspaceClock } from "@/lib/practice/practice-time";
+import {
+  RECALLABLE_FOLLOW_UP_STATUSES, DEAD_APPOINTMENT_STATUSES,
+} from "@/lib/practice/recall-constants";
 
 // CPR-140 FOLLOW-UP MANAGEMENT / PEN-004. The obligation loop: due -> overdue -> scheduled -> closed.
 //
@@ -771,6 +774,280 @@ export async function followUpWorkspace(admin: any, workspaceId: string, options
     truncated: all.items.length >= WORKSPACE_READ_LIMIT,
     unavailable: false, detail: null,
   };
+}
+
+// ════════════════════════════════════════════════════════════════════════════════════════════════════
+// CPR-V5-007 PHASE 5, s7.5: THE RECALL QUEUE, AND THE FOLLOW-UPS WHOSE BOOKING DIED
+//
+// "Unbooked due follow-ups remain visible in Follow-ups and may enter a recall queue."
+// "Missed follow-up appointments return to follow-up management according to the rule."
+//
+// ⚠ DERIVED, LIKE OVERDUE, AND FOR THE SAME REASON. recall-constants.ts states it at length: a stored
+// queue needs something to run to become true, so it would be shortest for the practice that had
+// forgotten most. This is computed from due_on against the practice's own today, every time.
+//
+// ⚠ AND THE STRANDED LIST IS THE HOLE IN migration 196'S TRIGGER, WHICH IS WHY IT IS NOT DEAD CODE.
+//
+// practice_follow_up_release_on_dead_appointment() puts a follow-up back on the board when its booking
+// is cancelled or no-showed, and it is right to. But read its WHERE clause:
+//
+//     where f.appointment_id = new.id and f.status = 'SCHEDULED'
+//
+// A DEFERRED follow-up is not SCHEDULED. FOLLOW_UP_TRANSITIONS allows SCHEDULED -> DEFERRED, and
+// deferFollowUp does not clear appointment_id -- so an obligation that was booked and then deferred
+// keeps pointing at its appointment, the appointment is cancelled, and THE TRIGGER SKIPS IT. It sits
+// there holding a dead booking with nothing to notice.
+//
+// The trigger is also `after update`, so a row that arrived already CANCELLED or NO_SHOW -- an import, a
+// restore, any path that does not transition through a live status -- never fires it either.
+//
+// So this list is a READ over what is actually true rather than a second copy of the trigger's job: any
+// live obligation whose appointment is dead, however it got that way. Where the trigger has already
+// done its work the list is empty, which is the correct answer and not an absent one.
+// ════════════════════════════════════════════════════════════════════════════════════════════════════
+
+/** One person in the queue. Every field is a string, a number, a boolean or null -- see the header. */
+export type RecallEntry = {
+  followUpId: string;
+  patientId: string;
+  patientName: string | null;
+  reason: string | null;
+  kind: string | null;
+  priority: string | null;
+  status: string;
+  /** The date this is measured against: due_on, or deferred_until for a deferred obligation. */
+  dueOn: string;
+  /** Positive when the date has passed. 0 means due today. Never negative in this list. */
+  daysOverdue: number;
+  /**
+   * ⚠ HOW MANY WAYS THERE ARE TO REACH THIS PERSON, AS A COUNT OF ROWS -- and null when the contact
+   * register could not be read. A zero here is "we hold no phone number and no address for them", which
+   * is a fact worth acting on; a null is "nobody knows", which is not.
+   */
+  contactRoutes: number | null;
+  href: string;
+};
+
+export type StrandedEntry = RecallEntry & {
+  appointmentId: string;
+  /** CANCELLED or NO_SHOW. The reason the booking behind this obligation is not going to happen. */
+  appointmentStatus: string;
+  appointmentAt: string;
+};
+
+export type RecallQueue = {
+  /** Overdue and unbooked, longest-waiting first. The queue proper. */
+  overdue: RecallEntry[];
+  /** Due today and unbooked. Not overdue yet, and one day from being. */
+  dueToday: RecallEntry[];
+  /** ⚠ SCHEDULED against a booking that is CANCELLED or NO_SHOW. Nobody is coming. */
+  stranded: StrandedEntry[];
+  /**
+   * The subset of overdue + dueToday this practice holds no contact route for.
+   *
+   * ⚠ A SUBSET, NOT A FOURTH QUEUE. The same rows appear in `overdue` or `dueToday`; this list exists so
+   * a screen can say "nine of these fourteen people cannot be rung" without counting anything twice.
+   * Empty when the contact register could not be read -- and `contactUnavailable` says which it was.
+   */
+  unreachable: RecallEntry[];
+  today: string;
+  timezone: string;
+  /** ⚠ True when the follow-ups themselves could not be read. Three empty lists are not three noughts. */
+  unavailable: boolean;
+  detail: string | null;
+  /** ⚠ True when the CONTACT register could not be read, which leaves every contactRoutes null. */
+  contactUnavailable: boolean;
+  contactDetail: string | null;
+  /** True when the appointment read behind `stranded` failed, so that list is a floor rather than a total. */
+  strandedUnavailable: boolean;
+  strandedDetail: string | null;
+};
+
+const EMPTY_RECALL = (today: string, timezone: string): RecallQueue => ({
+  overdue: [], dueToday: [], stranded: [], unreachable: [],
+  today, timezone,
+  unavailable: false, detail: null,
+  contactUnavailable: false, contactDetail: null,
+  strandedUnavailable: false, strandedDetail: null,
+});
+
+/**
+ * s7.5's recall queue, plus the stranded list nothing had ever produced.
+ *
+ * ⚠ ONE READ OF THE FOLLOW-UPS, THROUGH listFollowUps, so the queue cannot disagree with the board about
+ * what is overdue. Two reads would be two chances for one to fail and the other to succeed, and a row
+ * that moved between them would be in both lists or neither.
+ *
+ * ⚠ EVERY FAILURE IS ITS OWN FLAG. The follow-ups, the contact register and the appointments fail
+ * independently, and collapsing them into one `unavailable` would blank a queue that was perfectly
+ * readable because a contact lookup wobbled.
+ */
+export async function recallQueue(
+  admin: any, workspaceId: string, options: { limit?: number } = {},
+): Promise<RecallQueue> {
+  const { timezone, today } = await workspaceClock(admin, workspaceId);
+
+  const all = await listFollowUps(admin, workspaceId, {
+    status: [...RECALLABLE_FOLLOW_UP_STATUSES, "SCHEDULED"],
+    limit: options.limit ?? 500,
+  });
+  if (all.unavailable)
+    return { ...EMPTY_RECALL(today, timezone), unavailable: true, detail: all.detail };
+
+  // ⚠ THE DUE TEST IS deriveFollowUp's, NOT A SECOND COMPARISON. `dueInDays` is measured against
+  // effectiveDueOn, so a DEFERRED obligation is judged against the date it was deferred TO -- reading
+  // due_on here instead would put every deferred follow-up back in the queue it was deferred out of.
+  //
+  // ⚠ AND `!f.appointment_id` KEEPS THE TWO LISTS DISJOINT. A deferred obligation still holding a dead
+  // booking belongs in `stranded`, where the action is "return it", not in the recall queue, where the
+  // action is "ring them" -- and appearing in both would make the two figures add up to more people
+  // than there are.
+  const owed = all.items.filter(f =>
+    (RECALLABLE_FOLLOW_UP_STATUSES as readonly string[]).includes(f.status) && !f.appointment_id);
+  const due = owed.filter(f => f.dueInDays <= 0);
+
+  // ⚠ ANY LIVE STATUS HOLDING AN APPOINTMENT, NOT JUST SCHEDULED. Restricting this to SCHEDULED would
+  // reproduce the trigger's own blind spot exactly -- see the header -- and the case it misses is the
+  // one nothing else in this product would ever surface.
+  const scheduled = all.items.filter(f => !f.closed && f.appointment_id);
+
+  // ── THE CONTACT REGISTER. Read for the people in the queue and nobody else.
+  const patientIds = [...new Set([...due, ...scheduled].map(f => f.patient_id as string))];
+  let routesByPatient: Map<string, number> | null = new Map();
+  let contactDetail: string | null = null;
+  if (patientIds.length > 0) {
+    const { data: contacts, error: cErr } = await admin.from("practice_patient_contact")
+      .select("patient_id, contact_type").eq("workspace_id", workspaceId).in("patient_id", patientIds);
+    // ⚠ A FAILED READ IS NOT "NOBODY HAS A PHONE NUMBER". Reported as null on every row, because
+    // "we cannot reach these nine people" is an instruction to do something, and it must not be printed
+    // on the strength of a query that failed.
+    if (cErr || contacts == null) { routesByPatient = null; contactDetail = cErr?.message ?? "the contact register came back as neither rows nor an error"; }
+    else {
+      for (const c of contacts as any[]) {
+        // An address is not a way to recall somebody the same afternoon. Phone and email only.
+        if (c.contact_type !== "phone" && c.contact_type !== "email") continue;
+        routesByPatient.set(c.patient_id, (routesByPatient.get(c.patient_id) ?? 0) + 1);
+      }
+    }
+  }
+
+  const entry = (f: ListedFollowUp): RecallEntry => ({
+    followUpId: f.id as string,
+    patientId: f.patient_id as string,
+    patientName: f.patient_name,
+    reason: (f.reason as string | null) ?? null,
+    kind: (f.kind as string | null) ?? null,
+    priority: (f.priority as string | null) ?? null,
+    status: f.status as string,
+    dueOn: f.effectiveDueOn as string,
+    daysOverdue: -f.dueInDays,
+    contactRoutes: routesByPatient === null ? null : (routesByPatient.get(f.patient_id as string) ?? 0),
+    href: `/practice/follow-ups?followUp=${f.id}`,
+  });
+
+  const overdue = due.filter(f => f.dueInDays < 0).map(entry)
+    .sort((a, b) => b.daysOverdue - a.daysOverdue);
+  const dueToday = due.filter(f => f.dueInDays === 0).map(entry);
+
+  // ── THE STRANDED LIST. The appointments behind the SCHEDULED obligations, and which of them are dead.
+  let stranded: StrandedEntry[] = [];
+  let strandedUnavailable = false;
+  let strandedDetail: string | null = null;
+  if (scheduled.length > 0) {
+    const { data: appts, error: aErr } = await admin.from("practice_appointment")
+      .select("id, status, scheduled_at").eq("workspace_id", workspaceId)
+      .in("id", scheduled.map(f => f.appointment_id as string));
+    if (aErr || appts == null) {
+      // ⚠ NOT AN EMPTY STRANDED LIST. An empty one says "every booking behind a follow-up is alive",
+      // which is the reassuring answer and the one this read cannot support.
+      strandedUnavailable = true;
+      strandedDetail = aErr?.message ?? "the appointments behind your booked follow-ups came back as neither rows nor an error";
+    } else {
+      const byId = new Map((appts as any[]).map(a => [a.id as string, a]));
+      stranded = scheduled.flatMap(f => {
+        const a = byId.get(f.appointment_id as string);
+        if (!a || !(DEAD_APPOINTMENT_STATUSES as readonly string[]).includes(a.status)) return [];
+        return [{
+          ...entry(f),
+          appointmentId: a.id as string,
+          appointmentStatus: a.status as string,
+          appointmentAt: a.scheduled_at as string,
+        }];
+      }).sort((x, y) => String(x.appointmentAt).localeCompare(String(y.appointmentAt)));
+    }
+  }
+
+  return {
+    overdue, dueToday, stranded,
+    unreachable: routesByPatient === null ? [] : [...overdue, ...dueToday].filter(e => e.contactRoutes === 0),
+    today, timezone,
+    unavailable: false, detail: null,
+    contactUnavailable: routesByPatient === null, contactDetail,
+    strandedUnavailable, strandedDetail,
+  };
+}
+
+/**
+ * s7.5's "missed follow-up appointments return to follow-up management": put a stranded obligation back
+ * in the queue.
+ *
+ * ⚠ IT VERIFIES THE BOOKING IS ACTUALLY DEAD BEFORE IT UNBOOKS ANYTHING. Without that check this is not
+ * "return a missed follow-up", it is "unbook any follow-up", and the difference is a patient whose
+ * appointment on Thursday quietly stopped existing.
+ *
+ * ⚠ AND IT GOES THROUGH closeFollowUp RATHER THAN AN UPDATE, so the state machine, the event trail, the
+ * audit entry and the plan reconciliation all happen exactly as they do when a human clicks. A second
+ * write path for the same act is how two of them stop agreeing -- settleFollowUpsForEncounter took the
+ * same decision for the same reason.
+ */
+export async function returnStrandedFollowUp(admin: any, args: {
+  workspaceId: string; followUpId: string; note?: string; actorId: string; correlationId: string;
+}): Promise<EngineResult<{ status: string; appointmentStatus: string }>> {
+  const { data: f, error: fErr } = await admin.from("practice_follow_up")
+    .select("id, status, appointment_id")
+    .eq("id", args.followUpId).eq("workspace_id", args.workspaceId).maybeSingle();
+  // ⚠ A FAILED READ IS NOT A MISSING FOLLOW-UP. NOT_FOUND would tell somebody their obligation is gone.
+  if (fErr) return { ok: false, status: 500, code: "READ_FAILED", message: fErr.message };
+  if (!f) return { ok: false, status: 404, code: "NOT_FOUND", message: "Not found" };
+  // ⚠ NOT "SCHEDULED ONLY". The case migration 196's trigger misses is a DEFERRED obligation that kept
+  // its appointment id, so refusing everything but SCHEDULED here would refuse the only rows this
+  // function exists for. A closed one is refused: reopening a completed obligation is a different act.
+  if (CLOSED_FOLLOW_UP_STATUSES.includes(f.status) || f.status === "DRAFT")
+    return {
+      ok: false, status: 422, code: "NOT_LIVE",
+      message: `this follow-up is ${String(f.status).toLowerCase()}, so it is not waiting on a booking`,
+    };
+  if (f.status === "OPEN")
+    return {
+      ok: false, status: 422, code: "ALREADY_OPEN",
+      message: "this follow-up is already back in the queue",
+    };
+  if (!f.appointment_id)
+    return {
+      ok: false, status: 422, code: "NO_BOOKING",
+      message: "this follow-up reads as booked but names no appointment, so there is nothing to check",
+    };
+
+  const { data: appt, error: aErr } = await admin.from("practice_appointment")
+    .select("id, status").eq("id", f.appointment_id).eq("workspace_id", args.workspaceId).maybeSingle();
+  if (aErr) return { ok: false, status: 500, code: "READ_FAILED", message: aErr.message };
+  if (!appt) return { ok: false, status: 404, code: "NOT_FOUND", message: "Not found" };
+  if (!(DEAD_APPOINTMENT_STATUSES as readonly string[]).includes(appt.status))
+    return {
+      ok: false, status: 422, code: "BOOKING_STILL_LIVE",
+      message: `that appointment is ${appt.status}, so somebody is still expected. Cancel it first if it is not going to happen.`,
+    };
+
+  const back = await closeFollowUp(admin, {
+    workspaceId: args.workspaceId, followUpId: args.followUpId, to: "OPEN",
+    // The words go on the transition, which is where "why is this open again" is answerable.
+    outcome: args.note?.trim()
+      || `returned to the queue: the appointment behind it is ${String(appt.status).toLowerCase().replace(/_/g, " ")}`,
+    actorId: args.actorId, correlationId: args.correlationId,
+  });
+  if (!back.ok) return back;
+
+  return { ok: true, data: { status: "OPEN", appointmentStatus: appt.status as string } };
 }
 
 /** One obligation with its own history, for the panel beside it. */

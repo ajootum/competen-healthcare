@@ -1,11 +1,12 @@
 import type { WorkspaceContext } from "@/lib/practice/access";
 import { audit } from "@/lib/practice/provisioning";
-import { practiceToday } from "@/lib/practice/practice-time";
+import { practiceToday, zonedDayRange } from "@/lib/practice/practice-time";
 import { sessionConflict, hhmm } from "@/lib/practice/availability-config";
 import {
   SESSION_ACTIVITY_TYPES, BOOKING_MODES, BOOKING_MODES_LIVE, SESSION_APPOINTMENT_TYPES,
   suggestSessionName, type BookingMode,
 } from "@/lib/practice/practice-session-constants";
+import { WALK_IN_NOT_CONFIGURABLE, WALK_IN_ENFORCEMENT_NOTE } from "@/lib/practice/recall-constants";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -806,4 +807,189 @@ export async function deleteSession(admin: any, ctx: WorkspaceContext, args: {
     correlationId: args.correlationId,
   });
   return { ok: true, data: { id: t.id as string, deleted: true } };
+}
+
+// ════════════════════════════════════════════════════════════════════════════════════════════════════
+// CPR-V5-007 PHASE 5, s7.7 AND s7.4: WALK-IN RULES
+//
+// s7.4: "Walk-in limits are separate from booked capacity but contribute to operational workload
+// warnings." s4.3 gives a session "Walk-ins allowed -- boolean with optional default limit", which
+// migration 240 stored as walk_ins_allowed and walk_in_limit.
+//
+// ⚠ THE PER-SESSION LIMIT IS STORED AND READ BY NOTHING. checkPlacement enforces only migration 230's
+// practice-wide walk_in_daily_limit, per location. So a practitioner who typed "6" against a Tuesday
+// clinic has set a number that has never refused anything, and nothing had ever told them so. This
+// function resolves the effective limit against real counts and SAYS which of the two is enforced --
+// WALK_IN_ENFORCEMENT_NOTE carries that sentence to the screen.
+//
+// ⚠ IT IS A REPORT, NOT A CONTROL. Making the per-session limit bite means one count inside
+// checkPlacement in scheduling.ts, which this build deliberately did not change. A report that implied
+// otherwise would be worse than no report: the practitioner would believe a limit was holding.
+//
+// ⚠ AND THE TWO COUNTS ARE NEVER ADDED. A booked walk-in (practice_appointment, appointment_type
+// 'walk_in') and a queued one (practice_queue_entry with no appointment) are different records of
+// possibly the same person, and summing them would over-count every walk-in that was queued and then
+// given a diary entry. They are reported side by side, each the length of a list.
+// ════════════════════════════════════════════════════════════════════════════════════════════════════
+
+export type WalkInSessionPolicy = {
+  sessionId: string;
+  sessionName: string;
+  locationId: string | null;
+  locationName: string | null;
+  startsMinute: number;
+  endsMinute: number;
+  allowed: boolean;
+  /** migration 240's per-session limit. Null means none was set, NOT nought. */
+  sessionLimit: number | null;
+  /** migration 230's practice-wide daily limit for this session's location. Null means none was set. */
+  practiceDailyLimit: number | null;
+  /**
+   * s7.4's stricter-wins, applied to the two limits.
+   *
+   * ⚠ NULL MEANS NEITHER LIMIT WAS SET, which is "unlimited", and it is a different answer from 0, which
+   * is "none allowed". Migration 241's header draws the same distinction for capacity, and it is why
+   * both columns are nullable rather than defaulting to nought.
+   */
+  effectiveLimit: number | null;
+  effectiveLimitFrom: "session" | "practice" | "equal" | "none";
+  /** ⚠ Whether the winning limit is one anything actually enforces. See the header. */
+  effectiveLimitEnforced: boolean;
+};
+
+export type WalkInPolicy = {
+  date: string;
+  timezone: string;
+  /** The sessions on `date` that take walk-ins, with their resolved limits. */
+  sessions: WalkInSessionPolicy[];
+  /** The ones that do not. The other half of "how much of today is open to somebody who just arrives". */
+  sessionsClosedToWalkIns: WalkInSessionPolicy[];
+  sessionsUnreadable: string | null;
+  /**
+   * ⚠ THE IDS, NOT A NUMBER. Every figure a screen prints is the length of one of these lists, and each
+   * one can be opened. Null where the read failed -- never an empty array standing in for a nought.
+   */
+  bookedWalkInIds: string[] | null;
+  bookedWalkInsUnreadable: string | null;
+  queuedWalkInIds: string[] | null;
+  queuedWalkInsUnreadable: string | null;
+  /** The practice-wide daily limits in force, by location, so the report can name which one bit. */
+  practiceDailyLimits: { locationId: string | null; locationName: string | null; limit: number }[];
+  practiceDailyLimitsUnreadable: string | null;
+  /** What s7.7 asks for that no column holds. Carried to the screen rather than drawn as a control. */
+  notConfigurable: readonly { what: string; whyNot: string; wouldNeed: string }[];
+  enforcementNote: string;
+};
+
+/**
+ * s7.7's walk-in rules, resolved for one day.
+ *
+ * `date` defaults to the practice's own today -- not the server's. A practice in Kampala whose walk-in
+ * count reset three hours late would be told it had room it did not have.
+ */
+export async function walkInPolicy(admin: any, ctx: WorkspaceContext, args: {
+  date?: string | null;
+} = {}): Promise<WalkInPolicy> {
+  const { data: ws } = await admin.from("practice_workspace")
+    .select("timezone").eq("id", ctx.workspaceId).maybeSingle();
+  const timezone = (ws?.timezone as string) || "UTC";
+  const date = /^\d{4}-\d{2}-\d{2}$/.test(args.date ?? "") ? args.date! : practiceToday(timezone);
+  const weekday = ((new Date(`${date}T12:00:00Z`).getUTCDay() + 6) % 7) + 1;
+  const { startIso, endIso } = zonedDayRange(date, timezone);
+
+  const [templates, locations, rules, booked, queued] = await Promise.all([
+    admin.from("practice_availability_template")
+      .select("id, session_name, weekday, starts_minute, ends_minute, location_id, activity_type, walk_ins_allowed, walk_in_limit, effective_from, effective_to")
+      .eq("workspace_id", ctx.workspaceId).eq("status", "active").eq("weekday", weekday)
+      .order("starts_minute"),
+    admin.from("practice_location").select("id, name").eq("workspace_id", ctx.workspaceId),
+    // migration 230's single-row rules, which are the ones checkPlacement actually reads.
+    admin.from("practice_booking_rule")
+      .select("id, location_id, appointment_type, walk_in_daily_limit, active")
+      .eq("workspace_id", ctx.workspaceId).eq("active", true),
+    // ⚠ THE IDS, so the figure a screen prints is a list. `walk_in` only: 'emergency' is exempt from the
+    // limit for the same reason migration 255 exempts it from the overlap constraint -- an emergency is
+    // not a walk-in somebody chose to allow.
+    admin.from("practice_appointment").select("id")
+      .eq("workspace_id", ctx.workspaceId).eq("appointment_type", "walk_in")
+      .in("status", LIVE_APPOINTMENT_STATUSES).gte("scheduled_at", startIso).lt("scheduled_at", endIso),
+    admin.from("practice_queue_entry").select("id, appointment_id")
+      .eq("workspace_id", ctx.workspaceId).gte("entered_at", startIso).lt("entered_at", endIso),
+  ]);
+
+  const locationName = new Map(((locations.data ?? []) as any[]).map(l => [l.id as string, l.name as string]));
+
+  // The practice-wide limit that applies to a location: the row naming that location if there is one,
+  // otherwise the practice-wide row. The same precedence resolveBookingRule uses -- and only rows that
+  // CARRY a limit, because a rule with a null limit sets no limit rather than a limit of nought.
+  const ruleRows = rules.error ? [] : ((rules.data ?? []) as any[]).filter(r => r.walk_in_daily_limit != null);
+  const dailyLimitFor = (locationId: string | null): number | null => {
+    if (rules.error) return null;
+    const exact = ruleRows.find(r => r.location_id === locationId);
+    if (exact) return exact.walk_in_daily_limit as number;
+    const wide = ruleRows.find(r => r.location_id === null);
+    return wide ? (wide.walk_in_daily_limit as number) : null;
+  };
+
+  const rows = templates.error ? [] : ((templates.data ?? []) as any[]).filter(t =>
+    // The pattern only applies inside its own effective window. A session that ends in March does not
+    // take walk-ins in April, and a report ignoring the dates would offer capacity that is gone.
+    (!t.effective_from || String(t.effective_from) <= date)
+    && (!t.effective_to || String(t.effective_to) >= date));
+
+  const policies: WalkInSessionPolicy[] = rows.map(t => {
+    const sessionLimit = (t.walk_in_limit as number | null) ?? null;
+    const practiceDailyLimit = dailyLimitFor((t.location_id as string | null) ?? null);
+
+    // s7.4's stricter-wins. Null on either side means that side sets no limit, so the other one stands.
+    let effectiveLimit: number | null;
+    let effectiveLimitFrom: WalkInSessionPolicy["effectiveLimitFrom"];
+    if (sessionLimit === null && practiceDailyLimit === null) { effectiveLimit = null; effectiveLimitFrom = "none"; }
+    else if (sessionLimit === null) { effectiveLimit = practiceDailyLimit; effectiveLimitFrom = "practice"; }
+    else if (practiceDailyLimit === null) { effectiveLimit = sessionLimit; effectiveLimitFrom = "session"; }
+    else if (sessionLimit === practiceDailyLimit) { effectiveLimit = sessionLimit; effectiveLimitFrom = "equal"; }
+    else if (sessionLimit < practiceDailyLimit) { effectiveLimit = sessionLimit; effectiveLimitFrom = "session"; }
+    else { effectiveLimit = practiceDailyLimit; effectiveLimitFrom = "practice"; }
+
+    return {
+      sessionId: t.id as string,
+      sessionName: (t.session_name as string | null)
+        ?? suggestSessionName({
+          locationName: locationName.get(t.location_id as string) ?? null,
+          activityType: (t.activity_type as string | null) ?? null,
+          weekday: t.weekday as number,
+        }),
+      locationId: (t.location_id as string | null) ?? null,
+      locationName: locationName.get(t.location_id as string) ?? null,
+      startsMinute: t.starts_minute as number,
+      endsMinute: t.ends_minute as number,
+      allowed: !!t.walk_ins_allowed,
+      sessionLimit, practiceDailyLimit,
+      effectiveLimit, effectiveLimitFrom,
+      // ⚠ ONLY THE PRACTICE-WIDE ONE IS ENFORCED. If the session's own number won, nothing checks it.
+      effectiveLimitEnforced: effectiveLimitFrom === "practice" || effectiveLimitFrom === "equal",
+    };
+  });
+
+  return {
+    date, timezone,
+    sessions: policies.filter(p => p.allowed),
+    sessionsClosedToWalkIns: policies.filter(p => !p.allowed),
+    sessionsUnreadable: templates.error ? `your sessions could not be read: ${templates.error.message}` : null,
+    bookedWalkInIds: booked.error ? null : ((booked.data ?? []) as any[]).map(a => a.id as string),
+    bookedWalkInsUnreadable: booked.error ? `today's walk-in appointments could not be counted: ${booked.error.message}` : null,
+    // A queue entry that already has an appointment IS that appointment, checked in. Counting it as a
+    // second walk-in is the double count this function refuses to make.
+    queuedWalkInIds: queued.error ? null
+      : ((queued.data ?? []) as any[]).filter(q => !q.appointment_id).map(q => q.id as string),
+    queuedWalkInsUnreadable: queued.error ? `today's queue could not be read: ${queued.error.message}` : null,
+    practiceDailyLimits: rules.error ? [] : ruleRows.map(r => ({
+      locationId: (r.location_id as string | null) ?? null,
+      locationName: r.location_id ? (locationName.get(r.location_id as string) ?? null) : null,
+      limit: r.walk_in_daily_limit as number,
+    })),
+    practiceDailyLimitsUnreadable: rules.error ? `your booking rules could not be read: ${rules.error.message}` : null,
+    notConfigurable: WALK_IN_NOT_CONFIGURABLE,
+    enforcementNote: WALK_IN_ENFORCEMENT_NOTE,
+  };
 }

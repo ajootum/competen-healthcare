@@ -11,10 +11,15 @@ import { LAYER_SWATCH, LAYER1_STAT_SWATCH } from "@/lib/practice/practice-sessio
 import { LAYER2_STAT_SWATCH } from "@/lib/practice/schedule-exception-constants";
 import { LAYER3_STAT_SWATCH } from "@/lib/practice/booking-rule-constants";
 import { bookingRulesWorkspace, ruleReadingValue, type BookingRuleCard, type RuleConflict } from "@/lib/practice/booking-rules";
+import { walkInPolicy } from "@/lib/practice/practice-sessions";
+import { recallQueue } from "@/lib/practice/follow-ups";
+import { publishReadiness } from "@/lib/practice/patient-access";
 import LayerNav, { type Layer } from "./LayerNav";
 import SessionWorkspace from "./SessionWorkspace";
 import ExceptionWorkspace from "./ExceptionWorkspace";
 import RuleWorkspace from "./RuleWorkspace";
+import RecallWorkspace from "./RecallWorkspace";
+import PublishWorkspace from "./PublishWorkspace";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -38,11 +43,20 @@ import RuleWorkspace from "./RuleWorkspace";
 //                      booking (migration 244). Every booking made through it records the rule id AND
 //                      VERSION that decided it (AC-13). s7.2's twelve builder sections: eight are real
 //                      and enforced, four are drawn as what they are with the phase that owns them.
-//   Phase 4  NOT BUILT s8's patient booking access -- handle, OTP, publish state. A rule may be written
-//                      for the patient and referral channels (AC-06 requires that) and a booking
-//                      through them is refused with the phase named, because none could arrive.
-//   Phase 5  NOT BUILT s7.5's recall queue and s7.7's walk-in session limits, cutoff and queue rules.
-//   Phase 6  NOT BUILT s10's scenario preview and publish validation.
+//   Phase 4  PART      migrations 253-255 landed the three stores, and the handle is claimed in Practice
+//                      Setup. The INTAKE and the CONFIRMATION are still absent, so no patient can
+//                      complete anything -- and the publish checklist below carries that as a blocker
+//                      rather than leaving it to be discovered.
+//   Phase 5  BUILT     s7.5's recall queue (derived, never stored -- see follow-ups.ts), the stranded
+//                      follow-ups whose booking died and the one action that returns them, and s7.7's
+//                      walk-in limits resolved per session with the stricter of the two winning. The
+//                      cutoff, the queue ordering and the emergency override have no column and say so.
+//   Phase 6  BUILT     s10.2's publish validation as a CHECKLIST WITH THREE STATES -- and the two rows
+//                      nothing in this schema can answer are permanently "not checked", never a tick.
+//                      Three of the blockers are enforced by the database (migration 254's
+//                      practice_booking_access_publishable) and reported here rather than re-implemented.
+//                      s10.1's scenario preview is still absent, because there is no patient path to
+//                      simulate.
 //
 // EVERY LATER-PHASE SURFACE THE COMP DRAWS IS RENDERED AS NOT BUILT, WITH THE PHASE NAMED. Not greyed
 // out, not disabled, not a button that shrugs -- a sentence saying what is missing and which phase owns
@@ -97,8 +111,12 @@ export default async function AvailabilityBookingPage({ searchParams }: {
   // Layer 2's read runs whether or not Layer 2 is the open layer, because s3.2's navigator card carries
   // its completion summary -- "3 upcoming changes · 1 patient action required" -- and a card that said
   // nothing until you clicked it would be a card you had to click to find out you needed to.
-  const [s, x, r] = await Promise.all([
+  // ── PHASES 5 AND 6 ARE READ HERE, WITH LAYERS 1-3, AND NOT BEHIND THE OPEN LAYER. s3.2's navigator
+  //    card carries a completion summary for every layer, and Layer 3's now includes the publish
+  //    verdict -- a card you had to click to discover you needed to click it is not a summary.
+  const [s, x, r, recall, walkIns, readiness] = await Promise.all([
     practiceSessions(admin, ctx), scheduleChanges(admin, ctx), bookingRulesWorkspace(admin, ctx),
+    recallQueue(admin, ctx.workspaceId), walkInPolicy(admin, ctx), publishReadiness(admin, ctx),
   ]);
 
   const { layer } = await searchParams;
@@ -216,7 +234,7 @@ export default async function AvailabilityBookingPage({ searchParams }: {
       summary: rulesUnreadable ? "could not be read"
         : `${activeRules.length} rule${activeRules.length === 1 ? "" : "s"} in force`
           + (ruleConflicts.length > 0 ? ` · ${ruleConflicts.length} conflict${ruleConflicts.length === 1 ? "" : "s"} to resolve` : "")
-          + " · not published",
+          + ` · ${readiness.publishStateLabel.toLowerCase()}`,
       children: [
         {
           key: "rules", label: "Booking rules",
@@ -230,8 +248,22 @@ export default async function AvailabilityBookingPage({ searchParams }: {
           state: rulesUnreadable ? "unreadable" : ruleConflicts.length === 0,
           detail: rulesUnreadable ? null : `${ruleConflicts.length}`,
         },
-        { key: "access", label: "Booking access", state: "unreadable", detail: "Phase 4" },
-        { key: "publish", label: "Preview & publish", state: "unreadable", detail: "Phase 6" },
+        {
+          // s3.2's "Follow-ups and walk-ins". ⚠ `false` WHEN SOMEBODY IS OWED A REVIEW NOBODY BOOKED --
+          // a green tick against a recall queue would be the navigator answering a question nobody asked.
+          key: "recall", label: "Follow-ups and walk-ins",
+          state: recall.unavailable ? "unreadable" : recall.overdue.length + recall.stranded.length === 0,
+          detail: recall.unavailable ? null
+            : `${recall.overdue.length} overdue · ${recall.strandedUnavailable ? "?" : recall.stranded.length} stranded`,
+        },
+        {
+          // ⚠ THREE STATES, AND `cannot_say` IS NOT A PASS. The navigator draws it as unreadable rather
+          // than as a tick, because that is what it is: a question this build could not answer.
+          key: "publish", label: "Preview & publish",
+          state: readiness.verdict === "cannot_say" ? "unreadable" : readiness.verdict !== "not_ready",
+          detail: readiness.verdict === "cannot_say" ? null
+            : `${readiness.blockersFailing.length} blocking · ${readiness.notChecked.length} not checked`,
+        },
       ],
     },
   ];
@@ -263,11 +295,17 @@ export default async function AvailabilityBookingPage({ searchParams }: {
               className="rounded-lg border border-gray-200 bg-white px-3.5 py-2 text-[12px] font-semibold text-gray-700 hover:bg-gray-50">
               Open the planner
             </Link>
-            {/* THE COMP'S "Preview booking page" AND "Publish changes". Neither exists. */}
-            <span className="rounded-lg border border-dashed border-slate-300 bg-slate-50 px-3.5 py-2 text-[12px] font-semibold text-slate-500"
-              title="CPR-V5-007 Phase 4 and Phase 6. Not started.">
-              Nothing to publish yet — Phase 4
-            </span>
+            {/* s3.1's primary action. ⚠ IT IS A LINK TO THE CHECKLIST, NOT A PUBLISH BUTTON: the
+                verdict is the server's, and a header button that published without anybody having read
+                the checks would be the one control on this page that skipped its own guard. */}
+            <Link href="/practice/setup/availability-booking?layer=3"
+              className="rounded-lg border border-gray-200 bg-white px-3.5 py-2 text-[12px] font-semibold text-gray-700 hover:bg-gray-50">
+              {readiness.verdict === "not_ready"
+                ? `Publish readiness — ${readiness.blockersFailing.length} blocking`
+                : readiness.verdict === "cannot_say"
+                  ? "Publish readiness — cannot say"
+                  : `Publish readiness — ${readiness.publishStateLabel.toLowerCase()}`}
+            </Link>
           </div>
         </div>
 
@@ -276,20 +314,24 @@ export default async function AvailabilityBookingPage({ searchParams }: {
           <span aria-hidden className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[var(--cp-primary)]/12 text-[15px] text-[var(--cp-primary-deep)]">③</span>
           <div className="min-w-0 flex-1">
             <p className="text-[12.5px] font-bold text-gray-900">
-              This workspace is at Phase 3 of six: your regular practice, changes to it, and the rules
-              that decide a booking.
+              This workspace is at Phase 6 of six, and the one thing still missing is the screen a
+              patient would type into.
             </p>
             <p className="text-[11px] leading-relaxed text-gray-600">
               Layer 1 is complete — locations, named recurring sessions, activity types, appointment
               types, capacity and walk-ins. Layer 2 is complete for the thing that matters most about a
               schedule change: before one is made, this screen works out who is booked into the time you
               are changing and will not write the change until you have said what happens to them. Layer
-              3 is now real for booking you and your staff do: rules are cards with a name, a scope, a
+              3 is real for booking you and your staff do: rules are cards with a name, a scope, a
               priority and a version, the most specific one decides, two rules nothing can choose between
               block each other rather than being guessed at, and every booking made through the engine
-              records which rule and which version allowed it. The patient-facing booking page — handle,
-              link, OTP, publish — is Phase 4, so no patient can reach any of this yet. Nothing below is
-              a control that does nothing.
+              records which rule and which version allowed it. Follow-ups nobody booked, and the ones
+              whose booking has died, are worked out here rather than stored. The publish checklist runs
+              for real — and where it cannot answer a question it says &ldquo;not checked&rdquo; rather
+              than showing you a tick. What is still missing is the patient-facing intake: the handle,
+              the stores and the one-time code exist, and the screen a patient would fill in does not,
+              so nobody outside this practice can complete a booking. Nothing below is a control that
+              does nothing.
             </p>
           </div>
         </section>
@@ -592,20 +634,25 @@ export default async function AvailabilityBookingPage({ searchParams }: {
                   </Link>
                 </div>
 
-                <NotBuilt
-                  title="Walk-in rules and the follow-up recall queue"
-                  phase="Phase 5"
-                  what={"s7.7's per-session and per-day walk-in limits, cutoff time, queue position and emergency override are not columns on this table, so they are not offered — the practice-wide daily walk-in limit from before the card model is still applied and is shown on every card that carries one. s7.5's recall queue for follow-ups nobody booked lives in Follow-ups and is not started; what IS enforced here is the early and late window a due follow-up may be booked in, which is AC-08."} />
+                {/* ══ PHASE 5 -- s7.5's recall queue and s7.7's walk-in rules ════════════════════ */}
+                <RecallWorkspace
+                  recall={JSON.parse(JSON.stringify(recall))}
+                  walkIns={JSON.parse(JSON.stringify(walkIns))}
+                  mayManage={hasCapability(ctx, "followup.manage")}
+                />
+
+                {/* ══ PHASE 6 -- s10.2's publish readiness ══════════════════════════════════════ */}
+                <PublishWorkspace
+                  readiness={JSON.parse(JSON.stringify(readiness))}
+                  locations={JSON.parse(JSON.stringify(
+                    locations.map(l => ({ id: l.id, name: l.name, active: l.active }))))}
+                  mayPublish={hasCapability(ctx, "practice.settings.manage")}
+                />
 
                 <NotBuilt
-                  title="Patient booking access"
-                  phase="Phase 4"
-                  what={"s8's practitioner handle and URL, OTP verification and abuse protection, guest versus account booking, existing-patient matching, and the Draft / Ready / Published / Paused state. None of it exists, so no session can be set to Link only or Public — the session editor in Layer 1 shows those two modes and refuses them, and so does the engine."} />
-
-                <NotBuilt
-                  title="Scenario preview and publish validation"
+                  title="Scenario preview"
                   phase="Phase 6"
-                  what={"s10.1's eight testable scenarios and s10.2's eleven publish checks. The Layer 1 panel beside this shows what the booking engine would offer from real slots and real rules, which is the honest half of a preview: it cannot simulate a patient, because there is no patient-facing path to simulate."} />
+                  what={"s10.1's eight testable scenarios. The panel beside this shows what the booking engine would offer from real slots and real rules over the next fortnight, which is the honest half of a preview. The other half — walking a NEW PATIENT, a follow-up, a staff booking and a walk-in through the page as they would experience it — needs the patient-facing intake, which is Phase 4's remainder and is not built. The publish checklist above says so as a blocker rather than leaving it to be discovered."} />
               </>
             )}
           </div>
@@ -773,12 +820,43 @@ export default async function AvailabilityBookingPage({ searchParams }: {
                 <section className={card}>
                   <h3 className="mb-2 text-[13px] font-bold text-gray-900">Booking page status</h3>
                   <p className="flex items-center gap-1.5 text-[12.5px] font-bold text-slate-600">
-                    <span aria-hidden className="h-2 w-2 rounded-full bg-slate-300" />
-                    No booking page
+                    <span aria-hidden className={`h-2 w-2 rounded-full ${
+                      readiness.profileUnreadable ? "bg-slate-300"
+                        : readiness.verdict === "not_ready" ? "bg-rose-400"
+                          : readiness.verdict === "cannot_say" ? "bg-slate-400" : "bg-emerald-400"}`} />
+                    {readiness.publishStateLabel}
                   </p>
-                  <p className="mt-1 text-[11px] leading-relaxed text-gray-500">
-                    There is no handle, no URL and no publish state. Nobody outside this practice can
-                    reach your diary, and no setting on this page changes that until Phase 4 exists.
+                  {readiness.profileUnreadable ? (
+                    <p className="mt-1 text-[11px] leading-relaxed text-slate-600">
+                      Your booking page could not be read, so this panel is not saying you have none.
+                    </p>
+                  ) : (
+                    <ul className="mt-1.5 space-y-1 text-[11px]">
+                      <li className="flex items-baseline gap-2">
+                        <span className="text-gray-600">Blocking checks failing</span>
+                        <span className="ml-auto font-bold text-rose-700">{readiness.blockersFailing.length}</span>
+                      </li>
+                      <li className="flex items-baseline gap-2">
+                        {/* ⚠ ITS OWN LINE, IN SLATE. Not folded into "passing", and not hidden. */}
+                        <span className="text-gray-600">Could not be checked</span>
+                        <span className="ml-auto font-bold text-slate-600">{readiness.notChecked.length}</span>
+                      </li>
+                      <li className="flex items-baseline gap-2">
+                        <span className="text-gray-600">Warnings</span>
+                        <span className="ml-auto font-bold text-amber-700">{readiness.warningsFailing.length}</span>
+                      </li>
+                      <li className="flex items-baseline gap-2">
+                        <span className="text-gray-600">Handle</span>
+                        <span className="ml-auto font-bold text-gray-800">
+                          {readiness.profile?.handle ?? "not claimed"}
+                        </span>
+                      </li>
+                    </ul>
+                  )}
+                  <p className="mt-2 border-t border-gray-100 pt-2 text-[10px] leading-relaxed text-gray-500">
+                    A published page needs a claimed handle, the one-time code switched on and a mode
+                    that admits patients. Those three are refused by the database, not by this screen —
+                    so nothing here can talk it into publishing without them.
                   </p>
                 </section>
                 {/* s11's ladder, stated once, so the cards in the centre can be read against it. */}
