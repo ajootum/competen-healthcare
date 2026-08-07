@@ -367,7 +367,14 @@ function safeJson(text: string): any {
 //
 //   5. PER-SOURCE LIMITING IS EITHER REAL OR REFUSED. See sourceKey below.
 
-const OTP_MINUTES = 10;
+// CNE-003 s8 states a FIVE minute expiry, verbatim: "Hashed OTP storage / 5-minute expiry". This was 10
+// -- the ONLY number in the five CNE documents that disagreed with deployed code, and it disagreed in the
+// LESS SAFE direction, so the shorter window wins on both counts. A live code is exposure, and five
+// minutes is enough for somebody reading a message on the phone in their hand.
+//
+// The value is interpolated into the message body below rather than typed into the copy, so the number a
+// patient reads and the number the row enforces cannot drift apart.
+const OTP_MINUTES = 5;
 const OTP_PER_DESTINATION_PER_HOUR = 5;
 /**
  * Per SOURCE, and lower than the per-destination limit on purpose: one caller walking a list of numbers
@@ -488,7 +495,7 @@ export async function issueOtp(admin: any, args: {
   if (sent?.ok) await admin.from("practice_otp_challenge").update({ message_id: sent.data.messageId }).eq("id", challenge.id);
 
   // A CODE THAT COULD NOT BE SENT IS NOT A CODE. The challenge is spent immediately rather than left
-  // live for ten minutes, so nothing downstream can verify against something nobody received.
+  // live for its whole window, so nothing downstream can verify against something nobody received.
   const delivered = sent?.ok && sent.data.status === "handed_over";
   if (!delivered) {
     await admin.from("practice_otp_challenge").update({ consumed_at: nowIso() }).eq("id", challenge.id);
@@ -560,7 +567,7 @@ export async function verifyOtp(admin: any, args: {
   if (expected.length !== actual.length || !timingSafeEqual(expected, actual)) return no;
 
   // SINGLE USE, AND THE SPEND IS CHECKED. A consume that silently failed would leave a verified code
-  // live for the rest of its ten minutes, which is the whole property "one time" is there to provide.
+  // live for the rest of its window, which is the whole property "one time" is there to provide.
   const { data: spent, error: spendErr } = await admin.from("practice_otp_challenge")
     .update({ consumed_at: nowIso() }).eq("id", c.id).is("consumed_at", null).select("id");
   if (spendErr || ((spent ?? []) as any[]).length !== 1)
