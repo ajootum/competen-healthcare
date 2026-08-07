@@ -67,12 +67,27 @@ export async function loadAuditTrail(admin: any, hid: string | null, isSuper: bo
   } catch { /* optional */ }
 
   // Reused signals.
-  let complianceIssues = 0, openActions = 0;
-  try { const { data } = await scope(admin.from("gov_obligations").select("status").eq("status", "non_compliant").limit(3000)); complianceIssues = (data ?? []).length; } catch { /* optional */ }
-  try { const { data } = await scope(admin.from("capa_actions").select("status").limit(4000)); openActions = (data ?? []).filter((c: any) => !["completed", "verified", "closed"].includes(c.status)).length; } catch { /* optional */ }
+  //
+  // ⚠ THESE TWO ARE COMPLIANCE ALL-CLEARS, and both discarded their errors. "0 compliance issues" and
+  // "0 outstanding corrective actions" are the two figures on this page that a quality lead reads as
+  // permission to look elsewhere — and an unread obligations or CAPA table produced exactly those numbers.
+  // They go null instead, so the page shows an em dash and says which source is missing.
+  const unavailable: string[] = [];
+  let complianceIssues: number | null = 0, openActions: number | null = 0;
+  try {
+    const { data, error } = await scope(admin.from("gov_obligations").select("status").eq("status", "non_compliant").limit(3000));
+    if (error) { unavailable.push("compliance obligations"); complianceIssues = null; }
+    else complianceIssues = (data ?? []).length;
+  } catch { unavailable.push("compliance obligations"); complianceIssues = null; }
+  try {
+    const { data, error } = await scope(admin.from("capa_actions").select("status").limit(4000));
+    if (error) { unavailable.push("corrective actions"); openActions = null; }
+    else openActions = (data ?? []).filter((c: any) => !["completed", "verified", "closed"].includes(c.status)).length;
+  } catch { unavailable.push("corrective actions"); openActions = null; }
 
   return {
     provisioned: true as const,
+    unavailable,
     kpis: { totalEvents, domainEvents, assurance, complianceIssues, openActions, recentWindow: logs.length },
     byAction, byModule, trend, assuranceParts,
     recent: logs.slice(0, 10).map(l => ({ when: l.created_at, actor: l.actor_name, action: l.action, module: (l.entity_type || "").replace(/_/g, " "), entity: l.entity_name })),

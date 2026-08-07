@@ -16,10 +16,23 @@ export async function loadSafety(admin: any, hid: string | null, isSuper: boolea
   if (error) return { provisioned: false as const };
   const incidents = (incRows ?? []) as any[];
 
-  const { data: alertRows } = await scope(admin.from("op_safety_alerts").select("id, category, severity, active").limit(6000));
+  // ⚠ A FIGURE THAT COULD NOT BE READ IS NOT A NOUGHT. The incidents read above already returns early on
+  // error; these two did not, so a failed safety-alert or escalation read quietly became "0 active alerts"
+  // and subtracted itself from `openInvestigations` — a quality lead's safety board reporting a calmer unit
+  // than anyone had actually looked at. `unavailable` names the source; the affected figures go null so the
+  // page renders an em dash rather than a reassuring zero.
+  const unavailable: string[] = [];
+
+  const { data: alertRows, error: alertErr } = await scope(admin.from("op_safety_alerts").select("id, category, severity, active").limit(6000));
+  if (alertErr) unavailable.push("safety alerts");
   const alerts = (alertRows ?? []) as any[];
-  let escOpen = 0;
-  try { const { data } = await scope(admin.from("op_escalations").select("status").limit(6000)); escOpen = (data ?? []).filter((e: any) => !["resolved", "closed"].includes(e.status)).length; } catch { /* optional */ }
+
+  let escOpen: number | null = 0;
+  try {
+    const { data, error: escErr } = await scope(admin.from("op_escalations").select("status").limit(6000));
+    if (escErr) { unavailable.push("escalations"); escOpen = null; }
+    else escOpen = (data ?? []).filter((e: any) => !["resolved", "closed"].includes(e.status)).length;
+  } catch { unavailable.push("escalations"); escOpen = null; }
 
   // RCA effectiveness from M&M cases (optional).
   let rca: { pct: number | null; total: number } = { pct: null, total: 0 };
@@ -34,7 +47,11 @@ export async function loadSafety(admin: any, hid: string | null, isSuper: boolea
 
   const nearMiss = incidents.filter(i => i.near_miss);
   const realIncidents = incidents.filter(i => !i.near_miss);
-  const openInvestigations = incidents.filter(i => ["investigating", "awaiting_action"].includes(i.status)).length + escOpen;
+  // NULL PROPAGATES. Adding an unread escalation count as 0 would report a smaller number of open
+  // investigations with no sign that a component of it was missing — the arithmetic must go unknown too.
+  const openInvestigations = escOpen === null
+    ? null
+    : incidents.filter(i => ["investigating", "awaiting_action"].includes(i.status)).length + escOpen;
 
   // By type.
   const typeMap = new Map<string, number>();
@@ -64,7 +81,14 @@ export async function loadSafety(admin: any, hid: string | null, isSuper: boolea
 
   return {
     provisioned: true as const,
-    kpis: { total: incidents.length, incidents: realIncidents.length, nearMisses: nearMiss.length, pse: alerts.length, activePse: alerts.filter(a => a.active).length, openInvestigations, complaints: null as number | null },
+    unavailable,
+    kpis: {
+      total: incidents.length, incidents: realIncidents.length, nearMisses: nearMiss.length,
+      // An unread alert table must not report "0 patient-safety events" or "0 active".
+      pse: alertErr ? null : alerts.length,
+      activePse: alertErr ? null : alerts.filter(a => a.active).length,
+      openInvestigations, complaints: null as number | null,
+    },
     byType, bySeverity, investigationStatus, trend: buckets, topThemes, recent, rca,
   };
 }

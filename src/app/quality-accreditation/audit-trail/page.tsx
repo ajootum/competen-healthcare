@@ -20,11 +20,21 @@ export default async function AuditTrailPage() {
       {head}
       <Tabs tabs={TABS} active="Overview" />
 
+      {/* ⚠ "0 compliance issues" AND "0 OPEN ACTION ITEMS" ARE THE TWO TILES ON THIS PAGE A QUALITY LEAD READS
+          AS PERMISSION TO LOOK ELSEWHERE, and both were produced by reads that discarded their errors. They
+          render an em dash now — as the assurance score beside them already did — and this banner names the
+          source, so the dash cannot be read as "clean". */}
+      {d.unavailable.length > 0 && (
+        <div className="rounded-xl border border-[var(--cmp-color-error)] bg-[var(--cmp-surface-error)] px-4 py-3 text-sm text-rose-800">
+          <strong>Some figures on this page could not be read.</strong> {d.unavailable.join(" and ")} did not load, so the tiles below show “—” rather than a number. An absent figure is <strong>not</strong> a clean one.
+        </div>
+      )}
+
       <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
         <Stat icon="🧾" tone="blue" label="Total audit events" value={k.totalEvents.toLocaleString()} sub="immutable log" />
         <Stat icon="🛡️" tone="emerald" label="Assurance score" value={k.assurance != null ? `${k.assurance}%` : "—"} sub="composite" />
-        <Stat icon="⛔" tone="rose" label="Compliance issues" value={k.complianceIssues} sub="non-compliant" />
-        <Stat icon="🛠️" tone="amber" label="Open action items" value={k.openActions} />
+        <Stat icon="⛔" tone="rose" label="Compliance issues" value={k.complianceIssues ?? "—"} sub={k.complianceIssues == null ? "could not be read" : "non-compliant"} />
+        <Stat icon="🛠️" tone="amber" label="Open action items" value={k.openActions ?? "—"} sub={k.openActions == null ? "could not be read" : undefined} />
         <Stat icon="📡" tone="violet" label="Domain events" value={k.domainEvents.toLocaleString()} sub="event stream" />
         <Stat icon="🗂️" tone="teal" label="Modules covered" value={d.byModule.length} sub="in recent window" />
       </div>

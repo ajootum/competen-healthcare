@@ -20,13 +20,23 @@ export default async function SafetyPage() {
       {head}
       <Tabs tabs={TABS} active="Overview" />
 
+      {/* ⚠ A FIGURE THAT COULD NOT BE READ IS NOT A NOUGHT. The tiles below took an unread safety-alert or
+          escalation table as zero, so this board could report a calmer unit than anyone had looked at. The
+          affected figures now render an em dash — the same treatment the assurance score already had — and
+          this banner says which source is missing so the dash is not mistaken for "no store yet". */}
+      {d.unavailable.length > 0 && (
+        <div className="rounded-xl border border-[var(--cmp-color-error)] bg-[var(--cmp-surface-error)] px-4 py-3 text-sm text-rose-800">
+          <strong>Some figures on this page could not be read.</strong> {d.unavailable.join(" and ")} did not load, so the tiles below show “—” rather than a number. Do <strong>not</strong> read those as zero.
+        </div>
+      )}
+
       <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
         <Stat icon="📄" tone="blue" label="Total reports" value={k.total} sub="incidents logged" />
         <Stat icon="⚠️" tone="rose" label="Incidents" value={k.incidents} />
         <Stat icon="🟡" tone="amber" label="Near misses" value={k.nearMisses} />
-        <Stat icon="🛟" tone="violet" label="Patient safety events" value={k.pse} sub={`${k.activePse} active`} />
+        <Stat icon="🛟" tone="violet" label="Patient safety events" value={k.pse ?? "—"} sub={k.activePse != null ? `${k.activePse} active` : "could not be read"} />
         <Stat icon="💬" tone="slate" label="Complaints" value="—" sub="no store yet" />
-        <Stat icon="🔎" tone="teal" label="Open investigations" value={k.openInvestigations} />
+        <Stat icon="🔎" tone="teal" label="Open investigations" value={k.openInvestigations ?? "—"} sub={k.openInvestigations == null ? "could not be read" : undefined} />
       </div>
 
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
