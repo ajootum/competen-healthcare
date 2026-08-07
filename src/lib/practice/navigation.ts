@@ -204,6 +204,26 @@ export const PRACTICE_NAV: PracticeNavItem[] = [
   // document -- lab results among them, but also referrals and discharge summaries. Naming it after one
   // of its contents would promise an investigations module that does not exist.
 
+  // ── CPR-KS-001 PHASE 1: PRACTICE GUIDANCE, UNDER DOCUMENTS BY DECISION ──────────────────────────
+  //
+  // The user placed Knowledge Studio here rather than in the primary list, so PRIMARY_ORDER stays at
+  // NINE. The route keeps its `knowledge-studio` address because a URL is an address, not a claim --
+  // every user-facing word is "Practice Guidance".
+  //
+  // ⚠ THE LABEL IS NOT "STUDIO" OR "DESIGNER", AND THAT IS A SAFETY DECISION RATHER THAN A STYLE ONE.
+  // Those words name a TOOL, and a tool called a clinical algorithm designer makes its false claim
+  // before a practitioner authors anything: they will reasonably believe the system is now watching what
+  // they drew. It is not. So the section is named for what it PRODUCES -- written standing instructions
+  // a person reads -- and every asset carries GUIDANCE_NOT_MONITORED: "this is a written instruction,
+  // nothing here checks it." Also, `/super-admin/ckp/studio` already owns the other name.
+  //
+  // ⚠ ORDER, AGAIN. 9f forbids `built: true` before the page exists, so the page shipped first and this
+  // entry comes second -- the same sequence CPR-DOC-002 s3.1 needed above, for the same reason. The
+  // agent that built the page deliberately did NOT silence 9i by writing itself into
+  // NO_NAV_ENTRY_BY_DESIGN, because that allowlist demands a reason that is TRUE, and "this route has no
+  // nav entry by design" was not. A false reason that makes a harness green is worse than a red harness.
+  { href: "/practice/knowledge-studio", label: "Practice Guidance", icon: "◈", capability: "template.manage", group: "Clinical", phase: 6, built: true, parent: "/practice/documents" },
+
   // -- Practice Home: the figures, until Insights ships ---------------------------------------------
   // ── CPR-V5-003: ANALYTICS AND PATIENT INSIGHTS BECOME ONE SECTION ───────────────────────────────
   //
