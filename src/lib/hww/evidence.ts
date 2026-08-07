@@ -16,9 +16,22 @@ export const EVIDENCE_TASK_TYPES = ["procedure", "clinical_procedure", "ward_rou
 
 const marker = (kind: string, id: string) => `[auto:${kind}:${id}]`;
 
-async function alreadyBridged(admin: any, kind: string, id: string): Promise<boolean> {
-  const { data } = await admin.from("skill_log_entries").select("id").ilike("notes", `%${marker(kind, id)}%`).limit(1).maybeSingle();
-  return !!data;
+// ⚠ THE IDEMPOTENCY GUARANTEE IN THE HEADER LIVES OR DIES HERE, so this reports whether it could CHECK
+// separately from what it found. It used to do `const { data } = await …; return !!data`, which answered
+// "no, not bridged" for a read that never ran — so a blip on this line did not skip the create, it CAUSED a
+// second one, and every retry after it added another. "Re-completions never duplicate" was true only while
+// the database was healthy, which is exactly when the guarantee is not needed.
+//
+// A CHECK THAT CANNOT RUN MUST REFUSE, not assume "no" — the same rule registerPatient's identifier collision
+// arrived at. Refusing is cheap here: the operational record still exists, so a missing evidence entry can be
+// regenerated or logged by hand, while a duplicate silently inflates a nurse's skill log in the one system
+// whose value is that its evidence can be trusted.
+type BridgeCheck = { ok: true; bridged: boolean } | { ok: false; detail: string };
+
+async function alreadyBridged(admin: any, kind: string, id: string): Promise<BridgeCheck> {
+  const { data, error } = await admin.from("skill_log_entries").select("id").ilike("notes", `%${marker(kind, id)}%`).limit(1).maybeSingle();
+  if (error) return { ok: false, detail: error.message };
+  return { ok: true, bridged: !!data };
 }
 
 async function unitName(admin: any, unitId: string | null | undefined): Promise<string | null> {
@@ -34,7 +47,9 @@ export async function evidenceFromTask(admin: any, task: any): Promise<BridgeRes
   try {
     if (!task?.assigned_to || !task?.patient_id) return { created: false, reason: "no performer/patient" };
     if (!EVIDENCE_TASK_TYPES.includes(task.task_type)) return { created: false, reason: "not a procedural task type" };
-    if (await alreadyBridged(admin, "op_task", task.id)) return { created: false, reason: "already bridged" };
+    const check = await alreadyBridged(admin, "op_task", task.id);
+    if (!check.ok) return { created: false, reason: `idempotency check unavailable: ${check.detail}` };
+    if (check.bridged) return { created: false, reason: "already bridged" };
 
     const loc = await unitName(admin, task.unit_id);
     const { data, error } = await admin.from("skill_log_entries").insert({
@@ -58,7 +73,9 @@ export async function evidenceFromTask(admin: any, task: any): Promise<BridgeRes
 export async function evidenceFromMedication(admin: any, event: any, sched: any): Promise<BridgeResult> {
   try {
     if (event?.outcome !== "administered" || !event?.administered_by) return { created: false, reason: "not an administration" };
-    if (await alreadyBridged(admin, "op_med_admin", event.id)) return { created: false, reason: "already bridged" };
+    const check = await alreadyBridged(admin, "op_med_admin", event.id);
+    if (!check.ok) return { created: false, reason: `idempotency check unavailable: ${check.detail}` };
+    if (check.bridged) return { created: false, reason: "already bridged" };
 
     const loc = await unitName(admin, sched?.unit_id);
     const { data, error } = await admin.from("skill_log_entries").insert({
