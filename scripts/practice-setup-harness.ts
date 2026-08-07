@@ -27,6 +27,7 @@ import { createClient } from "@supabase/supabase-js";
 import { runProvisioning, type IndividualRequest } from "../src/lib/practice/provisioning";
 import { resolveWorkspaceContext } from "../src/lib/practice/access";
 import { practiceSetup } from "../src/lib/practice/setup";
+import { claimHandle } from "../src/lib/practice/identity-service";
 
 loadEnvConfig(process.cwd());
 
@@ -317,6 +318,40 @@ async function main() {
   ok("8d CONTROL: practice A does have all three, so 8a-c are not vacuous",
     line(withCh, "letterhead")?.done === true && line(withCh, "identifiers")?.done === true &&
     line(withCh, "availability")?.done === true);
+
+  // ---- 10. THE BOOKING ADDRESS (PIS-000 s3) -----------------------------------------------------------
+  //
+  // ⚠ AN UNCLAIMED ADDRESS MUST RENDER AS UNCLAIMED. It is a part of the primary operations card rather
+  // than a module of its own, so nothing in section 2's counts covers it -- and a part that said nothing,
+  // or said "not built" after it was built, would be the same overclaim as a percentage.
+  //
+  // ⚠ AND IT IS SEPARATE FROM `booking_access`, WHICH IS STILL NOT BUILT. Claiming an address is not
+  // publishing a page; one part being real must not quietly mark the other done.
+  const part = (s: Setup, k: string) => s.availability.parts.find(p => p.key === k);
+  const beforeClaim = await practiceSetup(admin, ctxA.ctx);
+  ok("10a the booking address is a part a practice can act on, and it starts unclaimed",
+    part(beforeClaim, "booking_address")?.done === false &&
+    !part(beforeClaim, "booking_address")?.notBuilt &&
+    /unclaimed/i.test(part(beforeClaim, "booking_address")?.detail ?? ""),
+    JSON.stringify(part(beforeClaim, "booking_address")));
+  ok("10a-2 while the booking PAGE is still not built, and says so separately",
+    !!part(beforeClaim, "booking_access")?.notBuilt &&
+    part(beforeClaim, "booking_access")?.done === null,
+    JSON.stringify(part(beforeClaim, "booking_access")));
+
+  const claimed = await claimHandle(admin, {
+    userId: OWNER, handle: "hsetupaddr", correlationId: "harness-set",
+  });
+  ok("10b-pre the address is claimed", claimed.ok, claimed.ok ? "" : claimed.message);
+  const afterClaim = await practiceSetup(admin, ctxA.ctx);
+  ok("10b and the part now names the handle",
+    part(afterClaim, "booking_address")?.done === true &&
+    part(afterClaim, "booking_address")?.detail === "@hsetupaddr",
+    JSON.stringify(part(afterClaim, "booking_address")));
+  const otherAfterClaim = await practiceSetup(admin, ctxB.ctx);
+  ok("10c CONTROL: the OTHER practice is still unclaimed, so 10b is about this practitioner's claim",
+    part(otherAfterClaim, "booking_address")?.done === false,
+    JSON.stringify(part(otherAfterClaim, "booking_address")));
 
   await cleanup();
 

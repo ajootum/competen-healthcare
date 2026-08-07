@@ -24,6 +24,22 @@ import { createHash } from "node:crypto";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
+/**
+ * ────────────────────────────────────────────────────────────────────────────────────────────────────
+ * ⚠ WHY `issue_identity` IS NOT IN THIS LIST, AND IS NOT A LEDGERED STEP.
+ *
+ * PIS-000 s15 makes a practitioner identity automatic, and migration 254 makes a booking page impossible
+ * without one -- so provisioning has to create it. It is NOT a step in the ledger because it cannot be:
+ * `provisioning_step.step_code` carries a CHECK constraint (migration 191) listing eight codes, none of
+ * them `issue_identity`, and the ledger seed at the top of runProvisioning is an upsert whose error is
+ * discarded. Adding the code here without widening that constraint would produce a step that silently
+ * never records anything -- the same shape as the capability bug the comments below describe.
+ *
+ * So issuance runs as an unledgered tail action AFTER publish_completed, and it is soft: see
+ * issuePractitionerIdentity(). Widening the constraint would let it become a proper step, and that is a
+ * migration for whoever owns migrations.
+ * ────────────────────────────────────────────────────────────────────────────────────────────────────
+ */
 export const PROVISIONING_STEPS = [
   "create_workspace",
   "create_owner_membership",
@@ -143,13 +159,74 @@ async function markStep(admin: any, requestId: string, step: StepCode, status: "
 }
 
 /**
+ * The practitioner identity (PIS-000), issued after the practice is already standing.
+ *
+ * ────────────────────────────────────────────────────────────────────────────────────────────────────
+ * ⚠ THIS FUNCTION CANNOT FAIL PROVISIONING, BY TWO INDEPENDENT MEASURES, AND BOTH ARE DELIBERATE.
+ *
+ *   ORDERING. It runs after publish_completed. By the time it is called the workspace is ONBOARDING, the
+ *   request is COMPLETED and the owner can sign in and work. There is no half-created practice for a
+ *   failure here to strand, because there is nothing left to create.
+ *
+ *   SOFT FAILURE. It returns a boolean and swallows everything -- including a thrown error, which the
+ *   engine below does not throw today but might after any future edit. Provisioning is the critical path
+ *   for every new practice on this platform: an identity that could not be issued must never be the
+ *   reason somebody cannot sign up. The failure is logged, and recorded in the practice's own audit trail
+ *   as `practice.identity_issue_deferred` so it is findable rather than merely absent.
+ *
+ * ⚠ SOFT IS NOT SILENT, AND IT IS NOT PERMANENT. issueIdentity() is idempotent per person -- keyed on a
+ * unique user_id -- so a re-run of provisioning, or the practitioner opening Practice Setup, issues the
+ * identity that this run could not. Nothing double-writes, and nothing is lost.
+ *
+ * ⚠ THE IMPORT IS DYNAMIC ON PURPOSE. identity-service imports audit() from this module; a static import
+ * back would make the two modules a cycle, whose behaviour under the bundler is a thing to test rather
+ * than a thing to rely on. Deferring it also means a module that fails to load cannot take provisioning
+ * down with it, which is the same property the rest of this function is built for.
+ * ────────────────────────────────────────────────────────────────────────────────────────────────────
+ */
+async function issuePractitionerIdentity(admin: any, req: {
+  id: string; target_user_id: string; correlation_id: string;
+}, payload: IndividualRequest, workspaceId: string | null): Promise<boolean> {
+  try {
+    const { issueIdentity } = await import("@/lib/practice/identity-service");
+    const result = await issueIdentity(admin, {
+      userId: req.target_user_id,
+      displayName: payload.displayName,
+      workspaceId,
+      correlationId: req.correlation_id,
+    });
+    if (result.ok) return true;
+    console.error(`[practice] identity not issued for ${req.target_user_id}: ${result.code} ${result.message}`);
+    await audit(admin, {
+      workspaceId, actorId: req.target_user_id, eventType: "practice.identity_issue_deferred",
+      payload: { requestId: req.id, errorCode: result.code, message: result.message },
+      correlationId: req.correlation_id,
+    });
+    return false;
+  } catch (e) {
+    const message = e instanceof Error ? e.message : String(e);
+    console.error(`[practice] identity issuance threw for ${req.target_user_id}: ${message}`);
+    await audit(admin, {
+      workspaceId, actorId: req.target_user_id, eventType: "practice.identity_issue_deferred",
+      payload: { requestId: req.id, errorCode: "THREW", message },
+      correlationId: req.correlation_id,
+    });
+    return false;
+  }
+}
+
+/**
  * Run (or resume) provisioning for an accepted request row. Every step is safe to re-run: each first
  * checks whether its resource already exists for this workspace, so a retry after a mid-flight failure
  * completes the remainder instead of duplicating the start.
  */
 export async function runProvisioning(admin: any, req: {
   id: string; target_user_id: string; correlation_id: string; workspace_id: string | null;
-}, payload: IndividualRequest): Promise<{ ok: boolean; workspaceId?: string; failedStep?: StepCode; errorCode?: string }> {
+}, payload: IndividualRequest): Promise<{
+  ok: boolean; workspaceId?: string; failedStep?: StepCode; errorCode?: string;
+  /** Whether the practitioner identity exists after this run. False never fails the run -- see above. */
+  identityIssued?: boolean;
+}> {
   // Ensure the step ledger exists (idempotent on the unique (request_id, step_code) index).
   for (const step of PROVISIONING_STEPS) {
     await admin.from("provisioning_step").upsert(
@@ -282,5 +359,8 @@ export async function runProvisioning(admin: any, req: {
   await audit(admin, { workspaceId, actorId: req.target_user_id, eventType: "practice.provisioning_completed", payload: { requestId: req.id, nextAction: "resume_onboarding" }, correlationId: req.correlation_id });
   await markStep(admin, req.id, "publish_completed", "succeeded");
 
-  return { ok: true, workspaceId: workspaceId ?? undefined };
+  // 8. The practitioner identity -- last, unledgered, and unable to fail this run. See the function.
+  const identityIssued = await issuePractitionerIdentity(admin, req, payload, workspaceId);
+
+  return { ok: true, workspaceId: workspaceId ?? undefined, identityIssued };
 }

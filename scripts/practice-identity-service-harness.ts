@@ -28,8 +28,8 @@ import { loadEnvConfig } from "@next/env";
 import { createClient } from "@supabase/supabase-js";
 import { runProvisioning, type IndividualRequest } from "../src/lib/practice/provisioning";
 import {
-  issueIdentity, getIdentity, changeHandle, updateIdentity, transitionIdentity,
-  resolveHandle, searchPractitioners, handleAvailable, handleCandidates,
+  issueIdentity, getIdentity, changeHandle, claimHandle, suggestHandle, updateIdentity,
+  transitionIdentity, resolveHandle, searchPractitioners, handleAvailable, handleCandidates,
   normaliseHandle, bookingQr, bookingUrl, shareTemplates,
   DISCOVERY_MODES, NOT_BUILT,
 } from "../src/lib/practice/identity-service";
@@ -145,12 +145,26 @@ async function main() {
     !tooShort.available && tooShort.reason === "invalid");
 
   // ── Issue ──────────────────────────────────────────────────────────────────
-  const wsA = await provision(A, "HARNESS PIS A (synthetic)", "a");
+  //
+  // ⚠ THE PRACTICE IS NAMED FOR THE PRACTITIONER, WHICH IS WHAT PROVISIONING ACTUALLY DOES. An individual
+  // practice takes its name from the display name typed at signup, and the identity is now issued from
+  // the same value -- so the harness must provision with the real name or it is testing a shape that
+  // never occurs.
+  const wsA = await provision(A, "Dr Elisha Okaisu", "a");
+  const afterProvisioning = await getIdentity(admin, A);
+  ok("PROVISIONING ISSUES THE IDENTITY -- issueIdentity is no longer a function nothing calls",
+    afterProvisioning !== null && afterProvisioning.display_name === "Dr Elisha Okaisu",
+    afterProvisioning ? JSON.stringify(afterProvisioning.display_name) : "no identity after provisioning");
+
   const first = await issueIdentity(admin, {
     userId: A, displayName: "Dr Elisha Okaisu", workspaceId: wsA, correlationId: "harness-pis",
   });
   ok("an identity is issued", first.ok, first.ok ? "" : `${first.code}: ${first.message}`);
   if (!first.ok) return report();
+  ok("and asking again returns the one provisioning made, not a second",
+    first.data.created === false && afterProvisioning !== null &&
+    first.data.practitionerNumber === afterProvisioning.practitioner_number,
+    JSON.stringify({ created: first.data.created, n: first.data.practitionerNumber }));
   const format = await getFormat(admin);
   ok("with a practitioner number in the CONFIGURED format, not a literal",
     first.data.practitionerNumber === formatPractitionerNumber(
@@ -161,7 +175,25 @@ async function main() {
     String((await getIdentity(admin, A)).number_format_version));
   ok("issuing a number LOCKS the format -- it cannot be changed casually afterwards",
     (await getFormat(admin)).locked === true);
-  ok("and the handle s3's algorithm suggested", first.data.handle === "eokaisu", String(first.data.handle));
+  // ⚠ THIS ASSERTION USED TO SAY THE OPPOSITE, AND THE CHANGE IS THE POINT OF THIS BUILD.
+  //
+  // s15 says an identity is issued automatically, and the first implementation read that as issuing the
+  // HANDLE automatically too -- suggestHandle()'s first free candidate, written onto the row. A handle is
+  // a public address derived from a real person's name, and changeHandle retires one for ever rather than
+  // freeing it, so an auto-assigned name is both a publication nobody agreed to and a permanent claim on
+  // a shared namespace made on somebody's behalf. Issuance now creates the row; the person claims the
+  // address.
+  ok("BUT NO HANDLE IS ASSIGNED -- an address is chosen, never derived from a name at signup",
+    first.data.handle === null && (await getIdentity(admin, A)).handle === null,
+    JSON.stringify({ returned: first.data.handle, stored: (await getIdentity(admin, A)).handle }));
+  ok("and s3's ladder still OFFERS one -- the algorithm was kept, only its authority was removed",
+    (await suggestHandle(admin, "Dr Elisha Okaisu")) === "eokaisu");
+
+  const claimA = await claimHandle(admin, { userId: A, handle: "@Eokaisu ", correlationId: "harness-pis" });
+  ok("the practitioner CLAIMS it deliberately, and it normalises on the way in",
+    claimA.ok && (claimA as any).data.handle === "eokaisu" &&
+    (claimA as any).data.bookingUrl === bookingUrl("eokaisu"),
+    JSON.stringify(claimA));
 
   const again = await issueIdentity(admin, {
     userId: A, displayName: "Dr Elisha Okaisu", workspaceId: wsA, correlationId: "harness-pis",
@@ -238,15 +270,18 @@ async function main() {
 
   // ── 9. Search resolution order ─────────────────────────────────────────────
   await updateIdentity(admin, { userId: A, discovery: "public", correlationId: "harness-pis" });
-  const wsB = await provision(B, "HARNESS PIS B (synthetic)", "b");
+  const wsB = await provision(B, "Dr Aisha Okaisu", "b");
   const second = await issueIdentity(admin, {
     userId: B, displayName: "Dr Aisha Okaisu", workspaceId: wsB, correlationId: "harness-pis",
   });
   ok("a second practitioner sharing a surname is issued", second.ok, second.ok ? "" : second.message);
   if (!second.ok) return report();
-  ok("and receives a DIFFERENT handle, because the first one is taken",
-    second.data.handle !== "eokaisu" && second.data.handle === "aokaisu",
-    String(second.data.handle));
+  ok("also with no handle -- nothing is derived for them either",
+    second.data.handle === null, String(second.data.handle));
+  ok("and the ladder OFFERS them a different one, because the first is taken",
+    (await suggestHandle(admin, "Dr Aisha Okaisu")) === "aokaisu");
+  const claimB = await claimHandle(admin, { userId: B, handle: "aokaisu", correlationId: "harness-pis" });
+  ok("which they then claim", claimB.ok, claimB.ok ? "" : claimB.message);
   for (const to of ["email_verified", "licence_verified", "active"]) {
     await transitionIdentity(admin, { userId: B, to, actorId: B, correlationId: "harness-pis" });
   }
@@ -346,7 +381,7 @@ async function main() {
     NOT_BUILT.some(n => n.key === "otp_booking" && /no channel|has none/i.test(n.detail)));
 
   // ── 2. The number is never reused ──────────────────────────────────────────
-  const wsC = await provision(C, "HARNESS PIS C (synthetic)", "c");
+  const wsC = await provision(C, "Grace Nabbosa", "c");
   const third = await issueIdentity(admin, {
     userId: C, displayName: "Grace Nabbosa", workspaceId: wsC, correlationId: "harness-pis",
   });

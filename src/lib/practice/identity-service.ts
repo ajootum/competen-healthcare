@@ -142,26 +142,71 @@ export function handleCandidates(displayName: string, limit = 12): string[] {
  * reason code: taken by a live identity, reserved (s4), or RETIRED BY SOMEBODY ELSE. The third is the
  * one that is easy to miss -- a released handle stays claimed, because posters and QR codes printed
  * with it are still in circulation and reassigning it would send a stranger's patients to somebody new.
+ *
+ * ⚠ A FAILED READ IS `unreadable`, NOT `available`. The first version of this function destructured only
+ * `data` from all three queries, so a database that could not answer produced a confident "yes, that one
+ * is free" -- and the caller would then write it. Reserved and retired have no database constraint
+ * behind them (nothing links practice_reserved_handle or practice_handle_history to the identity's
+ * handle column), so THIS read is the only thing enforcing them and it must never fail open.
+ *
+ * ⚠ THIS IS NOT THE COLLISION CONTROL. Two people claiming the same free handle in the same instant
+ * both read "available" here. What settles that is the unique constraint on the column, and the writers
+ * below attempt the write and handle the violation rather than trusting this answer.
  */
 export async function handleAvailable(admin: any, handle: string, forIdentityId?: string): Promise<{
-  available: boolean; reason?: "invalid" | "reserved" | "taken" | "retired";
+  available: boolean; reason?: "invalid" | "reserved" | "taken" | "retired" | "unreadable";
+  because?: string;
 }> {
   const h = normaliseHandle(handle);
   if (!HANDLE_RE.test(h)) return { available: false, reason: "invalid" };
 
-  const { data: reserved } = await admin.from("practice_reserved_handle")
+  const { data: reserved, error: reservedError } = await admin.from("practice_reserved_handle")
     .select("handle").eq("handle", h).maybeSingle();
+  if (reservedError) return { available: false, reason: "unreadable", because: reservedError.message };
   if (reserved) return { available: false, reason: "reserved" };
 
-  const { data: taken } = await admin.from("practice_practitioner_identity")
+  const { data: taken, error: takenError } = await admin.from("practice_practitioner_identity")
     .select("id").eq("handle", h).maybeSingle();
+  if (takenError) return { available: false, reason: "unreadable", because: takenError.message };
   if (taken && taken.id !== forIdentityId) return { available: false, reason: "taken" };
 
-  const { data: retired } = await admin.from("practice_handle_history")
+  const { data: retired, error: retiredError } = await admin.from("practice_handle_history")
     .select("identity_id").eq("handle", h).maybeSingle();
+  if (retiredError) return { available: false, reason: "unreadable", because: retiredError.message };
   if (retired && retired.identity_id !== forIdentityId) return { available: false, reason: "retired" };
 
   return { available: true };
+}
+
+/**
+ * ⚠ THE ONE BIT A "IS THIS FREE?" QUESTION MAY ANSWER.
+ *
+ * An availability endpoint is an enumeration oracle -- anybody who can call it can sweep the namespace
+ * and learn which handles exist. That is tolerable here (three to thirty lowercase alphanumerics is a
+ * small space, and the URLs are public by design; migration 254 says the same in as many words), but
+ * only if the answer carries NOTHING BEYOND TAKEN-OR-FREE. `taken`, `reserved` and `retired` are
+ * collapsed into one `unavailable` on purpose: which of the three it is would tell a sweeper whether a
+ * real practitioner holds a name, which is a fact about a person rather than about a string.
+ *
+ * `invalid` is disclosed because it is a property of the characters typed, computable without asking
+ * anybody. `unreadable` is disclosed because the alternative is reporting a database failure as "free".
+ */
+export type HandleCheck = {
+  handle: string;
+  /** The address the caller would get. Null when the handle could never be one. */
+  url: string | null;
+  state: "invalid" | "available" | "unavailable" | "unreadable";
+};
+
+export async function checkHandle(admin: any, raw: string, forIdentityId?: string): Promise<HandleCheck> {
+  const h = normaliseHandle(raw);
+  const result = await handleAvailable(admin, h, forIdentityId);
+  const state: HandleCheck["state"] =
+    result.available ? "available"
+      : result.reason === "invalid" ? "invalid"
+        : result.reason === "unreadable" ? "unreadable"
+          : "unavailable";
+  return { handle: h, url: state === "invalid" ? null : bookingUrl(h), state };
 }
 
 /** The first candidate that is actually free. */
@@ -182,11 +227,41 @@ export async function getIdentity(admin: any, userId: string) {
 }
 
 /**
+ * ⚠ WHAT A PRACTITIONER SHOULD KNOW BEFORE THEY CHOOSE ONE. Exported so the screen and the harness read
+ * the same sentence -- a warning that lives only in JSX is a warning that can be dropped in a redesign
+ * with nothing failing.
+ */
+export const HANDLE_PERMANENCE_NOTICE =
+  "Choose carefully. If you change your handle later the old one is not released: it stays attached to "
+  + "you for ever so that cards, posters and QR codes already carrying it keep reaching you rather than "
+  + "a stranger. That also means nobody else can ever have it, including you under a different name.";
+
+/**
  * Issue an identity. Idempotent per person.
  *
  * s15: "Every practitioner receives a permanent Practitioner Number, public handle, booking URL and QR
- * code automatically." Automatic, but NOT public: the number and handle are issued, and discovery stays
- * hidden until the practitioner opts in.
+ * code automatically." Automatic, but NOT public: the number is issued, and discovery stays hidden until
+ * the practitioner opts in.
+ *
+ * ────────────────────────────────────────────────────────────────────────────────────────────────────
+ * ⚠ NO HANDLE IS ASSIGNED HERE, AND THAT IS A DEPARTURE FROM s15 TAKEN DELIBERATELY.
+ *
+ * This function used to call suggestHandle() and write the first free candidate onto the row. It is the
+ * obvious reading of "automatically", and it is wrong for two reasons that only show up later:
+ *
+ *   1. A HANDLE IS A PUBLIC NAME. It is the address in https://practice.competenhealthcare.com/@handle,
+ *      printed on cards and given to patients. Deriving it from a real person's name at signup publishes
+ *      that name as a side effect of registering -- and nobody was asked.
+ *   2. A HANDLE IS CLOSE TO PERMANENT. changeHandle() retires the old one into practice_handle_history,
+ *      where it stays claimed for ever so printed codes keep working. So an auto-assigned @eokaisu that
+ *      its owner then replaces has burned a name they never chose out of a shared namespace, for good.
+ *
+ * So provisioning creates the ROW -- the permanent number, the lifecycle, the private profile -- and the
+ * practitioner CLAIMS the address themselves in Practice Setup, having seen the URL first. The schema
+ * already permits exactly this: migration 218 declares `handle text unique check (handle is null or ...)`
+ * and migration 254's booking-page foreign key is on a NULLABLE column, so an identity with no handle is
+ * a legal, first-class state rather than a half-written row.
+ * ────────────────────────────────────────────────────────────────────────────────────────────────────
  */
 export async function issueIdentity(admin: any, args: {
   userId: string; displayName: string; workspaceId?: string | null; correlationId: string;
@@ -203,8 +278,6 @@ export async function issueIdentity(admin: any, args: {
   }
   if (args.displayName.trim().length < 2)
     return { ok: false, status: 400, code: "VALIDATION_ERROR", message: "a display name is required" };
-
-  const suggested = await suggestHandle(admin, args.displayName);
 
   // A SEQUENCE, AND NOTHING ELSE. s2 says permanent and never reused, and max()+1 is wrong about the
   // second half: delete CPR-000005 and the next practitioner issued is handed 000005 again, so a number
@@ -239,7 +312,9 @@ export async function issueIdentity(admin: any, args: {
 
     const { data, error } = await admin.from("practice_practitioner_identity").insert({
       user_id: args.userId, practitioner_number: practitionerNumber,
-      handle: suggested, display_name: args.displayName.trim(),
+      // ⚠ NULL, AND NOT BY OMISSION. Written out so that a future reader sees a decision rather than a
+      // column somebody forgot. See the header.
+      handle: null, display_name: args.displayName.trim(),
       primary_workspace_id: args.workspaceId ?? null,
       status: "created", discovery: "hidden",
       // WHICH SHAPE THIS ONE FOLLOWS, recorded rather than inferred from its appearance later.
@@ -283,6 +358,47 @@ export async function issueIdentity(admin: any, args: {
  * goes to practice_handle_history so that the printed cards and posters carrying it keep working, and so
  * nobody else can claim it.
  */
+/**
+ * Why a handle was refused, in the practitioner's words.
+ *
+ * ⚠ `reserved` DOES NOT SAY WHY THAT PARTICULAR NAME IS RESERVED. practice_reserved_handle holds a
+ * `reason` column -- platform, brand, profession, routing -- and repeating it back would tell somebody
+ * probing the namespace which names the operator cares about and why. "It is not available" is the whole
+ * of what a caller is owed.
+ */
+const REFUSAL: Record<string, { code: string; status: number; message: string }> = {
+  invalid: {
+    code: "HANDLE_INVALID", status: 400,
+    message: "a handle is 3 to 30 characters, starts with a letter, and uses only lowercase letters and numbers",
+  },
+  reserved: { code: "HANDLE_RESERVED", status: 409, message: "that handle is not available" },
+  taken: { code: "HANDLE_TAKEN", status: 409, message: "that handle is in use" },
+  retired: {
+    code: "HANDLE_RETIRED", status: 409,
+    message: "that handle used to belong to somebody else, and stays with them so their printed codes keep working",
+  },
+  unreadable: {
+    code: "HANDLE_UNREADABLE", status: 503,
+    message: "whether that handle is free could not be checked just now, so nothing was changed",
+  },
+};
+
+/**
+ * ⚠ A UNIQUE VIOLATION ON THE HANDLE COLUMN IS "SOMEBODY ELSE GOT IT FIRST", NOT AN INTERNAL ERROR.
+ *
+ * handleAvailable() cannot settle a race -- two claims of the same free name both read "available" and
+ * both proceed. The unique constraint from migration 218 is the only thing that can, so the write is
+ * attempted and ITS refusal is the answer. Returning the raw Postgres message instead would both leak
+ * the constraint's name and tell the loser nothing they could act on.
+ */
+type Refused = { ok: false; status: number; code: string; message: string };
+
+const writeRefusal = (error: { code?: string; message: string }): Refused => {
+  if (error.code === "23505" || /duplicate|unique/i.test(error.message))
+    return { ok: false, ...REFUSAL.taken };
+  return { ok: false, status: 400, code: "VALIDATION_ERROR", message: error.message };
+};
+
 export async function changeHandle(admin: any, args: {
   userId: string; handle: string; correlationId: string;
 }): Promise<EngineResult<{ handle: string; previous: string | null }>> {
@@ -291,15 +407,7 @@ export async function changeHandle(admin: any, args: {
 
   const h = normaliseHandle(args.handle);
   const check = await handleAvailable(admin, h, identity.id);
-  if (!check.available) {
-    const message = {
-      invalid: "a handle is 3 to 30 characters, starts with a letter, and uses only lowercase letters and numbers",
-      reserved: "that handle is reserved",
-      taken: "that handle is in use",
-      retired: "that handle used to belong to somebody else, and stays with them so their printed codes keep working",
-    }[check.reason ?? "invalid"];
-    return { ok: false, status: 409, code: `HANDLE_${(check.reason ?? "invalid").toUpperCase()}`, message };
-  }
+  if (!check.available) return { ok: false, ...REFUSAL[check.reason ?? "invalid"] };
   if (identity.handle === h) return { ok: true, data: { handle: h, previous: null } };
 
   const previous: string | null = identity.handle ?? null;
@@ -314,7 +422,7 @@ export async function changeHandle(admin: any, args: {
 
   const { data: updated, error } = await admin.from("practice_practitioner_identity")
     .update({ handle: h, updated_at: nowIso() }).eq("id", identity.id).select("id");
-  if (error) return { ok: false, status: 400, code: "VALIDATION_ERROR", message: error.message };
+  if (error) return writeRefusal(error);
   if (!updated || updated.length === 0)
     return { ok: false, status: 404, code: "NOT_FOUND", message: "Not found" };
 
@@ -323,6 +431,226 @@ export async function changeHandle(admin: any, args: {
     payload: { identityId: identity.id, from: previous, to: h }, correlationId: args.correlationId,
   });
   return { ok: true, data: { handle: h, previous } };
+}
+
+/**
+ * CLAIM the first handle -- the deliberate act that gives a practitioner a public address.
+ *
+ * ────────────────────────────────────────────────────────────────────────────────────────────────────
+ * ⚠ SEPARATE FROM changeHandle BECAUSE IT IS A DIFFERENT ACT WITH A DIFFERENT COST.
+ *
+ * A CHANGE retires the outgoing handle into practice_handle_history, where it stays claimed for ever. A
+ * CLAIM retires nothing: there is no previous name, so the namespace is not consumed twice. Refusing to
+ * let this function overwrite an existing handle keeps that true -- a screen that "claimed" over the top
+ * would silently retire a name and the practitioner would find out from a dead poster.
+ *
+ * ⚠ THE WRITE IS THE COLLISION CHECK, NOT THE READ ABOVE IT. `.is("handle", null)` in the update is what
+ * makes this idempotent-safe against this identity being claimed twice concurrently, and the unique
+ * constraint is what settles two DIFFERENT identities racing for the same name. Neither is a check
+ * followed by a write. This codebase has been bitten three times by that pattern -- most recently a
+ * one-time code accepted ten times under concurrency -- so the read below exists only for the two rules
+ * the database cannot enforce (reserved, and retired by somebody else), and its failure is a refusal.
+ * ────────────────────────────────────────────────────────────────────────────────────────────────────
+ */
+export async function claimHandle(admin: any, args: {
+  userId: string; handle: string; correlationId: string;
+}): Promise<EngineResult<{ handle: string; bookingUrl: string }>> {
+  const identity = await getIdentity(admin, args.userId);
+  if (!identity)
+    return { ok: false, status: 404, code: "NO_IDENTITY", message: "no identity has been issued for you yet" };
+  if (identity.handle)
+    return {
+      ok: false, status: 409, code: "HANDLE_ALREADY_CLAIMED",
+      message: `you already have @${identity.handle}. Changing it retires the old one permanently, which is a different decision from claiming your first.`,
+    };
+
+  const h = normaliseHandle(args.handle);
+  const check = await handleAvailable(admin, h, identity.id);
+  if (!check.available) return { ok: false, ...REFUSAL[check.reason ?? "invalid"] };
+
+  const { data: updated, error } = await admin.from("practice_practitioner_identity")
+    .update({ handle: h, updated_at: nowIso() })
+    .eq("id", identity.id).is("handle", null).select("id, handle");
+  if (error) return writeRefusal(error);
+  // Zero rows and no error means the `is null` guard held: this identity acquired a handle between the
+  // read and the write. Reported as already claimed rather than as a mysterious not-found.
+  if (!updated || updated.length === 0)
+    return {
+      ok: false, status: 409, code: "HANDLE_ALREADY_CLAIMED",
+      message: "a handle was claimed for you a moment ago, so this one was not written",
+    };
+
+  await audit(admin, {
+    workspaceId: identity.primary_workspace_id, actorId: args.userId,
+    eventType: "practice.handle_claimed",
+    payload: { identityId: identity.id, handle: h, bookingUrl: bookingUrl(h) },
+    correlationId: args.correlationId,
+  });
+  return { ok: true, data: { handle: h, bookingUrl: bookingUrl(h) } };
+}
+
+/**
+ * The name an identity is issued under, when nobody has typed one for this call.
+ *
+ * ⚠ THIS IS NOT A PUBLIC NAME AND ISSUING IT PUBLISHES NOTHING. display_name is NOT NULL on the identity
+ * (migration 218), the row is created `hidden`, and resolveHandle refuses a hidden identity -- so the
+ * name sits privately against the row until its owner both claims a handle and changes their discovery
+ * mode. That is two deliberate acts away from a stranger being able to read it.
+ *
+ * The platform profile first, because that is the name the person themselves entered. The workspace name
+ * second, and ONLY for an individual practice, where provisioning set it from the practitioner's own
+ * stated display name. A managed practice is called something that is not a person, and issuing an
+ * identity under a clinic's name would put a business where a clinician belongs -- so it returns null and
+ * the caller has to ask.
+ */
+export async function resolveDisplayName(
+  admin: any, userId: string, workspaceId: string | null,
+): Promise<string | null> {
+  const { data: profile } = await admin.from("profiles").select("full_name").eq("id", userId).maybeSingle();
+  const fromProfile = (profile?.full_name ?? "").trim();
+  if (fromProfile.length >= 2) return fromProfile;
+
+  if (!workspaceId) return null;
+  const { data: ws } = await admin.from("practice_workspace")
+    .select("name, type").eq("id", workspaceId).maybeSingle();
+  if (ws?.type !== "individual_practice") return null;
+  const fromWorkspace = (ws?.name ?? "").trim();
+  return fromWorkspace.length >= 2 ? fromWorkspace : null;
+}
+
+// ── WHAT PRACTICE SETUP SHOWS ────────────────────────────────────────────────────────────────────────
+
+/**
+ * ⚠ EVERY FIELD IS A STRING, A BOOLEAN, A NUMBER, NULL, OR AN ARRAY OF THOSE. NOTHING IS A FUNCTION.
+ *
+ * This payload is handed from a server component to a client one. A method on it type-checks, passes
+ * eslint, passes every harness and kills the page at runtime -- which is exactly how the Follow-ups
+ * board died this week. The harness walks this object and asserts the same thing, because a rule that is
+ * only a comment is a rule that lasts until the next field is added.
+ */
+export type IdentitySetupView = {
+  /**
+   * The three states, kept apart. `none` is "no identity row exists", which is a real and recoverable
+   * situation for a practice provisioned before issuance was wired in -- NOT an error, and NOT the same
+   * as `unclaimed`.
+   */
+  state: "none" | "unclaimed" | "claimed" | "unreadable";
+  /** Populated only for `unreadable`. A failed read says so instead of rendering as "you have nothing". */
+  reason: string | null;
+
+  practitionerNumber: string | null;
+  displayName: string | null;
+  handle: string | null;
+  bookingUrl: string | null;
+  discovery: string | null;
+  identityStatus: string | null;
+
+  /** The host a claimed handle would hang off, so the screen can show the shape before anything is typed. */
+  host: string;
+  /** What a claim costs, in the words the harness also checks. */
+  permanenceNotice: string;
+
+  /**
+   * Candidates s3's algorithm produced THAT ARE ACTUALLY FREE. Offered, never applied -- and the
+   * distinction is the whole point of this build.
+   */
+  suggestions: string[];
+  /** True when at least one candidate could not be checked, so the list may be short rather than complete. */
+  suggestionsIncomplete: boolean;
+
+  /**
+   * The booking page, which is a different thing from the address. Reported honestly: this build has no
+   * surface that creates or publishes one, and migration 254's `practice_booking_access_publishable`
+   * constraint -- not this code -- is what refuses a published page with no handle.
+   */
+  bookingPage: {
+    state: "absent" | "present" | "unreadable";
+    reason: string | null;
+    publishState: string | null;
+    handle: string | null;
+  };
+};
+
+/** How many name candidates are worth offering. Enough to choose from, few enough to read. */
+const SUGGESTION_LIMIT = 5;
+
+export async function identitySetupView(admin: any, args: {
+  userId: string; workspaceId: string; fallbackDisplayName?: string | null;
+}): Promise<IdentitySetupView> {
+  const host = identityHost();
+  const base = {
+    reason: null as string | null,
+    practitionerNumber: null as string | null,
+    displayName: null as string | null,
+    handle: null as string | null,
+    bookingUrl: null as string | null,
+    discovery: null as string | null,
+    identityStatus: null as string | null,
+    host,
+    permanenceNotice: HANDLE_PERMANENCE_NOTICE,
+    suggestions: [] as string[],
+    suggestionsIncomplete: false,
+  };
+
+  const bookingPage = await bookingPageState(admin, args.workspaceId);
+
+  const { data: row, error } = await admin.from("practice_practitioner_identity")
+    .select("practitioner_number, display_name, handle, discovery, status")
+    .eq("user_id", args.userId).maybeSingle();
+  // ⚠ A FAILED READ IS NOT "YOU HAVE NO IDENTITY". Reporting it as `none` would offer a practitioner a
+  // button that issues a SECOND permanent number the moment the database answered again.
+  if (error) return { ...base, state: "unreadable", reason: error.message, bookingPage };
+
+  if (!row) {
+    return { ...base, state: "none", displayName: args.fallbackDisplayName ?? null, bookingPage };
+  }
+
+  if (row.handle) {
+    return {
+      ...base, state: "claimed",
+      practitionerNumber: row.practitioner_number, displayName: row.display_name,
+      handle: row.handle, bookingUrl: bookingUrl(row.handle),
+      discovery: row.discovery, identityStatus: row.status,
+      bookingPage,
+    };
+  }
+
+  const free: string[] = [];
+  let incomplete = false;
+  for (const candidate of handleCandidates(row.display_name ?? "", 24)) {
+    if (free.length >= SUGGESTION_LIMIT) break;
+    const check = await handleAvailable(admin, candidate);
+    if (check.available) free.push(candidate);
+    else if (check.reason === "unreadable") { incomplete = true; break; }
+  }
+
+  return {
+    ...base, state: "unclaimed",
+    practitionerNumber: row.practitioner_number, displayName: row.display_name,
+    discovery: row.discovery, identityStatus: row.status,
+    suggestions: free, suggestionsIncomplete: incomplete,
+    bookingPage,
+  };
+}
+
+/**
+ * Is there a booking-page profile for this practice, and what state is it in?
+ *
+ * ⚠ ABSENT IS NOT UNREADABLE, AND NEITHER IS AN ERROR. Migration 254 created practice_booking_access;
+ * nothing in this build writes to it, so `absent` is the honest answer for every practice today. A
+ * missing TABLE (PGRST205) is reported as absent too -- a deployment that has not applied 254 has no
+ * booking page in exactly the sense that matters here -- while any other failure is `unreadable`.
+ */
+async function bookingPageState(admin: any, workspaceId: string): Promise<IdentitySetupView["bookingPage"]> {
+  const { data, error } = await admin.from("practice_booking_access")
+    .select("handle, publish_state").eq("workspace_id", workspaceId).maybeSingle();
+  if (error) {
+    if (error.code === "PGRST205" || /could not find the table/i.test(error.message ?? ""))
+      return { state: "absent", reason: "the booking-page store is not present in this deployment", publishState: null, handle: null };
+    return { state: "unreadable", reason: error.message, publishState: null, handle: null };
+  }
+  if (!data) return { state: "absent", reason: null, publishState: null, handle: null };
+  return { state: "present", reason: null, publishState: data.publish_state ?? null, handle: data.handle ?? null };
 }
 
 /** The public profile fields (s6) and the discovery mode (s7). All practitioner-controlled. */

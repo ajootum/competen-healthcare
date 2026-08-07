@@ -145,12 +145,24 @@ function adminWithUnreadable(real: any, table: string) {
   });
 }
 
-/** An admin client on which one table answers as though it existed and were empty. */
-function adminWithTable(real: any, table: string) {
-  const source = (): any => {
+/**
+ * An admin client on which one table answers as though it did not exist.
+ *
+ * ⚠ THE CONTROL FOR "MISSING IS NOT UNREADABLE", NOW THAT THE TABLES ARE REAL. Migrations 253-255 landed
+ * the three stores this area probes for, so the database can no longer produce an absent one -- and a
+ * presence probe that can only ever say "present" is a function that returns true. PGRST205 is the code
+ * PostgREST answers with for a table it cannot find, and it is the exact string storePresence() treats as
+ * absence.
+ */
+function adminWithMissingTable(real: any, table: string) {
+  const missing = (): any => {
     const p: any = new Proxy({} as any, {
       get(_t, prop) {
-        if (prop === "then") return (resolve: any) => resolve({ data: [], error: null, count: 0 });
+        if (prop === "then")
+          return (resolve: any) => resolve({
+            data: null, count: null,
+            error: { code: "PGRST205", message: `Could not find the table 'public.${table}' in the schema cache` },
+          });
         return () => p;
       },
     });
@@ -158,12 +170,18 @@ function adminWithTable(real: any, table: string) {
   };
   return new Proxy(real, {
     get(t: any, prop: string) {
-      if (prop === "from") return (name: string) => (name === table ? source() : t.from(name));
+      if (prop === "from") return (name: string) => (name === table ? missing() : t.from(name));
       const v = t[prop];
       return typeof v === "function" ? v.bind(t) : v;
     },
   });
 }
+
+// ⚠ adminWithTable() USED TO LIVE HERE, and it is gone rather than left unused. It made one table answer
+// as though it existed and were empty, which was the only way to prove the presence probe could say
+// "present" while every real store was absent. Migration 254 landed the stores, so the real database now
+// provides that half and adminWithMissingTable() above provides the other. A stub kept "in case" is a
+// stub nobody maintains.
 
 /** Everything "sent" in this run lands here and nowhere else. No request leaves the process. */
 const outbox: { kind: string; destination: string; body: string }[] = [];
@@ -283,6 +301,14 @@ async function main() {
     TWILIO_ACCOUNT_SID: process.env.TWILIO_ACCOUNT_SID,
     TWILIO_AUTH_TOKEN: process.env.TWILIO_AUTH_TOKEN,
     RESEND_API_KEY: process.env.RESEND_API_KEY,
+    // ⚠ A KEY ALONE STOPPED BEING A CONFIGURED PROVIDER, AND THIS FIXTURE DID NOT NOTICE.
+    //
+    // messagingStatus() now asks for `RESEND_API_KEY && emailFrom()`, because a deployment with a key and
+    // no from-address sends from no-reply@example.invalid and Resend rejects it. This harness pretended a
+    // provider into existence by setting the key alone, so every section that needs one silently ran in a
+    // world where nothing could send -- which is exactly the failure mode the comment below this one was
+    // written about, in the other direction. Both halves are snapshotted, set and restored.
+    RESEND_FROM: process.env.RESEND_FROM,
   };
   /**
    * ⚠ `process.env.X = undefined` SETS THE STRING "undefined", WHICH IS TRUTHY.
@@ -390,6 +416,7 @@ async function main() {
     flag: PATIENT_BOOKING_FLAG, enabled: true, note: "harness only",
   });
   process.env.RESEND_API_KEY = "re_harness_only";
+  process.env.RESEND_FROM = "harness@example.invalid";
 
   const gateBest = await patientAccessGate(admin, { workspaceId: wsA });
   ok("3g-control-1. the cleared blockers really are gone -- delivery, the flag and the session are no longer refusing",
@@ -402,8 +429,13 @@ async function main() {
   ok("3g. ⚠ AND THE DOOR IS STILL SHUT. No configuration opens a door with nothing behind it",
     !gateBest.open && gateBest.blockers.some(b => b.code === "INTAKE_NOT_BUILT"),
     JSON.stringify({ open: gateBest.open, blockers: gateBest.blockers.map(b => b.code) }));
-  ok("3g-b. and the remaining refusals are the two that need code, not configuration",
-    gateBest.blockers.every(b => ["INTAKE_NOT_BUILT", "ACCESS_PROFILE_STORE_ABSENT"].includes(b.code)),
+  // ⚠ AND THE STORES LANDING DID NOT OPEN IT. When this was written, two blockers survived the pretending:
+  // INTAKE_NOT_BUILT and ACCESS_PROFILE_STORE_ABSENT. Migration 254 removed the second by creating the
+  // table -- and the door is still shut, on a blocker that is a fact about the code and that no schema can
+  // clear. That is the property this section exists for, and it is stronger now than it was: there is
+  // exactly one thing left, and it is not something anybody can configure or migrate their way past.
+  ok("3g-b. and the ONE remaining refusal is the one that needs code, not configuration and not a migration",
+    gateBest.blockers.length === 1 && gateBest.blockers[0].code === "INTAKE_NOT_BUILT",
     gateBest.blockers.map(b => b.code).join(", "));
 
   // Put the world back before anything else reads it.
@@ -433,20 +465,37 @@ async function main() {
     gateRestored.blockers.map(b => b.code).join(", "));
 
   // ── 3i. MISSING IS NOT UNREADABLE ─────────────────────────────────────────────────────────────
+  // ⚠ THIS ASSERTION USED TO SAY THE OPPOSITE, AND BOTH VERSIONS ARE TRUE OF THEIR OWN DAY.
+  //
+  // It read "every one of them is absent today", which was the honest state of the build when it was
+  // written. Migration 254 created practice_booking_access, practice_booking_request and
+  // practice_patient_session, so the probe's answer changed on its own -- which is precisely what
+  // storePresence() was written to do, and why it probes instead of remembering. The property being
+  // asserted is unchanged: the probe reports what the database actually holds.
   const stores = await storePresence(admin);
-  ok("3i. every store Phase 4 needs is probed, and every one of them is absent today",
+  ok("3i. every store Phase 4 needs is probed, and migration 254 has landed all of them",
     stores.state === "ok" && stores.value.length === PATIENT_ACCESS_STORES.length
-    && stores.value.every(s => !s.present),
+    && stores.value.every(s => s.present),
     JSON.stringify(stores));
   const storesBroken = await storePresence(adminWithUnreadable(admin, "practice_booking_access"));
   ok("3j. ⚠ a table that could not be REACHED is unreadable, not absent -- a network wobble is not 'Phase 4 is unbuilt'",
     storesBroken.state === "unreadable", JSON.stringify(storesBroken));
-  const storesPresent = await storePresence(adminWithTable(admin, "practice_booking_access"));
-  ok("3j-control. ⚠ and the probe CAN say present -- otherwise 3i is a function that returns false",
-    storesPresent.state === "ok"
-    && storesPresent.value.find(s => s.table === "practice_booking_access")?.present === true
-    && storesPresent.value.find(s => s.table === "practice_booking_request")?.present === false,
-    JSON.stringify(storesPresent));
+  // ⚠ THE CONTROL HAD TO TURN ROUND WITH IT. It used to prove the probe could say PRESENT while the real
+  // answer was absent; the real answer is now present, so what needs proving is that the probe can still
+  // say ABSENT -- otherwise 3i is a function that returns true.
+  const storesMissing = await storePresence(adminWithMissingTable(admin, "practice_booking_request"));
+  ok("3j-control. ⚠ and the probe CAN still say absent -- otherwise 3i is a function that returns true",
+    storesMissing.state === "ok"
+    && storesMissing.value.find(s => s.table === "practice_booking_request")?.present === false
+    && storesMissing.value.find(s => s.table === "practice_booking_access")?.present === true,
+    JSON.stringify(storesMissing));
+  // And absence still SHUTS THE GATE. The blocker exists for a deployment that has not applied 254, and
+  // it must not have quietly stopped working because this one has.
+  const gateNoStore = await patientAccessGate(
+    adminWithMissingTable(admin, "practice_booking_access"), { workspaceId: wsA });
+  ok("3j-control-2. ⚠ and a deployment WITHOUT the store is still refused by name, not merely by INTAKE_NOT_BUILT",
+    !gateNoStore.open && gateNoStore.blockers.some(b => b.code === "ACCESS_PROFILE_STORE_ABSENT"),
+    gateNoStore.blockers.map(b => b.code).join(", "));
 
   // ══ 4. THE FIGURES A PRACTITIONER SEES ════════════════════════════════════════════════════════
   section("4. Readiness figures");
@@ -515,24 +564,25 @@ async function main() {
     !rlHealthy.ok && (rlHealthy as any).code === "NOT_DELIVERED");
 
   // ── 5b. PER-SOURCE LIMITING IS REAL OR IT REFUSES ─────────────────────────────────────────────
+  //
+  // ⚠ THIS ASSERTION ALSO USED TO SAY THE OPPOSITE, AND FOR THE SAME REASON AS 3i.
+  //
+  // It read "a request that asks to be limited by source is REFUSED when the register cannot record one",
+  // and SOURCE_LIMIT_UNAVAILABLE was what came back, because practice_otp_challenge had nowhere to put a
+  // source. Migration 253 added source_hash. The refusal path is still in messaging.ts and 5a already
+  // proves an unreadable register refuses; what changed is that this deployment now HAS the column, so a
+  // source-limited request is no longer turned away for want of somewhere to record one.
   const srcLimited = await issueOtp(admin, {
     workspaceId: wsA, purpose: "booking", channel: "sms", destination: "+256711000002",
     sourceKey: "203.0.113.7", correlationId: CORR, transport: recorder,
   });
-  ok("5b. ⚠ a request that asks to be limited by source is REFUSED when the register cannot record one",
-    !srcLimited.ok && (srcLimited as any).code === "SOURCE_LIMIT_UNAVAILABLE"
-    && /unrecorded source is an unlimited one/i.test((srcLimited as any).message),
-    srcLimited.ok ? "it issued unlimited" : (srcLimited as any).code);
-  const srcAbsent = await issueOtp(admin, {
-    workspaceId: wsA, purpose: "booking", channel: "sms", destination: "+256711000002",
-    correlationId: CORR, transport: recorder,
-  });
-  ok("5b-control. ⚠ the SAME call without a sourceKey gets further -- so 5b is about the source control, not the destination",
-    !srcAbsent.ok && (srcAbsent as any).code === "NOT_DELIVERED",
-    (srcAbsent as any).code);
+  ok("5b. ⚠ a source-limited request is no longer refused for want of a register -- migration 253 gave it one",
+    !srcLimited.ok && (srcLimited as any).code === "NOT_DELIVERED",
+    srcLimited.ok ? "it issued" : `${(srcLimited as any).code}: ${(srcLimited as any).message}`);
 
   // ── FROM HERE A PROVIDER IS PRETENDED INTO EXISTENCE, so a code can actually be issued ─────────
   process.env.RESEND_API_KEY = "re_harness_only";
+  process.env.RESEND_FROM = "harness@example.invalid";
   await admin.from("practice_message_channel").insert({
     workspace_id: wsA, kind: "email", enabled: true, sender_name: "Harness", require_consent: false,
   });
@@ -548,6 +598,40 @@ async function main() {
   const realCode = (outbox[outbox.length - 1].body.match(/(\d{6})/) ?? [])[1];
   ok("5c-control-2. and the code reached the MESSAGE, which is where a patient would read it",
     !!realCode && /^\d{6}$/.test(realCode), String(realCode));
+
+  // ── 5b-b. AND THE SOURCE IS ACTUALLY RECORDED, AS A HASH ──────────────────────────────────────
+  //
+  // ⚠ THE REPLACEMENT FOR WHAT 5b USED TO PROVE. "The register can record a source" is only worth saying
+  // if the source is really written -- and only worth shipping if it is written as a hash. An IP address
+  // in the clear on every code request is a log of who asked, kept in a table with a different retention
+  // story from the one anybody agreed to. This can only be asserted once a code can actually be issued,
+  // which is why it sits below the pretended provider rather than beside 5b.
+  const SOURCE = "203.0.113.9";
+  const withSource = await issueOtp(admin, {
+    workspaceId: wsA, purpose: "booking", channel: "email", destination: "sourced@example.invalid",
+    sourceKey: SOURCE, correlationId: CORR, transport: recorder,
+  });
+  ok("5b-b. a source-limited request now issues, because the register can hold a source",
+    withSource.ok, withSource.ok ? "" : (withSource as any).message);
+  const { data: sourcedChallenge } = withSource.ok
+    ? await admin.from("practice_otp_challenge").select("source_hash").eq("id", withSource.data.challengeId).maybeSingle()
+    : { data: null };
+  ok("5b-c. ⚠ and the source is stored as 64 hex characters, never in the clear",
+    !!(sourcedChallenge as any)?.source_hash &&
+    /^[0-9a-f]{64}$/.test((sourcedChallenge as any).source_hash) &&
+    !(sourcedChallenge as any).source_hash.includes(SOURCE),
+    JSON.stringify(sourcedChallenge));
+
+  const withoutSource = await issueOtp(admin, {
+    workspaceId: wsA, purpose: "booking", channel: "email", destination: "unsourced@example.invalid",
+    correlationId: CORR, transport: recorder,
+  });
+  const { data: unsourcedChallenge } = withoutSource.ok
+    ? await admin.from("practice_otp_challenge").select("source_hash").eq("id", withoutSource.data.challengeId).maybeSingle()
+    : { data: null };
+  ok("5b-control. ⚠ CONTROL: the same call WITHOUT a source stores none -- so 5b-c is reading the argument, not a column that is always filled",
+    withoutSource.ok && (unsourcedChallenge as any)?.source_hash === null,
+    JSON.stringify(unsourcedChallenge));
 
   // ── 5d. NOTHING RETURNS OR LOGS A CODE ────────────────────────────────────────────────────────
   ok("5d. ⚠ the code is nowhere in what issueOtp returned",

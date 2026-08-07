@@ -29,10 +29,16 @@ import {
 //
 // ---- WHAT IS NOT A BUTTON --------------------------------------------------------------------------
 //
-// The comp's header carries "Preview booking page ↗". THERE IS NO BOOKING PAGE -- CPR-V5-007 makes it
-// Phase 4 and it has not been started -- so it is rendered as a statement of what is missing and which
+// The comp's header carries "Preview booking page ↗". THERE IS STILL NO BOOKING PAGE -- CPR-V5-007 makes
+// it Phase 4 and only part of it exists -- so it is rendered as a statement of what is missing and which
 // phase owns it, not as a control. A button that does nothing is the one failure this codebase refuses
 // hardest, and it is worse in the header than anywhere else because that is where people look first.
+//
+// ⚠ WHAT DID BECOME A CONTROL, AND WHY IT IS A DIFFERENT ONE. Claiming a booking ADDRESS (PIS-000 s3)
+// is built: provisioning issues the identity row and the practitioner chooses the handle themselves at
+// /practice/setup/identity. So there is a real link beside the disabled chip, labelled for the address
+// rather than for the page -- because an address is not a page, and one control doing duty for both
+// would be the same overclaim in the other direction.
 // ────────────────────────────────────────────────────────────────────────────────────────────────────
 
 export const dynamic = "force-dynamic";
@@ -70,6 +76,7 @@ export default async function PracticeSetupOverview() {
   const s = await practiceSetup(admin, ctx);
   const byKey = new Map(s.modules.map(m => [m.key, m]));
   const nextUp = s.checklist.find(i => !i.done && !i.unreadable);
+  const bookingAddress = s.availability.parts.find(p => p.key === "booking_address") ?? null;
 
   return (
     <div className="-m-5 min-h-full bg-[var(--cp-canvas)] p-5">
@@ -96,9 +103,20 @@ export default async function PracticeSetupOverview() {
               className="rounded-lg border border-gray-200 bg-white px-3.5 py-2 text-[12px] font-semibold text-gray-700 hover:bg-gray-50">
               Export setup
             </Link>
-            {/* NOT A BUTTON. See the header note. */}
+            {/* ⚠ A CONTROL NOW, BECAUSE THERE IS SOMETHING BEHIND IT -- AND IT STILL DOES NOT CLAIM A
+                BOOKING PAGE. Claiming an address is built; the page is not. The label says which of the
+                two this opens, and the chip beside it says whether the address exists. */}
+            <Link href="/practice/setup/identity"
+              className="rounded-lg border border-gray-200 bg-white px-3.5 py-2 text-[12px] font-semibold text-gray-700 hover:border-[var(--cp-primary)]/40 hover:bg-[var(--cp-primary)]/5 hover:text-[var(--cp-primary-deep)]">
+              {bookingAddress?.done === true
+                ? `Your booking address · ${bookingAddress.detail}`
+                : bookingAddress?.done === null
+                  ? "Your booking address · could not be read"
+                  : "Claim your booking address"}
+            </Link>
+            {/* NOT A BUTTON. There is still no booking page to preview -- an address is not a page. */}
             <span className="rounded-lg border border-dashed border-slate-300 bg-slate-50 px-3.5 py-2 text-[12px] font-semibold text-slate-500"
-              title="CPR-V5-007 Phase 4 — patient booking access. Not started.">
+              title="CPR-V5-007 Phase 4 — the public booking page, OTP verification and the publish state. Not started.">
               No booking page to preview
             </span>
           </div>

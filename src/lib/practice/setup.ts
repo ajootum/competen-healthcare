@@ -312,7 +312,7 @@ export async function practiceSetup(admin: any, ctx: WorkspaceContext) {
     wsQ, configQ, locationsQ, facilitiesQ,
     slotsQ, templatesQ, channelsQ, membersQ,
     bookingRulesQ, weekSessionsQ, sessionRowsQ, sessionTypesQ,
-    activityQ, parametersQ,
+    activityQ, parametersQ, identityQ,
   ] = await Promise.all([
     // `status` joined the select for CPR-LIFE-001's module 19 -- the lifecycle card's detail IS the
     // practice's current state, so it is read from the same row the profile card already reads.
@@ -356,6 +356,11 @@ export async function practiceSetup(admin: any, ctx: WorkspaceContext) {
     // why the state filter is here rather than a bare count of rows.
     admin.from("practice_parameter_activation").select("*", { count: "exact", head: true })
       .eq("workspace_id", ctx.workspaceId).eq("scope", "practice").eq("state", "active"),
+    // PIS-000 s3. ⚠ BY USER, NOT BY WORKSPACE. An identity belongs to the person and outlives any one
+    // practice (migration 218's header), so this is the only read on this page that is not
+    // workspace-scoped -- and `handle` is the one field this page needs from it.
+    admin.from("practice_practitioner_identity")
+      .select("handle").eq("user_id", ctx.userId).maybeSingle(),
   ]);
 
   const ws = wsQ.data;
@@ -372,6 +377,11 @@ export async function practiceSetup(admin: any, ctx: WorkspaceContext) {
   const weekSessions = countOf(weekSessionsQ);
   const sessionRows: any[] | null = sessionRowsQ.error ? null : ((sessionRowsQ.data ?? []) as any[]);
   const sessionTypeRows: any[] | null = sessionTypesQ.error ? null : ((sessionTypesQ.data ?? []) as any[]);
+  // ⚠ THREE STATES. `null` is "could not be read" and is never drawn as "no handle" -- telling somebody
+  // their address is unclaimed when the truth is that nobody knows would send them to claim a second one.
+  const claimedHandle: string | null | undefined = identityQ.error
+    ? undefined
+    : ((identityQ.data?.handle as string | null | undefined) ?? null);
 
   // ── IS EACH BUILT MODULE ACTUALLY SET UP? ───────────────────────────────────────────────────────
   //
@@ -584,10 +594,24 @@ export async function practiceSetup(admin: any, ctx: WorkspaceContext) {
       href: "/practice/setup/availability?step=4",
     },
     {
+      // PIS-000 s3, s8. ⚠ BUILT, AND THEREFORE IN THE DENOMINATOR. The handle is the one part of Phase 4
+      // that now exists: provisioning issues the identity row and the practitioner claims the address
+      // themselves. It is a part of its own rather than folded into `booking_access` below, because an
+      // address and a published page are different things and collapsing them would make claiming a
+      // handle look like publishing a page.
+      key: "booking_address", label: "Your booking address",
+      done: claimedHandle === undefined ? null : claimedHandle !== null,
+      detail: claimedHandle === undefined ? "could not be read"
+        : claimedHandle ? `@${claimedHandle}` : "unclaimed — nothing has been chosen for you",
+      href: "/practice/setup/identity",
+    },
+    {
       key: "booking_access", label: "Patient booking access",
       done: null, detail: "not built",
       href: null,
-      notBuilt: "A handle, a public URL, OTP verification and a publish state. CPR-V5-007 makes this Phase 4 and it has not been started.",
+      // ⚠ NARROWED, BECAUSE THE HANDLE PART IS NO LONGER TRUE. Claiming an address is built and sits
+      // above; the public page, the one-time code and the publish state are not.
+      notBuilt: "A public booking page, OTP verification and a publish state. CPR-V5-007 makes these Phase 4 and they have not been started.",
     },
   ];
   const availabilityPartsDone = availabilityParts.filter(p => p.done === true).length;
@@ -716,7 +740,11 @@ export async function practiceSetup(admin: any, ctx: WorkspaceContext) {
       met: false,
       indeterminate: false,
       detail: "Patients cannot reach your diary.",
-      blockedReason: "There is no patient-facing booking page. CPR-V5-007 makes the handle, the public URL, OTP verification and the publish state Phase 4, and it has not been started — so this cannot be met by configuring anything.",
+      // ⚠ THE HANDLE CAME OUT OF THIS SENTENCE WHEN IT STOPPED BEING TRUE. Claiming an address is built
+      // and can be done today; the page it would point at is not, and that is what still blocks this.
+      blockedReason: claimedHandle
+        ? "You have an address, but there is no patient-facing booking page behind it. CPR-V5-007 makes the public page, OTP verification and the publish state Phase 4, and they have not been started — so this cannot be met by configuring anything."
+        : "There is no patient-facing booking page. Claiming your booking address is the one part that exists; the public page, OTP verification and the publish state are CPR-V5-007 Phase 4 and have not been started.",
     },
     {
       key: "practice_ready", label: "Practice ready",
