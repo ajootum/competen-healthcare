@@ -287,6 +287,13 @@ export async function bookAppointment(admin: any, input: BookInput): Promise<Eng
     patient_name: patientName, patient_phone: input.patientPhone?.trim() || null,
     appointment_type: input.appointmentType, scheduled_at: new Date(startMs).toISOString(),
     duration_minutes: duration, status: initialStatus, reason: input.reason ?? null,
+    // MIGRATION 255 MAKES DOUBLE-BOOKING IMPOSSIBLE IN THE DATABASE, and this field is how a DELIBERATE
+    // one still gets through. The exclusion constraint carries `and not overlap_acknowledged`, so a row
+    // that does not say it meant it is refused by Postgres rather than by whichever engine looked first.
+    // Written from the same value checkPlacement was given above, so the acknowledgement and the check
+    // cannot disagree -- two sources for one decision is how a check-then-write reappears wearing a
+    // constraint's clothes.
+    overlap_acknowledged: input.allowOverlap === true,
     created_by: input.actorId,
   }).select("id, status").single();
   if (error) return { ok: false, status: 400, code: "VALIDATION_ERROR", message: error.message };
@@ -402,6 +409,12 @@ export async function rescheduleAppointment(admin: any, args: {
     .update({
       scheduled_at: new Date(startMs).toISOString(), duration_minutes: duration,
       location_id: locationId ?? null,
+      // A MOVE IS A NEW CLAIM ON A TIME, so the acknowledgement is rewritten rather than carried over.
+      // Without this line a row double-booked deliberately last week would keep its acknowledgement
+      // while being moved somewhere it was never granted -- and, worse, a row moved WITHOUT overlap
+      // would keep an acknowledgement it no longer needs, exempting it from migration 255's constraint
+      // for the rest of its life. The flag describes THIS placement, not the appointment's history.
+      overlap_acknowledged: args.allowOverlap === true,
       record_version: appt.record_version + 1, updated_at: new Date().toISOString(), updated_by: args.actorId,
     })
     .eq("id", appt.id).eq("record_version", appt.record_version)

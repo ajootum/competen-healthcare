@@ -1240,6 +1240,13 @@ export async function bookUnderRules(
     duration_minutes: duration,
     status: d.initialStatus,
     reason: args.reason ?? null,
+    // Migration 255's exclusion constraint carries `and not overlap_acknowledged`, so a deliberate
+    // double-book must say so in the row or Postgres refuses it. Taken from the same value passed to
+    // checkPlacement above, for the same reason the s14 override codes are: one decision, one source.
+    // NOTE this is NOT the s14 window override -- windowOverridden lifts lead time and horizon only, and
+    // was deliberately kept clear of the double-book check. An override of the notice period must never
+    // become an override of somebody else's appointment.
+    overlap_acknowledged: args.allowOverlap === true,
     // ══ AC-13. THE PAIR, IN THIS STATEMENT, OR NEITHER. ═══════════════════════════════════════════
     applied_rule_id: d.ruleId,
     applied_rule_version: d.ruleVersion,
