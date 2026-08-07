@@ -4,6 +4,8 @@ import { practiceToday, zonedDayRange } from "@/lib/practice/practice-time";
 import { defaultAppointmentMinutes } from "@/lib/practice/configuration";
 import { checkPlacement } from "@/lib/practice/scheduling";
 import { bookingBlock } from "@/lib/practice/lifecycle-constants";
+// CPR-V5-007 s8. A LEAF MODULE, so this import cannot become a cycle -- see patient-session.ts.
+import { checkPatientSession } from "@/lib/practice/patient-session";
 import {
   BOOKING_CHANNELS, BOOKING_CHANNEL_CODES, BOOKING_CHANNELS_WITH_A_DOOR, bookingChannel,
   RULE_STATUS_CODES, RULE_STATUSES_IN_FORCE,
@@ -1086,6 +1088,17 @@ export type InternalBookingArgs = {
   allowOverlap?: boolean;
   /** s14, AC-14. A reason is not optional and the record is written before the booking. */
   override?: { reason: string } | null;
+  /**
+   * ⚠ THE PATIENT'S PROOF, FOR THE patient_self CHANNEL ONLY. The bearer of a live
+   * practice_patient_session. Ignored by every other channel, which still take the capability path.
+   *
+   * ⚠ IT IS A TOKEN, NOT A VERDICT. Nothing about the decision arrives in this argument list -- rule 3
+   * of this file's header -- and this is no exception: the token is CHECKED here against the store, it
+   * does not assert anything.
+   */
+  patientSessionToken?: string | null;
+  /** The phone or inbox the booking claims. Must be the one that session actually verified. */
+  patientContact?: string | null;
   actorId: string;
   correlationId: string;
 };
@@ -1128,8 +1141,45 @@ export async function bookUnderRules(
       message: `${channel.label.toLowerCase()} is not built. ${channel.phase} owns it, and a rule may already be written for it — but there is no way for such a booking to arrive, so making one here would invent it.${channel.blockedBecause ? ` ${channel.blockedBecause}` : ""}`,
     };
 
-  if (!ctx.capabilities.includes(channel.capability))
+  // ══ WHO IS ALLOWED TO MAKE THIS BOOKING ════════════════════════════════════════════════════════
+  //
+  // ⚠ FOR patient_self, AND ONLY patient_self, A CAPABILITY TEST IS THE WRONG TEST. A patient is not a
+  // member, holds no role and appears in no practice_role_assignment -- migration 254 shapes the session
+  // table so they cannot -- so `capabilities.includes("appointment.manage")` can only ever be false for
+  // a real patient. Passing it would mean granting patients a practitioner capability, which is the one
+  // thing this whole area is built to prevent.
+  //
+  // So the test is SUBSTITUTED rather than skipped: proof of an unexpired, unrevoked patient session,
+  // minted from a consumed challenge, issued for THIS practice, that verified THIS destination. That is
+  // a strictly narrower claim than the capability it replaces -- it authorises one booking for one
+  // verified contact, not a role.
+  //
+  // ⚠ A STAFF MEMBER BOOKING FOR A PATIENT IS NOT THIS CHANNEL. They use `staff`, which still takes the
+  // capability path below. This branch is only for a booking a patient made themselves.
+  if (channel.code === "patient_self") {
+    const proof = await checkPatientSession(admin, {
+      token: args.patientSessionToken ?? null,
+      workspaceId: ctx.workspaceId,
+      // The contact the booking claims. checkPatientSession refuses when it is not the verified one.
+      destination: args.patientContact ?? null,
+    });
+    if (!proof.ok)
+      return {
+        ok: false,
+        // An unreadable session store is a 503 and a bad token is a 403: a caller that cannot tell an
+        // outage from a refusal retries forever against a database that is down.
+        status: proof.code === "PATIENT_SESSION_UNREADABLE" ? 503 : 403,
+        code: proof.code,
+        // ⚠ ONE MESSAGE FOR EVERY WAY A SESSION IS BAD. Revoked, expired, unknown and wrong-destination
+        // are one sentence, so a token being probed cannot be told how close it is. The distinction is
+        // kept server-side in proof.reason and deliberately not repeated here.
+        message: proof.code === "PATIENT_SESSION_UNREADABLE"
+          ? "this booking was not made because your session could not be checked"
+          : "your booking session is not valid. Request a new code and start again.",
+      };
+  } else if (!ctx.capabilities.includes(channel.capability)) {
     return { ok: false, status: 403, code: "FORBIDDEN", message: `${channel.capability} is required` };
+  }
 
   const decision = await evaluateBooking(admin, ctx, {
     channel: args.channel, appointmentType: args.appointmentType, scheduledAt: args.scheduledAt,

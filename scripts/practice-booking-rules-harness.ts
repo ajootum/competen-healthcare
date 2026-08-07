@@ -992,8 +992,20 @@ async function main() {
     channel: "patient_self", appointmentType: "new_consultation", scheduledAt: at(D_CH, 11 * 60),
     durationMinutes: 20, locationId: LOC_ELIG, patientName: "Should Not Happen", ...ACT,
   });
-  ok("7f but BOOKING through it is refused with the phase named, rather than inventing a patient booking",
-    !patientBooking.ok && patientBooking.code === "CHANNEL_NOT_BUILT" && /Phase 4/.test(patientBooking.message),
+  // ⚠ THIS ASSERTION CHANGED ITS REASON, NOT ITS POINT, AND THE CHANGE IS DELIBERATE.
+  //
+  // It read: refused with CHANNEL_NOT_BUILT and "Phase 4" in the message. That was true while
+  // patient_self had `door: false` -- s8's handle, page, intake and confirmation did not exist, so
+  // accepting a booking on that channel would have invented one.
+  //
+  // Phase 4's intake shipped (patient-booking.ts), the channel has a door, and the capability test is
+  // replaced FOR THAT CHANNEL ONLY by proof of a verified patient session. This call passes no session,
+  // so it is still refused -- and now for the reason that will still be the right one in a year.
+  //
+  // THE PROPERTY UNDER TEST IS UNCHANGED: a patient booking is never invented by a rule merely
+  // mentioning the channel. What changed is which guard says no.
+  ok("7f but BOOKING through it is refused -- now for want of a verified patient session, rather than for want of the phase",
+    !patientBooking.ok && patientBooking.code === "PATIENT_SESSION_INVALID",
     patientBooking.ok ? "booked" : `${patientBooking.code} ${patientBooking.message}`);
   const walkInBooking = await bookUnderRules(admin, A, {
     channel: "walk_in", appointmentType: "walk_in", scheduledAt: at(D_CH, 11 * 60),

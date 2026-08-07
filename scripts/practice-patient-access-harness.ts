@@ -375,11 +375,20 @@ async function main() {
   ok("3a. the door is shut", !gate0.open, JSON.stringify(gate0.blockers.map(b => b.code)));
   ok("3b. ⚠ and the DELIVERY CHANNEL is the first thing it says -- not the fifth",
     gate0.blockers[0]?.code === "DELIVERY_CHANNEL_ABSENT", gate0.blockers.map(b => b.code).join(" > "));
-  ok("3c. the build blocker is present and is named as a limit in the payload, not in prose",
-    gate0.blockers.some(b => b.code === "INTAKE_NOT_BUILT")
-    && gate0.buildBlockers.length === PATIENT_ACCESS_BUILD_BLOCKERS.length
-    && gate0.buildBlockers.includes("INTAKE_NOT_BUILT"),
-    JSON.stringify(gate0.buildBlockers));
+  // ⚠ THIS ASSERTION TURNED ROUND, AND THE TURN IS THE POINT.
+  //
+  // It read: "the build blocker is present and is named as a limit in the payload, not in prose" --
+  // INTAKE_NOT_BUILT, true for as long as there was no intake and no confirmation. patient-booking.ts
+  // built both, so PATIENT_ACCESS_BUILD_BLOCKERS is empty and the gate no longer pushes it.
+  //
+  // The PROPERTY under test is unchanged: whatever the build's own limits are, they appear as DATA on
+  // the payload and match the exported list exactly. That is still asserted, against a list that is now
+  // empty -- and an empty list is asserted to be genuinely empty rather than merely absent.
+  ok("3c. the build's own limits are named as data and match the exported list -- which is now empty, because the intake was built",
+    gate0.buildBlockers.length === PATIENT_ACCESS_BUILD_BLOCKERS.length
+    && PATIENT_ACCESS_BUILD_BLOCKERS.length === 0
+    && !gate0.blockers.some(b => b.code === "INTAKE_NOT_BUILT"),
+    JSON.stringify({ payload: gate0.buildBlockers, exported: PATIENT_ACCESS_BUILD_BLOCKERS }));
   ok("3d. the flag is off, and it is off because nothing turned it on rather than because it was set off",
     !gate0.flagEnabled && gate0.flag === PATIENT_BOOKING_FLAG);
   ok("3e. no session is bookable by a patient yet, and the gate says so",
@@ -426,17 +435,36 @@ async function main() {
   ok("3g-control-2. and the warning cleared too, so the gate is responding to the fixture throughout",
     !gateBest.warnings.some(b => b.code === "NO_PATIENT_RULE"),
     gateBest.warnings.map(b => b.code).join(", "));
-  ok("3g. ⚠ AND THE DOOR IS STILL SHUT. No configuration opens a door with nothing behind it",
-    !gateBest.open && gateBest.blockers.some(b => b.code === "INTAKE_NOT_BUILT"),
+  // ══ ⚠ 3g HAS REVERSED, DELIBERATELY, AND THIS IS THE MOST IMPORTANT COMMENT IN THIS FILE ═════════
+  //
+  // It read: "AND THE DOOR IS STILL SHUT. No configuration opens a door with nothing behind it", and it
+  // was the assertion this whole section existed for. It was true because INTAKE_NOT_BUILT was true:
+  // there was no intake, no confirmation, and no way for a patient booking to arrive, so clearing every
+  // configurable blocker still left one that no setting and no migration could clear.
+  //
+  // patient-booking.ts built the intake and the confirmation, and booking-rules.ts gave the patient_self
+  // channel a door guarded by a verified patient session. THERE IS NOW SOMETHING BEHIND THE DOOR. So a
+  // practice that has a gateway, an enabled channel, the launch flag, a bookable session and a patient
+  // rule can genuinely take a booking -- and a gate that still said `open: false` would be lying in the
+  // opposite direction, which is the failure mode this codebase calls a control that does nothing.
+  //
+  // ⚠ THE PROPERTY BEING PROVED IS THEREFORE THE STRONGER ONE: THE GATE CAN SAY YES AND IT CAN SAY NO,
+  // and which it says is derived from the fixture rather than hard-coded. 3a already proved it says no
+  // against an unconfigured practice; this proves it says yes when, and only when, everything is truly in
+  // place. An assertion that could only ever produce one answer is a function that returns a constant.
+  ok("3g. ⚠ AND NOW THE DOOR OPENS -- because there is finally something behind it. This assertion was the reverse until the intake was built",
+    gateBest.open && gateBest.blockers.length === 0,
     JSON.stringify({ open: gateBest.open, blockers: gateBest.blockers.map(b => b.code) }));
-  // ⚠ AND THE STORES LANDING DID NOT OPEN IT. When this was written, two blockers survived the pretending:
-  // INTAKE_NOT_BUILT and ACCESS_PROFILE_STORE_ABSENT. Migration 254 removed the second by creating the
-  // table -- and the door is still shut, on a blocker that is a fact about the code and that no schema can
-  // clear. That is the property this section exists for, and it is stronger now than it was: there is
-  // exactly one thing left, and it is not something anybody can configure or migrate their way past.
-  ok("3g-b. and the ONE remaining refusal is the one that needs code, not configuration and not a migration",
-    gateBest.blockers.length === 1 && gateBest.blockers[0].code === "INTAKE_NOT_BUILT",
-    gateBest.blockers.map(b => b.code).join(", "));
+  // ⚠ AND THE CONTROL THAT KEEPS 3g HONEST: taking away ONE configurable thing shuts it again. Without
+  // this, 3g is indistinguishable from a gate that started saying yes to everything.
+  await admin.from("practice_platform_flags").delete().eq("flag", PATIENT_BOOKING_FLAG);
+  const gateFlagOff = await patientAccessGate(admin, { workspaceId: wsA });
+  ok("3g-b. ⚠ and removing a single cleared blocker shuts it again -- so 3g is derived from the fixture, not a gate that now says yes to anything",
+    !gateFlagOff.open && gateFlagOff.blockers.some(b => b.code === "FLAG_OFF"),
+    gateFlagOff.blockers.map(b => b.code).join(", "));
+  await admin.from("practice_platform_flags").insert({
+    flag: PATIENT_BOOKING_FLAG, enabled: true, note: "harness only",
+  });
 
   // Put the world back before anything else reads it.
   restoreEnv();

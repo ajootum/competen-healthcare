@@ -223,8 +223,18 @@ export async function patientAccessGate(admin: any, args: {
       found.push(blockerFrom("DELIVERY_CHANNEL_ABSENT", delivery.value.reasons[0] ?? null));
   }
 
-  // 2. THE BUILD. Named second and unconditionally, because it is true regardless of what any read said.
-  found.push(blockerFrom("INTAKE_NOT_BUILT"));
+  // 2. ⚠ THE BUILD BLOCKER USED TO BE PUSHED HERE, UNCONDITIONALLY, AND IT IS GONE BECAUSE IT STOPPED
+  //    BEING TRUE -- not because it was inconvenient.
+  //
+  //    It read `found.push(blockerFrom("INTAKE_NOT_BUILT"))` and the comment said it was true regardless
+  //    of what any read said. That was correct while there was no intake and no confirmation. Both exist
+  //    now (patient-booking.ts), the stores landed with migration 254, and the patient_self channel has
+  //    a door guarded by a verified patient session. PATIENT_ACCESS_BUILD_BLOCKERS is empty and this
+  //    push is removed together with it, so the two cannot disagree.
+  //
+  //    ⚠ THE CONSEQUENCE, STATED PLAINLY: THIS GATE CAN NOW REPORT `open: true`. It could not before, by
+  //    construction. What keeps it shut in this deployment is DELIVERY_CHANNEL_ABSENT -- no gateway, no
+  //    mail provider, so no code can reach anybody -- and that is a configuration somebody can change.
 
   // 3. THE STORES.
   const stores = await storePresence(admin);
@@ -740,10 +750,15 @@ export async function publishReadiness(
 
   // ── 15. THE BUILD ───────────────────────────────────────────────────────────────────────────────
   //
-  // Unconditional and always failing, exactly as the gate's INTAKE_NOT_BUILT is, and for the same
-  // reason: it is true regardless of what any read said, and it is a fact about the code.
-  checks.push(checkRow("INTAKE_BUILT", "fail", {
-    because: "the patient-facing intake and confirmation are not built, so a published page would have nothing behind its first screen.",
+  // ⚠ THIS WAS AN UNCONDITIONAL `fail` AND IS NOW AN UNCONDITIONAL `pass`, because the thing it asserts
+  // changed. The intake and the confirmation exist (patient-booking.ts), so a published page no longer
+  // has nothing behind its first screen. Both versions are honest about their own day; what would not
+  // have been honest is leaving it failing so that a familiar number stayed familiar.
+  //
+  // It stays on the checklist rather than being deleted: it is one of s10.2's questions, and a check
+  // that has started passing is worth showing as passing.
+  checks.push(checkRow("INTAKE_BUILT", "pass", {
+    because: null,
   }));
 
   // ⚠ THE CONSTANTS DECLARE THE ORDER, AND THE ENGINE OBEYS IT. This function builds the rows in the

@@ -610,8 +610,15 @@ async function main() {
     r1.checks.filter(c => c.authority === "absent").every(c => (c.wouldNeed ?? "").length > 20),
     r1.checks.filter(c => c.authority === "absent").map(c => c.wouldNeed).join(" | "));
 
-  ok("5c. ⚠ the build blocker fails unconditionally: a page with no intake behind it is not ready, whatever the configuration says",
-    stateOf(r1, "INTAKE_BUILT") === "fail", stateOf(r1, "INTAKE_BUILT"));
+  // ⚠ THIS ASSERTION TURNED ROUND WITH THE THING IT ASSERTS.
+  //
+  // It read `=== "fail"`: a page with no intake behind it is not ready, whatever the configuration says.
+  // patient-booking.ts built the intake and the confirmation, so the row passes -- and it passes
+  // UNCONDITIONALLY, which is the property worth keeping. It never depended on configuration in either
+  // direction, and a check that started passing is worth showing as passing rather than left failing so
+  // a familiar number stays familiar.
+  ok("5c. ⚠ the build row is unconditional in either direction -- it failed for everyone until the intake existed, and now passes for everyone",
+    stateOf(r1, "INTAKE_BUILT") === "pass", stateOf(r1, "INTAKE_BUILT"));
   ok("5d. a practice with a location and sessions PASSES the rows it should -- this is not a checklist that always says no",
     stateOf(r1, "LOCATION_ACTIVE") === "pass",
     r1.checks.map(c => `${c.code}=${c.state}`).join(", "));
@@ -715,8 +722,13 @@ async function main() {
     PUBLISH_CHECKS_DATABASE_OWNED.map(c => `${c}=${stateOf(r2, c)}`).join(", "));
 
   const refused = await setPublishState(admin, ctxA, { to: "published", actorId: OWNER, correlationId: CORR });
+  // ⚠ IT USED TO LOOK FOR INTAKE_BUILT BY NAME, because that was the blocker that always failed. It
+  // passes now, so the refusal names the blockers this fixture actually has -- a practice with no
+  // patient-bookable session and no published registration form. The property is unchanged: the engine
+  // refuses, and it says which of ITS OWN checks stopped it.
   ok("7b. publishing is refused, and the refusal names the engine's own blockers",
-    !refused.ok && refused.code === "NOT_READY" && /INTAKE_BUILT/.test(refused.message),
+    !refused.ok && refused.code === "NOT_READY"
+    && /SESSION_BOOKABLE|REGISTRATION_FIELDS_VALID|APPOINTMENT_TYPE_LINKED/.test(refused.message),
     refused.ok ? "it published" : `${refused.code}: ${refused.message}`);
   ok("7c. ⚠ AND IT DOES NOT NAME THE THREE THE DATABASE OWNS. HANDLE_CLAIMED is failing and the engine says nothing about it, because that rule is not its business",
     !refused.ok && !/HANDLE_CLAIMED|OTP_REQUIRED|MODE_ADMITS_PATIENTS/.test(refused.message),

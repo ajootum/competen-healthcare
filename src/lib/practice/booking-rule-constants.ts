@@ -54,16 +54,27 @@ export const BOOKING_CHANNELS = [
     code: "patient_self", label: "Patient self-booking",
     definition: "A patient uses your booking page.",
     permission: "Subject to published rules.",
-    // s8's handle, link, OTP and publish state do not exist. There is no way for a patient to arrive.
-    door: false, phase: "Phase 4",
+    // ⚠ THE DOOR IS OPEN NOW, AND WHAT CHANGED IS THE BUILD RATHER THAN THE DEPLOYMENT.
+    //
+    // It was `false` while s8's handle, link, intake and publish state did not exist -- there was no way
+    // for a patient booking to arrive, so accepting one here would have invented it. All four exist:
+    // the handle is claimed in Practice Setup, the profile publishes through migration 254's
+    // constraint, and patient-booking.ts carries the intake and the confirmation.
+    //
+    // ⚠ AN OPEN DOOR IS NOT AN UNLOCKED ONE. `capability` below is NOT granted to patients and never
+    // may be -- no patient holds appointment.manage and none appears in practice_role_assignment.
+    // bookUnderRules substitutes a DIFFERENT test for this channel alone: proof of an unexpired,
+    // unrevoked practice_patient_session whose challenge verified this destination for this practice.
+    // The capability stays on the record because a STAFF member booking through the patient page is
+    // still staff, and the field is what the rule card displays.
+    door: true, phase: "Phase 4",
     capability: "appointment.manage",
-    // ⚠ NAMED, BECAUSE "PHASE 4" IS A SCHEDULE AND THIS IS A REASON. Phase 4 built the OTP machinery and
-    // stopped at the wall in front of it: a patient booking is protected by a one-time code, this
-    // deployment has nothing that can send one, and a code that cannot be sent is not a code. Somebody
-    // reading "Phase 4 owns it" would reasonably wait for Phase 4; somebody reading this knows what
-    // would have to change first. See patient-access.ts.
+    // ⚠ STILL BLOCKED IN THIS DEPLOYMENT, AND NOW FOR ONE REASON RATHER THAN TWO. The code machinery is
+    // real and the intake is built; what is missing is anything that can SEND a code. That is a fact
+    // about this deployment's configuration, not about the code -- so it is the sentence that changes
+    // the day a gateway is configured, and nothing else here has to.
     blockedBecause:
-      "It is protected by a one-time code, and there is no SMS gateway or mail provider configured to send one -- so no patient could complete it even if the page existed.",
+      "It is protected by a one-time code, and this deployment has no SMS gateway and no mail provider configured to send one -- so no patient can complete a booking until one exists. The intake itself is built.",
   },
   {
     code: "referral", label: "Linked facility or referral",
