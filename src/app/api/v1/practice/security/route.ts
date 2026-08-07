@@ -29,28 +29,37 @@ export async function GET(req: NextRequest) {
   if (patientId) {
     if (!hasCapability(auth.ctx, "patient.view"))
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-    const consents = await patientConsents(auth.caller.admin, auth.ctx.workspaceId, patientId);
-    return NextResponse.json({ consents, correlationId: auth.caller.traceId });
+    const result = await patientConsents(auth.caller.admin, auth.ctx.workspaceId, patientId);
+    // ⚠ `readable` TRAVELS TO THE CLIENT. An empty consent array is the answer somebody checks before
+    // sharing a record, so a caller must be able to tell "this patient has consented to nothing" from
+    // "the consents could not be read".
+    return NextResponse.json({
+      consents: result.consents, readable: result.readable, correlationId: auth.caller.traceId,
+    }, { status: result.readable ? 200 : 503 });
   }
 
   switch (url.searchParams.get("view")) {
     case "sessions": {
       // Everybody may see THEIR OWN devices; seeing the whole practice's is administration.
       const all = hasCapability(auth.ctx, "practice.settings.manage");
-      const sessions = await listSessions(auth.caller.admin, auth.ctx.workspaceId,
+      const list = await listSessions(auth.caller.admin, auth.ctx.workspaceId,
         all ? {} : { userId: auth.caller.userId });
       // THE LIMIT TRAVELS WITH THE LIST. A client cannot render "revoke" as "sign out everywhere".
+      // AND SO DOES THE READ STATE, with a 503 behind it: an empty device list served as 200 tells a
+      // client there are no devices, which is exactly what a failed read used to look like from here.
       return NextResponse.json({
-        sessions, scope: all ? "practice" : "mine",
+        sessions: list.sessions, readable: list.readable, namesReadable: list.namesReadable,
+        truncated: list.truncated, scope: all ? "practice" : "mine",
         revocationEndsPlatformSession: false,
         correlationId: auth.caller.traceId,
-      });
+      }, { status: list.readable ? 200 : 503 });
     }
     case "breakglass": {
       if (!hasCapability(auth.ctx, "access.review"))
         return NextResponse.json({ error: "Forbidden" }, { status: 403 });
       const log = await breakGlassLog(auth.caller.admin, auth.ctx.workspaceId);
-      return NextResponse.json({ ...log, correlationId: auth.caller.traceId });
+      return NextResponse.json({ ...log, correlationId: auth.caller.traceId },
+        { status: log.readable ? 200 : 503 });
     }
     default: {
       if (!hasCapability(auth.ctx, "practice.settings.manage"))

@@ -243,15 +243,45 @@ export const PRACTICE_LOGIN = {
     { role: "Practice administrator", lands: "Practice administration -- locations, hours, users, templates and booking rules." },
     { role: "Enterprise administrator", lands: "An overview across every practice you are responsible for." },
   ],
+  /**
+   * ⚠ THIS LIST IS RENDERED WITH A GREEN TICK BESIDE EVERY LINE, UNDER THE HEADING "HOW ACCESS IS
+   * PROTECTED". It is therefore a set of present-tense claims about controls that exist, and three of
+   * the five were false (COMP-SECURITY-SURVEY-001 s0.5).
+   *
+   *  - "Every sign-in recorded" -- nothing recorded a sign-in. `practice_audit_event` held 2,480 rows
+   *    across 38 event types and not one was an authentication event. TRUE NOW, and narrowed to what the
+   *    code actually does: the trail is written by the Practice shell, so it covers every sign-in that
+   *    opens a practice and does not claim to cover one that never did.
+   *  - "Account lockout and brute-force protection" -- nothing. No lockout, no failed-attempt counter, no
+   *    backoff, no CAPTCHA on any authentication endpoint, and no way to build one from here: passwords
+   *    are checked by the platform's authentication server, which this product does not sit in front of,
+   *    so a failed attempt never reaches any code in this repository. MOVED TO `planned`, where the
+   *    absent OAuth providers already sit.
+   *  - "Session timeout" -- written into the database, enforced in code, and dead: the device cookie was
+   *    re-minted on every request, so no browser was ever recognised twice and no idle interval could be
+   *    measured. The cookie is now planted by `src/proxy.ts`, so the control is real -- but it is OFF
+   *    unless a practice sets a limit, and the line now says that rather than implying every practice
+   *    has one.
+   *
+   * The file header rejects a HIPAA badge and a false practice count on exactly this principle. These
+   * three had slipped through it.
+   */
   security: [
     "Access limited to authorised users of your practice",
     "Role-based routing enforced after authentication",
-    "Every sign-in recorded",
-    "Account lockout and brute-force protection",
-    "Session timeout",
+    "Every sign-in that opens your practice is recorded, with the device it came from",
+    "Devices are listed and can be locked out of your practice one at a time",
+    "An idle sign-out limit your practice can set, or leave off",
   ],
-  /** Named in LP-DOC-001 as configurable or future. Listed as such rather than shown as buttons. */
-  planned: ["Multi-factor authentication", "Single sign-on"],
+  /**
+   * Named in LP-DOC-001 as configurable or future, or -- for the lockout -- claimed as present and found
+   * to be absent. Listed as such rather than shown as buttons or ticks.
+   */
+  planned: [
+    "Multi-factor authentication",
+    "Single sign-on",
+    "Account lockout and brute-force protection",
+  ],
 };
 
 /** LP-PAT-001. */
@@ -265,13 +295,25 @@ export const PATIENT_LOGIN = {
     { title: "Your documents", body: "Referral letters, results and reports -- yours and the ones your clinician has shared." },
     { title: "Your messages", body: "Secure messages with your care team." },
   ],
+  /**
+   * ⚠ THE SAME GREEN TICKS, ON A JOURNEY THAT DOES NOT EXIST YET. The page's own header says this
+   * privacy statement "is true today regardless of when the product opens" -- which is right about the
+   * three lines describing how sharing works, because those are properties of the clinician-side engines
+   * that are built. It was not right about "Every sign-in is recorded": there is no patient sign-in, no
+   * patient role and no patient authentication of any kind, so nothing records one. Moved to `planned`
+   * with the rest of the patient authentication story rather than ticked as an existing control.
+   */
   privacy: [
     "You see only your own information",
     "Clinical details appear only where your clinician has shared them",
-    "Every sign-in is recorded",
     "Patient access is separate from clinician access",
   ],
-  planned: ["One-time codes by SMS", "Multi-factor authentication", "Access for a parent, guardian or carer"],
+  planned: [
+    "One-time codes by SMS",
+    "Multi-factor authentication",
+    "Access for a parent, guardian or carer",
+    "A record of every patient sign-in",
+  ],
 };
 
 /** LP-BOOK-001 followed by LP-NEW-001. They are one continuous journey -- LP-NEW-001's first step is

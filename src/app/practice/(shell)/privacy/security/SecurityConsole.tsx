@@ -19,8 +19,23 @@ const input = "rounded-lg border border-gray-200 px-2.5 py-1.5 text-[12px] outli
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
-export default function SecurityConsole({ posture, sessions, glass, canManage, canReview, me }: {
-  posture: any; sessions: any[]; glass: any; canManage: boolean; canReview: boolean; me: string;
+/**
+ * ⚠ A FIGURE THAT COULD NOT BE READ IS NOT A NOUGHT.
+ *
+ * Every count on this page used to arrive as a number whatever happened, because the engines behind it
+ * wrote `data ?? []` and `count ?? 0`. The worst of them printed a large "0" above the words "record
+ * reads logged — in the last 7 days" on a FAILED COUNT: the page whose first guarantee is that every read
+ * of a patient record is logged, telling a practice that none had been. They now arrive as null when the
+ * read did not happen, and this is the one place that renders that.
+ */
+const figure = (n: number | null | undefined) => (n === null || n === undefined ? "—" : String(n));
+const unreadable = "This figure could not be read just now. It is not nought — reload to try again.";
+
+export default function SecurityConsole({
+  posture, sessions, sessionsReadable, sessionNamesReadable, glass, canManage, canReview, me,
+}: {
+  posture: any; sessions: any[]; sessionsReadable: boolean; sessionNamesReadable: boolean;
+  glass: any; canManage: boolean; canReview: boolean; me: string;
 }) {
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<{ kind: "ok" | "err"; text: string } | null>(null);
@@ -51,29 +66,43 @@ export default function SecurityConsole({ posture, sessions, glass, canManage, c
       )}
 
       {posture && (
-        <div className="mt-4 grid grid-cols-2 md:grid-cols-4 gap-3">
+        <div className="mt-4 grid grid-cols-2 md:grid-cols-5 gap-3">
           <div className={card}>
             <p className="text-[11px] font-semibold text-gray-500">Devices signed in</p>
-            <p className="mt-1 text-2xl font-bold text-gray-900">{posture.liveSessions}</p>
-            <p className="mt-0.5 text-[10px] text-gray-500">{posture.trustedDevices} marked trusted</p>
+            <p className="mt-1 text-2xl font-bold text-gray-900">{figure(posture.liveSessions)}</p>
+            <p className="mt-0.5 text-[10px] text-gray-500">
+              {posture.sessionsReadable ? `${figure(posture.trustedDevices)} marked trusted` : unreadable}
+            </p>
+          </div>
+          <div className={card}>
+            <p className="text-[11px] font-semibold text-gray-500">Sign-ins recorded</p>
+            <p className="mt-1 text-2xl font-bold text-gray-900">{figure(posture.authEvents?.signInsLast7Days)}</p>
+            <p className="mt-0.5 text-[10px] text-gray-500">
+              {posture.authEvents?.readable === false ? unreadable
+                : `in the last 7 days · ${figure(posture.authEvents?.refusalsLast7Days)} turned away`}
+            </p>
           </div>
           <div className={card}>
             <p className="text-[11px] font-semibold text-gray-500">Record reads logged</p>
-            <p className="mt-1 text-2xl font-bold text-gray-900">{posture.accessEventsLast7Days}</p>
-            <p className="mt-0.5 text-[10px] text-gray-500">in the last 7 days</p>
+            <p className="mt-1 text-2xl font-bold text-gray-900">{figure(posture.accessEventsLast7Days)}</p>
+            <p className="mt-0.5 text-[10px] text-gray-500">
+              {posture.accessLogReadable === false ? unreadable : "in the last 7 days"}
+            </p>
           </div>
           <div className={card}>
             <p className="text-[11px] font-semibold text-gray-500">Emergency access</p>
-            <p className="mt-1 text-2xl font-bold text-gray-900">{posture.breakGlass.awaitingReview}</p>
+            <p className="mt-1 text-2xl font-bold text-gray-900">{figure(posture.breakGlass.awaitingReview)}</p>
             <p className="mt-0.5 text-[10px] text-gray-500">
-              awaiting review{posture.breakGlass.live > 0 ? ` · ${posture.breakGlass.live} live now` : ""}
+              {posture.breakGlassReadable === false ? unreadable
+                : `awaiting review${posture.breakGlass.live > 0 ? ` · ${posture.breakGlass.live} live now` : ""}`}
             </p>
           </div>
           <div className={card}>
             <p className="text-[11px] font-semibold text-gray-500">Consents</p>
-            <p className="mt-1 text-2xl font-bold text-gray-900">{posture.consents.active}</p>
+            <p className="mt-1 text-2xl font-bold text-gray-900">{figure(posture.consents.active)}</p>
             <p className="mt-0.5 text-[10px] text-gray-500">
-              active · {posture.consents.expiringSoon} expiring · {posture.consents.withdrawn} withdrawn
+              {posture.consents.readable === false ? unreadable
+                : `active · ${figure(posture.consents.expiringSoon)} expiring · ${figure(posture.consents.withdrawn)} withdrawn`}
             </p>
           </div>
         </div>
@@ -90,7 +119,16 @@ export default function SecurityConsole({ posture, sessions, glass, canManage, c
             Locking a device out refuses it here on its next request. It does <strong>not</strong> sign
             that person out of Competen &mdash; this product cannot end a platform session.
           </p>
-          {sessions.length === 0 ? (
+          {/* ⚠ "NOTHING RECORDED YET" IS A CLAIM ABOUT THIS PRACTICE, and until now it was also what a
+              failed read produced. An administrator looking for the laptop somebody had just lost would
+              have been shown an empty list and concluded there was nothing to lock out. */}
+          {!sessionsReadable ? (
+            <p className="mt-2 rounded-lg bg-[var(--cmp-surface-warning)] px-3 py-2 text-[12px] text-[var(--cmp-text-warning)]">
+              The device list could not be read just now, so it is not shown. This is <strong>not</strong>{" "}
+              an empty list &mdash; there may be devices signed in that are not appearing. Nothing has
+              changed. Reload to try again.
+            </p>
+          ) : sessions.length === 0 ? (
             <p className="mt-2 text-[12px] text-gray-400">Nothing recorded yet.</p>
           ) : (
             <ul className="mt-2 flex flex-col">
@@ -102,7 +140,9 @@ export default function SecurityConsole({ posture, sessions, glass, canManage, c
                       {s.trusted && <span className="ml-1 text-[10px] font-normal text-gray-500">· trusted</span>}
                     </span>
                     <span className="block truncate text-[10px] text-gray-500">
-                      {canManage && s.name ? `${s.name} · ` : ""}
+                      {canManage
+                        ? (sessionNamesReadable ? (s.name ? `${s.name} · ` : "") : "name unavailable · ")
+                        : ""}
                       {String(s.user_agent ?? "unknown browser").slice(0, 60)}
                     </span>
                   </span>
@@ -140,20 +180,33 @@ export default function SecurityConsole({ posture, sessions, glass, canManage, c
           <section className={card}>
             <div className="flex items-baseline justify-between">
               <h2 className="text-[13px] font-bold text-gray-900">Emergency access</h2>
-              <span className="text-[11px] text-gray-500">{glass.awaitingReview} awaiting review</span>
+              <span className="text-[11px] text-gray-500">{figure(glass.awaitingReview)} awaiting review</span>
             </div>
             <p className="mt-0.5 text-[11px] text-gray-500">
               Somebody took access to a record they would not normally see. Every episode stays here until
               a second person has read it &mdash; nothing ages out.
             </p>
-            {glass.episodes.length === 0 ? (
+            {/* ⚠ "None. That is the usual state." IS REASSURANCE, and reassurance produced by a failed
+                read is the worst output this panel could have. The list is the control; a control that
+                quietly stops showing things is not one. */}
+            {glass.readable === false ? (
+              <p className="mt-2 rounded-lg bg-[var(--cmp-surface-warning)] px-3 py-2 text-[12px] text-[var(--cmp-text-warning)]">
+                The emergency-access list could not be read just now, so it is not shown. This is{" "}
+                <strong>not</strong> the same as there being none, and episodes may be awaiting review that
+                are not appearing here. Reload to try again.
+              </p>
+            ) : glass.episodes.length === 0 ? (
               <p className="mt-2 text-[12px] text-gray-400">None. That is the usual state.</p>
             ) : (
               <ul className="mt-2 flex flex-col">
                 {glass.episodes.map((e: any) => (
                   <li key={e.id} className="border-b border-gray-100 py-1.5 last:border-0">
                     <div className="flex items-baseline gap-2">
-                      <span className="text-[12px] font-semibold text-gray-800">{e.name ?? "Unnamed member"}</span>
+                      {/* "Unnamed member" is a statement about a person, and on a failed name lookup it
+                          would be made about a named clinician. */}
+                      <span className="text-[12px] font-semibold text-gray-800">
+                        {glass.namesReadable === false ? "Name unavailable" : (e.name ?? "Unnamed member")}
+                      </span>
                       {e.live && (
                         <span className="rounded bg-[var(--cmp-surface-critical)] px-1.5 py-0.5 text-[10px] font-semibold text-[var(--cmp-text-critical)]">
                           live now
@@ -240,7 +293,61 @@ export default function SecurityConsole({ posture, sessions, glass, canManage, c
                   </span>
                 </span>
               </label>
+              {/* ⚠ THE IDLE RULE STARTED WORKING IN THIS RELEASE AND HAD NEVER WORKED BEFORE, so it is
+                  stated rather than left to be discovered. It was written into the database and enforced
+                  in code from the start, and could never fire: the device cookie was re-minted on every
+                  request, so no browser was ever seen twice and no idle interval could be measured. */}
+              <p className="mt-1 rounded-lg bg-gray-50 px-3 py-2 text-[11px] leading-relaxed text-gray-600">
+                <strong className="text-gray-800">Idle sign-out:</strong>{" "}
+                {posture.idleLimitEnforced
+                  ? `set to ${posture.idleLimitMinutes} minutes. A device left unused for longer is locked out of this practice and has to sign in again.`
+                  : "not set, so no device is ever locked out for sitting unused."}{" "}
+                This limit now takes effect; until this release it was recorded but could never fire,
+                because every request looked like a new device. An idle lock-out is cleared by signing in
+                again &mdash; a lock-out somebody applied by hand is not.
+              </p>
             </div>
+          )}
+        </section>
+      )}
+
+      {/* ── WHAT THE SIGN-IN RECORD COVERS, AND WHAT IT DOES NOT ──────────────────────────────────── */}
+      {posture?.authEvents && (
+        <section className={`${card} mt-4`}>
+          <h2 className="text-[13px] font-bold text-gray-900">The sign-in record</h2>
+          <p className="mt-0.5 text-[11px] leading-relaxed text-gray-500">
+            Until this release nothing in this product recorded that anybody had ever signed in. Both
+            lists below come from the code that writes the trail, so this panel cannot describe more than
+            is actually recorded.
+          </p>
+          <div className="mt-3 grid sm:grid-cols-2 gap-4">
+            <div>
+              <h3 className="text-[11px] font-semibold text-gray-700">Recorded</h3>
+              <ul className="mt-1.5 flex flex-col gap-1">
+                {posture.authEvents.recordedTypes.map((t: any) => (
+                  <li key={t.type} className="flex items-baseline gap-2 text-[11.5px] leading-snug text-gray-700">
+                    <span aria-hidden className="text-[var(--cmp-text-success)]">✓</span>{t.what}
+                  </li>
+                ))}
+              </ul>
+            </div>
+            <div>
+              <h3 className="text-[11px] font-semibold text-gray-700">Not recorded, and why</h3>
+              <ul className="mt-1.5 flex flex-col gap-1.5">
+                {posture.authEvents.notRecordedHere.map((n: any) => (
+                  <li key={n.what} className="text-[11.5px] leading-snug text-gray-600">
+                    <span aria-hidden className="mr-1.5 text-gray-400">—</span>
+                    <strong className="font-semibold text-gray-700">{n.what}</strong> {n.why}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </div>
+          {posture.authEvents.readable === false && (
+            <p className="mt-3 rounded-lg bg-[var(--cmp-surface-warning)] px-3 py-2 text-[12px] text-[var(--cmp-text-warning)]">
+              The sign-in record itself could not be read just now, so the figures above it are shown as
+              unavailable rather than as nought. Reload to try again.
+            </p>
           )}
         </section>
       )}

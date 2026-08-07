@@ -1,5 +1,6 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
+import { DEVICE_COOKIE, DEVICE_COOKIE_OPTIONS, mintDeviceId, needsDeviceCookie } from "@/lib/practice/device-register";
 
 export async function proxy(request: NextRequest) {
   // ONE TRACE ID PER REQUEST (XWI P2-15).
@@ -13,9 +14,6 @@ export async function proxy(request: NextRequest) {
   // read the SAME id via headers(). It also fixes a latent flaw in the getCaller version: two getCaller
   // calls in one request produced two different ids.
   //
-  // The headers are re-derived from `request` INSIDE setAll rather than snapshotted up front, because
-  // Supabase's cookie refresh writes to request.cookies and a stale snapshot would drop the refreshed
-  // session -- silently logging people out, which is a very expensive way to get a trace id.
   // `x-pathname` rides along for the same reason: something server-side needs to know which URL was asked
   // for, and only this file sees it before routing. The practice shell layout uses it to send an expired
   // session back to the page it was actually trying to open instead of dropping everyone on the home page.
@@ -32,7 +30,19 @@ export async function proxy(request: NextRequest) {
     return h;
   };
 
-  let supabaseResponse = NextResponse.next({ request: { headers: withTrace(request) } });
+  // ⚠ THE RESPONSE IS BUILT ONCE, AT THE END, AND EVERY COOKIE IS COLLECTED UNTIL THEN.
+  //
+  // The previous version rebuilt `supabaseResponse` inside `setAll` and returned whatever the last
+  // rebuild produced. That was correct while `setAll` was the only writer, and the comment beside it
+  // explained precisely why the headers had to be re-derived from `request` rather than snapshotted: a
+  // stale snapshot drops a refreshed session and silently signs people out.
+  //
+  // A second writer now exists (the device cookie below), and under the old shape it would have had to
+  // rebuild the response again -- discarding the Set-Cookie headers the refresh had already written.
+  // Collecting instead of rebuilding keeps the original guarantee and removes the trap: `request.cookies`
+  // is mutated as each writer decides, the forwarded headers are derived from it after all of them have
+  // finished, and every pending cookie is written onto the single response.
+  const pending: { name: string; value: string; options?: Record<string, unknown> }[] = [];
 
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -43,22 +53,48 @@ export async function proxy(request: NextRequest) {
           return request.cookies.getAll();
         },
         setAll(cookiesToSet) {
-          cookiesToSet.forEach(({ name, value }) =>
-            request.cookies.set(name, value)
-          );
-          supabaseResponse = NextResponse.next({ request: { headers: withTrace(request) } });
-          cookiesToSet.forEach(({ name, value, options }) =>
-            supabaseResponse.cookies.set(name, value, options)
-          );
+          cookiesToSet.forEach(({ name, value, options }) => {
+            request.cookies.set(name, value);
+            pending.push({ name, value, options: options as Record<string, unknown> | undefined });
+          });
         },
       },
     }
   );
 
   // Refresh session so it doesn't expire while the user is active
-  await supabase.auth.getUser();
+  const { data: { user } } = await supabase.auth.getUser();
 
-  return supabaseResponse;
+  // ── THE PRACTICE DEVICE REGISTER (COMP-SECURITY-SURVEY-001 s0.2) ──────────────────────────────────
+  //
+  // ⚠ THIS IS THE ONLY PLACE IN THE APPLICATION THAT CAN PLANT THIS COOKIE, and its absence is why the
+  // register was broken. `src/lib/practice/shell.ts` tried `cookies().set` inside a Server Component,
+  // where that call ALWAYS throws, and fell back to a fresh `crypto.randomUUID()` on every request. Its
+  // comment claimed "the cookie is planted by the API the client calls"; no such API existed anywhere.
+  // The result was 13,114 `practice_session` rows for 8 memberships, a "sign out this device" button
+  // that marked a row nothing would ever present again, and an idle timeout that could never fire.
+  //
+  // ⚠ AND FIXING IT STARTS TWO CONTROLS THAT HAVE NEVER RUN. A device that persists is a device that can
+  // be locked out, and a device that persists is a device that can be found to have been idle. Both are
+  // dormant on day one -- the one live security policy carries `session_idle_minutes: null` -- but they
+  // are no longer dead code, and `touchSession` was changed in the same pass so that an idle lock-out
+  // clears itself when the person signs in again rather than banning their browser for ever.
+  //
+  // Setting it on `request` as well as on the response is what makes it usable by the render that
+  // follows in this very request, rather than only by the next one.
+  if (needsDeviceCookie({
+    signedIn: !!user,
+    pathname: request.nextUrl.pathname,
+    existing: request.cookies.get(DEVICE_COOKIE)?.value,
+  })) {
+    const deviceId = mintDeviceId();
+    request.cookies.set(DEVICE_COOKIE, deviceId);
+    pending.push({ name: DEVICE_COOKIE, value: deviceId, options: DEVICE_COOKIE_OPTIONS });
+  }
+
+  const response = NextResponse.next({ request: { headers: withTrace(request) } });
+  for (const c of pending) response.cookies.set(c.name, c.value, c.options);
+  return response;
 }
 
 export const config = {

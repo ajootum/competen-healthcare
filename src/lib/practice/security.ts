@@ -1,6 +1,7 @@
 import { audit } from "@/lib/practice/provisioning";
 import type { EngineResult } from "@/lib/practice/encounters";
 import { logAccess } from "@/lib/practice/privacy";
+import { AUTH_EVENT, authTrailSummary, recordAuthEvent } from "@/lib/practice/auth-audit";
 
 // CPR-370's five unbuilt capabilities: sessions, devices, consent, break-glass and the MFA policy.
 //
@@ -204,21 +205,103 @@ export function mfaGate(input: {
 // ── SESSIONS AND DEVICES ─────────────────────────────────────────────────────────────────────────────
 
 /**
+ * The reason string an idle lock-out writes, and the only one this module will ever undo.
+ *
+ * ⚠ IT IS HALF OF A DISCRIMINATOR, NOT A LABEL. A device locked out BY A PERSON must never be reinstated
+ * by anything other than a person; a device locked out by the clock may be, because re-authenticating is
+ * the correct answer to "you were away too long". The two are told apart by this reason AND by
+ * `revoked_by` being null -- two independent signals, because getting this wrong in one direction undoes
+ * the strongest device control in the product.
+ */
+export const IDLE_REVOKED_REASON = "Idle for longer than this practice allows";
+
+export type TouchOutcome = {
+  allowed: boolean;
+  reason?: "revoked" | "idle";
+  sessionId?: string;
+  /**
+   * ⚠ DID THE REGISTER ACTUALLY RUN? False means the read that would have found a lock-out did not
+   * happen, so `allowed: true` beside it is "not refused", never "checked and cleared".
+   */
+  checked: boolean;
+  /** A device seen here for the first time. */
+  created?: boolean;
+  /** An idle lock-out lifted because the person authenticated again since it was applied. */
+  resumed?: boolean;
+};
+
+/**
  * Record that this device is in use, and say whether it is still allowed.
  *
  * CALLED BY THE SHELL ON EVERY REQUEST, so it must be cheap and must never throw: a failure here would
  * lock somebody out of a clinical record because a bookkeeping write failed. It returns `allowed` and
- * the shell decides; on any error it returns allowed, deliberately.
+ * the shell decides; on any error it returns allowed, deliberately -- but it now also returns `checked`,
+ * so a caller can tell "this device is fine" from "nothing could be established about this device".
+ *
+ * ⚠ THIS FUNCTION HAS BEEN DEAD IN PRACTICE UNTIL NOW. Until `src/proxy.ts` began planting the device
+ * cookie, `deviceId` was a fresh UUID on every request, so `existing` was never found: no lock-out was
+ * ever enforced and the idle rule below could never fire. Both start working with the cookie fix, which
+ * is why the idle branch gained a way back.
  */
 export async function touchSession(admin: any, args: {
   workspaceId: string; userId: string; deviceId: string; userAgent?: string | null;
-}): Promise<{ allowed: boolean; reason?: "revoked" | "idle"; sessionId?: string }> {
+  /** GoTrue's `last_sign_in_at`. Without it an idle lock-out cannot be told from a stale one. */
+  authSignInAt?: string | null;
+  correlationId?: string | null;
+}): Promise<TouchOutcome> {
   try {
-    const { data: existing } = await admin.from("practice_session")
-      .select("id, revoked_at, last_seen_at").eq("workspace_id", args.workspaceId)
+    const { data: existing, error: readError } = await admin.from("practice_session")
+      .select("id, revoked_at, revoked_by, revoked_reason, last_seen_at").eq("workspace_id", args.workspaceId)
       .eq("user_id", args.userId).eq("device_id", args.deviceId).maybeSingle();
 
-    if (existing?.revoked_at) return { allowed: false, reason: "revoked", sessionId: existing.id };
+    // ⚠ A FAILED READ IS NOT AN UNKNOWN DEVICE. Falling through would insert a second row for a device
+    // that already has one, and -- far worse -- would step straight past a `revoked_at` it never saw.
+    // The request is still allowed, for the reason in the header, but it is allowed UNCHECKED and says so.
+    if (readError) return { allowed: true, checked: false };
+
+    if (existing?.revoked_at) {
+      const lockedOutByTheClock =
+        existing.revoked_by === null && existing.revoked_reason === IDLE_REVOKED_REASON;
+      const authenticatedSince =
+        !!args.authSignInAt && Date.parse(args.authSignInAt) > Date.parse(existing.revoked_at);
+
+      // ⚠ THE WAY BACK FROM AN IDLE LOCK-OUT, AND WHY IT HAS TO EXIST.
+      //
+      // With a stable device cookie, an idle lock-out marks the browser for ever: the same device id is
+      // presented on every later visit, the row is still revoked, and the person is refused permanently
+      // with no control anywhere in this product that reverses it. That is a hard lockout produced by a
+      // timer, which is not what an idle policy means. Signing in again is the answer to having been
+      // away, so a sign-in that happened AFTER the lock-out lifts it -- and only for a lock-out the
+      // clock applied, never one a person applied.
+      if (lockedOutByTheClock && authenticatedSince) {
+        const { data: resumed, error: resumeError } = await admin.from("practice_session").update({
+          revoked_at: null, revoked_by: null, revoked_reason: null, last_seen_at: nowIso(),
+          user_agent: args.userAgent ?? null,
+        }).eq("id", existing.id).eq("revoked_reason", IDLE_REVOKED_REASON).is("revoked_by", null).select("id");
+
+        // A resume whose write did not land leaves the row revoked, so the honest answer is still
+        // "refused" -- reporting entry on a write that failed is the exact error this arc is closing.
+        if (resumeError || ((resumed ?? []) as any[]).length !== 1)
+          return { allowed: false, reason: "idle", sessionId: existing.id, checked: true };
+
+        await recordAuthEvent(admin, {
+          workspaceId: args.workspaceId, actorId: args.userId, eventType: AUTH_EVENT.IDLE_SESSION_RESUMED,
+          dedupeKey: `${existing.id}:${args.authSignInAt}`,
+          payload: { sessionId: existing.id, lockedOutAt: existing.revoked_at, authSignInAt: args.authSignInAt },
+          correlationId: args.correlationId ?? null,
+        });
+        return { allowed: true, sessionId: existing.id, checked: true, resumed: true };
+      }
+
+      // ⚠ THE REASON HAS TO SURVIVE THE SECOND VISIT. A device still locked out by the clock must keep
+      // saying "idle", because that is the screen carrying the way back; reporting it as "revoked" on
+      // every visit after the first would tell somebody a colleague had locked them out and leave them
+      // asking the wrong person to undo something nobody did.
+      return {
+        allowed: false, reason: lockedOutByTheClock ? "idle" : "revoked",
+        sessionId: existing.id, checked: true,
+      };
+    }
 
     const policy = await getSecurityPolicy(admin, args.workspaceId);
     // An unreadable policy carries `session_idle_minutes: null`, so no idle rule is applied from a read
@@ -228,61 +311,120 @@ export async function touchSession(admin: any, args: {
       const idleMs = Date.now() - Date.parse(existing.last_seen_at);
       if (idleMs > policy.session_idle_minutes * 60_000) {
         // Idle-out REVOKES the row rather than merely refusing, so the person sees it on their device
-        // list afterwards as something that happened rather than a silent nothing.
-        await admin.from("practice_session").update({
-          revoked_at: nowIso(), revoked_reason: "Idle for longer than this practice allows",
-        }).eq("id", existing.id);
-        return { allowed: false, reason: "idle", sessionId: existing.id };
+        // list afterwards as something that happened rather than a silent nothing. `revoked_by` is left
+        // null on purpose: that null is what marks this as the clock's doing and makes it reversible.
+        const { error: idleError } = await admin.from("practice_session").update({
+          revoked_at: nowIso(), revoked_by: null, revoked_reason: IDLE_REVOKED_REASON,
+        }).eq("id", existing.id).is("revoked_at", null);
+        // The refusal stands either way -- the device WAS idle, and that is a fact about the clock rather
+        // than about the write. What a failed write changes is whether the person can see why on their
+        // device list, so it is recorded as an event even when the row could not be marked.
+        await recordAuthEvent(admin, {
+          workspaceId: args.workspaceId, actorId: args.userId, eventType: AUTH_EVENT.IDLE_TIMEOUT,
+          dedupeKey: `${existing.id}:${existing.last_seen_at}`,
+          payload: {
+            sessionId: existing.id, idleMinutes: Math.round(idleMs / 60_000),
+            allowedMinutes: policy.session_idle_minutes, lastSeenAt: existing.last_seen_at,
+            deviceMarked: !idleError,
+          },
+          correlationId: args.correlationId ?? null,
+        });
+        return { allowed: false, reason: "idle", sessionId: existing.id, checked: true };
       }
     }
 
     if (existing) {
       await admin.from("practice_session")
         .update({ last_seen_at: nowIso(), user_agent: args.userAgent ?? null }).eq("id", existing.id);
-      return { allowed: true, sessionId: existing.id };
+      return { allowed: true, sessionId: existing.id, checked: true };
     }
 
     // Upsert on the full unique index (213 s1) -- three columns, complete, not partial.
-    const { data: created } = await admin.from("practice_session").upsert({
+    const { data: created, error: createError } = await admin.from("practice_session").upsert({
       workspace_id: args.workspaceId, user_id: args.userId, device_id: args.deviceId,
       user_agent: args.userAgent ?? null, last_seen_at: nowIso(),
     }, { onConflict: "workspace_id,user_id,device_id" }).select("id").maybeSingle();
-    return { allowed: true, sessionId: created?.id };
+
+    // ⚠ NEVER DISCARD AN UPSERT'S ERROR (this repo has lost two writes that way). A device that could not
+    // be registered is a device that is not in the register, and the caller is told so rather than being
+    // handed a `sessionId: undefined` that reads like a success with a missing field.
+    if (createError || !created?.id) return { allowed: true, checked: false };
+
+    await recordAuthEvent(admin, {
+      workspaceId: args.workspaceId, actorId: args.userId, eventType: AUTH_EVENT.DEVICE_REGISTERED,
+      dedupeKey: created.id,
+      payload: { sessionId: created.id, userAgent: args.userAgent ?? null },
+      correlationId: args.correlationId ?? null,
+    });
+    return { allowed: true, sessionId: created.id, checked: true, created: true };
   } catch {
-    // See the note above: bookkeeping must not lock anybody out of a clinical record.
-    return { allowed: true };
+    // See the note above: bookkeeping must not lock anybody out of a clinical record. `checked: false`
+    // is the whole difference between that decision and a silent pass.
+    return { allowed: true, checked: false };
   }
 }
 
-export async function listSessions(admin: any, workspaceId: string, opts: { userId?: string } = {}) {
+export type SessionList = {
+  /** ⚠ WAS THE DEVICE TABLE READ? False means `sessions` is empty because nothing could be read. */
+  readable: boolean;
+  sessions: any[];
+  /** Whether the names beside the devices came back. False renders as unknown, never as "unnamed". */
+  namesReadable: boolean;
+  truncated: boolean;
+};
+
+/**
+ * The devices signed in to this practice.
+ *
+ * ⚠ THIS USED TO RETURN A BARE ARRAY AND `data ?? []` WITH IT, so a failed read rendered as "no devices"
+ * -- on the panel whose job is to show every device that can reach patient records, and from which
+ * `securityPosture` derived "0 devices signed in". A practice looking at that would conclude nothing was
+ * connected. The read state now travels with the list.
+ */
+export async function listSessions(admin: any, workspaceId: string, opts: { userId?: string } = {}): Promise<SessionList> {
+  const limit = 100;
   let q = admin.from("practice_session")
     .select("id, user_id, device_id, device_label, user_agent, trusted, first_seen_at, last_seen_at, revoked_at, revoked_reason")
     .eq("workspace_id", workspaceId);
   if (opts.userId) q = q.eq("user_id", opts.userId);
 
-  const { data } = await q.order("last_seen_at", { ascending: false }).limit(100);
-  const rows = (data ?? []) as any[];
-  if (rows.length === 0) return [];
+  const { data, error } = await q.order("last_seen_at", { ascending: false }).limit(limit);
+  if (error) return { readable: false, sessions: [], namesReadable: false, truncated: false };
 
-  const { data: profiles } = await admin.from("profiles")
+  const rows = (data ?? []) as any[];
+  if (rows.length === 0) return { readable: true, sessions: [], namesReadable: true, truncated: false };
+
+  const { data: profiles, error: profileError } = await admin.from("profiles")
     .select("id, full_name").in("id", [...new Set(rows.map(r => r.user_id))]);
   const nameOf = new Map(((profiles ?? []) as any[]).map(p => [p.id, p.full_name]));
 
-  return rows.map(r => ({
-    ...r,
-    name: nameOf.get(r.user_id) ?? null,
-    // The device id is never returned: it is the cookie value, and a list that showed it would be a
-    // list of credentials.
-    device_id: undefined,
-    live: !r.revoked_at,
-  }));
+  return {
+    readable: true,
+    namesReadable: !profileError,
+    truncated: rows.length === limit,
+    sessions: rows.map(r => ({
+      ...r,
+      name: nameOf.get(r.user_id) ?? null,
+      // The device id is never returned: it is the cookie value, and a list that showed it would be a
+      // list of credentials.
+      device_id: undefined,
+      live: !r.revoked_at,
+    })),
+  };
 }
 
 export async function revokeSession(admin: any, args: {
   workspaceId: string; sessionId: string; reason?: string; actorId: string; correlationId: string;
 }): Promise<EngineResult<{ revoked: true; endsPlatformSession: false }>> {
-  const { data: s } = await admin.from("practice_session")
+  const { data: s, error: lookupError } = await admin.from("practice_session")
     .select("id, user_id, revoked_at").eq("id", args.sessionId).eq("workspace_id", args.workspaceId).maybeSingle();
+  // A FAILED LOOKUP IS NOT A MISSING DEVICE. "Not found" would tell somebody hunting a lost laptop that
+  // the device they can see on the list above does not exist, and they would stop looking for it.
+  if (lookupError)
+    return {
+      ok: false, status: 503, code: "LOOKUP_FAILED",
+      message: `that device could not be looked up just now (${lookupError.message}), so nothing was changed. It is still allowed in -- try again.`,
+    };
   if (!s) return { ok: false, status: 404, code: "NOT_FOUND", message: "Not found" };
   if (s.revoked_at) return { ok: false, status: 422, code: "ALREADY_REVOKED", message: "that device is already locked out" };
 
@@ -332,8 +474,13 @@ export async function setDeviceTrusted(admin: any, args: {
   workspaceId: string; sessionId: string; trusted: boolean; label?: string;
   actorId: string; correlationId: string;
 }): Promise<EngineResult<{ trusted: boolean }>> {
-  const { data: s } = await admin.from("practice_session")
+  const { data: s, error: lookupError } = await admin.from("practice_session")
     .select("id, user_id, revoked_at").eq("id", args.sessionId).eq("workspace_id", args.workspaceId).maybeSingle();
+  if (lookupError)
+    return {
+      ok: false, status: 503, code: "LOOKUP_FAILED",
+      message: `that device could not be looked up just now (${lookupError.message}), so nothing was changed. Try again.`,
+    };
   if (!s) return { ok: false, status: 404, code: "NOT_FOUND", message: "Not found" };
   // Trusting a device somebody has already locked out is a contradiction, and allowing it would leave a
   // revoked-but-trusted row that reads two ways.
@@ -406,14 +553,46 @@ export async function withdrawConsent(admin: any, args: {
   if (!reason)
     return { ok: false, status: 400, code: "REASON_REQUIRED", message: "say why this consent is being withdrawn" };
 
-  const { data: c } = await admin.from("practice_consent")
+  const { data: c, error: lookupError } = await admin.from("practice_consent")
     .select("id, patient_id, consent_type, withdrawn_at").eq("id", args.consentId).eq("workspace_id", args.workspaceId).maybeSingle();
+  if (lookupError)
+    return {
+      ok: false, status: 503, code: "LOOKUP_FAILED",
+      message: `that consent could not be looked up just now (${lookupError.message}), so nothing was changed. It still stands -- try again.`,
+    };
   if (!c) return { ok: false, status: 404, code: "NOT_FOUND", message: "Not found" };
   if (c.withdrawn_at) return { ok: false, status: 422, code: "ALREADY_WITHDRAWN", message: "that consent was already withdrawn" };
 
-  await admin.from("practice_consent").update({
+  // ⚠ THE WRITE IS CHECKED, AND CONDITIONAL ON THE CONSENT STILL STANDING.
+  //
+  // This used to discard the error and then audit the withdrawal and return `{ withdrawn: true }`
+  // regardless. A patient asks a practice to stop sharing their record, somebody records it, the write
+  // fails, and the screen says it is done -- while the consent is still live and the practice carries on
+  // doing the thing it was told to stop. `.is("withdrawn_at", null)` makes it a compare-and-set, so a
+  // consent withdrawn between the read and the write cannot have a second reason written over the first.
+  const { data: updated, error: withdrawError } = await admin.from("practice_consent").update({
     withdrawn_at: nowIso(), withdrawn_by: args.actorId, withdrawal_reason: reason,
-  }).eq("id", c.id);
+  }).eq("id", c.id).is("withdrawn_at", null).select("id");
+
+  if (withdrawError)
+    return {
+      ok: false, status: 500, code: "WITHDRAW_FAILED",
+      message: `that consent could not be withdrawn (${withdrawError.message}). It still stands -- try again.`,
+    };
+
+  if (((updated ?? []) as any[]).length !== 1) {
+    // Nought rows changed. Either somebody else withdrew it in the meantime -- in which case it IS
+    // withdrawn and reporting a failure would be its own lie -- or the write did not land. Read it back
+    // and report whichever it actually was.
+    const { data: after } = await admin.from("practice_consent")
+      .select("withdrawn_at").eq("id", c.id).maybeSingle();
+    if (after?.withdrawn_at)
+      return { ok: false, status: 422, code: "ALREADY_WITHDRAWN", message: "that consent was already withdrawn" };
+    return {
+      ok: false, status: 500, code: "WITHDRAW_FAILED",
+      message: "that consent could not be withdrawn; nothing changed. It still stands -- try again.",
+    };
+  }
 
   await audit(admin, {
     workspaceId: args.workspaceId, actorId: args.actorId, eventType: "practice.consent_withdrawn",
@@ -428,15 +607,22 @@ export async function withdrawConsent(admin: any, args: {
  *
  * There is no `expired` column and no job that sets one -- expiry is a fact about the calendar, so it is
  * computed at read time. The same rule CPR-140 applies to overdue, for the same reason.
+ *
+ * ⚠ `readable` TRAVELS WITH THE LIST. An empty consent list means "this patient has consented to
+ * nothing", which is a clinically loaded statement: it is the answer somebody checks before sharing a
+ * record. Returning it for a read that failed would be the worst kind of false negative here.
  */
-export async function patientConsents(admin: any, workspaceId: string, patientId: string, today?: string) {
+export async function patientConsents(admin: any, workspaceId: string, patientId: string, today?: string): Promise<{
+  readable: boolean; consents: any[];
+}> {
   const on = today ?? new Date().toISOString().slice(0, 10);
-  const { data } = await admin.from("practice_consent")
+  const { data, error } = await admin.from("practice_consent")
     .select("id, consent_type, scope, granted_on, expires_on, withdrawn_at, withdrawal_reason, evidence, created_at")
     .eq("workspace_id", workspaceId).eq("patient_id", patientId).order("granted_on", { ascending: false });
+  if (error) return { readable: false, consents: [] };
 
   const labelOf = Object.fromEntries(CONSENT_TYPES.map(([t, l]) => [t, l])) as Record<string, string>;
-  return ((data ?? []) as any[]).map(c => {
+  const consents = ((data ?? []) as any[]).map(c => {
     const expired = !c.withdrawn_at && !!c.expires_on && c.expires_on < on;
     const daysToExpiry = c.expires_on
       ? Math.round((Date.parse(`${c.expires_on}T00:00:00Z`) - Date.parse(`${on}T00:00:00Z`)) / 86400000)
@@ -451,17 +637,38 @@ export async function patientConsents(admin: any, workspaceId: string, patientId
       expiringSoon: !c.withdrawn_at && !expired && daysToExpiry !== null && daysToExpiry <= 30,
     };
   });
+  return { readable: true, consents };
 }
 
-/** The practice's consent position: counts, never a percentage. */
-export async function consentSummary(admin: any, workspaceId: string, today?: string) {
+export type ConsentSummary = {
+  /** ⚠ WERE THE CONSENTS READ? Every count beside this is null when it is false. */
+  readable: boolean;
+  active: number | null;
+  expiringSoon: number | null;
+  expired: number | null;
+  withdrawn: number | null;
+  truncated: boolean;
+};
+
+/**
+ * The practice's consent position: counts, never a percentage.
+ *
+ * ⚠ NULL, NOT NOUGHT, WHEN THE READ FAILED. "0 active consents" is a statement about a practice, and it
+ * is the statement a failed read used to produce: `data ?? []` turned a database fault into four
+ * confident zeroes on the security page. A practice that had recorded a hundred consents would have been
+ * shown none, with nothing anywhere saying why.
+ */
+export async function consentSummary(admin: any, workspaceId: string, today?: string): Promise<ConsentSummary> {
   const on = today ?? new Date().toISOString().slice(0, 10);
-  const { data } = await admin.from("practice_consent")
+  const { data, error } = await admin.from("practice_consent")
     .select("id, consent_type, expires_on, withdrawn_at").eq("workspace_id", workspaceId).limit(1000);
+  if (error)
+    return { readable: false, active: null, expiringSoon: null, expired: null, withdrawn: null, truncated: false };
   const rows = (data ?? []) as any[];
 
   const active = rows.filter(c => !c.withdrawn_at && (!c.expires_on || c.expires_on >= on));
   return {
+    readable: true,
     active: active.length,
     expiringSoon: active.filter(c => c.expires_on && Date.parse(`${c.expires_on}T00:00:00Z`) - Date.parse(`${on}T00:00:00Z`) <= 30 * 86400000).length,
     expired: rows.filter(c => !c.withdrawn_at && c.expires_on && c.expires_on < on).length,
@@ -536,8 +743,11 @@ export async function breakGlass(admin: any, args: {
 
   // The grants themselves, time-boxed and marked `break_glass` so the team page can never show them as
   // a delegation. Only what the person does not already hold.
-  const { data: held } = await admin.from("practice_role_assignment")
+  const { data: held, error: heldError } = await admin.from("practice_role_assignment")
     .select("capability_code, effective_to").eq("membership_id", membership.id);
+  // A failed read here cannot refuse the emergency -- somebody is standing over a patient. What it must
+  // not do is pass silently: with no answer the code grants the whole read set, which is correct but is a
+  // different act from granting only the gap, and the audit payload below says which of the two happened.
   const now = nowIso();
   const alreadyHas = new Set(((held ?? []) as any[])
     .filter(g => g.effective_to === null || g.effective_to > now).map(g => g.capability_code));
@@ -561,7 +771,10 @@ export async function breakGlass(admin: any, args: {
   // LOUD, THREE WAYS: the audit trail, the access log, and a standing unreviewed item. Never silent.
   await audit(admin, {
     workspaceId: args.workspaceId, actorId: args.userId, eventType: "practice.break_glass_taken",
-    payload: { breakGlassId: bg.id, reason, patientId: args.patientId ?? null, expiresAt, granted: toGrant },
+    payload: {
+      breakGlassId: bg.id, reason, patientId: args.patientId ?? null, expiresAt, granted: toGrant,
+      existingGrantsReadable: !heldError,
+    },
     correlationId: args.correlationId,
   });
   await logAccess(admin, {
@@ -577,15 +790,50 @@ export async function breakGlass(admin: any, args: {
 export async function endBreakGlass(admin: any, args: {
   workspaceId: string; breakGlassId: string; actorId: string; correlationId: string;
 }): Promise<EngineResult<{ ended: number }>> {
-  const { data: bg } = await admin.from("practice_break_glass")
+  const { data: bg, error: lookupError } = await admin.from("practice_break_glass")
     .select("id, user_id, ended_at").eq("id", args.breakGlassId).eq("workspace_id", args.workspaceId).maybeSingle();
+  if (lookupError)
+    return {
+      ok: false, status: 503, code: "LOOKUP_FAILED",
+      message: `that emergency access could not be looked up just now (${lookupError.message}), so nothing was changed. It is still open -- try again.`,
+    };
   if (!bg) return { ok: false, status: 404, code: "NOT_FOUND", message: "Not found" };
   if (bg.ended_at) return { ok: false, status: 422, code: "ALREADY_ENDED", message: "that emergency access has already ended" };
 
   const now = nowIso();
-  const { data: ended } = await admin.from("practice_role_assignment")
+
+  // ⚠ BOTH WRITES ARE CHECKED, AND THE GRANTS GO FIRST.
+  //
+  // This used to discard the error from both, then report `{ ended: n }` whatever happened. The dangerous
+  // half is the second one: marking the episode ended while the time-boxed capability grants were still
+  // live would take a live emergency access off the "live now" list and leave the access itself running,
+  // which is the one state the whole control exists to make impossible.
+  //
+  // The grants are withdrawn BEFORE the episode is marked ended, so a failure between the two leaves the
+  // episode open with its access already gone -- visible and harmless -- rather than closed with its
+  // access still granted.
+  const { data: ended, error: grantError } = await admin.from("practice_role_assignment")
     .update({ effective_to: now }).eq("break_glass_id", bg.id).gt("effective_to", now).select("id");
-  await admin.from("practice_break_glass").update({ ended_at: now }).eq("id", bg.id);
+  if (grantError)
+    return {
+      ok: false, status: 500, code: "END_FAILED",
+      message: `the emergency grants could not be withdrawn (${grantError.message}). That access is still open -- try again.`,
+    };
+
+  const { data: closed, error: closeError } = await admin.from("practice_break_glass")
+    .update({ ended_at: now }).eq("id", bg.id).is("ended_at", null).select("id");
+  if (closeError || ((closed ?? []) as any[]).length !== 1) {
+    const { data: after } = await admin.from("practice_break_glass")
+      .select("ended_at").eq("id", bg.id).maybeSingle();
+    if (after?.ended_at)
+      return { ok: false, status: 422, code: "ALREADY_ENDED", message: "that emergency access has already ended" };
+    return {
+      ok: false, status: 500, code: "END_FAILED",
+      message: closeError
+        ? `the emergency access could not be marked ended (${closeError.message}). Its grants have been withdrawn, but it still shows as open -- try again.`
+        : "the emergency access could not be marked ended; nothing changed on the episode. Its grants have been withdrawn, but it still shows as open -- try again.",
+    };
+  }
 
   await audit(admin, {
     workspaceId: args.workspaceId, actorId: args.actorId, eventType: "practice.break_glass_ended",
@@ -602,8 +850,13 @@ export async function reviewBreakGlass(admin: any, args: {
   if (!note)
     return { ok: false, status: 400, code: "NOTE_REQUIRED", message: "say what you found; a review with no words is a tick" };
 
-  const { data: bg } = await admin.from("practice_break_glass")
+  const { data: bg, error: lookupError } = await admin.from("practice_break_glass")
     .select("id, user_id, reviewed_at").eq("id", args.breakGlassId).eq("workspace_id", args.workspaceId).maybeSingle();
+  if (lookupError)
+    return {
+      ok: false, status: 503, code: "LOOKUP_FAILED",
+      message: `that emergency access could not be looked up just now (${lookupError.message}), so no review was recorded. It is still awaiting one -- try again.`,
+    };
   if (!bg) return { ok: false, status: 404, code: "NOT_FOUND", message: "Not found" };
   if (bg.reviewed_at) return { ok: false, status: 422, code: "ALREADY_REVIEWED", message: "that has already been reviewed" };
   // NOBODY REVIEWS THEIR OWN EMERGENCY ACCESS. A self-reviewed break-glass is a form somebody fills in
@@ -611,9 +864,32 @@ export async function reviewBreakGlass(admin: any, args: {
   if (bg.user_id === args.actorId)
     return { ok: false, status: 422, code: "SELF_REVIEW", message: "somebody else has to review your emergency access" };
 
-  await admin.from("practice_break_glass").update({
+  // ⚠ THE WRITE IS CHECKED, AND CONDITIONAL ON THE EPISODE STILL BEING UNREVIEWED.
+  //
+  // This used to discard the error and return `{ reviewed: true }`. The header of this file says an
+  // unreviewed episode never ages out because the list IS the control -- and a review that silently
+  // failed took the episode off that list in the reviewer's mind while leaving it on it in the database.
+  // The reviewer stops looking; nobody else knows they should start.
+  const { data: updated, error: reviewError } = await admin.from("practice_break_glass").update({
     reviewed_at: nowIso(), reviewed_by: args.actorId, review_note: note,
-  }).eq("id", bg.id);
+  }).eq("id", bg.id).is("reviewed_at", null).select("id");
+
+  if (reviewError)
+    return {
+      ok: false, status: 500, code: "REVIEW_FAILED",
+      message: `that review could not be recorded (${reviewError.message}). The episode is still awaiting review -- try again.`,
+    };
+
+  if (((updated ?? []) as any[]).length !== 1) {
+    const { data: after } = await admin.from("practice_break_glass")
+      .select("reviewed_at").eq("id", bg.id).maybeSingle();
+    if (after?.reviewed_at)
+      return { ok: false, status: 422, code: "ALREADY_REVIEWED", message: "that has already been reviewed" };
+    return {
+      ok: false, status: 500, code: "REVIEW_FAILED",
+      message: "that review could not be recorded; nothing changed. The episode is still awaiting review -- try again.",
+    };
+  }
 
   await audit(admin, {
     workspaceId: args.workspaceId, actorId: args.actorId, eventType: "practice.break_glass_reviewed",
@@ -627,17 +903,36 @@ export async function reviewBreakGlass(admin: any, args: {
  *
  * AN UNREVIEWED EPISODE NEVER AGES OUT. It is not archived, hidden after a fortnight or rolled into a
  * count -- the list is the control, and a control that quietly stops showing things is not one.
+ *
+ * ⚠ AND A FAILED READ IS NOT AN EMPTY LIST. `data ?? []` used to render a database fault as "None. That
+ * is the usual state." beside "0 awaiting review" -- on the panel whose entire subject is that somebody
+ * took access to a record they would not normally see. That is a control quietly stopping showing things,
+ * which the paragraph above says is not a control at all.
  */
-export async function breakGlassLog(admin: any, workspaceId: string, opts: { limit?: number } = {}) {
-  const { data } = await admin.from("practice_break_glass")
+export type BreakGlassLog = {
+  readable: boolean;
+  episodes: any[];
+  awaitingReview: number | null;
+  live: number | null;
+  namesReadable: boolean;
+  truncated: boolean;
+};
+
+export async function breakGlassLog(admin: any, workspaceId: string, opts: { limit?: number } = {}): Promise<BreakGlassLog> {
+  const limit = opts.limit ?? 100;
+  const { data, error } = await admin.from("practice_break_glass")
     .select("id, user_id, patient_id, reason, capabilities, started_at, expires_at, ended_at, reviewed_at, reviewed_by, review_note")
-    .eq("workspace_id", workspaceId).order("started_at", { ascending: false }).limit(opts.limit ?? 100);
+    .eq("workspace_id", workspaceId).order("started_at", { ascending: false }).limit(limit);
+
+  if (error)
+    return { readable: false, episodes: [], awaitingReview: null, live: null, namesReadable: false, truncated: false };
 
   const rows = (data ?? []) as any[];
-  if (rows.length === 0) return { episodes: [], awaitingReview: 0, live: 0 };
+  if (rows.length === 0)
+    return { readable: true, episodes: [], awaitingReview: 0, live: 0, namesReadable: true, truncated: false };
 
   const ids = [...new Set(rows.flatMap(r => [r.user_id, r.reviewed_by]).filter(Boolean))];
-  const { data: profiles } = await admin.from("profiles").select("id, full_name").in("id", ids);
+  const { data: profiles, error: profileError } = await admin.from("profiles").select("id, full_name").in("id", ids);
   const nameOf = new Map(((profiles ?? []) as any[]).map(p => [p.id, p.full_name]));
 
   const now = nowIso();
@@ -650,9 +945,14 @@ export async function breakGlassLog(admin: any, workspaceId: string, opts: { lim
   }));
 
   return {
+    readable: true,
     episodes,
     awaitingReview: episodes.filter(e => e.awaitingReview).length,
     live: episodes.filter(e => e.live).length,
+    // A name that could not be looked up must not render as "Unnamed member": that is a statement about
+    // a person, and it would be made about a named clinician on a failed join.
+    namesReadable: !profileError,
+    truncated: rows.length === limit,
   };
 }
 
@@ -671,30 +971,60 @@ export async function breakGlassLog(admin: any, workspaceId: string, opts: { lim
  * does not inspect. What is knowable is stated; the rest is named as not knowable from here.
  */
 export async function securityPosture(admin: any, workspaceId: string) {
-  const [policy, sessions, glass, consents] = await Promise.all([
+  const [policy, sessions, glass, consents, authEvents] = await Promise.all([
     getSecurityPolicy(admin, workspaceId),
     listSessions(admin, workspaceId),
     breakGlassLog(admin, workspaceId, { limit: 50 }),
     consentSummary(admin, workspaceId),
+    authTrailSummary(admin, workspaceId),
   ]);
 
-  const { count: accessEvents } = await admin.from("practice_access_log")
+  // ⚠ THE COUNT'S ERROR IS NOT DISCARDED, AND THIS ONE MATTERED MOST OF ALL.
+  //
+  // It used to read `const { count: accessEvents } = …` and then `accessEventsLast7Days: accessEvents ?? 0`,
+  // which the console renders as a large "0" above the words "record reads logged — in the last 7 days".
+  // On a failed count that sentence said, in the plainest terms available, that not one patient record had
+  // been read in a week -- on the page whose first guarantee is "Every read of a patient record is logged,
+  // including your own". A practice checking that its access log was working would have been shown proof
+  // that it was not, by a query that never ran.
+  //
+  // Note also that a null count is NOT by itself an error (this repo has been caught by that before), so
+  // the error is what is tested, and the count is passed through as null when it is absent.
+  //
+  // ⚠⚠ AND THE DISCARD WAS NOT HYPOTHETICAL. This query filtered on `created_at`, and
+  // `practice_access_log` HAS NO SUCH COLUMN -- its timestamp is `occurred_at` (migration 213). So the
+  // count errored on every single call, `?? 0` swallowed it, and the security page has been printing
+  // "0 — record reads logged — in the last 7 days" for every practice since the page shipped, over an
+  // access log that was filling up normally the whole time. The column is corrected here; the harness
+  // asserts a non-zero count against a working client, which is what would have caught this at the time.
+  const { count: accessEvents, error: accessError } = await admin.from("practice_access_log")
     .select("*", { count: "exact", head: true }).eq("workspace_id", workspaceId)
-    .gte("created_at", new Date(Date.now() - 7 * 86400000).toISOString());
+    .gte("occurred_at", new Date(Date.now() - 7 * 86400000).toISOString());
 
+  const live = sessions.sessions.filter((s: any) => s.live);
   return {
     policy,
     // ⚠ WHETHER THE POLICY ABOVE WAS READ AT ALL, as a field. Every number on this page is a fact about
     // the practice; the policy is the one block that has a placeholder shape when it cannot be read, and
     // a switch rendered from a placeholder would show "two-factor: off" for a practice that requires it.
     policyReadable: policy.readable === true,
-    // Counts, never a score and never a percentage.
-    liveSessions: sessions.filter((s: any) => s.live).length,
-    revokedSessions: sessions.filter((s: any) => !s.live).length,
-    trustedDevices: sessions.filter((s: any) => s.live && s.trusted).length,
-    accessEventsLast7Days: accessEvents ?? 0,
-    breakGlass: { live: glass.live, awaitingReview: glass.awaitingReview, total: glass.episodes.length },
+    // Counts, never a score and never a percentage -- and null rather than nought wherever the read that
+    // would have produced the number did not happen.
+    sessionsReadable: sessions.readable,
+    liveSessions: sessions.readable ? live.length : null,
+    revokedSessions: sessions.readable ? sessions.sessions.length - live.length : null,
+    trustedDevices: sessions.readable ? live.filter((s: any) => s.trusted).length : null,
+    accessLogReadable: !accessError,
+    accessEventsLast7Days: accessError ? null : (accessEvents ?? 0),
+    breakGlassReadable: glass.readable,
+    breakGlass: {
+      live: glass.live, awaitingReview: glass.awaitingReview,
+      total: glass.readable ? glass.episodes.length : null,
+    },
     consents,
+    // THE AUTHENTICATION TRAIL, INCLUDING WHAT IT DOES NOT COVER. Both lists travel in the payload so no
+    // screen and no marketing page can describe this control as wider than it is.
+    authEvents,
     // What this product can and cannot say about itself, in the payload rather than as page furniture.
     guarantees: [
       "Every read of a patient record is logged, including your own.",
@@ -707,16 +1037,37 @@ export async function securityPosture(admin: any, workspaceId: string) {
       // second-factor level fell through to opening the practice.
       "Where this practice requires a second factor, a check that could not be completed refuses entry. A failed check is never counted as a passed one.",
       "This practice's security policy is either read or reported as unreadable. It is never assumed to be off.",
+      // Newly true. Until this release nothing in the product recorded that anybody had ever signed in.
+      "Every sign-in that opens this practice is recorded, once, in the audit trail — and a figure that could not be read is shown as unavailable rather than as nought.",
+      // Newly true, and the reason the device register works at all: see src/proxy.ts.
+      "Every device that reaches this practice is recorded, and the same browser is the same device on its next visit rather than a new one.",
     ],
     notKnowableFromHere: [
       "Encryption algorithm and key management — a property of the deployment, not of this application.",
       "Where the data physically resides.",
       "Whether the organisation holds any certification. This product asserts none.",
       "How long data must be kept — a legal question per jurisdiction, still unanswered.",
+      // ⚠ Named here rather than left to be assumed. A practice reading "every sign-in is recorded" would
+      // otherwise reasonably conclude that failures were counted somewhere, and they are not counted
+      // anywhere -- which is also why this product has no account lockout.
+      "How many times somebody tried and failed to sign in. Passwords are checked by the platform's authentication server, which this product does not sit in front of, so a failed attempt never reaches any code here.",
     ],
     // The places this product's reach ends, stated as fields so no client can imply otherwise.
     revocationEndsPlatformSession: false,
     mfaEnrolmentIsPlatformLevel: true,
+    // ⚠ THE IDLE RULE IS REAL FROM THIS RELEASE, AND WAS NOT BEFORE.
+    //
+    // It was written in migration 213 and enforced in touchSession, and it could never fire: the device
+    // cookie was re-minted on every request, so no device was ever seen twice and no idle interval could
+    // be measured. With the cookie planted by the proxy, a practice that sets a limit gets one. Stated as
+    // a field so the console can say it beside the setting rather than leaving somebody to discover it.
+    idleLimitMinutes: policy.readable ? (policy.session_idle_minutes ?? null) : null,
+    idleLimitEnforced: policy.readable && !!policy.session_idle_minutes,
+    // And the way back, because an idle lock-out with no way back is a permanent ban applied by a timer.
+    idleLockOutClearedBySigningInAgain: true,
+    // Failed sign-ins are not counted anywhere, so there is nothing to lock an account on.
+    accountLockoutBuiltHere: false,
+    failedSignInAttemptsVisibleHere: false,
     // ⚠ AND THERE IS NO ENROLMENT PAGE IN THIS PRODUCT AT ALL. Requiring a second factor is a switch on
     // this page; enrolling in one is not, anywhere. A member who does not already hold a verified factor
     // on their Competen account cannot obtain one from here, and turning the requirement on shuts them

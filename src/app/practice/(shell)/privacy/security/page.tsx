@@ -35,11 +35,19 @@ export default async function SecurityPage() {
   const canReview = hasCapability(ctx, "access.review");
   const admin = createAdminClient();
 
+  // ⚠ THE UNREAD BRANCH AND THE UNREADABLE BRANCH ARE NOT THE SAME SHAPE, on purpose. A caller without
+  // `access.review` is not shown the emergency-access list, and that is a permission rather than a
+  // failure -- so it is marked `readable: true` with nothing in it. A read that FAILED arrives with
+  // `readable: false` from the engine and the console says so. Collapsing the two would let a database
+  // fault present itself as "you are not allowed to see this", which sends somebody to ask the wrong
+  // person the wrong question.
   const [posture, sessions, glass] = await Promise.all([
     canManage ? securityPosture(admin, ctx.workspaceId) : Promise.resolve(null),
     // Everybody sees their OWN devices; the whole practice's is administration.
     listSessions(admin, ctx.workspaceId, canManage ? {} : { userId: ctx.userId }),
-    canReview ? breakGlassLog(admin, ctx.workspaceId) : Promise.resolve({ episodes: [], awaitingReview: 0, live: 0 }),
+    canReview
+      ? breakGlassLog(admin, ctx.workspaceId)
+      : Promise.resolve({ readable: true, episodes: [], awaitingReview: 0, live: 0, namesReadable: true, truncated: false }),
   ]);
 
   return (
@@ -60,7 +68,9 @@ export default async function SecurityPage() {
 
       <SecurityConsole
         posture={posture}
-        sessions={sessions}
+        sessions={sessions.sessions}
+        sessionsReadable={sessions.readable}
+        sessionNamesReadable={sessions.namesReadable}
         glass={glass}
         canManage={canManage}
         canReview={canReview}

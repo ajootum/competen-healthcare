@@ -5,6 +5,7 @@ import { createAdminClient } from "@/lib/supabase/server";
 import { resolveLifecycleActor } from "@/lib/practice/lifecycle";
 import { CAP_RESTORE } from "@/lib/practice/lifecycle-constants";
 import RestorePracticePanel from "./RestorePracticePanel";
+import IdleReSignIn from "./IdleReSignIn";
 
 // /practice/access-status (IAM-001 s7.1, SHELL-001 s13): a member of a restricted workspace sees WHAT
 // KIND of restriction stands and what they may do -- a status page, not a broken dashboard. Reason
@@ -28,9 +29,19 @@ const REASONS: Record<string, { title: string; body: string }> = {
     title: "This device has been locked out of the Practice",
     body: "Somebody in this practice revoked access for this device. You are still signed in to Competen elsewhere — this is a Practice lockout, not a sign-out. Signing in from a device that has not been revoked will work as usual.",
   },
+  // ⚠ THIS SENTENCE BECAME LOAD-BEARING WHEN THE DEVICE REGISTER STARTED WORKING.
+  //
+  // It always said "Sign in again to carry on", and until now that was harmless advice about a control
+  // that could never fire. With a stable device cookie the idle rule is real, and the lock-out it applies
+  // is on a browser that will present the same identifier for ever -- so if signing in again did not
+  // clear it, this screen would be a permanent wall with no route past it. touchSession now lifts an
+  // idle lock-out (and ONLY an idle one) when the person has authenticated since it was applied, so the
+  // instruction is true. The button below exists because there is nothing else on this page that gets
+  // somebody to a sign-in form, and an instruction with no control behind it is the thing this product
+  // has already been caught doing once, on the MFA screen above.
   idle: {
     title: "This device was idle for too long",
-    body: "This practice sets a limit on how long a device may sit unused before it has to sign in again. Nothing is wrong with your account. Sign in again to carry on.",
+    body: "This practice sets a limit on how long a device may sit unused before it has to sign in again. Nothing is wrong with your account, nothing has been deleted, and no other device is affected. Sign out and sign in again on this device to carry on — that clears it.",
   },
   // ⚠ THIS USED TO SAY "add an authenticator to your account and then come back". There is no page in
   // this product that adds one -- `auth.mfa.` appears in exactly one file, the shell's check -- so the
@@ -113,6 +124,9 @@ export default async function Page() {
           <RestorePracticePanel workspaceId={restorable.workspaceId}
             workspaceName={restorable.workspaceName} status={restorable.status} />
         )}
+        {/* The escape from an idle lock-out, on the screen that describes it. Signing out and back in is
+            what clears it, and this is the only page the person can reach. */}
+        {key === "idle" && <IdleReSignIn />}
         {/* The retry belongs to the one state a retry can fix. The guards run again on arrival, so this
             is a real second attempt at the check rather than a button that reloads a verdict. */}
         {key === "SECURITY_CHECK_UNAVAILABLE" && (
