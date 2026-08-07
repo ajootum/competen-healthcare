@@ -85,6 +85,7 @@
 import {
   PARAMETER_CATEGORY_CODES, PARAMETER_DATA_TYPE_CODES, COLLECTION_RULE_CODES, RISK_CLASS_CODES,
 } from "../src/lib/practice/parameters-constants";
+import type { PlatformDefinitionSeed, PlatformPackSeed } from "../src/lib/practice/parameters";
 
 /**
  * One catalogue parameter, in the shape `practice_parameter_definition` actually has.
@@ -453,70 +454,29 @@ export const CATALOGUE_REFUSALS = [
 ] as const;
 
 // ────────────────────────────────────────────────────────────────────────────────────────────────────
-// ⚠ WHAT THE SHIPPED ENGINE CANNOT EXPRESS
+// ⚠ WHAT THE SHIPPED ENGINE STILL CANNOT EXPRESS -- AND WHAT IS NOW CLOSED
 //
-// These are not complaints about the catalogue. They are places where a field this catalogue authors
-// has no route into the database through the functions parameters.ts exports, so the value below would
-// be silently dropped by a seeder that used them. The harness asserts each one by pushing a real
-// definition through the real engine and reading back what survived -- so if any of these is fixed, the
-// corresponding assertion fails and this list gets shorter.
+// ⚠ THE BLOCKER IS CLOSED. `ensurePlatformCatalogue(admin, definitions, packs)` now exists in
+// parameters.ts and is what this catalogue is seeded through. It reads the platform tier, inserts only
+// the codes missing from it, NEVER upserts (both platform unique indexes are PARTIAL and cannot be
+// on-conflict targets), writes the version-1 snapshot in the same act, and never discards an error.
+// ensureCoreLibrary was not touched.
+//
+// ⚠ IT WRITES NO PRACTICE AUDIT ENTRY, DELIBERATELY. provisioning.audit is keyed on a workspace and
+// authoring the platform library is not a practice act; naming an arbitrary practice to satisfy the
+// column would put a false record in the one trail that must not carry one. The seeding script's output
+// is the record, which is why it lists every code it inserted.
+//
+// ⚠ FOUR THINGS THAT WERE LISTED HERE AS GAPS ARE NOT GAPS. presentation, source/owner, status and the
+// version-1 change note are all carried by the platform writer, and are all still refused by
+// createDefinition. That asymmetry is CORRECT and is recorded in PLATFORM_VS_PRACTICE below rather than
+// deleted -- a practice must not be able to author a row claiming CPR-CPL-001 as its source, or ship
+// one `active` without governance.
+//
+// What is left below needs a MIGRATION, not a function, which is why it is still open.
 // ────────────────────────────────────────────────────────────────────────────────────────────────────
 
 export const ENGINE_GAPS = [
-  {
-    key: "platform_scope",
-    label: "Nothing can author a PLATFORM row except the hard-coded core seed",
-    detail:
-      "THE BLOCKING ONE. migration 246 s1 and s3 make workspace_id nullable and NULL means platform -- "
-      + "LCP s4's top tier, the thing every practice reads and none owns. But createDefinition, "
-      + "createPack and setPackItem all write `workspace_id: ctx.workspaceId` unconditionally, and "
-      + "ensureCoreLibrary -- the only function in the codebase that writes workspace_id NULL -- takes no "
-      + "argument and inserts CORE_LIBRARY and nothing else. There is NO function that creates a platform "
-      + "PACK at all; the pack table has a platform tier and no writer for it. So a seeder built out of "
-      + "the shipped functions can only ever author this catalogue inside one tenant, which is not a "
-      + "catalogue: no other practice could see it, installPack would refuse it, and CPL s24's 'platform "
-      + "master' would be a row belonging to whichever practice happened to run the script.",
-    wouldRequire:
-      "One exported function in parameters.ts -- ensurePlatformCatalogue(admin, definitions, packs) -- "
-      + "shaped exactly like ensureCoreLibrary: read the existing platform codes, insert only what is "
-      + "missing (never upsert; ux_practice_param_def_platform_code is PARTIAL and cannot be an "
-      + "on-conflict target), write the version-1 snapshot in the same act, and never discard the insert "
-      + "error. Note that provisioning.audit takes a workspaceId, so a platform write has no practice "
-      + "audit trail to go in and that decision has to be made explicitly rather than by omission.",
-  },
-  {
-    key: "presentation",
-    label: "presentation, and therefore \"whether it trends\"",
-    detail:
-      "DefinitionInput has no `presentation` field. createDefinition writes `origin?.presentation ?? "
-      + "{ form: true, graph: true, table: true }`, so EVERY definition created through the engine is "
-      + "marked graphable -- including the twenty-six free-text parameters above, which must not be "
-      + "charted at all. migration 246 s8's own warning is that a chart over text that looks like "
-      + "numbers is how a transposed digit becomes a trend.",
-    wouldRequire: "A `presentation` field on DefinitionInput, passed through to the insert.",
-  },
-  {
-    key: "source_owner",
-    label: "source and owner attribution",
-    detail:
-      "createDefinition hard-codes `source` to `Custom parameter, {workspaceName}` and `owner` to the "
-      + "workspace name for anything that is not a clone. A governed catalogue parameter written through "
-      + "it would be attributed to whichever practice ran the seeder rather than to CPR-CPL-001 s3, "
-      + "which is the opposite of what CPL s22 ('preserving source attribution') and s24 ('identify "
-      + "which practice, pack and version caused a parameter to appear') ask for.",
-    wouldRequire: "Optional `source` and `owner` on DefinitionInput.",
-  },
-  {
-    key: "status_and_version_note",
-    label: "The initial status and the version-1 change note",
-    detail:
-      "createDefinition writes status `draft` always and change_note `Created.` always. So an `active` "
-      + "catalogue parameter cannot be authored in one act, and rule 3's caveat -- the sentence that is "
-      + "the only thing standing between an unscaled score and a column of meaningless integers -- has "
-      + "nowhere to be written. setDefinitionStatus can promote a draft afterwards WITH a note, but it "
-      + "filters on `workspace_id = ctx.workspaceId`, so it cannot touch a platform row either.",
-    wouldRequire: "Optional `status` and `changeNote` on DefinitionInput.",
-  },
   {
     key: "category",
     label: "A category for CPL s3's cross-cutting parameters",
@@ -538,13 +498,102 @@ export const ENGINE_GAPS = [
       + "`team` and stays there unless somebody notices. The catalogue records the flag above and the "
       + "database has nowhere to put it.",
     wouldRequire:
-      "A default_visibility column on practice_parameter_definition that setActivation reads when no "
-      + "explicit visibility is given.",
+      "A migration adding a default_visibility column to practice_parameter_definition, with the same "
+      + "two-value CHECK the activation column already carries, and setActivation reading it when no "
+      + "explicit visibility is given. ensurePlatformCatalogue would then carry the catalogue's "
+      + "`sensitive` flag onto the row like every other field it already carries.",
+  },
+] as const;
+
+// ────────────────────────────────────────────────────────────────────────────────────────────────────
+// ⚠ THE TWO WRITE PATHS, AND THE FOUR FIELDS THAT DELIBERATELY BEHAVE DIFFERENTLY
+//
+// ensurePlatformCatalogue authors the PLATFORM tier from a specification. createDefinition authors a
+// PRACTICE's own parameter from a form. They are not two ways to do one thing, and the four fields
+// below are exactly where that shows -- the platform writer carries what the seed states, and
+// createDefinition overrides it with the practice's own attribution.
+//
+// ⚠ THIS IS NOT A GAP AND MUST NOT BE "FIXED" BY ADDING THESE FIELDS TO DefinitionInput. If a practice
+// could set `source`, it could author a row claiming CPR-CPL-001 as its provenance -- CPL s24 asks the
+// system to "identify which practice, pack and version caused a parameter to appear", and a settable
+// source makes that unanswerable. If it could set `status: active`, it would bypass the draft step
+// where CPL s22's version governance and migration 246's licence gate are meant to bite.
+//
+// The harness asserts BOTH HALVES of each row below: that the platform writer carries the value, and
+// that the practice path still refuses it. One half alone passes against an engine that has collapsed
+// the two paths into one.
+// ────────────────────────────────────────────────────────────────────────────────────────────────────
+
+export const PLATFORM_VS_PRACTICE = [
+  {
+    field: "workspace_id",
+    platform: "NULL -- the tier every practice reads and none owns (migration 246 s1).",
+    practice: "ctx.workspaceId, unconditionally. A practice can never write a platform row.",
+  },
+  {
+    field: "presentation",
+    platform: "Carried from the seed, so 28 free-text parameters ship with graph:false.",
+    practice: "Forced to { form, graph, table } all true. A practice-defined text parameter is marked "
+      + "chartable, which migration 246 s8 warns is how a transposed digit becomes a trend.",
+  },
+  {
+    field: "source / owner",
+    platform: "Carried from the seed -- 'CPR-CPL-001 s3 Reusable General Parameters'.",
+    practice: "Forced to 'Custom parameter, {workspaceName}'. Correct: a practice's parameter is the "
+      + "practice's, and it may not claim a specification's authority.",
+  },
+  {
+    field: "status",
+    platform: "Carried from the seed. 33 ship active, the 4 unscaled scores ship draft.",
+    practice: "Forced to draft. Correct: a new practice parameter goes through governance before use.",
+  },
+  {
+    field: "version-1 change_note",
+    platform: "Carried from the seed, so rule 3's caveat travels with the unscaled scores.",
+    practice: "Always 'Created.'. setDefinitionStatus can add a real note on the next version.",
   },
 ] as const;
 
 /** Every parameter code this catalogue names, including the CORE one the Symptoms pack reuses. */
 export const CATALOGUE_CODES = CATALOGUE_DEFINITIONS.map(d => d.code);
+
+// ────────────────────────────────────────────────────────────────────────────────────────────────────
+// THE TWO MAPPERS ONTO THE ENGINE'S SEED TYPES
+//
+// ⚠ THEY ARE DELIBERATELY DUMB, AND THAT IS THE POINT. Every field is carried across unchanged and
+// nothing is defaulted, derived or dropped here -- because a mapper that quietly supplied a missing
+// unit or flipped a `graph` flag would be a second author of the catalogue, sitting between the file a
+// reviewer reads and the row that reaches the database. If a field is wrong it is wrong in
+// CATALOGUE_DEFINITIONS above, where it can be seen.
+//
+// The one thing they DO is turn the pack's `items: string[]` -- a list of codes, which is what a human
+// writes -- into the `{ code, position }` objects the engine takes, with position following array
+// order. That ordering is the order the parameters appear on a form.
+// ────────────────────────────────────────────────────────────────────────────────────────────────────
+
+export const toPlatformDefinitions = (): PlatformDefinitionSeed[] => CATALOGUE_DEFINITIONS.map(d => ({
+  code: d.code, display_name: d.display_name, short_name: d.short_name ?? null,
+  synonyms: d.synonyms ?? [], category: d.category, data_type: d.data_type,
+  canonical_unit: d.canonical_unit ?? null, permitted_units: d.permitted_units ?? [],
+  unit_conversions: d.unit_conversions ?? {},
+  value_precision: d.value_precision ?? null,
+  min_plausible: d.min_plausible ?? null, max_plausible: d.max_plausible ?? null,
+  default_collection_rule: d.default_collection_rule,
+  presentation: d.presentation,
+  risk_class: d.risk_class,
+  licence_required: d.licence_required === true,
+  licence_reference: d.licence_reference ?? null,
+  source: d.source, owner: d.owner, status: d.status,
+  version_note: d.version_note,
+}));
+
+export const toPlatformPacks = (): PlatformPackSeed[] => CATALOGUE_PACKS.map(p => ({
+  code: p.code, name: p.name, specialty: p.specialty, description: p.description,
+  // CPL s2: a pack is inactive until a practitioner selects it, so `published` here means "offered in
+  // the catalogue", NOT "switched on anywhere". No activation row is written by seeding.
+  status: "published",
+  items: p.items.map((code, position) => ({ code, position })),
+}));
 
 // ────────────────────────────────────────────────────────────────────────────────────────────────────
 // THE VALIDATOR

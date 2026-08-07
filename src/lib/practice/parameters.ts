@@ -322,6 +322,252 @@ export async function ensureCoreLibrary(admin: any): Promise<EngineResult<{ crea
 }
 
 // ────────────────────────────────────────────────────────────────────────────────────────────────────
+// CPR-CPL-001 -- THE PLATFORM CATALOGUE WRITER
+//
+// ⚠ WHY THIS EXISTS, AND WHY ensureCoreLibrary COULD NOT BE MADE TO DO IT.
+//
+// Migration 246 s1 and s3 build a PLATFORM tier -- `workspace_id IS NULL`, the library every practice
+// reads and none owns -- and until this function there was nothing that could write it except
+// ensureCoreLibrary, which takes no argument and inserts LCP s5's sixteen core parameters. For PACKS
+// there was no platform writer at all, which is why the Clinical Parameters page showed zero packs and
+// said so in words.
+//
+// The alternative was a seeding script built out of createDefinition and createPack. It does not work:
+// both write `workspace_id: ctx.workspaceId` unconditionally, so the whole CPL-001 catalogue would have
+// been authored INSIDE ONE TENANT -- invisible to every other practice, un-installable by anyone else,
+// and CPL s24's "platform master" would be a row belonging to whichever practice happened to run the
+// script.
+//
+// ⚠ ensureCoreLibrary IS NOT TOUCHED AND MUST NOT BE. Its sixteen definitions are seeded and live, and
+// practice-parameters-harness asserts its idempotency directly. This is a SECOND entry point beside it,
+// deliberately duplicating its four safety properties rather than refactoring both into a shared
+// helper -- a refactor would edit a function that is already correct and already in production, to no
+// benefit, on the file another engine reads for the weight.
+//
+// ⚠ THE FOUR PROPERTIES IT COPIES FROM ensureCoreLibrary, EACH FOR ITS OWN REASON:
+//
+//   1. READ-THEN-INSERT-MISSING, AND NEVER .upsert(). `ux_practice_param_def_platform_code` and
+//      `ux_practice_param_pack_platform_code` are both PARTIAL (`where workspace_id is null`). A partial
+//      index CANNOT be an `on conflict` target: an upsert naming it does not fire, it INSERTs a
+//      duplicate, and the error a fail-soft caller discards is the only sign anything went wrong. Two
+//      silent write failures in this codebase came from exactly that shape.
+//
+//   2. THE ERROR IS NEVER DISCARDED. A failed READ is not "already present" -- treating it as one would
+//      make this insert the whole catalogue a second time. A failed INSERT is not a no-op. Every branch
+//      below returns a fail() naming what could not be done, because a seed that half-worked and
+//      reported success is a library with holes in it that nobody will look for.
+//
+//   3. THE VERSION SNAPSHOT IS WRITTEN IN THE SAME ACT. LCP s3: "parameter definitions remain
+//      versioned"; CPL s22: "Version changes so that historical values retain their original
+//      definition." A definition that exists without the version describing it cannot answer what it
+//      looked like when a measurement was taken against it.
+//
+//   4. IDEMPOTENT. Running it twice creates nothing the second time, and the returned counts say so
+//      rather than reporting the same figure twice.
+//
+// ⚠ AND ONE PROPERTY IT DOES NOT HAVE: THERE IS NO PRACTICE AUDIT ENTRY. THIS IS DELIBERATE.
+//
+// provisioning.audit writes to practice_audit_event, which is keyed on a workspace. Authoring the
+// platform library is NOT a practice act -- it belongs to no tenant, and picking some arbitrary
+// workspace to satisfy the column would put a false record in the one place that must not carry one: a
+// practice's own trail would then show it creating parameters it never created. So nothing is audited
+// here, and this comment is the statement of what is not recorded rather than an omission somebody has
+// to discover.
+//
+// WHAT STANDS IN FOR IT TODAY: the seeding script's output. scripts/cpl-catalogue-seed.ts names every
+// code it inserted and every code it found already present, and the returned `createdDefinitions` /
+// `createdPacks` arrays below exist so that it can. A platform-level audit trail -- its own table, with
+// no workspace column -- is its own piece of work and is not smuggled in here.
+//
+// ⚠ NOTHING HERE ACTIVATES ANYTHING. CPL s2: "Each pack is inactive until selected by a practitioner."
+// s24 puts activation in the Patient Workspace. This function does not touch
+// practice_parameter_activation and installing a pack remains a separate, practice-scoped act.
+// ────────────────────────────────────────────────────────────────────────────────────────────────────
+
+/** A platform definition to seed. Mirrors the columns migration 246 s1 actually has. */
+export type PlatformDefinitionSeed = {
+  code: string; display_name: string; short_name?: string | null; synonyms?: string[];
+  category: string; data_type: string;
+  canonical_unit?: string | null; permitted_units?: string[]; unit_conversions?: Record<string, number>;
+  options?: { value: string; label: string; score?: number }[];
+  value_precision?: number | null; min_plausible?: number | null; max_plausible?: number | null;
+  applicability?: Record<string, unknown>;
+  default_collection_rule?: string;
+  /** LCP s6 Presentation. `graph` is whether the value trends -- false for free text (246 s8). */
+  presentation?: { form: boolean; graph: boolean; table: boolean };
+  formula?: string | null;
+  risk_class?: string; licence_required?: boolean; licence_reference?: string | null;
+  /** LCP s6 Governance. Cited to the section that specified it, not to the practice that ran the seed. */
+  source?: string; owner?: string; status?: string;
+  /** The version-1 change note. A version with no note is a change nobody can review (246 s2). */
+  version_note?: string;
+};
+
+/** A platform pack and its items. `items` name DEFINITION CODES, which may be core ones. */
+export type PlatformPackSeed = {
+  code: string; name: string; specialty?: string | null; description?: string | null;
+  status?: string;
+  items: { code: string; local_label?: string | null; collection_rule?: string | null; position?: number; enabled?: boolean }[];
+};
+
+export type PlatformCatalogueResult = {
+  definitionsCreated: number; definitionsExisting: number;
+  packsCreated: number; packsExisting: number;
+  itemsCreated: number; itemsExisting: number;
+  /** ⚠ THE RECORD, in place of an audit entry. See the header. */
+  createdDefinitions: string[]; createdPacks: string[];
+};
+
+/**
+ * Seed a catalogue of PLATFORM parameter definitions and packs. Idempotent; installs nothing.
+ *
+ * ⚠ A DEFINITION IS NEVER UPDATED HERE, ONLY CREATED. A code that already exists at the platform tier
+ * is left exactly as it is, even if the seed describes it differently. Rewriting a live definition in
+ * place is the "silent rewriting" LCP s3 forbids: it would change, retrospectively, the unit and the
+ * plausibility window that every historical measurement was recorded against. Changing a shipped
+ * definition is a versioned edit, not a re-seed.
+ */
+export async function ensurePlatformCatalogue(
+  admin: any,
+  definitions: PlatformDefinitionSeed[],
+  packs: PlatformPackSeed[] = [],
+): Promise<EngineResult<PlatformCatalogueResult>> {
+  // ── definitions ────────────────────────────────────────────────────────────────────────────────
+  const { data: existingDefs, error: defReadErr } = await admin.from("practice_parameter_definition")
+    .select("id, code").is("workspace_id", null);
+  // ⚠ PROPERTY 2. A failed read is not an empty library; proceeding would insert everything twice.
+  if (defReadErr) return fail(503, "LIBRARY_UNREADABLE", `the platform parameter library could not be read: ${defReadErr.message}`);
+
+  const defByCode = new Map<string, string>(((existingDefs ?? []) as { id: string; code: string }[]).map(r => [r.code, r.id]));
+  const missingDefs = definitions.filter(d => !defByCode.has(d.code));
+
+  const defRows = missingDefs.map(d => ({
+    workspace_id: null,
+    code: d.code, display_name: d.display_name, short_name: d.short_name ?? null,
+    synonyms: d.synonyms ?? [], category: d.category, data_type: d.data_type,
+    canonical_unit: d.canonical_unit ?? null, permitted_units: d.permitted_units ?? [],
+    unit_conversions: d.unit_conversions ?? {}, options: d.options ?? [],
+    value_precision: d.value_precision ?? null,
+    min_plausible: d.min_plausible ?? null, max_plausible: d.max_plausible ?? null,
+    applicability: d.applicability ?? {},
+    default_collection_rule: d.default_collection_rule ?? "on_request",
+    // ⚠ CARRIED FROM THE SEED, not forced. createDefinition writes { form, graph, table } all true for
+    // everything, which marks free text chartable -- and a chart over text that happens to look like
+    // numbers is how a transposed digit becomes a trend (246 s8).
+    presentation: d.presentation ?? { form: true, graph: true, table: true },
+    formula: d.formula ?? null,
+    risk_class: d.risk_class ?? "low",
+    // CPL s23: a definition classified `licensed` cannot claim it needs no licence. The DB says so too;
+    // deriving it here turns a constraint violation into a row that is simply correct.
+    licence_required: d.risk_class === "licensed" ? true : d.licence_required === true,
+    licence_reference: d.licence_reference ?? null,
+    source: d.source ?? "CPR-CPL-001", owner: d.owner ?? "Competen Practice platform",
+    version: 1,
+    effective_from: new Date().toISOString(),
+    status: d.status ?? "draft",
+  }));
+
+  let definitionsCreated = 0;
+  if (defRows.length > 0) {
+    // ⚠ PROPERTY 1. insert(), never upsert() -- the platform index is partial.
+    const { data: inserted, error: insErr } = await admin.from("practice_parameter_definition")
+      .insert(defRows).select("id, code");
+    if (insErr) return fail(500, "CATALOGUE_SEED_FAILED", `the platform catalogue could not be written: ${insErr.message}`);
+
+    const insertedRows = (inserted ?? []) as { id: string; code: string }[];
+    for (const r of insertedRows) defByCode.set(r.code, r.id);
+    definitionsCreated = insertedRows.length;
+
+    // ⚠ PROPERTY 3. The snapshot in the same act, carrying the seed's own note.
+    const versionRows = insertedRows.map(r => ({
+      definition_id: r.id, version: 1,
+      snapshot: defRows.find(x => x.code === r.code) ?? {},
+      change_note: definitions.find(d => d.code === r.code)?.version_note
+        ?? "Seeded from the CPR-CPL-001 platform catalogue.",
+    }));
+    const { error: vErr } = await admin.from("practice_parameter_definition_version").insert(versionRows);
+    if (vErr) return fail(500, "CATALOGUE_VERSION_FAILED", `the catalogue was written without versions: ${vErr.message}`);
+  }
+
+  // ── packs ──────────────────────────────────────────────────────────────────────────────────────
+  const { data: existingPacks, error: packReadErr } = await admin.from("practice_parameter_pack")
+    .select("id, code").is("workspace_id", null);
+  if (packReadErr) return fail(503, "PACKS_UNREADABLE", `the platform pack catalogue could not be read: ${packReadErr.message}`);
+
+  const packByCode = new Map<string, string>(((existingPacks ?? []) as { id: string; code: string }[]).map(r => [r.code, r.id]));
+  const missingPacks = packs.filter(p => !packByCode.has(p.code));
+
+  let packsCreated = 0;
+  if (missingPacks.length > 0) {
+    const packRows = missingPacks.map(p => ({
+      workspace_id: null,
+      code: p.code, name: p.name,
+      specialty: p.specialty ?? null, description: p.description ?? null,
+      status: p.status ?? "published", version: 1,
+    }));
+    const { data: inserted, error: pErr } = await admin.from("practice_parameter_pack")
+      .insert(packRows).select("id, code");
+    if (pErr) return fail(500, "PACK_SEED_FAILED", `the platform packs could not be written: ${pErr.message}`);
+    const insertedPacks = (inserted ?? []) as { id: string; code: string }[];
+    for (const r of insertedPacks) packByCode.set(r.code, r.id);
+    packsCreated = insertedPacks.length;
+  }
+
+  // ── pack items ─────────────────────────────────────────────────────────────────────────────────
+  //
+  // ⚠ AN ITEM NAMING A DEFINITION THAT DOES NOT EXIST IS AN ERROR, NOT A SKIP. A pack quietly missing
+  // half its parameters installs cleanly and gives a practitioner a form with holes in it.
+  const packIds = packs.map(p => packByCode.get(p.code)).filter((v): v is string => !!v);
+  let existingItems: { pack_id: string; definition_id: string }[] = [];
+  if (packIds.length > 0) {
+    const { data, error: iErr } = await admin.from("practice_parameter_pack_item")
+      .select("pack_id, definition_id").in("pack_id", packIds);
+    if (iErr) return fail(503, "PACK_ITEMS_UNREADABLE", `the platform pack items could not be read: ${iErr.message}`);
+    existingItems = (data ?? []) as { pack_id: string; definition_id: string }[];
+  }
+  const haveItem = new Set(existingItems.map(i => `${i.pack_id}:${i.definition_id}`));
+
+  const itemRows: Record<string, unknown>[] = [];
+  for (const p of packs) {
+    const packId = packByCode.get(p.code);
+    if (!packId) return fail(500, "PACK_MISSING", `the pack ${p.code} was neither found nor created`);
+    for (let i = 0; i < p.items.length; i++) {
+      const item = p.items[i];
+      const definitionId = defByCode.get(item.code);
+      if (!definitionId)
+        return fail(422, "UNKNOWN_PARAMETER", `pack ${p.code} names the parameter ${item.code}, which is not in the platform library`);
+      if (haveItem.has(`${packId}:${definitionId}`)) continue;
+      itemRows.push({
+        pack_id: packId, definition_id: definitionId,
+        local_label: item.local_label ?? null, collection_rule: item.collection_rule ?? null,
+        position: item.position ?? i, enabled: item.enabled !== false,
+      });
+    }
+  }
+
+  let itemsCreated = 0;
+  if (itemRows.length > 0) {
+    // (ux_practice_param_pack_item IS a plain unique index and would be a valid on-conflict target, but
+    // read-then-insert-missing is used here too so that every branch of this function has the same
+    // shape and the same idempotency argument.)
+    const { error: iErr } = await admin.from("practice_parameter_pack_item").insert(itemRows);
+    if (iErr) return fail(500, "PACK_ITEM_SEED_FAILED", `the platform pack items could not be written: ${iErr.message}`);
+    itemsCreated = itemRows.length;
+  }
+
+  return {
+    ok: true,
+    data: {
+      definitionsCreated, definitionsExisting: definitions.length - definitionsCreated,
+      packsCreated, packsExisting: packs.length - packsCreated,
+      itemsCreated, itemsExisting: haveItem.size,
+      createdDefinitions: missingDefs.map(d => d.code),
+      createdPacks: missingPacks.map(p => p.code),
+    },
+  };
+}
+
+// ────────────────────────────────────────────────────────────────────────────────────────────────────
 // UNITS -- LCP s12 "Canonical units and deterministic unit conversion"
 // ────────────────────────────────────────────────────────────────────────────────────────────────────
 

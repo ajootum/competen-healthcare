@@ -5,48 +5,42 @@
  *   npx --yes tsx scripts/cpl-catalogue-seed.ts --apply    # write
  *
  * ────────────────────────────────────────────────────────────────────────────────────────────────────
- * ⚠ --apply CURRENTLY REFUSES, AND THE REFUSAL IS THE POINT OF THIS FILE.
+ * ⚠ THIS SCRIPT'S OUTPUT IS THE ONLY RECORD THAT THE CATALOGUE WAS SEEDED. READ THAT SENTENCE TWICE.
  *
- * The catalogue belongs at LCP s4's top tier: `workspace_id IS NULL`, the platform library every
- * practice reads and none owns. migration 246 s1 and s3 build that tier -- two partial unique indexes,
- * a read filter of `workspace_id is null or workspace_id = $me`, a pack table with the same nullable
- * column. What migration 246 does NOT come with is a way to write it:
+ * ensurePlatformCatalogue writes NO practice audit entry, and its own header says why: authoring the
+ * platform library is not a practice act, provisioning.audit is keyed on a workspace, and naming some
+ * arbitrary practice to satisfy the column would put a false record in the one trail that must not
+ * carry one. That decision was taken deliberately -- and it means there is no `practice.parameter.*`
+ * event anywhere to reconstruct this run from.
  *
- *   createDefinition   writes workspace_id: ctx.workspaceId, unconditionally
- *   createPack         writes workspace_id: ctx.workspaceId, unconditionally
- *   setPackItem        refuses any pack whose workspace_id is not ctx.workspaceId, in as many words
- *   ensureCoreLibrary  writes workspace_id: null -- and takes no argument, and inserts CORE_LIBRARY
+ * So this script NAMES EVERY CODE IT INSERTED and every code it found already there. That listing is
+ * the record. If the output is not kept, nothing else in the system knows when these 37 definitions
+ * and 5 packs arrived or which run put them there. A platform-level audit trail -- its own table, with
+ * no workspace column -- is its own piece of work.
  *
- * ensureCoreLibrary is the ONLY platform writer in the codebase and it is hard-coded to LCP s5's
- * sixteen core parameters. For PACKS there is no platform writer at all: the table has the tier and
- * nothing fills it, which is exactly why the Clinical Parameters page shows zero packs today.
+ * ────────────────────────────────────────────────────────────────────────────────────────────────────
+ * ⚠ IDEMPOTENT, AND NOT BY CHECKING A FLAG. ensurePlatformCatalogue reads the platform tier, inserts
+ * only the codes missing from it, and NEVER upserts -- the platform unique indexes are PARTIAL and
+ * cannot be `on conflict` targets, which is the shape that produced two silent write failures here. A
+ * second run creates nothing and says `0 created` rather than reporting the same figure twice.
  *
- * So a seeder assembled out of the shipped functions can only author this catalogue INSIDE ONE
- * TENANT -- and a catalogue inside one tenant is not a catalogue. No second practice can see it,
- * installPack would refuse it to everyone else, and CPL s24's "platform master" would be a row owned by
- * whichever practice happened to run this script. Writing the platform rows directly from here instead
- * would put a second copy of the engine's insert rules in scripts/, which is the shape this codebase
- * has already been bitten by twice (the partial-index upsert trap, and unit tables that disagree).
- *
- * ⚠ THE FIX IS ONE FUNCTION AND IT BELONGS IN parameters.ts, NOT HERE. See ENGINE_GAPS.platform_scope
- * in cpl-catalogue.ts. When `ensurePlatformCatalogue` exists, applyPlatform() below becomes a call to
- * it and this refusal is deleted.
- *
- * ⚠ WHAT THIS SCRIPT DOES DO, and it is not nothing: it validates every catalogue row against the
- * engine's own vocabularies and migration 246's own constraints, reads the live platform library, and
- * reports the exact diff -- so the moment the writer exists, what it will write is already known and
- * already checked. It is idempotent by construction: it computes a diff, so running it twice reports
- * the same diff and a second run after a successful apply reports nothing to do.
+ * ⚠ AND IT NEVER UPDATES A DEFINITION THAT ALREADY EXISTS. Re-running this after editing the catalogue
+ * does NOT push the edit: rewriting a live definition in place would retrospectively change the unit
+ * and plausibility window every historical measurement was recorded against, which is the silent
+ * rewriting LCP s3 forbids. Changing a shipped definition is a versioned edit, not a re-seed.
  *
  * ⚠ AND IT INSTALLS NOTHING. Authoring the library and installing a pack into a practice are two acts
- * (CPL s2, s24). This script never touches practice_parameter_activation, and the harness asserts the
- * activation count is unchanged after the whole catalogue has been pushed through the real engine.
+ * (CPL s2 "inactive until selected by a practitioner", s24 "activation can be performed from the
+ * Patient Workspace"). Nothing here touches practice_parameter_activation, and both the dry run and the
+ * apply print the activation count so a reader can see it did not move.
  * ────────────────────────────────────────────────────────────────────────────────────────────────────
  */
 import { loadEnvConfig } from "@next/env";
 import { createClient } from "@supabase/supabase-js";
+import { ensurePlatformCatalogue } from "../src/lib/practice/parameters";
 import {
-  CATALOGUE_DEFINITIONS, CATALOGUE_PACKS, CATALOGUE_REFUSALS, ENGINE_GAPS, CODE_PATTERN, validate,
+  CATALOGUE_DEFINITIONS, CATALOGUE_PACKS, CATALOGUE_REFUSALS, CODE_PATTERN, validate,
+  toPlatformDefinitions, toPlatformPacks,
 } from "./cpl-catalogue";
 
 loadEnvConfig(process.cwd());
@@ -129,23 +123,53 @@ async function main() {
   console.log(`\n  ${CATALOGUE_REFUSALS.length} things this catalogue deliberately does not author:`);
   for (const r of CATALOGUE_REFUSALS) console.log(`    - ${r.label}`);
 
-  // ── 4. The refusal ──────────────────────────────────────────────────────────────────────────────
   if (!apply) {
-    console.log("\n  DRY RUN. Nothing was written. Pass --apply to see why that is currently refused.\n");
+    console.log("\n  DRY RUN. Nothing was written. Pass --apply to seed the platform library.\n");
     return;
   }
 
-  const blocker = ENGINE_GAPS.find(g => g.key === "platform_scope")!;
-  console.error(`\n  REFUSED -- ${blocker.label}\n`);
-  console.error(`  ${blocker.detail.replace(/(.{100}\S*)\s/g, "$1\n  ")}\n`);
-  console.error(`  WOULD REQUIRE\n  ${blocker.wouldRequire.replace(/(.{100}\S*)\s/g, "$1\n  ")}\n`);
-  console.error(`  ${ENGINE_GAPS.length - 1} further fields this catalogue authors have no route through the engine either:`);
-  for (const g of ENGINE_GAPS) if (g.key !== "platform_scope") console.error(`    - ${g.label}`);
-  console.error("\n  Nothing was written, and no parameter was activated in any practice.\n");
-  // ⚠ exitCode, NOT exit(). process.exit() tears the loop down while the Supabase client still holds
-  // open handles, and libuv aborts with an assertion AFTER the refusal has printed -- which makes a
-  // deliberate, well-explained refusal look like a crash.
-  process.exitCode = 1;
+  // ── 4. The write ────────────────────────────────────────────────────────────────────────────────
+  //
+  // ⚠ ONE CALL, INTO THE ENGINE. Every insert rule -- the partial-index avoidance, the version
+  // snapshot, the never-discarded error -- lives in ensurePlatformCatalogue and NOT here. A second copy
+  // of those rules in scripts/ is the shape this codebase has already been bitten by twice.
+  const result = await ensurePlatformCatalogue(admin, toPlatformDefinitions(), toPlatformPacks());
+  if (!result.ok) {
+    console.error(`\n  FAILED -- ${result.code}: ${result.message}`);
+    console.error("  Nothing further was attempted, and no parameter was activated in any practice.\n");
+    process.exitCode = 1;
+    return;
+  }
+
+  const r = result.data;
+  console.log("\n  WRITTEN.");
+  // ⚠ THE LISTING IS THE RECORD. There is no practice audit entry for a platform write -- see the
+  // header, and ensurePlatformCatalogue's own comment. If this output is not kept, nothing in the
+  // system can say which run created these rows.
+  console.log(`\n  definitions created (${r.definitionsCreated}):`);
+  for (const code of r.createdDefinitions) console.log(`    + ${code}`);
+  if (r.definitionsCreated === 0) console.log("    (none -- all 37 were already in the platform library)");
+  console.log(`\n  packs created (${r.packsCreated}):`);
+  for (const code of r.createdPacks) console.log(`    + ${code}`);
+  if (r.packsCreated === 0) console.log("    (none -- all 5 were already in the platform library)");
+  console.log(`\n  pack items created: ${r.itemsCreated}${r.itemsExisting ? ` (${r.itemsExisting} already present)` : ""}`);
+
+  // ── 5. Counts after, read back rather than inferred ─────────────────────────────────────────────
+  //
+  // ⚠ READ BACK, NOT COMPUTED FROM THE RETURN VALUE. "before + created" is what the code believes; this
+  // is what the database contains. They differ exactly when something went wrong quietly.
+  const [afterDefs, afterPacks, afterItems, afterActs] = await Promise.all([
+    admin.from("practice_parameter_definition").select("id").is("workspace_id", null),
+    admin.from("practice_parameter_pack").select("id").is("workspace_id", null),
+    admin.from("practice_parameter_pack_item").select("id"),
+    admin.from("practice_parameter_activation").select("id"),
+  ]);
+  const n = (x: { data: unknown[] | null; error: unknown }) => x.error ? "unreadable" : String((x.data ?? []).length);
+  console.log(`\n  AFTER   platform definitions ${n(afterDefs)} · platform packs ${n(afterPacks)} · pack items ${n(afterItems)} · activations ${n(afterActs)}`);
+
+  // ⚠ THE ACTIVATION COUNT IS PRINTED SO A READER CAN SEE IT DID NOT MOVE. CPL s2: a pack is inactive
+  // until a practitioner selects it. Seeding the library installs nothing into any practice.
+  console.log("  No parameter was activated in any practice. Installing a pack remains a practitioner's act (CPL s24).\n");
 }
 
 main().catch(e => { console.error(e); process.exit(1); });

@@ -31,7 +31,7 @@ import { createClient } from "@supabase/supabase-js";
 import { runProvisioning, type IndividualRequest } from "../src/lib/practice/provisioning";
 import { resolveWorkspaceContext, type WorkspaceContext } from "../src/lib/practice/access";
 import {
-  ensureCoreLibrary, createDefinition, createPack, setPackItem, CORE_LIBRARY,
+  ensureCoreLibrary, ensurePlatformCatalogue, createDefinition, createPack, setPackItem, CORE_LIBRARY,
 } from "../src/lib/practice/parameters";
 import {
   PARAMETER_CATEGORY_CODES, PARAMETER_DATA_TYPE_CODES, COLLECTION_RULE_CODES, RISK_CLASS_CODES,
@@ -41,6 +41,7 @@ import {
 // so importing anything from it would run it against the live database on load.
 import {
   CATALOGUE_DEFINITIONS, CATALOGUE_PACKS, CATALOGUE_REFUSALS, ENGINE_GAPS, CATALOGUE_CODES, validate,
+  PLATFORM_VS_PRACTICE, toPlatformDefinitions, toPlatformPacks,
   type CatalogueDefinition,
 } from "./cpl-catalogue";
 
@@ -344,52 +345,111 @@ async function main() {
   ok("8e. ⚠ authoring the entire catalogue created ZERO activations -- the library is seeded, nothing installed",
     !actErr && (acts ?? []).length === 0, actErr?.message ?? `${(acts ?? []).length} activations`);
 
-  // ══ 9. ⚠ WHAT THE ENGINE SILENTLY DROPS ═════════════════════════════════════════════════════════
+  // ══ 9. ⚠ THE TWO WRITE PATHS, ASSERTED IN BOTH DIRECTIONS ═══════════════════════════════════════
   //
-  // Each assertion below reads a row BACK and compares it with what the catalogue asked for. These are
-  // deliberately written as "the engine does NOT carry this", so if any of them is fixed in
-  // parameters.ts the assertion FAILS and ENGINE_GAPS gets shorter. That is the intended failure.
-  section("9. ⚠ the fields the shipped engine cannot carry (each one fails when it is fixed)");
+  // These five assertions used to say "the engine CANNOT author a platform row". ensurePlatformCatalogue
+  // now exists, so they are TURNED ROUND rather than deleted: each asserts that the platform writer DOES
+  // carry the field, AND that the practice path still does not.
+  //
+  // ⚠ BOTH HALVES, IN ONE ASSERTION, ON PURPOSE. "the platform row has graph:false" passes on its own
+  // against an engine that has collapsed the two paths into one and made everything graph:false. The
+  // second half is what proves the paths are still distinct -- which is the property that stops a
+  // practice authoring a row claiming CPR-CPL-001's authority.
+  section("9. ⚠ the platform writer carries what the seed states, and the practice path still refuses it");
+
+  const platform = await ensurePlatformCatalogue(admin, toPlatformDefinitions(), toPlatformPacks());
+  ok("9-0. ensurePlatformCatalogue succeeds", platform.ok, platform.ok ? "" : `${platform.code} ${platform.message}`);
+  if (!platform.ok) { await cleanup(); return report(); }
+
+  // ⚠ IDEMPOTENCY, AS A REAL ASSERTION. Property 1 of the writer is read-then-insert-missing; a second
+  // call must create nothing. An upsert that silently inserted duplicates would fail here.
+  const platform2 = await ensurePlatformCatalogue(admin, toPlatformDefinitions(), toPlatformPacks());
+  ok("9-1. ⚠ a second call creates nothing -- read-then-insert-missing, never upsert",
+    platform2.ok && platform2.data.definitionsCreated === 0 && platform2.data.packsCreated === 0
+    && platform2.data.itemsCreated === 0,
+    platform2.ok ? JSON.stringify(platform2.data) : platform2.message);
 
   const probeCode = "safeguarding_concern";           // text: graph must be false
   const probe = CATALOGUE_DEFINITIONS.find(d => d.code === probeCode)!;
-  const { data: back } = await admin.from("practice_parameter_definition")
-    .select("workspace_id, presentation, source, owner, status, data_type, canonical_unit, min_plausible, category")
-    .eq("id", created.get(probeCode)!).maybeSingle();
-  const row = back as Record<string, unknown> | null;
+  const cols = "workspace_id, presentation, source, owner, status, data_type, canonical_unit, min_plausible, category";
+  // The PLATFORM row the writer made, and the PRACTICE row createDefinition made in section 8. Same
+  // code, same catalogue entry, two tiers.
+  const { data: platRaw } = await admin.from("practice_parameter_definition")
+    .select(cols).is("workspace_id", null).eq("code", probeCode).maybeSingle();
+  const { data: practRaw } = await admin.from("practice_parameter_definition")
+    .select(cols).eq("id", created.get(probeCode)!).maybeSingle();
+  const plat = platRaw as Record<string, unknown> | null;
+  const pract = practRaw as Record<string, unknown> | null;
 
-  ok("9a. ⚠ PLATFORM SCOPE: the engine wrote a WORKSPACE row, not the platform row a catalogue needs",
-    row != null && row.workspace_id === ctx.workspaceId,
-    `workspace_id=${String(row?.workspace_id)}`);
-  ok("9b. ⚠ PRESENTATION: the catalogue says graph:false and the row says graph:true -- free text marked chartable",
+  ok("9a. ⚠ PLATFORM SCOPE: the writer places the row at workspace_id NULL -- and createDefinition still cannot",
+    plat != null && plat.workspace_id === null
+    && pract != null && pract.workspace_id === ctx.workspaceId,
+    `platform=${String(plat?.workspace_id)} practice=${String(pract?.workspace_id)}`);
+
+  ok("9b. ⚠ PRESENTATION: the platform row carries graph:false for free text -- the practice row is still forced true",
     probe.presentation.graph === false
-    && (row?.presentation as { graph?: boolean } | null)?.graph === true,
-    JSON.stringify(row?.presentation));
-  ok("9c. ⚠ SOURCE: the catalogue cites CPR-CPL-001 s3 and the row is attributed to the practice",
-    /CPR-CPL-001/.test(probe.source) && typeof row?.source === "string" && !/CPL-001/.test(row.source as string),
-    String(row?.source));
-  ok("9d. ⚠ STATUS: the catalogue says active and every engine-created definition is a draft",
-    probe.status === "active" && row?.status === "draft", String(row?.status));
+    && (plat?.presentation as { graph?: boolean } | null)?.graph === false
+    && (pract?.presentation as { graph?: boolean } | null)?.graph === true,
+    `platform=${JSON.stringify(plat?.presentation)} practice=${JSON.stringify(pract?.presentation)}`);
 
-  const { data: ver } = await admin.from("practice_parameter_definition_version")
+  ok("9c. ⚠ SOURCE: the platform row cites CPR-CPL-001 -- the practice row is still attributed to the practice",
+    typeof plat?.source === "string" && /CPR-CPL-001/.test(plat.source as string)
+    && typeof pract?.source === "string" && !/CPL-001/.test(pract.source as string),
+    `platform="${String(plat?.source)}" practice="${String(pract?.source)}"`);
+
+  ok("9d. ⚠ STATUS: the platform row is active as the catalogue states -- the practice row is still a draft",
+    probe.status === "active" && plat?.status === "active" && pract?.status === "draft",
+    `platform=${String(plat?.status)} practice=${String(pract?.status)}`);
+
+  const platScoreId = ((await admin.from("practice_parameter_definition")
+    .select("id").is("workspace_id", null).eq("code", "performance_status").maybeSingle()).data as { id: string } | null)?.id;
+  const { data: platVer } = await admin.from("practice_parameter_definition_version")
+    .select("change_note, version").eq("definition_id", platScoreId!).maybeSingle();
+  const { data: practVer } = await admin.from("practice_parameter_definition_version")
     .select("change_note").eq("definition_id", created.get("performance_status")!).maybeSingle();
   const scored = CATALOGUE_DEFINITIONS.find(d => d.code === "performance_status")!;
-  ok("9e. ⚠ VERSION NOTE: rule 3's caveat is lost -- the engine writes `Created.` for every definition",
+  ok("9e. ⚠ VERSION NOTE: rule 3's caveat reaches the platform snapshot -- the practice row still says `Created.`",
     /must stay one until a practice states the instrument/.test(scored.version_note)
-    && (ver as { change_note?: string } | null)?.change_note === "Created.",
-    String((ver as { change_note?: string } | null)?.change_note));
+    && /must stay one until a practice states the instrument/.test(String((platVer as { change_note?: string } | null)?.change_note))
+    && (practVer as { change_note?: string } | null)?.change_note === "Created.",
+    `platform="${String((platVer as { change_note?: string } | null)?.change_note).slice(0, 60)}..."`);
 
-  // ⚠ CONTROL FOR ALL OF 9. The fields the engine DOES carry came through unchanged, so 9a-9e are not
-  // passing because the read is broken or the row is empty.
-  ok("9f. CONTROL: the fields the engine DOES carry survived exactly -- category, type and unit",
-    row?.category === probe.category && row?.data_type === probe.data_type
-    && row?.min_plausible === null,
-    JSON.stringify({ category: row?.category, data_type: row?.data_type, min_plausible: row?.min_plausible }));
+  // ⚠ CONTROL FOR ALL OF 9. The fields BOTH paths carry came through unchanged on both rows, so 9a-9e
+  // are not passing because one of the two reads is broken or returned an empty row.
+  ok("9f. CONTROL: the fields both paths carry survived on BOTH rows -- category, type, bounds",
+    plat?.category === probe.category && pract?.category === probe.category
+    && plat?.data_type === probe.data_type && pract?.data_type === probe.data_type
+    && plat?.min_plausible === null && pract?.min_plausible === null,
+    JSON.stringify({ plat: { c: plat?.category, t: plat?.data_type }, pract: { c: pract?.category, t: pract?.data_type } }));
 
-  ok("9g. ENGINE_GAPS names the blocker first and gives the one-function fix",
-    ENGINE_GAPS[0].key === "platform_scope" && /ensurePlatformCatalogue/.test(ENGINE_GAPS[0].wouldRequire));
-  ok("9h. and there is still no platform pack anywhere -- the tier has no writer",
-    ((await admin.from("practice_parameter_pack").select("id").is("workspace_id", null)).data ?? []).length === 0);
+  ok("9g. ⚠ every definition the writer created has its version-1 snapshot (property 3)",
+    (platVer as { version?: number } | null)?.version === 1);
+
+  const { data: platPacks } = await admin.from("practice_parameter_pack")
+    .select("id, code, status").is("workspace_id", null);
+  const platPackRows = (platPacks ?? []) as { id: string; code: string; status: string }[];
+  ok("9h. ⚠ the platform pack tier now has the five packs -- it had no writer at all before",
+    platPackRows.length >= CATALOGUE_PACKS.length
+    && CATALOGUE_PACKS.every(p => platPackRows.some(r => r.code === p.code)),
+    platPackRows.map(r => r.code).join(", "));
+
+  const { data: platItems } = await admin.from("practice_parameter_pack_item")
+    .select("pack_id, definition_id").in("pack_id", platPackRows.map(r => r.id));
+  ok("9i. ⚠ and their 38 items resolved, INCLUDING the core pain_score the Symptoms pack reuses",
+    ((platItems ?? []) as unknown[]).length === CATALOGUE_PACKS.reduce((n, p) => n + p.items.length, 0),
+    `${(platItems ?? []).length} items`);
+
+  // ⚠ THE ASYMMETRY IS DOCUMENTED, not just observed, so the next reader does not "fix" it.
+  ok("9j. PLATFORM_VS_PRACTICE records all five fields, and ENGINE_GAPS no longer claims the blocker",
+    PLATFORM_VS_PRACTICE.length === 5
+    && !ENGINE_GAPS.some(g => (g.key as string) === "platform_scope")
+    && ENGINE_GAPS.every(g => /migration/i.test(g.wouldRequire)),
+    ENGINE_GAPS.map(g => g.key).join(", "));
+
+  // ⚠ AND SEEDING THE PLATFORM LIBRARY STILL INSTALLED NOTHING. CPL s2, s24.
+  const { data: actsAfter } = await admin.from("practice_parameter_activation").select("id");
+  ok("9k. ⚠ after seeding the whole platform catalogue, there are STILL zero activations anywhere",
+    ((actsAfter ?? []) as unknown[]).length === 0, `${(actsAfter ?? []).length}`);
 
   // ══ 10. THE ENGINE'S REFUSALS STILL REFUSE ══════════════════════════════════════════════════════
   //

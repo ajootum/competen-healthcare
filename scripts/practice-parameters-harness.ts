@@ -699,8 +699,19 @@ async function main() {
     ok("pack-7. a caller without pack.install cannot install one",
       !refusedInstall.ok && refusedInstall.code === "FORBIDDEN", JSON.stringify(refusedInstall));
 
-    ok("pack-8. the library reports the packs it can see, with their item counts",
-      (await parameterLibrary(admin, ctxA)).packs.items.length === 2);
+    // ⚠ NOT A LITERAL TOTAL ANY MORE, AND THE REASON MATTERS. This asserted `items.length === 2` back
+    // when the platform pack tier was empty -- so the number 2 silently encoded "no platform pack
+    // exists". CPR-CPL-001's catalogue now seeds five platform packs through ensurePlatformCatalogue,
+    // and migration 246 s3's read filter means every practice sees its own packs PLUS the platform
+    // ones. A pinned total would now break each time the catalogue grows, and -- worse -- it could
+    // have passed for the wrong reason: two platform packs and ZERO of this practice's own would also
+    // have made it 2. So the two halves are asserted separately.
+    const libPacks = (await parameterLibrary(admin, ctxA)).packs.items;
+    ok("pack-8. the library reports the packs it can see -- this practice's own AND the platform catalogue's",
+      libPacks.filter(p => !p.platform).length === 2
+      && libPacks.some(p => p.code === "paed_neuro_local" && !p.platform)
+      && libPacks.some(p => p.platform),
+      libPacks.map(p => `${p.code}${p.platform ? " (platform)" : ""}`).join(", "));
   }
 
   // ══ 10. THE MONITORING PLAN -- s10.2 ════════════════════════════════════════════════════════════
