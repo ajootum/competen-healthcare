@@ -655,6 +655,14 @@ async function main() {
     // from the Follow-ups workspace and from Practice Intelligence's pathway panel, both of which link
     // to it directly -- see FollowUpsWorkspace.tsx and intelligence/Areas.tsx.
     pathways: "CPR-PI-001 s4: nine primary items, no submenus. Linked from Follow-ups and Intelligence.",
+    // CPR-DOC-002 s3.1 removes both from the permanent navigation and puts the Documents workspace's
+    // sub-navigation inside the workspace instead. Neither module was withdrawn -- both are still built
+    // and both are still reachable, from WorkspaceHeader's "Beside this workspace" links on every
+    // Documents tab. Assertions 14b / 14b-control / 14c in the documents-workspace harness pin those
+    // two hrefs, both page.tsx files, and that both capabilities are genuinely seeded, which is what
+    // makes removing the sidebar entries safe rather than a quiet withdrawal.
+    messages: "CPR-DOC-002 s3.1: sub-navigation lives inside the Documents workspace. Linked from WorkspaceHeader.",
+    inbox: "CPR-DOC-002 s3.1: sub-navigation lives inside the Documents workspace. Linked from WorkspaceHeader.",
   };
   const shellDirs = readdirSync(join(process.cwd(), "src", "app", "practice", "(shell)"), { withFileTypes: true })
     .filter(d => d.isDirectory() && !d.name.startsWith("[") && !d.name.startsWith("_"))

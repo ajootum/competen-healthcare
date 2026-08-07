@@ -183,11 +183,26 @@ export const PRACTICE_NAV: PracticeNavItem[] = [
   // which is the honest form of the same guard.
 
   // -- Documents: everything that arrives, and everything sent --------------------------------------
-  { href: "/practice/messages", label: "Messages", icon: "✉", capability: "message.use", group: "Communication", phase: 5, built: true, parent: "/practice/documents" },
-  // The comp calls this "Investigations". It is CPR-320's incoming register and holds every arriving
+  //
+  // ── CPR-DOC-002 s3.1: MESSAGES AND RESULTS & INCOMING LEAVE THE PERMANENT NAVIGATION ────────────
+  //
+  // "Keep a single primary sidebar item labelled Documents. Remove Messages and Results & Incoming from
+  // the permanent navigation. Sub-navigation should appear inside the workspace as tabs."
+  //
+  // Both routes still exist and both are still built. What changed is where you reach them from:
+  // WorkspaceHeader renders "Beside this workspace -> Incoming register / Internal messages" on every
+  // Documents tab, capability-filtered, and harness assertions 14b / 14b-control / 14c pin both hrefs,
+  // both page.tsx files, and that both capabilities are really seeded.
+  //
+  // WARNING: THE ORDER OF THESE TWO CHANGES IS LOAD-BEARING. Assertion 9a fails any built module that
+  // cannot be reached from the sidebar, so the tabs had to ship FIRST (commit 170dbb45) and these
+  // entries come out SECOND. Reversed, the nav change strands two working modules and the harness is
+  // right to refuse it. They are listed in 9i's NO_NAV_ENTRY_BY_DESIGN with that reason written down.
+  //
+  // The old entry for the incoming register said this, and it is still true of the tab that replaced it:
+  // the comp calls it "Investigations", but it is CPR-320's incoming register and holds every arriving
   // document -- lab results among them, but also referrals and discharge summaries. Naming it after one
   // of its contents would promise an investigations module that does not exist.
-  { href: "/practice/inbox", label: "Results & incoming", icon: "▼", capability: "inbox.record", group: "Communication", phase: 5, built: true, parent: "/practice/documents" },
 
   // -- Practice Home: the figures, until Insights ships ---------------------------------------------
   // ── CPR-V5-003: ANALYTICS AND PATIENT INSIGHTS BECOME ONE SECTION ───────────────────────────────
