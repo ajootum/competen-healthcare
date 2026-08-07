@@ -212,6 +212,15 @@ export function PatientsArea({ suite, compact }: { suite: Suite; compact?: boole
             </div>
           )}
           <ModuleNote module={m} />
+
+          {/* CPR-PIE-001 §4's "parameter deterioration" and §7's alert framework, which is the one part
+              of PIE that had a real store and no reader at all. Full area only: the Overview's compact
+              patients panel is the date rules, and an alert board underneath it would bury them. */}
+          {!compact && (
+            <div className="mt-5 border-t border-gray-100 pt-4">
+              <AlertsPanel suite={suite} />
+            </div>
+          )}
         </>
       )}
     </section>
@@ -422,6 +431,11 @@ export function ClinicalArea({ suite }: { suite: Suite }) {
         </section>
       </div>
 
+      {/* CPR-PIE-001 §5's referral trends. The store has existed since migration 238 and this is the
+          first reader it has had; it sits here because a referral is a clinical conclusion, beside the
+          diagnoses and the procedures that led to it. */}
+      <ReferralsPanel suite={suite} />
+
       {/* ⚠ WHAT THIS PRODUCT CANNOT COMPUTE, NAMED. A reader cannot tell an absent number from an
           unbuilt one, and the comps show every one of these as a figure. */}
       <section className={`${CARD} border-dashed bg-gray-50/60`}>
@@ -439,7 +453,181 @@ export function ClinicalArea({ suite }: { suite: Suite }) {
           ))}
         </ul>
       </section>
+
+      {/* CPR-PIE-001 §3/§4/§5's modules with no store at all -- a different claim from the list above,
+          which is about figures this product's records cannot support. These are whole modules whose
+          tables do not exist. */}
+      <NotBuildableArea suite={suite} />
     </div>
+  );
+}
+
+// ── REFERRALS -- CPR-PIE-001 §5 ──────────────────────────────────────────────────────────────────────
+//
+// ⚠ THE HEADING AND THE CAPTION ARE DOING SAFETY WORK HERE, WHICH IS UNUSUAL FOR COPY.
+//
+// practice_referral has no channel and no sent_at (migration 238, deliberately), so a panel headed
+// "Referrals outstanding" would be read as letters sitting in somebody's inbox awaiting a reply. It is
+// not that. It is a list of decisions a practitioner wrote down, and the ones nobody has since written
+// any news about. The engine carries that sentence in the payload; this draws it where it is read.
+
+export function ReferralsPanel({ suite }: { suite: Suite }) {
+  const m = suite.referrals;
+  const d = m.data;
+
+  return (
+    <section className={CARD}>
+      <PanelHead panel="clinical_trends" title="Where this practice sends people"
+        note="Referrals recorded in this window, and the ones nobody has heard anything about." />
+      {!d ? <ModuleNote module={m} /> : (
+        <>
+          <div className="mt-3 flex flex-col gap-4">
+            <OpenableCountBlock item={d.made} figureClass="text-emerald-700" />
+            <OpenableCountBlock item={d.awaitingNews} figureClass="text-amber-700" />
+          </div>
+
+          <div className="mt-4">
+            <Comparison c={d.change} />
+          </div>
+
+          <div className="mt-4">
+            <Distribution d={d.byStatus} />
+          </div>
+
+          <div className="mt-4">
+            <div className="flex items-baseline gap-2">
+              <h3 className="text-[12px] font-bold text-gray-800">Destinations</h3>
+              {d.distinctDestinations !== null && (
+                <span className="ml-auto text-[10px] text-gray-500">
+                  {d.distinctDestinations} distinct {d.distinctDestinations === 1 ? "destination" : "destinations"} typed
+                </span>
+              )}
+            </div>
+            <LabelList rows={d.destinations}
+              empty="No referral was recorded in this period. A fact about the period, not a gap in the data." />
+            <p className="mt-1.5 text-[10px] leading-relaxed text-gray-500">
+              Counted exactly as they were typed, with only surrounding spaces removed. Referred-to is
+              free text because the service may be at an institution this product has never heard of, and
+              merging spellings would invent a facility register nobody maintains.
+            </p>
+          </div>
+
+          {/* ⚠ THE LIMITATION, WHERE IT IS READ. Not a footnote and not a tooltip. */}
+          <p className="mt-4 rounded-lg border border-dashed border-slate-300 bg-slate-50/60 px-2.5 py-2 text-[10px] leading-relaxed text-gray-600">
+            <span className="font-semibold text-gray-700">Recorded, not sent. </span>{d.limitation}
+          </p>
+
+          <ModuleNote module={m} />
+        </>
+      )}
+    </section>
+  );
+}
+
+// ── CLINICAL PARAMETER ALERTS -- CPR-PIE-001 §7, AND §4's "PARAMETER DETERIORATION" ───────────────────
+//
+// ⚠ "NOT CLASSIFIED" IS DRAWN AS TWO WORDS AND NEVER AS A QUIET BAR AT THE BOTTOM OF THE LIST.
+//
+// Migration 246 makes severity nullable and states the rendering rule itself: an alert whose rule
+// declared no severity "must render as those words -- never as low, and never as a blank cell." So the
+// count gets its own block, at the top of the severity list rather than the foot of it, because a
+// classification nobody made is a question for somebody rather than the mildest answer.
+
+export function AlertsPanel({ suite }: { suite: Suite }) {
+  const m = suite.alerts;
+  const d = m.data;
+
+  return (
+    <section className={CARD}>
+      <PanelHead panel="patient_attention" title="Clinical parameter alerts"
+        note="Raised by the parameter engine's own rules. Nothing on this page raises an alert or changes one."
+        action={{ href: "/practice/patients", label: "Patients" }} />
+      {!d ? <ModuleNote module={m} /> : (
+        <>
+          <div className="mt-3 flex flex-col gap-4">
+            <OpenableCountBlock item={d.open} figureClass="text-rose-700" />
+            {d.actionable.map(a => (
+              <OpenableCountBlock key={a.key} item={a}
+                figureClass={a.key === "alerts_critical" ? "text-rose-700" : "text-amber-700"} />
+            ))}
+            <OpenableCountBlock item={d.notClassified} figureClass="text-slate-600" />
+            <OpenableCountBlock item={d.vitalSigns} figureClass="text-cyan-700" />
+          </div>
+
+          <div className="mt-4 grid gap-4 md:grid-cols-2">
+            <Distribution d={d.bySeverity} />
+            <Distribution d={d.byType} />
+          </div>
+
+          <div className="mt-3 flex flex-col">
+            <Proportion p={d.acknowledged} />
+          </div>
+          <div className="mt-2">
+            <Comparison c={d.raised} />
+          </div>
+
+          {/* ⚠ THE TAXONOMY, IN THE OPEN. Four levels and one absence, each saying what it asserts, so
+              nobody has to infer severity from a colour -- and so the fifth entry is visibly NOT a fifth
+              level. Two documents disagreed about the third; the disagreement was settled in writing and
+              the settlement is shown rather than assumed. */}
+          <div className="mt-4 border-t border-gray-100 pt-3">
+            <h3 className="text-[12px] font-bold text-gray-800">What the four levels mean</h3>
+            <ul className="mt-1.5 flex flex-col gap-1">
+              {d.taxonomy.map(t => (
+                <li key={t.key} className="flex gap-2">
+                  <span className={`mt-0.5 shrink-0 rounded px-1.5 py-0.5 text-[10px] font-bold ${
+                    t.key === "critical" ? "bg-rose-100 text-rose-700"
+                      : t.key === "action_required" ? "bg-amber-100 text-amber-700"
+                      : t.key === "advisory" ? "bg-sky-100 text-sky-700"
+                      : t.key === "informational" ? "bg-slate-100 text-slate-600"
+                      : "border border-dashed border-slate-300 bg-white text-slate-500"
+                  }`}>
+                    {t.label}
+                  </span>
+                  <span className="text-[10px] leading-relaxed text-gray-600">
+                    {t.meaning}
+                    {!t.isLevel && (
+                      <span className="ml-1 font-semibold text-gray-700">Not a level.</span>
+                    )}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </div>
+
+          <ModuleNote module={m} />
+        </>
+      )}
+    </section>
+  );
+}
+
+// ── WHAT CPR-PIE-001 ASKS FOR THAT HAS NO STORE AT ALL ───────────────────────────────────────────────
+//
+// ⚠ A MODULE-SCALE VERSION OF THE REFUSED CARDS ON THE PATIENTS AREA, AND IT EARNS ITS SPACE THE SAME
+// WAY. A reader who sees no medication panel cannot tell "unbuilt" from "not permitted" from "nothing
+// happened this month", and the first of those three is the only one that is a roadmap item.
+
+export function NotBuildableArea({ suite }: { suite: Suite }) {
+  return (
+    <section className={`${CARD} border-dashed bg-gray-50/60`}>
+      <PanelHead panel="refused" title="What the specification asks for and this product has no store for"
+        note="Each names the search that was run, so nobody repeats it." />
+      <div className="mt-2 grid gap-2 md:grid-cols-2">
+        {suite.notBuildable.map(u => (
+          <div key={u.key} className="rounded-xl border border-dashed border-slate-300 bg-white p-3">
+            <div className="flex items-baseline gap-2">
+              <p className="text-[12px] font-bold text-gray-700">{u.label}</p>
+              <span className="ml-auto shrink-0 text-[10px] text-gray-400">{u.from}</span>
+            </div>
+            <p className="mt-1.5 whitespace-pre-line text-[11px] leading-relaxed text-gray-600">{u.why}</p>
+            <p className="mt-1.5 text-[10px] leading-relaxed text-gray-500">
+              <span className="font-semibold">What would make it real: </span>{u.wouldRequire}
+            </p>
+          </div>
+        ))}
+      </div>
+    </section>
   );
 }
 

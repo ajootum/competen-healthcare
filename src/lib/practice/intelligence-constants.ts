@@ -283,6 +283,126 @@ export const REFUSED_PATIENT_STATES: RefusedState[] = [
 export const INACTIVE_AFTER_DAYS = 180;
 export const LOST_TO_FOLLOW_UP_AFTER_DAYS = 90;
 
+// ── CPR-PIE-001 §7. THE ALERT FRAMEWORK, AND THE FIFTH BUCKET THAT IS NOT A LEVEL ────────────────────
+//
+// ⚠ THE TAXONOMY IS SETTLED AND THIS IS NOT THE PLACE THAT SETTLED IT. Migration 246 did, in writing:
+//
+//     "CPR-MED-001 s5 said 'Informational / Advisory / Significant / Critical' and CPR-PIE-001 s7 said
+//      'Informational / Advisory / Action required / Critical'. The user settled it on 2026-08-07 in
+//      favour of PIE s7 -- 'action_required' says what to do rather than how bad it is, and PIE s7 is
+//      the platform-wide alert framework where MED s5 governs only medication. One taxonomy everywhere."
+//
+// THESE FOUR STRINGS ARE THE CHECK CONSTRAINT ON practice_parameter_alert.severity, COPIED OUT OF IT.
+// A fifth level invented here would not fail typecheck and would not fail the constraint either -- it
+// would simply never match a row, and the level would render as an eternally empty bar.
+//
+// ⚠ AND THE FIFTH ENTRY BELOW IS NOT A LEVEL. The column is NULLABLE on purpose: migration 246 says an
+// alert raised by a rule that carries no severity "is 'not classified', and must render as those words
+// -- never as low, and never as a blank cell." So NULL gets a NAMED bucket rather than being folded into
+// `informational` (which would be a clinical claim nobody made) or into a distribution's `unrecorded`
+// (which reads as a data-quality defect rather than as a rule that never declared one).
+//
+// ⚠ AND IT IS NOT THE OPERATIONAL SCALE. PriorityTile.severity is critical/warning/normal and answers
+// "does this need you today". This answers "how dangerous is this reading". Migration 246 warns in its
+// own words against merging them, and NOTHING here touches PriorityTile.
+
+export type AlertSeverityKey =
+  | "informational" | "advisory" | "action_required" | "critical" | "not_classified";
+
+export type AlertSeverity = {
+  key: AlertSeverityKey;
+  label: string;
+  /** What the level asserts, so a screen is not left to infer it from the colour. */
+  meaning: string;
+  /** False for `not_classified`, which is the absence of a level rather than one. */
+  isLevel: boolean;
+};
+
+export const ALERT_SEVERITIES: AlertSeverity[] = [
+  { key: "informational", label: "Informational", isLevel: true,
+    meaning: "Recorded so it is on the timeline. It asks for nothing." },
+  { key: "advisory", label: "Advisory", isLevel: true,
+    meaning: "Worth a practitioner's eye at the next contact. It does not name an action." },
+  { key: "action_required", label: "Action required", isLevel: true,
+    meaning: "PIE §7's third level, chosen over MED §5's \"Significant\" because it says what to do rather than how bad it is. Something is expected of somebody." },
+  { key: "critical", label: "Critical", isLevel: true,
+    meaning: "The most serious level this product has. It does not mean the patient is critical; it means the rule that fired is." },
+  { key: "not_classified", label: "Not classified", isLevel: false,
+    meaning: "The rule that raised this alert declared no severity. That is an absence, not a low reading, and it is drawn as these two words rather than as a blank cell or a quiet level -- migration 246 requires exactly that." },
+];
+
+/** The four the CHECK constraint accepts. `not_classified` is deliberately absent: it is what NULL renders as. */
+export const ALERT_SEVERITY_LEVELS = ALERT_SEVERITIES.filter(s => s.isLevel).map(s => s.key);
+
+/** The value a NULL severity is displayed under. Never written to the column. */
+export const SEVERITY_NOT_CLASSIFIED: AlertSeverityKey = "not_classified";
+
+// ── CPR-PIE-001 §3 AND §5: THE MODULES THAT CANNOT BE BUILT, NAMED WHERE THEY WOULD HAVE GONE ─────────
+//
+// ⚠ THE SAME DEVICE AS REFUSED_PATIENT_STATES, FOR THE SAME REASON, AT A DIFFERENT SCALE. PIE §3 lists
+// eight intelligence modules and §5 lists seven practice items. Some of them have no store in this
+// product AT ALL -- not a thin one, not a proxy: nothing.
+//
+// An omitted module reads as a feature nobody got round to. A module that says which specification it
+// came from, what is missing, and what would make it real is a finding somebody can act on. Every entry
+// below was checked against supabase/migrations before it was written, and each names the search that
+// was run so the next person does not repeat it.
+
+export type UnbuildableModule = {
+  key: string;
+  /** The specification's own words for it. */
+  label: string;
+  /** Which section of CPR-PIE-001 asks for it. */
+  from: string;
+  why: string;
+  wouldRequire: string;
+};
+
+export const PIE_NOT_BUILDABLE: UnbuildableModule[] = [
+  {
+    key: "medication_review",
+    label: "Medication review",
+    from: "PIE §3 (intelligence modules) and §2 (data sources)",
+    why: "There is no medication engine in this product. CPR-MED-001 is unbuilt: no practice_medication, practice_medication_event, practice_medication_warning, practice_dose_calculation, practice_medication_monitoring or practice_adverse_reaction table exists in any migration; there is no medication module in src/lib/practice and no /practice/medications route. The nearest store is practice_treatment (migration 194), whose treatment_type may be 'medication' -- but that row is a decision recorded inside one consultation, it carries no drug, no dose, no route and no stop date, and its status is never written after insert. Counting those rows and heading the panel \"Medication review\" would answer a different question from the one on the heading, which is the failure this whole engine exists to avoid.",
+    wouldRequire: "The CPR-MED-001 medication record: a prescribing store with a drug, a dose, a route, a start and a stop, and a status something writes. That is a migration and an engine, and it is not scope a read-only intelligence layer can invent.",
+  },
+  {
+    key: "medication_utilisation",
+    label: "Medication utilisation",
+    from: "PIE §5 (practice intelligence)",
+    why: "The same absent store as medication review, and one further reason of its own: utilisation is a question about what a practice dispenses or prescribes over time, and this product records neither. Nothing here has ever known that a prescription was issued.",
+    wouldRequire: "The medication record above, plus a dispensing or prescribing event with a date -- and a decision about whether utilisation counts prescriptions written or medicines given, because those are different numbers.",
+  },
+  {
+    key: "medication_monitoring_due",
+    label: "Medication monitoring due",
+    from: "PIE §4 (patient intelligence)",
+    why: "This asks which patients are due bloods or a level because of a drug they are on. Both halves are needed and only one exists: migration 246 gives the product monitoring plans and due-parameter reminders, but nothing anywhere records that a patient is on a drug, so no plan can be attached to one.",
+    wouldRequire: "The medication record, and a link from a drug to the parameter its monitoring plan watches. The plan side is built (practice_patient_monitoring_plan); the drug side does not exist.",
+  },
+  {
+    key: "growth_percentiles",
+    label: "Growth and anthropometric trends",
+    from: "PIE §3 (intelligence modules)",
+    why: "Half of this is now built and the half that matters is refused on purpose. Migration 246 gives the product anthropometric parameters and a longitudinal measurement series, so weight and height over time are recorded and charted per patient. What a growth chart actually IS -- a reading against a reference population -- is not, and migration 246 states why in its own words: \"A percentile computed against an unnamed population is not an approximation. It is a fabricated clinical claim.\" There is no reference-standard table, so no z-score and no centile can be computed from anything.\n\n⚠ AND THE NAME COLLIDES. The module already called Practice Growth in this engine is BUSINESS growth -- new patients and workload -- not a child's growth chart. They are unrelated and must not be merged by whoever next sees two things called growth.",
+    wouldRequire: "A named, versioned reference population (WHO or CDC, stated on the row) and the derived-value machinery of migration 246 section 9, so a centile arrives with its source and its formula attached rather than as a bare number.",
+  },
+  {
+    key: "predictive_reminders",
+    label: "Predictive reminders",
+    from: "PIE §3 (intelligence modules)",
+    why: "Everything else in this workspace is arithmetic a practitioner could check with a calendar. A prediction is not: it is a model, it needs an outcome to have been labelled, and this product has never labelled one. The available proxy -- \"patients like this usually come back in six weeks\" -- would be computed over a handful of records and expressed as a likelihood, and a likelihood is a rate wearing a different word. The date-derived reminders that ARE honest already exist beside this entry: overdue follow-ups, lost to follow-up, milestones past their date, and measurements a monitoring plan says are due.",
+    wouldRequire: "A recorded outcome to predict, a stated population to predict it over, and a published method -- plus a decision about how a probability is shown to a clinician in a product that computes no rates.",
+  },
+  {
+    key: "preventive_care_reminders",
+    label: "Preventive care reminders",
+    from: "PIE §4 (patient intelligence)",
+    why: "A preventive reminder needs a schedule -- what is due, to whom, at what age or interval -- and no such schedule exists. practice_follow_up.kind accepts 'immunisation', so a practitioner can record that THIS patient is owed one; nothing in this product knows what any patient is owed without somebody having written it down first. Deriving a schedule from the follow-ups already raised would flag exactly the patients somebody had already remembered, and miss every patient the reminder exists for.",
+    wouldRequire: "An immunisation or screening schedule as data -- an eligibility rule per item, with an age or interval -- which is a store and a governance surface, not a query.",
+  },
+];
+
 // ── §12. EMPTY, LOADING AND FAILURE STATES ───────────────────────────────────────────────────────────
 //
 // "Zero activity is presented as a valid result, not as a data-quality failure." Three states, and only

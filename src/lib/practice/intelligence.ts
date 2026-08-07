@@ -12,7 +12,8 @@ import {
 // server-only dependency into a client component -- see the header of intelligence-constants.ts.
 import {
   INACTIVE_AFTER_DAYS, LOST_TO_FOLLOW_UP_AFTER_DAYS, REFUSED_PATIENT_STATES,
-  type RefusedState,
+  ALERT_SEVERITIES, SEVERITY_NOT_CLASSIFIED, PIE_NOT_BUILDABLE,
+  type RefusedState, type UnbuildableModule,
 } from "@/lib/practice/intelligence-constants";
 
 // CPR-200 PRACTICE INTELLIGENCE.
@@ -1209,10 +1210,20 @@ export async function patientIntelligence(
  *
  * WHAT WAS LOOKED FOR AND WHAT WAS FOUND, so the next person does not repeat the search:
  *
- *   - No practice_order, practice_order_item, practice_investigation, practice_lab_request,
- *     practice_referral or practice_prescription table exists in any migration.
+ *   - No practice_order, practice_order_item, practice_lab_request or practice_prescription table
+ *     exists in any migration.
  *   - No orders engine exists in src/lib/practice and no /practice/orders route exists.
  *   - No orders capability exists in practice_role_capabilities.
+ *
+ * ⚠ TWO NAMES IN THAT LIST HAVE SINCE BEEN BUILT AND THE REFUSAL SURVIVES BOTH. Migration 238 created
+ * practice_encounter_investigation and practice_referral after this comment was written, so the sentence
+ * above has been corrected rather than left to rot -- a stale refusal is how a real store goes unread for
+ * months, and practice_referral went unread for exactly that reason until referralIntelligence below.
+ * NEITHER makes this module buildable, and the reason is the one this refusal was always about: both are
+ * NOTES THAT A PRACTITIONER DECIDED SOMETHING, recorded inside a consultation. Migration 238 says so in
+ * its own header -- "RECORDED, NOT SENT ... no channel column, no sent_at" -- so neither has a dispatch,
+ * neither has a recipient system, and practice_incoming_document still carries no reference back to the
+ * request that produced a result. "What have I asked for that has not come back" remains unaskable.
  *
  * THE NEAREST STORE IS practice_treatment (migration 194), AND IT IS NOT AN ORDERS ENGINE. It records
  * what the practitioner DECIDED inside a consultation -- treatment_type is one of medication, procedure,
@@ -3022,6 +3033,583 @@ export function priorityStrip(
   };
 }
 
+// ════════════════════════════════════════════════════════════════════════════════════════════════════
+// CPR-PIE-001 -- THE PRACTICE INTELLIGENCE ENGINE, AS AN EXTENSION AND NOT AS A REPLACEMENT
+// ════════════════════════════════════════════════════════════════════════════════════════════════════
+//
+// ────────────────────────────────────────────────────────────────────────────────────────────────────
+// CPR-PIE-001 IS A ONE-PAGE OUTLINE AND MORE THAN HALF OF IT WAS ALREADY BUILT ABOVE. Nothing in this
+// section replaces anything. Everything here is a store that had NO READER, or a refusal that had no
+// home. Where PIE describes something this file already does differently, this file wins and says so:
+//
+//   §3 "Follow-up intelligence"        followUpIntelligence, above. Untouched.
+//   §3 "Practice workload insights"    clinicalActivityIntelligence + locationIntelligence. Untouched.
+//   §3 "Population/cohort analytics"   cohortIntelligence, seven dimensions. Untouched.
+//   §5 "Common diagnoses"              caseMix + diagnosisReport. Untouched.
+//   §5 "Follow-up completion"          followUpIntelligence.completion -- ALREADY a numerator and a
+//                                      denominator with its censoring disclosed. PIE calls it a figure;
+//                                      this file already refused to make it a percentage and that refusal
+//                                      is older and better argued. NOT REOPENED.
+//   §7 "Informational/Advisory/Action required/Critical"   settled in migration 246 and read below.
+//   §8 "Every recommendation cites supporting data"        already stricter -- every figure in this
+//                                      payload carries a Provenance, which is more than a citation.
+//
+// SO THIS SECTION ADDS EXACTLY THREE THINGS:
+//
+//   1. REFERRAL TRENDS (§5). practice_referral has existed since migration 238 and NOTHING READ IT.
+//      A whole store with no reader is the cheapest real thing on this page.
+//   2. THE PARAMETER ALERT SURFACE (§7, and §4's "parameter deterioration"). Migration 246 shipped
+//      practice_parameter_alert with PIE §7's own four-level taxonomy on it. No dashboard read it.
+//   3. THE MODULES THAT CANNOT BE BUILT, IN THE PAYLOAD (§3, §4, §5). See PIE_NOT_BUILDABLE.
+// ────────────────────────────────────────────────────────────────────────────────────────────────────
+
+/**
+ * A comparison over a count THIS FILE OWNS, gated exactly as compareMetric gates a metrics.ts figure.
+ *
+ * ⚠ NOT A SECOND SET OF RULES. compareMetric cannot be reused because it takes a metrics.ts `Metric`,
+ * and referrals and alerts are not section 8 figures -- section 8 does not mention either, so there is no
+ * owning function to call over a second scope. What IS reused is every gate, in the same order and with
+ * the same wording: a current figure that failed, a prior window that was not real, a prior read that
+ * broke, and too few observations across the two windows for a difference to mean anything.
+ */
+function compareOwnCounts(args: {
+  key: string; label: string; range: IntelRange; formula: string; sources: string[];
+  current: number | null; currentStatus: IntelStatus; currentReason: string | null;
+  prior: number | null; priorError: string | null;
+}): IntelComparison {
+  const base = {
+    key: args.key, label: args.label,
+    formula: `${args.formula} -- compared against the same count over ${args.range.prior.label} as a signed count, never as a percentage`,
+    sources: args.sources,
+    priorFromDay: args.range.prior.fromDay, priorToDay: args.range.prior.toDay,
+  };
+  const noPrior = (status: IntelStatus, reason: string): IntelComparison =>
+    ({ ...base, current: args.current, prior: null, change: null, status, reason });
+
+  if (args.currentStatus !== "ok" || args.current === null)
+    return { ...base, current: null, prior: null, change: null, status: args.currentStatus, reason: args.currentReason };
+  if (!args.range.priorUsable)
+    return noPrior("unknowable", args.range.priorReason ?? "the previous period cannot be shown to be real");
+  if (args.priorError) return noPrior("unreadable", `the previous period could not be read: ${args.priorError}`);
+  if (args.prior === null) return noPrior("unreadable", "the previous period returned no count");
+
+  const observations = args.current + args.prior;
+  if (observations < MIN_OBSERVATIONS_FOR_COMPARISON)
+    return noPrior("unknowable",
+      `${observations} record${observations === 1 ? "" : "s"} across the two periods; ${MIN_OBSERVATIONS_FOR_COMPARISON} are needed before a difference means anything`);
+
+  return { ...base, current: args.current, prior: args.prior, change: args.current - args.prior, status: "ok", reason: null };
+}
+
+// ── 7. REFERRAL TRENDS -- PIE §5, AND THE ONE STORE IN THIS PRODUCT THAT NOBODY READ ──────────────────
+
+/** practice_referral.status -- migration 238's CHECK, in full. Every member emitted even at zero. */
+const REFERRAL_STATUSES: [string, string][] = [
+  ["made", "Made -- nothing heard back"],
+  ["accepted", "Accepted"],
+  ["declined", "Declined"],
+  ["withdrawn", "Withdrawn"],
+];
+
+/** How many destinations are listed. A long tail of one-off hospitals is not a trend and is not drawn. */
+const TOP_DESTINATIONS = 10;
+
+export type ReferralDestination = {
+  /** Exactly as it was typed. See the module comment on why it is not tidied. */
+  label: string;
+  /** Referrals to this destination in the period. */
+  total: number;
+  /** DISTINCT patients sent there. One patient referred three times is one person. */
+  patients: number;
+};
+
+export type ReferralIntelligenceData = {
+  /** Referrals recorded in the period, and the patients behind them. */
+  made: OpenableCount;
+  /** What the practitioner has since been TOLD. `made` means nobody has told them anything. */
+  byStatus: IntelDistribution;
+  destinations: ReferralDestination[];
+  /** How many distinct destinations were typed. Null when the list could not be computed. */
+  distinctDestinations: number | null;
+  /** Every referral still sitting at `made`, whenever it was recorded. As at now, not windowed. */
+  awaitingNews: OpenableCount;
+  /** This period against the one before, as a signed count. Refused unless the prior window was real. */
+  change: IntelComparison;
+  /** ⚠ RECORDED, NOT SENT. Migration 238's own warning, carried into the payload. */
+  limitation: string;
+  identified: boolean;
+};
+
+/**
+ * REFERRAL TRENDS -- PIE §5's fifth practice item, over a table that has been written since migration
+ * 238 and read by no dashboard since.
+ *
+ * ────────────────────────────────────────────────────────────────────────────────────────────────────
+ * ⚠ THE ONE THING A REFERRAL PANEL MUST NOT IMPLY, AND MIGRATION 238 SAYS IT FIRST.
+ *
+ *     "WARNING: RECORDED, NOT SENT. This product has no email, no SMS and no messaging of any kind, and
+ *      the tables were shaped so that nothing could ever claim to have transmitted anything -- no channel
+ *      column, no sent_at. A referral row is a note that the practitioner decided to refer."
+ *
+ * So `made` is NOT "sent and awaiting reply". It is "written down, and nobody has since written down any
+ * news about it". A panel headed "12 referrals outstanding" would be read as twelve letters sitting in
+ * somebody's inbox, and that is a claim this schema structurally cannot support. The limitation travels
+ * in the payload rather than in a comment, so the API says it too.
+ * ────────────────────────────────────────────────────────────────────────────────────────────────────
+ *
+ * ⚠ DESTINATIONS ARE COUNTED EXACTLY AS TYPED, and this is the same decision diagnosisReport already
+ * made for diagnosis labels. referred_to is free text because "the person or service referred to may be
+ * at an institution this product has never heard of" (238). Normalising "Mulago" and "mulago hospital"
+ * into one bar would be inventing a facility register nobody maintains, and getting it wrong quietly.
+ * Whitespace is trimmed, because trailing spaces are a typing artefact rather than a different hospital;
+ * nothing else is touched, and the panel says so.
+ *
+ * ⚠ referred_on IS A DATE COLUMN, SO THE WINDOW IS COMPARED AS DAYS. Comparing it against the period's
+ * INSTANTS would make "referrals this month" mean something an hour out at either end, and the direction
+ * of the error would depend on the practice's timezone.
+ *
+ * TABLES/COLUMNS: practice_referral.workspace_id/.patient_id/.referred_to/.status/.referred_on
+ * (migration 238); practice_patient.id/.display_name (193) for the names.
+ * CAPABILITY: encounter.list -- the same gate encounter-workspace.ts puts on referralHistory, because a
+ * referral is part of a consultation record and two engines disagreeing about who may read one is worse
+ * than either answer.
+ */
+export async function referralIntelligence(
+  admin: any, ctx: WorkspaceContext, range: IntelRange, atTime: Date = new Date(),
+): Promise<IntelModule<ReferralIntelligenceData>> {
+  const asOf = atTime.toISOString();
+  const sources = [
+    "practice_referral.referred_on", "practice_referral.status", "practice_referral.referred_to",
+    "practice_referral.patient_id",
+  ];
+  const limitation = "A referral row is a note that the practitioner DECIDED to refer. Migration 238 gave this table no channel and no sent_at on purpose: nothing in this product transmits anything, so `made` means \"written down, and no news recorded since\" rather than \"sent and awaiting a reply\". The letter that actually goes anywhere is a clinical document with its own release register.";
+
+  if (!hasCapability(ctx, CAP_ENCOUNTER_LIST))
+    return intelUnavailable("referral_intelligence", "Referrals",
+      `${CAP_ENCOUNTER_LIST} is required to see this practice's referrals -- a referral is part of a consultation record`,
+      sources);
+
+  const identified = hasCapability(ctx, CAP_PATIENT_VIEW);
+  const prov = (formula: string, src: string[], windowed: boolean): Provenance => ({
+    formula, sources: src,
+    fromDay: windowed ? range.period.fromDay : null,
+    toDay: windowed ? range.period.toDay : null,
+    asOf, provenance: "computed",
+  });
+
+  const madeFormula = `count of practice_referral rows whose referred_on falls on or between ${range.period.fromDay} and ${range.period.toDay} in this practice's calendar; referred_on is a DATE column and is compared as days rather than as instants`;
+  const awaitingFormula = "count of practice_referral rows whose status is still `made`, whenever they were recorded; this is a live state as at now and is deliberately not windowed -- \"what have I heard nothing about\" does not stop being true because a reader picked a 30-day range";
+
+  const made = openable("referrals_made", "Referrals recorded in this period",
+    `Referrals a practitioner wrote down between ${range.period.fromDay} and ${range.period.toDay}.`,
+    "/practice/patients", prov(madeFormula, sources, true));
+  const awaitingNews = openable("referrals_awaiting_news", "Referrals with no news recorded",
+    "Still at `made`. Nobody has recorded that the destination accepted, declined or that it was withdrawn -- which is not the same as nobody having replied.",
+    "/practice/patients", prov(awaitingFormula, ["practice_referral.status"], false));
+
+  const data: ReferralIntelligenceData = {
+    made, byStatus: {
+      key: "by_status", label: "What has since been heard", status: "unknowable", reason: null,
+      slices: [], of: null, unrecorded: 0,
+      formula: "count of the period's practice_referral rows by practice_referral.status; the four are migration 238's CHECK constraint in full and every one is emitted even at zero",
+      sources: ["practice_referral.status", "practice_referral.referred_on"],
+    },
+    destinations: [], distinctDestinations: null, awaitingNews,
+    change: compareOwnCounts({
+      key: "referrals_change", label: "Referrals recorded", range,
+      formula: madeFormula, sources, current: null, currentStatus: "unknowable",
+      currentReason: "not computed", prior: null, priorError: null,
+    }),
+    limitation, identified,
+  };
+
+  const [periodRead, priorRead, awaitingRead] = await Promise.all([
+    intelRows(admin.from("practice_referral")
+      .select("id, patient_id, referred_to, status, referred_on")
+      .eq("workspace_id", ctx.workspaceId)
+      .gte("referred_on", range.period.fromDay).lte("referred_on", range.period.toDay)
+      .order("referred_on", { ascending: false })),
+    intelCount(admin.from("practice_referral").select("id", { count: "exact", head: true })
+      .eq("workspace_id", ctx.workspaceId)
+      .gte("referred_on", range.prior.fromDay).lte("referred_on", range.prior.toDay)),
+    intelRows(admin.from("practice_referral")
+      .select("id, patient_id, referred_to, referred_on")
+      .eq("workspace_id", ctx.workspaceId).eq("status", "made")
+      .order("referred_on", { ascending: true })),
+  ]);
+
+  const problems: string[] = [];
+
+  // ── A FAILED READ IS NEVER A ZERO, AND A FULL PAGE IS NEVER A PERIOD ──────────────────────────────
+  const periodBad = periodRead.error
+    ? `could not be read: ${periodRead.error}`
+    : periodRead.overflowed ? overflowNote("referrals") : null;
+
+  if (periodBad) {
+    made.status = "unreadable";
+    made.reason = periodBad;
+    problems.push(`referrals in the period: ${periodBad}`);
+  } else {
+    made.status = "ok";
+    made.count = periodRead.rows.length;
+  }
+
+  const awaitingBad = awaitingRead.error
+    ? `could not be read: ${awaitingRead.error}`
+    : awaitingRead.overflowed ? overflowNote("referrals with no news") : null;
+  if (awaitingBad) {
+    awaitingNews.status = "unreadable";
+    awaitingNews.reason = awaitingBad;
+    problems.push(`referrals awaiting news: ${awaitingBad}`);
+  } else {
+    awaitingNews.status = "ok";
+    awaitingNews.count = awaitingRead.rows.length;
+  }
+
+  data.byStatus = distribution("by_status", "What has since been heard", periodRead,
+    r => r.status, REFERRAL_STATUSES, data.byStatus.formula, data.byStatus.sources, "referrals");
+
+  data.change = compareOwnCounts({
+    key: "referrals_change", label: "Referrals recorded", range, formula: madeFormula, sources,
+    current: made.count, currentStatus: made.status, currentReason: made.reason,
+    prior: priorRead.count, priorError: priorRead.error,
+  });
+  if (priorRead.error) problems.push(`the previous period's referrals: ${priorRead.error}`);
+
+  // ── DESTINATIONS, AS TYPED ────────────────────────────────────────────────────────────────────────
+  if (!periodBad) {
+    const byDestination = new Map<string, { total: number; patients: Set<string> }>();
+    for (const r of periodRead.rows) {
+      const label = String(r.referred_to ?? "").trim();
+      if (!label) continue;
+      const slot = byDestination.get(label) ?? { total: 0, patients: new Set<string>() };
+      slot.total++;
+      if (typeof r.patient_id === "string") slot.patients.add(r.patient_id);
+      byDestination.set(label, slot);
+    }
+    data.distinctDestinations = byDestination.size;
+    data.destinations = [...byDestination.entries()]
+      .map(([label, s]) => ({ label, total: s.total, patients: s.patients.size }))
+      .sort((a, b) => b.total - a.total || a.label.localeCompare(b.label))
+      .slice(0, TOP_DESTINATIONS);
+  }
+
+  // ── THE SAMPLES: REAL ROWS, DE-IDENTIFIED WHEN THE CALLER MAY NOT SEE NAMES ───────────────────────
+  //
+  // The same rule patientAttentionIntelligence follows: the id travels either way (enough to find the
+  // row), the NAME only with patient.view, and the count is complete in both cases.
+  const sampleSources = [
+    ...(periodBad ? [] : periodRead.rows.slice(0, SAMPLE_SIZE)),
+    ...(awaitingBad ? [] : awaitingRead.rows.slice(0, SAMPLE_SIZE)),
+  ];
+  const wantedIds = [...new Set(sampleSources
+    .map(r => r.patient_id).filter((x): x is string => typeof x === "string"))];
+
+  const nameById = new Map<string, string>();
+  if (identified && wantedIds.length > 0) {
+    const nameRead = await intelIn(admin, "practice_patient", "id, display_name", ctx.workspaceId, "id", wantedIds);
+    if (nameRead.error) problems.push(`patient names for the referral samples: ${nameRead.error}`);
+    else for (const p of nameRead.rows) nameById.set(p.id as string, String(p.display_name ?? ""));
+  }
+
+  const sampleRow = (r: any, note: string) => {
+    const pid = typeof r.patient_id === "string" ? r.patient_id : "";
+    return {
+      id: String(r.id),
+      label: identified
+        ? `${nameById.get(pid) || "Unnamed record"} → ${String(r.referred_to ?? "").trim() || "destination not recorded"}`
+        : `Patient ${pid.slice(0, 8)} → ${String(r.referred_to ?? "").trim() || "destination not recorded"}`,
+      note,
+      href: identified && pid ? `/practice/patients/${pid}` : null,
+    };
+  };
+
+  if (made.status === "ok") {
+    made.sample = periodRead.rows.slice(0, SAMPLE_SIZE)
+      .map(r => sampleRow(r, String(r.referred_on ?? "")));
+    made.sampleIsPartial = (made.count ?? 0) > made.sample.length;
+    if (!identified) made.reason = "counted, and not named: you hold reporting access but not clinical access";
+  }
+  if (awaitingNews.status === "ok") {
+    awaitingNews.sample = awaitingRead.rows.slice(0, SAMPLE_SIZE)
+      .map(r => sampleRow(r, `recorded ${String(r.referred_on ?? "")}`));
+    awaitingNews.sampleIsPartial = (awaitingNews.count ?? 0) > awaitingNews.sample.length;
+    if (!identified) awaitingNews.reason = "counted, and not named: you hold reporting access but not clinical access";
+  }
+
+  return intelModule("referral_intelligence", "Referrals", data, sources, problems);
+}
+
+// ── 8. THE PARAMETER ALERT SURFACE -- PIE §7, AND §4's "PARAMETER DETERIORATION" ──────────────────────
+
+/** Migration 246 seeds this; read out of the migration, not remembered. Practitioner and assistant. */
+const CAP_PARAMETER_VIEW = "parameter.view";
+
+/** practice_parameter_alert.alert_type -- migration 246's CHECK, in full. LCP §7.2's list verbatim. */
+const PARAMETER_ALERT_TYPES: [string, string][] = [
+  ["reference_range", "Outside the reference range"],
+  ["patient_target", "Outside this patient's own target"],
+  ["change_from_baseline", "Changed from the recorded baseline"],
+  ["percentage_change", "Changed by more than a configured percentage of the previous value"],
+  ["rate_of_change", "Changing faster than the configured limit"],
+  ["missing_overdue", "A measurement is due and has not been taken"],
+  ["trend_deviation", "Departing from its own established trend"],
+];
+
+/** The severities as a tally vocabulary. `not_classified` is where NULL lands -- see the pick below. */
+const ALERT_SEVERITY_VOCABULARY: [string, string][] =
+  ALERT_SEVERITIES.map(s => [s.key, s.label] as [string, string]);
+
+/** The two levels that assert something is expected of somebody, in the order they are acted on. */
+const ACTIONABLE_SEVERITIES: { key: string; label: string; definition: string }[] = [
+  { key: "critical", label: "Critical, still open",
+    definition: "The most serious level this product has, and nobody has acknowledged, actioned or overridden it." },
+  { key: "action_required", label: "Action required, still open",
+    definition: "PIE §7's third level. Something is expected of somebody and no acknowledgement has been recorded." },
+];
+
+export type ParameterAlertData = {
+  /** Every open alert, whatever its severity. */
+  open: OpenableCount;
+  /** ⚠ NULL IS A NAMED SLICE CALLED "Not classified", never folded into a level and never a blank. */
+  bySeverity: IntelDistribution;
+  byType: IntelDistribution;
+  /** Critical and action-required, separately, each a list. */
+  actionable: OpenableCount[];
+  /** Open alerts whose rule declared no severity at all. Surfaced, not buried. */
+  notClassified: OpenableCount;
+  /** Open alerts on a parameter whose category is vital_sign -- PIE §3's surveillance, as far as it goes. */
+  vitalSigns: OpenableCount;
+  /** Of the alerts raised in the period, how many have since been acknowledged, actioned or overridden. */
+  acknowledged: IntelProportion;
+  /** Alerts raised in this period against the one before, as a signed count. */
+  raised: IntelComparison;
+  /** The settled taxonomy, in the payload, so no client invents a fifth level or a low. */
+  taxonomy: { key: string; label: string; meaning: string; isLevel: boolean }[];
+  identified: boolean;
+};
+
+/**
+ * THE ALERT FRAMEWORK PIE §7 ASKS FOR, WHICH ALREADY EXISTS AS A TABLE AND HAD NO DASHBOARD.
+ *
+ * ────────────────────────────────────────────────────────────────────────────────────────────────────
+ * ⚠ THIS ENGINE RAISES NO ALERT AND CHANGES NONE. It counts what the parameter engine wrote. That is the
+ * whole boundary: practice_parameter_alert is written by src/lib/practice/parameters.ts, which owns the
+ * rules, the thresholds and the rationale on every row. A second place deciding what is critical would
+ * produce two answers to "how many critical alerts are open", and they would agree until the day somebody
+ * changed a threshold.
+ *
+ * ⚠ AND NOTHING FROM THE PARAMETER SERIES IS MERGED INTO THIS PAYLOAD, DELIBERATELY. The per-patient
+ * series that engine returns carries a change expressed as a percentage -- correct there, because a
+ * monitoring plan's own rule is written in those terms and the figure is one patient's own reading against
+ * their own baseline. It is NOT correct here: this payload is asserted to hold no rate anywhere, a whole
+ * dashboard is drawn from that assertion, and merging a series into it would breach the assertion the
+ * moment somebody added a panel. So the ALERT ROWS are read, and the series is not.
+ * ────────────────────────────────────────────────────────────────────────────────────────────────────
+ *
+ * ⚠ A NULL SEVERITY IS "NOT CLASSIFIED" AND IS NEVER A LOW. Migration 246 makes the column nullable on
+ * purpose and states the rendering rule in its own comment. Two wrong ways to handle it were available
+ * and both are refused here: folding NULL into `informational` asserts a clinical judgement nobody made,
+ * and letting it fall into the distribution's `unrecorded` bucket reads as a data-quality defect when it
+ * is a rule that never declared one. It gets its own named slice and its own openable count.
+ *
+ * ⚠ THE OPERATIONAL SCALE IS NOT TOUCHED. PriorityTile.severity stays critical/warning/normal; migration
+ * 246 warns against merging the two in its own words, and this module adds no tile to that strip.
+ *
+ * TABLES/COLUMNS: practice_parameter_alert.workspace_id/.patient_id/.definition_id/.alert_type/
+ * .severity/.status/.raised_at/.rationale (migration 246); practice_parameter_definition.display_name/
+ * .category (246); practice_patient.display_name (193).
+ * CAPABILITY: parameter.view -- migration 246 seeds it for practitioner and practice_assistant, and
+ * deliberately not for practice_owner. An owner holding report.view therefore sees this panel say so.
+ */
+export async function parameterAlertIntelligence(
+  admin: any, ctx: WorkspaceContext, range: IntelRange, atTime: Date = new Date(),
+): Promise<IntelModule<ParameterAlertData>> {
+  const asOf = atTime.toISOString();
+  const sources = [
+    "practice_parameter_alert.severity", "practice_parameter_alert.alert_type",
+    "practice_parameter_alert.status", "practice_parameter_alert.raised_at",
+    "practice_parameter_definition.category", "practice_parameter_definition.display_name",
+  ];
+
+  if (!hasCapability(ctx, CAP_PARAMETER_VIEW))
+    return intelUnavailable("parameter_alerts", "Clinical parameter alerts",
+      `${CAP_PARAMETER_VIEW} is required to see parameter alerts. Migration 246 grants it to the practitioner and the practice assistant and withholds it from the practice owner, so a business role holding report.view sees this sentence rather than a zero.`,
+      sources);
+
+  const identified = hasCapability(ctx, CAP_PATIENT_VIEW);
+  const prov = (formula: string, src: string[], windowed: boolean): Provenance => ({
+    formula, sources: src,
+    fromDay: windowed ? range.period.fromDay : null,
+    toDay: windowed ? range.period.toDay : null,
+    asOf, provenance: "computed",
+  });
+
+  // OPEN IS A LIVE STATE AND IS NOT WINDOWED. An alert raised five weeks ago that nobody has
+  // acknowledged is open now, and hiding it because a reader picked a 30-day range would make the
+  // backlog shrink every time somebody narrowed the window.
+  const openFormula = "count of practice_parameter_alert rows whose status is `open` -- not acknowledged, not actioned, not overridden -- whenever they were raised; open is a live state and is deliberately not windowed";
+  const raisedFormula = `count of practice_parameter_alert rows whose raised_at falls inside ${range.period.label}`;
+
+  const alertsHref = "/practice/patients";
+  const open = openable("alerts_open", "Open parameter alerts",
+    "Raised by the parameter engine's own rules and not yet acknowledged, actioned or overridden.",
+    alertsHref, prov(openFormula, ["practice_parameter_alert.status"], false));
+  const notClassified = openable("alerts_not_classified", "Open, and not classified",
+    "The rule that raised these declared no severity. That is an absence of a classification, not a low one.",
+    alertsHref, prov(`${openFormula}, restricted to rows whose severity column is NULL; NULL is reported as "not classified" and is never rendered as a level`,
+      ["practice_parameter_alert.severity"], false));
+  const vitalSigns = openable("alerts_vital_signs", "Open on a vital sign",
+    "Open alerts whose parameter is categorised vital_sign. PIE §3 asks for vital-sign surveillance; this is what the parameter engine actually supports, and it covers only parameters somebody configured.",
+    alertsHref, prov(`${openFormula}, restricted to rows whose practice_parameter_definition.category is 'vital_sign'`,
+      ["practice_parameter_definition.category"], false));
+  const actionable = ACTIONABLE_SEVERITIES.map(s => openable(
+    `alerts_${s.key}`, s.label, s.definition, alertsHref,
+    prov(`${openFormula}, restricted to severity = '${s.key}'`, ["practice_parameter_alert.severity"], false),
+  ));
+
+  const emptyDistribution = (key: string, label: string, formula: string, src: string[]): IntelDistribution => ({
+    key, label, status: "unknowable", reason: null, slices: [], of: null, unrecorded: 0, formula, sources: src,
+  });
+
+  const data: ParameterAlertData = {
+    open, notClassified, vitalSigns, actionable,
+    bySeverity: emptyDistribution("by_severity", "How serious the rule said it was",
+      "count of OPEN practice_parameter_alert rows by practice_parameter_alert.severity; the four levels are migration 246's CHECK constraint in full and a NULL is counted under `not_classified`, which is a bucket rather than a level",
+      ["practice_parameter_alert.severity", "practice_parameter_alert.status"]),
+    byType: emptyDistribution("by_type", "Which rule fired",
+      "count of OPEN practice_parameter_alert rows by practice_parameter_alert.alert_type; the seven are migration 246's CHECK constraint in full, which is LCP §7.2's list verbatim",
+      ["practice_parameter_alert.alert_type", "practice_parameter_alert.status"]),
+    acknowledged: {
+      key: "acknowledged", label: "Alerts raised in this period that somebody has since answered",
+      numerator: null, denominator: null, status: "unknowable", reason: null, caveat: null,
+      formula: `${raisedFormula}, and of those, the ones whose status is now acknowledged, actioned or overridden; the cohort is what the period raised, because the fate of an older alert belongs to the period that raised it`,
+      sources: ["practice_parameter_alert.raised_at", "practice_parameter_alert.status"],
+    },
+    raised: compareOwnCounts({
+      key: "alerts_raised_change", label: "Alerts raised", range, formula: raisedFormula,
+      sources: ["practice_parameter_alert.raised_at"],
+      current: null, currentStatus: "unknowable", currentReason: "not computed",
+      prior: null, priorError: null,
+    }),
+    taxonomy: ALERT_SEVERITIES.map(s => ({ key: s.key, label: s.label, meaning: s.meaning, isLevel: s.isLevel })),
+    identified,
+  };
+
+  // ⚠ THE EMBED IS WHAT MAKES THE VITAL-SIGN LENS POSSIBLE AND IT IS ALSO THE MOST FRAGILE READ HERE.
+  // A wrong relationship name does not fail typecheck; PostgREST errors at runtime, and the honest
+  // failure path below turns that into "could not be read" rather than into an empty surveillance panel.
+  const openRead = await intelRows(admin.from("practice_parameter_alert")
+    .select("id, patient_id, alert_type, severity, raised_at, rationale, practice_parameter_definition:definition_id(display_name, category)")
+    .eq("workspace_id", ctx.workspaceId).eq("status", "open")
+    .order("raised_at", { ascending: false }));
+
+  const [periodRead, priorRead] = await Promise.all([
+    intelRows(admin.from("practice_parameter_alert").select("id, status")
+      .eq("workspace_id", ctx.workspaceId)
+      .gte("raised_at", range.period.fromIso).lt("raised_at", range.period.toIso)),
+    intelCount(admin.from("practice_parameter_alert").select("id", { count: "exact", head: true })
+      .eq("workspace_id", ctx.workspaceId)
+      .gte("raised_at", range.prior.fromIso).lt("raised_at", range.prior.toIso)),
+  ]);
+
+  const problems: string[] = [];
+  const openBad = openRead.error
+    ? `could not be read: ${openRead.error}`
+    : openRead.overflowed ? overflowNote("open alerts") : null;
+
+  if (openBad) {
+    for (const o of [open, notClassified, vitalSigns, ...actionable]) { o.status = "unreadable"; o.reason = openBad; }
+    problems.push(`open alerts: ${openBad}`);
+    data.bySeverity = { ...data.bySeverity, status: "unreadable", reason: openBad };
+    data.byType = { ...data.byType, status: "unreadable", reason: openBad };
+  } else {
+    const rows = openRead.rows;
+
+    // ⚠ NULL -> "not_classified" HAPPENS HERE, IN THE PICK, so it lands in a NAMED slice. Left as NULL
+    // it would fall into `unrecorded`, which reads as a column nobody fills in rather than as a rule
+    // that declared nothing.
+    data.bySeverity = distribution("by_severity", "How serious the rule said it was", openRead,
+      r => (typeof r.severity === "string" && r.severity ? r.severity : SEVERITY_NOT_CLASSIFIED),
+      ALERT_SEVERITY_VOCABULARY, data.bySeverity.formula, data.bySeverity.sources, "open alerts");
+    data.byType = distribution("by_type", "Which rule fired", openRead,
+      r => r.alert_type, PARAMETER_ALERT_TYPES, data.byType.formula, data.byType.sources, "open alerts");
+
+    const wantedIds = [...new Set(rows.map(r => r.patient_id).filter((x): x is string => typeof x === "string"))]
+      .slice(0, INTEL_ROW_CAP);
+    const nameById = new Map<string, string>();
+    if (identified && wantedIds.length > 0) {
+      const nameRead = await intelIn(admin, "practice_patient", "id, display_name", ctx.workspaceId, "id", wantedIds);
+      if (nameRead.error) problems.push(`patient names for the alert samples: ${nameRead.error}`);
+      else for (const p of nameRead.rows) nameById.set(p.id as string, String(p.display_name ?? ""));
+    }
+
+    const sampleRow = (r: any) => {
+      const pid = typeof r.patient_id === "string" ? r.patient_id : "";
+      const parameter = String(r.practice_parameter_definition?.display_name ?? "").trim() || "a parameter";
+      return {
+        id: String(r.id),
+        label: identified
+          ? `${nameById.get(pid) || "Unnamed record"} -- ${parameter}`
+          : `Patient ${pid.slice(0, 8)} -- ${parameter}`,
+        // THE RATIONALE, NOT A SEVERITY WORD. Migration 246 made rationale NOT NULL precisely so an
+        // alert can say why it fired, and a sample row that showed only the level would waste that.
+        note: String(r.rationale ?? "").slice(0, 90) || null,
+        href: identified && pid ? `/practice/patients/${pid}` : null,
+      };
+    };
+
+    const settle = (o: OpenableCount, matching: any[]) => {
+      o.status = "ok";
+      o.count = matching.length;
+      o.sample = matching.slice(0, SAMPLE_SIZE).map(sampleRow);
+      o.sampleIsPartial = matching.length > o.sample.length;
+      if (!identified) o.reason = "counted, and not named: you hold reporting access but not clinical access";
+    };
+
+    settle(open, rows);
+    settle(notClassified, rows.filter(r => !(typeof r.severity === "string" && r.severity)));
+    settle(vitalSigns, rows.filter(r => r.practice_parameter_definition?.category === "vital_sign"));
+    for (const o of actionable) {
+      const key = o.key.replace(/^alerts_/, "");
+      settle(o, rows.filter(r => r.severity === key));
+    }
+  }
+
+  // ── THE PERIOD COHORT: RAISED, AND ANSWERED ───────────────────────────────────────────────────────
+  const periodBad = periodRead.error
+    ? `could not be read: ${periodRead.error}`
+    : periodRead.overflowed ? overflowNote("alerts raised") : null;
+  if (periodBad) problems.push(`alerts raised in the period: ${periodBad}`);
+
+  const answered = periodBad ? null
+    : periodRead.rows.filter(r => r.status === "acknowledged" || r.status === "actioned" || r.status === "overridden").length;
+
+  data.acknowledged = {
+    ...data.acknowledged,
+    numerator: answered,
+    denominator: periodBad ? null : periodRead.rows.length,
+    status: periodBad ? "unreadable" : periodRead.rows.length === 0 ? "unknowable" : "ok",
+    reason: periodBad ?? (periodRead.rows.length === 0
+      ? "no alert was raised in this period, so there is nothing whose answering could be counted"
+      : null),
+    caveat: periodBad ? null
+      : "An alert raised on the last day of the period has had a day to be answered and one raised on the first has had a month. A denominator that ignores that makes every recent period look worse than every old one, and always will.",
+  };
+
+  data.raised = compareOwnCounts({
+    key: "alerts_raised_change", label: "Alerts raised", range, formula: raisedFormula,
+    sources: ["practice_parameter_alert.raised_at"],
+    current: periodBad ? null : periodRead.rows.length,
+    currentStatus: periodBad ? "unreadable" : "ok",
+    currentReason: periodBad,
+    prior: priorRead.count, priorError: priorRead.error,
+  });
+  if (priorRead.error) problems.push(`the previous period's alerts: ${priorRead.error}`);
+
+  return intelModule("parameter_alerts", "Clinical parameter alerts", data, sources, problems);
+}
+
 // ── 6. THE SUITE ─────────────────────────────────────────────────────────────────────────────────────
 
 export type IntelligenceSuite = {
@@ -3046,6 +3634,20 @@ export type IntelligenceSuite = {
   pathways: IntelModule<PathwayIntelligenceData>;
   cohorts: IntelModule<CohortData>;
   reports: IntelModule<RecentReportsData>;
+  /**
+   * CPR-PIE-001 §5's referral trends. ADDITIVE: practice_referral has existed since migration 238 and
+   * this is the first reader it has ever had.
+   */
+  referrals: IntelModule<ReferralIntelligenceData>;
+  /** CPR-PIE-001 §7's alert framework, over the store migration 246 shipped and nothing surfaced. */
+  alerts: IntelModule<ParameterAlertData>;
+  /**
+   * CPR-PIE-001 §3/§4/§5's modules that have NO store in this product, named where they would have gone.
+   *
+   * ⚠ IN THE PAYLOAD RATHER THAN ONLY ON THE PAGE, so the API says it too and no second surface renders
+   * one of these as a zero. The same device REFUSED_PATIENT_STATES uses, at module scale.
+   */
+  notBuildable: UnbuildableModule[];
   /** The doctrine, in the payload. No client can render any of this as a rate. */
   ratesComputed: false;
   /** True only when NOTHING could be read. One dead feeder must not blank the suite (s12). */
@@ -3079,12 +3681,16 @@ export async function intelligenceSuite(
   // practiceIntelligenceWorkspace already refuses politely when report.view is absent, and each of the
   // other four states its own permission answer. Nothing here short-circuits on a missing capability:
   // a page that renders nothing cannot explain why it rendered nothing.
-  const [workspace, patients, pathways, reports, cohorts, home] = await Promise.all([
+  const [workspace, patients, pathways, reports, cohorts, referrals, alerts, home] = await Promise.all([
     practiceIntelligenceWorkspace(admin, ctx, opts, atTime),
     patientAttentionIntelligence(admin, ctx, range, atTime),
     pathwayIntelligence(admin, ctx, atTime),
     recentReports(admin, ctx, atTime),
     cohortIntelligence(admin, ctx, range, opts.cohortBy ?? "diagnosis", atTime),
+    // CPR-PIE-001. Both fail alone, like every other feeder: a practice with no parameter engine
+    // configured and a dead referral table still gets the other nine areas.
+    referralIntelligence(admin, ctx, range, atTime),
+    parameterAlertIntelligence(admin, ctx, range, atTime),
     operationsHome(admin, ctx),
   ]);
 
@@ -3122,7 +3728,15 @@ export async function intelligenceSuite(
       })),
     },
     patients, pathways, cohorts, reports,
+    referrals, alerts,
+    // ⚠ NOT CONDITIONAL. The list of what cannot be built travels whatever the caller's permissions and
+    // whatever the reads did: a reader who sees no medication panel must be able to tell "not built" from
+    // "not permitted" from "nothing this month", and an omitted list answers none of the three.
+    notBuildable: PIE_NOT_BUILDABLE,
     ratesComputed: false,
+    // ⚠ THE TWO NEW MODULES DO NOT JOIN THIS TEST, AND THE OMISSION IS DELIBERATE. Referrals and
+    // parameter alerts are both legitimately unavailable in a practice that holds neither capability, and
+    // counting them here would let two permission answers blank a page whose other nine areas worked.
     unavailable: workspace.unavailable && patients.data === null && pathways.data === null,
   };
 }
@@ -3162,6 +3776,20 @@ export function suiteGroundingFigures(suite: IntelligenceSuite): GroundedFigure[
 
   for (const t of suite.priority.tiles)
     push(`priority_${t.key}`, t.label, t.count, t.status, t.formula, t.sources, t.fromDay, t.toDay);
+
+  // ── CPR-PIE-001's TWO NEW MODULES, ON THE SAME TERMS AS EVERYTHING ELSE ────────────────────────────
+  //
+  // ⚠ ONLY THE OPENABLE COUNTS. The distributions, the destination list and the acknowledgement
+  // proportion are deliberately NOT flattened: a grounding figure is a single number a sentence can be
+  // built on, and handing a generator a seven-slice breakdown invites it to describe the slices in a
+  // sentence with a proportion in it. The panels show those; the model is given counts.
+  const ref = suite.referrals.data;
+  if (ref) for (const o of [ref.made, ref.awaitingNews])
+    push(`referrals_${o.key}`, o.label, o.count, o.status, o.formula, o.sources, o.fromDay, o.toDay);
+
+  const al = suite.alerts.data;
+  if (al) for (const o of [al.open, al.notClassified, al.vitalSigns, ...al.actionable])
+    push(`alerts_${o.key}`, o.label, o.count, o.status, o.formula, o.sources, o.fromDay, o.toDay);
 
   return out;
 }
