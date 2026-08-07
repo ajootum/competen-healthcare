@@ -103,7 +103,16 @@ export default async function ExecutiveActionsCentre({ searchParams }: { searchP
             <h3 className="text-sm font-bold text-gray-900">Management Work Queue</h3>
             <div className="flex gap-1">{["All", "High Priority", "Due Today", "Overdue"].map((f, i) => <span key={f} className={`text-[10px] px-2 py-0.5 rounded-full ${i === 0 ? "bg-teal-600 text-white" : "bg-gray-100 text-gray-500"}`}>{f}</span>)}</div>
           </div>
-          {d.items.length === 0 ? <p className="text-sm text-gray-400">Nothing in the queue — no open escalations, incidents, improvement actions or pending validations.</p> : (
+          {/* ⚠ A SOURCE THAT FAILED TO LOAD CONTRIBUTES NOTHING AND USED TO SAY NOTHING, so the empty state
+              below claimed "no open escalations, incidents, improvement actions or pending validations" for a
+              queue that had not been read. The banner names what is missing; the list still shows whatever DID
+              load, because those rows are real — it just no longer claims to be the whole queue. */}
+          {d.unavailable?.length > 0 && (
+            <p className="mb-3 rounded-lg border border-[var(--cmp-color-error)] bg-[var(--cmp-surface-error)] px-3 py-2 text-xs text-rose-800">
+              <strong>This queue is incomplete.</strong> {d.unavailable.join(" and ")} could not be read, so anything waiting there is not shown here. Do not read this as “nothing outstanding”.
+            </p>
+          )}
+          {d.items.length === 0 ? <p className="text-sm text-gray-400">{d.unavailable?.length > 0 ? "Nothing loaded from the sources that did respond." : "Nothing in the queue — no open escalations, incidents, improvement actions or pending validations."}</p> : (
             <div className="overflow-x-auto">
               <table className="w-full text-xs">
                 <thead><tr className="text-gray-400 text-left border-b border-gray-100"><th className="py-2 pr-3 font-medium">Priority</th><th className="py-2 pr-3 font-medium">Type</th><th className="py-2 pr-3 font-medium">Item</th><th className="py-2 pr-3 font-medium">Details</th><th className="py-2 pr-3 font-medium">Requested By</th><th className="py-2 pr-3 font-medium">When</th><th className="py-2 pr-3 font-medium">Status</th><th className="py-2 font-medium">Action</th></tr></thead>

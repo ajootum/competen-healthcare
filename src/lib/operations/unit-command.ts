@@ -337,20 +337,30 @@ export async function loadExecutiveActionCentre(admin: any, hid: string | null, 
   const since = new Date(); since.setDate(since.getDate() - 30); const since30 = since.toISOString().slice(0, 10);
   const items: any[] = [];
 
+  // ⚠ EACH SOURCE BELOW CONTRIBUTES SILENTLY OR NOT AT ALL. The three reads discarded their errors inside a
+  // catch, so a failed one added no items and said nothing — and the page's empty state reads "Nothing in the
+  // queue — no open escalations, incidents, improvement actions or pending validations." That sentence was
+  // printed for a queue that had failed to load. Naming the sources that could not be read is the whole fix:
+  // the list is still shown (the sources that DID load are real), but it no longer claims to be complete.
+  const unavailable: string[] = [];
+
   try {
-    const { data } = await scope(admin.from("op_escalations").select("id, level, summary, escalation_type, status, created_at, response_deadline, profiles!raised_by(full_name), assigned:profiles!assigned_responder(full_name), op_patients!patient_id(label, department_id)").neq("status", "resolved").neq("status", "cancelled").order("level", { ascending: false }).limit(60));
+    const { data, error } = await scope(admin.from("op_escalations").select("id, level, summary, escalation_type, status, created_at, response_deadline, profiles!raised_by(full_name), assigned:profiles!assigned_responder(full_name), op_patients!patient_id(label, department_id)").neq("status", "resolved").neq("status", "cancelled").order("level", { ascending: false }).limit(60));
+    if (error) unavailable.push("escalations");
     for (const e of data ?? []) { if (dept && e.op_patients?.department_id !== dept) continue; items.push({ id: e.id, type: "Escalation", priority: e.level >= 4 ? "High" : e.level >= 3 ? "Medium" : "Low", item: `Escalation L${e.level}${e.op_patients?.label ? ` · ${e.op_patients.label}` : ""}`, details: e.summary ?? e.escalation_type ?? "—", by: e.profiles?.full_name ?? "—", owner: e.assigned?.full_name ?? "—", at: e.created_at, due: e.response_deadline ? e.response_deadline.slice(0, 10) : null, status: e.status, state: STATE_OF[e.status] ?? "Open", critical: e.level >= 4 }); }
-  } catch { /* pre-migration */ }
+  } catch { unavailable.push("escalations"); }
 
   try {
-    const { data } = await scope(admin.from("op_incidents").select("id, incident_type, severity, status, created_at, description, reported_by_name, near_miss, profiles!reported_by(full_name), op_shifts!shift_id(department_id)").in("status", ["reported", "investigating", "awaiting_action"]).order("created_at", { ascending: false }).limit(60));
+    const { data, error } = await scope(admin.from("op_incidents").select("id, incident_type, severity, status, created_at, description, reported_by_name, near_miss, profiles!reported_by(full_name), op_shifts!shift_id(department_id)").in("status", ["reported", "investigating", "awaiting_action"]).order("created_at", { ascending: false }).limit(60));
+    if (error) unavailable.push("incidents");
     for (const i of data ?? []) { if (dept && i.op_shifts?.department_id !== dept) continue; items.push({ id: i.id, type: "Incident", priority: i.severity === "high" || i.severity === "critical" ? "High" : "Medium", item: `${i.incident_type} incident${i.near_miss ? " (near miss)" : ""}`, details: i.description ?? `${i.incident_type} · ${i.status}`, by: i.profiles?.full_name ?? i.reported_by_name ?? "—", owner: "—", at: i.created_at, due: null, status: i.status, state: STATE_OF[i.status] ?? "Open", critical: i.severity === "critical" }); }
-  } catch { /* pre-migration */ }
+  } catch { unavailable.push("incidents"); }
 
   try {
-    const { data } = await scope(admin.from("op_quality_actions").select("id, title, action_type, status, priority, due_at, owner_name, created_at, op_shifts!shift_id(department_id)").in("status", ["open", "in_progress", "overdue"]).order("created_at", { ascending: false }).limit(60));
+    const { data, error } = await scope(admin.from("op_quality_actions").select("id, title, action_type, status, priority, due_at, owner_name, created_at, op_shifts!shift_id(department_id)").in("status", ["open", "in_progress", "overdue"]).order("created_at", { ascending: false }).limit(60));
+    if (error) unavailable.push("improvement actions");
     for (const a of data ?? []) { if (dept && a.op_shifts?.department_id !== dept) continue; items.push({ id: a.id, type: "Improvement", priority: a.priority === "high" ? "High" : a.status === "overdue" ? "High" : "Medium", item: a.title ?? a.action_type, details: `${a.action_type.replace(/_/g, " ")} · ${a.status}`, by: a.owner_name ?? "Quality", owner: a.owner_name ?? "—", at: a.created_at, due: a.due_at ? a.due_at.slice(0, 10) : null, status: a.status, state: STATE_OF[a.status] ?? "Open", critical: false }); }
-  } catch { /* pre-migration */ }
+  } catch { unavailable.push("improvement actions"); }
 
   if (!dept) try {
     const { data: cyc } = await scope(admin.from("competency_cycles").select("id").eq("status", "active").limit(3000));
@@ -403,7 +413,9 @@ export async function loadExecutiveActionCentre(admin: any, hid: string | null, 
     .map(i => ({ item: i.item, due: i.due, overdue: i.due < today, dueToday: i.due === today }));
 
   const honestChannels = ["Leave Requests", "Staffing Requests", "Policy Approvals", "Budget Requests", "Executive Messages"];
-  return { items, counts, distribution, byStatus, aiRecommendations, upcomingDue, honestChannels };
+  // `unavailable` names the sources that could not be read. An empty array means the queue below is complete;
+  // a non-empty one means it is NOT, and the page must say so rather than print its "nothing in the queue".
+  return { items, counts, distribution, byStatus, aiRecommendations, upcomingDue, honestChannels, unavailable };
 }
 
 // ── Executive Actions Modules (UMW-005A) ─────────────────────────────────────

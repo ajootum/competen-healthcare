@@ -23,9 +23,14 @@ export async function loadEscalations(admin: any, hid: string | null, isSuper: b
   const probe = await admin.from("op_escalations").select("id").limit(1);
   if (probe.error && /does not exist|schema cache/i.test(probe.error.message ?? "")) return { provisioned: false as const };
 
-  const { data } = await scope(admin.from("op_escalations")
+  // ⚠ THE PROBE ABOVE CATCHES A MISSING TABLE; THIS READ HAD NOTHING CATCHING A FAILED ONE. It discarded its
+  // error, so `rows` became [] and the page printed its green tick — "✅ No open escalations. All escalations
+  // are resolved." — for a queue nobody had managed to read. An escalation queue is the one list where an
+  // unearned all-clear is the whole harm: it exists to make somebody act.
+  const { data, error } = await scope(admin.from("op_escalations")
     .select("*, op_patients!patient_id(label, department_id, acuity_level, departments!department_id(name)), profiles!raised_by(full_name), assignee:profiles!assigned_responder(full_name)")
     .order("level", { ascending: false }).order("created_at", { ascending: false }).limit(600));
+  if (error) return { provisioned: true as const, unavailable: true as const, detail: error.message };
   let rows = (data ?? []);
   if (dept) rows = rows.filter((r: any) => r.op_patients?.department_id === dept);
 
@@ -80,5 +85,5 @@ export async function loadEscalations(admin: any, hid: string | null, isSuper: b
   if (open.filter((r: any) => r.escalation_type === "equipment").length) aiWarn.push({ tone: "amber", title: "Equipment issues trending up", sub: "Open equipment escalations present" });
   if (open.filter((r: any) => r.overdue).length) aiWarn.push({ tone: "red", title: "Overdue escalations", sub: `${open.filter((r: any) => r.overdue).length} past SLA — action required` });
 
-  return { provisioned: true as const, total: all.length, kpis, board, byType, bySeverity, timeline, hotspots, review, aiWarn };
+  return { provisioned: true as const, unavailable: false as const, total: all.length, kpis, board, byType, bySeverity, timeline, hotspots, review, aiWarn };
 }

@@ -70,6 +70,10 @@ export default async function EscalationsWorkspace({ searchParams }: { searchPar
   );
 
   if (!d.provisioned) return <div className="space-y-4">{header}<div className="bg-[var(--cmp-surface-warning)] border border-[var(--cmp-color-warning)] rounded-xl p-6"><p className="font-semibold text-amber-900">⚙️ Operations tables not provisioned</p><p className="text-sm text-amber-800 mt-1">The op_escalations table isn&apos;t available for this tenant yet.</p></div></div>;
+  // ⚠ A QUEUE THAT COULD NOT BE READ IS NOT AN EMPTY QUEUE. Without this branch the board below rendered its
+  // green tick and "All escalations are resolved" off `d.board.length === 0` — the same sentence for "nobody
+  // needs you" and "we could not look". This says which, and says nothing else about the unit.
+  if (d.unavailable) return <div className="space-y-4">{header}<div className="bg-[var(--cmp-surface-error)] border border-[var(--cmp-color-error)] rounded-xl p-6"><p className="font-semibold text-rose-900">The escalation queue could not be read</p><p className="text-sm text-rose-800 mt-1">This is <strong>not</strong> a statement that there are no open escalations — nothing on this page could be loaded. Reload, and escalate by phone if you are waiting on one.</p><p className="text-[11px] text-rose-700 mt-2 font-mono">{d.detail}</p></div></div>;
 
   const k = d.kpis; const r = d.review;
   return (
