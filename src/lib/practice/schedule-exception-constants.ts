@@ -8,7 +8,6 @@
 // A CONSTANT A SCREEN NEEDS DOES NOT BELONG IN A FILE THAT TOUCHES THE DATABASE.
 // ────────────────────────────────────────────────────────────────────────────────────────────────────
 
-import type { CardSwatch } from "@/lib/practice/palette";
 
 /**
  * s5.2's SIX CATEGORIES, expressed as the SEVEN VALUES migration 242's CHECK allows.
@@ -234,47 +233,11 @@ export function exceptionDates(fromDate: string, toDate: string, cap = 400): str
 // OWN HUE.
 // ────────────────────────────────────────────────────────────────────────────────────────────────────
 
-/**
- * Layer 2's summary figures.
- *
- *   changes    amber   -- the layer's own hue in LAYER_SWATCH. A change is not a fault, it is a change.
- *   affected   rose    -- people who may be about to lose an appointment. The only figure on this screen
- *                         that is about a person rather than a date, and it is the one that must be
- *                         found rather than read.
- *   pending    violet  -- decided to park. palette.ts's hue for the unplanned and the organisational.
- *   unreviewed slate   -- ⚠ NEVER GREEN AND NEVER NOUGHT. An unreviewed change is an open question, and
- *                         a green tick here would be the screen answering it on the practitioner's
- *                         behalf. Slate and dashed, like every other "could not be read" in this product.
- */
-export const LAYER2_STAT_SWATCH: Record<string, CardSwatch> = {
-  changes: {
-    badge: "bg-amber-100 text-amber-700", figure: "text-amber-700",
-    box: "border-amber-200/80 bg-amber-50/70", accent: "bg-amber-400",
-    icon: "⚑", caption: "text-amber-800/70",
-  },
-  affected: {
-    badge: "bg-rose-100 text-rose-700", figure: "text-rose-700",
-    box: "border-rose-200/80 bg-rose-50/70", accent: "bg-rose-400",
-    icon: "☎", caption: "text-rose-800/70",
-  },
-  pending: {
-    badge: "bg-violet-100 text-violet-700", figure: "text-violet-700",
-    box: "border-violet-200/80 bg-violet-50/70", accent: "bg-violet-400",
-    icon: "⧗", caption: "text-violet-800/70",
-  },
-  unreviewed: {
-    badge: "bg-slate-100 text-slate-500", figure: "text-slate-600",
-    box: "border-slate-300 bg-slate-50/80", accent: "bg-slate-300",
-    icon: "?", caption: "text-slate-500",
-  },
-};
 
-/** The chip on an exception row. Three states, and the third is not the second. */
-export const IMPACT_STATE_CHIP: Record<string, { label: string; chip: string; dot: string }> = {
-  clear: { label: "Nobody affected", chip: "bg-emerald-100 text-emerald-800", dot: "bg-emerald-500" },
-  pending: { label: "Patients to decide", chip: "bg-rose-100 text-rose-800", dot: "bg-rose-500" },
-  settled: { label: "All decided", chip: "bg-[var(--cp-primary)]/12 text-[var(--cp-primary-deep)]", dot: "bg-[var(--cp-primary)]" },
-  // ⚠ NOT "nobody affected". Those are different answers and only one of them is safe.
-  unreviewed: { label: "Impact not reviewed", chip: "bg-slate-100 text-slate-600 ring-1 ring-slate-300", dot: "bg-slate-400" },
-  unreadable: { label: "Could not be read", chip: "bg-slate-100 text-slate-500 ring-1 ring-slate-300", dot: "bg-slate-300" },
-};
+
+// The swatches moved to palette.ts (see its Setup/Availability section). RE-EXPORTED rather than
+// re-declared, so consumers keep their import and there is exactly ONE definition of each colour.
+export {
+  LAYER2_STAT_SWATCH,
+  IMPACT_STATE_CHIP,
+} from "@/lib/practice/palette";

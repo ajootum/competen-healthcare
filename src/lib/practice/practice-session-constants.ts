@@ -9,7 +9,6 @@
 // ────────────────────────────────────────────────────────────────────────────────────────────────────
 
 import { ACTIVITY_TYPES, ACTIVITY_LABEL, type ActivityType } from "@/lib/practice/activity-constants";
-import type { CardSwatch } from "@/lib/practice/palette";
 
 /**
  * s4.3's "Activity type", and it is NOT a new list.
@@ -138,122 +137,23 @@ export function suggestSessionName(args: {
 // scans in the first seconds of a setup session must be FOUND, not READ left to right.
 // ────────────────────────────────────────────────────────────────────────────────────────────────────
 
-/**
- * CPR-V5-008's three domains.
- *
- *   foundation      emerald -- who you are and where you work. Settled facts, and the only domain whose
- *                              completion is unambiguously good news. palette.ts's growth hue.
- *   operations      indigo  -- the practice's primary. How the practice RUNS day to day, which is the
- *                              live-work hue everywhere else in this product.
- *   administration  violet  -- people and systems around the clinical work. palette.ts's hue for the
- *                              unplanned and the organisational.
- */
-export const SETUP_DOMAIN_SWATCH: Record<string, CardSwatch> = {
-  foundation: {
-    badge: "bg-emerald-100 text-emerald-700", figure: "text-emerald-700",
-    box: "border-emerald-200/80 bg-emerald-50/70", accent: "bg-emerald-400",
-    icon: "⌂", caption: "text-emerald-800/70",
-  },
-  operations: {
-    badge: "bg-[var(--cp-primary)]/12 text-[var(--cp-primary-deep)]", figure: "text-[var(--cp-primary-deep)]",
-    box: "border-[var(--cp-primary)]/25 bg-[var(--cp-primary)]/[0.06]", accent: "bg-[var(--cp-primary)]",
-    icon: "▦", caption: "text-[var(--cp-primary-deep)]/70",
-  },
-  administration: {
-    badge: "bg-violet-100 text-violet-700", figure: "text-violet-700",
-    box: "border-violet-200/80 bg-violet-50/70", accent: "bg-violet-400",
-    icon: "⚇", caption: "text-violet-800/70",
-  },
-};
 
-/**
- * s7's four progress states, plus the two this build needs and s7 does not have.
- *
- * ⚠ `unreadable` IS NOT A DESIGN ADDITION, IT IS THE FIRST DOCTRINE. A domain whose configuration could
- * not be read is not a domain with nothing in it, and drawing it as NOT STARTED would tell somebody to
- * go and configure something that may already be configured. Slate, dashed, and it says so.
- * `unavailable` is the same distinction for a domain whose every module this caller may not open.
- */
-export const DOMAIN_STATE_CHIP: Record<string, { label: string; chip: string; dot: string }> = {
-  complete: { label: "Complete", chip: "bg-emerald-100 text-emerald-800", dot: "bg-emerald-500" },
-  in_progress: { label: "In progress", chip: "bg-[var(--cp-primary)]/12 text-[var(--cp-primary-deep)]", dot: "bg-[var(--cp-primary)]" },
-  needs_attention: { label: "Needs attention", chip: "bg-amber-100 text-amber-800", dot: "bg-amber-500" },
-  not_started: { label: "Not started", chip: "bg-slate-100 text-slate-600", dot: "bg-slate-300" },
-  unreadable: { label: "Could not be read", chip: "bg-slate-100 text-slate-500 ring-1 ring-dashed ring-slate-300", dot: "bg-slate-300" },
-  unavailable: { label: "Not yours to change", chip: "bg-slate-100 text-slate-500", dot: "bg-slate-300" },
-};
 
-/** Module chips on the domain cards. The setup hub's four states plus the read failure. */
-export const MODULE_STATE_CHIP: Record<string, { label: string; chip: string; dot: string; mark: string }> = {
-  configured: { label: "Configured", chip: "bg-emerald-100 text-emerald-700", dot: "bg-emerald-500", mark: "✓" },
-  needs_attention: { label: "Needs attention", chip: "bg-amber-100 text-amber-700", dot: "bg-amber-500", mark: "!" },
-  not_built: { label: "Not built", chip: "bg-slate-100 text-slate-500", dot: "bg-slate-300", mark: "–" },
-  no_access: { label: "No access", chip: "bg-slate-100 text-slate-400", dot: "bg-slate-300", mark: "⚿" },
-  unreadable: { label: "Could not be read", chip: "bg-slate-100 text-slate-500", dot: "bg-slate-300", mark: "?" },
-};
 
-/**
- * s7's four readiness indicators.
- *
- * Emerald when met and slate when not -- deliberately NOT amber. An unmet readiness indicator is a
- * statement of where the practice has got to, not a fault; amber would make "you have not published a
- * booking page" read as a problem for a practitioner who never intends to.
- */
-export const READINESS_SWATCH = {
-  met: { ring: "text-emerald-600", label: "text-emerald-900", mark: "✓" },
-  unmet: { ring: "text-slate-300", label: "text-slate-600", mark: "○" },
-  unreadable: { ring: "text-slate-300", label: "text-slate-500", mark: "?" },
-} as const;
 
-/** The three layer cards of CPR-V5-007 s3.2, numbered as the specification numbers them. */
-export const LAYER_SWATCH: Record<string, CardSwatch> = {
-  regular_practice: {
-    badge: "bg-emerald-100 text-emerald-700", figure: "text-emerald-700",
-    box: "border-emerald-200/80 bg-emerald-50/70", accent: "bg-emerald-400",
-    icon: "▤", caption: "text-emerald-800/70",
-  },
-  changes: {
-    badge: "bg-amber-100 text-amber-700", figure: "text-amber-700",
-    box: "border-amber-200/80 bg-amber-50/70", accent: "bg-amber-400",
-    icon: "⚑", caption: "text-amber-800/70",
-  },
-  patient_booking: {
-    badge: "bg-violet-100 text-violet-700", figure: "text-violet-700",
-    box: "border-violet-200/80 bg-violet-50/70", accent: "bg-violet-400",
-    icon: "⚭", caption: "text-violet-800/70",
-  },
-};
 
-/** Layer 1's four summary figures, in the comp's order and hues. */
-export const LAYER1_STAT_SWATCH: Record<string, { badge: string; figure: string; icon: string }> = {
-  locations: { badge: "bg-[var(--cp-primary)]/12 text-[var(--cp-primary-deep)]", figure: "text-[var(--cp-primary-deep)]", icon: "◎" },
-  sessions: { badge: "bg-cyan-100 text-cyan-700", figure: "text-cyan-700", icon: "▦" },
-  appointment_types: { badge: "bg-violet-100 text-violet-700", figure: "text-violet-700", icon: "⚭" },
-  capacity: { badge: "bg-amber-100 text-amber-700", figure: "text-amber-700", icon: "☰" },
-};
 
-/**
- * Session cards on the weekly board, coloured BY ACTIVITY TYPE rather than by column.
- *
- * The comp's legend reads "Outpatient Clinic · Inpatient · Virtual · Procedure · Day off" -- five
- * colours over what a session IS, which is the only thing on that board worth a colour. Colouring by
- * weekday would make Monday green because it is first.
- */
-export const ACTIVITY_HUE: Record<string, string> = {
-  outpatient_clinic: "var(--cp-success)",
-  ward_round: "#7C3AED",
-  theatre: "var(--cp-accent)",
-  emergency_consult: "var(--cp-error)",
-  virtual_clinic: "var(--cp-warning)",
-  telephone_review: "var(--cp-info)",
-  administration: "var(--cp-slate-500)",
-  teaching: "var(--cp-info)",
-  meeting: "var(--cp-slate-500)",
-  research: "var(--cp-info)",
-  leave: "var(--cp-warning)",
-  travel: "var(--cp-slate-500)",
-  custom: "var(--cp-primary)",
-};
 
-/** A session nobody has typed yet. Grey, and it must stay grey: it is an absence, not a kind of work. */
-export const ACTIVITY_HUE_UNSET = "var(--cp-slate-400)";
+
+// The swatches moved to palette.ts (see its Setup/Availability section). RE-EXPORTED rather than
+// re-declared, so consumers keep their import and there is exactly ONE definition of each colour.
+export {
+  SETUP_DOMAIN_SWATCH,
+  DOMAIN_STATE_CHIP,
+  MODULE_STATE_CHIP,
+  READINESS_SWATCH,
+  LAYER_SWATCH,
+  LAYER1_STAT_SWATCH,
+  ACTIVITY_HUE,
+  ACTIVITY_HUE_UNSET,
+} from "@/lib/practice/palette";
