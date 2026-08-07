@@ -7,13 +7,14 @@ import { practiceSessions, readingValue, type SessionView, type LocationView } f
 import { bookingPreview } from "@/lib/practice/availability-config";
 import { scheduleChanges, impactReadingValue, type ScheduleChangeView, type QueuedAction } from "@/lib/practice/schedule-exceptions";
 import { formatDayTime } from "@/lib/datetime";
-import {
-  LAYER_SWATCH, LAYER1_STAT_SWATCH, appointmentTypeLabel,
-} from "@/lib/practice/practice-session-constants";
+import { LAYER_SWATCH, LAYER1_STAT_SWATCH } from "@/lib/practice/practice-session-constants";
 import { LAYER2_STAT_SWATCH } from "@/lib/practice/schedule-exception-constants";
+import { LAYER3_STAT_SWATCH } from "@/lib/practice/booking-rule-constants";
+import { bookingRulesWorkspace, ruleReadingValue, type BookingRuleCard, type RuleConflict } from "@/lib/practice/booking-rules";
 import LayerNav, { type Layer } from "./LayerNav";
 import SessionWorkspace from "./SessionWorkspace";
 import ExceptionWorkspace from "./ExceptionWorkspace";
+import RuleWorkspace from "./RuleWorkspace";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -30,15 +31,17 @@ import ExceptionWorkspace from "./ExceptionWorkspace";
 // further has been started.
 //
 //   Phase 1  BUILT     the shell, the navigator, Layer 1 in full (s4), migration 240's session entity.
-//   Phase 2  NOT BUILT s5.3's affected-booking workflow. Exceptions themselves already exist from
-//                      migration 230 and Layer 2 shows the real ones, and the workflow that resolves
-//                      the bookings a change strands does not exist.
-//   Phase 3  NOT BUILT s7's booking-rule CARD model and its builder. The single-row rule editor that
-//                      already works is linked from Layer 3 rather than replaced by a card that cannot
-//                      be edited -- retiring a working editor to show a mock-up of a better one is a
-//                      regression wearing a redesign.
-//   Phase 4  NOT BUILT s8's patient booking access -- handle, OTP, publish state.
-//   Phase 5  NOT BUILT s7.5's follow-up windows and s7.7's walk-in queue rules.
+//   Phase 2  BUILT     s5.3's affected-booking workflow -- who is booked into the time being changed,
+//                      and what happens to them, required before the change is written (migration 242).
+//   Phase 3  BUILT     s7's booking-rule CARD model and its builder, s11's specificity ladder and
+//                      conflict validation, rule versioning, and server-side evaluation for INTERNAL
+//                      booking (migration 244). Every booking made through it records the rule id AND
+//                      VERSION that decided it (AC-13). s7.2's twelve builder sections: eight are real
+//                      and enforced, four are drawn as what they are with the phase that owns them.
+//   Phase 4  NOT BUILT s8's patient booking access -- handle, OTP, publish state. A rule may be written
+//                      for the patient and referral channels (AC-06 requires that) and a booking
+//                      through them is refused with the phase named, because none could arrive.
+//   Phase 5  NOT BUILT s7.5's recall queue and s7.7's walk-in session limits, cutoff and queue rules.
 //   Phase 6  NOT BUILT s10's scenario preview and publish validation.
 //
 // EVERY LATER-PHASE SURFACE THE COMP DRAWS IS RENDERED AS NOT BUILT, WITH THE PHASE NAMED. Not greyed
@@ -94,7 +97,9 @@ export default async function AvailabilityBookingPage({ searchParams }: {
   // Layer 2's read runs whether or not Layer 2 is the open layer, because s3.2's navigator card carries
   // its completion summary -- "3 upcoming changes · 1 patient action required" -- and a card that said
   // nothing until you clicked it would be a card you had to click to find out you needed to.
-  const [s, x] = await Promise.all([practiceSessions(admin, ctx), scheduleChanges(admin, ctx)]);
+  const [s, x, r] = await Promise.all([
+    practiceSessions(admin, ctx), scheduleChanges(admin, ctx), bookingRulesWorkspace(admin, ctx),
+  ]);
 
   const { layer } = await searchParams;
   const active = Number(layer) >= 1 && Number(layer) <= 3 ? Number(layer) : 1;
@@ -102,7 +107,6 @@ export default async function AvailabilityBookingPage({ searchParams }: {
   const sessions = readingValue(s.sessions, [] as SessionView[]);
   const locations = readingValue(s.locations, [] as LocationView[]);
   const clinics = readingValue(s.clinics, [] as any[]);
-  const rules = readingValue(s.bookingRules, [] as any[]);
 
   // ── LAYER 2 (CPR-V5-007 Phase 2). Every figure here comes from the one read above, and each carries
   //    whether it could be read at all -- a nought and an outage are drawn differently on this layer,
@@ -117,16 +121,19 @@ export default async function AvailabilityBookingPage({ searchParams }: {
   const liveSessions = sessions.filter(x => x.status === "active" && x.effectiveState === "current");
   const activeLocations = locations.filter(l => l.active);
 
-  // ── s6.2's layer dashboard, computed where it can be and refused where it cannot ────────────────
+  // ── s6.2's layer dashboard. EVERY FIGURE NOW COMES FROM THE RULES ENGINE (Phase 3) rather than
+  //    from a count of rows beside a promise.
   //
-  // "Uncovered sessions" is real: a session anybody may book into that no active rule matches is a
-  // session with no notice period, no horizon and no walk-in limit. "Conflicts" is NOT computable --
-  // s11's rule is about equal specificity AND EXPLICIT PRIORITY, and practice_booking_rule has no
-  // priority column, so any number here would be invented.
-  const ruleCovers = (sess: SessionView) => rules.some(r =>
-    (r.location_id ?? null) === (sess.locationId ?? null) || r.location_id === null);
+  // "Uncovered sessions" is a session anybody may book into that no rule in force covers -- a session
+  // with no notice period, no horizon and no capacity limit. "Conflicts" used to be uncomputable
+  // because practice_booking_rule had no priority column; migration 244 added one, so s11's test is a
+  // real number and the pairs behind it are named on the layer.
   const bookableSessions = liveSessions.filter(x => x.bookingMode !== "none");
-  const uncovered = bookableSessions.filter(x => !ruleCovers(x)).length;
+  const ruleCards = ruleReadingValue(r.rules, [] as BookingRuleCard[]);
+  const ruleConflicts = ruleReadingValue(r.conflicts, [] as RuleConflict[]);
+  const uncoveredSessions = ruleReadingValue(r.uncovered, [] as { id: string; name: string }[]);
+  const rulesUnreadable = r.rules.state === "unreadable" ? r.rules.reason : null;
+  const activeRules = ruleCards.filter(c => c.status === "active");
 
   const fortnightEnd = new Date(Date.parse(`${s.today}T12:00:00Z`) + 13 * 86400000).toISOString().slice(0, 10);
   const preview = await bookingPreview(admin, ctx, { fromDate: s.today, toDate: fortnightEnd });
@@ -206,16 +213,24 @@ export default async function AvailabilityBookingPage({ searchParams }: {
     {
       n: 3, key: "patient_booking", title: "Patient Booking",
       blurb: "Decide what patients can book, who may book and how your capacity is protected.",
-      summary: s.bookingRules.state !== "ok" ? "could not be read"
-        : `${rules.length} active rule${rules.length === 1 ? "" : "s"} · not published`,
+      summary: rulesUnreadable ? "could not be read"
+        : `${activeRules.length} rule${activeRules.length === 1 ? "" : "s"} in force`
+          + (ruleConflicts.length > 0 ? ` · ${ruleConflicts.length} conflict${ruleConflicts.length === 1 ? "" : "s"} to resolve` : "")
+          + " · not published",
       children: [
         {
           key: "rules", label: "Booking rules",
-          state: s.bookingRules.state !== "ok" ? "unreadable" : rules.length > 0,
-          detail: s.bookingRules.state !== "ok" ? null : `${rules.length}`,
+          state: rulesUnreadable ? "unreadable" : activeRules.length > 0,
+          detail: rulesUnreadable ? null : `${activeRules.length} of ${ruleCards.length}`,
+        },
+        {
+          // ⚠ `false` WHEN SOMETHING IS DEADLOCKED, not `true` when nothing is. s11 blocks activation
+          // until a conflict is resolved, so this is a question somebody has to answer.
+          key: "conflicts", label: "Rule conflicts",
+          state: rulesUnreadable ? "unreadable" : ruleConflicts.length === 0,
+          detail: rulesUnreadable ? null : `${ruleConflicts.length}`,
         },
         { key: "access", label: "Booking access", state: "unreadable", detail: "Phase 4" },
-        { key: "form", label: "Registration form", state: null, detail: "in Setup" },
         { key: "publish", label: "Preview & publish", state: "unreadable", detail: "Phase 6" },
       ],
     },
@@ -258,20 +273,23 @@ export default async function AvailabilityBookingPage({ searchParams }: {
 
         {/* ── THE PHASE BANNER. Stated once, at the top, in the practitioner's words. ───────────── */}
         <section className="flex flex-wrap items-start gap-3 rounded-xl border border-[var(--cp-primary)]/20 bg-[var(--cp-primary)]/[0.05] p-3.5">
-          <span aria-hidden className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[var(--cp-primary)]/12 text-[15px] text-[var(--cp-primary-deep)]">②</span>
+          <span aria-hidden className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[var(--cp-primary)]/12 text-[15px] text-[var(--cp-primary-deep)]">③</span>
           <div className="min-w-0 flex-1">
             <p className="text-[12.5px] font-bold text-gray-900">
-              This workspace is at Phase 2 of six: your regular practice, and changes to it.
+              This workspace is at Phase 3 of six: your regular practice, changes to it, and the rules
+              that decide a booking.
             </p>
             <p className="text-[11px] leading-relaxed text-gray-600">
               Layer 1 is complete — locations, named recurring sessions, activity types, appointment
               types, capacity and walk-ins. Layer 2 is complete for the thing that matters most about a
               schedule change: before one is made, this screen works out who is booked into the time you
-              are changing, shows you their appointments, and will not write the change until you have
-              said what happens to them. Three of s5.3&apos;s six resolutions are real; the other two and
-              a half are named below rather than mimed. Layer 3 shows the booking rules you already have;
-              the rule card builder is Phase 3, and the patient-facing booking page — handle, link, OTP,
-              publish — is Phase 4. Nothing below is a control that does nothing.
+              are changing and will not write the change until you have said what happens to them. Layer
+              3 is now real for booking you and your staff do: rules are cards with a name, a scope, a
+              priority and a version, the most specific one decides, two rules nothing can choose between
+              block each other rather than being guessed at, and every booking made through the engine
+              records which rule and which version allowed it. The patient-facing booking page — handle,
+              link, OTP, publish — is Phase 4, so no patient can reach any of this yet. Nothing below is
+              a control that does nothing.
             </p>
           </div>
         </section>
@@ -473,101 +491,111 @@ export default async function AvailabilityBookingPage({ searchParams }: {
                 <NotBuilt
                   title="Offering the next available appointment, and a waiting list"
                   phase="Phase 3 and Phase 5"
-                  what={"s5.3 lists six resolutions and three of them are real here — keep pending, cancel the appointment, and record that the patient was moved to another one. “Offer next available” needs s7's rule engine to generate and hold alternatives and something to send them with, and “move to waiting list” needs a waiting list: practice_appointment has six statuses and none of them is wait-listed, and there is no priority to preserve. Both are refused by the engine with the reason rather than stored as a word that would make a patient look handled."} />
+                  what={"s5.3 lists six resolutions and three of them are real here — keep pending, cancel the appointment, and record that the patient was moved to another one. s7's rule engine now exists (Phase 3), so an alternative could be evaluated; what is still missing is somewhere to HOLD an offer and anything that would send it, which is why “offer next available” remains refused rather than stored. “Move to waiting list” needs a waiting list: practice_appointment has six statuses and none of them is wait-listed, and there is no priority to preserve. Both are refused by the engine with the reason rather than stored as a word that would make a patient look handled."} />
               </>
             )}
 
             {/* ══ LAYER 3 ═══════════════════════════════════════════════════════════════════════ */}
             {active === 3 && (
               <>
-                {/* s6.2's layer dashboard. Every figure computed or honestly absent. */}
-                <div className="grid gap-2.5 sm:grid-cols-2 lg:grid-cols-3">
+                {/* s6.2's layer dashboard. Tinted badge, AND THE FIGURE IN THE TILE'S OWN HUE.
+                    ⚠ THE CONFLICT TILE IS NOT A GOOD-NEWS TILE. s11 blocks activation until a conflict
+                    is resolved, so a figure above nought is work, not a note. */}
+                <div className="grid gap-2.5 sm:grid-cols-2 lg:grid-cols-4">
                   {[
                     {
-                      key: "bookable_locations",
-                      value: `${activeLocations.filter(l => l.supportsInternalBooking || l.supportsPatientBooking).length} of ${activeLocations.length}`,
-                      label: "Locations anybody may book into", tone: "text-[var(--cp-primary-deep)]",
+                      key: "rules", n: rulesUnreadable ? null : activeRules.length,
+                      label: rulesUnreadable ? "Rules in force — could not be read"
+                        : `Rules in force, of ${ruleCards.length} written`,
                     },
                     {
-                      key: "rules", value: s.bookingRules.state === "ok" ? String(rules.length) : "—",
-                      label: "Active booking rules", tone: "text-violet-700",
+                      key: "covered",
+                      n: rulesUnreadable || r.uncovered.state !== "ok" ? null
+                        : bookableSessions.length - uncoveredSessions.length,
+                      label: r.uncovered.state !== "ok" ? "Sessions covered — could not be read"
+                        : `Bookable sessions a rule covers, of ${bookableSessions.length}`,
                     },
                     {
-                      key: "uncovered", value: s.sessions.state === "ok" ? String(uncovered) : "—",
-                      label: "Bookable sessions no rule covers", tone: uncovered > 0 ? "text-amber-700" : "text-emerald-700",
+                      key: "conflicts", n: rulesUnreadable ? null : ruleConflicts.length,
+                      label: "Pairs of rules nothing can choose between",
                     },
                     {
-                      key: "access", value: "None", label: "Booking access — Phase 4, not built", tone: "text-slate-400",
+                      key: "decided",
+                      n: r.decided.state === "ok" ? r.decided.value.withRule : null,
+                      label: r.decided.state !== "ok" ? "Bookings carrying a rule — could not be read"
+                        : `Bookings carrying the rule that decided them · ${r.decided.value.withoutRule} predate the engine`,
                     },
-                    {
-                      // s11 needs an explicit PRIORITY to decide equal-specificity conflicts and
-                      // practice_booking_rule has no such column. A number here would be invented.
-                      key: "conflicts", value: "—", label: "Rule conflicts — needs rule priority, Phase 3", tone: "text-slate-400",
-                    },
-                    {
-                      key: "publish", value: "—", label: "Publish status — Phase 6, not built", tone: "text-slate-400",
-                    },
-                  ].map(m => (
-                    <div key={m.key} className={card}>
-                      <p className={`text-[22px] font-bold leading-none ${m.tone}`}>{m.value}</p>
-                      <p className="mt-1 text-[11px] leading-snug text-gray-500">{m.label}</p>
-                    </div>
-                  ))}
+                  ].map(t => {
+                    const st = LAYER3_STAT_SWATCH[t.key];
+                    return (
+                      <div key={t.key} className={card}>
+                        <span aria-hidden className={`flex h-8 w-8 items-center justify-center rounded-lg text-[15px] ${st.badge}`}>
+                          {st.icon}
+                        </span>
+                        <p className={`mt-2 text-[24px] font-bold leading-none ${t.n === null ? "text-slate-300" : st.figure}`}>
+                          {t.n === null ? "—" : t.n}
+                        </p>
+                        <p className="mt-1 text-[11px] leading-snug text-gray-500">{t.label}</p>
+                      </div>
+                    );
+                  })}
                 </div>
 
-                <section className={card}>
-                  <div className="mb-3 flex flex-wrap items-center gap-2">
-                    <span aria-hidden className="flex h-7 w-7 items-center justify-center rounded-lg bg-violet-100 text-[14px] text-violet-700">⚌</span>
-                    <div className="min-w-0">
-                      <h3 className="text-[14px] font-bold text-gray-900">Booking rules in force</h3>
-                      <p className="text-[11px] text-gray-500">
-                        These are the rules that actually refuse a booking today.
-                      </p>
-                    </div>
-                    <Link href="/practice/setup/availability?step=4"
-                      className="ml-auto rounded-lg border border-gray-200 bg-white px-3.5 py-2 text-[12px] font-semibold text-gray-700 hover:bg-gray-50">
-                      Edit rules
-                    </Link>
-                  </div>
-                  {s.bookingRules.state !== "ok" ? (
-                    <Unreadable what="Your booking rules could not be read." />
-                  ) : rules.length === 0 ? (
-                    <p className="text-[12px] text-amber-700">
-                      No rule is in force, so there is no notice period, no booking horizon and no
-                      walk-in limit anywhere in this practice.
-                    </p>
-                  ) : (
-                    <ul className="grid gap-2 sm:grid-cols-2">
-                      {rules.map(r => (
-                        <li key={r.id} className="rounded-lg border border-gray-200 px-3 py-2.5">
-                          <p className="text-[12.5px] font-bold text-gray-900">
-                            {r.location_id ? locations.find(l => l.id === r.location_id)?.name ?? "A location" : "Whole practice"}
-                            {r.appointment_type ? ` · ${appointmentTypeLabel(r.appointment_type)}` : ""}
-                          </p>
-                          {/* s15: plain language, never "policy expression". */}
-                          <p className="mt-0.5 text-[11px] leading-relaxed text-gray-600">
-                            {r.booking_horizon_days
-                              ? `Patients may book from ${r.booking_horizon_days} days before`
-                              : "Patients may book at any distance ahead"}
-                            {r.lead_time_minutes
-                              ? ` until ${r.lead_time_minutes} minutes before the appointment.`
-                              : " until the appointment starts."}
-                            {r.walk_in_daily_limit != null && ` Up to ${r.walk_in_daily_limit} walk-ins a day.`}
-                          </p>
-                          <p className="mt-1 text-[10px] text-gray-400">
-                            Visibility &ldquo;{r.visibility ?? "not set"}&rdquo; is stored and read by
-                            nothing — there is no patient-facing page for it to govern.
-                          </p>
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                </section>
+                {/* ⚠ AC-13, SAID IN WORDS AS WELL AS COUNTED. A null applied rule is TRUE of every
+                    appointment made before this engine existed, and the screen says so rather than
+                    leaving a gap somebody would read as a fault. */}
+                {r.decided.state === "ok" && r.decided.value.withoutRule > 0 && (
+                  <p className="rounded-lg border border-gray-200 bg-white px-3.5 py-2.5 text-[11.5px] leading-relaxed text-gray-600">
+                    <span className="font-bold">{r.decided.value.withoutRule}</span> booking
+                    {r.decided.value.withoutRule === 1 ? " was" : "s were"} not decided by a rule. That is
+                    true rather than missing: they were made before the rules engine, or through a door
+                    that does not consult one. Nothing here will attribute them to a rule after the fact.
+                  </p>
+                )}
+
+                {uncoveredSessions.length > 0 && (
+                  <p className="rounded-lg border border-amber-200 bg-amber-50/60 px-3.5 py-2.5 text-[11.5px] leading-relaxed text-amber-900">
+                    <span className="font-bold">{uncoveredSessions.length}</span> session
+                    {uncoveredSessions.length === 1 ? "" : "s"} anybody may book
+                    ({uncoveredSessions.map(u => u.name).join(", ")}) {uncoveredSessions.length === 1 ? "is" : "are"}{" "}
+                    covered by no rule in force, so nothing limits how far ahead or how full they get.
+                  </p>
+                )}
+
+                <RuleWorkspace
+                  rules={JSON.parse(JSON.stringify(ruleCards))}
+                  conflicts={JSON.parse(JSON.stringify(ruleConflicts))}
+                  locations={JSON.parse(JSON.stringify(r.locations))}
+                  sessions={JSON.parse(JSON.stringify(r.sessions))}
+                  mayAuthor={r.mayAuthor}
+                  mayBook={r.mayBook}
+                  rulesUnreadable={rulesUnreadable}
+                  today={r.today}
+                />
+
+                <div className="rounded-xl border border-gray-200 bg-white p-4">
+                  <p className="text-[12.5px] font-bold text-gray-900">
+                    Where these rules bite, and where they do not
+                  </p>
+                  <p className="mt-1 text-[11px] leading-relaxed text-gray-600">
+                    A rule written here decides bookings made through the rules engine, and every such
+                    booking records which rule and which version decided it. The calendar&apos;s own
+                    quick-book still applies the single-row rules from before the card model:
+                    migration 230 put a unique index across location and appointment type on the rows the
+                    old check reads, so a card rule cannot occupy that slot without making a second
+                    Friday rule impossible. The two are kept apart deliberately rather than one silently
+                    overriding the other, and closing the gap needs a migration this build did not write.
+                  </p>
+                  <Link href="/practice/setup/availability?step=4"
+                    className="mt-2 inline-block text-[11px] font-semibold text-[var(--cp-primary)] hover:underline">
+                    Open the single-row editor the calendar reads →
+                  </Link>
+                </div>
 
                 <NotBuilt
-                  title="Rule cards and the guided builder"
-                  phase="Phase 3"
-                  what={"s7.1 replaces the row above with cards carrying scope, types, window, capacity, access and confirmation, and s7.2 gives each one a twelve-section builder — identity, scope, window, capacity, eligibility, follow-ups, walk-ins, confirmation, cancellations, required information, notifications and overrides. practice_booking_rule holds five of those inputs and has no versioning, which s11 requires before any booking can record which rule decided it. The editor linked above is the one that works."} />
+                  title="Walk-in rules and the follow-up recall queue"
+                  phase="Phase 5"
+                  what={"s7.7's per-session and per-day walk-in limits, cutoff time, queue position and emergency override are not columns on this table, so they are not offered — the practice-wide daily walk-in limit from before the card model is still applied and is shown on every card that carries one. s7.5's recall queue for follow-ups nobody booked lives in Follow-ups and is not started; what IS enforced here is the early and late window a due follow-up may be booked in, which is AC-08."} />
 
                 <NotBuilt
                   title="Patient booking access"
@@ -753,8 +781,29 @@ export default async function AvailabilityBookingPage({ searchParams }: {
                     reach your diary, and no setting on this page changes that until Phase 4 exists.
                   </p>
                 </section>
+                {/* s11's ladder, stated once, so the cards in the centre can be read against it. */}
                 <section className={card}>
-                  <h3 className="mb-2 text-[13px] font-bold text-gray-900">What the engine would offer</h3>
+                  <h3 className="mb-2 text-[13px] font-bold text-gray-900">Which rule wins</h3>
+                  <p className="text-[11px] leading-relaxed text-gray-600">
+                    The most specific rule that covers a booking decides it. Most specific first:
+                  </p>
+                  <ol className="mt-1.5 space-y-0.5 text-[11px] text-gray-700">
+                    <li>1. A rule fixed to a set of dates</li>
+                    <li>2. A rule naming one session and one appointment type</li>
+                    <li>3. A rule naming one location and one appointment type</li>
+                    <li>4. A rule for a whole location</li>
+                    <li>5. A rule for your whole practice</li>
+                    <li className="text-gray-500">6. No rule at all — nothing constrains the booking</li>
+                  </ol>
+                  <p className="mt-2 border-t border-gray-100 pt-2 text-[10px] leading-relaxed text-gray-500">
+                    Two rules on the same rung are settled by priority. Two on the same rung at the same
+                    priority settle nothing, and any booking they both cover is refused until you change
+                    one of them.
+                  </p>
+                </section>
+
+                <section className={card}>
+                  <h3 className="mb-2 text-[13px] font-bold text-gray-900">What the diary would offer</h3>
                   <p className="text-[11.5px] leading-relaxed text-gray-600">
                     Over the next fortnight,{" "}
                     <span className="font-bold text-emerald-700">
@@ -764,9 +813,12 @@ export default async function AvailabilityBookingPage({ searchParams }: {
                     <span className="font-bold text-gray-800">
                       {preview.days.reduce((n: number, d: any) => n + d.total, 0)}
                     </span>{" "}
-                    slots would be offerable under your rules.
+                    slots are offerable.
                   </p>
-                  <p className="mt-2 text-[10px] leading-relaxed text-gray-500">{preview.note}</p>
+                  <p className="mt-2 text-[10px] leading-relaxed text-gray-500">
+                    ⚠ This figure comes from the single-row rules the slot generator reads, not from the
+                    cards above. See the note under the rules for why the two are kept apart. {preview.note}
+                  </p>
                 </section>
               </>
             )}

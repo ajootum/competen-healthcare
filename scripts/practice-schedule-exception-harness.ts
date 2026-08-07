@@ -613,7 +613,21 @@ async function main() {
   }
 
   // An emergency interruption takes the day, like leave does.
-  const WED3 = dueDateFrom(WED, 14);
+  // ⚠ THIS FIXTURE PASSED SIX DAYS A WEEK AND FAILED ON FRIDAYS.
+  //
+  // WED3 was `dueDateFrom(WED, 14)` flat. WED is the first Wednesday at least three weeks out, so on a
+  // Friday it lands on today+26 and WED3 on today+40 -- which is the exact day this same fixture takes
+  // as LEAVE at :346. The harness then cancelled the day it was about to assert a slot on, and 8l-setup
+  // found nought. Nothing was wrong with the engine.
+  //
+  // A date-dependent fixture is worse than a flaky one: it is green on the day you write it and red on
+  // some later Friday, by which time the change under suspicion is whatever landed most recently. This
+  // one was written on a Thursday and accused Phase 3, which had not touched it.
+  //
+  // Stepped explicitly off the collision rather than pushed further out and hoped: "further out" is what
+  // produced the overlap in the first place.
+  const LEAVE_DAY = dueDateFrom(today, 40);
+  const WED3 = dueDateFrom(WED, 14) === LEAVE_DAY ? dueDateFrom(WED, 21) : dueDateFrom(WED, 14);
   await generateSlots(admin, A, { fromDate: WED3, toDate: WED3, ...ACT });
   const { count: wed3Before } = await admin.from("practice_availability_slot")
     .select("*", { count: "exact", head: true }).eq("workspace_id", wsA).eq("generated_for_date", WED3);
