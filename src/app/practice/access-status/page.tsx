@@ -1,6 +1,10 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { resolvePracticeShell } from "@/lib/practice/shell";
+import { createAdminClient } from "@/lib/supabase/server";
+import { resolveLifecycleActor } from "@/lib/practice/lifecycle";
+import { CAP_RESTORE } from "@/lib/practice/lifecycle-constants";
+import RestorePracticePanel from "./RestorePracticePanel";
 
 // /practice/access-status (IAM-001 s7.1, SHELL-001 s13): a member of a restricted workspace sees WHAT
 // KIND of restriction stands and what they may do -- a status page, not a broken dashboard. Reason
@@ -46,11 +50,47 @@ export default async function Page() {
   const key = shell.state === "MFA_REQUIRED" ? "MFA_REQUIRED" : shell.reason;
   const reason = REASONS[key] ?? REASONS.WORKSPACE_INACTIVE;
 
+  // ── CPR-LIFE-001 s3: "Administrators may restore Archived or Suspended practices." ────────────────
+  //
+  // ⚠ THIS IS THE ONLY PLACE A RESTORE CAN BE OFFERED FROM, AND THAT IS NOT AN OVERSIGHT IN THE DESIGN.
+  //
+  // Archiving a practice takes its status out of the set resolveWorkspaceContext admits, so every
+  // Practice page -- including the lifecycle page that offers Restore -- redirects here. Without this,
+  // s2's "fully recoverable" would be true of the data and false of the product: the person who archived
+  // their own practice would need a developer to get it back.
+  //
+  // NOTHING IS GRANTED HERE. The same practice.restore capability decides it, resolved from the same
+  // active membership and the same time-bounded grants, and the engine refuses a caller who does not
+  // hold it. The panel is not rendered at all for anyone else, and the API would refuse them anyway.
+  let restorable: { workspaceId: string; workspaceName: string; status: string } | null = null;
+  if (shell.state === "ACCESS_RESTRICTED" && shell.reason === "WORKSPACE_INACTIVE") {
+    const admin = createAdminClient();
+    const actor = await resolveLifecycleActor(admin, shell.userId, shell.workspaceId);
+    if (actor && actor.capabilities.includes(CAP_RESTORE)) {
+      const { data: ws } = await admin.from("practice_workspace")
+        .select("name, status").eq("id", shell.workspaceId).maybeSingle();
+      const status = (ws?.status as string | undefined) ?? null;
+      // ⚠ ONLY THE TWO REVERSIBLE STATES. A practice that is CLOSED or CLOSING is not offered a restore
+      // here, because this build has no verb that puts one there and no engine that takes one out.
+      if (status === "ARCHIVED" || status === "SUSPENDED") {
+        restorable = {
+          workspaceId: shell.workspaceId,
+          workspaceName: (ws?.name as string | undefined) ?? actor.workspaceName,
+          status,
+        };
+      }
+    }
+  }
+
   return (
     <main className="min-h-screen bg-gray-50 flex items-center justify-center p-6">
       <div className="w-full max-w-md rounded-2xl border border-gray-200 bg-white p-8 text-center">
         <h1 className="text-lg font-bold text-gray-900">{reason.title}</h1>
         <p className="mt-3 text-sm leading-relaxed text-gray-600">{reason.body}</p>
+        {restorable && (
+          <RestorePracticePanel workspaceId={restorable.workspaceId}
+            workspaceName={restorable.workspaceName} status={restorable.status} />
+        )}
         <p className="mt-4 text-[13px] text-gray-500">
           <Link href="/practice" className="font-semibold text-[var(--cp-primary-deep)] hover:underline">Back to Competen Practice</Link>
         </p>

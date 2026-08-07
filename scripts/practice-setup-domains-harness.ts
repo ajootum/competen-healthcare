@@ -139,13 +139,19 @@ async function main() {
   ok("1b s3's Practice Foundation holds exactly the four modules it names",
     dom(first, "foundation").moduleKeys.slice().sort().join(",") === "identifiers,letterhead,locations,profile",
     dom(first, "foundation").moduleKeys.join(","));
-  ok("1c s4's Practice Operations holds availability and the three it subsumes, plus registration, workflows and notifications",
+  // ⚠ EACH DOMAIN HAS GAINED ONE MODULE SINCE CPR-V5-008, AND THE ADDITIONS ARE NAMED RATHER THAN THE
+  // ASSERTION BEING LOOSENED. Module 18 Clinical Parameters (CPR-LCP-001 s10.1) is operations; module 19
+  // Practice Lifecycle (CPR-LIFE-001 s8) is administration -- s8's breadcrumb names a "Security & Data"
+  // domain that does not exist here, and inventing a fourth domain on the strength of a breadcrumb would
+  // be a restructure of a frozen surface. An exact list is kept so a module cannot drift between domains
+  // unnoticed, which is the whole point of 1b to 1e.
+  ok("1c s4's Practice Operations holds availability and the three it subsumes, plus registration, workflows, notifications and clinical parameters",
     dom(first, "operations").moduleKeys.slice().sort().join(",")
-    === "appointment_types,availability,booking_rules,notifications,registration,self_booking,workflows",
+    === "appointment_types,availability,booking_rules,clinical_parameters,notifications,registration,self_booking,workflows",
     dom(first, "operations").moduleKeys.join(","));
-  ok("1d s5's Practice Administration holds exactly the six it names",
+  ok("1d s5's Practice Administration holds the six it names, plus practice lifecycle",
     dom(first, "administration").moduleKeys.slice().sort().join(",")
-    === "ai,analytics,billing,import_export,integrations,team",
+    === "ai,analytics,billing,import_export,integrations,lifecycle,team",
     dom(first, "administration").moduleKeys.join(","));
   ok("1e every module is in exactly one domain and none is left out",
     first.modules.length === first.domains.reduce((n, d) => n + d.moduleKeys.length, 0)
@@ -154,9 +160,9 @@ async function main() {
   ok("1f the domain catalogue and the computed domains agree key for key",
     SETUP_DOMAINS.map(d => d.key).join(",") === first.domains.map(d => d.key).join(","));
   // s4 makes availability the domain's PRIMARY module, so the three it subsumes are not drawn beside it.
-  ok("1g the operations domain draws four cards, not seven",
+  ok("1g the operations domain draws five cards, not eight",
     dom(first, "operations").cardKeys.slice().sort().join(",")
-    === "availability,notifications,registration,workflows",
+    === "availability,clinical_parameters,notifications,registration,workflows",
     dom(first, "operations").cardKeys.join(","));
 
   // ══ 2. COUNTS, NEVER PERCENTAGES ══════════════════════════════════════════════════════════════

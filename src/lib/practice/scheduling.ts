@@ -2,6 +2,7 @@ import { audit } from "@/lib/practice/provisioning";
 import { defaultAppointmentMinutes } from "@/lib/practice/configuration";
 import { practiceToday, zonedDayRange } from "@/lib/practice/practice-time";
 import { resolveBookingRule } from "@/lib/practice/availability-config";
+import { bookingBlock } from "@/lib/practice/lifecycle-constants";
 
 // PEN-001 Appointment & Scheduling Engine -- the business rules, separated from every UI that uses them
 // (PEN-001 "separate scheduling logic from user interfaces"). CPR-V2-003 V3 is one consumer; the command
@@ -100,6 +101,32 @@ export async function checkPlacement(admin: any, args: {
   excludeAppointmentId?: string;
   windowOverridden?: string[];
 }): Promise<EngineResult<{ locationName: string | null }>> {
+  // ── CPR-LIFE-001 s2 AND s10: AN ARCHIVED, SUSPENDED OR CLOSED PRACTICE TAKES NO BOOKINGS ─────────
+  //
+  // ────────────────────────────────────────────────────────────────────────────────────────────────
+  // ⚠ FIRST, AND HERE, BECAUSE THIS IS THE ONE PLACE EVERY BOOKING PASSES THROUGH.
+  //
+  // Four callers put an appointment into a diary -- bookAppointment, rescheduleAppointment,
+  // bookUnderRules and registration's book-on-register -- and all four come through checkPlacement.
+  // Putting the check in any of them individually is how a drag-and-drop quietly books into a practice
+  // that a typed booking is refused from, which is the exact failure this function's own header warns
+  // about for the travel rule.
+  //
+  // Until this line, s10's "Closed practices cannot receive bookings" was FALSE: setting a workspace to
+  // CLOSED by hand stopped nothing. This is the change that makes the state mean something.
+  //
+  // ⚠ AND AN UNREADABLE STATUS REFUSES. A booking made while nobody could tell whether the practice was
+  // archived is the thing this check exists to prevent; treating a failed read as "open" would be the
+  // two-state version of a three-state answer.
+  // ────────────────────────────────────────────────────────────────────────────────────────────────
+  const { data: practice, error: practiceError } = await admin.from("practice_workspace")
+    .select("status").eq("id", args.workspaceId).maybeSingle();
+  if (!practiceError && !practice)
+    return { ok: false, status: 404, code: "NOT_FOUND", message: "Not found" };
+  const blocked = bookingBlock(practiceError ? null : (practice?.status as string | null));
+  if (blocked)
+    return { ok: false, status: 409, code: blocked.code, message: blocked.message };
+
   // THE LOCATION IS VALIDATED, WHICH IT NEVER WAS. location_id has been written straight through since
   // migration 192, so a booking could name ANOTHER PRACTICE'S location -- a cross-tenant reference that
   // nothing would ever have noticed, because no screen joined to it until the calendar did.

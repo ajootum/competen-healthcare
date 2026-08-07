@@ -157,7 +157,12 @@ async function main() {
   ok("2e the denominator EXCLUDES what cannot be built",
     first.progress.of === first.progress.total - first.notBuiltCount,
     `${first.progress.of} vs ${first.progress.total}-${first.notBuiltCount}`);
-  ok("2f seventeen modules", first.modules.length === 17, String(first.modules.length));
+  // ⚠ NINETEEN, NOT SEVENTEEN. CPR-SETUP-001 named seventeen; two more have shipped since and each one
+  // states its own reason in setup.ts's CATALOGUE -- module 18 Clinical Parameters (CPR-LCP-001 s10.1)
+  // and module 19 Practice Lifecycle (CPR-LIFE-001 s8). The denominator is what a practice can actually
+  // configure, not what one document knew about, and a module that exists and is not counted is the same
+  // lie as one that is counted and does not.
+  ok("2f nineteen modules", first.modules.length === 19, String(first.modules.length));
   ok("2c no percentage anywhere in the payload",
     !/percent|"\d+%"/i.test(JSON.stringify({ ...first, modules: [], checklist: first.checklist })),
     "found a percentage");

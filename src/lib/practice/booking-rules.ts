@@ -3,6 +3,7 @@ import { audit } from "@/lib/practice/provisioning";
 import { practiceToday, zonedDayRange } from "@/lib/practice/practice-time";
 import { defaultAppointmentMinutes } from "@/lib/practice/configuration";
 import { checkPlacement } from "@/lib/practice/scheduling";
+import { bookingBlock } from "@/lib/practice/lifecycle-constants";
 import {
   BOOKING_CHANNELS, BOOKING_CHANNEL_CODES, BOOKING_CHANNELS_WITH_A_DOOR, bookingChannel,
   RULE_STATUS_CODES, RULE_STATUSES_IN_FORCE,
@@ -811,8 +812,23 @@ export async function evaluateBooking(
     return { ok: false, status: 400, code: "VALIDATION_ERROR", message: "scheduledAt is not a valid timestamp" };
 
   const { data: ws, error: wsErr } = await admin.from("practice_workspace")
-    .select("timezone").eq("id", ctx.workspaceId).maybeSingle();
+    .select("timezone, status").eq("id", ctx.workspaceId).maybeSingle();
   if (wsErr) return { ok: false, status: 503, code: "READ_FAILED", message: `the practice timezone could not be read: ${wsErr.message}` };
+
+  // ── CPR-LIFE-001 s2 AND s10: AN ARCHIVED, SUSPENDED OR CLOSED PRACTICE TAKES NO BOOKINGS ─────────
+  //
+  // ⚠ ok:false, NOT A REFUSAL IN THE DECISION. s14 lets an authorised person override a refusal WITH A
+  // REASON, and this is not something an override may lift: s10's third acceptance criterion is that a
+  // closed practice cannot receive bookings, full stop. A refusal in `decision.refusals` would appear on
+  // the screen beside "override with a reason", which is the wrong offer to make here.
+  //
+  // checkPlacement refuses on the same ground for the same practice, so a booking is stopped whether it
+  // arrives through this engine or through Phase 1's. This one exists so that the PREVIEW tells the
+  // truth as well -- a screen that says a booking is allowed and then refuses it is worse than either.
+  const notBookable = bookingBlock(ws ? (ws.status as string | null) : null);
+  if (notBookable)
+    return { ok: false, status: 409, code: notBookable.code, message: notBookable.message };
+
   const timezone = (ws?.timezone as string) || "UTC";
 
   const date = new Date(startMs).toLocaleDateString("en-CA", { timeZone: timezone });

@@ -244,6 +244,26 @@ const CATALOGUE: Entry[] = [
     icon: "⚖", hue: "var(--cp-accent)", href: "/practice/setup/clinical-parameters",
     capability: "parameter.view", domain: "operations",
   },
+  {
+    // ⚠ A NINETEENTH MODULE, IN administration, AND THE BREADCRUMB REFLECTS REALITY.
+    //
+    // CPR-LIFE-001 s8 says "Location: Practice Setup -> Security & Data -> Practice Lifecycle", and that
+    // is the WHOLE of its navigation text -- there is no sidebar list and no instruction to restructure
+    // anything. THERE IS NO `Security & Data` DOMAIN HERE: SETUP_DOMAINS is foundation, operations and
+    // administration, and inventing a fourth would be a real restructure of a frozen surface on the
+    // strength of a breadcrumb. So this is a card in `administration` beside Import & Export and Team &
+    // Permissions -- exactly the precedent Clinical Parameters set above -- and the page's own
+    // breadcrumb says "Practice Setup / Practice Administration / Practice Lifecycle", which is where it
+    // actually is.
+    //
+    // The comp draws a grouped ~20-item three-section sidebar. It is a pre-decision picture: PRIMARY_ORDER
+    // is nine flat items pinned by sixteen assertions in practice-current-activity-harness, and four
+    // specs' comps have now drawn a different navigation. navigation.ts is untouched.
+    n: 19, key: "lifecycle", title: "Practice Lifecycle",
+    description: "Archive, suspend or restore this practice, see every state change, and export everything.",
+    icon: "⟳", hue: "var(--cp-info)", href: "/practice/setup/lifecycle",
+    capability: "practice.lifecycle.view", domain: "administration",
+  },
 ];
 
 /** CPR-V5-008 s3-s5, in the comp's order, with the sentence each domain answers. */
@@ -294,7 +314,9 @@ export async function practiceSetup(admin: any, ctx: WorkspaceContext) {
     bookingRulesQ, weekSessionsQ, sessionRowsQ, sessionTypesQ,
     activityQ, parametersQ,
   ] = await Promise.all([
-    admin.from("practice_workspace").select("name, timezone, country").eq("id", ctx.workspaceId).maybeSingle(),
+    // `status` joined the select for CPR-LIFE-001's module 19 -- the lifecycle card's detail IS the
+    // practice's current state, so it is read from the same row the profile card already reads.
+    admin.from("practice_workspace").select("name, timezone, country, status").eq("id", ctx.workspaceId).maybeSingle(),
     admin.from("practice_configuration")
       .select("letterhead_name, letterhead_registration, default_encounter_mode, clinic_opens_minute, ai_assistant_enabled, default_appointment_minutes")
       .eq("workspace_id", ctx.workspaceId).eq("is_effective", true).maybeSingle(),
@@ -427,6 +449,14 @@ export async function practiceSetup(admin: any, ctx: WorkspaceContext) {
           : "nothing is collected yet",
       },
     import_export: { done: true, detail: "export available · no import" },
+    // ⚠ THERE IS NOTHING TO CONFIGURE HERE, SO THE CARD IS GREEN AND ITS DETAIL IS THE STATE ITSELF.
+    // CPR-LIFE-001 s9 lists six configurable settings -- grace period, retention, approvals, MFA, export
+    // availability and legal warning text -- and every one of them belongs to a deletion pipeline this
+    // build deliberately does not have. A "needs attention" chip over a practice that is working
+    // perfectly would send somebody looking for a form that does not exist and should not.
+    lifecycle: wsQ.error
+      ? unread("this practice's lifecycle state")
+      : { done: true, detail: ws?.status ? String(ws.status).toLowerCase().replace(/_/g, " ") : null },
     ai: configQ.error
       ? unread("your assistant settings")
       : { done: config?.ai_assistant_enabled === true, detail: config?.ai_assistant_enabled === true ? "on, with the notice acknowledged" : "off" },
