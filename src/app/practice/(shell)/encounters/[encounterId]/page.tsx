@@ -17,6 +17,8 @@ import EncounterConsole from "./EncounterConsole";
 import ContextPanel from "./ContextPanel";
 import { encounterParameters } from "@/lib/practice/parameters";
 import ParameterCollection from "./ParameterCollection";
+import { patientMedications } from "@/lib/practice/medication";
+import MedicationConsole from "./MedicationConsole";
 
 // /practice/encounters/{id} -- CPR-ENC-002's three-panel encounter screen.
 //
@@ -116,6 +118,12 @@ export default async function EncounterPage({ params }: { params: Promise<{ enco
   // gating the call would turn "you may not see this" into "there is nothing to collect".
   const parameterCollection = await encounterParameters(admin, shell.ctx, encounter.id);
 
+  // CPR-MED-001. Prescribing happens where the patient is, and the record it writes into lives on the
+  // patient page. Fetched unconditionally for the reason above: patientMedications reports
+  // permitted:false and storeState "absent" itself, and gating the call would turn either of those into
+  // "this patient is on nothing".
+  const medicationRecord = await patientMedications(admin, shell.ctx, encounter.patient_id);
+
   return (
     <div className="max-w-[1400px]">
       {/* ── The patient strip (CPR-ENC-002's header) ────────────────────────────────────────────── */}
@@ -182,6 +190,16 @@ export default async function EncounterPage({ params }: { params: Promise<{ enco
           of "shown first". ═════════════════════════════════════════════════════════════════════════ */}
       <div className="mt-4">
         <ParameterCollection collection={parameterCollection} locked={locked} />
+        {/* CPR-MED-001 s3 and s2, immediately under the parameters -- because the weight the calculator
+            multiplies is collected in the panel above, and a prescriber should be able to record it and
+            then use it without leaving the consultation (s9's "minimal-click workflow"). */}
+        <MedicationConsole
+          record={medicationRecord}
+          patientId={encounter.patient_id}
+          encounterId={encounter.id}
+          canRecord={hasCapability(shell.ctx, "medication.record")}
+          locked={locked}
+        />
       </div>
 
       <div className="mt-4 grid gap-4 xl:grid-cols-[280px_1fr]">

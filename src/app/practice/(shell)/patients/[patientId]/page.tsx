@@ -15,6 +15,8 @@ import PatientActions from "./PatientActions";
 import ContactLog from "./ContactLog";
 import { monitoringPlan } from "@/lib/practice/parameters";
 import MonitoringPlanPanel from "./MonitoringPlanPanel";
+import { patientMedications } from "@/lib/practice/medication";
+import MedicationPanel from "./MedicationPanel";
 
 // /practice/patients/{id} -- the Phase-2 slice of CPR-V2-002's patient workspace: identity, identifiers,
 // contacts and the diary history, plus book-for-patient. The clinical timeline, problems and documents
@@ -95,6 +97,16 @@ export default async function PatientPage({ params, searchParams }: {
   // the exact failure the three states exist to prevent -- and this page has been bitten by it before
   // (see the clinical-timeline note below).
   const monitoring = await monitoringPlan(admin, shell.ctx, patientId);
+
+  // CPR-MED-001. The medication record, as MED s8's first named integration and as the design comp draws
+  // it.
+  //
+  // ⚠ ALWAYS FETCHED, NEVER GATED HERE, for the same reason the monitoring plan above is not:
+  // patientMedications reports permitted:false itself, and reports storeState "absent" when the migration
+  // has not been applied. Gating the CALL would collapse "you may not see this" and "this deployment has
+  // no medication store" into "there is nothing here" -- and on a medication list that reads as a patient
+  // who takes nothing.
+  const medications = await patientMedications(admin, shell.ctx, patientId);
 
   if (patient.status === "merged") {
     return (
@@ -181,6 +193,15 @@ export default async function PatientPage({ params, searchParams }: {
       {/* CPR-LCP-001 s10.2. Rendered unconditionally: a panel that disappears when it cannot be read is
           the failed-read-as-zero bug wearing a layout. */}
       <MonitoringPlanPanel plan={monitoring} patientId={patientId} />
+
+      {/* CPR-MED-001 s2, s6, s7 and reconciliation. Rendered unconditionally, like the panel above: a
+          medication list that disappears when it cannot be read is the failed-read-as-zero bug wearing a
+          layout, and on this particular list it reads as a patient taking nothing. */}
+      <MedicationPanel
+        record={medications}
+        canRecord={hasCapability(shell.ctx, "medication.record")}
+        canVerify={hasCapability(shell.ctx, "medication.override")}
+      />
 
       {followUpView && followUpView.all.length > 0 && (
         <FollowUpPanel view={followUpView} patientId={patientId} tab={followUpTab ?? "upcoming"} />

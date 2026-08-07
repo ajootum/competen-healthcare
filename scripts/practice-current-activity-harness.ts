@@ -663,6 +663,17 @@ async function main() {
     // makes removing the sidebar entries safe rather than a quiet withdrawal.
     messages: "CPR-DOC-002 s3.1: sub-navigation lives inside the Documents workspace. Linked from WorkspaceHeader.",
     inbox: "CPR-DOC-002 s3.1: sub-navigation lives inside the Documents workspace. Linked from WorkspaceHeader.",
+    // ⚠ CPR-MED-001 CONTAINS NO NAVIGATION SECTION. Its s8 "Integrations" is a list of engines the
+    // medication engine reads from and writes to -- six of the seven already exist -- and the word
+    // "sidebar" does not appear in the document. The comp draws a Medications item beside Tasks, AI
+    // Assistant and Reports, all three of which CPR-V5-002 and CPR-PI-001 s15 deliberately REMOVED from
+    // the primary list. A picture drawn before two written decisions is not a proposal to undo them, and
+    // PRIMARY_ORDER stays at nine.
+    //
+    // The page ships BEFORE any entry, never after: 9f requires every nav entry to point at a page that
+    // exists, and a sidebar item added first is a 404 in a practitioner's sidebar. Reached from the
+    // Medications panel on every patient page and from the encounter prescribing console.
+    medications: "CPR-MED-001 has no navigation section. Nine primary items, no submenus. Linked from the patient workspace and the encounter console.",
   };
   const shellDirs = readdirSync(join(process.cwd(), "src", "app", "practice", "(shell)"), { withFileTypes: true })
     .filter(d => d.isDirectory() && !d.name.startsWith("[") && !d.name.startsWith("_"))

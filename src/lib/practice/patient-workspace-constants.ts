@@ -217,10 +217,22 @@ export const REFUSES = [
       "practice_incoming_document has no link to practice_treatment, so nothing can say this CBC answers that request. Pairing them on the label would be a guess presented as a chain of custody.",
   },
   {
+    // ⚠ REWRITTEN BY CPR-MED-001, NOT DELETED, AND THE DISTINCTION IS THE WHOLE POINT.
+    //
+    // The refusal below was written against practice_treatment and IT IS STILL TRUE OF IT. What changed
+    // is that a SECOND store now exists: practice_medication (CPR-MED-001 s2) carries start and stop
+    // dates, an active/completed/paused/discontinued status, a stop event on an append-only timeline, a
+    // source and a practitioner verification. "Current" is derivable for those rows and for no others.
+    //
+    // A practice will hold both kinds of row for years. So this workspace's medication block, which
+    // reads practice_treatment, still refuses to head itself "current" -- and the medication record on
+    // the patient page, which reads practice_medication, may. The two are rendered under different
+    // headings for exactly this reason, and an uncarried treatment row appears on the medication
+    // record's reconciliation list rather than being quietly counted as a medication.
     key: "current_medications",
-    label: "Current medications",
+    label: "Current medications, from the treatment decisions in this workspace",
     detail:
-      "CPR-V5-006's longitudinal record lists 'Current medications'. It cannot be built, and the reason is stronger than 'this is an intention rather than a list'. practice_treatment.duration is FREE TEXT -- '5 days', 'until review', '1/12'. There is no end date and none is computable, so a course decided in March cannot be known to have ended. There is also no stop event, no reconciliation, no other prescriber and no adherence. 'Current' is therefore not derivable at all, not merely unreliable. What is shown instead is every medication DECIDED AT THIS PRACTICE, newest first, each with the encounter and date that decided it and the status somebody set. No 'active' subset is computed, because computing one would mean parsing those duration strings and presenting the guess as a fact.",
+      "CPR-V5-006's longitudinal record lists 'Current medications'. It cannot be built FROM practice_treatment, and the reason is stronger than 'this is an intention rather than a list'. practice_treatment.duration is FREE TEXT -- '5 days', 'until review', '1/12'. There is no end date and none is computable, so a course decided in March cannot be known to have ended. There is also no stop event, no source and no adherence. 'Current' is therefore not derivable from these rows at all, not merely unreliable. What is shown here instead is every medication DECIDED AT THIS PRACTICE, newest first, each with the encounter and date that decided it and the status somebody set. No 'active' subset is computed, because computing one would mean parsing those duration strings and presenting the guess as a fact. CPR-MED-001 lifts this refusal for a DIFFERENT store: practice_medication rows carry start and stop dates, a four-state status and a stop event, so a current list is derivable there. It is shown on the patient page under its own heading, and a treatment decision that nobody has carried across into it is on that record's reconciliation list rather than in its count.",
   },
   {
     key: "asserted_family_links",
@@ -256,18 +268,26 @@ export const PENDING_RESULTS_BOUNDARY =
   "This product knows what came back, not what was requested. Pending results are documents that arrived and have not been reviewed; there is no register of investigations awaiting a result.";
 
 /**
- * The sentence that has to travel with the medication block, wherever it is rendered.
+ * The sentence that has to travel with THIS block -- the treatment decisions -- wherever it is rendered.
  *
- * NOT "current medications". practice_treatment.duration is free text, so no course has a computable
- * end and nothing can be known to still be running. This is what was decided here, and saying anything
- * more would be a guess wearing a clinical label.
+ * ⚠ REWRITTEN BY CPR-MED-001, AND STILL A REFUSAL. It is not "current medications" and it never will be:
+ * practice_treatment.duration is free text, so no course here has a computable end and nothing in this
+ * table can be known to still be running. What changed is that a place where it CAN be known now exists,
+ * so the sentence names it rather than leaving the reader with nowhere to go. Saying anything more about
+ * these rows would still be a guess wearing a clinical label.
  */
 export const MEDICATION_BOUNDARY =
-  "Medications decided at this practice, newest first. This is NOT a current-medication list: duration is free text, so no course has a computable end date, and there is no stop event, no reconciliation and no record of anything prescribed elsewhere.";
+  "Medications decided at this practice, newest first. This is NOT a current-medication list: duration is free text, so no course has a computable end date and there is no stop event on these rows. The patient's medication record — on their own page — is where a current list is held, with start and stop dates, a status and a source. A decision here that nobody has carried across into that record is on its reconciliation list.";
 
-/** Why "current" is not derivable, in one field, for a payload consumer that needs the reason. */
+/**
+ * Why "current" is not derivable FROM THESE ROWS, in one field, for a payload consumer that needs the
+ * reason.
+ *
+ * ⚠ THE SUBJECT IS practice_treatment AND IT MUST STAY THAT WAY. Reading this sentence as a statement
+ * about medications in general would now be wrong, which is why it names the table.
+ */
 export const MEDICATION_NOT_CURRENT_REASON =
-  "practice_treatment.duration is free text ('5 days', 'until review'), so a course decided in the past cannot be known to have ended.";
+  "practice_treatment.duration is free text ('5 days', 'until review'), so a course decided in the past cannot be known to have ended from these rows. The patient's medication record holds start and stop dates and a status, and a current list is derivable there.";
 
 /** What the place block is, and is not. The comp asks for a care setting; the record has no such column. */
 export const PLACE_BOUNDARY =
