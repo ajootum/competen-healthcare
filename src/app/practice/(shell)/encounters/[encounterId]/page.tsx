@@ -15,6 +15,8 @@ import { logAccess } from "@/lib/practice/privacy";
 import { formatDayTime } from "@/lib/datetime";
 import EncounterConsole from "./EncounterConsole";
 import ContextPanel from "./ContextPanel";
+import { encounterParameters } from "@/lib/practice/parameters";
+import ParameterCollection from "./ParameterCollection";
 
 // /practice/encounters/{id} -- CPR-ENC-002's three-panel encounter screen.
 //
@@ -110,6 +112,10 @@ export default async function EncounterPage({ params }: { params: Promise<{ enco
   const sessionRow = (session as any)?.data ?? null;
   const sessionUnavailable = !!(session as any)?.error;
 
+  // CPR-LCP-001 s10.3. Fetched unconditionally: encounterParameters reports permitted:false itself, and
+  // gating the call would turn "you may not see this" into "there is nothing to collect".
+  const parameterCollection = await encounterParameters(admin, shell.ctx, encounter.id);
+
   return (
     <div className="max-w-[1400px]">
       {/* ── The patient strip (CPR-ENC-002's header) ────────────────────────────────────────────── */}
@@ -169,6 +175,14 @@ export default async function EncounterPage({ params }: { params: Promise<{ enco
           </p>
         </div>
       )}
+
+      {/* ══ CPR-LCP-001 s10.3 -- ABOVE THE THREE PANELS, AND THAT IS THE SPECIFICATION.
+          "Only due, required and contextually relevant parameters shown first." A weight that is overdue
+          is worth less at the bottom of a page than a note tab is; putting it first is the whole content
+          of "shown first". ═════════════════════════════════════════════════════════════════════════ */}
+      <div className="mt-4">
+        <ParameterCollection collection={parameterCollection} locked={locked} />
+      </div>
 
       <div className="mt-4 grid gap-4 xl:grid-cols-[280px_1fr]">
         {/* ══ LEFT CONTEXT PANEL ═══════════════════════════════════════════════════════════════ */}

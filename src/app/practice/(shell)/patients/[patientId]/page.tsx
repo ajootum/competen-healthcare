@@ -13,6 +13,8 @@ import { listContacts } from "@/lib/practice/communication";
 import { logAccess, patientAccessHistory } from "@/lib/practice/privacy";
 import PatientActions from "./PatientActions";
 import ContactLog from "./ContactLog";
+import { monitoringPlan } from "@/lib/practice/parameters";
+import MonitoringPlanPanel from "./MonitoringPlanPanel";
 
 // /practice/patients/{id} -- the Phase-2 slice of CPR-V2-002's patient workspace: identity, identifiers,
 // contacts and the diary history, plus book-for-patient. The clinical timeline, problems and documents
@@ -84,6 +86,15 @@ export default async function PatientPage({ params, searchParams }: {
   const accessHistory = hasCapability(shell.ctx, "access.review")
     ? await patientAccessHistory(admin, shell.ctx.workspaceId, patientId, 12)
     : null;
+
+  // CPR-LCP-001 s10.2's Monitoring Plan panel.
+  //
+  // ⚠ ALWAYS FETCHED, NEVER GATED HERE. monitoringPlan itself returns permitted:false when the caller
+  // lacks parameter.view, and the panel renders that as a permissions sentence rather than as an empty
+  // plan. Gating the CALL would collapse "you may not see this" into "there is nothing here", which is
+  // the exact failure the three states exist to prevent -- and this page has been bitten by it before
+  // (see the clinical-timeline note below).
+  const monitoring = await monitoringPlan(admin, shell.ctx, patientId);
 
   if (patient.status === "merged") {
     return (
@@ -166,6 +177,10 @@ export default async function PatientPage({ params, searchParams }: {
           canStartEncounter={hasCapability(shell.ctx, "encounter.create")}
         />
       </div>
+
+      {/* CPR-LCP-001 s10.2. Rendered unconditionally: a panel that disappears when it cannot be read is
+          the failed-read-as-zero bug wearing a layout. */}
+      <MonitoringPlanPanel plan={monitoring} patientId={patientId} />
 
       {followUpView && followUpView.all.length > 0 && (
         <FollowUpPanel view={followUpView} patientId={patientId} tab={followUpTab ?? "upcoming"} />

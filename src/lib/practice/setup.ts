@@ -227,6 +227,23 @@ const CATALOGUE: Entry[] = [
     icon: "◫", hue: "var(--cp-success)", href: "/practice/reports", capability: "report.view",
     specUnbuilt: true, domain: "administration",
   },
+  {
+    // ⚠ AN EIGHTEENTH MODULE, AND IT IS NOT A NAVIGATION CHANGE.
+    //
+    // CPR-LCP-001 s10.1 asks for "Practice Setup / Clinical Parameters page". LCP-001 contains no
+    // navigation section at all -- s10 is titled "User Interface Requirements" and names a page under
+    // Practice Setup plus two panels inside existing workspaces. So this is a card in an existing
+    // domain at an existing route prefix, and PRIMARY_ORDER is untouched.
+    //
+    // THE COUNTS MOVE, AND THAT IS THE POINT. This page's own header says status is "computed from the
+    // code and the data, never copied from the table" -- a module that exists and is not counted would
+    // be the same lie in the other direction. CPR-SETUP-001's seventeen were the seventeen it knew
+    // about; the denominator is what a practice can actually configure.
+    n: 18, key: "clinical_parameters", title: "Clinical Parameters",
+    description: "Choose what this practice measures, how often, and what counts as out of range.",
+    icon: "⚖", hue: "var(--cp-accent)", href: "/practice/setup/clinical-parameters",
+    capability: "parameter.view", domain: "operations",
+  },
 ];
 
 /** CPR-V5-008 s3-s5, in the comp's order, with the sentence each domain answers. */
@@ -275,7 +292,7 @@ export async function practiceSetup(admin: any, ctx: WorkspaceContext) {
     wsQ, configQ, locationsQ, facilitiesQ,
     slotsQ, templatesQ, channelsQ, membersQ,
     bookingRulesQ, weekSessionsQ, sessionRowsQ, sessionTypesQ,
-    activityQ,
+    activityQ, parametersQ,
   ] = await Promise.all([
     admin.from("practice_workspace").select("name, timezone, country").eq("id", ctx.workspaceId).maybeSingle(),
     admin.from("practice_configuration")
@@ -312,6 +329,11 @@ export async function practiceSetup(admin: any, ctx: WorkspaceContext) {
     admin.from("practice_audit_event")
       .select("event_type, payload, occurred_at").eq("workspace_id", ctx.workspaceId)
       .like("event_type", "practice.%").order("occurred_at", { ascending: false }).limit(4),
+    // CPR-LCP-001 s10.1. What this practice has actually switched on -- a practice-wide activation in
+    // the `active` state. An INACTIVE row is a deliberate switch-off and is not "configured", which is
+    // why the state filter is here rather than a bare count of rows.
+    admin.from("practice_parameter_activation").select("*", { count: "exact", head: true })
+      .eq("workspace_id", ctx.workspaceId).eq("scope", "practice").eq("state", "active"),
   ]);
 
   const ws = wsQ.data;
@@ -324,6 +346,7 @@ export async function practiceSetup(admin: any, ctx: WorkspaceContext) {
   const channels = countOf(channelsQ);
   const members = countOf(membersQ);
   const bookingRules = countOf(bookingRulesQ);
+  const activeParameters = countOf(parametersQ);
   const weekSessions = countOf(weekSessionsQ);
   const sessionRows: any[] | null = sessionRowsQ.error ? null : ((sessionRowsQ.data ?? []) as any[]);
   const sessionTypeRows: any[] | null = sessionTypesQ.error ? null : ((sessionTypesQ.data ?? []) as any[]);
@@ -392,6 +415,17 @@ export async function practiceSetup(admin: any, ctx: WorkspaceContext) {
     team: members === null
       ? unread("your team")
       : { done: members > 1, detail: `${members} active` },
+    // ⚠ ZERO IS "NEEDS ATTENTION", NOT "CONFIGURED". LCP s3 makes the engine minimal by default, so a
+    // practice that has activated nothing is collecting nothing -- and a green tick over that would tell
+    // somebody their vital signs are being recorded when no screen offers a box to type one into.
+    clinical_parameters: activeParameters === null
+      ? unread("your clinical parameters")
+      : {
+        done: activeParameters > 0,
+        detail: activeParameters > 0
+          ? `${activeParameters} collected`
+          : "nothing is collected yet",
+      },
     import_export: { done: true, detail: "export available · no import" },
     ai: configQ.error
       ? unread("your assistant settings")

@@ -236,17 +236,34 @@ export type RefusedState = {
 };
 
 export const REFUSED_PATIENT_STATES: RefusedState[] = [
+  // ⚠ REWRITTEN, NOT DELETED, ON 2026-08-07 WHEN CPR-LCP-001 SHIPPED.
+  //
+  // The original refusal named its own precondition: "a repeated structured measurement with a direction
+  // agreed in advance." LCP-001 s7.2 is exactly that, so the precondition is now SOMETIMES met -- and
+  // only sometimes, which is why the refusal stays here rather than being removed.
+  //
+  // WHERE IT IS LIFTED: one parameter, for one patient, who has (a) at least two active measurements of
+  // it and (b) a monitoring plan whose change_rule carries an `improving_direction` a practitioner
+  // stated IN ADVANCE. trendLine in parameters-constants.ts computes it and returns
+  // `no_direction_agreed` or `too_few_measurements` for everything else.
+  //
+  // WHERE IT IS STILL REFUSED, AND THIS IS MOST PATIENTS: as a WHOLE-PATIENT state on this dashboard.
+  // There is no way to roll up "improving on weight, deteriorating on blood pressure, nothing agreed for
+  // anything else" into one chip beside a patient's name without inventing a weighting nobody agreed.
+  //
+  // AND THE ORIGINAL FAILURE MODE SURVIVES THE UNLOCK UNCHANGED, which is why its sentence is kept
+  // verbatim below: the trajectory must be computed from MEASUREMENTS and never from attendance.
   {
     key: "improving",
     label: "Improving",
-    why: "Nothing in this product records a clinical trajectory. There is no observation series, no severity scale and no staging, and no clinician has ever been asked in this software whether a patient is getting better. The available proxies are worse than nothing: fewer visits lately is what a patient who deteriorated and went elsewhere looks like, and a follow-up closed as 'improved' describes one obligation on one day rather than a person over time.",
-    wouldRequire: "A recorded trajectory -- either a clinician-stated impression per encounter, or a repeated structured measurement with a direction agreed in advance. Neither exists and neither is specified in CPR-PI-001 or CPR-PI-002.",
+    why: "As a state of a whole patient, this still cannot be computed. CPR-LCP-001 gives the product its first recorded trajectory -- a measurement series with a direction a practitioner agreed in advance -- but that is per parameter, for the patients who have a monitoring plan, and this chip would sit beside a name. Rolling 'improving on weight, deteriorating on blood pressure, nothing agreed for the rest' into one word needs a weighting nobody has agreed. The old proxies remain worse than nothing and remain refused: fewer visits lately is what a patient who deteriorated and went elsewhere looks like, and a follow-up closed as 'improved' describes one obligation on one day rather than a person over time.",
+    wouldRequire: "Either a clinician-stated overall impression per encounter, or a recorded decision about which monitored parameter speaks for this patient and how conflicting directions are resolved. The per-parameter direction now exists (see parameterSeries and trendLine); the roll-up rule does not, and no specification supplies one.",
   },
   {
     key: "deteriorating",
     label: "Deteriorating",
-    why: "The same absence as Improving, and it is the more dangerous of the two to guess at. A false Deteriorating flag sends a clinician after the wrong patient; a false absence of one is a patient nobody looked at because a dashboard said they were fine. Both require the product to have written down something it never asked for.",
-    wouldRequire: "The same recorded trajectory, plus a stated threshold for what counts as a decline, agreed by a clinician rather than chosen by whoever wrote the query.",
+    why: "The same position as Improving after CPR-LCP-001, and it is the more dangerous of the two to guess at. A false Deteriorating flag sends a clinician after the wrong patient; a false absence of one is a patient nobody looked at because a dashboard said they were fine. Per parameter, with a direction agreed in advance and at least two measurements, the monitoring plan now says so in the patient's own workspace and cites the two values it read. Rolling that into a single word beside a name still requires the product to have written down something it never asked for.",
+    wouldRequire: "The roll-up rule above, plus a stated threshold for what counts as a decline, agreed by a clinician rather than chosen by whoever wrote the query. The threshold now has a home -- practice_patient_monitoring_plan.target_low/target_high and change_rule -- and it is per patient and per parameter, not per dashboard.",
   },
   {
     key: "high_complexity",
