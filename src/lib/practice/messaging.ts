@@ -2,6 +2,7 @@ import { createHash, randomInt, timingSafeEqual } from "node:crypto";
 import { audit } from "@/lib/practice/provisioning";
 import type { EngineResult } from "@/lib/practice/encounters";
 import { type WorkspaceContext } from "@/lib/practice/access";
+import { formatDateTime } from "@/lib/datetime";
 // The sender resolvers live with the platform dispatcher because that is where the older of the two
 // variable names was introduced. Importing them rather than restating the fallback chain is the point:
 // a second copy is how the two stacks drifted apart in the first place.
@@ -281,6 +282,230 @@ export async function sendMessage(admin: any, args: {
 
   return { ok: true, data: { messageId: row.id as string, status: outcome.ok ? "handed_over" : "failed" } };
 }
+
+// ── APPOINTMENTS: THE THREE TEMPLATES THAT NOTHING CALLED ────────────────────────────────────────────
+//
+// ────────────────────────────────────────────────────────────────────────────────────────────────────
+// THE GAP THIS CLOSES. sendMessage() had exactly one caller -- issueOtp -- so appointment_confirmation,
+// appointment_reminder and appointment_cancelled were three templates nothing could ever reach. The
+// consequence was concrete: the day a provider key is configured, this product would send sign-in codes
+// and NOTHING ELSE. A patient would still never hear that their appointment exists.
+//
+// ⚠ NOTHING BELOW CLAIMS TO SEND. Every path ends in one of three honest outcomes -- a message handed to
+// a provider, a REFUSAL WITH A REASON WRITTEN AS A ROW, or a stated reason why nothing was attempted at
+// all. There is no fourth outcome, and in particular there is no silent success: with no provider
+// configured (which is the state today) every call here lands on refusalFor's last rung, "no <kind>
+// provider is configured for this deployment", and writes that sentence into practice_message.
+//
+// That is issueOtp's own precedent, deliberately followed: it refuses with NOT_DELIVERED and spends the
+// challenge rather than returning a code it could not deliver.
+//
+// ⚠ THE ENGINE DECIDES THE PURPOSE FROM THE APPOINTMENT'S OWN STATUS, not from the caller's intent. A
+// caller that asked for a "confirmation" on a REQUESTED appointment would be asking this product to tell
+// a patient something untrue -- "your appointment is confirmed" is a claim about the state machine, and
+// only the state machine may make it. So the caller names an appointment and this reads what it is.
+// ────────────────────────────────────────────────────────────────────────────────────────────────────
+
+/** What actually happened. `attempted: null` is a first-class outcome, never an empty success. */
+export type AppointmentNotice = {
+  appointmentId: string;
+  purpose: "appointment_confirmation" | "appointment_cancelled" | null;
+  /** Present only when a message row was written -- handed_over, failed or refused. */
+  attempted: { kind: MessageKind; status: string; messageId: string; refusedReason?: string } | null;
+  /** Present only when nothing was written, with the reason. Exactly one of these two is null. */
+  notAttempted: string | null;
+};
+
+/** Which status justifies which sentence. Nothing else may reach a patient. */
+const STATUS_PURPOSE: Record<string, "appointment_confirmation" | "appointment_cancelled"> = {
+  CONFIRMED: "appointment_confirmation",
+  CANCELLED: "appointment_cancelled",
+};
+
+/**
+ * Who the appointment is WITH, for the template's one name slot.
+ *
+ * practice_appointment records no practitioner column, so naming a person would be an invention on a
+ * managed practice with several. An individual practice has exactly one practitioner and it is the
+ * owner, so there the person's own name is the true answer; everywhere else the practice's name is, and
+ * "your appointment with <practice> is confirmed" is as true as the sentence gets. Returning null means
+ * neither could be read, and nothing is sent -- a message that names nobody is a message a patient
+ * cannot place.
+ */
+async function appointmentCounterparty(admin: any, workspace: {
+  id: string; name: string; type: string; owner_person_id: string | null;
+}): Promise<string | null> {
+  if (workspace.type === "individual_practice" && workspace.owner_person_id) {
+    const { data } = await admin.from("practice_practitioner_identity")
+      .select("display_name").eq("user_id", workspace.owner_person_id).maybeSingle();
+    if (data?.display_name) return data.display_name as string;
+  }
+  return workspace.name?.trim() || null;
+}
+
+/**
+ * The channel and address to use for one patient.
+ *
+ * PREFERENCE FIRST, THEN WHATEVER EXISTS. A patient who asked for email gets email. A patient whose
+ * preference names no electronic channel -- "in_person", "via_relative", or the outright "none" -- still
+ * resolves to a channel here ON PURPOSE, so that refusalFor writes the refusal row that answers "why did
+ * my patient never hear from us". Resolving to nothing would answer it with silence.
+ */
+async function appointmentDestination(admin: any, args: {
+  workspaceId: string; patientId: string | null; appointmentPhone: string | null;
+}): Promise<{ kind: MessageKind; destination: string } | null> {
+  let preferred: string | null = null;
+  let phone = args.appointmentPhone?.trim() || "";
+  let email = "";
+
+  if (args.patientId) {
+    const [{ data: patient }, { data: contacts }] = await Promise.all([
+      admin.from("practice_patient").select("preferred_contact_method").eq("id", args.patientId).maybeSingle(),
+      admin.from("practice_patient_contact").select("contact_type, value, preferred")
+        .eq("patient_id", args.patientId).eq("workspace_id", args.workspaceId),
+    ]);
+    preferred = (patient?.preferred_contact_method as string) ?? null;
+    const rows = (contacts ?? []) as { contact_type: string; value: string; preferred: boolean }[];
+    const best = (type: string) =>
+      (rows.filter(r => r.contact_type === type).sort((a, b) => Number(b.preferred) - Number(a.preferred))[0]?.value ?? "").trim();
+    phone = phone || best("phone");
+    email = best("email");
+  }
+
+  const wants: MessageKind | null = preferred === "email" ? "email" : preferred === "sms" || preferred === "phone" ? "sms" : null;
+  const order: MessageKind[] = wants === "email" ? ["email", "sms"] : wants === "sms" ? ["sms", "email"] : phone ? ["sms", "email"] : ["email", "sms"];
+  for (const kind of order) {
+    const destination = kind === "sms" ? phone : email;
+    if (destination) return { kind, destination };
+  }
+  return null;
+}
+
+/**
+ * Tell a patient that their appointment is confirmed, or that it is cancelled.
+ *
+ * ⚠ THIS CANNOT FAIL THE BOOKING. It returns an outcome and never throws; the caller books first and
+ * tells the patient second, so a gateway outage can never be the reason an appointment does not exist.
+ * The result is returned rather than swallowed so a screen can show the truth ("we could not reach
+ * them, because...") instead of a confirmation tick that nothing earned.
+ *
+ * There is no `appointment_reminder` path here, and that is not an oversight -- see the note at the end
+ * of this file.
+ */
+export async function notifyAppointment(admin: any, args: {
+  workspaceId: string; appointmentId: string; actorId?: string | null; correlationId: string;
+  transport?: Transport;
+}): Promise<EngineResult<AppointmentNotice>> {
+  const nothing = (reason: string, purpose: AppointmentNotice["purpose"] = null): EngineResult<AppointmentNotice> =>
+    ({ ok: true, data: { appointmentId: args.appointmentId, purpose, attempted: null, notAttempted: reason } });
+
+  const { data: appt, error } = await admin.from("practice_appointment")
+    .select("id, workspace_id, patient_id, patient_phone, scheduled_at, status")
+    .eq("id", args.appointmentId).eq("workspace_id", args.workspaceId).maybeSingle();
+  // ⚠ A FAILED READ IS NOT AN ABSENT APPOINTMENT. Collapsing the two would report an outage as "there was
+  // nobody to tell", which is the one answer that stops anybody looking.
+  if (error)
+    return {
+      ok: false, status: 503, code: "APPOINTMENT_UNREADABLE",
+      message: `nobody was told about this appointment because it could not be read: ${error.message}`,
+    };
+  if (!appt) return { ok: false, status: 404, code: "NOT_FOUND", message: "Not found" };
+
+  const purpose = STATUS_PURPOSE[appt.status as string];
+  if (!purpose)
+    return nothing(`an appointment that is ${appt.status} has neither been confirmed nor cancelled, so there is nothing to tell the patient`);
+
+  const { data: workspace, error: wsError } = await admin.from("practice_workspace")
+    .select("id, name, type, timezone, owner_person_id").eq("id", args.workspaceId).maybeSingle();
+  if (wsError || !workspace)
+    return {
+      ok: false, status: 503, code: "WORKSPACE_UNREADABLE",
+      message: `nobody was told about this appointment because the practice could not be read: ${wsError?.message ?? "no practice row"}`,
+    };
+
+  const counterparty = await appointmentCounterparty(admin, workspace);
+  if (!counterparty)
+    return nothing("the practice has no name to send under, and a message naming nobody is one a patient cannot place", purpose);
+
+  const target = await appointmentDestination(admin, {
+    workspaceId: args.workspaceId, patientId: (appt.patient_id as string) ?? null,
+    appointmentPhone: (appt.patient_phone as string) ?? null,
+  });
+  if (!target)
+    return nothing("no phone number or email address is recorded for this patient", purpose);
+
+  const sent = await sendMessage(admin, {
+    workspaceId: args.workspaceId, kind: target.kind, purpose,
+    destination: target.destination, patientId: (appt.patient_id as string) ?? null,
+    // THE PRACTICE'S OWN CLOCK, not the server's and not the reader's. A patient told "14:30" must be
+    // told the time the clinic means.
+    params: { practitioner: counterparty, when: formatDateTime(appt.scheduled_at, workspace.timezone as string) },
+    actorId: args.actorId ?? null, correlationId: args.correlationId, transport: args.transport,
+  });
+  if (!sent.ok) return sent;
+
+  await audit(admin, {
+    workspaceId: args.workspaceId, actorId: args.actorId ?? null,
+    eventType: "practice.appointment_notice",
+    payload: {
+      appointmentId: args.appointmentId, purpose, kind: target.kind,
+      status: sent.data.status, refusedReason: sent.data.refusedReason ?? null,
+    },
+    correlationId: args.correlationId,
+  });
+
+  return {
+    ok: true,
+    data: {
+      appointmentId: args.appointmentId, purpose, notAttempted: null,
+      attempted: {
+        kind: target.kind, status: sent.data.status, messageId: sent.data.messageId,
+        ...(sent.data.refusedReason ? { refusedReason: sent.data.refusedReason } : {}),
+      },
+    },
+  };
+}
+
+/**
+ * The shape every HTTP caller uses: never throws, never fails, always returns a sentence.
+ *
+ * An appointment is booked, moved or cancelled INSIDE a request that has already succeeded by the time
+ * this runs. Letting a messaging failure surface as a 5xx would mean a patient's appointment appearing
+ * not to exist because a gateway was slow. So the outcome is DEMOTED to a field on the response --
+ * reported honestly, never allowed to overturn what already happened.
+ */
+export async function appointmentNotice(admin: any, args: {
+  workspaceId: string; appointmentId: string; actorId?: string | null; correlationId: string;
+  transport?: Transport;
+}): Promise<AppointmentNotice> {
+  try {
+    const r = await notifyAppointment(admin, args);
+    return r.ok ? r.data : { appointmentId: args.appointmentId, purpose: null, attempted: null, notAttempted: r.message };
+  } catch (e) {
+    return {
+      appointmentId: args.appointmentId, purpose: null, attempted: null,
+      notAttempted: `the patient could not be told: ${e instanceof Error ? e.message : String(e)}`.slice(0, 300),
+    };
+  }
+}
+
+/**
+ * ⚠ WHY THERE IS NO REMINDER PATH, STATED RATHER THAN LEFT AS AN ABSENCE.
+ *
+ * `appointment_reminder` is a template with no caller and it stays that way. A confirmation and a
+ * cancellation both happen INSIDE a request somebody made -- there is a booking, a click, a state
+ * change, and a message can ride along with it. A reminder has no such moment: it is defined entirely by
+ * a time that has not arrived yet, so something has to wake up, find the appointments due tomorrow, and
+ * attempt each one. Nothing in this deployment does that.
+ *
+ * vercel.json has two crons (/api/cron/reports daily, /api/cron/jobs hourly) and neither touches any
+ * messaging table; practice_message.status='queued' is a value written and updated inside one HTTP
+ * request, with no next_retry_at, no lock column and no poller. Writing a reminder path without a runner
+ * would produce rows that look queued for ever -- the exact failure this table's own migration was
+ * written to prevent.
+ *
+ * A reminder therefore needs a scheduled runner and a durable outbox, and neither is invented here.
+ */
 
 /**
  * The provider call itself.

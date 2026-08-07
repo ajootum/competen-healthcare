@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requirePracticeContext, isDenied } from "@/lib/practice/api-context";
 import { transitionAppointment, rescheduleAppointment } from "@/lib/practice/scheduling";
+import { appointmentNotice } from "@/lib/practice/messaging";
 
 // PATCH /api/v1/practice/appointments/{id} { action } -- the state machine's only HTTP door.
 // Actions map to DM-001 s7 states; the engine refuses illegal moves with 422 and version conflicts with
@@ -34,7 +35,15 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ ap
   });
 
   if (!result.ok) return NextResponse.json({ error: { code: result.code, message: result.message } }, { status: result.status });
-  return NextResponse.json({ appointment: result.data, correlationId: auth.caller.traceId });
+
+  // CONFIRMING AND CANCELLING ARE THE TWO MOVES A PATIENT NEEDS TOLD ABOUT, and both are this endpoint's.
+  // Which sentence (if any) is true is read from the appointment's status by the engine, not decided
+  // from `action` here -- `arrive`, `complete` and `no_show` therefore say nothing, and say why.
+  const notice = await appointmentNotice(auth.caller.admin, {
+    workspaceId: auth.ctx.workspaceId, appointmentId,
+    actorId: auth.caller.userId, correlationId: auth.caller.traceId,
+  });
+  return NextResponse.json({ appointment: result.data, notice, correlationId: auth.caller.traceId });
 }
 
 export async function PUT(req: NextRequest, { params }: { params: Promise<{ appointmentId: string }> }) {
@@ -60,5 +69,14 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ appo
   });
 
   if (!result.ok) return NextResponse.json({ error: { code: result.code, message: result.message } }, { status: result.status });
-  return NextResponse.json({ appointment: result.data, correlationId: auth.caller.traceId });
+
+  // A MOVED APPOINTMENT IS THE ONE A PATIENT IS MOST LIKELY TO MISS. There is no `appointment_moved`
+  // template and the purpose list is CHECK-constrained, so nothing new is invented: a CONFIRMED
+  // appointment gets its confirmation again, carrying the new time, which is true. An appointment that
+  // was never confirmed still says nothing.
+  const notice = await appointmentNotice(auth.caller.admin, {
+    workspaceId: auth.ctx.workspaceId, appointmentId,
+    actorId: auth.caller.userId, correlationId: auth.caller.traceId,
+  });
+  return NextResponse.json({ appointment: result.data, notice, correlationId: auth.caller.traceId });
 }

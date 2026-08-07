@@ -33,7 +33,9 @@ export default function FlagAssign({ flagKey }: { flagKey: string }) {
       <select className={field} value={scopeType} onChange={e => setScopeType(e.target.value)}>
         {["tenant", "plan", "country", "cohort", "global"].map(s => <option key={s} value={s}>{s}</option>)}
       </select>
-      {scopeType !== "global" && <input className={`${field} w-32`} value={scopeRef} onChange={e => setScopeRef(e.target.value)} placeholder={scopeType === "tenant" ? "tenant id" : scopeType === "plan" ? "plan code" : scopeType === "country" ? "ISO-2" : "cohort"} />}
+      {/* NOT "ISO-2". tenants.primary_country holds full country names ("Kenya"), and the resolver matches
+          scope_ref exactly, so a placeholder promising ISO-2 invited assignments that could never match. */}
+      {scopeType !== "global" && <input className={`${field} w-32`} value={scopeRef} onChange={e => setScopeRef(e.target.value)} placeholder={scopeType === "tenant" ? "tenant id" : scopeType === "plan" ? "plan code" : scopeType === "country" ? "country, as on tenant" : "cohort"} />}
       <select className={field} value={enabled ? "on" : "off"} onChange={e => setEnabled(e.target.value === "on")}>
         <option value="on">on</option><option value="off">off</option>
       </select>

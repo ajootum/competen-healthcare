@@ -94,7 +94,14 @@ export async function dispatch(admin: any, userIds: string[], n: NotifPayload, c
       if (!to) { deliveries.push({ user_id: uid, channel: ch, status: "skipped", provider, error: "no recipient address" }); continue; }
       try {
         if (ch === "email") await sendEmail(to, n.title, n.body ?? n.title);
-        else { deliveries.push({ user_id: uid, channel: ch, address: to, status: "skipped", provider, error: "sms adapter pending" }); continue; }
+        // ⚠ "sms adapter pending" WAS A SENTENCE THAT WAS ABOUT TO BECOME FALSE. This branch is only
+        // reached when Twilio IS configured, and from that moment "pending" reads as "any day now" --
+        // over a module that has no SMS sender at all and no plan recorded anywhere to gain one. The
+        // adapters that do exist are the practice channel's, and they are template-closed and
+        // consent-gated on purpose; routing 242 platform call sites' free-text titles through them would
+        // put arbitrary prose into a patient-grade channel. So this stays skipped, and says exactly why
+        // rather than implying a fix is on its way.
+        else { deliveries.push({ user_id: uid, channel: ch, address: to, status: "skipped", provider, error: "the platform dispatcher does not send SMS; the provider is configured but only the practice message channel has an SMS sender" }); continue; }
         deliveries.push({ user_id: uid, channel: ch, address: to, status: "sent", provider });
       } catch (e: any) { deliveries.push({ user_id: uid, channel: ch, address: to, status: "failed", provider, error: String(e?.message ?? e).slice(0, 300) }); }
     }

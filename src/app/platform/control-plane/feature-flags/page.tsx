@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import { getLandlordCaller } from "@/lib/platform/landlord";
-import { loadFeatureFlags } from "@/lib/platform/feature-flags";
+import { loadFeatureFlags, WIRED_GATES } from "@/lib/platform/feature-flags";
 import FlagAssign from "./FlagAssign";
 import { cardClass } from "@/components/ui/primitives";
 
@@ -35,7 +35,14 @@ export default async function FeatureFlagsPage() {
                     <span className="font-mono text-sm font-medium text-gray-800">{f.key}</span>
                     {f.product_name && <span className="text-[10px] bg-violet-50 text-violet-700 rounded-full px-2 py-0.5">{f.product_name}</span>}
                     <span className="text-[10px] text-gray-400">default {f.default_on ? "on" : "off"}</span>
+                    {/* A SWITCH THAT IS WIRED TO NOTHING MUST LOOK LIKE ONE. Every key here was seeded by
+                        migration 042 and, until the Executive Intelligence gate, not one of them was read
+                        by any code — so this page was quietly presenting five inert rows as controls. */}
+                    {WIRED_GATES[f.key]
+                      ? <span title={WIRED_GATES[f.key]} className="text-[10px] bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)] rounded-full px-2 py-0.5">gates 1 surface</span>
+                      : <span title="No code reads this key. Assigning it changes nothing yet." className="text-[10px] bg-gray-100 text-gray-500 rounded-full px-2 py-0.5">not wired</span>}
                   </div>
+                  {WIRED_GATES[f.key] && <p className="text-[10.5px] text-gray-500 mt-0.5">Gates: {WIRED_GATES[f.key]}</p>}
                   {f.description && <p className="text-xs text-gray-500 mt-0.5">{f.description}</p>}
                   {f.assignments.length > 0 && (
                     <div className="flex flex-wrap gap-1.5 mt-1.5">
@@ -53,7 +60,8 @@ export default async function FeatureFlagsPage() {
           </div>
         </div>
       )}
-      <p className="text-[11px] text-gray-400">Evaluated in code via <code className="font-mono">flagEnabled(admin, key, &#123;tenantId, planCode, country&#125;)</code>. Use <b>+ assign</b> to scope a flag to a tenant, plan, country or cohort — most-specific wins.</p>
+      <p className="text-[11px] text-gray-400">Evaluated in code via <code className="font-mono">flagState(admin, key, &#123;tenantId, planCode, country&#125;)</code>, which answers <b>on</b>, <b>off</b> or <b>unresolved</b> — a flag that cannot be read is withheld and says so, never silently defaulted. Use <b>+ assign</b> to scope a flag to a tenant, plan, country or cohort — most-specific wins.</p>
+      <p className="text-[11px] text-gray-400">A flag marked <b>not wired</b> has no reader in the application: assigning it is recorded, and changes nothing on any screen until a gate is added. Country assignments must match the value the tenant record actually holds — live rows hold full country names (&ldquo;Kenya&rdquo;), not ISO-2 codes.</p>
     </div>
   );
 }

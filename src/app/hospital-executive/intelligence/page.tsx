@@ -1,15 +1,67 @@
 import { hexGuard, Head, Tabs, Stat, Card, Pill, Donut, Legend, Bars, Foot, T } from "../_ui";
 import { loadExecIntelligence } from "@/lib/hex/intelligence";
 import AiCopilotPanel from "@/components/AiCopilotPanel";
+import { gateFor } from "@/lib/platform/feature-flags";
 
 export const dynamic = "force-dynamic";
 
 // HEX-002/010 Executive Intelligence & Decision Platform — live copilot + cross-domain intelligence.
+//
+// ────────────────────────────────────────────────────────────────────────────────────────────────────
+// ⚠ THIS IS THE PLATFORM FEATURE-FLAG ENGINE'S ONE LIVE GATE.
+//
+// plat_feature_flags has been seeded since migration 042 and the resolver, the scope precedence and the
+// assignment UI were all written -- and NOTHING in the application ever asked it a question. Five
+// switches on a page, wired to nothing. This module is the first real consumer, chosen deliberately:
+//
+//   * `executive_intelligence` is the flag whose own description ("Executive intelligence suite") names
+//     this module. The key is not being repurposed to prove a point.
+//   * Its default_on is TRUE and there are no assignments, so wiring the gate changes nothing for anyone
+//     today. A gate whose introduction is itself an outage proves nothing.
+//   * Off is SAFE: this is a read-only analytics lens. No clinical action, no authentication, no sign-in
+//     and no write depends on it -- unlike the practice launch flags, which have live users behind them.
+//   * Off is OBSERVABLE: the module says it is switched off, which flag did it, and at which scope --
+//     rather than vanishing, erroring, or rendering empty widgets that read as "no data".
+//
+// The three states are rendered as three states. "off" is a decision and says who made it; "unresolved"
+// is the absence of a decision and says so plainly, because a switch that cannot be read is not a switch
+// that is off.
+// ────────────────────────────────────────────────────────────────────────────────────────────────────
 /* eslint-disable @typescript-eslint/no-explicit-any */
 const TABS = ["AI Summary", "Predictive Insights", "Benchmarking", "Scenario Planning", "Strategic Intelligence", "Sentiment & Signals", "Data Explorer", "Custom Analysis", "AI Copilot"];
 
 export default async function ExecIntelligencePage() {
-  const { admin, isSuper, hid } = await hexGuard();
+  const { admin, user, isSuper, hid } = await hexGuard();
+
+  const gate = await gateFor(admin, "executive_intelligence", user.id);
+  if (gate.state !== "on") {
+    const withheld = gate.state === "off";
+    return (
+      <div className="space-y-4">
+        <Head code="HEX-002 · Hospital Executive" title="Executive Intelligence" sub="AI-powered insights, predictive intelligence and strategic foresight for smarter executive decisions." />
+        <Card title={withheld ? "Switched off for this organisation" : "This module could not be switched on or off"}>
+          <div className="flex flex-col items-center justify-center py-8 text-center gap-2">
+            <span className="text-2xl">{withheld ? "🔌" : "❓"}</span>
+            <p className="text-[13px] text-gray-700 max-w-lg">
+              {withheld
+                ? "Executive Intelligence is switched off here. Nothing is broken and no data has been lost — the module is simply not enabled."
+                : "Executive Intelligence is not showing, because the platform could not work out whether it should be. It is withheld rather than guessed."}
+            </p>
+            <p className="text-[12px] text-gray-500 max-w-lg">{gate.reason}</p>
+            <p className="text-[10.5px] text-gray-400 font-mono">
+              flag {gate.key} · state {gate.state} · decided by {gate.decidedBy}{gate.scopeRef ? ` (${gate.scopeRef})` : ""}
+            </p>
+            <p className="text-[11px] text-gray-400 max-w-lg">
+              {withheld
+                ? "A platform operator can change this in Control Plane → Feature Flags."
+                : "This is not something an executive can change. A platform operator should check Control Plane → Feature Flags."}
+            </p>
+          </div>
+        </Card>
+      </div>
+    );
+  }
+
   const d = await loadExecIntelligence(admin, hid, isSuper);
   const head = <Head code="HEX-002 · Hospital Executive" title="Executive Intelligence" sub="AI-powered insights, predictive intelligence and strategic foresight for smarter executive decisions." />;
   const k = d.kpis;
