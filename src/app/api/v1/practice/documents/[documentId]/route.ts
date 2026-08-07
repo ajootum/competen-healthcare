@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requirePracticeContext, isDenied } from "@/lib/practice/api-context";
-import { getDocument, updateDocument, transitionDocument, amendDocument, recordRelease } from "@/lib/practice/documentation";
+import { getDocument, updateDocument, transitionDocument, amendDocument } from "@/lib/practice/documentation";
 import { DOCUMENT_ACTIONS } from "@/lib/practice/document-constants";
+import { signDocument, issueDocument } from "@/lib/practice/documents-workspace-issue";
 import { notifyDocumentAmended } from "@/lib/practice/tasks";
 
 // GET   /api/v1/practice/documents/{id}
@@ -14,6 +15,19 @@ import { notifyDocumentAmended } from "@/lib/practice/tasks";
 // SIGNING NEEDS document.sign; everything else needs document.author. The same split as the encounter,
 // and for the same reason: a scribe role could reasonably draft a referral letter without ever being able
 // to put a practitioner's name on it.
+//
+// ⚠ CPR-DOC-002 PHASE 2: SIGNING AND ISSUING NO LONGER GO STRAIGHT TO documentation.ts.
+//
+//   { action: "sign" } now requires { attestationVersion } and runs through signDocument(), which states
+//   what a DOCUMENT signature means (s7.1 -- a different act from signing the consultation), refuses a
+//   document still carrying unresolved merge markers (s12), re-checks the patient link at the moment of
+//   signature (s17) and writes the attestation with the SHA-256 of the text signed.
+//
+//   { release: ... } runs through issueDocument(), which adds s17's patient-link control and s6.4's
+//   recipient rules. The wire shape is unchanged, so nothing that already calls it breaks.
+//
+// Both engines re-check the capability themselves. That is not belt-and-braces for its own sake: the
+// check below protects THIS route, and the check in the engine protects every future caller of it.
 
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ documentId: string }> }) {
   const auth = await requirePracticeContext("document.view");
@@ -62,11 +76,11 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ do
   if (body.release) {
     const auth = await requirePracticeContext("document.author");
     if (isDenied(auth)) return auth;
-    const result = await recordRelease(auth.caller.admin, {
-      workspaceId: auth.ctx.workspaceId, documentId, channel: String(body.release.channel ?? "printed"),
-      recipient: body.release.recipient ? String(body.release.recipient) : undefined,
-      note: body.release.note ? String(body.release.note) : undefined,
-      actorId: auth.caller.userId, correlationId: auth.caller.traceId,
+    const result = await issueDocument(auth.caller.admin, auth.ctx, {
+      documentId, channel: String(body.release.channel ?? "printed"),
+      recipient: body.release.recipient ? String(body.release.recipient) : null,
+      note: body.release.note ? String(body.release.note) : null,
+      correlationId: auth.caller.traceId,
     });
     if (!result.ok) return fail(result);
     return NextResponse.json({ release: result.data, correlationId: auth.caller.traceId });
@@ -78,6 +92,28 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ do
 
     const auth = await requirePracticeContext(to === "SIGNED" ? "document.sign" : "document.author");
     if (isDenied(auth)) return auth;
+
+    // ⚠ SIGNING IS NOT A TRANSITION LIKE THE OTHERS, WHICH IS WHY IT LEAVES THE STATE MACHINE HERE.
+    // s7.1: it is an attestation. The caller must send back the version of the statement it displayed;
+    // a request without one is refused rather than defaulted, because a default would mean somebody's
+    // signature was recorded against wording they were never shown.
+    if (to === "SIGNED") {
+      const version = body.attestationVersion;
+      if (typeof version !== "string" || !version.trim())
+        return NextResponse.json({
+          error: {
+            code: "ATTESTATION_REQUIRED",
+            message: "signing a document requires the signature statement to have been read; attestationVersion is missing",
+          },
+        }, { status: 400 });
+
+      const signed = await signDocument(auth.caller.admin, auth.ctx, {
+        documentId, attestationVersion: version.trim(), correlationId: auth.caller.traceId,
+      });
+      if (!signed.ok) return fail(signed);
+      return NextResponse.json({ document: signed.data, correlationId: auth.caller.traceId });
+    }
+
     const result = await transitionDocument(auth.caller.admin, {
       workspaceId: auth.ctx.workspaceId, documentId, to,
       actorId: auth.caller.userId, correlationId: auth.caller.traceId,

@@ -7,17 +7,25 @@
 // this week. Everything a client component needs is HERE, and nothing here imports anything but types.
 //
 // ────────────────────────────────────────────────────────────────────────────────────────────────────
-// PHASE 1 ONLY (s20). Overview dashboard, patient documents, my documents, uploads with source
-// attribution and patient linkage, cross-practice search and filters, the status model, basic audit.
+// PHASES 1 AND 2 (s20). Phase 1: overview dashboard, patient documents, my documents, uploads with
+// source attribution and patient linkage, cross-practice search and filters, the status model, basic
+// audit. Phase 2: the structured editor, PDF render, signature, issue and the Shared & Issued register.
 //
 // WHAT IS DELIBERATELY ABSENT, AND WHY IT IS ABSENT RATHER THAN GREYED OUT. s18 forbids "not built"
 // messages in production UI; this codebase forbids controls that do nothing. Both rules are satisfied by
 // the same move: the control IS NOT DRAWN. A disabled button with an apology under it is the thing s18 is
 // actually complaining about, and a live button that does nothing is worse. So:
 //
-//   the structured editor, PDF render, signature, sharing        s20 Phase 2 -- no control drawn
 //   review queues, document tasks, AI drafting, saved views      s20 Phase 3 -- no control drawn
 //   patient upload channels, secure links                        s20 Phase 4 -- no control drawn
+//
+// AND ONE PHASE 2 SURFACE IS STILL NOT DRAWN, for the same reason: DELIVERY STATUS. s3 asks Shared &
+// Issued for "issued, printed, downloaded, emailed or link-shared documents with delivery status", s4
+// wants a failed-shares queue and s18 wants a Failed chip. Nothing in this product SENDS anything --
+// recordRelease() records that a copy left, which is a different fact -- so there is no column, anywhere,
+// that could produce a delivery outcome. A Failed chip over a table with no failure state would be
+// decoration, and a "Delivered" one would be a claim nobody checked. The Shared & Issued tab states in
+// one line what a release is and is not; see SHARE_DELIVERY_NOTE below.
 //
 // The comp draws four quick actions (Create document, Upload document, Generate with AI, Scan document)
 // and five metric cards, one of which is "Expiring soon". Generate with AI is Phase 3. Scan document is
@@ -94,10 +102,11 @@ export const DOC_ORIGINS = Object.keys(DOC_ORIGIN) as DocOrigin[];
  *   ACTIONED          -> actioned         beyond s7's list; migration 200's third state, kept true.
  *   (an attachment)   -> filed            a file has no lifecycle. It is here or it is removed.
  *
- * TWO OF s18's CHIPS ARE NOT DRAWN. "Failed" is a delivery failure and delivery is Phase 2 -- there is no
- * table that can produce one, so a Failed chip could only ever be decoration. "Archived" has no state on
- * either object: a clinical document is never archived (migration 210's header: it is marked entered in
- * error and kept forever) and an incoming document has no archive column.
+ * TWO OF s18's CHIPS ARE STILL NOT DRAWN AFTER PHASE 2. "Failed" is a DELIVERY failure, and Phase 2 built
+ * issuing rather than delivery -- recording that a copy left the practice is not sending it, so no row
+ * anywhere can be in a failed state and a Failed chip could only ever be decoration. "Archived" has no
+ * state on either object: a clinical document is never archived (migration 210's header: it is marked
+ * entered in error and kept forever) and an incoming document has no archive column.
  */
 export type DocStatus =
   | "draft" | "approved" | "signed" | "issued" | "superseded" | "entered_in_error"
@@ -186,10 +195,8 @@ export function receivedStatus(stored: string): DocStatus {
  *   My Documents       BUILT here      s20 Phase 1
  *   Templates          ALREADY EXISTS  /practice/documents/templates -- CPR-330 built it. Linked, not
  *                                      rebuilt, and gated on template.manage exactly as that page is.
+ *   Shared & Issued    BUILT here      s20 Phase 2, over migration 195's release register.
  *   Library            ALREADY EXISTS  /practice/documents/library -- CPR-320 built it.
- *   Shared & Issued    NOT DRAWN       s20 Phase 2 (sharing and delivery status). A release register
- *                                      exists, but "documents leaving the practice with delivery status"
- *                                      is the Phase 2 object and half of it would be a tab that lies.
  */
 export type DocTab = { key: string; href: string; label: string; blurb: string; capability: string | null };
 
@@ -209,6 +216,10 @@ export const DOC_TABS: DocTab[] = [
   {
     key: "templates", href: "/practice/documents/templates", label: "Templates",
     blurb: "Reusable structures for letters, certificates and summaries.", capability: "template.manage",
+  },
+  {
+    key: "shared", href: "/practice/documents/shared", label: "Shared & Issued",
+    blurb: "Copies recorded as having left this practice, and who is holding one.", capability: "document.view",
   },
   {
     key: "library", href: "/practice/documents/library", label: "Library",
@@ -517,15 +528,194 @@ export function patientLinkState(row: { patientId: string | null; origin: DocOri
   };
 }
 
+/* ══ PHASE 2 (s20) ═══════════════════════════════════════════════════════════════════════════════════
+ *
+ * Everything below is Phase 2's vocabulary, and it is HERE rather than in the engine for the reason this
+ * file exists at all: the editor, the sign panel and the issue form are client components, and the engine
+ * imports the audit writer, which imports the Supabase server client.
+ */
+
+/* ── s7.1: SIGNING A DOCUMENT IS NOT SIGNING AN ENCOUNTER ────────────────────────────────────────────
+ *
+ * s7.1, verbatim: "Signing a document means issuing or attesting to that document. It must remain
+ * distinct from signing an encounter. A consultation may be complete while its referral letter is still
+ * a draft, and a document may be reissued without reopening the encounter."
+ *
+ * ⚠ THE TWO ACTS ARE ALREADY SEPARATE IN THE DATABASE, AND THAT SEPARATION IS NOT THIS FILE'S DOING.
+ * Migration 195's header sets it out: "An encounter signature says 'this is what I recorded'. A document
+ * signature says 'this is what I issued, to someone, who now holds a copy I cannot retrieve'." They are
+ * different tables (practice_encounter vs practice_clinical_document), different columns, different
+ * capability codes (encounter.sign vs document.sign, both seeded, both probed live), and different
+ * consequences -- a signed encounter can be reopened to ACTIVE, a signed document can only be amended
+ * into a successor version.
+ *
+ * ⚠ WHAT WAS MISSING, AND IS WHAT PHASE 2 ADDS: THE SECOND ATTESTATION. Two distinct acts need two
+ * distinct statements, and there was only ever one button. Signing a document put signed_at and signed_by
+ * on a row and recorded a bare `{ documentId }` in the audit trail -- which is a record that somebody
+ * pressed something, not a record of what they said. The statement below is what a document signature
+ * MEANS, it is shown in full before the act, its version is echoed back by the caller so a client showing
+ * older wording cannot sign under newer wording, and it is written to the trail with the SHA-256 of the
+ * exact text that was signed.
+ *
+ * ⚠ WHY REUSING THE ENCOUNTER PATH WOULD NOT HAVE BEEN SAFE. transitionEncounter() writes signed_at on
+ * the CONSULTATION and emits encounter.signed, which the follow-up and activity projections consume. A
+ * referral letter signed through it would close a consultation that is still open, and would tell every
+ * downstream reader that the clinical record was attested when only a letter was. The document path below
+ * calls transitionDocument() -- a different engine over a different table -- and touches no encounter.
+ */
+export const DOC_ATTESTATION = {
+  /**
+   * ⚠ BUMP THIS WHEN THE STATEMENT CHANGES. A signature made today attested to today's wording; a
+   * signature recorded against version "doc-1" means the sentence below and not whatever replaces it.
+   * The version is stored with each signature so that stays answerable.
+   */
+  version: "doc-1",
+  statement:
+    "I have read this document in full. Its content is accurate to the best of my knowledge, and I am "
+    + "issuing it under my own name. Once signed it cannot be edited -- a correction becomes a new, linked "
+    + "version, because any copy already released stays out in the world.",
+  /** Drawn beside the statement so nobody reads the document signature as the consultation's. */
+  distinction:
+    "This signs the DOCUMENT, not the consultation behind it. A consultation may be complete while its "
+    + "letter is still a draft, and a letter may be reissued without reopening the consultation.",
+} as const;
+
+/**
+ * s8 / s12: A FIELD THE RECORD COULD NOT FILL IS VISIBLE, AND IT BLOCKS SIGNING.
+ *
+ * document-generation.ts renders an unresolved merge field as `[[patient.date_of_birth not recorded]]`
+ * rather than as blank, because "Dear ," is something a practitioner skims past and signs. That rule ends
+ * one step short: nothing stopped the marker being signed. s12's last bullet -- "block issuing when
+ * required fields remain unresolved" -- is the missing half, and this is the scanner behind it.
+ *
+ * TWO KINDS, because they are two different mistakes:
+ *   generated  `[[...]]`  the merge ran and this field had no value. A data gap.
+ *   unmerged   `{{...}}`  a template field that was never merged at all -- typed by hand, or pasted from
+ *                         a template body. It would print literally as `{{patient.name}}`.
+ *
+ * PURE, AND SHARED. The editor counts them live as you type and the engine refuses the signature; one
+ * function, so the button cannot say ready while the engine says no.
+ */
+export type DocMarker = { marker: string; kind: "generated" | "unmerged" };
+
+export function unresolvedMarkers(body: string): DocMarker[] {
+  const found: DocMarker[] = [];
+  for (const m of String(body ?? "").matchAll(/\[\[[^\]\n]{1,120}\]\]/g))
+    found.push({ marker: m[0], kind: "generated" });
+  for (const m of String(body ?? "").matchAll(/\{\{[^}\n]{1,120}\}\}/g))
+    found.push({ marker: m[0], kind: "unmerged" });
+  return found;
+}
+
+/**
+ * ⚠ ONE FUNCTION, CALLED BY THE SIGN PANEL AND BY THE ENGINE.
+ *
+ * The panel draws these as the reasons the sign control is not there; signDocument() refuses on the same
+ * list. TWO COPIES OF THIS RULE WOULD BE A BUTTON THAT SAYS READY OVER AN ENGINE THAT SAYS NO -- the same
+ * drift the card/href arrangement in Phase 1 exists to prevent, in a place where the consequence is not a
+ * wrong number but a letter that went out with a hole in it.
+ *
+ * ⚠ IT LIVES IN THIS FILE, NOT IN THE ENGINE, AND THAT IS LOAD-BEARING. documents-workspace-issue.ts
+ * imports node:crypto and the audit writer; a client component importing anything from it compiles,
+ * lints, passes every harness and then white-screens in a production build. The engine imports this.
+ *
+ * The patient link is NOT checked here: "this row's patient_id resolves to a live patient in this
+ * workspace" is a database fact, not something a payload can carry, so signDocument() checks it there.
+ */
+export type SignBlocker = { code: string; message: string };
+
+export function signBlockers(doc: { status: string; body: string; markers: DocMarker[] }): SignBlocker[] {
+  const blockers: SignBlocker[] = [];
+  if (doc.status !== "FINAL")
+    blockers.push({
+      code: "NOT_READY",
+      message: doc.status === "DRAFT"
+        ? "Mark it ready first. Finishing the writing and putting your name on it are two decisions."
+        : `A document at ${doc.status} cannot be signed.`,
+    });
+  if (!String(doc.body ?? "").trim())
+    blockers.push({ code: "EMPTY_DOCUMENT", message: "There is no content to sign." });
+  if (doc.markers.length > 0)
+    blockers.push({
+      code: "UNRESOLVED_FIELDS",
+      message: `${doc.markers.length} field${doc.markers.length === 1 ? "" : "s"} the record could not fill `
+        + `${doc.markers.length === 1 ? "is" : "are"} still in the text: `
+        + `${doc.markers.slice(0, 4).map(m => m.marker).join(", ")}`
+        + `${doc.markers.length > 4 ? ", and more" : ""}. Replace or remove them before signing.`,
+    });
+  return blockers;
+}
+
+/**
+ * s6.4 / s3: WHAT RECORDING A RELEASE IS, AND WHAT IT IS NOT.
+ *
+ * ⚠ THE HONEST SENTENCE THAT LETS THE TAB EXIST AT ALL. s3 asks Shared & Issued for delivery status and
+ * s6.4 for "share event recorded with sender, recipient, channel, timestamp and delivery RESULT". Five of
+ * those six are real rows in practice_clinical_document_release. The sixth needs something that sends,
+ * and nothing in this product does. Printing this line is not a "not built" message about a feature; it
+ * is a description of what the control in front of the reader actually does, which is the difference s18
+ * is drawing.
+ */
+export const SHARE_DELIVERY_NOTE =
+  "Issuing records that a copy left this practice -- who was given it, how, and when. Nothing is sent "
+  + "from here, so there is no delivery receipt to show and none is implied.";
+
+/**
+ * s6.4: "CP resolves recipient details and warns if missing or unverified."
+ *
+ * ⚠ ONE CHANNEL BLOCKS AND THE REST WARN, and the split is not arbitrary. For a printed copy handed
+ * across a desk, the recipient is usually the patient standing there and an empty box loses little. For
+ * an EMAILED copy the address IS the entire record of where the document went -- there is no sent-items
+ * folder in this product to reconstruct it from -- so an emailed release with no recipient is a copy that
+ * left to nobody knows where. That one is refused; the others produce a warning on the way through.
+ */
+export const RECIPIENT_REQUIRED_CHANNELS = ["emailed"] as const;
+
+/**
+ * ⚠ THESE THREE SWATCHES BELONG IN palette.ts AND ARE HERE ONLY BECAUSE THAT FILE IS HELD BY ANOTHER
+ * AGENT THIS SESSION -- the same note the Phase 1 card swatches above carry, and the same note CPR-PI-001
+ * and CPR-V5-007 each left. Every hue is one palette.ts already uses for the same meaning:
+ *
+ *   issued    emerald -- this product's "done, and correctly done" hue.
+ *   awaiting  amber   -- "waiting, not yet late". Nobody holds a copy; that may be right.
+ *   outdated  rose    -- the only FAILURE on the row, and it goes GREY WHEN THE COUNT IS ZERO. A red
+ *                        card reading 0 trains a reader to ignore red; this one only turns red when
+ *                        somebody outside the practice really is holding text we have replaced.
+ */
+export const SHARE_COUNT_SWATCH: Record<"issued" | "awaiting" | "outdated", { box: string; figure: string }> = {
+  issued: { box: "border-emerald-200/80 bg-emerald-50/70", figure: "text-emerald-700" },
+  awaiting: { box: "border-amber-200/80 bg-amber-50/70", figure: "text-amber-700" },
+  outdated: { box: "border-rose-300 bg-rose-50", figure: "text-rose-700" },
+};
+
+/** The zero state of the one card that must not cry wolf. */
+export const SHARE_COUNT_SWATCH_QUIET = { box: "border-gray-200 bg-white", figure: "text-gray-400" };
+
+export const SHARE_COUNT_LABEL = {
+  issued: {
+    label: "Copies issued", caption: "Recorded as having left the practice",
+    blurb: "Every release recorded against a signed document. One row per copy, not per document.",
+  },
+  awaiting: {
+    label: "Signed, nothing issued", caption: "Nobody is recorded as holding one",
+    blurb: "Signed documents with no release recorded. Either nobody has been given a copy, or somebody was and it was never written down.",
+  },
+  outdated: {
+    label: "Held copies now superseded", caption: "The holder's version was amended",
+    blurb: "A copy was issued, and that version has since been amended. Whoever holds it is holding text this practice has replaced.",
+  },
+} as const;
+
 /* ── s4.1's THREE ACTIONS ────────────────────────────────────────────────────────────────────────────
  *
  * "Display three primary actions: Create a document, Upload a patient document, and Open templates."
  *
  * ⚠ EVERY ONE OF THESE IS A ROUTE THAT EXISTS AND DOES THE THING WHEN YOU GET THERE. s4.1 names
- * "Create a document" as an action, and s20 puts the document EDITOR in Phase 2 -- so the action is not a
- * button that opens an editor this build does not have. It is the place documents are actually made
- * today: s6.3's "generate from encounter", where the content composes from what the consultation holds.
- * That is a real control with a real destination, which is the only kind this workspace draws.
+ * "Create a document" as an action, and it points at s6.3's "generate from encounter" rather than at a
+ * blank editor -- not because the editor is missing (Phase 2 built it) but because a clinical document
+ * with no patient and no source record is not a thing this product can make: practice_clinical_document
+ * .patient_id is NOT NULL (migration 195 s4), which is s17's first rule enforced by the schema. Every
+ * document starts from a patient or a consultation, so the action starts there too.
  *
  * ⚠ AND NO QUERY PARAMETER THAT NOTHING READS. The first build pointed the upload action at
  * `/practice/documents/patient?record=1`, implying a form that would open. Nothing parses `record`, so

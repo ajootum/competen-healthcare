@@ -4,6 +4,7 @@ import { resolvePracticeShell } from "@/lib/practice/shell";
 import { hasCapability } from "@/lib/practice/access";
 import { getDocument } from "@/lib/practice/documentation";
 import { letterhead } from "@/lib/practice/document-generation";
+import { DOC_ATTESTATION } from "@/lib/practice/documents-workspace-constants";
 import { logAccess } from "@/lib/practice/privacy";
 import { formatDateTime } from "@/lib/datetime";
 
@@ -53,6 +54,14 @@ export default async function PrintDocumentPage({ params }: { params: Promise<{ 
 
   const signed = doc.status === "SIGNED" || doc.status === "AMENDED";
 
+  // WHO SIGNED IT, BY NAME, ON THE PAPER. A recipient holding a printed certificate cannot look up a
+  // uuid. A name that could not be read prints nothing rather than an id -- an unresolved identifier on a
+  // clinical document reads as data rot to the person holding it.
+  const { data: signer } = signed && doc.signed_by
+    ? await admin.from("profiles").select("full_name").eq("id", doc.signed_by).maybeSingle()
+    : { data: null };
+  const signerName: string | null = signer?.full_name ?? null;
+
   return (
     <div className="mx-auto max-w-[190mm] bg-white p-8 print:p-0">
       {/* Screen-only chrome. Nothing here reaches the paper. */}
@@ -98,11 +107,20 @@ export default async function PrintDocumentPage({ params }: { params: Promise<{ 
         <footer className="mt-10 border-t border-black/20 pt-3 text-[11px]">
           {signed ? (
             <>
-              <p>Signed {doc.signed_at ? formatDateTime(doc.signed_at) : ""}.</p>
+              <p>
+                Signed {doc.signed_at ? formatDateTime(doc.signed_at) : ""}
+                {signerName ? ` by ${signerName}` : ""}.
+              </p>
               <p className="text-black/60">
                 {/* NO IMAGE OF A SIGNATURE. This product signs by recording who signed and when; drawing
                     a facsimile would assert something the record does not hold. */}
                 Signed electronically in Competen Practice. This copy carries no handwritten signature.
+              </p>
+              {/* ⚠ s7.1 ON THE PAPER. The reader of a printed referral letter cannot open the audit
+                  trail, so the one line that says WHAT THIS SIGNATURE MEANS has to be on the page: it is
+                  an attestation to this document, and it is not the consultation's signature. */}
+              <p className="mt-1 text-black/60">
+                {DOC_ATTESTATION.distinction}
               </p>
             </>
           ) : (

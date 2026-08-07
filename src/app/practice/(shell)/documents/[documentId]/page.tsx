@@ -4,6 +4,7 @@ import { createAdminClient } from "@/lib/supabase/server";
 import { resolvePracticeShell } from "@/lib/practice/shell";
 import { hasCapability } from "@/lib/practice/access";
 import { getDocument } from "@/lib/practice/documentation";
+import { editorSupport } from "@/lib/practice/documents-workspace-issue";
 import { LOCKED_DOCUMENT_STATUSES, DOC_TYPES } from "@/lib/practice/document-constants";
 import { logAccess } from "@/lib/practice/privacy";
 import DocumentConsole from "./DocumentConsole";
@@ -36,6 +37,16 @@ export default async function DocumentPage({ params }: { params: Promise<{ docum
 
   const { document: doc, patient, releases, successor, predecessor } = detail as any;
   const locked = LOCKED_DOCUMENT_STATUSES.includes(doc.status);
+
+  // CPR-DOC-002 s8, PHASE 2. Everything the structured editor needs, resolved HERE on the server and
+  // handed over as plain values: what each merge field resolves to for this patient, what markers are
+  // still in the text, the letterhead as it will print, and the template's section headings.
+  //
+  // ⚠ RESOLVED ON THE SERVER BY DESIGN. editorSupport() reads the patient, the configuration and the
+  // template through the admin client; it must never be reachable from the client component, and it is
+  // not -- DocumentConsole imports only from document-constants.ts and documents-workspace-constants.ts,
+  // neither of which imports anything server-side. That boundary killed the Follow-ups board this week.
+  const support = await editorSupport(admin, shell.ctx, doc);
 
   // CPR-370. A document carries the same clinical content as the consultation behind it, so opening
   // one is as much a read of the patient as opening their record.
@@ -126,6 +137,11 @@ export default async function DocumentPage({ params }: { params: Promise<{ docum
             hasSuccessor={successor !== null}
             canAuthor={hasCapability(shell.ctx, "document.author")}
             canSign={hasCapability(shell.ctx, "document.sign")}
+            merge={support.merge}
+            letterheadLines={support.letterheadLines}
+            templateSections={support.templateSections}
+            attestation={support.attestation}
+            printHref={`/practice/documents/${doc.id}/print`}
           />
         </div>
 
@@ -156,12 +172,22 @@ export default async function DocumentPage({ params }: { params: Promise<{ docum
             </p>
           </section>
 
+          {/* ⚠ THIS PANEL USED TO SAY "there is no practice letterhead yet". That stopped being true when
+              CPR-360 built the configuration the print view composes one from, and a page that describes
+              the product as it was two releases ago is a quieter kind of wrong answer than a bad number. */}
           <section className="rounded-xl border border-gray-200 bg-white p-4">
-            <h2 className="text-[13px] font-bold text-gray-900">Printing</h2>
-            <p className="mt-1 text-[12px] text-gray-500">
-              Use your browser&apos;s print command. There is no practice letterhead yet &mdash; a header
-              carrying a practice&apos;s name, registration and address is a document this product has not
-              been given, and inventing one would put unverified details on a clinical certificate.
+            <h2 className="text-[13px] font-bold text-gray-900">Printing and PDF</h2>
+            <p className="mt-1 text-[12px] leading-relaxed text-gray-500">
+              The print view is the PDF export: open it and choose &ldquo;Save as PDF&rdquo; in your
+              browser&apos;s print dialog. It carries the practice letterhead, the body exactly as the
+              record holds it, and the signature block. An unsigned document prints marked DRAFT.
+            </p>
+            <Link href={`/practice/documents/${doc.id}/print`}
+              className="mt-2 inline-block text-[12px] font-semibold text-[var(--cp-primary-deep)] hover:underline">
+              Open the print view &rarr;
+            </Link>
+            <p className="mt-2 text-[10px] text-gray-400">
+              Printing is a read of a patient record and is logged as an export.
             </p>
           </section>
         </div>
