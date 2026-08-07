@@ -1,6 +1,7 @@
 import { qaGuard, Head, Tabs, Stat, Card, Pill, Donut, Legend, Trend, Bars, Table, QuickActions, Foot, ragPct, T } from "../_ui";
 import { loadAuditCentre } from "@/lib/qaw/audit-centre";
 import Link from "next/link";
+import UnavailableNotice from "@/components/UnavailableNotice";
 
 export const dynamic = "force-dynamic";
 
@@ -20,6 +21,7 @@ export default async function AuditCentrePage() {
   return (
     <div className="space-y-4">
       {head}
+      <UnavailableNotice sources={d.unavailable} what="audit figures" />
       <Tabs tabs={TABS} active="Overview" />
 
       <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">

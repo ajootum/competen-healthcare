@@ -43,8 +43,13 @@ export async function POST(req: Request) {
   ctx.push(`ORGANISATIONAL READINESS: ${d.readinessIndex != null ? d.readinessIndex + "%" : "n/a"} (composite of the scorecard below).`);
   ctx.push(`SCORECARD: ${d.scorecard.map((s: any) => `${s.name} ${s.score != null ? s.score + "%" : "—"}`).join("; ")}.`);
   ctx.push(`WORKFORCE: ${d.hr.headcount.total} staff, establishment ${d.hr.positions.filled}/${d.hr.positions.establishment} filled, ${d.hr.positions.vacant} vacancies; competency currency ${d.hr.competency.coverage}%, learning compliance ${d.hr.learning.compliance}%.`);
-  ctx.push(`QUALITY: mean audit compliance ${d.quality.complianceScore != null ? d.quality.complianceScore + "%" : "n/a"}, ${d.quality.findings.critical} critical findings, ${d.quality.capa.open} open corrective actions (${d.quality.capa.overdue} overdue).`);
-  ctx.push(`ENTERPRISE RISK ITEMS: ${d.riskTotal} open, ${d.riskHigh} high-severity. Breakdown: ${d.risk.map((r: any) => `${r.label} ${r.count}`).join("; ")}.`);
+  ctx.push(`QUALITY: mean audit compliance ${d.quality.complianceScore != null ? d.quality.complianceScore + "%" : "n/a"}, ${d.quality.findings.critical ?? "unknown"} critical findings, ${d.quality.capa.open ?? "unknown"} open corrective actions (${d.quality.capa.overdue ?? "unknown"} overdue).`);
+
+  // ⚠ THE MODEL MUST NOT BE TOLD A NUMBER NOBODY HAS. A null count reaching this template would render the
+  // string "null" (or, before the null existed, a confident 0) and the advisor would reason about an
+  // enterprise risk position that had never been read. "unknown" is the only honest token here.
+  const n = (v: number | null) => (v == null ? "unknown" : String(v));
+  ctx.push(`ENTERPRISE RISK ITEMS: ${n(d.riskTotal)} open, ${n(d.riskHigh)} high-severity. Breakdown: ${d.risk.map((r: any) => `${r.label} ${n(r.count)}`).join("; ")}. Any "unknown" means that source could not be read — do NOT treat it as zero or as reassurance.`);
   try { const { data } = await scope(admin.from("gov_risks").select("likelihood, impact, status, title, category").limit(4000)); const risks = ((data ?? []) as any[]).filter(r => r.status !== "closed"); const high = risks.filter(r => Number(r.likelihood) * Number(r.impact) >= 10); ctx.push(`RISK REGISTER: ${risks.length} active, ${high.length} high/extreme. Top: ${[...high].sort((a, b) => (Number(b.likelihood) * Number(b.impact)) - (Number(a.likelihood) * Number(a.impact))).slice(0, 4).map(r => `${r.title} (${(r.category || "").replace(/_/g, " ")})`).join("; ") || "none"}.`); } catch { /* optional */ }
   try { const { data } = await scope(admin.from("op_ops_snapshots").select("occupancy_pct, avg_los, safe_staffing_score, period_type, period").eq("period_type", "day").order("period", { ascending: false }).limit(1)); const s = (data ?? [])[0]; if (s) ctx.push(`OPERATIONS (latest): bed occupancy ${Math.round(Number(s.occupancy_pct || 0))}%, average LOS ${Number(s.avg_los || 0)} days, safe-staffing score ${Math.round(Number(s.safe_staffing_score || 0))}.`); } catch { /* optional */ }
 

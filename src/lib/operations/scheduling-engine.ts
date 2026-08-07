@@ -71,13 +71,24 @@ export async function loadSchedulingEngine(admin: any, hid: string | null, isSup
   // Constraint & risk alerts (derived from real data)
   const today = new Date().toISOString().slice(0, 10);
   const in14 = new Date(Date.now() + 14 * 864e5).toISOString().slice(0, 10);
-  let expiringComp = 0;
-  try { const scope = (q: any) => (isSuper ? q : q.eq("hospital_id", hid ?? "00000000-0000-0000-0000-000000000000")); const { data } = await scope(admin.from("competency_decisions").select("expiry_date").gte("expiry_date", today).lte("expiry_date", in14)); expiringComp = (data ?? []).length; } catch { /* fail-soft */ }
+  // ⚠ SILENCE WAS THE FAILURE MODE HERE. `expiringComp` gates an alert further down, so an unread
+  // competency table produced 0, the alert was never pushed, and the scheduler's alert panel showed one
+  // fewer risk — a page whose entire job is to warn, quietly not warning. Null is not 0: it pushes a
+  // DIFFERENT alert saying the check could not run, so the panel is never silently short.
+  let expiringComp: number | null = 0;
+  try {
+    const scope = (q: any) => (isSuper ? q : q.eq("hospital_id", hid ?? "00000000-0000-0000-0000-000000000000"));
+    const { data, error } = await scope(admin.from("competency_decisions").select("expiry_date").gte("expiry_date", today).lte("expiry_date", in14));
+    expiringComp = error ? null : (data ?? []).length;
+  } catch { expiringComp = null; }
 
   const alerts: { title: string; sub: string; sev: string }[] = [];
   demandByUnit.filter((u: any) => u.state === "Uncovered").forEach((u: any) => alerts.push({ title: `${u.unit} below required coverage`, sub: `${u.coverage}% — action needed`, sev: "High" }));
   if (est.kpis.supervisorAvailable < est.kpis.supervisorRequired) alerts.push({ title: "Shift Supervisor coverage below establishment", sub: `${est.kpis.supervisorAvailable}/${est.kpis.supervisorRequired} charge FTE`, sev: "High" });
-  if (expiringComp) alerts.push({ title: `${expiringComp} competenc${expiringComp === 1 ? "y" : "ies"} expiring within 14 days`, sub: "Review affected staff", sev: "Medium" });
+  // An unread check RAISES an alert rather than withholding one — the absence of a warning must mean
+  // "nothing found", never "nothing looked".
+  if (expiringComp === null) alerts.push({ title: "Competency expiry could not be checked", sub: "The competency record did not load — treat expiry as unverified for this roster", sev: "High" });
+  else if (expiringComp) alerts.push({ title: `${expiringComp} competenc${expiringComp === 1 ? "y" : "ies"} expiring within 14 days`, sub: "Review affected staff", sev: "Medium" });
   if (noMatch) alerts.push({ title: `${noMatch} assignment(s) without validated competency`, sub: "No override recorded", sev: "Medium" });
   if (spread > 15) alerts.push({ title: "Workload imbalance across units", sub: "Review assignment fairness", sev: "Low" });
 

@@ -26,28 +26,42 @@ export async function loadWorkforceExceptions(admin: any, hid: string | null, is
   } catch { approvals = []; }
 
   // Aggregate workforce exceptions from the op_* stores (each fail-soft)
+  //
+  // ⚠ EACH SOURCE CONTRIBUTED SILENTLY OR NOT AT ALL. All five reads discarded their errors, so a failed one
+  // added no rows and said nothing, and the page's exception list looked simply shorter — a workforce with
+  // fewer problems than anyone had managed to look for.
+  //
+  // A GENUINELY ABSENT STORE IS NOT AN UNAVAILABLE ONE. These tables are optional per tenant (the file's own
+  // "store absent" comments), and reporting a pre-migration tenant as degraded would cry wolf on every page
+  // load. `missing()` keeps that case quiet and reports only reads that should have worked and didn't.
   const exceptions: any[] = [];
+  const unavailable: string[] = [];
   const push = (r: any) => exceptions.push(r);
   try {
-    const { data } = await scope(admin.from("op_replacement_requests").select("id, role, priority, status, reason, requested_at").not("status", "in", "(filled,redeployed,cancelled,declined)")).limit(120);
+    const { data, error } = await scope(admin.from("op_replacement_requests").select("id, role, priority, status, reason, requested_at").not("status", "in", "(filled,redeployed,cancelled,declined)")).limit(120);
+    if (error && !missing(error)) unavailable.push("replacement requests");
     for (const r of data ?? []) push({ source: "Replacement", tab: "redeployment", category: "Redeployment & Replacement", severity: SEV_PRI[r.priority] ?? "moderate", title: `${r.role} replacement`, staff: null, detail: r.reason, status: r.status, when: r.requested_at });
-  } catch { /* store absent */ }
+  } catch { unavailable.push("replacement requests"); }
   try {
-    const { data } = await scope(admin.from("op_attendance_exceptions").select("id, category, severity, status, staff_name, operational_impact, detected_at").not("status", "in", "(corrected,approved_exception,rejected,closed)")).limit(120);
+    const { data, error } = await scope(admin.from("op_attendance_exceptions").select("id, category, severity, status, staff_name, operational_impact, detected_at").not("status", "in", "(corrected,approved_exception,rejected,closed)")).limit(120);
+    if (error && !missing(error)) unavailable.push("attendance exceptions");
     for (const r of data ?? []) push({ source: "Attendance", tab: "attendance", category: "Attendance & Leave", severity: r.severity ?? "moderate", title: (r.category ?? "").replace(/_/g, " "), staff: r.staff_name, detail: r.operational_impact, status: r.status, when: r.detected_at });
-  } catch { /* store absent */ }
+  } catch { unavailable.push("attendance exceptions"); }
   try {
-    const { data } = await scope(admin.from("op_roster_exceptions").select("id, category, severity, status, staff_name, description, detected_at").not("status", "in", "(resolved,rejected,expired,superseded)")).limit(120);
+    const { data, error } = await scope(admin.from("op_roster_exceptions").select("id, category, severity, status, staff_name, description, detected_at").not("status", "in", "(resolved,rejected,expired,superseded)")).limit(120);
+    if (error && !missing(error)) unavailable.push("roster exceptions");
     for (const r of data ?? []) push({ source: "Roster", tab: "roster", category: "Roster & Shift", severity: r.severity ?? "moderate", title: (r.category ?? "").replace(/_/g, " "), staff: r.staff_name, detail: r.description, status: r.status, when: r.detected_at });
-  } catch { /* store absent */ }
+  } catch { unavailable.push("roster exceptions"); }
   try {
-    const { data } = await scope(admin.from("op_escalations").select("id, level, summary, escalation_type, status, created_at").neq("status", "resolved").neq("status", "cancelled")).limit(120);
+    const { data, error } = await scope(admin.from("op_escalations").select("id, level, summary, escalation_type, status, created_at").neq("status", "resolved").neq("status", "cancelled")).limit(120);
+    if (error && !missing(error)) unavailable.push("escalations");
     for (const r of data ?? []) push({ source: "Escalation", tab: "escalations", category: "Escalation", severity: (r.level ?? 0) >= 4 ? "critical" : (r.level ?? 0) >= 3 ? "high" : "moderate", title: r.summary ?? r.escalation_type ?? "Escalation", staff: null, detail: r.escalation_type, status: r.status, when: r.created_at });
-  } catch { /* store absent */ }
+  } catch { unavailable.push("escalations"); }
   try {
-    const { data } = await scope(admin.from("op_leave_records").select("id, staff_name, absence_type, leave_approval_status, absence_date").eq("leave_approval_status", "pending")).limit(120);
+    const { data, error } = await scope(admin.from("op_leave_records").select("id, staff_name, absence_type, leave_approval_status, absence_date").eq("leave_approval_status", "pending")).limit(120);
+    if (error && !missing(error)) unavailable.push("leave records");
     for (const r of data ?? []) push({ source: "Leave", tab: "attendance", category: "Attendance & Leave", severity: "moderate", title: `${(r.absence_type ?? "").replace(/_/g, " ")} — pending`, staff: r.staff_name, detail: null, status: "pending", when: r.absence_date });
-  } catch { /* store absent */ }
+  } catch { unavailable.push("leave records"); }
 
   const nowMs = Date.now();
   const OPEN_APPR = new Set(["waiting", "pending_info", "escalated", "returned", "delegated"]);
@@ -73,5 +87,5 @@ export async function loadWorkforceExceptions(admin: any, hid: string | null, is
     exceptionCount: exceptions.length,
   };
 
-  return { ready: true as const, apprProvisioned, approvals, openApprovals, exceptions, kpis, cats, priority };
+  return { ready: true as const, unavailable, apprProvisioned, approvals, openApprovals, exceptions, kpis, cats, priority };
 }

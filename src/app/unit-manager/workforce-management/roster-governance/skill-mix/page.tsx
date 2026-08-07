@@ -7,6 +7,7 @@ import { loadUnitDepartments } from "@/lib/operations/unit-command";
 import UnitFilters from "../../../UnitFilters";
 import RosterGovTabs from "../RosterGovTabs";
 import { KpiWithSub as Kpi } from "../../_kit";
+import UnavailableNotice from "@/components/UnavailableNotice";
 
 export const dynamic = "force-dynamic";
 
@@ -63,6 +64,7 @@ export default async function SkillMixSupervisor() {
   return (
     <div className="space-y-4">
       {header}
+      <UnavailableNotice sources={d.decisionsUnavailable ? ["competency decisions"] : []} what="skill-mix figures" />
 
       <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-5 gap-3">
         <Kpi label="Skill-mix match" value={match.matchScore != null ? `${match.matchScore}%` : "—"} sub={`${match.validated}/${match.assigned} validated`} tone={match.matchScore != null && match.matchScore >= 90 ? "text-[var(--cmp-text-success)]" : "text-[var(--cmp-text-warning)]"} />

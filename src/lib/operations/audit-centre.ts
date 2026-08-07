@@ -43,11 +43,14 @@ export async function loadAuditCentre(admin: any, hid: string | null, isSuper: b
   const complianceDelta = (complianceThis != null && complianceLast != null) ? complianceThis - complianceLast : null;
 
   // ── Findings ─────────────────────────────────────────────────────────────────────────────────
-  const findings = { highRisk: 0, otherNotMet: 0, met: 0, na: 0, total: 0, repeat: 0 };
+  // ⚠ AN UNREAD FINDINGS TABLE READ AS A CLEAN AUDIT: highRisk 0, otherNotMet 0, repeat 0 — the three numbers
+  // an accreditation lead checks first. `unavailable` marks the block so the page can refuse to draw them.
+  const findings = { highRisk: 0, otherNotMet: 0, met: 0, na: 0, total: 0, repeat: 0, unavailable: false };
   const findingRows: any[] = [];
   if (auditIds.length) {
     try {
-      const { data } = await admin.from("audit_findings").select("audit_id, item_text, is_critical, result").in("audit_id", auditIds).limit(20000);
+      const { data, error } = await admin.from("audit_findings").select("audit_id, item_text, is_critical, result").in("audit_id", auditIds).limit(20000);
+      if (error) findings.unavailable = true;
       const fr = (data ?? []) as any[]; findingRows.push(...fr);
       findings.total = fr.length;
       findings.highRisk = fr.filter(f => f.result === "not_met" && f.is_critical).length;

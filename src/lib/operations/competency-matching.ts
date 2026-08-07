@@ -27,14 +27,22 @@ export async function loadCompetencyMatching(admin: any, hid: string | null, isS
   const today = new Date().toISOString().slice(0, 10);
   const in30 = new Date(Date.now() + 30 * 864e5).toISOString().slice(0, 10);
   const decByStaff = new Map<string, any[]>();
-  let expiredCerts = 0, expiringCerts = 0;
+  // ⚠ AN UNREAD DECISION TABLE USED TO MAKE EVERY NURSE READ "None" — a definite statement that a person has
+  // no competency on file, produced for a table nobody queried, on the screen a manager uses to decide who
+  // may staff what. "Unknown" is a different claim from "None" and is the only one this can support.
+  let expiredCerts: number | null = 0, expiringCerts: number | null = 0;
+  let decisionsUnavailable = false;
   try {
-    const { data } = await scope(admin.from("competency_decisions").select("nurse_id, outcome, expiry_date"));
-    for (const d of data ?? []) { if (!d.nurse_id) continue; if (!decByStaff.has(d.nurse_id)) decByStaff.set(d.nurse_id, []); decByStaff.get(d.nurse_id)!.push(d); }
-    for (const d of data ?? []) { if (d.expiry_date && d.expiry_date < today) expiredCerts++; else if (d.expiry_date && d.expiry_date <= in30) expiringCerts++; }
-  } catch { /* fail-soft */ }
+    const { data, error } = await scope(admin.from("competency_decisions").select("nurse_id, outcome, expiry_date"));
+    if (error) { decisionsUnavailable = true; expiredCerts = null; expiringCerts = null; }
+    else {
+      for (const d of data ?? []) { if (!d.nurse_id) continue; if (!decByStaff.has(d.nurse_id)) decByStaff.set(d.nurse_id, []); decByStaff.get(d.nurse_id)!.push(d); }
+      for (const d of data ?? []) { if (d.expiry_date && d.expiry_date < today) expiredCerts!++; else if (d.expiry_date && d.expiry_date <= in30) expiringCerts!++; }
+    }
+  } catch { decisionsUnavailable = true; expiredCerts = null; expiringCerts = null; }
 
-  const statusOf = (id: string): "Current" | "Expiring" | "Expired" | "None" => {
+  const statusOf = (id: string): "Current" | "Expiring" | "Expired" | "None" | "Unknown" => {
+    if (decisionsUnavailable) return "Unknown";
     const ds = decByStaff.get(id) ?? [];
     if (!ds.length) return "None";
     const passing = ds.filter((d: any) => PASSING.includes(d.outcome));
@@ -46,7 +54,7 @@ export async function loadCompetencyMatching(admin: any, hid: string | null, isS
   const staff = pool.map(s => ({ ...s, status: statusOf(s.id) }));
   const currentSet = new Set(staff.filter(s => s.status === "Current" || s.status === "Expiring").map(s => s.id));
 
-  const skillMix = ["Current", "Expiring", "Expired", "None"].map(st => ({ label: st, n: staff.filter(s => s.status === st).length })).filter(x => x.n > 0);
+  const skillMix = ["Current", "Expiring", "Expired", "None", "Unknown"].map(st => ({ label: st, n: staff.filter(s => s.status === st).length })).filter(x => x.n > 0);
   const roleCoverage = [...new Set(staff.map(s => s.role))].map(role => {
     const rs = staff.filter(s => s.role === role);
     const ok = rs.filter(s => s.status === "Current" || s.status === "Expiring").length;
@@ -79,10 +87,15 @@ export async function loadCompetencyMatching(admin: any, hid: string | null, isS
   if (match && match.unvalidatedCount) insights.push({ icon: "🎯", text: `${match.unvalidatedCount} roster assignment(s) lack a validated competency — see recommended replacements`, tone: "amber" });
   const noneCount = staff.filter(s => s.status === "None").length;
   if (noneCount) insights.push({ icon: "📋", text: `${noneCount} staff have no competency record — complete competency passport`, tone: "gray" });
-  if (!insights.length) insights.push({ icon: "✅", text: "Workforce competency currency is healthy across all roles", tone: "green" });
+  // ⚠ THE GREEN TICK BELOW WAS THE WORST LINE IN THIS FILE. With the decision table unread, every count above
+  // is null or zero, so NOTHING was pushed and the panel concluded "competency currency is healthy across all
+  // roles" — a positive assertion about workforce safety derived from a table nobody had queried. It is now
+  // reachable only when the table actually answered.
+  if (decisionsUnavailable) insights.push({ icon: "⚠️", text: "The competency record could not be read — nothing on this page describes competency currency, and none of it should be taken as an all-clear", tone: "red" });
+  else if (!insights.length) insights.push({ icon: "✅", text: "Workforce competency currency is healthy across all roles", tone: "green" });
 
   return {
-    ready: true as const, provisioned, weekStart,
+    ready: true as const, provisioned, weekStart, decisionsUnavailable,
     kpis: { matchScore: match?.matchScore ?? null, currentPct: staff.length ? Math.round((currentSet.size / staff.length) * 100) : null, expiredCerts, expiringCerts, staffTotal: staff.length, noneCount },
     staff, skillMix, roleCoverage, match, insights,
     expiringStaff: staff.filter(s => s.status === "Expiring").slice(0, 8),

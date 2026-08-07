@@ -6,6 +6,7 @@ import { loadUnitDepartments } from "@/lib/operations/unit-command";
 import UnitFilters from "../../../UnitFilters";
 import AnalyticsTabs from "../AnalyticsTabs";
 import { KpiWithFoot as Kpi } from "../../_kit";
+import UnavailableNotice from "@/components/UnavailableNotice";
 
 export const dynamic = "force-dynamic";
 
@@ -51,6 +52,7 @@ export default async function ExceptionsAnalytics() {
   return (
     <div className="space-y-4">
       {header}
+      <UnavailableNotice sources={d.unavailable} what="workforce exceptions" />
 
       <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-3">
         <Kpi label="Open exceptions" value={k.openExceptions} sub={`${k.exceptionCount} raised`} foot="WF-EXC-001" />

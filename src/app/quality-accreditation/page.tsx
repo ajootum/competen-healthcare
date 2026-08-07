@@ -5,6 +5,7 @@ import { loadRiskCentre } from "@/lib/qaw/risk-centre";
 import { officeForWorkspace } from "@/lib/ogs/office";
 import { GovernanceBanner } from "@/components/GovernanceBanner";
 import Link from "next/link";
+import UnavailableNotice from "@/components/UnavailableNotice";
 
 export const dynamic = "force-dynamic";
 
@@ -36,7 +37,11 @@ export default async function QualityDashboard() {
     trend = [...byMonth.entries()].sort((a, b) => a[0].localeCompare(b[0])).slice(-6).map(([k, v]) => ({ label: MONTHS[Number(k.slice(5, 7)) - 1], value: v }));
   } catch { /* optional */ }
 
-  const capaOpen = core.capa.open, overdue = core.capa.overdue, onTrack = Math.max(0, capaOpen - overdue);
+  // ⚠ A DONUT CANNOT DRAW "UNKNOWN". When the corrective-action table could not be read these figures are
+  // null, and rendering them as 0 would draw an empty ring captioned "0 open actions" — the most confident
+  // possible statement about data nobody has. The chart is therefore replaced below, not fed zeros.
+  const capaUnknown = core.capa.open == null || core.capa.overdue == null;
+  const capaOpen = core.capa.open ?? 0, overdue = core.capa.overdue ?? 0, onTrack = Math.max(0, capaOpen - overdue);
   const planDonut = [
     { label: "On track", value: onTrack, tone: "emerald" },
     { label: "Overdue", value: overdue, tone: "rose" },
@@ -51,11 +56,14 @@ export default async function QualityDashboard() {
       {/* OGS R001 — this workspace operates as a governed Office */}
       <GovernanceBanner office={office} />
 
+      <UnavailableNotice sources={core.unavailable} what="quality figures" />
+
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         <Stat icon="📋" tone={core.complianceScore != null ? ragPct(core.complianceScore) : "slate"} label="Compliance score" value={core.complianceScore != null ? `${core.complianceScore}%` : "—"} sub="mean audit compliance" />
         <Stat icon="🎯" tone={stdMet != null ? ragPct(stdMet) : "slate"} label="Standards met" value={stdMet != null ? `${stdMet}%` : "—"} sub="of assessed" />
-        <Stat icon="⚠️" tone="rose" label="Open critical findings" value={core.findings.critical} sub={`${core.findings.open} open total`} />
-        <Stat icon="🛠️" tone={overdue ? "rose" : "amber"} label="Open improvement actions" value={core.capa.open} sub={`${overdue} overdue`} />
+        {/* An unread findings or CAPA table shows the em dash these tiles already use for a missing figure. */}
+        <Stat icon="⚠️" tone="rose" label="Open critical findings" value={core.findings.critical ?? "—"} sub={core.findings.open == null ? "could not be read" : `${core.findings.open} open total`} />
+        <Stat icon="🛠️" tone={overdue ? "rose" : "amber"} label="Open improvement actions" value={core.capa.open ?? "—"} sub={core.capa.open == null ? "could not be read" : `${overdue} overdue`} />
         <Stat icon="📋" tone="blue" label="Audits" value={core.audits.total} sub={`${core.audits.completed} completed`} />
         <Stat icon="📈" tone="teal" label="Improvement projects" value={core.improvements.active} sub={`${core.improvements.total} total`} />
         <Stat icon="📏" tone="indigo" label="Active indicators" value={core.indicators} sub={`${core.standards} standards`} />
@@ -74,10 +82,16 @@ export default async function QualityDashboard() {
         </Card>
 
         <Card title="Improvement plan status">
+          {capaUnknown ? (
+            <p className="rounded-lg border border-[var(--cmp-color-error)] bg-[var(--cmp-surface-error)] px-3 py-4 text-sm text-rose-800">
+              <strong>The corrective-action register could not be read.</strong> No chart is drawn here, because an empty ring labelled “0 open actions” would be a confident claim about data nobody has.
+            </p>
+          ) : (
           <div className="flex items-center gap-3">
             <Donut segments={planDonut} total={capaOpen} label="Open actions" size={130} />
-            <Legend items={[...planDonut.map((s: any) => ({ label: s.label, value: s.value, tone: s.tone })), { label: "High priority", value: core.capa.critical, tone: "amber" }, { label: "Active projects", value: core.improvements.active, tone: "blue" }]} />
+            <Legend items={[...planDonut.map((s: any) => ({ label: s.label, value: s.value, tone: s.tone })), { label: "High priority", value: core.capa.critical ?? 0, tone: "amber" }, { label: "Active projects", value: core.improvements.active, tone: "blue" }]} />
           </div>
+          )}
           <p className="text-[11px] text-gray-400 mt-2"><Link href="/quality-accreditation/improvements" className="text-teal-600 hover:underline">Manage improvement plans →</Link></p>
         </Card>
       </div>

@@ -10,7 +10,7 @@ import { loadQualityDashboard } from "./quality-accreditation-data";
 const NONE = "00000000-0000-0000-0000-000000000000";
 
 export type ScoreRow = { name: string; score: number | null; detail: string; href: string };
-export type RiskRow = { label: string; count: number; severity: "high" | "medium" | "low"; href: string };
+export type RiskRow = { label: string; /** null = the source table could not be read; never render as 0 */ count: number | null; severity: "high" | "medium" | "low"; href: string };
 export type Initiative = { code: string | null; title: string; status: string; target_date: string | null };
 
 export async function loadExecutiveDashboard(admin: any, hid: string | null, isSuper: boolean) {
@@ -48,8 +48,13 @@ export async function loadExecutiveDashboard(admin: any, hid: string | null, isS
     { label: "Competency decisions lapsed / at risk", count: compGaps, severity: compGaps ? "medium" : "low", href: "/competency-office" },
     { label: "Vacant established positions", count: hr.positions.vacant, severity: hr.positions.vacant ? "medium" : "low", href: "/human-resources/planning" },
   ];
-  const riskTotal = risk.reduce((s, r) => s + r.count, 0);
-  const riskHigh = risk.filter(r => r.severity === "high").reduce((s, r) => s + r.count, 0);
+  // ⚠ NULL PROPAGATES INTO THE EXECUTIVE RISK TOTAL. Two of the four rows come from quality tables that may
+  // not have been read; counting an unknown as 0 would report a SMALLER enterprise risk figure to the board
+  // than anyone had grounds for, with nothing on the page indicating a component was missing. A sum with an
+  // unknown term is unknown — the page renders an em dash and the rows themselves say which one it was.
+  const sum = (rows: RiskRow[]) => rows.some(r => r.count == null) ? null : rows.reduce((s, r) => s + (r.count ?? 0), 0);
+  const riskTotal = sum(risk);
+  const riskHigh = sum(risk.filter(r => r.severity === "high"));
 
   // ── Strategic initiative tracker — quality improvement objectives double as
   // the organisation's tracked strategic initiatives.

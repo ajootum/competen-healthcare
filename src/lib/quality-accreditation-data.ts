@@ -27,32 +27,46 @@ export async function loadQualityDashboard(admin: any, hid: string | null, isSup
     audits.avgCompliance = done.length ? Math.round(done.reduce((s: number, a: any) => s + Number(a.compliance_pct), 0) / done.length) : null;
   } catch { /* pre-migration */ }
 
+  // ⚠ "0 open findings" AND "0 open CAPA" ARE ACCREDITATION ALL-CLEARS. Both blocks discarded their errors,
+  // so an unread audit_findings or capa_actions table produced exactly the numbers a quality lead wants to
+  // see. Each affected count goes null and the source is named, so the page shows an em dash it must explain
+  // rather than a zero it cannot justify.
+  const unavailable: string[] = [];
+
   // ── Open findings (for the in-scope audits only)
-  const findings = { open: 0, critical: 0 };
+  const findings: { open: number | null; critical: number | null } = { open: 0, critical: 0 };
   try {
     if (auditIds.length) {
-      const { data } = await admin.from("audit_findings").select("is_critical").in("audit_id", auditIds).eq("result", "not_met").limit(20000);
-      findings.open = (data ?? []).length;
-      findings.critical = (data ?? []).filter((f: any) => f.is_critical).length;
+      const { data, error } = await admin.from("audit_findings").select("is_critical").in("audit_id", auditIds).eq("result", "not_met").limit(20000);
+      if (error) { unavailable.push("audit findings"); findings.open = null; findings.critical = null; }
+      else {
+        findings.open = (data ?? []).length;
+        findings.critical = (data ?? []).filter((f: any) => f.is_critical).length;
+      }
     }
-  } catch { /* ignore */ }
+  } catch { unavailable.push("audit findings"); findings.open = null; findings.critical = null; }
 
   // ── CAPA (corrective/preventive actions)
   // critical and overdue are computed from the SAME open set, so an action that
   // is both would be double-counted if the two were summed. highOrOverdue is the
   // deduplicated union (distinct actions needing urgent attention) for callers
   // that aggregate a single "high-severity" figure.
-  const capa = { open: 0, overdue: 0, critical: 0, highOrOverdue: 0 };
+  type Capa = { open: number | null; overdue: number | null; critical: number | null; highOrOverdue: number | null };
+  const capa: Capa = { open: 0, overdue: 0, critical: 0, highOrOverdue: 0 };
+  const capaUnknown = () => { unavailable.push("corrective actions"); capa.open = null; capa.overdue = null; capa.critical = null; capa.highOrOverdue = null; };
   try {
-    const { data } = await scope(admin.from("capa_actions").select("status, priority, due_date").limit(3000));
-    const openRows = (data ?? []).filter((c: any) => !["completed", "verified", "closed"].includes(c.status));
-    const isCrit = (c: any) => c.priority === "high" || c.priority === "critical";
-    const isOverdue = (c: any) => c.due_date && c.due_date < today;
-    capa.open = openRows.length;
-    capa.overdue = openRows.filter(isOverdue).length;
-    capa.critical = openRows.filter(isCrit).length;
-    capa.highOrOverdue = openRows.filter((c: any) => isCrit(c) || isOverdue(c)).length;
-  } catch { /* ignore */ }
+    const { data, error } = await scope(admin.from("capa_actions").select("status, priority, due_date").limit(3000));
+    if (error) capaUnknown();
+    else {
+      const openRows = (data ?? []).filter((c: any) => !["completed", "verified", "closed"].includes(c.status));
+      const isCrit = (c: any) => c.priority === "high" || c.priority === "critical";
+      const isOverdue = (c: any) => c.due_date && c.due_date < today;
+      capa.open = openRows.length;
+      capa.overdue = openRows.filter(isOverdue).length;
+      capa.critical = openRows.filter(isCrit).length;
+      capa.highOrOverdue = openRows.filter((c: any) => isCrit(c) || isOverdue(c)).length;
+    }
+  } catch { capaUnknown(); }
 
   // ── Improvement projects (QI / PDSA). total = active + completed exactly, so
   // executive KPIs built from these reconcile.
@@ -79,6 +93,7 @@ export async function loadQualityDashboard(admin: any, hid: string | null, isSup
   } catch { /* ignore */ }
 
   return {
+    unavailable,
     audits, findings, capa, improvements, standards, indicators, objects,
     accreditationReadiness: audits.avgCompliance,   // derived from audit compliance
     complianceScore: audits.avgCompliance,

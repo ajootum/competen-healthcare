@@ -6,6 +6,7 @@ import { loadUnitDepartments } from "@/lib/operations/unit-command";
 import UnitFilters from "../../UnitFilters";
 import SchedulingTabs from "../SchedulingTabs";
 import { KpiTile as Kpi } from "../../../../components/ui/primitives";
+import UnavailableNotice from "@/components/UnavailableNotice";
 
 export const dynamic = "force-dynamic";
 
@@ -55,6 +56,7 @@ export default async function CompetencyMatching() {
   return (
     <div className="space-y-4">
       {header}
+      <UnavailableNotice sources={d.decisionsUnavailable ? ["competency decisions"] : []} what="competency figures" />
 
       <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-3">
         <Kpi label="Competency match" value={k.matchScore != null ? `${k.matchScore}%` : "—"} sub={k.matchScore != null ? "Roster assignments" : "No roster"} icon="🎯" tone={k.matchScore != null && k.matchScore >= 90 ? "text-[var(--cmp-text-success)]" : k.matchScore != null ? "text-[var(--cmp-text-warning)]" : undefined} />

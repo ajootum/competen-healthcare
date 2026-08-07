@@ -21,11 +21,12 @@ export async function loadExecReports(admin: any, hid: string | null, isSuper: b
     { label: "Organisational readiness", value: d.readinessIndex != null ? `${d.readinessIndex}%` : "—" },
     { label: "Quality compliance", value: d.quality.complianceScore != null ? `${d.quality.complianceScore}%` : "—" },
     { label: "Critical quality findings", value: d.quality.findings.critical },
-    { label: "Open corrective actions", value: `${d.quality.capa.open} (${d.quality.capa.overdue} overdue)` },
+    // An unread register renders as a stated absence, never as "0 (0 overdue)".
+    { label: "Open corrective actions", value: d.quality.capa.open == null ? "could not be read" : `${d.quality.capa.open} (${d.quality.capa.overdue} overdue)` },
     { label: "Total workforce", value: d.hr.headcount.total },
     { label: "Establishment fill", value: `${d.fillRate}%` },
     { label: "Vacancies", value: d.hr.positions.vacant },
-    { label: "High-severity risk items", value: d.riskHigh },
+    { label: "High-severity risk items", value: d.riskHigh ?? "could not be read" },
   ];
 
   return {

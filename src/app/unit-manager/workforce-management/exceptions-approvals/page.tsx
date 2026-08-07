@@ -6,6 +6,7 @@ import { loadUnitDepartments } from "@/lib/operations/unit-command";
 import UnitFilters from "../../UnitFilters";
 import WfmExcTabs from "./WfmExcTabs";
 import { KpiWithFoot as Kpi } from "../_kit";
+import UnavailableNotice from "@/components/UnavailableNotice";
 
 export const dynamic = "force-dynamic";
 
@@ -50,6 +51,7 @@ export default async function ExceptionsApprovalsOverview() {
   return (
     <div className="space-y-4">
       {header}
+      <UnavailableNotice sources={d.unavailable} what="workforce exceptions" />
 
       {/* KPI cards (§8.1) */}
       <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-3">

@@ -1,6 +1,7 @@
 import { hexGuard, Head, Tabs, Stat, Card, Donut, Legend, Trend, Bars, Foot, T } from "../_ui";
 import { loadExecQuality } from "@/lib/hex/quality";
 import Link from "next/link";
+import UnavailableNotice from "@/components/UnavailableNotice";
 
 export const dynamic = "force-dynamic";
 
@@ -19,6 +20,7 @@ export default async function ExecQualityPage() {
     <div className="space-y-4">
       {head}
       <Tabs tabs={TABS} active="Overview" />
+      <UnavailableNotice sources={(d as any).unavailable} what="quality figures" />
 
       <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-7 gap-3">
         <Stat icon="🏅" tone={k.overallQuality != null && Number(k.overallQuality) >= 85 ? "emerald" : "amber"} label="Overall quality score" value={q(k.overallQuality, "")} sub="composite" />

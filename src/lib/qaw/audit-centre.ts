@@ -18,11 +18,17 @@ export async function loadAuditCentre(admin: any, hid: string | null, isSuper: b
   const audits = (auditRows ?? []) as any[];
   const ids = audits.map(a => a.id);
 
+  // ⚠ A CHUNKED READ HIDES A PARTIAL FAILURE ESPECIALLY WELL: one failed batch of 200 simply contributed no
+  // rows, so the findings total, the not-met count and the critical count were all quietly short with the
+  // page none the wiser. Any failed chunk marks the whole set unavailable — a partially-read audit is not a
+  // smaller audit.
   let findings: any[] = [];
+  let findingsUnavailable = false;
   if (ids.length) {
     // batch in chunks to stay under URL limits
     for (let i = 0; i < ids.length; i += 200) {
-      const { data } = await admin.from("audit_findings").select("audit_id, result, is_critical, item_text, created_at").in("audit_id", ids.slice(i, i + 200)).limit(20000);
+      const { data, error } = await admin.from("audit_findings").select("audit_id, result, is_critical, item_text, created_at").in("audit_id", ids.slice(i, i + 200)).limit(20000);
+      if (error) findingsUnavailable = true;
       findings = findings.concat(data ?? []);
     }
   }
@@ -30,8 +36,11 @@ export async function loadAuditCentre(admin: any, hid: string | null, isSuper: b
   const critical = notMet.filter(f => f.is_critical);
 
   // Open corrective actions (follow-ups) from these audits / this tenant.
-  const { data: capaRows } = await scope(admin.from("capa_actions").select("title, status, priority, due_date, owner_name, audit_id").limit(4000));
+  const { data: capaRows, error: capaErr } = await scope(admin.from("capa_actions").select("title, status, priority, due_date, owner_name, audit_id").limit(4000));
   const capa = (capaRows ?? []) as any[];
+  const unavailable: string[] = [];
+  if (findingsUnavailable) unavailable.push("audit findings");
+  if (capaErr) unavailable.push("corrective actions");
   const openCapa = capa.filter(c => !["completed", "verified", "closed"].includes(c.status));
   const overdueFollowUps = openCapa.filter(c => c.due_date && c.due_date < today)
     .map(c => ({ ...c, daysOver: Math.round((Date.parse(today) - Date.parse(c.due_date)) / 86400000) }))
@@ -78,6 +87,7 @@ export async function loadAuditCentre(admin: any, hid: string | null, isSuper: b
 
   return {
     provisioned: true as const,
+    unavailable,
     kpis: {
       total: audits.length, completed: completed.length, inProgress: inProgress.length, planned: planned.length,
       completionRate: audits.length ? Math.round((completed.length / audits.length) * 100) : 0,

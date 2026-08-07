@@ -7,6 +7,7 @@ import UnitFilters from "../../../UnitFilters";
 import WfmExcTabs from "../WfmExcTabs";
 import QueueActions from "./QueueActions";
 import { Kpi } from "../../_kit";
+import UnavailableNotice from "@/components/UnavailableNotice";
 
 export const dynamic = "force-dynamic";
 
@@ -51,6 +52,7 @@ export default async function MyApprovalQueue() {
   return (
     <div className="space-y-4">
       {header}
+      <UnavailableNotice sources={d.unavailable} what="workforce exceptions" />
 
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         <Kpi label="In my queue" value={q.length} tone={q.length ? "text-gray-900" : "text-[var(--cmp-text-success)]"} />
