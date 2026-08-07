@@ -11,11 +11,29 @@ export const CHANNELS: Channel[] = ["in_app", "email", "sms", "webhook", "teams"
 
 export type NotifPayload = { type: string; title: string; body?: string | null; href?: string | null };
 
+// TWO STACKS, ONE PROVIDER ACCOUNT, AND UNTIL NOW TWO DIFFERENT SENDER VARIABLES.
+//
+// This file reads NOTIFY_FROM_EMAIL and TWILIO_FROM_NUMBER. src/lib/practice/messaging.ts reads
+// RESEND_FROM and TWILIO_FROM -- from the SAME api keys. So a deployment that set one pair got half its
+// messaging working, with this module reporting "not ready" while messagingStatus() reported
+// "configured", or the reverse. Nobody had hit it only because no key has ever been set.
+//
+// Both resolvers below accept EITHER name, so setting one value makes both stacks work. Each stack still
+// prefers its own historical name, so an existing deployment cannot change behaviour. Consolidating onto
+// a single name is a follow-up, and it needs a deployment change rather than a code change -- which is
+// exactly why this accepts both instead.
+export function emailFrom(): string | null {
+  return process.env.NOTIFY_FROM_EMAIL ?? process.env.RESEND_FROM ?? null;
+}
+export function smsFrom(): string | null {
+  return process.env.TWILIO_FROM_NUMBER ?? process.env.TWILIO_FROM ?? null;
+}
+
 // Which channels can actually deliver, given configured provider env vars.
 export function channelProviders(): Record<Channel, { ready: boolean; provider: string | null }> {
-  const email = !!(process.env.RESEND_API_KEY && process.env.NOTIFY_FROM_EMAIL);
+  const email = !!(process.env.RESEND_API_KEY && emailFrom());
   const webhook = !!process.env.NOTIFY_WEBHOOK_URL;
-  const sms = !!(process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN && process.env.TWILIO_FROM_NUMBER);
+  const sms = !!(process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN && smsFrom());
   return {
     in_app: { ready: true, provider: "internal" },
     email: { ready: email, provider: email ? "resend" : null },
@@ -30,7 +48,7 @@ async function sendEmail(to: string, subject: string, text: string) {
   const r = await fetch("https://api.resend.com/emails", {
     method: "POST",
     headers: { Authorization: `Bearer ${process.env.RESEND_API_KEY}`, "Content-Type": "application/json" },
-    body: JSON.stringify({ from: process.env.NOTIFY_FROM_EMAIL, to, subject, text }),
+    body: JSON.stringify({ from: emailFrom(), to, subject, text }),
   });
   if (!r.ok) throw new Error(`Resend ${r.status}`);
 }

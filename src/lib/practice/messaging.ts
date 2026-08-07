@@ -2,6 +2,10 @@ import { createHash, randomInt, timingSafeEqual } from "node:crypto";
 import { audit } from "@/lib/practice/provisioning";
 import type { EngineResult } from "@/lib/practice/encounters";
 import { type WorkspaceContext } from "@/lib/practice/access";
+// The sender resolvers live with the platform dispatcher because that is where the older of the two
+// variable names was introduced. Importing them rather than restating the fallback chain is the point:
+// a second copy is how the two stacks drifted apart in the first place.
+import { emailFrom, smsFrom } from "@/lib/notifications/dispatch";
 
 // THE DELIVERY CHANNEL -- PIS-000 s11/s14, IAM-000 s3/s7, CPR-PRM-001 s10.
 //
@@ -37,7 +41,14 @@ export function messagingStatus(): {
 } {
   const twilio = !!(process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN);
   const africas = !!(process.env.AFRICASTALKING_API_KEY && process.env.AFRICASTALKING_USERNAME);
-  const resend = !!process.env.RESEND_API_KEY;
+  // A KEY WITHOUT A SENDER IS NOT A CONFIGURED PROVIDER. This read the api key alone, so a deployment
+  // with a key and no from-address reported "configured" and then sent from no-reply@example.invalid,
+  // which Resend rejects. The platform's channelProviders() has always required both -- this matches it.
+  //
+  // emailFrom()/smsFrom() accept EITHER stack's variable name (RESEND_FROM or NOTIFY_FROM_EMAIL,
+  // TWILIO_FROM or TWILIO_FROM_NUMBER) so that one value configures both. See their definitions in
+  // src/lib/notifications/dispatch.ts for why there were ever two.
+  const resend = !!(process.env.RESEND_API_KEY && emailFrom());
 
   return {
     sms: {
@@ -294,7 +305,7 @@ async function handOver(kind: MessageKind, destination: string, body: string, su
           authorization: `Basic ${Buffer.from(`${sid}:${process.env.TWILIO_AUTH_TOKEN}`).toString("base64")}`,
           "content-type": "application/x-www-form-urlencoded",
         },
-        body: new URLSearchParams({ To: destination, From: process.env.TWILIO_FROM ?? "", Body: body }),
+        body: new URLSearchParams({ To: destination, From: smsFrom() ?? "", Body: body }),
       });
       const text = await res.text();
       return { ok: res.ok, providerMessageId: safeJson(text)?.sid, response: text.slice(0, 2000) };
@@ -319,7 +330,10 @@ async function handOver(kind: MessageKind, destination: string, body: string, su
         method: "POST", signal: controller.signal,
         headers: { authorization: `Bearer ${process.env.RESEND_API_KEY}`, "content-type": "application/json" },
         body: JSON.stringify({
-          from: process.env.RESEND_FROM ?? "no-reply@example.invalid",
+          // No no-reply@example.invalid fallback. Sending from a deliberately invalid domain produces a
+          // provider rejection that reads like an outage rather than a missing setting -- and the gate
+          // above now refuses before we get here, so there is nothing left for a fallback to rescue.
+          from: emailFrom(),
           to: [destination], subject: subject ?? "Message", text: body,
         }),
       });
