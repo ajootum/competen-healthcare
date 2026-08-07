@@ -19,6 +19,14 @@
  *   9. THE POSTURE CARRIES NO SCORE, NO PERCENTAGE AND NO COMPLIANCE BADGE, and names what it cannot
  *      know from here.
  *  10. Cross-workspace isolation, non-vacuously.
+ *  11. ⚠ A FAILED READ IS NEVER A PASS, A ZERO OR A SUCCESS (COMP-SECURITY-SURVEY-001 s0.3). Every
+ *      assertion in this block SIMULATES THE FAILURE rather than asserting the happy path: a stub client
+ *      makes a named table answer with an error, and the probe that proves the stub really did fail is
+ *      asserted first. Without that probe these would be the fifteenth vacuous assertion in this repo.
+ *        - an unreadable policy reads as UNREADABLE, never as "MFA off, emergency access on";
+ *        - the MFA gate answers UNAVAILABLE, not OPEN, when the assurance-level call errors;
+ *        - a revoke whose write fails is reported as a failure, and the device is still refused entry
+ *          nowhere -- it is proved still ALLOWED IN, which is what makes the false success dangerous.
  *
  *   npx --yes tsx scripts/practice-security-harness.ts
  */
@@ -30,7 +38,7 @@ import { resolveWorkspaceContext } from "../src/lib/practice/access";
 import {
   getSecurityPolicy, updateSecurityPolicy, touchSession, listSessions, revokeSession, setDeviceTrusted,
   recordConsent, withdrawConsent, patientConsents, consentSummary,
-  breakGlass, endBreakGlass, reviewBreakGlass, breakGlassLog, securityPosture,
+  breakGlass, endBreakGlass, reviewBreakGlass, breakGlassLog, securityPosture, mfaGate,
   BREAK_GLASS_CAPABILITIES,
 } from "../src/lib/practice/security";
 
@@ -84,6 +92,57 @@ const capsOf = async (workspaceId: string, userId: string): Promise<string[]> =>
   const res = await resolveWorkspaceContext(admin, userId, workspaceId);
   return res.ok ? [...res.ctx.capabilities] : [];
 };
+
+// ── THE FAULT INJECTOR ─────────────────────────────────────────────────────────────────────────────
+//
+// ⚠ SIMULATE THE FAILURE; DO NOT ASSERT THE HAPPY PATH. An absence assertion that passes because the
+// query errored is the bug class this repo has found fifteen times. Every assertion below therefore runs
+// against a client that is MADE to fail on one named table, and each block asserts a PROBE first --
+// proof that the read really did fail -- before asserting how the failure was handled.
+
+/** A query builder that resolves to a fixed result no matter what is chained onto it. */
+const stubBuilder = (result: { data: unknown; error: unknown }): any => {
+  const b: any = new Proxy({}, {
+    get(_t, prop) {
+      if (typeof prop === "symbol") return undefined;
+      if (prop === "then") return (res: any, rej: any) => Promise.resolve(result).then(res, rej);
+      return () => b;
+    },
+  });
+  return b;
+};
+
+const FAULT = { message: "simulated read failure", code: "SIMULATED" };
+
+// `Reflect.get` is deliberately called WITHOUT the receiver: forwarding the proxy as `this` breaks any
+// getter on the real client that reads a private field.
+/** `admin`, except that every operation on `table` answers with an error. */
+const adminFailingTable = (table: string): any => new Proxy(admin, {
+  get(target: any, prop) {
+    if (prop === "from") return (t: string) => (t === table ? stubBuilder({ data: null, error: FAULT }) : target.from(t));
+    const v = Reflect.get(target, prop);
+    return typeof v === "function" ? v.bind(target) : v;
+  },
+});
+
+/** `admin`, except that `update()` on `table` answers with `result` and writes nothing. */
+const adminFailingUpdate = (table: string, result: { data: unknown; error: unknown }): any => new Proxy(admin, {
+  get(target: any, prop) {
+    if (prop === "from") return (t: string) => {
+      const real = target.from(t);
+      if (t !== table) return real;
+      return new Proxy(real, {
+        get(bt: any, bp) {
+          if (bp === "update") return () => stubBuilder(result);
+          const v = Reflect.get(bt, bp);
+          return typeof v === "function" ? v.bind(bt) : v;
+        },
+      });
+    };
+    const v = Reflect.get(target, prop);
+    return typeof v === "function" ? v.bind(target) : v;
+  },
+});
 
 async function main() {
   console.log("\nPractice security harness (CPR-370, migration 213)\n");
@@ -328,6 +387,122 @@ async function main() {
     policy.mfa_required === false);
   const badMinutes = await updateSecurityPolicy(admin, { workspaceId: wsA, breakGlassMinutes: 5000, ...base });
   ok("an emergency lasting three days is refused", !badMinutes.ok);
+
+  // ── 11. A FAILED READ IS NEVER A PASS, A ZERO OR A SUCCESS ───────────────
+  //
+  // COMP-SECURITY-SURVEY-001 s0.3, and the same class as the four in fc2de9a2. Each block SIMULATES the
+  // failure and asserts a probe first, so none of it can pass against a query that quietly worked.
+
+  const failPolicy = adminFailingTable("practice_security_policy");
+  const probe = await failPolicy.from("practice_security_policy")
+    .select("*").eq("workspace_id", wsA).maybeSingle();
+  ok("PROBE: the injected fault really does make the policy read fail -- nothing below is vacuous",
+    probe.error != null && probe.data == null, JSON.stringify(probe));
+  const probeControl = await admin.from("practice_security_policy")
+    .select("workspace_id").eq("workspace_id", wsA).maybeSingle();
+  ok("CONTROL: the same read on the real client succeeds, so it is the injection failing and not the fixture",
+    probeControl.error == null && probeControl.data != null, JSON.stringify(probeControl.error));
+
+  const unread = await getSecurityPolicy(failPolicy, wsA);
+  ok("AN UNREADABLE POLICY SAYS SO -- it no longer reads as 'MFA off, emergency access on'",
+    unread.readable === false, JSON.stringify(unread));
+  ok("CONTROL: a policy that WAS read says that too, so `readable` is not hardcoded false",
+    (await getSecurityPolicy(admin, wsA)).readable === true);
+
+  // The MFA gate: three answers, and a failed check is not either of the two that let somebody in.
+  const gateOnError = mfaGate({ policyReadable: true, mfaRequired: true, aal: { data: null, error: FAULT } });
+  ok("THE MFA GATE ANSWERS 'COULD NOT TELL' WHEN THE ASSURANCE-LEVEL CALL ERRORS -- it used to OPEN",
+    gateOnError.decision === "UNAVAILABLE" && (gateOnError as any).check === "mfa_status",
+    JSON.stringify(gateOnError));
+  const gateOnUnreadablePolicy = mfaGate({ policyReadable: false, mfaRequired: false, aal: null });
+  ok("AND AN UNREADABLE POLICY IS 'COULD NOT TELL' TOO -- never 'this practice does not require MFA'",
+    gateOnUnreadablePolicy.decision === "UNAVAILABLE" && (gateOnUnreadablePolicy as any).check === "mfa_policy",
+    JSON.stringify(gateOnUnreadablePolicy));
+  ok("THE SHELL'S OWN PATH: the unreadable policy read above, fed to the gate, refuses to open",
+    mfaGate({ policyReadable: unread.readable, mfaRequired: unread.mfa_required === true, aal: null })
+      .decision === "UNAVAILABLE");
+
+  const gateNotEnrolled = mfaGate({ policyReadable: true, mfaRequired: true, aal: { data: { currentLevel: "aal1", nextLevel: "aal1" }, error: null } });
+  const gateEnrolled = mfaGate({ policyReadable: true, mfaRequired: true, aal: { data: { currentLevel: "aal1", nextLevel: "aal2" }, error: null } });
+  ok("A REFUSAL IS A DIFFERENT ANSWER FROM A FAILED CHECK, and it carries whether they are enrolled",
+    gateNotEnrolled.decision === "REFUSE" && (gateNotEnrolled as any).enrolled === false &&
+    gateEnrolled.decision === "REFUSE" && (gateEnrolled as any).enrolled === true,
+    JSON.stringify([gateNotEnrolled, gateEnrolled]));
+  ok("a caller with no session at all is REFUSED, not 'could not tell' -- that is a real answer",
+    mfaGate({ policyReadable: true, mfaRequired: true, aal: { data: { currentLevel: null, nextLevel: null }, error: null } }).decision === "REFUSE");
+  ok("CONTROL: the gate is not refusing everything -- a second factor held, and a practice not asking for one, both open",
+    mfaGate({ policyReadable: true, mfaRequired: true, aal: { data: { currentLevel: "aal2", nextLevel: "aal2" }, error: null } }).decision === "OPEN" &&
+    mfaGate({ policyReadable: true, mfaRequired: false, aal: null }).decision === "OPEN");
+
+  // Emergency access, on an unreadable policy: the placeholder says break-glass is ON, so this is the
+  // branch where a database blip would have granted it inside a practice that switched it off.
+  const glassBefore = (await breakGlassLog(admin, wsA)).episodes.length;
+  const glassOnUnreadable = await breakGlass(failPolicy, {
+    workspaceId: wsA, userId: LOCUM, reason: "Testing an unreadable policy", correlationId: "h",
+  });
+  ok("EMERGENCY ACCESS IS REFUSED ON AN UNREADABLE POLICY -- a failed read is not a permission",
+    !glassOnUnreadable.ok && glassOnUnreadable.code === "POLICY_UNREADABLE",
+    glassOnUnreadable.ok ? "GRANTED" : glassOnUnreadable.code);
+  ok("and it wrote nothing while refusing -- no episode, no grant",
+    (await breakGlassLog(admin, wsA)).episodes.length === glassBefore);
+
+  const policyOnUnreadable = await updateSecurityPolicy(failPolicy, { workspaceId: wsA, mfaRequired: true, ...base });
+  ok("A POLICY CANNOT BE CHANGED AGAINST A POLICY NOBODY COULD READ -- the diff would be against fiction",
+    !policyOnUnreadable.ok && policyOnUnreadable.code === "POLICY_UNREADABLE",
+    policyOnUnreadable.ok ? "CHANGED" : policyOnUnreadable.code);
+  ok("and the stored policy is untouched by the refusal",
+    (await getSecurityPolicy(admin, wsA)).mfa_required === false);
+
+  // The revoke write. THE ASSERTION THAT MATTERS IS THE LAST ONE: the device is still allowed in, which
+  // is exactly what a false success would have hidden.
+  const clinic = await touchSession(admin, { workspaceId: wsA, userId: OWNER, deviceId: "device-clinic" });
+  ok("a device to revoke is registered and allowed", clinic.allowed && !!clinic.sessionId);
+  const { count: revokeAuditBefore } = await admin.from("practice_audit_event")
+    .select("*", { count: "exact", head: true }).eq("workspace_id", wsA).eq("event_type", "practice.session_revoked");
+
+  const revokeErrored = await revokeSession(adminFailingUpdate("practice_session", { data: null, error: FAULT }), {
+    workspaceId: wsA, sessionId: clinic.sessionId!, reason: "Write will fail", ...base,
+  });
+  ok("A REVOKE WHOSE WRITE ERRORS IS REPORTED AS A FAILURE, never as a completed lockout",
+    !revokeErrored.ok && revokeErrored.code === "REVOKE_FAILED",
+    revokeErrored.ok ? "REPORTED AS SUCCESS" : revokeErrored.code);
+
+  const revokeLanded = await revokeSession(adminFailingUpdate("practice_session", { data: [], error: null }), {
+    workspaceId: wsA, sessionId: clinic.sessionId!, reason: "Write will land nothing", ...base,
+  });
+  ok("AND SO IS ONE THAT ERRORS NOWHERE BUT CHANGES NOUGHT ROWS -- the shape RLS produces",
+    !revokeLanded.ok && revokeLanded.code === "REVOKE_FAILED",
+    revokeLanded.ok ? "REPORTED AS SUCCESS" : revokeLanded.code);
+
+  const { count: revokeAuditAfter } = await admin.from("practice_audit_event")
+    .select("*", { count: "exact", head: true }).eq("workspace_id", wsA).eq("event_type", "practice.session_revoked");
+  ok("neither failed attempt was audited as a revocation that happened",
+    (revokeAuditAfter ?? -1) === (revokeAuditBefore ?? -2),
+    JSON.stringify({ before: revokeAuditBefore, after: revokeAuditAfter }));
+
+  const stillIn = await touchSession(admin, { workspaceId: wsA, userId: OWNER, deviceId: "device-clinic" });
+  ok("⚠ AND THE DEVICE IS STILL ALLOWED IN. That is what a reported success would have hidden from the "
+    + "person who pressed the button after losing a laptop",
+    stillIn.allowed, JSON.stringify(stillIn));
+
+  const revokeReal = await revokeSession(admin, { workspaceId: wsA, sessionId: clinic.sessionId!, reason: "For real", ...base });
+  ok("CONTROL: the same device, the same call, a working client -- it revokes", revokeReal.ok,
+    revokeReal.ok ? "" : revokeReal.message);
+  ok("CONTROL: and is then refused, so the failed attempts were failing for the right reason",
+    !(await touchSession(admin, { workspaceId: wsA, userId: OWNER, deviceId: "device-clinic" })).allowed);
+
+  // The posture: the sentence a practitioner reads must be the behaviour asserted above.
+  const postureAfter = await securityPosture(admin, wsA);
+  ok("THE POSTURE PROMISES WHAT THE CODE NOW DOES: a failed lock-out is reported as a failure",
+    postureAfter.guarantees.some((g: string) => /lock-out whose write did not land is reported as a failure/i.test(g)),
+    JSON.stringify(postureAfter.guarantees));
+  ok("and that a check which could not be completed refuses entry rather than counting as a pass",
+    postureAfter.guarantees.some((g: string) => /never counted as a passed one/i.test(g)));
+  ok("it says whether the policy beside it was actually read",
+    postureAfter.policyReadable === true &&
+    (await securityPosture(failPolicy, wsA)).policyReadable === false);
+  ok("AND IT DOES NOT PRETEND THIS PRODUCT CAN ENROL A SECOND FACTOR -- there is no such screen",
+    postureAfter.mfaEnrolmentIsPlatformLevel === true && postureAfter.mfaEnrolmentBuiltHere === false);
 
   // ── 10. Isolation ────────────────────────────────────────────────────────
   const crossRevoke = await revokeSession(admin, {

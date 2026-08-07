@@ -32,9 +32,28 @@ const REASONS: Record<string, { title: string; body: string }> = {
     title: "This device was idle for too long",
     body: "This practice sets a limit on how long a device may sit unused before it has to sign in again. Nothing is wrong with your account. Sign in again to carry on.",
   },
+  // ⚠ THIS USED TO SAY "add an authenticator to your account and then come back". There is no page in
+  // this product that adds one -- `auth.mfa.` appears in exactly one file, the shell's check -- so the
+  // instruction sent a locked-out person to do something they could not do, and the sentence read as a
+  // route back in when there was none. What it says now is what is actually true, including who can undo
+  // it, because that is the only thing this person can act on.
+  //
+  // AND IT SPLITS ON `enrolled`, because the two cases need different sentences and one wrong sentence
+  // here is the whole problem. Somebody who HOLDS a factor is in a quite different position from somebody
+  // who does not, and telling the first that their account has no second factor would be simply false.
   MFA_REQUIRED: {
     title: "This Practice requires a second factor",
-    body: "Somebody in this practice has made two-factor authentication a requirement. Two-factor is set up on your Competen account rather than here, so add an authenticator to your account and then come back.",
+    body: "Somebody in this practice has made two-factor authentication a requirement, and your Competen account does not have one. Two-factor lives on the Competen account rather than in Practice, and this product has no screen that sets one up — so if you cannot add an authenticator to your account elsewhere, somebody in the practice who can still get in has to turn the requirement off. Contact them, or support, with your workspace name.",
+  },
+  MFA_REQUIRED_ENROLLED: {
+    title: "This Practice requires a second factor",
+    body: "Somebody in this practice has made two-factor authentication a requirement. Your Competen account does have an authenticator, but this sign-in was not verified with it. Sign out and sign in again, completing the second-factor step. If that does not clear it, this product has no screen that can complete the step for you — somebody in the practice who can still get in has to turn the requirement off.",
+  },
+  // The third state: not permitted, not refused — unanswered. It carries a retry rather than an
+  // instruction, because there is nothing for the person to do differently.
+  SECURITY_CHECK_UNAVAILABLE: {
+    title: "A security check could not be completed",
+    body: "This Practice was not opened because one of its security checks gave no answer just now. Nothing is wrong with your account, nothing has been locked out, and nothing was changed. This is usually momentary — try again. If it keeps happening, contact support with your workspace name.",
   },
 };
 
@@ -46,8 +65,11 @@ export default async function Page() {
   if (shell.state === "CHOOSER_REQUIRED") redirect("/practice/select-workspace");
   if (shell.state === "WORKSPACE_REQUIRED") redirect("/practice");
 
-  // MFA_REQUIRED carries no `reason` field -- the state itself is the reason.
-  const key = shell.state === "MFA_REQUIRED" ? "MFA_REQUIRED" : shell.reason;
+  // MFA_REQUIRED and SECURITY_CHECK_UNAVAILABLE carry no `reason` field -- the state is the reason. The
+  // first splits further on whether the person actually holds a factor, which the state carries.
+  const key = shell.state === "MFA_REQUIRED" ? (shell.enrolled ? "MFA_REQUIRED_ENROLLED" : "MFA_REQUIRED")
+    : shell.state === "SECURITY_CHECK_UNAVAILABLE" ? "SECURITY_CHECK_UNAVAILABLE"
+      : shell.reason;
   const reason = REASONS[key] ?? REASONS.WORKSPACE_INACTIVE;
 
   // ── CPR-LIFE-001 s3: "Administrators may restore Archived or Suspended practices." ────────────────
@@ -90,6 +112,16 @@ export default async function Page() {
         {restorable && (
           <RestorePracticePanel workspaceId={restorable.workspaceId}
             workspaceName={restorable.workspaceName} status={restorable.status} />
+        )}
+        {/* The retry belongs to the one state a retry can fix. The guards run again on arrival, so this
+            is a real second attempt at the check rather than a button that reloads a verdict. */}
+        {key === "SECURITY_CHECK_UNAVAILABLE" && (
+          <p className="mt-5">
+            <Link href="/practice/home"
+              className="inline-block rounded-lg bg-[var(--cp-primary)] px-4 py-2 text-[13px] font-semibold text-white">
+              Try again
+            </Link>
+          </p>
         )}
         <p className="mt-4 text-[13px] text-gray-500">
           <Link href="/practice" className="font-semibold text-[var(--cp-primary-deep)] hover:underline">Back to Competen Practice</Link>

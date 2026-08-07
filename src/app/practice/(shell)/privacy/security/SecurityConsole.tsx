@@ -201,31 +201,47 @@ export default function SecurityConsole({ posture, sessions, glass, canManage, c
       {canManage && posture && (
         <section className={`${card} mt-4`}>
           <h2 className="text-[13px] font-bold text-gray-900">Policy</h2>
-          <div className="mt-2 flex flex-col gap-2">
-            <label className="flex items-start gap-2 text-[12px] text-gray-700">
-              <input type="checkbox" className="mt-0.5" checked={posture.policy.mfa_required} disabled={busy}
-                onChange={e => send({ mfaRequired: e.target.checked })} />
-              <span>
-                Require two-factor authentication
-                {/* The limit, next to the switch. */}
-                <span className="block text-[10px] text-gray-500">
-                  Two-factor is set up on the Competen account, not here. Turning this on means this
-                  practice will not open without it &mdash; it does not enrol anybody.
+          {/* AN UNREADABLE POLICY IS NOT AN "OFF" ONE. Both switches below are rendered from stored
+              values; when the read failed those values are placeholders, and an unchecked box would tell
+              a practice that requires two-factor authentication that it does not. Say so and offer
+              nothing to click, rather than showing a switch that is answering a question it cannot. */}
+          {posture.policyReadable === false ? (
+            <p className="mt-2 rounded-lg bg-[var(--cmp-surface-warning)] px-3 py-2 text-[12px] text-[var(--cmp-text-warning)]">
+              This practice&rsquo;s policy could not be read just now, so it is not shown and cannot be
+              changed from here. Nothing has changed. Reload to try again.
+            </p>
+          ) : (
+            <div className="mt-2 flex flex-col gap-2">
+              <label className="flex items-start gap-2 text-[12px] text-gray-700">
+                <input type="checkbox" className="mt-0.5" checked={posture.policy.mfa_required} disabled={busy}
+                  onChange={e => send({ mfaRequired: e.target.checked })} />
+                <span>
+                  Require two-factor authentication
+                  {/* ⚠ THE LIMIT AND THE TRAP, NEXT TO THE SWITCH. "It does not enrol anybody" was true
+                      and much too quiet: there is no enrolment screen ANYWHERE in this product, so this
+                      switch can shut out every member who does not already hold a factor -- including
+                      whoever pressed it, on their next page load. */}
+                  <span className="block text-[10px] text-gray-500">
+                    Two-factor is set up on the Competen account, not here, and this product has no
+                    screen that sets one up. Turning this on means this practice will not open for
+                    anybody without a factor already on their account &mdash; including you, from your
+                    next page load. Only somebody who can still get in can turn it back off.
+                  </span>
                 </span>
-              </span>
-            </label>
-            <label className="flex items-start gap-2 text-[12px] text-gray-700">
-              <input type="checkbox" className="mt-0.5" checked={posture.policy.break_glass_enabled} disabled={busy}
-                onChange={e => send({ breakGlassEnabled: e.target.checked })} />
-              <span>
-                Allow emergency access
-                <span className="block text-[10px] text-gray-500">
-                  Lasts {posture.policy.break_glass_minutes} minutes, always logged, always reviewed.
-                  Turning it off means a clinician facing an emergency is refused instead.
+              </label>
+              <label className="flex items-start gap-2 text-[12px] text-gray-700">
+                <input type="checkbox" className="mt-0.5" checked={posture.policy.break_glass_enabled} disabled={busy}
+                  onChange={e => send({ breakGlassEnabled: e.target.checked })} />
+                <span>
+                  Allow emergency access
+                  <span className="block text-[10px] text-gray-500">
+                    Lasts {posture.policy.break_glass_minutes} minutes, always logged, always reviewed.
+                    Turning it off means a clinician facing an emergency is refused instead.
+                  </span>
                 </span>
-              </span>
-            </label>
-          </div>
+              </label>
+            </div>
+          )}
         </section>
       )}
 

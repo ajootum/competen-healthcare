@@ -46,8 +46,10 @@ export default async function PracticeShellLayout({ children }: { children: Reac
   if (shell.state === "ONBOARDING_REQUIRED") redirect("/practice/onboarding");
   if (shell.state === "ACCESS_RESTRICTED") redirect("/practice/access-status");
   // CPR-370: a revoked device and an unmet MFA policy are refusals like any other, and are refused on
-  // EVERY practice surface rather than only in the shell layout.
-  if (shell.state === "SESSION_REVOKED" || shell.state === "MFA_REQUIRED") redirect("/practice/access-status");
+  // EVERY practice surface rather than only in the shell layout. A security check that could not be
+  // COMPLETED goes to the same place and says so there -- it is neither a pass nor a refusal.
+  if (shell.state === "SESSION_REVOKED" || shell.state === "MFA_REQUIRED"
+    || shell.state === "SECURITY_CHECK_UNAVAILABLE") redirect("/practice/access-status");
 
   const { ctx } = shell;
 

@@ -1,7 +1,7 @@
 import { cookies, headers } from "next/headers";
 import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { resolvePracticeAccess, resolveWorkspaceContext, readActiveWorkspaceId, type WorkspaceContext } from "@/lib/practice/access";
-import { touchSession, getSecurityPolicy } from "@/lib/practice/security";
+import { touchSession, getSecurityPolicy, mfaGate } from "@/lib/practice/security";
 
 // Server-side shell resolution (CPR-SHELL-001 sections 5, 5.1 and 6.1).
 //
@@ -25,6 +25,15 @@ export type ShellState =
   // mask a more basic problem: a revoked device, and a practice that requires a second factor.
   | { state: "SESSION_REVOKED"; userId: string; reason: "revoked" | "idle"; workspaceId: string }
   | { state: "MFA_REQUIRED"; userId: string; workspaceId: string; enrolled: boolean }
+  // ⚠ "COULD NOT BE CHECKED" IS ITS OWN STATE, and it is deliberately not MFA_REQUIRED.
+  //
+  // A failed check must never read as a passed one -- but it must not read as a FAILED one either, and
+  // that distinction is the whole point of this state. MFA_REQUIRED routes to a screen telling somebody
+  // to go and enrol a second factor; sending a person there because a database read timed out would give
+  // them an instruction that neither describes their situation nor gets them back in. This state says
+  // what actually happened and offers a retry, and because it is derived fresh on every request it
+  // clears itself the moment the underlying read works.
+  | { state: "SECURITY_CHECK_UNAVAILABLE"; userId: string; workspaceId: string; check: "mfa_policy" | "mfa_status" }
   | { state: "READY"; userId: string; ctx: WorkspaceContext };
 
 export async function resolvePracticeShell(): Promise<ShellState> {
@@ -82,13 +91,38 @@ export async function resolvePracticeShell(): Promise<ShellState> {
 
   // MFA IS THE PLATFORM'S TO ENFORCE; what this product can do is refuse to OPEN the practice without
   // it. Checked only when the practice has asked for it, so no existing workspace is locked out by a
-  // migration -- and it routes to enrolment rather than to a dead end.
+  // migration.
+  //
+  // ⚠ BOTH READS BEHIND THIS DECISION FAIL CLOSED, INTO A RETRIABLE STATE RATHER THAN A REFUSAL.
+  //
+  // Read 1 -- the policy -- used to fall through to a hardcoded `mfa_required: false` whenever the table
+  // could not be read, so a database fault switched the second factor off for that request. Read 2 -- the
+  // assurance level -- discarded its error, and since `data` is null on failure the guard's `aal &&`
+  // short-circuited and the function returned READY: AN MFA-REQUIRED PRACTICE OPENED WITHOUT MFA
+  // WHENEVER THAT CALL ERRORED. Neither is a pass now; the decision itself lives in mfaGate, apart from
+  // the request, so all three of its answers can be proved.
+  //
+  // Why this is not a lockout: NOTHING HERE RUNS UNLESS A PRACTICE ASKED FOR MFA (read 2) or the policy
+  // is unreadable (read 1), the state is recomputed on every single request so a reload clears it, and
+  // it lands on a screen that says a check could not be completed and offers to try again -- not on the
+  // enrolment instruction, which this product has no page to satisfy. Note also that
+  // getAuthenticatorAssuranceLevel decodes the session that `supabase.auth.getUser()` at the top of this
+  // function already validated over the network, so a transient failure here means the session went away
+  // mid-request; refusing is then the right answer rather than an unlucky one.
   const policy = await getSecurityPolicy(admin, res.ctx.workspaceId);
-  if (policy.mfa_required) {
-    const { data: aal } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
-    if (aal && aal.currentLevel !== "aal2") {
-      return { state: "MFA_REQUIRED", userId: user.id, workspaceId: res.ctx.workspaceId, enrolled: aal.nextLevel === "aal2" };
-    }
+  const mfaRequired = policy.mfa_required === true;
+  // Asked only when the answer can matter, so an unreadable policy never buys a round trip whose result
+  // would be ignored anyway.
+  const aal = policy.readable && mfaRequired
+    ? await supabase.auth.mfa.getAuthenticatorAssuranceLevel()
+    : null;
+
+  const gate = mfaGate({ policyReadable: policy.readable, mfaRequired, aal });
+  if (gate.decision === "UNAVAILABLE") {
+    return { state: "SECURITY_CHECK_UNAVAILABLE", userId: user.id, workspaceId: res.ctx.workspaceId, check: gate.check };
+  }
+  if (gate.decision === "REFUSE") {
+    return { state: "MFA_REQUIRED", userId: user.id, workspaceId: res.ctx.workspaceId, enrolled: gate.enrolled };
   }
 
   return { state: "READY", userId: user.id, ctx: res.ctx };

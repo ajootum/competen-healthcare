@@ -52,19 +52,59 @@ export const BREAK_GLASS_CAPABILITIES = [
 
 // ── THE POLICY ───────────────────────────────────────────────────────────────────────────────────────
 
-export async function getSecurityPolicy(admin: any, workspaceId: string) {
-  const { data } = await admin.from("practice_security_policy")
-    .select("*").eq("workspace_id", workspaceId).maybeSingle();
-  if (data) return data;
+export type SecurityPolicy = {
+  workspace_id: string;
+  mfa_required: boolean;
+  break_glass_enabled: boolean;
+  break_glass_minutes: number;
+  session_idle_minutes: number | null;
+  /**
+   * DID THESE VALUES COME OUT OF THE DATABASE ON THIS CALL? When false, everything beside it is a
+   * placeholder holding the shape -- not an answer, and never a permission.
+   */
+  readable: boolean;
+  [key: string]: any;
+};
 
+/**
+ * This practice's security policy, in THREE STATES rather than two: read, created, or UNREADABLE.
+ *
+ * ⚠ THIS USED TO DISCARD BOTH ERRORS. An unreadable table fell through to a hardcoded default of
+ * `mfa_required: false, break_glass_enabled: true` -- so a transient database fault turned the second
+ * factor OFF and emergency access ON for that request, with nothing anywhere saying so. The comment
+ * that justified those defaults ("a migration must never lock a practice out of itself") is right about
+ * a MISSING row and wrong about a FAILED READ, and the two shared one branch.
+ *
+ * They are separate now. A missing row is still created permissively, because a practice that has never
+ * set a policy genuinely has none. A failed read returns the same shape with `readable: false`, and
+ * every caller that makes a decision on it CHECKS THAT FIELD -- see resolvePracticeShell, breakGlass
+ * and updateSecurityPolicy, each of which refuses rather than guessing.
+ */
+export async function getSecurityPolicy(admin: any, workspaceId: string): Promise<SecurityPolicy> {
+  const unreadable = (): SecurityPolicy => ({
+    workspace_id: workspaceId, mfa_required: false, break_glass_enabled: true,
+    break_glass_minutes: 60, session_idle_minutes: null, readable: false,
+  });
+
+  const { data, error } = await admin.from("practice_security_policy")
+    .select("*").eq("workspace_id", workspaceId).maybeSingle();
+  // A FAILED READ IS NOT AN ABSENT ROW. Falling through to the insert below would, on a read fault,
+  // either fabricate a permissive default or write over a policy this practice actually set.
+  if (error) return unreadable();
+  if (data) return { ...data, readable: true };
+
+  // No error and no row: nobody has ever set a policy here. MFA off, break-glass on -- off for MFA
+  // because a migration must never lock a practice out of itself.
   const { data: created } = await admin.from("practice_security_policy")
     .insert({ workspace_id: workspaceId }).select("*").single();
-  // Defaults, if even the insert raced: MFA off, break-glass on. Off for MFA because a migration must
-  // never lock a practice out of itself.
-  return created ?? {
-    workspace_id: workspaceId, mfa_required: false,
-    break_glass_enabled: true, break_glass_minutes: 60, session_idle_minutes: null,
-  };
+  if (created) return { ...created, readable: true };
+
+  // The insert produced no row. The likeliest cause is two requests creating it at once, in which case
+  // the row now EXISTS and can be read -- so read it rather than guessing at its contents. Only a
+  // second failure is genuinely unreadable.
+  const { data: raced } = await admin.from("practice_security_policy")
+    .select("*").eq("workspace_id", workspaceId).maybeSingle();
+  return raced ? { ...raced, readable: true } : unreadable();
 }
 
 export async function updateSecurityPolicy(admin: any, args: {
@@ -73,6 +113,14 @@ export async function updateSecurityPolicy(admin: any, args: {
   actorId: string; correlationId: string;
 }): Promise<EngineResult<{ changed: string[] }>> {
   const current = await getSecurityPolicy(admin, args.workspaceId);
+  // AN UNREADABLE POLICY CANNOT BE DIFFED. Every branch below compares against `current`, so proceeding
+  // on placeholder values would decide "nothing was different" against numbers nobody set, and audit a
+  // `from` that was never true -- in the one record an incident is reconstructed from.
+  if (!current.readable)
+    return {
+      ok: false, status: 503, code: "POLICY_UNREADABLE",
+      message: "this practice's security policy could not be read just now, so nothing was changed. Try again.",
+    };
   const patch: Record<string, unknown> = {};
   const changed: string[] = [];
 
@@ -110,6 +158,49 @@ export async function updateSecurityPolicy(admin: any, args: {
   return { ok: true, data: { changed } };
 }
 
+// ── THE MFA GATE ─────────────────────────────────────────────────────────────────────────────────────
+
+/** What `supabase.auth.mfa.getAuthenticatorAssuranceLevel()` answers with, or null when it was not asked. */
+export type AalReading = {
+  data: { currentLevel: string | null; nextLevel: string | null } | null;
+  error: unknown;
+} | null;
+
+export type MfaGateDecision =
+  | { decision: "OPEN" }
+  | { decision: "REFUSE"; enrolled: boolean }
+  | { decision: "UNAVAILABLE"; check: "mfa_policy" | "mfa_status" };
+
+/**
+ * THE DECISION BEHIND GUARD 8, SEPARATED FROM THE REQUEST SO IT CAN BE PROVED.
+ *
+ * ⚠ THREE ANSWERS, NEVER TWO: open, refuse, or could-not-tell. The version this replaces had two, and
+ * collapsed the third into the first -- `const { data: aal } = await …getAuthenticatorAssuranceLevel()`
+ * discarded the error, and since `data` is null on failure the guard's `aal &&` short-circuited and the
+ * practice OPENED. A failed check read as a passed one, in the one place the whole control lives.
+ *
+ * Refuse and could-not-tell are kept apart just as carefully, because they need different screens: a
+ * refusal means go and enrol a factor, and could-not-tell means try again in a moment. Telling somebody
+ * to enrol because a database read timed out would be an instruction they cannot act on -- and this
+ * product has no enrolment screen to send them to in the first place.
+ */
+export function mfaGate(input: {
+  policyReadable: boolean;
+  mfaRequired: boolean;
+  aal: AalReading;
+}): MfaGateDecision {
+  // An unreadable policy cannot say MFA is off. It cannot say anything.
+  if (!input.policyReadable) return { decision: "UNAVAILABLE", check: "mfa_policy" };
+  if (!input.mfaRequired) return { decision: "OPEN" };
+
+  // `data` present with `currentLevel: null` is a REAL answer -- it is what a session-less caller gets --
+  // and it refuses. Only `data: null`, or an error beside it, means the question went unanswered.
+  if (!input.aal || input.aal.error || !input.aal.data) return { decision: "UNAVAILABLE", check: "mfa_status" };
+  if (input.aal.data.currentLevel !== "aal2")
+    return { decision: "REFUSE", enrolled: input.aal.data.nextLevel === "aal2" };
+  return { decision: "OPEN" };
+}
+
 // ── SESSIONS AND DEVICES ─────────────────────────────────────────────────────────────────────────────
 
 /**
@@ -130,7 +221,10 @@ export async function touchSession(admin: any, args: {
     if (existing?.revoked_at) return { allowed: false, reason: "revoked", sessionId: existing.id };
 
     const policy = await getSecurityPolicy(admin, args.workspaceId);
-    if (existing && policy.session_idle_minutes) {
+    // An unreadable policy carries `session_idle_minutes: null`, so no idle rule is applied from a read
+    // that failed. Nothing is fabricated here and nothing is waved through either: the shell calls
+    // getSecurityPolicy again immediately after this and refuses the request outright on the same fault.
+    if (existing && policy.readable && policy.session_idle_minutes) {
       const idleMs = Date.now() - Date.parse(existing.last_seen_at);
       if (idleMs > policy.session_idle_minutes * 60_000) {
         // Idle-out REVOKES the row rather than merely refusing, so the person sees it on their device
@@ -192,9 +286,38 @@ export async function revokeSession(admin: any, args: {
   if (!s) return { ok: false, status: 404, code: "NOT_FOUND", message: "Not found" };
   if (s.revoked_at) return { ok: false, status: 422, code: "ALREADY_REVOKED", message: "that device is already locked out" };
 
-  await admin.from("practice_session").update({
+  // ⚠ THE WRITE IS CHECKED, AND CONDITIONAL ON THE ROW STILL BEING LIVE.
+  //
+  // This used to discard the error, then audit the revocation and return `{ revoked: true }` regardless.
+  // A failed write was reported to the person who pressed the button as a completed lockout -- which is
+  // precisely the failure the header of this file calls the most dangerous thing it could ship: somebody
+  // presses it after losing a laptop, stops worrying, and the device is still allowed in.
+  //
+  // `.is("revoked_at", null)` makes it a compare-and-set, so a row that was revoked between the read
+  // above and this write cannot be silently overwritten with a second revoker and a second reason.
+  const { data: updated, error: revokeError } = await admin.from("practice_session").update({
     revoked_at: nowIso(), revoked_by: args.actorId, revoked_reason: args.reason?.trim() || null,
-  }).eq("id", s.id);
+  }).eq("id", s.id).is("revoked_at", null).select("id");
+
+  if (revokeError)
+    return {
+      ok: false, status: 500, code: "REVOKE_FAILED",
+      message: `that device could not be locked out (${revokeError.message}). It is still allowed in -- try again.`,
+    };
+
+  if (((updated ?? []) as any[]).length !== 1) {
+    // Nought rows changed, and there are two reasons that happens. Somebody else revoked it in the
+    // meantime -- in which case the device IS locked out and reporting a failure would be its own lie --
+    // or the write did not land. Read the row and report whichever it actually was.
+    const { data: after } = await admin.from("practice_session")
+      .select("revoked_at").eq("id", s.id).maybeSingle();
+    if (after?.revoked_at)
+      return { ok: false, status: 422, code: "ALREADY_REVOKED", message: "that device is already locked out" };
+    return {
+      ok: false, status: 500, code: "REVOKE_FAILED",
+      message: "that device could not be locked out; nothing changed. It is still allowed in -- try again.",
+    };
+  }
 
   await audit(admin, {
     workspaceId: args.workspaceId, actorId: args.actorId, eventType: "practice.session_revoked",
@@ -379,6 +502,14 @@ export async function breakGlass(admin: any, args: {
     return { ok: false, status: 403, code: "NOT_A_MEMBER", message: "you are not an active member of this practice" };
 
   const policy = await getSecurityPolicy(admin, args.workspaceId);
+  // A FAILED READ IS NOT A PERMISSION. The placeholder has break-glass ON, so proceeding here would
+  // grant emergency access inside a practice that had deliberately switched it off, on a database blip.
+  // Refused rather than judged -- and retriably, which an emergency needs it to be.
+  if (!policy.readable)
+    return {
+      ok: false, status: 503, code: "POLICY_UNREADABLE",
+      message: "this practice's emergency-access setting could not be read just now, so nothing was granted. Try again.",
+    };
   if (!policy.break_glass_enabled)
     return { ok: false, status: 422, code: "BREAK_GLASS_DISABLED", message: "this practice has turned emergency access off" };
 
@@ -553,6 +684,10 @@ export async function securityPosture(admin: any, workspaceId: string) {
 
   return {
     policy,
+    // ⚠ WHETHER THE POLICY ABOVE WAS READ AT ALL, as a field. Every number on this page is a fact about
+    // the practice; the policy is the one block that has a placeholder shape when it cannot be read, and
+    // a switch rendered from a placeholder would show "two-factor: off" for a practice that requires it.
+    policyReadable: policy.readable === true,
     // Counts, never a score and never a percentage.
     liveSessions: sessions.filter((s: any) => s.live).length,
     revokedSessions: sessions.filter((s: any) => !s.live).length,
@@ -564,8 +699,14 @@ export async function securityPosture(admin: any, workspaceId: string) {
     guarantees: [
       "Every read of a patient record is logged, including your own.",
       "Emergency access cannot be taken silently, and cannot be reviewed by the person who took it.",
-      "A revoked device is refused by this practice on its next request.",
+      // Both halves are now enforced. The second half used to be untrue: a lock-out whose write failed
+      // was reported as a completed one, so this sentence promised something the code did not check.
+      "A revoked device is refused by this practice on its next request, and a lock-out whose write did not land is reported as a failure rather than as success.",
       "A withdrawn consent is kept, never deleted.",
+      // Newly true, and stated because the opposite was the shipped behaviour: an error reading the
+      // second-factor level fell through to opening the practice.
+      "Where this practice requires a second factor, a check that could not be completed refuses entry. A failed check is never counted as a passed one.",
+      "This practice's security policy is either read or reported as unreadable. It is never assumed to be off.",
     ],
     notKnowableFromHere: [
       "Encryption algorithm and key management — a property of the deployment, not of this application.",
@@ -573,8 +714,13 @@ export async function securityPosture(admin: any, workspaceId: string) {
       "Whether the organisation holds any certification. This product asserts none.",
       "How long data must be kept — a legal question per jurisdiction, still unanswered.",
     ],
-    // The two places this product's reach ends, stated as fields so no client can imply otherwise.
+    // The places this product's reach ends, stated as fields so no client can imply otherwise.
     revocationEndsPlatformSession: false,
     mfaEnrolmentIsPlatformLevel: true,
+    // ⚠ AND THERE IS NO ENROLMENT PAGE IN THIS PRODUCT AT ALL. Requiring a second factor is a switch on
+    // this page; enrolling in one is not, anywhere. A member who does not already hold a verified factor
+    // on their Competen account cannot obtain one from here, and turning the requirement on shuts them
+    // out until somebody who can still get in turns it off again.
+    mfaEnrolmentBuiltHere: false,
   };
 }
