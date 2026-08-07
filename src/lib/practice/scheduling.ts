@@ -84,11 +84,21 @@ const LIVE_STATUSES = ["REQUESTED", "CONFIRMED", "ARRIVED"];
  * `excludeAppointmentId` keeps an appointment from colliding with ITSELF when it is being moved a few
  * minutes -- without it every drag onto an overlapping time would refuse, naming the very appointment
  * in the practitioner's hand.
+ *
+ * ⚠ `windowOverridden` EXISTS BECAUSE THE WINDOW IS CHECKED TWICE AND ONLY ONE CHECKER KNOWS ABOUT s14.
+ * booking-rules.ts decides the lead time and the horizon from s11's own ladder, and s14 lets an
+ * authorised person lift that refusal WITH A REASON THAT IS WRITTEN TO THE AUDIT TRAIL FIRST. Since
+ * migration 245 those card rules carry `active` again, so resolveBookingRule below usually resolves the
+ * very same row and would refuse the booking a second time on the same ground -- leaving a record of an
+ * override that produced nothing. Naming the codes already lifted suppresses THOSE TWO CHECKS ONLY and
+ * lets everything after them run: an override of the notice period must never become an override of the
+ * double-booking check. Callers that pass nothing are unchanged in every respect.
  */
 export async function checkPlacement(admin: any, args: {
   workspaceId: string; startMs: number; endMs: number;
   locationId: string | null; appointmentType: string; allowOverlap: boolean;
   excludeAppointmentId?: string;
+  windowOverridden?: string[];
 }): Promise<EngineResult<{ locationName: string | null }>> {
   // THE LOCATION IS VALIDATED, WHICH IT NEVER WAS. location_id has been written straight through since
   // migration 192, so a booking could name ANOTHER PRACTICE'S location -- a cross-tenant reference that
@@ -115,13 +125,16 @@ export async function checkPlacement(admin: any, args: {
   const wherePhrase = rule.source === "default" || rule.source === "practice"
     ? "your practice's booking rule" : `the booking rule for this ${rule.source.replace("+", " and ")}`;
 
+  const lifted = args.windowOverridden ?? [];
   if (!OVERLAP_EXEMPT.includes(args.appointmentType)) {
-    if (rule.leadTimeMinutes > 0 && args.startMs < Date.now() + rule.leadTimeMinutes * 60000)
+    if (!lifted.includes("LEAD_TIME")
+      && rule.leadTimeMinutes > 0 && args.startMs < Date.now() + rule.leadTimeMinutes * 60000)
       return {
         ok: false, status: 409, code: "LEAD_TIME",
         message: `${wherePhrase} needs ${rule.leadTimeMinutes} minutes' notice, and that time is sooner than that`,
       };
-    if (rule.bookingHorizonDays !== null && args.startMs > Date.now() + rule.bookingHorizonDays * 86400000)
+    if (!lifted.includes("BEYOND_HORIZON")
+      && rule.bookingHorizonDays !== null && args.startMs > Date.now() + rule.bookingHorizonDays * 86400000)
       return {
         ok: false, status: 409, code: "BEYOND_HORIZON",
         message: `${wherePhrase} opens the diary ${rule.bookingHorizonDays} days ahead, and that date is further out`,

@@ -51,25 +51,30 @@ import {
 //      an override nobody can find afterwards is an override that did not happen, so the record is
 //      written here with its error read, and the booking is refused if it could not be recorded.
 //
-// ---- ONE DELIBERATE DEVIATION, AND IT IS NOT A ROLLBACK ---------------------------------------------
+// ---- THE `active` FLAG, AND WHY IT MIRRORS `status` AGAIN (migration 245) ---------------------------
 //
-// ⚠ RULES WRITTEN BY THIS ENGINE SET THE LEGACY `active` FLAG TO FALSE, AND `status` IS THE AUTHORITY.
+// ⚠ `status` IS THE AUTHORITY AND `active` IS ITS MIRROR: active === (status === 'active'). Nothing in
+// this engine reads `active`; it is written so that the OTHER readers of this table agree with it.
 //
-// Migration 230 put a PARTIAL UNIQUE INDEX on practice_booking_rule -- ux_practice_booking_rule_scope,
-// over (workspace_id, coalesce(location_id, zero-uuid), coalesce(appointment_type, '*')) WHERE active.
-// It was right for a single inline row per scope. It is fatal to s7's card model: a Friday session rule
-// and a Monday session rule at the same hospital both coalesce to (that hospital, '*') and the second
-// one cannot be marked active. Worse, it makes s11 UNTESTABLE and UNREACHABLE -- because the specificity
-// weights are powers of two, two rules can only have EQUAL specificity by constraining exactly the same
-// dimensions, which means they share a location and an appointment type, which means the index refuses
-// the second. "At equal specificity, explicit priority determines the winner" would be a sentence about
-// a state the database forbids.
+// Phase 3 shipped with `active` forced to FALSE on every card rule, and it was a workaround. Migration
+// 230's partial unique index -- ux_practice_booking_rule_scope, over (workspace_id, location_id,
+// appointment_type) WHERE active -- knew of a scope with two parts, and migration 244 gave a rule three
+// more: a session, a channel and a priority. Under the old key a Friday session rule and a Monday
+// session rule at one hospital were a duplicate, and s11's "at equal specificity, explicit priority
+// determines the winner" described a state the database forbade. Leaving `active` false kept the index
+// satisfied, and the cost was stated on screen rather than hidden: availability-config.ts's
+// resolveBookingRule -- the check the calendar's own quick-book runs -- filters on `active`, so the
+// calendar could not see a single card rule.
 //
-// So card rules leave `active` false and are evaluated by `status`. The consequence is stated rather
-// than hidden: availability-config.ts's resolveBookingRule -- the check the calendar's own quick-book
-// runs -- reads `active` and therefore does NOT see card rules. The legacy single-row editor keeps
-// working exactly as it did, its rules stay visible to BOTH engines (status defaults to 'active'), and
-// the honest fix is a migration dropping that index, which is not this build's to write. It is reported.
+// Migration 245 rekeyed that index on all five scope columns PLUS priority, still partial but now
+// `where status = 'active'`. The workaround has no reason left, so it is gone and the calendar sees
+// card rules again.
+//
+// ⚠ THE CONSEQUENCE, WHICH IS REAL: THE BOOKING WINDOW IS NOW CHECKED TWICE. checkPlacement() resolves
+// its own rule through resolveBookingRule and re-checks the lead time and the horizon, and it has no
+// concept of s14's override. bookUnderRules therefore tells it which window codes an authorised
+// override has already lifted -- and only those, so that an override of the notice period can never
+// become an override of the double-booking check. See the comment at the call site.
 //
 // ---- WHAT IS NOT HERE ------------------------------------------------------------------------------
 //
@@ -465,9 +470,11 @@ export async function saveBookingRule(admin: any, ctx: WorkspaceContext, args: R
       workspace_id: ctx.workspaceId,
       ...next,
       version: 1,
-      // ⚠ FALSE ON PURPOSE. See the header: migration 230's partial unique index makes the card model
-      // and s11 unexpressible if this is true. `status` is the authority for this engine.
-      active: false,
+      // ⚠ THE MIRROR, NOT A SECOND OPINION. `status` decides; `active` is written so the readers that
+      // still filter on it -- resolveBookingRule, the calendar's quick-book, the legacy availability
+      // console -- see the same rule this engine does. Migration 245 rekeyed the scope index on
+      // `status`, so this no longer has to lie to get past it.
+      active: next.status === "active",
       created_by: args.actorId,
     }).select("id, version").maybeSingle();
     if (error) return { ok: false, status: 422, code: "REFUSED_BY_DATABASE", message: error.message };
@@ -505,7 +512,9 @@ export async function saveBookingRule(admin: any, ctx: WorkspaceContext, args: R
 
   const nextVersion = (existing.version as number) + 1;
   const { data: updated, error: upErr } = await admin.from("practice_booking_rule")
-    .update({ ...next, version: nextVersion, active: false, updated_at: nowIso() })
+    // ⚠ THE MIRROR MOVES IN BOTH DIRECTIONS. Pausing or archiving a rule must clear `active` as well,
+    // or the calendar would keep enforcing a rule this engine has taken out of force.
+    .update({ ...next, version: nextVersion, active: next.status === "active", updated_at: nowIso() })
     .eq("id", existing.id).eq("workspace_id", ctx.workspaceId).eq("version", existing.version)
     .select("id, version").maybeSingle();
   if (upErr) return { ok: false, status: 422, code: "REFUSED_BY_DATABASE", message: upErr.message };
@@ -1193,6 +1202,14 @@ export async function bookUnderRules(
     workspaceId: ctx.workspaceId, startMs, endMs,
     locationId: args.locationId ?? null, appointmentType: args.appointmentType,
     allowOverlap: args.allowOverlap === true,
+    // ⚠ THE WINDOW IS ENFORCED TWICE, AND ONLY THIS ENGINE KNOWS WHAT AN OVERRIDE IS. checkPlacement
+    // resolves its own rule through resolveBookingRule, which reads the legacy `active` flag -- and
+    // since migration 245 let this engine set that flag honestly, the row it resolves is usually the
+    // very row this engine just decided with. Told nothing, it would refuse the booking a second time
+    // on the ground s14 has already lifted, leaving an audit record of an override that produced no
+    // booking. It is told the codes and NOTHING ELSE: the double-book, the travel conflict, the closed
+    // location and the walk-in limit all still run, and all still stop the booking.
+    windowOverridden: overridden,
   });
   if (!placed.ok) return placed;
 

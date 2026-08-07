@@ -6,10 +6,15 @@
  *      rungs. The winner is asserted BY NAME at every rung, and the ladder is walked down by archiving
  *      the winner and asserting the next one takes over -- a fixture with one matching rule could not
  *      test the ladder at all, and a count assertion is true of a dozen wrong implementations.
- *   2. s11's CONFLICT: at equal specificity AND equal priority, activation is BLOCKED. Both directions
- *      (authoring refuses, and evaluation refuses if two tied rules are in force anyway), each with a
- *      control -- including two rules that are equally specific and equally important and are NOT a
- *      conflict because their scopes can never meet.
+ *   2. s11's CONFLICT: at equal specificity AND equal priority, activation is BLOCKED -- now by TWO
+ *      guards, and section 3 asserts both. MIGRATION 245 made the DATABASE the first: its rekeyed
+ *      partial unique index refuses two active rules that share a scope AND a priority, so the state
+ *      the engine's evaluation-time guard was written to survive can no longer be written at all. The
+ *      engine's authoring refusal is asserted as it always was (it fires first, and with a sentence an
+ *      index cannot produce); its evaluation-time guard is asserted over real rows whose `active` is
+ *      synthesised at the read, because a state the database forbids cannot be reached by writing.
+ *      With controls -- including two rules that are equally specific and equally important and are NOT
+ *      a conflict because their scopes can never meet, and the one narrowing 245 brings with it.
  *   3. AC-13: every booking stores the rule id AND THE VERSION. Proven by making a booking, EDITING the
  *      rule, and showing the booking still names version 1 -- and that reading it back returns what the
  *      rule SAID THEN, not what it says now. The edit changes the confirmation mode, so the two
@@ -36,10 +41,13 @@ import { zonedDayRange, dueDateFrom, practiceToday } from "../src/lib/practice/p
 import { saveSession } from "../src/lib/practice/practice-sessions";
 import {
   listBookingRules, saveBookingRule, setRuleStatus, ruleVersionHistory,
-  evaluateBooking, bookUnderRules, explainAppointment, bookingRulesWorkspace,
+  evaluateBooking, bookUnderRules, explainAppointment, bookingRulesWorkspace, conflictsAmong,
   type BookingRuleCard,
 } from "../src/lib/practice/booking-rules";
 import { specificityOf, specificityRung } from "../src/lib/practice/booking-rule-constants";
+// ⚠ THE CALENDAR'S OWN READ, IMPORTED ON PURPOSE. It is the reader that could not see a card rule while
+// Phase 3's `active = false` workaround stood, so it is the reader that proves the workaround is gone.
+import { resolveBookingRule } from "../src/lib/practice/availability-config";
 
 loadEnvConfig(process.cwd());
 
@@ -124,6 +132,39 @@ function adminWithUnreadable(real: any, table: string) {
   return new Proxy(real, {
     get(t: any, prop: string) {
       if (prop === "from") return (name: string) => (name === table ? failing() : t.from(name));
+      const v = t[prop];
+      return typeof v === "function" ? v.bind(t) : v;
+    },
+  });
+}
+
+/**
+ * An admin client on which the rule table answers with rows OF THIS HARNESS'S CHOOSING.
+ *
+ * ⚠ THE ONLY WAY LEFT TO REACH s11's SECOND GUARD, AND IT IS THE SAME DEVICE AS THE ONE ABOVE. Since
+ * migration 245 the database refuses to HOLD two tied active rules (see section 3), so evaluation's
+ * "two rules are in force and nothing can choose between them" branch cannot be reached by writing
+ * anything. A branch a healthy database never produces cannot be tested against a healthy one -- which
+ * is the argument adminWithUnreadable already makes for a failed read, applied to a forbidden state.
+ *
+ * The rows handed to it are REAL rows, written by the real engine and read back with select("*"); the
+ * only thing synthesised is the one thing 245 forbids, which is both of them saying `active` at once.
+ */
+function adminReturningRules(real: any, rows: any[]) {
+  const source = (): any => {
+    const p: any = new Proxy({} as any, {
+      get(_t, prop) {
+        if (prop === "then")
+          return (resolve: any) => resolve({ data: rows, error: null, count: rows.length });
+        return () => p;
+      },
+    });
+    return p;
+  };
+  return new Proxy(real, {
+    get(t: any, prop: string) {
+      if (prop === "from")
+        return (name: string) => (name === "practice_booking_rule" ? source() : t.from(name));
       const v = t[prop];
       return typeof v === "function" ? v.bind(t) : v;
     },
@@ -293,6 +334,36 @@ async function main() {
       JSON.stringify([R_PRACTICE, R_LOCATION, R_LOCTYPE, R_SESSION].map(id => [byId.get(id)?.name, byId.get(id)?.specificity])));
   }
 
+  // ── MIGRATION 245 GAVE THE LEGACY `active` FLAG BACK, AND THIS IS WHAT IT BUYS ─────────────────────
+  //
+  // ⚠ WHILE PHASE 3's WORKAROUND STOOD, THE CALENDAR COULD NOT SEE A SINGLE CARD RULE. Card rules were
+  // written with `active` false to satisfy migration 230's index, and availability-config.ts's
+  // resolveBookingRule -- the check the calendar's own quick-book runs, through checkPlacement --
+  // filters on exactly that flag. A practitioner could write a rule, watch it decide a booking made from
+  // the rules screen, and watch the calendar ignore it. 245 rekeyed the index on `status`, so `active`
+  // is now the mirror of `status` and both readers see the same rule.
+  const mirrored = await mk({
+    name: "Muyenga home visits", locationId: LOC_NE, appointmentType: "home_visit", leadTimeMinutes: 90,
+  });
+  if (!mirrored.ok) throw new Error(`mirror rule fixture failed: ${mirrored.code} ${mirrored.message}`);
+  const R_MIRROR = mirrored.data.id;
+  {
+    const { data: row } = await admin.from("practice_booking_rule").select("status, active").eq("id", R_MIRROR).maybeSingle();
+    ok("1h a rule this engine writes as active sets the legacy `active` flag too -- Phase 3's workaround is gone",
+      row?.status === "active" && row?.active === true, JSON.stringify(row));
+    const seen = await resolveBookingRule(admin, wsA, LOC_NE, "home_visit");
+    ok("1i and resolveBookingRule -- the read behind the calendar's quick-book -- resolves it, by value and by source",
+      seen.leadTimeMinutes === 90 && seen.source === "location+type", JSON.stringify(seen));
+  }
+  await setRuleStatus(admin, A, { ruleId: R_MIRROR, status: "paused", ...ACT });
+  {
+    const { data: row } = await admin.from("practice_booking_rule").select("status, active").eq("id", R_MIRROR).maybeSingle();
+    const gone = await resolveBookingRule(admin, wsA, LOC_NE, "home_visit");
+    ok("1j CONTROL: pausing it clears the flag and the calendar stops seeing it, so `active` mirrors `status` in BOTH directions",
+      row?.status === "paused" && row?.active === false && gone.leadTimeMinutes === 0 && gone.source !== "location+type",
+      JSON.stringify([row, gone]));
+  }
+
   // ════════════════════════════════════════════════════════════════════════════════════════════════
   // 2. s11's LADDER -- ASSERTED BY NAME, WALKED DOWN RUNG BY RUNG
   //
@@ -399,70 +470,142 @@ async function main() {
     dTie.ok ? JSON.stringify(dTie.data.why) : "");
   await setRuleStatus(admin, A, { ruleId: R_TIE, status: "archived", ...ACT });
 
-  // ⚠ TWO TIED RULES WRITTEN STRAIGHT INTO THE TABLE, which the engine cannot prevent. Evaluation must
-  // refuse rather than choose, or s11's guarantee only holds for rules created through one door.
-  const { data: smuggled, error: smuggleErr } = await admin.from("practice_booking_rule").insert([
-    {
-      workspace_id: wsA, name: "Smuggled A", status: "active", priority: 3, active: false,
-      location_id: LOC_ELIG, appointment_type: "teleconsultation", version: 1,
-    },
-    {
-      workspace_id: wsA, name: "Smuggled B", status: "active", priority: 3, active: false,
-      location_id: LOC_ELIG, appointment_type: "teleconsultation", version: 1,
-    },
-  ]).select("id, name");
-  if (smuggleErr || !smuggled) throw new Error(`smuggled rule fixture failed: ${smuggleErr?.message}`);
-  const SMUGGLED_A = smuggled.find(r => r.name === "Smuggled A")!.id as string;
+  // ══ MIGRATION 245: THE DATABASE IS NOW THE FIRST GUARD, AND THE ENGINE IS THE SECOND ═════════════
+  //
+  // ⚠ THIS BLOCK USED TO WRITE TWO TIED ACTIVE RULES STRAIGHT INTO THE TABLE. IT NO LONGER CAN, AND
+  // THAT IS THE POINT. ux_practice_booking_rule_scope is keyed on (workspace, location, appointment
+  // type, session, channel, PRIORITY) where status = 'active'. Work through what an s11 tie is against
+  // that key: two rules have EQUAL SPECIFICITY only by constraining exactly the same dimensions (the
+  // weights are powers of two), and their scopes can only OVERLAP by giving those dimensions the same
+  // VALUES -- so an s11 tie is precisely a collision on that key, and it is refused. There is no scope
+  // combination the key permits that the engine calls a conflict; the reverse is not true, which is
+  // 3r below.
+  //
+  // So the assertion this fixture can make has changed. It used to be "the engine refuses a state
+  // anybody can create". It is now "the DATABASE refuses to create the state at all" -- which is worth
+  // asserting on its own, because an index that had silently stopped enforcing would look exactly like
+  // one that works.
+  const draftA = await saveBookingRule(admin, A, {
+    name: "Smuggled A", locationId: LOC_ELIG, appointmentType: "teleconsultation",
+    priority: 3, status: "draft", ...ACT,
+  });
+  const draftB = await saveBookingRule(admin, A, {
+    name: "Smuggled B", locationId: LOC_ELIG, appointmentType: "teleconsultation",
+    priority: 3, status: "draft", ...ACT,
+  });
+  if (!draftA.ok || !draftB.ok) throw new Error("tied draft fixture failed");
+  const SMUGGLED_A = draftA.data.id, SMUGGLED_B = draftB.data.id;
+  // Read back as the database actually holds them, before either is put in force.
+  const { data: tiedRows } = await admin.from("practice_booking_rule").select("*").in("id", [SMUGGLED_A, SMUGGLED_B]);
+  const rowOf = (id: string) => ((tiedRows ?? []) as any[]).find(r => r.id === id);
 
-  const dConflict = await evaluateBooking(admin, A, {
+  const activateFirst = await setRuleStatus(admin, A, { ruleId: SMUGGLED_A, status: "active", ...ACT });
+  ok("3h-setup the first of the two activates, so nothing below is a rule that could not be activated at all",
+    activateFirst.ok, activateFirst.ok ? "" : `${activateFirst.code} ${activateFirst.message}`);
+
+  const { error: smuggleErr } = await admin.from("practice_booking_rule")
+    .update({ status: "active", active: true }).eq("id", SMUGGLED_B);
+  ok("3h ⚠ 245: the second, activated by a DIRECT UPDATE past the engine entirely, is refused BY THE DATABASE",
+    !!smuggleErr && /ux_practice_booking_rule_scope/.test(String(smuggleErr?.message)),
+    smuggleErr ? smuggleErr.message : "the database accepted two tied active rules");
+  const { error: freeErr } = await admin.from("practice_booking_rule")
+    .update({ status: "active", active: true, priority: 9 }).eq("id", SMUGGLED_B);
+  ok("3i CONTROL: the same direct update with a DIFFERENT priority is accepted, so 3h is the index's priority column and not the update",
+    !freeErr, freeErr?.message ?? "");
+
+  // ── s11's SECOND GUARD, OVER A RULE SET THE DATABASE WILL NO LONGER HOLD ────────────────────────
+  //
+  // ⚠ WHY THIS IS NOT A FIXTURE INVENTED TO KEEP AN ASSERTION GREEN. booking-rules.ts still contains
+  // the branch that refuses to choose between two tied rules at EVALUATION time, and it is still worth
+  // having: the index above is one `drop index` away from being absent, and a database restored from
+  // before 245 would have neither it nor the state's impossibility. Code that can no longer be reached
+  // through the front door is exactly the code that rots. The rows below are the two REAL rows written
+  // above, read back with select("*"); the only thing synthesised is the one thing 245 forbids, which
+  // is both of them saying `active` at once -- and it is synthesised at the READ, which is the same
+  // device sections 9a-9j use for a query that fails.
+  const tiedAdmin = adminReturningRules(admin, [
+    { ...rowOf(SMUGGLED_A), status: "active" },
+    { ...rowOf(SMUGGLED_B), status: "active", priority: 3 },
+  ]);
+  const conflictReq = {
     channel: "practitioner", appointmentType: "teleconsultation",
     scheduledAt: at(D_EL, 10 * 60), locationId: LOC_ELIG, patientId: PAT_ADULT,
-  });
-  ok("3h two tied rules already in force make EVALUATION refuse, rather than the engine picking one quietly",
+  };
+  const dConflict = await evaluateBooking(tiedAdmin, A, conflictReq);
+  ok("3j two tied rules in force make EVALUATION refuse, rather than the engine picking one quietly",
     !dConflict.ok && dConflict.code === "RULE_CONFLICT",
     dConflict.ok ? `chose ${dConflict.data.ruleName}` : dConflict.code);
-  ok("3i and it names BOTH of them",
+  ok("3k and it names BOTH of them",
     !dConflict.ok && /Smuggled A/.test(dConflict.message) && /Smuggled B/.test(dConflict.message),
     dConflict.ok ? "" : dConflict.message);
-  const bookConflict = await bookUnderRules(admin, A, {
-    channel: "practitioner", appointmentType: "teleconsultation", scheduledAt: at(D_EL, 10 * 60),
-    locationId: LOC_ELIG, patientId: PAT_ADULT, ...ACT,
-  });
-  ok("3j and the BOOKING refuses too -- a blocked conflict is not merely a warning on a screen",
+  const bookConflict = await bookUnderRules(tiedAdmin, A, { ...conflictReq, ...ACT });
+  ok("3l and the BOOKING refuses too -- a blocked conflict is not merely a warning on a screen",
     !bookConflict.ok && bookConflict.code === "RULE_CONFLICT",
     bookConflict.ok ? "booked" : bookConflict.code);
-  const overrideConflict = await bookUnderRules(admin, A, {
-    channel: "practitioner", appointmentType: "teleconsultation", scheduledAt: at(D_EL, 10 * 60),
-    locationId: LOC_ELIG, patientId: PAT_ADULT, override: { reason: "I know better" }, ...ACT,
+  const overrideConflict = await bookUnderRules(tiedAdmin, A, {
+    ...conflictReq, override: { reason: "I know better" }, ...ACT,
   });
-  ok("3k and an override with a reason does NOT lift it -- s11 says resolve the conflict, not book past it",
+  ok("3m and an override with a reason does NOT lift it -- s11 says resolve the conflict, not book past it",
     !overrideConflict.ok && overrideConflict.code === "RULE_CONFLICT",
     overrideConflict.ok ? "booked" : overrideConflict.code);
 
-  await admin.from("practice_booking_rule").update({ priority: 9 }).eq("id", SMUGGLED_A);
-  const dResolved = await evaluateBooking(admin, A, {
-    channel: "practitioner", appointmentType: "teleconsultation",
-    scheduledAt: at(D_EL, 10 * 60), locationId: LOC_ELIG, patientId: PAT_ADULT,
-  });
-  ok("3l CONTROL: giving one of them a higher priority resolves it and names the winner, so 3h is the tie",
+  const resolvedAdmin = adminReturningRules(admin, [
+    { ...rowOf(SMUGGLED_A), status: "active", priority: 9 },
+    { ...rowOf(SMUGGLED_B), status: "active", priority: 3 },
+  ]);
+  const dResolved = await evaluateBooking(resolvedAdmin, A, conflictReq);
+  ok("3n CONTROL: the same two rows with different priorities produce a named winner, so 3j is the tie and not the fixture",
     dResolved.ok && dResolved.data.ruleId === SMUGGLED_A,
     dResolved.ok ? String(dResolved.data.ruleName) : `${dResolved.code} ${dResolved.message}`);
-  await admin.from("practice_booking_rule").delete().in("id", smuggled.map(r => r.id));
+  await admin.from("practice_booking_rule_version").delete().in("rule_id", [SMUGGLED_A, SMUGGLED_B]);
+  await admin.from("practice_booking_rule").delete().in("id", [SMUGGLED_A, SMUGGLED_B]);
 
   // ⚠ EQUAL SPECIFICITY AND EQUAL PRIORITY IS NOT ENOUGH. Two rules that can never decide the same
   // booking are not a conflict, and reporting them as one would stop a practitioner having two rooms.
   const farA = await mk({ name: "Kololo staff bookings", locationId: LOC_OTHER, channel: "staff" });
   const farB = await mk({ name: "Kololo practitioner bookings", locationId: LOC_OTHER, channel: "practitioner" });
-  ok("3m CONTROL: two equally specific, equally important rules whose CHANNELS differ are not a conflict",
+  ok("3o CONTROL: two equally specific, equally important rules whose CHANNELS differ are not a conflict",
     farA.ok && farB.ok, [farA, farB].map(r => r.ok ? "ok" : `${r.code} ${r.message}`).join(" / "));
   const R_STAFF = farA.ok ? farA.data.id : "";
   const R_PRAC = farB.ok ? farB.data.id : "";
 
+  // ── AND THE HALF OF THE OLD CONTROL THE DATABASE TOOK AWAY ─────────────────────────────────────
+  //
+  // The engine's answer is unchanged and is asserted directly, on the pure function both the card list
+  // and the save path use: "new patients only" and "existing patients only" can never describe one
+  // patient, so at one location and one priority they are NOT a conflict.
+  const eligRow = (id: string, elig: string) => ({
+    id, name: id, status: "active", priority: 0,
+    effective_from: null, effective_to: null, session_template_id: null,
+    location_id: LOC_NE, appointment_type: null, channel: null,
+    patient_eligibility: elig, min_age_years: null, max_age_years: null,
+  });
+  ok("3p the ENGINE does not call new-only and existing-only a conflict, and DOES call two new-only rules one",
+    conflictsAmong([eligRow("a", "new_only"), eligRow("b", "existing_only")]).length === 0
+    && conflictsAmong([eligRow("a", "new_only"), eligRow("b", "new_only")]).length === 1,
+    JSON.stringify([
+      conflictsAmong([eligRow("a", "new_only"), eligRow("b", "existing_only")]).length,
+      conflictsAmong([eligRow("a", "new_only"), eligRow("b", "new_only")]).length,
+    ]));
+
   const newOnly = await mk({ name: "New patients at Muyenga", locationId: LOC_NE, patientEligibility: "new_only" });
-  const existingOnly = await mk({ name: "Returning patients at Muyenga", locationId: LOC_NE, patientEligibility: "existing_only" });
-  ok("3n CONTROL: nor two whose eligibility can never describe one patient -- new-only and existing-only",
-    newOnly.ok && existingOnly.ok, [newOnly, existingOnly].map(r => r.ok ? "ok" : `${r.code} ${r.message}`).join(" / "));
-  const R_NEWONLY = newOnly.ok ? newOnly.data.id : "";
+  if (!newOnly.ok) throw new Error(`new-patients rule fixture failed: ${newOnly.code} ${newOnly.message}`);
+  const R_NEWONLY = newOnly.data.id;
+  const sameKey = await mk({ name: "Returning patients at Muyenga", locationId: LOC_NE, patientEligibility: "existing_only" });
+  // ⚠ A NARROWING 245 INTRODUCED, RECORDED RATHER THAN WORKED AROUND IN SILENCE. Its key holds the five
+  // scope columns and priority -- and NOT patient eligibility, the age range or the effective dates. So
+  // the pair 3p just proved is not a conflict cannot both be active at one priority anyway. The code
+  // says WHICH guard refused it: REFUSED_BY_DATABASE means the engine let it through and the index did
+  // not, where RULE_CONFLICT would have meant s11 objected. It is the index, and only the index.
+  ok("3q ⚠ but 245's key does not include eligibility, so the DATABASE refuses that pair anyway -- and says so as the index, not as s11",
+    !sameKey.ok && sameKey.code === "REFUSED_BY_DATABASE"
+    && /ux_practice_booking_rule_scope/.test(sameKey.message),
+    sameKey.ok ? "created" : `${sameKey.code} ${sameKey.message}`);
+  const existingOnly = await mk({
+    name: "Returning patients at Muyenga", locationId: LOC_NE, patientEligibility: "existing_only", priority: 1,
+  });
+  ok("3r CONTROL: the identical rule one priority higher is accepted, so 3q is the index's priority column and not the eligibility",
+    existingOnly.ok, existingOnly.ok ? "" : `${existingOnly.code} ${existingOnly.message}`);
   const R_EXISTING = existingOnly.ok ? existingOnly.data.id : "";
 
   // ════════════════════════════════════════════════════════════════════════════════════════════════
@@ -809,10 +952,19 @@ async function main() {
   const inRange = await bookTele(Date.now() + 10 * 86400_000);
   ok("6o CONTROL: ten days out is inside both, so 6m and 6n are the window",
     inRange.ok, inRange.ok ? "" : `${inRange.code} ${inRange.message}`);
-  const overrideWindow = await bookTele(Date.now() + 3 * 3600_000, { override: { reason: "Urgent review requested by the ward" } });
-  ok("6p s14: an override with a reason lifts a window refusal",
+  // ⚠ AND IT HAS TO LIFT IT IN BOTH ENGINES. Since migration 245 this rule carries `active` true, so
+  // checkPlacement's resolveBookingRule finds the SAME row and re-checks the SAME lead time knowing
+  // nothing about s14. If the second check were allowed to stand, the audit record written above would
+  // describe an override that produced no booking.
+  const URGENT_AT = Date.now() + 3 * 3600_000;
+  const overrideWindow = await bookTele(URGENT_AT, { override: { reason: "Urgent review requested by the ward" } });
+  ok("6p s14: an override with a reason lifts a window refusal -- in the rules engine AND in checkPlacement, which re-checks the same window",
     overrideWindow.ok && overrideWindow.data.overridden.includes("LEAD_TIME"),
     overrideWindow.ok ? "" : `${overrideWindow.code} ${overrideWindow.message}`);
+  const overrideClash = await bookTele(URGENT_AT, { override: { reason: "Urgent review requested by the ward" } });
+  ok("6q CONTROL: overriding the LEAD TIME does not swallow checkPlacement's OTHER refusals -- the same instant is still a double-book",
+    !overrideClash.ok && overrideClash.code === "DOUBLE_BOOKED",
+    overrideClash.ok ? "booked" : `${overrideClash.code} ${overrideClash.message}`);
 
   // ════════════════════════════════════════════════════════════════════════════════════════════════
   // 7. AC-06 -- SIX CHANNELS
@@ -858,7 +1010,12 @@ async function main() {
   // ⚠ NO APPOINTMENT TYPE ON THIS ONE. Naming one would make it MORE specific than the children's rule
   // (a type is worth more than an eligibility criterion), and 8a would then be testing the wrong thing
   // while looking like it tested the right one.
-  const anyRule = await mk({ name: "Bugolobi, everybody", locationId: LOC_ELIG, priority: 0 });
+  // ⚠ PRIORITY 1 ONLY BECAUSE OF MIGRATION 245's KEY, AND IT DECIDES NOTHING HERE. These two sit on
+  // DIFFERENT rungs -- the children's rule constrains location and eligibility (9), this one only
+  // location (8) -- so specificity settles them before priority is ever consulted, and 8a would win the
+  // same way at any priority. The only reason it is not 0 is 3q: the index does not know eligibility
+  // exists, so "children at Bugolobi" and "everybody at Bugolobi" collide on its key at equal priority.
+  const anyRule = await mk({ name: "Bugolobi, everybody", locationId: LOC_ELIG, priority: 1 });
   if (!childRule.ok || !anyRule.ok) throw new Error("eligibility fixture failed");
   const R_CHILD = childRule.data.id, R_ANY = anyRule.data.id;
 
