@@ -440,11 +440,22 @@ async function main() {
     .filter(f => CENTILE.test(withoutComments(readFileSync(f, "utf8"))))
     .map(f => f.split(/[\\/]/).pop() ?? f)
     .sort();
-  ok("src-7. ⚠ the word lives in exactly three named places: the refusal, the payload that carries it, and the panel that prints it",
-    centileFiles.length === 3
+  // ⚠ A FOURTH PLACE, ADDED DELIBERATELY AND NOT TO MAKE THIS PASS. CPR-PIE-001's
+  // intelligence-constants.ts carries `growth_percentiles` in PIE_NOT_BUILDABLE -- a refusal card that
+  // COMPUTES NOTHING and quotes migration 246 s8's own sentence back at the reader. src-9 below, which
+  // is the assertion that actually matters, does not match that file at all: no centile is assigned a
+  // value anywhere in it.
+  //
+  // Enumerating a fourth place is what this assertion was designed to do -- see its own comment above:
+  // naming a refusal is not making the claim. Widening the COUNT while src-9 stays exact is the honest
+  // edit. Deleting src-9, relaxing its right-hand-side list, or dropping the file names from here would
+  // not be.
+  ok("src-7. ⚠ the word lives in exactly four named places: the refusal, the payload that carries it, the panel that prints it, and PIE's not-buildable card",
+    centileFiles.length === 4
     && centileFiles.includes("parameters-constants.ts")
     && centileFiles.includes("parameters.ts")
-    && centileFiles.includes("MonitoringPlanPanel.tsx"),
+    && centileFiles.includes("MonitoringPlanPanel.tsx")
+    && centileFiles.includes("intelligence-constants.ts"),
     centileFiles.join(", "));
   ok("src-8. CONTROL: the centile scan is not blind (it matches a camelCase identifier, which \\b would not)",
     CENTILE.test("const p = weightForAgePercentile(x)") && centileFiles.length > 0);
