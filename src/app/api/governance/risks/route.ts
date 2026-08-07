@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getCaller, isResponse, forbidden, badRequest, isAdmin, isStaff, assertRowScope, subjectHospital } from "@/lib/api-auth";
+import { getCaller, isResponse, forbidden, badRequest, isAdmin, isStaff, assertRowScope, subjectHospital, scopeUnavailable } from "@/lib/api-auth";
 
 // Risk & Internal Controls API (GOV-001.4). One kind-discriminated route for
 // the two register entities:
@@ -45,13 +45,15 @@ export async function POST(req: Request) {
 
   if (b.kind === "control") {
     if (!String(b.name ?? "").trim()) return badRequest("name required");
+    // A control is ABOUT a registered risk — inherit that risk's tenant (risk_id is otherwise unvalidated, so
+    // a super_admin's control against hospital A's risk would land platform-wide). Resolved before the insert.
+    const riskScope = await subjectHospital(c, "gov_risks", b.risk_id || null);
+    if (!riskScope.ok) return scopeUnavailable(riskScope);
     const { data, error } = await c.admin.from("gov_controls").insert({
       name: String(b.name).trim(), objective: b.objective || null,
       control_type: CONTROL_TYPES.includes(b.control_type) ? b.control_type : "preventive",
       frequency: FREQUENCIES.includes(b.frequency) ? b.frequency : "continuous",
-      // A control is ABOUT a registered risk — inherit that risk's tenant (risk_id is otherwise unvalidated, so
-      // a super_admin's control against hospital A's risk would land platform-wide).
-      hospital_id: await subjectHospital(c, "gov_risks", b.risk_id || null), risk_id: b.risk_id || null,
+      hospital_id: riskScope.hospitalId, risk_id: b.risk_id || null,
       testing_method: b.testing_method || null, evidence_required: b.evidence_required || null,
       owner_name: b.owner_name || null, created_by: c.userId,
     }).select().single();

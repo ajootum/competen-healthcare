@@ -131,12 +131,44 @@ export function scopeHospitalIds(c: Caller): string[] | null {
 // with it lands UNSCOPED and is then read and counted across every tenant; for a cross-hospital admin it files
 // the row under the WRONG tenant. The row belongs to its subject's hospital. Falls back to the caller's hospital
 // when the subject has no tenant of its own (shared/master records, external guidelines).
-export async function subjectHospital(c: Caller, table: string, id: string | null | undefined, col = "hospital_id"): Promise<string | null> {
-  if (!id) return c.hospitalId ?? null;
-  const { data } = await c.admin.from(table).select(col).eq("id", id).maybeSingle();
+//
+// ⚠ WHY THIS RETURNS A SHAPE AND NOT A STRING. It used to do `const { data } = await …` and then
+// `h ?? c.hospitalId ?? null`, which made A FAILED READ INDISTINGUISHABLE FROM THE LEGITIMATE FALLBACK — and
+// the two want opposite answers. A subject in hospital B whose read errored was silently attributed to the
+// CALLER's hospital A, so the row was filed under the wrong tenant; and for a super_admin, whose `hospitalId`
+// is null, it landed UNSCOPED — reproducing precisely the bug the paragraph above says this function exists to
+// prevent. Two callers were worse than mis-filed: education-plan and pos-governance compare this value against
+// `c.hospitalId` to decide access, so a transient database error turned a cross-tenant guard into a PASS.
+//
+// A boolean flag beside a still-usable string would have been the same bug with a comment on it — every call
+// site would keep reading the string and keep being wrong. Changing the TYPE is what makes the compiler walk
+// all 13 call sites and force each one to say what it does when the tenant cannot be established. The answer
+// at every one of them is the same: refuse. Guessing a tenant is the failure being fixed.
+//
+// NOT-FOUND IS DELIBERATELY STILL `ok`. A missing subject keeps the caller-hospital fallback it always had —
+// only the READ FAILURE is split out. Widening the fix to "no such row" would change behaviour beyond the
+// defect and strand flows that legitimately pass an id for a record with no tenant of its own.
+export type SubjectScope =
+  | { ok: true; hospitalId: string | null }
+  | { ok: false; detail: string };
+
+export async function subjectHospital(c: Caller, table: string, id: string | null | undefined, col = "hospital_id"): Promise<SubjectScope> {
+  if (!id) return { ok: true, hospitalId: c.hospitalId ?? null };
+  const { data, error } = await c.admin.from(table).select(col).eq("id", id).maybeSingle();
+  if (error) return { ok: false, detail: error.message };
   const h = (data as Record<string, unknown> | null)?.[col] as string | null | undefined;
-  return h ?? c.hospitalId ?? null;
+  return { ok: true, hospitalId: h ?? c.hospitalId ?? null };
 }
+
+// The one response for a tenant that could not be read. 503, not 500: the request was well-formed and may well
+// succeed on retry — what failed was our ability to establish scope, and the safe act is to write nothing.
+// The database's own message is kept out of the body (this is an authorization path) and returned to the caller
+// for logging instead.
+export const scopeUnavailable = (s: Extract<SubjectScope, { ok: false }>) =>
+  NextResponse.json(
+    { error: "Could not establish which hospital this record belongs to. Nothing was written — please retry.", detail: s.detail },
+    { status: 503 },
+  );
 
 // True when the caller holds an ACTIVE patient assignment (op_patient_assignments)
 // for this patient — the HWW frontline access rule: a bedside clinician below

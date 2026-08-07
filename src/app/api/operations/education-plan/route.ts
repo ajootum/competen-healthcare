@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getCaller, isResponse, hasRole, isSuper, forbidden, badRequest, subjectHospital } from "@/lib/api-auth";
+import { getCaller, isResponse, hasRole, isSuper, forbidden, badRequest, subjectHospital, scopeUnavailable } from "@/lib/api-auth";
 
 // Education Planning API (LDS-005). Create education plans, milestones, study-leave and sponsorship
 // requests, and decide/update them. Manager-gated; tenant-scoped; audited. Sponsorship approval is
@@ -22,9 +22,13 @@ export async function POST(req: Request) {
   // Neither user_id nor plan_id was scope-checked, so an admin could file another tenant's nurse's study-leave
   // or sponsorship request into their own hospital; the guard closes that and the derived id files it correctly.
   const scopeToSubject = async (table: string, id: string | null | undefined) => {
-    const h = await subjectHospital(c, table, id);
-    if (id && !isSuper(c) && h !== c.hospitalId) return { err: forbidden("Subject out of scope"), hid: null };
-    return { err: null, hid: h ?? hid };
+    const s = await subjectHospital(c, table, id);
+    // ⚠ A TENANT WE COULD NOT READ MUST NOT REACH THE COMPARISON BELOW. While subjectHospital fell back to
+    // c.hospitalId on a failed read, `h !== c.hospitalId` was trivially FALSE whenever the read errored — so a
+    // transient database fault turned this cross-tenant guard into a pass and filed the record anyway.
+    if (!s.ok) return { err: scopeUnavailable(s), hid: null };
+    if (id && !isSuper(c) && s.hospitalId !== c.hospitalId) return { err: forbidden("Subject out of scope"), hid: null };
+    return { err: null, hid: s.hospitalId ?? hid };
   };
 
   if (b.action === "create_plan") {

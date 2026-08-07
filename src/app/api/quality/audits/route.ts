@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getCaller, isResponse, hasRole, assertProfileScope, assertCompetencyScope, subjectHospital } from "@/lib/api-auth";
+import { getCaller, isResponse, hasRole, assertProfileScope, assertCompetencyScope, subjectHospital, scopeUnavailable } from "@/lib/api-auth";
 import { notify } from "@/lib/notify";
 
 // Quality Engine — conduct an audit in one submission. The checklist comes
@@ -80,9 +80,10 @@ export async function POST(req: Request) {
 
   const title = `${comp.name} — ${audit_type} audit`;
   // An audit about a named nurse belongs to THAT nurse's tenant (assertProfileScope returns early for super).
-  const auditHospital = await subjectHospital(c, "profiles", nurse_id || null);
+  const auditScope = await subjectHospital(c, "profiles", nurse_id || null);
+  if (!auditScope.ok) return scopeUnavailable(auditScope);
   const { data: audit, error } = await admin.from("audits").insert({
-    hospital_id: auditHospital,
+    hospital_id: auditScope.hospitalId,
     audit_type, title,
     competency_id, nurse_id: nurse_id || null,
     area: (area ?? "").trim() || null,
@@ -113,7 +114,7 @@ export async function POST(req: Request) {
   if (criticalFails.length) {
     const due = new Date(); due.setDate(due.getDate() + 7);
     const { error: cerr } = await admin.from("capa_actions").insert(criticalFails.map(r => ({
-      hospital_id: auditHospital,   // inherit the audit's tenant, not the caller's
+      hospital_id: auditScope.hospitalId,   // inherit the audit's tenant, not the caller's
       audit_id: audit.id,
       title: `Critical criterion failed: ${itemById.get(r.checklist_item_id as string)?.item ?? "checklist item"}`,
       description: `Auto-created by the Quality Engine from "${title}"${area ? ` (${area})` : ""}. Verify corrective action with evidence before closure.`,

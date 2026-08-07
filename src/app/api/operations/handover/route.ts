@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getCaller, isResponse, isSupervisor, isSuper, forbidden, badRequest, subjectHospital, isAssignedToPatient } from "@/lib/api-auth";
+import { getCaller, isResponse, isSupervisor, isSuper, forbidden, badRequest, subjectHospital, scopeUnavailable, isAssignedToPatient } from "@/lib/api-auth";
 import { emitHandoverAccepted } from "@/lib/orchestration/producers";
 import { JBI_DOMAINS, JBI_MAX, classify } from "@/lib/operations/handover";
 
@@ -96,8 +96,17 @@ export async function POST(req: Request) {
     if (error) return migrationGate(error) ?? NextResponse.json({ error: error.message }, { status: 500 });
     await audit(c, act, it.id, b.patient_label);
     // HWW-OPS-001 catalogue event: responsibility transferred (fail-soft).
+    //
+    // ⚠ THE ONLY subjectHospital CALL SITE THAT DOES NOT REFUSE, and deliberately. The handover row is already
+    // updated by this point, so a 503 here would tell the supervisor their accept failed when it succeeded.
+    // Fail-soft means the EVENT is optional — so an unreadable tenant SKIPS the emission rather than emitting
+    // one carrying the caller's hospital, which would file the event under the wrong tenant (or unscoped, for a
+    // super_admin) and be read across every tenant. A missing event is recoverable; a mis-tenanted one is not.
     if (action === "accept") {
-      await emitHandoverAccepted(c.admin, { itemId: it.id, patientId: b.patient_id, hospitalId: await subjectHospital(c, "op_patients", b.patient_id) }, c.userId);
+      const patientScope = await subjectHospital(c, "op_patients", b.patient_id);
+      if (patientScope.ok) {
+        await emitHandoverAccepted(c.admin, { itemId: it.id, patientId: b.patient_id, hospitalId: patientScope.hospitalId }, c.userId);
+      }
     }
     return NextResponse.json({ ok: true, item_id: it.id });
   } catch (e: any) {
@@ -127,7 +136,9 @@ export async function PATCH(req: Request) {
       if (!String(b.question ?? "").trim()) return badRequest("question required");
       const h = await ensureHandover(c);
       if ("error" in h) return migrationGate(h.error) ?? NextResponse.json({ error: h.error.message }, { status: 500 });
-      const { data, error } = await c.admin.from("op_handover_clarifications").insert({ hospital_id: await subjectHospital(c, "op_patients", b.patient_id ?? null), handover_id: h.id, patient_id: b.patient_id ?? null, question: String(b.question).trim(), asked_by: c.userId, asked_by_name: me?.full_name ?? null, status: "pending" }).select("id").single();
+      const clarifyScope = await subjectHospital(c, "op_patients", b.patient_id ?? null);
+      if (!clarifyScope.ok) return scopeUnavailable(clarifyScope);
+      const { data, error } = await c.admin.from("op_handover_clarifications").insert({ hospital_id: clarifyScope.hospitalId, handover_id: h.id, patient_id: b.patient_id ?? null, question: String(b.question).trim(), asked_by: c.userId, asked_by_name: me?.full_name ?? null, status: "pending" }).select("id").single();
       if (error) return migrationGate(error) ?? NextResponse.json({ error: error.message }, { status: 500 });
       await audit(c, "handover_clarification_raised", data.id);
       return NextResponse.json({ ok: true, id: data.id }, { status: 201 });
@@ -152,7 +163,9 @@ export async function PATCH(req: Request) {
       const it = await ensureItem(c, h.id, b.patient_id);
       if ("error" in it) return migrationGate(it.error) ?? NextResponse.json({ error: it.error.message }, { status: 500 });
       // JBI handover-compliance evidence about a specific patient — scope to that patient's tenant.
-      const { data, error } = await c.admin.from("op_handover_audits").insert({ hospital_id: await subjectHospital(c, "op_patients", b.patient_id), handover_id: h.id, item_id: it.id, patient_id: b.patient_id, auditor_id: c.userId, auditor_name: me?.full_name ?? null, checklist, total_score: total, max_score: JBI_MAX, compliance_pct: pct, classification: classify(pct), duration_seconds: b.duration_seconds ?? null, follow_up_note: b.follow_up_note ?? null }).select("id").single();
+      const auditScope = await subjectHospital(c, "op_patients", b.patient_id);
+      if (!auditScope.ok) return scopeUnavailable(auditScope);
+      const { data, error } = await c.admin.from("op_handover_audits").insert({ hospital_id: auditScope.hospitalId, handover_id: h.id, item_id: it.id, patient_id: b.patient_id, auditor_id: c.userId, auditor_name: me?.full_name ?? null, checklist, total_score: total, max_score: JBI_MAX, compliance_pct: pct, classification: classify(pct), duration_seconds: b.duration_seconds ?? null, follow_up_note: b.follow_up_note ?? null }).select("id").single();
       if (error) return migrationGate(error) ?? NextResponse.json({ error: error.message }, { status: 500 });
       await c.admin.from("op_handover_items").update({ jbi_score: pct, jbi_checklist: checklist, updated_at: new Date().toISOString() }).eq("id", it.id);
       await audit(c, "handover_jbi_audit", data.id, `${pct}% ${classify(pct)}`);

@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getCaller, isResponse, hasRole, isSuper, isSupervisor, forbidden, badRequest, subjectHospital } from "@/lib/api-auth";
+import { getCaller, isResponse, hasRole, isSuper, isSupervisor, forbidden, badRequest, subjectHospital, scopeUnavailable } from "@/lib/api-auth";
 import { templateByKey } from "@/lib/operations/pos-form-templates";
 
 // Patient Operations governance API (POS-106A §13). The Unit Manager Governance Mode operating on
@@ -26,9 +26,13 @@ export async function POST(req: Request) {
     // Derive the tenant from whichever subject the exception is about (the sibling "request_amendment" branch
     // below already does this via inst.hospital_id). Neither FK was scope-checked here, so a caller could file
     // an exception about another tenant's patient/form under their own hospital.
-    const exceptionHospital = b.patient_id
+    // ⚠ AN UNREADABLE SUBJECT TENANT REFUSES rather than falling through to the check below. The old fallback
+    // returned the CALLER's hospital on a failed read, which made `!== c.hospitalId` false and let the guard pass.
+    const exceptionScope = b.patient_id
       ? await subjectHospital(c, "op_patients", b.patient_id)
-      : b.form_instance_id ? await subjectHospital(c, "op_form_instances", b.form_instance_id) : hid;
+      : b.form_instance_id ? await subjectHospital(c, "op_form_instances", b.form_instance_id) : null;
+    if (exceptionScope && !exceptionScope.ok) return scopeUnavailable(exceptionScope);
+    const exceptionHospital = exceptionScope ? exceptionScope.hospitalId : hid;
     if (!isSuper(c) && exceptionHospital !== c.hospitalId) return forbidden("Subject out of scope");
     const { data, error } = await admin.from("op_exceptions").insert({
       hospital_id: exceptionHospital ?? hid, patient_id: b.patient_id || null, form_instance_id: b.form_instance_id || null,

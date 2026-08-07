@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getCaller, isResponse, forbidden, isStaff, assertProfileScope, assertRowScope, subjectHospital } from "@/lib/api-auth";
+import { getCaller, isResponse, forbidden, isStaff, assertProfileScope, assertRowScope, subjectHospital, scopeUnavailable } from "@/lib/api-auth";
 
 // POST — create an assessment plan (+ optional items/assessors)
 export async function POST(req: Request) {
@@ -16,11 +16,14 @@ export async function POST(req: Request) {
     if (scopeErr) return scopeErr;
   }
 
+  // A learner-bound plan belongs to that learner's tenant; templates (no nurse_id) keep the caller's.
+  // Never client-supplied either way. Resolved BEFORE the insert so an unreadable tenant writes nothing.
+  const scope = await subjectHospital(c, "profiles", nurse_id ?? null);
+  if (!scope.ok) return scopeUnavailable(scope);
+
   const { data: plan, error } = await c.admin.from("assessment_plans").insert({
     name,
-    // A learner-bound plan belongs to that learner's tenant; templates (no nurse_id) keep the caller's.
-    // Never client-supplied either way.
-    hospital_id: await subjectHospital(c, "profiles", nurse_id ?? null),
+    hospital_id: scope.hospitalId,
     programme_type: programme_type ?? "annual",
     scheduling_rule: scheduling_rule ?? "fixed",
     nurse_id: nurse_id ?? null,
