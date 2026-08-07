@@ -1,5 +1,6 @@
 import { audit } from "@/lib/practice/provisioning";
 import { hasCapability, type WorkspaceContext } from "@/lib/practice/access";
+import { messagingStatus } from "@/lib/practice/messaging";
 import type { EngineResult } from "@/lib/practice/encounters";
 
 // CPR-370 SECURITY, PRIVACY AND PRACTITIONER CONTROL.
@@ -267,16 +268,50 @@ export async function privacyPosture(admin: any, ctx: WorkspaceContext) {
       .order("occurred_at").limit(1).maybeSingle(),
   ]);
 
+  // ⚠ THE SENDING GUARANTEE IS NOW READ, NOT TYPED.
+  //
+  // This line used to say "there is no delivery channel of any kind", and it was written when that was
+  // literally true of the codebase. Migration 224 then shipped Twilio, Africa's Talking and Resend
+  // adapters, and the sentence survived unchanged -- so the strongest promise on this page was being
+  // kept only by the accident of nobody having set an environment variable. Setting RESEND_API_KEY would
+  // have made a practice's privacy page lie, silently, with nothing failing.
+  //
+  // So it is derived from the two facts that actually decide it: whether this deployment has a provider,
+  // and whether THIS PRACTICE has switched a channel on. Both are read; a failed read produces the
+  // cautious sentence rather than the reassuring one, because a guarantee nobody could verify is not one.
+  const env = messagingStatus();
+  const { data: channelRows, error: channelErr } = await admin.from("practice_message_channel")
+    .select("kind, enabled").eq("workspace_id", ctx.workspaceId);
+  const providerConfigured = env.sms.configured || env.email.configured;
+  const channelsReadable = !channelErr && channelRows != null;
+  const practiceEnabled = channelsReadable && ((channelRows ?? []) as any[]).some(r => r.enabled);
+
+  const sendingGuarantee = !channelsReadable
+    ? "Whether this practice can send messages could not be checked just now, so nothing is claimed about it here."
+    : providerConfigured && practiceEnabled
+      ? "This practice HAS switched on messaging, and a provider is configured -- so appointment messages and one-time codes can leave this practice. What was sent, and what was refused, is listed in the message log."
+      : providerConfigured
+        ? "A message provider is configured for this deployment, but this practice has not switched any channel on -- so nothing is sent to your patients."
+        : "Nothing in this product sends email, SMS or messages to patients: no gateway or mail provider is configured for this deployment, so there is nothing to send with.";
+
   return {
     accessEntries: accessEntries ?? 0,
     patients: patients ?? 0,
     loggingSince: oldest?.occurred_at ?? null,
+    // ⚠ THE STATE BEHIND THE SENTENCE, AS FIELDS. A claim a reader cannot check is a claim they have to
+    // take on trust, which is the opposite of what this page is for.
+    messaging: {
+      providerConfigured,
+      practiceEnabled: channelsReadable ? practiceEnabled : null,
+      readable: channelsReadable,
+    },
     // Facts about the code, each one true at the commit that shipped this file.
     guarantees: [
       "Reads of a patient record, a consultation, a document, a search and an export are all logged.",
       "The access log is append-only: the database refuses an update or a delete of any entry.",
       "Reviewing the access log is itself logged, and shows patient names only to a reviewer who already holds clinical access.",
-      "Nothing in this product sends email, SMS or messages to patients -- there is no delivery channel of any kind.",
+      sendingGuarantee,
+      "One-time codes are never stored: only a salted hash of one is kept, it is single-use, it expires, and a guess that could not be counted is refused rather than judged.",
       "Dictation uses your browser's own speech recognition; no audio reaches Competen or is stored anywhere.",
       "Signed encounters and issued documents cannot be edited, enforced by database triggers rather than by application code.",
       "Every table is deny-by-default at the row level; nothing is readable without going through the capability checks.",
@@ -286,6 +321,7 @@ export async function privacyPosture(admin: any, ctx: WorkspaceContext) {
       "There is no retention policy: nothing is deleted from the access log, because how long to keep it is a legal question this product has not been given an answer to.",
       "The access log records reads made through this application. It cannot see a database console.",
       "There is no patient-facing view -- a patient asking who opened their record is answered by a practitioner reading it to them.",
+      "Patients cannot book with you through this product. The one-time-code machinery that would protect it is built and tested; the intake behind it is not, and there is nothing configured to send a patient a code.",
       "Export produces one patient at a time. A whole-practice export is not built.",
     ],
   };

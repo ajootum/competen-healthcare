@@ -339,33 +339,116 @@ function safeJson(text: string): any {
 }
 
 // ── OTP (IAM-000 s7, PIS-000 s11) ────────────────────────────────────────────────────────────────────
+//
+// ⚠ THIS IS AN AUTHENTICATION SURFACE. Five properties below are load-bearing, and each one is here
+// because its absence is a real, exploitable hole rather than an untidiness:
+//
+//   1. THE CODE IS NEVER STORED, LOGGED OR RETURNED. It exists in memory long enough to be handed to a
+//      template and is then only ever a salted SHA-256. There is no branch anywhere -- not for
+//      development, not for a harness -- that puts it in a response body or on a screen. The harness
+//      reads it out of the MESSAGE, through an injected transport, which is where a patient would.
+//
+//   2. RATE LIMITS FAIL CLOSED. ⚠ THE COUNT USED TO BE READ AS `(count ?? 0)` WITH THE ERROR DISCARDED,
+//      which meant an unreadable challenge table -- or PostgREST answering with a null count, which it
+//      does -- read as "nought codes sent in the last hour" and permitted an UNLIMITED number. A rate
+//      limit whose failure mode is "no limit" is not a rate limit. Both branches now refuse.
+//
+//   3. AN ATTEMPT THAT WAS NOT COUNTED DID NOT HAPPEN. ⚠ The attempt counter used to be a
+//      read-modify-write whose error was discarded: two concurrent guesses both read attempts=0 and both
+//      wrote 1, so five parallel workers could make far more than five guesses, and a failed UPDATE
+//      raised the ceiling to infinity. It is now a compare-and-set on the value that was read, and a
+//      write that does not land refuses the verification.
+//
+//   4. NOTHING HERE CONSULTS ANY RECORD KEYED ON THE DESTINATION. An issue path that looked up "is this
+//      a patient of this practice?" would answer differently -- in body, in status or merely in the time
+//      it took -- for a number that is known and one that is not, which is a patient-enumeration oracle
+//      on an unauthenticated endpoint. The harness proves the absence by making practice_patient
+//      unreadable and showing the answer does not change.
+//
+//   5. PER-SOURCE LIMITING IS EITHER REAL OR REFUSED. See sourceKey below.
 
 const OTP_MINUTES = 10;
 const OTP_PER_DESTINATION_PER_HOUR = 5;
+/**
+ * Per SOURCE, and lower than the per-destination limit on purpose: one caller walking a list of numbers
+ * is the abuse the per-destination limit cannot see, because each individual number looks untouched.
+ */
+const OTP_PER_SOURCE_PER_HOUR = 10;
 
 /** Hashed with the row's own id, so two identical codes never share a hash. */
 const hashCode = (challengeId: string, code: string) =>
   createHash("sha256").update(`${challengeId}:${code}`).digest("hex");
 
+/**
+ * A source is an IP, a device cookie or whatever the edge can be trusted to give -- all of them personal
+ * data, none of them worth keeping. Only the hash is ever computed here, and the caller's raw value never
+ * reaches a query, a log or a column.
+ */
+const hashSource = (sourceKey: string) =>
+  createHash("sha256").update(`otp-source:${sourceKey}`).digest("hex");
+
 export async function issueOtp(admin: any, args: {
   workspaceId?: string | null; purpose: "booking" | "sign_in" | "contact_verification";
   channel: MessageKind; destination: string; patientId?: string | null; correlationId: string;
+  /**
+   * ⚠ PER-SOURCE RATE LIMITING IS REAL OR IT REFUSES. THERE IS NO THIRD OPTION.
+   *
+   * practice_otp_challenge has no source column (migration 224 did not anticipate an unauthenticated
+   * caller), so a source-limited request cannot be recorded and therefore cannot be limited. Rather than
+   * silently degrade to per-destination only -- which would leave a caller believing a control is
+   * running when it is not -- passing a sourceKey against a store that cannot hold it REFUSES.
+   *
+   * The alternative, an in-process Map, was considered and rejected: it survives neither a second
+   * instance nor a restart, so it is a rate limit that an attacker removes by reconnecting. An
+   * approximated auth control is worse than a named absent one.
+   */
+  sourceKey?: string | null;
   transport?: Transport;
-}): Promise<EngineResult<{ challengeId: string; expiresAt: string; delivery: string; refusedReason?: string }>> {
+}): Promise<EngineResult<{
+  challengeId: string; expiresAt: string; delivery: string; refusedReason?: string;
+  /** ⚠ THE LIMIT AS A FIELD. A caller can check whether the control it asked for actually ran. */
+  sourceLimited: boolean;
+}>> {
   const destination = args.destination.trim();
   if (!destination) return { ok: false, status: 400, code: "VALIDATION_ERROR", message: "a destination is required" };
 
+  const since = new Date(Date.now() - 3600_000).toISOString();
+
   // RATE LIMITED PER DESTINATION. Without this, anybody can use this endpoint to send a stranger a
   // hundred text messages -- the product becomes the harassment tool.
-  const since = new Date(Date.now() - 3600_000).toISOString();
-  const { count } = await admin.from("practice_otp_challenge")
+  //
+  // ⚠ A FAILED COUNT IS NOT A COUNT OF NOUGHT, AND A NULL COUNT IS NOT A ZERO EITHER. See property 2.
+  const { count, error: countErr } = await admin.from("practice_otp_challenge")
     .select("*", { count: "exact", head: true })
     .eq("destination", destination).gte("created_at", since);
-  if ((count ?? 0) >= OTP_PER_DESTINATION_PER_HOUR)
+  if (countErr || count === null || count === undefined)
+    return {
+      ok: false, status: 503, code: "RATE_LIMIT_UNREADABLE",
+      message: `no code was issued because the codes already sent could not be counted: ${countErr?.message ?? "the count came back empty rather than as a number"}`,
+    };
+  if (count >= OTP_PER_DESTINATION_PER_HOUR)
     return {
       ok: false, status: 429, code: "TOO_MANY_CODES",
       message: "too many codes have been sent to that number in the last hour",
     };
+
+  // PER SOURCE. Refuses outright where the register cannot hold a source -- see sourceKey's comment.
+  const sourceHash = args.sourceKey ? hashSource(args.sourceKey) : null;
+  if (sourceHash) {
+    const { count: srcCount, error: srcErr } = await admin.from("practice_otp_challenge")
+      .select("*", { count: "exact", head: true })
+      .eq("source_hash", sourceHash).gte("created_at", since);
+    if (srcErr || srcCount === null || srcCount === undefined)
+      return {
+        ok: false, status: 503, code: "SOURCE_LIMIT_UNAVAILABLE",
+        message: `no code was issued because this request asked to be rate-limited by source and the challenge register cannot record one: ${srcErr?.message ?? "the count came back empty rather than as a number"}. An unrecorded source is an unlimited one.`,
+      };
+    if (srcCount >= OTP_PER_SOURCE_PER_HOUR)
+      return {
+        ok: false, status: 429, code: "TOO_MANY_CODES",
+        message: "too many codes have been requested from here in the last hour",
+      };
+  }
 
   // ANY LIVE CODE FOR THIS DESTINATION AND PURPOSE IS SPENT FIRST. Two valid codes at once means the
   // older one still works after the newer was issued, which is exactly what a code being "one time"
@@ -380,6 +463,10 @@ export async function issueOtp(admin: any, args: {
   const { data: challenge, error } = await admin.from("practice_otp_challenge").insert({
     workspace_id: args.workspaceId ?? null, purpose: args.purpose, channel: args.channel,
     destination, code_hash: "pending", expires_at: expiresAt,
+    // ⚠ WRITTEN ONLY WHEN ASKED FOR, AND THE INSERT IS ALLOWED TO FAIL IF THE COLUMN IS NOT THERE. The
+    // read above and this write are the two halves of the same control: a limit that reads a column
+    // nothing writes counts nought for ever, which is the failure mode this pairing forecloses.
+    ...(sourceHash ? { source_hash: sourceHash } : {}),
   }).select("id").single();
   if (error) return { ok: false, status: 400, code: "VALIDATION_ERROR", message: error.message };
 
@@ -413,25 +500,58 @@ export async function issueOtp(admin: any, args: {
 
   return {
     ok: true,
-    data: { challengeId: challenge.id as string, expiresAt, delivery: "handed_to_provider" },
+    data: {
+      challengeId: challenge.id as string, expiresAt, delivery: "handed_to_provider",
+      sourceLimited: sourceHash !== null,
+    },
   };
 }
 
 export async function verifyOtp(admin: any, args: {
   challengeId: string; code: string;
 }): Promise<EngineResult<{ verified: true; destination: string; purpose: string }>> {
-  const { data: c } = await admin.from("practice_otp_challenge")
+  // ⚠ THE ERROR USED TO BE DISCARDED HERE. A read that failed produced `c = null`, which fell into the
+  // same "not valid" refusal as a wrong code -- so it failed CLOSED, which is why this was survivable.
+  // It is still wrong: it reported an outage as the patient's mistake, and the next person to reorder
+  // these lines would have had nothing stopping them from letting a null read fall the other way. A
+  // failed read is an error, named as one, and it is never a pass.
+  const { data: c, error } = await admin.from("practice_otp_challenge")
     .select("*").eq("id", args.challengeId).maybeSingle();
+  if (error)
+    return {
+      ok: false, status: 503, code: "VERIFICATION_STORE_UNREADABLE",
+      message: `this code was not checked because the challenge could not be read: ${error.message}`,
+    };
+
   // ONE REFUSAL FOR EVERY FAILURE MODE. Distinguishing "no such challenge" from "wrong code" from
   // "expired" tells somebody guessing which guess was close -- the position CPR-310 took on invitation
-  // codes, for the same reason.
+  // codes, for the same reason. (The unreadable-store refusal above is not one of these modes: it says
+  // nothing about the code or the challenge, so it leaks nothing to a guesser -- and a caller that
+  // cannot tell an outage from a wrong code retries forever against a database that is down.)
   const no = { ok: false as const, status: 400, code: "INVALID_CODE", message: "that code is not valid" };
   if (!c) return no;
   if (c.consumed_at) return no;
   if (c.expires_at <= nowIso()) return no;
   if (c.attempts >= c.max_attempts) return no;
 
-  await admin.from("practice_otp_challenge").update({ attempts: c.attempts + 1 }).eq("id", c.id);
+  // ══ THE ATTEMPT IS COUNTED BEFORE IT IS JUDGED, ATOMICALLY, AND THE WRITE IS CHECKED ═══════════════
+  //
+  // ⚠ COMPARE-AND-SET ON THE VALUE THAT WAS READ. This was a bare update whose error was discarded, and
+  // it had two holes at once. Concurrently: N guesses all read attempts=0, all write 1, and the limit of
+  // five becomes a limit of five ROUNDS of however many workers an attacker runs -- a million-space code
+  // falls in minutes. On failure: the counter never moved and the ceiling was never reached at all.
+  //
+  // `.eq("attempts", c.attempts)` makes exactly one concurrent guess win the increment; the losers get
+  // zero rows back and are refused rather than judged. An attempt nobody counted did not happen.
+  const { data: bumped, error: bumpErr } = await admin.from("practice_otp_challenge")
+    .update({ attempts: c.attempts + 1 })
+    .eq("id", c.id).eq("attempts", c.attempts)
+    .select("id");
+  if (bumpErr || ((bumped ?? []) as any[]).length !== 1)
+    return {
+      ok: false, status: 503, code: "ATTEMPT_NOT_COUNTED",
+      message: `this code was not checked because the attempt could not be counted: ${bumpErr?.message ?? "another attempt on this challenge was in flight"}. An uncounted attempt is an unlimited one.`,
+    };
 
   const expected = Buffer.from(c.code_hash, "utf8");
   const actual = Buffer.from(hashCode(c.id, args.code.trim()), "utf8");
@@ -439,7 +559,16 @@ export async function verifyOtp(admin: any, args: {
   // time, to anybody who can measure it.
   if (expected.length !== actual.length || !timingSafeEqual(expected, actual)) return no;
 
-  await admin.from("practice_otp_challenge").update({ consumed_at: nowIso() }).eq("id", c.id);
+  // SINGLE USE, AND THE SPEND IS CHECKED. A consume that silently failed would leave a verified code
+  // live for the rest of its ten minutes, which is the whole property "one time" is there to provide.
+  const { data: spent, error: spendErr } = await admin.from("practice_otp_challenge")
+    .update({ consumed_at: nowIso() }).eq("id", c.id).is("consumed_at", null).select("id");
+  if (spendErr || ((spent ?? []) as any[]).length !== 1)
+    return {
+      ok: false, status: 503, code: "CODE_NOT_SPENT",
+      message: `this code was correct and was not accepted, because it could not be marked as used: ${spendErr?.message ?? "it had already been spent"}. A code that stays live after it is used is not single-use.`,
+    };
+
   return { ok: true, data: { verified: true, destination: c.destination, purpose: c.purpose } };
 }
 
