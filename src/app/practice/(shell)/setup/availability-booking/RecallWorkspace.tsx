@@ -260,7 +260,11 @@ export default function RecallWorkspace({ recall, walkIns, mayManage }: {
                   {s.locationName ? ` · ${s.locationName}` : ""}
                 </span>
                 <span className="ml-auto text-[11px] font-bold text-cyan-700">
-                  {s.effectiveLimit === null ? "no limit set" : `${s.effectiveLimit} a day`}
+                  {/* ⚠ USED OUT OF LIMIT, and a dash rather than a nought where the count failed --
+                      "0 of 6" on an unreadable count is an invitation to fill a session that is full. */}
+                  {s.effectiveLimit === null
+                    ? `${s.usedIds === null ? "—" : s.usedIds.length} so far, no limit set`
+                    : `${s.usedIds === null ? "—" : s.usedIds.length} of ${s.effectiveLimit}`}
                 </span>
                 <span className="text-[10px] text-gray-500">
                   {s.effectiveLimitFrom === "none" ? "neither this session nor a rule sets one"
@@ -268,6 +272,7 @@ export default function RecallWorkspace({ recall, walkIns, mayManage }: {
                       : s.effectiveLimitFrom === "practice" ? `from the booking rule${s.sessionLimit !== null ? `, stricter than this session's ${s.sessionLimit}` : ""}`
                         : "the session and the rule agree"}
                   {s.effectiveLimit !== null && !s.effectiveLimitEnforced ? " — not checked at booking time" : ""}
+                  {s.remaining !== null ? ` · ${s.remaining} left` : ""}
                 </span>
               </li>
             ))}

@@ -2,6 +2,10 @@ import { audit } from "@/lib/practice/provisioning";
 import { defaultAppointmentMinutes } from "@/lib/practice/configuration";
 import { practiceToday, zonedDayRange } from "@/lib/practice/practice-time";
 import { resolveBookingRule } from "@/lib/practice/availability-config";
+// CPR-V5-007 s7.7. ⚠ No cycle: practice-sessions reaches 11 modules and this one is not among them,
+// checked rather than assumed. It is imported so the per-session walk-in limit has ONE resolver shared
+// with the screen that reports it.
+import { walkInAllowance } from "@/lib/practice/practice-sessions";
 import { bookingBlock } from "@/lib/practice/lifecycle-constants";
 
 // PEN-001 Appointment & Scheduling Engine -- the business rules, separated from every UI that uses them
@@ -188,6 +192,49 @@ export async function checkPlacement(admin: any, args: {
         ok: false, status: 409, code: "WALK_IN_LIMIT",
         message: `${wherePhrase} allows ${rule.walkInDailyLimit} walk-ins a day here, and there ${(count ?? 0) === 1 ? "is" : "are"} already ${count ?? 0}`,
       };
+  }
+
+  // ── CPR-V5-007 s7.7 AND s4.3: THE SESSION'S OWN WALK-IN LIMIT ───────────────────────────────────
+  //
+  // ⚠ MIGRATION 240 HAS STORED walk_in_limit SINCE PHASE 1 AND NOTHING HAS EVER READ IT. A practitioner
+  // who typed "6" against a Tuesday clinic had set a number that never refused anything, and no screen
+  // said so. The block above enforces migration 230's PRACTICE-WIDE daily limit, per location; this one
+  // enforces the SESSION's, so s7.4's "the stricter limit applies" is true of both rather than of one.
+  //
+  // ⚠ RESOLVED BY walkInAllowance() AND NOWHERE ELSE. The Layer 3 screen already tells a practitioner
+  // which of the two limits bites and where the figure came from, and it reads the same walkInPolicy().
+  // Re-resolving the session here would give this product two answers to one question, and the one a
+  // person acts on is the screen's.
+  //
+  // ⚠ IT IS NOT PART OF s14's WINDOW OVERRIDE. `lifted` suppresses LEAD_TIME and BEYOND_HORIZON only,
+  // and this refusal never consults it. An override of the notice period must never become an override
+  // of a capacity rule -- the same separation the double-book check keeps.
+  //
+  // ⚠ AND IT SITS OUTSIDE THE OVERLAP_EXEMPT BLOCK DELIBERATELY. A walk-in is exempt from the OVERLAP
+  // rule because a queue exists precisely so an unscheduled arrival needs no free grid slot. That says
+  // nothing whatever about whether this clinic will take another one today.
+  if (args.appointmentType === "walk_in") {
+    const allowance = await walkInAllowance(admin, {
+      workspaceId: args.workspaceId, locationId: args.locationId ?? null, startMs: args.startMs,
+    });
+    // ⚠ A FAILED READ IS NOT A FREE SLOT. The limit exists because somebody meant it, and a booking waved
+    // through on an unreadable count is the fail-open direction this file has been bitten by already.
+    if (allowance.state !== "ok")
+      return {
+        ok: false, status: 503, code: "SESSION_WALK_IN_UNREADABLE",
+        message: `this walk-in was not booked because the session's walk-in limit could not be checked: ${allowance.reason}`,
+      };
+    if (allowance.value.full) {
+      const s = allowance.value.session!;
+      const n = allowance.value.sessionLimit!;
+      // NAMES THE SESSION AND ITS OWN NUMBER. "Walk-in limit reached" over two different limits is the
+      // message that sends somebody to change the wrong setting -- so this one says which is which, and
+      // it carries its own code so a caller can tell the two refusals apart.
+      return {
+        ok: false, status: 409, code: "SESSION_WALK_IN_LIMIT",
+        message: `${s.sessionName} takes ${n} walk-in${n === 1 ? "" : "s"}, and ${allowance.value.used === 1 ? "there is already 1" : `there are already ${allowance.value.used}`}. This is that session's own limit, not your practice-wide one.`,
+      };
+    }
   }
 
   if (args.allowOverlap || OVERLAP_EXEMPT.includes(args.appointmentType))

@@ -840,6 +840,16 @@ export type WalkInSessionPolicy = {
   startsMinute: number;
   endsMinute: number;
   allowed: boolean;
+  /**
+   * The walk-ins already sitting inside this session on this date.
+   *
+   * ⚠ THE IDS, AND NULL WHEN THEY COULD NOT BE READ. This is what the session's own limit is measured
+   * against, so an unreadable count must not read as an empty one -- checkPlacement refuses on `null`
+   * rather than treating it as room.
+   */
+  usedIds: string[] | null;
+  /** effectiveLimit less what is used. Null when there is no limit, or when the count failed. */
+  remaining: number | null;
   /** migration 240's per-session limit. Null means none was set, NOT nought. */
   sessionLimit: number | null;
   /** migration 230's practice-wide daily limit for this session's location. Null means none was set. */
@@ -887,7 +897,7 @@ export type WalkInPolicy = {
  * `date` defaults to the practice's own today -- not the server's. A practice in Kampala whose walk-in
  * count reset three hours late would be told it had room it did not have.
  */
-export async function walkInPolicy(admin: any, ctx: WorkspaceContext, args: {
+export async function walkInPolicy(admin: any, ctx: { workspaceId: string }, args: {
   date?: string | null;
 } = {}): Promise<WalkInPolicy> {
   const { data: ws } = await admin.from("practice_workspace")
@@ -910,7 +920,9 @@ export async function walkInPolicy(admin: any, ctx: WorkspaceContext, args: {
     // ⚠ THE IDS, so the figure a screen prints is a list. `walk_in` only: 'emergency' is exempt from the
     // limit for the same reason migration 255 exempts it from the overlap constraint -- an emergency is
     // not a walk-in somebody chose to allow.
-    admin.from("practice_appointment").select("id")
+    // scheduled_at and location_id come back too, because a per-session limit needs to know WHICH
+    // session a walk-in landed in -- a workspace-wide tally cannot answer "is this clinic full".
+    admin.from("practice_appointment").select("id, scheduled_at, location_id")
       .eq("workspace_id", ctx.workspaceId).eq("appointment_type", "walk_in")
       .in("status", LIVE_APPOINTMENT_STATUSES).gte("scheduled_at", startIso).lt("scheduled_at", endIso),
     admin.from("practice_queue_entry").select("id, appointment_id")
@@ -937,6 +949,15 @@ export async function walkInPolicy(admin: any, ctx: WorkspaceContext, args: {
     (!t.effective_from || String(t.effective_from) <= date)
     && (!t.effective_to || String(t.effective_to) >= date));
 
+  // ── WHICH WALK-INS LANDED IN WHICH SESSION ────────────────────────────────────────────────────────
+  //
+  // ⚠ MEASURED AGAINST THE DAY'S OWN MIDNIGHT, NOT AGAINST A TIMEZONE CALCULATION REPEATED HERE.
+  // `startIso` already IS local midnight expressed as an instant, so the minute-of-day is a subtraction
+  // and cannot drift from the session's starts_minute the way a second offset computation would.
+  const dayStartMs = Date.parse(startIso);
+  const walkInRows = booked.error ? null : ((booked.data ?? []) as any[]);
+  const minuteOfDay = (iso: string) => Math.floor((Date.parse(iso) - dayStartMs) / 60000);
+
   const policies: WalkInSessionPolicy[] = rows.map(t => {
     const sessionLimit = (t.walk_in_limit as number | null) ?? null;
     const practiceDailyLimit = dailyLimitFor((t.location_id as string | null) ?? null);
@@ -951,8 +972,23 @@ export async function walkInPolicy(admin: any, ctx: WorkspaceContext, args: {
     else if (sessionLimit < practiceDailyLimit) { effectiveLimit = sessionLimit; effectiveLimitFrom = "session"; }
     else { effectiveLimit = practiceDailyLimit; effectiveLimitFrom = "practice"; }
 
+    // A walk-in counts against this session when it falls inside the session's minutes AND is at its
+    // location. Half-open [start, end), the same boundary migration 255's range uses -- under a closed
+    // end a walk-in at 10:00 would count against both the 08:00-10:00 and the 10:00-12:00 clinic.
+    // A session with no location is not location-scoped, so anything that day counts against it.
+    const usedIds = walkInRows === null ? null : walkInRows.filter(a => {
+      const m = minuteOfDay(a.scheduled_at as string);
+      if (m < (t.starts_minute as number) || m >= (t.ends_minute as number)) return false;
+      return t.location_id === null || a.location_id === t.location_id;
+    }).map(a => a.id as string);
+
     return {
       sessionId: t.id as string,
+      usedIds,
+      // ⚠ NULL RATHER THAN A NUMBER when there is no limit OR the count failed. Those two are told
+      // apart by usedIds being null, and neither of them is "there is room".
+      remaining: usedIds === null || effectiveLimit === null
+        ? null : Math.max(0, effectiveLimit - usedIds.length),
       sessionName: (t.session_name as string | null)
         ?? suggestSessionName({
           locationName: locationName.get(t.location_id as string) ?? null,
@@ -966,8 +1002,12 @@ export async function walkInPolicy(admin: any, ctx: WorkspaceContext, args: {
       allowed: !!t.walk_ins_allowed,
       sessionLimit, practiceDailyLimit,
       effectiveLimit, effectiveLimitFrom,
-      // ⚠ ONLY THE PRACTICE-WIDE ONE IS ENFORCED. If the session's own number won, nothing checks it.
-      effectiveLimitEnforced: effectiveLimitFrom === "practice" || effectiveLimitFrom === "equal",
+      // ⚠ BOTH ARE ENFORCED NOW, so this is true wherever a limit exists at all. It read
+      // `effectiveLimitFrom === "practice" || "equal"` while checkPlacement enforced only migration
+      // 230's practice-wide number and nothing read migration 240's per-session one. Leaving it that
+      // way after wiring the session limit in would have made the screen wrong in the opposite
+      // direction -- telling a practitioner a limit was decorative when it had started refusing people.
+      effectiveLimitEnforced: effectiveLimit !== null,
     };
   });
 
@@ -991,5 +1031,71 @@ export async function walkInPolicy(admin: any, ctx: WorkspaceContext, args: {
     practiceDailyLimitsUnreadable: rules.error ? `your booking rules could not be read: ${rules.error.message}` : null,
     notConfigurable: WALK_IN_NOT_CONFIGURABLE,
     enforcementNote: WALK_IN_ENFORCEMENT_NOTE,
+  };
+}
+
+/**
+ * ⚠ THE ONE QUESTION checkPlacement ASKS ABOUT A SESSION'S WALK-IN LIMIT, AND THE ONLY PLACE IT IS
+ * ANSWERED.
+ *
+ * scheduling.ts calls THIS rather than re-resolving the session, because the Layer 3 screen already
+ * tells a practitioner which of the two limits bites and where the figure comes from. Two resolutions of
+ * one rule is exactly how a screen and an engine end up disagreeing, and the screen is the half a person
+ * acts on -- so both sides read walkInPolicy() and there is nothing to keep in step.
+ *
+ * ⚠ AND IT RETURNS THREE STATES. `unreadable` is not "there is room": a walk-in limit that silently
+ * stopped applying because a query failed is the fail-open class that produced four findings in this
+ * codebase today.
+ */
+export type WalkInAllowance = {
+  /** The session the proposed time falls inside. Null when no session governs it. */
+  session: WalkInSessionPolicy | null;
+  /** Walk-ins already in that session. Null when nothing governs the time. */
+  used: number | null;
+  /** ⚠ The SESSION'S OWN limit -- not the effective one. The practice-wide half is checkPlacement's. */
+  sessionLimit: number | null;
+  /** True only when a session limit exists and is already met or exceeded. */
+  full: boolean;
+};
+
+export async function walkInAllowance(admin: any, args: {
+  workspaceId: string; locationId: string | null; startMs: number;
+}): Promise<Reading<WalkInAllowance>> {
+  const { data: ws, error: wsErr } = await admin.from("practice_workspace")
+    .select("timezone").eq("id", args.workspaceId).maybeSingle();
+  if (wsErr) return { state: "unreadable", reason: `this practice's timezone could not be read: ${wsErr.message}` };
+  const timezone = (ws?.timezone as string) || "UTC";
+
+  // THE PRACTICE'S OWN DAY for the instant being booked, not the server's. A walk-in at 23:00 in Kampala
+  // belongs to that day's session, and a limit that reset three hours late would let it through.
+  const date = practiceToday(timezone, new Date(args.startMs));
+  const policy = await walkInPolicy(admin, { workspaceId: args.workspaceId }, { date });
+
+  // ⚠ EITHER READ FAILING MEANS NO ANSWER. Refusing here is what stops a database wobble becoming an
+  // unlimited walk-in day.
+  if (policy.sessionsUnreadable) return { state: "unreadable", reason: policy.sessionsUnreadable };
+  if (policy.bookedWalkInsUnreadable) return { state: "unreadable", reason: policy.bookedWalkInsUnreadable };
+
+  const dayStartMs = Date.parse(zonedDayRange(date, timezone).startIso);
+  const minute = Math.floor((args.startMs - dayStartMs) / 60000);
+
+  // Only sessions that TAKE walk-ins are candidates. A session with walk_ins_allowed = false cannot
+  // carry a limit at all -- migration 240's check ties the two together -- so it governs nothing here,
+  // and whether such a session should refuse a walk-in outright is a separate question this does not
+  // silently answer.
+  const session = policy.sessions.find(s =>
+    minute >= s.startsMinute && minute < s.endsMinute
+    && (s.locationId === null || s.locationId === args.locationId)) ?? null;
+
+  if (!session) return { state: "ok", value: { session: null, used: null, sessionLimit: null, full: false } };
+  if (session.usedIds === null)
+    return { state: "unreadable", reason: `the walk-ins already in ${session.sessionName} could not be counted` };
+
+  return {
+    state: "ok",
+    value: {
+      session, used: session.usedIds.length, sessionLimit: session.sessionLimit,
+      full: session.sessionLimit !== null && session.usedIds.length >= session.sessionLimit,
+    },
   };
 }

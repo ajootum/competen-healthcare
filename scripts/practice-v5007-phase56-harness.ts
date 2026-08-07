@@ -49,7 +49,7 @@ import { createClient } from "@supabase/supabase-js";
 import { runProvisioning, type IndividualRequest } from "../src/lib/practice/provisioning";
 import { resolveWorkspaceContext, type WorkspaceContext } from "../src/lib/practice/access";
 import { registerPatient } from "../src/lib/practice/patients";
-import { bookAppointment } from "../src/lib/practice/scheduling";
+import { bookAppointment, checkPlacement } from "../src/lib/practice/scheduling";
 import {
   createFollowUp, scheduleFollowUp, deferFollowUp, recallQueue, returnStrandedFollowUp,
 } from "../src/lib/practice/follow-ups";
@@ -534,17 +534,20 @@ async function main() {
   ok("4c. s7.4's stricter-wins in the other direction: 12 on the session against 5 on the rule resolves to 5, from the rule",
     loose?.effectiveLimit === 5 && loose?.effectiveLimitFrom === "practice" && loose?.sessionLimit === 12,
     JSON.stringify({ e: loose?.effectiveLimit, from: loose?.effectiveLimitFrom }));
-  ok("4d. ⚠ and the report says which of the two anything actually enforces: the rule's, not the session's",
-    loose?.effectiveLimitEnforced === true && zero?.effectiveLimitEnforced === false,
+  ok("4d. ⚠ and BOTH resolved limits are now reported as enforced -- the screen must not call a limit decorative once it has started refusing people",
+    loose?.effectiveLimitEnforced === true && zero?.effectiveLimitEnforced === true,
     JSON.stringify({ loose: loose?.effectiveLimitEnforced, zero: zero?.effectiveLimitEnforced }));
+  ok("4d-control. and a session with no limit at either level is still reported as unenforced, so 4d is not a constant",
+    w1.sessions.every(s => s.effectiveLimit !== null || s.effectiveLimitEnforced === false),
+    JSON.stringify(w1.sessions.map(s => [s.sessionName, s.effectiveLimit, s.effectiveLimitEnforced])));
 
   // ── THE TWO COUNTS ─────────────────────────────────────────────────────────────────────────────
   const walkIn = await bookAppointment(admin, {
-    workspaceId: wsA, patientId: pSilent.data.id, patientName: "Ssekandi Paul", scheduledAt: `${walkDate}T06:30:00.000Z`,
+    workspaceId: wsA, patientId: pSilent.data.id, patientName: "Ssekandi Paul", scheduledAt: `${walkDate}T03:00:00.000Z`,
     appointmentType: "walk_in", locationId: locA, actorId: OWNER, correlationId: CORR,
   });
   const walkInDead = await bookAppointment(admin, {
-    workspaceId: wsA, patientId: pDeferred.data.id, patientName: "Auma Grace", scheduledAt: `${walkDate}T07:30:00.000Z`,
+    workspaceId: wsA, patientId: pDeferred.data.id, patientName: "Auma Grace", scheduledAt: `${walkDate}T03:30:00.000Z`,
     appointmentType: "walk_in", locationId: locA, actorId: OWNER, correlationId: CORR,
   });
   ok("4-control-3. two walk-in appointments were booked on that day",
@@ -800,6 +803,127 @@ async function main() {
   ok("8c. ⚠ the checklist never draws 'not checked' as a tick",
     /not checked/.test(publishSrc) && !/not_checked[^}]*emerald/.test(publishSrc),
     "a not-checked row is styled green somewhere");
+
+  // ══ 9. THE SESSION'S OWN WALK-IN LIMIT, ENFORCED ══════════════════════════════════════════════
+  //
+  // ⚠ migration 240 STORED walk_in_limit SINCE PHASE 1 AND NOTHING READ IT. checkPlacement enforced only
+  // migration 230's practice-wide number, so a per-session limit was a number that had never refused
+  // anything. This section is the proof that it now does -- and, just as importantly, that it refuses
+  // the RIGHT booking and lifts for nothing it should not.
+  section("9. The session walk-in limit bites");
+
+  const walkDate2 = dueDateFrom(today, 3);
+  const weekday2 = ((new Date(`${walkDate2}T12:00:00Z`).getUTCDay() + 6) % 7) + 1;
+
+  // 08:00-10:00 Kampala is 05:00-07:00Z. Limit TWO, against a practice-wide FIVE -- so the session's own
+  // number is the stricter one and must be the one that bites.
+  const sTwo = await saveSession(admin, ctxA, {
+    weekday: weekday2, startsMinute: 8 * 60, endsMinute: 10 * 60, locationId: locA,
+    sessionName: "Two walk-ins only", bookingMode: "internal", walkInsAllowed: true, walkInLimit: 2,
+    actorId: OWNER, correlationId: CORR,
+  });
+  ok("9-control. a session capped at two walk-ins exists, under a practice-wide cap of five",
+    sTwo.ok, sTwo.ok ? "" : (sTwo as any).message);
+
+  const walkIn1 = await bookAppointment(admin, {
+    workspaceId: wsA, patientId: pOverdue.data.id, patientName: "Nakato Betty",
+    scheduledAt: `${walkDate2}T05:15:00.000Z`, appointmentType: "walk_in", locationId: locA,
+    actorId: OWNER, correlationId: CORR,
+  });
+  ok("9a-control. ⚠ the FIRST walk-in, under the limit, is ACCEPTED -- otherwise 9c proves only that this session refuses everything",
+    walkIn1.ok, walkIn1.ok ? "" : (walkIn1 as any).message);
+
+  const walkIn2 = await bookAppointment(admin, {
+    workspaceId: wsA, patientId: pDeferred.data.id, patientName: "Auma Grace",
+    scheduledAt: `${walkDate2}T05:45:00.000Z`, appointmentType: "walk_in", locationId: locA,
+    actorId: OWNER, correlationId: CORR,
+  });
+  ok("9b-control. and the second, which reaches the limit exactly, is still accepted",
+    walkIn2.ok, walkIn2.ok ? "" : (walkIn2 as any).message);
+
+  const walkIn3 = await bookAppointment(admin, {
+    workspaceId: wsA, patientId: pStranded.data.id, patientName: "Okello James",
+    scheduledAt: `${walkDate2}T06:00:00.000Z`, appointmentType: "walk_in", locationId: locA,
+    actorId: OWNER, correlationId: CORR,
+  });
+  ok("9c. ⚠ THE THIRD IS REFUSED, by the session's own limit, with its own code",
+    !walkIn3.ok && (walkIn3 as any).code === "SESSION_WALK_IN_LIMIT",
+    walkIn3.ok ? "it was booked" : (walkIn3 as any).code);
+  ok("9d. ⚠ and the refusal names the SESSION and the SESSION's number -- not the practice-wide one, which would send somebody to change the wrong setting",
+    !walkIn3.ok && /Two walk-ins only/.test((walkIn3 as any).message)
+    && /takes 2 walk-ins/.test((walkIn3 as any).message)
+    && !/\b5\b/.test((walkIn3 as any).message),
+    walkIn3.ok ? "" : (walkIn3 as any).message);
+
+  const startMs3 = Date.parse(`${walkDate2}T06:00:00.000Z`);
+  const placeArgs = {
+    workspaceId: wsA, startMs: startMs3, endMs: startMs3 + 20 * 60000,
+    locationId: locA ?? null, appointmentType: "walk_in",
+  };
+
+  // ⚠ s14's WINDOW OVERRIDE MUST NOT LIFT A CAPACITY RULE. `lifted` suppresses LEAD_TIME and
+  // BEYOND_HORIZON only; an override of the notice period becoming an override of somebody else's place
+  // in a full clinic is exactly the conflation migration 255's header warns about for double-booking.
+  const overridden = await checkPlacement(admin, {
+    ...placeArgs, allowOverlap: false,
+    windowOverridden: ["LEAD_TIME", "BEYOND_HORIZON", "SESSION_WALK_IN_LIMIT", "WALK_IN_LIMIT"],
+  });
+  ok("9e. ⚠ a s14 window override does NOT lift the walk-in limit, even when it names the code",
+    !overridden.ok && (overridden as any).code === "SESSION_WALK_IN_LIMIT",
+    overridden.ok ? "the override lifted a capacity rule" : (overridden as any).code);
+
+  // ⚠ OVERLAP-EXEMPT IS NOT LIMIT-EXEMPT. A walk-in needs no free grid slot; that says nothing about
+  // whether this clinic will take another one.
+  const overlapped = await checkPlacement(admin, { ...placeArgs, allowOverlap: true });
+  ok("9f. ⚠ and allowOverlap does not lift it either -- a walk-in is exempt from the OVERLAP rule, not from the limit",
+    !overlapped.ok && (overlapped as any).code === "SESSION_WALK_IN_LIMIT",
+    overlapped.ok ? "overlap exemption lifted a capacity rule" : (overlapped as any).code);
+
+  // ⚠ A FAILED READ IS NOT A FREE SLOT.
+  const unreadableSessions = await checkPlacement(
+    adminWithUnreadable(admin, "practice_availability_template"), { ...placeArgs, allowOverlap: false });
+  ok("9g. ⚠ an unreadable session table REFUSES the walk-in rather than waving it through",
+    !unreadableSessions.ok && (unreadableSessions as any).code === "SESSION_WALK_IN_UNREADABLE",
+    unreadableSessions.ok ? "it was allowed on an unreadable read" : (unreadableSessions as any).code);
+
+  // A time in the same day that no session covers: the session limit governs nothing, so the booking
+  // stands. This is the control proving 9c is about the SESSION and not about the day.
+  const outside = await checkPlacement(admin, {
+    workspaceId: wsA, startMs: Date.parse(`${walkDate2}T02:00:00.000Z`),
+    endMs: Date.parse(`${walkDate2}T02:20:00.000Z`), locationId: locA ?? null,
+    appointmentType: "walk_in", allowOverlap: false,
+  });
+  ok("9h-control. ⚠ a walk-in at a time NO session covers is allowed -- so 9c is the session's limit, not a day-wide refusal",
+    outside.ok, outside.ok ? "" : (outside as any).message);
+
+  // ⚠ AND THE PRACTICE-WIDE LIMIT STILL REFUSES INDEPENDENTLY. A second location with its own rule of
+  // nought, and no session at all: nothing the new code does can be what refuses this.
+  const { data: rowC } = await admin.from("practice_location")
+    .insert({ workspace_id: wsA, name: "Second Site", type: "clinic", active: true, travel_buffer_minutes: 0 })
+    .select("id").single();
+  const locC = rowC?.id as string;
+  const ruleC = await setBookingRule(admin, ctxA, {
+    locationId: locC, appointmentType: null, leadTimeMinutes: 0,
+    walkInDailyLimit: 0, actorId: OWNER, correlationId: CORR,
+  });
+  ok("9i-control. a second location has a practice-wide walk-in limit of nought and no session",
+    ruleC.ok, ruleC.ok ? "" : (ruleC as any).message);
+  const practiceWide = await checkPlacement(admin, {
+    workspaceId: wsA, startMs: startMs3, endMs: startMs3 + 20 * 60000,
+    locationId: locC, appointmentType: "walk_in", allowOverlap: false,
+  });
+  ok("9i. ⚠ the PRACTICE-WIDE limit still refuses on its own, under its own separate code",
+    !practiceWide.ok && (practiceWide as any).code === "WALK_IN_LIMIT",
+    practiceWide.ok ? "the practice-wide limit stopped working" : (practiceWide as any).code);
+
+  // The screen and the engine read the same resolver, so the figure a practitioner sees is the figure
+  // that refused the booking. Asserted rather than asserted-about.
+  const w3 = await walkInPolicy(admin, ctxA, { date: walkDate2 });
+  const twoSession = w3.sessions.find(s => s.sessionName === "Two walk-ins only");
+  ok("9j. ⚠ the screen's own figure agrees with the engine that refused: two used, none left",
+    twoSession?.usedIds?.length === 2 && twoSession?.remaining === 0
+    && twoSession?.effectiveLimitEnforced === true,
+    JSON.stringify({ used: twoSession?.usedIds?.length, left: twoSession?.remaining }));
 
   await cleanup();
   report();

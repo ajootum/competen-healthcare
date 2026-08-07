@@ -152,7 +152,7 @@ export const WALK_IN_NOT_CONFIGURABLE = [
  * call inside checkPlacement, in scheduling.ts, which this build did not change.
  */
 export const WALK_IN_ENFORCEMENT_NOTE =
-  "The practice-wide daily walk-in limit is enforced when a walk-in is booked: checkPlacement counts today's walk-ins at that location and refuses past the limit. The PER-SESSION limit below is stored and reported here, and is not yet checked at booking time -- so it reads as a plan rather than as a control.";
+  "Both limits are enforced when a walk-in is booked, and the stricter one bites. checkPlacement counts the day's walk-ins at the location against your practice-wide limit, then counts the ones already inside this session against the session's own -- and the refusal names which of the two was reached, so nobody goes and changes the wrong setting. A limit that could not be checked refuses the booking rather than waving it through.";
 
 /** Tinted swatches for Phase 5's tiles. Parked here rather than in palette.ts, which is contended. */
 export type RecallSwatch = { badge: string; figure: string; box: string; caption: string; icon: string };
