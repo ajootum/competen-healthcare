@@ -46,20 +46,25 @@ export const PATIENT_ACCESS_MODES = [
   {
     code: "link_only", label: "Link only",
     description: "Accessible only through the booking URL you share.",
-    reachable: false,
-    note: "s8 recommends this as the first patient-facing mode. It needs a handle, a page and a code that can actually be sent.",
+    // ⚠ TRUE NOW. It read false while the handle, the page and the intake did not exist. All three do.
+    reachable: true,
+    note: "s8 recommends this as the first patient-facing mode. It works: the handle is claimed in Practice Setup, and the page publishes once the database is satisfied. A patient still cannot finish without a channel that can send the code.",
   },
   {
     code: "public", label: "Public",
     description: "A discoverable booking page, where product policy permits.",
-    reachable: false,
-    note: "Not before link-only has been run with real patients.",
+    // ⚠ TRUE AS A BUILD FACT, WHICH IS WHAT THIS FIELD MEANS. Whether a practice SHOULD choose it is a
+    // product judgement and stays in the note, where it is advice rather than a broken switch.
+    reachable: true,
+    note: "Recommended only after link-only has been run with real patients. Nothing stops it: the page is governed by the same publish constraint either way.",
   },
   {
     code: "paused", label: "Paused",
     description: "Existing bookings remain; no new patient-facing requests are accepted.",
-    reachable: false,
-    note: "Meaningless until something can be un-paused.",
+    // ⚠ TRUE NOW: setPublishState pauses a live page, and resolveBookingPage refuses to resolve a paused
+    // one. It was meaningless only while nothing could be published in the first place.
+    reachable: true,
+    note: "A paused page stops resolving for patients and keeps the bookings already made.",
   },
 ] as const;
 
@@ -197,9 +202,21 @@ export const PATIENT_ACCESS_BLOCKING_CODES: string[] =
   PATIENT_ACCESS_BLOCKERS.filter(b => b.severity === "blocker").map(b => b.code);
 
 /**
- * ⚠ THE BLOCKERS NO CONFIGURATION CAN CLEAR.
+ * ⚠ THE BLOCKERS NO CONFIGURATION CAN CLEAR. EMPTY NOW, AND THAT IS THE POINT.
  *
- * A gate that could report `open: true` the moment somebody set an API key would be a gate with nothing
- * behind it. These two are properties of this build, and only a code change removes them.
+ * It held INTAKE_NOT_BUILT for as long as that was true: s19's Phase 4 asks for a handle, a link-only
+ * page, registration intake and confirmation, and the last two did not exist, so no amount of
+ * configuration could open the door.
+ *
+ * All four exist now -- the handle is claimed in Practice Setup, migration 254's stores landed,
+ * patient-booking.ts carries the intake and the confirmation, and booking-rules.ts gives the
+ * patient_self channel a door guarded by a verified session rather than by a capability. So the list is
+ * empty, and the door WILL open once a practice is configured for it.
+ *
+ * ⚠ WHAT STOPS IT TODAY IS DELIVERY_CHANNEL_ABSENT, WHICH IS A FACT ABOUT THE DEPLOYMENT RATHER THAN
+ * ABOUT THE CODE. There is no SMS gateway and no mail provider, so no code can be sent and no patient
+ * can complete a verification. That is a configuration somebody can change, and when they do, patient
+ * booking starts working -- which is exactly what an empty list here means and why it must not be
+ * padded to keep an old assertion passing.
  */
-export const PATIENT_ACCESS_BUILD_BLOCKERS: string[] = ["INTAKE_NOT_BUILT"];
+export const PATIENT_ACCESS_BUILD_BLOCKERS: string[] = [];

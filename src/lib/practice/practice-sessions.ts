@@ -346,8 +346,13 @@ export async function practiceSessions(admin: any, ctx: WorkspaceContext) {
       warnings.push("No activity type, so a Current Activity started from it inherits nothing.");
     if (bookingMode !== "none" && appointmentTypes.length === 0)
       warnings.push("Marked bookable but offers no appointment type, so nothing can be booked into it.");
+    // ⚠ THIS WARNING SAID "Phase 4 and is not built" AND WAS SHOWN ON EVERY PATIENT-FACING SESSION.
+    // It is built. Left alone it would have put a false sentence on the Layer 1 screen for exactly the
+    // sessions a practitioner had just opened to patients -- the same stale-claim class as the guard
+    // that used to refuse them. What is TRUE now is the dependency, which is worth saying because a
+    // session opened to patients still reaches nobody until the booking page is published.
     if (!BOOKING_MODES_LIVE.includes(bookingMode))
-      warnings.push(`"${bookingMode}" needs the patient booking page, which is Phase 4 and is not built.`);
+      warnings.push(`"${bookingMode}" only reaches patients once your booking page is published.`);
     if (effectiveState === "ended") warnings.push("This session's pattern has ended.");
     if (t.walk_ins_allowed && t.walk_in_limit == null)
       warnings.push("Walk-ins are allowed with no limit set.");
@@ -554,14 +559,27 @@ export async function saveSession(admin: any, ctx: WorkspaceContext, args: {
       message: "a session patients may book must offer at least one appointment type; zero means not patient-bookable",
     };
 
-  // ⚠ THE PHASE GATE. s8's patient-facing access -- handle, OTP, publish state -- is Phase 4 and is not
-  // started. Storing `public` would be storing a decision nothing can honour, and the session would sit
-  // there reading "patients may book" while no patient can reach anything.
-  if (patientFacing && !BOOKING_MODES_LIVE.includes(bookingMode as BookingMode))
-    return {
-      ok: false, status: 422, code: "PHASE_NOT_BUILT",
-      message: `"${bookingMode}" needs the patient booking page, which is CPR-V5-007 Phase 4 and is not built. Internal booking works now.`,
-    };
+  // ⚠ THE PHASE GATE USED TO SIT HERE, AND IT IS GONE BECAUSE ITS REASON IS GONE.
+  //
+  // It refused `link_only` and `public` with PHASE_NOT_BUILT, and it was correct for as long as s8's
+  // patient-facing access did not exist: storing "patients may book" while no patient could reach
+  // anything would have been storing a decision nothing could honour.
+  //
+  // Phase 4 shipped. The handle is claimed in Practice Setup, migration 254 landed the stores,
+  // patient-booking.ts carries the intake and the confirmation, and the patient_self channel has a door
+  // guarded by a verified session. The guard outlived its reason, and a guard that outlives its reason
+  // reads as a decision somebody meant -- which is how this product ended up claiming a table did not
+  // exist that had existed since migration 238.
+  //
+  // ⚠ AND BOTH MODES ARE RELEASED TOGETHER, DELIBERATELY. `public` differs from `link_only` only in
+  // whether the PAGE is discoverable, and that is a property of practice_booking_access.mode, not of a
+  // session. A session marked `public` under a link-only access profile still reaches only people
+  // holding the link, because the profile is the gate. Releasing one and not the other would put the
+  // discoverability decision in two places, and the session is the place that cannot enforce it.
+  //
+  // ⚠ WHAT STILL REFUSES, AND STILL SHOULD: NO_APPOINTMENT_TYPE, immediately above -- s4.3's "zero means
+  // not patient-bookable". And PUBLISHING is refused by practice_booking_access_publishable, in the
+  // database, which no session setting can talk round. Marking a session bookable is not publishing.
 
   if (locationId) {
     const { data: loc, error } = await admin.from("practice_location")

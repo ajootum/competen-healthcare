@@ -276,22 +276,65 @@ async function main() {
     weekday: 4, startsMinute: 540, endsMinute: 720, locationId: locId,
     sessionName: "Thursday", bookingMode: "public", appointmentTypes: ["new_consultation"], ...ACT,
   });
-  ok("4b public WITH types is refused for a different reason -- the phase, not the types",
-    !publicWithTypes.ok && publicWithTypes.code === "PHASE_NOT_BUILT",
-    publicWithTypes.ok ? "accepted" : publicWithTypes.code);
-  ok("3a and the refusal NAMES the phase, so nobody goes looking for a setting",
-    !publicWithTypes.ok && /Phase 4/.test(publicWithTypes.message),
-    publicWithTypes.ok ? "" : publicWithTypes.message);
+  // ══ ⚠ 4b, 3a AND 3b HAVE TURNED ROUND, AND THEY ARE TURNED ROUND RATHER THAN DELETED ═════════════
+  //
+  // They asserted PHASE_NOT_BUILT: `public` and `link_only` were refused because s8's patient-facing
+  // access did not exist, so storing them would have stored a decision nothing could honour. That was
+  // true, and the assertions were right to hold it.
+  //
+  // Phase 4 shipped -- handle, stores, intake, confirmation, and a patient_self channel guarded by a
+  // verified session. The refusal outlived its reason, and a session a practitioner cannot mark bookable
+  // is a feature that works with no way to switch it on.
+  //
+  // ⚠ SO WHAT THEY ASSERT NOW IS THAT THE MODE SAVES **AND** THAT THE REFUSAL THAT IS STILL REAL STILL
+  // FIRES. 4a above is untouched and still refuses zero types -- that is the guard that never went
+  // stale, and keeping it green here is what stops this pair becoming a hollow "everything is allowed".
+  ok("4b public WITH types now SAVES -- the phase gate that refused it has gone, because the phase shipped",
+    publicWithTypes.ok, publicWithTypes.ok ? "" : `${publicWithTypes.code} ${publicWithTypes.message}`);
+  ok("3a and the mode was actually STORED as asked, not quietly downgraded to internal",
+    publicWithTypes.ok
+    && (await admin.from("practice_availability_template")
+      .select("booking_mode").eq("id", publicWithTypes.data.id).maybeSingle()).data?.booking_mode === "public",
+    publicWithTypes.ok ? "stored mode did not match" : "");
 
   const linkOnly = await saveSession(admin, A, {
-    weekday: 4, startsMinute: 540, endsMinute: 720, locationId: locId,
-    bookingMode: "link_only", appointmentTypes: ["new_consultation"], ...ACT,
+    weekday: 5, startsMinute: 540, endsMinute: 720, locationId: locId,
+    sessionName: "Friday link-only", bookingMode: "link_only", appointmentTypes: ["new_consultation"], ...ACT,
   });
-  ok("3b link-only is refused too", !linkOnly.ok && linkOnly.code === "PHASE_NOT_BUILT",
-    linkOnly.ok ? "accepted" : linkOnly.code);
+  ok("3b link-only saves too -- both patient-facing modes were released together, because they differ only in whether the PAGE is discoverable",
+    linkOnly.ok, linkOnly.ok ? "" : `${linkOnly.code} ${linkOnly.message}`);
+
+  // ⚠ AND THE ONE THAT MUST NOT HAVE MOVED: marking a session bookable is NOT publishing. A practice
+  // with patient-facing sessions and no handle still cannot publish, and it is the DATABASE that says
+  // so -- practice_booking_access_publishable -- which no session setting can talk round.
+  const accessRow = await admin.from("practice_booking_access")
+    .insert({ workspace_id: A.workspaceId, mode: "link_only", otp_required: true }).select("id").maybeSingle();
+  ok("3b-control-1. a booking page exists to try to publish, so the next assertion is asserting over something",
+    !accessRow.error && !!accessRow.data, accessRow.error?.message ?? "");
+  const publishAttempt = await admin.from("practice_booking_access")
+    .update({ publish_state: "published" }).eq("workspace_id", A.workspaceId).select("id");
+  ok("3b-control-2. ⚠ AND PUBLISHING IS STILL REFUSED BY THE DATABASE with no handle -- relaxing the session guard did not relax the publish rule",
+    !!publishAttempt.error && publishAttempt.error.code === "23514"
+    && /practice_booking_access_publishable/.test(publishAttempt.error.message),
+    publishAttempt.error ? publishAttempt.error.message : "IT PUBLISHED -- the constraint is not biting");
+  await admin.from("practice_booking_access").delete().eq("workspace_id", A.workspaceId);
+
+  // ⚠ AND THE TWO PATIENT-FACING SESSIONS GO, HAVING BEEN ASSERTED. They used to be REFUSED, so they
+  // left no trace and every later assertion was written against a workspace without them. They save now,
+  // and leaving them behind made 11a ("a location whose only session is ended supports no booking")
+  // fail -- a downstream assertion breaking because a fixture upstream started succeeding. Removing them
+  // here keeps this file's later state exactly what it was, so 4b/3a/3b are the only things that moved.
+  for (const id of [publicWithTypes.ok ? publicWithTypes.data.id : null, linkOnly.ok ? linkOnly.data.id : null]) {
+    if (!id) continue;
+    await admin.from("practice_session_appointment_type").delete().eq("template_id", id);
+    await admin.from("practice_availability_template").delete().eq("id", id);
+  }
 
   const internalOk = await saveSession(admin, A, {
-    weekday: 4, startsMinute: 540, endsMinute: 720, locationId: locId,
+    weekday: 4, startsMinute: 810, endsMinute: 960, locationId: locId,
+    // ⚠ A DIFFERENT TIME FROM THE public SESSION ABOVE. That one used to be REFUSED, so this control
+    // could reuse its slot; it saves now, so reusing the slot made this control fail on SESSION_OVERLAP
+    // -- a control failing for a reason that has nothing to do with what it controls.
     sessionName: "Thursday Ward Round", activityType: "ward_round",
     bookingMode: "internal", appointmentTypes: ["new_consultation"], ...ACT,
   });

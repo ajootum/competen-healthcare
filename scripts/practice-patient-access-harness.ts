@@ -289,9 +289,19 @@ async function main() {
     declared.length === 1 && PATIENT_ACCESS_CAPABILITIES.includes(declared[0]) && catalogue.has(declared[0]),
     declared.join(", ") || "no requirePracticeContext literal found");
 
-  ok("1c. s8's four access modes exist, and only the internal one is reachable in this build",
-    PATIENT_ACCESS_MODES.length === 4 && PATIENT_ACCESS_MODES_REACHABLE.length === 1
-    && PATIENT_ACCESS_MODES_REACHABLE[0] === "internal_only",
+  // ⚠ TURNED ROUND WITH THE BUILD. It read "only the internal one is reachable", which was true while
+  // there was no handle, no page and no intake. All four are honourable now -- link-only and public
+  // publish through migration 254's constraint, and paused is a state setPublishState can reach and
+  // resolveBookingPage refuses to resolve. The flag drives a LIVE LABEL on the publish screen ("nothing
+  // behind it yet"), so leaving it stale was a false sentence on a screen rather than a dormant constant.
+  //
+  // ⚠ WHAT KEEPS THIS FROM BEING HOLLOW is that reachability is a claim about the BUILD, and the things
+  // that actually refuse are asserted elsewhere and still refuse: the publish constraint (7d/7e in the
+  // phase56 harness), and the delivery channel, which is why no patient can finish today.
+  ok("1c. s8's four access modes exist, and all four are honourable now -- the build caught up with the list",
+    PATIENT_ACCESS_MODES.length === 4 && PATIENT_ACCESS_MODES_REACHABLE.length === 4
+    && PATIENT_ACCESS_MODES_REACHABLE.includes("link_only")
+    && PATIENT_ACCESS_MODES_REACHABLE.includes("internal_only"),
     PATIENT_ACCESS_MODES_REACHABLE.join(", "));
 
   // ══ 2. THE DELIVERY CHANNEL'S ABSENCE IS READ, NOT ASSUMED ════════════════════════════════════
