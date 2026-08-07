@@ -30,7 +30,7 @@ import { runProvisioning, type IndividualRequest } from "../src/lib/practice/pro
 import {
   issueIdentity, getIdentity, changeHandle, claimHandle, suggestHandle, updateIdentity,
   transitionIdentity, resolveHandle, searchPractitioners, handleAvailable, handleCandidates,
-  normaliseHandle, bookingQr, bookingUrl, shareTemplates,
+  normaliseHandle, bookingQr, bookingUrl, bookingPath, shareTemplates,
   DISCOVERY_MODES, NOT_BUILT,
 } from "../src/lib/practice/identity-service";
 import {
@@ -347,8 +347,12 @@ async function main() {
     changed.ok && (changed as any).data.handle === "drokaisu" && (changed as any).data.previous === "eokaisu",
     JSON.stringify(changed));
   const oldUrl = await resolveHandle(admin, "eokaisu");
+  // ⚠ THE TARGET IS COMPOSED, NOT TYPED. It read "/@drokaisu" until CPB-002 moved the canonical address
+  // to /practice/book/@handle, and a hard-coded target in an assertion has the same failure mode the code
+  // does: it goes on describing the old shape, and would have kept passing while the redirect pointed at
+  // a route this application no longer serves.
   ok("5b. AND THE OLD URL REDIRECTS (s8) -- a printed poster keeps working",
-    oldUrl.kind === "redirect" && (oldUrl as any).to === "/@drokaisu", JSON.stringify(oldUrl));
+    oldUrl.kind === "redirect" && (oldUrl as any).to === bookingPath("drokaisu"), JSON.stringify(oldUrl));
   const stealOld = await handleAvailable(admin, "eokaisu");
   ok("5c. THE RELEASED HANDLE IS NOT FREE -- nobody else can claim it and inherit those patients",
     !stealOld.available && stealOld.reason === "retired", JSON.stringify(stealOld));

@@ -1,5 +1,9 @@
 import { issueOtp, verifyOtp, type Transport } from "@/lib/practice/messaging";
 import { bookUnderRules } from "@/lib/practice/booking-rules";
+import { rescheduleAppointment, transitionAppointment, APPOINTMENT_TRANSITIONS } from "@/lib/practice/scheduling";
+import { resolveBookingRule } from "@/lib/practice/availability-config";
+import { defaultAppointmentMinutes } from "@/lib/practice/configuration";
+import { audit } from "@/lib/practice/provisioning";
 import {
   issuePatientSession, checkPatientSession, normaliseDestination, type Reading,
 } from "@/lib/practice/patient-session";
@@ -436,6 +440,794 @@ export async function submitBookingRequest(admin: any, args: {
       confirmationNote:
         "Your appointment is booked. Write down the reference above -- no message has been sent to you, because this practice has no way to send one yet, so nothing will arrive by text or email. Contact the practice directly if you need to change or cancel it.",
     },
+  };
+}
+
+// ── 5. WHAT TIMES ARE ACTUALLY FREE ──────────────────────────────────────────────────────────────────
+//
+// ────────────────────────────────────────────────────────────────────────────────────────────────────
+// CPB-001 s10, and the comp's "Step 3 -- Select Date & Time".
+//
+// ⚠ THIS IS THE PATIENT-FACING READ, AND IT IS NOT bookingPreview(). They compute the same thing and are
+// deliberately separate functions, because they are allowed to SAY different things:
+//
+//   bookingPreview  is a practitioner looking at their own diary. It returns unofferable times WITH THE
+//                   REASON -- "already booked", "inside the notice period" -- which is exactly what a
+//                   practitioner needs and exactly what a stranger must never be told.
+//   bookableSlots   returns ONLY what can be booked, and nothing about what cannot. Migration 255's own
+//                   section 5 puts it in one line: "'09:00 is taken' and '09:00 is taken by an oncology
+//                   follow-up for J Smith' are different disclosures and only one of them was asked for."
+//
+// ⚠ SO THERE IS NO WITHHELD COUNT ON THE PAYLOAD, AND ITS ABSENCE IS THE CONTROL. "3 of 24 times are
+// free" tells anybody who can load a public page how full a named clinician's diary is, every hour, for
+// free. The harness asserts that no field of this payload carries that number.
+//
+// ⚠ AND THE APPOINTMENT READ SELECTS FOUR COLUMNS. scheduled_at and duration_minutes decide freeness;
+// patient_name, patient_id, reason and appointment_type decide nothing and are not read. Migration 255's
+// idx_practice_appointment_live_span exists so that the cheapest query is also the one that touches least.
+//
+// ⚠ IT IS NOT A RESERVATION AND IT IS NOT A PROMISE. Between this read and submitBookingRequest anybody
+// may take the time. That race is settled by migration 255's exclusion constraint, in the database, and
+// not by anything here -- which is why this function holds nothing and expires nothing.
+// ────────────────────────────────────────────────────────────────────────────────────────────────────
+
+/** The slot kinds a patient could actually be seen in. `leave`, `blocked` and `admin` are not offers. */
+const SLOT_KINDS_SEEING_PATIENTS = ["clinic", "telemedicine", "emergency_reserve"];
+
+/** How far ahead this function will look, whatever it is asked for. Bounds the read, not the rule. */
+const AVAILABILITY_WINDOW_CAP_DAYS = 120;
+
+export type BookableSlot = {
+  /** The session window this time came out of. Provenance, not a reservation. */
+  sourceSlotId: string;
+  startsAt: string;
+  endsAt: string;
+  minutes: number;
+  locationId: string | null;
+  locationName: string | null;
+};
+
+export type BookableTimes = {
+  appointmentType: string;
+  minutes: number;
+  /** The practice's own timezone, so a page can print a local time without guessing one. */
+  timezone: string;
+  /** The window actually searched, which may be narrower than the one asked for. */
+  fromIso: string;
+  toIso: string;
+  /**
+   * ⚠ ONLY OFFERABLE TIMES. Never a taken one, never a reason, never a total. See the header.
+   */
+  slots: BookableSlot[];
+};
+
+/**
+ * The times a patient may be offered, computed from the diary and the rules rather than stored.
+ *
+ * ⚠ A FAILED READ IS NOT AN EMPTY DIARY. Every query below is error-checked and an unreadable anything
+ * refuses with READ_FAILED -- because "no times are available" and "nobody could tell" are different
+ * sentences, and printing the first when the second is true sends a patient away from a practice that
+ * was open.
+ */
+export async function bookableSlots(admin: any, args: {
+  handle: string;
+  appointmentType: string;
+  locationId?: string | null;
+  fromIso: string;
+  toIso: string;
+}): Promise<EngineResult<BookableTimes>> {
+  const page = await resolveBookingPage(admin, args.handle);
+  if (page.state !== "ok") return { ok: false, status: 503, code: "READ_FAILED", message: page.reason };
+  if (!page.value) return { ok: false, status: 404, code: "NOT_FOUND", message: "There is no booking page at that address." };
+  const p = page.value;
+
+  // The page OFFERS these, so the page also ANSWERS for these. A type or a location that was never on it
+  // arriving here is somebody editing the request, and it is refused the same way submitBookingRequest
+  // refuses it rather than quietly returning nothing.
+  if (!p.appointmentTypes.includes(args.appointmentType))
+    return { ok: false, status: 422, code: "TYPE_NOT_OFFERED", message: "that kind of appointment is not offered here" };
+  if (args.locationId && !p.locations.some(l => l.id === args.locationId))
+    return { ok: false, status: 422, code: "LOCATION_NOT_OFFERED", message: "that location is not offered here" };
+
+  const fromMs = Date.parse(args.fromIso);
+  const toMsAsked = Date.parse(args.toIso);
+  if (Number.isNaN(fromMs) || Number.isNaN(toMsAsked) || toMsAsked <= fromMs)
+    return { ok: false, status: 400, code: "VALIDATION_ERROR", message: "a window needs a start and a later end" };
+  const toMs = Math.min(toMsAsked, fromMs + AVAILABILITY_WINDOW_CAP_DAYS * 86400000);
+  const fromIso = new Date(fromMs).toISOString();
+  const toIso = new Date(toMs).toISOString();
+
+  const minutes = await defaultAppointmentMinutes(admin, p.workspaceId);
+
+  const { data: ws, error: wsErr } = await admin.from("practice_workspace")
+    .select("timezone").eq("id", p.workspaceId).maybeSingle();
+  if (wsErr) return { ok: false, status: 503, code: "READ_FAILED", message: `this practice could not be read: ${wsErr.message}` };
+  const timezone = (ws?.timezone as string | null) || "UTC";
+
+  // ── THE SESSION WINDOWS ────────────────────────────────────────────────────────────────────────
+  //
+  // status OPEN as well as slot_kind, and the pair is not redundant: /api/v1/practice/availability
+  // writes BLOCKED and CLOSED rows with a clinic kind, so filtering on the kind alone would offer a
+  // patient time the practitioner has explicitly blocked out.
+  const { data: slotRows, error: slotErr } = await admin.from("practice_availability_slot")
+    .select("id, location_id, starts_at, ends_at, slot_kind, status, generated_from_template_id")
+    .eq("workspace_id", p.workspaceId).eq("status", "OPEN")
+    .in("slot_kind", SLOT_KINDS_SEEING_PATIENTS)
+    .gte("starts_at", fromIso).lt("starts_at", toIso).order("starts_at");
+  if (slotErr || slotRows == null)
+    return { ok: false, status: 503, code: "READ_FAILED", message: `this practice's times could not be read: ${slotErr?.message ?? "neither rows nor an error"}` };
+
+  // ── WHICH SESSIONS OFFER THIS KIND OF APPOINTMENT (s4.3) ───────────────────────────────────────
+  //
+  // ⚠ ZERO LINKED TYPES MEANS NOT PATIENT-BOOKABLE, which is the same rule publishReadiness's
+  // APPOINTMENT_TYPE_LINKED check applies. A session that offers nothing must not offer this.
+  //
+  // A slot with NO template is a one-off -- an extra session or extended hours -- and carries no type
+  // link anywhere, so restricting it here would invent a rule nobody wrote. It is governed by the
+  // booking page's own visible types, which the practice did choose, and which were checked above.
+  const { data: typeLinks, error: linkErr } = await admin.from("practice_session_appointment_type")
+    .select("template_id, appointment_type").eq("workspace_id", p.workspaceId);
+  if (linkErr || typeLinks == null)
+    return { ok: false, status: 503, code: "READ_FAILED", message: `the appointment types these sessions offer could not be read: ${linkErr?.message ?? "neither rows nor an error"}` };
+  const offersType = new Set(((typeLinks ?? []) as any[])
+    .filter(l => l.appointment_type === args.appointmentType).map(l => String(l.template_id)));
+
+  // ── WHAT IS ALREADY TAKEN. Four columns, and the reason is in the header. ───────────────────────
+  const { data: apptRows, error: apptErr } = await admin.from("practice_appointment")
+    .select("scheduled_at, duration_minutes")
+    .eq("workspace_id", p.workspaceId).in("status", ["REQUESTED", "CONFIRMED", "ARRIVED"])
+    // Widened at the front by the cap on an appointment's length, so a long appointment starting before
+    // the window but running into it is still seen. Migration 192 checks duration between 5 and 480.
+    .gte("scheduled_at", new Date(fromMs - 480 * 60000).toISOString())
+    .lt("scheduled_at", toIso);
+  if (apptErr || apptRows == null)
+    return { ok: false, status: 503, code: "READ_FAILED", message: `this practice's diary could not be read: ${apptErr?.message ?? "neither rows nor an error"}` };
+  const taken = ((apptRows ?? []) as any[]).map(a => {
+    const s = Date.parse(a.scheduled_at);
+    return { s, e: s + ((a.duration_minutes as number | null) ?? 20) * 60000 };
+  });
+
+  const locName = new Map(p.locations.map(l => [l.id, l.name]));
+  const now = Date.now();
+  const out: BookableSlot[] = [];
+
+  for (const slot of ((slotRows ?? []) as any[])) {
+    const slotLocation = (slot.location_id as string | null) ?? null;
+    // ⚠ A LOCATION THE PAGE DOES NOT EXPOSE IS NOT AN OFFER. resolveBookingPage already dropped
+    // inactive and foreign ids from p.locations, so this test is against the exposed list and not
+    // against the practice's whole estate.
+    if (slotLocation && !locName.has(slotLocation)) continue;
+    if (args.locationId && slotLocation !== args.locationId) continue;
+
+    const templateId = (slot.generated_from_template_id as string | null) ?? null;
+    if (templateId && !offersType.has(templateId)) continue;
+
+    const rule = await resolveBookingRule(admin, p.workspaceId, slotLocation, args.appointmentType);
+    const earliest = now + rule.leadTimeMinutes * 60000;
+    const latest = rule.bookingHorizonDays === null ? Infinity : now + rule.bookingHorizonDays * 86400000;
+
+    // ⚠ THE WINDOW IS SUBDIVIDED, because a generated slot is a whole SESSION -- migration 230's
+    // template carries a start minute and an end minute, so a 06:00-18:00 clinic is one row. Offering
+    // that row as "a time" would ask a patient to book twelve hours. The step is the practice's own
+    // configured appointment length, which is the length submitBookingRequest will book.
+    const windowStart = Date.parse(slot.starts_at);
+    const windowEnd = Date.parse(slot.ends_at);
+    if (Number.isNaN(windowStart) || Number.isNaN(windowEnd)) continue;
+
+    for (let s = windowStart; s + minutes * 60000 <= windowEnd; s += minutes * 60000) {
+      const e = s + minutes * 60000;
+      if (s < fromMs || s >= toMs) continue;
+      if (s < earliest || s > latest) continue;
+      if (taken.some(t => t.s < e && t.e > s)) continue;
+      out.push({
+        sourceSlotId: slot.id as string,
+        startsAt: new Date(s).toISOString(),
+        endsAt: new Date(e).toISOString(),
+        minutes,
+        locationId: slotLocation,
+        locationName: slotLocation ? locName.get(slotLocation) ?? null : null,
+      });
+    }
+  }
+
+  out.sort((a, b) => (a.startsAt < b.startsAt ? -1 : a.startsAt > b.startsAt ? 1 : 0));
+  return {
+    ok: true,
+    data: { appointmentType: args.appointmentType, minutes, timezone, fromIso, toIso, slots: out },
+  };
+}
+
+// ── 6. MANAGE A BOOKING WITHOUT AN ACCOUNT ───────────────────────────────────────────────────────────
+//
+// ════════════════════════════════════════════════════════════════════════════════════════════════════
+// CPB-001 s13 "Manage Existing Booking Without a Portal", and the comp's panel 8.
+//
+// ---- ⚠ THE ONE RULE THIS WHOLE SECTION IS SHAPED AROUND ---------------------------------------------
+//
+// s11 of the comp: "OTP required for booking AND management." So A BOOKING REFERENCE IS AN IDENTIFIER
+// AND NEVER A CREDENTIAL. It is printed on a confirmation, read down a telephone, forwarded, screenshotted
+// and left on a desk. Anything a stranger holding one can change is a booking a stranger can change.
+//
+// The composition below makes that structural rather than a rule somebody remembers:
+//
+//   1. A code is issued TO THE ADDRESS THE CALLER TYPED, never to an address found on a booking. So a
+//      stranger with somebody else's reference can only ever verify their OWN inbox.
+//   2. The verified session proves control of exactly that address.
+//   3. A booking is returned only when ITS OWN recorded contact is that same verified address.
+//   4. The reference is applied LAST, as a filter over what was already proved to be the caller's own.
+//
+// Under that order the reference adds no authority at all: without step 3 it opens nothing, and with
+// step 3 it merely narrows a list the caller was already entitled to see. That is also why it does not
+// matter that referenceFrom() is derived and unconstrained -- see BOOKING_REFERENCE_NOTE.
+//
+// ---- ⚠ WHAT THIS SECTION DOES NOT DO ----------------------------------------------------------------
+//
+//   IT WRITES NO SECOND SCHEDULING PATH. Rescheduling is rescheduleAppointment() and cancelling is
+//   transitionAppointment(), both in scheduling.ts, unchanged. That file carries the s14 override, the
+//   three overlap_acknowledged writes and the walk-in block; a patient path that re-implemented any of
+//   it would be the second copy that drifts. What is here is the AUTHORISATION and the RULES around
+//   those two calls, which is the part that genuinely differs for a patient.
+//
+//   ⚠ IT NEVER PASSES allowOverlap. Not on the reschedule, not anywhere. rescheduleAppointment writes
+//   `overlap_acknowledged: args.allowOverlap === true`, so omitting it writes false, so migration 255's
+//   exclusion constraint still refuses a double-book with 23P01. A patient has no authority to
+//   double-book and there is no argument on any function below that could grant it one.
+//
+//   IT NEVER CONFIRMS OR DENIES THAT A BOOKING EXISTS TO SOMEBODY WHO CANNOT PROVE THE CONTACT. An
+//   unknown reference, a reference belonging to another patient and a reference that is simply wrong all
+//   answer the same empty list.
+// ════════════════════════════════════════════════════════════════════════════════════════════════════
+
+/**
+ * ⚠ WHAT THE REFERENCE IS, WHAT IT IS NOT, AND WHAT IT WOULD TAKE TO MAKE IT MORE.
+ *
+ * Exported so the screen, the harness and this comment cannot drift apart.
+ */
+export const BOOKING_REFERENCE_NOTE =
+  "Your reference identifies this booking when you talk to the practice. It is not a password: on its "
+  + "own it cannot open, move or cancel anything. Changing a booking always needs a code sent to the "
+  + "phone or inbox the booking was made with.";
+
+/** A reference somebody can read down a telephone. Derived from the request, so nothing stores it. */
+export const bookingReference = referenceFrom;
+
+const REFERENCE_RE = /^CP-[A-Z0-9]{6}$/;
+
+/** How many bookings are read before matching. Bounds the query; reported when it bites. */
+const MANAGE_SCAN_LIMIT = 1000;
+
+/**
+ * ⚠ THE SCAN LOOKS BACKWARDS, AND THE FILTER LOOKS FORWARDS, AND THE TWO ARE NOT THE SAME QUESTION.
+ *
+ * The REQUEST records the time the patient originally asked for; the APPOINTMENT records where it is now.
+ * A booking rescheduled from last week to next week has a requested_start in the past and a live future
+ * appointment -- so scanning on `requested_start >= now` would lose exactly the bookings somebody has
+ * already had to move once. The scan window is therefore backwards-looking and bounded, and "is this
+ * still ahead of me" is decided on the appointment.
+ */
+const MANAGE_LOOKBACK_DAYS = 180;
+
+export type ManagedBooking = {
+  reference: string;
+  requestId: string;
+  appointmentId: string;
+  /** The appointment's own status. REQUESTED, CONFIRMED, ARRIVED, CANCELLED, COMPLETED or NO_SHOW. */
+  status: string;
+  scheduledAt: string;
+  durationMinutes: number;
+  appointmentType: string;
+  locationName: string | null;
+  /** What the practice chose to tell patients. Never an internal note. */
+  instructions: string | null;
+  /** ⚠ DERIVED FROM THE STATE MACHINE AND THE PRACTICE'S OWN RULE, never assumed. */
+  canReschedule: boolean;
+  canCancel: boolean;
+  /** Why not, in the patient's words, when either is false. */
+  whyNot: string | null;
+};
+
+export type ManagedBookingList = {
+  bookings: ManagedBooking[];
+  /**
+   * ⚠ TRUE WHEN THE SCAN HIT ITS LIMIT, so a short list is never silently presented as a whole one.
+   * A patient told "you have no bookings" because a read was capped is a patient who does not turn up.
+   */
+  listIncomplete: boolean;
+  referenceNote: string;
+};
+
+/**
+ * Issue a code so somebody can manage a booking they already have.
+ *
+ * ⚠ IT IS DELIBERATELY INDISTINGUISHABLE FROM requestBookingCode, AND THAT IS THE POINT. The answer does
+ * not depend on whether any booking exists at this address, because nothing in this path reads the
+ * booking table at all. s12: "Do not disclose whether an email already belongs to an existing patient."
+ *
+ * ⚠ THE PURPOSE IS 'booking', NOT A NEW ONE. messaging.ts's TEMPLATES is the list of things this product
+ * may send and the union on issueOtp is closed; inventing a fourth purpose here would be a template that
+ * does not exist, refused at send time as UNKNOWN_PURPOSE. Managing a booking is a booking matter and the
+ * existing template says the right thing.
+ */
+export async function requestManageCode(admin: any, args: {
+  handle: string; channel: "sms" | "email"; destination: string;
+  sourceKey?: string | null; correlationId: string; transport?: Transport;
+}): Promise<EngineResult<{ challengeId: string; expiresAt: string; sourceLimited: boolean }>> {
+  return requestBookingCode(admin, args);
+}
+
+/** The session check every function in this section starts with, and the page it is scoped to. */
+async function manageContext(admin: any, handle: string, token: string): Promise<
+  | { ok: true; page: PublicBookingPage; sessionId: string; destination: string }
+  | { ok: false; status: number; code: string; message: string }
+> {
+  const page = await resolveBookingPage(admin, handle);
+  if (page.state !== "ok") return { ok: false, status: 503, code: "READ_FAILED", message: page.reason };
+  if (!page.value) return { ok: false, status: 404, code: "NOT_FOUND", message: "There is no booking page at that address." };
+
+  // ⚠ NO `destination` ARGUMENT. The caller has not claimed a contact -- the session IS the claim, and
+  // its verified destination is what the booking is then matched against. Passing a caller-supplied
+  // address here would let somebody name the address they wanted the match run against.
+  const proof = await checkPatientSession(admin, { token, workspaceId: page.value.workspaceId });
+  if (!proof.ok)
+    return {
+      ok: false,
+      status: proof.code === "PATIENT_SESSION_UNREADABLE" ? 503 : 403,
+      code: proof.code,
+      message: proof.code === "PATIENT_SESSION_UNREADABLE"
+        ? "your booking could not be opened because your session could not be checked"
+        : "that link or code is no longer valid. Ask for a new code and try again.",
+    };
+
+  return {
+    ok: true, page: page.value,
+    sessionId: proof.proof.sessionId, destination: proof.proof.destination,
+  };
+}
+
+/**
+ * s13's "View booking": the bookings belonging to the contact this session verified.
+ *
+ * ⚠ THE MATCH IS ON THE VERIFIED DESTINATION AND NOTHING ELSE. A reference narrows the result; it never
+ * widens it, and a reference for somebody else's booking narrows it to nothing rather than to theirs.
+ *
+ * ⚠ THE CONTACT COMPARISON HAPPENS HERE RATHER THAN IN THE QUERY, and that is not laziness. The stored
+ * contact is whatever the patient typed -- "+256 772 555 401" -- and the verified destination is whatever
+ * they typed the second time. normaliseDestination is what makes those one address, and PostgREST cannot
+ * apply it. So the scan is bounded, ordered and its truncation is REPORTED rather than hidden.
+ */
+export async function managedBookings(admin: any, args: {
+  handle: string; token: string; reference?: string | null;
+}): Promise<EngineResult<ManagedBookingList>> {
+  const c = await manageContext(admin, args.handle, args.token);
+  if (!c.ok) return c;
+
+  const wanted = (args.reference ?? "").trim().toUpperCase();
+  if (wanted && !REFERENCE_RE.test(wanted))
+    // A malformed reference is a fact about the characters typed, so saying so discloses nothing.
+    return { ok: false, status: 400, code: "REFERENCE_INVALID", message: "a booking reference looks like CP-A1B2C3" };
+
+  // s13 is about a booking somebody still has. See MANAGE_LOOKBACK_DAYS for why the scan looks back
+  // while the answer looks forward.
+  const { data: rows, error } = await admin.from("practice_booking_request")
+    .select("id, appointment_id, contact_phone, contact_email, appointment_type, location_id, requested_start")
+    .eq("workspace_id", c.page.workspaceId).eq("status", "booked")
+    .gte("requested_start", new Date(Date.now() - MANAGE_LOOKBACK_DAYS * 86400000).toISOString())
+    .order("requested_start").limit(MANAGE_SCAN_LIMIT);
+  if (error || rows == null)
+    return { ok: false, status: 503, code: "READ_FAILED", message: `your bookings could not be read: ${error?.message ?? "neither rows nor an error"}` };
+
+  const scanned = (rows ?? []) as any[];
+  const verified = normaliseDestination(c.destination);
+  const mine = scanned.filter(r => {
+    const phone = r.contact_phone ? normaliseDestination(String(r.contact_phone)) : null;
+    const email = r.contact_email ? normaliseDestination(String(r.contact_email)) : null;
+    return phone === verified || email === verified;
+  }).filter(r => !wanted || referenceFrom(String(r.id)) === wanted);
+
+  if (mine.length === 0)
+    return {
+      ok: true,
+      data: { bookings: [], listIncomplete: scanned.length >= MANAGE_SCAN_LIMIT, referenceNote: BOOKING_REFERENCE_NOTE },
+    };
+
+  const apptIds = mine.map(r => String(r.appointment_id)).filter(Boolean);
+  const { data: appts, error: apptErr } = await admin.from("practice_appointment")
+    .select("id, status, scheduled_at, duration_minutes, location_id, appointment_type")
+    .eq("workspace_id", c.page.workspaceId).in("id", apptIds);
+  if (apptErr || appts == null)
+    return { ok: false, status: 503, code: "READ_FAILED", message: `your appointment could not be read: ${apptErr?.message ?? "neither rows nor an error"}` };
+  const byId = new Map(((appts ?? []) as any[]).map(a => [String(a.id), a]));
+
+  const locName = new Map(c.page.locations.map(l => [l.id, l.name]));
+  const now = Date.now();
+  const bookings: ManagedBooking[] = [];
+
+  for (const r of mine) {
+    const a = byId.get(String(r.appointment_id));
+    if (!a) continue;
+    const status = String(a.status);
+    const scheduledAt = String(a.scheduled_at);
+    // ⚠ DECIDED ON THE APPOINTMENT, NOT ON THE REQUEST. See MANAGE_LOOKBACK_DAYS.
+    if (Date.parse(scheduledAt) < now) continue;
+    const locationId = (a.location_id as string | null) ?? null;
+    const type = String(a.appointment_type ?? r.appointment_type);
+
+    const rule = await resolveBookingRule(admin, c.page.workspaceId, locationId, type);
+    const gate = manageGate({ status, scheduledAtMs: Date.parse(scheduledAt), now, notice: rule.cancellationNoticeMinutes });
+
+    bookings.push({
+      reference: referenceFrom(String(r.id)),
+      requestId: String(r.id),
+      appointmentId: String(a.id),
+      status, scheduledAt,
+      durationMinutes: (a.duration_minutes as number | null) ?? 20,
+      appointmentType: type,
+      locationName: locationId ? locName.get(locationId) ?? null : null,
+      instructions: c.page.instructions,
+      canReschedule: gate.canReschedule, canCancel: gate.canCancel, whyNot: gate.whyNot,
+    });
+  }
+
+  return {
+    ok: true,
+    data: {
+      bookings,
+      listIncomplete: scanned.length >= MANAGE_SCAN_LIMIT,
+      referenceNote: BOOKING_REFERENCE_NOTE,
+    },
+  };
+}
+
+/**
+ * ⚠ THE TWO GATES, DERIVED IN ONE PLACE so a screen's "Cancel" button and the engine's refusal cannot
+ * disagree. Both are read off things that are actually stored.
+ *
+ *   THE STATE MACHINE. APPOINTMENT_TRANSITIONS is scheduling.ts's own map, imported rather than copied.
+ *   CANCELLED cannot become CANCELLED; COMPLETED cannot become anything.
+ *
+ *   THE CANCELLATION NOTICE. migration 230's cancellation_notice_minutes, resolved through the same
+ *   ladder every other rule uses. s11's cancellation window, and it is a real column.
+ *
+ * ⚠ AND ARRIVED IS REFUSED FOR BOTH, on top of the map. The map permits ARRIVED -> CANCELLED because a
+ * practitioner at a desk may send somebody away; a patient standing in the waiting room self-cancelling
+ * is not that, and rescheduleAppointment refuses it independently with PATIENT_PRESENT.
+ *
+ * ⚠ THERE IS NO SEPARATE RESCHEDULE WINDOW, AND THAT IS REPORTED RATHER THAN INVENTED. s11 lists one
+ * beside the cancellation window; no column holds it. Reusing cancellation_notice_minutes for both would
+ * enforce a rule the practice never wrote. What DOES constrain a reschedule is the lead time on the new
+ * time, which bookableSlots applies from the same rule row.
+ */
+function manageGate(args: { status: string; scheduledAtMs: number; now: number; notice: number }): {
+  canReschedule: boolean; canCancel: boolean; whyNot: string | null;
+} {
+  const cancellable = (APPOINTMENT_TRANSITIONS[args.status] ?? []).includes("CANCELLED");
+  if (!cancellable)
+    return {
+      canReschedule: false, canCancel: false,
+      whyNot: `this appointment is ${args.status.toLowerCase().replace(/_/g, " ")}, so it can no longer be changed here. Contact the practice.`,
+    };
+  if (args.status === "ARRIVED")
+    return {
+      canReschedule: false, canCancel: false,
+      whyNot: "you have already been checked in for this appointment. Speak to the practice.",
+    };
+  if (Number.isNaN(args.scheduledAtMs))
+    return { canReschedule: false, canCancel: false, whyNot: "this appointment has no readable time, so nothing can be changed here." };
+
+  const deadline = args.scheduledAtMs - args.notice * 60000;
+  if (args.now > deadline) {
+    const hours = Math.round(args.notice / 60);
+    return {
+      canReschedule: false, canCancel: false,
+      whyNot: args.notice > 0
+        ? `this practice asks for ${args.notice < 120 ? `${args.notice} minutes` : `${hours} hours`}' notice, and that has passed. Contact the practice directly.`
+        : "this appointment time has passed. Contact the practice directly.",
+    };
+  }
+  return { canReschedule: true, canCancel: true, whyNot: null };
+}
+
+/** The one booking a manage action names, proved to belong to the verified contact. */
+async function mineOrRefuse(admin: any, args: { handle: string; token: string; reference: string }): Promise<
+  | { ok: true; booking: ManagedBooking; workspaceId: string; sessionId: string }
+  | { ok: false; status: number; code: string; message: string }
+> {
+  const c = await manageContext(admin, args.handle, args.token);
+  if (!c.ok) return c;
+
+  const list = await managedBookings(admin, { handle: args.handle, token: args.token, reference: args.reference });
+  if (!list.ok) return list;
+  const booking = list.data.bookings[0];
+  // ⚠ ONE ANSWER FOR "NO SUCH BOOKING", "NOT YOURS" AND "ALREADY GONE". Distinguishing them would turn a
+  // reference into an oracle for whether a booking exists at this practice.
+  if (!booking)
+    return { ok: false, status: 404, code: "BOOKING_NOT_FOUND", message: "no booking of yours matches that reference" };
+  return { ok: true, booking, workspaceId: c.page.workspaceId, sessionId: c.sessionId };
+}
+
+/**
+ * s13's "Reschedule": offer only valid replacement slots and re-run the rules before commit.
+ *
+ * ⚠ THE NEW TIME MUST BE ONE bookableSlots WOULD HAVE OFFERED. That is what re-running the rules means
+ * here: the lead time, the booking horizon, the session's own appointment types, the practice's blocked
+ * time and the diary are all applied to the REPLACEMENT, not merely to the original. Checking the
+ * replacement against nothing would let a patient move a booking into leave, into a blocked afternoon or
+ * to ten minutes' notice at a practice that asks for two days.
+ *
+ * ⚠ AND THEN THE WRITE GOES THROUGH rescheduleAppointment, WITH NO allowOverlap. Every guard that engine
+ * carries -- the terminal states, ARRIVED, the past-day check, checkPlacement, the record version -- runs
+ * unchanged, and migration 255 has the last word on the slot.
+ */
+export async function rescheduleManagedBooking(admin: any, args: {
+  handle: string; token: string; reference: string;
+  scheduledAt: string; correlationId: string;
+}): Promise<EngineResult<{
+  reference: string; appointmentId: string; from: string; to: string; confirmationSent: boolean; confirmationNote: string;
+}>> {
+  const found = await mineOrRefuse(admin, { handle: args.handle, token: args.token, reference: args.reference });
+  if (!found.ok) return found;
+  const { booking, workspaceId, sessionId } = found;
+
+  if (!booking.canReschedule)
+    return { ok: false, status: 422, code: "RESCHEDULE_NOT_ALLOWED", message: booking.whyNot ?? "this booking cannot be moved here" };
+
+  const wantedMs = Date.parse(args.scheduledAt);
+  if (Number.isNaN(wantedMs))
+    return { ok: false, status: 400, code: "VALIDATION_ERROR", message: "that is not a time we can read" };
+
+  // The replacement, checked against the same computation a fresh booking would be offered. A narrow
+  // window around the requested time is enough: this asks "would you offer me THIS", not "what else".
+  const offered = await bookableSlots(admin, {
+    handle: args.handle, appointmentType: booking.appointmentType,
+    fromIso: new Date(wantedMs).toISOString(),
+    toIso: new Date(wantedMs + 60000).toISOString(),
+  });
+  if (!offered.ok) return offered;
+  const match = offered.data.slots.find(s => Date.parse(s.startsAt) === wantedMs);
+  if (!match)
+    return {
+      ok: false, status: 409, code: "SLOT_NOT_OFFERED",
+      message: "that time is not one this practice can offer. Choose another from the times shown.",
+    };
+
+  const moved = await rescheduleAppointment(admin, {
+    workspaceId, appointmentId: booking.appointmentId,
+    scheduledAt: match.startsAt, durationMinutes: match.minutes,
+    locationId: match.locationId,
+    // ⚠ allowOverlap IS NOT PASSED. See this section's header. rescheduleAppointment writes
+    // `overlap_acknowledged: args.allowOverlap === true`, so this move is written as false and
+    // migration 255's exclusion constraint refuses an occupied time with 23P01.
+    actorId: sessionId, correlationId: args.correlationId,
+  });
+  if (!moved.ok) {
+    const gone = /23P01|no_overlap|exclusion constraint/i.test(moved.message) || moved.code === "DOUBLE_BOOKED";
+    return gone
+      ? { ok: false, status: 409, code: "SLOT_TAKEN", message: "That time has just been taken. Choose another." }
+      : moved;
+  }
+
+  await audit(admin, {
+    workspaceId, actorId: sessionId, eventType: "practice.booking_rescheduled_by_patient",
+    payload: {
+      appointmentId: booking.appointmentId, reference: booking.reference,
+      from: moved.data.from.scheduledAt, to: moved.data.scheduledAt,
+    },
+    correlationId: args.correlationId,
+  });
+
+  return {
+    ok: true,
+    data: {
+      reference: booking.reference, appointmentId: booking.appointmentId,
+      from: moved.data.from.scheduledAt, to: moved.data.scheduledAt,
+      // ⚠ READ, NOT ASSUMED, and false in this deployment. Nothing here sends anything.
+      confirmationSent: false,
+      confirmationNote:
+        "Your appointment has been moved. Write down the new time -- no message has been sent to you, "
+        + "because this practice has no way to send one yet, so nothing will arrive by text or email.",
+    },
+  };
+}
+
+/**
+ * s13's "Cancel": apply the cancellation rules, free the capacity, leave an audit trail.
+ *
+ * ⚠ THE CAPACITY IS FREED BY THE STATUS AND NOTHING ELSE. migration 255's constraint is `where status in
+ * ('REQUESTED','CONFIRMED','ARRIVED')`, so a CANCELLED row stops participating the instant it is written
+ * and the time becomes bookable again with nothing to clean up.
+ *
+ * ⚠ THE REASON HAS NOWHERE TO GO, AND IT IS RETURNED RATHER THAN DROPPED SILENTLY. Neither
+ * practice_appointment nor practice_booking_request holds a patient cancellation reason. It is written
+ * into the audit payload, which is a record, and the caller is told plainly that it is not on the booking.
+ * s13 says "record reason if configured" -- there is nothing to configure it into yet.
+ */
+export async function cancelManagedBooking(admin: any, args: {
+  handle: string; token: string; reference: string; reason?: string | null; correlationId: string;
+}): Promise<EngineResult<{
+  reference: string; appointmentId: string; status: string;
+  reasonStoredOnBooking: boolean; confirmationSent: boolean; confirmationNote: string;
+}>> {
+  const found = await mineOrRefuse(admin, { handle: args.handle, token: args.token, reference: args.reference });
+  if (!found.ok) return found;
+  const { booking, workspaceId, sessionId } = found;
+
+  if (!booking.canCancel)
+    return { ok: false, status: 422, code: "CANCEL_NOT_ALLOWED", message: booking.whyNot ?? "this booking cannot be cancelled here" };
+
+  const cancelled = await transitionAppointment(admin, {
+    workspaceId, appointmentId: booking.appointmentId, to: "CANCELLED",
+    actorId: sessionId, correlationId: args.correlationId,
+  });
+  if (!cancelled.ok) return cancelled;
+
+  const reason = (args.reason ?? "").trim().slice(0, 500) || null;
+  await audit(admin, {
+    workspaceId, actorId: sessionId, eventType: "practice.booking_cancelled_by_patient",
+    payload: {
+      appointmentId: booking.appointmentId, reference: booking.reference,
+      scheduledAt: booking.scheduledAt, reason,
+    },
+    correlationId: args.correlationId,
+  });
+
+  return {
+    ok: true,
+    data: {
+      reference: booking.reference, appointmentId: booking.appointmentId, status: cancelled.data.status,
+      // ⚠ FALSE, AND SAID OUT LOUD. See the header.
+      reasonStoredOnBooking: false,
+      confirmationSent: false,
+      confirmationNote:
+        "This appointment has been cancelled. No message has been sent to you or to the practice, "
+        + "because this practice has no way to send one yet.",
+    },
+  };
+}
+
+// ── 7. WHAT THE PUBLIC PAGE MAY SAY ABOUT BOOKING ────────────────────────────────────────────────────
+//
+// ────────────────────────────────────────────────────────────────────────────────────────────────────
+// CPB-001 s5's "Booking disabled -- profile may remain visible while the booking CTA is disabled", and
+// the comp's panel 3, whose two buttons are "Book an Appointment" and "Manage Existing Booking".
+//
+// ⚠ THE ANSWER IS READ, NOT WRITTEN INTO THE PAGE. /@handle used to render a hard-coded paragraph saying
+// booking could not be built. That paragraph was true when it was typed and had quietly stopped being
+// true; a page that types its own limitations into prose keeps saying them after they stop applying, and
+// nothing fails when they do. Every field below is derived from a store, so the day a mail provider is
+// configured the buttons appear on their own and nobody has to remember this file.
+//
+// ⚠ EVERY FIELD IS A STRING, A BOOLEAN, NULL, OR AN ARRAY OF THOSE. NOTHING IS A FUNCTION. This crosses
+// the server/client boundary, where a method type-checks, passes eslint, passes every harness and kills
+// the page at runtime. The harness walks this object and asserts it.
+//
+// ⚠ AND IT ADDS NOTHING THE PRACTITIONER DID NOT PUBLISH. There is no rating, no review count, no years
+// of experience and no photograph on this payload, because no column holds any of them. See the gap
+// notes: a fabricated figure beside a named clinician's name is the worst kind this product could print.
+// ────────────────────────────────────────────────────────────────────────────────────────────────────
+
+/**
+ * ⚠ A FACT ABOUT THE BUILD, WRITTEN DOWN ONCE, WHERE A HARNESS CAN HOLD IT.
+ *
+ * The booking and management ENGINES exist and are proven end to end. What does not exist is a screen a
+ * patient can use: there is no wizard at Location -> Service -> Time -> Details -> Verify, and no
+ * public HTTP route that reaches any of the functions in this file. So no button on any public page may
+ * offer booking yet, however well configured a practice is.
+ *
+ * This is deliberately a constant rather than a condition each page re-derives. When the screens are
+ * built this becomes `true` in one place, every page that asks changes together, and the harness
+ * assertion that pairs it with the payload is what stops the two drifting apart.
+ */
+export const PATIENT_BOOKING_SCREENS_BUILT = false;
+
+export const PATIENT_BOOKING_SCREENS_NOTE =
+  "Online booking is not open to patients yet. The booking is made by the practice; contact them the way "
+  + "you normally would.";
+
+export type PublicBookingEntry = {
+  /** ⚠ THREE STATES. `closed` is "this practice takes no online booking"; `unreadable` is "nobody knows". */
+  state: "open" | "closed" | "unreadable";
+  /** Populated for `unreadable` only. A failed read says so instead of drawing as "not taking bookings". */
+  reason: string | null;
+  handle: string;
+  /**
+   * ⚠ TRUE ONLY IF A PATIENT COULD ACTUALLY FINISH ONE TODAY -- which takes three separate things: this
+   * practice published a page, a code could reach the patient, and a screen exists to do it on. A button
+   * that dead-ends at any of the three is worse than no button.
+   */
+  canBook: boolean;
+  canManage: boolean;
+  /** One sentence, true today, whenever either of the two above is false. */
+  whyNot: string | null;
+  /**
+   * Which of the three is missing, as codes, so a screen never re-derives the arithmetic and a harness
+   * can name what it is testing. Empty when a booking could be completed.
+   */
+  blockers: ("PAGE_NOT_PUBLISHED" | "NOTHING_OFFERED" | "NO_WAY_TO_SEND_A_CODE" | "NO_PATIENT_SCREEN" | "COULD_NOT_CHECK")[];
+  /** What the PAGE calls this practice, where the practice chose a name for it. */
+  displayName: string | null;
+  instructions: string | null;
+  privacyNotice: string | null;
+  locations: { id: string; name: string }[];
+  appointmentTypes: string[];
+  referenceNote: string;
+};
+
+/**
+ * Whether this handle's practice is taking online bookings, and whether one could actually be completed.
+ *
+ * ⚠ A HANDLE THAT RESOLVES TO A PRACTITIONER BUT NOT TO A PUBLISHED BOOKING PAGE IS `closed`, NOT AN
+ * ERROR. The two are separate objects on purpose -- migration 254 keeps the booking page apart from the
+ * identity -- and a practitioner may publish a profile without ever opening a diary to strangers.
+ */
+export async function publicBookingEntry(admin: any, handle: string): Promise<PublicBookingEntry> {
+  const clean = (handle ?? "").trim().toLowerCase().replace(/^@/, "");
+  const base = {
+    reason: null as string | null, handle: clean,
+    canBook: false, canManage: false, whyNot: null as string | null,
+    blockers: [] as PublicBookingEntry["blockers"],
+    displayName: null as string | null, instructions: null as string | null,
+    privacyNotice: null as string | null,
+    locations: [] as { id: string; name: string }[], appointmentTypes: [] as string[],
+    referenceNote: BOOKING_REFERENCE_NOTE,
+  };
+
+  const page = await resolveBookingPage(admin, clean);
+  if (page.state !== "ok")
+    return {
+      ...base, state: "unreadable", reason: page.reason, blockers: ["COULD_NOT_CHECK"],
+      whyNot: "Whether this practice is taking online bookings could not be checked just now.",
+    };
+  if (!page.value)
+    return {
+      ...base, state: "closed", blockers: ["PAGE_NOT_PUBLISHED"],
+      whyNot: "This practice does not take online bookings. Contact them the way you normally would.",
+    };
+  const p = page.value;
+
+  // ⚠ IMPORTED WHERE IT IS USED so the public page does not pull the whole publish-readiness module into
+  // its graph for one boolean. publishReadiness takes the same measure for the same kind of reason.
+  const { deliveryReadiness } = await import("@/lib/practice/patient-access");
+  const delivery = await deliveryReadiness(admin, p.workspaceId);
+
+  const shared = {
+    ...base, state: "open" as const,
+    displayName: p.displayName, instructions: p.instructions, privacyNotice: p.privacyNotice,
+    locations: p.locations, appointmentTypes: p.appointmentTypes,
+  };
+
+  if (delivery.state !== "ok")
+    return {
+      ...shared, state: "unreadable", reason: delivery.reason, blockers: ["COULD_NOT_CHECK"],
+      whyNot: "Whether this practice can send you a confirmation code could not be checked just now.",
+    };
+
+  const blockers: PublicBookingEntry["blockers"] = [];
+
+  // ⚠ THE CODE IS NOT OPTIONAL ON A PUBLISHED PAGE. migration 254's practice_booking_access_publishable
+  // refuses to publish with otp_required false, so a resolvable page always requires one -- which means a
+  // deployment that cannot SEND one cannot take a booking, and saying otherwise would send a patient to
+  // wait for a message that is never coming.
+  if (!delivery.value.deliverable) blockers.push("NO_WAY_TO_SEND_A_CODE");
+  // A page offering no location or no kind of appointment has taken no booking through this route, so
+  // there is nothing to manage either.
+  if (p.appointmentTypes.length === 0 || p.locations.length === 0) blockers.push("NOTHING_OFFERED");
+  if (!PATIENT_BOOKING_SCREENS_BUILT) blockers.push("NO_PATIENT_SCREEN");
+
+  // ⚠ THE FIRST BLOCKER IS THE SENTENCE, and the order is the order a person can act on them: a practice
+  // can choose what it offers this afternoon, an operator can configure a provider, and nobody using this
+  // product can build the missing screens.
+  const SENTENCE: Record<string, string> = {
+    NOTHING_OFFERED: "This practice has not yet chosen what it offers online. Contact them directly.",
+    NO_WAY_TO_SEND_A_CODE: "Online booking is not open here yet: this practice has no way to send you the confirmation code that booking requires. Contact them directly.",
+    NO_PATIENT_SCREEN: PATIENT_BOOKING_SCREENS_NOTE,
+  };
+  const ordered = (["NOTHING_OFFERED", "NO_WAY_TO_SEND_A_CODE", "NO_PATIENT_SCREEN"] as const)
+    .filter(c => blockers.includes(c));
+
+  return {
+    ...shared, blockers: ordered as PublicBookingEntry["blockers"],
+    canBook: ordered.length === 0, canManage: ordered.length === 0,
+    whyNot: ordered.length === 0 ? null : SENTENCE[ordered[0]],
   };
 }
 

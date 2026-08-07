@@ -398,9 +398,20 @@ async function main() {
   const migrationDir = join(process.cwd(), "supabase", "migrations");
   const applied = existsSync(migrationDir) ? readdirSync(migrationDir) : [];
   const claimed = MEDICATION_MIGRATION.split("-")[0];
-  ok("6a2. ⚠ the migration number this engine claims is NOT already taken in supabase/migrations",
-    !applied.some(f => f.startsWith(`${claimed}-`)),
-    `${claimed} vs ${applied.filter(f => f.startsWith(`${claimed}-`)).join(", ") || "free"}`);
+  // ⚠ TURNED ROUND WHEN THE MIGRATION LANDED, AND THE ORIGINAL WOULD NOW BE WRONG. As first written
+  // this asserted the number was FREE, which was right while the file was unwritten and became false the
+  // moment 258-practice-medication.sql was created -- by this engine's own migration, correctly. An
+  // assertion that fails when the thing it guards SUCCEEDS is the stale-refusal class this codebase has
+  // corrected five times this week, and re-pinning it to "free" would have meant deleting the migration.
+  //
+  // The real claim was never "the number is unused". It was "the number this engine tells a reader to
+  // apply belongs to THIS migration and not somebody else's" -- which is what the 257 collision broke and
+  // what this now checks by NAME. A number taken by a different file still fails, which is the case that
+  // mattered.
+  const atClaimed = applied.filter(f => f.startsWith(`${claimed}-`));
+  ok("6a2. ⚠ the migration number this engine claims is unused, or is this engine's own file",
+    atClaimed.length === 0 || (atClaimed.length === 1 && atClaimed[0] === `${MEDICATION_MIGRATION}.sql`),
+    `${claimed} -> ${atClaimed.join(", ") || "free"} (engine claims ${MEDICATION_MIGRATION})`);
   ok("6a2-control. the migration directory really was read, and the number before it IS taken",
     applied.length > 200 && applied.some(f => f.startsWith(`${Number(claimed) - 1}-`)),
     `${applied.length} migrations`);

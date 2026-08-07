@@ -53,7 +53,11 @@ export default function BookingAddressConsole({ identity }: Props) {
   // actually be written rather than what was typed. The server normalises again; this is a preview, not
   // a validation.
   const normalised = typed.trim().replace(/^@+/, "").toLowerCase().replace(/[^a-z0-9]/g, "");
-  const previewUrl = normalised ? `${view.host}/@${normalised}` : null;
+  // ⚠ THE PREFIX COMES FROM THE PAYLOAD, NOT FROM A LITERAL HERE. This line used to read
+  // `${view.host}/@${normalised}` and it was a SECOND construction of the booking link -- so when
+  // CPB-002 moved the address to /practice/book/@handle, this preview would have gone on quietly
+  // showing the old shape to the one person choosing a name they can never change.
+  const previewUrl = normalised ? `${view.urlPrefix}${normalised}` : null;
   const confirming = normalised !== "" && confirmedFor === normalised;
   // ⚠ A CHECK FOR A DIFFERENT HANDLE IS NOT AN ANSWER ABOUT THIS ONE. Derived rather than cleared from an
   // effect, so a stale "available" can never survive a keystroke.
@@ -315,6 +319,82 @@ export default function BookingAddressConsole({ identity }: Props) {
           </>
         )}
       </section>
+
+      {/* ── CPB-002's Booking & Sharing Workspace ────────────────────────────────────────────────── */}
+      {view.sharing && (
+        <section className={card}>
+          <h2 className="text-[14px] font-bold text-gray-900">Share your booking link</h2>
+          <p className="mt-1 text-[12px] leading-relaxed text-gray-600">
+            {/* ⚠ THE DISTINCTION IS THE WHOLE SECTION. None of these buttons sends anything: each opens
+                the other application with the message already written, and you press send. */}
+            Nothing here sends a message. Each option opens the app you choose with the text already
+            written &mdash; you decide who receives it.
+          </p>
+
+          <div className="mt-3 flex flex-wrap items-start gap-4">
+            {/* Drawn in this process from the address above. No external image service ever sees it. */}
+            <div className="w-36 shrink-0 rounded-lg border border-gray-200 bg-white p-2"
+              dangerouslySetInnerHTML={{ __html: view.sharing.qrSvg }} />
+            <div className="min-w-0 flex-1">
+              <p className="break-all font-mono text-[12px] font-semibold text-gray-900">{view.sharing.url}</p>
+              <ul className="mt-2.5 flex flex-wrap gap-1.5">
+                {view.sharing.targets.map(t => (
+                  <li key={t.key}>
+                    {t.href ? (
+                      <a href={t.href} target="_blank" rel="noopener noreferrer" title={t.detail}
+                        className="inline-block rounded-lg border border-gray-200 px-2.5 py-1 text-[12px] font-semibold text-gray-700 hover:border-[var(--cp-primary)]/40 hover:bg-[var(--cp-primary)]/5">
+                        {t.label}
+                        {/* ⚠ SAID ON THE BUTTON, not only in a tooltip. Facebook and LinkedIn receive
+                            the address the moment it is clicked. */}
+                        {t.leavesCompeten && <span className="ml-1 text-[10px] font-normal text-gray-400">↗</span>}
+                      </a>
+                    ) : (
+                      <button type="button" title={t.detail}
+                        onClick={() => { void navigator.clipboard?.writeText(view.sharing!.url); setDone("Link copied. Nothing was sent."); }}
+                        className="rounded-lg border border-gray-200 px-2.5 py-1 text-[12px] font-semibold text-gray-700 hover:border-[var(--cp-primary)]/40 hover:bg-[var(--cp-primary)]/5">
+                        {t.label}
+                      </button>
+                    )}
+                  </li>
+                ))}
+              </ul>
+              <p className="mt-2 text-[10.5px] leading-relaxed text-gray-400">
+                {view.sharing.targets.filter(t => t.leavesCompeten).map(t => t.label).join(" and ")} open
+                their own share windows, and receive your booking address when you click. Nothing on this
+                page contacts them until you do.
+              </p>
+
+              <div className="mt-3 flex flex-wrap gap-2">
+                <a href={view.sharing.qrPngDataUrl} download={`${view.sharing.handle}-booking-qr.png`}
+                  className="rounded-lg border border-gray-300 px-3 py-1.5 text-[12px] font-semibold text-gray-700 hover:bg-gray-50">
+                  Download PNG
+                </a>
+                <a href={`data:image/svg+xml;charset=utf-8,${encodeURIComponent(view.sharing.qrSvg)}`}
+                  download={`${view.sharing.handle}-booking-qr.svg`}
+                  className="rounded-lg border border-gray-300 px-3 py-1.5 text-[12px] font-semibold text-gray-700 hover:bg-gray-50">
+                  Download SVG
+                </a>
+                <Link href={view.sharing.printPath} target="_blank"
+                  className="rounded-lg border border-gray-300 px-3 py-1.5 text-[12px] font-semibold text-gray-700 hover:bg-gray-50">
+                  Print assets
+                </Link>
+              </div>
+              <p className="mt-1.5 text-[10.5px] leading-relaxed text-gray-400">{view.sharing.pdfNote}</p>
+            </div>
+          </div>
+
+          <details className="mt-3">
+            <summary className="cursor-pointer text-[12px] font-semibold text-gray-700">Put it on your website</summary>
+            <p className="mt-1 text-[11px] leading-relaxed text-gray-500">
+              A plain link rather than a widget: nothing of ours runs on your site, so there is nothing
+              for you to audit and nothing that can break when we deploy.
+            </p>
+            <pre className="mt-1.5 overflow-x-auto rounded-lg bg-slate-50 p-2.5 font-mono text-[11px] text-gray-800">
+              {view.sharing.embed}
+            </pre>
+          </details>
+        </section>
+      )}
 
       {/* ── The booking page, which is a different thing ─────────────────────────────────────────── */}
       <section className={card}>

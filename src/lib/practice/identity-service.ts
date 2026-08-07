@@ -45,7 +45,12 @@ export const NOT_BUILT = [
     key: "otp_booking",
     spec: "PIS-000 s11",
     label: "OTP verification before booking confirmation",
-    detail: "Sending a one-time code to a patient needs an SMS or email channel. This product has none, by a decision taken in CPR-320 and CPR-340 and enforced by their harnesses -- there is no channel column and no sent_at anywhere. A code that cannot reach the patient is not a verification, so it is absent rather than stubbed. Everything else in s11 -- resolving a handle, a number, a QR code or a URL to a practitioner -- is built.",
+    // ⚠ REWRITTEN BECAUSE IT HAD STOPPED BEING TRUE, not because it was inconvenient. It used to read
+    // "there is no channel column and no sent_at anywhere", which was correct until migration 224 built
+    // the challenge store and 254 built the patient session. Both exist, and so does the whole request /
+    // verify / intake / confirmation path in patient-booking.ts. What is missing is a PROVIDER, which is
+    // configuration rather than code -- so this entry now describes a deployment, and says which.
+    detail: "Sending a one-time code to a patient needs an SMS gateway or a mail provider, and this deployment has none -- issueOtp refuses outright rather than printing the code or pretending it sent one. The machinery around it is built and exercised: the challenge store, the short-lived patient session, and the request/verify/intake/confirmation path, all proven by practice-patient-intake-harness.ts. Everything else in s11 -- resolving a handle, a number, a QR code or a URL to a practitioner -- is built.",
   },
   {
     key: "licence_verification",
@@ -78,16 +83,45 @@ export const NOT_BUILT = [
 /**
  * The canonical host.
  *
- * s8 names https://practice.competenhealthcare.com. NOT HARDCODED: a booking URL printed onto a poster
- * has to resolve, and hardcoding a host this deployment may not serve would put a dead address on a
- * physical card. Read from the environment, with the spec's value as the default.
+ * ────────────────────────────────────────────────────────────────────────────────────────────────────
+ * ⚠ THE ADDRESS WAS DECIDED, AND THREE DIFFERENT ONES WERE IN PLAY UNTIL IT WAS.
+ *
+ *   PIS-000 s8 and this code    https://practice.competenhealthcare.com/@handle
+ *   CPB-001's comp              https://booking.competenpractice.com/@dreokaisu
+ *   CPB-002's spec and comp     https://competenhealthcare.com/practice/book/@dreokaisu
+ *
+ * The third is the one chosen: one domain, no `practice.` subdomain, the path carrying the meaning. It
+ * is recorded here rather than in the three places that used to compose it, because THIS STRING GOES ON
+ * A PRINTED CARD AND AN A4 POSTER. A screen showing a stale link is fixed by a deploy; a thousand printed
+ * cards are not, and a patient holding one has no way to reach their practitioner.
+ *
+ * NOT HARDCODED, STILL: read from the environment with the decision as the default, so a deployment that
+ * serves a different host does not need a hunt through string literals.
+ * ────────────────────────────────────────────────────────────────────────────────────────────────────
  */
 export function identityHost(): string {
-  return (process.env.NEXT_PUBLIC_PRACTICE_IDENTITY_HOST ?? "https://practice.competenhealthcare.com")
+  return (process.env.NEXT_PUBLIC_PRACTICE_IDENTITY_HOST ?? "https://competenhealthcare.com")
     .replace(/\/+$/, "");
 }
 
-export const bookingUrl = (handle: string) => `${identityHost()}/@${handle}`;
+/**
+ * ⚠ THE PATH, AS ONE CONSTANT, AND THE ROUTE THAT SERVES IT MUST MATCH IT.
+ *
+ * src/app/practice/book/[handle]/page.tsx is the route. Changing one without the other prints a link
+ * this application does not serve, and the harness asserts the pair rather than trusting this comment.
+ */
+export const BOOKING_PATH = "/practice/book/";
+
+/**
+ * ⚠ THE ONE CONSTRUCTION OF A BOOKING LINK. Everything that shows, shares, encodes or prints one goes
+ * through here -- the QR generator below, the share templates below, the setup console's live preview
+ * and the public page itself. A second composition anywhere is a card printed pointing at an address the
+ * application does not serve, and unlike a screen you cannot redeploy a poster.
+ */
+export const bookingUrl = (handle: string) => `${identityHost()}${BOOKING_PATH}@${handle}`;
+
+/** The same link as a path, for an in-application redirect that must not leave the host. */
+export const bookingPath = (handle: string) => `${BOOKING_PATH}@${handle}`;
 
 // ── HANDLES ──────────────────────────────────────────────────────────────────────────────────────────
 
@@ -547,6 +581,15 @@ export type IdentitySetupView = {
 
   /** The host a claimed handle would hang off, so the screen can show the shape before anything is typed. */
   host: string;
+  /**
+   * ⚠ EVERYTHING BEFORE THE HANDLE, COMPOSED ON THE SERVER, so the live preview in the claim box is not a
+   * SECOND construction of the booking link. It used to read `${view.host}/@${typed}` in the console --
+   * one string literal away from previewing an address the application does not serve, and the reader of
+   * that line had no way to know the path had moved.
+   */
+  urlPrefix: string;
+  /** ⚠ CPB-002's sharing workspace. Null until a handle is claimed, because there is nothing to share. */
+  sharing: IdentitySharing | null;
   /** What a claim costs, in the words the harness also checks. */
   permanenceNotice: string;
 
@@ -571,6 +614,52 @@ export type IdentitySetupView = {
   };
 };
 
+/**
+ * CPB-002's "Booking & Sharing Workspace", as a payload.
+ *
+ * ⚠ EVERY FIELD IS A STRING, A BOOLEAN OR AN ARRAY OF PLAIN OBJECTS. NOTHING IS A FUNCTION. The QR is a
+ * finished SVG and a finished data URL rather than a generator, because a method on a payload handed to
+ * a client component type-checks, passes eslint, passes every harness and kills the page at runtime.
+ */
+export type IdentitySharing = {
+  /** ⚠ THE ONE STRING. The QR encodes this, the targets carry this, the print sheet prints this. */
+  url: string;
+  handle: string;
+  /** Drawn in this process. No external image service ever sees a practitioner's booking address. */
+  qrSvg: string;
+  qrPngDataUrl: string;
+  targets: ShareTarget[];
+  embed: string;
+  /** Where the printable card, business card and poster live. In-application, so it needs no host. */
+  printPath: string;
+  /** ⚠ NOTHING HERE SENDS ANYTHING, and it is a field so a screen cannot imply otherwise. */
+  sentByThisProduct: false;
+  /** CPB-002 asks for PDF as well as PNG and SVG. See NOT_BUILT's `qr_pdf`. */
+  pdfNote: string;
+};
+
+/**
+ * Build the sharing workspace for a claimed handle.
+ *
+ * ⚠ IT REFUSES TO GUESS. Called only with a handle that has actually been claimed; there is nothing to
+ * share before that, and a preview of a share sheet for an address nobody holds would be a screen
+ * inviting a practitioner to distribute a link that resolves to nothing.
+ */
+export async function identitySharing(displayName: string, handle: string): Promise<IdentitySharing> {
+  const share = shareTargets(displayName, handle);
+  return {
+    url: share.url,
+    handle,
+    qrSvg: await bookingQr(handle, "svg"),
+    qrPngDataUrl: await bookingQr(handle, "png"),
+    targets: share.targets,
+    embed: embedSnippet(displayName, handle),
+    printPath: `${bookingPath(handle)}/print`,
+    sentByThisProduct: false,
+    pdfNote: NOT_BUILT.find(n => n.key === "qr_pdf")!.detail,
+  };
+}
+
 /** How many name candidates are worth offering. Enough to choose from, few enough to read. */
 const SUGGESTION_LIMIT = 5;
 
@@ -587,6 +676,9 @@ export async function identitySetupView(admin: any, args: {
     discovery: null as string | null,
     identityStatus: null as string | null,
     host,
+    // ⚠ ONE CONSTRUCTION, ON THE SERVER. See the field's own note.
+    urlPrefix: `${host}${BOOKING_PATH}@`,
+    sharing: null as IdentitySharing | null,
     permanenceNotice: HANDLE_PERMANENCE_NOTICE,
     suggestions: [] as string[],
     suggestionsIncomplete: false,
@@ -611,6 +703,7 @@ export async function identitySetupView(admin: any, args: {
       practitionerNumber: row.practitioner_number, displayName: row.display_name,
       handle: row.handle, bookingUrl: bookingUrl(row.handle),
       discovery: row.discovery, identityStatus: row.status,
+      sharing: await identitySharing(row.display_name ?? "", row.handle),
       bookingPage,
     };
   }
@@ -799,14 +892,24 @@ export async function resolveHandle(admin: any, rawHandle: string): Promise<
     return { kind: "found", profile: publicView(row) };
   }
 
-  // s8: legacy URLs redirect automatically.
+  // ⚠ CPB-002's "Old links always redirect", AND IT IS A REDIRECT RATHER THAN A RESERVATION.
+  //
+  // practice_handle_history does two separate jobs and it is worth naming both, because only one of them
+  // is visible from handleAvailable(): it RESERVES the old name so nobody else can ever claim it, and it
+  // POINTS at the identity that used to hold it so an old link still arrives somewhere. Reservation alone
+  // would mean a printed poster reached a dead page instead of a stranger -- better, and still a patient
+  // who cannot reach their practitioner. This is the half that makes the poster work.
+  //
+  // ⚠ AND THE TARGET IS COMPOSED FROM bookingPath, not typed. It used to read `/@${handle}`, which was
+  // the route before CPB-002 moved it; a redirect that points at a route this application no longer
+  // serves is a 404 wearing a 307.
   const { data: retired } = await admin.from("practice_handle_history")
     .select("identity_id").eq("handle", h).maybeSingle();
   if (retired) {
     const { data: current } = await admin.from("practice_practitioner_identity")
       .select("handle, discovery, status").eq("id", retired.identity_id).maybeSingle();
     if (current?.handle && current.discovery !== "hidden" && RESOLVABLE_STATES.has(current.status))
-      return { kind: "redirect", to: `/@${current.handle}` };
+      return { kind: "redirect", to: bookingPath(current.handle) };
   }
   return { kind: "none" };
 }
@@ -903,4 +1006,102 @@ export function shareTemplates(displayName: string, handle: string) {
       { key: "card", label: "Printed card", body: `${displayName}\n@${handle}\n${url}` },
     ],
   };
+}
+
+/**
+ * CPB-002's "Quick Share" row: WhatsApp, Email, SMS, Facebook, LinkedIn, copy link, embed.
+ *
+ * ────────────────────────────────────────────────────────────────────────────────────────────────────
+ * ⚠ THESE ARE LINKS A PRACTITIONER CLICKS, NOT INTEGRATIONS. Nothing here has an API key, an OAuth
+ * grant or a webhook, and nothing is posted on anybody's behalf. Each `href` is a URL that opens the
+ * other application with the message already typed; the practitioner presses send. That is the whole
+ * honest version of "share tools working" when this product has no outbound channel of its own, and it
+ * is worth the distinction: a button labelled "Share on Facebook" that posted for you would need an
+ * app review, a page token and a permission the practitioner never granted.
+ *
+ * ⚠ AND THE TWO SOCIAL ONES SEND THE LINK TO A THIRD PARTY WHEN THEY ARE CLICKED. Facebook and LinkedIn
+ * receive the booking URL -- which is a public address by design, and is the practitioner's own to
+ * publish -- but nothing on this page contacts either company until somebody clicks. There is no pixel,
+ * no script and no preconnect, so a practitioner who never clicks is never seen by them.
+ *
+ * ⚠ EVERY TARGET IS BUILT FROM bookingUrl(). One construction, so the thing shared, the thing shown and
+ * the thing encoded into the QR are the same string.
+ * ────────────────────────────────────────────────────────────────────────────────────────────────────
+ */
+export type ShareTarget = {
+  key: string;
+  label: string;
+  /** What this actually does, in the practitioner's words. Never "shares to X" when it opens X. */
+  detail: string;
+  /** The link to open. Null for `copy`, which is the URL itself and opens nothing. */
+  href: string | null;
+  /** ⚠ TRUE when clicking hands the booking URL to somebody other than the practitioner and the patient. */
+  leavesCompeten: boolean;
+};
+
+export function shareTargets(displayName: string, handle: string): {
+  url: string;
+  targets: ShareTarget[];
+  /** ⚠ NOTHING HERE SENDS ANYTHING. Stated as a field so a screen cannot imply otherwise. */
+  sentByThisProduct: false;
+} {
+  const url = bookingUrl(handle);
+  const message = `Hello, this is ${displayName}. You can book an appointment with me here: ${url}`;
+  const e = encodeURIComponent;
+
+  return {
+    url,
+    sentByThisProduct: false,
+    targets: [
+      {
+        key: "copy", label: "Copy link", detail: "Copies the address to your clipboard. Nothing is sent.",
+        href: null, leavesCompeten: false,
+      },
+      {
+        key: "whatsapp", label: "WhatsApp",
+        detail: "Opens WhatsApp with the message written. You choose who to send it to and press send.",
+        href: `https://wa.me/?text=${e(message)}`, leavesCompeten: true,
+      },
+      {
+        key: "sms", label: "SMS",
+        detail: "Opens your phone's messages with the text written. You choose the number and press send.",
+        // RFC 5724's body parameter. Handsets differ on `?` versus `&`; `?body=` is the form both
+        // iOS and Android have accepted since iOS 8, and a mis-parsed one opens an empty message
+        // rather than sending a wrong one.
+        href: `sms:?body=${e(message)}`, leavesCompeten: false,
+      },
+      {
+        key: "email", label: "Email",
+        detail: "Opens your mail programme with the subject and message written. You choose the recipient.",
+        href: `mailto:?subject=${e(`Booking with ${displayName}`)}&body=${e(message)}`, leavesCompeten: false,
+      },
+      {
+        key: "facebook", label: "Facebook",
+        detail: "Opens Facebook's own share window with your booking address. Facebook receives the address when you click.",
+        href: `https://www.facebook.com/sharer/sharer.php?u=${e(url)}`, leavesCompeten: true,
+      },
+      {
+        key: "linkedin", label: "LinkedIn",
+        detail: "Opens LinkedIn's own share window with your booking address. LinkedIn receives the address when you click.",
+        href: `https://www.linkedin.com/sharing/share-offsite/?url=${e(url)}`, leavesCompeten: true,
+      },
+    ],
+  };
+}
+
+/**
+ * CPB-002's "Website embed".
+ *
+ * ⚠ A LINK, NOT A WIDGET, AND NOT AN IFRAME. A script embed would run this product's code inside
+ * somebody else's site, which is a supply chain the practitioner cannot audit and this product cannot
+ * update safely; an iframe would put a booking form -- and eventually a patient's name and date of birth
+ * -- inside a page whose framing, storage and third-party scripts are outside our control. An anchor
+ * does the job the practitioner actually asked for, works with JavaScript switched off, and cannot leak
+ * anything, because it carries nothing.
+ */
+export function embedSnippet(displayName: string, handle: string): string {
+  const url = bookingUrl(handle);
+  const safe = displayName.replace(/[<>&"]/g, c =>
+    ({ "<": "&lt;", ">": "&gt;", "&": "&amp;", '"': "&quot;" }[c] as string));
+  return `<a href="${url}" rel="noopener">Book an appointment with ${safe}</a>`;
 }
