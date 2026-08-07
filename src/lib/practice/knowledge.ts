@@ -999,8 +999,31 @@ export async function archiveGuidance(admin: any, args: {
   const doc = loaded.data;
 
   const reason = (args.reason ?? "").trim();
-  // Checked here so the message is a sentence rather than a constraint name -- and the constraint still
-  // stands behind it for anything that reaches the table another way.
+  // ⚠ THIS GUARD IS LOAD-BEARING AND IT IS NOT A SECOND COPY OF THE CONSTRAINT. That was the first
+  // draft's belief, and it was wrong -- probed live against migration 256:
+  //
+  //     archived_reason = NULL          -> REFUSED 23514
+  //     archived_reason = ""            -> ACCEPTED
+  //     archived_reason = "   "         -> ACCEPTED
+  //
+  // `practice_guidance_archived_reason` says `archived_reason is not null`, and a blank string is not
+  // null. So the DATABASE refuses a MISSING reason and this refuses an EMPTY one, and they are two
+  // different rules rather than one rule written twice. Delete this and a practitioner can withdraw a
+  // published protocol by pressing space -- the next person finds "archived" with a reason field that
+  // renders as nothing, which is the outcome the constraint exists to prevent and does not.
+  //
+  // ⚠ THE TWO REFUSALS THEREFORE CARRY DIFFERENT CODES. This one is REASON_REQUIRED; the constraint's
+  // is REASON_REQUIRED_BY_DATABASE, naming the constraint. They were the same code until a harness run
+  // proved that could not distinguish them -- an assertion on REASON_REQUIRED passed whether or not
+  // this guard existed, because removing it merely handed a refusal under the same name to the layer
+  // below. That is the exact shape of the vacuous assertions this codebase keeps finding, and a test
+  // that cannot tell which layer refused is testing neither.
+  //
+  // ⚠ THE HONEST GAP: the constraint SHOULD be
+  //   check (status <> 'archived' or (archived_reason is not null and btrim(archived_reason) <> ''))
+  // and until it is, this function is the only thing standing between a blank reason and the record.
+  // guidance harness 11u-gap asserts that gap exists, so it cannot close silently and leave a comment
+  // here saying something untrue.
   if (!reason)
     return { ok: false, status: 400, code: "REASON_REQUIRED", message: "say why this is being withdrawn. The next person needs to tell \"superseded\" from \"found to be wrong\"." };
 
@@ -1010,7 +1033,7 @@ export async function archiveGuidance(admin: any, args: {
   }).eq("id", doc.id).eq("workspace_id", args.workspaceId).eq("status", doc.status);
   if (error) {
     if (isCheckViolation(error) && /archived_reason/.test(String(error.message)))
-      return { ok: false, status: 422, code: "REASON_REQUIRED", message: `the database refuses an archived document with no reason (${GUIDANCE_CONSTRAINTS.archivedReason})` };
+      return { ok: false, status: 422, code: "REASON_REQUIRED_BY_DATABASE", message: `the database refuses an archived document with no reason (${GUIDANCE_CONSTRAINTS.archivedReason})` };
     return { ok: false, status: 400, code: "VALIDATION_ERROR", message: error.message };
   }
 

@@ -423,9 +423,13 @@ async function main() {
   });
   ok("11j. CONTROL: a colleague can approve it", approved.ok, approved.ok ? "" : approved.message);
 
+  // ⚠ PINNED TO THE CODE, NOT MERELY TO "REFUSED". `!early2.ok` alone would pass if publishing were
+  // broken outright, which is the commonest way a negative assertion goes vacuous. An approved decision
+  // that the DOCUMENT has not yet followed leaves it in_review, and in_review -> published is not a move
+  // that exists, so the refusal must be the state machine's and must say so.
   const early2 = await publishGuidance(admin, { workspaceId: wsA, guidanceId: g.data.id, ...base });
-  ok("11k. publishing before the document follows its approval is refused",
-    !early2.ok, early2.ok ? "published" : early2.code);
+  ok("11k. publishing before the document follows its approval is refused, by the state machine",
+    !early2.ok && early2.code === "MOVE_NOT_ALLOWED", early2.ok ? "published" : early2.code);
 
   const synced = await syncGuidanceApproval(admin, { workspaceId: wsA, guidanceId: g.data.id, ...base });
   ok("11l. the document follows the decision that was recorded elsewhere",
@@ -437,24 +441,40 @@ async function main() {
   // ⚠ THE INDEX IS THE RULE. A second, independent document under the same reference, approved the same
   // way, must be refused by the DATABASE -- and nothing in the engine pre-checks the code, so this is a
   // single-assertion test of ux_practice_guidance_published_code and not of a duplicated engine rule.
+  //
+  // ⚠ NO `if (…ok)` WRAPPER AROUND 11n. It used to sit inside two of them, and a setup step that failed
+  // would have taken the assertion out of the run WITHOUT REPORTING ANYTHING -- the count would simply
+  // have been smaller and nothing would have said so. A skipped assertion reads exactly like a passing
+  // one in a total. Each setup step is now asserted in its own right, and the run stops if one fails.
   const g2 = await createGuidance(admin, {
     workspaceId: wsA, code: "SOP-014", title: "A rival document", docType: "sop", ...base,
   });
-  if (g2.ok) {
-    await updateGuidance(admin, {
-      workspaceId: wsA, guidanceId: g2.data.id, effectiveFrom: "2026-09-01",
-      sections: GUIDANCE_SECTIONS_REQUIRED.map(k => ({ key: k, body: "x" })), ...base,
-    });
-    const s2 = await submitGuidanceForApproval(admin, { workspaceId: wsA, guidanceId: g2.data.id, assignedTo: COLLEAGUE, ...base });
-    if (s2.ok) {
-      await decideApproval(admin, { workspaceId: wsA, approvalId: s2.data.approvalId, decision: "APPROVED", note: "ok", actorId: COLLEAGUE, correlationId: "harness-guidance" });
-      await syncGuidanceApproval(admin, { workspaceId: wsA, guidanceId: g2.data.id, ...base });
-      const clash = await publishGuidance(admin, { workspaceId: wsA, guidanceId: g2.data.id, ...base });
-      ok("11n. ⚠ ONE REFERENCE, ONE DOCUMENT IN FORCE -- refused by the INDEX, which this engine deliberately does not pre-check",
-        !clash.ok && clash.code === "CODE_IN_USE" && /ux_practice_guidance_published_code/.test(clash.message),
-        clash.ok ? "both published" : clash.message);
-    }
-  }
+  ok("11n-setup. a second draft may hold the SAME reference -- the index constrains published rows only",
+    g2.ok, g2.ok ? "" : g2.message);
+  if (!g2.ok) return report();
+
+  await updateGuidance(admin, {
+    workspaceId: wsA, guidanceId: g2.data.id, effectiveFrom: "2026-09-01",
+    sections: GUIDANCE_SECTIONS_REQUIRED.map(k => ({ key: k, body: "x" })), ...base,
+  });
+  const s2 = await submitGuidanceForApproval(admin, { workspaceId: wsA, guidanceId: g2.data.id, assignedTo: COLLEAGUE, ...base });
+  ok("11n-setup-b. and it goes through the same approval as any other", s2.ok, s2.ok ? "" : s2.message);
+  if (!s2.ok) return report();
+
+  await decideApproval(admin, { workspaceId: wsA, approvalId: s2.data.approvalId, decision: "APPROVED", note: "ok", actorId: COLLEAGUE, correlationId: "harness-guidance" });
+  const rivalSync = await syncGuidanceApproval(admin, { workspaceId: wsA, guidanceId: g2.data.id, ...base });
+  ok("11n-setup-c. and reaches `approved`, so 11n tests the INDEX and not an earlier refusal",
+    rivalSync.ok && rivalSync.data.status === "approved", rivalSync.ok ? rivalSync.data.status : rivalSync.message);
+
+  const clash = await publishGuidance(admin, { workspaceId: wsA, guidanceId: g2.data.id, ...base });
+  ok("11n. ⚠ ONE REFERENCE, ONE DOCUMENT IN FORCE -- refused by the INDEX, which this engine deliberately does not pre-check",
+    !clash.ok && clash.code === "CODE_IN_USE" && /ux_practice_guidance_published_code/.test(clash.message),
+    clash.ok ? "both published" : `${clash.code}: ${clash.message}`);
+  // And the rival is left exactly where it was, rather than half-published.
+  const { data: rivalRow } = await admin.from(GUIDANCE_TABLE)
+    .select("status").eq("id", g2.data.id).maybeSingle();
+  ok("11n-b. the refused document is left approved, not half-published",
+    rivalRow?.status === "approved", String(rivalRow?.status));
 
   const revised = await reviseGuidance(admin, { workspaceId: wsA, guidanceId: g.data.id, ...base });
   ok("11o. a version in force can be revised into a new draft at version 2",
@@ -463,38 +483,121 @@ async function main() {
   ok("11p. and only one revision may be open at a time",
     !again.ok && again.code === "REVISION_OPEN", again.ok ? "two opened" : again.code);
 
-  if (revised.ok) {
-    const { data: copied } = await admin.from(GUIDANCE_SECTION_TABLE)
-      .select("section_key, body").eq("guidance_id", revised.data.id);
-    ok("11q. the new version carries the old one's text forward",
-      ((copied ?? []) as { body: string }[]).some(s => s.body.includes("Text for purpose")));
-    const { data: newRow } = await admin.from(GUIDANCE_TABLE)
-      .select("approval_request_id, effective_from").eq("id", revised.data.id).maybeSingle();
-    ok("11r. ⚠ BUT NOT ITS APPROVAL OR ITS DATES -- nobody has read the new version",
-      newRow?.approval_request_id === null && newRow?.effective_from === null, JSON.stringify(newRow));
+  // Same reasoning: no silent skip. If the revision could not be made, the run stops loudly.
+  if (!revised.ok) return report();
 
-    await updateGuidance(admin, {
-      workspaceId: wsA, guidanceId: revised.data.id, effectiveFrom: "2027-01-01",
-      sections: GUIDANCE_SECTIONS_REQUIRED.map(k => ({ key: k, body: "v2" })), ...base,
-    });
-    const s3 = await submitGuidanceForApproval(admin, { workspaceId: wsA, guidanceId: revised.data.id, assignedTo: COLLEAGUE, ...base });
-    if (s3.ok) {
-      await decideApproval(admin, { workspaceId: wsA, approvalId: s3.data.approvalId, decision: "APPROVED", note: "ok", actorId: COLLEAGUE, correlationId: "harness-guidance" });
-      await syncGuidanceApproval(admin, { workspaceId: wsA, guidanceId: revised.data.id, ...base });
-      const p2 = await publishGuidance(admin, { workspaceId: wsA, guidanceId: revised.data.id, ...base });
-      ok("11s. ⚠ PUBLISHING VERSION 2 WITHDRAWS VERSION 1 FIRST -- otherwise the index refuses it",
-        p2.ok && p2.data.superseded === g.data.id, p2.ok ? "" : p2.message);
-      const { data: old } = await admin.from(GUIDANCE_TABLE)
-        .select("status, archived_reason").eq("id", g.data.id).maybeSingle();
-      ok("11t. and version 1 is archived with a reason, not deleted",
-        old?.status === "archived" && /superseded by version 2/.test(String(old?.archived_reason)),
-        JSON.stringify(old));
-    }
-  }
+  const { data: copied } = await admin.from(GUIDANCE_SECTION_TABLE)
+    .select("section_key, body").eq("guidance_id", revised.data.id);
+  ok("11q. the new version carries the old one's text forward, all eight sections of it",
+    ((copied ?? []) as { body: string }[]).some(s => s.body.includes("Text for purpose"))
+      && ((copied ?? []) as unknown[]).length === 8,
+    `${((copied ?? []) as unknown[]).length} sections`);
+  const { data: newRow } = await admin.from(GUIDANCE_TABLE)
+    .select("approval_request_id, effective_from").eq("id", revised.data.id).maybeSingle();
+  ok("11r. ⚠ BUT NOT ITS APPROVAL OR ITS DATES -- nobody has read the new version",
+    newRow?.approval_request_id === null && newRow?.effective_from === null, JSON.stringify(newRow));
 
-  const noReason = await archiveGuidance(admin, { workspaceId: wsA, guidanceId: g.data.id, reason: "  ", ...base });
-  ok("11u. withdrawing without saying why is refused",
-    !noReason.ok && noReason.code === "REASON_REQUIRED", noReason.ok ? "archived" : noReason.code);
+  await updateGuidance(admin, {
+    workspaceId: wsA, guidanceId: revised.data.id, effectiveFrom: "2027-01-01",
+    sections: GUIDANCE_SECTIONS_REQUIRED.map(k => ({ key: k, body: "v2" })), ...base,
+  });
+  const s3 = await submitGuidanceForApproval(admin, { workspaceId: wsA, guidanceId: revised.data.id, assignedTo: COLLEAGUE, ...base });
+  ok("11s-setup. version 2 goes for approval", s3.ok, s3.ok ? "" : s3.message);
+  if (!s3.ok) return report();
+
+  await decideApproval(admin, { workspaceId: wsA, approvalId: s3.data.approvalId, decision: "APPROVED", note: "ok", actorId: COLLEAGUE, correlationId: "harness-guidance" });
+  await syncGuidanceApproval(admin, { workspaceId: wsA, guidanceId: revised.data.id, ...base });
+  // ⚠ THE PREDECESSOR IS STILL IN FORCE AT THIS POINT, so the index would refuse this publish if the
+  // engine did not withdraw version 1 first. Asserted, so 11s is known to be exercising the ordering.
+  const { data: beforePublish } = await admin.from(GUIDANCE_TABLE)
+    .select("status").eq("id", g.data.id).maybeSingle();
+  ok("11s-setup-b. and version 1 is STILL PUBLISHED going in, so 11s really tests the ordering",
+    beforePublish?.status === "published", String(beforePublish?.status));
+
+  const p2 = await publishGuidance(admin, { workspaceId: wsA, guidanceId: revised.data.id, ...base });
+  ok("11s. ⚠ PUBLISHING VERSION 2 WITHDRAWS VERSION 1 FIRST -- otherwise the index refuses it",
+    p2.ok && p2.data.superseded === g.data.id, p2.ok ? "" : p2.message);
+  const { data: old } = await admin.from(GUIDANCE_TABLE)
+    .select("status, archived_reason").eq("id", g.data.id).maybeSingle();
+  ok("11t. and version 1 is archived with a reason, not deleted",
+    old?.status === "archived" && /superseded by version 2/.test(String(old?.archived_reason)),
+    JSON.stringify(old));
+
+  // ── 11u. WITHDRAWING WITHOUT A REASON, ON BOTH LAYERS SEPARATELY ──────────────────────────────
+  //
+  // ⚠ THIS ASSERTION WAS WRONG TWICE OVER AND BOTH FAULTS ARE WORTH RECORDING.
+  //
+  //   1. It archived `g`, which assertion 11s had ALREADY archived as superseded. So it never reached
+  //      the reason guard at all -- loadForMove refused the move first, and the failure was
+  //      MOVE_NOT_ALLOWED. The test was pointed at a document in the wrong state.
+  //   2. ⚠ THE WORSE ONE: it could not have caught a missing guard even pointed correctly. The engine
+  //      and the database BOTH returned the code `REASON_REQUIRED`, so deleting the engine's guard
+  //      merely handed the same refusal, under the same name, to the layer below and the assertion
+  //      stayed green. That is precisely the failure this codebase has recorded twenty-four times.
+  //      knowledge.ts now returns REASON_REQUIRED_BY_DATABASE for the constraint's refusal, and the
+  //      two layers are asserted separately below.
+  //
+  // A FRESH DRAFT, because draft -> archived is a real transition and this must exercise the guard
+  // rather than the state machine in front of it.
+  const abandon = await createGuidance(admin, {
+    workspaceId: wsA, code: "SOP-099", title: "A draft that goes nowhere", docType: "sop", ...base,
+  });
+  ok("11u-setup. a fresh draft exists to abandon, in a state where archiving is actually a legal move",
+    abandon.ok && guidanceCanMove("draft", "archived"), abandon.ok ? "" : abandon.message);
+  if (!abandon.ok) return report();
+
+  const noReason = await archiveGuidance(admin, { workspaceId: wsA, guidanceId: abandon.data.id, reason: "  ", ...base });
+  ok("11u. ⚠ THE ENGINE refuses a withdrawal with no reason, in a sentence rather than a constraint name",
+    !noReason.ok && noReason.code === "REASON_REQUIRED" && noReason.status === 400
+      && /superseded/.test(noReason.message) && !/practice_guidance_archived_reason/.test(noReason.message),
+    noReason.ok ? "archived" : `${noReason.status} ${noReason.code}: ${noReason.message}`);
+
+  // ⚠ AND THE DATABASE, REACHED DIRECTLY, WITH THE ENGINE BYPASSED ENTIRELY. This is the half that
+  // survives somebody deleting the guard above, and it is the reason the guard above may be a
+  // convenience rather than the rule. Asserted on the ERROR CODE and the CONSTRAINT NAME, so it cannot
+  // pass on some other refusal that happens to arrive at the same moment.
+  const { error: rawErr } = await admin.from(GUIDANCE_TABLE)
+    .update({ status: "archived", archived_at: new Date().toISOString(), archived_reason: null })
+    .eq("id", abandon.data.id).eq("workspace_id", wsA);
+  ok("11u-db. ⚠ AND THE CONSTRAINT REFUSES IT WITH THE ENGINE BYPASSED -- 23514, by name",
+    String(rawErr?.code) === "23514" && /practice_guidance_archived_reason/.test(String(rawErr?.message)),
+    rawErr ? `${rawErr.code} ${rawErr.message}` : "the raw update was ACCEPTED");
+
+  const { data: stillDraft } = await admin.from(GUIDANCE_TABLE)
+    .select("status, archived_reason").eq("id", abandon.data.id).maybeSingle();
+  ok("11u-db-b. and the row is untouched by the attempt, not half-archived",
+    stillDraft?.status === "draft" && stillDraft?.archived_reason === null, JSON.stringify(stillDraft));
+
+  // ── 11u-gap. ⚠ WHAT THE CONSTRAINT DOES *NOT* CATCH, ASSERTED SO IT CANNOT CLOSE SILENTLY ────────
+  //
+  // The constraint reads `archived_reason is not null`, and a BLANK STRING IS NOT NULL. So the database
+  // refuses a MISSING reason and accepts an EMPTY one, which means the engine's guard above is the only
+  // thing standing between a blank reason and the record -- it is load-bearing, not a duplicate.
+  //
+  // This asserts the gap POSITIVELY rather than trusting the comment that describes it. If somebody
+  // later tightens the constraint to `btrim(archived_reason) <> ''`, this assertion FAILS and points at
+  // the comment that has to change with it. A gap recorded only in prose is a gap that goes stale.
+  const { error: blankErr } = await admin.from(GUIDANCE_TABLE)
+    .update({ status: "archived", archived_at: new Date().toISOString(), archived_reason: "   " })
+    .eq("id", abandon.data.id).eq("workspace_id", wsA);
+  ok("11u-gap. ⚠ THE CONSTRAINT ACCEPTS A BLANK REASON -- so the engine's guard is the rule, not a copy of it",
+    !blankErr, blankErr ? `unexpectedly refused: ${blankErr.code} -- tighten the comment in knowledge.ts, the gap has closed` : "accepted, as documented");
+  // Put it back, so 11u-control tests archiving rather than re-archiving.
+  await admin.from(GUIDANCE_TABLE)
+    .update({ status: "draft", archived_at: null, archived_reason: null })
+    .eq("id", abandon.data.id).eq("workspace_id", wsA);
+
+  // CONTROL. Without this, 11u and 11u-db cannot tell "refused for the right reason" from "archiving
+  // is broken and refuses everything".
+  const withReason = await archiveGuidance(admin, {
+    workspaceId: wsA, guidanceId: abandon.data.id, reason: "abandoned before it was finished", ...base,
+  });
+  const { data: archivedRow } = await admin.from(GUIDANCE_TABLE)
+    .select("status, archived_reason, archived_at").eq("id", abandon.data.id).maybeSingle();
+  ok("11u-control. ⚠ CONTROL: WITH a reason it archives, and the reason is what was stored",
+    withReason.ok && archivedRow?.status === "archived"
+      && archivedRow?.archived_reason === "abandoned before it was finished" && !!archivedRow?.archived_at,
+    withReason.ok ? JSON.stringify(archivedRow) : withReason.message);
 
   // ── Tenancy, non-vacuously ────────────────────────────────────────────────────────────────────
   const crossRead = await getGuidance(admin, wsB, g.data.id);
@@ -511,8 +614,18 @@ async function main() {
   ok("11x. the library is workspace-scoped, and the other practice's is genuinely empty rather than failed",
     libA.state === "ok" && libB.state === "ok" && libA.items.length > 0 && libB.items.length === 0,
     `${libA.items.length} / ${libB.items.length}`);
-  ok("11y. every count on the library opens a list",
-    libA.counts.every(c => c.href.startsWith("/practice/knowledge-studio")));
+  // ⚠ THE LENGTH IS ASSERTED TOO, and that is not padding. `[].every()` is TRUE, so this passed
+  // unconditionally while the store was absent and counts came back empty -- an assertion that was
+  // green for the whole of the first branch without ever looking at a href. It is the same shape as
+  // 11n's silent skip: nothing to check reads exactly like everything checked.
+  ok("11y. every count on the library opens a list, and there are five of them",
+    libA.counts.length === 5 && libA.counts.every(c => c.href.startsWith("/practice/knowledge-studio")),
+    `${libA.counts.length} counts`);
+  // And a figure is the length of the list it opens, not a number beside one.
+  const inForceCount = libA.counts.find(c => c.key === "published")?.total ?? -1;
+  ok("11y-b. and the figure equals the number of rows the filter it carries returns",
+    inForceCount === libA.items.filter(i => i.status === "published").length,
+    `${inForceCount} claimed`);
 
   const withdrawn = await withdrawGuidanceFromReview(admin, { workspaceId: wsA, guidanceId: g.data.id, ...base });
   ok("11z. an archived document cannot be moved anywhere, and the refusal says so",
